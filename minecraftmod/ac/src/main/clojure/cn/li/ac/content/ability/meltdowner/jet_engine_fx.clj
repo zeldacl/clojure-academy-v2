@@ -16,7 +16,11 @@
    {::runtime ::jet-engine-fx-runtime
     :state* state*}))
 
-(def ^:dynamic *jet-engine-fx-runtime* nil)
+
+(defonce ^:private installed-jet-engine-fx-runtime
+  (create-jet-engine-fx-runtime))
+
+(defonce ^:private jet-engine-fx-runtime-override* (atom nil))
 
 (defn- jet-engine-fx-runtime?
   [runtime]
@@ -29,8 +33,12 @@
   (when-not (jet-engine-fx-runtime? runtime)
     (throw (ex-info "Expected jet engine FX runtime"
                     {:value runtime})))
-  (binding [*jet-engine-fx-runtime* runtime]
-    (f)))
+  (let [prev-override @jet-engine-fx-runtime-override*]
+    (try
+      (reset! jet-engine-fx-runtime-override* runtime)
+      (f)
+      (finally
+        (reset! jet-engine-fx-runtime-override* prev-override)))))
 
 (defmacro with-jet-engine-fx-runtime
   [runtime & body]
@@ -38,9 +46,8 @@
 
 (defn- current-jet-engine-fx-runtime
   []
-  (or *jet-engine-fx-runtime*
-      (throw (ex-info "Jet Engine FX runtime is not bound"
-                      {:hint "Bind runtime via call-with-jet-engine-fx-runtime or use init! registered handlers"}))))
+  (or @jet-engine-fx-runtime-override*
+      @installed-jet-engine-fx-runtime))
 
 (defn- jet-engine-fx-state-atom
   []

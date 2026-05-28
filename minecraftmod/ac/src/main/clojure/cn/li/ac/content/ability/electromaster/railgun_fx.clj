@@ -22,7 +22,11 @@
    {::runtime ::railgun-fx-runtime
     :state* state*}))
 
-(def ^:dynamic *railgun-fx-runtime* nil)
+
+(defonce ^:private installed-railgun-fx-runtime
+  (create-railgun-fx-runtime))
+
+(defonce ^:private railgun-fx-runtime-override* (atom nil))
 
 (defn- railgun-fx-runtime?
   [runtime]
@@ -35,8 +39,12 @@
   (when-not (railgun-fx-runtime? runtime)
     (throw (ex-info "Expected railgun FX runtime"
                     {:value runtime})))
-  (binding [*railgun-fx-runtime* runtime]
-    (f)))
+  (let [prev-override @railgun-fx-runtime-override*]
+    (try
+      (reset! railgun-fx-runtime-override* runtime)
+      (f)
+      (finally
+        (reset! railgun-fx-runtime-override* prev-override)))))
 
 (defmacro with-railgun-fx-runtime
   [runtime & body]
@@ -44,9 +52,8 @@
 
 (defn- current-railgun-fx-runtime
   []
-  (or *railgun-fx-runtime*
-      (throw (ex-info "Railgun FX runtime is not bound"
-                      {:hint "Bind runtime via call-with-railgun-fx-runtime or use init! registered handlers"}))))
+  (or @railgun-fx-runtime-override*
+      @installed-railgun-fx-runtime))
 
 (defn- railgun-fx-state-atom
   []

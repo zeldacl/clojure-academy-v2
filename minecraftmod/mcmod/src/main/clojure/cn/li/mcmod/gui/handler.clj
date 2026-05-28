@@ -84,13 +84,13 @@
    {:cn.li.mcmod.gui.handler/runtime ::gui-handler-runtime
     :state* (or state* (atom nil))}))
 
-(def ^:dynamic *gui-handler-runtime* nil)
-
 (defonce ^:private installed-gui-handler-runtime
   (create-gui-handler-runtime))
 
+(defonce ^:private gui-handler-runtime-override* (atom nil))
+
 (defn- gui-handler-atom []
-  (:state* (or *gui-handler-runtime* installed-gui-handler-runtime)))
+  (:state* (or @gui-handler-runtime-override* installed-gui-handler-runtime)))
 
 (declare get-gui-handler)
 

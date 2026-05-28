@@ -15,10 +15,10 @@
    {::runtime ::network-server-runtime
     :state* state*}))
 
-(def ^:dynamic *network-server-runtime* nil)
-
 (defonce ^:private installed-network-server-runtime
   (create-network-server-runtime))
+
+(defonce ^:private network-server-runtime-override* (atom nil))
 
 (defn- network-server-runtime?
   [runtime]
@@ -31,8 +31,12 @@
   (when-not (network-server-runtime? runtime)
     (throw (ex-info "Expected network server runtime"
                     {:runtime runtime})))
-  (binding [*network-server-runtime* runtime]
-    (f)))
+  (let [prev-override @network-server-runtime-override*]
+    (try
+      (reset! network-server-runtime-override* runtime)
+      (f)
+      (finally
+        (reset! network-server-runtime-override* prev-override)))))
 
 (defmacro with-network-server-runtime
   [runtime & body]
@@ -40,7 +44,7 @@
 
 (defn- current-network-server-runtime
   []
-  (or *network-server-runtime*
+  (or @network-server-runtime-override*
       installed-network-server-runtime))
 
 (defn- network-server-state-atom

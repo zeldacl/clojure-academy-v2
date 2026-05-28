@@ -206,7 +206,7 @@
 (defonce ^:private installed-client-runtime
   (create-client-runtime))
 
-(def ^:dynamic *client-runtime* nil)
+(defonce ^:private client-runtime-override* (atom nil))
 
 (defn client-runtime?
   [value]
@@ -214,18 +214,21 @@
 
 (defn current-client-runtime
   []
-  (or *client-runtime*
-      installed-client-runtime))
+  (or @client-runtime-override*
+      @installed-client-runtime))
 
 (defmacro with-client-runtime
   [runtime & body]
-  `(binding [*client-runtime* ~runtime]
-     ~@body))
+  `(call-with-client-runtime ~runtime (fn [] ~@body)))
 
 (defn call-with-client-runtime
   [runtime f]
-  (binding [*client-runtime* runtime]
-    (f)))
+  (let [prev-override @client-runtime-override*]
+    (try
+      (reset! client-runtime-override* runtime)
+      (f)
+      (finally
+        (reset! client-runtime-override* prev-override)))))
 
 (defn client-runtime-state-atom
   []

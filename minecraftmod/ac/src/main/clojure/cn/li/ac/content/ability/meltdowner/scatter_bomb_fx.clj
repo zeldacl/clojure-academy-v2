@@ -17,7 +17,11 @@
    {::runtime ::scatter-bomb-fx-runtime
     :state* state*}))
 
-(def ^:dynamic *scatter-bomb-fx-runtime* nil)
+
+(defonce ^:private installed-scatter-bomb-fx-runtime
+  (create-scatter-bomb-fx-runtime))
+
+(defonce ^:private scatter-bomb-fx-runtime-override* (atom nil))
 
 (defn- scatter-bomb-fx-runtime?
   [runtime]
@@ -28,10 +32,14 @@
 (defn call-with-scatter-bomb-fx-runtime
   [runtime f]
   (when-not (scatter-bomb-fx-runtime? runtime)
-    (throw (ex-info "Expected scatter-bomb FX runtime"
+    (throw (ex-info "Expected scatter bomb FX runtime"
                     {:value runtime})))
-  (binding [*scatter-bomb-fx-runtime* runtime]
-    (f)))
+  (let [prev-override @scatter-bomb-fx-runtime-override*]
+    (try
+      (reset! scatter-bomb-fx-runtime-override* runtime)
+      (f)
+      (finally
+        (reset! scatter-bomb-fx-runtime-override* prev-override)))))
 
 (defmacro with-scatter-bomb-fx-runtime
   [runtime & body]
@@ -39,9 +47,8 @@
 
 (defn- current-scatter-bomb-fx-runtime
   []
-  (or *scatter-bomb-fx-runtime*
-      (throw (ex-info "Scatter Bomb FX runtime is not bound"
-                      {:hint "Bind runtime via call-with-scatter-bomb-fx-runtime or use init! registered handlers"}))))
+  (or @scatter-bomb-fx-runtime-override*
+      @installed-scatter-bomb-fx-runtime))
 
 (defn- scatter-bomb-fx-state-atom
   []

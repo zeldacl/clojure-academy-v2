@@ -11,13 +11,11 @@
    {:cn.li.mcmod.hooks.messages/runtime ::message-id-registry-runtime
     :state* (or state* (atom {}))}))
 
-(def ^:dynamic *message-id-registry-runtime* nil)
-
 (defonce ^:private installed-message-id-registry-runtime
   (create-message-id-registry-runtime))
 
 (defn- message-ids-atom []
-  (:state* (or *message-id-registry-runtime* installed-message-id-registry-runtime)))
+  (:state* @installed-message-id-registry-runtime))
 
 (defn- message-ids-snapshot []
   @(message-ids-atom))

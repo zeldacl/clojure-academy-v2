@@ -68,7 +68,7 @@
       "category changes should clear stale preset slots")
     (is (map? (contract/preset-get-all st u)))
 
-    (binding [contract/*player-ability-store* st]
+    (contract/with-player-ability-store st
       (is (= {:category-id :meltdowner
             :level 1
             :level-progress 0.0}

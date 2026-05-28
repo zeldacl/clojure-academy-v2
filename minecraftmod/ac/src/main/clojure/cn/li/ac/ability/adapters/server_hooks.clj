@@ -31,10 +31,10 @@
    {::runtime ::lifecycle-subscriptions-runtime
     :state* state*}))
 
-(def ^:dynamic *lifecycle-subscriptions-runtime* nil)
-
 (defonce ^:private installed-lifecycle-subscriptions-runtime
   (create-lifecycle-subscriptions-runtime))
+
+(defonce ^:private lifecycle-subscriptions-runtime-override* (atom nil))
 
 (defn- lifecycle-subscriptions-runtime?
   [runtime]
@@ -47,8 +47,12 @@
   (when-not (lifecycle-subscriptions-runtime? runtime)
     (throw (ex-info "Expected lifecycle subscriptions runtime"
                     {:runtime runtime})))
-  (binding [*lifecycle-subscriptions-runtime* runtime]
-    (f)))
+  (let [prev-override @lifecycle-subscriptions-runtime-override*]
+    (try
+      (reset! lifecycle-subscriptions-runtime-override* runtime)
+      (f)
+      (finally
+        (reset! lifecycle-subscriptions-runtime-override* prev-override)))))
 
 (defmacro with-lifecycle-subscriptions-runtime
   [runtime & body]
@@ -56,7 +60,7 @@
 
 (defn- current-lifecycle-subscriptions-runtime
   []
-  (or *lifecycle-subscriptions-runtime*
+  (or @lifecycle-subscriptions-runtime-override*
       installed-lifecycle-subscriptions-runtime))
 
 (defn- lifecycle-subscriptions-registered-atom

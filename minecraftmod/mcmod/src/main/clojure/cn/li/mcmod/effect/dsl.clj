@@ -10,13 +10,13 @@
 	 {:cn.li.mcmod.effect.dsl/runtime ::effect-registry-runtime
 	  :registry (or registry (registry-core/atom-registry {}))}))
 
-(def ^:dynamic *effect-registry-runtime* nil)
-
 (defonce ^:private installed-effect-registry-runtime
 	(create-effect-registry-runtime))
 
+(defonce ^:private effect-registry-runtime-override* (atom nil))
+
 (defn- effect-registry-state []
-	(:registry (or *effect-registry-runtime* installed-effect-registry-runtime)))
+	(:registry (or @effect-registry-runtime-override* installed-effect-registry-runtime)))
 
 (defrecord EffectSpec [id registry-name category color tick-interval damage-per-tick properties])
 

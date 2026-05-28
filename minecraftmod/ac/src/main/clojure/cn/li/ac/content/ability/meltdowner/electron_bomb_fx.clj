@@ -17,7 +17,11 @@
    {::runtime ::electron-bomb-fx-runtime
     :state* state*}))
 
-(def ^:dynamic *electron-bomb-fx-runtime* nil)
+
+(defonce ^:private installed-electron-bomb-fx-runtime
+  (create-electron-bomb-fx-runtime))
+
+(defonce ^:private electron-bomb-fx-runtime-override* (atom nil))
 
 (defn- electron-bomb-fx-runtime?
   [runtime]
@@ -30,8 +34,12 @@
   (when-not (electron-bomb-fx-runtime? runtime)
     (throw (ex-info "Expected electron bomb FX runtime"
                     {:value runtime})))
-  (binding [*electron-bomb-fx-runtime* runtime]
-    (f)))
+  (let [prev-override @electron-bomb-fx-runtime-override*]
+    (try
+      (reset! electron-bomb-fx-runtime-override* runtime)
+      (f)
+      (finally
+        (reset! electron-bomb-fx-runtime-override* prev-override)))))
 
 (defmacro with-electron-bomb-fx-runtime
   [runtime & body]
@@ -39,9 +47,8 @@
 
 (defn- current-electron-bomb-fx-runtime
   []
-  (or *electron-bomb-fx-runtime*
-      (throw (ex-info "Electron Bomb FX runtime is not bound"
-                      {:hint "Bind runtime via call-with-electron-bomb-fx-runtime or use init! registered handlers"}))))
+  (or @electron-bomb-fx-runtime-override*
+      @installed-electron-bomb-fx-runtime))
 
 (defn- electron-bomb-fx-state-atom
   []

@@ -42,10 +42,10 @@
    {::runtime ::keybind-registry-runtime
     :state* state*}))
 
-(def ^:dynamic *keybind-registry-runtime* nil)
-
 (defonce ^:private installed-keybind-registry-runtime
   (create-keybind-registry-runtime))
+
+(defonce ^:private keybind-registry-override* (atom nil))
 
 (defn- keybind-registry-runtime?
   [runtime]
@@ -58,8 +58,12 @@
   (when-not (keybind-registry-runtime? runtime)
     (throw (ex-info "Expected keybind registry runtime"
                     {:runtime runtime})))
-  (binding [*keybind-registry-runtime* runtime]
-    (f)))
+  (let [prev-override @keybind-registry-override*]
+    (try
+      (reset! keybind-registry-override* runtime)
+      (f)
+      (finally
+        (reset! keybind-registry-override* prev-override)))))
 
 (defmacro with-keybind-registry-runtime
   [runtime & body]
@@ -67,8 +71,8 @@
 
 (defn- current-keybind-registry-runtime
   []
-  (or *keybind-registry-runtime*
-      installed-keybind-registry-runtime))
+  (or @keybind-registry-override*
+      @installed-keybind-registry-runtime))
 
 (defn- keybind-registry-state-atom
   []
@@ -227,10 +231,10 @@
    :key-states* (atom {})
    :preset-switch-states* (atom {})})
 
-(def ^:dynamic *client-keybind-runtime* nil)
-
 (defonce ^:private installed-client-keybind-runtime
   (create-client-keybind-runtime))
+
+(defonce ^:private client-keybind-runtime-override* (atom nil))
 
 (defn- client-keybind-runtime?
   [runtime]
@@ -244,8 +248,12 @@
   (when-not (client-keybind-runtime? runtime)
     (throw (ex-info "Expected client keybind runtime"
                     {:runtime runtime})))
-  (binding [*client-keybind-runtime* runtime]
-    (f)))
+  (let [prev-override @client-keybind-runtime-override*]
+    (try
+      (reset! client-keybind-runtime-override* runtime)
+      (f)
+      (finally
+        (reset! client-keybind-runtime-override* prev-override)))))
 
 (defmacro with-client-keybind-runtime
   [runtime & body]
@@ -253,8 +261,8 @@
 
 (defn- current-client-keybind-runtime
   []
-  (or *client-keybind-runtime*
-      installed-client-keybind-runtime))
+  (or @client-keybind-runtime-override*
+      @installed-client-keybind-runtime))
 
 (defn- key-states-atom
   []

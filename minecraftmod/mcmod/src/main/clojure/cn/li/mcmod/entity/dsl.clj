@@ -10,13 +10,11 @@
    {:cn.li.mcmod.entity.dsl/runtime ::entity-registry-runtime
     :registry (or registry (registry-core/atom-registry {}))}))
 
-(def ^:dynamic *entity-registry-runtime* nil)
-
 (defonce ^:private installed-entity-registry-runtime
   (create-entity-registry-runtime))
 
 (defn- entity-registry-state []
-  (:registry (or *entity-registry-runtime* installed-entity-registry-runtime)))
+  (:registry @installed-entity-registry-runtime))
 
 (defrecord EntitySpec [id registry-name entity-kind category
                        width height

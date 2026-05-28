@@ -18,7 +18,11 @@
    {::runtime ::mine-detect-fx-runtime
     :state* state*}))
 
-(def ^:dynamic *mine-detect-fx-runtime* nil)
+
+(defonce ^:private installed-mine-detect-fx-runtime
+  (create-mine-detect-fx-runtime))
+
+(defonce ^:private mine-detect-fx-runtime-override* (atom nil))
 
 (defn- mine-detect-fx-runtime?
   [runtime]
@@ -31,8 +35,12 @@
   (when-not (mine-detect-fx-runtime? runtime)
     (throw (ex-info "Expected mine detect FX runtime"
                     {:value runtime})))
-  (binding [*mine-detect-fx-runtime* runtime]
-    (f)))
+  (let [prev-override @mine-detect-fx-runtime-override*]
+    (try
+      (reset! mine-detect-fx-runtime-override* runtime)
+      (f)
+      (finally
+        (reset! mine-detect-fx-runtime-override* prev-override)))))
 
 (defmacro with-mine-detect-fx-runtime
   [runtime & body]
@@ -40,9 +48,8 @@
 
 (defn- current-mine-detect-fx-runtime
   []
-  (or *mine-detect-fx-runtime*
-      (throw (ex-info "Mine Detect FX runtime is not bound"
-                      {:hint "Bind runtime via call-with-mine-detect-fx-runtime or use init! registered handlers"}))))
+  (or @mine-detect-fx-runtime-override*
+      @installed-mine-detect-fx-runtime))
 
 (defn- mine-detect-fx-state-atom
   []

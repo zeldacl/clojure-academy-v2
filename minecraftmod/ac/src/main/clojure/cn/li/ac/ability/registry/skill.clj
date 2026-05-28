@@ -17,10 +17,10 @@
 	 {::runtime ::skill-registry-runtime
 	  :state* state*}))
 
-(def ^:dynamic *skill-registry-runtime* nil)
-
 (defonce ^:private installed-skill-registry-runtime
 	(create-skill-registry-runtime))
+
+(defonce ^:private current-runtime-override* (atom nil))
 
 (defn- skill-registry-runtime?
 	[runtime]
@@ -33,8 +33,12 @@
 	(when-not (skill-registry-runtime? runtime)
 		(throw (ex-info "Expected skill registry runtime"
 						{:runtime runtime})))
-	(binding [*skill-registry-runtime* runtime]
-		(f)))
+	(let [prev-override @current-runtime-override*]
+		(try
+			(reset! current-runtime-override* runtime)
+			(f)
+			(finally
+				(reset! current-runtime-override* prev-override)))))
 
 (defmacro with-skill-registry-runtime
 	[runtime & body]
@@ -42,8 +46,8 @@
 
 (defn- current-skill-registry-runtime
 	[]
-	(or *skill-registry-runtime*
-		installed-skill-registry-runtime))
+	(or @current-runtime-override*
+		@installed-skill-registry-runtime))
 
 (defn- skill-registry-state-atom
 	[]

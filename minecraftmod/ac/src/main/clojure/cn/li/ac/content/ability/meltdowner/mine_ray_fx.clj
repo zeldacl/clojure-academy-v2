@@ -18,7 +18,11 @@
    {::runtime ::mine-ray-fx-runtime
     :state* state*}))
 
-(def ^:dynamic *mine-ray-fx-runtime* nil)
+
+(defonce ^:private installed-mine-ray-fx-runtime
+  (create-mine-ray-fx-runtime))
+
+(defonce ^:private mine-ray-fx-runtime-override* (atom nil))
 
 (defn- mine-ray-fx-runtime?
   [runtime]
@@ -29,10 +33,14 @@
 (defn call-with-mine-ray-fx-runtime
   [runtime f]
   (when-not (mine-ray-fx-runtime? runtime)
-    (throw (ex-info "Expected mine-ray FX runtime"
+    (throw (ex-info "Expected mine ray FX runtime"
                     {:value runtime})))
-  (binding [*mine-ray-fx-runtime* runtime]
-    (f)))
+  (let [prev-override @mine-ray-fx-runtime-override*]
+    (try
+      (reset! mine-ray-fx-runtime-override* runtime)
+      (f)
+      (finally
+        (reset! mine-ray-fx-runtime-override* prev-override)))))
 
 (defmacro with-mine-ray-fx-runtime
   [runtime & body]
@@ -40,9 +48,8 @@
 
 (defn- current-mine-ray-fx-runtime
   []
-  (or *mine-ray-fx-runtime*
-      (throw (ex-info "Mine Ray FX runtime is not bound"
-                      {:hint "Bind runtime via call-with-mine-ray-fx-runtime or use init! registered handlers"}))))
+  (or @mine-ray-fx-runtime-override*
+      @installed-mine-ray-fx-runtime))
 
 (defn- mine-ray-fx-state-atom
   []

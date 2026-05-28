@@ -22,12 +22,18 @@
 	 :registry-state* (atom {:world-data-registry {}
 											 :world-states {}})})
 
-(def ^:dynamic *world-registry-runtime* nil)
-
 (defonce ^:private installed-world-registry-runtime
 	(create-world-registry-runtime))
 
+(defonce ^:private world-registry-runtime-override* (atom nil))
+
 (def ^:dynamic *world-transaction* nil)
+
+(defonce ^:private world-transaction-override* (atom nil))
+
+(defn- current-world-transaction
+  []
+  (or @world-transaction-override* *world-transaction*))
 
 (defn- world-registry-runtime?
 	[runtime]
@@ -40,8 +46,12 @@
 	(when-not (world-registry-runtime? runtime)
 		(throw (ex-info "Expected world registry runtime"
 							{:runtime runtime})))
-	(binding [*world-registry-runtime* runtime]
-		(f)))
+	(let [prev-override @world-registry-runtime-override*]
+		(try
+			(reset! world-registry-runtime-override* runtime)
+			(f)
+			(finally
+				(reset! world-registry-runtime-override* prev-override)))))
 
 (defmacro with-world-registry-runtime
 	[runtime & body]
@@ -103,8 +113,26 @@
 
 (defn- current-world-registry-runtime
 	[]
-	(or *world-registry-runtime*
-			installed-world-registry-runtime))
+	(or @world-registry-runtime-override*
+			@installed-world-registry-runtime))
+
+(defn- current-world-transaction
+	[]
+	(or @world-transaction-override*
+			*world-transaction*))
+
+(defn- call-with-world-transaction
+	[transaction f]
+	(let [prev-override @world-transaction-override*]
+		(try
+			(reset! world-transaction-override* transaction)
+			(f)
+			(finally
+				(reset! world-transaction-override* prev-override)))))
+
+(defmacro ^:private with-world-transaction
+	[transaction & body]
+	`(call-with-world-transaction ~transaction (fn [] ~@body)))
 
 (defn- runtime-state-atom
 	([]
@@ -125,24 +153,26 @@
 
 (defn- transaction-for?
 	[world-data]
-	(and (map? *world-transaction*)
-			 (= (:world-key *world-transaction*) (:world-key world-data))
-			 (identical? (:runtime *world-transaction*) (world-data-runtime world-data))))
+	(let [tx (current-world-transaction)]
+		(and (map? tx)
+				 (= (:world-key tx) (:world-key world-data))
+				 (identical? (:runtime tx) (world-data-runtime world-data)))))
 
 (defn- current-world-state
 	[world-data]
 	(if (transaction-for? world-data)
-		@(:state* *world-transaction*)
-		(get-in (runtime-state-snapshot (world-data-runtime world-data))
-					 [:world-states (:world-key world-data)]
-					 (initial-world-state))))
+		(let [tx (current-world-transaction)]
+			@(:state* tx))
+		(get-in @(runtime-state-atom (world-data-runtime world-data))
+		        [:world-states (:world-key world-data)]
+		        (initial-world-state))))
 
 (defn- update-world-state!
 	[world-data f & args]
 	(if (transaction-for? world-data)
-		(do
-			(vswap! (:state* *world-transaction*) #(apply f % args))
-			@(:state* *world-transaction*))
+		(let [tx (current-world-transaction)]
+			(vswap! (:state* tx) #(apply f % args))
+			@(:state* tx))
 		(let [runtime (world-data-runtime world-data)
 					key (:world-key world-data)
 					next-state* (volatile! nil)]
@@ -206,9 +236,9 @@
 					   (fn [registry-state]
 						   (let [current (get-in registry-state [:world-states key] (initial-world-state))
 									tx-state* (volatile! current)]
-							(binding [*world-transaction* {:runtime runtime
-																				 :world-key key
-																				 :state* tx-state*}]
+							(with-world-transaction {:runtime runtime
+																 :world-key key
+																 :state* tx-state*}
 								(vreset! result* (mutation-fn world-data))
 								(assoc-in registry-state [:world-states key] @tx-state*)))))
 			@result*)))

@@ -17,7 +17,11 @@
    {::runtime ::ray-barrage-fx-runtime
     :state* state*}))
 
-(def ^:dynamic *ray-barrage-fx-runtime* nil)
+
+(defonce ^:private installed-ray-barrage-fx-runtime
+  (create-ray-barrage-fx-runtime))
+
+(defonce ^:private ray-barrage-fx-runtime-override* (atom nil))
 
 (defn- ray-barrage-fx-runtime?
   [runtime]
@@ -28,10 +32,14 @@
 (defn call-with-ray-barrage-fx-runtime
   [runtime f]
   (when-not (ray-barrage-fx-runtime? runtime)
-    (throw (ex-info "Expected ray-barrage FX runtime"
+    (throw (ex-info "Expected ray barrage FX runtime"
                     {:value runtime})))
-  (binding [*ray-barrage-fx-runtime* runtime]
-    (f)))
+  (let [prev-override @ray-barrage-fx-runtime-override*]
+    (try
+      (reset! ray-barrage-fx-runtime-override* runtime)
+      (f)
+      (finally
+        (reset! ray-barrage-fx-runtime-override* prev-override)))))
 
 (defmacro with-ray-barrage-fx-runtime
   [runtime & body]
@@ -39,9 +47,8 @@
 
 (defn- current-ray-barrage-fx-runtime
   []
-  (or *ray-barrage-fx-runtime*
-      (throw (ex-info "Ray Barrage FX runtime is not bound"
-                      {:hint "Bind runtime via call-with-ray-barrage-fx-runtime or use init! registered handlers"}))))
+  (or @ray-barrage-fx-runtime-override*
+      @installed-ray-barrage-fx-runtime))
 
 (defn- ray-barrage-fx-state-atom
   []

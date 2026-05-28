@@ -19,9 +19,9 @@
 ;; Injected platform fns
 ;; ============================================================================
 
-(defonce ^:private ^:dynamic *attack-fn* nil)
-(defonce ^:private ^:dynamic *attack-ignore-armor-fn* nil)
-(defonce ^:private ^:dynamic *nearby-players-fn* nil)
+(def ^:private ^:dynamic *attack-fn* nil)
+(def ^:private ^:dynamic *attack-ignore-armor-fn* nil)
+(def ^:private ^:dynamic *nearby-players-fn* nil)
 
 (defn register-platform-fns!
   "Call from forge adapter during mod init."

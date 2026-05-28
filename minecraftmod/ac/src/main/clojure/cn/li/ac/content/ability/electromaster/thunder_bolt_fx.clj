@@ -17,7 +17,11 @@
    {::runtime ::thunder-bolt-fx-runtime
     :state* state*}))
 
-(def ^:dynamic *thunder-bolt-fx-runtime* nil)
+
+(defonce ^:private installed-thunder-bolt-fx-runtime
+  (create-thunder-bolt-fx-runtime))
+
+(defonce ^:private thunder-bolt-fx-runtime-override* (atom nil))
 
 (defn- thunder-bolt-fx-runtime?
   [runtime]
@@ -28,10 +32,14 @@
 (defn call-with-thunder-bolt-fx-runtime
   [runtime f]
   (when-not (thunder-bolt-fx-runtime? runtime)
-    (throw (ex-info "Expected thunder-bolt FX runtime"
+    (throw (ex-info "Expected thunder bolt FX runtime"
                     {:value runtime})))
-  (binding [*thunder-bolt-fx-runtime* runtime]
-    (f)))
+  (let [prev-override @thunder-bolt-fx-runtime-override*]
+    (try
+      (reset! thunder-bolt-fx-runtime-override* runtime)
+      (f)
+      (finally
+        (reset! thunder-bolt-fx-runtime-override* prev-override)))))
 
 (defmacro with-thunder-bolt-fx-runtime
   [runtime & body]
@@ -39,9 +47,8 @@
 
 (defn- current-thunder-bolt-fx-runtime
   []
-  (or *thunder-bolt-fx-runtime*
-      (throw (ex-info "Thunder Bolt FX runtime is not bound"
-                      {:hint "Bind runtime via call-with-thunder-bolt-fx-runtime or use init! registered handlers"}))))
+  (or @thunder-bolt-fx-runtime-override*
+      @installed-thunder-bolt-fx-runtime))
 
 (defn- thunder-bolt-fx-state-atom
   []

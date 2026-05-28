@@ -2,27 +2,25 @@
 	"Platform-neutral config descriptor and runtime value registry.")
 
 (defn- log-info
-	[& xs]
-	(when-let [f (requiring-resolve 'cn.li.mcmod.util.log/info)]
-		(apply f xs)))
+  [& xs]
+  (when-let [f (requiring-resolve 'cn.li.mcmod.util.log/info)]
+    (apply f xs)))
 
 (defn- default-config-registry-runtime-state []
-	{:descriptor-registry {}
-	 :value-registry {}})
+  {:descriptor-registry {}
+   :value-registry {}})
 
 (defn create-config-registry-runtime
-	([] (create-config-registry-runtime {}))
-	([{:keys [state*]}]
-	 {:cn.li.mcmod.config.registry/runtime ::config-registry-runtime
-	  :state* (or state* (atom (default-config-registry-runtime-state)))}))
-
-(def ^:dynamic *config-registry-runtime* nil)
+  ([] (create-config-registry-runtime {}))
+  ([{:keys [state*]}]
+   {:cn.li.mcmod.config.registry/runtime ::config-registry-runtime
+    :state* (or state* (atom (default-config-registry-runtime-state)))}))
 
 (defonce ^:private installed-config-registry-runtime
 	(create-config-registry-runtime))
 
 (defn- config-registry-state-atom []
-	(:state* (or *config-registry-runtime* installed-config-registry-runtime)))
+	(:state* @installed-config-registry-runtime))
 
 (defn- config-registry-state-snapshot []
 	@(config-registry-state-atom))

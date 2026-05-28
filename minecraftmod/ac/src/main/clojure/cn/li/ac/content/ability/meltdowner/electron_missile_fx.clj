@@ -17,7 +17,11 @@
    {::runtime ::electron-missile-fx-runtime
     :state* state*}))
 
-(def ^:dynamic *electron-missile-fx-runtime* nil)
+
+(defonce ^:private installed-electron-missile-fx-runtime
+  (create-electron-missile-fx-runtime))
+
+(defonce ^:private electron-missile-fx-runtime-override* (atom nil))
 
 (defn- electron-missile-fx-runtime?
   [runtime]
@@ -30,8 +34,12 @@
   (when-not (electron-missile-fx-runtime? runtime)
     (throw (ex-info "Expected electron missile FX runtime"
                     {:value runtime})))
-  (binding [*electron-missile-fx-runtime* runtime]
-    (f)))
+  (let [prev-override @electron-missile-fx-runtime-override*]
+    (try
+      (reset! electron-missile-fx-runtime-override* runtime)
+      (f)
+      (finally
+        (reset! electron-missile-fx-runtime-override* prev-override)))))
 
 (defmacro with-electron-missile-fx-runtime
   [runtime & body]
@@ -39,9 +47,8 @@
 
 (defn- current-electron-missile-fx-runtime
   []
-  (or *electron-missile-fx-runtime*
-      (throw (ex-info "Electron Missile FX runtime is not bound"
-                      {:hint "Bind runtime via call-with-electron-missile-fx-runtime or use init! registered handlers"}))))
+  (or @electron-missile-fx-runtime-override*
+      @installed-electron-missile-fx-runtime))
 
 (defn- electron-missile-fx-state-atom
   []

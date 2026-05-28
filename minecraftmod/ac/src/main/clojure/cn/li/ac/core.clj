@@ -16,10 +16,10 @@
    {::runtime ::lifecycle-hooks-runtime
     :state* state*}))
 
-(def ^:dynamic *lifecycle-hooks-runtime* nil)
-
 (defonce ^:private installed-lifecycle-hooks-runtime
   (create-lifecycle-hooks-runtime))
+
+(defonce ^:private lifecycle-hooks-runtime-override* (atom nil))
 
 (defn- lifecycle-hooks-runtime?
   [runtime]
@@ -32,8 +32,12 @@
   (when-not (lifecycle-hooks-runtime? runtime)
     (throw (ex-info "Expected lifecycle hooks runtime"
                     {:runtime runtime})))
-  (binding [*lifecycle-hooks-runtime* runtime]
-    (f)))
+  (let [prev-override @lifecycle-hooks-runtime-override*]
+    (try
+      (reset! lifecycle-hooks-runtime-override* runtime)
+      (f)
+      (finally
+        (reset! lifecycle-hooks-runtime-override* prev-override)))))
 
 (defmacro with-lifecycle-hooks-runtime
   [runtime & body]
@@ -41,8 +45,8 @@
 
 (defn- current-lifecycle-hooks-runtime
   []
-  (or *lifecycle-hooks-runtime*
-      installed-lifecycle-hooks-runtime))
+  (or @lifecycle-hooks-runtime-override*
+      @installed-lifecycle-hooks-runtime))
 
 (defn- lifecycle-hooks-registered-atom
   []

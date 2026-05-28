@@ -13,13 +13,13 @@
    {:cn.li.mcmod.platform.integration-runtime/runtime ::integration-runtime
     :state* (or state* (atom (default-integration-runtime-state)))}))
 
-(def ^:dynamic *integration-runtime* nil)
-
 (defonce ^:private installed-integration-runtime
   (create-integration-runtime))
 
+(defonce ^:private integration-runtime-override* (atom nil))
+
 (defn- integration-hooks-atom []
-  (:state* (or *integration-runtime* installed-integration-runtime)))
+  (:state* (or @integration-runtime-override* installed-integration-runtime)))
 
 (defn- integration-hooks-snapshot []
   @(integration-hooks-atom))

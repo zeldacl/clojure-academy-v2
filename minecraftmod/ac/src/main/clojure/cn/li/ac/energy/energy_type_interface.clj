@@ -29,10 +29,10 @@
 	 {::runtime ::energy-type-runtime
 	  :state* state*}))
 
-(def ^:dynamic *energy-type-runtime* nil)
-
 (defonce ^:private installed-energy-type-runtime
 	(create-energy-type-runtime))
+
+(defonce ^:private energy-type-runtime-override* (atom nil))
 
 (defn- energy-type-runtime?
 	[runtime]
@@ -45,8 +45,12 @@
 	(when-not (energy-type-runtime? runtime)
 		(throw (ex-info "Expected energy-type runtime"
 						{:runtime runtime})))
-	(binding [*energy-type-runtime* runtime]
-		(f)))
+	(let [prev-override @energy-type-runtime-override*]
+	  (try
+	    (reset! energy-type-runtime-override* runtime)
+	    (f)
+	    (finally
+	      (reset! energy-type-runtime-override* prev-override)))))
 
 (defmacro with-energy-type-runtime
 	[runtime & body]
@@ -54,8 +58,8 @@
 
 (defn- current-energy-type-runtime
 	[]
-	(or *energy-type-runtime*
-		installed-energy-type-runtime))
+	(or @energy-type-runtime-override*
+		@installed-energy-type-runtime))
 
 (defn- energy-type-state-atom
 	[]

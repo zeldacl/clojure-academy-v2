@@ -17,7 +17,11 @@
    {::runtime ::plasma-cannon-fx-runtime
     :state* state*}))
 
-(def ^:dynamic *plasma-cannon-fx-runtime* nil)
+
+(defonce ^:private installed-plasma-cannon-fx-runtime
+  (create-plasma-cannon-fx-runtime))
+
+(defonce ^:private plasma-cannon-fx-runtime-override* (atom nil))
 
 (defn- plasma-cannon-fx-runtime?
   [runtime]
@@ -30,8 +34,12 @@
   (when-not (plasma-cannon-fx-runtime? runtime)
     (throw (ex-info "Expected Plasma Cannon FX runtime"
                     {:value runtime})))
-  (binding [*plasma-cannon-fx-runtime* runtime]
-    (f)))
+  (let [prev-override @plasma-cannon-fx-runtime-override*]
+    (try
+      (reset! plasma-cannon-fx-runtime-override* runtime)
+      (f)
+      (finally
+        (reset! plasma-cannon-fx-runtime-override* prev-override)))))
 
 (defmacro with-plasma-cannon-fx-runtime
   [runtime & body]
@@ -39,9 +47,8 @@
 
 (defn- current-plasma-cannon-fx-runtime
   []
-  (or *plasma-cannon-fx-runtime*
-      (throw (ex-info "Plasma Cannon FX runtime is not bound"
-                      {:hint "Bind runtime via call-with-plasma-cannon-fx-runtime or use init! registered handlers"}))))
+  (or @plasma-cannon-fx-runtime-override*
+      @installed-plasma-cannon-fx-runtime))
 
 (defn- plasma-cannon-fx-state-atom
   []

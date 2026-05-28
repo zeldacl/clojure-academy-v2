@@ -164,10 +164,10 @@
   {::runtime ::energy-system-runtime
    :systems* (atom {})})
 
-(def ^:dynamic *energy-system-runtime* nil)
-
 (defonce ^:private installed-energy-system-runtime
   (create-energy-system-runtime))
+
+(defonce ^:private energy-system-runtime-override* (atom nil))
 
 (defn- energy-system-runtime?
   [runtime]
@@ -180,8 +180,12 @@
   (when-not (energy-system-runtime? runtime)
     (throw (ex-info "Expected energy system runtime"
                     {:runtime runtime})))
-  (binding [*energy-system-runtime* runtime]
-    (f)))
+  (let [prev-override @energy-system-runtime-override*]
+    (try
+      (reset! energy-system-runtime-override* runtime)
+      (f)
+      (finally
+        (reset! energy-system-runtime-override* prev-override)))))
 
 (defmacro with-energy-system-runtime
   [runtime & body]
@@ -189,8 +193,8 @@
 
 (defn- current-energy-system-runtime
   []
-  (or *energy-system-runtime*
-      installed-energy-system-runtime))
+  (or @energy-system-runtime-override*
+      @installed-energy-system-runtime))
 
 (defn- systems-atom
   []

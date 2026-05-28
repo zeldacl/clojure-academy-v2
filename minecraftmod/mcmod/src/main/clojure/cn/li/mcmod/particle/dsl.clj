@@ -10,13 +10,13 @@
 	 {:cn.li.mcmod.particle.dsl/runtime ::particle-registry-runtime
 	  :registry (or registry (registry-core/atom-registry {}))}))
 
-(def ^:dynamic *particle-registry-runtime* nil)
-
 (defonce ^:private installed-particle-registry-runtime
 	(create-particle-registry-runtime))
 
+(defonce ^:private particle-registry-runtime-override* (atom nil))
+
 (defn- particle-registry-state []
-	(:registry (or *particle-registry-runtime* installed-particle-registry-runtime)))
+	(:registry (or @particle-registry-runtime-override* installed-particle-registry-runtime)))
 
 (defrecord ParticleSpec [id registry-name always-show? properties])
 

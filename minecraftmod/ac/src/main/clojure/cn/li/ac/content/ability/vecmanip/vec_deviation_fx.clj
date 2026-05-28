@@ -20,6 +20,9 @@
 
 (def ^:dynamic *vec-deviation-fx-runtime* nil)
 
+(defonce ^:private installed-vec-deviation-fx-runtime (create-vec-deviation-fx-runtime))
+(defonce ^:private vec-deviation-fx-runtime-override* (atom nil))
+
 (defn- vec-deviation-fx-runtime?
   [runtime]
   (and (map? runtime)
@@ -31,8 +34,12 @@
   (when-not (vec-deviation-fx-runtime? runtime)
     (throw (ex-info "Expected VecDeviation FX runtime"
                     {:value runtime})))
-  (binding [*vec-deviation-fx-runtime* runtime]
-    (f)))
+  (let [prev-override @vec-deviation-fx-runtime-override*]
+    (try
+      (reset! vec-deviation-fx-runtime-override* runtime)
+      (f)
+      (finally
+        (reset! vec-deviation-fx-runtime-override* prev-override)))))
 
 (defmacro with-vec-deviation-fx-runtime
   [runtime & body]
@@ -40,9 +47,8 @@
 
 (defn- current-vec-deviation-fx-runtime
   []
-  (or *vec-deviation-fx-runtime*
-      (throw (ex-info "VecDeviation FX runtime is not bound"
-                      {:hint "Bind runtime via call-with-vec-deviation-fx-runtime or use init! registered handlers"}))))
+  (or @vec-deviation-fx-runtime-override*
+      @installed-vec-deviation-fx-runtime))
 
 (defn- vec-deviation-fx-state-atom
   []

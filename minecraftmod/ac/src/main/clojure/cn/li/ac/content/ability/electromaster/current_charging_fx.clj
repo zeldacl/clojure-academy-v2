@@ -29,10 +29,9 @@
    {::runtime ::current-charging-fx-runtime
     :state* state*}))
 
-(def ^:dynamic *current-charging-fx-runtime* nil)
-
 (defonce ^:private installed-current-charging-fx-runtime
   (create-current-charging-fx-runtime))
+(defonce ^:private current-charging-fx-runtime-override* (atom nil))
 
 (defn- current-charging-fx-runtime?
   [runtime]
@@ -45,8 +44,12 @@
   (when-not (current-charging-fx-runtime? runtime)
     (throw (ex-info "Expected current charging FX runtime"
                     {:value runtime})))
-  (binding [*current-charging-fx-runtime* runtime]
-    (f)))
+  (let [prev-override @current-charging-fx-runtime-override*]
+    (try
+      (reset! current-charging-fx-runtime-override* runtime)
+      (f)
+      (finally
+        (reset! current-charging-fx-runtime-override* prev-override)))))
 
 (defmacro with-current-charging-fx-runtime
   [runtime & body]
@@ -54,8 +57,8 @@
 
 (defn- current-current-charging-fx-runtime
   []
-  (or *current-charging-fx-runtime*
-      installed-current-charging-fx-runtime))
+  (or @current-charging-fx-runtime-override*
+      @installed-current-charging-fx-runtime))
 
 (defn- current-charging-fx-state-atom
   []

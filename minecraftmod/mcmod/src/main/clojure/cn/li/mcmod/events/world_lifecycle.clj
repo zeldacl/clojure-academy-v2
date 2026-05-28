@@ -37,7 +37,7 @@
    {::runtime ::world-lifecycle-runtime
     :state* state*}))
 
-(def ^:dynamic *world-lifecycle-runtime* nil)
+(defonce ^:private world-lifecycle-runtime-override* (atom nil))
 
 (defonce ^:private installed-world-lifecycle-runtime
   (create-world-lifecycle-runtime))
@@ -53,8 +53,12 @@
   (when-not (world-lifecycle-runtime? runtime)
     (throw (ex-info "Expected world lifecycle runtime"
                     {:runtime runtime})))
-  (binding [*world-lifecycle-runtime* runtime]
-    (f)))
+  (let [prev-override @world-lifecycle-runtime-override*]
+    (try
+      (reset! world-lifecycle-runtime-override* runtime)
+      (f)
+      (finally
+        (reset! world-lifecycle-runtime-override* prev-override)))))
 
 (defmacro with-world-lifecycle-runtime
   [runtime & body]
@@ -62,7 +66,7 @@
 
 (defn- current-world-lifecycle-runtime
   []
-  (or *world-lifecycle-runtime*
+    (or @world-lifecycle-runtime-override*
       installed-world-lifecycle-runtime))
 
 (defn- world-lifecycle-state-atom

@@ -36,13 +36,13 @@
    {:cn.li.mcmod.command.actions/runtime ::action-executor-registry-runtime
     :state* (or state* (atom {}))}))
 
-(def ^:dynamic *action-executor-registry-runtime* nil)
-
 (defonce ^:private installed-action-executor-registry-runtime
   (create-action-executor-registry-runtime))
 
+(defonce ^:private action-executor-registry-runtime-override* (atom nil))
+
 (defn- action-executors-atom []
-  (:state* (or *action-executor-registry-runtime* installed-action-executor-registry-runtime)))
+  (:state* (or @action-executor-registry-runtime-override* installed-action-executor-registry-runtime)))
 
 (defn- action-executors-snapshot []
   @(action-executors-atom))

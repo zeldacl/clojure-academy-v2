@@ -23,13 +23,13 @@
    {:cn.li.mcmod.events.metadata/runtime ::event-metadata-runtime
     :state* (or state* (atom {:block-handlers {} :player-handlers {}}))}))
 
-(def ^:dynamic *event-metadata-runtime* nil)
-
 (defonce ^:private installed-event-metadata-runtime
   (create-event-metadata-runtime))
 
+(defonce ^:private event-metadata-runtime-override* (atom nil))
+
 (defn- event-metadata-state-atom []
-  (:state* (or *event-metadata-runtime* installed-event-metadata-runtime)))
+  (:state* (or @event-metadata-runtime-override* installed-event-metadata-runtime)))
 
 (defn- event-metadata-state-snapshot []
   @(event-metadata-state-atom))

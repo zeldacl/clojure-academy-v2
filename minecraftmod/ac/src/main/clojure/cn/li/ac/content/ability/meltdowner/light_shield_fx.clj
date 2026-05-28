@@ -17,7 +17,11 @@
    {::runtime ::light-shield-fx-runtime
     :state* state*}))
 
-(def ^:dynamic *light-shield-fx-runtime* nil)
+
+(defonce ^:private installed-light-shield-fx-runtime
+  (create-light-shield-fx-runtime))
+
+(defonce ^:private light-shield-fx-runtime-override* (atom nil))
 
 (defn- light-shield-fx-runtime?
   [runtime]
@@ -30,8 +34,12 @@
   (when-not (light-shield-fx-runtime? runtime)
     (throw (ex-info "Expected light shield FX runtime"
                     {:value runtime})))
-  (binding [*light-shield-fx-runtime* runtime]
-    (f)))
+  (let [prev-override @light-shield-fx-runtime-override*]
+    (try
+      (reset! light-shield-fx-runtime-override* runtime)
+      (f)
+      (finally
+        (reset! light-shield-fx-runtime-override* prev-override)))))
 
 (defmacro with-light-shield-fx-runtime
   [runtime & body]
@@ -39,9 +47,8 @@
 
 (defn- current-light-shield-fx-runtime
   []
-  (or *light-shield-fx-runtime*
-      (throw (ex-info "Light Shield FX runtime is not bound"
-                      {:hint "Bind runtime via call-with-light-shield-fx-runtime or use init! registered handlers"}))))
+  (or @light-shield-fx-runtime-override*
+      @installed-light-shield-fx-runtime))
 
 (defn- light-shield-fx-state-atom
   []

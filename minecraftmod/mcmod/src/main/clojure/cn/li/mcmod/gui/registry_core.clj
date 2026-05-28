@@ -15,13 +15,13 @@
    {:cn.li.mcmod.gui.registry-core/runtime ::gui-registry-core-runtime
     :state* (or state* (atom (default-gui-registry-core-runtime-state)))}))
 
-(def ^:dynamic *gui-registry-core-runtime* nil)
-
 (defonce ^:private installed-gui-registry-core-runtime
   (create-gui-registry-core-runtime))
 
+(defonce ^:private gui-registry-core-runtime-override* (atom nil))
+
 (defn- gui-registry-core-state-atom []
-  (:state* (or *gui-registry-core-runtime* installed-gui-registry-core-runtime)))
+  (:state* (or @gui-registry-core-runtime-override* installed-gui-registry-core-runtime)))
 
 (defn- gui-registry-core-state-snapshot []
   @(gui-registry-core-state-atom))

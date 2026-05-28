@@ -14,13 +14,13 @@
    {:cn.li.mcmod.gui.slot-schema/runtime ::slot-schema-runtime
     :state* (or state* (atom (default-slot-schema-runtime-state)))}))
 
-(def ^:dynamic *slot-schema-runtime* nil)
-
 (defonce ^:private installed-slot-schema-runtime
   (create-slot-schema-runtime))
 
+(defonce ^:private slot-schema-runtime-override* (atom nil))
+
 (defn- slot-schema-state-atom []
-  (:state* (or *slot-schema-runtime* installed-slot-schema-runtime)))
+  (:state* (or @slot-schema-runtime-override* installed-slot-schema-runtime)))
 
 (defn- slot-schema-state-snapshot []
   @(slot-schema-state-atom))

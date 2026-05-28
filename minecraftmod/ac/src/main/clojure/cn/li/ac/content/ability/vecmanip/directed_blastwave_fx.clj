@@ -18,7 +18,10 @@
    {::runtime ::directed-blastwave-fx-runtime
     :state* state*}))
 
-(def ^:dynamic *directed-blastwave-fx-runtime* nil)
+(defonce ^:private installed-directed-blastwave-fx-runtime
+  (create-directed-blastwave-fx-runtime))
+
+(defonce ^:private directed-blastwave-fx-runtime-override* (atom nil))
 
 (defn- directed-blastwave-fx-runtime?
   [runtime]
@@ -31,8 +34,12 @@
   (when-not (directed-blastwave-fx-runtime? runtime)
     (throw (ex-info "Expected Directed Blastwave FX runtime"
                     {:value runtime})))
-  (binding [*directed-blastwave-fx-runtime* runtime]
-    (f)))
+  (let [prev-override @directed-blastwave-fx-runtime-override*]
+    (try
+      (reset! directed-blastwave-fx-runtime-override* runtime)
+      (f)
+      (finally
+        (reset! directed-blastwave-fx-runtime-override* prev-override)))))
 
 (defmacro with-directed-blastwave-fx-runtime
   [runtime & body]
@@ -40,9 +47,8 @@
 
 (defn- current-directed-blastwave-fx-runtime
   []
-  (or *directed-blastwave-fx-runtime*
-      (throw (ex-info "Directed Blastwave FX runtime is not bound"
-                      {:hint "Bind runtime via call-with-directed-blastwave-fx-runtime or use init! registered handlers"}))))
+  (or @directed-blastwave-fx-runtime-override*
+      @installed-directed-blastwave-fx-runtime))
 
 (defn- directed-blastwave-fx-state-atom
   []

@@ -19,7 +19,11 @@
    {::runtime ::blood-retrograde-fx-runtime
     :state* state*}))
 
-(def ^:dynamic *blood-retrograde-fx-runtime* nil)
+
+(defonce ^:private installed-blood-retrograde-fx-runtime
+  (create-blood-retrograde-fx-runtime))
+
+(defonce ^:private blood-retrograde-fx-runtime-override* (atom nil))
 
 (defn- blood-retrograde-fx-runtime?
   [runtime]
@@ -32,8 +36,12 @@
   (when-not (blood-retrograde-fx-runtime? runtime)
     (throw (ex-info "Expected Blood Retrograde FX runtime"
                     {:value runtime})))
-  (binding [*blood-retrograde-fx-runtime* runtime]
-    (f)))
+  (let [prev-override @blood-retrograde-fx-runtime-override*]
+    (try
+      (reset! blood-retrograde-fx-runtime-override* runtime)
+      (f)
+      (finally
+        (reset! blood-retrograde-fx-runtime-override* prev-override)))))
 
 (defmacro with-blood-retrograde-fx-runtime
   [runtime & body]
@@ -41,9 +49,8 @@
 
 (defn- current-blood-retrograde-fx-runtime
   []
-  (or *blood-retrograde-fx-runtime*
-      (throw (ex-info "Blood Retrograde FX runtime is not bound"
-                      {:hint "Bind runtime via call-with-blood-retrograde-fx-runtime or use init! registered handlers"}))))
+  (or @blood-retrograde-fx-runtime-override*
+      @installed-blood-retrograde-fx-runtime))
 
 (defn- blood-retrograde-fx-state-atom
   []

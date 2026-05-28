@@ -9,13 +9,13 @@
    {:cn.li.mcmod.loot.dsl/runtime ::loot-injection-registry-runtime
     :registry (or registry (registry-core/atom-registry {}))}))
 
-(def ^:dynamic *loot-injection-registry-runtime* nil)
-
 (defonce ^:private installed-loot-injection-registry-runtime
   (create-loot-injection-registry-runtime))
 
+(defonce ^:private loot-injection-registry-runtime-override* (atom nil))
+
 (defn- loot-injection-registry-state []
-  (:registry (or *loot-injection-registry-runtime* installed-loot-injection-registry-runtime)))
+  (:registry (or @loot-injection-registry-runtime-override* installed-loot-injection-registry-runtime)))
 
 (defrecord LootInjectionSpec
   [id target-table item-id weight quality min-count max-count])

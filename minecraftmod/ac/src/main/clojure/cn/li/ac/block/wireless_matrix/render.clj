@@ -60,22 +60,30 @@
 (defonce ^:private installed-wireless-matrix-render-runtime
   (create-wireless-matrix-render-runtime))
 
-(def ^:dynamic *wireless-matrix-render-runtime*
-  installed-wireless-matrix-render-runtime)
+(defonce ^:private wireless-matrix-render-runtime-override* (atom nil))
 
 (defn current-wireless-matrix-render-runtime
   []
-  *wireless-matrix-render-runtime*)
+  (or @wireless-matrix-render-runtime-override*
+      installed-wireless-matrix-render-runtime))
 
 (defmacro with-wireless-matrix-render-runtime
   [runtime & body]
-  `(binding [*wireless-matrix-render-runtime* ~runtime]
-     ~@body))
+  `(let [prev-override# @wireless-matrix-render-runtime-override*]
+     (try
+       (reset! wireless-matrix-render-runtime-override* ~runtime)
+       ~@body
+       (finally
+         (reset! wireless-matrix-render-runtime-override* prev-override#)))))
 
 (defn call-with-wireless-matrix-render-runtime
   [runtime f]
-  (binding [*wireless-matrix-render-runtime* runtime]
-    (f)))
+  (let [prev-override @wireless-matrix-render-runtime-override*]
+    (try
+      (reset! wireless-matrix-render-runtime-override* runtime)
+      (f)
+      (finally
+        (reset! wireless-matrix-render-runtime-override* prev-override)))))
 
 (defn last-shield-hw-state-atom
   []

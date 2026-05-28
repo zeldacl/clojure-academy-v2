@@ -20,6 +20,9 @@
 
 (def ^:dynamic *vec-reflection-fx-runtime* nil)
 
+(defonce ^:private installed-vec-reflection-fx-runtime (create-vec-reflection-fx-runtime))
+(defonce ^:private vec-reflection-fx-runtime-override* (atom nil))
+
 (defn- vec-reflection-fx-runtime?
   [runtime]
   (and (map? runtime)
@@ -31,8 +34,12 @@
   (when-not (vec-reflection-fx-runtime? runtime)
     (throw (ex-info "Expected VecReflection FX runtime"
                     {:value runtime})))
-  (binding [*vec-reflection-fx-runtime* runtime]
-    (f)))
+  (let [prev-override @vec-reflection-fx-runtime-override*]
+    (try
+      (reset! vec-reflection-fx-runtime-override* runtime)
+      (f)
+      (finally
+        (reset! vec-reflection-fx-runtime-override* prev-override)))))
 
 (defmacro with-vec-reflection-fx-runtime
   [runtime & body]
@@ -40,9 +47,8 @@
 
 (defn- current-vec-reflection-fx-runtime
   []
-  (or *vec-reflection-fx-runtime*
-      (throw (ex-info "VecReflection FX runtime is not bound"
-                      {:hint "Bind runtime via call-with-vec-reflection-fx-runtime or use init! registered handlers"}))))
+  (or @vec-reflection-fx-runtime-override*
+      @installed-vec-reflection-fx-runtime))
 
 (defn- vec-reflection-fx-state-atom
   []

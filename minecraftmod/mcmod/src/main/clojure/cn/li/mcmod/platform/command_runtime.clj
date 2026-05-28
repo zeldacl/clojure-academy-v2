@@ -13,13 +13,13 @@
 	 {:cn.li.mcmod.platform.command-runtime/runtime ::command-runtime
 	  :state* (or state* (atom (default-command-runtime-state)))}))
 
-(def ^:dynamic *command-runtime* nil)
-
 (defonce ^:private installed-command-runtime
 	(create-command-runtime))
 
+(defonce ^:private command-runtime-override* (atom nil))
+
 (defn- command-hooks-atom []
-	(:state* (or *command-runtime* installed-command-runtime)))
+	(:state* (or @command-runtime-override* installed-command-runtime)))
 
 (defn- command-hooks-snapshot []
 	@(command-hooks-atom))

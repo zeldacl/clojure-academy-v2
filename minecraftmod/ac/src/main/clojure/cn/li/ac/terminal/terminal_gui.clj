@@ -42,12 +42,18 @@
   {::runtime ::terminal-runtime
    :runtime-state* (atom default-terminal-runtime-state)})
 
-(def ^:dynamic *terminal-runtime* nil)
-
 (defonce ^:private installed-terminal-runtime
   (create-terminal-runtime))
 
+(defonce ^:private terminal-runtime-override* (atom nil))
+
 (def ^:dynamic *terminal-owner* nil)
+
+(defonce ^:private terminal-owner-override* (atom nil))
+
+(defn- current-terminal-owner
+  []
+  (or @terminal-owner-override* *terminal-owner*))
 
 (defn- require-owner-value
   [owner label value]
@@ -86,8 +92,12 @@
   (when-not (terminal-runtime? runtime)
     (throw (ex-info "Expected terminal runtime"
                     {:runtime runtime})))
-  (binding [*terminal-runtime* runtime]
-    (f)))
+  (let [prev-override @terminal-runtime-override*]
+    (try
+      (reset! terminal-runtime-override* runtime)
+      (f)
+      (finally
+        (reset! terminal-runtime-override* prev-override)))))
 
 (defmacro with-terminal-runtime
   [runtime & body]
@@ -95,8 +105,8 @@
 
 (defn- current-terminal-runtime
   []
-  (or *terminal-runtime*
-      installed-terminal-runtime))
+  (or @terminal-runtime-override*
+      @installed-terminal-runtime))
 
 (defn- terminal-runtime-state-atom
   []
@@ -138,9 +148,27 @@
      :screen-id :terminal
      :player-uuid player-id}))
 
+(defn- call-with-terminal-owner
+  [owner f]
+  (let [prev-override @terminal-owner-override*]
+    (try
+      (reset! terminal-owner-override* owner)
+      (f)
+      (finally
+        (reset! terminal-owner-override* prev-override)))))
+
+(defmacro ^:private with-terminal-owner
+  [owner & body]
+  `(call-with-terminal-owner ~owner (fn [] ~@body)))
+
+(defn- current-terminal-owner
+  []
+  (or @terminal-owner-override*
+      *terminal-owner*))
+
 (defn terminal-state-snapshot
   ([]
-   (terminal-state-snapshot *terminal-owner*))
+   (terminal-state-snapshot (current-terminal-owner)))
   ([owner]
    (public-terminal-state
      (get-in (terminal-runtime-state-snapshot) [:owners (terminal-owner-key owner)]))))
@@ -176,7 +204,7 @@
 (defn query-terminal-state!
   "Query terminal state from server."
   ([callback]
-   (query-terminal-state! *terminal-owner* callback))
+   (query-terminal-state! (current-terminal-owner) callback))
   ([owner callback]
    (let [generation (ensure-terminal-owner! owner)]
      (net-client/send-to-server
@@ -194,7 +222,7 @@
 (defn install-terminal!
   "Send terminal installation request to server."
   ([callback]
-   (install-terminal! *terminal-owner* callback))
+   (install-terminal! (current-terminal-owner) callback))
   ([owner callback]
    (let [generation (ensure-terminal-owner! owner)]
      (swap-terminal-state! owner assoc :loading? true)
@@ -212,7 +240,7 @@
 (defn install-app!
   "Send app installation request to server."
   ([app-id callback]
-   (install-app! *terminal-owner* app-id callback))
+   (install-app! (current-terminal-owner) app-id callback))
   ([owner app-id callback]
    (let [generation (ensure-terminal-owner! owner)]
      (swap-terminal-state! owner assoc :loading? true)
@@ -230,7 +258,7 @@
 (defn uninstall-app!
   "Send app uninstallation request to server."
   ([app-id callback]
-   (uninstall-app! *terminal-owner* app-id callback))
+   (uninstall-app! (current-terminal-owner) app-id callback))
   ([owner app-id callback]
    (let [generation (ensure-terminal-owner! owner)]
      (net-client/send-to-server
@@ -397,7 +425,7 @@
 (defn- rebuild-app-grid!
   "Rebuild the app grid with current state."
   [root-widget player]
-  (binding [*terminal-owner* (player-terminal-owner player)]
+  (with-terminal-owner (player-terminal-owner player)
   (try
     ;; Remove old app widgets
     (doseq [i (range 9)]
@@ -409,7 +437,7 @@
           all-apps (ordered-apps)
           page (clamp-page all-apps (:page state))
           installed-apps (:installed-apps state)
-          _ (swap-terminal-state! *terminal-owner* assoc :page page)
+          _ (swap-terminal-state! (current-terminal-owner) assoc :page page)
           offset (* page apps-per-page)
           page-apps (->> all-apps (drop offset) (take apps-per-page))]
 
@@ -432,12 +460,12 @@
 
 (defn- change-page!
   [delta root-widget player]
-  (binding [*terminal-owner* (player-terminal-owner player)]
+  (with-terminal-owner (player-terminal-owner player)
   (let [apps (ordered-apps)
         current (:page (terminal-state-snapshot))
         next-page (clamp-page apps (+ (int (or current 0)) (int delta)))]
     (when (not= next-page current)
-      (swap-terminal-state! *terminal-owner* assoc :page next-page)
+      (swap-terminal-state! (current-terminal-owner) assoc :page next-page)
       (rebuild-app-grid! root-widget player)))))
 
 (defn- bind-navigation-controls!
@@ -468,7 +496,7 @@
     (let [owner (player-terminal-owner player)
           xml-path (modid/asset-path "guis" "terminal.xml")
           root-widget (cgui-doc/read-xml xml-path)]
-		(binding [*terminal-owner* owner]
+		(with-terminal-owner owner
 
       (if-not root-widget
         (do
@@ -498,7 +526,7 @@
                             (fn [_]
                               (swap! counter inc)
                               (when (zero? (mod @counter 40)) ; 40 frames ≈ 2 seconds
-                                (binding [*terminal-owner* owner]
+                                (with-terminal-owner owner
                                   (update-loading-indicator! root-widget))))))
 
           (log/info "Terminal GUI created successfully")

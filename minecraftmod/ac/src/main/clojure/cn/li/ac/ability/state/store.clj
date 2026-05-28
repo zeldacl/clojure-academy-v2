@@ -90,5 +90,4 @@
       (:slots (get-in (ensure-state! uuid) [:preset-data])))))
 
 (defn install-store! []
-  (alter-var-root #'contract/*player-ability-store*
-                  (constantly (ac-player-ability-store))))
+  (contract/install-player-ability-store! (ac-player-ability-store)))

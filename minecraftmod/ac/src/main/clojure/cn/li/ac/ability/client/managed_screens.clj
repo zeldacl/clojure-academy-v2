@@ -14,7 +14,10 @@
 	{::runtime ::managed-screen-runtime
 	 :state* (atom default-managed-screen-runtime-state)})
 
-(def ^:dynamic *managed-screen-runtime* nil)
+(defonce ^:private installed-managed-screen-runtime
+	(create-managed-screen-runtime))
+
+(defonce ^:private managed-screen-runtime-override* (atom nil))
 
 (defn- managed-screen-runtime?
 	[runtime]
@@ -27,18 +30,27 @@
 	(when-not (managed-screen-runtime? runtime)
 		(throw (ex-info "Expected managed screen runtime"
 										{:runtime runtime})))
-	(binding [*managed-screen-runtime* runtime]
-		(f)))
+	(let [prev-override @managed-screen-runtime-override*]
+		(try
+			(reset! managed-screen-runtime-override* runtime)
+			(f)
+			(finally
+				(reset! managed-screen-runtime-override* prev-override)))))
 
 (defmacro with-managed-screen-runtime
 	[runtime & body]
 	`(call-with-managed-screen-runtime ~runtime (fn [] ~@body)))
 
+(defn- current-managed-screen-runtime
+	[]
+	(or @managed-screen-runtime-override*
+			@installed-managed-screen-runtime))
+
 (defn- require-managed-screen-runtime
 	[]
-	(or *managed-screen-runtime*
+	(or (current-managed-screen-runtime)
 			(throw (ex-info "Managed screen runtime is not bound"
-											{:required '*managed-screen-runtime*}))))
+											{:required 'managed-screen-runtime}))))
 
 (defn- managed-screen-state-atom
 	[]

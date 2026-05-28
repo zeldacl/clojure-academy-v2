@@ -16,7 +16,11 @@
    {::runtime ::thunder-clap-fx-runtime
     :state* state*}))
 
-(def ^:dynamic *thunder-clap-fx-runtime* nil)
+
+(defonce ^:private installed-thunder-clap-fx-runtime
+  (create-thunder-clap-fx-runtime))
+
+(defonce ^:private thunder-clap-fx-runtime-override* (atom nil))
 
 (defn- thunder-clap-fx-runtime?
   [runtime]
@@ -29,8 +33,12 @@
   (when-not (thunder-clap-fx-runtime? runtime)
     (throw (ex-info "Expected thunder clap FX runtime"
                     {:value runtime})))
-  (binding [*thunder-clap-fx-runtime* runtime]
-    (f)))
+  (let [prev-override @thunder-clap-fx-runtime-override*]
+    (try
+      (reset! thunder-clap-fx-runtime-override* runtime)
+      (f)
+      (finally
+        (reset! thunder-clap-fx-runtime-override* prev-override)))))
 
 (defmacro with-thunder-clap-fx-runtime
   [runtime & body]
@@ -38,9 +46,8 @@
 
 (defn- current-thunder-clap-fx-runtime
   []
-  (or *thunder-clap-fx-runtime*
-      (throw (ex-info "Thunder Clap FX runtime is not bound"
-                      {:hint "Bind runtime via call-with-thunder-clap-fx-runtime or use init! registered handlers"}))))
+  (or @thunder-clap-fx-runtime-override*
+      @installed-thunder-clap-fx-runtime))
 
 (defn- thunder-clap-fx-state-atom
   []

@@ -19,6 +19,9 @@
 
 (def ^:dynamic *vec-accel-fx-runtime* nil)
 
+(defonce ^:private installed-vec-accel-fx-runtime (create-vec-accel-fx-runtime))
+(defonce ^:private vec-accel-fx-runtime-override* (atom nil))
+
 (defn- vec-accel-fx-runtime?
   [runtime]
   (and (map? runtime)
@@ -30,8 +33,12 @@
   (when-not (vec-accel-fx-runtime? runtime)
     (throw (ex-info "Expected VecAccel FX runtime"
                     {:value runtime})))
-  (binding [*vec-accel-fx-runtime* runtime]
-    (f)))
+  (let [prev-override @vec-accel-fx-runtime-override*]
+    (try
+      (reset! vec-accel-fx-runtime-override* runtime)
+      (f)
+      (finally
+        (reset! vec-accel-fx-runtime-override* prev-override)))))
 
 (defmacro with-vec-accel-fx-runtime
   [runtime & body]
@@ -39,9 +46,8 @@
 
 (defn- current-vec-accel-fx-runtime
   []
-  (or *vec-accel-fx-runtime*
-      (throw (ex-info "VecAccel FX runtime is not bound"
-                      {:hint "Bind runtime via call-with-vec-accel-fx-runtime or use init! registered handlers"}))))
+  (or @vec-accel-fx-runtime-override*
+      @installed-vec-accel-fx-runtime))
 
 (defn- vec-accel-fx-state-atom
   []

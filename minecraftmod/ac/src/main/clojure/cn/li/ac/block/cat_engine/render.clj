@@ -36,22 +36,30 @@
 (defonce ^:private installed-cat-engine-render-runtime
   (create-cat-engine-render-runtime))
 
-(def ^:dynamic *cat-engine-render-runtime*
-  installed-cat-engine-render-runtime)
+(defonce ^:private cat-engine-render-runtime-override* (atom nil))
 
 (defn current-cat-engine-render-runtime
   []
-  *cat-engine-render-runtime*)
+  (or @cat-engine-render-runtime-override*
+      installed-cat-engine-render-runtime))
 
 (defmacro with-cat-engine-render-runtime
   [runtime & body]
-  `(binding [*cat-engine-render-runtime* ~runtime]
-     ~@body))
+  `(let [prev-override# @cat-engine-render-runtime-override*]
+     (try
+       (reset! cat-engine-render-runtime-override* ~runtime)
+       ~@body
+       (finally
+         (reset! cat-engine-render-runtime-override* prev-override#)))))
 
 (defn call-with-cat-engine-render-runtime
   [runtime f]
-  (binding [*cat-engine-render-runtime* runtime]
-    (f)))
+  (let [prev-override @cat-engine-render-runtime-override*]
+    (try
+      (reset! cat-engine-render-runtime-override* runtime)
+      (f)
+      (finally
+        (reset! cat-engine-render-runtime-override* prev-override)))))
 
 (defn rotor-cache-atom
   []

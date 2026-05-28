@@ -26,7 +26,11 @@
    {::runtime ::mag-manip-fx-runtime
     :state* state*}))
 
-(def ^:dynamic *mag-manip-fx-runtime* nil)
+
+(defonce ^:private installed-mag-manip-fx-runtime
+  (create-mag-manip-fx-runtime))
+
+(defonce ^:private mag-manip-fx-runtime-override* (atom nil))
 
 (defn- mag-manip-fx-runtime?
   [runtime]
@@ -39,8 +43,12 @@
   (when-not (mag-manip-fx-runtime? runtime)
     (throw (ex-info "Expected mag manip FX runtime"
                     {:value runtime})))
-  (binding [*mag-manip-fx-runtime* runtime]
-    (f)))
+  (let [prev-override @mag-manip-fx-runtime-override*]
+    (try
+      (reset! mag-manip-fx-runtime-override* runtime)
+      (f)
+      (finally
+        (reset! mag-manip-fx-runtime-override* prev-override)))))
 
 (defmacro with-mag-manip-fx-runtime
   [runtime & body]
@@ -48,9 +56,8 @@
 
 (defn- current-mag-manip-fx-runtime
   []
-  (or *mag-manip-fx-runtime*
-      (throw (ex-info "Mag Manip FX runtime is not bound"
-                      {:hint "Bind runtime via call-with-mag-manip-fx-runtime or use init! registered handlers"}))))
+  (or @mag-manip-fx-runtime-override*
+      @installed-mag-manip-fx-runtime))
 
 (defn- mag-manip-fx-state-atom
   []

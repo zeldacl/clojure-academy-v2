@@ -70,24 +70,32 @@
 (defonce ^:private installed-wind-gen-render-runtime
 	(create-wind-gen-render-runtime))
 
-(def ^:dynamic *wind-gen-render-runtime*
-	installed-wind-gen-render-runtime)
+(defonce ^:private wind-gen-render-runtime-override* (atom nil))
 
 (defn current-wind-gen-render-runtime
-	[]
-	*wind-gen-render-runtime*)
+  []
+  (or @wind-gen-render-runtime-override*
+      installed-wind-gen-render-runtime))
 
 (defmacro with-wind-gen-render-runtime
-	[runtime & body]
-	`(binding [*wind-gen-render-runtime* ~runtime]
-		 ~@body))
+  [runtime & body]
+  `(let [prev-override# @wind-gen-render-runtime-override*]
+     (try
+       (reset! wind-gen-render-runtime-override* ~runtime)
+       ~@body
+       (finally
+         (reset! wind-gen-render-runtime-override* prev-override#)))))
 
 (defn call-with-wind-gen-render-runtime
-	[runtime f]
-	(binding [*wind-gen-render-runtime* runtime]
-		(f)))
+  [runtime f]
+  (let [prev-override @wind-gen-render-runtime-override*]
+    (try
+      (reset! wind-gen-render-runtime-override* runtime)
+      (f)
+      (finally
+        (reset! wind-gen-render-runtime-override* prev-override)))))
 
-(defn fan-rot-cache-atom
+(defn- fan-rot-cache-atom
 	[]
 	(:fan-rot-cache (current-wind-gen-render-runtime)))
 

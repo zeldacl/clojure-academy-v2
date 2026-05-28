@@ -59,6 +59,9 @@
 
 (def ^:dynamic *groundshock-fx-runtime* nil)
 
+(defonce ^:private installed-groundshock-fx-runtime (create-groundshock-fx-runtime))
+(defonce ^:private groundshock-fx-runtime-override* (atom nil))
+
 (defn- groundshock-fx-runtime?
   [runtime]
   (and (map? runtime)
@@ -70,8 +73,12 @@
   (when-not (groundshock-fx-runtime? runtime)
     (throw (ex-info "Expected groundshock FX runtime"
                     {:value runtime})))
-  (binding [*groundshock-fx-runtime* runtime]
-    (f)))
+  (let [prev-override @groundshock-fx-runtime-override*]
+    (try
+      (reset! groundshock-fx-runtime-override* runtime)
+      (f)
+      (finally
+        (reset! groundshock-fx-runtime-override* prev-override)))))
 
 (defmacro with-groundshock-fx-runtime
   [runtime & body]
@@ -79,9 +86,8 @@
 
 (defn- current-groundshock-fx-runtime
   []
-  (or *groundshock-fx-runtime*
-      (throw (ex-info "Groundshock FX runtime is not bound"
-                      {:hint "Bind runtime via call-with-groundshock-fx-runtime or use init! registered handlers"}))))
+  (or @groundshock-fx-runtime-override*
+      @installed-groundshock-fx-runtime))
 
 (defn- groundshock-fx-state-atom
   []

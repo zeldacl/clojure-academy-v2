@@ -19,7 +19,11 @@
    {::runtime ::meltdowner-fx-runtime
     :state* state*}))
 
-(def ^:dynamic *meltdowner-fx-runtime* nil)
+
+(defonce ^:private installed-meltdowner-fx-runtime
+  (create-meltdowner-fx-runtime))
+
+(defonce ^:private meltdowner-fx-runtime-override* (atom nil))
 
 (defn- meltdowner-fx-runtime?
   [runtime]
@@ -32,8 +36,12 @@
   (when-not (meltdowner-fx-runtime? runtime)
     (throw (ex-info "Expected meltdowner FX runtime"
                     {:value runtime})))
-  (binding [*meltdowner-fx-runtime* runtime]
-    (f)))
+  (let [prev-override @meltdowner-fx-runtime-override*]
+    (try
+      (reset! meltdowner-fx-runtime-override* runtime)
+      (f)
+      (finally
+        (reset! meltdowner-fx-runtime-override* prev-override)))))
 
 (defmacro with-meltdowner-fx-runtime
   [runtime & body]
@@ -41,9 +49,8 @@
 
 (defn- current-meltdowner-fx-runtime
   []
-  (or *meltdowner-fx-runtime*
-      (throw (ex-info "Meltdowner FX runtime is not bound"
-                      {:hint "Bind runtime via call-with-meltdowner-fx-runtime or use init! registered handlers"}))))
+  (or @meltdowner-fx-runtime-override*
+      @installed-meltdowner-fx-runtime))
 
 (defn- meltdowner-fx-state-atom
   []

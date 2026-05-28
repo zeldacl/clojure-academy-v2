@@ -20,7 +20,11 @@
    {::runtime ::arc-gen-fx-runtime
     :state* state*}))
 
-(def ^:dynamic *arc-gen-fx-runtime* nil)
+
+(defonce ^:private installed-arc-gen-fx-runtime
+  (create-arc-gen-fx-runtime))
+
+(defonce ^:private arc-gen-fx-runtime-override* (atom nil))
 
 (defn- arc-gen-fx-runtime?
   [runtime]
@@ -33,8 +37,12 @@
   (when-not (arc-gen-fx-runtime? runtime)
     (throw (ex-info "Expected Arc Gen FX runtime"
                     {:value runtime})))
-  (binding [*arc-gen-fx-runtime* runtime]
-    (f)))
+  (let [prev-override @arc-gen-fx-runtime-override*]
+    (try
+      (reset! arc-gen-fx-runtime-override* runtime)
+      (f)
+      (finally
+        (reset! arc-gen-fx-runtime-override* prev-override)))))
 
 (defmacro with-arc-gen-fx-runtime
   [runtime & body]
@@ -42,9 +50,8 @@
 
 (defn- current-arc-gen-fx-runtime
   []
-  (or *arc-gen-fx-runtime*
-      (throw (ex-info "Arc Gen FX runtime is not bound"
-                      {:hint "Bind runtime via call-with-arc-gen-fx-runtime or use init! registered handlers"}))))
+  (or @arc-gen-fx-runtime-override*
+      @installed-arc-gen-fx-runtime))
 
 (defn- arc-gen-fx-state-atom
   []

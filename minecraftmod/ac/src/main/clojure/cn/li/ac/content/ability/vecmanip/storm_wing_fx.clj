@@ -18,7 +18,11 @@
    {::runtime ::storm-wing-fx-runtime
     :state* state*}))
 
-(def ^:dynamic *storm-wing-fx-runtime* nil)
+
+(defonce ^:private installed-storm-wing-fx-runtime
+  (create-storm-wing-fx-runtime))
+
+(defonce ^:private storm-wing-fx-runtime-override* (atom nil))
 
 (defn- storm-wing-fx-runtime?
   [runtime]
@@ -31,8 +35,12 @@
   (when-not (storm-wing-fx-runtime? runtime)
     (throw (ex-info "Expected Storm Wing FX runtime"
                     {:value runtime})))
-  (binding [*storm-wing-fx-runtime* runtime]
-    (f)))
+  (let [prev-override @storm-wing-fx-runtime-override*]
+    (try
+      (reset! storm-wing-fx-runtime-override* runtime)
+      (f)
+      (finally
+        (reset! storm-wing-fx-runtime-override* prev-override)))))
 
 (defmacro with-storm-wing-fx-runtime
   [runtime & body]
@@ -40,9 +48,8 @@
 
 (defn- current-storm-wing-fx-runtime
   []
-  (or *storm-wing-fx-runtime*
-      (throw (ex-info "Storm Wing FX runtime is not bound"
-                      {:hint "Bind runtime via call-with-storm-wing-fx-runtime or use init! registered handlers"}))))
+  (or @storm-wing-fx-runtime-override*
+      @installed-storm-wing-fx-runtime))
 
 (defn- storm-wing-fx-state-atom
   []

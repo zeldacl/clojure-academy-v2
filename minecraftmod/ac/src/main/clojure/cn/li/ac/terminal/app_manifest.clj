@@ -25,10 +25,10 @@
 	 {::runtime ::app-init-registry-runtime
 	  :state* state*}))
 
-(def ^:dynamic *app-init-registry-runtime* nil)
-
 (defonce ^:private installed-app-init-registry-runtime
 	(create-app-init-registry-runtime))
+
+(defonce ^:private app-init-registry-runtime-override* (atom nil))
 
 (defn call-with-app-init-registry-runtime
 	[runtime f]
@@ -36,13 +36,17 @@
 	               (= ::app-init-registry-runtime (::runtime runtime))
 	               (some? (:state* runtime)))
 		(throw (ex-info "Expected app init registry runtime" {:runtime runtime})))
-	(binding [*app-init-registry-runtime* runtime]
-		(f)))
+	(let [prev-override @app-init-registry-runtime-override*]
+	  (try
+	    (reset! app-init-registry-runtime-override* runtime)
+	    (f)
+	    (finally
+	      (reset! app-init-registry-runtime-override* prev-override)))))
 
 (defn- current-app-init-registry-runtime
 	[]
-	(or *app-init-registry-runtime*
-		installed-app-init-registry-runtime))
+	(or @app-init-registry-runtime-override*
+		@installed-app-init-registry-runtime))
 
 (defn- app-init-registry-state-atom
 	[]

@@ -20,7 +20,10 @@
    {::runtime ::directed-shock-fx-runtime
     :state* state*}))
 
-(def ^:dynamic *directed-shock-fx-runtime* nil)
+(defonce ^:private installed-directed-shock-fx-runtime
+  (create-directed-shock-fx-runtime))
+
+(defonce ^:private directed-shock-fx-runtime-override* (atom nil))
 
 (defn- directed-shock-fx-runtime?
   [runtime]
@@ -33,8 +36,12 @@
   (when-not (directed-shock-fx-runtime? runtime)
     (throw (ex-info "Expected Directed Shock FX runtime"
                     {:value runtime})))
-  (binding [*directed-shock-fx-runtime* runtime]
-    (f)))
+  (let [prev-override @directed-shock-fx-runtime-override*]
+    (try
+      (reset! directed-shock-fx-runtime-override* runtime)
+      (f)
+      (finally
+        (reset! directed-shock-fx-runtime-override* prev-override)))))
 
 (defmacro with-directed-shock-fx-runtime
   [runtime & body]
@@ -42,9 +49,8 @@
 
 (defn- current-directed-shock-fx-runtime
   []
-  (or *directed-shock-fx-runtime*
-      (throw (ex-info "Directed Shock FX runtime is not bound"
-                      {:hint "Bind runtime via call-with-directed-shock-fx-runtime or use init! registered handlers"}))))
+  (or @directed-shock-fx-runtime-override*
+      @installed-directed-shock-fx-runtime))
 
 (defn- directed-shock-fx-state-atom
   []

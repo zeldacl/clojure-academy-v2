@@ -10,13 +10,11 @@
    {:cn.li.mcmod.item.dsl/runtime ::item-registry-runtime
     :registry (or registry (registry-core/atom-registry {}))}))
 
-(def ^:dynamic *item-registry-runtime* nil)
-
 (defonce ^:private installed-item-registry-runtime
   (create-item-registry-runtime))
 
 (defn- item-registry-state []
-  (:registry (or *item-registry-runtime* installed-item-registry-runtime)))
+  (:registry @installed-item-registry-runtime))
 
 ;; Item specifications
 (defrecord ItemSpec [id max-stack-size durability creative-tab rarity

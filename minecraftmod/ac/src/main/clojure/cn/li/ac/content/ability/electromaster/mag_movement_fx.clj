@@ -19,7 +19,11 @@
    {::runtime ::mag-movement-fx-runtime
     :state* state*}))
 
-(def ^:dynamic *mag-movement-fx-runtime* nil)
+
+(defonce ^:private installed-mag-movement-fx-runtime
+  (create-mag-movement-fx-runtime))
+
+(defonce ^:private mag-movement-fx-runtime-override* (atom nil))
 
 (defn- mag-movement-fx-runtime?
   [runtime]
@@ -32,8 +36,12 @@
   (when-not (mag-movement-fx-runtime? runtime)
     (throw (ex-info "Expected mag movement FX runtime"
                     {:value runtime})))
-  (binding [*mag-movement-fx-runtime* runtime]
-    (f)))
+  (let [prev-override @mag-movement-fx-runtime-override*]
+    (try
+      (reset! mag-movement-fx-runtime-override* runtime)
+      (f)
+      (finally
+        (reset! mag-movement-fx-runtime-override* prev-override)))))
 
 (defmacro with-mag-movement-fx-runtime
   [runtime & body]
@@ -41,9 +49,8 @@
 
 (defn- current-mag-movement-fx-runtime
   []
-  (or *mag-movement-fx-runtime*
-      (throw (ex-info "Mag Movement FX runtime is not bound"
-                      {:hint "Bind runtime via call-with-mag-movement-fx-runtime or use init! registered handlers"}))))
+  (or @mag-movement-fx-runtime-override*
+      @installed-mag-movement-fx-runtime))
 
 (defn- mag-movement-fx-state-atom
   []

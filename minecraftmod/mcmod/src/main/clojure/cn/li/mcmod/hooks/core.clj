@@ -96,13 +96,11 @@
    {:cn.li.mcmod.hooks.core/runtime ::hooks-core-runtime
     :state* (or state* (atom (default-runtime-hooks-state)))}))
 
-(def ^:dynamic *hooks-core-runtime* nil)
-
 (defonce ^:private installed-hooks-core-runtime
   (create-hooks-core-runtime))
 
 (defn- hooks-core-state-atom []
-  (:state* (or *hooks-core-runtime* installed-hooks-core-runtime)))
+  (:state* @installed-hooks-core-runtime))
 
 (defn- hooks-core-state-snapshot []
   @(hooks-core-state-atom))
