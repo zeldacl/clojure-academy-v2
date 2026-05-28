@@ -27,20 +27,38 @@
   []
   modid/*mod-id*)
 
-(def base-properties
-  (delay (bootstrap/create-stone-properties)))
+(def ^:private forge-mod-cache-lock
+  (Object.))
 
-(def carrier-properties
-  (delay (bootstrap/carrier-block-properties @base-properties)))
+(defn- cached-once!
+  [v init-fn]
+  (or (var-get v)
+      (locking forge-mod-cache-lock
+        (or (var-get v)
+            (let [created (init-fn)]
+              (alter-var-root v (constantly created))
+              created)))))
 
-(def blocks-register
-  (delay (bootstrap/create-blocks-register (current-mod-id))))
+(def ^:private ^:dynamic *base-properties* nil)
+(def ^:private ^:dynamic *carrier-properties* nil)
+(def ^:private ^:dynamic *blocks-register* nil)
+(def ^:private ^:dynamic *items-register* nil)
+(def ^:private ^:dynamic *creative-tabs-register* nil)
 
-(def items-register
-  (delay (bootstrap/create-items-register (current-mod-id))))
+(defn base-properties []
+  (cached-once! #'*base-properties* #(bootstrap/create-stone-properties)))
 
-(def creative-tabs-register
-  (delay (bootstrap/create-creative-tabs-register (current-mod-id))))
+(defn carrier-properties []
+  (cached-once! #'*carrier-properties* #(bootstrap/carrier-block-properties (base-properties))))
+
+(defn blocks-register []
+  (cached-once! #'*blocks-register* #(bootstrap/create-blocks-register (current-mod-id))))
+
+(defn items-register []
+  (cached-once! #'*items-register* #(bootstrap/create-items-register (current-mod-id))))
+
+(defn creative-tabs-register []
+  (cached-once! #'*creative-tabs-register* #(bootstrap/create-creative-tabs-register (current-mod-id))))
 
 (defn- aot-compilation?
   []
@@ -57,23 +75,30 @@
       (= "true" (System/getProperty "fabric.datagen"))))
 
 ;; BlockEntity types
-(defonce block-entities-register
-  (delay (bootstrap/create-block-entity-types-register (current-mod-id))))
+(def ^:private ^:dynamic *block-entities-register* nil)
+(def ^:private ^:dynamic *fluid-types-register* nil)
+(def ^:private ^:dynamic *fluids-register* nil)
+(def ^:private ^:dynamic *sounds-register* nil)
+(def ^:private ^:dynamic *effects-register* nil)
+(def ^:private ^:dynamic *particle-types-register* nil)
 
-(defonce fluid-types-register
-  (delay (bootstrap/create-fluid-types-register (current-mod-id))))
+(defn block-entities-register []
+  (cached-once! #'*block-entities-register* #(bootstrap/create-block-entity-types-register (current-mod-id))))
 
-(defonce fluids-register
-  (delay (bootstrap/create-fluids-register (current-mod-id))))
+(defn fluid-types-register []
+  (cached-once! #'*fluid-types-register* #(bootstrap/create-fluid-types-register (current-mod-id))))
 
-(defonce sounds-register
-  (delay (bootstrap/create-sounds-register (current-mod-id))))
+(defn fluids-register []
+  (cached-once! #'*fluids-register* #(bootstrap/create-fluids-register (current-mod-id))))
 
-(defonce effects-register
-  (delay (bootstrap/create-effects-register (current-mod-id))))
+(defn sounds-register []
+  (cached-once! #'*sounds-register* #(bootstrap/create-sounds-register (current-mod-id))))
 
-(defonce particle-types-register
-  (delay (bootstrap/create-particle-types-register (current-mod-id))))
+(defn effects-register []
+  (cached-once! #'*effects-register* #(bootstrap/create-effects-register (current-mod-id))))
+
+(defn particle-types-register []
+  (cached-once! #'*particle-types-register* #(bootstrap/create-particle-types-register (current-mod-id))))
 
 ;; Storage for registered blocks and items (populated during initialization)
 (def registered-blocks registry-state/registered-blocks)
@@ -90,17 +115,17 @@
 (defn- build-registration-context
   []
   {:mod-id (current-mod-id)
-   :blocks-register (force blocks-register)
-   :items-register (force items-register)
-   :block-entities-register (force block-entities-register)
-   :fluid-types-register (force fluid-types-register)
-   :fluids-register (force fluids-register)
-   :sounds-register (force sounds-register)
-   :effects-register (force effects-register)
-   :particle-types-register (force particle-types-register)
+  :blocks-register (blocks-register)
+  :items-register (items-register)
+  :block-entities-register (block-entities-register)
+  :fluid-types-register (fluid-types-register)
+  :fluids-register (fluids-register)
+  :sounds-register (sounds-register)
+  :effects-register (effects-register)
+  :particle-types-register (particle-types-register)
    :registered-fluids-source registered-fluids-source
-   :base-properties @base-properties
-   :carrier-properties @carrier-properties})
+  :base-properties (base-properties)
+  :carrier-properties (carrier-properties)})
 
 (defn get-registered-entity-type
   "Get a registered EntityType by entity-id."
@@ -177,7 +202,7 @@
      (content-registration/register-core-content! (build-registration-context)))
    (fn []
      (log/info "Registering Forge creative tab...")
-     (creative-tab/register-creative-tab! (force creative-tabs-register) (current-mod-id)))
+     (creative-tab/register-creative-tab! (creative-tabs-register) (current-mod-id)))
    (fn []
      (gui-registry-impl/register-menu-types!))])
 
@@ -225,16 +250,16 @@
       {:datagen-run? (datagen-run?)
        :on-common-setup on-common-setup
        :on-client-setup on-client-setup
-       :sounds-register (force sounds-register)
-       :effects-register (force effects-register)
-       :particle-types-register (force particle-types-register)
-       :fluid-types-register (force fluid-types-register)
-       :fluids-register (force fluids-register)
-       :blocks-register (force blocks-register)
-       :items-register (force items-register)
-       :block-entities-register (force block-entities-register)
-       :creative-tabs-register (force creative-tabs-register)
-       :gui-menu-register (force gui-registry-impl/menu-register)}
+      :sounds-register (sounds-register)
+      :effects-register (effects-register)
+      :particle-types-register (particle-types-register)
+      :fluid-types-register (fluid-types-register)
+      :fluids-register (fluids-register)
+      :blocks-register (blocks-register)
+      :items-register (items-register)
+      :block-entities-register (block-entities-register)
+      :creative-tabs-register (creative-tabs-register)
+      :gui-menu-register (gui-registry-impl/menu-register)}
       (registration-steps)
       aot? cphant? check?)))
 ;; (defn start-repl-safe []

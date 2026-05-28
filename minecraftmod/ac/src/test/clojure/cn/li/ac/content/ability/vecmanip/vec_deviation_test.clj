@@ -13,14 +13,16 @@
 ;; Fixtures
 ;; ---------------------------------------------------------------------------
 
-(defn- reset-fixture [f]
-  (arbitration/reset-projectile-locks-for-test!)
-  (try
-    (f)
-    (finally
-      (arbitration/reset-projectile-locks-for-test!))))
+(defn- with-fresh-arbitration-runtime [f]
+  (arbitration/call-with-projectile-arbitration-runtime
+    (arbitration/create-projectile-arbitration-runtime)
+    (fn []
+      (try
+        (f)
+        (finally
+          (arbitration/reset-projectile-locks-for-test!))))))
 
-(use-fixtures :each reset-fixture)
+(use-fixtures :each with-fresh-arbitration-runtime)
 
 ;; ---------------------------------------------------------------------------
 ;; Shared mock helpers

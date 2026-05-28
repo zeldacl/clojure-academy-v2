@@ -10,24 +10,60 @@
 (def ^:private arbitration-config-skill-id :vec-reflection)
 (def ^:private arbitration-config-field-id :interaction.projectile-arbitration-priority)
 
-(defonce ^:private projectile-locks
-	;; {:tick long :owners {[player-id projectile-id] :vec-reflection|:vec-deviation}}
-	(atom {:tick -1 :owners {}}))
+(defn create-projectile-arbitration-runtime
+	([]
+	 (create-projectile-arbitration-runtime {}))
+	([{:keys [projectile-locks*]
+		 :or {projectile-locks* (atom {:tick -1 :owners {}})}}]
+	 {::runtime ::projectile-arbitration-runtime
+	  :projectile-locks* projectile-locks*}))
+
+(def ^:dynamic *projectile-arbitration-runtime* nil)
+
+(defonce ^:private installed-projectile-arbitration-runtime
+	(create-projectile-arbitration-runtime))
+
+(defn- projectile-arbitration-runtime?
+	[runtime]
+	(and (map? runtime)
+			 (= ::projectile-arbitration-runtime (::runtime runtime))
+			 (some? (:projectile-locks* runtime))))
+
+(defn call-with-projectile-arbitration-runtime
+	[runtime f]
+	(when-not (projectile-arbitration-runtime? runtime)
+		(throw (ex-info "Expected projectile arbitration runtime"
+						{:value runtime})))
+	(binding [*projectile-arbitration-runtime* runtime]
+		(f)))
+
+(defmacro with-projectile-arbitration-runtime
+	[runtime & body]
+	`(call-with-projectile-arbitration-runtime ~runtime (fn [] ~@body)))
+
+(defn- current-projectile-arbitration-runtime
+	[]
+	(or *projectile-arbitration-runtime*
+			installed-projectile-arbitration-runtime))
+
+(defn- projectile-locks-atom
+	[]
+	(:projectile-locks* (current-projectile-arbitration-runtime)))
 
 (defn projectile-locks-snapshot
 	[]
-	@projectile-locks)
+	@(projectile-locks-atom))
 
 (defn reset-projectile-locks-for-test!
 	([]
 	 (reset-projectile-locks-for-test! {:tick -1 :owners {}}))
 	([snapshot]
-	 (reset! projectile-locks (or snapshot {:tick -1 :owners {}}))
+	 (reset! (projectile-locks-atom) (or snapshot {:tick -1 :owners {}}))
 	 nil))
 
 (defn clear-player-projectile-locks!
 	[player-id]
-	(swap! projectile-locks update :owners
+	(swap! (projectile-locks-atom) update :owners
 			 (fn [owners]
 				 (into {}
 						 (remove (fn [[[owner-player-id _projectile-id] _skill-id]]
@@ -77,7 +113,7 @@
 	(if (and player-id projectile-id)
 		(let [now-tick (current-tick)
 					lock-key [player-id (str projectile-id)]
-					state (swap! projectile-locks
+					state (swap! (projectile-locks-atom)
 										 (fn [st]
 											 (let [current-state (if (= (:tick st) now-tick)
 																							 st

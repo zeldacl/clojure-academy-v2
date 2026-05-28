@@ -38,7 +38,7 @@
 (def create-resource-location cn.li.mcmod.platform.resource/create-resource-location)
 
 ;; Capability registration
-(def capability-type-registry cn.li.mcmod.platform.capability/capability-type-registry)
+(def capability-type-registry cn.li.mcmod.platform.capability/capability-type-registry-snapshot)
 (def declare-capability! cn.li.mcmod.platform.capability/declare-capability!)
 (def ICapabilityProvider cn.li.mcmod.platform.capability/ICapabilityProvider)
 (def ILazyOptional cn.li.mcmod.platform.capability/ILazyOptional)

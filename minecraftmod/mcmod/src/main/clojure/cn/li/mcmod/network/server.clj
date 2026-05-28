@@ -2,12 +2,62 @@
   "Server-side RPC handler registry for GUI/network logic"
   (:require [cn.li.mcmod.util.log :as log]))
 
-(defonce ^:private handlers (atom {}))
-(defonce ^:private handlers-frozen? (atom false))
+(defn default-network-server-runtime-state
+  []
+  {:handlers {}
+   :frozen? false})
+
+(defn create-network-server-runtime
+  ([]
+   (create-network-server-runtime {}))
+  ([{:keys [state*]
+     :or {state* (atom (default-network-server-runtime-state))}}]
+   {::runtime ::network-server-runtime
+    :state* state*}))
+
+(def ^:dynamic *network-server-runtime* nil)
+
+(defonce ^:private installed-network-server-runtime
+  (create-network-server-runtime))
+
+(defn- network-server-runtime?
+  [runtime]
+  (and (map? runtime)
+       (= ::network-server-runtime (::runtime runtime))
+       (some? (:state* runtime))))
+
+(defn call-with-network-server-runtime
+  [runtime f]
+  (when-not (network-server-runtime? runtime)
+    (throw (ex-info "Expected network server runtime"
+                    {:runtime runtime})))
+  (binding [*network-server-runtime* runtime]
+    (f)))
+
+(defmacro with-network-server-runtime
+  [runtime & body]
+  `(call-with-network-server-runtime ~runtime (fn [] ~@body)))
+
+(defn- current-network-server-runtime
+  []
+  (or *network-server-runtime*
+      installed-network-server-runtime))
+
+(defn- network-server-state-atom
+  []
+  (:state* (current-network-server-runtime)))
+
+(defn- network-server-state-snapshot
+  []
+  @(network-server-state-atom))
+
+(defn- update-network-server-state!
+  [f & args]
+  (apply swap! (network-server-state-atom) f args))
 
 (defn- assert-not-frozen!
   []
-  (when @handlers-frozen?
+  (when (:frozen? (network-server-state-snapshot))
     (throw (ex-info "Network server handlers are frozen" {}))))
 
 (defn register-handler
@@ -18,31 +68,30 @@
   - handler-fn: (fn [payload player] response-map)"
   [msg-id handler-fn]
   (assert-not-frozen!)
-  (swap! handlers
-         (fn [registry]
-           (if-let [existing (get registry msg-id)]
-             (if (identical? existing handler-fn)
-               registry
-               (throw (ex-info "Conflicting network handler id" {:msg-id msg-id})))
-             (assoc registry msg-id handler-fn))))
+  (update-network-server-state!
+    update :handlers
+    (fn [registry]
+      (if-let [existing (get registry msg-id)]
+        (if (identical? existing handler-fn)
+          registry
+          (throw (ex-info "Conflicting network handler id" {:msg-id msg-id})))
+        (assoc registry msg-id handler-fn))))
   (log/info "Registered network handler for" msg-id)
   nil)
 
 (defn freeze-handlers!
   []
-  (reset! handlers-frozen? true)
+  (update-network-server-state! assoc :frozen? true)
   nil)
 
 (defn reset-handlers-for-test!
   []
-  (reset! handlers {})
-  (reset! handlers-frozen? false)
+  (reset! (network-server-state-atom) (default-network-server-runtime-state))
   nil)
 
 (defn handlers-snapshot
   []
-  {:handlers @handlers
-   :frozen? @handlers-frozen?})
+  (network-server-state-snapshot))
 
 (defn handle-request
   "Handle an incoming request and send a response if needed.
@@ -54,7 +103,7 @@
   - player: player entity
   - respond-fn: (fn [request-id response-map]) or nil"
   [msg-id request-id payload player respond-fn]
-  (if-let [handler (get @handlers msg-id)]
+  (if-let [handler (get (:handlers (network-server-state-snapshot)) msg-id)]
     (try
       (let [response (handler payload player)]
         (when (and respond-fn (>= request-id 0))

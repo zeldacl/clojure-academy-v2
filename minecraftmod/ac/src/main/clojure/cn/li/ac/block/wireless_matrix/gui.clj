@@ -28,7 +28,6 @@
   (:require [clojure.string :as str]
             [cn.li.mcmod.gui.cgui-core :as cgui-core]
             [cn.li.mcmod.gui.cgui-screen :as cgui-screen]
-            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.ac.gui.tech-ui-common :as tech-ui]
             [cn.li.ac.gui.manifest :as gui-manifest]
@@ -60,32 +59,51 @@
 
 (def wireless-matrix-id :wireless-matrix)
 
-(defonce-guard wireless-matrix-slot-schema-installed?)
+(def ^:private matrix-slot-schema-guard-lock
+  (Object.))
+
+(def ^:private ^:dynamic *wireless-matrix-slot-schema-installed?*
+  false)
 
 (defn- ensure-wireless-matrix-slot-schema!
   []
-  (with-init-guard wireless-matrix-slot-schema-installed?
-    (slot-schema/register-slot-schema!
-      {:schema-id wireless-matrix-id
-       :slots [{:id :plate-a :type :plate :x 78 :y 11}
-               {:id :plate-b :type :plate :x 53 :y 60}
-               {:id :plate-c :type :plate :x 104 :y 60}
-               {:id :core :type :core :x 78 :y 36}]})))
+  (when-not (var-get #'*wireless-matrix-slot-schema-installed?*)
+    (locking matrix-slot-schema-guard-lock
+      (when-not (var-get #'*wireless-matrix-slot-schema-installed?*)
+        (slot-schema/register-slot-schema!
+          {:schema-id wireless-matrix-id
+           :slots [{:id :plate-a :type :plate :x 78 :y 11}
+                   {:id :plate-b :type :plate :x 53 :y 60}
+                   {:id :plate-c :type :plate :x 104 :y 60}
+                   {:id :core :type :core :x 78 :y 36}]})
+        (alter-var-root #'*wireless-matrix-slot-schema-installed?* (constantly true))))))
 
 (def ^:private inventory-pred
   (fn [slot-index player-inventory-start]
     (>= slot-index player-inventory-start)))
 
-(def ^:private wireless-matrix-quick-move-config*
-  (delay
-    (ensure-wireless-matrix-slot-schema!)
-    (slot-schema/build-quick-move-config
-      wireless-matrix-id
-      {:inventory-pred inventory-pred
-       :rules [{:accept? core/is-mat-core?
-                :slot-ids [:core]}
-               {:accept? plate/is-constraint-plate?
-                :slot-type :plate}]})))
+(def ^:private matrix-quick-move-config-lock
+  (Object.))
+
+(def ^:private ^:dynamic *wireless-matrix-quick-move-config*
+  nil)
+
+(defn- wireless-matrix-quick-move-config
+  []
+  (or (var-get #'*wireless-matrix-quick-move-config*)
+      (locking matrix-quick-move-config-lock
+        (or (var-get #'*wireless-matrix-quick-move-config*)
+            (let [cfg (do
+                        (ensure-wireless-matrix-slot-schema!)
+                        (slot-schema/build-quick-move-config
+                          wireless-matrix-id
+                          {:inventory-pred inventory-pred
+                           :rules [{:accept? core/is-mat-core?
+                                    :slot-ids [:core]}
+                                   {:accept? plate/is-constraint-plate?
+                                    :slot-type :plate}]}))]
+              (alter-var-root #'*wireless-matrix-quick-move-config* (constantly cfg))
+              cfg)))))
 
 (defn- msg
   "Generate message ID for matrix actions (must match server DSL / underscores)."
@@ -385,7 +403,7 @@
     container
     slot-index
     player-inventory-start
-    @wireless-matrix-quick-move-config*))
+    (wireless-matrix-quick-move-config)))
 
 (defn on-close [container]
   (log/debug "Closing wireless matrix container")
@@ -623,28 +641,35 @@
        (contains? container :plate-count)
        (contains? container :core-level)))
 
-(defonce-guard wireless-matrix-gui-installed?)
+(def ^:private matrix-gui-guard-lock
+  (Object.))
+
+(def ^:private ^:dynamic *wireless-matrix-gui-installed?*
+  false)
 
 (defn init-wireless-matrix-gui!
   []
-  (with-init-guard wireless-matrix-gui-installed?
-    (ensure-wireless-matrix-slot-schema!)
-    (gui-reg/register-block-gui!
-      (gui-manifest/gui-name :wireless-matrix)
-      (merge (gui-manifest/gui-registration :wireless-matrix)
-             {:container-predicate matrix-container?
-              :container-fn create-container
-              :screen-fn create-screen
-              :tick-fn tick!
-              :sync-get get-sync-data
-              :sync-apply apply-sync-data!
-              :payload-sync-apply-fn apply-matrix-sync-payload!
-              :validate-fn still-valid?
-              :close-fn on-close
-              :button-click-fn handle-button-click!
-              :slot-count-fn get-slot-count
-              :slot-get-fn get-slot-item
-              :slot-set-fn set-slot-item!
-              :slot-can-place-fn can-place-item?
-              :slot-changed-fn slot-changed!}))
-    (log/info "Wireless Matrix GUI registered")))
+  (when-not (var-get #'*wireless-matrix-gui-installed?*)
+    (locking matrix-gui-guard-lock
+      (when-not (var-get #'*wireless-matrix-gui-installed?*)
+        (ensure-wireless-matrix-slot-schema!)
+        (gui-reg/register-block-gui!
+          (gui-manifest/gui-name :wireless-matrix)
+          (merge (gui-manifest/gui-registration :wireless-matrix)
+                 {:container-predicate matrix-container?
+                  :container-fn create-container
+                  :screen-fn create-screen
+                  :tick-fn tick!
+                  :sync-get get-sync-data
+                  :sync-apply apply-sync-data!
+                  :payload-sync-apply-fn apply-matrix-sync-payload!
+                  :validate-fn still-valid?
+                  :close-fn on-close
+                  :button-click-fn handle-button-click!
+                  :slot-count-fn get-slot-count
+                  :slot-get-fn get-slot-item
+                  :slot-set-fn set-slot-item!
+                  :slot-can-place-fn can-place-item?
+                  :slot-changed-fn slot-changed!}))
+        (alter-var-root #'*wireless-matrix-gui-installed?* (constantly true))
+        (log/info "Wireless Matrix GUI registered")))))

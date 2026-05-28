@@ -9,26 +9,36 @@
             [cn.li.ac.content.ability.meltdowner.meltdowner-fx :as meltdowner-fx]
             [cn.li.ac.content.ability.meltdowner.mine-ray-fx :as mine-ray-fx]
             [cn.li.ac.content.ability.meltdowner.ray-barrage-fx :as ray-barrage-fx]
-            [cn.li.ac.content.ability.meltdowner.scatter-bomb-fx :as scatter-bomb-fx]))
+            [cn.li.ac.content.ability.meltdowner.scatter-bomb-fx :as scatter-bomb-fx]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (defn- reset-fixture [f]
-  (electron-bomb-fx/reset-electron-bomb-fx-for-test!)
-  (electron-missile-fx/reset-electron-missile-fx-for-test!)
-  (jet-engine-fx/reset-jet-engine-fx-for-test!)
-  (light-shield-fx/reset-light-shield-fx-for-test!)
-  (meltdowner-fx/reset-meltdowner-fx-for-test!)
-  (mine-ray-fx/reset-mine-ray-fx-for-test!)
-  (ray-barrage-fx/reset-ray-barrage-fx-for-test!)
-  (scatter-bomb-fx/reset-scatter-bomb-fx-for-test!)
-  (f)
-  (electron-bomb-fx/reset-electron-bomb-fx-for-test!)
-  (electron-missile-fx/reset-electron-missile-fx-for-test!)
-  (jet-engine-fx/reset-jet-engine-fx-for-test!)
-  (light-shield-fx/reset-light-shield-fx-for-test!)
-  (meltdowner-fx/reset-meltdowner-fx-for-test!)
-  (mine-ray-fx/reset-mine-ray-fx-for-test!)
-  (ray-barrage-fx/reset-ray-barrage-fx-for-test!)
-  (scatter-bomb-fx/reset-scatter-bomb-fx-for-test!))
+  (binding [runtime-hooks/*client-session-id* :test-session
+            electron-bomb-fx/*electron-bomb-fx-runtime* (electron-bomb-fx/create-electron-bomb-fx-runtime)
+            electron-missile-fx/*electron-missile-fx-runtime* (electron-missile-fx/create-electron-missile-fx-runtime)
+            jet-engine-fx/*jet-engine-fx-runtime* (jet-engine-fx/create-jet-engine-fx-runtime)
+            light-shield-fx/*light-shield-fx-runtime* (light-shield-fx/create-light-shield-fx-runtime)
+            meltdowner-fx/*meltdowner-fx-runtime* (meltdowner-fx/create-meltdowner-fx-runtime)
+            mine-ray-fx/*mine-ray-fx-runtime* (mine-ray-fx/create-mine-ray-fx-runtime)
+            ray-barrage-fx/*ray-barrage-fx-runtime* (ray-barrage-fx/create-ray-barrage-fx-runtime)
+            scatter-bomb-fx/*scatter-bomb-fx-runtime* (scatter-bomb-fx/create-scatter-bomb-fx-runtime)]
+    (electron-bomb-fx/reset-electron-bomb-fx-for-test!)
+    (electron-missile-fx/reset-electron-missile-fx-for-test!)
+    (jet-engine-fx/reset-jet-engine-fx-for-test!)
+    (light-shield-fx/reset-light-shield-fx-for-test!)
+    (meltdowner-fx/reset-meltdowner-fx-for-test!)
+    (mine-ray-fx/reset-mine-ray-fx-for-test!)
+    (ray-barrage-fx/reset-ray-barrage-fx-for-test!)
+    (scatter-bomb-fx/reset-scatter-bomb-fx-for-test!)
+    (f)
+    (electron-bomb-fx/reset-electron-bomb-fx-for-test!)
+    (electron-missile-fx/reset-electron-missile-fx-for-test!)
+    (jet-engine-fx/reset-jet-engine-fx-for-test!)
+    (light-shield-fx/reset-light-shield-fx-for-test!)
+    (meltdowner-fx/reset-meltdowner-fx-for-test!)
+    (mine-ray-fx/reset-mine-ray-fx-for-test!)
+    (ray-barrage-fx/reset-ray-barrage-fx-for-test!)
+    (scatter-bomb-fx/reset-scatter-bomb-fx-for-test!)))
 
 (use-fixtures :each reset-fixture)
 
@@ -51,8 +61,8 @@
         mine-ray-enqueue! (var-get #'cn.li.ac.content.ability.meltdowner.mine-ray-fx/enqueue!)
         ray-barrage-enqueue! (var-get #'cn.li.ac.content.ability.meltdowner.ray-barrage-fx/enqueue-beam!)
         scatter-bomb-enqueue! (var-get #'cn.li.ac.content.ability.meltdowner.scatter-bomb-fx/enqueue!)]
-    (with-redefs [client-particles/queue-particle-effect! (fn [_] nil)
-                  client-sounds/queue-sound-effect! (fn [_] nil)]
+    (with-redefs [client-particles/queue-particle-effect! (fn [& _] nil)
+                  client-sounds/queue-sound-effect! (fn [& _] nil)]
       (electron-bomb-enqueue! (event "ctx-a" :electron-bomb/fx-spawn
                                      {:mode :spawn :x 1.0 :y 64.0 :z 1.0}))
       (electron-bomb-enqueue! (event "ctx-b" :electron-bomb/fx-spawn
@@ -143,3 +153,214 @@
       (is (some? (get-in (ray-barrage-fx/ray-barrage-fx-snapshot) [:beam-queue [:ctx "ctx-b"]])))
       (is (nil? (get-in (scatter-bomb-fx/scatter-bomb-fx-snapshot) [:effect-state [:ctx "ctx-a"]])))
       (is (some? (get-in (scatter-bomb-fx/scatter-bomb-fx-snapshot) [:effect-state [:ctx "ctx-b"]]))))))
+
+(deftest electron-bomb-fx-runtime-isolation-test
+  (let [runtime-a (electron-bomb-fx/create-electron-bomb-fx-runtime)
+        runtime-b (electron-bomb-fx/create-electron-bomb-fx-runtime)
+        enqueue! (var-get #'cn.li.ac.content.ability.meltdowner.electron-bomb-fx/enqueue!)]
+    (with-redefs [client-particles/queue-particle-effect! (fn [& _] nil)
+                  client-sounds/queue-sound-effect! (fn [& _] nil)]
+      (electron-bomb-fx/call-with-electron-bomb-fx-runtime
+        runtime-a
+        (fn []
+          (enqueue! (event "ctx-a" :electron-bomb/fx-spawn
+                           {:mode :spawn :x 1.0 :y 64.0 :z 1.0}))
+          (is (= #{[:ctx "ctx-a"]}
+                 (set (keys (:effect-state (electron-bomb-fx/electron-bomb-fx-snapshot))))))))
+      (electron-bomb-fx/call-with-electron-bomb-fx-runtime
+        runtime-b
+        (fn []
+          (is (= {:effect-state {}}
+                 (electron-bomb-fx/electron-bomb-fx-snapshot)))
+          (enqueue! (event "ctx-b" :electron-bomb/fx-spawn
+                           {:mode :spawn :x 2.0 :y 64.0 :z 2.0}))
+          (is (= #{[:ctx "ctx-b"]}
+                 (set (keys (:effect-state (electron-bomb-fx/electron-bomb-fx-snapshot))))))))
+      (electron-bomb-fx/call-with-electron-bomb-fx-runtime
+        runtime-a
+        (fn []
+          (is (= #{[:ctx "ctx-a"]}
+                 (set (keys (:effect-state (electron-bomb-fx/electron-bomb-fx-snapshot)))))))))))
+
+(deftest electron-missile-fx-runtime-isolation-test
+  (let [runtime-a (electron-missile-fx/create-electron-missile-fx-runtime)
+        runtime-b (electron-missile-fx/create-electron-missile-fx-runtime)
+        enqueue! (var-get #'cn.li.ac.content.ability.meltdowner.electron-missile-fx/enqueue!)]
+    (with-redefs [client-particles/queue-particle-effect! (fn [& _] nil)
+                  client-sounds/queue-sound-effect! (fn [& _] nil)]
+      (electron-missile-fx/call-with-electron-missile-fx-runtime
+        runtime-a
+        (fn []
+          (enqueue! (event "ctx-a" :electron-missile/fx-fire
+                           {:mode :fire :target-x 1.0 :target-y 64.0 :target-z 1.0}))
+          (is (= #{[:ctx "ctx-a"]}
+                 (set (keys (:impacts (electron-missile-fx/electron-missile-fx-snapshot))))))))
+      (electron-missile-fx/call-with-electron-missile-fx-runtime
+        runtime-b
+        (fn []
+          (is (= {:impacts {}}
+                 (electron-missile-fx/electron-missile-fx-snapshot)))
+          (enqueue! (event "ctx-b" :electron-missile/fx-fire
+                           {:mode :fire :target-x 2.0 :target-y 64.0 :target-z 2.0}))
+          (is (= #{[:ctx "ctx-b"]}
+                 (set (keys (:impacts (electron-missile-fx/electron-missile-fx-snapshot))))))))
+      (electron-missile-fx/call-with-electron-missile-fx-runtime
+        runtime-a
+        (fn []
+          (is (= #{[:ctx "ctx-a"]}
+                 (set (keys (:impacts (electron-missile-fx/electron-missile-fx-snapshot)))))))))))
+
+(deftest jet-engine-fx-runtime-isolation-test
+  (let [runtime-a (jet-engine-fx/create-jet-engine-fx-runtime)
+        runtime-b (jet-engine-fx/create-jet-engine-fx-runtime)
+        enqueue! (var-get #'cn.li.ac.content.ability.meltdowner.jet-engine-fx/enqueue!)]
+    (with-redefs [client-sounds/queue-current-sound-effect! (fn [& _] nil)]
+      (jet-engine-fx/call-with-jet-engine-fx-runtime
+        runtime-a
+        (fn []
+          (enqueue! (event "ctx-a" :jet-engine/fx-launch {:mode :launch :speed 1.5}))
+          (is (= #{[:ctx "ctx-a"]}
+                 (set (keys (:fx-state (jet-engine-fx/jet-engine-fx-snapshot))))))))
+      (jet-engine-fx/call-with-jet-engine-fx-runtime
+        runtime-b
+        (fn []
+          (is (= {:fx-state {}}
+                 (jet-engine-fx/jet-engine-fx-snapshot)))
+          (enqueue! (event "ctx-b" :jet-engine/fx-launch {:mode :launch :speed 2.5}))
+          (is (= #{[:ctx "ctx-b"]}
+                 (set (keys (:fx-state (jet-engine-fx/jet-engine-fx-snapshot))))))))
+      (jet-engine-fx/call-with-jet-engine-fx-runtime
+        runtime-a
+        (fn []
+          (is (= #{[:ctx "ctx-a"]}
+                 (set (keys (:fx-state (jet-engine-fx/jet-engine-fx-snapshot)))))))))))
+
+(deftest light-shield-fx-runtime-isolation-test
+  (let [runtime-a (light-shield-fx/create-light-shield-fx-runtime)
+        runtime-b (light-shield-fx/create-light-shield-fx-runtime)
+        enqueue! (var-get #'cn.li.ac.content.ability.meltdowner.light-shield-fx/enqueue!)]
+    (with-redefs [client-particles/queue-particle-effect! (fn [& _] nil)
+                  client-sounds/queue-sound-effect! (fn [& _] nil)]
+      (light-shield-fx/call-with-light-shield-fx-runtime
+        runtime-a
+        (fn []
+          (enqueue! (event "ctx-a" :light-shield/fx-start {:mode :start}))
+          (is (= #{[:ctx "ctx-a"]}
+                 (set (keys (:effect-state (light-shield-fx/light-shield-fx-snapshot))))))))
+      (light-shield-fx/call-with-light-shield-fx-runtime
+        runtime-b
+        (fn []
+          (is (= {:effect-state {}}
+                 (light-shield-fx/light-shield-fx-snapshot)))
+          (enqueue! (event "ctx-b" :light-shield/fx-start {:mode :start}))
+          (is (= #{[:ctx "ctx-b"]}
+                 (set (keys (:effect-state (light-shield-fx/light-shield-fx-snapshot))))))))
+      (light-shield-fx/call-with-light-shield-fx-runtime
+        runtime-a
+        (fn []
+          (is (= #{[:ctx "ctx-a"]}
+                 (set (keys (:effect-state (light-shield-fx/light-shield-fx-snapshot)))))))))))
+
+(deftest meltdowner-fx-runtime-isolation-test
+  (let [runtime-a (meltdowner-fx/create-meltdowner-fx-runtime)
+        runtime-b (meltdowner-fx/create-meltdowner-fx-runtime)
+        enqueue! (var-get #'cn.li.ac.content.ability.meltdowner.meltdowner-fx/enqueue!)]
+    (with-redefs [client-sounds/queue-sound-effect! (fn [& _] nil)]
+      (meltdowner-fx/call-with-meltdowner-fx-runtime
+        runtime-a
+        (fn []
+          (enqueue! (event "ctx-a" :meltdowner/fx-start {:mode :start}))
+          (is (= #{[:ctx "ctx-a"]}
+                 (set (keys (:effect-state (meltdowner-fx/meltdowner-fx-snapshot))))))))
+      (meltdowner-fx/call-with-meltdowner-fx-runtime
+        runtime-b
+        (fn []
+          (is (= {:effect-state {}
+                  :rays {}}
+                 (meltdowner-fx/meltdowner-fx-snapshot)))
+          (enqueue! (event "ctx-b" :meltdowner/fx-start {:mode :start}))
+          (is (= #{[:ctx "ctx-b"]}
+                 (set (keys (:effect-state (meltdowner-fx/meltdowner-fx-snapshot))))))))
+      (meltdowner-fx/call-with-meltdowner-fx-runtime
+        runtime-a
+        (fn []
+          (is (= #{[:ctx "ctx-a"]}
+                 (set (keys (:effect-state (meltdowner-fx/meltdowner-fx-snapshot)))))))))))
+
+(deftest mine-ray-fx-runtime-isolation-test
+  (let [runtime-a (mine-ray-fx/create-mine-ray-fx-runtime)
+        runtime-b (mine-ray-fx/create-mine-ray-fx-runtime)
+        enqueue! (var-get #'cn.li.ac.content.ability.meltdowner.mine-ray-fx/enqueue!)]
+    (with-redefs [client-particles/queue-particle-effect! (fn [& _] nil)
+                  client-sounds/queue-sound-effect! (fn [& _] nil)]
+      (mine-ray-fx/call-with-mine-ray-fx-runtime
+        runtime-a
+        (fn []
+          (enqueue! (event "ctx-a" :mine-ray/fx-start {:mode :start :variant :basic}))
+          (is (= #{[:ctx "ctx-a"]}
+                 (set (keys (:effect-state (mine-ray-fx/mine-ray-fx-snapshot))))))))
+      (mine-ray-fx/call-with-mine-ray-fx-runtime
+        runtime-b
+        (fn []
+          (is (= {:effect-state {}}
+                 (mine-ray-fx/mine-ray-fx-snapshot)))
+          (enqueue! (event "ctx-b" :mine-ray/fx-start {:mode :start :variant :expert}))
+          (is (= #{[:ctx "ctx-b"]}
+                 (set (keys (:effect-state (mine-ray-fx/mine-ray-fx-snapshot))))))))
+      (mine-ray-fx/call-with-mine-ray-fx-runtime
+        runtime-a
+        (fn []
+          (is (= #{[:ctx "ctx-a"]}
+                 (set (keys (:effect-state (mine-ray-fx/mine-ray-fx-snapshot)))))))))))
+
+(deftest ray-barrage-fx-runtime-isolation-test
+  (let [runtime-a (ray-barrage-fx/create-ray-barrage-fx-runtime)
+        runtime-b (ray-barrage-fx/create-ray-barrage-fx-runtime)
+        enqueue! (var-get #'cn.li.ac.content.ability.meltdowner.ray-barrage-fx/enqueue-beam!)]
+    (ray-barrage-fx/call-with-ray-barrage-fx-runtime
+      runtime-a
+      (fn []
+        (enqueue! (event "ctx-a" :ray-barrage/fx-beam
+                         {:from-x 0.0 :from-y 64.0 :from-z 0.0 :to-x 1.0 :to-y 64.0 :to-z 0.0}))
+        (is (= #{[:ctx "ctx-a"]}
+               (set (keys (:beam-queue (ray-barrage-fx/ray-barrage-fx-snapshot))))))))
+    (ray-barrage-fx/call-with-ray-barrage-fx-runtime
+      runtime-b
+      (fn []
+        (is (= {:beam-queue {}}
+               (ray-barrage-fx/ray-barrage-fx-snapshot)))
+        (enqueue! (event "ctx-b" :ray-barrage/fx-beam
+                         {:from-x 0.0 :from-y 65.0 :from-z 0.0 :to-x 1.0 :to-y 65.0 :to-z 0.0}))
+        (is (= #{[:ctx "ctx-b"]}
+               (set (keys (:beam-queue (ray-barrage-fx/ray-barrage-fx-snapshot))))))))
+    (ray-barrage-fx/call-with-ray-barrage-fx-runtime
+      runtime-a
+      (fn []
+        (is (= #{[:ctx "ctx-a"]}
+               (set (keys (:beam-queue (ray-barrage-fx/ray-barrage-fx-snapshot))))))))))
+
+(deftest scatter-bomb-fx-runtime-isolation-test
+  (let [runtime-a (scatter-bomb-fx/create-scatter-bomb-fx-runtime)
+        runtime-b (scatter-bomb-fx/create-scatter-bomb-fx-runtime)
+        enqueue! (var-get #'cn.li.ac.content.ability.meltdowner.scatter-bomb-fx/enqueue!)]
+    (with-redefs [client-particles/queue-current-particle-effect! (fn [& _] nil)
+                  client-sounds/queue-current-sound-effect! (fn [& _] nil)]
+      (scatter-bomb-fx/call-with-scatter-bomb-fx-runtime
+        runtime-a
+        (fn []
+          (enqueue! (event "ctx-a" :scatter-bomb/fx-start {:mode :start}))
+          (is (= #{[:ctx "ctx-a"]}
+                 (set (keys (:effect-state (scatter-bomb-fx/scatter-bomb-fx-snapshot))))))))
+      (scatter-bomb-fx/call-with-scatter-bomb-fx-runtime
+        runtime-b
+        (fn []
+          (is (= {:effect-state {}}
+                 (scatter-bomb-fx/scatter-bomb-fx-snapshot)))
+          (enqueue! (event "ctx-b" :scatter-bomb/fx-start {:mode :start}))
+          (is (= #{[:ctx "ctx-b"]}
+                 (set (keys (:effect-state (scatter-bomb-fx/scatter-bomb-fx-snapshot))))))))
+      (scatter-bomb-fx/call-with-scatter-bomb-fx-runtime
+        runtime-a
+        (fn []
+          (is (= #{[:ctx "ctx-a"]}
+                 (set (keys (:effect-state (scatter-bomb-fx/scatter-bomb-fx-snapshot)))))))))))

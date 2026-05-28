@@ -10,7 +10,11 @@
            [java.util UUID]
            [net.minecraftforge.server ServerLifecycleHooks]))
 
-(defonce ^:private installed? (atom false))
+(def ^:private install-guard-lock
+  (Object.))
+
+(def ^:private ^:dynamic *installed?*
+  false)
 
 (defn- resolve-player
   [uuid-str]
@@ -20,13 +24,16 @@
 
 (defn init!
   []
-  (when (compare-and-set! installed? false true)
-    (power-runtime/subscribe-achievement-trigger!
-      (fn [{:keys [uuid achievement-id]}]
-        (try
-          (when-let [player (resolve-player uuid)]
-            (.trigger ModTriggers/CUSTOM player (str achievement-id)))
-          (catch Exception e
-            (log/warn "Failed to dispatch achievement trigger" achievement-id (ex-message e))))))
-    (log/info "Forge achievement bridge initialized")))
+  (when-not (var-get #'*installed?*)
+    (locking install-guard-lock
+      (when-not (var-get #'*installed?*)
+        (power-runtime/subscribe-achievement-trigger!
+          (fn [{:keys [uuid achievement-id]}]
+            (try
+              (when-let [player (resolve-player uuid)]
+                (.trigger ModTriggers/CUSTOM player (str achievement-id)))
+              (catch Exception e
+                (log/warn "Failed to dispatch achievement trigger" achievement-id (ex-message e))))))
+        (alter-var-root #'*installed?* (constantly true))
+        (log/info "Forge achievement bridge initialized")))))
 

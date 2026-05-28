@@ -16,7 +16,16 @@
 
 ; Map of keyword → {:java-type Class :handler-factory-fn (fn [be side] handler)}
 ; Populated by declare-capability! calls from content namespaces at load time.
-(defonce capability-type-registry (atom {}))
+(def ^:private ^:dynamic *capability-type-registry* {})
+
+(defn capability-type-registry-snapshot
+  []
+  *capability-type-registry*)
+
+(defn update-capability-type-registry!
+  [f & args]
+  (apply alter-var-root #'*capability-type-registry* f args)
+  nil)
 
 ;; ============================================================================
 ;; Platform hook
@@ -44,15 +53,17 @@
                     for a given ScriptedBlockEntity instance
 
   Side effects:
-  - Stores entry in capability-type-registry
+  - Stores entry in capability-type-registry snapshot
   - If *declare-capability-impl* is already bound (platform init already ran),
     also calls it immediately to perform slot assignment"
   [key java-type handler-factory-fn]
   (when-not (keyword? key)
     (throw (ex-info "declare-capability!: key must be keyword" {:key key})))
-  (swap! capability-type-registry assoc key
-         {:java-type         java-type
-          :handler-factory-fn handler-factory-fn})
+  (update-capability-type-registry!
+   assoc
+   key
+   {:java-type java-type
+    :handler-factory-fn handler-factory-fn})
   (log-info "Declared capability" key "->" (.getName ^Class java-type))
   (when *declare-capability-impl*
     (*declare-capability-impl* key java-type))
@@ -61,7 +72,7 @@
 (defn get-capability-entry
   "Look up a capability entry by key. Returns nil if not registered."
   [key]
-  (get @capability-type-registry key))
+  (get (capability-type-registry-snapshot) key))
 
 (defn get-handler-factory
   "Return the handler-factory-fn for key, or nil."

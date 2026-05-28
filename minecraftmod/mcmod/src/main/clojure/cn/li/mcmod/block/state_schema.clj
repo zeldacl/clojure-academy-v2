@@ -16,26 +16,28 @@
             [cn.li.mcmod.nbt.dsl :as nbt-dsl]
             [cn.li.mcmod.block.inventory-helpers :as inv-helpers]))
 
-(defonce ^:private network-helper-fns
-  (atom {:get-world (fn [_] nil)
-         :get-tile-at (fn [_ _] nil)}))
+(def ^:private ^:dynamic *network-get-world-fn*
+  (fn [_] nil))
+
+(def ^:private ^:dynamic *network-get-tile-at-fn*
+  (fn [_ _] nil))
 
 (defn register-network-helper-fns!
   "Register helper fns used by generated network handlers."
   [{:keys [get-world get-tile-at]}]
-  (swap! network-helper-fns merge
-         (cond-> {}
-           get-world (assoc :get-world get-world)
-           get-tile-at (assoc :get-tile-at get-tile-at)))
+  (when get-world
+    (alter-var-root #'*network-get-world-fn* (constantly get-world)))
+  (when get-tile-at
+    (alter-var-root #'*network-get-tile-at-fn* (constantly get-tile-at)))
   nil)
 
 (defn get-network-world
   [player]
-  ((:get-world @network-helper-fns) player))
+  (*network-get-world-fn* player))
 
 (defn get-network-tile-at
   [world payload]
-  ((:get-tile-at @network-helper-fns) world payload))
+  (*network-get-tile-at-fn* world payload))
 
 (def ^:private nbt-writers
   "NBT writers extracted from nbt.dsl/type-converters"

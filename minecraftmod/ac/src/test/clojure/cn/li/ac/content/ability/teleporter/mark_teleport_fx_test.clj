@@ -6,12 +6,16 @@
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.content.ability.teleporter.mark-teleport-fx :as mfx]))
 
-(defn- reset-fixture [f]
-  (mfx/reset-mark-teleport-fx-for-test!)
-  (f)
-  (mfx/reset-mark-teleport-fx-for-test!))
+(defn- with-fresh-mark-teleport-fx-runtime [f]
+  (mfx/call-with-mark-teleport-fx-runtime
+    (mfx/create-mark-teleport-fx-runtime)
+    (fn []
+      (try
+        (f)
+        (finally
+          (mfx/reset-mark-teleport-fx-for-test!))))))
 
-(use-fixtures :each reset-fixture)
+(use-fixtures :each with-fresh-mark-teleport-fx-runtime)
 
 (defn- event [payload]
   {:payload payload
@@ -67,22 +71,24 @@
   (let [particles* (atom [])
         sounds* (atom [])
         enqueue! (var-get #'cn.li.ac.content.ability.teleporter.mark-teleport-fx/enqueue!)]
-    (with-redefs [client-particles/queue-particle-effect! (fn [payload]
-                                                             (swap! particles* conj payload)
-                                                             nil)
-                  client-sounds/queue-sound-effect! (fn [payload]
-                                                      (swap! sounds* conj payload)
+    (with-redefs [client-particles/current-effect-owner (fn [] {:client-session-id "mark-teleport-test"})
+                  client-particles/queue-particle-effect! (fn [& args]
+                                                            (swap! particles* conj args)
+                                                            nil)
+                  client-sounds/queue-sound-effect! (fn [& args]
+                                                      (swap! sounds* conj args)
                                                       nil)]
       (enqueue! (event {:mode :perform :target {:x 2.0 :y 64.0 :z 3.0} :distance 8.0}))
       (is (= 1 (count @particles*)))
       (is (= 1 (count @sounds*)))
-      (is (= "my_mod:tp.tp" (:sound-id (first @sounds*)))))))
+      (is (= "my_mod:tp.tp" (:sound-id (second (first @sounds*))))))))
 
 (deftest enqueue-perform-without-target-does-not-emit-audio-or-particles-test
   (let [particles* (atom 0)
         sounds* (atom 0)
         enqueue! (var-get #'cn.li.ac.content.ability.teleporter.mark-teleport-fx/enqueue!)]
-    (with-redefs [client-particles/queue-particle-effect! (fn [& _] (swap! particles* inc) nil)
+    (with-redefs [client-particles/current-effect-owner (fn [] {:client-session-id "mark-teleport-test"})
+                  client-particles/queue-particle-effect! (fn [& _] (swap! particles* inc) nil)
                   client-sounds/queue-sound-effect! (fn [& _] (swap! sounds* inc) nil)]
       (enqueue! (event {:mode :perform :distance 4.0}))
       (is (= 0 @particles*))
@@ -90,8 +96,42 @@
 
 (deftest enqueue-end-clears-state-test
   (let [enqueue! (var-get #'cn.li.ac.content.ability.teleporter.mark-teleport-fx/enqueue!)]
-    (enqueue! (event {:mode :start}))
-    (enqueue! (event {:mode :update :target {:x 1.0 :y 2.0 :z 3.0} :distance 2.0}))
-    (is (some? (get (:effect-state (mfx/mark-teleport-fx-snapshot)) [:ctx "ctx-1"])))
-    (enqueue! (event {:mode :end}))
-    (is (nil? (get (:effect-state (mfx/mark-teleport-fx-snapshot)) [:ctx "ctx-1"])))) )
+    (with-redefs [client-particles/current-effect-owner (fn [] {:client-session-id "mark-teleport-test"})]
+      (enqueue! (event {:mode :start}))
+      (enqueue! (event {:mode :update :target {:x 1.0 :y 2.0 :z 3.0} :distance 2.0}))
+      (is (some? (get (:effect-state (mfx/mark-teleport-fx-snapshot)) [:ctx "ctx-1"])))
+      (enqueue! (event {:mode :end}))
+      (is (nil? (get (:effect-state (mfx/mark-teleport-fx-snapshot)) [:ctx "ctx-1"]))))) )
+
+(deftest mark-teleport-fx-runtime-isolation-test
+  (let [runtime-a (mfx/create-mark-teleport-fx-runtime)
+        runtime-b (mfx/create-mark-teleport-fx-runtime)
+        enqueue! (var-get #'cn.li.ac.content.ability.teleporter.mark-teleport-fx/enqueue!)]
+    (with-redefs [client-particles/current-effect-owner (fn [] {:client-session-id "mark-teleport-test"})
+                  client-particles/queue-particle-effect! (fn [& _] nil)
+                  client-sounds/queue-sound-effect! (fn [& _] nil)]
+      (mfx/call-with-mark-teleport-fx-runtime
+        runtime-a
+        (fn []
+          (enqueue! {:payload {:mode :start}
+                     :ctx-id "ctx-a"
+                     :channel :mark-teleport/fx-test
+                     :owner-key [:ctx "ctx-a"]})
+          (is (= #{[:ctx "ctx-a"]}
+                 (set (keys (:effect-state (mfx/mark-teleport-fx-snapshot))))))))
+      (mfx/call-with-mark-teleport-fx-runtime
+        runtime-b
+        (fn []
+          (is (= {:effect-state {}}
+                 (mfx/mark-teleport-fx-snapshot)))
+          (enqueue! {:payload {:mode :start}
+                     :ctx-id "ctx-b"
+                     :channel :mark-teleport/fx-test
+                     :owner-key [:ctx "ctx-b"]})
+          (is (= #{[:ctx "ctx-b"]}
+                 (set (keys (:effect-state (mfx/mark-teleport-fx-snapshot))))))))
+      (mfx/call-with-mark-teleport-fx-runtime
+        runtime-a
+        (fn []
+          (is (= #{[:ctx "ctx-a"]}
+                 (set (keys (:effect-state (mfx/mark-teleport-fx-snapshot)))))))))))

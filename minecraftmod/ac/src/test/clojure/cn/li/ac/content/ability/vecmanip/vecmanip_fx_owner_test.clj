@@ -67,7 +67,8 @@
 
 (deftest storm-wing-keeps-state-per-owner-test
   (let [enqueue! (var-get #'cn.li.ac.content.ability.vecmanip.storm-wing-fx/enqueue!)]
-    (with-redefs [client-sounds/queue-sound-effect! (fn [_] nil)]
+    (with-redefs [client-particles/current-effect-owner (fn [] {:client-session-id "storm-wing-owner"})
+                  client-sounds/queue-sound-effect! (fn [& _] nil)]
       (enqueue! (event "ctx-a" :storm-wing/fx-start {:mode :start :charge-ticks 70}))
       (enqueue! (event "ctx-b" :storm-wing/fx-start {:mode :start :charge-ticks 40}))
       (enqueue! (event "ctx-a" :storm-wing/fx-update
@@ -85,8 +86,9 @@
 (deftest plasma-cannon-keeps-charge-state-per-owner-test
   (let [enqueue! (var-get #'cn.li.ac.content.ability.vecmanip.plasma-cannon-fx/enqueue!)
         build-plan (var-get #'cn.li.ac.content.ability.vecmanip.plasma-cannon-fx/build-plan)]
-    (with-redefs [client-sounds/queue-sound-effect! (fn [_] nil)
-                  client-particles/queue-particle-effect! (fn [_] nil)]
+    (with-redefs [client-particles/current-effect-owner (fn [] {:client-session-id "plasma-cannon-owner"})
+                  client-sounds/queue-sound-effect! (fn [& _] nil)
+                  client-particles/queue-particle-effect! (fn [& _] nil)]
       (enqueue! (event "ctx-a" :plasma-cannon/fx-start
                        {:mode :start :charge-pos {:x 1.0 :y 64.0 :z 1.0}}))
       (enqueue! (event "ctx-b" :plasma-cannon/fx-start

@@ -5,9 +5,11 @@
    - IGuiHandler protocol
   - RegistryGuiHandler record implementation
 
-   Container state atoms now live in `cn.li.mcmod.gui.container-state`.
+   Container runtime state now lives in an explicit component created from
+   `cn.li.mcmod.gui.container-state` and owned by the handler instance.
    Platform adapters and game content should not re-implement these building blocks."
-  (:require [cn.li.mcmod.gui.registry :as gui-registry]
+  (:require [cn.li.mcmod.gui.container-state :as container-state]
+            [cn.li.mcmod.gui.registry :as gui-registry]
             [cn.li.mcmod.platform.world :as pworld]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.util.log :as log]))
@@ -33,7 +35,7 @@
   (gui-registry/has-gui-id? gui-id))
 
 ;; Default handler implementation (driven by GUI config stored in `gui-registry`).
-(defrecord RegistryGuiHandler []
+(defrecord RegistryGuiHandler [container-runtime]
   IGuiHandler
   (get-server-container [_ gui-id player world pos]
     (let [tile-entity (pworld/world-get-tile-entity* world pos)
@@ -76,11 +78,29 @@
 ;; Global Handler Instance
 ;; ============================================================================
 
-(defonce ^:private gui-handler
-  (atom nil))
+(defn create-gui-handler-runtime
+  ([] (create-gui-handler-runtime {}))
+  ([{:keys [state*]}]
+   {:cn.li.mcmod.gui.handler/runtime ::gui-handler-runtime
+    :state* (or state* (atom nil))}))
+
+(def ^:dynamic *gui-handler-runtime* nil)
+
+(defonce ^:private installed-gui-handler-runtime
+  (create-gui-handler-runtime))
+
+(defn- gui-handler-atom []
+  (:state* (or *gui-handler-runtime* installed-gui-handler-runtime)))
+
+(declare get-gui-handler)
+
+(defn get-container-state-runtime
+  []
+  (:container-runtime (get-gui-handler)))
 
 (defn get-gui-handler
   "Get the global GUI handler instance."
   []
-  (or @gui-handler
-      (reset! gui-handler (->RegistryGuiHandler))))
+  (or @(gui-handler-atom)
+      (reset! (gui-handler-atom)
+              (->RegistryGuiHandler (container-state/create-container-state-runtime)))))

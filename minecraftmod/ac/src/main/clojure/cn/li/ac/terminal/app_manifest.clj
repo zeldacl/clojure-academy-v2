@@ -13,50 +13,88 @@
 		cn.li.ac.terminal.apps.media-player/init-media-player-app!
 		cn.li.ac.terminal.apps.about/init-about-app!])
 
-(defonce ^:private app-init-registry
-	(atom (vec default-app-init-symbols)))
+(defn default-app-init-registry-runtime-state
+	[]
+	{:init-symbols (vec default-app-init-symbols)
+	 :frozen? false})
 
-(defonce ^:private app-init-registry-frozen? (atom false))
+(defn create-app-init-registry-runtime
+	([] (create-app-init-registry-runtime {}))
+	([{:keys [state*]
+		 :or {state* (atom (default-app-init-registry-runtime-state))}}]
+	 {::runtime ::app-init-registry-runtime
+	  :state* state*}))
+
+(def ^:dynamic *app-init-registry-runtime* nil)
+
+(defonce ^:private installed-app-init-registry-runtime
+	(create-app-init-registry-runtime))
+
+(defn call-with-app-init-registry-runtime
+	[runtime f]
+	(when-not (and (map? runtime)
+	               (= ::app-init-registry-runtime (::runtime runtime))
+	               (some? (:state* runtime)))
+		(throw (ex-info "Expected app init registry runtime" {:runtime runtime})))
+	(binding [*app-init-registry-runtime* runtime]
+		(f)))
+
+(defn- current-app-init-registry-runtime
+	[]
+	(or *app-init-registry-runtime*
+		installed-app-init-registry-runtime))
+
+(defn- app-init-registry-state-atom
+	[]
+	(:state* (current-app-init-registry-runtime)))
+
+(defn- app-init-registry-state-snapshot
+	[]
+	@(app-init-registry-state-atom))
+
+(defn- update-app-init-registry-state!
+	[f & args]
+	(apply swap! (app-init-registry-state-atom) f args))
 
 (defn- assert-app-init-registry-open!
 	[]
-	(when @app-init-registry-frozen?
+	(when (:frozen? (app-init-registry-state-snapshot))
 		(throw (ex-info "Terminal app init registry is frozen" {}))))
 
 (defn app-init-registry-snapshot
 	[]
-	{:init-symbols @app-init-registry
-	 :frozen? @app-init-registry-frozen?})
+	(app-init-registry-state-snapshot))
 
 (defn reset-app-init-registry-for-test!
-	([]
-	 (reset-app-init-registry-for-test! {:init-symbols (vec default-app-init-symbols)}))
+	([] (reset-app-init-registry-for-test! {:init-symbols (vec default-app-init-symbols)}))
 	([{:keys [init-symbols frozen?]
 		 :or {init-symbols (vec default-app-init-symbols) frozen? false}}]
-	 (reset! app-init-registry (vec init-symbols))
-	 (reset! app-init-registry-frozen? frozen?)
+	 (reset! (app-init-registry-state-atom)
+	         {:init-symbols (vec init-symbols)
+	          :frozen? frozen?})
 	 nil))
 
 (defn freeze-app-init-registry!
 	[]
-	(reset! app-init-registry-frozen? true)
+	(update-app-init-registry-state! assoc :frozen? true)
 	nil)
 
 (defn list-app-init-symbols
 	"Get terminal app init symbols in registration order."
 	[]
-	@app-init-registry)
+	(:init-symbols (app-init-registry-state-snapshot)))
 
 (defn register-app-init!
 	"Register one terminal app init symbol if absent."
 	[init-sym]
 	{:pre [(symbol? init-sym)]}
 	(assert-app-init-registry-open!)
-	(swap! app-init-registry
-				 (fn [items]
-					 (if (some #(= % init-sym) items)
-						 items
-						 (conj items init-sym))))
+	(update-app-init-registry-state!
+		update :init-symbols
+		(fn [items]
+			(if (some #(= % init-sym) items)
+				items
+				(conj items init-sym))))
 	(log/debug "Registered terminal app init symbol" init-sym)
 	init-sym)
 
@@ -69,7 +107,7 @@
 			(throw (ex-info "All terminal app init entries must be symbols"
 											{:entries init-syms})))
 		(assert-app-init-registry-open!)
-		(reset! app-init-registry normalized)))
+		(update-app-init-registry-state! assoc :init-symbols normalized)))
 
 (defn reset-defaults!
 	"Reset app init symbols to built-in defaults."

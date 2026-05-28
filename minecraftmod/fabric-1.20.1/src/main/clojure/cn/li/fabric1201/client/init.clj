@@ -66,7 +66,7 @@
   "Attach a single universal BlockEntity renderer to all scripted tile types."
   []
   ;; Keep parity with Forge fallback behavior when renderer callbacks have not populated yet.
-  (when (empty? @tesr-api/scripted-renderer-registry)
+  (when (empty? (tesr-api/scripted-renderers-snapshot))
     (render-init/register-default-renderer-init-fns!)
     (render-init/register-all-renderers!))
   (doseq [tile-id (registry-metadata/get-all-tile-ids)]

@@ -5,17 +5,67 @@
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]))
 
-(defonce ^:private fx-state (atom {}))
+(defn default-shift-teleport-fx-runtime-state
+  []
+  {:fx-state {}})
+
+(defn create-shift-teleport-fx-runtime
+  ([]
+   (create-shift-teleport-fx-runtime {}))
+  ([{:keys [state*]
+     :or {state* (atom (default-shift-teleport-fx-runtime-state))}}]
+   {::runtime ::shift-teleport-fx-runtime
+    :state* state*}))
+
+(def ^:dynamic *shift-teleport-fx-runtime* nil)
+
+(defonce ^:private installed-shift-teleport-fx-runtime
+  (create-shift-teleport-fx-runtime))
+
+(defn- shift-teleport-fx-runtime?
+  [runtime]
+  (and (map? runtime)
+       (= ::shift-teleport-fx-runtime (::runtime runtime))
+       (some? (:state* runtime))))
+
+(defn call-with-shift-teleport-fx-runtime
+  [runtime f]
+  (when-not (shift-teleport-fx-runtime? runtime)
+    (throw (ex-info "Expected Shift Teleport FX runtime"
+                    {:value runtime})))
+  (binding [*shift-teleport-fx-runtime* runtime]
+    (f)))
+
+(defmacro with-shift-teleport-fx-runtime
+  [runtime & body]
+  `(call-with-shift-teleport-fx-runtime ~runtime (fn [] ~@body)))
+
+(defn- current-shift-teleport-fx-runtime
+  []
+  (or *shift-teleport-fx-runtime*
+      installed-shift-teleport-fx-runtime))
+
+(defn- shift-teleport-fx-state-atom
+  []
+  (:state* (current-shift-teleport-fx-runtime)))
+
+(defn- shift-teleport-fx-state-snapshot
+  []
+  @(shift-teleport-fx-state-atom))
+
+(defn- update-shift-teleport-fx-state!
+  [f & args]
+  (apply swap! (shift-teleport-fx-state-atom) f args))
 
 (defn shift-teleport-fx-snapshot []
-  {:fx-state @fx-state})
+  (shift-teleport-fx-state-snapshot))
 
 (defn reset-shift-teleport-fx-for-test! []
-  (reset! fx-state {})
+  (reset! (shift-teleport-fx-state-atom) (default-shift-teleport-fx-runtime-state))
   nil)
 
 (defn clear-shift-teleport-owner! [owner-key]
-  (swap! fx-state dissoc owner-key)
+  (update-shift-teleport-fx-state! update :fx-state dissoc owner-key)
   nil)
 
 (defn- enqueue! [{:keys [payload ctx-id channel owner-key]}]
@@ -28,26 +78,26 @@
                    :source-player-id source-player-id
                    :world-id world-id}]
     (case (:mode payload)
-      :start  (swap! fx-state assoc owner-key*
-                     (merge base-meta {:active? true :ttl 0 :target nil :target-count 0 :hand-valid? true}))
+      :start  (update-shift-teleport-fx-state! update :fx-state assoc owner-key*
+                                              (merge base-meta {:active? true :ttl 0 :target nil :target-count 0 :hand-valid? true}))
     :update
-    (swap! fx-state update owner-key*
-           (fn [st]
-             (assoc (merge base-meta (or st {:active? true :ttl 0}))
-                    :owner-key owner-key*
-                    :ctx-id ctx-id
-                    :channel channel
-                    :source-player-id source-player-id
-                    :world-id world-id
-                    :active? true
-                    :target {:x (double (or (:x payload) 0.0))
-                             :y (double (or (:y payload) 0.0))
-                             :z (double (or (:z payload) 0.0))}
-                    :target-count (long (or (:target-count payload) 0))
-                    :target-hit? (boolean (:target-hit? payload))
-                    :hand-valid? (boolean (if (contains? payload :hand-valid?)
-                                            (:hand-valid? payload)
-                                            true)))))
+    (update-shift-teleport-fx-state! update :fx-state update owner-key*
+                                     (fn [st]
+                                       (assoc (merge base-meta (or st {:active? true :ttl 0}))
+                                              :owner-key owner-key*
+                                              :ctx-id ctx-id
+                                              :channel channel
+                                              :source-player-id source-player-id
+                                              :world-id world-id
+                                              :active? true
+                                              :target {:x (double (or (:x payload) 0.0))
+                                                       :y (double (or (:y payload) 0.0))
+                                                       :z (double (or (:z payload) 0.0))}
+                                              :target-count (long (or (:target-count payload) 0))
+                                              :target-hit? (boolean (:target-hit? payload))
+                                              :hand-valid? (boolean (if (contains? payload :hand-valid?)
+                                                                      (:hand-valid? payload)
+                                                                      true)))))
     :perform
     (do
       (when-let [x (:x payload)]
@@ -82,28 +132,30 @@
       nil)))
 
 (defn- tick! []
-  (swap! fx-state
-         (fn [states]
-           (into {}
-                 (map (fn [[owner-key st]]
-                        (let [next-st (update st :ttl inc)]
-                          (when (and (:active? next-st)
-                                     (:target next-st)
-                                     (:hand-valid? next-st)
-                                     (zero? (mod (long (:ttl next-st)) 3)))
-                            (client-particles/queue-particle-effect! (:queue-owner next-st)
-                              {:type :particle
-                               :particle-type (if (:target-hit? next-st) :electric_spark :portal)
-                               :x (double (get-in next-st [:target :x]))
-                               :y (+ 0.4 (double (get-in next-st [:target :y])))
-                               :z (double (get-in next-st [:target :z]))
-                               :count (if (pos? (long (:target-count next-st))) 2 1)
-                               :speed 0.02
-                               :offset-x 0.25
-                               :offset-y 0.25
-                               :offset-z 0.25}))
-                          [owner-key next-st]))
-                 states)))))
+  (update-shift-teleport-fx-state!
+    update :fx-state
+    (fn [states]
+      (reduce-kv
+        (fn [acc owner-key st]
+          (let [next-st (update st :ttl inc)]
+            (when (and (:active? next-st)
+                       (:target next-st)
+                       (:hand-valid? next-st)
+                       (zero? (mod (long (:ttl next-st)) 3)))
+              (client-particles/queue-particle-effect! (:queue-owner next-st)
+                {:type :particle
+                 :particle-type (if (:target-hit? next-st) :electric_spark :portal)
+                 :x (double (get-in next-st [:target :x]))
+                 :y (+ 0.4 (double (get-in next-st [:target :y])))
+                 :z (double (get-in next-st [:target :z]))
+                 :count (if (pos? (long (:target-count next-st))) 2 1)
+                 :speed 0.02
+                 :offset-x 0.25
+                 :offset-y 0.25
+                 :offset-z 0.25}))
+            (assoc acc owner-key next-st)))
+        {}
+        states))))
 
 (defn- build-plan [_cp _hcp _tick] nil)
 

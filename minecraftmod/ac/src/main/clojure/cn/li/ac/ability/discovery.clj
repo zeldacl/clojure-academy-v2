@@ -7,17 +7,22 @@
 					[cn.li.ac.discovery.scanner :as scanner]
 					[cn.li.mcmod.util.log :as log]))
 
-(defonce ^:private bootstrap-attempts* (atom 0))
+(def ^:private bootstrap-attempts-lock
+	(Object.))
+
+(def ^:private ^:dynamic *bootstrap-attempts*
+	0)
 
 (defn bootstrap-attempts-snapshot
 	[]
-	@bootstrap-attempts*)
+	(var-get #'*bootstrap-attempts*))
 
 (defn reset-bootstrap-attempts-for-test!
 	([]
 	 (reset-bootstrap-attempts-for-test! 0))
 	([attempts]
-	 (reset! bootstrap-attempts* (long (or attempts 0)))
+	 (locking bootstrap-attempts-lock
+		 (alter-var-root #'*bootstrap-attempts* (constantly (long (or attempts 0)))))
 	 nil))
 
 (declare register-provider! registered-providers)
@@ -151,8 +156,9 @@
 	Safe to call repeatedly."
 	[]
 	(when (or (zero? (count (registered-providers)))
-					(< @bootstrap-attempts* 1))
-		(swap! bootstrap-attempts* inc)
+					(< (bootstrap-attempts-snapshot) 1))
+		(locking bootstrap-attempts-lock
+			(alter-var-root #'*bootstrap-attempts* (fn [n] (inc (long (or n 0))))))
 		(let [providers (scanner/discover-ability-providers)]
 			(if (empty? providers)
 				(log/warn "Ability discovery returned no providers; check classpath/resource layout")

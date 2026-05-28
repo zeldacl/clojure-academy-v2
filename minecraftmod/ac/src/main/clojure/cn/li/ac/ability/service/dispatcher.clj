@@ -24,11 +24,69 @@
 	collide in multiplayer."
 	nil)
 
-(defonce ^:private context-registry (atom {}))
-(defonce ^:private route-fns (atom {}))
-(defonce ^:private client-id-counter (atom {}))
-(defonce ^:private server-id-counter (atom {}))
-(defonce ^:private lifecycle-counters (atom {}))
+(def ^:private default-dispatcher-state
+	{:context-registry {}
+	 :route-fns {}
+	 :client-id-counter {}
+	 :server-id-counter {}
+	 :lifecycle-counters {}})
+
+(defn create-dispatcher-runtime
+	[]
+	{::runtime ::dispatcher-runtime
+	 :dispatcher-state* (atom default-dispatcher-state)})
+
+(def ^:dynamic *dispatcher-runtime* nil)
+
+(defonce ^:private installed-dispatcher-runtime
+	(create-dispatcher-runtime))
+
+(defn- dispatcher-runtime?
+	[runtime]
+	(and (map? runtime)
+			 (= ::dispatcher-runtime (::runtime runtime))
+			 (some? (:dispatcher-state* runtime))))
+
+(defn call-with-dispatcher-runtime
+	[runtime f]
+	(when-not (dispatcher-runtime? runtime)
+		(throw (ex-info "Expected dispatcher runtime"
+							{:runtime runtime})))
+	(binding [*dispatcher-runtime* runtime]
+		(f)))
+
+(defmacro with-dispatcher-runtime
+	[runtime & body]
+	`(call-with-dispatcher-runtime ~runtime (fn [] ~@body)))
+
+(defn- current-dispatcher-runtime
+	[]
+	(or *dispatcher-runtime*
+			installed-dispatcher-runtime))
+
+(defn- dispatcher-state-atom
+	[]
+	(:dispatcher-state* (current-dispatcher-runtime)))
+
+(defn- dispatcher-state-snapshot
+	[]
+	@(dispatcher-state-atom))
+
+(defn- update-dispatcher-state!
+	[f & args]
+	(apply swap! (dispatcher-state-atom) f args))
+
+(defn- context-registry-snapshot
+	[]
+	(:context-registry (dispatcher-state-snapshot)))
+
+(defn- route-fns-snapshot
+	[]
+	(:route-fns (dispatcher-state-snapshot)))
+
+(defn- lifecycle-counters-map
+	[]
+	(:lifecycle-counters (dispatcher-state-snapshot)))
 
 (def ^:private DEFAULT-TERMINATED-CONTEXT-GRACE-MS 1000)
 (def ^:private DEFAULT-KEEPALIVE-TIMEOUT-MS 1500)
@@ -99,9 +157,14 @@
 			 :session-id (context-session-id ctx)))
 
 (defn- next-context-id!
-	[counter-atom owner prefix]
-	(let [counters (swap! counter-atom update owner (fnil inc 0))]
-		(str prefix "-" (get counters owner))))
+	[counter-key owner prefix]
+	(let [counter* (volatile! nil)]
+		(update-dispatcher-state!
+			(fn [state]
+				(let [next-counter (inc (get-in state [counter-key owner] 0))]
+					(vreset! counter* next-counter)
+					(assoc-in state [counter-key owner] next-counter))))
+		(str prefix "-" @counter*)))
 
 (defn- require-context-owner
 	[ctx-id preferred-side]
@@ -115,7 +178,7 @@
 	 (preferred-context-entry ctx-id nil))
 	([ctx-id preferred-side]
 	 (if (vector? ctx-id)
-		 (when-let [ctx (get @context-registry ctx-id)]
+		 (when-let [ctx (get (context-registry-snapshot) ctx-id)]
 			 [ctx-id ctx])
 		 (do
 			 (require-context-owner ctx-id preferred-side)
@@ -123,34 +186,34 @@
 								 preferred-side (assoc :logical-side preferred-side))
 					 [side session] (route-owner-key owner)
 					 key [side session ctx-id]]
-				 (when-let [ctx (get @context-registry key)]
+				 (when-let [ctx (get (context-registry-snapshot) key)]
 					 [key ctx]))))))
 
 (defn- route-fns-for-context
 	[ctx]
 	(let [side-key [(context-logical-side ctx) (context-session-id ctx)]
 				 session-any-key [:any (context-session-id ctx)]]
-		(or (get @route-fns side-key)
-				(get @route-fns session-any-key)
-				(get @route-fns STATIC-ROUTE-OWNER)
+		(or (get (route-fns-snapshot) side-key)
+				(get (route-fns-snapshot) session-any-key)
+				(get (route-fns-snapshot) STATIC-ROUTE-OWNER)
 				{:to-server nil :to-client nil :to-except-local nil})))
 
 (defn reset-lifecycle-counters!
 	[]
-	(reset! lifecycle-counters {})
+	(update-dispatcher-state! assoc :lifecycle-counters {})
 	nil)
 
 (defn lifecycle-counters-snapshot
 	([]
-	 (apply merge-with + (vals @lifecycle-counters)))
+	 (apply merge-with + (vals (lifecycle-counters-map))))
 	([owner]
-	 (get @lifecycle-counters (route-owner-key owner) {})))
+	 (get (lifecycle-counters-map) (route-owner-key owner) {})))
 
 (defn- record-lifecycle-event!
 	([reason]
 	 (record-lifecycle-event! reason {}))
 	([reason owner]
-	 (swap! lifecycle-counters update-in [(route-owner-key owner) reason] (fnil inc 0))
+	 (update-dispatcher-state! update-in [:lifecycle-counters (route-owner-key owner) reason] (fnil inc 0))
 	 nil))
 
 (defn terminated-context-grace-ms
@@ -166,7 +229,7 @@
 	 (new-context player-uuid skill-id *context-owner*))
 	([player-uuid skill-id owner]
 	 (let [owner-key (context-owner-key owner :client)
-				 id (next-context-id! client-id-counter owner-key "cid")]
+				 id (next-context-id! :client-id-counter owner-key "cid")]
 		 {:id id :server-id nil :player-uuid player-uuid :skill-id skill-id
 			:logical-side :client :session-id (second owner-key)
 			:status STATUS-CONSTRUCTED :input-state :idle :message-buffer []
@@ -177,7 +240,7 @@
 	 (new-server-context player-uuid skill-id client-id *context-owner*))
 	([player-uuid skill-id client-id owner]
 	 (let [owner-key (context-owner-key owner :server)
-				 sid (next-context-id! server-id-counter owner-key "sid")]
+				 sid (next-context-id! :server-id-counter owner-key "sid")]
 		 {:id client-id :server-id sid :player-uuid player-uuid :skill-id skill-id
 			:logical-side :server :session-id (second owner-key)
 			:status STATUS-ALIVE :input-state :idle :message-buffer []
@@ -197,7 +260,7 @@
 
 (defn register-context! [ctx]
 	(let [ctx* (context-with-owner ctx)]
-		(swap! context-registry assoc (context-registry-key ctx*) ctx*)
+		(update-dispatcher-state! assoc-in [:context-registry (context-registry-key ctx*)] ctx*)
 		ctx*))
 
 (defn get-context
@@ -205,21 +268,21 @@
 	 (second (preferred-context-entry ctx-id)))
 	([owner ctx-id]
 	 (let [[side session] (route-owner-key owner)]
-		 (get @context-registry [side session ctx-id]))))
+		 (get (context-registry-snapshot) [side session ctx-id]))))
 
-(defn get-all-contexts [] @context-registry)
+(defn get-all-contexts [] (context-registry-snapshot))
 (defn update-context! [ctx-id f & args]
 	(when-let [[key _ctx] (preferred-context-entry ctx-id)]
-		(swap! context-registry
-				 (fn [registry]
-					 (if (contains? registry key)
-						 (apply update registry key f args)
-						 registry)))))
+		(update-dispatcher-state!
+			(fn [state]
+				(if (contains? (:context-registry state) key)
+					(apply update-in state [:context-registry key] f args)
+					state)))))
 (defn remove-context! [ctx-id]
 	(if (vector? ctx-id)
-		(swap! context-registry dissoc ctx-id)
+		(update-dispatcher-state! update :context-registry dissoc ctx-id)
 		(when-let [[key _ctx] (preferred-context-entry ctx-id)]
-			(swap! context-registry dissoc key))))
+			(update-dispatcher-state! update :context-registry dissoc key))))
 
 (defn- owner-matches-context?
 	[owner ctx]
@@ -229,72 +292,80 @@
 
 (defn get-all-contexts-for-player
 	([player-uuid]
-	 (filter #(= player-uuid (:player-uuid %)) (vals @context-registry)))
+	 (filter #(= player-uuid (:player-uuid %)) (vals (context-registry-snapshot))))
 	([owner player-uuid]
 	 (filter #(and (= player-uuid (:player-uuid %))
 					 (owner-matches-context? owner %))
-			 (vals @context-registry))))
+			 (vals (context-registry-snapshot)))))
 
 (defn snapshot-context-registry []
-	@context-registry)
+	(context-registry-snapshot))
 
 (defn clear-owner-contexts!
 	"Clear all registered contexts and counters for one logical owner."
 	[owner]
 	(let [owner-key (route-owner-key owner)]
-		(swap! context-registry
-				 (fn [registry]
-					 (into {}
-							 (remove (fn [[_ctx-id ctx-map]]
-											 (= owner-key [(context-logical-side ctx-map)
-																 (context-session-id ctx-map)])))
-							 registry)))
-		(swap! client-id-counter dissoc owner-key)
-		(swap! server-id-counter dissoc owner-key)
-		(swap! lifecycle-counters dissoc owner-key))
-	nil)
+		(update-dispatcher-state!
+			(fn [state]
+				(let [filtered-contexts (into {}
+											 (remove (fn [[_ctx-id ctx-map]]
+														 (= owner-key [(context-logical-side ctx-map)
+																				 (context-session-id ctx-map)])))
+											 (:context-registry state))]
+					(-> state
+							(assoc :context-registry filtered-contexts)
+							(update :client-id-counter dissoc owner-key)
+							(update :server-id-counter dissoc owner-key)
+							(update :lifecycle-counters dissoc owner-key)))))
+	nil))
 
 (defn clear-session-contexts!
 	"Clear all registered contexts and counters for one session id."
 	[session-id]
-	(swap! context-registry
-			 (fn [registry]
-				 (into {}
-						 (remove (fn [[_ctx-id ctx-map]]
-										 (= session-id (context-session-id ctx-map))))
-						 registry)))
-	(swap! client-id-counter
-			 (fn [counters]
-				 (into {}
-						 (remove (fn [[[ _side owner-session] _counter]]
-										 (= session-id owner-session)))
-						 counters)))
-	(swap! server-id-counter
-			 (fn [counters]
-				 (into {}
-						 (remove (fn [[[ _side owner-session] _counter]]
-										 (= session-id owner-session)))
-						 counters)))
-	(swap! lifecycle-counters
-			 (fn [counters]
-				 (into {}
-						 (remove (fn [[[ _side owner-session] _counter]]
-										 (= session-id owner-session)))
-						 counters)))
+	(update-dispatcher-state!
+		(fn [state]
+			(-> state
+					(update :context-registry
+							(fn [registry]
+								(into {}
+										(remove (fn [[_ctx-id ctx-map]]
+												 (= session-id (context-session-id ctx-map))))
+										registry)))
+					(update :client-id-counter
+							(fn [counters]
+								(into {}
+										(remove (fn [[[ _side owner-session] _counter]]
+												 (= session-id owner-session)))
+										counters)))
+					(update :server-id-counter
+							(fn [counters]
+								(into {}
+										(remove (fn [[[ _side owner-session] _counter]]
+												 (= session-id owner-session)))
+										counters)))
+					(update :lifecycle-counters
+							(fn [counters]
+								(into {}
+										(remove (fn [[[ _side owner-session] _counter]]
+												 (= session-id owner-session)))
+										counters))))))
 	nil)
 
 (defn reset-contexts-for-test!
 	([]
 	 (reset-contexts-for-test! {}))
 	([contexts]
-	 (reset! context-registry contexts)
-	 (reset! client-id-counter {})
-	 (reset! server-id-counter {})
+	 (update-dispatcher-state!
+			(fn [state]
+				(-> state
+						(assoc :context-registry contexts)
+						(assoc :client-id-counter {})
+						(assoc :server-id-counter {}))))
 	 nil))
 
 (defn reset-route-fns-for-test!
 	[]
-	(reset! route-fns {})
+	(update-dispatcher-state! assoc :route-fns {})
 	nil)
 
 (defn context-owned-by?
@@ -336,7 +407,7 @@
 	(update-context! ctx-id assoc :last-keepalive-ms (System/currentTimeMillis)))
 (defn check-keepalive-timeout! [send-terminated-fn]
 	(let [now (System/currentTimeMillis)]
-		(doseq [[ctx-id ctx] @context-registry]
+		(doseq [[ctx-id ctx] (context-registry-snapshot)]
 			(when (and (= (:status ctx) STATUS-ALIVE)
 								 (= :server (context-logical-side ctx))
 								 (:last-keepalive-ms ctx)
@@ -350,14 +421,15 @@
 	observers can still read final status immediately after termination."
 	[]
 	(let [now (System/currentTimeMillis)]
-		(swap! context-registry
-				 (fn [registry]
-					 (into {}
-								 (remove (fn [[_ctx-id ctx-map]]
-											 (and (= (:status ctx-map) STATUS-TERMINATED)
+		(update-dispatcher-state!
+							 update :context-registry
+							 (fn [registry]
+								 (into {}
+										(remove (fn [[_ctx-id ctx-map]]
+												(and (= (:status ctx-map) STATUS-TERMINATED)
 														 (:terminated-at-ms ctx-map)
-															 (>= (- now (:terminated-at-ms ctx-map)) (terminated-context-grace-ms)))))
-								 registry)))))
+														 (>= (- now (:terminated-at-ms ctx-map)) (terminated-context-grace-ms)))))
+										registry)))))
 
 (defn ctx-buffer-or-send!
 	([ctx-id msg send-fn]
@@ -382,8 +454,8 @@
 					 (nil? to-server)
 					 (nil? to-client)
 					 (nil? to-except-local))
-		(reset! route-fns {})
-		(swap! route-fns assoc (route-owner-key routes) {:to-server to-server :to-client to-client :to-except-local to-except-local}))
+		(update-dispatcher-state! assoc :route-fns {})
+		(update-dispatcher-state! assoc-in [:route-fns (route-owner-key routes)] {:to-server to-server :to-client to-client :to-except-local to-except-local}))
 	nil)
 (defn ctx-send-to-server! [ctx-id channel msg]
 	(ctx-buffer-or-send! ctx-id :client {:channel channel :payload msg}
@@ -408,7 +480,7 @@
 
 (defn active-contexts
 	([]
-	 (->> @context-registry
+	 (->> (context-registry-snapshot)
 			(filter (fn [[_ctx-id ctx]] (active-context? ctx)))
 			(map (fn [[_key ctx]] [(:id ctx) ctx]))
 			(into {})))

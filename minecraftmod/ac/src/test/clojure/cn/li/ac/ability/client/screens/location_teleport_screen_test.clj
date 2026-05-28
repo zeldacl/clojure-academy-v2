@@ -6,12 +6,11 @@
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (defn- reset-screen-fixture [f]
-  (screen/reset-screen-states-for-test!)
-  (try
-    (binding [runtime-hooks/*client-session-id* :test-session]
-      (f))
-    (finally
-      (screen/reset-screen-states-for-test!))))
+  (screen/call-with-location-teleport-screen-runtime
+    (screen/create-location-teleport-screen-runtime)
+    (fn []
+      (binding [runtime-hooks/*client-session-id* :test-session]
+        (f)))))
 
 (use-fixtures :each reset-screen-fixture)
 
@@ -141,3 +140,21 @@
       (is (= :err-cp (:last-error (screen/screen-state-snapshot "p1"))))
       (is (nil? (:last-error (screen/screen-state-snapshot "p2"))))
       (is (= "Mine" (-> (screen/screen-state-snapshot "p2") :locations first :name))))))
+
+(deftest screen-runtime-isolation-test
+  (let [runtime-b (screen/create-location-teleport-screen-runtime)]
+    (screen/open-screen! "p1" (sample-open-payload))
+    (screen/call-with-location-teleport-screen-runtime
+      runtime-b
+      (fn []
+        (screen/open-screen! "p1" {:snapshot {:locations [{:name "Mine"
+                                                           :world-id "minecraft:overworld"
+                                                           :x 4.0 :y 5.0 :z 6.0
+                                                           :can-perform? true}]
+                                              :exp 0.5
+                                              :limits {:cross-dimension-exp-threshold 0.75
+                                                       :max-location-name-length 4}
+                                              :current-pos {:world-id "minecraft:overworld"
+                                                            :x 7.0 :y 8.0 :z 9.0}}})
+        (is (= "Mine" (-> (screen/screen-state-snapshot "p1") :locations first :name)))))
+    (is (= "home" (-> (screen/screen-state-snapshot "p1") :locations first :name)))))

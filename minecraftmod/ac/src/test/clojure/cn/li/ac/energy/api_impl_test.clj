@@ -5,11 +5,9 @@
             [cn.li.ac.energy.domain.container :as container]))
 
 (defn- reset-default-system-fixture [f]
-  (energy-api/reset-energy-systems-for-test!)
-  (try
-    (f)
-    (finally
-      (energy-api/reset-energy-systems-for-test!))))
+  (energy-api/call-with-energy-system-runtime
+    (energy-api/create-energy-system-runtime)
+    f))
 
 (use-fixtures :each reset-default-system-fixture)
 
@@ -70,6 +68,23 @@
     (is (= #{(energy-api/energy-owner-key owner-a)
              (energy-api/energy-owner-key owner-b)}
            (set (keys (energy-api/energy-systems-snapshot)))))))
+
+(deftest energy-system-runtime-isolation-test
+  (let [runtime-b (energy-api/create-energy-system-runtime)
+        tank-a (atom (container/energy-container 100.0 10.0))
+        tank-b (atom (container/energy-container 100.0 70.0))]
+    (is (= :tank (energy-api/register-provider! test-owner :tank tank-a)))
+    (is (= #{(energy-api/energy-owner-key test-owner)}
+           (set (keys (energy-api/energy-systems-snapshot)))))
+
+    (energy-api/call-with-energy-system-runtime
+      runtime-b
+      (fn []
+        (is (empty? (energy-api/energy-systems-snapshot)))
+        (is (= :tank (energy-api/register-provider! test-owner :tank tank-b)))
+        (is (= 70.0 (proto/get-energy (energy-api/energy-system test-owner) :tank)))))
+
+    (is (= 10.0 (proto/get-energy (energy-api/energy-system test-owner) :tank)))))
 
 (deftest energy-owner-is-required-test
   (is (thrown-with-msg? clojure.lang.ExceptionInfo

@@ -33,9 +33,19 @@
    :loading? false
    :page 0})
 
-(defonce ^:private terminal-state (atom {}))
+(def ^:private default-terminal-runtime-state
+  {:next-generation 1
+   :owners {}})
 
-(defonce ^:private active-terminal-owners (atom #{}))
+(defn create-terminal-runtime
+  []
+  {::runtime ::terminal-runtime
+   :runtime-state* (atom default-terminal-runtime-state)})
+
+(def ^:dynamic *terminal-runtime* nil)
+
+(defonce ^:private installed-terminal-runtime
+  (create-terminal-runtime))
 
 (def ^:dynamic *terminal-owner* nil)
 
@@ -65,6 +75,61 @@
    (or (:screen-id owner) :terminal)
    (owner-player-id owner)])
 
+(defn- terminal-runtime?
+  [runtime]
+  (and (map? runtime)
+       (= ::terminal-runtime (::runtime runtime))
+       (some? (:runtime-state* runtime))))
+
+(defn call-with-terminal-runtime
+  [runtime f]
+  (when-not (terminal-runtime? runtime)
+    (throw (ex-info "Expected terminal runtime"
+                    {:runtime runtime})))
+  (binding [*terminal-runtime* runtime]
+    (f)))
+
+(defmacro with-terminal-runtime
+  [runtime & body]
+  `(call-with-terminal-runtime ~runtime (fn [] ~@body)))
+
+(defn- current-terminal-runtime
+  []
+  (or *terminal-runtime*
+      installed-terminal-runtime))
+
+(defn- terminal-runtime-state-atom
+  []
+  (:runtime-state* (current-terminal-runtime)))
+
+(defn- terminal-runtime-state-snapshot
+  []
+  @(terminal-runtime-state-atom))
+
+(defn- public-terminal-state
+  [entry]
+  (if entry
+    (dissoc entry :generation)
+    default-terminal-state))
+
+(defn- ensure-terminal-owner!
+  [owner]
+  (let [owner-key (terminal-owner-key owner)
+        generation* (volatile! nil)]
+    (swap! (terminal-runtime-state-atom)
+           (fn [{:keys [next-generation] :as runtime-state}]
+             (if-let [entry (get-in runtime-state [:owners owner-key])]
+               (do
+                 (vreset! generation* (:generation entry))
+                 runtime-state)
+               (let [generation next-generation]
+                 (vreset! generation* generation)
+                 (-> runtime-state
+                     (assoc :next-generation (inc next-generation))
+                     (assoc-in [:owners owner-key]
+                               (assoc default-terminal-state :generation generation)))))))
+    @generation*))
+
 (defn- player-terminal-owner
   [player]
   (let [player-id (or (player-uuid/player-uuid player) (str player))]
@@ -77,36 +142,31 @@
   ([]
    (terminal-state-snapshot *terminal-owner*))
   ([owner]
-   (get @terminal-state (terminal-owner-key owner) default-terminal-state)))
+   (public-terminal-state
+     (get-in (terminal-runtime-state-snapshot) [:owners (terminal-owner-key owner)]))))
 
 (defn- swap-terminal-state!
   [owner f & args]
+  (ensure-terminal-owner! owner)
   (let [owner-key (terminal-owner-key owner)]
-    (swap! terminal-state
-           (fn [states]
-             (assoc states owner-key
-                    (apply f (get states owner-key default-terminal-state) args))))))
-
-(defn- activate-terminal-owner!
-  [owner]
-  (swap! active-terminal-owners conj (terminal-owner-key owner))
-  nil)
+    (swap! (terminal-runtime-state-atom)
+           (fn [runtime-state]
+             (apply update-in runtime-state [:owners owner-key] f args)))))
 
 (defn- terminal-owner-active?
-  [owner]
-  (contains? @active-terminal-owners (terminal-owner-key owner)))
+  [owner generation]
+  (= generation
+     (get-in (terminal-runtime-state-snapshot) [:owners (terminal-owner-key owner) :generation])))
 
 (defn clear-terminal-state!
   [owner]
   (let [owner-key (terminal-owner-key owner)]
-    (swap! terminal-state dissoc owner-key)
-    (swap! active-terminal-owners disj owner-key))
+    (swap! (terminal-runtime-state-atom) update :owners dissoc owner-key))
   nil)
 
 (defn reset-terminal-states-for-test!
   []
-  (reset! terminal-state {})
-  (reset! active-terminal-owners #{})
+  (reset! (terminal-runtime-state-atom) default-terminal-runtime-state)
   nil)
 
 ;; ============================================================================
@@ -118,70 +178,70 @@
   ([callback]
    (query-terminal-state! *terminal-owner* callback))
   ([owner callback]
-  (activate-terminal-owner! owner)
-  (net-client/send-to-server
-    owner
-    (terminal-messages/msg-id :get-state)
-    {}
-    (fn [response]
-      (when (terminal-owner-active? owner)
-        (swap-terminal-state! owner merge
-               {:terminal-installed? (:terminal-installed? response)
-                :installed-apps (set (:installed-apps response))
-                :available-apps (:available-apps response)})
-        (when callback (callback response)))))))
+   (let [generation (ensure-terminal-owner! owner)]
+     (net-client/send-to-server
+       owner
+       (terminal-messages/msg-id :get-state)
+       {}
+       (fn [response]
+         (when (terminal-owner-active? owner generation)
+           (swap-terminal-state! owner merge
+                                 {:terminal-installed? (:terminal-installed? response)
+                                  :installed-apps (set (:installed-apps response))
+                                  :available-apps (:available-apps response)})
+           (when callback (callback response))))))))
 
 (defn install-terminal!
   "Send terminal installation request to server."
   ([callback]
    (install-terminal! *terminal-owner* callback))
   ([owner callback]
-  (activate-terminal-owner! owner)
-  (swap-terminal-state! owner assoc :loading? true)
-  (net-client/send-to-server
-    owner
-    (terminal-messages/msg-id :install-terminal)
-    {}
-    (fn [response]
-      (when (terminal-owner-active? owner)
-        (swap-terminal-state! owner assoc :loading? false)
-        (when (:success response)
-          (swap-terminal-state! owner assoc :terminal-installed? true))
-        (when callback (callback response)))))))
+   (let [generation (ensure-terminal-owner! owner)]
+     (swap-terminal-state! owner assoc :loading? true)
+     (net-client/send-to-server
+       owner
+       (terminal-messages/msg-id :install-terminal)
+       {}
+       (fn [response]
+         (when (terminal-owner-active? owner generation)
+           (swap-terminal-state! owner assoc :loading? false)
+           (when (:success response)
+             (swap-terminal-state! owner assoc :terminal-installed? true))
+           (when callback (callback response))))))))
 
 (defn install-app!
   "Send app installation request to server."
   ([app-id callback]
    (install-app! *terminal-owner* app-id callback))
   ([owner app-id callback]
-  (activate-terminal-owner! owner)
-  (swap-terminal-state! owner assoc :loading? true)
-  (net-client/send-to-server
-    owner
-    (terminal-messages/msg-id :install-app)
-    {:app-id (name app-id)}
-    (fn [response]
-      (when (terminal-owner-active? owner)
-        (swap-terminal-state! owner assoc :loading? false)
-        (when (:success response)
-          (swap-terminal-state! owner update :installed-apps conj app-id))
-        (when callback (callback response)))))))
+   (let [generation (ensure-terminal-owner! owner)]
+     (swap-terminal-state! owner assoc :loading? true)
+     (net-client/send-to-server
+       owner
+       (terminal-messages/msg-id :install-app)
+       {:app-id (name app-id)}
+       (fn [response]
+         (when (terminal-owner-active? owner generation)
+           (swap-terminal-state! owner assoc :loading? false)
+           (when (:success response)
+             (swap-terminal-state! owner update :installed-apps conj app-id))
+           (when callback (callback response))))))))
 
 (defn uninstall-app!
   "Send app uninstallation request to server."
   ([app-id callback]
    (uninstall-app! *terminal-owner* app-id callback))
   ([owner app-id callback]
-  (activate-terminal-owner! owner)
-  (net-client/send-to-server
-    owner
-    (terminal-messages/msg-id :uninstall-app)
-    {:app-id (name app-id)}
-    (fn [response]
-      (when (terminal-owner-active? owner)
-        (when (:success response)
-          (swap-terminal-state! owner update :installed-apps disj app-id))
-        (when callback (callback response)))))))
+   (let [generation (ensure-terminal-owner! owner)]
+     (net-client/send-to-server
+       owner
+       (terminal-messages/msg-id :uninstall-app)
+       {:app-id (name app-id)}
+       (fn [response]
+         (when (terminal-owner-active? owner generation)
+           (when (:success response)
+             (swap-terminal-state! owner update :installed-apps disj app-id))
+           (when callback (callback response))))))))
 
 ;; ============================================================================
 ;; App Grid Layout

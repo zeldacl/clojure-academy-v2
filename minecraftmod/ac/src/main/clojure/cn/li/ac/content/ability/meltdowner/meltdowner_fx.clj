@@ -6,8 +6,58 @@
             [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]))
 
-(defonce ^:private effect-state (atom {}))
-(defonce ^:private rays (atom {}))
+(defn default-meltdowner-fx-runtime-state
+  []
+  {:effect-state {}
+   :rays {}})
+
+(defn create-meltdowner-fx-runtime
+  ([]
+   (create-meltdowner-fx-runtime {}))
+  ([{:keys [state*]
+     :or {state* (atom (default-meltdowner-fx-runtime-state))}}]
+   {::runtime ::meltdowner-fx-runtime
+    :state* state*}))
+
+(def ^:dynamic *meltdowner-fx-runtime* nil)
+
+(defonce ^:private installed-meltdowner-fx-runtime
+  (create-meltdowner-fx-runtime))
+
+(defn- meltdowner-fx-runtime?
+  [runtime]
+  (and (map? runtime)
+       (= ::meltdowner-fx-runtime (::runtime runtime))
+       (some? (:state* runtime))))
+
+(defn call-with-meltdowner-fx-runtime
+  [runtime f]
+  (when-not (meltdowner-fx-runtime? runtime)
+    (throw (ex-info "Expected meltdowner FX runtime"
+                    {:value runtime})))
+  (binding [*meltdowner-fx-runtime* runtime]
+    (f)))
+
+(defmacro with-meltdowner-fx-runtime
+  [runtime & body]
+  `(call-with-meltdowner-fx-runtime ~runtime (fn [] ~@body)))
+
+(defn- current-meltdowner-fx-runtime
+  []
+  (or *meltdowner-fx-runtime*
+      installed-meltdowner-fx-runtime))
+
+(defn- meltdowner-fx-state-atom
+  []
+  (:state* (current-meltdowner-fx-runtime)))
+
+(defn- meltdowner-fx-state-snapshot
+  []
+  @(meltdowner-fx-state-atom))
+
+(defn- update-meltdowner-fx-state!
+  [f & args]
+  (apply swap! (meltdowner-fx-state-atom) f args))
 (def ^:private charge-loop-sound "my_mod:md.md_charge")
 (def ^:private fire-sound "my_mod:md.meltdowner")
 (def ^:private meltdowner-ray-style
@@ -24,21 +74,19 @@
    :line-alpha (fn [_ life] (int (+ 55 (* 150 life))))})
 
 (defn meltdowner-fx-snapshot []
-  {:effect-state @effect-state
-   :rays @rays})
+  (meltdowner-fx-state-snapshot))
 
 (defn reset-meltdowner-fx-for-test! []
-  (reset! effect-state {})
-  (reset! rays {})
+  (reset! (meltdowner-fx-state-atom) (default-meltdowner-fx-runtime-state))
   nil)
 
 (defn clear-meltdowner-owner! [owner-key]
-  (swap! effect-state dissoc owner-key)
-  (swap! rays dissoc owner-key)
+  (update-meltdowner-fx-state! update :effect-state dissoc owner-key)
+  (update-meltdowner-fx-state! update :rays dissoc owner-key)
   nil)
 
 (defn- all-rays []
-  (mapcat val @rays))
+  (mapcat val (:rays (meltdowner-fx-state-snapshot))))
 
 ;; ---------------------------------------------------------------------------
 ;; Enqueue
@@ -56,49 +104,54 @@
     (case mode
       :start
       (do
-        (swap! effect-state assoc owner-key*
-               (merge base-meta {:active? true :ticks 0 :charge-ratio 0.0 :performed? false}))
+        (update-meltdowner-fx-state!
+          update :effect-state assoc owner-key*
+          (merge base-meta {:active? true :ticks 0 :charge-ratio 0.0 :performed? false}))
         (client-sounds/queue-sound-effect! (:queue-owner base-meta)
           {:type :sound :sound-id charge-loop-sound :volume 1.0 :pitch 1.0}))
       :update
-      (swap! effect-state update owner-key*
-             (fn [st]
-               (assoc (merge base-meta (or st {}))
-                      :owner-key owner-key*
-                      :ctx-id ctx-id
-                      :channel channel
-                      :source-player-id source-player-id
-                      :world-id world-id
-                      :active? true
-                      :ticks (long (or ticks 0))
-                      :charge-ratio (double (or charge-ratio 0.0))
-                      :performed? false)))
+      (update-meltdowner-fx-state!
+        update :effect-state update owner-key*
+        (fn [st]
+          (assoc (merge base-meta (or st {}))
+                 :owner-key owner-key*
+                 :ctx-id ctx-id
+                 :channel channel
+                 :source-player-id source-player-id
+                 :world-id world-id
+                 :active? true
+                 :ticks (long (or ticks 0))
+                 :charge-ratio (double (or charge-ratio 0.0))
+                 :performed? false)))
       :end
-      (swap! effect-state assoc owner-key*
-             (merge base-meta {:active? false :performed? (boolean performed?)
-                                :ticks 0 :charge-ratio 0.0}))
+      (update-meltdowner-fx-state!
+        update :effect-state assoc owner-key*
+        (merge base-meta {:active? false :performed? (boolean performed?)
+                          :ticks 0 :charge-ratio 0.0}))
       :perform
       (do
         (when (and start end)
           (let [life (+ 16 (rand-int 8))]
-            (swap! rays update owner-key* (fnil conj [])
-                   (merge base-meta
-                          {:start start :end end
-                           :ttl life :max-ttl life
-                           :beam-length (double (or beam-length 30.0))
-                           :charge-ticks (int (or charge-ticks 20))
-                           :is-reflect? false}))))
+            (update-meltdowner-fx-state!
+              update :rays update owner-key* (fnil conj [])
+              (merge base-meta
+                     {:start start :end end
+                      :ttl life :max-ttl life
+                      :beam-length (double (or beam-length 30.0))
+                      :charge-ticks (int (or charge-ticks 20))
+                      :is-reflect? false}))))
         (client-sounds/queue-sound-effect! (:queue-owner base-meta)
           {:type :sound :sound-id fire-sound :volume 0.5 :pitch 1.0}))
       :reflect
       (when (and start end)
         (let [life (+ 10 (rand-int 6))]
-          (swap! rays update owner-key* (fnil conj [])
-                 (merge base-meta
-                        {:start start :end end
-                         :ttl life :max-ttl life
-                         :beam-length 10.0 :charge-ticks 20
-                         :is-reflect? true}))))
+          (update-meltdowner-fx-state!
+            update :rays update owner-key* (fnil conj [])
+            (merge base-meta
+                   {:start start :end end
+                    :ttl life :max-ttl life
+                    :beam-length 10.0 :charge-ticks 20
+                    :is-reflect? true}))))
       nil)))
 
 ;; ---------------------------------------------------------------------------
@@ -106,28 +159,30 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- tick! []
-  (swap! effect-state
-         (fn [states]
-           (into {}
-                 (keep (fn [[owner-key st]]
-                         (when (:active? st)
-                           (let [ticks (inc (long (or (:ticks st) 0)))]
-                             (when (zero? (mod ticks 10))
-                               (client-sounds/queue-sound-effect! (:queue-owner st)
-                                 {:type :sound :sound-id charge-loop-sound :volume 0.75 :pitch 1.0}))
-                             [owner-key (assoc st :ticks ticks)]))))
-                 states)))
-  (swap! rays
-         (fn [by-owner]
-           (into {}
-                 (keep (fn [[owner-key xs]]
-                         (let [live (->> xs
-                                         (map #(update % :ttl dec))
-                                         (filter #(pos? (long (:ttl %))))
-                                         vec)]
-                           (when (seq live)
-                             [owner-key live]))))
-                 by-owner))))
+  (update-meltdowner-fx-state!
+    update :effect-state
+    (fn [states]
+      (into {}
+            (keep (fn [[owner-key st]]
+                    (when (:active? st)
+                      (let [ticks (inc (long (or (:ticks st) 0)))]
+                        (when (zero? (mod ticks 10))
+                          (client-sounds/queue-sound-effect! (:queue-owner st)
+                            {:type :sound :sound-id charge-loop-sound :volume 0.75 :pitch 1.0}))
+                        [owner-key (assoc st :ticks ticks)]))))
+            states)))
+  (update-meltdowner-fx-state!
+    update :rays
+    (fn [by-owner]
+      (into {}
+            (keep (fn [[owner-key xs]]
+                    (let [live (->> xs
+                                    (map #(update % :ttl dec))
+                                    (filter #(pos? (long (:ttl %))))
+                                    vec)]
+                      (when (seq live)
+                        [owner-key live]))))
+            by-owner))))
 
 ;; ---------------------------------------------------------------------------
 ;; Render ops
@@ -167,7 +222,7 @@
                          (= (str (:source-player-id st))
                             (str (:player-uuid hand-center-pos)))))
             st))
-        (vals @effect-state)))
+        (vals (:effect-state (meltdowner-fx-state-snapshot)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Build plan

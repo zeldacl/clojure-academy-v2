@@ -12,11 +12,10 @@
 
 (use-fixtures :each
   (fn [f]
-    (level-renderer/reset-walk-speed-for-test!)
-    (try
-      (f)
-      (finally
-        (level-renderer/reset-walk-speed-for-test!)))))
+    (level-renderer/call-with-level-renderer-runtime
+      (level-renderer/create-level-renderer-runtime)
+      (fn []
+        (f)))))
 
 (deftest walk-speed-cache-isolated-by-owner-test
   (let [calls (atom [])]
@@ -40,4 +39,20 @@
       (level-renderer/clear-owner-walk-speed! owner-a fake-player)
       (is (= [0.2 0.3 default-walk-speed] @calls))
       (is (= {[(:client-session-id owner-b) (:player-uuid owner-b)] 0.3}
-             (level-renderer/walk-speed-snapshot))))))
+              (level-renderer/walk-speed-snapshot))))))
+
+      (deftest level-renderer-runtime-isolation-test
+        (let [runtime-b (level-renderer/create-level-renderer-runtime)
+         calls (atom [])]
+          (with-redefs [level-renderer/set-local-walk-speed! (fn [_player speed]
+                       (swap! calls conj speed)
+                       nil)]
+            (level-renderer/apply-local-walk-speed-from-plan! owner-a fake-player {:local-walk-speed 0.2})
+            (level-renderer/call-with-level-renderer-runtime
+         runtime-b
+         (fn []
+           (level-renderer/apply-local-walk-speed-from-plan! owner-a fake-player {:local-walk-speed 0.4})
+           (is (= {[(:client-session-id owner-a) (:player-uuid owner-a)] 0.4}
+             (level-renderer/walk-speed-snapshot)))))
+            (is (= {[(:client-session-id owner-a) (:player-uuid owner-a)] 0.2}
+              (level-renderer/walk-speed-snapshot))))))

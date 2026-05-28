@@ -5,20 +5,70 @@
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]))
 
-(defonce ^:private fx-state (atom {}))
+(defn default-threatening-teleport-fx-runtime-state
+  []
+  {:fx-state {}})
+
+(defn create-threatening-teleport-fx-runtime
+  ([]
+   (create-threatening-teleport-fx-runtime {}))
+  ([{:keys [state*]
+     :or {state* (atom (default-threatening-teleport-fx-runtime-state))}}]
+   {::runtime ::threatening-teleport-fx-runtime
+    :state* state*}))
+
+(def ^:dynamic *threatening-teleport-fx-runtime* nil)
+
+(defonce ^:private installed-threatening-teleport-fx-runtime
+  (create-threatening-teleport-fx-runtime))
+
+(defn- threatening-teleport-fx-runtime?
+  [runtime]
+  (and (map? runtime)
+       (= ::threatening-teleport-fx-runtime (::runtime runtime))
+       (some? (:state* runtime))))
+
+(defn call-with-threatening-teleport-fx-runtime
+  [runtime f]
+  (when-not (threatening-teleport-fx-runtime? runtime)
+    (throw (ex-info "Expected Threatening Teleport FX runtime"
+                    {:value runtime})))
+  (binding [*threatening-teleport-fx-runtime* runtime]
+    (f)))
+
+(defmacro with-threatening-teleport-fx-runtime
+  [runtime & body]
+  `(call-with-threatening-teleport-fx-runtime ~runtime (fn [] ~@body)))
+
+(defn- current-threatening-teleport-fx-runtime
+  []
+  (or *threatening-teleport-fx-runtime*
+      installed-threatening-teleport-fx-runtime))
+
+(defn- threatening-teleport-fx-state-atom
+  []
+  (:state* (current-threatening-teleport-fx-runtime)))
+
+(defn- threatening-teleport-fx-state-snapshot
+  []
+  @(threatening-teleport-fx-state-atom))
+
+(defn- update-threatening-teleport-fx-state!
+  [f & args]
+  (apply swap! (threatening-teleport-fx-state-atom) f args))
 
 (defn threatening-teleport-fx-snapshot
   []
-  {:fx-state @fx-state})
+  (threatening-teleport-fx-state-snapshot))
 
 (defn reset-threatening-teleport-fx-for-test!
   []
-  (reset! fx-state {})
+  (reset! (threatening-teleport-fx-state-atom) (default-threatening-teleport-fx-runtime-state))
   nil)
 
 (defn clear-threatening-teleport-owner!
   [owner-key]
-  (swap! fx-state dissoc owner-key)
+  (update-threatening-teleport-fx-state! update :fx-state dissoc owner-key)
   nil)
 
 (defn- enqueue! [{:keys [payload ctx-id channel owner-key]}]
@@ -31,22 +81,22 @@
                    :world-id (:world-id payload)}]
   (case (:mode payload)
     :start
-    (swap! fx-state assoc owner-key*
+        (update-threatening-teleport-fx-state! update :fx-state assoc owner-key*
            (merge base-meta {:ttl 0 :active? true :aim nil :attacked? false}))
     :update
-    (swap! fx-state update owner-key*
-           (fn [st]
-             (merge base-meta
-                    (or st {:ttl 0 :active? true})
-                    {:aim {:x (double (or (:drop-x payload) 0.0))
-                           :y (double (or (:drop-y payload) 0.0))
-                           :z (double (or (:drop-z payload) 0.0))}
-                     :attacked? (boolean (:attacked? payload))})))
+        (update-threatening-teleport-fx-state! update :fx-state update owner-key*
+                 (fn [st]
+                   (merge base-meta
+                     (or st {:ttl 0 :active? true})
+                     {:aim {:x (double (or (:drop-x payload) 0.0))
+                       :y (double (or (:drop-y payload) 0.0))
+                       :z (double (or (:drop-z payload) 0.0))}
+                      :attacked? (boolean (:attacked? payload))})))
     :perform
     (do
-      (swap! fx-state update owner-key*
-             (fn [st]
-               (merge base-meta (or st {:ttl 0 :active? false}) {:perform-ttl 15})))
+          (update-threatening-teleport-fx-state! update :fx-state update owner-key*
+                   (fn [st]
+                     (merge base-meta (or st {:ttl 0 :active? false}) {:perform-ttl 15})))
       (when-let [x (:drop-x payload)]
         (client-particles/queue-particle-effect! (:queue-owner base-meta)
           {:type :particle :particle-type :portal
@@ -56,31 +106,33 @@
       (client-sounds/queue-sound-effect! (:queue-owner base-meta)
         {:type :sound :sound-id "my_mod:tp.threatening_tp" :volume 0.7 :pitch 1.0}))
     :end
-    (swap! fx-state dissoc owner-key*)
+    (update-threatening-teleport-fx-state! update :fx-state dissoc owner-key*)
       nil)))
 
 (defn- tick! []
-  (swap! fx-state
-         (fn [states]
-           (into {}
-                 (map (fn [[owner-key st]]
-                        (let [next-st (-> st
-                                          (update :ttl (fnil inc 0))
-                                          (update :perform-ttl (fn [t] (when (and t (pos? (long t))) (dec (long t))))))]
-                          (when (and (:aim next-st) (zero? (mod (long (:ttl next-st)) 3)))
-                            (client-particles/queue-particle-effect! (:queue-owner next-st)
-                              {:type :particle
-                               :particle-type (if (:attacked? next-st) :electric_spark :portal)
-                               :x (double (get-in next-st [:aim :x]))
-                               :y (+ 0.4 (double (get-in next-st [:aim :y])))
-                               :z (double (get-in next-st [:aim :z]))
-                               :count 2
-                               :speed 0.02
-                               :offset-x 0.25
-                               :offset-y 0.25
-                               :offset-z 0.25}))
-                          [owner-key next-st]))
-                 states)))))
+  (update-threatening-teleport-fx-state!
+    update :fx-state
+    (fn [states]
+      (reduce-kv
+        (fn [acc owner-key st]
+          (let [next-st (-> st
+                            (update :ttl (fnil inc 0))
+                            (update :perform-ttl (fn [t] (when (and t (pos? (long t))) (dec (long t))))))]
+            (when (and (:aim next-st) (zero? (mod (long (:ttl next-st)) 3)))
+              (client-particles/queue-particle-effect! (:queue-owner next-st)
+                {:type :particle
+                 :particle-type (if (:attacked? next-st) :electric_spark :portal)
+                 :x (double (get-in next-st [:aim :x]))
+                 :y (+ 0.4 (double (get-in next-st [:aim :y])))
+                 :z (double (get-in next-st [:aim :z]))
+                 :count 2
+                 :speed 0.02
+                 :offset-x 0.25
+                 :offset-y 0.25
+                 :offset-z 0.25}))
+            (assoc acc owner-key next-st)))
+        {}
+        states))))
 
 (defn- build-plan [_cp _hcp _tick]
   nil)

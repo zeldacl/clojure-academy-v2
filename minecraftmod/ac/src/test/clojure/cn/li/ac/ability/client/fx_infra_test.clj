@@ -8,19 +8,27 @@
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (defn- reset-fixture [f]
-  (fx-registry/reset-fx-registry-for-test!)
-  (level-effects/reset-level-effect-registry-for-test!)
-  (hand-effects/reset-hand-effect-registry-for-test!)
-  (particles/reset-particle-queue-for-test!)
-  (sounds/reset-sound-queue-for-test!)
-  (try
-    (f)
-    (finally
-      (fx-registry/reset-fx-registry-for-test!)
-      (level-effects/reset-level-effect-registry-for-test!)
-      (hand-effects/reset-hand-effect-registry-for-test!)
-      (particles/reset-particle-queue-for-test!)
-      (sounds/reset-sound-queue-for-test!))))
+  (particles/call-with-particle-queue-runtime
+    (particles/create-particle-queue-runtime)
+    (fn []
+      (sounds/call-with-sound-queue-runtime
+        (sounds/create-sound-queue-runtime)
+        (fn []
+          (hand-effects/with-camera-pitch-runtime
+            (hand-effects/create-camera-pitch-runtime)
+            (fx-registry/reset-fx-registry-for-test!)
+            (level-effects/reset-level-effect-registry-for-test!)
+            (hand-effects/reset-hand-effect-registry-for-test!)
+            (particles/reset-particle-queue-for-test!)
+            (sounds/reset-sound-queue-for-test!)
+            (try
+              (f)
+              (finally
+                (fx-registry/reset-fx-registry-for-test!)
+                (level-effects/reset-level-effect-registry-for-test!)
+                (hand-effects/reset-hand-effect-registry-for-test!)
+                (particles/reset-particle-queue-for-test!)
+                (sounds/reset-sound-queue-for-test!)))))))))
 
 (use-fixtures :each reset-fixture)
 

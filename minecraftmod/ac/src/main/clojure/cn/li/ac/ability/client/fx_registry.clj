@@ -6,14 +6,62 @@
   instead of hard-coding a case statement per skill."
   (:require [cn.li.mcmod.util.log :as log]))
 
-;; channel-key → handler-fn
-;; handler-fn signature: (fn [ctx-id channel payload])
-(defonce ^:private fx-handlers (atom {}))
-(defonce ^:private fx-handlers-frozen? (atom false))
+(defn default-fx-registry-runtime-state
+  []
+  {:handlers {}
+   :frozen? false})
+
+(defn create-fx-registry-runtime
+  ([]
+   (create-fx-registry-runtime {}))
+  ([{:keys [state*]
+     :or {state* (atom (default-fx-registry-runtime-state))}}]
+   {::runtime ::fx-registry-runtime
+    :state* state*}))
+
+(def ^:dynamic *fx-registry-runtime* nil)
+
+(defonce ^:private installed-fx-registry-runtime
+  (create-fx-registry-runtime))
+
+(defn- fx-registry-runtime?
+  [runtime]
+  (and (map? runtime)
+       (= ::fx-registry-runtime (::runtime runtime))
+       (some? (:state* runtime))))
+
+(defn call-with-fx-registry-runtime
+  [runtime f]
+  (when-not (fx-registry-runtime? runtime)
+    (throw (ex-info "Expected FX registry runtime"
+                    {:value runtime})))
+  (binding [*fx-registry-runtime* runtime]
+    (f)))
+
+(defmacro with-fx-registry-runtime
+  [runtime & body]
+  `(call-with-fx-registry-runtime ~runtime (fn [] ~@body)))
+
+(defn- current-fx-registry-runtime
+  []
+  (or *fx-registry-runtime*
+      installed-fx-registry-runtime))
+
+(defn- fx-registry-state-atom
+  []
+  (:state* (current-fx-registry-runtime)))
+
+(defn- fx-registry-state-snapshot
+  []
+  @(fx-registry-state-atom))
+
+(defn- update-fx-registry-state!
+  [f & args]
+  (apply swap! (fx-registry-state-atom) f args))
 
 (defn- assert-registry-open!
   []
-  (when @fx-handlers-frozen?
+  (when (:frozen? (fx-registry-state-snapshot))
     (throw (ex-info "FX channel registry is frozen" {}))))
 
 (defn register-fx-channel!
@@ -24,11 +72,12 @@
   [channel-key handler-fn]
   {:pre [(keyword? channel-key) (fn? handler-fn)]}
   (assert-registry-open!)
-  (swap! fx-handlers
-         (fn [handlers]
-           (if (contains? handlers channel-key)
-             handlers
-             (assoc handlers channel-key handler-fn))))
+  (update-fx-registry-state!
+    update :handlers
+    (fn [handlers]
+      (if (contains? handlers channel-key)
+        handlers
+        (assoc handlers channel-key handler-fn))))
   nil)
 
 (defn register-fx-channels!
@@ -41,25 +90,23 @@
 
 (defn freeze-fx-registry!
   []
-  (reset! fx-handlers-frozen? true)
+  (update-fx-registry-state! assoc :frozen? true)
   nil)
 
 (defn fx-registry-snapshot
   []
-  {:handlers @fx-handlers
-   :frozen? @fx-handlers-frozen?})
+  (fx-registry-state-snapshot))
 
 (defn reset-fx-registry-for-test!
   []
-  (reset! fx-handlers {})
-  (reset! fx-handlers-frozen? false)
+  (reset! (fx-registry-state-atom) (default-fx-registry-runtime-state))
   nil)
 
 (defn dispatch-fx-channel!
   "Dispatch a context-channel push to its registered handler.
   Returns true when a handler was found and called, false otherwise."
   [ctx-id channel payload]
-  (if-let [handler-fn (get @fx-handlers channel)]
+  (if-let [handler-fn (get (:handlers (fx-registry-state-snapshot)) channel)]
     (do (handler-fn ctx-id channel payload)
         true)
     (do (log/debug "No FX handler for channel" channel)
@@ -68,4 +115,4 @@
 (defn registered-channels
   "Return the set of currently-registered channel keys (for diagnostics)."
   []
-  (set (keys @fx-handlers)))
+  (set (keys (:handlers (fx-registry-state-snapshot)))))

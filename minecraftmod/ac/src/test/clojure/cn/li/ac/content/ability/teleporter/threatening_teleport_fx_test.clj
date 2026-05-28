@@ -1,15 +1,20 @@
 (ns cn.li.ac.content.ability.teleporter.threatening-teleport-fx-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
+            [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.content.ability.teleporter.threatening-teleport-fx :as tfx]))
 
-(defn- reset-fixture [f]
-  (tfx/reset-threatening-teleport-fx-for-test!)
-  (f)
-  (tfx/reset-threatening-teleport-fx-for-test!))
+(defn- with-fresh-threatening-teleport-fx-runtime [f]
+  (tfx/call-with-threatening-teleport-fx-runtime
+    (tfx/create-threatening-teleport-fx-runtime)
+    (fn []
+      (try
+        (f)
+        (finally
+          (tfx/reset-threatening-teleport-fx-for-test!))))))
 
-(use-fixtures :each reset-fixture)
+(use-fixtures :each with-fresh-threatening-teleport-fx-runtime)
 
 (deftest init-registers-threatening-teleport-fx-channels-test
   (let [registered-level* (atom nil)
@@ -67,17 +72,18 @@
                  :ctx-id ctx-id
                  :channel :threatening-tp/fx-update
                  :owner-key [:ctx ctx-id]})]
-    (enqueue! (event "ctx-a" {:mode :start}))
-    (enqueue! (event "ctx-b" {:mode :start}))
-    (enqueue! (event "ctx-a" {:mode :update :drop-x 1.0 :drop-y 2.0 :drop-z 3.0 :attacked? true}))
-    (enqueue! (event "ctx-b" {:mode :update :drop-x 4.0 :drop-y 5.0 :drop-z 6.0 :attacked? false}))
-    (let [snapshot (tfx/threatening-teleport-fx-snapshot)]
-      (is (true? (:attacked? (get (:fx-state snapshot) [:ctx "ctx-a"]))))
-      (is (= {:x 4.0 :y 5.0 :z 6.0}
-             (:aim (get (:fx-state snapshot) [:ctx "ctx-b"])))))
-    (enqueue! (event "ctx-a" {:mode :end}))
-    (let [snapshot (tfx/threatening-teleport-fx-snapshot)]
-      (is (nil? (get (:fx-state snapshot) [:ctx "ctx-a"])))
-      (is (some? (get (:fx-state snapshot) [:ctx "ctx-b"]))))
-    (tfx/clear-threatening-teleport-owner! [:ctx "ctx-b"])
-    (is (empty? (:fx-state (tfx/threatening-teleport-fx-snapshot))))))
+    (with-redefs [client-particles/current-effect-owner (fn [] {:client-session-id "threatening-teleport-test"})]
+      (enqueue! (event "ctx-a" {:mode :start}))
+      (enqueue! (event "ctx-b" {:mode :start}))
+      (enqueue! (event "ctx-a" {:mode :update :drop-x 1.0 :drop-y 2.0 :drop-z 3.0 :attacked? true}))
+      (enqueue! (event "ctx-b" {:mode :update :drop-x 4.0 :drop-y 5.0 :drop-z 6.0 :attacked? false}))
+      (let [snapshot (tfx/threatening-teleport-fx-snapshot)]
+        (is (true? (:attacked? (get (:fx-state snapshot) [:ctx "ctx-a"]))))
+        (is (= {:x 4.0 :y 5.0 :z 6.0}
+               (:aim (get (:fx-state snapshot) [:ctx "ctx-b"])))))
+      (enqueue! (event "ctx-a" {:mode :end}))
+      (let [snapshot (tfx/threatening-teleport-fx-snapshot)]
+        (is (nil? (get (:fx-state snapshot) [:ctx "ctx-a"])))
+        (is (some? (get (:fx-state snapshot) [:ctx "ctx-b"]))))
+      (tfx/clear-threatening-teleport-owner! [:ctx "ctx-b"])
+      (is (empty? (:fx-state (tfx/threatening-teleport-fx-snapshot)))))))

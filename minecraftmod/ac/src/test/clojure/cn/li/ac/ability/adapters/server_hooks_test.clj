@@ -176,6 +176,24 @@
             [:projectiles]]
            @called))))
 
+(deftest lifecycle-subscriptions-runtime-isolation-test
+  (let [runtime-a (server-hooks/create-lifecycle-subscriptions-runtime)
+        runtime-b (server-hooks/create-lifecycle-subscriptions-runtime)]
+    (server-hooks/call-with-lifecycle-subscriptions-runtime
+      runtime-a
+      (fn []
+        (is (false? (server-hooks/lifecycle-subscriptions-registered-snapshot)))
+        (server-hooks/reset-lifecycle-subscriptions-registered-for-test! true)
+        (is (true? (server-hooks/lifecycle-subscriptions-registered-snapshot)))))
+    (server-hooks/call-with-lifecycle-subscriptions-runtime
+      runtime-b
+      (fn []
+        (is (false? (server-hooks/lifecycle-subscriptions-registered-snapshot)))))
+    (server-hooks/call-with-lifecycle-subscriptions-runtime
+      runtime-a
+      (fn []
+        (is (true? (server-hooks/lifecycle-subscriptions-registered-snapshot)))))))
+
       (deftest category-change-event-aborts-deactivates-and-recalculates-test
         (let [aborted (atom [])
         resource-updates (atom [])

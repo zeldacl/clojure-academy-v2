@@ -13,14 +13,29 @@
             [cn.li.mcmod.block.dsl :as bdsl]
             [cn.li.mcmod.util.log :as log]))
 
-;; Event Handler Registry
-;; ============================================================
+;; ============================================================================
+;; Runtime Container
+;; ============================================================================
 
-(defonce block-event-handlers
-  ^{
-     :doc "Registry of block event handlers.
-  Structure: {block-id -> {:on-right-click fn, :on-break fn, ...}}"}
-  (atom {}))
+(defn create-event-metadata-runtime
+  ([] (create-event-metadata-runtime {}))
+  ([{:keys [state*]}]
+   {:cn.li.mcmod.events.metadata/runtime ::event-metadata-runtime
+    :state* (or state* (atom {:block-handlers {} :player-handlers {}}))}))
+
+(def ^:dynamic *event-metadata-runtime* nil)
+
+(defonce ^:private installed-event-metadata-runtime
+  (create-event-metadata-runtime))
+
+(defn- event-metadata-state-atom []
+  (:state* (or *event-metadata-runtime* installed-event-metadata-runtime)))
+
+(defn- event-metadata-state-snapshot []
+  @(event-metadata-state-atom))
+
+(defn- update-event-metadata-state! [f & args]
+  (apply swap! (event-metadata-state-atom) f args))
 
 ;; Registration API
 ;; ============================================================
@@ -38,7 +53,7 @@
       (fn [event-data] (log/info \"Clicked!\")))"
   [block-id event-type handler-fn]
   (when handler-fn
-    (swap! block-event-handlers assoc-in [block-id event-type] handler-fn)
+    (update-event-metadata-state! assoc-in [:block-handlers block-id event-type] handler-fn)
     (log/info "Registered" event-type "handler for block:" block-id)))
 
 (defn unregister-block-event-handler!
@@ -48,7 +63,7 @@
     block-id: String - DSL block identifier
     event-type: Keyword - Event type to unregister"
   [block-id event-type]
-  (swap! block-event-handlers update block-id dissoc event-type)
+  (update-event-metadata-state! update-in [:block-handlers block-id] dissoc event-type)
   (log/info "Unregistered" event-type "handler for block:" block-id))
 
 ;; Query API
@@ -64,7 +79,7 @@
   Returns:
     Function - Event handler function, or nil if not registered"
   [block-id event-type]
-  (get-in @block-event-handlers [block-id event-type]))
+  (get-in (event-metadata-state-snapshot) [:block-handlers block-id event-type]))
 
 (defn has-event-handler?
   "Check if a block has a handler for a specific event type.
@@ -87,7 +102,7 @@
   Returns:
     Sequence of block ID strings"
   [event-type]
-  (->> @block-event-handlers
+  (->> (:block-handlers (event-metadata-state-snapshot))
       (filter (fn [[_ handlers]]
                  (contains? handlers event-type)))
        (map first)))
@@ -186,7 +201,7 @@
           (when-let [on-place (:on-place events)]
             (log/debug "    Registering :on-place handler")
             (register-block-event-handler! block-id :on-place on-place)))))
-    (log/info "Synchronized" (count @block-event-handlers) "block event handlers")))
+    (log/info "Synchronized" (count (:block-handlers (event-metadata-state-snapshot))) "block event handlers")))
 
 (defn init-event-metadata!
   "Initialize event metadata system.
@@ -199,14 +214,8 @@
 ;; Player Event Handlers (Runtime System)
 ;; ============================================================
 
-(defonce player-event-handlers
-  ^{:doc "Registry of player lifecycle and runtime event handlers.
-  Structure: {event-type-keyword -> handler-fn}
-  event-type-keyword examples:
-    :player/logged-in  :player/logged-out  :player/respawn  :player/clone
-    :player/tick       :player/death
-    :content/tick      (server tick for content runtime work)"}
-  (atom {}))
+
+;; Player event handlers stored in the same runtime state
 
 (defn register-player-event-handler!
   "Register a handler for a player-level event type.
@@ -217,13 +226,13 @@
     handler-fn: (fn [ctx]) where ctx is a platform-neutral event map"
   [event-type handler-fn]
   (when handler-fn
-    (swap! player-event-handlers assoc event-type handler-fn)
+    (update-event-metadata-state! assoc-in [:player-handlers event-type] handler-fn)
     (log/info "Registered player event handler for" event-type)))
 
 (defn get-player-event-handler
   "Return the handler-fn for event-type, or nil."
   [event-type]
-  (get @player-event-handlers event-type))
+  (get-in (event-metadata-state-snapshot) [:player-handlers event-type]))
 
 (defn has-player-event-handler?
   [event-type]

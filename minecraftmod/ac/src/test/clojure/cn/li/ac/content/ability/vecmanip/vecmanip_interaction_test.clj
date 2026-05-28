@@ -3,14 +3,16 @@
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.content.ability.vecmanip.arbitration :as arbitration]))
 
-(defn- reset-fixture [f]
-  (arbitration/reset-projectile-locks-for-test!)
-  (try
-    (f)
-    (finally
-      (arbitration/reset-projectile-locks-for-test!))))
+(defn- with-fresh-arbitration-runtime [f]
+  (arbitration/call-with-projectile-arbitration-runtime
+    (arbitration/create-projectile-arbitration-runtime)
+    (fn []
+      (try
+        (f)
+        (finally
+          (arbitration/reset-projectile-locks-for-test!))))))
 
-(use-fixtures :each reset-fixture)
+(use-fixtures :each with-fresh-arbitration-runtime)
 
 (deftest arbitration-priority-defaults-to-reflection-test
   (with-redefs [skill-config/tunable-string-list
@@ -49,3 +51,20 @@
     (is (nil? (get-in (arbitration/projectile-locks-snapshot) [:owners ["p1" "arrow-1"]])))
     (is (= :vec-reflection
            (get-in (arbitration/projectile-locks-snapshot) [:owners ["p2" "arrow-1"]])))))
+
+(deftest projectile-arbitration-runtime-isolation-test
+  (let [runtime-a (arbitration/create-projectile-arbitration-runtime)
+        runtime-b (arbitration/create-projectile-arbitration-runtime)]
+    (with-redefs [cn.li.ac.content.ability.vecmanip.arbitration/current-tick (fn [] 77)]
+      (arbitration/call-with-projectile-arbitration-runtime runtime-a
+        (fn []
+          (is (true? (arbitration/claim-projectile! "p1" :vec-reflection "arrow-1")))))
+      (arbitration/call-with-projectile-arbitration-runtime runtime-b
+        (fn []
+          (is (true? (arbitration/claim-projectile! "p1" :vec-deviation "arrow-1")))
+          (is (= :vec-deviation
+                 (get-in (arbitration/projectile-locks-snapshot) [:owners ["p1" "arrow-1"]])))))
+      (arbitration/call-with-projectile-arbitration-runtime runtime-a
+        (fn []
+          (is (= :vec-reflection
+                 (get-in (arbitration/projectile-locks-snapshot) [:owners ["p1" "arrow-1"]]))))))))

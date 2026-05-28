@@ -5,17 +5,67 @@
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]))
 
-(defonce ^:private effect-state (atom {}))
+(defn default-scatter-bomb-fx-runtime-state
+  []
+  {:effect-state {}})
+
+(defn create-scatter-bomb-fx-runtime
+  ([]
+   (create-scatter-bomb-fx-runtime {}))
+  ([{:keys [state*]
+     :or {state* (atom (default-scatter-bomb-fx-runtime-state))}}]
+   {::runtime ::scatter-bomb-fx-runtime
+    :state* state*}))
+
+(def ^:dynamic *scatter-bomb-fx-runtime* nil)
+
+(defonce ^:private installed-scatter-bomb-fx-runtime
+  (create-scatter-bomb-fx-runtime))
+
+(defn- scatter-bomb-fx-runtime?
+  [runtime]
+  (and (map? runtime)
+       (= ::scatter-bomb-fx-runtime (::runtime runtime))
+       (some? (:state* runtime))))
+
+(defn call-with-scatter-bomb-fx-runtime
+  [runtime f]
+  (when-not (scatter-bomb-fx-runtime? runtime)
+    (throw (ex-info "Expected scatter-bomb FX runtime"
+                    {:value runtime})))
+  (binding [*scatter-bomb-fx-runtime* runtime]
+    (f)))
+
+(defmacro with-scatter-bomb-fx-runtime
+  [runtime & body]
+  `(call-with-scatter-bomb-fx-runtime ~runtime (fn [] ~@body)))
+
+(defn- current-scatter-bomb-fx-runtime
+  []
+  (or *scatter-bomb-fx-runtime*
+      installed-scatter-bomb-fx-runtime))
+
+(defn- scatter-bomb-fx-state-atom
+  []
+  (:state* (current-scatter-bomb-fx-runtime)))
+
+(defn- scatter-bomb-fx-state-snapshot
+  []
+  @(scatter-bomb-fx-state-atom))
+
+(defn- update-scatter-bomb-fx-state!
+  [f & args]
+  (apply swap! (scatter-bomb-fx-state-atom) f args))
 
 (defn scatter-bomb-fx-snapshot []
-  {:effect-state @effect-state})
+  (scatter-bomb-fx-state-snapshot))
 
 (defn reset-scatter-bomb-fx-for-test! []
-  (reset! effect-state {})
+  (reset! (scatter-bomb-fx-state-atom) (default-scatter-bomb-fx-runtime-state))
   nil)
 
 (defn clear-scatter-bomb-owner! [owner-key]
-  (swap! effect-state dissoc owner-key)
+  (update-scatter-bomb-fx-state! update :effect-state dissoc owner-key)
   nil)
 
 ;; ---------------------------------------------------------------------------
@@ -33,20 +83,23 @@
     (case mode
       :start
       (do
-        (swap! effect-state assoc owner-key* (merge base-meta {:active? true :ticks 0 :balls 0}))
+        (update-scatter-bomb-fx-state!
+          update :effect-state assoc owner-key*
+          (merge base-meta {:active? true :ticks 0 :balls 0}))
         (client-sounds/queue-current-sound-effect!
           {:type :sound :sound-id "my_mod:md.sb_charge" :volume 0.5 :pitch 1.0}))
       :ball
       (do
-        (swap! effect-state update owner-key*
-               (fn [st]
-                 (assoc (merge base-meta (or st {:active? true :ticks 0}))
-                        :owner-key owner-key*
-                        :ctx-id ctx-id
-                        :channel channel
-                        :source-player-id source-player-id
-                        :world-id world-id
-                        :balls (int (or count 0)))))
+        (update-scatter-bomb-fx-state!
+          update :effect-state update owner-key*
+          (fn [st]
+            (assoc (merge base-meta (or st {:active? true :ticks 0}))
+                   :owner-key owner-key*
+                   :ctx-id ctx-id
+                   :channel channel
+                   :source-player-id source-player-id
+                   :world-id world-id
+                   :balls (int (or count 0)))))
         (client-particles/queue-current-particle-effect!
           {:type :particle :particle-type :electric-spark
            :x (double (or x 0.0))
@@ -75,13 +128,14 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- tick! []
-  (swap! effect-state
-         (fn [states]
-           (into {}
-                 (keep (fn [[owner-key st]]
-                         (when (:active? st)
-                           [owner-key (assoc st :ticks (inc (long (or (:ticks st) 0))))])))
-                 states))))
+  (update-scatter-bomb-fx-state!
+    update :effect-state
+    (fn [states]
+      (into {}
+            (keep (fn [[owner-key st]]
+                    (when (:active? st)
+                      [owner-key (assoc st :ticks (inc (long (or (:ticks st) 0))))])))
+            states))))
 
 ;; ---------------------------------------------------------------------------
 ;; Build plan

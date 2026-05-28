@@ -5,8 +5,11 @@
             [cn.li.ac.item.mat-core :as core]
             [cn.li.mcmod.gui.slot-registry :as slot-registry]))
 
-(defonce ^:private default-slot-validators-installed?
-  (atom false))
+(def ^:private slot-validator-guard-lock
+  (Object.))
+
+(def ^:private ^:dynamic *default-slot-validators-installed?*
+  false)
 
 (defn energy-item-validator
   "Return true if stack is an energy item."
@@ -31,9 +34,12 @@
 (defn register-default-slot-validators!
   "Install AC's standard typed slot validators into the shared slot registry."
   []
-  (when (compare-and-set! default-slot-validators-installed? false true)
-    (slot-registry/register-slot-validator! :energy energy-item-validator)
-    (slot-registry/register-slot-validator! :plate constraint-plate-validator)
-    (slot-registry/register-slot-validator! :core matrix-core-validator)
-    (slot-registry/register-slot-validator! :output output-slot-validator))
+  (when-not (var-get #'*default-slot-validators-installed?*)
+    (locking slot-validator-guard-lock
+      (when-not (var-get #'*default-slot-validators-installed?*)
+        (slot-registry/register-slot-validator! :energy energy-item-validator)
+        (slot-registry/register-slot-validator! :plate constraint-plate-validator)
+        (slot-registry/register-slot-validator! :core matrix-core-validator)
+        (slot-registry/register-slot-validator! :output output-slot-validator)
+        (alter-var-root #'*default-slot-validators-installed?* (constantly true)))))
   nil)

@@ -11,13 +11,16 @@
 
 (defn clean-player-states-fixture
   [f]
-  (with-test-player-state-owner
+  (ps/call-with-player-state-runtime
+    (ps/create-player-state-runtime)
     (fn []
-      (ps/reset-player-states-for-test!)
-      (try
-        (f)
-        (finally
-          (ps/reset-player-states-for-test!))))))
+      (with-test-player-state-owner
+        (fn []
+          (ps/reset-player-states-for-test!)
+          (try
+            (f)
+            (finally
+              (ps/reset-player-states-for-test!))))))))
 
 (defn seed-player-state!
   [uuid state]

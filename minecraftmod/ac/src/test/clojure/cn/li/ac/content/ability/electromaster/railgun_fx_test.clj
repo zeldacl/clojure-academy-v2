@@ -5,9 +5,12 @@
             [cn.li.ac.content.ability.electromaster.railgun-fx :as railgun-fx]))
 
 (defn- reset-fixture [f]
-  (railgun-fx/reset-railgun-fx-for-test!)
-  (f)
-  (railgun-fx/reset-railgun-fx-for-test!))
+  (railgun-fx/call-with-railgun-fx-runtime
+    (railgun-fx/create-railgun-fx-runtime)
+    (fn []
+      (railgun-fx/reset-railgun-fx-for-test!)
+      (f)
+      (railgun-fx/reset-railgun-fx-for-test!))))
 
 (use-fixtures :each reset-fixture)
 
@@ -60,7 +63,7 @@
     (enqueue! (event "ctx-a" :railgun/fx-shot {:start {:x 0.0 :y 64.0 :z 0.0}
                                                 :end {:x 6.0 :y 64.0 :z 0.0}}))
     (enqueue! (event "ctx-b" :railgun/fx-reflect {:start {:x 0.0 :y 65.0 :z 0.0}
-                                                   :end {:x 6.0 :y 65.0 :z 0.0}}))
+                                                    :end {:x 6.0 :y 65.0 :z 0.0}}))
     (let [snapshot (railgun-fx/railgun-fx-snapshot)]
       (is (= 1 (count (get (:beam-effects snapshot) [:ctx "ctx-a"]))))
       (is (= 1 (count (get (:beam-effects snapshot) [:ctx "ctx-b"]))))
@@ -68,3 +71,29 @@
       (let [after-clear (railgun-fx/railgun-fx-snapshot)]
         (is (nil? (get (:beam-effects after-clear) [:ctx "ctx-a"])))
         (is (= 1 (count (get (:beam-effects after-clear) [:ctx "ctx-b"]))))))))
+
+(deftest railgun-fx-runtime-isolation-test
+  (let [runtime-a (railgun-fx/create-railgun-fx-runtime)
+        runtime-b (railgun-fx/create-railgun-fx-runtime)
+        enqueue! (var-get #'cn.li.ac.content.ability.electromaster.railgun-fx/enqueue!)]
+    (railgun-fx/call-with-railgun-fx-runtime
+      runtime-a
+      (fn []
+        (enqueue! (event "ctx-a" :railgun/fx-shot {:start {:x 0.0 :y 64.0 :z 0.0}
+                                                    :end {:x 6.0 :y 64.0 :z 0.0}}))
+        (is (= #{[:ctx "ctx-a"]}
+               (set (keys (:beam-effects (railgun-fx/railgun-fx-snapshot))))))))
+    (railgun-fx/call-with-railgun-fx-runtime
+      runtime-b
+      (fn []
+        (is (= {:beam-effects {}}
+               (railgun-fx/railgun-fx-snapshot)))
+        (enqueue! (event "ctx-b" :railgun/fx-reflect {:start {:x 0.0 :y 65.0 :z 0.0}
+                                                       :end {:x 6.0 :y 65.0 :z 0.0}}))
+        (is (= #{[:ctx "ctx-b"]}
+               (set (keys (:beam-effects (railgun-fx/railgun-fx-snapshot))))))))
+    (railgun-fx/call-with-railgun-fx-runtime
+      runtime-a
+      (fn []
+        (is (= #{[:ctx "ctx-a"]}
+               (set (keys (:beam-effects (railgun-fx/railgun-fx-snapshot))))))))))

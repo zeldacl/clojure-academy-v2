@@ -2,19 +2,44 @@
   "Rendering utilities - OpenGL and texture helpers"
   (:require [cn.li.mcmod.util.log :as log]))
 
-(defonce ^:private gl11-class (delay (Class/forName "org.lwjgl.opengl.GL11")))
-(defonce ^:private texture-binder* (atom nil))
-(defonce ^:private texture-binder-warned* (atom false))
+(defn- default-render-runtime-state []
+  {:gl11-class (delay (Class/forName "org.lwjgl.opengl.GL11"))
+   :texture-binder nil
+   :texture-binder-warned false})
+
+(defn create-render-runtime
+  ([] (create-render-runtime {}))
+  ([{:keys [state*]}]
+   {:cn.li.mcmod.util.render/runtime ::render-runtime
+    :state* (or state* (atom (default-render-runtime-state)))}))
+
+(def ^:dynamic *render-runtime* nil)
+
+(defonce ^:private installed-render-runtime
+  (create-render-runtime))
+
+(defn- render-state-atom []
+  (:state* (or *render-runtime* installed-render-runtime)))
+
+(defn- render-state-snapshot []
+  @(render-state-atom))
+
+(defn reset-render-runtime-state-for-test!
+  "Reset render runtime state. Intended for tests."
+  []
+  (reset! (render-state-atom) (default-render-runtime-state))
+  nil)
 
 (defn register-texture-binder!
   "Register platform/client texture bind function.
 
   Signature: (fn [texture] ... )"
   [binder-fn]
-  (reset! texture-binder* binder-fn))
+  (swap! (render-state-atom) assoc :texture-binder binder-fn)
+  nil)
 
 (defn- gl-static [method-name arg-types args]
-  (let [^Class cls @gl11-class
+  (let [^Class cls @(-> (render-state-snapshot) :gl11-class)
         ^java.lang.reflect.Method m (.getMethod cls method-name (into-array Class arg-types))]
     (.invoke m nil (to-array args))))
 
@@ -132,10 +157,12 @@
   
   Returns: nil"
   [texture]
-  (if-let [binder @texture-binder*]
+  (if-let [binder (:texture-binder (render-state-snapshot))]
     (binder texture)
-    (when (compare-and-set! texture-binder-warned* false true)
-      (log/warn "Texture binder not registered; skipping bind" texture))))
+    (let [warned? (:texture-binder-warned (render-state-snapshot))]
+      (when-not warned?
+        (swap! (render-state-atom) assoc :texture-binder-warned true)
+        (log/warn "Texture binder not registered; skipping bind" texture)))))
 
 ;; ============================================================================
 ;; Convenience Macros

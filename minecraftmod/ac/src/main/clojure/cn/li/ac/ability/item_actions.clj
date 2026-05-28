@@ -11,105 +11,132 @@
 ;; Item → action resolution
 ;; ============================================================================
 
-(defonce ^:private item-action-registry
-  ;; item-id (String) → action keyword
-  (atom {}))
+(defn default-item-action-registries-runtime-state
+  []
+  {:item-actions {}
+   :action-handlers {}
+   :item-entity-spawns {}
+   :frozen? false})
 
-(defonce ^:private item-action-registries-frozen? (atom false))
+(defn create-item-action-registries-runtime
+  ([] (create-item-action-registries-runtime {}))
+  ([{:keys [state*]
+     :or {state* (atom (default-item-action-registries-runtime-state))}}]
+   {::runtime ::item-action-registries-runtime
+    :state* state*}))
 
-(declare action-handlers item-entity-spawns)
+(def ^:dynamic *item-action-registries-runtime* nil)
+
+(defonce ^:private installed-item-action-registries-runtime
+  (create-item-action-registries-runtime))
+
+(defn call-with-item-action-registries-runtime
+  [runtime f]
+  (when-not (and (map? runtime)
+                 (= ::item-action-registries-runtime (::runtime runtime))
+                 (some? (:state* runtime)))
+    (throw (ex-info "Expected item action registries runtime" {:runtime runtime})))
+  (binding [*item-action-registries-runtime* runtime]
+    (f)))
+
+(defn- current-item-action-registries-runtime
+  []
+  (or *item-action-registries-runtime*
+      installed-item-action-registries-runtime))
+
+(defn- item-action-registries-state-atom
+  []
+  (:state* (current-item-action-registries-runtime)))
+
+(defn- item-action-registries-state-snapshot
+  []
+  @(item-action-registries-state-atom))
+
+(defn- update-item-action-registries-state!
+  [f & args]
+  (apply swap! (item-action-registries-state-atom) f args))
 
 (defn- assert-registries-open!
   []
-  (when @item-action-registries-frozen?
+  (when (:frozen? (item-action-registries-state-snapshot))
     (throw (ex-info "Item action registries are frozen" {}))))
 
 (defn item-action-registries-snapshot
   []
-  {:item-actions @item-action-registry
-   :action-handlers @action-handlers
-   :item-entity-spawns @item-entity-spawns
-   :frozen? @item-action-registries-frozen?})
+  (item-action-registries-state-snapshot))
 
 (defn reset-item-action-registries-for-test!
-  ([]
+  ([]  
    (reset-item-action-registries-for-test! {}))
   ([{:keys [item-actions action-handlers item-entity-spawns frozen?]
      :or {item-actions {} action-handlers {} item-entity-spawns {} frozen? false}}]
-   (reset! item-action-registry item-actions)
-   (reset! cn.li.ac.ability.item-actions/action-handlers action-handlers)
-   (reset! cn.li.ac.ability.item-actions/item-entity-spawns item-entity-spawns)
-   (reset! item-action-registries-frozen? frozen?)
+   (reset! (item-action-registries-state-atom)
+           {:item-actions item-actions
+            :action-handlers action-handlers
+            :item-entity-spawns item-entity-spawns
+            :frozen? frozen?})
    nil))
 
 (defn freeze-item-action-registries!
   []
-  (reset! item-action-registries-frozen? true)
+  (update-item-action-registries-state! assoc :frozen? true)
   nil)
 
 (defn register-item-action!
   "Map an item id (e.g. \"ac:coin\") to an action keyword (e.g. :railgun-coin-throw)."
   [item-id action-keyword]
-  (if-let [existing (get @item-action-registry item-id)]
+  (if-let [existing (get (:item-actions (item-action-registries-state-snapshot)) item-id)]
     (when-not (= existing action-keyword)
       (throw (ex-info "Conflicting item action id"
                       {:item-id item-id :existing existing :new action-keyword})))
     (do
       (assert-registries-open!)
-      (swap! item-action-registry assoc item-id action-keyword)))
+      (update-item-action-registries-state! assoc-in [:item-actions item-id] action-keyword)))
   nil)
 
 (defn resolve-item-action
   "Return the action keyword for `item-id`, or nil."
   [item-id]
-  (get @item-action-registry item-id))
+  (get (:item-actions (item-action-registries-state-snapshot)) item-id))
 
 ;; ============================================================================
 ;; Action → handler dispatch
 ;; ============================================================================
 
-(defonce ^:private action-handlers
-  ;; action-keyword → (fn [player-uuid payload])
-  (atom {}))
-
 (defn register-action-handler!
   "Register a handler fn for an action keyword."
   [action-keyword handler-fn]
-  (when-not (contains? @action-handlers action-keyword)
+  (when-not (contains? (:action-handlers (item-action-registries-state-snapshot)) action-keyword)
     (assert-registries-open!)
-    (swap! action-handlers assoc action-keyword handler-fn))
+    (update-item-action-registries-state! assoc-in [:action-handlers action-keyword] handler-fn))
   nil)
 
 ;; ============================================================================
 ;; Item → entity-spawn spec
 ;; ============================================================================
 
-(defonce ^:private item-entity-spawns
-  ;; item-id (String) → {:entity-id String :speed double}
-  (atom {}))
-
 (defn register-item-entity-spawn!
   "Register a scripted-effect entity to spawn when `item-id` is used.
   `entity-spec` is a map with :entity-id (String) and optional :speed (double)."
   [item-id entity-spec]
-  (if-let [existing (get @item-entity-spawns item-id)]
+  (if-let [existing (get (:item-entity-spawns (item-action-registries-state-snapshot)) item-id)]
     (when-not (= existing entity-spec)
       (throw (ex-info "Conflicting item entity spawn id"
                       {:item-id item-id :existing existing :new entity-spec})))
     (do
       (assert-registries-open!)
-      (swap! item-entity-spawns assoc item-id entity-spec)))
+      (update-item-action-registries-state! assoc-in [:item-entity-spawns item-id] entity-spec)))
   nil)
 
 (defn get-item-entity-spawn
   "Return the entity-spawn spec for `item-id`, or nil."
   [item-id]
-  (get @item-entity-spawns item-id))
+  (get (:item-entity-spawns (item-action-registries-state-snapshot)) item-id))
 
 (defn on-item-action!
   "Dispatch `action` to its registered handler.  Returns nil if no handler."
   [action player-uuid payload]
-  (when-let [handler (get @action-handlers action)]
+  (when-let [handler (get (:action-handlers (item-action-registries-state-snapshot)) action)]
     (try
       (handler player-uuid payload)
       (catch Exception e

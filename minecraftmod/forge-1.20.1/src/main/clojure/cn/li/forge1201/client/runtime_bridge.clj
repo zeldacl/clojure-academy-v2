@@ -14,7 +14,11 @@
            [net.minecraftforge.event TickEvent$ClientTickEvent TickEvent$Phase]
            [net.minecraftforge.eventbus.api EventPriority]))
 
-(defonce ^:private tick-listener-registered? (atom false))
+(def ^:private tick-listener-guard-lock
+  (Object.))
+
+(def ^:private ^:dynamic *tick-listener-registered?*
+  false)
 
 (defn active-contexts []
   (power-runtime/client-active-contexts))
@@ -79,9 +83,12 @@
 
 (defn init! []
   (power-runtime/client-register-push-handlers!)
-  (when (compare-and-set! tick-listener-registered? false true)
-    (.addListener (MinecraftForge/EVENT_BUS)
-                  EventPriority/NORMAL false TickEvent$ClientTickEvent
-                  (reify java.util.function.Consumer
-                    (accept [_ evt] (on-client-tick evt)))))
+  (when-not (var-get #'*tick-listener-registered?*)
+    (locking tick-listener-guard-lock
+      (when-not (var-get #'*tick-listener-registered?*)
+        (.addListener (MinecraftForge/EVENT_BUS)
+                      EventPriority/NORMAL false TickEvent$ClientTickEvent
+                      (reify java.util.function.Consumer
+                        (accept [_ evt] (on-client-tick evt))))
+        (alter-var-root #'*tick-listener-registered?* (constantly true)))))
   (log/info "Client runtime bridge initialized"))

@@ -8,20 +8,70 @@
 (def ^:private prepare-duration-ms 150.0)
 (def ^:private punch-duration-ms 300.0)
 
-(defonce ^:private effect-state (atom {}))
+(defn default-directed-shock-fx-runtime-state
+  []
+  {:effect-state {}})
+
+(defn create-directed-shock-fx-runtime
+  ([]
+   (create-directed-shock-fx-runtime {}))
+  ([{:keys [state*]
+     :or {state* (atom (default-directed-shock-fx-runtime-state))}}]
+   {::runtime ::directed-shock-fx-runtime
+    :state* state*}))
+
+(def ^:dynamic *directed-shock-fx-runtime* nil)
+
+(defonce ^:private installed-directed-shock-fx-runtime
+  (create-directed-shock-fx-runtime))
+
+(defn- directed-shock-fx-runtime?
+  [runtime]
+  (and (map? runtime)
+       (= ::directed-shock-fx-runtime (::runtime runtime))
+       (some? (:state* runtime))))
+
+(defn call-with-directed-shock-fx-runtime
+  [runtime f]
+  (when-not (directed-shock-fx-runtime? runtime)
+    (throw (ex-info "Expected Directed Shock FX runtime"
+                    {:value runtime})))
+  (binding [*directed-shock-fx-runtime* runtime]
+    (f)))
+
+(defmacro with-directed-shock-fx-runtime
+  [runtime & body]
+  `(call-with-directed-shock-fx-runtime ~runtime (fn [] ~@body)))
+
+(defn- current-directed-shock-fx-runtime
+  []
+  (or *directed-shock-fx-runtime*
+      installed-directed-shock-fx-runtime))
+
+(defn- directed-shock-fx-state-atom
+  []
+  (:state* (current-directed-shock-fx-runtime)))
+
+(defn- directed-shock-fx-state-snapshot
+  []
+  @(directed-shock-fx-state-atom))
+
+(defn- update-directed-shock-fx-state!
+  [f & args]
+  (apply swap! (directed-shock-fx-state-atom) f args))
 
 (defn directed-shock-fx-snapshot
   []
-  {:effect-state @effect-state})
+  (directed-shock-fx-state-snapshot))
 
 (defn reset-directed-shock-fx-for-test!
   []
-  (reset! effect-state {})
+  (reset! (directed-shock-fx-state-atom) (default-directed-shock-fx-runtime-state))
   nil)
 
 (defn clear-directed-shock-owner!
   [owner-key]
-  (swap! effect-state dissoc owner-key)
+  (update-directed-shock-fx-state! update :effect-state dissoc owner-key)
   nil)
 
 (defn- now-ms [] (System/currentTimeMillis))
@@ -60,17 +110,19 @@
                    :world-id world-id}]
     (case mode
       :start
-      (swap! effect-state assoc owner-key*
-             (merge base-meta {:stage :prepare :started-at (now-ms)}))
+      (update-directed-shock-fx-state!
+        update :effect-state assoc owner-key*
+        (merge base-meta {:stage :prepare :started-at (now-ms)}))
       :perform
       (do
-        (swap! effect-state assoc owner-key*
-               (merge base-meta {:stage :punch :started-at (now-ms)}))
+        (update-directed-shock-fx-state!
+          update :effect-state assoc owner-key*
+          (merge base-meta {:stage :punch :started-at (now-ms)}))
         (client-sounds/queue-current-sound-effect!
           {:type :sound :sound-id sound-id :volume 0.5 :pitch 1.0}))
       :end
       (when-not performed?
-        (swap! effect-state dissoc owner-key*))
+        (update-directed-shock-fx-state! update :effect-state dissoc owner-key*))
       nil)))
 
 ;; ---------------------------------------------------------------------------
@@ -78,13 +130,14 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- tick! []
-  (swap! effect-state
-         (fn [states]
-           (into {}
-                 (remove (fn [[_ {:keys [stage started-at]}]]
-                           (and (= stage :punch)
-                                (>= (- (now-ms) (long started-at)) punch-duration-ms))))
-                 states))))
+  (update-directed-shock-fx-state!
+    update :effect-state
+    (fn [states]
+      (into {}
+            (remove (fn [[_ {:keys [stage started-at]}]]
+                      (and (= stage :punch)
+                           (>= (- (now-ms) (long started-at)) punch-duration-ms))))
+            states))))
 
 ;; ---------------------------------------------------------------------------
 ;; Transform
@@ -95,7 +148,7 @@
              (some (fn [[owner-key st]]
                      (when (:stage st)
                        [owner-key st]))
-                   @effect-state)]
+                   (:effect-state (directed-shock-fx-state-snapshot)))]
     (let [elapsed (- (now-ms) (long started-at))]
       (case stage
         :prepare
@@ -103,7 +156,9 @@
         :punch
         (let [progress (/ elapsed punch-duration-ms)]
           (if (>= progress 1.0)
-            (do (swap! effect-state dissoc owner-key) nil)
+            (do
+              (update-directed-shock-fx-state! update :effect-state dissoc owner-key)
+              nil)
             (punch-transform progress)))
         nil))))
 

@@ -62,14 +62,26 @@
   (fn [slot-index player-inventory-start]
     (>= slot-index player-inventory-start)))
 
-(def ^:private wireless-node-quick-move-config*
-  (delay
-    (ensure-wireless-node-slot-schema!)
-    (slot-schema/build-quick-move-config
-      wireless-node-id
-      {:inventory-pred inventory-pred
-       :rules [{:accept? energy-stub/is-energy-item-supported?
-                :slot-ids [:input :output]}]})))
+(def ^:private node-quick-move-config-lock
+  (Object.))
+
+(def ^:private ^:dynamic *wireless-node-quick-move-config*
+  nil)
+
+(defn- wireless-node-quick-move-config
+  []
+  (or (var-get #'*wireless-node-quick-move-config*)
+      (locking node-quick-move-config-lock
+        (or (var-get #'*wireless-node-quick-move-config*)
+            (let [cfg (do
+                        (ensure-wireless-node-slot-schema!)
+                        (slot-schema/build-quick-move-config
+                          wireless-node-id
+                          {:inventory-pred inventory-pred
+                           :rules [{:accept? energy-stub/is-energy-item-supported?
+                                    :slot-ids [:input :output]}]}))]
+              (alter-var-root #'*wireless-node-quick-move-config* (constantly cfg))
+              cfg)))))
 
 (defn- msg
   "Generate message ID for node actions (must match server DSL / underscores)."
@@ -266,7 +278,7 @@
 (defn quick-move-stack [container slot-index player-inventory-start]
   (move-common/quick-move-with-rules
     container slot-index player-inventory-start
-    @wireless-node-quick-move-config*))
+    (wireless-node-quick-move-config)))
 
 (defn on-close [container]
   (log/debug "Closing wireless node container")
@@ -488,13 +500,19 @@
   (create-node-gui container player))
 
 (declare node-container?)
-(defonce ^:private wireless-node-gui-installed? (atom false))
+(def ^:private wireless-node-gui-guard-lock
+  (Object.))
+
+(def ^:private ^:dynamic *wireless-node-gui-installed?*
+  false)
 
 (defn init!
   "Initialize Node GUI module"
   []
-  (when (compare-and-set! wireless-node-gui-installed? false true)
-    (ensure-wireless-node-slot-schema!)
+  (when-not (var-get #'*wireless-node-gui-installed?*)
+    (locking wireless-node-gui-guard-lock
+      (when-not (var-get #'*wireless-node-gui-installed?*)
+        (ensure-wireless-node-slot-schema!)
     (gui-reg/register-block-gui!
       (gui-manifest/gui-name :wireless-node)
       (merge (gui-manifest/gui-registration :wireless-node)
@@ -514,7 +532,8 @@
               :slot-can-place-fn can-place-item?
               :slot-changed-fn slot-changed!
               :quick-move-fn quick-move-stack}))
-    (log/info "Wireless Node GUI module initialized")))
+        (alter-var-root #'*wireless-node-gui-installed?* (constantly true))
+        (log/info "Wireless Node GUI module initialized")))))
 
 ;; ============================================================================
 ;; GUI Registration

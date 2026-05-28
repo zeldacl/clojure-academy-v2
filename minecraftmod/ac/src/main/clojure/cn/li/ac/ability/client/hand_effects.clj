@@ -11,7 +11,50 @@
 ;; Camera pitch delta accumulator (shared across all hand effects)
 ;; ---------------------------------------------------------------------------
 
-(defonce ^:private camera-pitch-deltas (atom {}))
+(defn create-camera-pitch-runtime
+  []
+  {::runtime ::camera-pitch-runtime
+   :camera-pitch-deltas* (atom {})})
+
+(def ^:dynamic *camera-pitch-runtime* nil)
+
+(defonce ^:private installed-camera-pitch-runtime
+  (create-camera-pitch-runtime))
+
+(defn- camera-pitch-runtime?
+  [runtime]
+  (and (map? runtime)
+       (= ::camera-pitch-runtime (::runtime runtime))
+       (some? (:camera-pitch-deltas* runtime))))
+
+(defn call-with-camera-pitch-runtime
+  [runtime f]
+  (when-not (camera-pitch-runtime? runtime)
+    (throw (ex-info "Expected camera pitch runtime"
+                    {:runtime runtime})))
+  (binding [*camera-pitch-runtime* runtime]
+    (f)))
+
+(defmacro with-camera-pitch-runtime
+  [runtime & body]
+  `(call-with-camera-pitch-runtime ~runtime (fn [] ~@body)))
+
+(defn- current-camera-pitch-runtime
+  []
+  (or *camera-pitch-runtime*
+      installed-camera-pitch-runtime))
+
+(defn- camera-pitch-deltas-atom
+  []
+  (:camera-pitch-deltas* (current-camera-pitch-runtime)))
+
+(defn- camera-pitch-deltas-snapshot
+  []
+  @(camera-pitch-deltas-atom))
+
+(defn- update-camera-pitch-deltas!
+  [f & args]
+  (apply swap! (camera-pitch-deltas-atom) f args))
 
 (defn- require-owner-value
   [owner label value]
@@ -61,7 +104,7 @@
   ([delta]
    (add-camera-pitch-delta! nil delta))
   ([owner-or-session delta]
-   (swap! camera-pitch-deltas update (normalize-session-id owner-or-session) (fnil conj []) (float delta))
+  (update-camera-pitch-deltas! update (normalize-session-id owner-or-session) (fnil conj []) (float delta))
    nil))
 
 (defn add-current-camera-pitch-delta!
@@ -75,17 +118,17 @@
   ([owner-or-session]
    (let [session-id (normalize-session-id owner-or-session)
          drained (atom [])]
-     (swap! camera-pitch-deltas
-            (fn [deltas]
-              (reset! drained (vec (get deltas session-id [])))
-              (dissoc deltas session-id)))
+     (update-camera-pitch-deltas!
+       (fn [deltas]
+         (reset! drained (vec (get deltas session-id [])))
+         (dissoc deltas session-id)))
      @drained)))
 
 (defn clear-session-camera-pitch-deltas!
   ([]
    (clear-session-camera-pitch-deltas! nil))
   ([owner-or-session]
-   (swap! camera-pitch-deltas dissoc (normalize-session-id owner-or-session))
+  (update-camera-pitch-deltas! dissoc (normalize-session-id owner-or-session))
    nil))
 
 (defn clear-owner-camera-pitch-deltas!
@@ -123,16 +166,67 @@
 ;; Registry
 ;; ---------------------------------------------------------------------------
 
+(defn default-hand-effect-runtime-state
+  []
+  {:registry {}
+   :order []
+   :frozen? false})
+
+(defn create-hand-effect-runtime
+  ([]
+   (create-hand-effect-runtime {}))
+  ([{:keys [state*]
+     :or {state* (atom (default-hand-effect-runtime-state))}}]
+   {::runtime ::hand-effect-runtime
+    :state* state*}))
+
+(def ^:dynamic *hand-effect-runtime* nil)
+
+(defonce ^:private installed-hand-effect-runtime
+  (create-hand-effect-runtime))
+
+(defn- hand-effect-runtime?
+  [runtime]
+  (and (map? runtime)
+       (= ::hand-effect-runtime (::runtime runtime))
+       (some? (:state* runtime))))
+
+(defn call-with-hand-effect-runtime
+  [runtime f]
+  (when-not (hand-effect-runtime? runtime)
+    (throw (ex-info "Expected hand-effect runtime"
+                    {:runtime runtime})))
+  (binding [*hand-effect-runtime* runtime]
+    (f)))
+
+(defmacro with-hand-effect-runtime
+  [runtime & body]
+  `(call-with-hand-effect-runtime ~runtime (fn [] ~@body)))
+
+(defn- current-hand-effect-runtime
+  []
+  (or *hand-effect-runtime*
+      installed-hand-effect-runtime))
+
+(defn- hand-effect-state-atom
+  []
+  (:state* (current-hand-effect-runtime)))
+
+(defn- hand-effect-state-snapshot
+  []
+  @(hand-effect-state-atom))
+
+(defn- update-hand-effect-state!
+  [f & args]
+  (apply swap! (hand-effect-state-atom) f args))
+
 ;; effect-id → {:enqueue-fn    (fn [payload])
 ;;              :tick-fn        (fn [])
 ;;              :transform-fn   (fn []) → transform-map or nil  (optional)}
-(defonce ^:private effect-registry (atom {}))
-(defonce ^:private effect-order (atom []))
-(defonce ^:private effect-registry-frozen? (atom false))
 
 (defn- assert-registry-open!
   []
-  (when @effect-registry-frozen?
+  (when (:frozen? (hand-effect-state-snapshot))
     (throw (ex-info "Hand effect registry is frozen" {}))))
 
 (defn register-hand-effect!
@@ -148,30 +242,31 @@
          (fn? (:enqueue-fn handler-map))
          (fn? (:tick-fn handler-map))]}
   (assert-registry-open!)
-  (when-not (get @effect-registry effect-id)
-    (swap! effect-order conj effect-id)
-    (swap! effect-registry assoc effect-id handler-map))
+  (update-hand-effect-state!
+    (fn [state]
+      (if (get-in state [:registry effect-id])
+        state
+        (-> state
+            (update :order conj effect-id)
+            (assoc-in [:registry effect-id] handler-map)))))
   (log/debug "Registered hand effect:" effect-id)
   nil)
 
 (defn freeze-hand-effect-registry!
   []
-  (reset! effect-registry-frozen? true)
+  (update-hand-effect-state! assoc :frozen? true)
   nil)
 
 (defn hand-effect-registry-snapshot
   []
-  {:registry @effect-registry
-   :order @effect-order
-   :camera-pitch-deltas @camera-pitch-deltas
-   :frozen? @effect-registry-frozen?})
+  (assoc (hand-effect-state-snapshot)
+   :camera-pitch-deltas (camera-pitch-deltas-snapshot)
+   ))
 
 (defn reset-hand-effect-registry-for-test!
   []
-  (reset! camera-pitch-deltas {})
-  (reset! effect-registry {})
-  (reset! effect-order [])
-  (reset! effect-registry-frozen? false)
+  (reset! (camera-pitch-deltas-atom) {})
+  (reset! (hand-effect-state-atom) (default-hand-effect-runtime-state))
   nil)
 
 ;; ---------------------------------------------------------------------------
@@ -181,26 +276,28 @@
 (defn enqueue-hand-effect!
   "Dispatch an incoming FX payload to the registered hand-effect handler."
   [effect-id payload]
-  (if-let [{:keys [enqueue-fn]} (get @effect-registry effect-id)]
+  (if-let [{:keys [enqueue-fn]} (get-in (hand-effect-state-snapshot) [:registry effect-id])]
     (enqueue-fn payload)
     (log/warn "No hand effect registered for" effect-id)))
 
 (defn tick-hand-effects!
   "Tick all registered hand effects."
   []
-  (doseq [eid @effect-order]
-    (when-let [{:keys [tick-fn]} (get @effect-registry eid)]
-      (tick-fn))))
+  (let [{:keys [order registry]} (hand-effect-state-snapshot)]
+    (doseq [eid order]
+      (when-let [{:keys [tick-fn]} (get registry eid)]
+        (tick-fn)))))
 
 (defn current-hand-transform
   "Merge transforms from all registered hand effects.
   Returns the first non-nil transform (priority = registration order)."
   []
-  (some (fn [eid]
-          (when-let [{:keys [transform-fn]} (get @effect-registry eid)]
-            (when transform-fn
-              (transform-fn))))
-        @effect-order))
+  (let [{:keys [order registry]} (hand-effect-state-snapshot)]
+    (some (fn [eid]
+            (when-let [{:keys [transform-fn]} (get registry eid)]
+              (when transform-fn
+                (transform-fn))))
+          order)))
 
 ;; ---------------------------------------------------------------------------
 ;; Introspection
@@ -209,4 +306,4 @@
 (defn registered-effects
   "Return the set of currently-registered hand effect ids."
   []
-  (set (keys @effect-registry)))
+  (set (keys (:registry (hand-effect-state-snapshot)))))

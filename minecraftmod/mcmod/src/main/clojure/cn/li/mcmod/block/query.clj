@@ -37,8 +37,8 @@
 
 (defn- block-registry-state
   []
-  (let [block-registry-var (requiring-resolve 'cn.li.mcmod.block.dsl-core/block-registry)]
-    (registry-core/snapshot (var-get block-registry-var))))
+  (let [get-block-registry (requiring-resolve 'cn.li.mcmod.block.dsl-core/get-block-registry)]
+    (registry-core/snapshot (get-block-registry))))
 
 (defn get-block-spec
   "Get a block specification by block-id from the registry

@@ -44,15 +44,15 @@
 
 (defn- with-config-state
   [f]
-  (let [descriptors @config-reg/descriptor-registry
-        values @config-reg/value-registry]
+  (let [descriptors (config-reg/get-descriptor-registry)
+        values (config-reg/get-value-registry)]
     (try
-      (reset! config-reg/descriptor-registry {})
-      (reset! config-reg/value-registry {})
+      (config-reg/set-descriptor-registry! {})
+      (config-reg/set-value-registry! {})
       (f)
       (finally
-        (reset! config-reg/descriptor-registry descriptors)
-        (reset! config-reg/value-registry values)))))
+        (config-reg/set-descriptor-registry! descriptors)
+        (config-reg/set-value-registry! values)))))
 
 (deftest skill-config-inventory-test
   (testing "all current player-configurable content skills are covered by per-skill config"

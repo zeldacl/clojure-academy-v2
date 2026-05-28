@@ -26,7 +26,7 @@
                                             :write-nbt-fn write-nbt-fn}))))))
 
 (defn register-all-blocks!
-  [{:keys [blocks-register registered-fluids-source base-properties carrier-properties]}]
+  [{:keys [blocks-register base-properties carrier-properties]}]
   (doseq [block-id (registry-metadata/get-all-block-ids)]
     (let [registry-name (registry-metadata/get-block-registry-name block-id)
           fluid-id (registry-metadata/get-fluid-id-for-block block-id)
@@ -40,7 +40,7 @@
                                         (let [get-props (requiring-resolve 'cn.li.mc1201.block.blockstate-properties/get-all-properties)]
                                           (cond
                                             fluid-id
-                                            (when-let [fluid-source-ro (get @registered-fluids-source fluid-id)]
+                                            (when-let [fluid-source-ro (registry-state/get-registered-fluid-source-ro fluid-id)]
                                               (bootstrap/create-liquid-block
                                                 (reify java.util.function.Supplier
                                                   (get [_]
@@ -55,7 +55,7 @@
                                             (bootstrap/create-carrier-scripted-block block-id tile-id carrier-properties)
                                             :else
                                             (bootstrap/create-plain-block base-properties))))))]
-      (swap! registry-state/registered-blocks assoc block-id registered-obj))))
+      (registry-state/register-block! block-id registered-obj))))
 
 (defn register-block-entities!
   [{:keys [block-entities-register]}]
@@ -63,7 +63,7 @@
     (let [registry-name (registry-metadata/get-tile-registry-name tile-id)
           block-ids (registry-metadata/get-tile-block-ids tile-id)
           ros (keep (fn [block-id]
-                      (when-let [ro (get @registry-state/registered-blocks block-id)]
+                      (when-let [ro (registry-state/get-registered-block-ro block-id)]
                         [block-id ro]))
                     block-ids)]
       (when (seq ros)
@@ -86,4 +86,4 @@
                         (reify java.util.function.Function
                           (apply [_ block-inst]
                             (.get block-id-by-inst block-inst))))))))]
-          (swap! registry-state/registered-block-entities assoc tile-id registered-obj))))))
+          (registry-state/register-block-entity! tile-id registered-obj))))))

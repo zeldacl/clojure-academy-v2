@@ -12,7 +12,6 @@
   Platform-agnostic rendering logic. Platform-specific TESR classes
   should be defined in forge/fabric modules using gen-class."
   (:require [cn.li.mcmod.client.resources :as res]
-            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.client.obj :as obj]
             [cn.li.mcmod.util.render :as render]
             [cn.li.mcmod.client.render.tesr-api :as tesr-api]
@@ -25,14 +24,78 @@
 ;; Resources (loaded once on initialization)
 ;; ============================================================================
 
-(defonce model 
-  (delay (res/load-obj-model "matrix")))
+(def ^:private matrix-render-resource-lock
+  (Object.))
 
-(defonce texture 
-  (delay (res/texture-location "models/matrix")))
+(def ^:private ^:dynamic *matrix-model*
+  nil)
 
-(defonce ^:private last-shield-hw-state
-  (atom nil))
+(def ^:private ^:dynamic *matrix-texture*
+  nil)
+
+(defn- matrix-model
+  []
+  (or (var-get #'*matrix-model*)
+      (locking matrix-render-resource-lock
+        (or (var-get #'*matrix-model*)
+            (let [m (res/load-obj-model "matrix")]
+              (alter-var-root #'*matrix-model* (constantly m))
+              m)))))
+
+(defn- matrix-texture
+  []
+  (or (var-get #'*matrix-texture*)
+      (locking matrix-render-resource-lock
+        (or (var-get #'*matrix-texture*)
+            (let [t (res/texture-location "models/matrix")]
+              (alter-var-root #'*matrix-texture* (constantly t))
+              t)))))
+
+(defn create-wireless-matrix-render-runtime
+  ([]
+   (create-wireless-matrix-render-runtime nil))
+  ([initial-state]
+   {:last-shield-hw-state (atom initial-state)}))
+
+(defonce ^:private installed-wireless-matrix-render-runtime
+  (create-wireless-matrix-render-runtime))
+
+(def ^:dynamic *wireless-matrix-render-runtime*
+  installed-wireless-matrix-render-runtime)
+
+(defn current-wireless-matrix-render-runtime
+  []
+  *wireless-matrix-render-runtime*)
+
+(defmacro with-wireless-matrix-render-runtime
+  [runtime & body]
+  `(binding [*wireless-matrix-render-runtime* ~runtime]
+     ~@body))
+
+(defn call-with-wireless-matrix-render-runtime
+  [runtime f]
+  (binding [*wireless-matrix-render-runtime* runtime]
+    (f)))
+
+(defn last-shield-hw-state-atom
+  []
+  (:last-shield-hw-state (current-wireless-matrix-render-runtime)))
+
+(defn last-shield-hw-state-snapshot
+  []
+  @(last-shield-hw-state-atom))
+
+(defn clear-last-shield-hw-state!
+  []
+  (reset! (last-shield-hw-state-atom) nil)
+  nil)
+
+(defn reset-last-shield-hw-state-for-test!
+  ([]
+   (clear-last-shield-hw-state!))
+  ([state]
+   (reset! (last-shield-hw-state-atom) state)
+   nil))
 
 ;; ============================================================================
 ;; Rendering Functions
@@ -45,7 +108,7 @@
   - tile: TileMatrix instance
   - pose-stack, vertex-consumer, packed-light, packed-overlay"
   [_tile pose-stack vertex-consumer packed-light packed-overlay]
-  (obj-tesr/render-obj-parts! @model ["Main" "Core"] pose-stack vertex-consumer packed-light packed-overlay))
+  (obj-tesr/render-obj-parts! (matrix-model) ["Main" "Core"] pose-stack vertex-consumer packed-light packed-overlay))
 
 (defn render-shields
   "Render animated shield plates using PoseStack and buffered vertex consumer.
@@ -62,8 +125,8 @@
         phase (mod (* time 50.0) 360.0)
         ht-phase-offset 40.0]
     (let [hw-state {:plate-count plate-count :core-level core-level :active-plates active-plates}]
-      (when (not= hw-state @last-shield-hw-state)
-        (reset! last-shield-hw-state hw-state)))
+      (when (not= hw-state (last-shield-hw-state-snapshot))
+        (reset! (last-shield-hw-state-atom) hw-state)))
     (dotimes [i active-plates]
       (pose/push-pose pose-stack)
       (try
@@ -71,7 +134,7 @@
               y-offset (* float-height (Math/sin (+ (* time 1.111) (* ht-phase-offset i))))]
           (pose/translate pose-stack (double 0.0) (double y-offset) (double 0.0))
           (pose/apply-y-rotation pose-stack (+ phase (* dtheta i)))
-          (obj/render-part-consumer @model "Shield" pose-stack vertex-consumer packed-light packed-overlay))
+          (obj/render-part-consumer (matrix-model) "Shield" pose-stack vertex-consumer packed-light packed-overlay))
         (finally
           (pose/pop-pose pose-stack))))))
 
@@ -83,7 +146,7 @@
   - partial-ticks, pose-stack, buffer-source, packed-light, packed-overlay"
   [tile partial-ticks pose-stack buffer-source packed-light packed-overlay]
   (obj-tesr/translate-obj-y-lift! pose-stack)
-  (obj-tesr/with-solid-vc-and-obj-bindings! buffer-source @texture
+  (obj-tesr/with-solid-vc-and-obj-bindings! buffer-source (matrix-texture)
     (fn [vc]
       (render-base tile pose-stack vc packed-light packed-overlay)
       (render-shields tile partial-ticks pose-stack vc packed-light packed-overlay))))
@@ -108,14 +171,21 @@
     ;; Multiblock part tiles share the same BlockEntity type and renderer dispatch.
     (tesr-api/register-scripted-tile-renderer! "wireless-matrix-part" renderer)))
 
-(defonce-guard matrix-renderer-installed?)
+(def ^:private matrix-renderer-guard-lock
+  (Object.))
+
+(def ^:private ^:dynamic *matrix-renderer-installed?*
+  false)
 
 (defn init!
   "Entry for `ac.registry.hooks/load-all-client-renderers!` (matches solar-gen pattern)."
   []
   (when-let [register-fn (requiring-resolve 'cn.li.mcmod.client.render.init/register-renderer-init-fn!)]
-    (with-init-guard matrix-renderer-installed?
-      (register-fn register!))))
+    (when-not (var-get #'*matrix-renderer-installed?*)
+      (locking matrix-renderer-guard-lock
+        (when-not (var-get #'*matrix-renderer-installed?*)
+          (register-fn register!)
+          (alter-var-root #'*matrix-renderer-installed?* (constantly true)))))))
 
 ;; ============================================================================
 ;; Platform Integration Notes

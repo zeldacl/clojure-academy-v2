@@ -11,6 +11,9 @@
   instead of reaching through to data internals."
   (:require [cn.li.ac.wireless.data.world :as wd]))
 
+(def create-world-registry-runtime wd/create-world-registry-runtime)
+(def call-with-world-registry-runtime wd/call-with-world-registry-runtime)
+
 (def get-world-data wd/get-world-data)
 (def get-world-data-non-create wd/get-world-data-non-create)
 

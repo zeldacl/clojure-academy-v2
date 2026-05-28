@@ -9,13 +9,16 @@
             [cn.li.mcmod.protocol.core :as registry-core]
             [cn.li.mcmod.util.log :as log]))
 
+(def ^:private ^:dynamic *tile-registry-state*
+  {:by-id {} :block->tile-id {}})
+
 (defonce ^{:doc "Registry of tile specs.
 
 Structure:
 - :by-id {tile-id -> TileSpec}
 - :block->tile-id {block-id -> tile-id}"}
   tile-registry
-  (registry-core/atom-registry {:by-id {} :block->tile-id {}}))
+  (registry-core/var-root-registry #'*tile-registry-state*))
 
 (defrecord TileSpec
   [id

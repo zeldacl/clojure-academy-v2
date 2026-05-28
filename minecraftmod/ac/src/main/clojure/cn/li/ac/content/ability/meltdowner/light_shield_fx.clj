@@ -5,17 +5,67 @@
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]))
 
-(defonce ^:private effect-state (atom {}))
+(defn default-light-shield-fx-runtime-state
+  []
+  {:effect-state {}})
+
+(defn create-light-shield-fx-runtime
+  ([]
+   (create-light-shield-fx-runtime {}))
+  ([{:keys [state*]
+     :or {state* (atom (default-light-shield-fx-runtime-state))}}]
+   {::runtime ::light-shield-fx-runtime
+    :state* state*}))
+
+(def ^:dynamic *light-shield-fx-runtime* nil)
+
+(defonce ^:private installed-light-shield-fx-runtime
+  (create-light-shield-fx-runtime))
+
+(defn- light-shield-fx-runtime?
+  [runtime]
+  (and (map? runtime)
+       (= ::light-shield-fx-runtime (::runtime runtime))
+       (some? (:state* runtime))))
+
+(defn call-with-light-shield-fx-runtime
+  [runtime f]
+  (when-not (light-shield-fx-runtime? runtime)
+    (throw (ex-info "Expected light shield FX runtime"
+                    {:value runtime})))
+  (binding [*light-shield-fx-runtime* runtime]
+    (f)))
+
+(defmacro with-light-shield-fx-runtime
+  [runtime & body]
+  `(call-with-light-shield-fx-runtime ~runtime (fn [] ~@body)))
+
+(defn- current-light-shield-fx-runtime
+  []
+  (or *light-shield-fx-runtime*
+      installed-light-shield-fx-runtime))
+
+(defn- light-shield-fx-state-atom
+  []
+  (:state* (current-light-shield-fx-runtime)))
+
+(defn- light-shield-fx-state-snapshot
+  []
+  @(light-shield-fx-state-atom))
+
+(defn- update-light-shield-fx-state!
+  [f & args]
+  (apply swap! (light-shield-fx-state-atom) f args))
 
 (defn light-shield-fx-snapshot []
-  {:effect-state @effect-state})
+  (light-shield-fx-state-snapshot))
 
 (defn reset-light-shield-fx-for-test! []
-  (reset! effect-state {})
+  (reset! (light-shield-fx-state-atom) (default-light-shield-fx-runtime-state))
   nil)
 
 (defn clear-light-shield-owner! [owner-key]
-  (swap! effect-state dissoc owner-key)
+  (update-light-shield-fx-state! update :effect-state dissoc owner-key)
   nil)
 
 ;; ---------------------------------------------------------------------------
@@ -34,7 +84,9 @@
     (case mode
       :start
       (do
-        (swap! effect-state assoc owner-key* (merge base-meta {:active? true :ticks 0}))
+        (update-light-shield-fx-state!
+          update :effect-state assoc owner-key*
+          (merge base-meta {:active? true :ticks 0}))
         (client-sounds/queue-sound-effect! (:queue-owner base-meta)
           {:type :sound :sound-id "my_mod:md.shield_on" :volume 0.7 :pitch 1.0}))
       :end
@@ -49,21 +101,22 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- tick! []
-  (swap! effect-state
-         (fn [states]
-           (into {}
-                 (keep (fn [[owner-key st]]
-                         (when (:active? st)
-                           (let [ticks (inc (long (or (:ticks st) 0)))]
-                             (when (zero? (mod ticks 5))
-                               (client-particles/queue-particle-effect! (:queue-owner st)
-                                 {:type :particle :particle-type :end-rod
-                                  :x 0.0 :y 1.0 :z 0.0
-                                  :count 3 :speed 0.15
-                                  :offset-x 0.8 :offset-y 0.8 :offset-z 0.8
-                                  :relative-to-camera? true}))
-                             [owner-key (assoc st :ticks ticks)]))))
-                 states))))
+  (update-light-shield-fx-state!
+    update :effect-state
+    (fn [states]
+      (into {}
+            (keep (fn [[owner-key st]]
+                    (when (:active? st)
+                      (let [ticks (inc (long (or (:ticks st) 0)))]
+                        (when (zero? (mod ticks 5))
+                          (client-particles/queue-particle-effect! (:queue-owner st)
+                            {:type :particle :particle-type :end-rod
+                             :x 0.0 :y 1.0 :z 0.0
+                             :count 3 :speed 0.15
+                             :offset-x 0.8 :offset-y 0.8 :offset-z 0.8
+                             :relative-to-camera? true}))
+                        [owner-key (assoc st :ticks ticks)]))))
+            states))))
 
 ;; ---------------------------------------------------------------------------
 ;; Build plan

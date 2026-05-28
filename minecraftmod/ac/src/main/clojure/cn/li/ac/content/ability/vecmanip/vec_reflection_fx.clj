@@ -5,29 +5,78 @@
             [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]))
 
-(defonce ^:private effect-state (atom {}))
-(defonce ^:private wave-effects (atom {}))
+(defn default-vec-reflection-fx-runtime-state
+  []
+  {:effect-state {}
+   :wave-effects {}})
+
+(defn create-vec-reflection-fx-runtime
+  ([]
+   (create-vec-reflection-fx-runtime {}))
+  ([{:keys [state*]
+     :or {state* (atom (default-vec-reflection-fx-runtime-state))}}]
+   {::runtime ::vec-reflection-fx-runtime
+    :state* state*}))
+
+(def ^:dynamic *vec-reflection-fx-runtime* nil)
+
+(defonce ^:private installed-vec-reflection-fx-runtime
+  (create-vec-reflection-fx-runtime))
+
+(defn- vec-reflection-fx-runtime?
+  [runtime]
+  (and (map? runtime)
+       (= ::vec-reflection-fx-runtime (::runtime runtime))
+       (some? (:state* runtime))))
+
+(defn call-with-vec-reflection-fx-runtime
+  [runtime f]
+  (when-not (vec-reflection-fx-runtime? runtime)
+    (throw (ex-info "Expected VecReflection FX runtime"
+                    {:value runtime})))
+  (binding [*vec-reflection-fx-runtime* runtime]
+    (f)))
+
+(defmacro with-vec-reflection-fx-runtime
+  [runtime & body]
+  `(call-with-vec-reflection-fx-runtime ~runtime (fn [] ~@body)))
+
+(defn- current-vec-reflection-fx-runtime
+  []
+  (or *vec-reflection-fx-runtime*
+      installed-vec-reflection-fx-runtime))
+
+(defn- vec-reflection-fx-state-atom
+  []
+  (:state* (current-vec-reflection-fx-runtime)))
+
+(defn- vec-reflection-fx-state-snapshot
+  []
+  @(vec-reflection-fx-state-atom))
+
+(defn- update-vec-reflection-fx-state!
+  [f & args]
+  (apply swap! (vec-reflection-fx-state-atom) f args))
+
 (def ^:private sound-id "my_mod:vecmanip.vec_reflection")
 
 (defn vec-reflection-fx-snapshot
   []
-  {:effect-state @effect-state
-   :wave-effects @wave-effects})
+  (vec-reflection-fx-state-snapshot))
 
 (defn reset-vec-reflection-fx-for-test!
   []
-  (reset! effect-state {})
-  (reset! wave-effects {})
+  (reset! (vec-reflection-fx-state-atom) (default-vec-reflection-fx-runtime-state))
   nil)
 
 (defn clear-vec-reflection-owner!
   [owner-key]
-  (swap! effect-state dissoc owner-key)
-  (swap! wave-effects dissoc owner-key)
+  (update-vec-reflection-fx-state!
+    (fn [state]
+      (-> state
+          (update :effect-state dissoc owner-key)
+          (update :wave-effects dissoc owner-key))))
   nil)
-
-(defn- all-wave-effects []
-  (mapcat val @wave-effects))
 
 ;; ---------------------------------------------------------------------------
 ;; Enqueue
@@ -43,18 +92,19 @@
                    :world-id world-id}]
     (case mode
       :start
-      (swap! effect-state assoc owner-key*
-             (merge base-meta {:active? true :ticks 0}))
+      (update-vec-reflection-fx-state! update :effect-state assoc owner-key*
+              (merge base-meta {:active? true :ticks 0}))
       :end
-      (swap! effect-state assoc owner-key*
-             (merge base-meta {:active? false :ticks 0}))
+      (update-vec-reflection-fx-state! update :effect-state assoc owner-key*
+              (merge base-meta {:active? false :ticks 0}))
       :reflect-entity
       (when reflected?
         (let [life (+ 8 (rand-int 6))]
-          (swap! wave-effects update owner-key* (fnil conj [])
-                 (merge base-meta
-                        {:x (double x) :y (double y) :z (double z)
-                         :ttl life :max-ttl life}))))
+          (update-vec-reflection-fx-state!
+            update :wave-effects update owner-key* (fnil conj [])
+            (merge base-meta
+                   {:x (double x) :y (double y) :z (double z)
+                    :ttl life :max-ttl life}))))
       :play
       (client-sounds/queue-current-sound-effect!
         {:type :sound :sound-id sound-id :volume 0.5 :pitch 1.0
@@ -66,24 +116,25 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- tick! []
-  (swap! effect-state
-         (fn [states]
-           (into {}
-                 (keep (fn [[owner-key st]]
-                         (when (:active? st)
-                           [owner-key (update st :ticks (fnil inc 0))])))
-                 states)))
-  (swap! wave-effects
-         (fn [by-owner]
-           (into {}
-                 (keep (fn [[owner-key xs]]
-                         (let [live (->> xs
-                                         (map #(update % :ttl dec))
-                                         (filter #(pos? (long (:ttl %))))
-                                         vec)]
-                           (when (seq live)
-                             [owner-key live]))))
-                 by-owner))))
+  (update-vec-reflection-fx-state!
+    (fn [{:keys [effect-state wave-effects] :as state}]
+      (assoc state
+             :effect-state
+             (into {}
+                   (keep (fn [[owner-key st]]
+                           (when (:active? st)
+                             [owner-key (update st :ticks (fnil inc 0))])))
+                   effect-state)
+             :wave-effects
+             (into {}
+                   (keep (fn [[owner-key xs]]
+                           (let [live (->> xs
+                                           (map #(update % :ttl dec))
+                                           (filter #(pos? (long (:ttl %))))
+                                           vec)]
+                             (when (seq live)
+                               [owner-key live]))))
+               wave-effects)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Render ops
@@ -147,15 +198,16 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- build-plan [camera-pos hand-center-pos _tick]
-  (let [vr (some (fn [st]
+  (let [{:keys [effect-state wave-effects]} (vec-reflection-fx-state-snapshot)
+        vr (some (fn [st]
                    (when (and (:active? st)
                               (or (nil? (:source-player-id st))
                                   (nil? (:player-uuid hand-center-pos))
                                   (= (str (:source-player-id st))
                                      (str (:player-uuid hand-center-pos)))))
                      st))
-                 (vals @effect-state))
-        current-waves (all-wave-effects)
+                 (vals effect-state))
+        current-waves (mapcat val wave-effects)
         ring-plan (if (and hand-center-pos vr (:active? vr))
                     (double-ring-ops (dissoc hand-center-pos :player-uuid)
                                     (long (or (:ticks vr) 0)))

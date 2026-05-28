@@ -45,22 +45,73 @@
 ;; Hand effect: first-person camera shake + punch animation
 ;; ---------------------------------------------------------------------------
 
-(defonce ^:private hand-state (atom {}))
+(defn default-groundshock-fx-runtime-state
+  []
+  {:hand-state {}})
+
+(defn create-groundshock-fx-runtime
+  ([]
+   (create-groundshock-fx-runtime {}))
+  ([{:keys [state*]
+     :or {state* (atom (default-groundshock-fx-runtime-state))}}]
+   {::runtime ::groundshock-fx-runtime
+    :state* state*}))
+
+(def ^:dynamic *groundshock-fx-runtime* nil)
+
+(defonce ^:private installed-groundshock-fx-runtime
+  (create-groundshock-fx-runtime))
+
+(defn- groundshock-fx-runtime?
+  [runtime]
+  (and (map? runtime)
+       (= ::groundshock-fx-runtime (::runtime runtime))
+       (some? (:state* runtime))))
+
+(defn call-with-groundshock-fx-runtime
+  [runtime f]
+  (when-not (groundshock-fx-runtime? runtime)
+    (throw (ex-info "Expected groundshock FX runtime"
+                    {:value runtime})))
+  (binding [*groundshock-fx-runtime* runtime]
+    (f)))
+
+(defmacro with-groundshock-fx-runtime
+  [runtime & body]
+  `(call-with-groundshock-fx-runtime ~runtime (fn [] ~@body)))
+
+(defn- current-groundshock-fx-runtime
+  []
+  (or *groundshock-fx-runtime*
+      installed-groundshock-fx-runtime))
+
+(defn- groundshock-fx-state-atom
+  []
+  (:state* (current-groundshock-fx-runtime)))
+
+(defn- groundshock-fx-state-snapshot
+  []
+  @(groundshock-fx-state-atom))
+
+(defn- update-groundshock-fx-state!
+  [f & args]
+  (apply swap! (groundshock-fx-state-atom) f args))
+
 (def ^:private perform-step 3.4)
 (def ^:private perform-ticks-count 4)
 
 (defn groundshock-fx-snapshot
   []
-  {:hand-state @hand-state})
+  (groundshock-fx-state-snapshot))
 
 (defn reset-groundshock-fx-for-test!
   []
-  (reset! hand-state {})
+  (reset! (groundshock-fx-state-atom) (default-groundshock-fx-runtime-state))
   nil)
 
 (defn clear-groundshock-owner!
   [owner-key]
-  (swap! hand-state dissoc owner-key)
+  (update-groundshock-fx-state! update :hand-state dissoc owner-key)
   nil)
 
 (defn- hand-enqueue! [payload]
@@ -74,51 +125,55 @@
                    :world-id world-id}]
     (case mode
       :start
-      (swap! hand-state assoc owner-key*
-             (merge base-meta {:charge-ticks 0 :perform-ticks 0 :active? true}))
+      (update-groundshock-fx-state!
+        update :hand-state assoc owner-key*
+        (merge base-meta {:charge-ticks 0 :perform-ticks 0 :active? true}))
       :update
-      (swap! hand-state update owner-key*
-             (fn [state]
-               (let [prev (long (or (:charge-ticks state) 0))
-                     next-val (long (max 0 (or charge-ticks 0)))]
-                 (doseq [tick (range (inc prev) (inc next-val))]
-                   (let [pitch-factor (cond
-                                        (< tick 4) (/ tick 4.0)
-                                        (<= tick 20) 1.0
-                                        (<= tick 25) (- 1.0 (/ (- tick 20) 5.0))
-                                        :else 0.0)]
-                     (hand-effects/add-camera-pitch-delta! (:queue-owner base-meta) (* -0.2 pitch-factor))))
-                 (merge base-meta
-                        {:charge-ticks next-val
-                         :perform-ticks (long (or (:perform-ticks state) 0))
-                         :active? true}))))
+      (update-groundshock-fx-state!
+        update :hand-state update owner-key*
+        (fn [state]
+          (let [prev (long (or (:charge-ticks state) 0))
+                next-val (long (max 0 (or charge-ticks 0)))]
+            (doseq [tick (range (inc prev) (inc next-val))]
+              (let [pitch-factor (cond
+                                   (< tick 4) (/ tick 4.0)
+                                   (<= tick 20) 1.0
+                                   (<= tick 25) (- 1.0 (/ (- tick 20) 5.0))
+                                   :else 0.0)]
+                (hand-effects/add-camera-pitch-delta! (:queue-owner base-meta) (* -0.2 pitch-factor))))
+            (merge base-meta
+                   {:charge-ticks next-val
+                    :perform-ticks (long (or (:perform-ticks state) 0))
+                    :active? true}))))
       :perform
-      (swap! hand-state update owner-key*
-             (fn [state]
-               (merge base-meta
-                      {:charge-ticks (long (or (:charge-ticks state) 0))
-                       :perform-ticks perform-ticks-count
-                       :active? false})))
+      (update-groundshock-fx-state!
+        update :hand-state update owner-key*
+        (fn [state]
+          (merge base-meta
+                 {:charge-ticks (long (or (:charge-ticks state) 0))
+                  :perform-ticks perform-ticks-count
+                  :active? false})))
       :end
       (when-not performed?
-        (swap! hand-state dissoc owner-key*))
+        (update-groundshock-fx-state! update :hand-state dissoc owner-key*))
       nil)))
 
 (defn- hand-tick! []
-  (swap! hand-state
-         (fn [states]
-           (into {}
-                 (keep (fn [[owner-key state]]
-                         (let [remaining (long (or (:perform-ticks state) 0))]
-                           (when (pos? remaining)
-                             (hand-effects/add-camera-pitch-delta! (:queue-owner state) perform-step))
-                           (let [next-state (if (> remaining 1)
-                                              (assoc state :perform-ticks (dec remaining))
-                                              (when (or (:active? state) (pos? remaining))
-                                                (assoc state :perform-ticks 0)))]
-                             (when next-state
-                               [owner-key next-state])))))
-                 states))))
+  (update-groundshock-fx-state!
+    update :hand-state
+    (fn [states]
+      (into {}
+            (keep (fn [[owner-key state]]
+                    (let [remaining (long (or (:perform-ticks state) 0))]
+                      (when (pos? remaining)
+                        (hand-effects/add-camera-pitch-delta! (:queue-owner state) perform-step))
+                      (let [next-state (if (> remaining 1)
+                                         (assoc state :perform-ticks (dec remaining))
+                                         (when (or (:active? state) (pos? remaining))
+                                           (assoc state :perform-ticks 0)))]
+                        (when next-state
+                          [owner-key next-state])))))
+            states))))
 
 ;; ---------------------------------------------------------------------------
 ;; FX channel registration

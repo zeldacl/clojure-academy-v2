@@ -5,22 +5,73 @@
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]))
 
-(defonce ^:private effect-state (atom {}))
+(defn default-plasma-cannon-fx-runtime-state
+  []
+  {:effect-state {}})
+
+(defn create-plasma-cannon-fx-runtime
+  ([]
+   (create-plasma-cannon-fx-runtime {}))
+  ([{:keys [state*]
+     :or {state* (atom (default-plasma-cannon-fx-runtime-state))}}]
+   {::runtime ::plasma-cannon-fx-runtime
+    :state* state*}))
+
+(def ^:dynamic *plasma-cannon-fx-runtime* nil)
+
+(defonce ^:private installed-plasma-cannon-fx-runtime
+  (create-plasma-cannon-fx-runtime))
+
+(defn- plasma-cannon-fx-runtime?
+  [runtime]
+  (and (map? runtime)
+       (= ::plasma-cannon-fx-runtime (::runtime runtime))
+       (some? (:state* runtime))))
+
+(defn call-with-plasma-cannon-fx-runtime
+  [runtime f]
+  (when-not (plasma-cannon-fx-runtime? runtime)
+    (throw (ex-info "Expected Plasma Cannon FX runtime"
+                    {:value runtime})))
+  (binding [*plasma-cannon-fx-runtime* runtime]
+    (f)))
+
+(defmacro with-plasma-cannon-fx-runtime
+  [runtime & body]
+  `(call-with-plasma-cannon-fx-runtime ~runtime (fn [] ~@body)))
+
+(defn- current-plasma-cannon-fx-runtime
+  []
+  (or *plasma-cannon-fx-runtime*
+      installed-plasma-cannon-fx-runtime))
+
+(defn- plasma-cannon-fx-state-atom
+  []
+  (:state* (current-plasma-cannon-fx-runtime)))
+
+(defn- plasma-cannon-fx-state-snapshot
+  []
+  @(plasma-cannon-fx-state-atom))
+
+(defn- update-plasma-cannon-fx-state!
+  [f & args]
+  (apply swap! (plasma-cannon-fx-state-atom) f args))
+
 (def ^:private loop-sound "my_mod:vecmanip.plasma_cannon")
 (def ^:private charged-sound "my_mod:vecmanip.plasma_cannon_t")
 
 (defn plasma-cannon-fx-snapshot
   []
-  {:effect-state @effect-state})
+  (plasma-cannon-fx-state-snapshot))
 
 (defn reset-plasma-cannon-fx-for-test!
   []
-  (reset! effect-state {})
+  (reset! (plasma-cannon-fx-state-atom) (default-plasma-cannon-fx-runtime-state))
   nil)
 
 (defn clear-plasma-cannon-owner!
   [owner-key]
-  (swap! effect-state dissoc owner-key)
+  (update-plasma-cannon-fx-state! update :effect-state dissoc owner-key)
   nil)
 
 ;; ---------------------------------------------------------------------------
@@ -40,29 +91,31 @@
     (case mode
       :start
       (do
-        (swap! effect-state assoc owner-key*
-               (merge base-meta
-                      {:active? true :charge-ticks 0 :charge-pos (:charge-pos payload)
-                       :flight-ticks 0 :state :charging :destination nil
-                       :performed? false}))
+        (update-plasma-cannon-fx-state!
+          update :effect-state assoc owner-key*
+          (merge base-meta
+                 {:active? true :charge-ticks 0 :charge-pos (:charge-pos payload)
+                  :flight-ticks 0 :state :charging :destination nil
+                  :performed? false}))
         (client-sounds/queue-sound-effect! (:queue-owner base-meta)
           {:type :sound :sound-id loop-sound :volume 0.5 :pitch 1.0}))
       :update
       (do
-        (swap! effect-state update owner-key*
-               (fn [st]
-                 (assoc (merge base-meta (or st {}))
-                        :owner-key owner-key*
-                        :ctx-id ctx-id
-                        :channel channel
-                        :source-player-id source-player-id
-                        :world-id world-id
-                        :active? true
-                        :charge-ticks (long (or charge-ticks 0))
-                        :flight-ticks (long (or flight-ticks 0))
-                        :state (or state :charging)
-                        :charge-pos (or charge-pos (:charge-pos st))
-                        :destination (or destination (:destination st)))))
+        (update-plasma-cannon-fx-state!
+          update :effect-state update owner-key*
+          (fn [st]
+            (assoc (merge base-meta (or st {}))
+                   :owner-key owner-key*
+                   :ctx-id ctx-id
+                   :channel channel
+                   :source-player-id source-player-id
+                   :world-id world-id
+                   :active? true
+                   :charge-ticks (long (or charge-ticks 0))
+                   :flight-ticks (long (or flight-ticks 0))
+                   :state (or state :charging)
+                   :charge-pos (or charge-pos (:charge-pos st))
+                   :destination (or destination (:destination st)))))
         (when (boolean fully-charged?)
           (client-sounds/queue-sound-effect! (:queue-owner base-meta)
             {:type :sound :sound-id charged-sound :volume 0.5 :pitch 1.0})))
@@ -85,7 +138,8 @@
             {:type :sound :sound-id "minecraft:entity.generic.explode"
              :volume 3.0 :pitch 0.8 :x tx :y ty :z tz})))
       :end
-      (swap! effect-state assoc owner-key* (merge base-meta {:active? false :performed? (boolean performed?)}))
+      (update-plasma-cannon-fx-state!
+        update :effect-state assoc owner-key* (merge base-meta {:active? false :performed? (boolean performed?)}))
       nil)))
 
 ;; ---------------------------------------------------------------------------
@@ -93,24 +147,27 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- tick! []
-  (swap! effect-state
-         (fn [states]
-           (into {}
-                 (keep (fn [[owner-key st]]
-                         (when (:active? st)
-                           (let [ticks (inc (long (or (:ticks st) 0)))]
-                             (when (and (pos? ticks) (zero? (mod ticks 10)))
-                                 (client-sounds/queue-sound-effect! (:queue-owner st)
-                                 {:type :sound :sound-id loop-sound :volume 0.4 :pitch 1.0}))
-                             (let [cp (:charge-pos st)]
-                               (when (and cp (= :go (:state st)))
-                                   (client-particles/queue-particle-effect! (:queue-owner st)
-                                   {:type :particle :particle-type :flame
-                                    :x (double (:x cp)) :y (double (:y cp)) :z (double (:z cp))
-                                    :count 4 :speed 0.2
-                                    :offset-x 0.5 :offset-y 0.5 :offset-z 0.5})))
-                             [owner-key (assoc st :ticks ticks)]))))
-                 states))))
+  (update-plasma-cannon-fx-state!
+    update :effect-state
+    (fn [states]
+      (reduce-kv
+        (fn [acc owner-key st]
+          (if-not (:active? st)
+            acc
+            (let [ticks (inc (long (or (:ticks st) 0)))]
+              (when (and (pos? ticks) (zero? (mod ticks 10)))
+                (client-sounds/queue-sound-effect! (:queue-owner st)
+                  {:type :sound :sound-id loop-sound :volume 0.4 :pitch 1.0}))
+              (let [cp (:charge-pos st)]
+                (when (and cp (= :go (:state st)))
+                  (client-particles/queue-particle-effect! (:queue-owner st)
+                    {:type :particle :particle-type :flame
+                     :x (double (:x cp)) :y (double (:y cp)) :z (double (:z cp))
+                     :count 4 :speed 0.2
+                     :offset-x 0.5 :offset-y 0.5 :offset-z 0.5})))
+              (assoc acc owner-key (assoc st :ticks ticks)))))
+        {}
+        states))))
 
 ;; ---------------------------------------------------------------------------
 ;; Build plan (plasma cannon has no render ops, only particles/sounds)
@@ -167,7 +224,7 @@
         :balls balls}])))
 
 (defn- build-plan [_camera-pos _hand-center-pos _tick]
-  (let [ops (mapcat plasma-state-ops (vals @effect-state))]
+  (let [ops (mapcat plasma-state-ops (vals (:effect-state (plasma-cannon-fx-state-snapshot))))]
     (when (seq ops)
       {:ops (vec ops)})))
 

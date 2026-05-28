@@ -3,14 +3,19 @@
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.level-effects :as level-effects]
-            [cn.li.ac.content.ability.electromaster.mag-movement-fx :as mag-movement-fx]))
+            [cn.li.ac.content.ability.electromaster.mag-movement-fx :as mag-movement-fx]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (defn- reset-fixture [f]
-  (mag-movement-fx/reset-mag-movement-fx-for-test!)
-  (client-sounds/poll-sound-effects!)
-  (f)
-  (mag-movement-fx/reset-mag-movement-fx-for-test!)
-  (client-sounds/poll-sound-effects!))
+  (binding [runtime-hooks/*client-session-id* :test-session]
+    (mag-movement-fx/call-with-mag-movement-fx-runtime
+      (mag-movement-fx/create-mag-movement-fx-runtime)
+      (fn []
+        (mag-movement-fx/reset-mag-movement-fx-for-test!)
+        (client-sounds/poll-sound-effects!)
+        (f)
+        (mag-movement-fx/reset-mag-movement-fx-for-test!)
+        (client-sounds/poll-sound-effects!)))))
 
 (defn- event [ctx-id payload]
   {:payload payload
@@ -95,3 +100,28 @@
     (let [snapshot (mag-movement-fx/mag-movement-fx-snapshot)]
       (is (nil? (get (:effect-state snapshot) [:ctx "ctx-a"])))
       (is (some? (get (:effect-state snapshot) [:ctx "ctx-b"]))))))
+
+(deftest mag-movement-fx-runtime-isolation-test
+  (binding [runtime-hooks/*client-session-id* :test-session]
+    (let [runtime-a (mag-movement-fx/create-mag-movement-fx-runtime)
+          runtime-b (mag-movement-fx/create-mag-movement-fx-runtime)
+          enqueue! @#'cn.li.ac.content.ability.electromaster.mag-movement-fx/enqueue!]
+      (mag-movement-fx/call-with-mag-movement-fx-runtime
+        runtime-a
+        (fn []
+          (enqueue! (event "ctx-a" {:mode :start :target {:x 1.0 :y 2.0 :z 3.0}}))
+          (is (= #{[:ctx "ctx-a"]}
+                 (set (keys (:effect-state (mag-movement-fx/mag-movement-fx-snapshot))))))))
+      (mag-movement-fx/call-with-mag-movement-fx-runtime
+        runtime-b
+        (fn []
+          (is (= {:effect-state {}}
+                 (mag-movement-fx/mag-movement-fx-snapshot)))
+          (enqueue! (event "ctx-b" {:mode :start :target {:x 4.0 :y 5.0 :z 6.0}}))
+          (is (= #{[:ctx "ctx-b"]}
+                 (set (keys (:effect-state (mag-movement-fx/mag-movement-fx-snapshot))))))))
+      (mag-movement-fx/call-with-mag-movement-fx-runtime
+        runtime-a
+        (fn []
+          (is (= #{[:ctx "ctx-a"]}
+                 (set (keys (:effect-state (mag-movement-fx/mag-movement-fx-snapshot)))))))))))

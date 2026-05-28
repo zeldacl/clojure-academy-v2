@@ -6,17 +6,67 @@
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]))
 
-(defonce ^:private effect-state (atom {}))
+(defn default-mine-ray-fx-runtime-state
+  []
+  {:effect-state {}})
+
+(defn create-mine-ray-fx-runtime
+  ([]
+   (create-mine-ray-fx-runtime {}))
+  ([{:keys [state*]
+     :or {state* (atom (default-mine-ray-fx-runtime-state))}}]
+   {::runtime ::mine-ray-fx-runtime
+    :state* state*}))
+
+(def ^:dynamic *mine-ray-fx-runtime* nil)
+
+(defonce ^:private installed-mine-ray-fx-runtime
+  (create-mine-ray-fx-runtime))
+
+(defn- mine-ray-fx-runtime?
+  [runtime]
+  (and (map? runtime)
+       (= ::mine-ray-fx-runtime (::runtime runtime))
+       (some? (:state* runtime))))
+
+(defn call-with-mine-ray-fx-runtime
+  [runtime f]
+  (when-not (mine-ray-fx-runtime? runtime)
+    (throw (ex-info "Expected mine-ray FX runtime"
+                    {:value runtime})))
+  (binding [*mine-ray-fx-runtime* runtime]
+    (f)))
+
+(defmacro with-mine-ray-fx-runtime
+  [runtime & body]
+  `(call-with-mine-ray-fx-runtime ~runtime (fn [] ~@body)))
+
+(defn- current-mine-ray-fx-runtime
+  []
+  (or *mine-ray-fx-runtime*
+      installed-mine-ray-fx-runtime))
+
+(defn- mine-ray-fx-state-atom
+  []
+  (:state* (current-mine-ray-fx-runtime)))
+
+(defn- mine-ray-fx-state-snapshot
+  []
+  @(mine-ray-fx-state-atom))
+
+(defn- update-mine-ray-fx-state!
+  [f & args]
+  (apply swap! (mine-ray-fx-state-atom) f args))
 
 (defn mine-ray-fx-snapshot []
-  {:effect-state @effect-state})
+  (mine-ray-fx-state-snapshot))
 
 (defn reset-mine-ray-fx-for-test! []
-  (reset! effect-state {})
+  (reset! (mine-ray-fx-state-atom) (default-mine-ray-fx-runtime-state))
   nil)
 
 (defn clear-mine-ray-owner! [owner-key]
-  (swap! effect-state dissoc owner-key)
+  (update-mine-ray-fx-state! update :effect-state dissoc owner-key)
   nil)
 
 ;; ---------------------------------------------------------------------------
@@ -35,23 +85,25 @@
     (case mode
       :start
       (do
-        (swap! effect-state assoc owner-key*
-               (merge base-meta {:active? true :ticks 0 :variant (or variant :basic)
-                                 :target nil :progress 0.0}))
+        (update-mine-ray-fx-state!
+          update :effect-state assoc owner-key*
+          (merge base-meta {:active? true :ticks 0 :variant (or variant :basic)
+                            :target nil :progress 0.0}))
         (client-sounds/queue-sound-effect! (:queue-owner base-meta)
           {:type :sound :sound-id "my_mod:md.mine_ray_start" :volume 0.5 :pitch 1.0}))
       :progress
-      (swap! effect-state update owner-key*
-             (fn [st]
-               (when st
-                 (assoc (merge base-meta st)
-                        :owner-key owner-key*
-                        :ctx-id ctx-id
-                        :channel channel
-                        :source-player-id source-player-id
-                        :world-id world-id
-                        :target {:x (int (or x 0)) :y (int (or y 0)) :z (int (or z 0))}
-                        :progress (double (or progress 0.0))))))
+      (update-mine-ray-fx-state!
+        update :effect-state update owner-key*
+        (fn [st]
+          (when st
+            (assoc (merge base-meta st)
+                   :owner-key owner-key*
+                   :ctx-id ctx-id
+                   :channel channel
+                   :source-player-id source-player-id
+                   :world-id world-id
+                   :target {:x (int (or x 0)) :y (int (or y 0)) :z (int (or z 0))}
+                   :progress (double (or progress 0.0))))))
       :end
       (clear-mine-ray-owner! owner-key*)
       nil)))
@@ -61,23 +113,24 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- tick! []
-  (swap! effect-state
-         (fn [states]
-           (into {}
-                 (keep (fn [[owner-key st]]
-                         (when (:active? st)
-                           (let [ticks (inc (long (or (:ticks st) 0)))]
-                             (when (zero? (mod ticks 8))
-                               (when-let [target (:target st)]
-                                 (client-particles/queue-particle-effect! (:queue-owner st)
-                                   {:type :particle :particle-type :electric-spark
-                                    :x (+ (double (:x target)) 0.5)
-                                    :y (+ (double (:y target)) 0.5)
-                                    :z (+ (double (:z target)) 0.5)
-                                    :count 2 :speed 0.1
-                                    :offset-x 0.3 :offset-y 0.3 :offset-z 0.3})))
-                             [owner-key (assoc st :ticks ticks)]))))
-                 states))))
+  (update-mine-ray-fx-state!
+    update :effect-state
+    (fn [states]
+      (into {}
+            (keep (fn [[owner-key st]]
+                    (when (:active? st)
+                      (let [ticks (inc (long (or (:ticks st) 0)))]
+                        (when (zero? (mod ticks 8))
+                          (when-let [target (:target st)]
+                            (client-particles/queue-particle-effect! (:queue-owner st)
+                              {:type :particle :particle-type :electric-spark
+                               :x (+ (double (:x target)) 0.5)
+                               :y (+ (double (:y target)) 0.5)
+                               :z (+ (double (:z target)) 0.5)
+                               :count 2 :speed 0.1
+                               :offset-x 0.3 :offset-y 0.3 :offset-z 0.3})))
+                        [owner-key (assoc st :ticks ticks)]))))
+            states))))
 
 ;; ---------------------------------------------------------------------------
 ;; Render ops  
@@ -118,7 +171,7 @@
                                           (double (or (:progress st) 0.0))
                                           (long (or (:ticks st) 0))
                                           (or (:variant st) :basic))))
-                    (vals @effect-state))]
+                      (vals (:effect-state (mine-ray-fx-state-snapshot))))]
     (when (seq ops)
       {:ops (vec ops)})))
 

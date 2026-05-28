@@ -5,26 +5,77 @@
             [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]))
 
-(defonce ^:private arcs (atom {}))
+(defn default-thunder-bolt-fx-runtime-state
+  []
+  {:arcs {}})
+
+(defn create-thunder-bolt-fx-runtime
+  ([]
+   (create-thunder-bolt-fx-runtime {}))
+  ([{:keys [state*]
+     :or {state* (atom (default-thunder-bolt-fx-runtime-state))}}]
+   {::runtime ::thunder-bolt-fx-runtime
+    :state* state*}))
+
+(def ^:dynamic *thunder-bolt-fx-runtime* nil)
+
+(defonce ^:private installed-thunder-bolt-fx-runtime
+  (create-thunder-bolt-fx-runtime))
+
+(defn- thunder-bolt-fx-runtime?
+  [runtime]
+  (and (map? runtime)
+       (= ::thunder-bolt-fx-runtime (::runtime runtime))
+       (some? (:state* runtime))))
+
+(defn call-with-thunder-bolt-fx-runtime
+  [runtime f]
+  (when-not (thunder-bolt-fx-runtime? runtime)
+    (throw (ex-info "Expected thunder-bolt FX runtime"
+                    {:value runtime})))
+  (binding [*thunder-bolt-fx-runtime* runtime]
+    (f)))
+
+(defmacro with-thunder-bolt-fx-runtime
+  [runtime & body]
+  `(call-with-thunder-bolt-fx-runtime ~runtime (fn [] ~@body)))
+
+(defn- current-thunder-bolt-fx-runtime
+  []
+  (or *thunder-bolt-fx-runtime*
+      installed-thunder-bolt-fx-runtime))
+
+(defn- thunder-bolt-fx-state-atom
+  []
+  (:state* (current-thunder-bolt-fx-runtime)))
+
+(defn- thunder-bolt-fx-state-snapshot
+  []
+  @(thunder-bolt-fx-state-atom))
+
+(defn- update-thunder-bolt-fx-state!
+  [f & args]
+  (apply swap! (thunder-bolt-fx-state-atom) f args))
+
 (def ^:private main-arc-life 20)
 
 (defn thunder-bolt-fx-snapshot
   []
-  {:arcs @arcs})
+  (thunder-bolt-fx-state-snapshot))
 
 (defn reset-thunder-bolt-fx-for-test!
   []
-  (reset! arcs {})
+  (reset! (thunder-bolt-fx-state-atom) (default-thunder-bolt-fx-runtime-state))
   nil)
 
 (defn clear-thunder-bolt-owner!
   [owner-key]
-  (swap! arcs dissoc owner-key)
+  (update-thunder-bolt-fx-state! update :arcs dissoc owner-key)
   nil)
 
 (defn- all-arcs
   []
-  (mapcat val @arcs))
+  (mapcat val (:arcs (thunder-bolt-fx-state-snapshot))))
 
 ;; ---------------------------------------------------------------------------
 ;; Enqueue
@@ -54,7 +105,7 @@
                                               :ttl life :max-ttl life
                                               :is-aoe? true})))))
                           vec)]
-        (swap! arcs update owner-key* (fnil into []) (into main-arcs aoe-arcs)))
+        (update-thunder-bolt-fx-state! update :arcs update owner-key* (fnil into []) (into main-arcs aoe-arcs)))
       (client-sounds/queue-current-sound-effect!
         {:type :sound :sound-id "my_mod:em.arc_strong" :volume 0.6 :pitch 1.0}))))
 
@@ -63,17 +114,18 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- tick! []
-  (swap! arcs
-         (fn [owners]
-           (->> owners
-                (keep (fn [[owner-key xs]]
-                        (let [live-arcs (->> xs
-                                             (map #(update % :ttl dec))
-                                             (filter #(pos? (long (:ttl %))))
-                                             vec)]
-                          (when (seq live-arcs)
-                            [owner-key live-arcs]))))
-                (into {})))))
+  (update-thunder-bolt-fx-state!
+    update :arcs
+    (fn [owners]
+      (->> owners
+           (keep (fn [[owner-key xs]]
+                   (let [live-arcs (->> xs
+                                        (map #(update % :ttl dec))
+                                        (filter #(pos? (long (:ttl %))))
+                                        vec)]
+                     (when (seq live-arcs)
+                       [owner-key live-arcs]))))
+           (into {})))))
 
 ;; ---------------------------------------------------------------------------
 ;; Render ops

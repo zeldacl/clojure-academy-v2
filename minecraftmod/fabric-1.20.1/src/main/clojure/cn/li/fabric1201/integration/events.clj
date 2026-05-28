@@ -5,7 +5,8 @@
             [cn.li.fabric1201.integration.events.loot :as loot-events]
             [cn.li.fabric1201.integration.events.lifecycle :as lifecycle-events]
             [cn.li.mcmod.util.log :as log]
-            [cn.li.mcmod.events.world-lifecycle :as world-lifecycle])
+            [cn.li.mcmod.events.world-lifecycle :as world-lifecycle]
+            [cn.li.mcmod.events.world-save-cache :as world-save-cache])
   (:import [net.fabricmc.fabric.api.event.player UseBlockCallback
             AttackBlockCallback
             PlayerBlockBreakEvents$Before]
@@ -21,39 +22,11 @@
             ServerEntityWorldChangeEvents$AfterPlayerChange]
            [net.fabricmc.fabric.api.loot.v2 LootTableEvents$Modify]))
 
-(defonce ^:private events-registered? (atom false))
-(defonce ^:private pending-world-save-data (atom {}))
+(def ^:private events-registration-lock
+  (Object.))
 
-(defn- require-world-owner-value
-  [world label value]
-  (if (some? value)
-    value
-    (throw (ex-info (format "Fabric world lifecycle owner requires %s" label)
-                    {:world world
-                     :required label}))))
-
-(defn- world-id
-  [world]
-  (require-world-owner-value world ":world-id" (some-> world .getRegistryKey .getValue str)))
-
-(defn- server-session-id
-  [world]
-  (require-world-owner-value
-    world
-    ":server-session-id"
-    (when-let [server (some-> world .getServer)]
-      [:server (System/identityHashCode server)])))
-
-(defn- world-key
-  [world]
-  [(server-session-id world) (world-id world)])
-
-(defn- consume-saved-data!
-  [world]
-  (let [wid (world-key world)
-        pending (get @pending-world-save-data wid)]
-    (swap! pending-world-save-data dissoc wid)
-    pending))
+(def ^:private ^:dynamic *events-registered?*
+  false)
 
 (defn handle-block-place-mixin
   "Handle Fabric block placement from BlockItem mixin.
@@ -64,10 +37,13 @@
 (defn register-events
   "Register Fabric event listeners."
   []
-  (if-not (compare-and-set! events-registered? false true)
+  (if (var-get #'*events-registered?*)
     (log/info "Fabric event listeners already registered, skipping")
-    (do
-      (log/info "Registering Fabric event listeners...")
+    (locking events-registration-lock
+      (if (var-get #'*events-registered?*)
+        (log/info "Fabric event listeners already registered, skipping")
+        (do
+          (log/info "Registering Fabric event listeners...")
 
       (.register UseBlockCallback/EVENT
                  (reify UseBlockCallback
@@ -87,16 +63,13 @@
       (.register net.fabricmc.fabric.api.event.lifecycle.v1.ServerWorldEvents/LOAD
                  (reify ServerWorldEvents$Load
                    (onWorldLoad [_ _server world]
-                     (world-lifecycle/dispatch-world-load world (consume-saved-data! world)))))
+                     (world-lifecycle/dispatch-world-load world (world-save-cache/consume-saved-data! world)))))
 
       (.register net.fabricmc.fabric.api.event.lifecycle.v1.ServerWorldEvents/UNLOAD
                  (reify ServerWorldEvents$Unload
                    (onWorldUnload [_ _server world]
-                     (let [saved (world-lifecycle/dispatch-world-save world)
-                         wid (world-key world)]
-                       (if (seq saved)
-                         (swap! pending-world-save-data assoc wid saved)
-                         (swap! pending-world-save-data dissoc wid)))
+                     (let [saved (world-lifecycle/dispatch-world-save world)]
+                       (world-save-cache/remember-saved-data! world saved))
                      (world-lifecycle/dispatch-world-unload world))))
 
       (.register net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents/END_WORLD_TICK
@@ -139,6 +112,7 @@
                    (onEndTick [_ server]
                      (lifecycle-events/handle-player-tick server))))
 
-      (lifecycle-events/install-server-stop-cleanup!)
+          (lifecycle-events/install-server-stop-cleanup!)
 
-      (log/info "Fabric event listeners registered"))))
+          (alter-var-root #'*events-registered?* (constantly true))
+          (log/info "Fabric event listeners registered"))))))

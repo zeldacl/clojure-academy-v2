@@ -2,6 +2,7 @@
   "Fabric 1.20.1 GUI System Initialization"
   (:require [cn.li.mc1201.gui.init.orchestrator :as gui-orchestrator]
             [cn.li.mc1201.gui.init.checks :as init-checks]
+            [cn.li.mc1201.runtime.spi.gui-registry :as registry-api]
             [cn.li.mcmod.gui.registry-core :as gui]
             [cn.li.fabric1201.adapter.gui-registry :as registry-impl]
             [cn.li.fabric1201.gui.network :as network]
@@ -71,5 +72,5 @@
 
 (defn cleanup! []
   (log/info "Cleaning up Fabric GUI system")
-  (reset! registry-impl/gui-handler-types {})
+  (registry-api/invalidate-menu-registry! :fabric-1.20.1)
   (log/info "Fabric GUI system cleanup complete"))

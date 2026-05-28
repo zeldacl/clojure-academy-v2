@@ -14,30 +14,78 @@
    :block-id nil
    :ticks 0})
 
-(defonce ^:private fx-state*
-  (atom {:states {}
-         :current-owner-key nil}))
+(defn default-mag-manip-fx-runtime-state
+  []
+  {:states {}
+   :current-owner-key nil})
+
+(defn create-mag-manip-fx-runtime
+  ([]
+   (create-mag-manip-fx-runtime {}))
+  ([{:keys [state*]
+     :or {state* (atom (default-mag-manip-fx-runtime-state))}}]
+   {::runtime ::mag-manip-fx-runtime
+    :state* state*}))
+
+(def ^:dynamic *mag-manip-fx-runtime* nil)
+
+(defonce ^:private installed-mag-manip-fx-runtime
+  (create-mag-manip-fx-runtime))
+
+(defn- mag-manip-fx-runtime?
+  [runtime]
+  (and (map? runtime)
+       (= ::mag-manip-fx-runtime (::runtime runtime))
+       (some? (:state* runtime))))
+
+(defn call-with-mag-manip-fx-runtime
+  [runtime f]
+  (when-not (mag-manip-fx-runtime? runtime)
+    (throw (ex-info "Expected mag manip FX runtime"
+                    {:value runtime})))
+  (binding [*mag-manip-fx-runtime* runtime]
+    (f)))
+
+(defmacro with-mag-manip-fx-runtime
+  [runtime & body]
+  `(call-with-mag-manip-fx-runtime ~runtime (fn [] ~@body)))
+
+(defn- current-mag-manip-fx-runtime
+  []
+  (or *mag-manip-fx-runtime*
+      installed-mag-manip-fx-runtime))
+
+(defn- mag-manip-fx-state-atom
+  []
+  (:state* (current-mag-manip-fx-runtime)))
+
+(defn- mag-manip-fx-state-snapshot
+  []
+  @(mag-manip-fx-state-atom))
+
+(defn- update-mag-manip-fx-state!
+  [f & args]
+  (apply swap! (mag-manip-fx-state-atom) f args))
 
 (defn mag-manip-fx-snapshot []
-  @fx-state*)
+  (mag-manip-fx-state-snapshot))
 
 (defn reset-mag-manip-fx-for-test! []
-  (reset! fx-state* {:states {}
-                     :current-owner-key nil})
+  (reset! (mag-manip-fx-state-atom) (default-mag-manip-fx-runtime-state))
   nil)
 
 (defn clear-mag-manip-owner!
   [owner-key]
-  (swap! fx-state*
-         (fn [store]
-           (let [states (dissoc (:states store) owner-key)]
-             {:states states
-              :current-owner-key (when-not (= owner-key (:current-owner-key store))
-                                   (:current-owner-key store))})))
+  (update-mag-manip-fx-state!
+    (fn [store]
+      (let [states (dissoc (:states store) owner-key)]
+        {:states states
+         :current-owner-key (when-not (= owner-key (:current-owner-key store))
+                              (:current-owner-key store))})))
   nil)
 
 (defn current-state []
-  (let [{:keys [states current-owner-key]} @fx-state*]
+  (let [{:keys [states current-owner-key]} (mag-manip-fx-state-snapshot)]
     (or (get states current-owner-key)
         (some (fn [[_ state]]
                 (when (:active? state) state))
@@ -59,36 +107,36 @@
     (case mode
       :hold-start
       (do
-        (swap! fx-state*
-               (fn [store]
-                 (-> store
-                     (assoc-in [:states owner-key*]
-                               (merge default-state base-meta
-                                      {:active? true
-                                       :focus focus
-                                       :block-id block-id
-                                       :ticks 0}))
-                     (assoc :current-owner-key owner-key*))))
+        (update-mag-manip-fx-state!
+          (fn [store]
+            (-> store
+                (assoc-in [:states owner-key*]
+                          (merge default-state base-meta
+                                 {:active? true
+                                  :focus focus
+                                  :block-id block-id
+                                  :ticks 0}))
+                (assoc :current-owner-key owner-key*))))
         (client-sounds/queue-current-sound-effect!
          {:type :sound :sound-id hold-loop-sound :volume 0.5 :pitch 1.0}))
 
       :hold-loop
-      (swap! fx-state*
-             (fn [store]
-               (-> store
-                   (update-in [:states owner-key*]
-                              (fn [state]
-                                (-> (merge default-state state base-meta)
-                                    (assoc :active? true)
-                                    (cond-> focus (assoc :focus focus))
-                                    (cond-> block-id (assoc :block-id block-id)))))
-                   (assoc :current-owner-key owner-key*))))
+      (update-mag-manip-fx-state!
+        (fn [store]
+          (-> store
+              (update-in [:states owner-key*]
+                         (fn [state]
+                           (-> (merge default-state state base-meta)
+                               (assoc :active? true)
+                               (cond-> focus (assoc :focus focus))
+                               (cond-> block-id (assoc :block-id block-id)))))
+              (assoc :current-owner-key owner-key*))))
 
       :throw
       (do
-        (swap! fx-state* update-in [:states owner-key*]
-               (fn [state]
-                 (merge default-state state base-meta {:active? false})))
+        (update-mag-manip-fx-state! update-in [:states owner-key*]
+                                    (fn [state]
+                                      (merge default-state state base-meta {:active? false})))
         (client-sounds/queue-current-sound-effect!
          {:type :sound :sound-id perform-sound :volume 0.9 :pitch 1.0}))
 
@@ -98,20 +146,20 @@
       nil)))
 
 (defn- tick! []
-  (swap! fx-state*
-         (fn [store]
-           (update store :states
-                   (fn [states]
-                     (into {}
-                           (map (fn [[owner-key state]]
-                                  (if-not (:active? state)
-                                    [owner-key state]
-                                    (let [ticks (inc (long (or (:ticks state) 0)))]
-                                      (when (zero? (mod ticks 12))
-                                        (client-sounds/queue-sound-effect! (:queue-owner state)
-                                         {:type :sound :sound-id hold-loop-sound :volume 0.35 :pitch 1.0}))
-                                      [owner-key (assoc state :ticks ticks)]))))
-                           states))))))
+  (update-mag-manip-fx-state!
+    (fn [store]
+      (update store :states
+              (fn [states]
+                (into {}
+                      (map (fn [[owner-key state]]
+                             (if-not (:active? state)
+                               [owner-key state]
+                               (let [ticks (inc (long (or (:ticks state) 0)))]
+                                 (when (zero? (mod ticks 12))
+                                   (client-sounds/queue-sound-effect! (:queue-owner state)
+                                    {:type :sound :sound-id hold-loop-sound :volume 0.35 :pitch 1.0}))
+                                 [owner-key (assoc state :ticks ticks)]))))
+                      states))))))
 
 (defn- current-hand-transform []
   (let [state (current-state)]

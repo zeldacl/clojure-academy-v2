@@ -5,21 +5,72 @@
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]))
 
-(defonce ^:private effect-state (atom {}))
 (def ^:private loop-sound "my_mod:em.move_loop")
+
+(defn default-mag-movement-fx-runtime-state
+  []
+  {:effect-state {}})
+
+(defn create-mag-movement-fx-runtime
+  ([]
+   (create-mag-movement-fx-runtime {}))
+  ([{:keys [state*]
+     :or {state* (atom (default-mag-movement-fx-runtime-state))}}]
+   {::runtime ::mag-movement-fx-runtime
+    :state* state*}))
+
+(def ^:dynamic *mag-movement-fx-runtime* nil)
+
+(defonce ^:private installed-mag-movement-fx-runtime
+  (create-mag-movement-fx-runtime))
+
+(defn- mag-movement-fx-runtime?
+  [runtime]
+  (and (map? runtime)
+       (= ::mag-movement-fx-runtime (::runtime runtime))
+       (some? (:state* runtime))))
+
+(defn call-with-mag-movement-fx-runtime
+  [runtime f]
+  (when-not (mag-movement-fx-runtime? runtime)
+    (throw (ex-info "Expected mag movement FX runtime"
+                    {:value runtime})))
+  (binding [*mag-movement-fx-runtime* runtime]
+    (f)))
+
+(defmacro with-mag-movement-fx-runtime
+  [runtime & body]
+  `(call-with-mag-movement-fx-runtime ~runtime (fn [] ~@body)))
+
+(defn- current-mag-movement-fx-runtime
+  []
+  (or *mag-movement-fx-runtime*
+      installed-mag-movement-fx-runtime))
+
+(defn- mag-movement-fx-state-atom
+  []
+  (:state* (current-mag-movement-fx-runtime)))
+
+(defn- mag-movement-fx-state-snapshot
+  []
+  @(mag-movement-fx-state-atom))
+
+(defn- update-mag-movement-fx-state!
+  [f & args]
+  (apply swap! (mag-movement-fx-state-atom) f args))
 
 (defn mag-movement-fx-snapshot
   []
-  {:effect-state @effect-state})
+  (mag-movement-fx-state-snapshot))
 
 (defn reset-mag-movement-fx-for-test!
   []
-  (reset! effect-state {})
+  (reset! (mag-movement-fx-state-atom) (default-mag-movement-fx-runtime-state))
   nil)
 
 (defn clear-mag-movement-owner!
   [owner-key]
-  (swap! effect-state dissoc owner-key)
+  (update-mag-movement-fx-state! update :effect-state dissoc owner-key)
   nil)
 
 (defn- magnetic-beam-style [tick]
@@ -57,18 +108,20 @@
     (case mode
       :start
       (do
-        (swap! effect-state assoc owner-key*
-               (merge base-meta {:active? true :target target :ticks 0}))
+        (update-mag-movement-fx-state!
+          update :effect-state assoc owner-key*
+          (merge base-meta {:active? true :target target :ticks 0}))
         (client-sounds/queue-sound-effect! (:queue-owner base-meta)
           {:type :sound :sound-id loop-sound :volume 0.58 :pitch 1.0}))
       :update
-      (swap! effect-state update owner-key*
-             (fn [st]
-               (if (:active? st)
-                 (merge st base-meta {:target target})
-                 (merge base-meta {:active? true :target target :ticks 0}))))
+      (update-mag-movement-fx-state!
+        update :effect-state update owner-key*
+        (fn [st]
+          (if (:active? st)
+            (merge st base-meta {:target target})
+            (merge base-meta {:active? true :target target :ticks 0}))))
       :end
-      (swap! effect-state dissoc owner-key*)
+      (update-mag-movement-fx-state! update :effect-state dissoc owner-key*)
       nil)))
 
 ;; ---------------------------------------------------------------------------
@@ -76,17 +129,20 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- tick! []
-  (swap! effect-state
-         (fn [states]
-           (into {}
-                 (keep (fn [[owner-key st]]
-                         (when (:active? st)
-                           (let [ticks (inc (long (or (:ticks st) 0)))]
-                             (when (zero? (mod ticks 10))
-                               (client-sounds/queue-sound-effect! (:queue-owner st)
-                                 {:type :sound :sound-id loop-sound :volume 0.4 :pitch 1.0}))
-                             [owner-key (assoc st :ticks ticks)]))))
-                 states))))
+  (update-mag-movement-fx-state!
+    update :effect-state
+    (fn [states]
+      (reduce-kv
+        (fn [acc owner-key st]
+          (if-not (:active? st)
+            acc
+            (let [ticks (inc (long (or (:ticks st) 0)))]
+              (when (zero? (mod ticks 10))
+                (client-sounds/queue-sound-effect! (:queue-owner st)
+                  {:type :sound :sound-id loop-sound :volume 0.4 :pitch 1.0}))
+              (assoc acc owner-key (assoc st :ticks ticks)))))
+        {}
+        states))))
 
 ;; ---------------------------------------------------------------------------
 ;; Render ops
@@ -100,7 +156,7 @@
                                         (= (str (:source-player-id st))
                                            (str (:player-uuid hand-center-pos)))))
                            st))
-                       (vals @effect-state))]
+                       (vals (:effect-state (mag-movement-fx-state-snapshot))))]
     (when (and hand-center-pos
                (:active? mag-move)
                (map? (:target mag-move)))

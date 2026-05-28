@@ -6,7 +6,11 @@
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.server MinecraftServer]))
 
-(defonce ^:private installed? (atom false))
+(def ^:private install-guard-lock
+  (Object.))
+
+(def ^:private ^:dynamic *installed?*
+  false)
 
 (defn- get-server ^MinecraftServer []
   (server-context/get-server))
@@ -15,10 +19,14 @@
   (core/create-player-motion get-server))
 
 (defn install-player-motion! []
-  (if-not (compare-and-set! installed? false true)
+  (if (var-get #'*installed?*)
     (log/info "Fabric player motion already installed, skipping")
-    (do
-      (server-context/install-server-context!)
-      (alter-var-root #'pm/*player-motion*
-                      (constantly (fabric-player-motion)))
-      (log/info "Fabric player motion installed"))))
+    (locking install-guard-lock
+      (if (var-get #'*installed?*)
+        (log/info "Fabric player motion already installed, skipping")
+        (do
+          (server-context/install-server-context!)
+          (alter-var-root #'pm/*player-motion*
+                          (constantly (fabric-player-motion)))
+          (alter-var-root #'*installed?* (constantly true))
+          (log/info "Fabric player motion installed"))))))

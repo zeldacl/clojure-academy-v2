@@ -8,19 +8,79 @@
             [cn.li.mcmod.client.render.script-render-registry :as registry]
             [cn.li.mcmod.util.log :as log]))
 
-(defonce ^:private scripted-render-enabled?* (atom true))
-(defonce ^:private draw-plan-cache* (atom {}))
-(defonce ^:private renderer-overrides* (atom {}))
-(defonce ^:private config-initialized? (atom false))
+(defn default-script-render-runtime-state
+  []
+  {:scripted-render-enabled? true
+   :draw-plan-cache {}
+   :renderer-overrides {}
+   :config-initialized? false})
+
+(defn create-script-render-runtime
+  ([]
+   (create-script-render-runtime {}))
+  ([initial-state]
+   {:state (atom (merge (default-script-render-runtime-state)
+                        initial-state))}))
+
+(defonce ^:private installed-script-render-runtime
+  (create-script-render-runtime))
+
+(def ^:dynamic *script-render-runtime*
+  installed-script-render-runtime)
+
+(defn current-script-render-runtime
+  []
+  *script-render-runtime*)
+
+(defmacro with-script-render-runtime
+  [runtime & body]
+  `(binding [*script-render-runtime* ~runtime]
+     ~@body))
+
+(defn call-with-script-render-runtime
+  [runtime f]
+  (binding [*script-render-runtime* runtime]
+    (f)))
+
+(defn script-render-runtime-state-atom
+  []
+  (:state (current-script-render-runtime)))
+
+(defn script-render-runtime-state-snapshot
+  []
+  @(script-render-runtime-state-atom))
+
+(defn update-script-render-runtime!
+  [f & args]
+  (apply swap! (script-render-runtime-state-atom) f args))
+
+(defn clear-script-render-runtime!
+  []
+  (reset! (script-render-runtime-state-atom)
+          (default-script-render-runtime-state))
+  nil)
+
+(defn reset-script-render-runtime-for-test!
+  ([]
+   (clear-script-render-runtime!))
+  ([state]
+   (reset! (script-render-runtime-state-atom)
+           (merge (default-script-render-runtime-state)
+                  state))
+   nil))
 
 (defn- ensure-config-initialized!
   []
-  (when (compare-and-set! config-initialized? false true)
-    (try
-      (render-config/init-descriptors!)
-      (catch Throwable t
-        (reset! config-initialized? false)
-        (throw t))))
+  (let [state-atom (script-render-runtime-state-atom)]
+    (when-not (:config-initialized? @state-atom)
+      (locking state-atom
+        (when-not (:config-initialized? @state-atom)
+          (try
+            (render-config/init-descriptors!)
+            (swap! state-atom assoc :config-initialized? true)
+            (catch Throwable t
+              (swap! state-atom assoc :config-initialized? false)
+              (throw t)))))))
   nil)
 
 (def ^:private scripted-effect-kinds
@@ -36,37 +96,38 @@
 (defn scripted-render-enabled?
   []
   (ensure-config-initialized!)
-  (and @scripted-render-enabled?*
+  (and (:scripted-render-enabled? (script-render-runtime-state-snapshot))
        (render-config/script-render-enabled?)))
 
 (defn set-scripted-render-enabled!
   [enabled?]
-  (reset! scripted-render-enabled?* (boolean enabled?))
-  (when-not @scripted-render-enabled?*
-    (reset! draw-plan-cache* {}))
-  @scripted-render-enabled?*)
+  (let [enabled? (boolean enabled?)]
+    (update-script-render-runtime! assoc :scripted-render-enabled? enabled?)
+    (when-not enabled?
+      (update-script-render-runtime! assoc :draw-plan-cache {}))
+    (:scripted-render-enabled? (script-render-runtime-state-snapshot))))
 
 (defn set-renderer-enabled!
   [renderer-id enabled?]
   (ensure-config-initialized!)
   (when (and (string? renderer-id) (not (empty? renderer-id)))
-    (swap! renderer-overrides* assoc renderer-id (boolean enabled?)))
+    (update-script-render-runtime! update :renderer-overrides assoc renderer-id (boolean enabled?)))
   nil)
 
 (defn clear-renderer-overrides!
   []
   (ensure-config-initialized!)
-  (reset! renderer-overrides* {})
+  (update-script-render-runtime! assoc :renderer-overrides {})
   nil)
 
 (defn clear-cache!
   []
-  (reset! draw-plan-cache* {})
+  (update-script-render-runtime! assoc :draw-plan-cache {})
   nil)
 
 (defn cache-size
   []
-  (count @draw-plan-cache*))
+  (count (:draw-plan-cache (script-render-runtime-state-snapshot))))
 
 (defn rebuild-cache!
   []
@@ -75,7 +136,7 @@
       (clear-cache!)
       {})
     (let [compiled (compiler/compile-profiles (registry/snapshot))]
-      (reset! draw-plan-cache* compiled)
+      (update-script-render-runtime! assoc :draw-plan-cache compiled)
       (log/info "ScriptRender cache rebuilt, size=" (count compiled))
       compiled)))
 
@@ -84,10 +145,10 @@
   (when (and (scripted-render-enabled?)
              (string? renderer-id)
              (not (empty? renderer-id)))
-    (or (get @draw-plan-cache* renderer-id)
+    (or (get-in (script-render-runtime-state-snapshot) [:draw-plan-cache renderer-id])
         (when-let [profile (registry/get-profile renderer-id)]
           (let [plan (compiler/compile-profile profile)]
-            (swap! draw-plan-cache* assoc renderer-id plan)
+            (update-script-render-runtime! update :draw-plan-cache assoc renderer-id plan)
             plan)))))
 
 (defn- normalize-render-kind
@@ -125,8 +186,9 @@
 
 (defn use-scripted-renderer?
   [renderer-id render-kind]
-  (let [kind (normalize-render-kind render-kind)
-        override (get @renderer-overrides* renderer-id ::unset)
+  (let [{:keys [renderer-overrides]} (script-render-runtime-state-snapshot)
+        kind (normalize-render-kind render-kind)
+        override (get renderer-overrides renderer-id ::unset)
         config-disabled? (contains? (render-config/disabled-renderer-ids) renderer-id)
         override-allowed? (and (not= override false)
                                (not config-disabled?))

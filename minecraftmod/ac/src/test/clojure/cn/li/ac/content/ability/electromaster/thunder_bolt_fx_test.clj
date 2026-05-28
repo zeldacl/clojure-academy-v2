@@ -3,14 +3,19 @@
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
-            [cn.li.ac.content.ability.electromaster.thunder-bolt-fx :as tb-fx]))
+            [cn.li.ac.content.ability.electromaster.thunder-bolt-fx :as tb-fx]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (defn- reset-fixture [f]
-  (tb-fx/reset-thunder-bolt-fx-for-test!)
-  (try
-    (f)
-    (finally
-      (tb-fx/reset-thunder-bolt-fx-for-test!))))
+  (binding [runtime-hooks/*client-session-id* :test-session]
+    (tb-fx/call-with-thunder-bolt-fx-runtime
+      (tb-fx/create-thunder-bolt-fx-runtime)
+      (fn []
+        (tb-fx/reset-thunder-bolt-fx-for-test!)
+        (try
+          (f)
+          (finally
+            (tb-fx/reset-thunder-bolt-fx-for-test!)))))))
 
 (defn- event
   [ctx-id payload]
@@ -62,9 +67,9 @@
         tick! (var-get #'cn.li.ac.content.ability.electromaster.thunder-bolt-fx/tick!)
         build-plan (var-get #'cn.li.ac.content.ability.electromaster.thunder-bolt-fx/build-plan)
         sounds* (atom [])]
-    (with-redefs [client-sounds/queue-sound-effect! (fn [payload]
-                                                       (swap! sounds* conj payload)
-                                                       nil)
+    (with-redefs [client-sounds/queue-current-sound-effect! (fn [& args]
+                                                               (swap! sounds* conj (last args))
+                                                               nil)
                   rand-int (fn [_] 0)]
       (enqueue! (event "ctx-main"
                        {:start {:x 0.0 :y 64.0 :z 0.0}
@@ -84,9 +89,9 @@
 (deftest two-owners-keep-independent-arc-queues-test
   (let [enqueue! (var-get #'cn.li.ac.content.ability.electromaster.thunder-bolt-fx/enqueue!)
         sounds* (atom [])]
-    (with-redefs [client-sounds/queue-sound-effect! (fn [payload]
-                                                       (swap! sounds* conj payload)
-                                                       nil)]
+    (with-redefs [client-sounds/queue-current-sound-effect! (fn [& args]
+                                   (swap! sounds* conj (last args))
+                                   nil)]
       (enqueue! (event "ctx-a"
                        {:start {:x 0.0 :y 64.0 :z 0.0}
                         :end {:x 3.0 :y 64.0 :z 3.0}
@@ -110,10 +115,41 @@
   (let [enqueue! (var-get #'cn.li.ac.content.ability.electromaster.thunder-bolt-fx/enqueue!)
         build-plan (var-get #'cn.li.ac.content.ability.electromaster.thunder-bolt-fx/build-plan)
         sounds* (atom [])]
-    (with-redefs [client-sounds/queue-sound-effect! (fn [payload]
-                                                       (swap! sounds* conj payload)
-                                                       nil)]
+    (with-redefs [client-sounds/queue-current-sound-effect! (fn [& args]
+                                   (swap! sounds* conj (last args))
+                                   nil)]
       (enqueue! (event "ctx-invalid" {:start {:x 0.0 :y 64.0 :z 0.0}}))
       (is (empty? (:arcs (tb-fx/thunder-bolt-fx-snapshot))))
       (is (empty? @sounds*))
       (is (nil? (build-plan {:x 0.0 :y 65.0 :z 0.0} nil 0))))))
+
+(deftest thunder-bolt-fx-runtime-isolation-test
+  (let [runtime-a (tb-fx/create-thunder-bolt-fx-runtime)
+        runtime-b (tb-fx/create-thunder-bolt-fx-runtime)
+        enqueue! (var-get #'cn.li.ac.content.ability.electromaster.thunder-bolt-fx/enqueue!)]
+    (with-redefs [client-sounds/queue-current-sound-effect! (fn [& _] nil)]
+      (tb-fx/call-with-thunder-bolt-fx-runtime
+        runtime-a
+        (fn []
+          (enqueue! (event "ctx-a"
+                           {:start {:x 0.0 :y 64.0 :z 0.0}
+                            :end {:x 3.0 :y 64.0 :z 3.0}
+                            :aoe-points []}))
+          (is (= #{[:ctx "ctx-a"]}
+                 (set (keys (:arcs (tb-fx/thunder-bolt-fx-snapshot))))))))
+      (tb-fx/call-with-thunder-bolt-fx-runtime
+        runtime-b
+        (fn []
+          (is (= {:arcs {}}
+                 (tb-fx/thunder-bolt-fx-snapshot)))
+          (enqueue! (event "ctx-b"
+                           {:start {:x 10.0 :y 64.0 :z 0.0}
+                            :end {:x 13.0 :y 64.0 :z 3.0}
+                            :aoe-points []}))
+          (is (= #{[:ctx "ctx-b"]}
+                 (set (keys (:arcs (tb-fx/thunder-bolt-fx-snapshot))))))))
+      (tb-fx/call-with-thunder-bolt-fx-runtime
+        runtime-a
+        (fn []
+          (is (= #{[:ctx "ctx-a"]}
+                 (set (keys (:arcs (tb-fx/thunder-bolt-fx-snapshot)))))))))))

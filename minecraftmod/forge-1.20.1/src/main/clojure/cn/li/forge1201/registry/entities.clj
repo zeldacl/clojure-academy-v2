@@ -126,4 +126,4 @@
                                      (:client-tracking-range entity-spec)
                                      (:update-interval entity-spec)
                                      (:fire-immune? entity-spec)))))]
-          (swap! registry-state/registered-entities assoc entity-id registered-obj))))))
+          (registry-state/register-entity! entity-id registered-obj))))))

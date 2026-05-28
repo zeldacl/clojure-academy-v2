@@ -17,29 +17,80 @@
 ;; Subscriber Registry (lightweight, no Forge EventBus dependency)
 ;; ============================================================================
 
-(defonce ^:private subscribers (atom {}))
-(defonce ^:private subscribers-frozen? (atom false))
+(defn default-event-subscriber-runtime-state
+  []
+  {:subscribers {}
+   :frozen? false})
+
+(defn create-event-subscriber-runtime
+  ([]
+   (create-event-subscriber-runtime {}))
+  ([{:keys [state*]
+     :or {state* (atom (default-event-subscriber-runtime-state))}}]
+   {::runtime ::event-subscriber-runtime
+    :state* state*}))
+
+(def ^:dynamic *event-subscriber-runtime* nil)
+
+(defonce ^:private installed-event-subscriber-runtime
+  (create-event-subscriber-runtime))
+
+(defn- event-subscriber-runtime?
+  [runtime]
+  (and (map? runtime)
+       (= ::event-subscriber-runtime (::runtime runtime))
+       (some? (:state* runtime))))
+
+(defn call-with-event-subscriber-runtime
+  [runtime f]
+  (when-not (event-subscriber-runtime? runtime)
+    (throw (ex-info "Expected event subscriber runtime"
+                    {:runtime runtime})))
+  (binding [*event-subscriber-runtime* runtime]
+    (f)))
+
+(defmacro with-event-subscriber-runtime
+  [runtime & body]
+  `(call-with-event-subscriber-runtime ~runtime (fn [] ~@body)))
+
+(defn- current-event-subscriber-runtime
+  []
+  (or *event-subscriber-runtime*
+      installed-event-subscriber-runtime))
+
+(defn- event-subscriber-state-atom
+  []
+  (:state* (current-event-subscriber-runtime)))
+
+(defn- event-subscriber-state-snapshot
+  []
+  @(event-subscriber-state-atom))
+
+(defn- update-event-subscriber-state!
+  [f & args]
+  (apply swap! (event-subscriber-state-atom) f args))
 
 (defn- assert-subscribers-open!
   []
-  (when @subscribers-frozen?
+  (when (:frozen? (event-subscriber-state-snapshot))
     (throw (ex-info "Ability event subscriber registry is frozen" {}))))
 
 (defn subscriber-registry-snapshot
   []
-  @subscribers)
+  (:subscribers (event-subscriber-state-snapshot)))
 
 (defn reset-ability-event-subscribers-for-test!
   ([]
    (reset-ability-event-subscribers-for-test! {}))
   ([snapshot]
-   (reset! subscribers (or snapshot {}))
-   (reset! subscribers-frozen? false)
+   (reset! (event-subscriber-state-atom)
+           {:subscribers (or snapshot {})
+            :frozen? false})
    nil))
 
 (defn freeze-ability-event-subscribers!
   []
-  (reset! subscribers-frozen? true)
+  (update-event-subscriber-state! assoc :frozen? true)
   nil)
 
 (defn subscribe-ability-event!
@@ -51,7 +102,7 @@
     handler-fn: (fn [event-map]) → any"
   [event-type handler-fn]
   (assert-subscribers-open!)
-  (swap! subscribers update event-type (fnil conj []) handler-fn)
+  (update-event-subscriber-state! update-in [:subscribers event-type] (fnil conj []) handler-fn)
   nil)
 
 (defn fire-ability-event!
@@ -59,7 +110,7 @@
   Always returns the original event map (useful for pipeline patterns)."
   [event]
   (let [event-type (:event/type event)]
-    (doseq [h (get @subscribers event-type [])]
+    (doseq [h (get (:subscribers (event-subscriber-state-snapshot)) event-type [])]
       (try
         (h event)
         (catch Exception e
@@ -79,7 +130,7 @@
     Final number after all subscribers have adjusted it."
   [event-type base-value extra]
   (let [state (atom (merge extra {:event/type event-type :value base-value}))]
-    (doseq [h (get @subscribers event-type [])]
+    (doseq [h (get (:subscribers (event-subscriber-state-snapshot)) event-type [])]
       (try
         (let [result (h @state)]
           (when (number? result)

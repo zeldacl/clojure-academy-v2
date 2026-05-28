@@ -8,7 +8,11 @@
             [cn.li.mcmod.util.log :as log])
   (:import [net.fabricmc.fabric.api.entity.event.v1 ServerLivingEntityEvents$AllowDamage]))
 
-(defonce ^:private installed? (atom false))
+(def ^:private install-guard-lock
+  (Object.))
+
+(def ^:private ^:dynamic *installed?*
+  false)
 
 (defn- on-allow-damage
   "Handle ALLOW_DAMAGE - perform side-effect-free precheck and cancel when
@@ -23,16 +27,20 @@
       true)))
 
 (defn install-damage-interception! []
-  (if-not (compare-and-set! installed? false true)
+  (if (var-get #'*installed?*)
     (log/info "Fabric damage interception already installed, skipping")
-    (do
-      ;; Install shared protocol implementation
-      (core/install-damage-interception!)
+    (locking install-guard-lock
+      (if (var-get #'*installed?*)
+        (log/info "Fabric damage interception already installed, skipping")
+        (do
+          ;; Install shared protocol implementation
+          (core/install-damage-interception!)
 
       ;; Register ALLOW_DAMAGE listener (pre-check cancel path).
-      (.register net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents/ALLOW_DAMAGE
-                 (reify ServerLivingEntityEvents$AllowDamage
-                   (allowDamage [_ entity damage-source amount]
-                     (on-allow-damage entity damage-source amount))))
+          (.register net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents/ALLOW_DAMAGE
+                     (reify ServerLivingEntityEvents$AllowDamage
+                       (allowDamage [_ entity damage-source amount]
+                         (on-allow-damage entity damage-source amount))))
 
-      (log/info "Fabric damage interception installed (ALLOW_DAMAGE precheck path)"))))
+          (alter-var-root #'*installed?* (constantly true))
+          (log/info "Fabric damage interception installed (ALLOW_DAMAGE precheck path)"))))))

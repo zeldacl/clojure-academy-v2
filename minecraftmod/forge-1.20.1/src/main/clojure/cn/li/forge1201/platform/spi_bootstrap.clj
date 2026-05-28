@@ -21,7 +21,11 @@
            [net.minecraft.world.phys BlockHitResult]))
 
 
-(defonce ^:private initialized? (atom false))
+(def ^:private platform-init-guard-lock
+  (Object.))
+
+(def ^:private ^:dynamic *initialized?*
+  false)
 
 (defn- resolve-binding! [binding-name]
   (require 'cn.li.forge1201.platform.bindings)
@@ -112,27 +116,30 @@
   NOTE: Protocol extension migration is in progress. This function is kept as the
   stable entrypoint for Java SPI provider invocation."
   []
-  (when (compare-and-set! initialized? false true)
-    (platform-init/install-platform-foundation+hooks!
-      forge-adapter
-      {:world-get-tile-entity (resolve-binding! 'world-get-tile-entity)
-       :world-get-block-state (resolve-binding! 'world-get-block-state)
-       :world-set-block (resolve-binding! 'world-set-block)
-       :world-remove-block (resolve-binding! 'world-remove-block)
-       :world-break-block (resolve-binding! 'world-break-block)
-       :world-place-block-by-id (resolve-binding! 'world-place-block-by-id)
-       :world-is-chunk-loaded? (resolve-binding! 'world-is-chunk-loaded?)
-       :world-get-day-time (resolve-binding! 'world-get-day-time)
-       :world-get-dimension-id (resolve-binding! 'world-get-dimension-id)
-       :world-get-players (resolve-binding! 'world-get-players)
-       :world-is-raining (resolve-binding! 'world-is-raining)
-       :world-is-client-side (resolve-binding! 'world-is-client-side)
-       :world-can-see-sky (resolve-binding! 'world-can-see-sky)}
-      {:be-get-level (resolve-binding! 'be-get-level)
-       :be-get-world (resolve-binding! 'be-get-world)
-       :be-get-custom-state (resolve-binding! 'be-get-custom-state)
-       :be-set-custom-state! (resolve-binding! 'be-set-custom-state!)
-       :be-get-block-id (resolve-binding! 'be-get-block-id)
-       :be-set-changed! (resolve-binding! 'be-set-changed!)})
-    (log/info "forge platform SPI bootstrap initialized via ServiceLoader entrypoint"))
+  (when-not (var-get #'*initialized?*)
+    (locking platform-init-guard-lock
+      (when-not (var-get #'*initialized?*)
+        (platform-init/install-platform-foundation+hooks!
+          forge-adapter
+          {:world-get-tile-entity (resolve-binding! 'world-get-tile-entity)
+           :world-get-block-state (resolve-binding! 'world-get-block-state)
+           :world-set-block (resolve-binding! 'world-set-block)
+           :world-remove-block (resolve-binding! 'world-remove-block)
+           :world-break-block (resolve-binding! 'world-break-block)
+           :world-place-block-by-id (resolve-binding! 'world-place-block-by-id)
+           :world-is-chunk-loaded? (resolve-binding! 'world-is-chunk-loaded?)
+           :world-get-day-time (resolve-binding! 'world-get-day-time)
+           :world-get-dimension-id (resolve-binding! 'world-get-dimension-id)
+           :world-get-players (resolve-binding! 'world-get-players)
+           :world-is-raining (resolve-binding! 'world-is-raining)
+           :world-is-client-side (resolve-binding! 'world-is-client-side)
+           :world-can-see-sky (resolve-binding! 'world-can-see-sky)}
+          {:be-get-level (resolve-binding! 'be-get-level)
+           :be-get-world (resolve-binding! 'be-get-world)
+           :be-get-custom-state (resolve-binding! 'be-get-custom-state)
+           :be-set-custom-state! (resolve-binding! 'be-set-custom-state!)
+           :be-get-block-id (resolve-binding! 'be-get-block-id)
+           :be-set-changed! (resolve-binding! 'be-set-changed!)})
+        (alter-var-root #'*initialized?* (constantly true))
+        (log/info "forge platform SPI bootstrap initialized via ServiceLoader entrypoint"))))
   nil)

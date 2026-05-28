@@ -19,7 +19,49 @@
             [cn.li.ac.util.init-guard :refer [with-init-guard]]
             [cn.li.mcmod.util.log :as log]))
 
-(defonce ^:private lifecycle-subscriptions-registered? (atom false))
+(defn default-lifecycle-subscriptions-runtime-state
+  []
+  false)
+
+(defn create-lifecycle-subscriptions-runtime
+  ([]
+   (create-lifecycle-subscriptions-runtime {}))
+  ([{:keys [state*]
+     :or {state* (atom (default-lifecycle-subscriptions-runtime-state))}}]
+   {::runtime ::lifecycle-subscriptions-runtime
+    :state* state*}))
+
+(def ^:dynamic *lifecycle-subscriptions-runtime* nil)
+
+(defonce ^:private installed-lifecycle-subscriptions-runtime
+  (create-lifecycle-subscriptions-runtime))
+
+(defn- lifecycle-subscriptions-runtime?
+  [runtime]
+  (and (map? runtime)
+       (= ::lifecycle-subscriptions-runtime (::runtime runtime))
+       (some? (:state* runtime))))
+
+(defn call-with-lifecycle-subscriptions-runtime
+  [runtime f]
+  (when-not (lifecycle-subscriptions-runtime? runtime)
+    (throw (ex-info "Expected lifecycle subscriptions runtime"
+                    {:runtime runtime})))
+  (binding [*lifecycle-subscriptions-runtime* runtime]
+    (f)))
+
+(defmacro with-lifecycle-subscriptions-runtime
+  [runtime & body]
+  `(call-with-lifecycle-subscriptions-runtime ~runtime (fn [] ~@body)))
+
+(defn- current-lifecycle-subscriptions-runtime
+  []
+  (or *lifecycle-subscriptions-runtime*
+      installed-lifecycle-subscriptions-runtime))
+
+(defn- lifecycle-subscriptions-registered-atom
+  []
+  (:state* (current-lifecycle-subscriptions-runtime)))
 
 (defn- unique-context-by-id
   [ctx-id]
@@ -32,13 +74,13 @@
 
 (defn lifecycle-subscriptions-registered-snapshot
   []
-  @lifecycle-subscriptions-registered?)
+  @(lifecycle-subscriptions-registered-atom))
 
 (defn reset-lifecycle-subscriptions-registered-for-test!
   ([]
    (reset-lifecycle-subscriptions-registered-for-test! false))
   ([registered?]
-   (reset! lifecycle-subscriptions-registered? (boolean registered?))
+  (reset! (lifecycle-subscriptions-registered-atom) (boolean registered?))
    nil))
 
 (defn install-store!
@@ -47,7 +89,7 @@
 
 (defn register-lifecycle-subscriptions!
   []
-  (with-init-guard lifecycle-subscriptions-registered?
+  (with-init-guard (lifecycle-subscriptions-registered-atom)
     (evt/subscribe-ability-event!
      evt/EVT-LEVEL-CHANGE
      (fn [{:keys [uuid new-level]}]

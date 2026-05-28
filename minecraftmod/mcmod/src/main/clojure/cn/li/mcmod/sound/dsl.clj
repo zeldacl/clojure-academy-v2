@@ -4,7 +4,19 @@
 						[cn.li.mcmod.protocol.core :as registry-core]
 						[cn.li.mcmod.util.log :as log]))
 
-(defonce sound-registry (registry-core/atom-registry {}))
+(defn create-sound-registry-runtime
+	([] (create-sound-registry-runtime {}))
+	([{:keys [registry]}]
+	 {:cn.li.mcmod.sound.dsl/runtime ::sound-registry-runtime
+	  :registry (or registry (registry-core/atom-registry {}))}))
+
+(def ^:dynamic *sound-registry-runtime* nil)
+
+(defonce ^:private installed-sound-registry-runtime
+	(create-sound-registry-runtime))
+
+(defn- sound-registry-state []
+	(:registry (or *sound-registry-runtime* installed-sound-registry-runtime)))
 
 (defrecord SoundSpec [id registry-name subtitle-key properties])
 
@@ -34,16 +46,16 @@
 	[sound-spec]
 	(validate-sound-spec sound-spec)
 	(log/info "Registering sound:" (:id sound-spec) "->" (:registry-name sound-spec))
-	(registry-core/swap-state! sound-registry #(assoc % (:id sound-spec) sound-spec))
+	(registry-core/swap-state! (sound-registry-state) #(assoc % (:id sound-spec) sound-spec))
 	sound-spec)
 
 (defn get-sound
 	[sound-id]
-	(registry-core/lookup sound-registry sound-id))
+	(registry-core/lookup (sound-registry-state) sound-id))
 
 (defn list-sounds
 	[]
-	(keys (registry-core/snapshot sound-registry)))
+	(keys (registry-core/snapshot (sound-registry-state))))
 
 (defmacro defsound
 	"Define a sound event.

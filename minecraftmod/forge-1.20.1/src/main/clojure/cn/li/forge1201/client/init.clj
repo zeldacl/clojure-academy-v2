@@ -123,7 +123,7 @@
   (log/info "RegisterRenderers - attaching scripted block entity renderers")
   ;; `FMLClientSetupEvent` work is often enqueued; this event can run first. Populate
   ;; scripted TESR callbacks only when still empty (no duplicate when order is normal).
-  (when (empty? @tesr-api/scripted-renderer-registry)
+  (when (empty? (tesr-api/scripted-renderers-snapshot))
     (log/info "RegisterRenderers - scripted registry empty; running renderer init (event-order fallback)")
     (render-init/register-default-renderer-init-fns!)
     (render-init/register-all-renderers!))

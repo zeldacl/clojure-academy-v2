@@ -5,7 +5,6 @@
   - Use ip_gen.obj
   - Texture frame depends on liquid amount ratio (0..4)."
   (:require [cn.li.mcmod.client.resources :as res]
-            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.client.obj :as obj]
             [cn.li.mcmod.client.render.tesr-api :as tesr-api]
             [cn.li.mcmod.client.render.buffer :as rb]
@@ -15,14 +14,36 @@
 
 (def ^:private tank-size 8000)
 
-(defonce model (delay (res/load-obj-model "ip_gen")))
+(def ^:private phase-render-resource-lock
+  (Object.))
 
-(defonce textures
-  (delay [(res/texture-location "models/ip_gen0")
-          (res/texture-location "models/ip_gen1")
-          (res/texture-location "models/ip_gen2")
-          (res/texture-location "models/ip_gen3")
-          (res/texture-location "models/ip_gen4")]))
+(def ^:private ^:dynamic *phase-model*
+  nil)
+
+(def ^:private ^:dynamic *phase-textures*
+  nil)
+
+(defn- phase-model
+  []
+  (or (var-get #'*phase-model*)
+      (locking phase-render-resource-lock
+        (or (var-get #'*phase-model*)
+            (let [m (res/load-obj-model "ip_gen")]
+              (alter-var-root #'*phase-model* (constantly m))
+              m)))))
+
+(defn- phase-textures
+  []
+  (or (var-get #'*phase-textures*)
+      (locking phase-render-resource-lock
+        (or (var-get #'*phase-textures*)
+            (let [textures [(res/texture-location "models/ip_gen0")
+                            (res/texture-location "models/ip_gen1")
+                            (res/texture-location "models/ip_gen2")
+                            (res/texture-location "models/ip_gen3")
+                            (res/texture-location "models/ip_gen4")]]
+              (alter-var-root #'*phase-textures* (constantly textures))
+              textures)))))
 
 (defn- clamp-frame
   [v]
@@ -38,7 +59,8 @@
   [tile pose-stack buffer-source packed-light packed-overlay]
   (let [state (or (platform-be/get-custom-state tile) {})
         tex-idx (state->texture-index state)
-        tex (nth @textures tex-idx (first @textures))
+        textures (phase-textures)
+        tex (nth textures tex-idx (first textures))
         vc (rb/get-solid-buffer buffer-source tex)]
     (pose/push-pose pose-stack)
     (try
@@ -46,7 +68,7 @@
       (pose/translate pose-stack 0.5 0.0 0.5)
       (binding [obj/*skip-flat-bottom-plane* true
                 obj/*bottom-plane-epsilon* 0.0008]
-        (obj/render-all! @model pose-stack vc packed-light packed-overlay))
+        (obj/render-all! (phase-model) pose-stack vc packed-light packed-overlay))
       (finally
         (pose/pop-pose pose-stack)))))
 
@@ -62,11 +84,18 @@
             (log/error "Error in phase generator renderer:" (ex-message e))
             (.printStackTrace e)))))))
 
-(defonce-guard phase-renderer-installed?)
+(def ^:private phase-renderer-guard-lock
+  (Object.))
+
+(def ^:private ^:dynamic *phase-renderer-installed?*
+  false)
 
 (defn init!
   []
   (when-let [register-fn (requiring-resolve 'cn.li.mcmod.client.render.init/register-renderer-init-fn!)]
-    (with-init-guard phase-renderer-installed?
-      (register-fn register!)
-      (log/info "Registered phase generator renderer"))))
+    (when-not (var-get #'*phase-renderer-installed?*)
+      (locking phase-renderer-guard-lock
+        (when-not (var-get #'*phase-renderer-installed?*)
+          (register-fn register!)
+          (alter-var-root #'*phase-renderer-installed?* (constantly true))
+          (log/info "Registered phase generator renderer"))))))

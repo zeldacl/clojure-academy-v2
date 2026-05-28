@@ -88,16 +88,22 @@
 
     nil)
 
-(defonce ^:private entity-accessors-registered?
-  (atom false))
+(def ^:private entity-accessor-guard-lock
+  (Object.))
+
+(def ^:private ^:dynamic *entity-accessors-registered?*
+  false)
 
 (defn register-entity-accessors!
   "Explicitly register entity-domain accessors once."
   []
-  (when (compare-and-set! entity-accessors-registered? false true)
-    (try
-      (register-entity-accessors-impl!)
-      (catch Throwable t
-        (reset! entity-accessors-registered? false)
-        (throw (ex-info "Failed to register entity accessors" {} t)))))
+  (when-not (var-get #'*entity-accessors-registered?*)
+    (locking entity-accessor-guard-lock
+      (when-not (var-get #'*entity-accessors-registered?*)
+        (try
+          (register-entity-accessors-impl!)
+          (alter-var-root #'*entity-accessors-registered?* (constantly true))
+          (catch Throwable t
+            (alter-var-root #'*entity-accessors-registered?* (constantly false))
+            (throw (ex-info "Failed to register entity accessors" {} t)))))))
   nil)

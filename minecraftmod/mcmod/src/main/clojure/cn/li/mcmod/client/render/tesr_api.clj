@@ -34,7 +34,24 @@
 ;; Renderer Registry & Dispatcher
 ;; ============================================================================
 
-(defonce renderer-registry (atom {}))
+(defn create-tesr-runtime
+  []
+  {:renderer-registry {}
+   :scripted-renderer-registry {}})
+
+(def ^:private ^:dynamic *renderer-registry*
+  {})
+
+(def ^:private ^:dynamic *scripted-renderer-registry*
+  {})
+
+(defn renderer-registry-snapshot
+  []
+  *renderer-registry*)
+
+(defn scripted-renderers-snapshot
+  []
+  *scripted-renderer-registry*)
 
 (defn register-tile-renderer!
   "Register a renderer for a specific TileEntity type
@@ -47,11 +64,11 @@
     (register-tile-renderer! TileMatrix my-renderer-obj)"
   [tile-class renderer-fn]
   (log/info "Registering TileEntity renderer for" tile-class)
-  (swap! renderer-registry assoc tile-class renderer-fn))
+  (alter-var-root #'*renderer-registry* assoc tile-class renderer-fn)
+  nil)
 
 ;; Scripted block entities: dispatch by block-id (string). Platform registers
 ;; one BER for ScriptedBlockEntity and calls render-scripted-tile-entity.
-(defonce scripted-renderer-registry (atom {}))
 
 (defn register-scripted-tile-renderer!
   "Register a renderer for a scripted block entity by block-id.
@@ -59,10 +76,11 @@
   render-scripted-tile-entity(block-id, be, x, y, z)."
   [block-id renderer-obj]
   (log/info "Registering scripted TileEntity renderer for" block-id)
-  (swap! scripted-renderer-registry assoc block-id renderer-obj))
+  (alter-var-root #'*scripted-renderer-registry* assoc block-id renderer-obj)
+  nil)
 
 (defn get-scripted-tile-renderer [block-id]
-  (get @scripted-renderer-registry block-id))
+  (get (scripted-renderers-snapshot) block-id))
 
 (defn render-scripted-tile-entity
   "Render a scripted block entity by block-id. Called from platform BER when
@@ -76,7 +94,7 @@
         (.printStackTrace e)))))
 
 (defn- get-block-id [tile-entity]
-  "Resolves block-id via `platform.be/get-block-id` (dynamic fn when bound, else IBlockEntity)."
+  ;; Resolves block-id via `platform.be/get-block-id` (dynamic fn when bound).
   (when tile-entity
     (let [v (platform-be/get-block-id tile-entity)]
       (when (string? v) v))))
@@ -88,7 +106,7 @@
   (when tile-entity
     (or (when-let [block-id (get-block-id tile-entity)]
           (get-scripted-tile-renderer block-id))
-        (get @renderer-registry (class tile-entity)))))
+        (get (renderer-registry-snapshot) (class tile-entity)))))
 
 (defn render-tile-entity
   "Universal dispatcher for rendering any TileEntity

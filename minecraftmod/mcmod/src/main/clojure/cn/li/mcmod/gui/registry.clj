@@ -2,17 +2,29 @@
   "GUI registry and query API."
   (:require [cn.li.mcmod.util.log :as log]))
 
-(defonce ^{:doc "Registry for GUI specs.
+(defn- default-gui-registry-runtime-state []
+  {:by-id {} :by-gui-id {}})
 
-Structure:
-- :by-id       {string-id -> GuiSpec}
-- :by-gui-id   {int-gui-id -> GuiSpec} (platform-visible GUIs only)"}
-  gui-registry
-  (atom {:by-id {} :by-gui-id {}}))
+(defn create-gui-registry-runtime
+  ([] (create-gui-registry-runtime {}))
+  ([{:keys [state*]}]
+   {:cn.li.mcmod.gui.registry/runtime ::gui-registry-runtime
+    :state* (or state* (atom (default-gui-registry-runtime-state)))}))
+
+(def ^:dynamic *gui-registry-runtime* nil)
+
+(defonce ^:private installed-gui-registry-runtime
+  (create-gui-registry-runtime))
+
+(defn- gui-registry-atom []
+  (:state* (or *gui-registry-runtime* installed-gui-registry-runtime)))
+
+(defn- gui-registry-snapshot []
+  @(gui-registry-atom))
 
 (defn register-gui! [gui-spec]
   (log/info "Registering GUI:" (:id gui-spec))
-  (swap! gui-registry
+  (swap! (gui-registry-atom)
          (fn [reg]
            (let [id (:id gui-spec)
                  gui-id (:gui-id gui-spec)
@@ -35,22 +47,22 @@ Structure:
   gui-spec)
 
 (defn get-gui [gui-id]
-  (get-in @gui-registry [:by-id gui-id]))
+  (get-in (gui-registry-snapshot) [:by-id gui-id]))
 
 (defn list-guis []
-  (keys (:by-id @gui-registry)))
+  (keys (:by-id (gui-registry-snapshot))))
 
 (defn get-gui-by-gui-id [gui-id]
-  (get-in @gui-registry [:by-gui-id gui-id]))
+  (get-in (gui-registry-snapshot) [:by-gui-id gui-id]))
 
 (defn list-gui-ids []
-  (keys (:by-gui-id @gui-registry)))
+  (keys (:by-gui-id (gui-registry-snapshot))))
 
 (defn get-all-gui-ids []
   (seq (list-gui-ids)))
 
 (defn has-gui-id? [gui-id]
-  (contains? (:by-gui-id @gui-registry) gui-id))
+  (contains? (:by-gui-id (gui-registry-snapshot)) gui-id))
 
 (defn get-registry-name [gui-id]
   (some-> (get-gui-by-gui-id gui-id)
@@ -97,17 +109,17 @@ Structure:
   (some (fn [[_gui-id spec]]
           (when (= (get-in spec [:registration :gui-type]) gui-type)
             spec))
-        (:by-gui-id @gui-registry)))
+  (:by-gui-id (gui-registry-snapshot))))
 
 (defn get-gui-id-for-type [gui-type]
   (some (fn [[gui-id spec]]
           (when (= (get-in spec [:registration :gui-type]) gui-type)
             gui-id))
-        (:by-gui-id @gui-registry)))
+  (:by-gui-id (gui-registry-snapshot))))
 
 (defn get-config-by-container [container]
   (some (fn [[_gui-id spec]]
           (when-let [pred (get-in spec [:lifecycle :container-predicate])]
             (when (pred container)
               spec)))
-        (:by-gui-id @gui-registry)))
+        (:by-gui-id (gui-registry-snapshot))))

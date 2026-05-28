@@ -17,23 +17,38 @@
             [cn.li.mc1201.platform.menu-inventory-ops :as menu-inventory-ops])
   (:import [net.minecraft.network.chat Component]))
 
-(defonce ^:private item-protocols-installed? (atom false))
-(defonce ^:private pos-installed? (atom false))
-(defonce ^:private nbt-installed? (atom false))
-(defonce ^:private world-installed? (atom false))
-(defonce ^:private entity-installed? (atom false))
-(defonce ^:private resource-installed? (atom false))
-(defonce ^:private item-factories-installed? (atom false))
-(defonce ^:private be-fns-installed? (atom false))
-(defonce ^:private world-fns-installed? (atom false))
-(defonce ^:private block-state-protocols-installed? (atom false))
-(defonce ^:private player-feedback-installed? (atom false))
+(def ^:private ^:dynamic item-protocols-installed? false)
+(def ^:private ^:dynamic pos-installed? false)
+(def ^:private ^:dynamic nbt-installed? false)
+(def ^:private ^:dynamic world-installed? false)
+(def ^:private ^:dynamic entity-installed? false)
+(def ^:private ^:dynamic resource-installed? false)
+(def ^:private ^:dynamic item-factories-installed? false)
+(def ^:private ^:dynamic be-fns-installed? false)
+(def ^:private ^:dynamic world-fns-installed? false)
+(def ^:private ^:dynamic block-state-protocols-installed? false)
+(def ^:private ^:dynamic player-feedback-installed? false)
+
+(def ^:private install-guard-lock
+  (Object.))
+
+(defn- install-once!
+  [guard-var f]
+  (locking install-guard-lock
+    (when-not (true? (var-get guard-var))
+      (alter-var-root guard-var (constantly true))
+      (f)
+      true)))
+
+(defmacro ^:private install-when!
+  [guard & body]
+  `(install-once! (var ~guard) (fn [] ~@body)))
 
 (declare install-item-protocols-only!)
 (declare install-item-factories-only!)
 
 (defn- install-player-feedback! []
-  (when (compare-and-set! player-feedback-installed? false true)
+  (install-when! player-feedback-installed?
     (alter-var-root
       #'player-feedback/*player-feedback*
       (constantly
@@ -57,7 +72,7 @@
 (defn install-block-state-protocol-only!
   "Install only BlockState protocol extensions (no Level extensions)."
   [adapter]
-  (when (compare-and-set! block-state-protocols-installed? false true)
+  (install-when! block-state-protocols-installed?
     (let [block-state-cls (class-access/block-state-class adapter)]
       (extend block-state-cls world/IBlockStateOps
               {:block-state-is-air (fn [this] (ru/inst this "isAir"))
@@ -68,7 +83,7 @@
     (log/info "mc1201 shared block-state protocols initialized")))
 
 (defn- install-nbt! []
-  (when (compare-and-set! nbt-installed? false true)
+  (install-when! nbt-installed?
     (let [compound-tag-cls (ru/class-noinit "net.minecraft.nbt.CompoundTag")
           list-tag-cls (ru/class-noinit "net.minecraft.nbt.ListTag")]
       (extend compound-tag-cls nbt/INBTCompound
@@ -109,7 +124,7 @@
                       (constantly (fn [this key] (ru/inst this "contains" key)))))))
 
 (defn- install-position! [_adapter]
-  (when (compare-and-set! pos-installed? false true)
+  (install-when! pos-installed?
     (let [block-pos-cls (ru/class-noinit "net.minecraft.core.BlockPos")]
       (extend block-pos-cls pos/IBlockPos
               {:pos-x (fn [this] (ru/inst this "getX"))
@@ -130,7 +145,7 @@
 (defn install-item-protocols-only!
   "Install only item protocols for ItemStack/Item classes."
   [adapter]
-  (when (compare-and-set! item-protocols-installed? false true)
+  (install-when! item-protocols-installed?
       (let [item-stack-cls (class-access/item-stack-class adapter)
         item-cls (class-access/item-class adapter)]
       (extend item-stack-cls item/IItemStack
@@ -152,7 +167,7 @@
       (log/info "mc1201 shared item protocols initialized"))))
 
 (defn- install-world! [adapter]
-  (when (compare-and-set! world-installed? false true)
+  (install-when! world-installed?
     (let [level-cls (class-access/level-class adapter)]
       (install-block-state-protocol-only! adapter)
       (try
@@ -197,7 +212,7 @@
 (defn install-entity-protocols-only!
   "Install only entity/player/inventory/menu protocol extensions."
   [adapter]
-  (when (compare-and-set! entity-installed? false true)
+  (install-when! entity-installed?
     (let [entity-cls (class-access/entity-class adapter)
           player-cls (class-access/player-class adapter)
           server-player-cls (class-access/server-player-class adapter)
@@ -294,7 +309,7 @@
       (log/info "mc1201 shared entity protocols initialized"))))
 
 (defn- install-resource-factory! []
-  (when (compare-and-set! resource-installed? false true)
+  (install-when! resource-installed?
     (let [rl-cls (ru/class-noinit "net.minecraft.resources.ResourceLocation")]
       (alter-var-root #'resource/*resource-factory*
                       (constantly (fn [namespace path]
@@ -315,7 +330,7 @@
 
   This is bootstrap-safe and useful for incremental migration on sensitive loaders."
   [item-stack-of-fn create-item-stack-by-id-fn item-stack-empty?-fn]
-  (when (compare-and-set! item-factories-installed? false true)
+  (install-when! item-factories-installed?
     (alter-var-root #'item/*item-factory*
                     (constantly (fn [nbt-tag]
                                   (item-stack-of-fn nbt-tag))))
@@ -334,7 +349,7 @@
   :be-get-level, :be-get-world, :be-get-custom-state,
   :be-set-custom-state!, :be-get-block-id, :be-set-changed!"
   [fns-map]
-  (when (compare-and-set! be-fns-installed? false true)
+  (install-when! be-fns-installed?
     (alter-var-root #'be/*be-get-level-fn* (constantly (:be-get-level fns-map)))
     (alter-var-root #'be/*be-get-world-fn* (constantly (:be-get-world fns-map)))
     (alter-var-root #'be/*be-get-custom-state-fn* (constantly (:be-get-custom-state fns-map)))
@@ -352,7 +367,7 @@
   :world-is-chunk-loaded?, :world-get-day-time, :world-get-dimension-id,
   :world-get-players, :world-is-raining, :world-is-client-side, :world-can-see-sky"
   [fns-map]
-  (when (compare-and-set! world-fns-installed? false true)
+  (install-when! world-fns-installed?
     (alter-var-root #'world/*world-get-tile-entity-fn* (constantly (:world-get-tile-entity fns-map)))
     (alter-var-root #'world/*world-get-block-state-fn* (constantly (:world-get-block-state fns-map)))
     (alter-var-root #'world/*world-set-block-fn* (constantly (:world-set-block fns-map)))

@@ -114,16 +114,22 @@
   
   nil)
 
-(defonce ^:private lifecycle-accessors-registered?
-  (atom false))
+(def ^:private lifecycle-accessor-guard-lock
+  (Object.))
+
+(def ^:private ^:dynamic *lifecycle-accessors-registered?*
+  false)
 
 (defn register-lifecycle-accessors!
   "Explicitly register lifecycle-domain accessors once."
   []
-  (when (compare-and-set! lifecycle-accessors-registered? false true)
-    (try
-      (register-lifecycle-accessors-impl!)
-      (catch Throwable t
-        (reset! lifecycle-accessors-registered? false)
-        (throw (ex-info "Failed to register lifecycle accessors" {} t)))))
+  (when-not (var-get #'*lifecycle-accessors-registered?*)
+    (locking lifecycle-accessor-guard-lock
+      (when-not (var-get #'*lifecycle-accessors-registered?*)
+        (try
+          (register-lifecycle-accessors-impl!)
+          (alter-var-root #'*lifecycle-accessors-registered?* (constantly true))
+          (catch Throwable t
+            (alter-var-root #'*lifecycle-accessors-registered?* (constantly false))
+            (throw (ex-info "Failed to register lifecycle accessors" {} t)))))))
   nil)

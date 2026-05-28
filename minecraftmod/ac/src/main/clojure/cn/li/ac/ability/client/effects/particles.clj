@@ -75,7 +75,50 @@
    :offset-z 1.0})
 
 ;; Event-driven particle spawning (session-scoped)
-(defonce ^:private particle-queue (atom {}))
+(defn create-particle-queue-runtime
+  []
+  {::runtime ::particle-queue-runtime
+   :queue* (atom {})})
+
+(def ^:dynamic *particle-queue-runtime* nil)
+
+(defonce ^:private installed-particle-queue-runtime
+  (create-particle-queue-runtime))
+
+(defn- particle-queue-runtime?
+  [runtime]
+  (and (map? runtime)
+       (= ::particle-queue-runtime (::runtime runtime))
+       (some? (:queue* runtime))))
+
+(defn call-with-particle-queue-runtime
+  [runtime f]
+  (when-not (particle-queue-runtime? runtime)
+    (throw (ex-info "Expected particle queue runtime"
+                    {:runtime runtime})))
+  (binding [*particle-queue-runtime* runtime]
+    (f)))
+
+(defmacro with-particle-queue-runtime
+  [runtime & body]
+  `(call-with-particle-queue-runtime ~runtime (fn [] ~@body)))
+
+(defn- current-runtime
+  []
+  (or *particle-queue-runtime*
+      installed-particle-queue-runtime))
+
+(defn- queue-atom
+  []
+  (:queue* (current-runtime)))
+
+(defn- queue-snapshot
+  []
+  @(queue-atom))
+
+(defn- update-queue!
+  [f & args]
+  (apply swap! (queue-atom) f args))
 
 (defn- require-owner-value
   [owner label value]
@@ -124,7 +167,7 @@
   ([particle-cmd]
    (queue-particle-effect! nil particle-cmd))
   ([owner-or-session particle-cmd]
-   (swap! particle-queue update (normalize-session-id owner-or-session) (fnil conj []) particle-cmd)
+  (update-queue! update (normalize-session-id owner-or-session) (fnil conj []) particle-cmd)
    nil))
 
 (defn queue-current-particle-effect!
@@ -138,17 +181,17 @@
   ([owner-or-session]
    (let [session-id (normalize-session-id owner-or-session)
          drained (atom [])]
-     (swap! particle-queue
-            (fn [queues]
-              (reset! drained (vec (get queues session-id [])))
-              (dissoc queues session-id)))
+     (update-queue!
+       (fn [queues]
+         (reset! drained (vec (get queues session-id [])))
+         (dissoc queues session-id)))
      @drained)))
 
 (defn clear-session-particle-effects!
   ([]
    (clear-session-particle-effects! nil))
   ([owner-or-session]
-   (swap! particle-queue dissoc (normalize-session-id owner-or-session))
+  (update-queue! dissoc (normalize-session-id owner-or-session))
    nil))
 
 (defn clear-owner-particle-effects!
@@ -157,19 +200,19 @@
 
 (defn particle-queue-snapshot
   ([]
-   @particle-queue)
+  (queue-snapshot))
   ([owner-or-session]
-   (vec (get @particle-queue (normalize-session-id owner-or-session) []))))
+  (vec (get (queue-snapshot) (normalize-session-id owner-or-session) []))))
 
 (defn reset-particle-queue-for-test!
   ([]
    (reset-particle-queue-for-test! {}))
   ([queues]
-   (reset! particle-queue
-           (into {}
-                 (map (fn [[session-id effects]]
-                        [session-id (vec effects)]))
-                 (or queues {})))
+   (reset! (queue-atom)
+      (into {}
+       (map (fn [[session-id effects]]
+         [session-id (vec effects)]))
+       (or queues {})))
    nil))
 
 ;; Event listeners for automatic particle spawning

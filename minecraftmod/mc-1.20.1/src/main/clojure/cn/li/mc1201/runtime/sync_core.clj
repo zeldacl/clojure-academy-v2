@@ -6,8 +6,60 @@
   transport when calling tick-sync!."
   (:require [cn.li.mcmod.hooks.core :as power-runtime]))
 
-(defonce ^:private scheduler-states (atom {}))
-(def ^:private flush-interval-ticks 10)
+(def ^:private default-flush-interval-ticks 10)
+
+(defn create-sync-scheduler-runtime
+  ([]
+   (create-sync-scheduler-runtime {}))
+  ([{:keys [flush-interval-ticks]
+     :or {flush-interval-ticks default-flush-interval-ticks}}]
+   {::runtime ::sync-scheduler-runtime
+    :scheduler-states* (atom {})
+    :flush-interval-ticks flush-interval-ticks}))
+
+(def ^:dynamic *sync-scheduler-runtime* nil)
+
+(defonce ^:private installed-sync-scheduler-runtime
+  (create-sync-scheduler-runtime))
+
+(defn- sync-scheduler-runtime?
+  [runtime]
+  (and (map? runtime)
+       (= ::sync-scheduler-runtime (::runtime runtime))
+       (some? (:scheduler-states* runtime))))
+
+(defn call-with-sync-scheduler-runtime
+  [runtime f]
+  (when-not (sync-scheduler-runtime? runtime)
+    (throw (ex-info "Expected sync scheduler runtime"
+                    {:runtime runtime})))
+  (binding [*sync-scheduler-runtime* runtime]
+    (f)))
+
+(defmacro with-sync-scheduler-runtime
+  [runtime & body]
+  `(call-with-sync-scheduler-runtime ~runtime (fn [] ~@body)))
+
+(defn- current-sync-scheduler-runtime
+  []
+  (or *sync-scheduler-runtime*
+      installed-sync-scheduler-runtime))
+
+(defn- scheduler-states-atom
+  []
+  (:scheduler-states* (current-sync-scheduler-runtime)))
+
+(defn- scheduler-states-snapshot
+  []
+  @(scheduler-states-atom))
+
+(defn- update-scheduler-states!
+  [f & args]
+  (apply swap! (scheduler-states-atom) f args))
+
+(defn- flush-interval-ticks
+  []
+  (:flush-interval-ticks (current-sync-scheduler-runtime)))
 
 (defn- session-id
   [owner]
@@ -26,16 +78,17 @@
 
 (defn- scheduler-state
   [states session-key]
-  (get states session-key (empty-scheduler-state)))
+  (merge (empty-scheduler-state)
+         (get states session-key)))
 
 (defn- current-session-tick
   [session-key]
-  (:tick-counter (scheduler-state @scheduler-states session-key)))
+	(:tick-counter (scheduler-state (scheduler-states-snapshot) session-key)))
 
 (defn- mark-player-dirty-in-session!
   [session-key uuid]
   (let [tick (current-session-tick session-key)]
-    (swap! scheduler-states update-in [session-key :dirty-players uuid]
+		(update-scheduler-states! update-in [session-key :dirty-players uuid]
            (fn [entry]
              (assoc (or entry {}) :last-dirty-tick tick)))))
 
@@ -45,7 +98,7 @@
 
 (defn clear-player-dirty!
   [owner uuid]
-  (swap! scheduler-states update-in [(session-id owner) :dirty-players] dissoc uuid))
+  (update-scheduler-states! update-in [(session-id owner) :dirty-players] dissoc uuid))
 
 (defn mark-all-dirty!
   [owner]
@@ -53,7 +106,7 @@
         tick (current-session-tick session-key)
         players (binding [power-runtime/*player-state-owner* owner]
                   (set (power-runtime/list-player-uuids)))]
-    (swap! scheduler-states assoc-in [session-key :dirty-players]
+		(update-scheduler-states! assoc-in [session-key :dirty-players]
            (into {}
                  (map (fn [uuid] [uuid {:last-dirty-tick tick}]))
                  players))))
@@ -66,7 +119,7 @@
   (let [session-key (session-id owner)
         server-tick-id (:server-tick-id owner)
         result (atom nil)]
-    (swap! scheduler-states
+		(update-scheduler-states!
            (fn [states]
              (let [state (scheduler-state states session-key)
                    duplicate-server-tick? (and (some? server-tick-id)
@@ -78,7 +131,7 @@
                                     (assoc :last-server-tick-id server-tick-id)))
                    tick (:tick-counter next-state)
                    due? (and (not duplicate-server-tick?)
-                             (zero? (mod tick flush-interval-ticks)))
+							 (zero? (mod tick (flush-interval-ticks))))
                    dirty-uuids (when due? (keys (:dirty-players next-state)))]
                (reset! result {:advanced? (not duplicate-server-tick?)
                                :due? due?
@@ -90,7 +143,7 @@
 
 (defn- mark-player-flushed!
   [session-key uuid tick]
-  (swap! scheduler-states update-in [session-key :dirty-players]
+	(update-scheduler-states! update-in [session-key :dirty-players]
          (fn [dirty]
            (if-let [entry (get dirty uuid)]
              (if (<= (:last-dirty-tick entry 0) tick)
@@ -100,19 +153,19 @@
 
 (defn scheduler-snapshot
   []
-  @scheduler-states)
+	(scheduler-states-snapshot))
 
 (defn clear-session-scheduler-state!
   "Remove all scheduler state for one server session."
   [session-key]
-  (swap! scheduler-states dissoc session-key)
+	(update-scheduler-states! dissoc session-key)
   nil)
 
 (defn reset-scheduler-for-test!
   ([]
    (reset-scheduler-for-test! {}))
   ([states]
-   (reset! scheduler-states states)
+		(reset! (scheduler-states-atom) states)
    nil))
 
 (defn tick-sync!

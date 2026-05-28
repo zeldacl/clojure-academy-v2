@@ -5,21 +5,71 @@
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]))
 
-(defonce ^:private impacts (atom {}))
+(defn default-electron-missile-fx-runtime-state
+  []
+  {:impacts {}})
+
+(defn create-electron-missile-fx-runtime
+  ([]
+   (create-electron-missile-fx-runtime {}))
+  ([{:keys [state*]
+     :or {state* (atom (default-electron-missile-fx-runtime-state))}}]
+   {::runtime ::electron-missile-fx-runtime
+    :state* state*}))
+
+(def ^:dynamic *electron-missile-fx-runtime* nil)
+
+(defonce ^:private installed-electron-missile-fx-runtime
+  (create-electron-missile-fx-runtime))
+
+(defn- electron-missile-fx-runtime?
+  [runtime]
+  (and (map? runtime)
+       (= ::electron-missile-fx-runtime (::runtime runtime))
+       (some? (:state* runtime))))
+
+(defn call-with-electron-missile-fx-runtime
+  [runtime f]
+  (when-not (electron-missile-fx-runtime? runtime)
+    (throw (ex-info "Expected electron missile FX runtime"
+                    {:value runtime})))
+  (binding [*electron-missile-fx-runtime* runtime]
+    (f)))
+
+(defmacro with-electron-missile-fx-runtime
+  [runtime & body]
+  `(call-with-electron-missile-fx-runtime ~runtime (fn [] ~@body)))
+
+(defn- current-electron-missile-fx-runtime
+  []
+  (or *electron-missile-fx-runtime*
+      installed-electron-missile-fx-runtime))
+
+(defn- electron-missile-fx-state-atom
+  []
+  (:state* (current-electron-missile-fx-runtime)))
+
+(defn- electron-missile-fx-state-snapshot
+  []
+  @(electron-missile-fx-state-atom))
+
+(defn- update-electron-missile-fx-state!
+  [f & args]
+  (apply swap! (electron-missile-fx-state-atom) f args))
 
 (defn electron-missile-fx-snapshot []
-  {:impacts @impacts})
+  (electron-missile-fx-state-snapshot))
 
 (defn reset-electron-missile-fx-for-test! []
-  (reset! impacts {})
+  (reset! (electron-missile-fx-state-atom) (default-electron-missile-fx-runtime-state))
   nil)
 
 (defn clear-electron-missile-owner! [owner-key]
-  (swap! impacts dissoc owner-key)
+  (update-electron-missile-fx-state! update :impacts dissoc owner-key)
   nil)
 
 (defn- all-impacts []
-  (mapcat val @impacts))
+  (mapcat val (:impacts (electron-missile-fx-state-snapshot))))
 
 (defn- enqueue! [{:keys [payload ctx-id channel owner-key]}]
   (let [owner-key* (or owner-key [:ctx ctx-id])
@@ -36,28 +86,30 @@
         {:type :sound :sound-id "my_mod:md.em_start" :volume 0.5 :pitch 1.0})
       :fire
       (do
-        (swap! impacts update owner-key*
-               (fn [q]
-                 (let [q2 (conj (vec q) (merge base-meta payload {:ttl 10}))]
-                   (if (> (count q2) 8)
-                     (subvec q2 (- (count q2) 8))
-                     q2))))
+        (update-electron-missile-fx-state!
+          update :impacts update owner-key*
+          (fn [q]
+            (let [q2 (conj (vec q) (merge base-meta payload {:ttl 10}))]
+              (if (> (count q2) 8)
+                (subvec q2 (- (count q2) 8))
+                q2))))
         (client-sounds/queue-sound-effect! (:queue-owner base-meta)
           {:type :sound :sound-id "my_mod:md.em_fire" :volume 0.35 :pitch (+ 0.85 (rand 0.3))}))
       nil)))
 
 (defn- tick! []
-  (swap! impacts
-         (fn [by-owner]
-           (into {}
-                 (keep (fn [[owner-key q]]
-                         (let [live (->> q
-                                         (map (fn [b] (update b :ttl dec)))
-                                         (filter (fn [b] (pos? (:ttl b))))
-                                         vec)]
-                           (when (seq live)
-                             [owner-key live]))))
-                 by-owner)))
+  (update-electron-missile-fx-state!
+    update :impacts
+    (fn [by-owner]
+      (into {}
+            (keep (fn [[owner-key q]]
+                    (let [live (->> q
+                                    (map (fn [b] (update b :ttl dec)))
+                                    (filter (fn [b] (pos? (:ttl b))))
+                                    vec)]
+                      (when (seq live)
+                        [owner-key live]))))
+            by-owner)))
   (doseq [impact (all-impacts)]
     (when-let [tx (:target-x impact)]
       (client-particles/queue-particle-effect! (:queue-owner impact)

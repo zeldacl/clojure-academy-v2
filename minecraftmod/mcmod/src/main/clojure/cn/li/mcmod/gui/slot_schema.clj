@@ -5,9 +5,31 @@
   Slot indexes, ranges, and layout metadata are derived from declaration order."
   (:require [cn.li.mcmod.util.log :as log]))
 
-(defonce ^{:doc "Registered slot schemas by schema-id keyword."}
-  slot-schema-registry
-  (atom {}))
+(defn- default-slot-schema-runtime-state []
+  {:slot-schema-registry {}})
+
+(defn create-slot-schema-runtime
+  ([] (create-slot-schema-runtime {}))
+  ([{:keys [state*]}]
+   {:cn.li.mcmod.gui.slot-schema/runtime ::slot-schema-runtime
+    :state* (or state* (atom (default-slot-schema-runtime-state)))}))
+
+(def ^:dynamic *slot-schema-runtime* nil)
+
+(defonce ^:private installed-slot-schema-runtime
+  (create-slot-schema-runtime))
+
+(defn- slot-schema-state-atom []
+  (:state* (or *slot-schema-runtime* installed-slot-schema-runtime)))
+
+(defn- slot-schema-state-snapshot []
+  @(slot-schema-state-atom))
+
+(defn set-slot-schema-registry!
+  "Replace all slot schemas. Intended for tests."
+  [registry]
+  (swap! (slot-schema-state-atom) assoc :slot-schema-registry (or registry {}))
+  nil)
 
 (defn- ensure-keyword
   [value label]
@@ -77,7 +99,7 @@
                   :slot-type->indexes (into {}
                                             (for [[slot-type grouped] (group-by :type slots)]
                                               [slot-type (mapv :index grouped)]))}]
-      (swap! slot-schema-registry assoc schema-id schema)
+      (swap! (slot-schema-state-atom) assoc-in [:slot-schema-registry schema-id] schema)
       (log/info "Registered slot schema:" schema-id)
       schema)))
 
@@ -96,7 +118,7 @@
 
 (defn get-slot-schema
   [schema-id]
-  (get @slot-schema-registry schema-id))
+  (get-in (slot-schema-state-snapshot) [:slot-schema-registry schema-id]))
 
 (defn get-slot-layout
   [schema-id]

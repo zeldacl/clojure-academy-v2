@@ -3,6 +3,7 @@
   (:require [cn.li.fabric1201.registry.fabric-dispatch :as fabric-dispatch]
             [cn.li.mcmod.block.tile-logic :as tile-logic]
             [cn.li.mcmod.entity.dsl :as edsl]
+            [cn.li.mcmod.protocol.core :as registry-core]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.fabric1201.entity FabricScriptedEntityAccess]
            [cn.li.fabric1201.shim FabricBootstrapHelper]
@@ -75,14 +76,14 @@
                          :else
                          (FabricBootstrapHelper/createPlainBlock base-properties))
             registered (fabric-dispatch/register-block registry-name block-inst)]
-        (swap! registered-blocks assoc block-id registered)))))
+        (registry-core/swap-state! registered-blocks #(assoc % block-id registered))))))
 
 (defn register-block-entities!
   [{:keys [mod-id registered-blocks registered-block-entities]}]
   (doseq [tile-id (or (metadata-call 'cn.li.mcmod.protocol.metadata/get-all-tile-ids) [])]
     (let [registry-name (metadata-call 'cn.li.mcmod.protocol.metadata/get-tile-registry-name tile-id)
           block-ids (metadata-call 'cn.li.mcmod.protocol.metadata/get-tile-block-ids tile-id)
-          blocks (keep #(get @registered-blocks %) block-ids)]
+          blocks (keep #(registry-core/lookup registered-blocks %) block-ids)]
       (when (seq blocks)
         (let [pairs (map vector block-ids blocks)
               block-id-map (java.util.IdentityHashMap.)]
@@ -95,7 +96,7 @@
                             (apply [_ block-inst]
                               (.get block-id-map block-inst))))
                 registered (FabricBootstrapHelper/registerBlockEntityType mod-id registry-name be-type)]
-            (swap! registered-block-entities assoc tile-id registered)))))))
+            (registry-core/swap-state! registered-block-entities #(assoc % tile-id registered))))))))
 
 (defn- create-standalone-item
   [_item-spec]
@@ -108,16 +109,16 @@
           item-spec (metadata-call 'cn.li.mcmod.protocol.metadata/get-item-spec item-id)
           item-inst (create-standalone-item item-spec)
           registered (fabric-dispatch/register-item registry-name item-inst)]
-      (swap! registered-items assoc item-id registered)))
+      (registry-core/swap-state! registered-items #(assoc % item-id registered))))
 
   (doseq [block-id (or (metadata-call 'cn.li.mcmod.protocol.metadata/get-all-block-ids) [])]
     (when (and (metadata-call 'cn.li.mcmod.protocol.metadata/should-create-block-item? block-id)
                (not (metadata-call 'cn.li.mcmod.protocol.metadata/fluid-block? block-id)))
-      (when-let [block-inst (get @registered-blocks block-id)]
+      (when-let [block-inst (registry-core/lookup registered-blocks block-id)]
         (let [registry-name (metadata-call 'cn.li.mcmod.protocol.metadata/get-block-registry-name block-id)
               block-item (FabricBootstrapHelper/createBlockItem block-inst)
               registered (fabric-dispatch/register-item registry-name block-item)]
-          (swap! registered-items assoc (str block-id "-item") registered))))))
+          (registry-core/swap-state! registered-items #(assoc % (str block-id "-item") registered)))))))
 
 (defn- register-scripted-projectile-spec!
   [registry-name entity-spec]

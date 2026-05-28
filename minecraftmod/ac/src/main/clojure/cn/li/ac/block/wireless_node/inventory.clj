@@ -16,30 +16,30 @@
      :slots [{:id :input :type :energy :x 42 :y 10}
              {:id :output :type :output :x 42 :y 80}]}))
 
-(def ^:private node-input-slot-index*
-  (delay
-    (ensure-node-slot-schema!)
-    (slot-schema/slot-index node-slot-schema-id :input)))
+(def ^:private node-slot-cache-lock
+  (Object.))
 
-(def ^:private node-output-slot-index*
-  (delay
-    (ensure-node-slot-schema!)
-    (slot-schema/slot-index node-slot-schema-id :output)))
+(def ^:private ^:dynamic *node-slot-cache*
+  {:input-slot-index nil
+   :output-slot-index nil
+   :slot-indexes nil
+   :slot-count nil})
 
-(def ^:private node-slot-indexes*
-  (delay
-    (ensure-node-slot-schema!)
-    (slot-schema/all-slot-indexes node-slot-schema-id)))
+(defn- node-slot-cache
+  [k loader]
+  (or (get (var-get #'*node-slot-cache*) k)
+      (locking node-slot-cache-lock
+        (or (get (var-get #'*node-slot-cache*) k)
+            (let [v (do
+                      (ensure-node-slot-schema!)
+                      (loader))]
+              (alter-var-root #'*node-slot-cache* assoc k v)
+              v)))))
 
-(def ^:private node-slot-count*
-  (delay
-    (ensure-node-slot-schema!)
-    (slot-registry/get-slot-count node-slot-schema-id)))
-
-(defn node-input-slot-index [] @node-input-slot-index*)
-(defn node-output-slot-index [] @node-output-slot-index*)
-(defn node-slot-indexes [] @node-slot-indexes*)
-(defn node-slot-count [] @node-slot-count*)
+(defn node-input-slot-index [] (node-slot-cache :input-slot-index #(slot-schema/slot-index node-slot-schema-id :input)))
+(defn node-output-slot-index [] (node-slot-cache :output-slot-index #(slot-schema/slot-index node-slot-schema-id :output)))
+(defn node-slot-indexes [] (node-slot-cache :slot-indexes #(slot-schema/all-slot-indexes node-slot-schema-id)))
+(defn node-slot-count [] (node-slot-cache :slot-count #(slot-registry/get-slot-count node-slot-schema-id)))
 
 (def node-container-fns
   {:get-size (fn [_be] (node-slot-count))

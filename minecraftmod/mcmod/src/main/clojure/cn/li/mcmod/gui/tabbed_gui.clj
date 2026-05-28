@@ -31,9 +31,6 @@
   [container]
   (contains? container :tab-index))
 
-;; Client-side tab index by container id so menu.clicked() can resolve tab even when container ref differs (e.g. integrated server).
-(defonce ^:private tab-index-by-container-id (atom {}))
-
 (defn- require-owner-value
   [owner label value]
   (if (some? value)
@@ -74,23 +71,6 @@
      :player-uuid player-id
      :player player}))
 
-(defn- session-key
-  [owner]
-  (require-owner-value owner ":session-id"
-                       (or (:server-session-id owner)
-                           (:client-session-id owner)
-                           (:session-id owner))))
-
-(defn- owner-player-key
-  [owner]
-  (require-owner-value owner ":player-uuid"
-                       (or (some-> (:player-uuid owner) str)
-                           (some-> (:player owner) player-key))))
-
-(defn- tab-state-key
-  [owner container-id]
-  [(session-key owner) (owner-player-key owner) (int container-id)])
-
 (defn- legacy-tab-index
   [container-id]
   (throw (ex-info "Tabbed GUI container id lookup requires explicit owner"
@@ -102,7 +82,7 @@
   (legacy-tab-index container-id))
   ([owner container-id tab-index]
    (when (integer? container-id)
-     (swap! tab-index-by-container-id assoc (tab-state-key owner container-id) (int tab-index)))))
+     (container-state/set-tab-index-by-container-id! owner container-id tab-index))))
 
 (defn get-tab-index-by-container-id
   "Get tab index for container id, or nil if not set."
@@ -111,7 +91,7 @@
      (legacy-tab-index container-id)))
   ([owner container-id]
    (when (integer? container-id)
-     (get @tab-index-by-container-id (tab-state-key owner container-id)))))
+     (container-state/get-tab-index-by-container-id owner container-id))))
 
 (defn clear-tab-index-by-container-id!
   "Clear tab state when menu is closed."
@@ -120,7 +100,7 @@
      (legacy-tab-index container-id)))
   ([owner container-id]
    (when (integer? container-id)
-     (swap! tab-index-by-container-id dissoc (tab-state-key owner container-id)))))
+     (container-state/clear-tab-index-by-container-id! owner container-id))))
 
 (defn slots-active-for-menu?
   "True when slot clicks should be allowed for this menu. Prefers client-set tab by container id, else container :tab-index."

@@ -19,11 +19,7 @@
   []
   (imaginary-energy/register-default-energy-type!)
   (let [translation-map (energy-translation-map)]
-    (swap! metadata/translations
-           (fn [existing]
-             (-> existing
-                 (update :en_us merge (:en_us translation-map))
-                 (update :zh_cn merge (:zh_cn translation-map)))))
+    (metadata/merge-translations! translation-map)
     {:domain :energy
      :translations (count (:en_us translation-map))
      :energy-type :imaginary-energy}))

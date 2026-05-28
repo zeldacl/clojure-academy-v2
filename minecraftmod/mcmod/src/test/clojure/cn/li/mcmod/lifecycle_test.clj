@@ -3,9 +3,7 @@
             [cn.li.mcmod.lifecycle :as lifecycle]))
 
 (defn- reset-state! []
-  (reset! lifecycle/content-init-fn nil)
-  (reset! lifecycle/runtime-content-activation-fn nil)
-  (reset! lifecycle/client-init-fns []))
+  (lifecycle/reset-lifecycle-state-for-test!))
 
 (deftest content-init-registration-test
   (reset-state!)

@@ -5,17 +5,67 @@
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]))
 
-(defonce ^:private effect-state (atom {}))
+(defn default-electron-bomb-fx-runtime-state
+  []
+  {:effect-state {}})
+
+(defn create-electron-bomb-fx-runtime
+  ([]
+   (create-electron-bomb-fx-runtime {}))
+  ([{:keys [state*]
+     :or {state* (atom (default-electron-bomb-fx-runtime-state))}}]
+   {::runtime ::electron-bomb-fx-runtime
+    :state* state*}))
+
+(def ^:dynamic *electron-bomb-fx-runtime* nil)
+
+(defonce ^:private installed-electron-bomb-fx-runtime
+  (create-electron-bomb-fx-runtime))
+
+(defn- electron-bomb-fx-runtime?
+  [runtime]
+  (and (map? runtime)
+       (= ::electron-bomb-fx-runtime (::runtime runtime))
+       (some? (:state* runtime))))
+
+(defn call-with-electron-bomb-fx-runtime
+  [runtime f]
+  (when-not (electron-bomb-fx-runtime? runtime)
+    (throw (ex-info "Expected electron bomb FX runtime"
+                    {:value runtime})))
+  (binding [*electron-bomb-fx-runtime* runtime]
+    (f)))
+
+(defmacro with-electron-bomb-fx-runtime
+  [runtime & body]
+  `(call-with-electron-bomb-fx-runtime ~runtime (fn [] ~@body)))
+
+(defn- current-electron-bomb-fx-runtime
+  []
+  (or *electron-bomb-fx-runtime*
+      installed-electron-bomb-fx-runtime))
+
+(defn- electron-bomb-fx-state-atom
+  []
+  (:state* (current-electron-bomb-fx-runtime)))
+
+(defn- electron-bomb-fx-state-snapshot
+  []
+  @(electron-bomb-fx-state-atom))
+
+(defn- update-electron-bomb-fx-state!
+  [f & args]
+  (apply swap! (electron-bomb-fx-state-atom) f args))
 
 (defn electron-bomb-fx-snapshot []
-  {:effect-state @effect-state})
+  (electron-bomb-fx-state-snapshot))
 
 (defn reset-electron-bomb-fx-for-test! []
-  (reset! effect-state {})
+  (reset! (electron-bomb-fx-state-atom) (default-electron-bomb-fx-runtime-state))
   nil)
 
 (defn clear-electron-bomb-owner! [owner-key]
-  (swap! effect-state dissoc owner-key)
+  (update-electron-bomb-fx-state! update :effect-state dissoc owner-key)
   nil)
 
 ;; ---------------------------------------------------------------------------
@@ -34,11 +84,12 @@
     (case mode
       :spawn
       (do
-        (swap! effect-state assoc owner-key*
-               (merge base-meta
-                      {:active? true :ticks 0
-                       :x (double (or x 0.0)) :y (double (or y 0.0)) :z (double (or z 0.0))
-                       :dx (double (or dx 0.0)) :dy (double (or dy 0.0)) :dz (double (or dz 0.0))}))
+        (update-electron-bomb-fx-state!
+          update :effect-state assoc owner-key*
+          (merge base-meta
+                 {:active? true :ticks 0
+                  :x (double (or x 0.0)) :y (double (or y 0.0)) :z (double (or z 0.0))
+                  :dx (double (or dx 0.0)) :dy (double (or dy 0.0)) :dz (double (or dz 0.0))}))
         (client-sounds/queue-sound-effect! (:queue-owner base-meta)
           {:type :sound :sound-id "my_mod:md.eb_spawn" :volume 0.6 :pitch 1.2}))
       :beam
@@ -63,24 +114,25 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- tick! []
-  (swap! effect-state
-         (fn [states]
-           (into {}
-                 (keep (fn [[owner-key st]]
-                         (when (:active? st)
-                           (let [ticks (inc (long (or (:ticks st) 0)))]
-                             (when (zero? (mod ticks 3))
-                               (let [angle (* 0.4 (double ticks))
-                                     ox (* 0.9 (Math/cos angle))
-                                     oz (* 0.9 (Math/sin angle))]
-                                 (client-particles/queue-particle-effect! (:queue-owner st)
-                                   {:type :particle :particle-type :electric-spark
-                                    :x (+ (:x st) ox) :y (:y st) :z (+ (:z st) oz)
-                                    :count 1 :speed 0.05
-                                    :offset-x 0.1 :offset-y 0.1 :offset-z 0.1})))
-                             (when-not (> ticks 40)
-                               [owner-key (assoc st :ticks ticks)])))))
-                 states))))
+  (update-electron-bomb-fx-state!
+    update :effect-state
+    (fn [states]
+      (into {}
+            (keep (fn [[owner-key st]]
+                    (when (:active? st)
+                      (let [ticks (inc (long (or (:ticks st) 0)))]
+                        (when (zero? (mod ticks 3))
+                          (let [angle (* 0.4 (double ticks))
+                                ox (* 0.9 (Math/cos angle))
+                                oz (* 0.9 (Math/sin angle))]
+                            (client-particles/queue-particle-effect! (:queue-owner st)
+                              {:type :particle :particle-type :electric-spark
+                               :x (+ (:x st) ox) :y (:y st) :z (+ (:z st) oz)
+                               :count 1 :speed 0.05
+                               :offset-x 0.1 :offset-y 0.1 :offset-z 0.1})))
+                        (when-not (> ticks 40)
+                          [owner-key (assoc st :ticks ticks)])))))
+            states))))
 
 ;; ---------------------------------------------------------------------------
 ;; Build plan

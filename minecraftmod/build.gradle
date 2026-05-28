@@ -441,6 +441,32 @@ tasks.register('auditTopLevelMutableState') {
             kinds as List
         }
 
+        def nestedAtomCount = { String formText ->
+            def matcher = (formText =~ /\((?:clojure\.core\/)?atom\b/)
+            int count = 0
+            matcher.each { count++ }
+            Math.max(0, count - 1)
+        }
+
+        def fxUiRuntimeHintPath = { String path ->
+            (path ==~ /^ac\/src\/main\/clojure\/cn\/li\/ac\/content\/ability\/.*_fx\.clj$/) ||
+                (path ==~ /^ac\/src\/main\/clojure\/cn\/li\/ac\/ability\/client\/screens\/[^\/]+\.clj$/) ||
+                (path ==~ /^mc-1\.20\.1\/src\/main\/clojure\/cn\/li\/mc1201\/client\/.*\.clj$/) ||
+                (path ==~ /^mc-1\.20\.1\/src\/main\/clojure\/cn\/li\/mc1201\/gui\/cgui\/renderer\.clj$/)
+        }
+
+        def forbiddenRuntimePatternRules = [
+            [pathPattern: ~/^mcmod\/src\/main\/clojure\/cn\/li\/mcmod\/network\/client\.clj$/,
+             allowedSymbols: ['client-runtime'] as Set,
+             reason     : 'Pilot 0: client network state must stay session-component owned.'],
+            [pathPattern: ~/^ac\/src\/main\/clojure\/cn\/li\/ac\/ability\/client\/combat_notice\.clj$/,
+             reason     : 'Pilot 1: combat notice state must stay UI-component owned.'],
+            [pathPattern: ~/^mcmod\/src\/main\/clojure\/cn\/li\/mcmod\/gui\/container_state\.clj$/,
+             reason     : 'Pilot 2: GUI container state must stay inside the installed GUI runtime component.'],
+            [pathPattern: ~/^mcmod\/src\/main\/clojure\/cn\/li\/mcmod\/gui\/tabbed_gui\.clj$/,
+             reason     : 'Pilot 2: tabbed GUI state must stay attached to the container runtime graph.']
+        ]
+
         def whitelist = new LinkedHashMap<String, Map>()
         whitelistFile.readLines('UTF-8').eachWithIndex { String rawLine, int idx ->
             def line = rawLine.trim()
@@ -483,6 +509,7 @@ tasks.register('auditTopLevelMutableState') {
                 symbol        : header.symbol,
                 defType       : header.defType,
                 kinds         : kinds,
+                nestedAtomCount: nestedAtomCount(formText),
                 classification: entry?.classification ?: 'UNCLASSIFIED',
                 owner         : entry?.owner ?: '',
                 notes         : entry?.notes ?: ''
@@ -529,6 +556,26 @@ tasks.register('auditTopLevelMutableState') {
         def staleWhitelist = whitelist.findAll { String key, Map _entry -> !findingKeys.contains(key) }.collect { _key, entry -> entry }
         def byClassification = findings.groupBy { it.classification }.collectEntries { k, v -> [k, v.size()] }.sort { a, b -> a.key <=> b.key }
         def unclassified = findings.findAll { it.classification == 'UNCLASSIFIED' }
+        def s2Findings = findings.findAll { it.classification.startsWith('S2_') }
+        def parallelRuntimeNamespaces = s2Findings.groupBy { it.path }
+            .collect { path, pathFindings -> [path: path, findings: pathFindings] }
+            .findAll { it.findings.size() > 1 }
+            .sort { a, b -> (b.findings.size() <=> a.findings.size()) ?: (a.path <=> b.path) }
+        def nestedAtomHints = findings.findAll { (it.nestedAtomCount ?: 0) > 0 }
+        def fxUiRuntimeHints = s2Findings.findAll { fxUiRuntimeHintPath(it.path) }
+        def forbiddenRuntimeViolations = findings.collectMany { finding ->
+            forbiddenRuntimePatternRules.findAll { rule ->
+                finding.path ==~ rule.pathPattern &&
+                    !(rule.allowedSymbols instanceof Set && rule.allowedSymbols.contains(finding.symbol))
+            }.collect { rule ->
+                [path          : finding.path,
+                 line          : finding.line,
+                 symbol        : finding.symbol,
+                 classification: finding.classification,
+                 kinds         : finding.kinds,
+                 reason        : rule.reason]
+            }
+        }.sort { a, b -> (a.path <=> b.path) ?: (a.line <=> b.line) ?: (a.symbol <=> b.symbol) }
 
         def md = { Object value ->
             (value == null ? '' : value.toString())
@@ -546,6 +593,11 @@ tasks.register('auditTopLevelMutableState') {
         report << "Classified findings: ${findings.size() - unclassified.size()}"
         report << "Unclassified findings: ${unclassified.size()}"
         report << "Stale whitelist entries: ${staleWhitelist.size()}"
+        report << "S2 runtime findings: ${s2Findings.size()}"
+        report << "Parallel runtime store namespaces: ${parallelRuntimeNamespaces.size()}"
+        report << "Nested atom hints: ${nestedAtomHints.size()}"
+        report << "FX/UI runtime hints: ${fxUiRuntimeHints.size()}"
+        report << "Forbidden runtime pattern violations: ${forbiddenRuntimeViolations.size()}"
         report << ''
         report << '## Summary by classification'
         report << ''
@@ -567,6 +619,41 @@ tasks.register('auditTopLevelMutableState') {
             report << "| `${md(finding.classification)}` | `${md(finding.path)}` | ${finding.line} | `${md(finding.symbol)}` | `${md(finding.kinds.join(','))}` | ${md(finding.owner)} | ${md(finding.notes)} |"
         }
         report << ''
+        if (!parallelRuntimeNamespaces.isEmpty()) {
+            report << '## Parallel runtime store namespaces'
+            report << ''
+            parallelRuntimeNamespaces.each { entry ->
+                def symbols = entry.findings.collect { it.symbol }.sort().join(', ')
+                report << "- `${entry.path}` (${entry.findings.size()} findings): `${symbols}`"
+            }
+            report << ''
+        }
+        if (!nestedAtomHints.isEmpty()) {
+            report << '## Nested atom hints'
+            report << ''
+            nestedAtomHints.sort { a, b -> (a.path <=> b.path) ?: (a.line <=> b.line) }.each { finding ->
+                report << "- `${finding.path}:${finding.line}` `${finding.symbol}` has ${finding.nestedAtomCount} nested atom occurrence(s) beyond the top-level def."
+            }
+            report << ''
+        }
+        if (!fxUiRuntimeHints.isEmpty()) {
+            report << '## FX/UI runtime hints'
+            report << ''
+            fxUiRuntimeHints.sort { a, b -> (a.path <=> b.path) ?: (a.line <=> b.line) }.each { finding ->
+                report << "- `${finding.path}:${finding.line}` `${finding.symbol}` (${finding.classification}, ${finding.kinds.join(',')})"
+            }
+            report << ''
+        }
+        if (!forbiddenRuntimeViolations.isEmpty()) {
+            report << '## Forbidden runtime pattern violations'
+            report << ''
+            report << '| path | line | symbol | classification | kind | reason |'
+            report << '| --- | ---: | --- | --- | --- | --- |'
+            forbiddenRuntimeViolations.each { violation ->
+                report << "| `${md(violation.path)}` | ${violation.line} | `${md(violation.symbol)}` | `${md(violation.classification)}` | `${md(violation.kinds.join(','))}` | ${md(violation.reason)} |"
+            }
+            report << ''
+        }
         if (!staleWhitelist.isEmpty()) {
             report << '## Stale whitelist entries'
             report << ''
@@ -595,6 +682,9 @@ tasks.register('auditTopLevelMutableState') {
         }
         if (!staleWhitelist.isEmpty()) {
             logger.warn('[auditTopLevelMutableState] {} stale whitelist entries. See {}', staleWhitelist.size(), outFile)
+        }
+        if (!forbiddenRuntimeViolations.isEmpty()) {
+            logger.warn('[auditTopLevelMutableState] {} forbidden runtime pattern violations. See {}', forbiddenRuntimeViolations.size(), outFile)
         }
         logger.lifecycle('[auditTopLevelMutableState] wrote {} findings to {}', findings.size(), outFile)
     }
@@ -648,8 +738,9 @@ tasks.register('verifyMultiplayerOwnerGuards') {
 
         def unclassifiedCount = extractCount('Unclassified findings')
         def staleCount = extractCount('Stale whitelist entries')
+        def forbiddenCount = extractCount('Forbidden runtime pattern violations')
 
-        if (unclassifiedCount > 0 || staleCount > 0) {
+        if (unclassifiedCount > 0 || staleCount > 0 || forbiddenCount > 0) {
             def detailLines = []
             if (staleCount > 0) {
                 detailLines << 'stale whitelist entries:'
@@ -662,13 +753,19 @@ tasks.register('verifyMultiplayerOwnerGuards') {
                 detailLines.addAll(captureSection('## Unclassified findings to triage')
                     .collect { "  ${it}" })
             }
+            if (forbiddenCount > 0) {
+                detailLines << 'forbidden runtime pattern violations:'
+                detailLines.addAll(captureSection('## Forbidden runtime pattern violations')
+                    .findAll { !it.startsWith('| ---') && !it.startsWith('| path |') }
+                    .collect { "  ${it}" })
+            }
             throw new GradleException(
-                "verifyMultiplayerOwnerGuards failed. Run auditTopLevelMutableState and update docs/dev/top-level-mutable-state-whitelist.tsv. " +
-                    "unclassified=${unclassifiedCount}, staleWhitelist=${staleCount}, report=${reportFile}" +
+                "verifyMultiplayerOwnerGuards failed. Run auditTopLevelMutableState, move runtime state back into explicit owner-bound components, and update docs/dev/top-level-mutable-state-whitelist.tsv when classifications legitimately change. " +
+                    "unclassified=${unclassifiedCount}, staleWhitelist=${staleCount}, forbiddenRuntime=${forbiddenCount}, report=${reportFile}" +
                     (detailLines.isEmpty() ? '' : "\n - ${detailLines.join('\n - ')}"))
         }
 
-        logger.lifecycle('[verifyMultiplayerOwnerGuards] passed. Top-level mutable state ownership audit has no unclassified or stale entries.')
+        logger.lifecycle('[verifyMultiplayerOwnerGuards] passed. Top-level mutable state ownership audit has no unclassified, stale, or forbidden pilot-path entries.')
     }
 }
 

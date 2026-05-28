@@ -7,7 +7,6 @@
 
   Loaded only from client init via hooks; uses mcmod protocols only."
   (:require [cn.li.mcmod.client.resources :as res]
-            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.client.obj :as obj]
             [cn.li.mcmod.client.render.tesr-api :as tesr-api]
             [cn.li.mcmod.client.render.multiblock-helper :as mb-helper]
@@ -39,19 +38,64 @@
           az (+ minz (/ (- maxz minz) (* 2.0 z-cells)))]
       [ax miny az])))
 
-(defonce ^:private normal-model (delay (res/load-obj-model "developer_normal")))
-;; OBJ uses dedicated UV-unwrapped texture, not the tiny block icon tile.
-(defonce ^:private normal-tex (delay (res/texture-location "models/developer_normal")))
+(def ^:private developer-render-resource-lock
+  (Object.))
 
-(defonce ^:private advanced-model (delay (res/load-obj-model "developer_advanced")))
-(defonce ^:private advanced-tex (delay (res/texture-location "models/developer_advanced")))
+(def ^:private ^:dynamic *normal-model*
+  nil)
+
+;; OBJ uses dedicated UV-unwrapped texture, not the tiny block icon tile.
+(def ^:private ^:dynamic *normal-tex*
+  nil)
+
+(def ^:private ^:dynamic *advanced-model*
+  nil)
+
+(def ^:private ^:dynamic *advanced-tex*
+  nil)
+
+(defn- normal-model
+  []
+  (or (var-get #'*normal-model*)
+      (locking developer-render-resource-lock
+        (or (var-get #'*normal-model*)
+            (let [m (res/load-obj-model "developer_normal")]
+              (alter-var-root #'*normal-model* (constantly m))
+              m)))))
+
+(defn- normal-tex
+  []
+  (or (var-get #'*normal-tex*)
+      (locking developer-render-resource-lock
+        (or (var-get #'*normal-tex*)
+            (let [t (res/texture-location "models/developer_normal")]
+              (alter-var-root #'*normal-tex* (constantly t))
+              t)))))
+
+(defn- advanced-model
+  []
+  (or (var-get #'*advanced-model*)
+      (locking developer-render-resource-lock
+        (or (var-get #'*advanced-model*)
+            (let [m (res/load-obj-model "developer_advanced")]
+              (alter-var-root #'*advanced-model* (constantly m))
+              m)))))
+
+(defn- advanced-tex
+  []
+  (or (var-get #'*advanced-tex*)
+      (locking developer-render-resource-lock
+        (or (var-get #'*advanced-tex*)
+            (let [t (res/texture-location "models/developer_advanced")]
+              (alter-var-root #'*advanced-tex* (constantly t))
+              t)))))
 
 (defn- render-obj-at-origin!
-  [model-delay tex-delay _tile _partial-ticks pose-stack buffer-source packed-light packed-overlay]
+  [model-fn tex-fn _tile _partial-ticks pose-stack buffer-source packed-light packed-overlay]
   (pose/push-pose pose-stack)
   (try
-    (let [model @model-delay
-          tex @tex-delay
+    (let [model (model-fn)
+          tex (tex-fn)
           [ax miny az] (or (obj-controller-anchor-offset model) [0.0 0.0 0.0])
           ;; Re-anchor the mesh so controller cell center maps to local origin.
           _ (pose/translate pose-stack (- ax) (- miny) (- az))
@@ -68,13 +112,13 @@
     (finally
       (pose/pop-pose pose-stack))))
 
-(defn- make-multiblock-renderer [model-delay tex-delay]
+(defn- make-multiblock-renderer [model-fn tex-fn]
   (reify tesr-api/ITileEntityRenderer
     (render-tile [_ tile-entity partial-ticks pose-stack buffer-source packed-light packed-overlay]
       (mb-helper/render-multiblock-tesr
        tile-entity
        (fn [tile pt ps bs pl po]
-         (render-obj-at-origin! model-delay tex-delay tile pt ps bs pl po))
+         (render-obj-at-origin! model-fn tex-fn tile pt ps bs pl po))
        partial-ticks pose-stack buffer-source packed-light packed-overlay))))
 
 (defn register!
@@ -87,11 +131,18 @@
     (tesr-api/register-scripted-tile-renderer! "developer-advanced" a)
     (tesr-api/register-scripted-tile-renderer! "developer-advanced-part" a)))
 
-(defonce-guard installed?)
+(def ^:private developer-renderer-guard-lock
+  (Object.))
+
+(def ^:private ^:dynamic *developer-renderer-installed?*
+  false)
 
 (defn init!
   []
   (when-let [register-fn (requiring-resolve 'cn.li.mcmod.client.render.init/register-renderer-init-fn!)]
-    (with-init-guard installed?
-      (register-fn register!)
-      (log/info "Registered developer OBJ tile renderers (normal + advanced)"))))
+    (when-not (var-get #'*developer-renderer-installed?*)
+      (locking developer-renderer-guard-lock
+        (when-not (var-get #'*developer-renderer-installed?*)
+          (register-fn register!)
+          (alter-var-root #'*developer-renderer-installed?* (constantly true))
+          (log/info "Registered developer OBJ tile renderers (normal + advanced)"))))))

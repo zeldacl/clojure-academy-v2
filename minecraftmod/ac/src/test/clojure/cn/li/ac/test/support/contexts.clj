@@ -3,9 +3,15 @@
 
 (defn clean-contexts-fixture
   [f]
-  (ctx/reset-contexts-for-test!)
-  (ctx/reset-lifecycle-counters!)
-  (ctx/reset-route-fns-for-test!)
-  (f)
-  (ctx/reset-contexts-for-test!)
-  (ctx/reset-route-fns-for-test!))
+  (ctx/call-with-dispatcher-runtime
+    (ctx/create-dispatcher-runtime)
+    (fn []
+      (ctx/reset-contexts-for-test!)
+      (ctx/reset-lifecycle-counters!)
+      (ctx/reset-route-fns-for-test!)
+      (try
+        (f)
+        (finally
+          (ctx/reset-contexts-for-test!)
+          (ctx/reset-lifecycle-counters!)
+          (ctx/reset-route-fns-for-test!))))))

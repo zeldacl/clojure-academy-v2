@@ -10,21 +10,28 @@
   keep their own `register!` implementations."
   (:require [cn.li.mcmod.util.log :as log]))
 
-(def ^:private renderer-init-fns
-  ;; Vector of (fn [] ...) or Var values implementing IFn.
-  (atom []))
+(defn create-render-init-runtime
+  []
+  {:renderer-init-fns []})
+
+(def ^:private ^:dynamic *renderer-init-fns*
+  [])
+
+(defn renderer-init-fns-snapshot
+  []
+  *renderer-init-fns*)
 
 (defn register-renderer-init-fn!
   "Register a single renderer init callback. Called by renderer namespaces at load time."
   [f]
-  (swap! renderer-init-fns conj f)
+  (alter-var-root #'*renderer-init-fns* conj f)
   nil)
 
 (defn register-renderer-init-fns!
   "Register renderer init callbacks to be invoked by `register-all-renderers!`.
    Each callback should be a (fn [] ...) or a Var referencing such a function."
   [fns]
-  (reset! renderer-init-fns (vec fns))
+  (alter-var-root #'*renderer-init-fns* (constantly (vec fns)))
   nil)
 
 (defn register-default-renderer-init-fns!
@@ -44,7 +51,7 @@
   callback queue was still empty, a compare-and-swap gate would permanently
   skip real registrations (matrix/solar TESRs would never attach)."
   []
-  (let [fns @renderer-init-fns]
+  (let [fns (renderer-init-fns-snapshot)]
     (log/info "Registering all core renderers..." (count fns) "callbacks")
     (when (empty? fns)
       (log/warn "No renderer init callbacks registered; skipping."))

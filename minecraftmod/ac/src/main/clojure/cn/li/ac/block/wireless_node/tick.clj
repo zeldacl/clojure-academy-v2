@@ -11,8 +11,20 @@
             [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.platform.position :as pos]))
 
-(def ^:private broadcast-node-state-fn
-  (delay (requiring-resolve 'cn.li.ac.block.wireless-node.gui/broadcast-node-state)))
+(def ^:private node-broadcast-fn-lock
+  (Object.))
+
+(def ^:private ^:dynamic *broadcast-node-state-fn*
+  nil)
+
+(defn- broadcast-node-state-fn
+  []
+  (or (var-get #'*broadcast-node-state-fn*)
+      (locking node-broadcast-fn-lock
+        (or (var-get #'*broadcast-node-state-fn*)
+            (let [f (requiring-resolve 'cn.li.ac.block.wireless-node.gui/broadcast-node-state)]
+              (alter-var-root #'*broadcast-node-state-fn* (constantly f))
+              f)))))
 
 (defn tick-charge-in
   "Pull energy from inventory slot 0 into the node. Returns updated state."
@@ -77,7 +89,7 @@
                        (node-state/update-block-state! state level block-pos))
                      (when (not= new-sync-state old-sync-state)
                        (try
-                         (when-let [broadcast-fn @broadcast-node-state-fn]
+                         (when-let [broadcast-fn (broadcast-node-state-fn)]
                            (broadcast-fn level block-pos new-sync-state))
                          (catch Exception _)))
                      (assoc state ::last-broadcast-state new-sync-state))

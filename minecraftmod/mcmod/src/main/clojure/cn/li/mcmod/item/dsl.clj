@@ -4,7 +4,19 @@
             [cn.li.mcmod.util.log :as log]))
 
 ;; Item Registry - stores all defined items
-(defonce item-registry (registry-core/atom-registry {}))
+(defn create-item-registry-runtime
+  ([] (create-item-registry-runtime {}))
+  ([{:keys [registry]}]
+   {:cn.li.mcmod.item.dsl/runtime ::item-registry-runtime
+    :registry (or registry (registry-core/atom-registry {}))}))
+
+(def ^:dynamic *item-registry-runtime* nil)
+
+(defonce ^:private installed-item-registry-runtime
+  (create-item-registry-runtime))
+
+(defn- item-registry-state []
+  (:registry (or *item-registry-runtime* installed-item-registry-runtime)))
 
 ;; Item specifications
 (defrecord ItemSpec [id max-stack-size durability creative-tab rarity
@@ -90,16 +102,16 @@
 (defn register-item! [item-spec]
   (validate-item-spec item-spec)
   (log/info "Registering item:" (:id item-spec))
-  (registry-core/swap-state! item-registry #(assoc % (:id item-spec) item-spec))
+  (registry-core/swap-state! (item-registry-state) #(assoc % (:id item-spec) item-spec))
   item-spec)
 
 ;; Get item from registry
 (defn get-item [item-id]
-  (registry-core/lookup item-registry item-id))
+  (registry-core/lookup (item-registry-state) item-id))
 
 ;; List all registered items
 (defn list-items []
-  (keys (registry-core/snapshot item-registry)))
+  (keys (registry-core/snapshot (item-registry-state))))
 
 ;; Main macro: defitem
 (defmacro defitem

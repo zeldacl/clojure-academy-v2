@@ -12,15 +12,20 @@
            [java.lang.reflect InvocationHandler Proxy]))
 
 
-(defonce ^:private resolved-vars
-  (atom {}))
+(def ^:private resolved-vars-lock
+  (Object.))
+
+(def ^:private ^:dynamic *resolved-vars*
+  {})
 
 (defn- resolve-var
   [var-sym]
-  (or (@resolved-vars var-sym)
-      (let [v (requiring-resolve var-sym)]
-        (swap! resolved-vars assoc var-sym v)
-        v)))
+  (or (get (var-get #'*resolved-vars*) var-sym)
+      (locking resolved-vars-lock
+        (or (get (var-get #'*resolved-vars*) var-sym)
+            (let [v (requiring-resolve var-sym)]
+              (alter-var-root #'*resolved-vars* assoc var-sym v)
+              v)))))
 
 (defn- cap-call
   [var-sym & args]
@@ -191,7 +196,7 @@
       (log/error "Failed to create IC2 energy source:" (ex-message e))
       nil)))
 
-(defn- get-ic2-capability
+(defn get-ic2-capability
   "Get IC2 energy capability for a block entity.
 
   This is called by the capability bridge when IC2 queries for energy

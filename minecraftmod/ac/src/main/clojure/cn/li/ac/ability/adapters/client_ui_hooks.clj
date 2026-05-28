@@ -1,6 +1,7 @@
 (ns cn.li.ac.ability.adapters.client-ui-hooks
   "Client HUD/screen/context hook composition for AC ability platform bridge."
   (:require [cn.li.ac.ability.client.api :as client-api]
+            [cn.li.ac.ability.client.combat-notice :as combat-notice]
             [cn.li.ac.ability.client.delegate-state :as delegate-state]
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
@@ -27,13 +28,74 @@
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.util.log :as log]))
 
-(defonce ^:private client-push-handlers-registered? (atom false))
-(defonce ^:private vm-wave-circles (atom {}))
-(defonce ^:private vm-wave-last-spawn-ms (atom {}))
-(defonce ^:private slot-context-ids (atom {}))
-;; Per-slot last keepalive send timestamp (ms). Limits keepalive messages to ~10/s.
-(defonce ^:private slot-key-tick-ms (atom {}))
-(defonce ^:private charge-coin-state (atom {}))
+(def ^:private default-client-ui-runtime-state
+  {:vm-wave-circles {}
+   :vm-wave-last-spawn-ms {}
+   :slot-context-ids {}
+   :slot-key-tick-ms {}
+  :charge-coin-state {}
+  :push-handlers-registered? false})
+
+(defn create-client-ui-runtime
+  []
+  {::runtime ::client-ui-runtime
+   :runtime-state* (atom default-client-ui-runtime-state)})
+
+(def ^:dynamic *client-ui-runtime* nil)
+
+(defonce ^:private installed-client-ui-runtime
+  (create-client-ui-runtime))
+
+(defn- client-ui-runtime?
+  [runtime]
+  (and (map? runtime)
+       (= ::client-ui-runtime (::runtime runtime))
+       (some? (:runtime-state* runtime))))
+
+(defn call-with-client-ui-runtime
+  [runtime f]
+  (when-not (client-ui-runtime? runtime)
+    (throw (ex-info "Expected client UI runtime"
+                    {:runtime runtime})))
+  (binding [*client-ui-runtime* runtime]
+    (f)))
+
+(defmacro with-client-ui-runtime
+  [runtime & body]
+  `(call-with-client-ui-runtime ~runtime (fn [] ~@body)))
+
+(defn- current-client-ui-runtime
+  []
+  (or *client-ui-runtime*
+      installed-client-ui-runtime))
+
+(defn- client-ui-runtime-state-atom
+  []
+  (:runtime-state* (current-client-ui-runtime)))
+
+(defn- client-ui-runtime-state-snapshot
+  []
+  @(client-ui-runtime-state-atom))
+
+(defn- update-client-ui-runtime!
+  [f & args]
+  (apply swap! (client-ui-runtime-state-atom) f args))
+
+(defn- vm-wave-circles-snapshot
+  []
+  (:vm-wave-circles (client-ui-runtime-state-snapshot)))
+
+(defn- slot-context-ids-snapshot
+  []
+  (:slot-context-ids (client-ui-runtime-state-snapshot)))
+
+(defn- slot-key-tick-ms-snapshot
+  []
+  (:slot-key-tick-ms (client-ui-runtime-state-snapshot)))
+
+(defn- charge-coin-state-snapshot
+  []
+  (:charge-coin-state (client-ui-runtime-state-snapshot)))
 
 (defn- current-client-session-id
   []
@@ -168,45 +230,52 @@
 
 (defn client-ui-state-snapshot
   ([]
-   {:vm-wave-circles @vm-wave-circles
-    :vm-wave-last-spawn-ms @vm-wave-last-spawn-ms
-    :slot-context-ids @slot-context-ids
-    :slot-key-tick-ms @slot-key-tick-ms
-    :charge-coin-state @charge-coin-state
-    :push-handlers-registered? @client-push-handlers-registered?})
+   (let [{:keys [vm-wave-circles vm-wave-last-spawn-ms slot-context-ids slot-key-tick-ms charge-coin-state]}
+         (client-ui-runtime-state-snapshot)]
+     {:vm-wave-circles vm-wave-circles
+      :vm-wave-last-spawn-ms vm-wave-last-spawn-ms
+      :slot-context-ids slot-context-ids
+      :slot-key-tick-ms slot-key-tick-ms
+      :charge-coin-state charge-coin-state
+  :push-handlers-registered? (:push-handlers-registered? (client-ui-runtime-state-snapshot))}))
   ([owner]
-   (let [owner-key (client-ui-owner-key owner)]
-     {:vm-wave-circles (get @vm-wave-circles owner-key [])
-      :vm-wave-last-spawn-ms (get @vm-wave-last-spawn-ms owner-key 0)
+   (let [owner-key (client-ui-owner-key owner)
+         {:keys [vm-wave-circles vm-wave-last-spawn-ms slot-context-ids slot-key-tick-ms charge-coin-state]}
+         (client-ui-runtime-state-snapshot)]
+     {:vm-wave-circles (get vm-wave-circles owner-key [])
+      :vm-wave-last-spawn-ms (get vm-wave-last-spawn-ms owner-key 0)
       :slot-context-ids (into {}
                               (filter (fn [[slot-key _ctx-id]]
                                         (= owner-key (slot-key-owner slot-key))))
-                              @slot-context-ids)
+                              slot-context-ids)
       :slot-key-tick-ms (into {}
                               (filter (fn [[slot-key _last-ms]]
                                         (= owner-key (slot-key-owner slot-key))))
-                              @slot-key-tick-ms)
-      :charge-coin-state (get @charge-coin-state owner-key)})))
+                              slot-key-tick-ms)
+      :charge-coin-state (get charge-coin-state owner-key)})))
 
 (defn clear-client-ui-state!
   [owner]
   (let [owner-key (client-ui-owner-key owner)]
-    (swap! vm-wave-circles dissoc owner-key)
-    (swap! vm-wave-last-spawn-ms dissoc owner-key)
-    (swap! slot-context-ids
-           (fn [m]
-             (into {}
-                   (remove (fn [[slot-key _ctx-id]]
-                             (= owner-key (slot-key-owner slot-key)))
-                           m))))
-    (swap! slot-key-tick-ms
-           (fn [m]
-             (into {}
-                   (remove (fn [[slot-key _last-ms]]
-                             (= owner-key (slot-key-owner slot-key)))
-                           m))))
-    (swap! charge-coin-state dissoc owner-key))
-  nil)
+    (update-client-ui-runtime!
+      (fn [runtime-state]
+        (-> runtime-state
+            (update :vm-wave-circles dissoc owner-key)
+            (update :vm-wave-last-spawn-ms dissoc owner-key)
+            (update :slot-context-ids
+                    (fn [m]
+                      (into {}
+                            (remove (fn [[slot-key _ctx-id]]
+                                      (= owner-key (slot-key-owner slot-key)))
+                                    m))))
+            (update :slot-key-tick-ms
+                    (fn [m]
+                      (into {}
+                            (remove (fn [[slot-key _last-ms]]
+                                      (= owner-key (slot-key-owner slot-key)))
+                                    m))))
+            (update :charge-coin-state dissoc owner-key))))
+  nil))
 
 (defn- clear-client-player-state!
   [owner]
@@ -237,17 +306,24 @@
 
 (defn reset-client-ui-state-for-test!
   []
-  (reset! client-push-handlers-registered? false)
-  (reset! vm-wave-circles {})
-  (reset! vm-wave-last-spawn-ms {})
-  (reset! slot-context-ids {})
-  (reset! slot-key-tick-ms {})
-  (reset! charge-coin-state {})
+  (reset! (client-ui-runtime-state-atom) default-client-ui-runtime-state)
   nil)
+
+(defn- mark-client-push-handlers-registered!
+  []
+  (let [installed? (volatile! false)]
+    (update-client-ui-runtime!
+      (fn [runtime-state]
+        (if (:push-handlers-registered? runtime-state)
+          runtime-state
+          (do
+            (vreset! installed? true)
+            (assoc runtime-state :push-handlers-registered? true)))))
+    @installed?))
 
 (defn set-slot-context-for-test!
   [player-uuid key-idx ctx-id]
-  (swap! slot-context-ids assoc (slot-context-key player-uuid key-idx) ctx-id)
+  (update-client-ui-runtime! assoc-in [:slot-context-ids (slot-context-key player-uuid key-idx)] ctx-id)
   nil)
 
 (defn seed-vm-wave-state-for-test!
@@ -255,8 +331,11 @@
    (seed-vm-wave-state-for-test! owner circles 0))
   ([owner circles last-spawn-ms]
    (let [owner-key (client-ui-owner-key owner)]
-     (swap! vm-wave-circles assoc owner-key (vec circles))
-     (swap! vm-wave-last-spawn-ms assoc owner-key (long last-spawn-ms))
+     (update-client-ui-runtime!
+       (fn [runtime-state]
+         (-> runtime-state
+             (assoc-in [:vm-wave-circles owner-key] (vec circles))
+             (assoc-in [:vm-wave-last-spawn-ms owner-key] (long last-spawn-ms)))))
      nil)))
 
 (def ^:private toggle-primary-state-input-id :content/toggle-primary-state)
@@ -297,9 +376,11 @@
 
 (defn- notify-charge-coin-throw!
   [player-uuid]
-  (swap! charge-coin-state assoc (client-ui-owner-key player-uuid)
-         {:start-ms (now-ms)
-          :window-ms (max 1 (long (railgun-coin-window-ms)))}))
+  (update-client-ui-runtime!
+    assoc-in
+    [:charge-coin-state (client-ui-owner-key player-uuid)]
+    {:start-ms (now-ms)
+     :window-ms (max 1 (long (railgun-coin-window-ms)))}))
 
 (defn- charge-coin-visual-state
   [player-uuid]
@@ -320,7 +401,7 @@
        :coin-progress 0.0
        :charge-ratio (max 0.0 (min 1.0 (- 1.0 (/ (double charge-ticks) max-charge-ticks))))}
       (let [owner-key (client-ui-owner-key player-uuid)
-        {:keys [start-ms window-ms]} (get @charge-coin-state owner-key)
+            {:keys [start-ms window-ms]} (get (charge-coin-state-snapshot) owner-key)
             has-window? (and start-ms window-ms)
             elapsed (if has-window? (- (long (now-ms)) (long start-ms)) 0)
             progress (if has-window?
@@ -330,7 +411,7 @@
             ratio (max 0.0 (min 1.0 progress))
             coin-active? (and active-window? (>= ratio (railgun-coin-active-threshold)))]
         (when (and has-window? (not active-window?))
-          (swap! charge-coin-state dissoc owner-key))
+          (update-client-ui-runtime! update :charge-coin-state dissoc owner-key))
         {:active? (boolean active-window?)
          :charge-ticks 0
          :coin-active? (boolean coin-active?)
@@ -413,22 +494,23 @@
       (client-keybinds/get-preset-switch-state))))
 
 (defn- remove-slot-context! [ctx-id]
-  (swap! slot-context-ids
-         (fn [m]
-           (into {}
-                 (remove (fn [[_slot-key active-ctx-id]]
-                           (= active-ctx-id ctx-id))
-                         m)))))
+  (update-client-ui-runtime!
+    update :slot-context-ids
+    (fn [m]
+      (into {}
+            (remove (fn [[_slot-key active-ctx-id]]
+                      (= active-ctx-id ctx-id))
+                    m)))))
 
 (defn- context-id-for-slot!
   [player-uuid key-idx skill-id]
   (let [slot-key (slot-context-key player-uuid key-idx)]
-    (or (get @slot-context-ids slot-key)
+    (or (get (slot-context-ids-snapshot) slot-key)
         (let [ctx-map (with-client-context-owner
                         player-uuid
                         #(ctx-mgr/activate-context! player-uuid skill-id))
               ctx-id (:id ctx-map)]
-          (swap! slot-context-ids assoc slot-key ctx-id)
+          (update-client-ui-runtime! assoc-in [:slot-context-ids slot-key] ctx-id)
           ctx-id))))
 
 (defn- send-slot-key-message!
@@ -443,38 +525,39 @@
 (defn- send-slot-keepalive!
   [player-uuid key-idx]
   (let [slot-key (slot-context-key player-uuid key-idx)]
-    (when-let [ctx-id (get @slot-context-ids slot-key)]
+    (when-let [ctx-id (get (slot-context-ids-snapshot) slot-key)]
       (net-client/send-to-server catalog/MSG-CTX-KEEPALIVE {:ctx-id ctx-id})
       ctx-id)))
 
 (defn- send-slot-key-up-message!
   [player-uuid key-idx]
   (let [slot-key (slot-context-key player-uuid key-idx)]
-    (when-let [ctx-id (get @slot-context-ids slot-key)]
+    (when-let [ctx-id (get (slot-context-ids-snapshot) slot-key)]
       (net-client/send-to-server catalog/MSG-SLOT-KEY-UP {:ctx-id ctx-id
                                                           :key-idx key-idx})
-      (swap! slot-context-ids dissoc slot-key)
+      (update-client-ui-runtime! update :slot-context-ids dissoc slot-key)
       ctx-id)))
 
 (defn- abort-slot-context!
   [player-uuid key-idx]
   (let [slot-key (slot-context-key player-uuid key-idx)]
-    (swap! slot-key-tick-ms dissoc slot-key)
-    (when-let [ctx-id (get @slot-context-ids slot-key)]
+    (update-client-ui-runtime! update :slot-key-tick-ms dissoc slot-key)
+    (when-let [ctx-id (get (slot-context-ids-snapshot) slot-key)]
       (net-client/send-to-server catalog/MSG-SLOT-KEY-ABORT {:ctx-id ctx-id
                                                              :key-idx key-idx})
-      (swap! slot-context-ids dissoc slot-key)
+      (update-client-ui-runtime! update :slot-context-ids dissoc slot-key)
       (ctx/terminate-context! ctx-id nil)
       ctx-id)))
 
 (defn- clear-slot-key-ticks!
   [slot-key-pred]
-  (swap! slot-key-tick-ms
-         (fn [m]
-           (into {}
-                 (remove (fn [[slot-key _last-ms]]
-                           (slot-key-pred slot-key))
-                         m)))))
+  (update-client-ui-runtime!
+    update :slot-key-tick-ms
+    (fn [m]
+      (into {}
+            (remove (fn [[slot-key _last-ms]]
+                      (slot-key-pred slot-key))
+                    m)))))
 
 (defn- abort-slot-keys!
   [slot-keys]
@@ -485,7 +568,7 @@
 (defn- abort-all-slot-contexts-for-owner!
   [owner]
   (let [owner-key (client-ui-owner-key owner)
-        abort-slots (->> @slot-context-ids
+  abort-slots (->> (slot-context-ids-snapshot)
                          (filter (fn [[slot-key _ctx-id]]
                                    (= owner-key (slot-key-owner slot-key))))
                          (map first)
@@ -495,7 +578,7 @@
 
 (defn- abort-all-slot-contexts-for-session!
   [session-id]
-  (let [abort-slots (->> @slot-context-ids
+  (let [abort-slots (->> (slot-context-ids-snapshot)
                          (filter (fn [[slot-key _ctx-id]]
                                    (= session-id (first slot-key))))
                          (map first)
@@ -534,7 +617,7 @@
              (number? delta)
              (not (zero? (double delta))))
     (let [slot-key (slot-context-key player-uuid key-idx)
-          ctx-id (get @slot-context-ids slot-key)
+          ctx-id (get (slot-context-ids-snapshot) slot-key)
           skill-id (client-keybinds/get-skill-id-for-slot-public player-uuid key-idx)]
       (when (and ctx-id (= skill-id :penetrate-teleport))
         (net-client/send-to-server catalog/MSG-CTX-CHANNEL
@@ -545,7 +628,7 @@
 (defn- active-flashing-context-ids
   [player-uuid]
   (let [owner-key (client-ui-owner-key player-uuid)]
-    (->> @slot-context-ids
+    (->> (slot-context-ids-snapshot)
        (keep (fn [[slot-key ctx-id]]
                (when (= owner-key (slot-key-owner slot-key))
                  (let [ctx-data (with-client-context-owner
@@ -605,28 +688,29 @@
      :seed (rand)}))
 
 (defn- update-vm-wave-circles! [player-uuid active? screen-width screen-height now-ms]
-  (let [owner-key (client-ui-owner-key player-uuid)
-        last-spawn-ms (long (get @vm-wave-last-spawn-ms owner-key 0))
-        needs-spawn? (and active? (>= (- now-ms last-spawn-ms) 90))]
-    (when needs-spawn?
-      (swap! vm-wave-last-spawn-ms assoc owner-key now-ms))
-    (swap! vm-wave-circles
-           (fn [owner-circles]
-             (let [circles (get owner-circles owner-key [])
-                   alive (->> circles
-                              (filter (fn [{:keys [born-ms life-ms]}]
-                                        (< (- now-ms (long born-ms)) (long life-ms))))
-                              vec)
-                   spawned (if needs-spawn?
-                             (conj alive (spawn-vm-wave-circle screen-width screen-height now-ms))
-                             alive)
-                   next-circles (if active? spawned (if (seq spawned) spawned []))]
-               (if (seq next-circles)
-                 (assoc owner-circles owner-key next-circles)
-                 (dissoc owner-circles owner-key)))))))
+  (let [owner-key (client-ui-owner-key player-uuid)]
+    (update-client-ui-runtime!
+      (fn [runtime-state]
+        (let [last-spawn-ms (long (get-in runtime-state [:vm-wave-last-spawn-ms owner-key] 0))
+              needs-spawn? (and active? (>= (- now-ms last-spawn-ms) 90))
+              circles (get-in runtime-state [:vm-wave-circles owner-key] [])
+              alive (->> circles
+                         (filter (fn [{:keys [born-ms life-ms]}]
+                                   (< (- now-ms (long born-ms)) (long life-ms))))
+                         vec)
+              spawned (if needs-spawn?
+                        (conj alive (spawn-vm-wave-circle screen-width screen-height now-ms))
+                        alive)
+              next-circles (if active? spawned (if (seq spawned) spawned []))
+              runtime-state (if needs-spawn?
+                              (assoc-in runtime-state [:vm-wave-last-spawn-ms owner-key] now-ms)
+                              runtime-state)]
+          (if (seq next-circles)
+            (assoc-in runtime-state [:vm-wave-circles owner-key] next-circles)
+            (update runtime-state :vm-wave-circles dissoc owner-key)))))))
 
 (defn- vm-wave-elements [player-uuid now-ms]
-  (->> (get @vm-wave-circles (client-ui-owner-key player-uuid) [])
+  (->> (get (vm-wave-circles-snapshot) (client-ui-owner-key player-uuid) [])
        (map (fn [{:keys [x y born-ms life-ms start-size end-size seed]}]
               (let [elapsed (double (max 0 (- now-ms (long born-ms))))
                     life (double (max 1 life-ms))
@@ -734,7 +818,7 @@
 
 (defn register-client-push-handlers!
   []
-  (when (compare-and-set! client-push-handlers-registered? false true)
+  (when (mark-client-push-handlers-registered!)
     (net-client/register-push-handler! catalog/MSG-SYNC-RUNTIME
       (fn [{:keys [uuid ability-data]}]
         (when (and uuid ability-data)
@@ -817,235 +901,246 @@
 
 (defn runtime-client-ui-hooks
   []
-  {:client-get-skill-by-controllable
-   (fn [cat-id ctrl-id]
-     (skill-query/get-skill-by-controllable cat-id ctrl-id))
+  (let [combat-notice-component (combat-notice/create-combat-notice-component)]
+    {:client-get-skill-by-controllable
+     (fn [cat-id ctrl-id]
+       (skill-query/get-skill-by-controllable cat-id ctrl-id))
 
-   :client-new-context
-   (fn [player-uuid skill-id]
-     (with-client-context-owner player-uuid #(ctx/new-context player-uuid skill-id)))
+     :client-new-context
+     (fn [player-uuid skill-id]
+       (with-client-context-owner player-uuid #(ctx/new-context player-uuid skill-id)))
 
-   :client-register-context!
-   (fn [ctx-map]
-     (ctx/register-context! ctx-map))
+     :client-register-context!
+     (fn [ctx-map]
+       (ctx/register-context! ctx-map))
 
-   :client-get-context
-   (fn [ctx-id]
-     (ctx/get-context ctx-id))
+     :client-get-context
+     (fn [ctx-id]
+       (ctx/get-context ctx-id))
 
-   :client-terminate-context!
-   (fn [ctx-id _reason]
-     (remove-slot-context! ctx-id)
-     (ctx/terminate-context! ctx-id nil))
+     :client-terminate-context!
+     (fn [ctx-id _reason]
+       (remove-slot-context! ctx-id)
+       (ctx/terminate-context! ctx-id nil))
 
-   :client-transition-to-alive!
-   (fn [ctx-id server-id payload]
-     (ctx/transition-to-alive! ctx-id server-id payload))
+     :client-transition-to-alive!
+     (fn [ctx-id server-id payload]
+       (ctx/transition-to-alive! ctx-id server-id payload))
 
-   :client-send-context-local!
-   (fn [ctx-id channel payload]
-     (ctx/ctx-send-to-local! ctx-id channel payload))
+     :client-send-context-local!
+     (fn [ctx-id channel payload]
+       (ctx/ctx-send-to-local! ctx-id channel payload))
 
-   :client-on-slot-key-down!
-   (fn [player-uuid key-idx]
-     ;; Reset keepalive throttle so the first hold refresh after key-down is never suppressed.
-     (swap! slot-key-tick-ms dissoc (slot-context-key player-uuid key-idx))
-     (send-slot-key-message! catalog/MSG-SLOT-KEY-DOWN player-uuid key-idx))
+     :client-on-slot-key-down!
+     (fn [player-uuid key-idx]
+       ;; Reset keepalive throttle so the first hold refresh after key-down is never suppressed.
+       (update-client-ui-runtime! update :slot-key-tick-ms dissoc (slot-context-key player-uuid key-idx))
+       (send-slot-key-message! catalog/MSG-SLOT-KEY-DOWN player-uuid key-idx))
 
-   :client-on-slot-key-tick!
-   (fn [player-uuid key-idx]
-     (let [slot-key (slot-context-key player-uuid key-idx)
-           now-ms   (System/currentTimeMillis)
-           last-ms  (get @slot-key-tick-ms slot-key 0)]
-       (when (>= (- now-ms last-ms) 100)
-         (swap! slot-key-tick-ms assoc slot-key now-ms)
-         (send-slot-keepalive! player-uuid key-idx))))
+     :client-on-slot-key-tick!
+     (fn [player-uuid key-idx]
+       (let [slot-key (slot-context-key player-uuid key-idx)
+             now-ms   (System/currentTimeMillis)
+             last-ms  (get (slot-key-tick-ms-snapshot) slot-key 0)]
+         (when (>= (- now-ms last-ms) 100)
+           (update-client-ui-runtime! assoc-in [:slot-key-tick-ms slot-key] now-ms)
+           (send-slot-keepalive! player-uuid key-idx))))
 
-   :client-on-slot-key-up!
-   (fn [player-uuid key-idx]
-     (swap! slot-key-tick-ms dissoc (slot-context-key player-uuid key-idx))
-     (send-slot-key-up-message! player-uuid key-idx))
+     :client-on-slot-key-up!
+     (fn [player-uuid key-idx]
+       (update-client-ui-runtime! update :slot-key-tick-ms dissoc (slot-context-key player-uuid key-idx))
+       (send-slot-key-up-message! player-uuid key-idx))
 
-   :client-on-slot-key-abort!
-   (fn [player-uuid key-idx]
-     (abort-slot-context! player-uuid key-idx))
+     :client-on-slot-key-abort!
+     (fn [player-uuid key-idx]
+       (abort-slot-context! player-uuid key-idx))
 
-   :client-on-movement-key-down!
-   (fn [player-uuid movement-key]
-     (send-flashing-movement-message! player-uuid :flashing/move-down movement-key))
+     :client-on-movement-key-down!
+     (fn [player-uuid movement-key]
+       (send-flashing-movement-message! player-uuid :flashing/move-down movement-key))
 
-   :client-on-movement-key-tick!
-   (fn [player-uuid movement-key]
-     (send-flashing-movement-message! player-uuid :flashing/move-tick movement-key))
+     :client-on-movement-key-tick!
+     (fn [player-uuid movement-key]
+       (send-flashing-movement-message! player-uuid :flashing/move-tick movement-key))
 
-   :client-on-movement-key-up!
-   (fn [player-uuid movement-key]
-     (send-flashing-movement-message! player-uuid :flashing/move-up movement-key))
+     :client-on-movement-key-up!
+     (fn [player-uuid movement-key]
+       (send-flashing-movement-message! player-uuid :flashing/move-up movement-key))
 
-   :client-on-slot-wheel!
-   (fn [player-uuid key-idx delta]
-     (send-slot-wheel-message! player-uuid key-idx delta))
+     :client-on-slot-wheel!
+     (fn [player-uuid key-idx delta]
+       (send-slot-wheel-message! player-uuid key-idx delta))
 
-   :client-clear-owner-state!
-   (fn [owner]
-     (clear-client-owned-runtime-state! owner))
+     :client-clear-owner-state!
+     (fn [owner]
+       (when-let [session-id (or (:client-session-id (when (map? owner) owner))
+                                 (:session-id (when (map? owner) owner))
+                                 (current-client-session-id))]
+         (combat-notice/clear-session! combat-notice-component session-id))
+       (clear-client-owned-runtime-state! owner))
 
-   :client-abort-all!
-   (fn []
-     (abort-all-slot-contexts-for-session! (current-session-id)))
+     :client-abort-all!
+     (fn []
+       (abort-all-slot-contexts-for-session! (current-session-id)))
 
-   :client-update-ability-data!
-   (fn [player-uuid ability-data]
-     (ensure-client-player-state! player-uuid)
-     (update-client-ability-data! player-uuid ability-data))
+     :client-update-ability-data!
+     (fn [player-uuid ability-data]
+       (ensure-client-player-state! player-uuid)
+       (update-client-ability-data! player-uuid ability-data))
 
-   :client-update-resource-data!
-   (fn [player-uuid resource-data]
-     (ensure-client-player-state! player-uuid)
-     (update-client-resource-data! player-uuid resource-data))
+     :client-update-resource-data!
+     (fn [player-uuid resource-data]
+       (ensure-client-player-state! player-uuid)
+       (update-client-resource-data! player-uuid resource-data))
 
-   :client-update-cooldown-data!
-   (fn [player-uuid cooldown-data]
-     (ensure-client-player-state! player-uuid)
-     (update-client-cooldown-data! player-uuid cooldown-data))
+     :client-update-cooldown-data!
+     (fn [player-uuid cooldown-data]
+       (ensure-client-player-state! player-uuid)
+       (update-client-cooldown-data! player-uuid cooldown-data))
 
-   :client-update-preset-data!
-   (fn [player-uuid preset-data]
-     (ensure-client-player-state! player-uuid)
-     (update-client-preset-data! player-uuid preset-data))
+     :client-update-preset-data!
+     (fn [player-uuid preset-data]
+       (ensure-client-player-state! player-uuid)
+       (update-client-preset-data! player-uuid preset-data))
 
-   :client-build-hud-render-data
-   (fn [hud-model screen-width screen-height cooldown-data]
-     (hud-renderer/build-hud-render-data hud-model screen-width screen-height cooldown-data))
+     :client-build-hud-render-data
+     (fn [hud-model screen-width screen-height cooldown-data]
+       (hud-renderer/build-hud-render-data hud-model screen-width screen-height cooldown-data
+                                           :combat-notice-component combat-notice-component))
 
-   :client-slot-visual-state
-   (fn [player-uuid key-idx]
-     (let [active-ctxs (player-contexts player-uuid)
-           skill-id (client-keybinds/get-skill-id-for-slot-public player-uuid key-idx)]
-       (:state (delegate-state/delegate-state-for-slot active-ctxs skill-id))))
+     :client-show-combat-notice!
+     (fn [notice-id payload]
+       (when-let [session-id (current-client-session-id)]
+         (combat-notice/show-notice! combat-notice-component session-id notice-id payload)))
 
-   :client-build-overlay-plan
-   (fn [player-uuid screen-width screen-height overlay-state]
-     (build-client-overlay-plan player-uuid screen-width screen-height overlay-state))
+     :client-slot-visual-state
+     (fn [player-uuid key-idx]
+       (let [active-ctxs (player-contexts player-uuid)
+             skill-id (client-keybinds/get-skill-id-for-slot-public player-uuid key-idx)]
+         (:state (delegate-state/delegate-state-for-slot active-ctxs skill-id))))
 
-   :client-req-learn-skill!
-   (fn [skill-id extra callback]
-     (client-api/req-learn-skill! skill-id extra callback))
+     :client-build-overlay-plan
+     (fn [player-uuid screen-width screen-height overlay-state]
+       (build-client-overlay-plan player-uuid screen-width screen-height overlay-state))
 
-   :client-req-level-up!
-   (fn [callback]
-     (client-api/req-level-up! callback))
+     :client-req-learn-skill!
+     (fn [skill-id extra callback]
+       (client-api/req-learn-skill! skill-id extra callback))
 
-   :client-req-set-activated!
-   (fn [activated callback]
-     (client-api/req-set-activated! activated callback))
+     :client-req-level-up!
+     (fn [callback]
+       (client-api/req-level-up! callback))
 
-   :client-req-set-preset-slot!
-   (fn [preset-idx key-idx cat-id ctrl-id callback]
-     (client-api/req-set-preset-slot! preset-idx key-idx cat-id ctrl-id callback))
+     :client-req-set-activated!
+     (fn [activated callback]
+       (client-api/req-set-activated! activated callback))
 
-   :client-req-switch-preset!
-   (fn [preset-idx callback]
-     (client-api/req-switch-preset! preset-idx callback))
+     :client-req-set-preset-slot!
+     (fn [preset-idx key-idx cat-id ctrl-id callback]
+       (client-api/req-set-preset-slot! preset-idx key-idx cat-id ctrl-id callback))
 
-   :client-open-managed-screen!
-   (fn [screen-key payload]
-     (let [{:keys [player-uuid client-session-id payload]} (validate-managed-screen-payload screen-key payload)]
-       (binding [runtime-hooks/*client-session-id* client-session-id]
-         (condp = screen-key
-      :ac/skill-tree
-      (assoc (skill-tree-screen/open-screen! player-uuid (:learn-context payload))
-        :title "Node Tree")
+     :client-req-switch-preset!
+     (fn [preset-idx callback]
+       (client-api/req-switch-preset! preset-idx callback))
 
-      :ac/preset-editor
-      (assoc (preset-editor-screen/open-screen! player-uuid)
-        :title "Preset Editor")
+     :client-open-managed-screen!
+     (fn [screen-key payload]
+       (let [{:keys [player-uuid client-session-id payload]} (validate-managed-screen-payload screen-key payload)]
+         (binding [runtime-hooks/*client-session-id* client-session-id]
+           (condp = screen-key
+             :ac/skill-tree
+             (assoc (skill-tree-screen/open-screen! player-uuid (:learn-context payload))
+                    :title "Node Tree")
 
-      :ac/saved-position
-      (assoc (location-teleport-screen/open-screen! player-uuid payload)
-        :title "Location Teleport"
-        :char-typed? true)
+             :ac/preset-editor
+             (assoc (preset-editor-screen/open-screen! player-uuid)
+                    :title "Preset Editor")
 
-      :ac/location-teleport
-      (assoc (location-teleport-screen/open-screen! player-uuid payload)
-        :title "Location Teleport"
-        :char-typed? true)
+             :ac/saved-position
+             (assoc (location-teleport-screen/open-screen! player-uuid payload)
+                    :title "Location Teleport"
+                    :char-typed? true)
 
-      nil))))
+             :ac/location-teleport
+             (assoc (location-teleport-screen/open-screen! player-uuid payload)
+                    :title "Location Teleport"
+                    :char-typed? true)
 
-   :client-build-managed-screen-render-data
-   (fn [screen-key]
-     (condp = screen-key
-       :ac/skill-tree (skill-tree-screen/build-screen-render-data)
-       :ac/preset-editor (preset-editor-screen/build-preset-editor-render-data)
-       :ac/saved-position nil
-       :ac/location-teleport nil
-       nil))
+             nil))))
 
-   :client-build-managed-screen-draw-ops
-   (fn [screen-key mouse-x mouse-y]
-     (condp = screen-key
-       :ac/skill-tree (skill-tree-screen/build-draw-ops mouse-x mouse-y)
-       :ac/preset-editor (build-preset-editor-draw-ops)
-       :ac/saved-position (location-teleport-screen/build-draw-ops mouse-x mouse-y)
-       :ac/location-teleport (location-teleport-screen/build-draw-ops mouse-x mouse-y)
-       []))
+     :client-build-managed-screen-render-data
+     (fn [screen-key]
+       (condp = screen-key
+         :ac/skill-tree (skill-tree-screen/build-screen-render-data)
+         :ac/preset-editor (preset-editor-screen/build-preset-editor-render-data)
+         :ac/saved-position nil
+         :ac/location-teleport nil
+         nil))
 
-   :client-handle-managed-screen-hover!
-   (fn [screen-key mouse-x mouse-y]
-     (condp = screen-key
-       :ac/skill-tree (skill-tree-screen/on-mouse-move mouse-x mouse-y)
-       :ac/saved-position (location-teleport-screen/on-mouse-move mouse-x mouse-y)
-       :ac/location-teleport (location-teleport-screen/on-mouse-move mouse-x mouse-y)
-       nil))
+     :client-build-managed-screen-draw-ops
+     (fn [screen-key mouse-x mouse-y]
+       (condp = screen-key
+         :ac/skill-tree (skill-tree-screen/build-draw-ops mouse-x mouse-y)
+         :ac/preset-editor (build-preset-editor-draw-ops)
+         :ac/saved-position (location-teleport-screen/build-draw-ops mouse-x mouse-y)
+         :ac/location-teleport (location-teleport-screen/build-draw-ops mouse-x mouse-y)
+         []))
 
-   :client-handle-managed-screen-click!
-   (fn [screen-key mouse-x mouse-y]
-     (condp = screen-key
-       :ac/skill-tree (skill-tree-screen/handle-screen-click! mouse-x mouse-y)
-       :ac/preset-editor (preset-editor-screen/handle-screen-click! mouse-x mouse-y)
-       :ac/saved-position (location-teleport-screen/handle-screen-click! mouse-x mouse-y)
-       :ac/location-teleport (location-teleport-screen/handle-screen-click! mouse-x mouse-y)
-       false))
+     :client-handle-managed-screen-hover!
+     (fn [screen-key mouse-x mouse-y]
+       (condp = screen-key
+         :ac/skill-tree (skill-tree-screen/on-mouse-move mouse-x mouse-y)
+         :ac/saved-position (location-teleport-screen/on-mouse-move mouse-x mouse-y)
+         :ac/location-teleport (location-teleport-screen/on-mouse-move mouse-x mouse-y)
+         nil))
 
-   :client-handle-managed-screen-char-typed!
-   (fn [screen-key ch]
-     (condp = screen-key
-       :ac/saved-position (location-teleport-screen/handle-char-typed! ch)
-       :ac/location-teleport (location-teleport-screen/handle-char-typed! ch)
-       nil))
+     :client-handle-managed-screen-click!
+     (fn [screen-key mouse-x mouse-y]
+       (condp = screen-key
+         :ac/skill-tree (skill-tree-screen/handle-screen-click! mouse-x mouse-y)
+         :ac/preset-editor (preset-editor-screen/handle-screen-click! mouse-x mouse-y)
+         :ac/saved-position (location-teleport-screen/handle-screen-click! mouse-x mouse-y)
+         :ac/location-teleport (location-teleport-screen/handle-screen-click! mouse-x mouse-y)
+         false))
 
-   :client-close-managed-screen!
-   (fn [screen-key]
-     (condp = screen-key
-       :ac/skill-tree (skill-tree-screen/close-screen!)
-       :ac/preset-editor (preset-editor-screen/close-screen!)
-       :ac/saved-position (location-teleport-screen/close-screen!)
-       :ac/location-teleport (location-teleport-screen/close-screen!)
-       nil))
+     :client-handle-managed-screen-char-typed!
+     (fn [screen-key ch]
+       (condp = screen-key
+         :ac/saved-position (location-teleport-screen/handle-char-typed! ch)
+         :ac/location-teleport (location-teleport-screen/handle-char-typed! ch)
+         nil))
 
-   :client-register-push-handlers!
-   (fn []
-     (register-client-push-handlers!))
+     :client-close-managed-screen!
+     (fn [screen-key]
+       (condp = screen-key
+         :ac/skill-tree (skill-tree-screen/close-screen!)
+         :ac/preset-editor (preset-editor-screen/close-screen!)
+         :ac/saved-position (location-teleport-screen/close-screen!)
+         :ac/location-teleport (location-teleport-screen/close-screen!)
+         nil))
 
-   :client-notify-visual-event!
-   (fn [event-key payload]
-     (case event-key
-       :ac/charge-coin-throw (notify-charge-coin-throw! (:player-uuid payload))
-       nil))
+     :client-register-push-handlers!
+     (fn []
+       (register-client-push-handlers!))
 
-   :client-visual-state
-   (fn [state-key payload]
-     (case state-key
-       :ac/charge-coin (charge-coin-visual-state (:player-uuid payload))
-       :ac/body-intensify-charge (body-intensify-visual-state (:player-uuid payload))
-       :ac/current-charging (current-charging-visual-state (:player-uuid payload))
-       nil))
+     :client-notify-visual-event!
+     (fn [event-key payload]
+       (case event-key
+         :ac/charge-coin-throw (notify-charge-coin-throw! (:player-uuid payload))
+         nil))
 
-   :client-trigger-mode-switch!
-   (fn [player-uuid]
-     (client-keybinds/trigger-mode-switch! player-uuid))
+     :client-visual-state
+     (fn [state-key payload]
+       (case state-key
+         :ac/charge-coin (charge-coin-visual-state (:player-uuid payload))
+         :ac/body-intensify-charge (body-intensify-visual-state (:player-uuid payload))
+         :ac/current-charging (current-charging-visual-state (:player-uuid payload))
+         nil))
 
-   :client-trigger-preset-switch!
-   (fn [player-uuid]
-     (client-keybinds/switch-preset! player-uuid))})
+     :client-trigger-mode-switch!
+     (fn [player-uuid]
+       (client-keybinds/trigger-mode-switch! player-uuid))
+
+     :client-trigger-preset-switch!
+     (fn [player-uuid]
+       (client-keybinds/switch-preset! player-uuid))}))

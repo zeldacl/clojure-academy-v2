@@ -159,26 +159,73 @@
 (defn- new-energy-system []
   (->EnergySystemImpl (atom {}) (atom {}) (atom {})))
 
-(defonce ^:private default-energy-system*
-  (delay (atom {})))
+(defn create-energy-system-runtime
+  []
+  {::runtime ::energy-system-runtime
+   :systems* (atom {})})
+
+(def ^:dynamic *energy-system-runtime* nil)
+
+(defonce ^:private installed-energy-system-runtime
+  (create-energy-system-runtime))
+
+(defn- energy-system-runtime?
+  [runtime]
+  (and (map? runtime)
+       (= ::energy-system-runtime (::runtime runtime))
+       (some? (:systems* runtime))))
+
+(defn call-with-energy-system-runtime
+  [runtime f]
+  (when-not (energy-system-runtime? runtime)
+    (throw (ex-info "Expected energy system runtime"
+                    {:runtime runtime})))
+  (binding [*energy-system-runtime* runtime]
+    (f)))
+
+(defmacro with-energy-system-runtime
+  [runtime & body]
+  `(call-with-energy-system-runtime ~runtime (fn [] ~@body)))
+
+(defn- current-energy-system-runtime
+  []
+  (or *energy-system-runtime*
+      installed-energy-system-runtime))
+
+(defn- systems-atom
+  []
+  (:systems* (current-energy-system-runtime)))
+
+(defn- systems-snapshot
+  []
+  @(systems-atom))
 
 (defn energy-system
   "Return the default energy system implementation."
   [owner]
   (let [key (energy-owner-key owner)
-        systems @default-energy-system*]
-    (or (get @systems key)
+        systems* (systems-atom)
+        created* (volatile! nil)]
+    (or (get (systems-snapshot) key)
         (do
-          (swap! systems #(if (contains? % key) % (assoc % key (new-energy-system))))
-          (get @systems key)))))
+          (swap! systems*
+                 (fn [systems]
+                   (if-let [existing (get systems key)]
+                     (do
+                       (vreset! created* existing)
+                       systems)
+                     (let [created (new-energy-system)]
+                       (vreset! created* created)
+                       (assoc systems key created)))))
+          @created*))))
 
 (defn energy-systems-snapshot
   []
-  (deref @default-energy-system*))
+  (systems-snapshot))
 
 (defn reset-energy-systems-for-test!
   []
-  (reset! @default-energy-system* {})
+  (reset! (systems-atom) {})
   nil)
 
 (defn register-provider!

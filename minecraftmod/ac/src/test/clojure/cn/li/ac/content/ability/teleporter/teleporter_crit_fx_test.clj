@@ -1,19 +1,12 @@
 (ns cn.li.ac.content.ability.teleporter.teleporter-crit-fx-test
-  (:require [clojure.test :refer [deftest is use-fixtures]]
-            [cn.li.ac.ability.client.combat-notice :as combat-notice]
+  (:require [clojure.test :refer [deftest is]]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.content.ability.teleporter.teleporter-crit-fx :as crit-fx]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.i18n]))
-
-(defn- reset-fixture [f]
-  (combat-notice/reset-notices!)
-  (f)
-  (combat-notice/reset-notices!))
-
-(use-fixtures :each reset-fixture)
 
 (deftest init-registers-teleporter-crit-channel-test
   (let [registered-level* (atom nil)
@@ -56,15 +49,19 @@
              @enqueued*)))))
 
     (deftest enqueue-crit-hit-emits-level-scaled-effects-and-notice-test
-  (let [particles* (atom [])
-        sounds* (atom [])
-        enqueue! (var-get #'cn.li.ac.content.ability.teleporter.teleporter-crit-fx/enqueue!)]
-    (with-redefs [client-particles/queue-particle-effect! (fn [payload]
-                                                             (swap! particles* conj payload)
-                                                             nil)
-                  client-sounds/queue-sound-effect! (fn [payload]
-                                                      (swap! sounds* conj payload)
-                                                      nil)
+      (let [particles* (atom [])
+            sounds* (atom [])
+            notices* (atom [])
+            enqueue! (var-get #'cn.li.ac.content.ability.teleporter.teleporter-crit-fx/enqueue!)]
+    (with-redefs [client-particles/queue-current-particle-effect! (fn [payload]
+                                    (swap! particles* conj payload)
+                                    nil)
+            client-sounds/queue-current-sound-effect! (fn [payload]
+                                  (swap! sounds* conj payload)
+                                  nil)
+                      runtime-hooks/client-show-combat-notice! (fn [notice-id payload]
+                                                                 (swap! notices* conj [notice-id payload])
+                                                                 nil)
                   cn.li.mcmod.i18n/*translate-fn* (fn [k]
                                                     (case k
                                                       "ability.teleporter.critical_hit" "Critical Hit %s"
@@ -80,6 +77,8 @@
       (is (= :portal (:particle-type (first @particles*))))
       (is (= :electric_spark (:particle-type (second @particles*))))
       (is (= "my_mod:tp.tp" (:sound-id (first @sounds*))))
-      (is (= "ability.teleporter.critical_hit" (:message-key (combat-notice/active-notice :teleporter-crit (System/currentTimeMillis)))))
-      (is (= ["x2.6"] (:message-args (combat-notice/active-notice :teleporter-crit (System/currentTimeMillis)))))
-      (is (= "Critical Hit x2.6" (:text (combat-notice/active-notice :teleporter-crit (System/currentTimeMillis))))))))
+      (is (= [[:teleporter-crit {:message-key "ability.teleporter.critical_hit"
+                 :args ["x2.6"]
+                 :duration-ms 1500
+                 :color [255 226 120]}]]
+         @notices*)))))

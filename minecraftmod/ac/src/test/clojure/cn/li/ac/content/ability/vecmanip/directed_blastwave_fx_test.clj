@@ -5,10 +5,14 @@
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.content.ability.vecmanip.directed-blastwave-fx :as blastwave-fx]))
 
-(defn- reset-fixture [f]
-  (blastwave-fx/reset-directed-blastwave-fx-for-test!)
-  (f)
-  (blastwave-fx/reset-directed-blastwave-fx-for-test!))
+(defn- with-fresh-directed-blastwave-fx-runtime [f]
+  (blastwave-fx/call-with-directed-blastwave-fx-runtime
+    (blastwave-fx/create-directed-blastwave-fx-runtime)
+    (fn []
+      (try
+        (f)
+        (finally
+          (blastwave-fx/reset-directed-blastwave-fx-for-test!))))))
 
 (defn- event [ctx-id payload]
   {:payload payload
@@ -16,7 +20,7 @@
    :channel :directed-blastwave/fx-perform
    :owner-key [:ctx ctx-id]})
 
-(use-fixtures :each reset-fixture)
+(use-fixtures :each with-fresh-directed-blastwave-fx-runtime)
 
 (deftest init-registers-directed-blastwave-fx-channels-test
   (let [registered-level* (atom nil)
@@ -69,9 +73,9 @@
 (deftest enqueue-perform-spawns-wave-and-queues-sound-test
   (let [enqueue! @#'cn.li.ac.content.ability.vecmanip.directed-blastwave-fx/enqueue!
         sound-calls* (atom [])]
-    (with-redefs [client-sounds/queue-sound-effect! (fn [payload]
-                                                      (swap! sound-calls* conj payload)
-                                                      nil)
+    (with-redefs [client-sounds/queue-current-sound-effect! (fn [payload]
+                                                              (swap! sound-calls* conj payload)
+                                                              nil)
                   rand-int (fn [_] 0)
                   rand (fn [] 0.5)]
       (enqueue! (event "ctx-wave"
@@ -87,7 +91,7 @@
 (deftest tick-clears-finished-state-and-expires-wave-test
   (let [enqueue! @#'cn.li.ac.content.ability.vecmanip.directed-blastwave-fx/enqueue!
         tick! @#'cn.li.ac.content.ability.vecmanip.directed-blastwave-fx/tick!]
-    (with-redefs [client-sounds/queue-sound-effect! (fn [_] nil)]
+    (with-redefs [client-sounds/queue-current-sound-effect! (fn [_] nil)]
       (enqueue! (event "ctx-tick" {:mode :start}))
       (enqueue! (event "ctx-tick" {:mode :end :performed? false}))
       (tick!)
@@ -102,7 +106,7 @@
 (deftest two-owners-keep-blastwave-state-and-waves-independent-test
   (let [enqueue! @#'cn.li.ac.content.ability.vecmanip.directed-blastwave-fx/enqueue!
         tick! @#'cn.li.ac.content.ability.vecmanip.directed-blastwave-fx/tick!]
-    (with-redefs [client-sounds/queue-sound-effect! (fn [_] nil)
+  (with-redefs [client-sounds/queue-current-sound-effect! (fn [_] nil)
                   rand-int (fn [_] 0)
                   rand (fn [] 0.5)]
       (enqueue! (event "ctx-a" {:mode :start}))
@@ -134,3 +138,37 @@
         (let [after-clear (blastwave-fx/directed-blastwave-fx-snapshot)]
           (is (nil? (get (:waves after-clear) [:ctx "ctx-a"])))
           (is (= 1 (count (get (:waves after-clear) [:ctx "ctx-b"])))))))))
+
+(deftest directed-blastwave-fx-runtime-isolation-test
+  (let [runtime-a (blastwave-fx/create-directed-blastwave-fx-runtime)
+        runtime-b (blastwave-fx/create-directed-blastwave-fx-runtime)
+        enqueue! @#'cn.li.ac.content.ability.vecmanip.directed-blastwave-fx/enqueue!]
+    (with-redefs [client-sounds/queue-current-sound-effect! (fn [_] nil)
+                  rand-int (fn [_] 0)
+                  rand (fn [] 0.5)]
+      (blastwave-fx/call-with-directed-blastwave-fx-runtime
+        runtime-a
+        (fn []
+          (enqueue! (event "ctx-a" {:mode :start}))
+          (enqueue! (event "ctx-a" {:mode :update :charge-ticks 9 :punched? true}))
+          (enqueue! (event "ctx-a"
+                           {:mode :perform
+                            :pos {:x 1.0 :y 2.0 :z 3.0}
+                            :look-dir {:x 0.0 :y 0.0 :z 1.0}}))
+          (is (= 9 (get-in (blastwave-fx/directed-blastwave-fx-snapshot)
+                           [:effect-state [:ctx "ctx-a"] :charge-ticks])))
+          (is (= 1 (count (get (:waves (blastwave-fx/directed-blastwave-fx-snapshot)) [:ctx "ctx-a"]))))))
+      (blastwave-fx/call-with-directed-blastwave-fx-runtime
+        runtime-b
+        (fn []
+          (is (= {:effect-state {}
+                  :waves {}}
+                 (blastwave-fx/directed-blastwave-fx-snapshot)))
+          (enqueue! (event "ctx-b" {:mode :start}))
+          (is (= #{[:ctx "ctx-b"]}
+                 (set (keys (:effect-state (blastwave-fx/directed-blastwave-fx-snapshot))))))))
+      (blastwave-fx/call-with-directed-blastwave-fx-runtime
+        runtime-a
+        (fn []
+          (is (= 9 (get-in (blastwave-fx/directed-blastwave-fx-snapshot)
+                           [:effect-state [:ctx "ctx-a"] :charge-ticks]))))))))

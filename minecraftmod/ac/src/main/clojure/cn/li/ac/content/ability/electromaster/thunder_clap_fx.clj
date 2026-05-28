@@ -4,20 +4,70 @@
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.render-util :as ru]))
 
-(defonce ^:private effect-state (atom {}))
+(defn default-thunder-clap-fx-runtime-state
+  []
+  {:effect-state {}})
+
+(defn create-thunder-clap-fx-runtime
+  ([]
+   (create-thunder-clap-fx-runtime {}))
+  ([{:keys [state*]
+     :or {state* (atom (default-thunder-clap-fx-runtime-state))}}]
+   {::runtime ::thunder-clap-fx-runtime
+    :state* state*}))
+
+(def ^:dynamic *thunder-clap-fx-runtime* nil)
+
+(defonce ^:private installed-thunder-clap-fx-runtime
+  (create-thunder-clap-fx-runtime))
+
+(defn- thunder-clap-fx-runtime?
+  [runtime]
+  (and (map? runtime)
+       (= ::thunder-clap-fx-runtime (::runtime runtime))
+       (some? (:state* runtime))))
+
+(defn call-with-thunder-clap-fx-runtime
+  [runtime f]
+  (when-not (thunder-clap-fx-runtime? runtime)
+    (throw (ex-info "Expected thunder clap FX runtime"
+                    {:value runtime})))
+  (binding [*thunder-clap-fx-runtime* runtime]
+    (f)))
+
+(defmacro with-thunder-clap-fx-runtime
+  [runtime & body]
+  `(call-with-thunder-clap-fx-runtime ~runtime (fn [] ~@body)))
+
+(defn- current-thunder-clap-fx-runtime
+  []
+  (or *thunder-clap-fx-runtime*
+      installed-thunder-clap-fx-runtime))
+
+(defn- thunder-clap-fx-state-atom
+  []
+  (:state* (current-thunder-clap-fx-runtime)))
+
+(defn- thunder-clap-fx-state-snapshot
+  []
+  @(thunder-clap-fx-state-atom))
+
+(defn- update-thunder-clap-fx-state!
+  [f & args]
+  (apply swap! (thunder-clap-fx-state-atom) f args))
 
 (defn thunder-clap-fx-snapshot
   []
-  {:effect-state @effect-state})
+  (thunder-clap-fx-state-snapshot))
 
 (defn reset-thunder-clap-fx-for-test!
   []
-  (reset! effect-state {})
+  (reset! (thunder-clap-fx-state-atom) (default-thunder-clap-fx-runtime-state))
   nil)
 
 (defn clear-thunder-clap-owner!
   [owner-key]
-  (swap! effect-state dissoc owner-key)
+  (update-thunder-clap-fx-state! update :effect-state dissoc owner-key)
   nil)
 
 ;; ---------------------------------------------------------------------------
@@ -26,33 +76,36 @@
 
 (defn- enqueue! [{:keys [payload ctx-id channel owner-key]}]
   (let [owner-key* (or owner-key [:ctx ctx-id])
-   {:keys [mode ticks charge-ratio target performed? source-player-id world-id]} payload
-   base-meta {:owner-key owner-key*
-         :ctx-id ctx-id
-         :channel channel
-         :source-player-id source-player-id
-         :world-id world-id}]
+        {:keys [mode ticks charge-ratio target performed? source-player-id world-id]} payload
+        base-meta {:owner-key owner-key*
+                   :ctx-id ctx-id
+                   :channel channel
+                   :source-player-id source-player-id
+                   :world-id world-id}]
     (case mode
       :start
-      (swap! effect-state assoc owner-key*
+      (update-thunder-clap-fx-state!
+        update :effect-state assoc owner-key*
         (merge base-meta {:active? true :ticks 0 :charge-ratio 0.0 :target nil :performed? false}))
       :update
-      (swap! effect-state update owner-key*
-             (fn [st]
-     (assoc (merge base-meta (or st {}))
-       :owner-key owner-key*
-       :ctx-id ctx-id
-       :channel channel
-       :source-player-id source-player-id
-       :world-id world-id
-                      :active? true
-                      :ticks (long (or ticks 0))
-                      :charge-ratio (double (or charge-ratio 0.0))
-                      :target target)))
+      (update-thunder-clap-fx-state!
+        update :effect-state update owner-key*
+        (fn [st]
+          (assoc (merge base-meta (or st {}))
+                 :owner-key owner-key*
+                 :ctx-id ctx-id
+                 :channel channel
+                 :source-player-id source-player-id
+                 :world-id world-id
+                 :active? true
+                 :ticks (long (or ticks 0))
+                 :charge-ratio (double (or charge-ratio 0.0))
+                 :target target)))
       :end
-      (swap! effect-state assoc owner-key*
+      (update-thunder-clap-fx-state!
+        update :effect-state assoc owner-key*
         (merge base-meta {:active? false :performed? (boolean performed?)
-            :ticks 0 :charge-ratio 0.0 :target nil}))
+                          :ticks 0 :charge-ratio 0.0 :target nil}))
       nil)))
 
 ;; ---------------------------------------------------------------------------
@@ -60,13 +113,14 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- tick! []
-  (swap! effect-state
-         (fn [states]
-           (into {}
-                 (keep (fn [[owner-key st]]
-                         (when (:active? st)
-                           [owner-key (update st :ticks (fnil inc 0))])))
-                 states))))
+  (update-thunder-clap-fx-state!
+    update :effect-state
+    (fn [states]
+      (into {}
+            (keep (fn [[owner-key st]]
+                    (when (:active? st)
+                      [owner-key (update st :ticks (fnil inc 0))])))
+            states))))
 
 ;; ---------------------------------------------------------------------------
 ;; Render ops
@@ -125,7 +179,7 @@
                                   (= (str (:source-player-id st))
                                      (str (:player-uuid hand-center-pos)))))
                      st))
-                 (vals @effect-state))]
+                 (vals (:effect-state (thunder-clap-fx-state-snapshot))))]
     (when (and hand-center-pos tc (:active? tc))
       (let [player-center (dissoc hand-center-pos :player-uuid)
             ticks (long (or (:ticks tc) 0))

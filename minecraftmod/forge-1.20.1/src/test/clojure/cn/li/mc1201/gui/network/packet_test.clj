@@ -4,18 +4,20 @@
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.network.client :as client]))
 
-(defn- reset-client-state!
+(defn- with-fresh-client-runtime
   [f]
-  (client/reset-client-state-for-test!)
-  (try
-    (f)
-    (finally
-      (client/reset-client-state-for-test!))))
+  (client/call-with-client-runtime (client/create-client-runtime)
+    (fn []
+      (try
+        (f)
+        (finally
+          (client/reset-client-state-for-test!))))))
 
-(use-fixtures :each reset-client-state!)
+(use-fixtures :each with-fresh-client-runtime)
 
 (deftest dispatch-client-response-respects-explicit-owner-test
-  (let [owner {:client-session-id :session-a :screen-id :screen-a}
+  (let [session (client/create-client-network-session)
+        owner {:client-session-id :session-a :screen-id :screen-a :client-network-session session}
         calls (atom [])]
     (with-redefs [client/send-request (fn [& _] nil)]
       (client/send-to-server owner "req" {} (fn [resp] (swap! calls conj [:response resp])))

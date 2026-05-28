@@ -382,14 +382,20 @@
        (contains? container :tile-entity)
        (contains? container :energy)))
 
-(defonce ^:private ability-interferer-gui-installed? (atom false))
+(def ^:private ability-interferer-gui-guard-lock
+  (Object.))
+
+(def ^:private ^:dynamic *ability-interferer-gui-installed?*
+  false)
 
 (defn init-ability-interferer-gui!
   []
-  (when (compare-and-set! ability-interferer-gui-installed? false true)
-    (slot-schema/register-slot-schema!
-      {:schema-id interferer-slot-schema-id
-       :slots [{:id :battery :type :energy :x 139 :y 25}]})
+  (when-not (var-get #'*ability-interferer-gui-installed?*)
+    (locking ability-interferer-gui-guard-lock
+      (when-not (var-get #'*ability-interferer-gui-installed?*)
+        (slot-schema/register-slot-schema!
+          {:schema-id interferer-slot-schema-id
+           :slots [{:id :battery :type :energy :x 139 :y 25}]})
     (gui-reg/register-block-gui!
             (gui-manifest/gui-name :ability-interferer)
             (merge (gui-manifest/gui-registration :ability-interferer)
@@ -408,4 +414,5 @@
        :slot-set-fn set-slot-item!
        :slot-can-place-fn can-place-item?
               :slot-changed-fn slot-changed!}))
-    (log/info "Ability Interferer GUI initialized")))
+        (alter-var-root #'*ability-interferer-gui-installed?* (constantly true))
+        (log/info "Ability Interferer GUI initialized")))))

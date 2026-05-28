@@ -5,10 +5,14 @@
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]))
 
-(defn- reset-fixture [f]
-  (brfx/reset-blood-retrograde-fx-for-test!)
-  (f)
-  (brfx/reset-blood-retrograde-fx-for-test!))
+(defn- with-fresh-blood-retrograde-fx-runtime [f]
+  (brfx/call-with-blood-retrograde-fx-runtime
+    (brfx/create-blood-retrograde-fx-runtime)
+    (fn []
+      (try
+        (f)
+        (finally
+          (brfx/reset-blood-retrograde-fx-for-test!))))))
 
 (defn- event [ctx-id payload]
   {:payload payload
@@ -16,7 +20,7 @@
    :channel :blood-retrograde/fx-perform
    :owner-key [:ctx ctx-id]})
 
-(use-fixtures :each reset-fixture)
+(use-fixtures :each with-fresh-blood-retrograde-fx-runtime)
 
 (deftest init-registers-blood-retrograde-fx-channels-test
   (let [registered-effect (atom nil)
@@ -54,9 +58,9 @@
                                                                        :channel (:channel fx-context)
                                                                        :owner-key [:ctx (:ctx-id fx-context)]})
                                                         nil)
-                  client-sounds/queue-sound-effect! (fn [payload]
-                                                      (swap! sound-calls* conj payload)
-                                                      nil)]
+                  client-sounds/queue-current-sound-effect! (fn [payload]
+                                                              (swap! sound-calls* conj payload)
+                                                              nil)]
       (brfx/init!)
       (@handler* "ctx-1" :blood-retrograde/fx-start nil)
       (@handler* "ctx-1" :blood-retrograde/fx-update {:ticks 7 :charge-ratio 0.35})
@@ -88,7 +92,7 @@
   (let [build-plan @#'cn.li.ac.content.ability.vecmanip.blood-retrograde-fx/build-plan
         tick! @#'cn.li.ac.content.ability.vecmanip.blood-retrograde-fx/tick!
         enqueue! @#'cn.li.ac.content.ability.vecmanip.blood-retrograde-fx/enqueue!]
-    (with-redefs [client-sounds/queue-sound-effect! (fn [_] nil)]
+    (with-redefs [client-sounds/queue-current-sound-effect! (fn [_] nil)]
       (enqueue! (event "ctx-main" {:mode :start}))
         (is (approx= 0.1 (:local-walk-speed (build-plan {:x 0.0 :y 0.0 :z 0.0}
                     {:x 0.0 :y 0.0 :z 0.0}
@@ -116,7 +120,7 @@
 
 (deftest two-owners-keep-blood-retrograde-state-and-queues-independent-test
   (let [enqueue! @#'cn.li.ac.content.ability.vecmanip.blood-retrograde-fx/enqueue!]
-    (with-redefs [client-sounds/queue-sound-effect! (fn [_] nil)]
+    (with-redefs [client-sounds/queue-current-sound-effect! (fn [_] nil)]
       (enqueue! (event "ctx-a" {:mode :start}))
       (enqueue! (event "ctx-b" {:mode :start}))
       (enqueue! (event "ctx-a" {:mode :update :ticks 5 :charge-ratio 0.25}))
@@ -141,3 +145,33 @@
           (is (nil? (get (:effect-state after-clear) [:ctx "ctx-a"])))
           (is (nil? (get (:splashes after-clear) [:ctx "ctx-a"])))
           (is (= 1 (count (get (:sprays after-clear) [:ctx "ctx-b"])))))))))
+
+(deftest blood-retrograde-fx-runtime-isolation-test
+  (let [runtime-a (brfx/create-blood-retrograde-fx-runtime)
+        runtime-b (brfx/create-blood-retrograde-fx-runtime)
+        enqueue! @#'cn.li.ac.content.ability.vecmanip.blood-retrograde-fx/enqueue!]
+    (with-redefs [client-sounds/queue-current-sound-effect! (fn [_] nil)]
+      (brfx/call-with-blood-retrograde-fx-runtime
+        runtime-a
+        (fn []
+          (enqueue! (event "ctx-a" {:mode :start}))
+          (enqueue! (event "ctx-a"
+                           {:mode :perform
+                            :sound-pos {:x 1.0 :y 2.0 :z 3.0}
+                            :splashes [{:x 1.0 :y 2.0 :z 3.0 :size 1.0}]
+                            :sprays [{:x 4.0 :y 5.0 :z 6.0 :face :up :size 1.0}]}))
+          (is (= 1 (count (get (:splashes (brfx/blood-retrograde-fx-snapshot)) [:ctx "ctx-a"]))))))
+      (brfx/call-with-blood-retrograde-fx-runtime
+        runtime-b
+        (fn []
+          (is (= {:effect-state {}
+                  :splashes {}
+                  :sprays {}}
+                 (brfx/blood-retrograde-fx-snapshot)))
+          (enqueue! (event "ctx-b" {:mode :start}))
+          (is (= #{[:ctx "ctx-b"]}
+                 (set (keys (:effect-state (brfx/blood-retrograde-fx-snapshot))))))))
+      (brfx/call-with-blood-retrograde-fx-runtime
+        runtime-a
+        (fn []
+          (is (= 1 (count (get (:splashes (brfx/blood-retrograde-fx-snapshot)) [:ctx "ctx-a"])))))))))

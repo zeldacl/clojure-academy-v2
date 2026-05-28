@@ -3,9 +3,9 @@
             [cn.li.mcmod.gui.slot-schema :as slot-schema]))
 
 (defn- reset-slot-schema-registry! [f]
-  (reset! slot-schema/slot-schema-registry {})
+  (slot-schema/set-slot-schema-registry! {})
   (f)
-  (reset! slot-schema/slot-schema-registry {}))
+  (slot-schema/set-slot-schema-registry! {}))
 
 (use-fixtures :each reset-slot-schema-registry!)
 

@@ -64,3 +64,30 @@
        clojure.lang.ExceptionInfo
        #"Network server handlers are frozen"
        (server/register-handler "late" (fn [_ _] nil)))))
+
+(deftest network-server-runtime-isolation-test
+  (let [runtime-a (server/create-network-server-runtime)
+        runtime-b (server/create-network-server-runtime)
+        responses* (atom [])]
+    (server/call-with-network-server-runtime
+      runtime-a
+      (fn []
+        (server/register-handler "a" (fn [payload _] {:ok (:v payload)}))
+        (server/handle-request "a" 1 {:v 11} :player
+                               (fn [req-id resp] (swap! responses* conj [:a req-id resp])))
+        (is (= [[:a 1 {:ok 11}]] @responses*))))
+    (server/call-with-network-server-runtime
+      runtime-b
+      (fn []
+        (is (empty? (:handlers (server/handlers-snapshot))))
+        (server/register-handler "b" (fn [payload _] {:ok (:v payload)}))
+        (server/handle-request "b" 2 {:v 22} :player
+                               (fn [req-id resp] (swap! responses* conj [:b req-id resp])))
+        (is (= [[:a 1 {:ok 11}] [:b 2 {:ok 22}]] @responses*))))
+    (server/call-with-network-server-runtime
+      runtime-a
+      (fn []
+        (server/handle-request "a" 3 {:v 33} :player
+                               (fn [req-id resp] (swap! responses* conj [:a req-id resp])))
+        (is (= [[:a 1 {:ok 11}] [:b 2 {:ok 22}] [:a 3 {:ok 33}]]
+               @responses*))))))

@@ -12,12 +12,31 @@
   (:import [net.minecraft.resources ResourceLocation]
            [net.fabricmc.fabric.api.screenhandler.v1 ScreenHandlerRegistry]))
 
-(defonce gui-handler-types
+(def ^:private gui-handler-registry-lock
+  (Object.))
+
+(def ^:private ^:dynamic *gui-handler-types*
   ^{:doc "Map from GUI ID to registered MenuType instances"}
-  (atom {}))
+  {})
+
+(defn- gui-handler-types-snapshot
+  []
+  (var-get #'*gui-handler-types*))
+
+(defn- assoc-gui-handler-type!
+  [gui-id handler-type]
+  (locking gui-handler-registry-lock
+    (alter-var-root #'*gui-handler-types* assoc gui-id handler-type)
+    nil))
+
+(defn- clear-gui-handler-types!
+  []
+  (locking gui-handler-registry-lock
+    (alter-var-root #'*gui-handler-types* (constantly {}))
+    nil))
 
 (defn get-handler-type [gui-id]
-  (get @gui-handler-types gui-id))
+  (get (gui-handler-types-snapshot) gui-id))
 
 (defn create-extended-screen-handler-type [gui-id]
   (let [registry-name (gui/get-registry-name gui-id)]
@@ -46,9 +65,9 @@
   (doseq [gui-id (gui/get-all-gui-ids)]
     (let [handler-type (create-extended-screen-handler-type gui-id)
           registry-name (gui/get-registry-name gui-id)]
-      (swap! gui-handler-types assoc gui-id handler-type)
+      (assoc-gui-handler-type! gui-id handler-type)
       (log/info "Registered screen handler type:" registry-name "for GUI ID" gui-id)))
-  (log/info "Registered" (count @gui-handler-types) "screen handler types"))
+  (log/info "Registered" (count (gui-handler-types-snapshot)) "screen handler types"))
 
 (defn open-gui-for-player [player gui-id tile-entity]
   (open-core/log-open-start! "[FABRIC-OPEN-GUI]" player gui-id tile-entity)
@@ -64,11 +83,11 @@
   (registry-api/register-registry-impl!
     :fabric-1.20.1
     {:register-menu-type! (fn [gui-id menu-type]
-                            (swap! gui-handler-types assoc gui-id menu-type)
+                            (assoc-gui-handler-type! gui-id menu-type)
                             nil)
      :get-menu-type get-handler-type
-     :list-menu-types (fn [] @gui-handler-types)
-     :invalidate-menu-registry! (fn [] (reset! gui-handler-types {}))}))
+     :list-menu-types (fn [] (gui-handler-types-snapshot))
+     :invalidate-menu-registry! clear-gui-handler-types!}))
 
 (defmethod gui/register-gui-handler :fabric-1.20.1 [_]
   (log/info "Registering GUI handler for Fabric 1.20.1")

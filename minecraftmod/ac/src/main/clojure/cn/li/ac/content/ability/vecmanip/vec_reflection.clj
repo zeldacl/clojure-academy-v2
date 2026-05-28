@@ -18,8 +18,58 @@
 
 (def ^:private vec-reflection-skill-id :vec-reflection)
 
-(defonce ^:private reflecting-pairs (atom #{}))
-(defonce ^:private reflection-depths (atom {}))
+(defn default-reflection-runtime-state
+  []
+  {:reflecting-pairs #{}
+   :reflection-depths {}})
+
+(defn create-vec-reflection-runtime
+  ([]
+   (create-vec-reflection-runtime {}))
+  ([{:keys [state*]
+     :or {state* (atom (default-reflection-runtime-state))}}]
+   {::runtime ::vec-reflection-runtime
+    :state* state*}))
+
+(def ^:dynamic *vec-reflection-runtime* nil)
+
+(defonce ^:private installed-vec-reflection-runtime
+  (create-vec-reflection-runtime))
+
+(defn- vec-reflection-runtime?
+  [runtime]
+  (and (map? runtime)
+       (= ::vec-reflection-runtime (::runtime runtime))
+       (some? (:state* runtime))))
+
+(defn call-with-vec-reflection-runtime
+  [runtime f]
+  (when-not (vec-reflection-runtime? runtime)
+    (throw (ex-info "Expected VecReflection runtime"
+                    {:value runtime})))
+  (binding [*vec-reflection-runtime* runtime]
+    (f)))
+
+(defmacro with-vec-reflection-runtime
+  [runtime & body]
+  `(call-with-vec-reflection-runtime ~runtime (fn [] ~@body)))
+
+(defn- current-vec-reflection-runtime
+  []
+  (or *vec-reflection-runtime*
+      installed-vec-reflection-runtime))
+
+(defn- reflection-runtime-state-atom
+  []
+  (:state* (current-vec-reflection-runtime)))
+
+(defn- reflection-runtime-state-snapshot
+  []
+  @(reflection-runtime-state-atom))
+
+(defn- update-reflection-runtime!
+  [f & args]
+  (apply swap! (reflection-runtime-state-atom) f args))
 
 (def ^:dynamic *reflection-chain-id* nil)
 
@@ -135,50 +185,50 @@
 
 (defn- try-enter-reflection!
   [owner-key]
-  (let [entered? (atom false)]
-    (swap! reflecting-pairs
-           (fn [pairs]
-             (if (contains? pairs owner-key)
-               pairs
-               (do
-                 (reset! entered? true)
-                 (conj pairs owner-key)))))
+  (let [entered? (volatile! false)]
+    (update-reflection-runtime!
+      (fn [{:keys [reflecting-pairs] :as state}]
+        (if (contains? reflecting-pairs owner-key)
+          state
+          (do
+            (vreset! entered? true)
+            (update state :reflecting-pairs conj owner-key)))))
     @entered?))
 
 (defn- leave-reflection!
   [owner-key]
-  (swap! reflecting-pairs disj owner-key)
-  (swap! reflection-depths
-         (fn [m]
-           (if-let [v (get m owner-key)]
-             (let [nv (dec (long v))]
-               (if (pos? nv)
-                 (assoc m owner-key nv)
-                 (dissoc m owner-key)))
-             m)))
+  (update-reflection-runtime!
+    (fn [{:keys [reflection-depths] :as state}]
+      (let [next-depths (if-let [v (get reflection-depths owner-key)]
+                          (let [nv (dec (long v))]
+                            (if (pos? nv)
+                              (assoc reflection-depths owner-key nv)
+                              (dissoc reflection-depths owner-key)))
+                          reflection-depths)]
+        (-> state
+            (update :reflecting-pairs disj owner-key)
+            (assoc :reflection-depths next-depths)))))
   nil)
 
 (defn reset-reflection-runtime-for-test!
   []
-  (reset! reflecting-pairs #{})
-  (reset! reflection-depths {})
+  (reset! (reflection-runtime-state-atom) (default-reflection-runtime-state))
   nil)
 
 (defn reflection-runtime-snapshot
   []
-  {:reflecting-pairs @reflecting-pairs
-   :reflection-depths @reflection-depths})
+  (reflection-runtime-state-snapshot))
 
 (defn mark-reflecting-for-test!
   [player-id attacker-id ctx-id chain-id]
   (let [owner-key (reflection-owner-key player-id attacker-id ctx-id chain-id)]
-    (swap! reflecting-pairs conj owner-key)
+    (update-reflection-runtime! update :reflecting-pairs conj owner-key)
     owner-key))
 
 (defn set-reflection-depth-for-test!
   [player-id attacker-id ctx-id chain-id depth]
   (let [owner-key (reflection-owner-key player-id attacker-id ctx-id chain-id)]
-    (swap! reflection-depths assoc owner-key (long depth))
+    (update-reflection-runtime! assoc-in [:reflection-depths owner-key] (long depth))
     owner-key))
 
 (defn- normalize-visited-map [visited now]
@@ -418,41 +468,40 @@
               owner-key (reflection-owner-key player-id attacker-id ctx-id chain-id)]
           (if-not (try-enter-reflection! owner-key)
             [false original-damage]
-            (do
-              (swap! reflection-depths update owner-key (fnil inc 0))
-              (try
-                (if-let [state (fx-common/get-player-state player-id)]
-                  (let [depth (max 0 (dec (get @reflection-depths owner-key 1)))
-                        exp (skill-exp player-id)
-                        max-depth (max-reflections)
-                        reflect-multiplier (* (cfg-lerp :combat.damage-multiplier exp)
-                                              (Math/pow 0.5 (double depth)))
-                        reflected-damage (* original-damage reflect-multiplier)
-                        consumption (* original-damage (cfg-lerp :cost.damage.cp exp))
-                        current-cp (current-cp player-id)]
-                    (if (and (< depth max-depth)
-                             (>= current-cp consumption)
-                             (>= reflected-damage (cfg-double :combat.min-reflected-damage)))
-                      (do
-                        (consume-cp! player-id consumption)
-                        (when (and attacker-id entity-damage/*entity-damage*)
-                          (let [world-id (or (get-in state [:position :world-id])
-                                             (fx-common/player-path attacker-id [:position :world-id])
-                                             "minecraft:overworld")]
-                            (entity-damage/apply-direct-damage! entity-damage/*entity-damage*
-                                                                world-id
-                                                                attacker-id
-                                                                reflected-damage
-                                                                :generic)))
-                        (add-exp! player-id (* original-damage (cfg-double :progression.exp-damage-scale)))
-                        (when ctx-id
-                          (when-let [attacker-pos (and attacker-id (try-find-attacker-pos player-id attacker-id))]
-                            (send-fx-play! ctx-id attacker-pos)))
-                        [true (max 0.0 (- original-damage reflected-damage))])
-                      [false original-damage]))
-                  [false original-damage])
-                (finally
-                  (leave-reflection! owner-key))))))))
+            (try
+              (if-let [state (fx-common/get-player-state player-id)]
+                (let [depth-state (update-reflection-runtime! update-in [:reflection-depths owner-key] (fnil inc 0))
+                      depth (max 0 (dec (get-in depth-state [:reflection-depths owner-key] 1)))
+                      exp (skill-exp player-id)
+                      max-depth (max-reflections)
+                      reflect-multiplier (* (cfg-lerp :combat.damage-multiplier exp)
+                                            (Math/pow 0.5 (double depth)))
+                      reflected-damage (* original-damage reflect-multiplier)
+                      consumption (* original-damage (cfg-lerp :cost.damage.cp exp))
+                      current-cp (current-cp player-id)]
+                  (if (and (< depth max-depth)
+                           (>= current-cp consumption)
+                           (>= reflected-damage (cfg-double :combat.min-reflected-damage)))
+                    (do
+                      (consume-cp! player-id consumption)
+                      (when (and attacker-id entity-damage/*entity-damage*)
+                        (let [world-id (or (get-in state [:position :world-id])
+                                           (fx-common/player-path attacker-id [:position :world-id])
+                                           "minecraft:overworld")]
+                          (entity-damage/apply-direct-damage! entity-damage/*entity-damage*
+                                                              world-id
+                                                              attacker-id
+                                                              reflected-damage
+                                                              :generic)))
+                      (add-exp! player-id (* original-damage (cfg-double :progression.exp-damage-scale)))
+                      (when ctx-id
+                        (when-let [attacker-pos (and attacker-id (try-find-attacker-pos player-id attacker-id))]
+                          (send-fx-play! ctx-id attacker-pos)))
+                      [true (max 0.0 (- original-damage reflected-damage))])
+                    [false original-damage]))
+                [false original-damage])
+              (finally
+                (leave-reflection! owner-key)))))))
     (catch Exception e
       (log/warn "VecReflection reflect-damage failed:" (ex-message e))
       [false original-damage])))

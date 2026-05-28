@@ -4,7 +4,6 @@
   Loaded with content init; uses `unified-developer-schema` for container atoms/sync.
   GUI close clears tile session (`TileDeveloper` unuse / onGuiClosed)."
   (:require [clojure.string :as str]
-            [cn.li.ac.util.init-guard :refer [with-init-guard]]
             [cn.li.mcmod.gui.cgui-core :as cgui-core]
             [cn.li.mcmod.gui.cgui-screen :as cgui-screen]
             [cn.li.mcmod.gui.tabbed-gui :as tabbed-gui]
@@ -179,16 +178,22 @@
        (contains? container :tile-entity)
        (= :developer (:container-type container))))
 
-(defonce ^:private developer-gui-installed? (atom false))
+(def ^:private developer-gui-guard-lock
+  (Object.))
+
+(def ^:private ^:dynamic *developer-gui-installed?*
+  false)
 
 (defn init-developer-gui!
   []
-  (with-init-guard developer-gui-installed?
-    (slot-schema/register-slot-schema!
-      {:schema-id developer-gui-id
-       ;; AcademyCraft 1.0.7: `TileDeveloper` inv size 2; `ContainerNode`-style slots on `ui_phasegen`.
-       :slots [{:id :inv-0 :type :generic :x 42 :y 10}
-               {:id :inv-1 :type :generic :x 42 :y 80}]})
+  (when-not (var-get #'*developer-gui-installed?*)
+    (locking developer-gui-guard-lock
+      (when-not (var-get #'*developer-gui-installed?*)
+        (slot-schema/register-slot-schema!
+          {:schema-id developer-gui-id
+           ;; AcademyCraft 1.0.7: `TileDeveloper` inv size 2; `ContainerNode`-style slots on `ui_phasegen`.
+           :slots [{:id :inv-0 :type :generic :x 42 :y 10}
+                   {:id :inv-1 :type :generic :x 42 :y 80}]})
     (gui-reg/register-block-gui!
       (gui-manifest/gui-name :developer)
       (merge (gui-manifest/gui-registration :developer)
@@ -206,4 +211,5 @@
        :slot-set-fn set-slot-item!
        :slot-can-place-fn can-place-item?
         :slot-changed-fn slot-changed!}))
-    (log/info "Ability Developer GUI registered (gui-id 13)")))
+        (alter-var-root #'*developer-gui-installed?* (constantly true))
+        (log/info "Ability Developer GUI registered (gui-id 13)")))))

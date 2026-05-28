@@ -125,13 +125,9 @@
         recipes (crafting-recipes/get-all-recipes)
         achievement-translation-map (achievement-registry/translation-maps)
         ability-translation-map* (ability-translation-map)]
-    (swap! metadata/achievement-tabs (fn [_] achievement-tabs))
-    (swap! metadata/achievements (fn [_] achievements))
-    (swap! metadata/translations
-           (fn [existing]
-             (-> existing
-                 (update :en_us merge (:en_us achievement-translation-map) (:en_us ability-translation-map*))
-               (update :en_us merge (:en_us command-translation-map))
-               (update :zh_cn merge (:zh_cn achievement-translation-map) (:zh_cn ability-translation-map*))
-               (update :zh_cn merge (:zh_cn command-translation-map)))))
-    (swap! metadata/recipes (fn [_] recipes))))
+    (metadata/set-achievement-tabs! achievement-tabs)
+    (metadata/set-achievements! achievements)
+    (metadata/merge-translations! achievement-translation-map)
+    (metadata/merge-translations! ability-translation-map*)
+    (metadata/merge-translations! command-translation-map)
+    (metadata/set-recipes! recipes)))

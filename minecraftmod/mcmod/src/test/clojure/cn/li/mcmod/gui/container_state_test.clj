@@ -30,11 +30,13 @@
 (use-fixtures
   :each
   (fn [f]
-    (state/clear-all!)
-    (try
-      (f)
-      (finally
-        (state/clear-all!)))))
+    (state/call-with-container-state-runtime
+      (state/create-container-state-runtime)
+      (fn []
+        (try
+          (f)
+          (finally
+            (state/clear-all!)))))))
 
 (deftest active-player-menu-and-id-lifecycle-test
   (testing "runtime state registers and unregisters the full menu lifecycle"
@@ -116,6 +118,8 @@
     (state/register-player-container! owner-b c2)
     (state/register-container-by-id! owner-a 7 c1)
     (state/register-container-by-id! owner-b 7 c2)
+    (state/set-tab-index-by-container-id! owner-a 7 1)
+    (state/set-tab-index-by-container-id! owner-b 7 0)
 
     (state/clear-session-containers! :server-a)
 
@@ -123,6 +127,8 @@
     (is (identical? c2 (state/get-player-container owner-b)))
     (is (nil? (state/get-container-by-id owner-a 7)))
     (is (identical? c2 (state/get-container-by-id owner-b 7)))
+    (is (nil? (state/get-tab-index-by-container-id owner-a 7)))
+    (is (= 0 (state/get-tab-index-by-container-id owner-b 7)))
     (is (= [c2] (vec (state/list-active-containers owner-b))))))
 
 (deftest client-container-side-channel-stays-absent-test

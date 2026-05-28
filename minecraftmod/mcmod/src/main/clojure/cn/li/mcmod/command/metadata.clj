@@ -11,18 +11,35 @@
   - Platform code stays generic"
   (:require [cn.li.mcmod.util.log :as log]))
 
-(defonce ^:private command-registry
-  (atom {}))
+(defn- default-command-metadata-runtime-state []
+  {})
+
+(defn create-command-metadata-runtime
+  ([] (create-command-metadata-runtime {}))
+  ([{:keys [state*]}]
+   {:cn.li.mcmod.command.metadata/runtime ::command-metadata-runtime
+    :state* (or state* (atom (default-command-metadata-runtime-state)))}))
+
+(def ^:dynamic *command-metadata-runtime* nil)
+
+(defonce ^:private installed-command-metadata-runtime
+  (create-command-metadata-runtime))
+
+(defn- command-registry-atom []
+  (:state* (or *command-metadata-runtime* installed-command-metadata-runtime)))
+
+(defn- command-registry-snapshot []
+  @(command-registry-atom))
 
 (defn register-command-registry!
   "Register/replace the full command registry map provided by game content."
   [registry]
-  (reset! command-registry (or registry {}))
+  (reset! (command-registry-atom) (or registry {}))
   nil)
 
 (defn- resolve-command-registry
   []
-  @command-registry)
+  (command-registry-snapshot))
 
 ;; ============================================================================
 ;; Command Registration Metadata

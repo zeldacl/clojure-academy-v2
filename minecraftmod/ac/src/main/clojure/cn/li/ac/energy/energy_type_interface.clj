@@ -16,12 +16,62 @@
 	(charge-item*! [this item-stack amount ignore-bandwidth] "Return leftover energy")
 	(discharge-item*! [this item-stack amount ignore-bandwidth] "Return extracted energy"))
 
-(defonce ^:private energy-types* (atom {}))
-(defonce ^:private energy-types-frozen? (atom false))
+(defn default-energy-type-runtime-state
+	[]
+	{:types {}
+	 :frozen? false})
+
+(defn create-energy-type-runtime
+	([]
+	 (create-energy-type-runtime {}))
+	([{:keys [state*]
+		 :or {state* (atom (default-energy-type-runtime-state))}}]
+	 {::runtime ::energy-type-runtime
+	  :state* state*}))
+
+(def ^:dynamic *energy-type-runtime* nil)
+
+(defonce ^:private installed-energy-type-runtime
+	(create-energy-type-runtime))
+
+(defn- energy-type-runtime?
+	[runtime]
+	(and (map? runtime)
+		 (= ::energy-type-runtime (::runtime runtime))
+		 (some? (:state* runtime))))
+
+(defn call-with-energy-type-runtime
+	[runtime f]
+	(when-not (energy-type-runtime? runtime)
+		(throw (ex-info "Expected energy-type runtime"
+						{:runtime runtime})))
+	(binding [*energy-type-runtime* runtime]
+		(f)))
+
+(defmacro with-energy-type-runtime
+	[runtime & body]
+	`(call-with-energy-type-runtime ~runtime (fn [] ~@body)))
+
+(defn- current-energy-type-runtime
+	[]
+	(or *energy-type-runtime*
+		installed-energy-type-runtime))
+
+(defn- energy-type-state-atom
+	[]
+	(:state* (current-energy-type-runtime)))
+
+(defn- energy-type-state-snapshot
+	[]
+	@(energy-type-state-atom))
+
+(defn- update-energy-type-state!
+	[f & args]
+	(apply swap! (energy-type-state-atom) f args))
 
 (defn- assert-not-frozen!
 	[]
-	(when @energy-types-frozen?
+	(when (:frozen? (energy-type-state-snapshot))
 		(throw (ex-info "Energy type registry is frozen" {}))))
 
 (defn register-energy-type!
@@ -30,7 +80,8 @@
 	(let [type-id (energy-type-id energy-type)]
 		(when-not (keyword? type-id)
 			(throw (ex-info "Energy type id must be a keyword" {:type-id type-id})))
-		(swap! energy-types*
+		(update-energy-type-state!
+				 update :types
 					 (fn [registry]
 						 (if-let [existing (get registry type-id)]
 							 (if (= existing energy-type)
@@ -43,32 +94,30 @@
 (defn unregister-energy-type!
 	[type-id]
 	(assert-not-frozen!)
-	(swap! energy-types* dissoc type-id)
+	(update-energy-type-state! update :types dissoc type-id)
 	nil)
 
 (defn freeze-energy-types!
 	[]
-	(reset! energy-types-frozen? true)
+	(update-energy-type-state! assoc :frozen? true)
 	nil)
 
 (defn energy-types-snapshot
 	[]
-	{:types @energy-types*
-	 :frozen? @energy-types-frozen?})
+	(energy-type-state-snapshot))
 
 (defn reset-energy-types-for-test!
 	[]
-	(reset! energy-types* {})
-	(reset! energy-types-frozen? false)
+	(reset! (energy-type-state-atom) (default-energy-type-runtime-state))
 	nil)
 
 (defn get-energy-type
 	[type-id]
-	(get @energy-types* type-id))
+	(get (:types (energy-type-state-snapshot)) type-id))
 
 (defn list-energy-types
 	[]
-	(->> @energy-types* vals (sort-by energy-type-id) vec))
+	(->> (:types (energy-type-state-snapshot)) vals (sort-by energy-type-id) vec))
 
 (defn resolve-energy-type
 	"Resolve an energy type either by keyword or by probing a candidate item."
@@ -81,4 +130,4 @@
 		(some (fn [energy-type]
 						(when (supports-item? energy-type type-or-item)
 							energy-type))
-					(vals @energy-types*))))
+					(vals (:types (energy-type-state-snapshot))))))

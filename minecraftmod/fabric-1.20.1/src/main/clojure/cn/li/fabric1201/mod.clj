@@ -13,6 +13,7 @@
             [cn.li.fabric1201.setup.event-wiring :as event-wiring]
             [cn.li.fabric1201.config.bridge :as config-bridge]
             [cn.li.mcmod.lifecycle :as lifecycle]
+            [cn.li.mcmod.protocol.core :as registry-core]
             [cn.li.mcmod.protocol.metadata :as registry-metadata]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mc1201.entity.hooks :as entity-hooks])
@@ -22,15 +23,40 @@
   []
   modid/*mod-id*)
 
-(defonce registered-blocks (atom {}))
-(defonce registered-items (atom {}))
-(defonce registered-block-entities (atom {}))
+(def ^:private ^:dynamic *registered-blocks-state* {})
+(def ^:private ^:dynamic *registered-items-state* {})
+(def ^:private ^:dynamic *registered-block-entities-state* {})
 
-(defonce base-properties
-  (delay (FabricBootstrapHelper/createStoneProperties)))
+(defonce registered-blocks (registry-core/var-root-registry #'*registered-blocks-state*))
+(defonce registered-items (registry-core/var-root-registry #'*registered-items-state*))
+(defonce registered-block-entities (registry-core/var-root-registry #'*registered-block-entities-state*))
 
-(defonce carrier-properties
-  (delay (FabricBootstrapHelper/carrierBlockProperties @base-properties)))
+(def ^:private fabric-properties-lock
+  (Object.))
+
+(def ^:private ^:dynamic *base-properties*
+  nil)
+
+(def ^:private ^:dynamic *carrier-properties*
+  nil)
+
+(defn- base-properties
+  []
+  (or (var-get #'*base-properties*)
+      (locking fabric-properties-lock
+        (or (var-get #'*base-properties*)
+            (let [p (FabricBootstrapHelper/createStoneProperties)]
+              (alter-var-root #'*base-properties* (constantly p))
+              p)))))
+
+(defn- carrier-properties
+  []
+  (or (var-get #'*carrier-properties*)
+      (locking fabric-properties-lock
+        (or (var-get #'*carrier-properties*)
+            (let [p (FabricBootstrapHelper/carrierBlockProperties (base-properties))]
+              (alter-var-root #'*carrier-properties* (constantly p))
+              p)))))
 
 (defn- registration-context
   []
@@ -38,8 +64,8 @@
    :registered-blocks registered-blocks
    :registered-items registered-items
    :registered-block-entities registered-block-entities
-   :base-properties @base-properties
-   :carrier-properties @carrier-properties})
+   :base-properties (base-properties)
+   :carrier-properties (carrier-properties)})
 
 (defn start-fabric-mod!
   "Main Fabric mod initialization called from the Java ModInitializer."
@@ -61,22 +87,23 @@
 (defn get-registered-block
   "Get a registered block by its DSL ID."
   [block-id]
-  (get @registered-blocks block-id))
+  (registry-core/lookup registered-blocks block-id))
 
 (defn get-registered-item
   "Get a registered item by its DSL ID."
   [item-id]
-  (get @registered-items item-id))
+  (registry-core/lookup registered-items item-id))
 
 (defn get-registered-block-entity-type
   "Get a registered BlockEntityType by tile-id or block-id."
   [tile-or-block-id]
-  (let [tile-id (or (when (contains? @registered-block-entities tile-or-block-id)
+  (let [be-snapshot (registry-core/snapshot registered-block-entities)
+        tile-id (or (when (contains? be-snapshot tile-or-block-id)
                       tile-or-block-id)
                     (registry-metadata/get-block-tile-id tile-or-block-id))]
-    (get @registered-block-entities tile-id)))
+    (get be-snapshot tile-id)))
 
 (defn get-registered-block-item
   "Get a registered block item by its block ID."
   [block-id]
-  (get @registered-items (str block-id "-item")))
+  (registry-core/lookup registered-items (str block-id "-item")))

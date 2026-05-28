@@ -22,9 +22,9 @@
     (with-redefs [fx-registry/register-fx-channel! (fn [_ handler]
                                                      (reset! handler* handler)
                                                      nil)
-                  client-sounds/queue-sound-effect! (fn [payload]
-                                                       (swap! sounds* conj payload)
-                                                       nil)
+                  client-sounds/queue-current-sound-effect! (fn [payload]
+                                                               (swap! sounds* conj payload)
+                                                               nil)
                   client-bridge/run-client-effect! (fn [effect-key payload]
                                                      (swap! local-fx* conj [effect-key payload])
                                                      nil)]

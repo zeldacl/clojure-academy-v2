@@ -10,6 +10,60 @@
 ;; Registry
 ;; ---------------------------------------------------------------------------
 
+(defn default-level-effect-runtime-state
+  []
+  {:registry {}
+   :order []
+   :frozen? false})
+
+(defn create-level-effect-runtime
+  ([]
+   (create-level-effect-runtime {}))
+  ([{:keys [state*]
+     :or {state* (atom (default-level-effect-runtime-state))}}]
+   {::runtime ::level-effect-runtime
+    :state* state*}))
+
+(def ^:dynamic *level-effect-runtime* nil)
+
+(defonce ^:private installed-level-effect-runtime
+  (create-level-effect-runtime))
+
+(defn- level-effect-runtime?
+  [runtime]
+  (and (map? runtime)
+       (= ::level-effect-runtime (::runtime runtime))
+       (some? (:state* runtime))))
+
+(defn call-with-level-effect-runtime
+  [runtime f]
+  (when-not (level-effect-runtime? runtime)
+    (throw (ex-info "Expected level-effect runtime"
+                    {:value runtime})))
+  (binding [*level-effect-runtime* runtime]
+    (f)))
+
+(defmacro with-level-effect-runtime
+  [runtime & body]
+  `(call-with-level-effect-runtime ~runtime (fn [] ~@body)))
+
+(defn- current-level-effect-runtime
+  []
+  (or *level-effect-runtime*
+      installed-level-effect-runtime))
+
+(defn- level-effect-state-atom
+  []
+  (:state* (current-level-effect-runtime)))
+
+(defn- level-effect-state-snapshot
+  []
+  @(level-effect-state-atom))
+
+(defn- update-level-effect-state!
+  [f & args]
+  (apply swap! (level-effect-state-atom) f args))
+
 ;; effect-id 鈫?{:enqueue-fn        (fn [payload])
 ;;              :enqueue-event-fn  (fn [{:keys [effect-id payload ctx-id channel owner-key]}])
 ;;              :tick-fn        (fn [])
@@ -17,16 +71,10 @@
 ;;                              or (fn [camera-pos hand-center-pos tick frame-context])
 ;;                              鈫?seq of ops | nil
 ;;              :walk-speed-fn  (fn []) 鈫?float | nil          (optional)}
-(defonce ^:private effect-registry (atom {}))
-
-;; Ordered list of effect-ids, preserving registration order for deterministic
-;; plan concatenation.
-(defonce ^:private effect-order (atom []))
-(defonce ^:private effect-registry-frozen? (atom false))
 
 (defn- assert-registry-open!
   []
-  (when @effect-registry-frozen?
+  (when (:frozen? (level-effect-state-snapshot))
     (throw (ex-info "Level effect registry is frozen" {}))))
 
 (defn register-level-effect!
@@ -48,28 +96,28 @@
          (fn? (:tick-fn handler-map))
          (fn? (:build-plan-fn handler-map))]}
   (assert-registry-open!)
-  (when-not (get @effect-registry effect-id)
-    (swap! effect-order conj effect-id)
-    (swap! effect-registry assoc effect-id handler-map))
+  (update-level-effect-state!
+    (fn [state]
+      (if (get-in state [:registry effect-id])
+        state
+        (-> state
+            (update :order conj effect-id)
+            (assoc-in [:registry effect-id] handler-map)))))
   (log/debug "Registered level effect:" effect-id)
   nil)
 
 (defn freeze-level-effect-registry!
   []
-  (reset! effect-registry-frozen? true)
+  (update-level-effect-state! assoc :frozen? true)
   nil)
 
 (defn level-effect-registry-snapshot
   []
-  {:registry @effect-registry
-   :order @effect-order
-   :frozen? @effect-registry-frozen?})
+  (level-effect-state-snapshot))
 
 (defn reset-level-effect-registry-for-test!
   []
-  (reset! effect-registry {})
-  (reset! effect-order [])
-  (reset! effect-registry-frozen? false)
+  (reset! (level-effect-state-atom) (default-level-effect-runtime-state))
   nil)
 
 ;; ---------------------------------------------------------------------------
@@ -113,7 +161,7 @@
   ([effect-id payload]
    (enqueue-level-effect! effect-id payload nil))
   ([effect-id payload fx-context]
-   (if-let [{:keys [enqueue-fn enqueue-event-fn]} (get @effect-registry effect-id)]
+   (if-let [{:keys [enqueue-fn enqueue-event-fn]} (get-in (level-effect-state-snapshot) [:registry effect-id])]
      (if enqueue-event-fn
        (enqueue-event-fn (enqueue-event effect-id payload fx-context))
        (enqueue-fn payload))
@@ -122,9 +170,10 @@
 (defn tick-level-effects!
   "Tick all registered level effects."
   []
-  (doseq [eid @effect-order]
-    (when-let [{:keys [tick-fn]} (get @effect-registry eid)]
-      (tick-fn))))
+  (let [{:keys [order registry]} (level-effect-state-snapshot)]
+    (doseq [eid order]
+      (when-let [{:keys [tick-fn]} (get registry eid)]
+        (tick-fn)))))
 
 (defn- invoke-build-plan-fn
   [build-plan-fn camera-pos hand-center-pos tick frame-context]
@@ -139,14 +188,15 @@
   ([camera-pos hand-center-pos tick]
    (build-level-effect-plan camera-pos hand-center-pos tick nil))
   ([camera-pos hand-center-pos tick frame-context]
-   (let [results (keep (fn [eid]
-                         (when-let [{:keys [build-plan-fn]} (get @effect-registry eid)]
+   (let [{:keys [order registry]} (level-effect-state-snapshot)
+         results (keep (fn [eid]
+                         (when-let [{:keys [build-plan-fn]} (get registry eid)]
                            (invoke-build-plan-fn build-plan-fn
                                                  camera-pos
                                                  hand-center-pos
                                                  tick
                                                  frame-context)))
-                       @effect-order)
+                       order)
          all-ops (into [] (mapcat :ops) results)
          walk-speeds (keep :local-walk-speed results)
          local-walk-speed (when (seq walk-speeds)
@@ -162,4 +212,4 @@
 (defn registered-effects
   "Return the set of currently-registered effect ids."
   []
-  (set (keys @effect-registry)))
+  (set (keys (:registry (level-effect-state-snapshot)))))

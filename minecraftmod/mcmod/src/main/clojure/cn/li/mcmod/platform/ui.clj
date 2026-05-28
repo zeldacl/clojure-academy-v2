@@ -5,8 +5,22 @@
 	registered factories."
 	(:require [cn.li.mcmod.util.log :as log]))
 
-(defonce ^:private widget-factories
-	(atom {}))
+(defn create-widget-factory-runtime
+	([] (create-widget-factory-runtime {}))
+	([{:keys [state*]}]
+	 {:cn.li.mcmod.platform.ui/runtime ::widget-factory-runtime
+	  :state* (or state* (atom {}))}))
+
+(def ^:dynamic *widget-factory-runtime* nil)
+
+(defonce ^:private installed-widget-factory-runtime
+	(create-widget-factory-runtime))
+
+(defn- widget-factories-atom []
+	(:state* (or *widget-factory-runtime* installed-widget-factory-runtime)))
+
+(defn- widget-factories-snapshot []
+	@(widget-factories-atom))
 
 (defn register-widget-factory!
 	[widget-key factory-fn]
@@ -15,7 +29,7 @@
 	(when-not (fn? factory-fn)
 		(throw (ex-info "Widget factory must be a function" {:widget-key widget-key
 																													:factory factory-fn})))
-	(swap! widget-factories assoc widget-key factory-fn)
+	(swap! (widget-factories-atom) assoc widget-key factory-fn)
 	nil)
 
 (defn register-widget-factories!
@@ -26,7 +40,7 @@
 
 (defn create-widget
 	[widget-key payload]
-	(if-let [factory-fn (get @widget-factories widget-key)]
+	(if-let [factory-fn (get (widget-factories-snapshot) widget-key)]
 		(factory-fn payload)
 		(do
 			(log/warn "UI widget factory not registered" {:widget-key widget-key})

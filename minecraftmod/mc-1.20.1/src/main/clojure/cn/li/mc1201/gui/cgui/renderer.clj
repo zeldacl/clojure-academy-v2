@@ -7,14 +7,57 @@
   (:import (net.minecraft.client Minecraft)
            (net.minecraft.client.gui GuiGraphics Font)
            (net.minecraft.client.renderer.texture TextureManager)
-           (net.minecraft.resources ResourceLocation)
            (com.mojang.blaze3d.vertex PoseStack)
            (com.mojang.blaze3d.systems RenderSystem)
            (cn.li.mc1201.client MinecraftClientAccess GuiGraphicsHelper)
            (java.lang.reflect Field)
            (org.lwjgl.opengl GL11)))
 
-(defonce ^:private texture-size-cache (atom {}))
+(defn create-cgui-renderer-runtime
+  ([]
+   (create-cgui-renderer-runtime {}))
+  ([initial-cache]
+   {:texture-size-cache (atom initial-cache)}))
+
+(defonce ^:private installed-cgui-renderer-runtime
+  (create-cgui-renderer-runtime))
+
+(def ^:dynamic *cgui-renderer-runtime*
+  installed-cgui-renderer-runtime)
+
+(defn current-cgui-renderer-runtime
+  []
+  *cgui-renderer-runtime*)
+
+(defmacro with-cgui-renderer-runtime
+  [runtime & body]
+  `(binding [*cgui-renderer-runtime* ~runtime]
+     ~@body))
+
+(defn call-with-cgui-renderer-runtime
+  [runtime f]
+  (binding [*cgui-renderer-runtime* runtime]
+    (f)))
+
+(defn texture-size-cache-atom
+  []
+  (:texture-size-cache (current-cgui-renderer-runtime)))
+
+(defn texture-size-cache-snapshot
+  []
+  @(texture-size-cache-atom))
+
+(defn clear-texture-size-cache!
+  []
+  (reset! (texture-size-cache-atom) {})
+  nil)
+
+(defn reset-texture-size-cache-for-test!
+  ([]
+   (clear-texture-size-cache!))
+  ([cache]
+   (reset! (texture-size-cache-atom) cache)
+   nil))
 
 (defn- get-texture-size-from-resource
   [resource-location]
@@ -24,29 +67,32 @@
   [resource-location]
   (when resource-location
     (let [k (str resource-location)
-          cached (@texture-size-cache k)]
+          cached ((texture-size-cache-snapshot) k)]
       (if cached
         cached
-        (let [^Minecraft mc (MinecraftClientAccess/getMinecraft)
-              ^TextureManager tm (try (.getTextureManager mc) (catch Exception _ nil))
-              tex (try (when tm (.getTexture tm resource-location)) (catch Exception _ nil))
-              size (try
-                     (or
-                      (get-texture-size-from-resource resource-location)
-                      (when tex
-                        (try
-                          (let [cls (class tex)
-                                ^Field wf (try (.getDeclaredField cls "width") (catch Exception _ nil))
-                                ^Field hf (try (.getDeclaredField cls "height") (catch Exception _ nil))]
-                            (when (and wf hf)
-                              (.setAccessible wf true)
-                              (.setAccessible hf true)
-                              (let [w (.getInt wf tex)
-                                    h (.getInt hf tex)]
-                                (when (and (number? w) (number? h)) [(int w) (int h)]))))
-                          (catch Exception _ nil))))
-                     (catch Exception _ nil))]
-          (when size (swap! texture-size-cache assoc k size))
+        (let [size (or
+                     (try
+                       (get-texture-size-from-resource resource-location)
+                       (catch Exception _ nil))
+                     (let [^Minecraft mc (MinecraftClientAccess/getMinecraft)
+                           ^TextureManager tm (try (.getTextureManager mc) (catch Exception _ nil))
+                           tex (try (when tm (.getTexture tm resource-location)) (catch Exception _ nil))]
+                       (try
+                         (when tex
+                           (try
+                             (let [cls (class tex)
+                                   ^Field wf (try (.getDeclaredField cls "width") (catch Exception _ nil))
+                                   ^Field hf (try (.getDeclaredField cls "height") (catch Exception _ nil))]
+                               (when (and wf hf)
+                                 (.setAccessible wf true)
+                                 (.setAccessible hf true)
+                                 (let [w (.getInt wf tex)
+                                       h (.getInt hf tex)]
+                                   (when (and (number? w) (number? h)) [(int w) (int h)]))))
+                             (catch Exception _ nil))
+                           )
+                         (catch Exception _ nil))))]
+          (when size (swap! (texture-size-cache-atom) assoc k size))
           size)))))
 
 (defn- apply-depth-mode!

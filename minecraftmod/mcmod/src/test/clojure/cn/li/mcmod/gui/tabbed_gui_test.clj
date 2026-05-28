@@ -1,6 +1,18 @@
 (ns cn.li.mcmod.gui.tabbed-gui-test
-  (:require [clojure.test :refer [deftest is]]
+  (:require [clojure.test :refer [deftest is use-fixtures]]
+            [cn.li.mcmod.gui.container-state :as container-state]
             [cn.li.mcmod.gui.tabbed-gui :as tabbed]))
+
+(use-fixtures
+  :each
+  (fn [f]
+    (container-state/call-with-container-state-runtime
+      (container-state/create-container-state-runtime)
+      (fn []
+        (try
+          (f)
+          (finally
+            (container-state/clear-all!)))))))
 
 (deftest same-container-id-tab-state-is-isolated-by-owner-test
   (let [owner-a {:session-id :session-a :player-uuid "player-a"}

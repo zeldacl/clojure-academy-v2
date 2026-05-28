@@ -6,22 +6,6 @@
 						[cn.li.ac.ability.service.dispatcher :as ctx]
 						[cn.li.mcmod.hooks.core :as runtime-hooks]))
 
-(defonce ^:private rejection-counters (atom {}))
-
-(defn reset-rejection-counters!
-	[]
-	(reset! rejection-counters {})
-	nil)
-
-(defn rejection-counters-snapshot
-	[]
-	@rejection-counters)
-
-(defn- record-rejection!
-	[reason]
-	(swap! rejection-counters update reason (fnil inc 0))
-	nil)
-
 (defn- valid-ctx-id?
 	[ctx-id]
 	(and (string? ctx-id) (not (str/blank? ctx-id))))
@@ -43,10 +27,10 @@
 	[{:keys [ctx-id skill-id]} player]
 	(cond
 		(or (not (valid-ctx-id? ctx-id)) (not (keyword? skill-id)))
-		(record-rejection! :payload-invalid)
+		nil
 
 		(nil? (uuid/player-uuid player))
-		(record-rejection! :player-uuid-missing)
+		nil
 
 		:else
 		(let [player-uuid (uuid/player-uuid player)
@@ -56,7 +40,7 @@
 					(if (or (nil? existing)
 								(= player-uuid (:player-uuid existing)))
 						(ctx-mgr/establish-context! player-uuid ctx-id skill-id)
-						(record-rejection! :ctx-not-owner)))))))
+						nil))))))
 
 (defn- resolve-owned-context
 	[ctx-id player]
@@ -109,27 +93,27 @@
 
 (defn handle-keepalive-context
 	[{:keys [ctx-id]} player]
-	(let [{:keys [ok? reason owner]} (resolve-owned-alive-context ctx-id player)]
+	(let [{:keys [ok? owner]} (resolve-owned-alive-context ctx-id player)]
 		(if ok?
 			(binding [ctx/*context-owner* owner]
 				(ctx/update-keepalive! ctx-id))
-			(record-rejection! reason))))
+			nil)))
 
 (defn handle-terminate-context
 	[{:keys [ctx-id]} player]
-	(let [{:keys [ok? reason owner]} (resolve-owned-context ctx-id player)]
+	(let [{:keys [ok? owner]} (resolve-owned-context ctx-id player)]
 		(if ok?
 			(binding [ctx/*context-owner* owner]
 				(ctx/terminate-context! ctx-id ctx-mgr/send-terminated-context!))
-			(record-rejection! reason))))
+			nil)))
 
 (defn handle-channel-context
 	[{:keys [ctx-id channel payload]} player]
-	(let [{:keys [ok? reason owner]} (if (keyword? channel)
+	(let [{:keys [ok? owner]} (if (keyword? channel)
 													(resolve-owned-alive-context ctx-id player)
 													{:ok? false :reason :payload-invalid})]
 		(if ok?
 			(binding [ctx/*context-owner* owner]
 				(ctx/update-keepalive! ctx-id)
 				(ctx/ctx-send-to-local! ctx-id channel payload))
-			(record-rejection! reason))))
+			nil)))

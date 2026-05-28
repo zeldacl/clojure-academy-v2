@@ -8,52 +8,54 @@
 (deftest register-datagen-metadata-populates-ability-translations
        (item-actions/reset-item-action-registries!)
   (ability-content/init-ability-content!)
-  (reset! metadata/translations {:en_us {} :zh_cn {}})
+  (metadata/reset-datagen-metadata-for-test!)
 
   (ability-datagen/register-datagen-metadata!)
 
+  (let [translations (metadata/get-translation-maps)]
+
   (testing "ability skill translation keys are exported"
     (is (= "Brain Course"
-           (get-in @metadata/translations [:en_us "ability.skill.generic.brain_course"])))
+           (get-in translations [:en_us "ability.skill.generic.brain_course"])))
     (is (= "Undergo focused neural training to raise your maximum CP by 1000."
-           (get-in @metadata/translations [:en_us "ability.skill.generic.brain_course.desc"])))
+           (get-in translations [:en_us "ability.skill.generic.brain_course.desc"])))
     (is (= "Advanced Brain Course"
-           (get-in @metadata/translations [:en_us "ability.skill.generic.brain_course_advanced"])))
+           (get-in translations [:en_us "ability.skill.generic.brain_course_advanced"])))
     (is (= "Deepen your neural development to raise maximum CP by 1500 and maximum overload by 100."
-           (get-in @metadata/translations [:en_us "ability.skill.generic.brain_course_advanced.desc"])))
+           (get-in translations [:en_us "ability.skill.generic.brain_course_advanced.desc"])))
     (is (= "Mind Course"
-           (get-in @metadata/translations [:en_us "ability.skill.generic.mind_course"])))
+           (get-in translations [:en_us "ability.skill.generic.mind_course"])))
     (is (= "Train your mental composure so CP recovers 20% faster."
-           (get-in @metadata/translations [:en_us "ability.skill.generic.mind_course.desc"])))
+           (get-in translations [:en_us "ability.skill.generic.mind_course.desc"])))
     (is (= "Flesh Ripping"
-           (get-in @metadata/translations [:en_us "ability.skill.teleporter.flesh_ripping"])))
+           (get-in translations [:en_us "ability.skill.teleporter.flesh_ripping"])))
     (is (= "Ability skill: Flesh Ripping"
-           (get-in @metadata/translations [:en_us "ability.skill.teleporter.flesh_ripping.desc"])))
+           (get-in translations [:en_us "ability.skill.teleporter.flesh_ripping.desc"])))
     (is (= "Dimension Folding Theorem"
-           (get-in @metadata/translations [:en_us "ability.skill.teleporter.dim_folding_theorem"])))
+           (get-in translations [:en_us "ability.skill.teleporter.dim_folding_theorem"])))
     (is (= "Exploit weak spatial folding during teleportation attacks to split space unpredictably and amplify the final hit."
-           (get-in @metadata/translations [:en_us "ability.skill.teleporter.dim_folding_theorem.desc"])))
+           (get-in translations [:en_us "ability.skill.teleporter.dim_folding_theorem.desc"])))
     (is (= "Critical Hit %s"
-           (get-in @metadata/translations [:en_us "ability.teleporter.critical_hit"]))))
+           (get-in translations [:en_us "ability.teleporter.critical_hit"]))))
 
   (testing "zh_cn receives teleporter-specific overrides"
     (is (= "脑域课程"
-           (get-in @metadata/translations [:zh_cn "ability.skill.generic.brain_course"])))
+           (get-in translations [:zh_cn "ability.skill.generic.brain_course"])))
     (is (= "接受针对脑域的基础训练，使最大 CP 提高 1000。"
-           (get-in @metadata/translations [:zh_cn "ability.skill.generic.brain_course.desc"])))
+           (get-in translations [:zh_cn "ability.skill.generic.brain_course.desc"])))
     (is (= "脑域进阶课程"
-           (get-in @metadata/translations [:zh_cn "ability.skill.generic.brain_course_advanced"])))
+           (get-in translations [:zh_cn "ability.skill.generic.brain_course_advanced"])))
     (is (= "进一步开发脑部思维能力，使最大 CP 提高 1500，最大过载提高 100。"
-           (get-in @metadata/translations [:zh_cn "ability.skill.generic.brain_course_advanced.desc"])))
+           (get-in translations [:zh_cn "ability.skill.generic.brain_course_advanced.desc"])))
     (is (= "心智课程"
-           (get-in @metadata/translations [:zh_cn "ability.skill.generic.mind_course"])))
+           (get-in translations [:zh_cn "ability.skill.generic.mind_course"])))
     (is (= "学习更高效地放松精神，使 CP 恢复速度提高 20%。"
-           (get-in @metadata/translations [:zh_cn "ability.skill.generic.mind_course.desc"])))
+           (get-in translations [:zh_cn "ability.skill.generic.mind_course.desc"])))
     (is (= "Flesh Ripping"
-           (get-in @metadata/translations [:zh_cn "ability.skill.teleporter.flesh_ripping"])))
+           (get-in translations [:zh_cn "ability.skill.teleporter.flesh_ripping"])))
     (is (= "折叠空间概论"
-           (get-in @metadata/translations [:zh_cn "ability.skill.teleporter.dim_folding_theorem"])))
+           (get-in translations [:zh_cn "ability.skill.teleporter.dim_folding_theorem"])))
     (is (= "利用传送攻击中不稳定的微弱空间折叠现象，让空间产生概率性的分裂，从而进一步提高伤害。"
-           (get-in @metadata/translations [:zh_cn "ability.skill.teleporter.dim_folding_theorem.desc"])))
+           (get-in translations [:zh_cn "ability.skill.teleporter.dim_folding_theorem.desc"])))
     (is (= "暴击 %s"
-           (get-in @metadata/translations [:zh_cn "ability.teleporter.critical_hit"])))))
+           (get-in translations [:zh_cn "ability.teleporter.critical_hit"]))))))

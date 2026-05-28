@@ -10,21 +10,57 @@
   (:import [net.minecraft.client Minecraft]
            [net.minecraft.client.player LocalPlayer]))
 
-(defonce ^:private lifecycle-state
-  (atom {:connection-key nil
-         :owner nil}))
+(def ^:private default-cleanup-state
+  {:connection-key nil
+   :owner nil})
+
+(defn create-session-cleanup-runtime
+  []
+  {::runtime ::session-cleanup-runtime
+   :lifecycle-state* (atom default-cleanup-state)})
+
+(def ^:dynamic *session-cleanup-runtime* nil)
+
+(defonce ^:private installed-session-cleanup-runtime
+  (create-session-cleanup-runtime))
+
+(defn- session-cleanup-runtime?
+  [runtime]
+  (and (map? runtime)
+       (= ::session-cleanup-runtime (::runtime runtime))
+       (some? (:lifecycle-state* runtime))))
+
+(defn call-with-session-cleanup-runtime
+  [runtime f]
+  (when-not (session-cleanup-runtime? runtime)
+    (throw (ex-info "Expected session cleanup runtime"
+                    {:runtime runtime})))
+  (binding [*session-cleanup-runtime* runtime]
+    (f)))
+
+(defmacro with-session-cleanup-runtime
+  [runtime & body]
+  `(call-with-session-cleanup-runtime ~runtime (fn [] ~@body)))
+
+(defn- current-session-cleanup-runtime
+  []
+  (or *session-cleanup-runtime*
+      installed-session-cleanup-runtime))
+
+(defn- lifecycle-state-atom
+  []
+  (:lifecycle-state* (current-session-cleanup-runtime)))
 
 (defn cleanup-state-snapshot
   []
-  @lifecycle-state)
+  @(lifecycle-state-atom))
 
 (defn reset-cleanup-state-for-test!
   ([]
-   (reset-cleanup-state-for-test! {:connection-key nil
-                                   :owner nil}))
+   (reset-cleanup-state-for-test! default-cleanup-state))
   ([snapshot]
-   (reset! lifecycle-state {:connection-key (:connection-key snapshot)
-                            :owner (:owner snapshot)})
+   (reset! (lifecycle-state-atom) {:connection-key (:connection-key snapshot)
+                                   :owner (:owner snapshot)})
    nil))
 
 (defn- local-player
@@ -63,13 +99,13 @@
   ([opts]
    (let [current-connection-key (client-session/connection-key)
          current-owner (client-session/current-local-player-owner)
-         {:keys [connection-key owner]} @lifecycle-state]
+         {:keys [connection-key owner]} (cleanup-state-snapshot)]
      (when (and owner
                 (not= connection-key current-connection-key))
        (try
          (clear-owner-state! owner opts)
          (catch Exception e
            (log/error "Failed to clear client owner state during connection transition" e))))
-     (reset! lifecycle-state {:connection-key current-connection-key
-                              :owner current-owner})
+     (reset! (lifecycle-state-atom) {:connection-key current-connection-key
+                                     :owner current-owner})
      nil)))

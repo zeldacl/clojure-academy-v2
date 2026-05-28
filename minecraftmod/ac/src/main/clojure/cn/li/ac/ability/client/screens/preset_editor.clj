@@ -14,9 +14,50 @@
    :pending-changes {}
    :player-uuid nil})
 
-(defonce ^:private editor-state
-  (atom {:current-owner nil
-         :states {}}))
+(def ^:private default-editor-runtime-state
+  {:current-owner nil
+   :states {}})
+
+(defn create-preset-editor-runtime
+  []
+  {::runtime ::preset-editor-runtime
+   :runtime-state* (atom default-editor-runtime-state)})
+
+(def ^:dynamic *preset-editor-runtime* nil)
+
+(defonce ^:private installed-preset-editor-runtime
+  (create-preset-editor-runtime))
+
+(defn- preset-editor-runtime?
+  [runtime]
+  (and (map? runtime)
+       (= ::preset-editor-runtime (::runtime runtime))
+       (some? (:runtime-state* runtime))))
+
+(defn call-with-preset-editor-runtime
+  [runtime f]
+  (when-not (preset-editor-runtime? runtime)
+    (throw (ex-info "Expected preset editor runtime"
+                    {:runtime runtime})))
+  (binding [*preset-editor-runtime* runtime]
+    (f)))
+
+(defmacro with-preset-editor-runtime
+  [runtime & body]
+  `(call-with-preset-editor-runtime ~runtime (fn [] ~@body)))
+
+(defn- current-preset-editor-runtime
+  []
+  (or *preset-editor-runtime*
+      installed-preset-editor-runtime))
+
+(defn- editor-runtime-state-atom
+  []
+  (:runtime-state* (current-preset-editor-runtime)))
+
+(defn- editor-runtime-state-snapshot
+  []
+  @(editor-runtime-state-atom))
 
 (defn- require-editor-owner-value
   [owner label value]
@@ -69,7 +110,7 @@
 
 (defn- current-owner-key
   []
-  (:current-owner (normalized-store @editor-state)))
+  (:current-owner (normalized-store (editor-runtime-state-snapshot))))
 
 (defn editor-state-snapshot
   ([]
@@ -77,12 +118,12 @@
      (editor-state-snapshot owner-key)
      default-editor-state))
   ([owner]
-   (get-in (normalized-store @editor-state) [:states (editor-owner-key owner)] default-editor-state)))
+  (get-in (normalized-store (editor-runtime-state-snapshot)) [:states (editor-owner-key owner)] default-editor-state)))
 
 (defn- swap-editor-state!
   [owner f & args]
   (let [owner-key (editor-owner-key owner)]
-    (swap! editor-state
+    (swap! (editor-runtime-state-atom)
            (fn [store]
              (let [store (normalized-store store)]
                (assoc-in store [:states owner-key]
@@ -91,12 +132,12 @@
 (defn- set-current-owner!
   [owner]
   (let [owner-key (editor-owner-key owner)]
-    (swap! editor-state #(assoc (normalized-store %) :current-owner owner-key))
+    (swap! (editor-runtime-state-atom) #(assoc (normalized-store %) :current-owner owner-key))
     owner-key))
 
 (defn reset-editor-states-for-test!
   []
-  (reset! editor-state {:current-owner nil :states {}})
+  (reset! (editor-runtime-state-atom) default-editor-runtime-state)
   nil)
 
 ;; ============================================================================
@@ -255,7 +296,7 @@
    (when-let [owner-key (current-owner-key)]
      (close-screen! owner-key)))
   ([owner]
-   (swap! editor-state
+   (swap! (editor-runtime-state-atom)
           (fn [store]
             (let [store (normalized-store store)
                   owner-key (editor-owner-key owner)]

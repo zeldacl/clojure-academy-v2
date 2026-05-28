@@ -94,16 +94,22 @@
   
   nil)
 
-(defonce ^:private render-accessors-registered?
-  (atom false))
+(def ^:private render-accessor-guard-lock
+  (Object.))
+
+(def ^:private ^:dynamic *render-accessors-registered?*
+  false)
 
 (defn register-render-accessors!
   "Explicitly register render-domain accessors once."
   []
-  (when (compare-and-set! render-accessors-registered? false true)
-    (try
-      (register-render-accessors-impl!)
-      (catch Throwable t
-        (reset! render-accessors-registered? false)
-        (throw (ex-info "Failed to register render accessors" {} t)))))
+  (when-not (var-get #'*render-accessors-registered?*)
+    (locking render-accessor-guard-lock
+      (when-not (var-get #'*render-accessors-registered?*)
+        (try
+          (register-render-accessors-impl!)
+          (alter-var-root #'*render-accessors-registered?* (constantly true))
+          (catch Throwable t
+            (alter-var-root #'*render-accessors-registered?* (constantly false))
+            (throw (ex-info "Failed to register render accessors" {} t)))))))
   nil)

@@ -5,9 +5,9 @@
 
 (use-fixtures :each
   (fn [f]
-    (sync-core/reset-scheduler-for-test!)
-    (f)
-    (sync-core/reset-scheduler-for-test!)))
+    (sync-core/call-with-sync-scheduler-runtime
+      (sync-core/create-sync-scheduler-runtime)
+      f)))
 
 (deftest player-tick-multiplicity-does-not-accelerate-scheduler-test
   (let [owner {:server-session-id :test-session}
@@ -74,3 +74,19 @@
   (sync-core/clear-session-scheduler-state! :a)
   (is (nil? (get (sync-core/scheduler-snapshot) :a)))
   (is (contains? (get-in (sync-core/scheduler-snapshot) [:b :dirty-players]) "pb")))
+
+(deftest scheduler-runtime-isolation-test
+  (let [owner {:server-session-id :test-session}
+        runtime-b (sync-core/create-sync-scheduler-runtime)]
+    (sync-core/mark-player-dirty! owner "outer")
+    (is (contains? (get-in (sync-core/scheduler-snapshot) [:test-session :dirty-players]) "outer"))
+
+    (sync-core/call-with-sync-scheduler-runtime
+      runtime-b
+      (fn []
+        (is (empty? (sync-core/scheduler-snapshot)))
+        (sync-core/mark-player-dirty! owner "inner")
+        (is (contains? (get-in (sync-core/scheduler-snapshot) [:test-session :dirty-players]) "inner"))))
+
+    (is (contains? (get-in (sync-core/scheduler-snapshot) [:test-session :dirty-players]) "outer"))
+    (is (not (contains? (get-in (sync-core/scheduler-snapshot) [:test-session :dirty-players]) "inner")))))

@@ -5,17 +5,67 @@
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]))
 
-(defonce ^:private fx-state (atom {}))
+(defn default-flesh-ripping-fx-runtime-state
+  []
+  {:fx-state {}})
+
+(defn create-flesh-ripping-fx-runtime
+  ([]
+   (create-flesh-ripping-fx-runtime {}))
+  ([{:keys [state*]
+     :or {state* (atom (default-flesh-ripping-fx-runtime-state))}}]
+   {::runtime ::flesh-ripping-fx-runtime
+    :state* state*}))
+
+(def ^:dynamic *flesh-ripping-fx-runtime* nil)
+
+(defonce ^:private installed-flesh-ripping-fx-runtime
+  (create-flesh-ripping-fx-runtime))
+
+(defn- flesh-ripping-fx-runtime?
+  [runtime]
+  (and (map? runtime)
+       (= ::flesh-ripping-fx-runtime (::runtime runtime))
+       (some? (:state* runtime))))
+
+(defn call-with-flesh-ripping-fx-runtime
+  [runtime f]
+  (when-not (flesh-ripping-fx-runtime? runtime)
+    (throw (ex-info "Expected Flesh Ripping FX runtime"
+                    {:value runtime})))
+  (binding [*flesh-ripping-fx-runtime* runtime]
+    (f)))
+
+(defmacro with-flesh-ripping-fx-runtime
+  [runtime & body]
+  `(call-with-flesh-ripping-fx-runtime ~runtime (fn [] ~@body)))
+
+(defn- current-flesh-ripping-fx-runtime
+  []
+  (or *flesh-ripping-fx-runtime*
+      installed-flesh-ripping-fx-runtime))
+
+(defn- flesh-ripping-fx-state-atom
+  []
+  (:state* (current-flesh-ripping-fx-runtime)))
+
+(defn- flesh-ripping-fx-state-snapshot
+  []
+  @(flesh-ripping-fx-state-atom))
+
+(defn- update-flesh-ripping-fx-state!
+  [f & args]
+  (apply swap! (flesh-ripping-fx-state-atom) f args))
 
 (defn flesh-ripping-fx-snapshot []
-  {:fx-state @fx-state})
+  (flesh-ripping-fx-state-snapshot))
 
 (defn reset-flesh-ripping-fx-for-test! []
-  (reset! fx-state {})
+  (reset! (flesh-ripping-fx-state-atom) (default-flesh-ripping-fx-runtime-state))
   nil)
 
 (defn clear-flesh-ripping-owner! [owner-key]
-  (swap! fx-state dissoc owner-key)
+  (update-flesh-ripping-fx-state! update :fx-state dissoc owner-key)
   nil)
 
 (defn- enqueue! [{:keys [payload ctx-id channel owner-key]}]
@@ -28,23 +78,23 @@
                    :source-player-id source-player-id
                    :world-id world-id}]
     (case (:mode payload)
-      :start (swap! fx-state assoc owner-key*
-                    (merge base-meta {:active? true :ttl 0 :aim nil :hit? false :target-uuid nil}))
+      :start (update-flesh-ripping-fx-state! update :fx-state assoc owner-key*
+                     (merge base-meta {:active? true :ttl 0 :aim nil :hit? false :target-uuid nil}))
     :update
-    (swap! fx-state update owner-key*
-           (fn [st]
-             (assoc (merge base-meta (or st {:active? true :ttl 0}))
-                    :owner-key owner-key*
-                    :ctx-id ctx-id
-                    :channel channel
-                    :source-player-id source-player-id
-                    :world-id world-id
-                    :active? true
-                    :aim {:x (double (or (:target-x payload) 0.0))
-                          :y (double (or (:target-y payload) 0.0))
-                          :z (double (or (:target-z payload) 0.0))}
-                    :hit? (boolean (:hit? payload))
-                    :target-uuid (:target-uuid payload))))
+        (update-flesh-ripping-fx-state! update :fx-state update owner-key*
+                (fn [st]
+                  (assoc (merge base-meta (or st {:active? true :ttl 0}))
+                     :owner-key owner-key*
+                     :ctx-id ctx-id
+                     :channel channel
+                     :source-player-id source-player-id
+                     :world-id world-id
+                     :active? true
+                     :aim {:x (double (or (:target-x payload) 0.0))
+                       :y (double (or (:target-y payload) 0.0))
+                       :z (double (or (:target-z payload) 0.0))}
+                     :hit? (boolean (:hit? payload))
+                     :target-uuid (:target-uuid payload))))
     :perform
     (do
       (when-let [x (:target-x payload)]
@@ -67,27 +117,29 @@
       nil)))
 
 (defn- tick! []
-  (swap! fx-state
-         (fn [states]
-           (into {}
-                 (map (fn [[owner-key st]]
-                        (let [next-st (update st :ttl inc)]
-                          (when (and (:active? next-st)
-                                     (:aim next-st)
-                                     (zero? (mod (long (:ttl next-st)) 3)))
-                            (client-particles/queue-particle-effect! (:queue-owner next-st)
-                              {:type :particle
-                               :particle-type (if (:hit? next-st) :damage-indicator :portal)
-                               :x (double (get-in next-st [:aim :x]))
-                               :y (+ 0.2 (double (get-in next-st [:aim :y])))
-                               :z (double (get-in next-st [:aim :z]))
-                               :count (if (:hit? next-st) 2 1)
-                               :speed 0.02
-                               :offset-x 0.12
-                               :offset-y 0.12
-                               :offset-z 0.12}))
-                          [owner-key next-st]))
-                 states)))))
+  (update-flesh-ripping-fx-state!
+    update :fx-state
+    (fn [states]
+      (reduce-kv
+        (fn [acc owner-key st]
+          (let [next-st (update st :ttl inc)]
+            (when (and (:active? next-st)
+                       (:aim next-st)
+                       (zero? (mod (long (:ttl next-st)) 3)))
+              (client-particles/queue-particle-effect! (:queue-owner next-st)
+                {:type :particle
+                 :particle-type (if (:hit? next-st) :damage-indicator :portal)
+                 :x (double (get-in next-st [:aim :x]))
+                 :y (+ 0.2 (double (get-in next-st [:aim :y])))
+                 :z (double (get-in next-st [:aim :z]))
+                 :count (if (:hit? next-st) 2 1)
+                 :speed 0.02
+                 :offset-x 0.12
+                 :offset-y 0.12
+                 :offset-z 0.12}))
+            (assoc acc owner-key next-st)))
+        {}
+        states))))
 
 (defn- build-plan [_cp _hcp _tick] nil)
 

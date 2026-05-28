@@ -32,7 +32,24 @@
 ;; Block Registry
 ;; ============================================================================
 
-(defonce block-registry (registry-core/atom-registry {}))
+(defn create-block-registry-runtime
+  ([] (create-block-registry-runtime {}))
+  ([{:keys [registry]}]
+   {:cn.li.mcmod.block.dsl-core/runtime ::block-registry-runtime
+    :registry (or registry (registry-core/atom-registry {}))}))
+
+(def ^:dynamic *block-registry-runtime* nil)
+
+(defonce ^:private installed-block-registry-runtime
+  (create-block-registry-runtime))
+
+(defn- block-registry-state []
+  (:registry (or *block-registry-runtime* installed-block-registry-runtime)))
+
+(defn get-block-registry
+  "Return the active block registry instance for the current runtime binding."
+  []
+  (block-registry-state))
 
 ;; ============================================================================
 ;; Block Creation
@@ -180,19 +197,19 @@
   [block-spec]
   (validators/validate-block-spec block-spec)
   (log/info "Registering block:" (:id block-spec))
-  (registry-core/swap-state! block-registry #(assoc % (:id block-spec) block-spec))
+  (registry-core/swap-state! (block-registry-state) #(assoc % (:id block-spec) block-spec))
   block-spec)
 
 (defn get-block
   "Get a block specification from the registry by ID."
   [block-id]
   (let [id-str (if (keyword? block-id) (name block-id) block-id)]
-    (registry-core/lookup block-registry id-str)))
+    (registry-core/lookup (block-registry-state) id-str)))
 
 (defn list-blocks
   "Get all registered block IDs."
   []
-  (keys (registry-core/snapshot block-registry)))
+  (keys (registry-core/snapshot (block-registry-state))))
 
 ;; ============================================================================
 ;; Main Macro: defblock

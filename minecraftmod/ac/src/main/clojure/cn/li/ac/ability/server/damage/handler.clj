@@ -69,49 +69,85 @@
 ;; Attack-cancel-check registry
 ;; ============================================================================
 
-(defonce ^:private attack-cancel-checks
-  ;; keyword → (fn [player-id attacker-id damage] → boolean)
-  (atom {}))
+;; ============================================================================
+;; Attack-cancel-check registry
+;; ============================================================================
 
-(defonce ^:private attack-precheck-side-effects
-  ;; keyword → (fn [player-id attacker-id damage damage-source] → any)
-  (atom {}))
+(defn default-attack-check-registries-runtime-state
+  []
+  {:cancel-checks {}
+   :precheck-side-effects {}
+   :frozen? false})
 
-(defonce ^:private attack-check-registries-frozen? (atom false))
+(defn create-attack-check-registries-runtime
+  ([] (create-attack-check-registries-runtime {}))
+  ([{:keys [state*]
+     :or {state* (atom (default-attack-check-registries-runtime-state))}}]
+   {::runtime ::attack-check-registries-runtime
+    :state* state*}))
+
+(def ^:dynamic *attack-check-registries-runtime* nil)
+
+(defonce ^:private installed-attack-check-registries-runtime
+  (create-attack-check-registries-runtime))
+
+(defn call-with-attack-check-registries-runtime
+  [runtime f]
+  (when-not (and (map? runtime)
+                 (= ::attack-check-registries-runtime (::runtime runtime))
+                 (some? (:state* runtime)))
+    (throw (ex-info "Expected attack check registries runtime" {:runtime runtime})))
+  (binding [*attack-check-registries-runtime* runtime]
+    (f)))
+
+(defn- current-attack-check-registries-runtime
+  []
+  (or *attack-check-registries-runtime*
+      installed-attack-check-registries-runtime))
+
+(defn- attack-check-registries-state-atom
+  []
+  (:state* (current-attack-check-registries-runtime)))
+
+(defn- attack-check-registries-state-snapshot
+  []
+  @(attack-check-registries-state-atom))
+
+(defn- update-attack-check-registries-state!
+  [f & args]
+  (apply swap! (attack-check-registries-state-atom) f args))
 
 (defn- assert-registries-open!
   []
-  (when @attack-check-registries-frozen?
+  (when (:frozen? (attack-check-registries-state-snapshot))
     (throw (ex-info "Attack check registries are frozen" {}))))
 
 (defn attack-check-registries-snapshot
   []
-  {:cancel-checks @attack-cancel-checks
-   :precheck-side-effects @attack-precheck-side-effects
-   :frozen? @attack-check-registries-frozen?})
+  (attack-check-registries-state-snapshot))
 
 (defn reset-attack-check-registries-for-test!
-  ([]
-   (reset-attack-check-registries-for-test! {}))
+  ([] (reset-attack-check-registries-for-test! {}))
   ([{:keys [cancel-checks precheck-side-effects frozen?]
      :or {cancel-checks {} precheck-side-effects {} frozen? false}}]
-   (reset! attack-cancel-checks cancel-checks)
-   (reset! attack-precheck-side-effects precheck-side-effects)
-   (reset! attack-check-registries-frozen? frozen?)
+   (reset! (attack-check-registries-state-atom)
+           {:cancel-checks cancel-checks
+            :precheck-side-effects precheck-side-effects
+            :frozen? frozen?})
    nil))
 
 (defn freeze-attack-check-registries!
   []
-  (reset! attack-check-registries-frozen? true)
+  (update-attack-check-registries-state! assoc :frozen? true)
   nil)
 
 (defn register-attack-cancel-check!
   "Register a predicate that decides whether an attack should be cancelled.
   Content skills call this at load time."
   [check-id check-fn]
-  (when-not (contains? @attack-cancel-checks check-id)
+  (when-not (contains? (:cancel-checks (attack-check-registries-state-snapshot)) check-id)
     (assert-registries-open!)
-    (swap! attack-cancel-checks assoc check-id check-fn))
+    (update-attack-check-registries-state! assoc-in [:cancel-checks check-id] check-fn))
   nil)
 
 (defn should-cancel-attack?
@@ -124,7 +160,7 @@
               (catch Exception e
                 (log/warn "Attack cancel check failed:" (ex-message e))
                 false)))
-          @attack-cancel-checks)))
+          (:cancel-checks (attack-check-registries-state-snapshot)))))
 
 (defn register-attack-precheck-side-effect!
   "Register a side-effect callback executed during attack precheck.
@@ -134,9 +170,9 @@
   (fn [player-id attacker-id damage damage-source] -> any)
   "
   [effect-id side-effect-fn]
-  (when-not (contains? @attack-precheck-side-effects effect-id)
+  (when-not (contains? (:precheck-side-effects (attack-check-registries-state-snapshot)) effect-id)
     (assert-registries-open!)
-    (swap! attack-precheck-side-effects assoc effect-id side-effect-fn))
+    (update-attack-check-registries-state! assoc-in [:precheck-side-effects effect-id] side-effect-fn))
   nil)
 
 (defn run-attack-precheck-side-effects!
@@ -152,4 +188,4 @@
                 (catch Exception e
                   (log/warn "Attack precheck side-effect failed:" effect-id (ex-message e))
                   nil)))
-            @attack-precheck-side-effects))))
+            (:precheck-side-effects (attack-check-registries-state-snapshot))))))

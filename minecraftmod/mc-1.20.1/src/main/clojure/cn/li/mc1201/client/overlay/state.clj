@@ -1,25 +1,60 @@
 (ns cn.li.mc1201.client.overlay.state
 	(:require [cn.li.mc1201.client.session :as client-session]))
 
-(defonce ^:private client-activated-overlay (atom {}))
+(defn create-overlay-state-runtime
+	[]
+	{::runtime ::overlay-state-runtime
+	 :client-activated-overlay* (atom {})})
+
+(def ^:dynamic *overlay-state-runtime* nil)
+
+(defonce ^:private installed-overlay-state-runtime
+	(create-overlay-state-runtime))
+
+(defn- overlay-state-runtime?
+	[runtime]
+	(and (map? runtime)
+			 (= ::overlay-state-runtime (::runtime runtime))
+			 (some? (:client-activated-overlay* runtime))))
+
+(defn call-with-overlay-state-runtime
+	[runtime f]
+	(when-not (overlay-state-runtime? runtime)
+		(throw (ex-info "Expected overlay state runtime"
+						{:runtime runtime})))
+	(binding [*overlay-state-runtime* runtime]
+		(f)))
+
+(defmacro with-overlay-state-runtime
+	[runtime & body]
+	`(call-with-overlay-state-runtime ~runtime (fn [] ~@body)))
+
+(defn- current-overlay-state-runtime
+	[]
+	(or *overlay-state-runtime*
+			installed-overlay-state-runtime))
+
+(defn- client-activated-overlay-atom
+	[]
+	(:client-activated-overlay* (current-overlay-state-runtime)))
 
 (defn get-client-activated
 	[owner]
-	(get @client-activated-overlay (client-session/owner-key owner)))
+	(get @(client-activated-overlay-atom) (client-session/owner-key owner)))
 
 (defn set-client-activated!
 	[owner v]
-	(swap! client-activated-overlay assoc (client-session/owner-key owner) (boolean v))
+	(swap! (client-activated-overlay-atom) assoc (client-session/owner-key owner) (boolean v))
 	nil)
 
 (defn clear-client-activated!
 	[owner]
-	(swap! client-activated-overlay dissoc (client-session/owner-key owner))
+	(swap! (client-activated-overlay-atom) dissoc (client-session/owner-key owner))
 	nil)
 
 (defn clear-client-overlay-session!
 	[client-session-id]
-	(swap! client-activated-overlay
+	(swap! (client-activated-overlay-atom)
 				 (fn [states]
 					 (into {}
 								 (remove (fn [[[entry-session-id _player-uuid] _value]]
@@ -29,11 +64,11 @@
 
 (defn overlay-state-snapshot
 	[]
-	@client-activated-overlay)
+	@(client-activated-overlay-atom))
 
 (defn reset-client-activated-for-test!
 	([]
 	 (reset-client-activated-for-test! {}))
 	([snapshot]
-	 (reset! client-activated-overlay (or snapshot {}))
+	 (reset! (client-activated-overlay-atom) (or snapshot {}))
 	 nil))

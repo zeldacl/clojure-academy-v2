@@ -62,9 +62,17 @@
   (send-context-message! [_this ctx-id direction channel payload]
     (dispatcher/send-context-message! ctx-id direction channel payload)))
 
-(defonce ^:private default-ability-system*
-  (delay (->AbilitySystemImpl)))
+(def ^:private ability-system-lock
+  (Object.))
+
+(def ^:private ^:dynamic *default-ability-system*
+  nil)
 
 (defn ability-system
   []
-  @default-ability-system*)
+  (or (var-get #'*default-ability-system*)
+      (locking ability-system-lock
+        (or (var-get #'*default-ability-system*)
+            (let [system (->AbilitySystemImpl)]
+              (alter-var-root #'*default-ability-system* (constantly system))
+              system)))))

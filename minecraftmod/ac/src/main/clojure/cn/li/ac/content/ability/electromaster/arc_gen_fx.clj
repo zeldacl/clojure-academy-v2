@@ -8,24 +8,74 @@
 (def ^:private sound-id "my_mod:em.arc_weak")
 (def ^:private arc-life 10)
 
-(defonce ^:private arcs* (atom {}))
+(defn default-arc-gen-fx-runtime-state
+  []
+  {:arcs {}})
+
+(defn create-arc-gen-fx-runtime
+  ([]
+   (create-arc-gen-fx-runtime {}))
+  ([{:keys [state*]
+     :or {state* (atom (default-arc-gen-fx-runtime-state))}}]
+   {::runtime ::arc-gen-fx-runtime
+    :state* state*}))
+
+(def ^:dynamic *arc-gen-fx-runtime* nil)
+
+(defonce ^:private installed-arc-gen-fx-runtime
+  (create-arc-gen-fx-runtime))
+
+(defn- arc-gen-fx-runtime?
+  [runtime]
+  (and (map? runtime)
+       (= ::arc-gen-fx-runtime (::runtime runtime))
+       (some? (:state* runtime))))
+
+(defn call-with-arc-gen-fx-runtime
+  [runtime f]
+  (when-not (arc-gen-fx-runtime? runtime)
+    (throw (ex-info "Expected Arc Gen FX runtime"
+                    {:value runtime})))
+  (binding [*arc-gen-fx-runtime* runtime]
+    (f)))
+
+(defmacro with-arc-gen-fx-runtime
+  [runtime & body]
+  `(call-with-arc-gen-fx-runtime ~runtime (fn [] ~@body)))
+
+(defn- current-arc-gen-fx-runtime
+  []
+  (or *arc-gen-fx-runtime*
+      installed-arc-gen-fx-runtime))
+
+(defn- arc-gen-fx-state-atom
+  []
+  (:state* (current-arc-gen-fx-runtime)))
+
+(defn- arc-gen-fx-state-snapshot
+  []
+  @(arc-gen-fx-state-atom))
+
+(defn- update-arc-gen-fx-state!
+  [f & args]
+  (apply swap! (arc-gen-fx-state-atom) f args))
 
 (defn arc-gen-fx-snapshot
   []
-  {:arcs @arcs*})
+  (arc-gen-fx-state-snapshot))
 
 (defn reset-arc-gen-fx-for-test!
   []
-  (reset! arcs* {})
+  (reset! (arc-gen-fx-state-atom) (default-arc-gen-fx-runtime-state))
   nil)
 
 (defn clear-arc-gen-owner!
   [owner-key]
-  (swap! arcs* dissoc owner-key)
+  (update-arc-gen-fx-state! update :arcs dissoc owner-key)
   nil)
 
 (defn- all-arcs []
-  (mapcat val @arcs*))
+  (mapcat val (:arcs (arc-gen-fx-state-snapshot))))
 
 (defn- enqueue! [{:keys [payload ctx-id channel owner-key]}]
   (let [owner-key* (or owner-key [:ctx ctx-id])
@@ -38,31 +88,33 @@
     (case mode
       :perform
       (when (and (map? start) (map? end))
-        (swap! arcs* update owner-key* (fnil conj [])
-               (merge base-meta
-                      {:start start
-                       :end end
-                       :hit-type hit-type
-                       :ttl arc-life
-                       :max-ttl arc-life}))
+        (update-arc-gen-fx-state!
+          update :arcs update owner-key* (fnil conj [])
+          (merge base-meta
+                 {:start start
+                  :end end
+                  :hit-type hit-type
+                  :ttl arc-life
+                  :max-ttl arc-life}))
         (client-sounds/queue-current-sound-effect!
           {:type :sound :sound-id sound-id :volume 0.5 :pitch 1.0}))
       :end
-      (swap! arcs* dissoc owner-key*)
+      (update-arc-gen-fx-state! update :arcs dissoc owner-key*)
       nil)))
 
 (defn- tick! []
-  (swap! arcs*
-         (fn [by-owner]
-           (into {}
-                 (keep (fn [[owner-key items]]
-                         (let [live (->> items
-                                         (map #(update % :ttl dec))
-                                         (filter #(pos? (long (:ttl %))))
-                                         vec)]
-                           (when (seq live)
-                             [owner-key live]))))
-                 by-owner))))
+  (update-arc-gen-fx-state!
+    update :arcs
+    (fn [by-owner]
+      (into {}
+            (keep (fn [[owner-key items]]
+                    (let [live (->> items
+                                    (map #(update % :ttl dec))
+                                    (filter #(pos? (long (:ttl %))))
+                                    vec)]
+                      (when (seq live)
+                        [owner-key live]))))
+            by-owner))))
 
 (defn- arc-ops [cam-pos {:keys [start end ttl max-ttl]}]
   (let [life (/ (double ttl) (double (max 1 max-ttl)))

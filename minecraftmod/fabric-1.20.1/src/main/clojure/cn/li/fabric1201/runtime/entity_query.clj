@@ -6,17 +6,25 @@
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.server MinecraftServer]))
 
-(defonce ^:private installed? (atom false))
+(def ^:private install-guard-lock
+  (Object.))
+
+(def ^:private ^:dynamic *installed?*
+  false)
 
 (defn- get-server ^MinecraftServer []
   (server-context/get-server))
 
 (defn install-entity-query!
   []
-  (if-not (compare-and-set! installed? false true)
+  (if (var-get #'*installed?*)
     (log/info "Fabric entity query already installed, skipping")
-    (do
-      (server-context/install-server-context!)
-      (alter-var-root #'pentity/*entity-get-type-id-fn*
-                      (constantly (core/create-entity-type-id-fn get-server)))
-      (log/info "Fabric entity query installed"))))
+    (locking install-guard-lock
+      (if (var-get #'*installed?*)
+        (log/info "Fabric entity query already installed, skipping")
+        (do
+          (server-context/install-server-context!)
+          (alter-var-root #'pentity/*entity-get-type-id-fn*
+                          (constantly (core/create-entity-type-id-fn get-server)))
+          (alter-var-root #'*installed?* (constantly true))
+          (log/info "Fabric entity query installed"))))))

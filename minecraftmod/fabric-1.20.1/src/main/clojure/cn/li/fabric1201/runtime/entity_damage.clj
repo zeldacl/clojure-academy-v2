@@ -6,17 +6,24 @@
   (:import [net.minecraft.world.level Level]
            [net.minecraft.world.phys AABB]))
 
-(defonce ^:private living-entity-class
-  (delay (ru/class-noinit "net.minecraft.world.entity.LivingEntity")))
+(def ^:private ^:dynamic *living-entity-class*
+  nil)
+
+(defn- living-entity-class
+  []
+  (or (var-get #'*living-entity-class*)
+      (let [resolved (ru/class-noinit "net.minecraft.world.entity.LivingEntity")]
+        (alter-var-root #'*living-entity-class* (constantly resolved))
+        resolved)))
 
 (defn- living-entity? [entity]
-  (instance? @living-entity-class entity))
+  (instance? (living-entity-class) entity))
 
 (defn fabric-entity-damage []
   (entity-damage/create-entity-damage
     server-context/get-server
     {:get-living-entities-in-aabb-fn (fn [^Level level ^AABB aabb]
-                                       (.getEntitiesOfClass level ^Class @living-entity-class aabb))
+                                       (.getEntitiesOfClass level ^Class (living-entity-class) aabb))
      :living-entity?-fn living-entity?}))
 
 (defn install-entity-damage! []

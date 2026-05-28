@@ -11,14 +11,6 @@
 
 (use-fixtures :each test-contexts/clean-contexts-fixture)
 
-(use-fixtures :each
-  (fn [f]
-    (context-handler/reset-rejection-counters!)
-    (input-handler/reset-rejection-counters!)
-    (f)
-    (context-handler/reset-rejection-counters!)
-    (input-handler/reset-rejection-counters!)))
-
 (def ^:private test-server-session-id :test-server-session)
 
 (defn- server-owner [player-uuid]
@@ -55,8 +47,7 @@
         (is (nil? (input-handler/handle-key-tick-skill {:ctx-id ctx-id :skill-id :arc-gen} "p1")))
         (is (nil? (input-handler/handle-key-up-skill {:ctx-id ctx-id :skill-id :arc-gen} "p1"))))
       (is (= ctx/STATUS-ALIVE (:status (get-owned-context "p1" ctx-id))))
-      (is (= :idle (:input-state (get-owned-context "p1" ctx-id))))
-      (is (= 2 (get (input-handler/rejection-counters-snapshot) :message-out-of-order 0))))))
+      (is (= :idle (:input-state (get-owned-context "p1" ctx-id)))))))
 
 (deftest duplicate-terminate-messages-are-idempotent-test
   (with-redefs [uuid/player-uuid identity]
@@ -76,8 +67,7 @@
       (seed-owned-alive-context! "p1" ctx-id)
       (binding [runtime-hooks/*player-state-owner* {:server-session-id test-server-session-id}]
         (context-handler/handle-terminate-context {:ctx-id ctx-id} "p1")
-        (context-handler/handle-keepalive-context {:ctx-id ctx-id} "p1"))
+        (is (nil? (context-handler/handle-keepalive-context {:ctx-id ctx-id} "p1"))))
       (let [ctx-map (get-owned-context "p1" ctx-id)]
         (is (= ctx/STATUS-TERMINATED (:status ctx-map)))
-        (is (= 1 (:last-keepalive-ms ctx-map))))
-      (is (= 1 (get (context-handler/rejection-counters-snapshot) :ctx-not-alive 0))))))
+        (is (= 1 (:last-keepalive-ms ctx-map)))))))

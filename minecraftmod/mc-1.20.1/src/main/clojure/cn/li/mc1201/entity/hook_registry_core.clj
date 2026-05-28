@@ -10,6 +10,7 @@
   (:require [clojure.string :as str]
             [cn.li.mcmod.entity.dsl :as edsl]
             [cn.li.mcmod.entity.hook-resolver :as hook-resolver]
+            [cn.li.mcmod.protocol.core :as registry-core]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.mc1201.entity ScriptedEntitySpecAccess]))
 
@@ -36,11 +37,17 @@
 ;; Hook Registry
 ;; ============================================================================
 
+(def ^:private ^:dynamic *hook-registry-state*
+  {})
+
+(def ^:private ^:dynamic *hook-metadata-state*
+  {})
+
 (defonce ^:private hook-registry
-  (atom {}))
+  (registry-core/var-root-registry #'*hook-registry-state*))
 
 (defonce ^:private hook-metadata
-  (atom {}))
+  (registry-core/var-root-registry #'*hook-metadata-state*))
 
 ;; ============================================================================
 ;; Hook Registration
@@ -84,7 +91,7 @@
               {:type event-type :id hook-id :priority priority})
     
     ;; Register hook in registry
-    (swap! hook-registry
+    (registry-core/swap-state! hook-registry
            (fn [registry]
              (update registry event-type
                      (fn [hooks]
@@ -95,12 +102,13 @@
                               :enabled? enabled?})))))
     
     ;; Store metadata
-    (swap! hook-metadata
-           assoc hook-id
-           {:event-type event-type
-            :priority priority
-            :doc doc
-            :enabled? enabled?})))
+        (registry-core/swap-state! hook-metadata
+               (fn [m]
+                 (assoc m hook-id
+                   {:event-type event-type
+                    :priority priority
+                    :doc doc
+                    :enabled? enabled?})))))
 
 (defn register-hook-group!
   "Register multiple hooks at once.
@@ -129,7 +137,7 @@
    Returns sequence of hook results (nil if hook disabled or error).
    Logs errors but doesn't throw - ensures other hooks still execute."
   [event-type & args]
-  (let [hooks (get (deref hook-registry) event-type [])
+  (let [hooks (get (registry-core/snapshot hook-registry) event-type [])
         sorted-hooks (sort-by :priority hooks)]
     (for [hook sorted-hooks]
       (try
@@ -147,7 +155,7 @@
   "Execute hooks only if all are enabled (useful for critical paths).
    Throws if any hook is disabled."
   [event-type & args]
-  (let [hooks (get (deref hook-registry) event-type [])]
+  (let [hooks (get (registry-core/snapshot hook-registry) event-type [])]
     (when-let [disabled-hooks (seq (filter #(not (:enabled? %)) hooks))]
       (throw (ex-info "Cannot execute hooks - some are disabled"
                       {:event-type event-type
@@ -161,55 +169,55 @@
 (defn enable-hook!
   "Enable a specific hook"
   [hook-id]
-  (swap! hook-metadata
+  (registry-core/swap-state! hook-metadata
          (fn [meta]
            (update meta hook-id assoc :enabled? true))))
 
 (defn disable-hook!
   "Disable a specific hook"
   [hook-id]
-  (swap! hook-metadata
+  (registry-core/swap-state! hook-metadata
          (fn [meta]
            (update meta hook-id assoc :enabled? false))))
 
 (defn is-hook-enabled?
   "Check if a hook is enabled"
   [hook-id]
-  (get-in (deref hook-metadata) [hook-id :enabled?] true))
+  (get-in (registry-core/snapshot hook-metadata) [hook-id :enabled?] true))
 
 (defn get-hooks-for-event
   "Get all hooks registered for an event type"
   [event-type]
-  (get (deref hook-registry) event-type []))
+  (get (registry-core/snapshot hook-registry) event-type []))
 
 (defn list-all-hooks
   "List all registered hooks with metadata"
   []
-  (deref hook-metadata))
+  (registry-core/snapshot hook-metadata))
 
 (defn unregister-hook!
   "Unregister a hook by ID"
   [hook-id]
-  (let [event-type (get-in (deref hook-metadata) [hook-id :event-type])]
+  (let [event-type (get-in (registry-core/snapshot hook-metadata) [hook-id :event-type])]
     (when event-type
-      (swap! hook-registry
+      (registry-core/swap-state! hook-registry
              (fn [registry]
                (update registry event-type
                        (fn [hooks]
                          (filterv #(not= (:id %) hook-id) hooks)))))
       
-      (swap! hook-metadata dissoc hook-id))))
+      (registry-core/swap-state! hook-metadata #(dissoc % hook-id)))))
 
 (defn clear-hooks!
   "Clear all hooks (for testing)"
   []
-  (reset! hook-registry {})
-  (reset! hook-metadata {}))
+  (registry-core/reset-state! hook-registry {})
+  (registry-core/reset-state! hook-metadata {}))
 
 (defn clear-event-hooks!
   "Clear all hooks for a specific event type"
   [event-type]
-  (let [hook-ids (map :id (get @hook-registry event-type []))]
+  (let [hook-ids (map :id (get (registry-core/snapshot hook-registry) event-type []))]
     (doseq [id hook-ids]
       (unregister-hook! id))))
 
@@ -220,8 +228,8 @@
 (defn hook-statistics
   "Get statistics about registered hooks"
   []
-  (let [registry (deref hook-registry)
-        metadata (deref hook-metadata)]
+    (let [registry (registry-core/snapshot hook-registry)
+      metadata (registry-core/snapshot hook-metadata)]
     {:total-hooks (count metadata)
      :total-event-types (count registry)
      :events-breakdown (into {}
@@ -286,20 +294,34 @@
                      nil)
                    [hook-id (first classes)]))))))
 
-(defn register-hook-classes!
-  [{:keys [installed?-atom entries register-fn success-label]}]
-  (when (compare-and-set! installed?-atom false true)
-    (doseq [[hook-id class-name] entries]
-      (if (register-fn hook-id class-name)
-        (log/info success-label {:hook-id hook-id :class class-name})
-        (log/error (str "Failed to register " (str/lower-case success-label))
-                   {:hook-id hook-id :class class-name}))))
-  nil)
+(def ^:private scripted-hook-install-lock
+  (Object.))
 
-(defonce ^:private scripted-hook-install-state
-  {:effect (atom false)
-   :ray (atom false)
-   :marker (atom false)})
+(def ^:private ^:dynamic *scripted-hook-install-state*
+  {:effect false
+   :ray false
+   :marker false})
+
+(defn- scripted-hook-installed?
+  [install-key]
+  (true? (get (var-get #'*scripted-hook-install-state*) install-key)))
+
+(defn- mark-scripted-hook-installed!
+  [install-key]
+  (alter-var-root #'*scripted-hook-install-state* assoc install-key true))
+
+(defn register-hook-classes!
+  [{:keys [install-key entries register-fn success-label]}]
+  (when-not (scripted-hook-installed? install-key)
+    (locking scripted-hook-install-lock
+      (when-not (scripted-hook-installed? install-key)
+        (mark-scripted-hook-installed! install-key)
+        (doseq [[hook-id class-name] entries]
+          (if (register-fn hook-id class-name)
+            (log/info success-label {:hook-id hook-id :class class-name})
+            (log/error (str "Failed to register " (str/lower-case success-label))
+                       {:hook-id hook-id :class class-name}))))))
+  nil)
 
 (def scripted-hook-specs
   "Data-driven specs for scripted entity hook class registration.
@@ -317,7 +339,7 @@
                                    :noop "cn.li.mc1201.entity.hook.effect.NoopEffectHook"
                                    :vertical-ballistic "cn.li.mc1201.entity.hook.effect.NoopEffectHook"}
             :conflict-mode :by-hook-id
-            :installed?-atom (:effect scripted-hook-install-state)
+            :install-key :effect
             :register-fn ScriptedEntitySpecAccess/registerScriptedEffectHookClass
             :success-label "Registered scripted effect hook"}
    :ray {:entity-kind :scripted-ray
@@ -326,7 +348,7 @@
          :catalog-impl-key-fn #(hook-resolver/resolve-impl-key :ray %)
          :impl-key->hook-class {:owner-follow "cn.li.mc1201.entity.hook.ray.OwnerFollowRayHook"}
          :conflict-mode :by-hook-id
-         :installed?-atom (:ray scripted-hook-install-state)
+         :install-key :ray
          :register-fn ScriptedEntitySpecAccess/registerScriptedRayHookClass
          :success-label "Registered scripted ray hook"}
    :marker {:entity-kind :scripted-marker
@@ -335,7 +357,7 @@
             :catalog-impl-key-fn #(hook-resolver/resolve-impl-key :marker %)
             :impl-key->hook-class {:owner-follow-marker "cn.li.mc1201.entity.hook.marker.OwnerFollowMarkerHook"}
             :conflict-mode :allow-duplicates
-            :installed?-atom (:marker scripted-hook-install-state)
+            :install-key :marker
             :register-fn ScriptedEntitySpecAccess/registerScriptedMarkerHookClass
             :success-label "Registered scripted marker hook"}})
 
@@ -371,11 +393,11 @@
 (defn register-scripted-hook-kind!
   "Register one scripted entity hook kind by spec key (:effect, :ray, :marker)."
   [hook-kind]
-  (let [{:keys [installed?-atom register-fn success-label] :as spec}
+  (let [{:keys [install-key register-fn success-label] :as spec}
         (or (get scripted-hook-specs hook-kind)
             (throw (ex-info "Unknown scripted hook kind" {:hook-kind hook-kind})))]
     (register-hook-classes!
-     {:installed?-atom installed?-atom
+     {:install-key install-key
       :entries (registration-entries spec (collect-scripted-hook-entries hook-kind))
       :register-fn register-fn
       :success-label success-label})))

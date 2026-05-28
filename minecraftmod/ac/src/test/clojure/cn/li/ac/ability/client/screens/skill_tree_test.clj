@@ -8,13 +8,12 @@
             [cn.li.mcmod.i18n :as i18n]))
 
 (defn- reset-screen-fixture [f]
-  (screen/reset-screen-states-for-test!)
-  (try
-    (binding [runtime-hooks/*client-session-id* :test-session
-              runtime-hooks/*player-state-owner* {:client-session-id :test-session}]
-      (f))
-    (finally
-      (screen/reset-screen-states-for-test!))))
+  (screen/call-with-skill-tree-screen-runtime
+    (screen/create-skill-tree-screen-runtime)
+    (fn []
+      (binding [runtime-hooks/*client-session-id* :test-session
+                runtime-hooks/*player-state-owner* {:client-session-id :test-session}]
+        (f)))))
 
 (use-fixtures :each reset-screen-fixture)
 
@@ -110,3 +109,15 @@
         (screen/close-screen! "player-1")
         (is (nil? (:player-uuid (screen/screen-state-snapshot "player-1"))))
         (is (= "player-2" (:player-uuid (screen/screen-state-snapshot "player-2")))))
+
+(deftest screen-runtime-isolation-test
+  (let [runtime-b (screen/create-skill-tree-screen-runtime)]
+    (screen/open-screen! "player-1" {:developer-type :portable})
+    (screen/call-with-skill-tree-screen-runtime
+      runtime-b
+      (fn []
+        (screen/open-screen! "player-1" {:developer-type :normal})
+        (is (= {:developer-type :normal}
+               (:learn-context (screen/screen-state-snapshot "player-1"))))))
+    (is (= {:developer-type :portable}
+           (:learn-context (screen/screen-state-snapshot "player-1"))))))

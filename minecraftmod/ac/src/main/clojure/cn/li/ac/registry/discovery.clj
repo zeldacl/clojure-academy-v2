@@ -7,31 +7,70 @@
   (:require [cn.li.ac.registry.core :as core]
             [cn.li.mcmod.util.log :as log]))
 
-(defonce ^:private providers* (atom {}))
-(defonce ^:private providers-frozen? (atom false))
+(defn default-content-provider-registry-runtime-state
+  []
+  {:providers {}
+   :frozen? false})
+
+(defn create-content-provider-registry-runtime
+  ([] (create-content-provider-registry-runtime {}))
+  ([{:keys [state*]
+     :or {state* (atom (default-content-provider-registry-runtime-state))}}]
+   {::runtime ::content-provider-registry-runtime
+    :state* state*}))
+
+(def ^:dynamic *content-provider-registry-runtime* nil)
+
+(defonce ^:private installed-content-provider-registry-runtime
+  (create-content-provider-registry-runtime))
+
+(defn call-with-content-provider-registry-runtime
+  [runtime f]
+  (when-not (and (map? runtime)
+                 (= ::content-provider-registry-runtime (::runtime runtime))
+                 (some? (:state* runtime)))
+    (throw (ex-info "Expected content provider registry runtime" {:runtime runtime})))
+  (binding [*content-provider-registry-runtime* runtime]
+    (f)))
+
+(defn- current-content-provider-registry-runtime
+  []
+  (or *content-provider-registry-runtime*
+      installed-content-provider-registry-runtime))
+
+(defn- content-provider-registry-state-atom
+  []
+  (:state* (current-content-provider-registry-runtime)))
+
+(defn- content-provider-registry-state-snapshot
+  []
+  @(content-provider-registry-state-atom))
+
+(defn- update-content-provider-registry-state!
+  [f & args]
+  (apply swap! (content-provider-registry-state-atom) f args))
 
 (defn- assert-registry-open!
   []
-  (when @providers-frozen?
+  (when (:frozen? (content-provider-registry-state-snapshot))
     (throw (ex-info "Content discovery provider registry is frozen" {}))))
 
 (defn provider-registry-snapshot
   []
-  {:providers @providers*
-   :frozen? @providers-frozen?})
+  (content-provider-registry-state-snapshot))
 
 (defn reset-provider-registry-for-test!
-  ([]
-   (reset-provider-registry-for-test! {}))
+  ([] (reset-provider-registry-for-test! {}))
   ([{:keys [providers frozen?]
      :or {providers {} frozen? false}}]
-   (reset! providers* providers)
-   (reset! providers-frozen? frozen?)
+   (reset! (content-provider-registry-state-atom)
+           {:providers providers
+            :frozen? frozen?})
    nil))
 
 (defn freeze-provider-registry!
   []
-  (reset! providers-frozen? true)
+  (update-content-provider-registry-state! assoc :frozen? true)
   nil)
 
 (defn register-provider!
@@ -40,19 +79,19 @@
   (let [provider* (core/normalize-provider provider)
   id (core/provider-id* provider*)]
     (assert-registry-open!)
-    (swap! providers* assoc id provider*)
+    (update-content-provider-registry-state! assoc-in [:providers id] provider*)
     (log/debug "Registered content provider" id)
     provider*))
 
 (defn unregister-provider!
   [provider-id]
   (assert-registry-open!)
-  (swap! providers* dissoc provider-id)
+  (update-content-provider-registry-state! update :providers dissoc provider-id)
   nil)
 
 (defn registered-providers
   []
-  (vals @providers*))
+  (vals (:providers (content-provider-registry-state-snapshot))))
 
 (defn discover-providers
   "Return providers in load order."

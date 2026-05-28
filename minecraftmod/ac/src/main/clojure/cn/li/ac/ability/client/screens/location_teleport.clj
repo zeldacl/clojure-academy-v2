@@ -29,9 +29,50 @@
             :max-location-name-length 16}
    :current-pos nil})
 
-(defonce ^:private screen-state
-  (atom {:current-owner nil
-         :states {}}))
+(def ^:private default-screen-runtime-state
+  {:current-owner nil
+   :states {}})
+
+(defn create-location-teleport-screen-runtime
+  []
+  {::runtime ::location-teleport-screen-runtime
+   :runtime-state* (atom default-screen-runtime-state)})
+
+(def ^:dynamic *location-teleport-screen-runtime* nil)
+
+(defonce ^:private installed-location-teleport-screen-runtime
+  (create-location-teleport-screen-runtime))
+
+(defn- location-teleport-screen-runtime?
+  [runtime]
+  (and (map? runtime)
+       (= ::location-teleport-screen-runtime (::runtime runtime))
+       (some? (:runtime-state* runtime))))
+
+(defn call-with-location-teleport-screen-runtime
+  [runtime f]
+  (when-not (location-teleport-screen-runtime? runtime)
+    (throw (ex-info "Expected location teleport screen runtime"
+                    {:runtime runtime})))
+  (binding [*location-teleport-screen-runtime* runtime]
+    (f)))
+
+(defmacro with-location-teleport-screen-runtime
+  [runtime & body]
+  `(call-with-location-teleport-screen-runtime ~runtime (fn [] ~@body)))
+
+(defn- current-location-teleport-screen-runtime
+  []
+  (or *location-teleport-screen-runtime*
+      installed-location-teleport-screen-runtime))
+
+(defn- screen-runtime-state-atom
+  []
+  (:runtime-state* (current-location-teleport-screen-runtime)))
+
+(defn- screen-runtime-state-snapshot
+  []
+  @(screen-runtime-state-atom))
 
 (defn- require-screen-owner-value
   [owner label value]
@@ -69,7 +110,7 @@
 
 (defn- current-owner-key
   []
-  (:current-owner (normalized-store @screen-state)))
+  (:current-owner (normalized-store (screen-runtime-state-snapshot))))
 
 (defn screen-state-snapshot
   ([]
@@ -77,12 +118,12 @@
      (screen-state-snapshot owner-key)
      default-screen-state))
   ([owner]
-   (get-in (normalized-store @screen-state) [:states (screen-owner-key owner)] default-screen-state)))
+  (get-in (normalized-store (screen-runtime-state-snapshot)) [:states (screen-owner-key owner)] default-screen-state)))
 
 (defn- swap-screen-state!
   [owner f & args]
   (let [owner-key (screen-owner-key owner)]
-    (swap! screen-state
+    (swap! (screen-runtime-state-atom)
            (fn [store]
              (let [store (normalized-store store)]
                (assoc-in store [:states owner-key]
@@ -91,12 +132,12 @@
 (defn- set-current-owner!
   [owner]
   (let [owner-key (screen-owner-key owner)]
-    (swap! screen-state #(assoc (normalized-store %) :current-owner owner-key))
+    (swap! (screen-runtime-state-atom) #(assoc (normalized-store %) :current-owner owner-key))
     owner-key))
 
 (defn reset-screen-states-for-test!
   []
-  (reset! screen-state {:current-owner nil :states {}})
+  (reset! (screen-runtime-state-atom) default-screen-runtime-state)
   nil)
 
 ;; ============================================================================
@@ -173,7 +214,7 @@
    (when-let [owner-key (current-owner-key)]
      (close-screen! owner-key)))
   ([owner]
-   (swap! screen-state
+   (swap! (screen-runtime-state-atom)
           (fn [store]
             (let [store (normalized-store store)
                   owner-key (screen-owner-key owner)]

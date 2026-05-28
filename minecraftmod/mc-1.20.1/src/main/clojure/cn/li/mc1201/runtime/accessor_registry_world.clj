@@ -81,16 +81,22 @@
 
     nil)
 
-(defonce ^:private world-accessors-registered?
-  (atom false))
+(def ^:private world-accessor-guard-lock
+  (Object.))
+
+(def ^:private ^:dynamic *world-accessors-registered?*
+  false)
 
 (defn register-world-accessors!
   "Explicitly register world-domain accessors once."
   []
-  (when (compare-and-set! world-accessors-registered? false true)
-    (try
-      (register-world-accessors-impl!)
-      (catch Throwable t
-        (reset! world-accessors-registered? false)
-        (throw (ex-info "Failed to register world accessors" {} t)))))
+  (when-not (var-get #'*world-accessors-registered?*)
+    (locking world-accessor-guard-lock
+      (when-not (var-get #'*world-accessors-registered?*)
+        (try
+          (register-world-accessors-impl!)
+          (alter-var-root #'*world-accessors-registered?* (constantly true))
+          (catch Throwable t
+            (alter-var-root #'*world-accessors-registered?* (constantly false))
+            (throw (ex-info "Failed to register world accessors" {} t)))))))
   nil)

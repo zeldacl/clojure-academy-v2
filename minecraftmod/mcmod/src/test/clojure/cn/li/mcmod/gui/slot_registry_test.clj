@@ -5,7 +5,7 @@
 
 (deftest register-and-get-validator-test
   (testing "register-slot-validator! normalizes key to keyword"
-    (reset! registry/slot-validators {})
+    (registry/set-slot-validators! {})
     (let [validator (fn [_] true)]
       (is (nil? (registry/register-slot-validator! "energy" validator)))
       (is (identical? validator (registry/get-slot-validator :energy)))))

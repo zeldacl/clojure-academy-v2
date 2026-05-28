@@ -6,20 +6,70 @@
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.render-util :as ru]))
 
-(defonce ^:private effect-state (atom {}))
+(defn default-mine-detect-fx-runtime-state
+  []
+  {:effect-state {}})
+
+(defn create-mine-detect-fx-runtime
+  ([]
+   (create-mine-detect-fx-runtime {}))
+  ([{:keys [state*]
+     :or {state* (atom (default-mine-detect-fx-runtime-state))}}]
+   {::runtime ::mine-detect-fx-runtime
+    :state* state*}))
+
+(def ^:dynamic *mine-detect-fx-runtime* nil)
+
+(defonce ^:private installed-mine-detect-fx-runtime
+  (create-mine-detect-fx-runtime))
+
+(defn- mine-detect-fx-runtime?
+  [runtime]
+  (and (map? runtime)
+       (= ::mine-detect-fx-runtime (::runtime runtime))
+       (some? (:state* runtime))))
+
+(defn call-with-mine-detect-fx-runtime
+  [runtime f]
+  (when-not (mine-detect-fx-runtime? runtime)
+    (throw (ex-info "Expected mine detect FX runtime"
+                    {:value runtime})))
+  (binding [*mine-detect-fx-runtime* runtime]
+    (f)))
+
+(defmacro with-mine-detect-fx-runtime
+  [runtime & body]
+  `(call-with-mine-detect-fx-runtime ~runtime (fn [] ~@body)))
+
+(defn- current-mine-detect-fx-runtime
+  []
+  (or *mine-detect-fx-runtime*
+      installed-mine-detect-fx-runtime))
+
+(defn- mine-detect-fx-state-atom
+  []
+  (:state* (current-mine-detect-fx-runtime)))
+
+(defn- mine-detect-fx-state-snapshot
+  []
+  @(mine-detect-fx-state-atom))
+
+(defn- update-mine-detect-fx-state!
+  [f & args]
+  (apply swap! (mine-detect-fx-state-atom) f args))
 
 (defn mine-detect-fx-snapshot
   []
-  {:effect-state @effect-state})
+  (mine-detect-fx-state-snapshot))
 
 (defn reset-mine-detect-fx-for-test!
   []
-  (reset! effect-state {})
+  (reset! (mine-detect-fx-state-atom) (default-mine-detect-fx-runtime-state))
   nil)
 
 (defn clear-mine-detect-owner!
   [owner-key]
-  (swap! effect-state dissoc owner-key)
+  (update-mine-detect-fx-state! update :effect-state dissoc owner-key)
   nil)
 
 (def ^:private mineview-texture
@@ -131,65 +181,70 @@
      :sound-id "my_mod:em.minedetect"
      :volume 0.8
      :pitch 1.0})
-  (swap! effect-state assoc owner-key
-         {:owner-key owner-key
-          :ctx-id ctx-id
-          :channel channel
-          :source-player-id source-player-id
-          :world-id world-id
-          :active? true
-          :ticks 0
-          :life-ticks (long (max 1 (or life-ticks default-life-ticks)))
-          :rescan-interval (long (max 1 (or rescan-interval default-rescan-interval)))
-          :last-rescan-tick nil
-          :range (clamped-range range)
-          :advanced? (boolean advanced?)
-          :ores []}))
+  (update-mine-detect-fx-state!
+    update :effect-state assoc owner-key
+    {:owner-key owner-key
+     :ctx-id ctx-id
+     :channel channel
+     :source-player-id source-player-id
+     :world-id world-id
+     :active? true
+     :ticks 0
+     :life-ticks (long (max 1 (or life-ticks default-life-ticks)))
+     :rescan-interval (long (max 1 (or rescan-interval default-rescan-interval)))
+     :last-rescan-tick nil
+     :range (clamped-range range)
+     :advanced? (boolean advanced?)
+     :ores []}))
 
 (defn- enqueue!
   [{:keys [payload ctx-id channel owner-key]}]
   (let [owner-key* (or owner-key [:ctx ctx-id])]
     (case (:mode payload)
       :perform (apply-perform! owner-key* ctx-id channel payload)
-      :end (swap! effect-state dissoc owner-key*)
+      :end (update-mine-detect-fx-state! update :effect-state dissoc owner-key*)
       nil)))
 
 (defn- tick!
   []
-  (swap! effect-state
-         (fn [states]
-           (into {}
-                 (keep (fn [[owner-key st]]
-                         (when (:active? st)
-                           (let [next-ticks (inc (long (:ticks st)))
-                                 life-ticks (long (:life-ticks st))]
-                             (when (< next-ticks life-ticks)
-                               [owner-key (assoc st :ticks next-ticks)])))))
+  (update-mine-detect-fx-state!
+    update :effect-state
+    (fn [states]
+      (reduce-kv (fn [acc owner-key st]
+                   (if (:active? st)
+                     (let [next-ticks (inc (long (:ticks st)))
+                           life-ticks (long (:life-ticks st))]
+                       (if (< next-ticks life-ticks)
+                         (assoc acc owner-key (assoc st :ticks next-ticks))
+                         acc))
+                     acc))
+                 {}
                  states))))
 
 (defn- maybe-refresh-ores!
   [owner-key hand-center-pos frame-context]
-  (swap! effect-state
-         (fn [states]
-           (update states owner-key
-                   (fn [st]
-                     (if (and st (should-rescan? st))
-                       (assoc st
-                              :ores (rescan-ores st hand-center-pos frame-context)
-                              :last-rescan-tick (:ticks st))
-                       st))))))
+  (update-mine-detect-fx-state!
+    update :effect-state
+    (fn [states]
+      (update states owner-key
+              (fn [st]
+                (if (and st (should-rescan? st))
+                  (assoc st
+                         :ores (rescan-ores st hand-center-pos frame-context)
+                         :last-rescan-tick (:ticks st))
+                  st))))))
 
 (defn- build-plan
   [_camera-pos hand-center-pos _tick frame-context]
   (when-let [[owner-key _] (some (fn [[owner-key st]]
                                    (when (:active? st)
                                      [owner-key st]))
-                                 @effect-state)]
+                                 (:effect-state (mine-detect-fx-state-snapshot)))]
     (maybe-refresh-ores! owner-key hand-center-pos frame-context)
-    (let [{:keys [ticks life-ticks ores advanced?]} (get @effect-state owner-key)
+    (let [{:keys [ticks life-ticks ores advanced?]} (get (:effect-state (mine-detect-fx-state-snapshot)) owner-key)
           ops (into []
                     (mapcat (fn [{:keys [x y z] :as ore}]
-                          (let [base-color (ore-color ore advanced?)
+                              (let [base-color (ore-color ore advanced?)
                                     color (faded-color base-color ticks life-ticks)]
                                 (block-highlight-ops x y z color))))
                     ores)]

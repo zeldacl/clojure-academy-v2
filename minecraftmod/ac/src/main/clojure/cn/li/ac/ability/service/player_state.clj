@@ -17,6 +17,8 @@
 (def get-player-state core/get-player-state)
 (def set-player-state! core/set-player-state!)
 (def update-player-state! core/update-player-state!)
+(def create-player-state-runtime core/create-player-state-runtime)
+(def call-with-player-state-runtime core/call-with-player-state-runtime)
 (def fresh-state core/fresh-state)
 (def get-or-create-player-state! core/get-or-create-player-state!)
 (def remove-player-state! core/remove-player-state!)

@@ -9,8 +9,14 @@
            [net.minecraftforge.event TickEvent$ClientTickEvent TickEvent$Phase]
            [net.minecraftforge.eventbus.api EventPriority]))
 
-(defonce ^:private tick-listener-registered? (atom false))
-(defonce ^:private render-listener-registered? (atom false))
+(def ^:private listener-guard-lock
+  (Object.))
+
+(def ^:private ^:dynamic *tick-listener-registered?*
+  false)
+
+(def ^:private ^:dynamic *render-listener-registered?*
+  false)
 
 (defn- on-client-tick [^TickEvent$ClientTickEvent evt]
   (when (= TickEvent$Phase/END (.phase evt))
@@ -35,14 +41,20 @@
       (log/error "DirectedShock hand render failed" e))))
 
 (defn init! []
-  (when (compare-and-set! tick-listener-registered? false true)
-    (.addListener (MinecraftForge/EVENT_BUS)
-                  EventPriority/NORMAL false TickEvent$ClientTickEvent
-                  (reify java.util.function.Consumer
-                    (accept [_ evt] (on-client-tick evt)))))
-  (when (compare-and-set! render-listener-registered? false true)
-    (.addListener (MinecraftForge/EVENT_BUS)
-                  EventPriority/NORMAL false RenderHandEvent
-                  (reify java.util.function.Consumer
-                    (accept [_ evt] (on-render-hand evt)))))
+  (when-not (var-get #'*tick-listener-registered?*)
+    (locking listener-guard-lock
+      (when-not (var-get #'*tick-listener-registered?*)
+        (.addListener (MinecraftForge/EVENT_BUS)
+                      EventPriority/NORMAL false TickEvent$ClientTickEvent
+                      (reify java.util.function.Consumer
+                        (accept [_ evt] (on-client-tick evt))))
+        (alter-var-root #'*tick-listener-registered?* (constantly true)))))
+  (when-not (var-get #'*render-listener-registered?*)
+    (locking listener-guard-lock
+      (when-not (var-get #'*render-listener-registered?*)
+        (.addListener (MinecraftForge/EVENT_BUS)
+                      EventPriority/NORMAL false RenderHandEvent
+                      (reify java.util.function.Consumer
+                        (accept [_ evt] (on-render-hand evt))))
+        (alter-var-root #'*render-listener-registered?* (constantly true)))))
   (log/info "Hand effect renderer initialized"))

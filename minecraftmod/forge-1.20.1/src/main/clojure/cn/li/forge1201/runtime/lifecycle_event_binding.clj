@@ -9,11 +9,15 @@
 					 [net.minecraftforge.event.entity.living LivingDeathEvent]
 					 [net.minecraftforge.event TickEvent$PlayerTickEvent]))
 
-(defonce ^:private lifecycle-listeners-registered? (atom false))
+(def ^:private lifecycle-listener-guard-lock
+	(Object.))
+
+(def ^:private ^:dynamic *lifecycle-listeners-registered?*
+	false)
 
 (defn reset-lifecycle-listeners-registration-for-test!
 	[]
-	(reset! lifecycle-listeners-registered? false)
+	(alter-var-root #'*lifecycle-listeners-registered?* (constantly false))
 	nil)
 
 (defn add-listener!
@@ -44,13 +48,16 @@
 					 on-player-death
 					 on-player-dimension-change
 					 on-player-tick]}]
-	(when (compare-and-set! lifecycle-listeners-registered? false true)
-		(doseq [[event-class handler]
-					(listener-bindings {:on-player-login on-player-login
+	(when-not (var-get #'*lifecycle-listeners-registered?*)
+		(locking lifecycle-listener-guard-lock
+			(when-not (var-get #'*lifecycle-listeners-registered?*)
+				(doseq [[event-class handler]
+							(listener-bindings {:on-player-login on-player-login
 													 :on-player-logout on-player-logout
 													 :on-player-clone on-player-clone
 													 :on-player-death on-player-death
 													 :on-player-dimension-change on-player-dimension-change
 													 :on-player-tick on-player-tick})]
-			(add-listener! event-class handler)))
+					(add-listener! event-class handler))
+				(alter-var-root #'*lifecycle-listeners-registered?* (constantly true)))))
 	nil)

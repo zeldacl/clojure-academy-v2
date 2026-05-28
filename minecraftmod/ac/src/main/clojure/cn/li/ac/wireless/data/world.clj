@@ -28,6 +28,9 @@
   [world]
   (world-registry/create-world-data world))
 
+(def create-world-registry-runtime world-registry/create-world-registry-runtime)
+(def call-with-world-registry-runtime world-registry/call-with-world-registry-runtime)
+
 (defn get-world-data
   "Get world data for a world, creating it if missing."
   [world]

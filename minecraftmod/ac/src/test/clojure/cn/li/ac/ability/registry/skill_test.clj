@@ -66,3 +66,25 @@
     (is (thrown-with-msg? clojure.lang.ExceptionInfo
                           #"Skill registry is frozen"
                           (sk/register-skill! (minimal-skill :new-skill :cat-a :ctrl-b))))))
+
+(deftest skill-registry-runtime-isolation-test
+  (let [runtime-a (sk/create-skill-registry-runtime)
+        runtime-b (sk/create-skill-registry-runtime)]
+    (sk/call-with-skill-registry-runtime
+      runtime-a
+      (fn []
+        (sk/register-skill! (minimal-skill :iso-a :cat-a :a))
+        (is (= #{:iso-a}
+               (set (keys (sk/skill-registry-snapshot)))))))
+    (sk/call-with-skill-registry-runtime
+      runtime-b
+      (fn []
+        (is (empty? (sk/skill-registry-snapshot)))
+        (sk/register-skill! (minimal-skill :iso-b :cat-b :b))
+        (is (= #{:iso-b}
+               (set (keys (sk/skill-registry-snapshot)))))))
+    (sk/call-with-skill-registry-runtime
+      runtime-a
+      (fn []
+        (is (= #{:iso-a}
+               (set (keys (sk/skill-registry-snapshot)))))))))

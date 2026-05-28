@@ -20,33 +20,72 @@
 	(can-execute? [this player context]
 		"Return true when the ability may be executed in the provided context"))
 
-(defonce ^:private lifecycle-registry
-	(atom {}))
+(defn default-lifecycle-registry-runtime-state
+	[]
+	{:lifecycles {}
+	 :frozen? false})
 
-(defonce ^:private lifecycle-registry-frozen? (atom false))
+(defn create-lifecycle-registry-runtime
+	([]  
+	 (create-lifecycle-registry-runtime {}))
+	([{:keys [state*]
+		 :or {state* (atom (default-lifecycle-registry-runtime-state))}}]
+	 {::runtime ::lifecycle-registry-runtime
+	  :state* state*}))
+
+(def ^:dynamic *lifecycle-registry-runtime* nil)
+
+(defonce ^:private installed-lifecycle-registry-runtime
+	(create-lifecycle-registry-runtime))
+
+(defn call-with-lifecycle-registry-runtime
+	[runtime f]
+	(when-not (and (map? runtime)
+	               (= ::lifecycle-registry-runtime (::runtime runtime))
+	               (some? (:state* runtime)))
+		(throw (ex-info "Expected lifecycle registry runtime" {:runtime runtime})))
+	(binding [*lifecycle-registry-runtime* runtime]
+		(f)))
+
+(defn- current-lifecycle-registry-runtime
+	[]
+	(or *lifecycle-registry-runtime*
+		installed-lifecycle-registry-runtime))
+
+(defn- lifecycle-registry-state-atom
+	[]
+	(:state* (current-lifecycle-registry-runtime)))
+
+(defn- lifecycle-registry-state-snapshot
+	[]
+	@(lifecycle-registry-state-atom))
+
+(defn- update-lifecycle-registry-state!
+	[f & args]
+	(apply swap! (lifecycle-registry-state-atom) f args))
 
 (defn- assert-registry-open!
 	[]
-	(when @lifecycle-registry-frozen?
+	(when (:frozen? (lifecycle-registry-state-snapshot))
 		(throw (ex-info "Ability lifecycle registry is frozen" {}))))
 
 (defn lifecycle-registry-snapshot
 	[]
-	{:lifecycles @lifecycle-registry
-	 :frozen? @lifecycle-registry-frozen?})
+	(lifecycle-registry-state-snapshot))
 
 (defn reset-lifecycle-registry-for-test!
-	([]
+	([]  
 	 (reset-lifecycle-registry-for-test! {}))
 	([{:keys [lifecycles frozen?]
 		 :or {lifecycles {} frozen? false}}]
-	 (reset! lifecycle-registry lifecycles)
-	 (reset! lifecycle-registry-frozen? frozen?)
+	 (reset! (lifecycle-registry-state-atom)
+	         {:lifecycles lifecycles
+	          :frozen? frozen?})
 	 nil))
 
 (defn freeze-lifecycle-registry!
 	[]
-	(reset! lifecycle-registry-frozen? true)
+	(update-lifecycle-registry-state! assoc :frozen? true)
 	nil)
 
 (defn register-lifecycle!
@@ -59,27 +98,27 @@
 		(throw (ex-info "Ability lifecycle id must be a keyword" {:ability-id ability-id})))
 	(when-not lifecycle
 		(throw (ex-info "Ability lifecycle cannot be nil" {:ability-id ability-id})))
-	(if-let [existing (get @lifecycle-registry ability-id)]
+	(if-let [existing (get (:lifecycles (lifecycle-registry-state-snapshot)) ability-id)]
 		existing
 		(do
 			(assert-registry-open!)
-			(swap! lifecycle-registry assoc ability-id lifecycle)
+			(update-lifecycle-registry-state! assoc-in [:lifecycles ability-id] lifecycle)
 			(log/debug "Registered ability lifecycle" ability-id)
 			lifecycle)))
 
 (defn unregister-lifecycle!
 	[ability-id]
 	(assert-registry-open!)
-	(swap! lifecycle-registry dissoc ability-id)
+	(update-lifecycle-registry-state! update :lifecycles dissoc ability-id)
 	nil)
 
 (defn get-lifecycle
 	[ability-id]
-	(get @lifecycle-registry ability-id))
+	(get (:lifecycles (lifecycle-registry-state-snapshot)) ability-id))
 
 (defn lifecycle-registered?
 	[ability-id]
-	(contains? @lifecycle-registry ability-id))
+	(contains? (:lifecycles (lifecycle-registry-state-snapshot)) ability-id))
 
 (defn- lifecycle-fn
 	[ability-id method-key]

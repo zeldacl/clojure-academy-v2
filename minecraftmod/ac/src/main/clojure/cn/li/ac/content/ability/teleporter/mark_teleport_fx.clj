@@ -6,17 +6,67 @@
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]))
 
-(defonce ^:private effect-state (atom {}))
+(defn default-mark-teleport-fx-runtime-state
+  []
+  {:effect-state {}})
+
+(defn create-mark-teleport-fx-runtime
+  ([]
+   (create-mark-teleport-fx-runtime {}))
+  ([{:keys [state*]
+     :or {state* (atom (default-mark-teleport-fx-runtime-state))}}]
+   {::runtime ::mark-teleport-fx-runtime
+    :state* state*}))
+
+(def ^:dynamic *mark-teleport-fx-runtime* nil)
+
+(defonce ^:private installed-mark-teleport-fx-runtime
+  (create-mark-teleport-fx-runtime))
+
+(defn- mark-teleport-fx-runtime?
+  [runtime]
+  (and (map? runtime)
+       (= ::mark-teleport-fx-runtime (::runtime runtime))
+       (some? (:state* runtime))))
+
+(defn call-with-mark-teleport-fx-runtime
+  [runtime f]
+  (when-not (mark-teleport-fx-runtime? runtime)
+    (throw (ex-info "Expected Mark Teleport FX runtime"
+                    {:value runtime})))
+  (binding [*mark-teleport-fx-runtime* runtime]
+    (f)))
+
+(defmacro with-mark-teleport-fx-runtime
+  [runtime & body]
+  `(call-with-mark-teleport-fx-runtime ~runtime (fn [] ~@body)))
+
+(defn- current-mark-teleport-fx-runtime
+  []
+  (or *mark-teleport-fx-runtime*
+      installed-mark-teleport-fx-runtime))
+
+(defn- mark-teleport-fx-state-atom
+  []
+  (:state* (current-mark-teleport-fx-runtime)))
+
+(defn- mark-teleport-fx-state-snapshot
+  []
+  @(mark-teleport-fx-state-atom))
+
+(defn- update-mark-teleport-fx-state!
+  [f & args]
+  (apply swap! (mark-teleport-fx-state-atom) f args))
 
 (defn mark-teleport-fx-snapshot []
-  {:effect-state @effect-state})
+  (mark-teleport-fx-state-snapshot))
 
 (defn reset-mark-teleport-fx-for-test! []
-  (reset! effect-state {})
+  (reset! (mark-teleport-fx-state-atom) (default-mark-teleport-fx-runtime-state))
   nil)
 
 (defn clear-mark-teleport-owner! [owner-key]
-  (swap! effect-state dissoc owner-key)
+  (update-mark-teleport-fx-state! update :effect-state dissoc owner-key)
   nil)
 
 ;; ---------------------------------------------------------------------------
@@ -34,20 +84,22 @@
                    :world-id world-id}]
     (case mode
       :start
-      (swap! effect-state assoc owner-key* (merge base-meta {:active? true :target nil :distance 0.0 :ticks 0}))
+      (update-mark-teleport-fx-state!
+        update :effect-state assoc owner-key* (merge base-meta {:active? true :target nil :distance 0.0 :ticks 0}))
       :update
-      (swap! effect-state update owner-key*
-             (fn [st]
-               (assoc (merge base-meta (or st {}))
-                      :owner-key owner-key*
-                      :ctx-id ctx-id
-                      :channel channel
-                      :source-player-id source-player-id
-                      :world-id world-id
-                      :active? true
-                      :target target
-                      :distance (double (or distance 0.0))
-                      :ticks (long (or (:ticks st) 0)))))
+      (update-mark-teleport-fx-state!
+        update :effect-state update owner-key*
+        (fn [st]
+          (assoc (merge base-meta (or st {}))
+                 :owner-key owner-key*
+                 :ctx-id ctx-id
+                 :channel channel
+                 :source-player-id source-player-id
+                 :world-id world-id
+                 :active? true
+                 :target target
+                 :distance (double (or distance 0.0))
+                 :ticks (long (or (:ticks st) 0)))))
       :perform
       (when (map? target)
         (client-particles/queue-particle-effect! (:queue-owner base-meta)
@@ -66,23 +118,26 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- tick! []
-  (swap! effect-state
-         (fn [states]
-           (into {}
-                 (keep (fn [[owner-key st]]
-                         (when (:active? st)
-                           (let [ticks (inc (long (or (:ticks st) 0)))
-                                 target (:target st)]
-                             (when (and target (zero? (mod ticks 3)))
-                               (client-particles/queue-particle-effect! (:queue-owner st)
-                                 {:type :particle :particle-type :portal
-                                  :x (:x target)
-                                  :y (- (double (or (:y target) 0.0)) 0.5)
-                                  :z (:z target)
-                                  :count 2 :speed 0.03
-                                  :offset-x 0.9 :offset-y 0.7 :offset-z 0.9}))
-                             [owner-key (assoc st :ticks ticks)]))))
-                 states))))
+  (update-mark-teleport-fx-state!
+    update :effect-state
+    (fn [states]
+      (reduce-kv
+        (fn [acc owner-key st]
+          (if-not (:active? st)
+            acc
+            (let [ticks (inc (long (or (:ticks st) 0)))
+                  target (:target st)]
+              (when (and target (zero? (mod ticks 3)))
+                (client-particles/queue-particle-effect! (:queue-owner st)
+                  {:type :particle :particle-type :portal
+                   :x (:x target)
+                   :y (- (double (or (:y target) 0.0)) 0.5)
+                   :z (:z target)
+                   :count 2 :speed 0.03
+                   :offset-x 0.9 :offset-y 0.7 :offset-z 0.9}))
+              (assoc acc owner-key (assoc st :ticks ticks)))))
+        {}
+        states))))
 
 ;; ---------------------------------------------------------------------------
 ;; Render ops
@@ -141,7 +196,7 @@
                         (let [{:keys [target ticks distance]} mk]
                           (concat (ground-ring-ops target ticks distance)
                                   (billboard-ops camera-pos target ticks)))))
-                    (vals @effect-state))]
+                    (vals (:effect-state (mark-teleport-fx-state-snapshot))))]
     (when (seq ops)
       {:ops (vec ops)})))
 

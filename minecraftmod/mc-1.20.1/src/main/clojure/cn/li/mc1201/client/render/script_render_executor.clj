@@ -12,17 +12,62 @@
   (draw! [_ _ _ _ _]
     nil))
 
-(defonce ^:private executors* (atom {}))
+(defn create-script-render-executor-runtime
+  ([]
+   (create-script-render-executor-runtime {}))
+  ([initial-executors]
+   {:executors (atom initial-executors)}))
+
+(defonce ^:private installed-script-render-executor-runtime
+  (create-script-render-executor-runtime))
+
+(def ^:dynamic *script-render-executor-runtime*
+  installed-script-render-executor-runtime)
+
+(defn current-script-render-executor-runtime
+  []
+  *script-render-executor-runtime*)
+
+(defmacro with-script-render-executor-runtime
+  [runtime & body]
+  `(binding [*script-render-executor-runtime* ~runtime]
+     ~@body))
+
+(defn call-with-script-render-executor-runtime
+  [runtime f]
+  (binding [*script-render-executor-runtime* runtime]
+    (f)))
+
+(defn executors-atom
+  []
+  (:executors (current-script-render-executor-runtime)))
+
+(defn executors-snapshot
+  []
+  @(executors-atom))
+
+(defn clear-executors!
+  []
+  (reset! (executors-atom) {})
+  nil)
+
+(defn reset-executors-for-test!
+  ([]
+   (clear-executors!))
+  ([executors]
+   (reset! (executors-atom) executors)
+   nil))
+
 (defonce ^:private noop-executor (->NoopPrimitiveExecutor))
 
 (defn register-executor!
   [kind executor]
-  (swap! executors* assoc kind executor)
+  (swap! (executors-atom) assoc kind executor)
   executor)
 
 (defn executor-for-kind
   [kind]
-  (get @executors* kind noop-executor))
+  (get (executors-snapshot) kind noop-executor))
 
 (defn execute-draw-plan!
   [render-ctx draw-plan entity partial-tick]

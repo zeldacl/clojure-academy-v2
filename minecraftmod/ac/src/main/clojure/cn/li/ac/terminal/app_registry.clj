@@ -16,33 +16,70 @@
 ;; Registry
 ;; ============================================================================
 
-(defonce ^:private app-registry
-  (atom {}))
+(defn default-app-registry-runtime-state
+  []
+  {:apps {}
+   :frozen? false})
 
-(defonce ^:private app-registry-frozen? (atom false))
+(defn create-app-registry-runtime
+  ([] (create-app-registry-runtime {}))
+  ([{:keys [state*]
+     :or {state* (atom (default-app-registry-runtime-state))}}]
+   {::runtime ::app-registry-runtime
+    :state* state*}))
+
+(def ^:dynamic *app-registry-runtime* nil)
+
+(defonce ^:private installed-app-registry-runtime
+  (create-app-registry-runtime))
+
+(defn call-with-app-registry-runtime
+  [runtime f]
+  (when-not (and (map? runtime)
+                 (= ::app-registry-runtime (::runtime runtime))
+                 (some? (:state* runtime)))
+    (throw (ex-info "Expected app registry runtime" {:runtime runtime})))
+  (binding [*app-registry-runtime* runtime]
+    (f)))
+
+(defn- current-app-registry-runtime
+  []
+  (or *app-registry-runtime*
+      installed-app-registry-runtime))
+
+(defn- app-registry-state-atom
+  []
+  (:state* (current-app-registry-runtime)))
+
+(defn- app-registry-state-snapshot
+  []
+  @(app-registry-state-atom))
+
+(defn- update-app-registry-state!
+  [f & args]
+  (apply swap! (app-registry-state-atom) f args))
 
 (defn- assert-app-registry-open!
   []
-  (when @app-registry-frozen?
+  (when (:frozen? (app-registry-state-snapshot))
     (throw (ex-info "Terminal app registry is frozen" {}))))
 
 (defn app-registry-snapshot
   []
-  {:apps @app-registry
-   :frozen? @app-registry-frozen?})
+  (app-registry-state-snapshot))
 
 (defn reset-app-registry-for-test!
-  ([]
-   (reset-app-registry-for-test! {}))
+  ([] (reset-app-registry-for-test! {}))
   ([{:keys [apps frozen?]
      :or {apps {} frozen? false}}]
-   (reset! app-registry apps)
-   (reset! app-registry-frozen? frozen?)
+   (reset! (app-registry-state-atom)
+           {:apps apps
+            :frozen? frozen?})
    nil))
 
 (defn freeze-app-registry!
   []
-  (reset! app-registry-frozen? true)
+  (update-app-registry-state! assoc :frozen? true)
   nil)
 
 (defn- normalize-app
@@ -80,12 +117,12 @@
     (when-not (:gui-fn app-spec)
       (throw (ex-info "App must have a :gui-fn" {:id app-id})))
 
-    (if-let [existing (get @app-registry app-id)]
+    (if-let [existing (get (:apps (app-registry-state-snapshot)) app-id)]
       existing
       (do
         (assert-app-registry-open!)
         (log/info "Registering terminal app:" app-id)
-        (swap! app-registry assoc app-id app-spec)
+        (update-app-registry-state! assoc-in [:apps app-id] app-spec)
         app-spec))))
 
 (defn unregister-app!
@@ -93,7 +130,7 @@
   [app-id]
   (assert-app-registry-open!)
   (log/info "Unregistering terminal app:" app-id)
-  (swap! app-registry dissoc app-id))
+  (update-app-registry-state! update :apps dissoc app-id))
 
 ;; ============================================================================
 ;; Access
@@ -102,22 +139,22 @@
 (defn get-app
   "Get an app by ID."
   [app-id]
-  (get @app-registry app-id))
+  (get (:apps (app-registry-state-snapshot)) app-id))
 
 (defn list-all-apps
   "List all registered apps."
   []
-  (vals @app-registry))
+  (vals (:apps (app-registry-state-snapshot))))
 
 (defn list-app-ids
   "List all registered app IDs."
   []
-  (keys @app-registry))
+  (keys (:apps (app-registry-state-snapshot))))
 
 (defn app-count
   "Get the number of registered apps."
   []
-  (count @app-registry))
+  (count (:apps (app-registry-state-snapshot))))
 
 ;; ============================================================================
 ;; Filtering
@@ -182,4 +219,4 @@
 (defn get-registry-snapshot
   "Get a snapshot of the current registry state."
   []
-  @app-registry)
+  (app-registry-state-snapshot))

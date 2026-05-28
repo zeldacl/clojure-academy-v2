@@ -4,11 +4,14 @@
             [cn.li.ac.terminal.apps.media-backend :as mb]))
 
 (defn- reset-fixture [f]
-  (mb/reset-playback-states-for-test!)
-  (try
-    (f)
-    (finally
-      (mb/reset-playback-states-for-test!))))
+  (mb/call-with-playback-runtime
+    (mb/create-playback-runtime)
+    (fn []
+      (mb/reset-playback-states-for-test!)
+      (try
+        (f)
+        (finally
+          (mb/reset-playback-states-for-test!))))))
 
 (use-fixtures :each reset-fixture)
 

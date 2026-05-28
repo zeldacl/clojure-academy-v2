@@ -7,18 +7,19 @@
             [cn.li.ac.content.ability.meltdowner.damage-helper :as dh]
             [cn.li.ac.content.ability.meltdowner.rad-intensify :as rad]))
 
-(defn- reset-marks-fixture [f]
+(defn- with-fresh-marks-runtime [f]
   (ps-fix/with-test-player-state-owner
     (fn []
-      (dh/reset-marks-for-test!)
-      (ps/reset-player-states-for-test!)
-      (try
-        (f)
-        (finally
-          (dh/reset-marks-for-test!)
-          (ps/reset-player-states-for-test!))))))
+      (dh/call-with-damage-helper-runtime (dh/create-damage-helper-runtime)
+        (fn []
+          (ps/reset-player-states-for-test!)
+          (try
+            (f)
+            (finally
+              (dh/reset-marks-for-test!)
+              (ps/reset-player-states-for-test!))))))))
 
-(use-fixtures :each reset-marks-fixture)
+(use-fixtures :each with-fresh-marks-runtime)
 
 (defn- learned-rad-intensify-data
   []
@@ -118,3 +119,30 @@
     (is (= #{[source-a other-target]} (set (keys (dh/marks-snapshot)))))
     (dh/clear-source-marks! source-a)
     (is (empty? (dh/marks-snapshot)))))
+
+(deftest damage-helper-runtime-isolation-test
+  (let [runtime-a (dh/create-damage-helper-runtime)
+        runtime-b (dh/create-damage-helper-runtime)
+        source "atk-a"
+        target "victim-1"
+        key [source target]]
+    (dh/call-with-damage-helper-runtime runtime-a
+      (fn []
+        (dh/reset-marks-for-test!
+          {key {:source-player-id source
+                :target-id target
+                :expire-at Long/MAX_VALUE
+                :rate 2.0}})))
+    (dh/call-with-damage-helper-runtime runtime-b
+      (fn []
+        (dh/reset-marks-for-test!
+          {key {:source-player-id source
+                :target-id target
+                :expire-at Long/MAX_VALUE
+                :rate 3.0}})
+        (is (= 3.0 (:rate (get (dh/marks-snapshot) key))))
+        (dh/clear-mark! source target)
+        (is (empty? (dh/marks-snapshot)))))
+    (dh/call-with-damage-helper-runtime runtime-a
+      (fn []
+        (is (= 2.0 (:rate (get (dh/marks-snapshot) key))))))))

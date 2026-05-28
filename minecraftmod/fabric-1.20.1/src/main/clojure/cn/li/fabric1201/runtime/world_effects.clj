@@ -11,7 +11,11 @@
            [net.minecraft.world.level.block Block]
            [net.minecraft.world.phys AABB]))
 
-(defonce ^:private installed? (atom false))
+(def ^:private install-guard-lock
+  (Object.))
+
+(def ^:private ^:dynamic *installed?*
+  false)
 
 (defn- get-server ^MinecraftServer []
   (server-context/get-server))
@@ -40,9 +44,13 @@
                     (str (.getDescriptionId block)))}))
 
 (defn install-world-effects! []
-  (if-not (compare-and-set! installed? false true)
+  (if (var-get #'*installed?*)
     (log/info "Fabric world effects already installed, skipping")
-    (do
-      (server-context/install-server-context!)
-      (world-effects/install-world-effects! (fabric-world-effects)
-                                            "Fabric world effects"))))
+    (locking install-guard-lock
+      (if (var-get #'*installed?*)
+        (log/info "Fabric world effects already installed, skipping")
+        (do
+          (server-context/install-server-context!)
+          (world-effects/install-world-effects! (fabric-world-effects)
+                                                "Fabric world effects")
+          (alter-var-root #'*installed?* (constantly true)))))))

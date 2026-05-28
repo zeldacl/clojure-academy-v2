@@ -28,18 +28,69 @@
 ;; Each handler: {:id kw :priority int :handles-fn (fn [uuid]) :on-key-down-fn (fn [uuid]) :hint-fn (fn [uuid])}
 ;; Higher priority wins. First handler where handles-fn returns true is active.
 
-(defonce ^:private activate-handlers (atom (sorted-map)))
+(defn default-keybind-registry-runtime-state
+  []
+  {:activate-handlers (sorted-map)
+   :key-groups {}
+   :frozen? false})
 
-(defonce ^:private keybind-registries-frozen? (atom false))
+(defn create-keybind-registry-runtime
+  ([]
+   (create-keybind-registry-runtime {}))
+  ([{:keys [state*]
+     :or {state* (atom (default-keybind-registry-runtime-state))}}]
+   {::runtime ::keybind-registry-runtime
+    :state* state*}))
+
+(def ^:dynamic *keybind-registry-runtime* nil)
+
+(defonce ^:private installed-keybind-registry-runtime
+  (create-keybind-registry-runtime))
+
+(defn- keybind-registry-runtime?
+  [runtime]
+  (and (map? runtime)
+       (= ::keybind-registry-runtime (::runtime runtime))
+       (some? (:state* runtime))))
+
+(defn call-with-keybind-registry-runtime
+  [runtime f]
+  (when-not (keybind-registry-runtime? runtime)
+    (throw (ex-info "Expected keybind registry runtime"
+                    {:runtime runtime})))
+  (binding [*keybind-registry-runtime* runtime]
+    (f)))
+
+(defmacro with-keybind-registry-runtime
+  [runtime & body]
+  `(call-with-keybind-registry-runtime ~runtime (fn [] ~@body)))
+
+(defn- current-keybind-registry-runtime
+  []
+  (or *keybind-registry-runtime*
+      installed-keybind-registry-runtime))
+
+(defn- keybind-registry-state-atom
+  []
+  (:state* (current-keybind-registry-runtime)))
+
+(defn- keybind-registry-state-snapshot
+  []
+  @(keybind-registry-state-atom))
+
+(defn- update-keybind-registry-state!
+  [f & args]
+  (apply swap! (keybind-registry-state-atom) f args))
 
 (defn- assert-keybind-registries-open!
   []
-  (when @keybind-registries-frozen?
+  (when (:frozen? (keybind-registry-state-snapshot))
     (throw (ex-info "Keybind registries are frozen" {}))))
 
 (defn- find-activate-handler-entry
   [id]
-  (first (filter (fn [[[_ handler-id] _handler]] (= id handler-id)) @activate-handlers)))
+  (first (filter (fn [[[_ handler-id] _handler]] (= id handler-id))
+                 (:activate-handlers (keybind-registry-state-snapshot)))))
 
 (defn add-activate-handler!
   "Register an activate handler. Higher priority = checked first."
@@ -54,21 +105,23 @@
                         {:id id
                          :existing-priority existing-priority
                          :new-priority priority})))
-      (swap! activate-handlers assoc [priority id] (assoc handler :priority priority)))))
+      (update-keybind-registry-state! assoc-in [:activate-handlers [priority id]]
+                                    (assoc handler :priority priority)))))
 
 (defn remove-activate-handler!
   "Remove an activate handler by id."
   [id]
   (assert-keybind-registries-open!)
-  (swap! activate-handlers
-         (fn [m]
-           (into (sorted-map)
-                 (remove (fn [[[_ hid] _]] (= hid id)) m)))))
+  (update-keybind-registry-state!
+    update :activate-handlers
+    (fn [m]
+      (into (sorted-map)
+            (remove (fn [[[_ hid] _]] (= hid id)) m)))))
 
 (defn get-active-handler
   "Walk handlers from highest priority down. Return first where handles-fn returns true."
   [player-uuid]
-  (let [handlers (reverse (vals @activate-handlers))]
+  (let [handlers (reverse (vals (:activate-handlers (keybind-registry-state-snapshot))))]
     (first (filter #((:handles-fn %) player-uuid) handlers))))
 
 (defn get-activate-hint
@@ -84,42 +137,36 @@
 ;; Groups: {:default {key-idx delegate-map}, :custom-group {key-idx delegate-map}}
 ;; delegate-map: {:skill-id kw :on-key-down fn :on-key-tick fn :on-key-up fn :on-key-abort fn}
 
-(defonce ^:private key-groups (atom {}))
-
 (defn register-key-delegate!
   "Register a delegate for a key index in a named group."
   [group key-idx delegate-map]
   (assert-keybind-registries-open!)
-  (swap! key-groups assoc-in [group key-idx] delegate-map))
+  (update-keybind-registry-state! assoc-in [:key-groups group key-idx] delegate-map))
 
 (defn clear-key-group!
   "Remove all delegates in a group."
   [group]
   (assert-keybind-registries-open!)
-  (swap! key-groups dissoc group))
+  (update-keybind-registry-state! update :key-groups dissoc group))
 
 (defn clear-all-key-groups!
   "Remove all delegates from all groups."
   []
   (assert-keybind-registries-open!)
-  (reset! key-groups {}))
+  (update-keybind-registry-state! assoc :key-groups {}))
 
 (defn freeze-keybind-registries!
   []
-  (reset! keybind-registries-frozen? true)
+  (update-keybind-registry-state! assoc :frozen? true)
   nil)
 
 (defn keybind-registries-snapshot
   []
-  {:activate-handlers @activate-handlers
-   :key-groups @key-groups
-   :frozen? @keybind-registries-frozen?})
+  (keybind-registry-state-snapshot))
 
 (defn reset-keybind-registries-for-test!
   []
-  (reset! activate-handlers (sorted-map))
-  (reset! key-groups {})
-  (reset! keybind-registries-frozen? false)
+  (reset! (keybind-registry-state-atom) (default-keybind-registry-runtime-state))
   nil)
 
 (declare get-client-player-state)
@@ -128,7 +175,7 @@
   "Get the effective delegate for a key index. Custom groups override :default."
   [key-idx]
   ;; Walk non-default groups first (any custom override), then default
-  (let [groups @key-groups
+  (let [groups (:key-groups (keybind-registry-state-snapshot))
         custom-groups (dissoc groups :default)]
     (or (some #(get % key-idx) (vals custom-groups))
         (get-in groups [:default key-idx]))))
@@ -174,13 +221,52 @@
    :gui-keys {:skill-tree false
               :preset-editor false}})
 
-(defonce ^:private key-states (atom {}))
+(defn create-client-keybind-runtime
+  []
+  {::runtime ::client-keybind-runtime
+   :key-states* (atom {})
+   :preset-switch-states* (atom {})})
+
+(def ^:dynamic *client-keybind-runtime* nil)
+
+(defonce ^:private installed-client-keybind-runtime
+  (create-client-keybind-runtime))
+
+(defn- client-keybind-runtime?
+  [runtime]
+  (and (map? runtime)
+       (= ::client-keybind-runtime (::runtime runtime))
+       (some? (:key-states* runtime))
+       (some? (:preset-switch-states* runtime))))
+
+(defn call-with-client-keybind-runtime
+  [runtime f]
+  (when-not (client-keybind-runtime? runtime)
+    (throw (ex-info "Expected client keybind runtime"
+                    {:runtime runtime})))
+  (binding [*client-keybind-runtime* runtime]
+    (f)))
+
+(defmacro with-client-keybind-runtime
+  [runtime & body]
+  `(call-with-client-keybind-runtime ~runtime (fn [] ~@body)))
+
+(defn- current-client-keybind-runtime
+  []
+  (or *client-keybind-runtime*
+      installed-client-keybind-runtime))
+
+(defn- key-states-atom
+  []
+  (:key-states* (current-client-keybind-runtime)))
 
 (def ^:private default-preset-switch-state
   {:current-preset 0
    :show-until-ms  0})
 
-(defonce ^:private preset-switch-state (atom {}))
+(defn- preset-switch-states-atom
+  []
+  (:preset-switch-states* (current-client-keybind-runtime)))
 
 (def ^:private PRESET-COUNT 4)
 (def ^:private PRESET-INDICATOR-DURATION-MS 2000)
@@ -230,20 +316,20 @@
 
 (defn key-state-snapshot
   ([]
-   @key-states)
+  @(key-states-atom))
   ([owner]
-   (get @key-states (client-owner-key owner) default-key-state)))
+  (get @(key-states-atom) (client-owner-key owner) default-key-state)))
 
 (defn preset-switch-state-snapshot
   ([]
-   @preset-switch-state)
+  @(preset-switch-states-atom))
   ([owner]
-   (get @preset-switch-state (client-owner-key owner) default-preset-switch-state)))
+  (get @(preset-switch-states-atom) (client-owner-key owner) default-preset-switch-state)))
 
 (defn- swap-key-state!
   [owner f & args]
   (let [owner-key (client-owner-key owner)]
-    (swap! key-states
+		(swap! (key-states-atom)
            (fn [states]
              (assoc states owner-key
                     (apply f (get states owner-key default-key-state) args))))))
@@ -251,7 +337,7 @@
 (defn- swap-preset-switch-state!
   [owner f & args]
   (let [owner-key (client-owner-key owner)]
-    (swap! preset-switch-state
+		(swap! (preset-switch-states-atom)
            (fn [states]
              (assoc states owner-key
                     (apply f (get states owner-key default-preset-switch-state) args))))))
@@ -259,14 +345,14 @@
 (defn clear-client-keybind-state!
   [owner]
   (let [owner-key (client-owner-key owner)]
-    (swap! key-states dissoc owner-key)
-    (swap! preset-switch-state dissoc owner-key))
+    (swap! (key-states-atom) dissoc owner-key)
+    (swap! (preset-switch-states-atom) dissoc owner-key))
   nil)
 
 (defn reset-client-keybind-state-for-test!
   []
-  (reset! key-states {})
-  (reset! preset-switch-state {})
+  (reset! (key-states-atom) {})
+  (reset! (preset-switch-states-atom) {})
   nil)
 
 (def ^:private movement-keys

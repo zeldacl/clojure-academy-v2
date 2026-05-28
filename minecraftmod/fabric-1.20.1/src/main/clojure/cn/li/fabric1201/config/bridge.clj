@@ -7,10 +7,22 @@
            [java.io File]
            [net.fabricmc.loader.api FabricLoader]))
 
-(defonce gson
-  (delay (-> (GsonBuilder.)
-             (.setPrettyPrinting)
-             (.create))))
+(def ^:private gson-lock
+  (Object.))
+
+(def ^:private ^:dynamic *gson*
+  nil)
+
+(defn- gson
+  []
+  (or (var-get #'*gson*)
+      (locking gson-lock
+        (or (var-get #'*gson*)
+            (let [codec (-> (GsonBuilder.)
+                            (.setPrettyPrinting)
+                            (.create))]
+              (alter-var-root #'*gson* (constantly codec))
+              codec)))))
 
 (defn- domain->file-name
   [domain extension]
@@ -32,7 +44,7 @@
 (defn- read-json-file
   [^File file]
   (with-open [reader (io/reader file)]
-    (let [^Gson gson-instance @gson]
+    (let [^Gson gson-instance (gson)]
       (.fromJson gson-instance reader java.util.Map))))
 
 (defn- apply-numeric-bounds
@@ -95,7 +107,7 @@
     (when parent
       (.mkdirs parent))
     (with-open [writer (io/writer file)]
-      (let [^Gson gson-instance @gson]
+      (let [^Gson gson-instance (gson)]
         (.toJson gson-instance (nested-config-map descriptors values) writer)))))
 
 (defn- load-domain!

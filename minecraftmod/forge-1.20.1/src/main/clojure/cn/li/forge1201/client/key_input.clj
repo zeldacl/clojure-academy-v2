@@ -16,19 +16,63 @@
            [net.minecraftforge.client.event InputEvent$Key InputEvent$MouseScrollingEvent]
            [org.lwjgl.glfw GLFW]))
 
-(defonce ^:private slot-keys (atom []))
-(defonce ^:private screen-keys (atom {}))
-(defonce ^:private raw-v-state (atom {}))
-(defonce ^:private raw-v-listener-registered? (atom false))
-(defonce ^:private mouse-scroll-listener-registered? (atom false))
+(defn default-key-input-runtime-state
+  []
+  {:slot-keys []
+   :screen-keys {}
+   :raw-v-state {}
+   :key-scheme :alternative
+   :override-active? {}})
+
+(defn create-key-input-runtime
+  ([]
+   (create-key-input-runtime {}))
+  ([initial-state]
+   {:state (atom (merge (default-key-input-runtime-state)
+                        initial-state))}))
+
+(defonce ^:private installed-key-input-runtime
+  (create-key-input-runtime))
+
+(def ^:dynamic *key-input-runtime*
+  installed-key-input-runtime)
+
+(defn current-key-input-runtime
+  []
+  *key-input-runtime*)
+
+(defmacro with-key-input-runtime
+  [runtime & body]
+  `(binding [*key-input-runtime* ~runtime]
+     ~@body))
+
+(defn call-with-key-input-runtime
+  [runtime f]
+  (binding [*key-input-runtime* runtime]
+    (f)))
+
+(defn key-input-runtime-state-atom
+  []
+  (:state (current-key-input-runtime)))
+
+(defn key-input-runtime-state-snapshot
+  []
+  @(key-input-runtime-state-atom))
+
+(defn update-key-input-runtime!
+  [f & args]
+  (apply swap! (key-input-runtime-state-atom) f args))
+
+(def ^:private listener-guard-lock
+  (Object.))
+
+(def ^:private ^:dynamic *raw-v-listener-registered?*
+  false)
+
+(def ^:private ^:dynamic *mouse-scroll-listener-registered?*
+  false)
 (def ^:private toggle-primary-state-input-id :content/toggle-primary-state)
 (def ^:private cycle-selection-input-id :content/cycle-selection)
-
-;; Key scheme: :original (LMB/RMB/R/F) or :alternative (Z/X/C/B)
-(defonce ^:private key-scheme (atom :alternative))
-
-;; Track whether vanilla keys are currently overridden
-(defonce ^:private override-active? (atom {}))
 
 (declare get-player-uuid
          update-owner-mode-switch-state!)
@@ -70,10 +114,10 @@
 (defn set-key-scheme!
   "Set the key scheme. :original (LMB/RMB/R/F) or :alternative (Z/X/C/B)."
   [scheme]
-  (reset! key-scheme scheme)
+  (update-key-input-runtime! assoc :key-scheme scheme)
   (log/info "Key scheme set" {:scheme scheme}))
 
-(defn get-key-scheme [] @key-scheme)
+(defn get-key-scheme [] (:key-scheme (key-input-runtime-state-snapshot)))
 
 (defn- create-original-slot-keys [category]
   ;; Original scheme uses raw GLFW polling for mouse/keyboard,
@@ -92,24 +136,25 @@
 
 (defn register-keybinds! []
   (let [category "key.categories.content.actions"
-        scheme @key-scheme]
-    (reset! slot-keys
-            (if (= scheme :original)
-              (create-original-slot-keys category)
-              (create-alternative-slot-keys category)))
-    (reset! screen-keys
-            (merge
-             {:primary (create-key-mapping "key.content.open_primary_screen" GLFW/GLFW_KEY_GRAVE_ACCENT category)
-              :secondary (create-key-mapping "key.content.open_secondary_screen" GLFW/GLFW_KEY_G category)
-              :mode-toggle (create-key-mapping "key.content.mode_toggle" GLFW/GLFW_KEY_V category)}
-             ;; Cycle key: C if original scheme (slot keys don't use C), N if alternative
-             (if (= scheme :original)
-               {:cycle-selection (create-key-mapping "key.content.cycle_selection" GLFW/GLFW_KEY_C category)}
-               {:cycle-selection (create-key-mapping "key.content.cycle_selection" GLFW/GLFW_KEY_N category)})))
-    (log/info "Client key bindings created" {:scheme scheme :slot-count (count @slot-keys)})))
+        scheme (get-key-scheme)
+        slot-key-mappings (if (= scheme :original)
+                            (create-original-slot-keys category)
+                            (create-alternative-slot-keys category))
+        screen-key-mappings (merge
+                              {:primary (create-key-mapping "key.content.open_primary_screen" GLFW/GLFW_KEY_GRAVE_ACCENT category)
+                               :secondary (create-key-mapping "key.content.open_secondary_screen" GLFW/GLFW_KEY_G category)
+                               :mode-toggle (create-key-mapping "key.content.mode_toggle" GLFW/GLFW_KEY_V category)}
+                              ;; Cycle key: C if original scheme (slot keys don't use C), N if alternative
+                              (if (= scheme :original)
+                                {:cycle-selection (create-key-mapping "key.content.cycle_selection" GLFW/GLFW_KEY_C category)}
+                                {:cycle-selection (create-key-mapping "key.content.cycle_selection" GLFW/GLFW_KEY_N category)}))]
+    (update-key-input-runtime! assoc
+                               :slot-keys slot-key-mappings
+                               :screen-keys screen-key-mappings)
+    (log/info "Client key bindings created" {:scheme scheme :slot-count (count slot-key-mappings)})))
 
-(defn get-slot-keys [] @slot-keys)
-(defn get-screen-keys [] (vals @screen-keys))
+(defn get-slot-keys [] (:slot-keys (key-input-runtime-state-snapshot)))
+(defn get-screen-keys [] (vals (:screen-keys (key-input-runtime-state-snapshot))))
 
 (defn- get-player-uuid []
   (when-let [^Minecraft mc (Minecraft/getInstance)]
@@ -122,52 +167,58 @@
 
 (defn- owner-mode-switch-state
   [owner]
-  (get @raw-v-state (client-owner-key owner) (mode-switch/initial-state)))
+  (get-in (key-input-runtime-state-snapshot) [:raw-v-state (client-owner-key owner)] (mode-switch/initial-state)))
 
 (defn- owner-override-active?
   [owner]
-  (boolean (get @override-active? (client-owner-key owner) false)))
+  (boolean (get-in (key-input-runtime-state-snapshot) [:override-active? (client-owner-key owner)] false)))
 
 (defn input-state-snapshot
   []
-  {:raw-v-state @raw-v-state
-   :override-active? @override-active?})
+  (let [{:keys [raw-v-state override-active?]} (key-input-runtime-state-snapshot)]
+    {:raw-v-state raw-v-state
+     :override-active? override-active?}))
 
 (defn reset-input-state-for-test!
   ([]
    (reset-input-state-for-test! {}))
-  ([{:keys [raw-v-state-map override-active-map]
+  ([{:keys [raw-v-state-map override-active-map key-scheme-value slot-keys-list screen-keys-map]
      :or {raw-v-state-map {}
-          override-active-map {}}}]
-   (reset! raw-v-state raw-v-state-map)
-   (reset! override-active? override-active-map)
+          override-active-map {}
+          key-scheme-value :alternative
+          slot-keys-list []
+          screen-keys-map {}}}]
+   (update-key-input-runtime! merge
+                              {:raw-v-state raw-v-state-map
+                               :override-active? override-active-map
+                               :key-scheme key-scheme-value
+                               :slot-keys slot-keys-list
+                               :screen-keys screen-keys-map})
    nil))
 
 (defn clear-owner-input-state!
   [owner]
   (let [owner-key (client-owner-key owner)]
-    (swap! raw-v-state dissoc owner-key)
-    (swap! override-active? dissoc owner-key))
+    (update-key-input-runtime! update :raw-v-state dissoc owner-key)
+    (update-key-input-runtime! update :override-active? dissoc owner-key))
   nil)
 
 (defn clear-client-input-session!
   [client-session-id]
-  (let [clear-session! (fn [state-atom]
-                         (swap! state-atom
-                                (fn [states]
-                                  (into {}
-                                        (remove (fn [[[entry-session-id _player-uuid] _value]]
-                                                  (= client-session-id entry-session-id)))
-                                        states))))]
-    (clear-session! raw-v-state)
-    (clear-session! override-active?))
+  (let [clear-session (fn [states]
+                        (into {}
+                              (remove (fn [[[entry-session-id _player-uuid] _value]]
+                                        (= client-session-id entry-session-id)))
+                              states))]
+    (update-key-input-runtime! update :raw-v-state clear-session)
+    (update-key-input-runtime! update :override-active? clear-session))
   nil)
 
 (defn- update-owner-mode-switch-state!
   [owner is-down opts]
   (let [state-atom (atom (owner-mode-switch-state owner))]
     (mode-switch/handle-button-state! state-atom is-down opts)
-    (swap! raw-v-state assoc (client-owner-key owner) @state-atom)
+    (update-key-input-runtime! update :raw-v-state assoc (client-owner-key owner) @state-atom)
     nil))
 
 (defn- suppress-vanilla-keys!
@@ -185,10 +236,10 @@
 (defn- update-control-override!
   "Enable/disable vanilla key suppression based on activation state."
   [owner activated?]
-  (let [need-override? (and (= @key-scheme :original) activated?)
+  (let [need-override? (and (= (get-key-scheme) :original) activated?)
         owner-key (client-owner-key owner)]
-    (when (not= (get @override-active? owner-key false) need-override?)
-      (swap! override-active? assoc owner-key need-override?)
+    (when (not= (get-in (key-input-runtime-state-snapshot) [:override-active? owner-key] false) need-override?)
+      (update-key-input-runtime! update :override-active? assoc owner-key need-override?)
       (log/info "Control override" {:active need-override?}))))
 
 (defn- original-scheme-slot-down?
@@ -199,15 +250,15 @@
       (case (int key-idx)
         0 (= GLFW/GLFW_PRESS (GLFW/glfwGetMouseButton window GLFW/GLFW_MOUSE_BUTTON_LEFT))
         1 (= GLFW/GLFW_PRESS (GLFW/glfwGetMouseButton window GLFW/GLFW_MOUSE_BUTTON_RIGHT))
-        2 (when-let [^KeyMapping key (nth @slot-keys 2 nil)] (.isDown key))
-        3 (when-let [^KeyMapping key (nth @slot-keys 3 nil)] (.isDown key))
+        2 (when-let [^KeyMapping key (nth (get-slot-keys) 2 nil)] (.isDown key))
+        3 (when-let [^KeyMapping key (nth (get-slot-keys) 3 nil)] (.isDown key))
         false))))
 
 (defn- slot-key-down?
   [scheme key-idx]
   (if (= scheme :original)
     (boolean (original-scheme-slot-down? key-idx))
-    (when-let [^KeyMapping key (nth @slot-keys key-idx nil)]
+    (when-let [^KeyMapping key (nth (get-slot-keys) key-idx nil)]
       (.isDown key))))
 
 (defn- movement-key-down?
@@ -225,14 +276,14 @@
   (client-session/with-current-client-session
     (fn []
       (let [delta (double (.getScrollDelta event))
-            scheme @key-scheme
+            scheme (get-key-scheme)
             owner (client-session/current-local-player-owner)
             activated? (boolean (and owner (overlay-state/get-client-activated owner)))]
         (when (and activated?
                    (not (current-screen-open?))
                    (not (zero? delta)))
           (when-let [uuid (get-player-uuid)]
-            (doseq [idx (range (count @slot-keys))]
+            (doseq [idx (range (count (get-slot-keys)))]
               (when (slot-key-down? scheme idx)
                 (power-runtime/client-on-slot-wheel! uuid idx delta)))))))))
 
@@ -240,7 +291,7 @@
   (client-session/with-current-client-session
     (fn []
       (if-let [owner (client-session/current-local-player-owner)]
-        (let [scheme @key-scheme
+        (let [scheme (get-key-scheme)
               activated? (boolean (overlay-state/get-client-activated owner))]
           ;; Update control override state
           (update-control-override! owner activated?)
@@ -248,7 +299,7 @@
           (when (owner-override-active? owner)
             (suppress-vanilla-keys!))
           ;; Handle cycle-selection key
-          (when-let [^KeyMapping cycle-key (get @screen-keys :cycle-selection)]
+          (when-let [^KeyMapping cycle-key (get-in (key-input-runtime-state-snapshot) [:screen-keys :cycle-selection])]
             (when (.consumeClick cycle-key)
               (when-let [uuid (get-player-uuid)]
                 (emit-keyboard-input! cycle-selection-input-id uuid :press))))
@@ -259,7 +310,7 @@
                 :slot (let [idx (second key-id)]
                         (slot-key-down? scheme idx))
                 :movement (movement-key-down? (second key-id))
-                :screen (when-let [^KeyMapping key (get @screen-keys (second key-id))] (.isDown key))
+                :screen (when-let [^KeyMapping key (get-in (key-input-runtime-state-snapshot) [:screen-keys (second key-id)])] (.isDown key))
                 false))
             get-player-uuid))
         (when-let [session-id (client-session/client-session-id)]
@@ -267,14 +318,20 @@
 
 (defn init! []
   (register-keybinds!)
-  (when (compare-and-set! raw-v-listener-registered? false true)
-    (.addListener (MinecraftForge/EVENT_BUS)
-                  EventPriority/NORMAL false InputEvent$Key
-                  (reify java.util.function.Consumer
-                    (accept [_ evt] (on-raw-key-input! evt)))))
-  (when (compare-and-set! mouse-scroll-listener-registered? false true)
-    (.addListener (MinecraftForge/EVENT_BUS)
-                  EventPriority/NORMAL false InputEvent$MouseScrollingEvent
-                  (reify java.util.function.Consumer
-                    (accept [_ evt] (on-mouse-scroll! evt)))))
+  (when-not (var-get #'*raw-v-listener-registered?*)
+    (locking listener-guard-lock
+      (when-not (var-get #'*raw-v-listener-registered?*)
+        (.addListener (MinecraftForge/EVENT_BUS)
+                      EventPriority/NORMAL false InputEvent$Key
+                      (reify java.util.function.Consumer
+                        (accept [_ evt] (on-raw-key-input! evt))))
+        (alter-var-root #'*raw-v-listener-registered?* (constantly true)))))
+  (when-not (var-get #'*mouse-scroll-listener-registered?*)
+    (locking listener-guard-lock
+      (when-not (var-get #'*mouse-scroll-listener-registered?*)
+        (.addListener (MinecraftForge/EVENT_BUS)
+                      EventPriority/NORMAL false InputEvent$MouseScrollingEvent
+                      (reify java.util.function.Consumer
+                        (accept [_ evt] (on-mouse-scroll! evt))))
+        (alter-var-root #'*mouse-scroll-listener-registered?* (constantly true)))))
   (log/info "Client key input initialized"))

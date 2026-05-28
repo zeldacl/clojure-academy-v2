@@ -6,9 +6,46 @@
 (defrecord WiWorldData
 	[world-key
 	 world
-	 state])
+	 runtime])
 
-(def ^:private world-data-registry (atom {}))
+(defn initial-world-state
+	[]
+	{:net-lookup {}
+	 :node-lookup {}
+	 :spatial-index (si/create-spatial-index-value)
+	 :networks []
+	 :connections []})
+
+(defn create-world-registry-runtime
+	[]
+	{::runtime ::world-registry-runtime
+	 :registry-state* (atom {:world-data-registry {}
+											 :world-states {}})})
+
+(def ^:dynamic *world-registry-runtime* nil)
+
+(defonce ^:private installed-world-registry-runtime
+	(create-world-registry-runtime))
+
+(def ^:dynamic *world-transaction* nil)
+
+(defn- world-registry-runtime?
+	[runtime]
+	(and (map? runtime)
+			 (= ::world-registry-runtime (::runtime runtime))
+			 (some? (:registry-state* runtime))))
+
+(defn call-with-world-registry-runtime
+	[runtime f]
+	(when-not (world-registry-runtime? runtime)
+		(throw (ex-info "Expected world registry runtime"
+							{:runtime runtime})))
+	(binding [*world-registry-runtime* runtime]
+		(f)))
+
+(defmacro with-world-registry-runtime
+	[runtime & body]
+	`(call-with-world-registry-runtime ~runtime (fn [] ~@body)))
 
 (defn- require-world-owner-value
 	[world label value]
@@ -61,38 +98,95 @@
 	[(server-session-id world) (world-id world)])
 
 (defn- attach-world-ref
-	[world wi-data]
-	(assoc wi-data :world-key (world-key world) :world world))
+	[runtime world wi-data]
+	(assoc wi-data :world-key (world-key world) :world world :runtime runtime))
+
+(defn- current-world-registry-runtime
+	[]
+	(or *world-registry-runtime*
+			installed-world-registry-runtime))
+
+(defn- runtime-state-atom
+	([]
+	 (:registry-state* (current-world-registry-runtime)))
+	([runtime]
+	 (:registry-state* runtime)))
+
+(defn- runtime-state-snapshot
+	([]
+	 @(runtime-state-atom))
+	([runtime]
+	 @(runtime-state-atom runtime)))
+
+(defn- world-data-runtime
+	[world-data]
+	(or (:runtime world-data)
+			(current-world-registry-runtime)))
+
+(defn- transaction-for?
+	[world-data]
+	(and (map? *world-transaction*)
+			 (= (:world-key *world-transaction*) (:world-key world-data))
+			 (identical? (:runtime *world-transaction*) (world-data-runtime world-data))))
+
+(defn- current-world-state
+	[world-data]
+	(if (transaction-for? world-data)
+		@(:state* *world-transaction*)
+		(get-in (runtime-state-snapshot (world-data-runtime world-data))
+					 [:world-states (:world-key world-data)]
+					 (initial-world-state))))
+
+(defn- update-world-state!
+	[world-data f & args]
+	(if (transaction-for? world-data)
+		(do
+			(vswap! (:state* *world-transaction*) #(apply f % args))
+			@(:state* *world-transaction*))
+		(let [runtime (world-data-runtime world-data)
+					key (:world-key world-data)
+					next-state* (volatile! nil)]
+			(swap! (runtime-state-atom runtime)
+					   (fn [registry-state]
+						   (let [current (get-in registry-state [:world-states key] (initial-world-state))
+									next (apply f current args)]
+							   (vreset! next-state* next)
+							   (assoc-in registry-state [:world-states key] next))))
+			@next-state*)))
+
+(defn- create-world-data*
+	[runtime world]
+	(let [key (world-key world)
+				world-data (->WiWorldData key world runtime)]
+		(swap! (runtime-state-atom runtime)
+				   (fn [registry-state]
+					   (if (contains? (:world-states registry-state) key)
+						   registry-state
+						   (assoc-in registry-state [:world-states key] (initial-world-state)))))
+		world-data))
 
 (defn create-world-data
 	"Create new world data for a world."
 	[world]
-	(->WiWorldData
-		(world-key world)
-		world
-		(atom {:net-lookup {}
-					 :node-lookup {}
-					 :spatial-index (si/create-spatial-index-value)
-					 :networks []
-					 :connections []})))
+	(create-world-data* (current-world-registry-runtime) world))
 
 (defn state-value
 	[world-data key]
-	(get @(:state world-data) key))
+	(get (current-world-state world-data) key))
 
 (defn set-state-value!
 	[world-data key value]
-	(swap! (:state world-data) assoc key value)
+	(update-world-state! world-data assoc key value)
 	value)
 
 (defn update-state-value!
 	[world-data key f & args]
-	(apply swap! (:state world-data) update key f args)
+	(apply update-world-state! world-data update key f args)
 	(state-value world-data key))
 
 (defn update-state!
 	[world-data f & args]
-	(apply swap! (:state world-data) f args))
+	(apply update-world-state! world-data f args))
 
 (defn net-lookup [world-data] (state-value world-data :net-lookup))
 (defn node-lookup [world-data] (state-value world-data :node-lookup))
@@ -103,40 +197,77 @@
 (defn transact!
 	"Run a world-state mutation with serialized access to all world indexes."
 	[world-data mutation-fn]
-	(locking world-data
-		(mutation-fn world-data)))
+	(if (transaction-for? world-data)
+		(mutation-fn world-data)
+		(let [runtime (world-data-runtime world-data)
+					key (:world-key world-data)
+					result* (volatile! nil)]
+			(swap! (runtime-state-atom runtime)
+					   (fn [registry-state]
+						   (let [current (get-in registry-state [:world-states key] (initial-world-state))
+									tx-state* (volatile! current)]
+							(binding [*world-transaction* {:runtime runtime
+																				 :world-key key
+																				 :state* tx-state*}]
+								(vreset! result* (mutation-fn world-data))
+								(assoc-in registry-state [:world-states key] @tx-state*)))))
+			@result*)))
 
 (defn get-world-data
 	"Get world data for a world, creating it if missing."
 	[world]
-	(let [key (world-key world)]
-	(or (when-let [existing (get @world-data-registry key)]
-			(if (and (= key (:world-key existing))
-							 (identical? world (:world existing)))
-				existing
-				(let [updated (attach-world-ref world existing)]
-					(swap! world-data-registry assoc key updated)
-					updated)))
-			(let [created (create-world-data world)]
-				(swap! world-data-registry #(if (contains? % key) % (assoc % key created)))
-				(get @world-data-registry key)))))
+	(let [runtime (current-world-registry-runtime)
+				key (world-key world)
+				world-data* (volatile! nil)]
+		(swap! (runtime-state-atom runtime)
+				   (fn [registry-state]
+					   (if-let [existing (get-in registry-state [:world-data-registry key])]
+						   (let [updated (if (and (= key (:world-key existing))
+															   (identical? world (:world existing))
+															   (identical? runtime (world-data-runtime existing)))
+													  existing
+													  (attach-world-ref runtime world existing))]
+							   (vreset! world-data* updated)
+							   (cond-> registry-state
+								   (not (contains? (:world-states registry-state) key))
+								   (assoc-in [:world-states key] (initial-world-state))
+								   (not (identical? updated existing))
+								   (assoc-in [:world-data-registry key] updated)))
+						   (let [created (->WiWorldData key world runtime)]
+							   (vreset! world-data* created)
+							   (-> registry-state
+								   (assoc-in [:world-data-registry key] created)
+								   (assoc-in [:world-states key] (initial-world-state)))))))
+		@world-data*))
 
 (defn get-world-data-non-create
 	"Get world data without creating."
 	[world]
-	(get @world-data-registry (world-key world)))
+	(get-in (runtime-state-snapshot) [:world-data-registry (world-key world)]))
 
 (defn register-world-data!
 	"Register a world -> WiWorldData mapping in the registry."
 	[world wi-data]
-	(let [wi-data* (attach-world-ref world wi-data)]
-		(swap! world-data-registry assoc (world-key world) wi-data*)
+	(let [runtime (current-world-registry-runtime)
+				key (world-key world)
+				wi-data* (attach-world-ref runtime world wi-data)
+				state (current-world-state wi-data)]
+		(swap! (runtime-state-atom runtime)
+				   (fn [registry-state]
+					   (-> registry-state
+						   (assoc-in [:world-data-registry key] wi-data*)
+						   (assoc-in [:world-states key] state))))
 		wi-data*))
 
 (defn remove-world-data!
 	"Remove world data (called on world unload)."
 	[world]
-	(swap! world-data-registry dissoc (world-key world))
+	(let [key (world-key world)]
+		(swap! (runtime-state-atom)
+				   (fn [registry-state]
+					   (-> registry-state
+						   (update :world-data-registry dissoc key)
+						   (update :world-states dissoc key)))))
 	(log/info (format "Removed WiWorldData for world: %s" (world-key world))))
 
 (defn clear-session-world-data!
@@ -145,20 +276,27 @@
 	(let [session-id (if (map? owner-or-session-id)
 									(server-session-id owner-or-session-id)
 									owner-or-session-id)]
-		(swap! world-data-registry
-				 (fn [registry]
-					 (into {}
-							 (remove (fn [[[entry-session-id _world-id] _world-data]]
-									 (= session-id entry-session-id)))
-							 registry))))
-	nil)
+		(swap! (runtime-state-atom)
+				   (fn [registry-state]
+					   (let [keys-to-remove (->> (concat (keys (:world-data-registry registry-state))
+																   (keys (:world-states registry-state)))
+													 (filter (fn [[entry-session-id _world-id]]
+															 (= session-id entry-session-id)))
+													 distinct
+													 vec)]
+						   (-> registry-state
+							   (update :world-data-registry #(apply dissoc % keys-to-remove))
+							   (update :world-states #(apply dissoc % keys-to-remove))))))
+		nil))
 
 (defn registry-snapshot
 	"Return current in-memory registry snapshot. Intended for tests/diagnostics."
 	[]
-	@world-data-registry)
+	(:world-data-registry (runtime-state-snapshot)))
 
 (defn reset-registry!
 	"Reset in-memory world registry. Intended for tests only."
 	[]
-	(reset! world-data-registry {}))
+	(reset! (runtime-state-atom)
+				{:world-data-registry {}
+				 :world-states {}}))

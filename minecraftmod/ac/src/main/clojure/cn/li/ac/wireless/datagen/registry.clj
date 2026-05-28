@@ -28,11 +28,7 @@
    Called during datagen initialization phase."
   []
   (let [translation-map (wireless-translation-map)]
-    (swap! metadata/translations
-           (fn [existing]
-             (-> existing
-                 (update :en_us merge (:en_us translation-map))
-                 (update :zh_cn merge (:zh_cn translation-map)))))
+    (metadata/merge-translations! translation-map)
     {:domain :wireless
      :translations (count (:en_us translation-map))
     :config-descriptors (count wireless-config/descriptors)}))

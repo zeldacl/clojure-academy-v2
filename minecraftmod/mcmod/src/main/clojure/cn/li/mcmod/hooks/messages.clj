@@ -5,8 +5,22 @@
   generic keys. Shared Minecraft/platform code resolves ids through this seam
   without carrying business protocol strings.")
 
-(defonce ^:private message-ids
-  (atom {}))
+(defn create-message-id-registry-runtime
+  ([] (create-message-id-registry-runtime {}))
+  ([{:keys [state*]}]
+   {:cn.li.mcmod.hooks.messages/runtime ::message-id-registry-runtime
+    :state* (or state* (atom {}))}))
+
+(def ^:dynamic *message-id-registry-runtime* nil)
+
+(defonce ^:private installed-message-id-registry-runtime
+  (create-message-id-registry-runtime))
+
+(defn- message-ids-atom []
+  (:state* (or *message-id-registry-runtime* installed-message-id-registry-runtime)))
+
+(defn- message-ids-snapshot []
+  @(message-ids-atom))
 
 (defn register-message!
   "Register a concrete wire message id for `message-key`."
@@ -17,7 +31,7 @@
   (when-not (and (string? message-id) (not (empty? message-id)))
     (throw (ex-info "Message id must be a non-empty string"
                     {:message-key message-key :message-id message-id})))
-  (swap! message-ids assoc message-key message-id)
+  (swap! (message-ids-atom) assoc message-key message-id)
   nil)
 
 (defn register-messages!
@@ -30,7 +44,7 @@
 (defn maybe-msg-id
   "Return the registered wire message id for `message-key`, or nil."
   [message-key]
-  (get @message-ids message-key))
+  (get (message-ids-snapshot) message-key))
 
 (defn msg-id
   "Return the registered wire message id for `message-key`.
@@ -45,10 +59,10 @@
 (defn valid-msg-id?
   "Return true when `message-id` is one of the registered wire ids."
   [message-id]
-  (contains? (set (vals @message-ids)) message-id))
+  (contains? (set (vals (message-ids-snapshot))) message-id))
 
 (defn clear-messages!
   "Clear registered message ids. Intended for tests."
   []
-  (reset! message-ids {})
+  (reset! (message-ids-atom) {})
   nil)

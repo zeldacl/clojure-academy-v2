@@ -22,12 +22,20 @@
 	(discharge-item*! [_ item-stack amount ignore-bandwidth]
 		(item-manager/pull-energy-from-item item-stack amount ignore-bandwidth)))
 
-(defonce ^:private default-imaginary-energy-type
-	(delay (energy-type/register-energy-type! (->ImaginaryEnergyType))))
+(def ^:private imaginary-energy-type-lock
+	(Object.))
+
+(def ^:private ^:dynamic *default-imaginary-energy-type*
+	nil)
 
 (defn register-default-energy-type!
 	[]
-	@default-imaginary-energy-type)
+	(or (var-get #'*default-imaginary-energy-type*)
+			(locking imaginary-energy-type-lock
+				(or (var-get #'*default-imaginary-energy-type*)
+						(let [energy-type (energy-type/register-energy-type! (->ImaginaryEnergyType))]
+							(alter-var-root #'*default-imaginary-energy-type* (constantly energy-type))
+							energy-type)))))
 
 (defn imaginary-energy-type
 	[]

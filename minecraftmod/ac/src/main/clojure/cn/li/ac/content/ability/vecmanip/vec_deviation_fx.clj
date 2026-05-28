@@ -5,29 +5,78 @@
             [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]))
 
-(defonce ^:private effect-state (atom {}))
-(defonce ^:private wave-effects (atom {}))
+(defn default-vec-deviation-fx-runtime-state
+  []
+  {:effect-state {}
+   :wave-effects {}})
+
+(defn create-vec-deviation-fx-runtime
+  ([]
+   (create-vec-deviation-fx-runtime {}))
+  ([{:keys [state*]
+     :or {state* (atom (default-vec-deviation-fx-runtime-state))}}]
+   {::runtime ::vec-deviation-fx-runtime
+    :state* state*}))
+
+(def ^:dynamic *vec-deviation-fx-runtime* nil)
+
+(defonce ^:private installed-vec-deviation-fx-runtime
+  (create-vec-deviation-fx-runtime))
+
+(defn- vec-deviation-fx-runtime?
+  [runtime]
+  (and (map? runtime)
+       (= ::vec-deviation-fx-runtime (::runtime runtime))
+       (some? (:state* runtime))))
+
+(defn call-with-vec-deviation-fx-runtime
+  [runtime f]
+  (when-not (vec-deviation-fx-runtime? runtime)
+    (throw (ex-info "Expected VecDeviation FX runtime"
+                    {:value runtime})))
+  (binding [*vec-deviation-fx-runtime* runtime]
+    (f)))
+
+(defmacro with-vec-deviation-fx-runtime
+  [runtime & body]
+  `(call-with-vec-deviation-fx-runtime ~runtime (fn [] ~@body)))
+
+(defn- current-vec-deviation-fx-runtime
+  []
+  (or *vec-deviation-fx-runtime*
+      installed-vec-deviation-fx-runtime))
+
+(defn- vec-deviation-fx-state-atom
+  []
+  (:state* (current-vec-deviation-fx-runtime)))
+
+(defn- vec-deviation-fx-state-snapshot
+  []
+  @(vec-deviation-fx-state-atom))
+
+(defn- update-vec-deviation-fx-state!
+  [f & args]
+  (apply swap! (vec-deviation-fx-state-atom) f args))
+
 (def ^:private sound-id "my_mod:vecmanip.vec_deviation")
 
 (defn vec-deviation-fx-snapshot
   []
-  {:effect-state @effect-state
-   :wave-effects @wave-effects})
+  (vec-deviation-fx-state-snapshot))
 
 (defn reset-vec-deviation-fx-for-test!
   []
-  (reset! effect-state {})
-  (reset! wave-effects {})
+  (reset! (vec-deviation-fx-state-atom) (default-vec-deviation-fx-runtime-state))
   nil)
 
 (defn clear-vec-deviation-owner!
   [owner-key]
-  (swap! effect-state dissoc owner-key)
-  (swap! wave-effects dissoc owner-key)
+  (update-vec-deviation-fx-state!
+    (fn [state]
+      (-> state
+          (update :effect-state dissoc owner-key)
+          (update :wave-effects dissoc owner-key))))
   nil)
-
-(defn- all-wave-effects []
-  (mapcat val @wave-effects))
 
 ;; ---------------------------------------------------------------------------
 ;; Enqueue
@@ -43,16 +92,19 @@
                    :world-id world-id}]
     (case mode
       :start
-      (swap! effect-state assoc owner-key* (merge base-meta {:active? true :ticks 0}))
+      (update-vec-deviation-fx-state! update :effect-state assoc owner-key*
+                                      (merge base-meta {:active? true :ticks 0}))
       :end
-      (swap! effect-state assoc owner-key* (merge base-meta {:active? false :ticks 0}))
+      (update-vec-deviation-fx-state! update :effect-state assoc owner-key*
+                                      (merge base-meta {:active? false :ticks 0}))
       :stop-entity
       (when marked?
         (let [life (+ 10 (rand-int 6))]
-          (swap! wave-effects update owner-key* (fnil conj [])
-                 (merge base-meta
-                        {:x (double x) :y (double y) :z (double z)
-                         :ttl life :max-ttl life}))))
+          (update-vec-deviation-fx-state!
+            update :wave-effects update owner-key* (fnil conj [])
+            (merge base-meta
+                   {:x (double x) :y (double y) :z (double z)
+                    :ttl life :max-ttl life}))))
       :play
       (client-sounds/queue-current-sound-effect!
         {:type :sound :sound-id sound-id :volume 0.5 :pitch 1.0
@@ -64,26 +116,27 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- tick! []
-  (swap! effect-state
-         (fn [states]
-           (into {}
-                 (keep (fn [[owner-key st]]
-                         (when (:active? st)
-                           [owner-key (update st :ticks (fnil inc 0))])))
-                 states)))
-  (swap! wave-effects
-         (fn [by-owner]
-           (into {}
-                 (keep (fn [[owner-key xs]]
-                         (let [live (->> xs
-                                         (map #(update % :ttl dec))
-                                         (filter #(pos? (long (:ttl %))))
-                                         vec)]
-                           (when (seq live)
-                             [owner-key live]))))
-                 by-owner))))
+  (update-vec-deviation-fx-state!
+    (fn [{:keys [effect-state wave-effects] :as state}]
+      (assoc state
+             :effect-state
+             (into {}
+                   (keep (fn [[owner-key st]]
+                           (when (:active? st)
+                             [owner-key (update st :ticks (fnil inc 0))])))
+                   effect-state)
+             :wave-effects
+             (into {}
+                   (keep (fn [[owner-key xs]]
+                           (let [live (->> xs
+                                           (map #(update % :ttl dec))
+                                           (filter #(pos? (long (:ttl %))))
+                                           vec)]
+                             (when (seq live)
+                               [owner-key live]))))
+                   wave-effects)))))
 
-(defn- matching-active-state [hand-center-pos]
+(defn- matching-active-state [effect-state hand-center-pos]
   (some (fn [st]
           (when (and (:active? st)
                      (or (nil? (:source-player-id st))
@@ -91,7 +144,7 @@
                          (= (str (:source-player-id st))
                             (str (:player-uuid hand-center-pos)))))
             st))
-        (vals @effect-state)))
+        (vals effect-state)))
 
 ;; ---------------------------------------------------------------------------
 ;; Render ops
@@ -143,8 +196,9 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- build-plan [camera-pos hand-center-pos _tick]
-  (let [vd (matching-active-state hand-center-pos)
-        current-waves (all-wave-effects)
+  (let [{:keys [effect-state wave-effects]} (vec-deviation-fx-state-snapshot)
+        vd (matching-active-state effect-state hand-center-pos)
+        current-waves (mapcat val wave-effects)
         ring-plan (if (and hand-center-pos vd (:active? vd))
                     (ring-ops (dissoc hand-center-pos :player-uuid)
                               (long (or (:ticks vd) 0)))

@@ -10,11 +10,13 @@
 (use-fixtures
   :each
   (fn [f]
-    (container-state/clear-all!)
-    (try
-      (f)
-      (finally
-        (container-state/clear-all!)))))
+    (container-state/call-with-container-state-runtime
+      (container-state/create-container-state-runtime)
+      (fn []
+        (try
+          (f)
+          (finally
+            (container-state/clear-all!)))))))
 
 (defn- sync-container-fixture
   [initial-rate]

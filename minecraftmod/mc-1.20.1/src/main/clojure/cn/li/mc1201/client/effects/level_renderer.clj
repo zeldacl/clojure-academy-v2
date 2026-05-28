@@ -18,7 +18,43 @@
 
 (def ^:private full-bright-uv2 15728880)
 (def ^:private default-walk-speed 0.1)
-(defonce ^:private last-applied-walk-speed (atom {}))
+
+(defn create-level-renderer-runtime
+  []
+  {::runtime ::level-renderer-runtime
+   :last-applied-walk-speed* (atom {})})
+
+(def ^:dynamic *level-renderer-runtime* nil)
+
+(defonce ^:private installed-level-renderer-runtime
+  (create-level-renderer-runtime))
+
+(defn- level-renderer-runtime?
+  [runtime]
+  (and (map? runtime)
+       (= ::level-renderer-runtime (::runtime runtime))
+       (some? (:last-applied-walk-speed* runtime))))
+
+(defn call-with-level-renderer-runtime
+  [runtime f]
+  (when-not (level-renderer-runtime? runtime)
+    (throw (ex-info "Expected level renderer runtime"
+                    {:runtime runtime})))
+  (binding [*level-renderer-runtime* runtime]
+    (f)))
+
+(defmacro with-level-renderer-runtime
+  [runtime & body]
+  `(call-with-level-renderer-runtime ~runtime (fn [] ~@body)))
+
+(defn- current-level-renderer-runtime
+  []
+  (or *level-renderer-runtime*
+      installed-level-renderer-runtime))
+
+(defn- last-applied-walk-speed-atom
+  []
+  (:last-applied-walk-speed* (current-level-renderer-runtime)))
 
 (defn- walk-speed-owner-key
   [owner]
@@ -26,13 +62,13 @@
 
 (defn walk-speed-snapshot
   []
-  @last-applied-walk-speed)
+  @(last-applied-walk-speed-atom))
 
 (defn reset-walk-speed-for-test!
   ([]
    (reset-walk-speed-for-test! {}))
   ([snapshot]
-   (reset! last-applied-walk-speed (or snapshot {}))
+  (reset! (last-applied-walk-speed-atom) (or snapshot {}))
    nil))
 
 (defn tick-level-effects!
@@ -53,10 +89,10 @@
    (clear-owner-walk-speed! owner nil))
   ([owner ^LocalPlayer player]
    (let [owner-key (walk-speed-owner-key owner)]
-     (when (contains? @last-applied-walk-speed owner-key)
+     (when (contains? @(last-applied-walk-speed-atom) owner-key)
        (when player
          (set-local-walk-speed! player default-walk-speed))
-       (swap! last-applied-walk-speed dissoc owner-key)))
+       (swap! (last-applied-walk-speed-atom) dissoc owner-key)))
    nil))
 
 (defn apply-local-walk-speed-from-plan!
@@ -67,10 +103,10 @@
    (let [owner-key (walk-speed-owner-key owner)
          target-speed (:local-walk-speed plan)]
      (if (number? target-speed)
-       (let [spd (float target-speed)]
-         (when (not= (get @last-applied-walk-speed owner-key) spd)
+       (let [spd (double target-speed)]
+         (when (not= (get @(last-applied-walk-speed-atom) owner-key) spd)
            (set-local-walk-speed! player spd)
-           (swap! last-applied-walk-speed assoc owner-key spd)))
+           (swap! (last-applied-walk-speed-atom) assoc owner-key spd)))
        (clear-owner-walk-speed! owner player)))))
 
 (defn hand-center-pos

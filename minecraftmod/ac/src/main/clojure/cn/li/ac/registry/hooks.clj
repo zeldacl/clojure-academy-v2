@@ -6,34 +6,72 @@
   (:require [cn.li.mcmod.util.log :as log]))
 
 ;; Unified hook registry state.
-(defonce ^:private hook-registry
-  (atom {:network-handlers []
-         :client-renderers []}))
+(defn default-hook-registry-runtime-state
+  []
+  {:network-handlers []
+   :client-renderers []
+   :frozen? false})
 
-(defonce ^:private hook-registry-frozen? (atom false))
+(defn create-hook-registry-runtime
+  ([] (create-hook-registry-runtime {}))
+  ([{:keys [state*]
+     :or {state* (atom (default-hook-registry-runtime-state))}}]
+   {::runtime ::hook-registry-runtime
+    :state* state*}))
+
+(def ^:dynamic *hook-registry-runtime* nil)
+
+(defonce ^:private installed-hook-registry-runtime
+  (create-hook-registry-runtime))
+
+(defn call-with-hook-registry-runtime
+  [runtime f]
+  (when-not (and (map? runtime)
+                 (= ::hook-registry-runtime (::runtime runtime))
+                 (some? (:state* runtime)))
+    (throw (ex-info "Expected hook registry runtime" {:runtime runtime})))
+  (binding [*hook-registry-runtime* runtime]
+    (f)))
+
+(defn- current-hook-registry-runtime
+  []
+  (or *hook-registry-runtime*
+      installed-hook-registry-runtime))
+
+(defn- hook-registry-state-atom
+  []
+  (:state* (current-hook-registry-runtime)))
+
+(defn- hook-registry-state-snapshot
+  []
+  @(hook-registry-state-atom))
+
+(defn- update-hook-registry-state!
+  [f & args]
+  (apply swap! (hook-registry-state-atom) f args))
 
 (defn- assert-registry-open!
   []
-  (when @hook-registry-frozen?
+  (when (:frozen? (hook-registry-state-snapshot))
     (throw (ex-info "AC hook registry is frozen" {}))))
 
 (defn hook-registry-snapshot
   []
-  (assoc @hook-registry :frozen? @hook-registry-frozen?))
+  (hook-registry-state-snapshot))
 
 (defn reset-hook-registry-for-test!
-  ([]
-   (reset-hook-registry-for-test! {}))
+  ([] (reset-hook-registry-for-test! {}))
   ([{:keys [network-handlers client-renderers frozen?]
      :or {network-handlers [] client-renderers [] frozen? false}}]
-   (reset! hook-registry {:network-handlers (vec network-handlers)
-                          :client-renderers (vec client-renderers)})
-   (reset! hook-registry-frozen? frozen?)
+   (reset! (hook-registry-state-atom)
+           {:network-handlers (vec network-handlers)
+            :client-renderers (vec client-renderers)
+            :frozen? frozen?})
    nil))
 
 (defn freeze-hook-registry!
   []
-  (reset! hook-registry-frozen? true)
+  (update-hook-registry-state! assoc :frozen? true)
   nil)
 
 (defn- dedupe-conj
@@ -45,12 +83,12 @@
 (defn get-network-handlers
   "Return currently registered network handler init fns."
   []
-  (:network-handlers @hook-registry))
+  (:network-handlers (hook-registry-state-snapshot)))
 
 (defn get-client-renderers
   "Return currently registered client renderer init symbols."
   []
-  (:client-renderers @hook-registry))
+  (:client-renderers (hook-registry-state-snapshot)))
 
 (defn reset-registries!
   "Reset both registries to an empty state.
@@ -63,14 +101,14 @@
   Called by block/GUI init functions to register their handlers."
   [handler-fn]
   (assert-registry-open!)
-  (swap! hook-registry update :network-handlers dedupe-conj handler-fn))
+  (update-hook-registry-state! update :network-handlers dedupe-conj handler-fn))
 
 (defn register-client-renderer!
   "Register a client renderer namespace symbol.
   Called by block init functions to register their renderers."
   [renderer-ns-sym]
   (assert-registry-open!)
-  (swap! hook-registry update :client-renderers dedupe-conj renderer-ns-sym))
+  (update-hook-registry-state! update :client-renderers dedupe-conj renderer-ns-sym))
 
 (defn call-all-network-handlers-with-report!
   "Call all network handler registration functions and collect result details.

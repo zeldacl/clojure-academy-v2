@@ -20,7 +20,15 @@
    :volume 1.0
    :last-track-id nil})
 
-(defonce ^:private playback-state (atom {}))
+(defn create-playback-runtime
+  []
+  {::runtime ::playback-runtime
+   :playback-state* (atom {})})
+
+(def ^:dynamic *playback-runtime* nil)
+
+(defonce ^:private installed-playback-runtime
+  (create-playback-runtime))
 
 (def ^:dynamic *media-owner* nil)
 
@@ -52,17 +60,48 @@
    (or (:screen-id owner) :media-player)
    (profile-id owner)])
 
+(defn- playback-runtime?
+  [runtime]
+  (and (map? runtime)
+       (= ::playback-runtime (::runtime runtime))
+       (some? (:playback-state* runtime))))
+
+(defn call-with-playback-runtime
+  [runtime f]
+  (when-not (playback-runtime? runtime)
+    (throw (ex-info "Expected playback runtime"
+                    {:runtime runtime})))
+  (binding [*playback-runtime* runtime]
+    (f)))
+
+(defmacro with-playback-runtime
+  [runtime & body]
+  `(call-with-playback-runtime ~runtime (fn [] ~@body)))
+
+(defn- current-playback-runtime
+  []
+  (or *playback-runtime*
+      installed-playback-runtime))
+
+(defn- playback-state-atom
+  []
+  (:playback-state* (current-playback-runtime)))
+
+(defn- playback-states-snapshot
+  []
+  @(playback-state-atom))
+
 (defn- swap-playback-state!
   [owner f & args]
   (let [owner-key (media-owner-key owner)]
-    (swap! playback-state
+    (swap! (playback-state-atom)
            (fn [states]
              (assoc states owner-key
                     (apply f (get states owner-key default-playback-state) args))))))
 
 (defn reset-playback-states-for-test!
   []
-  (reset! playback-state {})
+  (reset! (playback-state-atom) {})
   nil)
 
 (defn tracks-catalog
@@ -71,11 +110,11 @@
 
 (defn playback-state-snapshot
   ([]
-  (playback-state-snapshot *media-owner*))
+   (playback-state-snapshot *media-owner*))
   ([owner]
-  (let [{:keys [track-idx] :as st} (get @playback-state (media-owner-key owner) default-playback-state)
-        safe-idx (mod (max 0 (int track-idx)) (count tracks))]
-    (assoc st :track (nth tracks safe-idx)))))
+   (let [{:keys [track-idx] :as st} (get (playback-states-snapshot) (media-owner-key owner) default-playback-state)
+         safe-idx (mod (max 0 (int track-idx)) (count tracks))]
+     (assoc st :track (nth tracks safe-idx)))))
 
 (defn- clamp-volume
   [v]

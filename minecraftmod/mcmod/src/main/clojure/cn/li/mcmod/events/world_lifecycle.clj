@@ -21,15 +21,65 @@
 ;; Handler Registry
 ;; ============================================================================
 
-(defonce ^:private world-load-handlers (atom []))
-(defonce ^:private world-unload-handlers (atom []))
-(defonce ^:private world-save-handlers (atom []))
-(defonce ^:private world-tick-handlers (atom []))
-(defonce ^:private world-lifecycle-frozen? (atom false))
+(defn default-world-lifecycle-runtime-state
+  []
+  {:load []
+   :unload []
+   :save []
+   :tick []
+   :frozen? false})
+
+(defn create-world-lifecycle-runtime
+  ([]
+   (create-world-lifecycle-runtime {}))
+  ([{:keys [state*]
+     :or {state* (atom (default-world-lifecycle-runtime-state))}}]
+   {::runtime ::world-lifecycle-runtime
+    :state* state*}))
+
+(def ^:dynamic *world-lifecycle-runtime* nil)
+
+(defonce ^:private installed-world-lifecycle-runtime
+  (create-world-lifecycle-runtime))
+
+(defn- world-lifecycle-runtime?
+  [runtime]
+  (and (map? runtime)
+       (= ::world-lifecycle-runtime (::runtime runtime))
+       (some? (:state* runtime))))
+
+(defn call-with-world-lifecycle-runtime
+  [runtime f]
+  (when-not (world-lifecycle-runtime? runtime)
+    (throw (ex-info "Expected world lifecycle runtime"
+                    {:runtime runtime})))
+  (binding [*world-lifecycle-runtime* runtime]
+    (f)))
+
+(defmacro with-world-lifecycle-runtime
+  [runtime & body]
+  `(call-with-world-lifecycle-runtime ~runtime (fn [] ~@body)))
+
+(defn- current-world-lifecycle-runtime
+  []
+  (or *world-lifecycle-runtime*
+      installed-world-lifecycle-runtime))
+
+(defn- world-lifecycle-state-atom
+  []
+  (:state* (current-world-lifecycle-runtime)))
+
+(defn- world-lifecycle-state-snapshot
+  []
+  @(world-lifecycle-state-atom))
+
+(defn- update-world-lifecycle-state!
+  [f & args]
+  (apply swap! (world-lifecycle-state-atom) f args))
 
 (defn- assert-not-frozen!
   []
-  (when @world-lifecycle-frozen?
+  (when (:frozen? (world-lifecycle-state-snapshot))
     (throw (ex-info "World lifecycle handlers are frozen" {}))))
 
 (defn- handler-id
@@ -37,15 +87,16 @@
   (or (:id handler-map) handler-map))
 
 (defn- register-handler-entry!
-  [handlers-atom id handler-fn]
-  (swap! handlers-atom
-         (fn [entries]
-           (if-let [existing (first (filter #(= id (:id %)) entries))]
-             (if (identical? handler-fn (:fn existing))
-               entries
-               (throw (ex-info "Conflicting world lifecycle handler id"
-                               {:id id})))
-             (conj entries {:id id :fn handler-fn}))))
+  [phase id handler-fn]
+  (update-world-lifecycle-state!
+    update phase
+    (fn [entries]
+      (if-let [existing (first (filter #(= id (:id %)) entries))]
+        (if (identical? handler-fn (:fn existing))
+          entries
+          (throw (ex-info "Conflicting world lifecycle handler id"
+                          {:id id})))
+        (conj entries {:id id :fn handler-fn}))))
   nil)
 
 ;; ============================================================================
@@ -71,38 +122,30 @@
   (assert-not-frozen!)
   (let [id (handler-id handler-map)]
   (when-let [on-load (:on-load handler-map)]
-    (register-handler-entry! world-load-handlers id on-load))
+    (register-handler-entry! :load id on-load))
   (when-let [on-unload (:on-unload handler-map)]
-    (register-handler-entry! world-unload-handlers id on-unload))
+    (register-handler-entry! :unload id on-unload))
   (when-let [on-save (:on-save handler-map)]
-    (register-handler-entry! world-save-handlers id on-save))
+    (register-handler-entry! :save id on-save))
   (when-let [on-tick (:on-tick handler-map)]
-    (register-handler-entry! world-tick-handlers id on-tick)))
+    (register-handler-entry! :tick id on-tick)))
   nil)
 
 (defn freeze-world-lifecycle-handlers!
   "Freeze static lifecycle handler registration after bootstrap."
   []
-  (reset! world-lifecycle-frozen? true)
+  (update-world-lifecycle-state! assoc :frozen? true)
   nil)
 
 (defn reset-world-lifecycle-handlers-for-test!
   "Reset lifecycle handler registry. Intended for tests/reloads only."
   []
-  (reset! world-load-handlers [])
-  (reset! world-unload-handlers [])
-  (reset! world-save-handlers [])
-  (reset! world-tick-handlers [])
-  (reset! world-lifecycle-frozen? false)
+  (reset! (world-lifecycle-state-atom) (default-world-lifecycle-runtime-state))
   nil)
 
 (defn lifecycle-handlers-snapshot
   []
-  {:load @world-load-handlers
-   :unload @world-unload-handlers
-   :save @world-save-handlers
-   :tick @world-tick-handlers
-   :frozen? @world-lifecycle-frozen?})
+  (world-lifecycle-state-snapshot))
 
 ;; ============================================================================
 ;; Dispatch API (called by platform code)
@@ -117,7 +160,7 @@
 
   Called by platform code (forge/fabric) when world loads."
   [world saved-data]
-  (doseq [{handler :fn} @world-load-handlers]
+  (doseq [{handler :fn} (:load (world-lifecycle-state-snapshot))]
     (try
       (handler world saved-data)
       (catch Throwable t
@@ -131,7 +174,7 @@
 
   Called by platform code (forge/fabric) when world unloads."
   [world]
-  (doseq [{handler :fn} @world-unload-handlers]
+  (doseq [{handler :fn} (:unload (world-lifecycle-state-snapshot))]
     (try
       (handler world)
       (catch Throwable t
@@ -157,7 +200,7 @@
           (report-handler-error! :save t)
           acc)))
     []
-    @world-save-handlers))
+            (:save (world-lifecycle-state-snapshot))))
 
 (defn dispatch-world-tick
   "Dispatch world tick event to all registered handlers.
@@ -167,7 +210,7 @@
 
   Called by platform code (forge/fabric) each server world tick."
   [world]
-  (doseq [{handler :fn} @world-tick-handlers]
+  (doseq [{handler :fn} (:tick (world-lifecycle-state-snapshot))]
     (try
       (handler world)
       (catch Throwable t

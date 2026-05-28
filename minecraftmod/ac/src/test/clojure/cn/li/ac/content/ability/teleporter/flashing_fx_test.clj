@@ -6,12 +6,16 @@
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.content.ability.teleporter.flashing-fx :as ffx]))
 
-(defn- reset-fixture [f]
-  (ffx/reset-flashing-fx-for-test!)
-  (f)
-  (ffx/reset-flashing-fx-for-test!))
+(defn- with-fresh-flashing-fx-runtime [f]
+  (ffx/call-with-flashing-fx-runtime
+    (ffx/create-flashing-fx-runtime)
+    (fn []
+      (try
+        (f)
+        (finally
+          (ffx/reset-flashing-fx-for-test!))))))
 
-(use-fixtures :each reset-fixture)
+(use-fixtures :each with-fresh-flashing-fx-runtime)
 
 (defn- event [payload]
   {:payload payload
@@ -75,11 +79,12 @@
         sounds* (atom [])
         enqueue! (var-get #'cn.li.ac.content.ability.teleporter.flashing-fx/enqueue!)
         tick! (var-get #'cn.li.ac.content.ability.teleporter.flashing-fx/tick!)]
-    (with-redefs [client-particles/queue-particle-effect! (fn [payload]
-                                                             (swap! particles* conj payload)
-                                                             nil)
-                  client-sounds/queue-sound-effect! (fn [payload]
-                                                      (swap! sounds* conj payload)
+    (with-redefs [client-particles/current-effect-owner (fn [] {:client-session-id "flashing-test"})
+                  client-particles/queue-particle-effect! (fn [& args]
+                                                            (swap! particles* conj args)
+                                                            nil)
+                  client-sounds/queue-sound-effect! (fn [& args]
+                                                      (swap! sounds* conj args)
                                                       nil)]
       (enqueue! (event {:mode :state-start}))
       (enqueue! (event {:mode :preview-update :to-x 1.0 :to-y 64.0 :to-z 1.0}))
@@ -89,4 +94,41 @@
       (tick!)
       (is (= 1 (count @sounds*)))
       (is (>= (count @particles*) 2))
-      (is (= "my_mod:tp.tp_flashing" (:sound-id (first @sounds*)))))))
+      (is (= "my_mod:tp.tp_flashing" (:sound-id (second (first @sounds*))))))))
+
+(deftest flashing-fx-runtime-isolation-test
+  (let [runtime-a (ffx/create-flashing-fx-runtime)
+        runtime-b (ffx/create-flashing-fx-runtime)
+        enqueue! (var-get #'cn.li.ac.content.ability.teleporter.flashing-fx/enqueue!)]
+    (with-redefs [client-particles/current-effect-owner (fn [] {:client-session-id "flashing-test"})
+                  client-particles/queue-particle-effect! (fn [& _] nil)
+                  client-sounds/queue-sound-effect! (fn [& _] nil)]
+      (ffx/call-with-flashing-fx-runtime
+        runtime-a
+        (fn []
+          (enqueue! {:payload {:mode :state-start}
+                     :ctx-id "ctx-a"
+                     :channel :flashing/fx-test
+                     :owner-key [:ctx "ctx-a"]})
+          (enqueue! {:payload {:mode :preview-update :to-x 1.0 :to-y 64.0 :to-z 1.0}
+                     :ctx-id "ctx-a"
+                     :channel :flashing/fx-test
+                     :owner-key [:ctx "ctx-a"]})
+          (is (= #{[:ctx "ctx-a"]}
+                 (set (keys (:fx-state (ffx/flashing-fx-snapshot))))))))
+      (ffx/call-with-flashing-fx-runtime
+        runtime-b
+        (fn []
+          (is (= {:fx-state {}}
+                 (ffx/flashing-fx-snapshot)))
+          (enqueue! {:payload {:mode :state-start}
+                     :ctx-id "ctx-b"
+                     :channel :flashing/fx-test
+                     :owner-key [:ctx "ctx-b"]})
+          (is (= #{[:ctx "ctx-b"]}
+                 (set (keys (:fx-state (ffx/flashing-fx-snapshot))))))))
+      (ffx/call-with-flashing-fx-runtime
+        runtime-a
+        (fn []
+          (is (= {:x 1.0 :y 64.0 :z 1.0}
+                 (get-in (ffx/flashing-fx-snapshot) [:fx-state [:ctx "ctx-a"] :preview]))))))))

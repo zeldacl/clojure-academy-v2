@@ -11,14 +11,6 @@
 
 (use-fixtures :each test-contexts/clean-contexts-fixture)
 
-(use-fixtures :each
-  (fn [f]
-    (context-handler/reset-rejection-counters!)
-    (input-handler/reset-rejection-counters!)
-    (f)
-    (context-handler/reset-rejection-counters!)
-    (input-handler/reset-rejection-counters!)))
-
 (def ^:private test-server-session-id [:server :handler-test])
 
 (defn- server-owner [player-uuid]
@@ -122,8 +114,7 @@
                                                   :payload {:n 1}}
                                                  "p1"))
       (is (= 1 (:last-keepalive-ms (get-owned-context "p1" ctx-id))))
-      (is (empty? @events))
-      (is (= 2 (get (context-handler/rejection-counters-snapshot) :ctx-not-alive 0))))))
+      (is (empty? @events)))))
 
 (deftest key-down-does-not-let-other-player-reuse-existing-context-id-test
   (with-redefs [uuid/player-uuid identity]
@@ -156,8 +147,7 @@
                         :skill-id :arc-gen}
                        "p1"))))
         (is (empty? @establish-calls))
-        (is (empty? @rt-calls))
-        (is (= 1 (get (input-handler/rejection-counters-snapshot) :ctx-not-found 0)))))))
+        (is (empty? @rt-calls))))))
 
 (deftest key-input-ignores-owned-but-non-alive-context-test
   (with-redefs [uuid/player-uuid identity]
@@ -177,17 +167,15 @@
 
 (deftest malformed-context-and-input-payloads-record-payload-invalid-test
   (with-redefs [uuid/player-uuid identity]
-    (with-server-player-owner "p1"
-      #(context-handler/handle-keepalive-context {:ctx-id nil} "p1"))
-    (with-server-player-owner "p1"
-      #(context-handler/handle-channel-context {:ctx-id "ctx-x"
-                                                :channel nil
-                                                :payload {}}
-                                               "p1"))
-    (with-server-player-owner "p1"
-      #(input-handler/handle-key-down-skill {:ctx-id "" :skill-id :arc-gen} "p1"))
-    (is (= 2 (get (context-handler/rejection-counters-snapshot) :payload-invalid 0)))
-    (is (= 1 (get (input-handler/rejection-counters-snapshot) :payload-invalid 0)))))
+    (is (nil? (with-server-player-owner "p1"
+               #(context-handler/handle-keepalive-context {:ctx-id nil} "p1"))))
+    (is (nil? (with-server-player-owner "p1"
+               #(context-handler/handle-channel-context {:ctx-id "ctx-x"
+                                                         :channel nil
+                                                         :payload {}}
+                                                        "p1"))))
+    (is (nil? (with-server-player-owner "p1"
+               #(input-handler/handle-key-down-skill {:ctx-id "" :skill-id :arc-gen} "p1"))))))
 
 (deftest begin-link-rejects-malformed-or-owned-mismatch-context-test
   (with-redefs [uuid/player-uuid identity]
@@ -197,13 +185,11 @@
                                     :session-id [test-server-session-id "attacker"]))
       (with-redefs [ctx-mgr/establish-context! (fn [& args]
                                                  (swap! establish-calls conj args))]
-        (with-server-player-owner "owner"
-          #(context-handler/handle-begin-link-context {:ctx-id nil :skill-id :arc-gen} "owner"))
-        (with-server-player-owner "attacker"
-          #(context-handler/handle-begin-link-context {:ctx-id ctx-id :skill-id :arc-gen} "attacker"))
-        (is (empty? @establish-calls))
-        (is (= 1 (get (context-handler/rejection-counters-snapshot) :payload-invalid 0)))
-        (is (= 1 (get (context-handler/rejection-counters-snapshot) :ctx-not-owner 0)))))))
+        (is (nil? (with-server-player-owner "owner"
+                   #(context-handler/handle-begin-link-context {:ctx-id nil :skill-id :arc-gen} "owner"))))
+        (is (nil? (with-server-player-owner "attacker"
+                   #(context-handler/handle-begin-link-context {:ctx-id ctx-id :skill-id :arc-gen} "attacker"))))
+        (is (empty? @establish-calls))))))
 
 (deftest same-client-context-id-is-isolated-by-server-player-owner-test
   (with-redefs [uuid/player-uuid identity]

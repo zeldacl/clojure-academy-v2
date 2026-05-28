@@ -14,9 +14,50 @@
    :player-uuid nil
    :learn-context nil})
 
-(defonce ^:private screen-state
-  (atom {:current-owner nil
-         :states {}}))
+(def ^:private default-screen-runtime-state
+  {:current-owner nil
+   :states {}})
+
+(defn create-skill-tree-screen-runtime
+  []
+  {::runtime ::skill-tree-screen-runtime
+   :runtime-state* (atom default-screen-runtime-state)})
+
+(def ^:dynamic *skill-tree-screen-runtime* nil)
+
+(defonce ^:private installed-skill-tree-screen-runtime
+  (create-skill-tree-screen-runtime))
+
+(defn- skill-tree-screen-runtime?
+  [runtime]
+  (and (map? runtime)
+       (= ::skill-tree-screen-runtime (::runtime runtime))
+       (some? (:runtime-state* runtime))))
+
+(defn call-with-skill-tree-screen-runtime
+  [runtime f]
+  (when-not (skill-tree-screen-runtime? runtime)
+    (throw (ex-info "Expected skill tree screen runtime"
+                    {:runtime runtime})))
+  (binding [*skill-tree-screen-runtime* runtime]
+    (f)))
+
+(defmacro with-skill-tree-screen-runtime
+  [runtime & body]
+  `(call-with-skill-tree-screen-runtime ~runtime (fn [] ~@body)))
+
+(defn- current-skill-tree-screen-runtime
+  []
+  (or *skill-tree-screen-runtime*
+      installed-skill-tree-screen-runtime))
+
+(defn- screen-runtime-state-atom
+  []
+  (:runtime-state* (current-skill-tree-screen-runtime)))
+
+(defn- screen-runtime-state-snapshot
+  []
+  @(screen-runtime-state-atom))
 
 (defn- require-screen-owner-value
   [owner label value]
@@ -75,7 +116,7 @@
 
 (defn- current-owner-key
   []
-  (:current-owner (normalized-store @screen-state)))
+  (:current-owner (normalized-store (screen-runtime-state-snapshot))))
 
 (defn screen-state-snapshot
   ([]
@@ -83,12 +124,12 @@
      (screen-state-snapshot owner-key)
      default-screen-state))
   ([owner]
-   (get-in (normalized-store @screen-state) [:states (screen-owner-key owner)] default-screen-state)))
+  (get-in (normalized-store (screen-runtime-state-snapshot)) [:states (screen-owner-key owner)] default-screen-state)))
 
 (defn- swap-screen-state!
   [owner f & args]
   (let [owner-key (screen-owner-key owner)]
-    (swap! screen-state
+    (swap! (screen-runtime-state-atom)
            (fn [store]
              (let [store (normalized-store store)]
                (assoc-in store [:states owner-key]
@@ -97,12 +138,12 @@
 (defn- set-current-owner!
   [owner]
   (let [owner-key (screen-owner-key owner)]
-    (swap! screen-state #(assoc (normalized-store %) :current-owner owner-key))
+    (swap! (screen-runtime-state-atom) #(assoc (normalized-store %) :current-owner owner-key))
     owner-key))
 
 (defn reset-screen-states-for-test!
   []
-  (reset! screen-state {:current-owner nil :states {}})
+  (reset! (screen-runtime-state-atom) default-screen-runtime-state)
   nil)
 
 (def ^:private max-progress-segments 24)
@@ -329,7 +370,7 @@
    (when-let [owner-key (current-owner-key)]
      (close-screen! owner-key)))
   ([owner]
-   (swap! screen-state
+   (swap! (screen-runtime-state-atom)
           (fn [store]
             (let [store (normalized-store store)
                   owner-key (screen-owner-key owner)]

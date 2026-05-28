@@ -10,14 +10,6 @@
 
 (use-fixtures :each test-contexts/clean-contexts-fixture)
 
-(use-fixtures :each
-  (fn [f]
-    (context-handler/reset-rejection-counters!)
-    (input-handler/reset-rejection-counters!)
-    (f)
-    (context-handler/reset-rejection-counters!)
-    (input-handler/reset-rejection-counters!)))
-
 (def ^:private test-server-session-id [:server :ownership-test])
 
 (defn- server-owner [player-uuid]
@@ -50,18 +42,17 @@
       (binding [ctx/*context-owner* (server-owner "owner")]
         (ctx/ctx-on! ctx-id :fx #(swap! events conj %)))
 
-      (with-server-player-owner "attacker"
-        #(context-handler/handle-channel-context {:ctx-id ctx-id
-                                                  :channel :fx
-                                                  :payload {:n 1}}
-                                                 "attacker"))
-      (with-server-player-owner "attacker"
-        #(context-handler/handle-terminate-context {:ctx-id ctx-id} "attacker"))
+      (is (nil? (with-server-player-owner "attacker"
+                 #(context-handler/handle-channel-context {:ctx-id ctx-id
+                                                           :channel :fx
+                                                           :payload {:n 1}}
+                                                          "attacker"))))
+      (is (nil? (with-server-player-owner "attacker"
+                 #(context-handler/handle-terminate-context {:ctx-id ctx-id} "attacker"))))
 
       (is (empty? @events))
       (is (= ctx/STATUS-ALIVE (:status (get-owned-context "owner" ctx-id))))
-      (is (= 1 (:last-keepalive-ms (get-owned-context "owner" ctx-id))))
-      (is (= 2 (get (context-handler/rejection-counters-snapshot) :ctx-not-found 0))))))
+      (is (= 1 (:last-keepalive-ms (get-owned-context "owner" ctx-id)))))))
 
 (deftest forged-player-cannot-drive-key-input-test
   (with-redefs [uuid/player-uuid identity]
@@ -75,5 +66,4 @@
                #(input-handler/handle-key-down-skill {:ctx-id ctx-id :skill-id :arc-gen}
                        "attacker")))))
       (is (= 0 @down-calls))
-      (is (= 1 (:last-keepalive-ms (get-owned-context "owner" ctx-id))))
-      (is (= 1 (get (input-handler/rejection-counters-snapshot) :ctx-not-found 0))))))
+      (is (= 1 (:last-keepalive-ms (get-owned-context "owner" ctx-id)))))))

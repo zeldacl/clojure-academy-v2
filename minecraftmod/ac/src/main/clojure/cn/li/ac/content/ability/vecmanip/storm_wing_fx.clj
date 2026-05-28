@@ -6,21 +6,72 @@
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]))
 
-(defonce ^:private effect-state (atom {}))
+(defn default-storm-wing-fx-runtime-state
+  []
+  {:effect-state {}})
+
+(defn create-storm-wing-fx-runtime
+  ([]
+   (create-storm-wing-fx-runtime {}))
+  ([{:keys [state*]
+     :or {state* (atom (default-storm-wing-fx-runtime-state))}}]
+   {::runtime ::storm-wing-fx-runtime
+    :state* state*}))
+
+(def ^:dynamic *storm-wing-fx-runtime* nil)
+
+(defonce ^:private installed-storm-wing-fx-runtime
+  (create-storm-wing-fx-runtime))
+
+(defn- storm-wing-fx-runtime?
+  [runtime]
+  (and (map? runtime)
+       (= ::storm-wing-fx-runtime (::runtime runtime))
+       (some? (:state* runtime))))
+
+(defn call-with-storm-wing-fx-runtime
+  [runtime f]
+  (when-not (storm-wing-fx-runtime? runtime)
+    (throw (ex-info "Expected Storm Wing FX runtime"
+                    {:value runtime})))
+  (binding [*storm-wing-fx-runtime* runtime]
+    (f)))
+
+(defmacro with-storm-wing-fx-runtime
+  [runtime & body]
+  `(call-with-storm-wing-fx-runtime ~runtime (fn [] ~@body)))
+
+(defn- current-storm-wing-fx-runtime
+  []
+  (or *storm-wing-fx-runtime*
+      installed-storm-wing-fx-runtime))
+
+(defn- storm-wing-fx-state-atom
+  []
+  (:state* (current-storm-wing-fx-runtime)))
+
+(defn- storm-wing-fx-state-snapshot
+  []
+  @(storm-wing-fx-state-atom))
+
+(defn- update-storm-wing-fx-state!
+  [f & args]
+  (apply swap! (storm-wing-fx-state-atom) f args))
+
 (def ^:private loop-sound "my_mod:vecmanip.storm_wing")
 
 (defn storm-wing-fx-snapshot
   []
-  {:effect-state @effect-state})
+  (storm-wing-fx-state-snapshot))
 
 (defn reset-storm-wing-fx-for-test!
   []
-  (reset! effect-state {})
+  (reset! (storm-wing-fx-state-atom) (default-storm-wing-fx-runtime-state))
   nil)
 
 (defn clear-storm-wing-owner!
   [owner-key]
-  (swap! effect-state dissoc owner-key)
+  (update-storm-wing-fx-state! update :effect-state dissoc owner-key)
   nil)
 
 ;; ---------------------------------------------------------------------------
@@ -39,28 +90,31 @@
     (case mode
       :start
       (do
-        (swap! effect-state assoc owner-key*
-               (merge base-meta
-                      {:active? true :phase :charging :charge-ticks 0
-                       :charge-ticks-needed (long (or charge-ticks 70))
-                       :ticks 0}))
+        (update-storm-wing-fx-state!
+          update :effect-state assoc owner-key*
+          (merge base-meta
+                 {:active? true :phase :charging :charge-ticks 0
+                  :charge-ticks-needed (long (or charge-ticks 70))
+                  :ticks 0}))
         (client-sounds/queue-sound-effect! (:queue-owner base-meta)
           {:type :sound :sound-id loop-sound :volume 0.8 :pitch 1.0}))
       :update
-      (swap! effect-state update owner-key*
-             (fn [st]
-               (assoc (merge base-meta (or st {}))
-                      :owner-key owner-key*
-                      :ctx-id ctx-id
-                      :channel channel
-                      :source-player-id source-player-id
-                      :world-id world-id
-                      :active? true
-                      :phase (or phase :charging)
-                      :charge-ticks (long (or charge-ticks 0))
-                      :charge-ratio (double (or charge-ratio 0.0)))))
+      (update-storm-wing-fx-state!
+        update :effect-state update owner-key*
+        (fn [st]
+          (assoc (merge base-meta (or st {}))
+                 :owner-key owner-key*
+                 :ctx-id ctx-id
+                 :channel channel
+                 :source-player-id source-player-id
+                 :world-id world-id
+                 :active? true
+                 :phase (or phase :charging)
+                 :charge-ticks (long (or charge-ticks 0))
+                 :charge-ratio (double (or charge-ratio 0.0)))))
       :end
-      (swap! effect-state assoc owner-key* (merge base-meta {:active? false :ticks 0}))
+      (update-storm-wing-fx-state!
+        update :effect-state assoc owner-key* (merge base-meta {:active? false :ticks 0}))
       nil)))
 
 ;; ---------------------------------------------------------------------------
@@ -68,19 +122,20 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- tick! []
-  (swap! effect-state
-         (fn [states]
-           (into {}
-                 (keep (fn [[owner-key st]]
-                         (when (:active? st)
-                           (let [ticks (inc (long (or (:ticks st) 0)))]
-                             (when (zero? (mod ticks 10))
-                               (client-sounds/queue-sound-effect! (:queue-owner st)
-                                 {:type :sound :sound-id loop-sound :volume 0.5 :pitch 1.0}))
-                             [owner-key (assoc st :ticks ticks)]))))
-                 states))))
+  (update-storm-wing-fx-state!
+    update :effect-state
+    (fn [states]
+      (into {}
+            (keep (fn [[owner-key st]]
+                    (when (:active? st)
+                      (let [ticks (inc (long (or (:ticks st) 0)))]
+                        (when (zero? (mod ticks 10))
+                          (client-sounds/queue-sound-effect! (:queue-owner st)
+                            {:type :sound :sound-id loop-sound :volume 0.5 :pitch 1.0}))
+                        [owner-key (assoc st :ticks ticks)]))))
+            states))))
 
-(defn- matching-active-state [hand-center-pos]
+(defn- matching-active-state [effect-state hand-center-pos]
   (some (fn [st]
           (when (and (:active? st)
                      (or (nil? (:source-player-id st))
@@ -88,14 +143,15 @@
                          (= (str (:source-player-id st))
                             (str (:player-uuid hand-center-pos)))))
             st))
-        (vals @effect-state)))
+        (vals effect-state)))
 
 ;; ---------------------------------------------------------------------------
 ;; Build plan
 ;; ---------------------------------------------------------------------------
 
 (defn- build-plan [_camera-pos hand-center-pos _tick]
-  (let [sw (matching-active-state hand-center-pos)]
+  (let [effect-state (:effect-state (storm-wing-fx-state-snapshot))
+        sw (matching-active-state effect-state hand-center-pos)]
     (when (and hand-center-pos sw (:active? sw))
       (let [center (dissoc hand-center-pos :player-uuid)
             sw-ticks (long (or (:ticks sw) 0))

@@ -4,7 +4,6 @@
   Renders a floating rotating quad using the cat_engine block texture.
   Behavior mirrors legacy AcademyCraft TESR animation speed driven by :this-tick-gen."
   (:require [cn.li.mcmod.client.resources :as res]
-            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.client.render.tesr-api :as tesr-api]
             [cn.li.mcmod.client.render.buffer :as rb]
             [cn.li.mcmod.client.render.pose :as pose]
@@ -13,9 +12,66 @@
             [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.platform.position :as pos]))
 
-(defonce texture (delay (res/texture-location "block/cat_engine")))
+(def ^:private cat-engine-texture-lock
+  (Object.))
 
-(defonce ^:private rotor-cache (atom {}))
+(def ^:private ^:dynamic *cat-engine-texture*
+  nil)
+
+(defn- cat-engine-texture
+  []
+  (or (var-get #'*cat-engine-texture*)
+      (locking cat-engine-texture-lock
+        (or (var-get #'*cat-engine-texture*)
+            (let [tex (res/texture-location "block/cat_engine")]
+              (alter-var-root #'*cat-engine-texture* (constantly tex))
+              tex)))))
+
+(defn create-cat-engine-render-runtime
+  ([]
+   (create-cat-engine-render-runtime {}))
+  ([initial-cache]
+   {:rotor-cache (atom initial-cache)}))
+
+(defonce ^:private installed-cat-engine-render-runtime
+  (create-cat-engine-render-runtime))
+
+(def ^:dynamic *cat-engine-render-runtime*
+  installed-cat-engine-render-runtime)
+
+(defn current-cat-engine-render-runtime
+  []
+  *cat-engine-render-runtime*)
+
+(defmacro with-cat-engine-render-runtime
+  [runtime & body]
+  `(binding [*cat-engine-render-runtime* ~runtime]
+     ~@body))
+
+(defn call-with-cat-engine-render-runtime
+  [runtime f]
+  (binding [*cat-engine-render-runtime* runtime]
+    (f)))
+
+(defn rotor-cache-atom
+  []
+  (:rotor-cache (current-cat-engine-render-runtime)))
+
+(defn rotor-cache-snapshot
+  []
+  @(rotor-cache-atom))
+
+(defn clear-rotor-cache!
+  []
+  (reset! (rotor-cache-atom) {})
+  nil)
+
+(defn reset-rotor-cache-for-test!
+  ([]
+   (clear-rotor-cache!))
+  ([cache]
+   (reset! (rotor-cache-atom) cache)
+   nil))
 
 (defn- tile-key [tile]
   (let [p (pos/position-get-block-pos tile)]
@@ -25,12 +81,12 @@
   [tile tick-gen]
   (let [k (tile-key tile)
         now-ms (long (* 1000.0 (render/get-render-time)))
-        prev (get @rotor-cache k {:t now-ms :rot 0.0})
+        prev (get (rotor-cache-snapshot) k {:t now-ms :rot 0.0})
         dt-ms (max 0 (- now-ms (:t prev)))
         rot (mod (+ (double (:rot prev))
                     (* (double dt-ms) (double tick-gen) 1.0e-2))
                  360.0)]
-    (swap! rotor-cache assoc k {:t now-ms :rot rot})
+    (swap! (rotor-cache-atom) assoc k {:t now-ms :rot rot})
     rot))
 
 (def ^:private quad-vertices
@@ -62,7 +118,7 @@
         wx (+ 0.5 (double (pos/pos-x p)))
         wz (+ 0.5 (double (pos/pos-z p)))
         yaw-deg (+ 180.0 (Math/toDegrees (Math/atan2 wx wz)))
-        vc (rb/get-cutout-no-cull-buffer buffer-source @texture)]
+        vc (rb/get-cutout-no-cull-buffer buffer-source (cat-engine-texture))]
     (pose/push-pose pose-stack)
     (try
       (pose/translate pose-stack 0.5 (+ 0.03 bob) 0.5)
@@ -87,11 +143,18 @@
           (catch Exception e
             (log/error "Error in cat-engine renderer:" (ex-message e))))))))
 
-(defonce-guard cat-renderer-installed?)
+(def ^:private cat-renderer-guard-lock
+  (Object.))
+
+(def ^:private ^:dynamic *cat-renderer-installed?*
+  false)
 
 (defn init!
   []
   (when-let [register-fn (requiring-resolve 'cn.li.mcmod.client.render.init/register-renderer-init-fn!)]
-    (with-init-guard cat-renderer-installed?
-      (register-fn register!)
-      (log/info "Registered cat-engine renderer"))))
+    (when-not (var-get #'*cat-renderer-installed?*)
+      (locking cat-renderer-guard-lock
+        (when-not (var-get #'*cat-renderer-installed?*)
+          (register-fn register!)
+          (alter-var-root #'*cat-renderer-installed?* (constantly true))
+          (log/info "Registered cat-engine renderer"))))))

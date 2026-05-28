@@ -4,12 +4,11 @@
             [cn.li.mcmod.gui.dsl :as dsl]
             [cn.li.mcmod.gui.registry :as gui-registry]))
 
-(defn- reset-gui-registry! [f]
-  (reset! gui-registry/gui-registry {:by-id {} :by-gui-id {}})
-  (f)
-  (reset! gui-registry/gui-registry {:by-id {} :by-gui-id {}}))
+(defn- with-fresh-gui-registry-runtime [f]
+  (binding [gui-registry/*gui-registry-runtime* (gui-registry/create-gui-registry-runtime)]
+    (f)))
 
-(use-fixtures :each reset-gui-registry!)
+(use-fixtures :each with-fresh-gui-registry-runtime)
 
 (defn- platform-gui-spec
   [id gui-id gui-type]
@@ -41,7 +40,7 @@
       (dsl/create-gui-spec "registry-test-gui"
                            {:title "Registry Test"
                             :slots [{:index 0 :x 0 :y 0}]}))
-    (is (contains? (:by-id @gui-registry/gui-registry) "registry-test-gui"))
+    (is (contains? (set (gui-registry/list-guis)) "registry-test-gui"))
     (is (= "registry-test-gui" (:id (gui-registry/get-gui "registry-test-gui"))))))
 
 (deftest gui-registry-platform-id-test

@@ -15,15 +15,15 @@
                                     (reify java.util.function.Supplier
                                       (get [_]
                                         (item-properties/create-standalone-item item-spec))))]
-      (swap! registry-state/registered-items assoc item-id registered-obj)))
+      (registry-state/register-item! item-id registered-obj)))
   (doseq [block-id (registry-metadata/get-all-block-ids)]
     (when (and (registry-metadata/should-create-block-item? block-id)
                (not (registry-metadata/fluid-block? block-id)))
       (let [registry-name (registry-metadata/get-block-registry-name block-id)
-            block-registered (get @registry-state/registered-blocks block-id)
+            block-registered (registry-state/get-registered-block-ro block-id)
             registered-obj (.register ^DeferredRegister items-register registry-name
                                       (reify java.util.function.Supplier
                                         (get [_]
                                           (BlockItem. (.get ^RegistryObject block-registered)
                                                       (Item$Properties.)))))]
-        (swap! registry-state/registered-items assoc (str block-id "-item") registered-obj)))))
+        (registry-state/register-item! (str block-id "-item") registered-obj)))))

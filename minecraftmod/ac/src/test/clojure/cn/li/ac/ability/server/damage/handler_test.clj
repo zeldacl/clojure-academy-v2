@@ -58,3 +58,16 @@
   (is (thrown-with-msg? clojure.lang.ExceptionInfo
                         #"Attack check registries are frozen"
                         (h/register-attack-precheck-side-effect! :new-fx (fn [_ _ _ _] true)))))
+
+(deftest attack-check-registries-runtime-isolation-test
+  (let [rt-a (h/create-attack-check-registries-runtime)
+        rt-b (h/create-attack-check-registries-runtime)]
+    (h/call-with-attack-check-registries-runtime rt-a
+      (fn []
+        (h/register-attack-cancel-check! :always-cancel (fn [_ _ _] true))))
+    (h/call-with-attack-check-registries-runtime rt-b
+      (fn []
+        (is (false? (h/should-cancel-attack? "p" "a" 1.0 :src)))))
+    (h/call-with-attack-check-registries-runtime rt-a
+      (fn []
+        (is (true? (h/should-cancel-attack? "p" "a" 1.0 :src)))))))

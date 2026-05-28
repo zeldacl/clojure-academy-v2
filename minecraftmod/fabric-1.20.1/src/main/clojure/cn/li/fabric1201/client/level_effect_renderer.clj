@@ -9,8 +9,14 @@
            [net.minecraft.client.player LocalPlayer]
            [net.minecraft.client.renderer MultiBufferSource$BufferSource]))
 
-(defonce ^:private tick-listener-registered? (atom false))
-(defonce ^:private render-listener-registered? (atom false))
+(def ^:private level-effect-guard-lock
+  (Object.))
+
+(def ^:private ^:dynamic *tick-listener-registered?*
+  false)
+
+(def ^:private ^:dynamic *render-listener-registered?*
+  false)
 
 (defn- on-client-tick []
   (shared-level/tick-level-effects!))
@@ -39,14 +45,20 @@
 
 (defn init!
   []
-  (when (compare-and-set! tick-listener-registered? false true)
-    (.register ClientTickEvents/END_CLIENT_TICK
-               (reify ClientTickEvents$EndTick
-                 (onEndTick [_ _client]
-                   (on-client-tick)))))
-  (when (compare-and-set! render-listener-registered? false true)
-    (.register WorldRenderEvents/AFTER_TRANSLUCENT
-               (reify WorldRenderEvents$AfterTranslucent
-                 (afterTranslucent [_ context]
-                   (on-after-translucent-render context)))))
+  (when-not (var-get #'*tick-listener-registered?*)
+    (locking level-effect-guard-lock
+      (when-not (var-get #'*tick-listener-registered?*)
+        (.register ClientTickEvents/END_CLIENT_TICK
+                   (reify ClientTickEvents$EndTick
+                     (onEndTick [_ _client]
+                       (on-client-tick))))
+        (alter-var-root #'*tick-listener-registered?* (constantly true)))))
+  (when-not (var-get #'*render-listener-registered?*)
+    (locking level-effect-guard-lock
+      (when-not (var-get #'*render-listener-registered?*)
+        (.register WorldRenderEvents/AFTER_TRANSLUCENT
+                   (reify WorldRenderEvents$AfterTranslucent
+                     (afterTranslucent [_ context]
+                       (on-after-translucent-render context))))
+        (alter-var-root #'*render-listener-registered?* (constantly true)))))
   (log/info "Fabric level effect renderer initialized"))

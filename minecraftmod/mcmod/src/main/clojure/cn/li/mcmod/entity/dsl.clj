@@ -4,7 +4,19 @@
             [cn.li.mcmod.protocol.core :as registry-core]
             [cn.li.mcmod.util.log :as log]))
 
-(defonce entity-registry (registry-core/atom-registry {}))
+(defn create-entity-registry-runtime
+  ([] (create-entity-registry-runtime {}))
+  ([{:keys [registry]}]
+   {:cn.li.mcmod.entity.dsl/runtime ::entity-registry-runtime
+    :registry (or registry (registry-core/atom-registry {}))}))
+
+(def ^:dynamic *entity-registry-runtime* nil)
+
+(defonce ^:private installed-entity-registry-runtime
+  (create-entity-registry-runtime))
+
+(defn- entity-registry-state []
+  (:registry (or *entity-registry-runtime* installed-entity-registry-runtime)))
 
 (defrecord EntitySpec [id registry-name entity-kind category
                        width height
@@ -76,16 +88,16 @@
   [entity-spec]
   (validate-entity-spec entity-spec)
   (log/info "Registering entity:" (:id entity-spec))
-  (registry-core/swap-state! entity-registry #(assoc % (:id entity-spec) entity-spec))
+  (registry-core/swap-state! (entity-registry-state) #(assoc % (:id entity-spec) entity-spec))
   entity-spec)
 
 (defn get-entity
   [entity-id]
-  (registry-core/lookup entity-registry entity-id))
+  (registry-core/lookup (entity-registry-state) entity-id))
 
 (defn list-entities
   []
-  (keys (registry-core/snapshot entity-registry)))
+  (keys (registry-core/snapshot (entity-registry-state))))
 
 (defn get-entity-registry-name
   [entity-id]

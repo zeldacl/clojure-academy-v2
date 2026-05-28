@@ -28,8 +28,7 @@
            (#'sut/basic-get-item-model-id "ac" "wireless_node")))))
 
 (deftest hooks-dispatch-test
-  (let [hooks-atom (var-get #'sut/blockstate-hooks)
-        original-hooks @hooks-atom]
+  (let [original-hooks (sut/blockstate-hooks-snapshot)]
     (try
       (sut/register-blockstate-hooks!
         {:get-all-definitions (fn [] {:k :v})
@@ -46,5 +45,5 @@
         (is (= [:tex "b"] (sut/get-model-texture-config "b")))
         (is (= "m/r" (sut/get-item-model-id "m" "r"))))
       (finally
-        (reset! hooks-atom original-hooks)))))
+        (sut/restore-blockstate-hooks! original-hooks)))))
 

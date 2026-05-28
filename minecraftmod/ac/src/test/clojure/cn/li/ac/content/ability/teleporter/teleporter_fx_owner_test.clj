@@ -36,7 +36,9 @@
         penetrate-enqueue! (var-get #'cn.li.ac.content.ability.teleporter.penetrate-teleport-fx/enqueue!)
         shift-enqueue! (var-get #'cn.li.ac.content.ability.teleporter.shift-teleport-fx/enqueue!)]
     (with-redefs [client-particles/queue-particle-effect! (fn [_] nil)
-                  client-sounds/queue-sound-effect! (fn [_] nil)]
+                  client-particles/current-effect-owner (fn [] {:client-session-id "teleporter-owner-test"})
+                  client-sounds/queue-sound-effect! (fn [& _] nil)
+                  client-particles/queue-particle-effect! (fn [& _] nil)]
       (flashing-enqueue! (event "ctx-a" :flashing/fx-state-start {:mode :state-start}))
       (flashing-enqueue! (event "ctx-b" :flashing/fx-state-start {:mode :state-start}))
       (flashing-enqueue! (event "ctx-a" :flashing/fx-preview-update

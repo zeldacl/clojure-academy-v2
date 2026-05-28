@@ -10,28 +10,65 @@
 						[cn.li.mcmod.platform.entity-damage :as entity-damage]
 						[cn.li.mcmod.util.log :as log]))
 
-(defonce ^:private pending-tasks
-	(atom {}))
+(defn create-delayed-projectile-runtime
+	([]
+	 (create-delayed-projectile-runtime {}))
+	([{:keys [pending-tasks*]
+		 :or {pending-tasks* (atom {})}}]
+	 {::runtime ::delayed-projectile-runtime
+	  :pending-tasks* pending-tasks*}))
+
+(def ^:dynamic *delayed-projectile-runtime* nil)
+
+(defonce ^:private installed-delayed-projectile-runtime
+	(create-delayed-projectile-runtime))
+
+(defn- delayed-projectile-runtime?
+	[runtime]
+	(and (map? runtime)
+			 (= ::delayed-projectile-runtime (::runtime runtime))
+			 (some? (:pending-tasks* runtime))))
+
+(defn call-with-delayed-projectile-runtime
+	[runtime f]
+	(when-not (delayed-projectile-runtime? runtime)
+		(throw (ex-info "Expected delayed projectile runtime"
+						{:value runtime})))
+	(binding [*delayed-projectile-runtime* runtime]
+		(f)))
+
+(defmacro with-delayed-projectile-runtime
+	[runtime & body]
+	`(call-with-delayed-projectile-runtime ~runtime (fn [] ~@body)))
+
+(defn- current-delayed-projectile-runtime
+	[]
+	(or *delayed-projectile-runtime*
+			installed-delayed-projectile-runtime))
+
+(defn- pending-tasks-atom
+	[]
+	(:pending-tasks* (current-delayed-projectile-runtime)))
 
 (defn pending-tasks-snapshot
 	[]
-	@pending-tasks)
+	@(pending-tasks-atom))
 
 (defn reset-pending-tasks-for-test!
 	([]
 	 (reset-pending-tasks-for-test! {}))
 	([snapshot]
-	 (reset! pending-tasks (or snapshot {}))
+	 (reset! (pending-tasks-atom) (or snapshot {}))
 	 nil))
 
 (defn clear-player-tasks!
 	[player-uuid]
-	(swap! pending-tasks dissoc (str player-uuid))
+	(swap! (pending-tasks-atom) dissoc (str player-uuid))
 	nil)
 
 (defn clear-all-tasks!
 	[]
-	(reset! pending-tasks {})
+	(reset! (pending-tasks-atom) {})
 	nil)
 
 (def ^:private mdball-default-life-ticks 50)
@@ -50,7 +87,7 @@
 (defn schedule-task!
 	[player-uuid delay-ticks task]
 	(let [ticks (max 1 (int (or delay-ticks 1)))]
-		(swap! pending-tasks update (str player-uuid) (fnil conj [])
+		(swap! (pending-tasks-atom) update (str player-uuid) (fnil conj [])
 					 (assoc task :ticks-left ticks))))
 
 (defn schedule-electron-bomb-beam!
@@ -159,7 +196,7 @@
 (defn tick-player!
 	[player-uuid]
 	(let [k (str player-uuid)
-				tasks (get @pending-tasks k)]
+				tasks (get (pending-tasks-snapshot) k)]
 		(when (seq tasks)
 			(let [next-tasks (volatile! [])]
 				(doseq [{:keys [ticks-left] :as task} tasks]
@@ -168,5 +205,5 @@
 						(vswap! next-tasks conj (update task :ticks-left dec))))
 				(let [remaining @next-tasks]
 					(if (seq remaining)
-						(swap! pending-tasks assoc k remaining)
-						(swap! pending-tasks dissoc k)))))))
+						(swap! (pending-tasks-atom) assoc k remaining)
+						(swap! (pending-tasks-atom) dissoc k)))))))

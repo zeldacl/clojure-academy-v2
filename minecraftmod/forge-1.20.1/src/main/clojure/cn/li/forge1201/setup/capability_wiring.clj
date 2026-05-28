@@ -20,7 +20,7 @@
                    (let [^RegisterCapabilitiesEvent event event]
                      (doseq [^Class java-type (distinct (keep (fn [[_key {:keys [java-type]}]]
                                                                 java-type)
-                                                              @platform-cap/capability-type-registry))]
+                                                              (platform-cap/capability-type-registry-snapshot)))]
                        (when-not (forge-built-in-capability? java-type)
                          (.register event java-type))))))
   nil)

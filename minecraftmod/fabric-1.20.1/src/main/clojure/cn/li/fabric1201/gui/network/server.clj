@@ -23,7 +23,11 @@
   (binding [runtime-hooks/*player-state-owner* (server-player-owner player)]
     (f)))
 
-(defonce ^:private server-initialized? (atom false))
+(def ^:private server-init-guard-lock
+  (Object.))
+
+(def ^:private ^:dynamic *server-initialized?*
+  false)
 
 (defn send-response-to-client!
   [^ServerPlayer player request-id payload]
@@ -37,32 +41,36 @@
 
 (defn init-server!
   []
-  (when (compare-and-set! server-initialized? false true)
-    (let [handler-iface (ru/class-noinit "net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking$PlayChannelHandler")
-          receiver (shared/jproxy
-                     handler-iface
-                     (fn [method-name ^objects args]
-                       (when (= method-name "receive")
-                         (let [^MinecraftServer server (aget args 0)
-                               ^ServerPlayer player (aget args 1)
-                               ^FriendlyByteBuf buf (aget args 3)
-                               {:keys [msg-id request-id payload]} (packet-base/normalize-request (shared/read-buf-map buf))]
-                           (.execute server
-                                     (reify Runnable
-                                       (run [_]
-                                         (with-server-player-owner
-                                           player
-                                           #(net-server/handle-request
-                                              (str msg-id)
-                                              request-id
-                                              payload
-                                              player
-                                              (fn [rid response]
-                                                (send-response-to-client!
+  (when-not (var-get #'*server-initialized?*)
+    (locking server-init-guard-lock
+      (when-not (var-get #'*server-initialized?*)
+        (let [handler-iface (ru/class-noinit "net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking$PlayChannelHandler")
+              receiver (shared/jproxy
+                         handler-iface
+                         (fn [method-name ^objects args]
+                           (when (= method-name "receive")
+                             (let [^MinecraftServer server (aget args 0)
+                                   ^ServerPlayer player (aget args 1)
+                                   ^FriendlyByteBuf buf (aget args 3)
+                                   {:keys [msg-id request-id payload]} (packet-base/normalize-request (shared/read-buf-map buf))]
+                               (.execute server
+                                         (reify Runnable
+                                           (run [_]
+                                             (with-server-player-owner
+                                               player
+                                               #(net-server/handle-request
+                                                  (str msg-id)
+                                                  request-id
+                                                  payload
                                                   player
-                                                  (int rid)
-                                                  (or response {}))))))))))
-                       nil))]
-      (Reflector/invokeStaticMethod ServerPlayNetworking "registerGlobalReceiver"
-                                    (to-array [shared/c2s-channel receiver]))
-      (log/info "Fabric GUI network server transport initialized"))))
+                                                  (fn [rid response]
+                                                    (send-response-to-client!
+                                                      player
+                                                      (int rid)
+                                                      (or response {}))))))))))
+                           nil))]
+          (Reflector/invokeStaticMethod ServerPlayNetworking "registerGlobalReceiver"
+                                        (to-array [shared/c2s-channel receiver]))
+          (alter-var-root #'*server-initialized?* (constantly true))
+          (log/info "Fabric GUI network server transport initialized")))))
+  nil)

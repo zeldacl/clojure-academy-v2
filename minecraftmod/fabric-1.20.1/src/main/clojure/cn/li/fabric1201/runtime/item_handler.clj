@@ -8,7 +8,11 @@
            [net.minecraft.world.item ItemStack]
            [net.minecraft.world.level Level]))
 
-(defonce ^:private installed? (atom false))
+(def ^:private install-guard-lock
+  (Object.))
+
+(def ^:private ^:dynamic *installed?*
+  false)
 
 (defn- on-item-use
   "Handle Fabric UseItemCallback event."
@@ -23,11 +27,15 @@
 (defn init!
   "Initialize Fabric runtime item use event handler."
   []
-  (if-not (compare-and-set! installed? false true)
+  (if (var-get #'*installed?*)
     (log/info "Fabric runtime item handler already initialized, skipping")
-    (do
-      (.register UseItemCallback/EVENT
-                 (reify UseItemCallback
-                   (interact [_ player world hand]
-                     (on-item-use player world hand))))
-      (log/info "Fabric runtime item handler initialized"))))
+    (locking install-guard-lock
+      (if (var-get #'*installed?*)
+        (log/info "Fabric runtime item handler already initialized, skipping")
+        (do
+          (.register UseItemCallback/EVENT
+                     (reify UseItemCallback
+                       (interact [_ player world hand]
+                         (on-item-use player world hand))))
+          (alter-var-root #'*installed?* (constantly true))
+          (log/info "Fabric runtime item handler initialized"))))))

@@ -10,17 +10,9 @@
             [cn.li.mcmod.network.client :as net-client]))
 
 (defn- reset-ui-state! [f]
-  (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/vm-wave-circles {})
-  (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/vm-wave-last-spawn-ms {})
-  (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/slot-context-ids {})
-  (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/slot-key-tick-ms {})
-  (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/charge-coin-state {})
+  (client-ui-hooks/reset-client-ui-state-for-test!)
   (f)
-  (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/vm-wave-circles {})
-  (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/vm-wave-last-spawn-ms {})
-  (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/slot-context-ids {})
-  (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/slot-key-tick-ms {})
-  (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/charge-coin-state {}))
+  (client-ui-hooks/reset-client-ui-state-for-test!))
 
 (use-fixtures :each reset-ui-state!)
 
@@ -29,8 +21,8 @@
 (deftest movement-keys-ignore-terminated-flashing-context-test
   (let [sent (atom [])
         hooks (client-ui-hooks/runtime-client-ui-hooks)]
-    (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/slot-context-ids
-          {[test-client-session "p1" 0] "ctx-flashing-dead"})
+    (binding [runtime-hooks/*client-session-id* test-client-session]
+      (client-ui-hooks/set-slot-context-for-test! "p1" 0 "ctx-flashing-dead"))
     (with-redefs [ctx/get-context (fn [_]
                                     {:id "ctx-flashing-dead"
                                      :player-uuid "p1"

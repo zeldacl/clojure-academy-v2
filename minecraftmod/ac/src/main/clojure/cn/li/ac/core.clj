@@ -4,18 +4,59 @@
             [cn.li.ac.registry.hooks :as hooks]
             [cn.li.ac.testing.smoke-manifest :as smoke-manifest]))
 
-(defonce ^:private lifecycle-hooks-registered?
-  (atom false))
+(defn default-lifecycle-hooks-runtime-state
+  []
+  false)
+
+(defn create-lifecycle-hooks-runtime
+  ([]
+   (create-lifecycle-hooks-runtime {}))
+  ([{:keys [state*]
+     :or {state* (atom (default-lifecycle-hooks-runtime-state))}}]
+   {::runtime ::lifecycle-hooks-runtime
+    :state* state*}))
+
+(def ^:dynamic *lifecycle-hooks-runtime* nil)
+
+(defonce ^:private installed-lifecycle-hooks-runtime
+  (create-lifecycle-hooks-runtime))
+
+(defn- lifecycle-hooks-runtime?
+  [runtime]
+  (and (map? runtime)
+       (= ::lifecycle-hooks-runtime (::runtime runtime))
+       (some? (:state* runtime))))
+
+(defn call-with-lifecycle-hooks-runtime
+  [runtime f]
+  (when-not (lifecycle-hooks-runtime? runtime)
+    (throw (ex-info "Expected lifecycle hooks runtime"
+                    {:runtime runtime})))
+  (binding [*lifecycle-hooks-runtime* runtime]
+    (f)))
+
+(defmacro with-lifecycle-hooks-runtime
+  [runtime & body]
+  `(call-with-lifecycle-hooks-runtime ~runtime (fn [] ~@body)))
+
+(defn- current-lifecycle-hooks-runtime
+  []
+  (or *lifecycle-hooks-runtime*
+      installed-lifecycle-hooks-runtime))
+
+(defn- lifecycle-hooks-registered-atom
+  []
+  (:state* (current-lifecycle-hooks-runtime)))
 
 (defn lifecycle-hooks-guard-snapshot
   []
-  @lifecycle-hooks-registered?)
+  @(lifecycle-hooks-registered-atom))
 
 (defn reset-lifecycle-hooks-guard-for-test!
   ([]
    (reset-lifecycle-hooks-guard-for-test! false))
   ([registered?]
-   (reset! lifecycle-hooks-registered? (boolean registered?))
+   (reset! (lifecycle-hooks-registered-atom) (boolean registered?))
    nil))
 
 (defn- resolve-required
@@ -53,7 +94,7 @@
   content discovery. Requiring this namespace alone must not mutate lifecycle
   state."
   []
-  (when (compare-and-set! lifecycle-hooks-registered? false true)
+  (when (compare-and-set! (lifecycle-hooks-registered-atom) false true)
     (smoke-manifest/register!)
     (lifecycle/register-content-init! #'init)
     (lifecycle/register-runtime-content-activation! #'activate-runtime-content!)

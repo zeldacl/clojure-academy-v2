@@ -51,8 +51,31 @@
     :clone?
     :order})
 
-(defonce ^:private registry-state
-  (atom {}))
+;; ============================================================================
+;; Runtime Container
+;; ============================================================================
+
+(defn- default-content-registry-runtime-state [] {})
+
+(defn create-content-registry-runtime
+  ([] (create-content-registry-runtime {}))
+  ([{:keys [state*]}]
+   {:cn.li.mcmod.content.registry/runtime ::content-registry-runtime
+    :state* (or state* (atom (default-content-registry-runtime-state)))}))
+
+(def ^:dynamic *content-registry-runtime* nil)
+
+(defonce ^:private installed-content-registry-runtime
+  (create-content-registry-runtime))
+
+(defn- content-registry-state-atom []
+  (:state* (or *content-registry-runtime* installed-content-registry-runtime)))
+
+(defn- content-registry-state-snapshot []
+  @(content-registry-state-atom))
+
+(defn- update-content-registry-state! [f & args]
+  (apply swap! (content-registry-state-atom) f args))
 
 (defn- normalize-category
   [category]
@@ -108,7 +131,7 @@
   ([category descriptor-id descriptor]
    (let [category-key (normalize-category category)
          normalized (normalize-descriptor descriptor-id descriptor)]
-     (swap! registry-state
+     (update-content-registry-state!
             (fn [state]
               (let [existing (get-in state [category-key descriptor-id])]
                 (cond
@@ -132,7 +155,7 @@
 
 (defn get-descriptor
   [category descriptor-id]
-  (get-in @registry-state [(normalize-category category) descriptor-id]))
+  (get-in (content-registry-state-snapshot) [(normalize-category category) descriptor-id]))
 
 (defn require-descriptor
   [category descriptor-id]
@@ -143,22 +166,22 @@
 
 (defn list-descriptors
   [category]
-  (->> (vals (get @registry-state (normalize-category category) {}))
+  (->> (vals (get (content-registry-state-snapshot) (normalize-category category) {}))
        (sort-by (comp str :id))
        vec))
 
 (defn registry-snapshot
   []
-  @registry-state)
+  (content-registry-state-snapshot))
 
 (defn clear-category!
   [category]
-  (swap! registry-state dissoc (normalize-category category))
+  (update-content-registry-state! dissoc (normalize-category category))
   nil)
 
 (defn clear-registry!
   []
-  (reset! registry-state {})
+  (reset! (content-registry-state-atom) (default-content-registry-runtime-state))
   nil)
 
 (defn- invoke-descriptor-handler!

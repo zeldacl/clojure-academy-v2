@@ -5,17 +5,55 @@
             [cn.li.ac.ability.server.damage.runtime :as damage-runtime]
             [cn.li.ac.content.ability.meltdowner.rad-intensify :as rad]))
 
-(defonce ^:private marks (atom {}))
+(defn create-damage-helper-runtime
+  ([]
+   (create-damage-helper-runtime {}))
+  ([{:keys [marks*]
+     :or {marks* (atom {})}}]
+   {::runtime ::damage-helper-runtime
+    :marks* marks*}))
+
+(def ^:dynamic *damage-helper-runtime* nil)
+
+(defonce ^:private installed-damage-helper-runtime
+  (create-damage-helper-runtime))
+
+(defn- damage-helper-runtime?
+  [runtime]
+  (and (map? runtime)
+       (= ::damage-helper-runtime (::runtime runtime))
+       (some? (:marks* runtime))))
+
+(defn call-with-damage-helper-runtime
+  [runtime f]
+  (when-not (damage-helper-runtime? runtime)
+    (throw (ex-info "Expected damage helper runtime"
+                    {:value runtime})))
+  (binding [*damage-helper-runtime* runtime]
+    (f)))
+
+(defmacro with-damage-helper-runtime
+  [runtime & body]
+  `(call-with-damage-helper-runtime ~runtime (fn [] ~@body)))
+
+(defn- current-damage-helper-runtime
+  []
+  (or *damage-helper-runtime*
+      installed-damage-helper-runtime))
+
+(defn- marks-atom
+  []
+  (:marks* (current-damage-helper-runtime)))
 
 (defn marks-snapshot
   []
-  @marks)
+  @(marks-atom))
 
 (defn reset-marks-for-test!
   ([]
    (reset-marks-for-test! {}))
   ([snapshot]
-   (reset! marks (or snapshot {}))
+  (reset! (marks-atom) (or snapshot {}))
    nil))
 
 (defn- normalize-id
@@ -31,7 +69,7 @@
 
 (defn- clear-marks-where!
   [pred]
-  (swap! marks
+  (swap! (marks-atom)
          (fn [current]
            (into {}
                  (remove (fn [[k v]] (pred k v)))
@@ -40,7 +78,7 @@
 
 (defn clear-mark!
   [source-player-id target-id]
-  (swap! marks dissoc (mark-key source-player-id target-id))
+  (swap! (marks-atom) dissoc (mark-key source-player-id target-id))
   nil)
 
 (defn clear-target-marks!
@@ -77,7 +115,7 @@
     (when (and source-id marked-target-id (learned-rad-intensify? source-id))
       (let [expire (+ (now-ms) (rad/mark-duration-ms))
             mark-rate (rad/rate source-id)]
-        (swap! marks assoc (mark-key source-id marked-target-id)
+        (swap! (marks-atom) assoc (mark-key source-id marked-target-id)
                {:source-player-id source-id
                 :target-id marked-target-id
                 :expire-at expire
@@ -87,11 +125,11 @@
   [attacker-id target-id]
   (let [key (mark-key attacker-id target-id)
         t (now-ms)]
-    (when-let [{:keys [expire-at] :as mark} (get @marks key)]
+    (when-let [{:keys [expire-at] :as mark} (get @(marks-atom) key)]
       (if (> (long expire-at) t)
         mark
         (do
-          (swap! marks dissoc key)
+          (swap! (marks-atom) dissoc key)
           nil)))))
 
 (defn- damage-handler

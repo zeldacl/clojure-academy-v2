@@ -5,17 +5,67 @@
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]))
 
-(defonce ^:private fx-state (atom {}))
+  (defn default-penetrate-teleport-fx-runtime-state
+    []
+    {:fx-state {}})
+
+  (defn create-penetrate-teleport-fx-runtime
+    ([] 
+     (create-penetrate-teleport-fx-runtime {}))
+    ([{:keys [state*]
+       :or {state* (atom (default-penetrate-teleport-fx-runtime-state))}}]
+     {::runtime ::penetrate-teleport-fx-runtime
+      :state* state*}))
+
+  (def ^:dynamic *penetrate-teleport-fx-runtime* nil)
+
+  (defonce ^:private installed-penetrate-teleport-fx-runtime
+    (create-penetrate-teleport-fx-runtime))
+
+  (defn- penetrate-teleport-fx-runtime?
+    [runtime]
+    (and (map? runtime)
+         (= ::penetrate-teleport-fx-runtime (::runtime runtime))
+         (some? (:state* runtime))))
+
+  (defn call-with-penetrate-teleport-fx-runtime
+    [runtime f]
+    (when-not (penetrate-teleport-fx-runtime? runtime)
+      (throw (ex-info "Expected Penetrate Teleport FX runtime"
+                      {:value runtime})))
+    (binding [*penetrate-teleport-fx-runtime* runtime]
+      (f)))
+
+  (defmacro with-penetrate-teleport-fx-runtime
+    [runtime & body]
+    `(call-with-penetrate-teleport-fx-runtime ~runtime (fn [] ~@body)))
+
+  (defn- current-penetrate-teleport-fx-runtime
+    []
+    (or *penetrate-teleport-fx-runtime*
+        installed-penetrate-teleport-fx-runtime))
+
+  (defn- penetrate-teleport-fx-state-atom
+    []
+    (:state* (current-penetrate-teleport-fx-runtime)))
+
+  (defn- penetrate-teleport-fx-state-snapshot
+    []
+    @(penetrate-teleport-fx-state-atom))
+
+  (defn- update-penetrate-teleport-fx-state!
+    [f & args]
+    (apply swap! (penetrate-teleport-fx-state-atom) f args))
 
 (defn penetrate-teleport-fx-snapshot []
-  {:fx-state @fx-state})
+    (penetrate-teleport-fx-state-snapshot))
 
 (defn reset-penetrate-teleport-fx-for-test! []
-  (reset! fx-state {})
+    (reset! (penetrate-teleport-fx-state-atom) (default-penetrate-teleport-fx-runtime-state))
   nil)
 
 (defn clear-penetrate-teleport-owner! [owner-key]
-  (swap! fx-state dissoc owner-key)
+    (update-penetrate-teleport-fx-state! update :fx-state dissoc owner-key)
   nil)
 
 (defn- enqueue! [{:keys [payload ctx-id channel owner-key]}]
@@ -29,24 +79,26 @@
                    :world-id world-id}]
     (case (:mode payload)
       :start
-      (swap! fx-state assoc owner-key* (merge base-meta {:ttl 0 :active? true :available? false}))
+        (update-penetrate-teleport-fx-state!
+          update :fx-state assoc owner-key* (merge base-meta {:ttl 0 :active? true :available? false}))
 
       :update
-      (swap! fx-state update owner-key*
-             (fn [st]
-               (let [base (merge base-meta (or st {:ttl 0 :active? true}))]
-                 (assoc base
-                        :owner-key owner-key*
-                        :ctx-id ctx-id
-                        :channel channel
-                        :source-player-id source-player-id
-                        :world-id world-id
-                        :active? true
-                        :available? (boolean (:available? payload))
-                        :distance (double (or (:distance payload) 0.0))
-                        :x (:x payload)
-                        :y (:y payload)
-                        :z (:z payload)))))
+        (update-penetrate-teleport-fx-state!
+          update :fx-state update owner-key*
+          (fn [st]
+            (let [base (merge base-meta (or st {:ttl 0 :active? true}))]
+              (assoc base
+                     :owner-key owner-key*
+                     :ctx-id ctx-id
+                     :channel channel
+                     :source-player-id source-player-id
+                     :world-id world-id
+                     :active? true
+                     :available? (boolean (:available? payload))
+                     :distance (double (or (:distance payload) 0.0))
+                     :x (:x payload)
+                     :y (:y payload)
+                     :z (:z payload)))))
 
     :perform
     (do
@@ -63,27 +115,29 @@
       nil)))
 
 (defn- tick! []
-  (swap! fx-state
-         (fn [states]
-           (into {}
-                 (map (fn [[owner-key st]]
-                        (let [next-st (update st :ttl inc)]
-                          (when (and (:active? next-st)
-                                     (:x next-st)
-                                     (zero? (mod (:ttl next-st) 3)))
-                            (client-particles/queue-particle-effect! (:queue-owner next-st)
-                              {:type :particle
-                               :particle-type (if (:available? next-st) :portal :smoke)
-                               :x (double (:x next-st))
-                               :y (+ (double (:y next-st)) 1.0)
-                               :z (double (:z next-st))
-                               :count (if (:available? next-st) 5 2)
-                               :speed 0.02
-                               :offset-x 0.35
-                               :offset-y 0.6
-                               :offset-z 0.35}))
-                          [owner-key next-st]))
-                 states)))))
+    (update-penetrate-teleport-fx-state!
+      update :fx-state
+      (fn [states]
+        (reduce-kv
+          (fn [acc owner-key st]
+            (let [next-st (update st :ttl inc)]
+              (when (and (:active? next-st)
+                         (:x next-st)
+                         (zero? (mod (:ttl next-st) 3)))
+                (client-particles/queue-particle-effect! (:queue-owner next-st)
+                  {:type :particle
+                   :particle-type (if (:available? next-st) :portal :smoke)
+                   :x (double (:x next-st))
+                   :y (+ (double (:y next-st)) 1.0)
+                   :z (double (:z next-st))
+                   :count (if (:available? next-st) 5 2)
+                   :speed 0.02
+                   :offset-x 0.35
+                   :offset-y 0.6
+                   :offset-z 0.35}))
+              (assoc acc owner-key next-st)))
+          {}
+          states))))
 
 (defn- build-plan [_cp _hcp _tick] nil)
 

@@ -12,8 +12,21 @@
            [net.minecraftforge.fml.event.config ModConfigEvent]
            [net.minecraftforge.fml.config ModConfig$Type]))
 
-(defonce registered-configs
-  (atom {}))
+(def ^:private config-registry-lock
+  (Object.))
+
+(def ^:private ^:dynamic *registered-configs*
+  {})
+
+(defn- registered-configs-snapshot
+  []
+  (var-get #'*registered-configs*))
+
+(defn- assoc-registered-config!
+  [file-name domain-info]
+  (locking config-registry-lock
+    (alter-var-root #'*registered-configs* assoc file-name domain-info)
+    nil))
 
 (defn- domain->file-name
   [domain extension]
@@ -105,7 +118,7 @@
 (defn- handle-config-event!
   [^ModConfigEvent event]
   (let [file-name (some-> event .getConfig .getFileName)]
-    (when-let [domain-info (get @registered-configs file-name)]
+    (when-let [domain-info (get (registered-configs-snapshot) file-name)]
       (load-domain-values! domain-info))))
 
 (defn register-all!
@@ -116,7 +129,7 @@
         (when (seq descriptors)
           (let [{:keys [file-name spec] :as domain-info} (build-domain-spec domain descriptors)]
             (.registerConfig (ModLoadingContext/get) ModConfig$Type/COMMON spec file-name)
-            (swap! registered-configs assoc file-name domain-info)
+            (assoc-registered-config! file-name domain-info)
             (log/info "Registered Forge config file" file-name "for domain" domain)))))
     (ConfigEventBridge/addConfigListeners mod-bus
                                           (reify Consumer

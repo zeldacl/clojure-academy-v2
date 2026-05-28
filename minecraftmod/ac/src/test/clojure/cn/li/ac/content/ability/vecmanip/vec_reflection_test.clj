@@ -11,16 +11,18 @@
             [cn.li.mcmod.platform.world-effects]
             [cn.li.ac.ability.service.dispatcher :as ctx]))
 
-(defn- reset-fixture [f]
+(defn- with-fresh-reflection-runtime [f]
   (damage-handler/reset-attack-check-registries-for-test!)
-  (vr/reset-reflection-runtime-for-test!)
-  (try
-    (f)
-    (finally
-      (damage-handler/reset-attack-check-registries-for-test!)
-      (vr/reset-reflection-runtime-for-test!))))
+  (vr/call-with-vec-reflection-runtime
+    (vr/create-vec-reflection-runtime)
+    (fn []
+      (try
+        (f)
+        (finally
+          (damage-handler/reset-attack-check-registries-for-test!)
+          (vr/reset-reflection-runtime-for-test!))))))
 
-(use-fixtures :each reset-fixture)
+(use-fixtures :each with-fresh-reflection-runtime)
 
 (def ^:private test-context-owner {:logical-side :server :session-id :test-session})
 
@@ -197,6 +199,33 @@
         (binding [ctx/*context-owner* test-context-owner]
           (is (= [true 0.0] (vr/reflect-damage "p" "a" 10.0)))))
       (is (= [["w" "a" 10.0]] @applied)))))
+
+(deftest vec-reflection-runtime-isolation-test
+  (let [runtime-a (vr/create-vec-reflection-runtime)
+        runtime-b (vr/create-vec-reflection-runtime)]
+    (vr/call-with-vec-reflection-runtime
+      runtime-a
+      (fn []
+        (vr/mark-reflecting-for-test! "p" "a" "ctx-a" "chain-a")
+        (vr/set-reflection-depth-for-test! "p" "a" "ctx-a" "chain-a" 2)
+        (is (= 1 (count (:reflecting-pairs (vr/reflection-runtime-snapshot)))))
+        (is (= 2 (get-in (vr/reflection-runtime-snapshot)
+                         [:reflection-depths (vr/reflection-owner-key "p" "a" "ctx-a" "chain-a")])))))
+    (vr/call-with-vec-reflection-runtime
+      runtime-b
+      (fn []
+        (is (= {:reflecting-pairs #{}
+                :reflection-depths {}}
+               (vr/reflection-runtime-snapshot)))
+        (vr/mark-reflecting-for-test! "p" "a" "ctx-a" "chain-a")
+        (vr/set-reflection-depth-for-test! "p" "a" "ctx-a" "chain-a" 5)
+        (is (= 5 (get-in (vr/reflection-runtime-snapshot)
+                         [:reflection-depths (vr/reflection-owner-key "p" "a" "ctx-a" "chain-a")])))))
+    (vr/call-with-vec-reflection-runtime
+      runtime-a
+      (fn []
+        (is (= 2 (get-in (vr/reflection-runtime-snapshot)
+                         [:reflection-depths (vr/reflection-owner-key "p" "a" "ctx-a" "chain-a")])))))))
 
 (deftest tick-reflect-fireball-spawn-and-discard-test
   (let [spawn-calls (atom [])

@@ -101,3 +101,30 @@
   (clear-handlers!)
   (is (false? (:frozen? (lifecycle/lifecycle-handlers-snapshot)))))
 
+(deftest world-lifecycle-runtime-isolation-test
+  (let [runtime-a (lifecycle/create-world-lifecycle-runtime)
+        runtime-b (lifecycle/create-world-lifecycle-runtime)
+        calls* (atom [])]
+    (lifecycle/call-with-world-lifecycle-runtime
+      runtime-a
+      (fn []
+        (lifecycle/register-world-lifecycle-handler!
+          {:id :a
+           :on-load (fn [world _] (swap! calls* conj [:a world]))})
+        (lifecycle/dispatch-world-load :w-a nil)
+        (is (= [[:a :w-a]] @calls*))))
+    (lifecycle/call-with-world-lifecycle-runtime
+      runtime-b
+      (fn []
+        (is (empty? (:load (lifecycle/lifecycle-handlers-snapshot))))
+        (lifecycle/register-world-lifecycle-handler!
+          {:id :b
+           :on-load (fn [world _] (swap! calls* conj [:b world]))})
+        (lifecycle/dispatch-world-load :w-b nil)
+        (is (= [[:a :w-a] [:b :w-b]] @calls*))))
+    (lifecycle/call-with-world-lifecycle-runtime
+      runtime-a
+      (fn []
+        (lifecycle/dispatch-world-load :w-a2 nil)
+        (is (= [[:a :w-a] [:b :w-b] [:a :w-a2]] @calls*))))))
+

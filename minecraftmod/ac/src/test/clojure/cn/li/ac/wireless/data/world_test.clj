@@ -13,11 +13,9 @@
 (use-fixtures
   :each
   (fn [f]
-    (world-registry/reset-registry!)
-    (try
-      (f)
-      (finally
-        (world-registry/reset-registry!)))))
+    (world-registry/call-with-world-registry-runtime
+      (world-registry/create-world-registry-runtime)
+      f)))
 
 (defn- test-world
   [world-id]
@@ -54,8 +52,21 @@
     (is (nil? (world/get-world-data-non-create world-a-nether)))
     (is (some? (world/get-world-data-non-create world-b)))))
 
-  (deftest world-key-isolates-session-and-dimension-test
-    (let [world-a {:server-session-id :session-a :dimension-id :overworld :ref 1}
+(deftest world-registry-runtime-isolation-test
+  (let [world-id (test-world :isolated)
+        runtime-b (world-registry/create-world-registry-runtime)]
+    (world/get-world-data world-id)
+    (is (= 1 (count (world-registry/registry-snapshot))))
+    (world-registry/call-with-world-registry-runtime
+      runtime-b
+      (fn []
+        (is (nil? (world/get-world-data-non-create world-id)))
+        (world/get-world-data world-id)
+        (is (= 1 (count (world-registry/registry-snapshot))))))
+    (is (= 1 (count (world-registry/registry-snapshot))))))
+
+(deftest world-key-isolates-session-and-dimension-test
+  (let [world-a {:server-session-id :session-a :dimension-id :overworld :ref 1}
       world-a-new-ref {:server-session-id :session-a :dimension-id :overworld :ref 2}
       world-b {:server-session-id :session-b :dimension-id :overworld :ref 3}
       a (world/get-world-data world-a)
@@ -64,8 +75,9 @@
     (is (= [:session-a :overworld] (:world-key a)))
     (is (= [:session-a :overworld] (:world-key a2)))
     (is (= [:session-b :overworld] (:world-key b)))
-    (is (identical? (:state a) (:state a2)))
-    (is (not (identical? (:state a2) (:state b))))
+    (world-registry/update-state-value! a :networks conj :shared)
+    (is (= [:shared] (world-registry/networks a2)))
+    (is (empty? (world-registry/networks b)))
     (is (= 2 (count (world-registry/registry-snapshot))))
 
     (world/remove-world-data! world-a-new-ref)

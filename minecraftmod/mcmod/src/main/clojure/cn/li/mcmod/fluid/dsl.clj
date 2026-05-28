@@ -6,7 +6,19 @@
   (:require [clojure.string :as str]
             [cn.li.mcmod.protocol.core :as registry-core]))
 
-(defonce fluid-registry (registry-core/atom-registry {}))
+(defn create-fluid-registry-runtime
+  ([] (create-fluid-registry-runtime {}))
+  ([{:keys [registry]}]
+   {:cn.li.mcmod.fluid.dsl/runtime ::fluid-registry-runtime
+    :registry (or registry (registry-core/atom-registry {}))}))
+
+(def ^:dynamic *fluid-registry-runtime* nil)
+
+(defonce ^:private installed-fluid-registry-runtime
+  (create-fluid-registry-runtime))
+
+(defn- fluid-registry-state []
+  (:registry (or *fluid-registry-runtime* installed-fluid-registry-runtime)))
 
 (defrecord FluidPhysicalProperties
   [luminosity density viscosity temperature can-convert-to-source supports-boat])
@@ -90,14 +102,14 @@
 
 (defn register-fluid!
   [fluid-spec]
-  (registry-core/swap-state! fluid-registry #(assoc % (:id fluid-spec) fluid-spec))
+  (registry-core/swap-state! (fluid-registry-state) #(assoc % (:id fluid-spec) fluid-spec))
   fluid-spec)
 
 (defn get-fluid
   [fluid-id]
-  (registry-core/lookup fluid-registry (str fluid-id)))
+  (registry-core/lookup (fluid-registry-state) (str fluid-id)))
 
 (defn list-fluids
   []
-  (keys (registry-core/snapshot fluid-registry)))
+  (keys (registry-core/snapshot (fluid-registry-state))))
 

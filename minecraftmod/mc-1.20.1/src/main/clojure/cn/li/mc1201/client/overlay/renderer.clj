@@ -10,9 +10,55 @@
            [net.minecraft.client.gui GuiGraphics Font]
            [net.minecraft.resources ResourceLocation]))
 
-(defonce ^:private mode-switch-key-down? (atom {}))
-(defonce ^:private showing-numbers? (atom {}))
-(defonce ^:private last-show-value-change-ms (atom {}))
+(def ^:private default-overlay-render-runtime-state
+  {:mode-switch-key-down? {}
+   :showing-numbers? {}
+   :last-show-value-change-ms {}})
+
+(defn create-overlay-render-runtime
+  []
+  {::runtime ::overlay-render-runtime
+   :runtime-state* (atom default-overlay-render-runtime-state)})
+
+(def ^:dynamic *overlay-render-runtime* nil)
+
+(defonce ^:private installed-overlay-render-runtime
+  (create-overlay-render-runtime))
+
+(defn- overlay-render-runtime?
+  [runtime]
+  (and (map? runtime)
+       (= ::overlay-render-runtime (::runtime runtime))
+       (some? (:runtime-state* runtime))))
+
+(defn call-with-overlay-render-runtime
+  [runtime f]
+  (when-not (overlay-render-runtime? runtime)
+    (throw (ex-info "Expected overlay render runtime"
+                    {:runtime runtime})))
+  (binding [*overlay-render-runtime* runtime]
+    (f)))
+
+(defmacro with-overlay-render-runtime
+  [runtime & body]
+  `(call-with-overlay-render-runtime ~runtime (fn [] ~@body)))
+
+(defn- current-overlay-render-runtime
+  []
+  (or *overlay-render-runtime*
+      installed-overlay-render-runtime))
+
+(defn- overlay-render-runtime-state-atom
+  []
+  (:runtime-state* (current-overlay-render-runtime)))
+
+(defn- overlay-render-runtime-state-snapshot
+  []
+  @(overlay-render-runtime-state-atom))
+
+(defn- update-overlay-render-runtime!
+  [f & args]
+  (apply swap! (overlay-render-runtime-state-atom) f args))
 
 (defn- now-ms [] (System/currentTimeMillis))
 
@@ -21,41 +67,44 @@
   (client-session/owner-key owner))
 
 (defn- owner-state
-  [state-atom owner default]
-  (get @state-atom (render-owner-key owner) default))
+  [state-key owner default]
+  (get-in (overlay-render-runtime-state-snapshot) [state-key (render-owner-key owner)] default))
 
 (defn- assoc-owner-state!
-  [state-atom owner value]
-  (swap! state-atom assoc (render-owner-key owner) value)
+  [state-key owner value]
+  (update-overlay-render-runtime! assoc-in [state-key (render-owner-key owner)] value)
   nil)
 
 (defn clear-overlay-render-state!
   [owner]
   (let [owner-key (render-owner-key owner)]
-    (swap! mode-switch-key-down? dissoc owner-key)
-    (swap! showing-numbers? dissoc owner-key)
-    (swap! last-show-value-change-ms dissoc owner-key))
+    (update-overlay-render-runtime!
+      (fn [runtime-state]
+        (-> runtime-state
+            (update :mode-switch-key-down? dissoc owner-key)
+            (update :showing-numbers? dissoc owner-key)
+            (update :last-show-value-change-ms dissoc owner-key)))))
   nil)
 
 (defn clear-overlay-render-session!
   [client-session-id]
-  (let [clear-session! (fn [state-atom]
-                         (swap! state-atom
-                                (fn [states]
-                                  (into {}
-                                        (remove (fn [[[entry-session-id _player-uuid] _value]]
-                                                  (= client-session-id entry-session-id)))
-                                        states))))]
-    (clear-session! mode-switch-key-down?)
-    (clear-session! showing-numbers?)
-    (clear-session! last-show-value-change-ms))
+  (let [clear-session-state
+        (fn [states]
+          (into {}
+                (remove (fn [[[entry-session-id _player-uuid] _value]]
+                          (= client-session-id entry-session-id)))
+                states))]
+    (update-overlay-render-runtime!
+      (fn [runtime-state]
+        (-> runtime-state
+            (update :mode-switch-key-down? clear-session-state)
+            (update :showing-numbers? clear-session-state)
+            (update :last-show-value-change-ms clear-session-state)))))
   nil)
 
 (defn overlay-render-state-snapshot
   []
-  {:mode-switch-key-down? @mode-switch-key-down?
-   :showing-numbers? @showing-numbers?
-   :last-show-value-change-ms @last-show-value-change-ms})
+  (overlay-render-runtime-state-snapshot))
 
 (defn reset-overlay-render-state-for-test!
   ([]
@@ -66,9 +115,10 @@
      :or {mode-switch-key-down {}
      showing-numbers {}
      last-show-value-change {}}}]
-   (reset! mode-switch-key-down? mode-switch-key-down)
-   (reset! showing-numbers? showing-numbers)
-   (reset! last-show-value-change-ms last-show-value-change)
+   (reset! (overlay-render-runtime-state-atom)
+           {:mode-switch-key-down? mode-switch-key-down
+            :showing-numbers? showing-numbers
+            :last-show-value-change-ms last-show-value-change})
    nil))
 
 (defn on-mode-switch-key-state!
@@ -76,22 +126,22 @@
    (when-let [owner (client-session/current-local-player-owner)]
      (on-mode-switch-key-state! owner is-down)))
   ([owner is-down]
-   (let [was-down (boolean (owner-state mode-switch-key-down? owner false))
-         last-change (long (owner-state last-show-value-change-ms owner 0))
+   (let [was-down (boolean (owner-state :mode-switch-key-down? owner false))
+         last-change (long (owner-state :last-show-value-change-ms owner 0))
          now (now-ms)]
      (cond
        (and (not was-down) is-down)
        (do
-         (assoc-owner-state! showing-numbers? owner true)
-         (assoc-owner-state! last-show-value-change-ms owner now))
+         (assoc-owner-state! :showing-numbers? owner true)
+         (assoc-owner-state! :last-show-value-change-ms owner now))
 
        (and was-down (not is-down))
        (do
-         (assoc-owner-state! showing-numbers? owner false)
+         (assoc-owner-state! :showing-numbers? owner false)
          (if (> (- now last-change) 400)
-           (assoc-owner-state! last-show-value-change-ms owner now)
-           (assoc-owner-state! last-show-value-change-ms owner 0))))
-     (assoc-owner-state! mode-switch-key-down? owner (boolean is-down)))))
+           (assoc-owner-state! :last-show-value-change-ms owner now)
+           (assoc-owner-state! :last-show-value-change-ms owner 0))))
+     (assoc-owner-state! :mode-switch-key-down? owner (boolean is-down)))))
 
 (defn- draw-string! [^GuiGraphics graphics ^String text x y color]
   (let [^Minecraft mc (Minecraft/getInstance)
@@ -274,8 +324,8 @@
                              screen-width
                              screen-height
                              {:activated-override (overlay-state/get-client-activated owner)
-                              :showing-numbers? (owner-state showing-numbers? owner false)
-                              :last-show-value-change-ms (owner-state last-show-value-change-ms owner 0)
+                              :showing-numbers? (owner-state :showing-numbers? owner false)
+                              :last-show-value-change-ms (owner-state :last-show-value-change-ms owner 0)
                               :now-ms (now-ms)}))]
         (doseq [element (:elements overlay-plan)]
           (render-element! graphics element screen-width screen-height))))

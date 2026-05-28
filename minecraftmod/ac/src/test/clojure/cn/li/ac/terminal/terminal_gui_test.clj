@@ -4,11 +4,14 @@
             [cn.li.mcmod.network.client :as net-client]))
 
 (defn- reset-fixture [f]
-  (terminal-gui/reset-terminal-states-for-test!)
-  (try
-    (f)
-    (finally
-      (terminal-gui/reset-terminal-states-for-test!))))
+  (terminal-gui/call-with-terminal-runtime
+    (terminal-gui/create-terminal-runtime)
+    (fn []
+      (terminal-gui/reset-terminal-states-for-test!)
+      (try
+        (f)
+        (finally
+          (terminal-gui/reset-terminal-states-for-test!))))))
 
 (use-fixtures :each reset-fixture)
 
@@ -59,6 +62,26 @@
     (is (= false @callback-called?))
     (is (= #{} (:installed-apps (terminal-gui/terminal-state-snapshot owner))))
     (is (= false (:loading? (terminal-gui/terminal-state-snapshot owner))))))
+
+(deftest reopened-owner-ignores-old-callback-generation-test
+  (let [owner {:client-session-id :session-a :screen-id :terminal :player-uuid "a"}
+        callbacks* (atom [])]
+    (with-redefs [net-client/send-to-server
+                  (fn [_owner _msg-id _payload callback]
+                    (swap! callbacks* conj callback))]
+      (terminal-gui/query-terminal-state! owner nil)
+      (terminal-gui/clear-terminal-state! owner)
+      (terminal-gui/query-terminal-state! owner nil))
+    ((first @callbacks*) {:terminal-installed? true
+                          :installed-apps ["media-player"]
+                          :available-apps [{:id :media-player}]})
+    (is (= false (:terminal-installed? (terminal-gui/terminal-state-snapshot owner))))
+    ((second @callbacks*) {:terminal-installed? false
+                           :installed-apps []
+                           :available-apps [{:id :map}]})
+    (is (= false (:terminal-installed? (terminal-gui/terminal-state-snapshot owner))))
+    (is (= #{} (:installed-apps (terminal-gui/terminal-state-snapshot owner))))
+    (is (= [{:id :map}] (:available-apps (terminal-gui/terminal-state-snapshot owner))))))
 
 (deftest terminal-owner-key-fails-without-player-test
   (is (thrown-with-msg? clojure.lang.ExceptionInfo

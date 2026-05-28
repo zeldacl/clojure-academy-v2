@@ -27,7 +27,8 @@
 (defonce default-friction props/default-friction)
 (defonce default-creative-tab props/default-creative-tab)
 
-(defonce block-registry core/block-registry)
+(defn block-registry []
+	(core/get-block-registry))
 
 (defonce get-block-spec q/get-block-spec)
 (defonce list-blocks q/list-all-blocks)

@@ -6,16 +6,32 @@
   (:require [cn.li.mcmod.protocol.core :as registry-core]
             [cn.li.mcmod.util.log :as log]))
 
-(defonce tile-logic-registry (registry-core/atom-registry {}))
-(defonce tile-kind-registry (registry-core/atom-registry {}))
+(def ^:private ^:dynamic *tile-logic-registry-state* {})
+(def ^:private ^:dynamic *tile-kind-registry-state* {})
+
+(defonce tile-logic-registry (registry-core/var-root-registry #'*tile-logic-registry-state*))
+(defonce tile-kind-registry (registry-core/var-root-registry #'*tile-kind-registry-state*))
 
 ;; capability-registry: tile-id → {cap-key → handler-factory-fn}
 ;; handler-factory-fn is (fn [be side] handler-or-nil)
-(defonce capability-registry (registry-core/atom-registry {}))
+(def ^:private ^:dynamic *capability-registry-state* {})
+(defonce capability-registry (registry-core/var-root-registry #'*capability-registry-state*))
 
-;; Resolve capability factory once at namespace load time
-(def ^:private capability-get-factory
-  (delay (requiring-resolve 'cn.li.mcmod.platform.capability/get-handler-factory)))
+;; Resolve capability factory lazily (without top-level delay state)
+(def ^:private capability-factory-lock
+  (Object.))
+
+(def ^:private ^:dynamic *capability-get-factory*
+  nil)
+
+(defn- capability-get-factory
+  []
+  (or (var-get #'*capability-get-factory*)
+      (locking capability-factory-lock
+        (or (var-get #'*capability-get-factory*)
+            (let [f (requiring-resolve 'cn.li.mcmod.platform.capability/get-handler-factory)]
+              (alter-var-root #'*capability-get-factory* (constantly f))
+              f)))))
 
 ;; container-registry: tile-id → container-fns-map
 ;; container-fns-map keys:
@@ -29,7 +45,8 @@
 ;;   :slots-for-face            (fn [be face] int[])   ; optional
 ;;   :can-place-through-face?   (fn [be slot item face] bool)  ; optional
 ;;   :can-take-through-face?    (fn [be slot item face] bool)  ; optional
-(defonce container-registry (registry-core/atom-registry {}))
+(def ^:private ^:dynamic *container-registry-state* {})
+(defonce container-registry (registry-core/var-root-registry #'*container-registry-state*))
 
 (defn register-tile-kind!
   "Register reusable tile logic by tile-kind keyword.
@@ -141,7 +158,7 @@
   [tile-id cap-key be side]
   (when (get-in (registry-core/snapshot capability-registry) [tile-id cap-key])
     (try
-      (when-let [get-factory @capability-get-factory]
+      (when-let [get-factory (capability-get-factory)]
         (when-let [factory (get-factory cap-key)]
           (factory be side)))
       (catch Exception e

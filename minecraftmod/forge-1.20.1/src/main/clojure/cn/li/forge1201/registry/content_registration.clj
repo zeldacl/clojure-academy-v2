@@ -158,7 +158,7 @@
                                             (bootstrap/create-carrier-scripted-block block-id tile-id carrier-properties)
                                             :else
                                             (bootstrap/create-plain-block base-properties))))))]
-      (swap! registry-state/registered-blocks assoc block-id registered-obj))))
+      (registry-state/register-block! block-id registered-obj))))
 
 (defn register-all-fluids!
   [{:keys [fluid-types-register fluids-register items-register]}]
@@ -204,7 +204,7 @@
                                        (when-let [block-id (:block-id block-spec)]
                                          (reify java.util.function.Supplier
                                            (get [_]
-                                             (.get ^RegistryObject (get @registry-state/registered-blocks block-id)))))
+                                             (.get ^RegistryObject (registry-state/get-registered-block-ro block-id)))))
                                        (:slope-find-distance behavior)
                                        (:level-decrease-per-block behavior)
                                        (:tick-rate behavior)
@@ -227,7 +227,7 @@
                                         (when-let [block-id (:block-id block-spec)]
                                           (reify java.util.function.Supplier
                                             (get [_]
-                                              (.get ^RegistryObject (get @registry-state/registered-blocks block-id)))))
+                                              (.get ^RegistryObject (registry-state/get-registered-block-ro block-id)))))
                                         (:slope-find-distance behavior)
                                         (:level-decrease-per-block behavior)
                                         (:tick-rate behavior)
@@ -235,9 +235,9 @@
                                         (:can-convert-to-source physical))))))]
       (reset! source-holder source-ro)
       (reset! flowing-holder flowing-ro)
-      (swap! registry-state/registered-fluid-types assoc fluid-id fluid-type-ro)
-      (swap! registry-state/registered-fluids-source assoc fluid-id source-ro)
-      (swap! registry-state/registered-fluids-flowing assoc fluid-id flowing-ro)
+      (registry-state/register-fluid-type! fluid-id fluid-type-ro)
+      (registry-state/register-fluid-source! fluid-id source-ro)
+      (registry-state/register-fluid-flowing! fluid-id flowing-ro)
       (when (:has-bucket? block-spec)
         (let [bucket-ro (.register ^DeferredRegister items-register (:bucket-registry-name block-spec)
                                    (reify java.util.function.Supplier
@@ -246,7 +246,7 @@
                                          (reify java.util.function.Supplier
                                            (get [_] (.get ^RegistryObject source-ro)))))))]
           (reset! bucket-holder bucket-ro)
-          (swap! registry-state/registered-items assoc (:bucket-item-id block-spec) bucket-ro))))))
+          (registry-state/register-item! (:bucket-item-id block-spec) bucket-ro))))))
 
 (defn register-block-entities!
   [{:keys [block-entities-register]}]
@@ -254,7 +254,7 @@
     (let [registry-name (registry-metadata/get-tile-registry-name tile-id)
           block-ids (registry-metadata/get-tile-block-ids tile-id)
           ros (keep (fn [block-id]
-                      (when-let [ro (get @registry-state/registered-blocks block-id)]
+                      (when-let [ro (registry-state/get-registered-block-ro block-id)]
                         [block-id ro]))
                     block-ids)]
       (when (seq ros)
@@ -278,7 +278,7 @@
                         (reify java.util.function.Function
                           (apply [_ block-inst]
                             (.get block-id-by-inst block-inst))))))))]
-          (swap! registry-state/registered-block-entities assoc tile-id registered-obj))))))
+          (registry-state/register-block-entity! tile-id registered-obj))))))
 
 (defn register-all-entities!
   [mod-id]
@@ -308,7 +308,7 @@
                                      (:client-tracking-range entity-spec)
                                      (:update-interval entity-spec)
                                      (:fire-immune? entity-spec)))))]
-          (swap! registry-state/registered-entities assoc entity-id registered-obj))))))
+          (registry-state/register-entity! entity-id registered-obj))))))
 
 (defn- effect-category->forge
   ^MobEffectCategory
@@ -327,7 +327,7 @@
                                       (get [_]
                                         (SoundEvent/createVariableRangeEvent
                                           (ResourceLocation. mod-id registry-name)))))]
-      (swap! registry-state/registered-sounds assoc sound-id registered-obj))))
+      (registry-state/register-sound! sound-id registered-obj))))
 
 (defn register-all-effects!
   [{:keys [effects-register]}]
@@ -342,7 +342,7 @@
                                     (reify java.util.function.Supplier
                                       (get [_]
                                         (ScriptedMobEffect. category color tick-interval damage-per-tick))))]
-      (swap! registry-state/registered-effects assoc effect-id registered-obj))))
+      (registry-state/register-effect! effect-id registered-obj))))
 
 (defn register-all-particles!
   [{:keys [particle-types-register]}]
@@ -354,7 +354,7 @@
                                     (reify java.util.function.Supplier
                                       (get [_]
                                         (SimpleParticleType. always-show?))))]
-      (swap! registry-state/registered-particles assoc particle-id registered-obj))))
+      (registry-state/register-particle! particle-id registered-obj))))
 
 (defn register-all-items!
   [{:keys [items-register]}]
@@ -365,12 +365,12 @@
                                     (reify java.util.function.Supplier
                                       (get [_]
                                         (item-properties/create-standalone-item item-spec))))]
-      (swap! registry-state/registered-items assoc item-id registered-obj)))
+      (registry-state/register-item! item-id registered-obj)))
   (doseq [block-id (registry-metadata/get-all-block-ids)]
     (when (and (registry-metadata/should-create-block-item? block-id)
                (not (registry-metadata/fluid-block? block-id)))
       (let [registry-name (registry-metadata/get-block-registry-name block-id)
-            block-registered (get @registry-state/registered-blocks block-id)
+            block-registered (registry-state/get-registered-block-ro block-id)
             registered-obj (.register ^DeferredRegister items-register registry-name
                                       (reify java.util.function.Supplier
                                         (get [_]
@@ -378,7 +378,7 @@
                                             (BlockItem. (.get ^RegistryObject block-registered)
                                                         (Item$Properties.))))))]
 
-        (swap! registry-state/registered-items assoc (str block-id "-item") registered-obj)))))
+        (registry-state/register-item! (str block-id "-item") registered-obj)))))
 
 (defn register-core-content!
   [{:keys [mod-id] :as ctx}]

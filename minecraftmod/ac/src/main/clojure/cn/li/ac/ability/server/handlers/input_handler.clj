@@ -7,22 +7,6 @@
 						[cn.li.ac.ability.service.dispatcher :as ctx]
 						[cn.li.mcmod.hooks.core :as runtime-hooks]))
 
-(defonce ^:private rejection-counters (atom {}))
-
-(defn reset-rejection-counters!
-	[]
-	(reset! rejection-counters {})
-	nil)
-
-(defn rejection-counters-snapshot
-	[]
-	@rejection-counters)
-
-(defn- record-rejection!
-	[reason]
-	(swap! rejection-counters update reason (fnil inc 0))
-	nil)
-
 (defn- valid-ctx-id?
 	[ctx-id]
 	(and (string? ctx-id) (not (str/blank? ctx-id))))
@@ -68,15 +52,13 @@
 
 (defn- refresh-owned-alive-context!
 	[ctx-id player]
-	(let [{:keys [ok? reason owner]} (resolve-owned-alive-context ctx-id player)]
+	(let [{:keys [ok? owner]} (resolve-owned-alive-context ctx-id player)]
 		(if ok?
 			(do
 				(binding [ctx/*context-owner* owner]
 					(ctx/update-keepalive! ctx-id))
 				owner)
-			(do
-				(record-rejection! reason)
-				nil))))
+			nil)))
 
 (defn- dispatch-active-input!
 	[ctx-id payload player dispatch-fn]
@@ -84,7 +66,7 @@
 		(binding [ctx/*context-owner* owner]
 		(if (= ctx-rt/INPUT-ACTIVE (:input-state (ctx/get-context ctx-id)))
 			(dispatch-fn ctx-id (assoc payload :player player) ctx-mgr/send-terminated-context!)
-			(record-rejection! :message-out-of-order)))))
+			nil))))
 
 (defn handle-key-down-skill
 	[{:keys [ctx-id] :as payload} player]
@@ -98,7 +80,7 @@
 		(binding [ctx/*context-owner* owner]
 			(if (= ctx-rt/INPUT-ACTIVE (:input-state (ctx/get-context ctx-id)))
 				true
-				(record-rejection! :message-out-of-order)))))
+				nil))))
 
 (defn handle-key-up-skill
 	[{:keys [ctx-id] :as payload} player]

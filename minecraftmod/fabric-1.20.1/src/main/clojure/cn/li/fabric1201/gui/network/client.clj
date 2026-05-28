@@ -45,7 +45,11 @@
                                                    player-uuid (assoc :player-uuid player-uuid))]
       (f))))
 
-(defonce ^:private client-initialized? (atom false))
+(def ^:private client-init-guard-lock
+  (Object.))
+
+(def ^:private ^:dynamic *client-initialized?*
+  false)
 
 (defn send-to-server!
   [msg-id request-id payload]
@@ -59,28 +63,32 @@
 
 (defn init-client!
   []
-  (when (compare-and-set! client-initialized? false true)
-    (let [client-networking (ru/class-noinit "net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking")
-          handler-iface (ru/class-noinit "net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking$PlayChannelHandler")
-          receiver (shared/jproxy
-                     handler-iface
-                     (fn [method-name ^objects args]
-                       (when (= method-name "receive")
-                         (let [client (aget args 0)
-                               ^FriendlyByteBuf buf (aget args 2)
-                               {:keys [request-id payload]} (packet-base/normalize-response (shared/read-buf-map buf))]
-                           (Reflector/invokeInstanceMethod
-                             client
-                             "execute"
-                             (to-array
-                               [(reify Runnable
-                                  (run [_]
-                                    (with-client-response-owner payload
-                                      #(packet-base/dispatch-client-response!
-                                         runtime-hooks/*player-state-owner*
-                                         request-id
-                                         payload))))]))))
-                       nil))]
-      (Reflector/invokeStaticMethod client-networking "registerGlobalReceiver"
-                                    (to-array [shared/s2c-channel receiver]))
-      (log/info "Fabric GUI network client transport initialized"))))
+  (when-not (var-get #'*client-initialized?*)
+    (locking client-init-guard-lock
+      (when-not (var-get #'*client-initialized?*)
+        (let [client-networking (ru/class-noinit "net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking")
+              handler-iface (ru/class-noinit "net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking$PlayChannelHandler")
+              receiver (shared/jproxy
+                         handler-iface
+                         (fn [method-name ^objects args]
+                           (when (= method-name "receive")
+                             (let [client (aget args 0)
+                                   ^FriendlyByteBuf buf (aget args 2)
+                                   {:keys [request-id payload]} (packet-base/normalize-response (shared/read-buf-map buf))]
+                               (Reflector/invokeInstanceMethod
+                                 client
+                                 "execute"
+                                 (to-array
+                                   [(reify Runnable
+                                      (run [_]
+                                        (with-client-response-owner payload
+                                          #(packet-base/dispatch-client-response!
+                                             runtime-hooks/*player-state-owner*
+                                             request-id
+                                             payload))))]))))
+                           nil))]
+          (Reflector/invokeStaticMethod client-networking "registerGlobalReceiver"
+                                        (to-array [shared/s2c-channel receiver]))
+          (alter-var-root #'*client-initialized?* (constantly true))
+          (log/info "Fabric GUI network client transport initialized")))))
+  nil)

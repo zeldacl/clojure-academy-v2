@@ -13,9 +13,55 @@
            [net.minecraft.client Minecraft]
            [org.lwjgl.glfw GLFW]))
 
-(defonce ^:private tick-listener-registered? (atom false))
-(defonce ^:private raw-v-state (atom {}))
-(defonce ^:private raw-n-state (atom {}))
+(defn default-input-runtime-state
+  []
+  {:raw-v-state {}
+   :raw-n-state {}})
+
+(defn create-input-runtime
+  ([]
+   (create-input-runtime {}))
+  ([initial-state]
+   {:state (atom (merge (default-input-runtime-state)
+                        initial-state))}))
+
+(defonce ^:private installed-input-runtime
+  (create-input-runtime))
+
+(def ^:dynamic *input-runtime*
+  installed-input-runtime)
+
+(defn current-input-runtime
+  []
+  *input-runtime*)
+
+(defmacro with-input-runtime
+  [runtime & body]
+  `(binding [*input-runtime* ~runtime]
+     ~@body))
+
+(defn call-with-input-runtime
+  [runtime f]
+  (binding [*input-runtime* runtime]
+    (f)))
+
+(defn input-runtime-state-atom
+  []
+  (:state (current-input-runtime)))
+
+(defn input-runtime-state-snapshot
+  []
+  @(input-runtime-state-atom))
+
+(defn update-input-runtime!
+  [f & args]
+  (apply swap! (input-runtime-state-atom) f args))
+
+(def ^:private tick-listener-guard-lock
+  (Object.))
+
+(def ^:private ^:dynamic *tick-listener-registered?*
+  false)
 (def ^:private toggle-primary-state-input-id :content/toggle-primary-state)
 (def ^:private cycle-selection-input-id :content/cycle-selection)
 
@@ -25,8 +71,9 @@
 
 (defn input-state-snapshot
   []
-  {:raw-v-state @raw-v-state
-   :raw-n-state @raw-n-state})
+  (let [{:keys [raw-v-state raw-n-state]} (input-runtime-state-snapshot)]
+    {:raw-v-state raw-v-state
+     :raw-n-state raw-n-state}))
 
 (defn reset-input-state-for-test!
   ([]
@@ -34,43 +81,42 @@
   ([{:keys [raw-v-state-map raw-n-state-map]
      :or {raw-v-state-map {}
           raw-n-state-map {}}}]
-   (reset! raw-v-state raw-v-state-map)
-   (reset! raw-n-state raw-n-state-map)
+   (update-input-runtime! merge
+                         {:raw-v-state raw-v-state-map
+                          :raw-n-state raw-n-state-map})
    nil))
 
 (defn clear-owner-input-state!
   [owner]
   (let [owner-key (client-owner-key owner)]
-    (swap! raw-v-state dissoc owner-key)
-    (swap! raw-n-state dissoc owner-key))
+    (update-input-runtime! update :raw-v-state dissoc owner-key)
+    (update-input-runtime! update :raw-n-state dissoc owner-key))
   nil)
 
 (defn clear-client-input-session!
   [client-session-id]
-  (let [clear-session! (fn [state-atom]
-                         (swap! state-atom
-                                (fn [states]
-                                  (into {}
-                                        (remove (fn [[[entry-session-id _player-uuid] _value]]
-                                                  (= client-session-id entry-session-id)))
-                                        states))))]
-    (clear-session! raw-v-state)
-    (clear-session! raw-n-state))
+  (let [clear-session (fn [states]
+                        (into {}
+                              (remove (fn [[[entry-session-id _player-uuid] _value]]
+                                        (= client-session-id entry-session-id)))
+                              states))]
+    (update-input-runtime! update :raw-v-state clear-session)
+    (update-input-runtime! update :raw-n-state clear-session))
   nil)
 
 (defn- owner-mode-switch-state
   [owner]
-  (get @raw-v-state (client-owner-key owner) (mode-switch/initial-state)))
+  (get-in (input-runtime-state-snapshot) [:raw-v-state (client-owner-key owner)] (mode-switch/initial-state)))
 
 (defn- owner-cycle-state
   [owner]
-  (get @raw-n-state (client-owner-key owner) {:was-down false}))
+  (get-in (input-runtime-state-snapshot) [:raw-n-state (client-owner-key owner)] {:was-down false}))
 
 (defn- update-owner-mode-switch-state!
   [owner is-down opts]
   (let [state-atom (atom (owner-mode-switch-state owner))]
     (mode-switch/handle-button-state! state-atom is-down opts)
-    (swap! raw-v-state assoc (client-owner-key owner) @state-atom)
+    (update-input-runtime! update :raw-v-state assoc (client-owner-key owner) @state-atom)
     nil))
 
 (defn- get-player-uuid []
@@ -175,7 +221,7 @@
       (when (and (not was-down) is-down)
         (when-let [uuid (get-player-uuid)]
           (emit-keyboard-input! cycle-selection-input-id uuid :press)))
-      (swap! raw-n-state assoc owner-key {:was-down is-down}))))
+      (update-input-runtime! update :raw-n-state assoc owner-key {:was-down is-down}))))
 
 (defn- tick-content-keys! []
   (client-session/with-current-client-session
@@ -205,9 +251,12 @@
 (defn init!
   []
   (power-runtime/client-register-push-handlers!)
-  (when (compare-and-set! tick-listener-registered? false true)
-    (.register ClientTickEvents/END_CLIENT_TICK
-               (reify ClientTickEvents$EndTick
-                 (onEndTick [_ _client]
-                   (tick-client!)))))
+  (when-not (var-get #'*tick-listener-registered?*)
+    (locking tick-listener-guard-lock
+      (when-not (var-get #'*tick-listener-registered?*)
+        (.register ClientTickEvents/END_CLIENT_TICK
+                   (reify ClientTickEvents$EndTick
+                     (onEndTick [_ _client]
+                       (tick-client!))))
+        (alter-var-root #'*tick-listener-registered?* (constantly true)))))
   (log/info "Fabric client runtime bridge initialized"))

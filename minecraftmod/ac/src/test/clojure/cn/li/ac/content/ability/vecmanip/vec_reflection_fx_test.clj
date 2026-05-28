@@ -4,10 +4,14 @@
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.level-effects :as level-effects]))
 
-(defn- reset-fixture [f]
-  (vrfx/reset-vec-reflection-fx-for-test!)
-  (f)
-  (vrfx/reset-vec-reflection-fx-for-test!))
+(defn- with-fresh-vec-reflection-fx-runtime [f]
+  (vrfx/call-with-vec-reflection-fx-runtime
+    (vrfx/create-vec-reflection-fx-runtime)
+    (fn []
+      (try
+        (f)
+        (finally
+          (vrfx/reset-vec-reflection-fx-for-test!))))))
 
 (defn- event [ctx-id payload]
   {:payload payload
@@ -15,7 +19,7 @@
    :channel :vec-reflection/fx-reflect-entity
    :owner-key [:ctx ctx-id]})
 
-(use-fixtures :each reset-fixture)
+(use-fixtures :each with-fresh-vec-reflection-fx-runtime)
 
 (deftest enqueue-reflect-entity-requires-reflected-flag-test
   (is (nil? (@#'cn.li.ac.content.ability.vecmanip.vec-reflection-fx/enqueue!
@@ -84,3 +88,27 @@
       (let [after-clear (vrfx/vec-reflection-fx-snapshot)]
         (is (nil? (get (:effect-state after-clear) [:ctx "ctx-a"])))
         (is (= 1 (count (get (:wave-effects after-clear) [:ctx "ctx-b"]))))))))
+
+(deftest vec-reflection-fx-runtime-isolation-test
+  (let [runtime-a (vrfx/create-vec-reflection-fx-runtime)
+        runtime-b (vrfx/create-vec-reflection-fx-runtime)
+        enqueue! @#'cn.li.ac.content.ability.vecmanip.vec-reflection-fx/enqueue!]
+    (vrfx/call-with-vec-reflection-fx-runtime
+      runtime-a
+      (fn []
+        (enqueue! (event "ctx-a" {:mode :start}))
+        (enqueue! (event "ctx-a" {:mode :reflect-entity :x 1.0 :y 2.0 :z 3.0 :reflected? true}))
+        (is (= 1 (count (get (:wave-effects (vrfx/vec-reflection-fx-snapshot)) [:ctx "ctx-a"]))))))
+    (vrfx/call-with-vec-reflection-fx-runtime
+      runtime-b
+      (fn []
+        (is (= {:effect-state {}
+                :wave-effects {}}
+               (vrfx/vec-reflection-fx-snapshot)))
+        (enqueue! (event "ctx-a" {:mode :start}))
+        (is (= #{[:ctx "ctx-a"]}
+               (set (keys (:effect-state (vrfx/vec-reflection-fx-snapshot))))))))
+    (vrfx/call-with-vec-reflection-fx-runtime
+      runtime-a
+      (fn []
+        (is (= 1 (count (get (:wave-effects (vrfx/vec-reflection-fx-snapshot)) [:ctx "ctx-a"]))))))))

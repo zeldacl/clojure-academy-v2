@@ -57,7 +57,50 @@
    :pitch 1.2})
 
 ;; Sound queue (session-scoped)
-(defonce ^:private sound-queue (atom {}))
+(defn create-sound-queue-runtime
+  []
+  {::runtime ::sound-queue-runtime
+   :queue* (atom {})})
+
+(def ^:dynamic *sound-queue-runtime* nil)
+
+(defonce ^:private installed-sound-queue-runtime
+  (create-sound-queue-runtime))
+
+(defn- sound-queue-runtime?
+  [runtime]
+  (and (map? runtime)
+       (= ::sound-queue-runtime (::runtime runtime))
+       (some? (:queue* runtime))))
+
+(defn call-with-sound-queue-runtime
+  [runtime f]
+  (when-not (sound-queue-runtime? runtime)
+    (throw (ex-info "Expected sound queue runtime"
+                    {:runtime runtime})))
+  (binding [*sound-queue-runtime* runtime]
+    (f)))
+
+(defmacro with-sound-queue-runtime
+  [runtime & body]
+  `(call-with-sound-queue-runtime ~runtime (fn [] ~@body)))
+
+(defn- current-runtime
+  []
+  (or *sound-queue-runtime*
+      installed-sound-queue-runtime))
+
+(defn- queue-atom
+  []
+  (:queue* (current-runtime)))
+
+(defn- queue-snapshot
+  []
+  @(queue-atom))
+
+(defn- update-queue!
+  [f & args]
+  (apply swap! (queue-atom) f args))
 
 (defn- require-owner-value
   [owner label value]
@@ -106,7 +149,7 @@
   ([sound-cmd]
    (queue-sound-effect! nil sound-cmd))
   ([owner-or-session sound-cmd]
-   (swap! sound-queue update (normalize-session-id owner-or-session) (fnil conj []) sound-cmd)
+  (update-queue! update (normalize-session-id owner-or-session) (fnil conj []) sound-cmd)
    nil))
 
 (defn queue-current-sound-effect!
@@ -120,17 +163,17 @@
   ([owner-or-session]
    (let [session-id (normalize-session-id owner-or-session)
          drained (atom [])]
-     (swap! sound-queue
-            (fn [queues]
-              (reset! drained (vec (get queues session-id [])))
-              (dissoc queues session-id)))
+     (update-queue!
+       (fn [queues]
+         (reset! drained (vec (get queues session-id [])))
+         (dissoc queues session-id)))
      @drained)))
 
 (defn clear-session-sound-effects!
   ([]
    (clear-session-sound-effects! nil))
   ([owner-or-session]
-   (swap! sound-queue dissoc (normalize-session-id owner-or-session))
+  (update-queue! dissoc (normalize-session-id owner-or-session))
    nil))
 
 (defn clear-owner-sound-effects!
@@ -139,19 +182,19 @@
 
 (defn sound-queue-snapshot
   ([]
-   @sound-queue)
+  (queue-snapshot))
   ([owner-or-session]
-   (vec (get @sound-queue (normalize-session-id owner-or-session) []))))
+  (vec (get (queue-snapshot) (normalize-session-id owner-or-session) []))))
 
 (defn reset-sound-queue-for-test!
   ([]
    (reset-sound-queue-for-test! {}))
   ([queues]
-   (reset! sound-queue
-           (into {}
-                 (map (fn [[session-id sounds]]
-                        [session-id (vec sounds)]))
-                 (or queues {})))
+   (reset! (queue-atom)
+      (into {}
+       (map (fn [[session-id sounds]]
+         [session-id (vec sounds)]))
+       (or queues {})))
    nil))
 
 ;; Event listeners for automatic sound playing

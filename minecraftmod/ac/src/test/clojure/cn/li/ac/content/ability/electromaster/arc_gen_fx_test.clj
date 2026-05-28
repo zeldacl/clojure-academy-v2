@@ -5,10 +5,14 @@
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.content.ability.electromaster.arc-gen-fx :as arc-fx]))
 
-(defn- reset-fixture [f]
-  (arc-fx/reset-arc-gen-fx-for-test!)
-  (f)
-  (arc-fx/reset-arc-gen-fx-for-test!))
+(defn- with-fresh-arc-gen-fx-runtime [f]
+  (arc-fx/call-with-arc-gen-fx-runtime
+    (arc-fx/create-arc-gen-fx-runtime)
+    (fn []
+      (try
+        (f)
+        (finally
+          (arc-fx/reset-arc-gen-fx-for-test!))))))
 
 (defn- event [ctx-id payload]
   {:payload payload
@@ -16,7 +20,7 @@
    :channel :arc-gen/fx-perform
    :owner-key [:ctx ctx-id]})
 
-(use-fixtures :each reset-fixture)
+(use-fixtures :each with-fresh-arc-gen-fx-runtime)
 
 (deftest init-registers-arc-gen-fx-channel-test
   (let [registered-level* (atom nil)
@@ -57,9 +61,9 @@
   (let [enqueue! (var-get #'cn.li.ac.content.ability.electromaster.arc-gen-fx/enqueue!)
         build-plan (var-get #'cn.li.ac.content.ability.electromaster.arc-gen-fx/build-plan)
         sounds* (atom [])]
-    (with-redefs [client-sounds/queue-sound-effect! (fn [payload]
-                                                       (swap! sounds* conj payload)
-                                                       nil)]
+    (with-redefs [client-sounds/queue-current-sound-effect! (fn [payload]
+                                                               (swap! sounds* conj payload)
+                                                               nil)]
       (enqueue! (event "ctx-main"
                        {:mode :perform
                         :start {:x 0.0 :y 64.0 :z 0.0}
@@ -74,7 +78,7 @@
 
 (deftest two-owners-keep-arc-gen-queues-independent-test
   (let [enqueue! (var-get #'cn.li.ac.content.ability.electromaster.arc-gen-fx/enqueue!)]
-    (with-redefs [client-sounds/queue-sound-effect! (fn [_] nil)]
+    (with-redefs [client-sounds/queue-current-sound-effect! (fn [_] nil)]
       (enqueue! (event "ctx-a" {:mode :perform :start {:x 0.0 :y 0.0 :z 0.0} :end {:x 1.0 :y 0.0 :z 0.0}}))
       (enqueue! (event "ctx-b" {:mode :perform :start {:x 0.0 :y 1.0 :z 0.0} :end {:x 1.0 :y 1.0 :z 0.0}}))
       (let [snapshot (arc-fx/arc-gen-fx-snapshot)]
@@ -84,3 +88,32 @@
         (let [after-clear (arc-fx/arc-gen-fx-snapshot)]
           (is (nil? (get (:arcs after-clear) [:ctx "ctx-a"])))
           (is (= 1 (count (get (:arcs after-clear) [:ctx "ctx-b"])))))))))
+
+(deftest arc-gen-fx-runtime-isolation-test
+  (let [runtime-a (arc-fx/create-arc-gen-fx-runtime)
+        runtime-b (arc-fx/create-arc-gen-fx-runtime)
+        enqueue! (var-get #'cn.li.ac.content.ability.electromaster.arc-gen-fx/enqueue!)]
+    (with-redefs [client-sounds/queue-current-sound-effect! (fn [_] nil)]
+      (arc-fx/call-with-arc-gen-fx-runtime
+        runtime-a
+        (fn []
+          (enqueue! (event "ctx-a" {:mode :perform
+                                     :start {:x 0.0 :y 0.0 :z 0.0}
+                                     :end {:x 1.0 :y 0.0 :z 0.0}}))
+          (is (= #{[:ctx "ctx-a"]}
+                 (set (keys (:arcs (arc-fx/arc-gen-fx-snapshot))))))))
+      (arc-fx/call-with-arc-gen-fx-runtime
+        runtime-b
+        (fn []
+          (is (= {:arcs {}}
+                 (arc-fx/arc-gen-fx-snapshot)))
+          (enqueue! (event "ctx-b" {:mode :perform
+                                     :start {:x 0.0 :y 1.0 :z 0.0}
+                                     :end {:x 1.0 :y 1.0 :z 0.0}}))
+          (is (= #{[:ctx "ctx-b"]}
+                 (set (keys (:arcs (arc-fx/arc-gen-fx-snapshot))))))))
+      (arc-fx/call-with-arc-gen-fx-runtime
+        runtime-a
+        (fn []
+          (is (= #{[:ctx "ctx-a"]}
+                 (set (keys (:arcs (arc-fx/arc-gen-fx-snapshot)))))))))))

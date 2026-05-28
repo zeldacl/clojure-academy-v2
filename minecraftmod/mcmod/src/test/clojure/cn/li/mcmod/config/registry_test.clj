@@ -3,8 +3,8 @@
             [cn.li.mcmod.config.registry :as registry]))
 
 (defn- reset-registries! []
-  (reset! registry/descriptor-registry {})
-  (reset! registry/value-registry {}))
+  (registry/set-descriptor-registry! {})
+  (registry/set-value-registry! {}))
 
 (deftest register-descriptors-validation-test
   (reset-registries!)
@@ -31,7 +31,7 @@
     (registry/ensure-default-values! :gameplay {:limit 8 :enabled false})
     (registry/ensure-default-values! :gameplay {:limit 9 :enabled true})
     (is (= {:limit 8 :enabled false}
-           (get @registry/value-registry :gameplay))))
+           (get (registry/get-value-registry) :gameplay))))
   (testing "set-config-values! preserves defaults for missing keys"
     (registry/set-config-values! :gameplay {:limit 12})
     (is (= {:limit 12 :enabled true}
@@ -72,7 +72,7 @@
      {:key :y :default 2}])
   (testing "ensure-default-values! establishes initial runtime values"
     (registry/ensure-default-values! :order {:x 8 :y 9})
-    (is (= {:x 8 :y 9} (get @registry/value-registry :order))))
+    (is (= {:x 8 :y 9} (get (registry/get-value-registry) :order))))
   (testing "set-config-values! overrides runtime and fills missing from descriptor defaults"
     (registry/set-config-values! :order {:x 100})
     (is (= {:x 100 :y 2} (registry/get-config-values :order))))

@@ -6,7 +6,11 @@
             [cn.li.mcmod.hooks.core :as player-hooks])
   (:import [net.minecraft.world.entity.player Player]))
 
-(defonce ^:private server-stop-cleanup-installed? (atom false))
+(def ^:private server-stop-cleanup-guard-lock
+  (Object.))
+
+(def ^:private ^:dynamic *server-stop-cleanup-installed?*
+  false)
 
 (defn- player-uuid
   [^Player player]
@@ -75,10 +79,13 @@
 (defn install-server-stop-cleanup!
   [{:keys [cleanup-session!] :as opts}]
   (server-context-spi/install-server-context!)
-  (when (compare-and-set! server-stop-cleanup-installed? false true)
-    (server-context-spi/on-server-unavailable!
-      (fn [server]
-        (on-server-stop! server (assoc opts :cleanup-session! cleanup-session!)))))
+  (when-not (var-get #'*server-stop-cleanup-installed?*)
+    (locking server-stop-cleanup-guard-lock
+      (when-not (var-get #'*server-stop-cleanup-installed?*)
+        (server-context-spi/on-server-unavailable!
+          (fn [server]
+            (on-server-stop! server (assoc opts :cleanup-session! cleanup-session!))))
+        (alter-var-root #'*server-stop-cleanup-installed?* (constantly true)))))
   nil)
 
 (defn on-player-clone!

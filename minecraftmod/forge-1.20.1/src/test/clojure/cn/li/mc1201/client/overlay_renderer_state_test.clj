@@ -12,11 +12,10 @@
 
 (use-fixtures :each
   (fn [f]
-    (renderer/reset-overlay-render-state-for-test!)
-    (try
-      (f)
-      (finally
-        (renderer/reset-overlay-render-state-for-test!)))))
+    (renderer/call-with-overlay-render-runtime
+      (renderer/create-overlay-render-runtime)
+      (fn []
+        (f)))))
 
 (deftest overlay-render-state-isolated-by-owner-test
   (renderer/on-mode-switch-key-state! owner-a true)
@@ -46,3 +45,15 @@
   (let [snapshot (renderer/overlay-render-state-snapshot)]
     (is (nil? (get-in snapshot [:mode-switch-key-down? (render-owner-key owner-a)])))
     (is (true? (get-in snapshot [:mode-switch-key-down? (render-owner-key owner-b)])))))
+
+(deftest overlay-render-runtime-isolation-test
+  (let [runtime-b (renderer/create-overlay-render-runtime)]
+    (renderer/on-mode-switch-key-state! owner-a true)
+    (renderer/call-with-overlay-render-runtime
+      runtime-b
+      (fn []
+        (renderer/on-mode-switch-key-state! owner-a false)
+        (is (false? (get-in (renderer/overlay-render-state-snapshot)
+                            [:mode-switch-key-down? (render-owner-key owner-a)])))))
+    (is (true? (get-in (renderer/overlay-render-state-snapshot)
+                       [:mode-switch-key-down? (render-owner-key owner-a)])))))

@@ -10,15 +10,32 @@
   (:require [clojure.string :as str]
             [cn.li.mcmod.util.log :as log]))
 
-(defonce accessor-registries
-  {:world (atom {})
-   :entity (atom {})
-   :render (atom {})
-   :lifecycle (atom {})})
+(def ^:private accessor-registry-lock
+  (Object.))
+
+(def ^:dynamic *accessor-registries*
+  {:world {}
+   :entity {}
+   :render {}
+   :lifecycle {}})
+
+(defn- accessor-registries-snapshot
+  []
+  (var-get #'*accessor-registries*))
+
+(defn- update-accessor-registry!
+  [domain update-fn]
+  (locking accessor-registry-lock
+    (let [registries (accessor-registries-snapshot)
+          current (or (get registries domain)
+                      (throw (ex-info "Unknown accessor domain" {:domain domain})))
+          updated (update-fn current)]
+      (alter-var-root #'*accessor-registries* assoc domain updated)
+      updated)))
 
 (defonce get-registry
   (fn [domain]
-    (or (get accessor-registries domain)
+    (or (get (accessor-registries-snapshot) domain)
         (throw (ex-info "Unknown accessor domain" {:domain domain})))))
 
 (defonce validate-accessor-key
@@ -48,14 +65,15 @@
     (validate-accessor-key key)
     (validate-accessor-fn accessor-fn)
     (validate-accessor-doc doc)
-    (let [registry (get-registry domain)
-          current (deref registry)]
-      (when (contains? current key)
-        (throw (ex-info "Accessor already registered in domain"
-                        {:domain domain :key key})))
-      (log/info "Registering accessor"
-                {:domain domain :key key :doc (subs doc 0 (min 60 (count doc)))})
-      (swap! registry assoc key {:fn accessor-fn :doc doc}))))
+    (log/info "Registering accessor"
+              {:domain domain :key key :doc (subs doc 0 (min 60 (count doc)))})
+    (update-accessor-registry!
+      domain
+      (fn [current]
+        (when (contains? current key)
+          (throw (ex-info "Accessor already registered in domain"
+                          {:domain domain :key key})))
+        (assoc current key {:fn accessor-fn :doc doc})))))
 
 (defonce register-accessor-group!
   (fn [domain accessors-list]
@@ -64,14 +82,14 @@
 
 (defonce get-accessor
   (fn [domain key]
-    (when-let [registry (get accessor-registries domain)]
-      (when-let [entry (get (deref registry) key)]
+    (when-let [registry (get (accessor-registries-snapshot) domain)]
+      (when-let [entry (get registry key)]
         (:fn entry)))))
 
 (defonce get-accessor-meta
   (fn [domain key]
-    (when-let [registry (get accessor-registries domain)]
-      (get (deref registry) key))))
+    (when-let [registry (get (accessor-registries-snapshot) domain)]
+      (get registry key))))
 
 (defonce get-accessor-or-throw
   (fn [domain key]
@@ -81,56 +99,55 @@
 
 (defonce list-accessors
   (fn [domain]
-    (keys (deref (get-registry domain)))))
+    (keys (get-registry domain))))
 
 (defonce list-accessors-detailed
   (fn [domain]
-    (deref (get-registry domain))))
+    (get-registry domain)))
 
 (defonce accessor-exists?
   (fn [domain key]
-    (when-let [registry (get accessor-registries domain)]
-      (contains? (deref registry) key))))
+    (when-let [registry (get (accessor-registries-snapshot) domain)]
+      (contains? registry key))))
 
 (defonce get-all-accessors
   (fn []
-    (into {}
-          (for [[domain registry-atom] accessor-registries]
-            [domain (deref registry-atom)]))))
+    (accessor-registries-snapshot)))
 
 (defonce validate-registry-integrity
   (fn []
     (let [all-accessors (get-all-accessors)
-          errors (atom [])]
+          errors (transient [])]
       (doseq [[domain domain-accessors] all-accessors]
         (doseq [[key {:keys [fn]}] domain-accessors]
           (when-not (ifn? fn)
-            (swap! errors conj {:domain domain
-                                :key key
-                                :error "Accessor is not callable"}))))
-      (if (empty? @errors)
+            (conj! errors {:domain domain
+                           :key key
+                           :error "Accessor is not callable"}))))
+      (let [errors* (persistent! errors)]
+        (if (empty? errors*)
         {:valid true}
-        {:valid false :errors @errors}))))
+          {:valid false :errors errors*})))))
 
 (defonce registry-status
   (fn []
-    {:total-domains (count accessor-registries)
+    {:total-domains (count (accessor-registries-snapshot))
      :domains (into {}
-                    (for [[domain registry-atom] accessor-registries]
-                      [domain {:count (count (deref registry-atom))
-                               :keys (keys (deref registry-atom))}]))
+                    (for [[domain registry-map] (accessor-registries-snapshot)]
+                      [domain {:count (count registry-map)
+                               :keys (keys registry-map)}]))
      :integrity (validate-registry-integrity)}))
 
 (defonce clear-domain!
   (fn [domain]
-    (reset! (get-registry domain) {})))
+    (update-accessor-registry! domain (constantly {}))))
 
 (defonce unregister-accessor!
   (fn [domain key]
-    (swap! (get-registry domain) dissoc key)))
+    (update-accessor-registry! domain #(dissoc % key))))
 
 (defonce snapshot-registry
   (fn []
     (into {}
-          (for [[domain registry-atom] accessor-registries]
-            [domain (into {} (deref registry-atom))]))))
+          (for [[domain registry-map] (accessor-registries-snapshot)]
+            [domain (into {} registry-map)]))))

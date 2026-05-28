@@ -1,10 +1,10 @@
 (ns cn.li.ac.content.ability.teleporter.teleporter-crit-fx
   "Client FX for teleporter critical hits shared across teleporter attack skills."
   (:require [cn.li.ac.ability.client.level-effects :as level-effects]
-            [cn.li.ac.ability.client.combat-notice :as combat-notice]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.effects.particles :as client-particles]
-            [cn.li.ac.ability.client.effects.sounds :as client-sounds]))
+            [cn.li.ac.ability.client.effects.sounds :as client-sounds]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (defn- crit-particle-config
   [crit-level]
@@ -23,7 +23,7 @@
           y (double (or (:y payload) 0.0))
           z (double (or (:z payload) 0.0))]
       (when (:message-key payload)
-        (combat-notice/show-notice!
+        (runtime-hooks/client-show-combat-notice!
           :teleporter-crit
           {:message-key (:message-key payload)
            :args (:message-args payload)

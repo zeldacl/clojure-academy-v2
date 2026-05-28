@@ -15,29 +15,80 @@
 ;; Registry
 ;; ============================================================================
 
-(defonce ^:private category-registry (atom {}))
-(defonce ^:private category-registry-frozen? (atom false))
+(defn default-category-registry-runtime-state
+  []
+  {:registry {}
+   :frozen? false})
+
+(defn create-category-registry-runtime
+  ([]
+   (create-category-registry-runtime {}))
+  ([{:keys [state*]
+     :or {state* (atom (default-category-registry-runtime-state))}}]
+   {::runtime ::category-registry-runtime
+    :state* state*}))
+
+(def ^:dynamic *category-registry-runtime* nil)
+
+(defonce ^:private installed-category-registry-runtime
+  (create-category-registry-runtime))
+
+(defn- category-registry-runtime?
+  [runtime]
+  (and (map? runtime)
+       (= ::category-registry-runtime (::runtime runtime))
+       (some? (:state* runtime))))
+
+(defn call-with-category-registry-runtime
+  [runtime f]
+  (when-not (category-registry-runtime? runtime)
+    (throw (ex-info "Expected category registry runtime"
+                    {:runtime runtime})))
+  (binding [*category-registry-runtime* runtime]
+    (f)))
+
+(defmacro with-category-registry-runtime
+  [runtime & body]
+  `(call-with-category-registry-runtime ~runtime (fn [] ~@body)))
+
+(defn- current-category-registry-runtime
+  []
+  (or *category-registry-runtime*
+      installed-category-registry-runtime))
+
+(defn- category-registry-state-atom
+  []
+  (:state* (current-category-registry-runtime)))
+
+(defn- category-registry-state-snapshot
+  []
+  @(category-registry-state-atom))
+
+(defn- update-category-registry-state!
+  [f & args]
+  (apply swap! (category-registry-state-atom) f args))
 
 (defn- assert-registry-open!
   []
-  (when @category-registry-frozen?
+  (when (:frozen? (category-registry-state-snapshot))
     (throw (ex-info "Category registry is frozen" {}))))
 
 (defn category-registry-snapshot
   []
-  @category-registry)
+  (:registry (category-registry-state-snapshot)))
 
 (defn reset-category-registry-for-test!
   ([]
    (reset-category-registry-for-test! {}))
   ([snapshot]
-   (reset! category-registry (or snapshot {}))
-   (reset! category-registry-frozen? false)
+    (reset! (category-registry-state-atom)
+          {:registry (or snapshot {})
+          :frozen? false})
    nil))
 
 (defn freeze-category-registry!
   []
-  (reset! category-registry-frozen? true)
+    (update-category-registry-state! assoc :frozen? true)
   nil)
 
 ;; ============================================================================
@@ -48,14 +99,14 @@
   "Register a category spec with idempotent duplicate handling."
   [{:keys [id] :as spec}]
   {:pre [(keyword? id) (string? (:name-key spec))]}
-  (if-let [existing (get @category-registry id)]
+  (if-let [existing (get (:registry (category-registry-state-snapshot)) id)]
     (if (= existing spec)
       existing
       (throw (ex-info "Conflicting ability category id"
                       {:id id :existing existing :new spec})))
     (do
       (assert-registry-open!)
-      (swap! category-registry assoc id spec)
+      (update-category-registry-state! assoc-in [:registry id] spec)
       (log/info "Registered ability category" id)
       spec)))
 
@@ -64,13 +115,13 @@
 ;; ============================================================================
 
 (defn get-category [cat-id]
-  (get @category-registry cat-id))
+  (get (:registry (category-registry-state-snapshot)) cat-id))
 
 (defn get-all-categories []
-  (vals @category-registry))
+  (vals (:registry (category-registry-state-snapshot))))
 
 (defn category-enabled? [cat-id]
   (boolean (:enabled (get-category cat-id))))
 
 (defn get-prog-incr-rate [cat-id]
-  (get-in @category-registry [cat-id :prog-incr-rate] 1.0))
+  (get-in (:registry (category-registry-state-snapshot)) [cat-id :prog-incr-rate] 1.0))

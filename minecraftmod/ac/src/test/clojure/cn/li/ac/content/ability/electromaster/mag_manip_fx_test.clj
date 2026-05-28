@@ -1,9 +1,21 @@
 (ns cn.li.ac.content.ability.electromaster.mag-manip-fx-test
-  (:require [clojure.test :refer [deftest is]]
+  (:require [clojure.test :refer [deftest is use-fixtures]]
+            [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.hand-effects :as hand-effects]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.content.ability.electromaster.mag-manip-fx :as mag-manip-fx]))
+
+(defn- with-fresh-mag-manip-fx-runtime [f]
+  (mag-manip-fx/call-with-mag-manip-fx-runtime
+    (mag-manip-fx/create-mag-manip-fx-runtime)
+    (fn []
+      (try
+        (f)
+        (finally
+          (mag-manip-fx/reset-mag-manip-fx-for-test!))))))
+
+(use-fixtures :each with-fresh-mag-manip-fx-runtime)
 
 (deftest init-registers-mag-manip-fx-channels-test
   (let [registered-level* (atom nil)
@@ -79,13 +91,43 @@
 (deftest two-owners-keep-mag-manip-state-independent-test
   (mag-manip-fx/reset-mag-manip-fx-for-test!)
   (let [enqueue! (var-get #'cn.li.ac.content.ability.electromaster.mag-manip-fx/enqueue!)]
-    (enqueue! {:owner-key [:ctx "ctx-a"] :ctx-id "ctx-a" :mode :hold-start :block-id "minecraft:iron_block"})
-    (enqueue! {:owner-key [:ctx "ctx-b"] :ctx-id "ctx-b" :mode :hold-start :block-id "minecraft:gold_block"})
-    (enqueue! {:owner-key [:ctx "ctx-a"] :ctx-id "ctx-a" :mode :hold-loop :block-id "minecraft:copper_block"})
-    (let [snapshot (mag-manip-fx/mag-manip-fx-snapshot)]
-      (is (= "minecraft:copper_block" (:block-id (get (:states snapshot) [:ctx "ctx-a"]))))
-      (is (= "minecraft:gold_block" (:block-id (get (:states snapshot) [:ctx "ctx-b"])))))
-    (mag-manip-fx/clear-mag-manip-owner! [:ctx "ctx-a"])
-    (let [snapshot (mag-manip-fx/mag-manip-fx-snapshot)]
-      (is (nil? (get (:states snapshot) [:ctx "ctx-a"])))
-      (is (some? (get (:states snapshot) [:ctx "ctx-b"]))))))
+    (with-redefs [client-sounds/current-effect-owner (fn [] {:client-session-id "mag-manip-test"})
+                  client-sounds/queue-current-sound-effect! (fn [& _] nil)
+                  client-sounds/queue-sound-effect! (fn [& _] nil)]
+      (enqueue! {:owner-key [:ctx "ctx-a"] :ctx-id "ctx-a" :mode :hold-start :block-id "minecraft:iron_block"})
+      (enqueue! {:owner-key [:ctx "ctx-b"] :ctx-id "ctx-b" :mode :hold-start :block-id "minecraft:gold_block"})
+      (enqueue! {:owner-key [:ctx "ctx-a"] :ctx-id "ctx-a" :mode :hold-loop :block-id "minecraft:copper_block"})
+      (let [snapshot (mag-manip-fx/mag-manip-fx-snapshot)]
+        (is (= "minecraft:copper_block" (:block-id (get (:states snapshot) [:ctx "ctx-a"]))))
+        (is (= "minecraft:gold_block" (:block-id (get (:states snapshot) [:ctx "ctx-b"]))))
+        (mag-manip-fx/clear-mag-manip-owner! [:ctx "ctx-a"])
+        (let [snapshot (mag-manip-fx/mag-manip-fx-snapshot)]
+          (is (nil? (get (:states snapshot) [:ctx "ctx-a"])))
+          (is (some? (get (:states snapshot) [:ctx "ctx-b"]))))))))
+
+(deftest mag-manip-fx-runtime-isolation-test
+  (let [runtime-a (mag-manip-fx/create-mag-manip-fx-runtime)
+        runtime-b (mag-manip-fx/create-mag-manip-fx-runtime)
+        enqueue! (var-get #'cn.li.ac.content.ability.electromaster.mag-manip-fx/enqueue!)]
+    (with-redefs [client-sounds/current-effect-owner (fn [] {:client-session-id "mag-manip-test"})
+                  client-sounds/queue-current-sound-effect! (fn [& _] nil)
+                  client-sounds/queue-sound-effect! (fn [& _] nil)]
+      (mag-manip-fx/call-with-mag-manip-fx-runtime
+        runtime-a
+        (fn []
+          (enqueue! {:owner-key [:ctx "ctx-a"] :ctx-id "ctx-a" :mode :hold-start :block-id "minecraft:iron_block"})
+          (is (= #{[:ctx "ctx-a"]}
+                 (set (keys (:states (mag-manip-fx/mag-manip-fx-snapshot))))))))
+      (mag-manip-fx/call-with-mag-manip-fx-runtime
+        runtime-b
+        (fn []
+          (is (= {:states {} :current-owner-key nil}
+                 (mag-manip-fx/mag-manip-fx-snapshot)))
+          (enqueue! {:owner-key [:ctx "ctx-b"] :ctx-id "ctx-b" :mode :hold-start :block-id "minecraft:gold_block"})
+          (is (= #{[:ctx "ctx-b"]}
+                 (set (keys (:states (mag-manip-fx/mag-manip-fx-snapshot))))))))
+      (mag-manip-fx/call-with-mag-manip-fx-runtime
+        runtime-a
+        (fn []
+          (is (= #{[:ctx "ctx-a"]}
+                 (set (keys (:states (mag-manip-fx/mag-manip-fx-snapshot)))))))))))

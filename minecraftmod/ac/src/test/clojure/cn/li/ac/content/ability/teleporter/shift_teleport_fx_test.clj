@@ -6,12 +6,16 @@
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.content.ability.teleporter.shift-teleport-fx :as stfx]))
 
-(defn- reset-fixture [f]
-  (stfx/reset-shift-teleport-fx-for-test!)
-  (f)
-  (stfx/reset-shift-teleport-fx-for-test!))
+(defn- with-fresh-shift-teleport-fx-runtime [f]
+  (stfx/call-with-shift-teleport-fx-runtime
+    (stfx/create-shift-teleport-fx-runtime)
+    (fn []
+      (try
+        (f)
+        (finally
+          (stfx/reset-shift-teleport-fx-for-test!))))))
 
-(use-fixtures :each reset-fixture)
+(use-fixtures :each with-fresh-shift-teleport-fx-runtime)
 
 (defn- event [payload]
   {:payload payload
@@ -68,23 +72,62 @@
   (let [particles* (atom [])
         sounds* (atom [])
         enqueue! (var-get #'cn.li.ac.content.ability.teleporter.shift-teleport-fx/enqueue!)]
-    (with-redefs [client-particles/queue-particle-effect! (fn [payload]
-                                                             (swap! particles* conj payload)
-                                                             nil)
-                  client-sounds/queue-sound-effect! (fn [payload]
-                                                      (swap! sounds* conj payload)
+    (with-redefs [client-particles/current-effect-owner (fn [] {:client-session-id "shift-teleport-test"})
+                  client-particles/queue-particle-effect! (fn [& args]
+                                                            (swap! particles* conj args)
+                                                            nil)
+                  client-sounds/queue-sound-effect! (fn [& args]
+                                                      (swap! sounds* conj args)
                                                       nil)]
       (enqueue! (event {:mode :perform
             :from-x 0.0 :from-y 64.0 :from-z 0.0
             :x 5.0 :y 64.0 :z 0.0}))
       (is (>= (count @particles*) 2))
       (is (= 1 (count @sounds*)))
-      (is (= "my_mod:tp.tp" (:sound-id (first @sounds*)))))))
+      (is (= "my_mod:tp.tp" (:sound-id (second (first @sounds*))))))))
 
 (deftest enqueue-end-clears-state-test
   (let [enqueue! (var-get #'cn.li.ac.content.ability.teleporter.shift-teleport-fx/enqueue!)]
-    (enqueue! (event {:mode :start}))
-    (enqueue! (event {:mode :update :x 1.0 :y 2.0 :z 3.0 :target-count 1 :target-hit? false :hand-valid? true}))
-    (is (some? (get (:fx-state (stfx/shift-teleport-fx-snapshot)) [:ctx "ctx-1"])))
-    (enqueue! (event {:mode :end}))
-    (is (nil? (get (:fx-state (stfx/shift-teleport-fx-snapshot)) [:ctx "ctx-1"])))) )
+    (with-redefs [client-particles/current-effect-owner (fn [] {:client-session-id "shift-teleport-test"})]
+      (enqueue! (event {:mode :start}))
+      (enqueue! (event {:mode :update :x 1.0 :y 2.0 :z 3.0 :target-count 1 :target-hit? false :hand-valid? true}))
+      (is (some? (get (:fx-state (stfx/shift-teleport-fx-snapshot)) [:ctx "ctx-1"])))
+      (enqueue! (event {:mode :end}))
+      (is (nil? (get (:fx-state (stfx/shift-teleport-fx-snapshot)) [:ctx "ctx-1"]))))))
+
+(deftest shift-teleport-fx-runtime-isolation-test
+  (let [runtime-a (stfx/create-shift-teleport-fx-runtime)
+        runtime-b (stfx/create-shift-teleport-fx-runtime)
+        enqueue! (var-get #'cn.li.ac.content.ability.teleporter.shift-teleport-fx/enqueue!)]
+    (with-redefs [client-particles/current-effect-owner (fn [] {:client-session-id "shift-teleport-test"})
+                  client-particles/queue-particle-effect! (fn [& _] nil)
+                  client-sounds/queue-sound-effect! (fn [& _] nil)]
+      (stfx/call-with-shift-teleport-fx-runtime
+        runtime-a
+        (fn []
+          (enqueue! {:payload {:mode :start}
+                     :ctx-id "ctx-a"
+                     :channel :shift-tp/fx-test
+                     :owner-key [:ctx "ctx-a"]})
+          (enqueue! {:payload {:mode :update :x 1.0 :y 2.0 :z 3.0 :target-count 1 :target-hit? false :hand-valid? true}
+                     :ctx-id "ctx-a"
+                     :channel :shift-tp/fx-test
+                     :owner-key [:ctx "ctx-a"]})
+          (is (= #{[:ctx "ctx-a"]}
+                 (set (keys (:fx-state (stfx/shift-teleport-fx-snapshot))))))))
+      (stfx/call-with-shift-teleport-fx-runtime
+        runtime-b
+        (fn []
+          (is (= {:fx-state {}}
+                 (stfx/shift-teleport-fx-snapshot)))
+          (enqueue! {:payload {:mode :start}
+                     :ctx-id "ctx-b"
+                     :channel :shift-tp/fx-test
+                     :owner-key [:ctx "ctx-b"]})
+          (is (= #{[:ctx "ctx-b"]}
+                 (set (keys (:fx-state (stfx/shift-teleport-fx-snapshot))))))))
+      (stfx/call-with-shift-teleport-fx-runtime
+        runtime-a
+        (fn []
+          (is (= {:x 1.0 :y 2.0 :z 3.0}
+                 (get-in (stfx/shift-teleport-fx-snapshot) [:fx-state [:ctx "ctx-a"] :target]))))))))

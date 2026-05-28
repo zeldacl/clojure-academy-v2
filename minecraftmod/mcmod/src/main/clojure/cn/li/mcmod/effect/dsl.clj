@@ -4,7 +4,19 @@
 						[cn.li.mcmod.protocol.core :as registry-core]
 						[cn.li.mcmod.util.log :as log]))
 
-(defonce effect-registry (registry-core/atom-registry {}))
+(defn create-effect-registry-runtime
+	([] (create-effect-registry-runtime {}))
+	([{:keys [registry]}]
+	 {:cn.li.mcmod.effect.dsl/runtime ::effect-registry-runtime
+	  :registry (or registry (registry-core/atom-registry {}))}))
+
+(def ^:dynamic *effect-registry-runtime* nil)
+
+(defonce ^:private installed-effect-registry-runtime
+	(create-effect-registry-runtime))
+
+(defn- effect-registry-state []
+	(:registry (or *effect-registry-runtime* installed-effect-registry-runtime)))
 
 (defrecord EffectSpec [id registry-name category color tick-interval damage-per-tick properties])
 
@@ -27,16 +39,16 @@
 	(when-not (string? (:registry-name effect-spec))
 		(throw (ex-info "Effect :registry-name must be string" {:effect-spec effect-spec})))
 	(log/info "Registering effect:" (:id effect-spec) "->" (:registry-name effect-spec))
-	(registry-core/swap-state! effect-registry #(assoc % (:id effect-spec) effect-spec))
+	(registry-core/swap-state! (effect-registry-state) #(assoc % (:id effect-spec) effect-spec))
 	effect-spec)
 
 (defn get-effect
 	[effect-id]
-	(registry-core/lookup effect-registry effect-id))
+	(registry-core/lookup (effect-registry-state) effect-id))
 
 (defn list-effects
 	[]
-	(keys (registry-core/snapshot effect-registry)))
+	(keys (registry-core/snapshot (effect-registry-state))))
 
 (defmacro defeffect
 	[effect-name & options]

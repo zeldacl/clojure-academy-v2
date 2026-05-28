@@ -6,19 +6,36 @@
             [cn.li.mcmod.gui.metadata :as metadata]
             [cn.li.mcmod.gui.tabbed-gui :as tabbed-gui]))
 
-(defonce ^:private screen-factories
-  (atom {}))
+(defn- default-gui-registry-core-runtime-state []
+  {:screen-factories {}})
+
+(defn create-gui-registry-core-runtime
+  ([] (create-gui-registry-core-runtime {}))
+  ([{:keys [state*]}]
+   {:cn.li.mcmod.gui.registry-core/runtime ::gui-registry-core-runtime
+    :state* (or state* (atom (default-gui-registry-core-runtime-state)))}))
+
+(def ^:dynamic *gui-registry-core-runtime* nil)
+
+(defonce ^:private installed-gui-registry-core-runtime
+  (create-gui-registry-core-runtime))
+
+(defn- gui-registry-core-state-atom []
+  (:state* (or *gui-registry-core-runtime* installed-gui-registry-core-runtime)))
+
+(defn- gui-registry-core-state-snapshot []
+  @(gui-registry-core-state-atom))
 
 (def register-gui-platform-impl! platform-registry/register-gui-platform-impl!)
 
 (defn register-screen-factory!
   [screen-fn-kw screen-fn]
-  (swap! screen-factories assoc (keyword screen-fn-kw) screen-fn)
+  (swap! (gui-registry-core-state-atom) assoc-in [:screen-factories (keyword screen-fn-kw)] screen-fn)
   nil)
 
 (defn get-screen-factory-fn
   [screen-fn-kw]
-  (if-let [f (get @screen-factories (keyword screen-fn-kw))]
+  (if-let [f (get-in (gui-registry-core-state-snapshot) [:screen-factories (keyword screen-fn-kw)])]
     f
     (throw (ex-info "Screen factory not registered"
                     {:screen-fn-kw screen-fn-kw}))))

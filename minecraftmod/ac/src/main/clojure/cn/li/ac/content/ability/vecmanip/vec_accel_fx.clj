@@ -5,21 +5,72 @@
             [cn.li.ac.ability.client.effects.beam-ops :as fx-beam]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]))
 
-(defonce ^:private effect-state (atom {}))
+(defn default-vec-accel-fx-runtime-state
+  []
+  {:effect-state {}})
+
+(defn create-vec-accel-fx-runtime
+  ([]
+   (create-vec-accel-fx-runtime {}))
+  ([{:keys [state*]
+     :or {state* (atom (default-vec-accel-fx-runtime-state))}}]
+   {::runtime ::vec-accel-fx-runtime
+    :state* state*}))
+
+(def ^:dynamic *vec-accel-fx-runtime* nil)
+
+(defonce ^:private installed-vec-accel-fx-runtime
+  (create-vec-accel-fx-runtime))
+
+(defn- vec-accel-fx-runtime?
+  [runtime]
+  (and (map? runtime)
+       (= ::vec-accel-fx-runtime (::runtime runtime))
+       (some? (:state* runtime))))
+
+(defn call-with-vec-accel-fx-runtime
+  [runtime f]
+  (when-not (vec-accel-fx-runtime? runtime)
+    (throw (ex-info "Expected VecAccel FX runtime"
+                    {:value runtime})))
+  (binding [*vec-accel-fx-runtime* runtime]
+    (f)))
+
+(defmacro with-vec-accel-fx-runtime
+  [runtime & body]
+  `(call-with-vec-accel-fx-runtime ~runtime (fn [] ~@body)))
+
+(defn- current-vec-accel-fx-runtime
+  []
+  (or *vec-accel-fx-runtime*
+      installed-vec-accel-fx-runtime))
+
+(defn- vec-accel-fx-state-atom
+  []
+  (:state* (current-vec-accel-fx-runtime)))
+
+(defn- vec-accel-fx-state-snapshot
+  []
+  @(vec-accel-fx-state-atom))
+
+(defn- update-vec-accel-fx-state!
+  [f & args]
+  (apply swap! (vec-accel-fx-state-atom) f args))
+
 (def ^:private sound-id "my_mod:vecmanip.vec_accel")
 
 (defn vec-accel-fx-snapshot
   []
-  {:effect-state @effect-state})
+  (vec-accel-fx-state-snapshot))
 
 (defn reset-vec-accel-fx-for-test!
   []
-  (reset! effect-state {})
+  (reset! (vec-accel-fx-state-atom) (default-vec-accel-fx-runtime-state))
   nil)
 
 (defn clear-vec-accel-owner!
   [owner-key]
-  (swap! effect-state dissoc owner-key)
+  (update-vec-accel-fx-state! update :effect-state dissoc owner-key)
   nil)
 
 ;; ---------------------------------------------------------------------------
@@ -36,31 +87,33 @@
                    :world-id world-id}]
     (case mode
       :start
-      (swap! effect-state assoc owner-key*
-             (merge base-meta
-                    {:active? true :charge-ticks 0
-                     :can-perform? false
-                     :look-dir {:x 0.0 :y 0.0 :z 1.0}
-                     :init-vel {:x 0.0 :y 0.0 :z 1.0}}))
+      (update-vec-accel-fx-state!
+        update :effect-state assoc owner-key*
+        (merge base-meta
+               {:active? true :charge-ticks 0
+                :can-perform? false
+                :look-dir {:x 0.0 :y 0.0 :z 1.0}
+                :init-vel {:x 0.0 :y 0.0 :z 1.0}}))
       :update
-      (swap! effect-state update owner-key*
-             (fn [st]
-               (assoc (merge base-meta (or st {:active? true}))
-                      :owner-key owner-key*
-                      :ctx-id ctx-id
-                      :channel channel
-                      :source-player-id source-player-id
-                      :world-id world-id
-                      :active? true
-                      :charge-ticks (long (or charge-ticks 0))
-                      :can-perform? (boolean can-perform?)
-                      :look-dir (or look-dir {:x 0.0 :y 0.0 :z 1.0})
-                      :init-vel (or init-vel {:x 0.0 :y 0.0 :z 1.0}))))
+      (update-vec-accel-fx-state!
+        update :effect-state update owner-key*
+        (fn [st]
+          (assoc (merge base-meta (or st {:active? true}))
+                 :owner-key owner-key*
+                 :ctx-id ctx-id
+                 :channel channel
+                 :source-player-id source-player-id
+                 :world-id world-id
+                 :active? true
+                 :charge-ticks (long (or charge-ticks 0))
+                 :can-perform? (boolean can-perform?)
+                 :look-dir (or look-dir {:x 0.0 :y 0.0 :z 1.0})
+                 :init-vel (or init-vel {:x 0.0 :y 0.0 :z 1.0}))))
       :perform
       (client-sounds/queue-current-sound-effect!
         {:type :sound :sound-id sound-id :volume 0.35 :pitch 1.0})
       :end
-      (swap! effect-state assoc owner-key* (merge base-meta {:active? false}))
+      (update-vec-accel-fx-state! update :effect-state assoc owner-key* (merge base-meta {:active? false}))
       nil)))
 
 ;; ---------------------------------------------------------------------------
@@ -131,7 +184,7 @@
 
 (defn- build-plan [camera-pos _hand-center-pos _tick]
   (let [ops (mapcat #(trajectory-ops camera-pos %)
-                    (filter :active? (vals @effect-state)))]
+                    (filter :active? (vals (:effect-state (vec-accel-fx-state-snapshot)))))]
     (when (seq ops)
       {:ops (vec ops)})))
 

@@ -8,9 +8,9 @@
             [cn.li.mcmod.platform.world :as world]))
 
 (defn- reset-block-registry! [f]
-  (registry-core/reset-state! bdsl/block-registry {})
+  (registry-core/reset-state! (bdsl/block-registry) {})
   (f)
-  (registry-core/reset-state! bdsl/block-registry {}))
+  (registry-core/reset-state! (bdsl/block-registry) {}))
 
 (use-fixtures :each reset-block-registry!)
 

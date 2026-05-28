@@ -30,13 +30,27 @@
   #{:send-message
     :grant-advancement})
 
-(defonce ^:private action-executors
-  (atom {}))
+(defn create-action-executor-registry-runtime
+  ([] (create-action-executor-registry-runtime {}))
+  ([{:keys [state*]}]
+   {:cn.li.mcmod.command.actions/runtime ::action-executor-registry-runtime
+    :state* (or state* (atom {}))}))
+
+(def ^:dynamic *action-executor-registry-runtime* nil)
+
+(defonce ^:private installed-action-executor-registry-runtime
+  (create-action-executor-registry-runtime))
+
+(defn- action-executors-atom []
+  (:state* (or *action-executor-registry-runtime* installed-action-executor-registry-runtime)))
+
+(defn- action-executors-snapshot []
+  @(action-executors-atom))
 
 (defn valid-action-types
   "Return the currently registered command action ids."
   []
-  (into base-action-types (keys @action-executors)))
+  (into base-action-types (keys (action-executors-snapshot))))
 
 (defn register-action-type!
   "Register an action id as valid without installing an executor.
@@ -47,7 +61,7 @@
   [action-type]
   (when-not (keyword? action-type)
     (throw (ex-info "Action type must be a keyword" {:action-type action-type})))
-  (swap! action-executors update action-type #(or % nil))
+  (swap! (action-executors-atom) update action-type #(or % nil))
   nil)
 
 (defn register-action-types!
@@ -67,7 +81,7 @@
   (when-not (fn? executor-fn)
     (throw (ex-info "Action executor must be a function" {:action-type action-type
                                                            :executor executor-fn})))
-  (swap! action-executors assoc action-type executor-fn)
+  (swap! (action-executors-atom) assoc action-type executor-fn)
   nil)
 
 (defn register-action-executors!
@@ -80,7 +94,7 @@
 (defn get-action-executor
   "Return the registered content executor for `action-type`, if present."
   [action-type]
-  (get @action-executors action-type))
+  (get (action-executors-snapshot) action-type))
 
 (defn validate-action
   "Validate an action map.

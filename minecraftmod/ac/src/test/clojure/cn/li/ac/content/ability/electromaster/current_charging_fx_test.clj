@@ -1,8 +1,19 @@
 (ns cn.li.ac.content.ability.electromaster.current-charging-fx-test
-  (:require [clojure.test :refer [deftest is]]
+  (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.content.ability.electromaster.current-charging-fx :as current-charging-fx]))
+
+(defn- with-fresh-current-charging-fx-runtime [f]
+  (current-charging-fx/call-with-current-charging-fx-runtime
+    (current-charging-fx/create-current-charging-fx-runtime)
+    (fn []
+      (try
+        (f)
+        (finally
+          (current-charging-fx/reset-current-charging-fx-for-test!))))))
+
+(use-fixtures :each with-fresh-current-charging-fx-runtime)
 
 (deftest init-registers-current-charging-fx-channels-test
   (let [registered* (atom nil)]
@@ -24,9 +35,9 @@
     (with-redefs [fx-registry/register-fx-channels! (fn [_ handler]
                                                       (reset! handler* handler)
                                                       nil)
-                  client-sounds/queue-sound-effect! (fn [payload]
-                                                       (swap! queued* conj payload)
-                                                       nil)]
+                  client-sounds/queue-current-sound-effect! (fn [payload]
+                                                              (swap! queued* conj payload)
+                                                              nil)]
       (current-charging-fx/init!)
       (@handler* "ctx-1" :current-charging/fx-start {:is-item true})
       (is (true? (:active? (current-charging-fx/current-state))))
@@ -54,9 +65,9 @@
     (with-redefs [fx-registry/register-fx-channels! (fn [_ handler]
                                                       (reset! handler* handler)
                                                       nil)
-                  client-sounds/queue-sound-effect! (fn [payload]
-                                                       (swap! queued* conj payload)
-                                                       nil)]
+                  client-sounds/queue-current-sound-effect! (fn [payload]
+                                                              (swap! queued* conj payload)
+                                                              nil)]
       (current-charging-fx/init!)
       (@handler* "ctx-a" :current-charging/fx-start {:is-item false})
       (@handler* "ctx-b" :current-charging/fx-start {:is-item true})
@@ -80,3 +91,32 @@
         (is (nil? (get (:states snapshot) [:ctx "ctx-a"])))
         (is (= 30 (:charge-ticks (get (:states snapshot) [:ctx "ctx-b"])))))
       (is (= 2 (count @queued*))))))
+
+(deftest current-charging-fx-runtime-isolation-test
+  (let [runtime-a (current-charging-fx/create-current-charging-fx-runtime)
+        runtime-b (current-charging-fx/create-current-charging-fx-runtime)
+        handler* (atom nil)]
+    (with-redefs [fx-registry/register-fx-channels! (fn [_ handler]
+                                                      (reset! handler* handler)
+                                                      nil)
+                  client-sounds/queue-current-sound-effect! (fn [_] nil)]
+      (current-charging-fx/call-with-current-charging-fx-runtime runtime-a current-charging-fx/init!)
+      (current-charging-fx/call-with-current-charging-fx-runtime
+        runtime-a
+        (fn []
+          (@handler* "ctx-a" :current-charging/fx-start {:is-item true})
+          (is (= #{[:ctx "ctx-a"]}
+                 (set (keys (:states (current-charging-fx/current-charging-fx-snapshot))))))))
+      (current-charging-fx/call-with-current-charging-fx-runtime runtime-b current-charging-fx/init!)
+      (current-charging-fx/call-with-current-charging-fx-runtime
+        runtime-b
+        (fn []
+          (is (= #{[:ctx "ctx-b"]}
+                 (do
+                   (@handler* "ctx-b" :current-charging/fx-start {:is-item false})
+                   (set (keys (:states (current-charging-fx/current-charging-fx-snapshot)))))))))
+      (current-charging-fx/call-with-current-charging-fx-runtime
+        runtime-a
+        (fn []
+          (is (= #{[:ctx "ctx-a"]}
+                 (set (keys (:states (current-charging-fx/current-charging-fx-snapshot)))))))))))

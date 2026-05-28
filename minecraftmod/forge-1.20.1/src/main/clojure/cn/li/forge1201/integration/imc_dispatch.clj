@@ -13,8 +13,37 @@
 (def register-topology-network-handler-key "register_topology_network_handler")
 (def register-topology-node-handler-key "register_topology_node_handler")
 
-(defonce ^:private network-handlers (atom []))
-(defonce ^:private node-handlers (atom []))
+(def ^:private handler-registry-lock
+	(Object.))
+
+(def ^:private ^:dynamic *network-handlers* [])
+(def ^:private ^:dynamic *node-handlers* [])
+
+(defn- network-handlers-snapshot []
+	(var-get #'*network-handlers*))
+
+(defn- node-handlers-snapshot []
+	(var-get #'*node-handlers*))
+
+(defn- add-network-handler! [entry]
+	(locking handler-registry-lock
+		(alter-var-root #'*network-handlers* conj entry)
+		nil))
+
+(defn- add-node-handler! [entry]
+	(locking handler-registry-lock
+		(alter-var-root #'*node-handlers* conj entry)
+		nil))
+
+(defn- remove-network-handlers! [bad]
+	(locking handler-registry-lock
+		(alter-var-root #'*network-handlers* #(remove (set bad) %))
+		nil))
+
+(defn- remove-node-handlers! [bad]
+	(locking handler-registry-lock
+		(alter-var-root #'*node-handlers* #(remove (set bad) %))
+		nil))
 
 (defn register-network-handler!
 	"Register an IMC topology-network event handler.
@@ -25,10 +54,10 @@
 	[handler]
 	(cond
 		(fn? handler)
-		(swap! network-handlers conj {:kind :fn :handler handler})
+		(add-network-handler! {:kind :fn :handler handler})
 
 		(instance? java.util.function.Consumer handler)
-		(swap! network-handlers conj {:kind :consumer :handler handler})
+		(add-network-handler! {:kind :consumer :handler handler})
 
 		:else
 		(log/debug "Ignoring unsupported topology network IMC handler type" (type handler))))
@@ -42,10 +71,10 @@
 	[handler]
 	(cond
 		(fn? handler)
-		(swap! node-handlers conj {:kind :fn :handler handler})
+		(add-node-handler! {:kind :fn :handler handler})
 
 		(instance? java.util.function.Consumer handler)
-		(swap! node-handlers conj {:kind :consumer :handler handler})
+		(add-node-handler! {:kind :consumer :handler handler})
 
 		:else
 		(log/debug "Ignoring unsupported topology node IMC handler type" (type handler))))
@@ -78,9 +107,9 @@
 									(when (= ::remove-handler
 												 (invoke-safe #(invoke-network-handler! h payload)))
 										h))
-								@network-handlers)]
+								(network-handlers-snapshot))]
 		(when (seq bad)
-			(swap! network-handlers #(remove (set bad) %)))))
+			(remove-network-handlers! bad))))
 
 (defn- invoke-node-handler! [{:keys [kind handler]} payload]
 	(case kind
@@ -99,9 +128,9 @@
 									(when (= ::remove-handler
 												 (invoke-safe #(invoke-node-handler! h payload)))
 										h))
-								@node-handlers)]
+								(node-handlers-snapshot))]
 		(when (seq bad)
-			(swap! node-handlers #(remove (set bad) %)))))
+			(remove-node-handlers! bad))))
 
 (defn- on-runtime-event [event]
 	(when (map? event)

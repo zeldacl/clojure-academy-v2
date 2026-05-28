@@ -1,8 +1,7 @@
 (ns cn.li.forge1201.registry.fluids
   "Fluid registration for Forge 1.20.1."
   (:require [cn.li.forge1201.integration.bootstrap :as bootstrap]
-            [cn.li.forge1201.registry.state :as registry-state]
-            [cn.li.mcmod.protocol.metadata :as registry-metadata])
+            [cn.li.forge1201.registry.state :as registry-state])
   (:import [net.minecraftforge.registries DeferredRegister RegistryObject]))
 
 (defn- metadata-call
@@ -54,7 +53,7 @@
                                        (when-let [block-id (:block-id block-spec)]
                                          (reify java.util.function.Supplier
                                            (get [_]
-                                             (.get ^RegistryObject (get @registry-state/registered-blocks block-id)))))
+                                             (.get ^RegistryObject (registry-state/get-registered-block-ro block-id)))))
                                        (:slope-find-distance behavior)
                                        (:level-decrease-per-block behavior)
                                        (:tick-rate behavior)
@@ -77,7 +76,7 @@
                                         (when-let [block-id (:block-id block-spec)]
                                           (reify java.util.function.Supplier
                                             (get [_]
-                                              (.get ^RegistryObject (get @registry-state/registered-blocks block-id)))))
+                                              (.get ^RegistryObject (registry-state/get-registered-block-ro block-id)))))
                                         (:slope-find-distance behavior)
                                         (:level-decrease-per-block behavior)
                                         (:tick-rate behavior)
@@ -85,9 +84,9 @@
                                         (:can-convert-to-source physical))))))]
       (reset! source-holder source-ro)
       (reset! flowing-holder flowing-ro)
-      (swap! registry-state/registered-fluid-types assoc fluid-id fluid-type-ro)
-      (swap! registry-state/registered-fluids-source assoc fluid-id source-ro)
-      (swap! registry-state/registered-fluids-flowing assoc fluid-id flowing-ro)
+      (registry-state/register-fluid-type! fluid-id fluid-type-ro)
+      (registry-state/register-fluid-source! fluid-id source-ro)
+      (registry-state/register-fluid-flowing! fluid-id flowing-ro)
       (when (:has-bucket? block-spec)
         (let [bucket-ro (.register ^DeferredRegister items-register (:bucket-registry-name block-spec)
                                    (reify java.util.function.Supplier
@@ -96,4 +95,4 @@
                                          (reify java.util.function.Supplier
                                            (get [_] (.get ^RegistryObject source-ro)))))))]
           (reset! bucket-holder bucket-ro)
-          (swap! registry-state/registered-items assoc (:bucket-item-id block-spec) bucket-ro))))))
+          (registry-state/register-item! (:bucket-item-id block-spec) bucket-ro))))))

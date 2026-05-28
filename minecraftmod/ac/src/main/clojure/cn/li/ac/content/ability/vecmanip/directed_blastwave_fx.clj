@@ -5,30 +5,79 @@
             [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]))
 
-(defonce ^:private effect-state (atom {}))
-(defonce ^:private waves (atom {}))
+(defn default-directed-blastwave-fx-runtime-state
+  []
+  {:effect-state {}
+   :waves {}})
+
+(defn create-directed-blastwave-fx-runtime
+  ([]
+   (create-directed-blastwave-fx-runtime {}))
+  ([{:keys [state*]
+     :or {state* (atom (default-directed-blastwave-fx-runtime-state))}}]
+   {::runtime ::directed-blastwave-fx-runtime
+    :state* state*}))
+
+(def ^:dynamic *directed-blastwave-fx-runtime* nil)
+
+(defonce ^:private installed-directed-blastwave-fx-runtime
+  (create-directed-blastwave-fx-runtime))
+
+(defn- directed-blastwave-fx-runtime?
+  [runtime]
+  (and (map? runtime)
+       (= ::directed-blastwave-fx-runtime (::runtime runtime))
+       (some? (:state* runtime))))
+
+(defn call-with-directed-blastwave-fx-runtime
+  [runtime f]
+  (when-not (directed-blastwave-fx-runtime? runtime)
+    (throw (ex-info "Expected Directed Blastwave FX runtime"
+                    {:value runtime})))
+  (binding [*directed-blastwave-fx-runtime* runtime]
+    (f)))
+
+(defmacro with-directed-blastwave-fx-runtime
+  [runtime & body]
+  `(call-with-directed-blastwave-fx-runtime ~runtime (fn [] ~@body)))
+
+(defn- current-directed-blastwave-fx-runtime
+  []
+  (or *directed-blastwave-fx-runtime*
+      installed-directed-blastwave-fx-runtime))
+
+(defn- directed-blastwave-fx-state-atom
+  []
+  (:state* (current-directed-blastwave-fx-runtime)))
+
+(defn- directed-blastwave-fx-state-snapshot
+  []
+  @(directed-blastwave-fx-state-atom))
+
+(defn- update-directed-blastwave-fx-state!
+  [f & args]
+  (apply swap! (directed-blastwave-fx-state-atom) f args))
+
 (def ^:private sound-id "my_mod:vecmanip.directed_blast")
 (def ^:private wave-life 15)
 
 (defn directed-blastwave-fx-snapshot
   []
-  {:effect-state @effect-state
-   :waves @waves})
+  (directed-blastwave-fx-state-snapshot))
 
 (defn reset-directed-blastwave-fx-for-test!
   []
-  (reset! effect-state {})
-  (reset! waves {})
+  (reset! (directed-blastwave-fx-state-atom) (default-directed-blastwave-fx-runtime-state))
   nil)
 
 (defn clear-directed-blastwave-owner!
   [owner-key]
-  (swap! effect-state dissoc owner-key)
-  (swap! waves dissoc owner-key)
+  (update-directed-blastwave-fx-state!
+    (fn [state]
+      (-> state
+          (update :effect-state dissoc owner-key)
+          (update :waves dissoc owner-key))))
   nil)
-
-(defn- all-waves []
-  (mapcat val @waves))
 
 ;; ---------------------------------------------------------------------------
 ;; Enqueue
@@ -44,53 +93,56 @@
                    :world-id world-id}]
     (case mode
       :start
-      (swap! effect-state assoc owner-key*
-             (merge base-meta {:active? true :charge-ticks 0 :punched? false :performed? false}))
+      (update-directed-blastwave-fx-state!
+        update :effect-state assoc owner-key*
+        (merge base-meta {:active? true :charge-ticks 0 :punched? false :performed? false}))
       :update
-      (swap! effect-state update owner-key*
-             (fn [st]
-               (assoc (merge base-meta (or st {}))
-                      :owner-key owner-key*
-                      :ctx-id ctx-id
-                      :channel channel
-                      :source-player-id source-player-id
-                      :world-id world-id
-                      :active? true
-                      :charge-ticks (long (or charge-ticks 0))
-                      :punched? (boolean punched?)
-                      :performed? false)))
+      (update-directed-blastwave-fx-state!
+        update :effect-state update owner-key*
+        (fn [st]
+          (assoc (merge base-meta (or st {}))
+                 :owner-key owner-key*
+                 :ctx-id ctx-id
+                 :channel channel
+                 :source-player-id source-player-id
+                 :world-id world-id
+                 :active? true
+                 :charge-ticks (long (or charge-ticks 0))
+                 :punched? (boolean punched?)
+                 :performed? false)))
       :perform
-      (do
-        (when (map? pos)
-          (let [dir (let [d (or look-dir {:x 0.0 :y 0.0 :z 1.0})
-                          len (Math/sqrt (+ (* (:x d) (:x d))
-                                            (* (:y d) (:y d))
-                                            (* (:z d) (:z d))))
-                          inv (/ 1.0 (max 1.0e-6 len))]
-                      {:x (* (double (:x d)) inv)
-                       :y (* (double (:y d)) inv)
-                       :z (* (double (:z d)) inv)})
-                rings (+ 2 (rand-int 2))]
-                 (swap! waves update owner-key* (fnil conj [])
-                   (merge base-meta
-                     {:pos {:x (double (:x pos)) :y (double (:y pos)) :z (double (:z pos))}
-                      :dir dir
-                      :ttl wave-life :max-ttl wave-life
-                      :rings (vec (map (fn [idx]
-                          {:life (+ 8 (rand-int 5))
-                           :offset (+ (* idx 1.5) (- (* (rand) 0.6) 0.3))
-                           :size (* 1.0 (+ 0.8 (* (rand) 0.4)))
-                           :time-offset (+ (* idx 2) (- (rand-int 3) 1))})
-                        (range rings)))}))))
+      (let [wave-entry (when (map? pos)
+                         (let [d (or look-dir {:x 0.0 :y 0.0 :z 1.0})
+                               len (Math/sqrt (+ (* (:x d) (:x d))
+                                                 (* (:y d) (:y d))
+                                                 (* (:z d) (:z d))))
+                               inv (/ 1.0 (max 1.0e-6 len))
+                               dir {:x (* (double (:x d)) inv)
+                                    :y (* (double (:y d)) inv)
+                                    :z (* (double (:z d)) inv)}
+                               rings (+ 2 (rand-int 2))]
+                           (merge base-meta
+                                  {:pos {:x (double (:x pos)) :y (double (:y pos)) :z (double (:z pos))}
+                                   :dir dir
+                                   :ttl wave-life :max-ttl wave-life
+                                   :rings (vec (map (fn [idx]
+                                                      {:life (+ 8 (rand-int 5))
+                                                       :offset (+ (* idx 1.5) (- (* (rand) 0.6) 0.3))
+                                                       :size (* 1.0 (+ 0.8 (* (rand) 0.4)))
+                                                       :time-offset (+ (* idx 2) (- (rand-int 3) 1))})
+                                                    (range rings)))})))]
+        (when wave-entry
+          (update-directed-blastwave-fx-state! update-in [:waves owner-key*] (fnil conj []) wave-entry))
         (client-sounds/queue-current-sound-effect!
           {:type :sound :sound-id sound-id :volume 0.5 :pitch 1.0
            :x (double (or (:x pos) 0.0))
            :y (double (or (:y pos) 0.0))
            :z (double (or (:z pos) 0.0))}))
       :end
-                (swap! effect-state assoc owner-key*
-                  (merge base-meta {:active? false :charge-ticks 0 :punched? false
-                      :performed? (boolean performed?)}))
+      (update-directed-blastwave-fx-state!
+        update :effect-state assoc owner-key*
+        (merge base-meta {:active? false :charge-ticks 0 :punched? false
+                          :performed? (boolean performed?)}))
       nil)))
 
 ;; ---------------------------------------------------------------------------
@@ -98,24 +150,25 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- tick! []
-  (swap! effect-state
-         (fn [states]
-           (into {}
-                 (keep (fn [[owner-key st]]
-                         (when (:active? st)
-                           [owner-key st])))
-                 states)))
-  (swap! waves
-         (fn [by-owner]
-           (into {}
-                 (keep (fn [[owner-key xs]]
-                         (let [live (->> xs
-                                         (map #(update % :ttl dec))
-                                         (filter #(pos? (long (:ttl %))))
-                                         vec)]
-                           (when (seq live)
-                             [owner-key live]))))
-                 by-owner))))
+  (update-directed-blastwave-fx-state!
+    (fn [{:keys [effect-state waves] :as state}]
+      (assoc state
+             :effect-state
+             (into {}
+                   (keep (fn [[owner-key st]]
+                           (when (:active? st)
+                             [owner-key st])))
+                   effect-state)
+             :waves
+             (into {}
+                   (keep (fn [[owner-key xs]]
+                           (let [live (->> xs
+                                           (map #(update % :ttl dec))
+                                           (filter #(pos? (long (:ttl %))))
+                                           vec)]
+                             (when (seq live)
+                               [owner-key live]))))
+                   waves)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Render ops
@@ -201,7 +254,7 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- build-plan [_camera-pos hand-center-pos _tick]
-  (let [states @effect-state
+  (let [{:keys [effect-state waves]} (directed-blastwave-fx-state-snapshot)
         db (some (fn [st]
                    (when (and (:active? st)
                               (or (nil? (:source-player-id st))
@@ -209,8 +262,8 @@
                                   (= (str (:source-player-id st))
                                      (str (:player-uuid hand-center-pos)))))
                      st))
-                 (vals states))
-        current-waves (all-waves)
+                 (vals effect-state))
+        current-waves (mapcat val waves)
         charge-plan (if (and hand-center-pos db (:active? db))
                       (charge-ops (dissoc hand-center-pos :player-uuid)
                                   (long (or (:charge-ticks db) 0))

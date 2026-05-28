@@ -2,43 +2,80 @@
   (:require [clojure.string :as str]
             [cn.li.mcmod.util.log :as log]))
 
-(defonce ^:private op-registry (atom {}))
-(defonce ^:private op-registry-frozen? (atom false))
+(defn default-effect-op-registry-runtime-state
+  []
+  {:registry {}
+   :default-ops-installed? false
+   :frozen? false})
+
+(defn create-effect-op-registry-runtime
+  ([] (create-effect-op-registry-runtime {}))
+  ([{:keys [state*]
+     :or {state* (atom (default-effect-op-registry-runtime-state))}}]
+   {::runtime ::effect-op-registry-runtime
+    :state* state*}))
+
+(def ^:dynamic *effect-op-registry-runtime* nil)
+
+(defonce ^:private installed-effect-op-registry-runtime
+  (create-effect-op-registry-runtime))
+
+(defn call-with-effect-op-registry-runtime
+  [runtime f]
+  (when-not (and (map? runtime)
+                 (= ::effect-op-registry-runtime (::runtime runtime))
+                 (some? (:state* runtime)))
+    (throw (ex-info "Expected effect op registry runtime" {:runtime runtime})))
+  (binding [*effect-op-registry-runtime* runtime]
+    (f)))
+
+(defn- current-effect-op-registry-runtime
+  []
+  (or *effect-op-registry-runtime*
+      installed-effect-op-registry-runtime))
+
+(defn- effect-op-registry-state-atom
+  []
+  (:state* (current-effect-op-registry-runtime)))
+
+(defn- effect-op-registry-state-snapshot
+  []
+  @(effect-op-registry-state-atom))
+
+(defn- update-effect-op-registry-state!
+  [f & args]
+  (apply swap! (effect-op-registry-state-atom) f args))
 
 (defn- assert-op-registry-open!
   []
-  (when @op-registry-frozen?
+  (when (:frozen? (effect-op-registry-state-snapshot))
     (throw (ex-info "Effect op registry is frozen" {}))))
-
-(declare default-ops-installed?)
 
 (defn effect-op-registry-snapshot
   []
-  {:registry @op-registry
-   :default-ops-installed? @default-ops-installed?
-   :frozen? @op-registry-frozen?})
+  (effect-op-registry-state-snapshot))
 
 (defn reset-effect-op-registry-for-test!
-  ([]
-   (reset-effect-op-registry-for-test! {}))
+  ([] (reset-effect-op-registry-for-test! {}))
   ([{:keys [registry frozen?]
      default-ops-installed-value :default-ops-installed?
      :or {registry {} default-ops-installed-value false frozen? false}}]
-   (reset! op-registry registry)
-   (reset! default-ops-installed? default-ops-installed-value)
-   (reset! op-registry-frozen? frozen?)
+   (reset! (effect-op-registry-state-atom)
+           {:registry registry
+            :default-ops-installed? default-ops-installed-value
+            :frozen? frozen?})
    nil))
 
 (defn freeze-effect-op-registry!
   []
-  (reset! op-registry-frozen? true)
+  (update-effect-op-registry-state! assoc :frozen? true)
   nil)
 
 (defn register-op!
   [op-kw f]
-  (when-not (contains? @op-registry op-kw)
+  (when-not (contains? (:registry (effect-op-registry-state-snapshot)) op-kw)
     (assert-op-registry-open!)
-    (swap! op-registry assoc op-kw f))
+    (update-effect-op-registry-state! assoc-in [:registry op-kw] f))
   op-kw)
 
 (def ^:private default-op-namespaces
@@ -51,8 +88,7 @@
     cn.li.ac.ability.server.effect.potion
     cn.li.ac.ability.server.effect.beam])
 
-(defonce ^:private default-ops-installed?
-  (atom false))
+(defonce ^:private _dummy-ops nil) ; placeholder for removed defonce ^:private default-ops-installed?
 
 (defn- op-var-symbol
   [op-kw]
@@ -93,13 +129,14 @@
 (defn init-default-ops!
   "Require and register built-in effect op declarations once."
   []
-  (when (compare-and-set! default-ops-installed? false true)
+  (when-not (:default-ops-installed? (effect-op-registry-state-snapshot))
+    (update-effect-op-registry-state! assoc :default-ops-installed? true)
     (try
       (doseq [ns-sym default-op-namespaces]
         (require ns-sym)
         (register-op-declarations-in-ns! ns-sym))
       (catch Throwable t
-        (reset! default-ops-installed? false)
+        (update-effect-op-registry-state! assoc :default-ops-installed? false)
         (throw (ex-info "Failed to initialize default effect ops" {} t)))))
   nil)
 
@@ -119,7 +156,7 @@
 
 (defn run-op!
   [evt [op-kw params]]
-  (if-let [f (get @op-registry op-kw)]
+  (if-let [f (get (:registry (effect-op-registry-state-snapshot)) op-kw)]
     (try
       (or (f evt (resolve-params evt params)) evt)
       (catch Exception e

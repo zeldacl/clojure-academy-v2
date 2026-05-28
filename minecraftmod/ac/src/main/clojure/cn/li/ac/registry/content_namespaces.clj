@@ -50,8 +50,11 @@
     :init-fns '[cn.li.ac.terminal.init/init-terminal!]
     :trace-tag :terminal-init}])
 
-(defonce ^:private default-phase-providers-installed?
-  (atom false))
+(def ^:private phase-provider-guard-lock
+  (Object.))
+
+(def ^:private ^:dynamic *default-phase-providers-installed?*
+  false)
 
 (defn ensure-default-phase-providers!
   "Register built-in content phase providers once.
@@ -59,8 +62,11 @@
   Requiring this namespace must not mutate discovery state; callers opt in by
   asking for or loading the current plan."
   []
-  (when (compare-and-set! default-phase-providers-installed? false true)
-    (discovery/bootstrap-default-providers! default-phase-plugins))
+  (when-not (var-get #'*default-phase-providers-installed?*)
+    (locking phase-provider-guard-lock
+      (when-not (var-get #'*default-phase-providers-installed?*)
+        (discovery/bootstrap-default-providers! default-phase-plugins)
+        (alter-var-root #'*default-phase-providers-installed?* (constantly true)))))
   nil)
 
 (defn register-content-phase-plugin!

@@ -44,14 +44,19 @@
   (categories/format-recipe-for-jei recipe))
 
 ;; JEI integration status
-(def ^:private jei-available? (atom false))
+(def ^:private jei-available-lock
+  (Object.))
+
+(def ^:private ^:dynamic *jei-available?*
+  false)
 
 (defn jei-loaded?
   "Check if JEI is loaded and available."
   []
-  @jei-available?)
+  (var-get #'*jei-available?*))
 
 (defn mark-jei-loaded!
   "Mark JEI as loaded. Called by platform implementation."
   []
-  (reset! jei-available? true))
+  (locking jei-available-lock
+    (alter-var-root #'*jei-available?* (constantly true))))

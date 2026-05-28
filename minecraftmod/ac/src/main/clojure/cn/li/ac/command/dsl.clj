@@ -3,31 +3,70 @@
   (:require [cn.li.mcmod.util.log :as log]))
 
 ;; Command Registry - stores all defined commands
-(defonce ^:private command-registry (atom {}))
-(defonce ^:private command-registry-frozen? (atom false))
+(defn default-command-registry-runtime-state
+  []
+  {:commands {}
+   :frozen? false})
+
+(defn create-command-registry-runtime
+  ([] (create-command-registry-runtime {}))
+  ([{:keys [state*]
+     :or {state* (atom (default-command-registry-runtime-state))}}]
+   {::runtime ::command-registry-runtime
+    :state* state*}))
+
+(def ^:dynamic *command-registry-runtime* nil)
+
+(defonce ^:private installed-command-registry-runtime
+  (create-command-registry-runtime))
+
+(defn call-with-command-registry-runtime
+  [runtime f]
+  (when-not (and (map? runtime)
+                 (= ::command-registry-runtime (::runtime runtime))
+                 (some? (:state* runtime)))
+    (throw (ex-info "Expected command registry runtime" {:runtime runtime})))
+  (binding [*command-registry-runtime* runtime]
+    (f)))
+
+(defn- current-command-registry-runtime
+  []
+  (or *command-registry-runtime*
+      installed-command-registry-runtime))
+
+(defn- command-registry-state-atom
+  []
+  (:state* (current-command-registry-runtime)))
+
+(defn- command-registry-state-snapshot
+  []
+  @(command-registry-state-atom))
+
+(defn- update-command-registry-state!
+  [f & args]
+  (apply swap! (command-registry-state-atom) f args))
 
 (defn- assert-command-registry-open!
   []
-  (when @command-registry-frozen?
+  (when (:frozen? (command-registry-state-snapshot))
     (throw (ex-info "Command registry is frozen" {}))))
 
 (defn command-registry-snapshot
   []
-  {:commands @command-registry
-   :frozen? @command-registry-frozen?})
+  (command-registry-state-snapshot))
 
 (defn reset-command-registry-for-test!
-  ([]
-   (reset-command-registry-for-test! {}))
+  ([] (reset-command-registry-for-test! {}))
   ([{:keys [commands frozen?]
      :or {commands {} frozen? false}}]
-   (reset! command-registry commands)
-   (reset! command-registry-frozen? frozen?)
+   (reset! (command-registry-state-atom)
+           {:commands commands
+            :frozen? frozen?})
    nil))
 
 (defn freeze-command-registry!
   []
-  (reset! command-registry-frozen? true)
+  (update-command-registry-state! assoc :frozen? true)
   nil)
 
 ;; ============================================================================
@@ -185,29 +224,29 @@
   (when-not (instance? CommandSpec command-spec)
     (throw (ex-info "Must register a CommandSpec" {:spec command-spec})))
 
-  (if-let [existing (get @command-registry (:id command-spec))]
+  (if-let [existing (get (:commands (command-registry-state-snapshot)) (:id command-spec))]
     existing
     (do
       (assert-command-registry-open!)
       (log/info "Registering command:" (:id command-spec))
-      (swap! command-registry assoc (:id command-spec) command-spec)
+      (update-command-registry-state! assoc-in [:commands (:id command-spec)] command-spec)
       command-spec)))
 
 (defn get-command
   "Get a command from the registry by ID"
   [command-id]
-  (get @command-registry command-id))
+  (get (:commands (command-registry-state-snapshot)) command-id))
 
 (defn list-commands
   "List all registered command IDs"
   []
-  (keys @command-registry))
+  (keys (:commands (command-registry-state-snapshot))))
 
 (defn unregister-command!
   "Remove a command from the registry"
   [command-id]
   (assert-command-registry-open!)
-  (swap! command-registry dissoc command-id))
+  (update-command-registry-state! update :commands dissoc command-id))
 
 (defn clear-registry!
   "Clear all commands from the registry (for testing)"

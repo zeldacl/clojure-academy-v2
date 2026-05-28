@@ -4,7 +4,19 @@
 						[cn.li.mcmod.protocol.core :as registry-core]
 						[cn.li.mcmod.util.log :as log]))
 
-(defonce particle-registry (registry-core/atom-registry {}))
+(defn create-particle-registry-runtime
+	([] (create-particle-registry-runtime {}))
+	([{:keys [registry]}]
+	 {:cn.li.mcmod.particle.dsl/runtime ::particle-registry-runtime
+	  :registry (or registry (registry-core/atom-registry {}))}))
+
+(def ^:dynamic *particle-registry-runtime* nil)
+
+(defonce ^:private installed-particle-registry-runtime
+	(create-particle-registry-runtime))
+
+(defn- particle-registry-state []
+	(:registry (or *particle-registry-runtime* installed-particle-registry-runtime)))
 
 (defrecord ParticleSpec [id registry-name always-show? properties])
 
@@ -22,11 +34,11 @@
 	(when-not (string? (:id particle-spec))
 		(throw (ex-info "Particle :id must be string" {:particle-spec particle-spec})))
 	(log/info "Registering particle:" (:id particle-spec) "->" (:registry-name particle-spec))
-	(registry-core/swap-state! particle-registry #(assoc % (:id particle-spec) particle-spec))
+	(registry-core/swap-state! (particle-registry-state) #(assoc % (:id particle-spec) particle-spec))
 	particle-spec)
 
-(defn get-particle [particle-id] (registry-core/lookup particle-registry particle-id))
-(defn list-particles [] (keys (registry-core/snapshot particle-registry)))
+(defn get-particle [particle-id] (registry-core/lookup (particle-registry-state) particle-id))
+(defn list-particles [] (keys (registry-core/snapshot (particle-registry-state))))
 
 (defmacro defparticle
 	[particle-name & options]

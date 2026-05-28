@@ -4,13 +4,16 @@
 						[cn.li.mcmod.block.tile-logic :as tile-logic]
 						[cn.li.mcmod.platform.capability :as platform-cap]
 						[cn.li.ac.registry.hooks :as hooks]
-						[cn.li.ac.util.init-guard :refer [with-init-guard]]
 						[cn.li.ac.config.modid :as modid]
 						[cn.li.ac.block.developer.handlers :as dev-handlers]
 						[cn.li.mcmod.util.log :as log])
 	(:import [cn.li.acapi.wireless IWirelessReceiver]))
 
-(defonce ^:private developer-installed? (atom false))
+(def ^:private developer-guard-lock
+	(Object.))
+
+(def ^:private ^:dynamic *developer-installed?*
+	false)
 
 (def developer-default-multiblock-positions
 	[[0 0 0]
@@ -50,16 +53,18 @@
 		(fn [_] nil)))
 
 (defn init-developer! []
-	(with-init-guard developer-installed?
-		(tdsl/register-tile!
-			(tdsl/create-tile-spec
-				"developer-normal"
-				{:registry-name "developer_normal"
-				 :impl :scripted
-				 :blocks ["developer-normal" "developer-normal-part"]
-				 :tick-fn developer-tick-dispatch
-				 :read-nbt-fn developer-load-dispatch
-				 :write-nbt-fn developer-save-dispatch}))
+	(when-not (var-get #'*developer-installed?*)
+		(locking developer-guard-lock
+			(when-not (var-get #'*developer-installed?*)
+				(tdsl/register-tile!
+					(tdsl/create-tile-spec
+						"developer-normal"
+						{:registry-name "developer_normal"
+						 :impl :scripted
+						 :blocks ["developer-normal" "developer-normal-part"]
+						 :tick-fn developer-tick-dispatch
+						 :read-nbt-fn developer-load-dispatch
+						 :write-nbt-fn developer-save-dispatch}))
 		(tdsl/register-tile!
 			(tdsl/create-tile-spec
 				"developer-advanced"
@@ -123,6 +128,7 @@
 				 :physical {:material :metal :hardness 5.0 :resistance 12.0 :requires-tool true :harvest-tool :pickaxe :harvest-level 2 :sounds :metal}
 				 :rendering {:light-level 2.0 :has-item-form? false :model-parent "minecraft:block/cube_all" :textures {:all (modid/asset-path "block" "dev_advanced")}}
 				 :events {:on-right-click (developer-open-gui-dispatch "developer-advanced")}}))
-		(hooks/register-network-handler! dev-handlers/register-network-handlers!)
-		(hooks/register-client-renderer! 'cn.li.ac.block.developer.render/init!)
-		(log/info "Initialized Developer blocks (Normal and Advanced)")))
+				(hooks/register-network-handler! dev-handlers/register-network-handlers!)
+				(hooks/register-client-renderer! 'cn.li.ac.block.developer.render/init!)
+				(alter-var-root #'*developer-installed?* (constantly true))
+				(log/info "Initialized Developer blocks (Normal and Advanced)")))))

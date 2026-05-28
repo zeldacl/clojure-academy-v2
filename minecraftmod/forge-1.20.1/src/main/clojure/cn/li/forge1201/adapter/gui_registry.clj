@@ -26,16 +26,41 @@
 
 ;; Registries are locked before FMLCommonSetupEvent; MenuType must be registered
 ;; via DeferredRegister during RegisterEvent, just like blocks and items.
-(defonce menu-register
-  ;; AOT/checkClojure 阶段 Minecraft registries 尚未 bootstrapped。
-  ;; 延迟创建，避免编译期触发 Bootstrap。
-  (delay (ForgeBootstrapHelper/createMenusRegister modid/*mod-id*)))
+(def ^:private gui-registry-lock
+  (Object.))
 
-(defonce gui-menu-types
+(def ^:private ^:dynamic *menu-register* nil)
+
+(def ^:private ^:dynamic *gui-menu-types*
   ^{:doc "Map from GUI ID to RegistryObject<MenuType>.
   Call (.get ro) to get the actual MenuType after registration fires.
   Structure: {gui-id RegistryObject, ...}"}
-  (atom {}))
+  {})
+
+(defn menu-register
+  []
+  (or (var-get #'*menu-register*)
+      (locking gui-registry-lock
+        (or (var-get #'*menu-register*)
+            (let [created (ForgeBootstrapHelper/createMenusRegister modid/*mod-id*)]
+              (alter-var-root #'*menu-register* (constantly created))
+              created)))))
+
+(defn- gui-menu-types-snapshot
+  []
+  (var-get #'*gui-menu-types*))
+
+(defn- assoc-gui-menu-type!
+  [gui-id menu-type]
+  (locking gui-registry-lock
+    (alter-var-root #'*gui-menu-types* assoc gui-id menu-type)
+    nil))
+
+(defn- clear-gui-menu-types!
+  []
+  (locking gui-registry-lock
+    (alter-var-root #'*gui-menu-types* (constantly {}))
+    nil))
 
 (declare install-registry-contract!)
 
@@ -48,7 +73,7 @@
   
   Returns: MenuType or nil"
   [gui-id]
-  (when-let [registered (get @gui-menu-types gui-id)]
+  (when-let [registered (get (gui-menu-types-snapshot) gui-id)]
     (if (instance? RegistryObject registered)
       (.get ^RegistryObject registered)
       registered)))
@@ -94,16 +119,16 @@
           ;; Create IForgeMenuType eagerly; the embedded IContainerFactory is a
           ;; lazy callback that resolves get-menu-type at GUI-open time (runtime).
           menu-type (create-menu-type gui-id)
-          ^DeferredRegister deferred-register (force menu-register)
+          ^DeferredRegister deferred-register (menu-register)
           ro (.register deferred-register registry-name
                (reify java.util.function.Supplier
                  (get [_]
                    ;; Called by Forge during RegisterEvent — registries are open here.
                    ;; Store menu-type in platform adapter's metadata system
                    menu-type)))]
-      (swap! gui-menu-types assoc gui-id ro)
+      (assoc-gui-menu-type! gui-id ro)
       (log/info "Queued menu type:" registry-name "for GUI ID" gui-id)))
-      (log/info "Queued" (count @gui-menu-types) "menu types"))
+      (log/info "Queued" (count (gui-menu-types-snapshot)) "menu types"))
 
 ;; ============================================================================
 ;; GUI Opening
@@ -148,11 +173,11 @@
   (registry-api/register-registry-impl!
     :forge-1.20.1
     {:register-menu-type! (fn [gui-id menu-type]
-                            (swap! gui-menu-types assoc gui-id menu-type)
+                            (assoc-gui-menu-type! gui-id menu-type)
                             nil)
      :get-menu-type get-menu-type
-     :list-menu-types (fn [] @gui-menu-types)
-     :invalidate-menu-registry! (fn [] (reset! gui-menu-types {}))}))
+     :list-menu-types (fn [] (gui-menu-types-snapshot))
+     :invalidate-menu-registry! clear-gui-menu-types!}))
 
 (defmethod gui/register-gui-handler :forge-1.20.1 [_]
   ;; MenuType registration is handled via DeferredRegister during Forge bootstrap.

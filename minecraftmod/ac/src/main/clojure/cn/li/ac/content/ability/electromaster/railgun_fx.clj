@@ -10,7 +10,58 @@
 ;; State
 ;; ---------------------------------------------------------------------------
 
-(defonce ^:private beam-effects (atom {}))
+(defn default-railgun-fx-runtime-state
+  []
+  {:beam-effects {}})
+
+(defn create-railgun-fx-runtime
+  ([]
+   (create-railgun-fx-runtime {}))
+  ([{:keys [state*]
+     :or {state* (atom (default-railgun-fx-runtime-state))}}]
+   {::runtime ::railgun-fx-runtime
+    :state* state*}))
+
+(def ^:dynamic *railgun-fx-runtime* nil)
+
+(defonce ^:private installed-railgun-fx-runtime
+  (create-railgun-fx-runtime))
+
+(defn- railgun-fx-runtime?
+  [runtime]
+  (and (map? runtime)
+       (= ::railgun-fx-runtime (::runtime runtime))
+       (some? (:state* runtime))))
+
+(defn call-with-railgun-fx-runtime
+  [runtime f]
+  (when-not (railgun-fx-runtime? runtime)
+    (throw (ex-info "Expected railgun FX runtime"
+                    {:value runtime})))
+  (binding [*railgun-fx-runtime* runtime]
+    (f)))
+
+(defmacro with-railgun-fx-runtime
+  [runtime & body]
+  `(call-with-railgun-fx-runtime ~runtime (fn [] ~@body)))
+
+(defn- current-railgun-fx-runtime
+  []
+  (or *railgun-fx-runtime*
+      installed-railgun-fx-runtime))
+
+(defn- railgun-fx-state-atom
+  []
+  (:state* (current-railgun-fx-runtime)))
+
+(defn- railgun-fx-state-snapshot
+  []
+  @(railgun-fx-state-atom))
+
+(defn- update-railgun-fx-state!
+  [f & args]
+  (apply swap! (railgun-fx-state-atom) f args))
+
 (def ^:private beam-life-ticks 12)
 (def ^:private railgun-beam-style
   {:width (fn [_ life] (* 0.08 (+ 0.5 life)))
@@ -24,20 +75,20 @@
 
 (defn railgun-fx-snapshot
   []
-  {:beam-effects @beam-effects})
+  (railgun-fx-state-snapshot))
 
 (defn reset-railgun-fx-for-test!
   []
-  (reset! beam-effects {})
+  (reset! (railgun-fx-state-atom) (default-railgun-fx-runtime-state))
   nil)
 
 (defn clear-railgun-owner!
   [owner-key]
-  (swap! beam-effects dissoc owner-key)
+  (update-railgun-fx-state! update :beam-effects dissoc owner-key)
   nil)
 
 (defn- all-beam-effects []
-  (mapcat val @beam-effects))
+  (mapcat val (:beam-effects (railgun-fx-state-snapshot))))
 
 ;; ---------------------------------------------------------------------------
 ;; Enqueue
@@ -52,31 +103,33 @@
                    :source-player-id source-player-id
                    :world-id world-id}]
     (when (and start end)
-      (swap! beam-effects update owner-key* (fnil conj [])
-             (merge base-meta
-                    {:start start
-                     :end end
-                     :mode (or mode :block-hit)
-                     :hit-distance (double (or hit-distance 18.0))
-                     :ttl beam-life-ticks
-                     :max-ttl beam-life-ticks})))))
+      (update-railgun-fx-state!
+        update :beam-effects update owner-key* (fnil conj [])
+        (merge base-meta
+               {:start start
+                :end end
+                :mode (or mode :block-hit)
+                :hit-distance (double (or hit-distance 18.0))
+                :ttl beam-life-ticks
+                :max-ttl beam-life-ticks})))))
 
 ;; ---------------------------------------------------------------------------
 ;; Tick
 ;; ---------------------------------------------------------------------------
 
 (defn- tick! []
-  (swap! beam-effects
-         (fn [by-owner]
-           (into {}
-                 (keep (fn [[owner-key xs]]
-                         (let [live (->> xs
-                                         (map #(update % :ttl dec))
-                                         (filter #(pos? (long (:ttl %))))
-                                         vec)]
-                           (when (seq live)
-                             [owner-key live]))))
-                 by-owner))))
+  (update-railgun-fx-state!
+    update :beam-effects
+    (fn [by-owner]
+      (into {}
+            (keep (fn [[owner-key xs]]
+                    (let [live (->> xs
+                                    (map #(update % :ttl dec))
+                                    (filter #(pos? (long (:ttl %))))
+                                    vec)]
+                      (when (seq live)
+                        [owner-key live]))))
+            by-owner))))
 
 ;; ---------------------------------------------------------------------------
 ;; Render ops

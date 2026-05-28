@@ -1,20 +1,31 @@
 (ns cn.li.mcmod.gui.adapter.platform-registry
   "Platform callback registry for unified GUI adapter.")
 
-(defonce ^:private platform-impl
-  (atom nil))
+(defn create-gui-platform-registry-runtime
+  ([] (create-gui-platform-registry-runtime {}))
+  ([{:keys [state*]}]
+   {:cn.li.mcmod.gui.adapter.platform-registry/runtime ::gui-platform-registry-runtime
+    :state* (or state* (atom nil))}))
+
+(def ^:dynamic *gui-platform-registry-runtime* nil)
+
+(defonce ^:private installed-gui-platform-registry-runtime
+  (create-gui-platform-registry-runtime))
+
+(defn- platform-impl-atom []
+  (:state* (or *gui-platform-registry-runtime* installed-gui-platform-registry-runtime)))
 
 (defn register-gui-platform-impl!
   [impl-map]
   (when-not (map? impl-map)
     (throw (ex-info "Expected map for register-gui-platform-impl!"
                     {:impl-map-type (type impl-map)})))
-  (reset! platform-impl impl-map)
+  (reset! (platform-impl-atom) impl-map)
   nil)
 
 (defn platform-impl-fn!
   [k]
-  (let [m @platform-impl]
+  (let [m @(platform-impl-atom)]
     (when-not m
       (throw (ex-info "GUI platform implementation not registered"
                       {:missing-key k

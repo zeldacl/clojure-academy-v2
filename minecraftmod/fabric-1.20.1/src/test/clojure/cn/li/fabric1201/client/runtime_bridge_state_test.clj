@@ -12,11 +12,10 @@
 
 (use-fixtures :each
   (fn [f]
-    (runtime-bridge/reset-input-state-for-test!)
-    (try
-      (f)
-      (finally
-        (runtime-bridge/reset-input-state-for-test!)))))
+    (runtime-bridge/call-with-input-runtime
+      (runtime-bridge/create-input-runtime)
+      (fn []
+        (f)))))
 
 (deftest clear-owner-input-state-removes-only-target-owner-test
   (runtime-bridge/reset-input-state-for-test!
@@ -47,3 +46,25 @@
            (get-in snapshot [:raw-v-state (owner-key owner-b)])))
     (is (= {:was-down false}
            (get-in snapshot [:raw-n-state (owner-key owner-b)])))))
+
+(deftest input-runtime-isolation-test
+  (let [runtime-b (runtime-bridge/create-input-runtime)]
+    (runtime-bridge/reset-input-state-for-test!
+      {:raw-v-state-map {(owner-key owner-a) {:was-down true :down-at-ns 1}}
+       :raw-n-state-map {(owner-key owner-a) {:was-down true}}})
+    (runtime-bridge/call-with-input-runtime
+      runtime-b
+      (fn []
+        (runtime-bridge/reset-input-state-for-test!
+          {:raw-v-state-map {(owner-key owner-b) {:was-down false :down-at-ns nil}}
+           :raw-n-state-map {(owner-key owner-b) {:was-down false}}})
+        (let [snapshot (runtime-bridge/input-state-snapshot)]
+          (is (= {:was-down false :down-at-ns nil}
+                 (get-in snapshot [:raw-v-state (owner-key owner-b)])))
+          (is (= {:was-down false}
+                 (get-in snapshot [:raw-n-state (owner-key owner-b)]))))))
+    (let [snapshot (runtime-bridge/input-state-snapshot)]
+      (is (= {:was-down true :down-at-ns 1}
+             (get-in snapshot [:raw-v-state (owner-key owner-a)])))
+      (is (= {:was-down true}
+             (get-in snapshot [:raw-n-state (owner-key owner-a)]))))))

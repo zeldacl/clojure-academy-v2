@@ -4,14 +4,15 @@
             [cn.li.mcmod.network.client :as client]
             [cn.li.mcmod.platform.dispatch :as dispatch]))
 
-(defn- reset-client-state! [f]
-  (client/reset-client-state-for-test!)
-  (try
-    (f)
-    (finally
-      (client/reset-client-state-for-test!))))
+(defn- with-fresh-client-runtime [f]
+  (client/call-with-client-runtime (client/create-client-runtime)
+    (fn []
+      (try
+        (f)
+        (finally
+          (client/reset-client-state-for-test!))))))
 
-(use-fixtures :each reset-client-state!)
+(use-fixtures :each with-fresh-client-runtime)
 
 (deftest send-to-server-request-id-contract-test
   (let [calls (atom [])]
@@ -25,7 +26,7 @@
              @calls))
       (is (= #{[(binding [runtime-hooks/*client-session-id* :session-a]
                   (client/client-owner-key nil)) 1]}
-             (set (keys (:pending-requests (client/client-state-snapshot)))))))))
+             (set (keys (:pending-requests (client/client-state-snapshot {:client-session-id :session-a})))))))))
 
 (deftest ownerless-send-requires-client-session-test
   (with-redefs [client/send-request (fn [& _] nil)]
@@ -42,7 +43,7 @@
     (binding [runtime-hooks/*client-session-id* :session-a]
       (client/handle-response 1 {:ok true}))
     (is (= [{:ok true}] @responses))
-    (is (empty? (:pending-requests (client/client-state-snapshot)))))
+    (is (empty? (:pending-requests (client/client-state-snapshot {:client-session-id :session-a})))))
   (testing "unknown request-id is ignored without throw"
     (binding [runtime-hooks/*client-session-id* :session-a]
       (is (= nil (client/handle-response 999 {:ok false})))))
@@ -52,32 +53,36 @@
         (client/send-to-server "req" {} (fn [_] (throw (ex-info "cb-fail" {}))))))
     (binding [runtime-hooks/*client-session-id* :session-a]
       (is (= nil (client/handle-response 2 {:x 1}))))
-    (is (empty? (:pending-requests (client/client-state-snapshot))))))
+    (is (empty? (:pending-requests (client/client-state-snapshot {:client-session-id :session-a}))))))
 
 (deftest owner-scoped-pending-requests-test
-  (let [owner-a {:client-session-id :session-a :screen-id :screen}
-        owner-b {:client-session-id :session-b :screen-id :screen}
+  (let [session-a (client/create-client-network-session)
+        session-b (client/create-client-network-session)
+        owner-a {:client-session-id :session-a :screen-id :screen :client-network-session session-a}
+        owner-b {:client-session-id :session-b :screen-id :screen :client-network-session session-b}
         responses (atom [])]
     (with-redefs [client/send-request (fn [& _] nil)]
       (client/send-to-server owner-a "req" {} (fn [resp] (swap! responses conj [:a resp])))
       (client/send-to-server owner-b "req" {} (fn [resp] (swap! responses conj [:b resp]))))
     (is (= #{[(client/client-owner-key owner-a) 1]
              [(client/client-owner-key owner-b) 1]}
-           (set (keys (:pending-requests (client/client-state-snapshot))))))
+           (set (concat (keys (:pending-requests (client/client-state-snapshot session-a)))
+                        (keys (:pending-requests (client/client-state-snapshot session-b)))))))
     (client/handle-response owner-b 1 {:ok :b})
     (is (= [[:b {:ok :b}]] @responses))
     (is (= #{[(client/client-owner-key owner-a) 1]}
-           (set (keys (:pending-requests (client/client-state-snapshot))))))
+           (set (keys (:pending-requests (client/client-state-snapshot session-a))))))
     (client/clear-owner-state! owner-a)
-    (is (empty? (:pending-requests (client/client-state-snapshot))))))
+    (is (empty? (:pending-requests (client/client-state-snapshot session-a))))))
 
 (deftest pending-requests-expire-by-timeout-test
-  (let [owner {:client-session-id :session-a :screen-id :screen :timeout-ms 1}]
+  (let [session (client/create-client-network-session)
+        owner {:client-session-id :session-a :screen-id :screen :timeout-ms 1 :client-network-session session}]
     (with-redefs [client/send-request (fn [& _] nil)]
       (client/send-to-server owner "req" {} identity))
     (is (= [[(client/client-owner-key owner) 1]]
-           (client/expire-pending-requests! (+ (System/currentTimeMillis) 10000))))
-    (is (empty? (:pending-requests (client/client-state-snapshot))))))
+           (client/expire-pending-requests! session (+ (System/currentTimeMillis) 10000))))
+    (is (empty? (:pending-requests (client/client-state-snapshot session))))))
 
 (deftest push-handler-contract-test
   (let [calls (atom [])]
@@ -90,17 +95,51 @@
     (is (= nil (client/handle-push "push/boom" {:a 1})))))
 
 (deftest owner-scoped-push-handler-test
-  (let [owner-a {:client-session-id :session-a :screen-id :screen-a}
-        owner-b {:client-session-id :session-a :screen-id :screen-b}
+  (let [session-a (client/create-client-network-session)
+        session-b (client/create-client-network-session)
+        owner-a {:client-session-id :session-a :screen-id :screen-a :client-network-session session-a}
+        owner-b {:client-session-id :session-a :screen-id :screen-b :client-network-session session-b}
         calls (atom [])]
     (client/register-push-handler! "push/state" (fn [payload] (swap! calls conj [:static payload])))
     (client/register-push-handler! owner-a "push/state" (fn [payload] (swap! calls conj [:a payload])))
     (client/handle-push owner-a "push/state" {:x 1})
     (client/handle-push owner-b "push/state" {:x 2})
-  (is (= [[:a {:x 1}]] @calls))
+    (is (= [[:a {:x 1}]] @calls))
     (client/clear-owner-state! owner-a)
     (client/handle-push owner-a "push/state" {:x 3})
-  (is (= [[:a {:x 1}]] @calls))))
+    (is (= [[:a {:x 1}]] @calls))
+    (is (empty? (:push-handlers (client/client-state-snapshot session-a))))
+    (is (empty? (:push-handlers (client/client-state-snapshot session-b))))))
+
+(deftest client-runtime-isolation-test
+  (let [runtime-a (client/create-client-runtime)
+        runtime-b (client/create-client-runtime)
+        calls (atom [])]
+    (with-redefs [client/send-request (fn [& _] nil)]
+      (client/call-with-client-runtime runtime-a
+        (fn []
+          (binding [runtime-hooks/*client-session-id* :session-a]
+            (client/send-to-server "req" {} (fn [resp] (swap! calls conj [:a-response resp])))
+            (client/register-push-handler! "push/runtime" (fn [payload] (swap! calls conj [:a-push payload]))))))
+      (client/call-with-client-runtime runtime-b
+        (fn []
+          (binding [runtime-hooks/*client-session-id* :session-a]
+            (client/send-to-server "req" {} (fn [resp] (swap! calls conj [:b-response resp]))))))
+      (client/call-with-client-runtime runtime-b
+        (fn []
+          (binding [runtime-hooks/*client-session-id* :session-a]
+            (client/handle-push "push/runtime" {:x :ignored})
+            (client/handle-response 1 {:ok :b}))))
+      (is (= [[:b-response {:ok :b}]] @calls))
+      (client/call-with-client-runtime runtime-a
+        (fn []
+          (binding [runtime-hooks/*client-session-id* :session-a]
+            (client/handle-push "push/runtime" {:x :a})
+            (client/handle-response 1 {:ok :a}))))
+      (is (= [[:b-response {:ok :b}]
+              [:a-push {:x :a}]
+              [:a-response {:ok :a}]]
+             @calls)))))
 
 (deftest default-send-request-contract-test
   (binding [dispatch/*platform-version* :unknown]

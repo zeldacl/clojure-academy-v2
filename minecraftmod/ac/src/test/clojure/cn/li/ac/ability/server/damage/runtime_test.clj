@@ -48,3 +48,17 @@
   (rt/freeze-damage-handler-registry!)
   (is (false? (rt/register-damage-handler! :new-handler (fn [_ _ d _] d) 0)))
   (is (false? (rt/unregister-damage-handler! :dup))))
+
+(deftest damage-handler-registry-runtime-isolation-test
+  (let [rt-a (rt/create-damage-handler-registry-runtime)
+        rt-b (rt/create-damage-handler-registry-runtime)]
+    (rt/call-with-damage-handler-registry-runtime rt-a
+      (fn []
+        (rt/register-damage-handler! :mul (fn [_ _ d _] (* d 3)) 0)))
+    (rt/call-with-damage-handler-registry-runtime rt-b
+      (fn []
+        (is (empty? (rt/get-active-handlers)))
+        (is (= 5.0 (rt/process-damage! "p" "a" 5.0 :src)))))
+    (rt/call-with-damage-handler-registry-runtime rt-a
+      (fn []
+        (is (= [:mul] (rt/get-active-handlers)))))))

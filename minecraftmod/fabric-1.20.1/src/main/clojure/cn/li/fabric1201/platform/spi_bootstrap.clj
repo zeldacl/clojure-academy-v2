@@ -16,7 +16,11 @@
             [cn.li.mc1201.runtime.bootstrap-interop-core :as bootstrap-core]
             [cn.li.mc1201.reflect-util :as ru]))
 
-(defonce ^:private initialized? (atom false))
+(def ^:private platform-init-guard-lock
+  (Object.))
+
+(def ^:private ^:dynamic *initialized?*
+  false)
 
 (defn- install-be-ops! []
   (let [scripted-be-cls (ru/class-noinit "cn.li.fabric1201.block.entity.ScriptedBlockEntity")]
@@ -105,8 +109,11 @@
 (defn init-platform!
   "Initialize Fabric 1.20.1 platform implementations via SPI entrypoint."
   []
-  (when (compare-and-set! initialized? false true)
-    (platform-init/install-platform-core! fabric-adapter)
-    (install-be-ops!)
-    (log/info "fabric platform SPI bootstrap initialized via ServiceLoader entrypoint"))
+  (when-not (var-get #'*initialized?*)
+    (locking platform-init-guard-lock
+      (when-not (var-get #'*initialized?*)
+        (platform-init/install-platform-core! fabric-adapter)
+        (install-be-ops!)
+        (alter-var-root #'*initialized?* (constantly true))
+        (log/info "fabric platform SPI bootstrap initialized via ServiceLoader entrypoint"))))
   nil)

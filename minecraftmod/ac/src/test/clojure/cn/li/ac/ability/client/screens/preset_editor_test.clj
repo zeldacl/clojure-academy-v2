@@ -4,12 +4,11 @@
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (defn- reset-screen-fixture [f]
-  (screen/reset-editor-states-for-test!)
-  (try
-    (binding [runtime-hooks/*client-session-id* :test-session]
-      (f))
-    (finally
-      (screen/reset-editor-states-for-test!))))
+  (screen/call-with-preset-editor-runtime
+    (screen/create-preset-editor-runtime)
+    (fn []
+      (binding [runtime-hooks/*client-session-id* :test-session]
+        (f)))))
 
 (use-fixtures :each reset-screen-fixture)
 
@@ -40,3 +39,21 @@
   (is (thrown-with-msg? clojure.lang.ExceptionInfo
                         #"Preset editor owner requires :player-uuid"
                         (screen/editor-state-snapshot {:client-session-id :session-a}))))
+
+(deftest editor-runtime-isolation-test
+  (let [runtime-b (screen/create-preset-editor-runtime)]
+    (screen/open-screen! "player-1")
+    (screen/on-preset-tab-click 2)
+    (screen/on-skill-select :railgun)
+    (screen/on-slot-click 1)
+    (screen/call-with-preset-editor-runtime
+      runtime-b
+      (fn []
+        (screen/open-screen! "player-1")
+        (screen/on-preset-tab-click 3)
+        (screen/on-skill-select :meltdowner)
+        (screen/on-slot-click 0)
+        (is (= {3 {0 :meltdowner}}
+               (:pending-changes (screen/editor-state-snapshot "player-1"))))))
+    (is (= {2 {1 :railgun}}
+           (:pending-changes (screen/editor-state-snapshot "player-1"))))))

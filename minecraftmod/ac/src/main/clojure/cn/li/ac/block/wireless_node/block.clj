@@ -5,7 +5,6 @@
             [cn.li.mcmod.block.tile-logic :as tile-logic]
             [cn.li.mcmod.platform.capability :as platform-cap]
             [cn.li.ac.registry.hooks :as hooks]
-            [cn.li.ac.util.init-guard :refer [with-init-guard]]
             [cn.li.ac.block.wireless-node.logic :as node-logic]
             [cn.li.ac.block.wireless-node.handlers :as node-handlers]
             [cn.li.mcmod.util.log :as log])
@@ -17,12 +16,17 @@
    (bdsl/get-block "wireless-node-standard")
    (bdsl/get-block "wireless-node-advanced")])
 
-(defonce ^:private wireless-node-installed?
-  (atom false))
+(def ^:private wireless-node-guard-lock
+  (Object.))
+
+(def ^:private ^:dynamic *wireless-node-installed?*
+  false)
 
 (defn init-wireless-nodes! []
-  (with-init-guard wireless-node-installed?
-    (node-logic/ensure-node-slot-schema!)
+  (when-not (var-get #'*wireless-node-installed?*)
+    (locking wireless-node-guard-lock
+      (when-not (var-get #'*wireless-node-installed?*)
+        (node-logic/ensure-node-slot-schema!)
     (tile-logic/register-tile-kind!
       :wireless-node
       {:tick-fn node-logic/node-scripted-tick-fn
@@ -106,7 +110,8 @@
                   :on-place (node-logic/handle-node-place :advanced)
                   :on-break (node-logic/handle-node-break :advanced)}}))
     (hooks/register-network-handler! node-handlers/register-network-handlers!)
-    (log/info "Initialized Wireless Nodes (thin coordinator):")
-    (doseq [[tier cfg] (node-logic/node-types)]
-      (log/info "  -" (name tier) ": max-energy=" (:max-energy cfg)))
-    (log/info "  - Capabilities :wireless-node + :wireless-energy registered")))
+        (log/info "Initialized Wireless Nodes (thin coordinator):")
+        (doseq [[tier cfg] (node-logic/node-types)]
+          (log/info "  -" (name tier) ": max-energy=" (:max-energy cfg)))
+        (alter-var-root #'*wireless-node-installed?* (constantly true))
+        (log/info "  - Capabilities :wireless-node + :wireless-energy registered")))))

@@ -69,8 +69,11 @@
     :consume-liquid 8000
     :time cfg/craft-time-ticks}])
 
-(defonce ^:private recipes
-  (atom (vec (default-recipes))))
+(def ^:private recipe-store-lock
+  (Object.))
+
+(def ^:private ^:dynamic *recipes*
+  (vec (default-recipes)))
 
 (defn- validate-recipe!
   [recipe]
@@ -92,7 +95,7 @@
 
 (defn recipes-snapshot
   []
-  (vec @recipes))
+  (vec (var-get #'*recipes*)))
 
 (defn replace-recipes!
   [recipe-list]
@@ -101,27 +104,30 @@
                        assert-no-conflicting-duplicates!
                        distinct
                        vec)]
-    (reset! recipes validated))
+    (locking recipe-store-lock
+      (alter-var-root #'*recipes* (constantly validated))))
   nil)
 
 (defn register-recipe!
   [recipe]
   (let [recipe (validate-recipe! recipe)]
-    (swap! recipes
-           (fn [current]
-             (if-let [existing (first (filter #(= (:id %) (:id recipe)) current))]
-               (if (= existing recipe)
-                 current
-                 (throw (ex-info "Conflicting Imaginary Fusor recipe id"
-                                 {:id (:id recipe)
-                                  :existing existing
-                                  :new recipe})))
-               (conj (vec current) recipe)))))
+    (locking recipe-store-lock
+      (let [current (var-get #'*recipes*)
+            next (if-let [existing (first (filter #(= (:id %) (:id recipe)) current))]
+                   (if (= existing recipe)
+                     current
+                     (throw (ex-info "Conflicting Imaginary Fusor recipe id"
+                                     {:id (:id recipe)
+                                      :existing existing
+                                      :new recipe})))
+                   (conj (vec current) recipe))]
+        (alter-var-root #'*recipes* (constantly next)))))
   nil)
 
 (defn reset-recipes-for-test!
   []
-  (reset! recipes (vec (default-recipes)))
+  (locking recipe-store-lock
+    (alter-var-root #'*recipes* (constantly (vec (default-recipes)))))
   nil)
 
 (defn find-recipe

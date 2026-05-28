@@ -3,14 +3,19 @@
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.level-effects :as level-effects]
-            [cn.li.ac.content.ability.electromaster.mine-detect-fx :as mine-detect-fx]))
+            [cn.li.ac.content.ability.electromaster.mine-detect-fx :as mine-detect-fx]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (defn- reset-fixture [f]
-  (mine-detect-fx/reset-mine-detect-fx-for-test!)
-  (client-sounds/poll-sound-effects!)
-  (f)
-  (mine-detect-fx/reset-mine-detect-fx-for-test!)
-  (client-sounds/poll-sound-effects!))
+  (binding [runtime-hooks/*client-session-id* :test-session]
+    (mine-detect-fx/call-with-mine-detect-fx-runtime
+      (mine-detect-fx/create-mine-detect-fx-runtime)
+      (fn []
+        (mine-detect-fx/reset-mine-detect-fx-for-test!)
+        (client-sounds/poll-sound-effects!)
+        (f)
+        (mine-detect-fx/reset-mine-detect-fx-for-test!)
+        (client-sounds/poll-sound-effects!)))))
 
 (defn- event [ctx-id payload]
   {:payload payload
@@ -131,3 +136,28 @@
     (mine-detect-fx/clear-mine-detect-owner! [:ctx "ctx-a"])
     (is (nil? (owner-state "ctx-a")))
     (is (some? (owner-state "ctx-b")))))
+
+(deftest mine-detect-fx-runtime-isolation-test
+  (binding [runtime-hooks/*client-session-id* :test-session]
+    (let [runtime-a (mine-detect-fx/create-mine-detect-fx-runtime)
+          runtime-b (mine-detect-fx/create-mine-detect-fx-runtime)
+          enqueue! @#'cn.li.ac.content.ability.electromaster.mine-detect-fx/enqueue!]
+      (mine-detect-fx/call-with-mine-detect-fx-runtime
+        runtime-a
+        (fn []
+          (enqueue! (event "ctx-a" {:mode :perform :range 8.0 :advanced? false :life-ticks 10 :rescan-interval 1}))
+          (is (= #{[:ctx "ctx-a"]}
+                 (set (keys (:effect-state (mine-detect-fx/mine-detect-fx-snapshot))))))))
+      (mine-detect-fx/call-with-mine-detect-fx-runtime
+        runtime-b
+        (fn []
+          (is (= {:effect-state {}}
+                 (mine-detect-fx/mine-detect-fx-snapshot)))
+          (enqueue! (event "ctx-b" {:mode :perform :range 12.0 :advanced? true :life-ticks 20 :rescan-interval 2}))
+          (is (= #{[:ctx "ctx-b"]}
+                 (set (keys (:effect-state (mine-detect-fx/mine-detect-fx-snapshot))))))))
+      (mine-detect-fx/call-with-mine-detect-fx-runtime
+        runtime-a
+        (fn []
+          (is (= #{[:ctx "ctx-a"]}
+                 (set (keys (:effect-state (mine-detect-fx/mine-detect-fx-snapshot)))))))))))

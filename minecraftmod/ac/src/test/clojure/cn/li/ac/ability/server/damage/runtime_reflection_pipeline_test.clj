@@ -5,11 +5,12 @@
             [cn.li.mcmod.hooks.core :as hooks]))
 
 (defn- reset-fixture [f]
-  (let [saved-runtime-hooks @#'cn.li.mcmod.hooks.core/runtime-hooks]
+  (let [state-atom ((deref #'cn.li.mcmod.hooks.core/hooks-core-state-atom))
+        saved-runtime-hooks @state-atom]
     (try
       (f)
       (finally
-        (reset! @#'cn.li.mcmod.hooks.core/runtime-hooks saved-runtime-hooks)))))
+        (reset! state-atom saved-runtime-hooks)))))
 
 (use-fixtures :each reset-fixture)
 

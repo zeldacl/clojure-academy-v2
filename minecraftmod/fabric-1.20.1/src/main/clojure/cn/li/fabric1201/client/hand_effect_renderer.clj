@@ -9,7 +9,11 @@
   (:import [net.fabricmc.fabric.api.client.event.lifecycle.v1 ClientTickEvents ClientTickEvents$EndTick]
            [net.minecraft.client Minecraft]))
 
-(defonce ^:private tick-listener-registered? (atom false))
+(def ^:private tick-listener-guard-lock
+  (Object.))
+
+(def ^:private ^:dynamic *tick-listener-registered?*
+  false)
 
 (defn- on-client-tick []
   (hand/tick-hand-effects!)
@@ -19,9 +23,12 @@
 
 (defn init!
   []
-  (when (compare-and-set! tick-listener-registered? false true)
-    (.register ClientTickEvents/END_CLIENT_TICK
-               (reify ClientTickEvents$EndTick
-                 (onEndTick [_ _client]
-                   (on-client-tick)))))
+  (when-not (var-get #'*tick-listener-registered?*)
+    (locking tick-listener-guard-lock
+      (when-not (var-get #'*tick-listener-registered?*)
+        (.register ClientTickEvents/END_CLIENT_TICK
+                   (reify ClientTickEvents$EndTick
+                     (onEndTick [_ _client]
+                       (on-client-tick))))
+        (alter-var-root #'*tick-listener-registered?* (constantly true)))))
   (log/info "Fabric hand effect renderer initialized"))

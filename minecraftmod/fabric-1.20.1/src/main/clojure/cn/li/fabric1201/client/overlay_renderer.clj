@@ -4,7 +4,11 @@
             [cn.li.mcmod.util.log :as log])
   (:import [net.fabricmc.fabric.api.client.rendering.v1 HudRenderCallback]))
 
-(defonce ^:private hud-listener-registered? (atom false))
+(def ^:private hud-listener-guard-lock
+  (Object.))
+
+(def ^:private ^:dynamic *hud-listener-registered?*
+  false)
 (defn on-mode-switch-key-state!
   ([is-down]
    (shared-overlay/on-mode-switch-key-state! is-down))
@@ -13,9 +17,12 @@
 
 (defn init!
   []
-  (when (compare-and-set! hud-listener-registered? false true)
-    (.register HudRenderCallback/EVENT
-               (reify HudRenderCallback
-                 (onHudRender [_ graphics _tick-delta]
-                   (shared-overlay/render-overlay! graphics)))))
+  (when-not (var-get #'*hud-listener-registered?*)
+    (locking hud-listener-guard-lock
+      (when-not (var-get #'*hud-listener-registered?*)
+        (.register HudRenderCallback/EVENT
+                   (reify HudRenderCallback
+                     (onHudRender [_ graphics _tick-delta]
+                       (shared-overlay/render-overlay! graphics))))
+        (alter-var-root #'*hud-listener-registered?* (constantly true)))))
   (log/info "Fabric overlay renderer initialized"))

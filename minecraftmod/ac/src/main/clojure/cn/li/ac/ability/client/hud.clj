@@ -96,22 +96,26 @@
    :hint activate-hint})
 
 (defn- build-combat-notice-data
-  [now-ms]
-  (when-let [{:keys [text color alpha]} (combat-notice/active-notice :teleporter-crit now-ms)]
-    {:type :combat-notice
-     :x 120
-     :y 26
-     :text text
-     :color {:a (int (* 255.0 (double alpha)))
-             :r (int (nth color 0 255))
-             :g (int (nth color 1 255))
-             :b (int (nth color 2 255))}}))
+  [combat-notice-component now-ms]
+  (when (and combat-notice-component runtime-hooks/*client-session-id*)
+    (when-let [{:keys [text color alpha]} (combat-notice/active-notice combat-notice-component
+                                                                       runtime-hooks/*client-session-id*
+                                                                       :teleporter-crit
+                                                                       now-ms)]
+      {:type :combat-notice
+       :x 120
+       :y 26
+       :text text
+       :color {:a (int (* 255.0 (double alpha)))
+               :r (int (nth color 0 255))
+               :g (int (nth color 1 255))
+               :b (int (nth color 2 255))}})))
 
 (defn build-hud-render-data
   "Main function to build complete HUD render data. Called by forge layer."
   [hud-model screen-width screen-height cooldown-data
-   & {:keys [player-uuid activate-hint preset-state now-ms]}]
-  (let [combat-notice (build-combat-notice-data now-ms)
+   & {:keys [player-uuid activate-hint preset-state now-ms combat-notice-component]}]
+  (let [combat-notice (build-combat-notice-data combat-notice-component now-ms)
         preset-indicator (when preset-state
                            (let [now (System/currentTimeMillis)]
                              (when (> (:show-until-ms preset-state 0) now)
