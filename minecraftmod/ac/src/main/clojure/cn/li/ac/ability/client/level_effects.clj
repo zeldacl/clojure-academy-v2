@@ -14,6 +14,7 @@
   []
   {:registry {}
    :order []
+  :effect-states {}
    :frozen? false})
 
 (defn create-level-effect-runtime
@@ -64,6 +65,12 @@
   [f & args]
   (apply swap! (level-effect-state-atom) f args))
 
+(defn- assoc-effect-state
+  [state effect-id effect-state]
+  (if (nil? effect-state)
+    (update state :effect-states dissoc effect-id)
+    (assoc-in state [:effect-states effect-id] effect-state)))
+
 ;; effect-id 鈫?{:enqueue-fn        (fn [payload])
 ;;              :enqueue-event-fn  (fn [{:keys [effect-id payload ctx-id channel owner-key]}])
 ;;              :tick-fn        (fn [])
@@ -92,8 +99,10 @@
   [effect-id handler-map]
   {:pre [(keyword? effect-id) (map? handler-map)
          (or (fn? (:enqueue-fn handler-map))
-             (fn? (:enqueue-event-fn handler-map)))
-         (fn? (:tick-fn handler-map))
+             (fn? (:enqueue-event-fn handler-map))
+             (fn? (:enqueue-state-fn handler-map)))
+         (or (fn? (:tick-fn handler-map))
+             (fn? (:tick-state-fn handler-map)))
          (fn? (:build-plan-fn handler-map))]}
   (assert-registry-open!)
   (update-level-effect-state!
@@ -102,7 +111,8 @@
         state
         (-> state
             (update :order conj effect-id)
-            (assoc-in [:registry effect-id] handler-map)))))
+            (assoc-in [:registry effect-id] handler-map)
+            (assoc-effect-state effect-id (:initial-state handler-map))))))
   (log/debug "Registered level effect:" effect-id)
   nil)
 
@@ -114,6 +124,24 @@
 (defn level-effect-registry-snapshot
   []
   (level-effect-state-snapshot))
+
+(defn effect-state-snapshot
+  [effect-id]
+  (get-in (level-effect-state-snapshot) [:effect-states effect-id]))
+
+(defn reset-level-effect-state-for-test!
+  [effect-id state]
+  (update-level-effect-state! assoc-effect-state effect-id state)
+  nil)
+
+(defn update-effect-state!
+  [effect-id f & args]
+  (update-level-effect-state!
+    (fn [state]
+      (let [current-state (get-in state [:effect-states effect-id])
+            next-state (apply f current-state args)]
+        (assoc-effect-state state effect-id next-state))))
+  nil)
 
 (defn reset-level-effect-registry-for-test!
   []
@@ -161,9 +189,20 @@
   ([effect-id payload]
    (enqueue-level-effect! effect-id payload nil))
   ([effect-id payload fx-context]
-   (if-let [{:keys [enqueue-fn enqueue-event-fn]} (get-in (level-effect-state-snapshot) [:registry effect-id])]
-     (if enqueue-event-fn
+   (if-let [{:keys [enqueue-fn enqueue-event-fn enqueue-state-fn]} (get-in (level-effect-state-snapshot) [:registry effect-id])]
+     (cond
+       enqueue-state-fn
+       (let [event (enqueue-event effect-id payload fx-context)]
+         (update-level-effect-state!
+           (fn [state]
+             (let [current-state (get-in state [:effect-states effect-id])
+                   next-state (enqueue-state-fn current-state event)]
+               (assoc-effect-state state effect-id next-state)))))
+
+       enqueue-event-fn
        (enqueue-event-fn (enqueue-event effect-id payload fx-context))
+
+       :else
        (enqueue-fn payload))
      (log/warn "No level effect registered for" effect-id))))
 
@@ -172,8 +211,14 @@
   []
   (let [{:keys [order registry]} (level-effect-state-snapshot)]
     (doseq [eid order]
-      (when-let [{:keys [tick-fn]} (get registry eid)]
-        (tick-fn)))))
+      (when-let [{:keys [tick-fn tick-state-fn]} (get registry eid)]
+        (if tick-state-fn
+          (update-level-effect-state!
+            (fn [state]
+              (let [current-state (get-in state [:effect-states eid])
+                    next-state (tick-state-fn current-state)]
+                (assoc-effect-state state eid next-state))))
+          (tick-fn))))))
 
 (defn- invoke-build-plan-fn
   [build-plan-fn camera-pos hand-center-pos tick frame-context]
