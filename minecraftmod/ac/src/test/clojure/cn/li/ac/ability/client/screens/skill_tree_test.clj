@@ -1,5 +1,6 @@
 (ns cn.li.ac.ability.client.screens.skill-tree-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
+            [cn.li.ac.ability.client.managed-screens :as managed-screens]
             [cn.li.ac.ability.client.screens.skill-tree :as screen]
             [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.ability.registry.skill-query :as skill]
@@ -8,8 +9,8 @@
             [cn.li.mcmod.i18n :as i18n]))
 
 (defn- reset-screen-fixture [f]
-  (screen/call-with-skill-tree-screen-runtime
-    (screen/create-skill-tree-screen-runtime)
+  (managed-screens/call-with-managed-screen-runtime
+    (managed-screens/create-managed-screen-runtime)
     (fn []
       (binding [runtime-hooks/*client-session-id* :test-session
                 runtime-hooks/*player-state-owner* {:client-session-id :test-session}]
@@ -46,7 +47,7 @@
                   learning/check-all-conditions (fn [_ _ _ _] {:pass? true :failures []})
                   i18n/*translate-fn* (fn [k] (get translate-map (str k) (str k)))]
             (screen/open-screen! "player-1")
-      (let [render-data (screen/build-screen-render-data)
+      (let [render-data (screen/build-screen-render-data "player-1")
             node (first (:skill-nodes render-data))]
         (is (= "Generic" (get-in render-data [:ability-info :category-name])))
         (is (= "Brain Course" (:skill-name node)))
@@ -91,8 +92,8 @@
                   learning/check-all-conditions (fn [_ _ _ _] {:pass? true :failures []})
                   i18n/*translate-fn* (fn [k] (get translate-map (str k) (str k)))]
             (screen/open-screen! "player-1")
-            (screen/on-mouse-move 30 110)
-      (let [texts (->> (screen/build-draw-ops 0 0)
+            (screen/on-mouse-move "player-1" 30 110)
+      (let [texts (->> (screen/build-draw-ops "player-1" 0 0)
                        (filter #(= :text (:kind %)))
                        (map :text)
                        set)]
@@ -111,9 +112,9 @@
         (is (= "player-2" (:player-uuid (screen/screen-state-snapshot "player-2")))))
 
 (deftest screen-runtime-isolation-test
-  (let [runtime-b (screen/create-skill-tree-screen-runtime)]
+  (let [runtime-b (managed-screens/create-managed-screen-runtime)]
     (screen/open-screen! "player-1" {:developer-type :portable})
-    (screen/call-with-skill-tree-screen-runtime
+    (managed-screens/call-with-managed-screen-runtime
       runtime-b
       (fn []
         (screen/open-screen! "player-1" {:developer-type :normal})

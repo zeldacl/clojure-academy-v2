@@ -6,6 +6,7 @@
             [cn.li.ac.ability.client.hud :as hud]
             [cn.li.ac.ability.client.hand-effects :as hand-effects]
             [cn.li.ac.ability.client.keybinds :as client-keybinds]
+            [cn.li.ac.ability.client.managed-screens :as managed-screens]
             [cn.li.ac.ability.client.screens.location-teleport :as location-teleport-screen]
             [cn.li.ac.ability.client.screens.preset-editor :as preset-editor-screen]
             [cn.li.ac.ability.client.screens.skill-tree :as skill-tree-screen]
@@ -28,15 +29,9 @@
       (client-keybinds/call-with-client-keybind-runtime
         (client-keybinds/create-client-keybind-runtime)
         (fn []
-          (skill-tree-screen/call-with-skill-tree-screen-runtime
-            (skill-tree-screen/create-skill-tree-screen-runtime)
-            (fn []
-              (preset-editor-screen/call-with-preset-editor-runtime
-                (preset-editor-screen/create-preset-editor-runtime)
-                (fn []
-                  (location-teleport-screen/call-with-location-teleport-screen-runtime
-                    (location-teleport-screen/create-location-teleport-screen-runtime)
-                    f))))))))))
+          (managed-screens/call-with-managed-screen-runtime
+            (managed-screens/create-managed-screen-runtime)
+            f))))))
 
 (defn- reset-ui-state! [f]
   (with-fresh-ui-runtimes
@@ -513,12 +508,12 @@
 (deftest current-charging-visual-state-default-and-active-test
   (let [hooks (client-ui-hooks/runtime-client-ui-hooks)]
     (with-redefs [current-charging-fx/current-state
-                  (fn [] {:active? false
-                          :blending? false
-                          :is-item false
-                          :good? false
-                          :charge-ticks 0
-                          :charge-ratio 0.0})]
+                  (fn [_] {:active? false
+                           :blending? false
+                           :is-item false
+                           :good? false
+                           :charge-ticks 0
+                           :charge-ratio 0.0})]
       (let [visual ((:client-visual-state hooks) :ac/current-charging {:player-uuid "p1"})]
         (is (false? (:active? visual)))
         (is (false? (:is-item visual)))
@@ -526,12 +521,12 @@
         (is (= 0 (:charge-ticks visual)))
         (is (= 0.0 (:charge-ratio visual)))))
     (with-redefs [current-charging-fx/current-state
-                  (fn [] {:active? true
-                          :blending? false
-                          :is-item true
-                          :good? true
-                          :charge-ticks 30
-                          :charge-ratio 0.75})]
+          (fn [_] {:active? true
+             :blending? false
+             :is-item true
+             :good? true
+             :charge-ticks 30
+             :charge-ratio 0.75})]
       (let [visual ((:client-visual-state hooks) :ac/current-charging {:player-uuid "p1"})]
         (is (true? (:active? visual)))
         (is (true? (:is-item visual)))
@@ -541,14 +536,14 @@
 
 (deftest current-charging-overlay-elements-render-hud-state-test
   (with-redefs [current-charging-fx/current-state
-                (fn [] {:active? true
-                        :blending? false
-                        :is-item false
-                        :good? true
-                        :charge-ticks 20
-                        :charge-ratio 0.5})]
+                (fn [_] {:active? true
+                         :blending? false
+                         :is-item false
+                         :good? true
+                         :charge-ticks 20
+                         :charge-ratio 0.5})]
     (let [elements ((var-get #'cn.li.ac.ability.adapters.client-ui-hooks/current-charging-overlay-elements)
-                    320 180)
+                    "p1" 320 180)
           kinds (mapv :kind elements)]
       (is (some #{:fullscreen-fill} kinds))
       (is (some #{:text} kinds))

@@ -16,8 +16,7 @@
 
 (defn default-mag-manip-fx-runtime-state
   []
-  {:states {}
-   :current-owner-key nil})
+  {:states {}})
 
 (defn create-mag-manip-fx-runtime
   ([]
@@ -76,18 +75,14 @@
   [owner-key]
   (update-mag-manip-fx-state!
     (fn [store]
-      (let [states (dissoc (:states store) owner-key)]
-        {:states states
-         :current-owner-key (when-not (= owner-key (:current-owner-key store))
-                              (:current-owner-key store))})))
+      (let [store* (if (contains? store :states) store (default-mag-manip-fx-runtime-state))]
+        (assoc store* :states (dissoc (:states store*) owner-key)))))
   nil)
 
-(defn current-state []
-  (let [{:keys [states current-owner-key]} (mag-manip-fx-state-snapshot)]
-    (or (get states current-owner-key)
-        (some (fn [[_ state]]
-                (when (:active? state) state))
-              states)
+(defn current-state
+  [selector]
+  (let [{:keys [states]} (mag-manip-fx-state-snapshot)]
+    (or (get states selector)
         default-state)))
 
 (defn- reset-state! []
@@ -113,8 +108,7 @@
                                  {:active? true
                                   :focus focus
                                   :block-id block-id
-                                  :ticks 0}))
-                (assoc :current-owner-key owner-key*))))
+                                  :ticks 0})))))
         (client-sounds/queue-current-sound-effect!
          {:type :sound :sound-id hold-loop-sound :volume 0.5 :pitch 1.0}))
 
@@ -127,8 +121,7 @@
                            (-> (merge default-state state base-meta)
                                (assoc :active? true)
                                (cond-> focus (assoc :focus focus))
-                               (cond-> block-id (assoc :block-id block-id)))))
-              (assoc :current-owner-key owner-key*))))
+                               (cond-> block-id (assoc :block-id block-id))))))))
 
       :throw
       (do
@@ -160,12 +153,15 @@
                       states))))))
 
 (defn- current-hand-transform []
-  (let [state (current-state)]
+  (let [{:keys [states]} (mag-manip-fx-state-snapshot)
+        state (some (fn [[_ state]]
+                      (when (:active? state) state))
+                    states)]
     (when (:active? state)
-    (let [ticks (double (or (:ticks state) 0))
-          phase (* 0.22 ticks)
-          y (+ 0.02 (* 0.01 (Math/sin phase)))]
-          {:translate [0.0 y 0.0]}))))
+      (let [ticks (double (or (:ticks state) 0))
+            phase (* 0.22 ticks)
+            y (+ 0.02 (* 0.01 (Math/sin phase)))]
+        {:translate [0.0 y 0.0]}))))
 
 (defn- build-level-plan [_camera-pos _hand-center-pos _tick]
   nil)

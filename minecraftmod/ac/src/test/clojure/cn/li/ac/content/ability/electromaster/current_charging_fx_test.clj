@@ -40,9 +40,9 @@
                                                               nil)]
       (current-charging-fx/init!)
       (@handler* "ctx-1" :current-charging/fx-start {:is-item true})
-      (is (true? (:active? (current-charging-fx/current-state))))
       (is (true? (:active? (current-charging-fx/current-state [:ctx "ctx-1"]))))
-      (is (true? (:is-item (current-charging-fx/current-state))))
+      (is (true? (:active? (current-charging-fx/current-state [:ctx "ctx-1"]))))
+      (is (true? (:is-item (current-charging-fx/current-state [:ctx "ctx-1"]))))
       (is (= 1 (count @queued*)))
       (@handler* "ctx-1" :current-charging/fx-update {:is-item true
                                                        :good? true
@@ -50,13 +50,13 @@
                                                        :target {:x 1.0 :y 2.0 :z 3.0}
                                                        :block-pos [1 2 3]
                                                        :charged 4.0})
-      (is (= 20 (:charge-ticks (current-charging-fx/current-state))))
-      (is (= 0.5 (:charge-ratio (current-charging-fx/current-state))))
-      (is (= {:x 1.0 :y 2.0 :z 3.0} (:target (current-charging-fx/current-state))))
-      (is (= [1 2 3] (:block-pos (current-charging-fx/current-state))))
+      (is (= 20 (:charge-ticks (current-charging-fx/current-state [:ctx "ctx-1"]))))
+      (is (= 0.5 (:charge-ratio (current-charging-fx/current-state [:ctx "ctx-1"]))))
+      (is (= {:x 1.0 :y 2.0 :z 3.0} (:target (current-charging-fx/current-state [:ctx "ctx-1"]))))
+      (is (= [1 2 3] (:block-pos (current-charging-fx/current-state [:ctx "ctx-1"]))))
       (@handler* "ctx-1" :current-charging/fx-end {:is-item true})
-      (is (false? (:active? (current-charging-fx/current-state))))
-      (is (true? (:blending? (current-charging-fx/current-state)))))))
+      (is (false? (:active? (current-charging-fx/current-state [:ctx "ctx-1"]))))
+      (is (true? (:blending? (current-charging-fx/current-state [:ctx "ctx-1"])))))))
 
 (deftest two-owners-keep-current-charging-state-independent-test
   (let [queued* (atom [])
@@ -124,8 +124,7 @@
 (deftest current-charging-fx-fallback-works-without-binding-test
   (binding [current-charging-fx/*current-charging-fx-runtime* nil]
     (current-charging-fx/reset-current-charging-fx-for-test!)
-    (is (= {:states {}
-            :current-owner-key nil}
+    (is (= {:states {}}
            (current-charging-fx/current-charging-fx-snapshot)))
-    (is (= false (:active? (current-charging-fx/current-state))))))
+    (is (= false (:active? (current-charging-fx/current-state :missing-selector))))))
 

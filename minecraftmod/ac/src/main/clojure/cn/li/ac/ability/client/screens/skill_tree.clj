@@ -1,6 +1,7 @@
 (ns cn.li.ac.ability.client.screens.skill-tree
   "Skill tree screen logic (AC layer - no Minecraft imports)."
   (:require [cn.li.ac.ability.client.api :as api]
+            [cn.li.ac.ability.client.managed-screens :as managed-screens]
             [cn.li.ac.ability.registry.skill-query :as skill]
             [cn.li.ac.ability.server.service.learning :as learning]
             [cn.li.ac.ability.model.ability :as adata]
@@ -14,50 +15,7 @@
    :player-uuid nil
    :learn-context nil})
 
-(def ^:private default-screen-runtime-state
-  {:current-owner nil
-   :states {}})
-
-(defn create-skill-tree-screen-runtime
-  []
-  {::runtime ::skill-tree-screen-runtime
-   :runtime-state* (atom default-screen-runtime-state)})
-
-(def ^:dynamic *skill-tree-screen-runtime* nil)
-
-(defonce ^:private installed-skill-tree-screen-runtime
-  (create-skill-tree-screen-runtime))
-
-(defn- skill-tree-screen-runtime?
-  [runtime]
-  (and (map? runtime)
-       (= ::skill-tree-screen-runtime (::runtime runtime))
-       (some? (:runtime-state* runtime))))
-
-(defn call-with-skill-tree-screen-runtime
-  [runtime f]
-  (when-not (skill-tree-screen-runtime? runtime)
-    (throw (ex-info "Expected skill tree screen runtime"
-                    {:runtime runtime})))
-  (binding [*skill-tree-screen-runtime* runtime]
-    (f)))
-
-(defmacro with-skill-tree-screen-runtime
-  [runtime & body]
-  `(call-with-skill-tree-screen-runtime ~runtime (fn [] ~@body)))
-
-(defn- current-skill-tree-screen-runtime
-  []
-  (or *skill-tree-screen-runtime*
-      installed-skill-tree-screen-runtime))
-
-(defn- screen-runtime-state-atom
-  []
-  (:runtime-state* (current-skill-tree-screen-runtime)))
-
-(defn- screen-runtime-state-snapshot
-  []
-  @(screen-runtime-state-atom))
+(def screen-id :skill-tree)
 
 (defn- require-screen-owner-value
   [owner label value]
@@ -106,44 +64,18 @@
     (with-screen-player-state-owner owner
       #(ps/get-or-create-player-state! player-uuid))))
 
-(defn- normalized-store
-  [store]
-  (if (and (map? store) (contains? store :states))
-    store
-    (let [owner-key (when (:player-uuid store) (screen-owner-key store))]
-      {:current-owner owner-key
-       :states (if owner-key {owner-key (merge default-screen-state store)} {})})))
-
-(defn- current-owner-key
-  []
-  (:current-owner (normalized-store (screen-runtime-state-snapshot))))
-
 (defn screen-state-snapshot
-  ([]
-   (if-let [owner-key (current-owner-key)]
-     (screen-state-snapshot owner-key)
-     default-screen-state))
   ([owner]
-  (get-in (normalized-store (screen-runtime-state-snapshot)) [:states (screen-owner-key owner)] default-screen-state)))
+   (managed-screens/screen-state screen-id (screen-owner-key owner) default-screen-state)))
 
 (defn- swap-screen-state!
   [owner f & args]
   (let [owner-key (screen-owner-key owner)]
-    (swap! (screen-runtime-state-atom)
-           (fn [store]
-             (let [store (normalized-store store)]
-               (assoc-in store [:states owner-key]
-                         (apply f (get-in store [:states owner-key] default-screen-state) args)))))))
-
-(defn- set-current-owner!
-  [owner]
-  (let [owner-key (screen-owner-key owner)]
-    (swap! (screen-runtime-state-atom) #(assoc (normalized-store %) :current-owner owner-key))
-    owner-key))
+    (apply managed-screens/update-screen-state! screen-id owner-key default-screen-state f args)))
 
 (defn reset-screen-states-for-test!
   []
-  (reset! (screen-runtime-state-atom) default-screen-runtime-state)
+  (managed-screens/reset-managed-screen-state-for-test!)
   nil)
 
 (def ^:private max-progress-segments 24)
@@ -258,9 +190,9 @@
 
 (defn build-screen-render-data
   "Build complete screen render data. Called by forge layer."
-  []
-  (let [state (screen-state-snapshot)
-        owner-key (current-owner-key)]
+  [owner]
+  (let [state (screen-state-snapshot owner)
+        owner-key (screen-owner-key owner)]
   (when-let [_player-uuid (:player-uuid state)]
     (when-let [player-state (and owner-key (get-screen-player-state owner-key))]
       (let [ability-data (:ability-data player-state)
@@ -284,9 +216,9 @@
 
 (defn on-skill-click
   "Handle skill node click. Attempts to learn the skill if conditions are met."
-  [skill-id]
-  (let [state (screen-state-snapshot)
-        owner-key (current-owner-key)]
+  [owner skill-id]
+  (let [state (screen-state-snapshot owner)
+        owner-key (screen-owner-key owner)]
   (when-let [_player-uuid (:player-uuid state)]
     (when-let [player-state (and owner-key (get-screen-player-state owner-key))]
       (let [ability-data (:ability-data player-state)
@@ -309,8 +241,8 @@
 
 (defn handle-screen-click!
   "Handle clicks inside the skill tree screen using current render data."
-  [mouse-x mouse-y]
-  (if-let [render-data (build-screen-render-data)]
+  [owner mouse-x mouse-y]
+  (if-let [render-data (build-screen-render-data owner)]
     (let [clicked? (atom false)]
       (doseq [node (:skill-nodes render-data)]
         (when (and node (not @clicked?))
@@ -318,7 +250,7 @@
                 dy (- mouse-y (:y node))
                 dist-sq (+ (* dx dx) (* dy dy))]
             (when (< dist-sq 400)
-              (on-skill-click (:skill-id node))
+              (on-skill-click owner (:skill-id node))
               (reset! clicked? true)))))
 
       (when (and (not @clicked?)
@@ -333,8 +265,8 @@
 
 (defn on-mouse-move
   "Handle mouse movement for hover detection."
-  [mouse-x mouse-y]
-  (let [render-data (build-screen-render-data)
+  [owner mouse-x mouse-y]
+  (let [render-data (build-screen-render-data owner)
         skill-nodes (:skill-nodes render-data)
         hovered (when skill-nodes
                  (first
@@ -345,19 +277,19 @@
                              dist-sq (+ (* dx dx) (* dy dy))]
                          (< dist-sq 400))) ; 20px radius squared
                      skill-nodes)))]
-    (when-let [owner-key (current-owner-key)]
-      (swap-screen-state! owner-key assoc :hover-skill (:skill-id hovered)))))
+    (swap-screen-state! owner assoc :hover-skill (:skill-id hovered))))
 
 (defn open-screen!
   "Open skill tree screen. Returns command for forge layer.
   Optional `learn-context`: `{:pos-x :pos-y :pos-z :developer-type}` from Ability Developer."
-  ([player-uuid]
-   (open-screen! player-uuid nil))
-  ([player-uuid learn-context]
+  ([owner]
+   (open-screen! owner nil))
+  ([owner learn-context]
     ;; 确保player-state存在，防止UI卡死
-    (let [owner {:player-uuid player-uuid}]
+    (let [owner-key (screen-owner-key owner)
+          player-uuid (nth owner-key 2)]
       (ensure-screen-player-state! owner)
-      (set-current-owner! owner)
+      (managed-screens/set-active-owner! screen-id owner-key)
       (swap-screen-state! owner merge default-screen-state
                           {:player-uuid player-uuid
                            :learn-context learn-context}))
@@ -366,16 +298,8 @@
 
 (defn close-screen!
   "Close skill tree screen and clean up state."
-  ([]
-   (when-let [owner-key (current-owner-key)]
-     (close-screen! owner-key)))
   ([owner]
-   (swap! (screen-runtime-state-atom)
-          (fn [store]
-            (let [store (normalized-store store)
-                  owner-key (screen-owner-key owner)]
-              (cond-> (update store :states dissoc owner-key)
-                (= owner-key (:current-owner store)) (assoc :current-owner nil)))))))
+   (managed-screens/clear-screen-state! screen-id (screen-owner-key owner))))
 
 ;; ============================================================================
 ;; Draw Ops (for generic forge screen host)
@@ -418,8 +342,8 @@
 
 (defn build-draw-ops
   "Build draw ops for the generic hosted skill tree screen."
-  [_mouse-x _mouse-y]
-  (if-let [render-data (build-screen-render-data)]
+  [owner _mouse-x _mouse-y]
+  (if-let [render-data (build-screen-render-data owner)]
     (let [ability (:ability-info render-data)
           header [{:kind :fill :x 0 :y 0 :w 420 :h 260 :color 0xA0101010}
                   {:kind :text :x 12 :y 8 :text (str "Category: " (:category-name ability)) :color 0xFFFFFFFF}

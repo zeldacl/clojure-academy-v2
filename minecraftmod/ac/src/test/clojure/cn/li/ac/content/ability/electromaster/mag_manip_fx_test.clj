@@ -121,7 +121,7 @@
       (mag-manip-fx/call-with-mag-manip-fx-runtime
         runtime-b
         (fn []
-          (is (= {:states {} :current-owner-key nil}
+           (is (= {:states {}}
                  (mag-manip-fx/mag-manip-fx-snapshot)))
           (enqueue! {:owner-key [:ctx "ctx-b"] :ctx-id "ctx-b" :mode :hold-start :block-id "minecraft:gold_block"})
           (is (= #{[:ctx "ctx-b"]}

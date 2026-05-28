@@ -46,7 +46,8 @@
             :block-pos nil
             :charged 0.0}
            (get-in @contexts* [ctx-id :skill-state])))
-    (is (= [[ctx-id :current-charging/fx-start {:is-item true}]] @fx*))))
+    (is (= [[ctx-id :current-charging/fx-start {:is-item true
+                          :source-player-id "p1"}]] @fx*))))
 
 (deftest tick-item-path-updates-state-exp-and-fx-test
   (let [ctx-id "ctx-item"
@@ -91,7 +92,8 @@
     (is (= [[:stack 30.0 false]] @charge*))
     (is (= [["p1" 40.0]] @floor*))
     (is (= [[ctx-id :current-charging/fx-update
-             {:is-item true :good? true :charge-ticks 1 :exp 0.5}]]
+             {:is-item true :good? true :charge-ticks 1 :exp 0.5
+              :source-player-id "p1"}]]
            @fx*))))
 
 (deftest tick-block-path-spawns-arc-on-sixth-tick-test
@@ -131,12 +133,13 @@
       (tick! {:player-id "p1" :ctx-id ctx-id :player {:uuid "p1"}}))
     (is (= [[{:uuid "p1"} "my_mod:entity_arc" 0.0]] @spawned*))
     (is (= [[ctx-id :current-charging/fx-update
-             {:is-item false
-              :good? true
-              :charged 8.0
-              :charge-ticks 6
-              :target {:x 1.0 :y 2.0 :z 3.0}
-              :block-pos [1 2 3]}]]
+         {:is-item false
+          :good? true
+          :charged 8.0
+          :charge-ticks 6
+          :target {:x 1.0 :y 2.0 :z 3.0}
+          :block-pos [1 2 3]
+          :source-player-id "p1"}]]
            @fx*))))
 
 (deftest cost-fail-sends-end-and-terminates-test

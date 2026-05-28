@@ -1,11 +1,12 @@
 (ns cn.li.ac.ability.client.screens.preset-editor-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
+            [cn.li.ac.ability.client.managed-screens :as managed-screens]
             [cn.li.ac.ability.client.screens.preset-editor :as screen]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (defn- reset-screen-fixture [f]
-  (screen/call-with-preset-editor-runtime
-    (screen/create-preset-editor-runtime)
+  (managed-screens/call-with-managed-screen-runtime
+    (managed-screens/create-managed-screen-runtime)
     (fn []
       (binding [runtime-hooks/*client-session-id* :test-session]
         (f)))))
@@ -14,13 +15,13 @@
 
 (deftest editor-state-isolated-by-player-owner-test
   (screen/open-screen! "player-1")
-  (screen/on-preset-tab-click 2)
-  (screen/on-skill-select :railgun)
-  (screen/on-slot-click 1)
+  (screen/on-preset-tab-click "player-1" 2)
+  (screen/on-skill-select "player-1" :railgun)
+  (screen/on-slot-click "player-1" 1)
   (screen/open-screen! "player-2")
-  (screen/on-preset-tab-click 3)
-  (screen/on-skill-select :meltdowner)
-  (screen/on-slot-click 0)
+  (screen/on-preset-tab-click "player-2" 3)
+  (screen/on-skill-select "player-2" :meltdowner)
+  (screen/on-slot-click "player-2" 0)
   (is (= 2 (:selected-preset (screen/editor-state-snapshot "player-1"))))
   (is (= {2 {1 :railgun}}
          (:pending-changes (screen/editor-state-snapshot "player-1"))))
@@ -41,18 +42,18 @@
                         (screen/editor-state-snapshot {:client-session-id :session-a}))))
 
 (deftest editor-runtime-isolation-test
-  (let [runtime-b (screen/create-preset-editor-runtime)]
+  (let [runtime-b (managed-screens/create-managed-screen-runtime)]
     (screen/open-screen! "player-1")
-    (screen/on-preset-tab-click 2)
-    (screen/on-skill-select :railgun)
-    (screen/on-slot-click 1)
-    (screen/call-with-preset-editor-runtime
+    (screen/on-preset-tab-click "player-1" 2)
+    (screen/on-skill-select "player-1" :railgun)
+    (screen/on-slot-click "player-1" 1)
+    (managed-screens/call-with-managed-screen-runtime
       runtime-b
       (fn []
         (screen/open-screen! "player-1")
-        (screen/on-preset-tab-click 3)
-        (screen/on-skill-select :meltdowner)
-        (screen/on-slot-click 0)
+        (screen/on-preset-tab-click "player-1" 3)
+        (screen/on-skill-select "player-1" :meltdowner)
+        (screen/on-slot-click "player-1" 0)
         (is (= {3 {0 :meltdowner}}
                (:pending-changes (screen/editor-state-snapshot "player-1"))))))
     (is (= {2 {1 :railgun}}

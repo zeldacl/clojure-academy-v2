@@ -9,6 +9,7 @@
             [cn.li.ac.ability.client.hud :as hud-renderer]
             [cn.li.ac.ability.client.hand-effects :as hand-effects]
             [cn.li.ac.ability.client.keybinds :as client-keybinds]
+            [cn.li.ac.ability.client.managed-screens :as managed-screens]
             [cn.li.ac.ability.client.screens.location-teleport :as location-teleport-screen]
             [cn.li.ac.ability.client.screens.preset-editor :as preset-editor-screen]
             [cn.li.ac.ability.client.screens.skill-tree :as skill-tree-screen]
@@ -39,7 +40,8 @@
 (defn create-client-ui-runtime
   []
   {::runtime ::client-ui-runtime
-   :runtime-state* (atom default-client-ui-runtime-state)})
+  :runtime-state* (atom default-client-ui-runtime-state)
+  :managed-screen-runtime (managed-screens/create-managed-screen-runtime)})
 
 (def ^:dynamic *client-ui-runtime* nil)
 
@@ -72,6 +74,24 @@
 (defn- client-ui-runtime-state-atom
   []
   (:runtime-state* (current-client-ui-runtime)))
+
+(defn- managed-screen-runtime
+  []
+  (:managed-screen-runtime (current-client-ui-runtime)))
+
+(defn- call-with-managed-screen-runtime
+  [f]
+  (managed-screens/call-with-managed-screen-runtime (managed-screen-runtime) f))
+
+(defn- active-managed-screen-owner
+  [screen-key]
+  (managed-screens/active-owner
+    (case screen-key
+      :ac/skill-tree skill-tree-screen/screen-id
+      :ac/preset-editor preset-editor-screen/screen-id
+      :ac/saved-position location-teleport-screen/screen-id
+      :ac/location-teleport location-teleport-screen/screen-id
+      nil)))
 
 (defn- client-ui-runtime-state-snapshot
   []
@@ -287,9 +307,11 @@
 
 (defn- clear-managed-screen-state!
   [owner]
-  (skill-tree-screen/close-screen! owner)
-  (preset-editor-screen/close-screen! owner)
-  (location-teleport-screen/close-screen! owner)
+  (call-with-managed-screen-runtime
+    #(do
+       (skill-tree-screen/close-screen! owner)
+       (preset-editor-screen/close-screen! owner)
+       (location-teleport-screen/close-screen! owner)))
   nil)
 
 (defn- clear-client-owned-runtime-state!
@@ -307,6 +329,8 @@
 (defn reset-client-ui-state-for-test!
   []
   (reset! (client-ui-runtime-state-atom) default-client-ui-runtime-state)
+  (call-with-managed-screen-runtime
+    #(managed-screens/reset-managed-screen-state-for-test!))
   nil)
 
 (defn- mark-client-push-handlers-registered!
@@ -442,12 +466,12 @@
      :charge-ratio (max 0.0 (min 1.0 (/ (double hold-ticks) (double max-ticks))))}))
 
 (defn- current-charging-visual-state
-  [_player-uuid]
-  (current-charging-fx/current-state))
+  [player-uuid]
+  (current-charging-fx/current-state player-uuid))
 
 (defn- current-charging-overlay-elements
-  [screen-width screen-height]
-  (let [{:keys [active? blending? is-item good? charge-ticks charge-ratio]} (current-charging-fx/current-state)
+  [player-uuid screen-width screen-height]
+  (let [{:keys [active? blending? is-item good? charge-ticks charge-ratio]} (current-charging-fx/current-state player-uuid)
         visible? (or active? blending? (pos? (long (or charge-ticks 0))))]
     (when visible?
       (let [bar-width 140
@@ -793,7 +817,7 @@
                          :preset-state preset-state
                          :now-ms (long (or (:now-ms overlay-state) (System/currentTimeMillis))))
         base-elements (hud-render-data->overlay-elements hud-render-data screen-width screen-height)
-        current-charging-elements (current-charging-overlay-elements screen-width screen-height)
+        current-charging-elements (current-charging-overlay-elements player-uuid screen-width screen-height)
         reflection-active? (vec-reflection-active? player-uuid)
         deviation-active? (vec-deviation-active? player-uuid)
         vm-wave-active? (or reflection-active? deviation-active?)
@@ -812,7 +836,9 @@
 (defn- on-context-channel-push! [{:keys [ctx-id channel payload]}]
   (fx-registry/dispatch-fx-channel! ctx-id channel payload)
   (when (= channel :location-teleport/ui-open)
-    (location-teleport-screen/apply-server-payload! payload)
+    (call-with-managed-screen-runtime
+      #(when-let [owner (active-managed-screen-owner :ac/location-teleport)]
+         (location-teleport-screen/apply-server-payload! owner payload)))
     (client-bridge/open-screen! :ac/saved-position payload))
   (ctx/ctx-send-to-local! ctx-id channel payload))
 
@@ -864,8 +890,8 @@
     (log/info "Ability client push handlers registered")))
 
     (defn- build-preset-editor-draw-ops
-      []
-      (if-let [render-data (preset-editor-screen/build-preset-editor-render-data)]
+      [owner]
+      (if-let [render-data (preset-editor-screen/build-preset-editor-render-data owner)]
         (let [selected-preset (:selected-preset render-data)
           active-preset (:active-preset render-data)
           selected-skill (:selected-skill render-data)]
@@ -1047,77 +1073,94 @@
      (fn [screen-key payload]
        (let [{:keys [player-uuid client-session-id payload]} (validate-managed-screen-payload screen-key payload)]
          (binding [runtime-hooks/*client-session-id* client-session-id]
-           (condp = screen-key
-             :ac/skill-tree
-             (assoc (skill-tree-screen/open-screen! player-uuid (:learn-context payload))
-                    :title "Node Tree")
+           (call-with-managed-screen-runtime
+             #(let [owner {:client-session-id client-session-id
+                           :player-uuid player-uuid}]
+                (condp = screen-key
+                  :ac/skill-tree
+                  (assoc (skill-tree-screen/open-screen! owner (:learn-context payload))
+                         :title "Node Tree")
 
-             :ac/preset-editor
-             (assoc (preset-editor-screen/open-screen! player-uuid)
-                    :title "Preset Editor")
+                  :ac/preset-editor
+                  (assoc (preset-editor-screen/open-screen! owner)
+                         :title "Preset Editor")
 
-             :ac/saved-position
-             (assoc (location-teleport-screen/open-screen! player-uuid payload)
-                    :title "Location Teleport"
-                    :char-typed? true)
+                  :ac/saved-position
+                  (assoc (location-teleport-screen/open-screen! owner payload)
+                         :title "Location Teleport"
+                         :char-typed? true)
 
-             :ac/location-teleport
-             (assoc (location-teleport-screen/open-screen! player-uuid payload)
-                    :title "Location Teleport"
-                    :char-typed? true)
+                  :ac/location-teleport
+                  (assoc (location-teleport-screen/open-screen! owner payload)
+                         :title "Location Teleport"
+                         :char-typed? true)
 
-             nil))))
+                  nil))))))
 
      :client-build-managed-screen-render-data
      (fn [screen-key]
-       (condp = screen-key
-         :ac/skill-tree (skill-tree-screen/build-screen-render-data)
-         :ac/preset-editor (preset-editor-screen/build-preset-editor-render-data)
-         :ac/saved-position nil
-         :ac/location-teleport nil
-         nil))
+       (call-with-managed-screen-runtime
+         #(when-let [owner (active-managed-screen-owner screen-key)]
+            (condp = screen-key
+              :ac/skill-tree (skill-tree-screen/build-screen-render-data owner)
+              :ac/preset-editor (preset-editor-screen/build-preset-editor-render-data owner)
+              :ac/saved-position nil
+              :ac/location-teleport nil
+              nil))))
 
      :client-build-managed-screen-draw-ops
      (fn [screen-key mouse-x mouse-y]
-       (condp = screen-key
-         :ac/skill-tree (skill-tree-screen/build-draw-ops mouse-x mouse-y)
-         :ac/preset-editor (build-preset-editor-draw-ops)
-         :ac/saved-position (location-teleport-screen/build-draw-ops mouse-x mouse-y)
-         :ac/location-teleport (location-teleport-screen/build-draw-ops mouse-x mouse-y)
-         []))
+       (call-with-managed-screen-runtime
+         #(if-let [owner (active-managed-screen-owner screen-key)]
+            (condp = screen-key
+              :ac/skill-tree (skill-tree-screen/build-draw-ops owner mouse-x mouse-y)
+              :ac/preset-editor (build-preset-editor-draw-ops owner)
+              :ac/saved-position (location-teleport-screen/build-draw-ops owner mouse-x mouse-y)
+              :ac/location-teleport (location-teleport-screen/build-draw-ops owner mouse-x mouse-y)
+              [])
+            [])))
 
      :client-handle-managed-screen-hover!
      (fn [screen-key mouse-x mouse-y]
-       (condp = screen-key
-         :ac/skill-tree (skill-tree-screen/on-mouse-move mouse-x mouse-y)
-         :ac/saved-position (location-teleport-screen/on-mouse-move mouse-x mouse-y)
-         :ac/location-teleport (location-teleport-screen/on-mouse-move mouse-x mouse-y)
-         nil))
+       (call-with-managed-screen-runtime
+         #(when-let [owner (active-managed-screen-owner screen-key)]
+            (condp = screen-key
+              :ac/skill-tree (skill-tree-screen/on-mouse-move owner mouse-x mouse-y)
+              :ac/saved-position (location-teleport-screen/on-mouse-move owner mouse-x mouse-y)
+              :ac/location-teleport (location-teleport-screen/on-mouse-move owner mouse-x mouse-y)
+              nil))))
 
      :client-handle-managed-screen-click!
      (fn [screen-key mouse-x mouse-y]
-       (condp = screen-key
-         :ac/skill-tree (skill-tree-screen/handle-screen-click! mouse-x mouse-y)
-         :ac/preset-editor (preset-editor-screen/handle-screen-click! mouse-x mouse-y)
-         :ac/saved-position (location-teleport-screen/handle-screen-click! mouse-x mouse-y)
-         :ac/location-teleport (location-teleport-screen/handle-screen-click! mouse-x mouse-y)
-         false))
+       (call-with-managed-screen-runtime
+         #(if-let [owner (active-managed-screen-owner screen-key)]
+            (condp = screen-key
+              :ac/skill-tree (skill-tree-screen/handle-screen-click! owner mouse-x mouse-y)
+              :ac/preset-editor (preset-editor-screen/handle-screen-click! owner mouse-x mouse-y)
+              :ac/saved-position (location-teleport-screen/handle-screen-click! owner mouse-x mouse-y)
+              :ac/location-teleport (location-teleport-screen/handle-screen-click! owner mouse-x mouse-y)
+              false)
+            false)))
 
      :client-handle-managed-screen-char-typed!
      (fn [screen-key ch]
-       (condp = screen-key
-         :ac/saved-position (location-teleport-screen/handle-char-typed! ch)
-         :ac/location-teleport (location-teleport-screen/handle-char-typed! ch)
-         nil))
+       (call-with-managed-screen-runtime
+         #(when-let [owner (active-managed-screen-owner screen-key)]
+            (condp = screen-key
+              :ac/saved-position (location-teleport-screen/handle-char-typed! owner ch)
+              :ac/location-teleport (location-teleport-screen/handle-char-typed! owner ch)
+              nil))))
 
      :client-close-managed-screen!
      (fn [screen-key]
-       (condp = screen-key
-         :ac/skill-tree (skill-tree-screen/close-screen!)
-         :ac/preset-editor (preset-editor-screen/close-screen!)
-         :ac/saved-position (location-teleport-screen/close-screen!)
-         :ac/location-teleport (location-teleport-screen/close-screen!)
-         nil))
+       (call-with-managed-screen-runtime
+         #(when-let [owner (active-managed-screen-owner screen-key)]
+            (condp = screen-key
+              :ac/skill-tree (skill-tree-screen/close-screen! owner)
+              :ac/preset-editor (preset-editor-screen/close-screen! owner)
+              :ac/saved-position (location-teleport-screen/close-screen! owner)
+              :ac/location-teleport (location-teleport-screen/close-screen! owner)
+              nil))))
 
      :client-register-push-handlers!
      (fn []

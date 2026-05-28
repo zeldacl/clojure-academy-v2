@@ -8,6 +8,7 @@
   - Right info panel (x=220, y=10, w=90, h=220): hover info (dim, coords, cp)"
   (:require [cn.li.ac.ability.client.api :as api]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
+            [cn.li.ac.ability.client.managed-screens :as managed-screens]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [clojure.string :as str]))
 
@@ -29,50 +30,7 @@
             :max-location-name-length 16}
    :current-pos nil})
 
-(def ^:private default-screen-runtime-state
-  {:current-owner nil
-   :states {}})
-
-(defn create-location-teleport-screen-runtime
-  []
-  {::runtime ::location-teleport-screen-runtime
-   :runtime-state* (atom default-screen-runtime-state)})
-
-(def ^:dynamic *location-teleport-screen-runtime* nil)
-
-(defonce ^:private installed-location-teleport-screen-runtime
-  (create-location-teleport-screen-runtime))
-
-(defn- location-teleport-screen-runtime?
-  [runtime]
-  (and (map? runtime)
-       (= ::location-teleport-screen-runtime (::runtime runtime))
-       (some? (:runtime-state* runtime))))
-
-(defn call-with-location-teleport-screen-runtime
-  [runtime f]
-  (when-not (location-teleport-screen-runtime? runtime)
-    (throw (ex-info "Expected location teleport screen runtime"
-                    {:runtime runtime})))
-  (binding [*location-teleport-screen-runtime* runtime]
-    (f)))
-
-(defmacro with-location-teleport-screen-runtime
-  [runtime & body]
-  `(call-with-location-teleport-screen-runtime ~runtime (fn [] ~@body)))
-
-(defn- current-location-teleport-screen-runtime
-  []
-  (or *location-teleport-screen-runtime*
-      installed-location-teleport-screen-runtime))
-
-(defn- screen-runtime-state-atom
-  []
-  (:runtime-state* (current-location-teleport-screen-runtime)))
-
-(defn- screen-runtime-state-snapshot
-  []
-  @(screen-runtime-state-atom))
+(def screen-id :location-teleport)
 
 (defn- require-screen-owner-value
   [owner label value]
@@ -100,44 +58,18 @@
                                    (or (:player-uuid owner-map)
                                        (:uuid owner-map)))])))
 
-(defn- normalized-store
-  [store]
-  (if (and (map? store) (contains? store :states))
-    store
-    (let [owner-key (when (:player-uuid store) (screen-owner-key store))]
-      {:current-owner owner-key
-       :states (if owner-key {owner-key (merge default-screen-state store)} {})})))
-
-(defn- current-owner-key
-  []
-  (:current-owner (normalized-store (screen-runtime-state-snapshot))))
-
 (defn screen-state-snapshot
-  ([]
-   (if-let [owner-key (current-owner-key)]
-     (screen-state-snapshot owner-key)
-     default-screen-state))
   ([owner]
-  (get-in (normalized-store (screen-runtime-state-snapshot)) [:states (screen-owner-key owner)] default-screen-state)))
+   (managed-screens/screen-state screen-id (screen-owner-key owner) default-screen-state)))
 
 (defn- swap-screen-state!
   [owner f & args]
   (let [owner-key (screen-owner-key owner)]
-    (swap! (screen-runtime-state-atom)
-           (fn [store]
-             (let [store (normalized-store store)]
-               (assoc-in store [:states owner-key]
-                         (apply f (get-in store [:states owner-key] default-screen-state) args)))))))
-
-(defn- set-current-owner!
-  [owner]
-  (let [owner-key (screen-owner-key owner)]
-    (swap! (screen-runtime-state-atom) #(assoc (normalized-store %) :current-owner owner-key))
-    owner-key))
+    (apply managed-screens/update-screen-state! screen-id owner-key default-screen-state f args)))
 
 (defn reset-screen-states-for-test!
   []
-  (reset! (screen-runtime-state-atom) default-screen-runtime-state)
+  (managed-screens/reset-managed-screen-state-for-test!)
   nil)
 
 ;; ============================================================================
@@ -189,10 +121,11 @@
 (defn open-screen!
   "Called by platform bridge when server push opens the screen.
   `player-uuid` is the local player. `payload` is the initial query result."
-  [player-uuid payload]
+  [owner payload]
   (let [snapshot (snapshot-of payload)]
-    (let [owner {:player-uuid player-uuid}]
-      (set-current-owner! owner)
+    (let [owner-key (screen-owner-key owner)
+          player-uuid (nth owner-key 2)]
+      (managed-screens/set-active-owner! screen-id owner-key)
       (swap-screen-state! owner merge default-screen-state
                           {:open? true
                            :player-uuid player-uuid
@@ -210,46 +143,40 @@
     {:command :open-screen}))
 
 (defn close-screen!
-  ([]
-   (when-let [owner-key (current-owner-key)]
-     (close-screen! owner-key)))
   ([owner]
-   (swap! (screen-runtime-state-atom)
-          (fn [store]
-            (let [store (normalized-store store)
-                  owner-key (screen-owner-key owner)]
-              (cond-> (update store :states dissoc owner-key)
-                (= owner-key (:current-owner store)) (assoc :current-owner nil)))))))
+   (managed-screens/clear-screen-state! screen-id (screen-owner-key owner))))
 
 (defn apply-server-payload!
   "Apply server query payload to existing screen state (used before screen opens)."
-  [payload]
+  [owner payload]
   (when payload
-    (when-let [owner-key (current-owner-key)]
-      (let [snapshot (snapshot-of payload)]
-        (swap-screen-state! owner-key assoc
-                            :locations (vec (:locations snapshot []))
-                            :exp (double (or (:exp snapshot) 0.0))
-                            :limits (merge {:cross-dimension-exp-threshold 0.8
-                                            :max-location-name-length 16}
-                                           (:limits snapshot))
-                            :current-pos (:current-pos snapshot))))))
+    (let [snapshot (snapshot-of payload)]
+      (swap-screen-state! owner assoc
+                          :locations (vec (:locations snapshot []))
+                          :exp (double (or (:exp snapshot) 0.0))
+                          :limits (merge {:cross-dimension-exp-threshold 0.8
+                                          :max-location-name-length 16}
+                                         (:limits snapshot))
+                          :current-pos (:current-pos snapshot)))))
 
 (declare apply-query-response!)
 
-(defn refresh-locations! []
-  (when-let [owner-key (current-owner-key)]
+(defn refresh-locations!
+  [owner]
+  (let [owner-key (screen-owner-key owner)]
+    (swap-screen-state! owner-key assoc :pending-op :refresh :last-error nil)
     (api/req-location-teleport-query!
       (fn [resp]
         (let [action (action-of resp)
               snapshot (snapshot-of resp)]
-          (when (:success? action)
-            (apply-query-response! owner-key snapshot)))))))
+          (apply-query-response! owner-key snapshot)
+          (swap-screen-state! owner-key assoc
+                              :pending-op nil
+                              :last-error (when-not (:success? action)
+                                            (:error action))))))
+    true))
 
 (defn- apply-query-response!
-  ([resp]
-   (when-let [owner-key (current-owner-key)]
-     (apply-query-response! owner-key resp)))
   ([owner resp]
    (let [snapshot (snapshot-of resp)]
      (swap-screen-state! owner assoc
@@ -334,8 +261,8 @@
 
 (defn build-draw-ops
   "Build all draw ops for the current frame. Called from render loop."
-  [mx my]
-  (let [{:keys [locations selected add-text current-pos limits last-error pending-op]} (screen-state-snapshot)
+  [owner mx my]
+  (let [{:keys [locations selected add-text current-pos limits last-error pending-op]} (screen-state-snapshot owner)
         hovered-loc (when (and selected (< selected (count locations)))
                       (nth locations selected))
         loc-ops (mapcat #(location-row-ops %1 %2 mx my) (range (count locations)) locations)
@@ -359,20 +286,19 @@
 ;; Interaction
 ;; ============================================================================
 
-(defn on-mouse-move [mx my]
-  (let [{:keys [locations]} (screen-state-snapshot)
+(defn on-mouse-move [owner mx my]
+  (let [{:keys [locations]} (screen-state-snapshot owner)
         n (count locations)
         hovered (first (filter (fn [i]
                                  (point-in? mx my panel-x (row-y i) panel-w row-h))
                                (range n)))]
-    (when-let [owner-key (current-owner-key)]
-      (swap-screen-state! owner-key assoc :selected hovered))))
+    (swap-screen-state! owner assoc :selected hovered)))
 
 (defn handle-screen-click!
   "Handle mouse click. Returns truthy if click was consumed."
-  [mx my]
-  (let [owner-key (current-owner-key)
-        {:keys [locations add-text pending-op]} (screen-state-snapshot owner-key)
+  [owner mx my]
+  (let [owner-key (screen-owner-key owner)
+        {:keys [locations add-text pending-op]} (screen-state-snapshot owner)
         n (count locations)]
     (if (nil? owner-key)
       false
@@ -455,9 +381,9 @@
 
 (defn handle-char-typed!
   "Handle a character typed while screen is open. Called by platform if supported."
-  [ch]
-  (let [owner-key (current-owner-key)
-        {:keys [add-mode? add-text pending-op limits]} (screen-state-snapshot owner-key)
+    [owner ch]
+    (let [owner-key (screen-owner-key owner)
+      {:keys [add-mode? add-text pending-op limits]} (screen-state-snapshot owner)
         max-len (long (or (:max-location-name-length limits) 16))]
     (when (and owner-key add-mode? (nil? pending-op))
       (cond

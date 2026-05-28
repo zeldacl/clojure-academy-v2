@@ -70,12 +70,12 @@
                                          :preset-data {:active-preset 0 :slots {}}})
                   client-keybinds/get-activate-hint (fn [_] nil)
                   client-keybinds/get-preset-switch-state (fn [] nil)
-                  current-charging-fx/current-state (fn [] {:active? false
-                                                            :blending? false
-                                                            :is-item false
-                                                            :good? false
-                                                            :charge-ticks 0
-                                                            :charge-ratio 0.0})
+                  current-charging-fx/current-state (fn [& _] {:active? false
+                                                                :blending? false
+                                                                :is-item false
+                                                                :good? false
+                                                                :charge-ticks 0
+                                                                :charge-ratio 0.0})
                   skill-config/tunable-int (fn [skill-id field-id]
                                              (case [skill-id field-id]
                                                [:railgun :qte.coin-window-ms] 1000

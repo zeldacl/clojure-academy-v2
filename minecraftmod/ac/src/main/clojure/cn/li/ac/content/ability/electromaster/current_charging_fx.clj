@@ -19,8 +19,7 @@
    :ending-at-ms 0})
 
 (defn- empty-store []
-  {:states {}
-   :current-owner-key nil})
+  {:states {}})
 
 (defn create-current-charging-fx-runtime
   ([]
@@ -83,10 +82,8 @@
   [owner-key]
   (update-current-charging-fx-state!
     (fn [store]
-      (let [states (dissoc (:states store) owner-key)]
-        {:states states
-         :current-owner-key (when-not (= owner-key (:current-owner-key store))
-                              (:current-owner-key store))})))
+      (let [store* (if (contains? store :states) store (empty-store))]
+        (assoc store* :states (dissoc (:states store*) owner-key)))))
   nil)
 
 (defn- current-store []
@@ -109,15 +106,15 @@
                 states)
 
           :else
-          (or (get states (:current-owner-key store))
-              (some (fn [[_ st]]
-                      (when (:active? st) st))
-                    states)))
+            (or (some (fn [[_ st]]
+                  (when (:active? st) st))
+                states)
+                (some (fn [[_ st]]
+                  (when (:blending? st) st))
+                states)))
         default-state)))
 
 (defn current-state
-  ([]
-   (current-state nil))
   ([selector]
    (state-for-selector (current-store) selector)))
 
@@ -131,6 +128,8 @@
 
 (defn- owner-key [ctx-id payload]
   (or (:owner-key payload)
+      (when-let [source-player-id (:source-player-id payload)]
+        [:source-player source-player-id])
       [:ctx ctx-id]))
 
 (defn- base-meta [owner-key ctx-id payload]
@@ -156,8 +155,7 @@
                             :block-pos nil
                             :charged 0.0
                             :started-at-ms (now-ms)
-                            :ending-at-ms 0}))
-          (assoc :current-owner-key owner-key))))
+                             :ending-at-ms 0})))))
   (client-sounds/queue-current-sound-effect!
    {:type :sound
     :sound-id "my_mod:em.charge_loop"
@@ -168,41 +166,37 @@
   (update-current-charging-fx-state!
     (fn [store]
       (let [store* (if (contains? store :states) store (empty-store))]
-        (-> store*
-            (update-in [:states owner-key]
-                       (fn [state]
-                         (-> (merge default-state state (base-meta owner-key ctx-id payload))
-                             (merge {:active? true
-                                     :blending? false})
-                             (cond-> (contains? payload :is-item)
-                               (assoc :is-item (boolean (:is-item payload))))
-                             (cond-> (contains? payload :good?)
-                               (assoc :good? (boolean (:good? payload))))
-                             (cond-> (contains? payload :charge-ticks)
-                               (assoc :charge-ticks (max 0 (long (:charge-ticks payload)))
-                                      :charge-ratio (normalize-ratio (:charge-ticks payload))))
-                             (cond-> (contains? payload :target)
-                               (assoc :target (:target payload)))
-                             (cond-> (contains? payload :block-pos)
-                               (assoc :block-pos (:block-pos payload)))
-                             (cond-> (contains? payload :charged)
-                               (assoc :charged (double (:charged payload)))))))
-            (assoc :current-owner-key owner-key))))))
+        (update-in store* [:states owner-key]
+                   (fn [state]
+                     (-> (merge default-state state (base-meta owner-key ctx-id payload))
+                         (merge {:active? true
+                                 :blending? false})
+                         (cond-> (contains? payload :is-item)
+                           (assoc :is-item (boolean (:is-item payload))))
+                         (cond-> (contains? payload :good?)
+                           (assoc :good? (boolean (:good? payload))))
+                         (cond-> (contains? payload :charge-ticks)
+                           (assoc :charge-ticks (max 0 (long (:charge-ticks payload)))
+                                  :charge-ratio (normalize-ratio (:charge-ticks payload))))
+                         (cond-> (contains? payload :target)
+                           (assoc :target (:target payload)))
+                         (cond-> (contains? payload :block-pos)
+                           (assoc :block-pos (:block-pos payload)))
+                         (cond-> (contains? payload :charged)
+                           (assoc :charged (double (:charged payload)))))))))))
 
 (defn- apply-end! [owner-key ctx-id payload]
   (update-current-charging-fx-state!
     (fn [store]
       (let [store* (if (contains? store :states) store (empty-store))]
-        (-> store*
-            (update-in [:states owner-key]
-                       (fn [state]
-                         (-> (merge default-state state (base-meta owner-key ctx-id payload))
-                             (merge {:active? false
-                                     :blending? true
-                                     :is-item (boolean (:is-item payload))
-                                     :ending-at-ms (now-ms)})
-                             (assoc :good? false))))
-            (assoc :current-owner-key owner-key))))))
+        (update-in store* [:states owner-key]
+                   (fn [state]
+                     (-> (merge default-state state (base-meta owner-key ctx-id payload))
+                         (merge {:active? false
+                                 :blending? true
+                                 :is-item (boolean (:is-item payload))
+                                 :ending-at-ms (now-ms)})
+                         (assoc :good? false))))))))
 
 (defn- on-fx-channel [ctx-id channel payload]
   (let [payload* (or payload {})
