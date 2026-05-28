@@ -9,6 +9,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraftforge.gametest.GameTestHolder;
 import net.minecraftforge.gametest.PrefixGameTestTemplate;
 
+import java.util.List;
 import java.util.Map;
 
 import static cn.li.forge1201.MyMod1201.MODID;
@@ -56,6 +57,38 @@ public final class ForgeSmokeGameTests {
 
         helper.assertTrue(foundManifestWithChecks,
             "Expected at least one content-owned smoke manifest with checks");
+        helper.succeed();
+    }
+
+    @GameTest(templateNamespace = "minecraft", template = "empty", batch = "content_smoke")
+    public static void electronBombDefaultsAligned(GameTestHelper helper) {
+        String delayedNs = "cn.li.ac.ability.server.service.delayed-projectiles";
+        ClojureInterop.requireNamespace(delayedNs);
+
+        Object delayObj = ClojureInterop.invoke(delayedNs, "mdball-near-expire-delay");
+        helper.assertTrue(delayObj instanceof Number && ((Number) delayObj).intValue() == 15,
+            "Expected electron-bomb delayed settlement default to be 15 ticks (life 20, settle offset 5)");
+
+        String skillConfigNs = "cn.li.ac.ability.skill-config";
+        ClojureInterop.requireNamespace(skillConfigNs);
+
+        Object damageEndpointsObj = ClojureInterop.invoke(
+            skillConfigNs,
+            "tunable-double-list",
+            kw("electron-bomb"),
+            kw("combat.damage"));
+
+        helper.assertTrue(damageEndpointsObj instanceof List<?>,
+            "Expected electron-bomb combat.damage endpoints to be list-like");
+
+        List<?> damageEndpoints = (List<?>) damageEndpointsObj;
+        helper.assertTrue(damageEndpoints.size() == 2,
+            "Expected electron-bomb combat.damage endpoints to have length 2");
+        helper.assertTrue(((Number) damageEndpoints.get(0)).doubleValue() == 6.0,
+            "Expected electron-bomb min damage endpoint to be 6.0");
+        helper.assertTrue(((Number) damageEndpoints.get(1)).doubleValue() == 12.0,
+            "Expected electron-bomb max damage endpoint to be 12.0");
+
         helper.succeed();
     }
 }

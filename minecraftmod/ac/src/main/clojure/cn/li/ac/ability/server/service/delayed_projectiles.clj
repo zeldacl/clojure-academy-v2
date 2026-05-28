@@ -6,7 +6,9 @@
 						[cn.li.ac.ability.server.effect.geom :as geom]
 						[cn.li.ac.ability.server.effect.beam]
 						[cn.li.ac.ability.server.service.context-mgr :as ctx-mgr]
+						[cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
 						[cn.li.ac.ability.server.service.skill-effects :as skill-effects]
+						[cn.li.mcmod.platform.raycast :as raycast]
 						[cn.li.mcmod.platform.entity-damage :as entity-damage]
 						[cn.li.mcmod.util.log :as log]))
 
@@ -71,13 +73,18 @@
 	(reset! (pending-tasks-atom) {})
 	nil)
 
-(def ^:private mdball-default-life-ticks 50)
-(def ^:private mdball-settle-offset-ticks 2)
+(def ^:private mdball-default-life-ticks 20)
+(def ^:private mdball-settle-offset-ticks 5)
+(def ^:private electron-bomb-ray-distance 15.0)
+
+(defn default-mdball-life-ticks
+	[]
+	mdball-default-life-ticks)
 
 (defn mdball-near-expire-delay
 	"Return delay ticks that settles on MdBall lifecycle near-expire frame.
 
-	Default behavior matches life-2 callback semantics from upstream entities."
+	Default behavior matches life-5 callback semantics from upstream entities."
 	([]
 	 (mdball-near-expire-delay mdball-default-life-ticks))
 	([life-ticks]
@@ -107,34 +114,49 @@
 	(double (or (get beam key) default)))
 
 (defn- run-electron-bomb-beam!
-	[{:keys [player-id ctx-id world-id eye look-dir damage beam exp-gain]}]
+	[{:keys [player-id ctx-id world-id eye look-dir damage exp-gain]}]
 	(try
-		(let [result (effect/run-op!
-									 {:player-id player-id
-										:ctx-id    ctx-id
-										:world-id  world-id
-										:eye-pos   eye
-										:look-dir  look-dir}
-									 [:beam {:radius          (beam-param beam :radius 0.3)
-												 :query-radius    (beam-param beam :query-radius 20.0)
-												 :step            (beam-param beam :step 0.8)
-												 :max-distance    (beam-param beam :max-distance 30.0)
-												 :visual-distance (beam-param beam :visual-distance 28.0)
-													 :damage          (double (or damage 0.0))
-													 :damage-type     :magic
-													 :break-blocks?   false
-													 :block-energy    0.0
-													 :fx-topic        nil}])
-					visual-distance (double (or (get-in result [:beam-result :visual-distance])
-																				 (beam-param beam :visual-distance 28.0)))
-					end-pos (geom/v+ eye (geom/v* (geom/vnorm look-dir) visual-distance))]
-			(ctx-mgr/push-channel-to-player! player-id ctx-id :electron-bomb/fx-beam
-																			 {:mode :perform
-																				:start eye
-																				:end end-pos
-																				:hit-distance visual-distance})
-			(when (get-in result [:beam-result :performed?])
-				(skill-effects/add-skill-exp! player-id :electron-bomb (double (or exp-gain 0.003)))))
+		(when (and raycast/*raycast* look-dir eye)
+		  (let [dir (geom/vnorm {:x (double (or (:x look-dir) 0.0))
+									 :y (double (or (:y look-dir) 0.0))
+									 :z (double (or (:z look-dir) 0.0))})
+					hit (raycast/raycast-entities raycast/*raycast*
+											 world-id
+											 (double (:x eye))
+											 (double (:y eye))
+											 (double (:z eye))
+											 (double (:x dir))
+											 (double (:y dir))
+											 (double (:z dir))
+											 electron-bomb-ray-distance)]
+				(when hit
+				  (let [end-pos (geom/v+ eye (geom/v* dir electron-bomb-ray-distance))
+						target-uuid (:uuid hit)
+						damage-amt (double (or damage 0.0))]
+				    (when (and target-uuid entity-damage/*entity-damage*)
+				      (entity-damage/apply-direct-damage!
+				        entity-damage/*entity-damage*
+				        world-id
+				        target-uuid
+				        damage-amt
+				        :magic)
+				      (md-damage/mark-target! player-id target-uuid)
+				      (skill-effects/add-skill-exp! player-id :electron-bomb
+				                                    (double (or exp-gain 0.003))))
+				    (ctx-mgr/push-channel-to-player! player-id ctx-id :electron-bomb/fx-beam
+				      {:mode :perform
+				       :start eye
+				       :end end-pos
+				       :hit-distance electron-bomb-ray-distance
+				       :performed? true
+				       :target-uuid target-uuid})
+				    (ctx-mgr/push-channel-to-nearby-players! ctx-id :electron-bomb/fx-beam
+				      {:mode :perform
+				       :start eye
+				       :end end-pos
+				       :hit-distance electron-bomb-ray-distance
+				       :performed? true
+				       :target-uuid target-uuid})))))
 		(catch Exception e
 			(log/warn "Delayed ElectronBomb settle failed:" (ex-message e)))))
 
@@ -152,7 +174,8 @@
 			(when (fn? on-hit!)
 				(try (on-hit! target-uuid) (catch Exception _))))
 		(when target-pos
-			(ctx-mgr/push-channel-to-player! player-id ctx-id :electron-missile/fx-fire target-pos))
+			(ctx-mgr/push-channel-to-player! player-id ctx-id :electron-missile/fx-fire target-pos)
+			(ctx-mgr/push-channel-to-nearby-players! ctx-id :electron-missile/fx-fire target-pos))
 		(catch Exception e
 			(log/warn "Delayed ElectronMissile settle failed:" (ex-message e)))))
 
@@ -181,7 +204,11 @@
 			(ctx-mgr/push-channel-to-player! player-id ctx-id :scatter-bomb/fx-beam
 															 {:start eye
 																:end end-pos
-																:hit-distance visual-distance}))
+															:hit-distance visual-distance})
+			(ctx-mgr/push-channel-to-nearby-players! ctx-id :scatter-bomb/fx-beam
+														 {:start eye
+															:end end-pos
+															:hit-distance visual-distance}))
 		(catch Exception e
 			(log/warn "Delayed ScatterBomb settle failed:" (ex-message e)))))
 

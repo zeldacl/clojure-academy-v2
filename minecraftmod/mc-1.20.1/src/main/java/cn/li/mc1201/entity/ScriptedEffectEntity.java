@@ -19,8 +19,10 @@ import java.util.UUID;
 
 public class ScriptedEffectEntity extends Entity {
     private static final int BALLISTIC_MAX_LIFE = 120;
+    private static final String LIFE_TICKS_OVERRIDE_TAG = "lifeTicksOverride";
     private UUID ownerUuid;
     private int age;
+    private int lifeTicksOverride = -1;
     private final List<ArcData> activeArcs = new ArrayList<>();
     private boolean ballisticStateInitialized;
     private double ballisticCurrentY;
@@ -72,6 +74,7 @@ public class ScriptedEffectEntity extends Entity {
         ballisticStartY = tag.getDouble("motionStartY");
         ballisticMaxY = tag.getDouble("motionMaxY");
         ballisticInitVel = tag.contains("motionInitVel") ? tag.getDouble("motionInitVel") : 0.92D;
+        lifeTicksOverride = tag.contains(LIFE_TICKS_OVERRIDE_TAG) ? tag.getInt(LIFE_TICKS_OVERRIDE_TAG) : -1;
         activeArcs.clear();
     }
 
@@ -87,6 +90,9 @@ public class ScriptedEffectEntity extends Entity {
         tag.putDouble("motionStartY", ballisticStartY);
         tag.putDouble("motionMaxY", ballisticMaxY);
         tag.putDouble("motionInitVel", ballisticInitVel);
+        if (lifeTicksOverride > 0) {
+            tag.putInt(LIFE_TICKS_OVERRIDE_TAG, lifeTicksOverride);
+        }
     }
 
     private static double clamp01(double v) {
@@ -183,7 +189,7 @@ public class ScriptedEffectEntity extends Entity {
         age++;
         int lifeTicks;
         if (spec != null) {
-            lifeTicks = spec.getLifeTicks();
+            lifeTicks = lifeTicksOverride > 0 ? lifeTicksOverride : spec.getLifeTicks();
         } else if (this instanceof ScriptedRayEntity rayEntity) {
             ScriptedRaySpec raySpec = rayEntity.getRaySpec();
             lifeTicks = raySpec == null ? 15 : raySpec.getLifeTicks();
@@ -220,6 +226,10 @@ public class ScriptedEffectEntity extends Entity {
 
     public void setOwnerPlayer(Player owner) {
         ownerUuid = owner == null ? null : owner.getUUID();
+    }
+
+    public void setLifeTicksOverride(int lifeTicks) {
+        this.lifeTicksOverride = Math.max(1, lifeTicks);
     }
 
     public static final class ArcData {

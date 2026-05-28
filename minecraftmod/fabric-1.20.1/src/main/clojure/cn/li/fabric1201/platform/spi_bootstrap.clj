@@ -4,6 +4,7 @@
   Loaded via Java ServiceLoader provider at runtime.
   Keeps bootstrap-sensitive logic out of plain namespace loading paths."
   (:require [cn.li.mcmod.util.log :as log]
+            [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.be :as be]
             [cn.li.mc1201.platform.class-access :as class-access]
@@ -114,6 +115,11 @@
       (when-not (var-get #'*initialized?*)
         (platform-init/install-platform-core! fabric-adapter)
         (install-be-ops!)
+        (alter-var-root #'entity/*player-spawn-entity-by-id-with-options-fn*
+                        (constantly
+                         (fn [player entity-id speed options]
+                           (bootstrap-core/spawn-entity-by-id-from-player-with-options
+                             player entity-id speed options))))
         (alter-var-root #'*initialized?* (constantly true))
         (log/info "fabric platform SPI bootstrap initialized via ServiceLoader entrypoint"))))
   nil)

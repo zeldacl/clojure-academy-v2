@@ -6,10 +6,6 @@
    {:skill-id :rad-intensify :id :effect.mark-duration-ms :path "effect.mark-duration-ms" :section-suffix "effect" :type :int :min 1 :default 3000 :comment "RadIntensify target mark duration in milliseconds."}
 
    {:skill-id :electron-bomb :id :combat.damage :path "combat.damage" :section-suffix "combat" :type :double-list :min 0.0 :list-count 2 :default [6.0 12.0] :comment "ElectronBomb beam damage endpoints."}
-   {:skill-id :electron-bomb :id :beam.radius :path "beam.radius" :section-suffix "beam" :type :double :min 0.0 :default 0.3 :comment "ElectronBomb delayed beam radius."}
-   {:skill-id :electron-bomb :id :beam.query-radius :path "beam.query-radius" :section-suffix "beam" :type :double :min 0.0 :default 20.0 :comment "ElectronBomb delayed beam entity query radius."}
-   {:skill-id :electron-bomb :id :beam.step :path "beam.step" :section-suffix "beam" :type :double :min 0.001 :default 0.8 :comment "ElectronBomb delayed beam trace step."}
-   {:skill-id :electron-bomb :id :beam.max-distance :path "beam.max-distance" :section-suffix "beam" :type :double :min 0.0 :default 30.0 :comment "ElectronBomb delayed beam max distance."}
    {:skill-id :electron-bomb :id :cost.down.cp :path "cost.down.cp" :section-suffix "cost.down" :type :double-list :min 0.0 :list-count 2 :default [250.0 180.0] :comment "ElectronBomb down-stage CP cost."}
    {:skill-id :electron-bomb :id :cost.down.overload :path "cost.down.overload" :section-suffix "cost.down" :type :double-list :min 0.0 :list-count 2 :default [120.0 90.0] :comment "ElectronBomb down-stage overload cost."}
    {:skill-id :electron-bomb :id :cooldown.ticks :path "cooldown.ticks" :section-suffix "cooldown" :type :double-list :min 0.0 :list-count 2 :default [20.0 10.0] :comment "ElectronBomb cooldown ticks."}
@@ -123,8 +119,7 @@
    {:skill-id :scatter-bomb :id :progression.exp-per-ball :path "progression.exp-per-ball" :section-suffix "progression" :type :double :min 0.0 :default 0.002 :comment "ScatterBomb exp gained per fired ball."}])
 
 (def internal-tunable-definitions
-  [{:skill-id :electron-bomb :id :beam.visual-distance :path "beam.visual-distance" :section-suffix "beam" :type :double :min 0.0 :default 28.0 :comment "Internal FX beam visual distance."}
-   {:skill-id :meltdowner :id :beam.visual-distance :path "beam.visual-distance" :section-suffix "beam" :type :double :min 0.0 :default 45.0 :comment "Internal FX beam visual distance."}
+  [{:skill-id :meltdowner :id :beam.visual-distance :path "beam.visual-distance" :section-suffix "beam" :type :double :min 0.0 :default 45.0 :comment "Internal FX beam visual distance."}
    {:skill-id :mine-ray-luck :id :effect.extra-drop-y-offset :path "effect.extra-drop-y-offset" :section-suffix "effect" :type :int :default -999 :comment "Internal synthetic Y offset used for bonus drop hook."}
    {:skill-id :ray-barrage :id :beam.visual-distance :path "beam.visual-distance" :section-suffix "beam" :type :double :min 0.0 :default 20.0 :comment "Internal FX beam visual distance."}
    {:skill-id :scatter-bomb :id :beam.visual-distance :path "beam.visual-distance" :section-suffix "beam" :type :double :min 0.0 :default 23.0 :comment "Internal FX beam visual distance."}])

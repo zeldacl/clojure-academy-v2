@@ -77,7 +77,28 @@
   *entity-get-type-id-fn*
   nil)
 
+(defonce ^{:dynamic true
+           :doc "Optional platform spawn bridge:
+  (fn [player entity-id speed options] -> boolean).
+
+  Enables platform-specific spawn extensions (for example effect life override)
+  while preserving the legacy `player-spawn-entity-by-id!` path as fallback."}
+  *player-spawn-entity-by-id-with-options-fn*
+  nil)
+
 (defn entity-get-type-id*
   [world-id entity-uuid]
   (when-let [f *entity-get-type-id-fn*]
     (some-> (f world-id entity-uuid) str)))
+
+(defn player-spawn-entity-by-id-with-options!
+  "Spawn entity with optional platform-specific options.
+
+  Falls back to `player-spawn-entity-by-id!` when no platform bridge is
+  registered or when `options` is nil/empty."
+  [player entity-id speed options]
+  (if (and (some? *player-spawn-entity-by-id-with-options-fn*)
+           (map? options)
+           (seq options))
+    (boolean (*player-spawn-entity-by-id-with-options-fn* player entity-id speed options))
+    (boolean (player-spawn-entity-by-id! player entity-id speed))))

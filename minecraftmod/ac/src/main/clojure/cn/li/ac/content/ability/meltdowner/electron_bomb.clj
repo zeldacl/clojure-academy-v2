@@ -1,5 +1,5 @@
 (ns cn.li.ac.content.ability.meltdowner.electron-bomb
-  "ElectronBomb skill - delayed beam shot from meltdowner energy ball.
+  "ElectronBomb skill - delayed MdBall settlement with single-ray hit.
 
   Pattern: :instant (key press fires the bomb)
   Cost: CP lerp(250, 180, exp), overload lerp(120, 90, exp)
@@ -7,8 +7,8 @@
   Cooldown: lerp(20, 10, exp) ticks
   Exp: +0.003 per hit
 
-  Implementation note: the 'ball' delay is simulated by firing the beam
-  immediately with a short visual delay communicated to the FX layer.
+  Implementation note: the 'ball' delay is driven by delayed projectile
+  settlement and the client FX receives a single-ray visual event.
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill!]]
@@ -40,13 +40,6 @@
 (defn- cfg-lerp-int [field-id exp]
   (skill-config/lerp-int electron-bomb-skill-id field-id exp))
 
-(defn- beam-config []
-  {:radius          (cfg-double :beam.radius)
-   :query-radius    (cfg-double :beam.query-radius)
-   :step            (cfg-double :beam.step)
-   :max-distance    (cfg-double :beam.max-distance)
-   :visual-distance (cfg-double :beam.visual-distance)})
-
 ;; ---------------------------------------------------------------------------
 ;; Action
 ;; ---------------------------------------------------------------------------
@@ -61,8 +54,12 @@
                      (raycast/get-player-look-vector raycast/*raycast* player-id))]
       (when look-vec
         (when player
-          (entity/player-spawn-entity-by-id! player mdball-entity-id 0.0))
-        ;; Send FX first (ball spawn + delay animation)
+          (entity/player-spawn-entity-by-id-with-options!
+            player
+            mdball-entity-id
+            0.0
+            {:life-ticks (delayed-projectiles/default-mdball-life-ticks)}))
+        ;; Send spawn FX first; the delayed task owns the actual hit settlement.
         (ctx/ctx-send-to-client! ctx-id :electron-bomb/fx-spawn
                                  {:x (:x eye) :y (:y eye) :z (:z eye)
                                   :dx (:x look-vec) :dy (:y look-vec) :dz (:z look-vec)})
@@ -73,12 +70,11 @@
            :eye eye
            :look-dir look-vec
            :damage damage
-           :beam (beam-config)
            :exp-gain (cfg-double :progression.exp-hit)
            :delay-ticks (delayed-projectiles/mdball-near-expire-delay)})
-          (log/debug "ElectronBomb: scheduled delayed beam"
-                 {:delay (delayed-projectiles/mdball-near-expire-delay)
-                  :player player-id})))
+        (log/debug "ElectronBomb: scheduled delayed beam"
+                   {:delay (delayed-projectiles/mdball-near-expire-delay)
+                    :player player-id})))
     (catch Exception e
       (log/warn "ElectronBomb perform! failed:" (ex-message e)))))
 

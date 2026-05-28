@@ -137,6 +137,15 @@
                               :channel channel
                               :payload payload}))
 
+(defn push-channel-to-nearby-players!
+  "Push a context channel payload to nearby players except the local owner.
+
+  Uses dispatcher route `:to-except-local` when the context route is still
+  available, which mirrors normal server-side FX fan-out behavior."
+  [ctx-id channel payload]
+  (ctx/ctx-send-to-except-local! ctx-id channel payload)
+  nil)
+
 (defn tick-player-contexts!
   "Drive all active server-owned contexts for one player once per server tick."
   [player-uuid]

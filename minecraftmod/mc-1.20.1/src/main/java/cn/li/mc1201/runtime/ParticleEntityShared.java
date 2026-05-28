@@ -46,6 +46,10 @@ public final class ParticleEntityShared {
     }
 
     public static boolean spawnEntityByIdFromPlayer(Object playerObj, String entityId, float speed) {
+        return spawnEntityByIdFromPlayer(playerObj, entityId, speed, null);
+    }
+
+    public static boolean spawnEntityByIdFromPlayer(Object playerObj, String entityId, float speed, Integer lifeTicksOverride) {
         if (!(playerObj instanceof Player player) || entityId == null || entityId.isEmpty()) {
             return false;
         }
@@ -75,6 +79,9 @@ public final class ParticleEntityShared {
         if (entity instanceof ScriptedEffectEntity scriptedEffect) {
             scriptedEffect.setOwnerPlayer(player);
             scriptedEffect.setPos(player.getX(), player.getY() + 1.0D, player.getZ());
+            if (lifeTicksOverride != null && lifeTicksOverride > 0) {
+                scriptedEffect.setLifeTicksOverride(lifeTicksOverride);
+            }
         }
         return level.addFreshEntity(entity);
     }

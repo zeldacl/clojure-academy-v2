@@ -174,37 +174,22 @@
                   (boolean (ru/inst level "addFreshEntity" entity)))))))
         (catch Throwable _ false)))))
 
-(defn spawn-entity-by-id-from-player [player entity-id speed]
+(defn spawn-entity-by-id-from-player-with-options
+  [player entity-id speed options]
   (if (or (nil? player) (nil? entity-id) (= "" (str entity-id)))
     false
     (try
-      (let [level (player-level player)]
-        (if (world-client-side? level)
-          true
-          (let [builtins-cls (ru/class-noinit "net.minecraft.core.registries.BuiltInRegistries")
-                entity-registry (.get (.getField builtins-cls "ENTITY_TYPE") nil)
-                type (ru/inst entity-registry "get" (ru/make-rl entity-id))]
-            (if (nil? type)
-              false
-              (let [entity (ru/inst type "create" level)]
-                (if (nil? entity)
-                  false
-                  (let [x (double (ru/inst player "getX"))
-                        y (double (ru/inst player "getEyeY"))
-                        z (double (ru/inst player "getZ"))
-                        yrot (float (ru/inst player "getYRot"))
-                        xrot (float (ru/inst player "getXRot"))
-                        s (double (or speed 1.0))
-                        look (ru/inst (ru/inst (ru/inst player "getLookAngle") "normalize") "scale" s)]
-                    (ru/inst entity "moveTo" x (- y 0.1) z yrot xrot)
-                    (ru/inst entity "setDeltaMovement" look)
-                    (try
-                      (when (instance? (ru/class-noinit "net.minecraft.world.entity.projectile.Projectile") entity)
-                        (ru/inst entity "setOwner" player))
-                      (catch Throwable _ nil))
-                    (try
-                      (ru/inst entity "setOwnerPlayer" player)
-                      (ru/inst entity "setPos" x (+ (double (ru/inst player "getY")) 1.0) z)
-                      (catch Throwable _ nil))
-                    (boolean (ru/inst level "addFreshEntity" entity)))))))))
+      (let [particle-entity-shared-cls (ru/class-noinit "cn.li.mc1201.runtime.ParticleEntityShared")
+            life-ticks (some-> options :life-ticks int)
+            life-arg (when (and (number? life-ticks) (pos? life-ticks)) life-ticks)]
+        (boolean (ru/static particle-entity-shared-cls
+                            "spawnEntityByIdFromPlayer"
+                            player
+                            (str entity-id)
+                            (float (or speed 1.0))
+                            life-arg)))
       (catch Throwable _ false))))
+
+(defn spawn-entity-by-id-from-player
+  [player entity-id speed]
+  (spawn-entity-by-id-from-player-with-options player entity-id speed nil))
