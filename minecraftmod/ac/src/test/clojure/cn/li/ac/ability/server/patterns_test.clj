@@ -277,3 +277,43 @@
       (is (false? (get-in @ctx* [:skill-state :performed?])))
       (is (empty? @events*))
       (is (= [:up] (mapv :cost-stage @cost-fail-calls*))))))
+
+(deftest charge-window-on-up-honors-settle-perform-policy-test
+  (let [ctx* (atom {:skill-state {:hold-ticks 9 :performed? false}})
+        events* (atom [])
+        fx-stages* (atom [])
+        exp-calls* (atom 0)
+        cooldown-calls* (atom 0)
+        stage-calls* (atom 0)]
+    (effect/register-op! test-op-key
+                         (fn [evt _]
+                           (swap! stage-calls* inc)
+                           evt))
+    (with-redefs [skill-effects/apply-cost! (fn [_ _ _] true)
+                  skill-effects/emit-fx! (fn [_ _ stage]
+                                           (swap! fx-stages* conj stage)
+                                           nil)
+                  skill-effects/gain-exp! (fn [_ _]
+                                            (swap! exp-calls* inc)
+                                            nil)
+                  skill-effects/apply-cooldown! (fn [_ _]
+                                                  (swap! cooldown-calls* inc)
+                                                  nil)
+                  ctx/get-context (fn [_] @ctx*)
+                  ctx/update-context! (fn [_ f & args]
+                                        (apply swap! ctx* f args))
+                  evt/fire-ability-event! (fn [event]
+                                            (swap! events* conj event))]
+      (binding [ctx/*context-owner* test-context-owner]
+        (patterns/charge-window-on-up!
+         {:id :thunder-clap
+          :input-policy {:settle-perform-on-key-up? false}
+          :actions {:up! (fn [_] nil)}
+          :perform [[test-op-key {}]]}
+         {:ctx-id "ctx-charge-window-policy" :player-id "p1"}))
+      (is (= 0 @stage-calls*))
+      (is (= [:end] @fx-stages*))
+      (is (= 1 @exp-calls*))
+      (is (= 1 @cooldown-calls*))
+      (is (false? (get-in @ctx* [:skill-state :performed?])))
+      (is (empty? @events*)))))

@@ -253,13 +253,21 @@
     (when-not cost-ok?
       (cost-fail! spec evt* :tick))))
 
+(defn- should-settle-perform-on-key-up?
+  [spec evt]
+  (let [policy (get-in spec [:input-policy :settle-perform-on-key-up?])]
+    (cond
+      (fn? policy) (boolean (policy evt))
+      (some? policy) (boolean policy)
+      :else true)))
+
 (defn- stage-pattern-on-up!
   [spec {:keys [ctx-id] :as evt} perform?]
   (let [hold-ticks (long (or (get-in (ctx/get-context ctx-id) [:skill-state :hold-ticks]) 0))
         evt* (assoc evt :hold-ticks hold-ticks)
         cost-ok? (apply-cost! spec :up evt*)]
     (call-action! spec :up! (assoc evt* :cost-ok? cost-ok?))
-    (when (and perform? cost-ok?)
+    (when (and perform? cost-ok? (should-settle-perform-on-key-up? spec evt*))
       (run-stage-ops! spec evt* :perform)
       (emit-fx! spec evt* :perform)
       (record-performed! spec evt*))
