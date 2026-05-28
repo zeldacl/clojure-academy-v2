@@ -147,8 +147,9 @@
                  (set (keys (:effect-state (pcfx/plasma-cannon-fx-snapshot)))))))))))
 
 (deftest plasma-cannon-fx-runtime-required-without-binding-test
-  (binding [pcfx/*plasma-cannon-fx-runtime* nil]
-    (is (thrown-with-msg?
-          clojure.lang.ExceptionInfo
-          #"runtime is not bound"
-          (pcfx/plasma-cannon-fx-snapshot)))))
+  (pcfx/call-with-plasma-cannon-fx-runtime nil
+    (fn []
+      (is (thrown-with-msg?
+            clojure.lang.ExceptionInfo
+            #"runtime is not bound"
+            (pcfx/plasma-cannon-fx-snapshot))))))

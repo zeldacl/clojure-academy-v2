@@ -142,8 +142,9 @@
                    (set (keys (:hand-state (gfx/groundshock-fx-snapshot))))))))))))
 
 (deftest groundshock-fx-runtime-required-without-binding-test
-  (binding [gfx/*groundshock-fx-runtime* nil]
-    (is (thrown-with-msg?
-          clojure.lang.ExceptionInfo
-          #"runtime is not bound"
-          (gfx/groundshock-fx-snapshot)))))
+  (gfx/call-with-groundshock-fx-runtime nil
+    (fn []
+      (is (thrown-with-msg?
+            clojure.lang.ExceptionInfo
+            #"runtime is not bound"
+            (gfx/groundshock-fx-snapshot))))))

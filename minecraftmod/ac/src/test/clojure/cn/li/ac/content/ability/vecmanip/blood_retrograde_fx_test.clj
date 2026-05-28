@@ -177,8 +177,9 @@
           (is (= 1 (count (get (:splashes (brfx/blood-retrograde-fx-snapshot)) [:ctx "ctx-a"])))))))))
 
 (deftest blood-retrograde-fx-runtime-required-without-binding-test
-  (binding [brfx/*blood-retrograde-fx-runtime* nil]
-    (is (thrown-with-msg?
-          clojure.lang.ExceptionInfo
-          #"runtime is not bound"
-          (brfx/blood-retrograde-fx-snapshot)))))
+  (brfx/call-with-blood-retrograde-fx-runtime nil
+    (fn []
+      (is (thrown-with-msg?
+            clojure.lang.ExceptionInfo
+            #"runtime is not bound"
+            (brfx/blood-retrograde-fx-snapshot))))))

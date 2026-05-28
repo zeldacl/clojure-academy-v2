@@ -174,8 +174,9 @@
                            [:effect-state [:ctx "ctx-a"] :charge-ticks]))))))))
 
 (deftest directed-blastwave-fx-runtime-required-without-binding-test
-  (binding [blastwave-fx/*directed-blastwave-fx-runtime* nil]
-    (is (thrown-with-msg?
-          clojure.lang.ExceptionInfo
-          #"runtime is not bound"
-          (blastwave-fx/directed-blastwave-fx-snapshot)))))
+  (blastwave-fx/call-with-directed-blastwave-fx-runtime nil
+    (fn []
+      (is (thrown-with-msg?
+            clojure.lang.ExceptionInfo
+            #"runtime is not bound"
+            (blastwave-fx/directed-blastwave-fx-snapshot))))))

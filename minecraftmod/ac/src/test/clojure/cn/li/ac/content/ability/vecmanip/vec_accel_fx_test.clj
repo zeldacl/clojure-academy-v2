@@ -106,8 +106,9 @@
         (is (= 5 (:charge-ticks (get (:effect-state (vafx/vec-accel-fx-snapshot)) [:ctx "ctx-a"]))))))))
 
 (deftest vec-accel-fx-runtime-required-without-binding-test
-  (binding [vafx/*vec-accel-fx-runtime* nil]
-    (is (thrown-with-msg?
-          clojure.lang.ExceptionInfo
-          #"runtime is not bound"
-          (vafx/vec-accel-fx-snapshot)))))
+  (vafx/call-with-vec-accel-fx-runtime nil
+    (fn []
+      (is (thrown-with-msg?
+            clojure.lang.ExceptionInfo
+            #"runtime is not bound"
+            (vafx/vec-accel-fx-snapshot))))))
