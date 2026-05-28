@@ -153,3 +153,10 @@
         (fn []
           (is (= #{[:ctx "ctx-a"]}
                  (set (keys (:arcs (tb-fx/thunder-bolt-fx-snapshot)))))))))))
+
+(deftest thunder-bolt-fx-runtime-required-without-binding-test
+  (binding [tb-fx/*thunder-bolt-fx-runtime* nil]
+    (is (thrown-with-msg?
+          clojure.lang.ExceptionInfo
+          #"runtime is not bound"
+          (tb-fx/thunder-bolt-fx-snapshot)))))

@@ -19,9 +19,6 @@
 
 (def ^:dynamic *electron-missile-fx-runtime* nil)
 
-(defonce ^:private installed-electron-missile-fx-runtime
-  (create-electron-missile-fx-runtime))
-
 (defn- electron-missile-fx-runtime?
   [runtime]
   (and (map? runtime)
@@ -43,7 +40,8 @@
 (defn- current-electron-missile-fx-runtime
   []
   (or *electron-missile-fx-runtime*
-      installed-electron-missile-fx-runtime))
+      (throw (ex-info "Electron Missile FX runtime is not bound"
+                      {:hint "Bind runtime via call-with-electron-missile-fx-runtime or use init! registered handlers"}))))
 
 (defn- electron-missile-fx-state-atom
   []
@@ -124,10 +122,18 @@
   nil)
 
 (defn init! []
-  (level-effects/register-level-effect! :electron-missile
-    {:enqueue-event-fn enqueue!
-     :tick-fn       tick!
-     :build-plan-fn build-plan})
+  (let [runtime (create-electron-missile-fx-runtime)]
+    (level-effects/register-level-effect! :electron-missile
+      {:enqueue-event-fn (fn [event]
+                           (call-with-electron-missile-fx-runtime
+                             runtime
+                             (fn []
+                               (enqueue! event))))
+       :tick-fn (fn []
+                  (call-with-electron-missile-fx-runtime
+                    runtime
+                    tick!))
+       :build-plan-fn build-plan}))
   (fx-registry/register-fx-channels!
     [:electron-missile/fx-start :electron-missile/fx-fire]
     (fn [ctx-id channel payload]

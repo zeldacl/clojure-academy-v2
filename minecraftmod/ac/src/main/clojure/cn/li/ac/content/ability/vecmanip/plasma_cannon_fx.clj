@@ -19,9 +19,6 @@
 
 (def ^:dynamic *plasma-cannon-fx-runtime* nil)
 
-(defonce ^:private installed-plasma-cannon-fx-runtime
-  (create-plasma-cannon-fx-runtime))
-
 (defn- plasma-cannon-fx-runtime?
   [runtime]
   (and (map? runtime)
@@ -43,7 +40,8 @@
 (defn- current-plasma-cannon-fx-runtime
   []
   (or *plasma-cannon-fx-runtime*
-      installed-plasma-cannon-fx-runtime))
+      (throw (ex-info "Plasma Cannon FX runtime is not bound"
+                      {:hint "Bind runtime via call-with-plasma-cannon-fx-runtime or use init! registered handlers"}))))
 
 (defn- plasma-cannon-fx-state-atom
   []
@@ -233,10 +231,18 @@
 ;; ---------------------------------------------------------------------------
 
 (defn init! []
-  (level-effects/register-level-effect! :plasma-cannon
-    {:enqueue-event-fn enqueue!
-     :tick-fn       tick!
-     :build-plan-fn build-plan})
+  (let [runtime (create-plasma-cannon-fx-runtime)]
+    (level-effects/register-level-effect! :plasma-cannon
+      {:enqueue-event-fn (fn [event]
+                           (call-with-plasma-cannon-fx-runtime
+                             runtime
+                             (fn []
+                               (enqueue! event))))
+       :tick-fn (fn []
+                  (call-with-plasma-cannon-fx-runtime
+                    runtime
+                    tick!))
+       :build-plan-fn build-plan}))
   (fx-registry/register-fx-channels!
     [:plasma-cannon/fx-start :plasma-cannon/fx-update
      :plasma-cannon/fx-perform :plasma-cannon/fx-end]

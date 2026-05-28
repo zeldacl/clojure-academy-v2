@@ -19,9 +19,6 @@
 
 (def ^:dynamic *flesh-ripping-fx-runtime* nil)
 
-(defonce ^:private installed-flesh-ripping-fx-runtime
-  (create-flesh-ripping-fx-runtime))
-
 (defn- flesh-ripping-fx-runtime?
   [runtime]
   (and (map? runtime)
@@ -43,7 +40,8 @@
 (defn- current-flesh-ripping-fx-runtime
   []
   (or *flesh-ripping-fx-runtime*
-      installed-flesh-ripping-fx-runtime))
+      (throw (ex-info "Flesh Ripping FX runtime is not bound"
+                      {:hint "Bind runtime via call-with-flesh-ripping-fx-runtime or use init! registered handlers"}))))
 
 (defn- flesh-ripping-fx-state-atom
   []
@@ -144,10 +142,18 @@
 (defn- build-plan [_cp _hcp _tick] nil)
 
 (defn init! []
-  (level-effects/register-level-effect! :flesh-ripping
-    {:enqueue-event-fn enqueue!
-     :tick-fn       tick!
-     :build-plan-fn build-plan})
+  (let [runtime (create-flesh-ripping-fx-runtime)]
+    (level-effects/register-level-effect! :flesh-ripping
+      {:enqueue-event-fn (fn [event]
+                           (call-with-flesh-ripping-fx-runtime
+                             runtime
+                             (fn []
+                               (enqueue! event))))
+       :tick-fn (fn []
+                  (call-with-flesh-ripping-fx-runtime
+                    runtime
+                    tick!))
+       :build-plan-fn build-plan}))
   (fx-registry/register-fx-channels!
     [:flesh-ripping/fx-start :flesh-ripping/fx-update :flesh-ripping/fx-perform :flesh-ripping/fx-end]
     (fn [ctx-id channel payload]

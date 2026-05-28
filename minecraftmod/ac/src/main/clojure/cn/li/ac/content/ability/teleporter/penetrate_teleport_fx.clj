@@ -19,9 +19,6 @@
 
   (def ^:dynamic *penetrate-teleport-fx-runtime* nil)
 
-  (defonce ^:private installed-penetrate-teleport-fx-runtime
-    (create-penetrate-teleport-fx-runtime))
-
   (defn- penetrate-teleport-fx-runtime?
     [runtime]
     (and (map? runtime)
@@ -43,7 +40,8 @@
   (defn- current-penetrate-teleport-fx-runtime
     []
     (or *penetrate-teleport-fx-runtime*
-        installed-penetrate-teleport-fx-runtime))
+      (throw (ex-info "Penetrate Teleport FX runtime is not bound"
+              {:hint "Bind runtime via call-with-penetrate-teleport-fx-runtime or use init! registered handlers"}))))
 
   (defn- penetrate-teleport-fx-state-atom
     []
@@ -142,10 +140,18 @@
 (defn- build-plan [_cp _hcp _tick] nil)
 
 (defn init! []
-  (level-effects/register-level-effect! :penetrate-teleport
-    {:enqueue-event-fn enqueue!
-     :tick-fn       tick!
-     :build-plan-fn build-plan})
+  (let [runtime (create-penetrate-teleport-fx-runtime)]
+    (level-effects/register-level-effect! :penetrate-teleport
+      {:enqueue-event-fn (fn [event]
+                           (call-with-penetrate-teleport-fx-runtime
+                             runtime
+                             (fn []
+                               (enqueue! event))))
+       :tick-fn (fn []
+                  (call-with-penetrate-teleport-fx-runtime
+                    runtime
+                    tick!))
+       :build-plan-fn build-plan}))
   (fx-registry/register-fx-channels!
     [:penetrate-tp/fx-start :penetrate-tp/fx-update :penetrate-tp/fx-perform :penetrate-tp/fx-end]
     (fn [ctx-id channel payload]

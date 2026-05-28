@@ -22,9 +22,6 @@
 
 (def ^:dynamic *arc-gen-fx-runtime* nil)
 
-(defonce ^:private installed-arc-gen-fx-runtime
-  (create-arc-gen-fx-runtime))
-
 (defn- arc-gen-fx-runtime?
   [runtime]
   (and (map? runtime)
@@ -46,7 +43,8 @@
 (defn- current-arc-gen-fx-runtime
   []
   (or *arc-gen-fx-runtime*
-      installed-arc-gen-fx-runtime))
+      (throw (ex-info "Arc Gen FX runtime is not bound"
+                      {:hint "Bind runtime via call-with-arc-gen-fx-runtime or use init! registered handlers"}))))
 
 (defn- arc-gen-fx-state-atom
   []
@@ -137,10 +135,18 @@
       {:ops (vec ops)})))
 
 (defn init! []
-  (level-effects/register-level-effect! :arc-gen
-    {:enqueue-event-fn enqueue!
-     :tick-fn tick!
-     :build-plan-fn build-plan})
+  (let [runtime (create-arc-gen-fx-runtime)]
+    (level-effects/register-level-effect! :arc-gen
+      {:enqueue-event-fn (fn [event]
+                           (call-with-arc-gen-fx-runtime
+                             runtime
+                             (fn []
+                               (enqueue! event))))
+       :tick-fn (fn []
+                  (call-with-arc-gen-fx-runtime
+                    runtime
+                    tick!))
+       :build-plan-fn build-plan}))
   (fx-registry/register-fx-channel! :arc-gen/fx-perform
     (fn [ctx-id channel payload]
       (level-effects/enqueue-level-effect! :arc-gen

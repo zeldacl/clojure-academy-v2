@@ -8,15 +8,27 @@
             [cn.li.ac.content.ability.vecmanip.vec-deviation-fx :as vec-deviation-fx]))
 
 (defn- reset-fixture [f]
-  (vec-deviation-fx/reset-vec-deviation-fx-for-test!)
-  (vec-accel-fx/reset-vec-accel-fx-for-test!)
-  (storm-wing-fx/reset-storm-wing-fx-for-test!)
-  (plasma-cannon-fx/reset-plasma-cannon-fx-for-test!)
-  (f)
-  (vec-deviation-fx/reset-vec-deviation-fx-for-test!)
-  (vec-accel-fx/reset-vec-accel-fx-for-test!)
-  (storm-wing-fx/reset-storm-wing-fx-for-test!)
-  (plasma-cannon-fx/reset-plasma-cannon-fx-for-test!))
+  (vec-deviation-fx/call-with-vec-deviation-fx-runtime
+    (vec-deviation-fx/create-vec-deviation-fx-runtime)
+    (fn []
+      (vec-accel-fx/call-with-vec-accel-fx-runtime
+        (vec-accel-fx/create-vec-accel-fx-runtime)
+        (fn []
+          (storm-wing-fx/call-with-storm-wing-fx-runtime
+            (storm-wing-fx/create-storm-wing-fx-runtime)
+            (fn []
+              (plasma-cannon-fx/call-with-plasma-cannon-fx-runtime
+                (plasma-cannon-fx/create-plasma-cannon-fx-runtime)
+                (fn []
+                  (vec-deviation-fx/reset-vec-deviation-fx-for-test!)
+                  (vec-accel-fx/reset-vec-accel-fx-for-test!)
+                  (storm-wing-fx/reset-storm-wing-fx-for-test!)
+                  (plasma-cannon-fx/reset-plasma-cannon-fx-for-test!)
+                  (f)
+                  (vec-deviation-fx/reset-vec-deviation-fx-for-test!)
+                  (vec-accel-fx/reset-vec-accel-fx-for-test!)
+                  (storm-wing-fx/reset-storm-wing-fx-for-test!)
+                  (plasma-cannon-fx/reset-plasma-cannon-fx-for-test!))))))))))
 
 (use-fixtures :each reset-fixture)
 

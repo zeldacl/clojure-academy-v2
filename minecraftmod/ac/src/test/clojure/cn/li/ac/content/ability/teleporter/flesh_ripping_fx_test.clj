@@ -135,3 +135,10 @@
         (fn []
           (is (= #{[:ctx "ctx-a"]}
                  (set (keys (:fx-state (frfx/flesh-ripping-fx-snapshot)))))))))))
+
+(deftest flesh-ripping-fx-runtime-required-without-binding-test
+  (binding [frfx/*flesh-ripping-fx-runtime* nil]
+    (is (thrown-with-msg?
+          clojure.lang.ExceptionInfo
+          #"runtime is not bound"
+          (frfx/flesh-ripping-fx-snapshot)))))

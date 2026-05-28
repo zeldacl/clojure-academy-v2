@@ -9,17 +9,32 @@
             [cn.li.ac.content.ability.teleporter.shift-teleport-fx :as shift-teleport-fx]))
 
 (defn- reset-fixture [f]
-  (flashing-fx/reset-flashing-fx-for-test!)
-  (flesh-ripping-fx/reset-flesh-ripping-fx-for-test!)
-  (mark-teleport-fx/reset-mark-teleport-fx-for-test!)
-  (penetrate-teleport-fx/reset-penetrate-teleport-fx-for-test!)
-  (shift-teleport-fx/reset-shift-teleport-fx-for-test!)
-  (f)
-  (flashing-fx/reset-flashing-fx-for-test!)
-  (flesh-ripping-fx/reset-flesh-ripping-fx-for-test!)
-  (mark-teleport-fx/reset-mark-teleport-fx-for-test!)
-  (penetrate-teleport-fx/reset-penetrate-teleport-fx-for-test!)
-  (shift-teleport-fx/reset-shift-teleport-fx-for-test!))
+  (flashing-fx/call-with-flashing-fx-runtime
+    (flashing-fx/create-flashing-fx-runtime)
+    (fn []
+      (flesh-ripping-fx/call-with-flesh-ripping-fx-runtime
+        (flesh-ripping-fx/create-flesh-ripping-fx-runtime)
+        (fn []
+          (mark-teleport-fx/call-with-mark-teleport-fx-runtime
+            (mark-teleport-fx/create-mark-teleport-fx-runtime)
+            (fn []
+              (penetrate-teleport-fx/call-with-penetrate-teleport-fx-runtime
+                (penetrate-teleport-fx/create-penetrate-teleport-fx-runtime)
+                (fn []
+                  (shift-teleport-fx/call-with-shift-teleport-fx-runtime
+                    (shift-teleport-fx/create-shift-teleport-fx-runtime)
+                    (fn []
+                      (flashing-fx/reset-flashing-fx-for-test!)
+                      (flesh-ripping-fx/reset-flesh-ripping-fx-for-test!)
+                      (mark-teleport-fx/reset-mark-teleport-fx-for-test!)
+                      (penetrate-teleport-fx/reset-penetrate-teleport-fx-for-test!)
+                      (shift-teleport-fx/reset-shift-teleport-fx-for-test!)
+                      (f)
+                      (flashing-fx/reset-flashing-fx-for-test!)
+                      (flesh-ripping-fx/reset-flesh-ripping-fx-for-test!)
+                      (mark-teleport-fx/reset-mark-teleport-fx-for-test!)
+                      (penetrate-teleport-fx/reset-penetrate-teleport-fx-for-test!)
+                      (shift-teleport-fx/reset-shift-teleport-fx-for-test!))))))))))))
 
 (use-fixtures :each reset-fixture)
 

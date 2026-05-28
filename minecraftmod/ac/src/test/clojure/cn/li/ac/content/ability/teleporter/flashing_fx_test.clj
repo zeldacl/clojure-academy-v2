@@ -132,3 +132,10 @@
         (fn []
           (is (= {:x 1.0 :y 64.0 :z 1.0}
                  (get-in (ffx/flashing-fx-snapshot) [:fx-state [:ctx "ctx-a"] :preview]))))))))
+
+(deftest flashing-fx-runtime-required-without-binding-test
+  (binding [ffx/*flashing-fx-runtime* nil]
+    (is (thrown-with-msg?
+          clojure.lang.ExceptionInfo
+          #"runtime is not bound"
+          (ffx/flashing-fx-snapshot)))))

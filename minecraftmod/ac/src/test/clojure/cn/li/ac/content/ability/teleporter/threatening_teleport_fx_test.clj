@@ -87,3 +87,10 @@
         (is (some? (get (:fx-state snapshot) [:ctx "ctx-b"]))))
       (tfx/clear-threatening-teleport-owner! [:ctx "ctx-b"])
       (is (empty? (:fx-state (tfx/threatening-teleport-fx-snapshot)))))))
+
+(deftest threatening-teleport-fx-runtime-required-without-binding-test
+  (binding [tfx/*threatening-teleport-fx-runtime* nil]
+    (is (thrown-with-msg?
+          clojure.lang.ExceptionInfo
+          #"runtime is not bound"
+          (tfx/threatening-teleport-fx-snapshot)))))

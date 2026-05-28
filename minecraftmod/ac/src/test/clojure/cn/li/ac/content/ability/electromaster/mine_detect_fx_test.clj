@@ -161,3 +161,10 @@
         (fn []
           (is (= #{[:ctx "ctx-a"]}
                  (set (keys (:effect-state (mine-detect-fx/mine-detect-fx-snapshot)))))))))))
+
+(deftest mine-detect-fx-runtime-required-without-binding-test
+  (binding [mine-detect-fx/*mine-detect-fx-runtime* nil]
+    (is (thrown-with-msg?
+          clojure.lang.ExceptionInfo
+          #"runtime is not bound"
+          (mine-detect-fx/mine-detect-fx-snapshot)))))

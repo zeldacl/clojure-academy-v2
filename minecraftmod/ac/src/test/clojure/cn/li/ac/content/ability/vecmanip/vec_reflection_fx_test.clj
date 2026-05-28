@@ -112,3 +112,10 @@
       runtime-a
       (fn []
         (is (= 1 (count (get (:wave-effects (vrfx/vec-reflection-fx-snapshot)) [:ctx "ctx-a"]))))))))
+
+(deftest vec-reflection-fx-runtime-required-without-binding-test
+  (binding [vrfx/*vec-reflection-fx-runtime* nil]
+    (is (thrown-with-msg?
+          clojure.lang.ExceptionInfo
+          #"runtime is not bound"
+          (vrfx/vec-reflection-fx-snapshot)))))

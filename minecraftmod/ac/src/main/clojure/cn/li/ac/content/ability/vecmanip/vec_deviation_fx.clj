@@ -20,9 +20,6 @@
 
 (def ^:dynamic *vec-deviation-fx-runtime* nil)
 
-(defonce ^:private installed-vec-deviation-fx-runtime
-  (create-vec-deviation-fx-runtime))
-
 (defn- vec-deviation-fx-runtime?
   [runtime]
   (and (map? runtime)
@@ -44,7 +41,8 @@
 (defn- current-vec-deviation-fx-runtime
   []
   (or *vec-deviation-fx-runtime*
-      installed-vec-deviation-fx-runtime))
+      (throw (ex-info "VecDeviation FX runtime is not bound"
+                      {:hint "Bind runtime via call-with-vec-deviation-fx-runtime or use init! registered handlers"}))))
 
 (defn- vec-deviation-fx-state-atom
   []
@@ -212,10 +210,18 @@
 ;; ---------------------------------------------------------------------------
 
 (defn init! []
-  (level-effects/register-level-effect! :vec-deviation
-    {:enqueue-event-fn enqueue!
-     :tick-fn       tick!
-     :build-plan-fn build-plan})
+  (let [runtime (create-vec-deviation-fx-runtime)]
+    (level-effects/register-level-effect! :vec-deviation
+      {:enqueue-event-fn (fn [event]
+                           (call-with-vec-deviation-fx-runtime
+                             runtime
+                             (fn []
+                               (enqueue! event))))
+       :tick-fn (fn []
+                  (call-with-vec-deviation-fx-runtime
+                    runtime
+                    tick!))
+       :build-plan-fn build-plan}))
   (fx-registry/register-fx-channels!
     [:vec-deviation/fx-start :vec-deviation/fx-end
      :vec-deviation/fx-stop-entity :vec-deviation/fx-play]

@@ -20,9 +20,6 @@
 
 (def ^:dynamic *mine-ray-fx-runtime* nil)
 
-(defonce ^:private installed-mine-ray-fx-runtime
-  (create-mine-ray-fx-runtime))
-
 (defn- mine-ray-fx-runtime?
   [runtime]
   (and (map? runtime)
@@ -44,7 +41,8 @@
 (defn- current-mine-ray-fx-runtime
   []
   (or *mine-ray-fx-runtime*
-      installed-mine-ray-fx-runtime))
+      (throw (ex-info "Mine Ray FX runtime is not bound"
+                      {:hint "Bind runtime via call-with-mine-ray-fx-runtime or use init! registered handlers"}))))
 
 (defn- mine-ray-fx-state-atom
   []
@@ -180,10 +178,18 @@
 ;; ---------------------------------------------------------------------------
 
 (defn init! []
-  (level-effects/register-level-effect! :mine-ray
-    {:enqueue-event-fn enqueue!
-     :tick-fn       tick!
-     :build-plan-fn build-plan})
+  (let [runtime (create-mine-ray-fx-runtime)]
+    (level-effects/register-level-effect! :mine-ray
+      {:enqueue-event-fn (fn [event]
+                           (call-with-mine-ray-fx-runtime
+                             runtime
+                             (fn []
+                               (enqueue! event))))
+       :tick-fn (fn []
+                  (call-with-mine-ray-fx-runtime
+                    runtime
+                    tick!))
+       :build-plan-fn build-plan}))
   (fx-registry/register-fx-channels!
     [:mine-ray/fx-start :mine-ray/fx-progress :mine-ray/fx-end]
     (fn [ctx-id channel payload]

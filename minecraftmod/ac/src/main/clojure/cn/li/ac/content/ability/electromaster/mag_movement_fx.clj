@@ -21,9 +21,6 @@
 
 (def ^:dynamic *mag-movement-fx-runtime* nil)
 
-(defonce ^:private installed-mag-movement-fx-runtime
-  (create-mag-movement-fx-runtime))
-
 (defn- mag-movement-fx-runtime?
   [runtime]
   (and (map? runtime)
@@ -45,7 +42,8 @@
 (defn- current-mag-movement-fx-runtime
   []
   (or *mag-movement-fx-runtime*
-      installed-mag-movement-fx-runtime))
+      (throw (ex-info "Mag Movement FX runtime is not bound"
+                      {:hint "Bind runtime via call-with-mag-movement-fx-runtime or use init! registered handlers"}))))
 
 (defn- mag-movement-fx-state-atom
   []
@@ -170,10 +168,18 @@
 ;; ---------------------------------------------------------------------------
 
 (defn init! []
-  (level-effects/register-level-effect! :mag-movement
-    {:enqueue-event-fn enqueue!
-     :tick-fn       tick!
-     :build-plan-fn build-plan})
+  (let [runtime (create-mag-movement-fx-runtime)]
+    (level-effects/register-level-effect! :mag-movement
+      {:enqueue-event-fn (fn [event]
+                           (call-with-mag-movement-fx-runtime
+                             runtime
+                             (fn []
+                               (enqueue! event))))
+       :tick-fn (fn []
+                  (call-with-mag-movement-fx-runtime
+                    runtime
+                    tick!))
+       :build-plan-fn build-plan}))
   (fx-registry/register-fx-channels!
     [:mag-movement/fx-start :mag-movement/fx-update :mag-movement/fx-end]
     (fn [ctx-id channel payload]

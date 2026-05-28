@@ -120,3 +120,10 @@
         (fn []
           (is (= #{[:ctx "ctx-a"]}
                  (set (keys (:fx-state (pfx/penetrate-teleport-fx-snapshot)))))))))))
+
+(deftest penetrate-teleport-fx-runtime-required-without-binding-test
+  (binding [pfx/*penetrate-teleport-fx-runtime* nil]
+    (is (thrown-with-msg?
+          clojure.lang.ExceptionInfo
+          #"runtime is not bound"
+          (pfx/penetrate-teleport-fx-snapshot)))))

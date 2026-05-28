@@ -22,9 +22,6 @@
 
 (def ^:dynamic *directed-shock-fx-runtime* nil)
 
-(defonce ^:private installed-directed-shock-fx-runtime
-  (create-directed-shock-fx-runtime))
-
 (defn- directed-shock-fx-runtime?
   [runtime]
   (and (map? runtime)
@@ -46,7 +43,8 @@
 (defn- current-directed-shock-fx-runtime
   []
   (or *directed-shock-fx-runtime*
-      installed-directed-shock-fx-runtime))
+      (throw (ex-info "Directed Shock FX runtime is not bound"
+                      {:hint "Bind runtime via call-with-directed-shock-fx-runtime or use init! registered handlers"}))))
 
 (defn- directed-shock-fx-state-atom
   []
@@ -167,22 +165,33 @@
 ;; ---------------------------------------------------------------------------
 
 (defn init! []
-  (hand-effects/register-hand-effect! :directed-shock
-    {:enqueue-fn   enqueue!
-     :tick-fn      tick!
-     :transform-fn transform})
-  (fx-registry/register-fx-channels!
-    [:directed-shock/fx-start :directed-shock/fx-perform :directed-shock/fx-end]
-    (fn [ctx-id channel payload]
-      (let [owner-meta {:owner-key [:ctx ctx-id]
-                        :ctx-id ctx-id
-                        :channel channel}]
-        (case channel
-          :directed-shock/fx-start
-          (hand-effects/enqueue-hand-effect! :directed-shock (merge owner-meta {:mode :start}))
-          :directed-shock/fx-perform
-          (hand-effects/enqueue-hand-effect! :directed-shock (merge owner-meta {:mode :perform}))
-          :directed-shock/fx-end
-          (hand-effects/enqueue-hand-effect! :directed-shock
-            (merge owner-meta {:mode :end :performed? (boolean (:performed? payload))}))))))
+  (let [runtime (create-directed-shock-fx-runtime)]
+    (hand-effects/register-hand-effect! :directed-shock
+      {:enqueue-fn (fn [payload]
+                     (call-with-directed-shock-fx-runtime
+                       runtime
+                       (fn []
+                         (enqueue! payload))))
+       :tick-fn (fn []
+                  (call-with-directed-shock-fx-runtime
+                    runtime
+                    tick!))
+       :transform-fn (fn []
+                       (call-with-directed-shock-fx-runtime
+                         runtime
+                          transform))})
+    (fx-registry/register-fx-channels!
+      [:directed-shock/fx-start :directed-shock/fx-perform :directed-shock/fx-end]
+      (fn [ctx-id channel payload]
+        (let [owner-meta {:owner-key [:ctx ctx-id]
+                          :ctx-id ctx-id
+                          :channel channel}]
+          (case channel
+            :directed-shock/fx-start
+            (hand-effects/enqueue-hand-effect! :directed-shock (merge owner-meta {:mode :start}))
+            :directed-shock/fx-perform
+            (hand-effects/enqueue-hand-effect! :directed-shock (merge owner-meta {:mode :perform}))
+            :directed-shock/fx-end
+            (hand-effects/enqueue-hand-effect! :directed-shock
+              (merge owner-meta {:mode :end :performed? (boolean (:performed? payload))})))))))
   nil)

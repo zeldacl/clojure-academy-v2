@@ -59,9 +59,6 @@
 
 (def ^:dynamic *groundshock-fx-runtime* nil)
 
-(defonce ^:private installed-groundshock-fx-runtime
-  (create-groundshock-fx-runtime))
-
 (defn- groundshock-fx-runtime?
   [runtime]
   (and (map? runtime)
@@ -83,7 +80,8 @@
 (defn- current-groundshock-fx-runtime
   []
   (or *groundshock-fx-runtime*
-      installed-groundshock-fx-runtime))
+      (throw (ex-info "Groundshock FX runtime is not bound"
+                      {:hint "Bind runtime via call-with-groundshock-fx-runtime or use init! registered handlers"}))))
 
 (defn- groundshock-fx-state-atom
   []
@@ -180,13 +178,21 @@
 ;; ---------------------------------------------------------------------------
 
 (defn init! []
+  (let [runtime (create-groundshock-fx-runtime)]
   (level-effects/register-level-effect! :groundshock
     {:enqueue-event-fn level-enqueue!
      :tick-fn       level-tick!
      :build-plan-fn level-build-plan})
   (hand-effects/register-hand-effect! :groundshock
-    {:enqueue-fn   hand-enqueue!
-     :tick-fn      hand-tick!})
+    {:enqueue-fn (fn [payload]
+                   (call-with-groundshock-fx-runtime
+                     runtime
+                     (fn []
+                       (hand-enqueue! payload))))
+     :tick-fn (fn []
+                (call-with-groundshock-fx-runtime
+                  runtime
+                  hand-tick!))})
   (fx-registry/register-fx-channels!
     [:groundshock/fx-start :groundshock/fx-update :groundshock/fx-perform :groundshock/fx-end]
     (fn [ctx-id channel payload]
@@ -211,4 +217,5 @@
           :groundshock/fx-end
           (hand-effects/enqueue-hand-effect! :groundshock
             (merge owner-meta {:mode :end :performed? (boolean (:performed? payload))}))))))
+  )
   nil)

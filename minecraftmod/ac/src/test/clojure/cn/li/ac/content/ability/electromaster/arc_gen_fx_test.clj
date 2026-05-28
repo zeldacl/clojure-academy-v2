@@ -117,3 +117,10 @@
         (fn []
           (is (= #{[:ctx "ctx-a"]}
                  (set (keys (:arcs (arc-fx/arc-gen-fx-snapshot)))))))))))
+
+(deftest arc-gen-fx-runtime-required-without-binding-test
+  (binding [arc-fx/*arc-gen-fx-runtime* nil]
+    (is (thrown-with-msg?
+          clojure.lang.ExceptionInfo
+          #"runtime is not bound"
+          (arc-fx/arc-gen-fx-snapshot)))))

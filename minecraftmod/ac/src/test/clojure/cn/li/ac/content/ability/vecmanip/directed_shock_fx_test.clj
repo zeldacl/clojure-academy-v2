@@ -134,3 +134,10 @@
         runtime-a
         (fn []
           (is (= :punch (:stage (owner-state "ctx-a")))))))))
+
+(deftest directed-shock-fx-runtime-required-without-binding-test
+  (binding [dsfx/*directed-shock-fx-runtime* nil]
+    (is (thrown-with-msg?
+          clojure.lang.ExceptionInfo
+          #"runtime is not bound"
+          (dsfx/directed-shock-fx-snapshot)))))

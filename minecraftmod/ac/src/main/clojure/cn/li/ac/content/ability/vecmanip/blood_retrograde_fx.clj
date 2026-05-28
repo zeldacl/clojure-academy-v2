@@ -21,9 +21,6 @@
 
 (def ^:dynamic *blood-retrograde-fx-runtime* nil)
 
-(defonce ^:private installed-blood-retrograde-fx-runtime
-  (create-blood-retrograde-fx-runtime))
-
 (defn- blood-retrograde-fx-runtime?
   [runtime]
   (and (map? runtime)
@@ -45,7 +42,8 @@
 (defn- current-blood-retrograde-fx-runtime
   []
   (or *blood-retrograde-fx-runtime*
-      installed-blood-retrograde-fx-runtime))
+      (throw (ex-info "Blood Retrograde FX runtime is not bound"
+                      {:hint "Bind runtime via call-with-blood-retrograde-fx-runtime or use init! registered handlers"}))))
 
 (defn- blood-retrograde-fx-state-atom
   []
@@ -255,10 +253,18 @@
 ;; ---------------------------------------------------------------------------
 
 (defn init! []
-  (level-effects/register-level-effect! :blood-retrograde
-    {:enqueue-event-fn enqueue!
-     :tick-fn       tick!
-     :build-plan-fn build-plan})
+  (let [runtime (create-blood-retrograde-fx-runtime)]
+    (level-effects/register-level-effect! :blood-retrograde
+      {:enqueue-event-fn (fn [event]
+                           (call-with-blood-retrograde-fx-runtime
+                             runtime
+                             (fn []
+                               (enqueue! event))))
+       :tick-fn (fn []
+                  (call-with-blood-retrograde-fx-runtime
+                    runtime
+                    tick!))
+       :build-plan-fn build-plan}))
   (fx-registry/register-fx-channels!
     [:blood-retrograde/fx-start :blood-retrograde/fx-update
      :blood-retrograde/fx-end :blood-retrograde/fx-perform]

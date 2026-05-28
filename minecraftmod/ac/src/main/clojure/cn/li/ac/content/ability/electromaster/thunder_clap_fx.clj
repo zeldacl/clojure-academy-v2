@@ -18,9 +18,6 @@
 
 (def ^:dynamic *thunder-clap-fx-runtime* nil)
 
-(defonce ^:private installed-thunder-clap-fx-runtime
-  (create-thunder-clap-fx-runtime))
-
 (defn- thunder-clap-fx-runtime?
   [runtime]
   (and (map? runtime)
@@ -42,7 +39,8 @@
 (defn- current-thunder-clap-fx-runtime
   []
   (or *thunder-clap-fx-runtime*
-      installed-thunder-clap-fx-runtime))
+      (throw (ex-info "Thunder Clap FX runtime is not bound"
+                      {:hint "Bind runtime via call-with-thunder-clap-fx-runtime or use init! registered handlers"}))))
 
 (defn- thunder-clap-fx-state-atom
   []
@@ -198,10 +196,18 @@
 ;; ---------------------------------------------------------------------------
 
 (defn init! []
-  (level-effects/register-level-effect! :thunder-clap
-    {:enqueue-event-fn enqueue!
-     :tick-fn       tick!
-     :build-plan-fn build-plan})
+  (let [runtime (create-thunder-clap-fx-runtime)]
+    (level-effects/register-level-effect! :thunder-clap
+      {:enqueue-event-fn (fn [event]
+                           (call-with-thunder-clap-fx-runtime
+                             runtime
+                             (fn []
+                               (enqueue! event))))
+       :tick-fn (fn []
+                  (call-with-thunder-clap-fx-runtime
+                    runtime
+                    tick!))
+       :build-plan-fn build-plan}))
   (fx-registry/register-fx-channels!
     [:thunder-clap/fx-start :thunder-clap/fx-update :thunder-clap/fx-end]
     (fn [ctx-id channel payload]

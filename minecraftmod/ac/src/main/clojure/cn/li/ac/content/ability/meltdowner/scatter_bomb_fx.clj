@@ -19,9 +19,6 @@
 
 (def ^:dynamic *scatter-bomb-fx-runtime* nil)
 
-(defonce ^:private installed-scatter-bomb-fx-runtime
-  (create-scatter-bomb-fx-runtime))
-
 (defn- scatter-bomb-fx-runtime?
   [runtime]
   (and (map? runtime)
@@ -43,7 +40,8 @@
 (defn- current-scatter-bomb-fx-runtime
   []
   (or *scatter-bomb-fx-runtime*
-      installed-scatter-bomb-fx-runtime))
+      (throw (ex-info "Scatter Bomb FX runtime is not bound"
+                      {:hint "Bind runtime via call-with-scatter-bomb-fx-runtime or use init! registered handlers"}))))
 
 (defn- scatter-bomb-fx-state-atom
   []
@@ -149,10 +147,18 @@
 ;; ---------------------------------------------------------------------------
 
 (defn init! []
-  (level-effects/register-level-effect! :scatter-bomb
-    {:enqueue-event-fn enqueue!
-     :tick-fn       tick!
-     :build-plan-fn build-plan})
+  (let [runtime (create-scatter-bomb-fx-runtime)]
+    (level-effects/register-level-effect! :scatter-bomb
+      {:enqueue-event-fn (fn [event]
+                           (call-with-scatter-bomb-fx-runtime
+                             runtime
+                             (fn []
+                               (enqueue! event))))
+       :tick-fn (fn []
+                  (call-with-scatter-bomb-fx-runtime
+                    runtime
+                    tick!))
+       :build-plan-fn build-plan}))
   (fx-registry/register-fx-channels!
     [:scatter-bomb/fx-start :scatter-bomb/fx-ball :scatter-bomb/fx-beam :scatter-bomb/fx-end]
     (fn [ctx-id channel payload]

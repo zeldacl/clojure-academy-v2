@@ -68,3 +68,12 @@
         (fn []
           (is (= :vec-reflection
                  (get-in (arbitration/projectile-locks-snapshot) [:owners ["p1" "arrow-1"]]))))))))
+
+(deftest projectile-arbitration-fallback-works-without-binding-test
+  (with-redefs [cn.li.ac.content.ability.vecmanip.arbitration/current-tick (fn [] 123)]
+    (binding [arbitration/*projectile-arbitration-runtime* nil]
+      (arbitration/reset-projectile-locks-for-test!)
+      (is (true? (arbitration/claim-projectile! "p1" :vec-reflection "arrow-fallback")))
+      (is (= :vec-reflection
+             (get-in (arbitration/projectile-locks-snapshot)
+                     [:owners ["p1" "arrow-fallback"]]))))))

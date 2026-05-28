@@ -19,9 +19,6 @@
 
 (def ^:dynamic *thunder-bolt-fx-runtime* nil)
 
-(defonce ^:private installed-thunder-bolt-fx-runtime
-  (create-thunder-bolt-fx-runtime))
-
 (defn- thunder-bolt-fx-runtime?
   [runtime]
   (and (map? runtime)
@@ -43,7 +40,8 @@
 (defn- current-thunder-bolt-fx-runtime
   []
   (or *thunder-bolt-fx-runtime*
-      installed-thunder-bolt-fx-runtime))
+      (throw (ex-info "Thunder Bolt FX runtime is not bound"
+                      {:hint "Bind runtime via call-with-thunder-bolt-fx-runtime or use init! registered handlers"}))))
 
 (defn- thunder-bolt-fx-state-atom
   []
@@ -161,10 +159,18 @@
 ;; ---------------------------------------------------------------------------
 
 (defn init! []
-  (level-effects/register-level-effect! :thunder-bolt-strike
-    {:enqueue-event-fn enqueue!
-     :tick-fn       tick!
-     :build-plan-fn build-plan})
+  (let [runtime (create-thunder-bolt-fx-runtime)]
+    (level-effects/register-level-effect! :thunder-bolt-strike
+      {:enqueue-event-fn (fn [event]
+                           (call-with-thunder-bolt-fx-runtime
+                             runtime
+                             (fn []
+                               (enqueue! event))))
+       :tick-fn (fn []
+                  (call-with-thunder-bolt-fx-runtime
+                    runtime
+                    tick!))
+       :build-plan-fn build-plan}))
   (fx-registry/register-fx-channel! :thunder-bolt/fx-perform
     (fn [ctx-id channel payload]
       (level-effects/enqueue-level-effect! :thunder-bolt-strike payload

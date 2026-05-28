@@ -19,9 +19,6 @@
 
 (def ^:dynamic *electron-bomb-fx-runtime* nil)
 
-(defonce ^:private installed-electron-bomb-fx-runtime
-  (create-electron-bomb-fx-runtime))
-
 (defn- electron-bomb-fx-runtime?
   [runtime]
   (and (map? runtime)
@@ -43,7 +40,8 @@
 (defn- current-electron-bomb-fx-runtime
   []
   (or *electron-bomb-fx-runtime*
-      installed-electron-bomb-fx-runtime))
+      (throw (ex-info "Electron Bomb FX runtime is not bound"
+                      {:hint "Bind runtime via call-with-electron-bomb-fx-runtime or use init! registered handlers"}))))
 
 (defn- electron-bomb-fx-state-atom
   []
@@ -146,10 +144,18 @@
 ;; ---------------------------------------------------------------------------
 
 (defn init! []
-  (level-effects/register-level-effect! :electron-bomb
-    {:enqueue-event-fn enqueue!
-     :tick-fn       tick!
-     :build-plan-fn build-plan})
+  (let [runtime (create-electron-bomb-fx-runtime)]
+    (level-effects/register-level-effect! :electron-bomb
+      {:enqueue-event-fn (fn [event]
+                           (call-with-electron-bomb-fx-runtime
+                             runtime
+                             (fn []
+                               (enqueue! event))))
+       :tick-fn (fn []
+                  (call-with-electron-bomb-fx-runtime
+                    runtime
+                    tick!))
+       :build-plan-fn build-plan}))
   (fx-registry/register-fx-channels!
     [:electron-bomb/fx-spawn :electron-bomb/fx-beam :electron-bomb/fx-end]
     (fn [ctx-id channel payload]

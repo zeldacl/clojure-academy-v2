@@ -97,3 +97,10 @@
       (fn []
         (is (= #{[:ctx "ctx-a"]}
                (set (keys (:beam-effects (railgun-fx/railgun-fx-snapshot))))))))))
+
+(deftest railgun-fx-runtime-required-without-binding-test
+  (binding [railgun-fx/*railgun-fx-runtime* nil]
+    (is (thrown-with-msg?
+          clojure.lang.ExceptionInfo
+          #"runtime is not bound"
+          (railgun-fx/railgun-fx-snapshot)))))

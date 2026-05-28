@@ -20,9 +20,6 @@
 
 (def ^:dynamic *directed-blastwave-fx-runtime* nil)
 
-(defonce ^:private installed-directed-blastwave-fx-runtime
-  (create-directed-blastwave-fx-runtime))
-
 (defn- directed-blastwave-fx-runtime?
   [runtime]
   (and (map? runtime)
@@ -44,7 +41,8 @@
 (defn- current-directed-blastwave-fx-runtime
   []
   (or *directed-blastwave-fx-runtime*
-      installed-directed-blastwave-fx-runtime))
+      (throw (ex-info "Directed Blastwave FX runtime is not bound"
+                      {:hint "Bind runtime via call-with-directed-blastwave-fx-runtime or use init! registered handlers"}))))
 
 (defn- directed-blastwave-fx-state-atom
   []
@@ -278,10 +276,18 @@
 ;; ---------------------------------------------------------------------------
 
 (defn init! []
-  (level-effects/register-level-effect! :directed-blastwave
-    {:enqueue-event-fn enqueue!
-     :tick-fn       tick!
-     :build-plan-fn build-plan})
+  (let [runtime (create-directed-blastwave-fx-runtime)]
+    (level-effects/register-level-effect! :directed-blastwave
+      {:enqueue-event-fn (fn [event]
+                           (call-with-directed-blastwave-fx-runtime
+                             runtime
+                             (fn []
+                               (enqueue! event))))
+       :tick-fn (fn []
+                  (call-with-directed-blastwave-fx-runtime
+                    runtime
+                    tick!))
+       :build-plan-fn build-plan}))
   (fx-registry/register-fx-channels!
     [:directed-blastwave/fx-start :directed-blastwave/fx-update
      :directed-blastwave/fx-perform :directed-blastwave/fx-end]

@@ -146,3 +146,15 @@
     (dh/call-with-damage-helper-runtime runtime-a
       (fn []
         (is (= 2.0 (:rate (get (dh/marks-snapshot) key))))))))
+
+(deftest damage-helper-fallback-works-without-binding-test
+  (let [source "atk-fallback"
+        target "victim-fallback"
+        key [source target]]
+    (binding [dh/*damage-helper-runtime* nil]
+      (dh/reset-marks-for-test!
+        {key {:source-player-id source
+              :target-id target
+              :expire-at Long/MAX_VALUE
+              :rate 1.25}})
+      (is (= 1.25 (:rate (get (dh/marks-snapshot) key)))))))

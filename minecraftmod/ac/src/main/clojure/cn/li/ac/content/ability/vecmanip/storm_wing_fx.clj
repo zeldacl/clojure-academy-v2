@@ -20,9 +20,6 @@
 
 (def ^:dynamic *storm-wing-fx-runtime* nil)
 
-(defonce ^:private installed-storm-wing-fx-runtime
-  (create-storm-wing-fx-runtime))
-
 (defn- storm-wing-fx-runtime?
   [runtime]
   (and (map? runtime)
@@ -44,7 +41,8 @@
 (defn- current-storm-wing-fx-runtime
   []
   (or *storm-wing-fx-runtime*
-      installed-storm-wing-fx-runtime))
+      (throw (ex-info "Storm Wing FX runtime is not bound"
+                      {:hint "Bind runtime via call-with-storm-wing-fx-runtime or use init! registered handlers"}))))
 
 (defn- storm-wing-fx-state-atom
   []
@@ -212,10 +210,18 @@
 ;; ---------------------------------------------------------------------------
 
 (defn init! []
-  (level-effects/register-level-effect! :storm-wing
-    {:enqueue-event-fn enqueue!
-     :tick-fn       tick!
-     :build-plan-fn build-plan})
+  (let [runtime (create-storm-wing-fx-runtime)]
+    (level-effects/register-level-effect! :storm-wing
+      {:enqueue-event-fn (fn [event]
+                           (call-with-storm-wing-fx-runtime
+                             runtime
+                             (fn []
+                               (enqueue! event))))
+       :tick-fn (fn []
+                  (call-with-storm-wing-fx-runtime
+                    runtime
+                    tick!))
+       :build-plan-fn build-plan}))
   (fx-registry/register-fx-channels!
     [:storm-wing/fx-start :storm-wing/fx-update :storm-wing/fx-end]
     (fn [ctx-id channel payload]

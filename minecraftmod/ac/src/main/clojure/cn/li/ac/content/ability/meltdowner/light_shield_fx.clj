@@ -19,9 +19,6 @@
 
 (def ^:dynamic *light-shield-fx-runtime* nil)
 
-(defonce ^:private installed-light-shield-fx-runtime
-  (create-light-shield-fx-runtime))
-
 (defn- light-shield-fx-runtime?
   [runtime]
   (and (map? runtime)
@@ -43,7 +40,8 @@
 (defn- current-light-shield-fx-runtime
   []
   (or *light-shield-fx-runtime*
-      installed-light-shield-fx-runtime))
+      (throw (ex-info "Light Shield FX runtime is not bound"
+                      {:hint "Bind runtime via call-with-light-shield-fx-runtime or use init! registered handlers"}))))
 
 (defn- light-shield-fx-state-atom
   []
@@ -130,10 +128,18 @@
 ;; ---------------------------------------------------------------------------
 
 (defn init! []
-  (level-effects/register-level-effect! :light-shield
-    {:enqueue-event-fn enqueue!
-     :tick-fn       tick!
-     :build-plan-fn build-plan})
+  (let [runtime (create-light-shield-fx-runtime)]
+    (level-effects/register-level-effect! :light-shield
+      {:enqueue-event-fn (fn [event]
+                           (call-with-light-shield-fx-runtime
+                             runtime
+                             (fn []
+                               (enqueue! event))))
+       :tick-fn (fn []
+                  (call-with-light-shield-fx-runtime
+                    runtime
+                    tick!))
+       :build-plan-fn build-plan}))
   (fx-registry/register-fx-channels!
     [:light-shield/fx-start :light-shield/fx-end]
     (fn [ctx-id channel payload]

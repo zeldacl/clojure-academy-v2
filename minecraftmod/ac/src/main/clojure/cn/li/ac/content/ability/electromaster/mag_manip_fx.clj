@@ -29,9 +29,6 @@
 
 (def ^:dynamic *mag-manip-fx-runtime* nil)
 
-(defonce ^:private installed-mag-manip-fx-runtime
-  (create-mag-manip-fx-runtime))
-
 (defn- mag-manip-fx-runtime?
   [runtime]
   (and (map? runtime)
@@ -53,7 +50,8 @@
 (defn- current-mag-manip-fx-runtime
   []
   (or *mag-manip-fx-runtime*
-      installed-mag-manip-fx-runtime))
+      (throw (ex-info "Mag Manip FX runtime is not bound"
+                      {:hint "Bind runtime via call-with-mag-manip-fx-runtime or use init! registered handlers"}))))
 
 (defn- mag-manip-fx-state-atom
   []
@@ -192,15 +190,28 @@
                                              {:ctx-id ctx-id :channel channel})))))
 
 (defn init! []
-  (reset-state!)
-  (hand-effects/register-hand-effect! :mag-manip
-                                      {:enqueue-fn enqueue!
-                                       :tick-fn tick!
-                                       :transform-fn current-hand-transform})
-  (level-effects/register-level-effect! :mag-manip
-                                        {:enqueue-event-fn level-enqueue!
-                                         :tick-fn level-tick!
-                                         :build-plan-fn build-level-plan})
+  (let [runtime (create-mag-manip-fx-runtime)]
+    (call-with-mag-manip-fx-runtime
+      runtime
+      reset-state!)
+    (hand-effects/register-hand-effect! :mag-manip
+                                        {:enqueue-fn (fn [payload]
+                                                       (call-with-mag-manip-fx-runtime
+                                                         runtime
+                                                         (fn []
+                                                           (enqueue! payload))))
+                                         :tick-fn (fn []
+                                                    (call-with-mag-manip-fx-runtime
+                                                      runtime
+                                                      tick!))
+                                         :transform-fn (fn []
+                                                         (call-with-mag-manip-fx-runtime
+                                                           runtime
+                                                           current-hand-transform))})
+    (level-effects/register-level-effect! :mag-manip
+                                          {:enqueue-event-fn level-enqueue!
+                                           :tick-fn level-tick!
+                                           :build-plan-fn build-level-plan}))
   (fx-registry/register-fx-channels! [:mag-manip/fx-hold
                                       :mag-manip/fx-throw
                                       :mag-manip/fx-end]

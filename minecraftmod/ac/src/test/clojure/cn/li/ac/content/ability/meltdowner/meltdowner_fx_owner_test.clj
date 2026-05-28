@@ -364,3 +364,45 @@
         (fn []
           (is (= #{[:ctx "ctx-a"]}
                  (set (keys (:effect-state (scatter-bomb-fx/scatter-bomb-fx-snapshot)))))))))))
+
+    (deftest meltdowner-fx-runtime-required-without-binding-test
+      (binding [electron-bomb-fx/*electron-bomb-fx-runtime* nil
+        electron-missile-fx/*electron-missile-fx-runtime* nil
+        jet-engine-fx/*jet-engine-fx-runtime* nil
+        light-shield-fx/*light-shield-fx-runtime* nil
+        meltdowner-fx/*meltdowner-fx-runtime* nil
+        mine-ray-fx/*mine-ray-fx-runtime* nil
+        ray-barrage-fx/*ray-barrage-fx-runtime* nil
+        scatter-bomb-fx/*scatter-bomb-fx-runtime* nil]
+        (is (thrown-with-msg?
+          clojure.lang.ExceptionInfo
+          #"runtime is not bound"
+          (electron-bomb-fx/electron-bomb-fx-snapshot)))
+        (is (thrown-with-msg?
+          clojure.lang.ExceptionInfo
+          #"runtime is not bound"
+          (electron-missile-fx/electron-missile-fx-snapshot)))
+        (is (thrown-with-msg?
+          clojure.lang.ExceptionInfo
+          #"runtime is not bound"
+          (jet-engine-fx/jet-engine-fx-snapshot)))
+        (is (thrown-with-msg?
+          clojure.lang.ExceptionInfo
+          #"runtime is not bound"
+          (light-shield-fx/light-shield-fx-snapshot)))
+        (is (thrown-with-msg?
+          clojure.lang.ExceptionInfo
+          #"runtime is not bound"
+          (meltdowner-fx/meltdowner-fx-snapshot)))
+        (is (thrown-with-msg?
+          clojure.lang.ExceptionInfo
+          #"runtime is not bound"
+          (mine-ray-fx/mine-ray-fx-snapshot)))
+        (is (thrown-with-msg?
+          clojure.lang.ExceptionInfo
+          #"runtime is not bound"
+          (ray-barrage-fx/ray-barrage-fx-snapshot)))
+        (is (thrown-with-msg?
+          clojure.lang.ExceptionInfo
+          #"runtime is not bound"
+          (scatter-bomb-fx/scatter-bomb-fx-snapshot)))))

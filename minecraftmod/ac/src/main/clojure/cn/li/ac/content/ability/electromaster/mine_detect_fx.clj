@@ -20,9 +20,6 @@
 
 (def ^:dynamic *mine-detect-fx-runtime* nil)
 
-(defonce ^:private installed-mine-detect-fx-runtime
-  (create-mine-detect-fx-runtime))
-
 (defn- mine-detect-fx-runtime?
   [runtime]
   (and (map? runtime)
@@ -44,7 +41,8 @@
 (defn- current-mine-detect-fx-runtime
   []
   (or *mine-detect-fx-runtime*
-      installed-mine-detect-fx-runtime))
+      (throw (ex-info "Mine Detect FX runtime is not bound"
+                      {:hint "Bind runtime via call-with-mine-detect-fx-runtime or use init! registered handlers"}))))
 
 (defn- mine-detect-fx-state-atom
   []
@@ -253,10 +251,18 @@
 
 (defn init!
   []
-  (level-effects/register-level-effect! :mine-detect
-                                        {:enqueue-event-fn enqueue!
-                                         :tick-fn tick!
-                                         :build-plan-fn build-plan})
+  (let [runtime (create-mine-detect-fx-runtime)]
+    (level-effects/register-level-effect! :mine-detect
+                                          {:enqueue-event-fn (fn [event]
+                                                               (call-with-mine-detect-fx-runtime
+                                                                 runtime
+                                                                 (fn []
+                                                                   (enqueue! event))))
+                                           :tick-fn (fn []
+                                                      (call-with-mine-detect-fx-runtime
+                                                        runtime
+                                                        tick!))
+                                           :build-plan-fn build-plan}))
   (fx-registry/register-fx-channels!
     [:mine-detect/fx-perform :mine-detect/fx-end]
     (fn [ctx-id channel payload]

@@ -19,9 +19,6 @@
 
 (def ^:dynamic *flashing-fx-runtime* nil)
 
-(defonce ^:private installed-flashing-fx-runtime
-  (create-flashing-fx-runtime))
-
 (defn- flashing-fx-runtime?
   [runtime]
   (and (map? runtime)
@@ -43,7 +40,8 @@
 (defn- current-flashing-fx-runtime
   []
   (or *flashing-fx-runtime*
-      installed-flashing-fx-runtime))
+      (throw (ex-info "Flashing FX runtime is not bound"
+                      {:hint "Bind runtime via call-with-flashing-fx-runtime or use init! registered handlers"}))))
 
 (defn- flashing-fx-state-atom
   []
@@ -154,10 +152,18 @@
 
 (defn init!
   []
-  (level-effects/register-level-effect! :flashing
-    {:enqueue-event-fn enqueue!
-     :tick-fn tick!
-     :build-plan-fn build-plan})
+  (let [runtime (create-flashing-fx-runtime)]
+    (level-effects/register-level-effect! :flashing
+      {:enqueue-event-fn (fn [event]
+                           (call-with-flashing-fx-runtime
+                             runtime
+                             (fn []
+                               (enqueue! event))))
+       :tick-fn (fn []
+                  (call-with-flashing-fx-runtime
+                    runtime
+                    tick!))
+       :build-plan-fn build-plan}))
   (fx-registry/register-fx-channels!
     [:flashing/fx-state-start
      :flashing/fx-preview-start

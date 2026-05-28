@@ -131,3 +131,10 @@
         (fn []
           (is (= {:x 1.0 :y 2.0 :z 3.0}
                  (get-in (stfx/shift-teleport-fx-snapshot) [:fx-state [:ctx "ctx-a"] :target]))))))))
+
+(deftest shift-teleport-fx-runtime-required-without-binding-test
+  (binding [stfx/*shift-teleport-fx-runtime* nil]
+    (is (thrown-with-msg?
+          clojure.lang.ExceptionInfo
+          #"runtime is not bound"
+          (stfx/shift-teleport-fx-snapshot)))))

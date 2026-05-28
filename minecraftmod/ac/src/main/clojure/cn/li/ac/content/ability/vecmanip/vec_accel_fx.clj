@@ -19,9 +19,6 @@
 
 (def ^:dynamic *vec-accel-fx-runtime* nil)
 
-(defonce ^:private installed-vec-accel-fx-runtime
-  (create-vec-accel-fx-runtime))
-
 (defn- vec-accel-fx-runtime?
   [runtime]
   (and (map? runtime)
@@ -43,7 +40,8 @@
 (defn- current-vec-accel-fx-runtime
   []
   (or *vec-accel-fx-runtime*
-      installed-vec-accel-fx-runtime))
+      (throw (ex-info "VecAccel FX runtime is not bound"
+                      {:hint "Bind runtime via call-with-vec-accel-fx-runtime or use init! registered handlers"}))))
 
 (defn- vec-accel-fx-state-atom
   []
@@ -193,10 +191,18 @@
 ;; ---------------------------------------------------------------------------
 
 (defn init! []
-  (level-effects/register-level-effect! :vec-accel
-    {:enqueue-event-fn enqueue!
-     :tick-fn       tick!
-     :build-plan-fn build-plan})
+  (let [runtime (create-vec-accel-fx-runtime)]
+    (level-effects/register-level-effect! :vec-accel
+      {:enqueue-event-fn (fn [event]
+                           (call-with-vec-accel-fx-runtime
+                             runtime
+                             (fn []
+                               (enqueue! event))))
+       :tick-fn (fn []
+                  (call-with-vec-accel-fx-runtime
+                    runtime
+                    tick!))
+       :build-plan-fn build-plan}))
   (fx-registry/register-fx-channels!
     [:vec-accel/fx-start :vec-accel/fx-update :vec-accel/fx-perform :vec-accel/fx-end]
         (fn [ctx-id channel payload]

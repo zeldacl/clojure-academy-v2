@@ -19,9 +19,6 @@
 
 (def ^:dynamic *threatening-teleport-fx-runtime* nil)
 
-(defonce ^:private installed-threatening-teleport-fx-runtime
-  (create-threatening-teleport-fx-runtime))
-
 (defn- threatening-teleport-fx-runtime?
   [runtime]
   (and (map? runtime)
@@ -43,7 +40,8 @@
 (defn- current-threatening-teleport-fx-runtime
   []
   (or *threatening-teleport-fx-runtime*
-      installed-threatening-teleport-fx-runtime))
+      (throw (ex-info "Threatening Teleport FX runtime is not bound"
+                      {:hint "Bind runtime via call-with-threatening-teleport-fx-runtime or use init! registered handlers"}))))
 
 (defn- threatening-teleport-fx-state-atom
   []
@@ -138,10 +136,18 @@
   nil)
 
 (defn init! []
-  (level-effects/register-level-effect! :threatening-teleport
-    {:enqueue-event-fn enqueue!
-     :tick-fn       tick!
-     :build-plan-fn build-plan})
+  (let [runtime (create-threatening-teleport-fx-runtime)]
+    (level-effects/register-level-effect! :threatening-teleport
+      {:enqueue-event-fn (fn [event]
+                           (call-with-threatening-teleport-fx-runtime
+                             runtime
+                             (fn []
+                               (enqueue! event))))
+       :tick-fn (fn []
+                  (call-with-threatening-teleport-fx-runtime
+                    runtime
+                    tick!))
+       :build-plan-fn build-plan}))
   (fx-registry/register-fx-channels!
     [:threatening-tp/fx-start :threatening-tp/fx-update :threatening-tp/fx-perform :threatening-tp/fx-end]
     (fn [ctx-id channel payload]

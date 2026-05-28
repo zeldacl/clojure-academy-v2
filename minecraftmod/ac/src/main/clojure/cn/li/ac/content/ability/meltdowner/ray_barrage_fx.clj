@@ -19,9 +19,6 @@
 
 (def ^:dynamic *ray-barrage-fx-runtime* nil)
 
-(defonce ^:private installed-ray-barrage-fx-runtime
-  (create-ray-barrage-fx-runtime))
-
 (defn- ray-barrage-fx-runtime?
   [runtime]
   (and (map? runtime)
@@ -43,7 +40,8 @@
 (defn- current-ray-barrage-fx-runtime
   []
   (or *ray-barrage-fx-runtime*
-      installed-ray-barrage-fx-runtime))
+      (throw (ex-info "Ray Barrage FX runtime is not bound"
+                      {:hint "Bind runtime via call-with-ray-barrage-fx-runtime or use init! registered handlers"}))))
 
 (defn- ray-barrage-fx-state-atom
   []
@@ -114,10 +112,18 @@
             beams)}))
 
 (defn init! []
-  (level-effects/register-level-effect! :ray-barrage
-    {:enqueue-event-fn enqueue-beam!
-     :tick-fn       tick!
-     :build-plan-fn build-plan})
+  (let [runtime (create-ray-barrage-fx-runtime)]
+    (level-effects/register-level-effect! :ray-barrage
+      {:enqueue-event-fn (fn [event]
+                           (call-with-ray-barrage-fx-runtime
+                             runtime
+                             (fn []
+                               (enqueue-beam! event))))
+       :tick-fn (fn []
+                  (call-with-ray-barrage-fx-runtime
+                    runtime
+                    tick!))
+       :build-plan-fn build-plan}))
   (fx-registry/register-fx-channels!
     [:ray-barrage/fx-beam]
     (fn [ctx-id channel payload]

@@ -131,3 +131,10 @@
         (fn []
           (is (= #{[:ctx "ctx-a"]}
                  (set (keys (:states (mag-manip-fx/mag-manip-fx-snapshot)))))))))))
+
+(deftest mag-manip-fx-runtime-required-without-binding-test
+  (binding [mag-manip-fx/*mag-manip-fx-runtime* nil]
+    (is (thrown-with-msg?
+          clojure.lang.ExceptionInfo
+          #"runtime is not bound"
+          (mag-manip-fx/mag-manip-fx-snapshot)))))

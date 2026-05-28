@@ -20,9 +20,6 @@
 
 (def ^:dynamic *mark-teleport-fx-runtime* nil)
 
-(defonce ^:private installed-mark-teleport-fx-runtime
-  (create-mark-teleport-fx-runtime))
-
 (defn- mark-teleport-fx-runtime?
   [runtime]
   (and (map? runtime)
@@ -44,7 +41,8 @@
 (defn- current-mark-teleport-fx-runtime
   []
   (or *mark-teleport-fx-runtime*
-      installed-mark-teleport-fx-runtime))
+      (throw (ex-info "Mark Teleport FX runtime is not bound"
+                      {:hint "Bind runtime via call-with-mark-teleport-fx-runtime or use init! registered handlers"}))))
 
 (defn- mark-teleport-fx-state-atom
   []
@@ -205,10 +203,18 @@
 ;; ---------------------------------------------------------------------------
 
 (defn init! []
-  (level-effects/register-level-effect! :mark-teleport
-    {:enqueue-event-fn enqueue!
-     :tick-fn       tick!
-     :build-plan-fn build-plan})
+  (let [runtime (create-mark-teleport-fx-runtime)]
+    (level-effects/register-level-effect! :mark-teleport
+      {:enqueue-event-fn (fn [event]
+                           (call-with-mark-teleport-fx-runtime
+                             runtime
+                             (fn []
+                               (enqueue! event))))
+       :tick-fn (fn []
+                  (call-with-mark-teleport-fx-runtime
+                    runtime
+                    tick!))
+       :build-plan-fn build-plan}))
   (fx-registry/register-fx-channels!
     [:mark-teleport/fx-start :mark-teleport/fx-update :mark-teleport/fx-end :mark-teleport/fx-perform]
     (fn [ctx-id channel payload]

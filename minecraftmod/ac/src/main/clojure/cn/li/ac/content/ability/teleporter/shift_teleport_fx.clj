@@ -19,9 +19,6 @@
 
 (def ^:dynamic *shift-teleport-fx-runtime* nil)
 
-(defonce ^:private installed-shift-teleport-fx-runtime
-  (create-shift-teleport-fx-runtime))
-
 (defn- shift-teleport-fx-runtime?
   [runtime]
   (and (map? runtime)
@@ -43,7 +40,8 @@
 (defn- current-shift-teleport-fx-runtime
   []
   (or *shift-teleport-fx-runtime*
-      installed-shift-teleport-fx-runtime))
+      (throw (ex-info "Shift Teleport FX runtime is not bound"
+                      {:hint "Bind runtime via call-with-shift-teleport-fx-runtime or use init! registered handlers"}))))
 
 (defn- shift-teleport-fx-state-atom
   []
@@ -160,10 +158,18 @@
 (defn- build-plan [_cp _hcp _tick] nil)
 
 (defn init! []
-  (level-effects/register-level-effect! :shift-teleport
-    {:enqueue-event-fn enqueue!
-     :tick-fn       tick!
-     :build-plan-fn build-plan})
+  (let [runtime (create-shift-teleport-fx-runtime)]
+    (level-effects/register-level-effect! :shift-teleport
+      {:enqueue-event-fn (fn [event]
+                           (call-with-shift-teleport-fx-runtime
+                             runtime
+                             (fn []
+                               (enqueue! event))))
+       :tick-fn (fn []
+                  (call-with-shift-teleport-fx-runtime
+                    runtime
+                    tick!))
+       :build-plan-fn build-plan}))
   (fx-registry/register-fx-channels!
     [:shift-tp/fx-start :shift-tp/fx-update :shift-tp/fx-perform :shift-tp/fx-end]
     (fn [ctx-id channel payload]

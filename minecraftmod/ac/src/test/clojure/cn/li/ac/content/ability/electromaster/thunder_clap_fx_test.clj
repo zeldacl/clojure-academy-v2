@@ -115,3 +115,10 @@
       (fn []
         (is (= #{[:ctx "ctx-a"]}
                (set (keys (:effect-state (thunder-clap-fx/thunder-clap-fx-snapshot))))))))))
+
+(deftest thunder-clap-fx-runtime-required-without-binding-test
+  (binding [thunder-clap-fx/*thunder-clap-fx-runtime* nil]
+    (is (thrown-with-msg?
+          clojure.lang.ExceptionInfo
+          #"runtime is not bound"
+          (thunder-clap-fx/thunder-clap-fx-snapshot)))))

@@ -24,9 +24,6 @@
 
 (def ^:dynamic *railgun-fx-runtime* nil)
 
-(defonce ^:private installed-railgun-fx-runtime
-  (create-railgun-fx-runtime))
-
 (defn- railgun-fx-runtime?
   [runtime]
   (and (map? runtime)
@@ -48,7 +45,8 @@
 (defn- current-railgun-fx-runtime
   []
   (or *railgun-fx-runtime*
-      installed-railgun-fx-runtime))
+      (throw (ex-info "Railgun FX runtime is not bound"
+                      {:hint "Bind runtime via call-with-railgun-fx-runtime or use init! registered handlers"}))))
 
 (defn- railgun-fx-state-atom
   []
@@ -196,10 +194,18 @@
 ;; ---------------------------------------------------------------------------
 
 (defn init! []
-  (level-effects/register-level-effect! :railgun-shot
-    {:enqueue-event-fn enqueue!
-     :tick-fn       tick!
-     :build-plan-fn build-plan})
+  (let [runtime (create-railgun-fx-runtime)]
+    (level-effects/register-level-effect! :railgun-shot
+      {:enqueue-event-fn (fn [event]
+                           (call-with-railgun-fx-runtime
+                             runtime
+                             (fn []
+                               (enqueue! event))))
+       :tick-fn (fn []
+                  (call-with-railgun-fx-runtime
+                    runtime
+                    tick!))
+       :build-plan-fn build-plan}))
   (fx-registry/register-fx-channels!
     [:railgun/fx-shot :railgun/fx-reflect]
     (fn [ctx-id channel payload]

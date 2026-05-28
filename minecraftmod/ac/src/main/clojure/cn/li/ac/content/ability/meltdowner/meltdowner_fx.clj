@@ -21,9 +21,6 @@
 
 (def ^:dynamic *meltdowner-fx-runtime* nil)
 
-(defonce ^:private installed-meltdowner-fx-runtime
-  (create-meltdowner-fx-runtime))
-
 (defn- meltdowner-fx-runtime?
   [runtime]
   (and (map? runtime)
@@ -45,7 +42,8 @@
 (defn- current-meltdowner-fx-runtime
   []
   (or *meltdowner-fx-runtime*
-      installed-meltdowner-fx-runtime))
+      (throw (ex-info "Meltdowner FX runtime is not bound"
+                      {:hint "Bind runtime via call-with-meltdowner-fx-runtime or use init! registered handlers"}))))
 
 (defn- meltdowner-fx-state-atom
   []
@@ -249,10 +247,18 @@
 ;; ---------------------------------------------------------------------------
 
 (defn init! []
-  (level-effects/register-level-effect! :meltdowner
-    {:enqueue-event-fn enqueue!
-     :tick-fn       tick!
-     :build-plan-fn build-plan})
+  (let [runtime (create-meltdowner-fx-runtime)]
+    (level-effects/register-level-effect! :meltdowner
+      {:enqueue-event-fn (fn [event]
+                           (call-with-meltdowner-fx-runtime
+                             runtime
+                             (fn []
+                               (enqueue! event))))
+       :tick-fn (fn []
+                  (call-with-meltdowner-fx-runtime
+                    runtime
+                    tick!))
+       :build-plan-fn build-plan}))
   (fx-registry/register-fx-channels!
     [:meltdowner/fx-start :meltdowner/fx-update :meltdowner/fx-end
      :meltdowner/fx-perform :meltdowner/fx-reflect]

@@ -113,3 +113,10 @@
       runtime-a
       (fn []
         (is (= 1 (count (get (:wave-effects (vdfx/vec-deviation-fx-snapshot)) [:ctx "ctx-a"]))))))))
+
+(deftest vec-deviation-fx-runtime-required-without-binding-test
+  (binding [vdfx/*vec-deviation-fx-runtime* nil]
+    (is (thrown-with-msg?
+          clojure.lang.ExceptionInfo
+          #"runtime is not bound"
+          (vdfx/vec-deviation-fx-snapshot)))))

@@ -20,9 +20,6 @@
 
 (def ^:dynamic *vec-reflection-fx-runtime* nil)
 
-(defonce ^:private installed-vec-reflection-fx-runtime
-  (create-vec-reflection-fx-runtime))
-
 (defn- vec-reflection-fx-runtime?
   [runtime]
   (and (map? runtime)
@@ -44,7 +41,8 @@
 (defn- current-vec-reflection-fx-runtime
   []
   (or *vec-reflection-fx-runtime*
-      installed-vec-reflection-fx-runtime))
+      (throw (ex-info "VecReflection FX runtime is not bound"
+                      {:hint "Bind runtime via call-with-vec-reflection-fx-runtime or use init! registered handlers"}))))
 
 (defn- vec-reflection-fx-state-atom
   []
@@ -221,10 +219,18 @@
 ;; ---------------------------------------------------------------------------
 
 (defn init! []
-  (level-effects/register-level-effect! :vec-reflection
-    {:enqueue-event-fn enqueue!
-     :tick-fn       tick!
-     :build-plan-fn build-plan})
+  (let [runtime (create-vec-reflection-fx-runtime)]
+    (level-effects/register-level-effect! :vec-reflection
+      {:enqueue-event-fn (fn [event]
+                           (call-with-vec-reflection-fx-runtime
+                             runtime
+                             (fn []
+                               (enqueue! event))))
+       :tick-fn (fn []
+                  (call-with-vec-reflection-fx-runtime
+                    runtime
+                    tick!))
+       :build-plan-fn build-plan}))
   (fx-registry/register-fx-channels!
     [:vec-reflection/fx-start :vec-reflection/fx-end
      :vec-reflection/fx-reflect-entity :vec-reflection/fx-play]

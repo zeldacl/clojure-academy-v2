@@ -118,3 +118,10 @@
         (fn []
           (is (= :charging (get-in (swfx/storm-wing-fx-snapshot)
                                    [:effect-state [:ctx "ctx-a"] :phase]))))))))
+
+(deftest storm-wing-fx-runtime-required-without-binding-test
+  (binding [swfx/*storm-wing-fx-runtime* nil]
+    (is (thrown-with-msg?
+          clojure.lang.ExceptionInfo
+          #"runtime is not bound"
+          (swfx/storm-wing-fx-snapshot)))))

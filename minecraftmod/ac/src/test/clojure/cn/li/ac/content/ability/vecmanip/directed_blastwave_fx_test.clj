@@ -172,3 +172,10 @@
         (fn []
           (is (= 9 (get-in (blastwave-fx/directed-blastwave-fx-snapshot)
                            [:effect-state [:ctx "ctx-a"] :charge-ticks]))))))))
+
+(deftest directed-blastwave-fx-runtime-required-without-binding-test
+  (binding [blastwave-fx/*directed-blastwave-fx-runtime* nil]
+    (is (thrown-with-msg?
+          clojure.lang.ExceptionInfo
+          #"runtime is not bound"
+          (blastwave-fx/directed-blastwave-fx-snapshot)))))

@@ -135,3 +135,10 @@
         (fn []
           (is (= #{[:ctx "ctx-a"]}
                  (set (keys (:effect-state (mfx/mark-teleport-fx-snapshot)))))))))))
+
+(deftest mark-teleport-fx-runtime-required-without-binding-test
+  (binding [mfx/*mark-teleport-fx-runtime* nil]
+    (is (thrown-with-msg?
+          clojure.lang.ExceptionInfo
+          #"runtime is not bound"
+          (mfx/mark-teleport-fx-snapshot)))))

@@ -18,9 +18,6 @@
 
 (def ^:dynamic *jet-engine-fx-runtime* nil)
 
-(defonce ^:private installed-jet-engine-fx-runtime
-  (create-jet-engine-fx-runtime))
-
 (defn- jet-engine-fx-runtime?
   [runtime]
   (and (map? runtime)
@@ -42,7 +39,8 @@
 (defn- current-jet-engine-fx-runtime
   []
   (or *jet-engine-fx-runtime*
-      installed-jet-engine-fx-runtime))
+      (throw (ex-info "Jet Engine FX runtime is not bound"
+                      {:hint "Bind runtime via call-with-jet-engine-fx-runtime or use init! registered handlers"}))))
 
 (defn- jet-engine-fx-state-atom
   []
@@ -112,10 +110,18 @@
               :r 200 :g 220 :b 255 :a (min 80 alpha)}]})))
 
 (defn init! []
-  (level-effects/register-level-effect! :jet-engine
-    {:enqueue-event-fn enqueue!
-     :tick-fn       tick!
-     :build-plan-fn build-plan})
+  (let [runtime (create-jet-engine-fx-runtime)]
+    (level-effects/register-level-effect! :jet-engine
+      {:enqueue-event-fn (fn [event]
+                           (call-with-jet-engine-fx-runtime
+                             runtime
+                             (fn []
+                               (enqueue! event))))
+       :tick-fn (fn []
+                  (call-with-jet-engine-fx-runtime
+                    runtime
+                    tick!))
+       :build-plan-fn build-plan}))
   (fx-registry/register-fx-channels!
     [:jet-engine/fx-start :jet-engine/fx-launch :jet-engine/fx-charge-max]
     (fn [ctx-id channel payload]

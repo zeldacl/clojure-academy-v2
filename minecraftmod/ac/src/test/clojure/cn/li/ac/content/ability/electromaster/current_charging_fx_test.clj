@@ -120,3 +120,12 @@
         (fn []
           (is (= #{[:ctx "ctx-a"]}
                  (set (keys (:states (current-charging-fx/current-charging-fx-snapshot)))))))))))
+
+(deftest current-charging-fx-fallback-works-without-binding-test
+  (binding [current-charging-fx/*current-charging-fx-runtime* nil]
+    (current-charging-fx/reset-current-charging-fx-for-test!)
+    (is (= {:states {}
+            :current-owner-key nil}
+           (current-charging-fx/current-charging-fx-snapshot)))
+    (is (= false (:active? (current-charging-fx/current-state))))))
+
