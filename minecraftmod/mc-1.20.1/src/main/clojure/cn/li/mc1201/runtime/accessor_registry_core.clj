@@ -60,7 +60,7 @@
     (throw (ex-info "Accessor must have non-empty string documentation" {:doc doc})))
   doc)
 
-(defn- register-accessor!
+(defn register-accessor!
   [domain key accessor-fn doc]
   (validate-accessor-key key)
   (validate-accessor-fn accessor-fn)
