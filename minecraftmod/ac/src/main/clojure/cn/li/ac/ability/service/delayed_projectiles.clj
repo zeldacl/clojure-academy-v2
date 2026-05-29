@@ -101,10 +101,6 @@
   [{:keys [player-id] :as task}]
   (schedule-task! player-id (:delay-ticks task) (assoc task :kind :electron-bomb-beam)))
 
-(defn schedule-electron-missile-hit!
-  [{:keys [player-id] :as task}]
-  (schedule-task! player-id (:delay-ticks task) (assoc task :kind :electron-missile-hit)))
-
 (defn schedule-scatter-bomb-beam!
   [{:keys [player-id] :as task}]
   (schedule-task! player-id (:delay-ticks task) (assoc task :kind :scatter-bomb-beam)))
@@ -160,24 +156,6 @@
     (catch Exception e
       (log/warn "Delayed ElectronBomb settle failed:" (ex-message e)))))
 
-(defn- run-electron-missile-hit!
-  [{:keys [player-id ctx-id world-id target-uuid target-pos damage on-hit!]}]
-  (try
-    (when (and entity-damage/*entity-damage* target-uuid)
-      (entity-damage/apply-direct-damage!
-        entity-damage/*entity-damage*
-        world-id
-        target-uuid
-        (double (or damage 0.0))
-        :magic)
-      (when (fn? on-hit!)
-        (try (on-hit! target-uuid) (catch Exception _))))
-    (when target-pos
-      (ctx-mgr/push-channel-to-player! player-id ctx-id :electron-missile/fx-fire target-pos)
-      (ctx-mgr/push-channel-to-nearby-players! ctx-id :electron-missile/fx-fire target-pos))
-    (catch Exception e
-      (log/warn "Delayed ElectronMissile settle failed:" (ex-message e)))))
-
 (defn- run-scatter-bomb-beam!
   [{:keys [player-id ctx-id world-id eye look-dir damage beam]}]
   (try
@@ -215,7 +193,6 @@
   [{:keys [kind] :as task}]
   (case kind
     :electron-bomb-beam (run-electron-bomb-beam! task)
-    :electron-missile-hit (run-electron-missile-hit! task)
     :scatter-bomb-beam (run-scatter-bomb-beam! task)
     nil))
 

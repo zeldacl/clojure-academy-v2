@@ -43,6 +43,8 @@
       (is (= :electron-missile (first @registered-level*)))
       (is (fn? (:enqueue-state-fn (second @registered-level*))))
       (is (= #{:electron-missile/fx-start
+               :electron-missile/fx-update
+               :electron-missile/fx-end
                :electron-missile/fx-fire}
              (set (:channels @registered-handler*)))))))
 
@@ -58,21 +60,36 @@
                                                         nil)]
       (em-fx/init!)
       (@handler* "ctx-em" :electron-missile/fx-start {:source-player-id "player-a"})
+      (@handler* "ctx-em" :electron-missile/fx-update {:ticks 12
+                                                        :balls 3
+                                                        :source-player-id "player-a"})
       (@handler* "ctx-em" :electron-missile/fx-fire {:target-x 1.0
                                                       :target-y 64.0
                                                       :target-z 2.0
+                                                      :start {:x 0.0 :y 64.0 :z 0.0}
+                                                      :end {:x 1.0 :y 65.5 :z 2.0}
                                                       :source-player-id "player-a"})
+      (@handler* "ctx-em" :electron-missile/fx-end {:source-player-id "player-a"})
       (is (= [[:electron-missile {:mode :start :source-player-id "player-a"}
                {:ctx-id "ctx-em" :channel :electron-missile/fx-start}]
+              [:electron-missile {:mode :update
+                                  :ticks 12
+                                  :balls 3
+                                  :source-player-id "player-a"}
+               {:ctx-id "ctx-em" :channel :electron-missile/fx-update}]
               [:electron-missile {:mode :fire
+                                  :start {:x 0.0 :y 64.0 :z 0.0}
+                                  :end {:x 1.0 :y 65.5 :z 2.0}
                                   :target-x 1.0
                                   :target-y 64.0
                                   :target-z 2.0
                                   :source-player-id "player-a"}
-               {:ctx-id "ctx-em" :channel :electron-missile/fx-fire}]]
+               {:ctx-id "ctx-em" :channel :electron-missile/fx-fire}]
+              [:electron-missile {:mode :end :source-player-id "player-a"}
+               {:ctx-id "ctx-em" :channel :electron-missile/fx-end}]]
              @enqueued*)))))
 
-(deftest fire-adds-impact-and-tick-decays-state-test
+(deftest fire-adds-beam-and-end-clears-state-test
   (let [enqueue-state! (var-get #'cn.li.ac.content.ability.meltdowner.electron-missile-fx/enqueue-state!)
         tick-state! (var-get #'cn.li.ac.content.ability.meltdowner.electron-missile-fx/tick-state!)
         particles* (atom [])
@@ -86,17 +103,33 @@
                                                         nil)]
       (level-effects/update-effect-state! :electron-missile
         enqueue-state!
+        (event "ctx-a" :electron-missile/fx-update
+               {:mode :update
+                :ticks 8
+                :balls 2
+                :source-player-id "player-a"}))
+      (is (= 2 (get-in (em-fx/electron-missile-fx-snapshot) [:charge-state [:ctx "ctx-a"] :balls])))
+      (level-effects/update-effect-state! :electron-missile
+        enqueue-state!
         (event "ctx-a" :electron-missile/fx-fire
                {:mode :fire
+                :start {:x 0.0 :y 64.0 :z 0.0}
+                :end {:x 1.0 :y 65.5 :z 2.0}
                 :target-x 1.0 :target-y 64.0 :target-z 2.0
                 :source-player-id "player-a"}))
-      (is (seq (get-in (em-fx/electron-missile-fx-snapshot) [:impacts [:ctx "ctx-a"]])))
+      (is (seq (get-in (em-fx/electron-missile-fx-snapshot) [:beams [:ctx "ctx-a"]])))
       (dotimes [_ 10]
         (level-effects/update-effect-state! :electron-missile
           (fn [store _]
             (tick-state! store))
           nil))
-      (is (empty? (get-in (em-fx/electron-missile-fx-snapshot) [:impacts [:ctx "ctx-a"]])))
+      (is (empty? (get-in (em-fx/electron-missile-fx-snapshot) [:beams [:ctx "ctx-a"]])))
+      (level-effects/update-effect-state! :electron-missile
+        enqueue-state!
+        (event "ctx-a" :electron-missile/fx-end
+               {:mode :end
+                :source-player-id "player-a"}))
+      (is (nil? (get-in (em-fx/electron-missile-fx-snapshot) [:charge-state [:ctx "ctx-a"]])))
       (is (seq @particles*))
       (is (seq @sounds*)))))
 
@@ -112,23 +145,31 @@
         (fn []
           (level-effects/update-effect-state! :electron-missile
             enqueue-state!
-            (event "ctx-a" :electron-missile/fx-fire
-                   {:mode :fire :target-x 1.0 :target-y 64.0 :target-z 2.0 :source-player-id "player-a"}))
+               (event "ctx-a" :electron-missile/fx-fire
+                 {:mode :fire
+                  :start {:x 0.0 :y 64.0 :z 0.0}
+                  :end {:x 1.0 :y 65.5 :z 2.0}
+                  :target-x 1.0 :target-y 64.0 :target-z 2.0
+                  :source-player-id "player-a"}))
           (is (= #{[:ctx "ctx-a"]}
-                 (set (keys (:impacts (em-fx/electron-missile-fx-snapshot))))))))
+               (set (keys (:beams (em-fx/electron-missile-fx-snapshot))))))))
       (level-effects/call-with-level-effect-runtime
         runtime-b
         (fn []
-          (is (= {:impacts {}}
+             (is (= {:charge-state {} :beams {} :impacts {}}
                  (em-fx/electron-missile-fx-snapshot)))
           (level-effects/update-effect-state! :electron-missile
             enqueue-state!
-            (event "ctx-b" :electron-missile/fx-fire
-                   {:mode :fire :target-x 10.0 :target-y 64.0 :target-z 2.0 :source-player-id "player-b"}))
+               (event "ctx-b" :electron-missile/fx-fire
+                 {:mode :fire
+                  :start {:x 9.0 :y 64.0 :z 0.0}
+                  :end {:x 10.0 :y 65.5 :z 2.0}
+                  :target-x 10.0 :target-y 64.0 :target-z 2.0
+                  :source-player-id "player-b"}))
           (is (= #{[:ctx "ctx-b"]}
-                 (set (keys (:impacts (em-fx/electron-missile-fx-snapshot))))))))
+               (set (keys (:beams (em-fx/electron-missile-fx-snapshot))))))))
       (level-effects/call-with-level-effect-runtime
         runtime-a
         (fn []
           (is (= #{[:ctx "ctx-a"]}
-                 (set (keys (:impacts (em-fx/electron-missile-fx-snapshot)))))))))))
+               (set (keys (:beams (em-fx/electron-missile-fx-snapshot)))))))))))
