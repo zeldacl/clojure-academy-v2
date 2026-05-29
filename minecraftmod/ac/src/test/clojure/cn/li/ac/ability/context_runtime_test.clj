@@ -74,6 +74,15 @@
     (is (true? (rt/should-terminate-context-on-key-up?
                  {:input-policy {:terminate-on-key-up? true}})))))
 
+(deftest key-up-keep-active-policy-helper-test
+  (testing "default policy does not keep active"
+    (is (false? (rt/should-keep-active-on-key-up? {}))))
+  (testing "explicit policy can keep active"
+    (is (true? (rt/should-keep-active-on-key-up?
+                 {:input-policy {:keep-active-on-key-up? true}})))
+    (is (false? (rt/should-keep-active-on-key-up?
+                  {:input-policy {:keep-active-on-key-up? false}})))))
+
 (deftest key-up-can-keep-context-alive-when-policy-disables-termination-test
   (let [uuid "test-player-sticky"
         _ (seed-player-state! uuid)
@@ -93,6 +102,27 @@
           "context remains alive when termination policy is disabled")
         (is (= :idle (:input-state updated))
           "input state resets to :idle so subsequent key-down can reactivate"))))))
+
+(deftest key-up-can-keep-context-active-when-policy-demands-active-follow-through-test
+  (let [uuid "test-player-keep-active"
+        _ (seed-player-state! uuid)
+        c (-> (ctx/new-server-context uuid :arc-gen "ctx-keep-active" test-context-owner)
+              (assoc :input-state :active))]
+    (ctx/register-context! c)
+    (with-redefs [skill-reg/get-skill (fn [_]
+                                        {:id :arc-gen
+                                         :ctrl-id :arc-gen
+                                         :cooldown {:mode :manual}
+                                         :input-policy {:terminate-on-key-up? false
+                                                        :keep-active-on-key-up? true}})]
+      (binding [ctx/*context-owner* test-context-owner]
+        (is (true? (rt/handle-key-up! "ctx-keep-active" {:ctx-id "ctx-keep-active" :skill-id :arc-gen}))
+            "key-up should be handled")
+        (let [updated (ctx/get-context "ctx-keep-active")]
+          (is (= ctx/STATUS-ALIVE (:status updated))
+              "context remains alive when keep-active policy is enabled")
+          (is (= :active (:input-state updated))
+              "input state should remain active for post-release server tick follow-through"))))))
 
 (deftest pattern-handled-key-up-skips-generic-perform-and-cooldown-test
   (let [uuid "test-player-pattern-key-up"

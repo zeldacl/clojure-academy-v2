@@ -86,6 +86,17 @@
   [skill-spec]
   (not (false? (get-in skill-spec [:input-policy :terminate-on-key-up?]))))
 
+(defn should-keep-active-on-key-up?
+  "Pure policy helper: when true, key-up keeps context in ACTIVE state
+  after on-key-up callback settlement.
+
+  This is primarily used by skills that have a post-release triggering phase
+  driven by server tick.
+
+  Note: this policy is only effective when context is not terminated on key-up."
+  [skill-spec]
+  (true? (get-in skill-spec [:input-policy :keep-active-on-key-up?])))
+
 (defn handle-key-down!
   ([ctx-id payload]
    (handle-key-down! ctx-id payload nil))
@@ -131,7 +142,9 @@
                (apply-main-cooldown! released-ctx)))
            (if (should-terminate-context-on-key-up? spec)
              (ctx/terminate-context! ctx-id terminate-fn)
-             (set-input-state! ctx-id INPUT-IDLE)))
+             (if (should-keep-active-on-key-up? spec)
+               (set-input-state! ctx-id INPUT-ACTIVE)
+               (set-input-state! ctx-id INPUT-IDLE))))
          true)))))
 
 (defn handle-key-abort!

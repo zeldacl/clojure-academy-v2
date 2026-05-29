@@ -77,8 +77,10 @@
     (dispatch! :electron-missile (event "ctx-b" :electron-missile/fx-fire
                                        {:mode :fire :target-x 2.0 :target-y 64.0 :target-z 2.0}))
 
-    (dispatch! :jet-engine (event "ctx-a" :jet-engine/fx-launch {:mode :launch :speed 1.5}))
-    (dispatch! :jet-engine (event "ctx-b" :jet-engine/fx-launch {:mode :launch :speed 2.5}))
+    (dispatch! :jet-engine (event "ctx-a" :jet-engine/fx-start {:mode :mark-start :target {:x 1.0 :y 64.0 :z 1.0}}))
+    (dispatch! :jet-engine (event "ctx-b" :jet-engine/fx-start {:mode :mark-start :target {:x 2.0 :y 64.0 :z 2.0}}))
+    (dispatch! :jet-engine (event "ctx-a" :jet-engine/fx-trigger-start {:mode :trigger-start :pos {:x 1.2 :y 64.0 :z 1.2}}))
+    (dispatch! :jet-engine (event "ctx-b" :jet-engine/fx-trigger-start {:mode :trigger-start :pos {:x 2.2 :y 64.0 :z 2.2}}))
 
     (dispatch! :light-shield (event "ctx-a" :light-shield/fx-start {:mode :start}))
     (dispatch! :light-shield (event "ctx-b" :light-shield/fx-start {:mode :start}))
@@ -117,8 +119,8 @@
     (is (= 2.0 (get-in (electron-bomb-fx/electron-bomb-fx-snapshot) [:effect-state [:ctx "ctx-b"] :x])))
     (is (= 1 (count (get-in (electron-missile-fx/electron-missile-fx-snapshot) [:impacts [:ctx "ctx-a"]]))))
     (is (= 1 (count (get-in (electron-missile-fx/electron-missile-fx-snapshot) [:impacts [:ctx "ctx-b"]]))))
-    (is (= 1.5 (get-in (jet-engine-fx/jet-engine-fx-snapshot) [:fx-state [:ctx "ctx-a"] :speed])))
-    (is (= 2.5 (get-in (jet-engine-fx/jet-engine-fx-snapshot) [:fx-state [:ctx "ctx-b"] :speed])))
+    (is (= :triggering (get-in (jet-engine-fx/jet-engine-fx-snapshot) [:fx-state [:ctx "ctx-a"] :phase])))
+    (is (= :triggering (get-in (jet-engine-fx/jet-engine-fx-snapshot) [:fx-state [:ctx "ctx-b"] :phase])))
     (is (:active? (get-in (light-shield-fx/light-shield-fx-snapshot) [:effect-state [:ctx "ctx-a"]])))
     (is (:active? (get-in (light-shield-fx/light-shield-fx-snapshot) [:effect-state [:ctx "ctx-b"]])))
     (is (= 12 (get-in (meltdowner-fx/meltdowner-fx-snapshot) [:effect-state [:ctx "ctx-a"] :ticks])))

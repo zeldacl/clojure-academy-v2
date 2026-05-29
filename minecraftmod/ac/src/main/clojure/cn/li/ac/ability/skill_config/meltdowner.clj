@@ -31,13 +31,13 @@
    {:skill-id :jet-engine :id :charge.max-ticks :path "charge.max-ticks" :section-suffix "charge" :type :int :min 1 :default 80 :comment "JetEngine max charge ticks."}
    {:skill-id :jet-engine :id :movement.speed :path "movement.speed" :section-suffix "movement" :type :double-list :min 0.0 :list-count 2 :default [1.2 2.8] :comment "JetEngine base launch speed."}
    {:skill-id :jet-engine :id :movement.charge-speed-bonus :path "movement.charge-speed-bonus" :section-suffix "movement" :type :double :min 0.0 :default 1.5 :comment "JetEngine full-charge extra speed multiplier."}
-   {:skill-id :jet-engine :id :combat.damage :path "combat.damage" :section-suffix "combat" :type :double-list :min 0.0 :list-count 2 :default [6.0 12.0] :comment "JetEngine collision damage."}
+  {:skill-id :jet-engine :id :combat.damage :path "combat.damage" :section-suffix "combat" :type :double-list :min 0.0 :list-count 2 :default [7.0 20.0] :comment "JetEngine trigger-hit damage endpoints."}
    {:skill-id :jet-engine :id :combat.hit-radius :path "combat.hit-radius" :section-suffix "combat" :type :double :min 0.0 :default 1.5 :comment "JetEngine collision search radius."}
    {:skill-id :jet-engine :id :combat.hit-steps :path "combat.hit-steps" :section-suffix "combat" :type :int :min 1 :default 4 :comment "JetEngine collision samples along launch direction."}
-   {:skill-id :jet-engine :id :cost.down.cp :path "cost.down.cp" :section-suffix "cost.down" :type :double-list :min 0.0 :list-count 2 :default [200.0 150.0] :comment "JetEngine down-stage CP cost."}
-   {:skill-id :jet-engine :id :cost.down.overload :path "cost.down.overload" :section-suffix "cost.down" :type :double-list :min 0.0 :list-count 2 :default [60.0 40.0] :comment "JetEngine down-stage overload cost."}
-   {:skill-id :jet-engine :id :cooldown.ticks :path "cooldown.ticks" :section-suffix "cooldown" :type :double-list :min 0.0 :list-count 2 :default [60.0 35.0] :comment "JetEngine cooldown ticks."}
-   {:skill-id :jet-engine :id :progression.exp-use :path "progression.exp-use" :section-suffix "progression" :type :double :min 0.0 :default 0.002 :comment "JetEngine exp gained on launch."}
+  {:skill-id :jet-engine :id :cost.down.cp :path "cost.down.cp" :section-suffix "cost.down" :type :double-list :min 0.0 :list-count 2 :default [170.0 140.0] :comment "JetEngine release-stage CP cost."}
+  {:skill-id :jet-engine :id :cost.down.overload :path "cost.down.overload" :section-suffix "cost.down" :type :double-list :min 0.0 :list-count 2 :default [60.0 50.0] :comment "JetEngine release-stage overload cost."}
+  {:skill-id :jet-engine :id :cooldown.ticks :path "cooldown.ticks" :section-suffix "cooldown" :type :double-list :min 0.0 :list-count 2 :default [60.0 30.0] :comment "JetEngine cooldown ticks after successful release."}
+  {:skill-id :jet-engine :id :progression.exp-use :path "progression.exp-use" :section-suffix "progression" :type :double :min 0.0 :default 0.004 :comment "JetEngine exp gained on successful release."}
 
    {:skill-id :light-shield :id :combat.damage-reduction :path "combat.damage-reduction" :section-suffix "combat" :type :double-list :min 0.0 :max 1.0 :list-count 2 :default [0.5 0.8] :comment "LightShield incoming damage reduction."}
    {:skill-id :light-shield :id :combat.touch-damage :path "combat.touch-damage" :section-suffix "combat" :type :double-list :min 0.0 :list-count 2 :default [3.0 8.0] :comment "LightShield contact damage."}

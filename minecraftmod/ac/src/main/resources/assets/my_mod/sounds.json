@@ -30,7 +30,7 @@
   "md.eb_explode": {"category": "master", "sounds": [{"name": "my_mod:md/meltdowner", "stream": false}]},
   "md.em_start": {"category": "master", "sounds": [{"name": "my_mod:md/simple_charge", "stream": false}]},
   "md.em_fire": {"category": "master", "sounds": [{"name": "my_mod:md/ray_small", "stream": false}]},
-  "md.jet_engine": {"category": "master", "sounds": [{"name": "my_mod:md/mine_loop", "stream": false}]},
+  "md.jet_engine": {"category": "master", "sounds": [{"name": "my_mod:md/md_charge", "stream": false}]},
   "md.jet_charge": {"category": "master", "sounds": [{"name": "my_mod:md/simple_charge", "stream": false}]},
   "md.jet_max": {"category": "master", "sounds": [{"name": "my_mod:md/md_charge", "stream": false}]},
   "md.mine_ray_start": {"category": "master", "sounds": [{"name": "my_mod:md/mine_basic_startup", "stream": false}]},

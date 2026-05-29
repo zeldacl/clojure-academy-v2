@@ -22,13 +22,12 @@
 (use-fixtures :each reset-fixture)
 
 (defn- event
-  [ctx-id channel payload]
+  [ctx-id payload]
   {:payload payload
    :ctx-id ctx-id
-   :channel channel
    :owner-key [:ctx ctx-id]})
 
-(deftest init-registers-owner-aware-jet-engine-fx-test
+(deftest init-registers-parity-jet-engine-fx-channels-test
   (let [registered-level* (atom nil)
         registered-handler* (atom nil)]
     (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
@@ -42,11 +41,14 @@
       (is (= :jet-engine (first @registered-level*)))
       (is (fn? (:enqueue-state-fn (second @registered-level*))))
       (is (= #{:jet-engine/fx-start
-               :jet-engine/fx-launch
-               :jet-engine/fx-charge-max}
+               :jet-engine/fx-update
+               :jet-engine/fx-end
+               :jet-engine/fx-trigger-start
+               :jet-engine/fx-trigger-update
+               :jet-engine/fx-trigger-end}
              (set (:channels @registered-handler*)))))))
 
-(deftest launch-adds-state-and-builds-plan-test
+(deftest mark-and-trigger-state-flow-with-snapshot-test
   (let [enqueue-state! (var-get #'cn.li.ac.content.ability.meltdowner.jet-engine-fx/enqueue-state!)
         tick-state! (var-get #'cn.li.ac.content.ability.meltdowner.jet-engine-fx/tick-state!)
         build-plan (var-get #'cn.li.ac.content.ability.meltdowner.jet-engine-fx/build-plan)
@@ -56,51 +58,39 @@
                                                                nil)]
       (level-effects/update-effect-state! :jet-engine
         enqueue-state!
-        (event "ctx-je" :jet-engine/fx-launch {:mode :launch
-                                                :speed 1.5
-                                                :dx 0.0 :dy 1.0 :dz 0.0
-                                                :source-player-id "player-a"}))
-      (is (some? (get-in (je-fx/jet-engine-fx-snapshot) [:fx-state [:ctx "ctx-je"]])))
+        (event "ctx-je" {:mode :mark-start :target {:x 1.0 :y 64.0 :z 1.0} :hold-ticks 0}))
+      (is (= :marking (get-in (je-fx/jet-engine-fx-snapshot) [:fx-state [:ctx "ctx-je"] :phase])))
       (is (seq (:ops (build-plan {:x 0.0 :y 65.0 :z 0.0} nil 0))))
+
+      (level-effects/update-effect-state! :jet-engine
+        enqueue-state!
+        (event "ctx-je" {:mode :trigger-start
+                          :start {:x 0.0 :y 64.0 :z 0.0}
+                          :target {:x 4.0 :y 64.0 :z 0.0}
+                          :pos {:x 1.0 :y 64.0 :z 0.0}
+                          :trigger-ticks 0}))
+      (is (= :triggering (get-in (je-fx/jet-engine-fx-snapshot) [:fx-state [:ctx "ctx-je"] :phase])))
+      (let [ops (:ops (build-plan {:x 0.0 :y 65.0 :z 0.0} nil 1))]
+        (is (seq ops))
+        (is (some #(= :line (:kind %)) ops))
+        (is (some #(= :quad (:kind %)) ops)))
+
       (dotimes [_ 20]
         (level-effects/update-effect-state! :jet-engine
           (fn [store _]
             (tick-state! store))
           nil))
-      (is (nil? (build-plan {:x 0.0 :y 65.0 :z 0.0} nil 0)))
+      (is (nil? (build-plan {:x 0.0 :y 65.0 :z 0.0} nil 2)))
       (is (seq @sounds*)))))
 
-(deftest jet-engine-fx-runtime-isolation-test
-  (let [runtime-a (level-effects/create-level-effect-runtime)
-        runtime-b (level-effects/create-level-effect-runtime)
-        enqueue-state! (var-get #'cn.li.ac.content.ability.meltdowner.jet-engine-fx/enqueue-state!)]
+(deftest trigger-end-clears-owner-state-test
+  (let [enqueue-state! (var-get #'cn.li.ac.content.ability.meltdowner.jet-engine-fx/enqueue-state!)]
     (with-redefs [client-sounds/queue-current-sound-effect! (fn [& _] nil)]
-      (level-effects/call-with-level-effect-runtime
-        runtime-a
-        (fn []
-          (level-effects/update-effect-state! :jet-engine
-            enqueue-state!
-            (event "ctx-a" :jet-engine/fx-launch {:mode :launch
-                                                    :speed 1.5
-                                                    :dx 0.0 :dy 1.0 :dz 0.0
-                                                    :source-player-id "player-a"}))
-          (is (= #{[:ctx "ctx-a"]}
-                 (set (keys (:fx-state (je-fx/jet-engine-fx-snapshot))))))))
-      (level-effects/call-with-level-effect-runtime
-        runtime-b
-        (fn []
-          (is (= {:fx-state {}}
-                 (je-fx/jet-engine-fx-snapshot)))
-          (level-effects/update-effect-state! :jet-engine
-            enqueue-state!
-            (event "ctx-b" :jet-engine/fx-launch {:mode :launch
-                                                    :speed 1.5
-                                                    :dx 0.0 :dy 1.0 :dz 0.0
-                                                    :source-player-id "player-b"}))
-          (is (= #{[:ctx "ctx-b"]}
-                 (set (keys (:fx-state (je-fx/jet-engine-fx-snapshot))))))))
-      (level-effects/call-with-level-effect-runtime
-        runtime-a
-        (fn []
-          (is (= #{[:ctx "ctx-a"]}
-                 (set (keys (:fx-state (je-fx/jet-engine-fx-snapshot)))))))))))
+      (level-effects/update-effect-state! :jet-engine
+        enqueue-state!
+        (event "ctx-je" {:mode :mark-start :target {:x 1.0 :y 64.0 :z 1.0}}))
+      (is (contains? (set (keys (:fx-state (je-fx/jet-engine-fx-snapshot)))) [:ctx "ctx-je"]))
+      (level-effects/update-effect-state! :jet-engine
+        enqueue-state!
+        (event "ctx-je" {:mode :trigger-end}))
+      (is (not (contains? (set (keys (:fx-state (je-fx/jet-engine-fx-snapshot)))) [:ctx "ctx-je"]))))))
