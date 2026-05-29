@@ -227,13 +227,12 @@
         (is (= 2 (get-in (vr/reflection-runtime-snapshot)
                          [:reflection-depths (vr/reflection-owner-key "p" "a" "ctx-a" "chain-a")])))))))
 
-(deftest vec-reflection-fallback-works-without-binding-test
+(deftest vec-reflection-throws-without-binding-test
   (binding [vr/*vec-reflection-runtime* nil]
-    (vr/reset-reflection-runtime-for-test!)
-    (vr/mark-reflecting-for-test! "p" "a" "ctx-fallback" "chain-fallback")
-    (is (= 1 (count (:reflecting-pairs (vr/reflection-runtime-snapshot)))))
-    (is (contains? (:reflecting-pairs (vr/reflection-runtime-snapshot))
-                   (vr/reflection-owner-key "p" "a" "ctx-fallback" "chain-fallback")))))
+    (is (thrown-with-msg?
+          clojure.lang.ExceptionInfo
+          #"VecReflection runtime is not bound"
+          (vr/reset-reflection-runtime-for-test!)))))
 
 (deftest tick-reflect-fireball-spawn-and-discard-test
   (let [spawn-calls (atom [])

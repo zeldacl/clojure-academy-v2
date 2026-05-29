@@ -9,6 +9,8 @@
             [cn.li.ac.ability.server.damage.runtime :as damage-runtime]
             [cn.li.ac.ability.server.effect.core :as effect]
             [cn.li.ac.ability.spi-lifecycle :as lifecycle]
+            [cn.li.ac.content.ability.server-runtime-lifecycle :as server-runtime-lifecycle]
+            [cn.li.mcmod.util.log]
             [cn.li.ac.content.ability :as ability-content]))
 
 (defn- reset-ability-init-guard-fixture [f]
@@ -52,6 +54,7 @@
                   lifecycle/freeze-lifecycle-registry! (fn []
                                                          (swap! freeze-calls* conj :lifecycle)
                                                          nil)
+                  server-runtime-lifecycle/install-server-runtime-lifecycle! (fn [] nil)
                   cn.li.mcmod.util.log/info (fn [& _] nil)]
       (ability-content/init-ability-content!)
       (ability-content/init-ability-content!)

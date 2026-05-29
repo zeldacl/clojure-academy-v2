@@ -20,9 +20,6 @@
 
 (def ^:dynamic *projectile-arbitration-runtime* nil)
 
-(defonce ^:private installed-projectile-arbitration-runtime
-	(create-projectile-arbitration-runtime))
-
 (defn- projectile-arbitration-runtime?
 	[runtime]
 	(and (map? runtime)
@@ -41,14 +38,34 @@
 	[runtime & body]
 	`(call-with-projectile-arbitration-runtime ~runtime (fn [] ~@body)))
 
+(defn install-projectile-arbitration-runtime!
+	([]
+	 (install-projectile-arbitration-runtime! (create-projectile-arbitration-runtime)))
+	([runtime]
+	 (when-not (projectile-arbitration-runtime? runtime)
+		 (throw (ex-info "Expected projectile arbitration runtime"
+						{:value runtime})))
+	 (alter-var-root #'*projectile-arbitration-runtime* (constantly runtime))
+	 nil))
+
+(defn clear-projectile-arbitration-runtime!
+	[]
+	(alter-var-root #'*projectile-arbitration-runtime* (constantly nil))
+	nil)
+
 (defn- current-projectile-arbitration-runtime
 	[]
-	(or *projectile-arbitration-runtime*
-			installed-projectile-arbitration-runtime))
+	*projectile-arbitration-runtime*)
+
+(defn- require-projectile-arbitration-runtime
+	[]
+	(or (current-projectile-arbitration-runtime)
+			(throw (ex-info "Projectile arbitration runtime is not bound"
+							{:required 'projectile-arbitration-runtime}))))
 
 (defn- projectile-locks-atom
 	[]
-	(:projectile-locks* (current-projectile-arbitration-runtime)))
+	(:projectile-locks* (require-projectile-arbitration-runtime)))
 
 (defn projectile-locks-snapshot
 	[]

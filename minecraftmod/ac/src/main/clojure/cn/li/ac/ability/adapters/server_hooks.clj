@@ -144,6 +144,8 @@
      (ctx/clear-session-contexts! session-id)
      (ps/clear-session-player-states! session-id)
      (world-registry/clear-session-world-data! session-id)
+     (when-let [reset-server-runtimes! (requiring-resolve 'cn.li.ac.content.ability.server-runtime-lifecycle/reset-ability-server-runtimes!)]
+       (reset-server-runtimes!))
      (delayed-projectiles/clear-all-tasks!))
 
    :on-player-clone!

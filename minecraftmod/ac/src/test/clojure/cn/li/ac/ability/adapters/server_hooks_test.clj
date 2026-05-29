@@ -3,6 +3,7 @@
             [cn.li.ac.ability.adapters.server-hooks :as server-hooks]
             [cn.li.ac.ability.item-actions :as item-actions]
             [cn.li.ac.ability.registry.event :as evt]
+            [cn.li.ac.content.ability.server-runtime-lifecycle :as server-runtime-lifecycle]
             [cn.li.ac.ability.server.service.context-mgr :as ctx-mgr]
             [cn.li.ac.ability.server.service.delayed-projectiles :as delayed-projectiles]
             [cn.li.ac.ability.server.service.resource :as svc-res]
@@ -163,16 +164,20 @@
                   ps/clear-session-player-states! (fn [session-id]
                                                     (swap! called conj [:player-states session-id])
                                                     nil)
-          world-registry/clear-session-world-data! (fn [session-id]
-                       (swap! called conj [:wireless session-id])
-                       nil)
+                  world-registry/clear-session-world-data! (fn [session-id]
+                                                             (swap! called conj [:wireless session-id])
+                                                             nil)
+                  server-runtime-lifecycle/reset-ability-server-runtimes! (fn []
+                                                                            (swap! called conj [:reset-runtimes])
+                                                                            nil)
                   delayed-projectiles/clear-all-tasks! (fn []
                                                          (swap! called conj [:projectiles])
                                                          nil)]
       (stop! :server-session))
     (is (= [[:contexts :server-session]
             [:player-states :server-session]
-          [:wireless :server-session]
+            [:wireless :server-session]
+            [:reset-runtimes]
             [:projectiles]]
            @called))))
 

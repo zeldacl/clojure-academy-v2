@@ -1,5 +1,10 @@
 (ns cn.li.fabric1201.client.runtime-bridge-state-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
+            [cn.li.mc1201.client.effects.particle]
+            [cn.li.mc1201.client.effects.sound]
+            [cn.li.mc1201.client.session :as client-session]
+            [cn.li.mc1201.client.session-cleanup :as session-cleanup]
+            [cn.li.mcmod.hooks.core]
             [cn.li.fabric1201.client.runtime-bridge :as runtime-bridge]))
 
 (def ^:private owner-a {:client-session-id [:client :session-a]
@@ -68,3 +73,57 @@
              (get-in snapshot [:raw-v-state (owner-key owner-a)])))
       (is (= {:was-down true}
              (get-in snapshot [:raw-n-state (owner-key owner-a)]))))))
+
+(deftest tick-client-delegates-owner-transition-cleanup-test
+  (let [calls (atom [])]
+    (with-redefs [session-cleanup/tick-connection-change!
+                  (fn [opts]
+                    (swap! calls conj [:tick-connection-change opts])
+                    nil)
+                  client-session/current-local-player-owner (fn [] owner-a)
+                  client-session/client-session-id (fn [] [:client :session-a])
+                  cn.li.fabric1201.client.runtime-bridge/tick-mode-switch! (fn [] (swap! calls conj [:mode-switch]) nil)
+                  cn.li.fabric1201.client.runtime-bridge/tick-cycle-selection! (fn [] (swap! calls conj [:cycle-selection]) nil)
+                  cn.li.fabric1201.client.runtime-bridge/tick-content-keys! (fn [] (swap! calls conj [:content-keys]) nil)
+                  cn.li.mc1201.client.effects.particle/tick-particles! (fn [] (swap! calls conj [:particles]) nil)
+                  cn.li.mc1201.client.effects.sound/tick-sounds! (fn [] (swap! calls conj [:sounds]) nil)
+                  client-session/with-current-client-session (fn [f]
+                                                               (swap! calls conj [:with-current-client-session])
+                                                               (f))
+                  cn.li.mcmod.hooks.core/client-tick! (fn [] (swap! calls conj [:client-tick]) nil)]
+      (runtime-bridge/tick-client!)
+      (is (= :tick-connection-change (ffirst @calls)))
+      (is (= runtime-bridge/clear-owner-input-state!
+             (get-in (first @calls) [1 :clear-owner-input-state!])))
+      (is (not-any? #(= [:clear-client-session [:client :session-a]] %) @calls))
+      (is (some #(= [:mode-switch] %) @calls))
+      (is (some #(= [:cycle-selection] %) @calls))
+      (is (some #(= [:content-keys] %) @calls))
+      (is (some #(= [:particles] %) @calls))
+      (is (some #(= [:sounds] %) @calls))
+      (is (some #(= [:client-tick] %) @calls)))))
+
+(deftest tick-client-clears-client-session-when-owner-missing-test
+  (let [calls (atom [])]
+    (with-redefs [session-cleanup/tick-connection-change!
+                  (fn [opts]
+                    (swap! calls conj [:tick-connection-change opts])
+                    nil)
+                  client-session/current-local-player-owner (fn [] nil)
+                  client-session/client-session-id (fn [] [:client :session-a])
+                  runtime-bridge/clear-client-input-session! (fn [session-id]
+                                                               (swap! calls conj [:clear-client-session session-id])
+                                                               nil)
+                  cn.li.fabric1201.client.runtime-bridge/tick-mode-switch! (fn [] (swap! calls conj [:mode-switch]) nil)
+                  cn.li.fabric1201.client.runtime-bridge/tick-cycle-selection! (fn [] (swap! calls conj [:cycle-selection]) nil)
+                  cn.li.fabric1201.client.runtime-bridge/tick-content-keys! (fn [] (swap! calls conj [:content-keys]) nil)
+                  cn.li.mc1201.client.effects.particle/tick-particles! (fn [] (swap! calls conj [:particles]) nil)
+                  cn.li.mc1201.client.effects.sound/tick-sounds! (fn [] (swap! calls conj [:sounds]) nil)
+                  client-session/with-current-client-session (fn [f]
+                                                               (swap! calls conj [:with-current-client-session])
+                                                               (f))
+                  cn.li.mcmod.hooks.core/client-tick! (fn [] (swap! calls conj [:client-tick]) nil)]
+      (runtime-bridge/tick-client!)
+      (is (= runtime-bridge/clear-owner-input-state!
+             (get-in (first @calls) [1 :clear-owner-input-state!])))
+      (is (some #(= [:clear-client-session [:client :session-a]] %) @calls)))))

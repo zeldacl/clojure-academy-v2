@@ -15,9 +15,6 @@
 
 (def ^:dynamic *damage-helper-runtime* nil)
 
-(defonce ^:private installed-damage-helper-runtime
-  (create-damage-helper-runtime))
-
 (defn- damage-helper-runtime?
   [runtime]
   (and (map? runtime)
@@ -36,14 +33,34 @@
   [runtime & body]
   `(call-with-damage-helper-runtime ~runtime (fn [] ~@body)))
 
+(defn install-damage-helper-runtime!
+  ([]
+   (install-damage-helper-runtime! (create-damage-helper-runtime)))
+  ([runtime]
+   (when-not (damage-helper-runtime? runtime)
+     (throw (ex-info "Expected damage helper runtime"
+                     {:value runtime})))
+   (alter-var-root #'*damage-helper-runtime* (constantly runtime))
+   nil))
+
+(defn clear-damage-helper-runtime!
+  []
+  (alter-var-root #'*damage-helper-runtime* (constantly nil))
+  nil)
+
 (defn- current-damage-helper-runtime
   []
-  (or *damage-helper-runtime*
-      installed-damage-helper-runtime))
+  *damage-helper-runtime*)
+
+(defn- require-damage-helper-runtime
+  []
+  (or (current-damage-helper-runtime)
+      (throw (ex-info "Damage helper runtime is not bound"
+                      {:required 'damage-helper-runtime}))))
 
 (defn- marks-atom
   []
-  (:marks* (current-damage-helper-runtime)))
+  (:marks* (require-damage-helper-runtime)))
 
 (defn marks-snapshot
   []

@@ -33,9 +33,6 @@
 
 (def ^:dynamic *vec-reflection-runtime* nil)
 
-(defonce ^:private installed-vec-reflection-runtime
-  (create-vec-reflection-runtime))
-
 (defn- vec-reflection-runtime?
   [runtime]
   (and (map? runtime)
@@ -54,14 +51,34 @@
   [runtime & body]
   `(call-with-vec-reflection-runtime ~runtime (fn [] ~@body)))
 
+(defn install-vec-reflection-runtime!
+  ([]
+   (install-vec-reflection-runtime! (create-vec-reflection-runtime)))
+  ([runtime]
+   (when-not (vec-reflection-runtime? runtime)
+     (throw (ex-info "Expected VecReflection runtime"
+                     {:value runtime})))
+   (alter-var-root #'*vec-reflection-runtime* (constantly runtime))
+   nil))
+
+(defn clear-vec-reflection-runtime!
+  []
+  (alter-var-root #'*vec-reflection-runtime* (constantly nil))
+  nil)
+
 (defn- current-vec-reflection-runtime
   []
-  (or *vec-reflection-runtime*
-      installed-vec-reflection-runtime))
+  *vec-reflection-runtime*)
+
+(defn- require-vec-reflection-runtime
+  []
+  (or (current-vec-reflection-runtime)
+      (throw (ex-info "VecReflection runtime is not bound"
+                      {:required 'vec-reflection-runtime}))))
 
 (defn- reflection-runtime-state-atom
   []
-  (:state* (current-vec-reflection-runtime)))
+  (:state* (require-vec-reflection-runtime)))
 
 (defn- reflection-runtime-state-snapshot
   []

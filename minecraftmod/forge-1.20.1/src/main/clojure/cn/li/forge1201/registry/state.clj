@@ -24,13 +24,17 @@
 (def ^:private ^:dynamic *forge-registry-runtime*
 	(create-forge-registry-runtime))
 
+(def ^:private registry-runtime-lock
+	(Object.))
+
 (defn registry-runtime-state
 	[]
 	*forge-registry-runtime*)
 
 (defn update-registry-runtime!
 	[f & args]
-	(apply alter-var-root #'*forge-registry-runtime* f args)
+	(locking registry-runtime-lock
+		(apply alter-var-root #'*forge-registry-runtime* f args))
 	nil)
 
 (defn- registry-bucket
