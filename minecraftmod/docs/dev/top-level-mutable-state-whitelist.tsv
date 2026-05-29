@@ -1,2 +1,4 @@
 # relative-path	symbol	classification	owner	notes
 # Report-only seed list for auditTopLevelMutableState. Keep exact path+symbol entries only.
+ac/src/main/clojure/cn/li/ac/ability/service/platform_hooks.clj	platform-fn-registry	S2_RUNTIME_COMPONENT	ability/runtime-bridge	Process-local platform function registry installed during runtime hook bootstrap.
+ac/src/main/clojure/cn/li/ac/ability/service/runtime_store.clj	global-store-data	S2_RUNTIME_COMPONENT	ability/runtime-store	Server/session scoped reducer store backing ability state; accessed via IAbilityStore boundary.

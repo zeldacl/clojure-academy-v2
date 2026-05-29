@@ -6,6 +6,7 @@
             [cn.li.ac.ability.model.resource :as rdata]
             [cn.li.ac.ability.registry.event :as evt]
             [cn.li.ac.ability.registry.skill-query :as skill-query]
+            [cn.li.ac.ability.server.network :as network]
             [cn.li.ac.ability.server.damage.entity :as entity-damage-runtime]
             [cn.li.ac.ability.server.damage.handler :as damage-handler]
             [cn.li.ac.ability.server.damage.runtime :as damage-runtime]
@@ -13,11 +14,17 @@
             [cn.li.ac.ability.server.service.delayed-projectiles :as delayed-projectiles]
             [cn.li.ac.ability.server.service.resource :as svc-res]
             [cn.li.ac.ability.service.dispatcher :as ctx]
+            [cn.li.ac.ability.service.platform-hooks :as platform-hooks]
             [cn.li.ac.ability.service.player-state :as ps]
+            [cn.li.ac.block.developer.logic :as developer-logic]
+            [cn.li.ac.content.ability.server-runtime-lifecycle :as server-runtime-lifecycle]
             [cn.li.ac.wireless.data.world-registry :as world-registry]
-            [cn.li.ac.ability.state.store :as ability-store]
             [cn.li.ac.util.init-guard :refer [with-init-guard]]
             [cn.li.mcmod.util.log :as log]))
+
+(def ^:private fn-reset-server-runtimes :ability/reset-server-runtimes!)
+(def ^:private fn-register-network-handlers :ability/register-network-handlers!)
+(def ^:private fn-try-pull-developer-energy :ability/try-pull-developer-energy!)
 
 (defn default-lifecycle-subscriptions-runtime-state
   []
@@ -83,9 +90,16 @@
   (reset! (lifecycle-subscriptions-registered-atom) (boolean registered?))
    nil))
 
-(defn install-store!
+(defn register-platform-functions!
+  "Register platform-facing callbacks used by reducer/effects/network shells."
   []
-  (ability-store/install-store!))
+  (platform-hooks/register-platform-fn! fn-reset-server-runtimes
+                                       server-runtime-lifecycle/reset-ability-server-runtimes!)
+  (platform-hooks/register-platform-fn! fn-register-network-handlers
+                                       network/register-handlers!)
+  (platform-hooks/register-platform-fn! fn-try-pull-developer-energy
+                                       developer-logic/try-pull-energy!)
+  nil)
 
 (defn register-lifecycle-subscriptions!
   []
@@ -144,8 +158,8 @@
      (ctx/clear-session-contexts! session-id)
      (ps/clear-session-player-states! session-id)
      (world-registry/clear-session-world-data! session-id)
-     (when-let [reset-server-runtimes! (requiring-resolve 'cn.li.ac.content.ability.server-runtime-lifecycle/reset-ability-server-runtimes!)]
-       (reset-server-runtimes!))
+     (when (platform-hooks/platform-fn-registered? fn-reset-server-runtimes)
+       ((platform-hooks/get-platform-fn fn-reset-server-runtimes)))
      (delayed-projectiles/clear-all-tasks!))
 
    :on-player-clone!
@@ -217,8 +231,8 @@
 
    :register-network-handlers!
    (fn []
-     (if-let [f (requiring-resolve 'cn.li.ac.ability.server.network/register-handlers!)]
-       (f)
+     (if (platform-hooks/platform-fn-registered? fn-register-network-handlers)
+       ((platform-hooks/get-platform-fn fn-register-network-handlers))
        (log/warn "Ability network register-handlers! not available")))
 
    :subscribe-achievement-trigger!

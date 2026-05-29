@@ -7,7 +7,8 @@
 						[cn.li.mcmod.platform.be :as platform-be]
 						[cn.li.mcmod.platform.position :as pos]
 						[cn.li.mcmod.platform.entity :as entity]
-						[cn.li.ac.ability.state.store-contract :as ability-store]
+						[cn.li.ac.ability.model.resource :as rd]
+						[cn.li.ac.ability.service.player-state :as ps]
 						[cn.li.ac.ability.util.uuid :as uuid]
 						[cn.li.mcmod.platform.item :as pitem]
 						[cn.li.ac.block.ability-interferer.config :as interferer-config]
@@ -74,9 +75,8 @@
 (defn- apply-interference-effect! [player src-id]
 	(when-let [uuid (uuid/player-uuid player)]
 		(try
-			(let [store (ability-store/player-ability-store)]
-				(ability-store/res-add-interference! store uuid src-id)
-				true)
+			(ps/update-resource-data! uuid rd/add-interference src-id)
+			true
 			(catch Exception e
 				(log/warn "Failed to add interference for" uuid ":" (ex-message e))
 				false))))
@@ -84,9 +84,8 @@
 (defn- remove-interference-effect-by-uuid! [uuid src-id]
 	(when (and uuid src-id)
 		(try
-			(let [store (ability-store/player-ability-store)]
-				(ability-store/res-remove-interference! store uuid src-id)
-				true)
+			(ps/update-resource-data! uuid rd/remove-interference src-id)
+			true
 			(catch Exception e
 				(log/warn "Failed to remove interference for" uuid ":" (ex-message e))
 				false))))
@@ -112,8 +111,8 @@
 								 :range (clamp-range (:range base-state)))
 				src-id (source-id level pos)
 				prev-uuids (set (:affected-player-uuids state0 []))
-				battery-item (get-in state0 [:inventory battery-slot])]
-			(let [state1 (if (and battery-item (energy/is-energy-item-supported? battery-item))
+				battery-item (get-in state0 [:inventory battery-slot])
+				state1 (if (and battery-item (energy/is-energy-item-supported? battery-item))
 								(let [cur-energy (double (:energy state0 0.0))
 										max-energy (double (:max-energy state0 (interferer-config/max-energy)))
 										needed (max 0.0 (- max-energy cur-energy))
@@ -155,9 +154,9 @@
 													 :enabled false
 													 :affected-player-count 0
 													 :affected-player-uuids []))))
-								state2)]
+							state2)]
 			(when (not= state3 (platform-be/get-custom-state be))
-				(update-be-state! be level pos state3))))))
+				(update-be-state! be level pos state3)))))
 
 (def interferer-container-fns
 	{:get-size (fn [_be] total-slots)

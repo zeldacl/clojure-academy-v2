@@ -11,7 +11,7 @@
             [cn.li.ac.ability.model.resource :as rdata]
             [cn.li.ac.ability.registry.event :as evt]
             [cn.li.ac.ability.registry.skill-query :as skill-query]
-            [cn.li.ac.ability.server.service.learning-runtime :as learning-rt]
+            [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.ability.service.player-state :as ps]))
 
 (defn- ensure-state
@@ -50,12 +50,17 @@
 
 (defn learn-skill!
   [uuid skill-id]
-  (learning-rt/learn-skill! uuid skill-id))
+  (let [result (command-rt/run-command! uuid {:command :learn-skill
+                                              :skill-id skill-id
+                                              :check-conditions? false})
+        event (first (:events result))]
+    {:data (get-in result [:state :ability-data])
+     :event event}))
 
 (defn learn-skills!
   [uuid skill-ids]
   (reduce (fn [result skill-id]
-            (let [{:keys [event]} (learning-rt/learn-skill! uuid skill-id)]
+            (let [{:keys [event]} (learn-skill! uuid skill-id)]
               (if event
                 (-> result
                     (assoc :changed? true)

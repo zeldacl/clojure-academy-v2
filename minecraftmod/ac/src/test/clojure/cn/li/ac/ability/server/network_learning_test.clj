@@ -4,7 +4,7 @@
             [cn.li.ac.ability.model.ability :as adata]
             [cn.li.ac.ability.server.network :as network]
             [cn.li.ac.ability.server.service.learning :as learning]
-            [cn.li.ac.ability.server.service.learning-runtime :as learning-rt]
+            [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.ac.ability.util.uuid :as uuid]))
@@ -43,12 +43,13 @@
                   learning/check-all-conditions (fn [skill-id ability-data player-level developer-type]
                                                   (swap! calls* conj [:conditions skill-id player-level developer-type ability-data])
                                                   {:pass? true :failures []})
-                  learning-rt/learn-skill! (fn [uuid skill-id]
-                                             (swap! calls* conj [:learn uuid skill-id])
-                                             {:data (adata/learn-skill (get-in (ps/get-player-state uuid) [:ability-data]) skill-id)
-                                              :event {:event/type :ability/skill-learn
-                                                      :uuid uuid
-                                                      :skill-id skill-id}})
+                  command-rt/run-command! (fn [uuid {:keys [skill-id]}]
+                                            (swap! calls* conj [:learn uuid skill-id])
+                                            {:state {:ability-data (adata/learn-skill (get-in (ps/get-player-state uuid) [:ability-data]) skill-id)}
+                                             :events [{:event/type :ability/skill-learn
+                                                       :uuid uuid
+                                                       :skill-id skill-id}]
+                                             :effects []})
                   ps/update-ability-data! (fn [& _]
                                             (throw (ex-info "network handler should not mutate ability-data directly" {})))]
                                           (#'network/handle-learn-skill-request {:skill-id :arc-gen} player)

@@ -2,9 +2,7 @@
 	"Activation toggle request network handler."
 	(:require [cn.li.ac.ability.server.handlers.common :as common]
 						[cn.li.ac.ability.util.uuid :as uuid]
-						[cn.li.ac.ability.server.service.resource :as res]
-						[cn.li.ac.ability.registry.event :as evt]
-						[cn.li.ac.ability.service.player-state :as ps]
+						[cn.li.ac.ability.service.command-runtime :as command-rt]
 						[cn.li.mcmod.util.log :as log]))
 
 (defn handle-set-activated-request
@@ -15,16 +13,16 @@
 				rd    (:resource-data state)
 				requested (boolean activated)
 				before (boolean (:activated rd))
-				{:keys [data events]} (if (and requested (nil? (:category-id ability-data)))
-										 {:data rd :events []}
-										 (res/set-activated rd uuid requested))
-				after (boolean (:activated data))]
+				result (if (and requested (nil? (:category-id ability-data)))
+						 {:state state :events [] :effects []}
+						 (command-rt/run-command! uuid {:command :set-activated
+																	 :activated requested}))
+				next-state (get result :state state)
+				after (boolean (get-in next-state [:resource-data :activated]))]
 		(log/info "[V-TRACE][AC][SERVER][REQ-SET-ACTIVATED]"
 							{:uuid uuid
 							 :requested requested
 							 :before before
 							 :after after
 							 :has-category? (some? (:category-id ability-data))
-							 :events (count events)})
-		(ps/update-resource-data! uuid (constantly data))
-		(doseq [e events] (evt/fire-ability-event! e))))
+							 :events (count (:events result))})))

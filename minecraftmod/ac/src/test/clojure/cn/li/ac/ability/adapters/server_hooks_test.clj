@@ -5,10 +5,13 @@
             [cn.li.ac.ability.registry.event :as evt]
             [cn.li.ac.content.ability.server-runtime-lifecycle :as server-runtime-lifecycle]
             [cn.li.ac.ability.server.service.context-mgr :as ctx-mgr]
+            [cn.li.ac.ability.server.network :as network]
             [cn.li.ac.ability.server.service.delayed-projectiles :as delayed-projectiles]
             [cn.li.ac.ability.server.service.resource :as svc-res]
             [cn.li.ac.ability.service.dispatcher :as ctx]
+            [cn.li.ac.ability.service.platform-hooks :as platform-hooks]
             [cn.li.ac.ability.service.player-state :as ps]
+            [cn.li.ac.block.developer.logic :as developer-logic]
             [cn.li.ac.wireless.data.world-registry :as world-registry]))
 
 (defn- reset-registries! [f]
@@ -37,6 +40,13 @@
       (f)
       (finally
         (ctx/reset-contexts-for-test!)))))
+(use-fixtures :each
+  (fn [f]
+    (platform-hooks/reset-platform-fns!)
+    (try
+      (f)
+      (finally
+        (platform-hooks/reset-platform-fns!)))))
 
 (deftest build-item-use-plan-order-test
   (testing "coin use plans consume, dispatch domain action, then spawn scripted effect"
@@ -158,6 +168,10 @@
 (deftest server-stop-clears-session-state-test
   (let [called (atom [])
         stop! (:on-server-stop! (server-hooks/runtime-server-hooks))]
+    (platform-hooks/register-platform-fn! :ability/reset-server-runtimes!
+                                          (fn []
+                                            (swap! called conj [:reset-runtimes])
+                                            nil))
     (with-redefs [ctx/clear-session-contexts! (fn [session-id]
                                                 (swap! called conj [:contexts session-id])
                                                 nil)
@@ -167,9 +181,6 @@
                   world-registry/clear-session-world-data! (fn [session-id]
                                                              (swap! called conj [:wireless session-id])
                                                              nil)
-                  server-runtime-lifecycle/reset-ability-server-runtimes! (fn []
-                                                                            (swap! called conj [:reset-runtimes])
-                                                                            nil)
                   delayed-projectiles/clear-all-tasks! (fn []
                                                          (swap! called conj [:projectiles])
                                                          nil)]
@@ -180,6 +191,19 @@
             [:reset-runtimes]
             [:projectiles]]
            @called))))
+
+(deftest register-platform-functions-registers-network-reset-and-energy-pull-test
+  (let [energy-calls (atom [])]
+    (with-redefs [server-runtime-lifecycle/reset-ability-server-runtimes! (fn [] :reset-ok)
+                  network/register-handlers! (fn [] :network-ok)
+                  developer-logic/try-pull-energy! (fn [tile amount]
+                                                     (swap! energy-calls conj [tile amount])
+                                                     true)]
+      (server-hooks/register-platform-functions!)
+      (is (= :reset-ok ((platform-hooks/get-platform-fn :ability/reset-server-runtimes!))))
+      (is (= :network-ok ((platform-hooks/get-platform-fn :ability/register-network-handlers!))))
+      (is (true? ((platform-hooks/get-platform-fn :ability/try-pull-developer-energy!) :tile 12.5)))
+      (is (= [[:tile 12.5]] @energy-calls)))))
 
 (deftest lifecycle-subscriptions-runtime-isolation-test
   (let [runtime-a (server-hooks/create-lifecycle-subscriptions-runtime)

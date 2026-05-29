@@ -7,11 +7,13 @@
   - Pre-check logic (cooldown, resource) before dispatching"
   (:require [cn.li.ac.ability.client.runtime :as runtime]
             [cn.li.ac.ability.client.api :as api]
+            [cn.li.ac.ability.client.input-sampling :as sampling]
+            [cn.li.ac.ability.client.input-state-machine :as sm]
+            [cn.li.ac.ability.client.input-command-builder :as cmd-builder]
+            [cn.li.ac.ability.client.input-processor :as processor]
             [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.ability.service.dispatcher :as ctx]
-            [cn.li.ac.ability.model.cooldown :as cd-data]
             [cn.li.ac.ability.model.preset :as preset-data]
-            [cn.li.ac.ability.util.resource-check :as resource-check]
             [cn.li.ac.ability.registry.skill-query :as skill]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
@@ -362,27 +364,6 @@
   [player-uuid]
   (boolean (get-in (get-client-player-state player-uuid) [:resource-data :activated])))
 
-(defn- can-use-ability?
-  "Check if player can use abilities (not overloaded, not interfered)."
-  [player-uuid]
-  (when-let [state (get-client-player-state player-uuid)]
-    (resource-check/can-use-resource-data? (:resource-data state))))
-
-(defn- skill-on-cooldown?
-  "Check if the skill bound to a delegate is on cooldown."
-  [player-uuid delegate]
-  (when-let [state (get-client-player-state player-uuid)]
-    (let [cd (:cooldown-data state)
-          ctrl-id (or (:ctrl-id delegate) (:skill-id delegate))]
-      (when ctrl-id
-        (cd-data/in-cooldown? cd ctrl-id :main)))))
-
-(defn- should-abort-key?
-  "Pre-check: returns true if we should abort instead of dispatching normally."
-  [player-uuid delegate]
-  (or (not (can-use-ability? player-uuid))
-      (skill-on-cooldown? player-uuid delegate)))
-
 (defn- get-client-player-uuid
   "Get current client player UUID. Must be provided by forge layer."
   []
@@ -412,74 +393,34 @@
   "Handle skill key state change. Uses delegate system with pre-checks."
   [key-idx is-down]
   (when-let [player-uuid (get-client-player-uuid)]
-    (let [owner (current-client-owner player-uuid)
-          was-down (get-in (key-state-snapshot owner) [:skill-keys key-idx])]
-      (if (activated? player-uuid)
-        (when-let [delegate (get-delegate-for-key key-idx)]
-          (let [abort? (should-abort-key? player-uuid delegate)]
-            (cond
-              ;; Key pressed (transition from up to down)
-              (and (not was-down) is-down)
-              (if abort?
-                (when-let [f (:on-key-abort delegate)] (f player-uuid))
-                (when-let [f (:on-key-down delegate)] (f player-uuid)))
-
-              ;; Key held (still down)
-              (and was-down is-down)
-              (if abort?
-                (when-let [f (:on-key-abort delegate)] (f player-uuid))
-                (when-let [f (:on-key-tick delegate)] (f player-uuid)))
-
-              ;; Key released (transition from down to up)
-              (and was-down (not is-down))
-              (when-let [f (:on-key-up delegate)] (f player-uuid)))))
-        ;; Ability mode disabled: abort local held state cleanly.
-        (when was-down
-          (when-let [delegate (get-delegate-for-key key-idx)]
-            (when-let [f (:on-key-up delegate)] (f player-uuid)))))
-
-      ;; Update state
-      (swap-key-state! owner assoc-in [:skill-keys key-idx] is-down))))
+    (let [owner        (current-client-owner player-uuid)
+          key-state    (key-state-snapshot owner)
+          player-state (get-client-player-state player-uuid)
+          delegate     (get-delegate-for-key key-idx)
+          event        (sm/compute-skill-key-event key-state player-state key-idx is-down delegate)]
+      (processor/execute-skill-key-event! event player-uuid)
+      (swap-key-state! owner sm/next-skill-key-state key-idx is-down))))
 
 
 (defn on-gui-key-event
   "Handle GUI key state change. Opens screens or toggles mode on key press."
   [gui-type is-down]
   (when-let [player-uuid (get-client-player-uuid)]
-    (let [owner (current-client-owner player-uuid)
-          was-down (get-in (key-state-snapshot owner) [:gui-keys gui-type])]
-      ;; GUI keys trigger on key press only.
-      (when (and (not was-down) is-down)
-        (case gui-type
-          :skill-tree
-          (client-bridge/open-screen! :ac/skill-tree {:player-uuid player-uuid})
-
-          :preset-editor
-          (client-bridge/open-screen! :ac/preset-editor {:player-uuid player-uuid})
-
-          nil))
-
-      ;; Update state
-      (swap-key-state! owner assoc-in [:gui-keys gui-type] is-down))))
+    (let [owner     (current-client-owner player-uuid)
+          key-state (key-state-snapshot owner)
+          event     (sm/compute-gui-key-event key-state gui-type is-down)]
+      (processor/execute-gui-key-event! event player-uuid)
+      (swap-key-state! owner sm/next-gui-key-state gui-type is-down))))
 
 (defn on-movement-key-event
   "Handle movement key state transitions and forward them to runtime bridge."
   [movement-key is-down]
   (when-let [player-uuid (get-client-player-uuid)]
-    (let [owner (current-client-owner player-uuid)
-          was-down (get-in (key-state-snapshot owner) [:movement-keys movement-key])]
-      (cond
-        (and (not was-down) is-down)
-        (runtime/on-movement-key-down! player-uuid movement-key)
-
-        (and was-down is-down)
-        (runtime/on-movement-key-tick! player-uuid movement-key)
-
-        (and was-down (not is-down))
-        (runtime/on-movement-key-up! player-uuid movement-key)
-
-        :else nil)
-      (swap-key-state! owner assoc-in [:movement-keys movement-key] is-down))))
+    (let [owner     (current-client-owner player-uuid)
+          key-state (key-state-snapshot owner)
+          event     (sm/compute-movement-key-event key-state movement-key is-down)]
+      (processor/execute-movement-key-event! event player-uuid)
+      (swap-key-state! owner sm/next-movement-key-state movement-key is-down))))
 
 (defn trigger-mode-switch!
   "V key short-press handler. Delegates to the active activate handler.
@@ -491,18 +432,14 @@
      (if-let [handler (get-active-handler player-uuid)]
        (do
          (log/info "[V-TRACE][AC][CLIENT][HANDLER]"
-                   {:handler-id (:id handler)
-                    :uuid (str player-uuid)})
+                   {:handler-id (:id handler) :uuid (str player-uuid)})
          ((:on-key-down-fn handler) player-uuid))
-       ;; Fallback: simple toggle
+       ;; Fallback: build toggle command and execute
        (let [state   (get-client-player-state player-uuid)
-             current (boolean (get-in state [:resource-data :activated]))
-             next-state (not current)]
+             current (boolean (get-in state [:resource-data :activated]))]
          (log/info "[V-TRACE][AC][CLIENT][TOGGLE]"
-                   {:uuid (str player-uuid)
-                    :current current
-                    :next next-state})
-         (api/req-set-activated! next-state nil))))))
+                   {:uuid (str player-uuid) :current current :next (not current)})
+         (processor/execute-input-command! (cmd-builder/toggle-activated-command current)))))))
 
 (defn tick-keys!
   "Main tick function called by forge layer. key-state-fn returns boolean for each key."
@@ -538,15 +475,17 @@
      (switch-preset! player-uuid)))
   ([player-uuid]
    (when (activated? player-uuid)
-     (let [owner (current-client-owner player-uuid)
+     (let [owner         (current-client-owner player-uuid)
            current-state (preset-switch-state-snapshot owner)
-           next-idx (mod (inc (:current-preset current-state)) PRESET-COUNT)]
+           switch-cmd    (cmd-builder/preset-switch-command
+                           (:current-preset current-state) PRESET-COUNT)]
        (swap-preset-switch-state! owner assoc
-                                  :current-preset next-idx
-                                  :show-until-ms (+ (System/currentTimeMillis) PRESET-INDICATOR-DURATION-MS))
-       (api/req-switch-preset! next-idx nil)
+                                  :current-preset (:preset-idx switch-cmd)
+                                  :show-until-ms (+ (System/currentTimeMillis)
+                                                    PRESET-INDICATOR-DURATION-MS))
+       (processor/execute-input-command! switch-cmd)
        (update-default-group! player-uuid)
-       (log/info "[PRESET-SWITCH]" {:preset next-idx})))))
+       (log/info "[PRESET-SWITCH]" {:preset (:preset-idx switch-cmd)})))))
 
 (defn get-preset-switch-state
   "Get current preset switch state for HUD rendering."

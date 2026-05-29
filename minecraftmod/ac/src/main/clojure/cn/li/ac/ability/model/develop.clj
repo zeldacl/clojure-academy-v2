@@ -18,14 +18,6 @@
             [cn.li.ac.ability.rules.progression :as progression]))
 
 ;; ============================================================================
-;; Developer types (mirrors original DeveloperType.java)
-;; ============================================================================
-
-(def developer-types
-  "Compatibility alias for developer device specifications."
-  developer/developer-specs)
-
-;; ============================================================================
 ;; Stim count formulas (matches original)
 ;; ============================================================================
 

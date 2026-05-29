@@ -69,7 +69,7 @@
                                          :cooldown-data {}
                                          :preset-data {:active-preset 0 :slots {}}})
                   client-keybinds/get-activate-hint (fn [_] nil)
-                  client-keybinds/get-preset-switch-state (fn [] nil)
+                  client-keybinds/get-preset-switch-state (fn [_] nil)
                   current-charging-fx/current-state (fn [& _] {:active? false
                                                                 :blending? false
                                                                 :is-item false

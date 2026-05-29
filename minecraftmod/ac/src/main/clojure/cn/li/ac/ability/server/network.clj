@@ -12,7 +12,7 @@
             [cn.li.ac.ability.service.player-state      :as ps]
             [cn.li.ac.ability.model.ability :as adata]
             [cn.li.ac.ability.server.service.learning  :as lrn]
-            [cn.li.ac.ability.server.service.learning-runtime :as lrn-rt]
+            [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.ability.registry.skill             :as skill]
             [cn.li.ac.ability.rules.progression          :as progression]
             [cn.li.ac.ability.server.handlers.level-handler :as level-handler]
@@ -20,12 +20,15 @@
             [cn.li.ac.ability.server.handlers.activation-handler :as activation-handler]
             [cn.li.ac.ability.server.handlers.context-handler :as context-handler]
             [cn.li.ac.ability.server.handlers.input-handler :as input-handler]
+            [cn.li.ac.ability.service.platform-hooks :as platform-hooks]
             [cn.li.ac.ability.server.util.developer-validation :as dev-validate]
             [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.ac.wireless.gui.sync.handler :as net-helpers]
             [cn.li.mcmod.platform.world         :as world]
             [cn.li.mcmod.platform.be            :as platform-be]
             [cn.li.mcmod.util.log               :as log]))
+
+(def ^:private fn-try-pull-developer-energy :ability/try-pull-developer-energy!)
 
   ;; ============================================================================
   ;; Helpers
@@ -36,8 +39,8 @@
 
   (defn- try-pull-developer-energy!
     [tile ^double amount]
-    (if-let [f (requiring-resolve 'cn.li.ac.block.developer.logic/try-pull-energy!)]
-      (boolean (f tile amount))
+    (if (platform-hooks/platform-fn-registered? fn-try-pull-developer-energy)
+      (boolean ((platform-hooks/get-platform-fn fn-try-pull-developer-energy) tile amount))
       false))
 
   ;; ============================================================================
@@ -68,7 +71,9 @@
                   (not session-ok?) {:ok? false :reason :session}
                   (not (:structure-valid st)) {:ok? false :reason :structure}
                   :else {:ok? true :tile tile :developer-type (dev-validate/developer-type-for-tile tile)}))
-          do-learn! #(lrn-rt/learn-skill! uuid skill-id)]
+          do-learn! #(command-rt/run-command! uuid {:command :learn-skill
+                                                    :skill-id skill-id
+                                                    :check-conditions? false})]
       (when-not (adata/is-learned? ad skill-id)
         (cond
           (and all-coords? (not (:ok? station)))

@@ -511,11 +511,7 @@
 
 (defn- preset-switch-state-for-overlay
   [player-uuid]
-  (try
-    (client-keybinds/get-preset-switch-state player-uuid)
-    (catch clojure.lang.ArityException _
-      ;; Some tests and legacy adapters rebind this hook with the old zero-arity shape.
-      (client-keybinds/get-preset-switch-state))))
+  (client-keybinds/get-preset-switch-state player-uuid))
 
 (defn- remove-slot-context! [ctx-id]
   (update-client-ui-runtime!

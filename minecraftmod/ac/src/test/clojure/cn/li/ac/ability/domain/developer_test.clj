@@ -5,8 +5,6 @@
             [cn.li.ac.block.developer.config :as developer-config]))
 
 (deftest developer-specs-are-single-source-test
-  (testing "model aliases expose the centralized developer specs"
-    (is (= developer/developer-specs develop/developer-types)))
   (testing "energy pacing remains aligned with classic developer constants"
     (is (= 30.0 (developer/energy-per-tick :portable)))
     (is (= 35.0 (developer/energy-per-tick :normal)))

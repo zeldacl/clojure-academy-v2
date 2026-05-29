@@ -39,6 +39,7 @@
         owner-key* (or owner-key [:ctx ctx-id])
         {:keys [mode phase charge-ticks charge-ratio source-player-id world-id]} (or payload {})
         base-meta {:owner-key owner-key*
+                   :queue-owner (client-particles/current-effect-owner)
                    :ctx-id ctx-id
                    :channel channel
                    :source-player-id source-player-id
@@ -46,7 +47,7 @@
     (case mode
       :start
       (do
-        (client-sounds/queue-sound-effect! (client-particles/current-effect-owner)
+        (client-sounds/queue-sound-effect! (:queue-owner base-meta)
           {:type :sound :sound-id loop-sound :volume 0.8 :pitch 1.0})
         (assoc-in store* [:effect-state owner-key*]
                   (merge base-meta
@@ -57,6 +58,8 @@
       (assoc-in store* [:effect-state owner-key*]
                 (assoc (merge base-meta (get-in store* [:effect-state owner-key*] {}))
                        :owner-key owner-key*
+              :queue-owner (or (get-in store* [:effect-state owner-key* :queue-owner])
+                     (:queue-owner base-meta))
                        :ctx-id ctx-id
                        :channel channel
                        :source-player-id source-player-id

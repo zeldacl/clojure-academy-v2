@@ -559,7 +559,7 @@
                                        :cooldown-data {}
                                        :preset-data {}})
                 client-keybinds/get-activate-hint (fn [_] nil)
-                client-keybinds/get-preset-switch-state (fn [] nil)]
+                client-keybinds/get-preset-switch-state (fn [_] nil)]
     (let [plan (client-ui-hooks/build-client-overlay-plan
                 "p1" 320 180 {:activated-override nil :now-ms 1000})]
       (is (seq (:elements plan))))))
@@ -578,7 +578,7 @@
                                                            :skill-state {:toggle {:vec-reflection {:active true}
                                                                                   :vec-deviation {:active true}}}}})
                 client-keybinds/get-activate-hint (fn [_] nil)
-                client-keybinds/get-preset-switch-state (fn [] nil)]
+                client-keybinds/get-preset-switch-state (fn [_] nil)]
     ;; Pre-seed a wave circle born 100ms ago so alpha>0 at now-ms=1000
     (client-ui-hooks/seed-vm-wave-state-for-test!
      "p1"

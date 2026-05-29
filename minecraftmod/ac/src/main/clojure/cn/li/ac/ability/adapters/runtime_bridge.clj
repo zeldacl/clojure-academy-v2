@@ -67,7 +67,7 @@
   without it, mcmod.hooks.core stays on its no-op defaults."
   []
   (with-init-guard runtime-hooks-installed?
-    (server-hooks/install-store!)
+    (server-hooks/register-platform-functions!)
     (server-hooks/register-lifecycle-subscriptions!)
     (client-keybinds/install-default-handlers!)
     (install-sync-descriptors!)
