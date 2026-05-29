@@ -11,8 +11,7 @@
 						[cn.li.ac.ability.model.develop :as ddata]
 						[cn.li.ac.ability.model.preset :as pdata]
 						[cn.li.ac.ability.model.resource :as rdata]
-						[cn.li.ac.ability.server.service.category-runtime :as category-rt]
-						[cn.li.ac.ability.server.service.player-state-actions :as state-actions]
+								[cn.li.ac.ability.service.player-state-actions :as state-actions]
 						[cn.li.ac.ability.service.player-state :as ps]
 						[cn.li.ac.ability.registry.skill-query :as skill-query]
 						[cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
@@ -108,7 +107,7 @@
 	[action-map context]
 	(let [category-id (:category-id action-map)
 				player-uuid (action-player-uuid action-map context)]
-		(category-rt/change-category! player-uuid category-id)
+		(state-actions/change-category! player-uuid category-id)
 		(log/info "Switching category for player" player-uuid "to" category-id)
 		(send-feedback! context "command.academy.aim.cat.success" [(name category-id)] false)
 		{:success? true}))

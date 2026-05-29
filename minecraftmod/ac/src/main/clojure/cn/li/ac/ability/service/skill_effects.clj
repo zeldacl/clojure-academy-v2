@@ -1,4 +1,4 @@
-(ns cn.li.ac.ability.server.service.skill-effects
+(ns cn.li.ac.ability.service.skill-effects
   "Common side-effect helpers for skills.
 
   Centralizes the boilerplate:
@@ -7,10 +7,7 @@
   - firing ability events"
   (:require [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.ability.model.ability :as adata]
-            [cn.li.ac.ability.server.service.resource :as res]
-            [cn.li.ac.ability.server.service.learning :as learning]
-            [cn.li.ac.ability.server.service.cooldown :as cd]
-            [cn.li.ac.ability.registry.event :as evt]
+            [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.ability.config :as cfg]
             [cn.li.ac.ability.fx :as fx]))
 
@@ -29,18 +26,13 @@
   ([player-id overload cp]
    (perform-resource! player-id overload cp false))
   ([player-id overload cp creative?]
-   (if-let [state (ps/get-player-state player-id)]
-     (let [level (or (get-in state [:ability-data :level]) 1)
-           {:keys [data success? events]} (res/perform-resource
-                                          (:resource-data state)
-                                          player-id
-                                          (double overload)
-                                          (double cp)
-                                          (boolean creative?)
-                                          level)]
-       (when success?
-         (ps/update-resource-data! player-id (constantly data))
-         (doseq [e events] (evt/fire-ability-event! e)))
+   (if (ps/get-player-state player-id)
+     (let [{:keys [state success? events]} (command-rt/run-command! player-id
+                                                                    {:command :consume-resource
+                                                                     :overload (double overload)
+                                                                     :cp (double cp)
+                                                                     :creative? (boolean creative?)})
+           data (:resource-data state)]
        {:success? (boolean success?)
         :events events
         :data data})
@@ -53,21 +45,23 @@
   ([player-id skill-id amount]
    (add-skill-exp! player-id skill-id amount 1.0))
   ([player-id skill-id amount exp-rate]
-   (when-let [state (ps/get-player-state player-id)]
-     (let [{:keys [data events]} (learning/add-skill-exp
-                                  (:ability-data state)
-                                  player-id
-                                  skill-id
-                                  (double amount)
-                                  (double exp-rate))]
-       (ps/update-ability-data! player-id (constantly data))
-       (doseq [e events] (evt/fire-ability-event! e))
+   (when (ps/get-player-state player-id)
+     (let [scaled-amount (* (double amount) (double exp-rate))
+           {:keys [state events]} (command-rt/run-command! player-id
+                                                           {:command :add-skill-exp
+                                                            :skill-id skill-id
+                                                            :amount scaled-amount})
+           data (:ability-data state)]
        {:data data :events events}))))
 
 (defn set-main-cooldown!
   "Set main cooldown for ctrl-id (or skill-id)."
   [player-id ctrl-id cooldown-ticks]
-  (ps/update-cooldown-data! player-id cd/set-main-cooldown ctrl-id (max 1 (int cooldown-ticks))))
+  (command-rt/run-command! player-id {:command :set-cooldown
+                                      :ctrl-id ctrl-id
+                                      :sub-id :main
+                                      :ticks (max 1 (int cooldown-ticks))})
+  true)
 
 (defn- resolve-val
   [v evt]
@@ -198,4 +192,3 @@
   "Read current CP from resource-data as double."
   [player-id]
   (double (or (player-path player-id [:resource-data :cur-cp] 0.0) 0.0)))
-

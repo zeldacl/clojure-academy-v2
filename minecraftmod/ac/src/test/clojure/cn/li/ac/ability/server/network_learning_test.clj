@@ -3,7 +3,8 @@
             [cn.li.ac.test.support.player-state :as test-player]
             [cn.li.ac.ability.model.ability :as adata]
             [cn.li.ac.ability.server.network :as network]
-            [cn.li.ac.ability.server.service.learning :as learning]
+            [cn.li.ac.ability.rules.learning-rules :as learning-rules]
+            [cn.li.ac.ability.registry.skill :as skill]
             [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.mcmod.platform.entity :as entity]
@@ -35,14 +36,16 @@
   (inventory-get-player [_] nil)
   (menu-get-container-id [_] 0))
 
-(deftest handle-learn-skill-request-delegates-to-learning-runtime-test
+(deftest handle-learn-skill-request-delegates-to-command-runtime-test
   (let [calls* (atom [])
         player (StubPlayer.)]
     (ps/set-player-state! "p1" {:ability-data (assoc (adata/new-ability-data) :level 3)})
     (with-redefs [uuid/player-uuid (constantly "p1")
-                  learning/check-all-conditions (fn [skill-id ability-data player-level developer-type]
-                                                  (swap! calls* conj [:conditions skill-id player-level developer-type ability-data])
-                                                  {:pass? true :failures []})
+                  skill/get-skill (fn [skill-id]
+                                    {:id skill-id :level 1 :developer-type :normal :prerequisites []})
+                  learning-rules/check-all-conditions (fn [skill-spec ability-data player-level developer-type]
+                                                        (swap! calls* conj [:conditions (:id skill-spec) player-level developer-type ability-data])
+                                                        {:pass? true :failures []})
                   command-rt/run-command! (fn [uuid {:keys [skill-id]}]
                                             (swap! calls* conj [:learn uuid skill-id])
                                             {:state {:ability-data (adata/learn-skill (get-in (ps/get-player-state uuid) [:ability-data]) skill-id)}

@@ -6,7 +6,7 @@
             [cn.li.ac.ability.model.ability :as ad]
             [cn.li.ac.ability.model.resource :as rd]
             [cn.li.ac.ability.registry.skill :as skill-registry]
-            [cn.li.ac.ability.server.service.context-mgr :as cm]
+            [cn.li.ac.ability.service.context-mgr :as cm]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.service.player-state :as ps]))
 

@@ -4,8 +4,8 @@
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.handlers.context-handler :as context-handler]
             [cn.li.ac.ability.server.handlers.input-handler :as input-handler]
-            [cn.li.ac.ability.server.service.context-mgr :as ctx-mgr]
-            [cn.li.ac.ability.server.service.context-runtime :as ctx-rt]
+            [cn.li.ac.ability.service.context-mgr :as ctx-mgr]
+            [cn.li.ac.ability.service.context-runtime :as ctx-rt]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.ac.ability.util.uuid :as uuid]))
 

@@ -4,7 +4,7 @@
             [cn.li.ac.ability.client.screens.skill-tree :as screen]
             [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.ability.registry.skill-query :as skill]
-            [cn.li.ac.ability.server.service.learning :as learning]
+            [cn.li.ac.ability.rules.learning-rules :as learning-rules]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.i18n :as i18n]))
 
@@ -44,7 +44,7 @@
               ps/get-or-create-player-state! (fn [_] player-state)
                   skill/get-skills-for-category (fn [_] [skill-spec])
                   skill/get-skill-icon-path (fn [_] "textures/abilities/generic/skills/brain_course.png")
-                  learning/check-all-conditions (fn [_ _ _ _] {:pass? true :failures []})
+                  learning-rules/check-all-conditions (fn [_ _ _ _] {:pass? true :failures []})
                   i18n/*translate-fn* (fn [k] (get translate-map (str k) (str k)))]
             (screen/open-screen! "player-1")
       (let [render-data (screen/build-screen-render-data "player-1")
@@ -89,7 +89,7 @@
               ps/get-or-create-player-state! (fn [_] player-state)
                   skill/get-skills-for-category (fn [_] [skill-spec])
                   skill/get-skill-icon-path (fn [_] "textures/abilities/generic/skills/brain_course.png")
-                  learning/check-all-conditions (fn [_ _ _ _] {:pass? true :failures []})
+                  learning-rules/check-all-conditions (fn [_ _ _ _] {:pass? true :failures []})
                   i18n/*translate-fn* (fn [k] (get translate-map (str k) (str k)))]
             (screen/open-screen! "player-1")
             (screen/on-mouse-move "player-1" 30 110)

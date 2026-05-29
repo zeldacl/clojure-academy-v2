@@ -7,7 +7,7 @@
             [cn.li.ac.ability.model.cooldown :as cd]
             [cn.li.ac.ability.registry.event :as evt]
             [cn.li.ac.ability.registry.skill :as skill-reg]
-            [cn.li.ac.ability.server.service.context-runtime :as rt]))
+            [cn.li.ac.ability.service.context-runtime :as rt]))
 
 (defn- reset-test-state! [f]
   (test-contexts/clean-contexts-fixture

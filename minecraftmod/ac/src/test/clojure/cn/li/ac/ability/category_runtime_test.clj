@@ -5,7 +5,7 @@
             [cn.li.ac.ability.model.preset :as preset]
             [cn.li.ac.ability.registry.event :as evt]
             [cn.li.ac.ability.service.player-state :as ps]
-            [cn.li.ac.ability.server.service.category-runtime :as category-rt]))
+            [cn.li.ac.ability.service.player-state-actions :as state-actions]))
 
 (use-fixtures :each test-player/clean-player-states-fixture)
 
@@ -20,7 +20,7 @@
                         (preset/set-slot 0 0 [:electromaster :arc-gen]))})
     (with-redefs [evt/fire-ability-event! (fn [event]
                                             (swap! events* conj event))]
-      (let [{:keys [old-category new-category]} (category-rt/change-category! uuid :meltdowner)]
+      (let [{:keys [old-category new-category]} (state-actions/change-category! uuid :meltdowner)]
         (is (= :electromaster old-category))
         (is (= :meltdowner new-category))
         (is (= :meltdowner (get-in (ps/get-player-state uuid) [:ability-data :category-id])))

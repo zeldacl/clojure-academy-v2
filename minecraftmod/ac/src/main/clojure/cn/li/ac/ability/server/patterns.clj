@@ -6,7 +6,7 @@
   (:require [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.registry.event :as evt]
             [cn.li.ac.ability.server.effect.core :as effect]
-            [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
+            [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.util.toggle :as toggle]
             [cn.li.mcmod.util.log :as log]))
 

@@ -2,7 +2,7 @@
   (:require [clojure.test :refer [deftest is]]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.effect.geom :as geom]
-            [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
+            [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.content.ability.fx-helpers :as fx]
             [cn.li.ac.content.ability.vecmanip.directed-shock :as ds]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]

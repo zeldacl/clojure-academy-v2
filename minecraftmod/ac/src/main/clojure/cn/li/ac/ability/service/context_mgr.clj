@@ -1,4 +1,4 @@
-(ns cn.li.ac.ability.server.service.context-mgr
+(ns cn.li.ac.ability.service.context-mgr
   "Context lifecycle manager (server-side).
 
   Responsibilities:
@@ -10,8 +10,8 @@
   Network send-fns are injected, keeping this ns free of forge deps."
   (:require [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.service.player-state :as ps]
-            [cn.li.ac.ability.server.service.context-runtime :as ctx-rt]
-            [cn.li.ac.ability.server.service.context-transport :as transport]
+            [cn.li.ac.ability.service.context-transport :as transport]
+            [cn.li.ac.ability.service.context-runtime :as ctx-rt]
             [cn.li.ac.ability.domain.skill :as skill-domain]
             [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.model.ability :as adata]
@@ -45,18 +45,14 @@
   [player-uuid]
   (let [owner (server-context-owner player-uuid)]
     (->> (ctx/snapshot-context-registry)
-      vals
-      (filter (fn [ctx-map]
-          (and (= :server (:logical-side ctx-map))
-            (= (:session-id owner) (:session-id ctx-map))
-            (= player-uuid (:player-uuid ctx-map))
-            (= ctx/STATUS-ALIVE (:status ctx-map))
-            (= ctx-rt/INPUT-ACTIVE (:input-state ctx-map)))))
-      (sort-by (juxt :id :server-id)))))
-
-;; ============================================================================
-;; Client-side: request to start a skill
-;; ============================================================================
+         vals
+         (filter (fn [ctx-map]
+                   (and (= :server (:logical-side ctx-map))
+                        (= (:session-id owner) (:session-id ctx-map))
+                        (= player-uuid (:player-uuid ctx-map))
+                        (= ctx/STATUS-ALIVE (:status ctx-map))
+                        (= ctx-rt/INPUT-ACTIVE (:input-state ctx-map)))))
+         (sort-by (juxt :id :server-id)))))
 
 (defn activate-context!
   "Called on the CLIENT when player triggers a skill (e.g., key press).
@@ -65,14 +61,10 @@
   (let [new-ctx (ctx/new-context player-uuid skill-id)]
     (ctx/register-context! new-ctx)
     (transport/send-to-server! catalog/MSG-CTX-BEGIN-LINK
-                               {:ctx-id   (:id new-ctx)
+                               {:ctx-id (:id new-ctx)
                                 :skill-id skill-id})
     (log/debug "Context activated (client):" (:id new-ctx) skill-id)
     new-ctx))
-
-;; ============================================================================
-;; Server-side: respond to BEGIN-LINK
-;; ============================================================================
 
 (defn can-establish-skill-context?
   "Return true when a learned skill is enabled, controllable, and usable now."
@@ -88,9 +80,9 @@
   "Called on the SERVER upon receiving MSG-CTX-BEGIN-LINK.
   Validates the skill for the player, creates server-side context, sends ESTABLISH."
   [player-uuid client-ctx-id skill-id]
-  (let [state     (ps/get-player-state player-uuid)
-        ad        (:ability-data state)
-        rd        (:resource-data state)]
+  (let [state (ps/get-player-state player-uuid)
+        ad (:ability-data state)
+        rd (:resource-data state)]
     (if-not (and ad rd)
       (log/warn "establish-context!: no player state for" player-uuid)
       (if-not (can-establish-skill-context? ad rd skill-id)
@@ -101,14 +93,10 @@
         (let [server-ctx (ctx/new-server-context player-uuid skill-id client-ctx-id)]
           (ctx/register-context! server-ctx)
           (transport/send-to-client! player-uuid catalog/MSG-CTX-ESTABLISH
-                                     {:ctx-id    client-ctx-id
+                                     {:ctx-id client-ctx-id
                                       :server-id (:server-id server-ctx)})
           (log/debug "Context established (server):" (:server-id server-ctx) skill-id)
           server-ctx)))))
-
-;; ============================================================================
-;; Terminate helpers
-;; ============================================================================
 
 (defn abort-player-contexts!
   "Terminate all active contexts for a player (death, category change, logoff).
@@ -154,11 +142,7 @@
       (binding [ctx/*context-owner* owner]
         (ctx-rt/handle-key-tick! id {:ctx-id id
                                      :skill-id skill-id}
-                                send-terminated-context!)))))
-
-;; ============================================================================
-;; Server tick
-;; ============================================================================
+                                 send-terminated-context!)))))
 
 (defn tick-context-manager!
   "Call once per second (or per server tick with rate limiting).

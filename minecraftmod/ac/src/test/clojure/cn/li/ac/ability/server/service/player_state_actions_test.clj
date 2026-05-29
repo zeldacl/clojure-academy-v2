@@ -8,9 +8,8 @@
             [cn.li.ac.ability.model.resource :as rdata]
             [cn.li.ac.ability.registry.event :as evt]
             [cn.li.ac.ability.registry.skill-query :as skill-query]
-            [cn.li.ac.ability.server.service.context-mgr :as ctx-mgr]
-            [cn.li.ac.ability.server.service.player-state-actions :as state-actions]
-            [cn.li.ac.ability.server.service.resource :as svc-res]
+            [cn.li.ac.ability.service.context-mgr :as ctx-mgr]
+            [cn.li.ac.ability.service.player-state-actions :as state-actions]
             [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.test.support.player-state :as ps-fix]))
 
@@ -38,19 +37,26 @@
                               (assoc-in [:resource-data :cur-cp] 80.0)
                               (assoc-in [:resource-data :max-cp] 120.0)
                               (assoc-in [:resource-data :max-overload] 40.0)))
-    (with-redefs [svc-res/recalc-max-for-level (fn [rd level uuid]
-                                                 (swap! recalc-calls conj [level uuid rd])
-                                                 (assoc rd :recalc-level level))]
+    (with-redefs [rdata/recalc-max-values (fn [rd level]
+                                            (swap! recalc-calls conj [:base level rd])
+                                            (assoc rd :max-cp 140.0 :max-overload 55.0))
+                  evt/fire-calc-event! (fn [event-type base-value extra]
+                                         (swap! recalc-calls conj [:calc event-type base-value extra])
+                                         base-value)]
       (server-hooks/register-lifecycle-subscriptions!)
       (state-actions/set-level! "p1" 3)
       (is (= 3 (get-in (ps/get-player-state "p1") [:ability-data :level])))
-      (is (= [3 "p1" {:cur-cp 80.0
-                       :max-cp 120.0
-                       :max-overload 40.0
-                       :add-max-cp 0.0
-                       :add-max-overload 0.0}]
-             (let [[level uuid rd] (first @recalc-calls)]
-               [level uuid (select-keys rd [:cur-cp :max-cp :max-overload :add-max-cp :add-max-overload])]))))))
+      (is (= [evt/CALC-MAX-CP evt/CALC-MAX-OVERLOAD]
+             (->> @recalc-calls
+                  (filter #(= :calc (first %)))
+                  (mapv second))))
+      (is (= {:cur-cp 80.0
+              :max-cp 140.0
+              :max-overload 55.0
+              :add-max-cp 0.0
+              :add-max-overload 0.0}
+             (select-keys (get-in (ps/get-player-state "p1") [:resource-data])
+                          [:cur-cp :max-cp :max-overload :add-max-cp :add-max-overload]))))))
 
 (deftest recover-all-restores-cp-overload-and-recovery-timers-test
   (ps/set-player-state! "p1"
@@ -112,8 +118,7 @@
                               (assoc-in [:develop-data :state] :developing)))
     (with-redefs [ctx-mgr/abort-player-contexts! (fn [uuid]
                                                    (swap! aborted conj uuid)
-                                                   nil)
-                  svc-res/recalc-max-for-level (fn [rd _level _uuid] rd)]
+                                                   nil)]
       (server-hooks/register-lifecycle-subscriptions!)
       (state-actions/reset-abilities! "p1")
       (let [state (ps/get-player-state "p1")]

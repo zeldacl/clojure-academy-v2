@@ -2,7 +2,7 @@
 	"Context lifecycle request network handlers."
 	(:require [cn.li.ac.ability.util.uuid :as uuid]
 						[clojure.string :as str]
-						[cn.li.ac.ability.server.service.context-mgr :as ctx-mgr]
+						[cn.li.ac.ability.service.context-mgr :as ctx-mgr]
 						[cn.li.ac.ability.service.dispatcher :as ctx]
 						[cn.li.mcmod.hooks.core :as runtime-hooks]))
 

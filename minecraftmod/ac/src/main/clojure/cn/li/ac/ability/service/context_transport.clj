@@ -1,4 +1,4 @@
-(ns cn.li.ac.ability.server.service.context-transport
+(ns cn.li.ac.ability.service.context-transport
 	"Transport port for ability context server/client messaging.
 
 	Owns send-function registration and provides transport operations used by
@@ -15,7 +15,7 @@
 	([{:keys [state*]
 		 :or {state* (atom (default-context-transport-runtime-state))}}]
 	 {::runtime ::context-transport-runtime
-	  :state* state*}))
+		:state* state*}))
 
 (def ^:dynamic *context-transport-runtime* nil)
 
@@ -25,8 +25,8 @@
 (defn call-with-context-transport-runtime
 	[runtime f]
 	(when-not (and (map? runtime)
-	               (= ::context-transport-runtime (::runtime runtime))
-	               (some? (:state* runtime)))
+								 (= ::context-transport-runtime (::runtime runtime))
+								 (some? (:state* runtime)))
 		(throw (ex-info "Expected context transport runtime" {:runtime runtime})))
 	(binding [*context-transport-runtime* runtime]
 		(f)))
@@ -34,7 +34,7 @@
 (defn- current-context-transport-runtime
 	[]
 	(or *context-transport-runtime*
-		installed-context-transport-runtime))
+			installed-context-transport-runtime))
 
 (defn- context-transport-state-atom
 	[]
@@ -63,9 +63,9 @@
 	([{:keys [to-client to-server frozen?]
 		 :or {to-client nil to-server nil frozen? false}}]
 	 (reset! (context-transport-state-atom)
-	         {:to-client to-client
-	          :to-server to-server
-	          :frozen? frozen?})
+					 {:to-client to-client
+						:to-server to-server
+						:frozen? frozen?})
 	 nil))
 
 (defn freeze-context-transport!

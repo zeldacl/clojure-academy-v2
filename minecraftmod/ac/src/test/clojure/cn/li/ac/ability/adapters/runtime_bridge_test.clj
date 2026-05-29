@@ -1,7 +1,7 @@
 (ns cn.li.ac.ability.adapters.runtime-bridge-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.adapters.runtime-bridge :as runtime-bridge]
-            [cn.li.ac.ability.server.service.context-mgr :as ctx-mgr]
+            [cn.li.ac.ability.service.context-mgr :as ctx-mgr]
             [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))

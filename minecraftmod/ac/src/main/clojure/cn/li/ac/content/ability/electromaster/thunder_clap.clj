@@ -17,7 +17,7 @@
             [cn.li.ac.ability.server.effect.damage]
             [cn.li.ac.ability.server.effect.world]
             [cn.li.ac.ability.server.effect.state]
-            [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
+            [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.mcmod.platform.raycast :as raycast]))
 
 (def ^:private thunder-clap-skill-id :thunder-clap)

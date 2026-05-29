@@ -2,10 +2,10 @@
   (:require [clojure.test :refer [deftest is]]
             [cn.li.ac.content.ability.meltdowner.electron-bomb :as electron-bomb]
             [cn.li.ac.ability.skill-config :as skill-config]
-            [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
+            [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.server.effect.geom :as geom]
             [cn.li.ac.ability.service.dispatcher :as ctx]
-            [cn.li.ac.ability.server.service.delayed-projectiles :as delayed-projectiles]
+            [cn.li.ac.ability.service.delayed-projectiles :as delayed-projectiles]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.entity :as entity]))
 

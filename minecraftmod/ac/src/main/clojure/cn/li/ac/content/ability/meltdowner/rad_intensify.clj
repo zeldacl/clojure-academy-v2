@@ -3,7 +3,7 @@
   Custom exp is derived from max-cp ratio; damage rate lerps from 1.4 to 1.8."
   (:require [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.config :as cfg]
-            [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
+            [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.util.balance :as bal]
             [cn.li.ac.ability.skill-config :as skill-config]))
 

@@ -1,7 +1,7 @@
 (ns cn.li.ac.content.ability.vecmanip.vec-deviation-test
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [cn.li.ac.ability.skill-config :as skill-config]
-            [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
+            [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.util.toggle :as toggle]
             [cn.li.ac.content.ability.vecmanip.arbitration :as arbitration]
@@ -177,7 +177,7 @@
 
 (deftest reduce-damage-ignores-damage-above-threshold-test
   (testing "damage > 9999 is returned unchanged (no reduction)"
-    (with-redefs [cn.li.ac.ability.server.service.skill-effects/get-player-state (fn [_] {:ok true})
+    (with-redefs [cn.li.ac.ability.service.skill-effects/get-player-state (fn [_] {:ok true})
                   cn.li.ac.content.ability.vecmanip.vec-deviation/cfg-double
                   (fn [field] (case field :combat.damage-ignore-threshold 9999.0 0.0))
                   cn.li.ac.content.ability.vecmanip.vec-deviation/skill-exp   (fn [_] 0.5)
@@ -195,7 +195,7 @@
 (deftest reduce-damage-force-consumes-capped-cp-test
   (testing "CP consumed is min(available, max-consumption); damage is always reduced"
     (let [consumed (atom nil)]
-      (with-redefs [cn.li.ac.ability.server.service.skill-effects/get-player-state (fn [_] {:ok true})
+      (with-redefs [cn.li.ac.ability.service.skill-effects/get-player-state (fn [_] {:ok true})
                     cn.li.ac.content.ability.vecmanip.vec-deviation/cfg-double
                     (fn [field] (case field :combat.damage-ignore-threshold 9999.0 0.0))
                     cn.li.ac.content.ability.vecmanip.vec-deviation/skill-exp  (fn [_] 0.5)
@@ -222,7 +222,7 @@
 (deftest reduce-damage-adds-exp-proportional-to-original-damage-test
   (testing "add-exp! receives original-damage * 0.0006"
     (let [exp-gained (atom nil)]
-      (with-redefs [cn.li.ac.ability.server.service.skill-effects/get-player-state (fn [_] {:ok true})
+      (with-redefs [cn.li.ac.ability.service.skill-effects/get-player-state (fn [_] {:ok true})
                     cn.li.ac.content.ability.vecmanip.vec-deviation/cfg-double
                     (fn [field]
                       (case field

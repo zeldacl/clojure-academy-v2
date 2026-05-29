@@ -3,11 +3,34 @@
   (:require [cn.li.ac.ability.client.api :as api]
             [cn.li.ac.ability.client.managed-screens :as managed-screens]
             [cn.li.ac.ability.registry.skill-query :as skill]
-            [cn.li.ac.ability.server.service.learning :as learning]
+            [cn.li.ac.ability.registry.category :as category]
+            [cn.li.ac.ability.registry.skill :as skill-registry]
+            [cn.li.ac.ability.rules.learning-rules :as learning-rules]
             [cn.li.ac.ability.model.ability :as adata]
+            [cn.li.ac.ability.config :as cfg]
             [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.i18n :as i18n]))
+
+(defn- check-learn-conditions
+  [skill-id ability-data player-level developer-type]
+  (if-let [skill-spec (skill-registry/get-skill skill-id)]
+    (learning-rules/check-all-conditions skill-spec ability-data player-level developer-type)
+    {:pass? false :failures [{:type :unknown-skill :skill-id skill-id}]}))
+
+(defn- can-level-up-ability?
+  [ability-data]
+  (let [level (:level ability-data)
+        cat-id (:category-id ability-data)]
+    (and (< level (cfg/max-level))
+         (some? cat-id)
+         (let [skills (skill/get-controllable-skills-at-level cat-id level)
+               cat-rate (category/get-prog-incr-rate cat-id)]
+           (learning-rules/can-level-up? ability-data
+                                         skills
+                                         cat-rate
+                                         (cfg/prog-incr-rate)
+                                         (cfg/max-level))))))
 
 ;; Screen state (no Minecraft imports)
 (def ^:private default-screen-state
@@ -120,7 +143,7 @@
     (apply concat
       (map (fn [{:keys [skill x y]}]
         (let [target-skill-id (:id skill)
-              locked? (not (:pass? (learning/check-all-conditions
+                locked? (not (:pass? (check-learn-conditions
                  target-skill-id
                  ability-data
                  (:level ability-data)
@@ -149,8 +172,7 @@
         skill-id (or (:skill-id skill) (:id skill))
         ability-data (:ability-data player-state)
         learned? (adata/is-learned? ability-data skill-id)
-        ;; check-all-conditions needs: skill-id, ability-data, player-level, developer-type
-        conditions (learning/check-all-conditions
+        conditions (check-learn-conditions
                      skill-id
                      ability-data
                      (:level ability-data)
@@ -186,7 +208,7 @@
           :max (:max-cp resource-data)}
      :overload {:cur (:cur-overload resource-data)
                 :max (:max-overload resource-data)}
-     :can-level-up (learning/can-level-up? ability-data)}))
+    :can-level-up (can-level-up-ability? ability-data)}))
 
 (defn build-screen-render-data
   "Build complete screen render data. Called by forge layer."
@@ -224,7 +246,7 @@
       (let [ability-data (:ability-data player-state)
             ctx (:learn-context state)
             dev-type (or (:developer-type ctx) :normal)
-            conditions (learning/check-all-conditions
+            conditions (check-learn-conditions
                            skill-id
                            ability-data
                            (:level ability-data)

@@ -16,7 +16,7 @@
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.util.toggle :as toggle]
             [cn.li.ac.ability.util.scaling :as scaling]
-            [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
+            [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.server.damage.handler :as damage-handler]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
             [cn.li.mcmod.platform.world-effects :as world-effects]

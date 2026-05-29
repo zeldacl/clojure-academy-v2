@@ -1,13 +1,11 @@
 (ns cn.li.ac.ability.develop-service-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.test :refer [deftest is]]
             [cn.li.ac.ability.model.ability :as adata]
             [cn.li.ac.ability.model.develop :as dev]
             [cn.li.ac.ability.model.resource :as rdata]
             [cn.li.ac.ability.registry.event :as evt]
             [cn.li.ac.ability.registry.skill :as skill]
-            [cn.li.ac.ability.server.service.develop :as develop]
-            [cn.li.ac.ability.server.service.learning :as learning]
-            [cn.li.ac.ability.server.service.resource :as resource]))
+            [cn.li.ac.ability.rules.develop-rules :as develop]))
 
 (deftest start-skill-learning-guards-test
   (let [developing (assoc (dev/new-develop-data) :state :developing)]
@@ -55,21 +53,22 @@
                                 :action-data {:skill-id :s1}))
         ability-data (adata/new-ability-data)
         resource-data (rdata/new-resource-data)]
-    (with-redefs [learning/learn-skill (fn [d uuid sid]
-                                         (is (= "u1" uuid))
-                                         (is (= :s1 sid))
-                                         {:data (adata/learn-skill d sid)
-                                          :event {:event/type :ability/skill-learn :uuid uuid :skill-id sid}})
-          resource/recalc-max-for-level (fn [d level uuid]
-                      (is (= "u1" uuid))
-                      (assoc d :max-cp (+ (:max-cp d) level 10.0)))]
+    (with-redefs [evt/make-skill-learn-event (fn [uuid sid]
+                           (is (= "u1" uuid))
+                           (is (= :s1 sid))
+                           {:event/type :ability/skill-learn :uuid uuid :skill-id sid})
+          rdata/recalc-max-values (fn [d level]
+                (assoc d
+                  :max-cp (+ (:max-cp d) level 10.0)
+                  :max-overload (+ (:max-overload d) level 5.0)))
+          evt/fire-calc-event! (fn [_event-key value _extra] value)]
       (let [{:keys [ability-data resource-data events develop-data]}
             (develop/apply-completion develop-data ability-data resource-data "u1")]
         (is (contains? (:learned-skills ability-data) :s1))
         (is (= 1 (count events)))
         (is (= :ability/skill-learn (:event/type (first events))))
-      (is (= (+ (:max-cp (rdata/new-resource-data)) 11.0)
-           (:max-cp resource-data)))
+     (is (= (+ (:max-cp (rdata/new-resource-data)) 11.0)
+       (:max-cp resource-data)))
         (is (= :idle (:state develop-data)))))))
 
 (deftest apply-completion-level-up-and-fallback-test

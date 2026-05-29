@@ -1,7 +1,7 @@
 (ns cn.li.ac.content.ability.teleporter.location-teleport-test
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.ac.ability.config :as ability-config]
-            [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
+            [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.content.ability.teleporter.location-teleport :as loc-tp]
             [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.ac.ability.messages :as catalog]

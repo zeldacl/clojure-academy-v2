@@ -1,7 +1,7 @@
 (ns cn.li.ac.command.actions-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.service.player-state :as ps]
-            [cn.li.ac.ability.server.service.player-state-actions :as state-actions]
+            [cn.li.ac.ability.service.player-state-actions :as state-actions]
             [cn.li.ac.ability.registry.skill-query :as skill-query]
             [cn.li.ac.command.actions :as ac-actions]
             [cn.li.ac.test.support.player-state :as ps-fix]

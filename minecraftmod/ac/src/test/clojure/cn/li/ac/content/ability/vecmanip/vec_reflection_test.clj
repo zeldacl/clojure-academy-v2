@@ -1,6 +1,6 @@
 (ns cn.li.ac.content.ability.vecmanip.vec-reflection-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
-            [cn.li.ac.ability.server.service.skill-effects]
+            [cn.li.ac.ability.service.skill-effects]
             [cn.li.ac.ability.util.toggle]
             [cn.li.ac.ability.server.damage.handler :as damage-handler]
             [cn.li.ac.content.ability.vecmanip.vec-reflection :as vr]
@@ -69,7 +69,7 @@
                                                                               (case field
                                                                                 :combat.min-reflected-damage 5.0
                                                                                 0.0))
-                cn.li.ac.ability.server.service.skill-effects/get-player-state (fn [_] {:ok true})]
+                cn.li.ac.ability.service.skill-effects/get-player-state (fn [_] {:ok true})]
     ;; damage=2 -> consumption=4, current-cp=3 => false
     (is (false? (vr/can-cancel-attack? "p" "a" 2.0)))
       (with-redefs [cn.li.ac.content.ability.vecmanip.vec-reflection/current-cp (fn [_] 15.0)]
@@ -92,7 +92,7 @@
 
 (deftest reflect-damage-recursion-guard-pair-level-test
   (let [applied (atom [])]
-    (with-redefs [cn.li.ac.ability.server.service.skill-effects/get-player-state (fn [_] {:position {:world-id "w"}})
+    (with-redefs [cn.li.ac.ability.service.skill-effects/get-player-state (fn [_] {:position {:world-id "w"}})
                   cn.li.ac.content.ability.vecmanip.vec-reflection/skill-exp (fn [_] 0.5)
                   cn.li.ac.content.ability.vecmanip.vec-reflection/current-cp (fn [_] 9999.0)
                   cn.li.ac.content.ability.vecmanip.vec-reflection/consume-cp! (fn [_ _] true)
@@ -119,7 +119,7 @@
 
 (deftest reflect-damage-stops-when-max-reflections-reached-test
   (let [applied (atom [])]
-    (with-redefs [cn.li.ac.ability.server.service.skill-effects/get-player-state (fn [_] {:position {:world-id "w"}})
+    (with-redefs [cn.li.ac.ability.service.skill-effects/get-player-state (fn [_] {:position {:world-id "w"}})
                   cn.li.ac.content.ability.vecmanip.vec-reflection/skill-exp (fn [_] 0.5)
                   cn.li.ac.content.ability.vecmanip.vec-reflection/current-cp (fn [_] 9999.0)
                   cn.li.ac.content.ability.vecmanip.vec-reflection/consume-cp! (fn [_ _] true)
@@ -146,7 +146,7 @@
 
 (deftest reflect-damage-recursion-state-isolated-by-context-test
   (let [applied (atom [])]
-    (with-redefs [cn.li.ac.ability.server.service.skill-effects/get-player-state (fn [_] {:position {:world-id "w"}})
+    (with-redefs [cn.li.ac.ability.service.skill-effects/get-player-state (fn [_] {:position {:world-id "w"}})
                   cn.li.ac.content.ability.vecmanip.vec-reflection/skill-exp (fn [_] 0.5)
                   cn.li.ac.content.ability.vecmanip.vec-reflection/current-cp (fn [_] 9999.0)
                   cn.li.ac.content.ability.vecmanip.vec-reflection/consume-cp! (fn [_ _] true)
@@ -174,7 +174,7 @@
 
 (deftest reflect-damage-recursion-state-isolated-by-chain-test
   (let [applied (atom [])]
-    (with-redefs [cn.li.ac.ability.server.service.skill-effects/get-player-state (fn [_] {:position {:world-id "w"}})
+    (with-redefs [cn.li.ac.ability.service.skill-effects/get-player-state (fn [_] {:position {:world-id "w"}})
                   cn.li.ac.content.ability.vecmanip.vec-reflection/skill-exp (fn [_] 0.5)
                   cn.li.ac.content.ability.vecmanip.vec-reflection/current-cp (fn [_] 9999.0)
                   cn.li.ac.content.ability.vecmanip.vec-reflection/consume-cp! (fn [_ _] true)

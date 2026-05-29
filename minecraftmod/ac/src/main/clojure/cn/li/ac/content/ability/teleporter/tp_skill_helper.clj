@@ -6,7 +6,7 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.model.ability :as adata]
-            [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
+            [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.server.effect.geom :as geom]

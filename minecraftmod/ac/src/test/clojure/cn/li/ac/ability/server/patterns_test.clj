@@ -3,7 +3,7 @@
             [cn.li.ac.ability.registry.event :as evt]
             [cn.li.ac.ability.server.effect.core :as effect]
             [cn.li.ac.ability.server.patterns :as patterns]
-            [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
+            [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.service.dispatcher :as ctx]))
 
 (def ^:private test-op-key :patterns-test/op)

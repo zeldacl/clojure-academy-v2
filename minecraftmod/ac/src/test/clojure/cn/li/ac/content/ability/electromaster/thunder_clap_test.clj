@@ -3,7 +3,7 @@
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.effect.core :as effect]
             [cn.li.ac.ability.server.effect.geom :as geom]
-            [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
+            [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.content.ability.electromaster.thunder-clap :as thunder-clap]))
 
 (def ^:private spec thunder-clap/thunder-clap)

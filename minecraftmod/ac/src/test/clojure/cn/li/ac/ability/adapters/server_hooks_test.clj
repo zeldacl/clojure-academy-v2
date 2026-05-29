@@ -4,10 +4,9 @@
             [cn.li.ac.ability.item-actions :as item-actions]
             [cn.li.ac.ability.registry.event :as evt]
             [cn.li.ac.content.ability.server-runtime-lifecycle :as server-runtime-lifecycle]
-            [cn.li.ac.ability.server.service.context-mgr :as ctx-mgr]
+            [cn.li.ac.ability.service.context-mgr :as ctx-mgr]
             [cn.li.ac.ability.server.network :as network]
-            [cn.li.ac.ability.server.service.delayed-projectiles :as delayed-projectiles]
-            [cn.li.ac.ability.server.service.resource :as svc-res]
+            [cn.li.ac.ability.service.delayed-projectiles :as delayed-projectiles]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.service.platform-hooks :as platform-hooks]
             [cn.li.ac.ability.service.player-state :as ps]
@@ -68,33 +67,29 @@
 
 (deftest level-change-event-uses-service-recalc-path-test
   (let [updated (atom nil)
-        recalc-calls (atom [])]
-    (with-redefs [svc-res/recalc-max-for-level (fn [rd level uuid]
-                                                 (swap! recalc-calls conj [level uuid rd])
-                                                 (assoc rd :recalc-level level :recalc-uuid uuid :from :svc-res))
+        calc-calls (atom [])]
+    (with-redefs [evt/fire-calc-event! (fn [event-key value extra]
+                                         (swap! calc-calls conj [event-key value extra])
+                                         value)
                   ps/update-resource-data! (fn [uuid updater]
                                              (reset! updated {:uuid uuid
                                                               :resource (updater {:cur-cp 100.0
+                                                                                  :cur-overload 10.0
                                                                                   :max-cp 200.0
+                                                                                  :max-overload 150.0
                                                                                   :add-max-cp 5.0
                                                                                   :add-max-overload 7.0})})
                                              nil)]
       (server-hooks/register-lifecycle-subscriptions!)
       (evt/fire-ability-event! (evt/make-level-change-event "u-level" 2 3))
-      (is (= [[3 "u-level" {:cur-cp 100.0
-                             :max-cp 200.0
-                             :add-max-cp 0.0
-                             :add-max-overload 0.0}]]
-             @recalc-calls))
-      (is (= {:uuid "u-level"
-              :resource {:cur-cp 100.0
-                         :max-cp 200.0
-                         :add-max-cp 0.0
-                         :add-max-overload 0.0
-                         :recalc-level 3
-                         :recalc-uuid "u-level"
-                         :from :svc-res}}
-             @updated)))))
+                                        (is (= [evt/CALC-MAX-CP evt/CALC-MAX-OVERLOAD]
+                                         (mapv first @calc-calls)))
+                                        (is (every? #(= {:uuid "u-level"} (nth % 2)) @calc-calls))
+                                              (is (= "u-level" (:uuid @updated)))
+                                              (is (= {:add-max-cp 0.0
+                                                :add-max-overload 0.0}
+                                               (select-keys (:resource @updated)
+                                                [:add-max-cp :add-max-overload]))))))
 
 (deftest overload-event-aborts-player-contexts-test
   (let [aborted (atom [])]
@@ -225,34 +220,36 @@
 
       (deftest category-change-event-aborts-deactivates-and-recalculates-test
         (let [aborted (atom [])
-        resource-updates (atom [])
-        cooldown-clears (atom [])
-         recalc-calls (atom [])]
+         resource-updates (atom [])
+         cooldown-clears (atom [])
+         calc-calls (atom [])]
           (with-redefs [ctx-mgr/abort-player-contexts!
               (fn [uuid]
                 (swap! aborted conj uuid)
                 nil)
               ps/get-player-state (fn [_]
                      {:ability-data {:level 4}})
-            ps/update-cooldown-data! (fn [uuid updater]
+              ps/update-cooldown-data! (fn [uuid updater]
                      (swap! cooldown-clears conj [uuid (updater {:existing true})])
                      nil)
-                  ps/update-resource-data! (fn [uuid updater & args]
+              ps/update-resource-data! (fn [uuid updater & args]
                      (swap! resource-updates conj [uuid (apply updater {:activated true
-                              :cur-cp 10.0
-                              :max-cp 20.0}
-                           args)])
+                                      :cur-cp 10.0
+                                          :cur-overload 3.0
+                                          :max-cp 20.0
+                                          :max-overload 40.0}
+                                    args)])
                      nil)
-              svc-res/recalc-max-for-level (fn [rd level uuid]
-                    (swap! recalc-calls conj [level uuid rd])
-                    (assoc rd :recalc-level level))]
+              evt/fire-calc-event! (fn [event-key value extra]
+                      (swap! calc-calls conj [event-key value extra])
+                      value)]
             (server-hooks/register-lifecycle-subscriptions!)
             (evt/fire-ability-event! (evt/make-category-change-event "u-category" :old :new))
             (is (= ["u-category"] @aborted))
             (is (= [["u-category" {}]] @cooldown-clears))
-            (is (= [4 "u-category" {:activated true :cur-cp 10.0 :max-cp 20.0}]
-              (first @recalc-calls)))
+            (is (= [evt/CALC-MAX-CP evt/CALC-MAX-OVERLOAD]
+              (mapv first @calc-calls)))
+            (is (every? #(= {:uuid "u-category"} (nth % 2)) @calc-calls))
             (is (= ["u-category" false]
-                    [(ffirst @resource-updates) (get-in (first @resource-updates) [1 :activated])]))
-            (is (= ["u-category" 4]
-                    [(first (second @resource-updates)) (get-in (second @resource-updates) [1 :recalc-level])])))))
+              [(ffirst @resource-updates) (get-in (first @resource-updates) [1 :activated])]))
+            (is (= "u-category" (first (second @resource-updates)))))))

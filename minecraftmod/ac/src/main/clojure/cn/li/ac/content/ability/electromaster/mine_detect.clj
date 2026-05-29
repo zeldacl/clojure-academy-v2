@@ -12,7 +12,7 @@
   (:require [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.dispatcher :as ctx]
-            [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
+            [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.mcmod.platform.potion-effects :as potion-effects]
             [cn.li.mcmod.util.log :as log]))
 

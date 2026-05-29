@@ -2,8 +2,8 @@
 	"Input lifecycle request network handlers for ability contexts."
 	(:require [cn.li.ac.ability.util.uuid :as uuid]
 						[clojure.string :as str]
-						[cn.li.ac.ability.server.service.context-mgr :as ctx-mgr]
-						[cn.li.ac.ability.server.service.context-runtime :as ctx-rt]
+						[cn.li.ac.ability.service.context-mgr :as ctx-mgr]
+						[cn.li.ac.ability.service.context-runtime :as ctx-rt]
 						[cn.li.ac.ability.service.dispatcher :as ctx]
 						[cn.li.mcmod.hooks.core :as runtime-hooks]))
 

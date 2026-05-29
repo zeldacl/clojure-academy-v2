@@ -73,10 +73,11 @@
       {:pass? (empty? f) :failures f})))
 
 (defn can-learn?
-  "Convenience predicate—returns boolean."
+  "Convenience predicate—returns boolean. Returns false for nil skill-spec."
   [skill-spec ability-data player-level developer-type]
-  (:pass? (check-all-conditions skill-spec ability-data player-level developer-type)))
-
+  (boolean (when skill-spec
+    (:pass? (check-all-conditions skill-spec ability-data player-level developer-type))))
+)
 ;; ============================================================================
 ;; Experience Gain
 ;; ============================================================================

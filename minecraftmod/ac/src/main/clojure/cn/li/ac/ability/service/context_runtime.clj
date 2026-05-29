@@ -1,4 +1,4 @@
-(ns cn.li.ac.ability.server.service.context-runtime
+(ns cn.li.ac.ability.service.context-runtime
   "Server-side handlers for context key input lifecycle.
 
   This namespace executes skill runtime callbacks behind context messages:
@@ -14,7 +14,7 @@
             [cn.li.ac.ability.server.dispatch :as skill-rt]
             [cn.li.ac.ability.registry.event :as evt]
             [cn.li.ac.ability.service.player-state :as ps]
-            [cn.li.ac.ability.server.service.cooldown :as cd]))
+            [cn.li.ac.ability.rules.cooldown-rules :as cd-rules]))
 
 (def INPUT-IDLE :idle)
 (def INPUT-ACTIVE :active)
@@ -23,17 +23,17 @@
 
 (defn- event-payload [ctx-map payload]
   (let [player-id (:player-uuid ctx-map)
-        skill-id  (:skill-id ctx-map)
-        exp       (double (adata/get-skill-exp (get-in (ps/get-player-state player-id)
-                                                       [:ability-data])
-                                               skill-id))]
-    {:ctx-id    (:id ctx-map)
+        skill-id (:skill-id ctx-map)
+        exp (double (adata/get-skill-exp (get-in (ps/get-player-state player-id)
+                                                 [:ability-data])
+                                         skill-id))]
+    {:ctx-id (:id ctx-map)
      :server-id (:server-id ctx-map)
      :player-id player-id
-     :player    (:player payload)
-     :skill-id  skill-id
-     :exp       exp
-     :payload   payload}))
+     :player (:player payload)
+     :skill-id skill-id
+     :exp exp
+     :payload payload}))
 
 (defn- dispatch-skill-callback! [ctx-map cb-key event-type payload]
   (when-let [spec (skill/get-skill (:skill-id ctx-map))]
@@ -59,7 +59,12 @@
         spec (skill/get-skill (:skill-id ctx-map))
         ctrl-id (or (:ctrl-id spec) (:skill-id ctx-map))
         cooldown-ticks (max 1 (int (or (:cooldown-ticks spec) 1)))]
-    (ps/update-cooldown-data! uuid cd/set-main-cooldown ctrl-id cooldown-ticks)))
+    (ps/update-cooldown-data! uuid
+                              (fn [cooldown-data]
+                                (:data (cd-rules/set-cooldown cooldown-data
+                                                              ctrl-id
+                                                              cooldown-ticks
+                                                              :main))))))
 
 (defn- in-main-cooldown?
   [ctx-map]
@@ -68,7 +73,7 @@
         spec (skill/get-skill (:skill-id ctx-map))
         ctrl-id (or (:ctrl-id spec) (:skill-id ctx-map))]
     (and state
-         (cd/in-main-cooldown? (:cooldown-data state) ctrl-id))))
+         (cd-rules/in-cooldown? (:cooldown-data state) ctrl-id :main))))
 
 (defn should-apply-main-cooldown?
   "Pure policy helper: only skip cooldown when skill cooldown mode is explicit :manual."
@@ -121,7 +126,7 @@
                pattern-handled? (boolean (and spec (skill-rt/can-handle? spec)))]
            (when-not pattern-handled?
              (evt/fire-ability-event!
-               (evt/make-skill-perform-event (:player-uuid released-ctx) (:skill-id released-ctx)))
+              (evt/make-skill-perform-event (:player-uuid released-ctx) (:skill-id released-ctx)))
              (when (should-apply-main-cooldown? spec)
                (apply-main-cooldown! released-ctx)))
            (if (should-terminate-context-on-key-up? spec)

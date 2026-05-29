@@ -1,9 +1,9 @@
 (ns cn.li.ac.ability.server.service.delayed-projectiles-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
-            [cn.li.ac.ability.server.service.delayed-projectiles :as dp]
+            [cn.li.ac.ability.service.delayed-projectiles :as dp]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
-            [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
-            [cn.li.ac.ability.server.service.context-mgr :as ctx-mgr]
+            [cn.li.ac.ability.service.skill-effects :as skill-effects]
+            [cn.li.ac.ability.service.context-mgr :as ctx-mgr]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]))
 

@@ -23,7 +23,7 @@
             [cn.li.ac.ability.server.effect.geom :as geom]
             [cn.li.ac.ability.server.effect.beam]
             [cn.li.ac.ability.util.toggle :as toggle]
-            [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
+            [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]

@@ -1,6 +1,6 @@
 (ns cn.li.ac.content.ability.electromaster.mag-manip-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
-            [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
+            [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.ac.content.ability.electromaster.mag-manip :as mag-manip]

@@ -14,7 +14,7 @@
   No Minecraft imports."
   (:require [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.ability.service.dispatcher :as ctx]
-            [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
+            [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.server.effect.geom :as geom]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.block-manipulation :as bm]

@@ -1,7 +1,7 @@
 (ns cn.li.ac.content.ability.teleporter.tp-skill-helper-test
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
-            [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
+            [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.ability.model.ability :as ad]
             [cn.li.ac.test.support.player-state :as ps-fix]

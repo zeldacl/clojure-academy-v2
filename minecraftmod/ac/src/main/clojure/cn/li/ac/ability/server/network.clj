@@ -11,7 +11,7 @@
             [cn.li.mcmod.platform.entity        :as entity]
             [cn.li.ac.ability.service.player-state      :as ps]
             [cn.li.ac.ability.model.ability :as adata]
-            [cn.li.ac.ability.server.service.learning  :as lrn]
+            [cn.li.ac.ability.rules.learning-rules :as learning-rules]
             [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.ability.registry.skill             :as skill]
             [cn.li.ac.ability.rules.progression          :as progression]
@@ -71,6 +71,7 @@
                   (not session-ok?) {:ok? false :reason :session}
                   (not (:structure-valid st)) {:ok? false :reason :structure}
                   :else {:ok? true :tile tile :developer-type (dev-validate/developer-type-for-tile tile)}))
+                  skill-spec (skill/get-skill skill-id)
           do-learn! #(command-rt/run-command! uuid {:command :learn-skill
                                                     :skill-id skill-id
                                                     :check-conditions? false})]
@@ -81,17 +82,22 @@
 
           all-coords?
           (let [dev-t (:developer-type station)
-                {:keys [pass? failures]} (lrn/check-all-conditions skill-id ad player-level dev-t)]
+                {:keys [pass? failures]} (if skill-spec
+                                           (learning-rules/check-all-conditions skill-spec ad player-level dev-t)
+                                           {:pass? false
+                                            :failures [{:type :unknown-skill :skill-id skill-id}]})]
             (if pass?
-              (let [sk (skill/get-skill skill-id)
-                    cost (double (progression/learning-cost (long (:level sk))))]
+              (let [cost (double (progression/learning-cost (long (:level skill-spec))))]
                 (if (try-pull-developer-energy! (:tile station) cost)
                   (do-learn!)
                   (log/debug "learn-skill rejected (IF)" uuid skill-id cost)))
               (log/debug "learn-skill rejected" uuid skill-id failures)))
 
           :else
-          (let [{:keys [pass? failures]} (lrn/check-all-conditions skill-id ad player-level :normal)]
+          (let [{:keys [pass? failures]} (if skill-spec
+                                           (learning-rules/check-all-conditions skill-spec ad player-level :normal)
+                                           {:pass? false
+                                            :failures [{:type :unknown-skill :skill-id skill-id}]})]
             (if pass?
               (do-learn!)
               (log/debug "learn-skill rejected" uuid skill-id failures)))))))

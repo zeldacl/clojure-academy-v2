@@ -11,8 +11,7 @@
             [cn.li.ac.ability.model.resource :as rd]
             [cn.li.ac.ability.model.cooldown :as cd]
             [cn.li.ac.ability.server.dispatch :as skill-rt]
-            [cn.li.ac.ability.server.service.context-runtime :as rt]
-            [cn.li.ac.ability.server.service.cooldown :as cd-svc]))
+            [cn.li.ac.ability.service.context-runtime :as rt]))
 
 (defn- reset-test-state! [f]
   (test-contexts/clean-contexts-fixture
@@ -38,7 +37,7 @@
 (deftest key-down-blocked-by-cooldown-test
   (let [uuid "test-player-cooldown"
         _ (seed-player-state! uuid)
-        _ (ps/update-cooldown-data! uuid cd-svc/set-main-cooldown :arc-gen 10)
+  _ (ps/update-cooldown-data! uuid cd/set-cooldown :arc-gen :main 10)
         c (ctx/new-server-context uuid :arc-gen "ctx-cd" test-context-owner)]
     (ctx/register-context! c)
   (binding [ctx/*context-owner* test-context-owner]

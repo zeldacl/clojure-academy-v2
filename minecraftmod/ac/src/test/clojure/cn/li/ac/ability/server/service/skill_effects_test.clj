@@ -1,7 +1,7 @@
 (ns cn.li.ac.ability.server.service.skill-effects-test
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [cn.li.ac.ability.config :as ability-config]
-            [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
+            [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.test.support.player-state :as ps-fix]))
 

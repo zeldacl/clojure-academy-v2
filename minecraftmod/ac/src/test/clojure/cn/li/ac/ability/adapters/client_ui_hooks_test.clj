@@ -14,7 +14,7 @@
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.config.gameplay :as gameplay]
             [cn.li.ac.ability.service.dispatcher :as ctx]
-            [cn.li.ac.ability.server.service.context-mgr :as ctx-mgr]
+            [cn.li.ac.ability.service.context-mgr :as ctx-mgr]
             [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.ac.ability.messages :as catalog]

@@ -20,7 +20,7 @@
             [cn.li.ac.ability.server.effect.motion]
             [cn.li.ac.ability.server.effect.state]
             [cn.li.ac.ability.server.effect.fx]
-            [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
+            [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.player-motion :as player-motion]
             [cn.li.mcmod.platform.world-effects :as world-effects]

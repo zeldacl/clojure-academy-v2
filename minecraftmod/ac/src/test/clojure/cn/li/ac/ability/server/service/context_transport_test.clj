@@ -1,6 +1,6 @@
 (ns cn.li.ac.ability.server.service.context-transport-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
-            [cn.li.ac.ability.server.service.context-transport :as transport]))
+            [cn.li.ac.ability.service.context-transport :as transport]))
 
 (defn- reset-transport-fixture [f]
   (transport/reset-context-transport-for-test!)

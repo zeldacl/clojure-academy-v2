@@ -2,7 +2,7 @@
   "Server tick orchestration for player-state runtime updates."
   (:require [cn.li.ac.ability.model.develop :as dev]
             [cn.li.ac.ability.config :as cfg]
-            [cn.li.ac.ability.server.service.develop :as svc-dev]
+            [cn.li.ac.ability.rules.develop-rules :as develop-rules]
             [cn.li.ac.ability.registry.event :as evt]
             [cn.li.ac.ability.service.reducer :as reducer]
             [cn.li.ac.ability.service.player-state-core :as core]
@@ -25,10 +25,10 @@
             ticked-state (or (:state tick-result) state)
           {:keys [develop-data]} ticked-state
           dev-result (when (and develop-data (dev/developing? develop-data))
-                       (svc-dev/tick-develop develop-data))
+                       (develop-rules/tick-develop develop-data))
           new-dev    (if dev-result (:develop-data dev-result) develop-data)
           completion (when (and dev-result (:completed? dev-result))
-                       (svc-dev/apply-completion
+                       (develop-rules/apply-completion
                         new-dev
                         (:ability-data ticked-state)
                         (:resource-data ticked-state)

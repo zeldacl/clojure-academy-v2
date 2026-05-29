@@ -15,10 +15,12 @@
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.ability.registry.category :as acat]
+            [cn.li.ac.ability.registry.skill-query :as skill-query]
             [cn.li.ac.ability.domain.developer :as developer]
             [cn.li.ac.ability.util.balance :as bal]
             [cn.li.ac.ability.util.uuid :as uuid]
-            [cn.li.ac.ability.server.service.learning :as learning]
+            [cn.li.ac.ability.rules.learning-rules :as learning-rules]
+            [cn.li.ac.ability.config :as cfg]
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.ac.wireless.gui.sync.handler :as net-helpers]
             [cn.li.mcmod.platform.be :as platform-be]))
@@ -81,8 +83,14 @@
         has-category? (boolean cat)
         lvl (long (:level ad 1))
         level-prog (double (:level-progress ad 0.0))
+        skills-at-level (when cat-id
+                          (skill-query/get-controllable-skills-at-level cat-id lvl))
+        cat-rate (when cat-id (acat/get-prog-incr-rate cat-id))
         thresh (when (and cat-id (not (>= lvl 5)))
-                 (learning/level-up-threshold cat-id ad))
+                 (learning-rules/level-up-threshold ad
+                                                    skills-at-level
+                                                    cat-rate
+                                                    (cfg/prog-incr-rate)))
         cat-prog01 (if has-category?
                      (if (and thresh (pos? thresh))
                        (bal/clamp01 (/ level-prog thresh))

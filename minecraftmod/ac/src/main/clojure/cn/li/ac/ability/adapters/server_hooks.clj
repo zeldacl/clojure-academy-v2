@@ -10,9 +10,8 @@
             [cn.li.ac.ability.server.damage.entity :as entity-damage-runtime]
             [cn.li.ac.ability.server.damage.handler :as damage-handler]
             [cn.li.ac.ability.server.damage.runtime :as damage-runtime]
-            [cn.li.ac.ability.server.service.context-mgr :as ctx-mgr]
-            [cn.li.ac.ability.server.service.delayed-projectiles :as delayed-projectiles]
-            [cn.li.ac.ability.server.service.resource :as svc-res]
+            [cn.li.ac.ability.service.context-mgr :as ctx-mgr]
+            [cn.li.ac.ability.service.delayed-projectiles :as delayed-projectiles]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.service.platform-hooks :as platform-hooks]
             [cn.li.ac.ability.service.player-state :as ps]
@@ -79,6 +78,18 @@
     (when (= 1 (count matches))
       (first matches))))
 
+(defn- recalc-max-for-level-with-calc
+  [res-data level uuid]
+  (let [base (rdata/recalc-max-values res-data level)
+        calc-extra {:uuid uuid}
+        max-cp (evt/fire-calc-event! evt/CALC-MAX-CP (:max-cp base) calc-extra)
+        max-ol (evt/fire-calc-event! evt/CALC-MAX-OVERLOAD (:max-overload base) calc-extra)]
+    (assoc base
+           :max-cp max-cp
+           :max-overload max-ol
+           :cur-cp (min (:cur-cp base) max-cp)
+           :cur-overload (min (:cur-overload base) max-ol))))
+
 (defn lifecycle-subscriptions-registered-snapshot
   []
   @(lifecycle-subscriptions-registered-atom))
@@ -110,9 +121,9 @@
        (when (and uuid new-level)
          (ps/update-resource-data! uuid
                                    (fn [rd]
-                                     (svc-res/recalc-max-for-level (rdata/reset-add-max rd)
-                                                                   new-level
-                                                                   uuid))))))
+                                     (recalc-max-for-level-with-calc (rdata/reset-add-max rd)
+                                                                      new-level
+                                                                      uuid))))))
     (evt/subscribe-ability-event!
      evt/EVT-SKILL-LEARN
      (fn [{:keys [uuid]}]
@@ -121,7 +132,7 @@
            (let [level (get-in state [:ability-data :level] 1)]
              (ps/update-resource-data! uuid
                                        (fn [rd]
-                                         (svc-res/recalc-max-for-level rd level uuid))))))))
+                                         (recalc-max-for-level-with-calc rd level uuid))))))))
     (evt/subscribe-ability-event!
      evt/EVT-CATEGORY-CHANGE
      (fn [{:keys [uuid]}]
@@ -133,7 +144,7 @@
            (let [level (get-in state [:ability-data :level] 1)]
              (ps/update-resource-data! uuid
                                        (fn [rd]
-                                         (svc-res/recalc-max-for-level rd level uuid))))))))
+                                         (recalc-max-for-level-with-calc rd level uuid))))))))
     (evt/subscribe-ability-event!
      evt/EVT-OVERLOAD
      (fn [{:keys [uuid]}]

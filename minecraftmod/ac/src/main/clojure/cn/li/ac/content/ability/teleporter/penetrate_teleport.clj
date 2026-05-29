@@ -11,7 +11,7 @@
   (:require [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
-            [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
+            [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.server.effect.geom :as geom]
             [cn.li.ac.content.ability.teleporter.tp-skill-helper :as helper]
             [cn.li.mcmod.platform.block-manipulation :as bm]

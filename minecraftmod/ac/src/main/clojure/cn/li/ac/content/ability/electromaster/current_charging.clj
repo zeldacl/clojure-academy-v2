@@ -7,7 +7,7 @@
   (:require [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.dispatcher :as ctx]
-            [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
+            [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.energy.operations :as energy]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.runtime-interop :as interop]
