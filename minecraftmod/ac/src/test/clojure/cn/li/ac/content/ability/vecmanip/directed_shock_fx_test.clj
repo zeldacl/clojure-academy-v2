@@ -5,13 +5,16 @@
             [cn.li.ac.ability.client.hand-effects :as hand-effects]
             [cn.li.ac.content.ability.vecmanip.directed-shock-fx :as dsfx]))
 
-(defn- with-fresh-directed-shock-fx-runtime [f]
-  (dsfx/call-with-directed-shock-fx-runtime
-    (dsfx/create-directed-shock-fx-runtime)
+(defn- with-fresh-directed-shock-runtime [f]
+  (hand-effects/call-with-hand-effect-runtime
+    (hand-effects/create-hand-effect-runtime)
     (fn []
       (try
+        (hand-effects/reset-hand-effect-registry-for-test!)
+        (dsfx/reset-directed-shock-fx-for-test!)
         (f)
         (finally
+          (hand-effects/reset-hand-effect-registry-for-test!)
           (dsfx/reset-directed-shock-fx-for-test!))))))
 
 (defn- owner-state [ctx-id]
@@ -22,7 +25,7 @@
           :ctx-id ctx-id}
          payload))
 
-(use-fixtures :each with-fresh-directed-shock-fx-runtime)
+(use-fixtures :each with-fresh-directed-shock-runtime)
 
 (deftest init-registers-directed-shock-fx-channels-test
   (let [registered-hand* (atom nil)
@@ -67,78 +70,74 @@
              @hand-enqueued*)))))
 
 (deftest enqueue-perform-plays-sound-once-test
-  (let [enqueue! @#'cn.li.ac.content.ability.vecmanip.directed-shock-fx/enqueue!
+  (let [enqueue-state! @#'cn.li.ac.content.ability.vecmanip.directed-shock-fx/enqueue-state!
         sound-calls* (atom [])]
     (with-redefs [client-sounds/queue-current-sound-effect! (fn [payload]
                                                               (swap! sound-calls* conj payload))]
-      (enqueue! {:mode :perform})
+      (enqueue-state! (dsfx/default-directed-shock-fx-state) {:mode :perform})
       (is (= 1 (count @sound-calls*)))
       (is (= "my_mod:vecmanip.directed_shock"
              (:sound-id (first @sound-calls*)))))))
 
 (deftest end-payload-respects-performed-flag-test
-  (let [enqueue! @#'cn.li.ac.content.ability.vecmanip.directed-shock-fx/enqueue!]
+  (let [enqueue-state! @#'cn.li.ac.content.ability.vecmanip.directed-shock-fx/enqueue-state!]
     (with-redefs [cn.li.ac.content.ability.vecmanip.directed-shock-fx/now-ms (fn [] 1000)
                   client-sounds/queue-current-sound-effect! (fn [_] nil)]
-      (enqueue! (payload "ctx-1" {:mode :perform}))
-      (enqueue! (payload "ctx-1" {:mode :end :performed? true}))
+      (hand-effects/update-effect-state! :directed-shock enqueue-state! (payload "ctx-1" {:mode :perform}))
+      (hand-effects/update-effect-state! :directed-shock enqueue-state! (payload "ctx-1" {:mode :end :performed? true}))
       (is (= :punch (:stage (owner-state "ctx-1"))))
-      (enqueue! (payload "ctx-1" {:mode :end :performed? false}))
+      (hand-effects/update-effect-state! :directed-shock enqueue-state! (payload "ctx-1" {:mode :end :performed? false}))
       (is (nil? (owner-state "ctx-1"))))))
 
 (deftest punch-tick-clears-expired-state-test
-  (let [enqueue! @#'cn.li.ac.content.ability.vecmanip.directed-shock-fx/enqueue!
-        tick! @#'cn.li.ac.content.ability.vecmanip.directed-shock-fx/tick!
+  (let [enqueue-state! @#'cn.li.ac.content.ability.vecmanip.directed-shock-fx/enqueue-state!
+        tick-state! @#'cn.li.ac.content.ability.vecmanip.directed-shock-fx/tick-state!
         now* (atom 1000)]
     (with-redefs [cn.li.ac.content.ability.vecmanip.directed-shock-fx/now-ms (fn [] @now*)
                   client-sounds/queue-current-sound-effect! (fn [_] nil)]
-      (enqueue! {:mode :perform})
+      (hand-effects/update-effect-state! :directed-shock enqueue-state! {:mode :perform :owner-key [:ctx "ctx-a"]})
       (swap! now* + 301)
-      (tick!)
+      (hand-effects/update-effect-state! :directed-shock tick-state!)
       (is (empty? (:effect-state (dsfx/directed-shock-fx-snapshot)))))))
 
 (deftest two-owners-keep-directed-shock-state-independent-test
-  (let [enqueue! @#'cn.li.ac.content.ability.vecmanip.directed-shock-fx/enqueue!]
+  (let [enqueue-state! @#'cn.li.ac.content.ability.vecmanip.directed-shock-fx/enqueue-state!]
     (with-redefs [cn.li.ac.content.ability.vecmanip.directed-shock-fx/now-ms (fn [] 1000)
                   client-sounds/queue-current-sound-effect! (fn [_] nil)]
-      (enqueue! (payload "ctx-a" {:mode :start}))
-      (enqueue! (payload "ctx-b" {:mode :perform}))
+      (hand-effects/update-effect-state! :directed-shock enqueue-state! (payload "ctx-a" {:mode :start}))
+      (hand-effects/update-effect-state! :directed-shock enqueue-state! (payload "ctx-b" {:mode :perform}))
       (is (= :prepare (:stage (owner-state "ctx-a"))))
       (is (= :punch (:stage (owner-state "ctx-b"))))
-      (enqueue! (payload "ctx-a" {:mode :end :performed? false}))
+      (hand-effects/update-effect-state! :directed-shock enqueue-state! (payload "ctx-a" {:mode :end :performed? false}))
       (is (nil? (owner-state "ctx-a")))
       (is (= :punch (:stage (owner-state "ctx-b"))))
       (dsfx/clear-directed-shock-owner! [:ctx "ctx-b"])
       (is (empty? (:effect-state (dsfx/directed-shock-fx-snapshot)))))))
 
 (deftest directed-shock-fx-runtime-isolation-test
-  (let [runtime-a (dsfx/create-directed-shock-fx-runtime)
-        runtime-b (dsfx/create-directed-shock-fx-runtime)
-        enqueue! @#'cn.li.ac.content.ability.vecmanip.directed-shock-fx/enqueue!]
+  (let [runtime-a (hand-effects/create-hand-effect-runtime)
+        runtime-b (hand-effects/create-hand-effect-runtime)
+        enqueue-state! @#'cn.li.ac.content.ability.vecmanip.directed-shock-fx/enqueue-state!]
     (with-redefs [cn.li.ac.content.ability.vecmanip.directed-shock-fx/now-ms (fn [] 1000)
                   client-sounds/queue-current-sound-effect! (fn [_] nil)]
-      (dsfx/call-with-directed-shock-fx-runtime
+      (hand-effects/call-with-hand-effect-runtime
         runtime-a
         (fn []
-          (enqueue! (payload "ctx-a" {:mode :perform}))
+          (hand-effects/update-effect-state! :directed-shock enqueue-state! (payload "ctx-a" {:mode :perform}))
           (is (= :punch (:stage (owner-state "ctx-a"))))))
-      (dsfx/call-with-directed-shock-fx-runtime
+      (hand-effects/call-with-hand-effect-runtime
         runtime-b
         (fn []
           (is (= {:effect-state {}}
                  (dsfx/directed-shock-fx-snapshot)))
-          (enqueue! (payload "ctx-b" {:mode :start}))
+          (hand-effects/update-effect-state! :directed-shock enqueue-state! (payload "ctx-b" {:mode :start}))
           (is (= #{[:ctx "ctx-b"]}
                  (set (keys (:effect-state (dsfx/directed-shock-fx-snapshot))))))))
-      (dsfx/call-with-directed-shock-fx-runtime
+      (hand-effects/call-with-hand-effect-runtime
         runtime-a
         (fn []
           (is (= :punch (:stage (owner-state "ctx-a")))))))))
 
-(deftest directed-shock-fx-runtime-required-without-binding-test
-  (dsfx/call-with-directed-shock-fx-runtime nil
-    (fn []
-      (is (thrown-with-msg?
-            clojure.lang.ExceptionInfo
-            #"runtime is not bound"
-            (dsfx/directed-shock-fx-snapshot))))))
+(deftest directed-shock-fx-snapshot-default-without-registered-state-test
+  (is (= {:effect-state {}}
+         (dsfx/directed-shock-fx-snapshot))))

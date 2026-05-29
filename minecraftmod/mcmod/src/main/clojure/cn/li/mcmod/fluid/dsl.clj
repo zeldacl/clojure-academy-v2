@@ -15,10 +15,11 @@
 (defonce ^:private installed-fluid-registry-runtime
   (create-fluid-registry-runtime))
 
-(defonce ^:private fluid-registry-runtime-override* (atom nil))
+(def ^:dynamic *fluid-registry-runtime*
+  installed-fluid-registry-runtime)
 
 (defn- fluid-registry-state []
-  (:registry (or @fluid-registry-runtime-override* installed-fluid-registry-runtime)))
+  (:registry *fluid-registry-runtime*))
 
 (defrecord FluidPhysicalProperties
   [luminosity density viscosity temperature can-convert-to-source supports-boat])

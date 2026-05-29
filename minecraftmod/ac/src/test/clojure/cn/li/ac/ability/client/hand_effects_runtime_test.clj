@@ -52,3 +52,34 @@
         clojure.lang.ExceptionInfo
         #"frozen"
         (hand-effects/register-hand-effect! :c (handler :c)))))
+
+(deftest hand-effect-stateful-enqueue-and-tick-test
+  (hand-effects/register-hand-effect!
+    :stateful/a
+    {:initial-state {:count 0 :last nil}
+     :enqueue-state-fn (fn [state payload]
+          (-> (or state {:count 0 :last nil})
+         (update :count (fnil inc 0))
+         (assoc :last payload)))
+     :tick-state-fn (fn [state]
+       (-> (or state {:count 0 :last nil})
+           (update :count (fnil inc 0))))
+     :transform-fn (fn [] nil)})
+
+  (is (= {:count 0 :last nil}
+    (hand-effects/effect-state-snapshot :stateful/a)))
+
+  (hand-effects/enqueue-hand-effect! :stateful/a {:mode :start :owner-key [:ctx "ctx-a"]})
+  (is (= {:count 1 :last {:mode :start :owner-key [:ctx "ctx-a"]}}
+    (hand-effects/effect-state-snapshot :stateful/a)))
+
+  (hand-effects/tick-hand-effects!)
+  (is (= {:count 2 :last {:mode :start :owner-key [:ctx "ctx-a"]}}
+    (hand-effects/effect-state-snapshot :stateful/a)))
+
+  (hand-effects/update-effect-state! :stateful/a assoc :tag :ok)
+  (is (= :ok (get (hand-effects/effect-state-snapshot :stateful/a) :tag)))
+
+  (hand-effects/reset-hand-effect-state-for-test! :stateful/a {:count 7})
+  (is (= {:count 7}
+    (hand-effects/effect-state-snapshot :stateful/a))))

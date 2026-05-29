@@ -26,10 +26,11 @@
 (defonce ^:private installed-event-metadata-runtime
   (create-event-metadata-runtime))
 
-(defonce ^:private event-metadata-runtime-override* (atom nil))
+(def ^:dynamic *event-metadata-runtime*
+  installed-event-metadata-runtime)
 
 (defn- event-metadata-state-atom []
-  (:state* (or @event-metadata-runtime-override* installed-event-metadata-runtime)))
+  (:state* *event-metadata-runtime*))
 
 (defn- event-metadata-state-snapshot []
   @(event-metadata-state-atom))

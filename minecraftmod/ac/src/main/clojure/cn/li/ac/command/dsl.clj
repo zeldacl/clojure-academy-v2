@@ -18,7 +18,8 @@
 (defonce ^:private installed-command-registry-runtime
   (create-command-registry-runtime))
 
-(defonce ^:private command-registry-runtime-override* (atom nil))
+(def ^:dynamic *command-registry-runtime*
+  installed-command-registry-runtime)
 
 (defn call-with-command-registry-runtime
   [runtime f]
@@ -26,17 +27,12 @@
                  (= ::command-registry-runtime (::runtime runtime))
                  (some? (:state* runtime)))
     (throw (ex-info "Expected command registry runtime" {:runtime runtime})))
-  (let [prev-override @command-registry-runtime-override*]
-    (try
-      (reset! command-registry-runtime-override* runtime)
-      (f)
-      (finally
-        (reset! command-registry-runtime-override* prev-override)))))
+  (binding [*command-registry-runtime* runtime]
+    (f)))
 
 (defn- current-command-registry-runtime
   []
-  (or @command-registry-runtime-override*
-      @installed-command-registry-runtime))
+  *command-registry-runtime*)
 
 (defn- command-registry-state-atom
   []

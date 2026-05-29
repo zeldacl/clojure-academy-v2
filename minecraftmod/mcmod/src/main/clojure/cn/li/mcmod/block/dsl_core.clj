@@ -41,10 +41,11 @@
 (defonce ^:private installed-block-registry-runtime
   (create-block-registry-runtime))
 
-(defonce ^:private block-registry-runtime-override* (atom nil))
+(def ^:dynamic *block-registry-runtime*
+  installed-block-registry-runtime)
 
 (defn- block-registry-state []
-  (:registry (or @block-registry-runtime-override* installed-block-registry-runtime)))
+  (:registry *block-registry-runtime*))
 
 (defn get-block-registry
   "Return the active block registry instance for the current runtime binding."

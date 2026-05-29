@@ -39,10 +39,11 @@
 (defonce ^:private installed-action-executor-registry-runtime
   (create-action-executor-registry-runtime))
 
-(defonce ^:private action-executor-registry-runtime-override* (atom nil))
+(def ^:dynamic *action-executor-registry-runtime*
+  installed-action-executor-registry-runtime)
 
 (defn- action-executors-atom []
-  (:state* (or @action-executor-registry-runtime-override* installed-action-executor-registry-runtime)))
+  (:state* *action-executor-registry-runtime*))
 
 (defn- action-executors-snapshot []
   @(action-executors-atom))

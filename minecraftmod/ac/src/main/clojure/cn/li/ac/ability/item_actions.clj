@@ -28,7 +28,8 @@
 (defonce ^:private installed-item-action-registries-runtime
   (create-item-action-registries-runtime))
 
-(defonce ^:private item-action-registries-runtime-override* (atom nil))
+(def ^:dynamic *item-action-registries-runtime*
+  installed-item-action-registries-runtime)
 
 (defn call-with-item-action-registries-runtime
   [runtime f]
@@ -36,17 +37,12 @@
                  (= ::item-action-registries-runtime (::runtime runtime))
                  (some? (:state* runtime)))
     (throw (ex-info "Expected item action registries runtime" {:runtime runtime})))
-  (let [prev-override @item-action-registries-runtime-override*]
-    (try
-      (reset! item-action-registries-runtime-override* runtime)
-      (f)
-      (finally
-        (reset! item-action-registries-runtime-override* prev-override)))))
+  (binding [*item-action-registries-runtime* runtime]
+    (f)))
 
 (defn- current-item-action-registries-runtime
   []
-  (or @item-action-registries-runtime-override*
-      @installed-item-action-registries-runtime))
+  *item-action-registries-runtime*)
 
 (defn- item-action-registries-state-atom
   []

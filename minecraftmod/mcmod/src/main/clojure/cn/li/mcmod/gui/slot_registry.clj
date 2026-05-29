@@ -18,10 +18,11 @@
 (defonce ^:private installed-slot-registry-runtime
   (create-slot-registry-runtime))
 
-(defonce ^:private slot-registry-runtime-override* (atom nil))
+(def ^:dynamic *slot-registry-runtime*
+  installed-slot-registry-runtime)
 
 (defn- slot-registry-state-atom []
-  (:state* (or @slot-registry-runtime-override* installed-slot-registry-runtime)))
+  (:state* *slot-registry-runtime*))
 
 (defn- slot-registry-state-snapshot []
   @(slot-registry-state-atom))

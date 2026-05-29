@@ -12,10 +12,11 @@
 (defonce ^:private installed-loot-injection-registry-runtime
   (create-loot-injection-registry-runtime))
 
-(defonce ^:private loot-injection-registry-runtime-override* (atom nil))
+(def ^:dynamic *loot-injection-registry-runtime*
+  installed-loot-injection-registry-runtime)
 
 (defn- loot-injection-registry-state []
-  (:registry (or @loot-injection-registry-runtime-override* installed-loot-injection-registry-runtime)))
+  (:registry *loot-injection-registry-runtime*))
 
 (defrecord LootInjectionSpec
   [id target-table item-id weight quality min-count max-count])

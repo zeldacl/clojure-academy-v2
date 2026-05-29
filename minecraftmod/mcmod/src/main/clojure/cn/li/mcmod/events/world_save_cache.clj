@@ -58,7 +58,8 @@
 (defonce ^:private installed-world-save-cache-runtime
   (create-world-save-cache-runtime))
 
-(defonce ^:private world-save-cache-runtime-override* (atom nil))
+(def ^:dynamic *world-save-cache-runtime*
+  installed-world-save-cache-runtime)
 
 (defn- world-save-cache-runtime?
   [runtime]
@@ -71,12 +72,8 @@
   (when-not (world-save-cache-runtime? runtime)
     (throw (ex-info "Expected world save cache runtime"
                     {:runtime runtime})))
-  (let [prev-override @world-save-cache-runtime-override*]
-    (try
-      (reset! world-save-cache-runtime-override* runtime)
-      (f)
-      (finally
-        (reset! world-save-cache-runtime-override* prev-override)))))
+  (binding [*world-save-cache-runtime* runtime]
+    (f)))
 
 (defmacro with-world-save-cache-runtime
   [runtime & body]
@@ -84,8 +81,7 @@
 
 (defn- current-runtime
   []
-  (or @world-save-cache-runtime-override*
-      installed-world-save-cache-runtime))
+  *world-save-cache-runtime*)
 
 (defn- pending-save-data-atom
   []

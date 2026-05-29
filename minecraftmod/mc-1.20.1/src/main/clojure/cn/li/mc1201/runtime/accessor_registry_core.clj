@@ -14,10 +14,10 @@
   (Object.))
 
 (def ^:private registries*
-  (atom {:world {}
-         :entity {}
-         :render {}
-         :lifecycle {}}))
+  (volatile! {:world {}
+             :entity {}
+             :render {}
+             :lifecycle {}}))
 
 (defn- accessor-registries-snapshot
   []
@@ -30,7 +30,7 @@
           current (or (get registries domain)
                       (throw (ex-info "Unknown accessor domain" {:domain domain})))
           updated (update-fn current)]
-      (swap! registries* assoc domain updated)
+  (vreset! registries* (assoc registries domain updated))
       updated)))
 
 (defn- get-registry

@@ -1,90 +1,52 @@
 (ns cn.li.ac.content.ability.electromaster.arc-gen-fx
   "Client FX for Arc-Gen: short electric arc beam and weak arc sound."
-  (:require [cn.li.ac.ability.client.level-effects :as level-effects]
+  (:require [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
-            [cn.li.ac.ability.client.render-util :as ru]
-            [cn.li.ac.ability.client.effects.sounds :as client-sounds]))
+            [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.ability.client.render-util :as ru]))
 
 (def ^:private sound-id "my_mod:em.arc_weak")
 (def ^:private arc-life 10)
+(def ^:private arc-gen-effect-id :arc-gen)
 
 (defn default-arc-gen-fx-runtime-state
   []
   {:arcs {}})
 
-(defn create-arc-gen-fx-runtime
-  ([]
-   (create-arc-gen-fx-runtime {}))
-  ([{:keys [state*]
-     :or {state* (atom (default-arc-gen-fx-runtime-state))}}]
-   {::runtime ::arc-gen-fx-runtime
-    :state* state*}))
-
-
-(defonce ^:private installed-arc-gen-fx-runtime
-  (create-arc-gen-fx-runtime))
-
-(defonce ^:private arc-gen-fx-runtime-override* (atom nil))
-
-(defn- arc-gen-fx-runtime?
-  [runtime]
-  (and (map? runtime)
-       (= ::arc-gen-fx-runtime (::runtime runtime))
-       (some? (:state* runtime))))
-
-(defn call-with-arc-gen-fx-runtime
-  [runtime f]
-  (when-not (arc-gen-fx-runtime? runtime)
-    (throw (ex-info "Expected Arc Gen FX runtime"
-                    {:value runtime})))
-  (let [prev-override @arc-gen-fx-runtime-override*]
-    (try
-      (reset! arc-gen-fx-runtime-override* runtime)
-      (f)
-      (finally
-        (reset! arc-gen-fx-runtime-override* prev-override)))))
-
-(defmacro with-arc-gen-fx-runtime
-  [runtime & body]
-  `(call-with-arc-gen-fx-runtime ~runtime (fn [] ~@body)))
-
-(defn- current-arc-gen-fx-runtime
-  []
-  (or @arc-gen-fx-runtime-override*
-      @installed-arc-gen-fx-runtime))
-
-(defn- arc-gen-fx-state-atom
-  []
-  (:state* (current-arc-gen-fx-runtime)))
-
-(defn- arc-gen-fx-state-snapshot
-  []
-  @(arc-gen-fx-state-atom))
-
-(defn- update-arc-gen-fx-state!
-  [f & args]
-  (apply swap! (arc-gen-fx-state-atom) f args))
-
 (defn arc-gen-fx-snapshot
   []
-  (arc-gen-fx-state-snapshot))
+  (or (level-effects/effect-state-snapshot arc-gen-effect-id)
+      (default-arc-gen-fx-runtime-state)))
 
 (defn reset-arc-gen-fx-for-test!
   []
-  (reset! (arc-gen-fx-state-atom) (default-arc-gen-fx-runtime-state))
+  (level-effects/reset-level-effect-state-for-test!
+    arc-gen-effect-id
+    (default-arc-gen-fx-runtime-state))
   nil)
 
 (defn clear-arc-gen-owner!
   [owner-key]
-  (update-arc-gen-fx-state! update :arcs dissoc owner-key)
+  (level-effects/update-effect-state!
+    arc-gen-effect-id
+    (fn [store]
+      (let [store* (if (contains? (or store {}) :arcs)
+                     (or store (default-arc-gen-fx-runtime-state))
+                     (default-arc-gen-fx-runtime-state))]
+        (update store* :arcs dissoc owner-key))))
   nil)
 
 (defn- all-arcs []
-  (mapcat val (:arcs (arc-gen-fx-state-snapshot))))
+  (mapcat val (:arcs (arc-gen-fx-snapshot))))
 
-(defn- enqueue! [{:keys [payload ctx-id channel owner-key]}]
-  (let [owner-key* (or owner-key [:ctx ctx-id])
-        {:keys [mode start end hit-type source-player-id world-id]} payload
+(defn- enqueue-state!
+  [store event]
+  (let [store* (if (contains? (or store {}) :arcs)
+                 (or store (default-arc-gen-fx-runtime-state))
+                 (default-arc-gen-fx-runtime-state))
+        {:keys [payload ctx-id channel owner-key]} event
+        owner-key* (or owner-key [:ctx ctx-id])
+        {:keys [mode start end hit-type source-player-id world-id]} (or payload {})
         base-meta {:owner-key owner-key*
                    :ctx-id ctx-id
                    :channel channel
@@ -93,33 +55,37 @@
     (case mode
       :perform
       (when (and (map? start) (map? end))
-        (update-arc-gen-fx-state!
-          update :arcs update owner-key* (fnil conj [])
-          (merge base-meta
-                 {:start start
-                  :end end
-                  :hit-type hit-type
-                  :ttl arc-life
-                  :max-ttl arc-life}))
         (client-sounds/queue-current-sound-effect!
-          {:type :sound :sound-id sound-id :volume 0.5 :pitch 1.0}))
-      :end
-      (update-arc-gen-fx-state! update :arcs dissoc owner-key*)
-      nil)))
+          {:type :sound :sound-id sound-id :volume 0.5 :pitch 1.0})
+        (update-in store* [:arcs owner-key*] (fnil conj [])
+                   (merge base-meta
+                          {:start start
+                           :end end
+                           :hit-type hit-type
+                           :ttl arc-life
+                           :max-ttl arc-life})))
 
-(defn- tick! []
-  (update-arc-gen-fx-state!
-    update :arcs
-    (fn [by-owner]
-      (into {}
-            (keep (fn [[owner-key items]]
-                    (let [live (->> items
-                                    (map #(update % :ttl dec))
-                                    (filter #(pos? (long (:ttl %))))
-                                    vec)]
-                      (when (seq live)
-                        [owner-key live]))))
-            by-owner))))
+      :end
+      (update store* :arcs dissoc owner-key*)
+
+      store*)))
+
+(defn- tick-state!
+  [store]
+  (let [store* (if (contains? (or store {}) :arcs)
+                 (or store (default-arc-gen-fx-runtime-state))
+                 (default-arc-gen-fx-runtime-state))]
+    (update store* :arcs
+      (fn [by-owner]
+        (into {}
+              (keep (fn [[owner-key items]]
+                      (let [live (->> items
+                                      (map #(update % :ttl dec))
+                                      (filter #(pos? (long (:ttl %))))
+                                      vec)]
+                        (when (seq live)
+                          [owner-key live]))))
+              by-owner)))))
 
 (defn- arc-ops [cam-pos {:keys [start end ttl max-ttl]}]
   (let [life (/ (double ttl) (double (max 1 max-ttl)))
@@ -142,21 +108,14 @@
       {:ops (vec ops)})))
 
 (defn init! []
-  (let [runtime (create-arc-gen-fx-runtime)]
-    (level-effects/register-level-effect! :arc-gen
-      {:enqueue-event-fn (fn [event]
-                           (call-with-arc-gen-fx-runtime
-                             runtime
-                             (fn []
-                               (enqueue! event))))
-       :tick-fn (fn []
-                  (call-with-arc-gen-fx-runtime
-                    runtime
-                    tick!))
-       :build-plan-fn build-plan}))
+  (level-effects/register-level-effect! arc-gen-effect-id
+    {:initial-state (default-arc-gen-fx-runtime-state)
+     :enqueue-state-fn enqueue-state!
+     :tick-state-fn tick-state!
+     :build-plan-fn build-plan})
   (fx-registry/register-fx-channel! :arc-gen/fx-perform
     (fn [ctx-id channel payload]
-      (level-effects/enqueue-level-effect! :arc-gen
+      (level-effects/enqueue-level-effect! arc-gen-effect-id
         (merge (select-keys payload [:effect-instance-id :source-player-id :world-id])
                {:mode :perform
                 :start (:start payload)

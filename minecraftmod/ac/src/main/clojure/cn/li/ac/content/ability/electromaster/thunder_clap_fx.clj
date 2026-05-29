@@ -1,183 +1,124 @@
 (ns cn.li.ac.content.ability.electromaster.thunder-clap-fx
   "Client FX for Thunder Clap: surround ring + target mark + walk speed."
-  (:require [cn.li.ac.ability.client.level-effects :as level-effects]
-            [cn.li.ac.ability.client.fx-registry :as fx-registry]
+  (:require [cn.li.ac.ability.client.fx-registry :as fx-registry]
+            [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.render-util :as ru]))
+
+(def ^:private thunder-clap-effect-id :thunder-clap)
 
 (defn default-thunder-clap-fx-runtime-state
   []
   {:effect-state {}
    :impacts {}})
 
-(defn create-thunder-clap-fx-runtime
-  ([]
-   (create-thunder-clap-fx-runtime {}))
-  ([{:keys [state*]
-     :or {state* (atom (default-thunder-clap-fx-runtime-state))}}]
-   {::runtime ::thunder-clap-fx-runtime
-    :state* state*}))
-
-
-(defonce ^:private installed-thunder-clap-fx-runtime
-  (create-thunder-clap-fx-runtime))
-
-(defonce ^:private thunder-clap-fx-runtime-override* (atom nil))
-
-(defn- thunder-clap-fx-runtime?
-  [runtime]
-  (and (map? runtime)
-       (= ::thunder-clap-fx-runtime (::runtime runtime))
-       (some? (:state* runtime))))
-
-(defn call-with-thunder-clap-fx-runtime
-  [runtime f]
-  (when-not (thunder-clap-fx-runtime? runtime)
-    (throw (ex-info "Expected thunder clap FX runtime"
-                    {:value runtime})))
-  (let [prev-override @thunder-clap-fx-runtime-override*]
-    (try
-      (reset! thunder-clap-fx-runtime-override* runtime)
-      (f)
-      (finally
-        (reset! thunder-clap-fx-runtime-override* prev-override)))))
-
-(defmacro with-thunder-clap-fx-runtime
-  [runtime & body]
-  `(call-with-thunder-clap-fx-runtime ~runtime (fn [] ~@body)))
-
-(defn- current-thunder-clap-fx-runtime
-  []
-  (or @thunder-clap-fx-runtime-override*
-  installed-thunder-clap-fx-runtime))
-
-(defn- thunder-clap-fx-state-atom
-  []
-  (:state* (current-thunder-clap-fx-runtime)))
-
-(defn- thunder-clap-fx-state-snapshot
-  []
-  @(thunder-clap-fx-state-atom))
-
-(defn- update-thunder-clap-fx-state!
-  [f & args]
-  (apply swap! (thunder-clap-fx-state-atom) f args))
-
 (defn thunder-clap-fx-snapshot
   []
-  (thunder-clap-fx-state-snapshot))
+  (or (level-effects/effect-state-snapshot thunder-clap-effect-id)
+      (default-thunder-clap-fx-runtime-state)))
 
 (defn reset-thunder-clap-fx-for-test!
   []
-  (reset! (thunder-clap-fx-state-atom) (default-thunder-clap-fx-runtime-state))
+  (level-effects/reset-level-effect-state-for-test!
+    thunder-clap-effect-id
+    (default-thunder-clap-fx-runtime-state))
   nil)
 
 (defn clear-thunder-clap-owner!
   [owner-key]
-  (update-thunder-clap-fx-state! update :effect-state dissoc owner-key)
-  (update-thunder-clap-fx-state! update :impacts dissoc owner-key)
+  (level-effects/update-effect-state!
+    thunder-clap-effect-id
+    (fn [store]
+      (let [store* (or store (default-thunder-clap-fx-runtime-state))]
+        (-> store*
+            (update :effect-state dissoc owner-key)
+            (update :impacts dissoc owner-key)))))
   nil)
 
-;; ---------------------------------------------------------------------------
-;; Enqueue
-;; ---------------------------------------------------------------------------
-
-(defn- enqueue! [{:keys [payload ctx-id channel owner-key]}]
-  (let [owner-key* (or owner-key [:ctx ctx-id])
-  {:keys [mode ticks charge-ratio target performed? source-player-id world-id]} payload
+(defn- enqueue-state!
+  [store event]
+  (let [store* (or store (default-thunder-clap-fx-runtime-state))
+        {:keys [payload ctx-id channel owner-key]} event
+        {:keys [mode ticks charge-ratio target performed? source-player-id world-id]} (or payload {})
+        owner-key* (or owner-key [:ctx ctx-id])
         base-meta {:owner-key owner-key*
                    :ctx-id ctx-id
                    :channel channel
                    :source-player-id source-player-id
-                   :world-id world-id}]
+                   :world-id world-id}
+        effect-state (:effect-state store*)
+        current-st (get effect-state owner-key*)]
     (case mode
       :start
-      (update-thunder-clap-fx-state!
-        update :effect-state assoc owner-key*
-        (merge base-meta {:active? true :ticks 0 :charge-ratio 0.0 :target nil :performed? false}))
+      (assoc-in store* [:effect-state owner-key*]
+                (merge base-meta
+                       {:active? true
+                        :ticks 0
+                        :charge-ratio 0.0
+                        :target nil
+                        :performed? false}))
 
       :update
-      (update-thunder-clap-fx-state!
-        update :effect-state update owner-key*
-        (fn [st]
-          (assoc (merge base-meta (or st {}))
-                 :owner-key owner-key*
-                 :ctx-id ctx-id
-                 :channel channel
-                 :source-player-id source-player-id
-                 :world-id world-id
-                 :active? true
-                 :ticks (long (or ticks 0))
-                 :charge-ratio (double (or charge-ratio 0.0))
-                 :target target)))
+      (assoc-in store* [:effect-state owner-key*]
+                (merge base-meta
+                       current-st
+                       {:active? true
+                        :ticks (long (or ticks 0))
+                        :charge-ratio (double (or charge-ratio 0.0))
+                        :target target}))
 
       :perform
-      (do
-        (update-thunder-clap-fx-state!
-          update :effect-state update owner-key*
-          (fn [st]
-            (assoc (merge base-meta (or st {}))
-                   :owner-key owner-key*
-                   :ctx-id ctx-id
-                   :channel channel
-                   :source-player-id source-player-id
-                   :world-id world-id
-                   :active? true
-                   :ticks (long (or ticks (:ticks st) 0))
-                   :charge-ratio (double (or charge-ratio (:charge-ratio st) 0.0))
-                   :target (or target (:target st))
-                   :performed? true)))
-        (when (map? target)
-          (update-thunder-clap-fx-state!
-            update :impacts update owner-key* (fnil conj [])
-            (merge base-meta
-                   {:target target
-                    :ttl 6
-                    :max-ttl 6
-                    :charge-ratio (double (or charge-ratio 0.0))}))))
+      (let [next-store (assoc-in store* [:effect-state owner-key*]
+                                 (merge base-meta
+                                        current-st
+                                        {:active? true
+                                         :ticks (long (or ticks (:ticks current-st) 0))
+                                         :charge-ratio (double (or charge-ratio (:charge-ratio current-st) 0.0))
+                                         :target (or target (:target current-st))
+                                         :performed? true}))]
+        (if (map? target)
+          (update-in next-store [:impacts owner-key*] (fnil conj [])
+                     (merge base-meta
+                            {:target target
+                             :ttl 6
+                             :max-ttl 6
+                             :charge-ratio (double (or charge-ratio 0.0))}))
+          next-store))
 
       :end
-      (do
-        (update-thunder-clap-fx-state! update :effect-state dissoc owner-key*)
-        (when (and (map? target) performed?)
-          (update-thunder-clap-fx-state!
-            update :impacts update owner-key* (fnil conj [])
-            (merge base-meta
-                   {:target target
-                    :ttl 4
-                    :max-ttl 4
-                    :charge-ratio (double (or charge-ratio 0.0))}))))
+      (let [next-store (update store* :effect-state dissoc owner-key*)]
+        (if (and (map? target) performed?)
+          (update-in next-store [:impacts owner-key*] (fnil conj [])
+                     (merge base-meta
+                            {:target target
+                             :ttl 4
+                             :max-ttl 4
+                             :charge-ratio (double (or charge-ratio 0.0))}))
+          next-store))
 
-      nil)))
+      store*)))
 
-;; ---------------------------------------------------------------------------
-;; Tick
-;; ---------------------------------------------------------------------------
-
-(defn- tick! []
-  (update-thunder-clap-fx-state!
-    update :effect-state
-    (fn [states]
-      (into {}
-            (keep (fn [[owner-key st]]
-                    (when (:active? st)
-                      [owner-key (update st :ticks (fnil inc 0))])))
-            states))))
-  (update-thunder-clap-fx-state!
-    update :impacts
-    (fn [by-owner]
-      (->> by-owner
-           (keep (fn [[owner-key impacts]]
-                   (let [live (->> impacts
-                                   (map #(update % :ttl dec))
-                                   (filter #(pos? (long (or (:ttl %) 0))))
-                                   vec)]
-                     (when (seq live)
-                       [owner-key live]))))
-           (into {}))))
-
-;; ---------------------------------------------------------------------------
-;; Render ops
-;; ---------------------------------------------------------------------------
+(defn- tick-state!
+  [store]
+  (let [store* (or store (default-thunder-clap-fx-runtime-state))]
+    (-> store*
+        (update :effect-state
+          (fn [states]
+            (into {}
+                  (keep (fn [[owner-key st]]
+                          (when (:active? st)
+                            [owner-key (update st :ticks (fnil inc 0))])))
+                  states)))
+        (update :impacts
+          (fn [by-owner]
+            (into {}
+                  (keep (fn [[owner-key impacts]]
+                          (let [live (->> impacts
+                                          (map #(update % :ttl dec))
+                                          (filter #(pos? (long (or (:ttl %) 0))))
+                                          vec)]
+                            (when (seq live)
+                              [owner-key live]))))
+                  by-owner))))))
 
 (defn- surround-ops [player-center ticks]
   (let [radius (+ 0.55 (* 0.25 (Math/sin (* 0.22 (double ticks)))))
@@ -233,7 +174,7 @@
                       :z (+ (:z target) (* radius (Math/sin a0)))}
                   p1 {:x (+ (:x target) (* radius (Math/cos a1)))
                       :y y
-                      :z (+ (:z target) (* radius (Math/sin a1))) }]]
+                      :z (+ (:z target) (* radius (Math/sin a1)))}]]
         (ru/line-op p0 p1 color)))))
 
 (defn- local-walk-speed [ticks]
@@ -242,12 +183,8 @@
         value (- max-speed (* (/ (- max-speed min-speed) 60.0) (double ticks)))]
     (float (max min-speed value))))
 
-;; ---------------------------------------------------------------------------
-;; Build plan
-;; ---------------------------------------------------------------------------
-
 (defn- build-plan [_camera-pos hand-center-pos _tick]
-  (let [{:keys [effect-state impacts]} (thunder-clap-fx-state-snapshot)
+  (let [{:keys [effect-state impacts]} (thunder-clap-fx-snapshot)
         tc (some (fn [st]
                    (when (and (:active? st)
                               (or (nil? (:source-player-id st))
@@ -272,51 +209,41 @@
       {:ops (vec (concat charge-ops impact-render-ops))
        :local-walk-speed ws})))
 
-;; ---------------------------------------------------------------------------
-;; Registration
-;; ---------------------------------------------------------------------------
-
-(defn init! []
-  (let [runtime (create-thunder-clap-fx-runtime)]
-    (level-effects/register-level-effect! :thunder-clap
-      {:enqueue-event-fn (fn [event]
-                           (call-with-thunder-clap-fx-runtime
-                             runtime
-                             (fn []
-                               (enqueue! event))))
-       :tick-fn (fn []
-                  (call-with-thunder-clap-fx-runtime
-                    runtime
-                    tick!))
-       :build-plan-fn build-plan}))
+(defn init!
+  []
+  (level-effects/register-level-effect! thunder-clap-effect-id
+    {:initial-state (default-thunder-clap-fx-runtime-state)
+     :enqueue-state-fn enqueue-state!
+     :tick-state-fn tick-state!
+     :build-plan-fn build-plan})
   (fx-registry/register-fx-channels!
     [:thunder-clap/fx-start :thunder-clap/fx-update :thunder-clap/fx-perform :thunder-clap/fx-end]
     (fn [ctx-id channel payload]
       (case channel
         :thunder-clap/fx-start
-        (level-effects/enqueue-level-effect! :thunder-clap
+        (level-effects/enqueue-level-effect! thunder-clap-effect-id
                                              (merge (select-keys payload [:effect-instance-id :source-player-id :world-id])
                                                     {:mode :start})
                                              {:ctx-id ctx-id :channel channel})
         :thunder-clap/fx-update
-        (level-effects/enqueue-level-effect! :thunder-clap
+        (level-effects/enqueue-level-effect! thunder-clap-effect-id
           (merge (select-keys payload [:effect-instance-id :source-player-id :world-id])
                  {:mode :update
                   :ticks (long (or (:ticks payload) 0))
                   :charge-ratio (double (or (:charge-ratio payload) 0.0))
                   :target (get payload :target)})
           {:ctx-id ctx-id :channel channel})
-              :thunder-clap/fx-perform
-              (level-effects/enqueue-level-effect! :thunder-clap
-                (merge (select-keys payload [:effect-instance-id :source-player-id :world-id])
+        :thunder-clap/fx-perform
+        (level-effects/enqueue-level-effect! thunder-clap-effect-id
+          (merge (select-keys payload [:effect-instance-id :source-player-id :world-id])
                  {:mode :perform
                   :performed? (boolean (:performed? payload))
                   :ticks (long (or (:ticks payload) (:charge-ticks payload) 0))
                   :charge-ratio (double (or (:charge-ratio payload) 0.0))
                   :target (get payload :target)})
-                {:ctx-id ctx-id :channel channel})
+          {:ctx-id ctx-id :channel channel})
         :thunder-clap/fx-end
-        (level-effects/enqueue-level-effect! :thunder-clap
+        (level-effects/enqueue-level-effect! thunder-clap-effect-id
           (merge (select-keys payload [:effect-instance-id :source-player-id :world-id])
                  {:mode :end
                   :performed? (boolean (:performed? payload))

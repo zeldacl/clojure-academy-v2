@@ -1,40 +1,74 @@
 (ns cn.li.ac.content.ability.vecmanip.vec-accel-fx-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
+            [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.content.ability.vecmanip.vec-accel-fx :as vafx]))
 
-(defn- with-fresh-vec-accel-fx-runtime [f]
-  (vafx/call-with-vec-accel-fx-runtime
-    (vafx/create-vec-accel-fx-runtime)
+(defn- reset-fixture [f]
+  (level-effects/call-with-level-effect-runtime
+    (level-effects/create-level-effect-runtime)
     (fn []
       (try
+        (level-effects/reset-level-effect-registry-for-test!)
+        (vafx/reset-vec-accel-fx-for-test!)
         (f)
         (finally
-          (vafx/reset-vec-accel-fx-for-test!))))))
+          (vafx/reset-vec-accel-fx-for-test!)
+          (level-effects/reset-level-effect-registry-for-test!))))))
 
-(defn- event [ctx-id payload]
+(use-fixtures :each reset-fixture)
+
+(defn- event
+  [ctx-id payload]
   {:payload payload
    :ctx-id ctx-id
    :channel :vec-accel/fx-update
    :owner-key [:ctx ctx-id]})
 
-(use-fixtures :each with-fresh-vec-accel-fx-runtime)
+(deftest init-registers-owner-aware-vec-accel-fx-test
+  (let [registered-level* (atom nil)
+        registered-handler* (atom nil)]
+    (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
+                                                         (reset! registered-level* [effect-id effect-map])
+                                                         nil)
+                  fx-registry/register-fx-channels! (fn [channels handler]
+                                                      (reset! registered-handler* {:channels channels
+                                                                                   :handler handler})
+                                                      nil)]
+      (vafx/init!)
+      (is (= :vec-accel (first @registered-level*)))
+      (is (fn? (:enqueue-state-fn (second @registered-level*))))
+      (is (= #{:vec-accel/fx-start
+               :vec-accel/fx-update
+               :vec-accel/fx-perform
+               :vec-accel/fx-end}
+             (set (:channels @registered-handler*)))))))
 
 (deftest update-keeps-preview-state-per-owner-test
-  (let [enqueue! @#'cn.li.ac.content.ability.vecmanip.vec-accel-fx/enqueue!]
-    (enqueue! (event "ctx-a" {:mode :start}))
-    (enqueue! (event "ctx-b" {:mode :start}))
-    (enqueue! (event "ctx-a" {:mode :update
-                               :charge-ticks 12
-                               :can-perform? true
-                               :look-dir {:x 1.0 :y 0.0 :z 0.0}
-                               :init-vel {:x 1.0 :y 0.5 :z 0.0}}))
-    (enqueue! (event "ctx-b" {:mode :update
-                               :charge-ticks 3
-                               :can-perform? false
-                               :look-dir {:x 0.0 :y 0.0 :z 1.0}
-                               :init-vel {:x 0.0 :y 0.5 :z 1.0}}))
+  (let [enqueue-state! (var-get #'cn.li.ac.content.ability.vecmanip.vec-accel-fx/enqueue-state!)]
+    (level-effects/update-effect-state! :vec-accel
+      enqueue-state!
+      (event "ctx-a" {:mode :start :source-player-id "player-a"}))
+    (level-effects/update-effect-state! :vec-accel
+      enqueue-state!
+      (event "ctx-b" {:mode :start :source-player-id "player-b"}))
+    (level-effects/update-effect-state! :vec-accel
+      enqueue-state!
+      (event "ctx-a" {:mode :update
+                       :charge-ticks 12
+                       :can-perform? true
+                       :look-dir {:x 1.0 :y 0.0 :z 0.0}
+                       :init-vel {:x 1.0 :y 0.5 :z 0.0}
+                       :source-player-id "player-a"}))
+    (level-effects/update-effect-state! :vec-accel
+      enqueue-state!
+      (event "ctx-b" {:mode :update
+                       :charge-ticks 3
+                       :can-perform? false
+                       :look-dir {:x 0.0 :y 0.0 :z 1.0}
+                       :init-vel {:x 0.0 :y 0.5 :z 1.0}
+                       :source-player-id "player-b"}))
     (let [snapshot (vafx/vec-accel-fx-snapshot)]
       (is (= 12 (:charge-ticks (get (:effect-state snapshot) [:ctx "ctx-a"]))))
       (is (= 3 (:charge-ticks (get (:effect-state snapshot) [:ctx "ctx-b"]))))
@@ -43,72 +77,61 @@
         (is (nil? (get (:effect-state after-clear) [:ctx "ctx-a"])))
         (is (some? (get (:effect-state after-clear) [:ctx "ctx-b"])))))))
 
-(deftest init-registers-update-through-fx-channel-handler-test
-  (let [registered-effect (atom nil)
-        registered-handler (atom nil)
-        enqueued (atom [])]
-    (with-redefs [level-effects/register-level-effect!
-                  (fn [effect-id effect-map]
-                    (reset! registered-effect [effect-id effect-map])
-                    nil)
-                  fx-registry/register-fx-channels!
-                  (fn [channel-keys handler-fn]
-                    (reset! registered-handler {:channels channel-keys
-                                                :handler handler-fn})
-                    nil)
-                  level-effects/enqueue-level-effect!
-                  (fn [effect-id payload fx-context]
-                    (swap! enqueued conj [effect-id payload fx-context])
-                    nil)]
+(deftest init-handler-routes-update-through-level-effects-test
+  (let [registered-handler* (atom nil)
+        enqueued* (atom [])]
+    (with-redefs [level-effects/register-level-effect! (fn [& _] nil)
+                  fx-registry/register-fx-channels! (fn [_ handler]
+                                                      (reset! registered-handler* handler)
+                                                      nil)
+                  level-effects/enqueue-level-effect! (fn [effect-id payload fx-context]
+                                                        (swap! enqueued* conj [effect-id payload fx-context])
+                                                        nil)
+                  client-sounds/queue-current-sound-effect! (fn [& _] nil)]
       (vafx/init!)
-      (is (= :vec-accel (first @registered-effect)))
-      (is (= #{:vec-accel/fx-start
-               :vec-accel/fx-update
-               :vec-accel/fx-perform
-               :vec-accel/fx-end}
-             (set (:channels @registered-handler))))
-      ((:handler @registered-handler) "ctx-1" :vec-accel/fx-update
-       {:charge-ticks 9
+      (@registered-handler* "ctx-1" :vec-accel/fx-update
+       {:source-player-id "player-a"
+        :charge-ticks 9
         :can-perform? true
         :look-dir {:x 1.0 :y 0.0 :z 0.0}
         :init-vel {:x 0.0 :y 0.5 :z 1.0}})
-      (is (= [[:vec-accel {:mode :update
+      (is (= [[:vec-accel {:source-player-id "player-a"
+                           :mode :update
                            :charge-ticks 9
                            :can-perform? true
                            :look-dir {:x 1.0 :y 0.0 :z 0.0}
                            :init-vel {:x 0.0 :y 0.5 :z 1.0}}
                {:ctx-id "ctx-1" :channel :vec-accel/fx-update}]]
-             @enqueued)))))
+             @enqueued*)))))
 
 (deftest vec-accel-fx-runtime-isolation-test
-  (let [runtime-a (vafx/create-vec-accel-fx-runtime)
-        runtime-b (vafx/create-vec-accel-fx-runtime)
-        enqueue! @#'cn.li.ac.content.ability.vecmanip.vec-accel-fx/enqueue!]
-    (vafx/call-with-vec-accel-fx-runtime
+  (let [runtime-a (level-effects/create-level-effect-runtime)
+        runtime-b (level-effects/create-level-effect-runtime)
+        enqueue-state! (var-get #'cn.li.ac.content.ability.vecmanip.vec-accel-fx/enqueue-state!)]
+    (level-effects/call-with-level-effect-runtime
       runtime-a
       (fn []
-        (enqueue! (event "ctx-a" {:mode :start}))
-        (enqueue! (event "ctx-a" {:mode :update :charge-ticks 5 :can-perform? true
-                                   :look-dir {:x 1.0 :y 0.0 :z 0.0}
-                                   :init-vel {:x 1.0 :y 0.5 :z 0.0}}))
+        (level-effects/update-effect-state! :vec-accel
+          enqueue-state!
+          (event "ctx-a" {:mode :start :source-player-id "player-a"}))
+        (level-effects/update-effect-state! :vec-accel
+          enqueue-state!
+          (event "ctx-a" {:mode :update :charge-ticks 5 :can-perform? true
+                           :look-dir {:x 1.0 :y 0.0 :z 0.0}
+                           :init-vel {:x 1.0 :y 0.5 :z 0.0}
+                           :source-player-id "player-a"}))
         (is (= 5 (:charge-ticks (get (:effect-state (vafx/vec-accel-fx-snapshot)) [:ctx "ctx-a"]))))))
-    (vafx/call-with-vec-accel-fx-runtime
+    (level-effects/call-with-level-effect-runtime
       runtime-b
       (fn []
         (is (= {:effect-state {}}
                (vafx/vec-accel-fx-snapshot)))
-        (enqueue! (event "ctx-b" {:mode :start}))
+        (level-effects/update-effect-state! :vec-accel
+          enqueue-state!
+          (event "ctx-b" {:mode :start :source-player-id "player-b"}))
         (is (= #{[:ctx "ctx-b"]}
                (set (keys (:effect-state (vafx/vec-accel-fx-snapshot))))))))
-    (vafx/call-with-vec-accel-fx-runtime
+    (level-effects/call-with-level-effect-runtime
       runtime-a
       (fn []
         (is (= 5 (:charge-ticks (get (:effect-state (vafx/vec-accel-fx-snapshot)) [:ctx "ctx-a"]))))))))
-
-(deftest vec-accel-fx-runtime-required-without-binding-test
-  (vafx/call-with-vec-accel-fx-runtime nil
-    (fn []
-      (is (thrown-with-msg?
-            clojure.lang.ExceptionInfo
-            #"runtime is not bound"
-            (vafx/vec-accel-fx-snapshot))))))

@@ -1,18 +1,21 @@
 (ns cn.li.ac.content.ability.electromaster.arc-gen-fx-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
+            [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.level-effects :as level-effects]
-            [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.content.ability.electromaster.arc-gen-fx :as arc-fx]))
 
 (defn- with-fresh-arc-gen-fx-runtime [f]
-  (arc-fx/call-with-arc-gen-fx-runtime
-    (arc-fx/create-arc-gen-fx-runtime)
+  (level-effects/call-with-level-effect-runtime
+    (level-effects/create-level-effect-runtime)
     (fn []
       (try
+        (level-effects/reset-level-effect-registry-for-test!)
+        (arc-fx/reset-arc-gen-fx-for-test!)
         (f)
         (finally
-          (arc-fx/reset-arc-gen-fx-for-test!))))))
+          (arc-fx/reset-arc-gen-fx-for-test!)
+          (level-effects/reset-level-effect-registry-for-test!))))))
 
 (defn- event [ctx-id payload]
   {:payload payload
@@ -58,17 +61,18 @@
              @enqueued*)))))
 
 (deftest enqueue-perform-adds-arc-and-plays-sound-test
-  (let [enqueue! (var-get #'cn.li.ac.content.ability.electromaster.arc-gen-fx/enqueue!)
+  (let [enqueue-state! (var-get #'cn.li.ac.content.ability.electromaster.arc-gen-fx/enqueue-state!)
         build-plan (var-get #'cn.li.ac.content.ability.electromaster.arc-gen-fx/build-plan)
         sounds* (atom [])]
     (with-redefs [client-sounds/queue-current-sound-effect! (fn [payload]
                                                                (swap! sounds* conj payload)
                                                                nil)]
-      (enqueue! (event "ctx-main"
-                       {:mode :perform
-                        :start {:x 0.0 :y 64.0 :z 0.0}
-                        :end {:x 3.0 :y 64.0 :z 3.0}
-                        :hit-type :block}))
+      (level-effects/update-effect-state! :arc-gen enqueue-state!
+        (event "ctx-main"
+               {:mode :perform
+                :start {:x 0.0 :y 64.0 :z 0.0}
+                :end {:x 3.0 :y 64.0 :z 3.0}
+                :hit-type :block}))
       (let [plan (build-plan {:x 0.0 :y 65.0 :z 0.0} nil 0)]
         (is (some? plan))
         (is (seq (:ops plan))))
@@ -77,10 +81,16 @@
       (is (= "my_mod:em.arc_weak" (:sound-id (first @sounds*)))))))
 
 (deftest two-owners-keep-arc-gen-queues-independent-test
-  (let [enqueue! (var-get #'cn.li.ac.content.ability.electromaster.arc-gen-fx/enqueue!)]
+  (let [enqueue-state! (var-get #'cn.li.ac.content.ability.electromaster.arc-gen-fx/enqueue-state!)]
     (with-redefs [client-sounds/queue-current-sound-effect! (fn [_] nil)]
-      (enqueue! (event "ctx-a" {:mode :perform :start {:x 0.0 :y 0.0 :z 0.0} :end {:x 1.0 :y 0.0 :z 0.0}}))
-      (enqueue! (event "ctx-b" {:mode :perform :start {:x 0.0 :y 1.0 :z 0.0} :end {:x 1.0 :y 1.0 :z 0.0}}))
+      (level-effects/update-effect-state! :arc-gen enqueue-state!
+        (event "ctx-a" {:mode :perform
+                         :start {:x 0.0 :y 0.0 :z 0.0}
+                         :end {:x 1.0 :y 0.0 :z 0.0}}))
+      (level-effects/update-effect-state! :arc-gen enqueue-state!
+        (event "ctx-b" {:mode :perform
+                         :start {:x 0.0 :y 1.0 :z 0.0}
+                         :end {:x 1.0 :y 1.0 :z 0.0}}))
       (let [snapshot (arc-fx/arc-gen-fx-snapshot)]
         (is (= 1 (count (get (:arcs snapshot) [:ctx "ctx-a"]))))
         (is (= 1 (count (get (:arcs snapshot) [:ctx "ctx-b"]))))
@@ -89,38 +99,6 @@
           (is (nil? (get (:arcs after-clear) [:ctx "ctx-a"])))
           (is (= 1 (count (get (:arcs after-clear) [:ctx "ctx-b"])))))))))
 
-(deftest arc-gen-fx-runtime-isolation-test
-  (let [runtime-a (arc-fx/create-arc-gen-fx-runtime)
-        runtime-b (arc-fx/create-arc-gen-fx-runtime)
-        enqueue! (var-get #'cn.li.ac.content.ability.electromaster.arc-gen-fx/enqueue!)]
-    (with-redefs [client-sounds/queue-current-sound-effect! (fn [_] nil)]
-      (arc-fx/call-with-arc-gen-fx-runtime
-        runtime-a
-        (fn []
-          (enqueue! (event "ctx-a" {:mode :perform
-                                     :start {:x 0.0 :y 0.0 :z 0.0}
-                                     :end {:x 1.0 :y 0.0 :z 0.0}}))
-          (is (= #{[:ctx "ctx-a"]}
-                 (set (keys (:arcs (arc-fx/arc-gen-fx-snapshot))))))))
-      (arc-fx/call-with-arc-gen-fx-runtime
-        runtime-b
-        (fn []
-          (is (= {:arcs {}}
-                 (arc-fx/arc-gen-fx-snapshot)))
-          (enqueue! (event "ctx-b" {:mode :perform
-                                     :start {:x 0.0 :y 1.0 :z 0.0}
-                                     :end {:x 1.0 :y 1.0 :z 0.0}}))
-          (is (= #{[:ctx "ctx-b"]}
-                 (set (keys (:arcs (arc-fx/arc-gen-fx-snapshot))))))))
-      (arc-fx/call-with-arc-gen-fx-runtime
-        runtime-a
-        (fn []
-          (is (= #{[:ctx "ctx-a"]}
-                 (set (keys (:arcs (arc-fx/arc-gen-fx-snapshot)))))))))))
-
-(deftest arc-gen-fx-runtime-required-without-binding-test
-  (binding [arc-fx/*arc-gen-fx-runtime* nil]
-    (is (thrown-with-msg?
-          clojure.lang.ExceptionInfo
-          #"runtime is not bound"
-          (arc-fx/arc-gen-fx-snapshot)))))
+(deftest arc-gen-fx-snapshot-default-without-registered-state-test
+  (is (= {:arcs {}}
+         (arc-fx/arc-gen-fx-snapshot))))

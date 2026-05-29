@@ -13,8 +13,12 @@
     1 {:primary-count 12 :secondary-count 6 :speed 0.11 :pitch 1.12 :volume 0.75}
     {:primary-count 8 :secondary-count 0 :speed 0.09 :pitch 1.0 :volume 0.65}))
 
+(defn- default-teleporter-crit-fx-runtime-state
+  []
+  {})
+
 (defn- enqueue!
-  [payload]
+  [store {:keys [payload]}]
   (case (:mode payload)
     :crit-hit
     (let [{:keys [primary-count secondary-count speed pitch volume]}
@@ -42,18 +46,21 @@
            :offset-x 0.45 :offset-y 0.45 :offset-z 0.45}))
       (client-sounds/queue-current-sound-effect!
         {:type :sound :sound-id "my_mod:tp.tp" :volume volume :pitch pitch}))
-    nil))
+    nil)
+  (or store (default-teleporter-crit-fx-runtime-state)))
 
-(defn- tick! []
-  nil)
+(defn- tick!
+  [store]
+  (or store (default-teleporter-crit-fx-runtime-state)))
 
 (defn- build-plan [_cp _hcp _tick]
   nil)
 
 (defn init! []
   (level-effects/register-level-effect! :teleporter-crit
-    {:enqueue-fn enqueue!
-     :tick-fn tick!
+    {:initial-state (default-teleporter-crit-fx-runtime-state)
+     :enqueue-state-fn enqueue!
+     :tick-state-fn tick!
      :build-plan-fn build-plan})
   (fx-registry/register-fx-channels!
     [:teleporter/fx-crit-hit]

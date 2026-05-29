@@ -66,12 +66,12 @@
                                                     (case k
                                                       "ability.teleporter.critical_hit" "Critical Hit %s"
                                                       (str k)))]
-      (enqueue! {:mode :crit-hit
-             :x 1.0 :y 2.0 :z 3.0
-             :crit-level 2
-             :crit-rate 2.6
-             :message-key "ability.teleporter.critical_hit"
-             :message-args ["x2.6"]})
+      (enqueue! nil {:payload {:mode :crit-hit
+               :x 1.0 :y 2.0 :z 3.0
+               :crit-level 2
+               :crit-rate 2.6
+               :message-key "ability.teleporter.critical_hit"
+               :message-args ["x2.6"]}})
       (is (= 2 (count @particles*)))
       (is (= 1 (count @sounds*)))
       (is (= :portal (:particle-type (first @particles*))))

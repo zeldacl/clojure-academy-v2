@@ -14,7 +14,7 @@
   (create-item-registry-runtime))
 
 (defn- item-registry-state []
-  (:registry @installed-item-registry-runtime))
+  (:registry installed-item-registry-runtime))
 
 ;; Item specifications
 (defrecord ItemSpec [id max-stack-size durability creative-tab rarity

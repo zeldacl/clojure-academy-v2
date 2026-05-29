@@ -1,81 +1,38 @@
 (ns cn.li.ac.content.ability.electromaster.mag-movement-fx
   "Client FX for Magnetic Movement: beam between hand and target."
-  (:require [cn.li.ac.ability.client.level-effects :as level-effects]
-            [cn.li.ac.ability.client.effects.beam-ops :as fx-beam]
+  (:require [cn.li.ac.ability.client.effects.beam-ops :as fx-beam]
+            [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
-            [cn.li.ac.ability.client.effects.sounds :as client-sounds]))
+            [cn.li.ac.ability.client.level-effects :as level-effects]))
 
 (def ^:private loop-sound "my_mod:em.move_loop")
+(def ^:private mag-movement-effect-id :mag-movement)
 
 (defn default-mag-movement-fx-runtime-state
   []
   {:effect-state {}})
 
-(defn create-mag-movement-fx-runtime
-  ([]
-   (create-mag-movement-fx-runtime {}))
-  ([{:keys [state*]
-     :or {state* (atom (default-mag-movement-fx-runtime-state))}}]
-   {::runtime ::mag-movement-fx-runtime
-    :state* state*}))
-
-
-(defonce ^:private installed-mag-movement-fx-runtime
-  (create-mag-movement-fx-runtime))
-
-(defonce ^:private mag-movement-fx-runtime-override* (atom nil))
-
-(defn- mag-movement-fx-runtime?
-  [runtime]
-  (and (map? runtime)
-       (= ::mag-movement-fx-runtime (::runtime runtime))
-       (some? (:state* runtime))))
-
-(defn call-with-mag-movement-fx-runtime
-  [runtime f]
-  (when-not (mag-movement-fx-runtime? runtime)
-    (throw (ex-info "Expected mag movement FX runtime"
-                    {:value runtime})))
-  (let [prev-override @mag-movement-fx-runtime-override*]
-    (try
-      (reset! mag-movement-fx-runtime-override* runtime)
-      (f)
-      (finally
-        (reset! mag-movement-fx-runtime-override* prev-override)))))
-
-(defmacro with-mag-movement-fx-runtime
-  [runtime & body]
-  `(call-with-mag-movement-fx-runtime ~runtime (fn [] ~@body)))
-
-(defn- current-mag-movement-fx-runtime
-  []
-  (or @mag-movement-fx-runtime-override*
-      @installed-mag-movement-fx-runtime))
-
-(defn- mag-movement-fx-state-atom
-  []
-  (:state* (current-mag-movement-fx-runtime)))
-
-(defn- mag-movement-fx-state-snapshot
-  []
-  @(mag-movement-fx-state-atom))
-
-(defn- update-mag-movement-fx-state!
-  [f & args]
-  (apply swap! (mag-movement-fx-state-atom) f args))
-
 (defn mag-movement-fx-snapshot
   []
-  (mag-movement-fx-state-snapshot))
+  (or (level-effects/effect-state-snapshot mag-movement-effect-id)
+      (default-mag-movement-fx-runtime-state)))
 
 (defn reset-mag-movement-fx-for-test!
   []
-  (reset! (mag-movement-fx-state-atom) (default-mag-movement-fx-runtime-state))
+  (level-effects/reset-level-effect-state-for-test!
+    mag-movement-effect-id
+    (default-mag-movement-fx-runtime-state))
   nil)
 
 (defn clear-mag-movement-owner!
   [owner-key]
-  (update-mag-movement-fx-state! update :effect-state dissoc owner-key)
+  (level-effects/update-effect-state!
+    mag-movement-effect-id
+    (fn [store]
+      (let [store* (if (contains? (or store {}) :effect-state)
+                     (or store (default-mag-movement-fx-runtime-state))
+                     (default-mag-movement-fx-runtime-state))]
+        (update store* :effect-state dissoc owner-key))))
   nil)
 
 (defn- magnetic-beam-style [tick]
@@ -97,13 +54,14 @@
      :line-rgb {:r 161 :g 236 :b 255}
      :line-alpha (int (+ 90 (* 110 flicker)))}))
 
-;; ---------------------------------------------------------------------------
-;; Enqueue
-;; ---------------------------------------------------------------------------
-
-(defn- enqueue! [{:keys [payload ctx-id channel owner-key]}]
-  (let [owner-key* (or owner-key [:ctx ctx-id])
-        {:keys [mode target source-player-id world-id]} payload
+(defn- enqueue-state!
+  [store event]
+  (let [store* (if (contains? (or store {}) :effect-state)
+                 (or store (default-mag-movement-fx-runtime-state))
+                 (default-mag-movement-fx-runtime-state))
+        {:keys [payload ctx-id channel owner-key]} event
+        owner-key* (or owner-key [:ctx ctx-id])
+        {:keys [mode target source-player-id world-id]} (or payload {})
         base-meta {:owner-key owner-key*
                    :queue-owner (client-sounds/current-effect-owner)
                    :ctx-id ctx-id
@@ -113,45 +71,38 @@
     (case mode
       :start
       (do
-        (update-mag-movement-fx-state!
-          update :effect-state assoc owner-key*
-          (merge base-meta {:active? true :target target :ticks 0}))
         (client-sounds/queue-sound-effect! (:queue-owner base-meta)
-          {:type :sound :sound-id loop-sound :volume 0.58 :pitch 1.0}))
+          {:type :sound :sound-id loop-sound :volume 0.58 :pitch 1.0})
+        (assoc-in store* [:effect-state owner-key*]
+                  (merge base-meta {:active? true :target target :ticks 0})))
       :update
-      (update-mag-movement-fx-state!
-        update :effect-state update owner-key*
-        (fn [st]
-          (if (:active? st)
-            (merge st base-meta {:target target})
-            (merge base-meta {:active? true :target target :ticks 0}))))
+      (update-in store* [:effect-state owner-key*]
+                 (fn [st]
+                   (if (:active? st)
+                     (merge st base-meta {:target target})
+                     (merge base-meta {:active? true :target target :ticks 0}))))
       :end
-      (update-mag-movement-fx-state! update :effect-state dissoc owner-key*)
-      nil)))
+      (update store* :effect-state dissoc owner-key*)
+      store*)))
 
-;; ---------------------------------------------------------------------------
-;; Tick
-;; ---------------------------------------------------------------------------
-
-(defn- tick! []
-  (update-mag-movement-fx-state!
-    update :effect-state
-    (fn [states]
-      (reduce-kv
-        (fn [acc owner-key st]
-          (if-not (:active? st)
-            acc
-            (let [ticks (inc (long (or (:ticks st) 0)))]
-              (when (zero? (mod ticks 10))
-                (client-sounds/queue-sound-effect! (:queue-owner st)
-                  {:type :sound :sound-id loop-sound :volume 0.4 :pitch 1.0}))
-              (assoc acc owner-key (assoc st :ticks ticks)))))
-        {}
-        states))))
-
-;; ---------------------------------------------------------------------------
-;; Render ops
-;; ---------------------------------------------------------------------------
+(defn- tick-state!
+  [store]
+  (let [store* (if (contains? (or store {}) :effect-state)
+                 (or store (default-mag-movement-fx-runtime-state))
+                 (default-mag-movement-fx-runtime-state))]
+    (update store* :effect-state
+      (fn [states]
+        (reduce-kv
+          (fn [acc owner-key st]
+            (if-not (:active? st)
+              acc
+              (let [ticks (inc (long (or (:ticks st) 0)))]
+                (when (zero? (mod ticks 10))
+                  (client-sounds/queue-sound-effect! (:queue-owner st)
+                    {:type :sound :sound-id loop-sound :volume 0.4 :pitch 1.0}))
+                (assoc acc owner-key (assoc st :ticks ticks)))))
+          {}
+          states)))))
 
 (defn- build-plan [camera-pos hand-center-pos tick]
   (let [mag-move (some (fn [st]
@@ -161,7 +112,7 @@
                                         (= (str (:source-player-id st))
                                            (str (:player-uuid hand-center-pos)))))
                            st))
-                       (vals (:effect-state (mag-movement-fx-state-snapshot))))]
+                       (vals (:effect-state (mag-movement-fx-snapshot))))]
     (when (and hand-center-pos
                (:active? mag-move)
                (map? (:target mag-move)))
@@ -170,23 +121,12 @@
                                    (:target mag-move)
                                    (magnetic-beam-style tick)))})))
 
-;; ---------------------------------------------------------------------------
-;; Registration
-;; ---------------------------------------------------------------------------
-
 (defn init! []
-  (let [runtime (create-mag-movement-fx-runtime)]
-    (level-effects/register-level-effect! :mag-movement
-      {:enqueue-event-fn (fn [event]
-                           (call-with-mag-movement-fx-runtime
-                             runtime
-                             (fn []
-                               (enqueue! event))))
-       :tick-fn (fn []
-                  (call-with-mag-movement-fx-runtime
-                    runtime
-                    tick!))
-       :build-plan-fn build-plan}))
+  (level-effects/register-level-effect! mag-movement-effect-id
+    {:initial-state (default-mag-movement-fx-runtime-state)
+     :enqueue-state-fn enqueue-state!
+     :tick-state-fn tick-state!
+     :build-plan-fn build-plan})
   (fx-registry/register-fx-channels!
     [:mag-movement/fx-start :mag-movement/fx-update :mag-movement/fx-end]
     (fn [ctx-id channel payload]
@@ -195,7 +135,7 @@
                    :mag-movement/fx-update :update
                    :mag-movement/fx-end :end)]
         (level-effects/enqueue-level-effect!
-          :mag-movement
+          mag-movement-effect-id
           (assoc payload :mode mode)
           {:ctx-id ctx-id :channel channel}))))
   nil)

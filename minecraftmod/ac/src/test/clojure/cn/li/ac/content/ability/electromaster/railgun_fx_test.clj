@@ -5,12 +5,16 @@
             [cn.li.ac.content.ability.electromaster.railgun-fx :as railgun-fx]))
 
 (defn- reset-fixture [f]
-  (railgun-fx/call-with-railgun-fx-runtime
-    (railgun-fx/create-railgun-fx-runtime)
+  (level-effects/call-with-level-effect-runtime
+    (level-effects/create-level-effect-runtime)
     (fn []
-      (railgun-fx/reset-railgun-fx-for-test!)
-      (f)
-      (railgun-fx/reset-railgun-fx-for-test!))))
+      (try
+        (level-effects/reset-level-effect-registry-for-test!)
+        (railgun-fx/reset-railgun-fx-for-test!)
+        (f)
+        (finally
+          (railgun-fx/reset-railgun-fx-for-test!)
+          (level-effects/reset-level-effect-registry-for-test!))))))
 
 (use-fixtures :each reset-fixture)
 
@@ -32,7 +36,7 @@
                                                       nil)]
       (railgun-fx/init!)
       (is (= :railgun-shot (first @registered-level*)))
-      (is (fn? (:enqueue-event-fn (second @registered-level*))))
+      (is (fn? (:enqueue-state-fn (second @registered-level*))))
       (is (= #{:railgun/fx-shot :railgun/fx-reflect}
              (set (:channels @registered-handler*)))))))
 
@@ -48,9 +52,9 @@
                                                         nil)]
       (railgun-fx/init!)
       (@handler* "ctx-rail" :railgun/fx-shot {:mode :block-hit
-                                                :start {:x 0.0 :y 64.0 :z 0.0}
-                                                :end {:x 8.0 :y 64.0 :z 0.0}
-                                                :world-id "minecraft:overworld"})
+                                               :start {:x 0.0 :y 64.0 :z 0.0}
+                                               :end {:x 8.0 :y 64.0 :z 0.0}
+                                               :world-id "minecraft:overworld"})
       (is (= [[:railgun-shot {:mode :block-hit
                               :start {:x 0.0 :y 64.0 :z 0.0}
                               :end {:x 8.0 :y 64.0 :z 0.0}
@@ -58,12 +62,29 @@
                {:ctx-id "ctx-rail" :channel :railgun/fx-shot}]]
              @enqueued*)))))
 
+(deftest enqueue-perform-adds-beam-and-builds-plan-test
+  (let [enqueue-state! (var-get #'cn.li.ac.content.ability.electromaster.railgun-fx/enqueue-state!)
+        build-plan (var-get #'cn.li.ac.content.ability.electromaster.railgun-fx/build-plan)]
+    (level-effects/update-effect-state! :railgun-shot
+      enqueue-state!
+      (event "ctx-main" :railgun/fx-shot {:start {:x 0.0 :y 64.0 :z 0.0}
+                                           :end {:x 3.0 :y 64.0 :z 3.0}
+                                           :hit-distance 18.0}))
+    (let [plan (build-plan {:x 0.0 :y 65.0 :z 0.0} nil 0)]
+      (is (some? plan))
+      (is (seq (:ops plan))))
+    (is (= 1 (count (get (:beam-effects (railgun-fx/railgun-fx-snapshot)) [:ctx "ctx-main"]))))))
+
 (deftest two-owners-keep-railgun-beams-independent-test
-  (let [enqueue! (var-get #'cn.li.ac.content.ability.electromaster.railgun-fx/enqueue!)]
-    (enqueue! (event "ctx-a" :railgun/fx-shot {:start {:x 0.0 :y 64.0 :z 0.0}
-                                                :end {:x 6.0 :y 64.0 :z 0.0}}))
-    (enqueue! (event "ctx-b" :railgun/fx-reflect {:start {:x 0.0 :y 65.0 :z 0.0}
-                                                    :end {:x 6.0 :y 65.0 :z 0.0}}))
+  (let [enqueue-state! (var-get #'cn.li.ac.content.ability.electromaster.railgun-fx/enqueue-state!)]
+    (level-effects/update-effect-state! :railgun-shot
+      enqueue-state!
+      (event "ctx-a" :railgun/fx-shot {:start {:x 0.0 :y 64.0 :z 0.0}
+                                         :end {:x 6.0 :y 64.0 :z 0.0}}))
+    (level-effects/update-effect-state! :railgun-shot
+      enqueue-state!
+      (event "ctx-b" :railgun/fx-reflect {:start {:x 0.0 :y 65.0 :z 0.0}
+                                           :end {:x 6.0 :y 65.0 :z 0.0}}))
     (let [snapshot (railgun-fx/railgun-fx-snapshot)]
       (is (= 1 (count (get (:beam-effects snapshot) [:ctx "ctx-a"]))))
       (is (= 1 (count (get (:beam-effects snapshot) [:ctx "ctx-b"]))))
@@ -72,35 +93,6 @@
         (is (nil? (get (:beam-effects after-clear) [:ctx "ctx-a"])))
         (is (= 1 (count (get (:beam-effects after-clear) [:ctx "ctx-b"]))))))))
 
-(deftest railgun-fx-runtime-isolation-test
-  (let [runtime-a (railgun-fx/create-railgun-fx-runtime)
-        runtime-b (railgun-fx/create-railgun-fx-runtime)
-        enqueue! (var-get #'cn.li.ac.content.ability.electromaster.railgun-fx/enqueue!)]
-    (railgun-fx/call-with-railgun-fx-runtime
-      runtime-a
-      (fn []
-        (enqueue! (event "ctx-a" :railgun/fx-shot {:start {:x 0.0 :y 64.0 :z 0.0}
-                                                    :end {:x 6.0 :y 64.0 :z 0.0}}))
-        (is (= #{[:ctx "ctx-a"]}
-               (set (keys (:beam-effects (railgun-fx/railgun-fx-snapshot))))))))
-    (railgun-fx/call-with-railgun-fx-runtime
-      runtime-b
-      (fn []
-        (is (= {:beam-effects {}}
-               (railgun-fx/railgun-fx-snapshot)))
-        (enqueue! (event "ctx-b" :railgun/fx-reflect {:start {:x 0.0 :y 65.0 :z 0.0}
-                                                       :end {:x 6.0 :y 65.0 :z 0.0}}))
-        (is (= #{[:ctx "ctx-b"]}
-               (set (keys (:beam-effects (railgun-fx/railgun-fx-snapshot))))))))
-    (railgun-fx/call-with-railgun-fx-runtime
-      runtime-a
-      (fn []
-        (is (= #{[:ctx "ctx-a"]}
-               (set (keys (:beam-effects (railgun-fx/railgun-fx-snapshot))))))))))
-
-(deftest railgun-fx-runtime-required-without-binding-test
-  (binding [railgun-fx/*railgun-fx-runtime* nil]
-    (is (thrown-with-msg?
-          clojure.lang.ExceptionInfo
-          #"runtime is not bound"
-          (railgun-fx/railgun-fx-snapshot)))))
+(deftest railgun-fx-snapshot-default-without-registered-state-test
+  (is (= {:beam-effects {}}
+         (railgun-fx/railgun-fx-snapshot))))

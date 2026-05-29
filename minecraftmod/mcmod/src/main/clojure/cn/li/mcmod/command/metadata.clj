@@ -23,10 +23,11 @@
 (defonce ^:private installed-command-metadata-runtime
   (create-command-metadata-runtime))
 
-(defonce ^:private command-metadata-runtime-override* (atom nil))
+(def ^:dynamic *command-metadata-runtime*
+  installed-command-metadata-runtime)
 
 (defn- command-registry-atom []
-  (:state* (or @command-metadata-runtime-override* installed-command-metadata-runtime)))
+  (:state* *command-metadata-runtime*))
 
 (defn- command-registry-snapshot []
   @(command-registry-atom))

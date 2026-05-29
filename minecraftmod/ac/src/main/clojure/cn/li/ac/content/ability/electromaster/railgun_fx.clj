@@ -1,73 +1,13 @@
 (ns cn.li.ac.content.ability.electromaster.railgun-fx
   "Client FX for Railgun: beam effects + charge hand aura."
-  (:require [cn.li.ac.ability.client.level-effects :as level-effects]
-            [cn.li.ac.ability.client.effects.beam-ops :as fx-beam]
+  (:require [cn.li.ac.ability.client.effects.beam-ops :as fx-beam]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
+            [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.ac.ability.client.runtime :as client-runtime]))
 
-;; ---------------------------------------------------------------------------
-;; State
-;; ---------------------------------------------------------------------------
-
-(defn default-railgun-fx-runtime-state
-  []
-  {:beam-effects {}})
-
-(defn create-railgun-fx-runtime
-  ([]
-   (create-railgun-fx-runtime {}))
-  ([{:keys [state*]
-     :or {state* (atom (default-railgun-fx-runtime-state))}}]
-   {::runtime ::railgun-fx-runtime
-    :state* state*}))
-
-
-(defonce ^:private installed-railgun-fx-runtime
-  (create-railgun-fx-runtime))
-
-(defonce ^:private railgun-fx-runtime-override* (atom nil))
-
-(defn- railgun-fx-runtime?
-  [runtime]
-  (and (map? runtime)
-       (= ::railgun-fx-runtime (::runtime runtime))
-       (some? (:state* runtime))))
-
-(defn call-with-railgun-fx-runtime
-  [runtime f]
-  (when-not (railgun-fx-runtime? runtime)
-    (throw (ex-info "Expected railgun FX runtime"
-                    {:value runtime})))
-  (let [prev-override @railgun-fx-runtime-override*]
-    (try
-      (reset! railgun-fx-runtime-override* runtime)
-      (f)
-      (finally
-        (reset! railgun-fx-runtime-override* prev-override)))))
-
-(defmacro with-railgun-fx-runtime
-  [runtime & body]
-  `(call-with-railgun-fx-runtime ~runtime (fn [] ~@body)))
-
-(defn- current-railgun-fx-runtime
-  []
-  (or @railgun-fx-runtime-override*
-      @installed-railgun-fx-runtime))
-
-(defn- railgun-fx-state-atom
-  []
-  (:state* (current-railgun-fx-runtime)))
-
-(defn- railgun-fx-state-snapshot
-  []
-  @(railgun-fx-state-atom))
-
-(defn- update-railgun-fx-state!
-  [f & args]
-  (apply swap! (railgun-fx-state-atom) f args))
-
 (def ^:private beam-life-ticks 12)
+(def ^:private railgun-effect-id :railgun-shot)
 (def ^:private railgun-beam-style
   {:width (fn [_ life] (* 0.08 (+ 0.5 life)))
    :core-ratio 0.45
@@ -78,67 +18,75 @@
    :line-rgb {:r 165 :g 230 :b 255}
    :line-alpha (fn [_ life] (+ 40 (* 120 life)))})
 
+(defn default-railgun-fx-runtime-state
+  []
+  {:beam-effects {}})
+
 (defn railgun-fx-snapshot
   []
-  (railgun-fx-state-snapshot))
+  (or (level-effects/effect-state-snapshot railgun-effect-id)
+      (default-railgun-fx-runtime-state)))
 
 (defn reset-railgun-fx-for-test!
   []
-  (reset! (railgun-fx-state-atom) (default-railgun-fx-runtime-state))
+  (level-effects/reset-level-effect-state-for-test!
+    railgun-effect-id
+    (default-railgun-fx-runtime-state))
   nil)
 
 (defn clear-railgun-owner!
   [owner-key]
-  (update-railgun-fx-state! update :beam-effects dissoc owner-key)
+  (level-effects/update-effect-state!
+    railgun-effect-id
+    (fn [store]
+      (let [store* (if (contains? (or store {}) :beam-effects)
+                     (or store (default-railgun-fx-runtime-state))
+                     (default-railgun-fx-runtime-state))]
+        (update store* :beam-effects dissoc owner-key))))
   nil)
 
 (defn- all-beam-effects []
-  (mapcat val (:beam-effects (railgun-fx-state-snapshot))))
+  (mapcat val (:beam-effects (railgun-fx-snapshot))))
 
-;; ---------------------------------------------------------------------------
-;; Enqueue
-;; ---------------------------------------------------------------------------
-
-(defn- enqueue! [{:keys [payload ctx-id channel owner-key]}]
-  (let [owner-key* (or owner-key [:ctx ctx-id])
-        {:keys [mode start end hit-distance source-player-id world-id]} payload
+(defn- enqueue-state!
+  [store event]
+  (let [store* (if (contains? (or store {}) :beam-effects)
+                 (or store (default-railgun-fx-runtime-state))
+                 (default-railgun-fx-runtime-state))
+        {:keys [payload ctx-id channel owner-key]} event
+        owner-key* (or owner-key [:ctx ctx-id])
+        {:keys [mode start end hit-distance source-player-id world-id]} (or payload {})
         base-meta {:owner-key owner-key*
                    :ctx-id ctx-id
                    :channel channel
                    :source-player-id source-player-id
                    :world-id world-id}]
     (when (and start end)
-      (update-railgun-fx-state!
-        update :beam-effects update owner-key* (fnil conj [])
-        (merge base-meta
-               {:start start
-                :end end
-                :mode (or mode :block-hit)
-                :hit-distance (double (or hit-distance 18.0))
-                :ttl beam-life-ticks
-                :max-ttl beam-life-ticks})))))
+      (update-in store* [:beam-effects owner-key*] (fnil conj [])
+                 (merge base-meta
+                        {:start start
+                         :end end
+                         :mode (or mode :block-hit)
+                         :hit-distance (double (or hit-distance 18.0))
+                         :ttl beam-life-ticks
+                         :max-ttl beam-life-ticks})))))
 
-;; ---------------------------------------------------------------------------
-;; Tick
-;; ---------------------------------------------------------------------------
-
-(defn- tick! []
-  (update-railgun-fx-state!
-    update :beam-effects
-    (fn [by-owner]
-      (into {}
-            (keep (fn [[owner-key xs]]
-                    (let [live (->> xs
-                                    (map #(update % :ttl dec))
-                                    (filter #(pos? (long (:ttl %))))
-                                    vec)]
-                      (when (seq live)
-                        [owner-key live]))))
-            by-owner))))
-
-;; ---------------------------------------------------------------------------
-;; Render ops
-;; ---------------------------------------------------------------------------
+(defn- tick-state!
+  [store]
+  (let [store* (if (contains? (or store {}) :beam-effects)
+                 (or store (default-railgun-fx-runtime-state))
+                 (default-railgun-fx-runtime-state))]
+    (update store* :beam-effects
+      (fn [by-owner]
+        (into {}
+              (keep (fn [[owner-key xs]]
+                      (let [live (->> xs
+                                      (map #(update % :ttl dec))
+                                      (filter #(pos? (long (:ttl %))))
+                                      vec)]
+                        (when (seq live)
+                          [owner-key live]))))
+              by-owner)))))
 
 (defn- impact-ring-ops [end ttl max-ttl]
   (let [life (/ (double ttl) (double (max 1 max-ttl)))
@@ -173,10 +121,6 @@
              (ru/line-op center p0 {:r 90 :g 190 :b 255 :a 120})]))
         (range points)))))
 
-;; ---------------------------------------------------------------------------
-;; Build plan
-;; ---------------------------------------------------------------------------
-
 (defn- build-plan [camera-pos hand-center-pos tick]
   (let [beams (all-beam-effects)
         player-uuid (:player-uuid hand-center-pos)
@@ -196,26 +140,16 @@
     (when (or (seq beam-plan) (seq charge-plan))
       {:ops (vec (concat beam-plan charge-plan))})))
 
-;; ---------------------------------------------------------------------------
-;; Registration
-;; ---------------------------------------------------------------------------
-
-(defn init! []
-  (let [runtime (create-railgun-fx-runtime)]
-    (level-effects/register-level-effect! :railgun-shot
-      {:enqueue-event-fn (fn [event]
-                           (call-with-railgun-fx-runtime
-                             runtime
-                             (fn []
-                               (enqueue! event))))
-       :tick-fn (fn []
-                  (call-with-railgun-fx-runtime
-                    runtime
-                    tick!))
-       :build-plan-fn build-plan}))
+(defn init!
+  []
+  (level-effects/register-level-effect! railgun-effect-id
+    {:initial-state (default-railgun-fx-runtime-state)
+     :enqueue-state-fn enqueue-state!
+     :tick-state-fn tick-state!
+     :build-plan-fn build-plan})
   (fx-registry/register-fx-channels!
     [:railgun/fx-shot :railgun/fx-reflect]
     (fn [ctx-id channel payload]
-      (level-effects/enqueue-level-effect! :railgun-shot payload
+      (level-effects/enqueue-level-effect! railgun-effect-id payload
                                            {:ctx-id ctx-id :channel channel})))
   nil)

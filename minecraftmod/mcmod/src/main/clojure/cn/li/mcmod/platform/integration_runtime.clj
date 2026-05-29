@@ -16,10 +16,11 @@
 (defonce ^:private installed-integration-runtime
   (create-integration-runtime))
 
-(defonce ^:private integration-runtime-override* (atom nil))
+(def ^:dynamic *integration-runtime*
+  installed-integration-runtime)
 
 (defn- integration-hooks-atom []
-  (:state* (or @integration-runtime-override* installed-integration-runtime)))
+  (:state* *integration-runtime*))
 
 (defn- integration-hooks-snapshot []
   @(integration-hooks-atom))

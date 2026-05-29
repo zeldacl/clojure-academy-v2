@@ -6,75 +6,33 @@
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.render-util :as ru]))
 
+(def ^:private mine-detect-effect-id :mine-detect)
+
 (defn default-mine-detect-fx-runtime-state
   []
   {:effect-state {}})
 
-(defn create-mine-detect-fx-runtime
-  ([]
-   (create-mine-detect-fx-runtime {}))
-  ([{:keys [state*]
-     :or {state* (atom (default-mine-detect-fx-runtime-state))}}]
-   {::runtime ::mine-detect-fx-runtime
-    :state* state*}))
-
-
-(defonce ^:private installed-mine-detect-fx-runtime
-  (create-mine-detect-fx-runtime))
-
-(defonce ^:private mine-detect-fx-runtime-override* (atom nil))
-
-(defn- mine-detect-fx-runtime?
-  [runtime]
-  (and (map? runtime)
-       (= ::mine-detect-fx-runtime (::runtime runtime))
-       (some? (:state* runtime))))
-
-(defn call-with-mine-detect-fx-runtime
-  [runtime f]
-  (when-not (mine-detect-fx-runtime? runtime)
-    (throw (ex-info "Expected mine detect FX runtime"
-                    {:value runtime})))
-  (let [prev-override @mine-detect-fx-runtime-override*]
-    (try
-      (reset! mine-detect-fx-runtime-override* runtime)
-      (f)
-      (finally
-        (reset! mine-detect-fx-runtime-override* prev-override)))))
-
-(defmacro with-mine-detect-fx-runtime
-  [runtime & body]
-  `(call-with-mine-detect-fx-runtime ~runtime (fn [] ~@body)))
-
-(defn- current-mine-detect-fx-runtime
-  []
-  (or @mine-detect-fx-runtime-override*
-      @installed-mine-detect-fx-runtime))
-
-(defn- mine-detect-fx-state-atom
-  []
-  (:state* (current-mine-detect-fx-runtime)))
-
-(defn- mine-detect-fx-state-snapshot
-  []
-  @(mine-detect-fx-state-atom))
-
-(defn- update-mine-detect-fx-state!
-  [f & args]
-  (apply swap! (mine-detect-fx-state-atom) f args))
-
 (defn mine-detect-fx-snapshot
   []
-  (mine-detect-fx-state-snapshot))
+  (or (level-effects/effect-state-snapshot mine-detect-effect-id)
+      (default-mine-detect-fx-runtime-state)))
 
 (defn reset-mine-detect-fx-for-test!
   []
-  (reset! (mine-detect-fx-state-atom) (default-mine-detect-fx-runtime-state))
+  (level-effects/reset-level-effect-state-for-test!
+    mine-detect-effect-id
+    (default-mine-detect-fx-runtime-state))
   nil)
 
 (defn clear-mine-detect-owner!
   [owner-key]
-  (update-mine-detect-fx-state! update :effect-state dissoc owner-key)
+  (level-effects/update-effect-state!
+    mine-detect-effect-id
+    (fn [store]
+      (let [store* (if (contains? (or store {}) :effect-state)
+                     (or store (default-mine-detect-fx-runtime-state))
+                     (default-mine-detect-fx-runtime-state))]
+        (update store* :effect-state dissoc owner-key))))
   nil)
 
 (def ^:private mineview-texture
@@ -173,10 +131,10 @@
                     {:x (int (:x block))
                      :y (int (:y block))
                      :z (int (:z block))
-                   :block-id (:block-id block)
-                   :harvest-level (:harvest-level block)}))
-             (distinct)
-             (vec)))
+                     :block-id (:block-id block)
+                     :harvest-level (:harvest-level block)}))
+             distinct
+             vec))
       [])))
 
 (defn- apply-perform!
@@ -186,67 +144,79 @@
      :sound-id "my_mod:em.minedetect"
      :volume 0.8
      :pitch 1.0})
-  (update-mine-detect-fx-state!
-    update :effect-state assoc owner-key
-    {:owner-key owner-key
-     :ctx-id ctx-id
-     :channel channel
-     :source-player-id source-player-id
-     :world-id world-id
-     :active? true
-     :ticks 0
-     :life-ticks (long (max 1 (or life-ticks default-life-ticks)))
-     :rescan-interval (long (max 1 (or rescan-interval default-rescan-interval)))
-     :last-rescan-tick nil
-     :range (clamped-range range)
-     :advanced? (boolean advanced?)
-     :ores []}))
+  {:owner-key owner-key
+   :ctx-id ctx-id
+   :channel channel
+   :source-player-id source-player-id
+   :world-id world-id
+   :active? true
+   :ticks 0
+   :life-ticks (long (max 1 (or life-ticks default-life-ticks)))
+   :rescan-interval (long (max 1 (or rescan-interval default-rescan-interval)))
+   :last-rescan-tick nil
+   :range (clamped-range range)
+   :advanced? (boolean advanced?)
+   :ores []})
 
-(defn- enqueue!
-  [{:keys [payload ctx-id channel owner-key]}]
-  (let [owner-key* (or owner-key [:ctx ctx-id])]
+(defn- enqueue-state!
+  [store event]
+  (let [store* (if (contains? (or store {}) :effect-state)
+                 (or store (default-mine-detect-fx-runtime-state))
+                 (default-mine-detect-fx-runtime-state))
+        {:keys [payload ctx-id channel owner-key]} event
+        owner-key* (or owner-key [:ctx ctx-id])]
     (case (:mode payload)
-      :perform (apply-perform! owner-key* ctx-id channel payload)
-      :end (update-mine-detect-fx-state! update :effect-state dissoc owner-key*)
-      nil)))
+      :perform
+      (assoc-in store* [:effect-state owner-key*]
+                (apply-perform! owner-key* ctx-id channel payload))
 
-(defn- tick!
-  []
-  (update-mine-detect-fx-state!
-    update :effect-state
-    (fn [states]
-      (reduce-kv (fn [acc owner-key st]
-                   (if (:active? st)
-                     (let [next-ticks (inc (long (:ticks st)))
-                           life-ticks (long (:life-ticks st))]
-                       (if (< next-ticks life-ticks)
-                         (assoc acc owner-key (assoc st :ticks next-ticks))
-                         acc))
-                     acc))
-                 {}
-                 states))))
+      :end
+      (update store* :effect-state dissoc owner-key*)
+
+      store*)))
+
+(defn- tick-state!
+  [store]
+  (let [store* (if (contains? (or store {}) :effect-state)
+                 (or store (default-mine-detect-fx-runtime-state))
+                 (default-mine-detect-fx-runtime-state))]
+    (update store* :effect-state
+      (fn [states]
+        (reduce-kv (fn [acc owner-key st]
+                     (if (:active? st)
+                       (let [next-ticks (inc (long (:ticks st)))
+                             life-ticks (long (:life-ticks st))]
+                         (if (< next-ticks life-ticks)
+                           (assoc acc owner-key (assoc st :ticks next-ticks))
+                           acc))
+                       acc))
+                   {}
+                   states)))))
 
 (defn- maybe-refresh-ores!
   [owner-key hand-center-pos frame-context]
-  (update-mine-detect-fx-state!
-    update :effect-state
-    (fn [states]
-      (update states owner-key
-              (fn [st]
-                (if (and st (should-rescan? st))
-                  (assoc st
-                         :ores (rescan-ores st hand-center-pos frame-context)
-                         :last-rescan-tick (:ticks st))
-                  st))))))
+  (level-effects/update-effect-state!
+    mine-detect-effect-id
+    (fn [store]
+      (let [store* (if (contains? (or store {}) :effect-state)
+                     (or store (default-mine-detect-fx-runtime-state))
+                     (default-mine-detect-fx-runtime-state))]
+        (update-in store* [:effect-state owner-key]
+                   (fn [st]
+                     (if (and st (should-rescan? st))
+                       (assoc st
+                              :ores (rescan-ores st hand-center-pos frame-context)
+                              :last-rescan-tick (:ticks st))
+                       st)))))))
 
 (defn- build-plan
   [_camera-pos hand-center-pos _tick frame-context]
   (when-let [[owner-key _] (some (fn [[owner-key st]]
                                    (when (:active? st)
                                      [owner-key st]))
-                                 (:effect-state (mine-detect-fx-state-snapshot)))]
+                                 (:effect-state (mine-detect-fx-snapshot)))]
     (maybe-refresh-ores! owner-key hand-center-pos frame-context)
-    (let [{:keys [ticks life-ticks ores advanced?]} (get (:effect-state (mine-detect-fx-state-snapshot)) owner-key)
+    (let [{:keys [ticks life-ticks ores advanced?]} (get (:effect-state (mine-detect-fx-snapshot)) owner-key)
           ops (into []
                     (mapcat (fn [{:keys [x y z] :as ore}]
                               (let [base-color (ore-color ore advanced?)
@@ -258,24 +228,17 @@
 
 (defn init!
   []
-  (let [runtime (create-mine-detect-fx-runtime)]
-    (level-effects/register-level-effect! :mine-detect
-                                          {:enqueue-event-fn (fn [event]
-                                                               (call-with-mine-detect-fx-runtime
-                                                                 runtime
-                                                                 (fn []
-                                                                   (enqueue! event))))
-                                           :tick-fn (fn []
-                                                      (call-with-mine-detect-fx-runtime
-                                                        runtime
-                                                        tick!))
-                                           :build-plan-fn build-plan}))
+  (level-effects/register-level-effect! mine-detect-effect-id
+    {:initial-state (default-mine-detect-fx-runtime-state)
+     :enqueue-state-fn enqueue-state!
+     :tick-state-fn tick-state!
+     :build-plan-fn build-plan})
   (fx-registry/register-fx-channels!
     [:mine-detect/fx-perform :mine-detect/fx-end]
     (fn [ctx-id channel payload]
       (case channel
         :mine-detect/fx-perform
-        (level-effects/enqueue-level-effect! :mine-detect
+        (level-effects/enqueue-level-effect! mine-detect-effect-id
                                              {:mode :perform
                                               :range (:range payload)
                                               :advanced? (:advanced? payload)
@@ -283,7 +246,7 @@
                                               :rescan-interval (:rescan-interval payload)}
                                              {:ctx-id ctx-id :channel channel})
         :mine-detect/fx-end
-        (level-effects/enqueue-level-effect! :mine-detect {:mode :end}
+        (level-effects/enqueue-level-effect! mine-detect-effect-id {:mode :end}
                                              {:ctx-id ctx-id :channel channel})
         nil)))
   nil)

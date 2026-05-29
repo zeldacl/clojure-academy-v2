@@ -14,10 +14,11 @@
 (defonce ^:private installed-gui-registry-runtime
   (create-gui-registry-runtime))
 
-(defonce ^:private gui-registry-runtime-override* (atom nil))
+(def ^:dynamic *gui-registry-runtime*
+  installed-gui-registry-runtime)
 
 (defn- gui-registry-atom []
-  (:state* (or @gui-registry-runtime-override* installed-gui-registry-runtime)))
+  (:state* *gui-registry-runtime*))
 
 (defn- gui-registry-snapshot []
   @(gui-registry-atom))

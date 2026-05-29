@@ -15,5 +15,8 @@
               :kind :client}
              {:id :persistence-present
               :kind :persistence}]
-    :fixtures {:content-owned? true}})
+    :fixtures {:content-owned? true
+               :electron-bomb-defaults
+               {:settle-delay-ticks 15
+                :combat-damage [6.0 12.0]}}})
   nil)

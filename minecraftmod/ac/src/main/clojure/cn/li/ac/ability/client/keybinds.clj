@@ -45,7 +45,8 @@
 (defonce ^:private installed-keybind-registry-runtime
   (create-keybind-registry-runtime))
 
-(defonce ^:private keybind-registry-override* (atom nil))
+(def ^:dynamic *keybind-registry-runtime*
+  installed-keybind-registry-runtime)
 
 (defn- keybind-registry-runtime?
   [runtime]
@@ -58,12 +59,8 @@
   (when-not (keybind-registry-runtime? runtime)
     (throw (ex-info "Expected keybind registry runtime"
                     {:runtime runtime})))
-  (let [prev-override @keybind-registry-override*]
-    (try
-      (reset! keybind-registry-override* runtime)
-      (f)
-      (finally
-        (reset! keybind-registry-override* prev-override)))))
+  (binding [*keybind-registry-runtime* runtime]
+    (f)))
 
 (defmacro with-keybind-registry-runtime
   [runtime & body]
@@ -71,8 +68,7 @@
 
 (defn- current-keybind-registry-runtime
   []
-  (or @keybind-registry-override*
-      @installed-keybind-registry-runtime))
+  *keybind-registry-runtime*)
 
 (defn- keybind-registry-state-atom
   []
@@ -234,7 +230,8 @@
 (defonce ^:private installed-client-keybind-runtime
   (create-client-keybind-runtime))
 
-(defonce ^:private client-keybind-runtime-override* (atom nil))
+(def ^:dynamic *client-keybind-runtime*
+  installed-client-keybind-runtime)
 
 (defn- client-keybind-runtime?
   [runtime]
@@ -248,12 +245,8 @@
   (when-not (client-keybind-runtime? runtime)
     (throw (ex-info "Expected client keybind runtime"
                     {:runtime runtime})))
-  (let [prev-override @client-keybind-runtime-override*]
-    (try
-      (reset! client-keybind-runtime-override* runtime)
-      (f)
-      (finally
-        (reset! client-keybind-runtime-override* prev-override)))))
+  (binding [*client-keybind-runtime* runtime]
+    (f)))
 
 (defmacro with-client-keybind-runtime
   [runtime & body]
@@ -261,8 +254,7 @@
 
 (defn- current-client-keybind-runtime
   []
-  (or @client-keybind-runtime-override*
-      @installed-client-keybind-runtime))
+  *client-keybind-runtime*)
 
 (defn- key-states-atom
   []

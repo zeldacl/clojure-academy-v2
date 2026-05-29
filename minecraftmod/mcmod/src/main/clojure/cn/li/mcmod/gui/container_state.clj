@@ -24,7 +24,7 @@
 	{::runtime ::container-state-runtime
 	 :state* (atom (initial-container-state))})
 
-(defonce ^:private container-state-runtime-override* (atom nil))
+(def ^:dynamic *container-state-runtime* nil)
 
 (defn- container-state-runtime?
 	[runtime]
@@ -37,13 +37,9 @@
 	(let [runtime (if (container-state-runtime? runtime)
 									runtime
 									(throw (ex-info "Expected container-state runtime"
-															{:runtime runtime})))
-				prev-override @container-state-runtime-override*]
-		(try
-			(reset! container-state-runtime-override* runtime)
-			(f)
-			(finally
-				(reset! container-state-runtime-override* prev-override)))))
+																{:runtime runtime})))]
+		(binding [*container-state-runtime* runtime]
+			(f))))
 (defn- installed-runtime
 	[]
 	(if-let [f (requiring-resolve 'cn.li.mcmod.gui.handler/get-container-state-runtime)]
@@ -56,7 +52,7 @@
 
 (defn- current-runtime
 	[]
-	(or @container-state-runtime-override*
+	(or *container-state-runtime*
 			(installed-runtime)))
 
 (defn- state-atom

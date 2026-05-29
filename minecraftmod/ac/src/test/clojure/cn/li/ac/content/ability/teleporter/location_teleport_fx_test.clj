@@ -45,7 +45,7 @@
     (with-redefs [client-sounds/queue-current-sound-effect! (fn [payload]
                                                                (swap! sounds* conj payload)
                                                                nil)]
-      (enqueue! {:payload {:mode :perform-success :target {:x 1.0 :y 2.0 :z 3.0}}})
+  (enqueue! nil {:payload {:mode :perform-success :target {:x 1.0 :y 2.0 :z 3.0}}})
       (is (= 1 (count @sounds*)))
       (is (= "my_mod:tp.tp" (:sound-id (first @sounds*)))))))
 
@@ -53,5 +53,5 @@
   (let [sounds* (atom 0)
         enqueue! (var-get #'cn.li.ac.content.ability.teleporter.location-teleport-fx/enqueue!)]
     (with-redefs [client-sounds/queue-current-sound-effect! (fn [_] (swap! sounds* inc) nil)]
-      (enqueue! {:payload {:mode :ignored}})
+  (enqueue! nil {:payload {:mode :ignored}})
       (is (= 0 @sounds*)))))

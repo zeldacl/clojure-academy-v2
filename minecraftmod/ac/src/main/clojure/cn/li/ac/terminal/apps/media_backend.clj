@@ -28,13 +28,10 @@
 (defonce ^:private installed-playback-runtime
   (create-playback-runtime))
 
-(defonce ^:private playback-runtime-override* (atom nil))
+(def ^:dynamic *playback-runtime*
+  installed-playback-runtime)
 
-(defonce ^:private media-owner-override* (atom nil))
-
-(defn- current-media-owner
-  []
-  @media-owner-override*)
+(def ^:dynamic *media-owner* nil)
 
 (defn- require-owner-value
   [owner label value]
@@ -75,12 +72,8 @@
   (when-not (playback-runtime? runtime)
     (throw (ex-info "Expected playback runtime"
                     {:runtime runtime})))
-  (let [prev-override @playback-runtime-override*]
-    (try
-      (reset! playback-runtime-override* runtime)
-      (f)
-      (finally
-        (reset! playback-runtime-override* prev-override)))))
+  (binding [*playback-runtime* runtime]
+    (f)))
 
 (defmacro with-playback-runtime
   [runtime & body]
@@ -88,8 +81,7 @@
 
 (defn- current-playback-runtime
   []
-  (or @playback-runtime-override*
-      @installed-playback-runtime))
+  *playback-runtime*)
 
 (defn- playback-state-atom
   []
@@ -98,6 +90,36 @@
 (defn- playback-states-snapshot
   []
   @(playback-state-atom))
+
+(declare swap-playback-state!)
+
+(defn- reduce-playback-state-event
+  [state event payload]
+  (case event
+    :playback/set-volume
+    (assoc state :volume (:volume payload))
+
+    :playback/select-track
+    (assoc state :track-idx (:track-idx payload)
+                 :paused? false)
+
+    :playback/stop
+    (assoc state :playing? false :paused? false)
+
+    :playback/started
+    (assoc state
+           :playing? true
+           :paused? false
+           :last-track-id (:track-id payload))
+
+    :playback/paused
+    (assoc state :playing? false :paused? true)
+
+    state))
+
+(defn- dispatch-playback-state-event!
+  [owner event payload]
+  (swap-playback-state! owner reduce-playback-state-event event payload))
 
 (defn- swap-playback-state!
   [owner f & args]
@@ -117,76 +139,57 @@
   tracks)
 
 (defn playback-state-snapshot
-  ([]  
-   (playback-state-snapshot (current-media-owner)))
-  ([owner]
-   (let [{:keys [track-idx] :as st} (get (playback-states-snapshot) (media-owner-key owner) default-playback-state)
-         safe-idx (mod (max 0 (int track-idx)) (count tracks))]
-     (assoc st :track (nth tracks safe-idx)))))
+  [owner]
+  (let [{:keys [track-idx] :as st} (get (playback-states-snapshot) (media-owner-key owner) default-playback-state)
+        safe-idx (mod (max 0 (int track-idx)) (count tracks))]
+    (assoc st :track (nth tracks safe-idx))))
 
 (defn- clamp-volume
   [v]
   (float (max 0.0 (min 1.0 (double v)))))
 
 (defn set-volume!
-  ([v]
-  (set-volume! (current-media-owner) v))
-  ([owner v]
+  [owner v]
   (let [nv (clamp-volume v)]
-    (swap-playback-state! owner assoc :volume nv)
-    nv)))
+    (dispatch-playback-state-event! owner :playback/set-volume {:volume nv})
+    nv))
 
 (defn select-track!
-  ([idx]
-  (select-track! (current-media-owner) idx))
-  ([owner idx]
+  [owner idx]
   (let [safe-idx (mod (max 0 (int idx)) (count tracks))]
-    (swap-playback-state! owner assoc :track-idx safe-idx :paused? false)
-    (nth tracks safe-idx))))
+    (dispatch-playback-state-event! owner :playback/select-track {:track-idx safe-idx})
+    (nth tracks safe-idx)))
 
 (defn next-track!
-  ([]  
-  (next-track! (current-media-owner)))
-  ([owner]
+  [owner]
   (let [{:keys [track-idx]} (playback-state-snapshot owner)]
-    (select-track! owner (inc track-idx)))))
+    (select-track! owner (inc track-idx))))
 
 (defn prev-track!
-  ([]  
-  (prev-track! (current-media-owner)))
-  ([owner]
+  [owner]
   (let [{:keys [track-idx]} (playback-state-snapshot owner)]
-    (select-track! owner (dec track-idx)))))
+    (select-track! owner (dec track-idx))))
 
 (defn stop!
-  ([]  
-  (stop! (current-media-owner)))
-  ([owner]
-  (swap-playback-state! owner assoc :playing? false :paused? false)
-  true))
+  [owner]
+  (dispatch-playback-state-event! owner :playback/stop nil)
+  true)
 
 (defn play-current!
   "Queue current track as a client sound event and mark backend state as playing."
-  ([]
-    (play-current! (current-media-owner)))
-  ([owner]
+  [owner]
   (let [{:keys [track volume]} (playback-state-snapshot owner)]
     (client-sounds/queue-sound-effect! owner
       {:type :sound
        :sound-id (:sound-id track)
        :volume volume
        :pitch 1.0})
-    (swap-playback-state! owner assoc
-           :playing? true
-           :paused? false
-           :last-track-id (:id track))
+    (dispatch-playback-state-event! owner :playback/started {:track-id (:id track)})
     (log/info "Media backend queued track" (:id track) "volume" volume)
-    track)))
+    track))
 
 (defn toggle-pause!
-  ([]  
-  (toggle-pause! (current-media-owner)))
-  ([owner]
+  [owner]
   (let [{:keys [playing? paused?]} (playback-state-snapshot owner)]
     (cond
       paused?
@@ -196,18 +199,16 @@
 
       playing?
       (do
-        (swap-playback-state! owner assoc :playing? false :paused? true)
+        (dispatch-playback-state-event! owner :playback/paused nil)
         :paused)
 
       :else
       (do
         (play-current! owner)
-        :playing)))))
+        :playing))))
 
 (defn status-lines
-  ([]  
-  (status-lines (current-media-owner)))
-  ([owner]
+  [owner]
   (let [{:keys [track playing? paused? volume]} (playback-state-snapshot owner)
         state-text (cond
                      paused? "Paused"
@@ -222,4 +223,4 @@
      "- Level5 Judgelight"
      ""
      "Playback backend: active (sound queue bridge)"
-    "UI controls are being migrated; preview on app open."])))
+    "UI controls are being migrated; preview on app open."]))

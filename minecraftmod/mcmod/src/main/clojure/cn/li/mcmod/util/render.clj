@@ -16,10 +16,11 @@
 (defonce ^:private installed-render-runtime
   (create-render-runtime))
 
-(defonce ^:private render-runtime-override* (atom nil))
+(def ^:dynamic *render-runtime*
+  installed-render-runtime)
 
 (defn- render-state-atom []
-  (:state* (or @render-runtime-override* installed-render-runtime)))
+  (:state* *render-runtime*))
 
 (defn- render-state-snapshot []
   @(render-state-atom))

@@ -87,10 +87,11 @@
 (defonce ^:private installed-gui-handler-runtime
   (create-gui-handler-runtime))
 
-(defonce ^:private gui-handler-runtime-override* (atom nil))
+(def ^:dynamic *gui-handler-runtime*
+  installed-gui-handler-runtime)
 
 (defn- gui-handler-atom []
-  (:state* (or @gui-handler-runtime-override* installed-gui-handler-runtime)))
+  (:state* *gui-handler-runtime*))
 
 (declare get-gui-handler)
 

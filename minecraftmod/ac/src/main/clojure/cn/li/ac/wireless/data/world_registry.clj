@@ -25,15 +25,10 @@
 (defonce ^:private installed-world-registry-runtime
 	(create-world-registry-runtime))
 
-(defonce ^:private world-registry-runtime-override* (atom nil))
+(def ^:dynamic *world-registry-runtime*
+	installed-world-registry-runtime)
 
 (def ^:dynamic *world-transaction* nil)
-
-(defonce ^:private world-transaction-override* (atom nil))
-
-(defn- current-world-transaction
-  []
-  (or @world-transaction-override* *world-transaction*))
 
 (defn- world-registry-runtime?
 	[runtime]
@@ -46,12 +41,8 @@
 	(when-not (world-registry-runtime? runtime)
 		(throw (ex-info "Expected world registry runtime"
 							{:runtime runtime})))
-	(let [prev-override @world-registry-runtime-override*]
-		(try
-			(reset! world-registry-runtime-override* runtime)
-			(f)
-			(finally
-				(reset! world-registry-runtime-override* prev-override)))))
+	(binding [*world-registry-runtime* runtime]
+		(f)))
 
 (defmacro with-world-registry-runtime
 	[runtime & body]
@@ -113,22 +104,16 @@
 
 (defn- current-world-registry-runtime
 	[]
-	(or @world-registry-runtime-override*
-			@installed-world-registry-runtime))
+	*world-registry-runtime*)
 
 (defn- current-world-transaction
 	[]
-	(or @world-transaction-override*
-			*world-transaction*))
+	*world-transaction*)
 
 (defn- call-with-world-transaction
 	[transaction f]
-	(let [prev-override @world-transaction-override*]
-		(try
-			(reset! world-transaction-override* transaction)
-			(f)
-			(finally
-				(reset! world-transaction-override* prev-override)))))
+	(binding [*world-transaction* transaction]
+		(f)))
 
 (defmacro ^:private with-world-transaction
 	[transaction & body]

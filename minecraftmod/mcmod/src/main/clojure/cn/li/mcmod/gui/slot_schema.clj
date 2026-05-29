@@ -17,10 +17,11 @@
 (defonce ^:private installed-slot-schema-runtime
   (create-slot-schema-runtime))
 
-(defonce ^:private slot-schema-runtime-override* (atom nil))
+(def ^:dynamic *slot-schema-runtime*
+  installed-slot-schema-runtime)
 
 (defn- slot-schema-state-atom []
-  (:state* (or @slot-schema-runtime-override* installed-slot-schema-runtime)))
+  (:state* *slot-schema-runtime*))
 
 (defn- slot-schema-state-snapshot []
   @(slot-schema-state-atom))

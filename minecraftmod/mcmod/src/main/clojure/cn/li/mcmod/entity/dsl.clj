@@ -14,7 +14,7 @@
   (create-entity-registry-runtime))
 
 (defn- entity-registry-state []
-  (:registry @installed-entity-registry-runtime))
+  (:registry installed-entity-registry-runtime))
 
 (defrecord EntitySpec [id registry-name entity-kind category
                        width height

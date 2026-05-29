@@ -7,75 +7,33 @@
 (def ^:private sound-id "my_mod:vecmanip.directed_shock")
 (def ^:private prepare-duration-ms 150.0)
 (def ^:private punch-duration-ms 300.0)
+(def ^:private directed-shock-effect-id :directed-shock)
 
-(defn default-directed-shock-fx-runtime-state
+(defn default-directed-shock-fx-state
   []
   {:effect-state {}})
 
-(defn create-directed-shock-fx-runtime
-  ([]
-   (create-directed-shock-fx-runtime {}))
-  ([{:keys [state*]
-     :or {state* (atom (default-directed-shock-fx-runtime-state))}}]
-   {::runtime ::directed-shock-fx-runtime
-    :state* state*}))
-
-(defonce ^:private installed-directed-shock-fx-runtime
-  (create-directed-shock-fx-runtime))
-
-(defonce ^:private directed-shock-fx-runtime-override* (atom nil))
-
-(defn- directed-shock-fx-runtime?
-  [runtime]
-  (and (map? runtime)
-       (= ::directed-shock-fx-runtime (::runtime runtime))
-       (some? (:state* runtime))))
-
-(defn call-with-directed-shock-fx-runtime
-  [runtime f]
-  (when-not (directed-shock-fx-runtime? runtime)
-    (throw (ex-info "Expected Directed Shock FX runtime"
-                    {:value runtime})))
-  (let [prev-override @directed-shock-fx-runtime-override*]
-    (try
-      (reset! directed-shock-fx-runtime-override* runtime)
-      (f)
-      (finally
-        (reset! directed-shock-fx-runtime-override* prev-override)))))
-
-(defmacro with-directed-shock-fx-runtime
-  [runtime & body]
-  `(call-with-directed-shock-fx-runtime ~runtime (fn [] ~@body)))
-
-(defn- current-directed-shock-fx-runtime
-  []
-  (or @directed-shock-fx-runtime-override*
-      @installed-directed-shock-fx-runtime))
-
-(defn- directed-shock-fx-state-atom
-  []
-  (:state* (current-directed-shock-fx-runtime)))
-
-(defn- directed-shock-fx-state-snapshot
-  []
-  @(directed-shock-fx-state-atom))
-
-(defn- update-directed-shock-fx-state!
-  [f & args]
-  (apply swap! (directed-shock-fx-state-atom) f args))
-
 (defn directed-shock-fx-snapshot
   []
-  (directed-shock-fx-state-snapshot))
+  (or (hand-effects/effect-state-snapshot directed-shock-effect-id)
+      (default-directed-shock-fx-state)))
 
 (defn reset-directed-shock-fx-for-test!
   []
-  (reset! (directed-shock-fx-state-atom) (default-directed-shock-fx-runtime-state))
+  (hand-effects/reset-hand-effect-state-for-test!
+    directed-shock-effect-id
+    (default-directed-shock-fx-state))
   nil)
 
 (defn clear-directed-shock-owner!
   [owner-key]
-  (update-directed-shock-fx-state! update :effect-state dissoc owner-key)
+  (hand-effects/update-effect-state!
+    directed-shock-effect-id
+    (fn [state]
+      (update (or state (default-directed-shock-fx-state))
+              :effect-state
+              dissoc
+              owner-key)))
   nil)
 
 (defn- now-ms [] (System/currentTimeMillis))
@@ -104,8 +62,9 @@
 ;; Enqueue
 ;; ---------------------------------------------------------------------------
 
-(defn- enqueue! [payload]
-  (let [{:keys [mode performed? owner-key ctx-id channel source-player-id world-id]} payload
+(defn- enqueue-state! [state payload]
+  (let [state* (or state (default-directed-shock-fx-state))
+        {:keys [mode performed? owner-key ctx-id channel source-player-id world-id]} payload
         owner-key* (or owner-key [:ctx ctx-id])
         base-meta {:owner-key owner-key*
                    :ctx-id ctx-id
@@ -114,34 +73,36 @@
                    :world-id world-id}]
     (case mode
       :start
-      (update-directed-shock-fx-state!
-        update :effect-state assoc owner-key*
-        (merge base-meta {:stage :prepare :started-at (now-ms)}))
+      (update state* :effect-state assoc owner-key*
+              (merge base-meta {:stage :prepare :started-at (now-ms)}))
+
       :perform
       (do
-        (update-directed-shock-fx-state!
-          update :effect-state assoc owner-key*
-          (merge base-meta {:stage :punch :started-at (now-ms)}))
         (client-sounds/queue-current-sound-effect!
-          {:type :sound :sound-id sound-id :volume 0.5 :pitch 1.0}))
+          {:type :sound :sound-id sound-id :volume 0.5 :pitch 1.0})
+        (update state* :effect-state assoc owner-key*
+                (merge base-meta {:stage :punch :started-at (now-ms)})))
+
       :end
-      (when-not performed?
-        (update-directed-shock-fx-state! update :effect-state dissoc owner-key*))
-      nil)))
+      (if performed?
+        state*
+        (update state* :effect-state dissoc owner-key*))
+
+      state*)))
 
 ;; ---------------------------------------------------------------------------
 ;; Tick
 ;; ---------------------------------------------------------------------------
 
-(defn- tick! []
-  (update-directed-shock-fx-state!
-    update :effect-state
-    (fn [states]
-      (into {}
-            (remove (fn [[_ {:keys [stage started-at]}]]
-                      (and (= stage :punch)
-                           (>= (- (now-ms) (long started-at)) punch-duration-ms))))
-            states))))
+(defn- tick-state! [state]
+  (let [state* (or state (default-directed-shock-fx-state))]
+    (update state* :effect-state
+            (fn [states]
+              (into {}
+                    (remove (fn [[_ {:keys [stage started-at]}]]
+                              (and (= stage :punch)
+                                   (>= (- (now-ms) (long started-at)) punch-duration-ms))))
+                    states)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Transform
@@ -152,7 +113,7 @@
              (some (fn [[owner-key st]]
                      (when (:stage st)
                        [owner-key st]))
-                   (:effect-state (directed-shock-fx-state-snapshot)))]
+                   (:effect-state (directed-shock-fx-snapshot)))]
     (let [elapsed (- (now-ms) (long started-at))]
       (case stage
         :prepare
@@ -161,7 +122,7 @@
         (let [progress (/ elapsed punch-duration-ms)]
           (if (>= progress 1.0)
             (do
-              (update-directed-shock-fx-state! update :effect-state dissoc owner-key)
+              (clear-directed-shock-owner! owner-key)
               nil)
             (punch-transform progress)))
         nil))))
@@ -171,33 +132,24 @@
 ;; ---------------------------------------------------------------------------
 
 (defn init! []
-  (let [runtime (create-directed-shock-fx-runtime)]
-    (hand-effects/register-hand-effect! :directed-shock
-      {:enqueue-fn (fn [payload]
-                     (call-with-directed-shock-fx-runtime
-                       runtime
-                       (fn []
-                         (enqueue! payload))))
-       :tick-fn (fn []
-                  (call-with-directed-shock-fx-runtime
-                    runtime
-                    tick!))
-       :transform-fn (fn []
-                       (call-with-directed-shock-fx-runtime
-                         runtime
-                          transform))})
-    (fx-registry/register-fx-channels!
-      [:directed-shock/fx-start :directed-shock/fx-perform :directed-shock/fx-end]
-      (fn [ctx-id channel payload]
-        (let [owner-meta {:owner-key [:ctx ctx-id]
-                          :ctx-id ctx-id
-                          :channel channel}]
-          (case channel
-            :directed-shock/fx-start
-            (hand-effects/enqueue-hand-effect! :directed-shock (merge owner-meta {:mode :start}))
-            :directed-shock/fx-perform
-            (hand-effects/enqueue-hand-effect! :directed-shock (merge owner-meta {:mode :perform}))
-            :directed-shock/fx-end
-            (hand-effects/enqueue-hand-effect! :directed-shock
-              (merge owner-meta {:mode :end :performed? (boolean (:performed? payload))})))))))
+  (hand-effects/register-hand-effect! directed-shock-effect-id
+    {:initial-state (default-directed-shock-fx-state)
+     :enqueue-state-fn enqueue-state!
+     :tick-state-fn tick-state!
+     :transform-fn transform})
+  (fx-registry/register-fx-channels!
+    [:directed-shock/fx-start :directed-shock/fx-perform :directed-shock/fx-end]
+    (fn [ctx-id channel payload]
+      (let [owner-meta {:owner-key [:ctx ctx-id]
+                        :ctx-id ctx-id
+                        :channel channel}]
+        (case channel
+          :directed-shock/fx-start
+          (hand-effects/enqueue-hand-effect! directed-shock-effect-id (merge owner-meta {:mode :start}))
+          :directed-shock/fx-perform
+          (hand-effects/enqueue-hand-effect! directed-shock-effect-id (merge owner-meta {:mode :perform}))
+          :directed-shock/fx-end
+          (hand-effects/enqueue-hand-effect!
+            directed-shock-effect-id
+            (merge owner-meta {:mode :end :performed? (boolean (:performed? payload))}))))))
   nil)

@@ -14,7 +14,7 @@
 	(create-sound-registry-runtime))
 
 (defn- sound-registry-state []
-	(:registry @installed-sound-registry-runtime))
+	(:registry installed-sound-registry-runtime))
 
 (defrecord SoundSpec [id registry-name subtitle-key properties])
 

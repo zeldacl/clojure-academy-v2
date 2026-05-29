@@ -15,7 +15,7 @@
   (create-message-id-registry-runtime))
 
 (defn- message-ids-atom []
-  (:state* @installed-message-id-registry-runtime))
+  (:state* installed-message-id-registry-runtime))
 
 (defn- message-ids-snapshot []
   @(message-ids-atom))

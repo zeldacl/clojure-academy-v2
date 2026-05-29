@@ -20,7 +20,7 @@
 	(create-config-registry-runtime))
 
 (defn- config-registry-state-atom []
-	(:state* @installed-config-registry-runtime))
+	(:state* installed-config-registry-runtime))
 
 (defn- config-registry-state-snapshot []
 	@(config-registry-state-atom))

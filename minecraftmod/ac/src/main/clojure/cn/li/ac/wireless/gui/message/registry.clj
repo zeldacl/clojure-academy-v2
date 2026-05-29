@@ -16,7 +16,8 @@
 (defonce ^:private installed-wireless-message-registry-runtime
   (create-wireless-message-registry-runtime))
 
-(defonce ^:private wireless-message-registry-runtime-override* (atom nil))
+(def ^:dynamic *wireless-message-registry-runtime*
+  installed-wireless-message-registry-runtime)
 
 (defn call-with-wireless-message-registry-runtime
   [runtime f]
@@ -24,17 +25,12 @@
                  (= ::wireless-message-registry-runtime (::runtime runtime))
                  (some? (:state* runtime)))
     (throw (ex-info "Expected wireless message registry runtime" {:runtime runtime})))
-  (let [prev-override @wireless-message-registry-runtime-override*]
-    (try
-      (reset! wireless-message-registry-runtime-override* runtime)
-      (f)
-      (finally
-        (reset! wireless-message-registry-runtime-override* prev-override)))))
+  (binding [*wireless-message-registry-runtime* runtime]
+    (f)))
 
 (defn- current-wireless-message-registry-runtime
   []
-  (or @wireless-message-registry-runtime-override*
-      @installed-wireless-message-registry-runtime))
+  *wireless-message-registry-runtime*)
 
 (defn- wireless-message-registry-state-atom
   []

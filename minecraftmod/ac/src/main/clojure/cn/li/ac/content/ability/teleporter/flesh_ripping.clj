@@ -109,6 +109,8 @@
 ;; Skill registration
 ;; ---------------------------------------------------------------------------
 
+(declare flesh-ripping-skill)
+
 (defskill! flesh-ripping-skill
   :id             :flesh-ripping
   :category-id    :teleporter

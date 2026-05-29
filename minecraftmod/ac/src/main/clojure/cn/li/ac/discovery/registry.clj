@@ -18,7 +18,8 @@
 (defonce ^:private installed-provider-registry-runtime
   (create-provider-registry-runtime))
 
-(defonce ^:private current-runtime-override* (atom nil))
+(def ^:dynamic *provider-registry-runtime*
+  installed-provider-registry-runtime)
 
 (defn call-with-provider-registry-runtime
   [runtime f]
@@ -26,17 +27,12 @@
                  (= ::provider-registry-runtime (::runtime runtime))
                  (some? (:state* runtime)))
     (throw (ex-info "Expected provider registry runtime" {:runtime runtime})))
-  (let [prev-override @current-runtime-override*]
-    (try
-      (reset! current-runtime-override* runtime)
-      (f)
-      (finally
-        (reset! current-runtime-override* prev-override)))))
+  (binding [*provider-registry-runtime* runtime]
+    (f)))
 
 (defn- current-provider-registry-runtime
   []
-  (or @current-runtime-override*
-      @installed-provider-registry-runtime))
+  *provider-registry-runtime*)
 
 (defn- provider-registry-state-atom
   []

@@ -1,95 +1,46 @@
 (ns cn.li.ac.content.ability.vecmanip.directed-blastwave-fx
   "Client FX for Directed Blastwave: charge ring + expanding wave rings."
-  (:require [cn.li.ac.ability.client.level-effects :as level-effects]
+  (:require [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
-            [cn.li.ac.ability.client.render-util :as ru]
-            [cn.li.ac.ability.client.effects.sounds :as client-sounds]))
+            [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.ability.client.render-util :as ru]))
+
+(def ^:private directed-blastwave-effect-id :directed-blastwave)
+(def ^:private sound-id "my_mod:vecmanip.directed_blast")
+(def ^:private wave-life 15)
 
 (defn default-directed-blastwave-fx-runtime-state
   []
   {:effect-state {}
    :waves {}})
 
-(defn create-directed-blastwave-fx-runtime
-  ([]
-   (create-directed-blastwave-fx-runtime {}))
-  ([{:keys [state*]
-     :or {state* (atom (default-directed-blastwave-fx-runtime-state))}}]
-   {::runtime ::directed-blastwave-fx-runtime
-    :state* state*}))
-
-(defonce ^:private installed-directed-blastwave-fx-runtime
-  (create-directed-blastwave-fx-runtime))
-
-(defonce ^:private directed-blastwave-fx-runtime-override* (atom nil))
-
-(defn- directed-blastwave-fx-runtime?
-  [runtime]
-  (and (map? runtime)
-       (= ::directed-blastwave-fx-runtime (::runtime runtime))
-       (some? (:state* runtime))))
-
-(defn call-with-directed-blastwave-fx-runtime
-  [runtime f]
-  (when-not (directed-blastwave-fx-runtime? runtime)
-    (throw (ex-info "Expected Directed Blastwave FX runtime"
-                    {:value runtime})))
-  (let [prev-override @directed-blastwave-fx-runtime-override*]
-    (try
-      (reset! directed-blastwave-fx-runtime-override* runtime)
-      (f)
-      (finally
-        (reset! directed-blastwave-fx-runtime-override* prev-override)))))
-
-(defmacro with-directed-blastwave-fx-runtime
-  [runtime & body]
-  `(call-with-directed-blastwave-fx-runtime ~runtime (fn [] ~@body)))
-
-(defn- current-directed-blastwave-fx-runtime
-  []
-  (or @directed-blastwave-fx-runtime-override*
-      @installed-directed-blastwave-fx-runtime))
-
-(defn- directed-blastwave-fx-state-atom
-  []
-  (:state* (current-directed-blastwave-fx-runtime)))
-
-(defn- directed-blastwave-fx-state-snapshot
-  []
-  @(directed-blastwave-fx-state-atom))
-
-(defn- update-directed-blastwave-fx-state!
-  [f & args]
-  (apply swap! (directed-blastwave-fx-state-atom) f args))
-
-(def ^:private sound-id "my_mod:vecmanip.directed_blast")
-(def ^:private wave-life 15)
-
 (defn directed-blastwave-fx-snapshot
   []
-  (directed-blastwave-fx-state-snapshot))
+  (or (level-effects/effect-state-snapshot directed-blastwave-effect-id)
+      (default-directed-blastwave-fx-runtime-state)))
 
 (defn reset-directed-blastwave-fx-for-test!
   []
-  (reset! (directed-blastwave-fx-state-atom) (default-directed-blastwave-fx-runtime-state))
+  (level-effects/reset-level-effect-state-for-test!
+    directed-blastwave-effect-id
+    (default-directed-blastwave-fx-runtime-state))
   nil)
 
 (defn clear-directed-blastwave-owner!
   [owner-key]
-  (update-directed-blastwave-fx-state!
+  (level-effects/update-effect-state!
+    directed-blastwave-effect-id
     (fn [state]
-      (-> state
+      (-> (or state (default-directed-blastwave-fx-runtime-state))
           (update :effect-state dissoc owner-key)
           (update :waves dissoc owner-key))))
   nil)
 
-;; ---------------------------------------------------------------------------
-;; Enqueue
-;; ---------------------------------------------------------------------------
-
-(defn- enqueue! [{:keys [payload ctx-id channel owner-key]}]
-  (let [owner-key* (or owner-key [:ctx ctx-id])
-        {:keys [mode charge-ticks punched? pos look-dir performed? source-player-id world-id]} payload
+(defn- enqueue-state!
+  [store {:keys [payload ctx-id channel owner-key]}]
+  (let [store* (or store (default-directed-blastwave-fx-runtime-state))
+        owner-key* (or owner-key [:ctx ctx-id])
+        {:keys [mode charge-ticks punched? pos look-dir performed? source-player-id world-id]} (or payload {})
         base-meta {:owner-key owner-key*
                    :ctx-id ctx-id
                    :channel channel
@@ -97,23 +48,20 @@
                    :world-id world-id}]
     (case mode
       :start
-      (update-directed-blastwave-fx-state!
-        update :effect-state assoc owner-key*
-        (merge base-meta {:active? true :charge-ticks 0 :punched? false :performed? false}))
+      (assoc-in store* [:effect-state owner-key*]
+                (merge base-meta {:active? true :charge-ticks 0 :punched? false :performed? false}))
       :update
-      (update-directed-blastwave-fx-state!
-        update :effect-state update owner-key*
-        (fn [st]
-          (assoc (merge base-meta (or st {}))
-                 :owner-key owner-key*
-                 :ctx-id ctx-id
-                 :channel channel
-                 :source-player-id source-player-id
-                 :world-id world-id
-                 :active? true
-                 :charge-ticks (long (or charge-ticks 0))
-                 :punched? (boolean punched?)
-                 :performed? false)))
+      (assoc-in store* [:effect-state owner-key*]
+                (assoc (merge base-meta (get-in store* [:effect-state owner-key*] {}))
+                       :owner-key owner-key*
+                       :ctx-id ctx-id
+                       :channel channel
+                       :source-player-id source-player-id
+                       :world-id world-id
+                       :active? true
+                       :charge-ticks (long (or charge-ticks 0))
+                       :punched? (boolean punched?)
+                       :performed? false))
       :perform
       (let [wave-entry (when (map? pos)
                          (let [d (or look-dir {:x 0.0 :y 0.0 :z 1.0})
@@ -134,51 +82,45 @@
                                                        :offset (+ (* idx 1.5) (- (* (rand) 0.6) 0.3))
                                                        :size (* 1.0 (+ 0.8 (* (rand) 0.4)))
                                                        :time-offset (+ (* idx 2) (- (rand-int 3) 1))})
-                                                    (range rings)))})))]
-        (when wave-entry
-          (update-directed-blastwave-fx-state! update-in [:waves owner-key*] (fnil conj []) wave-entry))
+                                                    (range rings)))})))
+            updated-store (if wave-entry
+                            (update-in store* [:waves owner-key*] (fnil conj []) wave-entry)
+                            store*)]
         (client-sounds/queue-current-sound-effect!
           {:type :sound :sound-id sound-id :volume 0.5 :pitch 1.0
            :x (double (or (:x pos) 0.0))
            :y (double (or (:y pos) 0.0))
-           :z (double (or (:z pos) 0.0))}))
+           :z (double (or (:z pos) 0.0))})
+        updated-store)
       :end
-      (update-directed-blastwave-fx-state!
-        update :effect-state assoc owner-key*
-        (merge base-meta {:active? false :charge-ticks 0 :punched? false
-                          :performed? (boolean performed?)}))
-      nil)))
+      (assoc-in store* [:effect-state owner-key*]
+                (merge base-meta {:active? false :charge-ticks 0 :punched? false
+                                  :performed? (boolean performed?)}))
+      store*)))
 
-;; ---------------------------------------------------------------------------
-;; Tick
-;; ---------------------------------------------------------------------------
+(defn- tick-state!
+  [store]
+  (let [state* (or store (default-directed-blastwave-fx-runtime-state))]
+    (assoc state*
+           :effect-state
+           (into {}
+                 (keep (fn [[owner-key st]]
+                         (when (:active? st)
+                           [owner-key st])))
+                 (:effect-state state*))
+           :waves
+           (into {}
+                 (keep (fn [[owner-key xs]]
+                         (let [live (->> xs
+                                         (map #(update % :ttl dec))
+                                         (filter #(pos? (long (:ttl %))))
+                                         vec)]
+                           (when (seq live)
+                             [owner-key live]))))
+                 (:waves state*)))))
 
-(defn- tick! []
-  (update-directed-blastwave-fx-state!
-    (fn [{:keys [effect-state waves] :as state}]
-      (assoc state
-             :effect-state
-             (into {}
-                   (keep (fn [[owner-key st]]
-                           (when (:active? st)
-                             [owner-key st])))
-                   effect-state)
-             :waves
-             (into {}
-                   (keep (fn [[owner-key xs]]
-                           (let [live (->> xs
-                                           (map #(update % :ttl dec))
-                                           (filter #(pos? (long (:ttl %))))
-                                           vec)]
-                             (when (seq live)
-                               [owner-key live]))))
-                   waves)))))
-
-;; ---------------------------------------------------------------------------
-;; Render ops
-;; ---------------------------------------------------------------------------
-
-(defn- alpha-curve [t]
+(defn- alpha-curve
+  [t]
   (cond
     (< t 0.0) 0.0
     (< t 0.2) (/ t 0.2)
@@ -186,14 +128,16 @@
     (< t 1.0) (- 1.0 (/ (- t 0.8) 0.2))
     :else 0.0))
 
-(defn- size-scale [ticks]
+(defn- size-scale
+  [ticks]
   (let [x (min 1.62 (max 0.0 (/ (double ticks) 20.0)))]
     (cond
       (< x 0.2) (+ 0.4 (* (/ x 0.2) (- 0.8 0.4)))
       (<= x 1.62) (+ 0.8 (* (/ (- x 0.2) (- 1.62 0.2)) (- 1.5 0.8)))
       :else 1.5)))
 
-(defn- basis [dir]
+(defn- basis
+  [dir]
   (let [n-dir (ru/vnormalize dir)
         up-axis (if (> (Math/abs (double (:y n-dir))) 0.95)
                   {:x 1.0 :y 0.0 :z 0.0}
@@ -202,7 +146,8 @@
         up (ru/vnormalize (ru/vcross right n-dir))]
     [right up n-dir]))
 
-(defn- wave-ops [{:keys [pos dir ttl max-ttl rings]}]
+(defn- wave-ops
+  [{:keys [pos dir ttl max-ttl rings]}]
   (let [ticks (- (long max-ttl) (long ttl))
         max-alpha (alpha-curve (/ (double ticks) (double (max 1 max-ttl))))
         ss (size-scale ticks)
@@ -211,7 +156,7 @@
     (vec
       (mapcat
         (fn [{:keys [life offset size time-offset]}]
-          (let [local-t (/ (- (double ticks) (double time-offset)) (double (max 1 life)))
+          (let [local-t (- (/ (double ticks) (double (max 1 life))) (/ (double time-offset) (double (max 1 life))))
                 alpha (alpha-curve local-t)
                 real-alpha (min max-alpha alpha)]
             (if (<= real-alpha 0.0)
@@ -230,7 +175,8 @@
                              {:r 255 :g 255 :b 255 :a alpha-i})]))))
         rings))))
 
-(defn- charge-ops [center charge-ticks punched?]
+(defn- charge-ops
+  [center charge-ticks punched?]
   (let [progress (min 1.0 (/ (double charge-ticks) 50.0))
         radius (+ 0.1 (* 0.16 progress))
         pulse (+ radius (* 0.025 (Math/sin (* 0.22 charge-ticks))))
@@ -253,12 +199,9 @@
              (ru/line-op center p0 core)]))
         (range points)))))
 
-;; ---------------------------------------------------------------------------
-;; Build plan
-;; ---------------------------------------------------------------------------
-
-(defn- build-plan [_camera-pos hand-center-pos _tick]
-  (let [{:keys [effect-state waves]} (directed-blastwave-fx-state-snapshot)
+(defn- build-plan
+  [_camera-pos hand-center-pos _tick]
+  (let [{:keys [effect-state waves]} (directed-blastwave-fx-snapshot)
         db (some (fn [st]
                    (when (and (:active? st)
                               (or (nil? (:source-player-id st))
@@ -277,45 +220,35 @@
     (when (or (seq charge-plan) (seq wave-plan))
       {:ops (vec (concat charge-plan wave-plan))})))
 
-;; ---------------------------------------------------------------------------
-;; Registration
-;; ---------------------------------------------------------------------------
-
-(defn init! []
-  (let [runtime (create-directed-blastwave-fx-runtime)]
-    (level-effects/register-level-effect! :directed-blastwave
-      {:enqueue-event-fn (fn [event]
-                           (call-with-directed-blastwave-fx-runtime
-                             runtime
-                             (fn []
-                               (enqueue! event))))
-       :tick-fn (fn []
-                  (call-with-directed-blastwave-fx-runtime
-                    runtime
-                    tick!))
-       :build-plan-fn build-plan}))
+(defn init!
+  []
+  (level-effects/register-level-effect! directed-blastwave-effect-id
+    {:initial-state (default-directed-blastwave-fx-runtime-state)
+     :enqueue-state-fn enqueue-state!
+     :tick-state-fn tick-state!
+     :build-plan-fn build-plan})
   (fx-registry/register-fx-channels!
     [:directed-blastwave/fx-start :directed-blastwave/fx-update
      :directed-blastwave/fx-perform :directed-blastwave/fx-end]
     (fn [ctx-id channel payload]
       (case channel
         :directed-blastwave/fx-start
-        (level-effects/enqueue-level-effect! :directed-blastwave {:mode :start}
+        (level-effects/enqueue-level-effect! directed-blastwave-effect-id {:mode :start}
                                              {:ctx-id ctx-id :channel channel})
         :directed-blastwave/fx-update
-        (level-effects/enqueue-level-effect! :directed-blastwave
+        (level-effects/enqueue-level-effect! directed-blastwave-effect-id
           {:mode :update
            :charge-ticks (long (or (:charge-ticks payload) 0))
            :punched? (boolean (:punched? payload))}
           {:ctx-id ctx-id :channel channel})
         :directed-blastwave/fx-perform
-        (level-effects/enqueue-level-effect! :directed-blastwave
+        (level-effects/enqueue-level-effect! directed-blastwave-effect-id
           {:mode :perform
            :pos (:pos payload) :look-dir (:look-dir payload)
            :charge-ticks (long (or (:charge-ticks payload) 0))}
           {:ctx-id ctx-id :channel channel})
         :directed-blastwave/fx-end
-        (level-effects/enqueue-level-effect! :directed-blastwave
+        (level-effects/enqueue-level-effect! directed-blastwave-effect-id
           {:mode :end :performed? (boolean (:performed? payload))}
           {:ctx-id ctx-id :channel channel}))))
   nil)

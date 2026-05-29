@@ -1,0 +1,134 @@
+(ns cn.li.ac.content.ability.meltdowner.electron-missile-fx-test
+  (:require [clojure.test :refer [deftest is use-fixtures]]
+            [cn.li.ac.ability.client.effects.particles :as client-particles]
+            [cn.li.ac.ability.client.effects.sounds :as client-sounds]
+            [cn.li.ac.ability.client.fx-registry :as fx-registry]
+            [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.content.ability.meltdowner.electron-missile-fx :as em-fx]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]))
+
+(defn- reset-fixture [f]
+  (binding [runtime-hooks/*client-session-id* :test-session]
+    (level-effects/call-with-level-effect-runtime
+      (level-effects/create-level-effect-runtime)
+      (fn []
+        (try
+          (level-effects/reset-level-effect-registry-for-test!)
+          (em-fx/reset-electron-missile-fx-for-test!)
+          (f)
+          (finally
+            (em-fx/reset-electron-missile-fx-for-test!)
+            (level-effects/reset-level-effect-registry-for-test!)))))))
+
+(use-fixtures :each reset-fixture)
+
+(defn- event
+  [ctx-id channel payload]
+  {:payload payload
+   :ctx-id ctx-id
+   :channel channel
+   :owner-key [:ctx ctx-id]})
+
+(deftest init-registers-owner-aware-electron-missile-fx-test
+  (let [registered-level* (atom nil)
+        registered-handler* (atom nil)]
+    (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
+                                                         (reset! registered-level* [effect-id effect-map])
+                                                         nil)
+                  fx-registry/register-fx-channels! (fn [channels handler]
+                                                      (reset! registered-handler* {:channels channels
+                                                                                   :handler handler})
+                                                      nil)]
+      (em-fx/init!)
+      (is (= :electron-missile (first @registered-level*)))
+      (is (fn? (:enqueue-state-fn (second @registered-level*))))
+      (is (= #{:electron-missile/fx-start
+               :electron-missile/fx-fire}
+             (set (:channels @registered-handler*)))))))
+
+(deftest fx-handler-routes-events-with-ctx-metadata-test
+  (let [handler* (atom nil)
+        enqueued* (atom [])]
+    (with-redefs [level-effects/register-level-effect! (fn [& _] nil)
+                  fx-registry/register-fx-channels! (fn [_ handler]
+                                                      (reset! handler* handler)
+                                                      nil)
+                  level-effects/enqueue-level-effect! (fn [effect-id payload fx-context]
+                                                        (swap! enqueued* conj [effect-id payload fx-context])
+                                                        nil)]
+      (em-fx/init!)
+      (@handler* "ctx-em" :electron-missile/fx-start {:source-player-id "player-a"})
+      (@handler* "ctx-em" :electron-missile/fx-fire {:target-x 1.0
+                                                      :target-y 64.0
+                                                      :target-z 2.0
+                                                      :source-player-id "player-a"})
+      (is (= [[:electron-missile {:mode :start :source-player-id "player-a"}
+               {:ctx-id "ctx-em" :channel :electron-missile/fx-start}]
+              [:electron-missile {:mode :fire
+                                  :target-x 1.0
+                                  :target-y 64.0
+                                  :target-z 2.0
+                                  :source-player-id "player-a"}
+               {:ctx-id "ctx-em" :channel :electron-missile/fx-fire}]]
+             @enqueued*)))))
+
+(deftest fire-adds-impact-and-tick-decays-state-test
+  (let [enqueue-state! (var-get #'cn.li.ac.content.ability.meltdowner.electron-missile-fx/enqueue-state!)
+        tick-state! (var-get #'cn.li.ac.content.ability.meltdowner.electron-missile-fx/tick-state!)
+        particles* (atom [])
+        sounds* (atom [])]
+    (with-redefs [client-particles/current-effect-owner (fn [] {:client-session-id "electron-missile-fx-test"})
+                  client-particles/queue-particle-effect! (fn [& args]
+                                                             (swap! particles* conj args)
+                                                             nil)
+                  client-sounds/queue-sound-effect! (fn [& args]
+                                                        (swap! sounds* conj args)
+                                                        nil)]
+      (level-effects/update-effect-state! :electron-missile
+        enqueue-state!
+        (event "ctx-a" :electron-missile/fx-fire
+               {:mode :fire
+                :target-x 1.0 :target-y 64.0 :target-z 2.0
+                :source-player-id "player-a"}))
+      (is (seq (get-in (em-fx/electron-missile-fx-snapshot) [:impacts [:ctx "ctx-a"]])))
+      (dotimes [_ 10]
+        (level-effects/update-effect-state! :electron-missile
+          (fn [store _]
+            (tick-state! store))
+          nil))
+      (is (empty? (get-in (em-fx/electron-missile-fx-snapshot) [:impacts [:ctx "ctx-a"]])))
+      (is (seq @particles*))
+      (is (seq @sounds*)))))
+
+(deftest electron-missile-fx-runtime-isolation-test
+  (let [runtime-a (level-effects/create-level-effect-runtime)
+        runtime-b (level-effects/create-level-effect-runtime)
+        enqueue-state! (var-get #'cn.li.ac.content.ability.meltdowner.electron-missile-fx/enqueue-state!)]
+    (with-redefs [client-particles/current-effect-owner (fn [] {:client-session-id "electron-missile-fx-test"})
+                  client-particles/queue-particle-effect! (fn [& _] nil)
+                  client-sounds/queue-sound-effect! (fn [& _] nil)]
+      (level-effects/call-with-level-effect-runtime
+        runtime-a
+        (fn []
+          (level-effects/update-effect-state! :electron-missile
+            enqueue-state!
+            (event "ctx-a" :electron-missile/fx-fire
+                   {:mode :fire :target-x 1.0 :target-y 64.0 :target-z 2.0 :source-player-id "player-a"}))
+          (is (= #{[:ctx "ctx-a"]}
+                 (set (keys (:impacts (em-fx/electron-missile-fx-snapshot))))))))
+      (level-effects/call-with-level-effect-runtime
+        runtime-b
+        (fn []
+          (is (= {:impacts {}}
+                 (em-fx/electron-missile-fx-snapshot)))
+          (level-effects/update-effect-state! :electron-missile
+            enqueue-state!
+            (event "ctx-b" :electron-missile/fx-fire
+                   {:mode :fire :target-x 10.0 :target-y 64.0 :target-z 2.0 :source-player-id "player-b"}))
+          (is (= #{[:ctx "ctx-b"]}
+                 (set (keys (:impacts (em-fx/electron-missile-fx-snapshot))))))))
+      (level-effects/call-with-level-effect-runtime
+        runtime-a
+        (fn []
+          (is (= #{[:ctx "ctx-a"]}
+                 (set (keys (:impacts (em-fx/electron-missile-fx-snapshot)))))))))))

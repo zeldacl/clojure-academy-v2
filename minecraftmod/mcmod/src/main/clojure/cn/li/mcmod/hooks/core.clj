@@ -100,7 +100,7 @@
   (create-hooks-core-runtime))
 
 (defn- hooks-core-state-atom []
-  (:state* @installed-hooks-core-runtime))
+  (:state* installed-hooks-core-runtime))
 
 (defn- hooks-core-state-snapshot []
   @(hooks-core-state-atom))

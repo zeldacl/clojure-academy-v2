@@ -13,10 +13,11 @@
 (defonce ^:private installed-particle-registry-runtime
 	(create-particle-registry-runtime))
 
-(defonce ^:private particle-registry-runtime-override* (atom nil))
+(def ^:dynamic *particle-registry-runtime*
+	installed-particle-registry-runtime)
 
 (defn- particle-registry-state []
-	(:registry (or @particle-registry-runtime-override* installed-particle-registry-runtime)))
+	(:registry *particle-registry-runtime*))
 
 (defrecord ParticleSpec [id registry-name always-show? properties])
 

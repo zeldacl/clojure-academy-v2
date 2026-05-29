@@ -22,7 +22,8 @@
 (defonce ^:private installed-content-provider-registry-runtime
   (create-content-provider-registry-runtime))
 
-(defonce ^:private content-provider-registry-runtime-override* (atom nil))
+(def ^:dynamic *content-provider-registry-runtime*
+  installed-content-provider-registry-runtime)
 
 (defn call-with-content-provider-registry-runtime
   [runtime f]
@@ -30,17 +31,12 @@
                  (= ::content-provider-registry-runtime (::runtime runtime))
                  (some? (:state* runtime)))
     (throw (ex-info "Expected content provider registry runtime" {:runtime runtime})))
-  (let [prev-override @content-provider-registry-runtime-override*]
-    (try
-      (reset! content-provider-registry-runtime-override* runtime)
-      (f)
-      (finally
-        (reset! content-provider-registry-runtime-override* prev-override)))))
+  (binding [*content-provider-registry-runtime* runtime]
+    (f)))
 
 (defn- current-content-provider-registry-runtime
   []
-  (or @content-provider-registry-runtime-override*
-      @installed-content-provider-registry-runtime))
+  *content-provider-registry-runtime*)
 
 (defn- content-provider-registry-state-atom
   []

@@ -17,7 +17,8 @@
 (defonce ^:private installed-managed-screen-runtime
 	(create-managed-screen-runtime))
 
-(defonce ^:private managed-screen-runtime-override* (atom nil))
+(def ^:dynamic *managed-screen-runtime*
+	installed-managed-screen-runtime)
 
 (defn- managed-screen-runtime?
 	[runtime]
@@ -30,12 +31,8 @@
 	(when-not (managed-screen-runtime? runtime)
 		(throw (ex-info "Expected managed screen runtime"
 										{:runtime runtime})))
-	(let [prev-override @managed-screen-runtime-override*]
-		(try
-			(reset! managed-screen-runtime-override* runtime)
-			(f)
-			(finally
-				(reset! managed-screen-runtime-override* prev-override)))))
+	(binding [*managed-screen-runtime* runtime]
+		(f)))
 
 (defmacro with-managed-screen-runtime
 	[runtime & body]
@@ -43,8 +40,7 @@
 
 (defn- current-managed-screen-runtime
 	[]
-	(or @managed-screen-runtime-override*
-			@installed-managed-screen-runtime))
+	*managed-screen-runtime*)
 
 (defn- require-managed-screen-runtime
 	[]

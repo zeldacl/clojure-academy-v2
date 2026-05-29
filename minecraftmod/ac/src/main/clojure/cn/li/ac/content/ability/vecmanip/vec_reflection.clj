@@ -35,7 +35,6 @@
 
 (defonce ^:private installed-vec-reflection-runtime
   (create-vec-reflection-runtime))
-(defonce ^:private vec-reflection-runtime-override* (atom nil))
 
 (defn- vec-reflection-runtime?
   [runtime]
@@ -48,12 +47,8 @@
   (when-not (vec-reflection-runtime? runtime)
     (throw (ex-info "Expected VecReflection runtime"
                     {:value runtime})))
-  (let [prev-override @vec-reflection-runtime-override*]
-    (try
-      (reset! vec-reflection-runtime-override* runtime)
-      (f)
-      (finally
-        (reset! vec-reflection-runtime-override* prev-override)))))
+  (binding [*vec-reflection-runtime* runtime]
+    (f)))
 
 (defmacro with-vec-reflection-runtime
   [runtime & body]
@@ -61,7 +56,7 @@
 
 (defn- current-vec-reflection-runtime
   []
-  (or @vec-reflection-runtime-override*
+  (or *vec-reflection-runtime*
       installed-vec-reflection-runtime))
 
 (defn- reflection-runtime-state-atom
@@ -76,11 +71,11 @@
   [f & args]
   (apply swap! (reflection-runtime-state-atom) f args))
 
-(defonce ^:private reflection-chain-id-override* (atom nil))
+(def ^:dynamic *reflection-chain-id* nil)
 
 (defn- current-reflection-chain-id
   []
-  @reflection-chain-id-override*)
+  *reflection-chain-id*)
 
 (defn- exp01 [exp]
   (max 0.0 (min 1.0 (double (or exp 0.0)))))
@@ -471,11 +466,9 @@
   Returns tuple [performed? reduced-damage]."
   [player-id attacker-id original-damage]
   (try
-    (let [chain-id (or (current-reflection-chain-id) (new-reflection-chain-id))
-          prev-chain-id @reflection-chain-id-override*]
-      (try
-       (reset! reflection-chain-id-override* chain-id)
-       (let [ctx-id (active-vec-reflection-ctx-id player-id)
+    (let [chain-id (or (current-reflection-chain-id) (new-reflection-chain-id))]
+      (binding [*reflection-chain-id* chain-id]
+        (let [ctx-id (active-vec-reflection-ctx-id player-id)
               owner-key (reflection-owner-key player-id attacker-id ctx-id chain-id)]
           (if-not (try-enter-reflection! owner-key)
             [false original-damage]
@@ -512,9 +505,7 @@
                     [false original-damage]))
                 [false original-damage])
               (finally
-                (leave-reflection! owner-key)))))
-      (finally
-        (reset! reflection-chain-id-override* prev-chain-id))))
+                (leave-reflection! owner-key)))))))
     (catch Exception e
       (log/warn "VecReflection reflect-damage failed:" (ex-message e))
       [false original-damage])))
@@ -545,6 +536,8 @@
   (when (can-cancel-attack? player-id attacker-id original-damage)
     (reflect-damage player-id attacker-id original-damage)
     true))
+
+(declare vec-reflection)
 
 (defskill! vec-reflection
   :id :vec-reflection

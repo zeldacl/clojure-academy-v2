@@ -13,10 +13,11 @@
 (defonce ^:private installed-effect-registry-runtime
 	(create-effect-registry-runtime))
 
-(defonce ^:private effect-registry-runtime-override* (atom nil))
+(def ^:dynamic *effect-registry-runtime*
+	installed-effect-registry-runtime)
 
 (defn- effect-registry-state []
-	(:registry (or @effect-registry-runtime-override* installed-effect-registry-runtime)))
+	(:registry *effect-registry-runtime*))
 
 (defrecord EffectSpec [id registry-name category color tick-interval damage-per-tick properties])
 

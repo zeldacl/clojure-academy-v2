@@ -8,12 +8,16 @@
 
 (defn- reset-fixture [f]
   (binding [runtime-hooks/*client-session-id* :test-session]
-    (gfx/call-with-groundshock-fx-runtime
-      (gfx/create-groundshock-fx-runtime)
+    (hand-effects/call-with-hand-effect-runtime
+      (hand-effects/create-hand-effect-runtime)
       (fn []
+        (hand-effects/reset-hand-effect-registry-for-test!)
         (gfx/reset-groundshock-fx-for-test!)
-        (f)
-        (gfx/reset-groundshock-fx-for-test!)))))
+        (try
+          (f)
+          (finally
+            (hand-effects/reset-hand-effect-registry-for-test!)
+            (gfx/reset-groundshock-fx-for-test!)))))))
 
 (use-fixtures :each reset-fixture)
 
@@ -88,8 +92,8 @@
              @level-enqueued*)))))
 
 (deftest two-owners-keep-groundshock-hand-state-independent-test
-  (let [hand-enqueue! @#'cn.li.ac.content.ability.vecmanip.groundshock-fx/hand-enqueue!
-        hand-tick! @#'cn.li.ac.content.ability.vecmanip.groundshock-fx/hand-tick!
+  (let [hand-enqueue-state! @#'cn.li.ac.content.ability.vecmanip.groundshock-fx/hand-enqueue-state!
+        hand-tick-state! @#'cn.li.ac.content.ability.vecmanip.groundshock-fx/hand-tick-state!
         pitch-deltas* (atom [])]
     (with-redefs [hand-effects/add-camera-pitch-delta! (fn
                                                          ([delta]
@@ -98,17 +102,17 @@
                                                          ([_owner delta]
                                                           (swap! pitch-deltas* conj delta)
                                                           nil))]
-      (hand-enqueue! {:owner-key [:ctx "ctx-a"] :ctx-id "ctx-a" :mode :start})
-      (hand-enqueue! {:owner-key [:ctx "ctx-b"] :ctx-id "ctx-b" :mode :start})
-      (hand-enqueue! {:owner-key [:ctx "ctx-a"] :ctx-id "ctx-a" :mode :update :charge-ticks 2})
-      (hand-enqueue! {:owner-key [:ctx "ctx-b"] :ctx-id "ctx-b" :mode :update :charge-ticks 4})
+      (hand-effects/update-effect-state! :groundshock hand-enqueue-state! {:owner-key [:ctx "ctx-a"] :ctx-id "ctx-a" :mode :start})
+      (hand-effects/update-effect-state! :groundshock hand-enqueue-state! {:owner-key [:ctx "ctx-b"] :ctx-id "ctx-b" :mode :start})
+      (hand-effects/update-effect-state! :groundshock hand-enqueue-state! {:owner-key [:ctx "ctx-a"] :ctx-id "ctx-a" :mode :update :charge-ticks 2})
+      (hand-effects/update-effect-state! :groundshock hand-enqueue-state! {:owner-key [:ctx "ctx-b"] :ctx-id "ctx-b" :mode :update :charge-ticks 4})
       (let [snapshot (gfx/groundshock-fx-snapshot)]
         (is (= 2 (:charge-ticks (get (:hand-state snapshot) [:ctx "ctx-a"]))))
         (is (= 4 (:charge-ticks (get (:hand-state snapshot) [:ctx "ctx-b"]))))
         (is (= 6 (count @pitch-deltas*))))
-      (hand-enqueue! {:owner-key [:ctx "ctx-a"] :ctx-id "ctx-a" :mode :perform})
-      (hand-enqueue! {:owner-key [:ctx "ctx-b"] :ctx-id "ctx-b" :mode :end :performed? false})
-      (hand-tick!)
+      (hand-effects/update-effect-state! :groundshock hand-enqueue-state! {:owner-key [:ctx "ctx-a"] :ctx-id "ctx-a" :mode :perform})
+      (hand-effects/update-effect-state! :groundshock hand-enqueue-state! {:owner-key [:ctx "ctx-b"] :ctx-id "ctx-b" :mode :end :performed? false})
+      (hand-effects/update-effect-state! :groundshock hand-tick-state!)
       (let [snapshot (gfx/groundshock-fx-snapshot)]
         (is (= 3 (:perform-ticks (get (:hand-state snapshot) [:ctx "ctx-a"]))))
         (is (nil? (get (:hand-state snapshot) [:ctx "ctx-b"]))))
@@ -117,34 +121,30 @@
 
 (deftest groundshock-fx-runtime-isolation-test
   (binding [runtime-hooks/*client-session-id* :test-session]
-    (let [runtime-a (gfx/create-groundshock-fx-runtime)
-          runtime-b (gfx/create-groundshock-fx-runtime)
-          hand-enqueue! @#'cn.li.ac.content.ability.vecmanip.groundshock-fx/hand-enqueue!]
+    (let [runtime-a (hand-effects/create-hand-effect-runtime)
+          runtime-b (hand-effects/create-hand-effect-runtime)
+          hand-enqueue-state! @#'cn.li.ac.content.ability.vecmanip.groundshock-fx/hand-enqueue-state!]
       (with-redefs [hand-effects/add-camera-pitch-delta! (fn [& _] nil)]
-        (gfx/call-with-groundshock-fx-runtime
+        (hand-effects/call-with-hand-effect-runtime
           runtime-a
           (fn []
-            (hand-enqueue! {:owner-key [:ctx "ctx-a"] :ctx-id "ctx-a" :mode :start})
+            (hand-effects/update-effect-state! :groundshock hand-enqueue-state! {:owner-key [:ctx "ctx-a"] :ctx-id "ctx-a" :mode :start})
             (is (= #{[:ctx "ctx-a"]}
                    (set (keys (:hand-state (gfx/groundshock-fx-snapshot))))))))
-        (gfx/call-with-groundshock-fx-runtime
+        (hand-effects/call-with-hand-effect-runtime
           runtime-b
           (fn []
             (is (= {:hand-state {}}
                    (gfx/groundshock-fx-snapshot)))
-            (hand-enqueue! {:owner-key [:ctx "ctx-b"] :ctx-id "ctx-b" :mode :start})
+            (hand-effects/update-effect-state! :groundshock hand-enqueue-state! {:owner-key [:ctx "ctx-b"] :ctx-id "ctx-b" :mode :start})
             (is (= #{[:ctx "ctx-b"]}
                    (set (keys (:hand-state (gfx/groundshock-fx-snapshot))))))))
-        (gfx/call-with-groundshock-fx-runtime
+        (hand-effects/call-with-hand-effect-runtime
           runtime-a
           (fn []
             (is (= #{[:ctx "ctx-a"]}
                    (set (keys (:hand-state (gfx/groundshock-fx-snapshot))))))))))))
 
-(deftest groundshock-fx-runtime-required-without-binding-test
-  (gfx/call-with-groundshock-fx-runtime nil
-    (fn []
-      (is (thrown-with-msg?
-            clojure.lang.ExceptionInfo
-            #"runtime is not bound"
-            (gfx/groundshock-fx-snapshot))))))
+(deftest groundshock-fx-snapshot-default-without-registered-state-test
+  (is (= {:hand-state {}}
+         (gfx/groundshock-fx-snapshot))))

@@ -67,7 +67,7 @@
   (create-content-registry-runtime))
 
 (defn- content-registry-state-atom []
-  (:state* @installed-content-registry-runtime))
+  (:state* installed-content-registry-runtime))
 
 (defn- content-registry-state-snapshot []
   @(content-registry-state-atom))

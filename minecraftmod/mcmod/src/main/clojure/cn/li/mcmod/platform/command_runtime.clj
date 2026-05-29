@@ -16,10 +16,11 @@
 (defonce ^:private installed-command-runtime
 	(create-command-runtime))
 
-(defonce ^:private command-runtime-override* (atom nil))
+(def ^:dynamic *command-runtime*
+	installed-command-runtime)
 
 (defn- command-hooks-atom []
-	(:state* (or @command-runtime-override* installed-command-runtime)))
+	(:state* *command-runtime*))
 
 (defn- command-hooks-snapshot []
 	@(command-hooks-atom))

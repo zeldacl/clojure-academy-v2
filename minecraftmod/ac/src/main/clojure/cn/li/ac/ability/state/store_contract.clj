@@ -105,25 +105,21 @@
 ;; Store Binding
 ;; ============================================================================
 
-(defonce ^:private player-ability-store-override* (atom nil))
+(def ^:dynamic *player-ability-store* nil)
 
 (defn player-ability-store
   "Return the bound player ability store, or throw."
   []
-  (or @player-ability-store-override*
+  (or *player-ability-store*
       (throw (ex-info "Player ability store not initialised by AC runtime" {}))))
 
 (defn install-player-ability-store!
   "Install the permanent player ability store. Call once during bootstrap."
   [store]
-  (reset! player-ability-store-override* store))
+  (alter-var-root #'*player-ability-store* (constantly store)))
 
 (defmacro with-player-ability-store
   "Test support: temporarily bind the player ability store."
   [store & body]
-  `(let [prev-override# @player-ability-store-override*]
-     (try
-       (reset! player-ability-store-override* ~store)
-       ~@body
-       (finally
-         (reset! player-ability-store-override* prev-override#)))))
+  `(binding [*player-ability-store* ~store]
+     ~@body))

@@ -62,24 +62,38 @@ public final class ForgeSmokeGameTests {
 
     @GameTest(templateNamespace = "minecraft", template = "empty", batch = "content_smoke")
     public static void electronBombDefaultsAligned(GameTestHelper helper) {
-        String delayedNs = "cn.li.ac.ability.server.service.delayed-projectiles";
-        ClojureInterop.requireNamespace(delayedNs);
+        String registryNs = "cn.li.mcmod.content.registry";
+        ClojureInterop.requireNamespace(registryNs);
 
-        Object delayObj = ClojureInterop.invoke(delayedNs, "mdball-near-expire-delay");
+        Object manifestsObj = ClojureInterop.invoke(registryNs, "list-smoke-manifests");
+        helper.assertTrue(manifestsObj instanceof Iterable,
+            "Expected content smoke manifest registry to be iterable");
+
+        Map<?, ?> electronBombDefaults = null;
+        for (Object manifestObj : (Iterable<?>) manifestsObj) {
+            if (manifestObj instanceof Map<?, ?> manifestMap
+                && "ac".equals(manifestMap.get(kw("content-id")))) {
+                Object fixturesObj = manifestMap.get(kw("fixtures"));
+                if (fixturesObj instanceof Map<?, ?> fixturesMap) {
+                    Object defaultsObj = fixturesMap.get(kw("electron-bomb-defaults"));
+                    if (defaultsObj instanceof Map<?, ?> defaultsMap) {
+                        electronBombDefaults = defaultsMap;
+                        break;
+                    }
+                }
+            }
+        }
+
+        helper.assertTrue(electronBombDefaults != null,
+            "Expected AC smoke manifest to expose :electron-bomb-defaults fixture");
+
+        Object delayObj = electronBombDefaults.get(kw("settle-delay-ticks"));
         helper.assertTrue(delayObj instanceof Number && ((Number) delayObj).intValue() == 15,
             "Expected electron-bomb delayed settlement default to be 15 ticks (life 20, settle offset 5)");
 
-        String skillConfigNs = "cn.li.ac.ability.skill-config";
-        ClojureInterop.requireNamespace(skillConfigNs);
-
-        Object damageEndpointsObj = ClojureInterop.invoke(
-            skillConfigNs,
-            "tunable-double-list",
-            kw("electron-bomb"),
-            kw("combat.damage"));
-
+        Object damageEndpointsObj = electronBombDefaults.get(kw("combat-damage"));
         helper.assertTrue(damageEndpointsObj instanceof List<?>,
-            "Expected electron-bomb combat.damage endpoints to be list-like");
+            "Expected electron-bomb combat damage endpoints fixture to be list-like");
 
         List<?> damageEndpoints = (List<?>) damageEndpointsObj;
         helper.assertTrue(damageEndpoints.size() == 2,

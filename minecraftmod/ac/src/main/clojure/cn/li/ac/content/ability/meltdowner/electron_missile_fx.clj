@@ -1,161 +1,122 @@
 (ns cn.li.ac.content.ability.meltdowner.electron-missile-fx
   "Client FX for ElectronMissile: orbiting sparks + impact flash per fired ball."
-  (:require [cn.li.ac.ability.client.level-effects :as level-effects]
+  (:require [cn.li.ac.ability.client.effects.particles :as client-particles]
+            [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
-            [cn.li.ac.ability.client.effects.particles :as client-particles]
-            [cn.li.ac.ability.client.effects.sounds :as client-sounds]))
+            [cn.li.ac.ability.client.level-effects :as level-effects]))
+
+(def ^:private electron-missile-effect-id :electron-missile)
 
 (defn default-electron-missile-fx-runtime-state
   []
   {:impacts {}})
 
-(defn create-electron-missile-fx-runtime
-  ([]
-   (create-electron-missile-fx-runtime {}))
-  ([{:keys [state*]
-     :or {state* (atom (default-electron-missile-fx-runtime-state))}}]
-   {::runtime ::electron-missile-fx-runtime
-    :state* state*}))
-
-
-(defonce ^:private installed-electron-missile-fx-runtime
-  (create-electron-missile-fx-runtime))
-
-(defonce ^:private electron-missile-fx-runtime-override* (atom nil))
-
-(defn- electron-missile-fx-runtime?
-  [runtime]
-  (and (map? runtime)
-       (= ::electron-missile-fx-runtime (::runtime runtime))
-       (some? (:state* runtime))))
-
-(defn call-with-electron-missile-fx-runtime
-  [runtime f]
-  (when-not (electron-missile-fx-runtime? runtime)
-    (throw (ex-info "Expected electron missile FX runtime"
-                    {:value runtime})))
-  (let [prev-override @electron-missile-fx-runtime-override*]
-    (try
-      (reset! electron-missile-fx-runtime-override* runtime)
-      (f)
-      (finally
-        (reset! electron-missile-fx-runtime-override* prev-override)))))
-
-(defmacro with-electron-missile-fx-runtime
-  [runtime & body]
-  `(call-with-electron-missile-fx-runtime ~runtime (fn [] ~@body)))
-
-(defn- current-electron-missile-fx-runtime
+(defn electron-missile-fx-snapshot
   []
-  (or @electron-missile-fx-runtime-override*
-      @installed-electron-missile-fx-runtime))
+  (or (level-effects/effect-state-snapshot electron-missile-effect-id)
+      (default-electron-missile-fx-runtime-state)))
 
-(defn- electron-missile-fx-state-atom
+(defn reset-electron-missile-fx-for-test!
   []
-  (:state* (current-electron-missile-fx-runtime)))
-
-(defn- electron-missile-fx-state-snapshot
-  []
-  @(electron-missile-fx-state-atom))
-
-(defn- update-electron-missile-fx-state!
-  [f & args]
-  (apply swap! (electron-missile-fx-state-atom) f args))
-
-(defn electron-missile-fx-snapshot []
-  (electron-missile-fx-state-snapshot))
-
-(defn reset-electron-missile-fx-for-test! []
-  (reset! (electron-missile-fx-state-atom) (default-electron-missile-fx-runtime-state))
+  (level-effects/reset-level-effect-state-for-test!
+    electron-missile-effect-id
+    (default-electron-missile-fx-runtime-state))
   nil)
 
-(defn clear-electron-missile-owner! [owner-key]
-  (update-electron-missile-fx-state! update :impacts dissoc owner-key)
+(defn clear-electron-missile-owner!
+  [owner-key]
+  (level-effects/update-effect-state!
+    electron-missile-effect-id
+    (fn [store]
+      (update (or store (default-electron-missile-fx-runtime-state)) :impacts dissoc owner-key)))
   nil)
 
-(defn- all-impacts []
-  (mapcat val (:impacts (electron-missile-fx-state-snapshot))))
+(defn- all-impacts
+  []
+  (mapcat val (:impacts (electron-missile-fx-snapshot))))
 
-(defn- enqueue! [{:keys [payload ctx-id channel owner-key]}]
-  (let [owner-key* (or owner-key [:ctx ctx-id])
-        {:keys [source-player-id world-id]} payload
+(defn- enqueue-state!
+  [store {:keys [payload ctx-id channel owner-key]}]
+  (let [store* (or store (default-electron-missile-fx-runtime-state))
+        owner-key* (or owner-key [:ctx ctx-id])
+        {:keys [mode source-player-id world-id target-x target-y target-z]} (or payload {})
         base-meta {:owner-key owner-key*
                    :queue-owner (client-particles/current-effect-owner)
                    :ctx-id ctx-id
                    :channel channel
                    :source-player-id source-player-id
                    :world-id world-id}]
-    (case (:mode payload)
+    (case mode
       :start
-      (client-sounds/queue-sound-effect! (:queue-owner base-meta)
-        {:type :sound :sound-id "my_mod:md.em_start" :volume 0.5 :pitch 1.0})
-      :fire
       (do
-        (update-electron-missile-fx-state!
-          update :impacts update owner-key*
-          (fn [q]
-            (let [q2 (conj (vec q) (merge base-meta payload {:ttl 10}))]
-              (if (> (count q2) 8)
-                (subvec q2 (- (count q2) 8))
-                q2))))
         (client-sounds/queue-sound-effect! (:queue-owner base-meta)
-          {:type :sound :sound-id "my_mod:md.em_fire" :volume 0.35 :pitch (+ 0.85 (rand 0.3))}))
-      nil)))
+          {:type :sound :sound-id "my_mod:md.em_start" :volume 0.5 :pitch 1.0})
+        store*)
+      :fire
+      (let [store** (update-in store* [:impacts owner-key*] (fnil conj [])
+                               (merge base-meta
+                                      {:target-x target-x
+                                       :target-y target-y
+                                       :target-z target-z
+                                       :ttl 10
+                                       :max-ttl 10}))]
+        (client-sounds/queue-sound-effect! (:queue-owner base-meta)
+          {:type :sound :sound-id "my_mod:md.em_fire" :volume 0.35 :pitch (+ 0.85 (rand 0.3))})
+        store**)
+      store*)))
 
-(defn- tick! []
-  (update-electron-missile-fx-state!
-    update :impacts
-    (fn [by-owner]
-      (into {}
-            (keep (fn [[owner-key q]]
-                    (let [live (->> q
-                                    (map (fn [b] (update b :ttl dec)))
-                                    (filter (fn [b] (pos? (:ttl b))))
-                                    vec)]
-                      (when (seq live)
-                        [owner-key live]))))
-            by-owner)))
-  (doseq [impact (all-impacts)]
-    (when-let [tx (:target-x impact)]
-      (client-particles/queue-particle-effect! (:queue-owner impact)
-        {:type :particle :particle-type :electric-spark
-         :x (+ (double tx) 0.5)
-         :y (+ (double (:target-y impact)) 0.5)
-         :z (+ (double (:target-z impact)) 0.5)
-         :count 2 :speed 0.2
-         :offset-x 0.25 :offset-y 0.25 :offset-z 0.25}))))
+(defn- tick-state!
+  [store]
+  (let [store* (or store (default-electron-missile-fx-runtime-state))
+        impacts (all-impacts)]
+    (doseq [impact impacts]
+      (when-let [tx (:target-x impact)]
+        (client-particles/queue-particle-effect! (:queue-owner impact)
+          {:type :particle :particle-type :electric-spark
+           :x (+ (double tx) 0.5)
+           :y (+ (double (:target-y impact)) 0.5)
+           :z (+ (double (:target-z impact)) 0.5)
+           :count 2 :speed 0.2
+           :offset-x 0.25 :offset-y 0.25 :offset-z 0.25})))
+    (update store* :impacts
+      (fn [by-owner]
+        (into {}
+              (keep (fn [[owner-key q]]
+                      (let [live (->> q
+                                      (map #(update % :ttl dec))
+                                      (filter #(pos? (long (:ttl %))))
+                                      vec)]
+                        (when (seq live)
+                          [owner-key live]))))
+              by-owner)))))
 
-(defn- build-plan [_camera-pos _hand-center-pos _tick]
+(defn- build-plan
+  [_camera-pos _hand-center-pos _tick]
   nil)
 
-(defn init! []
-  (let [runtime (create-electron-missile-fx-runtime)]
-    (level-effects/register-level-effect! :electron-missile
-      {:enqueue-event-fn (fn [event]
-                           (call-with-electron-missile-fx-runtime
-                             runtime
-                             (fn []
-                               (enqueue! event))))
-       :tick-fn (fn []
-                  (call-with-electron-missile-fx-runtime
-                    runtime
-                    tick!))
-       :build-plan-fn build-plan}))
+(defn init!
+  []
+  (level-effects/register-level-effect! electron-missile-effect-id
+    {:initial-state (default-electron-missile-fx-runtime-state)
+     :enqueue-state-fn enqueue-state!
+     :tick-state-fn tick-state!
+     :build-plan-fn build-plan})
   (fx-registry/register-fx-channels!
     [:electron-missile/fx-start :electron-missile/fx-fire]
     (fn [ctx-id channel payload]
       (let [meta-payload (select-keys payload [:effect-instance-id :source-player-id :world-id])]
-      (case channel
-        :electron-missile/fx-start
-        (level-effects/enqueue-level-effect! :electron-missile (merge meta-payload {:mode :start})
-                                             {:ctx-id ctx-id :channel channel})
-        :electron-missile/fx-fire
-        (level-effects/enqueue-level-effect! :electron-missile
-          (merge meta-payload
-                 {:mode :fire
-                  :target-x (:target-x payload)
-                  :target-y (:target-y payload)
-                  :target-z (:target-z payload)})
-          {:ctx-id ctx-id :channel channel})
-        nil))))
+        (case channel
+          :electron-missile/fx-start
+          (level-effects/enqueue-level-effect! electron-missile-effect-id
+            (merge meta-payload {:mode :start})
+            {:ctx-id ctx-id :channel channel})
+          :electron-missile/fx-fire
+          (level-effects/enqueue-level-effect! electron-missile-effect-id
+            (merge meta-payload
+                   {:mode :fire
+                    :target-x (:target-x payload)
+                    :target-y (:target-y payload)
+                    :target-z (:target-z payload)})
+            {:ctx-id ctx-id :channel channel})
+          nil))))
   nil)

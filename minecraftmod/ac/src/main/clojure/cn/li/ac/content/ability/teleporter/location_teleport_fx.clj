@@ -4,23 +4,32 @@
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]))
 
-(defn- enqueue! [{:keys [payload]}]
-  (let [{:keys [mode]} payload]
-  (when (= mode :perform-success)
-    (client-sounds/queue-current-sound-effect!
-      {:type :sound
-       :sound-id "my_mod:tp.tp"
-       :volume 0.5
-       :pitch 1.0}))))
+(defn- default-location-teleport-fx-runtime-state
+  []
+  {})
 
-(defn- tick! [] nil)
+(defn- enqueue!
+  [store {:keys [payload]}]
+  (let [{:keys [mode]} payload]
+    (when (= mode :perform-success)
+      (client-sounds/queue-current-sound-effect!
+        {:type :sound
+         :sound-id "my_mod:tp.tp"
+         :volume 0.5
+         :pitch 1.0}))
+    (or store (default-location-teleport-fx-runtime-state))))
+
+(defn- tick!
+  [store]
+  (or store (default-location-teleport-fx-runtime-state)))
 
 (defn- build-plan [_camera-pos _hand-center-pos _tick] nil)
 
 (defn init! []
   (level-effects/register-level-effect! :location-teleport
-    {:enqueue-event-fn enqueue!
-     :tick-fn tick!
+    {:initial-state (default-location-teleport-fx-runtime-state)
+     :enqueue-state-fn enqueue!
+     :tick-state-fn tick!
      :build-plan-fn build-plan})
   (fx-registry/register-fx-channels!
     [:location-teleport/fx-perform-success]

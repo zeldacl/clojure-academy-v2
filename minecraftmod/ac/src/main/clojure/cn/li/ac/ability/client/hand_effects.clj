@@ -170,6 +170,7 @@
   []
   {:registry {}
    :order []
+  :effect-states {}
    :frozen? false})
 
 (defn create-hand-effect-runtime
@@ -220,8 +221,17 @@
   [f & args]
   (apply swap! (hand-effect-state-atom) f args))
 
-;; effect-id → {:enqueue-fn    (fn [payload])
-;;              :tick-fn        (fn [])
+(defn- assoc-effect-state
+  [state effect-id effect-state]
+  (if (nil? effect-state)
+    (update state :effect-states dissoc effect-id)
+    (assoc-in state [:effect-states effect-id] effect-state)))
+
+;; effect-id → {:enqueue-fn        (fn [payload])
+;;              :enqueue-state-fn  (fn [state payload] -> state)
+;;              :tick-fn           (fn [])
+;;              :tick-state-fn     (fn [state] -> state)
+;;              :initial-state     any (optional)
 ;;              :transform-fn   (fn []) → transform-map or nil  (optional)}
 
 (defn- assert-registry-open!
@@ -234,13 +244,18 @@
 
   `handler-map` keys:
     :enqueue-fn   (fn [payload]) — process incoming FX data
+    :enqueue-state-fn (fn [state payload]) -> state
     :tick-fn      (fn []) — advance animation state each game tick
+    :tick-state-fn (fn [state]) -> state
+    :initial-state any initial state for :enqueue-state-fn/:tick-state-fn path
     :transform-fn (fn []) → {:translate [x y z] :rotate [x y z] :scale [x y z]} or nil
                    (optional)"
   [effect-id handler-map]
   {:pre [(keyword? effect-id) (map? handler-map)
-         (fn? (:enqueue-fn handler-map))
-         (fn? (:tick-fn handler-map))]}
+         (or (fn? (:enqueue-fn handler-map))
+             (fn? (:enqueue-state-fn handler-map)))
+         (or (fn? (:tick-fn handler-map))
+             (fn? (:tick-state-fn handler-map)))]}
   (assert-registry-open!)
   (update-hand-effect-state!
     (fn [state]
@@ -248,7 +263,8 @@
         state
         (-> state
             (update :order conj effect-id)
-            (assoc-in [:registry effect-id] handler-map)))))
+            (assoc-in [:registry effect-id] handler-map)
+            (assoc-effect-state effect-id (:initial-state handler-map))))))
   (log/debug "Registered hand effect:" effect-id)
   nil)
 
@@ -263,6 +279,24 @@
    :camera-pitch-deltas (camera-pitch-deltas-snapshot)
    ))
 
+(defn effect-state-snapshot
+  [effect-id]
+  (get-in (hand-effect-state-snapshot) [:effect-states effect-id]))
+
+(defn reset-hand-effect-state-for-test!
+  [effect-id state]
+  (update-hand-effect-state! assoc-effect-state effect-id state)
+  nil)
+
+(defn update-effect-state!
+  [effect-id f & args]
+  (update-hand-effect-state!
+    (fn [state]
+      (let [current-state (get-in state [:effect-states effect-id])
+            next-state (apply f current-state args)]
+        (assoc-effect-state state effect-id next-state))))
+  nil)
+
 (defn reset-hand-effect-registry-for-test!
   []
   (reset! (camera-pitch-deltas-atom) {})
@@ -276,8 +310,14 @@
 (defn enqueue-hand-effect!
   "Dispatch an incoming FX payload to the registered hand-effect handler."
   [effect-id payload]
-  (if-let [{:keys [enqueue-fn]} (get-in (hand-effect-state-snapshot) [:registry effect-id])]
-    (enqueue-fn payload)
+  (if-let [{:keys [enqueue-fn enqueue-state-fn]} (get-in (hand-effect-state-snapshot) [:registry effect-id])]
+    (if enqueue-state-fn
+      (update-hand-effect-state!
+        (fn [state]
+          (let [current-state (get-in state [:effect-states effect-id])
+                next-state (enqueue-state-fn current-state payload)]
+            (assoc-effect-state state effect-id next-state))))
+      (enqueue-fn payload))
     (log/warn "No hand effect registered for" effect-id)))
 
 (defn tick-hand-effects!
@@ -285,8 +325,14 @@
   []
   (let [{:keys [order registry]} (hand-effect-state-snapshot)]
     (doseq [eid order]
-      (when-let [{:keys [tick-fn]} (get registry eid)]
-        (tick-fn)))))
+      (when-let [{:keys [tick-fn tick-state-fn]} (get registry eid)]
+        (if tick-state-fn
+          (update-hand-effect-state!
+            (fn [state]
+              (let [current-state (get-in state [:effect-states eid])
+                    next-state (tick-state-fn current-state)]
+                (assoc-effect-state state eid next-state))))
+          (tick-fn))))))
 
 (defn current-hand-transform
   "Merge transforms from all registered hand effects.

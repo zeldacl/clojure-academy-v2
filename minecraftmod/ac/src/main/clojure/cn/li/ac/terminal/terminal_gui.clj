@@ -45,15 +45,10 @@
 (defonce ^:private installed-terminal-runtime
   (create-terminal-runtime))
 
-(defonce ^:private terminal-runtime-override* (atom nil))
+(def ^:dynamic *terminal-runtime*
+  installed-terminal-runtime)
 
 (def ^:dynamic *terminal-owner* nil)
-
-(defonce ^:private terminal-owner-override* (atom nil))
-
-(defn- current-terminal-owner
-  []
-  (or @terminal-owner-override* *terminal-owner*))
 
 (defn- require-owner-value
   [owner label value]
@@ -92,12 +87,8 @@
   (when-not (terminal-runtime? runtime)
     (throw (ex-info "Expected terminal runtime"
                     {:runtime runtime})))
-  (let [prev-override @terminal-runtime-override*]
-    (try
-      (reset! terminal-runtime-override* runtime)
-      (f)
-      (finally
-        (reset! terminal-runtime-override* prev-override)))))
+  (binding [*terminal-runtime* runtime]
+    (f)))
 
 (defmacro with-terminal-runtime
   [runtime & body]
@@ -105,8 +96,7 @@
 
 (defn- current-terminal-runtime
   []
-  (or @terminal-runtime-override*
-      @installed-terminal-runtime))
+  *terminal-runtime*)
 
 (defn- terminal-runtime-state-atom
   []
@@ -150,28 +140,55 @@
 
 (defn- call-with-terminal-owner
   [owner f]
-  (let [prev-override @terminal-owner-override*]
-    (try
-      (reset! terminal-owner-override* owner)
-      (f)
-      (finally
-        (reset! terminal-owner-override* prev-override)))))
+  (binding [*terminal-owner* owner]
+    (f)))
 
 (defmacro ^:private with-terminal-owner
   [owner & body]
   `(call-with-terminal-owner ~owner (fn [] ~@body)))
 
-(defn- current-terminal-owner
-  []
-  (or @terminal-owner-override*
-      *terminal-owner*))
-
 (defn terminal-state-snapshot
-  ([]
-   (terminal-state-snapshot (current-terminal-owner)))
-  ([owner]
-   (public-terminal-state
-     (get-in (terminal-runtime-state-snapshot) [:owners (terminal-owner-key owner)]))))
+  [owner]
+  (public-terminal-state
+    (get-in (terminal-runtime-state-snapshot) [:owners (terminal-owner-key owner)])))
+
+(declare swap-terminal-state!)
+
+(defn- reduce-terminal-state-event
+  [state event payload]
+  (case event
+    :terminal/query-response
+    (merge state
+           {:terminal-installed? (:terminal-installed? payload)
+            :installed-apps (set (:installed-apps payload))
+            :available-apps (:available-apps payload)})
+
+    :terminal/install-start
+    (assoc state :loading? true)
+
+    :terminal/install-result
+    (cond-> (assoc state :loading? false)
+      (:success payload) (assoc :terminal-installed? true))
+
+    :terminal/install-app-start
+    (assoc state :loading? true)
+
+    :terminal/install-app-result
+    (cond-> (assoc state :loading? false)
+      (:success payload) (update :installed-apps conj (:app-id payload)))
+
+    :terminal/uninstall-app-result
+    (cond-> state
+      (:success payload) (update :installed-apps disj (:app-id payload)))
+
+    :terminal/set-page
+    (assoc state :page (int (or (:page payload) 0)))
+
+    state))
+
+(defn- dispatch-terminal-state-event!
+  [owner event payload]
+  (swap-terminal-state! owner reduce-terminal-state-event event payload))
 
 (defn- swap-terminal-state!
   [owner f & args]
@@ -203,73 +220,57 @@
 
 (defn query-terminal-state!
   "Query terminal state from server."
-  ([callback]
-   (query-terminal-state! (current-terminal-owner) callback))
-  ([owner callback]
-   (let [generation (ensure-terminal-owner! owner)]
-     (net-client/send-to-server
-       owner
-       (terminal-messages/msg-id :get-state)
-       {}
-       (fn [response]
-         (when (terminal-owner-active? owner generation)
-           (swap-terminal-state! owner merge
-                                 {:terminal-installed? (:terminal-installed? response)
-                                  :installed-apps (set (:installed-apps response))
-                                  :available-apps (:available-apps response)})
-           (when callback (callback response))))))))
+  [owner callback]
+  (let [generation (ensure-terminal-owner! owner)]
+    (net-client/send-to-server
+      owner
+      (terminal-messages/msg-id :get-state)
+      {}
+      (fn [response]
+        (when (terminal-owner-active? owner generation)
+          (dispatch-terminal-state-event! owner :terminal/query-response response)
+          (when callback (callback response)))))))
 
 (defn install-terminal!
   "Send terminal installation request to server."
-  ([callback]
-   (install-terminal! (current-terminal-owner) callback))
-  ([owner callback]
-   (let [generation (ensure-terminal-owner! owner)]
-     (swap-terminal-state! owner assoc :loading? true)
-     (net-client/send-to-server
-       owner
-       (terminal-messages/msg-id :install-terminal)
-       {}
-       (fn [response]
-         (when (terminal-owner-active? owner generation)
-           (swap-terminal-state! owner assoc :loading? false)
-           (when (:success response)
-             (swap-terminal-state! owner assoc :terminal-installed? true))
-           (when callback (callback response))))))))
+  [owner callback]
+  (let [generation (ensure-terminal-owner! owner)]
+    (dispatch-terminal-state-event! owner :terminal/install-start nil)
+    (net-client/send-to-server
+      owner
+      (terminal-messages/msg-id :install-terminal)
+      {}
+      (fn [response]
+        (when (terminal-owner-active? owner generation)
+          (dispatch-terminal-state-event! owner :terminal/install-result response)
+          (when callback (callback response)))))))
 
 (defn install-app!
   "Send app installation request to server."
-  ([app-id callback]
-   (install-app! (current-terminal-owner) app-id callback))
-  ([owner app-id callback]
-   (let [generation (ensure-terminal-owner! owner)]
-     (swap-terminal-state! owner assoc :loading? true)
-     (net-client/send-to-server
-       owner
-       (terminal-messages/msg-id :install-app)
-       {:app-id (name app-id)}
-       (fn [response]
-         (when (terminal-owner-active? owner generation)
-           (swap-terminal-state! owner assoc :loading? false)
-           (when (:success response)
-             (swap-terminal-state! owner update :installed-apps conj app-id))
-           (when callback (callback response))))))))
+  [owner app-id callback]
+  (let [generation (ensure-terminal-owner! owner)]
+    (dispatch-terminal-state-event! owner :terminal/install-app-start {:app-id app-id})
+    (net-client/send-to-server
+      owner
+      (terminal-messages/msg-id :install-app)
+      {:app-id (name app-id)}
+      (fn [response]
+        (when (terminal-owner-active? owner generation)
+          (dispatch-terminal-state-event! owner :terminal/install-app-result (assoc response :app-id app-id))
+          (when callback (callback response)))))))
 
 (defn uninstall-app!
   "Send app uninstallation request to server."
-  ([app-id callback]
-   (uninstall-app! (current-terminal-owner) app-id callback))
-  ([owner app-id callback]
-   (let [generation (ensure-terminal-owner! owner)]
-     (net-client/send-to-server
-       owner
-       (terminal-messages/msg-id :uninstall-app)
-       {:app-id (name app-id)}
-       (fn [response]
-         (when (terminal-owner-active? owner generation)
-           (when (:success response)
-             (swap-terminal-state! owner update :installed-apps disj app-id))
-           (when callback (callback response))))))))
+  [owner app-id callback]
+  (let [generation (ensure-terminal-owner! owner)]
+    (net-client/send-to-server
+      owner
+      (terminal-messages/msg-id :uninstall-app)
+      {:app-id (name app-id)}
+      (fn [response]
+        (when (terminal-owner-active? owner generation)
+          (dispatch-terminal-state-event! owner :terminal/uninstall-app-result (assoc response :app-id app-id))
+          (when callback (callback response)))))))
 
 ;; ============================================================================
 ;; App Grid Layout
@@ -364,9 +365,9 @@
 
 (defn- update-app-count!
   "Update the app count text."
-  [root-widget]
+  [owner root-widget]
   (when-let [text-widget (cgui-core/find-widget root-widget "text_appcount")]
-    (let [state (terminal-state-snapshot)
+    (let [state (terminal-state-snapshot owner)
           installed-count (count (:installed-apps state))
           total-count (count (:available-apps state))
           apps (ordered-apps)
@@ -391,8 +392,8 @@
 
 (defn- update-loading-indicator!
   "Update loading indicator visibility."
-  [root-widget]
-  (let [loading? (:loading? (terminal-state-snapshot))]
+  [owner root-widget]
+  (let [loading? (:loading? (terminal-state-snapshot owner))]
     (when-let [icon-widget (cgui-core/find-widget root-widget "icon_loading")]
       (cgui-core/set-visible! icon-widget loading?))
     (when-let [text-widget (cgui-core/find-widget root-widget "text_loading")]
@@ -425,48 +426,50 @@
 (defn- rebuild-app-grid!
   "Rebuild the app grid with current state."
   [root-widget player]
-  (with-terminal-owner (player-terminal-owner player)
-  (try
-    ;; Remove old app widgets
-    (doseq [i (range 9)]
-      (when-let [old-widget (cgui-core/find-widget root-widget (str "app_" i))]
-        (cgui-core/remove-widget! root-widget old-widget)))
+  (let [owner (player-terminal-owner player)]
+    (with-terminal-owner owner
+      (try
+        ;; Remove old app widgets
+        (doseq [i (range 9)]
+          (when-let [old-widget (cgui-core/find-widget root-widget (str "app_" i))]
+            (cgui-core/remove-widget! root-widget old-widget)))
 
-    ;; Get all apps
-        (let [state (terminal-state-snapshot)
-          all-apps (ordered-apps)
-          page (clamp-page all-apps (:page state))
-          installed-apps (:installed-apps state)
-          _ (swap-terminal-state! (current-terminal-owner) assoc :page page)
-          offset (* page apps-per-page)
-          page-apps (->> all-apps (drop offset) (take apps-per-page))]
+        ;; Get all apps
+        (let [state (terminal-state-snapshot owner)
+              all-apps (ordered-apps)
+              page (clamp-page all-apps (:page state))
+              installed-apps (:installed-apps state)
+              _ (dispatch-terminal-state-event! owner :terminal/set-page {:page page})
+              offset (* page apps-per-page)
+              page-apps (->> all-apps (drop offset) (take apps-per-page))]
 
-      ;; Create new app widgets
-      (doseq [[index app] (map-indexed vector page-apps)]
-        (let [installed? (contains? installed-apps (:id app))
-              app-widget (create-app-widget app index installed?
-                                           (fn [a inst?]
-                                             (handle-app-click a inst? player root-widget)))]
-          (cgui-core/set-name! app-widget (str "app_" index))
-          (cgui-core/add-widget! root-widget app-widget))))
+          ;; Create new app widgets
+          (doseq [[index app] (map-indexed vector page-apps)]
+            (let [installed? (contains? installed-apps (:id app))
+                  app-widget (create-app-widget app index installed?
+                                                (fn [a inst?]
+                                                  (handle-app-click a inst? player root-widget)))]
+              (cgui-core/set-name! app-widget (str "app_" index))
+              (cgui-core/add-widget! root-widget app-widget))))
 
-    ;; Update counters
-    (update-app-count! root-widget)
-    (update-loading-indicator! root-widget)
-    (update-arrow-state! root-widget (ordered-apps) (:page (terminal-state-snapshot)))
+        ;; Update counters
+        (update-app-count! owner root-widget)
+        (update-loading-indicator! owner root-widget)
+        (update-arrow-state! root-widget (ordered-apps) (:page (terminal-state-snapshot owner)))
 
-    (catch Exception e
-      (log/error "Error rebuilding app grid:" (ex-message e))))))
+        (catch Exception e
+          (log/error "Error rebuilding app grid:" (ex-message e)))))))
 
 (defn- change-page!
   [delta root-widget player]
-  (with-terminal-owner (player-terminal-owner player)
-  (let [apps (ordered-apps)
-        current (:page (terminal-state-snapshot))
-        next-page (clamp-page apps (+ (int (or current 0)) (int delta)))]
-    (when (not= next-page current)
-      (swap-terminal-state! (current-terminal-owner) assoc :page next-page)
-      (rebuild-app-grid! root-widget player)))))
+  (let [owner (player-terminal-owner player)]
+    (with-terminal-owner owner
+      (let [apps (ordered-apps)
+            current (:page (terminal-state-snapshot owner))
+            next-page (clamp-page apps (+ (int (or current 0)) (int delta)))]
+        (when (not= next-page current)
+          (dispatch-terminal-state-event! owner :terminal/set-page {:page next-page})
+          (rebuild-app-grid! root-widget player))))))
 
 (defn- bind-navigation-controls!
   [root-widget player]
@@ -527,7 +530,7 @@
                               (swap! counter inc)
                               (when (zero? (mod @counter 40)) ; 40 frames ≈ 2 seconds
                                 (with-terminal-owner owner
-                                  (update-loading-indicator! root-widget))))))
+                                  (update-loading-indicator! owner root-widget))))))
 
           (log/info "Terminal GUI created successfully")
           root-widget))))

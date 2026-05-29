@@ -22,7 +22,8 @@
 (defonce ^:private installed-hook-registry-runtime
   (create-hook-registry-runtime))
 
-(defonce ^:private hook-registry-runtime-override* (atom nil))
+(def ^:dynamic *hook-registry-runtime*
+  installed-hook-registry-runtime)
 
 (defn call-with-hook-registry-runtime
   [runtime f]
@@ -30,17 +31,12 @@
                  (= ::hook-registry-runtime (::runtime runtime))
                  (some? (:state* runtime)))
     (throw (ex-info "Expected hook registry runtime" {:runtime runtime})))
-  (let [prev-override @hook-registry-runtime-override*]
-    (try
-      (reset! hook-registry-runtime-override* runtime)
-      (f)
-      (finally
-        (reset! hook-registry-runtime-override* prev-override)))))
+  (binding [*hook-registry-runtime* runtime]
+    (f)))
 
 (defn- current-hook-registry-runtime
   []
-  (or @hook-registry-runtime-override*
-      @installed-hook-registry-runtime))
+  *hook-registry-runtime*)
 
 (defn- hook-registry-state-atom
   []
