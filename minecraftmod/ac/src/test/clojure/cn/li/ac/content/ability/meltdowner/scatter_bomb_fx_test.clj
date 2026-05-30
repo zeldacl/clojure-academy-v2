@@ -87,6 +87,35 @@
       (is (seq @particles*))
       (is (seq @sounds*)))))
 
+(deftest scatter-bomb-tick-cadence-test
+  (let [enqueue-state! (var-get #'cn.li.ac.content.ability.meltdowner.scatter-bomb-fx/enqueue-state!)
+        tick-state! (var-get #'cn.li.ac.content.ability.meltdowner.scatter-bomb-fx/tick-state!)]
+    (with-redefs [client-particles/queue-current-particle-effect! (fn [& _] nil)
+                  client-sounds/queue-current-sound-effect! (fn [& _] nil)]
+      (level-effects/update-effect-state! :scatter-bomb
+        enqueue-state!
+        (event "ctx-cadence" :scatter-bomb/fx-start {:mode :start :source-player-id "player-a"}))
+      (level-effects/update-effect-state! :scatter-bomb
+        enqueue-state!
+        (event "ctx-cadence" :scatter-bomb/fx-ball {:mode :ball
+                                                     :x 1.0 :y 64.0 :z 2.0
+                                                     :count 4
+                                                     :source-player-id "player-a"}))
+
+      (dotimes [_ 5]
+        (level-effects/update-effect-state! :scatter-bomb
+          (fn [store _]
+            (tick-state! store))
+          nil))
+
+      (is (= 5 (get-in (sb-fx/scatter-bomb-fx-snapshot) [:effect-state [:ctx "ctx-cadence"] :ticks])))
+      (is (= 4 (get-in (sb-fx/scatter-bomb-fx-snapshot) [:effect-state [:ctx "ctx-cadence"] :balls])))
+
+      (level-effects/update-effect-state! :scatter-bomb
+        enqueue-state!
+        (event "ctx-cadence" :scatter-bomb/fx-end {:mode :end :source-player-id "player-a"}))
+      (is (nil? (get-in (sb-fx/scatter-bomb-fx-snapshot) [:effect-state [:ctx "ctx-cadence"]]))))))
+
 (deftest scatter-bomb-fx-runtime-isolation-test
   (let [runtime-a (level-effects/create-level-effect-runtime)
         runtime-b (level-effects/create-level-effect-runtime)

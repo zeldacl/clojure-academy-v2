@@ -113,6 +113,14 @@
   [block-id]
   (registry-metadata/has-block-state-properties? block-id))
 
+(defn- registry-source-snapshot
+  [source]
+  (cond
+    (map? source) source
+    (fn? source) (or (source) {})
+    (instance? clojure.lang.IDeref source) (or @source {})
+    :else {}))
+
 (defn register-scripted-tile-hooks!
   []
   (doseq [tile-id (registry-metadata/get-all-tile-ids)]
@@ -143,7 +151,7 @@
                                         (let [get-props (requiring-resolve 'cn.li.mc1201.block.blockstate-properties/get-all-properties)]
                                           (cond
                                             fluid-id
-                                            (when-let [fluid-source-ro (get @registered-fluids-source fluid-id)]
+                                            (when-let [fluid-source-ro (get (registry-source-snapshot registered-fluids-source) fluid-id)]
                                               (bootstrap/create-liquid-block
                                                 (reify java.util.function.Supplier
                                                   (get [_]

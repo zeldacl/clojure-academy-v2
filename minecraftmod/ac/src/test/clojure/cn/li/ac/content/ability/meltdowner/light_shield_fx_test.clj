@@ -76,6 +76,34 @@
       (is (nil? (get-in (ls-fx/light-shield-fx-snapshot) [:effect-state [:ctx "ctx-ls"]])))
       (is (seq @sounds*)))))
 
+(deftest light-shield-particle-cadence-test
+  (let [enqueue-state! (var-get #'cn.li.ac.content.ability.meltdowner.light-shield-fx/enqueue-state!)
+        tick-state! (var-get #'cn.li.ac.content.ability.meltdowner.light-shield-fx/tick-state!)
+        particles* (atom [])]
+    (with-redefs [client-particles/current-effect-owner (fn [] {:client-session-id "light-shield-fx-test"})
+                  client-particles/queue-particle-effect! (fn [& args]
+                                                            (swap! particles* conj args)
+                                                            nil)
+                  client-sounds/queue-sound-effect! (fn [& _] nil)]
+      (level-effects/update-effect-state! :light-shield
+        enqueue-state!
+        (event "ctx-cadence" :light-shield/fx-start {:mode :start :source-player-id "player-a"}))
+
+      (dotimes [_ 10]
+        (level-effects/update-effect-state! :light-shield
+          (fn [store _]
+            (tick-state! store))
+          nil))
+
+      (is (= 10 (get-in (ls-fx/light-shield-fx-snapshot) [:effect-state [:ctx "ctx-cadence"] :ticks])))
+      (is (= 2 (count @particles*))
+          "light-shield should emit particles every 5 ticks")
+
+      (level-effects/update-effect-state! :light-shield
+        enqueue-state!
+        (event "ctx-cadence" :light-shield/fx-end {:mode :end :source-player-id "player-a"}))
+      (is (nil? (get-in (ls-fx/light-shield-fx-snapshot) [:effect-state [:ctx "ctx-cadence"]]))))))
+
 (deftest light-shield-fx-runtime-isolation-test
   (let [runtime-a (level-effects/create-level-effect-runtime)
         runtime-b (level-effects/create-level-effect-runtime)

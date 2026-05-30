@@ -1,5 +1,6 @@
 (ns cn.li.ac.ability.server.service.delayed-projectiles-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
+            [cn.li.ac.ability.server.effect.core :as effect]
             [cn.li.ac.ability.service.delayed-projectiles :as dp]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
@@ -110,6 +111,43 @@
         :delay-ticks 1})
       (dp/tick-player! "p1")
       (is (empty? @calls))
+      (is (nil? (get (dp/pending-tasks-snapshot) "p1"))))))
+
+(deftest scatter-bomb-settlement-order-and-cleanup-test
+  (let [calls (atom [])]
+    (with-redefs [effect/run-op! (fn [_ _]
+                                   {:beam-result {:visual-distance 23.0}})
+                  ctx-mgr/push-channel-to-player! (fn [player-id ctx-id ch payload]
+                                                   (swap! calls conj [:fx player-id ctx-id ch payload])
+                                                   true)
+                  ctx-mgr/push-channel-to-nearby-players! (fn [ctx-id ch payload]
+                                                           (swap! calls conj [:fx-nearby ctx-id ch payload])
+                                                           true)]
+      (dp/schedule-scatter-bomb-beam!
+       {:player-id "p1"
+        :ctx-id "ctx-1"
+        :world-id "w"
+        :eye {:x 1.0 :y 64.0 :z 2.0}
+        :look-dir {:x 0.0 :y 0.0 :z 1.0}
+        :damage 7.0
+        :beam {:radius 0.3 :query-radius 20.0 :step 0.8 :max-distance 25.0 :visual-distance 23.0}
+        :delay-ticks 1})
+      (dp/schedule-scatter-bomb-beam!
+       {:player-id "p1"
+        :ctx-id "ctx-1"
+        :world-id "w"
+        :eye {:x 1.0 :y 64.0 :z 2.0}
+        :look-dir {:x 0.0 :y 0.0 :z 1.0}
+        :damage 7.0
+        :beam {:radius 0.3 :query-radius 20.0 :step 0.8 :max-distance 25.0 :visual-distance 23.0}
+        :delay-ticks 2})
+
+      (dp/tick-player! "p1")
+      (is (= 2 (count @calls)))
+      (is (= 1 (count (get (dp/pending-tasks-snapshot) "p1"))))
+
+      (dp/tick-player! "p1")
+      (is (= 4 (count @calls)))
       (is (nil? (get (dp/pending-tasks-snapshot) "p1"))))))
 
 (deftest pending-tasks-are-player-keyed-and-clearable-test

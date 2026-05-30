@@ -133,6 +133,54 @@
       (is (seq @particles*))
       (is (seq @sounds*)))))
 
+(deftest beam-impact-ttl-cadence-test
+  (let [enqueue-state! (var-get #'cn.li.ac.content.ability.meltdowner.electron-missile-fx/enqueue-state!)
+        tick-state! (var-get #'cn.li.ac.content.ability.meltdowner.electron-missile-fx/tick-state!)
+        build-plan (var-get #'cn.li.ac.content.ability.meltdowner.electron-missile-fx/build-plan)
+        particles* (atom [])]
+    (with-redefs [client-particles/current-effect-owner (fn [] {:client-session-id "electron-missile-fx-test"})
+                  client-particles/queue-particle-effect! (fn [& args]
+                                                            (swap! particles* conj args)
+                                                            nil)
+                  client-sounds/queue-sound-effect! (fn [& _] nil)]
+      (level-effects/update-effect-state! :electron-missile
+        enqueue-state!
+        (event "ctx-em" :electron-missile/fx-fire
+               {:mode :fire
+                :start {:x 0.0 :y 64.0 :z 0.0}
+                :end {:x 1.0 :y 65.5 :z 2.0}
+                :source-player-id "player-a"}))
+      (level-effects/update-effect-state! :electron-missile
+        enqueue-state!
+        (event "ctx-em" :electron-missile/fx-fire
+               {:mode :fire
+                :target-x 4.0 :target-y 64.0 :target-z 4.0
+                :source-player-id "player-a"}))
+
+      (is (= 10 (get-in (em-fx/electron-missile-fx-snapshot) [:beams [:ctx "ctx-em"] 0 :ttl])))
+      (is (= 10 (get-in (em-fx/electron-missile-fx-snapshot) [:impacts [:ctx "ctx-em"] 0 :ttl])))
+
+      (level-effects/update-effect-state! :electron-missile
+        (fn [store _]
+          (tick-state! store))
+        nil)
+
+      (is (= 9 (get-in (em-fx/electron-missile-fx-snapshot) [:beams [:ctx "ctx-em"] 0 :ttl])))
+      (is (= 9 (get-in (em-fx/electron-missile-fx-snapshot) [:impacts [:ctx "ctx-em"] 0 :ttl])))
+      (is (some? (build-plan nil nil 0)))
+      (is (= 2 (count @particles*))
+          "one impact spark and one beam-end spark should be emitted per tick while both entries are alive")
+
+      (dotimes [_ 9]
+        (level-effects/update-effect-state! :electron-missile
+          (fn [store _]
+            (tick-state! store))
+          nil))
+
+      (is (nil? (get-in (em-fx/electron-missile-fx-snapshot) [:beams [:ctx "ctx-em"]])))
+      (is (nil? (get-in (em-fx/electron-missile-fx-snapshot) [:impacts [:ctx "ctx-em"]])))
+      (is (nil? (build-plan nil nil 0))))))
+
 (deftest electron-missile-fx-runtime-isolation-test
   (let [runtime-a (level-effects/create-level-effect-runtime)
         runtime-b (level-effects/create-level-effect-runtime)

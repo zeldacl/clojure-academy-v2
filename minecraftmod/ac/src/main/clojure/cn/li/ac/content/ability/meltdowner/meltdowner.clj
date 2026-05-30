@@ -65,6 +65,12 @@
 (defn- to-charge-ticks [ticks]
   (int (min (ticks-max) (max (ticks-min) (int ticks)))))
 
+(defn- normalize-look-dir
+  [look-vec]
+  {:x (double (or (:x look-vec) (:dx look-vec) 0.0))
+   :y (double (or (:y look-vec) (:dy look-vec) 0.0))
+   :z (double (or (:z look-vec) (:dz look-vec) 0.0))})
+
 ;; ---------------------------------------------------------------------------
 ;; Overload floor enforcement
 ;; ---------------------------------------------------------------------------
@@ -87,7 +93,7 @@
   (when (toggle-active? target-player-id :vec-reflection)
     (when-let [state (skill-effects/get-player-state target-player-id)]
       (let [exp        (skill-effects/skill-exp target-player-id :vec-reflection)
-        consumption (* (double incoming-damage) (cfg-lerp :reflection.cp-per-damage exp))
+            consumption (* (double incoming-damage) (cfg-lerp :reflection.cp-per-damage exp))
             current-cp (get-in state [:resource-data :cur-cp] 0.0)]
         (>= (double current-cp) (double consumption))))))
 
@@ -100,7 +106,8 @@
         look-vec  (when raycast/*raycast*
                     (raycast/get-player-look-vector raycast/*raycast* reflector-player-id))]
     (when look-vec
-      (let [dir (geom/vnorm {:x (:dx look-vec) :y (:dy look-vec) :z (:dz look-vec)})
+    (let [look-dir (normalize-look-dir look-vec)
+      dir (geom/vnorm look-dir)
             end (geom/v+ start-pos (geom/v* dir (cfg-double :reflection.shot-distance)))]
         (ctx/ctx-send-to-client! ctx-id :meltdowner/fx-reflect
                                  {:mode  :reflect
@@ -108,16 +115,16 @@
                                   :end   end})
         (let [hit (when raycast/*raycast*
                     (raycast/raycast-entities raycast/*raycast*
-                                             world-id
-                                             (:x start-pos) (:y start-pos) (:z start-pos)
-                                             (:dx look-vec) (:dy look-vec) (:dz look-vec)
-                                             (cfg-double :reflection.shot-distance)))]
+                   world-id
+                   (:x start-pos) (:y start-pos) (:z start-pos)
+                   (:x look-dir) (:y look-dir) (:z look-dir)
+                   (cfg-double :reflection.shot-distance)))]
           (when (and (= (:hit-type hit) :entity) entity-damage/*entity-damage*)
             (md-damage/mark-target! reflector-player-id (:uuid hit))
             (entity-damage/apply-direct-damage! entity-damage/*entity-damage*
-                                               world-id (:uuid hit)
+                  world-id (:uuid hit)
                                                 (* (cfg-double :reflection.damage-multiplier)
-                                                  (cfg-lerp :combat.damage caster-exp))
+                     (cfg-lerp :combat.damage caster-exp))
                                                :magic)
             true))))))
 
@@ -130,7 +137,7 @@
   [{:keys [player-id ctx-id hold-ticks]}]
   (let [exp      (skill-exp player-id)
         ct       (to-charge-ticks hold-ticks)
-      damage   (* (time-rate ct) (cfg-lerp :combat.damage exp))
+        damage   (* (time-rate ct) (cfg-lerp :combat.damage exp))
         world-id (geom/world-id-of player-id)
         eye      (geom/eye-pos player-id)
         look-vec (when raycast/*raycast*
@@ -146,10 +153,10 @@
                      :reflect-can-fn  (fn [uuid] (vec-reflection-can-reflect? uuid damage))
                      :reflect-shot-fn (fn [uuid] (perform-reflection-shot! ctx-id uuid exp))}
                         [:beam {:radius          (cfg-lerp :beam.radius exp)
-                          :query-radius    (cfg-double :beam.query-radius)
-                          :step            (cfg-double :beam.step)
-                          :max-distance    (cfg-double :beam.max-distance)
-                          :visual-distance (cfg-double :beam.visual-distance)
+                                :query-radius    (cfg-double :beam.query-radius)
+                                :step            (cfg-double :beam.step)
+                                :max-distance    (cfg-double :beam.max-distance)
+                                :visual-distance (cfg-double :beam.visual-distance)
                             :damage          damage
                             :damage-type     :magic
                             :break-blocks?   true
@@ -181,9 +188,10 @@
   [{:keys [player-id ctx-id hold-ticks]}]
   (let [ticks (long (or hold-ticks 0))
         exp   (skill-exp player-id)]
-      (if (< ticks (ticks-min))
+    (if (< ticks (ticks-min))
       (do
         (ctx/ctx-send-to-client! ctx-id :meltdowner/fx-end {:performed? false})
+        (ctx/terminate-context! ctx-id nil)
         (log/debug "Meltdowner: insufficient charge ticks" ticks))
       (let [{:keys [performed? reflection-hit?]}
             (perform-meltdowner! {:player-id  player-id
@@ -198,9 +206,11 @@
                                                      (cfg-double :cooldown.base-multiplier)
                                                      (cfg-lerp :cooldown.ticks exp))))
             (ctx/ctx-send-to-client! ctx-id :meltdowner/fx-end {:performed? true})
+            (ctx/terminate-context! ctx-id nil)
             (log/debug "Meltdowner performed; reflection?" (boolean reflection-hit?)))
           (do
             (ctx/ctx-send-to-client! ctx-id :meltdowner/fx-end {:performed? false})
+            (ctx/terminate-context! ctx-id nil)
             (log/debug "Meltdowner: beam failed")))))))
 
 (defn init!
@@ -229,24 +239,25 @@
   :pattern         :charge-window
   :cooldown        {:mode :manual}
   :cost            {:down {:overload (fn [{:keys [player-id]}]
-                 (cfg-lerp :cost.down.overload (skill-exp player-id)))}
-                    :tick {:cp (fn [{:keys [player-id]}]
-               (cfg-lerp :cost.tick.cp (skill-exp player-id)))} }
+                                       (cfg-lerp :cost.down.overload (skill-exp player-id)))}
+                    :tick  {:cp (fn [{:keys [player-id]}]
+                                  (cfg-lerp :cost.tick.cp (skill-exp player-id)))}}
   :fx              {:start  {:topic   :meltdowner/fx-start
                              :payload (fn [_] {:mode :start})}
                     :update {:topic   :meltdowner/fx-update
                              :payload (fn [{:keys [hold-ticks]}]
                                         (let [ticks (long (or hold-ticks 0))]
-                                          {:ticks        ticks
+                                          {:ticks ticks
                                            :charge-ratio (bal/clamp01
                                                           (/ (double ticks)
-                                                       (double (ticks-max))))}))}}
+                                                             (double (ticks-max))))}))}}
   :actions         {:down!      meltdowner-on-down!
                     :tick!      meltdowner-on-tick!
                     :up!        meltdowner-on-up!
                     :abort!     (fn [{:keys [ctx-id]}]
                                   (ctx/ctx-send-to-client! ctx-id :meltdowner/fx-end
-                                                           {:performed? false}))
+                                                           {:performed? false})
+                                  (ctx/terminate-context! ctx-id nil))
                     :cost-fail! (fn [{:keys [ctx-id cost-stage]}]
                                   (when (= cost-stage :tick)
                                     (ctx/ctx-send-to-client! ctx-id :meltdowner/fx-end

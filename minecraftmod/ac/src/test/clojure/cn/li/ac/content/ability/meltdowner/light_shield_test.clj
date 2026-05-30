@@ -4,7 +4,10 @@
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.util.toggle :as toggle]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
+            [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
             [cn.li.ac.content.ability.meltdowner.light-shield :as ls]
+            [cn.li.mcmod.platform.entity-damage :as entity-damage]
+            [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.platform.potion-effects :as potion-effects]))
 
 (defn- reduce-damage-fn []
@@ -79,6 +82,78 @@
         (is (= [:server :session "ctx-2"] (first (first @update-calls*))))
         (is (= 1 (count @exp-calls*)))))))
 
+(deftest reduce-damage-absorb-hit-applies-mark-and-exp-test
+  (testing "front-cone hits consume resource, mark the target, and scale exp gain"
+    (let [update-calls* (atom [])
+          exp-calls* (atom [])
+          mark-calls* (atom [])
+          damage-calls* (atom [])
+          reduce-damage! (reduce-damage-fn)]
+      (with-redefs [ctx/get-all-contexts (fn [] {[:server :session "ctx-3"]
+                                                 {:player-uuid "p-3"
+                                                  :skill-state {:light-shield {:ticks 120
+                                                                               :last-absorb-tick 0}
+                                                               :toggle {:light-shield {:active true}}}}})
+                    ctx/update-context! (fn [& args]
+                                          (swap! update-calls* conj args)
+                                          nil)
+                    toggle/is-toggle-active? (fn [_ _] true)
+                    skill-effects/skill-exp (fn [& _] 0.0)
+                    skill-effects/perform-resource! (fn [& _] {:success? true})
+                    skill-effects/add-skill-exp! (fn [player-id skill-id amount]
+                                                   (swap! exp-calls* conj [player-id skill-id amount])
+                                                   nil)
+                    skill-config/tunable-int (fn [_skill-id field-id]
+                                               (case field-id
+                                                 :combat.absorb-interval-ticks 18
+                                                 :combat.touch-interval-ticks 4
+                                                 :effect.deactivate-slowness-duration-ticks 60
+                                                 :effect.abort-slowness-duration-ticks 40
+                                                 :effect.slowness-amplifier 1
+                                                 1))
+                    skill-config/lerp-double (fn [_skill-id field-id _exp]
+                                               (case field-id
+                                                 :combat.absorb-damage 6.0
+                                                 :combat.touch-damage 3.0
+                                                 :cost.absorb.cp 5.0
+                                                 :cost.absorb.overload 0.5
+                                                 0.0))
+                    skill-config/tunable-double (fn [_skill-id field-id]
+                                                 (case field-id
+                                                   :progression.exp-absorbed-scale 0.0004
+                                                   :combat.front-cone-dot 0.5
+                                                   :combat.touch-radius 3.0
+                                                   0.0))
+                    ctx/get-context (fn [_] {:player-uuid "p-3"
+                                             :skill-state {:light-shield {:ticks 120
+                                                                          :last-touch-tick 0
+                                                                          :last-absorb-tick 0
+                                                                          :overload-floor 10.0}
+                                                           :toggle {:light-shield {:active true}}}})
+                    skill-effects/player-path (fn [& _] {:world-id "w" :x 0.0 :y 64.0 :z 0.0})
+                    ls/get-player-position (fn [_] {:world-id "w" :x 0.0 :y 64.0 :z 0.0})
+                    ls/get-player-look-vector (fn [_] {:x 1.0 :y 0.0 :z 0.0})
+                    md-damage/mark-target! (fn [source-id target-id]
+                                             (swap! mark-calls* conj [source-id target-id])
+                                             nil)
+                    entity-damage/*entity-damage* (reify entity-damage/IEntityDamage
+                                                    (apply-direct-damage! [_ world-id entity-uuid damage source-type]
+                                                      (swap! damage-calls* conj [world-id entity-uuid damage source-type])
+                                                      true)
+                                                    (apply-aoe-damage! [_ _ _ _ _ _ _ _ _] [])
+                                                    (apply-reflection-damage! [_ _ _ _ _ _ _] []))
+                    world-effects/find-entities-in-radius (fn [& _]
+                                                            [{:uuid "enemy-1"
+                                                              :x 1.0 :y 64.0 :z 0.0
+                                                              :living? true}])]
+        (binding [world-effects/*world-effects* :world]
+          (is (= [4.0 {:absorbed 6.0}]
+                 (reduce-damage! "p-3" "enemy-1" 10.0 :magic))))
+        (is (= [["p-3" "enemy-1"]] @mark-calls*))
+        (is (= [["w" "enemy-1" 3.0 :magic]] @damage-calls*))
+        (is (= [["p-3" :light-shield 0.0024]] @exp-calls*))
+        (is (seq @update-calls*))))))
+
 (deftest tick-timeout-deactivates-toggle-test
   (testing "tick exceeding max-active-ticks removes toggle and applies deactivation effects"
     (let [remove-calls* (atom 0)
@@ -118,3 +193,26 @@
         (is (= 1 @remove-calls*))
         (is (= 1 @potion-calls*))
         (is (= 1 (count @cooldown-calls*)))))))
+
+(deftest abort-applies-short-slowness-and-clears-state-test
+  (testing "abort! applies abort slowness and clears skill state"
+    (let [potion-calls* (atom [])
+          remove-calls* (atom 0)
+          update-calls* (atom [])]
+      (with-redefs [ctx/update-context! (fn [& args]
+                                          (swap! update-calls* conj args)
+                                          nil)
+                    toggle/remove-toggle! (fn [& _] (swap! remove-calls* inc))
+                    skill-config/tunable-int (fn [_skill-id field-id]
+                                               (case field-id
+                                                 :effect.abort-slowness-duration-ticks 40
+                                                 :effect.slowness-amplifier 1
+                                                 1))
+                    potion-effects/*potion-effects* :mock
+                    potion-effects/apply-potion-effect! (fn [& args]
+                                                          (swap! potion-calls* conj args)
+                                                          nil)]
+        (ls/light-shield-abort! {:player-id "p-4" :ctx-id "ctx-4"})
+        (is (= 1 @remove-calls*))
+        (is (= 1 (count @potion-calls*)))
+        (is (seq @update-calls*))))))

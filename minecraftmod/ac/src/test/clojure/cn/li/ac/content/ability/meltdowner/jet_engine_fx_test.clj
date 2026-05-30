@@ -140,3 +140,38 @@
       (is (= [[:mcmod/spawn-local-scripted-effect {:effect-id "entity_diamond_shield"}]
               [:mcmod/remove-local-scripted-effect {:entity-uuid "shield-uuid-3"}]]
              @local-effects*)))))
+
+(deftest trigger-flash-fades-with-ttl-test
+  (let [enqueue-state! (var-get #'cn.li.ac.content.ability.meltdowner.jet-engine-fx/enqueue-state!)
+        tick-state! (var-get #'cn.li.ac.content.ability.meltdowner.jet-engine-fx/tick-state!)
+        build-plan (var-get #'cn.li.ac.content.ability.meltdowner.jet-engine-fx/build-plan)]
+    (with-redefs [client-sounds/queue-current-sound-effect! (fn [& _] nil)
+                  client-bridge/run-client-effect! (fn [effect-key _payload]
+                                                     (when (= :mcmod/spawn-local-scripted-effect effect-key)
+                                                       "shield-uuid-4"))]
+      (level-effects/update-effect-state! :jet-engine
+        enqueue-state!
+        (event "ctx-fade" {:mode :trigger-start
+                            :start {:x 0.0 :y 64.0 :z 0.0}
+                            :target {:x 4.0 :y 64.0 :z 0.0}
+                            :pos {:x 1.0 :y 64.0 :z 0.0}
+                            :trigger-ticks 0}))
+
+      (let [a0 (:a (last (:ops (build-plan {:x 0.0 :y 65.0 :z 0.0} nil 0))))]
+        (dotimes [_ 13]
+          (level-effects/update-effect-state! :jet-engine
+            (fn [store _]
+              (tick-state! store))
+            nil))
+        (let [a1 (:a (last (:ops (build-plan {:x 0.0 :y 65.0 :z 0.0} nil 13))))]
+          (is (> a0 a1)
+              "screen flash alpha should fade as trigger ttl decreases")))
+
+      (dotimes [_ 7]
+        (level-effects/update-effect-state! :jet-engine
+          (fn [store _]
+            (tick-state! store))
+          nil))
+
+      (is (nil? (build-plan {:x 0.0 :y 65.0 :z 0.0} nil 20)))
+      (is (empty? (:fx-state (je-fx/jet-engine-fx-snapshot)))))))

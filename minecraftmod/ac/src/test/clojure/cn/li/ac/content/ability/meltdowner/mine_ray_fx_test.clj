@@ -84,6 +84,40 @@
       (is (nil? (get-in (mr-fx/mine-ray-fx-snapshot) [:effect-state [:ctx "ctx-mr"]])))
       (is (seq @sounds*)))))
 
+(deftest mine-ray-particle-cadence-test
+  (let [enqueue-state! (var-get #'cn.li.ac.content.ability.meltdowner.mine-ray-fx/enqueue-state!)
+        tick-state! (var-get #'cn.li.ac.content.ability.meltdowner.mine-ray-fx/tick-state!)
+        particles* (atom [])]
+    (with-redefs [client-particles/current-effect-owner (fn [] {:client-session-id "mine-ray-fx-test"})
+                  client-particles/queue-particle-effect! (fn [& args]
+                                                            (swap! particles* conj args)
+                                                            nil)
+                  client-sounds/queue-sound-effect! (fn [& _] nil)]
+      (level-effects/update-effect-state! :mine-ray
+        enqueue-state!
+        (event "ctx-cadence" :mine-ray/fx-start {:mode :start :variant :basic :source-player-id "player-a"}))
+      (level-effects/update-effect-state! :mine-ray
+        enqueue-state!
+        (event "ctx-cadence" :mine-ray/fx-progress {:mode :progress
+                                                     :x 2 :y 64 :z 5
+                                                     :progress 0.2
+                                                     :source-player-id "player-a"}))
+
+      (dotimes [_ 16]
+        (level-effects/update-effect-state! :mine-ray
+          (fn [store _]
+            (tick-state! store))
+          nil))
+
+      (is (= 16 (get-in (mr-fx/mine-ray-fx-snapshot) [:effect-state [:ctx "ctx-cadence"] :ticks])))
+      (is (= 2 (count @particles*))
+          "mine-ray should emit target particles every 8 ticks while active")
+
+      (level-effects/update-effect-state! :mine-ray
+        enqueue-state!
+        (event "ctx-cadence" :mine-ray/fx-end {:mode :end :source-player-id "player-a"}))
+      (is (nil? (get-in (mr-fx/mine-ray-fx-snapshot) [:effect-state [:ctx "ctx-cadence"]]))))))
+
 (deftest mine-ray-fx-runtime-isolation-test
   (let [runtime-a (level-effects/create-level-effect-runtime)
         runtime-b (level-effects/create-level-effect-runtime)

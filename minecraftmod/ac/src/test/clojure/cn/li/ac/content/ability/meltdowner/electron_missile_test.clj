@@ -189,3 +189,37 @@
     (is (= [:electron-missile/fx-end :electron-missile/fx-end]
            (mapv second @local-fx*)))
     (is (= @local-fx* @nearby-fx*))))
+
+(deftest electron-missile-tick-max-hold-terminates-context-test
+  (let [{:keys [ctx* get-context update-context!]} 
+        (make-context-mocks {:skill-state {:ticks 80 :active-balls 2 :active? true :overload-floor 200.0}})
+        local-fx* (atom [])
+        nearby-fx* (atom [])
+        terminate-calls* (atom [])]
+    (with-redefs [skill-effects/skill-exp (fn [& _] 0.5)
+                  skill-config/lerp-int stub-lerp-int
+                  skill-config/tunable-int stub-tunable-int
+                  skill-config/tunable-double stub-tunable-double
+                  skill-effects/enforce-overload-floor! (fn [& _] nil)
+                  ctx/get-context get-context
+                  ctx/update-context! update-context!
+                  ctx/terminate-context! (fn [& args]
+                                           (swap! terminate-calls* conj args)
+                                           nil)
+                  ctx/ctx-send-to-client! (fn [ctx-id ch payload]
+                                            (swap! local-fx* conj [ctx-id ch payload])
+                                            nil)
+                  ctx/ctx-send-to-except-local! (fn [ctx-id ch payload]
+                                                  (swap! nearby-fx* conj [ctx-id ch payload])
+                                                  nil)
+                  geom/world-id-of (fn [_] "w")
+                  geom/eye-pos (fn [_] {:x 1.0 :y 65.0 :z 2.0})]
+      (missile/electron-missile-tick! {:player-id "p1"
+                                       :ctx-id "ctx-5"
+                                       :player {:id "player-obj"}}))
+
+    (is (= 1 (count @terminate-calls*)))
+    (is (= [:electron-missile/fx-end] (mapv second @local-fx*)))
+    (is (= @local-fx* @nearby-fx*))
+    (is (= {:ticks 80 :active-balls 2 :active? true :overload-floor 200.0}
+           (:skill-state @ctx*)))))

@@ -1,0 +1,26 @@
+(ns cn.li.ac.content.ability.meltdowner.mine-ray-expert-test
+  (:require [clojure.test :refer [deftest is]]
+            [cn.li.ac.content.ability.meltdowner.mine-ray-expert :as expert]
+            [cn.li.ac.content.ability.meltdowner.mine-rays-base :as base]
+            [cn.li.ac.ability.skill-config :as skill-config]
+            [cn.li.ac.ability.service.skill-effects :as skill-effects]))
+
+(deftest mine-ray-expert-tick-delegates-with-cfg-test
+  (let [calls* (atom [])]
+    (with-redefs [skill-effects/skill-exp (fn [& _] 0.0)
+                  skill-config/lerp-double (fn [_skill-id field-id _exp]
+                                             (case field-id
+                                               :targeting.range 16.0
+                                               :mining.break-speed 0.4
+                                               0.0))
+                  skill-config/tunable-double (fn [_skill-id field-id]
+                                                (case field-id
+                                                  :progression.exp-block 0.001
+                                                  0.0))
+                  base/mining-ray-tick! (fn [cfg evt]
+                                          (swap! calls* conj [cfg evt])
+                                          nil)]
+      (expert/mine-ray-expert-tick! {:player-id "p1" :ctx-id "ctx-1"}))
+    (is (= 1 (count @calls*)))
+    (is (= {:range 16.0 :break-speed 0.4 :skill-id :mine-ray-expert :exp-block 0.001 :lucky? false}
+          (ffirst @calls*)))))

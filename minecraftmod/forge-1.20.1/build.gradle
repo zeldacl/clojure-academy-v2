@@ -146,6 +146,12 @@ def forgeTestOnlyNamespaces = (System.getProperty('forge.test.only') ?: '')
     .collect { it.trim() }
     .findAll { !it.isEmpty() } as Set
 
+def forgeRunDataRequested = {
+    gradle.startParameter.taskNames.any { String taskName ->
+        taskName == 'runData' || taskName.endsWith(':runData')
+    }
+}
+
 tasks.matching { it.name == 'compileTestClojure' }.configureEach {
     if (!forgeTestOnlyNamespaces.isEmpty()) {
         namespaces.set(forgeTestOnlyNamespaces)
@@ -375,6 +381,13 @@ tasks.matching { it.name == 'checkClojure' }.configureEach {
     reflection = 'fail'
     mustRunAfter tasks.named('copyClojureClassesToJavaOutput')
     dependsOn tasks.named('cleanMirroredClojureClassesForCompile')
+    onlyIf {
+        if (forgeRunDataRequested()) {
+            logger.lifecycle('[forge-1.20.1:checkClojure] skipped because runData requested its own compile/runtime path')
+            return false
+        }
+        return true
+    }
     doFirst {
         def internalFile = file("$buildDir/tmp/checkClojure/internal.txt")
         internalFile.parentFile.mkdirs()

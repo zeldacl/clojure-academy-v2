@@ -116,6 +116,48 @@
       (is (seq @particles*))
       (is (seq @sounds*)))))
 
+(deftest electron-bomb-active-and-beam-cadence-test
+  (let [enqueue-state! (var-get #'cn.li.ac.content.ability.meltdowner.electron-bomb-fx/enqueue-state!)
+        tick-state! (var-get #'cn.li.ac.content.ability.meltdowner.electron-bomb-fx/tick-state!)
+        build-plan (var-get #'cn.li.ac.content.ability.meltdowner.electron-bomb-fx/build-plan)
+        particles* (atom [])]
+    (with-redefs [client-particles/current-effect-owner (fn [] {:client-session-id "electron-bomb-fx-test"})
+                  client-particles/queue-particle-effect! (fn [& args]
+                                                            (swap! particles* conj args)
+                                                            nil)
+                  client-sounds/queue-sound-effect! (fn [& _] nil)]
+      (level-effects/update-effect-state! :electron-bomb
+        enqueue-state!
+        (event "ctx-cadence" :electron-bomb/fx-spawn
+               {:mode :spawn :x 1.0 :y 64.0 :z 2.0 :dx 0.0 :dy 0.0 :dz 1.0}))
+
+      (dotimes [_ 41]
+        (level-effects/update-effect-state! :electron-bomb
+          (fn [store _]
+            (tick-state! store))
+          nil))
+
+      (is (nil? (get-in (electron-bomb-fx/electron-bomb-fx-snapshot) [:effect-state [:ctx "ctx-cadence"]]))
+          "active electron-bomb state should auto-expire after tick > 40")
+      (is (= 13 (count @particles*))
+          "orbit particles should be emitted on ticks 3,6,...,39")
+
+      (reset! particles* [])
+      (level-effects/update-effect-state! :electron-bomb
+        enqueue-state!
+        (event "ctx-cadence" :electron-bomb/fx-beam
+               {:mode :beam
+                :start {:x 1.0 :y 64.0 :z 2.0}
+                :end {:x 1.0 :y 64.0 :z 17.0}}))
+      (is (seq (:ops (build-plan {:x 0.0 :y 65.0 :z 0.0} nil 0))))
+      (dotimes [_ 8]
+        (level-effects/update-effect-state! :electron-bomb
+          (fn [store _]
+            (tick-state! store))
+          nil))
+      (is (nil? (build-plan {:x 0.0 :y 65.0 :z 0.0} nil 0))
+          "beam flash plan should disappear when ttl decays to zero"))))
+
 (deftest electron-bomb-fx-runtime-isolation-test
   (let [runtime-a (level-effects/create-level-effect-runtime)
         runtime-b (level-effects/create-level-effect-runtime)

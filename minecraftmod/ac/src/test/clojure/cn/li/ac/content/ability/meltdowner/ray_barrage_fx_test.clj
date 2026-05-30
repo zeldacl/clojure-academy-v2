@@ -91,6 +91,37 @@
       (is (nil? (build-plan {:x 0.0 :y 65.0 :z 0.0} nil 0)))
       (is (empty? (:beam-queue (rb-fx/ray-barrage-fx-snapshot)))))))
 
+(deftest beam-alpha-fades-with-ttl-test
+  (let [enqueue-state! (var-get #'cn.li.ac.content.ability.meltdowner.ray-barrage-fx/enqueue-state!)
+        tick-state! (var-get #'cn.li.ac.content.ability.meltdowner.ray-barrage-fx/tick-state!)
+        build-plan (var-get #'cn.li.ac.content.ability.meltdowner.ray-barrage-fx/build-plan)]
+    (with-redefs [client-sounds/queue-current-sound-effect! (fn [& _] nil)]
+      (level-effects/update-effect-state! :ray-barrage
+        enqueue-state!
+        (event "ctx-fade" :ray-barrage/fx-beam
+               {:from-x 1.0 :from-y 64.0 :from-z 2.0
+                :to-x 4.0 :to-y 64.0 :to-z 6.0
+                :source-player-id "player-a"
+                :world-id "world-a"}))
+
+      (is (= 12 (get-in (rb-fx/ray-barrage-fx-snapshot) [:beam-queue [:ctx "ctx-fade"] 0 :ttl])))
+      (level-effects/update-effect-state! :ray-barrage
+        (fn [store _]
+          (tick-state! store))
+        nil)
+      (is (= 11 (get-in (rb-fx/ray-barrage-fx-snapshot) [:beam-queue [:ctx "ctx-fade"] 0 :ttl]))
+          "beam ttl should deterministically decay by one tick")
+      (is (seq (:ops (build-plan nil nil 1))))
+
+      (dotimes [_ 11]
+        (level-effects/update-effect-state! :ray-barrage
+          (fn [store _]
+            (tick-state! store))
+          nil))
+
+      (is (nil? (build-plan nil nil 13)))
+      (is (empty? (:beam-queue (rb-fx/ray-barrage-fx-snapshot)))))))
+
 (deftest ray-barrage-fx-runtime-isolation-test
   (let [runtime-a (level-effects/create-level-effect-runtime)
         runtime-b (level-effects/create-level-effect-runtime)
