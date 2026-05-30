@@ -13,21 +13,15 @@
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.skill-config :as skill-config]
-            [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
-            [cn.li.ac.ability.server.effect.geom :as geom]
-            [cn.li.mcmod.platform.raycast :as raycast]
-            [cn.li.mcmod.platform.block-manipulation :as bm]
-            [cn.li.mcmod.util.log :as log]))
+            [cn.li.ac.content.ability.meltdowner.mine-rays-base :as base]))
 
 ;; ---------------------------------------------------------------------------
 ;; Helpers
 ;; ---------------------------------------------------------------------------
 
 (def ^:private mine-ray-luck-skill-id :mine-ray-luck)
-
-(defn- cfg-double [field-id]
-  (skill-config/tunable-double mine-ray-luck-skill-id field-id))
+(def ^:private mine-ray-luck-fortune-level 3)
 
 (defn- cfg-int [field-id]
   (skill-config/tunable-int mine-ray-luck-skill-id field-id))
@@ -38,90 +32,22 @@
 (defn- skill-exp [player-id]
   (skill-effects/skill-exp player-id mine-ray-luck-skill-id))
 
-;; ---------------------------------------------------------------------------
-;; Fortune-aware mining tick
-;; ---------------------------------------------------------------------------
-
-(defn- mine-ray-luck-tick-impl!
-  [player-id ctx-id exp range break-speed]
-  (let [ctx-data  (ctx/get-context ctx-id)
-        world-id  (geom/world-id-of player-id)
-        eye       (geom/eye-pos player-id)
-        look-vec  (when raycast/*raycast*
-                    (raycast/get-player-look-vector raycast/*raycast* player-id))]
-    (when (and look-vec bm/*block-manipulation*)
-      (let [hit (raycast/raycast-blocks
-                  raycast/*raycast*
-                  world-id
-                  (:x eye) (:y eye) (:z eye)
-                  (:x look-vec) (:y look-vec) (:z look-vec)
-                  (double range))]
-        (if (nil? hit)
-          (ctx/update-context! ctx-id assoc :skill-state
-                               {:target-x nil :target-y nil :target-z nil :countdown 0.0})
-          (let [hx (int (:x hit)) hy (int (:y hit)) hz (int (:z hit))
-                prev-x (get-in ctx-data [:skill-state :target-x])
-                prev-y (get-in ctx-data [:skill-state :target-y])
-                prev-z (get-in ctx-data [:skill-state :target-z])
-                same-target? (and (= hx prev-x) (= hy prev-y) (= hz prev-z))
-                hardness (double (or (bm/get-block-hardness bm/*block-manipulation*
-                                                             world-id hx hy hz)
-                                     1.0))
-                countdown-delta (/ (double break-speed) (max 0.1 hardness))
-                prev-countdown (if same-target?
-                                 (double (or (get-in ctx-data [:skill-state :countdown]) 0.0))
-                                 0.0)
-                new-countdown (+ prev-countdown countdown-delta)]
-            (ctx/ctx-send-to-client! ctx-id :mine-ray/fx-progress
-                                     {:x hx :y hy :z hz
-                                      :progress (min 1.0 new-countdown)})
-            (if (>= new-countdown 1.0)
-              (when (bm/can-break-block? bm/*block-manipulation* player-id world-id hx hy hz)
-                ;; Break with extra drops (fortune: break twice for luck effect)
-                (bm/break-block! bm/*block-manipulation* player-id world-id hx hy hz true)
-                ;; Fortune bonus: randomly drop an extra item stack (33% extra drop chance)
-                (when (< (rand) (skill-config/probability mine-ray-luck-skill-id
-                                                           :effect.extra-drop-chance))
-                  (bm/break-block! bm/*block-manipulation* player-id world-id hx
-                                   (+ hy (cfg-int :effect.extra-drop-y-offset)) hz true))
-                (skill-effects/add-skill-exp! player-id mine-ray-luck-skill-id
-                                              (cfg-double :progression.exp-block))
-                (ctx/update-context! ctx-id assoc :skill-state
-                                     {:target-x nil :target-y nil :target-z nil :countdown 0.0}))
-              (ctx/update-context! ctx-id assoc :skill-state
-                                   {:target-x  hx
-                                    :target-y  hy
-                                    :target-z  hz
-                                    :countdown new-countdown}))))))))
+(defn- make-cfg [player-id]
+  (let [exp (skill-exp player-id)]
+    {:range         (cfg-lerp :targeting.range exp)
+     :break-speed   (cfg-lerp :mining.break-speed exp)
+     :skill-id      mine-ray-luck-skill-id
+     :fortune-level mine-ray-luck-fortune-level
+     :exp-block     (skill-config/tunable-double mine-ray-luck-skill-id :progression.exp-block)}))
 
 ;; ---------------------------------------------------------------------------
 ;; Actions
 ;; ---------------------------------------------------------------------------
 
-(defn mine-ray-luck-down!
-  [{:keys [ctx-id cost-ok?]}]
-  (when cost-ok?
-    (ctx/update-context! ctx-id assoc :skill-state
-                         {:target-x nil :target-y nil :target-z nil :countdown 0.0})))
-
-(defn mine-ray-luck-tick!
-  [{:keys [player-id ctx-id]}]
-  (try
-    (let [exp (skill-exp player-id)]
-      (mine-ray-luck-tick-impl!
-        player-id ctx-id exp
-        (cfg-lerp :targeting.range exp)
-        (cfg-lerp :mining.break-speed exp)))
-    (catch Exception e
-      (log/warn "MineRayLuck tick! failed:" (ex-message e)))))
-
-(defn mine-ray-luck-up!    [{:keys [ctx-id]}]
-  (ctx/update-context! ctx-id assoc :skill-state
-                       {:target-x nil :target-y nil :target-z nil :countdown 0.0}))
-
-(defn mine-ray-luck-abort! [{:keys [ctx-id]}]
-  (ctx/update-context! ctx-id assoc :skill-state
-                       {:target-x nil :target-y nil :target-z nil :countdown 0.0}))
+(defn mine-ray-luck-down!  [evt] (base/mining-ray-down!  mine-ray-luck-skill-id evt))
+(defn mine-ray-luck-tick!  [evt] (base/mining-ray-tick!  (make-cfg (:player-id evt)) evt))
+(defn mine-ray-luck-up!    [evt] (base/mining-ray-up!    {} evt))
+(defn mine-ray-luck-abort! [evt] (base/mining-ray-abort! {} evt))
 
 ;; ---------------------------------------------------------------------------
 ;; Skill registration

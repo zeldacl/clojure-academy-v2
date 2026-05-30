@@ -84,6 +84,24 @@
       (is (nil? (get-in (mr-fx/mine-ray-fx-snapshot) [:effect-state [:ctx "ctx-mr"]])))
       (is (seq @sounds*)))))
 
+(deftest mine-ray-start-sound-varies-by-variant-test
+  (let [enqueue-state! (var-get #'cn.li.ac.content.ability.meltdowner.mine-ray-fx/enqueue-state!)
+        sounds* (atom [])]
+    (with-redefs [client-particles/current-effect-owner (fn [] {:client-session-id "mine-ray-fx-test"})
+                  client-particles/queue-particle-effect! (fn [& _] nil)
+                  client-sounds/queue-sound-effect! (fn [& args]
+                                                        (swap! sounds* conj args)
+                                                        nil)]
+      (doseq [[ctx-id variant expected-sound-id]
+              [["ctx-basic" :basic "my_mod:md.mine_basic_startup"]
+               ["ctx-expert" :expert "my_mod:md.mine_expert_startup"]
+               ["ctx-luck" :luck "my_mod:md.mine_luck_startup"]]]
+        (level-effects/update-effect-state! :mine-ray
+          enqueue-state!
+          (event ctx-id :mine-ray/fx-start {:mode :start :variant variant :source-player-id "player-a"}))
+        (is (= expected-sound-id
+               (:sound-id (second (last @sounds*)))))))))
+
 (deftest mine-ray-particle-cadence-test
   (let [enqueue-state! (var-get #'cn.li.ac.content.ability.meltdowner.mine-ray-fx/enqueue-state!)
         tick-state! (var-get #'cn.li.ac.content.ability.meltdowner.mine-ray-fx/tick-state!)

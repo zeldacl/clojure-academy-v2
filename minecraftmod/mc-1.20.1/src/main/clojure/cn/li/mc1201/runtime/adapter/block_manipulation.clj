@@ -13,6 +13,8 @@
   (reify bm/IBlockManipulation
     (break-block! [_ player-id world-id x y z drop?]
       (core/break-block! (server-fn) player-id world-id x y z drop? break-guard-fn))
+    (break-block! [_ player-id world-id x y z drop? fortune-level]
+      (core/break-block! (server-fn) player-id world-id x y z drop? fortune-level break-guard-fn))
     (set-block! [_ world-id x y z block-id]
       (core/set-block! (server-fn) world-id x y z block-id))
     (get-block [_ world-id x y z]

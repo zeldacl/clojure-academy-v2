@@ -36,16 +36,16 @@
 
 (defn mining-ray-tick!
   "Tick handler for mining ray.
-  cfg: {:range double :break-speed double :skill-id keyword :lucky? boolean :exp-block double}"
+  cfg: {:range double :break-speed double :skill-id keyword :fortune-level int :exp-block double}"
   [cfg {:keys [player-id ctx-id]}]
   (try
-    (let [{:keys [range break-speed skill-id lucky? exp-block]} cfg
+    (let [{:keys [range break-speed skill-id fortune-level exp-block]} cfg
           ctx-data  (ctx/get-context ctx-id)
           world-id  (geom/world-id-of player-id)
           eye       (geom/eye-pos player-id)
           look-vec  (when raycast/*raycast*
                       (raycast/get-player-look-vector raycast/*raycast* player-id))]
-      (when (and look-vec bm/*block-manipulation*)
+      (if (and look-vec bm/*block-manipulation*)
         (let [hit (raycast/raycast-blocks
                     raycast/*raycast*
                     world-id
@@ -53,7 +53,6 @@
                     (:x look-vec) (:y look-vec) (:z look-vec)
                     (double range))]
           (if (nil? hit)
-            ;; No block in range - reset target
             (ctx/update-context! ctx-id assoc :skill-state
                                  {:target-x nil :target-y nil :target-z nil :countdown 0.0})
             (let [hx (int (:x hit)) hy (int (:y hit)) hz (int (:z hit))
@@ -64,29 +63,29 @@
                   hardness (double (or (bm/get-block-hardness bm/*block-manipulation*
                                                                world-id hx hy hz)
                                        1.0))
-                  ;; Countdown decreases by break-speed each tick; harder blocks take longer
                   countdown-delta (/ (double break-speed) (max 0.1 hardness))
                   prev-countdown (if same-target?
                                    (double (or (get-in ctx-data [:skill-state :countdown]) 0.0))
                                    0.0)
                   new-countdown (+ prev-countdown countdown-delta)]
-              ;; Send FX progress to client
               (ctx/ctx-send-to-client! ctx-id :mine-ray/fx-progress
                                        {:x hx :y hy :z hz
                                         :progress (min 1.0 new-countdown)})
               (if (>= new-countdown 1.0)
-                ;; Block ready to break
                 (when (bm/can-break-block? bm/*block-manipulation* player-id world-id hx hy hz)
-                  (bm/break-block! bm/*block-manipulation* player-id world-id hx hy hz true)
+                  (if (pos? (long (or fortune-level 0)))
+                    (bm/break-block! bm/*block-manipulation* player-id world-id hx hy hz true fortune-level)
+                    (bm/break-block! bm/*block-manipulation* player-id world-id hx hy hz true))
                   (skill-effects/add-skill-exp! player-id skill-id (double (or exp-block 0.001)))
                   (ctx/update-context! ctx-id assoc :skill-state
                                        {:target-x nil :target-y nil :target-z nil :countdown 0.0}))
-                ;; Still counting down
                 (ctx/update-context! ctx-id assoc :skill-state
-                                     {:target-x  hx
-                                      :target-y  hy
-                                      :target-z  hz
-                                      :countdown new-countdown})))))))
+                                     {:target-x hx
+                                      :target-y hy
+                                      :target-z hz
+                                      :countdown new-countdown})))))
+        (ctx/update-context! ctx-id assoc :skill-state
+                             {:target-x nil :target-y nil :target-z nil :countdown 0.0})))
     (catch Exception e
       (log/warn "MiningRay tick! failed:" (ex-message e)))))
 

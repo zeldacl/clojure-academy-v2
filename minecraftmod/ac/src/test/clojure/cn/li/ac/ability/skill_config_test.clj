@@ -18,8 +18,7 @@
    "scan-step"
    "spawn-y-offset"
    "destination-epsilon"
-   "punch-anim-ticks"
-   "effect.extra-drop-y-offset"])
+  "punch-anim-ticks"])
 
 (defn- registered-content-skill-ids
   []

@@ -8,6 +8,13 @@
 
 (def ^:private mine-ray-effect-id :mine-ray)
 
+(defn- start-sound-id
+  [variant]
+  (case variant
+    :expert "my_mod:md.mine_expert_startup"
+    :luck "my_mod:md.mine_luck_startup"
+    "my_mod:md.mine_basic_startup"))
+
 (defn default-mine-ray-fx-runtime-state
   []
   {:effect-state {}})
@@ -47,7 +54,10 @@
       :start
       (do
         (client-sounds/queue-sound-effect! (:queue-owner base-meta)
-          {:type :sound :sound-id "my_mod:md.mine_ray_start" :volume 0.5 :pitch 1.0})
+          {:type :sound
+           :sound-id (start-sound-id variant)
+           :volume 0.5
+           :pitch 1.0})
         (assoc-in store* [:effect-state owner-key*]
                   (merge base-meta {:active? true :ticks 0 :variant (or variant :basic)
                                     :target nil :progress 0.0})))

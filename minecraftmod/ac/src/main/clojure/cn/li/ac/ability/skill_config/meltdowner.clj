@@ -93,7 +93,6 @@
 
    {:skill-id :mine-ray-luck :id :targeting.range :path "targeting.range" :section-suffix "targeting" :type :double-list :min 0.0 :list-count 2 :default [16.0 22.0] :comment "MineRayLuck range."}
    {:skill-id :mine-ray-luck :id :mining.break-speed :path "mining.break-speed" :section-suffix "mining" :type :double-list :min 0.0 :list-count 2 :default [0.5 1.0] :comment "MineRayLuck break speed."}
-   {:skill-id :mine-ray-luck :id :effect.extra-drop-chance :path "effect.extra-drop-chance" :section-suffix "effect" :type :double :min 0.0 :max 1.0 :default 0.33 :comment "MineRayLuck extra drop chance."}
    {:skill-id :mine-ray-luck :id :cost.down.overload :path "cost.down.overload" :section-suffix "cost.down" :type :double-list :min 0.0 :list-count 2 :default [100.0 70.0] :comment "MineRayLuck down-stage overload cost."}
    {:skill-id :mine-ray-luck :id :cost.tick.cp :path "cost.tick.cp" :section-suffix "cost.tick" :type :double-list :min 0.0 :list-count 2 :default [22.0 15.0] :comment "MineRayLuck tick CP cost."}
    {:skill-id :mine-ray-luck :id :cooldown.ticks :path "cooldown.ticks" :section-suffix "cooldown" :type :int :min 0 :default 5 :comment "MineRayLuck cooldown ticks."}
@@ -130,6 +129,5 @@
 
 (def internal-tunable-definitions
   [{:skill-id :meltdowner :id :beam.visual-distance :path "beam.visual-distance" :section-suffix "beam" :type :double :min 0.0 :default 45.0 :comment "Internal FX beam visual distance."}
-   {:skill-id :mine-ray-luck :id :effect.extra-drop-y-offset :path "effect.extra-drop-y-offset" :section-suffix "effect" :type :int :default -999 :comment "Internal synthetic Y offset used for bonus drop hook."}
    {:skill-id :ray-barrage :id :beam.visual-distance :path "beam.visual-distance" :section-suffix "beam" :type :double :min 0.0 :default 20.0 :comment "Internal FX beam visual distance."}
    {:skill-id :scatter-bomb :id :beam.visual-distance :path "beam.visual-distance" :section-suffix "beam" :type :double :min 0.0 :default 23.0 :comment "Internal FX beam visual distance."}])

@@ -15,7 +15,14 @@
            [net.minecraft.resources ResourceLocation]
            [net.minecraft.server MinecraftServer]
            [net.minecraft.server.level ServerPlayer ServerLevel]
+           [net.minecraft.world.item ItemStack Items]
+           [net.minecraft.world.item.enchantment Enchantments]
            [net.minecraft.world.level.block Block Blocks]))
+
+(defn- fortune-tool-stack
+  ^ItemStack [fortune-level]
+  (doto (ItemStack. Items/NETHERITE_PICKAXE)
+    (.enchant Enchantments/BLOCK_FORTUNE (int fortune-level))))
 
 (defn get-level-by-id
   ^ServerLevel [^MinecraftServer server world-id]
@@ -32,20 +39,25 @@
   "Break a block at [x y z] in world-id.
   break-guard-fn: (fn [^ServerLevel level ^BlockPos pos ^ServerPlayer player]) → boolean
   Forge callers pass an event-based guard; Fabric callers pass a vanilla guard."
-  [^MinecraftServer server player-uuid world-id x y z drop? break-guard-fn]
-  (try
-    (when-let [^ServerLevel level (get-level-by-id server world-id)]
-      (when-let [^ServerPlayer player (query-core/get-player-by-uuid server player-uuid)]
-        (let [pos (BlockPos. (int x) (int y) (int z))]
-          (when (break-guard-fn level pos player)
-            (when drop?
-              (let [state (.getBlockState level pos)]
-                (Block/dropResources state level pos)))
-            (.removeBlock level pos false)
-            true))))
-    (catch Exception e
-      (log/warn "Failed to break block:" (ex-message e))
-      false)))
+  ([^MinecraftServer server player-uuid world-id x y z drop? break-guard-fn]
+   (break-block! server player-uuid world-id x y z drop? 0 break-guard-fn))
+  ([^MinecraftServer server player-uuid world-id x y z drop? fortune-level break-guard-fn]
+   (try
+     (when-let [^ServerLevel level (get-level-by-id server world-id)]
+       (when-let [^ServerPlayer player (query-core/get-player-by-uuid server player-uuid)]
+         (let [pos (BlockPos. (int x) (int y) (int z))]
+           (when (break-guard-fn level pos player)
+             (when drop?
+               (let [state (.getBlockState level pos)]
+                 (if (pos? (int fortune-level))
+                   (Block/dropResources state level pos (.getBlockEntity level pos) player
+                                        (fortune-tool-stack fortune-level))
+                   (Block/dropResources state level pos))))
+             (.removeBlock level pos false)
+             true))))
+     (catch Exception e
+       (log/warn "Failed to break block:" (ex-message e))
+       false))))
 
 (defn can-break-block?
   "Check whether a player may break a block at [x y z] in world-id.

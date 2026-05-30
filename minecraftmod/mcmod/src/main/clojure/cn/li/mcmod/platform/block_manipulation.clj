@@ -7,7 +7,10 @@
   "Protocol for breaking and modifying blocks."
 
   (break-block! [this player-id world-id x y z drop?]
+    [this player-id world-id x y z drop? fortune-level]
     "Break block at position, optionally drop items.
+    When fortune-level is provided, drops should be generated as if a tool
+    with that fortune enchantment broke the block.
     Returns true if successful.")
 
   (set-block! [this world-id x y z block-id]
