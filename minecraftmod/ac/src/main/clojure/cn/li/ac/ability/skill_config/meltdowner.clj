@@ -113,6 +113,7 @@
    {:skill-id :ray-barrage :id :progression.exp-hit :path "progression.exp-hit" :section-suffix "progression" :type :double :min 0.0 :default 0.003 :comment "RayBarrage exp gained when any beam hits."}
 
    {:skill-id :scatter-bomb :id :projectile.max-balls :path "projectile.max-balls" :section-suffix "projectile" :type :int :min 1 :default 6 :comment "ScatterBomb maximum accumulated balls."}
+  {:skill-id :scatter-bomb :id :projectile.max-hold-ticks :path "projectile.max-hold-ticks" :section-suffix "projectile" :type :int :min 1 :default 80 :comment "ScatterBomb hold window tick cap for ball accumulation."}
    {:skill-id :scatter-bomb :id :projectile.spawn-interval-ticks :path "projectile.spawn-interval-ticks" :section-suffix "projectile" :type :int :min 1 :default 10 :comment "ScatterBomb ball spawn interval."}
    {:skill-id :scatter-bomb :id :projectile.spawn-start-tick :path "projectile.spawn-start-tick" :section-suffix "projectile" :type :int :min 0 :default 20 :comment "ScatterBomb first ball spawn tick."}
    {:skill-id :scatter-bomb :id :projectile.cone-spread :path "projectile.cone-spread" :section-suffix "projectile" :type :double-list :min 0.0 :list-count 2 :default [0.3 0.8] :comment "ScatterBomb random cone spread [min,max]."}

@@ -1,6 +1,7 @@
 (ns cn.li.ac.ability.server.patterns-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.registry.event :as evt]
+            [cn.li.ac.content.ability.meltdowner.scatter-bomb :as scatter-bomb]
             [cn.li.ac.ability.server.effect.core :as effect]
             [cn.li.ac.ability.server.patterns :as patterns]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
@@ -317,3 +318,28 @@
       (is (= 1 @cooldown-calls*))
       (is (false? (get-in @ctx* [:skill-state :performed?])))
       (is (empty? @events*)))))
+
+(deftest hold-channel-scatter-bomb-cost-fail-invokes-skill-cleanup-and-terminates-test
+  (let [calls* (atom [])]
+    (with-redefs [skill-effects/apply-cost! (fn [_ _ _]
+                                              (swap! calls* conj :cost)
+                                              false)
+                  evt/fire-ability-event! (fn [_] nil)
+                  skill-effects/emit-fx! (fn [_ _ _] nil)
+                  ctx/get-context (fn [_]
+                                    {:skill-state {:balls 3}})
+                  ctx/ctx-send-to-client! (fn [ctx-id channel payload]
+                                            (swap! calls* conj [:send ctx-id channel payload])
+                                            nil)
+                  ctx/terminate-context! (fn [ctx-id terminate-fn]
+                                           (swap! calls* conj [:terminate ctx-id terminate-fn])
+                                           nil)]
+      (binding [ctx/*context-owner* test-context-owner]
+        (patterns/hold-channel-on-tick!
+         {:actions {:tick! (fn [_] (swap! calls* conj :tick))
+                    :cost-fail! scatter-bomb/scatter-bomb-cost-fail!}}
+         {:ctx-id "ctx-scatter" :player-id "p1"}))
+      (is (= [:cost
+              [:send "ctx-scatter" :scatter-bomb/fx-end {:balls 3}]
+              [:terminate "ctx-scatter" nil]]
+             @calls*)))))

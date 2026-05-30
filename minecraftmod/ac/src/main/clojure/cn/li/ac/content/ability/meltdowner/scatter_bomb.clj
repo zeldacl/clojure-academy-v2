@@ -49,6 +49,10 @@
 (defn- cfg-lerp-int [field-id exp]
   (skill-config/lerp-int scatter-bomb-skill-id field-id exp))
 
+(defn- current-hold-ticks
+  [ctx-id]
+  (long (or (get-in (ctx/get-context ctx-id) [:skill-state :hold-ticks]) 0)))
+
 (defn- beam-config []
   {:radius          (cfg-double :beam.radius)
    :query-radius    (cfg-double :beam.query-radius)
@@ -75,6 +79,10 @@
         len (max 1.0e-6 (Math/sqrt (+ (* dx dx) (* dy dy) (* dz dz))))]
     {:x (/ dx len) :y (/ dy len) :z (/ dz len)}))
 
+(def ^:dynamic *scatter-direction-sampler*
+  "Injectable sampler seam for deterministic tests."
+  random-cone-dir)
+
 ;; ---------------------------------------------------------------------------
 ;; Actions
 ;; ---------------------------------------------------------------------------
@@ -92,11 +100,12 @@
       (ctx/ctx-send-to-client! ctx-id :scatter-bomb/fx-start {}))))
 
 (defn scatter-bomb-tick!
-  [{:keys [player-id ctx-id hold-ticks player]}]
-  (let [ticks (long (or hold-ticks 0))
-        ctx-data (ctx/get-context ctx-id)]
+  [{:keys [player-id ctx-id player]}]
+  (let [ctx-data (ctx/get-context ctx-id)]
     (when ctx-data
-      (let [balls (int (or (get-in ctx-data [:skill-state :balls]) 0))
+      (let [ticks (inc (long (or (get-in ctx-data [:skill-state :hold-ticks]) 0)))
+            _ (ctx/update-context! ctx-id assoc-in [:skill-state :hold-ticks] ticks)
+            balls (int (or (get-in ctx-data [:skill-state :balls]) 0))
             floor (double (or (get-in ctx-data [:skill-state :overload-floor]) 0.0))]
         ;; Enforce overload floor
         (enforce-overload-floor! player-id floor)
@@ -107,13 +116,16 @@
               entity-damage/*entity-damage*
               (geom/world-id-of player-id)
               player-id
-                (cfg-double :effect.anti-afk-damage)
-              :magic)))
+              (cfg-double :effect.anti-afk-damage)
+              :magic))
+          (ctx/ctx-send-to-client! ctx-id :scatter-bomb/fx-end {:balls balls})
+          (ctx/terminate-context! ctx-id nil))
         ;; Spawn new ball every N ticks
-              (when (and (>= ticks (cfg-int :projectile.spawn-start-tick))
-                 (< balls (cfg-int :projectile.max-balls))
-                 (zero? (mod (- ticks (cfg-int :projectile.spawn-start-tick))
-                     (cfg-int :projectile.spawn-interval-ticks))))
+        (when (and (<= ticks (cfg-int :projectile.max-hold-ticks))
+                   (>= ticks (cfg-int :projectile.spawn-start-tick))
+                   (< balls (cfg-int :projectile.max-balls))
+                   (zero? (mod (- ticks (cfg-int :projectile.spawn-start-tick))
+                               (cfg-int :projectile.spawn-interval-ticks))))
           (let [new-balls (inc balls)]
             (ctx/update-context! ctx-id assoc-in [:skill-state :balls] new-balls)
             (when player
@@ -137,25 +149,31 @@
         (when look-vec
           ;; Each ball settles with a slight delay to preserve projectile cadence.
           (let [base-delay (delayed-projectiles/mdball-near-expire-delay)]
-          (dotimes [i balls]
-            (let [dir (random-cone-dir look-vec)]
-              (delayed-projectiles/schedule-scatter-bomb-beam!
-                {:player-id   player-id
-                 :ctx-id      ctx-id
-                 :world-id    world-id
-                 :eye         eye
-                 :look-dir    {:x (:x dir) :y (:y dir) :z (:z dir)}
-                 :damage      damage
+            (dotimes [i balls]
+              (let [dir (*scatter-direction-sampler* look-vec)]
+                (delayed-projectiles/schedule-scatter-bomb-beam!
+                  {:player-id   player-id
+                   :ctx-id      ctx-id
+                   :world-id    world-id
+                   :eye         eye
+                   :look-dir    {:x (:x dir) :y (:y dir) :z (:z dir)}
+                   :damage      damage
                    :beam        (beam-config)
-                 :delay-ticks (+ base-delay i)}))))
+                   :delay-ticks (+ base-delay i)}))))
           ;; Gain exp and set cooldown
-                 (skill-effects/add-skill-exp! player-id scatter-bomb-skill-id
-                           (* (cfg-double :progression.exp-per-ball) balls))
+          (skill-effects/add-skill-exp! player-id scatter-bomb-skill-id
+                                        (* (cfg-double :progression.exp-per-ball) balls))
           (skill-effects/set-main-cooldown!
-                   player-id scatter-bomb-skill-id
-                   (int (* balls (cfg-lerp :cooldown.ticks-per-ball exp))))
+            player-id scatter-bomb-skill-id
+            (int (* balls (cfg-lerp :cooldown.ticks-per-ball exp))))
           (log/debug "ScatterBomb: fired" balls "balls"))))
     (ctx/ctx-send-to-client! ctx-id :scatter-bomb/fx-end {:balls balls})))
+
+(defn scatter-bomb-cost-fail!
+  [{:keys [ctx-id cost-stage]}]
+  (when (= cost-stage :tick)
+    (let [balls (int (or (get-in (ctx/get-context ctx-id) [:skill-state :balls]) 0))]
+      (ctx/ctx-send-to-client! ctx-id :scatter-bomb/fx-end {:balls balls}))))
 
 (defn scatter-bomb-abort!
   [{:keys [ctx-id]}]
@@ -182,10 +200,14 @@
   :cooldown       {:mode :manual}
   :cost           {:down {:overload (fn [{:keys [player-id]}]
                 (cfg-lerp :cost.down.overload (skill-exp player-id)))}
-                   :tick {:cp (fn [{:keys [player-id]}]
-              (cfg-lerp :cost.tick.cp (skill-exp player-id)))} }
+                   :tick {:cp (fn [{:keys [player-id ctx-id]}]
+                                (let [ticks (current-hold-ticks ctx-id)]
+                                  (if (<= ticks (cfg-int :projectile.max-hold-ticks))
+                                    (cfg-lerp :cost.tick.cp (skill-exp player-id))
+                                    0.0)))} }
   :actions        {:down!  scatter-bomb-down!
                    :tick!  scatter-bomb-tick!
                    :up!    scatter-bomb-up!
-                   :abort! scatter-bomb-abort!}
+                   :abort! scatter-bomb-abort!
+                   :cost-fail! scatter-bomb-cost-fail!}
   :prerequisites  [{:skill-id :electron-bomb :min-exp 0.8}])

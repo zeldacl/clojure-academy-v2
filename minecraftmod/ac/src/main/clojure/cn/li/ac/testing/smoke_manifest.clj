@@ -18,5 +18,13 @@
     :fixtures {:content-owned? true
                :electron-bomb-defaults
                {:settle-delay-ticks 15
-                :combat-damage [6.0 12.0]}}})
+                :combat-damage [6.0 12.0]}
+               :scatter-bomb-defaults
+               {:max-hold-ticks 80
+                :anti-afk-tick 200
+                :anti-afk-damage 6.0
+                :spawn-start-tick 20
+                :spawn-interval-ticks 10
+                :max-balls 6
+                :settle-delay-ticks 15}}})
   nil)

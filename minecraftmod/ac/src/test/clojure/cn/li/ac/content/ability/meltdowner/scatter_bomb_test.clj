@@ -46,6 +46,7 @@
 (defn- stub-tunable-int [_skill-id field-id]
   (case field-id
     :effect.anti-afk-tick 200
+    :projectile.max-hold-ticks 80
     :projectile.spawn-start-tick 20
     :projectile.max-balls 6
     :projectile.spawn-interval-ticks 10
@@ -63,9 +64,9 @@
            (:skill-state @ctx*)))
     (is (= [["ctx-1" :scatter-bomb/fx-start {}]] @messages*))))
 
-(deftest scatter-bomb-tick-anti-afk-and-ball-spawn-test
+(deftest scatter-bomb-tick-spawns-ball-at-cadence-test
   (let [{:keys [ctx* get-context update-context! send! messages*]}
-        (context-mocks {:skill-state {:balls 0 :hold-ticks 0 :overload-floor 120.0}})
+  (context-mocks {:skill-state {:balls 0 :hold-ticks 19 :overload-floor 120.0}})
         floor-calls* (atom [])
         spawn-calls* (atom [])
         damage-calls* (atom [])]
@@ -90,13 +91,70 @@
                                                   (apply-reflection-damage! [_ _ _ _ _ _ _] []))]
       (scatter/scatter-bomb-tick! {:player-id "p1"
                                    :ctx-id "ctx-2"
-                                   :hold-ticks 200
                                    :player {:id "player-obj"}}))
     (is (= [["p1" 120.0]] @floor-calls*))
-    (is (= [["w" "p1" 6.0 :magic]] @damage-calls*))
+    (is (empty? @damage-calls*))
     (is (= [[{:id "player-obj"} "my_mod:entity_md_ball" 0.0]] @spawn-calls*))
+    (is (= 20 (get-in @ctx* [:skill-state :hold-ticks])))
     (is (= 1 (get-in @ctx* [:skill-state :balls])))
     (is (= :scatter-bomb/fx-ball (second (first @messages*))))))
+
+(deftest scatter-bomb-tick-anti-afk-damages-and-terminates-test
+  (let [{:keys [ctx* get-context update-context! send! messages*]}
+        (context-mocks {:skill-state {:balls 2 :hold-ticks 199 :overload-floor 120.0}})
+        damage-calls* (atom [])
+        terminate-calls* (atom [])]
+    (with-redefs [ctx/get-context get-context
+                  ctx/update-context! update-context!
+                  ctx/ctx-send-to-client! send!
+                  ctx/terminate-context! (fn [ctx-id terminate-fn]
+                                           (swap! terminate-calls* conj [ctx-id terminate-fn])
+                                           nil)
+                  skill-config/tunable-int stub-tunable-int
+                  skill-config/tunable-double stub-tunable-double
+                  skill-effects/enforce-overload-floor! (fn [& _] nil)
+                  geom/world-id-of (fn [_] "w")
+                  geom/eye-pos (fn [_] {:x 1.0 :y 64.0 :z 2.0})
+                  entity/player-spawn-entity-by-id! (fn [& _] true)
+                  entity-damage/*entity-damage* (reify entity-damage/IEntityDamage
+                                                  (apply-direct-damage! [_ world-id entity-uuid damage source-type]
+                                                    (swap! damage-calls* conj [world-id entity-uuid damage source-type])
+                                                    true)
+                                                  (apply-aoe-damage! [_ _ _ _ _ _ _ _ _] [])
+                                                  (apply-reflection-damage! [_ _ _ _ _ _ _] []))]
+      (scatter/scatter-bomb-tick! {:player-id "p1"
+                                   :ctx-id "ctx-afk"
+                                   :player {:id "player-obj"}}))
+    (is (= [["w" "p1" 6.0 :magic]] @damage-calls*))
+    (is (= [["ctx-afk" nil]] @terminate-calls*))
+    (is (= ["ctx-afk" :scatter-bomb/fx-end {:balls 2}] (last @messages*)))))
+
+(deftest scatter-bomb-tick-after-hold-window-does-not-spawn-new-ball-test
+  (let [{:keys [ctx* get-context update-context! send! messages*]}
+        (context-mocks {:skill-state {:balls 4 :hold-ticks 80 :overload-floor 120.0}})
+        spawn-calls* (atom [])]
+    (with-redefs [ctx/get-context get-context
+                  ctx/update-context! update-context!
+                  ctx/ctx-send-to-client! send!
+                  skill-config/tunable-int stub-tunable-int
+                  skill-config/tunable-double stub-tunable-double
+                  skill-effects/enforce-overload-floor! (fn [& _] nil)
+                  geom/world-id-of (fn [_] "w")
+                  entity/player-spawn-entity-by-id! (fn [& args]
+                                                      (swap! spawn-calls* conj args)
+                                                      true)
+                  geom/eye-pos (fn [_] {:x 1.0 :y 64.0 :z 2.0})
+                  entity-damage/*entity-damage* (reify entity-damage/IEntityDamage
+                                                  (apply-direct-damage! [_ _ _ _ _] true)
+                                                  (apply-aoe-damage! [_ _ _ _ _ _ _ _ _] [])
+                                                  (apply-reflection-damage! [_ _ _ _ _ _ _] []))]
+      (scatter/scatter-bomb-tick! {:player-id "p1"
+                                   :ctx-id "ctx-window"
+                                   :player {:id "player-obj"}}))
+    (is (= 81 (get-in @ctx* [:skill-state :hold-ticks])))
+    (is (= 4 (get-in @ctx* [:skill-state :balls])))
+    (is (empty? @spawn-calls*))
+    (is (empty? @messages*))))
 
 (deftest scatter-bomb-up-schedules-delayed-beams-and-settles-rewards-test
   (let [{:keys [get-context send! messages*]}
@@ -121,6 +179,8 @@
                   delayed-projectiles/schedule-scatter-bomb-beam! (fn [task]
                                                                     (swap! scheduled* conj task)
                                                                     nil)
+                  scatter/*scatter-direction-sampler* (fn [_]
+                                                        {:x 1.0 :y 0.0 :z 0.0})
                   geom/world-id-of (fn [_] "w")
                   geom/eye-pos (fn [_] {:x 1.0 :y 64.0 :z 2.0})]
       (binding [raycast/*raycast* (reify raycast/IRaycast
@@ -132,6 +192,19 @@
         (scatter/scatter-bomb-up! {:player-id "p1" :ctx-id "ctx-3"})))
 
     (is (= [15 16 17] (mapv :delay-ticks @scheduled*)))
+    (is (= [{:x 1.0 :y 0.0 :z 0.0}
+            {:x 1.0 :y 0.0 :z 0.0}
+            {:x 1.0 :y 0.0 :z 0.0}]
+           (mapv :look-dir @scheduled*)))
     (is (= [["p1" :scatter-bomb 0.006]] @exp-calls*))
     (is (= [["p1" :scatter-bomb 90]] @cooldown-calls*))
     (is (= ["ctx-3" :scatter-bomb/fx-end {:balls 3}] (last @messages*)))))
+
+(deftest scatter-bomb-cost-fail-sends-fx-end-test
+  (let [{:keys [get-context send! messages*]}
+        (context-mocks {:skill-state {:balls 4 :hold-ticks 21 :overload-floor 120.0}})]
+    (with-redefs [ctx/get-context get-context
+                  ctx/ctx-send-to-client! send!]
+      (scatter/scatter-bomb-cost-fail! {:ctx-id "ctx-fail"
+                                        :cost-stage :tick}))
+    (is (= [["ctx-fail" :scatter-bomb/fx-end {:balls 4}]] @messages*))))

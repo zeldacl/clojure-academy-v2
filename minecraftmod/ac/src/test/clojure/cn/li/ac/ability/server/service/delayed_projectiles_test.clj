@@ -183,3 +183,61 @@
       (fn []
         (is (= [{:kind :unknown :payload :a :ticks-left 2}]
                (get (dp/pending-tasks-snapshot) "p1")))))))
+
+(deftest scatter-bomb-settlement-uses-task-look-dir-test
+  (let [run-op-inputs* (atom [])]
+    (with-redefs [effect/run-op! (fn [ctx _op]
+                                   (swap! run-op-inputs* conj {:look-dir (:look-dir ctx)
+                                                               :eye-pos (:eye-pos ctx)})
+                                   {:beam-result {:visual-distance 23.0
+                                                  :hit-uuids []}})
+                  ctx-mgr/push-channel-to-player! (fn [& _] true)
+                  ctx-mgr/push-channel-to-nearby-players! (fn [& _] true)
+                  md-damage/mark-target! (fn [& _] true)]
+      (dp/schedule-scatter-bomb-beam!
+       {:player-id "p1"
+        :ctx-id "ctx-1"
+        :world-id "w"
+        :eye {:x 1.0 :y 64.0 :z 2.0}
+        :look-dir {:x 1.0 :y 0.0 :z 0.0}
+        :damage 7.0
+        :beam {:radius 0.3 :query-radius 20.0 :step 0.8 :max-distance 25.0 :visual-distance 23.0}
+        :delay-ticks 1})
+      (dp/schedule-scatter-bomb-beam!
+       {:player-id "p1"
+        :ctx-id "ctx-1"
+        :world-id "w"
+        :eye {:x 1.0 :y 64.0 :z 2.0}
+        :look-dir {:x 0.0 :y 1.0 :z 0.0}
+        :damage 7.0
+        :beam {:radius 0.3 :query-radius 20.0 :step 0.8 :max-distance 25.0 :visual-distance 23.0}
+        :delay-ticks 1})
+      (dp/tick-player! "p1")
+      (is (= [{:look-dir {:x 1.0 :y 0.0 :z 0.0}
+               :eye-pos {:x 1.0 :y 64.0 :z 2.0}}
+              {:look-dir {:x 0.0 :y 1.0 :z 0.0}
+               :eye-pos {:x 1.0 :y 64.0 :z 2.0}}]
+             @run-op-inputs*)))))
+
+(deftest clear-player-tasks-prevents-later-execution-test
+  (let [run-count* (atom 0)]
+    (with-redefs [effect/run-op! (fn [_ _]
+                                   (swap! run-count* inc)
+                                   {:beam-result {:visual-distance 23.0
+                                                  :hit-uuids []}})
+                  ctx-mgr/push-channel-to-player! (fn [& _] true)
+                  ctx-mgr/push-channel-to-nearby-players! (fn [& _] true)
+                  md-damage/mark-target! (fn [& _] true)]
+      (dp/schedule-scatter-bomb-beam!
+       {:player-id "p1"
+        :ctx-id "ctx-1"
+        :world-id "w"
+        :eye {:x 1.0 :y 64.0 :z 2.0}
+        :look-dir {:x 0.0 :y 0.0 :z 1.0}
+        :damage 7.0
+        :beam {:radius 0.3 :query-radius 20.0 :step 0.8 :max-distance 25.0 :visual-distance 23.0}
+        :delay-ticks 1})
+      (dp/clear-player-tasks! "p1")
+      (dp/tick-player! "p1")
+      (is (= 0 @run-count*))
+      (is (nil? (get (dp/pending-tasks-snapshot) "p1"))))))

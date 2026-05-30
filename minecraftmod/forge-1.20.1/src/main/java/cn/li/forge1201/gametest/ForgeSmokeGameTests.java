@@ -105,4 +105,51 @@ public final class ForgeSmokeGameTests {
 
         helper.succeed();
     }
+
+    @GameTest(templateNamespace = "minecraft", template = "empty", batch = "content_smoke")
+    public static void scatterBombDefaultsAligned(GameTestHelper helper) {
+        String registryNs = "cn.li.mcmod.content.registry";
+        ClojureInterop.requireNamespace(registryNs);
+
+        Object manifestsObj = ClojureInterop.invoke(registryNs, "list-smoke-manifests");
+        helper.assertTrue(manifestsObj instanceof Iterable,
+            "Expected content smoke manifest registry to be iterable");
+
+        Map<?, ?> scatterDefaults = null;
+        for (Object manifestObj : (Iterable<?>) manifestsObj) {
+            if (manifestObj instanceof Map<?, ?> manifestMap
+                && "ac".equals(manifestMap.get(kw("content-id")))) {
+                Object fixturesObj = manifestMap.get(kw("fixtures"));
+                if (fixturesObj instanceof Map<?, ?> fixturesMap) {
+                    Object defaultsObj = fixturesMap.get(kw("scatter-bomb-defaults"));
+                    if (defaultsObj instanceof Map<?, ?> defaultsMap) {
+                        scatterDefaults = defaultsMap;
+                        break;
+                    }
+                }
+            }
+        }
+
+        helper.assertTrue(scatterDefaults != null,
+            "Expected AC smoke manifest to expose :scatter-bomb-defaults fixture");
+
+        Object maxHoldObj = scatterDefaults.get(kw("max-hold-ticks"));
+        helper.assertTrue(maxHoldObj instanceof Number && ((Number) maxHoldObj).intValue() == 80,
+            "Expected scatter-bomb hold window to cap at 80 ticks");
+
+        Object antiAfkTickObj = scatterDefaults.get(kw("anti-afk-tick"));
+        helper.assertTrue(antiAfkTickObj instanceof Number && ((Number) antiAfkTickObj).intValue() == 200,
+            "Expected scatter-bomb anti-afk trigger at 200 ticks");
+
+        Object antiAfkDamageObj = scatterDefaults.get(kw("anti-afk-damage"));
+        helper.assertTrue(antiAfkDamageObj instanceof Number
+                && ((Number) antiAfkDamageObj).doubleValue() == 6.0,
+            "Expected scatter-bomb anti-afk self damage to be 6.0");
+
+        Object settleDelayObj = scatterDefaults.get(kw("settle-delay-ticks"));
+        helper.assertTrue(settleDelayObj instanceof Number && ((Number) settleDelayObj).intValue() == 15,
+            "Expected scatter-bomb delayed settlement default to be 15 ticks (life 20, settle offset 5)");
+
+        helper.succeed();
+    }
 }
