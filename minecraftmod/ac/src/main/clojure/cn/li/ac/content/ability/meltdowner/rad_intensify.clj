@@ -22,8 +22,8 @@
   [player-id]
   (skill-config/lerp-double rad-intensify-skill-id :combat.damage-rate (skill-exp player-id)))
 
-(defn mark-duration-ms []
-  (skill-config/tunable-int rad-intensify-skill-id :effect.mark-duration-ms))
+(defn mark-duration-ticks []
+  (max 1 (long (skill-config/tunable-int rad-intensify-skill-id :effect.mark-duration-ticks))))
 
 (defskill! rad-intensify
   :id :rad-intensify

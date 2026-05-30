@@ -7,12 +7,17 @@
             [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.skill-config :as skill-config]
+            [cn.li.ac.ability.server.effect.core :as effect]
             [cn.li.ac.ability.server.effect.geom :as geom]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as dh]
             [cn.li.ac.content.ability.meltdowner.electron-missile :as missile]
+            [cn.li.ac.content.ability.meltdowner.ray-barrage :as ray-barrage]
+            [cn.li.ac.content.ability.meltdowner.jet-engine :as jet-engine]
             [cn.li.ac.content.ability.meltdowner.rad-intensify :as rad]
             [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
+            [cn.li.mcmod.platform.player-motion :as player-motion]
+            [cn.li.mcmod.platform.teleportation :as teleportation]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.ac.ability.service.context-mgr :as ctx-mgr]))
@@ -85,13 +90,45 @@
     :progression.exp-hit 0.001
     0.0))
 
+(defn- stub-ray-lerp-double [_skill-id field-id _exp]
+  (case field-id
+    :combat.damage 6.0
+    :cost.down.cp 300.0
+    :cost.down.overload 130.0
+    0.0))
+
+(defn- stub-ray-tunable-double [_skill-id field-id]
+  (case field-id
+    :beam.spread 0.0
+    :beam.radius 0.3
+    :beam.query-radius 20.0
+    :beam.step 0.8
+    :beam.max-distance 22.0
+    :beam.visual-distance 20.0
+    :progression.exp-hit 0.003
+    0.0))
+
+(defn- stub-ray-tunable-int [_skill-id field-id]
+  (case field-id
+    :beam.count 1
+    0))
+
+(defn- jet-context-mocks [initial]
+  (let [ctx* (atom initial)]
+    {:ctx* ctx*
+     :get-context (fn [_] @ctx*)
+     :update-context! (fn [_ f & args]
+                        (swap! ctx* #(when % (apply f % args))))
+     :terminate-context! (fn [& _] nil)
+     :send! (fn [& _] nil)}))
+
 (deftest electron-bomb-delayed-hit-installs-rad-mark-test
   (let [attacker "atk-eb"
         victim "victim-eb"]
     (dh/ensure-damage-handler!)
     (learn-rad-intensify! attacker)
     (with-redefs [rad/rate (fn [_] 1.75)
-                  rad/mark-duration-ms (fn [] 100000)
+                  rad/mark-duration-ticks (fn [] 100000)
                   skill-effects/add-skill-exp! (fn [& _] nil)
                   ctx-mgr/push-channel-to-player! (fn [& _] nil)
                   ctx-mgr/push-channel-to-nearby-players! (fn [& _] nil)]
@@ -116,7 +153,7 @@
           :exp-gain 0.003
           :delay-ticks 1})
         (dp/tick-player! attacker))
-      (is (= 1.75 (:rate (get (dh/marks-snapshot) [attacker victim]))))
+      (is (= 1.75 (:rate (get (dh/marks-snapshot) victim))))
       (is (= 17.5 (double (rt/process-damage! victim attacker 10.0 :magic)))))))
 
 (deftest electron-missile-hit-installs-rad-mark-test
@@ -126,7 +163,7 @@
     (dh/ensure-damage-handler!)
     (learn-rad-intensify! attacker)
     (with-redefs [rad/rate (fn [_] 1.6)
-                  rad/mark-duration-ms (fn [] 100000)
+                  rad/mark-duration-ticks (fn [] 100000)
                   skill-effects/skill-exp (fn [& _] 0.5)
                   skill-config/lerp-double stub-missile-lerp-double
                   skill-config/lerp-int stub-missile-lerp-int
@@ -154,5 +191,111 @@
         (missile/electron-missile-tick! {:player-id attacker
                                          :ctx-id "ctx-em"
                                          :player {:id "player-obj"}}))
-      (is (= 1.6 (:rate (get (dh/marks-snapshot) [attacker victim]))))
+      (is (= 1.6 (:rate (get (dh/marks-snapshot) victim))))
       (is (= 16.0 (double (rt/process-damage! victim attacker 10.0 :magic)))))))
+
+(deftest ray-barrage-hit-installs-rad-mark-test
+  (let [attacker "atk-rb"
+        victim "victim-rb"]
+    (dh/ensure-damage-handler!)
+    (learn-rad-intensify! attacker)
+    (with-redefs [rad/rate (fn [_] 1.4)
+                  rad/mark-duration-ticks (fn [] 100000)
+                  skill-effects/skill-exp (fn [& _] 0.0)
+                  skill-config/lerp-double stub-ray-lerp-double
+                  skill-config/tunable-double stub-ray-tunable-double
+                  skill-config/tunable-int stub-ray-tunable-int
+                  effect/run-op! (fn [_ _]
+                                   {:beam-result {:performed? true
+                                                  :hit-uuids [victim]}})
+                  skill-effects/add-skill-exp! (fn [& _] nil)
+                  geom/world-id-of (fn [_] "w")
+                  geom/eye-pos (fn [_] {:x 0.0 :y 64.0 :z 0.0})
+                  ctx-mgr/push-channel-to-player! (fn [& _] nil)
+                  ctx-mgr/push-channel-to-nearby-players! (fn [& _] nil)]
+      (binding [raycast/*raycast* (reify raycast/IRaycast
+                                    (raycast-blocks [_ _ _ _ _ _ _ _ _] nil)
+                                    (raycast-entities [_ _ _ _ _ _ _ _ _] nil)
+                                    (raycast-combined [_ _ _ _ _ _ _ _ _] nil)
+                                    (get-player-look-vector [_ _] {:x 0.0 :y 0.0 :z 1.0})
+                                    (raycast-from-player [_ _ _ _] nil))]
+        (ray-barrage/ray-barrage-perform! {:player-id attacker :ctx-id "ctx-rb"}))
+      (is (= 1.4 (:rate (get (dh/marks-snapshot) victim))))
+      (is (= 14.0 (double (rt/process-damage! victim attacker 10.0 :magic)))))))
+
+(deftest scatter-bomb-delayed-hit-installs-rad-mark-test
+  (let [attacker "atk-sc"
+        victim "victim-sc"]
+    (dh/ensure-damage-handler!)
+    (learn-rad-intensify! attacker)
+    (with-redefs [rad/rate (fn [_] 1.33)
+                  rad/mark-duration-ticks (fn [] 100000)
+                  effect/run-op! (fn [_ _]
+                                   {:beam-result {:visual-distance 23.0
+                                                  :hit-uuids [victim]}})
+                  ctx-mgr/push-channel-to-player! (fn [& _] nil)
+                  ctx-mgr/push-channel-to-nearby-players! (fn [& _] nil)]
+      (dp/schedule-scatter-bomb-beam!
+       {:player-id attacker
+        :ctx-id "ctx-sc"
+        :world-id "w"
+        :eye {:x 0.0 :y 64.0 :z 0.0}
+        :look-dir {:x 0.0 :y 0.0 :z 1.0}
+        :damage 7.0
+        :beam {:radius 0.3 :query-radius 20.0 :step 0.8 :max-distance 25.0 :visual-distance 23.0}
+        :delay-ticks 1})
+      (dp/tick-player! attacker)
+      (is (= 1.33 (:rate (get (dh/marks-snapshot) victim))))
+      (is (= 13.3 (double (rt/process-damage! victim attacker 10.0 :magic)))))))
+
+(deftest jet-engine-hit-installs-rad-mark-test
+  (let [attacker "atk-jet"
+        victim "victim-jet"
+        {:keys [get-context update-context! terminate-context! send!]}
+        (jet-context-mocks {:skill-state {:phase :triggering
+                                          :start-pos {:x 0.0 :y 64.0 :z 0.0}
+                                          :target-pos {:x 4.0 :y 64.0 :z 0.0}
+                                          :last-pos {:x 0.0 :y 64.0 :z 0.0}
+                                          :velocity {:x 0.5 :y 0.0 :z 0.0}
+                                          :world-id "w"
+                                          :trigger-ticks 0
+                                          :hit-uuids #{}}})]
+    (dh/ensure-damage-handler!)
+    (learn-rad-intensify! attacker)
+    (with-redefs [rad/rate (fn [_] 1.5)
+                  rad/mark-duration-ticks (fn [] 100000)
+                  skill-effects/skill-exp (fn [& _] 0.0)
+                  ctx/get-context get-context
+                  ctx/update-context! update-context!
+                  ctx/terminate-context! terminate-context!
+                  ctx/ctx-send-to-client! send!
+                  ctx-mgr/push-channel-to-player! (fn [& _] nil)
+                  ctx-mgr/push-channel-to-nearby-players! (fn [& _] nil)]
+      (binding [teleportation/*teleportation* (reify teleportation/ITeleportation
+                                                (teleport-player! [_ _ _ _ _ _] true)
+                                                (teleport-with-entities! [_ _ _ _ _ _ _]
+                                                  {:success false :teleported-count 0})
+                                                (reset-fall-damage! [_ _] true)
+                                                (get-player-position [_ _] {:world-id "w" :x 0.0 :y 64.0 :z 0.0})
+                                                (get-player-dimension [_ _] "w"))
+                player-motion/*player-motion* (reify player-motion/IPlayerMotion
+                                                (set-velocity! [_ _ _ _ _] true)
+                                                (add-velocity! [_ _ _ _ _] true)
+                                                (get-velocity [_ _] {:x 0.0 :y 0.0 :z 0.0})
+                                                (set-on-ground! [_ _ _] true)
+                                                (is-on-ground? [_ _] false)
+                                                (dismount-riding! [_ _] true))
+                raycast/*raycast* (reify raycast/IRaycast
+                                    (raycast-blocks [_ _ _ _ _ _ _ _ _] nil)
+                                    (raycast-entities [_ _ _ _ _ _ _ _ _]
+                                      {:uuid victim})
+                                    (raycast-combined [_ _ _ _ _ _ _ _ _] nil)
+                                    (get-player-look-vector [_ _] {:x 1.0 :y 0.0 :z 0.0})
+                                    (raycast-from-player [_ _ _ _] nil))
+                entity-damage/*entity-damage* (reify entity-damage/IEntityDamage
+                                                (apply-direct-damage! [_ _ _ _ _] true)
+                                                (apply-aoe-damage! [_ _ _ _ _ _ _ _ _] [])
+                                                (apply-reflection-damage! [_ _ _ _ _ _ _] []))]
+        (jet-engine/jet-engine-tick! {:player-id attacker :ctx-id "ctx-jet" :hold-ticks 1}))
+      (is (= 1.5 (:rate (get (dh/marks-snapshot) victim))))
+      (is (= 15.0 (double (rt/process-damage! victim attacker 10.0 :magic)))))))

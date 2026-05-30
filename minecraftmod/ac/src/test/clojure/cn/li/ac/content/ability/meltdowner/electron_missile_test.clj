@@ -144,8 +144,8 @@
                   entity-damage/apply-direct-damage! (fn [& args]
                                                        (swap! damage-calls* conj args)
                                                        true)
-                  md-damage/mark-target! (fn [player-id uuid]
-                                           (swap! mark-calls* conj [player-id uuid])
+                  md-damage/mark-target! (fn [player-id uuid fx-context]
+                                           (swap! mark-calls* conj [player-id uuid fx-context])
                                            nil)]
       (binding [world-effects/*world-effects* :world
                 entity-damage/*entity-damage* :damage]
@@ -154,7 +154,9 @@
                                          :player {:id "player-obj"}})))
 
     (is (= 1 (count @damage-calls*)))
-    (is (= [["p1" "t-1"]] @mark-calls*))
+       (is (= [["p1" "t-1" {:ctx-id "ctx-3"
+                                                 :target-pos {:x 3.0 :y 64.0 :z 0.0}}]]
+                 @mark-calls*))
     (is (= [["p1" :electron-missile 0.001]] @exp-calls*))
     (is (= {:ticks 9 :active-balls 0 :active? true :overload-floor 200.0}
            (:skill-state @ctx*)))

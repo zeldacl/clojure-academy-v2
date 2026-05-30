@@ -133,8 +133,8 @@
                     skill-effects/player-path (fn [& _] {:world-id "w" :x 0.0 :y 64.0 :z 0.0})
                     ls/get-player-position (fn [_] {:world-id "w" :x 0.0 :y 64.0 :z 0.0})
                     ls/get-player-look-vector (fn [_] {:x 1.0 :y 0.0 :z 0.0})
-                    md-damage/mark-target! (fn [source-id target-id]
-                                             (swap! mark-calls* conj [source-id target-id])
+                    md-damage/mark-target! (fn [source-id target-id fx-context]
+                                             (swap! mark-calls* conj [source-id target-id fx-context])
                                              nil)
                     entity-damage/*entity-damage* (reify entity-damage/IEntityDamage
                                                     (apply-direct-damage! [_ world-id entity-uuid damage source-type]
@@ -149,7 +149,9 @@
         (binding [world-effects/*world-effects* :world]
           (is (= [4.0 {:absorbed 6.0}]
                  (reduce-damage! "p-3" "enemy-1" 10.0 :magic))))
-        (is (= [["p-3" "enemy-1"]] @mark-calls*))
+        (is (= [["p-3" "enemy-1" {:ctx-id "ctx-3"
+                   :target-pos {:x 1.0 :y 64.0 :z 0.0}}]]
+               @mark-calls*))
         (is (= [["w" "enemy-1" 3.0 :magic]] @damage-calls*))
         (is (= [["p-3" :light-shield 0.0024]] @exp-calls*))
         (is (seq @update-calls*))))))

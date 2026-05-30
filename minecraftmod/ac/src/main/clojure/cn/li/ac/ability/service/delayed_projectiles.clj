@@ -136,7 +136,11 @@
                 target-uuid
                 damage-amt
                 :magic)
-              (md-damage/mark-target! player-id target-uuid)
+              (md-damage/mark-target! player-id target-uuid
+                                      {:ctx-id ctx-id
+                                       :target-pos {:x (:x hit)
+                                                    :y (:y hit)
+                                                    :z (:z hit)}})
               (skill-effects/add-skill-exp! player-id :electron-bomb
                                             (double (or exp-gain 0.003))))
             (ctx-mgr/push-channel-to-player! player-id ctx-id :electron-bomb/fx-beam
@@ -175,6 +179,8 @@
                            :break-blocks? false
                            :block-energy 0.0
                            :fx-topic nil}])
+            _ (doseq [target-id (or (get-in result [:beam-result :hit-uuids]) [])]
+              (md-damage/mark-target! player-id target-id {:ctx-id ctx-id}))
           visual-distance (double (or (get-in result [:beam-result :visual-distance])
                                       (beam-param beam :visual-distance 23.0)))
           end-pos (geom/v+ eye (geom/v* (geom/vnorm look-dir) visual-distance))]

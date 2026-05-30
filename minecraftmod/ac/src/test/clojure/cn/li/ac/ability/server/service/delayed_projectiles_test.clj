@@ -59,7 +59,8 @@
         :delay-ticks 1})
       (dp/tick-player! "p1")
       (is (= [[:damage [:damage "w" "target-1" 12.5 :magic]]
-              [:mark ["p1" "target-1"]]
+          [:mark ["p1" "target-1" {:ctx-id "ctx-1"
+                  :target-pos {:x 4.0 :y 65.0 :z 6.0}}]]
               [:exp ["p1" :electron-bomb 0.125]]
               [:fx ["p1"
                     "ctx-1"
@@ -116,7 +117,11 @@
 (deftest scatter-bomb-settlement-order-and-cleanup-test
   (let [calls (atom [])]
     (with-redefs [effect/run-op! (fn [_ _]
-                                   {:beam-result {:visual-distance 23.0}})
+                                   {:beam-result {:visual-distance 23.0
+                                                  :hit-uuids ["target-1"]}})
+                  md-damage/mark-target! (fn [player-id target-id fx-context]
+                                           (swap! calls conj [:mark player-id target-id fx-context])
+                                           true)
                   ctx-mgr/push-channel-to-player! (fn [player-id ctx-id ch payload]
                                                    (swap! calls conj [:fx player-id ctx-id ch payload])
                                                    true)
@@ -143,11 +148,12 @@
         :delay-ticks 2})
 
       (dp/tick-player! "p1")
-      (is (= 2 (count @calls)))
+  (is (= 3 (count @calls)))
+      (is (= [:mark "p1" "target-1" {:ctx-id "ctx-1"}] (first @calls)))
       (is (= 1 (count (get (dp/pending-tasks-snapshot) "p1"))))
 
       (dp/tick-player! "p1")
-      (is (= 4 (count @calls)))
+  (is (= 6 (count @calls)))
       (is (nil? (get (dp/pending-tasks-snapshot) "p1"))))))
 
 (deftest pending-tasks-are-player-keyed-and-clearable-test

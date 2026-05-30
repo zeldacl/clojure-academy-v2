@@ -14,6 +14,7 @@
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.effect.geom :as geom]
+            [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
             [cn.li.mcmod.platform.player-motion :as player-motion]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.teleportation :as teleportation]
@@ -127,7 +128,7 @@
                            {:mode :trigger-end}))
 
 (defn- mark-hit-and-damage!
-  [player-id world-id hit hit-uuids]
+  [player-id ctx-id world-id hit hit-uuids]
   (let [target-id (str (:uuid hit))
         self-id (str player-id)]
     (if (or (empty? target-id)
@@ -142,6 +143,11 @@
             target-id
             (damage-amount player-id)
             :magic))
+        (md-damage/mark-target! player-id target-id
+              {:ctx-id ctx-id
+               :target-pos {:x (:x hit)
+                      :y (:y hit)
+                      :z (:z hit)}})
         (conj hit-uuids target-id)))))
 
 (defn- tick-triggering!
@@ -188,7 +194,7 @@
                                               (:x segment-dir) (:y segment-dir) (:z segment-dir)
                                               segment-distance))
               next-hit-uuids (if hit
-                               (mark-hit-and-damage! player-id world-id hit hit-uuids)
+                              (mark-hit-and-damage! player-id ctx-id world-id hit hit-uuids)
                                hit-uuids)]
           (ctx/update-context! ctx-id update :skill-state merge
                                {:trigger-ticks next-tick

@@ -13,6 +13,7 @@
             [cn.li.ac.ability.service.context-mgr :as ctx-mgr]
             [cn.li.ac.ability.service.delayed-projectiles :as delayed-projectiles]
             [cn.li.ac.ability.service.dispatcher :as ctx]
+            [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
             [cn.li.ac.ability.service.platform-hooks :as platform-hooks]
             [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.block.developer.logic :as developer-logic]
@@ -162,6 +163,8 @@
    (fn [player-uuid]
      (ctx-mgr/abort-player-contexts! player-uuid)
      (delayed-projectiles/clear-player-tasks! player-uuid)
+     (md-damage/clear-target-mark! player-uuid)
+     (md-damage/clear-source-marks! player-uuid)
      (ps/remove-player-state! player-uuid))
 
    :on-server-stop!
@@ -171,7 +174,8 @@
      (world-registry/clear-session-world-data! session-id)
      (when (platform-hooks/platform-fn-registered? fn-reset-server-runtimes)
        ((platform-hooks/get-platform-fn fn-reset-server-runtimes)))
-     (delayed-projectiles/clear-all-tasks!))
+     (delayed-projectiles/clear-all-tasks!)
+     (md-damage/clear-all-marks!))
 
    :on-player-clone!
    (fn [_old-player-uuid _new-player-uuid]
@@ -180,11 +184,15 @@
    :on-player-death!
    (fn [player-uuid]
      (delayed-projectiles/clear-player-tasks! player-uuid)
+     (md-damage/clear-target-mark! player-uuid)
+     (md-damage/clear-source-marks! player-uuid)
      (ctx-mgr/abort-player-contexts! player-uuid))
 
    :on-player-dimension-change!
    (fn [player-uuid _from-dim _to-dim]
      (delayed-projectiles/clear-player-tasks! player-uuid)
+     (md-damage/clear-target-mark! player-uuid)
+     (md-damage/clear-source-marks! player-uuid)
      (ctx-mgr/abort-player-contexts! player-uuid))
 
    :get-skills-for-category
@@ -194,6 +202,7 @@
    :on-player-tick!
    (fn [player-uuid]
      (ps/get-or-create-player-state! player-uuid)
+     (md-damage/tick-marks!)
      (ps/server-tick-player! player-uuid nil)
      (ctx-mgr/tick-player-contexts! player-uuid)
      (delayed-projectiles/tick-player! player-uuid)

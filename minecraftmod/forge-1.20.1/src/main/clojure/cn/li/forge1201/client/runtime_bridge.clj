@@ -40,7 +40,7 @@
       (overlay-state/clear-client-overlay-session! session-id))))
 
 (defn spawn-local-scripted-effect! [effect-id]
-  (ScriptedEffectSpawner/spawnLocalWithUuid effect-id))
+  (ScriptedEffectSpawner/spawnLocal effect-id))
 
 (defn remove-local-scripted-effect! [entity-uuid]
   (ScriptedEffectSpawner/removeLocalByUuid entity-uuid))

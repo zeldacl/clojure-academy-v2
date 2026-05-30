@@ -16,6 +16,7 @@
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.server.effect.core :as effect]
             [cn.li.ac.ability.server.effect.geom :as geom]
+            [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
             [cn.li.ac.ability.server.effect.beam]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.util.log :as log]))
@@ -88,6 +89,8 @@
                                    :block-energy    0.0
                                    :fx-topic        :ray-barrage/fx-beam}])]
               (when (get-in result [:beam-result :performed?])
+                (doseq [target-id (or (get-in result [:beam-result :hit-uuids]) [])]
+                  (md-damage/mark-target! player-id target-id {:ctx-id ctx-id}))
                 (swap! hit-count inc))))
           (when (pos? @hit-count)
             (skill-effects/add-skill-exp! player-id ray-barrage-skill-id

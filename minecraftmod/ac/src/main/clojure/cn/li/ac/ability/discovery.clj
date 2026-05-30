@@ -77,7 +77,8 @@
 			cn.li.ac.content.ability.meltdowner.mine-ray-fx
 			cn.li.ac.content.ability.meltdowner.ray-barrage-fx
 			cn.li.ac.content.ability.meltdowner.jet-engine-fx
-			cn.li.ac.content.ability.meltdowner.electron-missile-fx]}
+			cn.li.ac.content.ability.meltdowner.electron-missile-fx
+			cn.li.ac.content.ability.meltdowner.rad-intensify-fx]}
 	 {:id :teleporter
 		:priority 40
 		:skill-namespaces

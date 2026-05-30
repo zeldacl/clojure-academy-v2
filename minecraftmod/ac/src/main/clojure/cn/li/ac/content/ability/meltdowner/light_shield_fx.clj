@@ -46,7 +46,7 @@
     (case mode
       :start
       (do
-        (client-sounds/queue-sound-effect! (:queue-owner base-meta)
+        (client-sounds/queue-current-sound-effect!
           {:type :sound :sound-id "my_mod:md.shield_on" :volume 0.7 :pitch 1.0})
         (assoc-in store* [:effect-state owner-key*]
                   (merge base-meta {:active? true :ticks 0 :phase :startup})))
@@ -127,7 +127,7 @@
             {:ctx-id ctx-id :channel channel})
           :light-shield/fx-end
           (do
-            (client-sounds/queue-sound-effect! (client-particles/current-effect-owner)
+            (client-sounds/queue-current-sound-effect!
               {:type :sound :sound-id "my_mod:md.shield_loop" :volume 0.35 :pitch 0.95})
             (level-effects/enqueue-level-effect! light-shield-effect-id
               (merge meta-payload {:mode :end})

@@ -152,7 +152,11 @@
                    (in-front-cone? pos look-vec entity)
                    (consume-absorb! player-id exp))
           (when entity-damage/*entity-damage*
-            (md-damage/mark-target! player-id (:uuid entity))
+            (md-damage/mark-target! player-id (:uuid entity)
+                                    {:ctx-id ctx-id
+                                     :target-pos {:x (:x entity)
+                                                  :y (:y entity)
+                                                  :z (:z entity)}})
             (entity-damage/apply-direct-damage!
              entity-damage/*entity-damage*
              world-id (:uuid entity)

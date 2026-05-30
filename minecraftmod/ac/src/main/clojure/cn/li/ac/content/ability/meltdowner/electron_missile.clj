@@ -157,7 +157,11 @@
                                            (:uuid target)
                                            (cfg-lerp :combat.damage exp)
                                            :magic)
-                                         (md-damage/mark-target! player-id (:uuid target))
+                                        (md-damage/mark-target! player-id (:uuid target)
+                                                                {:ctx-id ctx-id
+                                                                 :target-pos {:x (:x target)
+                                                                              :y (:y target)
+                                                                              :z (:z target)}})
                                          (skill-effects/add-skill-exp! player-id
                                                                        electron-missile-skill-id
                                                                        (cfg-double :progression.exp-hit)))

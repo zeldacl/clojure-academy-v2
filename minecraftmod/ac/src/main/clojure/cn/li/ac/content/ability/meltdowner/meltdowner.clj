@@ -106,8 +106,8 @@
         look-vec  (when raycast/*raycast*
                     (raycast/get-player-look-vector raycast/*raycast* reflector-player-id))]
     (when look-vec
-    (let [look-dir (normalize-look-dir look-vec)
-      dir (geom/vnorm look-dir)
+  (let [look-dir (normalize-look-dir look-vec)
+    dir (geom/vnorm look-dir)
             end (geom/v+ start-pos (geom/v* dir (cfg-double :reflection.shot-distance)))]
         (ctx/ctx-send-to-client! ctx-id :meltdowner/fx-reflect
                                  {:mode  :reflect
@@ -115,17 +115,22 @@
                                   :end   end})
         (let [hit (when raycast/*raycast*
                     (raycast/raycast-entities raycast/*raycast*
-                   world-id
-                   (:x start-pos) (:y start-pos) (:z start-pos)
-                   (:x look-dir) (:y look-dir) (:z look-dir)
-                   (cfg-double :reflection.shot-distance)))]
+                  world-id
+                  (:x start-pos) (:y start-pos) (:z start-pos)
+                  (:x look-dir) (:y look-dir) (:z look-dir)
+                  (cfg-double :reflection.shot-distance)))]
           (when (and (= (:hit-type hit) :entity) entity-damage/*entity-damage*)
-            (md-damage/mark-target! reflector-player-id (:uuid hit))
+    (md-damage/mark-target! reflector-player-id (:uuid hit)
+            {:ctx-id ctx-id
+             :target-pos {:x (:x hit)
+                  :y (:y hit)
+                  :z (:z hit)}})
             (entity-damage/apply-direct-damage! entity-damage/*entity-damage*
-                  world-id (:uuid hit)
-                                                (* (cfg-double :reflection.damage-multiplier)
-                     (cfg-lerp :combat.damage caster-exp))
-                                               :magic)
+                 world-id
+                 (:uuid hit)
+                 (* (cfg-double :reflection.damage-multiplier)
+                    (cfg-lerp :combat.damage caster-exp))
+                 :magic)
             true))))))
 
 ;; ---------------------------------------------------------------------------
@@ -152,11 +157,11 @@
                      :look-dir        look-vec
                      :reflect-can-fn  (fn [uuid] (vec-reflection-can-reflect? uuid damage))
                      :reflect-shot-fn (fn [uuid] (perform-reflection-shot! ctx-id uuid exp))}
-                        [:beam {:radius          (cfg-lerp :beam.radius exp)
-                                :query-radius    (cfg-double :beam.query-radius)
-                                :step            (cfg-double :beam.step)
-                                :max-distance    (cfg-double :beam.max-distance)
-                                :visual-distance (cfg-double :beam.visual-distance)
+                    [:beam {:radius          (cfg-lerp :beam.radius exp)
+                            :query-radius    (cfg-double :beam.query-radius)
+                            :step            (cfg-double :beam.step)
+                            :max-distance    (cfg-double :beam.max-distance)
+                            :visual-distance (cfg-double :beam.visual-distance)
                             :damage          damage
                             :damage-type     :magic
                             :break-blocks?   true

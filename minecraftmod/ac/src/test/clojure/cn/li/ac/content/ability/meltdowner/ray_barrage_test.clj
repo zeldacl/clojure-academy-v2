@@ -1,6 +1,7 @@
 (ns cn.li.ac.content.ability.meltdowner.ray-barrage-test
   (:require [clojure.test :refer [deftest is]]
             [cn.li.ac.content.ability.meltdowner.ray-barrage :as rb]
+            [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.server.effect.core :as effect]
             [cn.li.ac.ability.server.effect.geom :as geom]
@@ -32,7 +33,8 @@
 
 (deftest ray-barrage-perform-hits-grant-exp-test
   (let [run-calls* (atom 0)
-        exp-calls* (atom [])]
+        exp-calls* (atom [])
+        marks* (atom [])]
     (with-redefs [skill-effects/skill-exp (fn [& _] 0.0)
                   skill-config/lerp-double stub-lerp-double
                   skill-config/tunable-double stub-tunable-double
@@ -41,7 +43,11 @@
                   geom/eye-pos (fn [_] {:x 0.0 :y 64.0 :z 0.0})
                   effect/run-op! (fn [_ _]
                                    (swap! run-calls* inc)
-                                   {:beam-result {:performed? true}})
+                                   {:beam-result {:performed? true
+                                                  :hit-uuids ["target-ray"]}})
+                  md-damage/mark-target! (fn [player-id target-id fx-context]
+                                           (swap! marks* conj [player-id target-id fx-context])
+                                           true)
                   skill-effects/add-skill-exp! (fn [& args]
                                                  (swap! exp-calls* conj args)
                                                  nil)]
@@ -54,7 +60,9 @@
         (rb/ray-barrage-perform! {:player-id "p1" :ctx-id "ctx-1"})))
 
     (is (= 5 @run-calls*))
-    (is (= [["p1" :ray-barrage 0.003]] @exp-calls*))))
+  (is (= [["p1" :ray-barrage 0.003]] @exp-calls*))
+  (is (= 5 (count @marks*)))
+  (is (= ["p1" "target-ray" {:ctx-id "ctx-1"}] (first @marks*)))))
 
 (deftest ray-barrage-perform-without-hit-has-no-exp-test
   (let [run-calls* (atom 0)

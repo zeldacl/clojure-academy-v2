@@ -5,6 +5,7 @@
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.server.effect.geom :as geom]
             [cn.li.ac.content.ability.meltdowner.jet-engine :as jet]
+            [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.player-motion :as player-motion]
             [cn.li.mcmod.platform.raycast :as raycast]
@@ -95,12 +96,16 @@
                                                                                                             :trigger-ticks 0
                                                                                                             :hit-uuids #{}}})
         damage-calls* (atom [])
-        teleport-calls* (atom [])]
+  teleport-calls* (atom [])
+  marks* (atom [])]
     (with-redefs [ctx/get-context get-context
                   ctx/update-context! update-context!
                   ctx/terminate-context! terminate-context!
                   ctx/ctx-send-to-client! send!
-                  skill-effects/skill-exp (fn [_ _] 0.0)]
+                  skill-effects/skill-exp (fn [_ _] 0.0)
+                  md-damage/mark-target! (fn [player-id target-id fx-context]
+                                           (swap! marks* conj [player-id target-id fx-context])
+                                           true)]
       (binding [teleportation/*teleportation* (reify teleportation/ITeleportation
                                                 (teleport-player! [_ _ _ x y z]
                                                   (swap! teleport-calls* conj [x y z])
@@ -134,4 +139,7 @@
         (jet/jet-engine-tick! {:player-id "p1" :ctx-id "ctx-1" :hold-ticks 2})
         (is (= ["target-1"] @damage-calls*))
         (is (= #{"target-1"} (get-in @ctx* [:skill-state :hit-uuids])))
-        (is (= 2 (count @teleport-calls*)))))))
+        (is (= 2 (count @teleport-calls*)))
+        (is (= [["p1" "target-1" {:ctx-id "ctx-1"
+                   :target-pos {:x nil :y nil :z nil}}]]
+             @marks*))))))
