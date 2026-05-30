@@ -10,7 +10,7 @@
   Exp: 0.003 * (hit? 1.0 : 0.2)
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.dsl :refer [defskill!]]
+  (:require [cn.li.ac.ability.dsl :refer [defskill]]
             [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
@@ -183,7 +183,7 @@
 ;; Skill registration
 ;; ---------------------------------------------------------------------------
 
-(defskill! threatening-teleport
+(defskill threatening-teleport
   :id             :threatening-teleport
   :category-id    :teleporter
   :name-key       "ability.skill.teleporter.threatening_teleport"

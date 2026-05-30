@@ -15,7 +15,7 @@
   - Drop rate: 30-100% (based on experience)
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.dsl :refer [defskill!]]
+  (:require [cn.li.ac.ability.dsl :refer [defskill]]
             [cn.li.ac.content.ability.fx-helpers :as fx]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.dispatcher :as ctx]
@@ -400,7 +400,7 @@
     (catch Exception e
       (log/warn "Groundshock key-abort failed:" (ex-message e)))))
 
-(defskill! groundshock
+(defskill groundshock
   :id :groundshock
   :category-id :vecmanip
   :name-key "ability.skill.vecmanip.groundshock"

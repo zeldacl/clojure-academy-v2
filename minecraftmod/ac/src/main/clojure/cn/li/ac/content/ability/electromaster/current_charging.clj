@@ -4,7 +4,7 @@
   Pattern: :hold-channel
   Cost: overload lerp(65,48) on down; CP lerp(3,7)/tick while charging
   Exp: +0.0001 effective / +0.00003 ineffective per tick"
-  (:require [cn.li.ac.ability.dsl :refer [defskill!]]
+  (:require [cn.li.ac.ability.dsl :refer [defskill]]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
@@ -132,7 +132,7 @@
 
   (declare current_charging_skill)
 
-(defskill! current_charging_skill
+(defskill current_charging_skill
   :id          :current-charging
   :category-id :electromaster
   :name-key    "ability.skill.electromaster.current_charging"
@@ -156,7 +156,7 @@
                          "Channel electricity into energy blocks or held energy items while holding."}
                  :zh_cn {"ability.skill.electromaster.current_charging" "电流充能"
                          "ability.skill.electromaster.current_charging.desc"
-                         "按住持续引导电流，为目标能量方块或手持能量物品充能。"}}
+                         "按住持续引导电流，为目标能量方块或手持能量物品充能�?}}
   :actions
   {:cost-fail! (fn [{:keys [ctx-id]}]
                  (let [skill-state (:skill-state (or (ctx/get-context ctx-id) {}))

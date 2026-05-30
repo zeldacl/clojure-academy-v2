@@ -6,11 +6,11 @@
 
   All mutating calls go through player-state ns; no atom touched directly.
   No net.minecraft.* imports allowed."
-  (:require [cn.li.mcmod.network.server         :as net-srv]
+  (:require 
+            [cn.li.ac.ability.service.player-state-core :as ps-core]
+[cn.li.mcmod.network.server         :as net-srv]
             [cn.li.ac.ability.messages          :as catalog]
-            [cn.li.mcmod.platform.entity        :as entity]
-            [cn.li.ac.ability.service.player-state      :as ps]
-            [cn.li.ac.ability.model.ability :as adata]
+            [cn.li.mcmod.platform.entity        :as entity]            [cn.li.ac.ability.model.ability :as adata]
             [cn.li.ac.ability.rules.learning-rules :as learning-rules]
             [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.ability.registry.skill             :as skill]
@@ -35,7 +35,7 @@
   ;; ============================================================================
 
   (defn- get-state [uuid]
-    (ps/get-or-create-player-state! uuid))
+    (ps-core/get-or-create-player-state! uuid))
 
   (defn- try-pull-developer-energy!
     [tile ^double amount]
@@ -103,41 +103,23 @@
               (log/debug "learn-skill rejected" uuid skill-id failures)))))))
 
   ;; ============================================================================
-  ;; Delegated handlers (split from this namespace)
-  ;; ============================================================================
-
-  (def handle-level-up-request level-handler/handle-level-up-request)
-  (def handle-set-preset-request preset-handler/handle-set-preset-request)
-  (def handle-switch-preset-request preset-handler/handle-switch-preset-request)
-  (def handle-set-activated-request activation-handler/handle-set-activated-request)
-
-  (def handle-begin-link-context context-handler/handle-begin-link-context)
-  (def handle-keepalive-context context-handler/handle-keepalive-context)
-  (def handle-terminate-context context-handler/handle-terminate-context)
-  (def handle-channel-context context-handler/handle-channel-context)
-
-  (def handle-key-down-skill input-handler/handle-key-down-skill)
-  (def handle-key-tick-skill input-handler/handle-key-tick-skill)
-  (def handle-key-up-skill input-handler/handle-key-up-skill)
-  (def handle-key-abort-skill input-handler/handle-key-abort-skill)
-
-  ;; ============================================================================
-  ;; ============================================================================
   ;; Registration
   ;; ============================================================================
 
 (defn register-handlers! []
   (net-srv/register-handler catalog/MSG-REQ-LEARN-NODE     handle-learn-skill-request)
-  (net-srv/register-handler catalog/MSG-REQ-LEVEL-UP       handle-level-up-request)
-  (net-srv/register-handler catalog/MSG-REQ-SET-PRESET     handle-set-preset-request)
-  (net-srv/register-handler catalog/MSG-REQ-SWITCH-PRESET  handle-switch-preset-request)
-  (net-srv/register-handler catalog/MSG-REQ-SET-ACTIVATED  handle-set-activated-request)
-  (net-srv/register-handler catalog/MSG-CTX-BEGIN-LINK     handle-begin-link-context)
-  (net-srv/register-handler catalog/MSG-CTX-KEEPALIVE      handle-keepalive-context)
-  (net-srv/register-handler catalog/MSG-CTX-TERMINATE      handle-terminate-context)
-  (net-srv/register-handler catalog/MSG-CTX-CHANNEL        handle-channel-context)
-  (net-srv/register-handler catalog/MSG-SLOT-KEY-DOWN      handle-key-down-skill)
-  (net-srv/register-handler catalog/MSG-SLOT-KEY-TICK      handle-key-tick-skill)
-  (net-srv/register-handler catalog/MSG-SLOT-KEY-UP        handle-key-up-skill)
-  (net-srv/register-handler catalog/MSG-SLOT-KEY-ABORT     handle-key-abort-skill)
+  (net-srv/register-handler catalog/MSG-REQ-LEVEL-UP       level-handler/handle-level-up-request)
+  (net-srv/register-handler catalog/MSG-REQ-SET-PRESET     preset-handler/handle-set-preset-request)
+  (net-srv/register-handler catalog/MSG-REQ-SWITCH-PRESET  preset-handler/handle-switch-preset-request)
+  (net-srv/register-handler catalog/MSG-REQ-SET-ACTIVATED  activation-handler/handle-set-activated-request)
+  (net-srv/register-handler catalog/MSG-CTX-BEGIN-LINK     context-handler/handle-begin-link-context)
+  (net-srv/register-handler catalog/MSG-CTX-KEEPALIVE      context-handler/handle-keepalive-context)
+  (net-srv/register-handler catalog/MSG-CTX-TERMINATE      context-handler/handle-terminate-context)
+  (net-srv/register-handler catalog/MSG-CTX-CHANNEL        context-handler/handle-channel-context)
+  (net-srv/register-handler catalog/MSG-SLOT-KEY-DOWN      input-handler/handle-key-down-skill)
+  (net-srv/register-handler catalog/MSG-SLOT-KEY-TICK      input-handler/handle-key-tick-skill)
+  (net-srv/register-handler catalog/MSG-SLOT-KEY-UP        input-handler/handle-key-up-skill)
+  (net-srv/register-handler catalog/MSG-SLOT-KEY-ABORT     input-handler/handle-key-abort-skill)
   (log/info "Ability network handlers registered"))
+
+

@@ -1,9 +1,9 @@
 (ns cn.li.ac.ability.client.screens.skill-tree-test
-  (:require [clojure.test :refer [deftest is use-fixtures]]
+  (:require 
+            [cn.li.ac.ability.service.player-state-core :as ps-core]
+[clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.client.managed-screens :as managed-screens]
-            [cn.li.ac.ability.client.screens.skill-tree :as screen]
-            [cn.li.ac.ability.service.player-state :as ps]
-            [cn.li.ac.ability.registry.skill-query :as skill]
+            [cn.li.ac.ability.client.screens.skill-tree :as screen]            [cn.li.ac.ability.registry.skill-query :as skill]
             [cn.li.ac.ability.rules.learning-rules :as learning-rules]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.i18n :as i18n]))
@@ -40,8 +40,8 @@
         translate-map {"ability.category.generic" "Generic"
                        "ability.skill.generic.brain_course" "Brain Course"
                        "ability.skill.generic.brain_course.desc" "Undergo focused neural training to raise your maximum CP by 1000."}]
-    (with-redefs [ps/get-player-state (fn [_] player-state)
-              ps/get-or-create-player-state! (fn [_] player-state)
+    (with-redefs [ps-core/get-player-state (fn [_] player-state)
+              ps-core/get-or-create-player-state! (fn [_] player-state)
                   skill/get-skills-for-category (fn [_] [skill-spec])
                   skill/get-skill-icon-path (fn [_] "textures/abilities/generic/skills/brain_course.png")
                   learning-rules/check-all-conditions (fn [_ _ _ _] {:pass? true :failures []})
@@ -85,8 +85,8 @@
         translate-map {"ability.category.generic" "Generic"
                        "ability.skill.generic.brain_course" "Brain Course"
                        "ability.skill.generic.brain_course.desc" "Undergo focused neural training to raise your maximum CP by 1000."}]
-    (with-redefs [ps/get-player-state (fn [_] player-state)
-              ps/get-or-create-player-state! (fn [_] player-state)
+    (with-redefs [ps-core/get-player-state (fn [_] player-state)
+              ps-core/get-or-create-player-state! (fn [_] player-state)
                   skill/get-skills-for-category (fn [_] [skill-spec])
                   skill/get-skill-icon-path (fn [_] "textures/abilities/generic/skills/brain_course.png")
                   learning-rules/check-all-conditions (fn [_ _ _ _] {:pass? true :failures []})
@@ -122,3 +122,4 @@
                (:learn-context (screen/screen-state-snapshot "player-1"))))))
     (is (= {:developer-type :portable}
            (:learn-context (screen/screen-state-snapshot "player-1"))))))
+

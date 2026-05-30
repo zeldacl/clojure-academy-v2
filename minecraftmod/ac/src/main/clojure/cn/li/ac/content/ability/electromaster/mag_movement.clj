@@ -11,7 +11,7 @@
   - Resets fall damage on completion
   - Grants experience based on distance traveled"
   (:require [clojure.string :as str]
-            [cn.li.ac.ability.dsl :refer [defskill!]]
+            [cn.li.ac.ability.dsl :refer [defskill]]
             [cn.li.ac.ability.config :as ability-config]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.dispatcher :as ctx]
@@ -274,7 +274,7 @@
 
 (declare mag-movement-skill)
 
-(defskill! mag-movement-skill
+(defskill mag-movement-skill
   :id              :mag-movement
   :category-id     :electromaster
   :name-key        "ability.skill.electromaster.mag_movement"

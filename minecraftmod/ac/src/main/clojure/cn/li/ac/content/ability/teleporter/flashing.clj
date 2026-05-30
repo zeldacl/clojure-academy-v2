@@ -9,7 +9,7 @@
   - up: perform one authority teleport with resource settlement.
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.dsl :refer [defskill!]]
+  (:require [cn.li.ac.ability.dsl :refer [defskill]]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.server.effect.geom :as geom]
@@ -275,7 +275,7 @@
   (skill-effects/set-main-cooldown! player-id flashing-skill-id
                                     (cfg-lerp-int :cooldown.deactivate-ticks (skill-exp player-id))))
 
-(defskill! flashing-skill
+(defskill flashing-skill
   :id              :flashing
   :category-id     :teleporter
   :name-key        "ability.skill.teleporter.flashing"

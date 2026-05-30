@@ -4,25 +4,28 @@
   This namespace owns command/runtime mutations that need to update player-state
   and trigger lifecycle events in one place, instead of hand-editing runtime
   maps at each caller."
-  (:require [cn.li.ac.ability.model.ability :as adata]
+  (:require 
+            [cn.li.ac.ability.service.player-state-accessors :as ps-accessors]
+[cn.li.ac.ability.service.player-state-dirty :as ps-dirty]
+[cn.li.ac.ability.service.player-state-core :as ps-core]
+[cn.li.ac.ability.model.ability :as adata]
             [cn.li.ac.ability.model.cooldown :as cdata]
             [cn.li.ac.ability.model.develop :as ddata]
             [cn.li.ac.ability.model.preset :as pdata]
             [cn.li.ac.ability.model.resource :as rdata]
             [cn.li.ac.ability.registry.event :as evt]
             [cn.li.ac.ability.registry.skill-query :as skill-query]
-            [cn.li.ac.ability.service.command-runtime :as command-rt]
-            [cn.li.ac.ability.service.player-state :as ps]))
+            [cn.li.ac.ability.service.command-runtime :as command-rt]))
 
 (defn- ensure-state
   [uuid]
-  (or (ps/get-player-state uuid)
-      (ps/get-or-create-player-state! uuid)))
+  (or (ps-core/get-player-state uuid)
+      (ps-core/get-or-create-player-state! uuid)))
 
 (defn- replace-runtime-state!
   [uuid state]
-  (ps/set-player-state! uuid state)
-  (ps/mark-dirty! uuid)
+  (ps-core/set-player-state! uuid state)
+  (ps-dirty/mark-dirty! uuid)
   state)
 
 (defn- clear-skill-from-presets
@@ -42,7 +45,7 @@
         old-level (int (get-in state [:ability-data :level] 1))
         new-level (int level)]
     (when (not= old-level new-level)
-      (ps/update-ability-data! uuid adata/set-level new-level)
+      (ps-accessors/update-ability-data! uuid adata/set-level new-level)
       (evt/fire-ability-event! (evt/make-level-change-event uuid old-level new-level)))
     {:changed? (not= old-level new-level)
      :old-level old-level
@@ -72,7 +75,7 @@
 
 (defn set-skill-exp!
   [uuid skill-id amount]
-  (ps/update-ability-data! uuid adata/set-skill-exp skill-id amount)
+  (ps-accessors/update-ability-data! uuid adata/set-skill-exp skill-id amount)
   {:changed? true
    :skill-id skill-id
    :exp (adata/get-skill-exp (:ability-data (ensure-state uuid)) skill-id)})
@@ -96,12 +99,12 @@
 
 (defn recover-all!
   [uuid]
-  (ps/update-resource-data! uuid rdata/recover-all)
+  (ps-accessors/update-resource-data! uuid rdata/recover-all)
   {:changed? true})
 
 (defn clear-cooldowns!
   [uuid]
-  (ps/update-cooldown-data! uuid (constantly (cdata/new-cooldown-data)))
+  (ps-accessors/update-cooldown-data! uuid (constantly (cdata/new-cooldown-data)))
   {:changed? true})
 
 (defn reset-abilities!
@@ -141,7 +144,7 @@
          old-category (get-in state [:ability-data :category-id])]
      (when (not= old-category new-category)
        (let [updated-ability (ability-update-fn (:ability-data state))]
-         (ps/update-player-state!
+         (ps-core/update-player-state!
            uuid
            (fn [player-state]
              (-> player-state
@@ -152,3 +155,6 @@
          {:ability-data updated-ability
           :old-category old-category
           :new-category new-category})))))
+
+
+

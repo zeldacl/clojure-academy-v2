@@ -1,11 +1,11 @@
 (ns cn.li.ac.content.ability.meltdowner.projectile-mark-integration-test
-  (:require [clojure.test :refer [deftest is use-fixtures]]
+  (:require 
+            [cn.li.ac.ability.service.player-state-core :as ps-core]
+[clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.model.ability :as ad]
             [cn.li.ac.ability.server.damage.runtime :as rt]
             [cn.li.ac.ability.service.delayed-projectiles :as dp]
-            [cn.li.ac.ability.service.dispatcher :as ctx]
-            [cn.li.ac.ability.service.player-state :as ps]
-            [cn.li.ac.ability.service.skill-effects :as skill-effects]
+            [cn.li.ac.ability.service.dispatcher :as ctx]            [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.server.effect.core :as effect]
             [cn.li.ac.ability.server.effect.geom :as geom]
@@ -23,11 +23,11 @@
             [cn.li.ac.ability.service.context-mgr :as ctx-mgr]))
 
 (defn- with-fresh-meltdowner-runtimes [f]
-  (let [player-state-rt (ps/create-player-state-runtime)
+  (let [player-state-rt (ps-core/create-player-state-runtime)
         projectile-rt (dp/create-delayed-projectile-runtime)
         damage-helper-rt (dh/create-damage-helper-runtime)
         damage-registry-rt (rt/create-damage-handler-registry-runtime)]
-    (ps/call-with-player-state-runtime player-state-rt
+    (ps-core/call-with-player-state-runtime player-state-rt
       (fn []
         (ps-fix/with-test-player-state-owner
           (fn []
@@ -37,7 +37,7 @@
                   (fn []
                     (rt/call-with-damage-handler-registry-runtime damage-registry-rt
                       (fn []
-                        (ps/reset-player-states-for-test!)
+                        (ps-core/reset-player-states-for-test!)
                         (rt/reset-damage-handler-registry-for-test!)
                         (try
                           (f)
@@ -45,7 +45,7 @@
                             (dp/reset-pending-tasks-for-test!)
                             (dh/reset-marks-for-test!)
                             (rt/reset-damage-handler-registry-for-test!)
-                            (ps/reset-player-states-for-test!)))))))))))))))
+                            (ps-core/reset-player-states-for-test!)))))))))))))))
 
 (use-fixtures :each with-fresh-meltdowner-runtimes)
 
@@ -53,7 +53,7 @@
   (-> (ad/new-ability-data) (ad/learn-skill :rad-intensify)))
 
 (defn- learn-rad-intensify! [player-id]
-  (ps/set-player-state! player-id {:ability-data (learned-rad-intensify-data)}))
+  (ps-core/set-player-state! player-id {:ability-data (learned-rad-intensify-data)}))
 
 (defn- missile-context-mocks [initial]
   (let [ctx* (atom initial)]
@@ -303,3 +303,5 @@
         (jet-engine/jet-engine-tick! {:player-id attacker :ctx-id "ctx-jet" :hold-ticks 1}))
       (is (= 1.5 (:rate (get (dh/marks-snapshot) victim))))
       (is (= 15.0 (double (rt/process-damage! victim attacker 10.0 :magic)))))))
+
+

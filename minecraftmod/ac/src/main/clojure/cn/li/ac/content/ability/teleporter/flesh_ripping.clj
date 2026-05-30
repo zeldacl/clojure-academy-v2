@@ -11,7 +11,7 @@
   Exp: +0.003 per entity hit
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.dsl :refer [defskill!]]
+  (:require [cn.li.ac.ability.dsl :refer [defskill]]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.server.effect.geom :as geom]
@@ -111,7 +111,7 @@
 
 (declare flesh-ripping-skill)
 
-(defskill! flesh-ripping-skill
+(defskill flesh-ripping-skill
   :id             :flesh-ripping
   :category-id    :teleporter
   :name-key       "ability.skill.teleporter.flesh_ripping"

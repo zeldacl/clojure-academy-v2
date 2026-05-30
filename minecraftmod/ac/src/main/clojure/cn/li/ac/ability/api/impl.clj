@@ -1,11 +1,13 @@
 (ns cn.li.ac.ability.api.impl
   "Default public implementation for the new ability API facade."
-  (:require [cn.li.ac.ability.api.protocol :as proto]
+  (:require 
+            [cn.li.ac.ability.service.player-state-tick :as ps-tick]
+[cn.li.ac.ability.service.player-state-dirty :as ps-dirty]
+[cn.li.ac.ability.service.player-state-core :as ps-core]
+[cn.li.ac.ability.api.protocol :as proto]
             [cn.li.ac.ability.registry.category :as category]
             [cn.li.ac.ability.registry.skill :as skill]
-            [cn.li.ac.ability.registry.skill-query :as skill-query]
-            [cn.li.ac.ability.service.player-state :as player-state]
-            [cn.li.ac.ability.service.dispatcher :as dispatcher]))
+            [cn.li.ac.ability.registry.skill-query :as skill-query]            [cn.li.ac.ability.service.dispatcher :as dispatcher]))
 
 (defrecord AbilitySystemImpl []
   proto/IAbilityRegistry
@@ -28,23 +30,23 @@
 
   proto/IAbilityState
   (get-player-state [_this player-uuid]
-    (player-state/get-player-state player-uuid))
+    (ps-core/get-player-state player-uuid))
   (get-or-create-player-state! [_this player-uuid]
-    (player-state/get-or-create-player-state! player-uuid))
+    (ps-core/get-or-create-player-state! player-uuid))
   (set-player-state! [_this player-uuid state]
-    (player-state/set-player-state! player-uuid state))
+    (ps-core/set-player-state! player-uuid state))
   (update-player-state! [_this player-uuid f args]
-    (apply player-state/update-player-state! player-uuid f args))
+    (apply ps-core/update-player-state! player-uuid f args))
   (mark-dirty! [_this player-uuid]
-    (player-state/mark-dirty! player-uuid))
+    (ps-dirty/mark-dirty! player-uuid))
   (mark-clean! [_this player-uuid]
-    (player-state/mark-clean! player-uuid))
+    (ps-dirty/mark-clean! player-uuid))
   (dirty? [_this player-uuid]
-    (player-state/dirty? player-uuid))
+    (ps-dirty/dirty? player-uuid))
   (server-tick-player! [_this player-uuid sync-fn]
-    (player-state/server-tick-player! player-uuid sync-fn))
+    (ps-tick/server-tick-player! player-uuid sync-fn))
   (remove-player-state! [_this player-uuid]
-    (player-state/remove-player-state! player-uuid))
+    (ps-core/remove-player-state! player-uuid))
 
   proto/IAbilityDispatcher
   (start-context! [_this player-uuid skill-id]
@@ -76,3 +78,6 @@
             (let [system (->AbilitySystemImpl)]
               (alter-var-root #'*default-ability-system* (constantly system))
               system)))))
+
+
+

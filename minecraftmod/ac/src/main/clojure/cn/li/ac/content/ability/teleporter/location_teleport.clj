@@ -12,7 +12,7 @@
   - UI opened from key-down; actual add/remove/perform via RPC requests
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.dsl :refer [defskill!]]
+  (:require [cn.li.ac.ability.dsl :refer [defskill]]
             [cn.li.ac.ability.config :as ability-config]
             [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
             [cn.li.ac.ability.service.dispatcher :as ctx]
@@ -314,7 +314,7 @@
   [_]
   nil)
 
-(defskill! location-teleport
+(defskill location-teleport
   :id :location-teleport
   :category-id :teleporter
   :name-key "ability.skill.teleporter.location_teleport"

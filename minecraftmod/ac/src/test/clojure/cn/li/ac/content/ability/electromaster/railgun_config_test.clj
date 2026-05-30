@@ -1,7 +1,7 @@
 (ns cn.li.ac.content.ability.electromaster.railgun-config-test
-  (:require [clojure.test :refer [deftest is testing]]
-            [cn.li.ac.ability.service.player-state :as player-state]
-            [cn.li.ac.ability.registry.skill :as skill-registry]
+  (:require 
+            [cn.li.ac.ability.service.player-state-core :as ps-core]
+[clojure.test :refer [deftest is testing]]            [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.content.ability :as ability-content]
             [cn.li.ac.content.ability.electromaster.railgun :as railgun]
@@ -14,16 +14,16 @@
     (fn []
       (let [descriptors (config-reg/get-descriptor-registry)
             values (config-reg/get-value-registry)
-            player-states (player-state/snapshot-player-states)]
+            player-states (ps-core/snapshot-player-states)]
         (try
           (config-reg/set-descriptor-registry! {})
           (config-reg/set-value-registry! {})
-          (player-state/reset-player-states-for-test!)
+          (ps-core/reset-player-states-for-test!)
           (f)
           (finally
             (config-reg/set-descriptor-registry! descriptors)
             (config-reg/set-value-registry! values)
-            (player-state/reset-player-states-for-test! player-states)))))))
+            (ps-core/reset-player-states-for-test! player-states)))))))
 
 (defn- seed-electromaster-config!
   [values]
@@ -45,9 +45,9 @@
           (seed-electromaster-config!
             {(skill-config/config-key :railgun :cost.down.cp) [1000.0 2000.0]
              (skill-config/config-key :railgun :cost.down.overload) [300.0 100.0]})
-          (player-state/set-player-state!
+          (ps-core/set-player-state!
             player-id
-            (-> (player-state/fresh-state)
+            (-> (ps-core/fresh-state)
                 (assoc-in [:ability-data :skill-exps :railgun] 0.5)))
           (with-redefs [railgun/read-coin-qte-status (fn [_]
                                                         {:has-window? true
@@ -61,3 +61,5 @@
               (is (fn? down-overload))
               (is (= 1500.0 (down-cp {:player-id player-id})))
               (is (= 200.0 (down-overload {:player-id player-id}))))))))))
+
+

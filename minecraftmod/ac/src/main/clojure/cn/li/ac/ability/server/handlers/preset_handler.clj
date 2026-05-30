@@ -1,15 +1,16 @@
 (ns cn.li.ac.ability.server.handlers.preset-handler
 	"Preset request network handlers."
-	(:require [cn.li.ac.ability.util.uuid :as uuid]
+	(:require 
+            [cn.li.ac.ability.service.player-state-core :as ps-core]
+[cn.li.ac.ability.util.uuid :as uuid]
 						[cn.li.ac.ability.model.ability :as ability-data]
 						[cn.li.ac.ability.service.command-runtime :as command-rt]
-						[cn.li.ac.ability.registry.skill-query :as skill-query]
-						[cn.li.ac.ability.service.player-state :as ps]))
+						[cn.li.ac.ability.registry.skill-query :as skill-query]))
 
 (defn- learned-controllable-slot
 	[player-uuid cat-id ctrl-id]
 	(when-let [skill-id (skill-query/get-skill-by-controllable cat-id ctrl-id)]
-		(when (ability-data/is-learned? (:ability-data (ps/get-player-state player-uuid)) skill-id)
+		(when (ability-data/is-learned? (:ability-data (ps-core/get-player-state player-uuid)) skill-id)
 			[cat-id ctrl-id])))
 
 (defn handle-set-preset-request

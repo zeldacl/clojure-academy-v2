@@ -5,14 +5,14 @@
   - Activate handler registry (V key stack)
   - Key group system with delegates
   - Pre-check logic (cooldown, resource) before dispatching"
-  (:require [cn.li.ac.ability.client.runtime :as runtime]
+  (:require 
+            [cn.li.ac.ability.service.player-state-core :as ps-core]
+[cn.li.ac.ability.client.runtime :as runtime]
             [cn.li.ac.ability.client.api :as api]
             [cn.li.ac.ability.client.input-sampling :as sampling]
             [cn.li.ac.ability.client.input-state-machine :as sm]
             [cn.li.ac.ability.client.input-command-builder :as cmd-builder]
-            [cn.li.ac.ability.client.input-processor :as processor]
-            [cn.li.ac.ability.service.player-state :as ps]
-            [cn.li.ac.ability.service.dispatcher :as ctx]
+            [cn.li.ac.ability.client.input-processor :as processor]            [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.model.preset :as preset-data]
             [cn.li.ac.ability.registry.skill-query :as skill]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
@@ -314,7 +314,7 @@
 (defn- get-client-player-state
   [player-uuid]
   (with-client-player-state-owner player-uuid
-    #(ps/get-player-state player-uuid)))
+    #(ps-core/get-player-state player-uuid)))
 
 (defn key-state-snapshot
   ([]
@@ -532,3 +532,4 @@
                        (runtime-hooks/client-abort-all!)
                        (log/info "[V-TRACE] Aborted all contexts for" uuid))
     :hint-fn         (fn [_uuid] "ac.activate.hint.abort")}))
+

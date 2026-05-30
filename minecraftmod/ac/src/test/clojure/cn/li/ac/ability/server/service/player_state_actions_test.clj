@@ -1,5 +1,7 @@
 (ns cn.li.ac.ability.server.service.player-state-actions-test
-  (:require [clojure.test :refer [deftest is use-fixtures]]
+  (:require 
+            [cn.li.ac.ability.service.player-state-core :as ps-core]
+[clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.adapters.server-hooks :as server-hooks]
             [cn.li.ac.ability.model.ability :as adata]
             [cn.li.ac.ability.model.cooldown :as cdata]
@@ -9,9 +11,7 @@
             [cn.li.ac.ability.registry.event :as evt]
             [cn.li.ac.ability.registry.skill-query :as skill-query]
             [cn.li.ac.ability.service.context-mgr :as ctx-mgr]
-            [cn.li.ac.ability.service.player-state-actions :as state-actions]
-            [cn.li.ac.ability.service.player-state :as ps]
-            [cn.li.ac.test.support.player-state :as ps-fix]))
+            [cn.li.ac.ability.service.player-state-actions :as state-actions]            [cn.li.ac.test.support.player-state :as ps-fix]))
 
 (defn- reset-lifecycle-subs! [f]
   (ps-fix/with-test-player-state-owner
@@ -29,8 +29,8 @@
 
 (deftest set-level-fires-recalc-with-reset-add-max-test
   (let [recalc-calls (atom [])]
-    (ps/set-player-state! "p1"
-                          (-> (ps/fresh-state)
+    (ps-core/set-player-state! "p1"
+                          (-> (ps-core/fresh-state)
                               (assoc-in [:ability-data :level] 2)
                               (assoc-in [:resource-data :add-max-cp] 5.0)
                               (assoc-in [:resource-data :add-max-overload] 7.0)
@@ -45,7 +45,7 @@
                                          base-value)]
       (server-hooks/register-lifecycle-subscriptions!)
       (state-actions/set-level! "p1" 3)
-      (is (= 3 (get-in (ps/get-player-state "p1") [:ability-data :level])))
+      (is (= 3 (get-in (ps-core/get-player-state "p1") [:ability-data :level])))
       (is (= [evt/CALC-MAX-CP evt/CALC-MAX-OVERLOAD]
              (->> @recalc-calls
                   (filter #(= :calc (first %)))
@@ -55,12 +55,12 @@
               :max-overload 55.0
               :add-max-cp 0.0
               :add-max-overload 0.0}
-             (select-keys (get-in (ps/get-player-state "p1") [:resource-data])
+             (select-keys (get-in (ps-core/get-player-state "p1") [:resource-data])
                           [:cur-cp :max-cp :max-overload :add-max-cp :add-max-overload]))))))
 
 (deftest recover-all-restores-cp-overload-and-recovery-timers-test
-  (ps/set-player-state! "p1"
-                        (-> (ps/fresh-state)
+  (ps-core/set-player-state! "p1"
+                        (-> (ps-core/fresh-state)
                             (assoc :resource-data {:cur-cp 5.0
                                                    :max-cp 42.0
                                                    :cur-overload 17.0
@@ -84,11 +84,11 @@
           :until-recover 0
           :until-overload-recover 0
           :interferences #{:jam}}
-         (:resource-data (ps/get-player-state "p1")))))
+         (:resource-data (ps-core/get-player-state "p1")))))
 
 (deftest unlearn-skill-clears-skill-exp-and-preset-slot-test
-  (ps/set-player-state! "p1"
-                        (-> (ps/fresh-state)
+  (ps-core/set-player-state! "p1"
+                        (-> (ps-core/fresh-state)
                             (assoc-in [:ability-data :learned-skills] #{:railgun :arc-gen})
                             (assoc-in [:ability-data :skill-exps] {:railgun 0.8 :arc-gen 0.2})
                             (assoc-in [:preset-data :slots] {[0 0] [:electromaster :railgun]
@@ -99,7 +99,7 @@
                                                  :arc-gen [:electromaster :arc-gen]
                                                  nil))]
     (state-actions/unlearn-skill! "p1" :railgun))
-  (let [state (ps/get-player-state "p1")]
+  (let [state (ps-core/get-player-state "p1")]
     (is (= #{:arc-gen} (get-in state [:ability-data :learned-skills])))
     (is (= {:arc-gen 0.2} (get-in state [:ability-data :skill-exps])))
     (is (nil? (get-in state [:preset-data :slots [0 0]])))
@@ -107,8 +107,8 @@
 
 (deftest reset-abilities-resets-runtime-slices-and-fires-category-side-effects-test
   (let [aborted (atom [])]
-    (ps/set-player-state! "p1"
-                          (-> (ps/fresh-state)
+    (ps-core/set-player-state! "p1"
+                          (-> (ps-core/fresh-state)
                               (assoc :cheats-enabled? true)
                               (assoc-in [:ability-data :category-id] :electromaster)
                               (assoc-in [:ability-data :level] 4)
@@ -121,7 +121,7 @@
                                                    nil)]
       (server-hooks/register-lifecycle-subscriptions!)
       (state-actions/reset-abilities! "p1")
-      (let [state (ps/get-player-state "p1")]
+      (let [state (ps-core/get-player-state "p1")]
         (is (= ["p1"] @aborted))
         (is (= (adata/new-ability-data) (:ability-data state)))
         (is (= (cdata/new-cooldown-data) (:cooldown-data state)))
@@ -129,3 +129,4 @@
         (is (= (ddata/new-develop-data) (:develop-data state)))
         (is (= true (:cheats-enabled? state)))
         (is (= (rdata/new-resource-data) (:resource-data state)))))))
+

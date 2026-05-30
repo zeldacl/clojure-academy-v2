@@ -5,7 +5,7 @@
   Cost on up: CP lerp(120,80), overload lerp(30,15) by exp
   Cooldown: lerp(80,50) ticks (manual)
   Exp: +0.002 per use"
-  (:require [cn.li.ac.ability.dsl :refer [defskill!]]
+  (:require [cn.li.ac.ability.dsl :refer [defskill]]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
@@ -68,7 +68,7 @@
      :y (- (* sin-p speed))
      :z (* cos-p hz speed)}))
 
-(defskill! vec-accel
+(defskill vec-accel
   :id          :vec-accel
   :category-id :vecmanip
   :name-key    "ability.skill.vecmanip.vec_accel"

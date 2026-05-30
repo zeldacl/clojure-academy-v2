@@ -8,9 +8,9 @@
 
   All state is in context/context-registry (owned by context.clj).
   Network send-fns are injected, keeping this ns free of forge deps."
-  (:require [cn.li.ac.ability.service.dispatcher :as ctx]
-            [cn.li.ac.ability.service.player-state :as ps]
-            [cn.li.ac.ability.service.context-transport :as transport]
+  (:require 
+            [cn.li.ac.ability.service.player-state-core :as ps-core]
+[cn.li.ac.ability.service.dispatcher :as ctx]            [cn.li.ac.ability.service.context-transport :as transport]
             [cn.li.ac.ability.service.context-runtime :as ctx-rt]
             [cn.li.ac.ability.domain.skill :as skill-domain]
             [cn.li.ac.ability.registry.skill :as skill-registry]
@@ -80,7 +80,7 @@
   "Called on the SERVER upon receiving MSG-CTX-BEGIN-LINK.
   Validates the skill for the player, creates server-side context, sends ESTABLISH."
   [player-uuid client-ctx-id skill-id]
-  (let [state (ps/get-player-state player-uuid)
+  (let [state (ps-core/get-player-state player-uuid)
         ad (:ability-data state)
         rd (:resource-data state)]
     (if-not (and ad rd)
@@ -150,3 +150,4 @@
   []
   (ctx/check-keepalive-timeout! send-terminated!)
   (ctx/purge-terminated-contexts!))
+

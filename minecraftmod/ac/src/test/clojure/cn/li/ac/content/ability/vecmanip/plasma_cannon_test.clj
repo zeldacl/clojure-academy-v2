@@ -64,11 +64,11 @@
 ;; ============================================================================
 
 (deftest defskill-registration
-  "Verify defskill! is properly registered"
+  "Verify defskill is properly registered"
   (testing "plasma-cannon skill should be registered"
     (let [source (slurp "src/main/clojure/cn/li/ac/content/ability/vecmanip/plasma_cannon.clj")]
-      (is (.contains source "(defskill! plasma-cannon")
-          "defskill! should define plasma-cannon")
+      (is (.contains source "(defskill plasma-cannon")
+          "defskill should define plasma-cannon")
       (is (.contains source ":pattern :charge-window")
           "plasma-cannon should use charge-window pattern")
       (is (.contains source ":level 5")
@@ -89,9 +89,9 @@
 
 (deftest plasma-cannon-cost-structure
   "Verify the cost model is correct: down-overload only, no tick cost"
-  (testing "Cost configuration in defskill!"
+  (testing "Cost configuration in defskill"
     (let [source (slurp "src/main/clojure/cn/li/ac/content/ability/vecmanip/plasma_cannon.clj")
-          defskill-idx (.indexOf source "(defskill! plasma-cannon")
+          defskill-idx (.indexOf source "(defskill plasma-cannon")
           defskill-section (subs source defskill-idx (count source))]
       (is (.contains defskill-section ":down {:overload")
           "Should have :down overload cost")

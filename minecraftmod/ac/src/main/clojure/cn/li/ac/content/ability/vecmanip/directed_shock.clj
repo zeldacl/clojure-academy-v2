@@ -5,7 +5,7 @@
   Cost on perform: CP lerp(50,100), overload lerp(18,12) by exp
   Cooldown: lerp(60,20) ticks by exp (hit-only)
   Exp: +0.0035 on hit / +0.001 on miss"
-  (:require [cn.li.ac.ability.dsl :refer [defskill!]]
+  (:require [cn.li.ac.ability.dsl :refer [defskill]]
             [cn.li.ac.ability.server.effect.geom :as geom]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.service.dispatcher :as ctx]
@@ -69,7 +69,7 @@
      :y (* (:y d1) scale)
      :z (* (:z d1) scale)}))
 
-(defskill! directed-shock
+(defskill directed-shock
   :id :directed-shock
   :category-id :vecmanip
   :name-key "ability.skill.vecmanip.directed_shock"

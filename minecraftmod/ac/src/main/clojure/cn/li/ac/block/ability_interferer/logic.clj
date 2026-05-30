@@ -1,15 +1,15 @@
 (ns cn.li.ac.block.ability-interferer.logic
 	"Ability Interferer business logic: state schema, player detection, tick, GUI, and container functions."
-	(:require [clojure.set :as set]
+	(:require 
+            [cn.li.ac.ability.service.player-state-accessors :as ps-accessors]
+[clojure.set :as set]
 						[clojure.string :as str]
 						[cn.li.mcmod.block.state-schema :as state-schema]
 						[cn.li.mcmod.platform.world :as world]
 						[cn.li.mcmod.platform.be :as platform-be]
 						[cn.li.mcmod.platform.position :as pos]
 						[cn.li.mcmod.platform.entity :as entity]
-						[cn.li.ac.ability.model.resource :as rd]
-						[cn.li.ac.ability.service.player-state :as ps]
-						[cn.li.ac.ability.util.uuid :as uuid]
+						[cn.li.ac.ability.model.resource :as rd]						[cn.li.ac.ability.util.uuid :as uuid]
 						[cn.li.mcmod.platform.item :as pitem]
 						[cn.li.ac.block.ability-interferer.config :as interferer-config]
 						[cn.li.ac.block.ability-interferer.schema :as interferer-schema]
@@ -75,7 +75,7 @@
 (defn- apply-interference-effect! [player src-id]
 	(when-let [uuid (uuid/player-uuid player)]
 		(try
-			(ps/update-resource-data! uuid rd/add-interference src-id)
+			(ps-accessors/update-resource-data! uuid rd/add-interference src-id)
 			true
 			(catch Exception e
 				(log/warn "Failed to add interference for" uuid ":" (ex-message e))
@@ -84,7 +84,7 @@
 (defn- remove-interference-effect-by-uuid! [uuid src-id]
 	(when (and uuid src-id)
 		(try
-			(ps/update-resource-data! uuid rd/remove-interference src-id)
+			(ps-accessors/update-resource-data! uuid rd/remove-interference src-id)
 			true
 			(catch Exception e
 				(log/warn "Failed to remove interference for" uuid ":" (ex-message e))
@@ -232,3 +232,4 @@
 							src-id (source-id world pos)]
 					(when (seq uuids)
 						(clear-interference-by-uuids! uuids src-id)))))))
+

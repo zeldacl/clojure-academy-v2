@@ -1,5 +1,9 @@
 (ns cn.li.ac.ability.adapters.server-hooks-test
-  (:require [clojure.test :refer [deftest is testing use-fixtures]]
+  (:require 
+            [cn.li.ac.ability.service.player-state-tick :as ps-tick]
+[cn.li.ac.ability.service.player-state-accessors :as ps-accessors]
+[cn.li.ac.ability.service.player-state-core :as ps-core]
+[clojure.test :refer [deftest is testing use-fixtures]]
             [cn.li.ac.ability.adapters.server-hooks :as server-hooks]
             [cn.li.ac.ability.item-actions :as item-actions]
             [cn.li.ac.ability.registry.event :as evt]
@@ -8,9 +12,7 @@
             [cn.li.ac.ability.server.network :as network]
             [cn.li.ac.ability.service.delayed-projectiles :as delayed-projectiles]
             [cn.li.ac.ability.service.dispatcher :as ctx]
-            [cn.li.ac.ability.service.platform-hooks :as platform-hooks]
-            [cn.li.ac.ability.service.player-state :as ps]
-            [cn.li.ac.block.developer.logic :as developer-logic]
+            [cn.li.ac.ability.service.platform-hooks :as platform-hooks]            [cn.li.ac.block.developer.logic :as developer-logic]
             [cn.li.ac.wireless.data.world-registry :as world-registry]))
 
 (defn- reset-registries! [f]
@@ -78,7 +80,7 @@
     (with-redefs [evt/fire-calc-event! (fn [event-key value extra]
                                          (swap! calc-calls conj [event-key value extra])
                                          value)
-                  ps/update-resource-data! (fn [uuid updater]
+                  ps-accessors/update-resource-data! (fn [uuid updater]
                                              (reset! updated {:uuid uuid
                                                               :resource (updater {:cur-cp 100.0
                                                                                   :cur-overload 10.0
@@ -117,7 +119,7 @@
                   delayed-projectiles/clear-player-tasks! (fn [uuid]
                                                             (swap! called conj [:projectiles uuid])
                                                             nil)
-                  ps/remove-player-state! (fn [uuid]
+                  ps-core/remove-player-state! (fn [uuid]
                                             (swap! called conj [:remove-state uuid])
                                             nil)]
       (logout! "player-1"))
@@ -129,10 +131,10 @@
 (deftest on-player-tick-drives-player-contexts-before-manager-sweep-test
   (let [calls (atom [])
         tick! (:on-player-tick! (server-hooks/runtime-server-hooks))]
-    (with-redefs [ps/get-or-create-player-state! (fn [uuid]
+    (with-redefs [ps-core/get-or-create-player-state! (fn [uuid]
                                                    (swap! calls conj [:ensure-state uuid])
                                                    nil)
-                  ps/server-tick-player! (fn [uuid payload]
+                  ps-tick/server-tick-player! (fn [uuid payload]
                                            (swap! calls conj [:player-state-tick uuid payload])
                                            nil)
                   ctx-mgr/tick-player-contexts! (fn [uuid]
@@ -177,7 +179,7 @@
     (with-redefs [ctx/clear-session-contexts! (fn [session-id]
                                                 (swap! called conj [:contexts session-id])
                                                 nil)
-                  ps/clear-session-player-states! (fn [session-id]
+                  ps-core/clear-session-player-states! (fn [session-id]
                                                     (swap! called conj [:player-states session-id])
                                                     nil)
                   world-registry/clear-session-world-data! (fn [session-id]
@@ -234,12 +236,12 @@
               (fn [uuid]
                 (swap! aborted conj uuid)
                 nil)
-              ps/get-player-state (fn [_]
+              ps-core/get-player-state (fn [_]
                      {:ability-data {:level 4}})
-              ps/update-cooldown-data! (fn [uuid updater]
+              ps-accessors/update-cooldown-data! (fn [uuid updater]
                      (swap! cooldown-clears conj [uuid (updater {:existing true})])
                      nil)
-              ps/update-resource-data! (fn [uuid updater & args]
+              ps-accessors/update-resource-data! (fn [uuid updater & args]
                      (swap! resource-updates conj [uuid (apply updater {:activated true
                                       :cur-cp 10.0
                                           :cur-overload 3.0
@@ -260,3 +262,5 @@
             (is (= ["u-category" false]
               [(ffirst @resource-updates) (get-in (first @resource-updates) [1 :activated])]))
             (is (= "u-category" (first (second @resource-updates)))))))
+
+

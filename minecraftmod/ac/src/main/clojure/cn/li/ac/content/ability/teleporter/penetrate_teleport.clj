@@ -8,7 +8,7 @@
   - Recompute final destination on key-up server-side only
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.dsl :refer [defskill!]]
+  (:require [cn.li.ac.ability.dsl :refer [defskill]]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
@@ -271,7 +271,7 @@
 ;; Skill registration
 ;; ---------------------------------------------------------------------------
 
-(defskill! penetrate-teleport-skill
+(defskill penetrate-teleport-skill
   :id             :penetrate-teleport
   :category-id    :teleporter
   :name-key       "ability.skill.teleporter.penetrate_teleport"

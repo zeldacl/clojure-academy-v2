@@ -7,6 +7,7 @@
 
   NO net.minecraft.* imports - this namespace is platform-neutral."
   (:require [clojure.string :as str]
+            [cn.li.ac.ability.config-common :as ability-config-common]
             [cn.li.ac.config.common :as config-common]
             [cn.li.mcmod.config.registry :as config-reg]
             [cn.li.mcmod.util.log :as log]))
@@ -341,29 +342,16 @@
   [k]
   (get (config-common/ability-config) k (get default-values k)))
 
-(defn- finite-double
-  [v default]
-  (try
-    (let [d (cond
-              (number? v) (double v)
-              (string? v) (Double/parseDouble v)
-              :else (double default))]
-      (if (or (Double/isNaN d) (Double/isInfinite d))
-        (double default)
-        d))
-    (catch Exception _
-      (double default))))
-
-    (defn- non-negative-double
+(defn- non-negative-double
   [k]
   (let [default (double (get default-values k))
-        ^double value (finite-double (raw-value k) default)]
+        ^double value (ability-config-common/finite-double (raw-value k) default)]
     (if (neg? value) default value)))
 
-    (defn- positive-double
+(defn- positive-double
   [k]
   (let [default (double (get default-values k))
-        ^double value (finite-double (raw-value k) default)]
+        ^double value (ability-config-common/finite-double (raw-value k) default)]
     (if (pos? value) value default)))
 
 (defn- non-negative-int
@@ -378,22 +366,13 @@
 
 (defn- boolean-value
   [k]
-  (let [v (raw-value k)]
-    (cond
-      (instance? Boolean v) v
-      (string? v) (Boolean/parseBoolean v)
-      :else (boolean (get default-values k)))))
-
-(defn- list-like?
-  [v]
-  (and (not (string? v))
-       (seqable? v)))
+  (ability-config-common/boolean-value (raw-value k) (get default-values k)))
 
 (defn- string-list
   [k]
   (let [v (raw-value k)
         fallback (vec (get default-values k))]
-    (if (list-like? v)
+    (if (ability-config-common/list-like? v)
       (->> v
            (keep #(let [s (some-> % str str/trim)]
                     (when-not (str/blank? s) s)))
@@ -406,10 +385,10 @@
   [k]
   (let [fallback (vec (get default-values k))
         raw (raw-value k)]
-    (if (and (list-like? raw)
+    (if (and (ability-config-common/list-like? raw)
              (= expected-level-count (count raw)))
       (mapv (fn [value default]
-              (let [d (finite-double value default)]
+          (let [d (ability-config-common/finite-double value default)]
                 (if (neg? d) (double default) d)))
             raw
             fallback)
@@ -577,44 +556,55 @@
 (defn max-saved-locations []
   (non-negative-int :max-saved-locations))
 
+(defn- collect-config-errors
+  []
+  (let [level-list-errors
+        (for [k [:init-cp :add-cp :init-overload :add-overload]
+              :let [values (raw-value k)]
+              :when (not (and (ability-config-common/list-like? values)
+                              (= expected-level-count (count values))
+                              (every? #(and (number? %) (not (neg? (double %)))) values)))]
+          (str (name k) " must be a non-negative numeric list with 5 elements"))
+        string-list-errors
+        (for [k [:normal-metal-blocks :weak-metal-blocks :metal-entities]
+              :let [values (raw-value k)]
+              :when (not (and (ability-config-common/list-like? values) (every? string? values)))]
+          (str (name k) " must be a string list"))
+        positive-errors
+        (for [k [:cp-recover-speed :overload-recover-speed :damage-scale :prog-incr-rate
+                 :overload-recovery-ratio-divisor :level-threshold-skill-count-multiplier
+                 :level-up-stim-base]
+              :let [value (ability-config-common/finite-double (raw-value k) 0.0)]
+              :when (not (pos? value))]
+          (str (name k) " must be positive"))
+        non-negative-errors
+        (for [k [:cp-recover-cooldown :overload-recover-cooldown
+                 :maxcp-incr-rate :maxo-incr-rate
+                 :runtime-cp-consume-per-tick :runtime-overload-per-tick
+                 :cp-recovery-rate-base :cp-recovery-lerp-start :cp-recovery-lerp-end
+                 :overload-recovery-min-rate :overload-recovery-active-rate
+                 :overload-recovery-lerp-start :overload-recovery-lerp-end
+                 :max-overload-growth-per-event :reflected-damage-multiplier
+                 :reflection-search-radius :level-threshold-all-mastered-discount
+                 :skill-learning-cost-base :skill-learning-cost-level-square-factor
+                 :max-saved-locations]
+              :let [value (ability-config-common/finite-double (raw-value k) -1.0)]
+              :when (neg? value)]
+          (str (name k) " must be non-negative"))]
+    (vec (concat level-list-errors
+                 string-list-errors
+                 positive-errors
+                 non-negative-errors))))
+
 (defn validate-config!
   "Validate currently effective ability configuration values. Getters remain
   defensive at runtime; this function is for diagnostics/tests."
   []
-  (let [errors (atom [])]
-    (doseq [k [:init-cp :add-cp :init-overload :add-overload]
-            :let [values (raw-value k)]]
-      (when-not (and (list-like? values)
-                     (= expected-level-count (count values))
-                     (every? #(and (number? %) (not (neg? (double %)))) values))
-        (swap! errors conj (str (name k) " must be a non-negative numeric list with 5 elements"))))
-    (doseq [k [:normal-metal-blocks :weak-metal-blocks :metal-entities]
-            :let [values (raw-value k)]]
-      (when-not (and (list-like? values) (every? string? values))
-        (swap! errors conj (str (name k) " must be a string list"))))
-    (doseq [k [:cp-recover-speed :overload-recover-speed :damage-scale :prog-incr-rate
-               :overload-recovery-ratio-divisor :level-threshold-skill-count-multiplier
-               :level-up-stim-base]
-            :let [value (finite-double (raw-value k) 0.0)]]
-      (when-not (pos? value)
-        (swap! errors conj (str (name k) " must be positive"))))
-    (doseq [k [:cp-recover-cooldown :overload-recover-cooldown
-               :maxcp-incr-rate :maxo-incr-rate
-              :runtime-cp-consume-per-tick :runtime-overload-per-tick
-              :cp-recovery-rate-base :cp-recovery-lerp-start :cp-recovery-lerp-end
-              :overload-recovery-min-rate :overload-recovery-active-rate
-              :overload-recovery-lerp-start :overload-recovery-lerp-end
-              :max-overload-growth-per-event :reflected-damage-multiplier
-              :reflection-search-radius :level-threshold-all-mastered-discount
-              :skill-learning-cost-base :skill-learning-cost-level-square-factor
-              :max-saved-locations]
-            :let [value (finite-double (raw-value k) -1.0)]]
-      (when (neg? value)
-        (swap! errors conj (str (name k) " must be non-negative"))))
-    (if (empty? @errors)
+  (let [errors (collect-config-errors)]
+    (if (empty? errors)
       (do
         (log/info "Ability configuration validation passed")
         nil)
       (do
-        (log/error "Ability configuration validation failed:" @errors)
-        (throw (ex-info "Invalid ability configuration" {:errors @errors}))))))
+        (log/error "Ability configuration validation failed:" errors)
+        (throw (ex-info "Invalid ability configuration" {:errors errors}))))))

@@ -3,8 +3,10 @@
 
   Extends the existing player-state atom with terminal installation tracking
   and app management. Reuses the existing dirty tracking and sync mechanisms."
-  (:require [cn.li.ac.ability.service.player-state :as ps]
-            [cn.li.mcmod.util.log :as log]))
+  (:require 
+            [cn.li.ac.ability.service.player-state-dirty :as ps-dirty]
+[cn.li.ac.ability.service.player-state-core :as ps-core]
+[cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
 ;; Terminal Data Structure
@@ -23,15 +25,15 @@
 (defn get-terminal-data
   "Get terminal data for a player by UUID string."
   [uuid-str]
-  (let [state (ps/get-player-state uuid-str)]
+  (let [state (ps-core/get-player-state uuid-str)]
     (or (:terminal-data state)
         (fresh-terminal-data))))
 
 (defn update-terminal-data!
   "Update terminal data for a player and mark as dirty."
   [uuid-str f & args]
-  (apply ps/update-player-state! uuid-str update :terminal-data f args)
-  (ps/mark-dirty! uuid-str))
+  (apply ps-core/update-player-state! uuid-str update :terminal-data f args)
+  (ps-dirty/mark-dirty! uuid-str))
 
 ;; ============================================================================
 ;; Terminal Installation
@@ -117,6 +119,9 @@
 (defn ensure-terminal-data!
   "Ensure terminal data exists in player state. Called on player join."
   [uuid-str]
-  (when-not (:terminal-data (ps/get-player-state uuid-str))
-    (ps/update-player-state! uuid-str
+  (when-not (:terminal-data (ps-core/get-player-state uuid-str))
+    (ps-core/update-player-state! uuid-str
                              assoc :terminal-data (fresh-terminal-data))))
+
+
+

@@ -2,11 +2,11 @@
   "BodyIntensify skill - hold to charge randomised potions.
 
   Pattern: :charge-window (min 10, max 40, tolerant 100)
-  Cost: overload lerp(200,120) on down; CP lerp(20,15)/tick while charging (≤40 ticks)
-  Cooldown: lerp(900,600) ticks (manual, applied on successful up ≥10 ticks)
+  Cost: overload lerp(200,120) on down; CP lerp(20,15)/tick while charging (�?0 ticks)
+  Cooldown: lerp(900,600) ticks (manual, applied on successful up �?0 ticks)
   Exp: +0.01 on successful release"
   (:require [clojure.string :as str]
-            [cn.li.ac.ability.dsl :refer [defskill!]]
+            [cn.li.ac.ability.dsl :refer [defskill]]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
@@ -90,7 +90,7 @@
        potion-effects/*potion-effects*
              player-id :hunger hunger-duration (cfg-int :effect.hunger-amplifier)))))
 
-(defskill! body-intensify
+(defskill body-intensify
   :id          :body-intensify
   :category-id :electromaster
   :name-key    "ability.skill.electromaster.body_intensify"

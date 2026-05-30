@@ -1,19 +1,19 @@
 (ns cn.li.ac.ability.server.handlers.preset-handler-test
-  (:require [clojure.test :refer [deftest is use-fixtures]]
+  (:require 
+            [cn.li.ac.ability.service.player-state-core :as ps-core]
+[clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.test.support.player-state :as test-player]
             [cn.li.ac.ability.model.ability :as ability-data]
             [cn.li.ac.ability.model.preset :as preset-data]
             [cn.li.ac.ability.registry.event :as evt]
             [cn.li.ac.ability.registry.skill-query :as skill-query]
-            [cn.li.ac.ability.server.handlers.preset-handler :as preset-handler]
-            [cn.li.ac.ability.service.player-state :as ps]
-            [cn.li.ac.ability.util.uuid :as uuid]))
+            [cn.li.ac.ability.server.handlers.preset-handler :as preset-handler]            [cn.li.ac.ability.util.uuid :as uuid]))
 
 (use-fixtures :each test-player/clean-player-states-fixture)
 
 (defn- seed-player!
   [player-uuid learned-skills slot]
-  (ps/set-player-state! player-uuid
+  (ps-core/set-player-state! player-uuid
                         {:ability-data (reduce ability-data/learn-skill
                                                (ability-data/new-ability-data)
                                                learned-skills)
@@ -32,7 +32,7 @@
                                                :ctrl-id :arc-gen}
                                               "p1")
     (is (= [:electromaster :arc-gen]
-           (get-in (ps/get-player-state "p1") [:preset-data :slots [0 0]])))))
+           (get-in (ps-core/get-player-state "p1") [:preset-data :slots [0 0]])))))
 
 (deftest set-preset-slot-ignores-unlearned-or-invalid-controllable-test
   (with-redefs [uuid/player-uuid identity
@@ -48,7 +48,7 @@
                                                :ctrl-id :arc-gen}
                                               "p1")
     (is (= [:electromaster :existing]
-           (get-in (ps/get-player-state "p1") [:preset-data :slots [0 0]])))
+           (get-in (ps-core/get-player-state "p1") [:preset-data :slots [0 0]])))
 
     (seed-player! "p2" [:disabled] [:electromaster :existing])
     (preset-handler/handle-set-preset-request {:preset-idx 0
@@ -57,7 +57,7 @@
                                                :ctrl-id :disabled}
                                               "p2")
     (is (= [:electromaster :existing]
-           (get-in (ps/get-player-state "p2") [:preset-data :slots [0 0]])))))
+           (get-in (ps-core/get-player-state "p2") [:preset-data :slots [0 0]])))))
 
 (deftest set-preset-slot-clear-request-removes-slot-test
   (with-redefs [uuid/player-uuid identity]
@@ -67,7 +67,7 @@
                                                :cat-id nil
                                                :ctrl-id nil}
                                               "p1")
-    (is (nil? (get-in (ps/get-player-state "p1") [:preset-data :slots [0 0]])))))
+    (is (nil? (get-in (ps-core/get-player-state "p1") [:preset-data :slots [0 0]])))))
 
 (deftest set-preset-slot-fires-preset-update-event-on-success-test
   (let [events* (atom [])]
@@ -107,14 +107,16 @@
     (with-redefs [uuid/player-uuid identity
                   evt/fire-ability-event! (fn [event]
                                             (swap! events* conj event))]
-      (ps/set-player-state! "p1"
+      (ps-core/set-player-state! "p1"
                             {:ability-data (ability-data/new-ability-data)
                              :preset-data (preset-data/set-active-preset (preset-data/new-preset-data) 1)})
       (preset-handler/handle-switch-preset-request {:preset-idx 3} "p1")
-      (is (= 3 (get-in (ps/get-player-state "p1") [:preset-data :active-preset])))
+      (is (= 3 (get-in (ps-core/get-player-state "p1") [:preset-data :active-preset])))
       (is (= [{:event/type evt/EVT-PRESET-SWITCH
                :event/side :both
                :uuid "p1"
                :old-preset 1
                :new-preset 3}]
              @events*)))))
+
+

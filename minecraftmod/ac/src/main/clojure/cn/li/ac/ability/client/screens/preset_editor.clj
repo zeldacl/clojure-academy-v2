@@ -1,12 +1,12 @@
 (ns cn.li.ac.ability.client.screens.preset-editor
   "Preset editor screen logic (AC layer - no Minecraft imports)."
-  (:require [cn.li.ac.ability.client.api :as api]
+  (:require 
+            [cn.li.ac.ability.service.player-state-core :as ps-core]
+[cn.li.ac.ability.client.api :as api]
             [cn.li.ac.ability.client.managed-screens :as managed-screens]
             [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.registry.skill-query :as skill-query]
-            [cn.li.ac.ability.model.ability :as adata]
-            [cn.li.ac.ability.service.player-state :as ps]
-            [cn.li.mcmod.hooks.core :as runtime-hooks]))
+            [cn.li.ac.ability.model.ability :as adata]            [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 ;; Editor state
 (def ^:private default-editor-state
@@ -56,7 +56,7 @@
   [owner]
   (let [[_session-id _screen-id player-uuid] (editor-owner-key owner)]
     (with-editor-player-state-owner owner
-      #(ps/get-player-state player-uuid))))
+      #(ps-core/get-player-state player-uuid))))
 
 (defn editor-state-snapshot
   ([owner]
@@ -222,3 +222,4 @@
   "Close preset editor screen."
   ([owner]
    (managed-screens/clear-screen-state! screen-id (editor-owner-key owner))))
+

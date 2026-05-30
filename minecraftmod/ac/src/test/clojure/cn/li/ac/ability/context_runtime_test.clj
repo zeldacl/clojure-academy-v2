@@ -1,13 +1,14 @@
 (ns cn.li.ac.ability.context-runtime-test
-  (:require [clojure.test :refer [deftest is testing use-fixtures]]
+  (:require 
+            [cn.li.ac.ability.service.player-state-accessors :as ps-accessors]
+[cn.li.ac.ability.service.player-state-core :as ps-core]
+[clojure.test :refer [deftest is testing use-fixtures]]
             [cn.li.ac.content.ability]
             [cn.li.ac.test.support.contexts :as test-contexts]
             [cn.li.ac.test.support.player-state :as test-player]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.registry.skill :as skill-reg]
-            [cn.li.ac.ability.registry.event :as evt]
-            [cn.li.ac.ability.service.player-state :as ps]
-            [cn.li.ac.ability.model.ability :as ad]
+            [cn.li.ac.ability.registry.event :as evt]            [cn.li.ac.ability.model.ability :as ad]
             [cn.li.ac.ability.model.resource :as rd]
             [cn.li.ac.ability.model.cooldown :as cd]
             [cn.li.ac.ability.server.dispatch :as skill-rt]
@@ -28,7 +29,7 @@
                          (update :learned-skills conj :arc-gen))
         resource-data (assoc (rd/new-resource-data) :activated true :cur-cp 100.0 :cur-overload 0.0)
         cooldown-data (cd/new-cooldown-data)]
-    (ps/set-player-state! uuid {:ability-data ability-data
+    (ps-core/set-player-state! uuid {:ability-data ability-data
                                 :resource-data resource-data
                                 :cooldown-data cooldown-data
                                 :preset-data {:active-preset 0 :slots {}}
@@ -37,7 +38,7 @@
 (deftest key-down-blocked-by-cooldown-test
   (let [uuid "test-player-cooldown"
         _ (seed-player-state! uuid)
-  _ (ps/update-cooldown-data! uuid cd/set-cooldown :arc-gen :main 10)
+  _ (ps-accessors/update-cooldown-data! uuid cd/set-cooldown :arc-gen :main 10)
         c (ctx/new-server-context uuid :arc-gen "ctx-cd" test-context-owner)]
     (ctx/register-context! c)
   (binding [ctx/*context-owner* test-context-owner]
@@ -144,7 +145,7 @@
                                             (swap! events* conj event))]
       (binding [ctx/*context-owner* test-context-owner]
       (is (true? (rt/handle-key-up! ctx-id {:ctx-id ctx-id :skill-id :arc-gen})))
-      (is (= 0 (cd/get-remaining (:cooldown-data (ps/get-player-state uuid)) :arc-gen :main))
+      (is (= 0 (cd/get-remaining (:cooldown-data (ps-core/get-player-state uuid)) :arc-gen :main))
         "generic key-up should not apply cooldown when pattern runtime owns settlement")
       (is (= [evt/EVT-CONTEXT-KEY-UP] (map :event/type @events*)))
       (is (not-any? #(= evt/EVT-SKILL-PERFORM (:event/type %)) @events*))))))
@@ -175,3 +176,6 @@
         (is (= [:on-key-down :on-key-tick :on-key-up :on-key-abort] @callback-keys))
         (is (= [ctx-id] @terminated))
         (is (= ctx/STATUS-TERMINATED (:status (ctx/get-context ctx-id))))))))
+
+
+

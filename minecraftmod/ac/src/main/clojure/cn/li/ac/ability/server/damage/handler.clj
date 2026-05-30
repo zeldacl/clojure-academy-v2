@@ -5,8 +5,9 @@
   This module manages the registration and provides utilities for common patterns.
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.service.player-state :as ps]
-            [cn.li.ac.ability.util.toggle :as toggle]
+  (:require 
+            [cn.li.ac.ability.service.player-state-core :as ps-core]
+[cn.li.ac.ability.util.toggle :as toggle]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.mcmod.platform.damage-interception :as damage-interception]
             [cn.li.mcmod.util.log :as log]))
@@ -28,7 +29,7 @@
    (when damage-interception/*damage-interception*
      (let [wrapped-handler (fn [player-id attacker-id damage damage-source]
                             ;; Check if toggle skill is active by looking for active contexts
-                            (if (ps/get-player-state player-id)
+                            (if (ps-core/get-player-state player-id)
                               ;; Try to find an active context with this toggle skill
                               (let [active-contexts (ctx/get-all-contexts)
                                     player-contexts (filter (fn [[_ctx-id ctx-data]]
@@ -189,3 +190,4 @@
                   (log/warn "Attack precheck side-effect failed:" effect-id (ex-message e))
                   nil)))
             (:precheck-side-effects (attack-check-registries-state-snapshot))))))
+

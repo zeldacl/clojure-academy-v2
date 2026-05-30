@@ -1,5 +1,5 @@
 (ns cn.li.ac.content.ability.meltdowner.meltdowner
-  "Meltdowner skill – charge-window beam with block-breaking and reflection.
+  "Meltdowner skill �?charge-window beam with block-breaking and reflection.
 
   Uses the escape-hatch pattern: fn hooks for overload-floor enforcement and
   min/max charge-window gating; :beam op (effect.beam) for the actual shot.
@@ -15,7 +15,7 @@
   - EXP gain: timeRate(ct) * 0.002
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.dsl :refer [defskill!]]
+  (:require [cn.li.ac.ability.dsl :refer [defskill]]
             [cn.li.ac.ability.util.balance :as bal]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.dispatcher :as ctx]
@@ -228,7 +228,7 @@
 ;; Skill registration
 ;; ---------------------------------------------------------------------------
 
-(defskill! meltdowner
+(defskill meltdowner
   :id              :meltdowner
   :category-id     :meltdowner
   :name-key        "ability.skill.meltdowner.meltdowner"

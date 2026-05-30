@@ -1,6 +1,9 @@
 (ns cn.li.ac.ability.adapters.client-ui-hooks
   "Client HUD/screen/context hook composition for AC ability platform bridge."
-  (:require [cn.li.ac.ability.client.api :as client-api]
+  (:require 
+            [cn.li.ac.ability.service.player-state-accessors :as ps-accessors]
+[cn.li.ac.ability.service.player-state-core :as ps-core]
+[cn.li.ac.ability.client.api :as client-api]
             [cn.li.ac.ability.client.combat-notice :as combat-notice]
             [cn.li.ac.ability.client.delegate-state :as delegate-state]
             [cn.li.ac.ability.client.effects.particles :as client-particles]
@@ -18,9 +21,7 @@
             [cn.li.ac.ability.service.context-mgr :as ctx-mgr]
             [cn.li.ac.ability.model.preset :as preset-data]
             [cn.li.ac.ability.registry.skill-query :as skill-query]
-            [cn.li.ac.ability.service.dispatcher :as ctx]
-            [cn.li.ac.ability.service.player-state :as ps]
-            [cn.li.ac.ability.util.resource-check :as resource-check]
+            [cn.li.ac.ability.service.dispatcher :as ctx]            [cn.li.ac.ability.util.resource-check :as resource-check]
             [cn.li.ac.config.gameplay :as gameplay]
             [cn.li.ac.ability.util.toggle :as toggle]
             [cn.li.ac.ability.messages :as catalog]
@@ -171,32 +172,32 @@
 (defn- get-client-player-state
   [player-uuid]
   (with-client-player-state-owner player-uuid
-    #(ps/get-player-state player-uuid)))
+    #(ps-core/get-player-state player-uuid)))
 
 (defn- ensure-client-player-state!
   [player-uuid]
   (with-client-player-state-owner player-uuid
-    #(ps/get-or-create-player-state! player-uuid)))
+    #(ps-core/get-or-create-player-state! player-uuid)))
 
 (defn- update-client-ability-data!
   [player-uuid ability-data]
   (with-client-player-state-owner player-uuid
-    #(ps/update-ability-data! player-uuid (constantly ability-data))))
+    #(ps-accessors/update-ability-data! player-uuid (constantly ability-data))))
 
 (defn- update-client-resource-data!
   [player-uuid resource-data]
   (with-client-player-state-owner player-uuid
-    #(ps/update-resource-data! player-uuid (constantly resource-data))))
+    #(ps-accessors/update-resource-data! player-uuid (constantly resource-data))))
 
 (defn- update-client-cooldown-data!
   [player-uuid cooldown-data]
   (with-client-player-state-owner player-uuid
-    #(ps/update-cooldown-data! player-uuid (constantly cooldown-data))))
+    #(ps-accessors/update-cooldown-data! player-uuid (constantly cooldown-data))))
 
 (defn- update-client-preset-data!
   [player-uuid preset-data]
   (with-client-player-state-owner player-uuid
-    #(ps/update-preset-data! player-uuid (constantly preset-data))))
+    #(ps-accessors/update-preset-data! player-uuid (constantly preset-data))))
 
 (defn- validate-managed-screen-payload
   [screen-key payload]
@@ -302,7 +303,7 @@
   (with-client-owner-bindings owner
     (fn []
       (let [[_session-id player-uuid] (client-ui-owner-key owner)]
-        (ps/remove-player-state! player-uuid))))
+        (ps-core/remove-player-state! player-uuid))))
   nil)
 
 (defn- clear-managed-screen-state!
@@ -1183,3 +1184,6 @@
      :client-trigger-preset-switch!
      (fn [player-uuid]
        (client-keybinds/switch-preset! player-uuid))}))
+
+
+

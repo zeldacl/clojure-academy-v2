@@ -1,15 +1,15 @@
 (ns cn.li.ac.ability.client.screens.skill-tree
   "Skill tree screen logic (AC layer - no Minecraft imports)."
-  (:require [cn.li.ac.ability.client.api :as api]
+  (:require 
+            [cn.li.ac.ability.service.player-state-core :as ps-core]
+[cn.li.ac.ability.client.api :as api]
             [cn.li.ac.ability.client.managed-screens :as managed-screens]
             [cn.li.ac.ability.registry.skill-query :as skill]
             [cn.li.ac.ability.registry.category :as category]
             [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.rules.learning-rules :as learning-rules]
             [cn.li.ac.ability.model.ability :as adata]
-            [cn.li.ac.ability.config :as cfg]
-            [cn.li.ac.ability.service.player-state :as ps]
-            [cn.li.mcmod.hooks.core :as runtime-hooks]
+            [cn.li.ac.ability.config :as cfg]            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.i18n :as i18n]))
 
 (defn- check-learn-conditions
@@ -79,13 +79,13 @@
   [owner]
   (let [[_session-id _screen-id player-uuid] (screen-owner-key owner)]
     (with-screen-player-state-owner owner
-      #(ps/get-player-state player-uuid))))
+      #(ps-core/get-player-state player-uuid))))
 
 (defn- ensure-screen-player-state!
   [owner]
   (let [[_session-id _screen-id player-uuid] (screen-owner-key owner)]
     (with-screen-player-state-owner owner
-      #(ps/get-or-create-player-state! player-uuid))))
+      #(ps-core/get-or-create-player-state! player-uuid))))
 
 (defn screen-state-snapshot
   ([owner]
@@ -307,7 +307,7 @@
   ([owner]
    (open-screen! owner nil))
   ([owner learn-context]
-    ;; 确保player-state存在，防止UI卡死
+    ;; 纭繚player-state瀛樺湪锛岄槻姝I鍗℃
     (let [owner-key (screen-owner-key owner)
           player-uuid (nth owner-key 2)]
       (ensure-screen-player-state! owner)
@@ -397,3 +397,5 @@
                       :color (if (:learned hover-node) 0xFF88FF88 0xFFFF8888)}])]
       (vec (concat header level-up connection-ops nodes tooltip)))
     []))
+
+

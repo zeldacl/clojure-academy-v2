@@ -1,7 +1,8 @@
 (ns cn.li.ac.command.actions-test
-  (:require [clojure.test :refer [deftest is use-fixtures]]
-            [cn.li.ac.ability.service.player-state :as ps]
-            [cn.li.ac.ability.service.player-state-actions :as state-actions]
+  (:require 
+            [cn.li.ac.ability.service.player-state-dirty :as ps-dirty]
+[cn.li.ac.ability.service.player-state-core :as ps-core]
+[clojure.test :refer [deftest is use-fixtures]]            [cn.li.ac.ability.service.player-state-actions :as state-actions]
             [cn.li.ac.ability.registry.skill-query :as skill-query]
             [cn.li.ac.command.actions :as ac-actions]
             [cn.li.ac.test.support.player-state :as ps-fix]
@@ -21,29 +22,29 @@
         context {:metadata {:send-feedback-fn (fn [message translate? args error?]
                                                 (swap! feedbacks conj [message translate? args error?]))}}
         uuid "command-player"
-        initial (-> (ps/fresh-state)
+        initial (-> (ps-core/fresh-state)
                     (assoc-in [:ability-data :category-id] :electromaster)
                     (assoc-in [:resource-data :cur-cp] 1.0)
                     (assoc-in [:resource-data :max-cp] 42.0)
                     (assoc :cooldown-data {[:railgun :main] 20}))]
-    (ps/set-player-state! uuid initial)
+    (ps-core/set-player-state! uuid initial)
 
     (is (:success? (command-actions/execute {:action :set-level
                                              :level 3
                                              :player-uuid uuid}
                                             context)))
-    (is (= 3 (get-in (ps/get-player-state uuid) [:ability-data :level])))
+    (is (= 3 (get-in (ps-core/get-player-state uuid) [:ability-data :level])))
 
     (is (:success? (command-actions/execute {:action :restore-cp
                                              :player-uuid uuid}
                                             context)))
-    (is (= 42.0 (get-in (ps/get-player-state uuid) [:resource-data :cur-cp])))
+    (is (= 42.0 (get-in (ps-core/get-player-state uuid) [:resource-data :cur-cp])))
 
     (is (:success? (command-actions/execute {:action :clear-cooldowns
                                              :player-uuid uuid}
                                             context)))
-    (is (= {} (:cooldown-data (ps/get-player-state uuid))))
-    (is (true? (ps/dirty? uuid)))
+    (is (= {} (:cooldown-data (ps-core/get-player-state uuid))))
+    (is (true? (ps-dirty/dirty? uuid)))
     (is (some #(= "command.academy.aim.level.success" (first %)) @feedbacks))))
 
 (deftest registered-command-actions-delegate-stateful-mutations-to-service-test
@@ -78,7 +79,7 @@
                   state-actions/maxout-progression! (fn [player-uuid skill-ids]
                                                       (swap! calls conj [:maxout player-uuid (vec skill-ids)])
                                                       {:changed? true})
-                  ps/get-or-create-player-state! (fn [_]
+                  ps-core/get-or-create-player-state! (fn [_]
                                                   {:ability-data {:category-id :electromaster}})
                   skill-query/get-skills-for-category (fn [_]
                                                         [{:id :railgun}
@@ -105,3 +106,6 @@
               [:reset-abilities uuid]
               [:maxout uuid [:arc-gen :railgun]]]
              @calls)))))
+
+
+

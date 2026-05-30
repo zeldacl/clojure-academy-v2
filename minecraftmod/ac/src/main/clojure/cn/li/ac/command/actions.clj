@@ -5,15 +5,16 @@
 	ids and the state-shape mutations behind them. mc1201 supplies opaque platform
 	adapters (for example player -> UUID and feedback callbacks) through command
 	context metadata."
-	(:require [clojure.string :as str]
+	(:require 
+            [cn.li.ac.ability.service.player-state-dirty :as ps-dirty]
+[cn.li.ac.ability.service.player-state-core :as ps-core]
+[clojure.string :as str]
 						[cn.li.ac.ability.model.ability :as adata]
 						[cn.li.ac.ability.model.cooldown :as cdata]
 						[cn.li.ac.ability.model.develop :as ddata]
 						[cn.li.ac.ability.model.preset :as pdata]
 						[cn.li.ac.ability.model.resource :as rdata]
-								[cn.li.ac.ability.service.player-state-actions :as state-actions]
-						[cn.li.ac.ability.service.player-state :as ps]
-						[cn.li.ac.ability.registry.skill-query :as skill-query]
+								[cn.li.ac.ability.service.player-state-actions :as state-actions]						[cn.li.ac.ability.registry.skill-query :as skill-query]
 						[cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
 						[cn.li.mcmod.command.actions :as command-actions]
 						[cn.li.mcmod.util.log :as log]))
@@ -77,7 +78,7 @@
 
 (defn- normalize-runtime-state
 	[state]
-	(let [defaults (ps/fresh-state)]
+	(let [defaults (ps-core/fresh-state)]
 		(-> (merge defaults (or state {}))
 				(update :ability-data #(merge (:ability-data defaults) (or % {})))
 				(update :resource-data #(merge (:resource-data defaults) (or % {})))
@@ -88,11 +89,11 @@
 
 (defn- update-player-runtime-data!
 	[player-uuid f]
-	(let [current (normalize-runtime-state (ps/get-or-create-player-state! player-uuid))
+	(let [current (normalize-runtime-state (ps-core/get-or-create-player-state! player-uuid))
 				updated (normalize-runtime-state (f current))]
-		(ps/set-player-state! player-uuid updated)
-		(ps/mark-dirty! player-uuid)
-		(ps/get-player-state player-uuid)))
+		(ps-core/set-player-state! player-uuid updated)
+		(ps-dirty/mark-dirty! player-uuid)
+		(ps-core/get-player-state player-uuid)))
 
 (defn- skills-for-category
 	[category-id]
@@ -133,7 +134,7 @@
 (defn- execute-learn-all-nodes!
 	[action-map context]
 	(let [player-uuid (action-player-uuid action-map context)]
-		(let [state (normalize-runtime-state (ps/get-or-create-player-state! player-uuid))
+		(let [state (normalize-runtime-state (ps-core/get-or-create-player-state! player-uuid))
 					skill-ids (skills-for-category (get-in state [:ability-data :category-id]))]
 			(state-actions/learn-skills! player-uuid skill-ids)
 			(doseq [skill-id skill-ids]
@@ -145,7 +146,7 @@
 (defn- execute-list-learned-nodes!
 	[action-map context]
 	(let [player-uuid (action-player-uuid action-map context)
-				state (normalize-runtime-state (ps/get-or-create-player-state! player-uuid))
+				state (normalize-runtime-state (ps-core/get-or-create-player-state! player-uuid))
 				learned (->> (get-in state [:ability-data :learned-skills] #{})
 										 (map name)
 										 sort)
@@ -156,7 +157,7 @@
 (defn- execute-list-available-nodes!
 	[action-map context]
 	(let [player-uuid (action-player-uuid action-map context)
-				state (normalize-runtime-state (ps/get-or-create-player-state! player-uuid))
+				state (normalize-runtime-state (ps-core/get-or-create-player-state! player-uuid))
 				category-id (get-in state [:ability-data :category-id])
 				learned (get-in state [:ability-data :learned-skills] #{})
 				available-ids (->> (skills-for-category category-id)
@@ -213,7 +214,7 @@
 (defn- execute-maxout-progression!
 	[action-map context]
 	(let [player-uuid (action-player-uuid action-map context)]
-		(let [state (normalize-runtime-state (ps/get-or-create-player-state! player-uuid))
+		(let [state (normalize-runtime-state (ps-core/get-or-create-player-state! player-uuid))
 					skill-ids (skills-for-category (get-in state [:ability-data :category-id]))]
 			(state-actions/maxout-progression! player-uuid skill-ids))
 		(send-feedback! context "command.academy.aim.maxout.success" [] false)
@@ -259,3 +260,5 @@
 							(repeat execute-ability-command-action!)))
 		(log/info "AC command actions installed" {:actions ability-command-action-types}))
 	nil)
+
+

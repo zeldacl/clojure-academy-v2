@@ -12,8 +12,7 @@
   - Mine-ray-luck grants fortune-style extra drops
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.service.player-state :as ps]
-            [cn.li.ac.ability.service.dispatcher :as ctx]
+  (:require            [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.server.effect.geom :as geom]
             [cn.li.mcmod.platform.raycast :as raycast]
@@ -100,3 +99,4 @@
   [_cfg {:keys [ctx-id]}]
   (ctx/update-context! ctx-id assoc :skill-state
                        {:target-x nil :target-y nil :target-z nil :countdown 0.0}))
+

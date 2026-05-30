@@ -13,7 +13,7 @@
             [cn.li.mcmod.platform.player-motion :as player-motion]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.teleportation :as teleportation]
-            ;; side-effectful require: ensures defskill! runs and private fns are compiled
+            ;; side-effectful require: ensures defskill runs and private fns are compiled
             [cn.li.ac.content.ability.vecmanip.vec-accel]))
 
 ;; ---------------------------------------------------------------------------
@@ -26,7 +26,7 @@
 (def ^:private check-ground-raycast
   @#'cn.li.ac.content.ability.vecmanip.vec-accel/check-ground-raycast)
 
-;; The skill spec map (public var created by defskill!)
+;; The skill spec map (public var created by defskill)
 (def ^:private spec
   cn.li.ac.content.ability.vecmanip.vec-accel/vec-accel)
 

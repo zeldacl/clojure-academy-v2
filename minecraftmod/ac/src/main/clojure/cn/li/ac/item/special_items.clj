@@ -1,6 +1,8 @@
 (ns cn.li.ac.item.special-items
   "Special migrated items with original gameplay behavior."
-  (:require [cn.li.mcmod.item.dsl :as idsl]
+  (:require 
+            [cn.li.ac.ability.service.player-state-core :as ps-core]
+[cn.li.mcmod.item.dsl :as idsl]
             [clojure.string :as str]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.item :as pitem]
@@ -8,9 +10,7 @@
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.world :as world]
             [cn.li.ac.ability.service.player-state-actions :as state-actions]
-            [cn.li.ac.ability.util.uuid :as uuid]
-            [cn.li.ac.ability.service.player-state :as ps]
-            [cn.li.ac.ability.model.ability :as adata]
+            [cn.li.ac.ability.util.uuid :as uuid]            [cn.li.ac.ability.model.ability :as adata]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.util.log :as log]))
 
@@ -48,7 +48,7 @@
           target-category (get induction-factor->category normalized-id)]
       (when target-category
       (let [uuid (uuid/player-uuid player)
-          state (ps/get-or-create-player-state! uuid)
+          state (ps-core/get-or-create-player-state! uuid)
           ability (:ability-data state)
           current-category (:category-id ability)
           current-level (int (:level ability 1))]
@@ -166,8 +166,8 @@
         "induction_factor_electromaster"
         {:max-stack-size 1
          :creative-tab :misc
-         :properties {:tooltip ["诱导因子 - 电击使"
-                                "用于能力觉醒/类别转化"]
+         :properties {:tooltip ["璇卞鍥犲瓙 - 鐢靛嚮浣?
+                                "鐢ㄤ簬鑳藉姏瑙夐啋/绫诲埆杞寲"]
                       :model-texture "factor_electromaster"}
          :on-right-click apply-induction-factor!}))
     (idsl/register-item!
@@ -175,8 +175,8 @@
         "induction_factor_meltdowner"
         {:max-stack-size 1
          :creative-tab :misc
-         :properties {:tooltip ["诱导因子 - 原子崩坏"
-                                "用于能力觉醒/类别转化"]
+         :properties {:tooltip ["璇卞鍥犲瓙 - 鍘熷瓙宕╁潖"
+                                "鐢ㄤ簬鑳藉姏瑙夐啋/绫诲埆杞寲"]
                       :model-texture "factor_meltdowner"}
          :on-right-click apply-induction-factor!}))
     (idsl/register-item!
@@ -184,8 +184,8 @@
         "induction_factor_teleporter"
         {:max-stack-size 1
          :creative-tab :misc
-         :properties {:tooltip ["诱导因子 - 空间移动"
-                                "用于能力觉醒/类别转化"]
+         :properties {:tooltip ["璇卞鍥犲瓙 - 绌洪棿绉诲姩"
+                                "鐢ㄤ簬鑳藉姏瑙夐啋/绫诲埆杞寲"]
                       :model-texture "factor_teleporter"}
          :on-right-click apply-induction-factor!}))
     (idsl/register-item!
@@ -193,8 +193,8 @@
         "induction_factor_vecmanip"
         {:max-stack-size 1
          :creative-tab :misc
-         :properties {:tooltip ["诱导因子 - 矢量操纵"
-                                "用于能力觉醒/类别转化"]
+         :properties {:tooltip ["璇卞鍥犲瓙 - 鐭㈤噺鎿嶇旱"
+                                "鐢ㄤ簬鑳藉姏瑙夐啋/绫诲埆杞寲"]
                       :model-texture "factor_vecmanip"}
          :on-right-click apply-induction-factor!}))
     (idsl/register-item!
@@ -202,8 +202,8 @@
         "mag_hook"
         {:max-stack-size 1
          :creative-tab :tools
-         :properties {:tooltip ["磁力钩"
-                                "右键投掷，命中后可回收"]
+         :properties {:tooltip ["纾佸姏閽?
+                                "鍙抽敭鎶曟幏锛屽懡涓悗鍙洖鏀?]
                       :model-texture "mag_hook"}
          :on-right-click throw-mag-hook!}))
     (idsl/register-item!
@@ -211,8 +211,10 @@
         "matter_unit"
         {:max-stack-size 16
          :creative-tab :misc
-         :properties {:tooltip ["物质单元（空）"
-                                "右键采集/放置虚相液体"]
+         :properties {:tooltip ["鐗╄川鍗曞厓锛堢┖锛?
+                                "鍙抽敭閲囬泦/鏀剧疆铏氱浉娑蹭綋"]
                       :model-texture "matter_unit"}
          :on-right-click use-matter-unit!}))
     (log/info "Special items initialized: induction factors, mag_hook, matter_unit")))
+
+

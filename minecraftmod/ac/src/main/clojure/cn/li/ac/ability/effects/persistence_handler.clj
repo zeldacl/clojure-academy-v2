@@ -8,12 +8,14 @@
     {:effect/type  :persist-state
      :player-uuid  string-uuid
      :domain       keyword}"
-  (:require [cn.li.ac.ability.service.player-state :as ps]
-            [cn.li.mcmod.util.log :as log]))
+  (:require 
+            [cn.li.ac.ability.service.player-state-dirty :as ps-dirty]
+[cn.li.mcmod.util.log :as log]))
 
 (defn execute-persist-state!
   [{:keys [player-uuid domain]}]
   (when player-uuid
-    (ps/mark-dirty! player-uuid)
+    (ps-dirty/mark-dirty! player-uuid)
     (log/debug "persist-state effect queued save" player-uuid domain))
   nil)
+

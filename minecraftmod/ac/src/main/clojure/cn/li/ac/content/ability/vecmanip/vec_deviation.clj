@@ -14,7 +14,7 @@
   - No overload cost
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.dsl :refer [defskill!]]
+  (:require [cn.li.ac.ability.dsl :refer [defskill]]
             [cn.li.ac.content.ability.vecmanip.arbitration :as arbitration]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.skill-config :as skill-config]
@@ -265,7 +265,7 @@
       (log/warn "VecDeviation reduce-damage failed:" (ex-message e))
       original-damage)))
 
-(defskill! vec-deviation
+(defskill vec-deviation
   :id :vec-deviation
   :category-id :vecmanip
   :name-key "ability.skill.vecmanip.vec_deviation"

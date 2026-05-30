@@ -1,20 +1,20 @@
 (ns cn.li.ac.terminal.player-data-test
-  (:require [clojure.test :refer [deftest is use-fixtures]]
-            [cn.li.ac.ability.service.player-state :as ps]
-            [cn.li.ac.test.support.player-state :as ps-fix]
+  (:require 
+            [cn.li.ac.ability.service.player-state-core :as ps-core]
+[clojure.test :refer [deftest is use-fixtures]]            [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.ac.terminal.player-data :as td]
             [cn.li.mcmod.util.log :as log]))
 
 (defn- each-fixture [f]
   (ps-fix/with-test-player-state-owner
     (fn []
-      (ps/reset-player-states-for-test!)
+      (ps-core/reset-player-states-for-test!)
       (try
         (with-redefs [log/info (fn [& _])
                       log/warn (fn [& _])]
           (f))
         (finally
-          (ps/reset-player-states-for-test!))))))
+          (ps-core/reset-player-states-for-test!))))))
 
 (use-fixtures :each each-fixture)
 
@@ -30,7 +30,7 @@
     (is (= t back))))
 
 (deftest terminal-ops-on-player-state-test
-  (ps/set-player-state! "p1" (ps/fresh-state))
+  (ps-core/set-player-state! "p1" (ps-core/fresh-state))
   (is (false? (td/terminal-installed? "p1")))
   (td/install-terminal! "p1")
   (is (true? (td/terminal-installed? "p1")))
@@ -46,8 +46,10 @@
   (is (= #{} (td/get-installed-apps "p1"))))
 
 (deftest ensure-terminal-data-test
-  (ps/set-player-state! "p2" (-> (ps/fresh-state)
+  (ps-core/set-player-state! "p2" (-> (ps-core/fresh-state)
                                  (dissoc :terminal-data)))
   (td/ensure-terminal-data! "p2")
   (is (= (td/fresh-terminal-data)
-         (:terminal-data (ps/get-player-state "p2")))))
+         (:terminal-data (ps-core/get-player-state "p2")))))
+
+

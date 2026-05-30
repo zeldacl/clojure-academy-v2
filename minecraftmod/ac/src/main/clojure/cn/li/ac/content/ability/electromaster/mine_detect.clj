@@ -9,7 +9,7 @@
   Exp: +0.008 per cast
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.dsl :refer [defskill!]]
+  (:require [cn.li.ac.ability.dsl :refer [defskill]]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
@@ -81,7 +81,7 @@
 ;; Skill registration
 ;; ---------------------------------------------------------------------------
 
-(defskill! mine-detect
+(defskill mine-detect
   :id             :mine-detect
   :category-id    :electromaster
   :name-key       "ability.skill.electromaster.mine_detect"

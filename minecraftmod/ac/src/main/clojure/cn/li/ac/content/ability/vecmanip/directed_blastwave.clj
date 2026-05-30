@@ -5,8 +5,7 @@
   Cost on perform: CP lerp(160,200), overload lerp(50,30) by exp
   Cooldown: lerp(80,50) ticks by exp
   Exp: +0.0025 on hit / +0.0012 on miss"
-  (:require [cn.li.ac.ability.service.player-state :as ps]
-            [cn.li.ac.ability.dsl :refer [defskill!]]
+  (:require            [cn.li.ac.ability.dsl :refer [defskill]]
             [cn.li.ac.content.ability.fx-helpers :as fx]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.dispatcher :as ctx]
@@ -122,7 +121,7 @@
                                           player-id world-id x y z
                                           (or full-exp? (< (rand) p-drop)))))))))))
 
-(defskill! directed-blastwave
+(defskill directed-blastwave
   :id          :directed-blastwave
   :category-id :vecmanip
   :name-key    "ability.skill.vecmanip.directed_blastwave"
@@ -219,3 +218,4 @@
    :abort! (fn [{:keys [ctx-id]}]
              (terminate-with-end! ctx-id false))}
   :prerequisites [{:skill-id :groundshock :min-exp 0.0}])
+

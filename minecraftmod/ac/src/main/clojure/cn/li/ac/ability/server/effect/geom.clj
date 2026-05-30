@@ -1,6 +1,7 @@
 (ns cn.li.ac.ability.server.effect.geom
-  (:require [cn.li.ac.ability.service.player-state :as ps]
-            [cn.li.ac.ability.server.effect.core :as effect]
+  (:require 
+            [cn.li.ac.ability.service.player-state-core :as ps-core]
+[cn.li.ac.ability.server.effect.core :as effect]
             [cn.li.ac.util.math.vec3 :as vec3]
             [cn.li.mcmod.platform.raycast :as raycast]))
 
@@ -10,19 +11,19 @@
 
 (defn world-id-of
   [player-id]
-  (or (get-in (ps/get-player-state player-id) [:position :world-id])
+  (or (get-in (ps-core/get-player-state player-id) [:position :world-id])
       "minecraft:overworld"))
 
 (defn eye-pos
   [player-id]
-  (let [pos (get-in (ps/get-player-state player-id) [:position])]
+  (let [pos (get-in (ps-core/get-player-state player-id) [:position])]
     {:x (double (or (:x pos) 0.0))
      :y (+ (double (or (:y pos) 64.0)) 1.62)
      :z (double (or (:z pos) 0.0))}))
 
 (defn body-pos
   [player-id]
-  (let [pos (get-in (ps/get-player-state player-id) [:position])]
+  (let [pos (get-in (ps-core/get-player-state player-id) [:position])]
     {:x (double (or (:x pos) 0.0))
      :y (double (or (:y pos) 64.0))
      :z (double (or (:z pos) 0.0))}))
@@ -68,3 +69,4 @@
                                         (double (or (:z look) 1.0))
                                         (double (or range 20.0))))]
     (assoc evt :world-id world-id :eye-pos eye :look-dir look :hit hit)))
+

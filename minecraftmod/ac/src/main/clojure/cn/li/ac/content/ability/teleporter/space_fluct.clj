@@ -1,8 +1,8 @@
 (ns cn.li.ac.content.ability.teleporter.space-fluct
   "Teleporter passive placeholder. Crit logic is implemented in tp-skill-helper."
-  (:require [cn.li.ac.ability.dsl :refer [defskill!]]))
+  (:require [cn.li.ac.ability.dsl :refer [defskill]]))
 
-(defskill! space-fluct
+(defskill space-fluct
   :id :space-fluct
   :category-id :teleporter
   :name-key "ability.skill.teleporter.space_fluct"

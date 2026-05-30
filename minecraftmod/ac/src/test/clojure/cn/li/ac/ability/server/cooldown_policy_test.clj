@@ -1,10 +1,10 @@
 (ns cn.li.ac.ability.server.cooldown-policy-test
-  (:require [clojure.test :refer [deftest is use-fixtures]]
+  (:require 
+            [cn.li.ac.ability.service.player-state-core :as ps-core]
+[clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.test.support.contexts :as test-contexts]
             [cn.li.ac.test.support.player-state :as test-player]
-            [cn.li.ac.ability.service.dispatcher :as ctx]
-            [cn.li.ac.ability.service.player-state :as ps]
-            [cn.li.ac.ability.model.cooldown :as cd]
+            [cn.li.ac.ability.service.dispatcher :as ctx]            [cn.li.ac.ability.model.cooldown :as cd]
             [cn.li.ac.ability.registry.event :as evt]
             [cn.li.ac.ability.registry.skill :as skill-reg]
             [cn.li.ac.ability.service.context-runtime :as rt]))
@@ -21,7 +21,7 @@
   ([uuid]
    (seed-player! uuid (cd/new-cooldown-data)))
   ([uuid cooldown-data]
-  (ps/set-player-state! uuid {:ability-data {:skill-exps {:arc-gen 0.0}}
+  (ps-core/set-player-state! uuid {:ability-data {:skill-exps {:arc-gen 0.0}}
                                 :cooldown-data cooldown-data})))
 
 (defn- active-context!
@@ -44,7 +44,7 @@
                   evt/fire-ability-event! (fn [_] nil)]
       (binding [ctx/*context-owner* test-context-owner]
         (is (true? (rt/handle-key-up! ctx-id {:ctx-id ctx-id :skill-id :arc-gen})))
-        (is (= 20 (cd/get-remaining (:cooldown-data (ps/get-player-state uuid)) :arc-gen :main)))
+        (is (= 20 (cd/get-remaining (:cooldown-data (ps-core/get-player-state uuid)) :arc-gen :main)))
         (is (= ctx/STATUS-TERMINATED (:status (ctx/get-context ctx-id))))))))
 
 (deftest manual-key-up-does-not-apply-automatic-main-cooldown-test
@@ -60,5 +60,6 @@
                   evt/fire-ability-event! (fn [_] nil)]
       (binding [ctx/*context-owner* test-context-owner]
         (is (true? (rt/handle-key-up! ctx-id {:ctx-id ctx-id :skill-id :arc-gen})))
-        (is (= 0 (cd/get-remaining (:cooldown-data (ps/get-player-state uuid)) :arc-gen :main)))
+        (is (= 0 (cd/get-remaining (:cooldown-data (ps-core/get-player-state uuid)) :arc-gen :main)))
         (is (= ctx/STATUS-TERMINATED (:status (ctx/get-context ctx-id))))))))
+

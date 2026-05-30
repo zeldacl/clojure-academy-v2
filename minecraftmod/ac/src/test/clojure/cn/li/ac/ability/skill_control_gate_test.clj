@@ -1,5 +1,7 @@
 (ns cn.li.ac.ability.skill-control-gate-test
-  (:require [clojure.test :refer [deftest is testing use-fixtures]]
+  (:require 
+            [cn.li.ac.ability.service.player-state-core :as ps-core]
+[clojure.test :refer [deftest is testing use-fixtures]]
             [cn.li.ac.test.support.contexts :as test-contexts]
             [cn.li.ac.test.support.player-state :as test-player]
             [cn.li.ac.ability.messages :as catalog]
@@ -7,8 +9,7 @@
             [cn.li.ac.ability.model.resource :as rd]
             [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.service.context-mgr :as cm]
-            [cn.li.ac.ability.service.dispatcher :as ctx]
-            [cn.li.ac.ability.service.player-state :as ps]))
+            [cn.li.ac.ability.service.dispatcher :as ctx]))
 
 (defn- reset-fixture
   [f]
@@ -25,7 +26,7 @@
 
 (defn- seed-player!
   [player-uuid skill-id resource-data]
-  (ps/set-player-state! player-uuid
+  (ps-core/set-player-state! player-uuid
                         {:ability-data (-> (ad/new-ability-data)
                                            (ad/learn-skill skill-id))
                          :resource-data resource-data}))
@@ -95,3 +96,5 @@
     (is (nil? ctx))
     (is (= [catalog/MSG-CTX-TERMINATE]
            (mapv second messages)))))
+
+

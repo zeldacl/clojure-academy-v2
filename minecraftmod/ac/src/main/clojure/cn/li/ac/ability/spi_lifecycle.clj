@@ -7,7 +7,8 @@
    
 	 The SPI is intentionally additive: existing event-driven ability code can
 	 keep working while new implementations opt into lifecycle handlers."
-	(:require [cn.li.mcmod.util.log :as log]))
+	(:require [cn.li.ac.ability.runtime-registry :as runtime-registry]
+	          [cn.li.mcmod.util.log :as log]))
 
 (defprotocol AbilityLifecycle
 	"Lifecycle hooks for AC abilities and categories."
@@ -40,10 +41,10 @@
 
 (defn call-with-lifecycle-registry-runtime
 	[runtime f]
-	(when-not (and (map? runtime)
-	               (= ::lifecycle-registry-runtime (::runtime runtime))
-	               (some? (:state* runtime)))
-		(throw (ex-info "Expected lifecycle registry runtime" {:runtime runtime})))
+	(runtime-registry/assert-runtime!
+		runtime
+		::lifecycle-registry-runtime
+		"Expected lifecycle registry runtime")
 	(binding [*lifecycle-registry-runtime* runtime]
 		(f)))
 
@@ -54,20 +55,22 @@
 
 (defn- lifecycle-registry-state-atom
 	[]
-	(:state* (current-lifecycle-registry-runtime)))
+	(runtime-registry/state-atom (current-lifecycle-registry-runtime)))
 
 (defn- lifecycle-registry-state-snapshot
 	[]
-	@(lifecycle-registry-state-atom))
+	(runtime-registry/snapshot (current-lifecycle-registry-runtime)))
 
 (defn- update-lifecycle-registry-state!
 	[f & args]
-	(apply swap! (lifecycle-registry-state-atom) f args))
+	(apply runtime-registry/update-state! (current-lifecycle-registry-runtime) f args))
 
 (defn- assert-registry-open!
 	[]
-	(when (:frozen? (lifecycle-registry-state-snapshot))
-		(throw (ex-info "Ability lifecycle registry is frozen" {}))))
+	(runtime-registry/assert-open!
+		(current-lifecycle-registry-runtime)
+		:frozen?
+		"Ability lifecycle registry is frozen"))
 
 (defn lifecycle-registry-snapshot
 	[]
@@ -78,15 +81,15 @@
 	 (reset-lifecycle-registry-for-test! {}))
 	([{:keys [lifecycles frozen?]
 		 :or {lifecycles {} frozen? false}}]
-	 (reset! (lifecycle-registry-state-atom)
-	         {:lifecycles lifecycles
-	          :frozen? frozen?})
+	 (runtime-registry/reset-state!
+	 	 (current-lifecycle-registry-runtime)
+	 	 {:lifecycles lifecycles
+	 	  :frozen? frozen?})
 	 nil))
 
 (defn freeze-lifecycle-registry!
 	[]
-	(update-lifecycle-registry-state! assoc :frozen? true)
-	nil)
+	(runtime-registry/freeze! (current-lifecycle-registry-runtime) :frozen?))
 
 (defn register-lifecycle!
 	"Register an AbilityLifecycle implementation for a skill/category id.

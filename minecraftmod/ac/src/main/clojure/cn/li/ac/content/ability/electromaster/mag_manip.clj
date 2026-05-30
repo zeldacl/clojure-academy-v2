@@ -6,7 +6,7 @@
   Cooldown: manual, lerp(60,40) ticks by exp
   Exp:      +0.005 on successful throw"
   (:require [clojure.string :as str]
-            [cn.li.ac.ability.dsl :refer [defskill!]]
+            [cn.li.ac.ability.dsl :refer [defskill]]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.effect.geom :as geom]
@@ -336,7 +336,7 @@
 
 (declare mag-manip)
 
-(defskill! mag-manip
+(defskill mag-manip
   :id :mag-manip
   :category-id :electromaster
   :name-key "ability.skill.electromaster.mag_manip"

@@ -12,7 +12,7 @@
   Exp: (1 + hit-count) * exp-base
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.dsl :refer [defskill!]]
+  (:require [cn.li.ac.ability.dsl :refer [defskill]]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.server.effect.geom :as geom]
@@ -314,7 +314,7 @@
 ;; Skill registration
 ;; ---------------------------------------------------------------------------
 
-(defskill! shift-teleport
+(defskill shift-teleport
   :id             :shift-teleport
   :category-id    :teleporter
   :name-key       "ability.skill.teleporter.shift_teleport"

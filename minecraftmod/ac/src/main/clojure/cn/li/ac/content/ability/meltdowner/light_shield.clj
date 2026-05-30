@@ -11,7 +11,7 @@
   Exp: +0.0004 per damage absorbed
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.dsl :refer [defskill!]]
+  (:require [cn.li.ac.ability.dsl :refer [defskill]]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.util.toggle :as toggle]
@@ -269,7 +269,7 @@
 ;; Skill registration
 ;; ---------------------------------------------------------------------------
 
-(defskill! light-shield
+(defskill light-shield
   :id             :light-shield
   :category-id    :meltdowner
   :name-key       "ability.skill.meltdowner.light_shield"

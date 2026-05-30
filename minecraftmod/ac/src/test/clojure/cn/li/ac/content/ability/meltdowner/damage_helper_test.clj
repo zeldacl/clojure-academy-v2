@@ -1,9 +1,9 @@
 (ns cn.li.ac.content.ability.meltdowner.damage-helper-test
-  (:require [clojure.test :refer [deftest is testing use-fixtures]]
+  (:require 
+            [cn.li.ac.ability.service.player-state-core :as ps-core]
+[clojure.test :refer [deftest is testing use-fixtures]]
             [cn.li.ac.ability.model.ability :as ad]
-            [cn.li.ac.ability.server.damage.runtime :as rt]
-            [cn.li.ac.ability.service.player-state :as ps]
-            [cn.li.ac.test.support.player-state :as ps-fix]
+            [cn.li.ac.ability.server.damage.runtime :as rt]            [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as dh]
             [cn.li.ac.content.ability.meltdowner.rad-intensify :as rad]))
 
@@ -12,12 +12,12 @@
     (fn []
       (dh/call-with-damage-helper-runtime (dh/create-damage-helper-runtime)
         (fn []
-          (ps/reset-player-states-for-test!)
+          (ps-core/reset-player-states-for-test!)
           (try
             (f)
             (finally
               (dh/reset-marks-for-test!)
-              (ps/reset-player-states-for-test!))))))))
+              (ps-core/reset-player-states-for-test!))))))))
 
 (use-fixtures :each with-fresh-marks-runtime)
 
@@ -25,7 +25,7 @@
   (-> (ad/new-ability-data) (ad/learn-skill :rad-intensify)))
 
 (defn- learn-rad-intensify! [player-id]
-  (ps/set-player-state! player-id {:ability-data (learned-rad-intensify-data)}))
+  (ps-core/set-player-state! player-id {:ability-data (learned-rad-intensify-data)}))
 
 (deftest process-damage-without-mark-is-unchanged-test
   (testing "no rad mark leaves damage unchanged (other handlers may still run)"
@@ -162,3 +162,5 @@
                        :target-id target
                        :ticks-left 2
                        :rate 1.25}}))))))
+
+

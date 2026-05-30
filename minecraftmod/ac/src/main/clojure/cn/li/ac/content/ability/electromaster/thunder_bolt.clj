@@ -5,7 +5,7 @@
   Cost: CP lerp(280,420), overload lerp(50,27) by exp
   Cooldown: lerp(120,50) ticks by exp
   Exp: +0.005 effective / +0.003 ineffective"
-  (:require [cn.li.ac.ability.dsl :refer [defskill!]]
+  (:require [cn.li.ac.ability.dsl :refer [defskill]]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.server.effect.geom :as geom]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
@@ -178,7 +178,7 @@
     (skill-effects/set-main-cooldown! player-id :thunder-bolt cooldown-ticks)
     nil))
 
-(defskill! thunder-bolt
+(defskill thunder-bolt
   :id          :thunder-bolt
   :category-id :electromaster
   :name-key    "ability.skill.electromaster.thunder_bolt"

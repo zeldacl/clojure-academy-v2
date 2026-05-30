@@ -1,11 +1,12 @@
 (ns cn.li.ac.ability.server.effect.state-test
-  (:require [clojure.test :refer [deftest is use-fixtures]]
+  (:require 
+            [cn.li.ac.ability.service.player-state-core :as ps-core]
+[clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.test.support.contexts :as test-contexts]
             [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.ac.ability.server.effect.core :as effect]
             [cn.li.ac.ability.server.effect.state]
-            [cn.li.ac.ability.service.dispatcher :as ctx]
-            [cn.li.ac.ability.service.player-state :as ps]))
+            [cn.li.ac.ability.service.dispatcher :as ctx]))
 
 (use-fixtures :each
   (fn [f]
@@ -37,7 +38,9 @@
         (is (= 1 (get-in (ctx/get-context "ctx-ch") [:skill-state :ticks])))))))
 
 (deftest overload-floor-op-test
-  (ps/get-or-create-player-state! "of-p")
+  (ps-core/get-or-create-player-state! "of-p")
   (effect/run-op! {:player-id "of-p"}
                   [:overload-floor {:floor 10.0}])
-  (is (<= 10.0 (get-in (ps/get-player-state "of-p") [:resource-data :cur-overload]))))
+  (is (<= 10.0 (get-in (ps-core/get-player-state "of-p") [:resource-data :cur-overload]))))
+
+

@@ -5,8 +5,11 @@
   - resource consumption via res/perform-resource
   - player-state updates
   - firing ability events"
-  (:require [cn.li.ac.ability.service.player-state :as ps]
-            [cn.li.ac.ability.model.ability :as adata]
+  (:require 
+            [cn.li.ac.ability.service.player-state-accessors :as ps-accessors]
+[cn.li.ac.ability.service.player-state-dirty :as ps-dirty]
+[cn.li.ac.ability.service.player-state-core :as ps-core]
+[cn.li.ac.ability.model.ability :as adata]
             [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.ability.config :as cfg]
             [cn.li.ac.ability.fx :as fx]))
@@ -26,7 +29,7 @@
   ([player-id overload cp]
    (perform-resource! player-id overload cp false))
   ([player-id overload cp creative?]
-   (if (ps/get-player-state player-id)
+   (if (ps-core/get-player-state player-id)
      (let [{:keys [state success? events]} (command-rt/run-command! player-id
                                                                     {:command :consume-resource
                                                                      :overload (double overload)
@@ -45,7 +48,7 @@
   ([player-id skill-id amount]
    (add-skill-exp! player-id skill-id amount 1.0))
   ([player-id skill-id amount exp-rate]
-   (when (ps/get-player-state player-id)
+   (when (ps-core/get-player-state player-id)
      (let [scaled-amount (* (double amount) (double exp-rate))
            {:keys [state events]} (command-rt/run-command! player-id
                                                            {:command :add-skill-exp
@@ -119,9 +122,9 @@
 
   Returns true when player state exists; false otherwise."
   [player-id floor-value]
-  (if (ps/get-player-state player-id)
+  (if (ps-core/get-player-state player-id)
     (do
-      (ps/update-resource-data!
+      (ps-accessors/update-resource-data!
         player-id
         (fn [res-data]
           (if (< (double (or (:cur-overload res-data) 0.0)) (double floor-value))
@@ -135,15 +138,15 @@
 (defn assoc-player-path!
   "Associate value at arbitrary player-state path and mark dirty." 
   [player-id path value]
-  (ps/update-player-state! player-id assoc-in path value)
-  (ps/mark-dirty! player-id)
+  (ps-core/update-player-state! player-id assoc-in path value)
+  (ps-dirty/mark-dirty! player-id)
   true)
 
 (defn update-player-path!
   "Update value at arbitrary player-state path with f and args, then mark dirty."
   [player-id path f & args]
-  (apply ps/update-player-state! player-id update-in path f args)
-  (ps/mark-dirty! player-id)
+  (apply ps-core/update-player-state! player-id update-in path f args)
+  (ps-dirty/mark-dirty! player-id)
   true)
 
 (defn gain-exp!
@@ -174,21 +177,24 @@
 (defn get-player-state
   "Return full player state map or nil when absent."
   [player-id]
-  (ps/get-player-state player-id))
+  (ps-core/get-player-state player-id))
 
 (defn player-path
   "Read arbitrary path from player state with optional default value."
   ([player-id path]
-   (get-in (ps/get-player-state player-id) path))
+   (get-in (ps-core/get-player-state player-id) path))
   ([player-id path default]
-   (get-in (ps/get-player-state player-id) path default)))
+   (get-in (ps-core/get-player-state player-id) path default)))
 
 (defn skill-exp
   "Read clamped skill exp as double from ability-data."
   [player-id skill-id]
-  (double (adata/get-skill-exp (:ability-data (ps/get-player-state player-id)) skill-id)))
+  (double (adata/get-skill-exp (:ability-data (ps-core/get-player-state player-id)) skill-id)))
 
 (defn current-cp
   "Read current CP from resource-data as double."
   [player-id]
   (double (or (player-path player-id [:resource-data :cur-cp] 0.0) 0.0)))
+
+
+

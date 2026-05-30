@@ -2,7 +2,7 @@
   "VecReflection skill - advanced reflection (toggle).
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.dsl :refer [defskill!]]
+  (:require [cn.li.ac.ability.dsl :refer [defskill]]
             [cn.li.ac.content.ability.fx-helpers :as fx]
             [cn.li.ac.content.ability.vecmanip.arbitration :as arbitration]
             [cn.li.ac.ability.service.dispatcher :as ctx]
@@ -556,7 +556,7 @@
 
 (declare vec-reflection)
 
-(defskill! vec-reflection
+(defskill vec-reflection
   :id :vec-reflection
   :category-id :vecmanip
   :name-key "ability.skill.vecmanip.vec_reflection"

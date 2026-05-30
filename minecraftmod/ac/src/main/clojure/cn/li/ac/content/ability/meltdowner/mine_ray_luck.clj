@@ -11,7 +11,7 @@
   Exp: +0.002 per block broken
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.dsl :refer [defskill!]]
+  (:require [cn.li.ac.ability.dsl :refer [defskill]]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.content.ability.meltdowner.mine-rays-base :as base]))
@@ -53,7 +53,7 @@
 ;; Skill registration
 ;; ---------------------------------------------------------------------------
 
-(defskill! mine-ray-luck
+(defskill mine-ray-luck
   :id             :mine-ray-luck
   :category-id    :meltdowner
   :name-key       "ability.skill.meltdowner.mine_ray_luck"

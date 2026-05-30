@@ -1,17 +1,17 @@
 (ns cn.li.ac.achievement.dispatcher
   "AC-side achievement dispatcher (game-concept aware)."
-  (:require [cn.li.ac.achievement.registry :as ach-reg]
+  (:require 
+            [cn.li.ac.ability.service.player-state-core :as ps-core]
+[cn.li.ac.achievement.registry :as ach-reg]
             [cn.li.ac.achievement.trigger :as ach-trigger]
-            [cn.li.ac.ability.registry.event :as evt]
-            [cn.li.ac.ability.service.player-state :as ps]
-            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
+            [cn.li.ac.ability.registry.event :as evt]            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.util.log :as log]))
 
 (defonce-guard installed?)
 
 (defn- player-category
   [uuid]
-  (get-in (ps/get-player-state uuid) [:ability-data :category-id]))
+  (get-in (ps-core/get-player-state uuid) [:ability-data :category-id]))
 
 (defn- fire-by-trigger!
   [kind payload uuid]
@@ -43,4 +43,5 @@
         (fire-by-trigger! :skill-perform {:skill-id skill-id} uuid)))
 
     (log/info "Achievement dispatcher initialized")))
+
 

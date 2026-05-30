@@ -1,6 +1,7 @@
 (ns cn.li.ac.test.support.player-state
-  (:require [cn.li.ac.ability.service.player-state :as ps]
-            [cn.li.mcmod.hooks.core :as runtime-hooks]))
+  (:require 
+            [cn.li.ac.ability.service.player-state-core :as ps-core]
+[cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (def test-player-state-owner {:server-session-id :test-session})
 
@@ -11,17 +12,19 @@
 
 (defn clean-player-states-fixture
   [f]
-  (ps/call-with-player-state-runtime
-    (ps/create-player-state-runtime)
+  (ps-core/call-with-player-state-runtime
+    (ps-core/create-player-state-runtime)
     (fn []
       (with-test-player-state-owner
         (fn []
-          (ps/reset-player-states-for-test!)
+          (ps-core/reset-player-states-for-test!)
           (try
             (f)
             (finally
-              (ps/reset-player-states-for-test!))))))))
+              (ps-core/reset-player-states-for-test!))))))))
 
 (defn seed-player-state!
   [uuid state]
-  (ps/set-player-state! uuid state))
+  (ps-core/set-player-state! uuid state))
+
+

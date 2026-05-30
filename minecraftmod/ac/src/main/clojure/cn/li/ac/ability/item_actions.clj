@@ -5,7 +5,8 @@
   Platform code queries this registry to resolve and execute item actions.
 
   No Minecraft imports."
-  (:require [cn.li.mcmod.util.log :as log]))
+  (:require [cn.li.ac.ability.runtime-registry :as runtime-registry]
+            [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
 ;; Item → action resolution
@@ -33,10 +34,10 @@
 
 (defn call-with-item-action-registries-runtime
   [runtime f]
-  (when-not (and (map? runtime)
-                 (= ::item-action-registries-runtime (::runtime runtime))
-                 (some? (:state* runtime)))
-    (throw (ex-info "Expected item action registries runtime" {:runtime runtime})))
+  (runtime-registry/assert-runtime!
+    runtime
+    ::item-action-registries-runtime
+    "Expected item action registries runtime")
   (binding [*item-action-registries-runtime* runtime]
     (f)))
 
@@ -46,20 +47,22 @@
 
 (defn- item-action-registries-state-atom
   []
-  (:state* (current-item-action-registries-runtime)))
+  (runtime-registry/state-atom (current-item-action-registries-runtime)))
 
 (defn- item-action-registries-state-snapshot
   []
-  @(item-action-registries-state-atom))
+  (runtime-registry/snapshot (current-item-action-registries-runtime)))
 
 (defn- update-item-action-registries-state!
   [f & args]
-  (apply swap! (item-action-registries-state-atom) f args))
+  (apply runtime-registry/update-state! (current-item-action-registries-runtime) f args))
 
 (defn- assert-registries-open!
   []
-  (when (:frozen? (item-action-registries-state-snapshot))
-    (throw (ex-info "Item action registries are frozen" {}))))
+  (runtime-registry/assert-open!
+    (current-item-action-registries-runtime)
+    :frozen?
+    "Item action registries are frozen"))
 
 (defn item-action-registries-snapshot
   []
@@ -70,17 +73,17 @@
    (reset-item-action-registries-for-test! {}))
   ([{:keys [item-actions action-handlers item-entity-spawns frozen?]
      :or {item-actions {} action-handlers {} item-entity-spawns {} frozen? false}}]
-   (reset! (item-action-registries-state-atom)
-           {:item-actions item-actions
-            :action-handlers action-handlers
-            :item-entity-spawns item-entity-spawns
-            :frozen? frozen?})
+   (runtime-registry/reset-state!
+     (current-item-action-registries-runtime)
+     {:item-actions item-actions
+      :action-handlers action-handlers
+      :item-entity-spawns item-entity-spawns
+      :frozen? frozen?})
    nil))
 
 (defn freeze-item-action-registries!
   []
-  (update-item-action-registries-state! assoc :frozen? true)
-  nil)
+  (runtime-registry/freeze! (current-item-action-registries-runtime) :frozen?))
 
 (defn register-item-action!
   "Map an item id (e.g. \"ac:coin\") to an action keyword (e.g. :railgun-coin-throw)."

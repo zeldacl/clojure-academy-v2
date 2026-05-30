@@ -16,7 +16,7 @@
   - Miss: none
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.dsl :refer [defskill!]]
+  (:require [cn.li.ac.ability.dsl :refer [defskill]]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
@@ -161,7 +161,7 @@
 ;; Skill registration
 ;; ---------------------------------------------------------------------------
 
-(defskill! arc-gen
+(defskill arc-gen
   :id             :arc-gen
   :category-id    :electromaster
   :name-key       "ability.skill.electromaster.arc_gen"

@@ -9,7 +9,7 @@
     or hover when no direction (float up 0.078/tick, or 0.1 near ground)
   - Speed: (if exp<0.45 0.7 1.2) * lerp(2,3,exp)
   - Acceleration: 0.16 per tick toward target velocity
-  - Low exp (<15%): tries to break 40 random soft blocks (hardness 0-0.3) in range卤10 each tick
+  - Low exp (<15%): tries to break 40 random soft blocks (hardness 0-0.3) in range�?0 each tick
   - Max exp (=1.0): on transition to flight, knockback nearby entities (range 3, strength 2.0)
   - On terminate: set cooldown lerp(30,10,exp) ticks
 
@@ -21,7 +21,7 @@
   - 0.00005 per tick during flight
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.dsl :refer [defskill!]]
+  (:require [cn.li.ac.ability.dsl :refer [defskill]]
             [cn.li.ac.content.ability.fx-helpers :as fx]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.dispatcher :as ctx]
@@ -330,7 +330,7 @@
   (let [validated-dir (validate-move-direction payload)]
     (ctx/update-context! ctx-id assoc-in [:skill-state :move-dir] validated-dir)))
 
-(defskill! storm-wing
+(defskill storm-wing
   :id :storm-wing
   :category-id :vecmanip
   :name-key "ability.skill.vecmanip.storm_wing"

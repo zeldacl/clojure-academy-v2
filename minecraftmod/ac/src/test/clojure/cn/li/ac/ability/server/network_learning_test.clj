@@ -1,13 +1,14 @@
 (ns cn.li.ac.ability.server.network-learning-test
-  (:require [clojure.test :refer [deftest is use-fixtures]]
+  (:require 
+            [cn.li.ac.ability.service.player-state-accessors :as ps-accessors]
+[cn.li.ac.ability.service.player-state-core :as ps-core]
+[clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.test.support.player-state :as test-player]
             [cn.li.ac.ability.model.ability :as adata]
             [cn.li.ac.ability.server.network :as network]
             [cn.li.ac.ability.rules.learning-rules :as learning-rules]
             [cn.li.ac.ability.registry.skill :as skill]
-            [cn.li.ac.ability.service.command-runtime :as command-rt]
-            [cn.li.ac.ability.service.player-state :as ps]
-            [cn.li.mcmod.platform.entity :as entity]
+            [cn.li.ac.ability.service.command-runtime :as command-rt]            [cn.li.mcmod.platform.entity :as entity]
             [cn.li.ac.ability.util.uuid :as uuid]))
 
 (use-fixtures :each test-player/clean-player-states-fixture)
@@ -39,7 +40,7 @@
 (deftest handle-learn-skill-request-delegates-to-command-runtime-test
   (let [calls* (atom [])
         player (StubPlayer.)]
-    (ps/set-player-state! "p1" {:ability-data (assoc (adata/new-ability-data) :level 3)})
+    (ps-core/set-player-state! "p1" {:ability-data (assoc (adata/new-ability-data) :level 3)})
     (with-redefs [uuid/player-uuid (constantly "p1")
                   skill/get-skill (fn [skill-id]
                                     {:id skill-id :level 1 :developer-type :normal :prerequisites []})
@@ -48,14 +49,16 @@
                                                         {:pass? true :failures []})
                   command-rt/run-command! (fn [uuid {:keys [skill-id]}]
                                             (swap! calls* conj [:learn uuid skill-id])
-                                            {:state {:ability-data (adata/learn-skill (get-in (ps/get-player-state uuid) [:ability-data]) skill-id)}
+                                            {:state {:ability-data (adata/learn-skill (get-in (ps-core/get-player-state uuid) [:ability-data]) skill-id)}
                                              :events [{:event/type :ability/skill-learn
                                                        :uuid uuid
                                                        :skill-id skill-id}]
                                              :effects []})
-                  ps/update-ability-data! (fn [& _]
+                  ps-accessors/update-ability-data! (fn [& _]
                                             (throw (ex-info "network handler should not mutate ability-data directly" {})))]
                                           (#'network/handle-learn-skill-request {:skill-id :arc-gen} player)
-      (is (= [[:conditions :arc-gen 3 :normal (get-in (ps/get-player-state "p1") [:ability-data])]
+      (is (= [[:conditions :arc-gen 3 :normal (get-in (ps-core/get-player-state "p1") [:ability-data])]
               [:learn "p1" :arc-gen]]
              @calls*)))))
+
+

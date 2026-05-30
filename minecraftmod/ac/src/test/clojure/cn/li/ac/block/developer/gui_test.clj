@@ -1,12 +1,12 @@
 (ns cn.li.ac.block.developer.gui-test
-  (:require [clojure.test :refer [deftest is]]
+  (:require 
+            [cn.li.ac.ability.service.player-state-core :as ps-core]
+[clojure.test :refer [deftest is]]
             [cn.li.ac.block.developer.gui :as developer-gui]
             [cn.li.ac.block.developer.logic :as developer-logic]
             [cn.li.ac.block.developer.panel :as developer-panel]
             [cn.li.ac.ability.domain.developer :as developer-domain]
-            [cn.li.ac.ability.registry.category :as category]
-            [cn.li.ac.ability.service.player-state :as player-state]
-            [cn.li.ac.ability.util.uuid :as uuid]
+            [cn.li.ac.ability.registry.category :as category]            [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.mcmod.gui.cgui-core :as cgui-core]
             [cn.li.mcmod.gui.events :as events]
             [cn.li.mcmod.platform.be :as platform-be]
@@ -77,7 +77,7 @@
                                          widget)
                   events/on-frame (fn [widget _handler]
                                     widget)
-                  player-state/get-player-state (fn [_]
+                  ps-core/get-player-state (fn [_]
                                                   {:ability-data {:category-id :electromaster
                                                                   :level 2
                                                                   :level-progress 1000.0}})
@@ -127,7 +127,7 @@
                   developer-domain/gte? (fn [_ _] true)
                   msg-registry/msg (fn [domain action] [domain action])
                   net-client/send-to-server (fn [& _] nil)
-                  player-state/get-player-state (fn [_]
+                  ps-core/get-player-state (fn [_]
                                                   {:ability-data {:category-id :electromaster
                                                                   :level 2
                                                                   :level-progress 0.0}})
@@ -161,7 +161,7 @@
                   uuid/player-uuid (fn [_] "player-uuid")
                   platform-be/get-block-id (fn [_] :developer-advanced)
                   developer-domain/developer-type-for-block-id (fn [_] :advanced)
-                  player-state/get-player-state (fn [_]
+                  ps-core/get-player-state (fn [_]
                                                   {:ability-data {:category-id nil
                                                                   :level 1
                                                                   :level-progress 0.0}})

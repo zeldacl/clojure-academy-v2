@@ -1,12 +1,12 @@
 (ns cn.li.ac.ability.server.service.context-mgr-test
-  (:require [clojure.test :refer [deftest is use-fixtures]]
+  (:require 
+            [cn.li.ac.ability.service.player-state-core :as ps-core]
+[clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.test.support.contexts :as test-contexts]
             [cn.li.ac.test.support.player-state :as test-player]
             [cn.li.ac.ability.service.context-mgr :as cm]
             [cn.li.ac.ability.service.context-runtime :as ctx-rt]
-            [cn.li.ac.ability.service.dispatcher :as ctx]
-            [cn.li.ac.ability.service.player-state :as ps]
-            [cn.li.ac.ability.registry.skill :as skill-registry]
+            [cn.li.ac.ability.service.dispatcher :as ctx]            [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.model.ability :as ad]
             [cn.li.ac.ability.model.resource :as rd]
             [cn.li.ac.ability.messages :as catalog]
@@ -51,7 +51,7 @@
   (let [ability-data (-> (ad/new-ability-data)
                          (ad/learn-skill skill-kw))
         resource-data (assoc (rd/new-resource-data) :activated true)]
-    (ps/set-player-state! uuid {:ability-data ability-data
+    (ps-core/set-player-state! uuid {:ability-data ability-data
                                 :resource-data resource-data})))
 
 (deftest activate-context-sends-begin-link-test
@@ -191,3 +191,5 @@
         (if (some? old-grace)
           (System/setProperty grace-key old-grace)
           (System/clearProperty grace-key))))))
+
+

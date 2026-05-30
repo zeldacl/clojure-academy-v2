@@ -1,7 +1,9 @@
 (ns cn.li.ac.block.developer.panel
   "Classic AcademyCraft `page_developer.xml`: load once, bind widgets to container + optional status poll.
   Full wireless list is embedded under `parent_right/area` from code (`gui.clj`); the Wireless tab reuses the same page."
-  (:require [clojure.string :as str]
+  (:require 
+            [cn.li.ac.ability.service.player-state-core :as ps-core]
+[clojure.string :as str]
             [cn.li.mcmod.gui.cgui-core :as cgui-core]
             [cn.li.mcmod.gui.cgui-widget-model :as cgui-model]
             [cn.li.mcmod.gui.components :as comp]
@@ -12,9 +14,7 @@
             [cn.li.mcmod.i18n :as i18n]
             [cn.li.ac.config.modid :as modid]
             [cn.li.ac.gui.tech-ui-common :as tech-ui]
-            [cn.li.mcmod.client.platform-bridge :as client-bridge]
-            [cn.li.ac.ability.service.player-state :as ps]
-            [cn.li.ac.ability.registry.category :as acat]
+            [cn.li.mcmod.client.platform-bridge :as client-bridge]            [cn.li.ac.ability.registry.category :as acat]
             [cn.li.ac.ability.registry.skill-query :as skill-query]
             [cn.li.ac.ability.domain.developer :as developer]
             [cn.li.ac.ability.util.balance :as bal]
@@ -101,7 +101,7 @@
                           (developer/gte? developer-type (developer/min-for-level (inc lvl))))
         ability-name (if has-category?
                        (i18n/translate (:name-key cat))
-                       "—")
+                       "鈥?)
         icon-path (if has-category?
                     (or (some-> cat :icon texture-path-from-category-icon)
                         (default-ability-icon-path))
@@ -111,8 +111,8 @@
                       "MAX"
                       (if thresh
                         (format "EXP %.0f%%" (* 100.0 cat-prog01))
-                        "—"))
-                    "—")
+                        "鈥?))
+                    "鈥?)
         level-label (cond
                       dev? "Learning"
                       (not has-category?) "No Category"
@@ -135,7 +135,7 @@
         bandwidth (max 1.0 (double (or @(:wireless-bandwidth container) 1.0)))
         sync-in (double (or @(:wireless-inject-last-tick container) 0.0))
         uuid-str (when player (uuid/player-uuid player))
-        pstate (when uuid-str (ps/get-player-state uuid-str))
+        pstate (when uuid-str (ps-core/get-player-state uuid-str))
         ad (:ability-data pstate)
         cat-id (:category-id ad)
         cat (when cat-id (acat/get-category cat-id))
@@ -186,11 +186,11 @@
           (when (map? resp)
             (set-text-path! root "parent_left/panel_machine/button_wireless/text_nodename"
               (if-let [n (:linked resp)]
-                (or (:node-name n) "—")
-                "—"))))))))
+                (or (:node-name n) "鈥?)
+                "鈥?))))))))
 
 (defn attach-classic-developer-bindings!
-  "`switch-wireless-tab!` — thunk (e.g. `tabbed-gui/switch-tab!` to the `:wireless` page)."
+  "`switch-wireless-tab!` 鈥?thunk (e.g. `tabbed-gui/switch-tab!` to the `:wireless` page)."
   [root container {:keys [switch-wireless-tab!]}]
   (let [pl (:player container)
         last-net-ms (atom 0)]
@@ -223,3 +223,4 @@
           (set-visible-path! root "parent_left/panel_ability/btn_upgrade" can-upgrade?)
           (sync-remote-node-name! root container last-net-ms))))
     root))
+

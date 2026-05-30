@@ -5,6 +5,7 @@
   platform-neutral: AC owns descriptors/defaults/getters, while Forge/Fabric
   expose the domains as TOML/JSON through the generic mcmod config bridge."
   (:require [clojure.string :as str]
+            [cn.li.ac.ability.config-common :as ability-config-common]
             [cn.li.ac.ability.skill-config.common :as common]
             [cn.li.ac.ability.skill-config.electromaster :as electromaster]
             [cn.li.ac.ability.skill-config.meltdowner :as meltdowner]
@@ -170,36 +171,23 @@
       (get (config-reg/get-config-values domain) k fallback)
       fallback)))
 
-(defn- finite-double
-  [value default]
-  (try
-    (let [d (cond
-              (number? value) (double value)
-              (string? value) (Double/parseDouble value)
-              :else (double default))]
-      (if (or (Double/isNaN d) (Double/isInfinite d))
-        (double default)
-        d))
-    (catch Exception _
-      (double default))))
-
-    (defn- non-negative-double
+(defn- non-negative-double
   [skill-id field-id]
   (let [default (double (field-default skill-id field-id))
-        ^double value (finite-double (raw-value skill-id field-id) default)]
+        ^double value (ability-config-common/finite-double (raw-value skill-id field-id) default)]
     (if (neg? value) default value)))
 
-    (defn- positive-double
+(defn- positive-double
   [skill-id field-id]
   (let [default (double (field-default skill-id field-id))
-        ^double value (finite-double (raw-value skill-id field-id) default)]
+        ^double value (ability-config-common/finite-double (raw-value skill-id field-id) default)]
     (if (pos? value) value default)))
 
 (defn- int-in-range
   [skill-id field-id]
   (let [{lower-bound :min upper-bound :max} (field-definition skill-id field-id)
         default (int (field-default skill-id field-id))
-      rounded-input (double (finite-double (raw-value skill-id field-id) default))
+      rounded-input (double (ability-config-common/finite-double (raw-value skill-id field-id) default))
       value (Math/round rounded-input)]
     (cond-> value
       (some? lower-bound) (max lower-bound)
@@ -219,7 +207,7 @@
   [skill-id field-id]
   (let [field-def (field-definition skill-id field-id)
         default (double (field-default skill-id field-id))
-        value (finite-double (raw-value skill-id field-id) default)]
+      value (ability-config-common/finite-double (raw-value skill-id field-id) default)]
     (if (within-bounds? field-def value)
       value
       default)))
@@ -232,16 +220,11 @@
   [skill-id field-id]
   (let [field-def (field-definition skill-id field-id)
         default (int (field-default skill-id field-id))
-      rounded-input (double (finite-double (raw-value skill-id field-id) default))
+      rounded-input (double (ability-config-common/finite-double (raw-value skill-id field-id) default))
       value (Math/round rounded-input)]
     (if (within-bounds? field-def value)
       value
       default)))
-
-(defn- list-like?
-  [value]
-  (and (not (string? value))
-       (seqable? value)))
 
 (defn tunable-double-list
   "Read a fixed-length list of bounded doubles for a skill action tunable.
@@ -252,10 +235,10 @@
   (let [{:keys [list-count] :as field-def} (field-definition skill-id field-id)
         fallback (vec (field-default skill-id field-id))
         raw (raw-value skill-id field-id)]
-    (if (and (list-like? raw)
+    (if (and (ability-config-common/list-like? raw)
              (or (nil? list-count) (= (int list-count) (count raw))))
       (mapv (fn [value default]
-              (let [d (finite-double value default)]
+              (let [d (ability-config-common/finite-double value default)]
                 (if (within-bounds? field-def d)
                   d
                   (double default))))
@@ -269,10 +252,10 @@
   (let [{:keys [list-count] :as field-def} (field-definition skill-id field-id)
         fallback (vec (field-default skill-id field-id))
         raw (raw-value skill-id field-id)]
-    (if (and (list-like? raw)
+    (if (and (ability-config-common/list-like? raw)
              (or (nil? list-count) (= (int list-count) (count raw))))
       (mapv (fn [value default]
-          (let [rounded-input (double (finite-double value default))
+          (let [rounded-input (double (ability-config-common/finite-double value default))
             i (Math/round rounded-input)]
                 (if (within-bounds? field-def i)
                   i
@@ -288,7 +271,7 @@
   [skill-id field-id]
   (let [fallback (vec (field-default skill-id field-id))
         raw (raw-value skill-id field-id)]
-    (if (list-like? raw)
+    (if (ability-config-common/list-like? raw)
       (let [values (->> raw
                         (map str)
                         (map str/trim)
@@ -313,11 +296,9 @@
 
 (defn- boolean-value
   [skill-id field-id]
-  (let [value (raw-value skill-id field-id)]
-    (cond
-      (instance? Boolean value) value
-      (string? value) (Boolean/parseBoolean value)
-      :else (boolean (field-default skill-id field-id)))))
+  (ability-config-common/boolean-value
+    (raw-value skill-id field-id)
+    (field-default skill-id field-id)))
 
 (defn tunable-boolean
   [skill-id field-id]
@@ -428,20 +409,28 @@
         (contains? spec :cooldown-ticks) (update :cooldown-ticks scale-value cd-scale)
         (contains? spec :cooldown-policy) (update :cooldown-policy scale-cooldown-policy cd-scale)))))
 
+(defn- collect-config-errors
+  []
+  (vec
+    (mapcat (fn [skill-id]
+              (let [level-error
+                    (when-not (<= 1 (skill-level skill-id) 5)
+                      [(str (name skill-id) ".general.level must be between 1 and 5")])
+                    non-negative-errors
+                    (for [field-id [:damage-scale :cp-consume-speed :overload-consume-speed
+                                    :cooldown-scale :cost-cp-scale :cost-overload-scale]
+                          :let [value (ability-config-common/finite-double (raw-value skill-id field-id) -1.0)]
+                          :when (neg? value)]
+                      (str (name skill-id) "." (name field-id) " must be non-negative"))
+                    exp-speed (ability-config-common/finite-double (raw-value skill-id :exp-incr-speed) 0.0)
+                    exp-error (when-not (pos? exp-speed)
+                                [(str (name skill-id) ".progression.exp-incr-speed must be positive")])]
+                (concat level-error non-negative-errors exp-error)))
+            all-skill-ids)))
+
 (defn validate-config!
   []
-  (let [errors (atom [])]
-    (doseq [skill-id all-skill-ids]
-      (when-not (<= 1 (skill-level skill-id) 5)
-        (swap! errors conj (str (name skill-id) ".general.level must be between 1 and 5")))
-      (doseq [field-id [:damage-scale :cp-consume-speed :overload-consume-speed
-                        :cooldown-scale :cost-cp-scale :cost-overload-scale]
-              :let [value (finite-double (raw-value skill-id field-id) -1.0)]]
-        (when (neg? value)
-          (swap! errors conj (str (name skill-id) "." (name field-id) " must be non-negative"))))
-      (let [exp-speed (finite-double (raw-value skill-id :exp-incr-speed) 0.0)]
-        (when-not (pos? exp-speed)
-          (swap! errors conj (str (name skill-id) ".progression.exp-incr-speed must be positive")))))
-    (when (seq @errors)
-      (throw (ex-info "Invalid ability skill configuration" {:errors @errors})))
+  (let [errors (collect-config-errors)]
+    (when (seq errors)
+      (throw (ex-info "Invalid ability skill configuration" {:errors errors})))
     nil))

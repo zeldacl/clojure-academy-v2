@@ -1,6 +1,11 @@
 (ns cn.li.ac.ability.adapters.server-hooks
   "Server/runtime hook composition for AC ability platform bridge."
-  (:require [cn.li.ac.ability.config :as ability-config]
+  (:require 
+            [cn.li.ac.ability.service.player-state-tick :as ps-tick]
+[cn.li.ac.ability.service.player-state-accessors :as ps-accessors]
+[cn.li.ac.ability.service.player-state-dirty :as ps-dirty]
+[cn.li.ac.ability.service.player-state-core :as ps-core]
+[cn.li.ac.ability.config :as ability-config]
             [cn.li.ac.ability.item-actions :as item-actions]
             [cn.li.ac.ability.model.cooldown :as cdata]
             [cn.li.ac.ability.model.resource :as rdata]
@@ -14,9 +19,7 @@
             [cn.li.ac.ability.service.delayed-projectiles :as delayed-projectiles]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
-            [cn.li.ac.ability.service.platform-hooks :as platform-hooks]
-            [cn.li.ac.ability.service.player-state :as ps]
-            [cn.li.ac.block.developer.logic :as developer-logic]
+            [cn.li.ac.ability.service.platform-hooks :as platform-hooks]            [cn.li.ac.block.developer.logic :as developer-logic]
             [cn.li.ac.content.ability.server-runtime-lifecycle :as server-runtime-lifecycle]
             [cn.li.ac.wireless.data.world-registry :as world-registry]
             [cn.li.ac.util.init-guard :refer [with-init-guard]]
@@ -120,7 +123,7 @@
      evt/EVT-LEVEL-CHANGE
      (fn [{:keys [uuid new-level]}]
        (when (and uuid new-level)
-         (ps/update-resource-data! uuid
+         (ps-accessors/update-resource-data! uuid
                                    (fn [rd]
                                      (recalc-max-for-level-with-calc (rdata/reset-add-max rd)
                                                                       new-level
@@ -129,9 +132,9 @@
      evt/EVT-SKILL-LEARN
      (fn [{:keys [uuid]}]
        (when uuid
-         (when-let [state (ps/get-player-state uuid)]
+         (when-let [state (ps-core/get-player-state uuid)]
            (let [level (get-in state [:ability-data :level] 1)]
-             (ps/update-resource-data! uuid
+             (ps-accessors/update-resource-data! uuid
                                        (fn [rd]
                                          (recalc-max-for-level-with-calc rd level uuid))))))))
     (evt/subscribe-ability-event!
@@ -139,11 +142,11 @@
      (fn [{:keys [uuid]}]
        (when uuid
          (ctx-mgr/abort-player-contexts! uuid)
-         (ps/update-cooldown-data! uuid (constantly (cdata/new-cooldown-data)))
-         (ps/update-resource-data! uuid rdata/set-activated false)
-         (when-let [state (ps/get-player-state uuid)]
+         (ps-accessors/update-cooldown-data! uuid (constantly (cdata/new-cooldown-data)))
+         (ps-accessors/update-resource-data! uuid rdata/set-activated false)
+         (when-let [state (ps-core/get-player-state uuid)]
            (let [level (get-in state [:ability-data :level] 1)]
-             (ps/update-resource-data! uuid
+             (ps-accessors/update-resource-data! uuid
                                        (fn [rd]
                                          (recalc-max-for-level-with-calc rd level uuid))))))))
     (evt/subscribe-ability-event!
@@ -157,7 +160,7 @@
   []
   {:on-player-login!
    (fn [player-uuid]
-     (ps/get-or-create-player-state! player-uuid))
+     (ps-core/get-or-create-player-state! player-uuid))
 
    :on-player-logout!
    (fn [player-uuid]
@@ -165,12 +168,12 @@
      (delayed-projectiles/clear-player-tasks! player-uuid)
      (md-damage/clear-target-mark! player-uuid)
      (md-damage/clear-source-marks! player-uuid)
-     (ps/remove-player-state! player-uuid))
+     (ps-core/remove-player-state! player-uuid))
 
    :on-server-stop!
    (fn [session-id]
      (ctx/clear-session-contexts! session-id)
-     (ps/clear-session-player-states! session-id)
+     (ps-core/clear-session-player-states! session-id)
      (world-registry/clear-session-world-data! session-id)
      (when (platform-hooks/platform-fn-registered? fn-reset-server-runtimes)
        ((platform-hooks/get-platform-fn fn-reset-server-runtimes)))
@@ -201,20 +204,20 @@
 
    :on-player-tick!
    (fn [player-uuid]
-     (ps/get-or-create-player-state! player-uuid)
+     (ps-core/get-or-create-player-state! player-uuid)
      (md-damage/tick-marks!)
-     (ps/server-tick-player! player-uuid nil)
+     (ps-tick/server-tick-player! player-uuid nil)
      (ctx-mgr/tick-player-contexts! player-uuid)
      (delayed-projectiles/tick-player! player-uuid)
      (ctx-mgr/tick-context-manager!))
 
    :list-player-uuids
    (fn []
-     (ps/list-player-uuids))
+     (ps-core/list-player-uuids))
 
    :build-sync-payload
    (fn [player-uuid]
-     (when-let [state (ps/get-player-state player-uuid)]
+     (when-let [state (ps-core/get-player-state player-uuid)]
        {:uuid player-uuid
         :ability-data (:ability-data state)
         :resource-data (:resource-data state)
@@ -225,27 +228,27 @@
 
    :mark-player-clean!
    (fn [player-uuid]
-     (ps/mark-clean! player-uuid))
+     (ps-dirty/mark-clean! player-uuid))
 
    :get-player-state
    (fn [player-uuid]
-     (ps/get-player-state player-uuid))
+     (ps-core/get-player-state player-uuid))
 
    :set-player-state!
    (fn [player-uuid state]
-     (ps/set-player-state! player-uuid state))
+     (ps-core/set-player-state! player-uuid state))
 
    :get-or-create-player-state!
    (fn [player-uuid]
-     (ps/get-or-create-player-state! player-uuid))
+     (ps-core/get-or-create-player-state! player-uuid))
 
    :fresh-player-state
    (fn []
-     (ps/fresh-state))
+     (ps-core/fresh-state))
 
    :runtime-activated?
    (fn [player-uuid]
-     (boolean (some-> (ps/get-player-state player-uuid)
+     (boolean (some-> (ps-core/get-player-state player-uuid)
                       :resource-data
                       rdata/is-activated?)))
 
@@ -338,3 +341,6 @@
    :compute-reflected-damage
    (fn [current-damage]
      (entity-damage-runtime/compute-reflected-damage current-damage))})
+
+
+

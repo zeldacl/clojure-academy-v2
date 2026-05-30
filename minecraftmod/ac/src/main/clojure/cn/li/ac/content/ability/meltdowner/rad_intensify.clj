@@ -1,7 +1,7 @@
 (ns cn.li.ac.content.ability.meltdowner.rad-intensify
   "Meltdowner passive: radiation intensify.
   Custom exp is derived from max-cp ratio; damage rate lerps from 1.4 to 1.8."
-  (:require [cn.li.ac.ability.dsl :refer [defskill!]]
+  (:require [cn.li.ac.ability.dsl :refer [defskill]]
             [cn.li.ac.ability.config :as cfg]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.util.balance :as bal]
@@ -25,7 +25,7 @@
 (defn mark-duration-ticks []
   (max 1 (long (skill-config/tunable-int rad-intensify-skill-id :effect.mark-duration-ticks))))
 
-(defskill! rad-intensify
+(defskill rad-intensify
   :id :rad-intensify
   :category-id :meltdowner
   :name-key "ability.skill.meltdowner.rad_intensify"

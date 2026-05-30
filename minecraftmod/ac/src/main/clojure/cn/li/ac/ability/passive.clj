@@ -1,8 +1,8 @@
 (ns cn.li.ac.ability.passive
   "Helpers for passive skill calc-event wiring."
-  (:require [cn.li.ac.ability.registry.event :as evt]
-            [cn.li.ac.ability.service.player-state :as ps]
-            [cn.li.ac.ability.model.ability :as adata]))
+  (:require 
+            [cn.li.ac.ability.service.player-state-core :as ps-core]
+[cn.li.ac.ability.registry.event :as evt]            [cn.li.ac.ability.model.ability :as adata]))
 
 (defn default-passive-handler-runtime-state
   []
@@ -83,7 +83,7 @@
 (defn learned-skill?
   [uuid skill-id]
   (boolean
-    (when-let [state (ps/get-player-state uuid)]
+    (when-let [state (ps-core/get-player-state uuid)]
       (adata/is-learned? (:ability-data state) skill-id))))
 
 (defn register-passive-calc-handler!
@@ -105,3 +105,4 @@
                 (double (transform-fn value event))
                 value))))
         true))))
+

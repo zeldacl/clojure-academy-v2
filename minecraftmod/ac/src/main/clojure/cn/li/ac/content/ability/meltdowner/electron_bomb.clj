@@ -11,7 +11,7 @@
   settlement and the client FX receives a single-ray visual event.
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.dsl :refer [defskill!]]
+  (:require [cn.li.ac.ability.dsl :refer [defskill]]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.service.dispatcher :as ctx]
@@ -86,7 +86,7 @@
 ;; Skill registration
 ;; ---------------------------------------------------------------------------
 
-(defskill! electron-bomb
+(defskill electron-bomb
   :id             :electron-bomb
   :category-id    :meltdowner
   :name-key       "ability.skill.meltdowner.electron_bomb"

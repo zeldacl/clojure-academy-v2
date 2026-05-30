@@ -6,7 +6,7 @@
   scattered beams around silbarn's nearby targets.
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.dsl :refer [defskill!]]
+  (:require [cn.li.ac.ability.dsl :refer [defskill]]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
@@ -220,7 +220,7 @@
 ;; Skill registration
 ;; ---------------------------------------------------------------------------
 
-(defskill! ray-barrage
+(defskill ray-barrage
   :id             :ray-barrage
   :category-id    :meltdowner
   :name-key       "ability.skill.meltdowner.ray_barrage"

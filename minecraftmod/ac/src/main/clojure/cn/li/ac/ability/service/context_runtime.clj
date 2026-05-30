@@ -8,13 +8,14 @@
   - MSG-SLOT-KEY-ABORT
 
   It keeps input state transitions strict to avoid duplicated lifecycle calls."
-  (:require [cn.li.ac.ability.service.dispatcher :as ctx]
+  (:require 
+            [cn.li.ac.ability.service.player-state-accessors :as ps-accessors]
+[cn.li.ac.ability.service.player-state-core :as ps-core]
+[cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.model.ability :as adata]
             [cn.li.ac.ability.registry.skill :as skill]
             [cn.li.ac.ability.server.dispatch :as skill-rt]
-            [cn.li.ac.ability.registry.event :as evt]
-            [cn.li.ac.ability.service.player-state :as ps]
-            [cn.li.ac.ability.rules.cooldown-rules :as cd-rules]))
+            [cn.li.ac.ability.registry.event :as evt]            [cn.li.ac.ability.rules.cooldown-rules :as cd-rules]))
 
 (def INPUT-IDLE :idle)
 (def INPUT-ACTIVE :active)
@@ -24,7 +25,7 @@
 (defn- event-payload [ctx-map payload]
   (let [player-id (:player-uuid ctx-map)
         skill-id (:skill-id ctx-map)
-        exp (double (adata/get-skill-exp (get-in (ps/get-player-state player-id)
+        exp (double (adata/get-skill-exp (get-in (ps-core/get-player-state player-id)
                                                  [:ability-data])
                                          skill-id))]
     {:ctx-id (:id ctx-map)
@@ -59,7 +60,7 @@
         spec (skill/get-skill (:skill-id ctx-map))
         ctrl-id (or (:ctrl-id spec) (:skill-id ctx-map))
         cooldown-ticks (max 1 (int (or (:cooldown-ticks spec) 1)))]
-    (ps/update-cooldown-data! uuid
+    (ps-accessors/update-cooldown-data! uuid
                               (fn [cooldown-data]
                                 (:data (cd-rules/set-cooldown cooldown-data
                                                               ctrl-id
@@ -69,7 +70,7 @@
 (defn- in-main-cooldown?
   [ctx-map]
   (let [uuid (:player-uuid ctx-map)
-        state (ps/get-player-state uuid)
+        state (ps-core/get-player-state uuid)
         spec (skill/get-skill (:skill-id ctx-map))
         ctrl-id (or (:ctrl-id spec) (:skill-id ctx-map))]
     (and state
@@ -157,3 +158,5 @@
          (dispatch-skill-callback! aborted-ctx :on-key-abort evt/EVT-CONTEXT-KEY-ABORT payload)
          (ctx/terminate-context! ctx-id terminate-fn)
          true)))))
+
+

@@ -8,7 +8,7 @@
   AOE radius: lerp(15,30,exp) with distance falloff
   Cooldown: ticks * lerp(10,6,exp)
   Exp: 0.003 per use"
-  (:require [cn.li.ac.ability.dsl :refer [defskill!]]
+  (:require [cn.li.ac.ability.dsl :refer [defskill]]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.util.balance :as bal]
             [cn.li.ac.ability.service.dispatcher :as ctx]
@@ -74,7 +74,7 @@
      :charge-ratio (compute-overcharge-ratio ticks)
      :target       (current-target ctx-id player-id)}))
 
-(defskill! thunder-clap
+(defskill thunder-clap
   :id              :thunder-clap
   :category-id     :electromaster
   :name-key        "ability.skill.electromaster.thunder_clap"

@@ -1,5 +1,7 @@
 (ns cn.li.ac.ability.adapters.client-ui-hooks-test
-  (:require [clojure.test :refer [deftest is use-fixtures]]
+  (:require 
+            [cn.li.ac.ability.service.player-state-core :as ps-core]
+[clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.adapters.client-ui-hooks :as client-ui-hooks]
             [cn.li.ac.ability.client.effects.particles :as particles]
             [cn.li.ac.ability.client.effects.sounds :as sounds]
@@ -14,9 +16,7 @@
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.config.gameplay :as gameplay]
             [cn.li.ac.ability.service.dispatcher :as ctx]
-            [cn.li.ac.ability.service.context-mgr :as ctx-mgr]
-            [cn.li.ac.ability.service.player-state :as ps]
-            [cn.li.ac.test.support.player-state :as ps-fix]
+            [cn.li.ac.ability.service.context-mgr :as ctx-mgr]            [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.ac.ability.messages :as catalog]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.network.client :as net-client]))
@@ -52,7 +52,7 @@
                       (particles/reset-particle-queue-for-test!)
                       (sounds/reset-sound-queue-for-test!)
                       (hand-effects/reset-hand-effect-registry-for-test!)
-                      (ps/reset-player-states-for-test!)
+                      (ps-core/reset-player-states-for-test!)
                       (ctx/reset-contexts-for-test!)
                       (try
                         (binding [client-keybinds/*client-session-id* :test-session]
@@ -64,7 +64,7 @@
                           (sounds/reset-sound-queue-for-test!)
                           (hand-effects/reset-hand-effect-registry-for-test!)
                           (ctx/reset-contexts-for-test!)
-                          (ps/reset-player-states-for-test!))))))))))))))
+                          (ps-core/reset-player-states-for-test!))))))))))))))
 
 (use-fixtures :each reset-ui-state!)
 
@@ -246,7 +246,7 @@
                               :player-uuid "p1"
                               :logical-side :client
                               :session-id [:session-a "p1"]})
-      (ps/set-player-state! "p1" {:resource-data {:activated true}}))
+      (ps-core/set-player-state! "p1" {:resource-data {:activated true}}))
     (client-ui-hooks/set-slot-context-for-test! owner 0 "ctx-cleanup")
     (client-ui-hooks/seed-vm-wave-state-for-test! owner [{:radius 1.0}] 42)
     (particles/queue-particle-effect! owner {:type :particle :particle-type :spark})
@@ -280,7 +280,7 @@
     (is (empty? (sounds/sound-queue-snapshot (:client-session-id owner))))
     (is (empty? (hand-effects/drain-camera-pitch-deltas! owner)))
     (binding [runtime-hooks/*player-state-owner* owner]
-      (is (nil? (ps/get-player-state "p1"))))
+      (is (nil? (ps-core/get-player-state "p1"))))
     (binding [ctx/*context-owner* context-owner]
       (is (nil? (ctx/get-context "ctx-cleanup"))))))
 
@@ -361,7 +361,7 @@
         cleared-groups (atom [])]
     (with-client-player-state-owner
       "p1"
-      #(ps/set-player-state! "p1" {:ability-data {:category-id :electromaster
+      #(ps-core/set-player-state! "p1" {:ability-data {:category-id :electromaster
                                                    :learned-skills [:railgun]}}))
     (client-ui-hooks/set-slot-context-for-test! "p1" 0 "ctx-runtime-reset")
     (with-redefs [net-client/register-push-handler! (fn [msg-id handler-fn]
@@ -398,7 +398,7 @@
         cleared (atom [])]
     (with-client-player-state-owner
       "p1"
-      #(ps/set-player-state! "p1" {:resource-data {:activated true
+      #(ps-core/set-player-state! "p1" {:resource-data {:activated true
                                                     :overload-fine true
                                                     :interferences #{}}}))
     (client-ui-hooks/set-slot-context-for-test! "p1" 0 "ctx-resource-reset")
@@ -550,7 +550,7 @@
       (is (>= (count (filter #{:fill} kinds)) 3)))))
 
 (deftest build-client-overlay-plan-falls-back-when-activated-override-nil-test
-  (with-redefs [ps/get-player-state (fn [_]
+  (with-redefs [ps-core/get-player-state (fn [_]
                                       {:resource-data {:activated true
                                                        :cur-cp 80.0
                                                        :max-cp 100.0
@@ -565,7 +565,7 @@
       (is (seq (:elements plan))))))
 
 (deftest build-client-overlay-plan-renders-reflection-crosshair-and-vm-wave-test
-  (with-redefs [ps/get-player-state (fn [_]
+  (with-redefs [ps-core/get-player-state (fn [_]
                                       {:resource-data {:activated true
                                                        :cur-cp 80.0
                                                        :max-cp 100.0
@@ -618,3 +618,4 @@
               {:ctx-id "ctx-flashing" :channel :flashing/move-tick :payload {:key :forward}}
               {:ctx-id "ctx-flashing" :channel :flashing/move-up :payload {:key :forward}}]
              (mapv :payload @sent))))))
+

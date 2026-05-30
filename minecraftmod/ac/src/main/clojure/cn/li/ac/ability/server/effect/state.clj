@@ -1,8 +1,8 @@
 (ns cn.li.ac.ability.server.effect.state
-  (:require [cn.li.ac.ability.service.dispatcher :as ctx]
-            [cn.li.ac.ability.server.effect.core :as effect]
-            [cn.li.ac.ability.service.player-state :as ps]
-            [cn.li.ac.ability.model.resource :as rdata]))
+  (:require 
+            [cn.li.ac.ability.service.player-state-accessors :as ps-accessors]
+[cn.li.ac.ability.service.dispatcher :as ctx]
+            [cn.li.ac.ability.server.effect.core :as effect]            [cn.li.ac.ability.model.resource :as rdata]))
 
 (effect/defop :assoc-state
   [evt {:keys [k v]}]
@@ -29,10 +29,12 @@
   :floor may be a number or a fn of evt."
   [evt {:keys [floor]}]
   (let [floor-val (double (if (fn? floor) (floor evt) (or floor 0.0)))]
-    (ps/update-resource-data!
+    (ps-accessors/update-resource-data!
      (:player-id evt)
      (fn [res-data]
        (if (< (double (get res-data :cur-overload 0.0)) floor-val)
          (-> res-data (rdata/set-cur-overload floor-val) (assoc :overload-fine true))
          res-data)))
     evt))
+
+

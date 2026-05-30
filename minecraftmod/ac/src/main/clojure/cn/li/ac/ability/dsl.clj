@@ -43,14 +43,3 @@
         skill-map (definition-core/build-skill-spec sym kv-map)]
     `(let [skill-map# (assoc ~skill-map :ac/content-type :skill)]
        (def ~sym skill-map#))))
-
-(defmacro defskill!
-  "Declare a skill map without registration.
-
-  Kept as a legacy spelling for existing content declarations; registration is
-  performed by cn.li.ac.content.ability/init-ability-content!."
-  [sym & opts]
-  (let [kv-map (apply hash-map opts)
-        skill-map (definition-core/build-skill-spec sym kv-map)]
-    `(let [skill-map# (assoc ~skill-map :ac/content-type :skill)]
-       (def ~sym skill-map#))))

@@ -6,9 +6,10 @@
   2) apply reducer command(s)
   3) persist resulting state
   4) execute emitted events/effects"
-  (:require [cn.li.ac.ability.effects.interpreter :as interpreter]
-            [cn.li.ac.ability.service.player-state :as ps]
-            [cn.li.ac.ability.service.reducer :as reducer]))
+  (:require 
+            [cn.li.ac.ability.service.player-state-dirty :as ps-dirty]
+[cn.li.ac.ability.service.player-state-core :as ps-core]
+[cn.li.ac.ability.effects.interpreter :as interpreter]            [cn.li.ac.ability.service.reducer :as reducer]))
 
 (defn- ensure-command-owner-fields
   [uuid command]
@@ -24,14 +25,14 @@
    (run-command! uuid command {}))
   ([uuid command {:keys [mark-dirty?]
                   :or {mark-dirty? true}}]
-   (let [state (or (ps/get-player-state uuid)
-                   (ps/get-or-create-player-state! uuid))
+   (let [state (or (ps-core/get-player-state uuid)
+                   (ps-core/get-or-create-player-state! uuid))
          result (reducer/apply-command state (ensure-command-owner-fields uuid command))
          next-state (:state result)]
      (when (and next-state (not= next-state state))
-       (ps/set-player-state! uuid next-state)
+       (ps-core/set-player-state! uuid next-state)
        (when mark-dirty?
-         (ps/mark-dirty! uuid)))
+         (ps-dirty/mark-dirty! uuid)))
      (interpreter/execute-reducer-result! result)
      result)))
 
@@ -43,14 +44,17 @@
    (run-commands! uuid commands {}))
   ([uuid commands {:keys [mark-dirty?]
                    :or {mark-dirty? true}}]
-   (let [state (or (ps/get-player-state uuid)
-                   (ps/get-or-create-player-state! uuid))
+   (let [state (or (ps-core/get-player-state uuid)
+                   (ps-core/get-or-create-player-state! uuid))
          normalized (mapv #(ensure-command-owner-fields uuid %) commands)
          result (reducer/apply-commands state normalized)
          next-state (:state result)]
      (when (and next-state (not= next-state state))
-       (ps/set-player-state! uuid next-state)
+       (ps-core/set-player-state! uuid next-state)
        (when mark-dirty?
-         (ps/mark-dirty! uuid)))
+         (ps-dirty/mark-dirty! uuid)))
      (interpreter/execute-reducer-result! result)
      result)))
+
+
+

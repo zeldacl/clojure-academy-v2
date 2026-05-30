@@ -1,10 +1,10 @@
 (ns cn.li.ac.content.ability.electromaster.mine-detect-config-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require 
+            [cn.li.ac.ability.service.player-state-core :as ps-core]
+[clojure.test :refer [deftest is testing]]
             [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.skill-config :as skill-config]
-            [cn.li.ac.content.ability :as ability-content]
-            [cn.li.ac.ability.service.player-state :as player-state]
-            [cn.li.ac.test.support.player-state :as ps-fix]
+            [cn.li.ac.content.ability :as ability-content]            [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.mcmod.config.registry :as config-reg]))
 
 (defn- with-test-state
@@ -13,16 +13,16 @@
     (fn []
       (let [descriptors (config-reg/get-descriptor-registry)
             values (config-reg/get-value-registry)
-            player-states (player-state/snapshot-player-states)]
+            player-states (ps-core/snapshot-player-states)]
         (try
           (config-reg/set-descriptor-registry! {})
           (config-reg/set-value-registry! {})
-          (player-state/reset-player-states-for-test!)
+          (ps-core/reset-player-states-for-test!)
           (f)
           (finally
             (config-reg/set-descriptor-registry! descriptors)
             (config-reg/set-value-registry! values)
-            (player-state/reset-player-states-for-test! player-states)))))))
+            (ps-core/reset-player-states-for-test! player-states)))))))
 
 (defn- seed-electromaster-config!
   [values]
@@ -53,3 +53,4 @@
           (is (= 200.0 ((get-in spec [:cost :down :overload]) {:player-id player-id})))
           (is (= 900 (skill-config/lerp-int :mine-detect :cooldown.ticks 0.0)))
           (is (= 0.008 (skill-config/tunable-double :mine-detect :progression.exp-cast))))))))
+
