@@ -90,17 +90,27 @@
      :tick-state-fn tick-state!
      :build-plan-fn build-plan})
   (fx-registry/register-fx-channels!
-    [:ray-barrage/fx-beam]
+    [:ray-barrage/fx-preray :ray-barrage/fx-barrage :ray-barrage/fx-beam]
     (fn [ctx-id channel payload]
-      (when (= channel :ray-barrage/fx-beam)
-        (when-let [beam-end (:beam-end payload)]
-          (let [origin (:origin payload)
-                meta-payload (select-keys payload [:effect-instance-id :source-player-id :world-id])]
-            (level-effects/enqueue-level-effect! ray-barrage-effect-id
-              (merge meta-payload
-                     {:from-x (:x origin) :from-y (:y origin) :from-z (:z origin)
-                      :to-x (:x beam-end) :to-y (:y beam-end) :to-z (:z beam-end)})
-              {:ctx-id ctx-id :channel channel})
-            (client-sounds/queue-current-sound-effect!
-              {:type :sound :sound-id "my_mod:md.ray_barrage" :volume 0.4 :pitch (+ 0.9 (rand 0.2))}))))))
+      (case channel
+        :ray-barrage/fx-preray
+        (client-sounds/queue-current-sound-effect!
+          {:type :sound :sound-id "my_mod:md.ray_barrage" :volume 0.35 :pitch 0.95})
+
+        :ray-barrage/fx-barrage
+        (client-sounds/queue-current-sound-effect!
+          {:type :sound :sound-id "my_mod:md.ray_barrage" :volume 0.45 :pitch 1.1})
+
+        :ray-barrage/fx-beam
+        (let [origin (or (:start payload) (:origin payload))
+              beam-end (or (:end payload) (:beam-end payload))]
+          (when (and (map? origin) (map? beam-end))
+            (let [meta-payload (select-keys payload [:effect-instance-id :source-player-id :world-id])]
+              (level-effects/enqueue-level-effect! ray-barrage-effect-id
+                (merge meta-payload
+                       {:from-x (:x origin) :from-y (:y origin) :from-z (:z origin)
+                        :to-x (:x beam-end) :to-y (:y beam-end) :to-z (:z beam-end)})
+                {:ctx-id ctx-id :channel channel}))))
+
+        nil)))
   nil)

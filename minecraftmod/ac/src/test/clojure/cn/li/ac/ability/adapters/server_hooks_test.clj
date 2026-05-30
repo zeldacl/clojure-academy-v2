@@ -34,6 +34,13 @@
 (use-fixtures :each reset-lifecycle-subs!)
 (use-fixtures :each
   (fn [f]
+    (server-runtime-lifecycle/install-server-runtime-lifecycle!)
+    (try
+      (f)
+      (finally
+        (server-runtime-lifecycle/reset-server-runtime-lifecycle-for-test!)))))
+(use-fixtures :each
+  (fn [f]
     (ctx/reset-contexts-for-test!)
     (try
       (f)

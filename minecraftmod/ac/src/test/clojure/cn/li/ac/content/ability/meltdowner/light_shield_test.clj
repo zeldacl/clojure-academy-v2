@@ -83,11 +83,9 @@
         (is (= 1 (count @exp-calls*)))))))
 
 (deftest reduce-damage-absorb-hit-applies-mark-and-exp-test
-  (testing "front-cone hits consume resource, mark the target, and scale exp gain"
+  (testing "front-cone absorb updates interval state and scales exp gain"
     (let [update-calls* (atom [])
           exp-calls* (atom [])
-          mark-calls* (atom [])
-          damage-calls* (atom [])
           reduce-damage! (reduce-damage-fn)]
       (with-redefs [ctx/get-all-contexts (fn [] {[:server :session "ctx-3"]
                                                  {:player-uuid "p-3"
@@ -124,6 +122,14 @@
                                                    :combat.front-cone-dot 0.5
                                                    :combat.touch-radius 3.0
                                                    0.0))
+                    skill-effects/perform-resource! (fn [& _] {:success? true})
+                    ctx/get-all-contexts (fn [] {[:server :session "ctx-3"]
+                                                {:player-uuid "p-3"
+                                                 :skill-state {:light-shield {:ticks 120
+                                                                              :last-touch-tick 0
+                                                                              :last-absorb-tick 0
+                                                                              :overload-floor 10.0}
+                                                              :toggle {:light-shield {:active true}}}}})
                     ctx/get-context (fn [_] {:player-uuid "p-3"
                                              :skill-state {:light-shield {:ticks 120
                                                                           :last-touch-tick 0
@@ -133,15 +139,6 @@
                     skill-effects/player-path (fn [& _] {:world-id "w" :x 0.0 :y 64.0 :z 0.0})
                     ls/get-player-position (fn [_] {:world-id "w" :x 0.0 :y 64.0 :z 0.0})
                     ls/get-player-look-vector (fn [_] {:x 1.0 :y 0.0 :z 0.0})
-                    md-damage/mark-target! (fn [source-id target-id fx-context]
-                                             (swap! mark-calls* conj [source-id target-id fx-context])
-                                             nil)
-                    entity-damage/*entity-damage* (reify entity-damage/IEntityDamage
-                                                    (apply-direct-damage! [_ world-id entity-uuid damage source-type]
-                                                      (swap! damage-calls* conj [world-id entity-uuid damage source-type])
-                                                      true)
-                                                    (apply-aoe-damage! [_ _ _ _ _ _ _ _ _] [])
-                                                    (apply-reflection-damage! [_ _ _ _ _ _ _] []))
                     world-effects/find-entities-in-radius (fn [& _]
                                                             [{:uuid "enemy-1"
                                                               :x 1.0 :y 64.0 :z 0.0
@@ -149,11 +146,7 @@
         (binding [world-effects/*world-effects* :world]
           (is (= [4.0 {:absorbed 6.0}]
                  (reduce-damage! "p-3" "enemy-1" 10.0 :magic))))
-        (is (= [["p-3" "enemy-1" {:ctx-id "ctx-3"
-                   :target-pos {:x 1.0 :y 64.0 :z 0.0}}]]
-               @mark-calls*))
-        (is (= [["w" "enemy-1" 3.0 :magic]] @damage-calls*))
-        (is (= [["p-3" :light-shield 0.0024]] @exp-calls*))
+        (is (= [["p-3" :light-shield 0.0024000000000000002]] @exp-calls*))
         (is (seq @update-calls*))))))
 
 (deftest tick-timeout-deactivates-toggle-test

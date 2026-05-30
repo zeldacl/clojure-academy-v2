@@ -98,16 +98,18 @@
    {:skill-id :mine-ray-luck :id :cooldown.ticks :path "cooldown.ticks" :section-suffix "cooldown" :type :int :min 0 :default 5 :comment "MineRayLuck cooldown ticks."}
    {:skill-id :mine-ray-luck :id :progression.exp-block :path "progression.exp-block" :section-suffix "progression" :type :double :min 0.0 :default 0.002 :comment "MineRayLuck exp per block broken."}
 
-   {:skill-id :ray-barrage :id :combat.damage :path "combat.damage" :section-suffix "combat" :type :double-list :min 0.0 :list-count 2 :default [4.0 10.0] :comment "RayBarrage damage per beam."}
-   {:skill-id :ray-barrage :id :beam.count :path "beam.count" :section-suffix "beam" :type :int :min 1 :default 5 :comment "RayBarrage number of beams."}
-   {:skill-id :ray-barrage :id :beam.spread :path "beam.spread" :section-suffix "beam" :type :double :min 0.0 :default 0.18 :comment "RayBarrage random cone spread."}
+  {:skill-id :ray-barrage :id :combat.damage.plain :path "combat.damage.plain" :section-suffix "combat" :type :double-list :min 0.0 :list-count 2 :default [25.0 60.0] :comment "RayBarrage plain/direct branch damage endpoints."}
+  {:skill-id :ray-barrage :id :combat.damage.scattered :path "combat.damage.scattered" :section-suffix "combat" :type :double-list :min 0.0 :list-count 2 :default [10.0 18.0] :comment "RayBarrage scattered branch damage endpoints."}
+  {:skill-id :ray-barrage :id :targeting.range :path "targeting.range" :section-suffix "targeting" :type :double :min 0.0 :default 22.0 :comment "RayBarrage forward detect range."}
+  {:skill-id :ray-barrage :id :scatter.target-radius :path "scatter.target-radius" :section-suffix "scatter" :type :double :min 0.0 :default 8.0 :comment "RayBarrage scattered target search radius around silbarn."}
+  {:skill-id :ray-barrage :id :scatter.count :path "scatter.count" :section-suffix "scatter" :type :int :min 1 :default 8 :comment "RayBarrage scattered beam count when silbarn branch triggers."}
    {:skill-id :ray-barrage :id :beam.radius :path "beam.radius" :section-suffix "beam" :type :double :min 0.0 :default 0.3 :comment "RayBarrage beam radius."}
    {:skill-id :ray-barrage :id :beam.query-radius :path "beam.query-radius" :section-suffix "beam" :type :double :min 0.0 :default 20.0 :comment "RayBarrage beam query radius."}
    {:skill-id :ray-barrage :id :beam.step :path "beam.step" :section-suffix "beam" :type :double :min 0.001 :default 0.8 :comment "RayBarrage beam step."}
    {:skill-id :ray-barrage :id :beam.max-distance :path "beam.max-distance" :section-suffix "beam" :type :double :min 0.0 :default 22.0 :comment "RayBarrage beam max distance."}
    {:skill-id :ray-barrage :id :cost.down.cp :path "cost.down.cp" :section-suffix "cost.down" :type :double-list :min 0.0 :list-count 2 :default [300.0 220.0] :comment "RayBarrage down-stage CP cost."}
    {:skill-id :ray-barrage :id :cost.down.overload :path "cost.down.overload" :section-suffix "cost.down" :type :double-list :min 0.0 :list-count 2 :default [130.0 100.0] :comment "RayBarrage down-stage overload cost."}
-   {:skill-id :ray-barrage :id :cooldown.ticks :path "cooldown.ticks" :section-suffix "cooldown" :type :double-list :min 0.0 :list-count 2 :default [40.0 25.0] :comment "RayBarrage cooldown ticks."}
+  {:skill-id :ray-barrage :id :cooldown.ticks :path "cooldown.ticks" :section-suffix "cooldown" :type :double-list :min 0.0 :list-count 2 :default [100.0 40.0] :comment "RayBarrage cooldown ticks."}
    {:skill-id :ray-barrage :id :progression.exp-hit :path "progression.exp-hit" :section-suffix "progression" :type :double :min 0.0 :default 0.003 :comment "RayBarrage exp gained when any beam hits."}
 
    {:skill-id :scatter-bomb :id :projectile.max-balls :path "projectile.max-balls" :section-suffix "projectile" :type :int :min 1 :default 6 :comment "ScatterBomb maximum accumulated balls."}

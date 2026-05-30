@@ -41,10 +41,58 @@
       (rb-fx/init!)
       (is (= :ray-barrage (first @registered-level*)))
       (is (fn? (:enqueue-state-fn (second @registered-level*))))
-      (is (= #{:ray-barrage/fx-beam}
+      (is (= #{:ray-barrage/fx-preray :ray-barrage/fx-barrage :ray-barrage/fx-beam}
              (set (:channels @registered-handler*)))))))
 
 (deftest fx-handler-routes-ray-barrage-beam-test
+  (let [handler* (atom nil)
+        enqueued* (atom [])
+        sounds* (atom [])]
+    (with-redefs [level-effects/register-level-effect! (fn [& _] nil)
+                  fx-registry/register-fx-channels! (fn [_ handler]
+                                                      (reset! handler* handler)
+                                                      nil)
+                  level-effects/enqueue-level-effect! (fn [effect-id payload fx-context]
+                                                        (swap! enqueued* conj [effect-id payload fx-context])
+                                                        nil)
+                  client-sounds/queue-current-sound-effect! (fn [payload]
+                                                              (swap! sounds* conj payload)
+                                                              nil)]
+      (rb-fx/init!)
+      (@handler* "ctx-rb" :ray-barrage/fx-beam {:start {:x 1.0 :y 2.0 :z 3.0}
+                      :end {:x 4.0 :y 5.0 :z 6.0}
+                                                  :effect-instance-id "inst-rb"
+                                                  :source-player-id "player-a"
+                                                  :world-id "world-a"})
+      (is (= [[:ray-barrage {:effect-instance-id "inst-rb"
+                             :source-player-id "player-a"
+                             :world-id "world-a"
+                             :from-x 1.0 :from-y 2.0 :from-z 3.0
+                             :to-x 4.0 :to-y 5.0 :to-z 6.0}
+               {:ctx-id "ctx-rb" :channel :ray-barrage/fx-beam}]]
+             @enqueued*))
+      (is (empty? @sounds*)))))
+
+(deftest fx-handler-preray-and-barrage-play-throttled-sounds-test
+  (let [handler* (atom nil)
+        sounds* (atom [])]
+    (with-redefs [level-effects/register-level-effect! (fn [& _] nil)
+                  fx-registry/register-fx-channels! (fn [_ handler]
+                                                      (reset! handler* handler)
+                                                      nil)
+                  level-effects/enqueue-level-effect! (fn [& _] nil)
+                  client-sounds/queue-current-sound-effect! (fn [payload]
+                                                              (swap! sounds* conj payload)
+                                                              nil)]
+      (rb-fx/init!)
+      (@handler* "ctx-pre" :ray-barrage/fx-preray {:start {:x 0.0 :y 0.0 :z 0.0}
+                                                     :end {:x 1.0 :y 0.0 :z 0.0}})
+      (@handler* "ctx-bar" :ray-barrage/fx-barrage {:silbarn {:x 2.0 :y 0.0 :z 0.0}
+                                                      :scatter-count 3})
+      (is (= 2 (count @sounds*)))
+      (is (= [0.95 1.1] (map :pitch @sounds*))))))
+
+(deftest fx-handler-supports-legacy-origin-beam-end-payload-test
   (let [handler* (atom nil)
         enqueued* (atom [])]
     (with-redefs [level-effects/register-level-effect! (fn [& _] nil)
@@ -56,18 +104,13 @@
                                                         nil)
                   client-sounds/queue-current-sound-effect! (fn [& _] nil)]
       (rb-fx/init!)
-      (@handler* "ctx-rb" :ray-barrage/fx-beam {:origin {:x 1.0 :y 2.0 :z 3.0}
-                                                  :beam-end {:x 4.0 :y 5.0 :z 6.0}
-                                                  :effect-instance-id "inst-rb"
-                                                  :source-player-id "player-a"
-                                                  :world-id "world-a"})
-      (is (= [[:ray-barrage {:effect-instance-id "inst-rb"
-                             :source-player-id "player-a"
-                             :world-id "world-a"
-                             :from-x 1.0 :from-y 2.0 :from-z 3.0
-                             :to-x 4.0 :to-y 5.0 :to-z 6.0}
-               {:ctx-id "ctx-rb" :channel :ray-barrage/fx-beam}]]
-             @enqueued*)))))
+      (@handler* "ctx-rb-legacy" :ray-barrage/fx-beam {:origin {:x 1.0 :y 2.0 :z 3.0}
+                                                         :beam-end {:x 4.0 :y 5.0 :z 6.0}})
+      (is (= 1 (count @enqueued*)))
+      (is (= {:from-x 1.0 :from-y 2.0 :from-z 3.0
+              :to-x 4.0 :to-y 5.0 :to-z 6.0}
+             (select-keys (second (first @enqueued*))
+                          [:from-x :from-y :from-z :to-x :to-y :to-z]))))))
 
 (deftest enqueue-beam-tick-and-build-plan-test
   (let [enqueue-state! (var-get #'cn.li.ac.content.ability.meltdowner.ray-barrage-fx/enqueue-state!)

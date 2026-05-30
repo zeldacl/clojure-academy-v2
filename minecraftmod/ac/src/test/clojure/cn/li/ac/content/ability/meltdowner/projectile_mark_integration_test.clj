@@ -92,14 +92,16 @@
 
 (defn- stub-ray-lerp-double [_skill-id field-id _exp]
   (case field-id
-    :combat.damage 6.0
+    :combat.damage.plain 25.0
+    :combat.damage.scattered 10.0
     :cost.down.cp 300.0
     :cost.down.overload 130.0
     0.0))
 
 (defn- stub-ray-tunable-double [_skill-id field-id]
   (case field-id
-    :beam.spread 0.0
+    :targeting.range 22.0
+    :scatter.target-radius 8.0
     :beam.radius 0.3
     :beam.query-radius 20.0
     :beam.step 0.8
@@ -110,7 +112,7 @@
 
 (defn- stub-ray-tunable-int [_skill-id field-id]
   (case field-id
-    :beam.count 1
+    :scatter.count 1
     0))
 
 (defn- jet-context-mocks [initial]
@@ -205,6 +207,8 @@
                   skill-config/lerp-double stub-ray-lerp-double
                   skill-config/tunable-double stub-ray-tunable-double
                   skill-config/tunable-int stub-ray-tunable-int
+                  ctx/ctx-send-to-client! (fn [& _] nil)
+                  ctx/ctx-send-to-except-local! (fn [& _] nil)
                   effect/run-op! (fn [_ _]
                                    {:beam-result {:performed? true
                                                   :hit-uuids [victim]}})

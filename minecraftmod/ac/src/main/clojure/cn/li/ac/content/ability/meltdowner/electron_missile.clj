@@ -129,7 +129,7 @@
           fire-interval (cfg-int :timing.fire-interval-ticks)
           world-id (geom/world-id-of player-id)]
       (skill-effects/enforce-overload-floor! player-id overload-floor)
-      (if (> ticks max-hold)
+      (if (>= ticks max-hold)
         (do
           (log/debug "ElectronMissile: max hold reached" ticks "/" max-hold)
           (send-end-fx! ctx-id)

@@ -134,8 +134,8 @@
                   ctx/ctx-send-to-client! (fn [ctx-id channel payload]
                                             (swap! fx-calls* conj [ctx-id channel payload])
                                             nil)
-                  damage-helper/mark-target! (fn [source-id target-id]
-                                               (swap! mark-calls* conj [source-id target-id])
+                  damage-helper/mark-target! (fn [source-id target-id & [fx-context]]
+                                               (swap! mark-calls* conj [source-id target-id fx-context])
                                                nil)
                   skill-config/tunable-double (fn [_ field-id]
                                                 (case field-id
@@ -163,6 +163,7 @@
              (#'cn.li.ac.content.ability.meltdowner.meltdowner/perform-reflection-shot!
               "ctx-r" "reflector-p" 0.0))))
       (is (= [0.0 0.0 1.0] (:dir @ray-input*)))
-      (is (= [["reflector-p" "target-1"]] @mark-calls*))
+      (is (= [["reflector-p" "target-1" {:ctx-id "ctx-r"
+                    :target-pos {:x nil :y nil :z nil}}]] @mark-calls*))
       (is (= [["w" "target-1" 20.0 :magic]] @damage-calls*))
       (is (= "ctx-r" (ffirst @fx-calls*))))))
