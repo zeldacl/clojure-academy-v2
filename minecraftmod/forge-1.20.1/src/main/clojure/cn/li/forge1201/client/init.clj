@@ -163,6 +163,9 @@
                             :mcmod/spawn-local-scripted-effect
                             (runtime-bridge/spawn-local-scripted-effect! (:effect-id payload))
 
+                            :mcmod/remove-local-scripted-effect
+                            (runtime-bridge/remove-local-scripted-effect! (:entity-uuid payload))
+
                             (log/debug "Unhandled client effect key" effect-key)))}))
 
 (defn register-key-mappings!

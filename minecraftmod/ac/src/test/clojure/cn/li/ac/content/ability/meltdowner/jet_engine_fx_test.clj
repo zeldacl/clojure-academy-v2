@@ -4,6 +4,7 @@
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.content.ability.meltdowner.jet-engine-fx :as je-fx]
+            [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (defn- reset-fixture [f]
@@ -52,10 +53,15 @@
   (let [enqueue-state! (var-get #'cn.li.ac.content.ability.meltdowner.jet-engine-fx/enqueue-state!)
         tick-state! (var-get #'cn.li.ac.content.ability.meltdowner.jet-engine-fx/tick-state!)
         build-plan (var-get #'cn.li.ac.content.ability.meltdowner.jet-engine-fx/build-plan)
-        sounds* (atom [])]
+        sounds* (atom [])
+        local-effects* (atom [])]
     (with-redefs [client-sounds/queue-current-sound-effect! (fn [& args]
                                                                (swap! sounds* conj (last args))
-                                                               nil)]
+                                                               nil)
+                  client-bridge/run-client-effect! (fn [effect-key payload]
+                                                     (swap! local-effects* conj [effect-key payload])
+                                                     (when (= :mcmod/spawn-local-scripted-effect effect-key)
+                                                       "shield-uuid-1"))]
       (level-effects/update-effect-state! :jet-engine
         enqueue-state!
         (event "ctx-je" {:mode :mark-start :target {:x 1.0 :y 64.0 :z 1.0} :hold-ticks 0}))
@@ -81,16 +87,56 @@
             (tick-state! store))
           nil))
       (is (nil? (build-plan {:x 0.0 :y 65.0 :z 0.0} nil 2)))
-      (is (seq @sounds*)))))
+      (is (seq @sounds*))
+            (is (= [[:mcmod/spawn-local-scripted-effect {:effect-id "entity_diamond_shield"}]
+              [:mcmod/remove-local-scripted-effect {:entity-uuid "shield-uuid-1"}]]
+              @local-effects*)))))
 
-(deftest trigger-end-clears-owner-state-test
-  (let [enqueue-state! (var-get #'cn.li.ac.content.ability.meltdowner.jet-engine-fx/enqueue-state!)]
-    (with-redefs [client-sounds/queue-current-sound-effect! (fn [& _] nil)]
+(deftest trigger-start-spawns-diamond-shield-once-per-phase-entry-test
+  (let [enqueue-state! (var-get #'cn.li.ac.content.ability.meltdowner.jet-engine-fx/enqueue-state!)
+        local-effects* (atom [])]
+    (with-redefs [client-sounds/queue-current-sound-effect! (fn [& _] nil)
+                  client-bridge/run-client-effect! (fn [effect-key payload]
+                                                     (swap! local-effects* conj [effect-key payload])
+                                                     (when (= :mcmod/spawn-local-scripted-effect effect-key)
+                                                       "shield-uuid-2"))]
       (level-effects/update-effect-state! :jet-engine
         enqueue-state!
-        (event "ctx-je" {:mode :mark-start :target {:x 1.0 :y 64.0 :z 1.0}}))
+        (event "ctx-je" {:mode :trigger-start
+                          :start {:x 0.0 :y 64.0 :z 0.0}
+                          :target {:x 4.0 :y 64.0 :z 0.0}
+                          :pos {:x 1.0 :y 64.0 :z 0.0}
+                          :trigger-ticks 0}))
+      (level-effects/update-effect-state! :jet-engine
+        enqueue-state!
+        (event "ctx-je" {:mode :trigger-start
+                          :start {:x 0.0 :y 64.0 :z 0.0}
+                          :target {:x 4.0 :y 64.0 :z 0.0}
+                          :pos {:x 2.0 :y 64.0 :z 0.0}
+                          :trigger-ticks 1}))
+      (is (= [[:mcmod/spawn-local-scripted-effect {:effect-id "entity_diamond_shield"}]]
+             @local-effects*)))))
+
+(deftest trigger-end-clears-owner-state-and-explicitly-removes-diamond-shield-test
+  (let [enqueue-state! (var-get #'cn.li.ac.content.ability.meltdowner.jet-engine-fx/enqueue-state!)
+        local-effects* (atom [])]
+    (with-redefs [client-sounds/queue-current-sound-effect! (fn [& _] nil)
+                  client-bridge/run-client-effect! (fn [effect-key payload]
+                                                     (swap! local-effects* conj [effect-key payload])
+                                                     (when (= :mcmod/spawn-local-scripted-effect effect-key)
+                                                       "shield-uuid-3"))]
+      (level-effects/update-effect-state! :jet-engine
+        enqueue-state!
+        (event "ctx-je" {:mode :trigger-start
+                          :start {:x 0.0 :y 64.0 :z 0.0}
+                          :target {:x 4.0 :y 64.0 :z 0.0}
+                          :pos {:x 1.0 :y 64.0 :z 0.0}
+                          :trigger-ticks 0}))
       (is (contains? (set (keys (:fx-state (je-fx/jet-engine-fx-snapshot)))) [:ctx "ctx-je"]))
       (level-effects/update-effect-state! :jet-engine
         enqueue-state!
         (event "ctx-je" {:mode :trigger-end}))
-      (is (not (contains? (set (keys (:fx-state (je-fx/jet-engine-fx-snapshot)))) [:ctx "ctx-je"]))))))
+      (is (not (contains? (set (keys (:fx-state (je-fx/jet-engine-fx-snapshot)))) [:ctx "ctx-je"])))
+      (is (= [[:mcmod/spawn-local-scripted-effect {:effect-id "entity_diamond_shield"}]
+              [:mcmod/remove-local-scripted-effect {:entity-uuid "shield-uuid-3"}]]
+             @local-effects*)))))

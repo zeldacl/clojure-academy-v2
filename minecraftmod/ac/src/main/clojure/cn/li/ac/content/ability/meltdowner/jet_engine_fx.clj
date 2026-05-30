@@ -8,9 +8,13 @@
             [cn.li.ac.ability.client.effects.beam-ops :as fx-beam]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.level-effects :as level-effects]
-            [cn.li.ac.ability.client.render-util :as ru]))
+            [cn.li.ac.ability.client.render-util :as ru]
+            [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 
 (def ^:private jet-engine-effect-id :jet-engine)
+(def ^:private local-scripted-effect-key :mcmod/spawn-local-scripted-effect)
+(def ^:private local-remove-scripted-effect-key :mcmod/remove-local-scripted-effect)
+(def ^:private diamond-shield-effect-id "entity_diamond_shield")
 
 (def ^:private mark-ttl 8)
 (def ^:private trigger-ttl 20)
@@ -147,11 +151,24 @@
                       :z (+ (double (:z target)) (* radius (Math/sin a1)))}]]
         (ru/line-op p0 p1 color)))))
 
+(defn- spawn-diamond-shield!
+  []
+  (let [entity-uuid (client-bridge/run-client-effect! local-scripted-effect-key
+                                                       {:effect-id diamond-shield-effect-id})]
+    (when (seq entity-uuid)
+      entity-uuid)))
+
+(defn- remove-diamond-shield!
+  [entity-uuid]
+  (when (seq entity-uuid)
+    (client-bridge/run-client-effect! local-remove-scripted-effect-key
+                                      {:entity-uuid entity-uuid})))
+
 (defn- enqueue-state!
   [store {:keys [payload ctx-id owner-key]}]
   (let [store* (or store (default-jet-engine-fx-runtime-state))
         owner-key* (or owner-key [:ctx ctx-id])
-        {:keys [mode start target pos hold-ticks trigger-ticks]} (or payload {})]
+        {:keys [mode start target pos hold-ticks trigger-ticks shield-entity-uuid]} (or payload {})]
     (case mode
       :mark-start
       (do
@@ -178,17 +195,24 @@
           (update store* :fx-state dissoc owner-key*)))
 
       :trigger-start
-      (do
-        (client-sounds/queue-current-sound-effect!
-          {:type :sound :sound-id "my_mod:md.jet_engine" :volume 0.8 :pitch 1.0})
+      (let [prev-state (get-in store* [:fx-state owner-key*])
+            entering-trigger? (not= :triggering (:phase prev-state))
+            spawned-uuid (when entering-trigger?
+                           ;; Keep parity with upstream JetEngine: spawn diamond-shield once on trigger phase entry.
+                           (spawn-diamond-shield!))]
+        (when entering-trigger?
+          (client-sounds/queue-current-sound-effect!
+            {:type :sound :sound-id "my_mod:md.jet_engine" :volume 0.8 :pitch 1.0}))
         (assoc-in store* [:fx-state owner-key*]
-                  (merge (get-in store* [:fx-state owner-key*])
+                  (merge prev-state
                          {:phase :triggering
                           :start start
                           :target target
                           :pos (or pos start)
                           :trigger-ticks (long (or trigger-ticks 0))
-                          :ttl trigger-ttl})))
+                          :ttl trigger-ttl
+                          :shield-entity-uuid (or spawned-uuid
+                                                  (:shield-entity-uuid prev-state))})))
 
       :trigger-update
       (assoc-in store* [:fx-state owner-key*]
@@ -196,10 +220,15 @@
                        {:phase :triggering
                         :pos pos
                         :trigger-ticks (long (or trigger-ticks 0))
+                        :shield-entity-uuid (or shield-entity-uuid
+                                                (get-in store* [:fx-state owner-key* :shield-entity-uuid]))
                         :ttl trigger-ttl}))
 
       :trigger-end
-      (update store* :fx-state dissoc owner-key*)
+      (let [st (get-in store* [:fx-state owner-key*])
+            shield-entity-uuid (:shield-entity-uuid st)]
+        (remove-diamond-shield! shield-entity-uuid)
+        (update store* :fx-state dissoc owner-key*))
 
       store*)))
 
@@ -211,8 +240,11 @@
         (into {}
               (keep (fn [[owner-key st]]
                       (let [ttl (long (or (:ttl st) 0))]
-                        (when (pos? ttl)
-                          [owner-key (update st :ttl dec)]))))
+                        (if (> ttl 1)
+                          [owner-key (update st :ttl dec)]
+                          (do
+                            (remove-diamond-shield! (:shield-entity-uuid st))
+                            nil)))))
               states)))))
 
 (defn- build-plan

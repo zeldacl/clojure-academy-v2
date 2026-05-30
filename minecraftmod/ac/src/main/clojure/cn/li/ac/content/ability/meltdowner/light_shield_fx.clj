@@ -3,7 +3,8 @@
   (:require [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
-            [cn.li.ac.ability.client.level-effects :as level-effects]))
+            [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.ability.client.render-util :as ru]))
 
 (def ^:private light-shield-effect-id :light-shield)
 
@@ -48,12 +49,9 @@
         (client-sounds/queue-sound-effect! (:queue-owner base-meta)
           {:type :sound :sound-id "my_mod:md.shield_on" :volume 0.7 :pitch 1.0})
         (assoc-in store* [:effect-state owner-key*]
-                  (merge base-meta {:active? true :ticks 0})))
+                  (merge base-meta {:active? true :ticks 0 :phase :startup})))
       :end
-      (do
-        (client-sounds/queue-sound-effect! (:queue-owner base-meta)
-          {:type :sound :sound-id "my_mod:md.shield_off" :volume 0.5 :pitch 0.9})
-        (update store* :effect-state dissoc owner-key*))
+      (update store* :effect-state dissoc owner-key*)
       store*)))
 
 (defn- tick-state!
@@ -76,8 +74,40 @@
               states)))))
 
 (defn- build-plan
-  [_camera-pos _hand-center-pos _tick]
-  nil)
+  [camera-pos hand-center-pos tick]
+  (when hand-center-pos
+    (let [center (dissoc hand-center-pos :player-uuid)
+          angle (* 0.12 (double (or tick 0)))
+          ring-radius (+ 0.82 (* 0.06 (Math/sin (* 0.17 (double (or tick 0))))))
+          segments 24
+          outer-color (ru/with-alpha {:r 180 :g 240 :b 255} 150)
+          inner-color (ru/with-alpha {:r 240 :g 255 :b 250} 110)
+          ring-ops (mapcat
+                     (fn [idx]
+                       (let [a0 (+ angle (/ (* 2.0 Math/PI idx) segments))
+                             a1 (+ angle (/ (* 2.0 Math/PI (inc idx)) segments))
+                             p0 {:x (+ (:x center) (* ring-radius (Math/cos a0)))
+                                 :y (+ (:y center) 0.15)
+                                 :z (+ (:z center) (* ring-radius (Math/sin a0)))}
+                             p1 {:x (+ (:x center) (* ring-radius (Math/cos a1)))
+                                 :y (+ (:y center) 0.15)
+                                 :z (+ (:z center) (* ring-radius (Math/sin a1)))}]
+                         [(ru/line-op p0 p1 outer-color)
+                          (ru/line-op center p0 inner-color)]))
+                     (range segments))
+          right (ru/camera-facing-right-axis center camera-pos)
+          up (ru/billboard-up-axis center camera-pos right)
+          half-size (+ 0.44 (* 0.07 (Math/sin (* 0.23 (double (or tick 0))))) )
+          side (ru/v* right half-size)
+          lift (ru/v* up half-size)
+          p0 (ru/v+ (ru/v- center side) lift)
+          p1 (ru/v+ (ru/v+ center side) lift)
+          p2 (ru/v- (ru/v+ center side) lift)
+          p3 (ru/v- (ru/v- center side) lift)
+          glow-op (ru/quad-op "my_mod:textures/effects/glow_circle.png"
+                              p0 p1 p2 p3
+                              (ru/with-alpha {:r 165 :g 245 :b 255} 90))]
+      {:ops (vec (cons glow-op ring-ops))})))
 
 (defn init!
   []
@@ -96,8 +126,11 @@
             (merge meta-payload {:mode :start})
             {:ctx-id ctx-id :channel channel})
           :light-shield/fx-end
-          (level-effects/enqueue-level-effect! light-shield-effect-id
-            (merge meta-payload {:mode :end})
-            {:ctx-id ctx-id :channel channel})
+          (do
+            (client-sounds/queue-sound-effect! (client-particles/current-effect-owner)
+              {:type :sound :sound-id "my_mod:md.shield_loop" :volume 0.35 :pitch 0.95})
+            (level-effects/enqueue-level-effect! light-shield-effect-id
+              (merge meta-payload {:mode :end})
+              {:ctx-id ctx-id :channel channel}))
           nil))))
   nil)

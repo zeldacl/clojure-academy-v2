@@ -36,7 +36,7 @@
   "md.mine_ray_start": {"category": "master", "sounds": [{"name": "my_mod:md/mine_basic_startup", "stream": false}]},
   "md.ray_barrage": {"category": "master", "sounds": [{"name": "my_mod:md/ray_small", "stream": false}]},
   "md.shield_on": {"category": "master", "sounds": [{"name": "my_mod:md/shield_startup", "stream": false}]},
-  "md.shield_off": {"category": "master", "sounds": [{"name": "my_mod:md/shield_startup", "stream": false}]},
+  "md.shield_off": {"category": "master", "sounds": [{"name": "my_mod:md/shield_loop", "stream": false}]},
   "md.sb_charge": {"category": "master", "sounds": [{"name": "my_mod:md/simple_charge", "stream": false}]},
 
   "entity.flipcoin": {"category": "master", "sounds": [{"name": "my_mod:entity/flipcoin", "stream": false}]},

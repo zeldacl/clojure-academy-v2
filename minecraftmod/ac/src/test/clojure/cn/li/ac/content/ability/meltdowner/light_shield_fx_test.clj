@@ -48,6 +48,7 @@
 
 (deftest start-end-update-state-and-build-plan-test
   (let [enqueue-state! (var-get #'cn.li.ac.content.ability.meltdowner.light-shield-fx/enqueue-state!)
+  build-plan (var-get #'cn.li.ac.content.ability.meltdowner.light-shield-fx/build-plan)
         tick-state! (var-get #'cn.li.ac.content.ability.meltdowner.light-shield-fx/tick-state!)
         particles* (atom [])
         sounds* (atom [])]
@@ -68,6 +69,7 @@
             (tick-state! store))
           nil))
       (is (seq @particles*))
+      (is (map? (build-plan {:x 0.0 :y 64.0 :z 0.0} {:player-uuid "player-a" :x 0.0 :y 64.0 :z 0.0} 12)))
       (level-effects/update-effect-state! :light-shield
         enqueue-state!
         (event "ctx-ls" :light-shield/fx-end {:mode :end :source-player-id "player-a"}))

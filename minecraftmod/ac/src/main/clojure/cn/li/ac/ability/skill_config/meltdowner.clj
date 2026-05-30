@@ -42,13 +42,19 @@
    {:skill-id :light-shield :id :combat.damage-reduction :path "combat.damage-reduction" :section-suffix "combat" :type :double-list :min 0.0 :max 1.0 :list-count 2 :default [0.5 0.8] :comment "LightShield incoming damage reduction."}
    {:skill-id :light-shield :id :combat.touch-damage :path "combat.touch-damage" :section-suffix "combat" :type :double-list :min 0.0 :list-count 2 :default [3.0 8.0] :comment "LightShield contact damage."}
    {:skill-id :light-shield :id :combat.touch-radius :path "combat.touch-radius" :section-suffix "combat" :type :double :min 0.0 :default 3.0 :comment "LightShield touch damage radius."}
+  {:skill-id :light-shield :id :combat.touch-interval-ticks :path "combat.touch-interval-ticks" :section-suffix "combat" :type :int :min 1 :default 4 :comment "LightShield touch damage interval ticks."}
+  {:skill-id :light-shield :id :combat.absorb-damage :path "combat.absorb-damage" :section-suffix "combat" :type :double-list :min 0.0 :list-count 2 :default [15.0 50.0] :comment "LightShield max absorbed damage per hit."}
+  {:skill-id :light-shield :id :combat.absorb-interval-ticks :path "combat.absorb-interval-ticks" :section-suffix "combat" :type :int :min 1 :default 18 :comment "LightShield absorb window interval ticks."}
    {:skill-id :light-shield :id :combat.front-cone-dot :path "combat.front-cone-dot" :section-suffix "combat" :type :double :min -1.0 :max 1.0 :default 0.5 :comment "LightShield minimum dot product for front cone."}
+  {:skill-id :light-shield :id :timing.max-active-ticks :path "timing.max-active-ticks" :section-suffix "timing" :type :double-list :min 1.0 :list-count 2 :default [120.0 180.0] :comment "LightShield max active duration ticks."}
    {:skill-id :light-shield :id :effect.deactivate-slowness-duration-ticks :path "effect.deactivate-slowness-duration-ticks" :section-suffix "effect" :type :int :min 0 :default 60 :comment "LightShield deactivate slowness duration."}
    {:skill-id :light-shield :id :effect.abort-slowness-duration-ticks :path "effect.abort-slowness-duration-ticks" :section-suffix "effect" :type :int :min 0 :default 40 :comment "LightShield abort slowness duration."}
    {:skill-id :light-shield :id :effect.slowness-amplifier :path "effect.slowness-amplifier" :section-suffix "effect" :type :int :min 0 :default 1 :comment "LightShield slowness amplifier."}
    {:skill-id :light-shield :id :cost.down.cp :path "cost.down.cp" :section-suffix "cost.down" :type :double-list :min 0.0 :list-count 2 :default [200.0 160.0] :comment "LightShield activation CP cost."}
    {:skill-id :light-shield :id :cost.down.overload :path "cost.down.overload" :section-suffix "cost.down" :type :double-list :min 0.0 :list-count 2 :default [100.0 70.0] :comment "LightShield activation overload cost."}
    {:skill-id :light-shield :id :cost.tick.cp :path "cost.tick.cp" :section-suffix "cost.tick" :type :double-list :min 0.0 :list-count 2 :default [12.0 8.0] :comment "LightShield tick CP cost."}
+  {:skill-id :light-shield :id :cost.absorb.cp :path "cost.absorb.cp" :section-suffix "cost.absorb" :type :double-list :min 0.0 :list-count 2 :default [50.0 30.0] :comment "LightShield absorb CP cost per successful absorb/touch damage."}
+  {:skill-id :light-shield :id :cost.absorb.overload :path "cost.absorb.overload" :section-suffix "cost.absorb" :type :double-list :min 0.0 :list-count 2 :default [5.0 3.0] :comment "LightShield absorb overload cost per successful absorb/touch damage."}
    {:skill-id :light-shield :id :cooldown.ticks :path "cooldown.ticks" :section-suffix "cooldown" :type :double-list :min 0.0 :list-count 2 :default [100.0 60.0] :comment "LightShield cooldown ticks."}
    {:skill-id :light-shield :id :progression.exp-absorbed-scale :path "progression.exp-absorbed-scale" :section-suffix "progression" :type :double :min 0.0 :default 0.0004 :comment "LightShield exp gained per absorbed damage."}
 

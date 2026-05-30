@@ -40,7 +40,10 @@
       (overlay-state/clear-client-overlay-session! session-id))))
 
 (defn spawn-local-scripted-effect! [effect-id]
-  (ScriptedEffectSpawner/spawnLocal effect-id))
+  (ScriptedEffectSpawner/spawnLocalWithUuid effect-id))
+
+(defn remove-local-scripted-effect! [entity-uuid]
+  (ScriptedEffectSpawner/removeLocalByUuid entity-uuid))
 
 (defn slot-visual-state [player-uuid key-idx]
   (client-session/with-current-client-session #(power-runtime/client-slot-visual-state player-uuid key-idx)))
