@@ -6,6 +6,7 @@
   - App installation/uninstallation
   - Terminal state queries"
   (:require [cn.li.ac.terminal.player-data :as term-data]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.ac.terminal.app-registry :as app-reg]
             [cn.li.ac.terminal.messages :as terminal-messages]
             [cn.li.ac.ability.util.uuid :as uuid]
@@ -21,7 +22,8 @@
   [_payload player]
   (try
     (let [uuid-str (uuid/player-uuid player)]
-      (term-data/install-terminal! uuid-str)
+      (term-data/install-terminal-in-session! (runtime-hooks/require-player-state-session-id "terminal.network")
+                                              uuid-str)
       {:success true})
     (catch Exception e
       (log/error "Error installing terminal:" (ex-message e))
@@ -35,7 +37,9 @@
           app-id (keyword (:app-id payload))]
       (if (app-reg/get-app app-id)
         (do
-          (term-data/install-app! uuid-str app-id)
+          (term-data/install-app-in-session! (runtime-hooks/require-player-state-session-id "terminal.network")
+                                             uuid-str
+                                             app-id)
           {:success true :app-id app-id})
         {:success false :error "App not found"}))
     (catch Exception e
@@ -48,7 +52,9 @@
   (try
     (let [uuid-str (uuid/player-uuid player)
           app-id (keyword (:app-id payload))]
-      (term-data/uninstall-app! uuid-str app-id)
+      (term-data/uninstall-app-in-session! (runtime-hooks/require-player-state-session-id "terminal.network")
+                   uuid-str
+                   app-id)
       {:success true :app-id app-id})
     (catch Exception e
       (log/error "Error uninstalling app:" (ex-message e))
@@ -59,7 +65,9 @@
   [_payload player]
   (try
     (let [uuid-str (uuid/player-uuid player)
-          terminal-data (term-data/get-terminal-data uuid-str)
+          terminal-data (term-data/get-terminal-data-in-session
+                         (runtime-hooks/require-player-state-session-id "terminal.network")
+                         uuid-str)
           available-apps (app-reg/list-available-apps player)]
       {:terminal-installed? (:terminal-installed? terminal-data)
        :installed-apps (vec (:installed-apps terminal-data))

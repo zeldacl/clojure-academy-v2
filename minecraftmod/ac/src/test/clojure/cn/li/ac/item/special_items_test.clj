@@ -1,6 +1,6 @@
 (ns cn.li.ac.item.special-items-test
   (:require 
-            [cn.li.ac.ability.service.player-state-core :as ps-core]
+            [cn.li.ac.ability.service.runtime-store :as store]
 [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.model.ability :as adata]            [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.ac.item.special-items :as special-items]
@@ -42,9 +42,10 @@
 
 (defn- seed-player!
   [player-uuid ability-data]
-  (ps-core/set-player-state!
+  (store/set-player-state!*
+   ps-fix/test-session-id
    player-uuid
-   (assoc (ps-core/fresh-state) :ability-data ability-data)))
+   (assoc (store/fresh-player-state) :ability-data ability-data)))
 
 (deftest induction-factor-initial-category-awakens-player-test
   (let [player-state* (atom {:inventory {}})
@@ -57,7 +58,7 @@
         :item-id "my_mod:induction_factor_electromaster"
         :side :server}))
     (is (= :electromaster
-           (get-in (ps-core/get-player-state player-uuid) [:ability-data :category-id])))
+          (get-in (store/get-player-state* ps-fix/test-session-id player-uuid) [:ability-data :category-id])))
     (is (= 1 (:main-hand-consumed @player-state*)))))
 
 (deftest induction-factor-category-transform-consumes-coil-and-drops-level-test
@@ -74,9 +75,9 @@
         :item-id "my_mod:induction_factor_electromaster"
         :side :server}))
     (is (= :electromaster
-           (get-in (ps-core/get-player-state player-uuid) [:ability-data :category-id])))
+          (get-in (store/get-player-state* ps-fix/test-session-id player-uuid) [:ability-data :category-id])))
     (is (= 4
-           (get-in (ps-core/get-player-state player-uuid) [:ability-data :level])))
+          (get-in (store/get-player-state* ps-fix/test-session-id player-uuid) [:ability-data :level])))
     (is (= 1 (:main-hand-consumed @player-state*)))
     (is (= 0
           (get-in @player-state* [:inventory "my_mod:magnetic_coil"])))))

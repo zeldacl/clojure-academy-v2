@@ -2,7 +2,7 @@
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
-            [cn.li.ac.ability.service.dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.content.ability.electromaster.mine-detect :as mine-detect]
             [cn.li.mcmod.platform.potion-effects :as potion-effects]))
 

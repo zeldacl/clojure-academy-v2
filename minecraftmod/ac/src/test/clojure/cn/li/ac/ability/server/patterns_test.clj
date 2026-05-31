@@ -5,7 +5,7 @@
             [cn.li.ac.ability.server.effect.core :as effect]
             [cn.li.ac.ability.server.patterns :as patterns]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
-            [cn.li.ac.ability.service.dispatcher :as ctx]))
+            [cn.li.ac.ability.service.context-dispatcher :as ctx]))
 
 (def ^:private test-op-key :patterns-test/op)
 (def ^:private test-context-owner {:logical-side :server :session-id :test-session})

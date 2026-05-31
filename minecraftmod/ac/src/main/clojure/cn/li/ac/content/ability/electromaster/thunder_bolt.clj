@@ -10,7 +10,7 @@
             [cn.li.ac.ability.server.effect.geom :as geom]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.util.balance :as bal]
-            [cn.li.ac.ability.service.dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]

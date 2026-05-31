@@ -120,6 +120,76 @@
   Content storage combines this owner with the requested player UUID."
   nil)
 
+(defn current-player-state-owner
+  "Return the currently bound runtime player-state owner map (or nil)."
+  []
+  *player-state-owner*)
+
+(defn player-state-session-id
+  "Resolve session-id from an owner map, preferring server > client > generic."
+  ([owner]
+   (or (:server-session-id owner)
+       (:client-session-id owner)
+       (:session-id owner)))
+  ([]
+   (player-state-session-id (current-player-state-owner))))
+
+(defn require-player-state-session-id
+  "Resolve session-id from current owner, throwing with component context when absent."
+  [component]
+  (let [owner (current-player-state-owner)
+        session-id (player-state-session-id owner)]
+    (or session-id
+        (throw (ex-info (str component " requires bound session-id")
+                        {:player-state-owner owner})))))
+
+(defn player-state-server-session-id
+  "Resolve server-session-id from an owner map (or nil)."
+  ([owner]
+   (:server-session-id owner))
+  ([]
+   (player-state-server-session-id (current-player-state-owner))))
+
+(defn require-player-state-server-session-id
+  "Resolve server-session-id from current owner, throwing with component context when absent."
+  [component]
+  (let [owner (current-player-state-owner)
+        session-id (player-state-server-session-id owner)]
+    (or session-id
+        (throw (ex-info (str component " requires bound :server-session-id")
+                        {:player-state-owner owner})))))
+
+(defn player-state-client-session-id
+  "Resolve client session-id from an owner map, preferring client > generic."
+  ([owner]
+   (or (:client-session-id owner)
+       (:session-id owner)))
+  ([]
+   (player-state-client-session-id (current-player-state-owner))))
+
+(defn context-player-state-session-id
+  "Resolve session-id from command/action context metadata owner, with runtime owner fallback."
+  [context]
+  (or (-> context :metadata :player-state-owner :server-session-id)
+      (-> context :metadata :player-state-owner :client-session-id)
+      (-> context :metadata :player-state-owner :session-id)
+      (player-state-session-id)))
+
+(defn require-context-player-state-session-id
+  "Resolve session-id from context metadata/runtime owner, throwing when absent."
+  [component context]
+  (let [session-id (context-player-state-session-id context)]
+    (or session-id
+        (throw (ex-info (str component " requires bound session-id")
+                        {:context context
+                         :player-state-owner (current-player-state-owner)})))))
+
+(defmacro with-player-state-owner
+  "Execute body with *player-state-owner* bound to owner."
+  [owner & body]
+  `(binding [*player-state-owner* ~owner]
+     ~@body))
+
 (defn register-power-runtime-hooks!
   "Register/replace power runtime hook fns."
   [hooks]

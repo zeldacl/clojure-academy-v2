@@ -1,7 +1,7 @@
 (ns cn.li.ac.content.ability.teleporter.threatening-teleport-test
   (:require [clojure.test :refer [deftest is]]
             [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
-            [cn.li.ac.ability.service.dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.content.ability.teleporter.threatening-teleport :as tt]
             [cn.li.ac.content.ability.teleporter.tp-skill-helper :as helper]

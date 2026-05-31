@@ -1,5 +1,5 @@
 (ns cn.li.ac.test.support.contexts
-  (:require [cn.li.ac.ability.service.dispatcher :as ctx]))
+  (:require [cn.li.ac.ability.service.context-dispatcher :as ctx]))
 
 (defn clean-contexts-fixture
   [f]

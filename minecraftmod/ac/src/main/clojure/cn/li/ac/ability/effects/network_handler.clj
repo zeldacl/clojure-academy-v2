@@ -10,13 +10,22 @@
      :channel      keyword
      :payload      map}"
   (:require 
-            [cn.li.ac.ability.service.player-state-dirty :as ps-dirty]
+            [cn.li.ac.ability.service.runtime-store :as store]
+[cn.li.mcmod.hooks.core :as runtime-hooks]
 [cn.li.mcmod.util.log :as log]))
 
+(defn- mark-runtime-dirty-in-session!
+  [session-id player-uuid]
+  (store/mark-player-dirty! session-id player-uuid))
+
 (defn execute-network-send!
-  [{:keys [player-uuid channel]}]
+  ([{:keys [player-uuid channel]}]
+   (execute-network-send! nil {:player-uuid player-uuid :channel channel}))
+  ([session-id {:keys [player-uuid channel]}]
   (when player-uuid
-    (ps-dirty/mark-dirty! player-uuid)
+    (mark-runtime-dirty-in-session! (or session-id
+                                        (runtime-hooks/require-player-state-session-id "network-send effect"))
+                                    player-uuid)
     (log/debug "network-send effect queued sync" player-uuid channel))
-  nil)
+   nil))
 

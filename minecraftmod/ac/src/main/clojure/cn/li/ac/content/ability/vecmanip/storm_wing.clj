@@ -9,7 +9,7 @@
     or hover when no direction (float up 0.078/tick, or 0.1 near ground)
   - Speed: (if exp<0.45 0.7 1.2) * lerp(2,3,exp)
   - Acceleration: 0.16 per tick toward target velocity
-  - Low exp (<15%): tries to break 40 random soft blocks (hardness 0-0.3) in rangeï¿½?0 each tick
+  - Low exp (<15%): tries to break 40 random soft blocks (hardness 0-0.3) in rangeï¿?0 each tick
   - Max exp (=1.0): on transition to flight, knockback nearby entities (range 3, strength 2.0)
   - On terminate: set cooldown lerp(30,10,exp) ticks
 
@@ -24,7 +24,7 @@
   (:require [cn.li.ac.ability.dsl :refer [defskill]]
             [cn.li.ac.content.ability.fx-helpers :as fx]
             [cn.li.ac.ability.skill-config :as skill-config]
-            [cn.li.ac.ability.service.dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.mcmod.platform.player-motion :as player-motion]
             [cn.li.mcmod.platform.entity-motion :as entity-motion]

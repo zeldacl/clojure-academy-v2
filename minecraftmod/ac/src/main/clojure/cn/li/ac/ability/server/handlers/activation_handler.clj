@@ -8,6 +8,7 @@
 (defn handle-set-activated-request
 	[{:keys [activated]} player]
 	(let [uuid  (uuid/player-uuid player)
+				session-id (common/current-server-session-id)
 				state (common/get-state uuid)
 				ability-data (:ability-data state)
 				rd    (:resource-data state)
@@ -15,7 +16,7 @@
 				before (boolean (:activated rd))
 				result (if (and requested (nil? (:category-id ability-data)))
 						 {:state state :events [] :effects []}
-						 (command-rt/run-command! uuid {:command :set-activated
+						 (command-rt/run-command-in-session! session-id uuid {:command :set-activated
 																	 :activated requested}))
 				next-state (get result :state state)
 				after (boolean (get-in next-state [:resource-data :activated]))]

@@ -6,13 +6,13 @@
   - Key group system with delegates
   - Pre-check logic (cooldown, resource) before dispatching"
   (:require 
-            [cn.li.ac.ability.service.player-state-core :as ps-core]
+            [cn.li.ac.ability.client.read-model :as read-model]
 [cn.li.ac.ability.client.runtime :as runtime]
             [cn.li.ac.ability.client.api :as api]
             [cn.li.ac.ability.client.input-sampling :as sampling]
             [cn.li.ac.ability.client.input-state-machine :as sm]
             [cn.li.ac.ability.client.input-command-builder :as cmd-builder]
-            [cn.li.ac.ability.client.input-processor :as processor]            [cn.li.ac.ability.service.dispatcher :as ctx]
+            [cn.li.ac.ability.client.input-processor :as processor]            [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.model.preset :as preset-data]
             [cn.li.ac.ability.registry.skill-query :as skill]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
@@ -303,18 +303,15 @@
                                                (:uuid owner-map))
                            str))])))
 
-(defn- with-client-player-state-owner
-  [player-uuid f]
-  (let [[session-id player-uuid*] (client-owner-key {:player-uuid player-uuid})]
-    (binding [runtime-hooks/*client-session-id* session-id
-              runtime-hooks/*player-state-owner* {:client-session-id session-id
-                                                  :player-uuid player-uuid*}]
-      (f))))
-
 (defn- get-client-player-state
   [player-uuid]
-  (with-client-player-state-owner player-uuid
-    #(ps-core/get-player-state player-uuid)))
+  (let [session-id (require-client-owner-value {:player-uuid player-uuid}
+                                               ":client-session-id"
+                                               (current-client-session-id))
+        player-uuid* (require-client-owner-value {:player-uuid player-uuid}
+                                                 ":player-uuid"
+                                                 (some-> player-uuid str))]
+    (read-model/get-player-state [session-id :keybinds player-uuid*])))
 
 (defn key-state-snapshot
   ([]

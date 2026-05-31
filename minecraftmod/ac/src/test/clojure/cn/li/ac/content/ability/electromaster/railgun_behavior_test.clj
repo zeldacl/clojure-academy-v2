@@ -1,11 +1,11 @@
 (ns cn.li.ac.content.ability.electromaster.railgun-behavior-test
   (:require 
-            [cn.li.ac.ability.service.player-state-core :as ps-core]
+            [cn.li.ac.ability.service.runtime-store :as store]
 [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.item-actions :as item-actions]
             [cn.li.ac.ability.server.effect.beam]
             [cn.li.ac.ability.server.effect.core :as effect]
-            [cn.li.ac.ability.service.dispatcher :as ctx]            [cn.li.ac.test.support.player-state :as ps-fix]
+            [cn.li.ac.ability.service.context-dispatcher :as ctx]            [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.ac.content.ability.electromaster.railgun :as railgun]
             [cn.li.mcmod.platform.block-manipulation :as block-manip]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
@@ -16,16 +16,15 @@
 (defn- reset-state! [f]
   (ps-fix/with-test-player-state-owner
     (fn []
-      (let [player-states-val (ps-core/snapshot-player-states)
-            context-registry-val (ctx/snapshot-context-registry)
+      (let [context-registry-val (ctx/snapshot-context-registry)
             item-actions-snapshot (item-actions/item-action-registries-snapshot)]
         (try
-          (ps-core/reset-player-states-for-test!)
+          (store/reset-store!)
           (ctx/reset-contexts-for-test!)
           (item-actions/reset-item-action-registries-for-test!)
           (f)
           (finally
-            (ps-core/reset-player-states-for-test! player-states-val)
+            (store/reset-store!)
             (ctx/reset-contexts-for-test! context-registry-val)
             (item-actions/reset-item-action-registries-for-test! item-actions-snapshot)))))))
 
@@ -71,7 +70,7 @@
         (is (not-any? #(= :damage (first %)) @calls))))))
 
 (deftest coin-throw-aborts-item-charge-and-opens-window-test
-  (ps-core/set-player-state! "p1" (ps-core/fresh-state))
+  (ps-fix/seed-player-state! "p1" (store/fresh-player-state))
   (ctx/register-context! {:id "ctx-1"
                           :player-uuid "p1"
                           :skill-id :railgun
@@ -103,9 +102,9 @@
     (is (true? (:perform? perform)))))
 
 (deftest read-coin-qte-status-skips-already-judged-coin-test
-  (ps-core/set-player-state! "p1" (ps-core/fresh-state))
+  (ps-fix/seed-player-state! "p1" (store/fresh-player-state))
   (railgun/register-coin-throw! "p1" {:timestamp-ms 42})
-  (ps-core/update-player-state! "p1" assoc-in [:runtime :railgun :coin-judged-uuid] "coin-1")
+  (store/update-player-state!* ps-fix/test-session-id "p1" assoc-in [:runtime :railgun :coin-judged-uuid] "coin-1")
   (with-redefs [world-effects/*world-effects* :mock-world
                 world-effects/find-entities-in-radius (fn [& _]
                                                         [{:type "entity_coin_throwing" :uuid "coin-1" :motion-progress 0.95}])

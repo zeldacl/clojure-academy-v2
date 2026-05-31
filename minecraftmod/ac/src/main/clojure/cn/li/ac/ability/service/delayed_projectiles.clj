@@ -5,7 +5,7 @@
   (:require [cn.li.ac.ability.server.effect.core :as effect]
             [cn.li.ac.ability.server.effect.geom :as geom]
             [cn.li.ac.ability.server.effect.beam]
-            [cn.li.ac.ability.service.context-mgr :as ctx-mgr]
+            [cn.li.ac.ability.service.context-manager :as ctx-mgr]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.mcmod.platform.raycast :as raycast]

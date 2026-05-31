@@ -6,11 +6,21 @@
 
   No Minecraft imports."
   (:require 
-            [cn.li.ac.ability.service.player-state-core :as ps-core]
+            [cn.li.ac.ability.service.runtime-store :as store]
 [cn.li.ac.ability.util.toggle :as toggle]
-            [cn.li.ac.ability.service.dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.mcmod.platform.damage-interception :as damage-interception]
-            [cn.li.mcmod.util.log :as log]))
+            [cn.li.mcmod.util.log :as log]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]))
+
+(defn- runtime-player-state
+  [player-id]
+  (store/get-player-state* (runtime-hooks/require-player-state-session-id "damage.handler")
+                           player-id))
+
+(defn- runtime-player-state-in-session
+  [session-id player-id]
+  (store/get-player-state* session-id player-id))
 
 (defn register-toggle-damage-handler!
   "Register a damage handler for a toggle skill.
@@ -27,9 +37,10 @@
    (register-toggle-damage-handler! handler-id skill-id handler-fn 100))
   ([handler-id skill-id handler-fn priority]
    (when damage-interception/*damage-interception*
-     (let [wrapped-handler (fn [player-id attacker-id damage damage-source]
+     (let [session-id (runtime-hooks/require-player-state-session-id "damage.handler")
+           wrapped-handler (fn [player-id attacker-id damage damage-source]
                             ;; Check if toggle skill is active by looking for active contexts
-                            (if (ps-core/get-player-state player-id)
+                            (if (runtime-player-state-in-session session-id player-id)
                               ;; Try to find an active context with this toggle skill
                               (let [active-contexts (ctx/get-all-contexts)
                                     player-contexts (filter (fn [[_ctx-id ctx-data]]

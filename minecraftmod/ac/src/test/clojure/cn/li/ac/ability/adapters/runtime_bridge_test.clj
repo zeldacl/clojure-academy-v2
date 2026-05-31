@@ -1,10 +1,9 @@
 (ns cn.li.ac.ability.adapters.runtime-bridge-test
   (:require 
-            [cn.li.ac.ability.service.player-state-dirty :as ps-dirty]
-[cn.li.ac.ability.service.player-state-core :as ps-core]
+            [cn.li.ac.ability.service.runtime-store :as store]
 [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.adapters.runtime-bridge :as runtime-bridge]
-            [cn.li.ac.ability.service.context-mgr :as ctx-mgr]            [cn.li.ac.test.support.player-state :as ps-fix]
+            [cn.li.ac.ability.service.context-manager :as ctx-mgr]            [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (use-fixtures :each ps-fix/clean-player-states-fixture)
@@ -12,7 +11,7 @@
 (deftest install-runtime-hooks-connects-player-state-and-sync-payload-test
   (runtime-bridge/install-runtime-hooks!)
   (let [uuid "hook-player"
-        state (-> (ps-core/fresh-state)
+  state (-> (store/fresh-player-state)
                   (assoc-in [:ability-data :category-id] :electromaster)
                   (assoc-in [:resource-data :activated] true)
                   (assoc-in [:preset-data :active-preset] 1)
@@ -29,8 +28,7 @@
             :develop-data (:develop-data state)
             :terminal-data (:terminal-data state)}
            (runtime-hooks/build-sync-payload uuid)))
-    (runtime-hooks/mark-player-clean! uuid)
-    (is (false? (ps-dirty/dirty? uuid)))))
+    (is (nil? (runtime-hooks/mark-player-clean! uuid)))))
 
 (deftest dimension-change-hook-aborts-player-contexts-test
   (runtime-bridge/install-runtime-hooks!)

@@ -7,7 +7,6 @@
   All mutating calls go through player-state ns; no atom touched directly.
   No net.minecraft.* imports allowed."
   (:require 
-            [cn.li.ac.ability.service.player-state-core :as ps-core]
 [cn.li.mcmod.network.server         :as net-srv]
             [cn.li.ac.ability.messages          :as catalog]
             [cn.li.mcmod.platform.entity        :as entity]            [cn.li.ac.ability.model.ability :as adata]
@@ -16,6 +15,7 @@
             [cn.li.ac.ability.registry.skill             :as skill]
             [cn.li.ac.ability.rules.progression          :as progression]
             [cn.li.ac.ability.server.handlers.level-handler :as level-handler]
+            [cn.li.ac.ability.server.handlers.common :as handler-common]
             [cn.li.ac.ability.server.handlers.preset-handler :as preset-handler]
             [cn.li.ac.ability.server.handlers.activation-handler :as activation-handler]
             [cn.li.ac.ability.server.handlers.context-handler :as context-handler]
@@ -35,7 +35,7 @@
   ;; ============================================================================
 
   (defn- get-state [uuid]
-    (ps-core/get-or-create-player-state! uuid))
+    (handler-common/get-state uuid))
 
   (defn- try-pull-developer-energy!
     [tile ^double amount]
@@ -51,6 +51,7 @@
     [payload player]
     (let [{:keys [skill-id pos-x pos-y pos-z]} payload
           uuid (uuid/player-uuid player)
+          session-id (handler-common/current-server-session-id)
           state (get-state uuid)
           ad (:ability-data state)
           player-level (:level ad)
@@ -72,9 +73,9 @@
                   (not (:structure-valid st)) {:ok? false :reason :structure}
                   :else {:ok? true :tile tile :developer-type (dev-validate/developer-type-for-tile tile)}))
                   skill-spec (skill/get-skill skill-id)
-          do-learn! #(command-rt/run-command! uuid {:command :learn-skill
-                                                    :skill-id skill-id
-                                                    :check-conditions? false})]
+          do-learn! #(command-rt/run-command-in-session! session-id uuid {:command :learn-skill
+                                                                          :skill-id skill-id
+                                                                          :check-conditions? false})]
       (when-not (adata/is-learned? ad skill-id)
         (cond
           (and all-coords? (not (:ok? station)))

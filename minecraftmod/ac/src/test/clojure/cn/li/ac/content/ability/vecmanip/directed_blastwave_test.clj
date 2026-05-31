@@ -1,6 +1,6 @@
 (ns cn.li.ac.content.ability.vecmanip.directed-blastwave-test
   (:require [clojure.test :refer [deftest is]]
-            [cn.li.ac.ability.service.dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.server.effect.geom :as geom]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.content.ability.fx-helpers :as fx]

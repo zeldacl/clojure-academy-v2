@@ -1,6 +1,6 @@
 (ns cn.li.ac.ability.passive-test
   (:require 
-            [cn.li.ac.ability.service.player-state-core :as ps-core]
+            [cn.li.ac.ability.service.runtime-store :as store]
 [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.model.ability :as ad]
             [cn.li.ac.ability.passive :as passive]
@@ -9,13 +9,13 @@
 (defn- reset-all! [f]
   (ps-fix/with-test-player-state-owner
     (fn []
-      (ps-core/reset-player-states-for-test!)
+      (store/reset-store!)
       (evt/reset-ability-event-subscribers-for-test!)
       (passive/reset-passive-handler-registry-for-test!)
       (try
         (f)
         (finally
-          (ps-core/reset-player-states-for-test!)
+          (store/reset-store!)
           (evt/reset-ability-event-subscribers-for-test!)
           (passive/reset-passive-handler-registry-for-test!))))))
 
@@ -27,10 +27,10 @@
               evt/CALC-MAX-CP
               :passive-skill
               (fn [v _] (+ v 25.0)))))
-  (ps-core/set-player-state!
-   "u1"
-   (assoc (ps-core/fresh-state)
-          :ability-data (ad/learn-skill (ad/new-ability-data) :passive-skill)))
+    (store/set-player-state!* ps-fix/test-session-id
+          "u1"
+          (assoc (store/fresh-player-state)
+            :ability-data (ad/learn-skill (ad/new-ability-data) :passive-skill)))
   (is (= 125.0 (evt/fire-calc-event! evt/CALC-MAX-CP 100.0 {:uuid "u1"})))
   (is (= 100.0 (evt/fire-calc-event! evt/CALC-MAX-CP 100.0 {:uuid "u2"}))))
 

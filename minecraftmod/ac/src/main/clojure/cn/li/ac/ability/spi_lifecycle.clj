@@ -36,9 +36,6 @@
 
 (def ^:dynamic *lifecycle-registry-runtime* nil)
 
-(defonce ^:private installed-lifecycle-registry-runtime
-	(create-lifecycle-registry-runtime))
-
 (defn call-with-lifecycle-registry-runtime
 	[runtime f]
 	(runtime-registry/assert-runtime!
@@ -51,7 +48,26 @@
 (defn- current-lifecycle-registry-runtime
 	[]
 	(or *lifecycle-registry-runtime*
-		installed-lifecycle-registry-runtime))
+		(throw (ex-info "Lifecycle registry runtime is not installed"
+						{:hint "Install via runtime_bridge/install-runtime-hooks! or spi_lifecycle/install-lifecycle-registry-runtime!"}))))
+
+(defn install-lifecycle-registry-runtime!
+	"Install an explicit lifecycle registry runtime instance.
+	This enables composition-root wiring instead of implicit singleton fallback."
+	[runtime]
+	(runtime-registry/assert-runtime!
+		runtime
+		::lifecycle-registry-runtime
+		"Expected lifecycle registry runtime")
+	(alter-var-root #'*lifecycle-registry-runtime* (constantly runtime))
+	runtime)
+
+(defn use-fresh-lifecycle-registry-runtime!
+	"Reset lifecycle registry runtime binding to a fresh runtime instance."
+	[]
+	(let [runtime (create-lifecycle-registry-runtime)]
+		(alter-var-root #'*lifecycle-registry-runtime* (constantly runtime))
+		runtime))
 
 (defn- lifecycle-registry-state-atom
 	[]

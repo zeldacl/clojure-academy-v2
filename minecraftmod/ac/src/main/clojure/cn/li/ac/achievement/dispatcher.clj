@@ -1,7 +1,8 @@
 (ns cn.li.ac.achievement.dispatcher
   "AC-side achievement dispatcher (game-concept aware)."
   (:require 
-            [cn.li.ac.ability.service.player-state-core :as ps-core]
+            [cn.li.ac.ability.service.runtime-store :as store]
+[cn.li.mcmod.hooks.core :as runtime-hooks]
 [cn.li.ac.achievement.registry :as ach-reg]
             [cn.li.ac.achievement.trigger :as ach-trigger]
             [cn.li.ac.ability.registry.event :as evt]            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
@@ -9,9 +10,17 @@
 
 (defonce-guard installed?)
 
+(declare trigger-custom-event!
+         player-category-in-session)
+
 (defn- player-category
   [uuid]
-  (get-in (ps-core/get-player-state uuid) [:ability-data :category-id]))
+  (player-category-in-session (runtime-hooks/require-player-state-session-id "achievement.dispatcher")
+                              uuid))
+
+(defn- player-category-in-session
+  [session-id uuid]
+  (get-in (store/get-player-state* session-id uuid) [:ability-data :category-id]))
 
 (defn- fire-by-trigger!
   [kind payload uuid]

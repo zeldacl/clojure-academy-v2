@@ -312,9 +312,12 @@
     :skill-id  keyword
     :status    keyword (default :constructed)"
   [player-state {:keys [ctx-id skill-id status] :or {status :constructed}}]
-  (let [ctx {:id ctx-id :skill-id skill-id :status status}
-        new-state (assoc-in player-state [:context-registry ctx-id] ctx)]
-    (ok new-state)))
+    (let [ctx {:id ctx-id :skill-id skill-id :status status}
+      new-state (assoc-in player-state [:context-registry ctx-id] ctx)
+      uuid (:player-uuid player-state)]
+    (ok new-state
+      [(evt/make-context-registered-event uuid ctx-id skill-id status)]
+      [])))
 
 (defn- cmd-update-context-status
   "Update status of a context in the context-registry.
@@ -326,8 +329,25 @@
   [player-state {:keys [ctx-id status reason]}]
   (if-not (get-in player-state [:context-registry ctx-id])
     (rejected player-state :context-not-found)
-    (let [new-state (update-in player-state [:context-registry ctx-id]
-                               merge {:status status :terminated-reason reason})]
+    (let [old-status (get-in player-state [:context-registry ctx-id :status])
+          new-state (update-in player-state [:context-registry ctx-id]
+                               merge {:status status :terminated-reason reason})
+          uuid (:player-uuid player-state)]
+      (ok new-state
+          [(evt/make-context-status-changed-event uuid ctx-id old-status status reason)]
+          []))))
+
+(defn- cmd-touch-context-keepalive
+  "Update keepalive timestamp of a context in the context-registry.
+
+  Command fields:
+    :ctx-id      keyword/uuid
+    :timestamp-ms long (optional, default now)"
+  [player-state {:keys [ctx-id timestamp-ms]}]
+  (if-not (get-in player-state [:context-registry ctx-id])
+    (rejected player-state :context-not-found)
+    (let [ts (long (or timestamp-ms (System/currentTimeMillis)))
+          new-state (assoc-in player-state [:context-registry ctx-id :last-keepalive-ms] ts)]
       (ok new-state))))
 
 (defn- cmd-purge-terminated-contexts
@@ -338,7 +358,12 @@
                    (filter (fn [[_ ctx]]
                              (not= :terminated (:status ctx)))
                            registry))]
-    (ok (assoc player-state :context-registry live))))
+    (if (= (count registry) (count live))
+      (ok (assoc player-state :context-registry live))
+      (ok (assoc player-state :context-registry live)
+          [(evt/make-context-purged-event (:player-uuid player-state)
+                                          (- (count registry) (count live)))]
+          []))))
 
 ;; ============================================================================
 ;; Sub-Reducer: resource recovery override
@@ -384,6 +409,7 @@
 (defmethod apply-command :server-tick     [ps cmd] (cmd-server-tick ps cmd))
 (defmethod apply-command :register-context [ps cmd] (cmd-register-context ps cmd))
 (defmethod apply-command :update-context-status [ps cmd] (cmd-update-context-status ps cmd))
+(defmethod apply-command :touch-context-keepalive [ps cmd] (cmd-touch-context-keepalive ps cmd))
 (defmethod apply-command :purge-terminated-contexts [ps cmd] (cmd-purge-terminated-contexts ps cmd))
 (defmethod apply-command :restore-resource [ps cmd] (cmd-restore-resource ps cmd))
 (defmethod apply-command :clear-all-cooldowns [ps cmd] (cmd-clear-all-cooldowns ps cmd))

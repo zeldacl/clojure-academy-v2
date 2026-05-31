@@ -96,11 +96,11 @@
 |---|--------|----------|----------|--------|
 | 6.1 | Context状态机：CONSTRUCTED → ALIVE → TERMINATED（单向） | `context-status` 枚举同三状态，只可前向转移 | `ac/ability/context.clj` | 不可从ALIVE回到CONSTRUCTED |
 | 6.2 | LocalManager客户端：分配clientID，追踪本地上下文 | 客户端context注册表，clientID自增 | `forge/client/key_runtime.clj` | 每次激活clientID递增 |
-| 6.3 | ServerManager：收到M_BEGIN_LINK创建远端context，分配serverID | 服务端收到begin-link消息创建serverCtx | `ac/ability/service/context_mgr.clj` | 服务端ctx有有效serverID |
-| 6.4 | keepalive：0.5s间隔，1.5s超时则终止 | 同间隔与超时阈值 | `ac/ability/service/context_mgr.clj` | 模拟2秒无keepalive→contextTERMINATED |
+| 6.3 | ServerManager：收到M_BEGIN_LINK创建远端context，分配serverID | 服务端收到begin-link消息创建serverCtx | `ac/ability/service/context_manager.clj` | 服务端ctx有有效serverID |
+| 6.4 | keepalive：0.5s间隔，1.5s超时则终止 | 同间隔与超时阈值 | `ac/ability/service/context_manager.clj` | 模拟2秒无keepalive→contextTERMINATED |
 | 6.5 | 握手前消息缓冲，建立后原子刷出 | `context-buffer-message!`，alive后`flush-buffered!` | `ac/ability/context.clj` | CONSTRUCTED状态发送的消息在ALIVE后被正确路由 |
 | 6.6 | 近邻广播范围25m，排除自身 | `find-nearby-players` 25m范围查询 | `forge/ability/network.clj` | 范围内玩家收到广播 |
-| 6.7 | 死亡/分类切换时强制abort所有上下文 | `abort-all-contexts!` | `ac/ability/service/context_mgr.clj` | 死亡后所有ctx=TERMINATED |
+| 6.7 | 死亡/分类切换时强制abort所有上下文 | `abort-all-contexts!` | `ac/ability/service/context_manager.clj` | 死亡后所有ctx=TERMINATED |
 | 6.8 | `MSG_TERMINATED` 在所有终止路径发送 | `send-terminated-msg!` 在所有terminate路径调用 | `ac/ability/context.clj` | 终止事件被监听到 |
 
 ---

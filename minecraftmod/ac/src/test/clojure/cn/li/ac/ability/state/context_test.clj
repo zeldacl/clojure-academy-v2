@@ -3,7 +3,7 @@
             [cn.li.ac.ability.api.impl :as api]
             [cn.li.ac.ability.api.protocol :as proto]
             [cn.li.ac.test.support.contexts :as test-contexts]
-            [cn.li.ac.ability.service.dispatcher :as ctx]))
+            [cn.li.ac.ability.service.context-dispatcher :as ctx]))
 
 (use-fixtures :each test-contexts/clean-contexts-fixture)
 

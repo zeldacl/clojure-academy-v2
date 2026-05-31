@@ -1,6 +1,6 @@
 (ns cn.li.ac.content.ability.teleporter.mark-teleport-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
-            [cn.li.ac.ability.service.dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.ac.content.ability.teleporter.mark-teleport :as mark]

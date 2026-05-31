@@ -2,13 +2,13 @@
   "BodyIntensify skill - hold to charge randomised potions.
 
   Pattern: :charge-window (min 10, max 40, tolerant 100)
-  Cost: overload lerp(200,120) on down; CP lerp(20,15)/tick while charging (ï¿½?0 ticks)
-  Cooldown: lerp(900,600) ticks (manual, applied on successful up ï¿½?0 ticks)
+  Cost: overload lerp(200,120) on down; CP lerp(20,15)/tick while charging (ï¿?0 ticks)
+  Cooldown: lerp(900,600) ticks (manual, applied on successful up ï¿?0 ticks)
   Exp: +0.01 on successful release"
   (:require [clojure.string :as str]
             [cn.li.ac.ability.dsl :refer [defskill]]
             [cn.li.ac.ability.skill-config :as skill-config]
-            [cn.li.ac.ability.service.dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.mcmod.platform.potion-effects :as potion-effects]))
 

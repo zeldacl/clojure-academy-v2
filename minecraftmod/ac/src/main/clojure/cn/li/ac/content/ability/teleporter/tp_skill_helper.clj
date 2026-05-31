@@ -19,6 +19,12 @@
 
 (def ^:private teleporter-critical-hit-message-key "ability.teleporter.critical_hit")
 
+(declare skill-exp
+         cfg-lerp
+         cfg-lerp-int
+         player-look-vec
+         player-position)
+
 (defn- crit-rate-label
   [crit-rate]
   (format "x%.1f" (double crit-rate)))

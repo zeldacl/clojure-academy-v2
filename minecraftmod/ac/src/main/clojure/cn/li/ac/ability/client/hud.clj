@@ -5,7 +5,7 @@
             [cn.li.ac.ability.client.combat-notice :as combat-notice]
             [cn.li.ac.ability.model.cooldown :as cd-data]
             [cn.li.ac.ability.client.delegate-state :as dstate]
-            [cn.li.ac.ability.service.dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (defn- player-contexts

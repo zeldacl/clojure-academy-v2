@@ -1,9 +1,8 @@
 (ns cn.li.ac.ability.state.player-test
   (:require 
-            [cn.li.ac.ability.service.player-state-tick :as ps-tick]
-[cn.li.ac.ability.service.player-state-accessors :as ps-accessors]
-[cn.li.ac.ability.service.player-state-dirty :as ps-dirty]
-[cn.li.ac.ability.service.player-state-core :as ps-core]
+            [cn.li.ac.ability.service.state-tick :as ps-tick]
+[cn.li.ac.ability.service.state-accessors :as ps-accessors]
+[cn.li.ac.ability.service.runtime-store :as store]
 [clojure.edn :as edn]
             [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.test.support.player-state :as ps-fix]            [cn.li.mcmod.hooks.core :as runtime-hooks]))
@@ -13,14 +12,14 @@
 (deftest player-state-access-requires-explicit-owner-test
   (binding [runtime-hooks/*player-state-owner* nil]
     (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                          #"Player state owner requires"
-                          (ps-core/get-player-state "ownerless")))
+                          #"requires bound session-id"
+                          (ps-accessors/get-ability-data "ownerless")))
     (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                          #"Player state owner requires"
-                          (ps-core/set-player-state! "ownerless" (ps-core/fresh-state))))))
+                          #"requires bound session-id"
+                          (ps-accessors/update-ability-data! "ownerless" assoc :category-id :x)))))
 
 (deftest fresh-state-shape-test
-  (let [s (ps-core/fresh-state)]
+  (let [s (store/fresh-player-state)]
     (is (map? (:ability-data s)))
     (is (map? (:resource-data s)))
     (is (map? (:cooldown-data s)))
@@ -30,60 +29,48 @@
     (is (false? (:dirty? s)))))
 
 (deftest get-or-create-player-state-test
-  (let [a (ps-core/get-or-create-player-state! "u1")
-        b (ps-core/get-or-create-player-state! "u1")]
+  (let [a (store/get-or-create-player-state! ps-fix/test-session-id "u1")
+        b (store/get-or-create-player-state! ps-fix/test-session-id "u1")]
     (is (identical? a b))))
 
 (deftest update-ability-data-marks-dirty-test
-  (ps-core/get-or-create-player-state! "u2")
-  (is (false? (ps-dirty/dirty? "u2")))
+  (store/get-or-create-player-state! ps-fix/test-session-id "u2")
+  (is (false? (:dirty? (store/get-player-state* ps-fix/test-session-id "u2"))))
   (ps-accessors/update-ability-data! "u2" assoc :category-id :x)
-  (is (true? (ps-dirty/dirty? "u2")))
-  (ps-dirty/mark-clean! "u2")
-  (is (false? (ps-dirty/dirty? "u2"))))
+  (is (true? (:dirty? (store/get-player-state* ps-fix/test-session-id "u2"))))
+  (store/clear-dirty! (store/get-store) ps-fix/test-session-id "u2")
+  (is (false? (:dirty? (store/get-player-state* ps-fix/test-session-id "u2")))))
 
 (deftest server-tick-player-smoke-test
-  (ps-core/get-or-create-player-state! "u3")
+  (store/get-or-create-player-state! ps-fix/test-session-id "u3")
   (let [r (ps-tick/server-tick-player! "u3" nil)]
     (is (map? r))
     (is (vector? (:events r)))))
 
 (deftest remove-player-state-test
-  (ps-core/set-player-state! "u4" (ps-core/fresh-state))
-  (is (some? (ps-core/get-player-state "u4")))
-  (ps-core/remove-player-state! "u4")
-  (is (nil? (ps-core/get-player-state "u4"))))
+  (store/set-player-state!* ps-fix/test-session-id "u4" (store/fresh-player-state))
+  (is (some? (store/get-player-state* ps-fix/test-session-id "u4")))
+  (store/remove-player-state!* ps-fix/test-session-id "u4")
+  (is (nil? (store/get-player-state* ps-fix/test-session-id "u4"))))
 
-(deftest player-state-isolated-by-dynamic-owner-test
-  (binding [runtime-hooks/*player-state-owner* {:server-session-id :session-a}]
-    (ps-core/set-player-state! "same-uuid" (assoc (ps-core/fresh-state) :marker :a)))
-  (binding [runtime-hooks/*player-state-owner* {:server-session-id :session-b}]
-    (ps-core/set-player-state! "same-uuid" (assoc (ps-core/fresh-state) :marker :b)))
-  (is (= :a (binding [runtime-hooks/*player-state-owner* {:server-session-id :session-a}]
-              (:marker (ps-core/get-player-state "same-uuid")))))
-  (is (= :b (binding [runtime-hooks/*player-state-owner* {:server-session-id :session-b}]
-              (:marker (ps-core/get-player-state "same-uuid")))))
-  (is (= ["same-uuid"]
-         (binding [runtime-hooks/*player-state-owner* {:server-session-id :session-a}]
-           (vec (ps-core/list-player-uuids))))))
+(deftest player-state-isolated-by-session-id-test
+  (store/set-player-state!* :session-a "same-uuid" (assoc (store/fresh-player-state) :marker :a))
+  (store/set-player-state!* :session-b "same-uuid" (assoc (store/fresh-player-state) :marker :b))
+  (is (= :a (:marker (store/get-player-state* :session-a "same-uuid"))))
+  (is (= :b (:marker (store/get-player-state* :session-b "same-uuid"))))
+  (is (= ["same-uuid"] (vec (store/list-players (store/get-store) :session-a)))))
 
 (deftest clear-session-player-states-removes-only-target-session-test
-  (binding [runtime-hooks/*player-state-owner* {:server-session-id :session-a}]
-    (ps-core/set-player-state! "same-uuid" (assoc (ps-core/fresh-state) :marker :a))
-    (ps-core/set-player-state! "only-a" (assoc (ps-core/fresh-state) :marker :only-a)))
-  (binding [runtime-hooks/*player-state-owner* {:server-session-id :session-b}]
-    (ps-core/set-player-state! "same-uuid" (assoc (ps-core/fresh-state) :marker :b)))
-  (ps-core/clear-session-player-states! {:server-session-id :session-a})
-  (is (nil? (binding [runtime-hooks/*player-state-owner* {:server-session-id :session-a}]
-              (ps-core/get-player-state "same-uuid"))))
-  (is (nil? (binding [runtime-hooks/*player-state-owner* {:server-session-id :session-a}]
-              (ps-core/get-player-state "only-a"))))
-  (is (= :b
-         (binding [runtime-hooks/*player-state-owner* {:server-session-id :session-b}]
-           (:marker (ps-core/get-player-state "same-uuid"))))))
+  (store/set-player-state!* :session-a "same-uuid" (assoc (store/fresh-player-state) :marker :a))
+  (store/set-player-state!* :session-a "only-a" (assoc (store/fresh-player-state) :marker :only-a))
+  (store/set-player-state!* :session-b "same-uuid" (assoc (store/fresh-player-state) :marker :b))
+  (store/remove-session! (store/get-store) :session-a)
+  (is (nil? (store/get-player-state* :session-a "same-uuid")))
+  (is (nil? (store/get-player-state* :session-a "only-a")))
+  (is (= :b (:marker (store/get-player-state* :session-b "same-uuid")))))
 
 (deftest persisted-state-edn-roundtrip-keeps-core-data-test
-  (let [state (-> (ps-core/fresh-state)
+  (let [state (-> (store/fresh-player-state)
                   (assoc-in [:ability-data :category-id] :electromaster)
                   (update-in [:ability-data :learned-skills] conj :railgun)
                   (assoc-in [:ability-data :skill-exps :railgun] 0.75)

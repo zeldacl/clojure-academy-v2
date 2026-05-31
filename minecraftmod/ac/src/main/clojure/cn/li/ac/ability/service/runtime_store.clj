@@ -33,6 +33,7 @@
             [cn.li.ac.ability.model.resource :as rdata]
             [cn.li.ac.ability.model.cooldown :as cdata]
             [cn.li.ac.ability.model.preset :as pdata]
+            [cn.li.ac.ability.model.develop :as ddata]
             ))
 
 ;; ============================================================================
@@ -71,6 +72,9 @@
   
   (remove-session! [store session-id]
     "Remove all state for a session. Returns nil.")
+
+  (remove-player-state! [store session-id player-uuid]
+    "Remove one player state from a session. Returns nil.")
   
   (list-sessions [store]
     "Return all active session-ids.")
@@ -92,6 +96,9 @@
    :resource-data    (rdata/new-resource-data)
    :cooldown-data    (cdata/new-cooldown-data)
    :preset-data      (pdata/new-preset-data)
+    :develop-data     (ddata/new-develop-data)
+    :terminal-data    {:terminal-installed? false
+                 :installed-apps #{}}
    :context-registry {}
    :dirty?           false})
 
@@ -152,6 +159,10 @@
 
   (remove-session! [_ session-id]
     (swap! store-atom update :sessions dissoc session-id)
+    nil)
+
+  (remove-player-state! [_ session-id player-uuid]
+    (swap! store-atom update-in [:sessions session-id :players] dissoc player-uuid)
     nil)
 
   (list-sessions [_]
@@ -220,6 +231,11 @@
       (let [fresh (fresh-player-state)]
         (set-player-state!* session-id player-uuid fresh)
         fresh)))
+
+(defn remove-player-state!*
+  "Remove one player state in the global store."
+  [session-id player-uuid]
+  (remove-player-state! global-store session-id player-uuid))
 
 (defn with-player-state
   "Apply f to player state and return f's result without mutating store.

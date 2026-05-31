@@ -1,7 +1,7 @@
 (ns cn.li.ac.block.ability-interferer.logic
 	"Ability Interferer business logic: state schema, player detection, tick, GUI, and container functions."
 	(:require 
-            [cn.li.ac.ability.service.player-state-accessors :as ps-accessors]
+			[cn.li.ac.ability.service.state-accessors :as ps-accessors]
 [clojure.set :as set]
 						[clojure.string :as str]
 						[cn.li.mcmod.block.state-schema :as state-schema]

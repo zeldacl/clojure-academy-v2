@@ -3,7 +3,7 @@
 
 	Ensures one projectile is handled by at most one vecmanip skill per tick."
 	(:require [clojure.string :as str]
-						[cn.li.ac.ability.service.dispatcher :as ctx]
+						[cn.li.ac.ability.service.context-dispatcher :as ctx]
 						[cn.li.ac.ability.skill-config :as skill-config]
 						[cn.li.ac.ability.util.toggle :as toggle]))
 

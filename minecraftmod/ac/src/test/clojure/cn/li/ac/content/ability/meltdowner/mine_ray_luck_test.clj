@@ -3,7 +3,7 @@
             [cn.li.ac.content.ability.meltdowner.mine-ray-luck :as luck]
             [cn.li.ac.content.ability.meltdowner.mine-rays-base :as base]
             [cn.li.ac.ability.skill-config :as skill-config]
-            [cn.li.ac.ability.service.dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.server.effect.geom :as geom]
             [cn.li.mcmod.platform.block-manipulation :as bm]

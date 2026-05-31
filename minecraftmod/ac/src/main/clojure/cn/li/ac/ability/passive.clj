@@ -1,8 +1,18 @@
 (ns cn.li.ac.ability.passive
   "Helpers for passive skill calc-event wiring."
   (:require 
-            [cn.li.ac.ability.service.player-state-core :as ps-core]
-[cn.li.ac.ability.registry.event :as evt]            [cn.li.ac.ability.model.ability :as adata]))
+            [cn.li.ac.ability.service.runtime-store :as store]
+            [cn.li.ac.ability.registry.event :as evt]
+            [cn.li.ac.ability.model.ability :as adata]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]))
+
+(defn- runtime-player-state
+  [uuid]
+  (store/get-player-state* (runtime-hooks/require-player-state-session-id "passive") uuid))
+
+(defn- runtime-player-state-in-session
+  [session-id uuid]
+  (store/get-player-state* session-id uuid))
 
 (defn default-passive-handler-runtime-state
   []
@@ -21,6 +31,9 @@
 
 (defonce ^:private installed-passive-handler-runtime
   (create-passive-handler-runtime))
+
+(declare learned-skill-in-session?
+         register-passive-calc-handler!)
 
 (defn- passive-handler-runtime?
   [runtime]
@@ -82,8 +95,14 @@
 
 (defn learned-skill?
   [uuid skill-id]
+  (learned-skill-in-session? (runtime-hooks/require-player-state-session-id "passive")
+                             uuid
+                             skill-id))
+
+(defn learned-skill-in-session?
+  [session-id uuid skill-id]
   (boolean
-    (when-let [state (ps-core/get-player-state uuid)]
+    (when-let [state (runtime-player-state-in-session session-id uuid)]
       (adata/is-learned? (:ability-data state) skill-id))))
 
 (defn register-passive-calc-handler!

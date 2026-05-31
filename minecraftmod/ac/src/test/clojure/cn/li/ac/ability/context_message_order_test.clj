@@ -1,11 +1,11 @@
 (ns cn.li.ac.ability.context-message-order-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.test.support.contexts :as test-contexts]
-            [cn.li.ac.ability.service.dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.server.handlers.context-handler :as context-handler]
             [cn.li.ac.ability.server.handlers.input-handler :as input-handler]
-            [cn.li.ac.ability.service.context-mgr :as ctx-mgr]
-            [cn.li.ac.ability.service.context-runtime :as ctx-rt]
+            [cn.li.ac.ability.service.context-manager :as ctx-mgr]
+            [cn.li.ac.ability.service.context-state :as ctx-rt]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.ac.ability.util.uuid :as uuid]))
 

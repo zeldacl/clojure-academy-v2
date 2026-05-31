@@ -1,6 +1,6 @@
 (ns cn.li.ac.content.ability.electromaster.mine-detect-config-test
   (:require 
-            [cn.li.ac.ability.service.player-state-core :as ps-core]
+            [cn.li.ac.ability.service.runtime-store :as store]
 [clojure.test :refer [deftest is testing]]
             [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.skill-config :as skill-config]
@@ -12,17 +12,16 @@
   (ps-fix/with-test-player-state-owner
     (fn []
       (let [descriptors (config-reg/get-descriptor-registry)
-            values (config-reg/get-value-registry)
-            player-states (ps-core/snapshot-player-states)]
+            values (config-reg/get-value-registry)]
         (try
           (config-reg/set-descriptor-registry! {})
           (config-reg/set-value-registry! {})
-          (ps-core/reset-player-states-for-test!)
+          (store/reset-store!)
           (f)
           (finally
             (config-reg/set-descriptor-registry! descriptors)
             (config-reg/set-value-registry! values)
-            (ps-core/reset-player-states-for-test! player-states)))))))
+            (store/reset-store!)))))))
 
 (defn- seed-electromaster-config!
   [values]

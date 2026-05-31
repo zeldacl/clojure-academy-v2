@@ -1,6 +1,6 @@
 (ns cn.li.ac.content.ability.vecmanip.storm-wing-test
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
-            [cn.li.ac.ability.service.dispatcher :as dispatcher]
+            [cn.li.ac.ability.service.context-dispatcher :as dispatcher]
             [cn.li.ac.content.ability.vecmanip.storm-wing :refer [validate-move-direction]]
             [cn.li.mcmod.util.log :as log]))
 
@@ -96,7 +96,7 @@
 (deftest test-validate-move-direction-small-vectors
   "Very small but non-zero vectors should be normalized"
   (testing "tiny positive vector"
-    ;; length = sqrt(3) * 1.0e-5 â‰ˆ 1.73e-5 > 1.0e-6 threshold, so should normalize
+    ;; length = sqrt(3) * 1.0e-5 â‰?1.73e-5 > 1.0e-6 threshold, so should normalize
     (let [result (validate-move-direction {:x 1.0e-5 :y 1.0e-5 :z 1.0e-5})]
       (is (not (nil? result)))
       ;; Should be normalized

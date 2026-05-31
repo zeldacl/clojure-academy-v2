@@ -1,9 +1,9 @@
 (ns cn.li.ac.ability.client.keybinds-test
   (:require 
-            [cn.li.ac.ability.service.player-state-core :as ps-core]
+            [cn.li.ac.ability.service.runtime-store :as store]
 [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.client.api :as client-api]
-            [cn.li.ac.ability.client.keybinds :as keybinds]            [cn.li.ac.ability.service.dispatcher :as ctx]
+            [cn.li.ac.ability.client.keybinds :as keybinds]            [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]))
@@ -13,18 +13,18 @@
     (fn []
       (keybinds/reset-client-keybind-state-for-test!)
       (keybinds/reset-keybind-registries-for-test!)
-      (ps-core/reset-player-states-for-test!)
+      (store/reset-store!)
       (try
         (f)
         (finally
           (keybinds/reset-client-keybind-state-for-test!)
           (keybinds/reset-keybind-registries-for-test!)
-          (ps-core/reset-player-states-for-test!))))))
+          (store/reset-store!))))))
 
 (use-fixtures :each reset-fixture)
 
 (defn- activated-state []
-  (assoc-in (ps-core/fresh-state) [:resource-data :activated] true))
+  (assoc-in (store/fresh-player-state) [:resource-data :activated] true))
 
 (deftest key-state-isolated-by-client-owner-test
   (let [opened (atom [])]
@@ -75,8 +75,9 @@
                         (keybinds/key-state-snapshot {:client-session-id :session-a}))))
 
 (deftest preset-switch-state-isolated-by-player-test
-  (ps-core/reset-player-states-for-test! {[:session-a "player-a"] (activated-state)
-                                     [:session-a "player-b"] (activated-state)})
+  (store/reset-store!)
+  (store/set-player-state!* :session-a "player-a" (activated-state))
+  (store/set-player-state!* :session-a "player-b" (activated-state))
   (let [requests (atom [])]
     (with-redefs [client-api/req-switch-preset! (fn [preset-idx callback]
                                                   (swap! requests conj preset-idx)

@@ -5,15 +5,17 @@
             [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.ac.terminal.player-data :as term-data]
             [cn.li.ac.terminal.app-registry :as app-reg]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.util.log :as log]))
 
 (defonce-guard app-installers-installed?)
 
 (defn- install-app-for-player!
   [player app-id]
-  (let [uuid-str (uuid/player-uuid player)]
+  (let [session-id (runtime-hooks/require-player-state-session-id "app-installers")
+        uuid-str (uuid/player-uuid player)]
     (cond
-      (not (term-data/terminal-installed? uuid-str))
+      (not (term-data/terminal-installed-in-session? session-id uuid-str))
       (do
         (log/info "Skip app install: terminal not installed" {:player uuid-str :app app-id})
         {:consume? true})
@@ -25,7 +27,7 @@
 
       :else
       (do
-        (term-data/install-app! uuid-str app-id)
+        (term-data/install-app-in-session! session-id uuid-str app-id)
         (log/info "Installed terminal app from installer item" {:player uuid-str :app app-id})
         {:consume? true}))))
 
@@ -45,8 +47,8 @@
         "app_freq_transmitter"
         {:max-stack-size 1
          :creative-tab :tools
-         :properties {:tooltip ["安装终端应用: 频率发射器"
-                                "需要先安装终端"]
+         :properties {:tooltip ["Install terminal app: Frequency Transmitter"
+                                "Requires terminal installation first"]
                       :model-texture "app_freq_transmitter"}
          :on-right-click (app-installer-handler :freq-transmitter)}))
     (idsl/register-item!
@@ -54,8 +56,8 @@
         "app_media_player"
         {:max-stack-size 1
          :creative-tab :tools
-         :properties {:tooltip ["安装终端应用: 媒体播放器"
-                                "需要先安装终端"]
+         :properties {:tooltip ["Install terminal app: Media Player"
+                                "Requires terminal installation first"]
                       :model-texture "app_media_player"}
          :on-right-click (app-installer-handler :media-player)}))
     (idsl/register-item!

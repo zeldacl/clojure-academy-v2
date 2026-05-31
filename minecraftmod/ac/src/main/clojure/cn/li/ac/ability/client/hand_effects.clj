@@ -4,7 +4,7 @@
   Skills register their hand-effect handlers via `register-hand-effect!` at
   load time.  The infrastructure dispatches enqueue / tick / transform calls
   without any skill-specific knowledge."
-  (:require [cn.li.mcmod.hooks.core :as runtime-hooks]
+  (:require [cn.li.ac.ability.client.effects.queue-infra :as queue-infra]
             [cn.li.mcmod.util.log :as log]))
 
 ;; ---------------------------------------------------------------------------
@@ -56,47 +56,13 @@
   [f & args]
   (apply swap! (camera-pitch-deltas-atom) f args))
 
-(defn- require-owner-value
-  [owner label value]
-  (if (some? value)
-    value
-    (throw (ex-info (format "Hand effects require %s" label)
-                    {:owner owner
-                     :required label}))))
-
-(defn- current-session-id
-  [owner]
-  (require-owner-value owner
-                       ":client-session-id"
-                       (or (when (map? owner) (:client-session-id owner))
-                           (when (map? owner) (:session-id owner))
-                           (:client-session-id runtime-hooks/*player-state-owner*)
-                           runtime-hooks/*client-session-id*)))
-
 (defn- normalize-session-id
   [owner-or-session]
-  (cond
-    (map? owner-or-session)
-    (current-session-id owner-or-session)
-
-    (and (vector? owner-or-session)
-         (= 2 (count owner-or-session))
-         (vector? (first owner-or-session)))
-    (first owner-or-session)
-
-    (some? owner-or-session)
-    owner-or-session
-
-    :else
-    (current-session-id nil)))
+  (queue-infra/normalize-session-id "hand" owner-or-session))
 
 (defn current-effect-owner
   []
-  (or runtime-hooks/*player-state-owner*
-      (when runtime-hooks/*client-session-id*
-        {:client-session-id runtime-hooks/*client-session-id*})
-      (throw (ex-info "Current hand effect owner requires :client-session-id"
-                      {:required ":client-session-id"}))))
+  (queue-infra/current-effect-owner "hand"))
 
 (defn add-camera-pitch-delta!
   "Queue a camera pitch delta (float degrees) to be consumed by the platform
@@ -104,7 +70,7 @@
   ([delta]
    (add-camera-pitch-delta! nil delta))
   ([owner-or-session delta]
-  (update-camera-pitch-deltas! update (normalize-session-id owner-or-session) (fnil conj []) (float delta))
+  (queue-infra/queue-effect! (camera-pitch-deltas-atom) "hand" owner-or-session (float delta))
    nil))
 
 (defn add-current-camera-pitch-delta!
@@ -116,13 +82,7 @@
   ([]
    (drain-camera-pitch-deltas! nil))
   ([owner-or-session]
-   (let [session-id (normalize-session-id owner-or-session)
-         drained (atom [])]
-     (update-camera-pitch-deltas!
-       (fn [deltas]
-         (reset! drained (vec (get deltas session-id [])))
-         (dissoc deltas session-id)))
-     @drained)))
+   (queue-infra/poll-effects! (camera-pitch-deltas-atom) "hand" owner-or-session)))
 
 (defn clear-session-camera-pitch-deltas!
   ([]
@@ -227,12 +187,12 @@
     (update state :effect-states dissoc effect-id)
     (assoc-in state [:effect-states effect-id] effect-state)))
 
-;; effect-id → {:enqueue-fn        (fn [payload])
+;; effect-id �?{:enqueue-fn        (fn [payload])
 ;;              :enqueue-state-fn  (fn [state payload] -> state)
 ;;              :tick-fn           (fn [])
 ;;              :tick-state-fn     (fn [state] -> state)
 ;;              :initial-state     any (optional)
-;;              :transform-fn   (fn []) → transform-map or nil  (optional)}
+;;              :transform-fn   (fn []) �?transform-map or nil  (optional)}
 
 (defn- assert-registry-open!
   []
@@ -243,12 +203,12 @@
   "Register a hand effect handler.  `effect-id` is a keyword.
 
   `handler-map` keys:
-    :enqueue-fn   (fn [payload]) — process incoming FX data
+    :enqueue-fn   (fn [payload]) �?process incoming FX data
     :enqueue-state-fn (fn [state payload]) -> state
-    :tick-fn      (fn []) — advance animation state each game tick
+    :tick-fn      (fn []) �?advance animation state each game tick
     :tick-state-fn (fn [state]) -> state
     :initial-state any initial state for :enqueue-state-fn/:tick-state-fn path
-    :transform-fn (fn []) → {:translate [x y z] :rotate [x y z] :scale [x y z]} or nil
+    :transform-fn (fn []) �?{:translate [x y z] :rotate [x y z] :scale [x y z]} or nil
                    (optional)"
   [effect-id handler-map]
   {:pre [(keyword? effect-id) (map? handler-map)

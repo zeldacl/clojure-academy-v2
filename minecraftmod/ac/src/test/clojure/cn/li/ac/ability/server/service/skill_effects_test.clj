@@ -1,6 +1,6 @@
 (ns cn.li.ac.ability.server.service.skill-effects-test
   (:require 
-            [cn.li.ac.ability.service.player-state-core :as ps-core]
+            [cn.li.ac.ability.service.runtime-store :as store]
 [clojure.test :refer [deftest is testing use-fixtures]]
             [cn.li.ac.ability.config :as ability-config]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]            [cn.li.ac.test.support.player-state :as ps-fix]))
@@ -32,7 +32,7 @@
         (is (false? (:creative? @seen)))))))
 
 (deftest perform-resource-state-missing-test
-  (ps-core/reset-player-states-for-test!)
+  (store/reset-store!)
   (is (= {:success? false :events [] :data nil}
          (skill-effects/perform-resource! "missing" 1.0 1.0 false))))
 

@@ -1,6 +1,6 @@
 (ns cn.li.ac.content.ability.meltdowner.damage-helper-test
   (:require 
-            [cn.li.ac.ability.service.player-state-core :as ps-core]
+            [cn.li.ac.ability.service.runtime-store :as store]
 [clojure.test :refer [deftest is testing use-fixtures]]
             [cn.li.ac.ability.model.ability :as ad]
             [cn.li.ac.ability.server.damage.runtime :as rt]            [cn.li.ac.test.support.player-state :as ps-fix]
@@ -12,12 +12,12 @@
     (fn []
       (dh/call-with-damage-helper-runtime (dh/create-damage-helper-runtime)
         (fn []
-          (ps-core/reset-player-states-for-test!)
+          (store/reset-store!)
           (try
             (f)
             (finally
               (dh/reset-marks-for-test!)
-              (ps-core/reset-player-states-for-test!))))))))
+              (store/reset-store!))))))))
 
 (use-fixtures :each with-fresh-marks-runtime)
 
@@ -25,7 +25,7 @@
   (-> (ad/new-ability-data) (ad/learn-skill :rad-intensify)))
 
 (defn- learn-rad-intensify! [player-id]
-  (ps-core/set-player-state! player-id {:ability-data (learned-rad-intensify-data)}))
+  (ps-fix/seed-player-state! player-id {:ability-data (learned-rad-intensify-data)}))
 
 (deftest process-damage-without-mark-is-unchanged-test
   (testing "no rad mark leaves damage unchanged (other handlers may still run)"

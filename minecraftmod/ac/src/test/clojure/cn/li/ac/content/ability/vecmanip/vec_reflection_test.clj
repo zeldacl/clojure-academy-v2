@@ -9,7 +9,7 @@
             [cn.li.mcmod.platform.entity-motion]
             [cn.li.mcmod.platform.raycast]
             [cn.li.mcmod.platform.world-effects]
-            [cn.li.ac.ability.service.dispatcher :as ctx]))
+            [cn.li.ac.ability.service.context-dispatcher :as ctx]))
 
 (defn- with-fresh-reflection-runtime [f]
   (damage-handler/reset-attack-check-registries-for-test!)

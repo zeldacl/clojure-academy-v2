@@ -1,7 +1,7 @@
 (ns cn.li.ac.content.ability.meltdowner.damage-helper
   "Meltdowner damage helper: mark targets and amplify incoming damage while marked."
   (:require [cn.li.ac.ability.service.skill-effects :as skill-effects]
-            [cn.li.ac.ability.service.context-mgr :as ctx-mgr]
+            [cn.li.ac.ability.service.context-manager :as ctx-mgr]
             [cn.li.ac.ability.model.ability :as adata]
             [cn.li.ac.ability.server.damage.runtime :as damage-runtime]
             [cn.li.mcmod.hooks.core :as hooks]

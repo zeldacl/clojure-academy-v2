@@ -1,9 +1,10 @@
 (ns cn.li.ac.ability.adapters.client-ui-hooks
   "Client HUD/screen/context hook composition for AC ability platform bridge."
   (:require 
-            [cn.li.ac.ability.service.player-state-accessors :as ps-accessors]
-[cn.li.ac.ability.service.player-state-core :as ps-core]
+            [cn.li.ac.ability.service.state-accessors :as ps-accessors]
+[cn.li.ac.ability.service.runtime-store :as store]
 [cn.li.ac.ability.client.api :as client-api]
+            [cn.li.ac.ability.client.read-model :as read-model]
             [cn.li.ac.ability.client.combat-notice :as combat-notice]
             [cn.li.ac.ability.client.delegate-state :as delegate-state]
             [cn.li.ac.ability.client.effects.particles :as client-particles]
@@ -18,10 +19,10 @@
             [cn.li.ac.ability.client.screens.skill-tree :as skill-tree-screen]
             [cn.li.ac.content.ability.electromaster.current-charging-fx :as current-charging-fx]
             [cn.li.ac.ability.skill-config :as skill-config]
-            [cn.li.ac.ability.service.context-mgr :as ctx-mgr]
+            [cn.li.ac.ability.service.context-manager :as ctx-mgr]
             [cn.li.ac.ability.model.preset :as preset-data]
             [cn.li.ac.ability.registry.skill-query :as skill-query]
-            [cn.li.ac.ability.service.dispatcher :as ctx]            [cn.li.ac.ability.util.resource-check :as resource-check]
+            [cn.li.ac.ability.service.context-dispatcher :as ctx]            [cn.li.ac.ability.util.resource-check :as resource-check]
             [cn.li.ac.config.gameplay :as gameplay]
             [cn.li.ac.ability.util.toggle :as toggle]
             [cn.li.ac.ability.messages :as catalog]
@@ -148,56 +149,71 @@
          [(require-client-owner-value owner ":client-session-id" session-id)
           (require-client-owner-value owner ":player-uuid" player-uuid)]))))
 
-(defn- current-session-id
-  []
-  (require-client-owner-value {} ":client-session-id" (current-client-session-id)))
-
 (defn- with-client-owner-bindings
   [owner f]
   (let [[session-id player-uuid] (client-ui-owner-key owner)]
-    (binding [runtime-hooks/*client-session-id* session-id
-              runtime-hooks/*player-state-owner* {:client-session-id session-id
-                                                  :player-uuid player-uuid}]
-      (f))))
+    (binding [runtime-hooks/*client-session-id* session-id]
+      (runtime-hooks/with-player-state-owner {:client-session-id session-id
+                                              :player-uuid player-uuid}
+        (f)))))
 
 (defn- with-client-player-state-owner
   [player-uuid f]
   (let [player-uuid* (require-client-owner-value {:player-uuid player-uuid}
                                                  ":player-uuid"
                                                  (some-> player-uuid str))]
-    (with-client-owner-bindings {:client-session-id (current-session-id)
-                                 :player-uuid player-uuid*}
-      f)))
+    (let [session-id (require-client-owner-value {} ":client-session-id" (current-client-session-id))]
+      (with-client-owner-bindings {:client-session-id session-id
+                                   :player-uuid player-uuid*}
+        #(f session-id player-uuid*)))))
+
+(defn- client-ui-read-owner-key
+  [player-uuid]
+  (let [session-id (require-client-owner-value {} ":client-session-id" (current-client-session-id))
+        player-uuid* (require-client-owner-value {:player-uuid player-uuid}
+                                                 ":player-uuid"
+                                                 (some-> player-uuid str))]
+    [session-id :client-ui-hooks player-uuid*]))
 
 (defn- get-client-player-state
   [player-uuid]
-  (with-client-player-state-owner player-uuid
-    #(ps-core/get-player-state player-uuid)))
+  (read-model/get-player-state (client-ui-read-owner-key player-uuid)))
 
 (defn- ensure-client-player-state!
   [player-uuid]
-  (with-client-player-state-owner player-uuid
-    #(ps-core/get-or-create-player-state! player-uuid)))
+  (read-model/ensure-player-state! (client-ui-read-owner-key player-uuid)))
 
 (defn- update-client-ability-data!
   [player-uuid ability-data]
   (with-client-player-state-owner player-uuid
-    #(ps-accessors/update-ability-data! player-uuid (constantly ability-data))))
+    (fn [session-id player-uuid*]
+      (ps-accessors/update-ability-data-in-session! session-id
+                                                    player-uuid*
+                                                    (constantly ability-data)))))
 
 (defn- update-client-resource-data!
   [player-uuid resource-data]
   (with-client-player-state-owner player-uuid
-    #(ps-accessors/update-resource-data! player-uuid (constantly resource-data))))
+    (fn [session-id player-uuid*]
+      (ps-accessors/update-resource-data-in-session! session-id
+                                                      player-uuid*
+                                                      (constantly resource-data)))))
 
 (defn- update-client-cooldown-data!
   [player-uuid cooldown-data]
   (with-client-player-state-owner player-uuid
-    #(ps-accessors/update-cooldown-data! player-uuid (constantly cooldown-data))))
+    (fn [session-id player-uuid*]
+      (ps-accessors/update-cooldown-data-in-session! session-id
+                                                      player-uuid*
+                                                      (constantly cooldown-data)))))
 
 (defn- update-client-preset-data!
   [player-uuid preset-data]
   (with-client-player-state-owner player-uuid
-    #(ps-accessors/update-preset-data! player-uuid (constantly preset-data))))
+    (fn [session-id player-uuid*]
+      (ps-accessors/update-preset-data-in-session! session-id
+                                                    player-uuid*
+                                                    (constantly preset-data)))))
 
 (defn- validate-managed-screen-payload
   [screen-key payload]
@@ -239,8 +255,7 @@
 
 (defn- with-client-context-owner
   [player-uuid f]
-  (binding [ctx/*context-owner* (client-context-owner player-uuid)]
-    (f)))
+  (f (client-context-owner player-uuid)))
 
 (defn- slot-context-key [player-uuid key-idx]
   (conj (client-ui-owner-key player-uuid) key-idx))
@@ -302,8 +317,8 @@
   [owner]
   (with-client-owner-bindings owner
     (fn []
-      (let [[_session-id player-uuid] (client-ui-owner-key owner)]
-        (ps-core/remove-player-state! player-uuid))))
+      (let [[session-id player-uuid] (client-ui-owner-key owner)]
+        (store/remove-player-state!* session-id player-uuid))))
   nil)
 
 (defn- clear-managed-screen-state!
@@ -529,7 +544,8 @@
     (or (get (slot-context-ids-snapshot) slot-key)
         (let [ctx-map (with-client-context-owner
                         player-uuid
-                        #(ctx-mgr/activate-context! player-uuid skill-id))
+                        (fn [owner]
+                          (ctx-mgr/activate-context! owner player-uuid skill-id)))
               ctx-id (:id ctx-map)]
           (update-client-ui-runtime! assoc-in [:slot-context-ids slot-key] ctx-id)
           ctx-id))))
@@ -654,7 +670,8 @@
                (when (= owner-key (slot-key-owner slot-key))
                  (let [ctx-data (with-client-context-owner
                                   player-uuid
-                                  #(ctx/get-context ctx-id))]
+                                  (fn [owner]
+                                    (ctx/get-context owner ctx-id)))]
                    (when (and (= :flashing (:skill-id ctx-data))
                               (ctx/active-context? ctx-data))
                      ctx-id)))))
@@ -931,7 +948,7 @@
 
      :client-new-context
      (fn [player-uuid skill-id]
-       (with-client-context-owner player-uuid #(ctx/new-context player-uuid skill-id)))
+       (with-client-context-owner player-uuid (fn [owner] (ctx/new-context player-uuid skill-id owner))))
 
      :client-register-context!
      (fn [ctx-map]
@@ -1004,7 +1021,8 @@
 
      :client-abort-all!
      (fn []
-       (abort-all-slot-contexts-for-session! (current-session-id)))
+       (abort-all-slot-contexts-for-session!
+        (require-client-owner-value {} ":client-session-id" (current-client-session-id))))
 
      :client-update-ability-data!
      (fn [player-uuid ability-data]

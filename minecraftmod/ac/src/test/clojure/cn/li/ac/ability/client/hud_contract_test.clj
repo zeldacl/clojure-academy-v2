@@ -4,7 +4,7 @@
             [cn.li.ac.ability.model.cooldown :as cd-data]
             [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.registry.skill-query :as skill-query]
-            [cn.li.ac.ability.service.dispatcher :as ctx]))
+            [cn.li.ac.ability.service.context-dispatcher :as ctx]))
 
 (deftest slot-visual-uses-active-context-and-authoritative-cooldown-test
   (let [cooldowns (cd-data/set-cooldown (cd-data/new-cooldown-data) :railgun :main 40)]

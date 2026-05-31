@@ -1,6 +1,6 @@
 (ns cn.li.ac.content.ability.vecmanip.groundshock-test
   (:require [clojure.test :refer [deftest is testing]]
-            [cn.li.ac.ability.service.dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.content.ability.vecmanip.groundshock :as gs]
             [cn.li.ac.content.ability.fx-helpers :as fx]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]

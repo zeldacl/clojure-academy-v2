@@ -1,6 +1,6 @@
 (ns cn.li.ac.ability.server.handlers.activation-handler-test
   (:require 
-            [cn.li.ac.ability.service.player-state-core :as ps-core]
+            [cn.li.ac.ability.service.runtime-store :as store]
 [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.test.support.player-state :as test-player]
             [cn.li.ac.ability.model.ability :as adata]
@@ -12,9 +12,10 @@
 
 (defn- seed-player!
   [player-uuid ability-data resource-data]
-  (ps-core/set-player-state! player-uuid
-                        {:ability-data ability-data
-                         :resource-data resource-data}))
+  (store/set-player-state!* test-player/test-session-id
+                            player-uuid
+                            {:ability-data ability-data
+                             :resource-data resource-data}))
 
 (deftest activation-request-without-category-is-ignored-test
   (let [events* (atom [])
@@ -24,7 +25,7 @@
                   evt/fire-ability-event! (fn [event]
                                             (swap! events* conj event))]
       (activation-handler/handle-set-activated-request {:activated true} uuid)
-      (is (false? (get-in (ps-core/get-player-state uuid) [:resource-data :activated])))
+      (is (false? (get-in (store/get-player-state* test-player/test-session-id uuid) [:resource-data :activated])))
       (is (empty? @events*)))))
 
 (deftest activation-request-with-category-activates-and-fires-event-test
@@ -37,7 +38,7 @@
                   evt/fire-ability-event! (fn [event]
                                             (swap! events* conj event))]
       (activation-handler/handle-set-activated-request {:activated true} uuid)
-      (is (true? (get-in (ps-core/get-player-state uuid) [:resource-data :activated])))
+      (is (true? (get-in (store/get-player-state* test-player/test-session-id uuid) [:resource-data :activated])))
       (is (= [{:event/type evt/EVT-ABILITY-ACTIVATE
                :event/side :server
                :uuid uuid}]
@@ -53,7 +54,7 @@
                   evt/fire-ability-event! (fn [event]
                                             (swap! events* conj event))]
       (activation-handler/handle-set-activated-request {:activated false} uuid)
-      (is (false? (get-in (ps-core/get-player-state uuid) [:resource-data :activated])))
+      (is (false? (get-in (store/get-player-state* test-player/test-session-id uuid) [:resource-data :activated])))
       (is (= [{:event/type evt/EVT-ABILITY-DEACTIVATE
                :event/side :server
                :uuid uuid}]
@@ -69,5 +70,5 @@
     (with-redefs [uuid/player-uuid identity
                   evt/fire-ability-event! (fn [_] nil)]
       (activation-handler/handle-set-activated-request {:activated true} uuid)
-      (is (true? (get-in (ps-core/get-player-state uuid) [:resource-data :activated]))))))
+      (is (true? (get-in (store/get-player-state* test-player/test-session-id uuid) [:resource-data :activated]))))))
 

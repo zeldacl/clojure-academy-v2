@@ -1,7 +1,7 @@
 (ns cn.li.ac.content.ability.electromaster.current-charging-test
   (:require [clojure.test :refer [deftest is]]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
-            [cn.li.ac.ability.service.dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.content.ability.electromaster.current-charging :as current-charging]
             [cn.li.ac.energy.operations :as energy]
             [cn.li.mcmod.platform.entity :as entity]

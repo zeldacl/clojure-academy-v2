@@ -2,7 +2,7 @@
   (:require [clojure.test :refer [deftest is]]
             [cn.li.ac.content.ability.meltdowner.scatter-bomb :as scatter]
             [cn.li.ac.ability.skill-config :as skill-config]
-            [cn.li.ac.ability.service.dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.service.delayed-projectiles :as delayed-projectiles]
             [cn.li.ac.ability.server.effect.geom :as geom]

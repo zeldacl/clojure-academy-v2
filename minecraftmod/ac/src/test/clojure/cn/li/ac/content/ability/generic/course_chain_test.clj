@@ -1,6 +1,6 @@
 (ns cn.li.ac.content.ability.generic.course-chain-test
   (:require 
-            [cn.li.ac.ability.service.player-state-core :as ps-core]
+                                          [cn.li.ac.ability.service.runtime-store :as store]
 [clojure.test :refer [deftest is testing use-fixtures]]
             [cn.li.ac.ability.model.ability :as adata]
                                           [cn.li.ac.ability.passive :as passive]
@@ -10,13 +10,13 @@
 (defn- reset-runtime-fixture [f]
        (ps-fix/with-test-player-state-owner
               (fn []
-                     (ps-core/reset-player-states-for-test!)
+                     (store/reset-store!)
                      (evt/reset-ability-event-subscribers-for-test!)
                      (passive/reset-passive-handler-registry-for-test!)
                      (try
                             (f)
                             (finally
-                                   (ps-core/reset-player-states-for-test!)
+                                   (store/reset-store!)
                                    (evt/reset-ability-event-subscribers-for-test!)
                                    (passive/reset-passive-handler-registry-for-test!))))))
 
@@ -45,15 +45,17 @@
 (deftest register-passive-hooks-apply-only-for-learned-skills-test
   (courses/register-passive-hooks! :brain-course-advanced)
   (courses/register-passive-hooks! :mind-course)
-  (ps-core/set-player-state!
+       (store/set-player-state!*
+        ps-fix/test-session-id
    "u-learned"
-   (assoc (ps-core/fresh-state)
+        (assoc (store/fresh-player-state)
           :ability-data (-> (adata/new-ability-data)
                             (adata/learn-skill :electromaster/brain-course-advanced)
                             (adata/learn-skill :electromaster/mind-course))))
-  (ps-core/set-player-state!
+       (store/set-player-state!*
+        ps-fix/test-session-id
    "u-unlearned"
-   (assoc (ps-core/fresh-state)
+        (assoc (store/fresh-player-state)
           :ability-data (adata/new-ability-data)))
 
   (testing "advanced brain course increases max CP and max overload"

@@ -5,6 +5,10 @@
             [cn.li.ac.ability.adapters.server-hooks :as server-hooks]
             [cn.li.ac.ability.client.keybinds :as client-keybinds]
             [cn.li.ac.content.ability.server-runtime-lifecycle :as server-runtime-lifecycle]
+            [cn.li.ac.ability.registry.category :as category-registry]
+            [cn.li.ac.ability.registry.event :as event-registry]
+            [cn.li.ac.ability.registry.skill :as skill-registry]
+            [cn.li.ac.ability.spi-lifecycle :as lifecycle-registry]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.util.log :as log]))
@@ -61,13 +65,35 @@
     (runtime-hooks/register-player-persistence-descriptor! descriptor))
   nil)
 
+(defn- install-runtime-components!
+  [{:keys [category-registry-runtime
+           event-subscriber-runtime
+           skill-registry-runtime
+           lifecycle-registry-runtime]}]
+  (category-registry/install-category-registry-runtime!
+    (or category-registry-runtime
+        (category-registry/create-category-registry-runtime)))
+  (event-registry/install-event-subscriber-runtime!
+    (or event-subscriber-runtime
+        (event-registry/create-event-subscriber-runtime)))
+  (skill-registry/install-skill-registry-runtime!
+    (or skill-registry-runtime
+        (skill-registry/create-skill-registry-runtime)))
+  (lifecycle-registry/install-lifecycle-registry-runtime!
+    (or lifecycle-registry-runtime
+        (lifecycle-registry/create-lifecycle-registry-runtime)))
+  nil)
+
 (defn install-runtime-hooks!
   "Register AC runtime hooks exactly once.
 
   This bridges loader lifecycle/network code to the AC ability implementation;
   without it, mcmod.hooks.core stays on its no-op defaults."
-  []
+  ([]
+   (install-runtime-hooks! nil))
+  ([runtime-components]
   (with-init-guard runtime-hooks-installed?
+    (install-runtime-components! runtime-components)
     (server-runtime-lifecycle/install-server-runtime-lifecycle!)
     (server-hooks/register-platform-functions!)
     (server-hooks/register-lifecycle-subscriptions!)
@@ -79,4 +105,4 @@
       (merge (server-hooks/runtime-server-hooks)
              (client-ui/runtime-client-ui-hooks)
              (client-effects/runtime-client-effect-hooks)))
-    (log/info "AC ability runtime hooks installed")))
+    (log/info "AC ability runtime hooks installed"))))

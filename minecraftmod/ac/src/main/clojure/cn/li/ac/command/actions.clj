@@ -6,15 +6,15 @@
 	adapters (for example player -> UUID and feedback callbacks) through command
 	context metadata."
 	(:require 
-            [cn.li.ac.ability.service.player-state-dirty :as ps-dirty]
-[cn.li.ac.ability.service.player-state-core :as ps-core]
+[cn.li.ac.ability.service.runtime-store :as store]
+[cn.li.mcmod.hooks.core :as runtime-hooks]
 [clojure.string :as str]
 						[cn.li.ac.ability.model.ability :as adata]
 						[cn.li.ac.ability.model.cooldown :as cdata]
 						[cn.li.ac.ability.model.develop :as ddata]
 						[cn.li.ac.ability.model.preset :as pdata]
 						[cn.li.ac.ability.model.resource :as rdata]
-								[cn.li.ac.ability.service.player-state-actions :as state-actions]						[cn.li.ac.ability.registry.skill-query :as skill-query]
+								[cn.li.ac.ability.service.state-actions :as state-actions]						[cn.li.ac.ability.registry.skill-query :as skill-query]
 						[cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
 						[cn.li.mcmod.command.actions :as command-actions]
 						[cn.li.mcmod.util.log :as log]))
@@ -36,6 +36,8 @@
 		:disable-cheats})
 
 (defonce-guard command-actions-installed?)
+
+(declare install-command-actions!)
 
 (defn- context-metadata
 	[context]
@@ -78,7 +80,7 @@
 
 (defn- normalize-runtime-state
 	[state]
-	(let [defaults (ps-core/fresh-state)]
+	(let [defaults (store/fresh-player-state)]
 		(-> (merge defaults (or state {}))
 				(update :ability-data #(merge (:ability-data defaults) (or % {})))
 				(update :resource-data #(merge (:resource-data defaults) (or % {})))
@@ -88,12 +90,13 @@
 				(update :terminal-data #(merge (:terminal-data defaults) (or % {}))))))
 
 (defn- update-player-runtime-data!
-	[player-uuid f]
-	(let [current (normalize-runtime-state (ps-core/get-or-create-player-state! player-uuid))
+	[player-uuid context f]
+	(let [session-id (runtime-hooks/require-context-player-state-session-id "Command actions" context)
+				current (normalize-runtime-state (store/get-or-create-player-state! session-id player-uuid))
 				updated (normalize-runtime-state (f current))]
-		(ps-core/set-player-state! player-uuid updated)
-		(ps-dirty/mark-dirty! player-uuid)
-		(ps-core/get-player-state player-uuid)))
+		(store/set-player-state!* session-id player-uuid updated)
+		(store/mark-player-dirty! session-id player-uuid)
+		(store/get-player-state* session-id player-uuid)))
 
 (defn- skills-for-category
 	[category-id]
@@ -106,39 +109,43 @@
 
 (defn- execute-switch-category!
 	[action-map context]
-	(let [category-id (:category-id action-map)
+	(let [session-id (runtime-hooks/require-context-player-state-session-id "Command actions" context)
+				category-id (:category-id action-map)
 				player-uuid (action-player-uuid action-map context)]
-		(state-actions/change-category! player-uuid category-id)
+		(state-actions/change-category-in-session! session-id player-uuid category-id)
 		(log/info "Switching category for player" player-uuid "to" category-id)
 		(send-feedback! context "command.academy.aim.cat.success" [(name category-id)] false)
 		{:success? true}))
 
 (defn- execute-learn-node!
 	[action-map context]
-	(let [node-id (:node-id action-map)
+	(let [session-id (runtime-hooks/require-context-player-state-session-id "Command actions" context)
+				node-id (:node-id action-map)
 				player-uuid (action-player-uuid action-map context)]
-		(state-actions/learn-skill! player-uuid node-id)
+		(state-actions/learn-skill-in-session! session-id player-uuid node-id)
 		(log/info "Learning node" node-id "for player" player-uuid)
 		(send-feedback! context "command.academy.aim.node.learn.success" [(name node-id)] false)
 		{:success? true}))
 
 (defn- execute-unlearn-node!
 	[action-map context]
-	(let [node-id (:node-id action-map)
+	(let [session-id (runtime-hooks/require-context-player-state-session-id "Command actions" context)
+				node-id (:node-id action-map)
 				player-uuid (action-player-uuid action-map context)]
-		(state-actions/unlearn-skill! player-uuid node-id)
+		(state-actions/unlearn-skill-in-session! session-id player-uuid node-id)
 		(log/info "Unlearning node" node-id "for player" player-uuid)
 		(send-feedback! context "command.academy.aim.node.unlearn.success" [(name node-id)] false)
 		{:success? true}))
 
 (defn- execute-learn-all-nodes!
 	[action-map context]
-	(let [player-uuid (action-player-uuid action-map context)]
-		(let [state (normalize-runtime-state (ps-core/get-or-create-player-state! player-uuid))
+	(let [session-id (runtime-hooks/require-context-player-state-session-id "Command actions" context)
+				player-uuid (action-player-uuid action-map context)]
+		(let [state (normalize-runtime-state (store/get-or-create-player-state! session-id player-uuid))
 					skill-ids (skills-for-category (get-in state [:ability-data :category-id]))]
-			(state-actions/learn-skills! player-uuid skill-ids)
+			(state-actions/learn-skills-in-session! session-id player-uuid skill-ids)
 			(doseq [skill-id skill-ids]
-				(state-actions/set-skill-exp! player-uuid skill-id 1.0)))
+				(state-actions/set-skill-exp-in-session! session-id player-uuid skill-id 1.0)))
 		(log/info "Learned all nodes for player" player-uuid)
 		(send-feedback! context "command.academy.aim.node.learn_all.success" [] false)
 		{:success? true}))
@@ -146,7 +153,10 @@
 (defn- execute-list-learned-nodes!
 	[action-map context]
 	(let [player-uuid (action-player-uuid action-map context)
-				state (normalize-runtime-state (ps-core/get-or-create-player-state! player-uuid))
+				state (normalize-runtime-state
+						 (store/get-or-create-player-state!
+							(runtime-hooks/require-context-player-state-session-id "Command actions" context)
+							player-uuid))
 				learned (->> (get-in state [:ability-data :learned-skills] #{})
 										 (map name)
 										 sort)
@@ -157,7 +167,10 @@
 (defn- execute-list-available-nodes!
 	[action-map context]
 	(let [player-uuid (action-player-uuid action-map context)
-				state (normalize-runtime-state (ps-core/get-or-create-player-state! player-uuid))
+				state (normalize-runtime-state
+						 (store/get-or-create-player-state!
+							(runtime-hooks/require-context-player-state-session-id "Command actions" context)
+							player-uuid))
 				category-id (get-in state [:ability-data :category-id])
 				learned (get-in state [:ability-data :learned-skills] #{})
 				available-ids (->> (skills-for-category category-id)
@@ -173,50 +186,56 @@
 
 (defn- execute-set-level!
 	[action-map context]
-	(let [level (:level action-map)
+	(let [session-id (runtime-hooks/require-context-player-state-session-id "Command actions" context)
+				level (:level action-map)
 				player-uuid (action-player-uuid action-map context)]
-		(state-actions/set-level! player-uuid level)
+		(state-actions/set-level-in-session! session-id player-uuid level)
 		(log/info "Setting level" level "for player" player-uuid)
 		(send-feedback! context "command.academy.aim.level.success" [(str level)] false)
 		{:success? true}))
 
 (defn- execute-set-node-exp!
 	[action-map context]
-	(let [node-id (:node-id action-map)
+	(let [session-id (runtime-hooks/require-context-player-state-session-id "Command actions" context)
+				node-id (:node-id action-map)
 				exp (:exp action-map)
 				player-uuid (action-player-uuid action-map context)]
-		(state-actions/set-skill-exp! player-uuid node-id exp)
+		(state-actions/set-skill-exp-in-session! session-id player-uuid node-id exp)
 		(log/info "Setting node exp" node-id "to" exp "for player" player-uuid)
 		(send-feedback! context "command.academy.aim.node.exp.success" [(name node-id) (str exp)] false)
 		{:success? true}))
 
 (defn- execute-restore-cp!
 	[action-map context]
-	(let [player-uuid (action-player-uuid action-map context)]
-		(state-actions/recover-all! player-uuid)
+	(let [session-id (runtime-hooks/require-context-player-state-session-id "Command actions" context)
+				player-uuid (action-player-uuid action-map context)]
+		(state-actions/recover-all-in-session! session-id player-uuid)
 		(send-feedback! context "command.academy.aim.fullcp.success" [] false)
 		{:success? true}))
 
 (defn- execute-clear-cooldowns!
 	[action-map context]
-	(let [player-uuid (action-player-uuid action-map context)]
-		(state-actions/clear-cooldowns! player-uuid)
+	(let [session-id (runtime-hooks/require-context-player-state-session-id "Command actions" context)
+				player-uuid (action-player-uuid action-map context)]
+		(state-actions/clear-cooldowns-in-session! session-id player-uuid)
 		(send-feedback! context "command.academy.aim.cd_clear.success" [] false)
 		{:success? true}))
 
 (defn- execute-reset-abilities!
 	[action-map context]
-	(let [player-uuid (action-player-uuid action-map context)]
-		(state-actions/reset-abilities! player-uuid)
+	(let [session-id (runtime-hooks/require-context-player-state-session-id "Command actions" context)
+				player-uuid (action-player-uuid action-map context)]
+		(state-actions/reset-abilities-in-session! session-id player-uuid)
 		(send-feedback! context "command.academy.aim.reset.success" [] false)
 		{:success? true}))
 
 (defn- execute-maxout-progression!
 	[action-map context]
-	(let [player-uuid (action-player-uuid action-map context)]
-		(let [state (normalize-runtime-state (ps-core/get-or-create-player-state! player-uuid))
+	(let [session-id (runtime-hooks/require-context-player-state-session-id "Command actions" context)
+				player-uuid (action-player-uuid action-map context)]
+		(let [state (normalize-runtime-state (store/get-or-create-player-state! session-id player-uuid))
 					skill-ids (skills-for-category (get-in state [:ability-data :category-id]))]
-			(state-actions/maxout-progression! player-uuid skill-ids))
+			(state-actions/maxout-progression-in-session! session-id player-uuid skill-ids))
 		(send-feedback! context "command.academy.aim.maxout.success" [] false)
 		{:success? true}))
 
@@ -224,7 +243,7 @@
 	[action-map context enabled?]
 	(let [player-uuid (action-player-uuid action-map context)]
 		(update-player-runtime-data!
-			player-uuid
+			player-uuid context
 			#(assoc % :cheats-enabled? (boolean enabled?)))
 		(send-feedback! context (if enabled?
 															"command.academy.aim.cheats_on.success"

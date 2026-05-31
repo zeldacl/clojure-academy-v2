@@ -3,7 +3,7 @@
 
   Keeps the transport shape consistent so ability namespaces only assemble
   payload-specific fields while this namespace injects the standard :mode tag."
-  (:require [cn.li.ac.ability.service.dispatcher :as ctx]))
+  (:require [cn.li.ac.ability.service.context-dispatcher :as ctx]))
 
 (defn send-fx!
   [ctx-id event-key mode payload]

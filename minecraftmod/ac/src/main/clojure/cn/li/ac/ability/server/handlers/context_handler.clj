@@ -2,8 +2,9 @@
 	"Context lifecycle request network handlers."
 	(:require [cn.li.ac.ability.util.uuid :as uuid]
 						[clojure.string :as str]
-						[cn.li.ac.ability.service.context-mgr :as ctx-mgr]
-						[cn.li.ac.ability.service.dispatcher :as ctx]
+						[cn.li.ac.ability.service.command-runtime :as command-rt]
+						[cn.li.ac.ability.service.context-manager :as ctx-mgr]
+						[cn.li.ac.ability.service.context-dispatcher :as ctx]
 						[cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (defn- valid-ctx-id?
@@ -12,12 +13,8 @@
 
 (defn- server-context-owner
 	[player-uuid]
-	(let [owner runtime-hooks/*player-state-owner*
-			server-session-id (:server-session-id owner)]
-		(when-not server-session-id
-			(throw (ex-info "Server context owner requires bound :server-session-id"
-									{:player-uuid player-uuid
-									 :player-state-owner owner})))
+	(let [server-session-id (runtime-hooks/require-player-state-server-session-id
+										"Server context owner")]
 		{:logical-side :server
 		 :server-session-id server-session-id
 		 :session-id [server-session-id player-uuid]
@@ -35,20 +32,18 @@
 		:else
 		(let [player-uuid (uuid/player-uuid player)
 				owner (server-context-owner player-uuid)]
-			(binding [ctx/*context-owner* owner]
-				(let [existing (ctx/get-context ctx-id)]
-					(if (or (nil? existing)
-								(= player-uuid (:player-uuid existing)))
-						(ctx-mgr/establish-context! player-uuid ctx-id skill-id)
-						nil))))))
+			(let [existing (ctx/get-context owner ctx-id)]
+				(if (or (nil? existing)
+						(= player-uuid (:player-uuid existing)))
+					(ctx-mgr/establish-context! player-uuid ctx-id skill-id)
+					nil)))))
 
 (defn- resolve-owned-context
 	[ctx-id player]
 	(let [player-uuid (uuid/player-uuid player)
 			owner (when player-uuid (server-context-owner player-uuid))
 			ctx-map (when (and owner (valid-ctx-id? ctx-id))
-								(binding [ctx/*context-owner* owner]
-									(ctx/get-context ctx-id)))]
+								(ctx/get-context owner ctx-id))]
 		(cond
 			(not (valid-ctx-id? ctx-id))
 			{:ok? false :reason :payload-invalid}
@@ -70,8 +65,7 @@
 	(let [player-uuid (uuid/player-uuid player)
 			owner (when player-uuid (server-context-owner player-uuid))
 			ctx-map (when (and owner (valid-ctx-id? ctx-id))
-								(binding [ctx/*context-owner* owner]
-									(ctx/get-context ctx-id)))]
+								(ctx/get-context owner ctx-id))]
 		(cond
 			(not (valid-ctx-id? ctx-id))
 			{:ok? false :reason :payload-invalid}
@@ -91,20 +85,32 @@
 			:else
 			{:ok? true :ctx ctx-map :owner owner})))
 
+(defn- sync-keepalive-command!
+	[owner ctx-id]
+	(let [server-session-id (:server-session-id owner)
+				[_session-id player-uuid] (:session-id owner)]
+		(when (and server-session-id player-uuid)
+			(command-rt/run-command-in-session!
+				server-session-id
+				player-uuid
+				{:command :touch-context-keepalive
+				 :ctx-id ctx-id
+				 :timestamp-ms (System/currentTimeMillis)}))))
+
 (defn handle-keepalive-context
 	[{:keys [ctx-id]} player]
 	(let [{:keys [ok? owner]} (resolve-owned-alive-context ctx-id player)]
 		(if ok?
-			(binding [ctx/*context-owner* owner]
-				(ctx/update-keepalive! ctx-id))
+			(do
+				(ctx/update-keepalive! owner ctx-id)
+				(sync-keepalive-command! owner ctx-id))
 			nil)))
 
 (defn handle-terminate-context
 	[{:keys [ctx-id]} player]
 	(let [{:keys [ok? owner]} (resolve-owned-context ctx-id player)]
 		(if ok?
-			(binding [ctx/*context-owner* owner]
-				(ctx/terminate-context! ctx-id ctx-mgr/send-terminated-context!))
+			(ctx/terminate-context! owner ctx-id ctx-mgr/send-terminated-context!)
 			nil)))
 
 (defn handle-channel-context
@@ -113,7 +119,8 @@
 													(resolve-owned-alive-context ctx-id player)
 													{:ok? false :reason :payload-invalid})]
 		(if ok?
-			(binding [ctx/*context-owner* owner]
-				(ctx/update-keepalive! ctx-id)
-				(ctx/ctx-send-to-local! ctx-id channel payload))
+			(do
+				(ctx/update-keepalive! owner ctx-id)
+				(sync-keepalive-command! owner ctx-id)
+				(ctx/ctx-send-to-local! owner ctx-id channel payload))
 			nil)))

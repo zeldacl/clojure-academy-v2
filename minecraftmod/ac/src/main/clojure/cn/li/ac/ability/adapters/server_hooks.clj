@@ -1,10 +1,9 @@
 (ns cn.li.ac.ability.adapters.server-hooks
   "Server/runtime hook composition for AC ability platform bridge."
   (:require 
-            [cn.li.ac.ability.service.player-state-tick :as ps-tick]
-[cn.li.ac.ability.service.player-state-accessors :as ps-accessors]
-[cn.li.ac.ability.service.player-state-dirty :as ps-dirty]
-[cn.li.ac.ability.service.player-state-core :as ps-core]
+            [cn.li.ac.ability.service.state-tick :as ps-tick]
+[cn.li.ac.ability.service.state-accessors :as ps-accessors]
+[cn.li.ac.ability.service.runtime-store :as store]
 [cn.li.ac.ability.config :as ability-config]
             [cn.li.ac.ability.item-actions :as item-actions]
             [cn.li.ac.ability.model.cooldown :as cdata]
@@ -15,14 +14,15 @@
             [cn.li.ac.ability.server.damage.entity :as entity-damage-runtime]
             [cn.li.ac.ability.server.damage.handler :as damage-handler]
             [cn.li.ac.ability.server.damage.runtime :as damage-runtime]
-            [cn.li.ac.ability.service.context-mgr :as ctx-mgr]
+            [cn.li.ac.ability.service.context-manager :as ctx-mgr]
             [cn.li.ac.ability.service.delayed-projectiles :as delayed-projectiles]
-            [cn.li.ac.ability.service.dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
             [cn.li.ac.ability.service.platform-hooks :as platform-hooks]            [cn.li.ac.block.developer.logic :as developer-logic]
             [cn.li.ac.content.ability.server-runtime-lifecycle :as server-runtime-lifecycle]
             [cn.li.ac.wireless.data.world-registry :as world-registry]
             [cn.li.ac.util.init-guard :refer [with-init-guard]]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.util.log :as log]))
 
 (def ^:private fn-reset-server-runtimes :ability/reset-server-runtimes!)
@@ -82,6 +82,29 @@
     (when (= 1 (count matches))
       (first matches))))
 
+(defn- runtime-get-player-state
+  [player-uuid]
+  (store/get-player-state* (runtime-hooks/require-player-state-session-id "Server hooks runtime state access") player-uuid))
+
+(defn- runtime-get-or-create-player-state!
+  [player-uuid]
+  (store/get-or-create-player-state! (runtime-hooks/require-player-state-session-id "Server hooks runtime state access") player-uuid))
+
+(defn- runtime-set-player-state!
+  [player-uuid state]
+  (store/set-player-state!* (runtime-hooks/require-player-state-session-id "Server hooks runtime state access") player-uuid state))
+
+(defn- runtime-mark-clean!
+  [player-uuid]
+  (store/clear-dirty! (store/get-store)
+                      (runtime-hooks/require-player-state-session-id "Server hooks runtime state access")
+                      player-uuid))
+
+(defn- runtime-list-player-uuids
+  []
+  (store/list-players (store/get-store)
+                      (runtime-hooks/require-player-state-session-id "Server hooks runtime state access")))
+
 (defn- recalc-max-for-level-with-calc
   [res-data level uuid]
   (let [base (rdata/recalc-max-values res-data level)
@@ -132,7 +155,7 @@
      evt/EVT-SKILL-LEARN
      (fn [{:keys [uuid]}]
        (when uuid
-         (when-let [state (ps-core/get-player-state uuid)]
+         (when-let [state (runtime-get-player-state uuid)]
            (let [level (get-in state [:ability-data :level] 1)]
              (ps-accessors/update-resource-data! uuid
                                        (fn [rd]
@@ -144,7 +167,7 @@
          (ctx-mgr/abort-player-contexts! uuid)
          (ps-accessors/update-cooldown-data! uuid (constantly (cdata/new-cooldown-data)))
          (ps-accessors/update-resource-data! uuid rdata/set-activated false)
-         (when-let [state (ps-core/get-player-state uuid)]
+         (when-let [state (runtime-get-player-state uuid)]
            (let [level (get-in state [:ability-data :level] 1)]
              (ps-accessors/update-resource-data! uuid
                                        (fn [rd]
@@ -160,7 +183,7 @@
   []
   {:on-player-login!
    (fn [player-uuid]
-     (ps-core/get-or-create-player-state! player-uuid))
+     (runtime-get-or-create-player-state! player-uuid))
 
    :on-player-logout!
    (fn [player-uuid]
@@ -168,12 +191,13 @@
      (delayed-projectiles/clear-player-tasks! player-uuid)
      (md-damage/clear-target-mark! player-uuid)
      (md-damage/clear-source-marks! player-uuid)
-     (ps-core/remove-player-state! player-uuid))
+     (store/remove-player-state!* (runtime-hooks/require-player-state-session-id "Server hooks runtime state access")
+                                  player-uuid))
 
    :on-server-stop!
    (fn [session-id]
      (ctx/clear-session-contexts! session-id)
-     (ps-core/clear-session-player-states! session-id)
+     (store/remove-session! (store/get-store) session-id)
      (world-registry/clear-session-world-data! session-id)
      (when (platform-hooks/platform-fn-registered? fn-reset-server-runtimes)
        ((platform-hooks/get-platform-fn fn-reset-server-runtimes)))
@@ -204,20 +228,22 @@
 
    :on-player-tick!
    (fn [player-uuid]
-     (ps-core/get-or-create-player-state! player-uuid)
+     (runtime-get-or-create-player-state! player-uuid)
      (md-damage/tick-marks!)
-     (ps-tick/server-tick-player! player-uuid nil)
+     (ps-tick/server-tick-player-in-session! (runtime-hooks/require-player-state-session-id "Server hooks runtime state access")
+                                             player-uuid
+                                             nil)
      (ctx-mgr/tick-player-contexts! player-uuid)
      (delayed-projectiles/tick-player! player-uuid)
      (ctx-mgr/tick-context-manager!))
 
    :list-player-uuids
    (fn []
-     (ps-core/list-player-uuids))
+     (runtime-list-player-uuids))
 
    :build-sync-payload
    (fn [player-uuid]
-     (when-let [state (ps-core/get-player-state player-uuid)]
+     (when-let [state (runtime-get-player-state player-uuid)]
        {:uuid player-uuid
         :ability-data (:ability-data state)
         :resource-data (:resource-data state)
@@ -228,27 +254,27 @@
 
    :mark-player-clean!
    (fn [player-uuid]
-     (ps-dirty/mark-clean! player-uuid))
+     (runtime-mark-clean! player-uuid))
 
    :get-player-state
    (fn [player-uuid]
-     (ps-core/get-player-state player-uuid))
+     (runtime-get-player-state player-uuid))
 
    :set-player-state!
    (fn [player-uuid state]
-     (ps-core/set-player-state! player-uuid state))
+     (runtime-set-player-state! player-uuid state))
 
    :get-or-create-player-state!
    (fn [player-uuid]
-     (ps-core/get-or-create-player-state! player-uuid))
+     (runtime-get-or-create-player-state! player-uuid))
 
    :fresh-player-state
    (fn []
-     (ps-core/fresh-state))
+     (store/fresh-player-state))
 
    :runtime-activated?
    (fn [player-uuid]
-     (boolean (some-> (ps-core/get-player-state player-uuid)
+     (boolean (some-> (runtime-get-player-state player-uuid)
                       :resource-data
                       rdata/is-activated?)))
 

@@ -1,4 +1,4 @@
-(ns cn.li.ac.ability.service.dispatcher
+(ns cn.li.ac.ability.service.context-dispatcher
 	"Canonical AC context/dispatcher service implementation."
 	(:require [cn.li.ac.ability.registry.event :as evt]
 						[clojure.string :as str]
@@ -166,28 +166,31 @@
 					(assoc-in state [counter-key owner] next-counter))))
 		(str prefix "-" @counter*)))
 
-(defn- require-context-owner
-	[ctx-id preferred-side]
-	(when-not *context-owner*
-		(throw (ex-info "Opaque ctx-id resolution requires *context-owner* or an explicit owner"
+
+(defn- resolve-context-owner
+	[owner ctx-id preferred-side]
+	(let [resolved-owner (or owner *context-owner*)]
+		(when-not resolved-owner
+			(throw (ex-info "Opaque ctx-id resolution requires *context-owner* or an explicit owner"
 							{:ctx-id ctx-id
-							 :preferred-side preferred-side}))))
+							 :preferred-side preferred-side})))
+		(cond-> resolved-owner
+			preferred-side (assoc :logical-side preferred-side))))
 
 (defn- preferred-context-entry
 	([ctx-id]
-	 (preferred-context-entry ctx-id nil))
+	 (preferred-context-entry nil ctx-id nil))
 	([ctx-id preferred-side]
+	 (preferred-context-entry nil ctx-id preferred-side))
+	([owner ctx-id preferred-side]
 	 (if (vector? ctx-id)
 		 (when-let [ctx (get (context-registry-snapshot) ctx-id)]
 			 [ctx-id ctx])
-		 (do
-			 (require-context-owner ctx-id preferred-side)
-			 (let [owner (cond-> *context-owner*
-								 preferred-side (assoc :logical-side preferred-side))
-					 [side session] (route-owner-key owner)
+		 (let [resolved-owner (resolve-context-owner owner ctx-id preferred-side)
+				 [side session] (route-owner-key resolved-owner)
 					 key [side session ctx-id]]
 				 (when-let [ctx (get (context-registry-snapshot) key)]
-					 [key ctx]))))))
+				 [key ctx])))))
 
 (defn- route-fns-for-context
 	[ctx]
@@ -265,24 +268,37 @@
 
 (defn get-context
 	([ctx-id]
-	 (second (preferred-context-entry ctx-id)))
+	 (second (preferred-context-entry nil ctx-id nil)))
 	([owner ctx-id]
-	 (let [[side session] (route-owner-key owner)]
-		 (get (context-registry-snapshot) [side session ctx-id]))))
+	 (if (vector? ctx-id)
+		 (get (context-registry-snapshot) ctx-id)
+		 (let [[side session] (route-owner-key owner)]
+			 (get (context-registry-snapshot) [side session ctx-id])))))
 
 (defn get-all-contexts [] (context-registry-snapshot))
-(defn update-context! [ctx-id f & args]
-	(when-let [[key _ctx] (preferred-context-entry ctx-id)]
+
+(defn update-context-owned!
+	"Update one context using an explicit owner when ctx-id is opaque."
+	[owner ctx-id f & args]
+	(when-let [[key _ctx] (preferred-context-entry owner ctx-id nil)]
 		(update-dispatcher-state!
 			(fn [state]
 				(if (contains? (:context-registry state) key)
 					(apply update-in state [:context-registry key] f args)
 					state)))))
-(defn remove-context! [ctx-id]
-	(if (vector? ctx-id)
-		(update-dispatcher-state! update :context-registry dissoc ctx-id)
-		(when-let [[key _ctx] (preferred-context-entry ctx-id)]
-			(update-dispatcher-state! update :context-registry dissoc key))))
+
+(defn update-context!
+	[ctx-id f & args]
+	(apply update-context-owned! nil ctx-id f args))
+
+(defn remove-context!
+	([ctx-id]
+	 (remove-context! nil ctx-id))
+	([owner ctx-id]
+	 (if (vector? ctx-id)
+		 (update-dispatcher-state! update :context-registry dissoc ctx-id)
+		 (when-let [[key _ctx] (preferred-context-entry owner ctx-id nil)]
+			 (update-dispatcher-state! update :context-registry dissoc key)))))
 
 (defn- owner-matches-context?
 	[owner ctx]
@@ -373,38 +389,48 @@
 	(when-let [ctx (get-context ctx-id)]
 		(= player-uuid (:player-uuid ctx))))
 
-(defn transition-to-alive! [ctx-id server-id flush-fn]
-	(when-let [[_key ctx] (preferred-context-entry ctx-id :client)]
-		(when (status-valid-transition? (:status ctx) STATUS-ALIVE)
-			(update-context! ctx-id (fn [c]
-															 (let [buffer (:message-buffer c)
-																					 alive-ctx (assoc c :status STATUS-ALIVE :server-id server-id :message-buffer [] :last-keepalive-ms (System/currentTimeMillis) :terminated-at-ms nil)]
-																 (when (and flush-fn (seq buffer))
-																	 (doseq [msg buffer] (flush-fn msg)))
-																 alive-ctx)))
-			(get-context ctx-id))))
 
-(defn terminate-context! [ctx-id send-terminated-fn]
-	(when-let [ctx (get-context ctx-id)]
-		(when (not= (:status ctx) STATUS-TERMINATED)
-			(update-context! ctx-id assoc :status STATUS-TERMINATED :terminated-at-ms (System/currentTimeMillis))
-			(when send-terminated-fn
-				(binding [*context-owner* {:logical-side (context-logical-side ctx)
-												 :session-id (context-session-id ctx)}]
-					(send-terminated-fn (:id ctx))))
-			(log/debug "Context terminated:" (:id ctx)))))
+(defn transition-to-alive!
+	([ctx-id server-id flush-fn]
+	 (transition-to-alive! nil ctx-id server-id flush-fn))
+	([owner ctx-id server-id flush-fn]
+	 (when-let [[_key ctx] (preferred-context-entry owner ctx-id :client)]
+		 (when (status-valid-transition? (:status ctx) STATUS-ALIVE)
+			 (update-context-owned! owner ctx-id (fn [c]
+															(let [buffer (:message-buffer c)
+																		alive-ctx (assoc c :status STATUS-ALIVE :server-id server-id :message-buffer [] :last-keepalive-ms (System/currentTimeMillis) :terminated-at-ms nil)]
+																(when (and flush-fn (seq buffer))
+																	(doseq [msg buffer] (flush-fn msg)))
+																alive-ctx)))
+			 (get-context owner ctx-id)))))
+
+(defn terminate-context!
+	([ctx-id send-terminated-fn]
+	 (terminate-context! nil ctx-id send-terminated-fn))
+	([owner ctx-id send-terminated-fn]
+	 (when-let [ctx (or (get-context owner ctx-id)
+									(when (nil? owner) (get-context ctx-id)))]
+		 (when (not= (:status ctx) STATUS-TERMINATED)
+			 (update-context-owned! owner ctx-id assoc :status STATUS-TERMINATED :terminated-at-ms (System/currentTimeMillis))
+			 (when send-terminated-fn
+				 (binding [*context-owner* {:logical-side (context-logical-side ctx)
+													 :session-id (context-session-id ctx)}]
+					 (send-terminated-fn (:id ctx))))
+			 (log/debug "Context terminated:" (:id ctx))))))
 
 (defn abort-all-contexts-for-player!
 	([player-uuid send-terminated-fn]
 	 (doseq [ctx (get-all-contexts-for-player player-uuid)]
 		 (terminate-context! (:id ctx) send-terminated-fn)))
 	([owner player-uuid send-terminated-fn]
-	 (binding [*context-owner* owner]
-		 (doseq [ctx (get-all-contexts-for-player owner player-uuid)]
-			 (terminate-context! (:id ctx) send-terminated-fn)))))
+	 (doseq [ctx (get-all-contexts-for-player owner player-uuid)]
+		 (terminate-context! owner (:id ctx) send-terminated-fn))))
 
-(defn update-keepalive! [ctx-id]
-	(update-context! ctx-id assoc :last-keepalive-ms (System/currentTimeMillis)))
+(defn update-keepalive!
+	([ctx-id]
+	 (update-keepalive! nil ctx-id))
+	([owner ctx-id]
+	 (update-context-owned! owner ctx-id assoc :last-keepalive-ms (System/currentTimeMillis))))
 (defn check-keepalive-timeout! [send-terminated-fn]
 	(let [now (System/currentTimeMillis)]
 		(doseq [[ctx-id ctx] (context-registry-snapshot)]
@@ -433,19 +459,24 @@
 
 (defn ctx-buffer-or-send!
 	([ctx-id msg send-fn]
-	 (ctx-buffer-or-send! ctx-id nil msg send-fn))
+	 (ctx-buffer-or-send! nil ctx-id nil msg send-fn))
 	([ctx-id preferred-side msg send-fn]
-	 (let [ctx (second (preferred-context-entry ctx-id preferred-side))]
-		(when ctx
-			(case (:status ctx)
-				:constructed (update-context! ctx-id update :message-buffer conj msg)
-				:alive (when send-fn (send-fn msg))
-				nil)))))
+	 (ctx-buffer-or-send! nil ctx-id preferred-side msg send-fn))
+	([owner ctx-id preferred-side msg send-fn]
+	 (let [ctx (second (preferred-context-entry owner ctx-id preferred-side))]
+		 (when ctx
+			 (case (:status ctx)
+				 :constructed (update-context-owned! owner ctx-id update :message-buffer conj msg)
+				 :alive (when send-fn (send-fn msg))
+				 nil)))))
 
-(defn ctx-send-to-local! [ctx-id channel msg]
-	(when-let [ctx (get-context ctx-id)]
-		(doseq [h (get-in ctx [:listeners channel] [])]
-			(try (h msg) (catch Exception e (log/warn "Listener threw" (ex-message e)))))))
+(defn ctx-send-to-local!
+	([ctx-id channel msg]
+	 (ctx-send-to-local! nil ctx-id channel msg))
+	([owner ctx-id channel msg]
+	 (when-let [ctx (if owner (get-context owner ctx-id) (get-context ctx-id))]
+		 (doseq [h (get-in ctx [:listeners channel] [])]
+			 (try (h msg) (catch Exception e (log/warn "Listener threw" (ex-message e))))))))
 
 (defn register-route-fns! [{:keys [to-server to-client to-except-local] :as routes}]
 	(if (and (nil? (:logical-side routes))
@@ -457,21 +488,33 @@
 		(update-dispatcher-state! assoc :route-fns {})
 		(update-dispatcher-state! assoc-in [:route-fns (route-owner-key routes)] {:to-server to-server :to-client to-client :to-except-local to-except-local}))
 	nil)
-(defn ctx-send-to-server! [ctx-id channel msg]
-	(ctx-buffer-or-send! ctx-id :client {:channel channel :payload msg}
-											 (fn [m] (when-let [ctx (second (preferred-context-entry ctx-id :client))]
-															 (when-let [f (:to-server (route-fns-for-context ctx))]
-																	 (f ctx-id (:channel m) (:payload m) ctx))))))
-(defn ctx-send-to-client! [ctx-id channel msg]
-	(ctx-buffer-or-send! ctx-id :server {:channel channel :payload msg}
-											 (fn [m] (when-let [ctx (second (preferred-context-entry ctx-id :server))]
-															 (when-let [f (:to-client (route-fns-for-context ctx))]
-																	 (f ctx-id (:channel m) (:payload m) ctx))))))
-(defn ctx-send-to-except-local! [ctx-id channel msg]
-	(ctx-buffer-or-send! ctx-id :server {:channel channel :payload msg}
-											 (fn [m] (when-let [ctx (second (preferred-context-entry ctx-id :server))]
-															 (when-let [f (:to-except-local (route-fns-for-context ctx))]
-																	 (f ctx-id (:channel m) (:payload m) ctx))))))
+
+(defn ctx-send-to-server!
+	([ctx-id channel msg]
+	 (ctx-send-to-server! nil ctx-id channel msg))
+	([owner ctx-id channel msg]
+	 (ctx-buffer-or-send! owner ctx-id :client {:channel channel :payload msg}
+													(fn [m] (when-let [ctx (second (preferred-context-entry owner ctx-id :client))]
+																				(when-let [f (:to-server (route-fns-for-context ctx))]
+																						(f ctx-id (:channel m) (:payload m) ctx)))))))
+
+(defn ctx-send-to-client!
+	([ctx-id channel msg]
+	 (ctx-send-to-client! nil ctx-id channel msg))
+	([owner ctx-id channel msg]
+	 (ctx-buffer-or-send! owner ctx-id :server {:channel channel :payload msg}
+													(fn [m] (when-let [ctx (second (preferred-context-entry owner ctx-id :server))]
+																				(when-let [f (:to-client (route-fns-for-context ctx))]
+																						(f ctx-id (:channel m) (:payload m) ctx)))))))
+
+(defn ctx-send-to-except-local!
+	([ctx-id channel msg]
+	 (ctx-send-to-except-local! nil ctx-id channel msg))
+	([owner ctx-id channel msg]
+	 (ctx-buffer-or-send! owner ctx-id :server {:channel channel :payload msg}
+													(fn [m] (when-let [ctx (second (preferred-context-entry owner ctx-id :server))]
+																				(when-let [f (:to-except-local (route-fns-for-context ctx))]
+																						(f ctx-id (:channel m) (:payload m) ctx)))))))
 (defn ctx-send-to-self! [ctx-id channel msg] (ctx-send-to-local! ctx-id channel msg))
 (defn ctx-on! [ctx-id channel handler-fn] (update-context! ctx-id update-in [:listeners channel] (fnil conj []) handler-fn))
 

@@ -1,17 +1,17 @@
 (ns cn.li.ac.ability.adapters.server-hooks-test
   (:require 
-            [cn.li.ac.ability.service.player-state-tick :as ps-tick]
-[cn.li.ac.ability.service.player-state-accessors :as ps-accessors]
-[cn.li.ac.ability.service.player-state-core :as ps-core]
+            [cn.li.ac.ability.service.state-tick :as ps-tick]
+[cn.li.ac.ability.service.state-accessors :as ps-accessors]
+[cn.li.ac.ability.service.runtime-store :as store]
 [clojure.test :refer [deftest is testing use-fixtures]]
             [cn.li.ac.ability.adapters.server-hooks :as server-hooks]
             [cn.li.ac.ability.item-actions :as item-actions]
             [cn.li.ac.ability.registry.event :as evt]
             [cn.li.ac.content.ability.server-runtime-lifecycle :as server-runtime-lifecycle]
-            [cn.li.ac.ability.service.context-mgr :as ctx-mgr]
+            [cn.li.ac.ability.service.context-manager :as ctx-mgr]
             [cn.li.ac.ability.server.network :as network]
             [cn.li.ac.ability.service.delayed-projectiles :as delayed-projectiles]
-            [cn.li.ac.ability.service.dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.platform-hooks :as platform-hooks]            [cn.li.ac.block.developer.logic :as developer-logic]
             [cn.li.ac.wireless.data.world-registry :as world-registry]))
 
@@ -119,21 +119,21 @@
                   delayed-projectiles/clear-player-tasks! (fn [uuid]
                                                             (swap! called conj [:projectiles uuid])
                                                             nil)
-                  ps-core/remove-player-state! (fn [uuid]
-                                            (swap! called conj [:remove-state uuid])
-                                            nil)]
+          store/remove-player-state!* (fn [session-id uuid]
+                     (swap! called conj [:remove-state session-id uuid])
+                     nil)]
       (logout! "player-1"))
-    (is (= [[:abort "player-1"]
+        (is (= [[:abort "player-1"]
             [:projectiles "player-1"]
-            [:remove-state "player-1"]]
+          [:remove-state nil "player-1"]]
            @called))))
 
 (deftest on-player-tick-drives-player-contexts-before-manager-sweep-test
   (let [calls (atom [])
         tick! (:on-player-tick! (server-hooks/runtime-server-hooks))]
-    (with-redefs [ps-core/get-or-create-player-state! (fn [uuid]
-                                                   (swap! calls conj [:ensure-state uuid])
-                                                   nil)
+    (with-redefs [store/get-or-create-player-state! (fn [session-id uuid]
+                                                      (swap! calls conj [:ensure-state session-id uuid])
+                                                      nil)
                   ps-tick/server-tick-player! (fn [uuid payload]
                                            (swap! calls conj [:player-state-tick uuid payload])
                                            nil)
@@ -147,7 +147,7 @@
                                                  (swap! calls conj [:context-manager])
                                                  nil)]
       (tick! "p1")
-      (is (= [[:ensure-state "p1"]
+      (is (= [[:ensure-state nil "p1"]
               [:player-state-tick "p1" nil]
               [:context-tick "p1"]
               [:projectiles "p1"]
@@ -179,9 +179,9 @@
     (with-redefs [ctx/clear-session-contexts! (fn [session-id]
                                                 (swap! called conj [:contexts session-id])
                                                 nil)
-                  ps-core/clear-session-player-states! (fn [session-id]
-                                                    (swap! called conj [:player-states session-id])
-                                                    nil)
+                  store/remove-session! (fn [_ability-store session-id]
+                                          (swap! called conj [:player-states session-id])
+                                          nil)
                   world-registry/clear-session-world-data! (fn [session-id]
                                                              (swap! called conj [:wireless session-id])
                                                              nil)
@@ -236,8 +236,8 @@
               (fn [uuid]
                 (swap! aborted conj uuid)
                 nil)
-              ps-core/get-player-state (fn [_]
-                     {:ability-data {:level 4}})
+              store/get-player-state* (fn [_session-id _]
+                         {:ability-data {:level 4}})
               ps-accessors/update-cooldown-data! (fn [uuid updater]
                      (swap! cooldown-clears conj [uuid (updater {:existing true})])
                      nil)

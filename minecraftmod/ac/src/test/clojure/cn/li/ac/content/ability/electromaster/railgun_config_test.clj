@@ -1,6 +1,6 @@
 (ns cn.li.ac.content.ability.electromaster.railgun-config-test
   (:require 
-            [cn.li.ac.ability.service.player-state-core :as ps-core]
+            [cn.li.ac.ability.service.runtime-store :as store]
 [clojure.test :refer [deftest is testing]]            [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.content.ability :as ability-content]
@@ -13,17 +13,16 @@
   (ps-fix/with-test-player-state-owner
     (fn []
       (let [descriptors (config-reg/get-descriptor-registry)
-            values (config-reg/get-value-registry)
-            player-states (ps-core/snapshot-player-states)]
+            values (config-reg/get-value-registry)]
         (try
           (config-reg/set-descriptor-registry! {})
           (config-reg/set-value-registry! {})
-          (ps-core/reset-player-states-for-test!)
+          (store/reset-store!)
           (f)
           (finally
             (config-reg/set-descriptor-registry! descriptors)
             (config-reg/set-value-registry! values)
-            (ps-core/reset-player-states-for-test! player-states)))))))
+            (store/reset-store!)))))))
 
 (defn- seed-electromaster-config!
   [values]
@@ -45,9 +44,9 @@
           (seed-electromaster-config!
             {(skill-config/config-key :railgun :cost.down.cp) [1000.0 2000.0]
              (skill-config/config-key :railgun :cost.down.overload) [300.0 100.0]})
-          (ps-core/set-player-state!
+          (ps-fix/seed-player-state!
             player-id
-            (-> (ps-core/fresh-state)
+            (-> (store/fresh-player-state)
                 (assoc-in [:ability-data :skill-exps :railgun] 0.5)))
           (with-redefs [railgun/read-coin-qte-status (fn [_]
                                                         {:has-window? true

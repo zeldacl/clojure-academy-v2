@@ -32,8 +32,24 @@
 
 (def ^:dynamic *event-subscriber-runtime* nil)
 
-(defonce ^:private installed-event-subscriber-runtime
-  (create-event-subscriber-runtime))
+(declare event-subscriber-runtime?)
+
+(defn install-event-subscriber-runtime!
+  "Install an explicit event subscriber runtime instance.
+  This enables composition-root wiring instead of implicit singleton fallback."
+  [runtime]
+  (when-not (event-subscriber-runtime? runtime)
+    (throw (ex-info "Expected event subscriber runtime"
+                    {:runtime runtime})))
+  (alter-var-root #'*event-subscriber-runtime* (constantly runtime))
+  runtime)
+
+(defn use-fresh-event-subscriber-runtime!
+  "Reset event subscriber runtime binding to a fresh runtime instance."
+  []
+  (let [runtime (create-event-subscriber-runtime)]
+    (alter-var-root #'*event-subscriber-runtime* (constantly runtime))
+    runtime))
 
 (defn- event-subscriber-runtime?
   [runtime]
@@ -56,7 +72,8 @@
 (defn- current-event-subscriber-runtime
   []
   (or *event-subscriber-runtime*
-      installed-event-subscriber-runtime))
+      (throw (ex-info "Ability event subscriber runtime is not installed"
+                      {:hint "Install via runtime_bridge/install-runtime-hooks! or event/install-event-subscriber-runtime!"}))))
 
 (defn- event-subscriber-state-atom
   []
@@ -166,6 +183,9 @@
 (def EVT-CONTEXT-KEY-TICK    :ability/context-key-tick)
 (def EVT-CONTEXT-KEY-UP      :ability/context-key-up)
 (def EVT-CONTEXT-KEY-ABORT   :ability/context-key-abort)
+(def EVT-CONTEXT-REGISTERED  :ability/context-registered)
+(def EVT-CONTEXT-STATUS-CHANGED :ability/context-status-changed)
+(def EVT-CONTEXT-PURGED      :ability/context-purged)
 
 ;; -- Calc (modifiable) --
 (def CALC-SKILL-ATTACK       :calc/skill-attack)
@@ -211,6 +231,32 @@
   [uuid skill-id]
   {:event/type EVT-SKILL-PERFORM :event/side :server
    :uuid uuid :skill-id skill-id})
+
+(defn make-context-registered-event
+  [uuid ctx-id skill-id status]
+  {:event/type EVT-CONTEXT-REGISTERED
+   :event/side :server
+   :uuid uuid
+   :ctx-id ctx-id
+   :skill-id skill-id
+   :status status})
+
+(defn make-context-status-changed-event
+  [uuid ctx-id old-status new-status reason]
+  {:event/type EVT-CONTEXT-STATUS-CHANGED
+   :event/side :server
+   :uuid uuid
+   :ctx-id ctx-id
+   :old-status old-status
+   :new-status new-status
+   :reason reason})
+
+(defn make-context-purged-event
+  [uuid removed-count]
+  {:event/type EVT-CONTEXT-PURGED
+   :event/side :server
+   :uuid uuid
+   :removed-count removed-count})
 
 (defn make-achievement-trigger-event
   [uuid achievement-id]

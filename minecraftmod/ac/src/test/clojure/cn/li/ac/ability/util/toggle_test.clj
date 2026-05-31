@@ -1,7 +1,7 @@
 (ns cn.li.ac.ability.util.toggle-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.test.support.contexts :as test-contexts]
-            [cn.li.ac.ability.service.dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.util.toggle :as tg]))
 
 (use-fixtures :each test-contexts/clean-contexts-fixture)

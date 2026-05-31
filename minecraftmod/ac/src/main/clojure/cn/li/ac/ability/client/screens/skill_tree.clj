@@ -1,15 +1,15 @@
 (ns cn.li.ac.ability.client.screens.skill-tree
   "Skill tree screen logic (AC layer - no Minecraft imports)."
   (:require 
-            [cn.li.ac.ability.service.player-state-core :as ps-core]
 [cn.li.ac.ability.client.api :as api]
+            [cn.li.ac.ability.client.read-model :as read-model]
             [cn.li.ac.ability.client.managed-screens :as managed-screens]
             [cn.li.ac.ability.registry.skill-query :as skill]
             [cn.li.ac.ability.registry.category :as category]
             [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.rules.learning-rules :as learning-rules]
             [cn.li.ac.ability.model.ability :as adata]
-            [cn.li.ac.ability.config :as cfg]            [cn.li.mcmod.hooks.core :as runtime-hooks]
+            [cn.li.ac.ability.config :as cfg]
             [cn.li.mcmod.i18n :as i18n]))
 
 (defn- check-learn-conditions
@@ -40,52 +40,21 @@
 
 (def screen-id :skill-tree)
 
-(defn- require-screen-owner-value
-  [owner label value]
-  (if (some? value)
-    value
-    (throw (ex-info (format "Skill tree screen owner requires %s" label)
-                    {:owner owner
-                     :required label}))))
-
 (defn screen-owner-key
   [owner]
-  (let [owner-map (cond
-                    (vector? owner) owner
-                    (map? owner) owner
-                    (some? owner) {:player-uuid owner}
-                    :else {})]
-    (if (vector? owner-map)
-      owner-map
-      [(require-screen-owner-value owner ":client-session-id"
-                                   (or (:client-session-id owner-map)
-                                       (:session-id owner-map)
-                                       runtime-hooks/*client-session-id*))
-       :skill-tree
-       (require-screen-owner-value owner ":player-uuid"
-                                   (some-> (or (:player-uuid owner-map)
-                                               (:uuid owner-map))
-                           str))])))
+  (read-model/owner-key owner :skill-tree))
 
 (defn- with-screen-player-state-owner
   [owner f]
-  (let [[session-id _screen-id player-uuid] (screen-owner-key owner)]
-    (binding [runtime-hooks/*client-session-id* session-id
-              runtime-hooks/*player-state-owner* {:client-session-id session-id
-                                                  :player-uuid player-uuid}]
-      (f))))
+  (read-model/with-player-state-owner (screen-owner-key owner) f))
 
 (defn- get-screen-player-state
   [owner]
-  (let [[_session-id _screen-id player-uuid] (screen-owner-key owner)]
-    (with-screen-player-state-owner owner
-      #(ps-core/get-player-state player-uuid))))
+  (read-model/get-player-state (screen-owner-key owner)))
 
 (defn- ensure-screen-player-state!
   [owner]
-  (let [[_session-id _screen-id player-uuid] (screen-owner-key owner)]
-    (with-screen-player-state-owner owner
-      #(ps-core/get-or-create-player-state! player-uuid))))
+  (read-model/ensure-player-state! (screen-owner-key owner)))
 
 (defn screen-state-snapshot
   ([owner]
@@ -307,7 +276,7 @@
   ([owner]
    (open-screen! owner nil))
   ([owner learn-context]
-    ;; 纭繚player-state瀛樺湪锛岄槻姝I鍗℃
+    ;; Ensure player state exists before opening the UI.
     (let [owner-key (screen-owner-key owner)
           player-uuid (nth owner-key 2)]
       (ensure-screen-player-state! owner)

@@ -1,9 +1,22 @@
 (ns cn.li.ac.ability.server.effect.geom
   (:require 
-            [cn.li.ac.ability.service.player-state-core :as ps-core]
+            [cn.li.ac.ability.service.runtime-store :as store]
 [cn.li.ac.ability.server.effect.core :as effect]
             [cn.li.ac.util.math.vec3 :as vec3]
-            [cn.li.mcmod.platform.raycast :as raycast]))
+            [cn.li.mcmod.platform.raycast :as raycast]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]))
+
+(defn- runtime-player-state
+  [player-id]
+  (store/get-player-state* (runtime-hooks/require-player-state-session-id "geom") player-id))
+
+(defn- runtime-player-state-in-session
+  [session-id player-id]
+  (store/get-player-state* session-id player-id))
+
+(declare world-id-of-in-session
+         eye-pos-in-session
+         body-pos-in-session)
 
 ;; ---------------------------------------------------------------------------
 ;; Player helpers
@@ -11,19 +24,31 @@
 
 (defn world-id-of
   [player-id]
-  (or (get-in (ps-core/get-player-state player-id) [:position :world-id])
+  (world-id-of-in-session (runtime-hooks/require-player-state-session-id "geom") player-id))
+
+(defn world-id-of-in-session
+  [session-id player-id]
+  (or (get-in (runtime-player-state-in-session session-id player-id) [:position :world-id])
       "minecraft:overworld"))
 
 (defn eye-pos
   [player-id]
-  (let [pos (get-in (ps-core/get-player-state player-id) [:position])]
+  (eye-pos-in-session (runtime-hooks/require-player-state-session-id "geom") player-id))
+
+(defn eye-pos-in-session
+  [session-id player-id]
+  (let [pos (get-in (runtime-player-state-in-session session-id player-id) [:position])]
     {:x (double (or (:x pos) 0.0))
      :y (+ (double (or (:y pos) 64.0)) 1.62)
      :z (double (or (:z pos) 0.0))}))
 
 (defn body-pos
   [player-id]
-  (let [pos (get-in (ps-core/get-player-state player-id) [:position])]
+  (body-pos-in-session (runtime-hooks/require-player-state-session-id "geom") player-id))
+
+(defn body-pos-in-session
+  [session-id player-id]
+  (let [pos (get-in (runtime-player-state-in-session session-id player-id) [:position])]
     {:x (double (or (:x pos) 0.0))
      :y (double (or (:y pos) 64.0))
      :z (double (or (:z pos) 0.0))}))

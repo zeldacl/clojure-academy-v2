@@ -6,13 +6,67 @@
   - player-state updates
   - firing ability events"
   (:require 
-            [cn.li.ac.ability.service.player-state-accessors :as ps-accessors]
-[cn.li.ac.ability.service.player-state-dirty :as ps-dirty]
-[cn.li.ac.ability.service.player-state-core :as ps-core]
+            [cn.li.ac.ability.service.runtime-store :as store]
 [cn.li.ac.ability.model.ability :as adata]
             [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.ability.config :as cfg]
-            [cn.li.ac.ability.fx :as fx]))
+            [cn.li.ac.ability.fx :as fx]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]))
+
+(defn- runtime-player-state
+  [player-id]
+  (store/get-player-state* (runtime-hooks/require-player-state-session-id "skill-effects")
+                           player-id))
+
+(defn- runtime-player-state-in-session
+  [session-id player-id]
+  (store/get-player-state* session-id player-id))
+
+(declare update-runtime-player-state-in-session!
+         mark-runtime-dirty-in-session!
+         perform-resource!
+         perform-resource-in-session!
+         add-skill-exp!
+         add-skill-exp-in-session!
+         set-main-cooldown!
+         set-main-cooldown-in-session!
+         apply-cost!
+         apply-cooldown!
+         enforce-overload-floor-in-session!
+         enforce-overload-floor!
+         assoc-player-path!
+         assoc-player-path-in-session!
+         update-player-path!
+         update-player-path-in-session!
+         gain-exp!
+         emit-fx!
+         get-player-state
+         get-player-state-in-session!
+         player-path
+         player-path-in-session!
+         skill-exp
+         skill-exp-in-session!
+         current-cp
+         current-cp-in-session!)
+
+(defn- update-runtime-player-state!
+  [player-id f]
+  (update-runtime-player-state-in-session! (runtime-hooks/require-player-state-session-id "skill-effects")
+                                           player-id
+                                           f))
+
+(defn- update-runtime-player-state-in-session!
+  [session-id player-id f]
+  (store/update-player-state!* session-id player-id f))
+
+(defn- mark-runtime-dirty!
+  [player-id]
+  (mark-runtime-dirty-in-session! (runtime-hooks/require-player-state-session-id "skill-effects")
+                                  player-id))
+
+(defn- mark-runtime-dirty-in-session!
+  [session-id player-id]
+  (store/mark-player-dirty! session-id player-id))
 
 
 (defn scale-damage
@@ -29,41 +83,69 @@
   ([player-id overload cp]
    (perform-resource! player-id overload cp false))
   ([player-id overload cp creative?]
-   (if (ps-core/get-player-state player-id)
-     (let [{:keys [state success? events]} (command-rt/run-command! player-id
-                                                                    {:command :consume-resource
-                                                                     :overload (double overload)
-                                                                     :cp (double cp)
-                                                                     :creative? (boolean creative?)})
+  (perform-resource-in-session! (runtime-hooks/require-player-state-session-id "skill-effects")
+                                player-id
+                                overload
+                                cp
+                                creative?)))
+
+(defn perform-resource-in-session!
+  [session-id player-id overload cp creative?]
+  (if (runtime-player-state-in-session session-id player-id)
+    (let [{:keys [state success? events]} (command-rt/run-command-in-session! session-id
+                                                      player-id
+                                                      {:command :consume-resource
+                                                      :overload (double overload)
+                                                      :cp (double cp)
+                                                      :creative? (boolean creative?)})
            data (:resource-data state)]
        {:success? (boolean success?)
         :events events
         :data data})
      {:success? false
       :events []
-      :data nil})))
+    :data nil}))
 
 (defn add-skill-exp!
   "Add exp to a skill and fire produced events."
   ([player-id skill-id amount]
    (add-skill-exp! player-id skill-id amount 1.0))
   ([player-id skill-id amount exp-rate]
-   (when (ps-core/get-player-state player-id)
-     (let [scaled-amount (* (double amount) (double exp-rate))
-           {:keys [state events]} (command-rt/run-command! player-id
-                                                           {:command :add-skill-exp
-                                                            :skill-id skill-id
-                                                            :amount scaled-amount})
-           data (:ability-data state)]
-       {:data data :events events}))))
+    (add-skill-exp-in-session! (runtime-hooks/require-player-state-session-id "skill-effects")
+                      player-id
+                      skill-id
+                      amount
+                      exp-rate)))
+
+(defn add-skill-exp-in-session!
+  [session-id player-id skill-id amount exp-rate]
+  (when (runtime-player-state-in-session session-id player-id)
+    (let [scaled-amount (* (double amount) (double exp-rate))
+          {:keys [state events]} (command-rt/run-command-in-session! session-id
+                             player-id
+                             {:command :add-skill-exp
+                              :skill-id skill-id
+                              :amount scaled-amount})
+          data (:ability-data state)]
+         {:data data :events events})))
 
 (defn set-main-cooldown!
   "Set main cooldown for ctrl-id (or skill-id)."
   [player-id ctrl-id cooldown-ticks]
-  (command-rt/run-command! player-id {:command :set-cooldown
-                                      :ctrl-id ctrl-id
-                                      :sub-id :main
-                                      :ticks (max 1 (int cooldown-ticks))})
+  (set-main-cooldown-in-session! (runtime-hooks/require-player-state-session-id "skill-effects")
+                                 player-id
+                                 ctrl-id
+                                 cooldown-ticks)
+  true)
+
+(defn set-main-cooldown-in-session!
+  [session-id player-id ctrl-id cooldown-ticks]
+  (command-rt/run-command-in-session! session-id
+                                      player-id
+                                      {:command :set-cooldown
+                                       :ctrl-id ctrl-id
+                                       :sub-id :main
+                                       :ticks (max 1 (int cooldown-ticks))})
   true)
 
 (defn- resolve-val
@@ -122,31 +204,57 @@
 
   Returns true when player state exists; false otherwise."
   [player-id floor-value]
-  (if (ps-core/get-player-state player-id)
+  (enforce-overload-floor-in-session! (runtime-hooks/require-player-state-session-id "skill-effects")
+                                      player-id
+                                      floor-value))
+
+(defn enforce-overload-floor-in-session!
+  [session-id player-id floor-value]
+  (if (runtime-player-state-in-session session-id player-id)
     (do
-      (ps-accessors/update-resource-data!
+      (update-runtime-player-state-in-session!
+        session-id
         player-id
-        (fn [res-data]
-          (if (< (double (or (:cur-overload res-data) 0.0)) (double floor-value))
-            (-> res-data
-                (assoc :cur-overload (double floor-value))
-                (assoc :overload-fine true))
-            res-data)))
+        (fn [player-state]
+          (update player-state :resource-data
+                  (fn [res-data]
+                    (if (< (double (or (:cur-overload res-data) 0.0)) (double floor-value))
+                      (-> res-data
+                          (assoc :cur-overload (double floor-value))
+                          (assoc :overload-fine true))
+                      res-data)))))
+      (mark-runtime-dirty-in-session! session-id player-id)
       true)
     false))
 
 (defn assoc-player-path!
   "Associate value at arbitrary player-state path and mark dirty." 
   [player-id path value]
-  (ps-core/update-player-state! player-id assoc-in path value)
-  (ps-dirty/mark-dirty! player-id)
+  (assoc-player-path-in-session! (runtime-hooks/require-player-state-session-id "skill-effects")
+                                 player-id
+                                 path
+                                 value))
+
+(defn assoc-player-path-in-session!
+  [session-id player-id path value]
+  (update-runtime-player-state-in-session! session-id player-id #(assoc-in % path value))
+  (mark-runtime-dirty-in-session! session-id player-id)
   true)
 
 (defn update-player-path!
   "Update value at arbitrary player-state path with f and args, then mark dirty."
   [player-id path f & args]
-  (apply ps-core/update-player-state! player-id update-in path f args)
-  (ps-dirty/mark-dirty! player-id)
+  (apply update-player-path-in-session!
+         (runtime-hooks/require-player-state-session-id "skill-effects")
+         player-id
+         path
+         f
+         args))
+
+(defn update-player-path-in-session!
+  [session-id player-id path f & args]
+  (update-runtime-player-state-in-session! session-id player-id #(apply update-in % path f args))
+  (mark-runtime-dirty-in-session! session-id player-id)
   true)
 
 (defn gain-exp!
@@ -177,24 +285,46 @@
 (defn get-player-state
   "Return full player state map or nil when absent."
   [player-id]
-  (ps-core/get-player-state player-id))
+  (get-player-state-in-session! (runtime-hooks/require-player-state-session-id "skill-effects")
+                                player-id))
+
+(defn get-player-state-in-session!
+  [session-id player-id]
+  (runtime-player-state-in-session session-id player-id))
 
 (defn player-path
   "Read arbitrary path from player state with optional default value."
   ([player-id path]
-   (get-in (ps-core/get-player-state player-id) path))
+    (player-path-in-session! (runtime-hooks/require-player-state-session-id "skill-effects") player-id path))
   ([player-id path default]
-   (get-in (ps-core/get-player-state player-id) path default)))
+    (player-path-in-session! (runtime-hooks/require-player-state-session-id "skill-effects") player-id path default)))
+
+(defn player-path-in-session!
+  ([session-id player-id path]
+   (get-in (runtime-player-state-in-session session-id player-id) path))
+  ([session-id player-id path default]
+   (get-in (runtime-player-state-in-session session-id player-id) path default)))
 
 (defn skill-exp
   "Read clamped skill exp as double from ability-data."
   [player-id skill-id]
-  (double (adata/get-skill-exp (:ability-data (ps-core/get-player-state player-id)) skill-id)))
+  (skill-exp-in-session! (runtime-hooks/require-player-state-session-id "skill-effects")
+                         player-id
+                         skill-id))
+
+(defn skill-exp-in-session!
+  [session-id player-id skill-id]
+  (double (adata/get-skill-exp (:ability-data (runtime-player-state-in-session session-id player-id)) skill-id)))
 
 (defn current-cp
   "Read current CP from resource-data as double."
   [player-id]
-  (double (or (player-path player-id [:resource-data :cur-cp] 0.0) 0.0)))
+  (current-cp-in-session! (runtime-hooks/require-player-state-session-id "skill-effects")
+                          player-id))
+
+(defn current-cp-in-session!
+  [session-id player-id]
+  (double (or (player-path-in-session! session-id player-id [:resource-data :cur-cp] 0.0) 0.0)))
 
 
 

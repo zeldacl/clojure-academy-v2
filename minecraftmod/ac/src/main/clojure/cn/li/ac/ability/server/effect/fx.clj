@@ -1,5 +1,5 @@
 (ns cn.li.ac.ability.server.effect.fx
-  (:require [cn.li.ac.ability.service.dispatcher :as ctx]
+  (:require [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.server.effect.core :as effect]))
 
 (effect/defop :fx

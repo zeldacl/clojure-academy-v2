@@ -1,7 +1,8 @@
 (ns cn.li.ac.item.special-items
   "Special migrated items with original gameplay behavior."
   (:require 
-            [cn.li.ac.ability.service.player-state-core :as ps-core]
+            [cn.li.ac.ability.service.runtime-store :as store]
+[cn.li.mcmod.hooks.core :as runtime-hooks]
 [cn.li.mcmod.item.dsl :as idsl]
             [clojure.string :as str]
             [cn.li.mcmod.platform.entity :as entity]
@@ -9,7 +10,7 @@
             [cn.li.mcmod.platform.nbt :as nbt]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.world :as world]
-            [cn.li.ac.ability.service.player-state-actions :as state-actions]
+            [cn.li.ac.ability.service.state-actions :as state-actions]
             [cn.li.ac.ability.util.uuid :as uuid]            [cn.li.ac.ability.model.ability :as adata]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.util.log :as log]))
@@ -44,18 +45,19 @@
 (defn- apply-induction-factor!
   [{:keys [player item-id side]}]
   (when (= side :server)
-    (let [normalized-id (last (str/split (str item-id) #":" 2))
+    (let [session-id (runtime-hooks/require-player-state-session-id "special-items")
+          normalized-id (last (str/split (str item-id) #":" 2))
           target-category (get induction-factor->category normalized-id)]
       (when target-category
       (let [uuid (uuid/player-uuid player)
-          state (ps-core/get-or-create-player-state! uuid)
+          state (store/get-or-create-player-state! session-id uuid)
           ability (:ability-data state)
           current-category (:category-id ability)
           current-level (int (:level ability 1))]
           (cond
             (nil? current-category)
             (do
-              (state-actions/change-category! uuid target-category)
+              (state-actions/change-category-in-session! session-id uuid target-category)
               (entity/player-consume-main-hand-item! player 1)
               (log/info "Applied induction factor for initial category" {:uuid uuid :category target-category}))
 
@@ -68,7 +70,8 @@
                   consumed-factor? (entity/player-consume-main-hand-item! player 1)
                   consumed-coil? (entity/player-consume-item-by-id! player magnetic-coil-item-id 1)]
               (when (and consumed-factor? consumed-coil?)
-                (state-actions/change-category!
+                (state-actions/change-category-in-session!
+                  session-id
                   uuid
                   target-category
                   (fn [data]
@@ -166,8 +169,8 @@
         "induction_factor_electromaster"
         {:max-stack-size 1
          :creative-tab :misc
-         :properties {:tooltip ["璇卞鍥犲瓙 - 鐢靛嚮浣?
-                                "鐢ㄤ簬鑳藉姏瑙夐啋/绫诲埆杞寲"]
+         :properties {:tooltip ["Induction Factor - Electromaster"
+                                "Used for ability awakening/category transform"]
                       :model-texture "factor_electromaster"}
          :on-right-click apply-induction-factor!}))
     (idsl/register-item!
@@ -175,8 +178,8 @@
         "induction_factor_meltdowner"
         {:max-stack-size 1
          :creative-tab :misc
-         :properties {:tooltip ["璇卞鍥犲瓙 - 鍘熷瓙宕╁潖"
-                                "鐢ㄤ簬鑳藉姏瑙夐啋/绫诲埆杞寲"]
+         :properties {:tooltip ["Induction Factor - Meltdowner"
+                                "Used for ability awakening/category transform"]
                       :model-texture "factor_meltdowner"}
          :on-right-click apply-induction-factor!}))
     (idsl/register-item!
@@ -184,8 +187,8 @@
         "induction_factor_teleporter"
         {:max-stack-size 1
          :creative-tab :misc
-         :properties {:tooltip ["璇卞鍥犲瓙 - 绌洪棿绉诲姩"
-                                "鐢ㄤ簬鑳藉姏瑙夐啋/绫诲埆杞寲"]
+         :properties {:tooltip ["Induction Factor - Teleporter"
+                                "Used for ability awakening/category transform"]
                       :model-texture "factor_teleporter"}
          :on-right-click apply-induction-factor!}))
     (idsl/register-item!
@@ -193,8 +196,8 @@
         "induction_factor_vecmanip"
         {:max-stack-size 1
          :creative-tab :misc
-         :properties {:tooltip ["璇卞鍥犲瓙 - 鐭㈤噺鎿嶇旱"
-                                "鐢ㄤ簬鑳藉姏瑙夐啋/绫诲埆杞寲"]
+         :properties {:tooltip ["Induction Factor - Vec Manip"
+                                "Used for ability awakening/category transform"]
                       :model-texture "factor_vecmanip"}
          :on-right-click apply-induction-factor!}))
     (idsl/register-item!
@@ -202,8 +205,8 @@
         "mag_hook"
         {:max-stack-size 1
          :creative-tab :tools
-         :properties {:tooltip ["纾佸姏閽?
-                                "鍙抽敭鎶曟幏锛屽懡涓悗鍙洖鏀?]
+         :properties {:tooltip ["Mag Hook"
+                                "Right click to throw and retrieve after hit"]
                       :model-texture "mag_hook"}
          :on-right-click throw-mag-hook!}))
     (idsl/register-item!
@@ -211,8 +214,8 @@
         "matter_unit"
         {:max-stack-size 16
          :creative-tab :misc
-         :properties {:tooltip ["鐗╄川鍗曞厓锛堢┖锛?
-                                "鍙抽敭閲囬泦/鏀剧疆铏氱浉娑蹭綋"]
+         :properties {:tooltip ["Matter Unit (Empty)"
+                                "Right click to collect/place imaginary phase liquid"]
                       :model-texture "matter_unit"}
          :on-right-click use-matter-unit!}))
     (log/info "Special items initialized: induction factors, mag_hook, matter_unit")))

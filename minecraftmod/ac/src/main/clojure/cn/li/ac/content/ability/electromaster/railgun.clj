@@ -1,5 +1,5 @@
 (ns cn.li.ac.content.ability.electromaster.railgun
-  "Railgun skill ï¿½?coin-QTE + iron-item charge mechanic.
+  "Railgun skill ï¿?coin-QTE + iron-item charge mechanic.
 
   Complex skill using the escape-hatch pattern: fn hooks for the custom
   coin-QTE / item-charge logic; :beam op (effect.beam) for the actual shot.
@@ -8,7 +8,7 @@
   (:require [cn.li.ac.ability.dsl :refer [defskill]]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
-            [cn.li.ac.ability.service.dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.server.effect.core :as effect]
             [cn.li.ac.ability.server.effect.geom :as geom]
             [cn.li.ac.ability.server.effect.beam]
@@ -49,7 +49,7 @@
 (defn- reflection-distance [] (cfg-double :reflection.distance))
 (defn- reflection-damage [] (cfg-double :reflection.damage))
 (defn- railgun-exp-gain [hit? reflection-hit?]
-  ;; Original: hitEntity (normal OR reflection hit) ï¿½?0.01, miss ï¿½?0.005
+  ;; Original: hitEntity (normal OR reflection hit) ï¿?0.01, miss ï¿?0.005
   (if (or hit? reflection-hit?)
     (cfg-double :progression.exp-reflection-hit)
     (cfg-double :progression.exp-hit)))
@@ -83,7 +83,7 @@
   "Register a railgun coin throw state.
   Called from the platform item-action hook when a coin is used in ability mode.
   If the player is currently in item-charge mode, that charge is aborted first
-  (mirrors original informThrowCoin ï¿½?onKeyAbort() behavior)."
+  (mirrors original informThrowCoin ï¿?onKeyAbort() behavior)."
   [player-id payload]
   (let [_now-ms (long (or (:timestamp-ms payload) (System/currentTimeMillis)))]
     ;; Abort any in-progress item charge so the coin QTE takes priority.

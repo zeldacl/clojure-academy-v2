@@ -1,6 +1,6 @@
 (ns cn.li.ac.ability.client.screens.skill-tree-test
   (:require 
-            [cn.li.ac.ability.service.player-state-core :as ps-core]
+            [cn.li.ac.ability.service.runtime-store :as store]
 [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.client.managed-screens :as managed-screens]
             [cn.li.ac.ability.client.screens.skill-tree :as screen]            [cn.li.ac.ability.registry.skill-query :as skill]
@@ -40,8 +40,8 @@
         translate-map {"ability.category.generic" "Generic"
                        "ability.skill.generic.brain_course" "Brain Course"
                        "ability.skill.generic.brain_course.desc" "Undergo focused neural training to raise your maximum CP by 1000."}]
-    (with-redefs [ps-core/get-player-state (fn [_] player-state)
-              ps-core/get-or-create-player-state! (fn [_] player-state)
+      (with-redefs [store/get-player-state* (fn [_ _] player-state)
+              store/get-or-create-player-state! (fn [_ _] player-state)
                   skill/get-skills-for-category (fn [_] [skill-spec])
                   skill/get-skill-icon-path (fn [_] "textures/abilities/generic/skills/brain_course.png")
                   learning-rules/check-all-conditions (fn [_ _ _ _] {:pass? true :failures []})
@@ -85,8 +85,8 @@
         translate-map {"ability.category.generic" "Generic"
                        "ability.skill.generic.brain_course" "Brain Course"
                        "ability.skill.generic.brain_course.desc" "Undergo focused neural training to raise your maximum CP by 1000."}]
-    (with-redefs [ps-core/get-player-state (fn [_] player-state)
-              ps-core/get-or-create-player-state! (fn [_] player-state)
+      (with-redefs [store/get-player-state* (fn [_ _] player-state)
+              store/get-or-create-player-state! (fn [_ _] player-state)
                   skill/get-skills-for-category (fn [_] [skill-spec])
                   skill/get-skill-icon-path (fn [_] "textures/abilities/generic/skills/brain_course.png")
                   learning-rules/check-all-conditions (fn [_ _ _ _] {:pass? true :failures []})

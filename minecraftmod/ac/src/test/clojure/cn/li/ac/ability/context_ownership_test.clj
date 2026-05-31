@@ -1,10 +1,10 @@
 (ns cn.li.ac.ability.context-ownership-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.test.support.contexts :as test-contexts]
-            [cn.li.ac.ability.service.dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.server.handlers.context-handler :as context-handler]
             [cn.li.ac.ability.server.handlers.input-handler :as input-handler]
-            [cn.li.ac.ability.service.context-runtime :as ctx-rt]
+            [cn.li.ac.ability.service.context-state :as ctx-rt]
             [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 

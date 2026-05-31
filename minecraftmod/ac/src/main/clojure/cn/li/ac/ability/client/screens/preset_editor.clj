@@ -1,12 +1,12 @@
 (ns cn.li.ac.ability.client.screens.preset-editor
   "Preset editor screen logic (AC layer - no Minecraft imports)."
   (:require 
-            [cn.li.ac.ability.service.player-state-core :as ps-core]
 [cn.li.ac.ability.client.api :as api]
+            [cn.li.ac.ability.client.read-model :as read-model]
             [cn.li.ac.ability.client.managed-screens :as managed-screens]
             [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.registry.skill-query :as skill-query]
-            [cn.li.ac.ability.model.ability :as adata]            [cn.li.mcmod.hooks.core :as runtime-hooks]))
+            [cn.li.ac.ability.model.ability :as adata]))
 
 ;; Editor state
 (def ^:private default-editor-state
@@ -17,46 +17,17 @@
 
 (def screen-id :preset-editor)
 
-(defn- require-editor-owner-value
-  [owner label value]
-  (if (some? value)
-    value
-    (throw (ex-info (format "Preset editor owner requires %s" label)
-                    {:owner owner
-                     :required label}))))
-
 (defn editor-owner-key
   [owner]
-  (let [owner-map (cond
-                    (vector? owner) owner
-                    (map? owner) owner
-                    (some? owner) {:player-uuid owner}
-                    :else {})]
-    (if (vector? owner-map)
-      owner-map
-      [(require-editor-owner-value owner ":client-session-id"
-                                   (or (:client-session-id owner-map)
-                                       (:session-id owner-map)
-                                       runtime-hooks/*client-session-id*))
-       :preset-editor
-       (require-editor-owner-value owner ":player-uuid"
-                                   (some-> (or (:player-uuid owner-map)
-                                               (:uuid owner-map))
-                           str))])))
+  (read-model/owner-key owner :preset-editor))
 
 (defn- with-editor-player-state-owner
   [owner f]
-  (let [[session-id _screen-id player-uuid] (editor-owner-key owner)]
-    (binding [runtime-hooks/*client-session-id* session-id
-              runtime-hooks/*player-state-owner* {:client-session-id session-id
-                                                  :player-uuid player-uuid}]
-      (f))))
+  (read-model/with-player-state-owner (editor-owner-key owner) f))
 
 (defn- get-editor-player-state
   [owner]
-  (let [[_session-id _screen-id player-uuid] (editor-owner-key owner)]
-    (with-editor-player-state-owner owner
-      #(ps-core/get-player-state player-uuid))))
+  (read-model/get-player-state (editor-owner-key owner)))
 
 (defn editor-state-snapshot
   ([owner]

@@ -1,11 +1,11 @@
 (ns cn.li.ac.ability.adapters.client-overlay-lifecycle-test
   (:require 
-            [cn.li.ac.ability.service.player-state-core :as ps-core]
+            [cn.li.ac.ability.service.runtime-store :as store]
 [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.adapters.client-ui-hooks :as client-ui-hooks]
             [cn.li.ac.ability.client.keybinds :as client-keybinds]
             [cn.li.ac.content.ability.electromaster.current-charging-fx :as current-charging-fx]
-            [cn.li.ac.ability.service.dispatcher :as ctx]            [cn.li.ac.ability.skill-config :as skill-config]
+            [cn.li.ac.ability.service.context-dispatcher :as ctx]            [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.network.client :as net-client]))
 
@@ -60,7 +60,7 @@
                                                             :vec-deviation {:active true}}}}}]
     (with-redefs [ctx/get-all-contexts-for-player (fn [& _] terminated-player-contexts)
                   ctx/get-all-contexts (fn [] terminated-toggle-contexts)
-                  ps-core/get-player-state (fn [_]
+                  store/get-player-state* (fn [_ _]
                                         {:resource-data {:activated true
                                                          :cur-cp 80.0
                                                          :max-cp 100.0

@@ -1,5 +1,5 @@
 (ns cn.li.ac.content.ability.meltdowner.meltdowner
-  "Meltdowner skill ï¿½?charge-window beam with block-breaking and reflection.
+  "Meltdowner skill ï¿?charge-window beam with block-breaking and reflection.
 
   Uses the escape-hatch pattern: fn hooks for overload-floor enforcement and
   min/max charge-window gating; :beam op (effect.beam) for the actual shot.
@@ -18,7 +18,7 @@
   (:require [cn.li.ac.ability.dsl :refer [defskill]]
             [cn.li.ac.ability.util.balance :as bal]
             [cn.li.ac.ability.skill-config :as skill-config]
-            [cn.li.ac.ability.service.dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.server.effect.core :as effect]
             [cn.li.ac.ability.server.effect.geom :as geom]
             [cn.li.ac.ability.server.effect.beam]

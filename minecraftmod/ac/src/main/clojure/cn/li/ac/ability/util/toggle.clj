@@ -1,11 +1,11 @@
 (ns cn.li.ac.ability.util.toggle
-  "Utilities for toggle (持续激活) skills.
+  "Utilities for toggle (持续激�? skills.
 
   Toggle skills remain active until manually deactivated or resources depleted.
   They consume resources per tick and maintain persistent state.
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.service.dispatcher :as ctx]))
+  (:require [cn.li.ac.ability.service.context-dispatcher :as ctx]))
 
 (defn init-toggle-state
   "Initialize toggle skill state in context.

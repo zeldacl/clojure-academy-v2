@@ -1,7 +1,7 @@
 (ns cn.li.ac.ability.client.effects.sounds
   "Sound effect commands for ability system (AC layer - no Minecraft imports)."
   (:require [cn.li.ac.ability.registry.event :as evt]
-            [cn.li.mcmod.hooks.core :as runtime-hooks]))
+            [cn.li.ac.ability.client.effects.queue-infra :as queue-infra]))
 
 ;; Sound effect command structure
 ;; {:type :sound
@@ -102,54 +102,20 @@
   [f & args]
   (apply swap! (queue-atom) f args))
 
-(defn- require-owner-value
-  [owner label value]
-  (if (some? value)
-    value
-    (throw (ex-info (format "Sound queue requires %s" label)
-                    {:owner owner
-                     :required label}))))
-
-(defn- current-session-id
-  [owner]
-  (require-owner-value owner
-                       ":client-session-id"
-                       (or (when (map? owner) (:client-session-id owner))
-                           (when (map? owner) (:session-id owner))
-                           (:client-session-id runtime-hooks/*player-state-owner*)
-                           runtime-hooks/*client-session-id*)))
-
 (defn- normalize-session-id
   [owner-or-session]
-  (cond
-    (map? owner-or-session)
-    (current-session-id owner-or-session)
-
-    (and (vector? owner-or-session)
-         (= 2 (count owner-or-session))
-         (vector? (first owner-or-session)))
-    (first owner-or-session)
-
-    (some? owner-or-session)
-    owner-or-session
-
-    :else
-    (current-session-id nil)))
+  (queue-infra/normalize-session-id "sound" owner-or-session))
 
 (defn current-effect-owner
   []
-  (or runtime-hooks/*player-state-owner*
-      (when runtime-hooks/*client-session-id*
-        {:client-session-id runtime-hooks/*client-session-id*})
-      (throw (ex-info "Current sound effect owner requires :client-session-id"
-                      {:required ":client-session-id"}))))
+  (queue-infra/current-effect-owner "sound"))
 
 (defn queue-sound-effect!
   "Queue a sound effect to be played."
   ([sound-cmd]
    (queue-sound-effect! nil sound-cmd))
   ([owner-or-session sound-cmd]
-  (update-queue! update (normalize-session-id owner-or-session) (fnil conj []) sound-cmd)
+  (queue-infra/queue-effect! (queue-atom) "sound" owner-or-session sound-cmd)
    nil))
 
 (defn queue-current-sound-effect!
@@ -161,13 +127,7 @@
   ([]
    (poll-sound-effects! nil))
   ([owner-or-session]
-   (let [session-id (normalize-session-id owner-or-session)
-         drained (atom [])]
-     (update-queue!
-       (fn [queues]
-         (reset! drained (vec (get queues session-id [])))
-         (dissoc queues session-id)))
-     @drained)))
+   (queue-infra/poll-effects! (queue-atom) "sound" owner-or-session)))
 
 (defn clear-session-sound-effects!
   ([]

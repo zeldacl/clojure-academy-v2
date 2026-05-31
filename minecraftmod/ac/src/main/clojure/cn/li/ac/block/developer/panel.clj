@@ -2,7 +2,8 @@
   "Classic AcademyCraft `page_developer.xml`: load once, bind widgets to container + optional status poll.
   Full wireless list is embedded under `parent_right/area` from code (`gui.clj`); the Wireless tab reuses the same page."
   (:require 
-            [cn.li.ac.ability.service.player-state-core :as ps-core]
+            [cn.li.ac.ability.service.runtime-store :as store]
+[cn.li.mcmod.hooks.core :as runtime-hooks]
 [clojure.string :as str]
             [cn.li.mcmod.gui.cgui-core :as cgui-core]
             [cn.li.mcmod.gui.cgui-widget-model :as cgui-model]
@@ -101,7 +102,7 @@
                           (developer/gte? developer-type (developer/min-for-level (inc lvl))))
         ability-name (if has-category?
                        (i18n/translate (:name-key cat))
-                       "鈥?)
+                       "N/A")
         icon-path (if has-category?
                     (or (some-> cat :icon texture-path-from-category-icon)
                         (default-ability-icon-path))
@@ -111,8 +112,8 @@
                       "MAX"
                       (if thresh
                         (format "EXP %.0f%%" (* 100.0 cat-prog01))
-                        "鈥?))
-                    "鈥?)
+                        "N/A"))
+                    "N/A")
         level-label (cond
                       dev? "Learning"
                       (not has-category?) "No Category"
@@ -124,18 +125,26 @@
      :exp-label exp-label
      :level-label level-label
      :cat-prog01 cat-prog01
-     :power01 (bal/clamp01 (/ energy max-energy))
-     :sync01 (bal/clamp01 (/ sync-in bandwidth))}))
+    :power01 (bal/clamp01 (/ energy max-energy))
+    :sync01 (bal/clamp01 (/ sync-in bandwidth))}))
+
+  (declare current-ui-model-in-session)
 
 (defn- current-ui-model
   [container player]
+  (current-ui-model-in-session (runtime-hooks/require-player-state-session-id "developer.panel")
+                               container
+                               player))
+
+(defn- current-ui-model-in-session
+  [session-id container player]
   (let [energy (double (or @(:energy container) 0.0))
         max-energy (max 1.0 (double (or @(:max-energy container) 1.0)))
         dev? (boolean (or @(:is-developing container) false))
         bandwidth (max 1.0 (double (or @(:wireless-bandwidth container) 1.0)))
         sync-in (double (or @(:wireless-inject-last-tick container) 0.0))
         uuid-str (when player (uuid/player-uuid player))
-        pstate (when uuid-str (ps-core/get-player-state uuid-str))
+        pstate (when uuid-str (store/get-player-state* session-id uuid-str))
         ad (:ability-data pstate)
         cat-id (:category-id ad)
         cat (when cat-id (acat/get-category cat-id))
@@ -186,11 +195,11 @@
           (when (map? resp)
             (set-text-path! root "parent_left/panel_machine/button_wireless/text_nodename"
               (if-let [n (:linked resp)]
-                (or (:node-name n) "鈥?)
-                "鈥?))))))))
+                (or (:node-name n) "N/A")
+                "N/A"))))))))
 
 (defn attach-classic-developer-bindings!
-  "`switch-wireless-tab!` 鈥?thunk (e.g. `tabbed-gui/switch-tab!` to the `:wireless` page)."
+  "`switch-wireless-tab!` �?thunk (e.g. `tabbed-gui/switch-tab!` to the `:wireless` page)."
   [root container {:keys [switch-wireless-tab!]}]
   (let [pl (:player container)
         last-net-ms (atom 0)]

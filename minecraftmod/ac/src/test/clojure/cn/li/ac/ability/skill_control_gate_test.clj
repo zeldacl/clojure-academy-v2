@@ -1,6 +1,6 @@
 (ns cn.li.ac.ability.skill-control-gate-test
   (:require 
-            [cn.li.ac.ability.service.player-state-core :as ps-core]
+            [cn.li.ac.ability.service.runtime-store :as store]
 [clojure.test :refer [deftest is testing use-fixtures]]
             [cn.li.ac.test.support.contexts :as test-contexts]
             [cn.li.ac.test.support.player-state :as test-player]
@@ -8,8 +8,8 @@
             [cn.li.ac.ability.model.ability :as ad]
             [cn.li.ac.ability.model.resource :as rd]
             [cn.li.ac.ability.registry.skill :as skill-registry]
-            [cn.li.ac.ability.service.context-mgr :as cm]
-            [cn.li.ac.ability.service.dispatcher :as ctx]))
+            [cn.li.ac.ability.service.context-manager :as cm]
+            [cn.li.ac.ability.service.context-dispatcher :as ctx]))
 
 (defn- reset-fixture
   [f]
@@ -26,10 +26,11 @@
 
 (defn- seed-player!
   [player-uuid skill-id resource-data]
-  (ps-core/set-player-state! player-uuid
-                        {:ability-data (-> (ad/new-ability-data)
-                                           (ad/learn-skill skill-id))
-                         :resource-data resource-data}))
+  (store/set-player-state!* test-player/test-session-id
+                            player-uuid
+                            {:ability-data (-> (ad/new-ability-data)
+                                               (ad/learn-skill skill-id))
+                             :resource-data resource-data}))
 
 (defn- activated-resource-data []
   (assoc (rd/new-resource-data) :activated true))

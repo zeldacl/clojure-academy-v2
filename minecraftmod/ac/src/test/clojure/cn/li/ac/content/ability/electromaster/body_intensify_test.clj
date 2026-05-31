@@ -1,7 +1,7 @@
 (ns cn.li.ac.content.ability.electromaster.body-intensify-test
   (:require [clojure.test :refer [deftest is]]
             [cn.li.ac.ability.skill-config :as skill-config]
-            [cn.li.ac.ability.service.dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.content.ability :as ability-content]

@@ -32,14 +32,11 @@
 
 (defn- resolve-payload-owner
   [payload]
-  (let [runtime-owner (when (map? runtime-hooks/*player-state-owner*)
-                        runtime-hooks/*player-state-owner*)
-        owner (merge runtime-owner
-                     (select-keys payload [:server-session-id
-                                           :client-session-id
-                                           :session-id
-                                           :player-uuid
-                                           :player]))]
+  (let [owner (select-keys payload [:server-session-id
+                                    :client-session-id
+                                    :session-id
+                                    :player-uuid
+                                    :player])]
     (cond-> owner
       (and (nil? (owner-session-id owner))
            runtime-hooks/*client-session-id*)
