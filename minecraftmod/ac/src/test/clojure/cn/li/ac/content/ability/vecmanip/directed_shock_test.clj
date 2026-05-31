@@ -1,7 +1,7 @@
 (ns cn.li.ac.content.ability.vecmanip.directed-shock-test
   (:require [clojure.test :refer [deftest is]]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
-            [cn.li.ac.ability.server.effect.geom :as geom]
+            [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.content.ability.fx-helpers :as fx]
             [cn.li.ac.content.ability.vecmanip.directed-shock :as ds]
@@ -191,3 +191,4 @@
     (is (= [["ctx-abort" :directed-shock/fx-end {:performed? false}]] @end-calls*))
     (is (= ["ctx-abort"] @terminate-calls*))
     (is (nil? (:skill-state @ctx*)))))
+

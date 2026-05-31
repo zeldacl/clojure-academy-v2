@@ -5,7 +5,7 @@
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
-            [cn.li.ac.ability.server.effect.geom :as geom]
+            [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.mcmod.platform.block-manipulation :as bm]
             [cn.li.mcmod.platform.raycast :as raycast]))
 
@@ -111,3 +111,4 @@
                                    {:player-id "p1" :ctx-id "ctx-1"})))
     (is (= {:target-x nil :target-y nil :target-z nil :countdown 0.0}
            (:skill-state @ctx*)))))
+

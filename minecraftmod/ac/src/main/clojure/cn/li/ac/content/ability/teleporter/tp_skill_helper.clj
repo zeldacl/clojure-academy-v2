@@ -9,7 +9,7 @@
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
             [cn.li.ac.ability.skill-config :as skill-config]
-            [cn.li.ac.ability.server.effect.geom :as geom]
+            [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.mcmod.platform.player-feedback :as player-feedback]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.entity :as entity]
@@ -242,3 +242,4 @@
 (defn player-position [player-id]
   (when teleportation/*teleportation*
     (teleportation/get-player-position teleportation/*teleportation* player-id)))
+

@@ -1,4 +1,4 @@
-﻿(ns cn.li.ac.ability.effects.world
+(ns cn.li.ac.ability.effects.world
   (:require [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.world-effects :as world-effects]))
 

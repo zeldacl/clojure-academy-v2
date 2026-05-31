@@ -9,7 +9,7 @@
             [cn.li.ac.content.ability.fx-helpers :as fx]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
-            [cn.li.ac.ability.server.effect.geom :as geom]
+            [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.world-effects :as world-effects]
@@ -218,4 +218,5 @@
    :abort! (fn [{:keys [ctx-id]}]
              (terminate-with-end! ctx-id false))}
   :prerequisites [{:skill-id :groundshock :min-exp 0.0}])
+
 

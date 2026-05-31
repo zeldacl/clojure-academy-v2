@@ -1,14 +1,8 @@
 (ns cn.li.ac.ability.server.effect.damage-test
-  (:require [clojure.test :refer [deftest is testing use-fixtures]]
-            [cn.li.ac.ability.server.effect.core :as effect]
-            [cn.li.ac.ability.server.effect.damage]
+  (:require [clojure.test :refer [deftest is testing]]
+            [cn.li.ac.ability.effects.damage :as damage]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.world-effects :as world-effects]))
-
-(use-fixtures :once
-  (fn [f]
-    (effect/init-default-ops!)
-    (f)))
 
 (defn- recording-damage [calls]
   (reify entity-damage/IEntityDamage
@@ -35,13 +29,13 @@
         dmg (recording-damage calls)
         evt {:player-id "att" :world-id "overworld" :target :victim :victim "u1" :amount 7.0 :damage-type :magic}]
     (binding [entity-damage/*entity-damage* dmg]
-      (is (= evt (effect/run-op! evt [:damage-direct {:target :victim :amount 7.0 :damage-type :magic}]))))
+      (is (= evt (damage/execute-damage-direct! evt {:target :victim :amount 7.0 :damage-type :magic}))))
     (is (= [{:world-id "overworld" :uuid "u1" :damage 7.0 :source :magic}] @calls))))
 
 (deftest damage-direct-skips-when-unbound-test
   (let [evt {:player-id "p" :world-id "w" :target :t :t "u9" :amount 3.0}]
     (binding [entity-damage/*entity-damage* nil]
-      (is (= evt (effect/run-op! evt [:damage-direct {:target :t :amount 3.0}]))))))
+      (is (= evt (damage/execute-damage-direct! evt {:target :t :amount 3.0}))))))
 
 (deftest damage-aoe-falloff-and-exclude-test
   (let [dcalls (atom [])
@@ -56,11 +50,12 @@
              :damage-type :generic}]
     (binding [entity-damage/*entity-damage* dmg
               world-effects/*world-effects* wfx]
-      (effect/run-op! evt [:damage-aoe {:center :center
-                                       :radius 10.0
-                                       :amount 100.0
-                                       :damage-type :generic
-                                       :exclude ["v2"]}]))
+      (damage/execute-damage-aoe! evt {:center :center
+                   :radius 10.0
+                   :amount 100.0
+                   :damage-type :generic
+                   :exclude ["v2"]}))
     (is (= 1 (count @dcalls)))
     (is (= "v1" (:uuid (first @dcalls))))
     (is (= 100.0 (:damage (first @dcalls))))))
+

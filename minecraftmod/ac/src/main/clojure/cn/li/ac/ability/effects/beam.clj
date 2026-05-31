@@ -1,4 +1,4 @@
-﻿(ns cn.li.ac.ability.effects.beam
+(ns cn.li.ac.ability.effects.beam
   "Beam shooting effect op shared between railgun, meltdowner, and similar skills.
 
   The :beam op fires a wide cylindrical beam from the player's eye position.

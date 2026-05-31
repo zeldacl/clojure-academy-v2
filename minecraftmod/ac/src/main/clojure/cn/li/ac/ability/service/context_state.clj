@@ -13,15 +13,29 @@
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.model.ability :as adata]
             [cn.li.ac.ability.registry.skill :as skill]
-            [cn.li.ac.ability.server.dispatch :as skill-rt]
             [cn.li.ac.ability.registry.event :as evt]
             [cn.li.ac.ability.rules.cooldown-rules :as cd-rules]
+            [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (def INPUT-IDLE :idle)
 (def INPUT-ACTIVE :active)
 (def INPUT-RELEASED :released)
 (def INPUT-ABORTED :aborted)
+
+(def ^:private callback->action-key
+  {:on-key-down  :down!
+   :on-key-tick  :tick!
+   :on-key-up    :up!
+   :on-key-abort :abort!})
+
+(def ^:private supported-patterns
+  #{:instant :hold-charge-release :toggle :hold-channel :release-cast :charge-window :passive})
+
+(defn- pattern-owned-spec?
+  [spec]
+  (and (keyword? (:pattern spec))
+       (contains? supported-patterns (:pattern spec))))
 
 (defn- resolved-session-id
   [owner]
@@ -60,9 +74,14 @@
    (dispatch-skill-callback! nil ctx-map cb-key event-type payload))
   ([owner ctx-map cb-key event-type payload]
    (when-let [spec (skill/get-skill (:skill-id ctx-map))]
-     (let [evt* (event-payload owner ctx-map payload)]
-       (when (skill-rt/can-handle? spec)
-         (skill-rt/dispatch! spec cb-key evt*))))
+     (let [evt* (event-payload owner ctx-map payload)
+           action-key (get callback->action-key cb-key)
+           callback-fn (get-in spec [:actions action-key])]
+       (when (fn? callback-fn)
+         (try
+           (callback-fn evt*)
+           (catch Exception e
+             (log/warn "Skill callback failed" (:id spec) cb-key (ex-message e)))))))
    (evt/fire-ability-event!
     {:event/type event-type
      :event/side :server
@@ -178,7 +197,7 @@
          (dispatch-skill-callback! owner released-ctx :on-key-up evt/EVT-CONTEXT-KEY-UP payload)
          (let [latest-ctx (if owner (ctx/get-context owner ctx-id) (ctx/get-context ctx-id))
                spec (skill/get-skill (:skill-id latest-ctx))
-               pattern-handled? (boolean (and spec (skill-rt/can-handle? spec)))]
+             pattern-handled? (boolean (and spec (pattern-owned-spec? spec)))]
            (when-not pattern-handled?
              (evt/fire-ability-event!
               (evt/make-skill-perform-event (:player-uuid released-ctx) (:skill-id released-ctx)))

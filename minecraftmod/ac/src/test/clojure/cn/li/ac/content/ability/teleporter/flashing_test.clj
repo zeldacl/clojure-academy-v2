@@ -5,7 +5,7 @@
             [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
             [cn.li.ac.content.ability.teleporter.flashing :as flashing]
             [cn.li.ac.content.ability.teleporter.tp-skill-helper :as helper]
-            [cn.li.ac.ability.server.effect.geom :as geom]))
+            [cn.li.ac.ability.effects.geom :as geom]))
 
 (defn- make-context-mocks [initial]
   (let [ctx* (atom initial)
@@ -172,3 +172,4 @@
       (is (= 10.0 (:to-x payload)))
       (is (< (Math/abs (- 65.45 (double (:to-y payload)))) 1.0e-6))
       (is (< (Math/abs (- 9.4 (double (:to-z payload)))) 1.0e-6)))))
+

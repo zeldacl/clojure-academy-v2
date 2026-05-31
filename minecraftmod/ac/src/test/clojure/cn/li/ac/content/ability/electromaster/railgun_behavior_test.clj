@@ -3,8 +3,7 @@
             [cn.li.ac.ability.service.runtime-store :as store]
 [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.item-actions :as item-actions]
-            [cn.li.ac.ability.server.effect.beam]
-            [cn.li.ac.ability.server.effect.core :as effect]
+            [cn.li.ac.ability.effects.beam :as beam]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]            [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.ac.content.ability.electromaster.railgun :as railgun]
             [cn.li.mcmod.platform.block-manipulation :as block-manip]
@@ -28,7 +27,6 @@
             (ctx/reset-contexts-for-test! context-registry-val)
             (item-actions/reset-item-action-registries-for-test! item-actions-snapshot)))))))
 
-(use-fixtures :once (fn [f] (effect/init-default-ops!) (f)))
 (use-fixtures :each reset-state!)
 
 (deftest beam-uses-trace-origin-but-keeps-visual-origin-test
@@ -50,16 +48,16 @@
                  :world-id "w1"
                  :eye-pos {:x 10.0 :y 20.0 :z 30.0}
                  :look-dir {:dx 0.0 :dy 0.0 :dz 1.0}}
-            out (effect/run-op! evt [:beam {:trace-pos {:x 1.0 :y 2.0 :z 3.0}
-                                            :radius 1.0
-                                            :query-radius 10.0
-                                            :step 0.9
-                                            :max-distance 8.0
-                                            :visual-distance 5.0
-                                            :damage 12.0
-                                            :block-energy 0.0
-                                            :break-blocks? false
-                                            :fx-topic :railgun/fx-shot}])]
+            out (beam/execute-beam! evt {:trace-pos {:x 1.0 :y 2.0 :z 3.0}
+                                         :radius 1.0
+                                         :query-radius 10.0
+                                         :step 0.9
+                                         :max-distance 8.0
+                                         :visual-distance 5.0
+                                         :damage 12.0
+                                         :block-energy 0.0
+                                         :break-blocks? false
+                                         :fx-topic :railgun/fx-shot})]
         (is (true? (get-in out [:beam-result :performed?])))
         (is (= ["w1" 1.0 2.0 3.0 10.0] (-> @calls first second rest vec)))
         (is (= [:fx :railgun/fx-shot {:mode :perform
@@ -113,4 +111,5 @@
     (let [status (#'railgun/read-coin-qte-status "p1")]
       (is (false? (:has-window? status)))
       (is (false? (:perform? status))))))
+
 

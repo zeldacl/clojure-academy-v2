@@ -1,6 +1,6 @@
 (ns cn.li.ac.ability.server.service.delayed-projectiles-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
-            [cn.li.ac.ability.server.effect.core :as effect]
+            [cn.li.ac.ability.effects.beam :as beam]
             [cn.li.ac.ability.service.delayed-projectiles :as dp]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
@@ -116,9 +116,9 @@
 
 (deftest scatter-bomb-settlement-order-and-cleanup-test
   (let [calls (atom [])]
-    (with-redefs [effect/run-op! (fn [_ _]
-                                   {:beam-result {:visual-distance 23.0
-                                                  :hit-uuids ["target-1"]}})
+    (with-redefs [beam/execute-beam! (fn [_ _]
+                       {:beam-result {:visual-distance 23.0
+                              :hit-uuids ["target-1"]}})
                   md-damage/mark-target! (fn [player-id target-id fx-context]
                                            (swap! calls conj [:mark player-id target-id fx-context])
                                            true)
@@ -186,11 +186,11 @@
 
 (deftest scatter-bomb-settlement-uses-task-look-dir-test
   (let [run-op-inputs* (atom [])]
-    (with-redefs [effect/run-op! (fn [ctx _op]
-                                   (swap! run-op-inputs* conj {:look-dir (:look-dir ctx)
-                                                               :eye-pos (:eye-pos ctx)})
-                                   {:beam-result {:visual-distance 23.0
-                                                  :hit-uuids []}})
+    (with-redefs [beam/execute-beam! (fn [ctx _spec]
+                                       (swap! run-op-inputs* conj {:look-dir (:look-dir ctx)
+                                                                   :eye-pos (:eye-pos ctx)})
+                                       {:beam-result {:visual-distance 23.0
+                                                      :hit-uuids []}})
                   ctx-mgr/push-channel-to-player! (fn [& _] true)
                   ctx-mgr/push-channel-to-nearby-players! (fn [& _] true)
                   md-damage/mark-target! (fn [& _] true)]
@@ -221,10 +221,10 @@
 
 (deftest clear-player-tasks-prevents-later-execution-test
   (let [run-count* (atom 0)]
-    (with-redefs [effect/run-op! (fn [_ _]
-                                   (swap! run-count* inc)
-                                   {:beam-result {:visual-distance 23.0
-                                                  :hit-uuids []}})
+    (with-redefs [beam/execute-beam! (fn [_ _]
+                                       (swap! run-count* inc)
+                                       {:beam-result {:visual-distance 23.0
+                                                      :hit-uuids []}})
                   ctx-mgr/push-channel-to-player! (fn [& _] true)
                   ctx-mgr/push-channel-to-nearby-players! (fn [& _] true)
                   md-damage/mark-target! (fn [& _] true)]
@@ -241,3 +241,4 @@
       (dp/tick-player! "p1")
       (is (= 0 @run-count*))
       (is (nil? (get (dp/pending-tasks-snapshot) "p1"))))))
+

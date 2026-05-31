@@ -5,7 +5,7 @@
   - Requires player on ground
   - Charge for 5+ ticks (affects pitch animation)
   - Propagates shockwave in look direction
-  - Breaks/modifies blocks in path (stone→cobblestone, grass→dirt)
+  - Breaks/modifies blocks in path (stone鈫抍obblestone, grass鈫抎irt)
   - Damages entities in AOE (4-6 damage)
   - Launches entities upward (0.6-0.9 y velocity)
   - At 100% experience: breaks blocks in 5-block radius around player
@@ -19,7 +19,7 @@
             [cn.li.ac.content.ability.fx-helpers :as fx]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
-            [cn.li.ac.ability.server.effect.geom :as geom]
+            [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.mcmod.platform.entity-motion :as entity-motion]
             [cn.li.mcmod.platform.player-motion :as player-motion]
@@ -422,3 +422,4 @@
             :up! groundshock-on-key-up
             :abort! groundshock-on-key-abort}
   :prerequisites [{:skill-id :directed-shock :min-exp 0.0}])
+

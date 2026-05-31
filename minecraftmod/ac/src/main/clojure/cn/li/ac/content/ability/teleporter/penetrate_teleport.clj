@@ -12,7 +12,7 @@
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
-            [cn.li.ac.ability.server.effect.geom :as geom]
+            [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.content.ability.teleporter.tp-skill-helper :as helper]
             [cn.li.mcmod.platform.block-manipulation :as bm]
             [cn.li.mcmod.util.log :as log]))
@@ -297,3 +297,4 @@
                                                                       (preview-payload ctx-id))}
                    :end   {:topic :penetrate-tp/fx-end   :payload (fn [_] {})}}
   :prerequisites  [{:skill-id :threatening-teleport :min-exp 0.5}])
+

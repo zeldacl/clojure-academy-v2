@@ -16,7 +16,7 @@
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.delayed-projectiles :as delayed-projectiles]
-            [cn.li.ac.ability.server.effect.geom :as geom]
+            [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.util.log :as log]))
@@ -105,3 +105,4 @@
                     (cfg-lerp-int :cooldown.ticks (skill-exp player-id)))
   :actions        {:perform! electron-bomb-perform!}
   :prerequisites  [])
+

@@ -5,7 +5,7 @@
             [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
             [cn.li.ac.content.ability.teleporter.penetrate-teleport :as pt]
             [cn.li.ac.content.ability.teleporter.tp-skill-helper :as helper]
-            [cn.li.ac.ability.server.effect.geom :as geom]))
+            [cn.li.ac.ability.effects.geom :as geom]))
 
 (defn- make-context-mocks [initial]
   (let [ctx* (atom initial)
@@ -92,3 +92,4 @@
     (is (= [["p1" :penetrate-teleport 40]] @cooldown-calls*))
     (is (= [["ctx-ok" :penetrate-tp/fx-perform {:x 10.0 :y 64.0 :z 12.0}]] @fx-calls*))
     (is (= [["p1" "teleporter.ignore_barrier"]] @ach-calls*))))
+

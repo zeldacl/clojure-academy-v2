@@ -528,43 +528,33 @@
             :player-uuid player-uuid
             :domain :preset-data}]))))
 
-  (defn- cmd-transform-domain-data
-    "Apply a transform fn to one top-level domain and return updated state.
-
-    Command fields:
-      :domain-key keyword
-      :transform-fn fn
-      :transform-args seq (optional)"
-    [player-state {:keys [domain-key transform-fn transform-args]}]
-    (if (and (keyword? domain-key) (fn? transform-fn))
+  (defn- transform-domain
+    [player-state domain-key transform-fn transform-args]
+    (if (fn? transform-fn)
       (let [args (if (sequential? transform-args) transform-args [])
             next-state (update player-state domain-key #(apply transform-fn % args))]
         (ok next-state))
       (rejected player-state :invalid-domain-transform-command)))
 
-  (defn- cmd-assoc-player-path
-    "Assoc value at a player-state path.
+  (defn- cmd-transform-ability-data
+    [player-state {:keys [transform-fn transform-args]}]
+    (transform-domain player-state :ability-data transform-fn transform-args))
 
-    Command fields:
-      :path vector
-      :value any"
-    [player-state {:keys [path value]}]
-    (if (vector? path)
-      (ok (assoc-in player-state path value))
-      (rejected player-state :invalid-player-path)))
+  (defn- cmd-transform-resource-data
+    [player-state {:keys [transform-fn transform-args]}]
+    (transform-domain player-state :resource-data transform-fn transform-args))
 
-  (defn- cmd-update-player-path
-    "Apply update-in at a player-state path.
+  (defn- cmd-transform-cooldown-data
+    [player-state {:keys [transform-fn transform-args]}]
+    (transform-domain player-state :cooldown-data transform-fn transform-args))
 
-    Command fields:
-      :path vector
-      :update-fn fn
-      :update-args seq (optional)"
-    [player-state {:keys [path update-fn update-args]}]
-    (if (and (vector? path) (fn? update-fn))
-      (let [args (if (sequential? update-args) update-args [])]
-        (ok (apply update-in player-state path update-fn args)))
-      (rejected player-state :invalid-player-path-update)))
+  (defn- cmd-transform-preset-data
+    [player-state {:keys [transform-fn transform-args]}]
+    (transform-domain player-state :preset-data transform-fn transform-args))
+
+  (defn- cmd-transform-develop-data
+    [player-state {:keys [transform-fn transform-args]}]
+    (transform-domain player-state :develop-data transform-fn transform-args))
 
   (defn- cmd-enforce-overload-floor
     "Ensure resource overload is not below floor.
@@ -580,27 +570,34 @@
                 (assoc-in [:resource-data :overload-fine] true)))
         (ok player-state))))
 
-  (defn- cmd-set-domain-data
-    "Replace one top-level domain map.
+  (defn- cmd-set-ability-data
+    [player-state {:keys [ability-data]}]
+    (ok (assoc player-state :ability-data ability-data)))
 
-    Command fields:
-      :domain-key keyword
-      :domain-data any"
-    [player-state {:keys [domain-key domain-data]}]
-    (if (keyword? domain-key)
-      (ok (assoc player-state domain-key domain-data))
-      (rejected player-state :invalid-domain-key)))
+  (defn- cmd-set-resource-data
+    [player-state {:keys [resource-data]}]
+    (ok (assoc player-state :resource-data resource-data)))
 
-  (defn- cmd-replace-player-state
-    "Replace the entire player-state map.
+  (defn- cmd-set-cooldown-data
+    [player-state {:keys [cooldown-data]}]
+    (ok (assoc player-state :cooldown-data cooldown-data)))
 
-    Command fields:
-      :player-state map"
-    [current-state {:keys [player-state new-state]}]
-    (let [target (or new-state player-state)]
-      (if (map? target)
-        (ok target)
-        (rejected current-state :invalid-player-state))))
+  (defn- cmd-set-develop-data
+    [player-state {:keys [develop-data]}]
+    (ok (assoc player-state :develop-data develop-data)))
+
+  (defn- cmd-set-railgun-coin-judged-uuid
+    [player-state {:keys [coin-uuid]}]
+    (if (some? coin-uuid)
+      (ok (assoc-in player-state [:runtime :railgun :coin-judged-uuid] coin-uuid))
+      (rejected player-state :invalid-coin-uuid)))
+
+  (defn- cmd-clear-railgun-coin-judged-uuid
+    [player-state _]
+    (let [railgun (get-in player-state [:runtime :railgun])]
+      (if (map? railgun)
+        (ok (assoc-in player-state [:runtime :railgun] (dissoc railgun :coin-judged-uuid)))
+        (ok player-state))))
 
 ;; ============================================================================
 ;; Public Dispatcher
@@ -639,12 +636,18 @@
 (defmethod apply-command :reset-abilities [ps cmd] (cmd-reset-abilities ps cmd))
 (defmethod apply-command :change-category [ps cmd] (cmd-change-category ps cmd))
 (defmethod apply-command :change-category-with-level [ps cmd] (cmd-change-category-with-level ps cmd))
-(defmethod apply-command :transform-domain-data [ps cmd] (cmd-transform-domain-data ps cmd))
-(defmethod apply-command :assoc-player-path [ps cmd] (cmd-assoc-player-path ps cmd))
-(defmethod apply-command :update-player-path [ps cmd] (cmd-update-player-path ps cmd))
+(defmethod apply-command :transform-ability-data [ps cmd] (cmd-transform-ability-data ps cmd))
+(defmethod apply-command :transform-resource-data [ps cmd] (cmd-transform-resource-data ps cmd))
+(defmethod apply-command :transform-cooldown-data [ps cmd] (cmd-transform-cooldown-data ps cmd))
+(defmethod apply-command :transform-preset-data [ps cmd] (cmd-transform-preset-data ps cmd))
+(defmethod apply-command :transform-develop-data [ps cmd] (cmd-transform-develop-data ps cmd))
 (defmethod apply-command :enforce-overload-floor [ps cmd] (cmd-enforce-overload-floor ps cmd))
-(defmethod apply-command :set-domain-data [ps cmd] (cmd-set-domain-data ps cmd))
-(defmethod apply-command :replace-player-state [ps cmd] (cmd-replace-player-state ps cmd))
+(defmethod apply-command :set-ability-data [ps cmd] (cmd-set-ability-data ps cmd))
+(defmethod apply-command :set-resource-data [ps cmd] (cmd-set-resource-data ps cmd))
+(defmethod apply-command :set-cooldown-data [ps cmd] (cmd-set-cooldown-data ps cmd))
+(defmethod apply-command :set-develop-data [ps cmd] (cmd-set-develop-data ps cmd))
+(defmethod apply-command :set-railgun-coin-judged-uuid [ps cmd] (cmd-set-railgun-coin-judged-uuid ps cmd))
+(defmethod apply-command :clear-railgun-coin-judged-uuid [ps cmd] (cmd-clear-railgun-coin-judged-uuid ps cmd))
 
 (defmethod apply-command :default
   [player-state command]

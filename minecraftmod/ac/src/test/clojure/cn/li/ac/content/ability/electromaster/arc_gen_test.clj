@@ -3,7 +3,7 @@
             [cn.li.ac.content.ability.electromaster.arc-gen :as arc]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
-            [cn.li.ac.ability.server.effect.geom :as geom]
+            [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.entity :as entity]
@@ -149,3 +149,4 @@
       (let [[_ _ payload] (first @fx-calls*)]
         (is (= {:x 10.0 :y 64.0 :z 20.0} (:start payload)))
         (is (= {:x 10.0 :y 64.0 :z 35.0} (:end payload)))))))
+

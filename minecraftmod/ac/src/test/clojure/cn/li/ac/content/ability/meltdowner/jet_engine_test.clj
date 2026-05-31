@@ -3,7 +3,7 @@
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
-            [cn.li.ac.ability.server.effect.geom :as geom]
+            [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.content.ability.meltdowner.jet-engine :as jet]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
@@ -143,3 +143,4 @@
         (is (= [["p1" "target-1" {:ctx-id "ctx-1"
                    :target-pos {:x nil :y nil :z nil}}]]
              @marks*))))))
+

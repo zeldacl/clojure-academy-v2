@@ -7,8 +7,8 @@
             [cn.li.ac.ability.service.delayed-projectiles :as dp]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]            [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.skill-config :as skill-config]
-            [cn.li.ac.ability.server.effect.core :as effect]
-            [cn.li.ac.ability.server.effect.geom :as geom]
+            [cn.li.ac.ability.effects.beam :as beam]
+            [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as dh]
             [cn.li.ac.content.ability.meltdowner.electron-missile :as missile]
             [cn.li.ac.content.ability.meltdowner.ray-barrage :as ray-barrage]
@@ -206,9 +206,9 @@
                   skill-config/tunable-int stub-ray-tunable-int
                   ctx/ctx-send-to-client! (fn [& _] nil)
                   ctx/ctx-send-to-except-local! (fn [& _] nil)
-                  effect/run-op! (fn [_ _]
-                                   {:beam-result {:performed? true
-                                                  :hit-uuids [victim]}})
+                  beam/execute-beam! (fn [_ _]
+                                       {:beam-result {:performed? true
+                                                      :hit-uuids [victim]}})
                   skill-effects/add-skill-exp! (fn [& _] nil)
                   geom/world-id-of (fn [_] "w")
                   geom/eye-pos (fn [_] {:x 0.0 :y 64.0 :z 0.0})
@@ -231,9 +231,9 @@
     (learn-rad-intensify! attacker)
     (with-redefs [rad/rate (fn [_] 1.33)
                   rad/mark-duration-ticks (fn [] 100000)
-                  effect/run-op! (fn [_ _]
-                                   {:beam-result {:visual-distance 23.0
-                                                  :hit-uuids [victim]}})
+                  beam/execute-beam! (fn [_ _]
+                                       {:beam-result {:visual-distance 23.0
+                                                      :hit-uuids [victim]}})
                   ctx-mgr/push-channel-to-player! (fn [& _] nil)
                   ctx-mgr/push-channel-to-nearby-players! (fn [& _] nil)]
       (dp/schedule-scatter-bomb-beam!
@@ -300,5 +300,6 @@
         (jet-engine/jet-engine-tick! {:player-id attacker :ctx-id "ctx-jet" :hold-ticks 1}))
       (is (= 1.5 (:rate (get (dh/marks-snapshot) victim))))
       (is (= 15.0 (double (rt/process-damage! victim attacker 10.0 :magic))))))))
+
 
 

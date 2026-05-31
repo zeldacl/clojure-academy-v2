@@ -14,7 +14,7 @@
             [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
-            [cn.li.ac.ability.server.effect.geom :as geom]
+            [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.content.ability.teleporter.tp-skill-helper :as helper]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.raycast :as raycast]
@@ -215,3 +215,4 @@
                    :update {:topic :threatening-tp/fx-update :payload (fn [_] {})}
                    :end   {:topic :threatening-tp/fx-end   :payload (fn [_] {})}}
   :prerequisites  [])
+

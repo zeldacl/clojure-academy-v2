@@ -10,10 +10,9 @@
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
-            [cn.li.ac.ability.server.effect.core :as effect]
-            [cn.li.ac.ability.server.effect.geom :as geom]
+            [cn.li.ac.ability.effects.beam :as beam]
+            [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
-            [cn.li.ac.ability.server.effect.beam]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [clojure.string :as str]
@@ -79,13 +78,13 @@
 
 (defn- run-beam!
   [{:keys [player-id ctx-id world-id eye look-dir damage]}]
-  (effect/run-op!
-    {:player-id player-id
-     :ctx-id ctx-id
-     :world-id world-id
-     :eye-pos eye
-     :look-dir look-dir}
-    [:beam (beam-spec damage)]))
+  (beam/execute-beam!
+   {:player-id player-id
+    :ctx-id ctx-id
+    :world-id world-id
+    :eye-pos eye
+    :look-dir look-dir}
+   (beam-spec damage)))
 
 (defn- send-fx-to-local-and-nearby!
   [ctx-id channel payload]
@@ -239,3 +238,4 @@
                     (cfg-lerp-int :cooldown.ticks (skill-exp player-id)))
   :actions        {:perform! ray-barrage-perform!}
   :prerequisites  [{:skill-id :meltdowner :min-exp 0.5}])
+

@@ -12,7 +12,7 @@
   (:require [cn.li.ac.ability.dsl :refer [defskill]]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
-            [cn.li.ac.ability.server.effect.geom :as geom]
+            [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
             [cn.li.ac.content.ability.teleporter.tp-skill-helper :as helper]))
 
@@ -305,3 +305,4 @@
   :fx              {:start {:topic :flashing/fx-state-start :payload (fn [_] {})}
                     :end   {:topic :flashing/fx-state-end :payload (fn [_] {})}}
   :prerequisites   [{:skill-id :shift-teleport :min-exp 0.8}])
+

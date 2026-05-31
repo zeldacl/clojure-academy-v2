@@ -43,10 +43,10 @@
       (command-rt/run-commands-in-session!
        session-id
        uuid-str
-       [{:command :set-domain-data :domain-key :ability-data :domain-data final-ability}
-        {:command :set-domain-data :domain-key :resource-data :domain-data final-resource}
-        {:command :set-domain-data :domain-key :cooldown-data :domain-data (:cooldown-data ticked-state)}
-        {:command :set-domain-data :domain-key :develop-data :domain-data final-dev-data}])
+       [{:command :set-ability-data :ability-data final-ability}
+        {:command :set-resource-data :resource-data final-resource}
+        {:command :set-cooldown-data :cooldown-data (:cooldown-data ticked-state)}
+        {:command :set-develop-data :develop-data final-dev-data}])
       (doseq [e all-events] (evt/fire-ability-event! e))
       (when (and sync-fn (seq all-events))
         nil)

@@ -30,8 +30,7 @@
   (command-rt/run-command-in-session!
    session-id
    uuid-str
-   {:command :transform-domain-data
-    :domain-key :cooldown-data
+   {:command :transform-cooldown-data
     :transform-fn f
     :transform-args args})
   nil)
@@ -63,8 +62,7 @@
   (command-rt/run-command-in-session!
    session-id
    uuid-str
-   {:command :transform-domain-data
-    :domain-key :ability-data
+   {:command :transform-ability-data
     :transform-fn f
     :transform-args args})
   nil)
@@ -81,8 +79,7 @@
   (command-rt/run-command-in-session!
    session-id
    uuid-str
-   {:command :transform-domain-data
-    :domain-key :resource-data
+   {:command :transform-resource-data
     :transform-fn f
     :transform-args args})
   nil)
@@ -106,8 +103,7 @@
   (command-rt/run-command-in-session!
    session-id
    uuid-str
-   {:command :transform-domain-data
-    :domain-key :preset-data
+   {:command :transform-preset-data
     :transform-fn f
     :transform-args args})
   nil)
@@ -124,8 +120,7 @@
   (command-rt/run-command-in-session!
    session-id
    uuid-str
-   {:command :transform-domain-data
-    :domain-key :develop-data
+   {:command :transform-develop-data
     :transform-fn f
     :transform-args args})
   nil)

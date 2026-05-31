@@ -11,7 +11,6 @@
             [cn.li.ac.ability.registry.event :as evt]            [cn.li.ac.ability.model.ability :as ad]
             [cn.li.ac.ability.model.resource :as rd]
             [cn.li.ac.ability.model.cooldown :as cd]
-            [cn.li.ac.ability.server.dispatch :as skill-rt]
             [cn.li.ac.ability.service.context-state :as rt]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
@@ -152,10 +151,9 @@
                                         {:id :arc-gen
                                          :ctrl-id :arc-gen
                                          :pattern :release-cast
+                                         :actions {:up! (fn [_] nil)}
                                          :cooldown {:mode :default}
                                          :cooldown-ticks 9})
-                  skill-rt/can-handle? (constantly true)
-                  skill-rt/dispatch! (fn [_ _ _] true)
                   evt/fire-ability-event! (fn [event]
                                             (swap! events* conj event))]
       (binding [ctx/*context-owner* test-context-owner]
@@ -176,12 +174,12 @@
     (with-redefs [skill-reg/get-skill (fn [_]
                                         {:id :arc-gen
                                          :pattern :hold-channel
+                         :actions {:down!  (fn [_] (swap! callback-keys conj :on-key-down))
+                               :tick!  (fn [_] (swap! callback-keys conj :on-key-tick))
+                               :up!    (fn [_] (swap! callback-keys conj :on-key-up))
+                               :abort! (fn [_] (swap! callback-keys conj :on-key-abort))}
                                          :cooldown {:mode :manual}
                                          :input-policy {:terminate-on-key-up? false}})
-                  skill-rt/can-handle? (constantly true)
-                  skill-rt/dispatch! (fn [_spec cb-key _evt]
-                                       (swap! callback-keys conj cb-key)
-                                       true)
                   evt/fire-ability-event! (fn [_] nil)]
       (binding [ctx/*context-owner* test-context-owner]
         (is (true? (rt/handle-key-down! ctx-id {:ctx-id ctx-id :skill-id :arc-gen} #(swap! terminated conj %))))

@@ -1,4 +1,4 @@
-﻿(ns cn.li.ac.ability.effects.potion
+(ns cn.li.ac.ability.effects.potion
   (:require [cn.li.mcmod.platform.potion-effects :as potion-effects]))
 
 (defn- apply-potion!

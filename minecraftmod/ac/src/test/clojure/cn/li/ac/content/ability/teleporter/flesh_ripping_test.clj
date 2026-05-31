@@ -2,7 +2,7 @@
   (:require [clojure.test :refer [deftest is]]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
-            [cn.li.ac.ability.server.effect.geom :as geom]
+            [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.content.ability.teleporter.flesh-ripping :as flesh]
             [cn.li.ac.content.ability.teleporter.tp-skill-helper :as helper]
             [cn.li.mcmod.platform.potion-effects :as potion]))
@@ -221,3 +221,4 @@
     (with-redefs [ctx/update-context! update-context!]
       (flesh/flesh-ripping-abort! {:ctx-id "ctx-4"}))
     (is (nil? (:skill-state @ctx*)))))
+

@@ -1,4 +1,4 @@
-﻿(ns cn.li.ac.ability.effects.state
+(ns cn.li.ac.ability.effects.state
   (:require 
             [cn.li.ac.ability.service.state-accessors :as ps-accessors]
 [cn.li.ac.ability.service.context-dispatcher :as ctx]

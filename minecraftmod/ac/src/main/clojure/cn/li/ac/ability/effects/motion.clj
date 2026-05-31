@@ -1,4 +1,4 @@
-﻿(ns cn.li.ac.ability.effects.motion
+(ns cn.li.ac.ability.effects.motion
   (:require [cn.li.mcmod.platform.player-motion :as player-motion]
             [cn.li.mcmod.platform.entity-motion :as entity-motion]
             [cn.li.mcmod.platform.teleportation :as teleportation]))

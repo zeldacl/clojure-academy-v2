@@ -1,14 +1,8 @@
 (ns cn.li.ac.ability.server.effect.motion-test
-  (:require [clojure.test :refer [deftest is use-fixtures]]
-            [cn.li.ac.ability.server.effect.core :as effect]
-            [cn.li.ac.ability.server.effect.motion]
+  (:require [clojure.test :refer [deftest is]]
+            [cn.li.ac.ability.effects.motion :as motion]
             [cn.li.mcmod.platform.player-motion :as player-motion]
             [cn.li.mcmod.platform.entity-motion :as entity-motion]))
-
-(use-fixtures :once
-  (fn [f]
-    (effect/init-default-ops!)
-    (f)))
 
 (defn- recording-player-motion [calls]
   (reify player-motion/IPlayerMotion
@@ -35,18 +29,19 @@
         pm (recording-player-motion calls)
         evt {:player-id "p1"}]
     (binding [player-motion/*player-motion* pm]
-      (is (= evt (effect/run-op! evt [:set-player-velocity {:x 1.0 :y 2.0 :z -0.5}]))))
+      (is (= evt (motion/execute-set-player-velocity! evt {:x 1.0 :y 2.0 :z -0.5}))))
     (is (= [[:vel "p1" 1.0 2.0 -0.5]] @calls))))
 
 (deftest set-player-velocity-noop-when-unbound-test
   (let [evt {:player-id "p2"}]
     (binding [player-motion/*player-motion* nil]
-      (is (= evt (effect/run-op! evt [:set-player-velocity {:x 1.0 :y 0.0 :z 0.0}]))))))
+      (is (= evt (motion/execute-set-player-velocity! evt {:x 1.0 :y 0.0 :z 0.0}))))))
 
 (deftest add-entity-velocity-resolves-target-test
   (let [calls (atom [])
         em (recording-entity-motion calls)
         evt {:world-id "dim1" :tgt "ent-uuid"}]
     (binding [entity-motion/*entity-motion* em]
-      (is (= evt (effect/run-op! evt [:add-entity-velocity {:target :tgt :x 0.1 :y 0.2 :z 0.3}]))))
+      (is (= evt (motion/execute-add-entity-velocity! evt {:target :tgt :x 0.1 :y 0.2 :z 0.3}))))
     (is (= [[:add "dim1" "ent-uuid" 0.1 0.2 0.3]] @calls))))
+

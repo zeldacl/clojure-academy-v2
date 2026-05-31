@@ -14,7 +14,7 @@
   (:require [cn.li.ac.ability.dsl :refer [defskill]]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
-            [cn.li.ac.ability.server.effect.geom :as geom]
+            [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.content.ability.teleporter.tp-skill-helper :as helper]
             [cn.li.mcmod.platform.potion-effects :as potion]
             [cn.li.mcmod.util.log :as log]))
@@ -142,3 +142,4 @@
                    :end   {:topic :flesh-ripping/fx-end   :payload (fn [_] {})}}
   :prerequisites  [{:skill-id :mark-teleport :min-exp 0.5}
                    {:skill-id :penetrate-teleport :min-exp 0.5}])
+

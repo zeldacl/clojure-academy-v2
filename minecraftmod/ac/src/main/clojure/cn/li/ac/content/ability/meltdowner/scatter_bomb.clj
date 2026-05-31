@@ -8,8 +8,8 @@
   On release: each ball fires a beam in random cone direction
   Anti-AFK: at tick 200, apply 6 self-damage
   Overload floor: enforced during hold
-  Cooldown: lerp(30, 15, exp) × ball-count ticks
-  Exp: +0.002 × ball-count
+  Cooldown: lerp(30, 15, exp) 脳 ball-count ticks
+  Exp: +0.002 脳 ball-count
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill]]
@@ -17,7 +17,7 @@
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.service.delayed-projectiles :as delayed-projectiles]
-            [cn.li.ac.ability.server.effect.geom :as geom]
+            [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
@@ -65,7 +65,7 @@
   (skill-effects/enforce-overload-floor! player-id floor-value))
 
 (defn- random-cone-dir
-  "Random direction within ±45° cone of look direction."
+  "Random direction within 卤45掳 cone of look direction."
   [look-vec]
   (let [[spread-min spread-max] (skill-config/tunable-double-list scatter-bomb-skill-id
                                                                   :projectile.cone-spread)
@@ -211,3 +211,4 @@
                    :abort! scatter-bomb-abort!
                    :cost-fail! scatter-bomb-cost-fail!}
   :prerequisites  [{:skill-id :electron-bomb :min-exp 0.8}])
+

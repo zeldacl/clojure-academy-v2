@@ -5,8 +5,8 @@
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
-            [cn.li.ac.ability.server.effect.geom :as geom]
-            [cn.li.ac.ability.server.effect.core :as effect]
+            [cn.li.ac.ability.effects.beam :as beam]
+            [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.raycast :as raycast]))
 
@@ -87,7 +87,7 @@
                                                :beam.radius 2.5
                                                :beam.block-energy 500.0
                                                0.0))
-                  effect/run-op! (fn [_ _] {:beam-result {:performed? true :reflection-hit? false}})
+                  beam/execute-beam! (fn [_ _] {:beam-result {:performed? true :reflection-hit? false}})
                   geom/world-id-of (fn [_] "w")
                   geom/eye-pos (fn [_] {:x 0.0 :y 64.0 :z 0.0})]
       (binding [raycast/*raycast* (raycast-stub {:x 0.0 :y 0.0 :z 1.0}
@@ -167,3 +167,4 @@
                     :target-pos {:x nil :y nil :z nil}}]] @mark-calls*))
       (is (= [["w" "target-1" 20.0 :magic]] @damage-calls*))
       (is (= "ctx-r" (ffirst @fx-calls*))))))
+

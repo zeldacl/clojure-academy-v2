@@ -1,8 +1,9 @@
 (ns cn.li.ac.content.ability.electromaster.thunder-clap-test
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
-            [cn.li.ac.ability.server.effect.core :as effect]
-            [cn.li.ac.ability.server.effect.geom :as geom]
+            [cn.li.ac.ability.effects.damage :as damage-op]
+            [cn.li.ac.ability.effects.geom :as geom]
+            [cn.li.ac.ability.effects.world :as world-op]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.content.ability.electromaster.thunder-clap :as thunder-clap]))
 
@@ -40,8 +41,10 @@
                                                        (swap! cooldown-calls* conj args))
                     skill-effects/add-skill-exp! (fn [& args]
                                                    (swap! exp-calls* conj args))
-                    effect/run-ops! (fn [evt ops]
-                                      (swap! run-ops* conj [evt ops]))]
+                    world-op/execute-spawn-lightning! (fn [_evt _params]
+                                                        (swap! run-ops* conj [:spawn-lightning]))
+                    damage-op/execute-damage-aoe! (fn [_evt params]
+                                                    (swap! run-ops* conj [:damage-aoe params]))]
         (up-fn {:player-id "p1" :ctx-id "ctx-short" :hold-ticks 20 :exp 0.5})
         (is (false? (get-in @ctx* [:skill-state :performed?])))
         (is (= {:x 1.0 :y 2.0 :z 3.0}
@@ -88,23 +91,32 @@
                                                        (swap! cooldown-calls* conj args))
                     skill-effects/add-skill-exp! (fn [& args]
                                                    (swap! exp-calls* conj args))
-                    effect/run-ops! (fn [evt ops]
-                                      (swap! run-ops* conj [evt ops]))]
+                    world-op/execute-spawn-lightning! (fn [evt params]
+                                                        (swap! run-ops* conj [:spawn-lightning evt params]))
+                    damage-op/execute-damage-aoe! (fn [evt params]
+                                                    (swap! run-ops* conj [:damage-aoe evt params]))]
         (up-fn {:player-id "p1" :ctx-id "ctx-hit" :hold-ticks 50 :exp 0.5})
         (is (true? (get-in @ctx* [:skill-state :performed?])))
         (is (= {:x 8.0 :y 64.0 :z 8.0}
                (get-in @ctx* [:skill-state :final-target])))
         (is (true? (settle-perform? {:ctx-id "ctx-hit"})))
-        (is (= [[{:player-id "p1"
-                  :ctx-id "ctx-hit"
-                  :world-id "world-1"
-                  :hit-pos {:x 8.0 :y 64.0 :z 8.0}
-                  :exp 0.5}
-                 [[:spawn-lightning {:at :hit-pos}]
-                  [:damage-aoe {:center :hit-pos
-                                :radius 22.5
-                                :amount 59.400000000000006
-                                :damage-type :lightning}]]]]
+        (is (= [[:spawn-lightning
+           {:player-id "p1"
+            :ctx-id "ctx-hit"
+            :world-id "world-1"
+            :hit-pos {:x 8.0 :y 64.0 :z 8.0}
+            :exp 0.5}
+           {:at :hit-pos}]
+          [:damage-aoe
+           {:player-id "p1"
+            :ctx-id "ctx-hit"
+            :world-id "world-1"
+            :hit-pos {:x 8.0 :y 64.0 :z 8.0}
+            :exp 0.5}
+           {:center :hit-pos
+            :radius 22.5
+            :amount 59.400000000000006
+            :damage-type :lightning}]]
                @run-ops*))
         (is (= [["p1" :thunder-clap 400]] @cooldown-calls*))
         (is (= [["p1" :thunder-clap 0.003]] @exp-calls*))

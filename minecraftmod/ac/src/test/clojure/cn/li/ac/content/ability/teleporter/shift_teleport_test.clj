@@ -1,6 +1,6 @@
 (ns cn.li.ac.content.ability.teleporter.shift-teleport-test
   (:require [clojure.test :refer [deftest is]]
-            [cn.li.ac.ability.server.effect.geom :as geom]
+            [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.content.ability.teleporter.shift-teleport :as shift]
@@ -332,3 +332,4 @@
 
     (is (= 1 @teleport-calls*))
     (is (= 0 @consume-calls*))))
+

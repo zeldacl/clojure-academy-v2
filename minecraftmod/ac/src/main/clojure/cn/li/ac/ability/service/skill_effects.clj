@@ -26,8 +26,7 @@
   [session-id player-id]
   (store/get-player-state* session-id player-id))
 
-(declare update-runtime-player-state-in-session!
-         perform-resource!
+(declare perform-resource!
          perform-resource-in-session!
          add-skill-exp!
          add-skill-exp-in-session!
@@ -37,10 +36,10 @@
          apply-cooldown!
          enforce-overload-floor-in-session!
          enforce-overload-floor!
-         assoc-player-path!
-         assoc-player-path-in-session!
-         update-player-path!
-         update-player-path-in-session!
+         mark-railgun-coin-judged!
+         mark-railgun-coin-judged-in-session!
+         clear-railgun-coin-judged!
+         clear-railgun-coin-judged-in-session!
          gain-exp!
          emit-fx!
          get-player-state
@@ -51,23 +50,6 @@
          skill-exp-in-session!
          current-cp
          current-cp-in-session!)
-
-(defn- update-runtime-player-state!
-  [player-id f]
-  (update-runtime-player-state-in-session! (resolve-session-id)
-                                           player-id
-                                           f))
-
-(defn- update-runtime-player-state-in-session!
-  [session-id player-id f]
-  (command-rt/run-command-in-session!
-   session-id
-   player-id
-   {:command :update-player-path
-    :path []
-    :update-fn f
-    :update-args []})
-  nil)
 
 
 (defn scale-damage
@@ -221,43 +203,34 @@
       true)
     false))
 
-(defn assoc-player-path!
-  "Associate value at arbitrary player-state path and mark dirty." 
-  [player-id path value]
-  (assoc-player-path-in-session! (resolve-session-id)
-                                 player-id
-                                 path
-                                 value))
+(defn mark-railgun-coin-judged!
+  "Record the currently judged railgun coin UUID in runtime state."
+  [player-id coin-uuid]
+  (mark-railgun-coin-judged-in-session! (resolve-session-id)
+                                        player-id
+                                        coin-uuid))
 
-(defn assoc-player-path-in-session!
-  [session-id player-id path value]
+(defn mark-railgun-coin-judged-in-session!
+  [session-id player-id coin-uuid]
   (command-rt/run-command-in-session!
    session-id
    player-id
-   {:command :assoc-player-path
-    :path path
-    :value value})
+   {:command :set-railgun-coin-judged-uuid
+    :coin-uuid coin-uuid})
   true)
 
-(defn update-player-path!
-  "Update value at arbitrary player-state path with f and args, then mark dirty."
-  [player-id path f & args]
-  (apply update-player-path-in-session!
-         (resolve-session-id)
-         player-id
-         path
-         f
-         args))
+(defn clear-railgun-coin-judged!
+  "Clear the one-shot judgement lock for railgun coin QTE."
+  [player-id]
+  (clear-railgun-coin-judged-in-session! (resolve-session-id)
+                                         player-id))
 
-(defn update-player-path-in-session!
-  [session-id player-id path f & args]
+(defn clear-railgun-coin-judged-in-session!
+  [session-id player-id]
   (command-rt/run-command-in-session!
    session-id
    player-id
-   {:command :update-player-path
-    :path path
-    :update-fn f
-    :update-args args})
+   {:command :clear-railgun-coin-judged-uuid})
   true)
 
 (defn gain-exp!

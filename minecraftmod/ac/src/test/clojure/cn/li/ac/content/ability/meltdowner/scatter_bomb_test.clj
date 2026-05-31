@@ -5,7 +5,7 @@
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.service.delayed-projectiles :as delayed-projectiles]
-            [cn.li.ac.ability.server.effect.geom :as geom]
+            [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.raycast :as raycast]))
@@ -208,3 +208,4 @@
       (scatter/scatter-bomb-cost-fail! {:ctx-id "ctx-fail"
                                         :cost-stage :tick}))
     (is (= [["ctx-fail" :scatter-bomb/fx-end {:balls 4}]] @messages*))))
+

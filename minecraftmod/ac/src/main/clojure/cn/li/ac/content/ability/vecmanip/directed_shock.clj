@@ -6,7 +6,7 @@
   Cooldown: lerp(60,20) ticks by exp (hit-only)
   Exp: +0.0035 on hit / +0.001 on miss"
   (:require [cn.li.ac.ability.dsl :refer [defskill]]
-            [cn.li.ac.ability.server.effect.geom :as geom]
+            [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.skill-config :as skill-config]
@@ -153,3 +153,4 @@
                 (terminate-with-end! ctx-id false)))))
    :abort! (fn [{:keys [ctx-id]}]
              (terminate-with-end! ctx-id false))})
+

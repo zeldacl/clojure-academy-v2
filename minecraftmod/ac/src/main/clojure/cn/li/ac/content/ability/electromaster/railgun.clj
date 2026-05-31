@@ -1,5 +1,5 @@
 (ns cn.li.ac.content.ability.electromaster.railgun
-  "Railgun skill ï¿?coin-QTE + iron-item charge mechanic.
+  "Railgun skill é”Ÿ?coin-QTE + iron-item charge mechanic.
 
   Complex skill using the escape-hatch pattern: fn hooks for the custom
   coin-QTE / item-charge logic; :beam op (effect.beam) for the actual shot.
@@ -9,9 +9,8 @@
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
-            [cn.li.ac.ability.server.effect.core :as effect]
-            [cn.li.ac.ability.server.effect.geom :as geom]
-            [cn.li.ac.ability.server.effect.beam]
+            [cn.li.ac.ability.effects.beam :as beam]
+            [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.util.toggle :as toggle]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.item-actions :as item-actions]
@@ -49,7 +48,7 @@
 (defn- reflection-distance [] (cfg-double :reflection.distance))
 (defn- reflection-damage [] (cfg-double :reflection.damage))
 (defn- railgun-exp-gain [hit? reflection-hit?]
-  ;; Original: hitEntity (normal OR reflection hit) ï¿?0.01, miss ï¿?0.005
+  ;; Original: hitEntity (normal OR reflection hit) é”Ÿ?0.01, miss é”Ÿ?0.005
   (if (or hit? reflection-hit?)
     (cfg-double :progression.exp-reflection-hit)
     (cfg-double :progression.exp-hit)))
@@ -83,7 +82,7 @@
   "Register a railgun coin throw state.
   Called from the platform item-action hook when a coin is used in ability mode.
   If the player is currently in item-charge mode, that charge is aborted first
-  (mirrors original informThrowCoin ï¿?onKeyAbort() behavior)."
+  (mirrors original informThrowCoin é”Ÿ?onKeyAbort() behavior)."
   [player-id payload]
   (let [_now-ms (long (or (:timestamp-ms payload) (System/currentTimeMillis)))]
     ;; Abort any in-progress item charge so the coin QTE takes priority.
@@ -93,7 +92,7 @@
         (ctx/update-context! ctx-id assoc :skill-state
                              {:fired false :mode :item-charge-cancelled :charge-ticks 0})))
     ;; New coin throw resets one-shot judgement lock.
-    (skill-effects/update-player-path! player-id [:runtime :railgun] dissoc :coin-judged-uuid)
+    (skill-effects/clear-railgun-coin-judged! player-id)
     true))
 
 (defn- discard-coin-entity!
@@ -129,7 +128,7 @@
 
 (defn- mark-coin-judged! [player-id coin-uuid]
   (when (some? coin-uuid)
-    (skill-effects/assoc-player-path! player-id [:runtime :railgun :coin-judged-uuid] coin-uuid)))
+    (skill-effects/mark-railgun-coin-judged! player-id coin-uuid)))
 
 (defn- read-coin-qte-status [player-id]
   (if-not world-effects/*world-effects*
@@ -150,7 +149,7 @@
                :coin-uuid (:uuid coin))
         (do
           ;; Clear stale lock when all coins are gone.
-          (skill-effects/update-player-path! player-id [:runtime :railgun] dissoc :coin-judged-uuid)
+          (skill-effects/clear-railgun-coin-judged! player-id)
           {:has-window? false :active? false :perform? false :progress 0.0})))))
 
 ;; ---------------------------------------------------------------------------
@@ -225,27 +224,27 @@
     (if-not look-vec
       {:performed? false}
       (let [damage   (cfg-lerp :beam.damage exp)
-            result   (effect/run-op!
-                       {:player-id       player-id
-                        :ctx-id          ctx-id
-                        :world-id        world-id
-                        :eye-pos         eye
-                        :trace-pos       trace-pos
-                        :look-dir        look-vec
-                        :reflect-can-fn  (fn [uuid] (vec-reflection-can-reflect? uuid damage))
-                        :reflect-shot-fn (fn [uuid]
-                                           (vec-reflection-consume-cp! uuid damage)
-                                           (perform-reflection-shot! ctx-id uuid))}
-                       [:beam {:radius          (cfg-double :beam.radius)
-                               :query-radius    (cfg-double :beam.query-radius)
-                               :step            (cfg-double :beam.step)
-                               :max-distance    (cfg-double :beam.max-distance)
-                               :visual-distance (cfg-double :beam.visual-distance)
-                               :damage          damage
-                               :damage-type     :magic
-                               :break-blocks?   true
-                               :block-energy    (cfg-lerp :beam.block-energy exp)
-                               :fx-topic        :railgun/fx-shot}])
+                result   (beam/execute-beam!
+                    {:player-id       player-id
+                     :ctx-id          ctx-id
+                     :world-id        world-id
+                     :eye-pos         eye
+                     :trace-pos       trace-pos
+                     :look-dir        look-vec
+                     :reflect-can-fn  (fn [uuid] (vec-reflection-can-reflect? uuid damage))
+                     :reflect-shot-fn (fn [uuid]
+                      (vec-reflection-consume-cp! uuid damage)
+                      (perform-reflection-shot! ctx-id uuid))}
+                    {:radius          (cfg-double :beam.radius)
+                     :query-radius    (cfg-double :beam.query-radius)
+                     :step            (cfg-double :beam.step)
+                     :max-distance    (cfg-double :beam.max-distance)
+                     :visual-distance (cfg-double :beam.visual-distance)
+                     :damage          damage
+                     :damage-type     :magic
+                     :break-blocks?   true
+                     :block-energy    (cfg-lerp :beam.block-energy exp)
+                     :fx-topic        :railgun/fx-shot})
             beam-result (or (:beam-result result) {:performed? false})]
         (when (and (:performed? beam-result) world-effects/*world-effects*)
           (world-effects/play-sound! world-effects/*world-effects*
@@ -437,4 +436,5 @@
   (item-actions/register-item-entity-spawn! "ac:coin" {:entity-id "entity_coin_throwing" :speed 0.0})
   (item-actions/register-item-entity-spawn! "my_mod:coin" {:entity-id "entity_coin_throwing" :speed 0.0})
   nil)
+
 

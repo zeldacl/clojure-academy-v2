@@ -4,7 +4,7 @@
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.content.ability.fx-helpers :as fx]
             [cn.li.ac.content.ability.vecmanip.blood-retrograde :as br]
-            [cn.li.ac.ability.server.effect.geom :as geom]
+            [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.raycast :as raycast]))
 
@@ -153,3 +153,4 @@
     (is (= ["ctx-2"] @terminate-calls))
     (is (false? (get-in @ctx-state [:skill-state :performed?] false)))
     (is (true? (get-in @ctx-state [:skill-state :ended?])))))
+

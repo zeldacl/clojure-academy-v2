@@ -2,9 +2,8 @@
   "Server-side delayed projectile settlement for MdBall-based skills.
 
   Gameplay logic remains in AC. Forge only provides tick callbacks and entity shells."
-  (:require [cn.li.ac.ability.server.effect.core :as effect]
-            [cn.li.ac.ability.server.effect.geom :as geom]
-            [cn.li.ac.ability.server.effect.beam]
+  (:require [cn.li.ac.ability.effects.geom :as geom]
+            [cn.li.ac.ability.effects.beam :as beam]
             [cn.li.ac.ability.service.context-manager :as ctx-mgr]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
@@ -163,22 +162,22 @@
 (defn- run-scatter-bomb-beam!
   [{:keys [player-id ctx-id world-id eye look-dir damage beam]}]
   (try
-    (let [result (effect/run-op!
-                   {:player-id player-id
-                    :ctx-id ctx-id
-                    :world-id world-id
-                    :eye-pos eye
-                    :look-dir look-dir}
-                   [:beam {:radius (beam-param beam :radius 0.3)
-                           :query-radius (beam-param beam :query-radius 20.0)
-                           :step (beam-param beam :step 0.8)
-                           :max-distance (beam-param beam :max-distance 25.0)
-                           :visual-distance (beam-param beam :visual-distance 23.0)
-                           :damage (double (or damage 0.0))
-                           :damage-type :magic
-                           :break-blocks? false
-                           :block-energy 0.0
-                           :fx-topic nil}])
+    (let [result (beam/execute-beam!
+                  {:player-id player-id
+                   :ctx-id ctx-id
+                   :world-id world-id
+                   :eye-pos eye
+                   :look-dir look-dir}
+                  {:radius (beam-param beam :radius 0.3)
+                   :query-radius (beam-param beam :query-radius 20.0)
+                   :step (beam-param beam :step 0.8)
+                   :max-distance (beam-param beam :max-distance 25.0)
+                   :visual-distance (beam-param beam :visual-distance 23.0)
+                   :damage (double (or damage 0.0))
+                   :damage-type :magic
+                   :break-blocks? false
+                   :block-energy 0.0
+                   :fx-topic nil})
             _ (doseq [target-id (or (get-in result [:beam-result :hit-uuids]) [])]
               (md-damage/mark-target! player-id target-id {:ctx-id ctx-id}))
           visual-distance (double (or (get-in result [:beam-result :visual-distance])
@@ -216,3 +215,4 @@
           (if (seq remaining)
             (swap! (pending-tasks-atom) assoc k remaining)
             (swap! (pending-tasks-atom) dissoc k)))))))
+

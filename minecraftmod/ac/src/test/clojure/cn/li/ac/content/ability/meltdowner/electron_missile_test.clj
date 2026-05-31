@@ -5,7 +5,7 @@
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
-            [cn.li.ac.ability.server.effect.geom :as geom]
+            [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.world-effects :as world-effects]))
@@ -225,3 +225,4 @@
     (is (= @local-fx* @nearby-fx*))
     (is (= {:ticks 80 :active-balls 2 :active? true :overload-floor 200.0}
            (:skill-state @ctx*)))))
+

@@ -20,7 +20,7 @@
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
-            [cn.li.ac.ability.server.effect.geom :as geom]
+            [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.item :as pitem]
             [cn.li.mcmod.platform.raycast :as raycast]
@@ -180,3 +180,4 @@
                     (skill-config/lerp-int arc-gen-skill-id :cooldown.ticks (skill-exp player-id)))
   :actions        {:perform! arc-gen-perform!}
   :prerequisites  [])
+

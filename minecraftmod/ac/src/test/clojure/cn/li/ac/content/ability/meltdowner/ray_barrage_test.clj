@@ -3,8 +3,8 @@
             [cn.li.ac.content.ability.meltdowner.ray-barrage :as rb]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
             [cn.li.ac.ability.skill-config :as skill-config]
-            [cn.li.ac.ability.server.effect.core :as effect]
-            [cn.li.ac.ability.server.effect.geom :as geom]
+            [cn.li.ac.ability.effects.beam :as beam]
+            [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.mcmod.platform.raycast :as raycast]
@@ -59,10 +59,10 @@
                   ctx/ctx-send-to-client! (fn [_ channel _] (swap! fx* conj channel) nil)
                   ctx/ctx-send-to-except-local! (fn [_ channel _] (swap! fx* conj channel) nil)
                   world-effects/find-entities-in-radius (fn [& _] [])
-                  effect/run-op! (fn [_ _]
-                                   (swap! run-calls* inc)
-                                   {:beam-result {:performed? true
-                                                  :hit-uuids ["target-ray"]}})
+                  beam/execute-beam! (fn [_ _]
+                                       (swap! run-calls* inc)
+                                       {:beam-result {:performed? true
+                                                      :hit-uuids ["target-ray"]}})
                   md-damage/mark-target! (fn [player-id target-id fx-context]
                                            (swap! marks* conj [player-id target-id fx-context])
                                            true)
@@ -102,10 +102,10 @@
                   world-effects/find-entities-in-radius (fn [& _]
                                                          [{:uuid "enemy-a" :x 1.0 :y 64.0 :z 5.0 :eye-height 1.6}
                                                           {:uuid "enemy-b" :x -1.0 :y 64.0 :z 5.0 :eye-height 1.6}])
-                  effect/run-op! (fn [_ [_ spec]]
-                                   (swap! run-calls* conj (:damage spec))
-                                   {:beam-result {:performed? true
-                                                  :hit-uuids ["enemy-a"]}})
+                  beam/execute-beam! (fn [_ spec]
+                                       (swap! run-calls* conj (:damage spec))
+                                       {:beam-result {:performed? true
+                                                      :hit-uuids ["enemy-a"]}})
                   skill-effects/add-skill-exp! (fn [& args]
                                                  (swap! exp-calls* conj args)
                                                  nil)
@@ -141,10 +141,10 @@
               ctx/ctx-send-to-client! (fn [_ channel _] (swap! fx* conj channel) nil)
               ctx/ctx-send-to-except-local! (fn [_ channel _] (swap! fx* conj channel) nil)
                   world-effects/find-entities-in-radius (fn [& _] [{:uuid "enemy" :x 0.0 :y 64.0 :z 6.0 :eye-height 1.6}])
-                  effect/run-op! (fn [_ _]
-                                   (swap! run-calls* inc)
-                                   {:beam-result {:performed? true
-                                                  :hit-uuids ["enemy"]}})
+                  beam/execute-beam! (fn [_ _]
+                                       (swap! run-calls* inc)
+                                       {:beam-result {:performed? true
+                                                      :hit-uuids ["enemy"]}})
                   md-damage/mark-target! (fn [& _] true)
                   skill-effects/add-skill-exp! (fn [& args]
                                                  (swap! exp-calls* conj args)
@@ -172,3 +172,4 @@
       (is (= 4 (count (filter #{:ray-barrage/fx-preray} @fx*))))
       (is (= 2 (count (filter #{:ray-barrage/fx-barrage} @fx*))))
     (is (= 2 (count @exp-calls*)))))
+

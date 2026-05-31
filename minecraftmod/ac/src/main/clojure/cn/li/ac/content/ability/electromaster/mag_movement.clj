@@ -15,11 +15,10 @@
             [cn.li.ac.ability.config :as ability-config]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
-            [cn.li.ac.ability.server.effect.core :as effect]
-            [cn.li.ac.ability.server.effect.geom :as geom]
-            [cn.li.ac.ability.server.effect.motion]
-            [cn.li.ac.ability.server.effect.state]
-            [cn.li.ac.ability.server.effect.fx]
+            [cn.li.ac.ability.effects.fx :as fx-op]
+            [cn.li.ac.ability.effects.geom :as geom]
+            [cn.li.ac.ability.effects.motion :as motion-op]
+            [cn.li.ac.ability.effects.state :as state-op]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.player-motion :as player-motion]
@@ -166,9 +165,9 @@
             (skill-effects/add-skill-exp! player-id mag-movement-skill-id
                                           (max (cfg-double :progression.exp-min)
                                                (* (cfg-double :progression.exp-distance-scale) traveled)))))
-        (effect/run-op! evt [:reset-fall-damage nil])
-        (effect/run-op! evt [:fx {:topic :mag-movement/fx-end
-                                  :payload {:mode :end}}])
+        (motion-op/execute-reset-fall-damage! evt nil)
+        (fx-op/execute-fx! evt {:topic :mag-movement/fx-end
+              :payload {:mode :end}})
         (ctx/update-context! ctx-id dissoc :skill-state)
         (ctx/terminate-context! ctx-id nil)))))
 
@@ -191,13 +190,13 @@
                                      :motion-x (double (or (:x velocity-now) 0.0))
                                      :motion-y (double (or (:y velocity-now) 0.0))
                                      :motion-z (double (or (:z velocity-now) 0.0))}))
-        (effect/run-op! evt [:fx {:topic :mag-movement/fx-start
-                                  :payload {:mode :start}}])
-        (effect/run-op! evt [:fx {:topic   :mag-movement/fx-update
-                                  :payload {:mode   :update
-                                            :target {:x (double target-x)
-                                                     :y (double target-y)
-                                                     :z (double target-z)}}}])
+        (fx-op/execute-fx! evt {:topic :mag-movement/fx-start
+              :payload {:mode :start}})
+        (fx-op/execute-fx! evt {:topic   :mag-movement/fx-update
+              :payload {:mode   :update
+                  :target {:x (double target-x)
+                     :y (double target-y)
+                     :z (double target-z)}}})
         (log/debug "MagMovement started" (:target-kind target-state)))
       (do
         (ctx/update-context! ctx-id assoc :skill-state {:has-target false :finalized? false})
@@ -217,7 +216,7 @@
             (let [movement-ticks (inc (int (:movement-ticks updated-state)))]
               (ctx/update-context! ctx-id assoc :skill-state
                                    (assoc updated-state :movement-ticks movement-ticks))
-              (effect/run-op! evt [:overload-floor {:floor (:overload-floor updated-state)}])
+              (state-op/execute-overload-floor! evt {:floor (:overload-floor updated-state)})
               (if-not cost-ok?
                 (finalize-and-terminate! evt {:grant-exp? true})
                 (let [p         (player-pos player-id)
@@ -254,9 +253,9 @@
                   (ctx/update-context! ctx-id assoc-in [:skill-state :motion-x] next-x)
                   (ctx/update-context! ctx-id assoc-in [:skill-state :motion-y] next-y)
                   (ctx/update-context! ctx-id assoc-in [:skill-state :motion-z] next-z)
-                  (effect/run-op! evt [:fx {:topic   :mag-movement/fx-update
-                                            :payload {:mode   :update
-                                                      :target {:x tx :y ty :z tz}}}])
+                  (fx-op/execute-fx! evt {:topic   :mag-movement/fx-update
+                                          :payload {:mode   :update
+                                                    :target {:x tx :y ty :z tz}}})
                   (when (zero? (mod movement-ticks 10))
                     (log/debug "MagMovement: moving for" (/ movement-ticks 20.0) "seconds")))))))))))
 

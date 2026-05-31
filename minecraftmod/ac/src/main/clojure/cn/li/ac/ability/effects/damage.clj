@@ -1,4 +1,4 @@
-﻿(ns cn.li.ac.ability.effects.damage
+(ns cn.li.ac.ability.effects.damage
   (:require [cn.li.ac.ability.util.balance :as bal]
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]))

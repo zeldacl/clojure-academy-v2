@@ -11,7 +11,6 @@
             [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.server.damage.handler :as damage-handler]
             [cn.li.ac.ability.server.damage.runtime :as damage-runtime]
-            [cn.li.ac.ability.server.effect.core :as effect]
             [cn.li.ac.content.ability.server-runtime-lifecycle :as server-runtime-lifecycle]
             [cn.li.ac.ability.item-actions :as item-actions]
             [cn.li.ac.ability.spi-lifecycle :as lifecycle]
@@ -121,7 +120,6 @@
     (try
       (doseq [cat [electromaster meltdowner-category teleporter vecmanip]]
         (category/register-category! (dissoc cat :ac/content-type)))
-      (effect/init-default-ops!)
       (let [skill-namespaces (load-discovered-skill-namespaces!)]
         (register-declared-skills! skill-namespaces)
         (doseq [ns-sym skill-namespaces]
@@ -132,7 +130,6 @@
       (discovery/freeze-provider-discovery!)
       (category/freeze-category-registry!)
       (skill-registry/freeze-skill-registry!)
-      (effect/freeze-effect-op-registry!)
       (item-actions/freeze-item-action-registries!)
       (damage-handler/freeze-attack-check-registries!)
       (damage-runtime/freeze-damage-handler-registry!)

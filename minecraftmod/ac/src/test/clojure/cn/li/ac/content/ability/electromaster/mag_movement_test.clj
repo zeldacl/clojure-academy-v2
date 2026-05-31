@@ -1,8 +1,10 @@
 (ns cn.li.ac.content.ability.electromaster.mag-movement-test
   (:require [clojure.test :refer [deftest is]]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
-            [cn.li.ac.ability.server.effect.core :as effect]
-            [cn.li.ac.ability.server.effect.geom :as geom]
+            [cn.li.ac.ability.effects.fx :as fx-op]
+            [cn.li.ac.ability.effects.geom :as geom]
+            [cn.li.ac.ability.effects.motion :as motion-op]
+            [cn.li.ac.ability.effects.state :as state-op]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.content.ability.electromaster.mag-movement :as mag-movement]
             [cn.li.mcmod.platform.raycast :as raycast]))
@@ -37,10 +39,10 @@
                   ctx/terminate-context! (fn [id _]
                                            (swap! terminated* conj id)
                                            nil)
-                  effect/run-op! (fn [_evt [op params]]
-                                   (when (= :fx op)
-                                     (swap! fx* conj params))
-                                   nil)
+                  fx-op/execute-fx! (fn [_evt params]
+                                      (swap! fx* conj params)
+                                      nil)
+                  motion-op/execute-reset-fall-damage! (fn [_evt _params] nil)
                   skill-effects/add-skill-exp! (fn [player-id skill-id amount]
                                                  (swap! exp* conj [player-id skill-id amount])
                                                  nil)]
@@ -66,10 +68,10 @@
                   ctx/terminate-context! (fn [id _]
                                            (swap! terminated* conj id)
                                            nil)
-                  effect/run-op! (fn [_evt [op params]]
-                                   (when (= :fx op)
-                                     (swap! fx* conj params))
-                                   nil)
+                  fx-op/execute-fx! (fn [_evt params]
+                                      (swap! fx* conj params)
+                                      nil)
+                  motion-op/execute-reset-fall-damage! (fn [_evt _params] nil)
                   skill-effects/add-skill-exp! (fn [& args]
                                                  (swap! exp* conj args)
                                                  nil)]
@@ -114,11 +116,12 @@
                   ctx/terminate-context! (fn [id _]
                                            (swap! terminated* conj id)
                                            nil)
-                  effect/run-op! (fn [_evt [op params]]
-                                   (when (and (= :fx op)
-                                              (= :mag-movement/fx-end (:topic params)))
-                                     (swap! fx* conj params))
-                                   nil)
+                  fx-op/execute-fx! (fn [_evt params]
+                                      (when (= :mag-movement/fx-end (:topic params))
+                                        (swap! fx* conj params))
+                                      nil)
+                  motion-op/execute-reset-fall-damage! (fn [_evt _params] nil)
+                  state-op/execute-overload-floor! (fn [_evt _params] nil)
                   skill-effects/add-skill-exp! (fn [player-id skill-id amount]
                                                  (swap! exp* conj [player-id skill-id amount])
                                                  nil)]
@@ -167,10 +170,11 @@
                   ctx/terminate-context! (fn [id _]
                                            (swap! terminated* conj id)
                                            nil)
-                  effect/run-op! (fn [_evt [op params]]
-                                   (when (= :fx op)
-                                     (swap! fx* conj params))
-                                   nil)
+                  fx-op/execute-fx! (fn [_evt params]
+                                      (swap! fx* conj params)
+                                      nil)
+                  motion-op/execute-reset-fall-damage! (fn [_evt _params] nil)
+                  state-op/execute-overload-floor! (fn [_evt _params] nil)
                   skill-effects/add-skill-exp! (fn [player-id skill-id amount]
                                                  (swap! exp* conj [player-id skill-id amount])
                                                  nil)]
@@ -257,10 +261,10 @@
                   ctx/terminate-context! (fn [id _]
                                            (swap! terminated* conj id)
                                            nil)
-                  effect/run-op! (fn [_evt [op params]]
-                                   (when (= :fx op)
-                                     (swap! fx* conj params))
-                                   nil)
+                  fx-op/execute-fx! (fn [_evt params]
+                                      (swap! fx* conj params)
+                                      nil)
+                  motion-op/execute-reset-fall-damage! (fn [_evt _params] nil)
                   skill-effects/add-skill-exp! (fn [player-id skill-id amount]
                                                  (swap! exp* conj [player-id skill-id amount])
                                                  nil)]
@@ -269,3 +273,4 @@
     (is (= 1 (count @exp*)))
     (is (= 1 (count @fx*)))
     (is (= [ctx-id] @terminated*))))
+

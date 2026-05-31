@@ -5,7 +5,7 @@
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.content.ability.teleporter.threatening-teleport :as tt]
             [cn.li.ac.content.ability.teleporter.tp-skill-helper :as helper]
-            [cn.li.ac.ability.server.effect.geom :as geom]
+            [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.raycast :as raycast]))
 
@@ -200,3 +200,4 @@
 
     (is (empty? @crit-fx-calls*))
     (is (some (fn [[channel _]] (= channel :threatening-tp/fx-perform)) @fx-calls*))))
+

@@ -1,4 +1,4 @@
-﻿(ns cn.li.ac.ability.effects.fx
+(ns cn.li.ac.ability.effects.fx
   (:require [cn.li.ac.ability.service.context-dispatcher :as ctx]))
 
 (defn execute-fx!

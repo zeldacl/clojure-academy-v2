@@ -19,7 +19,7 @@
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
-            [cn.li.ac.ability.server.effect.geom :as geom]
+            [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
@@ -224,3 +224,4 @@
                    :update {:topic :electron-missile/fx-update :payload (fn [_] {})}
                    :end    {:topic :electron-missile/fx-end :payload (fn [_] {})}}
   :prerequisites  [{:skill-id :jet-engine :min-exp 0.3}])
+

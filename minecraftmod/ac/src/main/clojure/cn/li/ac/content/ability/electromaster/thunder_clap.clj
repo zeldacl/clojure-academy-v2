@@ -12,11 +12,9 @@
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.util.balance :as bal]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
-            [cn.li.ac.ability.server.effect.core :as effect]
-            [cn.li.ac.ability.server.effect.geom :as geom]
-            [cn.li.ac.ability.server.effect.damage]
-            [cn.li.ac.ability.server.effect.world]
-            [cn.li.ac.ability.server.effect.state]
+            [cn.li.ac.ability.effects.damage :as damage-op]
+            [cn.li.ac.ability.effects.geom :as geom]
+            [cn.li.ac.ability.effects.world :as world-op]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.mcmod.platform.raycast :as raycast]))
 
@@ -136,14 +134,13 @@
                            radius   (cfg-lerp :combat.aoe-radius exp*)
                            cooldown (max 1 (int (* (double ticks)
                                                     (cfg-lerp :cooldown.ticks-per-hold exp*))))]
-                       (effect/run-ops!
-                        {:player-id player-id :ctx-id ctx-id :world-id world-id
-                         :hit-pos   hit-pos   :exp    exp*}
-                        [[:spawn-lightning {:at :hit-pos}]
-                         [:damage-aoe {:center      :hit-pos
-                                       :radius      radius
-                                       :amount      dmg
-                                       :damage-type :lightning}]])
+                       (let [evt {:player-id player-id :ctx-id ctx-id :world-id world-id
+                                  :hit-pos   hit-pos   :exp    exp*}]
+                         (world-op/execute-spawn-lightning! evt {:at :hit-pos})
+                         (damage-op/execute-damage-aoe! evt {:center      :hit-pos
+                                                              :radius      radius
+                                                              :amount      dmg
+                                                              :damage-type :lightning}))
                        (skill-effects/set-main-cooldown! player-id :thunder-clap cooldown)
                        (skill-effects/add-skill-exp! player-id :thunder-clap
                                                      (cfg-double :progression.exp-use))
@@ -158,3 +155,4 @@
    :abort!     (fn [{:keys [ctx-id]}]
                  (mark-performed! ctx-id false))}
   :prerequisites [{:skill-id :thunder-bolt :min-exp 1.0}])
+

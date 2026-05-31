@@ -2,7 +2,7 @@
   (:require [clojure.test :refer [deftest is]]
             [cn.li.ac.content.ability.electromaster.thunder-bolt :as thunder-bolt]
             [cn.li.ac.ability.skill-config :as skill-config]
-            [cn.li.ac.ability.server.effect.geom :as geom]
+            [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.mcmod.platform.raycast :as raycast]
@@ -214,3 +214,4 @@
                   rand (fn [] 0.0)]
       (thunder-bolt/thunder-bolt-perform! {:player-id "p4" :ctx-id "ctx-4" :exp 0.1})
       (is (empty? @potion*)))))
+
