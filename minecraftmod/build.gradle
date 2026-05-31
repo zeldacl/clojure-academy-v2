@@ -3579,6 +3579,7 @@ tasks.register('verifyCleanupResidueGuards') {
     group = 'verification'
     description = 'Run cleanup-residue guard checks for SSOT regressions.'
     dependsOn cleanupResidueGuardTaskNames
+    dependsOn 'auditAbilityReducerGenericCommands'
 }
 
 tasks.register('auditAbilityArchitectureStateWrites') {
@@ -3709,10 +3710,77 @@ tasks.register('auditAbilityArchitectureSessionResolvers') {
     }
 }
 
+tasks.register('auditAbilityReducerGenericCommands') {
+    group = 'verification'
+    description = 'Report usage of generic reducer command patterns in ac ability main sources.'
+
+    def abilityMainSources = fileTree(project.rootDir) {
+        include 'ac/src/main/clojure/cn/li/ac/ability/**/*.clj'
+        exclude '**/build/**', '**/.gradle/**', '**/bin/**'
+    }
+    def reportFile = layout.buildDirectory.file('reports/ability-architecture/reducer-generic-command-audit.md')
+
+    inputs.files(abilityMainSources)
+        .withPropertyName('abilityReducerGenericCommandAuditSources')
+        .withPathSensitivity(org.gradle.api.tasks.PathSensitivity.RELATIVE)
+    inputs.file(file('build.gradle'))
+        .withPropertyName('abilityReducerGenericCommandAuditImplementation')
+        .withPathSensitivity(org.gradle.api.tasks.PathSensitivity.RELATIVE)
+    outputs.file(reportFile)
+    outputs.cacheIf { true }
+
+    doLast {
+        def genericCommandPatterns = [
+            ~/:transform-ability-data\b/,
+            ~/:transform-resource-data\b/,
+            ~/:transform-cooldown-data\b/,
+            ~/:transform-preset-data\b/,
+            ~/:transform-develop-data\b/,
+            ~/:set-ability-data\b/,
+            ~/:set-resource-data\b/,
+            ~/:set-cooldown-data\b/,
+            ~/:set-develop-data\b/
+        ]
+
+        def findings = []
+        abilityMainSources.files.findAll { it.isFile() }.sort { it.path }.each { File sourceFile ->
+            def rel = project.rootDir.toPath().relativize(sourceFile.toPath()).toString().replace('\\', '/')
+            sourceFile.readLines('UTF-8').eachWithIndex { String line, int idx ->
+                genericCommandPatterns.each { pattern ->
+                    if (pattern.matcher(line).find()) {
+                        findings << [
+                            file: rel,
+                            line: idx + 1,
+                            text: line.trim(),
+                            pattern: pattern.pattern()
+                        ]
+                    }
+                }
+            }
+        }
+
+        def out = new StringBuilder()
+        out << "# Ability Reducer Generic Command Audit\n\n"
+        out << "Generated: ${new Date().format('yyyy-MM-dd HH:mm:ss')}\n\n"
+        out << "Total findings: ${findings.size()}\n\n"
+        out << "| file | line | pattern | code |\n"
+        out << "| --- | ---: | --- | --- |\n"
+        findings.each { finding ->
+            def code = finding.text.replace('|', '\\|')
+            out << "| ${finding.file} | ${finding.line} | ${finding.pattern} | ${code} |\n"
+        }
+
+        def output = reportFile.get().asFile
+        output.parentFile.mkdirs()
+        output.setText(out.toString(), 'UTF-8')
+        logger.lifecycle('[auditAbilityReducerGenericCommands] findings={}, report={}', findings.size(), output)
+    }
+}
+
 tasks.register('auditAbilityArchitectureBaseline') {
     group = 'verification'
     description = 'Run baseline architecture audits for ability refactor implementation.'
-    dependsOn 'auditAbilityArchitectureStateWrites', 'auditAbilityArchitectureSessionResolvers'
+    dependsOn 'auditAbilityArchitectureStateWrites', 'auditAbilityArchitectureSessionResolvers', 'auditAbilityReducerGenericCommands'
 }
 
 tasks.register('verifyAbilityArchitectureStrict') {
