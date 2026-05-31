@@ -22,19 +22,6 @@
             [cn.li.mcmod.hooks.core                      :as runtime-hooks]
             [cn.li.mcmod.util.log                        :as log]))
 
-(defonce ^:private session-id-resolver*
-  (atom (fn [] (runtime-hooks/player-state-session-id))))
-
-(defn install-session-runtime!
-  "Install runtime callback used for implicit session resolution in default arities.
-
-  Keys:
-  - :session-id-resolver (fn [] -> string|nil)"
-  [{:keys [session-id-resolver]}]
-  (when session-id-resolver
-    (reset! session-id-resolver* session-id-resolver))
-  nil)
-
 ;; ============================================================================
 ;; Event handler
 ;; ============================================================================
@@ -57,7 +44,7 @@
 (defn execute-effect!
   "Dispatch and execute a single effect plan."
   ([effect]
-   (execute-effect! ((or @session-id-resolver* (fn [] nil)))
+  (execute-effect! (runtime-hooks/require-player-state-session-id "effect-interpreter")
                     effect))
   ([session-id effect]
    (log/debug "ability-effect.execute"
@@ -78,7 +65,7 @@
   Each effect is executed in order; exceptions in one do not prevent
   subsequent effects from running."
   ([effects]
-    (execute-effects! ((or @session-id-resolver* (fn [] nil)))
+    (execute-effects! (runtime-hooks/require-player-state-session-id "effect-interpreter")
                       effects))
   ([session-id effects]
   (doseq [effect effects]
@@ -101,7 +88,7 @@
 
   Events are fired first (via evt/fire-ability-event!), then effects."
   [{:keys [events effects]}]
-  (let [session-id ((or @session-id-resolver* (fn [] nil)))
+  (let [session-id (runtime-hooks/require-player-state-session-id "effect-interpreter")
         event-effects (mapv (fn [event]
                               {:effect/type :fire-event
                                :event event

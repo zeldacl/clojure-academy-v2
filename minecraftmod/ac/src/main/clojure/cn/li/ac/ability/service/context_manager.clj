@@ -21,23 +21,9 @@
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.util.log :as log]))
 
-(defonce ^:private server-session-id-resolver*
-  (atom (fn [] (runtime-hooks/player-state-server-session-id))))
-
-(defn install-session-runtime!
-  "Install runtime callback used for implicit server-session resolution.
-
-  Keys:
-  - :server-session-id-resolver (fn [] -> string|nil)"
-  [{:keys [server-session-id-resolver]}]
-  (when server-session-id-resolver
-    (reset! server-session-id-resolver* server-session-id-resolver))
-  nil)
-
 (defn- resolve-server-session-id
   [reason]
-  (or ((or @server-session-id-resolver* (fn [] nil)))
-      (runtime-hooks/require-player-state-server-session-id reason)))
+  (runtime-hooks/require-player-state-server-session-id reason))
 
 (defn register-send-fns! [{:keys [to-client to-server]}]
   (transport/register-send-fns! {:to-client to-client :to-server to-server}))

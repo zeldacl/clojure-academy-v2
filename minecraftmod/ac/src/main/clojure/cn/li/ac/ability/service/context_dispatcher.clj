@@ -541,8 +541,10 @@
 		 :to-client (ctx-send-to-client! ctx-id channel payload)
 		 :to-except-local (ctx-send-to-except-local! ctx-id channel payload)
 		 :to-self (ctx-send-to-self! ctx-id channel payload)
-		 ;; keep compatibility: unknown/nil direction falls back to local dispatch
-		 (ctx-send-to-local! ctx-id channel payload))))
+		 (throw (ex-info "Unsupported context message direction"
+						{:ctx-id ctx-id
+						 :direction direction
+						 :allowed [:to-server :to-client :to-except-local :to-self]})))))
 
 (defn dispatch-skill-event!
 	([event]

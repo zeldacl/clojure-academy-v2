@@ -13,20 +13,12 @@
     (ps-fix/with-test-player-state-owner
       (fn []
         (store/reset-store!)
-        (ps-accessors/install-session-runtime!
-          {:session-id-resolver (fn [] (runtime-hooks/player-state-session-id))})
-        (ps-tick/install-session-runtime!
-          {:session-id-resolver (fn [] (runtime-hooks/player-state-session-id))})
         (evt/install-event-subscriber-runtime!
           (evt/create-event-subscriber-runtime))
         (try
           (f)
           (finally
             (store/reset-store!)
-            (ps-accessors/install-session-runtime!
-              {:session-id-resolver (fn [] (runtime-hooks/player-state-session-id))})
-            (ps-tick/install-session-runtime!
-              {:session-id-resolver (fn [] (runtime-hooks/player-state-session-id))})
             (evt/install-event-subscriber-runtime!
               (evt/create-event-subscriber-runtime))))))))
 
@@ -62,17 +54,12 @@
   (store/clear-dirty! (store/get-store) ps-fix/test-session-id "u2")
   (is (false? (:dirty? (store/get-player-state* ps-fix/test-session-id "u2")))))
 
-(deftest update-ability-data-uses-installed-session-resolver-test
+(deftest update-ability-data-uses-bound-owner-session-test
   (store/get-or-create-player-state! :accessor-session "u2")
-  (ps-accessors/install-session-runtime!
-    {:session-id-resolver (fn [] :accessor-session)})
-  (try
+  (binding [runtime-hooks/*player-state-owner* {:session-id :accessor-session}]
     (ps-accessors/update-ability-data! "u2" assoc :category-id :vecmanip)
     (is (= :vecmanip
-           (get-in (store/get-player-state* :accessor-session "u2") [:ability-data :category-id])))
-    (finally
-      (ps-accessors/install-session-runtime!
-        {:session-id-resolver (fn [] (runtime-hooks/player-state-session-id))}))))
+           (get-in (store/get-player-state* :accessor-session "u2") [:ability-data :category-id])))))
 
 (deftest server-tick-player-smoke-test
   (store/get-or-create-player-state! ps-fix/test-session-id "u3")
@@ -80,17 +67,12 @@
     (is (map? r))
     (is (vector? (:events r)))))
 
-(deftest server-tick-player-uses-installed-session-resolver-test
+(deftest server-tick-player-uses-bound-owner-session-test
   (store/get-or-create-player-state! :tick-session "u3")
-  (ps-tick/install-session-runtime!
-    {:session-id-resolver (fn [] :tick-session)})
-  (try
+  (binding [runtime-hooks/*player-state-owner* {:session-id :tick-session}]
     (let [r (ps-tick/server-tick-player! "u3" nil)]
       (is (map? r))
-      (is (vector? (:events r))))
-    (finally
-      (ps-tick/install-session-runtime!
-        {:session-id-resolver (fn [] (runtime-hooks/player-state-session-id))}))))
+      (is (vector? (:events r))))))
 
 (deftest remove-player-state-test
   (store/set-player-state!* ps-fix/test-session-id "u4" (store/fresh-player-state))

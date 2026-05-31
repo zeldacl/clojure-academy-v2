@@ -21,8 +21,6 @@
         (skill-registry/create-skill-registry-runtime))
        (evt/install-event-subscriber-runtime!
         (evt/create-event-subscriber-runtime))
-       (cm/install-session-runtime!
-        {:server-session-id-resolver (fn [] (runtime-hooks/player-state-server-session-id))})
        (cm/register-send-fns! {:to-client nil :to-server nil})
        (try
          (f)
@@ -31,8 +29,6 @@
             (skill-registry/create-skill-registry-runtime))
            (evt/install-event-subscriber-runtime!
             (evt/create-event-subscriber-runtime))
-           (cm/install-session-runtime!
-            {:server-session-id-resolver (fn [] (runtime-hooks/player-state-server-session-id))})
            (cm/register-send-fns! {:to-client nil :to-server nil})))))))
 
 (use-fixtures :each reset-fixture)
@@ -205,7 +201,7 @@
           (System/setProperty grace-key old-grace)
           (System/clearProperty grace-key))))))
 
-(deftest establish-context-uses-installed-server-session-resolver-test
+(deftest establish-context-uses-bound-server-session-test
   (let [out (atom [])
         player-id "p-alt"
         skill-id :arc-gen
@@ -222,30 +218,20 @@
                               player-id
                               {:ability-data ability-data
                                :resource-data resource-data})
-    (cm/install-session-runtime!
-      {:server-session-id-resolver (fn [] alt-session)})
     (cm/register-send-fns! {:to-client (fn [uuid msg-id payload]
                                          (swap! out conj [uuid msg-id payload]))
                             :to-server nil})
-    (try
+    (binding [runtime-hooks/*player-state-owner* {:server-session-id alt-session
+                                                  :player-uuid player-id}]
       (let [res (cm/establish-context! player-id "cid-alt" skill-id)]
         (is (some? res))
         (is (= [alt-session player-id] (:session-id res)))
-        (is (= 1 (count (filter #(= catalog/MSG-CTX-ESTABLISH (second %)) @out)))))
-      (finally
-        (cm/install-session-runtime!
-          {:server-session-id-resolver (fn [] (runtime-hooks/player-state-server-session-id))})))))
+        (is (= 1 (count (filter #(= catalog/MSG-CTX-ESTABLISH (second %)) @out))))))))
 
 (deftest context-manager-session-resolution-still-fail-fast-test
-  (cm/install-session-runtime!
-    {:server-session-id-resolver (fn [] nil)})
-  (try
-    (binding [runtime-hooks/*player-state-owner* nil]
-      (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                            #"requires bound"
-                            (cm/abort-player-contexts! "p-fail"))))
-    (finally
-      (cm/install-session-runtime!
-        {:server-session-id-resolver (fn [] (runtime-hooks/player-state-server-session-id))}))))
+  (binding [runtime-hooks/*player-state-owner* nil]
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                          #"requires bound"
+                          (cm/abort-player-contexts! "p-fail")))))
 
 

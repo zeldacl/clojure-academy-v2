@@ -12,14 +12,10 @@
     (ps-fix/with-test-player-state-owner
       (fn []
         (store/reset-store!)
-        (skill-effects/install-session-runtime!
-          {:session-id-resolver (fn [] (runtime-hooks/player-state-session-id))})
         (try
           (f)
           (finally
-            (store/reset-store!)
-            (skill-effects/install-session-runtime!
-              {:session-id-resolver (fn [] (runtime-hooks/player-state-session-id))})))))))
+            (store/reset-store!)))))))
 
 (deftest scale-damage-default-and-custom-test
   (with-redefs [ability-config/damage-scale (fn [] 2.0)]
@@ -50,26 +46,16 @@
   (is (= {:success? false :events [] :data nil}
          (skill-effects/perform-resource! "missing" 1.0 1.0 false))))
 
-(deftest perform-resource-uses-installed-session-resolver-test
+(deftest perform-resource-uses-bound-owner-session-test
   (store/set-player-state!* :skill-effects-session "p1" (store/fresh-player-state))
-  (skill-effects/install-session-runtime!
-    {:session-id-resolver (fn [] :skill-effects-session)})
-  (try
+  (binding [runtime-hooks/*player-state-owner* {:session-id :skill-effects-session}]
     (is (map? (skill-effects/perform-resource! "p1" 1.0 1.0 false)))
-    (finally
-      (skill-effects/install-session-runtime!
-        {:session-id-resolver (fn [] (runtime-hooks/player-state-session-id))}))))
+    ))
 
 (deftest skill-effects-session-resolution-still-fail-fast-test
-  (skill-effects/install-session-runtime!
-    {:session-id-resolver (fn [] nil)})
-  (try
-    (binding [runtime-hooks/*player-state-owner* nil]
-      (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                            #"requires bound session-id"
-                            (skill-effects/current-cp "p1"))))
-    (finally
-      (skill-effects/install-session-runtime!
-        {:session-id-resolver (fn [] (runtime-hooks/player-state-session-id))}))))
+  (binding [runtime-hooks/*player-state-owner* nil]
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                          #"requires bound session-id"
+                          (skill-effects/current-cp "p1")))))
 
 

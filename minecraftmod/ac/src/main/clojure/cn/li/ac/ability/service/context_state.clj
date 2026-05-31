@@ -8,8 +8,8 @@
   - MSG-SLOT-KEY-ABORT
 
   It keeps input state transitions strict to avoid duplicated lifecycle calls."
-  (:require [cn.li.ac.ability.service.state-accessors :as state-accessors]
-            [cn.li.ac.ability.service.runtime-store :as store]
+  (:require [cn.li.ac.ability.service.runtime-store :as store]
+            [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.model.ability :as adata]
             [cn.li.ac.ability.registry.skill :as skill]
@@ -17,19 +17,6 @@
             [cn.li.ac.ability.registry.event :as evt]
             [cn.li.ac.ability.rules.cooldown-rules :as cd-rules]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
-
-(defonce ^:private session-id-resolver*
-  (atom (fn [] (runtime-hooks/player-state-session-id))))
-
-(defn install-session-runtime!
-  "Install runtime callback used for implicit session resolution in default paths.
-
-  Keys:
-  - :session-id-resolver (fn [] -> string|nil)"
-  [{:keys [session-id-resolver]}]
-  (when session-id-resolver
-    (reset! session-id-resolver* session-id-resolver))
-  nil)
 
 (def INPUT-IDLE :idle)
 (def INPUT-ACTIVE :active)
@@ -43,7 +30,6 @@
       (let [session-id (:session-id owner)]
         (when (and (some? session-id) (not (vector? session-id)))
           session-id))
-      ((or @session-id-resolver* (fn [] nil)))
       (runtime-hooks/require-player-state-session-id "context-state")))
 
 (defn- runtime-player-state
@@ -107,13 +93,12 @@
          ctrl-id (or (:ctrl-id spec) (:skill-id ctx-map))
          cooldown-ticks (max 1 (int (or (:cooldown-ticks spec) 1)))
          session-id (resolved-session-id owner)]
-     (state-accessors/update-cooldown-data-in-session! session-id
-                                                       uuid
-                                                       (fn [cooldown-data]
-                                                         (:data (cd-rules/set-cooldown cooldown-data
-                                                                                       ctrl-id
-                                                                                       cooldown-ticks
-                                                                                       :main)))))))
+     (command-rt/run-command-in-session! session-id
+                                         uuid
+                                         {:command :set-cooldown
+                                          :ctrl-id ctrl-id
+                                          :ticks cooldown-ticks
+                                          :sub-id :main}))))
 
 (defn- in-main-cooldown?
   ([ctx-map]

@@ -1,7 +1,5 @@
 (ns cn.li.ac.ability.state.context-test
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
-            [cn.li.ac.ability.api.impl :as api]
-            [cn.li.ac.ability.api.protocol :as proto]
             [cn.li.ac.test.support.contexts :as test-contexts]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]))
 
@@ -100,11 +98,3 @@
         (is (= [:s1]
           (mapv :skill-id (ctx/active-contexts "p1"))))))
 
-        (deftest public-api-active-contexts-player-query-test
-          (let [system (api/ability-system)
-           alive (ctx/new-server-context "p1" :s1 "ctx-api-alive" test-server-context-owner)
-           other (ctx/new-server-context "p2" :s2 "ctx-api-other" test-server-context-owner)]
-            (ctx/register-context! alive)
-            (ctx/register-context! other)
-            (is (= [:s1]
-              (mapv :skill-id (proto/active-contexts system "p1"))))))

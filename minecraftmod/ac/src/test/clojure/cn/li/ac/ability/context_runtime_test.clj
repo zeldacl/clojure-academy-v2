@@ -23,17 +23,13 @@
          (skill-reg/create-skill-registry-runtime))
        (evt/install-event-subscriber-runtime!
          (evt/create-event-subscriber-runtime))
-       (rt/install-session-runtime!
-         {:session-id-resolver (fn [] (runtime-hooks/player-state-session-id))})
        (try
          (f)
          (finally
            (skill-reg/install-skill-registry-runtime!
              (skill-reg/create-skill-registry-runtime))
            (evt/install-event-subscriber-runtime!
-             (evt/create-event-subscriber-runtime))
-           (rt/install-session-runtime!
-             {:session-id-resolver (fn [] (runtime-hooks/player-state-session-id))})))))))
+             (evt/create-event-subscriber-runtime))))))))
 
 (use-fixtures :each reset-test-state!)
 
@@ -196,7 +192,7 @@
         (is (= [ctx-id] @terminated))
         (is (= ctx/STATUS-TERMINATED (:status (ctx/get-context ctx-id))))))))
 
-(deftest context-state-uses-installed-session-resolver-for-implicit-path-test
+(deftest context-state-uses-bound-owner-session-for-implicit-path-test
   (let [uuid "test-player-implicit-session"
         ctx-id "ctx-implicit-session"
         alt-session :ctx-state-alt]
@@ -211,31 +207,20 @@
                                :preset-data {:active-preset 0 :slots {}}
                                :dirty? false})
     (ctx/register-context! (ctx/new-server-context uuid :arc-gen ctx-id test-context-owner))
-    (rt/install-session-runtime!
-      {:session-id-resolver (fn [] alt-session)})
-    (try
-      (binding [ctx/*context-owner* test-context-owner]
-        (is (false? (rt/handle-key-down! ctx-id {:ctx-id ctx-id :skill-id :arc-gen})))
-        (is (= ctx/STATUS-TERMINATED (:status (ctx/get-context ctx-id)))))
-      (finally
-        (rt/install-session-runtime!
-          {:session-id-resolver (fn [] (runtime-hooks/player-state-session-id))})))))
+    (binding [ctx/*context-owner* test-context-owner
+              runtime-hooks/*player-state-owner* {:server-session-id alt-session}]
+      (is (false? (rt/handle-key-down! ctx-id {:ctx-id ctx-id :skill-id :arc-gen})))
+      (is (= ctx/STATUS-TERMINATED (:status (ctx/get-context ctx-id)))))))
 
 (deftest context-state-session-resolution-still-fail-fast-test
   (let [uuid "test-player-implicit-fail"
         ctx-id "ctx-implicit-fail"]
     (ctx/register-context! (ctx/new-server-context uuid :arc-gen ctx-id test-context-owner))
-    (rt/install-session-runtime!
-      {:session-id-resolver (fn [] nil)})
-    (try
-      (binding [ctx/*context-owner* test-context-owner
-                runtime-hooks/*player-state-owner* nil]
-        (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                              #"requires bound session-id"
-                              (rt/handle-key-down! ctx-id {:ctx-id ctx-id :skill-id :arc-gen}))))
-      (finally
-        (rt/install-session-runtime!
-          {:session-id-resolver (fn [] (runtime-hooks/player-state-session-id))})))))
+    (binding [ctx/*context-owner* test-context-owner
+              runtime-hooks/*player-state-owner* nil]
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                            #"requires bound session-id"
+                            (rt/handle-key-down! ctx-id {:ctx-id ctx-id :skill-id :arc-gen}))))))
 
 
 

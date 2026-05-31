@@ -30,33 +30,32 @@
 
 (deftest execute-reducer-result-translates-events-before-effects-test
   (let [calls (atom [])]
-    (with-redefs [interpreter/execute-effects! (fn [_session-id effects]
-                                                 (swap! calls conj [:effects effects])
-                                                 nil)]
-      (interpreter/execute-reducer-result!
-        {:events [{:event/type :ability/test-a}
-                  {:event/type :ability/test-b}]
-         :effects [{:effect/type :network-send :player-uuid "p1"}]})
-      (is (= [[:effects [{:effect/type :fire-event
-                          :event {:event/type :ability/test-a}
-                          :event-type :ability/test-a
-                          :player-uuid nil
-                          :ctx-id nil
-                          :session-id nil}
-                         {:effect/type :fire-event
-                          :event {:event/type :ability/test-b}
-                          :event-type :ability/test-b
-                          :player-uuid nil
-                          :ctx-id nil
-                          :session-id nil}
-                         {:effect/type :network-send :player-uuid "p1"}]]]
-             @calls)))))
+    (binding [runtime-hooks/*player-state-owner* {:session-id "session-A"}]
+      (with-redefs [interpreter/execute-effects! (fn [_session-id effects]
+                                                   (swap! calls conj [:effects effects])
+                                                   nil)]
+        (interpreter/execute-reducer-result!
+          {:events [{:event/type :ability/test-a}
+                    {:event/type :ability/test-b}]
+           :effects [{:effect/type :network-send :player-uuid "p1"}]})
+        (is (= [[:effects [{:effect/type :fire-event
+                            :event {:event/type :ability/test-a}
+                            :event-type :ability/test-a
+                            :player-uuid nil
+                            :ctx-id nil
+                            :session-id "session-A"}
+                           {:effect/type :fire-event
+                            :event {:event/type :ability/test-b}
+                            :event-type :ability/test-b
+                            :player-uuid nil
+                            :ctx-id nil
+                            :session-id "session-A"}
+                           {:effect/type :network-send :player-uuid "p1"}]]]
+               @calls))))))
 
-(deftest execute-reducer-result-uses-installed-session-resolver-test
+(deftest execute-reducer-result-uses-bound-owner-session-test
   (let [captured-effects (atom nil)]
-    (interpreter/install-session-runtime!
-      {:session-id-resolver (fn [] "effect-session")})
-    (try
+    (binding [runtime-hooks/*player-state-owner* {:session-id "effect-session"}]
       (with-redefs [interpreter/execute-effects! (fn [session-id effects]
                                                    (reset! captured-effects [session-id effects])
                                                    nil)]
@@ -70,7 +69,4 @@
                  :player-uuid "player-a"
                  :ctx-id nil
                  :session-id "effect-session"}]
-               (second @captured-effects))))
-      (finally
-        (interpreter/install-session-runtime!
-          {:session-id-resolver (fn [] (runtime-hooks/player-state-session-id))})))))
+               (second @captured-effects)))))))

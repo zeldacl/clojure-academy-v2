@@ -1,12 +1,7 @@
 (ns cn.li.ac.ability.application.contracts
-  "Lightweight runtime contracts for ability commands/events/effects.
+  "Runtime contracts for ability commands/events/effects.
 
-  These checks are intentionally permissive at the start of migration:
-  - command requires :command keyword
-  - event requires :event/type keyword
-  - effect requires :effect/type keyword
-
-  Use `assert-*` in shell boundaries to fail fast on malformed payloads."
+  Use assert-* at shell boundaries to fail fast on malformed payloads."
   )
 
 (defn command?
@@ -28,10 +23,10 @@
   [value]
   (and (map? value)
        (contains? value :state)
-       (vector? (:events value []))
-       (vector? (:effects value []))
-       (every? event? (:events value []))
-       (every? effect? (:effects value []))))
+  (vector? (:events value))
+  (vector? (:effects value))
+  (every? event? (:events value))
+  (every? effect? (:effects value))))
 
 (defn- describe
   [label value]

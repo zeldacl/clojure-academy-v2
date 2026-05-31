@@ -1,26 +1,12 @@
 (ns cn.li.ac.ability.service.state-accessors
   "Domain-specific read/write accessors for player-state payload sections."
   (:require [cn.li.ac.ability.service.runtime-store :as store]
+            [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
-
-(defonce ^:private session-id-resolver*
-  (atom (fn [] (runtime-hooks/player-state-session-id))))
-
-(defn install-session-runtime!
-  "Install runtime callback used for implicit session resolution in default arities.
-
-  Keys:
-  - :session-id-resolver (fn [] -> string|nil)"
-  [{:keys [session-id-resolver]}]
-  (when session-id-resolver
-    (reset! session-id-resolver* session-id-resolver))
-  nil)
 
 (defn- resolve-session-id
   []
-  (or ((or @session-id-resolver*
-           (fn [] nil)))
-      (runtime-hooks/require-player-state-session-id "state-accessors")))
+  (runtime-hooks/require-player-state-session-id "state-accessors"))
 
 (defn- runtime-player-state
   [uuid-str]
@@ -41,10 +27,14 @@
   Use this when the caller already resolved session ownership and should not
   depend on runtime-hooks dynamic owner state."
   [session-id uuid-str f & args]
-  (store/update-player-state!* session-id
-                               uuid-str
-                               #(apply update % :cooldown-data f args))
-  (store/mark-player-dirty! session-id uuid-str))
+  (command-rt/run-command-in-session!
+   session-id
+   uuid-str
+   {:command :transform-domain-data
+    :domain-key :cooldown-data
+    :transform-fn f
+    :transform-args args})
+  nil)
 
 (defn get-ability-data [uuid-str]
   (:ability-data (runtime-player-state uuid-str)))
@@ -70,10 +60,14 @@
 
 (defn update-ability-data-in-session!
   [session-id uuid-str f & args]
-  (store/update-player-state!* session-id
-                               uuid-str
-                               #(apply update % :ability-data f args))
-  (store/mark-player-dirty! session-id uuid-str))
+  (command-rt/run-command-in-session!
+   session-id
+   uuid-str
+   {:command :transform-domain-data
+    :domain-key :ability-data
+    :transform-fn f
+    :transform-args args})
+  nil)
 
 (defn update-resource-data! [uuid-str f & args]
   (apply update-resource-data-in-session!
@@ -84,10 +78,14 @@
 
 (defn update-resource-data-in-session!
   [session-id uuid-str f & args]
-  (store/update-player-state!* session-id
-                               uuid-str
-                               #(apply update % :resource-data f args))
-  (store/mark-player-dirty! session-id uuid-str))
+  (command-rt/run-command-in-session!
+   session-id
+   uuid-str
+   {:command :transform-domain-data
+    :domain-key :resource-data
+    :transform-fn f
+    :transform-args args})
+  nil)
 
 (defn update-cooldown-data! [uuid-str f & args]
   (apply update-cooldown-data-in-session!
@@ -105,10 +103,14 @@
 
 (defn update-preset-data-in-session!
   [session-id uuid-str f & args]
-  (store/update-player-state!* session-id
-                               uuid-str
-                               #(apply update % :preset-data f args))
-  (store/mark-player-dirty! session-id uuid-str))
+  (command-rt/run-command-in-session!
+   session-id
+   uuid-str
+   {:command :transform-domain-data
+    :domain-key :preset-data
+    :transform-fn f
+    :transform-args args})
+  nil)
 
 (defn update-develop-data! [uuid-str f & args]
   (apply update-develop-data-in-session!
@@ -119,7 +121,11 @@
 
 (defn update-develop-data-in-session!
   [session-id uuid-str f & args]
-  (store/update-player-state!* session-id
-                               uuid-str
-                               #(apply update % :develop-data f args))
-  (store/mark-player-dirty! session-id uuid-str))
+  (command-rt/run-command-in-session!
+   session-id
+   uuid-str
+   {:command :transform-domain-data
+    :domain-key :develop-data
+    :transform-fn f
+    :transform-args args})
+  nil)

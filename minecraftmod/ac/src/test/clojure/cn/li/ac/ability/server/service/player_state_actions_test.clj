@@ -18,8 +18,6 @@
 (defn- reset-lifecycle-subs! [f]
   (ps-fix/with-test-player-state-owner
    (fn []
-     (state-actions/install-session-runtime!
-      {:session-id-resolver (fn [] (runtime-hooks/player-state-session-id))})
      (evt/install-event-subscriber-runtime!
       (evt/create-event-subscriber-runtime))
      (evt/reset-ability-event-subscribers-for-test!)
@@ -27,8 +25,6 @@
      (try
        (f)
        (finally
-         (state-actions/install-session-runtime!
-          {:session-id-resolver (fn [] (runtime-hooks/player-state-session-id))})
          (evt/install-event-subscriber-runtime!
           (evt/create-event-subscriber-runtime))
          (evt/reset-ability-event-subscribers-for-test!)
@@ -140,28 +136,17 @@
         (is (= true (:cheats-enabled? state)))
         (is (= (rdata/new-resource-data) (:resource-data state)))))))
 
-(deftest state-actions-uses-installed-session-resolver-test
+(deftest state-actions-uses-bound-owner-session-test
   (store/set-player-state!* :actions-session "p2"
                         (-> (store/fresh-player-state)
                             (assoc-in [:ability-data :level] 1)))
-  (state-actions/install-session-runtime!
-    {:session-id-resolver (fn [] :actions-session)})
-  (try
+  (binding [runtime-hooks/*player-state-owner* {:server-session-id :actions-session}]
     (state-actions/set-level! "p2" 4)
-    (is (= 4 (get-in (store/get-player-state* :actions-session "p2") [:ability-data :level])))
-    (finally
-      (state-actions/install-session-runtime!
-        {:session-id-resolver (fn [] (runtime-hooks/player-state-session-id))}))))
+    (is (= 4 (get-in (store/get-player-state* :actions-session "p2") [:ability-data :level])))))
 
 (deftest state-actions-session-resolution-still-fail-fast-test
-  (state-actions/install-session-runtime!
-    {:session-id-resolver (fn [] nil)})
-  (try
-    (binding [runtime-hooks/*player-state-owner* nil]
-      (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                            #"requires bound session-id"
-                            (state-actions/recover-all! "p3"))))
-    (finally
-      (state-actions/install-session-runtime!
-        {:session-id-resolver (fn [] (runtime-hooks/player-state-session-id))}))))
+  (binding [runtime-hooks/*player-state-owner* nil]
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                          #"requires bound session-id"
+                          (state-actions/recover-all! "p3")))))
 

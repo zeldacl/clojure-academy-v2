@@ -528,6 +528,80 @@
             :player-uuid player-uuid
             :domain :preset-data}]))))
 
+  (defn- cmd-transform-domain-data
+    "Apply a transform fn to one top-level domain and return updated state.
+
+    Command fields:
+      :domain-key keyword
+      :transform-fn fn
+      :transform-args seq (optional)"
+    [player-state {:keys [domain-key transform-fn transform-args]}]
+    (if (and (keyword? domain-key) (fn? transform-fn))
+      (let [args (if (sequential? transform-args) transform-args [])
+            next-state (update player-state domain-key #(apply transform-fn % args))]
+        (ok next-state))
+      (rejected player-state :invalid-domain-transform-command)))
+
+  (defn- cmd-assoc-player-path
+    "Assoc value at a player-state path.
+
+    Command fields:
+      :path vector
+      :value any"
+    [player-state {:keys [path value]}]
+    (if (vector? path)
+      (ok (assoc-in player-state path value))
+      (rejected player-state :invalid-player-path)))
+
+  (defn- cmd-update-player-path
+    "Apply update-in at a player-state path.
+
+    Command fields:
+      :path vector
+      :update-fn fn
+      :update-args seq (optional)"
+    [player-state {:keys [path update-fn update-args]}]
+    (if (and (vector? path) (fn? update-fn))
+      (let [args (if (sequential? update-args) update-args [])]
+        (ok (apply update-in player-state path update-fn args)))
+      (rejected player-state :invalid-player-path-update)))
+
+  (defn- cmd-enforce-overload-floor
+    "Ensure resource overload is not below floor.
+
+    Command fields:
+      :floor-value number"
+    [player-state {:keys [floor-value]}]
+    (let [floor (double (or floor-value 0.0))
+          current (double (or (get-in player-state [:resource-data :cur-overload]) 0.0))]
+      (if (< current floor)
+        (ok (-> player-state
+                (assoc-in [:resource-data :cur-overload] floor)
+                (assoc-in [:resource-data :overload-fine] true)))
+        (ok player-state))))
+
+  (defn- cmd-set-domain-data
+    "Replace one top-level domain map.
+
+    Command fields:
+      :domain-key keyword
+      :domain-data any"
+    [player-state {:keys [domain-key domain-data]}]
+    (if (keyword? domain-key)
+      (ok (assoc player-state domain-key domain-data))
+      (rejected player-state :invalid-domain-key)))
+
+  (defn- cmd-replace-player-state
+    "Replace the entire player-state map.
+
+    Command fields:
+      :player-state map"
+    [current-state {:keys [player-state new-state]}]
+    (let [target (or new-state player-state)]
+      (if (map? target)
+        (ok target)
+        (rejected current-state :invalid-player-state))))
+
 ;; ============================================================================
 ;; Public Dispatcher
 ;; ============================================================================
@@ -565,6 +639,12 @@
 (defmethod apply-command :reset-abilities [ps cmd] (cmd-reset-abilities ps cmd))
 (defmethod apply-command :change-category [ps cmd] (cmd-change-category ps cmd))
 (defmethod apply-command :change-category-with-level [ps cmd] (cmd-change-category-with-level ps cmd))
+(defmethod apply-command :transform-domain-data [ps cmd] (cmd-transform-domain-data ps cmd))
+(defmethod apply-command :assoc-player-path [ps cmd] (cmd-assoc-player-path ps cmd))
+(defmethod apply-command :update-player-path [ps cmd] (cmd-update-player-path ps cmd))
+(defmethod apply-command :enforce-overload-floor [ps cmd] (cmd-enforce-overload-floor ps cmd))
+(defmethod apply-command :set-domain-data [ps cmd] (cmd-set-domain-data ps cmd))
+(defmethod apply-command :replace-player-state [ps cmd] (cmd-replace-player-state ps cmd))
 
 (defmethod apply-command :default
   [player-state command]

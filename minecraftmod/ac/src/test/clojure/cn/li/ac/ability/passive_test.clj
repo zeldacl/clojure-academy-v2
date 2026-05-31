@@ -12,8 +12,6 @@
   (ps-fix/with-test-player-state-owner
     (fn []
       (store/reset-store!)
-      (passive/install-session-runtime!
-        {:session-id-resolver (fn [] (runtime-hooks/player-state-session-id))})
       (evt/install-event-subscriber-runtime!
         (evt/create-event-subscriber-runtime))
       (evt/reset-ability-event-subscribers-for-test!)
@@ -22,8 +20,6 @@
         (f)
         (finally
           (store/reset-store!)
-          (passive/install-session-runtime!
-            {:session-id-resolver (fn [] (runtime-hooks/player-state-session-id))})
           (evt/install-event-subscriber-runtime!
             (evt/create-event-subscriber-runtime))
           (evt/reset-ability-event-subscribers-for-test!)
@@ -97,29 +93,19 @@
         (is (= #{:iso-a}
                (passive/passive-handler-registry-snapshot)))))))
 
-(deftest learned-skill-uses-installed-session-resolver-test
+(deftest learned-skill-uses-bound-owner-session-test
   (store/set-player-state!* :passive-session
                             "u3"
                             (assoc (store/fresh-player-state)
                                    :ability-data (ad/learn-skill (ad/new-ability-data) :passive-skill)))
-  (passive/install-session-runtime!
-    {:session-id-resolver (fn [] :passive-session)})
-  (try
+  (binding [runtime-hooks/*player-state-owner* {:session-id :passive-session}]
     (is (true? (passive/learned-skill? "u3" :passive-skill)))
-    (finally
-      (passive/install-session-runtime!
-        {:session-id-resolver (fn [] (runtime-hooks/player-state-session-id))}))))
+    ))
 
 (deftest passive-session-resolution-still-fail-fast-test
-  (passive/install-session-runtime!
-    {:session-id-resolver (fn [] nil)})
-  (try
-    (binding [runtime-hooks/*player-state-owner* nil]
-      (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                            #"requires bound session-id"
-                            (passive/learned-skill? "u3" :passive-skill))))
-    (finally
-      (passive/install-session-runtime!
-        {:session-id-resolver (fn [] (runtime-hooks/player-state-session-id))}))))
+  (binding [runtime-hooks/*player-state-owner* nil]
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                          #"requires bound session-id"
+                          (passive/learned-skill? "u3" :passive-skill)))))
 
 

@@ -13,26 +13,6 @@
             [cn.li.ac.ability.service.reducer :as reducer]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
-(defonce ^:private session-id-resolver*
-  (atom (fn [] (runtime-hooks/player-state-session-id))))
-
-(defonce ^:private owner-resolver*
-  (atom (fn [] (runtime-hooks/current-player-state-owner))))
-
-(defn install-session-runtime!
-  "Install runtime callbacks used for implicit session/owner resolution.
-
-  This is a migration bridge toward explicit dependency wiring.
-  Keys:
-  - :session-id-resolver (fn [] -> string|nil)
-  - :owner-resolver      (fn [] -> owner-map|nil)"
-  [{:keys [session-id-resolver owner-resolver]}]
-  (when session-id-resolver
-    (reset! session-id-resolver* session-id-resolver))
-  (when owner-resolver
-    (reset! owner-resolver* owner-resolver))
-  nil)
-
 (def ^:private default-command-trace-ttl-ms 60000)
 (def ^:private default-max-command-traces 2048)
 
@@ -105,10 +85,10 @@
 (defn- resolve-session-id
   [session-id]
   (or session-id
-      ((or @session-id-resolver* (fn [] nil)))
+      (runtime-hooks/player-state-session-id)
       (throw (ex-info "Command runtime requires explicit/bound session-id"
                       {:provided-session-id session-id
-                       :player-state-owner ((or @owner-resolver* (fn [] nil)))}))))
+                       :player-state-owner (runtime-hooks/current-player-state-owner)}))))
 
 (defn- run-command*
   [session-id uuid command {:keys [mark-dirty?]

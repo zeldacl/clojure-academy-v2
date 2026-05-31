@@ -13,23 +13,9 @@
             [cn.li.ac.ability.fx :as fx]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
-(defonce ^:private session-id-resolver*
-  (atom (fn [] (runtime-hooks/player-state-session-id))))
-
-(defn install-session-runtime!
-  "Install runtime callback used for implicit session resolution in default arities.
-
-  Keys:
-  - :session-id-resolver (fn [] -> string|nil)"
-  [{:keys [session-id-resolver]}]
-  (when session-id-resolver
-    (reset! session-id-resolver* session-id-resolver))
-  nil)
-
 (defn- resolve-session-id
   []
-  (or ((or @session-id-resolver* (fn [] nil)))
-      (runtime-hooks/require-player-state-session-id "skill-effects")))
+  (runtime-hooks/require-player-state-session-id "skill-effects"))
 
 (defn- runtime-player-state
   [player-id]
@@ -41,7 +27,6 @@
   (store/get-player-state* session-id player-id))
 
 (declare update-runtime-player-state-in-session!
-         mark-runtime-dirty-in-session!
          perform-resource!
          perform-resource-in-session!
          add-skill-exp!
@@ -75,16 +60,14 @@
 
 (defn- update-runtime-player-state-in-session!
   [session-id player-id f]
-  (store/update-player-state!* session-id player-id f))
-
-(defn- mark-runtime-dirty!
-  [player-id]
-  (mark-runtime-dirty-in-session! (resolve-session-id)
-                                  player-id))
-
-(defn- mark-runtime-dirty-in-session!
-  [session-id player-id]
-  (store/mark-player-dirty! session-id player-id))
+  (command-rt/run-command-in-session!
+   session-id
+   player-id
+   {:command :update-player-path
+    :path []
+    :update-fn f
+    :update-args []})
+  nil)
 
 
 (defn scale-damage
@@ -230,18 +213,11 @@
   [session-id player-id floor-value]
   (if (runtime-player-state-in-session session-id player-id)
     (do
-      (update-runtime-player-state-in-session!
-        session-id
-        player-id
-        (fn [player-state]
-          (update player-state :resource-data
-                  (fn [res-data]
-                    (if (< (double (or (:cur-overload res-data) 0.0)) (double floor-value))
-                      (-> res-data
-                          (assoc :cur-overload (double floor-value))
-                          (assoc :overload-fine true))
-                      res-data)))))
-      (mark-runtime-dirty-in-session! session-id player-id)
+      (command-rt/run-command-in-session!
+       session-id
+       player-id
+       {:command :enforce-overload-floor
+        :floor-value floor-value})
       true)
     false))
 
@@ -255,8 +231,12 @@
 
 (defn assoc-player-path-in-session!
   [session-id player-id path value]
-  (update-runtime-player-state-in-session! session-id player-id #(assoc-in % path value))
-  (mark-runtime-dirty-in-session! session-id player-id)
+  (command-rt/run-command-in-session!
+   session-id
+   player-id
+   {:command :assoc-player-path
+    :path path
+    :value value})
   true)
 
 (defn update-player-path!
@@ -271,8 +251,13 @@
 
 (defn update-player-path-in-session!
   [session-id player-id path f & args]
-  (update-runtime-player-state-in-session! session-id player-id #(apply update-in % path f args))
-  (mark-runtime-dirty-in-session! session-id player-id)
+  (command-rt/run-command-in-session!
+   session-id
+   player-id
+   {:command :update-player-path
+    :path path
+    :update-fn f
+    :update-args args})
   true)
 
 (defn gain-exp!

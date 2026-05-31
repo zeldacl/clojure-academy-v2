@@ -3581,6 +3581,233 @@ tasks.register('verifyCleanupResidueGuards') {
     dependsOn cleanupResidueGuardTaskNames
 }
 
+tasks.register('auditAbilityArchitectureStateWrites') {
+    group = 'verification'
+    description = 'Report direct runtime-store write calls in ac ability main sources.'
+
+    def abilityMainSources = fileTree(project.rootDir) {
+        include 'ac/src/main/clojure/cn/li/ac/ability/**/*.clj'
+        exclude '**/build/**', '**/.gradle/**', '**/bin/**'
+    }
+    def reportFile = layout.buildDirectory.file('reports/ability-architecture/state-write-audit.md')
+
+    inputs.files(abilityMainSources)
+        .withPropertyName('abilityStateWriteAuditSources')
+        .withPathSensitivity(org.gradle.api.tasks.PathSensitivity.RELATIVE)
+    inputs.file(file('build.gradle'))
+        .withPropertyName('abilityStateWriteAuditImplementation')
+        .withPathSensitivity(org.gradle.api.tasks.PathSensitivity.RELATIVE)
+    outputs.file(reportFile)
+    outputs.cacheIf { true }
+
+    doLast {
+        def writePatterns = [
+            ~/store\/set-player-state!\*/,
+            ~/store\/update-player-state!\*/,
+            ~/store\/mark-player-dirty!/,
+            ~/store\/remove-player-state!\*/,
+            ~/store\/remove-session!/,
+            ~/store\/clear-dirty!/
+        ]
+
+        def findings = []
+        abilityMainSources.files.findAll { it.isFile() }.sort { it.path }.each { File sourceFile ->
+            def rel = project.rootDir.toPath().relativize(sourceFile.toPath()).toString().replace('\\', '/')
+            sourceFile.readLines('UTF-8').eachWithIndex { String line, int idx ->
+                writePatterns.each { pattern ->
+                    if (pattern.matcher(line).find()) {
+                        findings << [
+                            file: rel,
+                            line: idx + 1,
+                            text: line.trim(),
+                            pattern: pattern.pattern()
+                        ]
+                    }
+                }
+            }
+        }
+
+        def out = new StringBuilder()
+        out << "# Ability Direct Store Write Audit\n\n"
+        out << "Generated: ${new Date().format('yyyy-MM-dd HH:mm:ss')}\n\n"
+        out << "Total findings: ${findings.size()}\n\n"
+        out << "| file | line | pattern | code |\n"
+        out << "| --- | ---: | --- | --- |\n"
+        findings.each { finding ->
+            def code = finding.text.replace('|', '\\|')
+            out << "| ${finding.file} | ${finding.line} | ${finding.pattern} | ${code} |\n"
+        }
+
+        def output = reportFile.get().asFile
+        output.parentFile.mkdirs()
+        output.setText(out.toString(), 'UTF-8')
+        logger.lifecycle('[auditAbilityArchitectureStateWrites] findings={}, report={}', findings.size(), output)
+    }
+}
+
+tasks.register('auditAbilityArchitectureSessionResolvers') {
+    group = 'verification'
+    description = 'Report implicit session/owner resolver patterns in ac ability main sources.'
+
+    def abilityMainSources = fileTree(project.rootDir) {
+        include 'ac/src/main/clojure/cn/li/ac/ability/**/*.clj'
+        exclude '**/build/**', '**/.gradle/**', '**/bin/**'
+    }
+    def reportFile = layout.buildDirectory.file('reports/ability-architecture/session-resolver-audit.md')
+
+    inputs.files(abilityMainSources)
+        .withPropertyName('abilitySessionResolverAuditSources')
+        .withPathSensitivity(org.gradle.api.tasks.PathSensitivity.RELATIVE)
+    inputs.file(file('build.gradle'))
+        .withPropertyName('abilitySessionResolverAuditImplementation')
+        .withPathSensitivity(org.gradle.api.tasks.PathSensitivity.RELATIVE)
+    outputs.file(reportFile)
+    outputs.cacheIf { true }
+
+    doLast {
+        def resolverPatterns = [
+            ~/session-id-resolver\*/,
+            ~/server-session-id-resolver\*/,
+            ~/owner-resolver\*/,
+            ~/install-session-runtime!/,
+            ~/runtime-hooks\/require-player-state-session-id/,
+            ~/runtime-hooks\/require-player-state-server-session-id/
+        ]
+
+        def findings = []
+        abilityMainSources.files.findAll { it.isFile() }.sort { it.path }.each { File sourceFile ->
+            def rel = project.rootDir.toPath().relativize(sourceFile.toPath()).toString().replace('\\', '/')
+            sourceFile.readLines('UTF-8').eachWithIndex { String line, int idx ->
+                resolverPatterns.each { pattern ->
+                    if (pattern.matcher(line).find()) {
+                        findings << [
+                            file: rel,
+                            line: idx + 1,
+                            text: line.trim(),
+                            pattern: pattern.pattern()
+                        ]
+                    }
+                }
+            }
+        }
+
+        def out = new StringBuilder()
+        out << "# Ability Implicit Session Resolver Audit\n\n"
+        out << "Generated: ${new Date().format('yyyy-MM-dd HH:mm:ss')}\n\n"
+        out << "Total findings: ${findings.size()}\n\n"
+        out << "| file | line | pattern | code |\n"
+        out << "| --- | ---: | --- | --- |\n"
+        findings.each { finding ->
+            def code = finding.text.replace('|', '\\|')
+            out << "| ${finding.file} | ${finding.line} | ${finding.pattern} | ${code} |\n"
+        }
+
+        def output = reportFile.get().asFile
+        output.parentFile.mkdirs()
+        output.setText(out.toString(), 'UTF-8')
+        logger.lifecycle('[auditAbilityArchitectureSessionResolvers] findings={}, report={}', findings.size(), output)
+    }
+}
+
+tasks.register('auditAbilityArchitectureBaseline') {
+    group = 'verification'
+    description = 'Run baseline architecture audits for ability refactor implementation.'
+    dependsOn 'auditAbilityArchitectureStateWrites', 'auditAbilityArchitectureSessionResolvers'
+}
+
+tasks.register('verifyAbilityArchitectureStrict') {
+    group = 'verification'
+    description = 'Fail build when ability architecture reintroduces resolver globals or service-layer direct store writes outside command_runtime.'
+
+    def abilityMainSources = fileTree(project.rootDir) {
+        include 'ac/src/main/clojure/cn/li/ac/ability/**/*.clj'
+        exclude '**/build/**', '**/.gradle/**', '**/bin/**'
+    }
+    def serviceSources = fileTree(project.rootDir) {
+        include 'ac/src/main/clojure/cn/li/ac/ability/service/**/*.clj'
+        exclude '**/build/**', '**/.gradle/**', '**/bin/**'
+    }
+    def markerFile = layout.buildDirectory.file('verification/ability-architecture/strict-guard.passed.txt')
+
+    inputs.files(abilityMainSources, serviceSources)
+        .withPropertyName('abilityArchitectureStrictSources')
+        .withPathSensitivity(org.gradle.api.tasks.PathSensitivity.RELATIVE)
+    inputs.file(file('build.gradle'))
+        .withPropertyName('abilityArchitectureStrictImplementation')
+        .withPathSensitivity(org.gradle.api.tasks.PathSensitivity.RELATIVE)
+    outputs.file(markerFile)
+    outputs.cacheIf { true }
+
+    doLast {
+        def resolverGlobalPatterns = [
+            ~/session-id-resolver\*/,
+            ~/server-session-id-resolver\*/,
+            ~/owner-resolver\*/,
+            ~/install-session-runtime!/
+        ]
+        def storeWritePatterns = [
+            ~/store\/set-player-state!\*/,
+            ~/store\/update-player-state!\*/,
+            ~/store\/mark-player-dirty!/,
+            ~/store\/remove-player-state!\*/,
+            ~/store\/remove-session!/, 
+            ~/store\/clear-dirty!/
+        ]
+        def allowedServiceWriteFiles = [
+            'ac/src/main/clojure/cn/li/ac/ability/service/command_runtime.clj'
+        ] as Set
+
+        def violations = []
+
+        abilityMainSources.files.findAll { it.isFile() }.sort { it.path }.each { File sourceFile ->
+            def rel = project.rootDir.toPath().relativize(sourceFile.toPath()).toString().replace('\\', '/')
+            sourceFile.readLines('UTF-8').eachWithIndex { String line, int idx ->
+                resolverGlobalPatterns.each { pattern ->
+                    if (pattern.matcher(line).find()) {
+                        violations << [
+                            type: 'resolver-global',
+                            file: rel,
+                            line: idx + 1,
+                            pattern: pattern.pattern(),
+                            text: line.trim()
+                        ]
+                    }
+                }
+            }
+        }
+
+        serviceSources.files.findAll { it.isFile() }.sort { it.path }.each { File sourceFile ->
+            def rel = project.rootDir.toPath().relativize(sourceFile.toPath()).toString().replace('\\', '/')
+            sourceFile.readLines('UTF-8').eachWithIndex { String line, int idx ->
+                storeWritePatterns.each { pattern ->
+                    if (pattern.matcher(line).find() && !allowedServiceWriteFiles.contains(rel)) {
+                        violations << [
+                            type: 'service-direct-write',
+                            file: rel,
+                            line: idx + 1,
+                            pattern: pattern.pattern(),
+                            text: line.trim()
+                        ]
+                    }
+                }
+            }
+        }
+
+        if (!violations.isEmpty()) {
+            logger.error('Ability architecture strict guard violations found ({}):', violations.size())
+            violations.each { v ->
+                logger.error('  [{}] {}:{} [{}] -> {}', v.type, v.file, v.line, v.pattern, v.text)
+            }
+            throw new GradleException('verifyAbilityArchitectureStrict failed. Resolve violations above.')
+        }
+
+        def out = markerFile.get().asFile
+        out.parentFile.mkdirs()
+        out.setText("passed ${new Date().format('yyyy-MM-dd HH:mm:ss')}${System.lineSeparator()}", 'UTF-8')
+        logger.lifecycle('[verifyAbilityArchitectureStrict] passed.')
+    }
+}
+
 def scanLogForFatalPatterns = { File logFile, List<String> fatalPatterns, List<List<String>> markerGroups = [] ->
     def matchedFatalPatterns = [] as LinkedHashSet<String>
     def markerHits = markerGroups.collect { false }
