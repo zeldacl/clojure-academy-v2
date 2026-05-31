@@ -12,7 +12,7 @@
             [cn.li.ac.ability.client.input-sampling :as sampling]
             [cn.li.ac.ability.client.input-state-machine :as sm]
             [cn.li.ac.ability.client.input-command-builder :as cmd-builder]
-            [cn.li.ac.ability.client.input-processor :as processor]            [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.client.input-processor :as processor]
             [cn.li.ac.ability.model.preset :as preset-data]
             [cn.li.ac.ability.registry.skill-query :as skill]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
@@ -382,9 +382,9 @@
 
 (defn- player-contexts
   [player-uuid]
-  (if-let [owner (client-context-query-owner player-uuid)]
-    (ctx/get-all-contexts-for-player owner player-uuid)
-    (ctx/get-all-contexts-for-player player-uuid)))
+  (read-model/get-player-contexts-for-player (str player-uuid)
+                                             (current-client-session-id)
+                                             :keybinds))
 
 (defn on-skill-key-event
   "Handle skill key state change. Uses delegate system with pre-checks."

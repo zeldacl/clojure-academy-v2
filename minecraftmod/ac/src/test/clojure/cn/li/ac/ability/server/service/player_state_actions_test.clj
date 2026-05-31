@@ -1,7 +1,8 @@
 (ns cn.li.ac.ability.server.service.player-state-actions-test
   (:require 
             [cn.li.ac.ability.service.runtime-store :as store]
-[clojure.test :refer [deftest is use-fixtures]]
+            [cn.li.ac.ability.service.command-runtime :as command-rt]
+            [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.adapters.server-hooks :as server-hooks]
             [cn.li.ac.ability.model.ability :as adata]
             [cn.li.ac.ability.model.cooldown :as cdata]
@@ -11,7 +12,6 @@
             [cn.li.ac.ability.registry.event :as evt]
             [cn.li.ac.ability.registry.skill-query :as skill-query]
             [cn.li.ac.ability.service.context-manager :as ctx-mgr]
-            [cn.li.ac.ability.service.state-actions :as state-actions]
             [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
@@ -50,7 +50,8 @@
                                          (swap! recalc-calls conj [:calc event-type base-value extra])
                                          base-value)]
       (server-hooks/register-lifecycle-subscriptions!)
-      (state-actions/set-level! "p1" 3)
+      (command-rt/run-command-in-session! ps-fix/test-session-id "p1"
+                  {:command :set-level :level 3})
       (is (= 3 (get-in (store/get-player-state* ps-fix/test-session-id "p1") [:ability-data :level])))
       (is (= [evt/CALC-MAX-CP evt/CALC-MAX-OVERLOAD]
              (->> @recalc-calls
@@ -78,7 +79,8 @@
                                                    :until-recover 9
                                                    :until-overload-recover 11
                                                    :interferences #{:jam}})))
-  (state-actions/recover-all! "p1")
+  (command-rt/run-command-in-session! ps-fix/test-session-id "p1"
+                                      {:command :recover-all})
   (is (= {:cur-cp 42.0
           :max-cp 42.0
           :cur-overload 0.0
@@ -104,7 +106,8 @@
                                                  :railgun [:electromaster :railgun]
                                                  :arc-gen [:electromaster :arc-gen]
                                                  nil))]
-    (state-actions/unlearn-skill! "p1" :railgun))
+    (command-rt/run-command-in-session! ps-fix/test-session-id "p1"
+                                        {:command :unlearn-skill :skill-id :railgun}))
   (let [state (store/get-player-state* ps-fix/test-session-id "p1")]
     (is (= #{:arc-gen} (get-in state [:ability-data :learned-skills])))
     (is (= {:arc-gen 0.2} (get-in state [:ability-data :skill-exps])))
@@ -126,7 +129,8 @@
                                                    (swap! aborted conj uuid)
                                                    nil)]
       (server-hooks/register-lifecycle-subscriptions!)
-      (state-actions/reset-abilities! "p1")
+      (command-rt/run-command-in-session! ps-fix/test-session-id "p1"
+                  {:command :reset-abilities})
       (let [state (store/get-player-state* ps-fix/test-session-id "p1")]
         (is (= ["p1"] @aborted))
         (is (= (adata/new-ability-data) (:ability-data state)))
@@ -141,12 +145,14 @@
                         (-> (store/fresh-player-state)
                             (assoc-in [:ability-data :level] 1)))
   (binding [runtime-hooks/*player-state-owner* {:server-session-id :actions-session}]
-    (state-actions/set-level! "p2" 4)
+    (command-rt/run-command-in-session! nil "p2"
+                                        {:command :set-level :level 4})
     (is (= 4 (get-in (store/get-player-state* :actions-session "p2") [:ability-data :level])))))
 
 (deftest state-actions-session-resolution-still-fail-fast-test
   (binding [runtime-hooks/*player-state-owner* nil]
     (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                          #"requires bound session-id"
-                          (state-actions/recover-all! "p3")))))
+                          #"session-id"
+                          (command-rt/run-command-in-session! nil "p3"
+                                                              {:command :recover-all})))))
 

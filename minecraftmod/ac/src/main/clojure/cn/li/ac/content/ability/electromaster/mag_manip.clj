@@ -9,8 +9,10 @@
             [cn.li.ac.ability.dsl :refer [defskill]]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.item :as pitem]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
@@ -47,6 +49,44 @@
 
 (defn- skill-exp [player-id]
   (skill-effects/skill-exp player-id mag-manip-skill-id))
+
+(defn- safe-context-data
+  [ctx-id]
+  (try
+    (ctx/get-context ctx-id)
+    (catch Exception _ nil)))
+
+(defn- command-runtime-ready?
+  [{:keys [session-id player-uuid]}]
+  (and (runtime-hooks/current-player-state-owner)
+       session-id
+       player-uuid))
+
+(defn- set-skill-state-root!
+  [ctx-id state-map]
+  (let [ctx-data (or (safe-context-data ctx-id) {})]
+    (if (command-runtime-ready? ctx-data)
+      (let [result (command-rt/run-command-in-session! (:session-id ctx-data)
+                                                       (:player-uuid ctx-data)
+                                                       {:command :context-assoc-skill-state
+                                                        :ctx-id ctx-id
+                                                        :k []
+                                                        :v state-map})]
+        (when (= :context-not-found (:rejected-reason result))
+          (ctx/update-context! ctx-id assoc :skill-state state-map)))
+      (ctx/update-context! ctx-id assoc :skill-state state-map))))
+
+(defn- clear-skill-state!
+  [ctx-id]
+  (let [ctx-data (or (safe-context-data ctx-id) {})]
+    (if (command-runtime-ready? ctx-data)
+      (let [result (command-rt/run-command-in-session! (:session-id ctx-data)
+                                                       (:player-uuid ctx-data)
+                                                       {:command :context-clear-skill-state
+                                                        :ctx-id ctx-id})]
+        (when (= :context-not-found (:rejected-reason result))
+          (ctx/update-context! ctx-id dissoc :skill-state)))
+      (ctx/update-context! ctx-id dissoc :skill-state))))
 
 (defn- metal-block-id? [block-id exp]
   (let [id (some-> block-id str/lower-case)]
@@ -172,12 +212,12 @@
 ;; if neither found store :no-target mode.
 (defn- start-holding! [ctx-id player-id held-block]
   (let [focus (hold-focus player-id)]
-    (ctx/update-context! ctx-id assoc :skill-state
-                         {:fired false
-                          :mode :holding
-                          :hold-ticks 0
-                          :held-block held-block
-                          :focus focus})
+    (set-skill-state-root! ctx-id
+                           {:fired false
+                            :mode :holding
+                            :hold-ticks 0
+                            :held-block held-block
+                            :focus focus})
     (ctx/ctx-send-to-client! ctx-id :mag-manip/fx-hold
                              {:mode :hold-start
                               :focus focus
@@ -197,9 +237,9 @@
                                             :from-world? false
                                             :from-hand? true
                                             :world-id world-id})
-          (ctx/update-context! ctx-id assoc :skill-state
-                               {:fired false
-                                :mode :capture-failed})))
+          (set-skill-state-root! ctx-id
+                                 {:fired false
+                                  :mode :capture-failed})))
       (if-let [{:keys [world-id x y z block-id]} (pick-up-target-block player-id exp)]
         (let [can-break? (block-manip/can-break-block? block-manip/*block-manipulation* player-id world-id x y z)
               broken? (and can-break?
@@ -213,12 +253,12 @@
                                               :source-z z})
             (do
               (log/debug "MagManip capture failed" {:world-id world-id :x x :y y :z z :block-id block-id})
-              (ctx/update-context! ctx-id assoc :skill-state
-                                   {:fired false
-                                    :mode :capture-failed}))))
-        (ctx/update-context! ctx-id assoc :skill-state
-                             {:fired false
-                              :mode :no-target})))))
+              (set-skill-state-root! ctx-id
+                                     {:fired false
+                                      :mode :capture-failed}))))
+        (set-skill-state-root! ctx-id
+                               {:fired false
+                                :mode :no-target})))))
 
 ;; Original s_tick: update hold position, send FX every 2 ticks.
 (defn- on-tick [{:keys [player-id ctx-id]}]
@@ -227,8 +267,8 @@
       (when (= :holding (:mode ss))
         (let [ticks (inc (int (or (:hold-ticks ss) 0)))
               focus (hold-focus player-id)]
-          (ctx/update-context! ctx-id assoc-in [:skill-state :hold-ticks] ticks)
-          (ctx/update-context! ctx-id assoc-in [:skill-state :focus] focus)
+          (set-skill-state-root! ctx-id
+                                 (assoc ss :hold-ticks ticks :focus focus))
           (when (zero? (mod ticks 2))
             (ctx/ctx-send-to-client! ctx-id :mag-manip/fx-hold
                                      {:mode :hold-loop
@@ -243,8 +283,8 @@
           held-block (get ss :held-block)
           exp (skill-exp player-id)]
       (if-not (and (= :holding (:mode ss)) held-block)
-        (ctx/update-context! ctx-id assoc :skill-state
-                             (assoc ss :fired false :mode :idle))
+        (set-skill-state-root! ctx-id
+                               (assoc ss :fired false :mode :idle))
         (let [focus (or (:focus ss) (hold-focus player-id))
               pos (skill-effects/player-path player-id :position {:x 0.0 :y 0.0 :z 0.0})
               too-far? (>= (geom/vdist-sq pos focus) (max-hold-distance-sq))]
@@ -253,15 +293,15 @@
             (do
               (release-or-rollback! player held-block)
               (ctx/ctx-send-to-client! ctx-id :mag-manip/fx-end {:mode :end :reason :too-far})
-              (ctx/update-context! ctx-id assoc :skill-state
-                                   (assoc ss :fired false :mode :too-far)))
+              (set-skill-state-root! ctx-id
+                                     (assoc ss :fired false :mode :too-far)))
 
             (not cost-ok?)
             (do
               (release-or-rollback! player held-block)
               (ctx/ctx-send-to-client! ctx-id :mag-manip/fx-end {:mode :end :reason :no-resource})
-              (ctx/update-context! ctx-id assoc :skill-state
-                                   (assoc ss :fired false :mode :no-resource)))
+              (set-skill-state-root! ctx-id
+                                     (assoc ss :fired false :mode :no-resource)))
 
             :else
             (let [world-id (geom/world-id-of player-id)
@@ -320,17 +360,17 @@
                                                                        exp))
               (skill-effects/add-skill-exp! player-id mag-manip-skill-id
                                             (cfg-double :progression.exp-throw))
-              (ctx/update-context! ctx-id assoc :skill-state
-                                   {:fired true
-                                    :mode :thrown
-                                    :held-block nil}))))))))
+              (set-skill-state-root! ctx-id
+                                     {:fired true
+                                      :mode :thrown
+                                      :held-block nil}))))))))
 
 (defn- on-abort [{:keys [ctx-id player]}]
   (when-let [ctx-data (ctx/get-context ctx-id)]
     (when-let [held (get-in ctx-data [:skill-state :held-block])]
       (release-or-rollback! player held)
       (ctx/ctx-send-to-client! ctx-id :mag-manip/fx-end {:mode :end :reason :abort}))
-    (ctx/update-context! ctx-id dissoc :skill-state)))
+    (clear-skill-state! ctx-id)))
 
 ;; --- Skill definition ---
 

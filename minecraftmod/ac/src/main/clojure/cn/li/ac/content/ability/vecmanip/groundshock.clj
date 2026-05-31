@@ -19,8 +19,10 @@
             [cn.li.ac.content.ability.fx-helpers :as fx]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.platform.entity-motion :as entity-motion]
             [cn.li.mcmod.platform.player-motion :as player-motion]
             [cn.li.mcmod.platform.block-manipulation :as block-manip]
@@ -120,6 +122,44 @@
 (defn- apply-cooldown! [player-id exp]
   (skill-effects/set-main-cooldown! player-id :groundshock (cooldown-ticks exp)))
 
+(defn- safe-context-data
+  [ctx-id]
+  (try
+    (ctx/get-context ctx-id)
+    (catch Exception _ nil)))
+
+(defn- command-runtime-ready?
+  [{:keys [session-id player-uuid]}]
+  (and (runtime-hooks/current-player-state-owner)
+       session-id
+       player-uuid))
+
+(defn- set-skill-state-root!
+  [ctx-id state-map]
+  (let [ctx-data (or (safe-context-data ctx-id) {})]
+    (if (command-runtime-ready? ctx-data)
+      (let [result (command-rt/run-command-in-session! (:session-id ctx-data)
+                                                       (:player-uuid ctx-data)
+                                                       {:command :context-assoc-skill-state
+                                                        :ctx-id ctx-id
+                                                        :k []
+                                                        :v state-map})]
+        (when (= :context-not-found (:rejected-reason result))
+          (ctx/update-context! ctx-id assoc :skill-state state-map)))
+      (ctx/update-context! ctx-id assoc :skill-state state-map))))
+
+(defn- clear-skill-state!
+  [ctx-id]
+  (let [ctx-data (or (safe-context-data ctx-id) {})]
+    (if (command-runtime-ready? ctx-data)
+      (let [result (command-rt/run-command-in-session! (:session-id ctx-data)
+                                                       (:player-uuid ctx-data)
+                                                       {:command :context-clear-skill-state
+                                                        :ctx-id ctx-id})]
+        (when (= :context-not-found (:rejected-reason result))
+          (ctx/update-context! ctx-id dissoc :skill-state)))
+      (ctx/update-context! ctx-id dissoc :skill-state))))
+
 (defn- get-player-position
   "Get player position from teleportation protocol."
   [player-id]
@@ -177,9 +217,9 @@
   "Initialize charge state."
   [{:keys [ctx-id]}]
   (try
-    (ctx/update-context! ctx-id assoc :skill-state
-                         {:charge-ticks 0
-                          :performed? false})
+    (set-skill-state-root! ctx-id
+                           {:charge-ticks 0
+                            :performed? false})
     (fx/send-start! ctx-id :groundshock/fx-start)
     (log/debug "Groundshock: Charge started")
     (catch Exception e
@@ -193,7 +233,7 @@
       (let [skill-state (:skill-state ctx-data)
             charge-ticks (long (or (:charge-ticks skill-state) 0))
             next-charge (inc charge-ticks)]
-        (ctx/update-context! ctx-id assoc-in [:skill-state :charge-ticks] next-charge)
+        (set-skill-state-root! ctx-id (assoc skill-state :charge-ticks next-charge))
         (fx/send-update! ctx-id :groundshock/fx-update
              {:charge-ticks (long (max 0 next-charge))})))
     (catch Exception e
@@ -371,7 +411,7 @@
                   (break-mastery-ring! player-id world-id pos exp broken-blocks*)
                   (apply-cooldown! player-id exp)
                   (add-exp! player-id (cfg-double :progression.exp-use))
-                  (ctx/update-context! ctx-id assoc-in [:skill-state :performed?] true)
+                  (set-skill-state-root! ctx-id (assoc skill-state :performed? true))
                   (fx/send-perform! ctx-id :groundshock/fx-perform
                                    {:affected-blocks (:affected-blocks result)
                                     :broken-blocks (finalize-broken-blocks @broken-blocks*)})
@@ -395,7 +435,7 @@
   [{:keys [ctx-id]}]
   (try
     (fx/send-end! ctx-id :groundshock/fx-end {:performed? false})
-    (ctx/update-context! ctx-id dissoc :skill-state)
+    (clear-skill-state! ctx-id)
     (log/debug "Groundshock aborted")
     (catch Exception e
       (log/warn "Groundshock key-abort failed:" (ex-message e)))))

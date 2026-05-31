@@ -13,9 +13,11 @@
   (:require [cn.li.ac.ability.dsl :refer [defskill]]
             [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.content.ability.teleporter.tp-skill-helper :as helper]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.util.log :as log]))
@@ -103,6 +105,44 @@
        (helper/cfg-probability threatening-teleport-skill-id :interaction.drop-prob.hit)
        (helper/cfg-probability threatening-teleport-skill-id :interaction.drop-prob.miss))))
 
+(defn- safe-context-data
+  [ctx-id]
+  (try
+    (ctx/get-context ctx-id)
+    (catch Exception _ nil)))
+
+(defn- command-runtime-ready?
+  [{:keys [session-id player-uuid]}]
+  (and (runtime-hooks/current-player-state-owner)
+       session-id
+       player-uuid))
+
+(defn- set-skill-state-root!
+  [ctx-id state-map]
+  (let [ctx-data (or (safe-context-data ctx-id) {})]
+    (if (command-runtime-ready? ctx-data)
+      (let [result (command-rt/run-command-in-session! (:session-id ctx-data)
+                                                       (:player-uuid ctx-data)
+                                                       {:command :context-assoc-skill-state
+                                                        :ctx-id ctx-id
+                                                        :k []
+                                                        :v state-map})]
+        (when (= :context-not-found (:rejected-reason result))
+          (ctx/update-context! ctx-id assoc :skill-state state-map)))
+      (ctx/update-context! ctx-id assoc :skill-state state-map))))
+
+(defn- clear-skill-state!
+  [ctx-id]
+  (let [ctx-data (or (safe-context-data ctx-id) {})]
+    (if (command-runtime-ready? ctx-data)
+      (let [result (command-rt/run-command-in-session! (:session-id ctx-data)
+                                                       (:player-uuid ctx-data)
+                                                       {:command :context-clear-skill-state
+                                                        :ctx-id ctx-id})]
+        (when (= :context-not-found (:rejected-reason result))
+          (ctx/update-context! ctx-id dissoc :skill-state)))
+      (ctx/update-context! ctx-id dissoc :skill-state))))
+
 ;; ---------------------------------------------------------------------------
 ;; Actions
 ;; ---------------------------------------------------------------------------
@@ -110,15 +150,15 @@
 (defn threatening-tp-down!
   [{:keys [ctx-id cost-ok?]}]
   (when cost-ok?
-    (ctx/update-context! ctx-id assoc :skill-state {:hold-ticks 0 :trace nil})))
+    (set-skill-state-root! ctx-id {:hold-ticks 0 :trace nil})))
 
 (defn threatening-tp-tick!
   [{:keys [player-id ctx-id hold-ticks]}]
   (let [exp (helper/skill-exp player-id threatening-teleport-skill-id)
         range (helper/cfg-lerp threatening-teleport-skill-id :targeting.range exp)
         trace (trace-result player-id range)]
-    (ctx/update-context! ctx-id assoc :skill-state {:hold-ticks (long hold-ticks)
-                                                    :trace trace})
+    (set-skill-state-root! ctx-id {:hold-ticks (long hold-ticks)
+                     :trace trace})
     (when trace
       (ctx/ctx-send-to-client! ctx-id :threatening-tp/fx-update
                                {:start-x (:start-x trace)
@@ -177,7 +217,7 @@
 
 (defn threatening-tp-abort!
   [{:keys [ctx-id]}]
-  (ctx/update-context! ctx-id dissoc :skill-state))
+  (clear-skill-state! ctx-id))
 
 ;; ---------------------------------------------------------------------------
 ;; Skill registration

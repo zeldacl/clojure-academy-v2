@@ -9,7 +9,7 @@
     or hover when no direction (float up 0.078/tick, or 0.1 near ground)
   - Speed: (if exp<0.45 0.7 1.2) * lerp(2,3,exp)
   - Acceleration: 0.16 per tick toward target velocity
-  - Low exp (<15%): tries to break 40 random soft blocks (hardness 0-0.3) in range�?0 each tick
+  - Low exp (<15%): tries to break 40 random soft blocks (hardness 0-0.3) in range�?0 each tick
   - Max exp (=1.0): on transition to flight, knockback nearby entities (range 3, strength 2.0)
   - On terminate: set cooldown lerp(30,10,exp) ticks
 
@@ -25,7 +25,9 @@
             [cn.li.ac.content.ability.fx-helpers :as fx]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.platform.player-motion :as player-motion]
             [cn.li.mcmod.platform.entity-motion :as entity-motion]
             [cn.li.mcmod.platform.block-manipulation :as block-manip]
@@ -86,6 +88,49 @@
 
 (defn- add-exp! [player-id]
   (skill-effects/add-skill-exp! player-id storm-wing-skill-id (cfg-double :progression.exp-tick)))
+
+(defn- safe-context-data
+  [ctx-id]
+  (try
+    (ctx/get-context ctx-id)
+    (catch Exception _ nil)))
+
+(defn- command-runtime-ready?
+  [{:keys [session-id player-uuid]}]
+  (and (runtime-hooks/current-player-state-owner)
+       session-id
+       player-uuid))
+
+(defn- set-skill-state-root!
+  [ctx-id state-map]
+  (let [ctx-data (or (safe-context-data ctx-id) {})]
+    (if (command-runtime-ready? ctx-data)
+      (let [result (command-rt/run-command-in-session! (:session-id ctx-data)
+                                                       (:player-uuid ctx-data)
+                                                       {:command :context-assoc-skill-state
+                                                        :ctx-id ctx-id
+                                                        :k []
+                                                        :v state-map})]
+        (when (= :context-not-found (:rejected-reason result))
+          (ctx/update-context! ctx-id assoc :skill-state state-map)))
+      (ctx/update-context! ctx-id assoc :skill-state state-map))))
+
+(defn- clear-skill-state!
+  [ctx-id]
+  (let [ctx-data (or (safe-context-data ctx-id) {})]
+    (if (command-runtime-ready? ctx-data)
+      (let [result (command-rt/run-command-in-session! (:session-id ctx-data)
+                                                       (:player-uuid ctx-data)
+                                                       {:command :context-clear-skill-state
+                                                        :ctx-id ctx-id})]
+        (when (= :context-not-found (:rejected-reason result))
+          (ctx/update-context! ctx-id dissoc :skill-state)))
+      (ctx/update-context! ctx-id dissoc :skill-state))))
+
+(defn- update-skill-state-root!
+  [ctx-id f]
+  (let [current (or (:skill-state (or (safe-context-data ctx-id) {})) {})]
+    (set-skill-state-root! ctx-id (f current))))
 
 (defn- break-soft-blocks! [player-id world-id px py pz]
   (when block-manip/*block-manipulation*
@@ -171,15 +216,15 @@
   (try
     (let [exp (skill-exp player-id)
           charge-needed (cfg-lerp-int :charge.time exp)]
-      (ctx/update-context! ctx-id assoc :skill-state
-                           {:phase :charging
-                            :charge-ticks 0
-                            :charge-ticks-needed charge-needed
-                            :vx 0.0 :vy 0.0 :vz 0.0})
+      (set-skill-state-root! ctx-id
+                             {:phase :charging
+                              :charge-ticks 0
+                              :charge-ticks-needed charge-needed
+                              :vx 0.0 :vy 0.0 :vz 0.0})
       (fx/send-start! ctx-id :storm-wing/fx-start {:charge-ticks (long charge-needed)}))
     (catch Exception e
       (log/error "StormWing key-down failed:" e)
-      (ctx/update-context! ctx-id dissoc :skill-state))))
+      (clear-skill-state! ctx-id))))
 
 (defn storm-wing-on-key-tick
   [{:keys [player-id ctx-id cost-ok?]}]
@@ -194,14 +239,14 @@
               (let [ct     (long (:charge-ticks skill-state 0))
                     needed (long (:charge-ticks-needed skill-state 70))
                     new-ct (inc ct)]
-                (ctx/update-context! ctx-id assoc-in [:skill-state :charge-ticks] new-ct)
+                (update-skill-state-root! ctx-id #(assoc % :charge-ticks new-ct))
                 (fx/send-update! ctx-id :storm-wing/fx-update
                                 {:phase :charging
                                  :charge-ticks (long new-ct)
                                  :charge-ratio (min 1.0 (/ (double new-ct) (double needed)))})
                 (when (>= new-ct needed)
                   ;; Transition to flying
-                  (ctx/update-context! ctx-id assoc-in [:skill-state :phase] :flying)
+                  (update-skill-state-root! ctx-id #(assoc % :phase :flying))
                   ;; Max-exp: initial entity knockback
                   (when (>= exp 1.0)
                     (when-let [pos (get-player-pos player-id)]
@@ -268,8 +313,7 @@
                           (player-motion/set-on-ground! player-motion/*player-motion* player-id false))
 
                         ;; Save velocity in state
-                        (ctx/update-context! ctx-id update :skill-state
-                                             assoc :vx new-vx :vy new-vy :vz new-vz)
+                        (update-skill-state-root! ctx-id #(assoc % :vx new-vx :vy new-vy :vz new-vz))
 
                         ;; Grant exp
                         (if-let [exp-result (try (add-exp! player-id) (catch Exception _ nil))]
@@ -286,20 +330,20 @@
                       (log/warn "StormWing: Player position unavailable, terminating")
                       (apply-cooldown! player-id exp)
                       (fx/send-end! ctx-id :storm-wing/fx-end)
-                      (ctx/update-context! ctx-id assoc-in [:skill-state :phase] :terminated))))
+                      (update-skill-state-root! ctx-id #(assoc % :phase :terminated))))
 
                 ;; Insufficient resources: terminate
                 (do
                   (apply-cooldown! player-id exp)
                   (fx/send-end! ctx-id :storm-wing/fx-end)
-                  (ctx/update-context! ctx-id assoc-in [:skill-state :phase] :terminated))))))))
+                  (update-skill-state-root! ctx-id #(assoc % :phase :terminated))))))))))
     (catch Exception e
       (log/error "StormWing key-tick failed:" e)
       ;; 主动终止技能状态，防止无限飞行
       (when-let [exp (try (skill-exp player-id) (catch Exception _ 0.0))]
         (apply-cooldown! player-id exp))
       (fx/send-end! ctx-id :storm-wing/fx-end)
-      (ctx/update-context! ctx-id assoc-in [:skill-state :phase] :terminated))))
+      (update-skill-state-root! ctx-id #(assoc % :phase :terminated)))))
 
 (defn storm-wing-on-key-up
   [{:keys [player-id ctx-id]}]
@@ -307,10 +351,10 @@
     (let [exp (skill-exp player-id)]
       (apply-cooldown! player-id exp)
       (fx/send-end! ctx-id :storm-wing/fx-end)
-      (ctx/update-context! ctx-id dissoc :skill-state))
+      (clear-skill-state! ctx-id))
     (catch Exception e
       (log/error "StormWing key-up failed:" e)
-      (ctx/update-context! ctx-id dissoc :skill-state))))
+      (clear-skill-state! ctx-id))))
 
 (defn storm-wing-on-key-abort
   [{:keys [player-id ctx-id]}]
@@ -318,17 +362,17 @@
     (let [exp (skill-exp player-id)]
       (apply-cooldown! player-id exp)
       (fx/send-end! ctx-id :storm-wing/fx-end)
-      (ctx/update-context! ctx-id dissoc :skill-state))
+      (clear-skill-state! ctx-id))
     (catch Exception e
       (log/error "StormWing key-abort failed:" e)
-      (ctx/update-context! ctx-id dissoc :skill-state))))
+      (clear-skill-state! ctx-id))))
 
 (defn storm-wing-on-move-dir
   "Called when client sends updated movement direction via context channel.
   payload: {:x dx :y dy :z dz} world-space unit vector, or nil for no movement."
   [{:keys [ctx-id payload]}]
   (let [validated-dir (validate-move-direction payload)]
-    (ctx/update-context! ctx-id assoc-in [:skill-state :move-dir] validated-dir)))
+    (update-skill-state-root! ctx-id #(assoc % :move-dir validated-dir))))
 
 (defskill storm-wing
   :id :storm-wing

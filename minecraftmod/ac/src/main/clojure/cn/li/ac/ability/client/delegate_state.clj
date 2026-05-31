@@ -1,11 +1,10 @@
 (ns cn.li.ac.ability.client.delegate-state
-  "DelegateState â€?visual state for each skill slot derived from active context.
+  "DelegateState ï¿½?visual state for each skill slot derived from active context.
 
   States:
-    :idle    â€?no active context for this slot (alpha=0.7, no glow)
-    :charge  â€?context is in charge phase (alpha=1.0, golden glow #FFAD37, sine)
-    :active  â€?context is alive and active (alpha=1.0, blue glow #46B3FF, sine)"
-  (:require [cn.li.ac.ability.service.context-dispatcher :as ctx]))
+    :idle    ï¿½?no active context for this slot (alpha=0.7, no glow)
+    :charge  ï¿½?context is in charge phase (alpha=1.0, golden glow #FFAD37, sine)
+    :active  ï¿½?context is alive and active (alpha=1.0, blue glow #46B3FF, sine)")
 
 (def ^:private state-visual-params
   {:idle   {:alpha 0.7  :glow-color nil                    :sin-effect? false}

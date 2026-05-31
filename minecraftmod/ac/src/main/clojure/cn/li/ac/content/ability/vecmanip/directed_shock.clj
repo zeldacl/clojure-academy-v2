@@ -9,8 +9,10 @@
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.content.ability.fx-helpers :as fx]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.entity-motion :as entity-motion]
             [cn.li.mcmod.platform.raycast :as raycast]
@@ -41,11 +43,50 @@
                                  (cfg-double :targeting.raycast-distance)
                                  true)))
 
+(defn- safe-context-data
+  [ctx-id]
+  (try
+    (ctx/get-context ctx-id)
+    (catch Exception _ nil)))
+
+(defn- command-runtime-ready?
+  [{:keys [session-id player-uuid]}]
+  (and (runtime-hooks/current-player-state-owner)
+       session-id
+       player-uuid))
+
+(defn- set-skill-state-root!
+  [ctx-id state-map]
+  (let [ctx-data (or (safe-context-data ctx-id) {})]
+    (if (command-runtime-ready? ctx-data)
+      (let [result (command-rt/run-command-in-session! (:session-id ctx-data)
+                                                       (:player-uuid ctx-data)
+                                                       {:command :context-assoc-skill-state
+                                                        :ctx-id ctx-id
+                                                        :k []
+                                                        :v state-map})]
+        (when (= :context-not-found (:rejected-reason result))
+          (ctx/update-context! ctx-id assoc :skill-state state-map)))
+      (ctx/update-context! ctx-id assoc :skill-state state-map))))
+
+(defn- clear-skill-state!
+  [ctx-id]
+  (let [ctx-data (or (safe-context-data ctx-id) {})]
+    (if (command-runtime-ready? ctx-data)
+      (let [result (command-rt/run-command-in-session! (:session-id ctx-data)
+                                                       (:player-uuid ctx-data)
+                                                       {:command :context-clear-skill-state
+                                                        :ctx-id ctx-id})]
+        (when (= :context-not-found (:rejected-reason result))
+          (ctx/update-context! ctx-id dissoc :skill-state)))
+      (ctx/update-context! ctx-id dissoc :skill-state))))
+
 (defn- terminate-with-end!
   [ctx-id performed?]
   (fx/send-end! ctx-id :directed-shock/fx-end {:performed? performed?})
-  (ctx/update-context! ctx-id assoc-in [:skill-state :performed?] performed?)
-  (ctx/update-context! ctx-id dissoc :skill-state)
+  (when-let [ctx-data (safe-context-data ctx-id)]
+    (set-skill-state-root! ctx-id (assoc (:skill-state ctx-data) :performed? performed?)))
+  (clear-skill-state! ctx-id)
   (ctx/terminate-context! ctx-id nil))
 
 (defn- hit-impulse [caster-pos hit-pos]
@@ -85,21 +126,21 @@
               :overload (fn [{:keys [exp]}] (cfg-lerp :cost.up.overload exp))}}
   :actions
   {:down! (fn [{:keys [ctx-id]}]
-            (ctx/update-context! ctx-id assoc :skill-state
-                                 {:charge-ticks 0
-                                  :performed? false
-                                  :punched? false
-                                  :punch-ticks 0})
+            (set-skill-state-root! ctx-id
+                                   {:charge-ticks 0
+                                    :performed? false
+                                    :punched? false
+                                    :punch-ticks 0})
             (fx/send-start! ctx-id :directed-shock/fx-start))
    :tick! (fn [{:keys [ctx-id]}]
             (when-let [ctx-data (ctx/get-context ctx-id)]
               (if (true? (get-in ctx-data [:skill-state :punched?]))
                 (let [next-punch (inc (long (or (get-in ctx-data [:skill-state :punch-ticks]) 0)))]
-                  (ctx/update-context! ctx-id assoc-in [:skill-state :punch-ticks] next-punch)
+                  (set-skill-state-root! ctx-id (assoc (:skill-state ctx-data) :punch-ticks next-punch))
                   (when (> next-punch (cfg-int :charge.punch-anim-ticks))
                     (terminate-with-end! ctx-id true)))
                 (let [next-charge (inc (long (or (get-in ctx-data [:skill-state :charge-ticks]) 0)))]
-                  (ctx/update-context! ctx-id assoc-in [:skill-state :charge-ticks] next-charge)
+                  (set-skill-state-root! ctx-id (assoc (:skill-state ctx-data) :charge-ticks next-charge))
                   (when (>= next-charge (cfg-int :charge.max-tolerant-ticks))
                     (terminate-with-end! ctx-id false))))))
    :up! (fn [{:keys [player-id ctx-id exp cost-ok?]}]
@@ -139,10 +180,11 @@
                                            :world-id world-id
                                            :impulse impulse
                                            :knockback knockback})
-                        (ctx/update-context! ctx-id update :skill-state merge
-                                             {:performed? true
-                                              :punched? true
-                                              :punch-ticks 0})
+                           (set-skill-state-root! ctx-id
+                                   (merge (:skill-state ctx-data)
+                                     {:performed? true
+                                      :punched? true
+                                      :punch-ticks 0}))
                         (skill-effects/add-skill-exp! player-id :directed-shock (cfg-double :progression.exp-hit))
                         (skill-effects/set-main-cooldown!
                          player-id :directed-shock (cfg-lerp-int :cooldown.ticks exp*))

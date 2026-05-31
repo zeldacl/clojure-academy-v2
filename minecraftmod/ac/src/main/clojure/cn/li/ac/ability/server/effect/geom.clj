@@ -1,4 +1,4 @@
-﻿(ns cn.li.ac.ability.effects.geom
+(ns cn.li.ac.ability.effects.geom
   (:require 
             [cn.li.ac.ability.service.runtime-store :as store]
             [cn.li.ac.util.math.vec3 :as vec3]

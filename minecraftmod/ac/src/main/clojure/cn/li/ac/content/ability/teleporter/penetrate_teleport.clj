@@ -10,11 +10,13 @@
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill]]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.content.ability.teleporter.tp-skill-helper :as helper]
             [cn.li.mcmod.platform.block-manipulation :as bm]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.util.log :as log]))
 
 ;; ---------------------------------------------------------------------------
@@ -175,6 +177,49 @@
      :y (:y dest)
      :z (:z dest)}))
 
+(defn- safe-context-data
+  [ctx-id]
+  (try
+    (ctx/get-context ctx-id)
+    (catch Exception _ nil)))
+
+(defn- command-runtime-ready?
+  [{:keys [session-id player-uuid]}]
+  (and (runtime-hooks/current-player-state-owner)
+       session-id
+       player-uuid))
+
+(defn- set-skill-state-root!
+  [ctx-id state-map]
+  (let [ctx-data (or (safe-context-data ctx-id) {})]
+    (if (command-runtime-ready? ctx-data)
+      (let [result (command-rt/run-command-in-session! (:session-id ctx-data)
+                                                       (:player-uuid ctx-data)
+                                                       {:command :context-assoc-skill-state
+                                                        :ctx-id ctx-id
+                                                        :k []
+                                                        :v state-map})]
+        (when (= :context-not-found (:rejected-reason result))
+          (ctx/update-context! ctx-id assoc :skill-state state-map)))
+      (ctx/update-context! ctx-id assoc :skill-state state-map))))
+
+(defn- clear-skill-state!
+  [ctx-id]
+  (let [ctx-data (or (safe-context-data ctx-id) {})]
+    (if (command-runtime-ready? ctx-data)
+      (let [result (command-rt/run-command-in-session! (:session-id ctx-data)
+                                                       (:player-uuid ctx-data)
+                                                       {:command :context-clear-skill-state
+                                                        :ctx-id ctx-id})]
+        (when (= :context-not-found (:rejected-reason result))
+          (ctx/update-context! ctx-id dissoc :skill-state)))
+      (ctx/update-context! ctx-id dissoc :skill-state))))
+
+(defn- update-skill-state-root!
+  [ctx-id f]
+  (let [current (or (:skill-state (or (safe-context-data ctx-id) {})) {})]
+    (set-skill-state-root! ctx-id (f current))))
+
 (defn- ensure-up-resolve!
   [ctx-id player-id]
   (let [ctx-data (ctx/get-context ctx-id)
@@ -185,7 +230,7 @@
              (= desired-distance (double (or (:desired-distance existing) 0.0))))
       existing
       (let [preview (resolve-preview player-id desired-distance)]
-        (ctx/update-context! ctx-id assoc-in [:skill-state :up-resolve] preview)
+        (update-skill-state-root! ctx-id #(assoc % :up-resolve preview))
         preview))))
 
 (defn- up-cost-cp
@@ -209,20 +254,20 @@
   [{:keys [player-id ctx-id cost-ok?]}]
   (when cost-ok?
     (let [desired (default-desired-distance player-id)]
-      (ctx/update-context! ctx-id assoc :skill-state {:hold-ticks 0
-                                                      :desired-distance desired
-                                                      :preview (resolve-preview player-id desired)
-                                                      :up-resolve nil})
+      (set-skill-state-root! ctx-id {:hold-ticks 0
+                                     :desired-distance desired
+                                     :preview (resolve-preview player-id desired)
+                                     :up-resolve nil})
       (ctx/ctx-on! ctx-id distance-channel
                    (fn [payload]
-                     (ctx/update-context! ctx-id update :skill-state
-                                          (fn [st]
-                                            (let [base (or st {:desired-distance desired})
-                                                  updated (update-distance player-id base payload)
-                                                  resolved (resolve-preview player-id (:desired-distance updated))]
-                                              (-> updated
-                                                  (assoc :preview resolved)
-                                                  (assoc :up-resolve nil))))))))))
+                     (update-skill-state-root! ctx-id
+                                               (fn [st]
+                                                 (let [base (or st {:desired-distance desired})
+                                                       updated (update-distance player-id base payload)
+                                                       resolved (resolve-preview player-id (:desired-distance updated))]
+                                                   (-> updated
+                                                       (assoc :preview resolved)
+                                                       (assoc :up-resolve nil))))))))))
 
 (defn penetrate-tp-tick!
   [{:keys [player-id ctx-id hold-ticks]}]
@@ -230,13 +275,13 @@
         desired (double (or (get-in ctx-data [:skill-state :desired-distance])
                             (default-desired-distance player-id)))
         preview (resolve-preview player-id desired)]
-    (ctx/update-context! ctx-id update :skill-state
-                         (fn [st]
-                           (-> (or st {})
-                               (assoc :hold-ticks (long hold-ticks))
-                               (assoc :desired-distance desired)
-                               (assoc :preview preview)
-                               (assoc :up-resolve nil))))))
+    (update-skill-state-root! ctx-id
+                              (fn [st]
+                                (-> (or st {})
+                                    (assoc :hold-ticks (long hold-ticks))
+                                    (assoc :desired-distance desired)
+                                    (assoc :preview preview)
+                                    (assoc :up-resolve nil))))))
 
 (defn penetrate-tp-up!
   [{:keys [player-id ctx-id cost-ok?]}]
@@ -265,7 +310,7 @@
 
 (defn penetrate-tp-abort!
   [{:keys [ctx-id]}]
-  (ctx/update-context! ctx-id dissoc :skill-state))
+  (clear-skill-state! ctx-id))
 
 ;; ---------------------------------------------------------------------------
 ;; Skill registration

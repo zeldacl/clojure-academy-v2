@@ -6,10 +6,12 @@
             [cn.li.ac.content.ability.fx-helpers :as fx]
             [cn.li.ac.content.ability.vecmanip.arbitration :as arbitration]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.util.toggle :as toggle]
             [cn.li.ac.ability.service.skill-effects :as fx-common]
             [cn.li.ac.ability.server.damage.handler :as damage-handler]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.platform.entity-motion :as entity-motion]
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
@@ -291,6 +293,47 @@
        first
        first))
 
+(defn- safe-context-data
+  [ctx-id]
+  (try
+    (ctx/get-context ctx-id)
+    (catch Exception _ nil)))
+
+(defn- command-runtime-ready?
+  [{:keys [session-id player-uuid]}]
+  (and (runtime-hooks/current-player-state-owner)
+       session-id
+       player-uuid))
+
+(defn- set-skill-state-key!
+  [ctx-id k v]
+  (let [ctx-data (or (safe-context-data ctx-id) {})]
+    (if (command-runtime-ready? ctx-data)
+      (let [result (command-rt/run-command-in-session! (:session-id ctx-data)
+                                                       (:player-uuid ctx-data)
+                                                       {:command :context-assoc-skill-state
+                                                        :ctx-id ctx-id
+                                                        :k [k]
+                                                        :v v})]
+        (when (= :context-not-found (:rejected-reason result))
+          (ctx/update-context! ctx-id assoc-in [:skill-state k] v)))
+      (ctx/update-context! ctx-id assoc-in [:skill-state k] v))))
+
+(defn- update-skill-state-root!
+  [ctx-id f]
+  (let [ctx-data (or (safe-context-data ctx-id) {})
+        next-state (f (or (:skill-state ctx-data) {}))]
+    (if (command-runtime-ready? ctx-data)
+      (let [result (command-rt/run-command-in-session! (:session-id ctx-data)
+                                                       (:player-uuid ctx-data)
+                                                       {:command :context-assoc-skill-state
+                                                        :ctx-id ctx-id
+                                                        :k []
+                                                        :v next-state})]
+        (when (= :context-not-found (:rejected-reason result))
+          (ctx/update-context! ctx-id assoc :skill-state next-state)))
+      (ctx/update-context! ctx-id assoc :skill-state next-state))))
+
 (defn- add-exp! [player-id amount]
   (fx-common/add-skill-exp! player-id vec-reflection-skill-id amount))
 
@@ -336,15 +379,14 @@
         (if is-active?
           (do
             (toggle/remove-toggle! ctx-id :vec-reflection)
-            (ctx/update-context! ctx-id update-in [:skill-state] dissoc :vec-reflection-visited :vec-reflection-visited-map)
-            (ctx/update-context! ctx-id update-in [:skill-state] dissoc :vec-reflection-overload-keep)
+            (update-skill-state-root! ctx-id #(dissoc % :vec-reflection-visited :vec-reflection-visited-map :vec-reflection-overload-keep))
             (fx/send-end! ctx-id :vec-reflection/fx-end)
             (log/info "VecReflection: Deactivated"))
           (do
             (toggle/activate-toggle! ctx-id :vec-reflection)
-            (ctx/update-context! ctx-id assoc-in [:skill-state :vec-reflection-visited-map] {})
+            (set-skill-state-key! ctx-id :vec-reflection-visited-map {})
             (let [overload-keep (cfg-lerp :cost.overload-keep exp)]
-              (ctx/update-context! ctx-id assoc-in [:skill-state :vec-reflection-overload-keep] overload-keep)
+              (set-skill-state-key! ctx-id :vec-reflection-overload-keep overload-keep)
               (enforce-overload-floor! player-id overload-keep))
             (fx/send-start! ctx-id :vec-reflection/fx-start)
             (log/info "VecReflection: Activated")))))
@@ -449,9 +491,9 @@
                                                    visited
                                                    entities)
                       pruned (prune-visited-map visited-with-current now ttl-ms max-size)]
-                  (ctx/update-context! ctx-id assoc-in [:skill-state :vec-reflection-visited-map] pruned)
-                  ;; keep old key cleaned to avoid stale accumulation after migration
-                  (ctx/update-context! ctx-id update-in [:skill-state] dissoc :vec-reflection-visited))))))))))
+                  (update-skill-state-root! ctx-id #(-> %
+                                                        (assoc :vec-reflection-visited-map pruned)
+                                                        (dissoc :vec-reflection-visited))))))))))))
 
 (defn vec-reflection-on-key-tick
   "Tick handler - consume resources and reflect nearby projectiles."
@@ -471,8 +513,7 @@
   [{:keys [ctx-id]}]
   (try
     (toggle/remove-toggle! ctx-id :vec-reflection)
-    (ctx/update-context! ctx-id update-in [:skill-state] dissoc :vec-reflection-visited :vec-reflection-visited-map)
-    (ctx/update-context! ctx-id update-in [:skill-state] dissoc :vec-reflection-overload-keep)
+    (update-skill-state-root! ctx-id #(dissoc % :vec-reflection-visited :vec-reflection-visited-map :vec-reflection-overload-keep))
     (fx/send-end! ctx-id :vec-reflection/fx-end)
     (log/debug "VecReflection aborted")
     (catch Exception e

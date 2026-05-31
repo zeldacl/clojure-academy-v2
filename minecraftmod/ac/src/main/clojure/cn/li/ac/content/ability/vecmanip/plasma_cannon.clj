@@ -21,8 +21,10 @@
             [cn.li.ac.content.ability.fx-helpers :as fx]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.world-effects :as world-effects]
@@ -75,6 +77,65 @@
 
 (defn- add-exp! [player-id amount]
   (skill-effects/add-skill-exp! player-id :plasma-cannon amount))
+
+(defn- safe-context-data
+  [ctx-id]
+  (try
+    (ctx/get-context ctx-id)
+    (catch Exception _ nil)))
+
+(defn- command-runtime-ready?
+  [{:keys [session-id player-uuid]}]
+  (and (runtime-hooks/current-player-state-owner)
+       session-id
+       player-uuid))
+
+(defn- set-skill-state-root!
+  [ctx-id state-map]
+  (let [ctx-data (or (safe-context-data ctx-id) {})]
+    (if (command-runtime-ready? ctx-data)
+      (let [result (command-rt/run-command-in-session! (:session-id ctx-data)
+                                                       (:player-uuid ctx-data)
+                                                       {:command :context-assoc-skill-state
+                                                        :ctx-id ctx-id
+                                                        :k []
+                                                        :v state-map})]
+        (when (= :context-not-found (:rejected-reason result))
+          (ctx/update-context! ctx-id assoc :skill-state state-map)))
+      (ctx/update-context! ctx-id assoc :skill-state state-map))))
+
+(defn- set-skill-state!
+  [ctx-id k v]
+  (let [ctx-data (or (safe-context-data ctx-id) {})
+        key-path (if (vector? k) k [k])]
+    (if (command-runtime-ready? ctx-data)
+      (let [result (command-rt/run-command-in-session! (:session-id ctx-data)
+                                                       (:player-uuid ctx-data)
+                                                       {:command :context-assoc-skill-state
+                                                        :ctx-id ctx-id
+                                                        :k key-path
+                                                        :v v})]
+        (when (= :context-not-found (:rejected-reason result))
+          (ctx/update-context! ctx-id assoc-in (into [:skill-state] key-path) v)))
+      (ctx/update-context! ctx-id assoc-in (into [:skill-state] key-path) v))))
+
+(defn- update-skill-state-root!
+  [ctx-id f]
+  (let [ctx-data (or (safe-context-data ctx-id) {})
+        next-state (f (or (:skill-state ctx-data) {}))]
+    (set-skill-state-root! ctx-id next-state)))
+
+(defn- clear-skill-state!
+  [ctx-id]
+  (let [ctx-data (or (safe-context-data ctx-id) {})]
+    (if (command-runtime-ready? ctx-data)
+      (let [result (command-rt/run-command-in-session! (:session-id ctx-data)
+                                                       (:player-uuid ctx-data)
+                                                       {:command :context-clear-skill-state
+                                                        :ctx-id ctx-id})]
+        (when (= :context-not-found (:rejected-reason result))
+          (ctx/update-context! ctx-id dissoc :skill-state)))
+      (ctx/update-context! ctx-id dissoc :skill-state))))
 
 ;; Cost DSL hooks (used by content spec :cost)
 (defn plasma-cannon-cost-down-overload
@@ -215,15 +276,15 @@
               spawn-pos {:x (double (:x pos))
                          :y (+ (double (:y pos)) (cfg-double :projectile.spawn-y-offset))
                          :z (double (:z pos))}]
-          (ctx/update-context! ctx-id assoc :skill-state
-                               {:state        :charging
-                                :charge-ticks  0
-                                :charge-time   ct
-                                :overload-keep (overload-keep exp)
-                                :sync-ticks    0
-                                :flight-ticks  0
-                                :charge-pos    spawn-pos
-                                :destination   nil})
+            (set-skill-state-root! ctx-id
+                   {:state        :charging
+                    :charge-ticks  0
+                    :charge-time   ct
+                    :overload-keep (overload-keep exp)
+                    :sync-ticks    0
+                    :flight-ticks  0
+                    :charge-pos    spawn-pos
+                    :destination   nil})
           (fx/send-start! ctx-id :plasma-cannon/fx-start)
           (fx/send-update! ctx-id :plasma-cannon/fx-update
                            {:state :charging :charge-pos spawn-pos :charge-ticks 0 :fully-charged? false})
@@ -259,7 +320,7 @@
                 (log/debug "PlasmaCannon: Ran out of CP, aborting"))
               ;; Still charging
               (do
-                (ctx/update-context! ctx-id assoc-in [:skill-state :charge-ticks] next-ticks)
+                (set-skill-state! ctx-id [:charge-ticks] next-ticks)
                 ;; Notify client: fully-charged flag triggers plasma_cannon_t sound
                 (let [fully-charged? (>= next-ticks charge-time)]
                   (fx/send-update! ctx-id :plasma-cannon/fx-update
@@ -289,10 +350,10 @@
                     (ctx/terminate-context! ctx-id nil))
                   ;; Still flying: move and sync every configured interval
                   (let [next-sync (if (zero? sync-ticks) (cfg-int :projectile.sync-interval-ticks) (dec sync-ticks))]
-                    (ctx/update-context! ctx-id update :skill-state assoc
-                                         :charge-pos   new-pos
-                                         :flight-ticks next-flight
-                                         :sync-ticks   next-sync)
+                    (update-skill-state-root! ctx-id #(assoc %
+                                                             :charge-pos new-pos
+                                                             :flight-ticks next-flight
+                                                             :sync-ticks next-sync))
                     (when (zero? sync-ticks)
                       (fx/send-update! ctx-id :plasma-cannon/fx-update
                                        {:charge-pos   new-pos
@@ -339,12 +400,12 @@
             ;; Set cooldown (original: ctx.setCooldown in s_perform)
             (apply-cooldown! player-id exp)
             ;; Transition to :go state
-            (ctx/update-context! ctx-id update :skill-state assoc
-                                 :state        :go
-                                 :charge-pos   spawn-pos
-                                 :destination  dest
-                                 :flight-ticks 0
-                                 :sync-ticks   0)
+            (update-skill-state-root! ctx-id #(assoc %
+                                                     :state :go
+                                                     :charge-pos spawn-pos
+                                                     :destination dest
+                                                     :flight-ticks 0
+                                                     :sync-ticks 0))
             ;; Notify client: state change to flying
             (fx/send-update! ctx-id :plasma-cannon/fx-update
                              {:state       :go
@@ -360,7 +421,7 @@
   [{:keys [ctx-id]}]
   (try
     (fx/send-end! ctx-id :plasma-cannon/fx-end {:performed? false})
-    (ctx/update-context! ctx-id dissoc :skill-state)
+    (clear-skill-state! ctx-id)
     (log/debug "PlasmaCannon: Aborted")
     (catch Exception e
       (log/warn "PlasmaCannon key-abort failed:" (ex-message e)))))

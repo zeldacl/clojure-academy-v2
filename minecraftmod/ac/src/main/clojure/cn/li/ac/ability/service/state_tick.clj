@@ -40,13 +40,14 @@
           final-dev (if completion (:develop-data completion) new-dev)
           all-events (vec (or (:events completion) []))
           final-dev-data (or final-dev (dev/new-develop-data))]
-      (command-rt/run-commands-in-session!
+      (command-rt/run-command-in-session!
        session-id
        uuid-str
-       [{:command :set-ability-data :ability-data final-ability}
-        {:command :set-resource-data :resource-data final-resource}
-        {:command :set-cooldown-data :cooldown-data (:cooldown-data ticked-state)}
-        {:command :set-develop-data :develop-data final-dev-data}])
+       {:command :apply-server-tick-postprocess
+        :ability-data final-ability
+        :resource-data final-resource
+        :cooldown-data (:cooldown-data ticked-state)
+        :develop-data final-dev-data})
       (doseq [e all-events] (evt/fire-ability-event! e))
       (when (and sync-fn (seq all-events))
         nil)

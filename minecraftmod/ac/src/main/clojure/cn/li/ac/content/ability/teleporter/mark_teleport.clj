@@ -16,8 +16,10 @@
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill]]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.util.math.vec3 :as vec3]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.raycast :as raycast]
@@ -178,10 +180,48 @@
   [{:keys [player]}]
   (boolean (and player (entity/player-creative? player))))
 
+(defn- safe-context-data
+  [ctx-id]
+  (try
+    (ctx/get-context ctx-id)
+    (catch Exception _ nil)))
+
+(defn- command-runtime-ready?
+  [{:keys [session-id player-uuid]}]
+  (and (runtime-hooks/current-player-state-owner)
+       session-id
+       player-uuid))
+
+(defn- set-skill-state-root!
+  [ctx-id state-map]
+  (let [ctx-data (or (safe-context-data ctx-id) {})]
+    (if (command-runtime-ready? ctx-data)
+      (let [result (command-rt/run-command-in-session! (:session-id ctx-data)
+                                                       (:player-uuid ctx-data)
+                                                       {:command :context-assoc-skill-state
+                                                        :ctx-id ctx-id
+                                                        :k []
+                                                        :v state-map})]
+        (when (= :context-not-found (:rejected-reason result))
+          (ctx/update-context! ctx-id assoc :skill-state state-map)))
+      (ctx/update-context! ctx-id assoc :skill-state state-map))))
+
+(defn- clear-skill-state!
+  [ctx-id]
+  (let [ctx-data (or (safe-context-data ctx-id) {})]
+    (if (command-runtime-ready? ctx-data)
+      (let [result (command-rt/run-command-in-session! (:session-id ctx-data)
+                                                       (:player-uuid ctx-data)
+                                                       {:command :context-clear-skill-state
+                                                        :ctx-id ctx-id})]
+        (when (= :context-not-found (:rejected-reason result))
+          (ctx/update-context! ctx-id dissoc :skill-state)))
+      (ctx/update-context! ctx-id dissoc :skill-state))))
+
 (defn mark-teleport-on-key-down
   "Initialize hold state and client marker."
   [{:keys [ctx-id]}]
-  (ctx/update-context! ctx-id assoc :skill-state {:hold-ticks 0 :has-target false}))
+  (set-skill-state-root! ctx-id {:hold-ticks 0 :has-target false}))
 
 (defn mark-teleport-on-key-tick
   "Update destination marker while key is held."
@@ -189,10 +229,12 @@
   (when-let [ctx (ctx/get-context ctx-id)]
     (let [next-ticks (inc (long (or (get-in ctx [:skill-state :hold-ticks]) 0)))]
       (if-let [target (resolve-destination player-id player next-ticks)]
-        (ctx/update-context! ctx-id update :skill-state merge
-                             (assoc target :hold-ticks next-ticks :has-target true))
-        (ctx/update-context! ctx-id update :skill-state merge
-                             {:hold-ticks next-ticks :has-target false})))))
+        (set-skill-state-root! ctx-id
+                               (merge (:skill-state ctx)
+                                      (assoc target :hold-ticks next-ticks :has-target true)))
+        (set-skill-state-root! ctx-id
+                               (merge (:skill-state ctx)
+                                      {:hold-ticks next-ticks :has-target false}))))))
 
 (defn mark-teleport-on-key-up
   "Execute teleport when key released."
@@ -204,9 +246,10 @@
                        (select-keys (:skill-state ctx)
                                     [:world-id :target-x :target-y :target-z :distance :exp])))]
       (if target
-        (ctx/update-context! ctx-id update :skill-state merge
-                             (assoc target :hold-ticks hold-ticks :has-target true))
-        (ctx/update-context! ctx-id assoc :skill-state {:hold-ticks hold-ticks :has-target false}))
+        (set-skill-state-root! ctx-id
+                               (merge (:skill-state ctx)
+                                      (assoc target :hold-ticks hold-ticks :has-target true)))
+        (set-skill-state-root! ctx-id {:hold-ticks hold-ticks :has-target false}))
       (when (and target teleportation/*teleportation*)
         (let [distance (double (:distance target))
               exp (double (or (:exp target) (skill-exp player-id) 0.0))]
@@ -236,7 +279,7 @@
 (defn mark-teleport-on-key-abort
   "Clean up teleport state on abort."
   [{:keys [ctx-id]}]
-  (ctx/update-context! ctx-id dissoc :skill-state)
+  (clear-skill-state! ctx-id)
   (log/debug "MarkTeleport aborted"))
 
 (def mark-teleport-skill

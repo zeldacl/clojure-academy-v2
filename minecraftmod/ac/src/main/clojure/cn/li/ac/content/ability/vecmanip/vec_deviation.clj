@@ -17,10 +17,12 @@
   (:require [cn.li.ac.ability.dsl :refer [defskill]]
             [cn.li.ac.content.ability.vecmanip.arbitration :as arbitration]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.util.toggle :as toggle]
             [cn.li.ac.ability.service.skill-effects :as fx-common]
             [cn.li.ac.ability.server.damage.handler :as damage-handler]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.platform.entity-motion :as entity-motion]
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.util.log :as log]))
@@ -112,6 +114,47 @@
        first
        first))
 
+(defn- safe-context-data
+  [ctx-id]
+  (try
+    (ctx/get-context ctx-id)
+    (catch Exception _ nil)))
+
+(defn- command-runtime-ready?
+  [{:keys [session-id player-uuid]}]
+  (and (runtime-hooks/current-player-state-owner)
+       session-id
+       player-uuid))
+
+(defn- set-skill-state-key!
+  [ctx-id k v]
+  (let [ctx-data (or (safe-context-data ctx-id) {})]
+    (if (command-runtime-ready? ctx-data)
+      (let [result (command-rt/run-command-in-session! (:session-id ctx-data)
+                                                       (:player-uuid ctx-data)
+                                                       {:command :context-assoc-skill-state
+                                                        :ctx-id ctx-id
+                                                        :k [k]
+                                                        :v v})]
+        (when (= :context-not-found (:rejected-reason result))
+          (ctx/update-context! ctx-id assoc-in [:skill-state k] v)))
+      (ctx/update-context! ctx-id assoc-in [:skill-state k] v))))
+
+(defn- update-skill-state-root!
+  [ctx-id f]
+  (let [ctx-data (or (safe-context-data ctx-id) {})
+        next-state (f (or (:skill-state ctx-data) {}))]
+    (if (command-runtime-ready? ctx-data)
+      (let [result (command-rt/run-command-in-session! (:session-id ctx-data)
+                                                       (:player-uuid ctx-data)
+                                                       {:command :context-assoc-skill-state
+                                                        :ctx-id ctx-id
+                                                        :k []
+                                                        :v next-state})]
+        (when (= :context-not-found (:rejected-reason result))
+          (ctx/update-context! ctx-id assoc :skill-state next-state)))
+      (ctx/update-context! ctx-id assoc :skill-state next-state))))
+
 (defn- add-exp!
   [player-id amount]
   (fx-common/add-skill-exp! player-id :vec-deviation amount))
@@ -142,15 +185,14 @@
         cur-overload    (fx-common/player-path player-id [:resource-data :cur-overload] 0.0)
         overload-floor  (+ (double cur-overload) activ-overload)]
     (fx-common/perform-resource! player-id activ-overload 0.0 false)
-    (ctx/update-context! ctx-id assoc-in [:skill-state :vec-deviation-visited] #{})
-    (ctx/update-context! ctx-id assoc-in [:skill-state :vec-deviation-marked] #{})
-    (ctx/update-context! ctx-id assoc-in [:skill-state :vec-deviation-overload-floor] overload-floor)
+    (set-skill-state-key! ctx-id :vec-deviation-visited #{})
+    (set-skill-state-key! ctx-id :vec-deviation-marked #{})
+    (set-skill-state-key! ctx-id :vec-deviation-overload-floor overload-floor)
     (log/info "VecDeviation: Activated")))
 
 (defn vec-deviation-deactivate!
   [{:keys [ctx-id]}]
-  (ctx/update-context! ctx-id update :skill-state dissoc
-                       :vec-deviation-visited :vec-deviation-marked :vec-deviation-overload-floor)
+  (update-skill-state-root! ctx-id #(dissoc % :vec-deviation-visited :vec-deviation-marked :vec-deviation-overload-floor))
   (log/info "VecDeviation: Deactivated"))
 
 (defn vec-deviation-tick!
@@ -222,19 +264,18 @@
                           (let [generic-mark? (and (not (contains? (large-fireball-ids) eid))
                                                    (not (contains? (small-fireball-ids) eid)))]
                             (when generic-mark?
-                              (ctx/update-context! ctx-id update-in [:skill-state :vec-deviation-marked] (fnil conj #{}) entity-uuid))
+                              (update-skill-state-root! ctx-id #(update % :vec-deviation-marked (fnil conj #{}) entity-uuid)))
                             (send-fx-stop-entity! ctx-id entity generic-mark?))
                           (log/debug "VecDeviation: Deflected entity" entity-uuid "difficulty" difficulty))))))
                 (let [visited-ids (into #{} (keep :uuid entities))]
-                  (ctx/update-context! ctx-id update-in [:skill-state :vec-deviation-visited] (fnil into #{}) visited-ids))))))))
+                  (update-skill-state-root! ctx-id #(update % :vec-deviation-visited (fnil into #{}) visited-ids)))))))))
     (catch Exception e
       (log/warn "VecDeviation tick! failed:" (ex-message e)))))
 
 (defn vec-deviation-abort!
   [{:keys [ctx-id]}]
   (toggle/remove-toggle! ctx-id :vec-deviation)
-  (ctx/update-context! ctx-id update :skill-state dissoc
-                       :vec-deviation-visited :vec-deviation-marked :vec-deviation-overload-floor))
+  (update-skill-state-root! ctx-id #(dissoc % :vec-deviation-visited :vec-deviation-marked :vec-deviation-overload-floor)))
 
 ;; Damage reduction handler (called from damage event system)
 (defn reduce-damage

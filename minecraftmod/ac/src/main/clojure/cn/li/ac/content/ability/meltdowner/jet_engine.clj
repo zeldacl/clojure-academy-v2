@@ -13,8 +13,10 @@
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.platform.player-motion :as player-motion]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.teleportation :as teleportation]
@@ -84,6 +86,37 @@
   (or (when teleportation/*teleportation*
         (teleportation/get-player-position teleportation/*teleportation* player-id))
       (eye-pos-safe player-id)))
+
+(defn- safe-context-data
+  [ctx-id]
+  (try
+    (ctx/get-context ctx-id)
+    (catch Exception _ nil)))
+
+(defn- command-runtime-ready?
+  [{:keys [session-id player-uuid]}]
+  (and (runtime-hooks/current-player-state-owner)
+       session-id
+       player-uuid))
+
+(defn- set-skill-state-root!
+  [ctx-id state-map]
+  (let [ctx-data (or (safe-context-data ctx-id) {})]
+    (if (command-runtime-ready? ctx-data)
+      (let [result (command-rt/run-command-in-session! (:session-id ctx-data)
+                                                       (:player-uuid ctx-data)
+                                                       {:command :context-assoc-skill-state
+                                                        :ctx-id ctx-id
+                                                        :k []
+                                                        :v state-map})]
+        (when (= :context-not-found (:rejected-reason result))
+          (ctx/update-context! ctx-id assoc :skill-state state-map)))
+      (ctx/update-context! ctx-id assoc :skill-state state-map))))
+
+(defn- update-skill-state-root!
+  [ctx-id f & args]
+  (let [current (or (:skill-state (or (safe-context-data ctx-id) {})) {})]
+    (set-skill-state-root! ctx-id (apply f current args))))
 
 (defn- can-afford-release? [player-id]
   (let [cp-needed (release-cp-cost player-id)
@@ -196,21 +229,21 @@
               next-hit-uuids (if hit
                               (mark-hit-and-damage! player-id ctx-id world-id hit hit-uuids)
                                hit-uuids)]
-          (ctx/update-context! ctx-id update :skill-state merge
-                               {:trigger-ticks next-tick
-                                :last-pos next-pos
-                                :hit-uuids next-hit-uuids})
+          (update-skill-state-root! ctx-id merge
+                                    {:trigger-ticks next-tick
+                                     :last-pos next-pos
+                                     :hit-uuids next-hit-uuids})
           (send-trigger-update! ctx-id next-pos next-tick))))))
 
 (defn jet-engine-down!
   [{:keys [ctx-id player-id cost-ok?]}]
   (when cost-ok?
     (let [target (get-target-pos player-id)]
-      (ctx/update-context! ctx-id assoc :skill-state {:phase :marking
-                                                      :hold-ticks 0
-                                                      :target-pos target
-                                                      :trigger-ticks 0
-                                                      :hit-uuids #{}})
+      (set-skill-state-root! ctx-id {:phase :marking
+                                     :hold-ticks 0
+                                     :target-pos target
+                                     :trigger-ticks 0
+                                     :hit-uuids #{}})
       (send-mark-start! ctx-id target))))
 
 (defn jet-engine-tick!
@@ -227,9 +260,9 @@
           (send-mark-end! ctx-id (:target-pos st))
           (ctx/terminate-context! ctx-id nil))
         (let [target (or (get-target-pos player-id) (:target-pos st))]
-          (ctx/update-context! ctx-id update :skill-state merge
-                               {:hold-ticks (long hold-ticks)
-                                :target-pos target})
+          (update-skill-state-root! ctx-id merge
+                                    {:hold-ticks (long hold-ticks)
+                                     :target-pos target})
           (send-mark-update! ctx-id target hold-ticks)))
 
       nil)))
@@ -257,15 +290,15 @@
             (let [start-pos (get-player-pos player-id)
                   travel (geom/v- target-pos start-pos)
                   velocity (geom/v* travel (/ 1.0 (double trigger-time-ticks)))]
-              (ctx/update-context! ctx-id update :skill-state merge
-                                   {:phase :triggering
-                                    :start-pos start-pos
-                                    :target-pos target-pos
-                                    :last-pos start-pos
-                                    :velocity velocity
-                                    :world-id (geom/world-id-of player-id)
-                                    :trigger-ticks 0
-                                    :hit-uuids #{}})
+              (update-skill-state-root! ctx-id merge
+                                        {:phase :triggering
+                                         :start-pos start-pos
+                                         :target-pos target-pos
+                                         :last-pos start-pos
+                                         :velocity velocity
+                                         :world-id (geom/world-id-of player-id)
+                                         :trigger-ticks 0
+                                         :hit-uuids #{}})
               (send-mark-end! ctx-id target-pos)
               (send-trigger-start! ctx-id start-pos target-pos velocity)
               (skill-effects/add-skill-exp! player-id jet-engine-skill-id (cfg-double :progression.exp-use))

@@ -1,10 +1,10 @@
 (ns cn.li.ac.ability.adapters.server-hooks-test
   (:require 
             [cn.li.ac.ability.service.state-tick :as ps-tick]
-[cn.li.ac.ability.service.state-accessors :as ps-accessors]
-[cn.li.ac.ability.service.runtime-store :as store]
-[cn.li.ac.ability.runtime-container :as runtime-container]
-[clojure.test :refer [deftest is testing use-fixtures]]
+            [cn.li.ac.ability.service.command-runtime :as command-rt]
+            [cn.li.ac.ability.service.runtime-store :as store]
+            [cn.li.ac.ability.runtime-container :as runtime-container]
+            [clojure.test :refer [deftest is testing use-fixtures]]
             [cn.li.ac.ability.adapters.server-hooks :as server-hooks]
             [cn.li.ac.ability.item-actions :as item-actions]
             [cn.li.ac.ability.registry.event :as evt]
@@ -13,6 +13,7 @@
             [cn.li.ac.ability.server.network :as network]
             [cn.li.ac.ability.service.delayed-projectiles :as delayed-projectiles]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
             [cn.li.ac.ability.service.platform-hooks :as platform-hooks]            [cn.li.ac.block.developer.logic :as developer-logic]
             [cn.li.ac.wireless.data.world-registry :as world-registry]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
@@ -26,12 +27,16 @@
         (item-actions/reset-item-action-registries-for-test! item-actions-snapshot)))))
 
 (defn- reset-lifecycle-subs! [f]
+  (evt/install-event-subscriber-runtime!
+    (evt/create-event-subscriber-runtime))
   (evt/reset-ability-event-subscribers-for-test!)
   (server-hooks/reset-lifecycle-subscriptions-registered-for-test!)
   (try
     (f)
     (finally
       (evt/reset-ability-event-subscribers-for-test!)
+      (evt/install-event-subscriber-runtime!
+        (evt/create-event-subscriber-runtime))
       (server-hooks/reset-lifecycle-subscriptions-registered-for-test!))))
 
 (use-fixtures :each reset-registries!)
@@ -86,31 +91,37 @@
       (is (true? (:consume? plan))))))
 
 (deftest level-change-event-uses-service-recalc-path-test
-  (let [updated (atom nil)
+  (let [commands* (atom [])
         calc-calls (atom [])]
     (with-redefs [evt/fire-calc-event! (fn [event-key value extra]
                                          (swap! calc-calls conj [event-key value extra])
                                          value)
-                  ps-accessors/update-resource-data! (fn [uuid updater]
-                                             (reset! updated {:uuid uuid
-                                                              :resource (updater {:cur-cp 100.0
-                                                                                  :cur-overload 10.0
-                                                                                  :max-cp 200.0
-                                                                                  :max-overload 150.0
-                                                                                  :add-max-cp 5.0
-                                                                                  :add-max-overload 7.0})})
-                                             nil)]
+        store/get-player-state* (fn [_session-id _uuid]
+              {:resource-data {:cur-cp 100.0
+                     :cur-overload 10.0
+                     :max-cp 200.0
+                     :max-overload 150.0
+                     :add-max-cp 5.0
+                     :add-max-overload 7.0}})
+        command-rt/run-command-in-session! (fn [session-id uuid command]
+                    (swap! commands* conj [session-id uuid command])
+                    nil)]
+      (evt/install-event-subscriber-runtime!
+        (evt/create-event-subscriber-runtime))
               (server-hooks/reset-lifecycle-subscriptions-registered-for-test!)
       (server-hooks/register-lifecycle-subscriptions!)
       (evt/fire-ability-event! (evt/make-level-change-event "u-level" 2 3))
                                         (is (= [evt/CALC-MAX-CP evt/CALC-MAX-OVERLOAD]
                                          (mapv first @calc-calls)))
                                         (is (every? #(= {:uuid "u-level"} (nth % 2)) @calc-calls))
-                                              (is (= "u-level" (:uuid @updated)))
-                                              (is (= {:add-max-cp 0.0
-                                                :add-max-overload 0.0}
-                                               (select-keys (:resource @updated)
-                                                [:add-max-cp :add-max-overload]))))))
+                (is (= [[:test-session "u-level"]]
+                  (mapv (fn [[sid uuid _]] [sid uuid]) @commands*)))
+                (is (= :sync-resource-data
+                  (get-in (first @commands*) [2 :command])))
+                (is (= {:add-max-cp 0.0
+                   :add-max-overload 0.0}
+                  (select-keys (get-in (first @commands*) [2 :resource-data])
+                     [:add-max-cp :add-max-overload]))))))
 
 (deftest overload-event-aborts-player-contexts-test
   (let [aborted (atom [])]
@@ -118,6 +129,8 @@
                   (fn [uuid]
                     (swap! aborted conj uuid)
                     nil)]
+      (evt/install-event-subscriber-runtime!
+        (evt/create-event-subscriber-runtime))
       (server-hooks/reset-lifecycle-subscriptions-registered-for-test!)
       (server-hooks/register-lifecycle-subscriptions!)
       (evt/fire-ability-event! (evt/make-overload-event "u-overload"))
@@ -132,6 +145,8 @@
                   delayed-projectiles/clear-player-tasks! (fn [uuid]
                                                             (swap! called conj [:projectiles uuid])
                                                             nil)
+                  md-damage/clear-target-mark! (fn [_uuid] nil)
+                  md-damage/clear-source-marks! (fn [_uuid] nil)
           store/remove-player-state!* (fn [session-id uuid]
                      (swap! called conj [:remove-state session-id uuid])
                      nil)]
@@ -153,6 +168,7 @@
                   ctx-mgr/tick-player-contexts! (fn [uuid]
                                                  (swap! calls conj [:context-tick uuid])
                                                  nil)
+                  md-damage/tick-marks! (fn [] nil)
                   delayed-projectiles/tick-player! (fn [uuid]
                                                      (swap! calls conj [:projectiles uuid])
                                                      nil)
@@ -198,6 +214,7 @@
                   world-registry/clear-session-world-data! (fn [session-id]
                                                              (swap! called conj [:wireless session-id])
                                                              nil)
+                  md-damage/clear-all-marks! (fn [] nil)
                   delayed-projectiles/clear-all-tasks! (fn []
                                                          (swap! called conj [:projectiles])
                                                          nil)]
@@ -241,39 +258,50 @@
 
       (deftest category-change-event-aborts-deactivates-and-recalculates-test
         (let [aborted (atom [])
-         resource-updates (atom [])
-         cooldown-clears (atom [])
+          commands* (atom [])
          calc-calls (atom [])]
           (with-redefs [ctx-mgr/abort-player-contexts!
               (fn [uuid]
                 (swap! aborted conj uuid)
                 nil)
               store/get-player-state* (fn [_session-id _]
-                         {:ability-data {:level 4}})
-              ps-accessors/update-cooldown-data! (fn [uuid updater]
-                     (swap! cooldown-clears conj [uuid (updater {:existing true})])
-                     nil)
-              ps-accessors/update-resource-data! (fn [uuid updater & args]
-                     (swap! resource-updates conj [uuid (apply updater {:activated true
-                                      :cur-cp 10.0
-                                          :cur-overload 3.0
-                                          :max-cp 20.0
-                                          :max-overload 40.0}
-                                    args)])
-                     nil)
+                {:ability-data {:level 4}
+                 :resource-data {:activated true
+                  :cur-cp 10.0
+                  :cur-overload 3.0
+                  :max-cp 20.0
+                  :max-overload 40.0}})
+          command-rt/run-command-in-session! (fn [session-id uuid command]
+                      (swap! commands* conj [session-id uuid command])
+                      nil)
               evt/fire-calc-event! (fn [event-key value extra]
                       (swap! calc-calls conj [event-key value extra])
                       value)]
+            (evt/install-event-subscriber-runtime!
+              (evt/create-event-subscriber-runtime))
             (server-hooks/reset-lifecycle-subscriptions-registered-for-test!)
             (server-hooks/register-lifecycle-subscriptions!)
             (evt/fire-ability-event! (evt/make-category-change-event "u-category" :old :new))
             (is (some #{"u-category"} @aborted))
-            (is (some #{["u-category" {}]} @cooldown-clears))
+             (is (some (fn [[sid uuid cmd]]
+               (and (= sid :test-session)
+               (= uuid "u-category")
+               (= :clear-all-cooldowns (:command cmd))))
+             @commands*))
+             (is (some (fn [[sid uuid cmd]]
+               (and (= sid :test-session)
+               (= uuid "u-category")
+               (= :set-activated (:command cmd))
+               (false? (:activated cmd))))
+             @commands*))
             (is (every? (set (mapv first @calc-calls))
                         [evt/CALC-MAX-CP evt/CALC-MAX-OVERLOAD]))
             (is (every? #(= {:uuid "u-category"} (nth % 2)) @calc-calls))
-            (is (= ["u-category" false]
-              [(ffirst @resource-updates) (get-in (first @resource-updates) [1 :activated])]))
-            (is (= "u-category" (first (second @resource-updates)))))))
+              (is (some (fn [[sid uuid cmd]]
+                    (and (= sid :test-session)
+                      (= uuid "u-category")
+                      (= :sync-resource-data (:command cmd))
+                      (map? (:resource-data cmd))))
+                  @commands*)))))
 
 

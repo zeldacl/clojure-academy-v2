@@ -1,8 +1,7 @@
 (ns cn.li.ac.ability.server.network-learning-test
   (:require 
-            [cn.li.ac.ability.service.state-accessors :as ps-accessors]
-[cn.li.ac.ability.service.runtime-store :as store]
-[clojure.test :refer [deftest is use-fixtures]]
+            [cn.li.ac.ability.service.runtime-store :as store]
+            [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.test.support.player-state :as test-player]
             [cn.li.ac.ability.model.ability :as adata]
             [cn.li.ac.ability.server.network :as network]
@@ -53,9 +52,7 @@
                                              :events [{:event/type :ability/skill-learn
                                                        :uuid uuid
                                                        :skill-id skill-id}]
-                                             :effects []})
-                  ps-accessors/update-ability-data! (fn [& _]
-                                            (throw (ex-info "network handler should not mutate ability-data directly" {})))]
+                                             :effects []})]
                                           (#'network/handle-learn-skill-request {:skill-id :arc-gen} player)
       (is (= [[:conditions :arc-gen 3 :normal (get-in (store/get-player-state* test-player/test-session-id "p1") [:ability-data])]
               [:learn test-player/test-session-id "p1" :arc-gen]]

@@ -1,7 +1,7 @@
 (ns cn.li.ac.ability.adapters.client-ui-hooks
   "Client HUD/screen/context hook composition for AC ability platform bridge."
   (:require 
-            [cn.li.ac.ability.service.state-accessors :as ps-accessors]
+            [cn.li.ac.ability.service.command-runtime :as command-rt]
 [cn.li.ac.ability.service.runtime-store :as store]
 [cn.li.ac.ability.client.api :as client-api]
             [cn.li.ac.ability.client.read-model :as read-model]
@@ -22,7 +22,8 @@
             [cn.li.ac.ability.service.context-manager :as ctx-mgr]
             [cn.li.ac.ability.model.preset :as preset-data]
             [cn.li.ac.ability.registry.skill-query :as skill-query]
-            [cn.li.ac.ability.service.context-dispatcher :as ctx]            [cn.li.ac.ability.util.resource-check :as resource-check]
+            [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.util.resource-check :as resource-check]
             [cn.li.ac.config.gameplay :as gameplay]
             [cn.li.ac.ability.util.toggle :as toggle]
             [cn.li.ac.ability.messages :as catalog]
@@ -187,33 +188,41 @@
   [player-uuid ability-data]
   (with-client-player-state-owner player-uuid
     (fn [session-id player-uuid*]
-      (ps-accessors/update-ability-data-in-session! session-id
-                                                    player-uuid*
-                                                    (constantly ability-data)))))
+      (command-rt/run-command-in-session!
+       session-id
+       player-uuid*
+       {:command :sync-ability-data
+        :ability-data ability-data}))))
 
 (defn- update-client-resource-data!
   [player-uuid resource-data]
   (with-client-player-state-owner player-uuid
     (fn [session-id player-uuid*]
-      (ps-accessors/update-resource-data-in-session! session-id
-                                                      player-uuid*
-                                                      (constantly resource-data)))))
+      (command-rt/run-command-in-session!
+       session-id
+       player-uuid*
+       {:command :sync-resource-data
+        :resource-data resource-data}))))
 
 (defn- update-client-cooldown-data!
   [player-uuid cooldown-data]
   (with-client-player-state-owner player-uuid
     (fn [session-id player-uuid*]
-      (ps-accessors/update-cooldown-data-in-session! session-id
-                                                      player-uuid*
-                                                      (constantly cooldown-data)))))
+      (command-rt/run-command-in-session!
+       session-id
+       player-uuid*
+       {:command :sync-cooldown-data
+        :cooldown-data cooldown-data}))))
 
 (defn- update-client-preset-data!
   [player-uuid preset-data]
   (with-client-player-state-owner player-uuid
     (fn [session-id player-uuid*]
-      (ps-accessors/update-preset-data-in-session! session-id
-                                                    player-uuid*
-                                                    (constantly preset-data)))))
+      (command-rt/run-command-in-session!
+       session-id
+       player-uuid*
+       {:command :sync-preset-data
+        :preset-data preset-data}))))
 
 (defn- validate-managed-screen-payload
   [screen-key payload]
@@ -247,11 +256,9 @@
 
 (defn- player-contexts
   [player-uuid]
-  (if-let [session-id (current-client-session-id)]
-    (ctx/get-all-contexts-for-player {:logical-side :client
-                                      :session-id [session-id player-uuid]}
-                                     player-uuid)
-    (ctx/get-all-contexts-for-player player-uuid)))
+  (read-model/get-player-contexts-for-player (str player-uuid)
+                                             (current-client-session-id)
+                                             :client-ui-hooks))
 
 (defn- with-client-context-owner
   [player-uuid f]

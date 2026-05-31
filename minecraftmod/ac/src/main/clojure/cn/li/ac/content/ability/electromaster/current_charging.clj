@@ -7,8 +7,10 @@
   (:require [cn.li.ac.ability.dsl :refer [defskill]]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.energy.operations :as energy]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.runtime-interop :as interop]
             [cn.li.mcmod.platform.raycast :as raycast]
@@ -35,19 +37,74 @@
   (cond-> (or payload {})
     (some? player-id) (assoc :source-player-id player-id)))
 
+(declare safe-context-data set-skill-state!)
+
 (defn- next-charge-ticks!
   [ctx-id]
-  (let [ctx-data (or (ctx/get-context ctx-id) {})
+  (let [ctx-data (or (safe-context-data ctx-id) {})
         current (long (or (get-in ctx-data [:skill-state :charge-ticks]) 0))
         next (inc current)]
-    (ctx/update-context! ctx-id assoc-in [:skill-state :charge-ticks] next)
+    (set-skill-state! ctx-id [:charge-ticks] next)
     next))
+
+(defn- safe-context-data
+  [ctx-id]
+  (try
+    (ctx/get-context ctx-id)
+    (catch Exception _ nil)))
+
+(defn- command-runtime-ready?
+  [{:keys [session-id player-uuid]}]
+  (and (runtime-hooks/current-player-state-owner)
+       session-id
+       player-uuid))
+
+(defn- set-skill-state!
+  [ctx-id k v]
+  (let [ctx-data (or (safe-context-data ctx-id) {})
+        key-path (if (vector? k) k [k])]
+    (if (command-runtime-ready? ctx-data)
+      (let [result (command-rt/run-command-in-session! (:session-id ctx-data)
+                                                       (:player-uuid ctx-data)
+                                                       {:command :context-assoc-skill-state
+                                                        :ctx-id ctx-id
+                                                        :k key-path
+                                                        :v v})]
+        (when (= :context-not-found (:rejected-reason result))
+          (ctx/update-context! ctx-id assoc-in (into [:skill-state] key-path) v)))
+      (ctx/update-context! ctx-id assoc-in (into [:skill-state] (if (vector? k) k [k])) v))))
+
+(defn- set-skill-state-root!
+  [ctx-id state-map]
+  (let [ctx-data (or (safe-context-data ctx-id) {})]
+    (if (command-runtime-ready? ctx-data)
+      (let [result (command-rt/run-command-in-session! (:session-id ctx-data)
+                                                       (:player-uuid ctx-data)
+                                                       {:command :context-assoc-skill-state
+                                                        :ctx-id ctx-id
+                                                        :k []
+                                                        :v state-map})]
+        (when (= :context-not-found (:rejected-reason result))
+          (ctx/update-context! ctx-id assoc :skill-state state-map)))
+      (ctx/update-context! ctx-id assoc :skill-state state-map))))
+
+(defn- clear-skill-state!
+  [ctx-id]
+  (let [ctx-data (or (safe-context-data ctx-id) {})]
+    (if (command-runtime-ready? ctx-data)
+      (let [result (command-rt/run-command-in-session! (:session-id ctx-data)
+                                                       (:player-uuid ctx-data)
+                                                       {:command :context-clear-skill-state
+                                                        :ctx-id ctx-id})]
+        (when (= :context-not-found (:rejected-reason result))
+          (ctx/update-context! ctx-id dissoc :skill-state)))
+      (ctx/update-context! ctx-id dissoc :skill-state))))
 
 (defn- end-and-terminate!
   [ctx-id is-item player-id]
   (ctx/ctx-send-to-client! ctx-id :current-charging/fx-end
                            (fx-payload player-id {:is-item (boolean is-item)}))
-  (ctx/update-context! ctx-id dissoc :skill-state)
+  (clear-skill-state! ctx-id)
   (ctx/terminate-context! ctx-id nil))
 
 (defn- charge-item-tick!
@@ -62,7 +119,7 @@
                                       (if effective?
                                         (cfg-double :progression.exp-effective)
                                         (cfg-double :progression.exp-ineffective)))
-        (ctx/update-context! ctx-id assoc-in [:skill-state :good?] (boolean effective?))
+        (set-skill-state! ctx-id [:good?] (boolean effective?))
         (ctx/ctx-send-to-client! ctx-id :current-charging/fx-update
                (fx-payload player-id
                      {:is-item true
@@ -117,10 +174,10 @@
                effective?
                (zero? (mod (long (or charge-ticks 0)) 6)))
       (entity/player-spawn-entity-by-id! player arc-entity-id 0.0))
-    (ctx/update-context! ctx-id assoc-in [:skill-state :good?] (boolean effective?))
-    (ctx/update-context! ctx-id assoc-in [:skill-state :target] ray-end)
-    (ctx/update-context! ctx-id assoc-in [:skill-state :block-pos] block-pos)
-    (ctx/update-context! ctx-id assoc-in [:skill-state :charged] (double charged))
+    (set-skill-state! ctx-id [:good?] (boolean effective?))
+    (set-skill-state! ctx-id [:target] ray-end)
+    (set-skill-state! ctx-id [:block-pos] block-pos)
+    (set-skill-state! ctx-id [:charged] (double charged))
     (ctx/ctx-send-to-client! ctx-id :current-charging/fx-update
                  (fx-payload player-id
                        {:is-item false
@@ -167,16 +224,16 @@
              (let [is-item (boolean (main-hand-item player-id))
                    exp* (double (or exp 0.0))
                    overload-floor (cfg-lerp :cost.down.overload exp*)]
-               (ctx/update-context! ctx-id assoc :skill-state
-                                    {:mode (if is-item :item :block)
-                                     :is-item is-item
-                                     :good? false
-                                     :exp exp*
-                                     :charge-ticks 0
-                                     :overload-floor overload-floor
-                                     :target nil
-                                     :block-pos nil
-                                     :charged 0.0})
+           (set-skill-state-root! ctx-id
+                      {:mode (if is-item :item :block)
+                       :is-item is-item
+                       :good? false
+                       :exp exp*
+                       :charge-ticks 0
+                       :overload-floor overload-floor
+                       :target nil
+                       :block-pos nil
+                       :charged 0.0})
                (ctx/ctx-send-to-client! ctx-id :current-charging/fx-start
                                         (fx-payload player-id {:is-item is-item}))))
    :tick!  (fn [{:keys [player-id ctx-id player]}]
@@ -205,11 +262,11 @@
                (ctx/ctx-send-to-client! ctx-id :current-charging/fx-end
                                         (fx-payload player-id
                                                     {:is-item (boolean (:is-item skill-state))}))
-               (ctx/update-context! ctx-id dissoc :skill-state)))
+               (clear-skill-state! ctx-id)))
    :abort! (fn [{:keys [ctx-id]}]
              (when-let [{:keys [skill-state player-id]} (ctx/get-context ctx-id)]
                (ctx/ctx-send-to-client! ctx-id :current-charging/fx-end
                                         (fx-payload player-id
                                                     {:is-item (boolean (:is-item skill-state))})))
-             (ctx/update-context! ctx-id dissoc :skill-state))}
+             (clear-skill-state! ctx-id))}
   :prerequisites [{:skill-id :arc-gen :min-exp 0.3}])

@@ -12,10 +12,12 @@
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.util.balance :as bal]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.ability.effects.damage :as damage-op]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.effects.world :as world-op]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.platform.raycast :as raycast]))
 
 (def ^:private thunder-clap-skill-id :thunder-clap)
@@ -57,10 +59,37 @@
   (or (get-in (ctx/get-context ctx-id) [:skill-state :hit-pos])
       (resolve-fallback-target player-id)))
 
+(defn- safe-context-data
+  [ctx-id]
+  (try
+    (ctx/get-context ctx-id)
+    (catch Exception _ nil)))
+
+(defn- command-runtime-ready?
+  [{:keys [session-id player-uuid]}]
+  (and (runtime-hooks/current-player-state-owner)
+       session-id
+       player-uuid))
+
+(defn- update-skill-state-root!
+  [ctx-id f & args]
+  (let [ctx-data (or (safe-context-data ctx-id) {})
+        next-state (apply f (or (:skill-state ctx-data) {}) args)]
+    (if (command-runtime-ready? ctx-data)
+      (let [result (command-rt/run-command-in-session! (:session-id ctx-data)
+                                                       (:player-uuid ctx-data)
+                                                       {:command :context-assoc-skill-state
+                                                        :ctx-id ctx-id
+                                                        :k []
+                                                        :v next-state})]
+        (when (= :context-not-found (:rejected-reason result))
+          (ctx/update-context! ctx-id assoc :skill-state next-state)))
+      (ctx/update-context! ctx-id assoc :skill-state next-state))))
+
 (defn- mark-performed!
   [ctx-id performed? & {:as extra-state}]
-  (ctx/update-context! ctx-id update :skill-state merge
-                       (merge {:performed? (boolean performed?)} extra-state))
+  (update-skill-state-root! ctx-id merge
+                            (merge {:performed? (boolean performed?)} extra-state))
   (boolean performed?))
 
 (defn- end-payload

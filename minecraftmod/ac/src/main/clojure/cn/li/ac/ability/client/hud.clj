@@ -3,18 +3,16 @@
   (:require [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.registry.skill-query :as skill-query]
             [cn.li.ac.ability.client.combat-notice :as combat-notice]
+            [cn.li.ac.ability.client.read-model :as read-model]
             [cn.li.ac.ability.model.cooldown :as cd-data]
             [cn.li.ac.ability.client.delegate-state :as dstate]
-            [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (defn- player-contexts
   [player-uuid]
-  (if-let [session-id runtime-hooks/*client-session-id*]
-    (ctx/get-all-contexts-for-player {:logical-side :client
-                                      :session-id [session-id player-uuid]}
-                                     player-uuid)
-    (ctx/get-all-contexts-for-player player-uuid)))
+  (read-model/get-player-contexts-for-player (str player-uuid)
+                                             runtime-hooks/*client-session-id*
+                                             :hud))
 
 (defn build-cp-bar-render-data
   "Build CP bar render data with color gradient and consumption hint."

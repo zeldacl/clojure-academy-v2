@@ -2,11 +2,10 @@
   "Server/runtime hook composition for AC ability platform bridge."
   (:require 
             [cn.li.ac.ability.service.state-tick :as ps-tick]
-[cn.li.ac.ability.service.state-accessors :as ps-accessors]
+[cn.li.ac.ability.service.command-runtime :as command-rt]
 [cn.li.ac.ability.service.runtime-store :as store]
 [cn.li.ac.ability.config :as ability-config]
             [cn.li.ac.ability.item-actions :as item-actions]
-            [cn.li.ac.ability.model.cooldown :as cdata]
             [cn.li.ac.ability.model.resource :as rdata]
             [cn.li.ac.ability.registry.event :as evt]
             [cn.li.ac.ability.registry.skill-query :as skill-query]
@@ -86,24 +85,77 @@
   [player-uuid]
   (store/get-player-state* (runtime-hooks/require-player-state-session-id "Server hooks runtime state access") player-uuid))
 
+(defn- runtime-sync-player-state!
+  [player-uuid state]
+  (let [state* (or state {})
+        session-id (runtime-hooks/require-player-state-session-id "Server hooks runtime state access")
+        commands (cond-> []
+                   (contains? state* :ability-data)
+                   (conj {:command :sync-ability-data :ability-data (:ability-data state*)})
+
+                   (contains? state* :resource-data)
+                   (conj {:command :sync-resource-data :resource-data (:resource-data state*)})
+
+                   (contains? state* :cooldown-data)
+                   (conj {:command :sync-cooldown-data :cooldown-data (:cooldown-data state*)})
+
+                   (contains? state* :preset-data)
+                   (conj {:command :sync-preset-data :preset-data (:preset-data state*)})
+
+                   (contains? state* :develop-data)
+                   (conj {:command :sync-develop-data :develop-data (:develop-data state*)})
+
+                   (contains? state* :terminal-data)
+                   (conj {:command :sync-terminal-data :terminal-data (:terminal-data state*)})
+
+                   (contains? state* :context-registry)
+                   (conj {:command :sync-context-registry :context-registry (:context-registry state*)})
+
+                   (contains? state* :runtime)
+                   (conj {:command :sync-runtime-data :runtime-data (:runtime state*)})
+
+                   (contains? state* :dirty?)
+                   (conj {:command :set-dirty-flag :dirty? (:dirty? state*)}))]
+    (if (seq commands)
+      (command-rt/run-commands-in-session! session-id
+                                           player-uuid
+                                           commands
+                                           {:mark-dirty? (if (contains? state* :dirty?)
+                                                           (boolean (:dirty? state*))
+                                                           true)})
+      (command-rt/run-command-in-session! session-id player-uuid {:command :set-dirty-flag :dirty? false}))))
+
 (defn- runtime-get-or-create-player-state!
   [player-uuid]
-  (store/get-or-create-player-state! (runtime-hooks/require-player-state-session-id "Server hooks runtime state access") player-uuid))
+  (or (runtime-get-player-state player-uuid)
+      (do
+        (runtime-sync-player-state! player-uuid (store/fresh-player-state))
+        (or (runtime-get-player-state player-uuid)
+            (store/fresh-player-state)))))
 
 (defn- runtime-set-player-state!
   [player-uuid state]
-  (store/set-player-state!* (runtime-hooks/require-player-state-session-id "Server hooks runtime state access") player-uuid state))
+  (runtime-sync-player-state! player-uuid state))
 
 (defn- runtime-mark-clean!
   [player-uuid]
-  (store/clear-dirty! (store/get-store)
-                      (runtime-hooks/require-player-state-session-id "Server hooks runtime state access")
-                      player-uuid))
+  (command-rt/run-command-in-session!
+   (runtime-hooks/require-player-state-session-id "Server hooks runtime state access")
+   player-uuid
+   {:command :set-dirty-flag :dirty? false})
+  nil)
 
 (defn- runtime-list-player-uuids
   []
   (store/list-players (store/get-store)
                       (runtime-hooks/require-player-state-session-id "Server hooks runtime state access")))
+
+(defn- run-runtime-command!
+  [player-uuid command]
+  (command-rt/run-command-in-session!
+   (runtime-hooks/require-player-state-session-id "Server hooks runtime state access")
+   player-uuid
+   command))
 
 (defn- recalc-max-for-level-with-calc
   [res-data level uuid]
@@ -146,32 +198,41 @@
      evt/EVT-LEVEL-CHANGE
      (fn [{:keys [uuid new-level]}]
        (when (and uuid new-level)
-         (ps-accessors/update-resource-data! uuid
-                                   (fn [rd]
-                                     (recalc-max-for-level-with-calc (rdata/reset-add-max rd)
-                                                                      new-level
-                                                                      uuid))))))
+         (when-let [state (runtime-get-player-state uuid)]
+           (let [next-resource-data (recalc-max-for-level-with-calc
+                                     (rdata/reset-add-max (:resource-data state))
+                                     new-level
+                                     uuid)]
+             (run-runtime-command! uuid
+                                   {:command :sync-resource-data
+                                    :resource-data next-resource-data}))))))
     (evt/subscribe-ability-event!
      evt/EVT-SKILL-LEARN
      (fn [{:keys [uuid]}]
        (when uuid
          (when-let [state (runtime-get-player-state uuid)]
            (let [level (get-in state [:ability-data :level] 1)]
-             (ps-accessors/update-resource-data! uuid
-                                       (fn [rd]
-                                         (recalc-max-for-level-with-calc rd level uuid))))))))
+             (run-runtime-command! uuid
+                                   {:command :sync-resource-data
+                                    :resource-data (recalc-max-for-level-with-calc
+                                                    (:resource-data state)
+                                                    level
+                                                    uuid)}))))))
     (evt/subscribe-ability-event!
      evt/EVT-CATEGORY-CHANGE
      (fn [{:keys [uuid]}]
        (when uuid
          (ctx-mgr/abort-player-contexts! uuid)
-         (ps-accessors/update-cooldown-data! uuid (constantly (cdata/new-cooldown-data)))
-         (ps-accessors/update-resource-data! uuid rdata/set-activated false)
+         (run-runtime-command! uuid {:command :clear-all-cooldowns})
+         (run-runtime-command! uuid {:command :set-activated :activated false})
          (when-let [state (runtime-get-player-state uuid)]
            (let [level (get-in state [:ability-data :level] 1)]
-             (ps-accessors/update-resource-data! uuid
-                                       (fn [rd]
-                                         (recalc-max-for-level-with-calc rd level uuid))))))))
+             (run-runtime-command! uuid
+                                   {:command :sync-resource-data
+                                    :resource-data (recalc-max-for-level-with-calc
+                                                    (:resource-data state)
+                                                    level
+                                                    uuid)}))))))
     (evt/subscribe-ability-event!
      evt/EVT-OVERLOAD
      (fn [{:keys [uuid]}]

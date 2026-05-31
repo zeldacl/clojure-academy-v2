@@ -1,8 +1,8 @@
 (ns cn.li.ac.ability.context-runtime-test
   (:require 
-            [cn.li.ac.ability.service.state-accessors :as ps-accessors]
-[cn.li.ac.ability.service.runtime-store :as store]
-[clojure.test :refer [deftest is testing use-fixtures]]
+            [cn.li.ac.ability.service.command-runtime :as command-rt]
+            [cn.li.ac.ability.service.runtime-store :as store]
+            [clojure.test :refer [deftest is testing use-fixtures]]
             [cn.li.ac.content.ability]
             [cn.li.ac.test.support.contexts :as test-contexts]
             [cn.li.ac.test.support.player-state :as test-player]
@@ -52,7 +52,12 @@
 (deftest key-down-blocked-by-cooldown-test
   (let [uuid "test-player-cooldown"
         _ (seed-player-state! uuid)
-  _ (ps-accessors/update-cooldown-data! uuid cd/set-cooldown :arc-gen :main 10)
+  _ (command-rt/run-command-in-session! test-player/test-session-id
+                uuid
+                {:command :set-cooldown
+                 :ctrl-id :arc-gen
+                 :ticks 10
+                 :sub-id :main})
         c (ctx/new-server-context uuid :arc-gen "ctx-cd" test-context-owner)]
     (ctx/register-context! c)
   (binding [ctx/*context-owner* test-context-owner]

@@ -9,11 +9,13 @@
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.ability.effects.beam :as beam]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.util.toggle :as toggle]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.item-actions :as item-actions]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
@@ -74,6 +76,59 @@
     true
     (entity/player-consume-main-hand-item! player 1)))
 
+(defn- safe-context-data
+  [ctx-id]
+  (try
+    (ctx/get-context ctx-id)
+    (catch Exception _ nil)))
+
+(defn- command-runtime-ready?
+  [{:keys [session-id player-uuid]}]
+  (and (runtime-hooks/current-player-state-owner)
+       session-id
+       player-uuid))
+
+(defn- set-skill-state-root!
+  [ctx-id state-map]
+  (let [ctx-data (or (safe-context-data ctx-id) {})]
+    (if (command-runtime-ready? ctx-data)
+      (let [result (command-rt/run-command-in-session! (:session-id ctx-data)
+                                                       (:player-uuid ctx-data)
+                                                       {:command :context-assoc-skill-state
+                                                        :ctx-id ctx-id
+                                                        :k []
+                                                        :v state-map})]
+        (when (= :context-not-found (:rejected-reason result))
+          (ctx/update-context! ctx-id assoc :skill-state state-map)))
+      (ctx/update-context! ctx-id assoc :skill-state state-map))))
+
+(defn- set-skill-state!
+  [ctx-id k v]
+  (let [ctx-data (or (safe-context-data ctx-id) {})]
+    (if (command-runtime-ready? ctx-data)
+      (let [key-path (if (vector? k) k [k])
+            result (command-rt/run-command-in-session! (:session-id ctx-data)
+                                                       (:player-uuid ctx-data)
+                                                       {:command :context-assoc-skill-state
+                                                        :ctx-id ctx-id
+                                                        :k k
+                                                        :v v})]
+        (when (= :context-not-found (:rejected-reason result))
+          (ctx/update-context! ctx-id assoc-in (into [:skill-state] key-path) v)))
+      (ctx/update-context! ctx-id assoc-in (into [:skill-state] (if (vector? k) k [k])) v))))
+
+(defn- clear-skill-state!
+  [ctx-id]
+  (let [ctx-data (or (safe-context-data ctx-id) {})]
+    (if (command-runtime-ready? ctx-data)
+      (let [result (command-rt/run-command-in-session! (:session-id ctx-data)
+                                                       (:player-uuid ctx-data)
+                                                       {:command :context-clear-skill-state
+                                                        :ctx-id ctx-id})]
+        (when (= :context-not-found (:rejected-reason result))
+          (ctx/update-context! ctx-id dissoc :skill-state)))
+      (ctx/update-context! ctx-id dissoc :skill-state))))
+
 ;; ---------------------------------------------------------------------------
 ;; Coin QTE window management
 ;; ---------------------------------------------------------------------------
@@ -89,8 +144,9 @@
     (doseq [[ctx-id ctx-data] (ctx/get-all-contexts)]
       (when (and (= (:player-uuid ctx-data) player-id)
                  (= :item-charge (get-in ctx-data [:skill-state :mode])))
-        (ctx/update-context! ctx-id assoc :skill-state
-                             {:fired false :mode :item-charge-cancelled :charge-ticks 0})))
+        (set-skill-state-root! ctx-id {:fired false
+                                       :mode :item-charge-cancelled
+                                       :charge-ticks 0})))
     ;; New coin throw resets one-shot judgement lock.
     (skill-effects/clear-railgun-coin-judged! player-id)
     true))
@@ -320,28 +376,28 @@
                 (ach-dispatcher/trigger-custom-event! player-id "electromaster.attack_creeper"))
               (skill-effects/set-main-cooldown! player-id :railgun
                                                 (railgun-cooldown-ticks exp))
-              (ctx/update-context! ctx-id assoc :skill-state
-                                   {:fired       true
-                                    :mode        :performed
-                                    :hit-count   normal-hit-count}))
+              (set-skill-state-root! ctx-id
+                                     {:fired       true
+                                      :mode        :performed
+                                      :hit-count   normal-hit-count}))
             (log/debug "Railgun coin-QTE perform" player-id))
-          (ctx/update-context! ctx-id assoc :skill-state {:fired false :mode :coin-qte-no-resource})))
+          (set-skill-state-root! ctx-id {:fired false :mode :coin-qte-no-resource})))
 
       (:has-window? qte)
       (do
         (mark-coin-judged! player-id (:coin-uuid qte))
-        (ctx/update-context! ctx-id assoc :skill-state {:fired false :mode :coin-qte-miss})
+        (set-skill-state-root! ctx-id {:fired false :mode :coin-qte-miss})
         (log/debug "Railgun coin-QTE miss" player-id (:progress qte)))
 
       (accepted-item-in-hand? player)
-      (ctx/update-context! ctx-id assoc :skill-state
-                           {:fired        false
-                            :mode         :item-charge
-                            :charge-ticks (item-charge-ticks)
-                            :hit-count    0})
+      (set-skill-state-root! ctx-id
+                             {:fired        false
+                              :mode         :item-charge
+                              :charge-ticks (item-charge-ticks)
+                              :hit-count    0})
 
       :else
-      (ctx/update-context! ctx-id assoc :skill-state {:fired false :mode :idle-no-trigger}))))
+      (set-skill-state-root! ctx-id {:fired false :mode :idle-no-trigger}))))
 
 (defn- railgun-on-key-tick
   "Item-charge path: countdown; auto-fires when charge-ticks reaches zero."
@@ -366,14 +422,14 @@
                         (ach-dispatcher/trigger-custom-event! player-id "electromaster.attack_creeper"))
                       (skill-effects/set-main-cooldown! player-id :railgun
                                                         (railgun-cooldown-ticks exp))
-                      (ctx/update-context! ctx-id assoc :skill-state
-                                           {:fired     true
-                                            :mode      :performed
-                                            :hit-count normal-hit-count})))
-                  (ctx/update-context! ctx-id assoc :skill-state
-                                       (assoc skill-state :fired false :mode :item-charge-failed)))
-                (ctx/update-context! ctx-id assoc-in [:skill-state :charge-ticks] 0))
-              (ctx/update-context! ctx-id assoc-in [:skill-state :charge-ticks] (dec ticks-left)))))))
+                      (set-skill-state-root! ctx-id
+                                             {:fired     true
+                                              :mode      :performed
+                                              :hit-count normal-hit-count})))
+                  (set-skill-state-root! ctx-id
+                                         (assoc skill-state :fired false :mode :item-charge-failed)))
+                (set-skill-state! ctx-id [:charge-ticks] 0))
+              (set-skill-state! ctx-id [:charge-ticks] (dec ticks-left)))))))
     (catch Exception e
       (log/warn "railgun-on-key-tick error" (ex-message e)))))
 
@@ -384,14 +440,14 @@
     (let [skill-state (:skill-state ctx)
           mode        (:mode skill-state)]
       (when (and (= mode :item-charge) (not (:fired skill-state)))
-        (ctx/update-context! ctx-id assoc :skill-state
-                             (assoc skill-state :mode :item-charge-cancelled :charge-ticks 0)))
+        (set-skill-state-root! ctx-id
+                               (assoc skill-state :mode :item-charge-cancelled :charge-ticks 0)))
       (when (:fired skill-state)
         (log/debug "Railgun completed")))))
 
 (defn- railgun-on-key-abort
   [{:keys [ctx-id]}]
-  (ctx/update-context! ctx-id dissoc :skill-state)
+  (clear-skill-state! ctx-id)
   (log/debug "Railgun aborted"))
 
 ;; ---------------------------------------------------------------------------

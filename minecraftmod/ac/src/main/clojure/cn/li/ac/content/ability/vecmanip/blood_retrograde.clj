@@ -14,8 +14,10 @@
             [cn.li.ac.content.ability.fx-helpers :as fx]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
@@ -83,6 +85,49 @@
 
 (defn- cooldown-ticks [exp]
   (cfg-lerp-int :cooldown.ticks exp))
+
+(defn- safe-context-data
+  [ctx-id]
+  (try
+    (ctx/get-context ctx-id)
+    (catch Exception _ nil)))
+
+(defn- command-runtime-ready?
+  [{:keys [session-id player-uuid]}]
+  (and (runtime-hooks/current-player-state-owner)
+       session-id
+       player-uuid))
+
+(defn- set-skill-state-root!
+  [ctx-id state-map]
+  (let [ctx-data (or (safe-context-data ctx-id) {})]
+    (if (command-runtime-ready? ctx-data)
+      (let [result (command-rt/run-command-in-session! (:session-id ctx-data)
+                                                       (:player-uuid ctx-data)
+                                                       {:command :context-assoc-skill-state
+                                                        :ctx-id ctx-id
+                                                        :k []
+                                                        :v state-map})]
+        (when (= :context-not-found (:rejected-reason result))
+          (ctx/update-context! ctx-id assoc :skill-state state-map)))
+      (ctx/update-context! ctx-id assoc :skill-state state-map))))
+
+(defn- update-skill-state-root!
+  [ctx-id f]
+  (let [current (or (:skill-state (or (safe-context-data ctx-id) {})) {})]
+    (set-skill-state-root! ctx-id (f current))))
+
+(defn- clear-skill-state!
+  [ctx-id]
+  (let [ctx-data (or (safe-context-data ctx-id) {})]
+    (if (command-runtime-ready? ctx-data)
+      (let [result (command-rt/run-command-in-session! (:session-id ctx-data)
+                                                       (:player-uuid ctx-data)
+                                                       {:command :context-clear-skill-state
+                                                        :ctx-id ctx-id})]
+        (when (= :context-not-found (:rejected-reason result))
+          (ctx/update-context! ctx-id dissoc :skill-state)))
+      (ctx/update-context! ctx-id dissoc :skill-state))))
 
 (defn- release-hit
   [player-id ctx-id stage]
@@ -181,12 +226,12 @@
                        :sprays (spray-hit-payloads player-id world-id target-info)})))
 
 (defn- finish! [ctx-id performed?]
-  (ctx/update-context! ctx-id update :skill-state
-                       (fn [skill-state]
-                         (assoc (or skill-state {})
-                                :executed? true
-                                :ended? true
-                                :performed? (boolean performed?))))
+  (update-skill-state-root! ctx-id
+                            (fn [skill-state]
+                              (assoc (or skill-state {})
+                                     :executed? true
+                                     :ended? true
+                                     :performed? (boolean performed?))))
   (fx/send-end! ctx-id :blood-retrograde/fx-end {:performed? (boolean performed?)})
   (ctx/terminate-context! ctx-id nil))
 
@@ -212,10 +257,10 @@
 (defn blood-retrograde-on-key-down
   "Initialize charge state and local charge slowdown."
   [{:keys [ctx-id]}]
-  (ctx/update-context! ctx-id assoc :skill-state
-                       {:ticks 0
-                        :executed? false
-                        :ended? false})
+  (set-skill-state-root! ctx-id
+                         {:ticks 0
+                          :executed? false
+                          :ended? false})
   (fx/send-start! ctx-id :blood-retrograde/fx-start)
   (fx/send-update! ctx-id :blood-retrograde/fx-update {:ticks 0 :charge-ratio 0.0})
   (log/debug "BloodRetrograde charge started"))
@@ -228,8 +273,7 @@
           executed? (boolean (:executed? skill-state false))]
       (when-not executed?
         (let [ticks (inc (long (or (:ticks skill-state) 0)))]
-          (ctx/update-context! ctx-id update :skill-state assoc
-                               :ticks ticks)
+          (update-skill-state-root! ctx-id #(assoc % :ticks ticks))
           (fx/send-update! ctx-id :blood-retrograde/fx-update
                            {:ticks (long ticks)
                             :charge-ratio (exp01 (/ (double ticks) (cfg-double :charge.fx-ratio-ticks)))})
@@ -259,7 +303,7 @@
   (when-let [ctx-data (ctx/get-context ctx-id)]
     (when-not (get-in ctx-data [:skill-state :ended?])
       (fx/send-end! ctx-id :blood-retrograde/fx-end {:performed? false})))
-  (ctx/update-context! ctx-id dissoc :skill-state)
+  (clear-skill-state! ctx-id)
   (log/debug "BloodRetrograde aborted"))
 
 (def blood_retrograde

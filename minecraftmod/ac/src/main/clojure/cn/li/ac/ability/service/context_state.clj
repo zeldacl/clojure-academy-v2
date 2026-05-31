@@ -95,12 +95,22 @@
   ([ctx-id state]
    (set-input-state! nil ctx-id state))
   ([owner ctx-id state]
-   (if owner
-     (do
-       (ctx/update-context-owned! owner ctx-id assoc :input-state state)
-       (ctx/get-context owner ctx-id))
-     (do
-       (ctx/update-context! ctx-id assoc :input-state state)
+   (let [ctx-map (if owner (ctx/get-context owner ctx-id) (ctx/get-context ctx-id))
+         player-id (:player-uuid ctx-map)
+         session-id (resolved-session-id owner)
+         result (when (and player-id session-id)
+                  (command-rt/run-command-in-session!
+                   session-id
+                   player-id
+                   {:command :context-set-input-state
+                    :ctx-id (:id ctx-map)
+                    :input-state state}))]
+     (when (= :context-not-found (:rejected-reason result))
+       (if owner
+         (ctx/update-context-owned! owner ctx-id assoc :input-state state)
+         (ctx/update-context! ctx-id assoc :input-state state)))
+     (if owner
+       (ctx/get-context owner ctx-id)
        (ctx/get-context ctx-id)))))
 
 (defn- apply-main-cooldown!

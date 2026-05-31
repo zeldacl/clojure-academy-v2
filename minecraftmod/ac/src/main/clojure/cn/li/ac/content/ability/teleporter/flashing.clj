@@ -11,10 +11,12 @@
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill]]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
-            [cn.li.ac.content.ability.teleporter.tp-skill-helper :as helper]))
+            [cn.li.ac.content.ability.teleporter.tp-skill-helper :as helper]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (def ^:private flashing-skill-id :flashing)
 (def ^:private move-down-channel :flashing/move-down)
@@ -25,6 +27,48 @@
 
 (defn- now-ms []
   (System/currentTimeMillis))
+
+(defn- safe-context-data
+  [ctx-id]
+  (try
+    (ctx/get-context ctx-id)
+    (catch Exception _ nil)))
+
+(defn- command-runtime-ready?
+  [{:keys [session-id player-uuid]}]
+  (and (runtime-hooks/current-player-state-owner)
+       session-id
+       player-uuid))
+
+(defn- set-skill-state!
+  [ctx-id k v]
+  (let [ctx-data (or (safe-context-data ctx-id) {})
+        key-path (if (vector? k) k [k])]
+    (if (command-runtime-ready? ctx-data)
+      (let [result (command-rt/run-command-in-session! (:session-id ctx-data)
+                                                       (:player-uuid ctx-data)
+                                                       {:command :context-assoc-skill-state
+                                                        :ctx-id ctx-id
+                                                        :k key-path
+                                                        :v v})]
+        (when (= :context-not-found (:rejected-reason result))
+          (ctx/update-context! ctx-id assoc-in (into [:skill-state] key-path) v)))
+      (ctx/update-context! ctx-id assoc-in (into [:skill-state] key-path) v))))
+
+(defn- update-skill-state-root!
+  [ctx-id f]
+  (let [ctx-data (or (safe-context-data ctx-id) {})
+        next-state (f (or (:skill-state ctx-data) {}))]
+    (if (command-runtime-ready? ctx-data)
+      (let [result (command-rt/run-command-in-session! (:session-id ctx-data)
+                                                       (:player-uuid ctx-data)
+                                                       {:command :context-assoc-skill-state
+                                                        :ctx-id ctx-id
+                                                        :k []
+                                                        :v next-state})]
+        (when (= :context-not-found (:rejected-reason result))
+          (ctx/update-context! ctx-id assoc :skill-state next-state)))
+      (ctx/update-context! ctx-id assoc :skill-state next-state))))
 
 (defn- skill-exp [player-id]
   (helper/skill-exp player-id flashing-skill-id))
@@ -138,11 +182,11 @@
 
 (defn- clear-preview!
   [ctx-id]
-  (ctx/update-context! ctx-id update :skill-state
-                       (fn [st]
-                         (-> (or st {})
-                             (dissoc :direction)
-                             (dissoc :preview)))))
+  (update-skill-state-root! ctx-id
+                            (fn [st]
+                              (-> (or st {})
+                                  (dissoc :direction)
+                                  (dissoc :preview)))))
 
 (defn- maintain-active-state!
   [ctx-id ctx-data]
@@ -183,7 +227,7 @@
           (skill-effects/perform-resource! player-id (double overload-cost) (double cp-cost))
           (let [protect-ticks (cfg-lerp-int :timing.post-blink-fall-protect-ticks exp)
                 protect-until (+ (now-ms) (* 50 (long (max 0 protect-ticks))))]
-            (ctx/update-context! ctx-id assoc-in [:skill-state :fall-protect-until-ms] protect-until)
+          (set-skill-state! ctx-id [:fall-protect-until-ms] protect-until)
             (helper/reset-fall-damage! player-id))
           (skill-effects/add-skill-exp! player-id flashing-skill-id
                                         (helper/cfg-double flashing-skill-id :progression.exp-blink))
@@ -194,12 +238,12 @@
 (defn- update-preview!
   [ctx-id player-id direction mode]
   (when-let [preview (resolve-preview player-id direction)]
-    (ctx/update-context! ctx-id update :skill-state
-                         (fn [st]
-                           (-> (or st {})
-                               (assoc :active? true)
-                               (assoc :direction direction)
-                               (assoc :preview preview))))
+    (update-skill-state-root! ctx-id
+                              (fn [st]
+                                (-> (or st {})
+                                    (assoc :active? true)
+                                    (assoc :direction direction)
+                                    (assoc :preview preview))))
     (ctx/ctx-send-to-client! ctx-id mode preview)))
 
 (defn- register-movement-listeners!
@@ -225,7 +269,7 @@
                          (perform-flash! (:player-uuid active-ctx) ctx-id direction)
                          (clear-preview! ctx-id)
                          (ctx/ctx-send-to-client! ctx-id :flashing/fx-preview-end {:direction direction}))))))
-    (ctx/update-context! ctx-id assoc-in [:skill-state :listeners-installed?] true)))
+              (set-skill-state! ctx-id [:listeners-installed?] true)))
 
 (defn flashing-activate!
   [{:keys [ctx-id player-id cost-ok?]}]
@@ -234,16 +278,16 @@
           max-active-ticks (cfg-lerp-int :timing.max-active-ticks exp)
           overload-floor (double (or (skill-effects/player-path player-id [:resource-data :cur-overload] 0.0) 0.0))
           now (now-ms)]
-      (ctx/update-context! ctx-id update :skill-state
-                           (fn [st]
-                             (-> (or st {})
-                                 (assoc :active? true)
-                                 (assoc :active-exp exp)
-                                 (assoc :activated-at-ms now)
-                                 (assoc :expires-at-ms (+ now (* 50 (long (max 0 max-active-ticks)))))
-                                 (assoc :overload-floor overload-floor)
-                                 (dissoc :direction)
-                                 (dissoc :preview)))))
+      (update-skill-state-root! ctx-id
+                                (fn [st]
+                                  (-> (or st {})
+                                      (assoc :active? true)
+                                      (assoc :active-exp exp)
+                                      (assoc :activated-at-ms now)
+                                      (assoc :expires-at-ms (+ now (* 50 (long (max 0 max-active-ticks)))))
+                                      (assoc :overload-floor overload-floor)
+                                      (dissoc :direction)
+                                      (dissoc :preview)))))
     (register-movement-listeners! ctx-id)))
 
 (defn flashing-tick!
@@ -254,24 +298,24 @@
 (defn flashing-deactivate!
   [{:keys [player-id ctx-id]}]
   (ctx/ctx-send-to-client! ctx-id :flashing/fx-state-end {})
-  (ctx/update-context! ctx-id update :skill-state
-                       (fn [st]
-                         (-> (or st {})
-                             (assoc :active? false)
-                             (dissoc :direction)
-                             (dissoc :preview))))
+  (update-skill-state-root! ctx-id
+                            (fn [st]
+                              (-> (or st {})
+                                  (assoc :active? false)
+                                  (dissoc :direction)
+                                  (dissoc :preview))))
   (skill-effects/set-main-cooldown! player-id flashing-skill-id
                                     (cfg-lerp-int :cooldown.deactivate-ticks (skill-exp player-id))))
 
 (defn flashing-abort!
   [{:keys [player-id ctx-id]}]
   (ctx/ctx-send-to-client! ctx-id :flashing/fx-state-end {})
-  (ctx/update-context! ctx-id update :skill-state
-                       (fn [st]
-                         (-> (or st {})
-                             (assoc :active? false)
-                             (dissoc :direction)
-                             (dissoc :preview))))
+  (update-skill-state-root! ctx-id
+                            (fn [st]
+                              (-> (or st {})
+                                  (assoc :active? false)
+                                  (dissoc :direction)
+                                  (dissoc :preview))))
   (skill-effects/set-main-cooldown! player-id flashing-skill-id
                                     (cfg-lerp-int :cooldown.deactivate-ticks (skill-exp player-id))))
 

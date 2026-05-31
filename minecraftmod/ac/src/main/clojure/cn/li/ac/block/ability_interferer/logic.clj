@@ -1,8 +1,10 @@
 (ns cn.li.ac.block.ability-interferer.logic
 	"Ability Interferer business logic: state schema, player detection, tick, GUI, and container functions."
 	(:require 
-			[cn.li.ac.ability.service.state-accessors :as ps-accessors]
-[clojure.set :as set]
+			[cn.li.ac.ability.service.command-runtime :as command-rt]
+			[cn.li.ac.ability.service.runtime-store :as store]
+			[cn.li.mcmod.hooks.core :as runtime-hooks]
+			[clojure.set :as set]
 						[clojure.string :as str]
 						[cn.li.mcmod.block.state-schema :as state-schema]
 						[cn.li.mcmod.platform.world :as world]
@@ -75,7 +77,15 @@
 (defn- apply-interference-effect! [player src-id]
 	(when-let [uuid (uuid/player-uuid player)]
 		(try
-			(ps-accessors/update-resource-data! uuid rd/add-interference src-id)
+			(let [session-id (runtime-hooks/require-player-state-server-session-id "ability-interferer")
+						state (store/get-player-state* session-id uuid)
+						resource-data (some-> state :resource-data (rd/add-interference src-id))]
+				(when resource-data
+					(command-rt/run-command-in-session!
+					 session-id
+					 uuid
+					 {:command :sync-resource-data
+						:resource-data resource-data})))
 			true
 			(catch Exception e
 				(log/warn "Failed to add interference for" uuid ":" (ex-message e))
@@ -84,7 +94,15 @@
 (defn- remove-interference-effect-by-uuid! [uuid src-id]
 	(when (and uuid src-id)
 		(try
-			(ps-accessors/update-resource-data! uuid rd/remove-interference src-id)
+			(let [session-id (runtime-hooks/require-player-state-server-session-id "ability-interferer")
+						state (store/get-player-state* session-id uuid)
+						resource-data (some-> state :resource-data (rd/remove-interference src-id))]
+				(when resource-data
+					(command-rt/run-command-in-session!
+					 session-id
+					 uuid
+					 {:command :sync-resource-data
+						:resource-data resource-data})))
 			true
 			(catch Exception e
 				(log/warn "Failed to remove interference for" uuid ":" (ex-message e))

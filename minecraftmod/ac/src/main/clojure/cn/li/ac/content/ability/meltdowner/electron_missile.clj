@@ -19,8 +19,10 @@
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.world-effects :as world-effects]
@@ -102,16 +104,42 @@
 (defn- send-end-fx! [ctx-id]
   (send-fx-to-local-and-nearby! ctx-id :electron-missile/fx-end {}))
 
+(defn- safe-context-data
+  [ctx-id]
+  (try
+    (ctx/get-context ctx-id)
+    (catch Exception _ nil)))
+
+(defn- command-runtime-ready?
+  [{:keys [session-id player-uuid]}]
+  (and (runtime-hooks/current-player-state-owner)
+       session-id
+       player-uuid))
+
+(defn- set-skill-state-root!
+  [ctx-id state-map]
+  (let [ctx-data (or (safe-context-data ctx-id) {})]
+    (if (command-runtime-ready? ctx-data)
+      (let [result (command-rt/run-command-in-session! (:session-id ctx-data)
+                                                       (:player-uuid ctx-data)
+                                                       {:command :context-assoc-skill-state
+                                                        :ctx-id ctx-id
+                                                        :k []
+                                                        :v state-map})]
+        (when (= :context-not-found (:rejected-reason result))
+          (ctx/update-context! ctx-id assoc :skill-state state-map)))
+      (ctx/update-context! ctx-id assoc :skill-state state-map))))
+
 (defn electron-missile-down!
   [{:keys [player-id ctx-id cost-ok?]}]
   (when cost-ok?
     (let [overload-floor (max (cfg-double :cost.down.overload)
                               (current-overload player-id))]
-      (ctx/update-context! ctx-id assoc :skill-state
-                           {:ticks 0
-                            :active-balls 0
-                            :active? true
-                            :overload-floor overload-floor})
+      (set-skill-state-root! ctx-id
+                             {:ticks 0
+                              :active-balls 0
+                              :active? true
+                              :overload-floor overload-floor})
       (send-start-fx! ctx-id))))
 
 (defn electron-missile-tick!
@@ -157,11 +185,11 @@
                                            (:uuid target)
                                            (cfg-lerp :combat.damage exp)
                                            :magic)
-                                        (md-damage/mark-target! player-id (:uuid target)
-                                                                {:ctx-id ctx-id
-                                                                 :target-pos {:x (:x target)
-                                                                              :y (:y target)
-                                                                              :z (:z target)}})
+                                          (md-damage/mark-target! player-id (:uuid target)
+                                                                  {:ctx-id ctx-id
+                                                                   :target-pos {:x (:x target)
+                                                                                :y (:y target)
+                                                                                :z (:z target)}})
                                          (skill-effects/add-skill-exp! player-id
                                                                        electron-missile-skill-id
                                                                        (cfg-double :progression.exp-hit)))
@@ -169,11 +197,11 @@
                                        (dec balls-after-spawn))
                                      balls-after-spawn)))]
           (send-update-fx! ctx-id ticks balls-after-fire)
-          (ctx/update-context! ctx-id assoc :skill-state
-                               {:ticks (inc ticks)
-                                :active-balls balls-after-fire
-                                :active? true
-                                :overload-floor overload-floor}))))
+          (set-skill-state-root! ctx-id
+                                 {:ticks (inc ticks)
+                                  :active-balls balls-after-fire
+                                  :active? true
+                                  :overload-floor overload-floor}))))
     (catch Exception e
       (log/warn "ElectronMissile tick! failed:" (ex-message e)))))
 
@@ -183,14 +211,14 @@
         cd (cfg-lerp-int :cooldown.ticks exp)]
     (skill-effects/set-main-cooldown! player-id electron-missile-skill-id cd)
     (send-end-fx! ctx-id)
-    (ctx/update-context! ctx-id assoc :skill-state
-                         {:ticks 0 :active-balls 0 :active? false})))
+    (set-skill-state-root! ctx-id
+                 {:ticks 0 :active-balls 0 :active? false})))
 
 (defn electron-missile-abort!
   [{:keys [ctx-id]}]
   (send-end-fx! ctx-id)
-  (ctx/update-context! ctx-id assoc :skill-state
-                       {:ticks 0 :active-balls 0 :active? false}))
+  (set-skill-state-root! ctx-id
+                         {:ticks 0 :active-balls 0 :active? false}))
 
 (defn init!
   "Explicit runtime installer for Meltdowner shared damage helper hooks."

@@ -19,11 +19,13 @@
             [cn.li.ac.ability.util.balance :as bal]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.ability.effects.beam :as beam]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.util.toggle :as toggle]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.util.log :as log]))
@@ -69,6 +71,33 @@
   {:x (double (or (:x look-vec) (:dx look-vec) 0.0))
    :y (double (or (:y look-vec) (:dy look-vec) 0.0))
    :z (double (or (:z look-vec) (:dz look-vec) 0.0))})
+
+(defn- safe-context-data
+  [ctx-id]
+  (try
+    (ctx/get-context ctx-id)
+    (catch Exception _ nil)))
+
+(defn- command-runtime-ready?
+  [{:keys [session-id player-uuid]}]
+  (and (runtime-hooks/current-player-state-owner)
+       session-id
+       player-uuid))
+
+(defn- set-skill-state!
+  [ctx-id key-path value]
+  (let [ctx-data (or (safe-context-data ctx-id) {})
+        path (if (vector? key-path) key-path [key-path])]
+    (if (command-runtime-ready? ctx-data)
+      (let [result (command-rt/run-command-in-session! (:session-id ctx-data)
+                                                       (:player-uuid ctx-data)
+                                                       {:command :context-assoc-skill-state
+                                                        :ctx-id ctx-id
+                                                        :k path
+                                                        :v value})]
+        (when (= :context-not-found (:rejected-reason result))
+          (ctx/update-context! ctx-id assoc-in (into [:skill-state] path) value)))
+      (ctx/update-context! ctx-id assoc-in (into [:skill-state] path) value))))
 
 ;; ---------------------------------------------------------------------------
 ;; Overload floor enforcement
@@ -176,7 +205,7 @@
   [{:keys [player-id ctx-id cost-ok?]}]
   (when cost-ok?
     (let [overload-floor (cfg-lerp :cost.down.overload (skill-exp player-id))]
-      (ctx/update-context! ctx-id update :skill-state assoc :overload-floor overload-floor))))
+      (set-skill-state! ctx-id [:overload-floor] overload-floor))))
 
 (defn- meltdowner-on-tick!
   [{:keys [player-id ctx-id hold-ticks]}]

@@ -2,7 +2,6 @@
 	"Canonical AC context/dispatcher service implementation."
 	(:require [cn.li.ac.ability.registry.event :as evt]
 						[cn.li.ac.ability.service.context-domain :as context-domain]
-						[cn.li.ac.ability.service.context-repository :as context-repo]
 						[cn.li.mcmod.util.log :as log]))
 
 (def STATUS-CONSTRUCTED context-domain/status-constructed)
@@ -79,27 +78,55 @@
 
 (defn- dispatcher-state-atom
 	[]
-	(context-repo/dispatcher-state-atom (current-dispatcher-runtime)))
+	(:dispatcher-state* (current-dispatcher-runtime)))
 
 (defn- dispatcher-state-snapshot
 	[]
-	(context-repo/state-snapshot (current-dispatcher-runtime)))
+	@(dispatcher-state-atom))
 
 (defn- update-dispatcher-state!
 	[f & args]
-	(apply context-repo/swap-state! (current-dispatcher-runtime) f args))
+	(apply swap! (dispatcher-state-atom) f args))
 
 (defn- context-registry-snapshot
 	[]
-	(context-repo/context-registry-snapshot (current-dispatcher-runtime)))
+	(:context-registry (dispatcher-state-snapshot)))
 
 (defn- route-fns-snapshot
 	[]
-	(context-repo/route-fns-snapshot (current-dispatcher-runtime)))
+	(:route-fns (dispatcher-state-snapshot)))
 
 (defn- lifecycle-counters-map
 	[]
-	(context-repo/lifecycle-counters-map (current-dispatcher-runtime)))
+	(:lifecycle-counters (dispatcher-state-snapshot)))
+
+(defn- assoc-context!
+	[key ctx]
+	(update-dispatcher-state! assoc-in [:context-registry key] ctx)
+	ctx)
+
+(defn- update-context-if-present!
+	[key f & args]
+	(update-dispatcher-state!
+	 (fn [state]
+		 (if (contains? (:context-registry state) key)
+			 (apply update-in state [:context-registry key] f args)
+			 state))))
+
+(defn- dissoc-context!
+	[key]
+	(update-dispatcher-state! update :context-registry dissoc key)
+	nil)
+
+(defn- clear-route-fns!
+	[]
+	(update-dispatcher-state! assoc :route-fns {})
+	nil)
+
+(defn- register-route-fns-entry!
+	[owner-key routes]
+	(update-dispatcher-state! assoc-in [:route-fns owner-key] routes)
+	nil)
 
 (def ^:private DEFAULT-TERMINATED-CONTEXT-GRACE-MS 1000)
 (def ^:private DEFAULT-KEEPALIVE-TIMEOUT-MS 1500)
@@ -270,7 +297,7 @@
 
 (defn register-context! [ctx]
 	(let [ctx* (context-with-owner ctx)]
-		(context-repo/assoc-context! (current-dispatcher-runtime) (context-registry-key ctx*) ctx*)
+		(assoc-context! (context-registry-key ctx*) ctx*)
 		ctx*))
 
 (defn get-context
@@ -288,7 +315,7 @@
 	"Update one context using an explicit owner when ctx-id is opaque."
 	[owner ctx-id f & args]
 	(when-let [[key _ctx] (preferred-context-entry owner ctx-id nil)]
-		(apply context-repo/update-context-if-present! (current-dispatcher-runtime) key f args)))
+		(apply update-context-if-present! key f args)))
 
 (defn update-context!
 	[ctx-id f & args]
@@ -299,9 +326,9 @@
 	 (remove-context! nil ctx-id))
 	([owner ctx-id]
 	 (if (vector? ctx-id)
-		 (context-repo/dissoc-context! (current-dispatcher-runtime) ctx-id)
+			 (dissoc-context! ctx-id)
 		 (when-let [[key _ctx] (preferred-context-entry owner ctx-id nil)]
-			 (context-repo/dissoc-context! (current-dispatcher-runtime) key)))))
+				 (dissoc-context! key)))))
 
 (defn- owner-matches-context?
 	[owner ctx]
@@ -374,12 +401,17 @@
 	([]
 	 (reset-contexts-for-test! {}))
 	([contexts]
-	 (context-repo/reset-contexts! (current-dispatcher-runtime) contexts)
+	 (update-dispatcher-state!
+		(fn [state]
+			(-> state
+					(assoc :context-registry contexts)
+					(assoc :client-id-counter {})
+					(assoc :server-id-counter {}))))
 	 nil))
 
 (defn reset-route-fns-for-test!
 	[]
-	(context-repo/clear-route-fns! (current-dispatcher-runtime))
+	(clear-route-fns!)
 	nil)
 
 (defn context-owned-by?
@@ -483,9 +515,8 @@
 					 (nil? to-server)
 					 (nil? to-client)
 					 (nil? to-except-local))
-		(context-repo/clear-route-fns! (current-dispatcher-runtime))
-		(context-repo/register-route-fns!
-			(current-dispatcher-runtime)
+		(clear-route-fns!)
+		(register-route-fns-entry!
 			(route-owner-key routes)
 			{:to-server to-server :to-client to-client :to-except-local to-except-local}))
 	nil)

@@ -1,10 +1,10 @@
 (ns cn.li.ac.ability.state.player-test
   (:require 
             [cn.li.ac.ability.service.state-tick :as ps-tick]
-[cn.li.ac.ability.service.state-accessors :as ps-accessors]
-[cn.li.ac.ability.service.runtime-store :as store]
-[cn.li.ac.ability.registry.event :as evt]
-[clojure.edn :as edn]
+            [cn.li.ac.ability.service.command-runtime :as command-rt]
+            [cn.li.ac.ability.service.runtime-store :as store]
+            [cn.li.ac.ability.registry.event :as evt]
+            [clojure.edn :as edn]
             [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.test.support.player-state :as ps-fix]            [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
@@ -25,11 +25,17 @@
 (deftest player-state-access-requires-explicit-owner-test
   (binding [runtime-hooks/*player-state-owner* nil]
     (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                          #"requires bound session-id"
-                          (ps-accessors/get-ability-data "ownerless")))
+                          #"session-id"
+                          (command-rt/run-command-in-session! nil
+                                                              "ownerless"
+                                                              {:command :change-category
+                                                               :category-id :x})))
     (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                          #"requires bound session-id"
-                          (ps-accessors/update-ability-data! "ownerless" assoc :category-id :x)))))
+                          #"session-id"
+                          (command-rt/run-command-in-session! nil
+                                                              "ownerless"
+                                                              {:command :change-category
+                                                               :category-id :x})))))
 
 (deftest fresh-state-shape-test
   (let [s (store/fresh-player-state)]
@@ -49,15 +55,21 @@
 (deftest update-ability-data-marks-dirty-test
   (store/get-or-create-player-state! ps-fix/test-session-id "u2")
   (is (false? (:dirty? (store/get-player-state* ps-fix/test-session-id "u2"))))
-  (ps-accessors/update-ability-data! "u2" assoc :category-id :x)
+  (command-rt/run-command-in-session! ps-fix/test-session-id
+                                      "u2"
+                                      {:command :change-category
+                                       :new-category :vecmanip})
   (is (true? (:dirty? (store/get-player-state* ps-fix/test-session-id "u2"))))
   (store/clear-dirty! (store/get-store) ps-fix/test-session-id "u2")
   (is (false? (:dirty? (store/get-player-state* ps-fix/test-session-id "u2")))))
 
 (deftest update-ability-data-uses-bound-owner-session-test
   (store/get-or-create-player-state! :accessor-session "u2")
-  (binding [runtime-hooks/*player-state-owner* {:session-id :accessor-session}]
-    (ps-accessors/update-ability-data! "u2" assoc :category-id :vecmanip)
+  (binding [runtime-hooks/*player-state-owner* {:server-session-id :accessor-session}]
+    (command-rt/run-command-in-session! nil
+                                        "u2"
+                                        {:command :change-category
+                                         :new-category :vecmanip})
     (is (= :vecmanip
            (get-in (store/get-player-state* :accessor-session "u2") [:ability-data :category-id])))))
 
@@ -69,7 +81,7 @@
 
 (deftest server-tick-player-uses-bound-owner-session-test
   (store/get-or-create-player-state! :tick-session "u3")
-  (binding [runtime-hooks/*player-state-owner* {:session-id :tick-session}]
+  (binding [runtime-hooks/*player-state-owner* {:server-session-id :tick-session}]
     (let [r (ps-tick/server-tick-player! "u3" nil)]
       (is (map? r))
       (is (vector? (:events r))))))

@@ -528,34 +528,6 @@
             :player-uuid player-uuid
             :domain :preset-data}]))))
 
-  (defn- transform-domain
-    [player-state domain-key transform-fn transform-args]
-    (if (fn? transform-fn)
-      (let [args (if (sequential? transform-args) transform-args [])
-            next-state (update player-state domain-key #(apply transform-fn % args))]
-        (ok next-state))
-      (rejected player-state :invalid-domain-transform-command)))
-
-  (defn- cmd-transform-ability-data
-    [player-state {:keys [transform-fn transform-args]}]
-    (transform-domain player-state :ability-data transform-fn transform-args))
-
-  (defn- cmd-transform-resource-data
-    [player-state {:keys [transform-fn transform-args]}]
-    (transform-domain player-state :resource-data transform-fn transform-args))
-
-  (defn- cmd-transform-cooldown-data
-    [player-state {:keys [transform-fn transform-args]}]
-    (transform-domain player-state :cooldown-data transform-fn transform-args))
-
-  (defn- cmd-transform-preset-data
-    [player-state {:keys [transform-fn transform-args]}]
-    (transform-domain player-state :preset-data transform-fn transform-args))
-
-  (defn- cmd-transform-develop-data
-    [player-state {:keys [transform-fn transform-args]}]
-    (transform-domain player-state :develop-data transform-fn transform-args))
-
   (defn- cmd-enforce-overload-floor
     "Ensure resource overload is not below floor.
 
@@ -570,21 +542,123 @@
                 (assoc-in [:resource-data :overload-fine] true)))
         (ok player-state))))
 
-  (defn- cmd-set-ability-data
+  (defn- cmd-sync-ability-data
     [player-state {:keys [ability-data]}]
-    (ok (assoc player-state :ability-data ability-data)))
+    (if (some? ability-data)
+      (ok (assoc player-state :ability-data ability-data))
+      (rejected player-state :invalid-ability-data-sync)))
 
-  (defn- cmd-set-resource-data
+  (defn- cmd-sync-resource-data
     [player-state {:keys [resource-data]}]
-    (ok (assoc player-state :resource-data resource-data)))
+    (if (some? resource-data)
+      (ok (assoc player-state :resource-data resource-data))
+      (rejected player-state :invalid-resource-data-sync)))
 
-  (defn- cmd-set-cooldown-data
+  (defn- cmd-sync-cooldown-data
     [player-state {:keys [cooldown-data]}]
-    (ok (assoc player-state :cooldown-data cooldown-data)))
+    (if (some? cooldown-data)
+      (ok (assoc player-state :cooldown-data cooldown-data))
+      (rejected player-state :invalid-cooldown-data-sync)))
 
-  (defn- cmd-set-develop-data
+  (defn- cmd-sync-preset-data
+    [player-state {:keys [preset-data]}]
+    (if (some? preset-data)
+      (ok (assoc player-state :preset-data preset-data))
+      (rejected player-state :invalid-preset-data-sync)))
+
+  (defn- cmd-sync-develop-data
     [player-state {:keys [develop-data]}]
-    (ok (assoc player-state :develop-data develop-data)))
+    (if (some? develop-data)
+      (ok (assoc player-state :develop-data develop-data))
+      (rejected player-state :invalid-develop-data-sync)))
+
+  (defn- cmd-sync-terminal-data
+    [player-state {:keys [terminal-data]}]
+    (if (some? terminal-data)
+      (ok (assoc player-state :terminal-data terminal-data))
+      (rejected player-state :invalid-terminal-data-sync)))
+
+  (defn- cmd-sync-context-registry
+    [player-state {:keys [context-registry]}]
+    (if (map? context-registry)
+      (ok (assoc player-state :context-registry context-registry))
+      (rejected player-state :invalid-context-registry-sync)))
+
+  (defn- cmd-sync-runtime-data
+    [player-state {:keys [runtime-data]}]
+    (if (some? runtime-data)
+      (ok (assoc player-state :runtime runtime-data))
+      (rejected player-state :invalid-runtime-data-sync)))
+
+  (defn- cmd-set-dirty-flag
+    [player-state {:keys [dirty?] :or {dirty? false}}]
+    (ok (assoc player-state :dirty? (boolean dirty?))))
+
+  (defn- cmd-apply-server-tick-postprocess
+    "Apply post-tick resolved domain snapshots produced by state-tick orchestration.
+
+    This command is explicit and domain-scoped to server tick settlement,
+    replacing ad-hoc use of generic set-* commands in tick pipelines."
+    [player-state {:keys [ability-data resource-data cooldown-data develop-data]}]
+    (ok (cond-> player-state
+          (some? ability-data) (assoc :ability-data ability-data)
+          (some? resource-data) (assoc :resource-data resource-data)
+          (some? cooldown-data) (assoc :cooldown-data cooldown-data)
+          (some? develop-data) (assoc :develop-data develop-data))))
+
+  (defn- cmd-context-assoc-skill-state
+    [player-state {:keys [ctx-id k v]}]
+    (if-not (get-in player-state [:context-registry ctx-id])
+      (rejected player-state :context-not-found)
+      (let [key-path (if (vector? k) k [k])]
+        (ok (assoc-in player-state (into [:context-registry ctx-id :skill-state] key-path) v)))))
+
+  (defn- cmd-context-increment-skill-state
+    [player-state {:keys [ctx-id k max]}]
+    (if-not (get-in player-state [:context-registry ctx-id])
+      (rejected player-state :context-not-found)
+    (let [state-key (or k :charge-ticks)
+      key-path (if (vector? state-key) state-key [state-key])
+            max-v (long (or max Long/MAX_VALUE))
+      current (long (or (get-in player-state (into [:context-registry ctx-id :skill-state] key-path)) 0))
+            next-v (min max-v (inc current))]
+      (ok (assoc-in player-state (into [:context-registry ctx-id :skill-state] key-path) next-v)))))
+
+  (defn- cmd-context-set-toggle-state
+    [player-state {:keys [ctx-id skill-id toggle-state]}]
+    (if-not (get-in player-state [:context-registry ctx-id])
+      (rejected player-state :context-not-found)
+      (ok (assoc-in player-state [:context-registry ctx-id :skill-state :toggle skill-id]
+                    toggle-state))))
+
+  (defn- cmd-context-set-toggle-active
+    [player-state {:keys [ctx-id skill-id active]}]
+    (if-not (get-in player-state [:context-registry ctx-id])
+      (rejected player-state :context-not-found)
+      (ok (assoc-in player-state [:context-registry ctx-id :skill-state :toggle skill-id :active]
+                    (boolean active)))))
+
+  (defn- cmd-context-remove-toggle-state
+    [player-state {:keys [ctx-id skill-id]}]
+    (if-not (get-in player-state [:context-registry ctx-id])
+      (rejected player-state :context-not-found)
+      (ok (update-in player-state [:context-registry ctx-id :skill-state :toggle]
+                     (fn [toggle-map]
+                       (if (map? toggle-map)
+                         (dissoc toggle-map skill-id)
+                         toggle-map))))))
+
+  (defn- cmd-context-clear-skill-state
+    [player-state {:keys [ctx-id]}]
+    (if-not (get-in player-state [:context-registry ctx-id])
+      (rejected player-state :context-not-found)
+      (ok (update-in player-state [:context-registry ctx-id] dissoc :skill-state))))
+
+  (defn- cmd-context-set-input-state
+    [player-state {:keys [ctx-id input-state]}]
+    (if-not (get-in player-state [:context-registry ctx-id])
+      (rejected player-state :context-not-found)
+      (ok (assoc-in player-state [:context-registry ctx-id :input-state] input-state))))
 
   (defn- cmd-set-railgun-coin-judged-uuid
     [player-state {:keys [coin-uuid]}]
@@ -636,16 +710,24 @@
 (defmethod apply-command :reset-abilities [ps cmd] (cmd-reset-abilities ps cmd))
 (defmethod apply-command :change-category [ps cmd] (cmd-change-category ps cmd))
 (defmethod apply-command :change-category-with-level [ps cmd] (cmd-change-category-with-level ps cmd))
-(defmethod apply-command :transform-ability-data [ps cmd] (cmd-transform-ability-data ps cmd))
-(defmethod apply-command :transform-resource-data [ps cmd] (cmd-transform-resource-data ps cmd))
-(defmethod apply-command :transform-cooldown-data [ps cmd] (cmd-transform-cooldown-data ps cmd))
-(defmethod apply-command :transform-preset-data [ps cmd] (cmd-transform-preset-data ps cmd))
-(defmethod apply-command :transform-develop-data [ps cmd] (cmd-transform-develop-data ps cmd))
 (defmethod apply-command :enforce-overload-floor [ps cmd] (cmd-enforce-overload-floor ps cmd))
-(defmethod apply-command :set-ability-data [ps cmd] (cmd-set-ability-data ps cmd))
-(defmethod apply-command :set-resource-data [ps cmd] (cmd-set-resource-data ps cmd))
-(defmethod apply-command :set-cooldown-data [ps cmd] (cmd-set-cooldown-data ps cmd))
-(defmethod apply-command :set-develop-data [ps cmd] (cmd-set-develop-data ps cmd))
+(defmethod apply-command :sync-ability-data [ps cmd] (cmd-sync-ability-data ps cmd))
+(defmethod apply-command :sync-resource-data [ps cmd] (cmd-sync-resource-data ps cmd))
+(defmethod apply-command :sync-cooldown-data [ps cmd] (cmd-sync-cooldown-data ps cmd))
+(defmethod apply-command :sync-preset-data [ps cmd] (cmd-sync-preset-data ps cmd))
+(defmethod apply-command :sync-develop-data [ps cmd] (cmd-sync-develop-data ps cmd))
+(defmethod apply-command :sync-terminal-data [ps cmd] (cmd-sync-terminal-data ps cmd))
+(defmethod apply-command :sync-context-registry [ps cmd] (cmd-sync-context-registry ps cmd))
+(defmethod apply-command :sync-runtime-data [ps cmd] (cmd-sync-runtime-data ps cmd))
+(defmethod apply-command :set-dirty-flag [ps cmd] (cmd-set-dirty-flag ps cmd))
+(defmethod apply-command :apply-server-tick-postprocess [ps cmd] (cmd-apply-server-tick-postprocess ps cmd))
+(defmethod apply-command :context-assoc-skill-state [ps cmd] (cmd-context-assoc-skill-state ps cmd))
+(defmethod apply-command :context-increment-skill-state [ps cmd] (cmd-context-increment-skill-state ps cmd))
+(defmethod apply-command :context-set-toggle-state [ps cmd] (cmd-context-set-toggle-state ps cmd))
+(defmethod apply-command :context-set-toggle-active [ps cmd] (cmd-context-set-toggle-active ps cmd))
+(defmethod apply-command :context-remove-toggle-state [ps cmd] (cmd-context-remove-toggle-state ps cmd))
+(defmethod apply-command :context-clear-skill-state [ps cmd] (cmd-context-clear-skill-state ps cmd))
+(defmethod apply-command :context-set-input-state [ps cmd] (cmd-context-set-input-state ps cmd))
 (defmethod apply-command :set-railgun-coin-judged-uuid [ps cmd] (cmd-set-railgun-coin-judged-uuid ps cmd))
 (defmethod apply-command :clear-railgun-coin-judged-uuid [ps cmd] (cmd-clear-railgun-coin-judged-uuid ps cmd))
 
