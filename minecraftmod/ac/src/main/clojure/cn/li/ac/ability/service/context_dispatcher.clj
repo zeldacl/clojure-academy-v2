@@ -1,19 +1,16 @@
 (ns cn.li.ac.ability.service.context-dispatcher
 	"Canonical AC context/dispatcher service implementation."
 	(:require [cn.li.ac.ability.registry.event :as evt]
-						[clojure.string :as str]
+						[cn.li.ac.ability.service.context-domain :as context-domain]
+						[cn.li.ac.ability.service.context-repository :as context-repo]
 						[cn.li.mcmod.util.log :as log]))
 
-(def STATUS-CONSTRUCTED :constructed)
-(def STATUS-ALIVE :alive)
-(def STATUS-TERMINATED :terminated)
+(def STATUS-CONSTRUCTED context-domain/status-constructed)
+(def STATUS-ALIVE context-domain/status-alive)
+(def STATUS-TERMINATED context-domain/status-terminated)
 
 (defn status-valid-transition? [from to]
-	(case [from to]
-		[:constructed :alive] true
-		[:constructed :terminated] true
-		[:alive :terminated] true
-		false))
+	(context-domain/status-valid-transition? from to))
 
 (def ^:private STATIC-ROUTE-OWNER [::static-routes ::process])
 
@@ -37,9 +34,8 @@
 	 :dispatcher-state* (atom default-dispatcher-state)})
 
 (def ^:dynamic *dispatcher-runtime* nil)
-
-(defonce ^:private installed-dispatcher-runtime
-	(create-dispatcher-runtime))
+(defonce ^:private dispatcher-runtime-ref*
+	(atom (create-dispatcher-runtime)))
 
 (defn- dispatcher-runtime?
 	[runtime]
@@ -62,44 +58,55 @@
 (defn- current-dispatcher-runtime
 	[]
 	(or *dispatcher-runtime*
-			installed-dispatcher-runtime))
+			@dispatcher-runtime-ref*))
+
+(defn install-dispatcher-runtime!
+	"Install an explicit dispatcher runtime instance.
+	This enables composition-root wiring instead of namespace-level singletons."
+	[runtime]
+	(when-not (dispatcher-runtime? runtime)
+		(throw (ex-info "Expected dispatcher runtime"
+						{:runtime runtime})))
+	(reset! dispatcher-runtime-ref* runtime)
+	runtime)
+
+(defn use-fresh-dispatcher-runtime!
+	"Reset dispatcher runtime installation to a fresh runtime instance."
+	[]
+	(let [runtime (create-dispatcher-runtime)]
+		(reset! dispatcher-runtime-ref* runtime)
+		runtime))
 
 (defn- dispatcher-state-atom
 	[]
-	(:dispatcher-state* (current-dispatcher-runtime)))
+	(context-repo/dispatcher-state-atom (current-dispatcher-runtime)))
 
 (defn- dispatcher-state-snapshot
 	[]
-	@(dispatcher-state-atom))
+	(context-repo/state-snapshot (current-dispatcher-runtime)))
 
 (defn- update-dispatcher-state!
 	[f & args]
-	(apply swap! (dispatcher-state-atom) f args))
+	(apply context-repo/swap-state! (current-dispatcher-runtime) f args))
 
 (defn- context-registry-snapshot
 	[]
-	(:context-registry (dispatcher-state-snapshot)))
+	(context-repo/context-registry-snapshot (current-dispatcher-runtime)))
 
 (defn- route-fns-snapshot
 	[]
-	(:route-fns (dispatcher-state-snapshot)))
+	(context-repo/route-fns-snapshot (current-dispatcher-runtime)))
 
 (defn- lifecycle-counters-map
 	[]
-	(:lifecycle-counters (dispatcher-state-snapshot)))
+	(context-repo/lifecycle-counters-map (current-dispatcher-runtime)))
 
 (def ^:private DEFAULT-TERMINATED-CONTEXT-GRACE-MS 1000)
 (def ^:private DEFAULT-KEEPALIVE-TIMEOUT-MS 1500)
 
 (defn- positive-long-prop
 	[prop-key default-value]
-	(let [raw (System/getProperty prop-key)]
-		(if (and raw (not (str/blank? raw)))
-			(try
-				(let [parsed (Long/parseLong raw)]
-					(if (pos? parsed) parsed default-value))
-				(catch Exception _ default-value))
-			default-value)))
+	(context-domain/positive-long-prop prop-key default-value))
 
 (defn keepalive-timeout-ms
 	"Server-side keepalive timeout threshold in milliseconds.
@@ -263,7 +270,7 @@
 
 (defn register-context! [ctx]
 	(let [ctx* (context-with-owner ctx)]
-		(update-dispatcher-state! assoc-in [:context-registry (context-registry-key ctx*)] ctx*)
+		(context-repo/assoc-context! (current-dispatcher-runtime) (context-registry-key ctx*) ctx*)
 		ctx*))
 
 (defn get-context
@@ -281,11 +288,7 @@
 	"Update one context using an explicit owner when ctx-id is opaque."
 	[owner ctx-id f & args]
 	(when-let [[key _ctx] (preferred-context-entry owner ctx-id nil)]
-		(update-dispatcher-state!
-			(fn [state]
-				(if (contains? (:context-registry state) key)
-					(apply update-in state [:context-registry key] f args)
-					state)))))
+		(apply context-repo/update-context-if-present! (current-dispatcher-runtime) key f args)))
 
 (defn update-context!
 	[ctx-id f & args]
@@ -296,9 +299,9 @@
 	 (remove-context! nil ctx-id))
 	([owner ctx-id]
 	 (if (vector? ctx-id)
-		 (update-dispatcher-state! update :context-registry dissoc ctx-id)
+		 (context-repo/dissoc-context! (current-dispatcher-runtime) ctx-id)
 		 (when-let [[key _ctx] (preferred-context-entry owner ctx-id nil)]
-			 (update-dispatcher-state! update :context-registry dissoc key)))))
+			 (context-repo/dissoc-context! (current-dispatcher-runtime) key)))))
 
 (defn- owner-matches-context?
 	[owner ctx]
@@ -371,17 +374,12 @@
 	([]
 	 (reset-contexts-for-test! {}))
 	([contexts]
-	 (update-dispatcher-state!
-			(fn [state]
-				(-> state
-						(assoc :context-registry contexts)
-						(assoc :client-id-counter {})
-						(assoc :server-id-counter {}))))
+	 (context-repo/reset-contexts! (current-dispatcher-runtime) contexts)
 	 nil))
 
 (defn reset-route-fns-for-test!
 	[]
-	(update-dispatcher-state! assoc :route-fns {})
+	(context-repo/clear-route-fns! (current-dispatcher-runtime))
 	nil)
 
 (defn context-owned-by?
@@ -398,7 +396,7 @@
 		 (when (status-valid-transition? (:status ctx) STATUS-ALIVE)
 			 (update-context-owned! owner ctx-id (fn [c]
 															(let [buffer (:message-buffer c)
-																		alive-ctx (assoc c :status STATUS-ALIVE :server-id server-id :message-buffer [] :last-keepalive-ms (System/currentTimeMillis) :terminated-at-ms nil)]
+															alive-ctx (context-domain/transition-to-alive c server-id (System/currentTimeMillis))]
 																(when (and flush-fn (seq buffer))
 																	(doseq [msg buffer] (flush-fn msg)))
 																alive-ctx)))
@@ -411,7 +409,7 @@
 	 (when-let [ctx (or (get-context owner ctx-id)
 									(when (nil? owner) (get-context ctx-id)))]
 		 (when (not= (:status ctx) STATUS-TERMINATED)
-			 (update-context-owned! owner ctx-id assoc :status STATUS-TERMINATED :terminated-at-ms (System/currentTimeMillis))
+				 (update-context-owned! owner ctx-id context-domain/transition-to-terminated (System/currentTimeMillis))
 			 (when send-terminated-fn
 				 (binding [*context-owner* {:logical-side (context-logical-side ctx)
 													 :session-id (context-session-id ctx)}]
@@ -485,8 +483,11 @@
 					 (nil? to-server)
 					 (nil? to-client)
 					 (nil? to-except-local))
-		(update-dispatcher-state! assoc :route-fns {})
-		(update-dispatcher-state! assoc-in [:route-fns (route-owner-key routes)] {:to-server to-server :to-client to-client :to-except-local to-except-local}))
+		(context-repo/clear-route-fns! (current-dispatcher-runtime))
+		(context-repo/register-route-fns!
+			(current-dispatcher-runtime)
+			(route-owner-key routes)
+			{:to-server to-server :to-client to-client :to-except-local to-except-local}))
 	nil)
 
 (defn ctx-send-to-server!
@@ -519,7 +520,7 @@
 (defn ctx-on! [ctx-id channel handler-fn] (update-context! ctx-id update-in [:listeners channel] (fnil conj []) handler-fn))
 
 (defn active-context? [ctx]
-	(not= STATUS-TERMINATED (:status ctx)))
+	(context-domain/active-context? ctx))
 
 (defn active-contexts
 	([]

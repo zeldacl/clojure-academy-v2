@@ -23,7 +23,7 @@
         hooks (client-ui-hooks/runtime-client-ui-hooks)]
     (binding [runtime-hooks/*client-session-id* test-client-session]
       (client-ui-hooks/set-slot-context-for-test! "p1" 0 "ctx-flashing-dead"))
-    (with-redefs [ctx/get-context (fn [_]
+    (with-redefs [ctx/get-context (fn [_owner _ctx-id]
                                     {:id "ctx-flashing-dead"
                                      :player-uuid "p1"
                                      :skill-id :flashing

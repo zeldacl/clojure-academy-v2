@@ -18,6 +18,7 @@
 	  :state* state*}))
 
 (def ^:dynamic *skill-registry-runtime* nil)
+(defonce ^:private skill-registry-runtime-ref* (atom nil))
 
 (defn- skill-registry-runtime?
 	[runtime]
@@ -40,6 +41,7 @@
 (defn- current-skill-registry-runtime
 	[]
 	(or *skill-registry-runtime*
+		@skill-registry-runtime-ref*
 		(throw (ex-info "Skill registry runtime is not installed"
 						{:hint "Install via runtime_bridge/install-runtime-hooks! or skill/install-skill-registry-runtime!"}))))
 
@@ -50,14 +52,14 @@
 	(when-not (skill-registry-runtime? runtime)
 		(throw (ex-info "Expected skill registry runtime"
 						{:runtime runtime})))
-	(alter-var-root #'*skill-registry-runtime* (constantly runtime))
+	(reset! skill-registry-runtime-ref* runtime)
 	runtime)
 
 (defn use-fresh-skill-registry-runtime!
 	"Reset skill registry runtime binding to a fresh runtime instance."
 	[]
 	(let [runtime (create-skill-registry-runtime)]
-		(alter-var-root #'*skill-registry-runtime* (constantly runtime))
+		(reset! skill-registry-runtime-ref* runtime)
 		runtime))
 
 (defn- skill-registry-state-atom

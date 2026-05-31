@@ -9,12 +9,7 @@
 [cn.li.ac.ability.service.runtime-store :as store]
 [cn.li.mcmod.hooks.core :as runtime-hooks]
 [clojure.string :as str]
-						[cn.li.ac.ability.model.ability :as adata]
-						[cn.li.ac.ability.model.cooldown :as cdata]
-						[cn.li.ac.ability.model.develop :as ddata]
-						[cn.li.ac.ability.model.preset :as pdata]
-						[cn.li.ac.ability.model.resource :as rdata]
-								[cn.li.ac.ability.service.state-actions :as state-actions]						[cn.li.ac.ability.registry.skill-query :as skill-query]
+														[cn.li.ac.ability.service.command-runtime :as command-rt]						[cn.li.ac.ability.registry.skill-query :as skill-query]
 						[cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
 						[cn.li.mcmod.command.actions :as command-actions]
 						[cn.li.mcmod.util.log :as log]))
@@ -112,7 +107,10 @@
 	(let [session-id (runtime-hooks/require-context-player-state-session-id "Command actions" context)
 				category-id (:category-id action-map)
 				player-uuid (action-player-uuid action-map context)]
-		(state-actions/change-category-in-session! session-id player-uuid category-id)
+		(command-rt/run-command-in-session! session-id
+												player-uuid
+												{:command :change-category
+												 :new-category category-id})
 		(log/info "Switching category for player" player-uuid "to" category-id)
 		(send-feedback! context "command.academy.aim.cat.success" [(name category-id)] false)
 		{:success? true}))
@@ -122,7 +120,11 @@
 	(let [session-id (runtime-hooks/require-context-player-state-session-id "Command actions" context)
 				node-id (:node-id action-map)
 				player-uuid (action-player-uuid action-map context)]
-		(state-actions/learn-skill-in-session! session-id player-uuid node-id)
+		(command-rt/run-command-in-session! session-id
+												player-uuid
+												{:command :learn-skill
+												 :skill-id node-id
+												 :check-conditions? false})
 		(log/info "Learning node" node-id "for player" player-uuid)
 		(send-feedback! context "command.academy.aim.node.learn.success" [(name node-id)] false)
 		{:success? true}))
@@ -132,7 +134,10 @@
 	(let [session-id (runtime-hooks/require-context-player-state-session-id "Command actions" context)
 				node-id (:node-id action-map)
 				player-uuid (action-player-uuid action-map context)]
-		(state-actions/unlearn-skill-in-session! session-id player-uuid node-id)
+		(command-rt/run-command-in-session! session-id
+												player-uuid
+												{:command :unlearn-skill
+												 :skill-id node-id})
 		(log/info "Unlearning node" node-id "for player" player-uuid)
 		(send-feedback! context "command.academy.aim.node.unlearn.success" [(name node-id)] false)
 		{:success? true}))
@@ -143,9 +148,20 @@
 				player-uuid (action-player-uuid action-map context)]
 		(let [state (normalize-runtime-state (store/get-or-create-player-state! session-id player-uuid))
 					skill-ids (skills-for-category (get-in state [:ability-data :category-id]))]
-			(state-actions/learn-skills-in-session! session-id player-uuid skill-ids)
-			(doseq [skill-id skill-ids]
-				(state-actions/set-skill-exp-in-session! session-id player-uuid skill-id 1.0)))
+			(command-rt/run-commands-in-session!
+				session-id
+				player-uuid
+				(vec (concat
+							(map (fn [skill-id]
+									 {:command :learn-skill
+									  :skill-id skill-id
+									  :check-conditions? false})
+								 skill-ids)
+							(map (fn [skill-id]
+									 {:command :set-skill-exp
+									  :skill-id skill-id
+									  :amount 1.0})
+								 skill-ids)))))
 		(log/info "Learned all nodes for player" player-uuid)
 		(send-feedback! context "command.academy.aim.node.learn_all.success" [] false)
 		{:success? true}))
@@ -189,7 +205,10 @@
 	(let [session-id (runtime-hooks/require-context-player-state-session-id "Command actions" context)
 				level (:level action-map)
 				player-uuid (action-player-uuid action-map context)]
-		(state-actions/set-level-in-session! session-id player-uuid level)
+		(command-rt/run-command-in-session! session-id
+												player-uuid
+												{:command :set-level
+												 :level level})
 		(log/info "Setting level" level "for player" player-uuid)
 		(send-feedback! context "command.academy.aim.level.success" [(str level)] false)
 		{:success? true}))
@@ -200,7 +219,11 @@
 				node-id (:node-id action-map)
 				exp (:exp action-map)
 				player-uuid (action-player-uuid action-map context)]
-		(state-actions/set-skill-exp-in-session! session-id player-uuid node-id exp)
+		(command-rt/run-command-in-session! session-id
+												player-uuid
+												{:command :set-skill-exp
+												 :skill-id node-id
+												 :amount exp})
 		(log/info "Setting node exp" node-id "to" exp "for player" player-uuid)
 		(send-feedback! context "command.academy.aim.node.exp.success" [(name node-id) (str exp)] false)
 		{:success? true}))
@@ -209,7 +232,7 @@
 	[action-map context]
 	(let [session-id (runtime-hooks/require-context-player-state-session-id "Command actions" context)
 				player-uuid (action-player-uuid action-map context)]
-		(state-actions/recover-all-in-session! session-id player-uuid)
+		(command-rt/run-command-in-session! session-id player-uuid {:command :recover-all})
 		(send-feedback! context "command.academy.aim.fullcp.success" [] false)
 		{:success? true}))
 
@@ -217,7 +240,7 @@
 	[action-map context]
 	(let [session-id (runtime-hooks/require-context-player-state-session-id "Command actions" context)
 				player-uuid (action-player-uuid action-map context)]
-		(state-actions/clear-cooldowns-in-session! session-id player-uuid)
+		(command-rt/run-command-in-session! session-id player-uuid {:command :clear-all-cooldowns})
 		(send-feedback! context "command.academy.aim.cd_clear.success" [] false)
 		{:success? true}))
 
@@ -225,7 +248,7 @@
 	[action-map context]
 	(let [session-id (runtime-hooks/require-context-player-state-session-id "Command actions" context)
 				player-uuid (action-player-uuid action-map context)]
-		(state-actions/reset-abilities-in-session! session-id player-uuid)
+		(command-rt/run-command-in-session! session-id player-uuid {:command :reset-abilities})
 		(send-feedback! context "command.academy.aim.reset.success" [] false)
 		{:success? true}))
 
@@ -235,7 +258,20 @@
 				player-uuid (action-player-uuid action-map context)]
 		(let [state (normalize-runtime-state (store/get-or-create-player-state! session-id player-uuid))
 					skill-ids (skills-for-category (get-in state [:ability-data :category-id]))]
-			(state-actions/maxout-progression-in-session! session-id player-uuid skill-ids))
+			(command-rt/run-commands-in-session!
+				session-id
+				player-uuid
+				(vec (concat [{:command :set-level :level 5}]
+							(map (fn [skill-id]
+									 {:command :learn-skill
+									  :skill-id skill-id
+									  :check-conditions? false})
+								 skill-ids)
+							(map (fn [skill-id]
+									 {:command :set-skill-exp
+									  :skill-id skill-id
+									  :amount 1.0})
+								 skill-ids)))))
 		(send-feedback! context "command.academy.aim.maxout.success" [] false)
 		{:success? true}))
 

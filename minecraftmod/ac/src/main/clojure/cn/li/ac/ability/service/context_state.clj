@@ -18,6 +18,19 @@
             [cn.li.ac.ability.rules.cooldown-rules :as cd-rules]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
+(defonce ^:private session-id-resolver*
+  (atom (fn [] (runtime-hooks/player-state-session-id))))
+
+(defn install-session-runtime!
+  "Install runtime callback used for implicit session resolution in default paths.
+
+  Keys:
+  - :session-id-resolver (fn [] -> string|nil)"
+  [{:keys [session-id-resolver]}]
+  (when session-id-resolver
+    (reset! session-id-resolver* session-id-resolver))
+  nil)
+
 (def INPUT-IDLE :idle)
 (def INPUT-ACTIVE :active)
 (def INPUT-RELEASED :released)
@@ -30,6 +43,7 @@
       (let [session-id (:session-id owner)]
         (when (and (some? session-id) (not (vector? session-id)))
           session-id))
+      ((or @session-id-resolver* (fn [] nil)))
       (runtime-hooks/require-player-state-session-id "context-state")))
 
 (defn- runtime-player-state

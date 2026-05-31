@@ -22,6 +22,19 @@
             [cn.li.mcmod.hooks.core                      :as runtime-hooks]
             [cn.li.mcmod.util.log                        :as log]))
 
+(defonce ^:private session-id-resolver*
+  (atom (fn [] (runtime-hooks/player-state-session-id))))
+
+(defn install-session-runtime!
+  "Install runtime callback used for implicit session resolution in default arities.
+
+  Keys:
+  - :session-id-resolver (fn [] -> string|nil)"
+  [{:keys [session-id-resolver]}]
+  (when session-id-resolver
+    (reset! session-id-resolver* session-id-resolver))
+  nil)
+
 ;; ============================================================================
 ;; Event handler
 ;; ============================================================================
@@ -44,18 +57,19 @@
 (defn execute-effect!
   "Dispatch and execute a single effect plan."
   ([effect]
-  (execute-effect! (runtime-hooks/player-state-session-id) effect))
+   (execute-effect! ((or @session-id-resolver* (fn [] nil)))
+                    effect))
   ([session-id effect]
-  (log/debug "ability-effect.execute"
-             {:type (:effect/type effect)
-              :player-uuid (:player-uuid effect)
-              :ctx-id (:ctx-id effect)})
-  (case (:effect/type effect)
-    :network-send  (net/execute-network-send! session-id effect)
-    :platform-call (platform/execute-platform-call! effect)
-    :persist-state (persist/execute-persist-state! session-id effect)
-    :fire-event    (execute-fire-event! effect)
-    (log/warn "Unknown ability effect type" (:effect/type effect) effect))))
+   (log/debug "ability-effect.execute"
+              {:type (:effect/type effect)
+               :player-uuid (:player-uuid effect)
+               :ctx-id (:ctx-id effect)})
+   (case (:effect/type effect)
+     :network-send  (net/execute-network-send! session-id effect)
+     :platform-call (platform/execute-platform-call! effect)
+     :persist-state (persist/execute-persist-state! session-id effect)
+     :fire-event    (execute-fire-event! effect)
+     (log/warn "Unknown ability effect type" (:effect/type effect) effect))))
 
 (defn execute-effects!
   "Execute a sequence of effect plans produced by the reducer.
@@ -64,7 +78,8 @@
   Each effect is executed in order; exceptions in one do not prevent
   subsequent effects from running."
   ([effects]
-    (execute-effects! (runtime-hooks/player-state-session-id) effects))
+    (execute-effects! ((or @session-id-resolver* (fn [] nil)))
+                      effects))
   ([session-id effects]
   (doseq [effect effects]
     (try
@@ -86,7 +101,7 @@
 
   Events are fired first (via evt/fire-ability-event!), then effects."
   [{:keys [events effects]}]
-  (let [session-id (runtime-hooks/player-state-session-id)
+  (let [session-id ((or @session-id-resolver* (fn [] nil)))
         event-effects (mapv (fn [event]
                               {:effect/type :fire-event
                                :event event

@@ -7,22 +7,33 @@
             [cn.li.ac.ability.service.context-manager :as cm]
             [cn.li.ac.ability.service.context-state :as ctx-rt]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]            [cn.li.ac.ability.registry.skill :as skill-registry]
+            [cn.li.ac.ability.registry.event :as evt]
             [cn.li.ac.ability.model.ability :as ad]
             [cn.li.ac.ability.model.resource :as rd]
             [cn.li.ac.ability.messages :as catalog]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (defn- reset-fixture [f]
-  (let [saved-skills (skill-registry/skill-registry-snapshot)]
-    (test-contexts/clean-contexts-fixture
-     #(test-player/clean-player-states-fixture
-       (fn []
-         (cm/register-send-fns! {:to-client nil :to-server nil})
-         (try
-           (f)
-           (finally
-             (skill-registry/reset-skill-registry-for-test! saved-skills)
-             (cm/register-send-fns! {:to-client nil :to-server nil}))))))))
+  (test-contexts/clean-contexts-fixture
+   #(test-player/clean-player-states-fixture
+     (fn []
+       (skill-registry/install-skill-registry-runtime!
+        (skill-registry/create-skill-registry-runtime))
+       (evt/install-event-subscriber-runtime!
+        (evt/create-event-subscriber-runtime))
+       (cm/install-session-runtime!
+        {:server-session-id-resolver (fn [] (runtime-hooks/player-state-server-session-id))})
+       (cm/register-send-fns! {:to-client nil :to-server nil})
+       (try
+         (f)
+         (finally
+           (skill-registry/install-skill-registry-runtime!
+            (skill-registry/create-skill-registry-runtime))
+           (evt/install-event-subscriber-runtime!
+            (evt/create-event-subscriber-runtime))
+           (cm/install-session-runtime!
+            {:server-session-id-resolver (fn [] (runtime-hooks/player-state-server-session-id))})
+           (cm/register-send-fns! {:to-client nil :to-server nil})))))))
 
 (use-fixtures :each reset-fixture)
 
@@ -141,10 +152,10 @@
                                   :input-state ctx-rt/INPUT-IDLE))
     (ctx/register-context! (assoc (ctx/new-server-context "p2" :meltdowner "cid-1" (server-owner "p2"))
                                   :input-state ctx-rt/INPUT-ACTIVE))
-    (with-redefs [ctx-rt/handle-key-tick! (fn [ctx-id payload terminate-fn]
+    (with-redefs [ctx-rt/handle-key-tick! (fn [owner ctx-id payload terminate-fn]
                                             (swap! calls conj {:ctx-id ctx-id
                                                                :payload payload
-                                                               :owner ctx/*context-owner*
+                                                               :owner owner
                                                                :terminate-fn (some? terminate-fn)})
                                             true)]
       (with-server-player-owner "p1"
@@ -193,5 +204,48 @@
         (if (some? old-grace)
           (System/setProperty grace-key old-grace)
           (System/clearProperty grace-key))))))
+
+(deftest establish-context-uses-installed-server-session-resolver-test
+  (let [out (atom [])
+        player-id "p-alt"
+        skill-id :arc-gen
+        alt-session :alt-server-session
+        ability-data (-> (ad/new-ability-data)
+                         (ad/learn-skill skill-id))
+        resource-data (assoc (rd/new-resource-data) :activated true)]
+    (when-not (skill-registry/get-skill skill-id)
+      (skill-registry/register-skill! {:id skill-id
+                                       :category-id :electromaster
+                                       :level 1
+                                       :pattern :passive}))
+    (store/set-player-state!* alt-session
+                              player-id
+                              {:ability-data ability-data
+                               :resource-data resource-data})
+    (cm/install-session-runtime!
+      {:server-session-id-resolver (fn [] alt-session)})
+    (cm/register-send-fns! {:to-client (fn [uuid msg-id payload]
+                                         (swap! out conj [uuid msg-id payload]))
+                            :to-server nil})
+    (try
+      (let [res (cm/establish-context! player-id "cid-alt" skill-id)]
+        (is (some? res))
+        (is (= [alt-session player-id] (:session-id res)))
+        (is (= 1 (count (filter #(= catalog/MSG-CTX-ESTABLISH (second %)) @out)))))
+      (finally
+        (cm/install-session-runtime!
+          {:server-session-id-resolver (fn [] (runtime-hooks/player-state-server-session-id))})))))
+
+(deftest context-manager-session-resolution-still-fail-fast-test
+  (cm/install-session-runtime!
+    {:server-session-id-resolver (fn [] nil)})
+  (try
+    (binding [runtime-hooks/*player-state-owner* nil]
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                            #"requires bound"
+                            (cm/abort-player-contexts! "p-fail"))))
+    (finally
+      (cm/install-session-runtime!
+        {:server-session-id-resolver (fn [] (runtime-hooks/player-state-server-session-id))}))))
 
 

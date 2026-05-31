@@ -13,9 +13,27 @@
             [cn.li.ac.ability.fx :as fx]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
+(defonce ^:private session-id-resolver*
+  (atom (fn [] (runtime-hooks/player-state-session-id))))
+
+(defn install-session-runtime!
+  "Install runtime callback used for implicit session resolution in default arities.
+
+  Keys:
+  - :session-id-resolver (fn [] -> string|nil)"
+  [{:keys [session-id-resolver]}]
+  (when session-id-resolver
+    (reset! session-id-resolver* session-id-resolver))
+  nil)
+
+(defn- resolve-session-id
+  []
+  (or ((or @session-id-resolver* (fn [] nil)))
+      (runtime-hooks/require-player-state-session-id "skill-effects")))
+
 (defn- runtime-player-state
   [player-id]
-  (store/get-player-state* (runtime-hooks/require-player-state-session-id "skill-effects")
+  (store/get-player-state* (resolve-session-id)
                            player-id))
 
 (defn- runtime-player-state-in-session
@@ -51,7 +69,7 @@
 
 (defn- update-runtime-player-state!
   [player-id f]
-  (update-runtime-player-state-in-session! (runtime-hooks/require-player-state-session-id "skill-effects")
+  (update-runtime-player-state-in-session! (resolve-session-id)
                                            player-id
                                            f))
 
@@ -61,7 +79,7 @@
 
 (defn- mark-runtime-dirty!
   [player-id]
-  (mark-runtime-dirty-in-session! (runtime-hooks/require-player-state-session-id "skill-effects")
+  (mark-runtime-dirty-in-session! (resolve-session-id)
                                   player-id))
 
 (defn- mark-runtime-dirty-in-session!
@@ -83,7 +101,7 @@
   ([player-id overload cp]
    (perform-resource! player-id overload cp false))
   ([player-id overload cp creative?]
-  (perform-resource-in-session! (runtime-hooks/require-player-state-session-id "skill-effects")
+  (perform-resource-in-session! (resolve-session-id)
                                 player-id
                                 overload
                                 cp
@@ -111,7 +129,7 @@
   ([player-id skill-id amount]
    (add-skill-exp! player-id skill-id amount 1.0))
   ([player-id skill-id amount exp-rate]
-    (add-skill-exp-in-session! (runtime-hooks/require-player-state-session-id "skill-effects")
+    (add-skill-exp-in-session! (resolve-session-id)
                       player-id
                       skill-id
                       amount
@@ -132,7 +150,7 @@
 (defn set-main-cooldown!
   "Set main cooldown for ctrl-id (or skill-id)."
   [player-id ctrl-id cooldown-ticks]
-  (set-main-cooldown-in-session! (runtime-hooks/require-player-state-session-id "skill-effects")
+  (set-main-cooldown-in-session! (resolve-session-id)
                                  player-id
                                  ctrl-id
                                  cooldown-ticks)
@@ -204,7 +222,7 @@
 
   Returns true when player state exists; false otherwise."
   [player-id floor-value]
-  (enforce-overload-floor-in-session! (runtime-hooks/require-player-state-session-id "skill-effects")
+  (enforce-overload-floor-in-session! (resolve-session-id)
                                       player-id
                                       floor-value))
 
@@ -230,7 +248,7 @@
 (defn assoc-player-path!
   "Associate value at arbitrary player-state path and mark dirty." 
   [player-id path value]
-  (assoc-player-path-in-session! (runtime-hooks/require-player-state-session-id "skill-effects")
+  (assoc-player-path-in-session! (resolve-session-id)
                                  player-id
                                  path
                                  value))
@@ -245,7 +263,7 @@
   "Update value at arbitrary player-state path with f and args, then mark dirty."
   [player-id path f & args]
   (apply update-player-path-in-session!
-         (runtime-hooks/require-player-state-session-id "skill-effects")
+         (resolve-session-id)
          player-id
          path
          f
@@ -285,7 +303,7 @@
 (defn get-player-state
   "Return full player state map or nil when absent."
   [player-id]
-  (get-player-state-in-session! (runtime-hooks/require-player-state-session-id "skill-effects")
+  (get-player-state-in-session! (resolve-session-id)
                                 player-id))
 
 (defn get-player-state-in-session!
@@ -295,9 +313,9 @@
 (defn player-path
   "Read arbitrary path from player state with optional default value."
   ([player-id path]
-    (player-path-in-session! (runtime-hooks/require-player-state-session-id "skill-effects") player-id path))
+    (player-path-in-session! (resolve-session-id) player-id path))
   ([player-id path default]
-    (player-path-in-session! (runtime-hooks/require-player-state-session-id "skill-effects") player-id path default)))
+    (player-path-in-session! (resolve-session-id) player-id path default)))
 
 (defn player-path-in-session!
   ([session-id player-id path]
@@ -308,7 +326,7 @@
 (defn skill-exp
   "Read clamped skill exp as double from ability-data."
   [player-id skill-id]
-  (skill-exp-in-session! (runtime-hooks/require-player-state-session-id "skill-effects")
+  (skill-exp-in-session! (resolve-session-id)
                          player-id
                          skill-id))
 
@@ -319,7 +337,7 @@
 (defn current-cp
   "Read current CP from resource-data as double."
   [player-id]
-  (current-cp-in-session! (runtime-hooks/require-player-state-session-id "skill-effects")
+  (current-cp-in-session! (resolve-session-id)
                           player-id))
 
 (defn current-cp-in-session!

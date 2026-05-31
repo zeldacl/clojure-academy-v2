@@ -3,6 +3,8 @@
             [cn.li.ac.ability.spi-lifecycle :as spi]))
 
 (defn- clean-fixture [f]
+  (spi/install-lifecycle-registry-runtime!
+    (spi/create-lifecycle-registry-runtime))
   (spi/reset-lifecycle-registry-for-test!)
   (try
     (f)

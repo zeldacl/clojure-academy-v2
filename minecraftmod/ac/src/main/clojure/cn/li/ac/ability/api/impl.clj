@@ -10,7 +10,17 @@
             [cn.li.ac.ability.service.context-dispatcher :as dispatcher]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
-(defrecord AbilitySystemImpl []
+(defn- default-session-id-provider
+  []
+  (runtime-hooks/require-player-state-session-id "Ability API state access"))
+
+(defn- require-session-id
+  [session-id-provider]
+  (or (when (fn? session-id-provider)
+        (session-id-provider))
+      (default-session-id-provider)))
+
+(defrecord AbilitySystemImpl [session-id-provider]
   proto/IAbilityRegistry
   (register-category! [_this category-spec]
     (category/register-category! category-spec))
@@ -31,25 +41,25 @@
 
   proto/IAbilityState
   (get-player-state [_this player-uuid]
-    (store/get-player-state* (runtime-hooks/require-player-state-session-id "Ability API state access") player-uuid))
+    (store/get-player-state* (require-session-id session-id-provider) player-uuid))
   (get-or-create-player-state! [_this player-uuid]
-    (store/get-or-create-player-state! (runtime-hooks/require-player-state-session-id "Ability API state access") player-uuid))
+    (store/get-or-create-player-state! (require-session-id session-id-provider) player-uuid))
   (set-player-state! [_this player-uuid state]
-    (store/set-player-state!* (runtime-hooks/require-player-state-session-id "Ability API state access") player-uuid state))
+    (store/set-player-state!* (require-session-id session-id-provider) player-uuid state))
   (update-player-state! [_this player-uuid f args]
-    (store/update-player-state!* (runtime-hooks/require-player-state-session-id "Ability API state access") player-uuid #(apply f % args)))
+    (store/update-player-state!* (require-session-id session-id-provider) player-uuid #(apply f % args)))
   (mark-dirty! [_this player-uuid]
-    (store/mark-player-dirty! (runtime-hooks/require-player-state-session-id "Ability API state access") player-uuid))
+    (store/mark-player-dirty! (require-session-id session-id-provider) player-uuid))
   (mark-clean! [_this player-uuid]
     (store/clear-dirty! (store/get-store)
-                       (runtime-hooks/require-player-state-session-id "Ability API state access")
+                       (require-session-id session-id-provider)
                        player-uuid))
   (dirty? [_this player-uuid]
-    (boolean (:dirty? (store/get-player-state* (runtime-hooks/require-player-state-session-id "Ability API state access") player-uuid))))
+    (boolean (:dirty? (store/get-player-state* (require-session-id session-id-provider) player-uuid))))
   (server-tick-player! [_this player-uuid sync-fn]
-    (ps-tick/server-tick-player-in-session! (runtime-hooks/require-player-state-session-id "Ability API state access") player-uuid sync-fn))
+    (ps-tick/server-tick-player-in-session! (require-session-id session-id-provider) player-uuid sync-fn))
   (remove-player-state! [_this player-uuid]
-    (store/remove-player-state!* (runtime-hooks/require-player-state-session-id "Ability API state access") player-uuid))
+    (store/remove-player-state!* (require-session-id session-id-provider) player-uuid))
 
   proto/IAbilityDispatcher
   (start-context! [_this player-uuid skill-id]
@@ -73,8 +83,11 @@
   The facade is stateless and delegates to explicit runtime components,
   so callers should wire lifecycle through runtime-bridge instead of relying
   on an implicit process-global singleton."
-  []
-  (->AbilitySystemImpl))
+  ([]
+   (ability-system {}))
+  ([{:keys [session-id-provider]
+     :or {session-id-provider default-session-id-provider}}]
+   (->AbilitySystemImpl session-id-provider)))
 
 
 

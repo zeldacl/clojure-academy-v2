@@ -2,3 +2,22 @@
 # Report-only seed list for auditTopLevelMutableState. Keep exact path+symbol entries only.
 ac/src/main/clojure/cn/li/ac/ability/service/platform_hooks.clj	platform-fn-registry	S2_RUNTIME_COMPONENT	ability/runtime-bridge	Process-local platform function registry installed during runtime hook bootstrap.
 ac/src/main/clojure/cn/li/ac/ability/service/runtime_store.clj	global-store-data	S2_RUNTIME_COMPONENT	ability/runtime-store	Server/session scoped reducer store backing ability state; accessed via IAbilityStore boundary.
+ac/src/main/clojure/cn/li/ac/ability/discovery.clj	bootstrap-attempts*	S2_RUNTIME_COMPONENT	ability/discovery-bootstrap	Bootstrap attempt guard for one-time provider discovery freeze during process lifetime.
+ac/src/main/clojure/cn/li/ac/ability/effects/interpreter.clj	session-id-resolver*	S2_RUNTIME_COMPONENT	ability/runtime-container	Installable session resolver bridge for effect interpreter implicit arities.
+ac/src/main/clojure/cn/li/ac/ability/passive.clj	session-id-resolver*	S2_RUNTIME_COMPONENT	ability/runtime-container	Installable session resolver bridge for passive skill checks.
+ac/src/main/clojure/cn/li/ac/ability/registry/category.clj	category-registry-runtime-ref*	S2_RUNTIME_COMPONENT	ability/runtime-container	Installable category registry runtime pointer for composition-root wiring.
+ac/src/main/clojure/cn/li/ac/ability/registry/event.clj	event-subscriber-runtime-ref*	S2_RUNTIME_COMPONENT	ability/runtime-container	Installable event subscriber runtime pointer for composition-root wiring.
+ac/src/main/clojure/cn/li/ac/ability/registry/skill.clj	skill-registry-runtime-ref*	S2_RUNTIME_COMPONENT	ability/runtime-container	Installable skill registry runtime pointer for composition-root wiring.
+ac/src/main/clojure/cn/li/ac/ability/server/handlers/common.clj	server-session-id-resolver*	S2_RUNTIME_COMPONENT	ability/runtime-container	Installable server session resolver for shared server handler defaults.
+ac/src/main/clojure/cn/li/ac/ability/server/handlers/common.clj	owner-resolver*	S2_RUNTIME_COMPONENT	ability/runtime-container	Installable owner resolver for shared server handler defaults.
+ac/src/main/clojure/cn/li/ac/ability/service/command_runtime.clj	session-id-resolver*	S2_RUNTIME_COMPONENT	ability/runtime-container	Installable session resolver for command runtime implicit session dispatch.
+ac/src/main/clojure/cn/li/ac/ability/service/command_runtime.clj	owner-resolver*	S2_RUNTIME_COMPONENT	ability/runtime-container	Installable owner resolver used in command-runtime fail-fast diagnostics.
+ac/src/main/clojure/cn/li/ac/ability/service/command_runtime.clj	recent-command-traces*	S2_RUNTIME_COMPONENT	ability/command-runtime	In-memory idempotency trace cache for duplicate command replay suppression.
+ac/src/main/clojure/cn/li/ac/ability/service/context_dispatcher.clj	dispatcher-runtime-ref*	S2_RUNTIME_COMPONENT	ability/runtime-container	Installable dispatcher runtime holder replacing singleton install vars.
+ac/src/main/clojure/cn/li/ac/ability/service/context_manager.clj	server-session-id-resolver*	S2_RUNTIME_COMPONENT	ability/runtime-container	Installable server session resolver for context manager implicit owner paths.
+ac/src/main/clojure/cn/li/ac/ability/service/context_state.clj	session-id-resolver*	S2_RUNTIME_COMPONENT	ability/runtime-container	Installable session resolver for context input lifecycle runtime handlers.
+ac/src/main/clojure/cn/li/ac/ability/service/skill_effects.clj	session-id-resolver*	S2_RUNTIME_COMPONENT	ability/runtime-container	Installable session resolver for skill effects shared command paths.
+ac/src/main/clojure/cn/li/ac/ability/service/state_accessors.clj	session-id-resolver*	S2_RUNTIME_COMPONENT	ability/runtime-container	Installable session resolver for player-state accessor default arities.
+ac/src/main/clojure/cn/li/ac/ability/service/state_actions.clj	session-id-resolver*	S2_RUNTIME_COMPONENT	ability/runtime-container	Installable session resolver for state-actions command facade defaults.
+ac/src/main/clojure/cn/li/ac/ability/service/state_tick.clj	session-id-resolver*	S2_RUNTIME_COMPONENT	ability/runtime-container	Installable session resolver for server tick state update bridge.
+ac/src/main/clojure/cn/li/ac/ability/spi_lifecycle.clj	lifecycle-registry-runtime-ref*	S2_RUNTIME_COMPONENT	ability/runtime-container	Installable lifecycle registry runtime pointer for composition-root wiring.

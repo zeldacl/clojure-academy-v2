@@ -1,6 +1,7 @@
 (ns cn.li.ac.core.init
   "AC core initialization orchestration extracted from cn.li.ac.core."
   (:require [cn.li.ac.ability.adapters.runtime-bridge :as ability-runtime]
+            [cn.li.ac.ability.runtime-container :as ability-runtime-container]
             [cn.li.ac.ability.messages :as ability-messages]
             [cn.li.ac.block.platform-bridge :as block-bridge]
             [cn.li.ac.command.platform-bridge :as command-bridge]
@@ -21,5 +22,6 @@
   (when-let [init-wireless-world-data! (requiring-resolve 'cn.li.ac.wireless.data.world/init-world-data!)]
     (init-wireless-world-data!))
   (config-registry/init-configs!)
-  (ability-runtime/install-runtime-hooks!)
+  (ability-runtime/install-runtime-hooks!
+    (ability-runtime-container/create-ability-runtime-container))
   nil)

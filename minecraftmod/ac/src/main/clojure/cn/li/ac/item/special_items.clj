@@ -10,8 +10,8 @@
             [cn.li.mcmod.platform.nbt :as nbt]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.world :as world]
-            [cn.li.ac.ability.service.state-actions :as state-actions]
-            [cn.li.ac.ability.util.uuid :as uuid]            [cn.li.ac.ability.model.ability :as adata]
+            [cn.li.ac.ability.service.command-runtime :as command-rt]
+            [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.util.log :as log]))
 
@@ -57,7 +57,10 @@
           (cond
             (nil? current-category)
             (do
-              (state-actions/change-category-in-session! session-id uuid target-category)
+              (command-rt/run-command-in-session! session-id
+                                                  uuid
+                                                  {:command :change-category
+                                                   :new-category target-category})
               (entity/player-consume-main-hand-item! player 1)
               (log/info "Applied induction factor for initial category" {:uuid uuid :category target-category}))
 
@@ -70,14 +73,12 @@
                   consumed-factor? (entity/player-consume-main-hand-item! player 1)
                   consumed-coil? (entity/player-consume-item-by-id! player magnetic-coil-item-id 1)]
               (when (and consumed-factor? consumed-coil?)
-                (state-actions/change-category-in-session!
-                  session-id
-                  uuid
-                  target-category
-                  (fn [data]
-                    (-> data
-                        (adata/set-category target-category)
-                        (adata/set-level new-level))))
+                (command-rt/run-command-in-session!
+                 session-id
+                 uuid
+                 {:command :change-category-with-level
+                  :new-category target-category
+                  :new-level new-level})
                 (log/info "Applied induction factor category transform"
                           {:uuid uuid
                            :from current-category

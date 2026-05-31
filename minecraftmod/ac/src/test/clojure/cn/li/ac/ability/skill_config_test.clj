@@ -1,6 +1,7 @@
 (ns cn.li.ac.ability.skill-config-test
   (:require [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
+            [cn.li.ac.ability.runtime-container :as runtime-container]
             [cn.li.ac.ability.registry.skill-query :as skill-registry]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.config.common :as config-common]
@@ -19,6 +20,9 @@
    "spawn-y-offset"
    "destination-epsilon"
   "punch-anim-ticks"])
+
+(runtime-container/install-ability-runtime-container!
+  (runtime-container/create-ability-runtime-container))
 
 (defn- registered-content-skill-ids
   []

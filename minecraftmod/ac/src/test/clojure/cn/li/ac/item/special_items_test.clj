@@ -3,11 +3,27 @@
             [cn.li.ac.ability.service.runtime-store :as store]
 [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.model.ability :as adata]            [cn.li.ac.ability.util.uuid :as uuid]
+            [cn.li.ac.ability.registry.event :as evt]
             [cn.li.ac.item.special-items :as special-items]
             [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.mcmod.platform.entity :as entity]))
 
+(defn- with-event-runtime
+  [f]
+  (ps-fix/with-test-player-state-owner
+   (fn []
+     (evt/install-event-subscriber-runtime!
+      (evt/create-event-subscriber-runtime))
+     (evt/reset-ability-event-subscribers-for-test!)
+     (try
+       (f)
+       (finally
+         (evt/install-event-subscriber-runtime!
+          (evt/create-event-subscriber-runtime))
+         (evt/reset-ability-event-subscribers-for-test!))))))
+
 (use-fixtures :each ps-fix/clean-player-states-fixture)
+(use-fixtures :each with-event-runtime)
 
 (deftype StubPlayer [state*]
   entity/IEntityOps

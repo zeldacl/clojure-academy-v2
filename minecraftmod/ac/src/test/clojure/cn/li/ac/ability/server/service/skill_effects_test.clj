@@ -3,9 +3,23 @@
             [cn.li.ac.ability.service.runtime-store :as store]
 [clojure.test :refer [deftest is testing use-fixtures]]
             [cn.li.ac.ability.config :as ability-config]
-            [cn.li.ac.ability.service.skill-effects :as skill-effects]            [cn.li.ac.test.support.player-state :as ps-fix]))
+            [cn.li.ac.ability.service.skill-effects :as skill-effects]
+            [cn.li.ac.test.support.player-state :as ps-fix]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
-(use-fixtures :each ps-fix/clean-player-states-fixture)
+(use-fixtures :each
+  (fn [f]
+    (ps-fix/with-test-player-state-owner
+      (fn []
+        (store/reset-store!)
+        (skill-effects/install-session-runtime!
+          {:session-id-resolver (fn [] (runtime-hooks/player-state-session-id))})
+        (try
+          (f)
+          (finally
+            (store/reset-store!)
+            (skill-effects/install-session-runtime!
+              {:session-id-resolver (fn [] (runtime-hooks/player-state-session-id))})))))))
 
 (deftest scale-damage-default-and-custom-test
   (with-redefs [ability-config/damage-scale (fn [] 2.0)]
@@ -35,5 +49,27 @@
   (store/reset-store!)
   (is (= {:success? false :events [] :data nil}
          (skill-effects/perform-resource! "missing" 1.0 1.0 false))))
+
+(deftest perform-resource-uses-installed-session-resolver-test
+  (store/set-player-state!* :skill-effects-session "p1" (store/fresh-player-state))
+  (skill-effects/install-session-runtime!
+    {:session-id-resolver (fn [] :skill-effects-session)})
+  (try
+    (is (map? (skill-effects/perform-resource! "p1" 1.0 1.0 false)))
+    (finally
+      (skill-effects/install-session-runtime!
+        {:session-id-resolver (fn [] (runtime-hooks/player-state-session-id))}))))
+
+(deftest skill-effects-session-resolution-still-fail-fast-test
+  (skill-effects/install-session-runtime!
+    {:session-id-resolver (fn [] nil)})
+  (try
+    (binding [runtime-hooks/*player-state-owner* nil]
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                            #"requires bound session-id"
+                            (skill-effects/current-cp "p1"))))
+    (finally
+      (skill-effects/install-session-runtime!
+        {:session-id-resolver (fn [] (runtime-hooks/player-state-session-id))}))))
 
 

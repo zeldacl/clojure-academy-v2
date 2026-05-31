@@ -85,7 +85,7 @@
                     (when (and (= "p1" player-uuid) (= 0 key-idx))
                       :railgun))
                   ctx-mgr/activate-context!
-                  (fn [player-uuid skill-id]
+                  (fn [_owner player-uuid skill-id]
                     (swap! activated conj {:player-uuid player-uuid :skill-id skill-id})
                     {:id "ctx-client-1"})
                   net-client/send-to-server
@@ -114,7 +114,7 @@
          activated (atom [])
          hooks (client-ui-hooks/runtime-client-ui-hooks)]
           (with-redefs [client-keybinds/get-skill-id-for-slot-public (fn [_ _] :railgun)
-              ctx-mgr/activate-context! (fn [player-uuid skill-id]
+                    ctx-mgr/activate-context! (fn [_owner player-uuid skill-id]
                       (swap! activated conj {:player-uuid player-uuid
                               :skill-id skill-id})
                       {:id "ctx-should-not-exist"})
@@ -132,7 +132,7 @@
         terminated (atom [])
         hooks (client-ui-hooks/runtime-client-ui-hooks)]
     (with-redefs [client-keybinds/get-skill-id-for-slot-public (fn [_ _] :railgun)
-                  ctx-mgr/activate-context! (fn [_ _] {:id "ctx-client-abort"})
+                  ctx-mgr/activate-context! (fn [_owner _player-uuid _skill-id] {:id "ctx-client-abort"})
                   net-client/send-to-server
                   (fn
                     ([msg-id payload]
@@ -158,7 +158,7 @@
         terminated (atom [])
         hooks (client-ui-hooks/runtime-client-ui-hooks)]
     (with-redefs [client-keybinds/get-skill-id-for-slot-public (fn [_ _] :railgun)
-                  ctx-mgr/activate-context! (fn [_ _] {:id "ctx-client-abort-all"})
+                  ctx-mgr/activate-context! (fn [_owner _player-uuid _skill-id] {:id "ctx-client-abort-all"})
                   net-client/send-to-server
                   (fn
                     ([msg-id payload]
@@ -180,7 +180,7 @@
   (let [ctx-counter (atom 0)
         hooks (client-ui-hooks/runtime-client-ui-hooks)]
     (with-redefs [client-keybinds/get-skill-id-for-slot-public (fn [_ _] :railgun)
-                  ctx-mgr/activate-context! (fn [_ _]
+                  ctx-mgr/activate-context! (fn [_owner _player-uuid _skill-id]
                                               {:id (str "ctx-" (swap! ctx-counter inc))})
                   net-client/send-to-server (fn [& _] nil)]
       (binding [client-keybinds/*client-session-id* :session-a]
@@ -301,7 +301,7 @@
                       1 :railgun
                       nil))
                   ctx-mgr/activate-context!
-                  (fn [_ _] {:id "ctx-penetrate"})
+                  (fn [_owner _player-uuid _skill-id] {:id "ctx-penetrate"})
                   gameplay/use-mouse-wheel-enabled? (fn [] true)
                   net-client/send-to-server
                   (fn
@@ -594,8 +594,8 @@
   (let [sent (atom [])
         hooks (client-ui-hooks/runtime-client-ui-hooks)]
     (with-redefs [client-keybinds/get-skill-id-for-slot-public (fn [_ _] :flashing)
-                  ctx-mgr/activate-context! (fn [_ _] {:id "ctx-flashing"})
-                  ctx/get-context (fn [ctx-id]
+                  ctx-mgr/activate-context! (fn [_owner _player-uuid _skill-id] {:id "ctx-flashing"})
+                  ctx/get-context (fn [_owner ctx-id]
                                     (when (= ctx-id "ctx-flashing")
                                       {:id "ctx-flashing" :skill-id :flashing}))
                   net-client/send-to-server

@@ -27,6 +27,9 @@
 (deftest init-ability-content-freezes-registries-once-test
   (let [freeze-calls* (atom [])]
     (with-redefs [discovery/discovered-skill-namespaces (fn [] [])
+                  discovery/freeze-provider-discovery! (fn []
+                                                        (swap! freeze-calls* conj :discovery)
+                                                        nil)
                   effect/init-default-ops! (fn [] nil)
                   category/register-category! (fn [_] nil)
                   item-actions/register-item-action! (fn [& _] nil)
@@ -58,7 +61,8 @@
                   cn.li.mcmod.util.log/info (fn [& _] nil)]
       (ability-content/init-ability-content!)
       (ability-content/init-ability-content!)
-      (is (= [:category
+            (is (= [:discovery
+              :category
               :skill
               :effect
               :item-actions

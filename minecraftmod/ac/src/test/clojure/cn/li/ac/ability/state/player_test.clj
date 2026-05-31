@@ -3,11 +3,32 @@
             [cn.li.ac.ability.service.state-tick :as ps-tick]
 [cn.li.ac.ability.service.state-accessors :as ps-accessors]
 [cn.li.ac.ability.service.runtime-store :as store]
+[cn.li.ac.ability.registry.event :as evt]
 [clojure.edn :as edn]
             [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.test.support.player-state :as ps-fix]            [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
-(use-fixtures :each ps-fix/clean-player-states-fixture)
+(use-fixtures :each
+  (fn [f]
+    (ps-fix/with-test-player-state-owner
+      (fn []
+        (store/reset-store!)
+        (ps-accessors/install-session-runtime!
+          {:session-id-resolver (fn [] (runtime-hooks/player-state-session-id))})
+        (ps-tick/install-session-runtime!
+          {:session-id-resolver (fn [] (runtime-hooks/player-state-session-id))})
+        (evt/install-event-subscriber-runtime!
+          (evt/create-event-subscriber-runtime))
+        (try
+          (f)
+          (finally
+            (store/reset-store!)
+            (ps-accessors/install-session-runtime!
+              {:session-id-resolver (fn [] (runtime-hooks/player-state-session-id))})
+            (ps-tick/install-session-runtime!
+              {:session-id-resolver (fn [] (runtime-hooks/player-state-session-id))})
+            (evt/install-event-subscriber-runtime!
+              (evt/create-event-subscriber-runtime))))))))
 
 (deftest player-state-access-requires-explicit-owner-test
   (binding [runtime-hooks/*player-state-owner* nil]
@@ -41,11 +62,35 @@
   (store/clear-dirty! (store/get-store) ps-fix/test-session-id "u2")
   (is (false? (:dirty? (store/get-player-state* ps-fix/test-session-id "u2")))))
 
+(deftest update-ability-data-uses-installed-session-resolver-test
+  (store/get-or-create-player-state! :accessor-session "u2")
+  (ps-accessors/install-session-runtime!
+    {:session-id-resolver (fn [] :accessor-session)})
+  (try
+    (ps-accessors/update-ability-data! "u2" assoc :category-id :vecmanip)
+    (is (= :vecmanip
+           (get-in (store/get-player-state* :accessor-session "u2") [:ability-data :category-id])))
+    (finally
+      (ps-accessors/install-session-runtime!
+        {:session-id-resolver (fn [] (runtime-hooks/player-state-session-id))}))))
+
 (deftest server-tick-player-smoke-test
   (store/get-or-create-player-state! ps-fix/test-session-id "u3")
   (let [r (ps-tick/server-tick-player! "u3" nil)]
     (is (map? r))
     (is (vector? (:events r)))))
+
+(deftest server-tick-player-uses-installed-session-resolver-test
+  (store/get-or-create-player-state! :tick-session "u3")
+  (ps-tick/install-session-runtime!
+    {:session-id-resolver (fn [] :tick-session)})
+  (try
+    (let [r (ps-tick/server-tick-player! "u3" nil)]
+      (is (map? r))
+      (is (vector? (:events r))))
+    (finally
+      (ps-tick/install-session-runtime!
+        {:session-id-resolver (fn [] (runtime-hooks/player-state-session-id))}))))
 
 (deftest remove-player-state-test
   (store/set-player-state!* ps-fix/test-session-id "u4" (store/fresh-player-state))
@@ -85,7 +130,7 @@
         decoded (edn/read-string (pr-str persisted))]
     (is (= persisted decoded))
     (is (false? (contains? decoded :dirty?)))
-    (is (= #{:ability-data :resource-data :cooldown-data :preset-data :develop-data :terminal-data}
+    (is (= #{:ability-data :resource-data :cooldown-data :preset-data :develop-data :terminal-data :context-registry}
            (set (keys decoded))))
     (is (= [:electromaster :railgun]
            (get-in decoded [:preset-data :slots [0 0]])))

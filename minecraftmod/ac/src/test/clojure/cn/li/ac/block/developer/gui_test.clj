@@ -6,7 +6,9 @@
             [cn.li.ac.block.developer.logic :as developer-logic]
             [cn.li.ac.block.developer.panel :as developer-panel]
             [cn.li.ac.ability.domain.developer :as developer-domain]
-            [cn.li.ac.ability.registry.category :as category]            [cn.li.ac.ability.util.uuid :as uuid]
+            [cn.li.ac.ability.registry.category :as category]
+            [cn.li.ac.ability.registry.skill-query :as skill-query]
+            [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.mcmod.gui.cgui-core :as cgui-core]
             [cn.li.mcmod.gui.events :as events]
             [cn.li.mcmod.platform.be :as platform-be]
@@ -17,8 +19,15 @@
             [cn.li.mcmod.gui.spec :as gui-reg]
             [cn.li.ac.wireless.gui.sync.handler :as net-helpers]
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]))
+
+(defn- with-player-state-owner
+  [player-uuid f]
+  (binding [runtime-hooks/*player-state-owner* {:server-session-id :test-session
+                                                :player-uuid player-uuid}]
+    (f)))
 
 (defn- widget-tree []
   (let [root (cgui-core/create-widget :name "main")
@@ -82,12 +91,14 @@
                                                                   :level 2
                                                                   :level-progress 1000.0}})
                   category/get-category (fn [_] {:name-key "ac.category.electromaster"})
+                  category/get-prog-incr-rate (fn [_] 1.0)
                   uuid/player-uuid (fn [_] "player-uuid")
                   entity/player-get-name (fn [_] "Player One")
                   platform-be/get-block-id (fn [_] :developer-advanced)
                   developer-domain/developer-type-for-block-id (fn [_] :advanced)
                   developer-domain/min-for-level (fn [_] :normal)
                   developer-domain/gte? (fn [_ _] true)
+                  skill-query/get-controllable-skills-at-level (fn [& _] [])
                   net-helpers/tile-pos-payload (fn [_] {:x 12 :y 34 :z 56})
                   client-bridge/open-screen!
                   (fn [screen-id payload]
@@ -102,16 +113,19 @@
         :wireless-bandwidth (atom 1000.0)
         :wireless-inject-last-tick (atom 0.0)}
         {:switch-wireless-tab! nil})
-      (is (= 1 (count (filter #(= :learn (:kind %)) @calls))))
-      (let [{:keys [handler]} (first @calls)]
-        (handler {:x 1 :y 2})
-        (is (= [{:kind :learn :handler handler}
-                {:kind :open
-                 :screen-id :ac/skill-tree
-                 :payload {:player-uuid "player-uuid"
-                           :learn-context {:x 12 :y 34 :z 56
-                                           :developer-type :advanced}}}]
-               @calls))))))
+      (with-player-state-owner
+        "player-uuid"
+        (fn []
+          (is (= 1 (count (filter #(= :learn (:kind %)) @calls))))
+          (let [{:keys [handler]} (first @calls)]
+            (handler {:x 1 :y 2})
+            (is (= [{:kind :learn :handler handler}
+                    {:kind :open
+                     :screen-id :ac/skill-tree
+                     :payload {:player-uuid "player-uuid"
+                               :learn-context {:x 12 :y 34 :z 56
+                                               :developer-type :advanced}}}]
+                   @calls))))))))
 
 (deftest developer-panel-upgrade-button-respects-category-state-test
   (let [root (widget-tree)
@@ -125,6 +139,7 @@
                   developer-domain/developer-type-for-block-id (fn [_] :advanced)
                   developer-domain/min-for-level (fn [_] :normal)
                   developer-domain/gte? (fn [_ _] true)
+                  skill-query/get-controllable-skills-at-level (fn [& _] [])
                   msg-registry/msg (fn [domain action] [domain action])
                   net-client/send-to-server (fn [& _] nil)
                   store/get-player-state* (fn [_ _]
@@ -132,6 +147,7 @@
                                                                   :level 2
                                                                   :level-progress 0.0}})
                   category/get-category (fn [_] {:name-key "ac.category.electromaster"})
+                  category/get-prog-incr-rate (fn [_] 1.0)
                   net-helpers/tile-pos-payload (fn [_] {:pos-x 1 :pos-y 2 :pos-z 3})]
       (developer-panel/attach-classic-developer-bindings!
        root
@@ -143,9 +159,12 @@
         :wireless-bandwidth (atom 1000.0)
         :wireless-inject-last-tick (atom 0.0)}
        {:switch-wireless-tab! nil})
-      (is (fn? @frame-handler))
-      (@frame-handler nil)
-      (is (true? (cgui-core/visible? (cgui-core/find-widget root "parent_left/panel_ability/btn_upgrade")))))))
+      (with-player-state-owner
+        "player-uuid"
+        (fn []
+          (is (fn? @frame-handler))
+          (@frame-handler nil)
+          (is (true? (cgui-core/visible? (cgui-core/find-widget root "parent_left/panel_ability/btn_upgrade")))))))))
 
 (deftest developer-panel-upgrade-button-hidden-without-category-test
   (let [root (widget-tree)
@@ -161,6 +180,7 @@
                   uuid/player-uuid (fn [_] "player-uuid")
                   platform-be/get-block-id (fn [_] :developer-advanced)
                   developer-domain/developer-type-for-block-id (fn [_] :advanced)
+                  skill-query/get-controllable-skills-at-level (fn [& _] [])
                   store/get-player-state* (fn [_ _]
                                                   {:ability-data {:category-id nil
                                                                   :level 1
@@ -182,12 +202,15 @@
         :wireless-bandwidth (atom 1000.0)
         :wireless-inject-last-tick (atom 0.0)}
        {:switch-wireless-tab! nil})
-      (@frame-handler nil)
-      (is (false? (cgui-core/visible? (cgui-core/find-widget root "parent_left/panel_ability/btn_upgrade"))))
-      (let [handler (some :handler @open-calls)]
-        (is (fn? handler))
-        (handler nil)
-        (is (empty? (filter :open @open-calls)))))))
+      (with-player-state-owner
+        "player-uuid"
+        (fn []
+          (@frame-handler nil)
+          (is (false? (cgui-core/visible? (cgui-core/find-widget root "parent_left/panel_ability/btn_upgrade"))))
+          (let [handler (some :handler @open-calls)]
+            (is (fn? handler))
+            (handler nil)
+            (is (empty? (filter :open @open-calls)))))))))
 
 (deftest developer-gui-init-registers-once-test
   (let [slot-calls (atom 0)

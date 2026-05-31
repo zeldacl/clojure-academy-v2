@@ -8,6 +8,15 @@
 
 (use-fixtures :each ps-fix/clean-player-states-fixture)
 
+(defn- reset-runtime-bridge-fixture [f]
+  (when-let [guard-var (ns-resolve 'cn.li.ac.ability.adapters.runtime-bridge 'runtime-hooks-installed?)]
+    (reset! (var-get guard-var) false))
+  (binding [runtime-hooks/*player-state-owner* {:server-session-id :test-session}
+            runtime-hooks/*client-session-id* :test-client-session]
+    (f)))
+
+(use-fixtures :each reset-runtime-bridge-fixture)
+
 (deftest install-runtime-hooks-connects-player-state-and-sync-payload-test
   (runtime-bridge/install-runtime-hooks!)
   (let [uuid "hook-player"

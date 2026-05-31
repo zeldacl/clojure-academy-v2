@@ -57,10 +57,10 @@
 (deftest screen-owner-requires-explicit-session-and-player-test
   (binding [runtime-hooks/*client-session-id* nil]
     (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                          #"Skill tree screen owner requires :client-session-id"
+                          #"Client read model owner requires :client-session-id"
                           (screen/screen-state-snapshot "player-1"))))
   (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                        #"Skill tree screen owner requires :player-uuid"
+                        #"Client read model owner requires :player-uuid"
                         (screen/screen-state-snapshot {:client-session-id :session-a}))))
 
 (deftest build-draw-ops-includes-hover-description-tooltip-test

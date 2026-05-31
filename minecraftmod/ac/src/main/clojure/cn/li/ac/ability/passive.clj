@@ -6,9 +6,27 @@
             [cn.li.ac.ability.model.ability :as adata]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
+(defonce ^:private session-id-resolver*
+  (atom (fn [] (runtime-hooks/player-state-session-id))))
+
+(defn install-session-runtime!
+  "Install runtime callback used for implicit session resolution in default arities.
+
+  Keys:
+  - :session-id-resolver (fn [] -> string|nil)"
+  [{:keys [session-id-resolver]}]
+  (when session-id-resolver
+    (reset! session-id-resolver* session-id-resolver))
+  nil)
+
+(defn- resolve-session-id
+  []
+  (or ((or @session-id-resolver* (fn [] nil)))
+      (runtime-hooks/require-player-state-session-id "passive")))
+
 (defn- runtime-player-state
   [uuid]
-  (store/get-player-state* (runtime-hooks/require-player-state-session-id "passive") uuid))
+  (store/get-player-state* (resolve-session-id) uuid))
 
 (defn- runtime-player-state-in-session
   [session-id uuid]
@@ -95,7 +113,7 @@
 
 (defn learned-skill?
   [uuid skill-id]
-  (learned-skill-in-session? (runtime-hooks/require-player-state-session-id "passive")
+  (learned-skill-in-session? (resolve-session-id)
                              uuid
                              skill-id))
 

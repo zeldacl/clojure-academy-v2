@@ -1,7 +1,7 @@
 (ns cn.li.ac.command.actions-test
   (:require 
             [cn.li.ac.ability.service.runtime-store :as store]
-[clojure.test :refer [deftest is use-fixtures]]            [cn.li.ac.ability.service.state-actions :as state-actions]
+[clojure.test :refer [deftest is use-fixtures]]            [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.ability.registry.skill-query :as skill-query]
             [cn.li.ac.command.actions :as ac-actions]
             [cn.li.ac.test.support.player-state :as ps-fix]
@@ -49,35 +49,14 @@
 (deftest registered-command-actions-delegate-stateful-mutations-to-service-test
   (ac-actions/install-command-actions!)
   (let [calls (atom [])
-        context {}
+        context {:metadata {:player-state-owner {:server-session-id ps-fix/test-session-id}}}
         uuid "command-player"]
-    (with-redefs [state-actions/learn-skill! (fn [player-uuid skill-id]
-                                               (swap! calls conj [:learn-skill player-uuid skill-id])
-                                               {:changed? true})
-                  state-actions/unlearn-skill! (fn [player-uuid skill-id]
-                                                 (swap! calls conj [:unlearn-skill player-uuid skill-id])
-                                                 {:changed? true})
-                  state-actions/learn-skills! (fn [player-uuid skill-ids]
-                                                (swap! calls conj [:learn-skills player-uuid (vec skill-ids)])
-                                                {:changed? true})
-                  state-actions/set-level! (fn [player-uuid level]
-                                             (swap! calls conj [:set-level player-uuid level])
-                                             {:changed? true})
-                  state-actions/set-skill-exp! (fn [player-uuid skill-id amount]
-                                                 (swap! calls conj [:set-skill-exp player-uuid skill-id amount])
-                                                 {:changed? true})
-                  state-actions/recover-all! (fn [player-uuid]
-                                               (swap! calls conj [:recover-all player-uuid])
-                                               {:changed? true})
-                  state-actions/clear-cooldowns! (fn [player-uuid]
-                                                   (swap! calls conj [:clear-cooldowns player-uuid])
-                                                   {:changed? true})
-                  state-actions/reset-abilities! (fn [player-uuid]
-                                                   (swap! calls conj [:reset-abilities player-uuid])
-                                                   {:changed? true})
-                  state-actions/maxout-progression! (fn [player-uuid skill-ids]
-                                                      (swap! calls conj [:maxout player-uuid (vec skill-ids)])
-                                                      {:changed? true})
+    (with-redefs [command-rt/run-command-in-session! (fn [session-id player-uuid command]
+                                                        (swap! calls conj [:command session-id player-uuid command])
+                                                        {:state {}})
+                  command-rt/run-commands-in-session! (fn [session-id player-uuid commands]
+                                                        (swap! calls conj [:commands session-id player-uuid (vec commands)])
+                                                        {:state {}})
                   store/get-or-create-player-state! (fn [_ _]
                                                   {:ability-data {:category-id :electromaster}})
                   skill-query/get-skills-for-category (fn [_]
@@ -93,17 +72,22 @@
                       {:action :reset-abilities :player-uuid uuid}
                       {:action :maxout-progression :player-uuid uuid}]]
         (is (:success? (command-actions/execute action context))))
-            (is (= [[:learn-skill uuid :railgun]
-              [:unlearn-skill uuid :railgun]
-              [:learn-skills uuid [:arc-gen :railgun]]
-              [:set-skill-exp uuid :arc-gen 1.0]
-              [:set-skill-exp uuid :railgun 1.0]
-              [:set-level uuid 3]
-              [:set-skill-exp uuid :railgun 0.5]
-              [:recover-all uuid]
-              [:clear-cooldowns uuid]
-              [:reset-abilities uuid]
-              [:maxout uuid [:arc-gen :railgun]]]
+      (is (= [[:command ps-fix/test-session-id uuid {:command :learn-skill :skill-id :railgun :check-conditions? false}]
+              [:command ps-fix/test-session-id uuid {:command :unlearn-skill :skill-id :railgun}]
+              [:commands ps-fix/test-session-id uuid [{:command :learn-skill :skill-id :arc-gen :check-conditions? false}
+                                                      {:command :learn-skill :skill-id :railgun :check-conditions? false}
+                                                      {:command :set-skill-exp :skill-id :arc-gen :amount 1.0}
+                                                      {:command :set-skill-exp :skill-id :railgun :amount 1.0}]]
+              [:command ps-fix/test-session-id uuid {:command :set-level :level 3}]
+              [:command ps-fix/test-session-id uuid {:command :set-skill-exp :skill-id :railgun :amount 0.5}]
+              [:command ps-fix/test-session-id uuid {:command :recover-all}]
+              [:command ps-fix/test-session-id uuid {:command :clear-all-cooldowns}]
+              [:command ps-fix/test-session-id uuid {:command :reset-abilities}]
+              [:commands ps-fix/test-session-id uuid [{:command :set-level :level 5}
+                                                      {:command :learn-skill :skill-id :arc-gen :check-conditions? false}
+                                                      {:command :learn-skill :skill-id :railgun :check-conditions? false}
+                                                      {:command :set-skill-exp :skill-id :arc-gen :amount 1.0}
+                                                      {:command :set-skill-exp :skill-id :railgun :amount 1.0}]]]
              @calls)))))
 
 

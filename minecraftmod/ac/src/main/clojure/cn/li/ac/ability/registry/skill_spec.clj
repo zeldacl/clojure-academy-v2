@@ -7,6 +7,15 @@
 	(:require [cn.li.ac.ability.domain.developer :as developer]
 					[cn.li.ac.ability.registry.skill-schema :as schema]))
 
+(def ^:private LEGACY-FN-REFS-PROP "ac.skill-spec.allow-legacy-fn-refs")
+
+(defn- legacy-fn-refs-allowed?
+	[]
+	(let [raw (System/getProperty LEGACY-FN-REFS-PROP)]
+		(if (nil? raw)
+			true
+			(Boolean/parseBoolean raw))))
+
 (defn build-defaults
 	"Build default fields derived from the minimal skill spec."
 	[{:keys [level]}]
@@ -34,8 +43,18 @@
 
 (defn- resolve-fn-ref [v]
 	(cond
-		(fn? v) v
-		(var? v) (var-get v)
+		(fn? v) (if (legacy-fn-refs-allowed?)
+						 v
+						 (throw (ex-info "Legacy function callbacks in skill spec are disabled"
+									 {:value-type :fn
+										:property LEGACY-FN-REFS-PROP
+										:hint "Use declarative op/protocol keys instead of direct function values."})))
+		(var? v) (if (legacy-fn-refs-allowed?)
+						 (var-get v)
+						 (throw (ex-info "Legacy var callbacks in skill spec are disabled"
+									 {:value-type :var
+										:property LEGACY-FN-REFS-PROP
+										:hint "Use declarative op/protocol keys instead of var references."})))
 		:else v))
 
 (defn- normalize-op [id op]

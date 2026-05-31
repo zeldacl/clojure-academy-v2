@@ -8,6 +8,19 @@
             [cn.li.ac.ability.service.runtime-store :as store]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
+(defonce ^:private session-id-resolver*
+  (atom (fn [] (runtime-hooks/player-state-session-id))))
+
+(defn install-session-runtime!
+  "Install runtime callback used for implicit session resolution in default arities.
+
+  Keys:
+  - :session-id-resolver (fn [] -> string|nil)"
+  [{:keys [session-id-resolver]}]
+  (when session-id-resolver
+    (reset! session-id-resolver* session-id-resolver))
+  nil)
+
 (defn server-tick-player-in-session!
   [session-id uuid-str sync-fn]
   (when-let [state (store/get-player-state* session-id uuid-str)]
@@ -51,6 +64,8 @@
 
 (defn server-tick-player!
   [uuid-str sync-fn]
-  (server-tick-player-in-session! (runtime-hooks/require-player-state-session-id "state-tick")
+  (server-tick-player-in-session! (or ((or @session-id-resolver*
+                                          (fn [] nil)))
+                                      (runtime-hooks/require-player-state-session-id "state-tick"))
                                   uuid-str
                                   sync-fn))

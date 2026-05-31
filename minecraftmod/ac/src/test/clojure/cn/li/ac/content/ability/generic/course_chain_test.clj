@@ -39,7 +39,7 @@
         (is (= "ability.skill.generic.brain_course.desc" (:description-key spec)))
         (is (= "Brain Course"
                (get-in spec [:translations :en_us "ability.skill.generic.brain_course"])))
-        (is (= "鑴戝煙璇剧▼"
+        (is (= "脑域课程"
                (get-in spec [:translations :zh_cn "ability.skill.generic.brain_course"])))))))
 
 (deftest register-passive-hooks-apply-only-for-learned-skills-test

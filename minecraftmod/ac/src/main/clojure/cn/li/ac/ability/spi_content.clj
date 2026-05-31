@@ -31,15 +31,3 @@
 (defn list-fx-namespaces
   []
   (discovery/discovered-fx-namespaces))
-
-(defn declare-skill-namespace!
-  ([provider-id ns-sym]
-   (declare-skill-namespace! provider-id ns-sym 100))
-  ([provider-id ns-sym priority]
-   (discovery/register-skill-namespace! provider-id ns-sym priority)))
-
-(defn declare-fx-namespace!
-  ([provider-id ns-sym]
-   (declare-fx-namespace! provider-id ns-sym 100))
-  ([provider-id ns-sym priority]
-   (discovery/register-fx-namespace! provider-id ns-sym priority)))

@@ -29,6 +29,7 @@
     :state* state*}))
 
 (def ^:dynamic *category-registry-runtime* nil)
+(defonce ^:private category-registry-runtime-ref* (atom nil))
 
 (defn- category-registry-runtime?
   [runtime]
@@ -51,6 +52,7 @@
 (defn- current-category-registry-runtime
   []
   (or *category-registry-runtime*
+      @category-registry-runtime-ref*
       (throw (ex-info "Category registry runtime is not installed"
                       {:hint "Install via runtime_bridge/install-runtime-hooks! or category/install-category-registry-runtime!"}))))
 
@@ -61,14 +63,14 @@
   (when-not (category-registry-runtime? runtime)
     (throw (ex-info "Expected category registry runtime"
                     {:runtime runtime})))
-  (alter-var-root #'*category-registry-runtime* (constantly runtime))
+  (reset! category-registry-runtime-ref* runtime)
   runtime)
 
 (defn use-fresh-category-registry-runtime!
   "Reset category registry runtime binding to a fresh runtime instance."
   []
   (let [runtime (create-category-registry-runtime)]
-    (alter-var-root #'*category-registry-runtime* (constantly runtime))
+    (reset! category-registry-runtime-ref* runtime)
     runtime))
 
 (defn- category-registry-state-atom

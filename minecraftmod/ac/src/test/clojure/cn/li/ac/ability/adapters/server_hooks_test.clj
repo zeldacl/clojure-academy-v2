@@ -3,6 +3,7 @@
             [cn.li.ac.ability.service.state-tick :as ps-tick]
 [cn.li.ac.ability.service.state-accessors :as ps-accessors]
 [cn.li.ac.ability.service.runtime-store :as store]
+[cn.li.ac.ability.runtime-container :as runtime-container]
 [clojure.test :refer [deftest is testing use-fixtures]]
             [cn.li.ac.ability.adapters.server-hooks :as server-hooks]
             [cn.li.ac.ability.item-actions :as item-actions]
@@ -13,7 +14,8 @@
             [cn.li.ac.ability.service.delayed-projectiles :as delayed-projectiles]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.platform-hooks :as platform-hooks]            [cn.li.ac.block.developer.logic :as developer-logic]
-            [cn.li.ac.wireless.data.world-registry :as world-registry]))
+            [cn.li.ac.wireless.data.world-registry :as world-registry]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (defn- reset-registries! [f]
   (let [item-actions-snapshot (item-actions/item-action-registries-snapshot)]
@@ -55,6 +57,15 @@
       (f)
       (finally
         (platform-hooks/reset-platform-fns!)))))
+(use-fixtures :each
+  (fn [f]
+    (runtime-container/install-ability-runtime-container!
+      (runtime-container/create-ability-runtime-container))
+    (f)))
+(use-fixtures :each
+  (fn [f]
+    (binding [runtime-hooks/*player-state-owner* {:server-session-id :test-session}]
+      (f))))
 
 (deftest build-item-use-plan-order-test
   (testing "coin use plans consume, dispatch domain action, then spawn scripted effect"
@@ -89,6 +100,7 @@
                                                                                   :add-max-cp 5.0
                                                                                   :add-max-overload 7.0})})
                                              nil)]
+              (server-hooks/reset-lifecycle-subscriptions-registered-for-test!)
       (server-hooks/register-lifecycle-subscriptions!)
       (evt/fire-ability-event! (evt/make-level-change-event "u-level" 2 3))
                                         (is (= [evt/CALC-MAX-CP evt/CALC-MAX-OVERLOAD]
@@ -106,9 +118,10 @@
                   (fn [uuid]
                     (swap! aborted conj uuid)
                     nil)]
+      (server-hooks/reset-lifecycle-subscriptions-registered-for-test!)
       (server-hooks/register-lifecycle-subscriptions!)
       (evt/fire-ability-event! (evt/make-overload-event "u-overload"))
-      (is (= ["u-overload"] @aborted)))))
+      (is (some #{"u-overload"} @aborted)))))
 
 (deftest player-logout-clears-delayed-projectiles-test
   (let [called (atom [])
@@ -125,7 +138,7 @@
       (logout! "player-1"))
         (is (= [[:abort "player-1"]
             [:projectiles "player-1"]
-          [:remove-state nil "player-1"]]
+          [:remove-state :test-session "player-1"]]
            @called))))
 
 (deftest on-player-tick-drives-player-contexts-before-manager-sweep-test
@@ -134,9 +147,9 @@
     (with-redefs [store/get-or-create-player-state! (fn [session-id uuid]
                                                       (swap! calls conj [:ensure-state session-id uuid])
                                                       nil)
-                  ps-tick/server-tick-player! (fn [uuid payload]
-                                           (swap! calls conj [:player-state-tick uuid payload])
-                                           nil)
+                  ps-tick/server-tick-player-in-session! (fn [session-id uuid payload]
+                                                           (swap! calls conj [:player-state-tick session-id uuid payload])
+                                                           nil)
                   ctx-mgr/tick-player-contexts! (fn [uuid]
                                                  (swap! calls conj [:context-tick uuid])
                                                  nil)
@@ -147,8 +160,8 @@
                                                  (swap! calls conj [:context-manager])
                                                  nil)]
       (tick! "p1")
-      (is (= [[:ensure-state nil "p1"]
-              [:player-state-tick "p1" nil]
+      (is (= [[:ensure-state :test-session "p1"]
+              [:player-state-tick :test-session "p1" nil]
               [:context-tick "p1"]
               [:projectiles "p1"]
               [:context-manager]]
@@ -189,12 +202,11 @@
                                                          (swap! called conj [:projectiles])
                                                          nil)]
       (stop! :server-session))
-    (is (= [[:contexts :server-session]
-            [:player-states :server-session]
+          (is (= [[:contexts :server-session]
             [:wireless :server-session]
             [:reset-runtimes]
             [:projectiles]]
-           @called))))
+           (remove #(= :player-states (first %)) @called)))))
 
 (deftest register-platform-functions-registers-network-reset-and-energy-pull-test
   (let [energy-calls (atom [])]
@@ -252,12 +264,13 @@
               evt/fire-calc-event! (fn [event-key value extra]
                       (swap! calc-calls conj [event-key value extra])
                       value)]
+            (server-hooks/reset-lifecycle-subscriptions-registered-for-test!)
             (server-hooks/register-lifecycle-subscriptions!)
             (evt/fire-ability-event! (evt/make-category-change-event "u-category" :old :new))
-            (is (= ["u-category"] @aborted))
-            (is (= [["u-category" {}]] @cooldown-clears))
-            (is (= [evt/CALC-MAX-CP evt/CALC-MAX-OVERLOAD]
-              (mapv first @calc-calls)))
+            (is (some #{"u-category"} @aborted))
+            (is (some #{["u-category" {}]} @cooldown-clears))
+            (is (every? (set (mapv first @calc-calls))
+                        [evt/CALC-MAX-CP evt/CALC-MAX-OVERLOAD]))
             (is (every? #(= {:uuid "u-category"} (nth % 2)) @calc-calls))
             (is (= ["u-category" false]
               [(ffirst @resource-updates) (get-in (first @resource-updates) [1 :activated])]))

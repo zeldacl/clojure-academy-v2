@@ -35,6 +35,7 @@
 	  :state* state*}))
 
 (def ^:dynamic *lifecycle-registry-runtime* nil)
+(defonce ^:private lifecycle-registry-runtime-ref* (atom nil))
 
 (defn call-with-lifecycle-registry-runtime
 	[runtime f]
@@ -48,6 +49,7 @@
 (defn- current-lifecycle-registry-runtime
 	[]
 	(or *lifecycle-registry-runtime*
+		@lifecycle-registry-runtime-ref*
 		(throw (ex-info "Lifecycle registry runtime is not installed"
 						{:hint "Install via runtime_bridge/install-runtime-hooks! or spi_lifecycle/install-lifecycle-registry-runtime!"}))))
 
@@ -59,14 +61,14 @@
 		runtime
 		::lifecycle-registry-runtime
 		"Expected lifecycle registry runtime")
-	(alter-var-root #'*lifecycle-registry-runtime* (constantly runtime))
+	(reset! lifecycle-registry-runtime-ref* runtime)
 	runtime)
 
 (defn use-fresh-lifecycle-registry-runtime!
 	"Reset lifecycle registry runtime binding to a fresh runtime instance."
 	[]
 	(let [runtime (create-lifecycle-registry-runtime)]
-		(alter-var-root #'*lifecycle-registry-runtime* (constantly runtime))
+		(reset! lifecycle-registry-runtime-ref* runtime)
 		runtime))
 
 (defn- lifecycle-registry-state-atom

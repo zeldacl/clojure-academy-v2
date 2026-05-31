@@ -197,9 +197,10 @@
           establish-calls (atom [])]
       (with-redefs [ctx-mgr/establish-context! (fn [player-uuid ctx-id skill-id]
                                                  (swap! establish-calls conj [player-uuid ctx-id skill-id])
-                                                 (ctx/register-context!
-                                                  (assoc (ctx/new-server-context player-uuid skill-id ctx-id)
-                                                         :input-state :idle)))]
+                                                 (binding [ctx/*context-owner* (server-owner player-uuid)]
+                                                   (ctx/register-context!
+                                                    (assoc (ctx/new-server-context player-uuid skill-id ctx-id)
+                                                           :input-state :idle))))]
         (with-server-player-owner "p1"
           #(context-handler/handle-begin-link-context {:ctx-id ctx-id :skill-id :railgun} "p1"))
         (with-server-player-owner "p2"

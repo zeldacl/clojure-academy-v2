@@ -211,8 +211,14 @@
 
 (defn update-player-state!*
   "Update player state in the global store."
-  [session-id player-uuid f]
-  (update-player-state! global-store session-id player-uuid f))
+  [session-id player-uuid f & args]
+  (if (seq args)
+    (update-player-state! global-store
+                          session-id
+                          player-uuid
+                          (fn [state]
+                            (apply f state args)))
+    (update-player-state! global-store session-id player-uuid f)))
 
 (defn update-player-domain!
   "Update a domain sub-key in the global store."

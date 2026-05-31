@@ -1,12 +1,15 @@
 (ns cn.li.ac.ability.datagen.registry-test
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.ac.ability.datagen.registry :as ability-datagen]
+                                          [cn.li.ac.ability.runtime-container :as runtime-container]
                                           [cn.li.ac.ability.item-actions :as item-actions]
             [cn.li.ac.content.ability :as ability-content]
             [cn.li.mcmod.datagen.metadata :as metadata]))
 
 (deftest register-datagen-metadata-populates-ability-translations
        (item-actions/reset-item-action-registries!)
+       (runtime-container/install-ability-runtime-container!
+              (runtime-container/create-ability-runtime-container))
   (ability-content/init-ability-content!)
   (metadata/reset-datagen-metadata-for-test!)
 

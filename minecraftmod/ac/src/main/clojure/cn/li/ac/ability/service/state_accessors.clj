@@ -3,9 +3,28 @@
   (:require [cn.li.ac.ability.service.runtime-store :as store]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
+(defonce ^:private session-id-resolver*
+  (atom (fn [] (runtime-hooks/player-state-session-id))))
+
+(defn install-session-runtime!
+  "Install runtime callback used for implicit session resolution in default arities.
+
+  Keys:
+  - :session-id-resolver (fn [] -> string|nil)"
+  [{:keys [session-id-resolver]}]
+  (when session-id-resolver
+    (reset! session-id-resolver* session-id-resolver))
+  nil)
+
+(defn- resolve-session-id
+  []
+  (or ((or @session-id-resolver*
+           (fn [] nil)))
+      (runtime-hooks/require-player-state-session-id "state-accessors")))
+
 (defn- runtime-player-state
   [uuid-str]
-  (store/get-player-state* (runtime-hooks/require-player-state-session-id "state-accessors")
+  (store/get-player-state* (resolve-session-id)
                            uuid-str))
 
 (defn runtime-player-state-in-session
@@ -44,7 +63,7 @@
 
 (defn update-ability-data! [uuid-str f & args]
   (apply update-ability-data-in-session!
-         (runtime-hooks/require-player-state-session-id "state-accessors")
+         (resolve-session-id)
          uuid-str
          f
          args))
@@ -58,7 +77,7 @@
 
 (defn update-resource-data! [uuid-str f & args]
   (apply update-resource-data-in-session!
-         (runtime-hooks/require-player-state-session-id "state-accessors")
+         (resolve-session-id)
          uuid-str
          f
          args))
@@ -72,14 +91,14 @@
 
 (defn update-cooldown-data! [uuid-str f & args]
   (apply update-cooldown-data-in-session!
-         (runtime-hooks/require-player-state-session-id "state-accessors")
+         (resolve-session-id)
          uuid-str
          f
          args))
 
 (defn update-preset-data! [uuid-str f & args]
   (apply update-preset-data-in-session!
-         (runtime-hooks/require-player-state-session-id "state-accessors")
+         (resolve-session-id)
          uuid-str
          f
          args))
@@ -93,7 +112,7 @@
 
 (defn update-develop-data! [uuid-str f & args]
   (apply update-develop-data-in-session!
-         (runtime-hooks/require-player-state-session-id "state-accessors")
+         (resolve-session-id)
          uuid-str
          f
          args))

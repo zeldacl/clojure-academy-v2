@@ -18,6 +18,7 @@
             [cn.li.ac.ability.model.resource :as rdata]
             [cn.li.ac.ability.model.cooldown :as cdata]
             [cn.li.ac.ability.model.preset :as pdata]
+            [cn.li.ac.ability.model.develop :as ddata]
             [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.registry.skill-query :as skill-query]
             [cn.li.ac.ability.registry.category :as category]
@@ -384,6 +385,150 @@
   (ok (assoc player-state :cooldown-data (cdata/new-cooldown-data))))
 
 ;; ============================================================================
+;; Sub-Reducer: admin/maintenance commands
+;; ============================================================================
+
+(defn- cmd-set-level
+  "Set level directly (admin path) and fire level-change event when changed."
+  [player-state {:keys [player-uuid level]}]
+  (let [old-level (int (get-in player-state [:ability-data :level] 1))
+        new-level (int level)]
+    (if (= old-level new-level)
+      (ok player-state)
+      (ok (update player-state :ability-data adata/set-level new-level)
+          [(evt/make-level-change-event player-uuid old-level new-level)]
+          [{:effect/type :persist-state
+            :player-uuid player-uuid
+            :domain :ability-data}]))))
+
+(defn- cmd-set-skill-exp
+  "Set one skill exp directly (admin path)."
+  [player-state {:keys [player-uuid skill-id amount]}]
+  (let [new-state (update player-state :ability-data adata/set-skill-exp skill-id amount)]
+    (ok new-state
+        []
+        [{:effect/type :persist-state
+          :player-uuid player-uuid
+          :domain :ability-data}])) )
+
+(defn- cmd-unlearn-skill
+  "Remove a skill from learned set and clear related preset slots."
+  [player-state {:keys [player-uuid skill-id]}]
+  (let [ability-before (:ability-data player-state)
+        preset-before (:preset-data player-state)
+        controllable (skill-query/controllable-key skill-id)
+        new-ability (-> ability-before
+                        (update :learned-skills disj skill-id)
+                        (update :skill-exps dissoc skill-id))
+        new-preset (if controllable
+                     (reduce-kv (fn [data [preset-idx key-idx] slot]
+                                  (if (= slot controllable)
+                                    (pdata/set-slot data preset-idx key-idx nil)
+                                    data))
+                                preset-before
+                                (:slots preset-before))
+                     preset-before)
+        changed? (not= [ability-before preset-before] [new-ability new-preset])]
+    (if-not changed?
+      (ok player-state)
+      (ok (-> player-state
+              (assoc :ability-data new-ability)
+              (assoc :preset-data new-preset))
+          []
+          [{:effect/type :persist-state
+            :player-uuid player-uuid
+            :domain :ability-data}
+           {:effect/type :persist-state
+            :player-uuid player-uuid
+            :domain :preset-data}]))))
+
+(defn- cmd-recover-all
+  "Fully recover CP/overload values."
+  [player-state {:keys [player-uuid]}]
+  (ok (update player-state :resource-data rdata/recover-all)
+      []
+      [{:effect/type :persist-state
+        :player-uuid player-uuid
+        :domain :resource-data}]))
+
+(defn- cmd-reset-abilities
+  "Reset ability/runtime-facing ability domains to defaults."
+  [player-state {:keys [player-uuid]}]
+  (let [old-category (get-in player-state [:ability-data :category-id])
+        next-state (assoc player-state
+                          :ability-data (adata/new-ability-data)
+                          :resource-data (rdata/new-resource-data)
+                          :cooldown-data (cdata/new-cooldown-data)
+                          :preset-data (pdata/new-preset-data)
+                          :develop-data (ddata/new-develop-data))
+        events (if old-category
+                 [(evt/make-category-change-event player-uuid old-category nil)]
+                 [])]
+    (ok next-state
+        events
+        [{:effect/type :persist-state
+          :player-uuid player-uuid
+          :domain :ability-data}
+         {:effect/type :persist-state
+          :player-uuid player-uuid
+          :domain :resource-data}
+         {:effect/type :persist-state
+          :player-uuid player-uuid
+          :domain :cooldown-data}
+         {:effect/type :persist-state
+          :player-uuid player-uuid
+          :domain :preset-data}
+         {:effect/type :persist-state
+          :player-uuid player-uuid
+          :domain :develop-data}])) )
+
+(defn- cmd-change-category
+  "Set category and clear preset slots.
+
+  This command intentionally uses the default category transition behaviour.
+  Special transitions that need custom level handling should remain in explicit
+  application-level flows until they are modeled as first-class commands."
+  [player-state {:keys [player-uuid new-category]}]
+  (let [old-category (get-in player-state [:ability-data :category-id])]
+    (if (= old-category new-category)
+      (ok player-state)
+      (ok (-> player-state
+              (update :ability-data adata/set-category new-category)
+              (update :preset-data pdata/clear-slots))
+          [(evt/make-category-change-event player-uuid old-category new-category)]
+          [{:effect/type :persist-state
+            :player-uuid player-uuid
+            :domain :ability-data}
+           {:effect/type :persist-state
+            :player-uuid player-uuid
+            :domain :preset-data}]))))
+
+(defn- cmd-change-category-with-level
+  "Set category, force a target level, and clear preset slots.
+
+  This models explicit category transforms previously handled by callback-style
+  state mutation in item workflows."
+  [player-state {:keys [player-uuid new-category new-level]}]
+  (let [old-category (get-in player-state [:ability-data :category-id])
+        target-level (int new-level)]
+    (if (= old-category new-category)
+      (ok player-state)
+      (ok (-> player-state
+              (update :ability-data
+                      (fn [ability-data]
+                        (-> ability-data
+                            (adata/set-category new-category)
+                            (adata/set-level target-level))))
+              (update :preset-data pdata/clear-slots))
+          [(evt/make-category-change-event player-uuid old-category new-category)]
+          [{:effect/type :persist-state
+            :player-uuid player-uuid
+            :domain :ability-data}
+           {:effect/type :persist-state
+            :player-uuid player-uuid
+            :domain :preset-data}]))))
+
+;; ============================================================================
 ;; Public Dispatcher
 ;; ============================================================================
 
@@ -413,6 +558,13 @@
 (defmethod apply-command :purge-terminated-contexts [ps cmd] (cmd-purge-terminated-contexts ps cmd))
 (defmethod apply-command :restore-resource [ps cmd] (cmd-restore-resource ps cmd))
 (defmethod apply-command :clear-all-cooldowns [ps cmd] (cmd-clear-all-cooldowns ps cmd))
+(defmethod apply-command :set-level [ps cmd] (cmd-set-level ps cmd))
+(defmethod apply-command :set-skill-exp [ps cmd] (cmd-set-skill-exp ps cmd))
+(defmethod apply-command :unlearn-skill [ps cmd] (cmd-unlearn-skill ps cmd))
+(defmethod apply-command :recover-all [ps cmd] (cmd-recover-all ps cmd))
+(defmethod apply-command :reset-abilities [ps cmd] (cmd-reset-abilities ps cmd))
+(defmethod apply-command :change-category [ps cmd] (cmd-change-category ps cmd))
+(defmethod apply-command :change-category-with-level [ps cmd] (cmd-change-category-with-level ps cmd))
 
 (defmethod apply-command :default
   [player-state command]

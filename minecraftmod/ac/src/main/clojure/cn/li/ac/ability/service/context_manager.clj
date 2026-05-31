@@ -21,12 +21,37 @@
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.util.log :as log]))
 
+(defonce ^:private server-session-id-resolver*
+  (atom (fn [] (runtime-hooks/player-state-server-session-id))))
+
+(defn install-session-runtime!
+  "Install runtime callback used for implicit server-session resolution.
+
+  Keys:
+  - :server-session-id-resolver (fn [] -> string|nil)"
+  [{:keys [server-session-id-resolver]}]
+  (when server-session-id-resolver
+    (reset! server-session-id-resolver* server-session-id-resolver))
+  nil)
+
+(defn- resolve-server-session-id
+  [reason]
+  (or ((or @server-session-id-resolver* (fn [] nil)))
+      (runtime-hooks/require-player-state-server-session-id reason)))
+
 (defn register-send-fns! [{:keys [to-client to-server]}]
   (transport/register-send-fns! {:to-client to-client :to-server to-server}))
 
 (defn- sync-context-register-command!
   [ctx-map]
-  (let [[server-session-id player-uuid] (:session-id ctx-map)]
+  (let [session-id (:session-id ctx-map)
+        server-session-id (if (vector? session-id)
+                            (first session-id)
+                            (or (:server-session-id ctx-map)
+                                session-id))
+        player-uuid (or (when (vector? session-id)
+                          (second session-id))
+                        (:player-uuid ctx-map))]
     (when (and server-session-id player-uuid)
       (command-rt/run-command-in-session!
        server-session-id
@@ -38,7 +63,14 @@
 
 (defn- sync-context-terminated-command!
   [ctx-map]
-  (let [[server-session-id player-uuid] (:session-id ctx-map)]
+  (let [session-id (:session-id ctx-map)
+        server-session-id (if (vector? session-id)
+                            (first session-id)
+                            (or (:server-session-id ctx-map)
+                                session-id))
+        player-uuid (or (when (vector? session-id)
+                          (second session-id))
+                        (:player-uuid ctx-map))]
     (when (and server-session-id player-uuid)
       (command-rt/run-command-in-session!
        server-session-id
@@ -56,8 +88,7 @@
 
 (defn- server-context-owner
   [player-uuid]
-  (let [server-session-id (runtime-hooks/require-player-state-server-session-id
-                           "Server context owner")]
+  (let [server-session-id (resolve-server-session-id "Server context owner")]
     {:logical-side :server
      :server-session-id server-session-id
      :session-id [server-session-id player-uuid]
@@ -65,8 +96,7 @@
 
 (defn- server-player-state
   [player-uuid]
-  (let [session-id (runtime-hooks/require-player-state-server-session-id
-                    "Server context state read")]
+  (let [session-id (resolve-server-session-id "Server context state read")]
     (store/get-player-state* session-id player-uuid)))
 
 (defn- active-server-contexts-for-player

@@ -31,6 +31,7 @@
     :state* state*}))
 
 (def ^:dynamic *event-subscriber-runtime* nil)
+(defonce ^:private event-subscriber-runtime-ref* (atom nil))
 
 (declare event-subscriber-runtime?)
 
@@ -41,14 +42,14 @@
   (when-not (event-subscriber-runtime? runtime)
     (throw (ex-info "Expected event subscriber runtime"
                     {:runtime runtime})))
-  (alter-var-root #'*event-subscriber-runtime* (constantly runtime))
+  (reset! event-subscriber-runtime-ref* runtime)
   runtime)
 
 (defn use-fresh-event-subscriber-runtime!
   "Reset event subscriber runtime binding to a fresh runtime instance."
   []
   (let [runtime (create-event-subscriber-runtime)]
-    (alter-var-root #'*event-subscriber-runtime* (constantly runtime))
+    (reset! event-subscriber-runtime-ref* runtime)
     runtime))
 
 (defn- event-subscriber-runtime?
@@ -72,6 +73,7 @@
 (defn- current-event-subscriber-runtime
   []
   (or *event-subscriber-runtime*
+  @event-subscriber-runtime-ref*
       (throw (ex-info "Ability event subscriber runtime is not installed"
                       {:hint "Install via runtime_bridge/install-runtime-hooks! or event/install-event-subscriber-runtime!"}))))
 

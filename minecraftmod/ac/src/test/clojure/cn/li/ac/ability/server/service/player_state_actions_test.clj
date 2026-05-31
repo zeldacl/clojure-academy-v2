@@ -11,16 +11,26 @@
             [cn.li.ac.ability.registry.event :as evt]
             [cn.li.ac.ability.registry.skill-query :as skill-query]
             [cn.li.ac.ability.service.context-manager :as ctx-mgr]
-            [cn.li.ac.ability.service.state-actions :as state-actions]            [cn.li.ac.test.support.player-state :as ps-fix]))
+            [cn.li.ac.ability.service.state-actions :as state-actions]
+            [cn.li.ac.test.support.player-state :as ps-fix]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (defn- reset-lifecycle-subs! [f]
   (ps-fix/with-test-player-state-owner
    (fn []
+     (state-actions/install-session-runtime!
+      {:session-id-resolver (fn [] (runtime-hooks/player-state-session-id))})
+     (evt/install-event-subscriber-runtime!
+      (evt/create-event-subscriber-runtime))
      (evt/reset-ability-event-subscribers-for-test!)
      (server-hooks/reset-lifecycle-subscriptions-registered-for-test!)
      (try
        (f)
        (finally
+         (state-actions/install-session-runtime!
+          {:session-id-resolver (fn [] (runtime-hooks/player-state-session-id))})
+         (evt/install-event-subscriber-runtime!
+          (evt/create-event-subscriber-runtime))
          (evt/reset-ability-event-subscribers-for-test!)
          (server-hooks/reset-lifecycle-subscriptions-registered-for-test!))))))
 
@@ -129,4 +139,29 @@
         (is (= (ddata/new-develop-data) (:develop-data state)))
         (is (= true (:cheats-enabled? state)))
         (is (= (rdata/new-resource-data) (:resource-data state)))))))
+
+(deftest state-actions-uses-installed-session-resolver-test
+  (store/set-player-state!* :actions-session "p2"
+                        (-> (store/fresh-player-state)
+                            (assoc-in [:ability-data :level] 1)))
+  (state-actions/install-session-runtime!
+    {:session-id-resolver (fn [] :actions-session)})
+  (try
+    (state-actions/set-level! "p2" 4)
+    (is (= 4 (get-in (store/get-player-state* :actions-session "p2") [:ability-data :level])))
+    (finally
+      (state-actions/install-session-runtime!
+        {:session-id-resolver (fn [] (runtime-hooks/player-state-session-id))}))))
+
+(deftest state-actions-session-resolution-still-fail-fast-test
+  (state-actions/install-session-runtime!
+    {:session-id-resolver (fn [] nil)})
+  (try
+    (binding [runtime-hooks/*player-state-owner* nil]
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                            #"requires bound session-id"
+                            (state-actions/recover-all! "p3"))))
+    (finally
+      (state-actions/install-session-runtime!
+        {:session-id-resolver (fn [] (runtime-hooks/player-state-session-id))}))))
 

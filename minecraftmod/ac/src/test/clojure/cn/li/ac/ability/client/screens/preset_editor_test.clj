@@ -35,10 +35,10 @@
 (deftest editor-owner-requires-explicit-session-and-player-test
   (binding [runtime-hooks/*client-session-id* nil]
     (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                          #"Preset editor owner requires :client-session-id"
+                          #"Client read model owner requires :client-session-id"
                           (screen/editor-state-snapshot "player-1"))))
   (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                        #"Preset editor owner requires :player-uuid"
+                        #"Client read model owner requires :player-uuid"
                         (screen/editor-state-snapshot {:client-session-id :session-a}))))
 
 (deftest editor-runtime-isolation-test

@@ -4,7 +4,8 @@
             [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.ability.service.runtime-store :as store]
             [cn.li.ac.ability.service.reducer :as reducer]
-            [cn.li.ac.ability.effects.interpreter :as interpreter]))
+            [cn.li.ac.ability.effects.interpreter :as interpreter]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (def ^:private baseline-state
   {:ability-data {}
@@ -47,6 +48,27 @@
                                              :command-id "fixed-command-id"})
         (is (= "fixed-command-id" (:command-id @captured-command)))))))
 
+(deftest run-command-in-session-uses-installed-session-resolver-test
+  (testing "installed resolver is used when explicit session id is nil"
+    (let [captured-command (atom nil)]
+      (command-rt/install-session-runtime!
+        {:session-id-resolver (fn [] "injected-session")
+         :owner-resolver (fn [] {:session-id "injected-session"})})
+      (try
+        (with-redefs [store/get-or-create-player-state! (fn [_session-id _uuid] baseline-state)
+                      store/set-player-state!* (fn [_session-id _uuid _state] nil)
+                      store/mark-player-dirty! (fn [_session-id _uuid] nil)
+                      reducer/apply-command (fn [state command]
+                                              (reset! captured-command command)
+                                              {:state state :events [] :effects []})
+                      interpreter/execute-reducer-result! (fn [_result] nil)]
+          (command-rt/run-command-in-session! nil "player-A" {:command :level-up})
+          (is (= "injected-session" (:session-id @captured-command))))
+        (finally
+          (command-rt/install-session-runtime!
+            {:session-id-resolver (fn [] (runtime-hooks/player-state-session-id))
+             :owner-resolver (fn [] (runtime-hooks/current-player-state-owner))}))))))
+
 (deftest run-command-in-session-idempotent-replay-test
   (testing "idempotent mode replays cached result and skips reducer/effects"
     (command-rt/reset-command-traces-for-test!)
@@ -87,3 +109,36 @@
                                            :command-id "trace-check-1"})
       (is (contains? (command-rt/command-traces-snapshot)
                      ["session-Z" "player-Z" "trace-check-1"])))))
+
+(deftest command-sequence-isomorphic-across-session-injection-test
+  (testing "same command sequence yields isomorphic state/effects under different injected sessions"
+    (let [uuid "player-isomorphic"
+          commands [{:command :set-level :level 3}
+                    {:command :set-skill-exp :skill-id :arc-gen :amount 42}
+                    {:command :change-category-with-level :new-category :electromaster :new-level 4}
+                    {:command :clear-all-cooldowns}]
+          run-sequence (fn [session-id]
+                         (command-rt/install-session-runtime!
+                           {:session-id-resolver (fn [] session-id)
+                            :owner-resolver (fn [] {:session-id session-id})})
+                         (let [executed (atom [])
+                               result (with-redefs [interpreter/execute-reducer-result!
+                                                    (fn [reducer-result]
+                                                      (swap! executed conj reducer-result)
+                                                      nil)]
+                                        (command-rt/run-commands-in-session! nil uuid commands))]
+                           {:result result
+                            :state (store/get-player-state* session-id uuid)
+                            :executed @executed}))]
+      (store/reset-store!)
+      (try
+        (let [a (run-sequence "session-A")
+              b (run-sequence "session-B")]
+          (is (= (:state a) (:state b)))
+          (is (= (:result a) (:result b)))
+          (is (= (:executed a) (:executed b))))
+        (finally
+          (store/reset-store!)
+          (command-rt/install-session-runtime!
+            {:session-id-resolver (fn [] (runtime-hooks/player-state-session-id))
+             :owner-resolver (fn [] (runtime-hooks/current-player-state-owner))}))))))

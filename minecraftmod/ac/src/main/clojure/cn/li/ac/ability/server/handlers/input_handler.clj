@@ -5,7 +5,7 @@
 						[cn.li.ac.ability.service.context-manager :as ctx-mgr]
 						[cn.li.ac.ability.service.context-state :as ctx-rt]
 						[cn.li.ac.ability.service.context-dispatcher :as ctx]
-						[cn.li.mcmod.hooks.core :as runtime-hooks]))
+						[cn.li.ac.ability.server.handlers.common :as handlers-common]))
 
 (defn- valid-ctx-id?
 	[ctx-id]
@@ -13,12 +13,7 @@
 
 (defn- server-context-owner
 	[player-uuid]
-	(let [server-session-id (runtime-hooks/require-player-state-server-session-id
-										"Server context owner")]
-		{:logical-side :server
-		 :server-session-id server-session-id
-		 :session-id [server-session-id player-uuid]
-		 :player-uuid player-uuid}))
+	(handlers-common/server-context-owner player-uuid))
 
 (defn- resolve-owned-alive-context
 	[ctx-id player]

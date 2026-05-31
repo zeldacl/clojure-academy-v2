@@ -5,10 +5,7 @@
             [cn.li.ac.ability.adapters.server-hooks :as server-hooks]
             [cn.li.ac.ability.client.keybinds :as client-keybinds]
             [cn.li.ac.content.ability.server-runtime-lifecycle :as server-runtime-lifecycle]
-            [cn.li.ac.ability.registry.category :as category-registry]
-            [cn.li.ac.ability.registry.event :as event-registry]
-            [cn.li.ac.ability.registry.skill :as skill-registry]
-            [cn.li.ac.ability.spi-lifecycle :as lifecycle-registry]
+            [cn.li.ac.ability.runtime-container :as runtime-container]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.util.log :as log]))
@@ -66,22 +63,9 @@
   nil)
 
 (defn- install-runtime-components!
-  [{:keys [category-registry-runtime
-           event-subscriber-runtime
-           skill-registry-runtime
-           lifecycle-registry-runtime]}]
-  (category-registry/install-category-registry-runtime!
-    (or category-registry-runtime
-        (category-registry/create-category-registry-runtime)))
-  (event-registry/install-event-subscriber-runtime!
-    (or event-subscriber-runtime
-        (event-registry/create-event-subscriber-runtime)))
-  (skill-registry/install-skill-registry-runtime!
-    (or skill-registry-runtime
-        (skill-registry/create-skill-registry-runtime)))
-  (lifecycle-registry/install-lifecycle-registry-runtime!
-    (or lifecycle-registry-runtime
-        (lifecycle-registry/create-lifecycle-registry-runtime)))
+  [runtime-components]
+  (runtime-container/install-ability-runtime-container!
+    (runtime-container/create-ability-runtime-container runtime-components))
   nil)
 
 (defn install-runtime-hooks!

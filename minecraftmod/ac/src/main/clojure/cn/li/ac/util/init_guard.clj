@@ -10,4 +10,9 @@
   "Execute body exactly once per guard atom using compare-and-set! semantics."
   [guard & body]
   `(when (compare-and-set! ~guard false true)
-     ~@body))
+     (try
+       ~@body
+       (catch Throwable t#
+         ;; Roll back the guard on failure so callers can retry initialization.
+         (reset! ~guard false)
+         (throw t#)))))
