@@ -1,6 +1,7 @@
 (ns cn.li.ac.content.ability.teleporter.penetrate-teleport-test
   (:require [clojure.test :refer [deftest is]]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-registry :as ctx-reg]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
             [cn.li.ac.content.ability.teleporter.penetrate-teleport :as pt]
@@ -22,8 +23,8 @@
 (deftest penetrate-down-registers-distance-listener-and-updates-state-test
   (let [{:keys [ctx* listeners* get-context update-context! ctx-on!]}
         (make-context-mocks {:skill-state {}})]
-    (with-redefs [ctx/get-context get-context
-                  ctx/update-context! update-context!
+    (with-redefs [ctx-reg/get-context get-context
+                  ctx-reg/update-context! update-context!
                   ctx/ctx-on! ctx-on!
                   helper/skill-exp (fn [_ _] 0.2)
                   helper/cfg-lerp (fn [_ field _]
@@ -46,8 +47,8 @@
   (let [{:keys [ctx* get-context update-context!]}
         (make-context-mocks {:skill-state {:desired-distance 6.0
                                            :up-resolve {:distance 3.0}}})]
-    (with-redefs [ctx/get-context get-context
-                  ctx/update-context! update-context!
+    (with-redefs [ctx-reg/get-context get-context
+                  ctx-reg/update-context! update-context!
                   pt/resolve-preview (fn [_player-id desired]
                                        {:distance desired
                                         :cp-per-block 9.0

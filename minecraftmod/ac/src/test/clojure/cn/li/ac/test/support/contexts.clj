@@ -7,11 +7,9 @@
     (ctx/create-dispatcher-runtime)
     (fn []
       (ctx/reset-contexts-for-test!)
-      (ctx/reset-lifecycle-counters!)
       (ctx/reset-route-fns-for-test!)
       (try
         (f)
         (finally
           (ctx/reset-contexts-for-test!)
-          (ctx/reset-lifecycle-counters!)
           (ctx/reset-route-fns-for-test!))))))

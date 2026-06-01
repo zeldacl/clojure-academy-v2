@@ -2,6 +2,7 @@
   (:require [clojure.test :refer [deftest is]]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-registry :as ctx-reg]
             [cn.li.ac.content.ability.electromaster.current-charging :as current-charging]
             [cn.li.ac.energy.operations :as energy]
             [cn.li.mcmod.platform.entity :as entity]
@@ -28,8 +29,8 @@
         down! (get (skill-actions) :down!)]
     (with-redefs [current-charging/main-hand-item (fn [_] :stack)
                   current-charging/cfg-lerp (fn [_ _] 52.0)
-                  ctx/get-context (fn [id] (get @contexts* id))
-                  ctx/update-context! (fn [id f & args]
+                  ctx-reg/get-context (fn [id] (get @contexts* id))
+                  ctx-reg/update-context! (fn [id f & args]
                                         (swap! contexts* update id #(apply f % args))
                                         nil)
                   ctx/ctx-send-to-client! (fn [id ch payload]
@@ -78,8 +79,8 @@
                   skill-effects/enforce-overload-floor! (fn [pid floor]
                                                           (swap! floor* conj [pid floor])
                                                           nil)
-                  ctx/get-context (fn [id] (get @contexts* id))
-                  ctx/update-context! (fn [id f & args]
+                  ctx-reg/get-context (fn [id] (get @contexts* id))
+                  ctx-reg/update-context! (fn [id f & args]
                                         (swap! contexts* update id #(apply f % args))
                                         nil)
                   ctx/ctx-send-to-client! (fn [id ch payload]
@@ -123,8 +124,8 @@
                   entity/player-spawn-entity-by-id! (fn [player eid yaw]
                                                       (swap! spawned* conj [player eid yaw])
                                                       true)
-                  ctx/get-context (fn [id] (get @contexts* id))
-                  ctx/update-context! (fn [id f & args]
+                  ctx-reg/get-context (fn [id] (get @contexts* id))
+                  ctx-reg/update-context! (fn [id f & args]
                                         (swap! contexts* update id #(apply f % args))
                                         nil)
                   ctx/ctx-send-to-client! (fn [id ch payload]
@@ -148,14 +149,14 @@
         fx* (atom [])
         terminated* (atom [])
         cost-fail! (get (skill-actions) :cost-fail!)]
-    (with-redefs [ctx/get-context (fn [id] (get @contexts* id))
-                  ctx/update-context! (fn [id f & args]
+    (with-redefs [ctx-reg/get-context (fn [id] (get @contexts* id))
+                  ctx-reg/update-context! (fn [id f & args]
                                         (swap! contexts* update id #(apply f % args))
                                         nil)
                   ctx/ctx-send-to-client! (fn [id ch payload]
                                             (swap! fx* conj [id ch payload])
                                             nil)
-                  ctx/terminate-context! (fn [id _]
+                  ctx-reg/terminate-context! (fn [id _]
                                            (swap! terminated* conj id)
                                            nil)]
       (cost-fail! {:ctx-id ctx-id}))

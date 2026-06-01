@@ -4,7 +4,6 @@
   Centralizes owner/session resolution and runtime-store reads so UI modules
   avoid depending on store wiring details."
   (:require [cn.li.ac.ability.service.runtime-store :as store]
-            [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (defn- require-owner-value
@@ -77,17 +76,14 @@
          vec)))
 
 (defn get-player-contexts-for-player
-  "Read contexts for one player. Falls back to dispatcher query when client
-  session is unavailable, preserving legacy client behavior."
+  "Read contexts for one player from projected player-state only."
   ([player-uuid]
-   (vec (ctx/get-all-contexts-for-player (str player-uuid))))
+   (if-let [session-id runtime-hooks/*client-session-id*]
+     (get-player-contexts-for-player player-uuid session-id nil)
+     []))
   ([player-uuid session-id screen-id]
    (if session-id
      (let [player-uuid* (str player-uuid)
-           owner {:logical-side :client
-                  :session-id [session-id player-uuid*]}
            projected (get-player-contexts [session-id screen-id player-uuid*])]
-       (if (seq projected)
-         projected
-         (vec (ctx/get-all-contexts-for-player owner player-uuid*))))
-     (get-player-contexts-for-player player-uuid))))
+       projected)
+     [])))

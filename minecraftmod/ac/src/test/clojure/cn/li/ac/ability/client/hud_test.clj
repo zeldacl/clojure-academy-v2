@@ -3,10 +3,10 @@
             [cn.li.ac.ability.client.combat-notice :as combat-notice]
             [cn.li.ac.ability.client.delegate-state :as dstate]
             [cn.li.ac.ability.client.hud :as hud]
+            [cn.li.ac.ability.client.read-model :as read-model]
             [cn.li.ac.ability.model.cooldown :as cd-data]
             [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.registry.skill-query :as skill-query]
-            [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (deftest build-hud-render-data-includes-combat-notice-when-inactive-test
@@ -37,7 +37,7 @@
     (is (nil? (:bar-color data)))))
 
 (deftest build-skill-slot-render-data-resolves-skill-id-spec-and-icon-test
-  (with-redefs [ctx/get-all-contexts-for-player (fn [& _] {})
+  (with-redefs [read-model/get-player-contexts-for-player (fn [& _] [])
                 skill-query/get-skill-by-controllable (fn [_ _] :railgun)
                 skill-registry/get-skill (fn [_] {:name "Railgun"})
                 skill-query/get-skill-icon-path (fn [_] "textures/skills/railgun.png")

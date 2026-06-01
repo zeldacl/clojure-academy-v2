@@ -1,6 +1,7 @@
 (ns cn.li.ac.content.ability.vecmanip.directed-blastwave-test
   (:require [clojure.test :refer [deftest is]]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-registry :as ctx-reg]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.content.ability.fx-helpers :as fx]
@@ -67,9 +68,9 @@
                   db/cfg-double mock-cfg-double
                   db/cfg-lerp mock-cfg-lerp
                   db/cfg-lerp-int mock-cfg-lerp-int
-                  ctx/get-context get-context
-                  ctx/update-context! update-context!
-                  ctx/terminate-context! terminate-context!
+                  ctx-reg/get-context get-context
+                  ctx-reg/update-context! update-context!
+                  ctx-reg/terminate-context! terminate-context!
                   fx/send-end! (fn [ctx-id ch payload]
                                  (swap! end-calls* conj [ctx-id ch payload]))]
       (up-fn {:player-id "p1" :ctx-id "ctx-invalid" :exp 0.5 :cost-ok? true}))
@@ -89,9 +90,9 @@
                   db/cfg-double mock-cfg-double
                   db/cfg-lerp mock-cfg-lerp
                   db/cfg-lerp-int mock-cfg-lerp-int
-                  ctx/get-context get-context
-                  ctx/update-context! update-context!
-                  ctx/terminate-context! terminate-context!
+                  ctx-reg/get-context get-context
+                  ctx-reg/update-context! update-context!
+                  ctx-reg/terminate-context! terminate-context!
                   geom/world-id-of (fn [_] "w")
                   geom/body-pos (fn [_] {:x 2.0 :y 3.0 :z 4.0})
                   geom/eye-pos (fn [_] {:x 2.0 :y 4.62 :z 4.0})
@@ -131,9 +132,9 @@
                   db/cfg-double mock-cfg-double
                   db/cfg-lerp mock-cfg-lerp
                   db/cfg-lerp-int mock-cfg-lerp-int
-                  ctx/get-context get-context
-                  ctx/update-context! update-context!
-                  ctx/terminate-context! terminate-context!
+                  ctx-reg/get-context get-context
+                  ctx-reg/update-context! update-context!
+                  ctx-reg/terminate-context! terminate-context!
                   geom/world-id-of (fn [_] "w")
                   geom/body-pos (fn [_] {:x 0.0 :y 0.0 :z 0.0})
                   geom/eye-pos (fn [_] {:x 0.0 :y 1.62 :z 0.0})
@@ -176,9 +177,9 @@
         (make-context-mocks {:skill-state {:charge-ticks 12 :performed? true :punched? true :punch-ticks 6}})
         end-calls* (atom [])]
     (with-redefs [db/cfg-int mock-cfg-int
-                  ctx/get-context get-context
-                  ctx/update-context! update-context!
-                  ctx/terminate-context! terminate-context!
+                  ctx-reg/get-context get-context
+                  ctx-reg/update-context! update-context!
+                  ctx-reg/terminate-context! terminate-context!
                   fx/send-end! (fn [ctx-id ch payload]
                                  (swap! end-calls* conj [ctx-id ch payload]))]
       (binding [ctx/*context-owner* test-context-owner]
@@ -193,9 +194,9 @@
         {:keys [ctx-state get-context update-context! terminate-context! terminate-calls]}
         (make-context-mocks {:skill-state {:charge-ticks 3 :performed? false}})
         end-calls* (atom [])]
-    (with-redefs [ctx/get-context get-context
-                  ctx/update-context! update-context!
-                  ctx/terminate-context! terminate-context!
+    (with-redefs [ctx-reg/get-context get-context
+                  ctx-reg/update-context! update-context!
+                  ctx-reg/terminate-context! terminate-context!
                   fx/send-end! (fn [ctx-id ch payload]
                                  (swap! end-calls* conj [ctx-id ch payload]))]
       (abort-fn {:ctx-id "ctx-abort"}))

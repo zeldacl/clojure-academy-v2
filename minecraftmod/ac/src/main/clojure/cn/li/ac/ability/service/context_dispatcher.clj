@@ -1,6 +1,8 @@
 (ns cn.li.ac.ability.service.context-dispatcher
 	"Canonical AC context/dispatcher service implementation."
 	(:require [cn.li.ac.ability.registry.event :as evt]
+						[cn.li.ac.ability.service.command-runtime :as command-rt]
+						[cn.li.ac.ability.service.runtime-store :as store]
 						[cn.li.ac.ability.service.context-domain :as context-domain]
 						[cn.li.mcmod.util.log :as log]))
 
@@ -24,8 +26,7 @@
 	{:context-registry {}
 	 :route-fns {}
 	 :client-id-counter {}
-	 :server-id-counter {}
-	 :lifecycle-counters {}})
+	 :server-id-counter {}})
 
 (defn create-dispatcher-runtime
 	[]
@@ -92,13 +93,86 @@
 	[]
 	(:context-registry (dispatcher-state-snapshot)))
 
+(declare context-session-id)
+
+(defn- context-store-session-id
+	[ctx]
+	(let [sid (context-session-id ctx)]
+		(if (vector? sid) (first sid) sid)))
+
+(defn- context-store-player-uuid
+	[ctx]
+	(or (:player-uuid ctx)
+			(when-let [sid (context-session-id ctx)]
+				(when (vector? sid)
+					(second sid)))))
+
+(defn- context-projection
+	[ctx]
+	(let [session-id (context-store-session-id ctx)
+				player-uuid (context-store-player-uuid ctx)
+				ctx-id (:id ctx)]
+		(when (and session-id player-uuid ctx-id)
+			(try
+				(get-in (store/get-player-state* session-id player-uuid)
+						[:context-registry ctx-id])
+				(catch Exception _
+					nil)))))
+
+(defn- merge-context-projection
+	[ctx]
+	(if-let [projected (context-projection ctx)]
+		(cond-> ctx
+			(contains? projected :input-state)
+			(assoc :input-state (:input-state projected))
+			(contains? projected :last-keepalive-ms)
+			(assoc :last-keepalive-ms (:last-keepalive-ms projected))
+			(contains? projected :skill-state)
+			(assoc :skill-state (:skill-state projected)))
+		ctx))
+
+(defn- sync-register-context-command!
+	[ctx]
+	(let [session-id (context-store-session-id ctx)
+				player-uuid (context-store-player-uuid ctx)]
+		(when (and session-id player-uuid)
+			(try
+				(command-rt/run-command-in-session!
+				 session-id
+				 player-uuid
+				 {:command :register-context
+					:ctx-id (:id ctx)
+					:skill-id (:skill-id ctx)
+					:status (:status ctx)})
+				(catch Exception e
+					(log/warn "Failed to sync register-context command"
+							{:ctx-id (:id ctx)
+							 :player-uuid player-uuid
+							 :reason (ex-message e)}))))))
+
+(defn- sync-context-status-command!
+	[ctx status reason]
+	(let [session-id (context-store-session-id ctx)
+				player-uuid (context-store-player-uuid ctx)]
+		(when (and session-id player-uuid)
+			(try
+				(command-rt/run-command-in-session!
+				 session-id
+				 player-uuid
+				 {:command :update-context-status
+					:ctx-id (:id ctx)
+					:status status
+					:reason reason})
+				(catch Exception e
+					(log/warn "Failed to sync context status command"
+							{:ctx-id (:id ctx)
+							 :status status
+							 :player-uuid player-uuid
+							 :reason (ex-message e)}))))))
+
 (defn- route-fns-snapshot
 	[]
 	(:route-fns (dispatcher-state-snapshot)))
-
-(defn- lifecycle-counters-map
-	[]
-	(:lifecycle-counters (dispatcher-state-snapshot)))
 
 (defn- assoc-context!
 	[key ctx]
@@ -127,19 +201,6 @@
 	[owner-key routes]
 	(update-dispatcher-state! assoc-in [:route-fns owner-key] routes)
 	nil)
-
-(def ^:private DEFAULT-TERMINATED-CONTEXT-GRACE-MS 1000)
-(def ^:private DEFAULT-KEEPALIVE-TIMEOUT-MS 1500)
-
-(defn- positive-long-prop
-	[prop-key default-value]
-	(context-domain/positive-long-prop prop-key default-value))
-
-(defn keepalive-timeout-ms
-	"Server-side keepalive timeout threshold in milliseconds.
-	Configurable through -Dac.ctx.keepalive-timeout-ms (default 1500)."
-	[]
-	(positive-long-prop "ac.ctx.keepalive-timeout-ms" DEFAULT-KEEPALIVE-TIMEOUT-MS))
 
 (defn- require-session-id
 	[owner session-id]
@@ -235,30 +296,6 @@
 				(get (route-fns-snapshot) STATIC-ROUTE-OWNER)
 				{:to-server nil :to-client nil :to-except-local nil})))
 
-(defn reset-lifecycle-counters!
-	[]
-	(update-dispatcher-state! assoc :lifecycle-counters {})
-	nil)
-
-(defn lifecycle-counters-snapshot
-	([]
-	 (apply merge-with + (vals (lifecycle-counters-map))))
-	([owner]
-	 (get (lifecycle-counters-map) (route-owner-key owner) {})))
-
-(defn- record-lifecycle-event!
-	([reason]
-	 (record-lifecycle-event! reason {}))
-	([reason owner]
-	 (update-dispatcher-state! update-in [:lifecycle-counters (route-owner-key owner) reason] (fnil inc 0))
-	 nil))
-
-(defn terminated-context-grace-ms
-	"Grace window before terminated contexts are purged from registry.
-	Configurable through -Dac.ctx.terminated-grace-ms (default 1000)."
-	[]
-	(positive-long-prop "ac.ctx.terminated-grace-ms" DEFAULT-TERMINATED-CONTEXT-GRACE-MS))
-
 (declare register-context!)
 
 (defn new-context
@@ -298,18 +335,26 @@
 (defn register-context! [ctx]
 	(let [ctx* (context-with-owner ctx)]
 		(assoc-context! (context-registry-key ctx*) ctx*)
+		(sync-register-context-command! ctx*)
 		ctx*))
 
 (defn get-context
 	([ctx-id]
-	 (second (preferred-context-entry nil ctx-id nil)))
+	 (some-> (second (preferred-context-entry nil ctx-id nil))
+				 merge-context-projection))
 	([owner ctx-id]
 	 (if (vector? ctx-id)
-		 (get (context-registry-snapshot) ctx-id)
+			 (some-> (get (context-registry-snapshot) ctx-id)
+						 merge-context-projection)
 		 (let [[side session] (route-owner-key owner)]
-			 (get (context-registry-snapshot) [side session ctx-id])))))
+				 (some-> (get (context-registry-snapshot) [side session ctx-id])
+							 merge-context-projection)))))
 
-(defn get-all-contexts [] (context-registry-snapshot))
+(defn get-all-contexts
+	[]
+	(into {}
+			(map (fn [[k v]] [k (merge-context-projection v)]))
+			(context-registry-snapshot)))
 
 (defn update-context-owned!
 	"Update one context using an explicit owner when ctx-id is opaque."
@@ -338,14 +383,15 @@
 
 (defn get-all-contexts-for-player
 	([player-uuid]
-	 (filter #(= player-uuid (:player-uuid %)) (vals (context-registry-snapshot))))
+	 (filter #(= player-uuid (:player-uuid %))
+				 (map merge-context-projection (vals (context-registry-snapshot)))))
 	([owner player-uuid]
 	 (filter #(and (= player-uuid (:player-uuid %))
 					 (owner-matches-context? owner %))
-			 (vals (context-registry-snapshot)))))
+			 (map merge-context-projection (vals (context-registry-snapshot))))))
 
 (defn snapshot-context-registry []
-	(context-registry-snapshot))
+	(get-all-contexts))
 
 (defn clear-owner-contexts!
 	"Clear all registered contexts and counters for one logical owner."
@@ -361,8 +407,7 @@
 					(-> state
 							(assoc :context-registry filtered-contexts)
 							(update :client-id-counter dissoc owner-key)
-							(update :server-id-counter dissoc owner-key)
-							(update :lifecycle-counters dissoc owner-key)))))
+							(update :server-id-counter dissoc owner-key)))))
 	nil))
 
 (defn clear-session-contexts!
@@ -388,13 +433,7 @@
 								(into {}
 										(remove (fn [[[ _side owner-session] _counter]]
 												 (= session-id owner-session)))
-										counters)))
-					(update :lifecycle-counters
-							(fn [counters]
-								(into {}
-										(remove (fn [[[ _side owner-session] _counter]]
-												 (= session-id owner-session)))
-										counters))))))
+											counters))))))
 	nil)
 
 (defn reset-contexts-for-test!
@@ -442,6 +481,8 @@
 									(when (nil? owner) (get-context ctx-id)))]
 		 (when (not= (:status ctx) STATUS-TERMINATED)
 				 (update-context-owned! owner ctx-id context-domain/transition-to-terminated (System/currentTimeMillis))
+				 (when send-terminated-fn
+					(sync-context-status-command! ctx :terminated :dispatcher-terminated))
 			 (when send-terminated-fn
 				 (binding [*context-owner* {:logical-side (context-logical-side ctx)
 													 :session-id (context-session-id ctx)}]
@@ -455,37 +496,6 @@
 	([owner player-uuid send-terminated-fn]
 	 (doseq [ctx (get-all-contexts-for-player owner player-uuid)]
 		 (terminate-context! owner (:id ctx) send-terminated-fn))))
-
-(defn update-keepalive!
-	([ctx-id]
-	 (update-keepalive! nil ctx-id))
-	([owner ctx-id]
-	 (update-context-owned! owner ctx-id assoc :last-keepalive-ms (System/currentTimeMillis))))
-(defn check-keepalive-timeout! [send-terminated-fn]
-	(let [now (System/currentTimeMillis)]
-		(doseq [[ctx-id ctx] (context-registry-snapshot)]
-			(when (and (= (:status ctx) STATUS-ALIVE)
-								 (= :server (context-logical-side ctx))
-								 (:last-keepalive-ms ctx)
-								 (> (- now (:last-keepalive-ms ctx)) (keepalive-timeout-ms)))
-				(log/debug "Context keepalive timeout:" ctx-id)
-				(record-lifecycle-event! :timeout-terminated ctx)
-				(terminate-context! ctx-id send-terminated-fn)))))
-
-(defn purge-terminated-contexts!
-	"Remove terminated contexts after a short grace window so client/server
-	observers can still read final status immediately after termination."
-	[]
-	(let [now (System/currentTimeMillis)]
-		(update-dispatcher-state!
-							 update :context-registry
-							 (fn [registry]
-								 (into {}
-										(remove (fn [[_ctx-id ctx-map]]
-												(and (= (:status ctx-map) STATUS-TERMINATED)
-														 (:terminated-at-ms ctx-map)
-														 (>= (- now (:terminated-at-ms ctx-map)) (terminated-context-grace-ms)))))
-										registry)))))
 
 (defn ctx-buffer-or-send!
 	([ctx-id msg send-fn]

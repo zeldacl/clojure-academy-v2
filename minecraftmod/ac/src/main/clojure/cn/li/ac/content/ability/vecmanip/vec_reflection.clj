@@ -6,6 +6,7 @@
             [cn.li.ac.content.ability.fx-helpers :as fx]
             [cn.li.ac.content.ability.vecmanip.arbitration :as arbitration]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-registry :as ctx-reg]
             [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.util.toggle :as toggle]
@@ -286,7 +287,7 @@
 
 (defn- active-vec-reflection-ctx-id
   [player-id]
-  (->> (ctx/get-all-contexts)
+  (->> (ctx-reg/get-all-contexts)
        (filter (fn [[_ctx-id ctx-data]]
                  (and (= (:player-uuid ctx-data) player-id)
                       (toggle/is-toggle-active? ctx-data :vec-reflection))))
@@ -296,7 +297,7 @@
 (defn- safe-context-data
   [ctx-id]
   (try
-    (ctx/get-context ctx-id)
+    (ctx-reg/get-context ctx-id)
     (catch Exception _ nil)))
 
 (defn- command-runtime-ready?
@@ -316,8 +317,8 @@
                                                         :k [k]
                                                         :v v})]
         (when (= :context-not-found (:rejected-reason result))
-          (ctx/update-context! ctx-id assoc-in [:skill-state k] v)))
-      (ctx/update-context! ctx-id assoc-in [:skill-state k] v))))
+          (ctx-reg/update-context! ctx-id assoc-in [:skill-state k] v)))
+      (ctx-reg/update-context! ctx-id assoc-in [:skill-state k] v))))
 
 (defn- update-skill-state-root!
   [ctx-id f]
@@ -331,8 +332,8 @@
                                                         :k []
                                                         :v next-state})]
         (when (= :context-not-found (:rejected-reason result))
-          (ctx/update-context! ctx-id assoc :skill-state next-state)))
-      (ctx/update-context! ctx-id assoc :skill-state next-state))))
+          (ctx-reg/update-context! ctx-id assoc :skill-state next-state)))
+      (ctx-reg/update-context! ctx-id assoc :skill-state next-state))))
 
 (defn- add-exp! [player-id amount]
   (fx-common/add-skill-exp! player-id vec-reflection-skill-id amount))
@@ -373,7 +374,7 @@
   "Activate or deactivate toggle skill."
   [{:keys [player-id ctx-id]}]
   (try
-    (when-let [ctx-data (ctx/get-context ctx-id)]
+    (when-let [ctx-data (ctx-reg/get-context ctx-id)]
       (let [is-active? (toggle/is-toggle-active? ctx-data :vec-reflection)
             exp (skill-exp player-id)]
         (if is-active?
@@ -395,7 +396,7 @@
 
 (defn- vec-reflection-on-key-tick-body
   [player-id ctx-id cost-ok?]
-  (when-let [ctx-data (ctx/get-context ctx-id)]
+  (when-let [ctx-data (ctx-reg/get-context ctx-id)]
     (when (toggle/is-toggle-active? ctx-data :vec-reflection)
       (let [exp (skill-exp player-id)
             overload-keep (get-in ctx-data [:skill-state :vec-reflection-overload-keep] 0.0)]
@@ -408,7 +409,7 @@
           (log/info "VecReflection: Deactivated (insufficient CP)"))
 
         (when (and cost-ok?
-                   (toggle/is-toggle-active? (or (ctx/get-context ctx-id) ctx-data) :vec-reflection))
+                   (toggle/is-toggle-active? (or (ctx-reg/get-context ctx-id) ctx-data) :vec-reflection))
           (when-let [pos (get-player-position player-id)]
             (when world-effects/*world-effects*
               (let [world-id (:world-id pos)

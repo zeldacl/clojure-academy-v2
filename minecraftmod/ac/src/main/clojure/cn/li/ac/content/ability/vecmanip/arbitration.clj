@@ -4,6 +4,7 @@
 	Ensures one projectile is handled by at most one vecmanip skill per tick."
 	(:require [clojure.string :as str]
 						[cn.li.ac.ability.service.context-dispatcher :as ctx]
+						[cn.li.ac.ability.service.context-registry :as ctx-reg]
 						[cn.li.ac.ability.skill-config :as skill-config]
 						[cn.li.ac.ability.util.toggle :as toggle]))
 
@@ -112,7 +113,7 @@
 
 (defn dual-active?
 	[player-id]
-	(let [contexts (ctx/get-all-contexts)]
+	(let [contexts (ctx-reg/get-all-contexts)]
 		(boolean
 			(and (some (fn [[_ctx-id ctx-data]]
 									 (and (= (:player-uuid ctx-data) player-id)

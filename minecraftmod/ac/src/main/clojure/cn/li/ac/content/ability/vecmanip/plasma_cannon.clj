@@ -21,6 +21,7 @@
             [cn.li.ac.content.ability.fx-helpers :as fx]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-registry :as ctx-reg]
             [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
@@ -81,7 +82,7 @@
 (defn- safe-context-data
   [ctx-id]
   (try
-    (ctx/get-context ctx-id)
+    (ctx-reg/get-context ctx-id)
     (catch Exception _ nil)))
 
 (defn- command-runtime-ready?
@@ -101,8 +102,8 @@
                                                         :k []
                                                         :v state-map})]
         (when (= :context-not-found (:rejected-reason result))
-          (ctx/update-context! ctx-id assoc :skill-state state-map)))
-      (ctx/update-context! ctx-id assoc :skill-state state-map))))
+          (ctx-reg/update-context! ctx-id assoc :skill-state state-map)))
+      (ctx-reg/update-context! ctx-id assoc :skill-state state-map))))
 
 (defn- set-skill-state!
   [ctx-id k v]
@@ -116,8 +117,8 @@
                                                         :k key-path
                                                         :v v})]
         (when (= :context-not-found (:rejected-reason result))
-          (ctx/update-context! ctx-id assoc-in (into [:skill-state] key-path) v)))
-      (ctx/update-context! ctx-id assoc-in (into [:skill-state] key-path) v))))
+          (ctx-reg/update-context! ctx-id assoc-in (into [:skill-state] key-path) v)))
+      (ctx-reg/update-context! ctx-id assoc-in (into [:skill-state] key-path) v))))
 
 (defn- update-skill-state-root!
   [ctx-id f]
@@ -134,8 +135,8 @@
                                                        {:command :context-clear-skill-state
                                                         :ctx-id ctx-id})]
         (when (= :context-not-found (:rejected-reason result))
-          (ctx/update-context! ctx-id dissoc :skill-state)))
-      (ctx/update-context! ctx-id dissoc :skill-state))))
+          (ctx-reg/update-context! ctx-id dissoc :skill-state)))
+      (ctx-reg/update-context! ctx-id dissoc :skill-state))))
 
 ;; Cost DSL hooks (used by content spec :cost)
 (defn plasma-cannon-cost-down-overload
@@ -270,7 +271,7 @@
       (if-not cost-ok?
         (do
           (fx/send-end! ctx-id :plasma-cannon/fx-end {:performed? false})
-          (ctx/terminate-context! ctx-id nil)
+          (ctx-reg/terminate-context! ctx-id nil)
           (log/debug "PlasmaCannon: Not enough resources to activate"))
         (let [pos      (get-player-position player-id)
               spawn-pos {:x (double (:x pos))
@@ -296,7 +297,7 @@
   "Server-side tick. Handles both :charging and :go states."
   [{:keys [player-id ctx-id cost-ok?]}]
   (try
-    (when-let [ctx-data (ctx/get-context ctx-id)]
+    (when-let [ctx-data (ctx-reg/get-context ctx-id)]
       (let [skill-state (:skill-state ctx-data)
             state       (or (:state skill-state) :charging)
         ov-keep     (double (or (:overload-keep skill-state) (overload-keep 1.0)))]
@@ -316,7 +317,7 @@
               ;; Out of CP: abort (original: terminate())
               (do
                 (fx/send-end! ctx-id :plasma-cannon/fx-end {:performed? false})
-                (ctx/terminate-context! ctx-id nil)
+                (ctx-reg/terminate-context! ctx-id nil)
                 (log/debug "PlasmaCannon: Ran out of CP, aborting"))
               ;; Still charging
               (do
@@ -347,7 +348,7 @@
                     (do-explode! player-id world-id destination exp)
                     (fx/send-perform! ctx-id :plasma-cannon/fx-perform {:pos destination})
                     (fx/send-end! ctx-id :plasma-cannon/fx-end {:performed? true})
-                    (ctx/terminate-context! ctx-id nil))
+                    (ctx-reg/terminate-context! ctx-id nil))
                   ;; Still flying: move and sync every configured interval
                   (let [next-sync (if (zero? sync-ticks) (cfg-int :projectile.sync-interval-ticks) (dec sync-ticks))]
                     (update-skill-state-root! ctx-id #(assoc %
@@ -362,7 +363,7 @@
           ;; Fallback: unknown state 锟?terminate
           (do
             (fx/send-end! ctx-id :plasma-cannon/fx-end {:performed? false})
-            (ctx/terminate-context! ctx-id nil)))))
+            (ctx-reg/terminate-context! ctx-id nil)))))
     (catch Exception e
       (log/warn "PlasmaCannon key-tick failed:" (ex-message e)))))
 
@@ -371,7 +372,7 @@
   Equivalent to l_keyUp() / s_perform() in original."
   [{:keys [player-id ctx-id]}]
   (try
-    (when-let [ctx-data (ctx/get-context ctx-id)]
+    (when-let [ctx-data (ctx-reg/get-context ctx-id)]
       (let [skill-state  (:skill-state ctx-data)
             state        (or (:state skill-state) :charging)
             charge-ticks (long (or (:charge-ticks skill-state) 0))
@@ -383,7 +384,7 @@
           ;; Not fully charged or already flying 锟?abort
           (when-not (= state :go)
             (fx/send-end! ctx-id :plasma-cannon/fx-end {:performed? false})
-            (ctx/terminate-context! ctx-id nil)
+            (ctx-reg/terminate-context! ctx-id nil)
             (log/debug "PlasmaCannon: Released before fully charged, aborting"))
 
           ;; Fully charged 锟?fire (equivalent to s_perform on server)

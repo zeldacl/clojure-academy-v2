@@ -2,6 +2,7 @@
   (:require [clojure.test :refer [deftest is]]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-registry :as ctx-reg]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.content.ability.meltdowner.jet-engine :as jet]
@@ -30,8 +31,8 @@
 
 (deftest jet-engine-down-enters-marking-phase-test
   (let [{:keys [ctx* get-context update-context! send!]} (context-mocks {})]
-    (with-redefs [ctx/get-context get-context
-                  ctx/update-context! update-context!
+    (with-redefs [ctx-reg/get-context get-context
+                  ctx-reg/update-context! update-context!
                   ctx/ctx-send-to-client! send!
                   geom/world-id-of (fn [_] "w")
                   geom/eye-pos (fn [_] {:x 0.0 :y 64.0 :z 0.0})]
@@ -45,9 +46,9 @@
                                                                                                             :target-pos {:x 8.0 :y 65.0 :z 8.0}}})
         exp-calls* (atom [])
         cooldown-calls* (atom [])]
-    (with-redefs [ctx/get-context get-context
-                  ctx/update-context! update-context!
-                  ctx/terminate-context! terminate-context!
+    (with-redefs [ctx-reg/get-context get-context
+                  ctx-reg/update-context! update-context!
+                  ctx-reg/terminate-context! terminate-context!
                   ctx/ctx-send-to-client! send!
             skill-effects/skill-exp (fn [_ _] 0.0)
                   skill-config/lerp-double (fn [_ _ _] 10.0)
@@ -69,9 +70,9 @@
   (let [{:keys [ctx* get-context update-context! terminate-context! send! terminated*]} (context-mocks {:skill-state {:phase :marking
                                                                                                             :target-pos {:x 8.0 :y 65.0 :z 8.0}}})
         cooldown-calls* (atom [])]
-    (with-redefs [ctx/get-context get-context
-                  ctx/update-context! update-context!
-                  ctx/terminate-context! terminate-context!
+    (with-redefs [ctx-reg/get-context get-context
+                  ctx-reg/update-context! update-context!
+                  ctx-reg/terminate-context! terminate-context!
                   ctx/ctx-send-to-client! send!
             skill-effects/skill-exp (fn [_ _] 0.0)
                   skill-config/lerp-double (fn [_ _ _] 10.0)
@@ -98,9 +99,9 @@
         damage-calls* (atom [])
   teleport-calls* (atom [])
   marks* (atom [])]
-    (with-redefs [ctx/get-context get-context
-                  ctx/update-context! update-context!
-                  ctx/terminate-context! terminate-context!
+    (with-redefs [ctx-reg/get-context get-context
+                  ctx-reg/update-context! update-context!
+                  ctx-reg/terminate-context! terminate-context!
                   ctx/ctx-send-to-client! send!
                   skill-effects/skill-exp (fn [_ _] 0.0)
                   md-damage/mark-target! (fn [player-id target-id fx-context]

@@ -12,6 +12,7 @@
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.util.balance :as bal]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-registry :as ctx-reg]
             [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.ability.effects.damage :as damage-op]
             [cn.li.ac.ability.effects.geom :as geom]
@@ -56,13 +57,13 @@
 
 (defn- current-target
   [ctx-id player-id]
-  (or (get-in (ctx/get-context ctx-id) [:skill-state :hit-pos])
+  (or (get-in (ctx-reg/get-context ctx-id) [:skill-state :hit-pos])
       (resolve-fallback-target player-id)))
 
 (defn- safe-context-data
   [ctx-id]
   (try
-    (ctx/get-context ctx-id)
+    (ctx-reg/get-context ctx-id)
     (catch Exception _ nil)))
 
 (defn- command-runtime-ready?
@@ -83,8 +84,8 @@
                                                         :k []
                                                         :v next-state})]
         (when (= :context-not-found (:rejected-reason result))
-          (ctx/update-context! ctx-id assoc :skill-state next-state)))
-      (ctx/update-context! ctx-id assoc :skill-state next-state))))
+          (ctx-reg/update-context! ctx-id assoc :skill-state next-state)))
+      (ctx-reg/update-context! ctx-id assoc :skill-state next-state))))
 
 (defn- mark-performed!
   [ctx-id performed? & {:as extra-state}]
@@ -95,7 +96,7 @@
 (defn- end-payload
   [{:keys [ctx-id player-id hold-ticks]}]
   (let [ticks (long (or hold-ticks 0))]
-    {:performed?   (boolean (get-in (ctx/get-context ctx-id) [:skill-state :performed?]))
+    {:performed?   (boolean (get-in (ctx-reg/get-context ctx-id) [:skill-state :performed?]))
      :charge-ticks ticks
      :ticks        ticks
      :charge-ratio (compute-overcharge-ratio ticks)
@@ -114,7 +115,7 @@
   :pattern         :charge-window
   :input-policy    {:settle-perform-on-key-up?
                     (fn [{:keys [ctx-id]}]
-                      (boolean (get-in (ctx/get-context ctx-id) [:skill-state :performed?])))}
+                      (boolean (get-in (ctx-reg/get-context ctx-id) [:skill-state :performed?])))}
   :cooldown        {:mode :manual}
   :cost            {:down {:overload (fn [{:keys [exp]}]
                                       (cfg-lerp :cost.down.overload (double (or exp 0.0))))}
@@ -180,7 +181,7 @@
                    (ctx/ctx-send-to-client! ctx-id :thunder-clap/fx-end
                                             (merge {:mode :end :ctx-id ctx-id}
                                                    (end-payload {:ctx-id ctx-id}))))
-                 (ctx/terminate-context! ctx-id nil))
+                 (ctx-reg/terminate-context! ctx-id nil))
    :abort!     (fn [{:keys [ctx-id]}]
                  (mark-performed! ctx-id false))}
   :prerequisites [{:skill-id :thunder-bolt :min-exp 1.0}])

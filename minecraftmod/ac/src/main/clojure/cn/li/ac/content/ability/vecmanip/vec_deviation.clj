@@ -17,6 +17,7 @@
   (:require [cn.li.ac.ability.dsl :refer [defskill]]
             [cn.li.ac.content.ability.vecmanip.arbitration :as arbitration]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-registry :as ctx-reg]
             [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.util.toggle :as toggle]
@@ -107,7 +108,7 @@
 
 (defn- active-vec-deviation-ctx-id
   [player-id]
-  (->> (ctx/get-all-contexts)
+  (->> (ctx-reg/get-all-contexts)
        (filter (fn [[_ctx-id ctx-data]]
                  (and (= (:player-uuid ctx-data) player-id)
                       (toggle/is-toggle-active? ctx-data :vec-deviation))))
@@ -117,7 +118,7 @@
 (defn- safe-context-data
   [ctx-id]
   (try
-    (ctx/get-context ctx-id)
+    (ctx-reg/get-context ctx-id)
     (catch Exception _ nil)))
 
 (defn- command-runtime-ready?
@@ -137,8 +138,8 @@
                                                         :k [k]
                                                         :v v})]
         (when (= :context-not-found (:rejected-reason result))
-          (ctx/update-context! ctx-id assoc-in [:skill-state k] v)))
-      (ctx/update-context! ctx-id assoc-in [:skill-state k] v))))
+          (ctx-reg/update-context! ctx-id assoc-in [:skill-state k] v)))
+      (ctx-reg/update-context! ctx-id assoc-in [:skill-state k] v))))
 
 (defn- update-skill-state-root!
   [ctx-id f]
@@ -152,8 +153,8 @@
                                                         :k []
                                                         :v next-state})]
         (when (= :context-not-found (:rejected-reason result))
-          (ctx/update-context! ctx-id assoc :skill-state next-state)))
-      (ctx/update-context! ctx-id assoc :skill-state next-state))))
+          (ctx-reg/update-context! ctx-id assoc :skill-state next-state)))
+      (ctx-reg/update-context! ctx-id assoc :skill-state next-state))))
 
 (defn- add-exp!
   [player-id amount]
@@ -199,7 +200,7 @@
   "Tick handler - consume resources and deflect projectiles. Assumes toggle is active."
   [{:keys [player-id ctx-id cost-ok?]}]
   (try
-    (when-let [ctx-data (ctx/get-context ctx-id)]
+    (when-let [ctx-data (ctx-reg/get-context ctx-id)]
       (let [exp (skill-exp player-id)
             active? (toggle/is-toggle-active? ctx-data :vec-deviation)]
         (when (and active? (not cost-ok?))
@@ -234,7 +235,7 @@
                                (not= entity-uuid player-id)
                                (not marked?)
                                difficulty
-                               (toggle/is-toggle-active? (or (ctx/get-context ctx-id) ctx-data) :vec-deviation))
+                               (toggle/is-toggle-active? (or (ctx-reg/get-context ctx-id) ctx-data) :vec-deviation))
                       ;; Edit E: fix Bug1 (no * difficulty), Bug2 (force-consume), Bug3 (consume after claim)
                       (let [base-cost   (cfg-lerp :cost.deflect.cp exp)
                             avail-cp    (current-cp player-id)

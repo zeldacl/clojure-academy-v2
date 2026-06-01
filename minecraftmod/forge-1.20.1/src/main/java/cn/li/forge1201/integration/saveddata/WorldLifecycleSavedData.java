@@ -4,7 +4,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.level.saveddata.SavedData;
 
 public class WorldLifecycleSavedData extends SavedData {
-    public static final String NAME = "clojure_academy_world_lifecycle";
+    public static final String NAME = "clj_world_lifecycle";
 
     private CompoundTag handlers;
 

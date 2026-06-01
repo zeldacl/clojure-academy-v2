@@ -191,8 +191,8 @@
     (try
       (System/setProperty keepalive-key "42")
       (System/setProperty grace-key "84")
-      (is (= 42 (ctx/keepalive-timeout-ms)))
-      (is (= 84 (ctx/terminated-context-grace-ms)))
+      (is (= 42 (cm/keepalive-timeout-ms)))
+      (is (= 84 (cm/terminated-context-grace-ms)))
       (finally
         (if (some? old-keepalive)
           (System/setProperty keepalive-key old-keepalive)

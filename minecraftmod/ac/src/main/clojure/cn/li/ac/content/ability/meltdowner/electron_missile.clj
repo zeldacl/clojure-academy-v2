@@ -19,6 +19,7 @@
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-registry :as ctx-reg]
             [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
@@ -107,7 +108,7 @@
 (defn- safe-context-data
   [ctx-id]
   (try
-    (ctx/get-context ctx-id)
+    (ctx-reg/get-context ctx-id)
     (catch Exception _ nil)))
 
 (defn- command-runtime-ready?
@@ -127,8 +128,8 @@
                                                         :k []
                                                         :v state-map})]
         (when (= :context-not-found (:rejected-reason result))
-          (ctx/update-context! ctx-id assoc :skill-state state-map)))
-      (ctx/update-context! ctx-id assoc :skill-state state-map))))
+          (ctx-reg/update-context! ctx-id assoc :skill-state state-map)))
+      (ctx-reg/update-context! ctx-id assoc :skill-state state-map))))
 
 (defn electron-missile-down!
   [{:keys [player-id ctx-id cost-ok?]}]
@@ -145,7 +146,7 @@
 (defn electron-missile-tick!
   [{:keys [player-id ctx-id player]}]
   (try
-    (let [ctx-data (ctx/get-context ctx-id)
+    (let [ctx-data (ctx-reg/get-context ctx-id)
           state (get ctx-data :skill-state {})
           ticks (long (or (:ticks state) 0))
           active-balls (long (or (:active-balls state) 0))
@@ -161,7 +162,7 @@
         (do
           (log/debug "ElectronMissile: max hold reached" ticks "/" max-hold)
           (send-end-fx! ctx-id)
-          (ctx/terminate-context! ctx-id nil))
+          (ctx-reg/terminate-context! ctx-id nil))
         (let [balls-after-spawn (if (and (zero? (mod ticks spawn-interval))
                                          (< active-balls max-balls))
                                   (do

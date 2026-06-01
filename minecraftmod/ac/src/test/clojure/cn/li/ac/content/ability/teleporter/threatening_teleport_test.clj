@@ -2,6 +2,7 @@
   (:require [clojure.test :refer [deftest is]]
             [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-registry :as ctx-reg]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.content.ability.teleporter.threatening-teleport :as tt]
             [cn.li.ac.content.ability.teleporter.tp-skill-helper :as helper]
@@ -25,7 +26,7 @@
         cooldown-calls* (atom 0)
         fx-calls* (atom 0)
         ach-calls* (atom 0)]
-    (with-redefs [ctx/get-context get-context
+    (with-redefs [ctx-reg/get-context get-context
                   helper/deal-magic-damage! (fn [& _] (swap! damage-calls* inc))
                   skill-effects/add-skill-exp! (fn [& _] (swap! exp-calls* inc))
                   skill-effects/set-main-cooldown! (fn [& _] (swap! cooldown-calls* inc))
@@ -42,8 +43,8 @@
 (deftest threatening-tp-tick-updates-trace-and-sends-update-fx-test
   (let [{:keys [ctx* get-context update-context!]} (make-context-mocks {:skill-state {}})
         fx-updates* (atom [])]
-    (with-redefs [ctx/get-context get-context
-                  ctx/update-context! update-context!
+    (with-redefs [ctx-reg/get-context get-context
+                  ctx-reg/update-context! update-context!
                   ctx/ctx-send-to-client! (fn [_ctx-id channel payload]
                                             (swap! fx-updates* conj [channel payload]))
                   helper/skill-exp (fn [_ _] 0.5)
@@ -82,7 +83,7 @@
         consume-calls* (atom 0)
         drop-calls* (atom [])
         crit-fx-calls* (atom [])]
-    (with-redefs [ctx/get-context get-context
+    (with-redefs [ctx-reg/get-context get-context
                   helper/skill-exp (fn [_ _] 0.5)
                   helper/cfg-lerp (fn [_ field _]
                                     (case field
@@ -163,7 +164,7 @@
                                                                           :target-uuid "enemy"}}})
         fx-calls* (atom [])
         crit-fx-calls* (atom [])]
-    (with-redefs [ctx/get-context get-context
+    (with-redefs [ctx-reg/get-context get-context
                   helper/skill-exp (fn [_ _] 0.5)
                   helper/cfg-lerp (fn [_ field _]
                                     (case field

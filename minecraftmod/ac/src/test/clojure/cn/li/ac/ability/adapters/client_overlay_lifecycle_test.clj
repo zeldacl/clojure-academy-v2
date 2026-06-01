@@ -3,6 +3,7 @@
             [cn.li.ac.ability.service.runtime-store :as store]
 [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.adapters.client-ui-hooks :as client-ui-hooks]
+            [cn.li.ac.ability.client.read-model :as read-model]
             [cn.li.ac.ability.client.keybinds :as client-keybinds]
             [cn.li.ac.content.ability.electromaster.current-charging-fx :as current-charging-fx]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]            [cn.li.ac.ability.skill-config :as skill-config]
@@ -58,7 +59,7 @@
                                      :status ctx/STATUS-TERMINATED
                                      :skill-state {:toggle {:vec-reflection {:active true}
                                                             :vec-deviation {:active true}}}}}]
-    (with-redefs [ctx/get-all-contexts-for-player (fn [& _] terminated-player-contexts)
+    (with-redefs [read-model/get-player-contexts-for-player (fn [& _] terminated-player-contexts)
                   ctx/get-all-contexts (fn [] terminated-toggle-contexts)
                   store/get-player-state* (fn [_ _]
                                         {:resource-data {:activated true

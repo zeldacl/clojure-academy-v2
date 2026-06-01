@@ -2,13 +2,14 @@
   "BodyIntensify skill - hold to charge randomised potions.
 
   Pattern: :charge-window (min 10, max 40, tolerant 100)
-  Cost: overload lerp(200,120) on down; CP lerp(20,15)/tick while charging (ï¿?0 ticks)
-  Cooldown: lerp(900,600) ticks (manual, applied on successful up ï¿?0 ticks)
+  Cost: overload lerp(200,120) on down; CP lerp(20,15)/tick while charging (ï¿½?0 ticks)
+  Cooldown: lerp(900,600) ticks (manual, applied on successful up ï¿½?0 ticks)
   Exp: +0.01 on successful release"
   (:require [clojure.string :as str]
             [cn.li.ac.ability.dsl :refer [defskill]]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-registry :as ctx-reg]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.mcmod.platform.potion-effects :as potion-effects]))
 
@@ -112,12 +113,12 @@
                                  {:performed? (>= (long (or hold-ticks 0)) (min-time))})}}
   :actions
   {:cost-fail! (fn [{:keys [ctx-id]}]
-                 (ctx/terminate-context! ctx-id nil))
+                 (ctx-reg/terminate-context! ctx-id nil))
    :tick!      (fn [{:keys [player-id ctx-id hold-ticks exp]}]
                  (enforce-overload-floor! player-id
                                           (cfg-lerp :cost.down.overload (double (or exp 0.0))))
                  (when (>= (long (or hold-ticks 0)) (max-tolerant-time))
-                   (ctx/terminate-context! ctx-id nil)))
+                   (ctx-reg/terminate-context! ctx-id nil)))
    :up!        (fn [{:keys [player-id hold-ticks exp]}]
                  (let [ticks (long (or hold-ticks 0))]
                    (when (>= ticks (min-time))

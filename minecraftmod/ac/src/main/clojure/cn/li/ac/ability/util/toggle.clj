@@ -6,13 +6,13 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.service.command-runtime :as command-rt]
-            [cn.li.ac.ability.service.context-dispatcher :as ctx]
-            [cn.li.mcmod.hooks.core :as runtime-hooks]))
+            [cn.li.ac.ability.service.context-registry :as ctx-reg]
+            [cn.li.mcmod.util.log :as log]))
 
 (defn- context-owner
   [ctx-id]
   (try
-    (let [ctx-map (ctx/get-context ctx-id)
+    (let [ctx-map (ctx-reg/get-context ctx-id)
           sid (:session-id ctx-map)]
       {:ctx-map ctx-map
        :session-id (if (vector? sid) (first sid) sid)
@@ -20,39 +20,15 @@
     (catch Exception _
       {:ctx-map nil :session-id nil :player-uuid nil})))
 
-(defn- run-toggle-fallback!
-  [ctx-id command]
-  (case (:command command)
-    :context-increment-skill-state
-    (let [k (:k command)
-          key-path (if (vector? k) k [k])
-          max-v (long (or (:max command) Long/MAX_VALUE))]
-      (ctx/update-context! ctx-id
-                           (fn [c]
-                             (let [current (long (or (get-in c (into [:skill-state] key-path)) 0))
-                                   next-v (min max-v (inc current))]
-                               (assoc-in c (into [:skill-state] key-path) next-v)))))
-
-    :context-set-toggle-active
-    (ctx/update-context! ctx-id assoc-in [:skill-state :toggle (:skill-id command) :active]
-                         (boolean (:active command)))
-
-    :context-remove-toggle-state
-    (ctx/update-context! ctx-id update-in [:skill-state :toggle] dissoc (:skill-id command))
-
-    :context-set-toggle-state
-    (ctx/update-context! ctx-id assoc-in [:skill-state :toggle (:skill-id command)] (:toggle-state command))
-
-    nil)
-  nil)
-
 (defn- run-toggle-command!
   [ctx-id command]
   (let [{:keys [session-id player-uuid]} (context-owner ctx-id)
-        owner (runtime-hooks/current-player-state-owner)]
-    (if (and owner session-id player-uuid)
-      (command-rt/run-command-in-session! session-id player-uuid command)
-      (run-toggle-fallback! ctx-id command))))
+        command* (assoc command :ctx-id ctx-id)]
+    (if (and session-id player-uuid)
+      (command-rt/run-command-in-session! session-id player-uuid command*)
+      (do
+        (log/warn "toggle command skipped: missing context owner/session" {:ctx-id ctx-id :command (:command command*)})
+        nil))))
 
 (defn init-toggle-state
   "Initialize toggle skill state in context.

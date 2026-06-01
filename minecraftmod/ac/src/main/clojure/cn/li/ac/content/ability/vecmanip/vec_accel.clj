@@ -8,6 +8,7 @@
   (:require [cn.li.ac.ability.dsl :refer [defskill]]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-registry :as ctx-reg]
             [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
@@ -73,7 +74,7 @@
 (defn- safe-context-data
   [ctx-id]
   (try
-    (ctx/get-context ctx-id)
+    (ctx-reg/get-context ctx-id)
     (catch Exception _ nil)))
 
 (defn- command-runtime-ready?
@@ -94,8 +95,8 @@
                                                         :k key-path
                                                         :v v})]
         (when (= :context-not-found (:rejected-reason result))
-          (ctx/update-context! ctx-id assoc-in (into [:skill-state] key-path) v)))
-      (ctx/update-context! ctx-id assoc-in (into [:skill-state] key-path) v))))
+          (ctx-reg/update-context! ctx-id assoc-in (into [:skill-state] key-path) v)))
+      (ctx-reg/update-context! ctx-id assoc-in (into [:skill-state] key-path) v))))
 
 (defn- update-skill-state-root!
   [ctx-id f & args]
@@ -110,8 +111,8 @@
                                                         :k []
                                                         :v next-state})]
         (when (= :context-not-found (:rejected-reason result))
-          (ctx/update-context! ctx-id assoc :skill-state next-state)))
-      (ctx/update-context! ctx-id assoc :skill-state next-state))))
+          (ctx-reg/update-context! ctx-id assoc :skill-state next-state)))
+      (ctx-reg/update-context! ctx-id assoc :skill-state next-state))))
 
 (defskill vec-accel
   :id          :vec-accel
@@ -140,7 +141,7 @@
                                             :init-vel     init-vel
                                             :performed?   false})))
    :perform! (fn [{:keys [player-id ctx-id exp]}]
-               (when-let [ctx-data (ctx/get-context ctx-id)]
+               (when-let [ctx-data (ctx-reg/get-context ctx-id)]
                  (let [ss           (:skill-state ctx-data)
                        can-perform? (boolean (:can-perform? ss))
                        init-vel     (:init-vel ss)]
@@ -162,7 +163,7 @@
   :fx {:start   {:topic :vec-accel/fx-start   :payload (fn [_] {})}
        :update  {:topic :vec-accel/fx-update
                  :payload (fn [{:keys [ctx-id charge-ticks]}]
-                            (let [st (:skill-state (ctx/get-context ctx-id))]
+                            (let [st (:skill-state (ctx-reg/get-context ctx-id))]
                               {:charge-ticks (long (max 0 (or charge-ticks 0)))
                                :can-perform? (boolean (:can-perform? st))
                                :look-dir     (or (:look-dir st) {:x 0.0 :y 0.0 :z 1.0})
@@ -170,5 +171,5 @@
        :perform {:topic :vec-accel/fx-perform  :payload (fn [_] {})}
        :end     {:topic :vec-accel/fx-end
                  :payload (fn [{:keys [ctx-id]}]
-                            {:performed? (boolean (get-in (ctx/get-context ctx-id) [:skill-state :performed?]))})}}
+                            {:performed? (boolean (get-in (ctx-reg/get-context ctx-id) [:skill-state :performed?]))})}}
   :prerequisites [{:skill-id :directed-shock :min-exp 0.0}])

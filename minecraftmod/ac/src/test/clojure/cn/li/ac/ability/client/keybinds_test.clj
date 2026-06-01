@@ -3,6 +3,7 @@
             [cn.li.ac.ability.service.runtime-store :as store]
 [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.client.api :as client-api]
+            [cn.li.ac.ability.client.read-model :as read-model]
             [cn.li.ac.ability.client.keybinds :as keybinds]            [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
@@ -111,7 +112,7 @@
 (deftest default-abort-handler-uses-client-abort-hook-test
   (let [aborted (atom [])]
     (keybinds/install-default-handlers!)
-    (with-redefs [ctx/get-all-contexts-for-player (fn [& _] [{:id "ctx-1" :status :alive}])
+    (with-redefs [read-model/get-player-contexts-for-player (fn [& _] [{:id "ctx-1" :status :alive}])
                   runtime-hooks/client-abort-all! (fn [] (swap! aborted conj :abort-hook))
                   ctx/abort-all-contexts-for-player! (fn [& _]
                                                        (throw (ex-info "legacy abort path should not be used" {})))]

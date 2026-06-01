@@ -1,6 +1,7 @@
 (ns cn.li.ac.content.ability.vecmanip.groundshock-test
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-registry :as ctx-reg]
             [cn.li.ac.content.ability.vecmanip.groundshock :as gs]
             [cn.li.ac.content.ability.fx-helpers :as fx]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
@@ -64,7 +65,7 @@
 
 (deftest key-up-missing-position-sends-fx-end-test
   (let [end-calls* (atom [])]
-    (with-redefs [ctx/get-context (fn [_] {:skill-state {:charge-ticks 10 :performed? false}})
+    (with-redefs [ctx-reg/get-context (fn [_] {:skill-state {:charge-ticks 10 :performed? false}})
                   gs/cfg-int (fn [field]
                                (case field
                                  :charge.min-ticks 5
@@ -82,7 +83,7 @@
 
 (deftest key-up-cost-fail-sends-fx-end-test
   (let [end-calls* (atom [])]
-    (with-redefs [ctx/get-context (fn [_] {:skill-state {:charge-ticks 10 :performed? false}})
+    (with-redefs [ctx-reg/get-context (fn [_] {:skill-state {:charge-ticks 10 :performed? false}})
                   gs/cfg-int (fn [field]
                                (case field
                                  :charge.min-ticks 5
@@ -98,7 +99,7 @@
 
 (deftest key-up-missing-direction-sends-fx-end-test
   (let [end-calls* (atom [])]
-    (with-redefs [ctx/get-context (fn [_] {:skill-state {:charge-ticks 10 :performed? false}})
+    (with-redefs [ctx-reg/get-context (fn [_] {:skill-state {:charge-ticks 10 :performed? false}})
                   gs/cfg-int (fn [field]
                                (case field
                                  :charge.min-ticks 5

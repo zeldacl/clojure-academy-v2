@@ -7,6 +7,7 @@
   (:require [cn.li.ac.ability.dsl :refer [defskill]]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-registry :as ctx-reg]
             [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.energy.operations :as energy]
@@ -50,7 +51,7 @@
 (defn- safe-context-data
   [ctx-id]
   (try
-    (ctx/get-context ctx-id)
+    (ctx-reg/get-context ctx-id)
     (catch Exception _ nil)))
 
 (defn- command-runtime-ready?
@@ -71,8 +72,8 @@
                                                         :k key-path
                                                         :v v})]
         (when (= :context-not-found (:rejected-reason result))
-          (ctx/update-context! ctx-id assoc-in (into [:skill-state] key-path) v)))
-      (ctx/update-context! ctx-id assoc-in (into [:skill-state] (if (vector? k) k [k])) v))))
+          (ctx-reg/update-context! ctx-id assoc-in (into [:skill-state] key-path) v)))
+      (ctx-reg/update-context! ctx-id assoc-in (into [:skill-state] (if (vector? k) k [k])) v))))
 
 (defn- set-skill-state-root!
   [ctx-id state-map]
@@ -85,8 +86,8 @@
                                                         :k []
                                                         :v state-map})]
         (when (= :context-not-found (:rejected-reason result))
-          (ctx/update-context! ctx-id assoc :skill-state state-map)))
-      (ctx/update-context! ctx-id assoc :skill-state state-map))))
+          (ctx-reg/update-context! ctx-id assoc :skill-state state-map)))
+      (ctx-reg/update-context! ctx-id assoc :skill-state state-map))))
 
 (defn- clear-skill-state!
   [ctx-id]
@@ -97,15 +98,15 @@
                                                        {:command :context-clear-skill-state
                                                         :ctx-id ctx-id})]
         (when (= :context-not-found (:rejected-reason result))
-          (ctx/update-context! ctx-id dissoc :skill-state)))
-      (ctx/update-context! ctx-id dissoc :skill-state))))
+          (ctx-reg/update-context! ctx-id dissoc :skill-state)))
+      (ctx-reg/update-context! ctx-id dissoc :skill-state))))
 
 (defn- end-and-terminate!
   [ctx-id is-item player-id]
   (ctx/ctx-send-to-client! ctx-id :current-charging/fx-end
                            (fx-payload player-id {:is-item (boolean is-item)}))
   (clear-skill-state! ctx-id)
-  (ctx/terminate-context! ctx-id nil))
+  (ctx-reg/terminate-context! ctx-id nil))
 
 (defn- charge-item-tick!
   [{:keys [player-id ctx-id exp charge charge-ticks]}]
@@ -204,7 +205,7 @@
   :cost        {:down {:overload (fn [{:keys [exp]}]
                                   (cfg-lerp :cost.down.overload (double (or exp 0.0))))}
                 :tick {:cp (fn [{:keys [player-id ctx-id exp]}]
-                             (let [state (:skill-state (ctx/get-context ctx-id))]
+                             (let [state (:skill-state (ctx-reg/get-context ctx-id))]
                                (if (and (:is-item state) (nil? (main-hand-item player-id)))
                                  0.0
                                  (cfg-lerp :cost.tick.cp (double (or (:exp state) exp 0.0))))))}}
@@ -216,9 +217,9 @@
          "按住持续引导电流，为目标能量方块或手持能量物品充能。"}}
   :actions
   {:cost-fail! (fn [{:keys [ctx-id]}]
-                 (let [skill-state (:skill-state (or (ctx/get-context ctx-id) {}))
+                 (let [skill-state (:skill-state (or (ctx-reg/get-context ctx-id) {}))
                is-item (boolean (:is-item skill-state))
-               player-id (:player-id (or (ctx/get-context ctx-id) {}))]
+               player-id (:player-id (or (ctx-reg/get-context ctx-id) {}))]
              (end-and-terminate! ctx-id is-item player-id)))
    :down!  (fn [{:keys [player-id ctx-id exp]}]
              (let [is-item (boolean (main-hand-item player-id))
@@ -237,7 +238,7 @@
                (ctx/ctx-send-to-client! ctx-id :current-charging/fx-start
                                         (fx-payload player-id {:is-item is-item}))))
    :tick!  (fn [{:keys [player-id ctx-id player]}]
-             (when-let [skill-state (:skill-state (ctx/get-context ctx-id))]
+             (when-let [skill-state (:skill-state (ctx-reg/get-context ctx-id))]
                (let [is-item (boolean (:is-item skill-state))
                      exp (double (or (:exp skill-state) 0.0))
                      charge (Math/floor (cfg-lerp :effect.charge-amount exp))
@@ -258,13 +259,13 @@
                                         :charge charge
                                         :charge-ticks charge-ticks})))))
    :up!    (fn [{:keys [ctx-id]}]
-             (when-let [{:keys [skill-state player-id]} (ctx/get-context ctx-id)]
+             (when-let [{:keys [skill-state player-id]} (ctx-reg/get-context ctx-id)]
                (ctx/ctx-send-to-client! ctx-id :current-charging/fx-end
                                         (fx-payload player-id
                                                     {:is-item (boolean (:is-item skill-state))}))
                (clear-skill-state! ctx-id)))
    :abort! (fn [{:keys [ctx-id]}]
-             (when-let [{:keys [skill-state player-id]} (ctx/get-context ctx-id)]
+             (when-let [{:keys [skill-state player-id]} (ctx-reg/get-context ctx-id)]
                (ctx/ctx-send-to-client! ctx-id :current-charging/fx-end
                                         (fx-payload player-id
                                                     {:is-item (boolean (:is-item skill-state))})))

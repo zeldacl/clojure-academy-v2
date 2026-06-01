@@ -33,12 +33,12 @@
     :description "Credits and information"
     :category :help}])
 
-(defonce ^:private apps-by-id-index
-  (delay (into {} (map (juxt :id identity) apps))))
+(def ^:private apps-by-id-index
+  (into {} (map (juxt :id identity) apps)))
 
 (defn- apps-by-id
   []
-  @apps-by-id-index)
+  apps-by-id-index)
 
 (defn app-ids
   []

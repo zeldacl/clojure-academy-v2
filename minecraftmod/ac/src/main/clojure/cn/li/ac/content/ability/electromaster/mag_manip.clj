@@ -9,6 +9,7 @@
             [cn.li.ac.ability.dsl :refer [defskill]]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-registry :as ctx-reg]
             [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
@@ -53,7 +54,7 @@
 (defn- safe-context-data
   [ctx-id]
   (try
-    (ctx/get-context ctx-id)
+    (ctx-reg/get-context ctx-id)
     (catch Exception _ nil)))
 
 (defn- command-runtime-ready?
@@ -73,8 +74,8 @@
                                                         :k []
                                                         :v state-map})]
         (when (= :context-not-found (:rejected-reason result))
-          (ctx/update-context! ctx-id assoc :skill-state state-map)))
-      (ctx/update-context! ctx-id assoc :skill-state state-map))))
+          (ctx-reg/update-context! ctx-id assoc :skill-state state-map)))
+      (ctx-reg/update-context! ctx-id assoc :skill-state state-map))))
 
 (defn- clear-skill-state!
   [ctx-id]
@@ -85,8 +86,8 @@
                                                        {:command :context-clear-skill-state
                                                         :ctx-id ctx-id})]
         (when (= :context-not-found (:rejected-reason result))
-          (ctx/update-context! ctx-id dissoc :skill-state)))
-      (ctx/update-context! ctx-id dissoc :skill-state))))
+          (ctx-reg/update-context! ctx-id dissoc :skill-state)))
+      (ctx-reg/update-context! ctx-id dissoc :skill-state))))
 
 (defn- metal-block-id? [block-id exp]
   (let [id (some-> block-id str/lower-case)]
@@ -186,7 +187,7 @@
 ;; --- Cost helpers ---
 
 (defn- holding-nearby? [player-id ctx-id]
-  (when-let [ctx-data (ctx/get-context ctx-id)]
+  (when-let [ctx-data (ctx-reg/get-context ctx-id)]
     (let [ss (:skill-state ctx-data)]
       (when (and (= :holding (:mode ss)) (:held-block ss))
         (let [focus (or (:focus ss) (hold-focus player-id))
@@ -262,7 +263,7 @@
 
 ;; Original s_tick: update hold position, send FX every 2 ticks.
 (defn- on-tick [{:keys [player-id ctx-id]}]
-  (when-let [ctx-data (ctx/get-context ctx-id)]
+  (when-let [ctx-data (ctx-reg/get-context ctx-id)]
     (let [ss (:skill-state ctx-data)]
       (when (= :holding (:mode ss))
         (let [ticks (inc (int (or (:hold-ticks ss) 0)))
@@ -278,7 +279,7 @@
 ;; Original s_perform: check dist < 5 blocks, throw, damage always 10.
 ;; Cooldown and exp applied manually - only on successful throw.
 (defn- on-up [{:keys [player-id ctx-id cost-ok? player]}]
-  (when-let [ctx-data (ctx/get-context ctx-id)]
+  (when-let [ctx-data (ctx-reg/get-context ctx-id)]
     (let [ss (:skill-state ctx-data)
           held-block (get ss :held-block)
           exp (skill-exp player-id)]
@@ -366,7 +367,7 @@
                                       :held-block nil}))))))))
 
 (defn- on-abort [{:keys [ctx-id player]}]
-  (when-let [ctx-data (ctx/get-context ctx-id)]
+  (when-let [ctx-data (ctx-reg/get-context ctx-id)]
     (when-let [held (get-in ctx-data [:skill-state :held-block])]
       (release-or-rollback! player held)
       (ctx/ctx-send-to-client! ctx-id :mag-manip/fx-end {:mode :end :reason :abort}))

@@ -61,18 +61,20 @@
                      (.getString tag state-key)
                      #(log/warn "Failed to decode runtime NBT EDN:" (ex-message %)))]
         (if-let [state (normalize-loaded-state decoded)]
-          (power-runtime/set-player-state! uuid state)
+          (do
+            (power-runtime/sync-player-state! uuid state)
+            (or (power-runtime/get-player-state uuid) state))
           (do
             (when (some? decoded)
               (log/warn "Ignoring runtime NBT EDN with non-map root:" (pr-str (type decoded))))
-            (power-runtime/get-or-create-player-state! uuid))))
-      (power-runtime/get-or-create-player-state! uuid))))
+            (power-runtime/ensure-player-state! uuid))))
+      (power-runtime/ensure-player-state! uuid))))
 
 (defn save-player-state!
   "Save in-memory runtime state to player persistent NBT."
   [^ServerPlayer player]
   (let [uuid  (str (.getUUID player))
-        state (power-runtime/get-or-create-player-state! uuid)
+      state (power-runtime/ensure-player-state! uuid)
         tag   (player-tag player)
         state-key (runtime-state-key)]
     (when state-key
@@ -98,6 +100,6 @@
         state    (or (power-runtime/get-player-state old-uuid)
                      (load-player-state! old-player)
                      (power-runtime/fresh-player-state))]
-    (power-runtime/set-player-state! new-uuid (assoc state :dirty? true))
+      (power-runtime/sync-player-state! new-uuid (assoc state :dirty? true))
     (save-player-state! new-player)
     (clone-content-owned-tags! old-player new-player)))

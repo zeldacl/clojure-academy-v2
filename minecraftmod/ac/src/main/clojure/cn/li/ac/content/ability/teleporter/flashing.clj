@@ -11,6 +11,7 @@
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill]]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-registry :as ctx-reg]
             [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.effects.geom :as geom]
@@ -31,7 +32,7 @@
 (defn- safe-context-data
   [ctx-id]
   (try
-    (ctx/get-context ctx-id)
+    (ctx-reg/get-context ctx-id)
     (catch Exception _ nil)))
 
 (defn- command-runtime-ready?
@@ -52,8 +53,8 @@
                                                         :k key-path
                                                         :v v})]
         (when (= :context-not-found (:rejected-reason result))
-          (ctx/update-context! ctx-id assoc-in (into [:skill-state] key-path) v)))
-      (ctx/update-context! ctx-id assoc-in (into [:skill-state] key-path) v))))
+          (ctx-reg/update-context! ctx-id assoc-in (into [:skill-state] key-path) v)))
+      (ctx-reg/update-context! ctx-id assoc-in (into [:skill-state] key-path) v))))
 
 (defn- update-skill-state-root!
   [ctx-id f]
@@ -67,8 +68,8 @@
                                                         :k []
                                                         :v next-state})]
         (when (= :context-not-found (:rejected-reason result))
-          (ctx/update-context! ctx-id assoc :skill-state next-state)))
-      (ctx/update-context! ctx-id assoc :skill-state next-state))))
+          (ctx-reg/update-context! ctx-id assoc :skill-state next-state)))
+      (ctx-reg/update-context! ctx-id assoc :skill-state next-state))))
 
 (defn- skill-exp [player-id]
   (helper/skill-exp player-id flashing-skill-id))
@@ -201,7 +202,7 @@
 
       (and (pos? expires-at) (> now expires-at))
       (do
-        (ctx/terminate-context! ctx-id nil)
+        (ctx-reg/terminate-context! ctx-id nil)
         nil)
 
       :else
@@ -248,22 +249,22 @@
 
 (defn- register-movement-listeners!
   [ctx-id]
-  (when-not (get-in (ctx/get-context ctx-id) [:skill-state :listeners-installed?])
+  (when-not (get-in (ctx-reg/get-context ctx-id) [:skill-state :listeners-installed?])
     (ctx/ctx-on! ctx-id move-down-channel
                  (fn [{:keys [key]}]
-                   (when-let [ctx-data (ctx/get-context ctx-id)]
+                   (when-let [ctx-data (ctx-reg/get-context ctx-id)]
                      (when-let [active-ctx (maintain-active-state! ctx-id ctx-data)]
                        (when-let [direction (movement-key->direction key)]
                          (update-preview! ctx-id (:player-uuid active-ctx) direction :flashing/fx-preview-start))))))
     (ctx/ctx-on! ctx-id move-tick-channel
                  (fn [{:keys [key]}]
-                   (when-let [ctx-data (ctx/get-context ctx-id)]
+                   (when-let [ctx-data (ctx-reg/get-context ctx-id)]
                      (when-let [active-ctx (maintain-active-state! ctx-id ctx-data)]
                        (when-let [direction (movement-key->direction key)]
                          (update-preview! ctx-id (:player-uuid active-ctx) direction :flashing/fx-preview-update))))))
     (ctx/ctx-on! ctx-id move-up-channel
                  (fn [{:keys [key]}]
-                   (when-let [ctx-data (ctx/get-context ctx-id)]
+                   (when-let [ctx-data (ctx-reg/get-context ctx-id)]
                      (when-let [active-ctx (maintain-active-state! ctx-id ctx-data)]
                        (when-let [direction (movement-key->direction key)]
                          (perform-flash! (:player-uuid active-ctx) ctx-id direction)
@@ -292,7 +293,7 @@
 
 (defn flashing-tick!
   [{:keys [ctx-id]}]
-  (when-let [ctx-data (ctx/get-context ctx-id)]
+  (when-let [ctx-data (ctx-reg/get-context ctx-id)]
     (maintain-active-state! ctx-id ctx-data)))
 
 (defn flashing-deactivate!

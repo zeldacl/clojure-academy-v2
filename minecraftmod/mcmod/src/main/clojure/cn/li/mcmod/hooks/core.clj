@@ -21,8 +21,8 @@
    :build-sync-payload (fn [_] nil)
    :mark-player-clean! noop
    :get-player-state (fn [_] nil)
-   :set-player-state! noop
-   :get-or-create-player-state! (fn [_] nil)
+  :sync-player-state! (fn [_ _] nil)
+  :ensure-player-state! (fn [_] nil)
    :fresh-player-state (fn [] nil)
    :runtime-activated? (fn [_] false)
    :register-network-handlers! noop
@@ -294,13 +294,13 @@
   [player-uuid]
   (boolean ((:runtime-activated? (hooks-core-state-snapshot)) player-uuid)))
 
-(defn set-player-state!
+(defn sync-player-state!
   [player-uuid state]
-  ((:set-player-state! (hooks-core-state-snapshot)) player-uuid state))
+  ((:sync-player-state! (hooks-core-state-snapshot)) player-uuid state))
 
-(defn get-or-create-player-state!
+(defn ensure-player-state!
   [player-uuid]
-  ((:get-or-create-player-state! (hooks-core-state-snapshot)) player-uuid))
+  ((:ensure-player-state! (hooks-core-state-snapshot)) player-uuid))
 
 (defn fresh-player-state
   []

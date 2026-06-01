@@ -14,6 +14,7 @@
             [cn.li.ac.content.ability.fx-helpers :as fx]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-registry :as ctx-reg]
             [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
@@ -89,7 +90,7 @@
 (defn- safe-context-data
   [ctx-id]
   (try
-    (ctx/get-context ctx-id)
+    (ctx-reg/get-context ctx-id)
     (catch Exception _ nil)))
 
 (defn- command-runtime-ready?
@@ -109,8 +110,8 @@
                                                         :k []
                                                         :v state-map})]
         (when (= :context-not-found (:rejected-reason result))
-          (ctx/update-context! ctx-id assoc :skill-state state-map)))
-      (ctx/update-context! ctx-id assoc :skill-state state-map))))
+          (ctx-reg/update-context! ctx-id assoc :skill-state state-map)))
+      (ctx-reg/update-context! ctx-id assoc :skill-state state-map))))
 
 (defn- update-skill-state-root!
   [ctx-id f]
@@ -126,12 +127,12 @@
                                                        {:command :context-clear-skill-state
                                                         :ctx-id ctx-id})]
         (when (= :context-not-found (:rejected-reason result))
-          (ctx/update-context! ctx-id dissoc :skill-state)))
-      (ctx/update-context! ctx-id dissoc :skill-state))))
+          (ctx-reg/update-context! ctx-id dissoc :skill-state)))
+      (ctx-reg/update-context! ctx-id dissoc :skill-state))))
 
 (defn- release-hit
   [player-id ctx-id stage]
-  (let [ticks (long (or (get-in (ctx/get-context ctx-id) [:skill-state :ticks]) 0))
+  (let [ticks (long (or (get-in (ctx-reg/get-context ctx-id) [:skill-state :ticks]) 0))
         should-release? (case stage
                           :tick (>= (inc ticks) (cfg-int :charge.max-ticks))
                           :up true
@@ -233,7 +234,7 @@
                                      :ended? true
                                      :performed? (boolean performed?))))
   (fx/send-end! ctx-id :blood-retrograde/fx-end {:performed? (boolean performed?)})
-  (ctx/terminate-context! ctx-id nil))
+  (ctx-reg/terminate-context! ctx-id nil))
 
 (defn- try-perform! [player-id ctx-id hit cost-ok?]
   (let [target-id (:entity-id hit)
@@ -268,7 +269,7 @@
 (defn blood-retrograde-on-key-tick
   "Update charge progress and auto-release at max charge."
   [{:keys [player-id ctx-id cost-ok?]}]
-  (when-let [ctx-data (ctx/get-context ctx-id)]
+  (when-let [ctx-data (ctx-reg/get-context ctx-id)]
     (let [skill-state (:skill-state ctx-data)
           executed? (boolean (:executed? skill-state false))]
       (when-not executed?
@@ -287,7 +288,7 @@
 (defn blood-retrograde-on-key-up
   "Execute the skill on release if a valid target is found."
   [{:keys [player-id ctx-id cost-ok?]}]
-  (when-let [ctx-data (ctx/get-context ctx-id)]
+  (when-let [ctx-data (ctx-reg/get-context ctx-id)]
     (let [skill-state (:skill-state ctx-data)
           executed? (boolean (:executed? skill-state false))]
       (when-not executed?
@@ -300,7 +301,7 @@
 (defn blood-retrograde-on-key-abort
   "Clean up charge state on abort."
   [{:keys [ctx-id]}]
-  (when-let [ctx-data (ctx/get-context ctx-id)]
+  (when-let [ctx-data (ctx-reg/get-context ctx-id)]
     (when-not (get-in ctx-data [:skill-state :ended?])
       (fx/send-end! ctx-id :blood-retrograde/fx-end {:performed? false})))
   (clear-skill-state! ctx-id)

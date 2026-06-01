@@ -4,6 +4,7 @@
             [cn.li.ac.content.ability.meltdowner.mine-rays-base :as base]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-registry :as ctx-reg]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.mcmod.platform.block-manipulation :as bm]
@@ -46,8 +47,8 @@
         (context-mocks {:skill-state {:target-x 1 :target-y 64 :target-z 2 :countdown 0.9}})
         break-calls* (atom [])
         exp-calls* (atom [])]
-    (with-redefs [ctx/get-context get-context
-                  ctx/update-context! update-context!
+    (with-redefs [ctx-reg/get-context get-context
+                  ctx-reg/update-context! update-context!
                   ctx/ctx-send-to-client! (fn [& _] nil)
                   skill-effects/add-skill-exp! (fn [& args]
                                                  (swap! exp-calls* conj args)
@@ -89,8 +90,8 @@
 (deftest mine-ray-luck-resets-stale-state-when-raycast-is-unavailable-test
   (let [{:keys [ctx* get-context update-context!]} 
         (context-mocks {:skill-state {:target-x 1 :target-y 64 :target-z 2 :countdown 0.6}})]
-    (with-redefs [ctx/get-context get-context
-                  ctx/update-context! update-context!
+    (with-redefs [ctx-reg/get-context get-context
+                  ctx-reg/update-context! update-context!
                   ctx/ctx-send-to-client! (fn [& _] nil)
                   skill-effects/add-skill-exp! (fn [& _] nil)
                   geom/world-id-of (fn [_] "w")

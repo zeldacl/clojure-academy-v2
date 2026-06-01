@@ -19,6 +19,7 @@
             [cn.li.ac.content.ability.fx-helpers :as fx]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-registry :as ctx-reg]
             [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
@@ -125,7 +126,7 @@
 (defn- safe-context-data
   [ctx-id]
   (try
-    (ctx/get-context ctx-id)
+    (ctx-reg/get-context ctx-id)
     (catch Exception _ nil)))
 
 (defn- command-runtime-ready?
@@ -145,8 +146,8 @@
                                                         :k []
                                                         :v state-map})]
         (when (= :context-not-found (:rejected-reason result))
-          (ctx/update-context! ctx-id assoc :skill-state state-map)))
-      (ctx/update-context! ctx-id assoc :skill-state state-map))))
+          (ctx-reg/update-context! ctx-id assoc :skill-state state-map)))
+      (ctx-reg/update-context! ctx-id assoc :skill-state state-map))))
 
 (defn- clear-skill-state!
   [ctx-id]
@@ -157,8 +158,8 @@
                                                        {:command :context-clear-skill-state
                                                         :ctx-id ctx-id})]
         (when (= :context-not-found (:rejected-reason result))
-          (ctx/update-context! ctx-id dissoc :skill-state)))
-      (ctx/update-context! ctx-id dissoc :skill-state))))
+          (ctx-reg/update-context! ctx-id dissoc :skill-state)))
+      (ctx-reg/update-context! ctx-id dissoc :skill-state))))
 
 (defn- get-player-position
   "Get player position from teleportation protocol."
@@ -229,7 +230,7 @@
   "Update charge progress."
   [{:keys [ctx-id]}]
   (try
-    (when-let [ctx-data (ctx/get-context ctx-id)]
+    (when-let [ctx-data (ctx-reg/get-context ctx-id)]
       (let [skill-state (:skill-state ctx-data)
             charge-ticks (long (or (:charge-ticks skill-state) 0))
             next-charge (inc charge-ticks)]
@@ -383,7 +384,7 @@
   "Perform the ground slam."
   [{:keys [player-id ctx-id cost-ok?]}]
   (try
-    (when-let [ctx-data (ctx/get-context ctx-id)]
+    (when-let [ctx-data (ctx-reg/get-context ctx-id)]
       (let [skill-state (:skill-state ctx-data)
             charge-ticks (long (or (:charge-ticks skill-state) 0))
             exp (exp01 (skill-exp player-id))]

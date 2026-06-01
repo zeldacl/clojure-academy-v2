@@ -3,6 +3,7 @@
             [cn.li.ac.content.ability.meltdowner.electron-missile :as missile]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-registry :as ctx-reg]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
             [cn.li.ac.ability.effects.geom :as geom]
@@ -53,7 +54,7 @@
                                                     {:resource-data {:cur-overload 350.0}})
                   skill-effects/skill-exp (fn [& _] 0.4)
                   skill-config/tunable-double stub-tunable-double
-                  ctx/update-context! update-context!
+                  ctx-reg/update-context! update-context!
                   ctx/ctx-send-to-client! (fn [ctx-id ch payload]
                                             (swap! local-fx* conj [ctx-id ch payload])
                                             nil)
@@ -83,8 +84,8 @@
                   skill-effects/enforce-overload-floor! (fn [player-id floor]
                                                          (swap! floor-calls* conj [player-id floor])
                                                          nil)
-                  ctx/get-context get-context
-                  ctx/update-context! update-context!
+                  ctx-reg/get-context get-context
+                  ctx-reg/update-context! update-context!
                   ctx/ctx-send-to-client! (fn [ctx-id ch payload]
                                             (swap! local-fx* conj [ctx-id ch payload])
                                             nil)
@@ -126,8 +127,8 @@
                   skill-effects/add-skill-exp! (fn [player-id skill-id amount]
                                                  (swap! exp-calls* conj [player-id skill-id amount])
                                                  nil)
-                  ctx/get-context get-context
-                  ctx/update-context! update-context!
+                  ctx-reg/get-context get-context
+                  ctx-reg/update-context! update-context!
                   ctx/ctx-send-to-client! (fn [ctx-id ch payload]
                                             (swap! local-fx* conj [ctx-id ch payload])
                                             nil)
@@ -175,7 +176,7 @@
                   skill-effects/set-main-cooldown! (fn [player-id skill-id ticks]
                                                      (swap! cooldown-calls* conj [player-id skill-id ticks])
                                                      nil)
-                  ctx/update-context! update-context!
+                  ctx-reg/update-context! update-context!
                   ctx/ctx-send-to-client! (fn [ctx-id ch payload]
                                             (swap! local-fx* conj [ctx-id ch payload])
                                             nil)
@@ -203,9 +204,9 @@
                   skill-config/tunable-int stub-tunable-int
                   skill-config/tunable-double stub-tunable-double
                   skill-effects/enforce-overload-floor! (fn [& _] nil)
-                  ctx/get-context get-context
-                  ctx/update-context! update-context!
-                  ctx/terminate-context! (fn [& args]
+                  ctx-reg/get-context get-context
+                  ctx-reg/update-context! update-context!
+                  ctx-reg/terminate-context! (fn [& args]
                                            (swap! terminate-calls* conj args)
                                            nil)
                   ctx/ctx-send-to-client! (fn [ctx-id ch payload]

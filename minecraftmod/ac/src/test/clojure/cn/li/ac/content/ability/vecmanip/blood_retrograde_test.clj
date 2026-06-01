@@ -1,6 +1,7 @@
 (ns cn.li.ac.content.ability.vecmanip.blood-retrograde-test
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-registry :as ctx-reg]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.content.ability.fx-helpers :as fx]
             [cn.li.ac.content.ability.vecmanip.blood-retrograde :as br]
@@ -83,9 +84,9 @@
             br/cfg-lerp-int mock-cfg-lerp-int
             br/skill-exp (fn [_] 0.0)
           br/get-player-look (fn [_] {:x 0.0 :y 0.0 :z 1.0})
-                  ctx/get-context get-context
-                  ctx/update-context! update-context!
-                  ctx/terminate-context! terminate-context!
+                  ctx-reg/get-context get-context
+                  ctx-reg/update-context! update-context!
+                  ctx-reg/terminate-context! terminate-context!
                   geom/world-id-of (fn [_] "w")
                   raycast/raycast-from-player (fn [& _]
                                                 {:entity-id "target-1"
@@ -131,9 +132,9 @@
             br/cfg-lerp-int mock-cfg-lerp-int
             br/skill-exp (fn [_] 0.0)
           br/get-player-look (fn [_] {:x 0.0 :y 0.0 :z 1.0})
-                  ctx/get-context get-context
-                  ctx/update-context! update-context!
-                  ctx/terminate-context! terminate-context!
+                  ctx-reg/get-context get-context
+                  ctx-reg/update-context! update-context!
+                  ctx-reg/terminate-context! terminate-context!
                   geom/world-id-of (fn [_] "w")
                   raycast/raycast-from-player (fn [& _] nil)
                   fx/send-update! (fn [& _] nil)

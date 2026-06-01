@@ -13,6 +13,7 @@
 
   No Minecraft imports."
   (:require            [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-registry :as ctx-reg]
             [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.effects.geom :as geom]
@@ -32,7 +33,7 @@
 (defn- safe-context-data
   [ctx-id]
   (try
-    (ctx/get-context ctx-id)
+    (ctx-reg/get-context ctx-id)
     (catch Exception _ nil)))
 
 (defn- command-runtime-ready?
@@ -52,8 +53,8 @@
                                                         :k []
                                                         :v state-map})]
         (when (= :context-not-found (:rejected-reason result))
-          (ctx/update-context! ctx-id assoc :skill-state state-map)))
-      (ctx/update-context! ctx-id assoc :skill-state state-map))))
+          (ctx-reg/update-context! ctx-id assoc :skill-state state-map)))
+      (ctx-reg/update-context! ctx-id assoc :skill-state state-map))))
 
 (defn mining-ray-down!
   "Initialize mining ray context state."
@@ -67,7 +68,7 @@
   [cfg {:keys [player-id ctx-id]}]
   (try
     (let [{:keys [range break-speed skill-id fortune-level exp-block]} cfg
-          ctx-data  (ctx/get-context ctx-id)
+          ctx-data  (ctx-reg/get-context ctx-id)
           world-id  (geom/world-id-of player-id)
           eye       (geom/eye-pos player-id)
           look-vec  (when raycast/*raycast*

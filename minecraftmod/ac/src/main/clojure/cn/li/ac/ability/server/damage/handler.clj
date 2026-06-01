@@ -9,6 +9,7 @@
             [cn.li.ac.ability.service.runtime-store :as store]
 [cn.li.ac.ability.util.toggle :as toggle]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-registry :as ctx-reg]
             [cn.li.mcmod.platform.damage-interception :as damage-interception]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
@@ -42,7 +43,7 @@
                             ;; Check if toggle skill is active by looking for active contexts
                             (if (runtime-player-state-in-session session-id player-id)
                               ;; Try to find an active context with this toggle skill
-                              (let [active-contexts (ctx/get-all-contexts)
+                              (let [active-contexts (ctx-reg/get-all-contexts)
                                     player-contexts (filter (fn [[_ctx-id ctx-data]]
                                                              (= (:player-uuid ctx-data) player-id))
                                                            active-contexts)

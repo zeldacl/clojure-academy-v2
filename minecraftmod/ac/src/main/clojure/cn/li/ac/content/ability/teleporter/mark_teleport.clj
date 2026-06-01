@@ -16,6 +16,7 @@
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill]]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-registry :as ctx-reg]
             [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.util.math.vec3 :as vec3]
@@ -142,7 +143,7 @@
 
 (defn- cached-or-resolved-target
   [player-id ctx-id player]
-  (when-let [ctx-data (ctx/get-context ctx-id)]
+  (when-let [ctx-data (ctx-reg/get-context ctx-id)]
     (let [hold-ticks (long (or (get-in ctx-data [:skill-state :hold-ticks]) 0))]
       (or (resolve-destination player-id player hold-ticks)
           (when (get-in ctx-data [:skill-state :has-target])
@@ -151,7 +152,7 @@
 
 (defn mark-teleport-fx-update-payload
   [{:keys [ctx-id]}]
-  (when-let [ctx-data (ctx/get-context ctx-id)]
+  (when-let [ctx-data (ctx-reg/get-context ctx-id)]
     (build-target-fx-payload (:skill-state ctx-data))))
 
 (defn mark-teleport-fx-perform-payload
@@ -183,7 +184,7 @@
 (defn- safe-context-data
   [ctx-id]
   (try
-    (ctx/get-context ctx-id)
+    (ctx-reg/get-context ctx-id)
     (catch Exception _ nil)))
 
 (defn- command-runtime-ready?
@@ -203,8 +204,8 @@
                                                         :k []
                                                         :v state-map})]
         (when (= :context-not-found (:rejected-reason result))
-          (ctx/update-context! ctx-id assoc :skill-state state-map)))
-      (ctx/update-context! ctx-id assoc :skill-state state-map))))
+          (ctx-reg/update-context! ctx-id assoc :skill-state state-map)))
+      (ctx-reg/update-context! ctx-id assoc :skill-state state-map))))
 
 (defn- clear-skill-state!
   [ctx-id]
@@ -215,8 +216,8 @@
                                                        {:command :context-clear-skill-state
                                                         :ctx-id ctx-id})]
         (when (= :context-not-found (:rejected-reason result))
-          (ctx/update-context! ctx-id dissoc :skill-state)))
-      (ctx/update-context! ctx-id dissoc :skill-state))))
+          (ctx-reg/update-context! ctx-id dissoc :skill-state)))
+      (ctx-reg/update-context! ctx-id dissoc :skill-state))))
 
 (defn mark-teleport-on-key-down
   "Initialize hold state and client marker."
@@ -226,7 +227,7 @@
 (defn mark-teleport-on-key-tick
   "Update destination marker while key is held."
   [{:keys [player-id ctx-id player]}]
-  (when-let [ctx (ctx/get-context ctx-id)]
+  (when-let [ctx (ctx-reg/get-context ctx-id)]
     (let [next-ticks (inc (long (or (get-in ctx [:skill-state :hold-ticks]) 0)))]
       (if-let [target (resolve-destination player-id player next-ticks)]
         (set-skill-state-root! ctx-id
@@ -239,7 +240,7 @@
 (defn mark-teleport-on-key-up
   "Execute teleport when key released."
   [{:keys [player-id ctx-id player cost-ok?]}]
-  (when-let [ctx (ctx/get-context ctx-id)]
+  (when-let [ctx (ctx-reg/get-context ctx-id)]
     (let [hold-ticks (long (or (get-in ctx [:skill-state :hold-ticks]) 0))
           target (or (resolve-destination player-id player hold-ticks)
                      (when (get-in ctx [:skill-state :has-target])

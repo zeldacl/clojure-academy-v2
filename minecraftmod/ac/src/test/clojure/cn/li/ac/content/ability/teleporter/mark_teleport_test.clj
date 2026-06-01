@@ -1,6 +1,7 @@
 (ns cn.li.ac.content.ability.teleporter.mark-teleport-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-registry :as ctx-reg]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.ac.content.ability.teleporter.mark-teleport :as mark]
@@ -20,8 +21,8 @@
 (deftest mark-teleport-on-key-down-initializes-hold-state-test
   (let [{:keys [ctx* get-context update-context!]}
         (make-context-mocks {:skill-state {:legacy true}})]
-    (with-redefs [ctx/get-context get-context
-                  ctx/update-context! update-context!]
+    (with-redefs [ctx-reg/get-context get-context
+                  ctx-reg/update-context! update-context!]
       (mark/mark-teleport-on-key-down {:ctx-id "ctx-1"}))
 
     (is (= {:hold-ticks 0 :has-target false}
@@ -35,8 +36,8 @@
         fx-calls* (atom [])
         exp-calls* (atom [])
         cooldown-calls* (atom [])]
-    (with-redefs [ctx/get-context get-context
-                  ctx/update-context! update-context!
+    (with-redefs [ctx-reg/get-context get-context
+                  ctx-reg/update-context! update-context!
                   ctx/ctx-send-to-client! (fn [ctx-id channel payload]
                                             (swap! fx-calls* conj [ctx-id channel payload])
                                             nil)
@@ -90,8 +91,8 @@
         fx-calls* (atom 0)
         exp-calls* (atom 0)
         cooldown-calls* (atom 0)]
-    (with-redefs [ctx/get-context get-context
-                  ctx/update-context! update-context!
+    (with-redefs [ctx-reg/get-context get-context
+                  ctx-reg/update-context! update-context!
                   ctx/ctx-send-to-client! (fn [& _] (swap! fx-calls* inc) nil)
                   skill-effects/add-skill-exp! (fn [& _] (swap! exp-calls* inc) nil)
                   skill-effects/set-main-cooldown! (fn [& _] (swap! cooldown-calls* inc) nil)
@@ -119,8 +120,8 @@
                                            :distance 2.5 :exp 0.4}})
         teleport-calls* (atom 0)
         fx-calls* (atom 0)]
-    (with-redefs [ctx/get-context get-context
-                  ctx/update-context! update-context!
+    (with-redefs [ctx-reg/get-context get-context
+                  ctx-reg/update-context! update-context!
                   ctx/ctx-send-to-client! (fn [& _] (swap! fx-calls* inc) nil)
                   teleportation/get-player-position (fn [& _] nil)
                   teleportation/teleport-player! (fn [& _] (swap! teleport-calls* inc) true)
@@ -146,8 +147,8 @@
         fx-calls* (atom 0)
         exp-calls* (atom 0)
         cooldown-calls* (atom 0)]
-    (with-redefs [ctx/get-context get-context
-                  ctx/update-context! update-context!
+    (with-redefs [ctx-reg/get-context get-context
+                  ctx-reg/update-context! update-context!
                   ctx/ctx-send-to-client! (fn [& _] (swap! fx-calls* inc) nil)
                   teleportation/get-player-position (fn [& _] nil)
                   teleportation/teleport-player! (fn [& _] false)

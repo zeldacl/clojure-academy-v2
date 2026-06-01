@@ -103,7 +103,9 @@
                          :result))]
     (if cached
       (assoc cached :idempotent-replay? true)
-      (let [state (store/get-or-create-player-state! session-id uuid)
+      (let [owner (or (runtime-hooks/current-player-state-owner)
+                      {:session-id session-id})
+            state (store/get-or-create-player-state! session-id uuid)
             result (reducer/apply-command state normalized)
             _ (contracts/assert-reducer-result! result)
             next-state (:state result)]
@@ -111,7 +113,8 @@
           (store/set-player-state!* session-id uuid next-state)
           (when mark-dirty?
             (store/mark-player-dirty! session-id uuid)))
-        (interpreter/execute-reducer-result! result)
+        (runtime-hooks/with-player-state-owner owner
+          (interpreter/execute-reducer-result! result))
         (record-command-trace! session-id uuid command-id result)
         result))))
 
@@ -129,7 +132,9 @@
                              :or {mark-dirty? true}}]
   (doseq [command commands]
     (contracts/assert-command! command))
-  (let [session-id (resolve-session-id session-id)
+    (let [session-id (resolve-session-id session-id)
+      owner (or (runtime-hooks/current-player-state-owner)
+        {:session-id session-id})
         state (store/get-or-create-player-state! session-id uuid)
         normalized (mapv #(ensure-command-owner-fields session-id uuid %) commands)
         result (reducer/apply-commands state normalized)
@@ -139,7 +144,8 @@
       (store/set-player-state!* session-id uuid next-state)
       (when mark-dirty?
         (store/mark-player-dirty! session-id uuid)))
-    (interpreter/execute-reducer-result! result)
+    (runtime-hooks/with-player-state-owner owner
+      (interpreter/execute-reducer-result! result))
     result))
 
 (defn run-commands-in-session!

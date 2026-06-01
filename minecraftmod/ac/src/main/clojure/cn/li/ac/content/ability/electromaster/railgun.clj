@@ -9,6 +9,7 @@
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-registry :as ctx-reg]
             [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.ability.effects.beam :as beam]
             [cn.li.ac.ability.effects.geom :as geom]
@@ -79,7 +80,7 @@
 (defn- safe-context-data
   [ctx-id]
   (try
-    (ctx/get-context ctx-id)
+    (ctx-reg/get-context ctx-id)
     (catch Exception _ nil)))
 
 (defn- command-runtime-ready?
@@ -99,8 +100,8 @@
                                                         :k []
                                                         :v state-map})]
         (when (= :context-not-found (:rejected-reason result))
-          (ctx/update-context! ctx-id assoc :skill-state state-map)))
-      (ctx/update-context! ctx-id assoc :skill-state state-map))))
+          (ctx-reg/update-context! ctx-id assoc :skill-state state-map)))
+      (ctx-reg/update-context! ctx-id assoc :skill-state state-map))))
 
 (defn- set-skill-state!
   [ctx-id k v]
@@ -114,8 +115,8 @@
                                                         :k k
                                                         :v v})]
         (when (= :context-not-found (:rejected-reason result))
-          (ctx/update-context! ctx-id assoc-in (into [:skill-state] key-path) v)))
-      (ctx/update-context! ctx-id assoc-in (into [:skill-state] (if (vector? k) k [k])) v))))
+          (ctx-reg/update-context! ctx-id assoc-in (into [:skill-state] key-path) v)))
+      (ctx-reg/update-context! ctx-id assoc-in (into [:skill-state] (if (vector? k) k [k])) v))))
 
 (defn- clear-skill-state!
   [ctx-id]
@@ -126,8 +127,8 @@
                                                        {:command :context-clear-skill-state
                                                         :ctx-id ctx-id})]
         (when (= :context-not-found (:rejected-reason result))
-          (ctx/update-context! ctx-id dissoc :skill-state)))
-      (ctx/update-context! ctx-id dissoc :skill-state))))
+          (ctx-reg/update-context! ctx-id dissoc :skill-state)))
+      (ctx-reg/update-context! ctx-id dissoc :skill-state))))
 
 ;; ---------------------------------------------------------------------------
 ;; Coin QTE window management
@@ -141,7 +142,7 @@
   [player-id payload]
   (let [_now-ms (long (or (:timestamp-ms payload) (System/currentTimeMillis)))]
     ;; Abort any in-progress item charge so the coin QTE takes priority.
-    (doseq [[ctx-id ctx-data] (ctx/get-all-contexts)]
+    (doseq [[ctx-id ctx-data] (ctx-reg/get-all-contexts)]
       (when (and (= (:player-uuid ctx-data) player-id)
                  (= :item-charge (get-in ctx-data [:skill-state :mode])))
         (set-skill-state-root! ctx-id {:fired false
@@ -216,7 +217,7 @@
   (some (fn [[_ ctx-data]]
           (and (= (:player-uuid ctx-data) player-id)
                (toggle/is-toggle-active? ctx-data skill-id)))
-        (ctx/get-all-contexts)))
+        (ctx-reg/get-all-contexts)))
 
 (defn- vec-reflection-can-reflect? [target-player-id incoming-damage]
   (when (toggle-active? target-player-id :vec-reflection)
@@ -325,7 +326,7 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- item-charge-ready? [ctx-id player]
-  (when-let [ctx-data (ctx/get-context ctx-id)]
+  (when-let [ctx-data (ctx-reg/get-context ctx-id)]
     (let [skill-state (:skill-state ctx-data)]
       (and (= (:mode skill-state) :item-charge)
            (<= (max 0 (int (or (:charge-ticks skill-state) 0))) 1)
@@ -403,7 +404,7 @@
   "Item-charge path: countdown; auto-fires when charge-ticks reaches zero."
   [{:keys [player-id ctx-id player cost-ok?]}]
   (try
-    (when-let [ctx-data (ctx/get-context ctx-id)]
+    (when-let [ctx-data (ctx-reg/get-context ctx-id)]
       (let [skill-state (:skill-state ctx-data)]
         (when (= (:mode skill-state) :item-charge)
           (let [ticks-left (max 0 (int (or (:charge-ticks skill-state) 0)))]
@@ -436,7 +437,7 @@
 (defn- railgun-on-key-up
   "Cancels an unfinished item charge. Cooldown is only applied on successful perform."
   [{:keys [ctx-id]}]
-  (when-let [ctx (ctx/get-context ctx-id)]
+  (when-let [ctx (ctx-reg/get-context ctx-id)]
     (let [skill-state (:skill-state ctx)
           mode        (:mode skill-state)]
       (when (and (= mode :item-charge) (not (:fired skill-state)))

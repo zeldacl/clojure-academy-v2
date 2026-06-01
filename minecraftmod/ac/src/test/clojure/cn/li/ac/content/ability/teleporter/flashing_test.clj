@@ -1,6 +1,7 @@
 (ns cn.li.ac.content.ability.teleporter.flashing-test
   (:require [clojure.test :refer [deftest is]]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-registry :as ctx-reg]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
             [cn.li.ac.content.ability.teleporter.flashing :as flashing]
@@ -22,8 +23,8 @@
 (deftest flashing-activate-registers-movement-listeners-test
   (let [{:keys [ctx* listeners* get-context update-context! ctx-on!]}
         (make-context-mocks {:player-uuid "p1" :skill-id :flashing :skill-state {}})]
-    (with-redefs [ctx/get-context get-context
-                  ctx/update-context! update-context!
+    (with-redefs [ctx-reg/get-context get-context
+                  ctx-reg/update-context! update-context!
                   ctx/ctx-on! ctx-on!
                   helper/skill-exp (fn [_ _] 0.5)
                   helper/cfg-lerp-int (fn [_ field _]
@@ -50,10 +51,10 @@
         exp* (atom [])
         ach* (atom [])
         reset-fall* (atom [])]
-    (with-redefs [ctx/get-context get-context
-                  ctx/update-context! update-context!
+    (with-redefs [ctx-reg/get-context get-context
+                  ctx-reg/update-context! update-context!
                   ctx/ctx-on! ctx-on!
-                  ctx/terminate-context! (fn [& _] nil)
+                  ctx-reg/terminate-context! (fn [& _] nil)
                   ctx/ctx-send-to-client! (fn [ctx-id channel payload]
                                             (swap! fx* conj [ctx-id channel payload]))
                   helper/skill-exp (fn [_ _] 0.5)
@@ -107,10 +108,10 @@
   (let [{:keys [ctx* listeners* get-context update-context! ctx-on!]}
         (make-context-mocks {:player-uuid "p1" :skill-id :flashing :skill-state {}})
         terminated* (atom [])]
-    (with-redefs [ctx/get-context get-context
-                  ctx/update-context! update-context!
+    (with-redefs [ctx-reg/get-context get-context
+                  ctx-reg/update-context! update-context!
                   ctx/ctx-on! ctx-on!
-                  ctx/terminate-context! (fn [ctx-id _]
+                  ctx-reg/terminate-context! (fn [ctx-id _]
                                            (swap! terminated* conj ctx-id)
                                            nil)
                   helper/skill-exp (fn [_ _] 0.5)
@@ -131,10 +132,10 @@
   (let [{:keys [listeners* get-context update-context! ctx-on!]}
         (make-context-mocks {:player-uuid "p1" :skill-id :flashing :skill-state {}})
         fx* (atom [])]
-    (with-redefs [ctx/get-context get-context
-                  ctx/update-context! update-context!
+    (with-redefs [ctx-reg/get-context get-context
+                  ctx-reg/update-context! update-context!
                   ctx/ctx-on! ctx-on!
-                  ctx/terminate-context! (fn [& _] nil)
+                  ctx-reg/terminate-context! (fn [& _] nil)
                   ctx/ctx-send-to-client! (fn [ctx-id channel payload]
                                             (swap! fx* conj [ctx-id channel payload]))
                   helper/skill-exp (fn [_ _] 0.5)

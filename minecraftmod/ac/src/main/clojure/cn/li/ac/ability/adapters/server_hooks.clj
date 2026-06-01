@@ -15,6 +15,7 @@
             [cn.li.ac.ability.server.damage.runtime :as damage-runtime]
             [cn.li.ac.ability.service.context-manager :as ctx-mgr]
             [cn.li.ac.ability.service.delayed-projectiles :as delayed-projectiles]
+            [cn.li.ac.ability.service.context-registry :as ctx-reg]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
             [cn.li.ac.ability.service.platform-hooks :as platform-hooks]            [cn.li.ac.block.developer.logic :as developer-logic]
@@ -74,7 +75,7 @@
 
 (defn- unique-context-by-id
   [ctx-id]
-  (let [matches (->> (ctx/snapshot-context-registry)
+  (let [matches (->> (ctx-reg/snapshot-context-registry)
                      vals
                      (filter #(= ctx-id (:id %)))
                      vec)]
@@ -257,7 +258,7 @@
 
    :on-server-stop!
    (fn [session-id]
-     (ctx/clear-session-contexts! session-id)
+    (ctx-reg/clear-session-contexts! session-id)
      (store/remove-session! (store/get-store) session-id)
      (world-registry/clear-session-world-data! session-id)
      (when (platform-hooks/platform-fn-registered? fn-reset-server-runtimes)
@@ -321,11 +322,11 @@
    (fn [player-uuid]
      (runtime-get-player-state player-uuid))
 
-   :set-player-state!
+   :sync-player-state!
    (fn [player-uuid state]
-     (runtime-set-player-state! player-uuid state))
+     (runtime-sync-player-state! player-uuid state))
 
-   :get-or-create-player-state!
+   :ensure-player-state!
    (fn [player-uuid]
      (runtime-get-or-create-player-state! player-uuid))
 
@@ -360,7 +361,7 @@
    :get-context-player-uuid
    (fn [ctx-id]
      (when-let [ctx-map (or (when ctx/*context-owner*
-                               (ctx/get-context ctx-id))
+                               (ctx-reg/get-context ctx-id))
                             (unique-context-by-id ctx-id))]
        (:player-uuid ctx-map)))
 

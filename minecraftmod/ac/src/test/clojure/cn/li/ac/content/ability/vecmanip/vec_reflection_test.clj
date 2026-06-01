@@ -9,7 +9,8 @@
             [cn.li.mcmod.platform.entity-motion]
             [cn.li.mcmod.platform.raycast]
             [cn.li.mcmod.platform.world-effects]
-            [cn.li.ac.ability.service.context-dispatcher :as ctx]))
+            [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-registry :as ctx-reg]))
 
 (defn- with-fresh-reflection-runtime [f]
   (damage-handler/reset-attack-check-registries-for-test!)
@@ -238,11 +239,11 @@
   (let [spawn-calls (atom [])
         discard-calls (atom [])
         fx-calls (atom 0)]
-    (with-redefs [ctx/get-context (fn [_]
+    (with-redefs [ctx-reg/get-context (fn [_]
                                     {:skill-state {:toggle {:vec-reflection {:active true}}
                                                    :vec-reflection-overload-keep 0.0
                                                    :vec-reflection-visited-map {}}})
-                  ctx/update-context! (fn [& _] nil)
+                  ctx-reg/update-context! (fn [& _] nil)
                   cn.li.ac.ability.util.toggle/is-toggle-active? (fn [_ _] true)
                   cn.li.ac.ability.util.toggle/update-toggle-tick! (fn [& _] nil)
                   cn.li.ac.content.ability.vecmanip.vec-reflection/enforce-overload-floor! (fn [& _] nil)
@@ -298,11 +299,11 @@
   (let [spawn-calls (atom [])
         set-velocity-calls (atom [])
         discard-calls (atom [])]
-    (with-redefs [ctx/get-context (fn [_]
+    (with-redefs [ctx-reg/get-context (fn [_]
                                     {:skill-state {:toggle {:vec-reflection {:active true}}
                                                    :vec-reflection-overload-keep 0.0
                                                    :vec-reflection-visited-map {}}})
-                  ctx/update-context! (fn [& _] nil)
+                  ctx-reg/update-context! (fn [& _] nil)
                   cn.li.ac.ability.util.toggle/is-toggle-active? (fn [_ _] true)
                   cn.li.ac.ability.util.toggle/update-toggle-tick! (fn [& _] nil)
                   cn.li.ac.content.ability.vecmanip.vec-reflection/enforce-overload-floor! (fn [& _] nil)

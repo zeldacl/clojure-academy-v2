@@ -1,6 +1,7 @@
 (ns cn.li.ac.content.ability.electromaster.thunder-clap-test
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-registry :as ctx-reg]
             [cn.li.ac.ability.effects.damage :as damage-op]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.effects.world :as world-op]
@@ -35,8 +36,8 @@
           run-ops* (atom [])]
       (with-redefs [thunder-clap/min-ticks (fn [] 40)
                     thunder-clap/max-ticks (fn [] 60)
-                    ctx/get-context get-context
-                    ctx/update-context! update-context!
+                    ctx-reg/get-context get-context
+                    ctx-reg/update-context! update-context!
                     skill-effects/set-main-cooldown! (fn [& args]
                                                        (swap! cooldown-calls* conj args))
                     skill-effects/add-skill-exp! (fn [& args]
@@ -84,8 +85,8 @@
                                               (case field
                                                 :progression.exp-use 0.003
                                                 0.0))
-                    ctx/get-context get-context
-                    ctx/update-context! update-context!
+                    ctx-reg/get-context get-context
+                    ctx-reg/update-context! update-context!
                     geom/world-id-of (fn [_] "world-1")
                     skill-effects/set-main-cooldown! (fn [& args]
                                                        (swap! cooldown-calls* conj args))

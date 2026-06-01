@@ -76,7 +76,7 @@
 
     (deftest update-missing-context-does-not-create-phantom-test
       (binding [ctx/*context-owner* test-server-context-owner]
-        (ctx/update-keepalive! "missing-context")
+        (ctx/update-context! "missing-context" assoc :last-keepalive-ms 1)
         (is (nil? (ctx/get-context "missing-context"))))
       (is (empty? (ctx/get-all-contexts))))
 

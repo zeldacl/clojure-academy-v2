@@ -14,6 +14,7 @@
   (:require [cn.li.ac.ability.dsl :refer [defskill]]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-registry :as ctx-reg]
             [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.ability.util.toggle :as toggle]
             [cn.li.ac.ability.util.scaling :as scaling]
@@ -58,7 +59,7 @@
           (when (and (= (:player-uuid ctx-data) player-id)
                      (toggle/is-toggle-active? ctx-data :light-shield))
             [ctx-key ctx-data]))
-        (ctx/get-all-contexts)))
+        (ctx-reg/get-all-contexts)))
 
 (defn- shield-ticks
   [ctx-data]
@@ -97,7 +98,7 @@
 (defn- safe-context-data
   [ctx-id]
   (try
-    (ctx/get-context ctx-id)
+    (ctx-reg/get-context ctx-id)
     (catch Exception _ nil)))
 
 (defn- command-runtime-ready?
@@ -118,8 +119,8 @@
                                                         :k key-path
                                                         :v v})]
         (when (= :context-not-found (:rejected-reason result))
-          (ctx/update-context! ctx-id assoc-in (into [:skill-state] key-path) v)))
-      (ctx/update-context! ctx-id assoc-in (into [:skill-state] key-path) v))))
+          (ctx-reg/update-context! ctx-id assoc-in (into [:skill-state] key-path) v)))
+      (ctx-reg/update-context! ctx-id assoc-in (into [:skill-state] key-path) v))))
 
 (defn- update-skill-state-root!
   [ctx-id f]
@@ -133,8 +134,8 @@
                                                         :k []
                                                         :v next-state})]
         (when (= :context-not-found (:rejected-reason result))
-          (ctx/update-context! ctx-id assoc :skill-state next-state)))
-      (ctx/update-context! ctx-id assoc :skill-state next-state))))
+          (ctx-reg/update-context! ctx-id assoc :skill-state next-state)))
+      (ctx-reg/update-context! ctx-id assoc :skill-state next-state))))
 
 (defn- get-player-position [player-id]
   (when-let [teleportation (resolve 'cn.li.mcmod.platform.teleportation/*teleportation*)]
@@ -214,7 +215,7 @@
 
 (defn light-shield-tick!
   [{:keys [player-id ctx-id cost-ok?]}]
-  (when-let [ctx-data (ctx/get-context ctx-id)]
+  (when-let [ctx-data (ctx-reg/get-context ctx-id)]
     (when (and cost-ok? (toggle/is-toggle-active? ctx-data :light-shield))
       (let [exp (skill-exp player-id)
             next-ticks (inc (shield-ticks ctx-data))

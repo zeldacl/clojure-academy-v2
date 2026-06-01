@@ -13,6 +13,7 @@
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-registry :as ctx-reg]
             [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
@@ -90,7 +91,7 @@
 (defn- safe-context-data
   [ctx-id]
   (try
-    (ctx/get-context ctx-id)
+    (ctx-reg/get-context ctx-id)
     (catch Exception _ nil)))
 
 (defn- command-runtime-ready?
@@ -110,8 +111,8 @@
                                                         :k []
                                                         :v state-map})]
         (when (= :context-not-found (:rejected-reason result))
-          (ctx/update-context! ctx-id assoc :skill-state state-map)))
-      (ctx/update-context! ctx-id assoc :skill-state state-map))))
+          (ctx-reg/update-context! ctx-id assoc :skill-state state-map)))
+      (ctx-reg/update-context! ctx-id assoc :skill-state state-map))))
 
 (defn- update-skill-state-root!
   [ctx-id f & args]
@@ -185,7 +186,7 @@
 
 (defn- tick-triggering!
   [{:keys [player-id ctx-id]}]
-  (let [ctx-data (ctx/get-context ctx-id)
+  (let [ctx-data (ctx-reg/get-context ctx-id)
         st (:skill-state ctx-data)
         trigger-ticks (long (or (:trigger-ticks st) 0))
         start-pos (:start-pos st)
@@ -196,7 +197,7 @@
       (do
         (send-trigger-end! ctx-id)
         (send-mark-end! ctx-id target-pos)
-        (ctx/terminate-context! ctx-id nil))
+        (ctx-reg/terminate-context! ctx-id nil))
       (let [next-tick (inc trigger-ticks)
             t (/ (double next-tick) (double trigger-time-ticks))
             next-pos (lerp-pos start-pos target-pos t)
@@ -248,7 +249,7 @@
 
 (defn jet-engine-tick!
   [{:keys [ctx-id player-id hold-ticks]}]
-  (let [st (get-in (ctx/get-context ctx-id) [:skill-state])
+  (let [st (get-in (ctx-reg/get-context ctx-id) [:skill-state])
         phase (:phase st)]
     (case phase
       :triggering
@@ -258,7 +259,7 @@
       (if-not (can-afford-release? player-id)
         (do
           (send-mark-end! ctx-id (:target-pos st))
-          (ctx/terminate-context! ctx-id nil))
+          (ctx-reg/terminate-context! ctx-id nil))
         (let [target (or (get-target-pos player-id) (:target-pos st))]
           (update-skill-state-root! ctx-id merge
                                     {:hold-ticks (long hold-ticks)
@@ -270,7 +271,7 @@
 (defn jet-engine-up!
   [{:keys [player-id ctx-id]}]
   (try
-    (let [st (get-in (ctx/get-context ctx-id) [:skill-state])
+    (let [st (get-in (ctx-reg/get-context ctx-id) [:skill-state])
           phase (:phase st)
           target-pos (or (:target-pos st) (get-target-pos player-id))]
       (if (not= phase :marking)
@@ -286,7 +287,7 @@
           (if-not (and paid? target-pos)
             (do
               (send-mark-end! ctx-id target-pos)
-              (ctx/terminate-context! ctx-id nil))
+              (ctx-reg/terminate-context! ctx-id nil))
             (let [start-pos (get-player-pos player-id)
                   travel (geom/v- target-pos start-pos)
                   velocity (geom/v* travel (/ 1.0 (double trigger-time-ticks)))]
@@ -306,11 +307,11 @@
     (catch Exception e
       (log/warn "JetEngine up! failed" (ex-message e))
       (send-mark-end! ctx-id nil)
-      (ctx/terminate-context! ctx-id nil))))
+      (ctx-reg/terminate-context! ctx-id nil))))
 
 (defn jet-engine-abort!
   [{:keys [ctx-id]}]
-  (let [st (get-in (ctx/get-context ctx-id) [:skill-state])]
+  (let [st (get-in (ctx-reg/get-context ctx-id) [:skill-state])]
     (send-trigger-end! ctx-id)
     (send-mark-end! ctx-id (:target-pos st))))
 

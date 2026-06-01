@@ -9,10 +9,12 @@
   All state is in context/context-registry (owned by context.clj).
   Network send-fns are injected, keeping this ns free of forge deps."
   (:require [cn.li.ac.ability.service.runtime-store :as store]
+            [cn.li.ac.ability.service.context-registry :as ctx-reg]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-transport :as transport]
             [cn.li.ac.ability.service.context-state :as ctx-state]
             [cn.li.ac.ability.service.command-runtime :as command-rt]
+            [cn.li.ac.ability.service.context-domain :as context-domain]
             [cn.li.ac.ability.domain.skill :as skill-domain]
             [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.model.ability :as adata]
@@ -21,6 +23,23 @@
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.util.log :as log]))
 
+(def ^:private default-terminated-context-grace-ms 1000)
+(def ^:private default-keepalive-timeout-ms 1500)
+
+(defn keepalive-timeout-ms
+  "Server-side keepalive timeout threshold in milliseconds.
+  Configurable through -Dac.ctx.keepalive-timeout-ms (default 1500)."
+  []
+  (context-domain/positive-long-prop "ac.ctx.keepalive-timeout-ms"
+                                     default-keepalive-timeout-ms))
+
+(defn terminated-context-grace-ms
+  "Grace window before terminated contexts are purged from registry.
+  Configurable through -Dac.ctx.terminated-grace-ms (default 1000)."
+  []
+  (context-domain/positive-long-prop "ac.ctx.terminated-grace-ms"
+                                     default-terminated-context-grace-ms))
+
 (defn- resolve-server-session-id
   [reason]
   (runtime-hooks/require-player-state-server-session-id reason))
@@ -28,49 +47,10 @@
 (defn register-send-fns! [{:keys [to-client to-server]}]
   (transport/register-send-fns! {:to-client to-client :to-server to-server}))
 
-(defn- sync-context-register-command!
-  [ctx-map]
-  (let [session-id (:session-id ctx-map)
-        server-session-id (if (vector? session-id)
-                            (first session-id)
-                            (or (:server-session-id ctx-map)
-                                session-id))
-        player-uuid (or (when (vector? session-id)
-                          (second session-id))
-                        (:player-uuid ctx-map))]
-    (when (and server-session-id player-uuid)
-      (command-rt/run-command-in-session!
-       server-session-id
-       player-uuid
-       {:command :register-context
-        :ctx-id (:id ctx-map)
-        :skill-id (:skill-id ctx-map)
-        :status :alive}))))
-
-(defn- sync-context-terminated-command!
-  [ctx-map]
-  (let [session-id (:session-id ctx-map)
-        server-session-id (if (vector? session-id)
-                            (first session-id)
-                            (or (:server-session-id ctx-map)
-                                session-id))
-        player-uuid (or (when (vector? session-id)
-                          (second session-id))
-                        (:player-uuid ctx-map))]
-    (when (and server-session-id player-uuid)
-      (command-rt/run-command-in-session!
-       server-session-id
-       player-uuid
-       {:command :update-context-status
-        :ctx-id (:id ctx-map)
-        :status :terminated
-        :reason :dispatcher-terminated}))))
-
 (defn- send-terminated! [ctx-id]
-  (when-let [ctx-map (ctx/get-context ctx-id)]
+  (when-let [ctx-map (ctx-reg/get-context ctx-id)]
     (let [player-uuid (:player-uuid ctx-map)]
-      (transport/send-to-client! player-uuid catalog/MSG-CTX-TERMINATE {:ctx-id ctx-id})
-      (sync-context-terminated-command! ctx-map))))
+      (transport/send-to-client! player-uuid catalog/MSG-CTX-TERMINATE {:ctx-id ctx-id}))))
 
 (defn- server-context-owner
   [player-uuid]
@@ -88,13 +68,13 @@
 (defn- active-server-contexts-for-player
   [player-uuid]
   (let [owner (server-context-owner player-uuid)]
-    (->> (ctx/snapshot-context-registry)
+    (->> (ctx-reg/snapshot-context-registry)
          vals
          (filter (fn [ctx-map]
                    (and (= :server (:logical-side ctx-map))
                         (= (:session-id owner) (:session-id ctx-map))
                         (= player-uuid (:player-uuid ctx-map))
-                        (= ctx/STATUS-ALIVE (:status ctx-map))
+                        (= ctx-reg/STATUS-ALIVE (:status ctx-map))
                         (= ctx-state/INPUT-ACTIVE (:input-state ctx-map)))))
          (sort-by (juxt :id :server-id)))))
 
@@ -105,9 +85,9 @@
    (activate-context! nil player-uuid skill-id))
   ([owner player-uuid skill-id]
    (let [new-ctx (if owner
-                   (ctx/new-context player-uuid skill-id owner)
-                   (ctx/new-context player-uuid skill-id))]
-     (ctx/register-context! new-ctx)
+                   (ctx-reg/new-context player-uuid skill-id owner)
+                   (ctx-reg/new-context player-uuid skill-id))]
+     (ctx-reg/register-context! new-ctx)
      (transport/send-to-server! catalog/MSG-CTX-BEGIN-LINK
                                 {:ctx-id (:id new-ctx)
                                  :skill-id skill-id})
@@ -139,9 +119,8 @@
           (log/debug "establish-context! rejected: conditions not met" player-uuid skill-id)
           (transport/send-to-client! player-uuid catalog/MSG-CTX-TERMINATE {:ctx-id client-ctx-id})
           nil)
-        (let [server-ctx (ctx/new-server-context player-uuid skill-id client-ctx-id owner)]
-          (ctx/register-context! server-ctx)
-          (sync-context-register-command! server-ctx)
+        (let [server-ctx (ctx-reg/new-server-context player-uuid skill-id client-ctx-id owner)]
+          (ctx-reg/register-context! server-ctx)
           (transport/send-to-client! player-uuid catalog/MSG-CTX-ESTABLISH
                                      {:ctx-id client-ctx-id
                                       :server-id (:server-id server-ctx)})
@@ -153,14 +132,55 @@
   Should be called from forge player event handlers."
   [player-uuid]
   (let [owner (server-context-owner player-uuid)]
-    (ctx/abort-all-contexts-for-player! owner
-                                        player-uuid
-                                        send-terminated!)))
+    (ctx-reg/abort-all-contexts-for-player! owner
+                                            player-uuid
+                                            send-terminated!)))
 
 (defn send-terminated-context!
   "Notify client that a specific context has terminated."
   [ctx-id]
   (send-terminated! ctx-id))
+
+(defn- context-owner-from-map
+  [ctx-map]
+  {:logical-side (:logical-side ctx-map)
+   :session-id (:session-id ctx-map)})
+
+(defn- timeout-expired-server-contexts
+  []
+  (let [now (System/currentTimeMillis)
+  timeout-ms (keepalive-timeout-ms)]
+      (->> (ctx-reg/snapshot-context-registry)
+         vals
+         (filter (fn [ctx-map]
+                   (and (= :server (:logical-side ctx-map))
+              (= ctx-reg/STATUS-ALIVE (:status ctx-map))
+                        (:last-keepalive-ms ctx-map)
+                        (> (- now (:last-keepalive-ms ctx-map)) timeout-ms)))))))
+
+(defn- terminate-expired-contexts!
+  []
+  (doseq [ctx-map (timeout-expired-server-contexts)]
+    (ctx-reg/terminate-context! (context-owner-from-map ctx-map)
+                                (:id ctx-map)
+                                send-terminated!)))
+
+(defn- stale-terminated-contexts
+  []
+  (let [now (System/currentTimeMillis)
+  grace-ms (terminated-context-grace-ms)]
+      (->> (ctx-reg/snapshot-context-registry)
+         vals
+         (filter (fn [ctx-map]
+            (and (= ctx-reg/STATUS-TERMINATED (:status ctx-map))
+                        (:terminated-at-ms ctx-map)
+                        (>= (- now (:terminated-at-ms ctx-map)) grace-ms)))))))
+
+(defn- purge-stale-terminated-contexts!
+  []
+  (doseq [ctx-map (stale-terminated-contexts)]
+    (ctx-reg/remove-context! (context-owner-from-map ctx-map)
+                             (:id ctx-map))))
 
 (defn push-channel-to-player!
   "Push a context channel payload to a player's client.
@@ -201,5 +221,5 @@
   "Call once per second (or per server tick with rate limiting).
   Checks keepalive timeouts on all live ALIVE contexts."
   []
-  (ctx/check-keepalive-timeout! send-terminated!)
-  (ctx/purge-terminated-contexts!))
+  (terminate-expired-contexts!)
+  (purge-stale-terminated-contexts!))

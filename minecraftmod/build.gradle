@@ -3490,6 +3490,42 @@ tasks.register('verifyNonAcNoBusinessSemanticResidue') {
     }
 }
 
+tasks.register('verifyAbilityNoDispatcherBusinessApiUsage') {
+    group = 'verification'
+    description = 'Verify AC ability main source does not call business context APIs through context-dispatcher alias.'
+
+    doLast {
+        def scannedFiles = fileTree('.') {
+            include 'ac/src/main/clojure/cn/li/ac/ability/**/*.clj'
+            exclude '**/build/**', '**/.gradle/**', '**/bin/**'
+            exclude 'ac/src/main/clojure/cn/li/ac/ability/service/context_dispatcher.clj'
+            exclude 'ac/src/main/clojure/cn/li/ac/ability/service/context_registry.clj'
+        }.files.findAll { it.isFile() }
+
+        def forbiddenPatterns = [
+            ~/\bctx\/(get-context|get-all-contexts|get-all-contexts-for-player|update-context!?|update-context-owned!?|terminate-context!?|remove-context!?|register-context!?|start-context!?|start-server-context!?|clear-session-contexts!?|clear-owner-contexts!?|reset-contexts-for-test!|snapshot-context-registry|context-owned-by\?)\b/
+        ]
+
+        def violations = []
+        scannedFiles.sort { a, b -> a.path <=> b.path }.each { File sourceFile ->
+            def rel = project.rootDir.toPath().relativize(sourceFile.toPath()).toString().replace('\\', '/')
+            sourceFile.readLines('UTF-8').eachWithIndex { String line, int idx ->
+                forbiddenPatterns.each { pattern ->
+                    if (pattern.matcher(line).find()) {
+                        violations << "${rel}:${idx + 1}: ${line.trim()}"
+                    }
+                }
+            }
+        }
+
+        if (!violations.isEmpty()) {
+            throw new GradleException("AC ability source still uses dispatcher business APIs. Migrate to context-registry APIs:\n - ${violations.join('\n - ')}")
+        }
+
+        logger.lifecycle('[verifyAbilityNoDispatcherBusinessApiUsage] passed. Business context APIs are consumed via context-registry.')
+    }
+}
+
 def cleanupResidueGuardTaskNames = [
     'verifyNoContentVersionAdapters',
     'verifyNoHardcodedContentBootstrap',
@@ -3582,6 +3618,7 @@ tasks.register('verifyCleanupResidueGuards') {
     description = 'Run cleanup-residue guard checks for SSOT regressions.'
     dependsOn cleanupResidueGuardTaskNames
     dependsOn 'auditAbilityReducerGenericCommands'
+    dependsOn 'verifyAbilityNoDispatcherBusinessApiUsage'
 }
 
 tasks.register('auditAbilityArchitectureStateWrites') {

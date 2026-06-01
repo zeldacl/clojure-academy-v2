@@ -13,6 +13,7 @@
   (:require [cn.li.ac.ability.dsl :refer [defskill]]
             [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-registry :as ctx-reg]
             [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.effects.geom :as geom]
@@ -108,7 +109,7 @@
 (defn- safe-context-data
   [ctx-id]
   (try
-    (ctx/get-context ctx-id)
+    (ctx-reg/get-context ctx-id)
     (catch Exception _ nil)))
 
 (defn- command-runtime-ready?
@@ -128,8 +129,8 @@
                                                         :k []
                                                         :v state-map})]
         (when (= :context-not-found (:rejected-reason result))
-          (ctx/update-context! ctx-id assoc :skill-state state-map)))
-      (ctx/update-context! ctx-id assoc :skill-state state-map))))
+          (ctx-reg/update-context! ctx-id assoc :skill-state state-map)))
+      (ctx-reg/update-context! ctx-id assoc :skill-state state-map))))
 
 (defn- clear-skill-state!
   [ctx-id]
@@ -140,8 +141,8 @@
                                                        {:command :context-clear-skill-state
                                                         :ctx-id ctx-id})]
         (when (= :context-not-found (:rejected-reason result))
-          (ctx/update-context! ctx-id dissoc :skill-state)))
-      (ctx/update-context! ctx-id dissoc :skill-state))))
+          (ctx-reg/update-context! ctx-id dissoc :skill-state)))
+      (ctx-reg/update-context! ctx-id dissoc :skill-state))))
 
 ;; ---------------------------------------------------------------------------
 ;; Actions
@@ -175,7 +176,7 @@
   (try
     (let [exp (helper/skill-exp player-id threatening-teleport-skill-id)
           damage (helper/cfg-lerp threatening-teleport-skill-id :combat.damage exp)
-          ctx-data (ctx/get-context ctx-id)
+          ctx-data (ctx-reg/get-context ctx-id)
           range (helper/cfg-lerp threatening-teleport-skill-id :targeting.range exp)
           trace (or (get-in ctx-data [:skill-state :trace])
                     (trace-result player-id range))]

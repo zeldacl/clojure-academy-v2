@@ -26,7 +26,7 @@
                   (assoc-in [:preset-data :active-preset] 1)
                   (assoc-in [:develop-data :level-progress] 42.0)
                   (assoc-in [:terminal-data :installed-apps] #{:tutorial :settings}))]
-    (runtime-hooks/set-player-state! uuid state)
+    (runtime-hooks/sync-player-state! uuid state)
     (is (= state (runtime-hooks/get-player-state uuid)))
     (is (true? (runtime-hooks/runtime-activated? uuid)))
     (is (= {:uuid uuid

@@ -19,6 +19,7 @@
             [cn.li.ac.ability.util.balance :as bal]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-registry :as ctx-reg]
             [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.ability.effects.beam :as beam]
             [cn.li.ac.ability.effects.geom :as geom]
@@ -75,7 +76,7 @@
 (defn- safe-context-data
   [ctx-id]
   (try
-    (ctx/get-context ctx-id)
+    (ctx-reg/get-context ctx-id)
     (catch Exception _ nil)))
 
 (defn- command-runtime-ready?
@@ -96,8 +97,8 @@
                                                         :k path
                                                         :v value})]
         (when (= :context-not-found (:rejected-reason result))
-          (ctx/update-context! ctx-id assoc-in (into [:skill-state] path) value)))
-      (ctx/update-context! ctx-id assoc-in (into [:skill-state] path) value))))
+          (ctx-reg/update-context! ctx-id assoc-in (into [:skill-state] path) value)))
+      (ctx-reg/update-context! ctx-id assoc-in (into [:skill-state] path) value))))
 
 ;; ---------------------------------------------------------------------------
 ;; Overload floor enforcement
@@ -115,7 +116,7 @@
   (some (fn [[_ ctx-data]]
           (and (= (:player-id ctx-data) player-id)
                (toggle/is-toggle-active? ctx-data skill-id)))
-        (ctx/get-all-contexts)))
+        (ctx-reg/get-all-contexts)))
 
 (defn- vec-reflection-can-reflect? [target-player-id incoming-damage]
   (when (toggle-active? target-player-id :vec-reflection)
@@ -210,11 +211,11 @@
 (defn- meltdowner-on-tick!
   [{:keys [player-id ctx-id hold-ticks]}]
   (let [ticks (long (or hold-ticks 0))]
-    (when-let [floor (get-in (ctx/get-context ctx-id) [:skill-state :overload-floor])]
+    (when-let [floor (get-in (ctx-reg/get-context ctx-id) [:skill-state :overload-floor])]
       (enforce-overload-floor! player-id floor))
     (when (> ticks (ticks-tolerant))
       (ctx/ctx-send-to-client! ctx-id :meltdowner/fx-end {:performed? false})
-      (ctx/terminate-context! ctx-id nil)
+      (ctx-reg/terminate-context! ctx-id nil)
       (log/debug "Meltdowner aborted: over tolerant ticks" ticks))))
 
 (defn- meltdowner-on-up!
@@ -224,7 +225,7 @@
     (if (< ticks (ticks-min))
       (do
         (ctx/ctx-send-to-client! ctx-id :meltdowner/fx-end {:performed? false})
-        (ctx/terminate-context! ctx-id nil)
+        (ctx-reg/terminate-context! ctx-id nil)
         (log/debug "Meltdowner: insufficient charge ticks" ticks))
       (let [{:keys [performed? reflection-hit?]}
             (perform-meltdowner! {:player-id  player-id
@@ -239,11 +240,11 @@
                                                      (cfg-double :cooldown.base-multiplier)
                                                      (cfg-lerp :cooldown.ticks exp))))
             (ctx/ctx-send-to-client! ctx-id :meltdowner/fx-end {:performed? true})
-            (ctx/terminate-context! ctx-id nil)
+            (ctx-reg/terminate-context! ctx-id nil)
             (log/debug "Meltdowner performed; reflection?" (boolean reflection-hit?)))
           (do
             (ctx/ctx-send-to-client! ctx-id :meltdowner/fx-end {:performed? false})
-            (ctx/terminate-context! ctx-id nil)
+            (ctx-reg/terminate-context! ctx-id nil)
             (log/debug "Meltdowner: beam failed")))))))
 
 (defn init!
@@ -290,12 +291,12 @@
                     :abort!     (fn [{:keys [ctx-id]}]
                                   (ctx/ctx-send-to-client! ctx-id :meltdowner/fx-end
                                                            {:performed? false})
-                                  (ctx/terminate-context! ctx-id nil))
+                                  (ctx-reg/terminate-context! ctx-id nil))
                     :cost-fail! (fn [{:keys [ctx-id cost-stage]}]
                                   (when (= cost-stage :tick)
                                     (ctx/ctx-send-to-client! ctx-id :meltdowner/fx-end
                                                              {:performed? false}))
-                                  (ctx/terminate-context! ctx-id nil))}
+                                  (ctx-reg/terminate-context! ctx-id nil))}
   :prerequisites   [{:skill-id :scatter-bomb :min-exp 0.8}
                     {:skill-id :light-shield :min-exp 0.8}])
 

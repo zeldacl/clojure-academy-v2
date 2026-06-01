@@ -3,6 +3,7 @@
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-registry :as ctx-reg]
             [cn.li.ac.ability.util.toggle :as toggle]
             [cn.li.ac.content.ability.vecmanip.arbitration :as arbitration]
             [cn.li.ac.content.ability.vecmanip.vec-deviation :as vd]
@@ -40,13 +41,13 @@
 (defmacro with-tick-mocks
   "Establish a baseline set of mocks for vec-deviation-tick! tests.
    Options map keys:
-     :current-cp   â€?double returned for current-cp (default 100.0)
-     :difficulty   â€?difficulty of the test entity (default 1.0, via affected-entity-difficulty)
-     :dual-active? â€?bool (default false)
-     :claim?       â€?result of claim-projectile! (default true)
-     :ctx-data     â€?context map (default active-ctx-data)
-     :set-vel-atom â€?atom to capture set-velocity! calls
-     :consume-atom â€?atom to capture perform-resource! calls"
+     :current-cp   ï¿½?double returned for current-cp (default 100.0)
+     :difficulty   ï¿½?difficulty of the test entity (default 1.0, via affected-entity-difficulty)
+     :dual-active? ï¿½?bool (default false)
+     :claim?       ï¿½?result of claim-projectile! (default true)
+     :ctx-data     ï¿½?context map (default active-ctx-data)
+     :set-vel-atom ï¿½?atom to capture set-velocity! calls
+     :consume-atom ï¿½?atom to capture perform-resource! calls"
   [opts & body]
   `(let [set-vel-calls#  (or (:set-vel-atom ~opts) (atom []))
          consume-calls#  (or (:consume-atom ~opts) (atom []))
@@ -86,9 +87,9 @@
                    (fn [_a# _b#] nil)
                    cn.li.ac.content.ability.vecmanip.vec-deviation/send-fx-stop-entity!
                    (fn [_a# _b# _c#] nil)
-                   ctx/get-context
+                   ctx-reg/get-context
                    (fn [_id#] ctx-data#)
-                   ctx/update-context!
+                   ctx-reg/update-context!
                    (fn [_a# _b# & _rest#] nil)
                    world-effects/*world-effects* :mock
                    world-effects/find-entities-in-radius
@@ -111,7 +112,7 @@
        ~@body)))
 
 ;; ---------------------------------------------------------------------------
-;; Bug 1 â€?deflect cost must NOT be multiplied by difficulty
+;; Bug 1 ï¿½?deflect cost must NOT be multiplied by difficulty
 ;; ---------------------------------------------------------------------------
 
 (deftest deflect-cost-not-scaled-by-difficulty-test
@@ -126,7 +127,7 @@
       (is (= 15.0 (first @consume-calls)) "CP consumed = base cost 15.0, not difficulty-scaled 30.0"))))
 
 ;; ---------------------------------------------------------------------------
-;; Bug 2 â€?deflect must proceed even when CP is nearly empty (force-consume)
+;; Bug 2 ï¿½?deflect must proceed even when CP is nearly empty (force-consume)
 ;; ---------------------------------------------------------------------------
 
 (deftest deflect-proceeds-when-cp-nearly-empty-test
@@ -135,12 +136,12 @@
           consume-calls (atom [])]
       (with-tick-mocks {:set-vel-atom set-vel-calls :consume-atom consume-calls :current-cp 3.0}
         (vd/vec-deviation-tick! {:player-id "p1" :ctx-id "ctx-1" :cost-ok? true}))
-      (is (= 1 (count @set-vel-calls)) "set-velocity! called â€?deflection happened")
+      (is (= 1 (count @set-vel-calls)) "set-velocity! called ï¿½?deflection happened")
       (is (= 1 (count @consume-calls)) "perform-resource! called once")
       (is (= 3.0 (first @consume-calls)) "CP consumed capped to available 3.0, not full 15.0"))))
 
 ;; ---------------------------------------------------------------------------
-;; Bug 2 cont. â€?toggle must NOT be terminated by insufficient deflect CP
+;; Bug 2 cont. ï¿½?toggle must NOT be terminated by insufficient deflect CP
 ;; ---------------------------------------------------------------------------
 
 (deftest toggle-not-terminated-by-insufficient-deflect-cp-test
@@ -155,7 +156,7 @@
       (is (= 1 (count @set-vel-calls)) "deflection still executes with 0 CP"))))
 
 ;; ---------------------------------------------------------------------------
-;; Bug 3 â€?CP must NOT be consumed when arbitration denies the claim
+;; Bug 3 ï¿½?CP must NOT be consumed when arbitration denies the claim
 ;; ---------------------------------------------------------------------------
 
 (deftest cp-not-consumed-when-arbitration-denies-test
@@ -172,7 +173,7 @@
       (is (empty? @set-vel-calls)  "set-velocity! not called when arbitration denies"))))
 
 ;; ---------------------------------------------------------------------------
-;; reduce-damage â€?threshold guard
+;; reduce-damage ï¿½?threshold guard
 ;; ---------------------------------------------------------------------------
 
 (deftest reduce-damage-ignores-damage-above-threshold-test
@@ -189,7 +190,7 @@
       (is (= 10000.0 (vd/reduce-damage "p1" 10000.0))))))
 
 ;; ---------------------------------------------------------------------------
-;; reduce-damage â€?force-consume semantics (cap to current CP)
+;; reduce-damage ï¿½?force-consume semantics (cap to current CP)
 ;; ---------------------------------------------------------------------------
 
 (deftest reduce-damage-force-consumes-capped-cp-test
@@ -213,10 +214,10 @@
                     cn.li.ac.content.ability.vecmanip.vec-deviation/active-vec-deviation-ctx-id (fn [_] nil)]
         (let [result (vd/reduce-damage "p1" 10.0)]
           (is (= 5.0 (double @consumed)) "CP consumed capped to 5.0 (min of 5.0 available and 15.0 max)")
-          (is (= 5.0 result) "damage reduced by 50% â†?10.0 * (1-0.5) = 5.0"))))))
+          (is (= 5.0 result) "damage reduced by 50% ï¿½?10.0 * (1-0.5) = 5.0"))))))
 
 ;; ---------------------------------------------------------------------------
-;; reduce-damage â€?exp proportional to original damage
+;; reduce-damage ï¿½?exp proportional to original damage
 ;; ---------------------------------------------------------------------------
 
 (deftest reduce-damage-adds-exp-proportional-to-original-damage-test
@@ -248,7 +249,7 @@
             "exp = 10.0 * 0.0006 = 0.006")))))
 
 ;; ---------------------------------------------------------------------------
-;; Config contract â€?new activation overload key
+;; Config contract ï¿½?new activation overload key
 ;; ---------------------------------------------------------------------------
 
 (deftest config-cost-activation-overload-default-test
@@ -258,7 +259,7 @@
              (get defaults (skill-config/config-key :vec-deviation :cost.activation.overload)))))))
 
 ;; ---------------------------------------------------------------------------
-;; tick! â€?overload floor is enforced each tick
+;; tick! ï¿½?overload floor is enforced each tick
 ;; ---------------------------------------------------------------------------
 
 (deftest tick-enforces-overload-floor-test

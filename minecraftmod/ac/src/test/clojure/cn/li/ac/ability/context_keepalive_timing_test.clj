@@ -1,7 +1,9 @@
 (ns cn.li.ac.ability.context-keepalive-timing-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.test.support.contexts :as test-contexts]
-            [cn.li.ac.ability.service.context-dispatcher :as ctx]))
+            [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-manager :as ctx-mgr]
+            [cn.li.ac.ability.messages :as catalog]))
 
 (use-fixtures :each test-contexts/clean-contexts-fixture)
 
@@ -31,15 +33,16 @@
             sends (atom [])
             in-window-id "ctx-in-window"
             expired-id "ctx-expired"]
+        (ctx-mgr/register-send-fns! {:to-client (fn [_uuid msg-id payload]
+                                                  (when (= catalog/MSG-CTX-TERMINATE msg-id)
+                                                    (swap! sends conj (:ctx-id payload))))
+                                      :to-server nil})
         (register-alive-context! in-window-id (- now 1400))
         (register-alive-context! expired-id (- now 1600))
 
-        (ctx/check-keepalive-timeout!
-         (fn [ctx-id]
-           (swap! sends conj ctx-id)))
+        (ctx-mgr/tick-context-manager!)
 
         (binding [ctx/*context-owner* test-context-owner]
           (is (= ctx/STATUS-ALIVE (:status (ctx/get-context in-window-id))))
           (is (= ctx/STATUS-TERMINATED (:status (ctx/get-context expired-id)))))
-        (is (= [expired-id] @sends))
-        (is (= 1 (get (ctx/lifecycle-counters-snapshot) :timeout-terminated 0)))))))
+        (is (= [expired-id] @sends))))))

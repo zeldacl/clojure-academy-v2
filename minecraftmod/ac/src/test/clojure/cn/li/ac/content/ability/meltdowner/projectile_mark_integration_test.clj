@@ -5,7 +5,9 @@
             [cn.li.ac.ability.model.ability :as ad]
             [cn.li.ac.ability.server.damage.runtime :as rt]
             [cn.li.ac.ability.service.delayed-projectiles :as dp]
-            [cn.li.ac.ability.service.context-dispatcher :as ctx]            [cn.li.ac.ability.service.skill-effects :as skill-effects]
+            [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-registry :as ctx-reg]
+            [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.effects.beam :as beam]
             [cn.li.ac.ability.effects.geom :as geom]
@@ -171,8 +173,8 @@
                   skill-effects/enforce-overload-floor! (fn [& _] nil)
                   skill-effects/perform-resource! (fn [& _] {:success? true})
                   skill-effects/add-skill-exp! (fn [& _] nil)
-                  ctx/get-context get-context
-                  ctx/update-context! update-context!
+                  ctx-reg/get-context get-context
+                  ctx-reg/update-context! update-context!
                   ctx/ctx-send-to-client! (fn [& _] nil)
                   ctx/ctx-send-to-except-local! (fn [& _] nil)
                   geom/world-id-of (fn [_] "w")
@@ -266,9 +268,9 @@
     (with-redefs [rad/rate (fn [_] 1.5)
                   rad/mark-duration-ticks (fn [] 100000)
                   skill-effects/skill-exp (fn [& _] 0.0)
-                  ctx/get-context get-context
-                  ctx/update-context! update-context!
-                  ctx/terminate-context! terminate-context!
+                  ctx-reg/get-context get-context
+                  ctx-reg/update-context! update-context!
+                  ctx-reg/terminate-context! terminate-context!
                   ctx/ctx-send-to-client! send!
                   ctx-mgr/push-channel-to-player! (fn [& _] nil)
                   ctx-mgr/push-channel-to-nearby-players! (fn [& _] nil)]
