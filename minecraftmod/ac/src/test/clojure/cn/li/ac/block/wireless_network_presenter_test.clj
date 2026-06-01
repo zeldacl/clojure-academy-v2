@@ -36,8 +36,8 @@
               :matrix-range #(.getMatrixRange %)})))))
 
 (deftest matrix-presenter-uses-plain-network-values-test
-  (let [network (network "ssid" "pw")]
-    (network-state/update-nodes! network conj :node-a)
+  (let [network (-> (network "ssid" "pw")
+                    (network-state/update-nodes! conj :node-a))]
     (is (= {:ssid "ssid"
             :password "pw"
             :owner "tester"

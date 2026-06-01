@@ -5,13 +5,11 @@
   - IFItemManager：物品能量（电池充放电、容量、带宽）
   - IFNodeManager：节点能量（Wireless Node 充放电）
   - IFReceiverManager：接收器能量（inject/pull）
-  - 无线网络：获取网络、连接状态、无线传输（含 fallback stub）
-  - 网络同步：send-sync-message（当前为 stub 实现）"
+  - 无线网络：获取网络、连接状态"
   (:require [cn.li.mcmod.util.log :as log]
             [cn.li.ac.energy.api.impl :as energy-api]
             [cn.li.ac.energy.service.item-manager :as item-manager]
             [cn.li.ac.energy.service.node-manager :as node-manager]
-            [cn.li.ac.energy.service.transfer-service :as transfer-service]
             [cn.li.ac.wireless.api :as wireless-api]))
 
 (defn energy-system
@@ -113,13 +111,13 @@
   (node-manager/pull-from-receiver tile-entity amount))
 
 ;; ============================================================================
-;; Wireless Network (delegates to wireless.helper)
+;; Wireless Network (delegates to cn.li.ac.wireless.api)
 ;; ============================================================================
 
 (defn get-wireless-network
-  "Get wireless network for a node (delegates to wireless.helper).
+  "Get wireless network for a node via `wireless.api`.
   Returns nil if no network is found or an error occurs."
-  [node password]
+  [node _password]
   (try
     (wireless-api/get-wireless-net-by-node node)
     (catch Exception _
@@ -127,47 +125,11 @@
       nil)))
 
 (defn is-node-connected?
-  "Check if node is connected to wireless network (delegates to wireless.helper)"
-  [node password]
+  "Check if node is connected to wireless network via `wireless.api`"
+  [node _password]
   (try
     (boolean (wireless-api/is-node-linked? node))
     (catch Exception _
       (log/warn "is-node-connected? failed; returning false for safety")
       false)))
 
-(defn transfer-energy-wireless
-  "Simulate wireless transfer and return transmission loss amount.
-  Current behavior is a deterministic 10% loss model used by tests/stubs."
-  [_network _from _to amount]
-  (transfer-service/transfer-loss amount))
-
-(defn transfer-energy-wireless-result
-  "Simulate wireless transfer and return normalized transfer result map.
-
-  This is a new Phase C helper API while `transfer-energy-wireless` is kept as
-  a legacy-compatible wrapper returning only loss amount."
-  ([_network _from _to amount]
-   (transfer-service/transfer-result amount))
-  ([_network _from _to amount loss-rate]
-   (transfer-service/transfer-result amount loss-rate)))
-
-;; ============================================================================
-;; Network Synchronization (stub: logs only)
-;; ============================================================================
-
-(defn send-sync-message
-  "Send synchronization message to client (stub implementation)"
-  [player data]
-  (log/info (format "Sync to %s: enabled=%s, chargingIn=%s, chargingOut=%s, energy=%.1f"
-                    player
-                    (:enabled data)
-                    (:charging-in data)
-                    (:charging-out data)
-                    (:energy data))))
-
-;; ============================================================================
-;; Initialization
-;; ============================================================================
-
-(defn init-energy-system! []
-  (log/info "Energy system initialized"))

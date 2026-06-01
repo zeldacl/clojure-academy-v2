@@ -4,15 +4,15 @@
 					[cn.li.mcmod.util.log :as log]))
 
 (defn reset-password!
-	"Change network password"
+	"Change network password. Returns updated network."
 	[network new-password]
-	(network-state/set-state-value! network :password new-password)
-	(log/info (format "Network '%s' password changed" (network-state/get-ssid network)))
-	true)
+	(let [updated (network-state/set-state-value! network :password new-password)]
+		(log/info (format "Network '%s' password changed" (network-state/get-ssid updated)))
+		updated))
 
 (defn reset-ssid!
-	"Change network ssid"
+	"Change network ssid. Returns updated network."
 	[network new-ssid]
-	(network-state/set-state-value! network :ssid new-ssid)
-	(log/info (format "Network ssid changed to '%s'" new-ssid))
-	true)
+	(let [updated (network-state/set-state-value! network :ssid new-ssid)]
+		(log/info (format "Network ssid changed to '%s'" new-ssid))
+		updated))

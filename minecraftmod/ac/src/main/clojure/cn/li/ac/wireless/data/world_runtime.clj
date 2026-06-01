@@ -5,7 +5,7 @@
 						[cn.li.ac.wireless.data.network-state :as network-state]
 						[cn.li.ac.wireless.data.node-conn :as node-conn]
 						[cn.li.ac.wireless.data.world-registry :as world-registry]
-						[cn.li.ac.wireless.data.world-topology :as topology]
+						[cn.li.ac.wireless.service.commands :as commands]
 						[cn.li.mcmod.util.log :as log]))
 
 (defn network-impl-validator
@@ -15,7 +15,7 @@
 		(when (or (network-state/is-disposed? item)
 							(and (vb/is-chunk-loaded? (:matrix item) (:world world-data))
 									 (nil? (resolver/resolve-matrix-cap (:world world-data) (:matrix item)))))
-			(topology/destroy-network-impl! world-data item))))
+			(commands/destroy-network! world-data item))))
 
 (defn node-connection-impl-validator
 	"Remove disposed/invalid node connections from world-data."
@@ -24,7 +24,7 @@
 		(when (or (node-conn/is-disposed? item)
 							(and (vb/is-chunk-loaded? (:node item) (:world world-data))
 									 (nil? (resolver/resolve-node-cap (:world world-data) (:node item)))))
-			(topology/destroy-node-connection-impl! world-data item))))
+			(commands/destroy-node-connection! world-data item))))
 
 (defn tick-world-data!
 	"Tick all world wireless items."

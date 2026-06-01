@@ -24,18 +24,16 @@ Compatibility:
 
 - Existing callers can continue to require `cn.li.ac.wireless.data.world`.
 
-### `cn.li.ac.wireless.data.network`
+### Wireless topology (current)
 
-Now delegates internally to:
+- Writes: `cn.li.ac.wireless.service.commands` → `domain.topology` + `entity-commit` + `world-registry/transact!`
+- Reads: `cn.li.ac.wireless.service.queries` → `network-lookup` / `spatial-lookup`
+- Removed (do not reintroduce): `topology-service`, `topology-index`, `network-membership`, `query-service`, `network-command`, `world-topology`, `*-impl!` aliases on `data.world`
 
-- `cn.li.ac.wireless.data.network-state`
-- `cn.li.ac.wireless.data.network-membership`
-- `cn.li.ac.wireless.data.network-validation`
-- `cn.li.ac.wireless.data.network-energy-balance`
+### `cn.li.ac.wireless.data.network-*` modules
 
-Compatibility:
-
-- Existing callers can continue to require `cn.li.ac.wireless.data.network`.
+- `network-state`, `network-validation`, `network-runtime`, `network-energy-balance`, `node-conn` — runtime entities and tick paths only.
+- There is no `cn.li.ac.wireless.data.network` compatibility namespace.
 
 Removed obsolete modules:
 
@@ -50,8 +48,8 @@ Removed obsolete modules:
 Current canonical facade for wireless queries and commands. It delegates to:
 
 - `cn.li.ac.wireless.core.capability-resolver` for runtime capability resolution.
-- `cn.li.ac.wireless.service.network-command` for command execution.
-- `cn.li.ac.wireless.service.node-connection` and `cn.li.ac.wireless.data.world` for topology operations.
+- `cn.li.ac.wireless.service.commands` for topology mutations.
+- `cn.li.ac.wireless.service.queries` for read paths.
 
 Compatibility:
 

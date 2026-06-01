@@ -5,7 +5,7 @@
             [cn.li.ac.wireless.data.network-state :as network-state]
             [cn.li.ac.wireless.data.node-conn :as node-conn]
             [cn.li.ac.wireless.data.world-registry :as world-registry]
-            [cn.li.ac.wireless.data.world-topology :as topology]
+            [cn.li.ac.wireless.service.commands :as commands]
             [cn.li.mcmod.platform.nbt :as nbt]
             [cn.li.mcmod.util.log :as log]))
 
@@ -31,17 +31,17 @@
                   matrix-vb
                   (nbt/nbt-get-string compound "ssid")
                   (nbt/nbt-get-string compound "password"))]
-    (network-state/set-nodes!
-      network
-      (vblock-codec/nbt-list->vblocks
-        (nbt/nbt-get-list compound "nodes")
-        :node
-        false
-        vb/from-foundation))
-    (network-state/set-buffer! network (nbt/nbt-get-double compound "buffer"))
-    (network-state/set-update-counter! network (nbt/nbt-get-int compound "updateCounter"))
-    (network-state/set-state-value! network :disposed (nbt/nbt-get-boolean compound "disposed"))
-    network))
+    (-> network
+        (network-state/set-state-value!
+          :nodes
+          (vec (vblock-codec/nbt-list->vblocks
+                 (nbt/nbt-get-list compound "nodes")
+                 :node
+                 false
+                 vb/from-foundation)))
+        (network-state/set-state-value! :buffer (nbt/nbt-get-double compound "buffer"))
+        (network-state/set-state-value! :update-counter (nbt/nbt-get-int compound "updateCounter"))
+        (network-state/set-state-value! :disposed (nbt/nbt-get-boolean compound "disposed")))))
 
 (defn connection-to-nbt
   [conn]
@@ -81,7 +81,7 @@
     (doseq [index (range networks-size)]
       (when-let [network-compound (nbt/nbt-list-get-compound networks-list index)]
         (try
-          (topology/rebuild-network-indexes!
+          (commands/rebuild-network-indexes!
             world-data
             (network-from-nbt world-data network-compound))
           (catch Exception e
@@ -89,7 +89,7 @@
     (doseq [index (range connections-size)]
       (when-let [connection-compound (nbt/nbt-list-get-compound connections-list index)]
         (try
-          (topology/rebuild-connection-indexes!
+          (commands/rebuild-connection-indexes!
             world-data
             (connection-from-nbt world-data connection-compound))
           (catch Exception e

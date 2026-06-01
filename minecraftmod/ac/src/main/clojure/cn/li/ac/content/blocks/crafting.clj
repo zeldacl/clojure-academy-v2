@@ -1,7 +1,6 @@
 (ns cn.li.ac.content.blocks.crafting
   "Content entrypoint for crafting/processing blocks"
   (:require [cn.li.ac.content.block-loader-core :as block-loader]
-            [cn.li.ac.wireless.shared.message-registry :as msg-reg]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]))
 
 (def ^:private crafting-block-spec
@@ -9,8 +8,7 @@
    :init-entries '[cn.li.ac.block.imag-fusor.block/init-imag-fusor!
                    cn.li.ac.block.metal-former.block/init-metal-former!
                    cn.li.ac.block.imag-fusor.gui/init-imag-fusor-gui!
-                   cn.li.ac.block.metal-former.gui/init-metal-former-gui!]
-   :post-init-entries [msg-reg/register-all!]})
+                   cn.li.ac.block.metal-former.gui/init-metal-former-gui!]})
 
 (defonce-guard crafting-blocks-installed?)
 

@@ -3,8 +3,8 @@
             [cn.li.ac.test.support.wireless-stubs :as stubs]
             [cn.li.ac.wireless.api :as wireless-api]
             [cn.li.ac.wireless.data.network-state :as network-state]
-            [cn.li.ac.wireless.service.world-registry :as world-registry]
-            [cn.li.ac.wireless.service.network-command :as network-command]
+            [cn.li.ac.wireless.data.world-registry :as world-registry]
+            [cn.li.ac.wireless.service.commands :as commands]
             [cn.li.ac.wireless.core.vblock :as vb]
             [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.platform.events :as platform-events])
@@ -17,7 +17,8 @@
       (with-redefs [platform-be/be-get-world-safe (fn [_] :world)
                     world-registry/get-world-data (fn [_] :world-data)
                     vb/create-vmatrix (fn [_] :matrix-vb)
-                    network-command/create-network! (fn [_ _ _ _] true)
+                    cn.li.ac.wireless.data.network-lookup/get-network-by-matrix (constantly nil)
+                    commands/create-network! (fn [_ _ _ _] true)
                     platform-be/get-capability (fn [tile cap-key]
                                                  (when (and (= tile :matrix-tile)
                                                             (= cap-key WirelessCapabilityKeys/MATRIX))
@@ -36,7 +37,8 @@
     (with-redefs [platform-be/be-get-world-safe (fn [_] :world)
                   world-registry/get-world-data (fn [_] :world-data)
                   vb/create-vmatrix (fn [_] :matrix-vb)
-                  network-command/create-network! (fn [_ _ _ _] false)
+                  cn.li.ac.wireless.data.network-lookup/get-network-by-matrix (constantly nil)
+                  commands/create-network! (fn [_ _ _ _] false)
                   platform-be/get-capability (fn [_ _] (stubs/fake-matrix))
                   platform-events/fire-event! (fn [evt] (swap! events conj evt))]
       (is (false? (wireless-api/create-network! :matrix-tile "ssid-a" "pw")))
@@ -49,7 +51,7 @@
     (with-redefs [wireless-api/get-wireless-net-by-matrix (fn [_] net)
                   platform-be/be-get-world-safe (fn [_] :world)
                   world-registry/get-world-data (fn [_] :world-data)
-                  network-command/destroy-network! (fn [_ _] true)
+                  commands/destroy-network! (fn [_ _] true)
                   platform-be/get-capability (fn [tile cap-key]
                                                (when (and (= tile :mt)
                                                           (= cap-key WirelessCapabilityKeys/MATRIX))
@@ -76,7 +78,7 @@
                     platform-be/be-get-world-safe (fn [_] :world)
                     world-registry/get-world-data (fn [_] :world-data)
                     vb/create-vnode (fn [_] :node-vb)
-                    network-command/link-node-to-network! (fn [_ _ _ _] true)
+                    commands/link-node-to-network! (fn [_ _ _ _] true)
                     platform-be/get-capability (fn [tile cap-key]
                                                  (cond
                                                    (and (= tile :matrix-tile)
@@ -101,9 +103,9 @@
       (with-redefs [platform-be/be-get-world-safe (fn [_] :world)
                     world-registry/get-world-data (fn [_] :world-data)
                     vb/create-vnode-conn (fn [_] :node-conn-vb)
-                    network-command/ensure-node-connection! (fn [_ _] :conn)
+                    commands/ensure-node-connection! (fn [_ _] :conn)
                     vb/create-vgenerator (fn [_] :gen-vb)
-                    network-command/link-generator-to-connection! (fn [_ _ _] true)
+                    commands/link-generator-to-connection! (fn [_ _ _] true)
                     platform-be/get-capability (fn [tile cap-key]
                                                  (cond
                                                    (and (= tile :node-tile)
@@ -127,9 +129,9 @@
       (with-redefs [platform-be/be-get-world-safe (fn [_] :world)
                     world-registry/get-world-data (fn [_] :world-data)
                     vb/create-vnode-conn (fn [_] :node-conn-vb)
-                    network-command/ensure-node-connection! (fn [_ _] :conn)
+                    commands/ensure-node-connection! (fn [_ _] :conn)
                     vb/create-vreceiver (fn [_] :rec-vb)
-                    network-command/link-receiver-to-connection! (fn [_ _ _] true)
+                    commands/link-receiver-to-connection! (fn [_ _ _] true)
                     platform-be/get-capability (fn [tile cap-key]
                                                  (cond
                                                    (and (= tile :node-tile)

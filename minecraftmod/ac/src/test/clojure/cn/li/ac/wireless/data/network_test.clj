@@ -3,11 +3,12 @@
             [cn.li.ac.test.support.wireless-stubs :as stubs]
             [cn.li.ac.wireless.core.vblock :as vb]
             [cn.li.ac.wireless.data.network-state :as network-state]
-            [cn.li.ac.wireless.data.network-membership :as network-membership]
+            [cn.li.ac.wireless.service.commands :as commands]
             [cn.li.ac.wireless.data.network-validation :as network-validation]
             [cn.li.ac.wireless.data.network-runtime :as network-runtime]
             [cn.li.ac.wireless.data.world-registry :as world-registry]
             [cn.li.ac.wireless.config :as ncfg]
+            [cn.li.ac.wireless.data.network-lookup :as lookup]
             [cn.li.ac.wireless.data.world :as wdata]))
 
 (defn- test-world
@@ -28,17 +29,17 @@
   (let [wd {:world :w :net-lookup (atom {}) :spatial-index (atom {})}
         matrix {:x 0 :y 0 :z 0}
         network (network-state/create-wireless-net wd matrix "ssid" "pw")]
-    (network-state/update-nodes! network conj :node-a :node-b)
-    (is (= {:matrix matrix
-            :ssid "ssid"
-            :password "pw"
-            :nodes [:node-a :node-b]
-            :load 2
-            :disposed? false}
-           (network-state/snapshot network)))
-    (is (true? (network-state/active? network)))
-    (network-state/mark-disposed! network)
-    (is (false? (network-state/active? network)))))
+    (let [network (network-state/update-nodes! network conj :node-a :node-b)]
+      (is (= {:matrix matrix
+              :ssid "ssid"
+              :password "pw"
+              :nodes [:node-a :node-b]
+              :load 2
+              :disposed? false}
+             (network-state/snapshot network)))
+      (is (true? (network-state/active? network)))
+      (let [network (network-state/mark-disposed! network)]
+        (is (false? (network-state/active? network)))))))
 
 (deftest add-node-password-and-capacity-and-range-gates-test
   (let [w (test-world :w-net)
@@ -49,13 +50,14 @@
         far-node (vb/create-vnode 100 0 0)]
     (stubs/with-tile-world tiles
       (fn []
-        (is (true? (wdata/create-network-impl! wd matrix-vb "myssid" "secret")))
-        (let [net (wdata/get-network-by-ssid wd "myssid")]
-          (is (false? (network-membership/add-node! net near-node "wrong")))
-          (is (true? (network-membership/add-node! net near-node "secret")))
-          (is (false? (network-membership/add-node! net (vb/create-vnode 6 0 0) "secret")))
-          (is (false? (network-membership/add-node! net far-node "secret")))
-          (is (= net (get (world-registry/net-lookup wd) near-node))))))))
+        (is (true? (commands/create-network! wd matrix-vb "myssid" "secret")))
+        (let [net (lookup/get-network-by-ssid wd "myssid")]
+          (is (false? (commands/link-node-to-network! wd net near-node "wrong")))
+          (is (true? (commands/link-node-to-network! wd net near-node "secret")))
+          (is (false? (commands/link-node-to-network! wd net (vb/create-vnode 6 0 0) "secret")))
+          (is (false? (commands/link-node-to-network! wd net far-node "secret")))
+          (is (identical? (lookup/get-network-by-ssid wd "myssid")
+                          (get (world-registry/net-lookup wd) near-node))))))))
 
 (deftest remove-node-cleans-up-indexes-test
   (let [w (test-world :w-net2)
@@ -66,12 +68,12 @@
         node-vb (vb/create-vnode 3 0 0)]
     (stubs/with-tile-world tiles
       (fn []
-        (is (true? (wdata/create-network-impl! wd matrix-vb "n2" "p")))
-        (let [net (wdata/get-network-by-ssid wd "n2")]
-          (is (true? (network-membership/add-node! net node-vb "p")))
+        (is (true? (commands/create-network! wd matrix-vb "n2" "p")))
+        (let [net (lookup/get-network-by-ssid wd "n2")]
+          (is (true? (commands/link-node-to-network! wd net node-vb "p")))
           (is (some? (get (world-registry/net-lookup wd) node-vb)))
-          (network-membership/remove-node! net node-vb)
-              (is (empty? (network-state/get-nodes net)))
+          (commands/unlink-node-from-network! net node-vb)
+          (is (empty? (network-state/get-nodes (lookup/get-network-by-ssid wd "n2"))))
           (is (nil? (get (world-registry/net-lookup wd) node-vb))))))))
 
 (deftest validate-disposes-when-matrix-destroyed-test
@@ -81,12 +83,13 @@
         matrix-vb (vb/create-vmatrix 0 0 0)]
     (stubs/with-tile-world tiles
       (fn []
-        (is (true? (wdata/create-network-impl! wd matrix-vb "n3" "p")))
-        (let [net (wdata/get-network-by-ssid wd "n3")]
+        (is (true? (commands/create-network! wd matrix-vb "n3" "p")))
+        (let [net (lookup/get-network-by-ssid wd "n3")]
           (is (true? (network-validation/validate! net)))
           (swap! tiles dissoc [0 0 0])
           (is (false? (network-validation/validate! net)))
-          (is (true? (network-state/is-disposed? net))))))))
+          (is (true? (network-state/is-disposed?
+                        (lookup/get-network-by-ssid wd "n3")))))))))
 
 (deftest is-in-range-without-matrix-test
   (let [wd (wdata/create-world-data (test-world :w4))
@@ -109,14 +112,16 @@
         vb2 (vb/create-vnode 4 0 0)]
     (stubs/with-tile-world tiles
       (fn []
-        (let [net (network-state/create-wireless-net wd matrix-vb "bal" "p")]
-          (is (true? (network-membership/add-node! net vb1 "p")))
-          (is (true? (network-membership/add-node! net vb2 "p")))
+        (is (true? (commands/create-network! wd matrix-vb "bal" "p")))
+        (let [net (lookup/get-network-by-ssid wd "bal")]
+          (is (true? (commands/link-node-to-network! wd net vb1 "p")))
+          (is (true? (commands/link-node-to-network! wd net vb2 "p")))
           (with-redefs [ncfg/update-interval-ticks (constantly 1)
                         ncfg/buffer-max (constantly 1.0e6)
                         shuffle identity]
-            (network-runtime/tick-wireless-net! net))
-          (let [e1 (.getEnergy n1)
+            (network-runtime/tick-wireless-net! (lookup/get-network-by-ssid wd "bal")))
+          (let [net (lookup/get-network-by-ssid wd "bal")
+                e1 (.getEnergy n1)
                 e2 (.getEnergy n2)
                 buf (network-state/get-buffer net)]
             (is (< (Math/abs (- e1 e2)) 5.0)
@@ -137,15 +142,17 @@
         large-vb (vb/create-vnode 4 0 0)]
     (stubs/with-tile-world tiles
       (fn []
-        (let [net (network-state/create-wireless-net wd matrix-vb "bal-cap" "p")]
-          (is (true? (network-membership/add-node! net small-vb "p")))
-          (is (true? (network-membership/add-node! net large-vb "p")))
+        (is (true? (commands/create-network! wd matrix-vb "bal-cap" "p")))
+        (let [net (lookup/get-network-by-ssid wd "bal-cap")]
+          (is (true? (commands/link-node-to-network! wd net small-vb "p")))
+          (is (true? (commands/link-node-to-network! wd net large-vb "p")))
           (with-redefs [ncfg/update-interval-ticks (constantly 1)
                         ncfg/buffer-max (constantly 1.0e6)
                         shuffle identity]
             (dotimes [_ 2]
-              (network-runtime/tick-wireless-net! net)))
-          (let [e-small (.getEnergy small)
+              (network-runtime/tick-wireless-net! (lookup/get-network-by-ssid wd "bal-cap"))))
+          (let [net (lookup/get-network-by-ssid wd "bal-cap")
+                e-small (.getEnergy small)
                 e-large (.getEnergy large)
                 buf (network-state/get-buffer net)
                 percent (/ 1000.0 1100.0)

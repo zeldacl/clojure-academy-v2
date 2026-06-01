@@ -1,6 +1,6 @@
 (ns cn.li.ac.wireless.data.node-conn
   "Node Connection management
-  
+
   Manages connections between a node and generators/receivers:
   - Generator energy collection
   - Receiver energy distribution
@@ -9,37 +9,52 @@
   (:require [clojure.string :as str]
             [cn.li.ac.wireless.core.vblock :as vb]
             [cn.li.ac.wireless.core.capability-resolver :as resolver]
+            [cn.li.ac.wireless.data.entity-commit :as entity-commit]
             [cn.li.ac.wireless.data.vblock-codec :as vblock-codec]
             [cn.li.ac.wireless.data.world-registry :as world-registry]
+            [cn.li.ac.wireless.domain.topology :as topology]
+            [cn.li.ac.wireless.domain.transfer :as transfer]
+            [cn.li.ac.wireless.runtime.effects :as effects]
             [cn.li.mcmod.platform.nbt :as nbt]
-            [cn.li.mcmod.util.log :as log]))
+            [cn.li.mcmod.util.log :as log])
+  (:import [cn.li.acapi.wireless
+            IWirelessGenerator
+            IWirelessNode
+            IWirelessReceiver]))
 
 ;; ============================================================================
 ;; NodeConn Record
 ;; ============================================================================
 
 (defrecord NodeConn
-  [world-data         ; WiWorldData - parent world data
-   node               ; VBlock - center node
-  state])            ; atom<{:receivers :generators :disposed}>
+  [world-data
+   node
+   state])
 
-;; ============================================================================
-;; Factory
-;; ============================================================================
+(defn- default-state
+  []
+  {:receivers []
+   :generators []
+   :disposed false})
 
 (defn create-node-conn
   "Create a new node connection"
   [world-data node-vblock]
-  (->NodeConn
-    world-data
-    node-vblock
-    (atom {:receivers []
-           :generators []
-           :disposed false})))
+  (->NodeConn world-data node-vblock (default-state)))
 
 ;; ============================================================================
 ;; Accessors
 ;; ============================================================================
+
+(defn- state-value [conn key] (get (:state conn) key))
+
+(defn- with-state [conn state] (assoc conn :state state))
+
+(defn- update-state [conn f] (with-state conn (f (:state conn))))
+
+(defn- commit!
+  [conn updated]
+  (entity-commit/commit-connection! (:world-data conn) conn updated))
 
 (defn get-node
   "Get the node TileEntity"
@@ -47,30 +62,30 @@
   (resolver/resolve-node-cap (:world (:world-data conn)) (:node conn)))
 
 (defn get-receivers [conn]
-  (vec (:receivers @(:state conn))))
+  (vec (or (state-value conn :receivers) [])))
 
 (defn get-generators [conn]
-  (vec (:generators @(:state conn))))
+  (vec (or (state-value conn :generators) [])))
 
 (defn is-disposed? [conn]
-  (boolean (:disposed @(:state conn))))
+  (boolean (state-value conn :disposed)))
 
 (defn set-disposed!
   [conn value]
-  (swap! (:state conn) assoc :disposed (boolean value))
-  (boolean value))
+  (let [updated (update-state conn #(assoc % :disposed (boolean value)))]
+    (commit! conn updated)))
 
 (defn get-load
   "Get total load (receivers + generators)"
   [conn]
-    (+ (count (get-receivers conn))
-      (count (get-generators conn))))
+  (+ (count (get-receivers conn))
+     (count (get-generators conn))))
 
 (defn get-capacity
   "Get node capacity"
   [conn]
   (if-let [node (get-node conn)]
-    (.getCapacity ^ cn.li.acapi.wireless.IWirelessNode node)
+    (.getCapacity ^IWirelessNode node)
     Integer/MAX_VALUE))
 
 (declare remove-receiver! remove-generator!)
@@ -88,7 +103,7 @@
   "Check if vblock is within node range"
   [conn vblock]
   (if-let [node (get-node conn)]
-    (let [range (.getRange ^ cn.li.acapi.wireless.IWirelessNode node)
+    (let [range (.getRange ^IWirelessNode node)
           dist-sq (vb/dist-sq vblock (:node conn))]
       (<= dist-sq (* range range)))
     false))
@@ -97,8 +112,7 @@
 ;; Device Management (Unified)
 ;; ============================================================================
 
-(defn- capacity-available?
-  [conn]
+(defn- capacity-available? [conn]
   (< (get-load conn) (get-capacity conn)))
 
 (defn- resolve-device-context
@@ -122,37 +136,59 @@
   (world-registry/transact!
     (:world-data conn)
     (fn [_]
-      (swap! (:state conn) update device-key conj device-vb)
-      (world-registry/update-state-value! (:world-data conn) :node-lookup assoc device-vb conn)
-      (log/info (format "Added %s %s to node %s"
-                        device-name
-                        (vb/vblock-to-string device-vb)
-                        (vb/vblock-to-string (:node conn))))
-      true)))
+      (let [world-data (:world-data conn)
+            conn (entity-commit/resolve-connection world-data conn)
+            conn* (update-state conn #(update % device-key conj device-vb))]
+        (entity-commit/replace-connection-in-state! world-data conn conn*)
+        (world-registry/update-state!
+          world-data
+          (fn [state]
+            (-> state
+                (topology/link-connection-device conn* device-vb)
+                (assoc-in [:node-lookup (:node conn*)] conn*))))
+        (log/info (format "Added %s %s to node %s"
+                          device-name
+                          (vb/vblock-to-string device-vb)
+                          (vb/vblock-to-string (:node conn*))))
+        true))))
 
 (defn- remove-device!
   [conn device-vb device-key device-name]
-  (world-registry/transact!
-    (:world-data conn)
-    (fn [_]
-      (let [devices (get @(:state conn) device-key)
+  (let [world-data (:world-data conn)
+        conn (entity-commit/resolve-connection world-data conn)]
+    (world-registry/transact!
+      world-data
+      (fn [_]
+        (let [conn (entity-commit/resolve-connection world-data conn)
+              devices (state-value conn device-key)
             removed? (boolean (some #(vb/vblock-equals? % device-vb) devices))]
         (when removed?
-          (swap! (:state conn) update device-key
-                 (fn [items]
-                   (filterv #(not (vb/vblock-equals? % device-vb)) items)))
-          (world-registry/update-state-value! (:world-data conn) :node-lookup dissoc device-vb)
-          (log/info (format "Removed %s %s from node %s"
-                            device-name
-                            (vb/vblock-to-string device-vb)
-                            (vb/vblock-to-string (:node conn)))))
-        removed?))))
+          (let [conn* (update-state
+                        conn
+                        (fn [state]
+                          (update state device-key
+                                  (fn [items]
+                                    (filterv #(not (vb/vblock-equals? % device-vb)) items)))))]
+            (entity-commit/replace-connection-in-state! world-data conn conn*)
+            (world-registry/update-state!
+              world-data
+              (fn [state]
+                (-> state
+                    (topology/unlink-connection-device device-vb)
+                    (assoc-in [:node-lookup (:node conn*)] conn*))))
+            (log/info (format "Removed %s %s from node %s"
+                              device-name
+                              (vb/vblock-to-string device-vb)
+                              (vb/vblock-to-string (:node conn))))
+            true))
+        removed?)))))
 
 (defn- add-device!
   "Generic function to add a device (receiver or generator) to node connection
   Returns true if successful"
   [conn device-vb device-type]
-  (let [{:keys [device-key remove-fn device-name]} (resolve-device-context conn device-type)]
+  (let [conn (entity-commit/resolve-connection (:world-data conn) conn)
+        {:keys [device-key remove-fn device-name]} (resolve-device-context conn device-type)]
     (cond
       (not (capacity-available? conn))
       (do
@@ -207,16 +243,18 @@
   "Validate connection integrity
   Returns true if valid, false if should be disposed"
   [conn]
-  (let [world (:world (:world-data conn))
-        node-vb (:node conn)]
-    (when (and (not (is-disposed? conn))
-               (vb/is-chunk-loaded? node-vb world))
-      (let [node-exists? (some? (vb/vblock-get node-vb world))
-            empty? (and (zero? (count (get-generators conn)))
-                        (zero? (count (get-receivers conn))))]
-        (when (or (not node-exists?)
-                  empty?)
-          (set-disposed! conn true))))
+  (let [conn (entity-commit/resolve-connection (:world-data conn) conn)
+        world (:world (:world-data conn))
+        node-vb (:node conn)
+        conn (if (and (not (is-disposed? conn))
+                      (vb/is-chunk-loaded? node-vb world))
+               (let [node-exists? (some? (vb/vblock-get node-vb world))
+                     empty? (and (zero? (count (get-generators conn)))
+                                 (zero? (count (get-receivers conn))))]
+                 (if (or (not node-exists?) empty?)
+                   (set-disposed! conn true)
+                   conn))
+               conn)]
     (not (is-disposed? conn))))
 
 ;; ============================================================================
@@ -232,37 +270,29 @@
         (let [world (:world (:world-data conn))
               generators-shuffled (shuffle generators)]
           (loop [gens-remaining generators-shuffled
-                 transfer-left bandwidth]
-            (when (and (seq gens-remaining) (> transfer-left 0))
+                 transfer-left (double bandwidth)]
+            (when (and (seq gens-remaining) (pos? transfer-left))
               (let [gen-vb (first gens-remaining)]
                 (if (vb/is-chunk-loaded? gen-vb world)
-                  (if-let [gen (resolver/resolve-generator-cap world gen-vb)]
-                    (let [gen-cap ^cn.li.acapi.wireless.IWirelessGenerator gen
-                          ;; Match AC NodeConn semantics:
-                          ;; request by node transfer-left, generator bandwidth, and node free space.
-                          node-max (.getMaxEnergy ^cn.li.acapi.wireless.IWirelessNode node)
-                          node-current (.getEnergy ^cn.li.acapi.wireless.IWirelessNode node)
-                          node-space (- node-max node-current)
-                          required (min transfer-left
-                                        (double (.getGeneratorBandwidth gen-cap))
-                                        node-space)
-                          provided (double (.getProvidedEnergy gen-cap required))
-                          actual-transfer (if (> provided required)
-                                            (do
-                                              (log/warn "Energy input overflow for generator" (str gen-cap)
-                                                        "provided=" provided "required=" required)
-                                              required)
-                                            provided)]
-                      (.setEnergy ^cn.li.acapi.wireless.IWirelessNode node (+ node-current actual-transfer))
+                  (if-let [gen-cap (resolver/resolve-generator-cap world gen-vb)]
+                    (let [node-max (double (.getMaxEnergy ^IWirelessNode node))
+                          node-energy (double (.getEnergy ^IWirelessNode node))
+                          gen-bandwidth (double (.getGeneratorBandwidth ^IWirelessGenerator gen-cap))
+                          node-space (- node-max node-energy)
+                          required (min transfer-left gen-bandwidth node-space)
+                          provided (double (.getProvidedEnergy ^IWirelessGenerator gen-cap required))
+                          step (transfer/collect-from-generator-step
+                                transfer-left node-energy node-max gen-bandwidth provided)]
+                      (if step
+                        (do
+                          (effects/apply-generator-collect-step!
+                            node (assoc step :provided provided) gen-cap)
+                          (recur (rest gens-remaining) (:transfer-left step)))
+                        (recur (rest gens-remaining) transfer-left)))
 
-                      (recur (rest gens-remaining)
-                             (- transfer-left actual-transfer)))
-
-                    ;; Generator destroyed
                     (do (remove-generator! conn gen-vb)
                         (recur (rest gens-remaining) transfer-left)))
 
-                  ;; Chunk not loaded
                   (recur (rest gens-remaining) transfer-left))))))))))
 
 (defn- transfer-to-receivers!
@@ -274,33 +304,25 @@
         (let [world (:world (:world-data conn))
               receivers-shuffled (shuffle receivers)]
           (loop [recs-remaining receivers-shuffled
-                 transfer-left bandwidth]
-            (when (and (seq recs-remaining) (> transfer-left 0))
+                 transfer-left (double bandwidth)]
+            (when (and (seq recs-remaining) (pos? transfer-left))
               (let [rec-vb (first recs-remaining)]
                 (if (vb/is-chunk-loaded? rec-vb world)
-                  (if-let [rec (resolver/resolve-receiver-cap world rec-vb)]
-                    (let [rec-cap ^cn.li.acapi.wireless.IWirelessReceiver rec
-                          ;; Match AC NodeConn semantics:
-                          ;; bounded by node energy, node transfer-left, receiver bandwidth and requirement.
-                          node-current (.getEnergy ^cn.li.acapi.wireless.IWirelessNode node)
-                          give0 (min node-current
-                                     transfer-left
-                                     (double (.getReceiverBandwidth rec-cap)))
-                          give (min give0 (double (.getRequiredEnergy rec-cap)))
-                          leftover (double (.injectEnergy rec-cap give))
-                          actual-transfer (- give leftover)]
+                  (if-let [rec-cap (resolver/resolve-receiver-cap world rec-vb)]
+                    (let [node-energy (double (.getEnergy ^IWirelessNode node))
+                          step (transfer/distribute-to-receiver-step
+                                transfer-left
+                                node-energy
+                                (double (.getReceiverBandwidth ^IWirelessReceiver rec-cap))
+                                (double (.getRequiredEnergy ^IWirelessReceiver rec-cap)))]
+                      (if step
+                        (let [actual (effects/apply-receiver-distribute-step! node step rec-cap)]
+                          (recur (rest recs-remaining) (- transfer-left actual)))
+                        (recur (rest recs-remaining) transfer-left)))
 
-                      ;; Update node energy
-                      (.setEnergy ^cn.li.acapi.wireless.IWirelessNode node (- node-current actual-transfer))
-
-                      (recur (rest recs-remaining)
-                             (- transfer-left actual-transfer)))
-
-                    ;; Receiver destroyed
                     (do (remove-receiver! conn rec-vb)
                         (recur (rest recs-remaining) transfer-left)))
 
-                  ;; Chunk not loaded
                   (recur (rest recs-remaining) transfer-left))))))))))
 
 ;; ============================================================================
@@ -310,19 +332,17 @@
 (defn tick-node-conn!
   "Tick the node connection"
   [conn]
-  (when-not (is-disposed? conn)
-    ;; Validate
-    (when (validate! conn)
-      (let [world (:world (:world-data conn))
-            node-vb (:node conn)]
-        (when (vb/is-chunk-loaded? node-vb world)
-          (when-let [node (resolver/resolve-node-cap world node-vb)]
-            (let [bandwidth (.getBandwidth ^ cn.li.acapi.wireless.IWirelessNode node)]
-              ;; Collect from generators
-              (transfer-from-generators! conn node bandwidth)
-              
-              ;; Distribute to receivers
-                (transfer-to-receivers! conn node bandwidth))))))))
+  (let [conn (entity-commit/resolve-connection (:world-data conn) conn)]
+    (when-not (is-disposed? conn)
+      (when (validate! conn)
+        (let [conn (entity-commit/resolve-connection (:world-data conn) conn)
+              world (:world (:world-data conn))
+              node-vb (:node conn)]
+          (when (vb/is-chunk-loaded? node-vb world)
+            (when-let [node (resolver/resolve-node-cap world node-vb)]
+              (let [bandwidth (.getBandwidth ^IWirelessNode node)]
+                (transfer-from-generators! conn node bandwidth)
+                (transfer-to-receivers! conn node bandwidth)))))))))
 
 ;; ============================================================================
 ;; Disposal
@@ -370,10 +390,9 @@
         receivers (vec (for [i (range receivers-size)]
                          (vb/vblock-from-nbt (nbt/nbt-list-get-compound receivers-list i))))
         generators (vec (for [i (range generators-size)]
-                          (vb/vblock-from-nbt (nbt/nbt-list-get-compound generators-list i))))
-        conn (create-node-conn world-data node-vb)]
-      (swap! (:state conn) assoc :receivers receivers :generators generators)
-    conn))
+                          (vb/vblock-from-nbt (nbt/nbt-list-get-compound generators-list i))))]
+    (-> (create-node-conn world-data node-vb)
+        (assoc :state {:receivers receivers :generators generators :disposed false}))))
 
 ;; ============================================================================
 ;; Debug
@@ -388,9 +407,3 @@
   (log/info (format "  Receivers: %d" (count (get-receivers conn))))
   (log/info (format "  Disposed: %s" (is-disposed? conn))))
 
-;; ============================================================================
-;; Initialization
-;; ============================================================================
-
-(defn init-node-connection! []
-  (log/info "Node connection system initialized"))

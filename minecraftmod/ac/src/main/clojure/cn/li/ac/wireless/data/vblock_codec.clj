@@ -8,10 +8,21 @@
   (:require [cn.li.ac.foundation.vblock :as foundation-vb]
             [cn.li.mcmod.platform.nbt :as nbt]))
 
+(defn- normalize-vblock
+  [vblock]
+  (if (record? vblock)
+    {:x (:x vblock)
+     :y (:y vblock)
+     :z (:z vblock)
+     :block-type (:block-type vblock)
+     :ignore-chunk (:ignore-chunk vblock)}
+    vblock))
+
 (defn vblock-to-nbt
   "Serialize a vblock-like map to an NBT compound."
   [vblock]
-  (let [compound (nbt/create-nbt-compound)]
+  (let [vblock (normalize-vblock vblock)
+        compound (nbt/create-nbt-compound)]
     (nbt/nbt-set-int! compound "x" (:x vblock))
     (nbt/nbt-set-int! compound "y" (:y vblock))
     (nbt/nbt-set-int! compound "z" (:z vblock))

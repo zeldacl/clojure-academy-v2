@@ -6,7 +6,7 @@
 						[cn.li.ac.block.cat-engine.config :as cat-config]
 						[cn.li.ac.block.cat-engine.schema :as cat-schema]
 						[cn.li.ac.wireless.api :as wireless-api]
-						[cn.li.ac.wireless.service.node-connection :as node-connection]
+						[cn.li.ac.wireless.data.node-conn :as node-conn]
 						[cn.li.mcmod.util.log :as log])
 	(:import [cn.li.acapi.wireless IWirelessNode]))
 
@@ -23,7 +23,7 @@
 
 (defn get-linked-node ^IWirelessNode [be]
 	(when-let [conn (try (wireless-api/get-node-conn-by-generator be) (catch Exception _ nil))]
-		(try (node-connection/get-node conn) (catch Exception _ nil))))
+		(try (node-conn/get-node conn) (catch Exception _ nil))))
 
 (defn sync-link-state [be state]
 	(if-let [node (get-linked-node be)]

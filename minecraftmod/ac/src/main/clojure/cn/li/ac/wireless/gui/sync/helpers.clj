@@ -8,7 +8,7 @@
             [cn.li.ac.wireless.core.vblock :as vb]
             [cn.li.ac.wireless.core.capability-resolver :as resolver]
             [cn.li.ac.wireless.data.network-state :as network-state]
-            [cn.li.ac.wireless.service.world-registry :as world-registry]
+            [cn.li.ac.wireless.api :as wireless-api]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.be :as platform-be]
@@ -328,8 +328,7 @@
           world (platform-be/be-get-level tile)
           block-pos (pos/position-get-block-pos tile)
           node-vblock (vb/create-vnode (pos/pos-x block-pos) (pos/pos-y block-pos) (pos/pos-z block-pos))
-          world-data  (world-registry/get-world-data world)
-          network     (world-registry/get-network-by-node world-data node-vblock)]
+          network (wireless-api/get-wireless-net-by-node tile)]
       (if network
         (do
           (reset! (:capacity container) (network-state/get-load network))
@@ -363,8 +362,7 @@
           world (platform-be/be-get-level tile)
           block-pos (pos/position-get-block-pos tile)
           matrix-vblock (vb/create-vmatrix (pos/pos-x block-pos) (pos/pos-y block-pos) (pos/pos-z block-pos))
-          world-data    (world-registry/get-world-data world)
-          network       (world-registry/get-network-by-matrix world-data matrix-vblock)
+          network (wireless-api/get-wireless-net-by-matrix tile)
           stats-cap     (long (or (:capacity stats) 0))]
       (if network
         (do

@@ -28,10 +28,8 @@ foundation → domain/model → data/repository/persistence → service/applicat
 
 | 兼容入口 | 新职责位置 | 说明 |
 |----------|------------|------|
-| `cn.li.ac.wireless.api` | `cn.li.ac.wireless.service.query-service`、`network-command`、事件发射 | API 保留查询/拓扑入口，查询算法已下沉 service。 |
-| `cn.li.ac.wireless.data.world` | `cn.li.ac.wireless.data.*`、`service.world-registry` | world 数据所有权保留 data，service 只提供薄边界。 |
-| `cn.li.ac.wireless.data.world-topology` | `data.topology-index`、`service.topology-service` | 旧拓扑 namespace 只做代理。 |
-| `cn.li.ac.wireless.service.network-command` | `service.topology-service` | 命令 facade 保持旧函数名。 |
+| `cn.li.ac.wireless.api` | `service.commands`、`service.queries`、事件发射 | 对外唯一入口；不再经过已删除的 command/query facade。 |
+| `cn.li.ac.wireless.data.world` | `data.world-registry`、`data.persistence`、生命周期 | world 数据所有权在 data；拓扑命令在 `service.commands`。 |
 | `cn.li.ac.wireless.core.vblock` | `data.vblock-codec`、`core.vblock-resolver` | runtime record 兼容保留，NBT codec 与 world resolver 分离。 |
 | `cn.li.ac.block.wireless-node.logic` | `state`、`inventory`、`tick`、`capability` | 旧 logic 仅保留 facade 和方块事件 handler。 |
 | `cn.li.ac.energy.api.impl` | `service.provider-registry`、`service.subscription`、`service.transfer-executor` | 协议实现瘦身为适配层。 |
@@ -43,10 +41,10 @@ foundation → domain/model → data/repository/persistence → service/applicat
 
 - VBlock NBT 编解码：`cn.li.ac.wireless.data.vblock-codec`。
 - VBlock → world/tile/capability runtime lookup：`cn.li.ac.wireless.core.vblock-resolver`。
-- 查询算法：`cn.li.ac.wireless.service.query-service`。
-- 拓扑索引增删改查：`cn.li.ac.wireless.data.topology-index`。
-- 拓扑业务命令：`cn.li.ac.wireless.service.topology-service`。
-- 旧 namespace 只添加 delegation，不再新增大段实现。
+- 查询：`cn.li.ac.wireless.service.queries`（只读，tile → vblock → lookup）。
+- 拓扑命令：`cn.li.ac.wireless.service.commands`（`transact!` + `entity-commit`）。
+- 纯拓扑状态变换：`cn.li.ac.wireless.domain.topology`。
+- 能量计划与副作用：`domain.transfer`、`runtime.effects`。
 
 ### Wireless Node Block
 

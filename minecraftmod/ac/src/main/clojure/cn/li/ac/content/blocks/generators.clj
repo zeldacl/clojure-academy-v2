@@ -1,7 +1,6 @@
 (ns cn.li.ac.content.blocks.generators
   "Content entrypoint for energy generator blocks"
   (:require [cn.li.ac.content.block-loader-core :as block-loader]
-            [cn.li.ac.wireless.shared.message-registry :as msg-reg]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]))
 
 (def ^:private generator-block-spec
@@ -19,8 +18,7 @@
                    cn.li.ac.block.wind-gen.gui/init-wind-gen-gui!
                    cn.li.ac.block.phase-gen.block/init-phase-gen!
                    cn.li.ac.block.phase-gen.gui/init-phase-gen-gui!
-                   cn.li.ac.block.cat-engine.block/init-cat-engine!]
-   :post-init-entries [msg-reg/register-all!]})
+                   cn.li.ac.block.cat-engine.block/init-cat-engine!]})
 
 (defonce-guard generator-blocks-installed?)
 

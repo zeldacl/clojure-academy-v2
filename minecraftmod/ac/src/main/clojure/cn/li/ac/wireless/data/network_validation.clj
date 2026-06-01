@@ -10,12 +10,15 @@
 	Returns true if valid, false if should be disposed."
 	[network]
 	(let [world (:world (:world-data network))
-				matrix-vb (:matrix network)]
-		(when (vb/is-chunk-loaded? matrix-vb world)
-			(when-not (resolver/resolve-matrix-cap world matrix-vb)
-				(net-state/mark-disposed! network)
-				(log/info (format "Network '%s' disposed: matrix destroyed" (net-state/get-ssid network)))))
-		(net-state/active? network)))
+	      matrix-vb (:matrix network)
+	      network (if (and (vb/is-chunk-loaded? matrix-vb world)
+	                       (not (resolver/resolve-matrix-cap world matrix-vb)))
+	                (do
+	                  (log/info (format "Network '%s' disposed: matrix destroyed"
+	                                    (net-state/get-ssid network)))
+	                  (net-state/mark-disposed! network))
+	                network)]
+	  (net-state/active? network)))
 
 (defn is-in-range?
 	"Check if coordinates are in network range."

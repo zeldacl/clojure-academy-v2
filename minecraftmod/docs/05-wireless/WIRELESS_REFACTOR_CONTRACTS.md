@@ -7,8 +7,15 @@ This document defines the current wireless runtime contracts. The old split API/
 ## 1. Public API Contract
 
 - Public wireless queries and commands enter through `cn.li.ac.wireless.api`.
-- GUI/block code should consume snapshots or API return values, not mutable `WirelessNet`/`NodeConn` atoms directly.
-- Commands should call the service/topology functions behind the API instead of rebuilding indexes by hand.
+- GUI/block code should consume snapshots or API return values, not mutable entity internals directly.
+- Writes go through `cn.li.ac.wireless.service.commands`; reads go through `cn.li.ac.wireless.service.queries`.
+- There is no parallel `topology-service`, `topology-index`, `network-membership`, or `query-service` layer.
+
+## 1a. Runtime shape
+
+- Domain: `wireless.domain.model` (capacity/range helpers), `wireless.domain.topology` (pure world-state transitions), `wireless.domain.transfer` (energy plans).
+- Commit: `wireless.data.world-registry/transact!` plus `wireless.data.entity-commit` for network/connection record replacement.
+- Effects: `wireless.runtime.effects` for capability energy IO only.
 
 ## 2. Capability Boundary
 

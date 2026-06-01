@@ -4,11 +4,13 @@
             [cn.li.ac.integration.block.energy-converter.config :as converter-config]
             [cn.li.ac.test.support.wireless-stubs :as stubs]
             [cn.li.ac.wireless.core.vblock :as vb]
-            [cn.li.ac.wireless.data.network-membership :as network-membership]
+            [cn.li.ac.wireless.service.commands :as commands]
             [cn.li.ac.wireless.data.network-state :as network-state]
             [cn.li.ac.wireless.data.network-runtime :as network-runtime]
             [cn.li.ac.wireless.config :as network-config]
+            [cn.li.ac.wireless.data.network-lookup :as lookup]
             [cn.li.ac.wireless.data.world :as wdata]
+            [cn.li.ac.wireless.service.commands :as commands]
             [cn.li.mcmod.platform.be :as platform-be]))
 
 (defn- test-world
@@ -45,13 +47,13 @@
                        [5 0 0] (stubs/mutable-node {:energy 100.0 :max-energy 1000.0 :bandwidth 1.0e6})})]
       (stubs/with-tile-world tiles
         (fn []
-          (is (true? (wdata/create-network-impl! wd matrix-vb "contract-net" "pw")))
-          (let [net (wdata/get-network-by-ssid wd "contract-net")
+          (is (true? (commands/create-network! wd matrix-vb "contract-net" "pw")))
+          (let [net (lookup/get-network-by-ssid wd "contract-net")
                 node-a (get @tiles [3 0 0])
                 node-b (get @tiles [5 0 0])]
-            (is (false? (network-membership/add-node! net node-a-vb "wrong")))
-            (is (true? (network-membership/add-node! net node-a-vb "pw")))
-            (is (true? (network-membership/add-node! net node-b-vb "pw")))
+            (is (false? (commands/link-node-to-network! wd net node-a-vb "wrong")))
+            (is (true? (commands/link-node-to-network! wd net node-a-vb "pw")))
+            (is (true? (commands/link-node-to-network! wd net node-b-vb "pw")))
             (with-redefs [network-config/update-interval-ticks (constantly 1)
                           network-config/buffer-max (constantly 1.0e6)
                           shuffle identity]
@@ -90,10 +92,10 @@
                        [100 0 0] (stubs/mutable-node {:energy 30.0 :max-energy 100.0})})]
       (stubs/with-tile-world tiles
         (fn []
-          (is (true? (wdata/create-network-impl! wd matrix-vb "cap-net" "pw")))
-          (let [net (wdata/get-network-by-ssid wd "cap-net")]
-            (is (true? (network-membership/add-node! net near-a "pw")))
-            (is (false? (network-membership/add-node! net near-b "pw")))
-            (network-membership/remove-node! net near-a)
-            (is (false? (network-membership/add-node! net far-node "pw")))
-            (is (true? (network-membership/add-node! net near-b "pw")))))))))
+          (is (true? (commands/create-network! wd matrix-vb "cap-net" "pw")))
+          (let [net (lookup/get-network-by-ssid wd "cap-net")]
+            (is (true? (commands/link-node-to-network! wd net near-a "pw")))
+            (is (false? (commands/link-node-to-network! wd net near-b "pw")))
+            (commands/unlink-node-from-network! net near-a)
+            (is (false? (commands/link-node-to-network! wd net far-node "pw")))
+            (is (true? (commands/link-node-to-network! wd net near-b "pw")))))))))

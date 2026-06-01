@@ -70,15 +70,11 @@
     (is (= 0.0 (op/pull-from-receiver :x 3.0)))))
 
 (deftest wireless-stub-fallback-test
-  (testing "get-wireless-network uses stub on helper exception"
+  (testing "get-wireless-network returns nil on helper exception"
     (with-redefs [wireless-api/get-wireless-net-by-node (fn [_] (throw (ex-info "no" {})))]
       (let [n (op/get-wireless-network :node "secret")]
-        (is (map? n))
-        (is (= "Network-secret" (:ssid n)))
-        (is (= "secret" (:password n))))))
-  (testing "is-node-connected? true on non-empty password when helper throws"
+        (is (nil? n)))))
+  (testing "is-node-connected? returns false when helper throws"
     (with-redefs [wireless-api/is-node-linked? (fn [_] (throw (ex-info "no" {})))]
-      (is (true? (op/is-node-connected? :n "pw")))
-      (is (false? (op/is-node-connected? :n "")))))
-  (testing "transfer-energy-wireless returns simulated loss"
-    (is (= 1.0 (op/transfer-energy-wireless :net :a :b 10.0)))))
+      (is (false? (op/is-node-connected? :n "pw")))
+      (is (false? (op/is-node-connected? :n ""))))))

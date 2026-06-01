@@ -6,12 +6,13 @@
 
 ## 模块边界
 
-- `cn.li.ac.wireless.api`：对外查询和命令门面。
-- `cn.li.ac.wireless.core.capability-resolver`：从 tile/VBlock 解析 `IWireless*` capability。
-- `cn.li.ac.wireless.core.vblock`：无线 runtime 的 Minecraft/NBT 位置边界，纯位置逻辑复用 `cn.li.ac.foundation.vblock`。
-- `cn.li.ac.wireless.data.*`：世界状态、网络状态、拓扑索引、NodeConn、持久化和 tick 逻辑。
-- `cn.li.ac.wireless.config`：所有无线配置描述符和 getter。
-- `ac/block/wireless_*` 与 GUI sync：只做 block/GUI 接入，通过 API、resolver 和 snapshot 边界访问无线状态。
+- `cn.li.ac.wireless.api`：对外唯一入口（查询/命令/事件）。
+- `cn.li.ac.wireless.service.commands` / `service.queries`：应用层读写，分别调用 `domain.*` 与 `world-registry/transact!`。
+- `cn.li.ac.wireless.domain.topology` / `domain.transfer`：纯状态变换与能量计划。
+- `cn.li.ac.wireless.runtime.effects`：capability 能量 IO 副作用边界。
+- `cn.li.ac.wireless.data.world`：仅负责世界生命周期与 NBT 集成；不再代理拓扑命令或 lookup。
+- `cn.li.ac.wireless.data.world-registry`：唯一可变提交点；`network-lookup` / `spatial-lookup` 为只读索引访问。
+- `ac/block/wireless_*` 与 GUI：通过 `wireless.api` 访问，不直接调用已删除的 facade namespace。
 
 ## 运行时流程
 

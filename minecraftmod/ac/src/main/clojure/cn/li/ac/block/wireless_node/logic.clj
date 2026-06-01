@@ -15,8 +15,7 @@
             [cn.li.ac.block.wireless-node.state :as node-state]
             [cn.li.ac.block.wireless-node.tick :as node-tick]
             [cn.li.ac.wireless.core.vblock :as vb]
-            [cn.li.ac.wireless.data.network-membership :as network-membership]
-            [cn.li.ac.wireless.service.world-registry :as world-registry]
+            [cn.li.ac.wireless.api :as wireless-api]
             [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.platform.position :as ppos]
             [cn.li.mcmod.platform.world :as platform-world]
@@ -91,8 +90,7 @@
                                              :node-type   node-type
                                              :placer-name player-name))))
       (try
-        (let [wd (world-registry/get-world-data world)]
-          (world-registry/add-to-spatial-index! wd node-vb))
+        (wireless-api/register-node-spatial! world node-vb)
         (catch Exception _))
       (log/info "Node placed by" player-name "at" pos))))
 
@@ -107,10 +105,9 @@
           (doseq [item (:inventory state [])]
             (when item (log/info "Dropping item:" item)))))
       (try
-        (when-let [wd (world-registry/get-world-data-non-create world)]
-          (world-registry/remove-from-spatial-index! wd node-vb)
-          (when-let [net (world-registry/get-network-by-node wd node-vb)]
-            (network-membership/remove-node! net node-vb))
-          (when-let [conn (world-registry/get-node-connection wd node-vb)]
-            (world-registry/destroy-node-connection-impl! wd conn)))
+        (do
+          (wireless-api/unregister-node-spatial! world node-vb)
+          (when be
+            (wireless-api/unlink-node-from-network! be)
+            (wireless-api/destroy-node-connection-for-node! be)))
         (catch Exception _)))))
