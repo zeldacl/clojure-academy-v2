@@ -6,7 +6,7 @@
 
 - 让 `mc-1.20.1` 承担 **Minecraft API 相关且 loader-agnostic** 的 GUI 核心。
 - 让 `forge-1.20.1` / `fabric-1.20.1` 只保留 loader 生命周期、注册、网络与平台桥接壳。
-- 用统一 adapter 入口 `cn.li.mcmod.gui.adapter` 连接平台与业务实现。
+- 平台菜单桥接直接 require `cn.li.mcmod.gui.adapter.platform-registry`；AC 通过 `cn.li.ac.gui.platform-adapter/install-into-mcmod!` 注入回调。
 
 ## 分层职责
 
@@ -59,7 +59,7 @@
 
 ## 统一入口
 
-- 平台 GUI 代码统一依赖：`cn.li.mcmod.gui.adapter`
+- 平台 GUI 代码统一依赖：`cn.li.mcmod.gui.adapter.platform-registry` 与 `cn.li.mcmod.gui.registry`
 - 避免直接在平台层混用旧 `ac.*` GUI facade 命名空间
 
 ## 初始化顺序原则（不要强行统一）

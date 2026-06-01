@@ -7,7 +7,7 @@
   Platform-specific screen_impl.clj files should delegate to this factory
   and only handle platform-specific registration mechanics."
   (:require [cn.li.mcmod.gui.registry :as gui-registry]
-            [cn.li.mcmod.gui.registry-core :as gui-core]
+            [cn.li.mcmod.gui.container-state :as container-state]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.util.log :as log]))
 
@@ -17,13 +17,13 @@
 
 (defn- resolve-clj-container
   [gui-type gui-id minecraft-menu]
-  (or (gui-core/resolve-container-for-menu minecraft-menu)
+  (or (container-state/resolve-container-for-menu minecraft-menu)
       (throw (ex-info "No Clojure container registered for screen creation"
                       {:gui-type gui-type
                        :gui-id gui-id
                        :menu-type (some-> minecraft-menu type str)
                        :menu-container-id (try
-                                            (gui-core/get-menu-container-id minecraft-menu)
+                                            (container-state/get-menu-container-id minecraft-menu)
                                             (catch Exception _ nil))}))))
 
 (defn create-screen

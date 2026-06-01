@@ -16,7 +16,7 @@
 
 ## 二、Clojure 移植架构
 
-- **复用**：`mcmod` 中 `cn.li.mcmod.gui.xml-parser`、`cn.li.mcmod.gui.dsl` 的 `defgui-from-xml`；直方图/属性/按钮创建模式与 Node GUI 一致。
+- **复用**：`mcmod` 中 `cn.li.mcmod.gui.xml-parser`（`read-xml` / `get-widget`）与 `cn.li.ac.gui.tech-ui-common`；直方图/属性/按钮创建模式与 Node GUI 一致。
 - **Matrix 特有**：实现位于 **`ac`**（如 `cn.li.ac.block.wireless-matrix.*` 下的 gui / 网络处理）；历史文件名 `matrix_gui_xml.clj` 等若已合并，以仓库内实际路径为准。
 - **布局**：XML 定义 4 插槽、容量直方图、属性与网络信息/初始化表单；路径以当前项目 `my_mod` 资源为准，不写 academy 目录。
 

@@ -64,7 +64,7 @@ flowchart LR
 
 ## 二、平台中立化重构摘要
 
-- **GUI**：`cn.li.mcmod.gui.dsl`、容器 schema、元数据；Forge 侧完成 MenuType/Screen 注册与桥接。
+- **GUI**：`cn.li.mcmod.gui.registry` / `spec`、容器 schema；Forge 侧完成 MenuType/Screen 注册（`mc1201.runtime.spi.gui-registry`）。
 - **注册**：`cn.li.mcmod.protocol.metadata`、事件元数据；方块/物品由 DSL 与元数据驱动。
 - **事件**：`cn.li.mcmod.events.*`；从 DSL 的 `:on-right-click` 等同步到处理器。
 - **能量**：物品/节点等充放电统一走 **`cn.li.ac.energy.operations`**。

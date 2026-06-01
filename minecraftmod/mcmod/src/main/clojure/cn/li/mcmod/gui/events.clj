@@ -1,6 +1,51 @@
 (ns cn.li.mcmod.gui.events
-  "LambdaLib2 GuiEventBus wrapper - Event handling DSL"
-  (:require [cn.li.mcmod.gui.cgui-events :as cgui-events]))
+  "Widget event registration DSL and runtime event primitives."
+  (:require [clojure.string :as str]))
+
+;; ============================================================================
+;; Event primitives
+;; ============================================================================
+
+(defn listen-widget-event!
+  [widget event-klass-or-key handler]
+  (let [event-key (if (keyword? event-klass-or-key)
+                    event-klass-or-key
+                    (keyword (str/lower-case (str event-klass-or-key))))]
+    (swap! (:events widget) update event-key (fnil conj []) handler)
+    widget))
+
+(defn unlisten-widget-event!
+  [widget event-klass-or-key]
+  (let [event-key (if (keyword? event-klass-or-key)
+                    event-klass-or-key
+                    (keyword (str/lower-case (str event-klass-or-key))))]
+    (swap! (:events widget) dissoc event-key)
+    widget))
+
+(defn clear-widget-events!
+  [widget]
+  (reset! (:events widget) {})
+  widget)
+
+(defn emit-widget-event!
+  [widget event-key event]
+  (doseq [handler (get @(:events widget) event-key)]
+    (handler event))
+  event)
+
+(defn stop-event-propagation!
+  [event]
+  (if (map? event)
+    (assoc event :canceled? true)
+    event))
+
+(defn event-canceled?
+  [event]
+  (boolean (and (map? event) (:canceled? event))))
+
+(defn get-widget-event-handlers
+  [widget event-key]
+  (get @(:events widget) event-key []))
 
 ;; ============================================================================
 ;; Event Listener Registration
@@ -21,7 +66,7 @@
     (fn [event]
       (println \"Clicked at\" (.x event) (.y event))))"
   [widget event-class handler]
-  (cgui-events/listen-widget-event! widget event-class handler)
+  (listen-widget-event! widget event-class handler)
   widget)
 
 (defn unlisten!
@@ -31,10 +76,10 @@
   - widget: Widget instance
   - event-class: Event class to remove (optional, removes all if nil)"
   ([widget]
-   (cgui-events/clear-widget-events! widget)
+   (clear-widget-events! widget)
    widget)
   ([widget event-class]
-   (cgui-events/unlisten-widget-event! widget event-class)
+   (unlisten-widget-event! widget event-class)
    widget))
 
 ;; ============================================================================
@@ -211,7 +256,7 @@
 (defn stop-propagation!
   "Stop event from propagating to parent widgets"
   [event]
-  (cgui-events/stop-event-propagation! event))
+  (stop-event-propagation! event))
 
 (defn event-pos
   "Extract [x y] position from mouse event"

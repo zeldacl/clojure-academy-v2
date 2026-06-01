@@ -6,7 +6,7 @@
 	round-trip this generic state through AC.
 
 	Runtime state is owned by an explicit container-state runtime component. In
-	production that component is installed by `cn.li.mcmod.gui.handler`; tests may
+	production that component is installed at load time; tests may
 	bind a fresh runtime explicitly via `call-with-container-state-runtime`."
 	(:require [cn.li.mcmod.platform.entity :as entity]
 						[cn.li.mcmod.util.log :as log]))
@@ -40,20 +40,19 @@
 																{:runtime runtime})))]
 		(binding [*container-state-runtime* runtime]
 			(f))))
-(defn- installed-runtime
+
+(defonce ^:private installed-container-state-runtime
+	(create-container-state-runtime))
+
+(defn installed-runtime
+	"Return the production container-state runtime installed at load time."
 	[]
-	(if-let [f (requiring-resolve 'cn.li.mcmod.gui.handler/get-container-state-runtime)]
-		(let [runtime (f)]
-			(if (container-state-runtime? runtime)
-				runtime
-				(throw (ex-info "Installed GUI container runtime is invalid"
-												{:runtime runtime}))))
-		(throw (ex-info "GUI container runtime provider is unavailable" {}))))
+	installed-container-state-runtime)
 
 (defn- current-runtime
 	[]
 	(or *container-state-runtime*
-			(installed-runtime)))
+			installed-container-state-runtime))
 
 (defn- state-atom
 	[]
@@ -125,15 +124,17 @@
 	(or (:owner container)
 			(select-keys container [:server-session-id :client-session-id :session-id :player-uuid :player])))
 
-(defn- legacy-container-entry
-	[container-id]
-	(throw (ex-info "GUI container id lookup requires explicit owner"
-									{:container-id container-id})))
-
-(defn- legacy-tab-entry
-	[container-id]
-	(throw (ex-info "Tabbed GUI container id lookup requires explicit owner"
-									{:container-id container-id})))
+(defn owner-from-container
+	"Resolve an explicit owner map from a Clojure container."
+	[container]
+	(let [owner (container-owner container)
+				player (:player owner)
+				player-id (or (:player-uuid owner)
+											(:player-uuid container)
+											(some-> player player-key))]
+		(cond-> owner
+			player (assoc :player player)
+			player-id (assoc :player-uuid player-id))))
 
 (defn- remove-map-entries
 	[m pred]
@@ -246,23 +247,17 @@
 
 (defn register-active-container!
 	"Register a Clojure container as active for an explicit owner."
-	([container]
-	 (throw (ex-info "Active GUI container registration requires explicit owner"
-									 {:container container})))
-	([owner container]
-	 (let [state (update-state! register-active-container-state owner container)]
-		 (log/debug "Registered active GUI container; total=" (count (:active-containers state))))
-	 nil))
+	[owner container]
+	(let [state (update-state! register-active-container-state owner container)]
+		(log/debug "Registered active GUI container; total=" (count (:active-containers state)))
+		nil))
 
 (defn unregister-active-container!
 	"Unregister a Clojure container when its Minecraft menu is closed."
-	([container]
-	 (throw (ex-info "Active GUI container unregister requires explicit owner"
-									 {:container container})))
-	([owner container]
-	 (let [state (update-state! unregister-active-container-state owner container)]
-		 (log/debug "Unregistered active GUI container; remaining=" (count (:active-containers state))))
-	 nil))
+	[owner container]
+	(let [state (update-state! unregister-active-container-state owner container)]
+		(log/debug "Unregistered active GUI container; remaining=" (count (:active-containers state)))
+		nil))
 
 (defn list-active-containers
 	"Return active containers. Zero-arity returns a global diagnostic/tick snapshot;
@@ -337,60 +332,42 @@
 
 (defn register-container-by-id!
 	"Register a Clojure container by Minecraft containerId/window id."
-	([container-id _container]
-	 (legacy-container-entry container-id))
-	([owner container-id container]
-	 (when (some? container-id)
-		 (update-state! register-container-by-id-state owner container-id container)
-		 (log/debug "Registered GUI container by owner/id" (container-owner-key owner container-id)))
-	 nil))
+	[owner container-id container]
+	(when (some? container-id)
+		(update-state! register-container-by-id-state owner container-id container)
+		(log/debug "Registered GUI container by owner/id" (container-owner-key owner container-id)))
+	nil)
 
 (defn unregister-container-by-id!
 	"Remove containerId/window id mapping."
-	([container-id]
-	 (when (some? container-id)
-		 (legacy-container-entry container-id))
-	 nil)
-	([owner container-id]
-	 (when (some? container-id)
-		 (update-state! unregister-container-by-id-state owner container-id)
-		 (log/debug "Unregistered GUI container by owner/id" (container-owner-key owner container-id)))
-	 nil))
+	[owner container-id]
+	(when (some? container-id)
+		(update-state! unregister-container-by-id-state owner container-id)
+		(log/debug "Unregistered GUI container by owner/id" (container-owner-key owner container-id)))
+	nil)
 
 (defn get-container-by-id
 	"Get a Clojure container by Minecraft containerId/window id."
-	([container-id]
-	 (when (some? container-id)
-		 (legacy-container-entry container-id)))
-	([owner container-id]
-	 (when (some? container-id)
-		 (get-in (snapshot) [:containers-by-id (container-owner-key owner container-id)]))))
+	[owner container-id]
+	(when (some? container-id)
+		(get-in (snapshot) [:containers-by-id (container-owner-key owner container-id)])))
 
 (defn set-tab-index-by-container-id!
-	([container-id _tab-index]
-	 (when (integer? container-id)
-		 (legacy-tab-entry container-id)))
-	([owner container-id tab-index]
-	 (when (integer? container-id)
-		 (update-state! set-tab-index-state owner container-id tab-index))
-	 nil))
+	[owner container-id tab-index]
+	(when (integer? container-id)
+		(update-state! set-tab-index-state owner container-id tab-index))
+	nil)
 
 (defn get-tab-index-by-container-id
-	([container-id]
-	 (when (integer? container-id)
-		 (legacy-tab-entry container-id)))
-	([owner container-id]
-	 (when (integer? container-id)
-		 (get-in (snapshot) [:tab-index-by-container-id (container-owner-key owner container-id)]))))
+	[owner container-id]
+	(when (integer? container-id)
+		(get-in (snapshot) [:tab-index-by-container-id (container-owner-key owner container-id)])))
 
 (defn clear-tab-index-by-container-id!
-	([container-id]
-	 (when (integer? container-id)
-		 (legacy-tab-entry container-id)))
-	([owner container-id]
-	 (when (integer? container-id)
-		 (update-state! clear-tab-index-state owner container-id))
-	 nil))
+	[owner container-id]
+	(when (integer? container-id)
+		(update-state! clear-tab-index-state owner container-id))
+	nil)
 
 (defn get-menu-container-id
 	"Get a Minecraft menu/container window id via platform protocol or reflection."

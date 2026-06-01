@@ -7,7 +7,7 @@
             [cn.li.mc1201.gui.provider.common :as provider-common]
             [cn.li.mc1201.gui.registry.common :as registry-common]
             [cn.li.mcmod.gui.handler :as gui-handler]
-            [cn.li.mcmod.gui.registry-core :as gui])
+            [cn.li.mcmod.gui.registry :as gui])
   (:import [net.minecraft.world MenuProvider]
            [net.fabricmc.fabric.api.screenhandler.v1 ExtendedScreenHandlerFactory]
            [net.minecraft.network.chat Component]))

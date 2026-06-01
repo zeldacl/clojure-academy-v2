@@ -6,7 +6,7 @@
 [cn.li.mcmod.hooks.core :as runtime-hooks]
 [clojure.string :as str]
             [cn.li.mcmod.gui.cgui-core :as cgui-core]
-            [cn.li.mcmod.gui.cgui-widget-model :as cgui-model]
+            [cn.li.mcmod.gui.components :as components]
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.mcmod.gui.events :as events]
             [cn.li.mcmod.gui.xml-parser :as cgui-doc]
@@ -30,7 +30,7 @@
   (msg-registry/msg :developer action))
 
 (defn- textbox-of [widget]
-  (cgui-model/get-widget-component widget :textbox))
+  (components/get-widget-component widget :textbox))
 
 (defn- set-text-path! [root path text]
   (when-let [w (cgui-core/find-widget root path)]
@@ -39,7 +39,7 @@
 
 (defn- set-progress-path! [root path ^double v]
   (when-let [w (cgui-core/find-widget root path)]
-    (when-let [pb (cgui-model/get-widget-component w :progressbar)]
+    (when-let [pb (components/get-widget-component w :progressbar)]
       (comp/set-progress! pb v))))
 
 (defn- set-drawtexture-path! [root path texture-path]

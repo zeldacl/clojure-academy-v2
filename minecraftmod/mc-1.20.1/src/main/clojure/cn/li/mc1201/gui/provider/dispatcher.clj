@@ -2,7 +2,7 @@
   "Shared GUI provider callback dispatcher used by Forge/Fabric wrappers."
   (:require [cn.li.mc1201.gui.provider.common :as provider-common]
             [cn.li.mc1201.runtime.spi.gui-registry :as registry-api]
-            [cn.li.mcmod.gui.registry-core :as gui]
+            [cn.li.mcmod.gui.handler :as gui-handler]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.world.entity.player Player]))
 
@@ -29,7 +29,7 @@
            create-menu-proxy-fn
            log-prefix]
     :or {log-prefix "[MENU-PROVIDER]"}}]
-  (let [handler (gui/get-gui-handler)
+  (let [handler (gui-handler/get-gui-handler)
         ^Player player player
         world (.level player)
         pos (provider-common/tile->pos tile-entity player)]

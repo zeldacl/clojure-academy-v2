@@ -4,7 +4,9 @@
   Platform namespaces provide small callback/config differences (slot add callback,
   loader-specific remove semantics, player inventory mode defaults), while all menu
   proxy and slot/data-slot sync logic lives here."
-  (:require [cn.li.mcmod.gui.registry-core :as gui]
+  (:require [cn.li.mcmod.gui.registry :as gui-reg]
+            [cn.li.mcmod.gui.container-state :as cs]
+            [cn.li.mcmod.gui.adapter.platform-registry :as platform]
             [cn.li.mcmod.gui.tabbed-gui :as tabbed]
             [cn.li.mcmod.gui.container.schema :as container-schema]
             [cn.li.mc1201.gui.slots.tabbed :as tabbed-slots]
@@ -61,16 +63,16 @@
                               :or {call-super-removed? false
                                    log-message "Menu closed for player"}}]
   (let [owner (or (:owner clj-container) (owner-for-player player))
-        cid (gui/get-menu-container-id this)]
+        cid (cs/get-menu-container-id this)]
     (when cid
       (when on-container-id
         (on-container-id owner cid))
-      (gui/unregister-container-by-id! owner cid)))
-  (gui/unregister-menu-container! this)
-  (gui/safe-close! clj-container)
+      (cs/unregister-container-by-id! owner cid)))
+  (cs/unregister-menu-container! this)
+  (platform/safe-close! clj-container)
   (let [owner (or (:owner clj-container) (owner-for-player player))]
-    (gui/unregister-active-container! owner clj-container)
-    (gui/unregister-player-container! owner clj-container))
+    (cs/unregister-active-container! owner clj-container)
+    (cs/unregister-player-container! owner clj-container))
   (when call-super-removed?
     (let [^CMenuBridge s this]
       (.callSuperRemoved s player)))
@@ -89,8 +91,8 @@
       (let [payload (sync-get clj-container)]
         (when (container-schema/sync-payload-dirty? last-sent has-sent? payload)
           (container-schema/cache-sync-payload! last-sent has-sent? payload)
-          (gui/safe-sync! clj-container)))
-      (gui/safe-sync! clj-container))))
+          (platform/safe-sync! clj-container)))
+      (platform/safe-sync! clj-container))))
 
 (defn- quick-move-stack
   [this clj-container player slot-index error-prefix]
@@ -99,15 +101,15 @@
       (if (and slot (.hasItem slot))
         (let [^ItemStack stack (.getItem slot)
               moved (.copy stack)
-              gui-id (gui/get-gui-id-for-container clj-container)
+              gui-id (platform/get-gui-id-for-container clj-container)
               [tile-start tile-end] (if gui-id
-                                      (gui/get-slot-range gui-id :tile)
+                                      (gui-reg/get-slot-range gui-id :tile)
                                       [0 -1])
               [player-main-start player-main-end] (if gui-id
-                                                    (gui/get-slot-range gui-id :player-main)
+                                                    (gui-reg/get-slot-range gui-id :player-main)
                                                     [0 -1])
               [player-hotbar-start player-hotbar-end] (if gui-id
-                                                        (gui/get-slot-range gui-id :player-hotbar)
+                                                        (gui-reg/get-slot-range gui-id :player-hotbar)
                                                         [0 -1])
               player-start (if (and (<= 0 player-main-start) (<= 0 player-hotbar-start))
                              (min player-main-start player-hotbar-start)
@@ -142,10 +144,10 @@
 
 (defn- finalize-menu-registration!
   [menu window-id clj-container owner]
-  (gui/register-active-container! owner clj-container)
-  (gui/register-player-container! owner clj-container)
-  (gui/register-menu-container! menu clj-container)
-  (gui/register-container-by-id! owner window-id clj-container)
+  (cs/register-active-container! owner clj-container)
+  (cs/register-player-container! owner clj-container)
+  (cs/register-menu-container! menu clj-container)
+  (cs/register-container-by-id! owner window-id clj-container)
   menu)
 
 (defn platform-menu-proxy-opts
@@ -154,7 +156,7 @@
    (platform-menu-proxy-opts platform-key nil))
   ([platform-key opts]
    (merge
-    {:get-slot-layout gui/get-slot-layout
+    {:get-slot-layout gui-reg/get-slot-layout
      :default-player-inventory-mode :full
      :call-super-removed? false
      :remove-log-message "Menu closed for player"
@@ -189,7 +191,7 @@
                                              call-super-removed?
                                              remove-log-message
                                              quick-move-error-prefix]
-                                      :or {get-slot-layout gui/get-slot-layout
+                                      :or {get-slot-layout gui-reg/get-slot-layout
                                            default-player-inventory-mode :full
                                            call-super-removed? false
                                            remove-log-message "Menu closed for player"
@@ -200,7 +202,7 @@
                    (tabbed-slots/create-tab-data-slot clj-container))
         menu (proxy [CMenuBridge] [menu-type (int window-id)]
                (stillValid [player]
-                 (boolean (gui/safe-validate clj-container player)))
+                 (boolean (platform/safe-validate clj-container player)))
 
                (removed [player]
                  (remove-menu!

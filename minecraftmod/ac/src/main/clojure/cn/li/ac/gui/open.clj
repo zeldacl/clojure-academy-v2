@@ -6,7 +6,7 @@
   Minecraft GUI code."
   (:require [cn.li.ac.gui.manifest :as gui-manifest]
             [cn.li.mcmod.gui.handler :as gui-handler]
-            [cn.li.mcmod.gui.metadata :as gui-meta]
+            [cn.li.mcmod.gui.registry :as gui-registry]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.world :as pworld]
             [cn.li.mcmod.util.log :as log]))
@@ -42,7 +42,7 @@
 (defn open-gui-by-type
   "Build a platform-neutral GUI open result for an AC GUI type keyword."
   [player gui-type world pos]
-  (if-let [gui-id (or (gui-meta/get-gui-id-for-type gui-type)
+  (if-let [gui-id (or (gui-registry/get-gui-id-for-type gui-type)
                       (gui-manifest/gui-id-for-type gui-type))]
     (open-gui player gui-id world pos)
     (throw (ex-info "No GUI registered for GUI type"

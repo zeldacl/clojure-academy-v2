@@ -14,7 +14,7 @@
             [cn.li.mcmod.gui.tabbed-gui :as tabbed-gui]
             [cn.li.mcmod.gui.xml-parser :as cgui-doc]
             [cn.li.mcmod.util.log :as log]
-            [cn.li.ac.gui.platform-adapter :as gui]
+            [cn.li.mcmod.gui.container-state :as container-state]
             [cn.li.ac.config.modid :as modid]))
 
 ;; ============================================================================
@@ -107,7 +107,7 @@
   (let [pages (vec pages)
         container-id (or container-id
                          (when minecraft-container
-                           (gui/get-menu-container-id minecraft-container)))
+                           (container-state/get-menu-container-id minecraft-container)))
         tech (apply create-tech-ui pages)
         _ (tabbed-gui/attach-tab-sync! pages tech container container-id)
         root (:window tech)
@@ -136,7 +136,7 @@
   "Create a CGui screen container from common TechUI screen options."
   [{:keys [minecraft-container] :as opts}]
   (let [assembled (assemble-tech-ui-root
-                    (assoc opts :container-id (gui/get-menu-container-id minecraft-container)))
+                    (assoc opts :container-id (container-state/get-menu-container-id minecraft-container)))
         base (cgui-screen/create-cgui-screen-container (:root assembled) minecraft-container)]
     (assoc-tech-ui-screen-size (assoc base :current-tab-atom (:current assembled)))))
 

@@ -18,7 +18,7 @@
             [cn.li.mcmod.gui.cgui-screen :as cgui-screen]
             [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.gui.events :as events]
-            [cn.li.ac.gui.platform-adapter :as gui]
+            [cn.li.mcmod.gui.container-state :as container-state]
             [cn.li.ac.gui.manifest :as gui-manifest]
             [cn.li.mcmod.gui.tabbed-gui :as tabbed-gui]
             [cn.li.ac.gui.tech-ui-common :as tech-ui]
@@ -439,7 +439,7 @@
           _ (log/info "DEBUG: wireless-panel created, size=" (cgui-core/get-size wireless-panel) "visible=" (cgui-core/visible? wireless-panel))
           pages [inv-page {:id "wireless" :window wireless-panel}]
           _ (log/info "DEBUG: pages created, count=" (count pages))
-          container-id (when-let [m (:menu opts)] (gui/get-menu-container-id m))
+          container-id (when-let [m (:menu opts)] (container-state/get-menu-container-id m))
           ;; Compose tech UI from pages (inventory, info, wireless)
           tech-ui (apply tech-ui/create-tech-ui pages)
           _ (log/info "DEBUG: tech-ui created, window size=" (cgui-core/get-size (:window tech-ui)) "current=" @(:current tech-ui))

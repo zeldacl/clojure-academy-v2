@@ -1441,6 +1441,7 @@ tasks.register('verifyDeletedCompatibilityResidues') {
             file('ac/src/main/clojure/cn/li/ac/block/gui/registration.clj'),
             file('ac/src/main/clojure/cn/li/ac/gui/platform_adapter/metadata_api.clj'),
             file('ac/src/main/clojure/cn/li/ac/gui/platform_adapter/registry_api.clj'),
+            file('ac/src/main/clojure/cn/li/ac/wireless/gui/registry.clj'),
             file('ac/src/main/clojure/cn/li/ac/wireless/gui/protocol.clj'),
             file('ac/src/main/clojure/cn/li/ac/wireless/gui/state/sync.clj'),
             file('ac/src/main/clojure/cn/li/ac/wireless/gui/events/bus.clj'),
@@ -2333,10 +2334,11 @@ tasks.register('verifyGuiRegistrySpiSsoT') {
 
     doLast {
         def violations = []
-        def files = [
-            registryCore: file('mcmod/src/main/clojure/cn/li/mcmod/gui/registry_core.clj'),
-            dsl: file('mcmod/src/main/clojure/cn/li/mcmod/gui/dsl.clj'),
-            metadata: file('mcmod/src/main/clojure/cn/li/mcmod/gui/metadata.clj'),
+        def requiredFiles = [
+            registry: file('mcmod/src/main/clojure/cn/li/mcmod/gui/registry.clj'),
+            spec: file('mcmod/src/main/clojure/cn/li/mcmod/gui/spec.clj'),
+            handler: file('mcmod/src/main/clojure/cn/li/mcmod/gui/handler.clj'),
+            platformRegistry: file('mcmod/src/main/clojure/cn/li/mcmod/gui/adapter/platform_registry.clj'),
             providerDispatcher: file('mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/provider/dispatcher.clj'),
             screenRegistry: file('mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/screen/registry.clj'),
             acPlatformAdapter: file('ac/src/main/clojure/cn/li/ac/gui/platform_adapter.clj'),
@@ -2344,40 +2346,32 @@ tasks.register('verifyGuiRegistrySpiSsoT') {
             fabricRegistry: file('fabric-1.20.1/src/main/clojure/cn/li/fabric1201/adapter/gui_registry.clj')
         ]
 
-        files.each { name, File f ->
+        def removedNamespaces = [
+            'mcmod/src/main/clojure/cn/li/mcmod/gui/registry_core.clj',
+            'mcmod/src/main/clojure/cn/li/mcmod/gui/metadata.clj',
+            'mcmod/src/main/clojure/cn/li/mcmod/gui/dsl.clj',
+            'mcmod/src/main/clojure/cn/li/mcmod/gui/parser.clj',
+            'mcmod/src/main/clojure/cn/li/mcmod/gui/schema.clj',
+            'mcmod/src/main/clojure/cn/li/mcmod/gui/validator.clj',
+            'mcmod/src/main/clojure/cn/li/mcmod/gui/renderer.clj',
+            'mcmod/src/main/clojure/cn/li/mcmod/gui/network_codec.clj',
+            'mcmod/src/main/clojure/cn/li/mcmod/gui/cgui_events.clj',
+            'mcmod/src/main/clojure/cn/li/mcmod/gui/cgui_widget_model.clj'
+        ]
+
+        requiredFiles.each { name, File f ->
             if (!f.exists()) {
-                violations << "Required GUI SPI file missing (${name}): ${project.rootDir.toPath().relativize(f.toPath()).toString().replace('\\', '/')}"
+                violations << "Required GUI entry file missing (${name}): ${project.rootDir.toPath().relativize(f.toPath()).toString().replace('\\', '/')}"
             }
         }
 
-        if (files.registryCore.exists()) {
-            def text = files.registryCore.getText('UTF-8')
-            ['requiring-resolve', ':reload', 'metadata-call', 'resolve-var', '(defn get-menu-type', '(defn register-menu-type!'].each { token ->
-                if (text.contains(token)) {
-                    violations << "mcmod.gui.registry-core must stay a thin facade without dynamic metadata/MenuType SPI residue: ${token}"
-                }
+        removedNamespaces.each { rel ->
+            if (file(rel).exists()) {
+                violations << "Removed GUI namespace must stay deleted: ${rel}"
             }
         }
 
-        if (files.metadata.exists()) {
-            def text = files.metadata.getText('UTF-8')
-            ['platform-menu-types', '(defn register-menu-type!', '(defn get-menu-type', 'unregister-menu-types!'].each { token ->
-                if (text.contains(token)) {
-                    violations << "mcmod.gui.metadata must not own platform MenuType state: ${token}"
-                }
-            }
-        }
-
-        if (files.dsl.exists()) {
-            def text = files.dsl.getText('UTF-8')
-            ['requiring-resolve', 'defgui-with-lazy-fns', 'defgui-from-xml'].each { token ->
-                if (text.contains(token)) {
-                    violations << "mcmod.gui.dsl must not reintroduce dynamic GUI wrapper macros: ${token}"
-                }
-            }
-        }
-
-        [files.providerDispatcher, files.screenRegistry].each { File f ->
+        [requiredFiles.providerDispatcher, requiredFiles.screenRegistry].each { File f ->
             if (f.exists()) {
                 def rel = project.rootDir.toPath().relativize(f.toPath()).toString().replace('\\', '/')
                 def text = f.getText('UTF-8')
@@ -2393,8 +2387,8 @@ tasks.register('verifyGuiRegistrySpiSsoT') {
             }
         }
 
-        if (files.acPlatformAdapter.exists()) {
-            def text = files.acPlatformAdapter.getText('UTF-8')
+        if (requiredFiles.acPlatformAdapter.exists()) {
+            def text = requiredFiles.acPlatformAdapter.getText('UTF-8')
             ['metadata/get-menu-type', 'metadata/register-menu-type!', ':register-menu-type!', ':get-menu-type'].each { token ->
                 if (text.contains(token)) {
                     violations << "ac.gui.platform-adapter must not install or re-export platform MenuType callbacks: ${token}"
@@ -2402,7 +2396,7 @@ tasks.register('verifyGuiRegistrySpiSsoT') {
             }
         }
 
-        [files.forgeRegistry, files.fabricRegistry].each { File f ->
+        [requiredFiles.forgeRegistry, requiredFiles.fabricRegistry].each { File f ->
             if (f.exists()) {
                 def rel = project.rootDir.toPath().relativize(f.toPath()).toString().replace('\\', '/')
                 def text = f.getText('UTF-8')

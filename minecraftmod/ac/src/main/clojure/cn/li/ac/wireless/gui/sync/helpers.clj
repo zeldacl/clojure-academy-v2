@@ -152,7 +152,7 @@
   (try
     ;; Get the unified platform broadcast function from platform-adapter
     ;; We use dynamic require to break circular dependency
-    (when-let [get-fn (requiring-resolve 'cn.li.ac.gui.platform-adapter/get-platform-broadcast-fn)]
+    (when-let [get-fn (requiring-resolve 'cn.li.ac.gui.platform-adapter.sync-api/get-platform-broadcast-fn)]
       (when-let [broadcast-fn (get-fn)]
         (broadcast-fn world pos sync-data)))
     (catch Exception e

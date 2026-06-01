@@ -4,7 +4,7 @@
   Platform adapters should supply only registration API and optional render-tail
   callbacks (e.g. Forge event bus hooks)."
   (:require [cn.li.mc1201.gui.cgui.runtime :as cgui-rt]
-            [cn.li.mcmod.gui.registry-core :as gui]
+            [cn.li.mcmod.gui.registry :as gui-reg]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.client.gui GuiGraphics]
            [cn.li.mc1201.gui CGuiContainerScreen]))
@@ -155,7 +155,7 @@
   [gui-id menu player-inventory title factory-fn-kw {:keys [on-render-tail!]}]
   (let [factory-fn (when factory-fn-kw
                      (try
-                       (gui/get-screen-factory-fn factory-fn-kw)
+                       (gui-reg/get-screen-factory-fn factory-fn-kw)
                        (catch Exception e
                          (log/error "[SCREEN-FACTORY] Screen factory not registered for" factory-fn-kw ":" (.getMessage e))
                          nil)))]

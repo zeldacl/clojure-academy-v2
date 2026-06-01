@@ -32,13 +32,3 @@
         (tabbed/clear-tab-index-by-container-id! owner-a container-id)
         (tabbed/clear-tab-index-by-container-id! owner-b container-id)))))
 
-(deftest ownerless-tab-state-lookup-fails-fast-test
-  (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                        #"Tabbed GUI container id lookup requires explicit owner"
-                        (tabbed/set-tab-index-by-container-id! 9 1)))
-  (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                        #"Tabbed GUI container id lookup requires explicit owner"
-                        (tabbed/get-tab-index-by-container-id 9)))
-  (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                        #"Tabbed GUI container id lookup requires explicit owner"
-                        (tabbed/clear-tab-index-by-container-id! 9))))

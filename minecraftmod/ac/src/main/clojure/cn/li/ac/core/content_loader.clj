@@ -6,7 +6,7 @@
             [cn.li.ac.wireless.gui.sync.handler :as wireless-sync-handler]
             [cn.li.ac.wireless.gui.screen-factory :as screen-factory]
             [cn.li.mcmod.block.state-schema :as state-schema]
-            [cn.li.mcmod.gui.registry-core :as gui-adapter]
+            [cn.li.mcmod.gui.registry :as gui-registry]
             [cn.li.mcmod.gui.tabbed-gui :as tabbed-gui]
             [cn.li.mcmod.util.log :as log]))
 
@@ -27,14 +27,14 @@
   (platform-gui/install-into-mcmod!)
   (register-network-edit-helpers!)
   (content-ns/load-all!)
-  (let [gui-ids (gui-adapter/get-all-gui-ids)]
+  (let [gui-ids (gui-registry/get-all-gui-ids)]
     (log/info "Registering screen factories for GUI IDs:" gui-ids)
     (doseq [gui-id gui-ids]
-      (when-let [gui-type (platform-gui/get-gui-type gui-id)]
-        (let [declared-screen-fn-kw (platform-gui/get-screen-factory-fn-kw gui-id)
+      (when-let [gui-type (gui-registry/get-gui-type gui-id)]
+        (let [declared-screen-fn-kw (gui-registry/get-screen-factory-fn-kw gui-id)
               screen-fn-kw (or declared-screen-fn-kw
                                (keyword (str "create-" (name gui-type) "-screen")))]
-          (gui-adapter/register-screen-factory!
+          (gui-registry/register-screen-factory!
             screen-fn-kw
             (partial screen-factory/create-screen gui-type))
           (log/info "Registered screen factory" screen-fn-kw "for GUI ID" gui-id

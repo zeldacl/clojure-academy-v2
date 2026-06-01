@@ -66,14 +66,6 @@
       (is (nil? (state/get-container-for-menu menu)))
       (is (nil? (state/get-container-by-id owner 17))))))
 
-    (deftest ownerless-container-id-lookup-fails-fast-test
-      (is (thrown-with-msg? clojure.lang.ExceptionInfo
-            #"GUI container id lookup requires explicit owner"
-            (state/register-container-by-id! 42 {:gui-type :matrix})))
-      (is (thrown-with-msg? clojure.lang.ExceptionInfo
-            #"GUI container id lookup requires explicit owner"
-            (state/get-container-by-id 42))))
-
 (deftest same-container-id-is-isolated-by-player-owner-test
   (testing "two players may have the same Minecraft window id without overwriting each other"
     (let [p1 (FakePlatformObject. "player-1" nil)

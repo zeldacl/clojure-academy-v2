@@ -1,6 +1,6 @@
 (ns cn.li.fabric1201.adapter.gui-registry
   "Fabric 1.20.1 GUI Registration Implementation"
-  (:require [cn.li.mcmod.gui.registry-core :as gui]
+  (:require [cn.li.mcmod.gui.registry :as gui]
             [cn.li.mcmod.gui.handler :as gui-handler]
             [cn.li.mc1201.gui.menu.proxy :as menu-proxy]
             [cn.li.fabric1201.gui.provider-bridge :as provider-bridge]
@@ -45,7 +45,7 @@
       (reify net.fabricmc.fabric.api.screenhandler.v1.ScreenHandlerRegistry$ExtendedClientHandlerFactory
         (create [_ sync-id player-inventory buf]
           (let [{:keys [gui-id pos]} (registry-common/read-extended-open-payload buf)
-                handler (gui/get-gui-handler)]
+                handler (gui-handler/get-gui-handler)]
             (registry-common/create-client-menu!
               {:gui-id gui-id
                :window-id sync-id
@@ -89,7 +89,7 @@
      :list-menu-types (fn [] (gui-handler-types-snapshot))
      :invalidate-menu-registry! clear-gui-handler-types!}))
 
-(defmethod gui/register-gui-handler :fabric-1.20.1 [_]
+(defmethod gui-handler/register-gui-handler :fabric-1.20.1 [_]
   (log/info "Registering GUI handler for Fabric 1.20.1")
   (install-registry-contract!)
   (register-screen-handler-types!)
@@ -97,5 +97,5 @@
 
 (defn init! []
   (log/info "Initializing Fabric 1.20.1 GUI system")
-  (gui/register-gui-handler :fabric-1.20.1)
+  (gui-handler/register-gui-handler :fabric-1.20.1)
   (log/info "Fabric 1.20.1 GUI system initialized"))

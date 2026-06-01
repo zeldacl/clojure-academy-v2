@@ -10,7 +10,7 @@
 
 1. **屏幕工厂**：具体 GUI screen/container 组装集中在 **`ac`** 的业务 `gui.clj` 中，平台层只注册并调用 manifest/metadata 暴露的入口。
 2. **槽位与快速移动**：通用规则与 schema 在 **`mcmod`**（如 `cn.li.mcmod.gui.slot-schema`）；各 GUI 在 **`ac`** 的 `gui.clj` 中组合 slot layout、quick-move 与 validator，平台 menu proxy 只执行桥接。
-3. **Container 分发与 GUI 元数据**：`cn.li.mcmod.gui.metadata` 只保存平台无关 GUI metadata；平台 MenuType/ScreenHandlerType 归 `cn.li.mc1201.runtime.spi.gui-registry` 与 Forge/Fabric adapter 管理，避免 `mcmod` 和平台层双缓存。
+3. **Container 分发与 GUI 元数据**：`cn.li.mcmod.gui.registry` 为 GUI spec/metadata 单一注册表；平台 MenuType/ScreenHandlerType 归 `cn.li.mc1201.runtime.spi.gui-registry` 与 Forge/Fabric adapter 管理，避免 `mcmod` 和平台层双缓存。
 4. **注册去游戏化**：GUI 声明、manifest 与 metadata 驱动 shared dispatcher；Forge/Fabric 只保留 loader API 差异和注册胶水。
 5. **能量过滤**：与 **`cn.li.ac.energy.operations`** 对齐，供槽位 `filter` / validator 使用。
 6. **TechUI 组装统一**：简单块 GUI 的 XML page、wireless tab、tab sync、InfoArea 与 screen container 包装统一通过 **`cn.li.ac.gui.tech-ui-common`**，业务 GUI 只注入 widget 绑定和 InfoArea 内容。
@@ -22,16 +22,18 @@
 
 ### mcmod（协议与 DSL）
 
-- **`cn.li.mcmod.gui.dsl`**：`defgui`、GUI registry 与平台无关运行时 helper；旧的动态 XML/lazy wrapper API 已删除。
-- **`cn.li.mcmod.gui.metadata`**：GUI 元数据查询，不保存平台 MenuType/ScreenHandlerType。
-- **`cn.li.mcmod.gui.registry-core`**：薄 facade；只转发 metadata、container-state 与平台 callback，不做动态 metadata require。
-- **`cn.li.mcmod.gui.cgui-core` / `components` / `events` / `xml-parser`**：widget、事件与 XML model runtime；不负责 Minecraft 渲染或 loader 注册。
+- **`cn.li.mcmod.gui.registry`**：GUI spec 注册、metadata 查询与 screen factory 表。
+- **`cn.li.mcmod.gui.spec`**：`create-block-gui-spec` / `register-block-gui!` 等纯 map 规格构造。
+- **`cn.li.mcmod.gui.handler`**：`IGuiHandler` 与 `register-gui-handler` multimethod。
+- **`cn.li.mcmod.gui.adapter.platform-registry`**：AC 注入的平台容器回调（tick/sync/slot/quick-move）。
+- **`cn.li.mcmod.gui.container-state` / `tabbed-gui`**：显式 owner 的容器索引与 tab 状态。
+- **`cn.li.mcmod.gui.cgui-core` / `components` / `events` / `xml-parser`**：widget、事件与 XML runtime；不负责 Minecraft 渲染或 loader 注册。
 - **`cn.li.mcmod.gui.slot-schema` / `slot-registry`**：槽位 schema、slot layout 与快速移动配置；不直接访问 Minecraft/Forge/Fabric API。
-- **`cn.li.mcmod.gui.adapter`**：平台 multimethod 入口（如 quick-move 桥接）。
 
 ### ac（内容与 Wireless）
 
-- **`cn.li.ac.block.wireless-node.gui`** / **`cn.li.ac.block.wireless-matrix.gui`** 等：具体 `defgui`、容器与 quick-move。
+- **`cn.li.ac.block.wireless-node.gui`** / **`cn.li.ac.block.wireless-matrix.gui`** 等：块 GUI 定义（`cn.li.mcmod.gui.spec/register-block-gui!`）、容器与 quick-move。
+- **`cn.li.ac.gui.platform-adapter`**：仅在 `content_loader` 中调用 `install-into-mcmod!`，向 `platform-registry` 注册 AC 容器回调；不再 re-export mcmod registry API。
 - **`cn.li.ac.gui.tech-ui-common`**：TechUI 标准 screen builder；简单块 GUI 不直接读取 XML、不直接调用 tab sync 或 `cgui-screen/create-cgui-screen-container`。
 - **`cn.li.ac.wireless.gui.tab`**：TechUI 的 wireless tab 统一入口，调用方必须传 `:role :node/:generator/:receiver`，不再保留 `:mode` fallback 或角色 wrapper。
 - **`cn.li.ac.block.gui.sync`**：AC block GUI sync helper；schema-backed GUI 通过它构造 container sync 生命周期。

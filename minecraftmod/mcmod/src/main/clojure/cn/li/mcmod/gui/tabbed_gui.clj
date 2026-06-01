@@ -44,18 +44,6 @@
   (when player
     (some-> (entity/player-get-uuid player) str)))
 
-(defn- owner-from-container
-  [container]
-  (let [owner (or (:owner container)
-                  (select-keys container [:server-session-id :client-session-id :session-id :player-uuid :player]))
-        player (:player owner)
-        player-id (or (:player-uuid owner)
-                      (:player-uuid container)
-                      (some-> player player-key))]
-    (cond-> owner
-      player (assoc :player player)
-      player-id (assoc :player-uuid player-id))))
-
 (defn- server-owner-for-player
   [player]
   (let [runtime-owner runtime-hooks/*player-state-owner*
@@ -71,42 +59,29 @@
      :player-uuid player-id
      :player player}))
 
-(defn- legacy-tab-index
-  [container-id]
-  (throw (ex-info "Tabbed GUI container id lookup requires explicit owner"
-                  {:container-id container-id})))
-
 (defn set-tab-index-by-container-id!
-  "Set current tab index for a container id (client-side). Called from on-tab-change so menu.clicked() can block slot packets."
-  ([container-id _tab-index]
-  (legacy-tab-index container-id))
-  ([owner container-id tab-index]
-   (when (integer? container-id)
-     (container-state/set-tab-index-by-container-id! owner container-id tab-index))))
+  "Set current tab index for a container id (client-side)."
+  [owner container-id tab-index]
+  (when (integer? container-id)
+    (container-state/set-tab-index-by-container-id! owner container-id tab-index)))
 
 (defn get-tab-index-by-container-id
   "Get tab index for container id, or nil if not set."
-  ([container-id]
-   (when (integer? container-id)
-     (legacy-tab-index container-id)))
-  ([owner container-id]
-   (when (integer? container-id)
-     (container-state/get-tab-index-by-container-id owner container-id))))
+  [owner container-id]
+  (when (integer? container-id)
+    (container-state/get-tab-index-by-container-id owner container-id)))
 
 (defn clear-tab-index-by-container-id!
   "Clear tab state when menu is closed."
-  ([container-id]
-   (when (integer? container-id)
-     (legacy-tab-index container-id)))
-  ([owner container-id]
-   (when (integer? container-id)
-     (container-state/clear-tab-index-by-container-id! owner container-id))))
+  [owner container-id]
+  (when (integer? container-id)
+    (container-state/clear-tab-index-by-container-id! owner container-id)))
 
 (defn slots-active-for-menu?
   "True when slot clicks should be allowed for this menu. Prefers client-set tab by container id, else container :tab-index."
   [menu container]
   (let [cid (when menu (container-state/get-menu-container-id menu))
-      owner (owner-from-container container)
+      owner (container-state/owner-from-container container)
       tid (when cid (get-tab-index-by-container-id owner cid))]
     (if (some? tid)
       (zero? (int tid))
@@ -157,7 +132,7 @@
         menu (get-player-menu player)
         menu-container (when menu (container-state/get-container-for-menu menu))
         owner (if menu-container
-                (owner-from-container menu-container)
+                (container-state/owner-from-container menu-container)
                 (server-owner-for-player player))
         container (or menu-container
                       (when (and menu (container-state/get-menu-container-id menu))
@@ -202,7 +177,7 @@
    container-id: optional integer id from `gui/get-menu-container-id`"
   [pages tech-ui container container-id]
     (let [current-atom (:current tech-ui)
-      owner (owner-from-container container)]
+      owner (container-state/owner-from-container container)]
     (when (some? current-atom)
       (add-watch current-atom :tab-sync
         (fn [_ _ _ new-id]

@@ -3,8 +3,8 @@
    Screens are top-level UI containers with focus tracking and event routing.
    Focus management emits gain-focus/lost-focus events for widget lifecycle."
   (:require [cn.li.mcmod.gui.cgui-core :as cgui-core]
-            [cn.li.mcmod.gui.cgui-widget-model :as model]
-            [cn.li.mcmod.gui.cgui-events :as cgui-events]))
+            [cn.li.mcmod.gui.components :as components]
+            [cn.li.mcmod.gui.events :as events]))
 
 ;; ============================================================================
 ;; CGUI Creation & Root Management
@@ -59,11 +59,11 @@
         (let [old @a]
           (when (and old (not= old widget))
             (swap! (:metadata old) assoc :focused? false)
-            (cgui-events/emit-widget-event! old :lost-focus {:new-focus widget}))
+            (events/emit-widget-event! old :lost-focus {:new-focus widget}))
           (reset! a widget)
           (when widget
             (swap! (:metadata widget) assoc :focused? true)
-            (cgui-events/emit-widget-event! widget :gain-focus {:old-focus old}))
+            (events/emit-widget-event! widget :gain-focus {:old-focus old}))
           widget)))))
 
 (defn remove-focus!
@@ -78,7 +78,7 @@
         (reset! a nil))
       (when old
         (swap! (:metadata old) assoc :focused? false)
-        (cgui-events/emit-widget-event! old :lost-focus {:new-focus nil}))
+        (events/emit-widget-event! old :lost-focus {:new-focus nil}))
       nil)))
 
 ;; ============================================================================
@@ -115,7 +115,7 @@
         widget-fn (if (= type :container) cgui-core/create-container cgui-core/create-widget)
         widget (widget-fn :name name :pos pos :size size :scale scale :z-level z-level)]
     (doseq [component components]
-      (model/add-widget-component! widget component))
+      (components/add-widget-component! widget component))
     (doseq [child-spec children]
       (cgui-core/add-widget! widget (build-widget-tree child-spec)))
     widget))

@@ -768,7 +768,7 @@ Block DSL 提供了多个辅助函数来生成常见的不规则形状：
 
 ### 示例：右键打开 GUI（思路说明）
 
-实际项目中，右键逻辑通常在 **`ac`** 的 **`defgui`** 与 **`cn.li.mcmod.gui.adapter`** / Forge 桥接中完成（参见 `06-gui/GUI_DSL.md` 与 `cn.li.ac.block.wireless-node.gui`）。下面仅保留 **`defblock`** 侧占位：
+实际项目中，右键逻辑通常在 **`ac`** 各块 `gui.clj`（`cn.li.mcmod.gui.spec/register-block-gui!`）与 Forge/`mc1201` 菜单桥接中完成。下面仅保留 **`defblock`** 侧占位：
 
 ```clojure
 (ns cn.li.ac.content.example-gui-block

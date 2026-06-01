@@ -2,7 +2,6 @@
   "Pure Clojure component API inspired by Java references."
   (:require [clojure.string :as str]
             [cn.li.mcmod.gui.cgui-core :as cgui-core]
-            [cn.li.mcmod.gui.cgui-widget-model :as cgui-model]
             [cn.li.mcmod.gui.events :as events]
             [cn.li.mcmod.platform.resource :as res]))
 
@@ -17,6 +16,41 @@
 
 (defn- component-kind [component]
   (or (:kind component) (::kind component) :unknown))
+
+(defn create-component-instance
+  [kind]
+  {:kind kind :state (atom {})})
+
+(defn add-widget-component!
+  [widget component]
+  (swap! (:components widget) conj component)
+  widget)
+
+(defn remove-widget-component!
+  [widget component]
+  (swap! (:components widget)
+         (fn [xs] (vec (remove #(= % component) xs))))
+  widget)
+
+(defn get-widget-component
+  [widget kind]
+  (first (filter #(= (component-kind %) kind) @(:components widget))))
+
+(defn get-widget-component-by-class
+  [widget component-class]
+  (let [s (str component-class)
+        s (if (str/starts-with? s "class ") (subs s 6) s)
+        simple (last (str/split s #"\."))
+        kind (keyword (str/lower-case (or simple "")))]
+    (get-widget-component widget kind)))
+
+(defn get-widget-components
+  [widget kind]
+  (filterv #(= (component-kind %) kind) @(:components widget)))
+
+(defn get-all-widget-components
+  [widget]
+  (vec @(:components widget)))
 
 (defn- component-state [component]
   (or (:state component) (atom {})))
@@ -37,7 +71,7 @@
                             (swap! (:state native) assoc :owner-widget widget)
                             native)
                           native)]
-    (cgui-model/add-widget-component! widget comp-with-owner)
+    (add-widget-component! widget comp-with-owner)
     ;; component lifecycle hook: call :on-added if provided on native component
     (when (and (map? comp-with-owner) (fn? (:on-added comp-with-owner)))
       ((:on-added comp-with-owner) widget comp-with-owner))
@@ -46,7 +80,7 @@
 (defn remove-component!
   "Remove a component from widget"
   [widget component]
-  (cgui-model/remove-widget-component! widget component)
+  (remove-widget-component! widget component)
   ;; component lifecycle hook: call :on-removed if provided on component
   (when (and (map? component) (fn? (:on-removed component)))
     ((:on-removed component) widget component))
@@ -56,9 +90,9 @@
   "Get component of specific type from widget (keyword or class-like value)."
   [widget component-class]
   (if (keyword? component-class)
-    (cgui-model/get-widget-component widget component-class)
+    (get-widget-component widget component-class)
     (let [kind (-> (str component-class) str/lower-case keyword)]
-      (cgui-model/get-widget-component widget kind))))
+      (get-widget-component widget kind))))
 
 (defn get-textbox-component [widget]
   (get-component widget :textbox))

@@ -1,7 +1,7 @@
 (ns cn.li.ac.gui.platform-adapter.dispatcher-api
   "Dispatcher-oriented operations exposed to platform GUI bridges."
   (:require [cn.li.ac.wireless.gui.container.dispatcher :as dispatcher]
-            [cn.li.mcmod.gui.metadata :as metadata]))
+            [cn.li.mcmod.gui.registry :as gui-registry]))
 
 (def safe-tick! dispatcher/safe-tick!)
 (def safe-validate dispatcher/safe-validate)
@@ -18,18 +18,14 @@
 
 (defn- player-inventory-start-for
   [container]
-  (if-let [gui-id (some-> container dispatcher/get-container-type metadata/get-gui-id-for-type)]
-    (let [[main-start _] (or (metadata/get-slot-range gui-id :player-main) [0 -1])
-          [hotbar-start _] (or (metadata/get-slot-range gui-id :player-hotbar) [0 -1])
+  (if-let [gui-id (some-> container dispatcher/get-container-type gui-registry/get-gui-id-for-type)]
+    (let [[main-start _] (or (gui-registry/get-slot-range gui-id :player-main) [0 -1])
+          [hotbar-start _] (or (gui-registry/get-slot-range gui-id :player-hotbar) [0 -1])
           starts (filter #(and (integer? %) (<= 0 %)) [main-start hotbar-start])]
       (if (seq starts) (apply min starts) 0))
     0))
 
 (defn execute-quick-move-forge
-  "Bridge mcmod quick-move callback to AC dispatcher.
-
-  menu/slot/stack are accepted for compatibility with platform callback shape.
-  The dispatcher needs only container + slot-index + player inventory start."
   [_menu container slot-index _slot _stack]
   (let [player-inventory-start (player-inventory-start-for container)]
     (dispatcher/safe-execute-quick-move container slot-index player-inventory-start)))
@@ -37,8 +33,7 @@
 (def get-container-type dispatcher/get-container-type)
 
 (defn get-gui-id-for-container
-  "Resolve GUI ID from a container using business-layer metadata."
   [container]
   (let [container-type (dispatcher/get-container-type container)]
     (when (not= container-type :unknown)
-      (metadata/get-gui-id-for-type container-type))))
+      (gui-registry/get-gui-id-for-type container-type))))

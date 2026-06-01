@@ -1,6 +1,7 @@
 (ns cn.li.mc1201.gui.slots.sync
   "Shared slot/data-slot setup logic for menu bridges."
-  (:require [cn.li.mcmod.gui.registry-core :as gui]
+  (:require [cn.li.mcmod.gui.registry :as gui-reg]
+            [cn.li.mcmod.gui.adapter.platform-registry :as platform]
             [cn.li.mcmod.gui.tabbed-gui :as tabbed]
             [cn.li.mc1201.gui.menu.container :as ca]
             [cn.li.mc1201.gui.slots.common :as slots-common])
@@ -17,9 +18,9 @@
 
 (defn setup-menu-slots!
   [^CMenuBridge menu clj-container tab-slot {:keys [get-slot-layout default-player-inventory-mode]
-                                             :or {get-slot-layout gui/get-slot-layout
+                                             :or {get-slot-layout gui-reg/get-slot-layout
                                                   default-player-inventory-mode :full}}]
-  (let [gui-id (gui/get-gui-id-for-container clj-container)
+  (let [gui-id (platform/get-gui-id-for-container clj-container)
         ^ServerPlayer player (:player clj-container)
         player-inventory (when player (.getInventory player))
         slot-layout (when gui-id (get-slot-layout gui-id))

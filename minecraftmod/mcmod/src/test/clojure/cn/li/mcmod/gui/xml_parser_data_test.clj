@@ -60,12 +60,10 @@
            (parser/parse-draw-texture (elem :Component []))))
     (is (= "button" (:id (parser/parse-button (elem :Button [])))))
     (is (= 0x404040 (:color (parser/parse-label (elem :Label [])))))
-    (is (= [] (:states (parser/parse-animation (elem :Animation [])))))
-    (is (= "assets/my_mod/gui/layouts/page.xml"
-           (parser/resolve-gui-layout-path "page")))))
+    (is (= [] (:states (parser/parse-animation (elem :Animation [])))))))
 
 (deftest xml-widget-contract-test
-  (testing "parse-widget and xml-to-dsl-spec collect nested controls recursively"
+  (testing "parse-widget collects nested controls recursively"
     (let [root {:tag :Widget
                 :attrs {:name "main"}
                 :content [{:tag :Component
@@ -73,7 +71,7 @@
                            :content [(elem :width ["188"]) (elem :height ["166"])]}
                           {:tag :Component
                            :attrs {:class "DrawTexture"}
-                          :content [(elem :texture ["my_mod:gui/bg"])]}
+                           :content [(elem :texture ["my_mod:gui/bg"])]}
                           {:tag :Slot :content [(elem :index ["0"]) (elem :x ["1"]) (elem :y ["2"])]}
                           {:tag :Button :attrs {:name "b0"} :content [(elem :x ["5"]) (elem :y ["6"])]}
                           {:tag :Label :content [(elem :text ["hello"])]}
@@ -82,15 +80,15 @@
                            :content [{:tag :Slot :content [(elem :index ["1"]) (elem :x ["3"]) (elem :y ["4"])]}
                                      {:tag :Button :attrs {:name "b1"} :content []}
                                      {:tag :Label :content [(elem :text ["world"])]}]}]}
-          tree (parser/parse-widget root)
-          spec (parser/xml-to-dsl-spec tree "gui-id")]
+          tree (parser/parse-widget root)]
       (is (= "main" (:name tree)))
       (is (= 1 (count (:children tree))))
-      (is (= 2 (count (get-in spec [:layout :slots]))))
-      (is (= 2 (count (get-in spec [:layout :buttons]))))
-      (is (= 2 (count (get-in spec [:layout :labels]))))
-      (is (= "gui-id" (:id spec)))
-      (is (= 188.0 (get-in spec [:layout :width])))
-      (is (= 166.0 (get-in spec [:layout :height])))
-      (is (= "my_mod:gui/bg" (get-in spec [:layout :background])))
-      (is (map? (:widget-tree spec))))))
+      (is (= 1 (count (:slots tree))))
+      (is (= 1 (count (:buttons tree))))
+      (is (= 1 (count (:labels tree))))
+      (let [child (first (:children tree))]
+        (is (= 1 (count (:slots child))))
+        (is (= 1 (count (:buttons child))))
+        (is (= 1 (count (:labels child)))))
+      (is (= 188.0 (:width (:transform tree))))
+      (is (= "my_mod:gui/bg" (:texture (:texture tree)))))))

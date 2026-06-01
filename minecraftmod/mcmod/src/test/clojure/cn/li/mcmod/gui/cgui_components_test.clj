@@ -1,7 +1,7 @@
 (ns cn.li.mcmod.gui.cgui-components-test
   (:require [clojure.test :refer [deftest is]]
             [cn.li.mcmod.gui.cgui-core :as cgui-core]
-            [cn.li.mcmod.gui.cgui-events :as cgui-events]
+            [cn.li.mcmod.gui.events :as events]
             [cn.li.mcmod.gui.cgui-screen :as cgui-screen]
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.mcmod.platform.resource :as res]))
@@ -12,7 +12,7 @@
         child (cgui-core/create-widget :name "inner")
         gained (atom [])]
     (cgui-screen/cgui-add-widget! cgui child)
-    (cgui-events/listen-widget-event! child :gain-focus (fn [e] (swap! gained conj e)))
+    (events/listen-widget-event! child :gain-focus (fn [e] (swap! gained conj e)))
     (cgui-screen/gain-focus! root child)
     (is (identical? child (cgui-screen/get-focus root)))
     (is (= 1 (count @gained)))

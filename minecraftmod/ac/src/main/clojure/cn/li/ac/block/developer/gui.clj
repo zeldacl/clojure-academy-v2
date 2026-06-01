@@ -8,7 +8,7 @@
             [cn.li.mcmod.gui.cgui-screen :as cgui-screen]
             [cn.li.mcmod.gui.tabbed-gui :as tabbed-gui]
             [cn.li.ac.gui.tech-ui-common :as tech-ui]
-            [cn.li.ac.gui.platform-adapter :as gui]
+            [cn.li.mcmod.gui.container-state :as container-state]
             [cn.li.ac.gui.manifest :as gui-manifest]
             [cn.li.ac.wireless.gui.tab :as wireless-tab]
             [cn.li.mcmod.util.log :as log]
@@ -119,7 +119,7 @@
           pages [inv-page
                  {:id "developer" :window classic-root}
                  {:id "wireless" :window wireless-window}]
-          container-id (when-let [m (:menu opts)] (gui/get-menu-container-id m))
+          container-id (when-let [m (:menu opts)] (container-state/get-menu-container-id m))
           ;; Do not use `apply` here: `(apply create-tech-ui [p1 p2 p3] opts-map)` treats the
           ;; map as a seq of MapEntries and breaks page maps (nil :id / :window).
           tech-ui (tech-ui/create-tech-ui pages
