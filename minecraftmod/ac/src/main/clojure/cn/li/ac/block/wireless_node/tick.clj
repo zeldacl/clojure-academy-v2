@@ -62,6 +62,7 @@
   (try
     (let [vblock      (vb/create-vnode (pos/pos-x block-pos) (pos/pos-y block-pos) (pos/pos-z block-pos))
           world-data  (world-registry/get-world-data level)
+          _           (world-registry/add-to-spatial-index! world-data vblock)
           network     (world-registry/get-network-by-node world-data vblock)
           connected?  (network-state/active? network)]
       (assoc state :enabled connected?))

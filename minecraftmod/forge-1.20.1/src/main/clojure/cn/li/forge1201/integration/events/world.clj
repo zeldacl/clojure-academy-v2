@@ -2,7 +2,8 @@
   "Forge world load/unload event handlers." 
   (:require [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.events.world-lifecycle :as world-lifecycle]
-            [cn.li.mcmod.events.world-save-cache :as world-save-cache])
+            [cn.li.mcmod.events.world-save-cache :as world-save-cache]
+            [cn.li.forge1201.integration.saveddata.world-lifecycle :as wl-saved])
   (:import [net.minecraftforge.event.level LevelEvent$Load LevelEvent$Unload LevelEvent$Save]
            [net.minecraftforge.event TickEvent$LevelTickEvent TickEvent$Phase]))
 
@@ -12,7 +13,10 @@
     (let [level (.getLevel evt)]
       (when-not (.isClientSide level)
         (log/info "World loaded, dispatching to lifecycle handlers")
-        (world-lifecycle/dispatch-world-load level (world-save-cache/consume-saved-data! level))))
+        (let [from-storage (wl-saved/load-world-lifecycle-saved-data level)
+              from-cache (world-save-cache/consume-saved-data! level)
+              saved (or from-storage from-cache)]
+          (world-lifecycle/dispatch-world-load level saved))))
     (catch Throwable t
       (log/error "Error handling world load event:" (.getMessage t))
       (.printStackTrace t))))
@@ -23,6 +27,7 @@
     (let [level (.getLevel evt)]
       (when-not (.isClientSide level)
         (let [saved (world-lifecycle/dispatch-world-save level)]
+          (wl-saved/save-world-lifecycle-saved-data! level saved)
           (world-save-cache/remember-saved-data! level saved))))
     (catch Throwable t
       (log/error "Error handling world save event:" (.getMessage t))

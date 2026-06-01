@@ -99,8 +99,8 @@
 (deftest balance-energy-moves-toward-average-test
   (let [w (test-world :w-bal)
         wd (wdata/create-world-data w)
-        n1 (stubs/mutable-node {:energy 900.0 :max-energy 1000.0})
-        n2 (stubs/mutable-node {:energy 100.0 :max-energy 1000.0})
+        n1 (stubs/mutable-node {:energy 900.0 :max-energy 1000.0 :bandwidth 1.0e6})
+        n2 (stubs/mutable-node {:energy 100.0 :max-energy 1000.0 :bandwidth 1.0e6})
         tiles (atom {[0 0 0] (stubs/fake-matrix {:bandwidth 5000.0})
                      [2 0 0] n1
                      [4 0 0] n2})
@@ -113,19 +113,22 @@
           (is (true? (network-membership/add-node! net vb1 "p")))
           (is (true? (network-membership/add-node! net vb2 "p")))
           (with-redefs [ncfg/update-interval-ticks (constantly 1)
-                        ncfg/buffer-max (constantly 1.0e6)]
-            (dotimes [_ 3]
-              (network-runtime/tick-wireless-net! net)))
+                        ncfg/buffer-max (constantly 1.0e6)
+                        shuffle identity]
+            (network-runtime/tick-wireless-net! net))
           (let [e1 (.getEnergy n1)
-                e2 (.getEnergy n2)]
-            (is (< (Math/abs (- e1 e2)) 120.0)
-                "energies should move closer after balancing")))))))
+                e2 (.getEnergy n2)
+                buf (network-state/get-buffer net)]
+            (is (< (Math/abs (- e1 e2)) 5.0)
+                "energies should converge under large bandwidth")
+            (is (< (Math/abs (- (+ e1 e2 buf) 1000.0)) 1.0e-6)
+                "node+buffer energy should be conserved")))))))
 
 (deftest balance-energy-conserves-energy-with-different-node-capacities-test
   (let [w (test-world :w-bal-capacity)
         wd (wdata/create-world-data w)
-        small (stubs/mutable-node {:energy 0.0 :max-energy 100.0})
-        large (stubs/mutable-node {:energy 1000.0 :max-energy 1000.0})
+        small (stubs/mutable-node {:energy 0.0 :max-energy 100.0 :bandwidth 1.0e6})
+        large (stubs/mutable-node {:energy 1000.0 :max-energy 1000.0 :bandwidth 1.0e6})
         tiles (atom {[0 0 0] (stubs/fake-matrix {:bandwidth 5000.0})
                      [2 0 0] small
                      [4 0 0] large})
@@ -138,8 +141,16 @@
           (is (true? (network-membership/add-node! net small-vb "p")))
           (is (true? (network-membership/add-node! net large-vb "p")))
           (with-redefs [ncfg/update-interval-ticks (constantly 1)
-                        ncfg/buffer-max (constantly 1.0e6)]
-            (network-runtime/tick-wireless-net! net))
-          (is (= 100.0 (.getEnergy small)))
-          (is (= 900.0 (.getEnergy large)))
-          (is (= 1000.0 (+ (.getEnergy small) (.getEnergy large)))))))))
+                        ncfg/buffer-max (constantly 1.0e6)
+                        shuffle identity]
+            (dotimes [_ 2]
+              (network-runtime/tick-wireless-net! net)))
+          (let [e-small (.getEnergy small)
+                e-large (.getEnergy large)
+                buf (network-state/get-buffer net)
+                percent (/ 1000.0 1100.0)
+                tgt-small (* 100.0 percent)
+                tgt-large (* 1000.0 percent)]
+            (is (< (Math/abs (- e-small tgt-small)) 1.0e-6))
+            (is (< (Math/abs (- e-large tgt-large)) 1.0e-6))
+            (is (< (Math/abs (- (+ e-small e-large buf) 1000.0)) 1.0e-6))))))))

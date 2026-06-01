@@ -57,8 +57,7 @@
   (world-registry/transact!
     world-data
     (fn [_]
-      (world-registry/update-state-value! world-data :net-lookup dissoc node-vblock)
-      (remove-from-spatial-index! world-data node-vblock))))
+      (world-registry/update-state-value! world-data :net-lookup dissoc node-vblock))))
 
 (defn unregister-network!
   [world-data net]

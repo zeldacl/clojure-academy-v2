@@ -1,81 +1,85 @@
 (ns cn.li.ac.wireless.data.network-energy-balance
-	(:require [cn.li.ac.wireless.core.capability-resolver :as resolver]
-					[cn.li.ac.wireless.data.network-state :as network-state])
+	(:require [cn.li.ac.wireless.config :as network-config]
+            [cn.li.ac.wireless.core.capability-resolver :as resolver]
+            [cn.li.ac.wireless.core.vblock :as vb]
+            [cn.li.ac.wireless.data.network-membership :as membership]
+            [cn.li.ac.wireless.data.network-state :as network-state]
+            [cn.li.mcmod.util.log :as log])
 	(:import [cn.li.acapi.wireless IWirelessMatrix IWirelessNode]))
 
-(defn- get-matrix-bandwidth
-	[network]
-	(let [world (:world (:world-data network))
-				matrix-vb (:matrix network)]
-		(if-let [matrix (resolver/resolve-matrix-cap world matrix-vb)]
-			(double (.getMatrixBandwidth ^IWirelessMatrix matrix))
-			0.0)))
+(defn- resolve-matrix
+  [network]
+  (let [world (:world (:world-data network))]
+    (resolver/resolve-matrix-cap world (:matrix network))))
 
-(defn- active-nodes
-	[network]
-	(let [world (:world (:world-data network))]
-		(->> (network-state/get-nodes network)
-				 (map (fn [node-vb]
-								(when-let [node (resolver/resolve-node-cap world node-vb)]
-									[node-vb node])))
-				 (remove nil?)
-				 vec)))
+(defn- node-entry
+  [world node-vb]
+  (when-let [node (resolver/resolve-node-cap world node-vb)]
+    {:vb node-vb
+     :node ^IWirelessNode node
+     :energy (double (.getEnergy ^IWirelessNode node))
+     :max-energy (double (.getMaxEnergy ^IWirelessNode node))
+     :bandwidth (double (.getBandwidth ^IWirelessNode node))}))
 
-(defn- water-fill-level
-	"Find a shared target level where each node is capped by its max energy."
-	[total-energy capacities]
-	(let [max-capacity (if (seq capacities)
-							 (double (reduce max capacities))
-							 0.0)]
-		(if (or (not (pos? total-energy)) (not (seq capacities)) (zero? max-capacity))
-			0.0
-			(loop [low 0.0
-					 high max-capacity
-					 remaining 64]
-				(if (zero? remaining)
-					high
-					(let [mid (/ (+ low high) 2.0)
-							filled (reduce + (map #(min (double %) mid) capacities))]
-						(if (< filled total-energy)
-							(recur mid high (dec remaining))
-							(recur low mid (dec remaining)))))))))
-
-(defn- target-energies
-	"Compute capacity-aware balancing targets while conserving total energy."
-	[energies capacities]
-	(let [safe-capacities (mapv #(max 0.0 (double %)) capacities)
-			clamped-energies (mapv (fn [energy capacity]
-										 (-> (double energy)
-											 (max 0.0)
-											 (min capacity)))
-									 energies safe-capacities)
-			total-energy (min (reduce + clamped-energies)
-							  (reduce + safe-capacities))
-			level (water-fill-level total-energy safe-capacities)]
-		(mapv #(min % level) safe-capacities)))
+(defn- collect-active-nodes!
+  "Return active node entries and cleanup destroyed nodes that are in loaded chunks."
+  [network]
+  (let [world (:world (:world-data network))
+        node-vbs (network-state/get-nodes network)]
+    (reduce
+      (fn [acc node-vb]
+        (if (vb/is-chunk-loaded? node-vb world)
+          (if-let [entry (node-entry world node-vb)]
+            (conj acc entry)
+            (do
+              (try
+                (membership/remove-node! network node-vb)
+                (catch Exception e
+                  (log/warn "Failed to unlink missing node during balance" (vb/vblock-to-string node-vb) (ex-message e))))
+              acc))
+          acc))
+      []
+      node-vbs)))
 
 (defn balance-energy!
-	"Balance energy across linked wireless nodes toward the current mean.
-	The adjustment is bandwidth-limited by matrix bandwidth per tick."
-	[network]
-	(let [pairs (active-nodes network)
-				nodes (mapv second pairs)
-				n (count nodes)]
-		(when (pos? n)
-			(let [energies (mapv (fn [^IWirelessNode node] (double (.getEnergy node))) nodes)
-					capacities (mapv (fn [^IWirelessNode node] (double (.getMaxEnergy node))) nodes)
-					targets (target-energies energies capacities)
-					total-need (reduce + (map (fn [energy target]
-													 (max 0.0 (- target energy)))
-												 energies targets))
-						max-transfer (get-matrix-bandwidth network)
-						scale (if (pos? total-need)
-										(min 1.0 (/ max-transfer total-need))
-										0.0)]
-				(doseq [[^IWirelessNode node target] (map vector nodes targets)]
-					(let [e (double (.getEnergy node))
-							delta (* (- target e) scale)
-								next-e (-> (+ e delta)
-													 (max 0.0)
-													 (min (double (.getMaxEnergy node))))]
-						(.setEnergy node next-e)))))))
+  "Balance energy across linked wireless nodes using a buffer-based model.
+  - Total transfer is limited by matrix bandwidth per balance tick.
+  - Per-node adjustment is limited by node bandwidth.
+  - Buffer is clamped to [0, buffer-max]."
+  [network]
+  (when-let [^IWirelessMatrix matrix (resolve-matrix network)]
+    (let [entries (collect-active-nodes! network)
+          entries (shuffle (filter #(pos? (:max-energy %)) entries))
+          max-sum (reduce + 0.0 (map :max-energy entries))]
+      (when (and (seq entries) (pos? max-sum))
+        (let [matrix-bandwidth (double (.getMatrixBandwidth matrix))
+              buffer-max (double (network-config/buffer-max))
+              buffer0 (double (network-state/get-buffer network))
+              buffer0 (-> buffer0 (max 0.0) (min buffer-max))]
+          (let [sum (+ (reduce + 0.0 (map :energy entries)) buffer0)
+                percent (min 1.0 (max 0.0 (/ sum max-sum)))]
+          (loop [xs entries
+                 transfer-left matrix-bandwidth
+                 buffer buffer0]
+            (if (or (empty? xs) (not (pos? transfer-left)))
+              (network-state/set-buffer! network (-> buffer (max 0.0) (min buffer-max)))
+              (let [{:keys [node energy max-energy bandwidth]} (first xs)
+                    target (* max-energy percent)
+                    delta (- target energy)
+                    bandwidth (max 0.0 bandwidth)
+                    room-in-buffer (- buffer-max buffer)]
+                (cond
+                  (and (pos? delta) (pos? buffer))
+                  (let [give (min delta bandwidth transfer-left buffer)
+                        next-energy (+ energy give)]
+                    (.setEnergy ^IWirelessNode node (min next-energy max-energy))
+                    (recur (rest xs) (- transfer-left give) (- buffer give)))
+
+                  (and (neg? delta) (pos? room-in-buffer))
+                  (let [take (min (- delta) bandwidth transfer-left room-in-buffer)
+                        next-energy (- energy take)]
+                    (.setEnergy ^IWirelessNode node (max 0.0 next-energy))
+                    (recur (rest xs) (- transfer-left take) (+ buffer take)))
+
+                  :else
+                  (recur (rest xs) transfer-left buffer)))))))))))

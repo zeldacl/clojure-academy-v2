@@ -160,11 +160,15 @@
 
   Called by platform code (forge/fabric) when world loads."
   [world saved-data]
-  (doseq [{handler :fn} (:load (world-lifecycle-state-snapshot))]
-    (try
-      (handler world saved-data)
-      (catch Throwable t
-        (report-handler-error! :load t)))))
+  (let [handlers (:load (world-lifecycle-state-snapshot))
+        handler-ids (into #{} (map :id) handlers)
+        by-id? (and (map? saved-data)
+                    (some #(contains? saved-data %) handler-ids))]
+    (doseq [{:keys [id] handler-fn :fn} handlers]
+      (try
+        (handler-fn world (if by-id? (get saved-data id) saved-data))
+        (catch Throwable t
+          (report-handler-error! :load t))))))
 
 (defn dispatch-world-unload
   "Dispatch world unload event to all registered handlers.
@@ -186,20 +190,20 @@
   Args:
     world: World instance
 
-  Returns: Map of saved data from all handlers (for persistence)
+  Returns: Map of handler-id -> saved data payload (for persistence)
 
   Called by platform code (forge/fabric) before world saves."
   [world]
   (reduce
-    (fn [acc {handler :fn}]
+    (fn [acc {:keys [id] handler-fn :fn}]
       (try
-        (if-let [data (handler world)]
-          (conj acc data)
+        (if-let [data (handler-fn world)]
+          (assoc acc id data)
           acc)
         (catch Throwable t
           (report-handler-error! :save t)
           acc)))
-    []
+    {}
             (:save (world-lifecycle-state-snapshot))))
 
 (defn dispatch-world-tick

@@ -26,8 +26,12 @@
 (def get-nearby-chunks wd/get-nearby-chunks)
 (def get-vblocks-in-chunks wd/get-vblocks-in-chunks)
 
+(def add-to-spatial-index! wd/add-to-spatial-index!)
+(def remove-from-spatial-index! wd/remove-from-spatial-index!)
+
 (def create-network-impl! wd/create-network-impl!)
 (def destroy-network-impl! wd/destroy-network-impl!)
+(def destroy-node-connection-impl! wd/destroy-node-connection-impl!)
 (def ensure-node-connection! wd/ensure-node-connection!)
 (def link-node-to-network! wd/link-node-to-network!)
 (def link-generator-to-node-connection! wd/link-generator-to-node-connection!)

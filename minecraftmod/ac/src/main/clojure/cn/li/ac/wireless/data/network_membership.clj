@@ -38,7 +38,6 @@
 						(fn [nodes]
 							(filterv #(not (vb/vblock-equals? % node-vblock)) nodes)))
 					(world-registry/update-state-value! (:world-data network) :net-lookup dissoc node-vblock)
-					(spatial/remove-from-spatial-index! (:world-data network) node-vblock)
 					(log/info (format "Removed node %s from '%s'"
 														(vb/vblock-to-string node-vblock)
 														(net-state/get-ssid network))))
@@ -59,6 +58,7 @@
 			(remove-node-from-old-network! network node-vblock)
 			(net-state/update-nodes! network conj node-vblock)
 			(world-registry/update-state-value! (:world-data network) :net-lookup assoc node-vblock network)
+			(spatial/add-to-spatial-index! (:world-data network) node-vblock)
 			(log/info (format "Added node %s to network '%s'"
 												(vb/vblock-to-string node-vblock)
 												(net-state/get-ssid network)))

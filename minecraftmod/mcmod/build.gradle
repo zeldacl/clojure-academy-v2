@@ -23,10 +23,11 @@ def mcmodTestOnlyNamespaces = (System.getProperty('mcmod.test.only') ?: '')
 
 tasks.matching { it.name == 'compileTestClojure' }.configureEach {
     if (!mcmodTestOnlyNamespaces.isEmpty()) {
-        namespaces.set(mcmodTestOnlyNamespaces)
+        def effective = (mcmodTestOnlyNamespaces + ['cn.li.mcmod.test-runner']) as Set
+        namespaces.set(effective)
         inputs.property('mcmod.test.only', mcmodTestOnlyNamespaces.join(','))
         doFirst {
-            logger.lifecycle('[mcmod:compileTestClojure] focused namespace compile active, namespaces={}', mcmodTestOnlyNamespaces.size())
+            logger.lifecycle('[mcmod:compileTestClojure] focused namespace compile active, requested={}, effective={}', mcmodTestOnlyNamespaces.size(), effective.size())
         }
     }
 }

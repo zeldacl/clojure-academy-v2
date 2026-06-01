@@ -15,6 +15,7 @@
             [cn.li.ac.wireless.data.persistence :as persistence]
             [cn.li.ac.wireless.data.world-topology :as topology]
             [cn.li.ac.wireless.data.world-runtime :as runtime]
+            [cn.li.mcmod.platform.nbt :as nbt]
             [cn.li.mcmod.events.world-lifecycle :as world-lifecycle]
             [cn.li.mcmod.util.log :as log]))
 
@@ -136,13 +137,18 @@
    (get-saved-data-world-data nil saved-data))
   ([world saved-data]
    (when saved-data
-     (let [payload (try (get-wi-nbt saved-data) (catch Exception _ nil))]
-       (if payload
-         (when world
-           (persistence/world-data-from-nbt world payload))
-         (try
-           (get-wi-data saved-data)
-           (catch Exception _ nil)))))))
+     (cond
+       (and world (satisfies? nbt/INBTCompound saved-data))
+       (persistence/world-data-from-nbt world saved-data)
+
+       (satisfies? IWiSavedData saved-data)
+       (let [payload (try (get-wi-nbt saved-data) (catch Exception _ nil))]
+         (if payload
+           (when world (persistence/world-data-from-nbt world payload))
+           (try (get-wi-data saved-data) (catch Exception _ nil))))
+
+       :else
+       nil))))
 
 (defn on-world-load
   "Called when world loads - restore from saved data."
@@ -165,7 +171,7 @@
       (network-impl-validator wi-data)
       (node-connection-impl-validator wi-data)
       (log/info "Prepared WiWorldData for save")
-      (WiSavedDataWrapper. wi-data (persistence/world-data-to-nbt wi-data)))
+      (persistence/world-data-to-nbt wi-data))
     nil))
 
 (defn on-world-tick

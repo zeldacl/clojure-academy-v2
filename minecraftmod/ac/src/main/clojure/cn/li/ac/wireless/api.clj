@@ -72,11 +72,16 @@
 	[world pos]
 	(query-service/find-available-nodes world pos))
 
+(declare destroy-network!)
+
 (defn create-network!
 	[matrix-tile ssid password]
 	(let [world (platform-be/be-get-world-safe matrix-tile)
 				world-data (world-registry/get-world-data world)
 				matrix-vb (vb/create-vmatrix matrix-tile)
+        ;; Functional parity: recreating a network on the same matrix replaces the old one.
+        _ (when-let [old (world-registry/get-network-by-matrix world-data matrix-vb)]
+            (destroy-network! matrix-tile))
 				created? (network-command/create-network! world-data matrix-vb ssid password)]
 		(when created?
 				(when-let [matrix-cap (resolver/matrix-capability matrix-tile)]
@@ -170,8 +175,18 @@
 (defn unlink-generator-from-node!
 	[gen-tile]
 	(when-let [conn (get-node-conn-by-generator gen-tile)]
-		(let [gen-vb (vb/create-vgenerator gen-tile)]
-			(network-command/unlink-generator-from-connection! conn gen-vb))))
+		(let [world (platform-be/be-get-world-safe gen-tile)
+          gen-vb (vb/create-vgenerator gen-tile)
+          removed? (network-command/unlink-generator-from-connection! conn gen-vb)]
+      (when removed?
+        (when-let [gen-cap (resolver/generator-capability gen-tile)]
+          (when-let [node-cap (resolver/resolve-node-cap world (:node conn))]
+            (platform-events/fire-event!
+              {:kind :topology/node
+               :action :generator-unlinked
+               :node ^IWirelessNode node-cap
+               :generator ^IWirelessGenerator gen-cap}))))
+      removed?)))
 
 (defn link-receiver-to-node!
 	[rec-tile node-tile password need-auth]
@@ -196,8 +211,18 @@
 (defn unlink-receiver-from-node!
 	[rec-tile]
 	(when-let [conn (get-node-conn-by-receiver rec-tile)]
-		(let [rec-vb (vb/create-vreceiver rec-tile)]
-			(network-command/unlink-receiver-from-connection! conn rec-vb))))
+		(let [world (platform-be/be-get-world-safe rec-tile)
+          rec-vb (vb/create-vreceiver rec-tile)
+          removed? (network-command/unlink-receiver-from-connection! conn rec-vb)]
+      (when removed?
+        (when-let [rec-cap (resolver/receiver-capability rec-tile)]
+          (when-let [node-cap (resolver/resolve-node-cap world (:node conn))]
+            (platform-events/fire-event!
+              {:kind :topology/node
+               :action :receiver-unlinked
+               :node ^IWirelessNode node-cap
+               :receiver ^IWirelessReceiver rec-cap}))))
+      removed?)))
 
 (defn change-network-ssid!
 	[network new-ssid]

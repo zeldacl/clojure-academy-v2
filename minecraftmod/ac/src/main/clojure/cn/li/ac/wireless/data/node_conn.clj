@@ -211,10 +211,12 @@
         node-vb (:node conn)]
     (when (and (not (is-disposed? conn))
                (vb/is-chunk-loaded? node-vb world))
-      (when (and (nil? (vb/vblock-get node-vb world))
-                 (zero? (count (get-generators conn)))
-                 (zero? (count (get-receivers conn))))
-      (set-disposed! conn true)))
+      (let [node-exists? (some? (vb/vblock-get node-vb world))
+            empty? (and (zero? (count (get-generators conn)))
+                        (zero? (count (get-receivers conn))))]
+        (when (or (not node-exists?)
+                  empty?)
+          (set-disposed! conn true))))
     (not (is-disposed? conn))))
 
 ;; ============================================================================

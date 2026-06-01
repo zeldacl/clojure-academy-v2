@@ -14,7 +14,11 @@
             [cn.li.ac.block.wireless-node.owner :as node-owner]
             [cn.li.ac.block.wireless-node.state :as node-state]
             [cn.li.ac.block.wireless-node.tick :as node-tick]
+            [cn.li.ac.wireless.core.vblock :as vb]
+            [cn.li.ac.wireless.data.network-membership :as network-membership]
+            [cn.li.ac.wireless.service.world-registry :as world-registry]
             [cn.li.mcmod.platform.be :as platform-be]
+            [cn.li.mcmod.platform.position :as ppos]
             [cn.li.mcmod.platform.world :as platform-world]
             [cn.li.mcmod.util.log :as log]))
 
@@ -79,20 +83,34 @@
     (log/info "Placing Wireless Node (" (name node-type) ")")
     (let [{:keys [player world pos]} event-data
           player-name (node-owner/player-name player)
+          node-vb      (vb/create-vnode (ppos/pos-x pos) (ppos/pos-y pos) (ppos/pos-z pos))
           be          (platform-world/world-get-tile-entity* world pos)]
       (when be
         (let [state (or (platform-be/get-custom-state be) node-state/node-default-state)]
           (platform-be/set-custom-state! be (assoc state
                                              :node-type   node-type
                                              :placer-name player-name))))
+      (try
+        (let [wd (world-registry/get-world-data world)]
+          (world-registry/add-to-spatial-index! wd node-vb))
+        (catch Exception _))
       (log/info "Node placed by" player-name "at" pos))))
 
 (defn handle-node-break [node-type]
   (fn [event-data]
     (log/info "Breaking Wireless Node (" (name node-type) ")")
     (let [{:keys [world pos]} event-data
-          be (platform-world/world-get-tile-entity* world pos)]
+          node-vb (vb/create-vnode (ppos/pos-x pos) (ppos/pos-y pos) (ppos/pos-z pos))
+          be      (platform-world/world-get-tile-entity* world pos)]
       (when be
         (let [state (or (platform-be/get-custom-state be) node-state/node-default-state)]
           (doseq [item (:inventory state [])]
-            (when item (log/info "Dropping item:" item))))))))
+            (when item (log/info "Dropping item:" item)))))
+      (try
+        (when-let [wd (world-registry/get-world-data-non-create world)]
+          (world-registry/remove-from-spatial-index! wd node-vb)
+          (when-let [net (world-registry/get-network-by-node wd node-vb)]
+            (network-membership/remove-node! net node-vb))
+          (when-let [conn (world-registry/get-node-connection wd node-vb)]
+            (world-registry/destroy-node-connection-impl! wd conn)))
+        (catch Exception _)))))

@@ -117,3 +117,32 @@
               conn2 (node-conn/node-connection-from-nbt wd nbt)]
           (is (= 1 (count (node-conn/get-generators conn2))))
           (is (= 0 (count (node-conn/get-receivers conn2)))))))))
+
+(deftest validate-disposes-empty-connection-even-when-node-exists-test
+  (let [wd (wdata/create-world-data (test-world :wc-empty-dispose))
+        node-t (stubs/mutable-node {:capacity 8 :range 10.0})
+        tiles (atom {[0 0 0] node-t})
+        node-vb (vb/create-vnode 0 0 0)
+        conn (node-conn/create-node-conn wd node-vb)]
+    (stubs/with-tile-world tiles
+      (fn []
+        ;; Functional parity expectation: empty connections should not linger.
+        (is (false? (node-conn/is-disposed? conn)))
+        (is (false? (node-conn/validate! conn)) "empty connection should be marked disposed")
+        (is (true? (node-conn/is-disposed? conn)))))))
+
+(deftest validate-disposes-when-node-is-destroyed-even-if-devices-remain-test
+  (let [wd (wdata/create-world-data (test-world :wc-node-destroy-dispose))
+        node-t (stubs/mutable-node {:capacity 8 :range 10.0})
+        gen (stubs/generator-stub {})
+        tiles (atom {[0 0 0] node-t [2 0 0] gen})
+        node-vb (vb/create-vnode 0 0 0)
+        gen-vb (vb/->VBlock 2 0 0 :generator true)
+        conn (node-conn/create-node-conn wd node-vb)]
+    (stubs/with-tile-world tiles
+      (fn []
+        (is (true? (node-conn/add-generator! conn gen-vb)))
+        ;; Node disappears while chunk is loaded.
+        (swap! tiles dissoc [0 0 0])
+        (is (false? (node-conn/validate! conn)))
+        (is (true? (node-conn/is-disposed? conn)))))))

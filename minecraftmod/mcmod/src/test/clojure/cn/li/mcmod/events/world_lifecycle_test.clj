@@ -9,9 +9,10 @@
   (clear-handlers!)
   (let [calls (atom [])]
     (lifecycle/register-world-lifecycle-handler!
-      {:on-load (fn [world data] (swap! calls conj [:load world data]))
+      {:id :t
+       :on-load (fn [world data] (swap! calls conj [:load world data]))
        :on-unload (fn [world] (swap! calls conj [:unload world]))})
-    (lifecycle/dispatch-world-load :world {:k 1})
+    (lifecycle/dispatch-world-load :world {:t {:k 1}})
     (lifecycle/dispatch-world-unload :world)
     (is (= [[:load :world {:k 1}]
             [:unload :world]]
@@ -27,10 +28,11 @@
 
 (deftest dispatch-save-collects-non-nil-results-test
   (clear-handlers!)
-  (lifecycle/register-world-lifecycle-handler! {:on-save (fn [_] nil)})
-  (lifecycle/register-world-lifecycle-handler! {:on-save (fn [_] {:a 1})})
-  (lifecycle/register-world-lifecycle-handler! {:on-save (fn [_] {:b 2})})
-  (is (= [{:a 1} {:b 2}]
+  (lifecycle/register-world-lifecycle-handler! {:id :nil :on-save (fn [_] nil)})
+  (lifecycle/register-world-lifecycle-handler! {:id :a :on-save (fn [_] {:a 1})})
+  (lifecycle/register-world-lifecycle-handler! {:id :b :on-save (fn [_] {:b 2})})
+  (is (= {:a {:a 1}
+          :b {:b 2}}
          (lifecycle/dispatch-world-save :world))))
 
 (deftest dispatch-swallows-handler-exceptions-test
@@ -39,20 +41,22 @@
   (binding [*err* (java.io.PrintWriter. (java.io.StringWriter.) true)]
     (let [seen (atom [])]
       (lifecycle/register-world-lifecycle-handler!
-        {:on-load (fn [_ _] (throw (ex-info "boom-load" {})))
+        {:id :boom
+         :on-load (fn [_ _] (throw (ex-info "boom-load" {})))
          :on-unload (fn [_] (throw (ex-info "boom-unload" {})))
          :on-save (fn [_] (throw (ex-info "boom-save" {})))
          :on-tick (fn [_] (throw (ex-info "boom-tick" {})))})
       (lifecycle/register-world-lifecycle-handler!
-        {:on-load (fn [_ _] (swap! seen conj :load-ok))
+        {:id :ok
+         :on-load (fn [_ _] (swap! seen conj :load-ok))
          :on-unload (fn [_] (swap! seen conj :unload-ok))
          :on-save (fn [_] (swap! seen conj :save-ok) {:ok true})
          :on-tick (fn [_] (swap! seen conj :tick-ok))})
       (testing "load/unload continue after faulty handlers"
-        (is (nil? (lifecycle/dispatch-world-load :w nil)))
+        (is (nil? (lifecycle/dispatch-world-load :w {:ok nil :boom nil})))
         (is (nil? (lifecycle/dispatch-world-unload :w))))
       (testing "save keeps collecting successful handlers"
-        (is (= [{:ok true}] (lifecycle/dispatch-world-save :w))))
+        (is (= {:ok {:ok true}} (lifecycle/dispatch-world-save :w))))
       (testing "tick continues after faulty handlers"
         (is (nil? (lifecycle/dispatch-world-tick :w))))
       (is (= [:load-ok :unload-ok :save-ok :tick-ok] @seen)))))
@@ -74,7 +78,7 @@
     (is (= 1 (count (:load (lifecycle/lifecycle-handlers-snapshot)))))
     (is (= 1 (count (:save (lifecycle/lifecycle-handlers-snapshot)))))
     (lifecycle/dispatch-world-load :world nil)
-    (is (= [{:saved true}] (lifecycle/dispatch-world-save :world)))
+    (is (= {:same {:saved true}} (lifecycle/dispatch-world-save :world)))
     (is (= [[:load :world nil] [:save :world]] @calls))))
 
 (deftest duplicate-handler-id-with-different-function-fails-test
@@ -127,4 +131,26 @@
       (fn []
         (lifecycle/dispatch-world-load :w-a2 nil)
         (is (= [[:a :w-a] [:b :w-b] [:a :w-a2]] @calls*))))))
+
+(deftest save-load-routes-data-by-handler-id-test
+  (clear-handlers!)
+  (let [calls (atom [])]
+    (lifecycle/register-world-lifecycle-handler!
+      {:id :a
+       :on-load (fn [world data] (swap! calls conj [:a world data]))
+       :on-save (fn [_] {:from :a})})
+    (lifecycle/register-world-lifecycle-handler!
+      {:id :b
+       :on-load (fn [world data] (swap! calls conj [:b world data]))
+       :on-save (fn [_] {:from :b})})
+
+    ;; Functional parity expectation: each handler receives only its own saved payload.
+    (let [saved (lifecycle/dispatch-world-save :world)]
+      (is (= {:a {:from :a}
+              :b {:from :b}}
+             saved))
+      (lifecycle/dispatch-world-load :world saved)
+      (is (= [[:a :world {:from :a}]
+              [:b :world {:from :b}]]
+             @calls)))))
 

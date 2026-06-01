@@ -5,6 +5,7 @@
             [cn.li.ac.test.support.wireless-stubs :as stubs]
             [cn.li.ac.wireless.core.vblock :as vb]
             [cn.li.ac.wireless.data.network-membership :as network-membership]
+            [cn.li.ac.wireless.data.network-state :as network-state]
             [cn.li.ac.wireless.data.network-runtime :as network-runtime]
             [cn.li.ac.wireless.config :as network-config]
             [cn.li.ac.wireless.data.world :as wdata]
@@ -40,8 +41,8 @@
           node-a-vb (vb/create-vnode 3 0 0)
           node-b-vb (vb/create-vnode 5 0 0)
           tiles (atom {[0 0 0] (stubs/fake-matrix {:capacity 4 :matrix-range 32.0 :bandwidth 5000.0})
-                       [3 0 0] (stubs/mutable-node {:energy 900.0 :max-energy 1000.0})
-                       [5 0 0] (stubs/mutable-node {:energy 100.0 :max-energy 1000.0})})]
+                       [3 0 0] (stubs/mutable-node {:energy 900.0 :max-energy 1000.0 :bandwidth 1.0e6})
+                       [5 0 0] (stubs/mutable-node {:energy 100.0 :max-energy 1000.0 :bandwidth 1.0e6})})]
       (stubs/with-tile-world tiles
         (fn []
           (is (true? (wdata/create-network-impl! wd matrix-vb "contract-net" "pw")))
@@ -52,10 +53,14 @@
             (is (true? (network-membership/add-node! net node-a-vb "pw")))
             (is (true? (network-membership/add-node! net node-b-vb "pw")))
             (with-redefs [network-config/update-interval-ticks (constantly 1)
-                          network-config/buffer-max (constantly 1.0e6)]
-              (dotimes [_ 3]
-              (network-runtime/tick-wireless-net! net)))
-            (is (< (Math/abs (- (.getEnergy node-a) (.getEnergy node-b))) 120.0))))))))
+                          network-config/buffer-max (constantly 1.0e6)
+                          shuffle identity]
+              (network-runtime/tick-wireless-net! net))
+            (let [ea (.getEnergy node-a)
+                  eb (.getEnergy node-b)
+                  buf (network-state/get-buffer net)]
+              (is (< (Math/abs (- ea eb)) 5.0))
+              (is (< (Math/abs (- (+ ea eb buf) 1000.0)) 1.0e-6)))))))))
 
 (deftest energy-converter-simulate-and-bounds-contract-test
   (testing "simulate mode does not mutate state and extraction is bounded"

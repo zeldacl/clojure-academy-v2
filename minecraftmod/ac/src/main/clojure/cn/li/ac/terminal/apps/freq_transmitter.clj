@@ -1,6 +1,7 @@
 (ns cn.li.ac.terminal.apps.freq-transmitter
   "Frequency Transmitter app - Manage wireless frequencies."
   (:require [cn.li.ac.terminal.app-registry :as reg]
+            [cn.li.ac.terminal.apps.freq-transmitter-state :as ft-state]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.gui.cgui-core :as cgui-core]
@@ -16,6 +17,7 @@
   "Create the frequency transmitter GUI."
   [_player]
   (let [root (cgui-core/create-widget :size [450 400])
+        state (ft-state/initial-state {:now-ms 0})
 
         ;; Background
         bg (cgui-core/create-widget :pos [0 0] :size [450 400])
@@ -29,30 +31,16 @@
 
         ;; Content
         content-y 70
-        content-lines ["Wireless Network Management"
-                      ""
-                      "What is a Frequency?"
-                      "Frequencies allow wireless devices to communicate"
-                      "on separate channels. Devices on the same frequency"
-                      "can share energy and data."
-                      ""
-                      "How to Use:"
-                      "1. Craft a Frequency Transmitter item"
-                      "2. Right-click to set a frequency"
-                      "3. Use on wireless nodes to assign frequency"
-                      "4. All nodes with same frequency connect"
-                      ""
-                      "Network Tips:"
-                      "- Use different frequencies for different systems"
-                      "- Matrix cores manage network connections"
-                      "- Nodes automatically find nearby matrices"
-                      "- Energy flows through connected networks"
-                      ""
-                      "Advanced Features:"
-                      "- Create private networks with unique frequencies"
-                      "- Share frequencies with team members"
-                      "- Monitor network energy flow"
-                      "- Optimize node placement for coverage"]
+        content-lines (concat
+                        (ft-state/intro-lines state)
+                        ["" "Current status: intro/help"
+                         "Server commands ready:"
+                         "- query-ssid"
+                         "- auth-matrix / auth-node"
+                         "- link-node / link-user"
+                         ""
+                         "Interactive CGui flow is backed by a pure"
+                         "state machine and server-side revalidation."])
 
         content-widgets (map-indexed
                          (fn [idx line]

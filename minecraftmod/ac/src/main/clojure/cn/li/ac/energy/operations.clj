@@ -123,9 +123,8 @@
   (try
     (wireless-api/get-wireless-net-by-node node)
     (catch Exception _
-      {:ssid (str "Network-" password)
-       :password password
-       :connected-nodes #{}})))
+      (log/warn "get-wireless-network failed; returning nil for safety")
+      nil)))
 
 (defn is-node-connected?
   "Check if node is connected to wireless network (delegates to wireless.helper)"
@@ -133,7 +132,8 @@
   (try
     (boolean (wireless-api/is-node-linked? node))
     (catch Exception _
-      (boolean (and password (not= "" (str password)))))))
+      (log/warn "is-node-connected? failed; returning false for safety")
+      false)))
 
 (defn transfer-energy-wireless
   "Simulate wireless transfer and return transmission loss amount.
