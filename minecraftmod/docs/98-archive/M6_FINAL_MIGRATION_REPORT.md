@@ -103,7 +103,7 @@ Full command: `.\gradlew :mcmod:compileClojure :ac:compileClojure :forge-1.20.1:
 | Sub-item | Status | Evidence |
 |----------|--------|---------|
 | M5-A: Command executor runtime dispatch | ✅ Complete | `command_executor.clj` dispatches to `power-runtime` state; `:learn-all-nodes` uses skill registry; `:list-available-nodes` shows registry + learned |
-| M5-B: MediaPlayer backend | ✅ Complete | `media_backend.clj` created; `media_player.clj` wired |
+| M5-B: MediaPlayer backend | ✅ Complete (superseded layout) | 历史：`media_backend.clj` + `media_player.clj`；现行：`cn.li.ac.terminal.client.apps.media` + `client/runtime` 播放事件，见 [TERMINAL_SYSTEM_MAINTENANCE.md](../04-systems/TERMINAL_SYSTEM_MAINTENANCE.md) |
 | M5-C: World generation audit | ✅ Complete | 4 ore types (crystal, imaginary, reso, constrained) + phase liquid pool; `forge:add_features` biome modifiers present; `minecraft:ore` configured features with vein size 12; height uniform(-64, 60) |
 | M5-D: External integrations | ✅ Functional | JEI plugin + recipe category ✅; IC2 EU↔IF bridge ✅; CraftTweaker recipe adapter ✅; ForgeEnergy bridge ✅; 4 minor TODO stubs (non-blocking) |
 

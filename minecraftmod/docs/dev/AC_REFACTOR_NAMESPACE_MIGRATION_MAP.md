@@ -1,6 +1,6 @@
 # AC Refactor Namespace Migration Map
 
-Last updated: 2026-05-13
+Last updated: 2026-06-01
 Scope: `ac` module structural refactor (wireless / ability / registry startup chain / GUI tab)
 
 ## Principles
@@ -14,15 +14,18 @@ Scope: `ac` module structural refactor (wireless / ability / registry startup ch
 
 ### `cn.li.ac.wireless.data.world`
 
-Now delegates internally to:
+**Lifecycle only** (no command/lookup passthrough):
 
-- `cn.li.ac.wireless.data.world-registry`
-- `cn.li.ac.wireless.data.spatial-lookup`
-- `cn.li.ac.wireless.data.network-lookup`
+- `get-world-data`, `init-world-data!`, `on-world-load` / `on-world-save` / `on-world-tick` / `on-world-unload`
+- Delegates persistence to `cn.li.ac.wireless.data.persistence`
 
-Compatibility:
+Callers:
 
-- Existing callers can continue to require `cn.li.ac.wireless.data.world`.
+- **Topology writes** → `cn.li.ac.wireless.api` or `cn.li.ac.wireless.service.commands`
+- **Reads** → `cn.li.ac.wireless.api` or `cn.li.ac.wireless.service.queries` → `network-lookup` / `spatial-lookup`
+- **Mutable commit** → `cn.li.ac.wireless.data.world-registry` (`transact!`) — internal to commands/runtime/persistence, not block/GUI
+
+Do **not** re-add `create-network-impl!` or other `*-impl!` aliases on `data.world`.
 
 ### Wireless topology (current)
 

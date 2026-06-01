@@ -8,7 +8,8 @@
 |------|--------|--------------|
 | 能力系统（Ability） | [ABILITY_SYSTEM_MAINTENANCE.md](ABILITY_SYSTEM_MAINTENANCE.md) | `ac/ability`、`mcmod/ability`、`forge1201/ability` |
 | UI 系统（GUI/CGUI） | [UI_SYSTEM_MAINTENANCE.md](UI_SYSTEM_MAINTENANCE.md) | `ac/gui`、`mcmod/gui`、`forge1201/gui` |
-| 无线系统（Wireless） | [WIRELESS_SYSTEM_MAINTENANCE.md](WIRELESS_SYSTEM_MAINTENANCE.md) | `ac/wireless`、`ac/terminal` |
+| 无线系统（Wireless） | [WIRELESS_SYSTEM_MAINTENANCE.md](WIRELESS_SYSTEM_MAINTENANCE.md) | `ac/wireless` |
+| 数据终端（Terminal） | [TERMINAL_SYSTEM_MAINTENANCE.md](TERMINAL_SYSTEM_MAINTENANCE.md) | `ac/terminal`、`ac/terminal/client` |
 | 能量系统（Energy） | [ENERGY_SYSTEM_MAINTENANCE.md](ENERGY_SYSTEM_MAINTENANCE.md) | `ac/energy` |
 | 网络系统（Network） | [NETWORK_SYSTEM_MAINTENANCE.md](NETWORK_SYSTEM_MAINTENANCE.md) | `mcmod/network`、`forge1201/events` |
 | 注册系统（Registry） | [REGISTRY_SYSTEM_MAINTENANCE.md](REGISTRY_SYSTEM_MAINTENANCE.md) | `mcmod/registry`、`ac/registry`、`forge1201/registry.clj` |

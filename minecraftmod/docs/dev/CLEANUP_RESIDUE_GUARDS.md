@@ -56,6 +56,12 @@ pure scan guards instead of rereading the same trees.
     `mc1201` accepts an opaque `effectId`, Forge handles only the generic
     `:mcmod/spawn-local-scripted-effect` bridge key, and AC owns BodyIntensify
     data such as `"intensify_effect"`.
+- AC data terminal must use the functional `ac/terminal` layout, not legacy SPI/bridge files.
+  - Guards: `verifyTerminalBridgeInitOrchestration`, `verifyTerminalMessageIdsStatic`
+  - Client init resolves `cn.li.ac.terminal.client.actions/install-ui-hooks!`;
+    widget factory and `create-terminal-gui` live in `terminal.client.shell`.
+  - Must stay deleted: `ac/.../terminal/client/bridge.clj`, `ac/.../terminal/registry.clj`,
+    `forge1201/client/terminal_screen_bridge.clj`, `mcmod/.../platform/terminal_ui.clj`.
 - Runtime item handling uses shared event helpers, not a thin compatibility
   adapter namespace.
   - Guard: `verifyRuntimeEventNoThinItemAdapter`

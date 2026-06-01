@@ -68,7 +68,7 @@ Status: ✅ PASS
 - ✅ `rework/page_solar.xml` - Solar system interface
 - ✅ `rework/page_windbase.xml` - Wind turbine interface  
 - ✅ `rework/pageselect.xml` - Page selection UI
-- ✅ `terminal.xml` - Terminal interface
+- ✅ `terminal.xml` - Terminal interface（现行由 `cn.li.ac.terminal.client.shell` 加载，见 [TERMINAL_SYSTEM_MAINTENANCE.md](../04-systems/TERMINAL_SYSTEM_MAINTENANCE.md)）
 - ✅ `settings.xml` - Settings panel
 - ✅ `tutorial.xml` - Tutorial interface
 - ✅ `ui_edit.xml` - UI editor

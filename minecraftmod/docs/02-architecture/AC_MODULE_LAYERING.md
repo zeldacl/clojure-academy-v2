@@ -22,14 +22,14 @@ foundation → domain/model → data/repository/persistence → service/applicat
 - `api`：兼容公开入口与事件发射，尽量委托到 service。
 - `block/*` / `content/*` / `client/*`：内容适配、GUI、客户端表现和运行时 glue。
 
-## 已确立的兼容 Facade
+## 稳定公开入口
 
-这些 namespace 仍可作为迁移期入口使用，但新增实现应优先落到内部职责 namespace：
+下列 namespace 是对外或跨模块的稳定边界；**新增实现**应落在右侧列出的内部职责 namespace，而不是在入口层堆积逻辑：
 
-| 兼容入口 | 新职责位置 | 说明 |
-|----------|------------|------|
-| `cn.li.ac.wireless.api` | `service.commands`、`service.queries`、事件发射 | 对外唯一入口；不再经过已删除的 command/query facade。 |
-| `cn.li.ac.wireless.data.world` | `data.world-registry`、`data.persistence`、生命周期 | world 数据所有权在 data；拓扑命令在 `service.commands`。 |
+| 公开入口 | 内部职责 | 说明 |
+|----------|----------|------|
+| `cn.li.ac.wireless.api` | `service.commands`、`service.queries`、事件发射 | 无线对外**唯一**入口；已删除 `topology-service` / `query-service` 等第二套路径。 |
+| `cn.li.ac.wireless.data.world` | `data.persistence`、生命周期钩子 | **仅** SavedData 与 `on-world-load/save/tick`；不代理 lookup，也不 re-export 拓扑命令。可变状态提交在 `data.world-registry`。 |
 | `cn.li.ac.wireless.core.vblock` | `data.vblock-codec`、`core.vblock-resolver` | runtime record 兼容保留，NBT codec 与 world resolver 分离。 |
 | `cn.li.ac.block.wireless-node.logic` | `state`、`inventory`、`tick`、`capability` | 旧 logic 仅保留 facade 和方块事件 handler。 |
 | `cn.li.ac.energy.api.impl` | `service.provider-registry`、`service.subscription`、`service.transfer-executor` | 协议实现瘦身为适配层。 |
@@ -69,7 +69,7 @@ foundation → domain/model → data/repository/persistence → service/applicat
 ## 测试策略
 
 - 每次拆分保留 facade 行为测试，优先断言公开函数和业务不变量。
-- 对新内部纯逻辑添加 focused tests：例如 VBlock codec、query/topology service、beam render builder、energy API facade。
+- 对新内部纯逻辑添加 focused tests：例如 VBlock codec、`service.commands` / `service.queries`、`domain.topology`、beam render builder、energy API facade。
 - `get_errors` 中 Clojure reload 的 `redefined var` 可视为噪声；最终以 Gradle 编译/单测/边界门禁为准。
 
 ## 验证命令

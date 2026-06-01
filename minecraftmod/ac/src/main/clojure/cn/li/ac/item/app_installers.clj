@@ -3,8 +3,8 @@
   (:require [cn.li.mcmod.item.dsl :as idsl]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.ac.ability.util.uuid :as uuid]
-            [cn.li.ac.terminal.player-data :as term-data]
-            [cn.li.ac.terminal.app-registry :as app-reg]
+            [cn.li.ac.terminal.player :as term-player]
+            [cn.li.ac.terminal.catalog :as term-catalog]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.util.log :as log]))
 
@@ -15,19 +15,19 @@
   (let [session-id (runtime-hooks/require-player-state-session-id "app-installers")
         uuid-str (uuid/player-uuid player)]
     (cond
-      (not (term-data/terminal-installed-in-session? session-id uuid-str))
+      (not (term-player/terminal-installed? session-id uuid-str))
       (do
         (log/info "Skip app install: terminal not installed" {:player uuid-str :app app-id})
         {:consume? true})
 
-      (not (app-reg/get-app app-id))
+      (not (term-catalog/app-exists? app-id))
       (do
         (log/warn "Skip app install: app not registered" {:player uuid-str :app app-id})
         {:consume? true})
 
       :else
       (do
-        (term-data/install-app-in-session! session-id uuid-str app-id)
+        (term-player/install-app! session-id uuid-str app-id)
         (log/info "Installed terminal app from installer item" {:player uuid-str :app app-id})
         {:consume? true}))))
 

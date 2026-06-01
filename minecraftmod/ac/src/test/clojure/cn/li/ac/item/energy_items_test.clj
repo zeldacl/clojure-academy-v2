@@ -7,7 +7,7 @@
     (let [calls (atom [])]
       (with-redefs [requiring-resolve
                     (fn [sym]
-                      (is (= 'cn.li.ac.terminal.apps.skill-tree/open-skill-tree-gui sym))
+                      (is (= 'cn.li.ac.terminal.client.actions/open-skill-tree! sym))
                       (fn [player learn-context]
                         (swap! calls conj {:player player
                                            :learn-context learn-context})))]

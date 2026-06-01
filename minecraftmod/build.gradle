@@ -2728,18 +2728,18 @@ tasks.register('verifyTerminalMessageIdsStatic') {
             }
         }
 
-        def terminalGui = file('ac/src/main/clojure/cn/li/ac/terminal/terminal_gui.clj')
-        if (terminalGui.exists()) {
-            def text = terminalGui.getText('UTF-8')
+        def terminalShell = file('ac/src/main/clojure/cn/li/ac/terminal/client/shell.clj')
+        if (terminalShell.exists()) {
+            def text = terminalShell.getText('UTF-8')
             ['cn.li.ac.terminal.network/msg-id',
              'terminal.network/msg-id',
              '(requiring-resolve'].each { token ->
                 if (text.contains(token)) {
-                    violations << "ac/src/main/clojure/cn/li/ac/terminal/terminal_gui.clj: GUI must use cn.li.ac.terminal.messages, not dynamic network message resolution: ${token}"
+                    violations << "ac/src/main/clojure/cn/li/ac/terminal/client/shell.clj: GUI must use cn.li.ac.terminal.messages, not dynamic network message resolution: ${token}"
                 }
             }
             if (!text.contains('cn.li.ac.terminal.messages')) {
-                violations << 'ac/src/main/clojure/cn/li/ac/terminal/terminal_gui.clj: must require cn.li.ac.terminal.messages'
+                violations << 'ac/src/main/clojure/cn/li/ac/terminal/client/shell.clj: must require cn.li.ac.terminal.messages'
             }
         }
 
@@ -2769,50 +2769,58 @@ tasks.register('verifyTerminalBridgeInitOrchestration') {
     doLast {
         def violations = []
         def acCore = file('ac/src/main/clojure/cn/li/ac/core.clj')
-        def acBridge = file('ac/src/main/clojure/cn/li/ac/terminal/platform_bridge.clj')
-        def terminalGui = file('ac/src/main/clojure/cn/li/ac/terminal/terminal_gui.clj')
+        def acActions = file('ac/src/main/clojure/cn/li/ac/terminal/client/actions.clj')
+        def terminalGui = file('ac/src/main/clojure/cn/li/ac/terminal/client/shell.clj')
+        def deletedAcTerminalBridge = file('ac/src/main/clojure/cn/li/ac/terminal/client/bridge.clj')
+        def deletedTerminalRegistry = file('ac/src/main/clojure/cn/li/ac/terminal/registry.clj')
         def mcmodUi = file('mcmod/src/main/clojure/cn/li/mcmod/platform/ui.clj')
         def forgeInit = file('forge-1.20.1/src/main/clojure/cn/li/forge1201/client/init.clj')
         def forgeCguiBridge = file('forge-1.20.1/src/main/clojure/cn/li/forge1201/client/cgui_screen_bridge.clj')
         def deletedForgeTerminalBridge = file('forge-1.20.1/src/main/clojure/cn/li/forge1201/client/terminal_screen_bridge.clj')
 
-        [acCore, acBridge, terminalGui, mcmodUi, forgeInit, forgeCguiBridge].each { f ->
+        [acCore, acActions, terminalGui, mcmodUi, forgeInit, forgeCguiBridge].each { f ->
             if (!f.exists()) {
-                violations << "Required terminal bridge file missing: ${project.rootDir.toPath().relativize(f.toPath()).toString().replace('\\', '/')}"
+                violations << "Required terminal client file missing: ${project.rootDir.toPath().relativize(f.toPath()).toString().replace('\\', '/')}"
             }
         }
         if (deletedForgeTerminalBridge.exists()) {
             violations << 'forge terminal-specific screen bridge must stay deleted; Forge must use the generic CGui screen bridge'
         }
+        if (deletedAcTerminalBridge.exists()) {
+            violations << 'ac terminal client bridge must stay deleted; widget factories install from client shell via client actions'
+        }
+        if (deletedTerminalRegistry.exists()) {
+            violations << 'ac terminal registry wrapper must stay deleted; catalog owns queries'
+        }
 
         if (acCore.exists()) {
             def text = acCore.getText('UTF-8')
-            if (!text.contains('cn.li.ac.terminal.platform-bridge/install-terminal-ui-hooks!')) {
+            if (!text.contains('cn.li.ac.terminal.client.actions/install-ui-hooks!')) {
                 violations << 'ac/src/main/clojure/cn/li/ac/core.clj: client init must install terminal UI hooks'
             }
             if (!text.contains('hooks/load-all-client-renderers!')) {
                 violations << 'ac/src/main/clojure/cn/li/ac/core.clj: client init must still load registered client renderers'
             }
         }
-        if (acBridge.exists()) {
-            def text = acBridge.getText('UTF-8')
-            if (!text.contains('platform-ui/register-widget-factory!') || !text.contains(':ac/terminal-gui')) {
-                violations << 'ac/src/main/clojure/cn/li/ac/terminal/platform_bridge.clj: must register AC terminal widget through generic platform UI registry'
-            }
-            if (!text.contains('terminal-gui/create-terminal-gui')) {
-                violations << 'ac/src/main/clojure/cn/li/ac/terminal/platform_bridge.clj: must delegate widget creation to terminal-gui'
-            }
-            if (text.contains('cn.li.mcmod.platform.terminal-ui')) {
-                violations << 'ac/src/main/clojure/cn/li/ac/terminal/platform_bridge.clj: must not depend on deleted terminal-ui bridge'
+        if (acActions.exists()) {
+            def text = acActions.getText('UTF-8')
+            if (!text.contains('shell/install-ui-hooks!')) {
+                violations << 'ac/src/main/clojure/cn/li/ac/terminal/client/actions.clj: must delegate UI hook install to client shell'
             }
         }
         if (terminalGui.exists()) {
             def text = terminalGui.getText('UTF-8')
+            if (!text.contains('platform-ui/register-widget-factory!') || !text.contains(':ac/terminal-gui')) {
+                violations << 'ac/src/main/clojure/cn/li/ac/terminal/client/shell.clj: must register AC terminal widget through generic platform UI registry'
+            }
+            if (!text.contains('create-terminal-gui')) {
+                violations << 'ac/src/main/clojure/cn/li/ac/terminal/client/shell.clj: widget factory must create the terminal shell GUI'
+            }
             if (!text.contains('client-bridge/open-screen!') || !text.contains(':ac/terminal')) {
-                violations << 'ac/src/main/clojure/cn/li/ac/terminal/terminal_gui.clj: must open terminal through generic mcmod client bridge'
+                violations << 'ac/src/main/clojure/cn/li/ac/terminal/client/shell.clj: must open terminal through generic mcmod client bridge'
             }
             if (text.contains('cn.li.mcmod.platform.terminal-ui')) {
-                violations << 'ac/src/main/clojure/cn/li/ac/terminal/terminal_gui.clj: must not depend on terminal-ui hook storage directly'
+                violations << 'ac/src/main/clojure/cn/li/ac/terminal/client/shell.clj: must not depend on terminal-ui hook storage directly'
             }
         }
         if (mcmodUi.exists()) {

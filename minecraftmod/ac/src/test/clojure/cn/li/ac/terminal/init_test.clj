@@ -1,17 +1,12 @@
 (ns cn.li.ac.terminal.init-test
   (:require [clojure.test :refer [deftest is]]
-            [cn.li.ac.terminal.app-manifest :as manifest]
-            [cn.li.ac.terminal.init :as terminal-init]))
+            [cn.li.ac.registry.hooks :as hooks]
+            [cn.li.ac.terminal.init :as terminal-init]
+            [cn.li.ac.terminal.network :as network]))
 
-(deftest register-apps-uses-manifest-symbols-test
-  (let [resolved-calls (atom [])
-        invoked (atom [])]
-    (with-redefs [manifest/list-app-init-symbols
-                  (fn [] '[demo.a/init! demo.b/init!])
-                  requiring-resolve
-                  (fn [sym]
-                    (swap! resolved-calls conj sym)
-                    (fn [] (swap! invoked conj sym)))]
-      (terminal-init/register-apps!)
-      (is (= '[demo.a/init! demo.b/init!] @resolved-calls))
-      (is (= '[demo.a/init! demo.b/init!] @invoked)))))
+(deftest init-terminal-registers-network-handlers-test
+  (let [registered (atom [])]
+    (with-redefs [hooks/register-network-handler! (fn [f] (swap! registered conj f))]
+      (terminal-init/init-terminal!)
+      (is (= 1 (count @registered)))
+      (is (= network/register-handlers! (first @registered))))))

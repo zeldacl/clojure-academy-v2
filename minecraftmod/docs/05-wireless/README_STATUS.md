@@ -20,4 +20,6 @@
 
 - 现行文档用于当前开发与维护。
 - 历史文档保留背景信息，不作为当前实现规范。
-- 当前代码以 `cn.li.ac.wireless.api`、`capability-resolver`、`wireless.data.persistence` 和 `wireless.config` 为维护入口。
+- 架构契约与调用图：[WIRELESS_REFACTOR_CONTRACTS.md](WIRELESS_REFACTOR_CONTRACTS.md)
+- 维护手册：[../04-systems/WIRELESS_SYSTEM_MAINTENANCE.md](../04-systems/WIRELESS_SYSTEM_MAINTENANCE.md)
+- 代码入口：`cn.li.ac.wireless.api`（对外）；`service.commands` / `service.queries`（模块内）；`data.world-registry`（提交）；`data.persistence`、`wireless.config`、`core.capability-resolver`

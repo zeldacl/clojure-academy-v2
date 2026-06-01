@@ -24,6 +24,7 @@
             [cn.li.ac.ability.registry.category :as category]
             [cn.li.ac.ability.registry.event :as evt]
             [cn.li.ac.ability.config :as cfg]
+            [cn.li.ac.terminal.model :as terminal-model]
             [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
@@ -575,7 +576,8 @@
   (defn- cmd-sync-terminal-data
     [player-state {:keys [terminal-data]}]
     (if (some? terminal-data)
-      (ok (assoc player-state :terminal-data terminal-data))
+      (ok (assoc player-state terminal-model/state-key
+                 (terminal-model/normalize-state terminal-data)))
       (rejected player-state :invalid-terminal-data-sync)))
 
   (defn- cmd-sync-context-registry

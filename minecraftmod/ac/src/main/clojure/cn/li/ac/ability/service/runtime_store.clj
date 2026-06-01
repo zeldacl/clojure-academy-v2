@@ -34,7 +34,7 @@
             [cn.li.ac.ability.model.cooldown :as cdata]
             [cn.li.ac.ability.model.preset :as pdata]
             [cn.li.ac.ability.model.develop :as ddata]
-            ))
+            [cn.li.ac.terminal.model :as terminal-model]))
 
 ;; ============================================================================
 ;; Store Protocol
@@ -97,8 +97,7 @@
    :cooldown-data    (cdata/new-cooldown-data)
    :preset-data      (pdata/new-preset-data)
     :develop-data     (ddata/new-develop-data)
-    :terminal-data    {:terminal-installed? false
-                 :installed-apps #{}}
+    :terminal-data    (terminal-model/fresh-state)
    :context-registry {}
    :dirty?           false})
 

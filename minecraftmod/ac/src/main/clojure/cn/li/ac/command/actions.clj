@@ -12,6 +12,7 @@
 														[cn.li.ac.ability.service.command-runtime :as command-rt]						[cn.li.ac.ability.registry.skill-query :as skill-query]
 						[cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
 						[cn.li.mcmod.command.actions :as command-actions]
+						[cn.li.ac.terminal.model :as terminal-model]
 						[cn.li.mcmod.util.log :as log]))
 
 (def ability-command-action-types
@@ -82,7 +83,9 @@
 				(update :cooldown-data #(or % (:cooldown-data defaults)))
 				(update :preset-data #(merge (:preset-data defaults) (or % {})))
 				(update :develop-data #(merge (:develop-data defaults) (or % {})))
-				(update :terminal-data #(merge (:terminal-data defaults) (or % {}))))))
+				(update terminal-model/state-key
+				        #(terminal-model/normalize-state
+				           (merge (:terminal-data defaults) (or % {})))))))
 
 (defn- update-player-runtime-data!
 	[player-uuid context f]

@@ -2,6 +2,9 @@
 
 > 状态标签：**历史**（迁移过程记录，不作为现行规范）
 
+> **现行架构（2026-06）**  
+> 无线能源已完成函数式单路径重构。请以 [WIRELESS_REFACTOR_CONTRACTS.md](WIRELESS_REFACTOR_CONTRACTS.md) 与 [../04-systems/WIRELESS_SYSTEM_MAINTENANCE.md](../04-systems/WIRELESS_SYSTEM_MAINTENANCE.md) 为准；下文 Phase/Batch 叙述仅作追溯。
+
 > **与当前仓库对齐（2026-04）**  
 > - Gradle 子工程：`api`、`mcmod`、`ac`、`forge-1.20.1`；根 `settings.gradle` 中 **`fabric-1.20.1` 默认未 include**。  
 > - 下文历史段落中若出现 **Forge 1.16.5**、**「core」路径** 或三平台并列表述，均为迁移过程记录，**不代表当前默认构建矩阵**。  

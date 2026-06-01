@@ -33,7 +33,7 @@
                            (let [{:keys [player side]} event-data]
                              (when (= side :client)
                                (when-let [open-fn (requiring-resolve
-                                                   'cn.li.ac.terminal.apps.tutorial/open-tutorial-gui)]
+                                                   'cn.li.ac.terminal.client.actions/open-tutorial!)]
                                  (open-fn player)))
                              {:consume? true}))}))
     (idsl/register-item!
@@ -48,7 +48,7 @@
                            (let [{:keys [player side]} event-data]
                              (when (= side :client)
                                (when-let [open-fn (requiring-resolve
-                                                   'cn.li.ac.terminal.terminal-gui/open-terminal)]
+                                                   'cn.li.ac.terminal.client.actions/open-terminal!)]
                                  (open-fn player)))
                              {:consume? true}))}))
     (idsl/register-item!

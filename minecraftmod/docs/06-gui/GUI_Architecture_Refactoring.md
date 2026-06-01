@@ -14,7 +14,7 @@
 4. **注册去游戏化**：GUI 声明、manifest 与 metadata 驱动 shared dispatcher；Forge/Fabric 只保留 loader API 差异和注册胶水。
 5. **能量过滤**：与 **`cn.li.ac.energy.operations`** 对齐，供槽位 `filter` / validator 使用。
 6. **TechUI 组装统一**：简单块 GUI 的 XML page、wireless tab、tab sync、InfoArea 与 screen container 包装统一通过 **`cn.li.ac.gui.tech-ui-common`**，业务 GUI 只注入 widget 绑定和 InfoArea 内容。
-7. **Terminal/simple screen**：Terminal 属于 client simple screen，不进入 block menu 生命周期；AC 在 client init 安装 terminal UI hook，Forge simple host 复用 `mc1201.gui.cgui.runtime` 渲染/输入/释放路径。
+7. **Terminal/simple screen**：数据终端属于 client simple screen，不进入 block menu 生命周期。AC 在 client init 通过 `cn.li.ac.terminal.client.actions/install-ui-hooks!` 委托 `client.shell/install-ui-hooks!`，向 `mcmod.platform.ui` 注册 `:ac/terminal-gui` 工厂；打开时用 `mcmod.client.platform-bridge/open-screen!` `:ac/terminal`。Forge 复用通用 `cgui_screen_bridge` 与 `mc1201.gui.cgui.runtime`，**无**专用 `terminal_screen_bridge` 或 `mcmod.platform.terminal-ui`。详见 [TERMINAL_SYSTEM_MAINTENANCE.md](../04-systems/TERMINAL_SYSTEM_MAINTENANCE.md)。
 
 ---
 
@@ -35,7 +35,8 @@
 - **`cn.li.ac.gui.tech-ui-common`**：TechUI 标准 screen builder；简单块 GUI 不直接读取 XML、不直接调用 tab sync 或 `cgui-screen/create-cgui-screen-container`。
 - **`cn.li.ac.wireless.gui.tab`**：TechUI 的 wireless tab 统一入口，调用方必须传 `:role :node/:generator/:receiver`，不再保留 `:mode` fallback 或角色 wrapper。
 - **`cn.li.ac.block.gui.sync`**：AC block GUI sync helper；schema-backed GUI 通过它构造 container sync 生命周期。
-- **`cn.li.ac.core`**：`init` 中注册 slot validators、注入 GUI 平台回调；client init 负责安装 Terminal UI hook 并加载 client renderer。
+- **`cn.li.ac.core`**：`init` 中注册 slot validators、注入 GUI 平台回调；client init 通过 `requiring-resolve` 安装 Terminal UI hook（`terminal.client.actions`）并加载 client renderer。
+- **`cn.li.ac.terminal.*`**（服务端）与 **`cn.li.ac.terminal.client.*`**（客户端）：数据终端 catalog、会话状态、网络 handler、shell 与 app launcher；见 [TERMINAL_SYSTEM_MAINTENANCE.md](../04-systems/TERMINAL_SYSTEM_MAINTENANCE.md)。
 
 ### forge-1.20.1（适配）
 
@@ -49,7 +50,7 @@
 - **Registry**：MenuType 注册位于平台 adapter 自有缓存后，通过 `cn.li.mc1201.runtime.spi.gui-registry` 暴露给 shared GUI 打开与 screen 注册路径。
 - **Screen**：客户端注册；创建屏幕时调用 `ac` 侧 screen-factory。
 - **网络**：Forge 通道与包；业务分发在 `mcmod`/`ac` 协议与 handler 中完成。
-- **Terminal host**：Forge `terminal_screen_bridge` 只负责 Minecraft `Screen` host 与 `Minecraft#setScreen`；Terminal widget 由 `mcmod.platform.terminal-ui` hook 调用 AC `terminal-gui/create-terminal-gui`。
+- **Terminal host**：与 block menu 无关。Widget 由 `shell/create-terminal-gui` 经 `platform.ui` 工厂 `:ac/terminal-gui` 提供；屏幕 host 走通用 CGui screen bridge，**禁止**恢复 `forge1201/client/terminal_screen_bridge` 或 `mcmod.platform.terminal-ui`。
 
 ## Java Shim 与 CGui Runtime
 

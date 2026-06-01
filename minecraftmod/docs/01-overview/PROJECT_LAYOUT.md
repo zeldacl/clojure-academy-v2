@@ -30,8 +30,36 @@
 
 资源与注册用 id 仍以根目录 **`gradle.properties`** 的 `mod_id`（如 `my_mod`）、**`assets/my_mod/`**、`data/my_mod/` 为准。
 
+## 数据终端（`ac/terminal`）
+
+函数式拆分，服务端与客户端命名空间分离：
+
+| 路径 | 命名空间前缀 | 说明 |
+|------|----------------|------|
+| `ac/.../terminal/model.clj` 等 | `cn.li.ac.terminal.*` | 会话状态、`catalog`、网络、`messages` |
+| `ac/.../terminal/client/` | `cn.li.ac.terminal.client.*` | Shell、runtime、app launcher、`client.actions` 侧载入口 |
+
+维护说明见 [TERMINAL_SYSTEM_MAINTENANCE.md](../04-systems/TERMINAL_SYSTEM_MAINTENANCE.md)。勿再引入 `registry` 包装层、`client/bridge` 或 manifest/SPI 式应用注册。
+
+## 无线能源（`ac/wireless`）
+
+单一函数式运行时，对外经 `cn.li.ac.wireless.api`：
+
+| 路径 | 命名空间 | 说明 |
+|------|----------|------|
+| `wireless/api.clj` | `cn.li.ac.wireless.api` | 查询与拓扑命令的唯一对外入口 |
+| `wireless/service/commands.clj`、`queries.clj` | `service.*` | 写/读编排（模块内） |
+| `wireless/domain/` | `domain.topology`、`domain.transfer` | 纯 world-state 与能量计划 |
+| `wireless/data/world.clj` | `data.world` | **仅**生命周期与 SavedData |
+| `wireless/data/world_registry.clj` | `data.world-registry` | `transact!` 可变提交 |
+| `wireless/runtime/effects.clj` | `runtime.effects` | capability 能量 IO |
+| `ac/block/wireless_*` | `cn.li.ac.block.wireless-*` | 方块 tick/事件；经 `wireless.api` 改拓扑 |
+
+契约与排障：[WIRELESS_REFACTOR_CONTRACTS.md](../05-wireless/WIRELESS_REFACTOR_CONTRACTS.md)、[WIRELESS_SYSTEM_MAINTENANCE.md](../04-systems/WIRELESS_SYSTEM_MAINTENANCE.md)。已删除 `topology-service`、`query-service`、`topology-index` 等并行层。
+
 ## 新增内容应落在何处
 
 1. 在 **`mcmod`** 扩展 DSL / 元数据 / 协议（若涉及新抽象）。
 2. 在 **`ac`** 实现方块、物品、业务逻辑，使用 `defblock` / `defitem` 等写入 `mcmod` registry。
 3. 仅在需要 Loader 专用胶水时改 **`forge-1.20.1`**（或启用后的 Fabric 模块），并保持适配层薄。
+4. 新终端应用：改 `terminal/catalog.clj` + `terminal/client/apps/*` + `client/apps.clj` 的 `launchers`。

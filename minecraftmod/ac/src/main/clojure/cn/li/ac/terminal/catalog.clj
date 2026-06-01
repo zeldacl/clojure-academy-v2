@@ -1,0 +1,66 @@
+(ns cn.li.ac.terminal.catalog
+  "Immutable terminal app catalog and pure queries (server-safe metadata only).")
+
+(def apps
+  [{:id :skill-tree
+    :name "Skill Tree"
+    :icon "my_mod:textures/guis/apps/skill_tree/icon.png"
+    :description "View and manage your abilities"
+    :category :abilities}
+   {:id :settings
+    :name "Settings"
+    :icon "my_mod:textures/guis/apps/settings/icon.png"
+    :description "Configure game settings"
+    :category :system}
+   {:id :tutorial
+    :name "Tutorial"
+    :icon "my_mod:textures/guis/apps/tutorial/icon.png"
+    :description "Learn how to use your abilities"
+    :category :help}
+   {:id :freq-transmitter
+    :name "Frequency Transmitter"
+    :icon "my_mod:textures/guis/apps/freq_transmitter/icon.png"
+    :description "Manage wireless frequencies"
+    :category :wireless}
+   {:id :media-player
+    :name "Media Player"
+    :icon "my_mod:textures/guis/apps/media_player/icon.png"
+    :description "Browse AcademyCraft media tracks"
+    :category :media}
+   {:id :about
+    :name "About"
+    :icon "my_mod:textures/guis/apps/about/icon.png"
+    :description "Credits and information"
+    :category :help}])
+
+(defonce ^:private apps-by-id-index
+  (delay (into {} (map (juxt :id identity) apps))))
+
+(defn- apps-by-id
+  []
+  @apps-by-id-index)
+
+(defn app-ids
+  []
+  (mapv :id apps))
+
+(defn app-by-id
+  [app-id]
+  (get (apps-by-id) app-id))
+
+(defn app-exists?
+  [app-id]
+  (boolean (app-by-id app-id)))
+
+(defn app-count
+  []
+  (count apps))
+
+(defn ordered-apps
+  []
+  (->> apps
+       (sort-by (fn [app]
+                  [(str (or (:category app) ""))
+                   (str (or (:name app) ""))
+                   (str (or (:id app) ""))]))
+       vec))

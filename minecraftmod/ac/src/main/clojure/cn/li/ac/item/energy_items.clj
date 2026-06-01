@@ -10,7 +10,7 @@
 (defn- open-portable-developer!
   [{:keys [player side]}]
   (when (= side :client)
-    (when-let [open-fn (requiring-resolve 'cn.li.ac.terminal.apps.skill-tree/open-skill-tree-gui)]
+    (when-let [open-fn (requiring-resolve 'cn.li.ac.terminal.client.actions/open-skill-tree!)]
       (open-fn player {:developer-type :portable})))
   {:consume? true})
 
