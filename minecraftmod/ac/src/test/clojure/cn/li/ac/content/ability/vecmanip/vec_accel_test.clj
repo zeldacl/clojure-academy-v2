@@ -9,7 +9,7 @@
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
-            [cn.li.ac.ability.service.context-registry :as ctx-reg]
+            [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.mcmod.platform.player-motion :as player-motion]
             [cn.li.mcmod.platform.raycast :as raycast]
@@ -154,9 +154,9 @@
           test-ctx     {:skill-state {:can-perform? true :init-vel init-vel}}
           perform-fn   (get-in spec [:actions :perform!])]
       (with-config-mocks
-        (with-redefs [ctx-reg/get-context
+        (with-redefs [ctx/get-context
                       (fn [_id] test-ctx)
-                      ctx-reg/update-context!
+                      ctx-skill/update-skill-state-root!
                       (fn [_id f & args] (swap! update-calls conj (apply list f args)))
                       player-motion/*player-motion* :mock-pm
                       player-motion/set-velocity!
@@ -173,7 +173,7 @@
       (is (= 0.5 (double (:y (first @vel-calls)))) "y velocity matches init-vel")
       (is (= 0.0 (double (:z (first @vel-calls)))) "z velocity matches init-vel")
       (is (seq @update-calls)
-          "ctx-reg/update-context! called at least once"))))
+          "ctx-skill/update-skill-state-root! called at least once"))))
 
 ;; ---------------------------------------------------------------------------
 ;; 7. perform! �?skips launch when can-perform? is false
@@ -186,8 +186,9 @@
                                    :init-vel     {:x 1.0 :y 0.0 :z 0.0}}}
           perform-fn (get-in spec [:actions :perform!])]
       (with-config-mocks
-        (with-redefs [ctx-reg/get-context       (fn [_id] test-ctx)
-                      ctx-reg/update-context!   (fn [& _] nil)
+        (with-redefs [ctx/get-context            (fn [_id] test-ctx)
+                      ctx-skill/assoc-skill-state!     (fn [& _] nil)
+                      ctx-skill/update-skill-state-root! (fn [& _] nil)
                       player-motion/*player-motion* :mock-pm
                       player-motion/set-velocity!
                       (fn [& _] (swap! vel-calls conj :called))
@@ -205,13 +206,13 @@
   (testing ":end payload returns {:performed? true} when [:skill-state :performed?]=true"
     (let [payload-fn (get-in spec [:fx :end :payload])
           test-ctx   {:id "ctx-1" :skill-state {:performed? true}}]
-      (with-redefs [ctx-reg/get-context (fn [_id] test-ctx)]
+      (with-redefs [ctx/get-context (fn [_id] test-ctx)]
         (is (= {:performed? true}
                (payload-fn {:ctx-id "ctx-1"}))
             "payload reads from [:skill-state :performed?], not root key"))))
   (testing ":end payload returns {:performed? false} when [:skill-state :performed?]=false"
     (let [payload-fn (get-in spec [:fx :end :payload])
           test-ctx   {:id "ctx-1" :skill-state {:performed? false}}]
-      (with-redefs [ctx-reg/get-context (fn [_id] test-ctx)]
+      (with-redefs [ctx/get-context (fn [_id] test-ctx)]
         (is (= {:performed? false}
                (payload-fn {:ctx-id "ctx-1"})))))))

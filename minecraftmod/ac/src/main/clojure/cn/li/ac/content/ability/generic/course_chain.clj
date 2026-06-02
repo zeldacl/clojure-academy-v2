@@ -1,6 +1,7 @@
 (ns cn.li.ac.content.ability.generic.course-chain
   "Shared metadata and passive registration for the generic course skill chain."
-  (:require [cn.li.ac.ability.passive :as passive]
+  (:require [cn.li.ac.ability.definition-core :as definition-core]
+            [cn.li.ac.ability.passive :as passive]
             [cn.li.ac.ability.registry.event :as evt]))
 
 (def categories
@@ -82,23 +83,25 @@
                 prerequisites conditions translations]}
         (course-definition course-key)]
     (mapv (fn [cat-id]
-            {:id (skill-id cat-id id-suffix)
-             :category-id cat-id
-             :name-key name-key
-             :description-key description-key
-             :icon icon
-             :ui-position ui-position
-             :level level
-             :controllable? false
-             :ctrl-id ctrl-id
-             :pattern :passive
-             :prerequisites (mapv (fn [{:keys [skill-id-suffix min-exp]}]
-                                    {:skill-id (skill-id cat-id skill-id-suffix)
-                                     :min-exp min-exp})
-                                  prerequisites)
-             :conditions conditions
-             :translations translations
-             :ac/content-type :skill})
+            (-> (definition-core/build-skill-spec
+                  (symbol (name cat-id) id-suffix)
+                  {:id (skill-id cat-id id-suffix)
+                   :category-id cat-id
+                   :name-key name-key
+                   :description-key description-key
+                   :icon icon
+                   :ui-position ui-position
+                   :level level
+                   :controllable? false
+                   :ctrl-id ctrl-id
+                   :pattern :passive
+                   :prerequisites (mapv (fn [{:keys [skill-id-suffix min-exp]}]
+                                          {:skill-id (skill-id cat-id skill-id-suffix)
+                                           :min-exp min-exp})
+                                        prerequisites)
+                   :conditions conditions
+                   :translations translations})
+                (assoc :ac/content-type :skill)))
           categories)))
 
 (defn register-passive-hooks!

@@ -21,7 +21,6 @@
             [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
-            [cn.li.mcmod.gui.slot-registry :as slot-registry]
             [cn.li.ac.energy.operations :as energy-ops]
             [cn.li.mcmod.gui.spec :as gui-reg]
             [cn.li.ac.block.gui.sync :as gui-sync]
@@ -54,7 +53,7 @@
     (gui-sync/create-schema-container solar-schema/unified-solar-schema tile player :solar {:state state})))
 
 (defn get-slot-count [_container]
-  (slot-registry/get-slot-count solar-slot-schema-id))
+  (slot-schema/tile-slot-count solar-slot-schema-id))
 
 (defn can-place-item? [_container _slot-index item-stack]
   (energy-ops/is-energy-item-supported? item-stack))

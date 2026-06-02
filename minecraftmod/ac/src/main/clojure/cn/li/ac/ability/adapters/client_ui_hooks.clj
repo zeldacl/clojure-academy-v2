@@ -22,7 +22,6 @@
             [cn.li.ac.ability.service.context-manager :as ctx-mgr]
             [cn.li.ac.ability.model.preset :as preset-data]
             [cn.li.ac.ability.registry.skill-query :as skill-query]
-            [cn.li.ac.ability.service.context-registry :as ctx-reg]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.util.resource-check :as resource-check]
             [cn.li.ac.config.gameplay :as gameplay]
@@ -192,7 +191,7 @@
       (command-rt/run-command-in-session!
        session-id
        player-uuid*
-       {:command :sync-ability-data
+       {:command :hydrate-player-state
         :ability-data ability-data}))))
 
 (defn- update-client-resource-data!
@@ -202,7 +201,7 @@
       (command-rt/run-command-in-session!
        session-id
        player-uuid*
-       {:command :sync-resource-data
+       {:command :hydrate-player-state
         :resource-data resource-data}))))
 
 (defn- update-client-cooldown-data!
@@ -212,7 +211,7 @@
       (command-rt/run-command-in-session!
        session-id
        player-uuid*
-       {:command :sync-cooldown-data
+       {:command :hydrate-player-state
         :cooldown-data cooldown-data}))))
 
 (defn- update-client-preset-data!
@@ -222,7 +221,7 @@
       (command-rt/run-command-in-session!
        session-id
        player-uuid*
-       {:command :sync-preset-data
+       {:command :hydrate-player-state
         :preset-data preset-data}))))
 
 (defn- validate-managed-screen-payload
@@ -341,7 +340,7 @@
 (defn- clear-client-owned-runtime-state!
   [owner]
   (clear-managed-screen-state! owner)
-  (ctx-reg/clear-owner-contexts! (client-context-owner-from-owner owner))
+  (ctx/clear-owner-contexts! (client-context-owner-from-owner owner))
   (clear-client-ui-state! owner)
   (client-keybinds/clear-client-keybind-state! owner)
   (client-particles/clear-owner-particle-effects! owner)
@@ -435,7 +434,7 @@
   (let [contexts (player-contexts player-uuid)
         railgun-ctx (some (fn [ctx-data]
                             (when (and (= :railgun (:skill-id ctx-data))
-                                       (ctx-reg/active-context? ctx-data))
+                                       (ctx/active-context? ctx-data))
                               ctx-data))
                           contexts)
         skill-state (:skill-state railgun-ctx)
@@ -470,7 +469,7 @@
   [player-uuid skill-id]
   (some (fn [ctx-data]
           (when (and (= skill-id (:skill-id ctx-data))
-                     (ctx-reg/active-context? ctx-data))
+                     (ctx/active-context? ctx-data))
             ctx-data))
   (player-contexts player-uuid)))
 
@@ -591,7 +590,7 @@
       (net-client/send-to-server catalog/MSG-SLOT-KEY-ABORT {:ctx-id ctx-id
                                                              :key-idx key-idx})
       (update-client-ui-runtime! update :slot-context-ids dissoc slot-key)
-      (ctx-reg/terminate-context! ctx-id nil)
+      (ctx/terminate-context! ctx-id nil)
       ctx-id)))
 
 (defn- clear-slot-key-ticks!
@@ -679,9 +678,9 @@
                  (let [ctx-data (with-client-context-owner
                                   player-uuid
                                   (fn [owner]
-                                    (ctx-reg/get-context owner ctx-id)))]
+                                    (ctx/get-context owner ctx-id)))]
                    (when (and (= :flashing (:skill-id ctx-data))
-                              (ctx-reg/active-context? ctx-data))
+                              (ctx/active-context? ctx-data))
                      ctx-id)))))
        distinct
        vec)))
@@ -699,18 +698,18 @@
   (boolean
     (some (fn [[_ctx-id ctx-data]]
               (and (= (:player-uuid ctx-data) player-uuid)
-                    (ctx-reg/active-context? ctx-data)
+                    (ctx/active-context? ctx-data)
                  (toggle/is-toggle-active? ctx-data :vec-reflection)))
-                  (ctx-reg/get-all-contexts))))
+                  (ctx/get-all-contexts))))
 
 (defn- vec-deviation-active?
   [player-uuid]
   (boolean
     (some (fn [[_ctx-id ctx-data]]
               (and (= (:player-uuid ctx-data) player-uuid)
-                    (ctx-reg/active-context? ctx-data)
+                    (ctx/active-context? ctx-data)
                  (toggle/is-toggle-active? ctx-data :vec-deviation)))
-                  (ctx-reg/get-all-contexts))))
+                  (ctx/get-all-contexts))))
 
 (defn- ease-in-out [t]
   (if (< t 0.5)
@@ -899,15 +898,15 @@
           (client-keybinds/update-default-group! uuid))))
     (net-client/register-push-handler! catalog/MSG-CTX-ESTABLISH
       (fn [{:keys [ctx-id server-id]}]
-        (ctx-reg/transition-to-alive! ctx-id server-id (partial flush-buffered-context-message! ctx-id))))
+        (ctx/transition-to-alive! ctx-id server-id (partial flush-buffered-context-message! ctx-id))))
     (net-client/register-push-handler! catalog/MSG-CTX-TERMINATE
       (fn [{:keys [ctx-id]}]
         (remove-slot-context! ctx-id)
-        (ctx-reg/terminate-context! ctx-id nil)))
+        (ctx/terminate-context! ctx-id nil)))
     (net-client/register-push-handler! catalog/MSG-CTX-TERMINATED
       (fn [{:keys [ctx-id]}]
         (remove-slot-context! ctx-id)
-        (ctx-reg/terminate-context! ctx-id nil)))
+        (ctx/terminate-context! ctx-id nil)))
     (net-client/register-push-handler! catalog/MSG-CTX-CHANNEL on-context-channel-push!)
     (log/info "Ability client push handlers registered")))
 
@@ -956,24 +955,24 @@
 
      :client-new-context
      (fn [player-uuid skill-id]
-       (with-client-context-owner player-uuid (fn [owner] (ctx-reg/new-context player-uuid skill-id owner))))
+       (with-client-context-owner player-uuid (fn [owner] (ctx/new-context player-uuid skill-id owner))))
 
      :client-register-context!
      (fn [ctx-map]
-       (ctx-reg/register-context! ctx-map))
+       (ctx/register-context! ctx-map))
 
      :client-get-context
      (fn [ctx-id]
-       (ctx-reg/get-context ctx-id))
+       (ctx/get-context ctx-id))
 
      :client-terminate-context!
      (fn [ctx-id _reason]
        (remove-slot-context! ctx-id)
-       (ctx-reg/terminate-context! ctx-id nil))
+       (ctx/terminate-context! ctx-id nil))
 
      :client-transition-to-alive!
      (fn [ctx-id server-id payload]
-       (ctx-reg/transition-to-alive! ctx-id server-id payload))
+       (ctx/transition-to-alive! ctx-id server-id payload))
 
      :client-send-context-local!
      (fn [ctx-id channel payload]

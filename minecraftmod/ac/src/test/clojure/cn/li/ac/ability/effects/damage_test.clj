@@ -1,5 +1,5 @@
-(ns cn.li.ac.ability.server.effect.damage-test
-  (:require [clojure.test :refer [deftest is testing]]
+(ns cn.li.ac.ability.effects.damage-test
+  (:require [clojure.test :refer [deftest is]]
             [cn.li.ac.ability.effects.damage :as damage]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.world-effects :as world-effects]))
@@ -51,11 +51,10 @@
     (binding [entity-damage/*entity-damage* dmg
               world-effects/*world-effects* wfx]
       (damage/execute-damage-aoe! evt {:center :center
-                   :radius 10.0
-                   :amount 100.0
-                   :damage-type :generic
-                   :exclude ["v2"]}))
+                                       :radius 10.0
+                                       :amount 100.0
+                                       :damage-type :generic
+                                       :exclude ["v2"]}))
     (is (= 1 (count @dcalls)))
     (is (= "v1" (:uuid (first @dcalls))))
     (is (= 100.0 (:damage (first @dcalls))))))
-

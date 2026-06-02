@@ -60,6 +60,8 @@
 - `verifyCurrentPlatforms`：当前纳入平台（Forge+Fabric）矩阵基线（含 smoke + hook coverage）。
 - `verifyArchitectureBoundaries`：跨层依赖边界扫描（阻止核心层误依赖平台/Minecraft 类）；任务按文件单次扫描并声明输入/通过标记输出，源文件未变时热运行可 UP-TO-DATE。
 - `verifyCleanupResidueGuards`：聚合 cleanup/SSoT 回归守卫；子任务声明源输入与通过标记输出，源文件未变时热运行可跳过重复扫描。
+- `verifyAbilityArchitectureStrict`：能力系统 **reducer-only** 门禁（禁止旁路写 store、旧 context mutation API、`:sync-*-data` 等）；见 [ABILITY_SYSTEM_MAINTENANCE.md](../04-systems/ABILITY_SYSTEM_MAINTENANCE.md)。
+- `verifyAbilityNoDispatcherBusinessApiUsage`：禁止已删除的 `context-registry` 门面与 `ctx-reg/` 引用。
 - `runForgeGameTests`：启动 GameTest 运行。
 - `validateForgeGameTestLog`：校验 GameTest 日志中的失败/致命信息。
 - `verifyForgeTesting`：聚合测试验证入口。

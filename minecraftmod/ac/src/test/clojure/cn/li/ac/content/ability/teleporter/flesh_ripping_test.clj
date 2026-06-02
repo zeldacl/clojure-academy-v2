@@ -1,7 +1,7 @@
 (ns cn.li.ac.content.ability.teleporter.flesh-ripping-test
   (:require [clojure.test :refer [deftest is]]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
-            [cn.li.ac.ability.service.context-registry :as ctx-reg]
+            [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.content.ability.teleporter.flesh-ripping :as flesh]
@@ -12,13 +12,13 @@
   (let [ctx* (atom initial-ctx)]
     {:ctx* ctx*
      :get-context (fn [_] @ctx*)
-     :update-context! (fn [_ f & args]
-                        (swap! ctx* #(when % (apply f % args))))}))
+     :update-skill-state-root! (fn [_ f & args]
+                        (swap! ctx* update :skill-state (fn [ss] (apply f (or ss {}) args))))}))
 
 (deftest flesh-ripping-tick-caches-trace-and-sends-update-fx-test
-  (let [{:keys [ctx* update-context!]} (make-context-mocks {:skill-state {}})
+  (let [{:keys [ctx* update-skill-state-root!]} (make-context-mocks {:skill-state {}})
         fx-calls* (atom [])]
-    (with-redefs [ctx-reg/update-context! update-context!
+    (with-redefs [ctx-skill/update-skill-state-root! update-skill-state-root!
                   helper/skill-exp (fn [_ _] 0.5)
                   helper/cfg-lerp (fn [_ field _]
                                     (case field
@@ -62,7 +62,7 @@
         fx-calls* (atom [])
         potion-calls* (atom [])
         damage-calls* (atom [])]
-    (with-redefs [ctx-reg/get-context get-context
+    (with-redefs [ctx/get-context get-context
                   helper/skill-exp (fn [_ _] 0.5)
                   helper/cfg-lerp (fn [_ field _]
                                     (case field
@@ -133,7 +133,7 @@
                                                                          :target-y 2.0
                                                                          :target-z 3.0}}})
         fx-calls* (atom [])]
-    (with-redefs [ctx-reg/get-context get-context
+    (with-redefs [ctx/get-context get-context
                   helper/skill-exp (fn [_ _] 0.5)
                   helper/cfg-lerp (fn [_ field _]
                                     (case field
@@ -183,7 +183,7 @@
         exp-calls* (atom 0)
         cooldown-calls* (atom 0)
         fx-calls* (atom 0)]
-    (with-redefs [ctx-reg/get-context get-context
+    (with-redefs [ctx/get-context get-context
                   helper/skill-exp (fn [_ _] 0.5)
                   helper/cfg-lerp (fn [_ _ _] 0.0)
                   helper/deal-magic-damage! (fn [& _] (swap! damage-calls* inc))
@@ -202,7 +202,7 @@
         cooldown-calls* (atom 0)
         fx-calls* (atom 0)
         damage-calls* (atom 0)]
-    (with-redefs [ctx-reg/get-context (fn [_] {:skill-state {:trace nil}})
+    (with-redefs [ctx/get-context (fn [_] {:skill-state {:trace nil}})
                   helper/skill-exp (fn [_ _] 0.5)
                   helper/cfg-lerp (fn [_ _ _] 0.0)
                   helper/raycast-entity (fn [_ _] nil)
@@ -218,8 +218,8 @@
     (is (= 0 @fx-calls*))))
 
 (deftest flesh-ripping-abort-clears-skill-state-test
-  (let [{:keys [ctx* update-context!]} (make-context-mocks {:skill-state {:hold-ticks 3 :trace {:hit? true}}})]
-    (with-redefs [ctx-reg/update-context! update-context!]
+  (let [{:keys [ctx* update-skill-state-root!]} (make-context-mocks {:skill-state {:hold-ticks 3 :trace {:hit? true}}})]
+    (with-redefs [ctx-skill/update-skill-state-root! update-skill-state-root!]
       (flesh/flesh-ripping-abort! {:ctx-id "ctx-4"}))
     (is (nil? (:skill-state @ctx*)))))
 

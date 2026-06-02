@@ -2,7 +2,6 @@
   "CLIENT-ONLY: Wind Generator GUI (main + base)."
   (:require [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
-            [cn.li.mcmod.gui.slot-registry :as slot-registry]
             [cn.li.mcmod.gui.spec :as gui-reg]
             [cn.li.mcmod.platform.item :as item]
             [cn.li.ac.energy.operations :as energy]
@@ -30,7 +29,7 @@
 (defn- create-main-container [tile player]
   (gui-sync/create-schema-container wind-schema/wind-gen-main-schema tile player :wind-gen-main))
 
-(defn- main-slot-count [_] (slot-registry/get-slot-count main-schema-id))
+(defn- main-slot-count [_] (slot-schema/tile-slot-count main-schema-id))
 (defn- main-get-slot [container slot] (common/get-slot-item-be container slot))
 (defn- main-set-slot! [container slot stack]
   (common/set-slot-item-be! container slot stack {:inventory [nil]} identity))
@@ -60,7 +59,7 @@
 (defn- create-base-container [tile player]
   (gui-sync/create-schema-container wind-schema/wind-gen-base-schema tile player :wind-gen-base))
 
-(defn- base-slot-count [_] (slot-registry/get-slot-count base-schema-id))
+(defn- base-slot-count [_] (slot-schema/tile-slot-count base-schema-id))
 (defn- base-get-slot [container slot] (common/get-slot-item-be container slot))
 (defn- base-set-slot! [container slot stack]
   (common/set-slot-item-be! container slot stack {:inventory [nil]} identity))

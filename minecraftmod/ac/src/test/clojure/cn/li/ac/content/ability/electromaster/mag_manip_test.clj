@@ -2,7 +2,7 @@
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
-            [cn.li.ac.ability.service.context-registry :as ctx-reg]
+            [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
             [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.ac.content.ability.electromaster.mag-manip :as mag-manip]
             [cn.li.mcmod.platform.block-manipulation :as block-manip]
@@ -31,8 +31,8 @@
                     entity/player-get-main-hand-item-id (fn [_] nil)
                     block-manip/can-break-block? (fn [& _] true)
                     block-manip/break-block! (fn [& _] false)
-                    ctx-reg/get-context (fn [id] (get @contexts* id))
-                    ctx-reg/update-context! (fn [id f & args]
+                    ctx/get-context (fn [id] (get @contexts* id))
+                    ctx-skill/update-skill-state-root! (fn [id f & args]
                                           (swap! contexts* update id #(apply f % args))
                                           nil)
                     ctx/ctx-send-to-client! (fn [& _] nil)]
@@ -59,8 +59,8 @@
                   entity/player-give-item-stack! (fn [player stack]
                                                    (swap! give-calls* conj [player stack])
                                                    true)
-                  ctx-reg/get-context (fn [id] (get @contexts* id))
-                  ctx-reg/update-context! (fn [id f & args]
+                  ctx/get-context (fn [id] (get @contexts* id))
+                  ctx-skill/update-skill-state-root! (fn [id f & args]
                                         (swap! contexts* update id #(apply f % args))
                                         nil)
                   ctx/ctx-send-to-client! (fn [id ch payload]
@@ -95,8 +95,8 @@
                   skill-effects/add-skill-exp! (fn [pid sid amount]
                                                  (swap! exp* conj [pid sid amount])
                                                  nil)
-                  ctx-reg/get-context (fn [id] (get @contexts* id))
-                  ctx-reg/update-context! (fn [id f & args]
+                  ctx/get-context (fn [id] (get @contexts* id))
+                  ctx-skill/update-skill-state-root! (fn [id f & args]
                                         (swap! contexts* update id #(apply f % args))
                                         nil)
                   ctx/ctx-send-to-client! (fn [& _] nil)]

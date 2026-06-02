@@ -2,7 +2,7 @@
   (:require [clojure.test :refer [deftest is]]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
-            [cn.li.ac.ability.service.context-registry :as ctx-reg]
+            [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
             [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.content.ability :as ability-content]
@@ -76,8 +76,8 @@
                                                      (swap! cooldown-calls* conj [player-id skill-id ticks]))
                   fx/send-end! (fn [ctx-id channel payload]
                                  (swap! end-calls* conj [ctx-id channel payload]))
-                  ctx-reg/update-context! (fn [& _] nil)
-                  ctx-reg/terminate-context! (fn [ctx-id _]
+                  ctx-skill/update-skill-state-root! (fn [& _] nil)
+                  ctx/terminate-context! (fn [ctx-id _]
                                            (swap! terminate-calls* conj ctx-id))]
       (up-fn {:player-id "p1" :ctx-id "ctx-low" :exp 0.5 :hold-ticks 9})
       (up-fn {:player-id "p1" :ctx-id "ctx-ok" :exp 0.5 :hold-ticks 10}))

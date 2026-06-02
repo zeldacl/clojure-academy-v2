@@ -54,11 +54,10 @@
                      (raycast/get-player-look-vector raycast/*raycast* player-id))]
       (when look-vec
         (when player
-          (entity/player-spawn-entity-by-id-with-options!
+          (entity/player-spawn-entity-by-id!
             player
             mdball-entity-id
-            0.0
-            {:life-ticks (delayed-projectiles/default-mdball-life-ticks)}))
+            0.0))
         ;; Send spawn FX first; the delayed task owns the actual hit settlement.
         (ctx/ctx-send-to-client! ctx-id :electron-bomb/fx-spawn
                                  {:x (:x eye) :y (:y eye) :z (:z eye)

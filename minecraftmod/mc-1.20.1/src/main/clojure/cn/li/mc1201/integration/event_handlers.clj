@@ -4,7 +4,7 @@
   Platform-specific dispatchers and handlers are passed as function parameters
   to enable both Forge and Fabric to use identical core event processing logic."
   (:require [cn.li.mcmod.util.log :as log]
-            [cn.li.mcmod.events.metadata :as event-metadata]
+            [cn.li.mcmod.block.query :as bquery]
             [cn.li.mc1201.integration.event-feedback :as event-feedback]
             [cn.li.mc1201.integration.event-helpers-core :as event-helpers])
   (:import [net.minecraft.world.entity.player Player]))
@@ -34,7 +34,7 @@
 
 (defn- identify-block-id
   [block]
-  (event-metadata/identify-block-from-full-name (str block)))
+  (bquery/identify-block-from-full-name (str block)))
 
 (defn- dispatch-block-event
   [event-data dispatcher-fn event-key log-prefix]
@@ -87,7 +87,7 @@
       (log/info (str log-prefix " Identified block-id:" block-id))
 
       (if block-id
-        (if (event-metadata/has-event-handler? block-id :on-right-click)
+        (if (bquery/has-block-event-handler? block-id :on-right-click)
           (do
             (log/info (str log-prefix " Block has registered handler, dispatching..."))
             (let [ret (dispatcher-fn (assoc event-data :block-id block-id))]

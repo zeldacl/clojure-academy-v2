@@ -58,24 +58,15 @@
 
 (defn create-block-spec
   "Create a block specification from options.
-
-  Accepts both nested and flat syntax for backward compatibility during migration:
-  - Nested: {:physical {:material :stone :hardness 5.0} ...}
-  - Flat: {:material :stone :hardness 5.0 ...}
-
-  Nested syntax takes precedence over flat syntax."
+  Only nested syntax is supported."
   [block-id options]
-  (let [;; Extract nested groups (new syntax)
-        physical-opts (:physical options)
+  (let [physical-opts (:physical options)
         rendering-opts (:rendering options)
         block-state-opts (:block-state options)
         events-opts (:events options)
         multi-block-opts (:multi-block options)
 
-        ;; Handle multi-block shorthand syntax
-        multi-block-config (or multi-block-opts (:multi-block options))
-        shorthand-positions (when (map? multi-block-config)
-                              (:positions multi-block-config))
+        shorthand-positions (:positions multi-block-opts)
         processed-shorthand-positions (when shorthand-positions
                                         (let [positions (mapv (fn [pos]
                                                                 (if (vector? pos)
@@ -91,76 +82,50 @@
                                             positions
                                             (into [{:x 0 :y 0 :z 0}] positions))))
 
-        ;; Build nested records
         physical (props/map->PhysicalProperties
-                   {:material (or (:material physical-opts) (:material options) :stone)
-                    :hardness (or (:hardness physical-opts) (:hardness options) props/default-hardness)
-                    :resistance (or (:resistance physical-opts) (:resistance options) props/default-resistance)
-                    :friction (or (:friction physical-opts) (:friction options) props/default-friction)
-                    :slip-factor (or (:slip-factor physical-opts) (:slip-factor options) props/default-friction)
-                    :sounds (or (:sounds physical-opts) (:sounds options) :stone)
-                    :harvest-level (or (:harvest-level physical-opts) (:harvest-level options) 0)
-                    :harvest-tool (or (:harvest-tool physical-opts) (:harvest-tool options) :pickaxe)
-                    :requires-tool (or (:requires-tool physical-opts) (:requires-tool options) false)})
+                   {:material (or (:material physical-opts) :stone)
+                    :hardness (or (:hardness physical-opts) props/default-hardness)
+                    :resistance (or (:resistance physical-opts) props/default-resistance)
+                    :friction (or (:friction physical-opts) props/default-friction)
+                    :slip-factor (or (:slip-factor physical-opts) props/default-friction)
+                    :sounds (or (:sounds physical-opts) :stone)
+                    :harvest-level (or (:harvest-level physical-opts) 0)
+                    :harvest-tool (or (:harvest-tool physical-opts) :pickaxe)
+                    :requires-tool (boolean (:requires-tool physical-opts))})
 
         rendering (props/map->RenderingProperties
-                    {:model-parent (or (:model-parent rendering-opts) (:model-parent options))
-                     :textures (or (:textures rendering-opts) (:textures options))
-                     :model-textures (or (:model-textures rendering-opts) (:model-textures options))
+                    {:model-parent (:model-parent rendering-opts)
+                     :textures (:textures rendering-opts)
+                     :model-textures (:model-textures rendering-opts)
                      :has-item-form? (if (contains? rendering-opts :has-item-form?)
                                        (:has-item-form? rendering-opts)
-                                       (not= false (:has-item-form options)))
-                     :flat-item-icon? (boolean (or (:flat-item-icon? rendering-opts) (:flat-item-icon? options)))
-                     :creative-tab (or (:creative-tab rendering-opts) (:creative-tab options) props/default-creative-tab)
-                     :light-level (or (:light-level rendering-opts) (:light-level options) props/default-light-level)})
+                                       true)
+                     :flat-item-icon? (boolean (:flat-item-icon? rendering-opts))
+                     :creative-tab (or (:creative-tab rendering-opts) props/default-creative-tab)
+                     :light-level (or (:light-level rendering-opts) props/default-light-level)})
 
         block-state (props/map->BlockStateConfig
-                      {:block-state-properties (or (:block-state-properties block-state-opts)
-                                                   (:block-state-properties options))})
+                      {:block-state-properties (:block-state-properties block-state-opts)})
 
         events (props/map->EventHandlers
-                 {:on-right-click (or (:on-right-click events-opts) (:on-right-click options) (fn [_] nil))
-                  :on-break (or (:on-break events-opts) (:on-break options) (fn [_] nil))
-                  :on-place (or (:on-place events-opts) (:on-place options) (fn [_] nil))
-                  :on-multi-block-break (or (:on-multi-block-break events-opts) (:on-multi-block-break options) (fn [_] nil))})
+                 {:on-right-click (:on-right-click events-opts)
+                  :on-break (:on-break events-opts)
+                  :on-place (:on-place events-opts)
+                  :on-multi-block-break (:on-multi-block-break events-opts)})
 
-        ;; Multi-block configuration
-        multi-block? (boolean (or (:multi-block? multi-block-opts)
-                                  (:multi-block? options)
-                                  multi-block-config))
-        multi-block-size (or (:size multi-block-opts)
-                             (:multi-block-size multi-block-opts)
-                             (:multi-block-size options)
-                             (when (map? multi-block-config)
-                               (:size multi-block-config)))
-        multi-block-positions (or (:positions multi-block-opts)
-                                  (:multi-block-positions multi-block-opts)
-                                  (:multi-block-positions options)
-                                  processed-shorthand-positions)
+        multi-block? (or (:enabled? multi-block-opts)
+                         (:multi-block? multi-block-opts)
+                         (some? (:size multi-block-opts))
+                         (seq processed-shorthand-positions))
+        multi-block-size (:size multi-block-opts)
+        multi-block-positions processed-shorthand-positions
         multi-block-origin (or (:origin multi-block-opts)
-                               (:multi-block-origin multi-block-opts)
-                               (:multi-block-origin options)
-                               (when (map? multi-block-config)
-                                 (:origin multi-block-config))
                                {:x 0 :y 0 :z 0})
-        multi-block-rotation-center (or (:rotation-center multi-block-opts)
-                                        (:multi-block-rotation-center multi-block-opts)
-                                        (:multi-block-rotation-center options)
-                                        (when (map? multi-block-config)
-                                          (:rotation-center multi-block-config)))
-        pivot-xz-override (or (:pivot-xz-override multi-block-opts)
-                              (:pivot-xz-override options)
-                              (when (map? multi-block-config)
-                                (:pivot-xz-override multi-block-config)))
+        multi-block-rotation-center (:rotation-center multi-block-opts)
+        pivot-xz-override (:pivot-xz-override multi-block-opts)
         tesr-use-raw-rotation-center?
-        (boolean (or (:tesr-use-raw-rotation-center? multi-block-opts)
-                     (:tesr-use-raw-rotation-center? options)
-                     (when (map? multi-block-config)
-                       (:tesr-use-raw-rotation-center? multi-block-config))))
-        tesr-y-deg-override (or (:tesr-y-deg-override multi-block-opts)
-                              (:tesr-y-deg-override options)
-                              (when (map? multi-block-config)
-                                (:tesr-y-deg-override multi-block-config)))
+        (boolean (:tesr-use-raw-rotation-center? multi-block-opts))
+        tesr-y-deg-override (:tesr-y-deg-override multi-block-opts)
 
         multi-block (props/map->MultiBlockConfig
                       {:multi-block? multi-block?
@@ -168,12 +133,10 @@
                        :multi-block-positions multi-block-positions
                        :multi-block-origin multi-block-origin
                        :multi-block-rotation-center multi-block-rotation-center
-                       :multi-block-master? (or (:multi-block-master? multi-block-opts)
-                                                (:multi-block-master? options)
-                                                false)
-                       :multiblock-mode (or (:multiblock-mode multi-block-opts) (:multiblock-mode options))
-                       :controller-block-id (or (:controller-block-id multi-block-opts) (:controller-block-id options))
-                       :part-block-id (or (:part-block-id multi-block-opts) (:part-block-id options))
+                       :multi-block-master? (boolean (:master? multi-block-opts))
+                       :multiblock-mode (:mode multi-block-opts)
+                       :controller-block-id (:controller-block-id multi-block-opts)
+                       :part-block-id (:part-block-id multi-block-opts)
                        :pivot-xz-override pivot-xz-override
                        :tesr-use-raw-rotation-center? tesr-use-raw-rotation-center?
                        :tesr-y-deg-override tesr-y-deg-override})]
@@ -274,24 +237,19 @@
                             maps))
         merged-controller-opts (deep-merge common-opts
                                            raw-controller-opts
-                                           {:multi-block multi-block
-                                            :multiblock-mode :controller-parts
-                                            :controller-block-id controller-id
-                                            :part-block-id part-id})
+                                           {:multi-block (merge multi-block
+                                                                {:mode :controller-parts
+                                                                 :controller-block-id controller-id
+                                                                 :part-block-id part-id})})
         merged-part-opts (deep-merge common-opts
                                      {:rendering {:has-item-form? false}}
                                      raw-part-opts
-                                     {:multiblock-mode :controller-parts
-                                      :controller-block-id controller-id
-                                      :part-block-id part-id})]
+                                     {:multi-block {:mode :controller-parts
+                                                    :controller-block-id controller-id
+                                                    :part-block-id part-id}})]
     `(do
        (defblock ~controller-name ~@(vec (mapcat identity merged-controller-opts)))
        (defblock ~part-name ~@(vec (mapcat identity merged-part-opts))))))
-
-(defmacro defcontroller-multiblock
-  "Convenience macro - alias for defmultiblock"
-  [base-name & options]
-  `(defmultiblock ~base-name ~@options))
 
 ;; ============================================================================
 ;; Template Support

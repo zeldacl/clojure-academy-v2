@@ -3,7 +3,7 @@
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
-            [cn.li.ac.ability.service.context-registry :as ctx-reg]
+            [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
             [cn.li.ac.content.ability.teleporter.shift-teleport :as shift]
             [cn.li.ac.content.ability.teleporter.tp-skill-helper :as helper]
             [cn.li.mcmod.platform.entity :as entity]
@@ -261,7 +261,7 @@
 
 (deftest shift-tp-down-respects-cost-gate-test
   (let [updates* (atom [])]
-    (with-redefs [ctx-reg/update-context! (fn [ctx-id f & args]
+    (with-redefs [ctx-skill/update-skill-state-root! (fn [ctx-id f & args]
                                         (swap! updates* conj [ctx-id f args])
                                         nil)]
       (shift/shift-tp-down! {:ctx-id "ctx-cost-fail" :cost-ok? false})
@@ -275,7 +275,7 @@
   (let [updates* (atom [])
         fx-calls* (atom 0)]
     (with-redefs [entity/player-main-hand-placeable-block? (fn [_] false)
-                  ctx-reg/update-context! (fn [ctx-id f & args]
+                  ctx-skill/update-skill-state-root! (fn [ctx-id f & args]
                                         (swap! updates* conj [ctx-id f args])
                                         nil)
                   ctx/ctx-send-to-client! (fn [& _] (swap! fx-calls* inc) nil)]

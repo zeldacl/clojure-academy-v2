@@ -11,7 +11,6 @@
             [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.server.damage.handler :as damage-handler]
             [cn.li.ac.ability.server.damage.runtime :as damage-runtime]
-            [cn.li.ac.content.ability.server-runtime-lifecycle :as server-runtime-lifecycle]
             [cn.li.ac.ability.item-actions :as item-actions]
             [cn.li.ac.ability.spi-lifecycle :as lifecycle]
             [cn.li.ac.util.init-guard :refer [defonce-guard]]
@@ -124,7 +123,6 @@
         (register-declared-skills! skill-namespaces)
         (doseq [ns-sym skill-namespaces]
           (run-namespace-init! ns-sym)))
-      (server-runtime-lifecycle/install-server-runtime-lifecycle!)
       ;; Register generic item actions (not skill-specific)
       (item-actions/register-item-action! "ac:app_skill_tree" :open-skill-tree)
       (discovery/freeze-provider-discovery!)

@@ -6,7 +6,6 @@
             [cn.li.mcmod.gui.events :as events]
             [cn.li.mcmod.gui.spec :as gui-reg]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
-            [cn.li.mcmod.gui.slot-registry :as slot-registry]
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.util.log :as log]
             [cn.li.ac.block.ability-interferer.config :as cfg]
@@ -28,7 +27,7 @@
    machine slot + player hotbar only (no player main inventory grid)."
   []
   (let [layout (slot-schema/get-slot-layout interferer-slot-schema-id)
-        tile-slot-count (slot-registry/get-slot-count interferer-slot-schema-id)
+        tile-slot-count (slot-schema/tile-slot-count interferer-slot-schema-id)
         tile-end (dec tile-slot-count)
         hotbar-start tile-slot-count
         hotbar-end (+ hotbar-start 8)]
@@ -87,7 +86,7 @@
                     :refresh-whitelist-view (atom nil)}})))
 
 (defn- get-slot-count [_container]
-  (slot-registry/get-slot-count interferer-slot-schema-id))
+  (slot-schema/tile-slot-count interferer-slot-schema-id))
 
 (defn- get-slot-item [container slot-index]
   (common/get-slot-item-be container slot-index))

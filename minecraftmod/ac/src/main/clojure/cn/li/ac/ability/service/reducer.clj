@@ -12,6 +12,7 @@
   No side effects, no atoms, no dynamic bindings, no requiring-resolve.
   All business logic delegates to the rules layer (rules/*.clj)."
   (:require [cn.li.ac.ability.rules.learning-rules :as learning]
+            [cn.li.ac.ability.rules.develop-rules :as develop-rules]
             [cn.li.ac.ability.rules.resource-rules :as resource]
             [cn.li.ac.ability.rules.cooldown-rules :as cooldown]
             [cn.li.ac.ability.model.ability :as adata]
@@ -285,22 +286,41 @@
 ;; ============================================================================
 
 (defn- cmd-server-tick
-  "Advance one server tick for a player: recover resources, decrement cooldowns.
-  
+  "Advance one server tick: resource/cooldown recovery, develop tick, completion.
+
   Command fields:
-    :cp-speed    float (optional override)
-    :ol-speed    float (optional override)"
-  [player-state {:keys [cp-speed ol-speed]}]
-  (let [res-data (:resource-data player-state)
+    :cp-speed       float (optional override)
+    :ol-speed       float (optional override)
+    :uuid           UUID-string (optional, for develop completion events)
+    :player-uuid    UUID-string (optional alias)"
+  [player-state {:keys [cp-speed ol-speed uuid player-uuid]}]
+  (let [uuid-str (or uuid player-uuid (:player-uuid player-state))
+        res-data (:resource-data player-state)
         cd-data (:cooldown-data player-state)
         eff-cp-speed (or cp-speed (cfg/cp-recover-speed))
         eff-ol-speed (or ol-speed (cfg/overload-recover-speed))
-        
         res-result (resource/server-tick-recovery res-data eff-cp-speed eff-ol-speed)
-        {:keys [data]} (cooldown/server-tick cd-data)]
-    (ok (assoc player-state
-               :resource-data (:data res-result)
-               :cooldown-data data))))
+        {:keys [data]} (cooldown/server-tick cd-data)
+        ticked-state (assoc player-state
+                            :resource-data (:data res-result)
+                            :cooldown-data data)
+        develop-data (:develop-data ticked-state)
+        dev-result (when (and develop-data (ddata/developing? develop-data))
+                     (develop-rules/tick-develop develop-data))
+        new-dev (if dev-result (:develop-data dev-result) develop-data)
+        completion (when (and dev-result (:completed? dev-result) uuid-str)
+                     (develop-rules/apply-completion
+                      new-dev
+                      (:ability-data ticked-state)
+                      (:resource-data ticked-state)
+                      uuid-str))
+        final-state (cond-> ticked-state
+                      (some? new-dev) (assoc :develop-data new-dev)
+                      completion (assoc :ability-data (:ability-data completion)
+                                        :resource-data (:resource-data completion)
+                                        :develop-data (:develop-data completion)))
+        completion-events (or (:events completion) [])]
+    (ok final-state completion-events)))
 
 ;; ============================================================================
 ;; Sub-Reducer: context lifecycle
@@ -543,70 +563,31 @@
                 (assoc-in [:resource-data :overload-fine] true)))
         (ok player-state))))
 
-  (defn- cmd-sync-ability-data
-    [player-state {:keys [ability-data]}]
-    (if (some? ability-data)
-      (ok (assoc player-state :ability-data ability-data))
-      (rejected player-state :invalid-ability-data-sync)))
+  (defn- cmd-hydrate-player-state
+    "Replace player-state slices from persistence or lifecycle hydration.
 
-  (defn- cmd-sync-resource-data
-    [player-state {:keys [resource-data]}]
-    (if (some? resource-data)
-      (ok (assoc player-state :resource-data resource-data))
-      (rejected player-state :invalid-resource-data-sync)))
-
-  (defn- cmd-sync-cooldown-data
-    [player-state {:keys [cooldown-data]}]
-    (if (some? cooldown-data)
-      (ok (assoc player-state :cooldown-data cooldown-data))
-      (rejected player-state :invalid-cooldown-data-sync)))
-
-  (defn- cmd-sync-preset-data
-    [player-state {:keys [preset-data]}]
-    (if (some? preset-data)
-      (ok (assoc player-state :preset-data preset-data))
-      (rejected player-state :invalid-preset-data-sync)))
-
-  (defn- cmd-sync-develop-data
-    [player-state {:keys [develop-data]}]
-    (if (some? develop-data)
-      (ok (assoc player-state :develop-data develop-data))
-      (rejected player-state :invalid-develop-data-sync)))
-
-  (defn- cmd-sync-terminal-data
-    [player-state {:keys [terminal-data]}]
-    (if (some? terminal-data)
-      (ok (assoc player-state terminal-model/state-key
-                 (terminal-model/normalize-state terminal-data)))
-      (rejected player-state :invalid-terminal-data-sync)))
-
-  (defn- cmd-sync-context-registry
-    [player-state {:keys [context-registry]}]
-    (if (map? context-registry)
-      (ok (assoc player-state :context-registry context-registry))
-      (rejected player-state :invalid-context-registry-sync)))
-
-  (defn- cmd-sync-runtime-data
-    [player-state {:keys [runtime-data]}]
-    (if (some? runtime-data)
-      (ok (assoc player-state :runtime runtime-data))
-      (rejected player-state :invalid-runtime-data-sync)))
+    Only keys present on the command are applied. Intended for adapters and
+    server hooks — not arbitrary gameplay callers."
+    [player-state cmd]
+    (if (and (contains? cmd :context-registry)
+             (not (map? (:context-registry cmd))))
+      (rejected player-state :invalid-context-registry-sync)
+      (ok (cond-> player-state
+            (contains? cmd :ability-data) (assoc :ability-data (:ability-data cmd))
+            (contains? cmd :resource-data) (assoc :resource-data (:resource-data cmd))
+            (contains? cmd :cooldown-data) (assoc :cooldown-data (:cooldown-data cmd))
+            (contains? cmd :preset-data) (assoc :preset-data (:preset-data cmd))
+            (contains? cmd :develop-data) (assoc :develop-data (:develop-data cmd))
+            (contains? cmd :terminal-data)
+            (assoc terminal-model/state-key
+                   (terminal-model/normalize-state (:terminal-data cmd)))
+            (contains? cmd :context-registry) (assoc :context-registry (:context-registry cmd))
+            (contains? cmd :runtime-data) (assoc :runtime (:runtime-data cmd))
+            (contains? cmd :dirty?) (assoc :dirty? (boolean (:dirty? cmd)))))))
 
   (defn- cmd-set-dirty-flag
     [player-state {:keys [dirty?] :or {dirty? false}}]
     (ok (assoc player-state :dirty? (boolean dirty?))))
-
-  (defn- cmd-apply-server-tick-postprocess
-    "Apply post-tick resolved domain snapshots produced by state-tick orchestration.
-
-    This command is explicit and domain-scoped to server tick settlement,
-    replacing ad-hoc use of generic set-* commands in tick pipelines."
-    [player-state {:keys [ability-data resource-data cooldown-data develop-data]}]
-    (ok (cond-> player-state
-          (some? ability-data) (assoc :ability-data ability-data)
-          (some? resource-data) (assoc :resource-data resource-data)
-          (some? cooldown-data) (assoc :cooldown-data cooldown-data)
-          (some? develop-data) (assoc :develop-data develop-data))))
 
   (defn- cmd-context-assoc-skill-state
     [player-state {:keys [ctx-id k v]}]
@@ -676,6 +657,185 @@
         (ok player-state))))
 
 ;; ============================================================================
+;; Sub-Reducer: player runtime (delayed projectiles, radiation marks, vecmanip)
+;; ============================================================================
+
+(defn- pending-tasks-path
+  [player-uuid]
+  [:runtime :delayed-projectiles :pending-tasks (str player-uuid)])
+
+(defn- cmd-schedule-delayed-projectile-task
+  [player-state {:keys [player-uuid task delay-ticks]}]
+  (let [ticks (max 1 (int (or delay-ticks 1)))
+        task* (assoc task :ticks-left ticks)]
+    (ok (update-in player-state (pending-tasks-path player-uuid) (fnil conj []) task*))))
+
+(defn- cmd-tick-delayed-projectile-tasks
+  [player-state {:keys [player-uuid]}]
+  (let [path (pending-tasks-path player-uuid)
+        tasks (get-in player-state path [])
+        due (volatile! [])
+        remaining (volatile! [])]
+    (doseq [task tasks]
+      (if (<= (long (or (:ticks-left task) 0)) 1)
+        (vswap! due conj task)
+        (vswap! remaining conj (update task :ticks-left dec))))
+    (let [next-state (if (seq @remaining)
+                       (assoc-in player-state path @remaining)
+                       (update-in player-state [:runtime :delayed-projectiles :pending-tasks]
+                                   dissoc (str player-uuid)))
+          events (mapv (fn [t]
+                         {:event/type :delayed-projectile-due
+                          :player-uuid player-uuid
+                          :task t})
+                       @due)]
+      (ok next-state events))))
+
+(defn- cmd-clear-delayed-projectile-tasks
+  [player-state {:keys [player-uuid clear-all?]}]
+  (if clear-all?
+    (ok (assoc-in player-state [:runtime :delayed-projectiles :pending-tasks] {}))
+    (ok (update-in player-state [:runtime :delayed-projectiles :pending-tasks]
+                   dissoc (str player-uuid)))))
+
+(defn- cmd-mark-radiation-target
+  [player-state {:keys [target-id mark]}]
+  (if (and target-id mark)
+    (ok (assoc-in player-state [:runtime :meltdowner :radiation-marks (str target-id)] mark))
+    (rejected player-state :invalid-radiation-mark)))
+
+(defn- cmd-clear-radiation-marks
+  [player-state {:keys [target-id source-player-id clear-all? clear-expired?]}]
+  (let [marks (or (get-in player-state [:runtime :meltdowner :radiation-marks]) {})
+        next-marks
+        (cond
+          clear-all?
+          {}
+
+          clear-expired?
+          (into {}
+                (remove (fn [[_k {:keys [ticks-left]}]]
+                          (not (pos? (long (or ticks-left 0))))))
+                marks)
+
+          target-id
+          (dissoc marks (str target-id))
+
+          source-player-id
+          (let [source-key (str source-player-id)]
+            (into {}
+                  (remove (fn [[_k {:keys [source-player-id]}]]
+                            (= source-key (str source-player-id))))
+                  marks))
+
+          :else
+          marks)]
+    (ok (assoc-in player-state [:runtime :meltdowner :radiation-marks] next-marks))))
+
+(defn- cmd-tick-radiation-marks
+  [player-state _]
+  (let [marks (or (get-in player-state [:runtime :meltdowner :radiation-marks]) {})
+        next-marks
+        (reduce-kv
+          (fn [acc target-id mark]
+            (let [ticks-left (dec (long (or (:ticks-left mark) 0)))]
+              (if (pos? ticks-left)
+                (assoc acc target-id (assoc mark :ticks-left ticks-left))
+                acc)))
+          {}
+          marks)]
+    (ok (assoc-in player-state [:runtime :meltdowner :radiation-marks] next-marks))))
+
+(defn- projectile-claims-path
+  []
+  [:runtime :vecmanip :projectile-claims])
+
+(defn- cmd-claim-projectile
+  [player-state {:keys [player-uuid skill-id projectile-id tick]}]
+  (if (and player-uuid projectile-id skill-id)
+    (let [now-tick (long tick)
+          lock-key [(str player-uuid) (str projectile-id)]
+          claims (or (get-in player-state (projectile-claims-path))
+                     {:tick -1 :owners {}})
+          current (if (= (:tick claims) now-tick)
+                    claims
+                    {:tick now-tick :owners {}})
+          owner (get-in current [:owners lock-key])
+          next-claims
+          (cond
+            (nil? owner)
+            (assoc-in current [:owners lock-key] skill-id)
+
+            (= owner skill-id)
+            current
+
+            :else
+            current)
+          granted? (= (get-in next-claims [:owners lock-key]) skill-id)
+          next-state (assoc-in player-state (projectile-claims-path) next-claims)]
+      (assoc (ok next-state) :granted? granted?))
+    (assoc (ok player-state) :granted? false)))
+
+(defn- cmd-replace-projectile-claims
+  [player-state {:keys [claims]}]
+  (ok (assoc-in player-state (projectile-claims-path) (or claims {:tick -1 :owners {}}))))
+
+(defn- cmd-clear-player-projectile-claims
+  [player-state {:keys [player-uuid]}]
+  (let [claims (or (get-in player-state (projectile-claims-path))
+                   {:tick -1 :owners {}})
+        next-owners
+        (into {}
+              (remove (fn [[[owner-player-id _] _]]
+                        (= (str owner-player-id) (str player-uuid))))
+              (or (:owners claims) {}))]
+    (ok (assoc-in player-state (projectile-claims-path)
+                (assoc claims :owners next-owners)))))
+
+(defn- reflection-path
+  []
+  [:runtime :vecmanip :reflection])
+
+(defn- reflecting-pairs-set
+  [player-state]
+  (set (or (get-in player-state (into (reflection-path) [:reflecting-pairs])) [])))
+
+(defn- cmd-enter-vec-reflection
+  [player-state {:keys [owner-key]}]
+  (let [pairs (reflecting-pairs-set player-state)]
+    (if (contains? pairs owner-key)
+      (assoc (ok player-state) :granted? false)
+      (assoc (ok (update-in player-state (into (reflection-path) [:reflecting-pairs])
+                    (fnil conj []) owner-key))
+             :granted? true))))
+
+(defn- cmd-leave-vec-reflection
+  [player-state {:keys [owner-key]}]
+  (let [pairs (reflecting-pairs-set player-state)
+        depths (or (get-in player-state (into (reflection-path) [:reflection-depths])) {})
+        next-depths
+        (if-let [v (get depths owner-key)]
+          (let [nv (dec (long v))]
+            (if (pos? nv)
+              (assoc depths owner-key nv)
+              (dissoc depths owner-key)))
+          depths)
+        next-pairs (disj pairs owner-key)]
+    (ok (-> player-state
+            (assoc-in (into (reflection-path) [:reflecting-pairs]) (vec next-pairs))
+            (assoc-in (into (reflection-path) [:reflection-depths]) next-depths)))))
+
+(defn- cmd-set-vec-reflection-depth
+  [player-state {:keys [owner-key depth]}]
+  (ok (assoc-in player-state (into (reflection-path) [:reflection-depths owner-key])
+              (long depth))))
+
+(defn- cmd-reset-vec-reflection-runtime
+  [player-state _]
+  (ok (assoc-in player-state (reflection-path)
+              {:reflecting-pairs [] :reflection-depths {}})))
+
+;; ============================================================================
 ;; Public Dispatcher
 ;; ============================================================================
 
@@ -713,16 +873,8 @@
 (defmethod apply-command :change-category [ps cmd] (cmd-change-category ps cmd))
 (defmethod apply-command :change-category-with-level [ps cmd] (cmd-change-category-with-level ps cmd))
 (defmethod apply-command :enforce-overload-floor [ps cmd] (cmd-enforce-overload-floor ps cmd))
-(defmethod apply-command :sync-ability-data [ps cmd] (cmd-sync-ability-data ps cmd))
-(defmethod apply-command :sync-resource-data [ps cmd] (cmd-sync-resource-data ps cmd))
-(defmethod apply-command :sync-cooldown-data [ps cmd] (cmd-sync-cooldown-data ps cmd))
-(defmethod apply-command :sync-preset-data [ps cmd] (cmd-sync-preset-data ps cmd))
-(defmethod apply-command :sync-develop-data [ps cmd] (cmd-sync-develop-data ps cmd))
-(defmethod apply-command :sync-terminal-data [ps cmd] (cmd-sync-terminal-data ps cmd))
-(defmethod apply-command :sync-context-registry [ps cmd] (cmd-sync-context-registry ps cmd))
-(defmethod apply-command :sync-runtime-data [ps cmd] (cmd-sync-runtime-data ps cmd))
+(defmethod apply-command :hydrate-player-state [ps cmd] (cmd-hydrate-player-state ps cmd))
 (defmethod apply-command :set-dirty-flag [ps cmd] (cmd-set-dirty-flag ps cmd))
-(defmethod apply-command :apply-server-tick-postprocess [ps cmd] (cmd-apply-server-tick-postprocess ps cmd))
 (defmethod apply-command :context-assoc-skill-state [ps cmd] (cmd-context-assoc-skill-state ps cmd))
 (defmethod apply-command :context-increment-skill-state [ps cmd] (cmd-context-increment-skill-state ps cmd))
 (defmethod apply-command :context-set-toggle-state [ps cmd] (cmd-context-set-toggle-state ps cmd))
@@ -732,6 +884,19 @@
 (defmethod apply-command :context-set-input-state [ps cmd] (cmd-context-set-input-state ps cmd))
 (defmethod apply-command :set-railgun-coin-judged-uuid [ps cmd] (cmd-set-railgun-coin-judged-uuid ps cmd))
 (defmethod apply-command :clear-railgun-coin-judged-uuid [ps cmd] (cmd-clear-railgun-coin-judged-uuid ps cmd))
+(defmethod apply-command :schedule-delayed-projectile-task [ps cmd] (cmd-schedule-delayed-projectile-task ps cmd))
+(defmethod apply-command :tick-delayed-projectile-tasks [ps cmd] (cmd-tick-delayed-projectile-tasks ps cmd))
+(defmethod apply-command :clear-delayed-projectile-tasks [ps cmd] (cmd-clear-delayed-projectile-tasks ps cmd))
+(defmethod apply-command :mark-radiation-target [ps cmd] (cmd-mark-radiation-target ps cmd))
+(defmethod apply-command :clear-radiation-marks [ps cmd] (cmd-clear-radiation-marks ps cmd))
+(defmethod apply-command :tick-radiation-marks [ps cmd] (cmd-tick-radiation-marks ps cmd))
+(defmethod apply-command :claim-projectile [ps cmd] (cmd-claim-projectile ps cmd))
+(defmethod apply-command :replace-projectile-claims [ps cmd] (cmd-replace-projectile-claims ps cmd))
+(defmethod apply-command :clear-player-projectile-claims [ps cmd] (cmd-clear-player-projectile-claims ps cmd))
+(defmethod apply-command :enter-vec-reflection [ps cmd] (cmd-enter-vec-reflection ps cmd))
+(defmethod apply-command :leave-vec-reflection [ps cmd] (cmd-leave-vec-reflection ps cmd))
+(defmethod apply-command :set-vec-reflection-depth [ps cmd] (cmd-set-vec-reflection-depth ps cmd))
+(defmethod apply-command :reset-vec-reflection-runtime [ps cmd] (cmd-reset-vec-reflection-runtime ps cmd))
 
 (defmethod apply-command :default
   [player-state command]

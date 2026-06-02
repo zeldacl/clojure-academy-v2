@@ -10,15 +10,13 @@
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill]]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
-            [cn.li.ac.ability.service.context-registry :as ctx-reg]
-            [cn.li.ac.ability.service.command-runtime :as command-rt]
-            [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
+            [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
+                        [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.content.ability.teleporter.tp-skill-helper :as helper]
             [cn.li.mcmod.platform.block-manipulation :as bm]
-            [cn.li.mcmod.hooks.core :as runtime-hooks]
-            [cn.li.mcmod.util.log :as log]))
+                        [cn.li.mcmod.util.log :as log]))
 
 ;; ---------------------------------------------------------------------------
 ;; Constants and helpers
@@ -169,7 +167,7 @@
 
 (defn- preview-payload
   [ctx-id]
-  (let [ctx-data (ctx-reg/get-context ctx-id)
+  (let [ctx-data (ctx/get-context ctx-id)
         preview (get-in ctx-data [:skill-state :preview])
         dest (:dest preview)]
     {:distance (double (or (:distance preview) 0.0))
@@ -178,52 +176,21 @@
      :y (:y dest)
      :z (:z dest)}))
 
-(defn- safe-context-data
-  [ctx-id]
-  (try
-    (ctx-reg/get-context ctx-id)
-    (catch Exception _ nil)))
-
-(defn- command-runtime-ready?
-  [{:keys [session-id player-uuid]}]
-  (and (runtime-hooks/current-player-state-owner)
-       session-id
-       player-uuid))
+(defn- update-skill-state-root!
+  [ctx-id f & args]
+  (apply ctx-skill/update-skill-state-root! ctx-id f args))
 
 (defn- set-skill-state-root!
   [ctx-id state-map]
-  (let [ctx-data (or (safe-context-data ctx-id) {})]
-    (if (command-runtime-ready? ctx-data)
-      (let [result (command-rt/run-command-in-session! (:session-id ctx-data)
-                                                       (:player-uuid ctx-data)
-                                                       {:command :context-assoc-skill-state
-                                                        :ctx-id ctx-id
-                                                        :k []
-                                                        :v state-map})]
-        (when (= :context-not-found (:rejected-reason result))
-          (ctx-reg/update-context! ctx-id assoc :skill-state state-map)))
-      (ctx-reg/update-context! ctx-id assoc :skill-state state-map))))
+  (ctx-skill/update-skill-state-root! ctx-id identity state-map))
 
 (defn- clear-skill-state!
   [ctx-id]
-  (let [ctx-data (or (safe-context-data ctx-id) {})]
-    (if (command-runtime-ready? ctx-data)
-      (let [result (command-rt/run-command-in-session! (:session-id ctx-data)
-                                                       (:player-uuid ctx-data)
-                                                       {:command :context-clear-skill-state
-                                                        :ctx-id ctx-id})]
-        (when (= :context-not-found (:rejected-reason result))
-          (ctx-reg/update-context! ctx-id dissoc :skill-state)))
-      (ctx-reg/update-context! ctx-id dissoc :skill-state))))
-
-(defn- update-skill-state-root!
-  [ctx-id f]
-  (let [current (or (:skill-state (or (safe-context-data ctx-id) {})) {})]
-    (set-skill-state-root! ctx-id (f current))))
+  (ctx-skill/clear-skill-state! ctx-id))
 
 (defn- ensure-up-resolve!
   [ctx-id player-id]
-  (let [ctx-data (ctx-reg/get-context ctx-id)
+  (let [ctx-data (ctx/get-context ctx-id)
         existing (get-in ctx-data [:skill-state :up-resolve])
         desired-distance (double (or (get-in ctx-data [:skill-state :desired-distance])
                                      (default-desired-distance player-id)))]
@@ -272,7 +239,7 @@
 
 (defn penetrate-tp-tick!
   [{:keys [player-id ctx-id hold-ticks]}]
-  (let [ctx-data (ctx-reg/get-context ctx-id)
+  (let [ctx-data (ctx/get-context ctx-id)
         desired (double (or (get-in ctx-data [:skill-state :desired-distance])
                             (default-desired-distance player-id)))
         preview (resolve-preview player-id desired)]

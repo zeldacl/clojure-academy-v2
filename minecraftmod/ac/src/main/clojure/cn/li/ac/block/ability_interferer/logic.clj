@@ -84,7 +84,7 @@
 					(command-rt/run-command-in-session!
 					 session-id
 					 uuid
-					 {:command :sync-resource-data
+					 {:command :hydrate-player-state
 						:resource-data resource-data})))
 			true
 			(catch Exception e
@@ -101,7 +101,7 @@
 					(command-rt/run-command-in-session!
 					 session-id
 					 uuid
-					 {:command :sync-resource-data
+					 {:command :hydrate-player-state
 						:resource-data resource-data})))
 			true
 			(catch Exception e

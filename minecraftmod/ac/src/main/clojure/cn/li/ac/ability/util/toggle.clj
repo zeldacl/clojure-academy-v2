@@ -6,13 +6,13 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.service.command-runtime :as command-rt]
-            [cn.li.ac.ability.service.context-registry :as ctx-reg]
+            [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.mcmod.util.log :as log]))
 
 (defn- context-owner
   [ctx-id]
   (try
-    (let [ctx-map (ctx-reg/get-context ctx-id)
+    (let [ctx-map (ctx/get-context ctx-id)
           sid (:session-id ctx-map)]
       {:ctx-map ctx-map
        :session-id (if (vector? sid) (first sid) sid)

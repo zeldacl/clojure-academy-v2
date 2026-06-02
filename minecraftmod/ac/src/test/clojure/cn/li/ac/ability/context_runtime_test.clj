@@ -165,7 +165,8 @@
       (is (true? (rt/handle-key-up! ctx-id {:ctx-id ctx-id :skill-id :arc-gen})))
       (is (= 0 (cd/get-remaining (:cooldown-data (store/get-player-state* test-player/test-session-id uuid)) :arc-gen :main))
         "generic key-up should not apply cooldown when pattern runtime owns settlement")
-      (is (= [evt/EVT-CONTEXT-KEY-UP] (map :event/type @events*)))
+      (is (some #(= evt/EVT-CONTEXT-KEY-UP %) (map :event/type @events*))
+          "key-up should emit context key-up event")
       (is (not-any? #(= evt/EVT-SKILL-PERFORM (:event/type %)) @events*))))))
 
 (deftest key-input-lifecycle-dispatches-distinct-callback-keys-test

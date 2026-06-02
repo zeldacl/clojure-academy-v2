@@ -3,9 +3,11 @@
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
-            [cn.li.ac.ability.service.context-registry :as ctx-reg]
+            [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
             [cn.li.ac.ability.util.toggle :as toggle]
             [cn.li.ac.content.ability.vecmanip.arbitration :as arbitration]
+            [cn.li.ac.ability.service.runtime-store :as store]
+            [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.ac.content.ability.vecmanip.vec-deviation :as vd]
             [cn.li.mcmod.platform.entity-motion :as entity-motion]
             [cn.li.mcmod.platform.world-effects :as world-effects]))
@@ -15,13 +17,14 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- with-fresh-arbitration-runtime [f]
-  (arbitration/call-with-projectile-arbitration-runtime
-    (arbitration/create-projectile-arbitration-runtime)
+  (ps-fix/with-test-player-state-owner
     (fn []
+      (store/reset-store!)
+      (ps-fix/seed-player-state! "p1" {})
       (try
         (f)
         (finally
-          (arbitration/reset-projectile-locks-for-test!))))))
+          (arbitration/reset-projectile-locks-for-test! "p1"))))))
 
 (use-fixtures :each with-fresh-arbitration-runtime)
 
@@ -87,9 +90,9 @@
                    (fn [_a# _b#] nil)
                    cn.li.ac.content.ability.vecmanip.vec-deviation/send-fx-stop-entity!
                    (fn [_a# _b# _c#] nil)
-                   ctx-reg/get-context
+                   ctx/get-context
                    (fn [_id#] ctx-data#)
-                   ctx-reg/update-context!
+                   ctx-skill/update-skill-state-root!
                    (fn [_a# _b# & _rest#] nil)
                    world-effects/*world-effects* :mock
                    world-effects/find-entities-in-radius

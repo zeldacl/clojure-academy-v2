@@ -1,23 +1,21 @@
 (ns cn.li.ac.content.ability.meltdowner.damage-helper-test
-  (:require 
-            [cn.li.ac.ability.service.runtime-store :as store]
-[clojure.test :refer [deftest is testing use-fixtures]]
+  (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [cn.li.ac.ability.model.ability :as ad]
-            [cn.li.ac.ability.server.damage.runtime :as rt]            [cn.li.ac.test.support.player-state :as ps-fix]
+            [cn.li.ac.ability.server.damage.runtime :as rt]
+            [cn.li.ac.ability.service.runtime-store :as store]
+            [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as dh]
             [cn.li.ac.content.ability.meltdowner.rad-intensify :as rad]))
 
 (defn- with-fresh-marks-runtime [f]
   (ps-fix/with-test-player-state-owner
     (fn []
-      (dh/call-with-damage-helper-runtime (dh/create-damage-helper-runtime)
-        (fn []
-          (store/reset-store!)
-          (try
-            (f)
-            (finally
-              (dh/reset-marks-for-test!)
-              (store/reset-store!))))))))
+      (store/reset-store!)
+      (try
+        (f)
+        (finally
+          (dh/reset-marks-for-test!)
+          (store/reset-store!))))))
 
 (use-fixtures :each with-fresh-marks-runtime)
 
@@ -125,42 +123,18 @@
     (dh/clear-source-marks! "atk-a")
     (is (empty? (dh/marks-snapshot)))))
 
-(deftest damage-helper-runtime-isolation-test
-  (let [runtime-a (dh/create-damage-helper-runtime)
-        runtime-b (dh/create-damage-helper-runtime)
-        target "victim-1"]
-    (dh/call-with-damage-helper-runtime runtime-a
-      (fn []
-        (dh/reset-marks-for-test!
-          {target {:source-player-id "atk-a"
-                   :target-id target
-                   :ticks-left 2
-                   :rate 2.0}})))
-    (dh/call-with-damage-helper-runtime runtime-b
-      (fn []
-        (dh/reset-marks-for-test!
-          {target {:source-player-id "atk-b"
-                   :target-id target
-                   :ticks-left 4
-                   :rate 3.0}})
-        (is (= 3.0 (:rate (get (dh/marks-snapshot) target))))
-        (dh/tick-marks!)
-        (is (= 3 (:ticks-left (get (dh/marks-snapshot) target))))))
-    (dh/call-with-damage-helper-runtime runtime-a
-      (fn []
-        (is (= 2.0 (:rate (get (dh/marks-snapshot) target))))
-        (is (= 2 (:ticks-left (get (dh/marks-snapshot) target))))))))
-
-(deftest damage-helper-throws-without-binding-test
-  (let [target "victim-fallback"]
-    (binding [dh/*damage-helper-runtime* nil]
-      (is (thrown-with-msg?
-            clojure.lang.ExceptionInfo
-            #"Damage helper runtime is not bound"
-            (dh/reset-marks-for-test!
-              {target {:source-player-id "atk-fallback"
-                       :target-id target
-                       :ticks-left 2
-                       :rate 1.25}}))))))
-
-
+(deftest damage-helper-marks-are-per-attacker-state-test
+  (let [target-a "victim-a"
+        target-b "victim-b"]
+    (dh/reset-marks-for-test!
+      {target-a {:source-player-id "atk-a"
+                 :target-id target-a
+                 :ticks-left 2
+                 :rate 2.0}
+       target-b {:source-player-id "atk-b"
+                 :target-id target-b
+                 :ticks-left 4
+                 :rate 3.0}})
+    (dh/tick-marks!)
+    (is (= 1 (:ticks-left (get (dh/marks-snapshot) target-a))))
+    (is (= 3 (:ticks-left (get (dh/marks-snapshot) target-b))))))

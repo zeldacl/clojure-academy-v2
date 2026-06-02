@@ -8,15 +8,15 @@ Block DSL 提供声明式方式定义方块元数据，**由 `cn.li.mcmod.protoc
 
 1. **实现位置**：宏与 `BlockSpec` 定义在 **`cn.li.mcmod.block.dsl`**（简称下文 **`bdsl`**）；内容侧在 **`ac`** 的命名空间中 `(require [cn.li.mcmod.block.dsl :as bdsl])` 后调用 **`defblock`**。
 2. **注册表**：每个 **`defblock`** 调用 **`register-block!`**，把校验后的 **`BlockSpec`** 存入 **`block-registry`**（atom）。**方块 id** 为 DSL 符号名的字符串形式（如 `wireless-node-basic` → `"wireless-node-basic"`）。
-3. **BlockSpec 结构**（嵌套记录，也可用扁平字段，`create-block-spec` 会合并）：
+3. **BlockSpec 结构**（嵌套记录）：
    - **`:physical`** — `PhysicalProperties`：`:material`、`:hardness`、`:resistance`、采集工具等。
    - **`:rendering`** — `RenderingProperties`：`:model-parent`、`:textures`、`:model-textures`、`:has-item-form?`、`:light-level` 等。
    - **`:block-state`** — `BlockStateConfig`：动态 **`block-state-properties`**（供 `blockstate_properties` 生成 `Property`）。
-   - **`:events`** — `EventHandlers`：`:on-right-click`、`:on-break`、`:on-place`、`:on-multi-block-break`（可与顶层扁平键混用）。
+  - **`:events`** — `EventHandlers`：`:on-right-click`、`:on-break`、`:on-place`、`:on-multi-block-break`。
    - **`:multi-block`** — `MultiBlockConfig`：多方块体积、不规则坐标、`controller-parts` 模式等。
 4. **BlockEntity 元数据**：需要 Scripted BlockEntity 的方块必须在 **`cn.li.mcmod.block.tile-dsl`** 中用 **`deftile`** 显式绑定 block-id -> tile-id；Block DSL 不再承载 tile 生命周期钩子。
-5. **进阶宏**：**`defmultiblock`** / **`defcontroller-multiblock`** 一次生成 controller + part 两个 **`defblock`**，并设置 **`multiblock-mode :controller-parts`**。
-6. **事件进游戏**：`cn.li.ac.core/init` 在内容加载后调用 **`cn.li.mcmod.events.metadata/init-event-metadata!`**，从所有 `BlockSpec` 的 `:events` 同步到 **`events.metadata`**，Forge 侧只通过 **`cn.li.mcmod.events.dispatcher`** 分发。
+5. **进阶宏**：**`defmultiblock`** 一次生成 controller + part 两个 **`defblock`**，并在 `:multi-block` 中设置 controller-parts 元数据。
+6. **事件进游戏**：平台侧通过 **`cn.li.mcmod.block.query`** + **`cn.li.mcmod.events.dispatcher`** 直接从 `BlockSpec :events` 分发。
 
 完整启动链、与 `deftile`/Forge 注册的关系见 **`docs/02-architecture/Runtime_And_DSL_CN.md`**。
 
@@ -24,23 +24,23 @@ Block DSL 提供声明式方式定义方块元数据，**由 `cn.li.mcmod.protoc
 
 ### 1. Block DSL 核心 (`cn.li.mcmod.block.dsl`)
 
-提供 **`defblock`**、**`defmultiblock`** 与运行时查询（**`get-block`**、**`list-blocks`** 等）。
+提供 **`defblock`**、**`defmultiblock`** 与运行时查询（**`get-block-spec`**、**`list-blocks`** 等）。
 
 #### 基础语法
 
 ```clojure
 (bdsl/defblock block-name
-  :material :stone          ; 材质
-  :hardness 1.5             ; 硬度
-  :resistance 6.0           ; 爆炸抗性
-  :light-level 0            ; 光照等级 (0-15)
-  :requires-tool true       ; 是否需要工具
-  :harvest-tool :pickaxe    ; 采集工具
-  :harvest-level 0          ; 采集等级
-  :sounds :stone            ; 音效
-  :on-right-click fn        ; 右键点击处理器
-  :on-break fn              ; 破坏处理器
-  :on-place fn)             ; 放置处理器
+  :physical {:material :stone
+             :hardness 1.5
+             :resistance 6.0
+             :requires-tool true
+             :harvest-tool :pickaxe
+             :harvest-level 0
+             :sounds :stone}
+  :rendering {:light-level 0}
+  :events {:on-right-click fn
+           :on-break fn
+           :on-place fn})
 ```
 
 ### 模型策略官方字段（Datagen 推荐）
@@ -59,7 +59,7 @@ Block DSL 提供声明式方式定义方块元数据，**由 `cn.li.mcmod.protoc
 
 1. `:model-textures`（按 model 名精确匹配）
 2. `:textures`（通用纹理）
-3. 兼容旧字段 `:properties` 下同名配置
+3. `:properties` 下同名配置（仅用于 datagen 的扩展字段）
 4. 自动回退到 `my_mod:blocks/<model-name>`
 
 > 建议：新增方块优先声明 `:model-parent`/`:textures`/`:model-textures`，避免仅依赖回退推导。
@@ -824,7 +824,7 @@ Block DSL 提供了多个辅助函数来生成常见的不规则形状：
 
 ```clojure
 ;; 获取已注册的方块
-(bdsl/get-block "demo-block")
+(bdsl/get-block-spec "demo-block")
 ;; => #BlockSpec{:id "demo-block" :material :stone ...}
 
 ;; 列出所有方块
@@ -838,7 +838,7 @@ Block DSL 提供了多个辅助函数来生成常见的不规则形状：
 
 ## 与 Forge 注册的关系（当前实现）
 
-**不要**在适配层手写「遍历 `bdsl/get-block` + 手动 `.register`」。Forge 1.20.1 使用 **`cn.li.forge1201.mod/register-all-blocks!`**：
+**不要**在适配层手写「遍历 `bdsl/get-block-spec` + 手动 `.register`」。Forge 1.20.1 使用 **`cn.li.forge1201.mod/register-all-blocks!`**：
 
 - 对 **`cn.li.mcmod.protocol.metadata/get-all-block-ids`** 返回的每个 id，读取 spec；
 - 按是否需要 **动态 BlockState**、**Scripted BlockEntity**、**多方块** 等，调用 Java 侧 **`invoke-bootstrap-helper`** 工厂（如 `createDynamicStateBlock`、`createCarrierScriptedBlock`）；
@@ -858,7 +858,7 @@ Fabric 若重新启用子工程，应对齐同一 **`protocol.metadata`** 查询
 
 - `(create-block-spec id options)` - 创建方块规范
 - `(register-block! spec)` - 注册方块
-- `(get-block id)` - 获取方块规范
+- `(get-block-spec id)` - 获取方块规范
 - `(list-blocks)` - 列出所有方块
 - `(get-block-properties spec)` - 获取方块属性
 - `(handle-right-click spec data)` - 处理右键点击

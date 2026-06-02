@@ -1173,8 +1173,7 @@ tasks.register('verifyMcmodClientBridgeScreenKeysNeutral') {
     doLast {
         def scannedFiles = [
             file('mcmod/src/main/clojure/cn/li/mcmod/client/platform_bridge.clj'),
-            file('mcmod/src/main/clojure/cn/li/mcmod/platform/ui.clj'),
-            file('mcmod/src/main/clojure/cn/li/mcmod/platform/ops_ui.clj')
+            file('mcmod/src/main/clojure/cn/li/mcmod/platform/ui.clj')
         ].findAll { it.exists() }
         def forbiddenTokens = [
             'open-skill-tree-screen',
@@ -1358,7 +1357,6 @@ tasks.register('verifyMcmodNoSavedLocationBusinessSurface') {
     doLast {
         def scannedFiles = [
             file('mcmod/src/main/clojure/cn/li/mcmod/platform/saved_locations.clj'),
-            file('mcmod/src/main/clojure/cn/li/mcmod/platform/ops_world.clj'),
             file('mc-1.20.1/src/main/clojure/cn/li/mc1201/runtime/saved_locations_core.clj'),
             file('forge-1.20.1/src/main/clojure/cn/li/forge1201/runtime/adapters/registry.clj'),
             file('fabric-1.20.1/src/main/clojure/cn/li/fabric1201/runtime/saved_locations.clj')
@@ -1448,7 +1446,25 @@ tasks.register('verifyDeletedCompatibilityResidues') {
             file('ac/src/main/clojure/cn/li/ac/wireless/gui/events/handlers.clj'),
             file('ac/src/main/clojure/cn/li/ac/wireless/gui/component/tabs.clj'),
             file('ac/src/main/clojure/cn/li/ac/testing/fixtures.clj'),
-            file('ac/src/main/clojure/cn/li/ac/testing/mocks.clj')
+            file('ac/src/main/clojure/cn/li/ac/testing/mocks.clj'),
+            file('ac/src/main/clojure/cn/li/ac/ability/server/effect/geom.clj'),
+            file('ac/src/main/clojure/cn/li/ac/ability/server/effect/motion.clj'),
+            file('ac/src/main/clojure/cn/li/ac/ability/server/effect/world.clj'),
+            file('ac/src/main/clojure/cn/li/ac/ability/server/effect/fx.clj'),
+            file('ac/src/main/clojure/cn/li/ac/ability/server/effect/beam.clj'),
+            file('ac/src/main/clojure/cn/li/ac/ability/server/effect/damage.clj'),
+            file('ac/src/main/clojure/cn/li/ac/ability/server/effect/potion.clj'),
+            file('ac/src/main/clojure/cn/li/ac/ability/service/context_registry.clj'),
+            file('mcmod/src/main/clojure/cn/li/mcmod/events/metadata.clj'),
+            file('mcmod/src/main/clojure/cn/li/mcmod/block/events.clj'),
+            file('mcmod/src/main/clojure/cn/li/mcmod/block/multiblock_router.clj'),
+            file('mcmod/src/main/clojure/cn/li/mcmod/sound/metadata.clj'),
+            file('mcmod/src/main/clojure/cn/li/mcmod/platform.clj'),
+            file('mcmod/src/main/clojure/cn/li/mcmod/platform/ops_foundation.clj'),
+            file('mcmod/src/main/clojure/cn/li/mcmod/platform/ops_world.clj'),
+            file('mcmod/src/main/clojure/cn/li/mcmod/platform/ops_entity.clj'),
+            file('mcmod/src/main/clojure/cn/li/mcmod/platform/ops_integration.clj'),
+            file('mcmod/src/main/clojure/cn/li/mcmod/platform/ops_ui.clj')
         ]
         def violations = []
         deletedFiles.each { File f ->
@@ -2486,10 +2502,6 @@ tasks.register('verifyBlockDslNoRuntimeEvents') {
     doLast {
         def violations = []
         def dslFile = file('mcmod/src/main/clojure/cn/li/mcmod/block/dsl.clj')
-        def eventsFile = file('mcmod/src/main/clojure/cn/li/mcmod/block/events.clj')
-        if (!eventsFile.exists()) {
-            violations << 'Required block events namespace missing: cn.li.mcmod.block.events'
-        }
         if (!dslFile.exists()) {
             violations << 'Required block DSL namespace missing: cn.li.mcmod.block.dsl'
         } else {
@@ -3492,18 +3504,19 @@ tasks.register('verifyNonAcNoBusinessSemanticResidue') {
 
 tasks.register('verifyAbilityNoDispatcherBusinessApiUsage') {
     group = 'verification'
-    description = 'Verify AC ability main source does not call business context APIs through context-dispatcher alias.'
+    description = 'Verify AC ability source does not reintroduce the deleted context-registry facade.'
 
     doLast {
         def scannedFiles = fileTree('.') {
-            include 'ac/src/main/clojure/cn/li/ac/ability/**/*.clj'
+            include 'ac/src/main/clojure/cn/li/ac/**/*.clj'
+            include 'ac/src/test/clojure/cn/li/ac/**/*.clj'
             exclude '**/build/**', '**/.gradle/**', '**/bin/**'
-            exclude 'ac/src/main/clojure/cn/li/ac/ability/service/context_dispatcher.clj'
-            exclude 'ac/src/main/clojure/cn/li/ac/ability/service/context_registry.clj'
+            exclude 'ac/src/test/clojure/cn/li/ac/ability/architecture_guard_test.clj'
         }.files.findAll { it.isFile() }
 
         def forbiddenPatterns = [
-            ~/\bctx\/(get-context|get-all-contexts|get-all-contexts-for-player|update-context!?|update-context-owned!?|terminate-context!?|remove-context!?|register-context!?|start-context!?|start-server-context!?|clear-session-contexts!?|clear-owner-contexts!?|reset-contexts-for-test!|snapshot-context-registry|context-owned-by\?)\b/
+            ~/service\.context-registry/,
+            ~/\bctx-reg\//
         ]
 
         def violations = []
@@ -3519,10 +3532,10 @@ tasks.register('verifyAbilityNoDispatcherBusinessApiUsage') {
         }
 
         if (!violations.isEmpty()) {
-            throw new GradleException("AC ability source still uses dispatcher business APIs. Migrate to context-registry APIs:\n - ${violations.join('\n - ')}")
+            throw new GradleException("Deleted context-registry facade referenced. Use context-dispatcher (lifecycle/merged reads), context-skill-state (skill writes), or context-projection (store reads):\n - ${violations.join('\n - ')}")
         }
 
-        logger.lifecycle('[verifyAbilityNoDispatcherBusinessApiUsage] passed. Business context APIs are consumed via context-registry.')
+        logger.lifecycle('[verifyAbilityNoDispatcherBusinessApiUsage] passed. context-registry facade stays deleted; context-dispatcher is the single entry.')
     }
 }
 
@@ -3861,8 +3874,25 @@ tasks.register('verifyAbilityArchitectureStrict') {
             ~/store\/clear-dirty!/
         ]
         def allowedServiceWriteFiles = [
-            'ac/src/main/clojure/cn/li/ac/ability/service/command_runtime.clj'
+            'ac/src/main/clojure/cn/li/ac/ability/service/command_runtime.clj',
+            'ac/src/main/clojure/cn/li/ac/ability/effects/network_handler.clj',
+            'ac/src/main/clojure/cn/li/ac/ability/effects/persistence_handler.clj'
         ] as Set
+
+        def reducerOnlyForbiddenPatterns = [
+            ~/command-runtime-ready\?/,
+            ~/safe-context-data/,
+            ~/ctx-reg\/update-context!/,
+            ~/sync-register-context-command!/,
+            ~/sync-context-status-command!/,
+            ~/:command\s+:sync-(ability|resource|cooldown|preset|develop|terminal|context-registry|runtime)-data/,
+            ~/:command\s+:apply-server-tick-postprocess/
+        ]
+        def reducerOnlyScanFiles = fileTree(project.rootDir) {
+            include 'ac/src/main/clojure/cn/li/ac/ability/**/*.clj'
+            include 'ac/src/main/clojure/cn/li/ac/content/ability/**/*.clj'
+            exclude '**/build/**', '**/.gradle/**', '**/bin/**'
+        }
 
         def violations = []
 
@@ -3890,6 +3920,23 @@ tasks.register('verifyAbilityArchitectureStrict') {
                     if (pattern.matcher(line).find() && !allowedServiceWriteFiles.contains(rel)) {
                         violations << [
                             type: 'service-direct-write',
+                            file: rel,
+                            line: idx + 1,
+                            pattern: pattern.pattern(),
+                            text: line.trim()
+                        ]
+                    }
+                }
+            }
+        }
+
+        reducerOnlyScanFiles.files.findAll { it.isFile() }.sort { it.path }.each { File sourceFile ->
+            def rel = project.rootDir.toPath().relativize(sourceFile.toPath()).toString().replace('\\', '/')
+            sourceFile.readLines('UTF-8').eachWithIndex { String line, int idx ->
+                reducerOnlyForbiddenPatterns.each { pattern ->
+                    if (pattern.matcher(line).find()) {
+                        violations << [
+                            type: 'reducer-only-residue',
                             file: rel,
                             line: idx + 1,
                             pattern: pattern.pattern(),

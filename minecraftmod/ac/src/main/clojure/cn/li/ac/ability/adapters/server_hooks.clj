@@ -15,11 +15,10 @@
             [cn.li.ac.ability.server.damage.runtime :as damage-runtime]
             [cn.li.ac.ability.service.context-manager :as ctx-mgr]
             [cn.li.ac.ability.service.delayed-projectiles :as delayed-projectiles]
-            [cn.li.ac.ability.service.context-registry :as ctx-reg]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
             [cn.li.ac.ability.service.platform-hooks :as platform-hooks]            [cn.li.ac.block.developer.logic :as developer-logic]
-            [cn.li.ac.content.ability.server-runtime-lifecycle :as server-runtime-lifecycle]
+            [cn.li.ac.ability.service.player-runtime-commands :as player-runtime-cmd]
             [cn.li.ac.wireless.data.world-registry :as world-registry]
             [cn.li.ac.util.init-guard :refer [with-init-guard]]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
@@ -75,7 +74,7 @@
 
 (defn- unique-context-by-id
   [ctx-id]
-  (let [matches (->> (ctx-reg/snapshot-context-registry)
+  (let [matches (->> (ctx/snapshot-context-registry)
                      vals
                      (filter #(= ctx-id (:id %)))
                      vec)]
@@ -90,40 +89,24 @@
   [player-uuid state]
   (let [state* (or state {})
         session-id (runtime-hooks/require-player-state-session-id "Server hooks runtime state access")
-        commands (cond-> []
-                   (contains? state* :ability-data)
-                   (conj {:command :sync-ability-data :ability-data (:ability-data state*)})
-
-                   (contains? state* :resource-data)
-                   (conj {:command :sync-resource-data :resource-data (:resource-data state*)})
-
-                   (contains? state* :cooldown-data)
-                   (conj {:command :sync-cooldown-data :cooldown-data (:cooldown-data state*)})
-
-                   (contains? state* :preset-data)
-                   (conj {:command :sync-preset-data :preset-data (:preset-data state*)})
-
-                   (contains? state* :develop-data)
-                   (conj {:command :sync-develop-data :develop-data (:develop-data state*)})
-
-                   (contains? state* :terminal-data)
-                   (conj {:command :sync-terminal-data :terminal-data (:terminal-data state*)})
-
-                   (contains? state* :context-registry)
-                   (conj {:command :sync-context-registry :context-registry (:context-registry state*)})
-
-                   (contains? state* :runtime)
-                   (conj {:command :sync-runtime-data :runtime-data (:runtime state*)})
-
-                   (contains? state* :dirty?)
-                   (conj {:command :set-dirty-flag :dirty? (:dirty? state*)}))]
-    (if (seq commands)
-      (command-rt/run-commands-in-session! session-id
-                                           player-uuid
-                                           commands
-                                           {:mark-dirty? (if (contains? state* :dirty?)
-                                                           (boolean (:dirty? state*))
-                                                           true)})
+        hydrate-cmd (cond-> {:command :hydrate-player-state}
+                      (contains? state* :ability-data) (assoc :ability-data (:ability-data state*))
+                      (contains? state* :resource-data) (assoc :resource-data (:resource-data state*))
+                      (contains? state* :cooldown-data) (assoc :cooldown-data (:cooldown-data state*))
+                      (contains? state* :preset-data) (assoc :preset-data (:preset-data state*))
+                      (contains? state* :develop-data) (assoc :develop-data (:develop-data state*))
+                      (contains? state* :terminal-data) (assoc :terminal-data (:terminal-data state*))
+                      (contains? state* :context-registry) (assoc :context-registry (:context-registry state*))
+                      (contains? state* :runtime) (assoc :runtime-data (:runtime state*))
+                      (contains? state* :dirty?) (assoc :dirty? (:dirty? state*)))]
+    (if (> (count hydrate-cmd) 1)
+      (command-rt/run-command-in-session!
+       session-id
+       player-uuid
+       hydrate-cmd
+       {:mark-dirty? (if (contains? state* :dirty?)
+                       (boolean (:dirty? state*))
+                       true)})
       (command-rt/run-command-in-session! session-id player-uuid {:command :set-dirty-flag :dirty? false}))))
 
 (defn- runtime-get-or-create-player-state!
@@ -185,7 +168,7 @@
   "Register platform-facing callbacks used by reducer/effects/network shells."
   []
   (platform-hooks/register-platform-fn! fn-reset-server-runtimes
-                                       server-runtime-lifecycle/reset-ability-server-runtimes!)
+                                       player-runtime-cmd/reset-all-content-runtimes!)
   (platform-hooks/register-platform-fn! fn-register-network-handlers
                                        network/register-handlers!)
   (platform-hooks/register-platform-fn! fn-try-pull-developer-energy
@@ -205,7 +188,7 @@
                                      new-level
                                      uuid)]
              (run-runtime-command! uuid
-                                   {:command :sync-resource-data
+                                   {:command :hydrate-player-state
                                     :resource-data next-resource-data}))))))
     (evt/subscribe-ability-event!
      evt/EVT-SKILL-LEARN
@@ -214,7 +197,7 @@
          (when-let [state (runtime-get-player-state uuid)]
            (let [level (get-in state [:ability-data :level] 1)]
              (run-runtime-command! uuid
-                                   {:command :sync-resource-data
+                                   {:command :hydrate-player-state
                                     :resource-data (recalc-max-for-level-with-calc
                                                     (:resource-data state)
                                                     level
@@ -229,7 +212,7 @@
          (when-let [state (runtime-get-player-state uuid)]
            (let [level (get-in state [:ability-data :level] 1)]
              (run-runtime-command! uuid
-                                   {:command :sync-resource-data
+                                   {:command :hydrate-player-state
                                     :resource-data (recalc-max-for-level-with-calc
                                                     (:resource-data state)
                                                     level
@@ -258,7 +241,7 @@
 
    :on-server-stop!
    (fn [session-id]
-    (ctx-reg/clear-session-contexts! session-id)
+    (ctx/clear-session-contexts! session-id)
      (store/remove-session! (store/get-store) session-id)
      (world-registry/clear-session-world-data! session-id)
      (when (platform-hooks/platform-fn-registered? fn-reset-server-runtimes)
@@ -361,7 +344,7 @@
    :get-context-player-uuid
    (fn [ctx-id]
      (when-let [ctx-map (or (when ctx/*context-owner*
-                               (ctx-reg/get-context ctx-id))
+                               (ctx/get-context ctx-id))
                             (unique-context-by-id ctx-id))]
        (:player-uuid ctx-map)))
 

@@ -2,6 +2,21 @@
 
 > 状态标签：**当前规范**。本文冻结 ability 核心重构后的服务端权威语义，用于实现、测试与回归验收。
 
+**实现落点（2026-06）**：**Reducer-only** — 所有权威状态变更经 `command-runtime` → `reducer` → `runtime-store`；Context 协议由 `context-dispatcher` 承载 lifecycle 与合并读；context 业务字段在 `[:context-registry]`。已删除 `context-registry` 门面与 `:sync-*-data` reducer 命令。详见 [ABILITY_SYSTEM_MAINTENANCE.md](../04-systems/ABILITY_SYSTEM_MAINTENANCE.md)。
+
+## Reducer-only 状态变更
+
+与协议矩阵正交的实现约束：
+
+| 域 | 变更方式 | 说明 |
+|----|----------|------|
+| ability / resource / cooldown / preset / develop / terminal | reducer 命令（如 `:consume-cp`、`:set-cooldown`） | 由 `state-tick`、技能 pattern、事件订阅组命令批次 |
+| `[:context-registry]` 内字段 | reducer context 命令（如 `:context-assoc-skill-state`、`:update-context-status`） | 技能经 `context-skill-state`；lifecycle 经 `context-manager` + command |
+| 持久化 / 客户端 sync 快照 | `:hydrate-player-state` | 仅 adapters；按 key 局部 `assoc`，非业务通用 API |
+| 服务端 tick develop | `:server-tick` | 禁止 `:apply-server-tick-postprocess` 或 tick 后 ad-hoc store 写 |
+
+资源结算、冷却、pattern 副作用的**语义**仍按下文「资源、冷却与 Pattern」；**实现**必须落到 reducer 命令，不得在 handler 内直接改 map。
+
 ## 行为基线
 
 旧版 `Skill`/`ContextManager` 仅作为行为来源，不复制旧结构。本轮保留的语义是：

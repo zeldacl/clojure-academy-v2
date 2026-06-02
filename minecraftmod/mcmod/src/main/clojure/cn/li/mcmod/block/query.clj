@@ -3,7 +3,9 @@
 
   Accepts either block ids or already-resolved block specs for most helpers so
   callers can progressively migrate away from registry wrapper layers."
-  (:require [cn.li.mcmod.block.tile-dsl :as tdsl]
+  (:require [clojure.string :as str]
+            [cn.li.mcmod.block.dsl-multiblock :as mb]
+            [cn.li.mcmod.block.tile-dsl :as tdsl]
             [cn.li.mcmod.protocol.core :as registry-core]))
 
 (declare get-block-spec)
@@ -48,11 +50,53 @@
   (let [id-str (normalize-block-id block-id)]
     (get (block-registry-state) id-str)))
 
+(defn get-block-registry-name
+  "Get the Minecraft registry path for a block-id.
+   Uses explicit :registry-name when present; otherwise kebab-case -> snake_case."
+  [block-id]
+  (when-let [id-str (normalize-block-id block-id)]
+    (let [block-spec (get-block-spec id-str)
+          explicit-name (:registry-name block-spec)]
+      (if (and (string? explicit-name) (not (str/blank? explicit-name)))
+        explicit-name
+        (str/replace id-str #"-" "_")))))
+
 (defn list-all-blocks
   "Get a sequence of all registered block IDs
    Returns: sequence of block-id strings"
   []
   (keys (block-registry-state)))
+
+(defn identify-block-from-registry-name
+  "Resolve DSL block-id from Minecraft registry path.
+   First tries snake_case -> kebab-case; then falls back to explicit :registry-name match."
+  [registry-name]
+  (when registry-name
+    (let [candidate-id (str/replace registry-name #"_" "-")]
+      (or (when (get-block-spec candidate-id) candidate-id)
+          (some (fn [block-id]
+                  (when (= registry-name (get-block-registry-name block-id))
+                    block-id))
+                (list-all-blocks))))))
+
+(defn identify-block-from-full-name
+  "Resolve DSL block-id from full block name strings, e.g.
+   \"Block{my_mod:demo_block}\", \"my_mod:demo_block\", or \"demo_block\"."
+  [^String block-name]
+  (when block-name
+    (let [registry-name (cond
+                          (.contains block-name "{")
+                          (-> block-name
+                              (str/split #"[{}]")
+                              second
+                              (str/split #":")
+                              last)
+
+                          (.contains block-name ":")
+                          (last (str/split block-name #":"))
+
+                          :else block-name)]
+      (identify-block-from-registry-name registry-name))))
 
 (defn controller-parts-block?
   "Return true when the block uses controller+parts multiblock mode."
@@ -111,10 +155,10 @@
     (let [multi-block (:multi-block block-spec)]
       (:multi-block? multi-block))))
 
-(defn has-tile-entity?
-  "Check if a block has a tile entity (block entity)
-   block-spec: BlockSpec record to check
-   Returns: true if block has tile entity"
+(defn has-block-entity?
+  "Check if a block is bound to a Tile DSL block entity.
+   block-spec: BlockSpec record
+   Returns: true if Tile DSL maps the block to a tile-id"
   [block-or-spec]
   (when-let [block-spec (resolve-block-spec block-or-spec)]
     (boolean (tdsl/get-tile-id-for-block (:id block-spec)))))
@@ -193,12 +237,22 @@
   (when-let [block-spec (resolve-block-spec block-or-spec)]
     (let [multi-block (:multi-block block-spec)]
       (when (:multi-block? multi-block)
-        (let [multiblock-router (requiring-resolve 'cn.li.mcmod.block.multiblock-router/calculate-multi-block-positions)
-              origin (or (:multi-block-origin multi-block) {:x 0 :y 0 :z 0})
+        (let [origin (or (:multi-block-origin multi-block) {:x 0 :y 0 :z 0})
               positions (if-let [custom-pos (:multi-block-positions multi-block)]
-                          (multiblock-router custom-pos origin)
-                          (multiblock-router (:multi-block-size multi-block) origin))]
+                          (mb/calculate-multi-block-positions custom-pos origin)
+                          (mb/calculate-multi-block-positions (:multi-block-size multi-block) origin))]
           positions)))))
+
+(defn get-block-event-handler
+  "Get event handler function from block spec by event type."
+  [block-or-spec event-type]
+  (when-let [block-spec (resolve-block-spec block-or-spec)]
+    (get-in block-spec [:events event-type])))
+
+(defn has-block-event-handler?
+  "Return true when an explicit block event handler exists."
+  [block-or-spec event-type]
+  (some? (get-block-event-handler block-or-spec event-type)))
 
 (defn has-block-state-properties?
   "Check if a block has custom block state properties
@@ -208,9 +262,3 @@
   (when-let [block-spec (resolve-block-spec block-or-spec)]
     (boolean (get-in block-spec [:block-state :block-state-properties]))))
 
-(defn has-block-entity?
-  "Check if a block is bound to a Tile DSL block entity.
-   block-spec: BlockSpec record
-   Returns: true if Tile DSL maps the block to a tile-id"
-  [block-or-spec]
-  (has-tile-entity? block-or-spec))

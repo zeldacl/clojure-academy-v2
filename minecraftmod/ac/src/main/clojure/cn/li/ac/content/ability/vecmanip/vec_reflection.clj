@@ -6,90 +6,19 @@
             [cn.li.ac.content.ability.fx-helpers :as fx]
             [cn.li.ac.content.ability.vecmanip.arbitration :as arbitration]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
-            [cn.li.ac.ability.service.context-registry :as ctx-reg]
-            [cn.li.ac.ability.service.command-runtime :as command-rt]
-            [cn.li.ac.ability.skill-config :as skill-config]
+            [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
+                        [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.util.toggle :as toggle]
             [cn.li.ac.ability.service.skill-effects :as fx-common]
+            [cn.li.ac.ability.service.player-runtime-commands :as prt-cmd]
             [cn.li.ac.ability.server.damage.handler :as damage-handler]
-            [cn.li.mcmod.hooks.core :as runtime-hooks]
-            [cn.li.mcmod.platform.entity-motion :as entity-motion]
+                        [cn.li.mcmod.platform.entity-motion :as entity-motion]
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.util.log :as log]))
 
 (def ^:private vec-reflection-skill-id :vec-reflection)
-
-(defn default-reflection-runtime-state
-  []
-  {:reflecting-pairs #{}
-   :reflection-depths {}})
-
-(defn create-vec-reflection-runtime
-  ([]
-   (create-vec-reflection-runtime {}))
-  ([{:keys [state*]
-     :or {state* (atom (default-reflection-runtime-state))}}]
-   {::runtime ::vec-reflection-runtime
-    :state* state*}))
-
-(def ^:dynamic *vec-reflection-runtime* nil)
-
-(defn- vec-reflection-runtime?
-  [runtime]
-  (and (map? runtime)
-       (= ::vec-reflection-runtime (::runtime runtime))
-       (some? (:state* runtime))))
-
-(defn call-with-vec-reflection-runtime
-  [runtime f]
-  (when-not (vec-reflection-runtime? runtime)
-    (throw (ex-info "Expected VecReflection runtime"
-                    {:value runtime})))
-  (binding [*vec-reflection-runtime* runtime]
-    (f)))
-
-(defmacro with-vec-reflection-runtime
-  [runtime & body]
-  `(call-with-vec-reflection-runtime ~runtime (fn [] ~@body)))
-
-(defn install-vec-reflection-runtime!
-  ([]
-   (install-vec-reflection-runtime! (create-vec-reflection-runtime)))
-  ([runtime]
-   (when-not (vec-reflection-runtime? runtime)
-     (throw (ex-info "Expected VecReflection runtime"
-                     {:value runtime})))
-   (alter-var-root #'*vec-reflection-runtime* (constantly runtime))
-   nil))
-
-(defn clear-vec-reflection-runtime!
-  []
-  (alter-var-root #'*vec-reflection-runtime* (constantly nil))
-  nil)
-
-(defn- current-vec-reflection-runtime
-  []
-  *vec-reflection-runtime*)
-
-(defn- require-vec-reflection-runtime
-  []
-  (or (current-vec-reflection-runtime)
-      (throw (ex-info "VecReflection runtime is not bound"
-                      {:required 'vec-reflection-runtime}))))
-
-(defn- reflection-runtime-state-atom
-  []
-  (:state* (require-vec-reflection-runtime)))
-
-(defn- reflection-runtime-state-snapshot
-  []
-  @(reflection-runtime-state-atom))
-
-(defn- update-reflection-runtime!
-  [f & args]
-  (apply swap! (reflection-runtime-state-atom) f args))
 
 (def ^:dynamic *reflection-chain-id* nil)
 
@@ -208,52 +137,53 @@
    :chain-id (or chain-id :no-chain)})
 
 (defn- try-enter-reflection!
-  [owner-key]
-  (let [entered? (volatile! false)]
-    (update-reflection-runtime!
-      (fn [{:keys [reflecting-pairs] :as state}]
-        (if (contains? reflecting-pairs owner-key)
-          state
-          (do
-            (vreset! entered? true)
-            (update state :reflecting-pairs conj owner-key)))))
-    @entered?))
+  [player-id owner-key]
+  (boolean
+    (:granted?
+     (prt-cmd/run-for-player!
+      player-id
+      {:command :enter-vec-reflection :owner-key owner-key}))))
 
 (defn- leave-reflection!
-  [owner-key]
-  (update-reflection-runtime!
-    (fn [{:keys [reflection-depths] :as state}]
-      (let [next-depths (if-let [v (get reflection-depths owner-key)]
-                          (let [nv (dec (long v))]
-                            (if (pos? nv)
-                              (assoc reflection-depths owner-key nv)
-                              (dissoc reflection-depths owner-key)))
-                          reflection-depths)]
-        (-> state
-            (update :reflecting-pairs disj owner-key)
-            (assoc :reflection-depths next-depths)))))
+  [player-id owner-key]
+  (prt-cmd/run-for-player!
+   player-id
+   {:command :leave-vec-reflection :owner-key owner-key})
   nil)
 
 (defn reset-reflection-runtime-for-test!
-  []
-  (reset! (reflection-runtime-state-atom) (default-reflection-runtime-state))
+  [player-id]
+  (prt-cmd/run-for-player!
+   player-id
+   {:command :reset-vec-reflection-runtime})
   nil)
 
 (defn reflection-runtime-snapshot
-  []
-  (reflection-runtime-state-snapshot))
+  [player-id]
+  (prt-cmd/vec-reflection-state player-id))
 
 (defn mark-reflecting-for-test!
   [player-id attacker-id ctx-id chain-id]
   (let [owner-key (reflection-owner-key player-id attacker-id ctx-id chain-id)]
-    (update-reflection-runtime! update :reflecting-pairs conj owner-key)
+    (prt-cmd/run-for-player! player-id {:command :enter-vec-reflection :owner-key owner-key})
     owner-key))
 
 (defn set-reflection-depth-for-test!
   [player-id attacker-id ctx-id chain-id depth]
   (let [owner-key (reflection-owner-key player-id attacker-id ctx-id chain-id)]
-    (update-reflection-runtime! assoc-in [:reflection-depths owner-key] (long depth))
+    (prt-cmd/run-for-player!
+     player-id
+     {:command :set-vec-reflection-depth :owner-key owner-key :depth (long depth)})
     owner-key))
+
+(defn- increment-reflection-depth!
+  [player-id owner-key]
+  (let [state (prt-cmd/vec-reflection-state player-id)
+        next-depth (inc (long (or (get-in state [:reflection-depths owner-key]) 0)))]
+    (prt-cmd/run-for-player!
+     player-id
+     {:command :set-vec-reflection-depth :owner-key owner-key :depth next-depth})
+    (prt-cmd/vec-reflection-state player-id)))
 
 (defn- normalize-visited-map [visited now]
   (cond
@@ -287,53 +217,21 @@
 
 (defn- active-vec-reflection-ctx-id
   [player-id]
-  (->> (ctx-reg/get-all-contexts)
+  (->> (ctx/get-all-contexts)
        (filter (fn [[_ctx-id ctx-data]]
                  (and (= (:player-uuid ctx-data) player-id)
                       (toggle/is-toggle-active? ctx-data :vec-reflection))))
        first
        first))
 
-(defn- safe-context-data
-  [ctx-id]
-  (try
-    (ctx-reg/get-context ctx-id)
-    (catch Exception _ nil)))
-
-(defn- command-runtime-ready?
-  [{:keys [session-id player-uuid]}]
-  (and (runtime-hooks/current-player-state-owner)
-       session-id
-       player-uuid))
 
 (defn- set-skill-state-key!
   [ctx-id k v]
-  (let [ctx-data (or (safe-context-data ctx-id) {})]
-    (if (command-runtime-ready? ctx-data)
-      (let [result (command-rt/run-command-in-session! (:session-id ctx-data)
-                                                       (:player-uuid ctx-data)
-                                                       {:command :context-assoc-skill-state
-                                                        :ctx-id ctx-id
-                                                        :k [k]
-                                                        :v v})]
-        (when (= :context-not-found (:rejected-reason result))
-          (ctx-reg/update-context! ctx-id assoc-in [:skill-state k] v)))
-      (ctx-reg/update-context! ctx-id assoc-in [:skill-state k] v))))
+  (ctx-skill/assoc-skill-state! ctx-id k v))
 
 (defn- update-skill-state-root!
   [ctx-id f]
-  (let [ctx-data (or (safe-context-data ctx-id) {})
-        next-state (f (or (:skill-state ctx-data) {}))]
-    (if (command-runtime-ready? ctx-data)
-      (let [result (command-rt/run-command-in-session! (:session-id ctx-data)
-                                                       (:player-uuid ctx-data)
-                                                       {:command :context-assoc-skill-state
-                                                        :ctx-id ctx-id
-                                                        :k []
-                                                        :v next-state})]
-        (when (= :context-not-found (:rejected-reason result))
-          (ctx-reg/update-context! ctx-id assoc :skill-state next-state)))
-      (ctx-reg/update-context! ctx-id assoc :skill-state next-state))))
+  (ctx-skill/update-skill-state-root! ctx-id f))
 
 (defn- add-exp! [player-id amount]
   (fx-common/add-skill-exp! player-id vec-reflection-skill-id amount))
@@ -374,7 +272,7 @@
   "Activate or deactivate toggle skill."
   [{:keys [player-id ctx-id]}]
   (try
-    (when-let [ctx-data (ctx-reg/get-context ctx-id)]
+    (when-let [ctx-data (ctx/get-context ctx-id)]
       (let [is-active? (toggle/is-toggle-active? ctx-data :vec-reflection)
             exp (skill-exp player-id)]
         (if is-active?
@@ -396,7 +294,7 @@
 
 (defn- vec-reflection-on-key-tick-body
   [player-id ctx-id cost-ok?]
-  (when-let [ctx-data (ctx-reg/get-context ctx-id)]
+  (when-let [ctx-data (ctx/get-context ctx-id)]
     (when (toggle/is-toggle-active? ctx-data :vec-reflection)
       (let [exp (skill-exp player-id)
             overload-keep (get-in ctx-data [:skill-state :vec-reflection-overload-keep] 0.0)]
@@ -409,7 +307,7 @@
           (log/info "VecReflection: Deactivated (insufficient CP)"))
 
         (when (and cost-ok?
-                   (toggle/is-toggle-active? (or (ctx-reg/get-context ctx-id) ctx-data) :vec-reflection))
+                   (toggle/is-toggle-active? (or (ctx/get-context ctx-id) ctx-data) :vec-reflection))
           (when-let [pos (get-player-position player-id)]
             (when world-effects/*world-effects*
               (let [world-id (:world-id pos)
@@ -529,12 +427,12 @@
       (binding [*reflection-chain-id* chain-id]
         (let [ctx-id (active-vec-reflection-ctx-id player-id)
               owner-key (reflection-owner-key player-id attacker-id ctx-id chain-id)]
-          (if-not (try-enter-reflection! owner-key)
+          (if-not (try-enter-reflection! player-id owner-key)
             [false original-damage]
             (try
               (if-let [state (fx-common/get-player-state player-id)]
-                (let [depth-state (update-reflection-runtime! update-in [:reflection-depths owner-key] (fnil inc 0))
-                      depth (max 0 (dec (get-in depth-state [:reflection-depths owner-key] 1)))
+                (let [depth-state (increment-reflection-depth! player-id owner-key)
+                      depth (max 0 (dec (long (or (get-in depth-state [:reflection-depths owner-key]) 1))))
                       exp (skill-exp player-id)
                       max-depth (max-reflections)
                       reflect-multiplier (* (cfg-lerp :combat.damage-multiplier exp)
@@ -564,7 +462,7 @@
                     [false original-damage]))
                 [false original-damage])
               (finally
-                (leave-reflection! owner-key)))))))
+                (leave-reflection! player-id owner-key)))))))
     (catch Exception e
       (log/warn "VecReflection reflect-damage failed:" (ex-message e))
       [false original-damage])))

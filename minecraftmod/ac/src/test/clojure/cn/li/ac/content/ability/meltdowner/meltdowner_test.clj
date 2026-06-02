@@ -3,7 +3,6 @@
             [cn.li.ac.content.ability.meltdowner.meltdowner :as meltdowner]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as damage-helper]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
-            [cn.li.ac.ability.service.context-registry :as ctx-reg]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.effects.beam :as beam]
@@ -38,7 +37,7 @@
         exp-calls* (atom [])
         cooldown-calls* (atom [])]
     (with-redefs [ctx/ctx-send-to-client! send!
-                  ctx-reg/terminate-context! terminate!
+                  ctx/terminate-context! terminate!
                   skill-effects/skill-exp (fn [_ _] 0.3)
                   skill-effects/add-skill-exp! (fn [& args] (swap! exp-calls* conj args))
                   skill-effects/set-main-cooldown! (fn [& args] (swap! cooldown-calls* conj args))
@@ -61,7 +60,7 @@
         exp-calls* (atom [])
         cooldown-calls* (atom [])]
     (with-redefs [ctx/ctx-send-to-client! send!
-                  ctx-reg/terminate-context! terminate!
+                  ctx/terminate-context! terminate!
                   skill-effects/skill-exp (fn [_ _] 0.6)
                   skill-effects/add-skill-exp! (fn [& args] (swap! exp-calls* conj args))
                   skill-effects/set-main-cooldown! (fn [& args] (swap! cooldown-calls* conj args))
@@ -105,8 +104,8 @@
   (let [{:keys [messages* terminated* send! terminate!]} (context-mocks)
         overload-calls* (atom [])]
     (with-redefs [ctx/ctx-send-to-client! send!
-                  ctx-reg/terminate-context! terminate!
-                  ctx-reg/get-context (fn [_] {:skill-state {:overload-floor 123.0}})
+                  ctx/terminate-context! terminate!
+                  ctx/get-context (fn [_] {:skill-state {:overload-floor 123.0}})
                   skill-effects/enforce-overload-floor!
                   (fn [player-id floor] (swap! overload-calls* conj [player-id floor]))
                   skill-config/tunable-int (fn [_ field-id]

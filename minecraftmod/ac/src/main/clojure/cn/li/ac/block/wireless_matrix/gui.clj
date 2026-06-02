@@ -37,7 +37,6 @@
             [cn.li.ac.block.wireless-matrix.logic :as matrix-logic]
             [cn.li.ac.block.wireless-matrix.schema :as matrix-schema]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
-            [cn.li.mcmod.gui.slot-registry :as slot-registry]
             [cn.li.mcmod.gui.spec :as gui-reg]
             [cn.li.ac.block.gui.sync :as gui-sync]
             [cn.li.ac.item.constraint-plate :as plate]
@@ -304,10 +303,10 @@
 (def ^:private matrix-slot-schema-id wireless-matrix-id)
 
 (defn get-slot-count [_container]
-  (slot-registry/get-slot-count matrix-slot-schema-id))
+  (slot-schema/tile-slot-count matrix-slot-schema-id))
 
 (defn can-place-item? [_container slot-index item-stack]
-  (case (slot-registry/get-slot-type-for-index matrix-slot-schema-id slot-index)
+  (case (slot-schema/slot-type matrix-slot-schema-id slot-index)
     :plate (plate/is-constraint-plate? item-stack)
     :core (core/is-mat-core? item-stack)
     false))

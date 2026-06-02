@@ -13,7 +13,6 @@
             [cn.li.ac.wireless.gui.tab :as wireless-tab]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
-            [cn.li.mcmod.gui.slot-registry :as slot-registry]
             [cn.li.mcmod.gui.spec :as gui-reg]
             [cn.li.ac.block.gui.sync :as gui-sync]
             [cn.li.ac.wireless.gui.container.common :as common]
@@ -45,7 +44,7 @@
     (gui-sync/create-schema-container dev-schema/unified-developer-schema tile player :developer {:state state})))
 
 (defn get-slot-count [_container]
-  (slot-registry/get-slot-count developer-gui-id))
+  (slot-schema/tile-slot-count developer-gui-id))
 
 (defn- normalize-inventory-2
   [state]

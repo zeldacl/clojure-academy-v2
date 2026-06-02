@@ -12,9 +12,9 @@
            [cn.li.mcmod.energy IEnergyCapable]))
 
 (defn get-all-wireless-nodes []
-  [(bdsl/get-block "wireless-node-basic")
-   (bdsl/get-block "wireless-node-standard")
-   (bdsl/get-block "wireless-node-advanced")])
+  [(bdsl/get-block-spec "wireless-node-basic")
+   (bdsl/get-block-spec "wireless-node-standard")
+   (bdsl/get-block-spec "wireless-node-advanced")])
 
 (def ^:private wireless-node-guard-lock
   (Object.))

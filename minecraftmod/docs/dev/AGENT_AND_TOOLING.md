@@ -1,6 +1,6 @@
 # Agent 与工具链约定（正文）
 
-本文档是仓库内 Agent/开发辅助工具规则正文。根目录 `CLAUDE.md` 保留指向本文件的指针，并摘要 **Clojure 设计与实现原则**（正文见下文「代码与运行时规则」）。
+本文档是仓库内 Agent/开发辅助工具规则正文。根目录 `CLAUDE.md` 仅为指向本文件的指针（不重复条文）；Clojure 原则见下文「代码与运行时规则」。
 
 ## 构建与开发基线（Windows 使用 `cmd /c .\gradlew.bat`）
 
@@ -23,6 +23,8 @@
   - `cmd /c .\gradlew.bat verifyNonAcNoBusinessRuntimeHookApis`
   - `cmd /c .\gradlew.bat verifyNonAcNoBusinessSemanticResidue`
   - `cmd /c .\gradlew.bat verifyCleanupResidueGuards`
+  - `cmd /c .\gradlew.bat verifyAbilityArchitectureStrict`（能力 reducer-only / 禁止旁路写与已删 API）
+  - `cmd /c .\gradlew.bat verifyAbilityNoDispatcherBusinessApiUsage`（禁止 `context-registry` 门面与 `ctx-reg/`）
   - `cmd /c .\gradlew.bat auditTopLevelMutableState`（报告型顶层可变状态审计；输出 `build/reports/top-level-state/audit.md`）
   - `cmd /c .\gradlew.bat unitTestCompile`
   - `cmd /c .\gradlew.bat runAcUnitTests`（执行 `ac` 的 `clojure.test`，入口为 `:ac:runAcClojureTests` / `cn.li.ac.test-runner`；可选 `"-Dac.test.only=cn.li.ac.foo-test,cn.li.ac.bar-test"`；输出慢测试 namespace Top 10）
@@ -155,7 +157,7 @@
 
 ### Clojure 设计与实现原则（强制）
 
-编写或修改 `mcmod` / `ac` / 平台 Clojure 代码时遵守（根目录 `CLAUDE.md` 同步摘要）：
+编写或修改 `mcmod` / `ac` / 平台 Clojure 代码时遵守：
 
 1. **函数式风格**：优先纯函数与不可变数据；副作用集中在显式边界（命名或模块上可识别），避免可变共享状态与命令式流程控制。
 2. **Clojure 最佳实践**：遵循项目既有命名与抽象（`defprotocol`、数据驱动 DSL、threading macro 等）；不引入与 idiomatic Clojure 相悖的 Java 式层次或样板。
@@ -167,6 +169,26 @@
 8. **相似模式须抽象**：同一文件或邻近模块内重复出现的结构（注册、校验、网络编解码、GUI 槽位等）应提取为共享函数或宏，禁止复制粘贴多份近似逻辑。
 9. **目录与文件须合规**：新建或移动源码前对照 [PROJECT_LAYOUT.md](../01-overview/PROJECT_LAYOUT.md) 与模块既有子域划分；命名空间路径与目录一一对应，禁止在根目录或随意子包下堆放“临时”文件。
 10. **慎用顶层全局变量**：非必要不得新增命名空间级 `def` / `defonce` / `^:private def`（含可变 atom 与“方便缓存”的单例）；优先参数传递、显式 owner（world/player/session 等）或不可变注册表。若确须保留，须在代码旁注明**无法编译**或**无法实现功能**的具体原因；可变顶层状态见 [TOP_LEVEL_STATE_GOVERNANCE.md](TOP_LEVEL_STATE_GOVERNANCE.md)，新增须跑 `auditTopLevelMutableState` 并更新白名单（如适用）。
+
+#### FP 通用原则 — P.I.C.A.S.O.（毕加索原则）
+
+面向函数式编程的六条通用准则；编写 `mcmod` / `ac` 逻辑时作为上述强制原则的展开：
+
+- **P — Pure Functions（纯函数）**：一个函数只做计算；相同输入必然相同输出。
+- **I — Immutability（不可变性）**：数据一旦创建绝不就地修改；一切变化通过计算生成新数据。
+- **C — Composition（函数组合）**：不写大段单体逻辑；用单一小函数像搭积木一样组合出复杂行为。
+- **A — Actions vs. Calculations（动作与计算隔离）**：严格区分有副作用的 I/O 动作与纯计算，把副作用逼到系统最边缘。
+- **S — Shared Nothing（无共享状态）**：函数间不共享全局变量；并发天然安全，消除死锁与隐式污染。
+- **O — One generic data structure（单一通用数据结构）**：不为每个概念发明 Class/Record 壳；优先用 Map/Vector 等通用结构承载数据。
+
+#### Clojure 专属原则 — S.I.D.E.（边际原则）
+
+Rich Hickey 式 Clojure 设计哲学；日常编码与架构取舍时优先对照：
+
+- **S — Simplicity（简单而非简便）**：拒绝把数据、逻辑、状态交织（braid）在一起；每个组件保持独立与纯粹。
+- **I — Identity / State split（标识与状态分离）**：用 Atom/Ref 等代表标识，用不可变快照代表状态；以时间轴上的状态演变代替对象就地修改。
+- **D — Data-Driven（数据驱动）**：业务逻辑、配置与系统状态建模为纯数据（Map/List），而非特异的代码与类型层级。
+- **E — Expression Problem Solved（表达式问题）**：用 Protocol 与 Multimethod 扩展新数据与新行为，避免修改旧代码；开放扩展、封闭修改。
 
 - **侧分离**：客户端代码放 `client` 侧；共享逻辑不得引用 `net.minecraft.client.*`。
 - **反射与动态求值**：避免通过字符串反射解析 Minecraft/Forge 符号；`eval` 内禁止出现平台类名直连。
@@ -204,6 +226,27 @@
   - 用户态 hook/request API 名、skill/preset/cooldown/ability 等业务术语、AC NBT/wire/gui/worldgen/render fixture、无线/终端/铁路炮/虚相等内容名不得出现在 `mcmod`、`mc-1.20.1`、`forge-1.20.1`、`fabric-1.20.1` main 源码或资源元数据中。
   - `mcmod` 可暴露中性 descriptor / opcode / envelope；具体业务 key、NBT key、payload key、screen key、integration target 与 smoke manifest 必须由 `ac` 注册。
   - Guard 误报优先通过中性示例/注释/fixture 清理解决；只有 Minecraft/Forge/Fabric 原生术语（如 Forge `capability`、动画 `phase`、GUI `imageWidth`）才允许保留。
+
+## 能力系统架构（AC，reducer-only）
+
+能力域**只**允许 reducer 架构，无第二套状态写路径。维护手册：[ABILITY_SYSTEM_MAINTENANCE.md](../04-systems/ABILITY_SYSTEM_MAINTENANCE.md)。
+
+| 层级 | 模块 | 职责 |
+|------|------|------|
+| 命令壳 | `service.command-runtime` | 唯一 `run-command!` 入口；提交后写 `runtime-store` |
+| 归约 | `service.reducer` | `apply-command`；纯函数更新 `:ability-data`、`:resource-data`、`:cooldown-data`、`[:context-registry]` 等 |
+| 存储 | `service.runtime-store` | 玩家状态 SSoT |
+| 副作用 | `effects.interpreter` + `effects.*` | 执行 reducer 返回的 effects |
+| 技能写 | `service.context-skill-state` → `skill-state-commands` | 技能内改 skill-state，必须走 reducer |
+| 适配器灌入 | `adapters.server-hooks` / `client-ui-hooks` | 仅用 `:hydrate-player-state`，不用 `:sync-*-data` |
+| Context 读/传输 | `service.context-dispatcher`（`:as ctx`） | lifecycle、合并读；**无** `context-registry` 门面 |
+
+**Agent 修改能力代码时：**
+
+- 新增或修改玩家状态 → 在 `reducer.clj` 增加/调整 `defmethod apply-command`，调用方发 `{:command ...}`。
+- 技能改 skill-state → `ctx-skill/assoc-skill-state!` 等，禁止 `update-context!`。
+- 不要新增 `store/set-player-state!*` 调用（白名单见维护手册）。
+- 验证：`verifyAbilityArchitectureStrict`、`verifyAbilityNoDispatcherBusinessApiUsage`、`cn.li.ac.ability.architecture-guard-test`。
 
 ## Runtime message 边界
 

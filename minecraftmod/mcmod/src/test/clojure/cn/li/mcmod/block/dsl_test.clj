@@ -2,7 +2,6 @@
   "Unit tests for Block DSL"
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [cn.li.mcmod.block.dsl :as bdsl]
-            [cn.li.mcmod.block.events :as block-events]
             [cn.li.mcmod.protocol.core :as registry-core]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.world :as world]))
@@ -14,40 +13,29 @@
 
 (use-fixtures :each reset-block-registry!)
 
-(deftest create-block-spec-flat-syntax-test
-  (testing "flat syntax maps into nested records"
-    (let [spec (bdsl/create-block-spec "test-block"
-                                       {:material :stone
-                                        :hardness 2.0
-                                        :resistance 5.0
-                                        :light-level 7})]
-      (is (= "test-block" (:id spec)))
-      (is (= :stone (get-in spec [:physical :material])))
-      (is (= 2.0 (get-in spec [:physical :hardness])))
-      (is (= 5.0 (get-in spec [:physical :resistance])))
-      (is (= 7 (get-in spec [:rendering :light-level]))))))
-
-(deftest nested-syntax-precedence-test
-  (testing "nested config takes precedence over top-level keys"
+(deftest create-block-spec-nested-only-test
+  (testing "nested syntax maps into block records"
     (let [spec (bdsl/create-block-spec "nested-priority"
-                                       {:material :wood
-                                        :hardness 1.0
-                                        :physical {:material :metal
-                                                   :hardness 8.0}})]
+                                       {:physical {:material :metal
+                                                   :hardness 8.0}
+                                        :rendering {:light-level 7}
+                                        :events {:on-right-click :handler}})]
       (is (= :metal (get-in spec [:physical :material])))
-      (is (= 8.0 (get-in spec [:physical :hardness]))))))
+      (is (= 8.0 (get-in spec [:physical :hardness])))
+      (is (= 7 (get-in spec [:rendering :light-level])))
+      (is (= :handler (get-in spec [:events :on-right-click]))))))
 
 (deftest register-and-lookup-test
-  (testing "register-block! + get-block supports string and keyword ids"
-    (let [spec (bdsl/create-block-spec "registry-block" {:material :stone})]
+  (testing "register-block! + get-block-spec supports string and keyword ids"
+    (let [spec (bdsl/create-block-spec "registry-block" {:physical {:material :stone}})]
       (bdsl/register-block! spec)
-      (is (= "registry-block" (:id (bdsl/get-block "registry-block"))))
-      (is (= "registry-block" (:id (bdsl/get-block :registry-block))))
+      (is (= "registry-block" (:id (bdsl/get-block-spec "registry-block"))))
+      (is (= "registry-block" (:id (bdsl/get-block-spec :registry-block))))
       (is (= #{"registry-block"} (set (bdsl/list-blocks)))))))
 
 (deftest validate-block-spec-invalid-material-test
   (testing "invalid material is rejected"
-    (let [spec (bdsl/create-block-spec "bad-material" {:material :not-a-material})]
+    (let [spec (bdsl/create-block-spec "bad-material" {:physical {:material :not-a-material}})]
       (is (thrown-with-msg?
             clojure.lang.ExceptionInfo
             #"Invalid material"
@@ -116,43 +104,27 @@
         (is (false? (bdsl/can-place-multi-block? :fake-world (pos/create-block-pos 0 0 0) spec)))))))
 
 (deftest template-and-merge-helpers-test
-  (is (= 2 (:harvest-level (bdsl/ore-template 2))))
-  (is (= :wood (:material (bdsl/wood-template))))
-  (is (= 3 (:harvest-level (bdsl/metal-template 3))))
-  (is (= :glass (:material (bdsl/glass-template))))
-  (is (= 15 (:light-level (bdsl/light-block-template 15))))
-  (is (true? (:multi-block? (bdsl/multi-block-template {:width 2 :height 1 :depth 1}))))
-  (is (vector? (:multi-block-positions (bdsl/irregular-multi-block-template [{:x 1 :y 0 :z 0} {:x 0 :y 0 :z 0}]))))
+(is (= 2 (get-in (bdsl/ore-template 2) [:physical :harvest-level])))
+  (is (= :wood (get-in (bdsl/wood-template) [:physical :material])))
+  (is (= 3 (get-in (bdsl/metal-template 3) [:physical :harvest-level])))
+  (is (= :glass (get-in (bdsl/glass-template) [:physical :material])))
+  (is (= 15 (get-in (bdsl/light-block-template 15) [:rendering :light-level])))
+  (is (some? (get-in (bdsl/multi-block-template {:width 2 :height 1 :depth 1})
+                     [:multi-block :size])))
+  (is (vector? (get-in (bdsl/irregular-multi-block-template [{:x 1 :y 0 :z 0} {:x 0 :y 0 :z 0}])
+                       [:multi-block :positions])))
   (is (pos? (count (bdsl/create-l-shape 2 2))))
   (is (pos? (count (bdsl/create-t-shape 3 2))))
   (is (pos? (count (bdsl/create-cross-shape 1))))
   (is (pos? (count (bdsl/create-pyramid-shape 3 2))))
   (is (pos? (count (bdsl/create-hollow-cube 2))))
-  (is (= :stone (:material (bdsl/merge-templates (bdsl/wood-template) {:material :stone})))))
-
-(deftest interaction-handlers-test
-  ;; Handler fns are read from top-level keys on the spec map by block event helpers.
-  (let [spec (-> (bdsl/create-block-spec "evt"
-                                         {:material :stone
-                                          :multi-block? true
-                                          :multi-block-size {:width 1 :height 1 :depth 1}
-                                          :events {:on-multi-block-break (fn [e] [:mb e])}})
-                 (assoc :on-right-click (fn [e] [:right e])
-                        :on-break (fn [e] [:break e])
-                        :on-place (fn [e] [:place e])))]
-    (is (= [:right :x] (block-events/handle-right-click spec :x)))
-    (is (= [:break :y] (block-events/handle-break spec :y)))
-    (is (= [:place :z] (block-events/handle-place spec :z)))
-    (let [r (block-events/handle-multi-block-break spec {:pos :p})]
-      (is (true? (:should-break-all r)))
-      ;; `calculate-multi-block-positions` uses `for` for regular shapes → lazy seq, not vec.
-      (is (sequential? (:positions r)))
-      (is (pos? (count (:positions r)))))))
+  (is (= :stone (get-in (bdsl/merge-templates (bdsl/wood-template) {:physical {:material :stone}})
+                        [:physical :material]))))
 
 (deftest get-block-properties-test
   (let [spec (bdsl/create-block-spec "props"
               (merge (bdsl/metal-template 2)
-                                            {:light-level 9}))]
+                                            {:rendering {:light-level 9}}))]
     (is (= :metal (:material (bdsl/get-block-properties spec))))
     (is (= 9 (:light-level (bdsl/get-block-properties spec))))
     (is (true? (:requires-tool (bdsl/get-block-properties spec))))))

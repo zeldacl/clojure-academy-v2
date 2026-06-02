@@ -1,7 +1,7 @@
 (ns cn.li.ac.content.ability.electromaster.mag-movement-test
   (:require [clojure.test :refer [deftest is]]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
-            [cn.li.ac.ability.service.context-registry :as ctx-reg]
+            [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
             [cn.li.ac.ability.effects.fx :as fx-op]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.effects.motion :as motion-op]
@@ -33,11 +33,11 @@
         exp* (atom [])
         terminated* (atom [])
         cost-fail! (get (skill-actions) :cost-fail!)]
-    (with-redefs [ctx-reg/get-context (fn [id] (get @contexts* id))
-                  ctx-reg/update-context! (fn [id f & args]
+    (with-redefs [ctx/get-context (fn [id] (get @contexts* id))
+                  ctx-skill/update-skill-state-root! (fn [id f & args]
                                         (swap! contexts* update id #(apply f % args))
                                         nil)
-                  ctx-reg/terminate-context! (fn [id _]
+                  ctx/terminate-context! (fn [id _]
                                            (swap! terminated* conj id)
                                            nil)
                   fx-op/execute-fx! (fn [_evt params]
@@ -62,11 +62,11 @@
         down! (get (skill-actions) :down!)]
     (with-redefs [mag-movement/resolve-target (fn [_] nil)
                   mag-movement/player-pos (fn [_] {:x 0.0 :y 0.0 :z 0.0})
-                  ctx-reg/get-context (fn [id] (get @contexts* id))
-                  ctx-reg/update-context! (fn [id f & args]
+                  ctx/get-context (fn [id] (get @contexts* id))
+                  ctx-skill/update-skill-state-root! (fn [id f & args]
                                         (swap! contexts* update id #(apply f % args))
                                         nil)
-                  ctx-reg/terminate-context! (fn [id _]
+                  ctx/terminate-context! (fn [id _]
                                            (swap! terminated* conj id)
                                            nil)
                   fx-op/execute-fx! (fn [_evt params]
@@ -110,11 +110,11 @@
                                               :movement.acceleration 0.08
                                               :targeting.target-update-radius 4.0
                                               0.0))
-                  ctx-reg/get-context (fn [id] (get @contexts* id))
-                  ctx-reg/update-context! (fn [id f & args]
+                  ctx/get-context (fn [id] (get @contexts* id))
+                  ctx-skill/update-skill-state-root! (fn [id f & args]
                                         (swap! contexts* update id #(apply f % args))
                                         nil)
-                  ctx-reg/terminate-context! (fn [id _]
+                  ctx/terminate-context! (fn [id _]
                                            (swap! terminated* conj id)
                                            nil)
                   fx-op/execute-fx! (fn [_evt params]
@@ -164,11 +164,11 @@
                                               :progression.exp-distance-scale 0.0011
                                               :targeting.target-update-radius 4.0
                                               0.0))
-                  ctx-reg/get-context (fn [id] (get @contexts* id))
-                  ctx-reg/update-context! (fn [id f & args]
+                  ctx/get-context (fn [id] (get @contexts* id))
+                  ctx-skill/update-skill-state-root! (fn [id f & args]
                                         (swap! contexts* update id #(apply f % args))
                                         nil)
-                  ctx-reg/terminate-context! (fn [id _]
+                  ctx/terminate-context! (fn [id _]
                                            (swap! terminated* conj id)
                                            nil)
                   fx-op/execute-fx! (fn [_evt params]
@@ -255,11 +255,11 @@
                                               :progression.exp-min 0.005
                                               :progression.exp-distance-scale 0.0011
                                               0.0))
-                  ctx-reg/get-context (fn [id] (get @contexts* id))
-                  ctx-reg/update-context! (fn [id f & args]
+                  ctx/get-context (fn [id] (get @contexts* id))
+                  ctx-skill/update-skill-state-root! (fn [id f & args]
                                         (swap! contexts* update id #(apply f % args))
                                         nil)
-                  ctx-reg/terminate-context! (fn [id _]
+                  ctx/terminate-context! (fn [id _]
                                            (swap! terminated* conj id)
                                            nil)
                   fx-op/execute-fx! (fn [_evt params]

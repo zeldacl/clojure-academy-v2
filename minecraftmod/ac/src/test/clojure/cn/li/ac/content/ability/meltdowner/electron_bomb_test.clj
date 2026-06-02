@@ -32,10 +32,9 @@
                   geom/eye-pos (fn [_] {:x 1.0 :y 64.0 :z 2.0})
                   raycast/*raycast* :mock-raycast
                   raycast/get-player-look-vector (fn [_ _] {:x 0.0 :y 0.0 :z 1.0})
-                  delayed-projectiles/default-mdball-life-ticks (fn [] 20)
-                  entity/player-spawn-entity-by-id-with-options! (fn [& args]
-                                                                   (swap! spawn-calls* conj args)
-                                                                   true)
+                  entity/player-spawn-entity-by-id! (fn [& args]
+                                                      (swap! spawn-calls* conj args)
+                                                      true)
                   ctx/ctx-send-to-client! (fn [ctx-id channel payload]
                                             (swap! fx-calls* conj [ctx-id channel payload])
                                             nil)
@@ -45,7 +44,7 @@
                                                                      nil)]
       (electron-bomb/electron-bomb-perform!
         {:player-id "p1" :ctx-id "ctx-1" :player {:id "player-obj"}})
-      (is (= [[{:id "player-obj"} "my_mod:entity_md_ball" 0.0 {:life-ticks 20}]]
+      (is (= [[{:id "player-obj"} "my_mod:entity_md_ball" 0.0]]
              @spawn-calls*))
       (is (= [["ctx-1"
                :electron-bomb/fx-spawn
@@ -73,10 +72,9 @@
                   geom/eye-pos (fn [_] {:x 1.0 :y 64.0 :z 2.0})
                   raycast/*raycast* :mock-raycast
                   raycast/get-player-look-vector (fn [& _] nil)
-                  delayed-projectiles/default-mdball-life-ticks (fn [] 20)
-                  entity/player-spawn-entity-by-id-with-options! (fn [& args]
-                                                                   (swap! spawn-calls* conj args)
-                                                                   true)
+                  entity/player-spawn-entity-by-id! (fn [& args]
+                                                      (swap! spawn-calls* conj args)
+                                                      true)
                   ctx/ctx-send-to-client! (fn [ctx-id channel payload]
                                             (swap! fx-calls* conj [ctx-id channel payload])
                                             nil)

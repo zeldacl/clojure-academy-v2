@@ -1,13 +1,12 @@
 (ns cn.li.ac.ability.effects.state
-  (:require 
-            [cn.li.ac.ability.service.command-runtime :as command-rt]
-            [cn.li.ac.ability.service.context-registry :as ctx-reg]
+  (:require [cn.li.ac.ability.service.command-runtime :as command-rt]
+            [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (defn- resolve-session-id
   [evt]
   (or (runtime-hooks/player-state-session-id)
-      (let [ctx-map (ctx-reg/get-context (:ctx-id evt))
+      (let [ctx-map (ctx/get-context (:ctx-id evt))
             sid (:session-id ctx-map)]
         (if (vector? sid) (first sid) sid))
       (runtime-hooks/require-player-state-session-id "effects-state")))
@@ -39,7 +38,7 @@
 
 (defn execute-terminate!
   [evt _params]
-  (ctx-reg/terminate-context! (:ctx-id evt) nil)
+  (ctx/terminate-context! (:ctx-id evt) nil)
   evt)
 
 (defn execute-overload-floor!

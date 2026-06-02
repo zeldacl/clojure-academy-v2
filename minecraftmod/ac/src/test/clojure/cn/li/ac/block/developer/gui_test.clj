@@ -65,7 +65,7 @@
                   (fn [sym]
                     (when (= sym 'cn.li.ac.gui.open/open-gui-by-type)
                       (fn [& args] (swap! calls conj args))))
-                  bdsl/get-block (fn [_] nil)
+                  bdsl/get-block-spec (fn [_] nil)
                   world/world-is-client-side* (fn [_] true)]
       ((developer-logic/open-developer-gui-for "developer-normal")
        {:player :player-1

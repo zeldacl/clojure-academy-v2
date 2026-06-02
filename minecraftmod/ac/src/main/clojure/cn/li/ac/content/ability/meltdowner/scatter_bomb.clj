@@ -15,13 +15,11 @@
   (:require [cn.li.ac.ability.dsl :refer [defskill]]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
-            [cn.li.ac.ability.service.context-registry :as ctx-reg]
-            [cn.li.ac.ability.service.command-runtime :as command-rt]
-            [cn.li.ac.ability.service.skill-effects :as skill-effects]
+            [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
+                        [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.service.delayed-projectiles :as delayed-projectiles]
             [cn.li.ac.ability.effects.geom :as geom]
-            [cn.li.mcmod.hooks.core :as runtime-hooks]
-            [cn.li.mcmod.platform.entity :as entity]
+                        [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.util.log :as log]))
@@ -54,48 +52,15 @@
 
 (defn- current-hold-ticks
   [ctx-id]
-  (long (or (get-in (ctx-reg/get-context ctx-id) [:skill-state :hold-ticks]) 0)))
-
-(defn- safe-context-data
-  [ctx-id]
-  (try
-    (ctx-reg/get-context ctx-id)
-    (catch Exception _ nil)))
-
-(defn- command-runtime-ready?
-  [{:keys [session-id player-uuid]}]
-  (and (runtime-hooks/current-player-state-owner)
-       session-id
-       player-uuid))
-
-(defn- set-skill-state-root!
-  [ctx-id state-map]
-  (let [ctx-data (or (safe-context-data ctx-id) {})]
-    (if (command-runtime-ready? ctx-data)
-      (let [result (command-rt/run-command-in-session! (:session-id ctx-data)
-                                                       (:player-uuid ctx-data)
-                                                       {:command :context-assoc-skill-state
-                                                        :ctx-id ctx-id
-                                                        :k []
-                                                        :v state-map})]
-        (when (= :context-not-found (:rejected-reason result))
-          (ctx-reg/update-context! ctx-id assoc :skill-state state-map)))
-      (ctx-reg/update-context! ctx-id assoc :skill-state state-map))))
+  (long (or (get-in (ctx/get-context ctx-id) [:skill-state :hold-ticks]) 0)))
 
 (defn- set-skill-state!
   [ctx-id k v]
-  (let [ctx-data (or (safe-context-data ctx-id) {})
-        path (if (vector? k) k [k])]
-    (if (command-runtime-ready? ctx-data)
-      (let [result (command-rt/run-command-in-session! (:session-id ctx-data)
-                                                       (:player-uuid ctx-data)
-                                                       {:command :context-assoc-skill-state
-                                                        :ctx-id ctx-id
-                                                        :k path
-                                                        :v v})]
-        (when (= :context-not-found (:rejected-reason result))
-          (ctx-reg/update-context! ctx-id assoc-in (into [:skill-state] path) v)))
-      (ctx-reg/update-context! ctx-id assoc-in (into [:skill-state] path) v))))
+  (ctx-skill/assoc-skill-state! ctx-id k v))
+
+(defn- set-skill-state-root!
+  [ctx-id state-map]
+  (ctx-skill/update-skill-state-root! ctx-id identity state-map))
 
 (defn- beam-config []
   {:radius          (cfg-double :beam.radius)
@@ -145,7 +110,7 @@
 
 (defn scatter-bomb-tick!
   [{:keys [player-id ctx-id player]}]
-  (let [ctx-data (ctx-reg/get-context ctx-id)]
+  (let [ctx-data (ctx/get-context ctx-id)]
     (when ctx-data
       (let [ticks (inc (long (or (get-in ctx-data [:skill-state :hold-ticks]) 0)))
             _ (set-skill-state! ctx-id [:hold-ticks] ticks)
@@ -163,7 +128,7 @@
               (cfg-double :effect.anti-afk-damage)
               :magic))
           (ctx/ctx-send-to-client! ctx-id :scatter-bomb/fx-end {:balls balls})
-          (ctx-reg/terminate-context! ctx-id nil))
+          (ctx/terminate-context! ctx-id nil))
         ;; Spawn new ball every N ticks
         (when (and (<= ticks (cfg-int :projectile.max-hold-ticks))
                    (>= ticks (cfg-int :projectile.spawn-start-tick))
@@ -181,7 +146,7 @@
 
 (defn scatter-bomb-up!
   [{:keys [player-id ctx-id]}]
-  (let [ctx-data (ctx-reg/get-context ctx-id)
+  (let [ctx-data (ctx/get-context ctx-id)
         balls (int (or (get-in ctx-data [:skill-state :balls]) 0))
         exp (skill-exp player-id)]
     (when (pos? balls)
@@ -216,7 +181,7 @@
 (defn scatter-bomb-cost-fail!
   [{:keys [ctx-id cost-stage]}]
   (when (= cost-stage :tick)
-    (let [balls (int (or (get-in (ctx-reg/get-context ctx-id) [:skill-state :balls]) 0))]
+    (let [balls (int (or (get-in (ctx/get-context ctx-id) [:skill-state :balls]) 0))]
       (ctx/ctx-send-to-client! ctx-id :scatter-bomb/fx-end {:balls balls}))))
 
 (defn scatter-bomb-abort!

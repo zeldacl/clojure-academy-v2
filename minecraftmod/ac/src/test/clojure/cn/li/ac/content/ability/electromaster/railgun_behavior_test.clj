@@ -5,7 +5,6 @@
             [cn.li.ac.ability.item-actions :as item-actions]
             [cn.li.ac.ability.effects.beam :as beam]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
-            [cn.li.ac.ability.service.context-registry :as ctx-reg]
             [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.ac.content.ability.electromaster.railgun :as railgun]
             [cn.li.mcmod.platform.block-manipulation :as block-manip]
@@ -81,7 +80,7 @@
   (with-redefs [log/debug (fn [& _])]
     (binding [ctx/*context-owner* {:logical-side :server :session-id :test-session}]
       (is (true? (railgun/register-coin-throw! "p1" {:timestamp-ms 12345})))
-      (is (= :item-charge-cancelled (get-in (ctx-reg/get-context "ctx-1") [:skill-state :mode]))))))
+      (is (= :item-charge-cancelled (get-in (ctx/get-context "ctx-1") [:skill-state :mode]))))))
 
 (deftest coin-progress-threshold-status-test
   (let [below (#'railgun/qte-status 0.59)

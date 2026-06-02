@@ -2,7 +2,7 @@
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
-            [cn.li.ac.ability.service.context-registry :as ctx-reg]
+            [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
             [cn.li.ac.ability.util.toggle :as toggle]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
@@ -16,7 +16,7 @@
 
 (deftest activate-does-not-manually-send-fx-test
   (testing "activate! initializes state but does not manually emit client FX"
-    (with-redefs [ctx-reg/update-context! (fn [& _] nil)
+    (with-redefs [ctx-skill/update-skill-state-root! (fn [& _] nil)
                   ctx/ctx-send-to-client! (fn [& _]
                                             (throw (ex-info "manual fx send should not happen" {})))
                   skill-effects/player-path (fn [& _] 12.0)
@@ -27,7 +27,7 @@
   (testing "damage is unchanged when absorb interval has not elapsed"
     (let [consume-calls* (atom 0)
           reduce-damage! (reduce-damage-fn)]
-      (with-redefs [ctx-reg/get-all-contexts (fn [] {[:server :session "ctx-1"]
+      (with-redefs [ctx/get-all-contexts (fn [] {[:server :session "ctx-1"]
                                                  {:player-uuid "p-1"
                                                   :skill-state {:light-shield {:ticks 100
                                                                                :last-absorb-tick 95}
@@ -49,12 +49,12 @@
     (let [update-calls* (atom [])
           exp-calls* (atom [])
           reduce-damage! (reduce-damage-fn)]
-      (with-redefs [ctx-reg/get-all-contexts (fn [] {[:server :session "ctx-2"]
+      (with-redefs [ctx/get-all-contexts (fn [] {[:server :session "ctx-2"]
                                                  {:player-uuid "p-2"
                                                   :skill-state {:light-shield {:ticks 100
                                                                                :last-absorb-tick 70}
                                                                :toggle {:light-shield {:active true}}}}})
-                    ctx-reg/update-context! (fn [& args]
+                    ctx-skill/update-skill-state-root! (fn [& args]
                                           (swap! update-calls* conj args)
                                           nil)
                     toggle/is-toggle-active? (fn [_ _] true)
@@ -88,12 +88,12 @@
     (let [update-calls* (atom [])
           exp-calls* (atom [])
           reduce-damage! (reduce-damage-fn)]
-      (with-redefs [ctx-reg/get-all-contexts (fn [] {[:server :session "ctx-3"]
+      (with-redefs [ctx/get-all-contexts (fn [] {[:server :session "ctx-3"]
                                                  {:player-uuid "p-3"
                                                   :skill-state {:light-shield {:ticks 120
                                                                                :last-absorb-tick 0}
                                                                :toggle {:light-shield {:active true}}}}})
-                    ctx-reg/update-context! (fn [& args]
+                    ctx-skill/update-skill-state-root! (fn [& args]
                                           (swap! update-calls* conj args)
                                           nil)
                     toggle/is-toggle-active? (fn [_ _] true)
@@ -124,14 +124,14 @@
                                                    :combat.touch-radius 3.0
                                                    0.0))
                     skill-effects/perform-resource! (fn [& _] {:success? true})
-                    ctx-reg/get-all-contexts (fn [] {[:server :session "ctx-3"]
+                    ctx/get-all-contexts (fn [] {[:server :session "ctx-3"]
                                                 {:player-uuid "p-3"
                                                  :skill-state {:light-shield {:ticks 120
                                                                               :last-touch-tick 0
                                                                               :last-absorb-tick 0
                                                                               :overload-floor 10.0}
                                                               :toggle {:light-shield {:active true}}}}})
-                    ctx-reg/get-context (fn [_] {:player-uuid "p-3"
+                    ctx/get-context (fn [_] {:player-uuid "p-3"
                                              :skill-state {:light-shield {:ticks 120
                                                                           :last-touch-tick 0
                                                                           :last-absorb-tick 0
@@ -155,13 +155,13 @@
     (let [remove-calls* (atom 0)
           cooldown-calls* (atom [])
           potion-calls* (atom 0)]
-      (with-redefs [ctx-reg/get-context (fn [_]
+      (with-redefs [ctx/get-context (fn [_]
                                       {:player-uuid "p-3"
                                        :skill-state {:light-shield {:ticks 5
                                                                     :last-touch-tick 0
                                                                     :overload-floor 10.0}
                                                     :toggle {:light-shield {:active true}}}})
-                    ctx-reg/update-context! (fn [& _] nil)
+                    ctx-skill/update-skill-state-root! (fn [& _] nil)
                     toggle/is-toggle-active? (fn [_ _] true)
                     toggle/remove-toggle! (fn [& _] (swap! remove-calls* inc))
                     skill-effects/skill-exp (fn [& _] 0.0)
@@ -195,7 +195,7 @@
     (let [potion-calls* (atom [])
           remove-calls* (atom 0)
           update-calls* (atom [])]
-      (with-redefs [ctx-reg/update-context! (fn [& args]
+      (with-redefs [ctx-skill/update-skill-state-root! (fn [& args]
                                           (swap! update-calls* conj args)
                                           nil)
                     toggle/remove-toggle! (fn [& _] (swap! remove-calls* inc))

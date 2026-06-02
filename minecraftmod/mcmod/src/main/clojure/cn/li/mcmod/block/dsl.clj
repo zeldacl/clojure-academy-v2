@@ -36,7 +36,6 @@
 (def is-controller-block? q/is-controller-block?)
 (def is-part-block? q/is-part-block?)
 (def is-multi-block? q/is-multi-block?)
-(def has-tile-entity? q/has-tile-entity?)
 (def is-light-emitter? q/is-light-emitter?)
 (def get-controller-block-id q/get-controller-block-id)
 (def get-part-block-id q/get-part-block-id)
@@ -64,7 +63,6 @@
 
 (def create-block-spec core/create-block-spec)
 (def register-block! core/register-block!)
-(def get-block core/get-block)
 (def get-block-properties core/get-block-properties)
 
 (def ore-template templates/ore-template)
@@ -83,9 +81,6 @@
 
 (defmacro defmultiblock [base-name & options]
 	`(core/defmultiblock ~base-name ~@options))
-
-(defmacro defcontroller-multiblock [base-name & options]
-	`(core/defcontroller-multiblock ~base-name ~@options))
 
 (defmacro defblock-template [block-name config]
 	`(core/defblock-template ~block-name ~config))

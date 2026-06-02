@@ -4,7 +4,6 @@
             [cn.li.ac.ability.adapters.client-ui-hooks :as client-ui]
             [cn.li.ac.ability.adapters.server-hooks :as server-hooks]
             [cn.li.ac.ability.client.keybinds :as client-keybinds]
-            [cn.li.ac.content.ability.server-runtime-lifecycle :as server-runtime-lifecycle]
             [cn.li.ac.ability.runtime-container :as runtime-container]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
@@ -78,7 +77,6 @@
   ([runtime-components]
   (with-init-guard runtime-hooks-installed?
     (install-runtime-components! runtime-components)
-    (server-runtime-lifecycle/install-server-runtime-lifecycle!)
     (server-hooks/register-platform-functions!)
     (server-hooks/register-lifecycle-subscriptions!)
     (client-keybinds/install-default-handlers!)

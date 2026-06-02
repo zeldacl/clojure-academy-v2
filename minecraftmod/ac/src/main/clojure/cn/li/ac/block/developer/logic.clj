@@ -72,7 +72,7 @@
 					ticker (inc (long (get state0 :update-ticker 0)))
 					state1 (-> state0 (assoc :update-ticker ticker) (ensure-tier-defaults be))
 					state2 (if (zero? (mod ticker (dev-config/validate-interval)))
-									 (let [block-spec (some-> (platform-be/get-block-id be) bdsl/get-block)]
+									 (let [block-spec (some-> (platform-be/get-block-id be) bdsl/get-block-spec)]
 										 (assoc state1 :structure-valid (boolean (and block-spec (validate-structure level pos block-spec)))))
 									 state1)
 					state3 (if-not (:structure-valid state2 false) (assoc state2 :is-developing false) state2)
@@ -89,7 +89,7 @@
 		(when (and player world pos (not sneaking))
 			(try
 				(if-let [open-gui-by-type (requiring-resolve 'cn.li.ac.gui.open/open-gui-by-type)]
-					(let [block-spec (bdsl/get-block controller-block-id)
+					(let [block-spec (bdsl/get-block-spec controller-block-id)
 								controller-pos (or (when block-spec (bdsl/resolve-multi-block-master-pos world pos block-spec)) pos)]
 						(if (world/world-is-client-side* world)
 							(open-gui-by-type player :developer world controller-pos)

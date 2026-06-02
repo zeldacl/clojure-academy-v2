@@ -7,7 +7,6 @@
 						[cn.li.ac.wireless.gui.tab :as wireless-tab]
 						[cn.li.mcmod.gui.spec :as gui-reg]
 						[cn.li.mcmod.gui.slot-schema :as slot-schema]
-						[cn.li.mcmod.gui.slot-registry :as slot-registry]
 						[cn.li.mcmod.platform.be :as platform-be]
 						[cn.li.mcmod.util.log :as log]
 						[cn.li.ac.integration.block.energy-converter.config :as ec-config]
@@ -55,7 +54,7 @@
 						 :status (atom (if (output-block? block-id) "OUTPUT" "INPUT"))}})))
 
 (defn- get-slot-count [_container]
-	(slot-registry/get-slot-count converter-slot-schema-id))
+	(slot-schema/tile-slot-count converter-slot-schema-id))
 
 (defn- get-slot-item [_container _slot-index] nil)
 (defn- set-slot-item! [_container _slot-index _item-stack] nil)

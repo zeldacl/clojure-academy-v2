@@ -9,7 +9,7 @@
             [cn.li.ac.block.wireless-node.network-infra :as node-infra]
             [cn.li.ac.block.wireless-node.state :as node-state]
             [cn.li.ac.wireless.config :as node-config]
-            [cn.li.mcmod.gui.slot-registry :as slot-registry]
+            [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.ac.wireless.core.capability-resolver :as resolver])
   (:import [cn.li.acapi.wireless IWirelessNode]))
 
@@ -93,7 +93,7 @@
       (is (false? (node-owner/owner-authorized? "ServerPlayer['bob'/1, l='world']" :player))))))
 
 (deftest node-gui-slot-placement-policy-test
-  (with-redefs [slot-registry/get-slot-type-for-index (fn [_ idx]
+  (with-redefs [slot-schema/slot-type (fn [_ idx]
                                                          (case idx
                                                            0 :energy
                                                            1 :output

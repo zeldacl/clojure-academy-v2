@@ -8,7 +8,6 @@
             [cn.li.ac.gui.tech-ui-common :as tech-ui]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
-            [cn.li.mcmod.gui.slot-registry :as slot-registry]
             [cn.li.mcmod.platform.item :as pitem]
             [cn.li.ac.energy.operations :as energy]
             [cn.li.mcmod.gui.spec :as gui-reg]
@@ -36,7 +35,7 @@
     (gui-sync/create-schema-container fusor-schema/imag-fusor-schema tile player fusor-gui-type {:state state})))
 
 (defn get-slot-count [_container]
-  (slot-registry/get-slot-count fusor-slot-schema-id))
+  (slot-schema/tile-slot-count fusor-slot-schema-id))
 
 (defn get-slot-item [container slot-index]
   (common/get-slot-item-be container slot-index))

@@ -7,7 +7,6 @@
             [cn.li.mcmod.gui.events :as events]
             [cn.li.mcmod.gui.spec :as gui-reg]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
-            [cn.li.mcmod.gui.slot-registry :as slot-registry]
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.util.log :as log]
             [cn.li.ac.gui.manifest :as gui-manifest]
@@ -43,7 +42,7 @@
   (gui-sync/create-schema-container former-gui-schema tile player former-gui-type))
 
 (defn- get-slot-count [_container]
-  (slot-registry/get-slot-count former-slot-schema-id))
+  (slot-schema/tile-slot-count former-slot-schema-id))
 
 (defn- get-slot-item [container slot-index]
   (common/get-slot-item-be container slot-index))

@@ -26,6 +26,7 @@ Human-readable mirror: [docs/01-overview/PROJECT_LAYOUT.md](../../docs/01-overvi
   - Domains: `block`, `client/render`, `config`, `energy`, `gui`, `item`, `registry`, `terminal`, `wireless`, etc.
   - **Terminal** (`ac/.../terminal/`): server `model`, `catalog`, `player`, `network`; client `client/shell`, `client/runtime`, `client/apps`, `client/actions` (sole `requiring-resolve` entry). See `docs/04-systems/TERMINAL_SYSTEM_MAINTENANCE.md`.
   - **Wireless** (`ac/.../wireless/`): public `api`; `service.commands` / `service.queries`; `domain.topology` / `domain.transfer`; `data.world-registry` (`transact!`); `data.world` lifecycle-only. See `docs/05-wireless/WIRELESS_REFACTOR_CONTRACTS.md`.
+  - **Ability** (`ac/ability/`, `ac/content/ability/`): **reducer-only** — all player-state writes via `command-runtime` → `reducer` → `runtime-store` only; `context-dispatcher` (`:as ctx`) for lifecycle/merged reads; `context-skill-state` for skill-state writes; no `context-registry` facade, no `:sync-*-data` commands, no `update-context!`. See `docs/04-systems/ABILITY_SYSTEM_MAINTENANCE.md`.
   - Depends on `mcmod`; uses mcmod DSLs/metadata; **must not** import Forge/Fabric/`net.minecraft.*`.
   - Shared assets: `ac/src/main/resources` (e.g. `assets/my_mod/`, `data/my_mod/`).
 

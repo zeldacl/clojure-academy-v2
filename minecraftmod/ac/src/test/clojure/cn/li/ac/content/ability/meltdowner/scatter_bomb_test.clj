@@ -3,7 +3,7 @@
             [cn.li.ac.content.ability.meltdowner.scatter-bomb :as scatter]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
-            [cn.li.ac.ability.service.context-registry :as ctx-reg]
+            [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.service.delayed-projectiles :as delayed-projectiles]
             [cn.li.ac.ability.effects.geom :as geom]
@@ -18,7 +18,7 @@
     {:ctx* ctx*
      :messages* messages*
      :get-context (fn [_] @ctx*)
-     :update-context! (fn [_ f & args]
+     :update-skill-state-root! (fn [_ f & args]
                         (swap! ctx* #(apply f % args)))
      :send! (fn [ctx-id channel payload]
               (swap! messages* conj [ctx-id channel payload])
@@ -54,11 +54,11 @@
     0))
 
 (deftest scatter-bomb-down-initializes-state-and-start-fx-test
-  (let [{:keys [ctx* update-context! send! messages*]} (context-mocks {:skill-state {:legacy true}})]
+  (let [{:keys [ctx* update-skill-state-root! send! messages*]} (context-mocks {:skill-state {:legacy true}})]
     (with-redefs [skill-effects/skill-exp (fn [& _] 0.0)
                   skill-config/lerp-double stub-lerp-double
                   skill-config/tunable-double stub-tunable-double
-                  ctx-reg/update-context! update-context!
+                  ctx-skill/update-skill-state-root! update-skill-state-root!
                   ctx/ctx-send-to-client! send!]
       (scatter/scatter-bomb-down! {:player-id "p1" :ctx-id "ctx-1" :cost-ok? true}))
     (is (= {:balls 0 :hold-ticks 0 :overload-floor 120.0}
@@ -66,13 +66,13 @@
     (is (= [["ctx-1" :scatter-bomb/fx-start {}]] @messages*))))
 
 (deftest scatter-bomb-tick-spawns-ball-at-cadence-test
-  (let [{:keys [ctx* get-context update-context! send! messages*]}
+  (let [{:keys [ctx* get-context update-skill-state-root! send! messages*]}
   (context-mocks {:skill-state {:balls 0 :hold-ticks 19 :overload-floor 120.0}})
         floor-calls* (atom [])
         spawn-calls* (atom [])
         damage-calls* (atom [])]
-    (with-redefs [ctx-reg/get-context get-context
-                  ctx-reg/update-context! update-context!
+    (with-redefs [ctx/get-context get-context
+                  ctx-skill/update-skill-state-root! update-skill-state-root!
                   ctx/ctx-send-to-client! send!
                   skill-config/tunable-int stub-tunable-int
                   skill-config/tunable-double stub-tunable-double
@@ -101,14 +101,14 @@
     (is (= :scatter-bomb/fx-ball (second (first @messages*))))))
 
 (deftest scatter-bomb-tick-anti-afk-damages-and-terminates-test
-  (let [{:keys [ctx* get-context update-context! send! messages*]}
+  (let [{:keys [ctx* get-context update-skill-state-root! send! messages*]}
         (context-mocks {:skill-state {:balls 2 :hold-ticks 199 :overload-floor 120.0}})
         damage-calls* (atom [])
         terminate-calls* (atom [])]
-    (with-redefs [ctx-reg/get-context get-context
-                  ctx-reg/update-context! update-context!
+    (with-redefs [ctx/get-context get-context
+                  ctx-skill/update-skill-state-root! update-skill-state-root!
                   ctx/ctx-send-to-client! send!
-                  ctx-reg/terminate-context! (fn [ctx-id terminate-fn]
+                  ctx/terminate-context! (fn [ctx-id terminate-fn]
                                            (swap! terminate-calls* conj [ctx-id terminate-fn])
                                            nil)
                   skill-config/tunable-int stub-tunable-int
@@ -131,11 +131,11 @@
     (is (= ["ctx-afk" :scatter-bomb/fx-end {:balls 2}] (last @messages*)))))
 
 (deftest scatter-bomb-tick-after-hold-window-does-not-spawn-new-ball-test
-  (let [{:keys [ctx* get-context update-context! send! messages*]}
+  (let [{:keys [ctx* get-context update-skill-state-root! send! messages*]}
         (context-mocks {:skill-state {:balls 4 :hold-ticks 80 :overload-floor 120.0}})
         spawn-calls* (atom [])]
-    (with-redefs [ctx-reg/get-context get-context
-                  ctx-reg/update-context! update-context!
+    (with-redefs [ctx/get-context get-context
+                  ctx-skill/update-skill-state-root! update-skill-state-root!
                   ctx/ctx-send-to-client! send!
                   skill-config/tunable-int stub-tunable-int
                   skill-config/tunable-double stub-tunable-double
@@ -163,7 +163,7 @@
         scheduled* (atom [])
         exp-calls* (atom [])
         cooldown-calls* (atom [])]
-    (with-redefs [ctx-reg/get-context get-context
+    (with-redefs [ctx/get-context get-context
                   ctx/ctx-send-to-client! send!
                   skill-effects/skill-exp (fn [& _] 0.0)
                   skill-config/lerp-double stub-lerp-double
@@ -204,7 +204,7 @@
 (deftest scatter-bomb-cost-fail-sends-fx-end-test
   (let [{:keys [get-context send! messages*]}
         (context-mocks {:skill-state {:balls 4 :hold-ticks 21 :overload-floor 120.0}})]
-    (with-redefs [ctx-reg/get-context get-context
+    (with-redefs [ctx/get-context get-context
                   ctx/ctx-send-to-client! send!]
       (scatter/scatter-bomb-cost-fail! {:ctx-id "ctx-fail"
                                         :cost-stage :tick}))

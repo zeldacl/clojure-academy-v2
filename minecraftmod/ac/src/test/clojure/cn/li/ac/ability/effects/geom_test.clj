@@ -1,4 +1,4 @@
-(ns cn.li.ac.ability.server.effect.geom-test
+(ns cn.li.ac.ability.effects.geom-test
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.test.support.player-state :as ps-fix]))
@@ -55,4 +55,3 @@
       (is (= 0.0 (:x e)))
       (is (> 0.01 (Math/abs (- (:y e) 65.62))))
       (is (= 0.0 (:z e))))))
-

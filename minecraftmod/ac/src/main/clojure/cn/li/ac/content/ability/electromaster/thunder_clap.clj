@@ -12,14 +12,12 @@
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.util.balance :as bal]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
-            [cn.li.ac.ability.service.context-registry :as ctx-reg]
-            [cn.li.ac.ability.service.command-runtime :as command-rt]
-            [cn.li.ac.ability.effects.damage :as damage-op]
+            [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
+                        [cn.li.ac.ability.effects.damage :as damage-op]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.effects.world :as world-op]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
-            [cn.li.mcmod.hooks.core :as runtime-hooks]
-            [cn.li.mcmod.platform.raycast :as raycast]))
+                        [cn.li.mcmod.platform.raycast :as raycast]))
 
 (def ^:private thunder-clap-skill-id :thunder-clap)
 
@@ -55,37 +53,60 @@
      :y (+ (double (:y eye)) (* (double (:y look*)) range))
      :z (+ (double (:z eye)) (* (double (:z look*)) range))}))
 
+(defn- block-impact-point
+  [hit]
+  {:x (double (or (:hit-x hit) (:x hit) 0.0))
+   :y (double (or (:hit-y hit) (:y hit) 0.0))
+   :z (double (or (:hit-z hit) (:z hit) 0.0))})
+
+(defn- entity-impact-point
+  [hit]
+  {:x (double (or (:x hit) (:hit-x hit) 0.0))
+   :y (+ (double (or (:y hit) (:hit-y hit) 0.0))
+         (double (or (:eye-height hit) 0.0)))
+   :z (double (or (:z hit) (:hit-z hit) 0.0))})
+
+(defn- hit-kind
+  [hit]
+  (let [kind (:hit-type hit)]
+    (cond
+      (= kind :entity) :entity
+      (= kind :block) :block
+      :else :miss)))
+
+(defn- resolve-raycast-target
+  [player-id]
+  (let [range (targeting-range)
+        world-id (geom/world-id-of player-id)
+        eye (geom/eye-pos player-id)
+        look (when raycast/*raycast*
+               (raycast/get-player-look-vector raycast/*raycast* player-id))
+        hit (when (and raycast/*raycast* look)
+              (raycast/raycast-combined raycast/*raycast*
+                                        world-id
+                                        (:x eye) (:y eye) (:z eye)
+                                        (double (or (:x look) 0.0))
+                                        (double (or (:y look) 0.0))
+                                        (double (or (:z look) 1.0))
+                                        (double range)))]
+    (case (if hit (hit-kind hit) :miss)
+      :entity (entity-impact-point hit)
+      :block (block-impact-point hit)
+      (resolve-fallback-target player-id))))
+
 (defn- current-target
   [ctx-id player-id]
-  (or (get-in (ctx-reg/get-context ctx-id) [:skill-state :hit-pos])
+  (or (get-in (ctx/get-context ctx-id) [:skill-state :hit-pos])
       (resolve-fallback-target player-id)))
-
-(defn- safe-context-data
-  [ctx-id]
-  (try
-    (ctx-reg/get-context ctx-id)
-    (catch Exception _ nil)))
-
-(defn- command-runtime-ready?
-  [{:keys [session-id player-uuid]}]
-  (and (runtime-hooks/current-player-state-owner)
-       session-id
-       player-uuid))
 
 (defn- update-skill-state-root!
   [ctx-id f & args]
-  (let [ctx-data (or (safe-context-data ctx-id) {})
-        next-state (apply f (or (:skill-state ctx-data) {}) args)]
-    (if (command-runtime-ready? ctx-data)
-      (let [result (command-rt/run-command-in-session! (:session-id ctx-data)
-                                                       (:player-uuid ctx-data)
-                                                       {:command :context-assoc-skill-state
-                                                        :ctx-id ctx-id
-                                                        :k []
-                                                        :v next-state})]
-        (when (= :context-not-found (:rejected-reason result))
-          (ctx-reg/update-context! ctx-id assoc :skill-state next-state)))
-      (ctx-reg/update-context! ctx-id assoc :skill-state next-state))))
+  (apply ctx-skill/update-skill-state-root! ctx-id f args))
+
+(defn- refresh-hit-pos!
+  [{:keys [ctx-id player-id]}]
+  (update-skill-state-root! ctx-id assoc :hit-pos (resolve-raycast-target player-id))
+  nil)
 
 (defn- mark-performed!
   [ctx-id performed? & {:as extra-state}]
@@ -96,7 +117,7 @@
 (defn- end-payload
   [{:keys [ctx-id player-id hold-ticks]}]
   (let [ticks (long (or hold-ticks 0))]
-    {:performed?   (boolean (get-in (ctx-reg/get-context ctx-id) [:skill-state :performed?]))
+    {:performed?   (boolean (get-in (ctx/get-context ctx-id) [:skill-state :performed?]))
      :charge-ticks ticks
      :ticks        ticks
      :charge-ratio (compute-overcharge-ratio ticks)
@@ -115,7 +136,7 @@
   :pattern         :charge-window
   :input-policy    {:settle-perform-on-key-up?
                     (fn [{:keys [ctx-id]}]
-                      (boolean (get-in (ctx-reg/get-context ctx-id) [:skill-state :performed?])))}
+                      (boolean (get-in (ctx/get-context ctx-id) [:skill-state :performed?])))}
   :cooldown        {:mode :manual}
   :cost            {:down {:overload (fn [{:keys [exp]}]
                                       (cfg-lerp :cost.down.overload (double (or exp 0.0))))}
@@ -123,10 +144,6 @@
                                  (if (<= (long (or hold-ticks 0)) (min-ticks))
                                    (cfg-lerp :cost.tick.cp (bal/clamp01 (double (or exp 0.0))))
                                    0.0))}}
-  :on-down         [[:aim-raycast {:range (fn [_] (targeting-range))}]
-                    [:assoc-state {:k :hit-pos :v :hit}]]
-  :on-tick         [[:aim-raycast {:range (fn [_] (targeting-range))}]
-                    [:assoc-state {:k :hit-pos :v :hit}]]
   :fx              {:start  {:topic   :thunder-clap/fx-start
                              :payload (fn [{:keys [ctx-id player-id]}]
                                         {:charge-ticks 0
@@ -151,7 +168,9 @@
                     :end    {:topic   :thunder-clap/fx-end
                              :payload end-payload}}
   :actions
-  {:up!        (fn [{:keys [player-id ctx-id hold-ticks exp]}]
+  {:down!      refresh-hit-pos!
+   :tick!      refresh-hit-pos!
+   :up!        (fn [{:keys [player-id ctx-id hold-ticks exp]}]
                  (let [ticks (long (or hold-ticks 0))]
                    (if (< ticks (min-ticks))
                      (mark-performed! ctx-id false :final-target (current-target ctx-id player-id))
@@ -181,7 +200,7 @@
                    (ctx/ctx-send-to-client! ctx-id :thunder-clap/fx-end
                                             (merge {:mode :end :ctx-id ctx-id}
                                                    (end-payload {:ctx-id ctx-id}))))
-                 (ctx-reg/terminate-context! ctx-id nil))
+                 (ctx/terminate-context! ctx-id nil))
    :abort!     (fn [{:keys [ctx-id]}]
                  (mark-performed! ctx-id false))}
   :prerequisites [{:skill-id :thunder-bolt :min-exp 1.0}])

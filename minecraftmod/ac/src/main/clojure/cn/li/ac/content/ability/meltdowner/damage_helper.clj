@@ -2,6 +2,8 @@
   "Meltdowner damage helper: mark targets and amplify incoming damage while marked."
   (:require [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.service.context-manager :as ctx-mgr]
+            [cn.li.ac.ability.service.player-runtime-commands :as prt-cmd]
+            [cn.li.ac.ability.service.runtime-store :as store]
             [cn.li.ac.ability.model.ability :as adata]
             [cn.li.ac.ability.server.damage.runtime :as damage-runtime]
             [cn.li.mcmod.hooks.core :as hooks]
@@ -9,84 +11,7 @@
 
 (def ^:private rad-mark-fx-channel :rad-intensify/fx-mark)
 
-(defn create-damage-helper-runtime
-  ([]
-   (create-damage-helper-runtime {}))
-  ([{:keys [marks*]
-     :or {marks* (atom {})}}]
-   {::runtime ::damage-helper-runtime
-    :marks* marks*
-    :last-server-tick* (atom nil)}))
-
-(def ^:dynamic *damage-helper-runtime* nil)
-
-(defn- damage-helper-runtime?
-  [runtime]
-  (and (map? runtime)
-       (= ::damage-helper-runtime (::runtime runtime))
-  (some? (:marks* runtime))
-  (some? (:last-server-tick* runtime))))
-
-(defn call-with-damage-helper-runtime
-  [runtime f]
-  (when-not (damage-helper-runtime? runtime)
-    (throw (ex-info "Expected damage helper runtime"
-                    {:value runtime})))
-  (binding [*damage-helper-runtime* runtime]
-    (f)))
-
-(defmacro with-damage-helper-runtime
-  [runtime & body]
-  `(call-with-damage-helper-runtime ~runtime (fn [] ~@body)))
-
-(defn install-damage-helper-runtime!
-  ([]
-   (install-damage-helper-runtime! (create-damage-helper-runtime)))
-  ([runtime]
-   (when-not (damage-helper-runtime? runtime)
-     (throw (ex-info "Expected damage helper runtime"
-                     {:value runtime})))
-   (alter-var-root #'*damage-helper-runtime* (constantly runtime))
-   nil))
-
-(defn clear-damage-helper-runtime!
-  []
-  (alter-var-root #'*damage-helper-runtime* (constantly nil))
-  nil)
-
-(defn- current-damage-helper-runtime
-  []
-  *damage-helper-runtime*)
-
-(defn- require-damage-helper-runtime
-  []
-  (or (current-damage-helper-runtime)
-      (throw (ex-info "Damage helper runtime is not bound"
-                      {:required 'damage-helper-runtime}))))
-
-(defn- marks-atom
-  []
-  (:marks* (require-damage-helper-runtime)))
-
-(defn marks-snapshot
-  []
-  @(marks-atom))
-
-(defn clear-all-marks!
-  []
-  (reset! (marks-atom) {})
-  (when-let [last-server-tick* (:last-server-tick* (require-damage-helper-runtime))]
-    (reset! last-server-tick* nil))
-  nil)
-
-(defn reset-marks-for-test!
-  ([]
-   (reset-marks-for-test! {}))
-  ([snapshot]
-   (clear-all-marks!)
-   (when (seq snapshot)
-     (reset! (marks-atom) (or snapshot {})))
-   nil))
+(defonce ^:private last-radiation-tick-id* (atom nil))
 
 (defn- normalize-id
   [id]
@@ -96,19 +21,44 @@
   []
   (some-> hooks/*player-state-owner* :server-tick-id))
 
-(defn- clear-marks-where!
-  [pred]
-  (swap! (marks-atom)
-         (fn [current]
-           (into {}
-                 (remove (fn [[k v]] (pred k v)))
-                 current)))
+(defn clear-all-marks!
+  []
+  (let [session-id (prt-cmd/session-id)
+        store-ref (store/get-store)]
+    (doseq [player-uuid (store/list-players store-ref session-id)]
+      (prt-cmd/run-for-player!
+       player-uuid
+       {:command :clear-radiation-marks :clear-all? true}))
+    (reset! last-radiation-tick-id* nil))
   nil)
+
+(defn reset-marks-for-test!
+  ([]
+   (reset-marks-for-test! {}))
+  ([snapshot]
+   (clear-all-marks!)
+   (doseq [[target-id mark] snapshot]
+     (when-let [source-id (:source-player-id mark)]
+       (prt-cmd/run-for-player!
+        source-id
+        {:command :mark-radiation-target
+         :target-id target-id
+         :mark mark})))
+   nil))
+
+(defn marks-snapshot
+  []
+  (prt-cmd/radiation-marks-snapshot))
 
 (defn clear-mark!
   ([target-id]
    (when-let [target-key (normalize-id target-id)]
-     (swap! (marks-atom) dissoc target-key))
+     (let [session-id (prt-cmd/session-id)
+           store-ref (store/get-store)]
+       (doseq [player-uuid (store/list-players store-ref session-id)]
+         (prt-cmd/run-for-player!
+          player-uuid
+          {:command :clear-radiation-marks :target-id target-key}))))
    nil)
   ([_source-player-id target-id]
    (clear-mark! target-id)))
@@ -124,35 +74,34 @@
 
 (defn clear-source-marks!
   [source-player-id]
-  (let [source-key (normalize-id source-player-id)]
-    (clear-marks-where!
-      (fn [_target-id mark]
-        (= source-key (:source-player-id mark))))))
+  (when source-player-id
+    (prt-cmd/run-for-player!
+     source-player-id
+     {:command :clear-radiation-marks :source-player-id source-player-id}))
+  nil)
 
 (defn clear-expired-marks!
   []
-  (clear-marks-where!
-    (fn [_target-id {:keys [ticks-left]}]
-      (not (pos? (long (or ticks-left 0)))))))
+  (let [session-id (prt-cmd/session-id)
+        store-ref (store/get-store)]
+    (doseq [player-uuid (store/list-players store-ref session-id)]
+      (prt-cmd/run-for-player!
+       player-uuid
+       {:command :clear-radiation-marks :clear-expired? true})))
+  nil)
 
 (defn tick-marks!
   []
-  (let [runtime (require-damage-helper-runtime)
-        tick-id (current-server-tick-id)
-        last-server-tick* (:last-server-tick* runtime)]
-    (when (or (nil? tick-id) (not= tick-id @last-server-tick*))
+  (let [tick-id (current-server-tick-id)]
+    (when (or (nil? tick-id) (not= tick-id @last-radiation-tick-id*))
       (when tick-id
-        (reset! last-server-tick* tick-id))
-      (swap! (marks-atom)
-             (fn [current]
-               (reduce-kv
-                 (fn [acc target-id mark]
-                   (let [ticks-left (dec (long (or (:ticks-left mark) 0)))]
-                     (if (pos? ticks-left)
-                       (assoc acc target-id (assoc mark :ticks-left ticks-left))
-                       acc)))
-                 {}
-                 current)))))
+        (reset! last-radiation-tick-id* tick-id))
+      (let [session-id (prt-cmd/session-id)
+            store-ref (store/get-store)]
+        (doseq [player-uuid (store/list-players store-ref session-id)]
+          (prt-cmd/run-for-player!
+           player-uuid
+           {:command :tick-radiation-marks})))))
   nil)
 
 (defn- learned-rad-intensify?
@@ -183,7 +132,7 @@
    (let [source-id (normalize-id attacker-id)
          marked-target-id (normalize-id target-id)]
      (when (and source-id marked-target-id (learned-rad-intensify? source-id))
-       (let [source-ticks (long (or (get-in @(marks-atom) [source-id :ticks-left]) 0))
+       (let [source-ticks (long (or (:ticks-left (get (marks-snapshot) marked-target-id)) 0))
              mark-ticks (long (max 60 (rad/mark-duration-ticks) source-ticks))
              mark-rate (rad/rate source-id)
              mark {:source-player-id source-id
@@ -191,7 +140,11 @@
                    :ticks-left mark-ticks
                    :rate mark-rate
                    :updated-at-tick (current-server-tick-id)}]
-         (swap! (marks-atom) assoc marked-target-id mark)
+         (prt-cmd/run-for-player!
+          source-id
+          {:command :mark-radiation-target
+           :target-id marked-target-id
+           :mark mark})
          (emit-mark-fx! source-id {:ctx-id ctx-id
                                    :target-pos target-pos
                                    :mark mark}))))))
@@ -199,11 +152,11 @@
 (defn- active-mark
   [target-id]
   (let [target-key (normalize-id target-id)]
-    (when-let [{:keys [ticks-left] :as mark} (get @(marks-atom) target-key)]
-      (if (pos? (long (or ticks-left 0)))
+    (when-let [mark (prt-cmd/radiation-marks-for-target target-key)]
+      (if (pos? (long (or (:ticks-left mark) 0)))
         mark
         (do
-          (swap! (marks-atom) dissoc target-key)
+          (clear-mark! target-id)
           nil)))))
 
 (defn- damage-handler
@@ -218,7 +171,6 @@
     [(double damage) nil]))
 
 (defn ensure-damage-handler!
-  "Idempotent: (re-)install Meltdowner mark handler after test fixtures clear handlers."
   []
   (damage-runtime/register-damage-handler!
     :meltdowner/rad-intensify
@@ -226,7 +178,6 @@
     90))
 
 (defn init!
-  "Explicit runtime installer for Meltdowner mark damage handler."
   []
   (ensure-damage-handler!)
   nil)

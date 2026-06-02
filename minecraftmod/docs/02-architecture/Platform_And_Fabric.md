@@ -87,7 +87,7 @@ Fabric:
 
 ## 事件与 GUI
 
-- **事件**：`cn.li.mcmod.events.metadata` 等识别方块与处理器（如 `:on-right-click`）。
+- **事件**：`cn.li.mcmod.block.query` 识别方块并解析处理器（如 `:on-right-click`），`cn.li.mcmod.events.dispatcher` 统一分发。
 - **GUI**：DSL 与元数据在 `mcmod`；具体 Wireless 等屏幕工厂与容器逻辑多在 **`ac`**（如 `cn.li.ac.wireless.gui.*`、`cn.li.ac.block.wireless-node.gui`）。Forge 负责 MenuType 注册与桥接类。
 
 ---

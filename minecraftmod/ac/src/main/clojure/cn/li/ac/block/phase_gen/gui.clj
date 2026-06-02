@@ -11,7 +11,6 @@
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.mcmod.gui.events :as events]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
-            [cn.li.mcmod.gui.slot-registry :as slot-registry]
             [cn.li.mcmod.platform.item :as pitem]
             [cn.li.ac.energy.operations :as energy]
             [cn.li.mcmod.gui.spec :as gui-reg]
@@ -53,7 +52,7 @@
   (gui-sync/create-schema-container phase-schema/phase-gen-schema tile player phase-gui-type))
 
 (defn get-slot-count [_container]
-  (slot-registry/get-slot-count phase-slot-schema-id))
+  (slot-schema/tile-slot-count phase-slot-schema-id))
 
 (defn get-slot-item [container slot-index]
   (common/get-slot-item-be container slot-index))

@@ -1,7 +1,7 @@
 (ns cn.li.ac.content.ability.teleporter.mark-teleport-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
-            [cn.li.ac.ability.service.context-registry :as ctx-reg]
+            [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.ac.content.ability.teleporter.mark-teleport :as mark]
@@ -15,29 +15,29 @@
   (let [ctx* (atom initial)]
     {:ctx* ctx*
      :get-context (fn [_] @ctx*)
-     :update-context! (fn [_ f & args]
-                        (swap! ctx* #(when % (apply f % args))))}))
+     :update-skill-state-root! (fn [_ f & args]
+                        (swap! ctx* update :skill-state (fn [ss] (apply f (or ss {}) args))))}))
 
 (deftest mark-teleport-on-key-down-initializes-hold-state-test
-  (let [{:keys [ctx* get-context update-context!]}
+  (let [{:keys [ctx* get-context update-skill-state-root!]}
         (make-context-mocks {:skill-state {:legacy true}})]
-    (with-redefs [ctx-reg/get-context get-context
-                  ctx-reg/update-context! update-context!]
+    (with-redefs [ctx/get-context get-context
+                  ctx-skill/update-skill-state-root! update-skill-state-root!]
       (mark/mark-teleport-on-key-down {:ctx-id "ctx-1"}))
 
     (is (= {:hold-ticks 0 :has-target false}
            (:skill-state @ctx*)))))
 
 (deftest mark-teleport-on-key-up-short-tap-success-sends-perform-and-applies-effects-test
-  (let [{:keys [ctx* get-context update-context!]}
+  (let [{:keys [ctx* get-context update-skill-state-root!]}
         (make-context-mocks {:skill-state {:hold-ticks 0 :has-target false}})
         teleport-calls* (atom [])
         reset-calls* (atom [])
         fx-calls* (atom [])
         exp-calls* (atom [])
         cooldown-calls* (atom [])]
-    (with-redefs [ctx-reg/get-context get-context
-                  ctx-reg/update-context! update-context!
+    (with-redefs [ctx/get-context get-context
+                  ctx-skill/update-skill-state-root! update-skill-state-root!
                   ctx/ctx-send-to-client! (fn [ctx-id channel payload]
                                             (swap! fx-calls* conj [ctx-id channel payload])
                                             nil)
@@ -81,7 +81,7 @@
     (is (= true (get-in @ctx* [:skill-state :has-target])))))
 
 (deftest mark-teleport-on-key-up-cost-fail-has-no-side-effects-test
-  (let [{:keys [ctx* get-context update-context!]}
+  (let [{:keys [ctx* get-context update-skill-state-root!]}
         (make-context-mocks {:skill-state {:hold-ticks 5
                                            :has-target true
                                            :world-id "minecraft:overworld"
@@ -91,8 +91,8 @@
         fx-calls* (atom 0)
         exp-calls* (atom 0)
         cooldown-calls* (atom 0)]
-    (with-redefs [ctx-reg/get-context get-context
-                  ctx-reg/update-context! update-context!
+    (with-redefs [ctx/get-context get-context
+                  ctx-skill/update-skill-state-root! update-skill-state-root!
                   ctx/ctx-send-to-client! (fn [& _] (swap! fx-calls* inc) nil)
                   skill-effects/add-skill-exp! (fn [& _] (swap! exp-calls* inc) nil)
                   skill-effects/set-main-cooldown! (fn [& _] (swap! cooldown-calls* inc) nil)
@@ -112,7 +112,7 @@
     (is (= true (get-in @ctx* [:skill-state :has-target])))))
 
 (deftest mark-teleport-on-key-up-min-distance-does-not-perform-test
-  (let [{:keys [get-context update-context!]}
+  (let [{:keys [get-context update-skill-state-root!]}
         (make-context-mocks {:skill-state {:hold-ticks 2
                                            :has-target true
                                            :world-id "minecraft:overworld"
@@ -120,8 +120,8 @@
                                            :distance 2.5 :exp 0.4}})
         teleport-calls* (atom 0)
         fx-calls* (atom 0)]
-    (with-redefs [ctx-reg/get-context get-context
-                  ctx-reg/update-context! update-context!
+    (with-redefs [ctx/get-context get-context
+                  ctx-skill/update-skill-state-root! update-skill-state-root!
                   ctx/ctx-send-to-client! (fn [& _] (swap! fx-calls* inc) nil)
                   teleportation/get-player-position (fn [& _] nil)
                   teleportation/teleport-player! (fn [& _] (swap! teleport-calls* inc) true)
@@ -138,7 +138,7 @@
     (is (= 0 @fx-calls*))))
 
 (deftest mark-teleport-on-key-up-teleport-failure-does-not-send-perform-test
-  (let [{:keys [get-context update-context!]}
+  (let [{:keys [get-context update-skill-state-root!]}
         (make-context-mocks {:skill-state {:hold-ticks 1
                                            :has-target true
                                            :world-id "minecraft:overworld"
@@ -147,8 +147,8 @@
         fx-calls* (atom 0)
         exp-calls* (atom 0)
         cooldown-calls* (atom 0)]
-    (with-redefs [ctx-reg/get-context get-context
-                  ctx-reg/update-context! update-context!
+    (with-redefs [ctx/get-context get-context
+                  ctx-skill/update-skill-state-root! update-skill-state-root!
                   ctx/ctx-send-to-client! (fn [& _] (swap! fx-calls* inc) nil)
                   teleportation/get-player-position (fn [& _] nil)
                   teleportation/teleport-player! (fn [& _] false)

@@ -6,7 +6,7 @@
             [cn.li.ac.ability.server.damage.runtime :as rt]
             [cn.li.ac.ability.service.delayed-projectiles :as dp]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
-            [cn.li.ac.ability.service.context-registry :as ctx-reg]
+            [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.effects.beam :as beam]
@@ -25,26 +25,20 @@
             [cn.li.ac.ability.service.context-manager :as ctx-mgr]))
 
 (defn- with-fresh-meltdowner-runtimes [f]
-  (let [projectile-rt (dp/create-delayed-projectile-runtime)
-        damage-helper-rt (dh/create-damage-helper-runtime)
-        damage-registry-rt (rt/create-damage-handler-registry-runtime)]
+  (let [damage-registry-rt (rt/create-damage-handler-registry-runtime)]
     (ps-fix/with-test-player-state-owner
       (fn []
-        (dp/call-with-delayed-projectile-runtime projectile-rt
+        (rt/call-with-damage-handler-registry-runtime damage-registry-rt
           (fn []
-            (dh/call-with-damage-helper-runtime damage-helper-rt
-              (fn []
-                (rt/call-with-damage-handler-registry-runtime damage-registry-rt
-                  (fn []
-                    (store/reset-store!)
-                    (rt/reset-damage-handler-registry-for-test!)
-                    (try
-                      (f)
-                      (finally
-                        (dp/reset-pending-tasks-for-test!)
-                        (dh/reset-marks-for-test!)
-                        (rt/reset-damage-handler-registry-for-test!)
-                        (store/reset-store!))))))))))))
+            (store/reset-store!)
+            (rt/reset-damage-handler-registry-for-test!)
+            (try
+              (f)
+              (finally
+                (dp/reset-pending-tasks-for-test!)
+                (dh/reset-marks-for-test!)
+                (rt/reset-damage-handler-registry-for-test!)
+                (store/reset-store!))))))))
 
 (use-fixtures :each with-fresh-meltdowner-runtimes)
 
@@ -58,8 +52,8 @@
   (let [ctx* (atom initial)]
     {:ctx* ctx*
      :get-context (fn [_] @ctx*)
-     :update-context! (fn [_ f & args]
-                        (swap! ctx* #(when % (apply f % args))))}))
+     :update-skill-state-root! (fn [_ f & args]
+                        (swap! ctx* update :skill-state (fn [ss] (apply f (or ss {}) args))))}))
 
 (defn- stub-missile-lerp-double [_skill-id field-id _exp]
   (case field-id
@@ -118,8 +112,8 @@
   (let [ctx* (atom initial)]
     {:ctx* ctx*
      :get-context (fn [_] @ctx*)
-     :update-context! (fn [_ f & args]
-                        (swap! ctx* #(when % (apply f % args))))
+     :update-skill-state-root! (fn [_ f & args]
+                        (swap! ctx* update :skill-state (fn [ss] (apply f (or ss {}) args))))
      :terminate-context! (fn [& _] nil)
      :send! (fn [& _] nil)}))
 
@@ -160,7 +154,7 @@
 (deftest electron-missile-hit-installs-rad-mark-test
   (let [attacker "atk-em"
         victim "victim-em"
-        {:keys [get-context update-context!]} (missile-context-mocks {:skill-state {:ticks 8 :active-balls 1 :active? true :overload-floor 200.0}})]
+        {:keys [get-context update-skill-state-root!]} (missile-context-mocks {:skill-state {:ticks 8 :active-balls 1 :active? true :overload-floor 200.0}})]
     (dh/ensure-damage-handler!)
     (learn-rad-intensify! attacker)
     (with-redefs [rad/rate (fn [_] 1.6)
@@ -173,8 +167,8 @@
                   skill-effects/enforce-overload-floor! (fn [& _] nil)
                   skill-effects/perform-resource! (fn [& _] {:success? true})
                   skill-effects/add-skill-exp! (fn [& _] nil)
-                  ctx-reg/get-context get-context
-                  ctx-reg/update-context! update-context!
+                  ctx/get-context get-context
+                  ctx-skill/update-skill-state-root! update-skill-state-root!
                   ctx/ctx-send-to-client! (fn [& _] nil)
                   ctx/ctx-send-to-except-local! (fn [& _] nil)
                   geom/world-id-of (fn [_] "w")
@@ -254,7 +248,7 @@
 (deftest jet-engine-hit-installs-rad-mark-test
   (let [attacker "atk-jet"
         victim "victim-jet"
-        {:keys [get-context update-context! terminate-context! send!]}
+        {:keys [get-context update-skill-state-root! terminate-context! send!]}
         (jet-context-mocks {:skill-state {:phase :triggering
                                           :start-pos {:x 0.0 :y 64.0 :z 0.0}
                                           :target-pos {:x 4.0 :y 64.0 :z 0.0}
@@ -268,9 +262,9 @@
     (with-redefs [rad/rate (fn [_] 1.5)
                   rad/mark-duration-ticks (fn [] 100000)
                   skill-effects/skill-exp (fn [& _] 0.0)
-                  ctx-reg/get-context get-context
-                  ctx-reg/update-context! update-context!
-                  ctx-reg/terminate-context! terminate-context!
+                  ctx/get-context get-context
+                  ctx-skill/update-skill-state-root! update-skill-state-root!
+                  ctx/terminate-context! terminate-context!
                   ctx/ctx-send-to-client! send!
                   ctx-mgr/push-channel-to-player! (fn [& _] nil)
                   ctx-mgr/push-channel-to-nearby-players! (fn [& _] nil)]

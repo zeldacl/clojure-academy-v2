@@ -28,7 +28,6 @@
             [cn.li.mcmod.util.log :as log]
             [cn.li.ac.energy.operations :as energy-stub]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
-            [cn.li.mcmod.gui.slot-registry :as slot-registry]
             [cn.li.mcmod.gui.spec :as gui-reg]
             [cn.li.ac.block.gui.sync :as gui-sync]
             [cn.li.ac.wireless.gui.container.common :as common]
@@ -187,14 +186,14 @@
 (defn- tile-state [tile] (common/get-tile-state tile))
 
 (defn get-slot-count [_container]
-  (slot-registry/get-slot-count node-slot-schema-id))
+  (slot-schema/tile-slot-count node-slot-schema-id))
 
 (defn get-owner [container]
   (let [tile (:tile-entity container)]
     (node-owner/owner-name (tile-state tile))))
 
 (defn can-place-item? [_container slot-index item-stack]
-  (case (slot-registry/get-slot-type-for-index node-slot-schema-id slot-index)
+  (case (slot-schema/slot-type node-slot-schema-id slot-index)
     :energy (energy-stub/is-energy-item-supported? item-stack)
     :output (energy-stub/is-energy-item-supported? item-stack)
     false))

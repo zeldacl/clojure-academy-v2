@@ -16,12 +16,10 @@
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill]]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
-            [cn.li.ac.ability.service.context-registry :as ctx-reg]
-            [cn.li.ac.ability.service.command-runtime :as command-rt]
-            [cn.li.ac.ability.service.skill-effects :as skill-effects]
+            [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
+                        [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.util.math.vec3 :as vec3]
-            [cn.li.mcmod.hooks.core :as runtime-hooks]
-            [cn.li.mcmod.platform.entity :as entity]
+                        [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.teleportation :as teleportation]
@@ -143,7 +141,7 @@
 
 (defn- cached-or-resolved-target
   [player-id ctx-id player]
-  (when-let [ctx-data (ctx-reg/get-context ctx-id)]
+  (when-let [ctx-data (ctx/get-context ctx-id)]
     (let [hold-ticks (long (or (get-in ctx-data [:skill-state :hold-ticks]) 0))]
       (or (resolve-destination player-id player hold-ticks)
           (when (get-in ctx-data [:skill-state :has-target])
@@ -152,7 +150,7 @@
 
 (defn mark-teleport-fx-update-payload
   [{:keys [ctx-id]}]
-  (when-let [ctx-data (ctx-reg/get-context ctx-id)]
+  (when-let [ctx-data (ctx/get-context ctx-id)]
     (build-target-fx-payload (:skill-state ctx-data))))
 
 (defn mark-teleport-fx-perform-payload
@@ -181,43 +179,13 @@
   [{:keys [player]}]
   (boolean (and player (entity/player-creative? player))))
 
-(defn- safe-context-data
-  [ctx-id]
-  (try
-    (ctx-reg/get-context ctx-id)
-    (catch Exception _ nil)))
-
-(defn- command-runtime-ready?
-  [{:keys [session-id player-uuid]}]
-  (and (runtime-hooks/current-player-state-owner)
-       session-id
-       player-uuid))
-
 (defn- set-skill-state-root!
   [ctx-id state-map]
-  (let [ctx-data (or (safe-context-data ctx-id) {})]
-    (if (command-runtime-ready? ctx-data)
-      (let [result (command-rt/run-command-in-session! (:session-id ctx-data)
-                                                       (:player-uuid ctx-data)
-                                                       {:command :context-assoc-skill-state
-                                                        :ctx-id ctx-id
-                                                        :k []
-                                                        :v state-map})]
-        (when (= :context-not-found (:rejected-reason result))
-          (ctx-reg/update-context! ctx-id assoc :skill-state state-map)))
-      (ctx-reg/update-context! ctx-id assoc :skill-state state-map))))
+  (ctx-skill/update-skill-state-root! ctx-id identity state-map))
 
 (defn- clear-skill-state!
   [ctx-id]
-  (let [ctx-data (or (safe-context-data ctx-id) {})]
-    (if (command-runtime-ready? ctx-data)
-      (let [result (command-rt/run-command-in-session! (:session-id ctx-data)
-                                                       (:player-uuid ctx-data)
-                                                       {:command :context-clear-skill-state
-                                                        :ctx-id ctx-id})]
-        (when (= :context-not-found (:rejected-reason result))
-          (ctx-reg/update-context! ctx-id dissoc :skill-state)))
-      (ctx-reg/update-context! ctx-id dissoc :skill-state))))
+  (ctx-skill/clear-skill-state! ctx-id))
 
 (defn mark-teleport-on-key-down
   "Initialize hold state and client marker."
@@ -227,7 +195,7 @@
 (defn mark-teleport-on-key-tick
   "Update destination marker while key is held."
   [{:keys [player-id ctx-id player]}]
-  (when-let [ctx (ctx-reg/get-context ctx-id)]
+  (when-let [ctx (ctx/get-context ctx-id)]
     (let [next-ticks (inc (long (or (get-in ctx [:skill-state :hold-ticks]) 0)))]
       (if-let [target (resolve-destination player-id player next-ticks)]
         (set-skill-state-root! ctx-id
@@ -240,7 +208,7 @@
 (defn mark-teleport-on-key-up
   "Execute teleport when key released."
   [{:keys [player-id ctx-id player cost-ok?]}]
-  (when-let [ctx (ctx-reg/get-context ctx-id)]
+  (when-let [ctx (ctx/get-context ctx-id)]
     (let [hold-ticks (long (or (get-in ctx [:skill-state :hold-ticks]) 0))
           target (or (resolve-destination player-id player hold-ticks)
                      (when (get-in ctx [:skill-state :has-target])
@@ -283,33 +251,32 @@
   (clear-skill-state! ctx-id)
   (log/debug "MarkTeleport aborted"))
 
-(def mark-teleport-skill
-  {:id :mark-teleport
-   :category-id :teleporter
-   :name-key "ability.skill.teleporter.mark_teleport"
-   :description-key "ability.skill.teleporter.mark_teleport.desc"
-   :icon "textures/abilities/teleporter/skills/mark_teleport.png"
-   :level 2
-   :controllable? true
-   :ctrl-id :mark-teleport
-   :cp-consume-speed 0.0
-   :overload-consume-speed 0.0
-   :cooldown-ticks (fn [{:keys [player-id]}]
-                     (cooldown-ticks (skill-exp player-id)))
-   :pattern :release-cast
-   :cooldown {:mode :manual}
-   :cost {:up {:cp mark-teleport-cost-up-cp
-               :overload mark-teleport-cost-up-overload
-               :creative? mark-teleport-cost-creative?}}
-   :actions {:down! mark-teleport-on-key-down
-             :tick! mark-teleport-on-key-tick
-             :up! mark-teleport-on-key-up
-             :abort! mark-teleport-on-key-abort}
-   :fx {:start {:topic :mark-teleport/fx-start
-                :payload (fn [_] {})}
-        :update {:topic :mark-teleport/fx-update
-                 :payload mark-teleport-fx-update-payload}
-        :end {:topic :mark-teleport/fx-end
-              :payload (fn [_] {})}}
-   :prerequisites [{:skill-id :threatening-teleport :min-exp 0.4}]
-   :ac/content-type :skill})
+(defskill mark-teleport-skill
+  :id :mark-teleport
+  :category-id :teleporter
+  :name-key "ability.skill.teleporter.mark_teleport"
+  :description-key "ability.skill.teleporter.mark_teleport.desc"
+  :icon "textures/abilities/teleporter/skills/mark_teleport.png"
+  :level 2
+  :controllable? true
+  :ctrl-id :mark-teleport
+  :cp-consume-speed 0.0
+  :overload-consume-speed 0.0
+  :cooldown-ticks (fn [{:keys [player-id]}]
+                    (cooldown-ticks (skill-exp player-id)))
+  :pattern :release-cast
+  :cooldown {:mode :manual}
+  :cost {:up {:cp mark-teleport-cost-up-cp
+              :overload mark-teleport-cost-up-overload
+              :creative? mark-teleport-cost-creative?}}
+  :actions {:down! mark-teleport-on-key-down
+            :tick! mark-teleport-on-key-tick
+            :up! mark-teleport-on-key-up
+            :abort! mark-teleport-on-key-abort}
+  :fx {:start {:topic :mark-teleport/fx-start
+              :payload (fn [_] {})}
+       :update {:topic :mark-teleport/fx-update
+               :payload mark-teleport-fx-update-payload}
+       :end {:topic :mark-teleport/fx-end
+             :payload (fn [_] {})}}
+  :prerequisites [{:skill-id :threatening-teleport :min-exp 0.4}])

@@ -57,6 +57,24 @@
 
 契约与排障：[WIRELESS_REFACTOR_CONTRACTS.md](../05-wireless/WIRELESS_REFACTOR_CONTRACTS.md)、[WIRELESS_SYSTEM_MAINTENANCE.md](../04-systems/WIRELESS_SYSTEM_MAINTENANCE.md)。已删除 `topology-service`、`query-service`、`topology-index` 等并行层。
 
+## 能力系统（`ac/ability` + `ac/content/ability`）
+
+**Reducer-only（强制）**：玩家状态唯一写路径为 `command-runtime` → `reducer` → `runtime-store`；副作用走 `effects.interpreter`。无 `context-registry` 门面、无 `:sync-*-data` reducer 命令、无 `update-context!` 旁路。
+
+| 路径 | 命名空间 | 说明 |
+|------|----------|------|
+| `ability/service/command_runtime.clj` | `service.command-runtime` | 命令执行壳 |
+| `ability/service/reducer.clj` | `service.reducer` | 玩家状态归约 |
+| `ability/service/context_dispatcher.clj` | `service.context-dispatcher` | Context transport + lifecycle + 合并读（`:as ctx`） |
+| `ability/service/context_manager.clj` | `service.context-manager` | 服务端 activate / keepalive / abort |
+| `ability/service/context_skill_state.clj` | `service.context-skill-state` | 技能侧读写入口（`:as ctx-skill`） |
+| `ability/service/context_projection.clj` | `service.context-projection` | 仅 store 投影读 |
+| `ability/effects/*` | `effects.*` | 服务端效果（勿恢复 `ability/server/effect/*`） |
+| `ability/adapters/runtime_bridge.clj` | `adapters.runtime-bridge` | 安装 mcmod hooks |
+| `content/ability/*` | `cn.li.ac.content.ability.*` | 各技能 `defskill` 实现 |
+
+维护说明：[ABILITY_SYSTEM_MAINTENANCE.md](../04-systems/ABILITY_SYSTEM_MAINTENANCE.md)。
+
 ## 新增内容应落在何处
 
 1. 在 **`mcmod`** 扩展 DSL / 元数据 / 协议（若涉及新抽象）。

@@ -1,100 +1,71 @@
 (ns cn.li.ac.ability.service.delayed-projectiles
   "Server-side delayed projectile settlement for MdBall-based skills.
 
-  Gameplay logic remains in AC. Forge only provides tick callbacks and entity shells."
+  Pending tasks live in player-state [:runtime :delayed-projectiles :pending-tasks]."
   (:require [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.effects.beam :as beam]
             [cn.li.ac.ability.service.context-manager :as ctx-mgr]
+            [cn.li.ac.ability.service.player-runtime-commands :as prt-cmd]
+            [cn.li.ac.ability.service.runtime-store :as store]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.util.log :as log]))
 
-(defn create-delayed-projectile-runtime
-  ([]
-   (create-delayed-projectile-runtime {}))
-  ([{:keys [pending-tasks*]
-     :or {pending-tasks* (atom {})}}]
-   {::runtime ::delayed-projectile-runtime
-    :pending-tasks* pending-tasks*}))
-
-(def ^:dynamic *delayed-projectile-runtime* nil)
-
-(defonce ^:private installed-delayed-projectile-runtime
-  (create-delayed-projectile-runtime))
-
-(defn- delayed-projectile-runtime?
-  [runtime]
-  (and (map? runtime)
-       (= ::delayed-projectile-runtime (::runtime runtime))
-       (some? (:pending-tasks* runtime))))
-
-(defn call-with-delayed-projectile-runtime
-  [runtime f]
-  (when-not (delayed-projectile-runtime? runtime)
-    (throw (ex-info "Expected delayed projectile runtime"
-                    {:value runtime})))
-  (binding [*delayed-projectile-runtime* runtime]
-    (f)))
-
-(defmacro with-delayed-projectile-runtime
-  [runtime & body]
-  `(call-with-delayed-projectile-runtime ~runtime (fn [] ~@body)))
-
-(defn- current-delayed-projectile-runtime
-  []
-  (or *delayed-projectile-runtime*
-      installed-delayed-projectile-runtime))
-
-(defn- pending-tasks-atom
-  []
-  (:pending-tasks* (current-delayed-projectile-runtime)))
+(def ^:private mdball-default-life-ticks 20)
+(def ^:private mdball-settle-offset-ticks 5)
+(def ^:private electron-bomb-ray-distance 15.0)
 
 (defn pending-tasks-snapshot
+  [player-uuid]
+  (prt-cmd/pending-delayed-tasks player-uuid))
+
+(defn clear-player-tasks!
+  [player-uuid]
+  (prt-cmd/run-for-player!
+   player-uuid
+   {:command :clear-delayed-projectile-tasks})
+  nil)
+
+(defn clear-all-tasks!
   []
-  @(pending-tasks-atom))
+  (let [session-id (prt-cmd/session-id)
+        store-ref (store/get-store)]
+    (doseq [player-uuid (store/list-players store-ref session-id)]
+      (clear-player-tasks! player-uuid)))
+  nil)
+
+(defn schedule-task!
+  [player-uuid delay-ticks task]
+  (prt-cmd/run-for-player!
+   player-uuid
+   {:command :schedule-delayed-projectile-task
+    :delay-ticks delay-ticks
+    :task task})
+  nil)
 
 (defn reset-pending-tasks-for-test!
   ([]
    (reset-pending-tasks-for-test! {}))
   ([snapshot]
-   (reset! (pending-tasks-atom) (or snapshot {}))
+   (clear-all-tasks!)
+   (doseq [[player-uuid tasks] snapshot
+           task tasks]
+     (doseq [t tasks]
+       (schedule-task! player-uuid (:ticks-left t) (dissoc t :ticks-left))))
    nil))
-
-(defn clear-player-tasks!
-  [player-uuid]
-  (swap! (pending-tasks-atom) dissoc (str player-uuid))
-  nil)
-
-(defn clear-all-tasks!
-  []
-  (reset! (pending-tasks-atom) {})
-  nil)
-
-(def ^:private mdball-default-life-ticks 20)
-(def ^:private mdball-settle-offset-ticks 5)
-(def ^:private electron-bomb-ray-distance 15.0)
 
 (defn default-mdball-life-ticks
   []
   mdball-default-life-ticks)
 
 (defn mdball-near-expire-delay
-  "Return delay ticks that settles on MdBall lifecycle near-expire frame.
-
-  Default behavior matches life-5 callback semantics from upstream entities."
   ([]
    (mdball-near-expire-delay mdball-default-life-ticks))
   ([life-ticks]
    (max 1 (- (int (or life-ticks mdball-default-life-ticks))
              mdball-settle-offset-ticks))))
-
-(defn schedule-task!
-  [player-uuid delay-ticks task]
-  (let [ticks (max 1 (int (or delay-ticks 1)))]
-    (swap! (pending-tasks-atom) update (str player-uuid) (fnil conj [])
-           (assoc task :ticks-left ticks))))
 
 (defn schedule-electron-bomb-beam!
   [{:keys [player-id] :as task}]
@@ -203,16 +174,9 @@
 
 (defn tick-player!
   [player-uuid]
-  (let [k (str player-uuid)
-        tasks (get (pending-tasks-snapshot) k)]
-    (when (seq tasks)
-      (let [next-tasks (volatile! [])]
-        (doseq [{:keys [ticks-left] :as task} tasks]
-          (if (<= (int ticks-left) 1)
-            (run-task! task)
-            (vswap! next-tasks conj (update task :ticks-left dec))))
-        (let [remaining @next-tasks]
-          (if (seq remaining)
-            (swap! (pending-tasks-atom) assoc k remaining)
-            (swap! (pending-tasks-atom) dissoc k)))))))
-
+  (let [result (prt-cmd/run-for-player!
+                player-uuid
+                {:command :tick-delayed-projectile-tasks})]
+    (doseq [{:keys [task]} (:events result)]
+      (run-task! task))
+    nil))

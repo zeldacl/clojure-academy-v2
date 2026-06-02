@@ -4,14 +4,12 @@
 
   Uses shared mc1201 installer with a Forge-specific adapter implementation."
   (:require [cn.li.mcmod.util.log :as log]
-            [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mc1201.bootstrap.platform-init :as platform-init]
             [cn.li.mc1201.platform.class-access :as class-access]
             [cn.li.mc1201.platform.item-ops :as item-ops]
             [cn.li.mc1201.platform.player-ops :as player-ops]
             [cn.li.mc1201.platform.world-block-ops :as world-block-ops]
             [cn.li.mc1201.platform.menu-inventory-ops :as menu-inventory-ops]
-            [cn.li.mc1201.runtime.bootstrap-interop-core :as bootstrap-core]
             [cn.li.forge1201.integration.side :as side])
   (:import [cn.li.mc1201.runtime BlockRegistryShared ItemInventoryShared ItemPlayerOpsShared ItemRegistryShared ParticleEntityShared RuntimeAccessShared]
            [net.minecraft.core BlockPos]
@@ -142,11 +140,6 @@
            :be-set-custom-state! (resolve-binding! 'be-set-custom-state!)
            :be-get-block-id (resolve-binding! 'be-get-block-id)
            :be-set-changed! (resolve-binding! 'be-set-changed!)})
-        (alter-var-root #'entity/*player-spawn-entity-by-id-with-options-fn*
-                        (constantly
-                         (fn [player entity-id speed options]
-                           (bootstrap-core/spawn-entity-by-id-from-player-with-options
-                             player entity-id speed options))))
         (alter-var-root #'*initialized?* (constantly true))
         (log/info "forge platform SPI bootstrap initialized via ServiceLoader entrypoint"))))
   nil)

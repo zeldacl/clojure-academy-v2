@@ -2,6 +2,8 @@
 
 > 状态标签：**历史**（迁移验收基线，偏追踪用途）
 
+> **现行实现架构**：行为验收仍参考下表，但**状态写入实现**统一为 **reducer-only**（`command-runtime` → `reducer` → `runtime-store`）。模块路径、守卫与禁止项以 [ABILITY_SYSTEM_MAINTENANCE.md](../04-systems/ABILITY_SYSTEM_MAINTENANCE.md) 为准；表中 `ac/ability/context.clj` 等旧路径仅作行为对照。
+
 > 本文档是旧版1.12 ability系统的完整行为规格，作为新实现的验收基线。
 > 每行包含：旧行为 | 目标行为 | 目标模块 | 测试点
 
@@ -17,6 +19,7 @@
 | 事件归属 | Forge 事件在 forge 层捕获 → 转发到 mcmod 分发入口 → ac 注册处理器 |
 | 服务端权威 | 所有状态写入在服务端执行；客户端展示/预测，服务端回包确认 |
 | 无旧API兼容层 | 不保留旧接口；行为兼容，代码结构可重构 |
+| Reducer-only 写路径 | 玩家状态仅 `command-runtime` → `reducer` → `runtime-store`；禁止 `update-context!`、`:sync-*-data`、直写 store（见维护手册） |
 
 ---
 

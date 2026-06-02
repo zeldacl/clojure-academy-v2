@@ -1,7 +1,7 @@
 (ns cn.li.ac.content.ability.electromaster.thunder-clap-test
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
-            [cn.li.ac.ability.service.context-registry :as ctx-reg]
+            [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
             [cn.li.ac.ability.effects.damage :as damage-op]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.effects.world :as world-op]
@@ -17,8 +17,8 @@
     {:ctx* ctx*
      :terminate-calls* terminate-calls*
      :get-context (fn [_] @ctx*)
-     :update-context! (fn [_ f & args]
-                        (apply swap! ctx* f args))
+     :update-skill-state-root! (fn [_ctx-id f & args]
+                                 (swap! ctx* update :skill-state #(apply f % args)))
      :terminate-context! (fn [ctx-id terminate-fn]
                            (swap! terminate-calls* conj [ctx-id terminate-fn])
                            nil)}))
@@ -28,7 +28,7 @@
     (let [up-fn (get-in spec [:actions :up!])
           end-payload-fn (get-in spec [:fx :end :payload])
           settle-perform? (get-in spec [:input-policy :settle-perform-on-key-up?])
-          {:keys [ctx* get-context update-context!]} (context-mocks {:skill-state {:hold-ticks 20
+          {:keys [ctx* get-context update-skill-state-root!]} (context-mocks {:skill-state {:hold-ticks 20
                                                                                    :performed? false
                                                                                    :hit-pos {:x 1.0 :y 2.0 :z 3.0}}})
           cooldown-calls* (atom [])
@@ -36,8 +36,8 @@
           run-ops* (atom [])]
       (with-redefs [thunder-clap/min-ticks (fn [] 40)
                     thunder-clap/max-ticks (fn [] 60)
-                    ctx-reg/get-context get-context
-                    ctx-reg/update-context! update-context!
+                    ctx/get-context get-context
+                    ctx-skill/update-skill-state-root! update-skill-state-root!
                     skill-effects/set-main-cooldown! (fn [& args]
                                                        (swap! cooldown-calls* conj args))
                     skill-effects/add-skill-exp! (fn [& args]
@@ -66,7 +66,7 @@
     (let [up-fn (get-in spec [:actions :up!])
           end-payload-fn (get-in spec [:fx :end :payload])
           settle-perform? (get-in spec [:input-policy :settle-perform-on-key-up?])
-          {:keys [ctx* get-context update-context!]} (context-mocks {:skill-state {:hold-ticks 50
+          {:keys [ctx* get-context update-skill-state-root!]} (context-mocks {:skill-state {:hold-ticks 50
                                                                                    :performed? false
                                                                                    :hit-pos {:x 8.0 :y 64.0 :z 8.0}}})
           cooldown-calls* (atom [])
@@ -85,8 +85,8 @@
                                               (case field
                                                 :progression.exp-use 0.003
                                                 0.0))
-                    ctx-reg/get-context get-context
-                    ctx-reg/update-context! update-context!
+                    ctx/get-context get-context
+                    ctx-skill/update-skill-state-root! update-skill-state-root!
                     geom/world-id-of (fn [_] "world-1")
                     skill-effects/set-main-cooldown! (fn [& args]
                                                        (swap! cooldown-calls* conj args))

@@ -17,10 +17,16 @@
   (->BlockPosStub x y z))
 
 (defn- controller-parts-opts []
-  (merge (bdsl/multi-block-template {:width 2 :height 1 :depth 1})
-         {:multiblock-mode :controller-parts
-          :controller-block-id "ctl-test"
-          :part-block-id "part-test"}))
+  {:physical {:material :metal
+              :hardness 5.0
+              :resistance 10.0
+              :requires-tool true
+              :harvest-tool :pickaxe}
+   :multi-block {:size {:width 2 :height 1 :depth 1}
+                 :origin {:x 0 :y 0 :z 0}
+                 :mode :controller-parts
+                 :controller-block-id "ctl-test"
+                 :part-block-id "part-test"}})
 
 (defn- register-controller-and-part! []
   (bdsl/register-block! (bdsl/create-block-spec "ctl-test" (controller-parts-opts)))

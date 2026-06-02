@@ -1,5 +1,7 @@
 (ns cn.li.ac.content.ability.vecmanip.vec-reflection-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
+            [cn.li.ac.ability.service.runtime-store :as store]
+            [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.ac.ability.service.skill-effects]
             [cn.li.ac.ability.util.toggle]
             [cn.li.ac.ability.server.damage.handler :as damage-handler]
@@ -10,18 +12,19 @@
             [cn.li.mcmod.platform.raycast]
             [cn.li.mcmod.platform.world-effects]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
-            [cn.li.ac.ability.service.context-registry :as ctx-reg]))
+            [cn.li.ac.ability.service.context-skill-state :as ctx-skill]))
 
 (defn- with-fresh-reflection-runtime [f]
-  (damage-handler/reset-attack-check-registries-for-test!)
-  (vr/call-with-vec-reflection-runtime
-    (vr/create-vec-reflection-runtime)
+  (ps-fix/with-test-player-state-owner
     (fn []
+      (store/reset-store!)
+      (ps-fix/seed-player-state! "p" {})
+      (damage-handler/reset-attack-check-registries-for-test!)
       (try
         (f)
         (finally
           (damage-handler/reset-attack-check-registries-for-test!)
-          (vr/reset-reflection-runtime-for-test!))))))
+          (vr/reset-reflection-runtime-for-test! "p"))))))
 
 (use-fixtures :each with-fresh-reflection-runtime)
 
@@ -201,49 +204,30 @@
           (is (= [true 0.0] (vr/reflect-damage "p" "a" 10.0)))))
       (is (= [["w" "a" 10.0]] @applied)))))
 
-(deftest vec-reflection-runtime-isolation-test
-  (let [runtime-a (vr/create-vec-reflection-runtime)
-        runtime-b (vr/create-vec-reflection-runtime)]
-    (vr/call-with-vec-reflection-runtime
-      runtime-a
-      (fn []
-        (vr/mark-reflecting-for-test! "p" "a" "ctx-a" "chain-a")
-        (vr/set-reflection-depth-for-test! "p" "a" "ctx-a" "chain-a" 2)
-        (is (= 1 (count (:reflecting-pairs (vr/reflection-runtime-snapshot)))))
-        (is (= 2 (get-in (vr/reflection-runtime-snapshot)
-                         [:reflection-depths (vr/reflection-owner-key "p" "a" "ctx-a" "chain-a")])))))
-    (vr/call-with-vec-reflection-runtime
-      runtime-b
-      (fn []
-        (is (= {:reflecting-pairs #{}
-                :reflection-depths {}}
-               (vr/reflection-runtime-snapshot)))
-        (vr/mark-reflecting-for-test! "p" "a" "ctx-a" "chain-a")
-        (vr/set-reflection-depth-for-test! "p" "a" "ctx-a" "chain-a" 5)
-        (is (= 5 (get-in (vr/reflection-runtime-snapshot)
-                         [:reflection-depths (vr/reflection-owner-key "p" "a" "ctx-a" "chain-a")])))))
-    (vr/call-with-vec-reflection-runtime
-      runtime-a
-      (fn []
-        (is (= 2 (get-in (vr/reflection-runtime-snapshot)
-                         [:reflection-depths (vr/reflection-owner-key "p" "a" "ctx-a" "chain-a")])))))))
-
-(deftest vec-reflection-throws-without-binding-test
-  (binding [vr/*vec-reflection-runtime* nil]
-    (is (thrown-with-msg?
-          clojure.lang.ExceptionInfo
-          #"VecReflection runtime is not bound"
-          (vr/reset-reflection-runtime-for-test!)))))
+(deftest vec-reflection-state-is-per-player-test
+  (ps-fix/seed-player-state! "p2" {})
+  (vr/mark-reflecting-for-test! "p" "a" "ctx-a" "chain-a")
+  (vr/set-reflection-depth-for-test! "p" "a" "ctx-a" "chain-a" 2)
+  (is (= 1 (count (:reflecting-pairs (vr/reflection-runtime-snapshot "p")))))
+  (is (= 2 (get-in (vr/reflection-runtime-snapshot "p")
+                   [:reflection-depths (vr/reflection-owner-key "p" "a" "ctx-a" "chain-a")])))
+  (is (= 0 (count (:reflecting-pairs (vr/reflection-runtime-snapshot "p2")))))
+  (vr/mark-reflecting-for-test! "p2" "a" "ctx-a" "chain-a")
+  (vr/set-reflection-depth-for-test! "p2" "a" "ctx-a" "chain-a" 5)
+  (is (= 5 (get-in (vr/reflection-runtime-snapshot "p2")
+                   [:reflection-depths (vr/reflection-owner-key "p2" "a" "ctx-a" "chain-a")])))
+  (is (= 2 (get-in (vr/reflection-runtime-snapshot "p")
+                   [:reflection-depths (vr/reflection-owner-key "p" "a" "ctx-a" "chain-a")]))))
 
 (deftest tick-reflect-fireball-spawn-and-discard-test
   (let [spawn-calls (atom [])
         discard-calls (atom [])
         fx-calls (atom 0)]
-    (with-redefs [ctx-reg/get-context (fn [_]
+    (with-redefs [ctx/get-context (fn [_]
                                     {:skill-state {:toggle {:vec-reflection {:active true}}
                                                    :vec-reflection-overload-keep 0.0
                                                    :vec-reflection-visited-map {}}})
-                  ctx-reg/update-context! (fn [& _] nil)
+                  ctx-skill/update-skill-state-root! (fn [& _] nil)
                   cn.li.ac.ability.util.toggle/is-toggle-active? (fn [_ _] true)
                   cn.li.ac.ability.util.toggle/update-toggle-tick! (fn [& _] nil)
                   cn.li.ac.content.ability.vecmanip.vec-reflection/enforce-overload-floor! (fn [& _] nil)
@@ -299,11 +283,11 @@
   (let [spawn-calls (atom [])
         set-velocity-calls (atom [])
         discard-calls (atom [])]
-    (with-redefs [ctx-reg/get-context (fn [_]
+    (with-redefs [ctx/get-context (fn [_]
                                     {:skill-state {:toggle {:vec-reflection {:active true}}
                                                    :vec-reflection-overload-keep 0.0
                                                    :vec-reflection-visited-map {}}})
-                  ctx-reg/update-context! (fn [& _] nil)
+                  ctx-skill/update-skill-state-root! (fn [& _] nil)
                   cn.li.ac.ability.util.toggle/is-toggle-active? (fn [_ _] true)
                   cn.li.ac.ability.util.toggle/update-toggle-tick! (fn [& _] nil)
                   cn.li.ac.content.ability.vecmanip.vec-reflection/enforce-overload-floor! (fn [& _] nil)

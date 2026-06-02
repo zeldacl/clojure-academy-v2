@@ -39,8 +39,6 @@
             (partial screen-factory/create-screen gui-type))
           (log/info "Registered screen factory" screen-fn-kw "for GUI ID" gui-id
                     "gui-type=" gui-type "declared?" (boolean declared-screen-fn-kw))))))
-  (when-let [f (requiring-resolve 'cn.li.mcmod.events.metadata/init-event-metadata!)]
-    (f))
   (hooks/call-all-network-handlers!)
   (tabbed-gui/register-set-tab-handler!))
 

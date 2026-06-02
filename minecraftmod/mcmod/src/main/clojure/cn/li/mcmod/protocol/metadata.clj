@@ -10,7 +10,6 @@
   - This module queries DSL systems for available blocks/items
   - Game content lives in ac (and DSL registries in mcmod); platform code stays generic"
   (:require [clojure.string :as str]
-            [cn.li.mcmod.block.dsl :as bdsl]
             [cn.li.mcmod.block.tile-dsl :as tdsl]
             [cn.li.mcmod.gui.registry :as gui-registry]
             [cn.li.mcmod.fluid.dsl :as fdsl]
@@ -50,11 +49,7 @@
   Returns:
     String - Registry name (e.g., \"demo_block\")"
   [block-id]
-  (let [block-spec (get-block-spec block-id)
-        explicit-name (:registry-name block-spec)]
-    (if (and (string? explicit-name) (not (str/blank? explicit-name)))
-      explicit-name
-      (str/replace block-id #"-" "_"))))
+  (bquery/get-block-registry-name block-id))
 
 (defn get-block-spec
   "Retrieves the full block specification from the DSL.
@@ -72,31 +67,15 @@
   [block-id]
   (bquery/controller-parts-block? block-id))
 
-(defn- norm-block-id-for-compare
-  "Match BE / DSL ids whether stored as keyword or string (defrecord vs runtime)."
-  [x]
-  (when (some? x)
-    (if (keyword? x) (name x) (str x))))
-
 (defn is-controller-block?
   "Return true when block-id is the controller block in controller+parts mode."
   [block-id]
-    (let [spec (bquery/get-block-spec block-id)
-        multi-block (:multi-block spec)
-        cid (:controller-block-id multi-block)]
-    (and (= :controller-parts (:multiblock-mode multi-block))
-         (some? cid)
-         (= (norm-block-id-for-compare block-id) (norm-block-id-for-compare cid)))))
+  (boolean (bquery/is-controller-block? block-id)))
 
 (defn is-part-block?
   "Return true when block-id is the part block in controller+parts mode."
   [block-id]
-    (let [spec (bquery/get-block-spec block-id)
-        multi-block (:multi-block spec)
-        pid (:part-block-id multi-block)]
-    (and (= :controller-parts (:multiblock-mode multi-block))
-         (some? pid)
-         (= (norm-block-id-for-compare block-id) (norm-block-id-for-compare pid)))))
+  (boolean (bquery/is-part-block? block-id)))
 
 (defn get-controller-block-id
   "Get controller block-id for a block participating in controller+parts mode."
@@ -112,12 +91,7 @@
   "Get normalized relative offsets (including origin) for a controller block.
   Returns a vector of maps with :relative-x/:relative-y/:relative-z."
   [controller-block-id]
-    (when-let [spec (bquery/get-block-spec controller-block-id)]
-    (let [multi-block (:multi-block spec)
-          origin (or (:multi-block-origin multi-block) {:x 0 :y 0 :z 0})]
-      (if-let [custom-pos (:multi-block-positions multi-block)]
-        (bdsl/calculate-multi-block-positions custom-pos origin)
-        (bdsl/calculate-multi-block-positions (:multi-block-size multi-block) origin)))))
+  (bquery/get-structure-offsets controller-block-id))
 
 (defn has-block-state-properties?
   "Checks if a block has dynamic block state properties.
@@ -128,8 +102,7 @@
   Returns:
     Boolean - true if block has block-state-properties defined"
   [block-id]
-    (let [block-spec (bquery/get-block-spec block-id)]
-    (some? (get-in block-spec [:block-state :block-state-properties]))))
+  (boolean (bquery/has-block-state-properties? block-id)))
 
 (defn has-block-entity?
   "Checks if a block uses the generic scripted BlockEntity (ScriptedEntityBlock/ScriptedBlockEntity).
@@ -140,7 +113,7 @@
   Returns:
     Boolean - true if Tile DSL binds the block to a tile-id"
   [block-id]
-  (boolean (tdsl/get-tile-id-for-block block-id)))
+  (boolean (bquery/has-block-entity? block-id)))
 
 (defn get-scripted-block-ids
   "Returns block IDs that use the generic scripted BlockEntity.
@@ -478,7 +451,7 @@
 
         ;; Get all block items - fetch spec once per block
         block-item-entries (for [block-id (get-all-block-ids)
-                                 :let [spec (bdsl/get-block block-id)
+                                 :let [spec (bquery/get-block-spec block-id)
                                        rendering (:rendering spec)]
                                  :when (:has-item-form? rendering)]
                              {:type :block-item

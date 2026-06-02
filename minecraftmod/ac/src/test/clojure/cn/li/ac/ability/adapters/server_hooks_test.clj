@@ -8,7 +8,8 @@
             [cn.li.ac.ability.adapters.server-hooks :as server-hooks]
             [cn.li.ac.ability.item-actions :as item-actions]
             [cn.li.ac.ability.registry.event :as evt]
-            [cn.li.ac.content.ability.server-runtime-lifecycle :as server-runtime-lifecycle]
+            [cn.li.ac.ability.service.player-runtime-commands :as player-runtime-cmd]
+            [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.ac.ability.service.context-manager :as ctx-mgr]
             [cn.li.ac.ability.server.network :as network]
             [cn.li.ac.ability.service.delayed-projectiles :as delayed-projectiles]
@@ -43,11 +44,13 @@
 (use-fixtures :each reset-lifecycle-subs!)
 (use-fixtures :each
   (fn [f]
-    (server-runtime-lifecycle/install-server-runtime-lifecycle!)
-    (try
-      (f)
-      (finally
-        (server-runtime-lifecycle/reset-server-runtime-lifecycle-for-test!)))))
+    (ps-fix/with-test-player-state-owner
+      (fn []
+        (store/reset-store!)
+        (try
+          (f)
+          (finally
+            (store/reset-store!)))))))
 (use-fixtures :each
   (fn [f]
     (ctx/reset-contexts-for-test!)
@@ -116,7 +119,7 @@
                                         (is (every? #(= {:uuid "u-level"} (nth % 2)) @calc-calls))
                 (is (= [[:test-session "u-level"]]
                   (mapv (fn [[sid uuid _]] [sid uuid]) @commands*)))
-                (is (= :sync-resource-data
+                (is (= :hydrate-player-state
                   (get-in (first @commands*) [2 :command])))
                 (is (= {:add-max-cp 0.0
                    :add-max-overload 0.0}
@@ -206,8 +209,8 @@
                                             (swap! called conj [:reset-runtimes])
                                             nil))
     (with-redefs [ctx/clear-session-contexts! (fn [session-id]
-                                                (swap! called conj [:contexts session-id])
-                                                nil)
+                                                   (swap! called conj [:contexts session-id])
+                                                   nil)
                   store/remove-session! (fn [_ability-store session-id]
                                           (swap! called conj [:player-states session-id])
                                           nil)
@@ -227,7 +230,7 @@
 
 (deftest register-platform-functions-registers-network-reset-and-energy-pull-test
   (let [energy-calls (atom [])]
-    (with-redefs [server-runtime-lifecycle/reset-ability-server-runtimes! (fn [] :reset-ok)
+    (with-redefs [player-runtime-cmd/reset-all-content-runtimes! (fn [] :reset-ok)
                   network/register-handlers! (fn [] :network-ok)
                   developer-logic/try-pull-energy! (fn [tile amount]
                                                      (swap! energy-calls conj [tile amount])
@@ -300,7 +303,7 @@
               (is (some (fn [[sid uuid cmd]]
                     (and (= sid :test-session)
                       (= uuid "u-category")
-                      (= :sync-resource-data (:command cmd))
+                      (= :hydrate-player-state (:command cmd))
                       (map? (:resource-data cmd))))
                   @commands*)))))
 

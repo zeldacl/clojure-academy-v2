@@ -17,7 +17,6 @@
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.config.gameplay :as gameplay]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
-            [cn.li.ac.ability.service.context-registry :as ctx-reg]
             [cn.li.ac.ability.service.context-manager :as ctx-mgr]            [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.ac.ability.messages :as catalog]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
@@ -141,7 +140,7 @@
                      (swap! sent conj {:msg-id msg-id :payload payload}))
                     ([msg-id payload _callback]
                      (swap! sent conj {:msg-id msg-id :payload payload})))
-                  ctx-reg/terminate-context! (fn
+                  ctx/terminate-context! (fn
                                            ([ctx-id terminate-fn]
                                             (swap! terminated conj [ctx-id terminate-fn])
                                             nil)
@@ -171,7 +170,7 @@
                      (swap! sent conj {:msg-id msg-id :payload payload}))
                     ([msg-id payload _callback]
                      (swap! sent conj {:msg-id msg-id :payload payload})))
-                  ctx-reg/terminate-context! (fn
+                  ctx/terminate-context! (fn
                                            ([ctx-id terminate-fn]
                                             (swap! terminated conj [ctx-id terminate-fn])
                                             nil)
@@ -340,7 +339,7 @@
     (with-redefs [net-client/register-push-handler! (fn [msg-id handler-fn]
                                                       (swap! handlers assoc msg-id handler-fn)
                                                       nil)
-                  ctx-reg/terminate-context! (fn
+                  ctx/terminate-context! (fn
                                            ([ctx-id terminate-fn]
                                             (swap! terminated conj [ctx-id terminate-fn])
                                             nil)
@@ -384,7 +383,7 @@
                   net-client/send-to-server (fn [msg-id payload]
                                               (swap! sent conj {:msg-id msg-id :payload payload})
                                               nil)
-                  ctx-reg/terminate-context! (fn
+                  ctx/terminate-context! (fn
                                            ([ctx-id terminate-fn]
                                             (swap! terminated conj [ctx-id terminate-fn])
                                             nil)
@@ -426,7 +425,7 @@
                   net-client/send-to-server (fn [msg-id payload]
                                               (swap! sent conj {:msg-id msg-id :payload payload})
                                               nil)
-                  ctx-reg/terminate-context! (fn
+                  ctx/terminate-context! (fn
                                            ([ctx-id terminate-fn]
                                             (swap! terminated conj [ctx-id terminate-fn])
                                             nil)
@@ -595,7 +594,7 @@
                                                        :max-overload 100.0}
                                        :cooldown-data {}
                                        :preset-data {}})
-                ctx-reg/get-all-contexts (fn []
+                ctx/get-all-contexts (fn []
                                        {"ctx-reflection" {:player-uuid "p1"
                                                            :skill-state {:toggle {:vec-reflection {:active true}
                                                                                   :vec-deviation {:active true}}}}})
@@ -617,7 +616,7 @@
         hooks (client-ui-hooks/runtime-client-ui-hooks)]
     (with-redefs [client-keybinds/get-skill-id-for-slot-public (fn [_ _] :flashing)
                   ctx-mgr/activate-context! (fn [_owner _player-uuid _skill-id] {:id "ctx-flashing"})
-                  ctx-reg/get-context (fn [_owner ctx-id]
+                  ctx/get-context (fn [_owner ctx-id]
                                     (when (= ctx-id "ctx-flashing")
                                       {:id "ctx-flashing" :skill-id :flashing}))
                   net-client/send-to-server

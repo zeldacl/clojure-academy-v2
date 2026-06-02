@@ -14,12 +14,10 @@
             [cn.li.ac.content.ability.fx-helpers :as fx]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
-            [cn.li.ac.ability.service.context-registry :as ctx-reg]
-            [cn.li.ac.ability.service.command-runtime :as command-rt]
-            [cn.li.ac.ability.effects.geom :as geom]
+            [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
+                        [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
-            [cn.li.mcmod.hooks.core :as runtime-hooks]
-            [cn.li.mcmod.platform.raycast :as raycast]
+                        [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.util.log :as log]))
@@ -87,52 +85,21 @@
 (defn- cooldown-ticks [exp]
   (cfg-lerp-int :cooldown.ticks exp))
 
-(defn- safe-context-data
-  [ctx-id]
-  (try
-    (ctx-reg/get-context ctx-id)
-    (catch Exception _ nil)))
-
-(defn- command-runtime-ready?
-  [{:keys [session-id player-uuid]}]
-  (and (runtime-hooks/current-player-state-owner)
-       session-id
-       player-uuid))
+(defn- update-skill-state-root!
+  [ctx-id f & args]
+  (apply ctx-skill/update-skill-state-root! ctx-id f args))
 
 (defn- set-skill-state-root!
   [ctx-id state-map]
-  (let [ctx-data (or (safe-context-data ctx-id) {})]
-    (if (command-runtime-ready? ctx-data)
-      (let [result (command-rt/run-command-in-session! (:session-id ctx-data)
-                                                       (:player-uuid ctx-data)
-                                                       {:command :context-assoc-skill-state
-                                                        :ctx-id ctx-id
-                                                        :k []
-                                                        :v state-map})]
-        (when (= :context-not-found (:rejected-reason result))
-          (ctx-reg/update-context! ctx-id assoc :skill-state state-map)))
-      (ctx-reg/update-context! ctx-id assoc :skill-state state-map))))
-
-(defn- update-skill-state-root!
-  [ctx-id f]
-  (let [current (or (:skill-state (or (safe-context-data ctx-id) {})) {})]
-    (set-skill-state-root! ctx-id (f current))))
+  (ctx-skill/update-skill-state-root! ctx-id identity state-map))
 
 (defn- clear-skill-state!
   [ctx-id]
-  (let [ctx-data (or (safe-context-data ctx-id) {})]
-    (if (command-runtime-ready? ctx-data)
-      (let [result (command-rt/run-command-in-session! (:session-id ctx-data)
-                                                       (:player-uuid ctx-data)
-                                                       {:command :context-clear-skill-state
-                                                        :ctx-id ctx-id})]
-        (when (= :context-not-found (:rejected-reason result))
-          (ctx-reg/update-context! ctx-id dissoc :skill-state)))
-      (ctx-reg/update-context! ctx-id dissoc :skill-state))))
+  (ctx-skill/clear-skill-state! ctx-id))
 
 (defn- release-hit
   [player-id ctx-id stage]
-  (let [ticks (long (or (get-in (ctx-reg/get-context ctx-id) [:skill-state :ticks]) 0))
+  (let [ticks (long (or (get-in (ctx/get-context ctx-id) [:skill-state :ticks]) 0))
         should-release? (case stage
                           :tick (>= (inc ticks) (cfg-int :charge.max-ticks))
                           :up true
@@ -234,7 +201,7 @@
                                      :ended? true
                                      :performed? (boolean performed?))))
   (fx/send-end! ctx-id :blood-retrograde/fx-end {:performed? (boolean performed?)})
-  (ctx-reg/terminate-context! ctx-id nil))
+  (ctx/terminate-context! ctx-id nil))
 
 (defn- try-perform! [player-id ctx-id hit cost-ok?]
   (let [target-id (:entity-id hit)
@@ -269,7 +236,7 @@
 (defn blood-retrograde-on-key-tick
   "Update charge progress and auto-release at max charge."
   [{:keys [player-id ctx-id cost-ok?]}]
-  (when-let [ctx-data (ctx-reg/get-context ctx-id)]
+  (when-let [ctx-data (ctx/get-context ctx-id)]
     (let [skill-state (:skill-state ctx-data)
           executed? (boolean (:executed? skill-state false))]
       (when-not executed?
@@ -288,7 +255,7 @@
 (defn blood-retrograde-on-key-up
   "Execute the skill on release if a valid target is found."
   [{:keys [player-id ctx-id cost-ok?]}]
-  (when-let [ctx-data (ctx-reg/get-context ctx-id)]
+  (when-let [ctx-data (ctx/get-context ctx-id)]
     (let [skill-state (:skill-state ctx-data)
           executed? (boolean (:executed? skill-state false))]
       (when-not executed?
@@ -301,35 +268,34 @@
 (defn blood-retrograde-on-key-abort
   "Clean up charge state on abort."
   [{:keys [ctx-id]}]
-  (when-let [ctx-data (ctx-reg/get-context ctx-id)]
+  (when-let [ctx-data (ctx/get-context ctx-id)]
     (when-not (get-in ctx-data [:skill-state :ended?])
       (fx/send-end! ctx-id :blood-retrograde/fx-end {:performed? false})))
   (clear-skill-state! ctx-id)
   (log/debug "BloodRetrograde aborted"))
 
-(def blood_retrograde
-  {:ac/content-type :skill
-   :id :blood-retrograde
-   :category-id :vecmanip
-   :name-key "ability.skill.vecmanip.blood_retrograde"
-   :description-key "ability.skill.vecmanip.blood_retrograde.desc"
-   :icon "textures/abilities/vecmanip/skills/blood_retro.png"
-   :ui-position [204 83]
-   :level 4
-   :controllable? true
-   :ctrl-id :blood-retrograde
-   :cp-consume-speed 0.0
-   :overload-consume-speed 0.0
-   :cooldown-ticks 90
-   :pattern :release-cast
-   :cooldown {:mode :manual}
-   :cost {:tick {:cp blood-retrograde-cost-release-tick
-                 :overload blood-retrograde-cost-release-tick}
-          :up {:cp blood-retrograde-cost-release-cp
-               :overload blood-retrograde-cost-release-overload}}
-   :actions {:down! blood-retrograde-on-key-down
-             :tick! blood-retrograde-on-key-tick
-             :up! blood-retrograde-on-key-up
-             :abort! blood-retrograde-on-key-abort}
-   :prerequisites [{:skill-id :directed-blastwave :min-exp 0.0}]})
+(defskill blood-retrograde
+  :id :blood-retrograde
+  :category-id :vecmanip
+  :name-key "ability.skill.vecmanip.blood_retrograde"
+  :description-key "ability.skill.vecmanip.blood_retrograde.desc"
+  :icon "textures/abilities/vecmanip/skills/blood_retro.png"
+  :ui-position [204 83]
+  :level 4
+  :controllable? true
+  :ctrl-id :blood-retrograde
+  :cp-consume-speed 0.0
+  :overload-consume-speed 0.0
+  :cooldown-ticks 90
+  :pattern :release-cast
+  :cooldown {:mode :manual}
+  :cost {:tick {:cp blood-retrograde-cost-release-tick
+               :overload blood-retrograde-cost-release-tick}
+         :up {:cp blood-retrograde-cost-release-cp
+              :overload blood-retrograde-cost-release-overload}}
+  :actions {:down! blood-retrograde-on-key-down
+            :tick! blood-retrograde-on-key-tick
+            :up! blood-retrograde-on-key-up
+            :abort! blood-retrograde-on-key-abort}
+  :prerequisites [{:skill-id :directed-blastwave :min-exp 0.0}])
 

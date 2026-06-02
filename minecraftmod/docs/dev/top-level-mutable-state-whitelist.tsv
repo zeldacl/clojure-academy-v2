@@ -8,4 +8,5 @@ ac/src/main/clojure/cn/li/ac/ability/registry/event.clj	event-subscriber-runtime
 ac/src/main/clojure/cn/li/ac/ability/registry/skill.clj	skill-registry-runtime-ref*	S2_RUNTIME_COMPONENT	ability/runtime-container	Installable skill registry runtime pointer for composition-root wiring.
 ac/src/main/clojure/cn/li/ac/ability/service/command_runtime.clj	recent-command-traces*	S2_RUNTIME_COMPONENT	ability/command-runtime	In-memory idempotency trace cache for duplicate command replay suppression.
 ac/src/main/clojure/cn/li/ac/ability/service/context_dispatcher.clj	dispatcher-runtime-ref*	S2_RUNTIME_COMPONENT	ability/runtime-container	Installable dispatcher runtime holder replacing singleton install vars.
+ac/src/main/clojure/cn/li/ac/content/ability/meltdowner/damage_helper.clj	last-radiation-tick-id*	S2_RUNTIME_COMPONENT	ability/player-runtime	Server-tick dedup guard when tick-marks! runs more than once per server tick.
 ac/src/main/clojure/cn/li/ac/ability/spi_lifecycle.clj	lifecycle-registry-runtime-ref*	S2_RUNTIME_COMPONENT	ability/runtime-container	Installable lifecycle registry runtime pointer for composition-root wiring.

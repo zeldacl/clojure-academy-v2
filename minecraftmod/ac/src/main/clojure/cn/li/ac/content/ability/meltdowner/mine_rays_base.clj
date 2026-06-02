@@ -13,12 +13,10 @@
 
   No Minecraft imports."
   (:require            [cn.li.ac.ability.service.context-dispatcher :as ctx]
-            [cn.li.ac.ability.service.context-registry :as ctx-reg]
-            [cn.li.ac.ability.service.command-runtime :as command-rt]
-            [cn.li.ac.ability.service.skill-effects :as skill-effects]
+            [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
+                        [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.effects.geom :as geom]
-            [cn.li.mcmod.hooks.core :as runtime-hooks]
-            [cn.li.mcmod.platform.raycast :as raycast]
+                        [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.block-manipulation :as bm]
             [cn.li.mcmod.util.log :as log]))
 
@@ -30,31 +28,9 @@
   []
   {:target-x nil :target-y nil :target-z nil :countdown 0.0})
 
-(defn- safe-context-data
-  [ctx-id]
-  (try
-    (ctx-reg/get-context ctx-id)
-    (catch Exception _ nil)))
-
-(defn- command-runtime-ready?
-  [{:keys [session-id player-uuid]}]
-  (and (runtime-hooks/current-player-state-owner)
-       session-id
-       player-uuid))
-
 (defn- set-skill-state-root!
   [ctx-id state-map]
-  (let [ctx-data (or (safe-context-data ctx-id) {})]
-    (if (command-runtime-ready? ctx-data)
-      (let [result (command-rt/run-command-in-session! (:session-id ctx-data)
-                                                       (:player-uuid ctx-data)
-                                                       {:command :context-assoc-skill-state
-                                                        :ctx-id ctx-id
-                                                        :k []
-                                                        :v state-map})]
-        (when (= :context-not-found (:rejected-reason result))
-          (ctx-reg/update-context! ctx-id assoc :skill-state state-map)))
-      (ctx-reg/update-context! ctx-id assoc :skill-state state-map))))
+  (ctx-skill/update-skill-state-root! ctx-id identity state-map))
 
 (defn mining-ray-down!
   "Initialize mining ray context state."
@@ -68,7 +44,7 @@
   [cfg {:keys [player-id ctx-id]}]
   (try
     (let [{:keys [range break-speed skill-id fortune-level exp-block]} cfg
-          ctx-data  (ctx-reg/get-context ctx-id)
+          ctx-data  (ctx/get-context ctx-id)
           world-id  (geom/world-id-of player-id)
           eye       (geom/eye-pos player-id)
           look-vec  (when raycast/*raycast*

@@ -22,9 +22,9 @@
 ### 2.1 数据结构与注册表
 
 - **`cn.li.mcmod.block.dsl`**
-  - `defblock`、`defmultiblock` / `defcontroller-multiblock`：宏展开为 `register-block!`，写入 **`block-registry`**（atom）。
+  - `defblock`、`defmultiblock`：宏展开为 `register-block!`，写入 **`block-registry`**（atom）。
   - `create-block-spec` 将选项归并为 **`BlockSpec`**，含嵌套记录：`PhysicalProperties`、`RenderingProperties`、`BlockStateConfig`、`EventHandlers`、`MultiBlockConfig`。
-  - 支持 **扁平写法**（`:material`、`:on-right-click` 与顶层同级）与 **嵌套写法**（`:physical {...}`、`:events {...}`），二者在 `create-block-spec` 中合并。
+  - 仅支持 **嵌套写法**（`:physical {...}`、`:rendering {...}`、`:events {...}`、`:multi-block {...}`）。
 - **`cn.li.mcmod.item.dsl`**
   - `defitem` → **`item-registry`**（atom），`ItemSpec` 记录。
 - **`cn.li.mcmod.block.tile-dsl`**
@@ -34,9 +34,9 @@
 
 ### 2.2 事件与方块 DSL 的关系
 
-- 方块 spec 的 **`:events`**（或扁平的 `:on-right-click` 等）在 `create-block-spec` 中写入 `EventHandlers`。
-- **`cn.li.mcmod.events.metadata`** 在 **`init-event-metadata!`** 时执行 **`sync-handlers-from-dsl!`**：遍历 `bdsl/list-blocks`，把 DSL 里的事件函数登记到 **`block-event-handlers`**。
-- Forge 侧 **`cn.li.forge1201.events`** 通过 **`cn.li.mcmod.events.dispatcher`** 按 block-id 分发，不硬编码方块名。
+- 方块 spec 的 **`:events`** 在 `create-block-spec` 中写入 `EventHandlers`。
+- **`cn.li.mcmod.block.query`** 提供 `identify-block-from-full-name`、`get-block-event-handler`、`has-block-event-handler?` 等统一查询。
+- Forge/Fabric 侧通过 **`cn.li.mcmod.events.dispatcher`** 按 block-id 分发，不硬编码方块名，也不依赖额外事件同步表。
 
 ---
 
@@ -59,7 +59,7 @@
    - **`wd/init-world-data!`**、能量/无线 Java API bridge；
    - **`content-ns/load-all!`** → 所有 **`defblock`/`defitem`** 进入 registry；
    - 按 GUI id 注册 screen factory（依赖上一步 DSL 已加载）；
-   - **`event-metadata/init-event-metadata!`** → 从 block DSL 同步事件表；
+   - 事件分发在运行时通过 `block.query` 直接查询 `BlockSpec :events`；
    - **`hooks/call-all-network-handlers!`** 等。
 4. Forge **注册阶段**（如 **`cn.li.forge1201.mod/register-all-blocks!`**）：只对 **`protocol.metadata`** 暴露的 id 循环，按 metadata 选择 `DynamicStateBlock`、`ScriptedBlock`、多方块等 Java 工厂；**`register-block-entities!`** 按 **tile-id** 聚合 BlockEntityType；**`register-all-items!`** 同理。
 
@@ -97,5 +97,5 @@
 | Forge 注册 | `cn.li.forge1201.mod` |
 | 内容加载 | `cn.li.ac.registry.content-namespaces`, `cn.li.ac.core` |
 | 生命周期 | `cn.li.mcmod.lifecycle`, `cn.li.mcmod.content` |
-| 事件同步 | `cn.li.mcmod.events.metadata`, `cn.li.mcmod.events.dispatcher` |
+| 事件分发 | `cn.li.mcmod.block.query`, `cn.li.mcmod.events.dispatcher` |
 | Forge 初始化 | `cn.li.forge1201.init` |

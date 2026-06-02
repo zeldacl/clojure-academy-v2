@@ -15,15 +15,13 @@
             [cn.li.ac.ability.config :as ability-config]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
-            [cn.li.ac.ability.service.context-registry :as ctx-reg]
-            [cn.li.ac.ability.service.command-runtime :as command-rt]
-            [cn.li.ac.ability.effects.fx :as fx-op]
+            [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
+                        [cn.li.ac.ability.effects.fx :as fx-op]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.effects.motion :as motion-op]
             [cn.li.ac.ability.effects.state :as state-op]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
-            [cn.li.mcmod.hooks.core :as runtime-hooks]
-            [cn.li.mcmod.platform.raycast :as raycast]
+                        [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.player-motion :as player-motion]
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.platform.entity :as entity]
@@ -71,58 +69,17 @@
        :position
        {:world-id "minecraft:overworld" :x 0.0 :y 64.0 :z 0.0}))
 
-(defn- safe-context-data
-  [ctx-id]
-  (try
-    (ctx-reg/get-context ctx-id)
-    (catch Exception _ nil)))
-
-(defn- command-runtime-ready?
-  [{:keys [session-id player-uuid]}]
-  (and (runtime-hooks/current-player-state-owner)
-       session-id
-       player-uuid))
+(defn- set-skill-state!
+  [ctx-id k v]
+  (ctx-skill/assoc-skill-state! ctx-id k v))
 
 (defn- set-skill-state-root!
   [ctx-id state-map]
-  (let [ctx-data (or (safe-context-data ctx-id) {})]
-    (if (command-runtime-ready? ctx-data)
-      (let [result (command-rt/run-command-in-session! (:session-id ctx-data)
-                                                       (:player-uuid ctx-data)
-                                                       {:command :context-assoc-skill-state
-                                                        :ctx-id ctx-id
-                                                        :k []
-                                                        :v state-map})]
-        (when (= :context-not-found (:rejected-reason result))
-          (ctx-reg/update-context! ctx-id assoc :skill-state state-map)))
-      (ctx-reg/update-context! ctx-id assoc :skill-state state-map))))
-
-(defn- set-skill-state!
-  [ctx-id k v]
-  (let [ctx-data (or (safe-context-data ctx-id) {})]
-    (if (command-runtime-ready? ctx-data)
-      (let [key-path (if (vector? k) k [k])
-            result (command-rt/run-command-in-session! (:session-id ctx-data)
-                                                       (:player-uuid ctx-data)
-                                                       {:command :context-assoc-skill-state
-                                                        :ctx-id ctx-id
-                                                        :k k
-                                                        :v v})]
-        (when (= :context-not-found (:rejected-reason result))
-          (ctx-reg/update-context! ctx-id assoc-in (into [:skill-state] key-path) v)))
-      (ctx-reg/update-context! ctx-id assoc-in (into [:skill-state] (if (vector? k) k [k])) v))))
+  (ctx-skill/update-skill-state-root! ctx-id identity state-map))
 
 (defn- clear-skill-state!
   [ctx-id]
-  (let [ctx-data (or (safe-context-data ctx-id) {})]
-    (if (command-runtime-ready? ctx-data)
-      (let [result (command-rt/run-command-in-session! (:session-id ctx-data)
-                                                       (:player-uuid ctx-data)
-                                                       {:command :context-clear-skill-state
-                                                        :ctx-id ctx-id})]
-        (when (= :context-not-found (:rejected-reason result))
-          (ctx-reg/update-context! ctx-id dissoc :skill-state)))
-      (ctx-reg/update-context! ctx-id dissoc :skill-state))))
+  (ctx-skill/clear-skill-state! ctx-id))
 
 (defn- try-adjust [from to]
   (let [d (- (double to) (double from))
@@ -190,7 +147,7 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- tick-cp-cost [{:keys [ctx-id exp]}]
-  (if-let [ctx (ctx-reg/get-context ctx-id)]
+  (if-let [ctx (ctx/get-context ctx-id)]
     (if (get-in ctx [:skill-state :has-target])
       (cfg-lerp :cost.tick.cp (double (or exp 0.0)))
       0.0)
@@ -202,7 +159,7 @@
 
 (defn- finalize-and-terminate!
   [{:keys [player-id ctx-id] :as evt} {:keys [grant-exp?] :or {grant-exp? true}}]
-  (when-let [ctx-data (ctx-reg/get-context ctx-id)]
+  (when-let [ctx-data (ctx/get-context ctx-id)]
     (let [skill-state (:skill-state ctx-data)
           finalized? (boolean (get-in ctx-data [:skill-state :finalized?]))
           should-finalize? (and skill-state (not finalized?))]
@@ -225,7 +182,7 @@
         (fx-op/execute-fx! evt {:topic :mag-movement/fx-end
               :payload {:mode :end}})
           (clear-skill-state! ctx-id)
-        (ctx-reg/terminate-context! ctx-id nil)))))
+        (ctx/terminate-context! ctx-id nil)))))
 
 (defn- on-down! [{:keys [player-id exp] :as evt}]
   (let [ctx-id (:ctx-id evt)
@@ -260,7 +217,7 @@
         (finalize-and-terminate! evt {:grant-exp? false})))))
 
 (defn- on-tick! [{:keys [player-id ctx-id cost-ok?] :as evt}]
-  (when-let [ctx (ctx-reg/get-context ctx-id)]
+  (when-let [ctx (ctx/get-context ctx-id)]
     (let [skill-state (:skill-state ctx)
           has-target  (:has-target skill-state)]
       (when has-target
@@ -319,7 +276,7 @@
                     (log/debug "MagMovement: moving for" (/ movement-ticks 20.0) "seconds")))))))))))
 
 (defn- on-up! [{:keys [ctx-id] :as evt}]
-  (when-let [ctx (ctx-reg/get-context ctx-id)]
+  (when-let [ctx (ctx/get-context ctx-id)]
     (let [skill-state (:skill-state ctx)
           has-target  (:has-target skill-state)]
       (when has-target

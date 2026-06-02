@@ -3,7 +3,7 @@
             [cn.li.ac.content.ability.meltdowner.electron-missile :as missile]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
-            [cn.li.ac.ability.service.context-registry :as ctx-reg]
+            [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
             [cn.li.ac.ability.effects.geom :as geom]
@@ -15,8 +15,8 @@
   (let [ctx* (atom initial)]
     {:ctx* ctx*
      :get-context (fn [_] @ctx*)
-     :update-context! (fn [_ f & args]
-                        (swap! ctx* #(when % (apply f % args))))}))
+     :update-skill-state-root! (fn [_ f & args]
+                        (swap! ctx* update :skill-state (fn [ss] (apply f (or ss {}) args))))}))
 
 (defn- stub-lerp-double [_skill-id field-id _exp]
        (case field-id
@@ -47,14 +47,14 @@
               0.0))
 
 (deftest electron-missile-down-initializes-state-and-sends-start-fx-test
-  (let [{:keys [ctx* update-context!]} (make-context-mocks {:skill-state {:legacy true}})
+  (let [{:keys [ctx* update-skill-state-root!]} (make-context-mocks {:skill-state {:legacy true}})
         local-fx* (atom [])
         nearby-fx* (atom [])]
     (with-redefs [skill-effects/get-player-state (fn [_]
                                                     {:resource-data {:cur-overload 350.0}})
                   skill-effects/skill-exp (fn [& _] 0.4)
                   skill-config/tunable-double stub-tunable-double
-                  ctx-reg/update-context! update-context!
+                  ctx-skill/update-skill-state-root! update-skill-state-root!
                   ctx/ctx-send-to-client! (fn [ctx-id ch payload]
                                             (swap! local-fx* conj [ctx-id ch payload])
                                             nil)
@@ -71,7 +71,7 @@
     (is (= [["ctx-1" :electron-missile/fx-start {}]] @nearby-fx*))))
 
 (deftest electron-missile-tick-spawns-ball-on-spawn-interval-test
-  (let [{:keys [ctx* get-context update-context!]}
+  (let [{:keys [ctx* get-context update-skill-state-root!]}
         (make-context-mocks {:skill-state {:ticks 0 :active-balls 0 :active? true :overload-floor 220.0}})
         spawn-calls* (atom [])
         local-fx* (atom [])
@@ -84,8 +84,8 @@
                   skill-effects/enforce-overload-floor! (fn [player-id floor]
                                                          (swap! floor-calls* conj [player-id floor])
                                                          nil)
-                  ctx-reg/get-context get-context
-                  ctx-reg/update-context! update-context!
+                  ctx/get-context get-context
+                  ctx-skill/update-skill-state-root! update-skill-state-root!
                   ctx/ctx-send-to-client! (fn [ctx-id ch payload]
                                             (swap! local-fx* conj [ctx-id ch payload])
                                             nil)
@@ -110,7 +110,7 @@
     (is (= @local-fx* @nearby-fx*))))
 
 (deftest electron-missile-tick-fires-immediate-hit-when-target-and-cost-ok-test
-  (let [{:keys [ctx* get-context update-context!]}
+  (let [{:keys [ctx* get-context update-skill-state-root!]}
         (make-context-mocks {:skill-state {:ticks 8 :active-balls 1 :active? true :overload-floor 200.0}})
         local-fx* (atom [])
         nearby-fx* (atom [])
@@ -127,8 +127,8 @@
                   skill-effects/add-skill-exp! (fn [player-id skill-id amount]
                                                  (swap! exp-calls* conj [player-id skill-id amount])
                                                  nil)
-                  ctx-reg/get-context get-context
-                  ctx-reg/update-context! update-context!
+                  ctx/get-context get-context
+                  ctx-skill/update-skill-state-root! update-skill-state-root!
                   ctx/ctx-send-to-client! (fn [ctx-id ch payload]
                                             (swap! local-fx* conj [ctx-id ch payload])
                                             nil)
@@ -166,7 +166,7 @@
     (is (= @local-fx* @nearby-fx*))))
 
 (deftest electron-missile-up-and-abort-send-end-and-reset-state-test
-  (let [{:keys [ctx* update-context!]}
+  (let [{:keys [ctx* update-skill-state-root!]}
         (make-context-mocks {:skill-state {:ticks 22 :active-balls 3 :active? true :overload-floor 200.0}})
         local-fx* (atom [])
         nearby-fx* (atom [])
@@ -176,7 +176,7 @@
                   skill-effects/set-main-cooldown! (fn [player-id skill-id ticks]
                                                      (swap! cooldown-calls* conj [player-id skill-id ticks])
                                                      nil)
-                  ctx-reg/update-context! update-context!
+                  ctx-skill/update-skill-state-root! update-skill-state-root!
                   ctx/ctx-send-to-client! (fn [ctx-id ch payload]
                                             (swap! local-fx* conj [ctx-id ch payload])
                                             nil)
@@ -194,7 +194,7 @@
     (is (= @local-fx* @nearby-fx*))))
 
 (deftest electron-missile-tick-max-hold-terminates-context-test
-  (let [{:keys [ctx* get-context update-context!]} 
+  (let [{:keys [ctx* get-context update-skill-state-root!]} 
         (make-context-mocks {:skill-state {:ticks 80 :active-balls 2 :active? true :overload-floor 200.0}})
         local-fx* (atom [])
         nearby-fx* (atom [])
@@ -204,9 +204,9 @@
                   skill-config/tunable-int stub-tunable-int
                   skill-config/tunable-double stub-tunable-double
                   skill-effects/enforce-overload-floor! (fn [& _] nil)
-                  ctx-reg/get-context get-context
-                  ctx-reg/update-context! update-context!
-                  ctx-reg/terminate-context! (fn [& args]
+                  ctx/get-context get-context
+                  ctx-skill/update-skill-state-root! update-skill-state-root!
+                  ctx/terminate-context! (fn [& args]
                                            (swap! terminate-calls* conj args)
                                            nil)
                   ctx/ctx-send-to-client! (fn [ctx-id ch payload]

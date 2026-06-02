@@ -4,7 +4,7 @@
             [cn.li.ac.content.ability.meltdowner.mine-rays-base :as base]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
-            [cn.li.ac.ability.service.context-registry :as ctx-reg]
+            [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.mcmod.platform.block-manipulation :as bm]
@@ -15,7 +15,7 @@
   (let [ctx* (atom initial)]
     {:ctx* ctx*
      :get-context (fn [_] @ctx*)
-     :update-context! (fn [_ f & args]
+     :update-skill-state-root! (fn [_ f & args]
                         (swap! ctx* #(apply f % args)))}))
 
 (deftest mine-ray-luck-tick-delegates-with-fortune-cfg-test
@@ -43,12 +43,12 @@
            (ffirst @calls*)))))
 
 (deftest mine-ray-luck-breaks-block-with-fortune-level-test
-  (let [{:keys [ctx* get-context update-context!]} 
+  (let [{:keys [ctx* get-context update-skill-state-root!]} 
         (context-mocks {:skill-state {:target-x 1 :target-y 64 :target-z 2 :countdown 0.9}})
         break-calls* (atom [])
         exp-calls* (atom [])]
-    (with-redefs [ctx-reg/get-context get-context
-                  ctx-reg/update-context! update-context!
+    (with-redefs [ctx/get-context get-context
+                  ctx-skill/update-skill-state-root! update-skill-state-root!
                   ctx/ctx-send-to-client! (fn [& _] nil)
                   skill-effects/add-skill-exp! (fn [& args]
                                                  (swap! exp-calls* conj args)
@@ -88,10 +88,10 @@
            (:skill-state @ctx*)))))
 
 (deftest mine-ray-luck-resets-stale-state-when-raycast-is-unavailable-test
-  (let [{:keys [ctx* get-context update-context!]} 
+  (let [{:keys [ctx* get-context update-skill-state-root!]} 
         (context-mocks {:skill-state {:target-x 1 :target-y 64 :target-z 2 :countdown 0.6}})]
-    (with-redefs [ctx-reg/get-context get-context
-                  ctx-reg/update-context! update-context!
+    (with-redefs [ctx/get-context get-context
+                  ctx-skill/update-skill-state-root! update-skill-state-root!
                   ctx/ctx-send-to-client! (fn [& _] nil)
                   skill-effects/add-skill-exp! (fn [& _] nil)
                   geom/world-id-of (fn [_] "w")

@@ -19,15 +19,13 @@
             [cn.li.ac.ability.util.balance :as bal]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
-            [cn.li.ac.ability.service.context-registry :as ctx-reg]
-            [cn.li.ac.ability.service.command-runtime :as command-rt]
-            [cn.li.ac.ability.effects.beam :as beam]
+            [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
+                        [cn.li.ac.ability.effects.beam :as beam]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.util.toggle :as toggle]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
-            [cn.li.mcmod.hooks.core :as runtime-hooks]
-            [cn.li.mcmod.platform.raycast :as raycast]
+                        [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.util.log :as log]))
 
@@ -73,36 +71,9 @@
    :y (double (or (:y look-vec) (:dy look-vec) 0.0))
    :z (double (or (:z look-vec) (:dz look-vec) 0.0))})
 
-(defn- safe-context-data
-  [ctx-id]
-  (try
-    (ctx-reg/get-context ctx-id)
-    (catch Exception _ nil)))
-
-(defn- command-runtime-ready?
-  [{:keys [session-id player-uuid]}]
-  (and (runtime-hooks/current-player-state-owner)
-       session-id
-       player-uuid))
-
 (defn- set-skill-state!
-  [ctx-id key-path value]
-  (let [ctx-data (or (safe-context-data ctx-id) {})
-        path (if (vector? key-path) key-path [key-path])]
-    (if (command-runtime-ready? ctx-data)
-      (let [result (command-rt/run-command-in-session! (:session-id ctx-data)
-                                                       (:player-uuid ctx-data)
-                                                       {:command :context-assoc-skill-state
-                                                        :ctx-id ctx-id
-                                                        :k path
-                                                        :v value})]
-        (when (= :context-not-found (:rejected-reason result))
-          (ctx-reg/update-context! ctx-id assoc-in (into [:skill-state] path) value)))
-      (ctx-reg/update-context! ctx-id assoc-in (into [:skill-state] path) value))))
-
-;; ---------------------------------------------------------------------------
-;; Overload floor enforcement
-;; ---------------------------------------------------------------------------
+  [ctx-id k v]
+  (ctx-skill/assoc-skill-state! ctx-id k v))
 
 (defn- enforce-overload-floor!
   [player-id floor-value]
@@ -116,7 +87,7 @@
   (some (fn [[_ ctx-data]]
           (and (= (:player-id ctx-data) player-id)
                (toggle/is-toggle-active? ctx-data skill-id)))
-        (ctx-reg/get-all-contexts)))
+        (ctx/get-all-contexts)))
 
 (defn- vec-reflection-can-reflect? [target-player-id incoming-damage]
   (when (toggle-active? target-player-id :vec-reflection)
@@ -211,11 +182,11 @@
 (defn- meltdowner-on-tick!
   [{:keys [player-id ctx-id hold-ticks]}]
   (let [ticks (long (or hold-ticks 0))]
-    (when-let [floor (get-in (ctx-reg/get-context ctx-id) [:skill-state :overload-floor])]
+    (when-let [floor (get-in (ctx/get-context ctx-id) [:skill-state :overload-floor])]
       (enforce-overload-floor! player-id floor))
     (when (> ticks (ticks-tolerant))
       (ctx/ctx-send-to-client! ctx-id :meltdowner/fx-end {:performed? false})
-      (ctx-reg/terminate-context! ctx-id nil)
+      (ctx/terminate-context! ctx-id nil)
       (log/debug "Meltdowner aborted: over tolerant ticks" ticks))))
 
 (defn- meltdowner-on-up!
@@ -225,7 +196,7 @@
     (if (< ticks (ticks-min))
       (do
         (ctx/ctx-send-to-client! ctx-id :meltdowner/fx-end {:performed? false})
-        (ctx-reg/terminate-context! ctx-id nil)
+        (ctx/terminate-context! ctx-id nil)
         (log/debug "Meltdowner: insufficient charge ticks" ticks))
       (let [{:keys [performed? reflection-hit?]}
             (perform-meltdowner! {:player-id  player-id
@@ -240,11 +211,11 @@
                                                      (cfg-double :cooldown.base-multiplier)
                                                      (cfg-lerp :cooldown.ticks exp))))
             (ctx/ctx-send-to-client! ctx-id :meltdowner/fx-end {:performed? true})
-            (ctx-reg/terminate-context! ctx-id nil)
+            (ctx/terminate-context! ctx-id nil)
             (log/debug "Meltdowner performed; reflection?" (boolean reflection-hit?)))
           (do
             (ctx/ctx-send-to-client! ctx-id :meltdowner/fx-end {:performed? false})
-            (ctx-reg/terminate-context! ctx-id nil)
+            (ctx/terminate-context! ctx-id nil)
             (log/debug "Meltdowner: beam failed")))))))
 
 (defn init!
@@ -291,12 +262,12 @@
                     :abort!     (fn [{:keys [ctx-id]}]
                                   (ctx/ctx-send-to-client! ctx-id :meltdowner/fx-end
                                                            {:performed? false})
-                                  (ctx-reg/terminate-context! ctx-id nil))
+                                  (ctx/terminate-context! ctx-id nil))
                     :cost-fail! (fn [{:keys [ctx-id cost-stage]}]
                                   (when (= cost-stage :tick)
                                     (ctx/ctx-send-to-client! ctx-id :meltdowner/fx-end
                                                              {:performed? false}))
-                                  (ctx-reg/terminate-context! ctx-id nil))}
+                                  (ctx/terminate-context! ctx-id nil))}
   :prerequisites   [{:skill-id :scatter-bomb :min-exp 0.8}
                     {:skill-id :light-shield :min-exp 0.8}])
 

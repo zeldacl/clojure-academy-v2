@@ -7,18 +7,22 @@
     (let [spec thunder-clap/thunder-clap
           down-overload (get-in spec [:cost :down :overload])
           tick-cp (get-in spec [:cost :tick :cp])
-          range-fn (get-in spec [:on-down 0 1 :range])]
+          down-action (get-in spec [:actions :down!])
+          tick-action (get-in spec [:actions :tick!])]
       (with-redefs [thunder-clap/cfg-lerp (fn [field exp]
                                             (case field
                                               :cost.down.overload (+ 100.0 (* 200.0 exp))
                                               :cost.tick.cp (+ 10.0 (* 20.0 exp))
                                               0.0))
                     thunder-clap/min-ticks (fn [] 50)
-                    thunder-clap/targeting-range (fn [] 77.0)]
+                    thunder-clap/targeting-range (fn [] 77.0)
+                    thunder-clap/resolve-raycast-target (fn [_] {:x 1.0 :y 2.0 :z 3.0})]
         (is (fn? down-overload))
         (is (fn? tick-cp))
-        (is (fn? range-fn))
+        (is (fn? down-action))
+        (is (fn? tick-action))
         (is (= 200.0 (down-overload {:exp 0.5})))
         (is (= 20.0 (tick-cp {:hold-ticks 50 :exp 0.5})))
         (is (= 0.0 (tick-cp {:hold-ticks 51 :exp 0.5})))
-        (is (= 77.0 (range-fn {})))))))
+        (is (nil? (down-action {:ctx-id "ctx-1" :player-id "p1"})))
+        (is (nil? (tick-action {:ctx-id "ctx-1" :player-id "p1"})))))))

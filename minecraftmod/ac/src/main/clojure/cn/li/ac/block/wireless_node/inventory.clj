@@ -2,7 +2,6 @@
   "Wireless node slot schema and container inventory operations."
   (:require [cn.li.ac.block.wireless-node.state :as node-state]
             [cn.li.ac.energy.operations :as energy]
-            [cn.li.mcmod.gui.slot-registry :as slot-registry]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.platform.item :as pitem]))
@@ -39,7 +38,7 @@
 (defn node-input-slot-index [] (node-slot-cache :input-slot-index #(slot-schema/slot-index node-slot-schema-id :input)))
 (defn node-output-slot-index [] (node-slot-cache :output-slot-index #(slot-schema/slot-index node-slot-schema-id :output)))
 (defn node-slot-indexes [] (node-slot-cache :slot-indexes #(slot-schema/all-slot-indexes node-slot-schema-id)))
-(defn node-slot-count [] (node-slot-cache :slot-count #(slot-registry/get-slot-count node-slot-schema-id)))
+(defn node-slot-count [] (node-slot-cache :slot-count #(slot-schema/tile-slot-count node-slot-schema-id)))
 
 (def node-container-fns
   {:get-size (fn [_be] (node-slot-count))

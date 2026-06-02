@@ -1,6 +1,8 @@
 (ns cn.li.ac.ability.server.service.delayed-projectiles-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.effects.beam :as beam]
+            [cn.li.ac.ability.service.runtime-store :as store]
+            [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.ac.ability.service.delayed-projectiles :as dp]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
@@ -9,12 +11,16 @@
             [cn.li.mcmod.platform.entity-damage :as entity-damage]))
 
 (defn- with-fresh-delayed-projectile-runtime [f]
-  (dp/call-with-delayed-projectile-runtime (dp/create-delayed-projectile-runtime)
+  (ps-fix/with-test-player-state-owner
     (fn []
+      (store/reset-store!)
+      (ps-fix/seed-player-state! "p1" {})
+      (ps-fix/seed-player-state! "p2" {})
       (try
         (f)
         (finally
-          (dp/reset-pending-tasks-for-test!))))))
+          (dp/reset-pending-tasks-for-test!)
+          (store/reset-store!))))))
 
 (use-fixtures :each with-fresh-delayed-projectile-runtime)
 
@@ -80,7 +86,7 @@
                       :performed? true
                       :target-uuid "target-1"}]]]
              @calls))
-      (is (nil? (get (dp/pending-tasks-snapshot) "p1"))))))
+      (is (empty? (dp/pending-tasks-snapshot "p1"))))))
 
 (deftest electron-bomb-settlement-without-raycast-is-noop-test
   (let [calls (atom [])]
@@ -112,7 +118,7 @@
         :delay-ticks 1})
       (dp/tick-player! "p1")
       (is (empty? @calls))
-      (is (nil? (get (dp/pending-tasks-snapshot) "p1"))))))
+      (is (empty? (dp/pending-tasks-snapshot "p1"))))))
 
 (deftest scatter-bomb-settlement-order-and-cleanup-test
   (let [calls (atom [])]
@@ -150,39 +156,31 @@
       (dp/tick-player! "p1")
   (is (= 3 (count @calls)))
       (is (= [:mark "p1" "target-1" {:ctx-id "ctx-1"}] (first @calls)))
-      (is (= 1 (count (get (dp/pending-tasks-snapshot) "p1"))))
+      (is (= 1 (count (dp/pending-tasks-snapshot "p1"))))
 
       (dp/tick-player! "p1")
   (is (= 6 (count @calls)))
-      (is (nil? (get (dp/pending-tasks-snapshot) "p1"))))))
+      (is (empty? (dp/pending-tasks-snapshot "p1"))))))
 
 (deftest pending-tasks-are-player-keyed-and-clearable-test
   (dp/schedule-task! "p1" 2 {:kind :unknown :payload 1})
   (dp/schedule-task! "p2" 2 {:kind :unknown :payload 2})
-  (is (= #{"p1" "p2"} (set (keys (dp/pending-tasks-snapshot)))))
+  (is (= 1 (count (dp/pending-tasks-snapshot "p1"))))
+  (is (= 1 (count (dp/pending-tasks-snapshot "p2"))))
   (dp/clear-player-tasks! "p1")
-  (is (nil? (get (dp/pending-tasks-snapshot) "p1")))
-  (is (= 1 (count (get (dp/pending-tasks-snapshot) "p2")))))
+  (is (empty? (dp/pending-tasks-snapshot "p1")))
+  (is (= 1 (count (dp/pending-tasks-snapshot "p2")))))
 
-(deftest delayed-projectile-runtime-isolation-test
-  (let [runtime-a (dp/create-delayed-projectile-runtime)
-        runtime-b (dp/create-delayed-projectile-runtime)]
-    (dp/call-with-delayed-projectile-runtime runtime-a
-      (fn []
-        (dp/schedule-task! "p1" 2 {:kind :unknown :payload :a})))
-    (dp/call-with-delayed-projectile-runtime runtime-b
-      (fn []
-        (dp/schedule-task! "p1" 2 {:kind :unknown :payload :b})))
-    (dp/call-with-delayed-projectile-runtime runtime-b
-      (fn []
-        (is (= [{:kind :unknown :payload :b :ticks-left 2}]
-               (get (dp/pending-tasks-snapshot) "p1")))
-        (dp/clear-player-tasks! "p1")
-        (is (nil? (get (dp/pending-tasks-snapshot) "p1")))))
-    (dp/call-with-delayed-projectile-runtime runtime-a
-      (fn []
-        (is (= [{:kind :unknown :payload :a :ticks-left 2}]
-               (get (dp/pending-tasks-snapshot) "p1")))))))
+(deftest delayed-projectile-tasks-are-per-player-state-test
+  (dp/schedule-task! "p1" 2 {:kind :unknown :payload :a})
+  (dp/schedule-task! "p2" 2 {:kind :unknown :payload :b})
+  (is (= [{:kind :unknown :payload :a :ticks-left 2}]
+         (dp/pending-tasks-snapshot "p1")))
+  (is (= [{:kind :unknown :payload :b :ticks-left 2}]
+         (dp/pending-tasks-snapshot "p2")))
+  (dp/clear-player-tasks! "p1")
+  (is (empty? (dp/pending-tasks-snapshot "p1")))
+  (is (= 1 (count (dp/pending-tasks-snapshot "p2")))))
 
 (deftest scatter-bomb-settlement-uses-task-look-dir-test
   (let [run-op-inputs* (atom [])]
@@ -240,5 +238,5 @@
       (dp/clear-player-tasks! "p1")
       (dp/tick-player! "p1")
       (is (= 0 @run-count*))
-      (is (nil? (get (dp/pending-tasks-snapshot) "p1"))))))
+      (is (empty? (dp/pending-tasks-snapshot "p1"))))))
 

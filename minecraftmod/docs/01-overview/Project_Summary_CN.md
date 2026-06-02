@@ -22,7 +22,7 @@
 - **`mcmod`** 中的 **`defblock`/`defitem`/`deftile`** 只往各自 **atom registry** 写元数据；**不**直接碰 Minecraft。
 - **`cn.li.mcmod.protocol.metadata`** 聚合查询，供 Forge/Fabric 注册循环使用。
 - **`ac`** 通过 **`content-namespaces`** 统一 `require` 内容命名空间，触发 DSL 副作用；**`cn.li.ac.core/init`** 在 `lifecycle` 中注册，由 **`forge1201.init`** 在设置版本号后执行。
-- 事件：DSL 中的 `:on-right-click` 等经 **`events.metadata/sync-handlers-from-dsl!`** 进入分发器，Forge 事件只调 **`events.dispatcher`**。
+- 事件：DSL 中的 `:on-right-click` 等由 **`block.query`** 解析并交给 **`events.dispatcher`**，平台侧不再维护独立事件同步表。
 
 详细步骤、模块禁止项与无线方块实现模式见 **`02-architecture/Runtime_And_DSL_CN.md`**。
 
@@ -35,7 +35,7 @@ flowchart LR
   subgraph mcmod [mcmod DSL 与元数据]
     R[block/item/tile registry atoms]
     RM[protocol.metadata 查询 API]
-    EM[events.metadata 分发注册表]
+    BQ[block.query 事件查询]
   end
   subgraph forge [forge-1.20.1]
     M[mod.clj DeferredRegister]
@@ -45,8 +45,8 @@ flowchart LR
   CN --> BL
   R --> RM
   RM --> M
-  R --> EM
-  EM --> EV
+  R --> BQ
+  BQ --> EV
 ```
 
 ### 核心设计原则
@@ -66,7 +66,7 @@ flowchart LR
 
 - **GUI**：`cn.li.mcmod.gui.registry` / `spec`、容器 schema；Forge 侧完成 MenuType/Screen 注册（`mc1201.runtime.spi.gui-registry`）。
 - **注册**：`cn.li.mcmod.protocol.metadata`、事件元数据；方块/物品由 DSL 与元数据驱动。
-- **事件**：`cn.li.mcmod.events.*`；从 DSL 的 `:on-right-click` 等同步到处理器。
+- **事件**：`cn.li.mcmod.events.*` + `cn.li.mcmod.block.query`；处理器直接读取 `BlockSpec :events`。
 - **能量**：物品/节点等充放电统一走 **`cn.li.ac.energy.operations`**。
 
 ---
@@ -95,6 +95,7 @@ flowchart LR
 - Wireless / GUI：`05-wireless/`、`06-gui/`
 - DSL：`03-dsl/`
 - 能力矩阵：`07-ability/ABILITY_FEATURE_MATRIX.md`
+- 能力运行时维护（**reducer-only** 唯一写路径 / context / 守卫）：`04-systems/ABILITY_SYSTEM_MAINTENANCE.md`
 - 测试范围：`testing/IMPLEMENTATION_SCOPE.md`
 - Agent 工具约定：`dev/AGENT_AND_TOOLING.md`
 - **历史归档（非现行权威）**：`98-archive/README.md`

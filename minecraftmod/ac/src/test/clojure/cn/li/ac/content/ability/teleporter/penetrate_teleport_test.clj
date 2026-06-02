@@ -1,7 +1,7 @@
 (ns cn.li.ac.content.ability.teleporter.penetrate-teleport-test
   (:require [clojure.test :refer [deftest is]]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
-            [cn.li.ac.ability.service.context-registry :as ctx-reg]
+            [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
             [cn.li.ac.content.ability.teleporter.penetrate-teleport :as pt]
@@ -14,17 +14,17 @@
     {:ctx* ctx*
      :listeners* listeners*
      :get-context (fn [_] @ctx*)
-     :update-context! (fn [_ f & args]
-                        (swap! ctx* #(when % (apply f % args))))
+     :update-skill-state-root! (fn [_ f & args]
+                        (swap! ctx* update :skill-state (fn [ss] (apply f (or ss {}) args))))
      :ctx-on! (fn [_ channel handler]
                 (swap! listeners* assoc channel handler)
                 nil)}))
 
 (deftest penetrate-down-registers-distance-listener-and-updates-state-test
-  (let [{:keys [ctx* listeners* get-context update-context! ctx-on!]}
+  (let [{:keys [ctx* listeners* get-context update-skill-state-root! ctx-on!]}
         (make-context-mocks {:skill-state {}})]
-    (with-redefs [ctx-reg/get-context get-context
-                  ctx-reg/update-context! update-context!
+    (with-redefs [ctx/get-context get-context
+                  ctx-skill/update-skill-state-root! update-skill-state-root!
                   ctx/ctx-on! ctx-on!
                   helper/skill-exp (fn [_ _] 0.2)
                   helper/cfg-lerp (fn [_ field _]
@@ -44,11 +44,11 @@
     (is (= true (get-in @ctx* [:skill-state :preview :available?])))))
 
 (deftest penetrate-tick-refreshes-preview-and-resets-up-resolve-test
-  (let [{:keys [ctx* get-context update-context!]}
+  (let [{:keys [ctx* get-context update-skill-state-root!]}
         (make-context-mocks {:skill-state {:desired-distance 6.0
                                            :up-resolve {:distance 3.0}}})]
-    (with-redefs [ctx-reg/get-context get-context
-                  ctx-reg/update-context! update-context!
+    (with-redefs [ctx/get-context get-context
+                  ctx-skill/update-skill-state-root! update-skill-state-root!
                   pt/resolve-preview (fn [_player-id desired]
                                        {:distance desired
                                         :cp-per-block 9.0

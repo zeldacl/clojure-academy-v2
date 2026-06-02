@@ -1,4 +1,4 @@
-(ns cn.li.ac.ability.server.effect.motion-test
+(ns cn.li.ac.ability.effects.motion-test
   (:require [clojure.test :refer [deftest is]]
             [cn.li.ac.ability.effects.motion :as motion]
             [cn.li.mcmod.platform.player-motion :as player-motion]
@@ -44,4 +44,3 @@
     (binding [entity-motion/*entity-motion* em]
       (is (= evt (motion/execute-add-entity-velocity! evt {:target :tgt :x 0.1 :y 0.2 :z 0.3}))))
     (is (= [[:add "dim1" "ent-uuid" 0.1 0.2 0.3]] @calls))))
-

@@ -4,7 +4,6 @@
 						[clojure.string :as str]
 						[cn.li.ac.ability.service.command-runtime :as command-rt]
 						[cn.li.ac.ability.service.context-manager :as ctx-mgr]
-						[cn.li.ac.ability.service.context-registry :as ctx-reg]
 						[cn.li.ac.ability.service.context-dispatcher :as ctx]
 						[cn.li.ac.ability.server.handlers.common :as handlers-common]))
 
@@ -28,7 +27,7 @@
 		:else
 		(let [player-uuid (uuid/player-uuid player)
 				owner (server-context-owner player-uuid)]
-			(let [existing (ctx-reg/get-context owner ctx-id)]
+			(let [existing (ctx/get-context owner ctx-id)]
 				(if (or (nil? existing)
 						(= player-uuid (:player-uuid existing)))
 					(ctx-mgr/establish-context! player-uuid ctx-id skill-id)
@@ -39,7 +38,7 @@
 	(let [player-uuid (uuid/player-uuid player)
 			owner (when player-uuid (server-context-owner player-uuid))
 			ctx-map (when (and owner (valid-ctx-id? ctx-id))
-								(ctx-reg/get-context owner ctx-id))]
+								(ctx/get-context owner ctx-id))]
 		(cond
 			(not (valid-ctx-id? ctx-id))
 			{:ok? false :reason :payload-invalid}
@@ -61,7 +60,7 @@
 	(let [player-uuid (uuid/player-uuid player)
 			owner (when player-uuid (server-context-owner player-uuid))
 			ctx-map (when (and owner (valid-ctx-id? ctx-id))
-								(ctx-reg/get-context owner ctx-id))]
+								(ctx/get-context owner ctx-id))]
 		(cond
 			(not (valid-ctx-id? ctx-id))
 			{:ok? false :reason :payload-invalid}
@@ -75,7 +74,7 @@
 			(not= player-uuid (:player-uuid ctx-map))
 			{:ok? false :reason :ctx-not-owner}
 
-			(not= (:status ctx-map) ctx-reg/STATUS-ALIVE)
+			(not= (:status ctx-map) ctx/STATUS-ALIVE)
 			{:ok? false :reason :ctx-not-alive}
 
 			:else
@@ -105,7 +104,7 @@
 	[{:keys [ctx-id]} player]
 	(let [{:keys [ok? owner]} (resolve-owned-context ctx-id player)]
 		(if ok?
-			(ctx-reg/terminate-context! owner ctx-id ctx-mgr/send-terminated-context!)
+			(ctx/terminate-context! owner ctx-id ctx-mgr/send-terminated-context!)
 			nil)))
 
 (defn handle-channel-context

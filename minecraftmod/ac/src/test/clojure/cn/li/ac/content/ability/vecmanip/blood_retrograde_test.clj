@@ -1,7 +1,7 @@
 (ns cn.li.ac.content.ability.vecmanip.blood-retrograde-test
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
-            [cn.li.ac.ability.service.context-registry :as ctx-reg]
+            [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.content.ability.fx-helpers :as fx]
             [cn.li.ac.content.ability.vecmanip.blood-retrograde :as br]
@@ -39,8 +39,8 @@
     {:ctx-state ctx-state
      :terminate-calls terminate-calls
      :get-context (fn [_] @ctx-state)
-     :update-context! (fn [_ f & args]
-                        (swap! ctx-state #(when % (apply f % args))))
+     :update-skill-state-root! (fn [_ctx-id f & args]
+                                 (swap! ctx-state update :skill-state #(apply f % args)))
      :terminate-context! (fn [ctx-id _]
                            (swap! terminate-calls conj ctx-id))}))
 
@@ -48,28 +48,28 @@
   (testing "tick release cost is disabled even if a target is available"
     (with-redefs [br/release-hit (fn [& _] {:entity-id "e-1"})
             br/skill-exp (fn [_] 0.5)]
-      (is (= 0.0 ((get-in br/blood_retrograde [:cost :tick :cp])
+      (is (= 0.0 ((get-in br/blood-retrograde [:cost :tick :cp])
                   {:player-id "p1" :ctx-id "ctx-1"})))
-      (is (= 0.0 ((get-in br/blood_retrograde [:cost :tick :overload])
+      (is (= 0.0 ((get-in br/blood-retrograde [:cost :tick :overload])
                   {:player-id "p1" :ctx-id "ctx-1"}))))))
 
 (deftest release-cost-up-only-fires-on-hit-test
   (testing "up-stage release costs only apply when the release raycast hits"
     (with-redefs [br/release-hit (fn [& _] nil)
             br/skill-exp (fn [_] 0.0)]
-      (is (= 0.0 ((get-in br/blood_retrograde [:cost :up :cp])
+      (is (= 0.0 ((get-in br/blood-retrograde [:cost :up :cp])
                   {:player-id "p1" :ctx-id "ctx-1"})))
-      (is (= 0.0 ((get-in br/blood_retrograde [:cost :up :overload])
+      (is (= 0.0 ((get-in br/blood-retrograde [:cost :up :overload])
                   {:player-id "p1" :ctx-id "ctx-1"}))))
     (with-redefs [br/release-hit (fn [& _] {:entity-id "e-1"})
             br/skill-exp (fn [_] 0.0)]
-      (is (= 280.0 ((get-in br/blood_retrograde [:cost :up :cp])
+      (is (= 280.0 ((get-in br/blood-retrograde [:cost :up :cp])
                     {:player-id "p1" :ctx-id "ctx-1"})))
-      (is (= 55.0 ((get-in br/blood_retrograde [:cost :up :overload])
+      (is (= 55.0 ((get-in br/blood-retrograde [:cost :up :overload])
                    {:player-id "p1" :ctx-id "ctx-1"}))))))
 
 (deftest auto-release-at-max-tick-applies-side-effects-test
-  (let [{:keys [ctx-state get-context update-context! terminate-context! terminate-calls]}
+  (let [{:keys [ctx-state get-context update-skill-state-root! terminate-context! terminate-calls]}
         (make-context-mocks {:skill-state {:ticks 29
                                            :executed? false
                                            :ended? false}})
@@ -84,9 +84,9 @@
             br/cfg-lerp-int mock-cfg-lerp-int
             br/skill-exp (fn [_] 0.0)
           br/get-player-look (fn [_] {:x 0.0 :y 0.0 :z 1.0})
-                  ctx-reg/get-context get-context
-                  ctx-reg/update-context! update-context!
-                  ctx-reg/terminate-context! terminate-context!
+                  ctx/get-context get-context
+                  ctx-skill/update-skill-state-root! update-skill-state-root!
+                  ctx/terminate-context! terminate-context!
                   geom/world-id-of (fn [_] "w")
                   raycast/raycast-from-player (fn [& _]
                                                 {:entity-id "target-1"
@@ -121,7 +121,7 @@
     (is (true? (get-in @ctx-state [:skill-state :performed?])))))
 
 (deftest manual-release-without-hit-only-ends-context-test
-  (let [{:keys [ctx-state get-context update-context! terminate-context! terminate-calls]}
+  (let [{:keys [ctx-state get-context update-skill-state-root! terminate-context! terminate-calls]}
         (make-context-mocks {:skill-state {:ticks 12
                                            :executed? false
                                            :ended? false}})
@@ -132,9 +132,9 @@
             br/cfg-lerp-int mock-cfg-lerp-int
             br/skill-exp (fn [_] 0.0)
           br/get-player-look (fn [_] {:x 0.0 :y 0.0 :z 1.0})
-                  ctx-reg/get-context get-context
-                  ctx-reg/update-context! update-context!
-                  ctx-reg/terminate-context! terminate-context!
+                  ctx/get-context get-context
+                  ctx-skill/update-skill-state-root! update-skill-state-root!
+                  ctx/terminate-context! terminate-context!
                   geom/world-id-of (fn [_] "w")
                   raycast/raycast-from-player (fn [& _] nil)
                   fx/send-update! (fn [& _] nil)

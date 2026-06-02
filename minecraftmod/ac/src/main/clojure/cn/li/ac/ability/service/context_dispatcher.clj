@@ -1,9 +1,12 @@
 (ns cn.li.ac.ability.service.context-dispatcher
-	"Canonical AC context/dispatcher service implementation."
+	"Context transport router: listeners, routes, id counters, message buffering.
+
+	Business context state (status, input-state, skill-state, keepalive) is
+	authoritative in runtime-store and updated only via reducer commands."
 	(:require [cn.li.ac.ability.registry.event :as evt]
 						[cn.li.ac.ability.service.command-runtime :as command-rt]
-						[cn.li.ac.ability.service.runtime-store :as store]
 						[cn.li.ac.ability.service.context-domain :as context-domain]
+						[cn.li.ac.ability.service.context-projection :as ctx-proj]
 						[cn.li.mcmod.util.log :as log]))
 
 (def STATUS-CONSTRUCTED context-domain/status-constructed)
@@ -23,7 +26,7 @@
 	nil)
 
 (def ^:private default-dispatcher-state
-	{:context-registry {}
+	{:transport-contexts {}
 	 :route-fns {}
 	 :client-id-counter {}
 	 :server-id-counter {}})
@@ -89,9 +92,9 @@
 	[f & args]
 	(apply swap! (dispatcher-state-atom) f args))
 
-(defn- context-registry-snapshot
+(defn- transport-contexts-snapshot
 	[]
-	(:context-registry (dispatcher-state-snapshot)))
+	(:transport-contexts (dispatcher-state-snapshot)))
 
 (declare context-session-id)
 
@@ -107,89 +110,39 @@
 				(when (vector? sid)
 					(second sid)))))
 
-(defn- context-projection
-	[ctx]
-	(let [session-id (context-store-session-id ctx)
-				player-uuid (context-store-player-uuid ctx)
-				ctx-id (:id ctx)]
-		(when (and session-id player-uuid ctx-id)
-			(try
-				(get-in (store/get-player-state* session-id player-uuid)
-						[:context-registry ctx-id])
-				(catch Exception _
-					nil)))))
-
-(defn- merge-context-projection
-	[ctx]
-	(if-let [projected (context-projection ctx)]
-		(cond-> ctx
-			(contains? projected :input-state)
-			(assoc :input-state (:input-state projected))
-			(contains? projected :last-keepalive-ms)
-			(assoc :last-keepalive-ms (:last-keepalive-ms projected))
-			(contains? projected :skill-state)
-			(assoc :skill-state (:skill-state projected)))
-		ctx))
-
-(defn- sync-register-context-command!
-	[ctx]
-	(let [session-id (context-store-session-id ctx)
-				player-uuid (context-store-player-uuid ctx)]
-		(when (and session-id player-uuid)
-			(try
-				(command-rt/run-command-in-session!
-				 session-id
-				 player-uuid
-				 {:command :register-context
-					:ctx-id (:id ctx)
-					:skill-id (:skill-id ctx)
-					:status (:status ctx)})
-				(catch Exception e
-					(log/warn "Failed to sync register-context command"
-							{:ctx-id (:id ctx)
-							 :player-uuid player-uuid
-							 :reason (ex-message e)}))))))
-
-(defn- sync-context-status-command!
+(defn- run-context-status-command!
 	[ctx status reason]
 	(let [session-id (context-store-session-id ctx)
 				player-uuid (context-store-player-uuid ctx)]
 		(when (and session-id player-uuid)
-			(try
-				(command-rt/run-command-in-session!
-				 session-id
-				 player-uuid
-				 {:command :update-context-status
-					:ctx-id (:id ctx)
-					:status status
-					:reason reason})
-				(catch Exception e
-					(log/warn "Failed to sync context status command"
-							{:ctx-id (:id ctx)
-							 :status status
-							 :player-uuid player-uuid
-							 :reason (ex-message e)}))))))
+			(command-rt/run-command-in-session!
+			 session-id
+			 player-uuid
+			 {:command :update-context-status
+				:ctx-id (:id ctx)
+				:status status
+				:reason reason}))))
 
 (defn- route-fns-snapshot
 	[]
 	(:route-fns (dispatcher-state-snapshot)))
 
-(defn- assoc-context!
+(defn- assoc-transport!
 	[key ctx]
-	(update-dispatcher-state! assoc-in [:context-registry key] ctx)
+	(update-dispatcher-state! assoc-in [:transport-contexts key] ctx)
 	ctx)
 
-(defn- update-context-if-present!
+(defn- update-transport-if-present!
 	[key f & args]
 	(update-dispatcher-state!
 	 (fn [state]
-		 (if (contains? (:context-registry state) key)
-			 (apply update-in state [:context-registry key] f args)
+		 (if (contains? (:transport-contexts state) key)
+			 (apply update-in state [:transport-contexts key] f args)
 			 state))))
 
-(defn- dissoc-context!
+(defn- dissoc-transport!
 	[key]
-	(update-dispatcher-state! update :context-registry dissoc key)
+	(update-dispatcher-state! update :transport-contexts dissoc key)
 	nil)
 
 (defn- clear-route-fns!
@@ -279,12 +232,12 @@
 	 (preferred-context-entry nil ctx-id preferred-side))
 	([owner ctx-id preferred-side]
 	 (if (vector? ctx-id)
-		 (when-let [ctx (get (context-registry-snapshot) ctx-id)]
+		 (when-let [ctx (get (transport-contexts-snapshot) ctx-id)]
 			 [ctx-id ctx])
 		 (let [resolved-owner (resolve-context-owner owner ctx-id preferred-side)
 				 [side session] (route-owner-key resolved-owner)
 					 key [side session ctx-id]]
-				 (when-let [ctx (get (context-registry-snapshot) key)]
+				 (when-let [ctx (get (transport-contexts-snapshot) key)]
 				 [key ctx])))))
 
 (defn- route-fns-for-context
@@ -333,47 +286,46 @@
 		ctx))
 
 (defn register-context! [ctx]
-	(let [ctx* (context-with-owner ctx)]
-		(assoc-context! (context-registry-key ctx*) ctx*)
-		(sync-register-context-command! ctx*)
+	(let [ctx* (context-with-owner ctx)
+				session-id (context-store-session-id ctx*)
+				player-uuid (context-store-player-uuid ctx*)]
+		(when (and session-id player-uuid)
+			(command-rt/run-command-in-session!
+			 session-id
+			 player-uuid
+			 {:command :register-context
+				:ctx-id (:id ctx*)
+				:skill-id (:skill-id ctx*)
+				:status (or (:status ctx*) STATUS-CONSTRUCTED)}))
+		(assoc-transport! (context-registry-key ctx*) ctx*)
 		ctx*))
 
 (defn get-context
 	([ctx-id]
 	 (some-> (second (preferred-context-entry nil ctx-id nil))
-				 merge-context-projection))
+				 ctx-proj/merge-store-projection))
 	([owner ctx-id]
 	 (if (vector? ctx-id)
-			 (some-> (get (context-registry-snapshot) ctx-id)
-						 merge-context-projection)
+			 (some-> (get (transport-contexts-snapshot) ctx-id)
+						 ctx-proj/merge-store-projection)
 		 (let [[side session] (route-owner-key owner)]
-				 (some-> (get (context-registry-snapshot) [side session ctx-id])
-							 merge-context-projection)))))
+				 (some-> (get (transport-contexts-snapshot) [side session ctx-id])
+							 ctx-proj/merge-store-projection)))))
 
 (defn get-all-contexts
 	[]
 	(into {}
-			(map (fn [[k v]] [k (merge-context-projection v)]))
-			(context-registry-snapshot)))
-
-(defn update-context-owned!
-	"Update one context using an explicit owner when ctx-id is opaque."
-	[owner ctx-id f & args]
-	(when-let [[key _ctx] (preferred-context-entry owner ctx-id nil)]
-		(apply update-context-if-present! key f args)))
-
-(defn update-context!
-	[ctx-id f & args]
-	(apply update-context-owned! nil ctx-id f args))
+			(map (fn [[k v]] [k (ctx-proj/merge-store-projection v)]))
+			(transport-contexts-snapshot)))
 
 (defn remove-context!
 	([ctx-id]
 	 (remove-context! nil ctx-id))
 	([owner ctx-id]
 	 (if (vector? ctx-id)
-			 (dissoc-context! ctx-id)
+			 (dissoc-transport! ctx-id)
 		 (when-let [[key _ctx] (preferred-context-entry owner ctx-id nil)]
-				 (dissoc-context! key)))))
+				 (dissoc-transport! key)))))
 
 (defn- owner-matches-context?
 	[owner ctx]
@@ -384,11 +336,11 @@
 (defn get-all-contexts-for-player
 	([player-uuid]
 	 (filter #(= player-uuid (:player-uuid %))
-				 (map merge-context-projection (vals (context-registry-snapshot)))))
+				 (map ctx-proj/merge-store-projection (vals (transport-contexts-snapshot)))))
 	([owner player-uuid]
 	 (filter #(and (= player-uuid (:player-uuid %))
 					 (owner-matches-context? owner %))
-			 (map merge-context-projection (vals (context-registry-snapshot))))))
+			 (map ctx-proj/merge-store-projection (vals (transport-contexts-snapshot))))))
 
 (defn snapshot-context-registry []
 	(get-all-contexts))
@@ -403,9 +355,9 @@
 											 (remove (fn [[_ctx-id ctx-map]]
 														 (= owner-key [(context-logical-side ctx-map)
 																				 (context-session-id ctx-map)])))
-											 (:context-registry state))]
+											 (:transport-contexts state))]
 					(-> state
-							(assoc :context-registry filtered-contexts)
+							(assoc :transport-contexts filtered-contexts)
 							(update :client-id-counter dissoc owner-key)
 							(update :server-id-counter dissoc owner-key)))))
 	nil))
@@ -416,7 +368,7 @@
 	(update-dispatcher-state!
 		(fn [state]
 			(-> state
-					(update :context-registry
+					(update :transport-contexts
 							(fn [registry]
 								(into {}
 										(remove (fn [[_ctx-id ctx-map]]
@@ -443,7 +395,7 @@
 	 (update-dispatcher-state!
 		(fn [state]
 			(-> state
-					(assoc :context-registry contexts)
+					(assoc :transport-contexts contexts)
 					(assoc :client-id-counter {})
 					(assoc :server-id-counter {}))))
 	 nil))
@@ -464,14 +416,19 @@
 	 (transition-to-alive! nil ctx-id server-id flush-fn))
 	([owner ctx-id server-id flush-fn]
 	 (when-let [[_key ctx] (preferred-context-entry owner ctx-id :client)]
-		 (when (status-valid-transition? (:status ctx) STATUS-ALIVE)
-			 (update-context-owned! owner ctx-id (fn [c]
-															(let [buffer (:message-buffer c)
-															alive-ctx (context-domain/transition-to-alive c server-id (System/currentTimeMillis))]
-																(when (and flush-fn (seq buffer))
-																	(doseq [msg buffer] (flush-fn msg)))
-																alive-ctx)))
-			 (get-context owner ctx-id)))))
+		 (let [merged (ctx-proj/merge-store-projection ctx)]
+			 (when (status-valid-transition? (:status merged) STATUS-ALIVE)
+				 (run-context-status-command! merged STATUS-ALIVE nil)
+				 (update-transport-if-present!
+					_key
+					(fn [c]
+						(let [buffer (:message-buffer c)
+									alive-transport (context-domain/transition-to-alive
+																	 c server-id (System/currentTimeMillis))]
+							(when (and flush-fn (seq buffer))
+								(doseq [msg buffer] (flush-fn msg)))
+							alive-transport))))
+				 (get-context owner ctx-id)))))
 
 (defn terminate-context!
 	([ctx-id send-terminated-fn]
@@ -480,9 +437,12 @@
 	 (when-let [ctx (or (get-context owner ctx-id)
 									(when (nil? owner) (get-context ctx-id)))]
 		 (when (not= (:status ctx) STATUS-TERMINATED)
-				 (update-context-owned! owner ctx-id context-domain/transition-to-terminated (System/currentTimeMillis))
-				 (when send-terminated-fn
-					(sync-context-status-command! ctx :terminated :dispatcher-terminated))
+			 (run-context-status-command! ctx STATUS-TERMINATED :dispatcher-terminated)
+			 (when-let [[key _transport] (preferred-context-entry owner ctx-id nil)]
+				 (update-transport-if-present!
+					key
+					context-domain/transition-to-terminated
+					(System/currentTimeMillis)))
 			 (when send-terminated-fn
 				 (binding [*context-owner* {:logical-side (context-logical-side ctx)
 													 :session-id (context-session-id ctx)}]
@@ -505,10 +465,12 @@
 	([owner ctx-id preferred-side msg send-fn]
 	 (let [ctx (second (preferred-context-entry owner ctx-id preferred-side))]
 		 (when ctx
-			 (case (:status ctx)
-				 :constructed (update-context-owned! owner ctx-id update :message-buffer conj msg)
-				 :alive (when send-fn (send-fn msg))
-				 nil)))))
+			 (let [merged (ctx-proj/merge-store-projection ctx)]
+				 (case (:status merged)
+					 :constructed (when-let [[key _] (preferred-context-entry owner ctx-id preferred-side)]
+														(update-transport-if-present! key update :message-buffer conj msg))
+					 :alive (when send-fn (send-fn msg))
+					 nil))))))
 
 (defn ctx-send-to-local!
 	([ctx-id channel msg]
@@ -558,16 +520,22 @@
 																				(when-let [f (:to-except-local (route-fns-for-context ctx))]
 																						(f ctx-id (:channel m) (:payload m) ctx)))))))
 (defn ctx-send-to-self! [ctx-id channel msg] (ctx-send-to-local! ctx-id channel msg))
-(defn ctx-on! [ctx-id channel handler-fn] (update-context! ctx-id update-in [:listeners channel] (fnil conj []) handler-fn))
+(defn ctx-on!
+	([ctx-id channel handler-fn]
+	 (ctx-on! nil ctx-id channel handler-fn))
+	([owner ctx-id channel handler-fn]
+	 (when-let [[key _ctx] (preferred-context-entry owner ctx-id nil)]
+		 (update-transport-if-present! key update-in [:listeners channel] (fnil conj []) handler-fn))))
 
 (defn active-context? [ctx]
 	(context-domain/active-context? ctx))
 
 (defn active-contexts
 	([]
-	 (->> (context-registry-snapshot)
-			(filter (fn [[_ctx-id ctx]] (active-context? ctx)))
-			(map (fn [[_key ctx]] [(:id ctx) ctx]))
+	 (->> (transport-contexts-snapshot)
+			(map (fn [[_key ctx]] (ctx-proj/merge-store-projection ctx)))
+			(filter active-context?)
+			(map (fn [ctx] [(:id ctx) ctx]))
 			(into {})))
 	([player-uuid]
 	 (->> (get-all-contexts-for-player player-uuid)

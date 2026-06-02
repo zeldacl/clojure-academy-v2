@@ -46,6 +46,13 @@
              {:message "Legacy callback keys are no longer supported for skills"
               :skill-id id :legacy-key k})))
 
+(defn validate-no-dead-op-vectors!
+  [{:keys [id] :as spec}]
+  (doseq [k [:on-down :on-tick :on-up :ops]]
+    (assert! (not (contains? spec k))
+             {:message "Declarative :ops / :on-* vectors are not executed; use :actions"
+              :skill-id id :dead-key k})))
+
 (defn validate-pattern!
   [{:keys [id pattern] :as _spec}]
   (assert! (keyword? pattern)
@@ -55,7 +62,7 @@
             :skill-id id :pattern pattern :valid-patterns supported-patterns}))
 
 (defn validate-actions!
-  [{:keys [id pattern actions perform ops] :as _spec}]
+  [{:keys [id pattern actions perform] :as _spec}]
   (when (some? actions)
     (assert! (map? actions)
              {:message "Skill :actions must be a map" :skill-id id}))
@@ -65,15 +72,10 @@
               :skill-id id :action-key k}))
   ;; Check required action keys for the given pattern
   (let [required     (get required-action-keys pattern #{})
-        has-ops-for? (fn [action-key]
-                       (case action-key
-                         :perform! (seq perform)
-                         :down!    (or (seq (:down ops)) (seq (:on-down _spec)))
-                         :tick!    (or (seq (:tick ops)) (seq (:on-tick _spec)))
-                         :up!      (or (seq (:up ops))   (seq (:on-up _spec)))
-                         false))
+        has-perform? (fn [action-key]
+                       (and (= action-key :perform!) (seq perform)))
         missing      (seq (remove #(or (contains? (or actions {}) %)
-                                       (has-ops-for? %))
+                                       (has-perform? %))
                                   required))]
     (when missing
       (throw (ex-info "Missing required actions for pattern"
@@ -135,6 +137,7 @@
   Throws ExceptionInfo on the first failure."
   [spec]
   (validate-no-legacy-callbacks! spec)
+  (validate-no-dead-op-vectors! spec)
   (validate-pattern! spec)
   (validate-actions! spec)
   (validate-cooldown! spec)

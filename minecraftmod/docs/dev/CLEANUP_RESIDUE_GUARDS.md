@@ -89,9 +89,9 @@ pure scan guards instead of rereading the same trees.
   and the `scripted-hook-specs` table in `hook_registry_core.clj`; the old
   per-kind wrappers (`effect_hooks`, `ray_hooks`, `marker_hooks`) must stay
   deleted.
-- Block runtime event side-effect helpers live in `cn.li.mcmod.block.events`;
-  `cn.li.mcmod.block.dsl` remains the declaration/preset/query aggregate and
-  must not define `handle-*` runtime event functions.
+- Block runtime event routing now goes through `cn.li.mcmod.block.query` +
+  `cn.li.mcmod.events.dispatcher`; `cn.li.mcmod.block.dsl` remains declaration/query
+  aggregate and must not define `handle-*` runtime event functions.
 - Schema-backed AC block GUIs (`developer`, `imag_fusor`, `phase_gen`,
   `solar_gen`, `wireless_node`, `wireless_matrix`) use
   `cn.li.ac.block.gui.sync` for schema sync/get/apply/close helpers and
