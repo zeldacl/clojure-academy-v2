@@ -10,8 +10,9 @@
       container {:tile-entity :tile-1}]
       (with-redefs [tab-view/wireless-panel-from-main (fn [_] panel)
         net-helpers/tile-pos-payload (fn [_] {:pos-x 1 :pos-y 2 :pos-z 3})
-        tab/install-panel-rebuild! (fn [panel* payload cfg opts]
+        tab/install-panel-rebuild! (fn [panel* owner payload cfg opts]
                      (swap! calls conj {:panel panel*
+            :owner owner
                         :payload payload
                         :cfg cfg
                         :opts opts}))]

@@ -2,7 +2,8 @@
   (:require [cn.li.mcmod.util.log :as log])
   (:import [cn.li.forge1201.integration.saveddata WorldLifecycleSavedData]
            [net.minecraft.nbt CompoundTag]
-           [net.minecraft.world.level Level]
+           [net.minecraft.server.level ServerLevel]
+           [net.minecraft.world.level.storage DimensionDataStorage]
            [java.util.function Function Supplier]))
 
 (defn- id->key
@@ -24,8 +25,8 @@
 
 (defn- get-or-create-saved-data
   ^WorldLifecycleSavedData
-  [^Level level]
-  (let [storage (.getDataStorage level)
+  [^ServerLevel level]
+  (let [^DimensionDataStorage storage (.getDataStorage level)
         loader (reify Function
                  (apply [_ tag] (WorldLifecycleSavedData/load ^CompoundTag tag)))
         creator (reify Supplier
@@ -34,7 +35,7 @@
 
 (defn load-world-lifecycle-saved-data
   "Return saved map of handler-id -> CompoundTag, or nil when empty."
-  [^Level level]
+  [^ServerLevel level]
   (try
     (let [^WorldLifecycleSavedData sd (get-or-create-saved-data level)
           ^CompoundTag handlers (.getHandlers sd)
@@ -49,7 +50,7 @@
 
 (defn save-world-lifecycle-saved-data!
   "Persist handler-id -> CompoundTag map into SavedData. Returns nil."
-  [^Level level saved-map]
+  [^ServerLevel level saved-map]
   (try
     (let [^WorldLifecycleSavedData sd (get-or-create-saved-data level)
           ^CompoundTag handlers (CompoundTag.)]

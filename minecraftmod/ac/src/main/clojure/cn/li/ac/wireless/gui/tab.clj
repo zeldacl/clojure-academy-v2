@@ -6,10 +6,15 @@
   - :generator -> connect a Generator (SolarGen) to a Wireless Node"
   (:require [cn.li.mcmod.gui.cgui-core :as cgui-core]
             [cn.li.mcmod.gui.xml-parser :as cgui-doc]
+            [cn.li.mcmod.gui.container-state :as container-state]
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.ac.wireless.gui.sync.handler :as net-helpers]
             [cn.li.ac.wireless.gui.tab.role-config :as role-config]
             [cn.li.ac.wireless.gui.tab.view :as tab-view]))
+
+(defn- panel-network-owner
+  [container]
+  (container-state/owner-from-container container))
 
 (defn- install-panel-rebuild!
   "Generic rebuild loop for any wireless-panel role.
@@ -17,10 +22,11 @@
   `payload` - base server message payload (tile position)
   `cfg`     - entry from role-config
   `opts`    - optional: {:connected-row-logo-path ...}"
-  [panel payload cfg {:keys [connected-row-logo-path]}]
+  [panel owner payload cfg {:keys [connected-row-logo-path]}]
   (let [{:keys [list-msg disconnect-msg connect-msg name-fn connect-payload-fn]} cfg]
     (letfn [(rebuild! []
               (net-client/send-to-server
+                owner
                 (list-msg)
                 payload
                 (fn [resp]
@@ -31,10 +37,12 @@
                                            :encrypted?-fn (fn [t] (boolean (:is-encrypted? t)))
                                            :disconnect-fn (fn [_linked]
                                                             (net-client/send-to-server
+                                                              owner
                                                               (disconnect-msg) payload
                                                               (fn [_] (rebuild!))))
                                            :connect-fn   (fn [target pass]
                                                            (net-client/send-to-server
+                                                             owner
                                                              (connect-msg)
                                                              (connect-payload-fn payload target pass)
                                                              (fn [_] (rebuild!))))})
@@ -58,10 +66,11 @@
         doc     (tab-view/base-wireless-doc)
         root    (cgui-doc/get-widget doc "main")
         panel   (tab-view/wireless-panel-from-main root)
+        owner   (panel-network-owner container)
         payload (net-helpers/tile-pos-payload (:tile-entity container))]
     (tab-view/setup-panel-logo! root cfg tab-logo-path)
     (when-not defer-initial-rebuild?
-      (install-panel-rebuild! panel payload cfg
+      (install-panel-rebuild! panel owner payload cfg
                               {:connected-row-logo-path connected-row-logo-path}))
     root))
 
@@ -71,10 +80,11 @@
   [main-root container connected-row-logo-path]
   (let [done? (atom false)
         panel (tab-view/wireless-panel-from-main main-root)
+        owner (panel-network-owner container)
         payload (net-helpers/tile-pos-payload (:tile-entity container))]
     (fn []
       (when (compare-and-set! done? false true)
-        (install-panel-rebuild! panel payload (:receiver role-config/role-config)
+        (install-panel-rebuild! panel owner payload (:receiver role-config/role-config)
                                 {:connected-row-logo-path connected-row-logo-path})))))
 
 (defn create-embedded-developer-wireless-panel!
@@ -85,6 +95,7 @@
     (let [doc (tab-view/base-wireless-doc)
           main-root (cgui-doc/get-widget doc "main")
           panel (tab-view/wireless-panel-from-main main-root)
+          owner (panel-network-owner container)
           payload (net-helpers/tile-pos-payload (:tile-entity container))]
       (cgui-core/remove-widget! main-root panel)
       (cgui-core/add-widget! host-widget panel)
@@ -92,6 +103,6 @@
       ;; `panel_wireless` transform is CENTER in XML; wide `parent_right/area` would offset it.
       (cgui-core/set-w-align! panel :left)
       (cgui-core/set-h-align! panel :top)
-      (install-panel-rebuild! panel payload (:receiver role-config/role-config)
+      (install-panel-rebuild! panel owner payload (:receiver role-config/role-config)
                               {:connected-row-logo-path connected-row-logo-path})
       panel)))

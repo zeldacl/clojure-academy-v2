@@ -287,7 +287,7 @@
                         (do
                           (effects/apply-generator-collect-step!
                             node (assoc step :provided provided) gen-cap)
-                          (recur (rest gens-remaining) (:transfer-left step)))
+                          (recur (rest gens-remaining) (double (:transfer-left step))))
                         (recur (rest gens-remaining) transfer-left)))
 
                     (do (remove-generator! conn gen-vb)
