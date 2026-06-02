@@ -4,20 +4,13 @@
             [cn.li.forge1201.setup.consumer-support :as consumer-support]
             [cn.li.mc1201.entity.hooks :as entity-hooks]
             [cn.li.mcmod.util.log :as log])
-  (:import [net.minecraftforge.eventbus.api IEventBus]
-           [net.minecraftforge.fml.event.lifecycle FMLClientSetupEvent FMLCommonSetupEvent]))
+  (:import [net.minecraftforge.eventbus.api IEventBus]))
 
 (def ^:private key-mappings-class-name "net.minecraftforge.client.event.RegisterKeyMappingsEvent")
 
 (defn- add-listener!
   [^IEventBus mod-bus ^Class listener-class f]
   (consumer-support/add-normal-listener! mod-bus listener-class f))
-
-(defn register-common-lifecycle-listeners!
-  [^IEventBus mod-bus on-common-setup on-client-setup]
-  (add-listener! mod-bus FMLCommonSetupEvent on-common-setup)
-  (add-listener! mod-bus FMLClientSetupEvent on-client-setup)
-  nil)
 
 (defn register-client-hooks!
   []

@@ -4,23 +4,25 @@
             [cn.li.fabric1201.integration.events.block :as block-events]
             [cn.li.fabric1201.integration.events.loot :as loot-events]
             [cn.li.fabric1201.integration.events.lifecycle :as lifecycle-events]
+            [cn.li.fabric1201.commands :as commands]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.events.world-lifecycle :as world-lifecycle]
             [cn.li.mcmod.events.world-save-cache :as world-save-cache])
-  (:import [net.fabricmc.fabric.api.event.player UseBlockCallback
-            AttackBlockCallback
-            PlayerBlockBreakEvents$Before]
-           [net.fabricmc.fabric.api.event.lifecycle.v1 ServerWorldEvents$Load
-            ServerWorldEvents$Unload
-            ServerTickEvents$EndTick
-            ServerTickEvents$EndWorldTick]
-           [net.fabricmc.fabric.api.networking.v1 ServerPlayConnectionEvents$Join
-            ServerPlayConnectionEvents$Disconnect]
+  (:import [net.fabricmc.fabric.api.command.v2 CommandRegistrationCallback]
+           [net.fabricmc.fabric.api.loot.v2 LootTableEvents$Modify]
            [net.fabricmc.fabric.api.entity.event.v1 ServerPlayerEvents$CopyFrom
             ServerLivingEntityEvents$AfterDeath
             ServerEntityWorldChangeEvents
             ServerEntityWorldChangeEvents$AfterPlayerChange]
-           [net.fabricmc.fabric.api.loot.v2 LootTableEvents$Modify]))
+           [net.fabricmc.fabric.api.networking.v1 ServerPlayConnectionEvents$Join
+            ServerPlayConnectionEvents$Disconnect]
+           [net.fabricmc.fabric.api.event.lifecycle.v1 ServerWorldEvents$Load
+            ServerWorldEvents$Unload
+            ServerTickEvents$EndTick
+            ServerTickEvents$EndWorldTick]
+           [net.fabricmc.fabric.api.event.player UseBlockCallback
+            AttackBlockCallback
+            PlayerBlockBreakEvents$Before]))
 
 (def ^:private events-registration-lock
   (Object.))
@@ -111,6 +113,11 @@
                  (reify ServerTickEvents$EndTick
                    (onEndTick [_ server]
                      (lifecycle-events/handle-player-tick server))))
+
+      (.register CommandRegistrationCallback/EVENT
+                 (reify CommandRegistrationCallback
+                   (register [_ dispatcher _registry-access _environment]
+                     (commands/register-commands dispatcher))))
 
           (lifecycle-events/install-server-stop-cleanup!)
 

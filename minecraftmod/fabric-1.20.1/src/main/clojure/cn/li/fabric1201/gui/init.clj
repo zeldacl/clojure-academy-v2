@@ -5,7 +5,7 @@
             [cn.li.mc1201.runtime.spi.gui-registry :as registry-api]
             [cn.li.mcmod.gui.registry :as gui]
             [cn.li.fabric1201.adapter.gui-registry :as registry-impl]
-            [cn.li.fabric1201.gui.network :as network]
+            [cn.li.fabric1201.gui.network.server :as network-server]
             [cn.li.mcmod.util.log :as log]))
 
 (def ^:private platform-label "Fabric 1.20.1")
@@ -24,14 +24,15 @@
 (def ^:private server-phase
   {:platform-label platform-label
    :phase-label "Server"
-   :steps [{:run network/init-server!}]})
+   :steps [{:run network-server/init-server!}]})
 
 (def ^:private client-phase
   {:platform-label platform-label
    :phase-label "Client"
    :steps [{:run #(optional-init! 'cn.li.fabric1201.gui.screen-impl/init-client!
                                   "Fabric GUI screen impl not available on current side")}
-           {:run network/init-client!}]})
+           {:run #(optional-init! 'cn.li.fabric1201.gui.network.client/init-client!
+                                  "Fabric GUI client network not available on current side")}]})
 
 (defn init-common! []
   (gui-orchestrator/run-phase! common-phase))
@@ -50,25 +51,6 @@
                        (some? (registry-impl/get-handler-type gui-id))))
         checks gui-checks]
     (gui-orchestrator/verify-checks! "Verifying Fabric GUI system initialization..." checks)))
-
-(defn safe-init-common! []
-  (gui-orchestrator/safe-run-phase! common-phase))
-
-(defn safe-init-client! []
-  (gui-orchestrator/safe-run-phase! client-phase))
-
-(defn safe-init-server! []
-  (gui-orchestrator/safe-run-phase! server-phase))
-
-(defn register-with-fabric-api! []
-  (log/info "Registering with Fabric API events")
-  (log/info "Fabric API event registration complete"))
-
-(defn init-all! []
-  (log/info "=== Full Fabric 1.20.1 GUI Initialization ===")
-  (gui-orchestrator/safe-run-phases! [common-phase server-phase client-phase])
-  (verify-initialization)
-  (log/info "=== Full Fabric 1.20.1 GUI Initialization Complete ==="))
 
 (defn cleanup! []
   (log/info "Cleaning up Fabric GUI system")

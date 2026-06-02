@@ -56,18 +56,6 @@
 (defn registered-effects-snapshot [] (registry-bucket :registered-effects))
 (defn registered-particles-snapshot [] (registry-bucket :registered-particles))
 
-;; compatibility aliases (function values)
-(def registered-blocks registered-blocks-snapshot)
-(def registered-items registered-items-snapshot)
-(def registered-entities registered-entities-snapshot)
-(def registered-block-entities registered-block-entities-snapshot)
-(def registered-fluid-types registered-fluid-types-snapshot)
-(def registered-fluids-source registered-fluids-source-snapshot)
-(def registered-fluids-flowing registered-fluids-flowing-snapshot)
-(def registered-sounds registered-sounds-snapshot)
-(def registered-effects registered-effects-snapshot)
-(def registered-particles registered-particles-snapshot)
-
 (defn register-block! [block-id registered-obj]
 	(registry-put! :registered-blocks block-id registered-obj))
 

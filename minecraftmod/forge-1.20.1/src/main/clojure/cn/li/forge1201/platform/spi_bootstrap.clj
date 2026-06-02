@@ -113,8 +113,7 @@
 (defn init-platform!
   "Initialize Forge 1.20.1 platform implementations.
 
-  NOTE: Protocol extension migration is in progress. This function is kept as the
-  stable entrypoint for Java SPI provider invocation."
+  Stable entrypoint for Java SPI provider invocation."
   []
   (when-not (var-get #'*initialized?*)
     (locking platform-init-guard-lock

@@ -838,13 +838,13 @@ Block DSL 提供了多个辅助函数来生成常见的不规则形状：
 
 ## 与 Forge 注册的关系（当前实现）
 
-**不要**在适配层手写「遍历 `bdsl/get-block-spec` + 手动 `.register`」。Forge 1.20.1 使用 **`cn.li.forge1201.mod/register-all-blocks!`**：
+**不要**在适配层手写「遍历 `bdsl/get-block-spec` + 手动 `.register`」。Forge 1.20.1 统一走 **`cn.li.forge1201.registry.content-registration/register-core-content!`**：
 
 - 对 **`cn.li.mcmod.protocol.metadata/get-all-block-ids`** 返回的每个 id，读取 spec；
 - 按是否需要 **动态 BlockState**、**Scripted BlockEntity**、**多方块** 等，调用 Java 侧 **`invoke-bootstrap-helper`** 工厂（如 `createDynamicStateBlock`、`createCarrierScriptedBlock`）；
 - BlockItem、BlockEntityType 等同理走 metadata。
 
-因此：**内容作者只负责在 `ac` 里 `defblock`（并确保命名空间被 `content-namespaces/load-all!` 加载）**；**注册表代码集中在 `forge1201.mod`**，与旧版「在 mod 里手写 demo 注册」不同。
+因此：**内容作者只负责在 `ac` 里 `defblock`（并确保命名空间被 `content-namespaces/load-all!` 加载）**；**注册表代码集中在 `forge1201.registry.content-registration`**，与旧版「在 mod 里手写 demo 注册」不同。
 
 Fabric 若重新启用子工程，应对齐同一 **`protocol.metadata`** 查询模式，而不是复制旧文档中的 `Registry/register` 片段。
 

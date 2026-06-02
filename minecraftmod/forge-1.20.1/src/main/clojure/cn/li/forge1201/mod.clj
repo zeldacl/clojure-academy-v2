@@ -1,27 +1,17 @@
 (ns cn.li.forge1201.mod
-  "Forge 1.20.1 main mod class - generated with gen-class"
+  "Forge 1.20.1 loader entry implemented via Java @Mod bridge."
   (:require [cn.li.forge1201.integration.bootstrap :as bootstrap]
     [cn.li.forge1201.registry.content-registration :as content-registration]
     [cn.li.forge1201.registry.creative-tab :as creative-tab]
     [cn.li.forge1201.setup.common :as setup-common]
-    [cn.li.forge1201.setup.forge-lifecycle-coordinator :as lifecycle-coordinator]
+    [cn.li.forge1201.setup.lifecycle-init :as lifecycle-init]
     [cn.li.forge1201.integration.side :as side]
     [cn.li.forge1201.registry.state :as registry-state]
-    [cn.li.forge1201.integration.events.interact :as interact-events]
     [cn.li.forge1201.gui.init :as gui-init]
     [cn.li.forge1201.adapter.gui-registry :as gui-registry-impl]
     [cn.li.mcmod.config :as modid]
     [cn.li.mcmod.util.log :as log])
-  (:import [net.minecraftforge.fml.event.lifecycle FMLClientSetupEvent])
-  (:gen-class
-   :name com.example.my_mod1201.MyMod1201Clj
-   :prefix "mod-"
-   :init init
-   :state state
-   :constructors {[] []}
-   :methods [[onRightClickBlock [net.minecraftforge.event.entity.player.PlayerInteractEvent$RightClickBlock] void]
-     [commonSetup [net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent] void]
-     [clientSetup [net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent] void]]))
+  (:import [net.minecraftforge.fml.event.lifecycle FMLClientSetupEvent]))
 
 (defn- current-mod-id
   []
@@ -100,18 +90,6 @@
 (defn particle-types-register []
   (cached-once! #'*particle-types-register* #(bootstrap/create-particle-types-register (current-mod-id))))
 
-;; Storage for registered blocks and items (populated during initialization)
-(def registered-blocks registry-state/registered-blocks)
-(def registered-items registry-state/registered-items)
-(def registered-entities registry-state/registered-entities)
-(def registered-block-entities registry-state/registered-block-entities)
-(def registered-fluid-types registry-state/registered-fluid-types)
-(def registered-fluids-source registry-state/registered-fluids-source)
-(def registered-fluids-flowing registry-state/registered-fluids-flowing)
-(def registered-sounds registry-state/registered-sounds)
-(def registered-effects registry-state/registered-effects)
-(def registered-particles registry-state/registered-particles)
-
 (defn- build-registration-context
   []
   {:mod-id (current-mod-id)
@@ -123,78 +101,9 @@
   :sounds-register (sounds-register)
   :effects-register (effects-register)
   :particle-types-register (particle-types-register)
-   :registered-fluids-source registered-fluids-source
+   :registered-fluids-source registry-state/registered-fluids-source-snapshot
   :base-properties (base-properties)
   :carrier-properties (carrier-properties)})
-
-(defn get-registered-entity-type
-  "Get a registered EntityType by entity-id."
-  [entity-id]
-  (if-let [f (requiring-resolve 'cn.li.forge1201.registry.state/get-registered-entity-type)]
-    (f entity-id)
-    nil))
-
-(defn get-registered-block-entity-type
-  "Get a registered BlockEntityType by tile-id or block-id."
-  [tile-or-block-id]
-  (if-let [f (requiring-resolve 'cn.li.forge1201.registry.state/get-registered-block-entity-type)]
-    (f tile-or-block-id)
-    nil))
-
-;; ============================================================================
-;; Helper Functions for Registry Queries
-;; ============================================================================
-
-(defn get-registered-block
-  "Get a registered block by its DSL ID.
-  
-  Args:
-    block-id: String - DSL block identifier (e.g., \"demo-block\")
-  
-  Returns:
-    RegistryObject - The registered block, or nil if not found"
-  [block-id]
-  (if-let [f (requiring-resolve 'cn.li.forge1201.registry.state/get-registered-block)]
-    (f block-id)
-    nil))
-
-(defn get-registered-item
-  "Get a registered item by its DSL ID.
-  
-  Args:
-    item-id: String - DSL item identifier (e.g., \"demo-item\")
-  
-  Returns:
-    RegistryObject - The registered item, or nil if not found"
-  [item-id]
-  (if-let [f (requiring-resolve 'cn.li.forge1201.registry.state/get-registered-item)]
-    (f item-id)
-    nil))
-
-(defn get-registered-block-item
-  "Get a registered block item by its block ID.
-  
-  Args:
-    block-id: String - DSL block identifier (e.g., \"demo-block\")
-  
-  Returns:
-    RegistryObject - The registered block item, or nil if not found"
-  [block-id]
-  (if-let [f (requiring-resolve 'cn.li.forge1201.registry.state/get-registered-block-item)]
-    (f block-id)
-    nil))
-
-(defn get-registered-fluid-source
-  [fluid-id]
-  (if-let [f (requiring-resolve 'cn.li.forge1201.registry.state/get-registered-fluid-source)]
-    (f fluid-id)
-    nil))
-
-(defn get-registered-fluid-flowing
-  [fluid-id]
-  (if-let [f (requiring-resolve 'cn.li.forge1201.registry.state/get-registered-fluid-flowing)]
-    (f fluid-id)
-    nil))
 
 (defn- registration-steps
   []
@@ -246,7 +155,7 @@
                :clojurephant cphant?
                :ac-check check?
                :compile-files (boolean *compile-files*)})
-    (lifecycle-coordinator/init-lifecycle-with-error-handling!
+    (lifecycle-init/init-lifecycle-with-error-handling!
       {:datagen-run? (datagen-run?)
        :on-common-setup on-common-setup
        :on-client-setup on-client-setup
@@ -262,23 +171,3 @@
       :gui-menu-register (gui-registry-impl/menu-register)}
       (registration-steps)
       aot? cphant? check?)))
-;; (defn start-repl-safe []
-;;   (let [cl (.getContextClassLoader (Thread/currentThread))]
-;;     (nrepl/start-server :port 7888 :handler (nrepl/default-handler))
-;;     ;; 纭繚 REPL 绾跨▼鑳借闂埌 Minecraft 鐨勭被
-;;     (.setContextClassLoader (Thread/currentThread) cl)))
-
-;; ============================================================================
-;; Gen-class Method Implementations
-;; ============================================================================
-
-;; Gen-class method implementations (required by gen-class contract)
-(defn mod-commonSetup [_this event]
-  (on-common-setup event))
-
-(defn mod-clientSetup [_this event]
-  (on-client-setup event))
-
-;; Event handler method (required by gen-class, but not used directly in 1.20.1)
-(defn mod-onRightClickBlock [_this event]
-  (interact-events/handle-right-click-event event))

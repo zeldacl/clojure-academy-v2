@@ -1435,6 +1435,12 @@ tasks.register('verifyDeletedCompatibilityResidues') {
         def deletedFiles = [
             file('forge-1.20.1/src/main/java/cn/li/forge1201/event/ForgeMissingMappingHandler.java'),
             file('forge-1.20.1/src/main/clojure/cn/li/forge1201/integration/events.clj'),
+            file('forge-1.20.1/src/main/clojure/cn/li/forge1201/registry/blocks.clj'),
+            file('forge-1.20.1/src/main/clojure/cn/li/forge1201/registry/items.clj'),
+            file('forge-1.20.1/src/main/clojure/cn/li/forge1201/registry/fluids.clj'),
+            file('forge-1.20.1/src/main/clojure/cn/li/forge1201/registry/entities.clj'),
+            file('forge-1.20.1/src/main/clojure/cn/li/forge1201/registry/forge_dispatch.clj'),
+            file('forge-1.20.1/src/main/clojure/cn/li/forge1201/setup/forge_lifecycle_coordinator.clj'),
             file('mc-1.20.1/src/main/clojure/cn/li/mc1201/runtime/spi_contracts.clj'),
             file('ac/src/main/clojure/cn/li/ac/block/gui/registration.clj'),
             file('ac/src/main/clojure/cn/li/ac/gui/platform_adapter/metadata_api.clj'),
@@ -1480,7 +1486,11 @@ tasks.register('verifyDeletedCompatibilityResidues') {
             'spi_contracts',
             'compatibility facade',
             'minimal bridge for migration',
-            'Compile-unblocking stub'
+            'Compile-unblocking stub',
+            'MyMod1201Clj',
+            'mod-onRightClickBlock',
+            'temporary fallback',
+            'fluid-backed block falls back'
         ]
         fileTree(project.rootDir) {
             include 'mc-1.20.1/src/main/**/*.clj', 'mc-1.20.1/src/main/**/*.java'
@@ -2058,7 +2068,6 @@ tasks.register('verifyGuiNetworkTransportBoundaries') {
         def sharedRegistryCommon = file('mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/registry/common.clj')
         def deletedTopLevelPacket = file('mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/network_packet_base.clj')
         def forgeNetwork = file('forge-1.20.1/src/main/clojure/cn/li/forge1201/gui/network.clj')
-        def fabricNetwork = file('fabric-1.20.1/src/main/clojure/cn/li/fabric1201/gui/network.clj')
         def fabricSharedNetwork = file('fabric-1.20.1/src/main/clojure/cn/li/fabric1201/gui/network/shared.clj')
         def fabricServerNetwork = file('fabric-1.20.1/src/main/clojure/cn/li/fabric1201/gui/network/server.clj')
         def fabricClientNetwork = file('fabric-1.20.1/src/main/clojure/cn/li/fabric1201/gui/network/client.clj')
@@ -2071,7 +2080,7 @@ tasks.register('verifyGuiNetworkTransportBoundaries') {
             violations << 'Top-level GUI network packet namespace must stay deleted; use cn.li.mc1201.gui.network.packet'
         }
 
-        [sharedPacket, sharedRegistryCommon, forgeNetwork, fabricNetwork, fabricSharedNetwork, fabricServerNetwork, fabricClientNetwork, forgeGuiRegistry, fabricGuiRegistry, fabricProviderBridge].each { File f ->
+        [sharedPacket, sharedRegistryCommon, forgeNetwork, fabricSharedNetwork, fabricServerNetwork, fabricClientNetwork, forgeGuiRegistry, fabricGuiRegistry, fabricProviderBridge].each { File f ->
             if (!f.exists()) {
                 violations << "Required GUI network file missing: ${project.rootDir.toPath().relativize(f.toPath()).toString().replace('\\', '/')}"
             }
@@ -2121,33 +2130,6 @@ tasks.register('verifyGuiNetworkTransportBoundaries') {
             ['registry-common/create-wrapped-container', '.readBlockPos'].each { token ->
                 if (forgeRegistryText.contains(token)) {
                     violations << "forge1201.adapter.gui-registry must not inline shared GUI registry flow, found ${token}"
-                }
-            }
-        }
-
-        if (fabricNetwork.exists()) {
-            def fabricText = fabricNetwork.getText('UTF-8')
-            if (fabricText.contains('cn.li.ac.config.modid')) {
-                violations << 'fabric1201.gui.network must use platform-neutral cn.li.mcmod.config for mod-id'
-            }
-            if (fabricText.contains('cn.li.mc1201.gui.network-packet-base')) {
-                violations << 'fabric1201.gui.network must require cn.li.mc1201.gui.network.packet'
-            }
-            if (!fabricText.contains('cn.li.fabric1201.gui.network.server')) {
-                violations << 'fabric1201.gui.network facade must delegate server transport to cn.li.fabric1201.gui.network.server'
-            }
-            if (!fabricText.contains("requiring-resolve 'cn.li.fabric1201.gui.network.client/init-client!")) {
-                violations << 'fabric1201.gui.network facade must lazy-load cn.li.fabric1201.gui.network.client/init-client!'
-            }
-            ['net.minecraft.client.Minecraft',
-             'ClientPlayNetworking',
-             'ServerPlayNetworking',
-             'registerGlobalReceiver',
-             'packet-base/request-map',
-             'packet-base/response-map',
-             'packet-base/push-map'].each { token ->
-                if (fabricText.contains(token)) {
-                    violations << "fabric1201.gui.network facade must remain thin and side-neutral: ${token}"
                 }
             }
         }

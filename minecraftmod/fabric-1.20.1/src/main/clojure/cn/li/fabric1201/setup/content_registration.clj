@@ -58,9 +58,9 @@
                          (FabricBootstrapHelper/createPlainBlock base-properties)
 
                          fluid-id
-                         (do
-                           (log/warn "Fabric block registration: fluid-backed block falls back to plain block until fluid chain is wired" {:block-id block-id :fluid-id fluid-id})
-                           (FabricBootstrapHelper/createPlainBlock base-properties))
+                         (throw (ex-info "Fabric fluid-backed block registration not wired"
+                                         {:block-id block-id
+                                          :fluid-id fluid-id}))
 
                          (and needs-dynamic-properties? has-be?)
                          (let [props (get-props block-id)]

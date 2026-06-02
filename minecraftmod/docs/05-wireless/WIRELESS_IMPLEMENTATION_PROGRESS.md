@@ -1518,8 +1518,8 @@ root (176×200)
   - `init-server!`: 注册服务端网络包
   - `init-client!`: 注册 Screen + 客户端网络包
   - `verify-initialization`: 验证 handler types
-  - `safe-init-*`: 带错误处理
-  - `register-with-fabric-api!`: Fabric事件系统集成
+- `safe-init-*`: 带错误处理（旧接口，已清理）
+- Fabric 事件通过统一 `integration/events/register-events` 注册
   - `cleanup!`: 资源清理
 
 **架构特点：**

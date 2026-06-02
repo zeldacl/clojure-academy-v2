@@ -6,16 +6,28 @@
             [cn.li.fabric1201.runtime.entity-damage :as runtime-entity-damage]
             [cn.li.fabric1201.runtime.entity-motion :as runtime-entity-motion]
             [cn.li.fabric1201.runtime.entity-query :as runtime-entity-query]
-            [cn.li.fabric1201.runtime.raycast :as runtime-raycast]
             [cn.li.fabric1201.runtime.world-effects :as runtime-world-effects]
-            [cn.li.fabric1201.runtime.teleportation :as runtime-teleportation]
-            [cn.li.fabric1201.runtime.named-position-store :as runtime-position-store]
-            [cn.li.fabric1201.runtime.potion-effects :as runtime-potion-effects]
-            [cn.li.fabric1201.runtime.interop :as runtime-interop]
             [cn.li.fabric1201.runtime.block-manipulation :as runtime-block-manipulation]
             [cn.li.fabric1201.adapter.network :as runtime-network]
+            [cn.li.fabric1201.adapter.server-context :as server-context]
             [cn.li.mc1201.runtime.adapter-registry :as adapter-registry]
+            [cn.li.mc1201.runtime.adapter-support :as adapter-support]
+            [cn.li.mc1201.runtime.interop-core :as interop-core]
+            [cn.li.mc1201.runtime.raycast-core :as raycast-core]
+            [cn.li.mc1201.runtime.teleportation-core :as teleportation-core]
+            [cn.li.mc1201.runtime.named-position-store-core :as named-position-store-core]
+            [cn.li.mc1201.runtime.potion-effects-core :as potion-effects-core]
+            [cn.li.mcmod.platform.raycast :as prc]
+            [cn.li.mcmod.platform.teleportation :as ptp]
+            [cn.li.mcmod.platform.named-position-store :as pstore]
+            [cn.li.mcmod.platform.potion-effects :as ppe]
             [cn.li.mcmod.hooks.core :as power-runtime]))
+
+(defn- install-bound-adapter!
+  [adapter-var create-adapter label]
+  (adapter-support/install-adapter! adapter-var
+                                    (create-adapter server-context/get-server)
+                                    label))
 
 (def runtime-install-steps
   [(adapter-registry/step :damage-interception runtime-damage-interception/install-damage-interception!)
@@ -24,12 +36,25 @@
    (adapter-registry/step :entity-damage runtime-entity-damage/install-entity-damage!)
    (adapter-registry/step :entity-motion runtime-entity-motion/install-entity-motion!)
    (adapter-registry/step :entity-query runtime-entity-query/install-entity-query!)
-   (adapter-registry/step :raycast runtime-raycast/install-raycast!)
+   (adapter-registry/step :raycast
+                          #(install-bound-adapter! #'prc/*raycast*
+                                                   raycast-core/create-raycast
+                                                   "Fabric raycast"))
    (adapter-registry/step :world-effects runtime-world-effects/install-world-effects!)
-   (adapter-registry/step :teleportation runtime-teleportation/install-teleportation!)
-  (adapter-registry/step :named-position-store runtime-position-store/install-named-position-store!)
-   (adapter-registry/step :potion-effects runtime-potion-effects/install-potion-effects!)
-   (adapter-registry/step :runtime-interop runtime-interop/install-runtime-interop!)
+   (adapter-registry/step :teleportation
+                          #(install-bound-adapter! #'ptp/*teleportation*
+                                                   teleportation-core/create-teleportation
+                                                   "Fabric teleportation"))
+  (adapter-registry/step :named-position-store
+                         #(install-bound-adapter! #'pstore/*named-position-store*
+                                                  named-position-store-core/create-named-position-store
+                                                  "Fabric named position store"))
+   (adapter-registry/step :potion-effects
+                          #(install-bound-adapter! #'ppe/*potion-effects*
+                                                   potion-effects-core/create-potion-effects
+                                                   "Fabric potion effects"))
+   (adapter-registry/step :runtime-interop
+                          #(interop-core/install-runtime-interop! "Fabric" server-context/get-server))
    (adapter-registry/step :block-manipulation runtime-block-manipulation/install-block-manipulation!)
    (adapter-registry/step :network runtime-network/init!)
    (adapter-registry/step :damage-handlers power-runtime/init-damage-handlers!)])

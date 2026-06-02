@@ -61,7 +61,7 @@
    - 按 GUI id 注册 screen factory（依赖上一步 DSL 已加载）；
    - 事件分发在运行时通过 `block.query` 直接查询 `BlockSpec :events`；
    - **`hooks/call-all-network-handlers!`** 等。
-4. Forge **注册阶段**（如 **`cn.li.forge1201.mod/register-all-blocks!`**）：只对 **`protocol.metadata`** 暴露的 id 循环，按 metadata 选择 `DynamicStateBlock`、`ScriptedBlock`、多方块等 Java 工厂；**`register-block-entities!`** 按 **tile-id** 聚合 BlockEntityType；**`register-all-items!`** 同理。
+4. Forge **注册阶段**（由 **`cn.li.forge1201.registry.content-registration/register-core-content!`** 统一驱动）：只对 **`protocol.metadata`** 暴露的 id 循环，按 metadata 选择 `DynamicStateBlock`、`ScriptedBlock`、多方块等 Java 工厂；**`register-block-entities!`** 按 **tile-id** 聚合 BlockEntityType；**`register-all-items!`** 同理。
 
 ---
 
