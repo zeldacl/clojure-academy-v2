@@ -1,13 +1,6 @@
 (ns cn.li.mcmod.platform.item
-  "Platform-agnostic ItemStack abstraction layer.
-  
-  Supports Forge 1.20.1 and Fabric 1.20.1 modern APIs.
-  
-  Design:
-  - ItemStack objects are passed from platform layer (not created in core)
-  - Protocols extended directly to Minecraft's ItemStack classes
-  - Core code uses protocol methods instead of direct Java calls
-  - Factory function for creating ItemStack from NBT")
+  "Platform-agnostic ItemStack abstraction layer."
+  (:require [cn.li.mcmod.platform.runtime :as prt]))
 
 ;; ============================================================================
 ;; ItemStack Protocol
@@ -71,32 +64,21 @@
 ;; Platform Factory Registration
 ;; ============================================================================
 
-(defonce ^{:dynamic true
-           :doc "Platform-specific ItemStack factory function.
-                 
-                 Must be initialized by platform code before core code runs.
-                 
-                 Expected signature: (fn [nbt-compound] -> IItemStack)
-                 
-                 Platform implementations:
-                 - Forge 1.20.1: ItemStack.of(nbt)
-                 - Fabric 1.20.1: ItemStack.fromNbt(nbt)
-                 
-                 Example platform initialization:
-                 (alter-var-root #'cn.li.mcmod.platform.item/*item-factory*
-                   (constantly (fn [nbt] (ItemStack/of nbt))))"}
-  *item-factory*
+(def ^:private ^:dynamic *item-factory* nil)
+(def ^:private ^:dynamic *item-stack-resolver* nil)
+
+(defn install-item-factories!
+  [{:keys [item-factory item-stack-resolver] :as factories} label]
+  (when item-factory
+    (prt/install-impl! #'*item-factory* item-factory (str (or label "item") "-factory")))
+  (when item-stack-resolver
+    (prt/install-impl! #'*item-stack-resolver* item-stack-resolver (str (or label "item") "-resolver")))
   nil)
 
-  (defonce ^{:dynamic true
-         :doc "Platform-specific ItemStack resolver by registry id.
-
-           Expected signature: (fn [item-id count] -> IItemStack-or-nil)
-
-           item-id format: \"namespace:path\".
-           count should be positive integer."}
-    *item-stack-resolver*
-    nil)
+(defn call-with-item-factories [factories f]
+  (binding [*item-factory* (or (:item-factory factories) *item-factory*)
+            *item-stack-resolver* (or (:item-stack-resolver factories) *item-stack-resolver*)]
+    (f)))
 
 ;; ============================================================================
 ;; Factory Functions

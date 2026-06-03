@@ -63,10 +63,10 @@
 																							:ttl life :max-ttl life
 																							:is-aoe? true})))))
 													vec)
-						store** (update store* :arcs update owner-key* (fnil into []) (into main-arcs aoe-arcs))]
+						store* (update store* :arcs update owner-key* (fnil into []) (into main-arcs aoe-arcs))]
 				(client-sounds/queue-current-sound-effect!
 					{:type :sound :sound-id "my_mod:em.arc_strong" :volume 0.6 :pitch 1.0})
-				store**))))
+				store*))))
 
 (defn- tick-state!
 	[store]

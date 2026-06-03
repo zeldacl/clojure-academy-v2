@@ -1,5 +1,6 @@
 (ns cn.li.mcmod.platform.integration-runtime
-  "Platform-neutral bridge for optional content integrations such as JEI and CraftTweaker.")
+  "Platform-neutral bridge for optional content integrations such as JEI and CraftTweaker."
+  (:require [cn.li.mcmod.platform.runtime :as prt]))
 
 (defn- default-integration-runtime-state []
   {:jei-get-all-categories (fn [] [])
@@ -27,7 +28,15 @@
 
 (defn register-integration-hooks!
   [hooks]
-  (swap! (integration-hooks-atom) merge hooks)
+  (doseq [[k v] hooks]
+    (prt/register-hook! (integration-hooks-atom) k v
+                        :duplicate-policy :same-value-idempotent
+                        :label "integration-runtime"))
+  nil)
+
+(defn reset-integration-hooks-for-test!
+  []
+  (reset! (integration-hooks-atom) (default-integration-runtime-state))
   nil)
 
 (defn jei-get-all-categories

@@ -295,12 +295,12 @@
 
 ;; This dispatcher provides:
 ;;
-;; 1. **Metadata-Driven Dispatch**:
+;; 1. **Metadata-Driven Dispatch*:
 ;;    - Uses GUI registry to look up handlers by container predicate
 ;;    - No hardcoded type checks or cond branching needed
 ;;    - Extensible: new container types register metadata through the GUI registry
 ;;
-;; 2. **Unified Interface**:
+;; 2. **Unified Interface*:
 ;;    - tick-container! - Lifecycle tick
 ;;    - validate-container - Permission check
 ;;    - sync-container! - Data synchronization
@@ -308,14 +308,14 @@
 ;;    - handle-text-input! - Text field interactions
 ;;    - close-container! - Cleanup on close
 ;;
-;; 3. **Slot Operations**:
+;; 3. **Slot Operations*:
 ;;    - slot-count, slot-get-item, slot-set-item!
 ;;    - slot-can-place?, slot-changed!
 ;;
-;; 4. **Type Queries**:
+;; 4. **Type Queries*:
 ;;    - get-container-type: returns :gui-type from metadata
 ;;
-;; 5. **Error Handling**:
+;; 5. **Error Handling*:
 ;;    - safe-* wrappers catch exceptions
 ;;    - Return sensible defaults on error
 ;;    - Log errors for debugging

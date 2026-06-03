@@ -24,7 +24,8 @@
         (log/info "Fabric entity query already installed, skipping")
         (do
           (server-context/install-server-context!)
-          (alter-var-root #'pentity/*entity-get-type-id-fn*
-                          (constantly (core/create-entity-type-id-fn get-server)))
+          (pentity/install-entity-type-id-fn!
+            (core/create-entity-type-id-fn get-server)
+            "Fabric entity query")
           (alter-var-root #'*installed?* (constantly true))
           (log/info "Fabric entity query installed"))))))

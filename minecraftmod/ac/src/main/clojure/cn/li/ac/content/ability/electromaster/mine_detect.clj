@@ -53,9 +53,8 @@
     (let [exp       (skill-exp player-id)
           range     (scan-range exp)
           advanced? (advanced-mode? player-id exp)]
-      (when potion-effects/*potion-effects*
-        (potion-effects/apply-potion-effect!
-          potion-effects/*potion-effects*
+      (when (potion-effects/available?)
+        (potion-effects/apply-potion-effect!*
           player-id :blindness
           (cfg-int :effect.blindness-duration-ticks)
           (cfg-int :effect.blindness-amplifier)))

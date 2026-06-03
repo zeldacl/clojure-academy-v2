@@ -14,24 +14,16 @@
     {:ctx* ctx*
      :listeners* listeners*
      :get-context (fn [_] @ctx*)
-     :replace-skill-state-root! (fn [_ state-map]
-                                  (swap! ctx* assoc :skill-state state-map)
-                                  nil)
-     :assoc-skill-state! (fn [_ k v]
-                           (swap! ctx* assoc-in (into [:skill-state] (if (vector? k) k [k])) v)
-                           nil)
      :update-skill-state-root! (fn [_ f & args]
-                                 (swap! ctx* update :skill-state (fn [ss] (apply f (or ss {}) args))))
+                        (swap! ctx* update :skill-state (fn [ss] (apply f (or ss {}) args))))
      :ctx-on! (fn [_ channel handler]
                 (swap! listeners* assoc channel handler)
                 nil)}))
 
 (deftest flashing-activate-registers-movement-listeners-test
-  (let [{:keys [ctx* listeners* get-context replace-skill-state-root! assoc-skill-state! update-skill-state-root! ctx-on!]}
+  (let [{:keys [ctx* listeners* get-context update-skill-state-root! ctx-on!]}
         (make-context-mocks {:player-uuid "p1" :skill-id :flashing :skill-state {}})]
     (with-redefs [ctx/get-context get-context
-                  ctx-skill/replace-skill-state-root! replace-skill-state-root!
-                  ctx-skill/assoc-skill-state! assoc-skill-state!
                   ctx-skill/update-skill-state-root! update-skill-state-root!
                   ctx/ctx-on! ctx-on!
                   helper/skill-exp (fn [_ _] 0.5)
@@ -51,7 +43,7 @@
     (is (contains? @listeners* :flashing/move-up))))
 
 (deftest flashing-movement-up-performs-teleport-and-effects-test
-  (let [{:keys [listeners* get-context replace-skill-state-root! assoc-skill-state! update-skill-state-root! ctx-on!]}
+  (let [{:keys [listeners* get-context update-skill-state-root! ctx-on!]}
         (make-context-mocks {:player-uuid "p1" :skill-id :flashing :skill-state {}})
         teleports* (atom [])
         resources* (atom [])
@@ -60,8 +52,6 @@
         ach* (atom [])
         reset-fall* (atom [])]
     (with-redefs [ctx/get-context get-context
-                  ctx-skill/replace-skill-state-root! replace-skill-state-root!
-                  ctx-skill/assoc-skill-state! assoc-skill-state!
                   ctx-skill/update-skill-state-root! update-skill-state-root!
                   ctx/ctx-on! ctx-on!
                   ctx/terminate-context! (fn [& _] nil)
@@ -115,12 +105,10 @@
     (is (some #(= :flashing/fx-perform (second %)) @fx*))))
 
 (deftest flashing-timeout-terminates-on-movement-event-test
-  (let [{:keys [ctx* listeners* get-context replace-skill-state-root! assoc-skill-state! update-skill-state-root! ctx-on!]}
+  (let [{:keys [ctx* listeners* get-context update-skill-state-root! ctx-on!]}
         (make-context-mocks {:player-uuid "p1" :skill-id :flashing :skill-state {}})
         terminated* (atom [])]
     (with-redefs [ctx/get-context get-context
-                  ctx-skill/replace-skill-state-root! replace-skill-state-root!
-                  ctx-skill/assoc-skill-state! assoc-skill-state!
                   ctx-skill/update-skill-state-root! update-skill-state-root!
                   ctx/ctx-on! ctx-on!
                   ctx/terminate-context! (fn [ctx-id _]
@@ -141,12 +129,10 @@
     (is (= ["ctx-1"] @terminated*))))
 
 (deftest flashing-block-hit-resolution-applies-side-and-head-correction-test
-  (let [{:keys [listeners* get-context replace-skill-state-root! assoc-skill-state! update-skill-state-root! ctx-on!]}
+  (let [{:keys [listeners* get-context update-skill-state-root! ctx-on!]}
         (make-context-mocks {:player-uuid "p1" :skill-id :flashing :skill-state {}})
         fx* (atom [])]
     (with-redefs [ctx/get-context get-context
-                  ctx-skill/replace-skill-state-root! replace-skill-state-root!
-                  ctx-skill/assoc-skill-state! assoc-skill-state!
                   ctx-skill/update-skill-state-root! update-skill-state-root!
                   ctx/ctx-on! ctx-on!
                   ctx/terminate-context! (fn [& _] nil)

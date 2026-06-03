@@ -50,8 +50,8 @@
           damage   (cfg-lerp :combat.damage exp)
           world-id (geom/world-id-of player-id)
           eye      (geom/eye-pos player-id)
-          look-vec (when raycast/*raycast*
-                     (raycast/get-player-look-vector raycast/*raycast* player-id))]
+          look-vec (when (raycast/available?)
+                     (raycast/get-player-look-vector* player-id))]
       (when look-vec
         (when player
           (entity/player-spawn-entity-by-id!

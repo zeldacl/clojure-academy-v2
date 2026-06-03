@@ -1,5 +1,6 @@
 (ns cn.li.mcmod.platform.energy-integration
-	"Platform-neutral bridge for energy integration settings.")
+	"Platform-neutral bridge for energy integration settings."
+	(:require [cn.li.mcmod.platform.runtime :as prt]))
 
 (defn- default-energy-integration-state []
 	{:forge-energy-conversion-rate (fn [] 1.0)
@@ -25,7 +26,15 @@
 
 (defn register-energy-integration-hooks!
 	[hooks]
-	(swap! (energy-hooks-atom) merge hooks)
+	(doseq [[k v] hooks]
+		(prt/register-hook! (energy-hooks-atom) k v
+		                    :duplicate-policy :same-value-idempotent
+		                    :label "energy-integration"))
+	nil)
+
+(defn reset-energy-integration-hooks-for-test!
+	[]
+	(reset! (energy-hooks-atom) (default-energy-integration-state))
 	nil)
 
 (defn forge-energy-conversion-rate

@@ -28,6 +28,26 @@
    :channel channel
    :owner-key [:ctx ctx-id]})
 
+(deftest init-registers-owner-aware-meltdowner-fx-test
+  (let [registered-level* (atom nil)
+        registered-handler* (atom nil)]
+    (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
+                                                         (reset! registered-level* [effect-id effect-map])
+                                                         nil)
+                  fx-registry/register-fx-channels! (fn [channels handler]
+                                                      (reset! registered-handler* {:channels channels
+                                                                                   :handler handler})
+                                                      nil)]
+      (md-fx/init!)
+      (is (= :meltdowner (first @registered-level*)))
+      (is (fn? (:enqueue-state-fn (second @registered-level*))))
+      (is (= #{:meltdowner/fx-start
+               :meltdowner/fx-update
+               :meltdowner/fx-end
+               :meltdowner/fx-perform
+               :meltdowner/fx-reflect}
+             (set (:channels @registered-handler*)))))))
+
 (deftest fx-handler-routes-meltdowner-channels-test
   (let [handler* (atom nil)
         enqueued* (atom [])]

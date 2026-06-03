@@ -1,18 +1,6 @@
 (ns cn.li.mcmod.platform.nbt
-  "Platform-agnostic NBT (Named Binary Tag) abstraction layer.
-  
-  This namespace provides protocols and factory functions for NBT operations
-  without depending on any specific Minecraft version or mod loader.
-  
-  Platform implementations (forge-1.20.1, forge-1.16.5, fabric-1.20.1) extend
-  these protocols to their concrete NBT types and register factory functions
-  during platform initialization.
-  
-  Design:
-  - Protocols define operations independent of platform classes
-  - Dynamic var *nbt-factory* holds platform-specific constructors
-  - Platform code uses extend-type to add protocol implementations
-  - Core code uses protocols + factories, never imports engine-specific classes")
+  "Platform-agnostic NBT (Named Binary Tag) abstraction layer."
+  (:require [cn.li.mcmod.platform.runtime :as prt]))
 
 ;; ============================================================================
 ;; NBT Compound Protocol
@@ -95,28 +83,26 @@
 ;; Platform Factory Registration
 ;; ============================================================================
 
-(defonce ^{:dynamic true
-           :doc "Platform-specific NBT factory functions.
-         
-         Must be initialized by platform code before core code runs.
-         
-         Expected keys:
-         - :create-compound - fn [] -> INBTCompound
-         - :create-list     - fn [] -> INBTList
-         
-         Example platform initialization:
-        (alter-var-root #'cn.li.mcmod.platform.nbt/*nbt-factory*
-                 (constantly {:create-compound #(CompoundTag.)
-                              :create-list #(ListTag.)}))"}
-  *nbt-factory*
-  nil)
+(def ^:private ^:dynamic *nbt-factory* nil)
+(def ^:private ^:dynamic *nbt-has-key-fn* nil)
 
-(defonce ^{:dynamic true
-           :doc "Optional platform override for nbt-has-key? (fn [nbt key] -> boolean).
+(defn install-nbt-factory!
+  [factory-map label]
+  (prt/install-impl! #'*nbt-factory* factory-map (or label "nbt-factory")))
 
-Set by platform bootstrap to avoid protocol dispatch timing issues during early init."}
-  *nbt-has-key-fn*
-  nil)
+(defn install-nbt-has-key-fn!
+  [f label]
+  (prt/install-impl! #'*nbt-has-key-fn* f (or label "nbt-has-key")))
+
+(defn call-with-nbt-factory [factory-map f]
+  (binding [*nbt-factory* factory-map] (f)))
+
+(defn call-with-nbt-runtime
+  "Test/install helper binding factory map and optional has-key fn."
+  [{:keys [factory has-key-fn]} f]
+  (binding [*nbt-factory* factory
+            *nbt-has-key-fn* has-key-fn]
+    (f)))
 
 ;; ============================================================================
 ;; Factory Functions

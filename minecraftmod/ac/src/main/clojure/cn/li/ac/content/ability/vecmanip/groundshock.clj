@@ -52,8 +52,8 @@
   (skill-config/tunable-boolean groundshock-skill-id field-id))
 
 (defn- horizontal-look [player-id]
-  (when-let [look-vec (and raycast/*raycast*
-                           (raycast/get-player-look-vector raycast/*raycast* player-id))]
+  (when-let [look-vec (and (raycast/available?)
+                           (raycast/get-player-look-vector* player-id))]
     (let [flat {:x (double (:x look-vec))
                 :y 0.0
                 :z (double (:z look-vec))}
@@ -123,7 +123,7 @@
 
 (defn- set-skill-state-root!
   [ctx-id state-map]
-  (ctx-skill/replace-skill-state-root! ctx-id state-map))
+  (ctx-skill/update-skill-state-root! ctx-id identity state-map))
 
 (defn- clear-skill-state!
   [ctx-id]
@@ -132,8 +132,8 @@
 (defn- get-player-position
   "Get player position from teleportation protocol."
   [player-id]
-  (when teleportation/*teleportation*
-    (teleportation/get-player-position teleportation/*teleportation* player-id)))
+  (when (teleportation/available?)
+    (teleportation/get-player-position* player-id)))
 
 (defn- entity-overlaps-shock-box?
   [entity bx by bz]
@@ -153,25 +153,25 @@
 
 (defn- break-with-force!
   [player-id world-id x y z drop? energy* block-drop-rate broken-blocks*]
-  (when (and block-manip/*block-manipulation*
-             (block-manip/can-break-block? block-manip/*block-manipulation* player-id world-id x y z))
-    (let [hardness (block-manip/get-block-hardness block-manip/*block-manipulation* world-id x y z)
-          block-id (block-manip/get-block block-manip/*block-manipulation* world-id x y z)]
+  (when (and (block-manip/available?)
+             (block-manip/can-break-block?* player-id world-id x y z))
+    (let [hardness (block-manip/get-block-hardness* world-id x y z)
+          block-id (block-manip/get-block* world-id x y z)]
       (when (and block-id
                  (number? hardness)
                  (>= (double hardness) 0.0)
                  (>= @energy* (double hardness))
-                 (not (block-manip/farmland-block? block-manip/*block-manipulation* world-id x y z))
-                 (not (block-manip/liquid-block? block-manip/*block-manipulation* world-id x y z)))
+                 (not (block-manip/farmland-block?* world-id x y z))
+                 (not (block-manip/liquid-block?* world-id x y z)))
         (swap! energy* - (double hardness))
-        (when (block-manip/break-block! block-manip/*block-manipulation*
+        (when (block-manip/break-block!*
                                         player-id
                                         world-id
                                         x y z
                                         (and drop? (< (rand) block-drop-rate)))
           (swap! broken-blocks* conj [x y z])
-          (when world-effects/*world-effects*
-            (world-effects/play-sound! world-effects/*world-effects*
+          (when (world-effects/available?)
+            (world-effects/play-sound!*
                                        world-id
                                        (+ (double x) 0.5)
                                        (+ (double y) 0.5)
@@ -217,14 +217,14 @@
                  (true? (:living? entity))
                  (not (contains? @affected-entities* entity-id))
                  (entity-overlaps-shock-box? entity bx by bz))
-        (when entity-damage/*entity-damage*
-          (entity-damage/apply-direct-damage! entity-damage/*entity-damage*
+        (when (entity-damage/available?)
+          (entity-damage/apply-direct-damage!*
                                               world-id
                                               entity-id
                                               damage
                                               :generic))
-        (when entity-motion/*entity-motion*
-          (entity-motion/add-velocity! entity-motion/*entity-motion*
+        (when (entity-motion/available?)
+          (entity-motion/add-velocity!*
                                        world-id
                                        entity-id
                                        0.0
@@ -245,8 +245,8 @@
           {:x x
            :y y
            :z z
-           :block-id (or (and block-manip/*block-manipulation*
-                              (block-manip/get-block block-manip/*block-manipulation* world-id x y z))
+           :block-id (or (and (block-manip/available?)
+                              (block-manip/get-block* world-id x y z))
                          "minecraft:stone")})
         positions))
 
@@ -280,8 +280,8 @@
         (let [block-x (int (Math/floor x))
               block-y (int (Math/floor start-y))
               block-z (int (Math/floor z))
-              candidate-entities (when world-effects/*world-effects*
-                                   (world-effects/find-entities-in-aabb world-effects/*world-effects*
+              candidate-entities (when (world-effects/available?)
+                                   (world-effects/find-entities-in-aabb*
                                      world-id
                                      (- x (+ entity-search-radius 3.0))
                                      (- block-y 2.0)
@@ -296,20 +296,20 @@
                     bz (int (Math/floor (+ z (:z delta))))
                     pos-key [bx by bz]]
                 (when-not (contains? @affected-blocks* pos-key)
-                  (when-let [block-id (and block-manip/*block-manipulation*
-                                           (block-manip/get-block block-manip/*block-manipulation*
+                  (when-let [block-id (and (block-manip/available?)
+                                           (block-manip/get-block*
                                                                   world-id bx by bz))]
                     (swap! affected-blocks* conj pos-key)
                     (case block-id
                       "minecraft:stone"
                       (do
-                        (block-manip/set-block! block-manip/*block-manipulation*
+                        (block-manip/set-block!*
                                                 world-id bx by bz "minecraft:cobblestone")
                         (swap! energy* - (propagation-energy-cost block-id)))
 
                       "minecraft:grass_block"
                       (do
-                        (block-manip/set-block! block-manip/*block-manipulation*
+                        (block-manip/set-block!*
                                                 world-id bx by bz "minecraft:dirt")
                         (swap! energy* - (propagation-energy-cost block-id)))
 
@@ -335,7 +335,7 @@
 (defn- break-mastery-ring!
   [player-id world-id player-pos exp broken-blocks*]
   (when (and (>= (exp01 exp) (cfg-double :breaking.mastery-exp-threshold))
-             block-manip/*block-manipulation*)
+             (block-manip/available?))
     (let [energy* (atom Double/MAX_VALUE)
           x0 (int (double (:x player-pos)))
           y0 (int (double (:y player-pos)))
@@ -343,7 +343,7 @@
       (doseq [x (range (- x0 (cfg-int :breaking.mastery-radius)) (+ x0 (cfg-int :breaking.mastery-radius)))
               y (range (- y0 1) (+ y0 1))
           z (range (- z0 (cfg-int :breaking.mastery-radius)) (+ z0 (cfg-int :breaking.mastery-radius)))]
-        (when-let [hardness (block-manip/get-block-hardness block-manip/*block-manipulation* world-id x y z)]
+        (when-let [hardness (block-manip/get-block-hardness* world-id x y z)]
           (when (and (number? hardness)
              (<= (double hardness) (cfg-double :breaking.mastery-hardness-cap)))
             (break-with-force! player-id world-id x y z true energy* 1.0 broken-blocks*)))))))
@@ -359,8 +359,7 @@
 
         ;; Check if charge is valid (5+ ticks) and player is on ground
           (if (and (>= charge-ticks (cfg-int :charge.min-ticks))
-                 player-motion/*player-motion*
-                 (player-motion/is-on-ground? player-motion/*player-motion* player-id))
+                 (player-motion/is-on-ground?* player-id))
           (if-not cost-ok?
             (do
               (fx/send-end! ctx-id :groundshock/fx-end {:performed? false})

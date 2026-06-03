@@ -530,7 +530,7 @@
 ;; ============================================================================
 
 (defn apply-breathe-to-ui!
-  "Apply breathe effect to all **direct** child widgets whose name starts with `ui_`."
+  "Apply breathe effect to all **direct* child widgets whose name starts with `ui_`."
   [page-widget]
   (doseq [w (cgui-core/get-draw-list page-widget)]
     (when (clojure.string/starts-with? (cgui-core/get-name w) "ui_")

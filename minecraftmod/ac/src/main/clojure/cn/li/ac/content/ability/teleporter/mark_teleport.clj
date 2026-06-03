@@ -107,18 +107,18 @@
   [player-id player hold-ticks]
   (let [exp (double (or (skill-exp player-id) 0.0))
         cp (current-cp player-id)
-        player-pos (when teleportation/*teleportation*
-                     (teleportation/get-player-position teleportation/*teleportation* player-id))
-        look-vec (when raycast/*raycast*
-                   (raycast/get-player-look-vector raycast/*raycast* player-id))]
+        player-pos (when (teleportation/available?)
+                     (teleportation/get-player-position* player-id))
+        look-vec (when (raycast/available?)
+                   (raycast/get-player-look-vector* player-id))]
     (when (and player-pos look-vec)
       (let [{:keys [world-id x y z]} player-pos
             creative? (boolean (and player (entity/player-creative? player)))
             dist (max-distance exp cp hold-ticks creative?)
             start-y (+ (double y) (helper/cfg-double mark-teleport-skill-id
                                                       :targeting.eye-height))
-            hit (when raycast/*raycast*
-                  (raycast/raycast-combined raycast/*raycast*
+            hit (when (raycast/available?)
+                  (raycast/raycast-combined*
                                             world-id
                                             (double x) start-y (double z)
                                             (double (:x look-vec))
@@ -181,7 +181,7 @@
 
 (defn- set-skill-state-root!
   [ctx-id state-map]
-  (ctx-skill/replace-skill-state-root! ctx-id state-map))
+  (ctx-skill/update-skill-state-root! ctx-id identity state-map))
 
 (defn- clear-skill-state!
   [ctx-id]
@@ -219,13 +219,12 @@
                                (merge (:skill-state ctx)
                                       (assoc target :hold-ticks hold-ticks :has-target true)))
         (set-skill-state-root! ctx-id {:hold-ticks hold-ticks :has-target false}))
-      (when (and target teleportation/*teleportation*)
+      (when (and target (teleportation/available?))
         (let [distance (double (:distance target))
               exp (double (or (:exp target) (skill-exp player-id) 0.0))]
           (when (and cost-ok? (>= distance (helper/cfg-double mark-teleport-skill-id
                                                               :targeting.min-distance)))
-            (let [success (teleportation/teleport-player! teleportation/*teleportation*
-                                                          player-id
+            (let [success (teleportation/teleport-player!* player-id
                                                           (:world-id target)
                                                           (:target-x target)
                                                           (:target-y target)
@@ -238,7 +237,7 @@
                                                  :player-id player-id
                                                  :ctx-id ctx-id}
                                                 (or (build-target-fx-payload target) {})))
-                (teleportation/reset-fall-damage! teleportation/*teleportation* player-id)
+                (teleportation/reset-fall-damage!* player-id)
                 (add-exp! player-id (* (helper/cfg-double mark-teleport-skill-id
                                                           :progression.exp-per-distance)
                                        distance))

@@ -1,15 +1,6 @@
 (ns cn.li.mcmod.platform.position
-  "Platform-agnostic position abstraction layer.
-  
-  This namespace provides protocols and factory functions for block positions
-  without depending on any specific Minecraft version (BlockPos package
-  location changed across versions).
-  
-  Design Philosophy:
-  - VBlocks store raw coordinates (x, y, z) as integers
-  - BlockPos objects created only when interfacing with platform APIs
-  - Platform code extends IBlockPos protocol to Minecraft's BlockPos
-  - Core code uses factory to create positions when needed")
+  "Platform-agnostic position abstraction layer."
+  (:require [cn.li.mcmod.platform.runtime :as prt]))
 
 ;; ============================================================================
 ;; Position Protocol
@@ -51,18 +42,14 @@
 ;; Platform Factory Registration
 ;; ============================================================================
 
-(defonce ^{:dynamic true
-           :doc "Platform-specific position factory function.
-         
-         Must be initialized by platform code before core code runs.
-         
-         Expected signature: (fn [x y z] -> IBlockPos)
-         
-         Example platform initialization:
-         (alter-var-root #'cn.li.mcmod.platform.position/*position-factory*
-           (constantly (fn [x y z] (BlockPos. x y z))))"}
-  *position-factory*
-  nil)
+(def ^:private ^:dynamic *position-factory* nil)
+
+(defn install-position-factory!
+  [factory-fn label]
+  (prt/install-impl! #'*position-factory* factory-fn (or label "position-factory")))
+
+(defn call-with-position-factory [factory-fn f]
+  (binding [*position-factory* factory-fn] (f)))
 
 ;; ============================================================================
 ;; Factory Functions
@@ -117,12 +104,11 @@
 ;; Position Navigation (platform-agnostic wrappers)
 ;; ============================================================================
 
-(defonce ^{:dynamic true
-           :doc "Platform function to get the BlockPos one above a given pos.
-         Signature: (fn [pos] -> IBlockPos)
-         Must be initialized by platform code."}
-  *pos-above-fn*
-  nil)
+(def ^:private ^:dynamic *pos-above-fn* nil)
+
+(defn install-pos-above-fn!
+  [f label]
+  (prt/install-impl! #'*pos-above-fn* f (or label "pos-above")))
 
 (defn pos-above
   "Return the BlockPos directly above the given position.

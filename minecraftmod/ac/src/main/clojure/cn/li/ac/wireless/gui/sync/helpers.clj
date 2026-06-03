@@ -3,7 +3,8 @@
   
   Provides common functions for broadcasting state and applying sync payloads
   to reduce code duplication between node and matrix sync implementations."
-  (:require [cn.li.mcmod.util.log :as log]
+  (:require [cn.li.ac.gui.platform-adapter.sync-api :as gui-sync-api]
+            [cn.li.mcmod.util.log :as log]
             [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.ac.wireless.core.vblock :as vb]
             [cn.li.ac.wireless.core.capability-resolver :as resolver]
@@ -148,15 +149,8 @@
   - log-prefix: String for logging (e.g. 'node', 'matrix')
   
   Returns: nil"
-  [world pos sync-data log-prefix]
-  (try
-    ;; Get the unified platform broadcast function from platform-adapter
-    ;; We use dynamic require to break circular dependency
-    (when-let [get-fn (requiring-resolve 'cn.li.ac.gui.platform-adapter.sync-api/get-platform-broadcast-fn)]
-      (when-let [broadcast-fn (get-fn)]
-        (broadcast-fn world pos sync-data)))
-    (catch Exception e
-      (log/debug (str "Error broadcasting " log-prefix " state:")(ex-message e)))))
+  [world pos sync-data _log-prefix]
+  (gui-sync-api/broadcast-gui-state!* world pos sync-data))
 
 ;; ============================================================================
 ;; Position Extraction

@@ -29,6 +29,21 @@
    :channel :mag-movement/fx-update
    :owner-key [:ctx ctx-id]})
 
+(deftest init-registers-mag-movement-fx-channels-test
+  (let [registered-effect* (atom nil)
+        registered-handler* (atom nil)]
+    (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
+                                                          (reset! registered-effect* [effect-id effect-map])
+                                                          nil)
+                  fx-registry/register-fx-channels! (fn [channels handler]
+                                                      (reset! registered-handler* {:channels channels
+                                                                                   :handler handler})
+                                                      nil)]
+      (mag-movement-fx/init!)
+      (is (= :mag-movement (first @registered-effect*)))
+      (is (= #{:mag-movement/fx-start :mag-movement/fx-update :mag-movement/fx-end}
+             (set (:channels @registered-handler*)))))))
+
 (deftest fx-handler-routes-start-update-end-test
   (let [handler* (atom nil)
         enqueued* (atom [])]

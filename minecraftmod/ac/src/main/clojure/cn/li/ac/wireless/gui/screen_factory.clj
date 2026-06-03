@@ -78,12 +78,12 @@
 
 ;; This factory provides a clean separation between:
 ;;
-;; 1. **Game Logic** (this namespace):
+;; 1. **Game Logic* (this namespace):
 ;;    - Extracting Clojure containers from platform wrappers
 ;;    - Delegating to CGui-based GUI creation
 ;;    - Error handling and logging
 ;;
-;; 2. **Platform-Specific Code** (screen_impl.clj in each platform):
+;; 2. **Platform-Specific Code* (screen_impl.clj in each platform):
 ;;    - Registering screen factories with platform APIs
 ;;    - Handling platform-specific types and interfaces
 ;;    - Platform initialization lifecycle

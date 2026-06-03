@@ -30,7 +30,7 @@
 
 (defn- set-skill-state-root!
   [ctx-id state-map]
-  (ctx-skill/replace-skill-state-root! ctx-id state-map))
+  (ctx-skill/update-skill-state-root! ctx-id identity state-map))
 
 (defn mining-ray-down!
   "Initialize mining ray context state."
@@ -47,11 +47,10 @@
           ctx-data  (ctx/get-context ctx-id)
           world-id  (geom/world-id-of player-id)
           eye       (geom/eye-pos player-id)
-          look-vec  (when raycast/*raycast*
-                      (raycast/get-player-look-vector raycast/*raycast* player-id))]
-      (if (and look-vec bm/*block-manipulation*)
-        (let [hit (raycast/raycast-blocks
-                    raycast/*raycast*
+          look-vec  (when (raycast/available?)
+                      (raycast/get-player-look-vector* player-id))]
+      (if (and look-vec (bm/available?))
+        (let [hit (raycast/raycast-blocks*
                     world-id
                     (:x eye) (:y eye) (:z eye)
                     (:x look-vec) (:y look-vec) (:z look-vec)
@@ -63,7 +62,7 @@
                   prev-y (get-in ctx-data [:skill-state :target-y])
                   prev-z (get-in ctx-data [:skill-state :target-z])
                   same-target? (and (= hx prev-x) (= hy prev-y) (= hz prev-z))
-                  hardness (double (or (bm/get-block-hardness bm/*block-manipulation*
+                  hardness (double (or (bm/get-block-hardness*
                                                                world-id hx hy hz)
                                        1.0))
                   countdown-delta (/ (double break-speed) (max 0.1 hardness))
@@ -75,10 +74,10 @@
                                        {:x hx :y hy :z hz
                                         :progress (min 1.0 new-countdown)})
               (if (>= new-countdown 1.0)
-                (when (bm/can-break-block? bm/*block-manipulation* player-id world-id hx hy hz)
+                (when (bm/can-break-block?* player-id world-id hx hy hz)
                   (if (pos? (long (or fortune-level 0)))
-                    (bm/break-block! bm/*block-manipulation* player-id world-id hx hy hz true fortune-level)
-                    (bm/break-block! bm/*block-manipulation* player-id world-id hx hy hz true))
+                    (bm/break-block!* player-id world-id hx hy hz true fortune-level)
+                    (bm/break-block!* player-id world-id hx hy hz true))
                   (skill-effects/add-skill-exp! player-id skill-id (double (or exp-block 0.001)))
                   (set-skill-state-root! ctx-id (empty-skill-state)))
                 (set-skill-state-root! ctx-id

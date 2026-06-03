@@ -18,8 +18,7 @@
 
 (defn install-damage-interception!
   []
-  (alter-var-root #'pdi/*damage-interception*
-                  (constantly (make-damage-interception))))
+  (pdi/install-damage-interception! (make-damage-interception) "mc1201 damage interception"))
 
 (defn should-allow-attack?
   [player-id attacker-id original-damage damage-source]

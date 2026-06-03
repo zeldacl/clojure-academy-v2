@@ -12,18 +12,18 @@
 
 (defn execute-spawn-lightning!
   [evt {:keys [at]}]
-  (when world-effects/*world-effects*
+  (when (world-effects/available?)
     (let [{:keys [x y z]} (or (when (map? at) at) (get evt at))]
-      (world-effects/spawn-lightning! world-effects/*world-effects*
+      (world-effects/spawn-lightning!*
                                       (:world-id evt)
                                       (double x) (double y) (double z))))
   evt)
 
 (defn execute-create-explosion!
   [evt {:keys [at radius fire?]}]
-  (when world-effects/*world-effects*
+  (when (world-effects/available?)
     (let [{:keys [x y z]} (or (when (map? at) at) (get evt at))]
-      (world-effects/create-explosion! world-effects/*world-effects*
+      (world-effects/create-explosion!*
                                        (:world-id evt)
                                        (double x) (double y) (double z)
                                        (double (or radius 4.0))

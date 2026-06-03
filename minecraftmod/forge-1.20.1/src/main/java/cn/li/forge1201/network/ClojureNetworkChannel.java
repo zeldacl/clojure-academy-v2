@@ -1,6 +1,8 @@
 package cn.li.forge1201.network;
 
+import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.network.NetworkRegistry;
 import net.minecraftforge.network.PacketDistributor;
@@ -44,6 +46,12 @@ final class ClojureNetworkChannel {
 
     static void sendToClient(ServerPlayer player, int requestId, byte[] response) {
         requireInitialized().send(PacketDistributor.PLAYER.with(() -> player), new ClojureNetworkPackets.S2CPacket(requestId, response));
+    }
+
+    static void broadcastGuiBlockStateToTrackingChunk(ServerLevel level, BlockPos pos, byte[] payload) {
+        requireInitialized().send(
+            PacketDistributor.TRACKING_CHUNK.with(() -> level.getChunkAt(pos)),
+            new ClojureNetworkPackets.S2CPacket(-1, payload));
     }
 
     private static SimpleChannel requireInitialized() {

@@ -9,8 +9,7 @@
 
 (defn set-platform-version!
   [platform-key]
-  (alter-var-root #'platform-dispatch/*platform-version*
-                  (constantly platform-key))
+  (platform-dispatch/install-platform-version! platform-key "mc1201-bootstrap")
   (log/info "Set platform dispatch to" platform-key))
 
 (defn assert-platform-ready!

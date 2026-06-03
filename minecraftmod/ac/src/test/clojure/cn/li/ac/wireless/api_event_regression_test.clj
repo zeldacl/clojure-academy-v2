@@ -6,6 +6,7 @@
             [cn.li.ac.wireless.data.world-registry :as world-registry]
             [cn.li.ac.wireless.service.commands :as commands]
             [cn.li.ac.wireless.core.vblock :as vb]
+            [cn.li.ac.wireless.core.capability-resolver :as resolver]
             [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.platform.events :as platform-events])
   (:import [cn.li.acapi.wireless WirelessCapabilityKeys]))
@@ -19,10 +20,8 @@
                     vb/create-vmatrix (fn [_] :matrix-vb)
                     cn.li.ac.wireless.data.network-lookup/get-network-by-matrix (constantly nil)
                     commands/create-network! (fn [_ _ _ _] true)
-                    platform-be/get-capability (fn [tile cap-key]
-                                                 (when (and (= tile :matrix-tile)
-                                                            (= cap-key WirelessCapabilityKeys/MATRIX))
-                                                   matrix))
+                    resolver/matrix-capability (fn [tile]
+                                                 (when (= tile :matrix-tile) matrix))
                     platform-events/fire-event! (fn [evt] (swap! events conj evt))]
         (is (true? (wireless-api/create-network! :matrix-tile "ssid-a" "pw")))
         (is (= 1 (count @events)))
@@ -39,7 +38,7 @@
                   vb/create-vmatrix (fn [_] :matrix-vb)
                   cn.li.ac.wireless.data.network-lookup/get-network-by-matrix (constantly nil)
                   commands/create-network! (fn [_ _ _ _] false)
-                  platform-be/get-capability (fn [_ _] (stubs/fake-matrix))
+                  resolver/matrix-capability (fn [_] (stubs/fake-matrix))
                   platform-events/fire-event! (fn [evt] (swap! events conj evt))]
       (is (false? (wireless-api/create-network! :matrix-tile "ssid-a" "pw")))
       (is (empty? @events)))))
@@ -47,15 +46,13 @@
 (deftest destroy-network-fires-when-destroyed
   (let [events (atom [])
         matrix (stubs/fake-matrix)
-      net (network-state/create-wireless-net {:world :world} :matrix-vb "ssid-z" "pw")]
+        net (network-state/create-wireless-net {:world :world} :matrix-vb "ssid-z" "pw")]
     (with-redefs [wireless-api/get-wireless-net-by-matrix (fn [_] net)
                   platform-be/be-get-world-safe (fn [_] :world)
                   world-registry/get-world-data (fn [_] :world-data)
                   commands/destroy-network! (fn [_ _] true)
-                  platform-be/get-capability (fn [tile cap-key]
-                                               (when (and (= tile :mt)
-                                                          (= cap-key WirelessCapabilityKeys/MATRIX))
-                                                 matrix))
+                  resolver/matrix-capability (fn [tile]
+                                               (when (= tile :mt) matrix))
                   platform-events/fire-event! (fn [evt] (swap! events conj evt))]
       (is (true? (wireless-api/destroy-network! :mt)))
       (is (= 1 (count @events)))
@@ -79,13 +76,10 @@
                     world-registry/get-world-data (fn [_] :world-data)
                     vb/create-vnode (fn [_] :node-vb)
                     commands/link-node-to-network! (fn [_ _ _ _] true)
-                    platform-be/get-capability (fn [tile cap-key]
-                                                 (cond
-                                                   (and (= tile :matrix-tile)
-                                                        (= cap-key WirelessCapabilityKeys/MATRIX)) matrix
-                                                   (and (= tile :node-tile)
-                                                        (= cap-key WirelessCapabilityKeys/NODE)) node
-                                                   :else nil))
+                    resolver/matrix-capability (fn [tile]
+                                                 (when (= tile :matrix-tile) matrix))
+                    resolver/node-capability (fn [tile]
+                                               (when (= tile :node-tile) node))
                     platform-events/fire-event! (fn [evt] (swap! events conj evt))]
         (is (true? (wireless-api/link-node-to-network! :node-tile :matrix-tile "pw")))
         (is (= 1 (count @events)))
@@ -106,13 +100,10 @@
                     commands/ensure-node-connection! (fn [_ _] :conn)
                     vb/create-vgenerator (fn [_] :gen-vb)
                     commands/link-generator-to-connection! (fn [_ _ _] true)
-                    platform-be/get-capability (fn [tile cap-key]
-                                                 (cond
-                                                   (and (= tile :node-tile)
-                                                        (= cap-key WirelessCapabilityKeys/NODE)) node
-                                                   (and (= tile :gen-tile)
-                                                        (= cap-key WirelessCapabilityKeys/GENERATOR)) gen
-                                                   :else nil))
+                    resolver/node-capability (fn [tile]
+                                               (when (= tile :node-tile) node))
+                    resolver/generator-capability (fn [tile]
+                                                    (when (= tile :gen-tile) gen))
                     platform-events/fire-event! (fn [evt] (swap! events conj evt))]
         (is (true? (wireless-api/link-generator-to-node! :gen-tile :node-tile "pw" true)))
         (is (= 1 (count @events)))
@@ -132,17 +123,14 @@
                     commands/ensure-node-connection! (fn [_ _] :conn)
                     vb/create-vreceiver (fn [_] :rec-vb)
                     commands/link-receiver-to-connection! (fn [_ _ _] true)
-                    platform-be/get-capability (fn [tile cap-key]
-                                                 (cond
-                                                   (and (= tile :node-tile)
-                                                        (= cap-key WirelessCapabilityKeys/NODE)) node
-                                                   (and (= tile :rec-tile)
-                                                        (= cap-key WirelessCapabilityKeys/RECEIVER)) rec
-                                                   :else nil))
+                    resolver/node-capability (fn [tile]
+                                               (when (= tile :node-tile) node))
+                    resolver/receiver-capability (fn [tile]
+                                                   (when (= tile :rec-tile) rec))
                     platform-events/fire-event! (fn [evt] (swap! events conj evt))]
         (is (true? (wireless-api/link-receiver-to-node! :rec-tile :node-tile "pw" true)))
         (is (= 1 (count @events)))
         (let [event (first @events)]
           (is (= :receiver-linked (:action event)))
           (is (= node (:node event)))
-          (is (= rec (:receiver event))))))))
+          (is (= rec (:receiver event)))))))))

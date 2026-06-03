@@ -1,41 +1,23 @@
 (ns cn.li.mcmod.platform.entity-damage
-  "Protocol for entity damage application.
-
-  Platform (forge) implements this protocol and binds to *entity-damage*.
-  Game logic (ac) calls protocol methods without importing Minecraft classes.")
+  "Protocol for entity damage application."
+  (:require [cn.li.mcmod.platform.runtime :as prt]))
 
 (defprotocol IEntityDamage
-  "Entity damage application."
+  (apply-direct-damage! [this world-id entity-uuid damage source-type])
+  (apply-aoe-damage! [this world-id x y z radius damage source-type falloff?])
+  (apply-reflection-damage! [this world-id entity-uuid damage source-type reflection-count max-reflections]))
 
-  (apply-direct-damage! [this world-id entity-uuid damage source-type]
-    "Apply direct damage to a single entity.
-    - world-id: string (dimension identifier)
-    - entity-uuid: string (entity UUID)
-    - damage: double damage amount
-    - source-type: keyword (:magic :lightning :explosion :generic)
-    Returns: true if damage applied, false if entity not found or immune")
+(def ^:private ^:dynamic *runtime* nil)
 
-  (apply-aoe-damage! [this world-id x y z radius damage source-type falloff?]
-    "Apply AOE damage to all entities within radius.
-    - world-id: string (dimension identifier)
-    - x, y, z: double coordinates (center of AOE)
-    - radius: double AOE radius
-    - damage: double base damage amount
-    - source-type: keyword (:magic :lightning :explosion :generic)
-    - falloff?: boolean, if true damage decreases with distance
-    Returns: seq of damaged entity UUIDs")
+(defn install-entity-damage!
+  [impl label]
+  (prt/install-impl! #'*runtime* impl (or label "entity-damage")))
 
-  (apply-reflection-damage! [this world-id entity-uuid damage source-type reflection-count max-reflections]
-    "Apply damage with reflection tracking (bounces to nearby entities).
-    - world-id: string (dimension identifier)
-    - entity-uuid: string (initial target UUID)
-    - damage: double damage amount
-    - source-type: keyword (:magic :lightning :explosion :generic)
-    - reflection-count: int current reflection depth
-    - max-reflections: int maximum reflection bounces
-    Returns: seq of hit entity UUIDs (including reflections)"))
+(defn available? [] (prt/impl-available? #'*runtime*))
+(defn current [] (prt/impl-current #'*runtime*))
+(defn call-with-runtime [rt f] (binding [*runtime* rt] (f)))
 
-(def ^:dynamic *entity-damage*
-  "Bound by platform (forge) to a reified IEntityDamage implementation.
-  nil until platform init runs."
-  nil)
+(prt/def-impl-wrappers '*runtime* IEntityDamage
+  [apply-direct-damage!* apply-direct-damage! world-id entity-uuid damage source-type]
+  [apply-aoe-damage!* apply-aoe-damage! world-id x y z radius damage source-type falloff?]
+  [apply-reflection-damage!* apply-reflection-damage! world-id entity-uuid damage source-type reflection-count max-reflections])

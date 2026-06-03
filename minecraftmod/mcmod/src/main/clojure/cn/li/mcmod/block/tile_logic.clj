@@ -3,7 +3,8 @@
 
   Supports tile-id lifecycle registration and reusable tile-kind registration.
   ScriptedBlockEntity calls into this namespace for tick/load/save/capability/container hooks."
-  (:require [cn.li.mcmod.protocol.core :as registry-core]
+  (:require [cn.li.mcmod.platform.runtime :as prt]
+            [cn.li.mcmod.protocol.core :as registry-core]
             [cn.li.mcmod.util.log :as log]))
 
 (def ^:private ^:dynamic *tile-logic-registry-state* {})
@@ -24,14 +25,17 @@
 (def ^:private ^:dynamic *capability-get-factory*
   nil)
 
+(defn install-capability-get-factory!
+  [factory-fn label]
+  (prt/install-impl! #'*capability-get-factory* factory-fn (or label "capability-get-factory"))
+  nil)
+
 (defn- capability-get-factory
   []
-  (or (var-get #'*capability-get-factory*)
+  (or *capability-get-factory*
       (locking capability-factory-lock
-        (or (var-get #'*capability-get-factory*)
-            (let [f (requiring-resolve 'cn.li.mcmod.platform.capability/get-handler-factory)]
-              (alter-var-root #'*capability-get-factory* (constantly f))
-              f)))))
+        (or *capability-get-factory*
+            (requiring-resolve 'cn.li.mcmod.platform.capability/get-handler-factory)))))
 
 ;; container-registry: tile-id → container-fns-map
 ;; container-fns-map keys:

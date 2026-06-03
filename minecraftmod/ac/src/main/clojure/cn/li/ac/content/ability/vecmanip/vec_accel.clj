@@ -39,14 +39,14 @@
     (* (Math/sin prog) (cfg-double :movement.max-velocity))))
 
 (defn- get-player-position [player-id]
-  (when-let [tp teleportation/*teleportation*]
-    (teleportation/get-player-position tp player-id)))
+  (when (teleportation/available?)
+    (teleportation/get-player-position* player-id)))
 
 (defn- check-ground-raycast [player-id]
-  (when raycast/*raycast*
+  (when (raycast/available?)
     (when-let [pos (get-player-position player-id)]
       (let [world-id (or (:world-id pos) "minecraft:overworld")]
-        (some? (raycast/raycast-blocks raycast/*raycast*
+        (some? (raycast/raycast-blocks*
                                        world-id
                                        (double (:x pos)) (double (:y pos)) (double (:z pos))
                                        0 -1 0 (cfg-double :targeting.ground-check-distance)))))))
@@ -95,8 +95,8 @@
   :actions
   {:tick!    (fn [{:keys [player-id ctx-id charge-ticks exp]}]
          (let [can-perform? (boolean (or (>= (double (or exp 0.0)) (cfg-double :targeting.groundless-exp-threshold)) (check-ground-raycast player-id)))
-                     look-dir     (when raycast/*raycast*
-                                    (raycast/get-player-look-vector raycast/*raycast* player-id))
+                     look-dir     (when (raycast/available?)
+                                    (raycast/get-player-look-vector* player-id))
                      init-vel     (when look-dir (compute-init-vel look-dir (long (or charge-ticks 0))))]
                  (update-skill-state-root! ctx-id merge
                                            {:can-perform? can-perform?
@@ -110,10 +110,10 @@
                        init-vel     (:init-vel ss)]
                    (if (and can-perform? init-vel)
                      (let [{:keys [x y z]} init-vel]
-                       (when player-motion/*player-motion*
-                         (player-motion/set-velocity! player-motion/*player-motion* player-id x y z))
-                       (when teleportation/*teleportation*
-                         (teleportation/reset-fall-damage! teleportation/*teleportation* player-id))
+                       (when (player-motion/available?)
+                         (player-motion/set-velocity!* player-id x y z))
+                       (when (teleportation/available?)
+                         (teleportation/reset-fall-damage!* player-id))
                        (skill-effects/set-main-cooldown! player-id :vec-accel
                                                          (cfg-lerp-int :cooldown.ticks exp))
                        (skill-effects/add-skill-exp! player-id :vec-accel (cfg-double :progression.exp-use))

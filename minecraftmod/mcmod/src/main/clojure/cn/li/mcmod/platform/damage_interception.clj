@@ -1,30 +1,23 @@
 (ns cn.li.mcmod.platform.damage-interception
-  "Protocol for intercepting and modifying damage events.
-
-  This allows runtime effects to react to incoming damage and modify it.
-  Platform (forge) implements this protocol and registers event handlers.
-
-  No Minecraft imports.")
+  "Protocol for intercepting and modifying damage events."
+  (:require [cn.li.mcmod.platform.runtime :as prt]))
 
 (defprotocol IDamageInterception
-  "Damage event interception for runtime reactions."
+  (register-damage-handler! [this handler-id handler-fn priority])
+  (unregister-damage-handler! [this handler-id])
+  (get-active-handlers [this]))
 
-  (register-damage-handler! [this handler-id handler-fn priority]
-    "Register a damage handler function.
-    - handler-id: keyword identifier for this handler
-    - handler-fn: (fn [player-id attacker-id damage damage-source] -> [modified-damage metadata])
-    - priority: int (lower = earlier, default 100)
-    Returns: true if registered successfully")
+(def ^:private ^:dynamic *runtime* nil)
 
-  (unregister-damage-handler! [this handler-id]
-    "Unregister a damage handler.
-    Returns: true if unregistered successfully")
+(defn install-damage-interception!
+  [impl label]
+  (prt/install-impl! #'*runtime* impl (or label "damage-interception")))
 
-  (get-active-handlers [this]
-    "Get list of active handler IDs.
-    Returns: seq of handler-id keywords"))
+(defn available? [] (prt/impl-available? #'*runtime*))
+(defn current [] (prt/impl-current #'*runtime*))
+(defn call-with-runtime [rt f] (binding [*runtime* rt] (f)))
 
-(def ^:dynamic *damage-interception*
-  "Bound by platform (forge) to a reified IDamageInterception implementation.
-  nil until platform init runs."
-  nil)
+(prt/def-impl-wrappers '*runtime* IDamageInterception
+  [register-damage-handler!* register-damage-handler! handler-id handler-fn priority]
+  [unregister-damage-handler!* unregister-damage-handler! handler-id]
+  [get-active-handlers* get-active-handlers])

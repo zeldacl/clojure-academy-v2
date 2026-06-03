@@ -1215,7 +1215,7 @@
       ;; OBJ semantics are triangles; backend can expand the submission order
       ;; via `buffer/*triangle-vertex-order*` when needed.
       (let [tri [i0 i1 i2]]
-        (doseq [ord (or buffer/*triangle-vertex-order* [0 1 2])
+        (doseq [ord (buffer/triangle-vertex-order)
             :let [vertex-idx (nth tri (int ord))]]
           (let [{:keys [pos uv normal]} (nth vertices vertex-idx)
               pos (map-model-pos pos)
@@ -1295,7 +1295,7 @@
                                    pose-stack vertex-consumer packed-light packed-overlay)))))
 
 (defn render-part-consumer-multi
-  "Buffered OBJ draw with a **fresh** VertexConsumer per material batch.
+  "Buffered OBJ draw with a **fresh* VertexConsumer per material batch.
   `material->texture` maps MTL material name (string) to the same texture type
   your platform uses for `buffer/get-solid-buffer`. Unknown / default faces
   (no `:material`) use `default-texture`."

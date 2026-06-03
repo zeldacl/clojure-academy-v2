@@ -375,11 +375,11 @@
 
 (defmulti send-request
   "Platform-specific transport for RPC requests"
-  (fn [_msg-id _payload _request-id] platform-dispatch/*platform-version*))
+  (fn [_msg-id _payload _request-id] (platform-dispatch/current-platform-version)))
 
 (defmethod send-request :default [_msg-id _payload _request-id]
   (throw (ex-info "No network transport for version"
-                  {:version platform-dispatch/*platform-version*})))
+                  {:version (platform-dispatch/current-platform-version)})))
 
 (defn send-to-server
   "Send a request to server and optionally receive a response.

@@ -88,24 +88,22 @@
                   ctx-skill/update-skill-state-root! update-skill-state-root!
                   ctx/terminate-context! terminate-context!
                   geom/world-id-of (fn [_] "w")
-                  raycast/raycast-from-player (fn [& _]
+                  raycast/raycast-from-player* (fn [& _]
                                                 {:entity-id "target-1"
                                                  :x 1.0 :y 2.0 :z 3.0})
-                  raycast/raycast-blocks (fn [& _]
+                  raycast/raycast-blocks* (fn [& _]
                                            {:x 1.0 :y 2.0 :z 3.0 :face :up})
                   fx/send-update! (fn [& _] nil)
                   fx/send-perform! (fn [ctx-id ch payload]
                                      (swap! perform-calls* conj [ctx-id ch payload]))
                   fx/send-end! (fn [ctx-id ch payload]
                                  (swap! end-calls* conj [ctx-id ch payload]))
-                  entity-damage/apply-direct-damage! (fn [_ world-id target-id damage kind]
+                  entity-damage/apply-direct-damage!* (fn [_ world-id target-id damage kind]
                                                       (swap! damage-calls* conj [world-id target-id damage kind]))
                   skill-effects/set-main-cooldown! (fn [player-id skill-id ticks]
                                                      (swap! cooldown-calls* conj [player-id skill-id ticks]))
                   skill-effects/add-skill-exp! (fn [player-id skill-id amount]
                                                  (swap! exp-calls* conj [player-id skill-id amount]))]
-      (binding [raycast/*raycast* :mock
-                entity-damage/*entity-damage* :mock]
         (br/blood-retrograde-on-key-tick {:player-id "p1"
                                           :ctx-id "ctx-1"
                                           :cost-ok? true})))
@@ -136,15 +134,13 @@
                   ctx-skill/update-skill-state-root! update-skill-state-root!
                   ctx/terminate-context! terminate-context!
                   geom/world-id-of (fn [_] "w")
-                  raycast/raycast-from-player (fn [& _] nil)
+                  raycast/raycast-from-player* (fn [& _] nil)
                   fx/send-update! (fn [& _] nil)
                   fx/send-perform! (fn [& _] nil)
                   fx/send-end! (fn [ctx-id ch payload]
                                  (swap! end-calls* conj [ctx-id ch payload]))
-                  entity-damage/apply-direct-damage! (fn [& _]
+                  entity-damage/apply-direct-damage!* (fn [& _]
                                                       (swap! damage-calls* conj :damage))]
-      (binding [raycast/*raycast* :mock
-                entity-damage/*entity-damage* :mock]
         (br/blood-retrograde-on-key-up {:player-id "p1"
                                         :ctx-id "ctx-2"
                                         :cost-ok? true})))

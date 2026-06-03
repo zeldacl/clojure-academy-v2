@@ -36,8 +36,8 @@
                   helper/player-position (fn [_] {:x 1.0 :y 64.0 :z 3.0})
                   helper/player-look-vec (fn [_] {:x 0.0 :y 0.0 :z 1.0})
                   geom/world-id-of (fn [_] "minecraft:overworld")
-                  raycast/raycast-blocks (fn [& _] {:x 20 :y 64 :z 21 :face :up})
-                  world-effects/find-entities-in-aabb (fn [& _]
+                  raycast/raycast-blocks* (fn [& _] {:x 20 :y 64 :z 21 :face :up})
+                  world-effects/find-entities-in-aabb* (fn [& _]
                                                         [{:uuid "enemy-1" :x 12.0 :y 64.9 :z 13.4 :width 0.6 :height 1.8}
                                                          {:uuid "enemy-2" :x 13.0 :y 64.8 :z 14.3 :width 0.6 :height 1.8}
                                                          {:uuid "p1" :x 1.0 :y 64.0 :z 3.0 :width 0.6 :height 1.8}
@@ -72,8 +72,6 @@
                   ctx/ctx-send-to-client! (fn [_ctx-id ch payload]
                                             (swap! fx-calls* conj [ch payload])
                                             nil)]
-      (binding [raycast/*raycast* :mock
-            world-effects/*world-effects* :mock
             ctx/*context-owner* test-context-owner]
         (shift/shift-tp-up! {:player-id "p1" :ctx-id "ctx-1" :player :player :cost-ok? true})))
 
@@ -116,8 +114,8 @@
                   helper/player-position (fn [_] {:x 1.0 :y 64.0 :z 3.0})
                   helper/player-look-vec (fn [_] {:x 0.0 :y 0.0 :z 1.0})
                   geom/world-id-of (fn [_] "minecraft:overworld")
-                  raycast/raycast-blocks (fn [& _] {:x 20 :y 64 :z 21 :face :up})
-                  world-effects/find-entities-in-aabb (fn [& _]
+                  raycast/raycast-blocks* (fn [& _] {:x 20 :y 64 :z 21 :face :up})
+                  world-effects/find-entities-in-aabb* (fn [& _]
                                                         [{:uuid "enemy-1" :x 12.0 :y 64.9 :z 13.4 :width 0.6 :height 1.8}])
                   entity/player-main-hand-placeable-block? (fn [_] true)
                   entity/player-creative? (fn [_] false)
@@ -138,8 +136,6 @@
                   ctx/ctx-send-to-client! (fn [_ctx-id ch payload]
                                             (swap! fx-calls* conj [ch payload])
                                             nil)]
-      (binding [raycast/*raycast* :mock
-            world-effects/*world-effects* :mock
             ctx/*context-owner* test-context-owner]
         (shift/shift-tp-up! {:player-id "p1" :ctx-id "ctx-1b" :player :player :cost-ok? true})))
 
@@ -167,8 +163,8 @@
                   helper/player-look-vec (fn [_] {:x 0.0 :y 0.0 :z 1.0})
                   helper/cfg-double (fn [_ _] 1.6)
                   geom/world-id-of (fn [_] "minecraft:overworld")
-                  raycast/raycast-blocks (fn [& _] {:x 4 :y 5 :z 6 :face :up})
-                  world-effects/find-entities-in-aabb (fn [& _] [])
+                  raycast/raycast-blocks* (fn [& _] {:x 4 :y 5 :z 6 :face :up})
+                  world-effects/find-entities-in-aabb* (fn [& _] [])
                   entity/player-main-hand-placeable-block? (fn [_] true)
                   entity/player-drop-main-hand-item-at! (fn [& _] true)
                   entity/player-place-main-hand-block-at-hit! (fn [& _]
@@ -183,8 +179,6 @@
                   skill-effects/add-skill-exp! (fn [& _] (swap! exp-calls* inc))
                   skill-effects/set-main-cooldown! (fn [& _] (swap! cooldown-calls* inc))
                   ctx/ctx-send-to-client! (fn [& _] (swap! fx-calls* inc))]
-      (binding [raycast/*raycast* :mock
-            world-effects/*world-effects* :mock
             ctx/*context-owner* test-context-owner]
         (shift/shift-tp-up! {:player-id "p1" :ctx-id "ctx-2" :player :player :cost-ok? false})))
 
@@ -210,8 +204,8 @@
                   helper/player-position (fn [_] {:x 1.0 :y 2.0 :z 3.0})
                   helper/player-look-vec (fn [_] {:x 0.0 :y 0.0 :z 1.0})
                   geom/world-id-of (fn [_] "minecraft:overworld")
-                  raycast/raycast-blocks (fn [& _] {:x 8 :y 9 :z 10 :face :up})
-                  world-effects/find-entities-in-aabb (fn [& _] [])
+                  raycast/raycast-blocks* (fn [& _] {:x 8 :y 9 :z 10 :face :up})
+                  world-effects/find-entities-in-aabb* (fn [& _] [])
                   entity/player-main-hand-placeable-block? (fn [_] true)
                   entity/player-creative? (fn [_] false)
                   entity/player-drop-main-hand-item-at! (fn [_ n x y z]
@@ -230,8 +224,6 @@
                   skill-effects/add-skill-exp! (fn [& _] nil)
                   skill-effects/set-main-cooldown! (fn [& _] nil)
                   ctx/ctx-send-to-client! (fn [& _] nil)]
-      (binding [raycast/*raycast* :mock
-            world-effects/*world-effects* :mock
             ctx/*context-owner* test-context-owner]
         (shift/shift-tp-up! {:player-id "p1" :ctx-id "ctx-3" :player :player :cost-ok? true})))
 
@@ -247,13 +239,11 @@
                   helper/player-look-vec (fn [_] {:x 0.0 :y 0.0 :z 1.0})
                   helper/cfg-double (fn [_ _] 1.6)
                   geom/world-id-of (fn [_] "minecraft:overworld")
-                  raycast/raycast-blocks (fn [& _] {:x 8 :y 9 :z 10 :face :up})
-                  world-effects/find-entities-in-aabb (fn [& _] [])
+                  raycast/raycast-blocks* (fn [& _] {:x 8 :y 9 :z 10 :face :up})
+                  world-effects/find-entities-in-aabb* (fn [& _] [])
                   entity/player-main-hand-placeable-block? (fn [_] false)
                   helper/teleport-to! (fn [& _] (swap! teleport-calls* inc) true)
                   ctx/ctx-send-to-client! (fn [& _] nil)]
-      (binding [raycast/*raycast* :mock
-            world-effects/*world-effects* :mock
             ctx/*context-owner* test-context-owner]
         (shift/shift-tp-up! {:player-id "p1" :ctx-id "ctx-4" :player :player :cost-ok? true})))
 
@@ -308,8 +298,8 @@
                   helper/player-position (fn [_] {:x 1.0 :y 64.0 :z 3.0})
                   helper/player-look-vec (fn [_] {:x 0.0 :y 0.0 :z 1.0})
                   geom/world-id-of (fn [_] "minecraft:overworld")
-                  raycast/raycast-blocks (fn [& _] {:x 8 :y 64 :z 10 :face :up})
-                  world-effects/find-entities-in-aabb (fn [& _] [])
+                  raycast/raycast-blocks* (fn [& _] {:x 8 :y 64 :z 10 :face :up})
+                  world-effects/find-entities-in-aabb* (fn [& _] [])
                   entity/player-main-hand-placeable-block? (fn [_] true)
                   entity/player-creative? (fn [_] true)
                   entity/player-drop-main-hand-item-at! (fn [& _] false)
@@ -326,8 +316,6 @@
                   skill-effects/add-skill-exp! (fn [& _] nil)
                   skill-effects/set-main-cooldown! (fn [& _] nil)
                   ctx/ctx-send-to-client! (fn [& _] nil)]
-      (binding [raycast/*raycast* :mock
-            world-effects/*world-effects* :mock
             ctx/*context-owner* test-context-owner]
         (shift/shift-tp-up! {:player-id "p1" :ctx-id "ctx-creative" :player :player :cost-ok? true})))
 

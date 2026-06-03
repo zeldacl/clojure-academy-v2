@@ -65,12 +65,12 @@
 (defn- get-target-pos [player-id]
   (let [world-id (geom/world-id-of player-id)
         eye (eye-pos-safe player-id)
-        look (when raycast/*raycast*
-               (raycast/get-player-look-vector raycast/*raycast* player-id))]
+        look (when (raycast/available?)
+               (raycast/get-player-look-vector* player-id))]
     (when look
       (let [dir (geom/vnorm look)
-            block-hit (when raycast/*raycast*
-                        (raycast/raycast-blocks raycast/*raycast*
+            block-hit (when (raycast/available?)
+                        (raycast/raycast-blocks*
                                                 world-id
                                                 (:x eye) (:y eye) (:z eye)
                                                 (:x dir) (:y dir) (:z dir)
@@ -82,8 +82,8 @@
           (geom/v+ eye (geom/v* dir jet-target-range)))))))
 
 (defn- get-player-pos [player-id]
-  (or (when teleportation/*teleportation*
-        (teleportation/get-player-position teleportation/*teleportation* player-id))
+  (or (when (teleportation/available?)
+        (teleportation/get-player-position* player-id))
       (eye-pos-safe player-id)))
 
 (defn- update-skill-state-root!
@@ -92,7 +92,7 @@
 
 (defn- set-skill-state-root!
   [ctx-id state-map]
-  (ctx-skill/replace-skill-state-root! ctx-id state-map))
+  (ctx-skill/update-skill-state-root! ctx-id identity state-map))
 
 (defn- can-afford-release? [player-id]
   (let [cp-needed (release-cp-cost player-id)
@@ -145,9 +145,8 @@
             (contains? hit-uuids target-id))
       hit-uuids
       (do
-        (when entity-damage/*entity-damage*
-          (entity-damage/apply-direct-damage!
-            entity-damage/*entity-damage*
+        (when (entity-damage/available?)
+          (entity-damage/apply-direct-damage!*
             world-id
             target-id
             (damage-amount player-id)
@@ -181,23 +180,22 @@
         segment-distance (geom/vlen segment)
         segment-dir (geom/vnorm segment)]
         (when (zero? trigger-ticks)
-          (when player-motion/*player-motion*
-            (player-motion/dismount-riding! player-motion/*player-motion* player-id)))
-        (when teleportation/*teleportation*
-          (teleportation/teleport-player! teleportation/*teleportation*
-                                         player-id
+          (when (player-motion/available?)
+            (player-motion/dismount-riding!* player-id)))
+        (when (teleportation/available?)
+          (teleportation/teleport-player!* player-id
                                          world-id
                                          (:x next-pos)
                                          (:y next-pos)
                                          (:z next-pos))
-          (teleportation/reset-fall-damage! teleportation/*teleportation* player-id))
-        (when (and player-motion/*player-motion*
+          (teleportation/reset-fall-damage!* player-id))
+        (when (and (player-motion/available?)
                    (:velocity st))
           (let [{:keys [x y z]} (:velocity st)]
-            (player-motion/set-velocity! player-motion/*player-motion* player-id x y z)))
-        (let [hit (when (and raycast/*raycast*
+            (player-motion/set-velocity!* player-id x y z)))
+        (let [hit (when (and (raycast/available?)
                              (> segment-distance min-segment-distance))
-                    (raycast/raycast-entities raycast/*raycast*
+                    (raycast/raycast-entities*
                                               world-id
                                               (:x prev-pos) (:y prev-pos) (:z prev-pos)
                                               (:x segment-dir) (:y segment-dir) (:z segment-dir)

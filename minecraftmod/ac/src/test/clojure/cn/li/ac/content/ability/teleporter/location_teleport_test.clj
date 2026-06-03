@@ -49,15 +49,14 @@
         player-id "player-a"
         current-pos {:world-id "minecraft:overworld" :x 10.0 :y 64.0 :z -2.5}
         long-name "home-base-name-that-is-too-long"]
-    (binding [position-store/*named-position-store* (memory-position-store store)
-              teleportation/*teleportation* (teleportation-at current-pos)]
+              (teleportation/available?) (teleportation-at current-pos)]
       (testing "saving trims names to the upstream 16 character UI limit"
         (is (= {:success? true :name "home-base-name-t"}
                (loc-tp/save-current-location! player-id long-name)))
         (is (= {:name "home-base-name-t"
                 :world-id "minecraft:overworld"
                 :x 10.0 :y 64.0 :z -2.5}
-               (position-store/get-location position-store/*named-position-store* player-id "home-base-name-t"))))
+               (position-store/get-location* player-id "home-base-name-t"))))
       (testing "query includes saved locations with same-dimension perform stats"
         (with-redefs [skill-effects/skill-exp (fn [_ _] 1.0)
                       skill-effects/current-cp (fn [_] 100000.0)
@@ -77,28 +76,27 @@
       (testing "delete removes the saved location"
         (is (= {:success? true :name "home-base-name-t"}
                (loc-tp/delete-saved-location! player-id "home-base-name-that-is-too-long")))
-        (is (empty? (position-store/list-locations position-store/*named-position-store* player-id)))))))
+        (is (empty? (position-store/list-locations* player-id)))))))
 
       (deftest save-current-location-enforces-ac-max-location-policy-test
         (let [store (atom {"player-limit" {"home" {:name "home"
                        :world-id "minecraft:overworld"
                        :x 0.0 :y 64.0 :z 0.0}}})
          current-pos {:world-id "minecraft:overworld" :x 10.0 :y 65.0 :z 2.0}]
-          (binding [position-store/*named-position-store* (memory-position-store store)
-          teleportation/*teleportation* (teleportation-at current-pos)]
+          (teleportation/available?) (teleportation-at current-pos)]
             (with-redefs [ability-config/max-saved-locations (fn [] 1)]
          (testing "new names are rejected when the AC configured limit is reached"
            (is (= {:success? false
               :error :location-limit-reached
               :max-locations 1}
              (loc-tp/save-current-location! "player-limit" "mine")))
-           (is (nil? (position-store/get-location position-store/*named-position-store*
+           (is (nil? (position-store/get-location*
                       "player-limit" "mine"))))
          (testing "overwriting an existing saved location is still allowed"
            (is (= {:success? true :name "home"}
              (loc-tp/save-current-location! "player-limit" "home")))
            (is (= current-pos
-             (select-keys (position-store/get-location position-store/*named-position-store*
+             (select-keys (position-store/get-location*
                           "player-limit" "home")
                 [:world-id :x :y :z]))))))))
 
@@ -107,8 +105,7 @@
                                             :world-id "minecraft:the_nether"
                                             :x 0.0 :y 80.0 :z 0.0}}})
         current-pos {:world-id "minecraft:overworld" :x 0.0 :y 64.0 :z 0.0}]
-    (binding [position-store/*named-position-store* (memory-position-store store)
-              teleportation/*teleportation* (teleportation-at current-pos)]
+              (teleportation/available?) (teleportation-at current-pos)]
       (testing "low exp marks cross-dimension destination unavailable"
         (with-redefs [skill-effects/skill-exp (fn [_ _] 0.8)
                       skill-effects/current-cp (fn [_] 100000.0)
@@ -139,8 +136,7 @@
                         :world-id "minecraft:overworld"
                         :x 3.0 :y 65.0 :z 7.0}}})
              current-pos {:world-id "minecraft:overworld" :x 0.0 :y 64.0 :z 0.0}]
-              (binding [position-store/*named-position-store* (memory-position-store store)
-              teleportation/*teleportation* (teleportation-at current-pos)]
+              (teleportation/available?) (teleportation-at current-pos)]
                 (with-redefs [skill-effects/skill-exp (fn [_ _] 1.0)
                     skill-effects/get-player-state (fn [_]
                             {:resource-data {:activated false

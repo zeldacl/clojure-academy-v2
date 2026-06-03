@@ -1,6 +1,8 @@
 package cn.li.forge1201.network;
 
 import clojure.lang.IFn;
+import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 
 /**
@@ -28,5 +30,9 @@ public class ClojureNetwork {
 
     public static void sendToClient(ServerPlayer player, int requestId, byte[] response) {
         ClojureNetworkChannel.sendToClient(player, requestId, response);
+    }
+
+    public static void broadcastGuiBlockStateToTrackingChunk(ServerLevel level, BlockPos pos, byte[] payload) {
+        ClojureNetworkChannel.broadcastGuiBlockStateToTrackingChunk(level, pos, payload);
     }
 }

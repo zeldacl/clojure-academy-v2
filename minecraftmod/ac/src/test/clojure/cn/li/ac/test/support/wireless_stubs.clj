@@ -105,18 +105,22 @@
   (receiver-stub {:required 0.0}))
 
 (defn with-tile-world
-  "Bind platform world fns so tile entities resolve from `tiles-atom` keyed by [x y z] (ints)."
+  "Install platform world/position/nbt stubs so tile entities resolve from `tiles-atom` keyed by [x y z] (ints)."
   [tiles-atom f]
-  (binding [pos/*position-factory* (fn [x y z] (TestPos. (long x) (long y) (long z)))
-            nbt/*nbt-factory* {:create-compound nbt-compound
-                              :create-list nbt-list}
-            ;; use map contains? for our stub compound
-            nbt/*nbt-has-key-fn* (fn [compound k] (nbt/nbt-has-key? compound k))
-            pworld/*world-is-chunk-loaded-fn* (fn [_ _ _] true)
-            pworld/*world-get-tile-entity-fn*
-            (fn [_ pos]
-              (let [x (pos/position-get-x pos)
-                    y (pos/position-get-y pos)
-                    z (pos/position-get-z pos)]
-                (get @tiles-atom [x y z])))]
-    (f)))
+  (pworld/call-with-world-ops
+    {:world-is-chunk-loaded? (fn [_ _ _] true)
+     :world-get-tile-entity
+     (fn [_ pos]
+       (let [x (pos/position-get-x pos)
+             y (pos/position-get-y pos)
+             z (pos/position-get-z pos)]
+         (get @tiles-atom [x y z])))}
+    (fn []
+      (pos/call-with-position-factory
+        (fn [x y z] (TestPos. (long x) (long y) (long z)))
+        (fn []
+          (nbt/call-with-nbt-runtime
+            {:factory {:create-compound nbt-compound
+                       :create-list nbt-list}
+             :has-key-fn (fn [compound k] (nbt/nbt-has-key? compound k))}
+            f))))))

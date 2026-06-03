@@ -8,8 +8,8 @@
   (when-let [uuid (or (when (map? target) (:uuid target))
                       (when (keyword? target) (get evt target))
                       (when (string? target) target))]
-    (when entity-damage/*entity-damage*
-      (entity-damage/apply-direct-damage! entity-damage/*entity-damage*
+    (when (entity-damage/available?)
+      (entity-damage/apply-direct-damage!*
                                           (:world-id evt)
                                           uuid
                                           (double (or amount 0.0))
@@ -18,10 +18,10 @@
 
 (defn execute-damage-aoe!
   [evt {:keys [center radius amount damage-type exclude]}]
-  (when (and world-effects/*world-effects* entity-damage/*entity-damage*)
+  (when (and (world-effects/available?) (entity-damage/available?))
     (let [center* (or (when (map? center) center) (get evt center))
           world-id (:world-id evt)
-          victims (world-effects/find-entities-in-radius world-effects/*world-effects*
+          victims (world-effects/find-entities-in-radius*
                                                          world-id
                                                          (double (:x center*))
                                                          (double (:y center*))
@@ -36,7 +36,7 @@
                 dist (Math/sqrt (+ (* dx dx) (* dy dy) (* dz dz)))
                 final (* (double amount) (bal/falloff-linear dist radius))]
             (when (> final 0.0)
-              (entity-damage/apply-direct-damage! entity-damage/*entity-damage*
+              (entity-damage/apply-direct-damage!*
                                                   world-id uuid final
                                                   (or damage-type :generic))))))))
   evt)

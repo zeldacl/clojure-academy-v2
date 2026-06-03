@@ -20,6 +20,26 @@
 
 (use-fixtures :each with-fresh-flashing-fx-runtime)
 
+(deftest init-registers-flashing-fx-channels-test
+  (let [registered-level* (atom nil)
+        registered-handler* (atom nil)]
+    (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
+                                                         (reset! registered-level* [effect-id effect-map])
+                                                         nil)
+                  fx-registry/register-fx-channels! (fn [channels handler]
+                                                      (reset! registered-handler* {:channels channels
+                                                                                   :handler handler})
+                                                      nil)]
+      (ffx/init!)
+      (is (= :flashing (first @registered-level*)))
+      (is (= #{:flashing/fx-state-start
+               :flashing/fx-preview-start
+               :flashing/fx-preview-update
+               :flashing/fx-preview-end
+               :flashing/fx-perform
+               :flashing/fx-state-end}
+             (set (:channels @registered-handler*)))))))
+
 (deftest fx-handler-routes-preview-and-perform-events-test
   (let [handler* (atom nil)
         enqueued* (atom [])]

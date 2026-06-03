@@ -15,11 +15,15 @@
      :namespaces '[cn.li.ac.block.wireless-matrix.block
                                  cn.li.ac.block.wireless-matrix.gui
                                  cn.li.ac.block.wireless-node.block
-                                 cn.li.ac.block.wireless-node.gui]
+                                 cn.li.ac.block.wireless-node.gui
+                                 cn.li.ac.block.solar-gen.block
+                                 cn.li.ac.block.solar-gen.gui]
      :init-entries '[cn.li.ac.block.wireless-matrix.block/init-wireless-matrix!
                                      cn.li.ac.block.wireless-matrix.gui/init-wireless-matrix-gui!
                                      cn.li.ac.block.wireless-node.block/init-wireless-nodes!
-                                     cn.li.ac.block.wireless-node.gui/init!]
+                                     cn.li.ac.block.wireless-node.gui/init!
+                                     cn.li.ac.block.solar-gen.block/init-solar-gen!
+                                     cn.li.ac.block.solar-gen.gui/init-solar-gui!]
      :post-init-entries [msg-reg/register-all!]})
 
 (defonce-guard wireless-blocks-installed?)

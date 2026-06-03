@@ -26,7 +26,6 @@
         (log/info "Fabric entity motion already installed, skipping")
         (do
           (server-context/install-server-context!)
-          (alter-var-root #'pem/*entity-motion*
-                          (constantly (fabric-entity-motion)))
+          (pem/install-entity-motion! (fabric-entity-motion) "Fabric entity motion")
           (alter-var-root #'*installed?* (constantly true))
           (log/info "Fabric entity motion installed"))))))

@@ -1,38 +1,25 @@
 (ns cn.li.mcmod.platform.potion-effects
-  "Protocol for potion effect application.
-
-  Platform (forge) implements this protocol and binds to *potion-effects*.
-  Game logic (ac) calls protocol methods without importing Minecraft classes.")
+  "Protocol for potion effect application."
+  (:require [cn.li.mcmod.platform.runtime :as prt]))
 
 (defprotocol IPotionEffects
-  "Potion effect application and removal."
+  (apply-potion-effect! [this player-uuid effect-type duration amplifier])
+  (remove-potion-effect! [this player-uuid effect-type])
+  (has-potion-effect? [this player-uuid effect-type])
+  (clear-all-effects! [this player-uuid]))
 
-  (apply-potion-effect! [this player-uuid effect-type duration amplifier]
-    "Apply a potion effect to a player.
-    - player-uuid: string (player UUID)
-    - effect-type: keyword (:speed :slowness :jump-boost :regeneration :strength :resistance :hunger :blindness)
-    - duration: int (ticks, 20 ticks = 1 second)
-    - amplifier: int (0 = level I, 1 = level II, etc.)
-    Returns: true if applied successfully, false otherwise")
+(def ^:private ^:dynamic *runtime* nil)
 
-  (remove-potion-effect! [this player-uuid effect-type]
-    "Remove a potion effect from a player.
-    - player-uuid: string (player UUID)
-    - effect-type: keyword (same as apply-potion-effect!)
-    Returns: true if removed successfully, false otherwise")
+(defn install-potion-effects!
+  [impl label]
+  (prt/install-impl! #'*runtime* impl (or label "potion-effects")))
 
-  (has-potion-effect? [this player-uuid effect-type]
-    "Check if player has a specific potion effect.
-    - player-uuid: string (player UUID)
-    - effect-type: keyword
-    Returns: true if player has the effect, false otherwise")
+(defn available? [] (prt/impl-available? #'*runtime*))
+(defn current [] (prt/impl-current #'*runtime*))
+(defn call-with-runtime [rt f] (binding [*runtime* rt] (f)))
 
-  (clear-all-effects! [this player-uuid]
-    "Remove all potion effects from a player.
-    - player-uuid: string (player UUID)
-    Returns: true if cleared successfully, false otherwise"))
-
-(def ^:dynamic *potion-effects*
-  "Bound by platform (forge) to a reified IPotionEffects implementation.
-  nil until platform init runs."
-  nil)
+(prt/def-impl-wrappers '*runtime* IPotionEffects
+  [apply-potion-effect!* apply-potion-effect! player-uuid effect-type duration amplifier]
+  [remove-potion-effect!* remove-potion-effect! player-uuid effect-type]
+  [has-potion-effect?* has-potion-effect? player-uuid effect-type]
+  [clear-all-effects!* clear-all-effects! player-uuid])

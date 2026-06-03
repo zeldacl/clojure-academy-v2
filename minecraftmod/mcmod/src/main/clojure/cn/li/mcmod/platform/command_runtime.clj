@@ -1,5 +1,6 @@
 (ns cn.li.mcmod.platform.command-runtime
-	"Platform-neutral bridge for content-owned command initialization.")
+	"Platform-neutral bridge for content-owned command initialization."
+	(:require [cn.li.mcmod.platform.runtime :as prt]))
 
 (def ^:private noop
 	(fn [] nil))
@@ -27,7 +28,15 @@
 
 (defn register-command-hooks!
 	[hooks]
-	(swap! (command-hooks-atom) merge hooks)
+	(doseq [[k v] hooks]
+		(prt/register-hook! (command-hooks-atom) k v
+		                    :duplicate-policy :same-value-idempotent
+		                    :label "command-runtime"))
+	nil)
+
+(defn reset-command-hooks-for-test!
+	[]
+	(reset! (command-hooks-atom) (default-command-runtime-state))
 	nil)
 
 (defn init-commands!

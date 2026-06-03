@@ -11,7 +11,6 @@
             [cn.li.fabric1201.adapter.network :as runtime-network]
             [cn.li.fabric1201.adapter.server-context :as server-context]
             [cn.li.mc1201.runtime.adapter-registry :as adapter-registry]
-            [cn.li.mc1201.runtime.adapter-support :as adapter-support]
             [cn.li.mc1201.runtime.interop-core :as interop-core]
             [cn.li.mc1201.runtime.raycast-core :as raycast-core]
             [cn.li.mc1201.runtime.teleportation-core :as teleportation-core]
@@ -24,10 +23,8 @@
             [cn.li.mcmod.hooks.core :as power-runtime]))
 
 (defn- install-bound-adapter!
-  [adapter-var create-adapter label]
-  (adapter-support/install-adapter! adapter-var
-                                    (create-adapter server-context/get-server)
-                                    label))
+  [install-fn create-adapter label]
+  (install-fn (create-adapter server-context/get-server) label))
 
 (def runtime-install-steps
   [(adapter-registry/step :damage-interception runtime-damage-interception/install-damage-interception!)
@@ -37,20 +34,20 @@
    (adapter-registry/step :entity-motion runtime-entity-motion/install-entity-motion!)
    (adapter-registry/step :entity-query runtime-entity-query/install-entity-query!)
    (adapter-registry/step :raycast
-                          #(install-bound-adapter! #'prc/*raycast*
+                          #(install-bound-adapter! prc/install-raycast!
                                                    raycast-core/create-raycast
                                                    "Fabric raycast"))
    (adapter-registry/step :world-effects runtime-world-effects/install-world-effects!)
    (adapter-registry/step :teleportation
-                          #(install-bound-adapter! #'ptp/*teleportation*
+                          #(install-bound-adapter! ptp/install-teleportation!
                                                    teleportation-core/create-teleportation
                                                    "Fabric teleportation"))
-  (adapter-registry/step :named-position-store
-                         #(install-bound-adapter! #'pstore/*named-position-store*
-                                                  named-position-store-core/create-named-position-store
-                                                  "Fabric named position store"))
+   (adapter-registry/step :named-position-store
+                          #(install-bound-adapter! pstore/install-named-position-store!
+                                                   named-position-store-core/create-named-position-store
+                                                   "Fabric named position store"))
    (adapter-registry/step :potion-effects
-                          #(install-bound-adapter! #'ppe/*potion-effects*
+                          #(install-bound-adapter! ppe/install-potion-effects!
                                                    potion-effects-core/create-potion-effects
                                                    "Fabric potion effects"))
    (adapter-registry/step :runtime-interop

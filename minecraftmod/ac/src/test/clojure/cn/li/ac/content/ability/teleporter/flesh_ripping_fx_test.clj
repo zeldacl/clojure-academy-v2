@@ -20,6 +20,24 @@
 
 (use-fixtures :each with-fresh-flesh-ripping-fx-runtime)
 
+(deftest init-registers-flesh-ripping-fx-channels-test
+  (let [registered-level* (atom nil)
+        registered-handler* (atom nil)]
+    (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
+                                                         (reset! registered-level* [effect-id effect-map])
+                                                         nil)
+                  fx-registry/register-fx-channels! (fn [channels handler]
+                                                      (reset! registered-handler* {:channels channels
+                                                                                   :handler handler})
+                                                      nil)]
+      (frfx/init!)
+      (is (= :flesh-ripping (first @registered-level*)))
+      (is (= #{:flesh-ripping/fx-start
+               :flesh-ripping/fx-update
+               :flesh-ripping/fx-perform
+               :flesh-ripping/fx-end}
+             (set (:channels @registered-handler*)))))))
+
 (deftest fx-handler-routes-start-update-perform-end-payloads-test
   (let [handler* (atom nil)
         enqueued* (atom [])]

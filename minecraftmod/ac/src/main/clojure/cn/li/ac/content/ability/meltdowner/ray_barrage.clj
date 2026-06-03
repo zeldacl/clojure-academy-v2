@@ -126,8 +126,8 @@
 
 (defn- raycast-front-hit
   [world-id eye look-dir]
-  (when raycast/*raycast*
-    (raycast/raycast-combined raycast/*raycast*
+  (when (raycast/available?)
+    (raycast/raycast-combined*
                               world-id
                               (double (:x eye)) (double (:y eye)) (double (:z eye))
                               (double (:dx look-dir)) (double (:dy look-dir)) (double (:dz look-dir))
@@ -135,14 +135,13 @@
 
 (defn- select-scatter-targets
   [world-id silbarn-hit player-id]
-  (if-not world-effects/*world-effects*
+  (if-not (world-effects/available?)
     []
     (let [sx (double (or (:x silbarn-hit) (:hit-x silbarn-hit) 0.0))
           sy (double (or (:y silbarn-hit) (:hit-y silbarn-hit) 0.0))
           sz (double (or (:z silbarn-hit) (:hit-z silbarn-hit) 0.0))
           silbarn-uuid (some-> (:uuid silbarn-hit) str)
-          targets (->> (world-effects/find-entities-in-radius
-                         world-effects/*world-effects*
+          targets (->> (world-effects/find-entities-in-radius*
                          world-id sx sy sz
                          (double (cfg-double :scatter.target-radius)))
                        (remove (fn [{:keys [uuid]}]
@@ -171,8 +170,8 @@
           scatter-damage (cfg-lerp :combat.damage.scattered exp)
           world-id       (geom/world-id-of player-id)
           eye            (geom/eye-pos player-id)
-          look-vec       (when raycast/*raycast*
-                           (raycast/get-player-look-vector raycast/*raycast* player-id))
+          look-vec       (when (raycast/available?)
+                           (raycast/get-player-look-vector* player-id))
           look-dir       (when look-vec (normalize-look-dir look-vec))]
       (when look-dir
         (let [front-hit     (raycast-front-hit world-id eye look-dir)

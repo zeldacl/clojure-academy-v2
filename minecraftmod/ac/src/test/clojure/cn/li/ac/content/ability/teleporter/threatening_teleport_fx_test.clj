@@ -19,6 +19,24 @@
 
 (use-fixtures :each with-fresh-threatening-teleport-fx-runtime)
 
+(deftest init-registers-threatening-teleport-fx-channels-test
+  (let [registered-level* (atom nil)
+        registered-handler* (atom nil)]
+    (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
+                                                         (reset! registered-level* [effect-id effect-map])
+                                                         nil)
+                  fx-registry/register-fx-channels! (fn [channels handler]
+                                                      (reset! registered-handler* {:channels channels
+                                                                                   :handler handler})
+                                                      nil)]
+      (tfx/init!)
+      (is (= :threatening-teleport (first @registered-level*)))
+      (is (= #{:threatening-tp/fx-start
+               :threatening-tp/fx-update
+               :threatening-tp/fx-perform
+               :threatening-tp/fx-end}
+             (set (:channels @registered-handler*)))))))
+
 (deftest two-owners-keep-threatening-teleport-state-independent-test
   (with-redefs [client-particles/current-effect-owner (fn [] {:client-session-id "threatening-teleport-test"})]
     (tfx/init!)

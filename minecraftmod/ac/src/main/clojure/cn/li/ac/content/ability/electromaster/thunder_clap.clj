@@ -45,8 +45,8 @@
 (defn- resolve-fallback-target
   [player-id]
   (let [eye (geom/eye-pos player-id)
-        look (when raycast/*raycast*
-               (raycast/get-player-look-vector raycast/*raycast* player-id))
+        look (when (raycast/available?)
+               (raycast/get-player-look-vector* player-id))
         look* (or look {:x 0.0 :y 0.0 :z 1.0})
         range (targeting-range)]
     {:x (+ (double (:x eye)) (* (double (:x look*)) range))
@@ -79,10 +79,10 @@
   (let [range (targeting-range)
         world-id (geom/world-id-of player-id)
         eye (geom/eye-pos player-id)
-        look (when raycast/*raycast*
-               (raycast/get-player-look-vector raycast/*raycast* player-id))
-        hit (when (and raycast/*raycast* look)
-              (raycast/raycast-combined raycast/*raycast*
+        look (when (raycast/available?)
+               (raycast/get-player-look-vector* player-id))
+        hit (when (and (raycast/available?) look)
+              (raycast/raycast-combined*
                                         world-id
                                         (:x eye) (:y eye) (:z eye)
                                         (double (or (:x look) 0.0))

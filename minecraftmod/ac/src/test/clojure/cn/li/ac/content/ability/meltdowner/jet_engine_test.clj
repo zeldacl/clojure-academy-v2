@@ -20,15 +20,8 @@
      :terminated* terminated*
      :messages* messages*
      :get-context (fn [_] @ctx*)
-     :replace-skill-state-root! (fn [_ state-map]
-                                  (swap! ctx* assoc :skill-state state-map)
-                                  nil)
-     :assoc-skill-state! (fn [_ k v]
-                           (swap! ctx* assoc-in (into [:skill-state] (if (vector? k) k [k])) v)
-                           nil)
      :update-skill-state-root! (fn [_ f & args]
-                           (swap! ctx* update :skill-state #(apply f (or % {}) args))
-                           nil)
+                        (apply swap! ctx* f args))
      :terminate-context! (fn [ctx-id terminate-fn]
                            (swap! terminated* conj [ctx-id terminate-fn])
                            nil)
@@ -37,27 +30,22 @@
               nil)}))
 
 (deftest jet-engine-down-enters-marking-phase-test
-  (let [{:keys [ctx* get-context replace-skill-state-root! assoc-skill-state! update-skill-state-root! send!]} (context-mocks {})]
+  (let [{:keys [ctx* get-context update-skill-state-root! send!]} (context-mocks {})]
     (with-redefs [ctx/get-context get-context
-                  ctx-skill/replace-skill-state-root! replace-skill-state-root!
-                  ctx-skill/assoc-skill-state! assoc-skill-state!
                   ctx-skill/update-skill-state-root! update-skill-state-root!
                   ctx/ctx-send-to-client! send!
                   geom/world-id-of (fn [_] "w")
                   geom/eye-pos (fn [_] {:x 0.0 :y 64.0 :z 0.0})]
-      (binding [raycast/*raycast* nil]
         (jet/jet-engine-down! {:ctx-id "ctx-1" :player-id "p1" :cost-ok? true}))
       (is (= :marking (get-in @ctx* [:skill-state :phase])))
       (is (= 0 (get-in @ctx* [:skill-state :hold-ticks]))))))
 
 (deftest jet-engine-up-success-enters-triggering-and-settles-test
-  (let [{:keys [ctx* get-context replace-skill-state-root! assoc-skill-state! update-skill-state-root! terminate-context! send! terminated*]} (context-mocks {:skill-state {:phase :marking
+  (let [{:keys [ctx* get-context update-skill-state-root! terminate-context! send! terminated*]} (context-mocks {:skill-state {:phase :marking
                                                                                                             :target-pos {:x 8.0 :y 65.0 :z 8.0}}})
         exp-calls* (atom [])
         cooldown-calls* (atom [])]
     (with-redefs [ctx/get-context get-context
-                  ctx-skill/replace-skill-state-root! replace-skill-state-root!
-                  ctx-skill/assoc-skill-state! assoc-skill-state!
                   ctx-skill/update-skill-state-root! update-skill-state-root!
                   ctx/terminate-context! terminate-context!
                   ctx/ctx-send-to-client! send!
@@ -70,7 +58,6 @@
                   skill-effects/set-main-cooldown! (fn [& args] (swap! cooldown-calls* conj args))
                   geom/world-id-of (fn [_] "w")
                   geom/eye-pos (fn [_] {:x 1.0 :y 64.0 :z 1.0})]
-      (binding [teleportation/*teleportation* nil]
         (jet/jet-engine-up! {:player-id "p1" :ctx-id "ctx-1"}))
       (is (= :triggering (get-in @ctx* [:skill-state :phase])))
       (is (seq @exp-calls*))
@@ -78,12 +65,10 @@
       (is (empty? @terminated*)))))
 
 (deftest jet-engine-up-failure-terminates-without-cooldown-test
-  (let [{:keys [ctx* get-context replace-skill-state-root! assoc-skill-state! update-skill-state-root! terminate-context! send! terminated*]} (context-mocks {:skill-state {:phase :marking
+  (let [{:keys [ctx* get-context update-skill-state-root! terminate-context! send! terminated*]} (context-mocks {:skill-state {:phase :marking
                                                                                                             :target-pos {:x 8.0 :y 65.0 :z 8.0}}})
         cooldown-calls* (atom [])]
     (with-redefs [ctx/get-context get-context
-                  ctx-skill/replace-skill-state-root! replace-skill-state-root!
-                  ctx-skill/assoc-skill-state! assoc-skill-state!
                   ctx-skill/update-skill-state-root! update-skill-state-root!
                   ctx/terminate-context! terminate-context!
                   ctx/ctx-send-to-client! send!
@@ -101,7 +86,7 @@
       (is (= :marking (get-in @ctx* [:skill-state :phase]))))))
 
 (deftest jet-engine-triggering-hit-dedup-test
-  (let [{:keys [ctx* get-context replace-skill-state-root! assoc-skill-state! update-skill-state-root! terminate-context! send!]} (context-mocks {:skill-state {:phase :triggering
+  (let [{:keys [ctx* get-context update-skill-state-root! terminate-context! send!]} (context-mocks {:skill-state {:phase :triggering
                                                                                                             :start-pos {:x 0.0 :y 64.0 :z 0.0}
                                                                                                             :target-pos {:x 4.0 :y 64.0 :z 0.0}
                                                                                                             :last-pos {:x 0.0 :y 64.0 :z 0.0}
@@ -113,8 +98,6 @@
   teleport-calls* (atom [])
   marks* (atom [])]
     (with-redefs [ctx/get-context get-context
-                  ctx-skill/replace-skill-state-root! replace-skill-state-root!
-                  ctx-skill/assoc-skill-state! assoc-skill-state!
                   ctx-skill/update-skill-state-root! update-skill-state-root!
                   ctx/terminate-context! terminate-context!
                   ctx/ctx-send-to-client! send!
@@ -122,7 +105,6 @@
                   md-damage/mark-target! (fn [player-id target-id fx-context]
                                            (swap! marks* conj [player-id target-id fx-context])
                                            true)]
-      (binding [teleportation/*teleportation* (reify teleportation/ITeleportation
                                                 (teleport-player! [_ _ _ x y z]
                                                   (swap! teleport-calls* conj [x y z])
                                                   true)
@@ -131,21 +113,21 @@
                                                 (reset-fall-damage! [_ _] true)
                                                 (get-player-position [_ _] {:world-id "w" :x 0.0 :y 64.0 :z 0.0})
                                                 (get-player-dimension [_ _] "w"))
-                player-motion/*player-motion* (reify player-motion/IPlayerMotion
+                (player-motion/available?) (reify player-motion/IPlayerMotion
                                                 (set-velocity! [_ _ _ _ _] true)
                                                 (add-velocity! [_ _ _ _ _] true)
                                                 (get-velocity [_ _] {:x 0.0 :y 0.0 :z 0.0})
                                                 (set-on-ground! [_ _ _] true)
                                                 (is-on-ground? [_ _] false)
                                                 (dismount-riding! [_ _] true))
-                raycast/*raycast* (reify raycast/IRaycast
+                (raycast/available?) (reify raycast/IRaycast
                                     (raycast-blocks [_ _ _ _ _ _ _ _ _] nil)
                                     (raycast-entities [_ _ _ _ _ _ _ _ _]
                                       {:uuid "target-1"})
                                     (raycast-combined [_ _ _ _ _ _ _ _ _] nil)
                                     (get-player-look-vector [_ _] {:x 1.0 :y 0.0 :z 0.0})
                                     (raycast-from-player [_ _ _ _] nil))
-                entity-damage/*entity-damage* (reify entity-damage/IEntityDamage
+                (entity-damage/available?) (reify entity-damage/IEntityDamage
                                                 (apply-direct-damage! [_ _ entity-id _ _]
                                                   (swap! damage-calls* conj entity-id)
                                                   true)

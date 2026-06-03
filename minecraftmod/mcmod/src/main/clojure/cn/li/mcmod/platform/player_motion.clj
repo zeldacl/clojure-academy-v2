@@ -1,35 +1,29 @@
 (ns cn.li.mcmod.platform.player-motion
-  "Protocol for manipulating player motion and physics.
-
-  No Minecraft imports.")
+  "Protocol for manipulating player motion and physics."
+  (:require [cn.li.mcmod.platform.runtime :as prt]))
 
 (defprotocol IPlayerMotion
-  "Protocol for manipulating player motion and physics."
+  (set-velocity! [this player-id x y z])
+  (add-velocity! [this player-id x y z])
+  (get-velocity [this player-id])
+  (set-on-ground! [this player-id on-ground?])
+  (is-on-ground? [this player-id])
+  (dismount-riding! [this player-id]))
 
-  (set-velocity! [this player-id x y z]
-    "Set player velocity vector.
-    Returns true if successful.")
+(def ^:private ^:dynamic *runtime* nil)
 
-  (add-velocity! [this player-id x y z]
-    "Add to player velocity vector.
-    Returns true if successful.")
+(defn install-player-motion!
+  [impl label]
+  (prt/install-impl! #'*runtime* impl (or label "player-motion")))
 
-  (get-velocity [this player-id]
-    "Get player velocity as {:x :y :z}.
-    Returns nil if player not found.")
+(defn available? [] (prt/impl-available? #'*runtime*))
+(defn current [] (prt/impl-current #'*runtime*))
+(defn call-with-runtime [rt f] (binding [*runtime* rt] (f)))
 
-  (set-on-ground! [this player-id on-ground?]
-    "Set player on-ground state.
-    Returns true if successful.")
-
-  (is-on-ground? [this player-id]
-    "Check if player is on ground.
-    Returns boolean.")
-
-  (dismount-riding! [this player-id]
-    "Dismount player from riding entity.
-    Returns true if successful."))
-
-(def ^:dynamic *player-motion*
-  "Dynamic var bound to IPlayerMotion implementation by platform layer."
-  nil)
+(prt/def-impl-wrappers '*runtime* IPlayerMotion
+  [set-velocity!* set-velocity! player-id x y z]
+  [add-velocity!* add-velocity! player-id x y z]
+  [get-velocity* get-velocity player-id]
+  [set-on-ground!* set-on-ground! player-id on-ground?]
+  [is-on-ground?* is-on-ground? player-id]
+  [dismount-riding!* dismount-riding! player-id])

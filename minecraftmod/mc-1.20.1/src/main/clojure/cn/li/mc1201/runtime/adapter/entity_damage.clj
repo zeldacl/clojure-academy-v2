@@ -3,8 +3,7 @@
 
   Platform namespaces provide only server lookup and platform-specific entity
   query callbacks; this namespace owns the damage-flow orchestration."
-  (:require [cn.li.mc1201.runtime.adapter-support :as adapter-support]
-            [cn.li.mc1201.runtime.entity-damage-core :as core]
+  (:require [cn.li.mc1201.runtime.entity-damage-core :as core]
             [cn.li.mc1201.runtime.entity-query-core :as query-core]
             [cn.li.mcmod.platform.entity-damage :as ped]
             [cn.li.mcmod.util.log :as log])
@@ -111,4 +110,4 @@
 
 (defn install-entity-damage!
   [entity-damage label]
-  (adapter-support/install-adapter! #'ped/*entity-damage* entity-damage label))
+  (ped/install-entity-damage! entity-damage label))

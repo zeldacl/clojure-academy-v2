@@ -35,7 +35,6 @@
                   body-intensify/cfg-int (fn [_] 0)
                   shuffle identity
                   rand (fn [] 0.0)]
-      (binding [potion-effects/*potion-effects* (potion-effects-stub applied*)]
         (apply-buffs! "player-a" 20 0.2)))
     (is (= :speed (:effect (first @applied*))))
     (is (= :hunger (:effect (last @applied*))))))
@@ -51,7 +50,6 @@
                   body-intensify/cfg-int (fn [_] 0)
                   shuffle identity
                   rand (fn [] 0.0)]
-      (binding [potion-effects/*potion-effects* (potion-effects-stub applied*)]
         (apply-buffs! "player-b" 20 0.2)))
     (is (= 1 (count @applied*)))
     (is (= :hunger (:effect (first @applied*))))))

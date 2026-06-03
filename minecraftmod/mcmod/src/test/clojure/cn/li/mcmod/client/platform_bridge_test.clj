@@ -2,28 +2,12 @@
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 
-(def ^:private bridge-vars
-  [#'cn.li.mcmod.client.platform-bridge/*slot-key-down-fn*
-   #'cn.li.mcmod.client.platform-bridge/*slot-key-tick-fn*
-   #'cn.li.mcmod.client.platform-bridge/*slot-key-up-fn*
-  #'cn.li.mcmod.client.platform-bridge/*slot-key-abort-fn*
-   #'cn.li.mcmod.client.platform-bridge/*movement-key-down-fn*
-   #'cn.li.mcmod.client.platform-bridge/*movement-key-tick-fn*
-   #'cn.li.mcmod.client.platform-bridge/*movement-key-up-fn*
-   #'cn.li.mcmod.client.platform-bridge/*open-screen-fn*
-   #'cn.li.mcmod.client.platform-bridge/*open-simple-gui-fn*
-   #'cn.li.mcmod.client.platform-bridge/*run-client-effect-fn*])
-
-(defn- clear-bridge! []
-  (doseq [bridge-var bridge-vars]
-    (alter-var-root bridge-var (constantly nil))))
-
 (defn- reset-bridge-state! [f]
-  (clear-bridge!)
+  (client-bridge/reset-client-bridge-for-test!)
   (try
     (f)
     (finally
-      (clear-bridge!))))
+      (client-bridge/reset-client-bridge-for-test!))))
 
 (use-fixtures :each reset-bridge-state!)
 

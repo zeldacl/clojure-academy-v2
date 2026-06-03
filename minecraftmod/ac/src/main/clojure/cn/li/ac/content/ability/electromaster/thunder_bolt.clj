@@ -57,10 +57,10 @@
 (defn- resolve-attack-data [player-id range]
   (let [world-id (geom/world-id-of player-id)
         eye (geom/eye-pos player-id)
-        look (when raycast/*raycast*
-               (raycast/get-player-look-vector raycast/*raycast* player-id))
-        hit (when (and raycast/*raycast* look)
-              (raycast/raycast-combined raycast/*raycast*
+        look (when (raycast/available?)
+               (raycast/get-player-look-vector* player-id))
+        hit (when (and (raycast/available?) look)
+              (raycast/raycast-combined*
                                         world-id
                                         (:x eye) (:y eye) (:z eye)
                                         (double (or (:x look) 0.0))
@@ -82,8 +82,8 @@
      :impact impact}))
 
 (defn- damage-entity! [world-id target-uuid damage]
-  (when (and entity-damage/*entity-damage* target-uuid (> (double damage) 0.0))
-    (entity-damage/apply-direct-damage! entity-damage/*entity-damage*
+  (when (and (entity-damage/available?) target-uuid (> (double damage) 0.0))
+    (entity-damage/apply-direct-damage!*
                                         world-id
                                         target-uuid
                                         (double damage)
@@ -91,9 +91,9 @@
     true))
 
 (defn- aoe-victims [world-id center radius excluded]
-  (if-not world-effects/*world-effects*
+  (if-not (world-effects/available?)
     []
-    (->> (world-effects/find-entities-in-radius world-effects/*world-effects*
+    (->> (world-effects/find-entities-in-radius*
                                                  world-id
                                                  (double (:x center))
                                                  (double (:y center))
@@ -118,11 +118,11 @@
 (defn- try-apply-slowness! [target-uuid exp]
   (let [exp-threshold (cfg-double :effect.slowness-exp-threshold)
         chance (double (skill-config/probability thunder-bolt-skill-id :effect.slowness-chance))]
-    (when (and potion-effects/*potion-effects*
+    (when (and (potion-effects/available?)
                target-uuid
                (> exp exp-threshold)
                (< (rand) chance))
-      (potion-effects/apply-potion-effect! potion-effects/*potion-effects*
+      (potion-effects/apply-potion-effect!*
                                            target-uuid
                                            :slowness
                                            (cfg-int :effect.slowness-duration-ticks)
@@ -153,8 +153,8 @@
                             :z (double z)})
                          victims)
         effective? (or direct-hit? (pos? aoe-hit-count))]
-    (when (and world-effects/*world-effects* (not= hit-kind :miss))
-      (world-effects/spawn-lightning! world-effects/*world-effects*
+    (when (and (world-effects/available?) (not= hit-kind :miss))
+      (world-effects/spawn-lightning!*
                                       world-id
                                       (double (:x impact))
                                       (double (:y impact))

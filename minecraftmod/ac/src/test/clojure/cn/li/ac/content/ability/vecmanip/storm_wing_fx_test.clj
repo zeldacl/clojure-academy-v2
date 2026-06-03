@@ -27,6 +27,24 @@
    :channel :storm-wing/fx-update
    :owner-key [:ctx ctx-id]})
 
+(deftest init-registers-owner-aware-storm-wing-fx-test
+  (let [registered-level* (atom nil)
+        registered-handler* (atom nil)]
+    (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
+                                                         (reset! registered-level* [effect-id effect-map])
+                                                         nil)
+                  fx-registry/register-fx-channels! (fn [channels handler]
+                                                      (reset! registered-handler* {:channels channels
+                                                                                   :handler handler})
+                                                      nil)]
+      (swfx/init!)
+      (is (= :storm-wing (first @registered-level*)))
+      (is (fn? (:enqueue-state-fn (second @registered-level*))))
+      (is (= #{:storm-wing/fx-start
+               :storm-wing/fx-update
+               :storm-wing/fx-end}
+             (set (:channels @registered-handler*)))))))
+
 (deftest flying-build-plan-queues-particles-and-loop-sound-test
   (let [enqueue-state! (var-get #'cn.li.ac.content.ability.vecmanip.storm-wing-fx/enqueue-state!)
         tick-state! (var-get #'cn.li.ac.content.ability.vecmanip.storm-wing-fx/tick-state!)

@@ -23,6 +23,7 @@
             [cn.li.ac.ability.service.skill-effects :as fx-common]
             [cn.li.ac.ability.server.damage.handler :as damage-handler]
                         [cn.li.mcmod.platform.entity-motion :as entity-motion]
+            [cn.li.mcmod.platform.teleportation :as teleportation]
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.util.log :as log]))
 
@@ -82,9 +83,7 @@
 (defn- get-player-position
   "Get player position from teleportation protocol."
   [player-id]
-  (when-let [teleportation (resolve 'cn.li.mcmod.platform.teleportation/*teleportation*)]
-    (when-let [tp-impl @teleportation]
-      ((resolve 'cn.li.mcmod.platform.teleportation/get-player-position) tp-impl player-id))))
+  (teleportation/get-player-position* player-id))
 
 (defn- entity-registry-id
   [entity]
@@ -177,12 +176,12 @@
           (when-let [floor (get-in ctx-data [:skill-state :vec-deviation-overload-floor])]
             (fx-common/enforce-overload-floor! player-id floor))
           (when-let [pos (get-player-position player-id)]
-            (when world-effects/*world-effects*
+            (when (world-effects/available?)
               (let [world-id (:world-id pos)
                     x (:x pos)
                     y (:y pos)
                     z (:z pos)
-                    entities (world-effects/find-entities-in-radius world-effects/*world-effects*
+                    entities (world-effects/find-entities-in-radius*
                                                                     world-id x y z (cfg-double :targeting.radius))
                     visited (get-in ctx-data [:skill-state :vec-deviation-visited] #{})
                     marked (get-in ctx-data [:skill-state :vec-deviation-marked] #{})
@@ -211,16 +210,16 @@
                           ;; Consume only after arbitration succeeds; cap to available CP (force-consume semantics)
                           (when (pos? actual-cost)
                             (fx-common/perform-resource! player-id 0.0 actual-cost false))
-                          (when entity-motion/*entity-motion*
-                            (entity-motion/set-velocity! entity-motion/*entity-motion*
+                          (when (entity-motion/available?)
+                            (entity-motion/set-velocity!*
                                                          world-id entity-uuid 0.0 0.0 0.0))
                           (when (or (contains? (large-fireball-ids) eid)
                                     (contains? (small-fireball-ids) eid))
-                            (when entity-motion/*entity-motion*
-                              (entity-motion/discard-entity! entity-motion/*entity-motion* world-id entity-uuid)))
+                            (when (entity-motion/available?)
+                              (entity-motion/discard-entity!* world-id entity-uuid)))
                           (when (and (contains? (large-fireball-ids) eid)
-                                     world-effects/*world-effects*)
-                            (world-effects/create-explosion! world-effects/*world-effects*
+                                     (world-effects/available?))
+                            (world-effects/create-explosion!*
                                                              world-id
                                                              (double (or (:x entity) 0.0))
                                                              (double (or (:y entity) 0.0))

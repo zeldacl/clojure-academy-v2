@@ -3,7 +3,8 @@
 
   This namespace owns world/chunk/tile/capability lookup. It deliberately stays
   separate from NBT codecs so persistence remains data-only."
-  (:require [cn.li.mcmod.platform.be :as platform-be]
+  (:require [cn.li.mcmod.block.tile-logic :as tile-logic]
+            [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.world :as world])
   (:import [cn.li.acapi.wireless
@@ -27,28 +28,32 @@
 
 (defn- has-capability?
   "Return true if tile exposes the named wireless capability."
-  [tile cap-key]
-  (try (some? (platform-be/get-capability tile cap-key))
-       (catch Exception _ false)))
+  [tile cap-key fallback-class]
+  (when tile
+    (try
+      (or (when-let [tile-id (platform-be/get-block-id tile)]
+            (some? (tile-logic/get-capability tile-id cap-key tile nil)))
+          (instance? fallback-class tile))
+      (catch Exception _ false))))
 
 (defn- tile-has-wireless-matrix? [tile]
   (if (map? tile)
     (contains? tile :plate-count)
-    (or (has-capability? tile WirelessCapabilityKeys/MATRIX)
+    (or (has-capability? tile WirelessCapabilityKeys/MATRIX IWirelessMatrix)
         (instance? IWirelessMatrix tile))))
 
 (defn- tile-has-wireless-node? [tile]
   (if (map? tile)
     (contains? tile :node-type)
-    (or (has-capability? tile WirelessCapabilityKeys/NODE)
+    (or (has-capability? tile WirelessCapabilityKeys/NODE IWirelessNode)
         (instance? IWirelessNode tile))))
 
 (defn- tile-has-wireless-generator? [tile]
-  (or (has-capability? tile WirelessCapabilityKeys/GENERATOR)
+  (or (has-capability? tile WirelessCapabilityKeys/GENERATOR IWirelessGenerator)
       (instance? IWirelessGenerator tile)))
 
 (defn- tile-has-wireless-receiver? [tile]
-  (or (has-capability? tile WirelessCapabilityKeys/RECEIVER)
+  (or (has-capability? tile WirelessCapabilityKeys/RECEIVER IWirelessReceiver)
       (instance? IWirelessReceiver tile)))
 
 (defn vblock-get

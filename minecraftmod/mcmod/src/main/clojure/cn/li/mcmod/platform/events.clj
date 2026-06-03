@@ -1,26 +1,24 @@
 (ns cn.li.mcmod.platform.events
-  "Platform-neutral event bridge.
+  "Platform-neutral event bridge."
+  (:require [cn.li.mcmod.platform.runtime :as prt]
+            [cn.li.mcmod.util.log :as log]))
 
-  Forge binds *fire-event-fn* during platform init. Code in ac can call
-  fire-event! without importing any Forge or Minecraft classes.")
+(def ^:private ^:dynamic *fire-event-fn* nil)
 
-(defn- log-warn
-  [& xs]
-  (when-let [f (requiring-resolve 'cn.li.mcmod.util.log/warn)]
-    (apply f xs)))
+(defn install-fire-event-fn!
+  [fire-fn label]
+  (prt/install-impl! #'*fire-event-fn* fire-fn (or label "platform-events")))
 
-(def ^:dynamic *fire-event-fn*
-  "Bound by the platform (Forge) to (fn [event]).
-  Posts the event to the Forge game event bus.
-  nil in non-Forge contexts (data-gen, tests, Fabric)."
-  nil)
+(defn available? [] (prt/impl-available? #'*fire-event-fn*))
+(defn current [] (prt/impl-current #'*fire-event-fn*))
+(defn call-with-runtime [fire-fn f] (binding [*fire-event-fn* fire-fn] (f)))
 
 (defn fire-event!
-  "Post an event object to the platform event bus.
-  No-op when *fire-event-fn* is not bound (e.g. in tests or on Fabric)."
+  "Post an event object to the platform event bus. No-op when not installed."
   [event]
-  (when (and *fire-event-fn* event)
-    (try
-      (*fire-event-fn* event)
-      (catch Exception e
-        (log-warn "Event dispatch failed:" (ex-message e))))))
+  (when-let [fire *fire-event-fn*]
+    (when event
+      (try
+        (fire event)
+        (catch Exception e
+          (log/warn "Event dispatch failed:" (ex-message e)))))))

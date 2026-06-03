@@ -111,8 +111,7 @@
                                                                                   :progression.exp-damage-scale 0.0
                                                                                   0.0))
                   cn.li.ac.content.ability.vecmanip.vec-reflection/max-reflections (fn [] 6)
-                  cn.li.mcmod.platform.entity-damage/*entity-damage* :mock
-                  cn.li.mcmod.platform.entity-damage/apply-direct-damage! (fn [_ world-id attacker-id damage _]
+                  entity-damage/apply-direct-damage!* (fn [_ world-id attacker-id damage _]
                                                                             (swap! applied conj [world-id attacker-id damage]))
                   cn.li.ac.content.ability.vecmanip.vec-reflection/add-exp! (fn [_ _] nil)
                   cn.li.ac.content.ability.vecmanip.vec-reflection/active-vec-reflection-ctx-id (fn [_] nil)]
@@ -138,8 +137,7 @@
                                                                                   :progression.exp-damage-scale 0.0
                                                                                   0.0))
                   cn.li.ac.content.ability.vecmanip.vec-reflection/max-reflections (fn [] 2)
-                  cn.li.mcmod.platform.entity-damage/*entity-damage* :mock
-                  cn.li.mcmod.platform.entity-damage/apply-direct-damage! (fn [_ world-id attacker-id damage _]
+                  entity-damage/apply-direct-damage!* (fn [_ world-id attacker-id damage _]
                                                                             (swap! applied conj [world-id attacker-id damage]))
                   cn.li.ac.content.ability.vecmanip.vec-reflection/add-exp! (fn [_ _] nil)
                   cn.li.ac.content.ability.vecmanip.vec-reflection/active-vec-reflection-ctx-id (fn [_] nil)]
@@ -165,8 +163,7 @@
                                                                                   :progression.exp-damage-scale 0.0
                                                                                   0.0))
                   cn.li.ac.content.ability.vecmanip.vec-reflection/max-reflections (fn [] 6)
-                  cn.li.mcmod.platform.entity-damage/*entity-damage* :mock
-                  cn.li.mcmod.platform.entity-damage/apply-direct-damage! (fn [_ world-id attacker-id damage _]
+                  entity-damage/apply-direct-damage!* (fn [_ world-id attacker-id damage _]
                                                                             (swap! applied conj [world-id attacker-id damage]))
                   cn.li.ac.content.ability.vecmanip.vec-reflection/add-exp! (fn [_ _] nil)
                   cn.li.ac.content.ability.vecmanip.vec-reflection/active-vec-reflection-ctx-id (fn [_] "ctx-current")]
@@ -193,8 +190,7 @@
                                                                                   :progression.exp-damage-scale 0.0
                                                                                   0.0))
                   cn.li.ac.content.ability.vecmanip.vec-reflection/max-reflections (fn [] 6)
-                  cn.li.mcmod.platform.entity-damage/*entity-damage* :mock
-                  cn.li.mcmod.platform.entity-damage/apply-direct-damage! (fn [_ world-id attacker-id damage _]
+                  entity-damage/apply-direct-damage!* (fn [_ world-id attacker-id damage _]
                                                                             (swap! applied conj [world-id attacker-id damage]))
                   cn.li.ac.content.ability.vecmanip.vec-reflection/add-exp! (fn [_ _] nil)
                   cn.li.ac.content.ability.vecmanip.vec-reflection/active-vec-reflection-ctx-id (fn [_] "ctx-current")]
@@ -252,20 +248,17 @@
                   cn.li.ac.content.ability.vecmanip.vec-reflection/send-fx-reflect-entity! (fn [& _] (swap! fx-calls inc))
                   cn.li.ac.content.ability.vecmanip.arbitration/dual-active? (fn [_] false)
                   cn.li.ac.content.ability.vecmanip.arbitration/claim-projectile! (fn [& _] true)
-                  cn.li.mcmod.platform.world-effects/find-entities-in-radius (fn [& _]
+                  world-effects/find-entities-in-radius* (fn [& _]
                                                                                [{:uuid "e1"
                                                                                  :entity-id "minecraft:fireball"
                                                                                  :x 1.0 :y 65.0 :z 1.0}])
-                  cn.li.mcmod.platform.world-effects/spawn-projectile! (fn [_ world-id spec]
+                  world-effects/spawn-projectile!* (fn [_ world-id spec]
                                                                          (swap! spawn-calls conj [world-id spec])
                                                                          {:success? true :uuid "spawned" :entity-id (:entity-id spec)})
-                  cn.li.mcmod.platform.raycast/get-player-look-vector (fn [& _] {:x 1.0 :y 0.0 :z 0.0})
-                  cn.li.mcmod.platform.entity-motion/get-velocity (fn [& _] {:x 1.0 :y 0.0 :z 0.0})
-                  cn.li.mcmod.platform.entity-motion/discard-entity! (fn [_ world-id entity-id]
+                  raycast/get-player-look-vector* (fn [& _] {:x 1.0 :y 0.0 :z 0.0})
+                  cn.li.mcmod.platform.entity-motion/get-velocity* (fn [& _] {:x 1.0 :y 0.0 :z 0.0})
+                  cn.li.mcmod.platform.entity-motion/discard-entity!* (fn [_ world-id entity-id]
                                                                        (swap! discard-calls conj [world-id entity-id]))]
-      (binding [cn.li.mcmod.platform.world-effects/*world-effects* :mock
-                cn.li.mcmod.platform.entity-motion/*entity-motion* :mock
-                cn.li.mcmod.platform.raycast/*raycast* :mock]
         (@#'cn.li.ac.content.ability.vecmanip.vec-reflection/vec-reflection-on-key-tick-body
          "p1" "ctx-1" true))
       (is (= 1 (count @spawn-calls)))
@@ -312,22 +305,19 @@
                   cn.li.ac.content.ability.vecmanip.vec-reflection/send-fx-reflect-entity! (fn [& _] nil)
                   cn.li.ac.content.ability.vecmanip.arbitration/dual-active? (fn [_] false)
                   cn.li.ac.content.ability.vecmanip.arbitration/claim-projectile! (fn [& _] true)
-                  cn.li.mcmod.platform.world-effects/find-entities-in-radius (fn [& _]
+                  world-effects/find-entities-in-radius* (fn [& _]
                                                                                [{:uuid "e1"
                                                                                  :entity-id "minecraft:fireball"
                                                                                  :x 1.0 :y 65.0 :z 1.0}])
-                  cn.li.mcmod.platform.world-effects/spawn-projectile! (fn [_ world-id spec]
+                  world-effects/spawn-projectile!* (fn [_ world-id spec]
                                                                          (swap! spawn-calls conj [world-id spec])
                                                                          {:success? false})
-                  cn.li.mcmod.platform.raycast/get-player-look-vector (fn [& _] {:x 0.0 :y 1.0 :z 0.0})
-                  cn.li.mcmod.platform.entity-motion/get-velocity (fn [& _] {:x 0.0 :y 0.0 :z 2.0})
-                  cn.li.mcmod.platform.entity-motion/set-velocity! (fn [_ world-id entity-id vx vy vz]
+                  raycast/get-player-look-vector* (fn [& _] {:x 0.0 :y 1.0 :z 0.0})
+                  cn.li.mcmod.platform.entity-motion/get-velocity* (fn [& _] {:x 0.0 :y 0.0 :z 2.0})
+                  cn.li.mcmod.platform.entity-motion/set-velocity!* (fn [_ world-id entity-id vx vy vz]
                                                                      (swap! set-velocity-calls conj [world-id entity-id vx vy vz]))
-                  cn.li.mcmod.platform.entity-motion/discard-entity! (fn [_ world-id entity-id]
+                  cn.li.mcmod.platform.entity-motion/discard-entity!* (fn [_ world-id entity-id]
                                                                        (swap! discard-calls conj [world-id entity-id]))]
-      (binding [cn.li.mcmod.platform.world-effects/*world-effects* :mock
-                cn.li.mcmod.platform.entity-motion/*entity-motion* :mock
-                cn.li.mcmod.platform.raycast/*raycast* :mock]
         (@#'cn.li.ac.content.ability.vecmanip.vec-reflection/vec-reflection-on-key-tick-body
          "p1" "ctx-1" true))
       (is (= 1 (count @spawn-calls)))

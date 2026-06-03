@@ -47,6 +47,9 @@
 (defn- cfg-lerp [field-id exp]
   (skill-config/lerp-double scatter-bomb-skill-id field-id exp))
 
+(defn- cfg-lerp-int [field-id exp]
+  (skill-config/lerp-int scatter-bomb-skill-id field-id exp))
+
 (defn- current-hold-ticks
   [ctx-id]
   (long (or (get-in (ctx/get-context ctx-id) [:skill-state :hold-ticks]) 0)))
@@ -57,7 +60,7 @@
 
 (defn- set-skill-state-root!
   [ctx-id state-map]
-  (ctx-skill/replace-skill-state-root! ctx-id state-map))
+  (ctx-skill/update-skill-state-root! ctx-id identity state-map))
 
 (defn- beam-config []
   {:radius          (cfg-double :beam.radius)
@@ -117,9 +120,8 @@
         (enforce-overload-floor! player-id floor)
         ;; Anti-AFK self-damage at tick 200
         (when (= ticks (cfg-int :effect.anti-afk-tick))
-          (when entity-damage/*entity-damage*
-            (entity-damage/apply-direct-damage!
-              entity-damage/*entity-damage*
+          (when (entity-damage/available?)
+            (entity-damage/apply-direct-damage!*
               (geom/world-id-of player-id)
               player-id
               (cfg-double :effect.anti-afk-damage)
@@ -149,8 +151,8 @@
     (when (pos? balls)
       (let [world-id (geom/world-id-of player-id)
             eye      (geom/eye-pos player-id)
-            look-vec (when raycast/*raycast*
-                       (raycast/get-player-look-vector raycast/*raycast* player-id))
+            look-vec (when (raycast/available?)
+                       (raycast/get-player-look-vector* player-id))
             damage   (cfg-lerp :combat.damage exp)]
         (when look-vec
           ;; Each ball settles with a slight delay to preserve projectile cadence.

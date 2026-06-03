@@ -152,25 +152,24 @@
   "Teleport player-id to (x y z) in world-id.
   Returns true if successful."
   [player-id world-id x y z]
-  (when teleportation/*teleportation*
-    (let [result (teleportation/teleport-player! teleportation/*teleportation*
-                                                 player-id world-id
+  (when (teleportation/available?)
+    (let [result (teleportation/teleport-player!* player-id world-id
                                                  (double x) (double y) (double z))]
       (when result
-        (teleportation/reset-fall-damage! teleportation/*teleportation* player-id))
+        (teleportation/reset-fall-damage!* player-id))
       result)))
 
 (defn reset-fall-damage!
   "Reset player's fall damage state. Returns true on success."
   [player-id]
-  (when teleportation/*teleportation*
-    (teleportation/reset-fall-damage! teleportation/*teleportation* player-id)))
+  (when (teleportation/available?)
+    (teleportation/reset-fall-damage!* player-id)))
 
 (defn raycast-combined
   "Raycast from world position and direction, returning first hit map or nil."
   [world-id start-x start-y start-z dir-x dir-y dir-z max-distance]
-  (when raycast/*raycast*
-    (raycast/raycast-combined raycast/*raycast*
+  (when (raycast/available?)
+    (raycast/raycast-combined*
                               world-id
                               (double start-x)
                               (double start-y)
@@ -183,8 +182,8 @@
 (defn raycast-blocks
   "Raycast blocks from world position and direction, returning block hit or nil."
   [world-id start-x start-y start-z dir-x dir-y dir-z max-distance]
-  (when raycast/*raycast*
-    (raycast/raycast-blocks raycast/*raycast*
+  (when (raycast/available?)
+    (raycast/raycast-blocks*
                             world-id
                             (double start-x)
                             (double start-y)
@@ -201,8 +200,8 @@
 (defn raycast-entity
   "Cast ray from player, returning first living non-player entity UUID, or nil."
   [player-id max-dist]
-  (when raycast/*raycast*
-    (when-let [result (raycast/raycast-from-player raycast/*raycast*
+  (when (raycast/available?)
+    (when-let [result (raycast/raycast-from-player*
                                                     player-id (double max-dist) true)]
       (when (and (:hit-entity result)
                  (not= (str (:entity-uuid result)) (str player-id)))
@@ -216,9 +215,8 @@
   "Apply magic (armor-bypassing) damage to entity uuid in world.
   3-arity is plain damage; 4-arity applies teleporter passive crit pipeline."
   ([world-id entity-uuid damage]
-   (when entity-damage/*entity-damage*
-     (entity-damage/apply-direct-damage!
-       entity-damage/*entity-damage*
+   (when (entity-damage/available?)
+     (entity-damage/apply-direct-damage!*
        world-id entity-uuid (double damage) :magic)))
   ([attacker-id world-id entity-uuid damage]
    (let [crit-result (calc-teleporter-crit attacker-id (double damage))
@@ -236,10 +234,10 @@
 ;; ---------------------------------------------------------------------------
 
 (defn player-look-vec [player-id]
-  (when raycast/*raycast*
-    (raycast/get-player-look-vector raycast/*raycast* player-id)))
+  (when (raycast/available?)
+    (raycast/get-player-look-vector* player-id)))
 
 (defn player-position [player-id]
-  (when teleportation/*teleportation*
-    (teleportation/get-player-position teleportation/*teleportation* player-id)))
+  (when (teleportation/available?)
+    (teleportation/get-player-position* player-id)))
 

@@ -19,8 +19,9 @@
   "Resolve family keyword from ability namespace symbol.
   Example: cn.li.ac.content.ability.electromaster.railgun -> :electromaster"
   [ns-sym]
-  (when-let [family (nth (str/split (name ns-sym) #"\.") 5 nil)]
-    (keyword family)))
+  (let [parts (str/split (name ns-sym) #"\\.")]
+    (when (>= (count parts) 6)
+      (keyword (nth parts 5)))))
 
 (defn fx-namespace?
   [ns-sym]

@@ -1,17 +1,15 @@
 (ns cn.li.mcmod.platform.resource
-  "Platform-agnostic resource identifier abstraction.
+  "Platform-agnostic resource identifier abstraction."
+  (:require [cn.li.mcmod.platform.runtime :as prt]))
 
-  Core code uses this namespace to create Minecraft resource identifiers
-  (ResourceLocation / Identifier) without importing platform classes.")
+(def ^:private ^:dynamic *resource-factory* nil)
 
-(defonce ^{:dynamic true
-           :doc "Platform-specific resource factory function.
+(defn install-resource-factory!
+  [factory-fn label]
+  (prt/install-impl! #'*resource-factory* factory-fn (or label "resource-factory")))
 
-                 Must be initialized by platform code before core code runs.
-
-                 Expected signature: (fn [namespace path] -> resource-id-object)"}
-  *resource-factory*
-  nil)
+(defn call-with-resource-factory [factory-fn f]
+  (binding [*resource-factory* factory-fn] (f)))
 
 (defn create-resource-location
   "Create a platform-specific resource identifier.
@@ -33,7 +31,15 @@
 ;; Optional high-level injection for mcmod code that does not depend on config.modid.
 ;; Ac/loader sets this to (fn [namespace path] resource) so gui.components and client.resources
 ;; can resolve paths without requiring config.modid. namespace may be nil (use default mod id).
-(def ^:dynamic *resource-location-fn* nil)
+(def ^:private ^:dynamic *resource-location-fn* nil)
+
+(defn install-resource-location-fn!
+  [location-fn label]
+  (prt/install-impl! #'*resource-location-fn* location-fn (or label "resource-location-fn"))
+  nil)
+
+(defn call-with-resource-location-fn [location-fn f]
+  (binding [*resource-location-fn* location-fn] (f)))
 
 (def ^:private default-resource-namespace
   (or (System/getenv "MOD_ID") "my_mod"))

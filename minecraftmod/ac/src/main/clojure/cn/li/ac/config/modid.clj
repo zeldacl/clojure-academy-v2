@@ -17,11 +17,12 @@
   shared configuration state."
   []
   (alter-var-root #'mcmod-config/*mod-id* (constantly MOD-ID))
-  (alter-var-root #'platform-resource/*resource-location-fn*
-                  (constantly (fn [namespace path]
-                                (if namespace
-                                  (mcmod-config/resource-location namespace path)
-                                  (mcmod-config/resource-location path)))))
+  (platform-resource/install-resource-location-fn!
+   (fn [namespace path]
+     (if namespace
+       (mcmod-config/resource-location namespace path)
+       (mcmod-config/resource-location path)))
+   "ac-modid")
   nil)
 
 (def resource-location mcmod-config/resource-location)

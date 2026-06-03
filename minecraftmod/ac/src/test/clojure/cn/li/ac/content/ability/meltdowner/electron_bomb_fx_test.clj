@@ -28,6 +28,24 @@
    :channel channel
    :owner-key [:ctx ctx-id]})
 
+(deftest init-registers-owner-aware-electron-bomb-fx-test
+  (let [registered-level* (atom nil)
+        registered-handler* (atom nil)]
+    (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
+                                                         (reset! registered-level* [effect-id effect-map])
+                                                         nil)
+                  fx-registry/register-fx-channels! (fn [channels handler]
+                                                      (reset! registered-handler* {:channels channels
+                                                                                   :handler handler})
+                                                      nil)]
+      (electron-bomb-fx/init!)
+      (is (= :electron-bomb (first @registered-level*)))
+      (is (fn? (:enqueue-state-fn (second @registered-level*))))
+      (is (= #{:electron-bomb/fx-spawn
+               :electron-bomb/fx-beam
+               :electron-bomb/fx-end}
+             (set (:channels @registered-handler*)))))))
+
 (deftest fx-handler-routes-events-with-ctx-metadata-test
   (let [handler* (atom nil)
         enqueued* (atom [])]

@@ -1,29 +1,25 @@
 (ns cn.li.mcmod.platform.entity-motion
-	"Protocol for manipulating generic entity motion (not only players).
-
-	Platform layer implements this protocol and binds to *entity-motion*.
-	Game logic (ac) uses it to apply knockback/impulse without Minecraft imports.")
+  "Protocol for manipulating generic entity motion."
+  (:require [cn.li.mcmod.platform.runtime :as prt]))
 
 (defprotocol IEntityMotion
-	"Generic entity motion control."
+  (set-velocity! [this world-id entity-uuid x y z])
+  (add-velocity! [this world-id entity-uuid x y z])
+  (discard-entity! [this world-id entity-uuid])
+  (get-velocity [this world-id entity-uuid]))
 
-	(set-velocity! [this world-id entity-uuid x y z]
-		"Set absolute velocity of target entity.
-		Returns true when successful.")
+(def ^:private ^:dynamic *runtime* nil)
 
-	(add-velocity! [this world-id entity-uuid x y z]
-		"Add velocity delta to target entity.
-		Returns true when successful.")
+(defn install-entity-motion!
+  [impl label]
+  (prt/install-impl! #'*runtime* impl (or label "entity-motion")))
 
-	(discard-entity! [this world-id entity-uuid]
-		"Discard/remove target entity from world.
-		Returns true when successful.")
+(defn available? [] (prt/impl-available? #'*runtime*))
+(defn current [] (prt/impl-current #'*runtime*))
+(defn call-with-runtime [rt f] (binding [*runtime* rt] (f)))
 
-	(get-velocity [this world-id entity-uuid]
-		"Get target entity velocity map {:x :y :z}.
-		Returns nil when entity is not found."))
-
-(def ^:dynamic *entity-motion*
-	"Bound by platform layer to IEntityMotion implementation.
-	nil until platform init runs."
-	nil)
+(prt/def-impl-wrappers '*runtime* IEntityMotion
+  [set-velocity!* set-velocity! world-id entity-uuid x y z]
+  [add-velocity!* add-velocity! world-id entity-uuid x y z]
+  [discard-entity!* discard-entity! world-id entity-uuid]
+  [get-velocity* get-velocity world-id entity-uuid])

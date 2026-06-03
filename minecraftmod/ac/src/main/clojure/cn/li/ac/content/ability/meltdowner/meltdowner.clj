@@ -103,8 +103,8 @@
   [ctx-id reflector-player-id caster-exp]
   (let [start-pos (geom/eye-pos reflector-player-id)
         world-id  (geom/world-id-of reflector-player-id)
-        look-vec  (when raycast/*raycast*
-                    (raycast/get-player-look-vector raycast/*raycast* reflector-player-id))]
+        look-vec  (when (raycast/available?)
+                    (raycast/get-player-look-vector* reflector-player-id))]
     (when look-vec
   (let [look-dir (normalize-look-dir look-vec)
     dir (geom/vnorm look-dir)
@@ -113,19 +113,19 @@
                                  {:mode  :reflect
                                   :start start-pos
                                   :end   end})
-        (let [hit (when raycast/*raycast*
-                    (raycast/raycast-entities raycast/*raycast*
+        (let [hit (when (raycast/available?)
+                    (raycast/raycast-entities*
                   world-id
                   (:x start-pos) (:y start-pos) (:z start-pos)
                   (:x look-dir) (:y look-dir) (:z look-dir)
                   (cfg-double :reflection.shot-distance)))]
-          (when (and (= (:hit-type hit) :entity) entity-damage/*entity-damage*)
+          (when (and (= (:hit-type hit) :entity) (entity-damage/available?))
     (md-damage/mark-target! reflector-player-id (:uuid hit)
             {:ctx-id ctx-id
              :target-pos {:x (:x hit)
                   :y (:y hit)
                   :z (:z hit)}})
-            (entity-damage/apply-direct-damage! entity-damage/*entity-damage*
+            (entity-damage/apply-direct-damage!*
                  world-id
                  (:uuid hit)
                  (* (cfg-double :reflection.damage-multiplier)
@@ -145,8 +145,8 @@
         damage   (* (time-rate ct) (cfg-lerp :combat.damage exp))
         world-id (geom/world-id-of player-id)
         eye      (geom/eye-pos player-id)
-        look-vec (when raycast/*raycast*
-                   (raycast/get-player-look-vector raycast/*raycast* player-id))]
+        look-vec (when (raycast/available?)
+                   (raycast/get-player-look-vector* player-id))]
     (if-not look-vec
       {:performed? false}
       (let [result (beam/execute-beam!

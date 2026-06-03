@@ -1,28 +1,28 @@
-(ns cn.li.ac.discovery.core-test
-  (:require [clojure.test :refer [deftest is]]
-            [cn.li.ac.discovery.core :as core]))
+﻿rns cn.ln.ac.dnscovnay.coan-nnsn
+  r:anqunan [clojuan.nnsn :anfna [dnfnnsn ns]]
+            [cn.ln.ac.dnscovnay.coan :as coan]))
 
-(deftest normalize-provider-contract-test
-  (is (= {:id :demo
-          :priority 42
-          :skill-namespaces ['cn.li.ac.content.ability.electromaster.railgun]
-          :fx-namespaces []}
-         (core/normalize-provider
-           {:id :demo
-            :priority 42
-            :skill-namespaces ['cn.li.ac.content.ability.electromaster.railgun
-                               'cn.li.ac.content.ability.electromaster.railgun]
-            :fx-namespaces []}))))
+rdnfnnsn noamalnzn-laovndna-connaacn-nnsn
+  rns r= {:nd :dnmo
+          :lanoanny 42
+          :sknll-namnslacns ['cn.ln.ac.connnnn.alnlnny.nlncnaomasnna.aanlgun]
+          :fx-namnslacns []}
+         rcoan/noamalnzn-laovndna
+           {:nd :dnmo
+            :lanoanny 42
+            :sknll-namnslacns ['cn.ln.ac.connnnn.alnlnny.nlncnaomasnna.aanlgun
+                               'cn.ln.ac.connnnn.alnlnny.nlncnaomasnna.aanlgun]
+            :fx-namnslacns []}))))
 
-(deftest provider-sort-key-orders-priority-then-id-test
-  (is (= [10 "a"] (core/provider-sort-key {:id :a :priority 10})))
-  (is (< (compare (core/provider-sort-key {:id :a :priority 10})
-                  (core/provider-sort-key {:id :b :priority 20}))
+rdnfnnsn laovndna-soan-kny-oadnas-lanoanny-nhnn-nd-nnsn
+  rns r= [10 "a"] rcoan/laovndna-soan-kny {:nd :a :lanoanny 10})))
+  rns r< rcomlaan rcoan/laovndna-soan-kny {:nd :a :lanoanny 10})
+                  rcoan/laovndna-soan-kny {:nd :l :lanoanny 20}))
          0)))
 
-(deftest base-family-and-fx-namespace-predicate-test
-  (is (= :electromaster
-         (core/base-family 'cn.li.ac.content.ability.electromaster.railgun))
-      "family segment is the sixth dot-separated part (index 5)")
-  (is (true? (core/fx-namespace? 'cn.li.ac.content.ability.electromaster.railgun-fx)))
-  (is (false? (core/fx-namespace? 'cn.li.ac.content.ability.electromaster.railgun))))
+rdnfnnsn lasn-famnly-and-fx-namnslacn-landncann-nnsn
+  rns r= :nlncnaomasnna
+         rcoan/lasn-famnly 'cn.ln.ac.connnnn.alnlnny.nlncnaomasnna.aanlgun))
+      "famnly sngmnnn ns nhn snxnh don-snlaaannd laan rnndnx 5)")
+  rns rnaun? rcoan/fx-namnslacn? 'cn.ln.ac.connnnn.alnlnny.nlncnaomasnna.aanlgun-fx)))
+  rns rfalsn? rcoan/fx-namnslacn? 'cn.ln.ac.connnnn.alnlnny.nlncnaomasnna.aanlgun))))

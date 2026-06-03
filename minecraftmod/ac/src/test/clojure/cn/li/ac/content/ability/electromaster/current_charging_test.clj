@@ -19,20 +19,8 @@
 (defn- mk-context-store [ctx-id seed]
   (atom {ctx-id seed}))
 
-(defn- replace-skill-state-root-stub [contexts*]
-  (fn [id state-map]
-    (swap! contexts* assoc-in [id :skill-state] state-map)
-    nil))
-
-(defn- assoc-skill-state-stub [contexts*]
-  (fn [id k v]
-    (swap! contexts* assoc-in (into [id :skill-state] (if (vector? k) k [k])) v)
-    nil))
-
-(defn- clear-skill-state-stub [contexts*]
-  (fn [id]
-    (swap! contexts* update id dissoc :skill-state)
-    nil))
+(deftest pattern-is-hold-channel-test
+  (is (= :hold-channel (:pattern (skill-def)))))
 
 (deftest down-action-initializes-state-and-starts-fx-test
   (let [ctx-id "ctx-1"
@@ -42,9 +30,9 @@
     (with-redefs [current-charging/main-hand-item (fn [_] :stack)
                   current-charging/cfg-lerp (fn [_ _] 52.0)
                   ctx/get-context (fn [id] (get @contexts* id))
-                  ctx-skill/replace-skill-state-root! (replace-skill-state-root-stub contexts*)
-                  ctx-skill/assoc-skill-state! (assoc-skill-state-stub contexts*)
-                  ctx-skill/clear-skill-state! (clear-skill-state-stub contexts*)
+                  ctx-skill/update-skill-state-root! (fn [id f & args]
+                                        (swap! contexts* update id #(apply f % args))
+                                        nil)
                   ctx/ctx-send-to-client! (fn [id ch payload]
                                             (swap! fx* conj [id ch payload])
                                             nil)]
@@ -92,9 +80,9 @@
                                                           (swap! floor* conj [pid floor])
                                                           nil)
                   ctx/get-context (fn [id] (get @contexts* id))
-                  ctx-skill/replace-skill-state-root! (replace-skill-state-root-stub contexts*)
-                  ctx-skill/assoc-skill-state! (assoc-skill-state-stub contexts*)
-                  ctx-skill/clear-skill-state! (clear-skill-state-stub contexts*)
+                  ctx-skill/update-skill-state-root! (fn [id f & args]
+                                        (swap! contexts* update id #(apply f % args))
+                                        nil)
                   ctx/ctx-send-to-client! (fn [id ch payload]
                                             (swap! fx* conj [id ch payload])
                                             nil)]
@@ -128,8 +116,7 @@
                                                            :ray-end {:x 1.0 :y 2.0 :z 3.0}})
                   skill-effects/add-skill-exp! (fn [& _] nil)
                   skill-effects/enforce-overload-floor! (fn [& _] nil)
-                  interop/*runtime-interop* :mock
-                  interop/get-player-view (fn [_ _]
+                  interop/get-player-view* (fn [_ _]
                                             {:world-id "minecraft:overworld"
                                              :x 0.0 :y 64.0 :z 0.0
                                              :look-x 1.0 :look-y 0.0 :look-z 0.0})
@@ -137,9 +124,9 @@
                                                       (swap! spawned* conj [player eid yaw])
                                                       true)
                   ctx/get-context (fn [id] (get @contexts* id))
-                  ctx-skill/replace-skill-state-root! (replace-skill-state-root-stub contexts*)
-                  ctx-skill/assoc-skill-state! (assoc-skill-state-stub contexts*)
-                  ctx-skill/clear-skill-state! (clear-skill-state-stub contexts*)
+                  ctx-skill/update-skill-state-root! (fn [id f & args]
+                                        (swap! contexts* update id #(apply f % args))
+                                        nil)
                   ctx/ctx-send-to-client! (fn [id ch payload]
                                             (swap! fx* conj [id ch payload])
                                             nil)]
@@ -162,9 +149,9 @@
         terminated* (atom [])
         cost-fail! (get (skill-actions) :cost-fail!)]
     (with-redefs [ctx/get-context (fn [id] (get @contexts* id))
-                  ctx-skill/replace-skill-state-root! (replace-skill-state-root-stub contexts*)
-                  ctx-skill/assoc-skill-state! (assoc-skill-state-stub contexts*)
-                  ctx-skill/clear-skill-state! (clear-skill-state-stub contexts*)
+                  ctx-skill/update-skill-state-root! (fn [id f & args]
+                                        (swap! contexts* update id #(apply f % args))
+                                        nil)
                   ctx/ctx-send-to-client! (fn [id ch payload]
                                             (swap! fx* conj [id ch payload])
                                             nil)

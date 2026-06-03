@@ -46,7 +46,7 @@
 
 (defn- resolve-target
   [player-id max-range]
-  (when raycast/*raycast*
+  (when (raycast/available?)
     (let [player-pos (helper/player-position player-id)
           look-vec (helper/player-look-vec player-id)]
       (when (and player-pos look-vec)
@@ -55,8 +55,7 @@
               eye-y (+ (double (:y player-pos))
                        (helper/cfg-double shift-teleport-skill-id :targeting.eye-height))
               eye-z (double (:z player-pos))
-              hit (raycast/raycast-blocks
-                    raycast/*raycast*
+              hit (raycast/raycast-blocks*
                     world-id
                     eye-x eye-y eye-z
                     (double (:x look-vec))
@@ -148,7 +147,7 @@
 (defn- line-targets
   "Return entities intersecting segment eye->destination in stable near-to-far order."
   [player-id world-id eye-pos dest-pos]
-  (if-not (and world-effects/*world-effects* eye-pos dest-pos)
+  (if-not (and (world-effects/available?) eye-pos dest-pos)
     []
     (let [min-x (min (double (:x eye-pos)) (double (:x dest-pos)))
           min-y (min (double (:y eye-pos)) (double (:y dest-pos)))
@@ -156,8 +155,7 @@
           max-x (max (double (:x eye-pos)) (double (:x dest-pos)))
           max-y (max (double (:y eye-pos)) (double (:y dest-pos)))
           max-z (max (double (:z eye-pos)) (double (:z dest-pos)))
-          candidates (world-effects/find-entities-in-aabb
-                       world-effects/*world-effects*
+          candidates (world-effects/find-entities-in-aabb*
                        world-id
                        min-x min-y min-z
                        max-x max-y max-z)]
@@ -226,7 +224,7 @@
 
 (defn- set-skill-state-root!
   [ctx-id state-map]
-  (ctx-skill/replace-skill-state-root! ctx-id state-map))
+  (ctx-skill/update-skill-state-root! ctx-id identity state-map))
 
 (defn- clear-skill-state!
   [ctx-id]

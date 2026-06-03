@@ -28,17 +28,13 @@
   (cfg-double :targeting.range))
 
 (defn- main-hand-item [player-id]
-  (when interop/*runtime-interop*
-    (interop/get-player-main-hand-item interop/*runtime-interop* player-id)))
+  (when (interop/available?)
+    (interop/get-player-main-hand-item* player-id)))
 
 (defn- fx-payload
   [player-id payload]
   (cond-> (or payload {})
     (some? player-id) (assoc :source-player-id player-id)))
-
-(defn- clear-skill-state!
-  [ctx-id]
-  (ctx-skill/clear-skill-state! ctx-id))
 
 (defn- set-skill-state!
   [ctx-id k v]
@@ -46,7 +42,11 @@
 
 (defn- set-skill-state-root!
   [ctx-id state-map]
-  (ctx-skill/replace-skill-state-root! ctx-id state-map))
+  (ctx-skill/update-skill-state-root! ctx-id identity state-map))
+
+(defn- clear-skill-state!
+  [ctx-id]
+  (ctx-skill/clear-skill-state! ctx-id))
 
 (defn- next-charge-ticks!
   [ctx-id]
@@ -87,8 +87,8 @@
   Returns {:effective? bool :charged double :block-pos [x y z] :ray-end {xyz}}."
   [view charge]
   (let [world-id (or (:world-id view) "minecraft:overworld")
-        hit      (when raycast/*raycast*
-                   (raycast/raycast-blocks raycast/*raycast*
+        hit      (when (raycast/available?)
+                   (raycast/raycast-blocks*
                                            world-id
                                            (double (:x view)) (double (:y view)) (double (:z view))
                                            (double (:look-x view)) (double (:look-y view)) (double (:look-z view))
@@ -100,7 +100,7 @@
     (if-not hit
       {:effective? false :charged 0.0 :block-pos nil :ray-end ray-end}
       (let [bx (int (:x hit)) by (int (:y hit)) bz (int (:z hit))
-            be (interop/get-block-entity-at interop/*runtime-interop* world-id bx by bz)]
+            be (interop/get-block-entity-at* world-id bx by bz)]
         (if-not be
           {:effective? false :charged 0.0 :block-pos [bx by bz] :ray-end ray-end}
           (cond
@@ -116,8 +116,8 @@
 
 (defn- charge-block-tick!
   [{:keys [player-id ctx-id player charge charge-ticks]}]
-  (let [view   (when interop/*runtime-interop*
-                 (interop/get-player-view interop/*runtime-interop* player-id))
+  (let [view   (when (interop/available?)
+                 (interop/get-player-view* player-id))
         result (when view (charge-block-target! view charge))
         {:keys [effective? charged block-pos ray-end]}
         (or result {:effective? false :charged 0.0 :block-pos nil :ray-end nil})]
@@ -179,16 +179,16 @@
              (let [is-item (boolean (main-hand-item player-id))
                    exp* (double (or exp 0.0))
                    overload-floor (cfg-lerp :cost.down.overload exp*)]
-          (set-skill-state-root! ctx-id
-                                 {:mode (if is-item :item :block)
-                                  :is-item is-item
-                                  :good? false
-                                  :exp exp*
-                                  :charge-ticks 0
-                                  :overload-floor overload-floor
-                                  :target nil
-                                  :block-pos nil
-                                  :charged 0.0})
+           (set-skill-state-root! ctx-id
+                      {:mode (if is-item :item :block)
+                       :is-item is-item
+                       :good? false
+                       :exp exp*
+                       :charge-ticks 0
+                       :overload-floor overload-floor
+                       :target nil
+                       :block-pos nil
+                       :charged 0.0})
                (ctx/ctx-send-to-client! ctx-id :current-charging/fx-start
                                         (fx-payload player-id {:is-item is-item}))))
    :tick!  (fn [{:keys [player-id ctx-id player]}]

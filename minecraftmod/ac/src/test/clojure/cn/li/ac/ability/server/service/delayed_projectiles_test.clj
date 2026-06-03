@@ -31,15 +31,13 @@
 
 (deftest electron-bomb-settlement-hit-path-test
   (let [calls (atom [])]
-    (with-redefs [raycast/*raycast* :mock-raycast
-                  raycast/raycast-entities (fn [& _]
+    (with-redefs [raycast/raycast-entities* (fn [& _]
                                              {:uuid "target-1"
                                               :x 4.0
                                               :y 65.0
                                               :z 6.0
                                               :distance 9.0})
-                  cn.li.mcmod.platform.entity-damage/*entity-damage* :damage
-                  entity-damage/apply-direct-damage! (fn [& args]
+                  entity-damage/apply-direct-damage!* (fn [& args]
                                                       (swap! calls conj [:damage args])
                                                       true)
                   md-damage/mark-target! (fn [& args]
@@ -90,12 +88,10 @@
 
 (deftest electron-bomb-settlement-without-raycast-is-noop-test
   (let [calls (atom [])]
-    (with-redefs [raycast/*raycast* nil
-                  raycast/raycast-entities (fn [& _]
+    (with-redefs [raycast/raycast-entities* (fn [& _]
                                              (swap! calls conj :raycast)
                                              nil)
-                  cn.li.mcmod.platform.entity-damage/*entity-damage* :damage
-                  entity-damage/apply-direct-damage! (fn [& _]
+                  entity-damage/apply-direct-damage!* (fn [& _]
                                                       (swap! calls conj :damage)
                                                       true)
                   md-damage/mark-target! (fn [& _]

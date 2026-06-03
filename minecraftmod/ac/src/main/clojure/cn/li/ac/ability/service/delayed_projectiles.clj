@@ -82,11 +82,11 @@
 (defn- run-electron-bomb-beam!
   [{:keys [player-id ctx-id world-id eye look-dir damage exp-gain]}]
   (try
-    (when (and raycast/*raycast* look-dir eye)
+    (when (and (raycast/available?) look-dir eye)
       (let [dir (geom/vnorm {:x (double (or (:x look-dir) 0.0))
                              :y (double (or (:y look-dir) 0.0))
                              :z (double (or (:z look-dir) 0.0))})
-            hit (raycast/raycast-entities raycast/*raycast*
+            hit (raycast/raycast-entities*
                                           world-id
                                           (double (:x eye))
                                           (double (:y eye))
@@ -99,9 +99,8 @@
           (let [end-pos (geom/v+ eye (geom/v* dir electron-bomb-ray-distance))
                 target-uuid (:uuid hit)
                 damage-amt (double (or damage 0.0))]
-            (when (and target-uuid entity-damage/*entity-damage*)
-              (entity-damage/apply-direct-damage!
-                entity-damage/*entity-damage*
+            (when (and target-uuid (entity-damage/available?))
+              (entity-damage/apply-direct-damage!*
                 world-id
                 target-uuid
                 damage-amt

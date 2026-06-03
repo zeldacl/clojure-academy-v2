@@ -2,8 +2,7 @@
   "Platform-neutral Capability declaration registry.
 
   Content code calls declare-capability! to register a capability type and its
-  handler factory. forge/fabric platform implementations bind
-  *declare-capability-impl* to perform the platform-specific slot assignment.")
+  handler factory. Forge exposes capabilities via tile-logic/get-capability.")
 
 (defn- log-info
   [& xs]
@@ -27,46 +26,10 @@
   (apply alter-var-root #'*capability-type-registry* f args)
   nil)
 
-;; ============================================================================
-;; Platform hook
-;; ============================================================================
-
-(def ^:dynamic *declare-capability-impl*
-  "Platform-specific implementation of capability slot assignment.
-  Bound by forge/fabric init to (fn [key java-type] ...).
-  forge: calls CapabilitySlots/assign(key).
-  nil until a platform sets it – declare-capability! is safe to call before
-  the platform binds this var (it registers into capability-type-registry only)."
-  nil)
-
-;; ============================================================================
-;; Public API
-;; ============================================================================
-
-(defn declare-capability!
-  "Register a capability type with this mod.
-
-  Parameters:
-  - key             keyword  e.g. :content-node
-  - java-type       Class    the Java interface class for this capability
-  - handler-factory (fn [be side] handler)  creates the capability handler
-                    for a given ScriptedBlockEntity instance
-
-  Side effects:
-  - Stores entry in capability-type-registry snapshot
-  - If *declare-capability-impl* is already bound (platform init already ran),
-    also calls it immediately to perform slot assignment"
-  [key java-type handler-factory-fn]
-  (when-not (keyword? key)
-    (throw (ex-info "declare-capability!: key must be keyword" {:key key})))
-  (update-capability-type-registry!
-   assoc
-   key
-   {:java-type java-type
-    :handler-factory-fn handler-factory-fn})
-  (log-info "Declared capability" key "->" (.getName ^Class java-type))
-  (when *declare-capability-impl*
-    (*declare-capability-impl* key java-type))
+(defn reset-capability-type-registry!
+  "Test-only reset of the static capability type registry."
+  []
+  (alter-var-root #'*capability-type-registry* (constantly {}))
   nil)
 
 (defn get-capability-entry
@@ -78,6 +41,24 @@
   "Return the handler-factory-fn for key, or nil."
   [key]
   (:handler-factory-fn (get-capability-entry key)))
+
+;; ============================================================================
+;; Public API
+;; ============================================================================
+
+(defn declare-capability!
+  "Register a capability type with this mod."
+  [key java-type handler-factory-fn]
+  (when-not (keyword? key)
+    (throw (ex-info "declare-capability!: key must be keyword" {:key key})))
+  (let [entry {:java-type java-type :handler-factory-fn handler-factory-fn}]
+    (when-let [prev (get-capability-entry key)]
+      (when (not= prev entry)
+        (throw (ex-info "Duplicate capability registration with different entry"
+                        {:key key :previous prev :incoming entry}))))
+    (update-capability-type-registry! assoc key entry))
+  (log-info "Declared capability" key "->" (.getName ^Class java-type))
+  nil)
 
 ;; ============================================================================
 ;; Capability Access Protocol

@@ -55,7 +55,7 @@
                                                  nil)
                   geom/world-id-of (fn [_] "w")
                   geom/eye-pos (fn [_] {:x 0.0 :y 64.0 :z 0.0})
-                  bm/*block-manipulation* (reify bm/IBlockManipulation
+                  (bm/available?) (reify bm/IBlockManipulation
                                             (break-block! [_ _ world-id x y z drop-items?]
                                               (swap! break-calls* conj [world-id x y z drop-items?])
                                               true)
@@ -69,7 +69,6 @@
                                             (find-blocks-in-line [_ _ _ _ _ _ _ _ _] [])
                                             (liquid-block? [_ _ _ _ _] false)
                                             (farmland-block? [_ _ _ _ _] false))]
-      (binding [raycast/*raycast* (reify raycast/IRaycast
                                     (raycast-blocks [_ _ _ _ _ _ _ _ _]
                                       {:x 1 :y 64 :z 2})
                                     (raycast-entities [_ _ _ _ _ _ _ _ _] nil)
@@ -96,8 +95,7 @@
                   skill-effects/add-skill-exp! (fn [& _] nil)
                   geom/world-id-of (fn [_] "w")
                   geom/eye-pos (fn [_] {:x 0.0 :y 64.0 :z 0.0})
-                  bm/*block-manipulation* nil]
-      (binding [raycast/*raycast* (reify raycast/IRaycast
+                  (bm/available?) nil]
                                     (raycast-blocks [_ _ _ _ _ _ _ _ _]
                                       nil)
                                     (raycast-entities [_ _ _ _ _ _ _ _ _] nil)

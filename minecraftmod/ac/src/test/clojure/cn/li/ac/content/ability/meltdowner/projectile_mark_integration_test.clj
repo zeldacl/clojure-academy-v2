@@ -127,14 +127,13 @@
                   skill-effects/add-skill-exp! (fn [& _] nil)
                   ctx-mgr/push-channel-to-player! (fn [& _] nil)
                   ctx-mgr/push-channel-to-nearby-players! (fn [& _] nil)]
-      (binding [raycast/*raycast* (reify raycast/IRaycast
                                     (raycast-blocks [_ _ _ _ _ _ _ _ _] nil)
                                     (raycast-entities [_ _ _ _ _ _ _ _ _]
                                       {:uuid victim :x 0.0 :y 64.0 :z 8.0 :distance 8.0})
                                     (raycast-combined [_ _ _ _ _ _ _ _ _] nil)
                                     (get-player-look-vector [_ _] {:x 0.0 :y 0.0 :z 1.0})
                                     (raycast-from-player [_ _ _ _] nil))
-                entity-damage/*entity-damage* (reify entity-damage/IEntityDamage
+                (entity-damage/available?) (reify entity-damage/IEntityDamage
                                                (apply-direct-damage! [_ _ _ _ _] true)
                                                (apply-aoe-damage! [_ _ _ _ _ _ _ _ _] [])
                                                (apply-reflection-damage! [_ _ _ _ _ _ _] []))]
@@ -173,13 +172,12 @@
                   ctx/ctx-send-to-except-local! (fn [& _] nil)
                   geom/world-id-of (fn [_] "w")
                   geom/eye-pos (fn [_] {:x 0.0 :y 64.0 :z 0.0})
-                  world-effects/find-entities-in-radius (fn [& _]
+                  world-effects/find-entities-in-radius* (fn [& _]
                                                          [{:uuid victim
                                                            :x 3.0 :y 64.0 :z 0.0
                                                            :eye-height 1.6
                                                            :living? true}])]
-      (binding [world-effects/*world-effects* :world
-                entity-damage/*entity-damage* (reify entity-damage/IEntityDamage
+                (entity-damage/available?) (reify entity-damage/IEntityDamage
                                                (apply-direct-damage! [_ _ _ _ _] true)
                                                (apply-aoe-damage! [_ _ _ _ _ _ _ _ _] [])
                                                (apply-reflection-damage! [_ _ _ _ _ _ _] []))]
@@ -210,7 +208,6 @@
                   geom/eye-pos (fn [_] {:x 0.0 :y 64.0 :z 0.0})
                   ctx-mgr/push-channel-to-player! (fn [& _] nil)
                   ctx-mgr/push-channel-to-nearby-players! (fn [& _] nil)]
-      (binding [raycast/*raycast* (reify raycast/IRaycast
                                     (raycast-blocks [_ _ _ _ _ _ _ _ _] nil)
                                     (raycast-entities [_ _ _ _ _ _ _ _ _] nil)
                                     (raycast-combined [_ _ _ _ _ _ _ _ _] nil)
@@ -268,28 +265,27 @@
                   ctx/ctx-send-to-client! send!
                   ctx-mgr/push-channel-to-player! (fn [& _] nil)
                   ctx-mgr/push-channel-to-nearby-players! (fn [& _] nil)]
-      (binding [teleportation/*teleportation* (reify teleportation/ITeleportation
                                                 (teleport-player! [_ _ _ _ _ _] true)
                                                 (teleport-with-entities! [_ _ _ _ _ _ _]
                                                   {:success false :teleported-count 0})
                                                 (reset-fall-damage! [_ _] true)
                                                 (get-player-position [_ _] {:world-id "w" :x 0.0 :y 64.0 :z 0.0})
                                                 (get-player-dimension [_ _] "w"))
-                player-motion/*player-motion* (reify player-motion/IPlayerMotion
+                (player-motion/available?) (reify player-motion/IPlayerMotion
                                                 (set-velocity! [_ _ _ _ _] true)
                                                 (add-velocity! [_ _ _ _ _] true)
                                                 (get-velocity [_ _] {:x 0.0 :y 0.0 :z 0.0})
                                                 (set-on-ground! [_ _ _] true)
                                                 (is-on-ground? [_ _] false)
                                                 (dismount-riding! [_ _] true))
-                raycast/*raycast* (reify raycast/IRaycast
+                (raycast/available?) (reify raycast/IRaycast
                                     (raycast-blocks [_ _ _ _ _ _ _ _ _] nil)
                                     (raycast-entities [_ _ _ _ _ _ _ _ _]
                                       {:uuid victim})
                                     (raycast-combined [_ _ _ _ _ _ _ _ _] nil)
                                     (get-player-look-vector [_ _] {:x 1.0 :y 0.0 :z 0.0})
                                     (raycast-from-player [_ _ _ _] nil))
-                entity-damage/*entity-damage* (reify entity-damage/IEntityDamage
+                (entity-damage/available?) (reify entity-damage/IEntityDamage
                                                 (apply-direct-damage! [_ _ _ _ _] true)
                                                 (apply-aoe-damage! [_ _ _ _ _ _ _ _ _] [])
                                                 (apply-reflection-damage! [_ _ _ _ _ _ _] []))]

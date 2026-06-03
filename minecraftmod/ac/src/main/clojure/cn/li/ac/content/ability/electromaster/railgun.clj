@@ -75,17 +75,17 @@
     true
     (entity/player-consume-main-hand-item! player 1)))
 
-(defn- clear-skill-state!
-  [ctx-id]
-  (ctx-skill/clear-skill-state! ctx-id))
-
 (defn- set-skill-state!
   [ctx-id k v]
   (ctx-skill/assoc-skill-state! ctx-id k v))
 
 (defn- set-skill-state-root!
   [ctx-id state-map]
-  (ctx-skill/replace-skill-state-root! ctx-id state-map))
+  (ctx-skill/update-skill-state-root! ctx-id identity state-map))
+
+(defn- clear-skill-state!
+  [ctx-id]
+  (ctx-skill/clear-skill-state! ctx-id))
 
 (defn register-coin-throw!
   "Register a railgun coin throw state.
@@ -95,14 +95,12 @@
   [player-id payload]
   (let [_now-ms (long (or (:timestamp-ms payload) (System/currentTimeMillis)))]
     ;; Abort any in-progress item charge so the coin QTE takes priority.
-    (doseq [[_ctx-key ctx-data] (ctx/get-all-contexts)]
-      (let [ctx-id (:id ctx-data)]
-        (when (and (some? ctx-id)
-                   (= (:player-uuid ctx-data) player-id)
-                   (= :item-charge (get-in ctx-data [:skill-state :mode])))
-          (set-skill-state-root! ctx-id {:fired false
-                                         :mode :item-charge-cancelled
-                                         :charge-ticks 0}))))
+    (doseq [[ctx-id ctx-data] (ctx/get-all-contexts)]
+      (when (and (= (:player-uuid ctx-data) player-id)
+                 (= :item-charge (get-in ctx-data [:skill-state :mode])))
+        (set-skill-state-root! ctx-id {:fired false
+                                       :mode :item-charge-cancelled
+                                       :charge-ticks 0})))
     ;; New coin throw resets one-shot judgement lock.
     (skill-effects/clear-railgun-coin-judged! player-id)
     true))
@@ -110,17 +108,16 @@
 (defn- discard-coin-entity!
   "Kills a specific coin entity by UUID. Falls back to nearby cleanup when UUID is nil."
   [player-id coin-uuid]
-  (when (and world-effects/*world-effects* entity-motion/*entity-motion*)
+  (when (and (world-effects/available?) (entity-motion/available?))
     (let [pos (geom/eye-pos player-id)
           world-id (geom/world-id-of player-id)]
       (when (and pos world-id)
-        (doseq [ent (world-effects/find-entities-in-radius
-                      world-effects/*world-effects*
+        (doseq [ent (world-effects/find-entities-in-radius*
                       world-id (:x pos) (:y pos) (:z pos) 4.0)]
           (when (and (= "entity_coin_throwing" (:type ent))
                      (or (nil? coin-uuid)
                          (= coin-uuid (:uuid ent))))
-            (entity-motion/discard-entity! entity-motion/*entity-motion*
+            (entity-motion/discard-entity!*
                                            world-id (:uuid ent))))))))
 
 (defn- qte-status [p]
@@ -143,13 +140,12 @@
     (skill-effects/mark-railgun-coin-judged! player-id coin-uuid)))
 
 (defn- read-coin-qte-status [player-id]
-  (if-not world-effects/*world-effects*
+  (if-not (world-effects/available?)
     {:has-window? false :active? false :perform? false :progress 0.0}
     (let [pos (geom/eye-pos player-id)
           world-id (geom/world-id-of player-id)
           entities (when (and pos world-id)
-                     (world-effects/find-entities-in-radius
-                      world-effects/*world-effects*
+                     (world-effects/find-entities-in-radius*
                       world-id (:x pos) (:y pos) (:z pos) 4.0))
           judged-uuid (coin-judged-uuid player-id)
           candidates (coin-candidates entities)
@@ -184,7 +180,7 @@
         (>= (double current-cp) (double consumption))))))
 
 (defn- vec-reflection-consume-cp! [target-player-id incoming-damage]
-  (when (skill-effects/get-player-state target-player-id)
+  (when-let [state (skill-effects/get-player-state target-player-id)]
     (let [exp        (skill-effects/skill-exp target-player-id :vec-reflection)
           consumption (* (double incoming-damage)
                          (cfg-lerp :reflection.cp-consumption-per-damage exp))]
@@ -196,11 +192,11 @@
   [ctx-id reflector-player-id]
   (let [start-pos (geom/eye-pos reflector-player-id)
         world-id  (geom/world-id-of reflector-player-id)
-        look-vec  (when raycast/*raycast*
-                    (raycast/get-player-look-vector raycast/*raycast* reflector-player-id))]
+        look-vec  (when (raycast/available?)
+                    (raycast/get-player-look-vector* reflector-player-id))]
     (when look-vec
       (let [max-distance (reflection-distance)
-            hit (raycast/raycast-entities raycast/*raycast*
+            hit (raycast/raycast-entities*
                                           world-id
                                           (:x start-pos) (:y start-pos) (:z start-pos)
                                           (:dx look-vec) (:dy look-vec) (:dz look-vec)
@@ -215,8 +211,8 @@
                                   :start        start-pos
                                   :end          end-pos
                                   :hit-distance actual-dist})
-        (when (and (= (:hit-type hit) :entity) entity-damage/*entity-damage*)
-          (entity-damage/apply-direct-damage! entity-damage/*entity-damage*
+        (when (and (= (:hit-type hit) :entity) (entity-damage/available?))
+          (entity-damage/apply-direct-damage!*
                                               world-id (:uuid hit)
                                               (reflection-damage) :magic)
           true)))))
@@ -231,8 +227,8 @@
   (let [world-id  (geom/world-id-of player-id)
         eye       (geom/eye-pos player-id)
         trace-pos (body-pos player-id)
-        look-vec  (when raycast/*raycast*
-                    (raycast/get-player-look-vector raycast/*raycast* player-id))]
+        look-vec  (when (raycast/available?)
+                    (raycast/get-player-look-vector* player-id))]
     (if-not look-vec
       {:performed? false}
       (let [damage   (cfg-lerp :beam.damage exp)
@@ -258,8 +254,8 @@
                      :block-energy    (cfg-lerp :beam.block-energy exp)
                      :fx-topic        :railgun/fx-shot})
             beam-result (or (:beam-result result) {:performed? false})]
-        (when (and (:performed? beam-result) world-effects/*world-effects*)
-          (world-effects/play-sound! world-effects/*world-effects*
+        (when (and (:performed? beam-result) (world-effects/available?))
+          (world-effects/play-sound!*
                                      world-id
                                      (:x eye) (:y eye) (:z eye)
                                      "my_mod:em.railgun"

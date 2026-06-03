@@ -28,10 +28,12 @@
     (is (identical? leaf (cgui-core/find-widget root "mid/leaf")))))
 
 (deftest add-texture-component-with-resource-fn-test
-  (binding [res/*resource-location-fn* (fn [ns path] {:ns ns :path path})]
-    (let [w (cgui-core/create-widget)
-          _ (comp/add-component! w (comp/texture "demo:textures/a.png"))
-          c (comp/get-drawtexture-component w)]
-      (is (some? c))
-      (is (= :drawtexture (:kind c)))
-      (is (= {:ns "demo" :path "textures/a.png"} (:texture @(:state c)))))))
+  (res/call-with-resource-location-fn
+   (fn [ns path] {:ns ns :path path})
+   (fn []
+     (let [w (cgui-core/create-widget)
+           _ (comp/add-component! w (comp/texture "demo:textures/a.png"))
+           c (comp/get-drawtexture-component w)]
+       (is (some? c))
+       (is (= :drawtexture (:kind c)))
+       (is (= {:ns "demo" :path "textures/a.png"} (:texture @(:state c))))))))

@@ -29,7 +29,17 @@
 	(when-not (fn? factory-fn)
 		(throw (ex-info "Widget factory must be a function" {:widget-key widget-key
 																													:factory factory-fn})))
+	(let [prev (get (widget-factories-snapshot) widget-key)]
+		(when (and (some? prev) (not= prev factory-fn))
+			(throw (ex-info "Duplicate UI widget factory registration"
+											{:widget-key widget-key :previous prev :incoming factory-fn}))))
 	(swap! (widget-factories-atom) assoc widget-key factory-fn)
+	nil)
+
+(defn reset-widget-factory-registry!
+	"Test-only reset of widget factory registry."
+	[]
+	(swap! (widget-factories-atom) (constantly {}))
 	nil)
 
 (defn register-widget-factories!

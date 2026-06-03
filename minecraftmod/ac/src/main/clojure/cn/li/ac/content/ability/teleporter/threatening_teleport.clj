@@ -54,14 +54,14 @@
   (let [player-pos (helper/player-position player-id)
         look-vec (helper/player-look-vec player-id)
         world-id (geom/world-id-of player-id)]
-    (when (and player-pos look-vec raycast/*raycast*)
+    (when (and player-pos look-vec (raycast/available?))
       (let [sx (double (:x player-pos))
             sy (+ (double (:y player-pos)) default-eye-height)
             sz (double (:z player-pos))
             dx (double (:x look-vec))
             dy (double (:y look-vec))
             dz (double (:z look-vec))
-            hit (raycast/raycast-combined raycast/*raycast*
+            hit (raycast/raycast-combined*
                                           world-id
                                           sx sy sz dx dy dz
                                           (double range))]
@@ -106,7 +106,7 @@
 
 (defn- set-skill-state-root!
   [ctx-id state-map]
-  (ctx-skill/replace-skill-state-root! ctx-id state-map))
+  (ctx-skill/update-skill-state-root! ctx-id identity state-map))
 
 (defn- clear-skill-state!
   [ctx-id]

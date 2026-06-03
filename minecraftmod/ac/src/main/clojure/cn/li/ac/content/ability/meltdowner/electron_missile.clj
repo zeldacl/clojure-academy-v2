@@ -46,11 +46,10 @@
   (skill-effects/skill-exp player-id electron-missile-skill-id))
 
 (defn- find-nearest-entity [player-id world-id exp]
-  (when world-effects/*world-effects*
+  (when (world-effects/available?)
     (let [seek-range (cfg-lerp :targeting.seek-range exp)
           eye (geom/eye-pos player-id)
-          candidates (world-effects/find-entities-in-radius
-                       world-effects/*world-effects*
+          candidates (world-effects/find-entities-in-radius*
                        world-id
                        (double (:x eye))
                        (double (:y eye))
@@ -105,7 +104,7 @@
 
 (defn- set-skill-state-root!
   [ctx-id state-map]
-  (ctx-skill/replace-skill-state-root! ctx-id state-map))
+  (ctx-skill/update-skill-state-root! ctx-id identity state-map))
 
 (defn electron-missile-down!
   [{:keys [player-id ctx-id cost-ok?]}]
@@ -155,9 +154,8 @@
                                    (if (and target
                                             (try-pay-attack-cost! player-id exp))
                                      (do
-                                       (when (and entity-damage/*entity-damage* (:uuid target))
-                                         (entity-damage/apply-direct-damage!
-                                           entity-damage/*entity-damage*
+                                       (when (and (entity-damage/available?) (:uuid target))
+                                         (entity-damage/apply-direct-damage!*
                                            world-id
                                            (:uuid target)
                                            (cfg-lerp :combat.damage exp)

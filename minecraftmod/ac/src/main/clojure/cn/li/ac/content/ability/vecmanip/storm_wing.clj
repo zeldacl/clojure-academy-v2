@@ -64,8 +64,8 @@
   (skill-effects/skill-exp player-id storm-wing-skill-id))
 
 (defn- get-player-pos [player-id]
-  (when teleportation/*teleportation*
-    (teleportation/get-player-position teleportation/*teleportation* player-id)))
+  (when (teleportation/available?)
+    (teleportation/get-player-position* player-id)))
 
 (defn- apply-cooldown! [player-id exp]
   (let [cd-ticks (cfg-lerp-int :cooldown.ticks exp)]
@@ -94,14 +94,14 @@
 
 (defn- set-skill-state-root!
   [ctx-id state-map]
-  (ctx-skill/replace-skill-state-root! ctx-id state-map))
+  (ctx-skill/update-skill-state-root! ctx-id identity state-map))
 
 (defn- clear-skill-state!
   [ctx-id]
   (ctx-skill/clear-skill-state! ctx-id))
 
 (defn- break-soft-blocks! [player-id world-id px py pz]
-  (when block-manip/*block-manipulation*
+  (when (block-manip/available?)
     (let [tries (cfg-int :breaking.soft-block-tries)
           radius (cfg-int :breaking.soft-block-search-radius)]
       (dotimes [_ tries]
@@ -109,17 +109,15 @@
               bx (+ (int px) (- (rand-int diameter) radius))
               by (+ (int py) (- (rand-int diameter) radius))
               bz (+ (int pz) (- (rand-int diameter) radius))]
-          (when-let [hardness (block-manip/get-block-hardness
-                                block-manip/*block-manipulation*
+          (when-let [hardness (block-manip/get-block-hardness*
                                 world-id bx by bz)]
             (when (and (> hardness 0.0) (<= hardness (cfg-double :breaking.soft-hardness-max)))
-              (block-manip/break-block! block-manip/*block-manipulation*
+              (block-manip/break-block!*
                                         player-id world-id bx by bz false))))))))
 
 (defn- knockback-nearby-entities! [player-id world-id px py pz]
-  (when (and world-effects/*world-effects* entity-motion/*entity-motion*)
-    (let [entities (world-effects/find-entities-in-radius
-                     world-effects/*world-effects*
+  (when (and (world-effects/available?) (entity-motion/available?))
+    (let [entities (world-effects/find-entities-in-radius*
                      world-id (double px) (double py) (double pz) (cfg-double :combat.mastery-knockback-radius))]
       (doseq [entity entities
               :let [eid (:uuid entity)]
@@ -128,7 +126,7 @@
               dy (- (double (:y entity)) (double py))
               dz (- (double (:z entity)) (double pz))
               dist (max 1.0e-6 (Math/sqrt (+ (* dx dx) (* dy dy) (* dz dz))))]
-          (entity-motion/add-velocity! entity-motion/*entity-motion*
+          (entity-motion/add-velocity!*
                                        world-id eid
                                        (* (/ dx dist) (cfg-double :combat.mastery-knockback-strength))
                                        (* (/ dy dist) (cfg-double :combat.mastery-knockback-strength))
@@ -254,9 +252,8 @@
                                 [(* dx inv speed) (* dy inv speed) (* dz inv speed)])
                               ;; No movement: hover - check ground proximity
                               (let [;; Raycast down to detect near ground
-                                    near-ground? (when raycast/*raycast*
-                                                   (let [hit (raycast/raycast-blocks
-                                                               raycast/*raycast*
+                                    near-ground? (when (raycast/available?)
+                                                   (let [hit (raycast/raycast-blocks*
                                                                world-id
                                                                px (+ py (cfg-double :targeting.near-ground-eye-height)) pz
                                                                0.0 -1.0 0.0
@@ -272,13 +269,13 @@
                             new-vz (accel-toward cur-vz tvz)]
 
                         ;; Apply velocity to player
-                        (when player-motion/*player-motion*
-                          (player-motion/set-velocity! player-motion/*player-motion*
+                        (when (player-motion/available?)
+                          (player-motion/set-velocity!*
                                                        player-id new-vx new-vy new-vz))
 
                         ;; Reset fall distance (done via motion)
-                        (when player-motion/*player-motion*
-                          (player-motion/set-on-ground! player-motion/*player-motion* player-id false))
+                        (when (player-motion/available?)
+                          (player-motion/set-on-ground!* player-id false))
 
                         ;; Save velocity in state
                         (update-skill-state-root! ctx-id #(assoc % :vx new-vx :vy new-vy :vz new-vz))

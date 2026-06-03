@@ -20,8 +20,8 @@
   "Return candidate entities within the beam cylinder, annotated with
   :forward-dist and :radial-dist, sorted nearest-first."
   [player-id world-id start-pos dir max-distance query-radius radius]
-  (when world-effects/*world-effects*
-      (->> (world-effects/find-entities-in-radius world-effects/*world-effects*
+  (when (world-effects/available?)
+      (->> (world-effects/find-entities-in-radius*
                                                    world-id
                                                    (:x start-pos) (:y start-pos) (:z start-pos)
                                                    (double query-radius))
@@ -43,7 +43,7 @@
   "Advance a cylindrical beam along dir, breaking blocks that can be broken
   within the available energy budget."
   [player-id world-id start-pos dir max-distance energy radius step]
-  (when (and block-manip/*block-manipulation* (pos? (double energy)) (pos? (double max-distance)))
+  (when (and (block-manip/available?) (pos? (double energy)) (pos? (double max-distance)))
     (let [[right up]      (geom/orthonormal-basis dir)
           processed       (atom #{})
           sample-points   (transient [])]
@@ -72,25 +72,25 @@
                     bx       (geom/floor-int (:x pos))
                     by       (geom/floor-int (:y pos))
                     bz       (geom/floor-int (:z pos))
-                    hardness (block-manip/get-block-hardness block-manip/*block-manipulation*
+                    hardness (block-manip/get-block-hardness*
                                                              world-id bx by bz)]
                 (if (or (nil? hardness) (neg? (double hardness)))
                   (recur (+ travel 1.0) remaining)
                   (if (and (pos? (double hardness))
                            (<= (double hardness) remaining)
-                           (block-manip/can-break-block? block-manip/*block-manipulation*
+                           (block-manip/can-break-block?*
                                                          player-id world-id bx by bz))
                     (do
-                      (block-manip/break-block! block-manip/*block-manipulation*
+                      (block-manip/break-block!*
                                                 player-id world-id bx by bz (< (rand) 0.05))
                       (when (< (rand) 0.05)
                         (let [[ox oy oz] (rand-nth neighbor-offsets)
                               nx         (+ bx (int ox))
                               ny         (+ by (int oy))
                               nz         (+ bz (int oz))]
-                          (when (block-manip/can-break-block? block-manip/*block-manipulation*
+                          (when (block-manip/can-break-block?*
                                                               player-id world-id nx ny nz)
-                            (block-manip/break-block! block-manip/*block-manipulation*
+                            (block-manip/break-block!*
                                                       player-id world-id nx ny nz false))))
                       (recur (+ travel 1.0) (- remaining (double hardness))))
                     (recur (+ travel 1.0) 0.0)))))))))))
@@ -141,10 +141,10 @@
                               :normal-hit-count    normal-hit-count
                               :hit-uuids           hit-uuids}))
                   (do
-                    (when (and (pos? dmg) entity-damage/*entity-damage*)
+                    (when (and (pos? dmg) (entity-damage/available?))
                       (let [radial (double radial-dist)
                             factor (+ 0.2 (* 0.8 (- 1.0 (/ (min md (max 0.0 radial)) md))))]
-                        (entity-damage/apply-direct-damage! entity-damage/*entity-damage*
+                        (entity-damage/apply-direct-damage!*
                                                             world-id uuid
                                                             (* dmg factor)
                                                             (or damage-type :magic))))

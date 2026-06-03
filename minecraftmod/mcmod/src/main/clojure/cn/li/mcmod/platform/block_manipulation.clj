@@ -1,45 +1,39 @@
 (ns cn.li.mcmod.platform.block-manipulation
-  "Protocol for breaking and modifying blocks.
-
-  No Minecraft imports.")
+  "Protocol for breaking and modifying blocks."
+  (:require [cn.li.mcmod.platform.runtime :as prt]))
 
 (defprotocol IBlockManipulation
-  "Protocol for breaking and modifying blocks."
-
   (break-block! [this player-id world-id x y z drop?]
-    [this player-id world-id x y z drop? fortune-level]
-    "Break block at position, optionally drop items.
-    When fortune-level is provided, drops should be generated as if a tool
-    with that fortune enchantment broke the block.
-    Returns true if successful.")
+    [this player-id world-id x y z drop? fortune-level])
+  (set-block! [this world-id x y z block-id])
+  (get-block [this world-id x y z])
+  (get-block-hardness [this world-id x y z])
+  (can-break-block? [this player-id world-id x y z])
+  (find-blocks-in-line [this world-id x1 y1 z1 dx dy dz max-distance])
+  (liquid-block? [this world-id x y z])
+  (farmland-block? [this world-id x y z]))
 
-  (set-block! [this world-id x y z block-id]
-    "Set block at position to new block type.
-    block-id is a string like 'minecraft:stone'.
-    Returns true if successful.")
+(def ^:private ^:dynamic *runtime* nil)
 
-  (get-block [this world-id x y z]
-    "Get block at position.
-    Returns block-id string like 'minecraft:stone', or nil if air/invalid.")
+(defn install-block-manipulation!
+  [impl label]
+  (prt/install-impl! #'*runtime* impl (or label "block-manipulation")))
 
-  (get-block-hardness [this world-id x y z]
-    "Get block hardness value.
-    Returns float, or -1 if unbreakable, or nil if invalid position.")
+(defn available? [] (prt/impl-available? #'*runtime*))
+(defn current [] (prt/impl-current #'*runtime*))
+(defn call-with-runtime [rt f] (binding [*runtime* rt] (f)))
 
-  (can-break-block? [this player-id world-id x y z]
-    "Check if player can break block (permissions, protection, etc.).
-    Returns boolean.")
+(prt/def-impl-wrappers '*runtime* IBlockManipulation
+  [break-block!* break-block! player-id world-id x y z drop?]
+  [set-block!* set-block! world-id x y z block-id]
+  [get-block* get-block world-id x y z]
+  [get-block-hardness* get-block-hardness world-id x y z]
+  [can-break-block?* can-break-block? player-id world-id x y z]
+  [find-blocks-in-line* find-blocks-in-line world-id x1 y1 z1 dx dy dz max-distance]
+  [liquid-block?* liquid-block? world-id x y z]
+  [farmland-block?* farmland-block? world-id x y z])
 
-  (find-blocks-in-line [this world-id x1 y1 z1 dx dy dz max-distance]
-    "Find blocks along a line for chained world effects.
-    Returns vector of {:x :y :z :block-id :hardness} maps.")
-
-  (liquid-block? [this world-id x y z]
-    "Returns true if target block is liquid by platform material/fluid-state check.")
-
-  (farmland-block? [this world-id x y z]
-    "Returns true if target block is farmland (platform-native check)."))
-
-(def ^:dynamic *block-manipulation*
-  "Dynamic var bound to IBlockManipulation implementation by platform layer."
-  nil)
+(defn break-block-with-fortune!*
+  [player-id world-id x y z drop? fortune-level]
+  (when-let [rt *runtime*]
+    (break-block! rt player-id world-id x y z drop? fortune-level)))

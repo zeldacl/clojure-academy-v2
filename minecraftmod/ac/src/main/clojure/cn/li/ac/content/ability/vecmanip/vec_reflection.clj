@@ -16,6 +16,7 @@
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.raycast :as raycast]
+            [cn.li.mcmod.platform.teleportation :as teleportation]
             [cn.li.mcmod.util.log :as log]))
 
 (def ^:private vec-reflection-skill-id :vec-reflection)
@@ -90,9 +91,7 @@
   (cfg-lerp :cost.tick.cp (skill-exp player-id)))
 
 (defn- get-player-position [player-id]
-  (when-let [teleportation (resolve 'cn.li.mcmod.platform.teleportation/*teleportation*)]
-    (when-let [tp-impl @teleportation]
-      ((resolve 'cn.li.mcmod.platform.teleportation/get-player-position) tp-impl player-id))))
+  (teleportation/get-player-position* player-id))
 
 (defn- entity-registry-id [entity]
   (or (:entity-id entity) (:type entity) ""))
@@ -258,10 +257,9 @@
   (or (when-let [st (fx-common/get-player-state attacker-id)]
         (get st :position))
       (when-let [self-pos (get-player-position player-id)]
-        (when world-effects/*world-effects*
+        (when (world-effects/available?)
           (first (filter (fn [ent] (= (:uuid ent) attacker-id))
-                         (world-effects/find-entities-in-radius
-                          world-effects/*world-effects*
+                         (world-effects/find-entities-in-radius*
                           (:world-id self-pos)
                           (:x self-pos)
                           (:y self-pos)
@@ -309,7 +307,7 @@
         (when (and cost-ok?
                    (toggle/is-toggle-active? (or (ctx/get-context ctx-id) ctx-data) :vec-reflection))
           (when-let [pos (get-player-position player-id)]
-            (when world-effects/*world-effects*
+            (when (world-effects/available?)
               (let [world-id (:world-id pos)
                     x (:x pos)
                     y (:y pos)
@@ -322,7 +320,7 @@
                     dual-active? (arbitration/dual-active? player-id)
                     arbitration-allowed? (or (not dual-active?)
                                              (arbitration/skill-allowed-in-dual-active? :vec-reflection))
-                    entities (world-effects/find-entities-in-radius world-effects/*world-effects*
+                    entities (world-effects/find-entities-in-radius*
                                                                     world-id x y z (cfg-double :targeting.radius))
                     visited (normalize-visited-map
                              (or (get-in ctx-data [:skill-state :vec-reflection-visited-map])
@@ -336,12 +334,12 @@
                         eid (entity-registry-id entity)
                         difficulty (affect-difficulty-with-snapshot entity excluded-ids difficulty-map)]
                     (when (and entity-id (not= entity-id player-id) difficulty)
-                      (when-let [look-vec (and raycast/*raycast*
-                                               (raycast/get-player-look-vector raycast/*raycast* player-id))]
+                      (when-let [look-vec (and (raycast/available?)
+                                               (raycast/get-player-look-vector* player-id))]
                         (when (and arbitration-allowed?
                                    (arbitration/claim-projectile! player-id :vec-reflection entity-id))
-                          (let [entity-vel (when entity-motion/*entity-motion*
-                                             (entity-motion/get-velocity entity-motion/*entity-motion*
+                          (let [entity-vel (when (entity-motion/available?)
+                                             (entity-motion/get-velocity*
                                                                          world-id
                                                                          entity-id))
                                 speed (Math/sqrt (+ (Math/pow (double (or (:x entity-vel) 0.0)) 2.0)
@@ -357,9 +355,9 @@
                                 (fx/send-end! ctx-id :vec-reflection/fx-end)
                                 (log/info "VecReflection: Deactivated (insufficient reflect CP)"))
                               (do
-                                (if (and world-effects/*world-effects*
+                                (if (and (world-effects/available?)
                                          (fireball-entity? eid))
-                                  (let [spawn-result (world-effects/spawn-projectile! world-effects/*world-effects*
+                                  (let [spawn-result (world-effects/spawn-projectile!*
                                                                                     world-id
                                                                                     {:entity-id eid
                                                                                      :x (double (or (:x entity) 0.0))
@@ -370,14 +368,14 @@
                                                                                      :vz vel-z
                                                                                      :owner-uuid player-id})
                                         spawned? (boolean (:success? spawn-result))]
-                                    (when (and spawned? entity-motion/*entity-motion*)
-                                      (entity-motion/discard-entity! entity-motion/*entity-motion* world-id entity-id))
-                                    (when (and (not spawned?) entity-motion/*entity-motion*)
-                                      (entity-motion/set-velocity! entity-motion/*entity-motion*
+                                    (when (and spawned? (entity-motion/available?))
+                                      (entity-motion/discard-entity!* world-id entity-id))
+                                    (when (and (not spawned?) (entity-motion/available?))
+                                      (entity-motion/set-velocity!*
                                                                    world-id
                                                                    entity-id vel-x vel-y vel-z)))
-                                  (when entity-motion/*entity-motion*
-                                    (entity-motion/set-velocity! entity-motion/*entity-motion*
+                                  (when (entity-motion/available?)
+                                    (entity-motion/set-velocity!*
                                                                  world-id
                                                                  entity-id vel-x vel-y vel-z)))
                                 (add-exp! player-id (* difficulty (cfg-double :progression.exp-reflect-entity-scale)))
@@ -445,11 +443,11 @@
                            (>= reflected-damage (cfg-double :combat.min-reflected-damage)))
                     (do
                       (consume-cp! player-id consumption)
-                      (when (and attacker-id entity-damage/*entity-damage*)
+                      (when (and attacker-id (entity-damage/available?))
                         (let [world-id (or (get-in state [:position :world-id])
                                            (fx-common/player-path attacker-id [:position :world-id])
                                            "minecraft:overworld")]
-                          (entity-damage/apply-direct-damage! entity-damage/*entity-damage*
+                          (entity-damage/apply-direct-damage!*
                                                               world-id
                                                               attacker-id
                                                               reflected-damage

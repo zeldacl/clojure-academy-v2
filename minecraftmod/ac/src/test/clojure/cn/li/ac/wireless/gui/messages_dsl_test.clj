@@ -4,6 +4,7 @@
             [cn.li.mcmod.gui.message.dsl :as msg-dsl]
             [cn.li.ac.gui.manifest :as gui-manifest]
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
+            [cn.li.ac.wireless.gui.message.api :as wireless-msgs]
             [cn.li.ac.wireless.shared.message-registry :as shared-registry]))
 
 (def expected-node-actions
@@ -54,7 +55,7 @@
 
 (deftest wireless-message-integration-test
   (shared-registry/register-all!)
-  (let [catalog (msg-registry/build-catalog)
+  (let [catalog (wireless-msgs/catalog)
         node-spec (msg-registry/get-domain-spec :node)
         matrix-spec (msg-registry/get-domain-spec :matrix)]
     (testing "required domains are registered"
@@ -73,10 +74,10 @@
              (set (keys (:messages (msg-registry/get-domain-spec :metal-former)))))))
 
     (testing "catalog lookups are bidirectional"
-      (is (= "wireless_node_get_status" (msg-registry/msg :node :get-status)))
-      (is (= "wireless_matrix_init" (msg-registry/msg :matrix :init)))
+      (is (= "wireless_node_get_status" (wireless-msgs/msg :node :get-status)))
+      (is (= "wireless_matrix_init" (wireless-msgs/msg :matrix :init)))
       (is (= {:domain :node :action :get-status}
-             (msg-dsl/find-by-msg-id catalog "wireless_node_get_status")))
+             (wireless-msgs/find-by-msg-id "wireless_node_get_status")))
     )
   )
 )

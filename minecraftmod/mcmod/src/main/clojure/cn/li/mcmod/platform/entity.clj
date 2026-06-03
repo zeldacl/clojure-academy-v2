@@ -4,7 +4,8 @@
   This namespace defines a protocol for entity/player/menu operations that
   platform adapters (forge/fabric) must implement. Avoid importing any
   `net.minecraft.*` classes here so this namespace can be compiled without
-  Minecraft on the classpath.")
+  Minecraft on the classpath."
+  (:require [cn.li.mcmod.platform.runtime :as prt]))
 
 (defprotocol IEntityOps
   (entity-distance-to-sqr [entity x y z]
@@ -70,12 +71,17 @@
   (menu-get-container-id [menu]
     "Return the containerId (window id) from an AbstractContainerMenu"))
 
-(defonce ^{:dynamic true
-           :doc "Optional platform resolver: (fn [world-id entity-uuid] -> string|nil).
+(def ^:private ^:dynamic *entity-get-type-id-fn* nil)
 
-  Returns canonical entity type id such as \"minecraft:creeper\"."}
-  *entity-get-type-id-fn*
-  nil)
+(defn install-entity-type-id-fn!
+  [f label]
+  (prt/install-impl! #'*entity-get-type-id-fn* f (or label "entity-type-id")))
+
+(defn entity-type-id-available? []
+  (prt/impl-available? #'*entity-get-type-id-fn*))
+
+(defn call-with-entity-type-id-fn [f thunk]
+  (binding [*entity-get-type-id-fn* f] (thunk)))
 
 (defn entity-get-type-id*
   [world-id entity-uuid]

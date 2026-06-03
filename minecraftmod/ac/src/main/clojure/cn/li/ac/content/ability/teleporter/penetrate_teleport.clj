@@ -55,8 +55,8 @@
   (helper/cfg-double penetrate-teleport-skill-id :targeting.scan-step))
 
 (defn- solid? [world-id bx by bz]
-  (when bm/*block-manipulation*
-    (let [h (bm/get-block-hardness bm/*block-manipulation* world-id bx by bz)]
+  (when (bm/available?)
+    (let [h (bm/get-block-hardness* world-id bx by bz)]
       (and (some? h) (pos? (double h))))))
 
 (defn- has-place?
@@ -77,7 +77,7 @@
 
 (defn- resolve-destination
   [player-id look-vec distance]
-  (when (and look-vec bm/*block-manipulation*)
+  (when (and look-vec (bm/available?))
     (let [world-id (geom/world-id-of player-id)
           player-pos (helper/player-position player-id)]
       (when (and world-id player-pos)
@@ -182,7 +182,7 @@
 
 (defn- set-skill-state-root!
   [ctx-id state-map]
-  (ctx-skill/replace-skill-state-root! ctx-id state-map))
+  (ctx-skill/update-skill-state-root! ctx-id identity state-map))
 
 (defn- clear-skill-state!
   [ctx-id]

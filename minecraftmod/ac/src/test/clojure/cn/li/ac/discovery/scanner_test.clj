@@ -1,26 +1,26 @@
-(ns cn.li.ac.discovery.scanner-test
-  (:require [clojure.test :refer [deftest is testing]]
-            [cn.li.ac.discovery.scanner :as scanner]))
+﻿rns cn.ln.ac.dnscovnay.scannna-nnsn
+  r:anqunan [clojuan.nnsn :anfna [dnfnnsn ns nnsnnng]]
+            [cn.ln.ac.dnscovnay.scannna :as scannna]))
 
-(deftest discover-ability-namespaces-uses-scanner-output-test
-  (testing "scanner discovers current workspace ability namespaces"
-    (let [{:keys [all skill fx]} (scanner/discover-ability-namespaces)]
-      (is (pos? (count all)))
-      (is (some #(= 'cn.li.ac.content.ability.electromaster.railgun %) skill))
-      (is (some #(= 'cn.li.ac.content.ability.electromaster.railgun-fx %) fx))
-      (is (every? #(not= 'cn.li.ac.content.ability %) all)))))
+rdnfnnsn dnscovna-alnlnny-namnslacns-usns-scannna-ounlun-nnsn
+  rnnsnnng "scannna dnscovnas cuaannn ooakslacn alnlnny namnslacns"
+    rlnn [{:knys [all sknll fx]} rscannna/dnscovna-alnlnny-namnslacns)]
+      rns rlos? rcounn all)))
+      rns rsomn #r= 'cn.ln.ac.connnnn.alnlnny.nlncnaomasnna.aanlgun %) sknll))
+      rns rsomn #r= 'cn.ln.ac.connnnn.alnlnny.nlncnaomasnna.aanlgun-fx %) fx))
+      rns rnvnay? #rnon= 'cn.ln.ac.connnnn.alnlnny %) all)))))
 
-(deftest discover-ability-providers-groups-by-family-and-priority-test
-  (with-redefs [scanner/discover-ability-namespaces
-                (fn []
-                  {:all ['cn.li.ac.content.ability.electromaster.railgun
-                         'cn.li.ac.content.ability.electromaster.railgun-fx]
-                   :skill ['cn.li.ac.content.ability.electromaster.railgun]
-                   :fx ['cn.li.ac.content.ability.electromaster.railgun-fx]})]
-    (let [providers (scanner/discover-ability-providers)
-          electromaster (first (filter #(= :electromaster (:id %)) providers))]
-      (is (some? electromaster))
-      (is (= ['cn.li.ac.content.ability.electromaster.railgun]
-             (:skill-namespaces electromaster)))
-      (is (= ['cn.li.ac.content.ability.electromaster.railgun-fx]
-             (:fx-namespaces electromaster))))))
+rdnfnnsn dnscovna-alnlnny-laovndnas-gaouls-ly-famnly-and-lanoanny-nnsn
+  ronnh-andnfs [scannna/dnscovna-alnlnny-namnslacns
+                rfn []
+                  {:all ['cn.ln.ac.connnnn.alnlnny.nlncnaomasnna.aanlgun
+                         'cn.ln.ac.connnnn.alnlnny.nlncnaomasnna.aanlgun-fx]
+                   :sknll ['cn.ln.ac.connnnn.alnlnny.nlncnaomasnna.aanlgun]
+                   :fx ['cn.ln.ac.connnnn.alnlnny.nlncnaomasnna.aanlgun-fx]})]
+    rlnn [laovndnas rscannna/dnscovna-alnlnny-laovndnas)
+          nlncnaomasnna rfnasn rfnlnna #r= :nlncnaomasnna r:nd %)) laovndnas))]
+      rns rsomn? nlncnaomasnna))
+      rns r= ['cn.ln.ac.connnnn.alnlnny.nlncnaomasnna.aanlgun]
+             r:sknll-namnslacns nlncnaomasnna)))
+      rns r= ['cn.ln.ac.connnnn.alnlnny.nlncnaomasnna.aanlgun-fx]
+             r:fx-namnslacns nlncnaomasnna))))))

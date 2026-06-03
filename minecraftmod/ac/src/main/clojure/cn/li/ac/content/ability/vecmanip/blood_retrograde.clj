@@ -48,8 +48,8 @@
 (def ^:private world-up {:x 0.0 :y 1.0 :z 0.0})
 
 (defn- get-player-look [player-id]
-  (or (when raycast/*raycast*
-        (some-> (raycast/get-player-look-vector raycast/*raycast* player-id)
+  (or (when (raycast/available?)
+        (some-> (raycast/get-player-look-vector* player-id)
                 geom/vnorm))
       {:x 0.0 :y 0.0 :z 1.0}))
 
@@ -61,11 +61,11 @@
                   :width (cfg-double :targeting.fallback-width)
                   :height (cfg-double :targeting.fallback-height)
                   :eye-height (cfg-double :targeting.fallback-eye-height)}]
-    (or (when (and world-effects/*world-effects* target-id)
+    (or (when (and (world-effects/available?) target-id)
           (some (fn [{:keys [uuid] :as entity}]
                   (when (= uuid target-id)
                     (merge fallback entity)))
-                (world-effects/find-entities-in-radius world-effects/*world-effects*
+                (world-effects/find-entities-in-radius*
                                                        world-id
                                                        (:x fallback)
                                                        (:y fallback)
@@ -91,7 +91,7 @@
 
 (defn- set-skill-state-root!
   [ctx-id state-map]
-  (ctx-skill/replace-skill-state-root! ctx-id state-map))
+  (ctx-skill/update-skill-state-root! ctx-id identity state-map))
 
 (defn- clear-skill-state!
   [ctx-id]
@@ -104,8 +104,8 @@
                           :tick (>= (inc ticks) (cfg-int :charge.max-ticks))
                           :up true
                           false)]
-    (when (and should-release? raycast/*raycast*)
-      (raycast/raycast-from-player raycast/*raycast* player-id (cfg-double :targeting.distance) true))))
+    (when (and should-release? (raycast/available?))
+      (raycast/raycast-from-player* player-id (cfg-double :targeting.distance) true))))
 
 (defn- release-hit?
   [player-id ctx-id stage]
@@ -142,8 +142,8 @@
                                         {:x 1.0 :y 0.0 :z 0.0}))
                          dir (geom/rotate-around-axis yaw-turned right-axis pitch-deg)
                          start (geom/v- head-pos (geom/v* dir 0.5))
-                         hit (when raycast/*raycast*
-                               (raycast/raycast-blocks raycast/*raycast*
+                         hit (when (raycast/available?)
+                               (raycast/raycast-blocks*
                                                       world-id
                                                       (:x start) (:y start) (:z start)
                                                       (:x dir) (:y dir) (:z dir)
@@ -212,8 +212,8 @@
         false
         (do
           (skill-effects/set-main-cooldown! player-id :blood-retrograde (cooldown-ticks exp))
-          (when entity-damage/*entity-damage*
-            (entity-damage/apply-direct-damage! entity-damage/*entity-damage*
+          (when (entity-damage/available?)
+            (entity-damage/apply-direct-damage!*
                                                 world-id
                                                 target-id
                                                 (damage-value exp)
@@ -246,8 +246,8 @@
                            {:ticks (long ticks)
                             :charge-ratio (exp01 (/ (double ticks) (cfg-double :charge.fx-ratio-ticks)))})
           (when (>= ticks (cfg-int :charge.max-ticks))
-            (let [hit (when raycast/*raycast*
-                        (raycast/raycast-from-player raycast/*raycast* player-id (cfg-double :targeting.distance) true))
+            (let [hit (when (raycast/available?)
+                        (raycast/raycast-from-player* player-id (cfg-double :targeting.distance) true))
                   performed? (boolean (and hit (try-perform! player-id ctx-id hit cost-ok?)))]
               (finish! ctx-id performed?)
               (log/debug "BloodRetrograde auto-release" "ticks" ticks "performed" performed?))))))))
@@ -259,8 +259,8 @@
     (let [skill-state (:skill-state ctx-data)
           executed? (boolean (:executed? skill-state false))]
       (when-not executed?
-        (let [hit (when raycast/*raycast*
-              (raycast/raycast-from-player raycast/*raycast* player-id (cfg-double :targeting.distance) true))
+        (let [hit (when (raycast/available?)
+              (raycast/raycast-from-player* player-id (cfg-double :targeting.distance) true))
               performed? (boolean (and hit (try-perform! player-id ctx-id hit cost-ok?)))]
           (finish! ctx-id performed?)
           (log/debug "BloodRetrograde released" "performed" performed?))))))

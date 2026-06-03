@@ -85,24 +85,24 @@
   []
   (log/info "Binding client-side rendering implementations...")
 
-  ;; Bind pose stack implementations
-  (alter-var-root #'pose/*y-rotation-fn* (constantly pose-impl/rotate-y))
-  (alter-var-root #'pose/*x-rotation-fn* (constantly pose-impl/rotate-x))
-  (alter-var-root #'pose/*z-rotation-fn* (constantly pose-impl/rotate-z))
-  (alter-var-root #'pose/*push-pose-fn* (constantly pose-impl/push-pose))
-  (alter-var-root #'pose/*pop-pose-fn* (constantly pose-impl/pop-pose))
-  (alter-var-root #'pose/*translate-fn* (constantly pose-impl/translate))
-  (alter-var-root #'pose/*scale-fn* (constantly pose-impl/scale))
-  (alter-var-root #'pose/*get-matrix-fn* (constantly pose-impl/get-pose-matrix))
+  (pose/install-pose-ops!
+   {:y-rotation pose-impl/rotate-y
+    :x-rotation pose-impl/rotate-x
+    :z-rotation pose-impl/rotate-z
+    :push-pose pose-impl/push-pose
+    :pop-pose pose-impl/pop-pose
+    :translate pose-impl/translate
+    :scale pose-impl/scale
+    :get-matrix pose-impl/get-pose-matrix}
+   "forge-client")
 
-  ;; Bind vertex consumer implementation
-  (alter-var-root #'buffer/*submit-vertex-fn* (constantly pose-impl/submit-vertex))
-  (alter-var-root #'buffer/*triangle-vertex-order* (constantly [0 1 2 2]))
-
-  ;; Bind render buffer selectors
-  (alter-var-root #'buffer/*solid-buffer-fn* (constantly buffer-impl/get-solid-buffer))
-  (alter-var-root #'buffer/*translucent-buffer-fn* (constantly buffer-impl/get-translucent-buffer))
-  (alter-var-root #'buffer/*cutout-no-cull-buffer-fn* (constantly buffer-impl/get-cutout-no-cull-buffer))
+  (buffer/install-render-buffer-ops!
+   {:solid buffer-impl/get-solid-buffer
+    :translucent buffer-impl/get-translucent-buffer
+    :cutout-no-cull buffer-impl/get-cutout-no-cull-buffer
+    :submit-vertex pose-impl/submit-vertex
+    :triangle-vertex-order [0 1 2 2]}
+   "forge-client")
 
   (log/info "Client-side rendering bindings complete"))
 

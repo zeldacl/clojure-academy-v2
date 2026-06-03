@@ -75,7 +75,7 @@
 
 (defn- set-skill-state-root!
   [ctx-id state-map]
-  (ctx-skill/replace-skill-state-root! ctx-id state-map))
+  (ctx-skill/update-skill-state-root! ctx-id identity state-map))
 
 (defn- clear-skill-state!
   [ctx-id]
@@ -92,10 +92,9 @@
 
 (defn- update-entity-target
   [{:keys [target-world-id target-entity-uuid target-x target-y target-z] :as skill-state}]
-  (if-not (and world-effects/*world-effects* target-entity-uuid)
+  (if-not (and (world-effects/available?) target-entity-uuid)
     nil
-    (let [candidates (world-effects/find-entities-in-radius
-                       world-effects/*world-effects*
+    (let [candidates (world-effects/find-entities-in-radius*
                        (or target-world-id "minecraft:overworld")
                        (double target-x) (double target-y) (double target-z)
                        (cfg-double :targeting.target-update-radius))
@@ -108,11 +107,11 @@
                :target-z (double (:z matched)))))))
 
 (defn- resolve-target [player-id]
-  (when-let [look (when raycast/*raycast*
-                    (raycast/get-player-look-vector raycast/*raycast* player-id))]
+  (when-let [look (when (raycast/available?)
+                    (raycast/get-player-look-vector* player-id))]
     (let [eye      (geom/eye-pos player-id)
           world-id (geom/world-id-of player-id)
-          hit      (raycast/raycast-combined raycast/*raycast*
+          hit      (raycast/raycast-combined*
                                              world-id
                                              (:x eye) (:y eye) (:z eye)
                                              (double (:x look))
@@ -189,8 +188,8 @@
         state-pos (player-pos player-id)]
     (if-let [{:keys [target-x target-y target-z] :as target-state}
              (resolve-target player-id)]
-      (let [velocity-now (when player-motion/*player-motion*
-                           (player-motion/get-velocity player-motion/*player-motion* player-id))]
+      (let [velocity-now (when (player-motion/available?)
+                           (player-motion/get-velocity* player-id))]
          (set-skill-state-root! ctx-id
                  (merge target-state
                    {:has-target true
@@ -244,8 +243,8 @@
                       desired-x (/ dx scale)
                       desired-y (/ dy scale)
                       desired-z (/ dz scale)
-                      player-vel (when player-motion/*player-motion*
-                                   (player-motion/get-velocity player-motion/*player-motion* player-id))
+                      player-vel (when (player-motion/available?)
+                                   (player-motion/get-velocity* player-id))
                       cur-vx    (double (or (:x player-vel) 0.0))
                       cur-vy    (double (or (:y player-vel) 0.0))
                       cur-vz    (double (or (:z player-vel) 0.0))
@@ -260,8 +259,8 @@
                       next-x    (try-adjust base-x desired-x)
                       next-y    (try-adjust base-y desired-y)
                       next-z    (try-adjust base-z desired-z)]
-                  (when player-motion/*player-motion*
-                    (player-motion/set-velocity! player-motion/*player-motion*
+                  (when (player-motion/available?)
+                    (player-motion/set-velocity!*
                                                  player-id next-x next-y next-z))
                   (set-skill-state-root! ctx-id
                                          (assoc updated-state

@@ -63,7 +63,7 @@
 													:dz (double (or dz 0.0))})))
 
 			:beam
-			(let [store** (if (and start end)
+			(let [store* (if (and start end)
 											(update-in store* [:beams owner-key*] (fnil conj [])
 																 (merge base-meta
 																				{:start start
@@ -83,7 +83,7 @@
 						 :offset-x 0.5 :offset-y 0.5 :offset-z 0.5}))
 				(client-sounds/queue-sound-effect! (:queue-owner base-meta)
 					{:type :sound :sound-id "my_mod:md.eb_explode" :volume 0.8 :pitch 1.0})
-				(update store** :effect-state dissoc owner-key*))
+				(update store* :effect-state dissoc owner-key*))
 
 			:end
 			(-> store*

@@ -1,76 +1,55 @@
 (ns cn.li.mcmod.client.render.buffer
   "Platform-neutral render buffer API for model rendering.
 
-  Platform adapters register two functions during platform init:
-  - solid buffer selection
-  - translucent buffer selection
+  Platform adapters call `install-render-buffer-ops!` once at client bootstrap."
+  (:require [cn.li.mcmod.platform.runtime :as prt]))
 
-  ac/mcmod rendering code should call this namespace instead of referencing
-  platform RenderType classes directly.")
+(def ^:private ^:dynamic *render-buffer-ops* nil)
 
-(def ^:dynamic *solid-buffer-fn* nil)
-(def ^:dynamic *translucent-buffer-fn* nil)
-(def ^:dynamic *cutout-no-cull-buffer-fn* nil)
+(defn- buffer-op [k]
+  (when *render-buffer-ops* (get *render-buffer-ops* k)))
 
-(def ^:dynamic *submit-vertex-fn* nil)
+(defn install-render-buffer-ops!
+  "Install render buffer ops. Keys:
+  :solid :translucent :cutout-no-cull — (fn [buffer-source texture] consumer)
+  :submit-vertex — vertex submit fn
+  :triangle-vertex-order — vector, default [0 1 2]"
+  [ops-map label]
+  (prt/install-impl! #'*render-buffer-ops* ops-map (or label "render-buffer-ops"))
+  nil)
 
-(def ^:dynamic *triangle-vertex-order*
-  "Backend triangle emission order.
+(defn render-buffer-ops-available? []
+  (prt/impl-available? #'*render-buffer-ops*))
 
-  Default `[0 1 2]` emits one triangle (OBJ-spec semantics).
-  Some backend buffers are quad-oriented and may set `[0 1 2 2]` so each
-  triangle is submitted as a degenerate quad without changing core OBJ logic."
-  [0 1 2])
+(defn call-with-render-buffer-ops [ops f]
+  (binding [*render-buffer-ops* ops] (f)))
 
 (defn- require-buffer-fn
   [buffer-fn kind]
   (or buffer-fn
       (throw (ex-info (str "Render buffer function not initialized: " kind)
                       {:kind kind
-                       :hint "Call platform-impl/init-platform! before renderer registration"}))))
+                       :hint "Call install-render-buffer-ops! before renderer registration"}))))
 
 (defn get-solid-buffer
-  "Return a solid VertexConsumer for `texture` from `buffer-source`.
-
-  Throws ex-info when no platform implementation is registered."
   [buffer-source texture]
-  ((require-buffer-fn *solid-buffer-fn* :solid) buffer-source texture))
+  ((require-buffer-fn (buffer-op :solid) :solid) buffer-source texture))
 
 (defn get-translucent-buffer
-  "Return a translucent VertexConsumer for `texture` from `buffer-source`.
-
-  Throws ex-info when no platform implementation is registered."
   [buffer-source texture]
-  ((require-buffer-fn *translucent-buffer-fn* :translucent) buffer-source texture))
+  ((require-buffer-fn (buffer-op :translucent) :translucent) buffer-source texture))
 
 (defn get-cutout-no-cull-buffer
-  "Return a cutout/no-cull VertexConsumer for `texture` from `buffer-source`.
-
-  Useful for OBJ models with thin faces or uncertain winding where backface
-  culling can make the model appear invisible."
   [buffer-source texture]
-  ((require-buffer-fn *cutout-no-cull-buffer-fn* :cutout-no-cull) buffer-source texture))
+  ((require-buffer-fn (buffer-op :cutout-no-cull) :cutout-no-cull) buffer-source texture))
+
+(defn triangle-vertex-order
+  []
+  (or (buffer-op :triangle-vertex-order) [0 1 2]))
 
 (defn submit-vertex
-  "Submit a single vertex to a platform `VertexConsumer`.
-
-  Args:
-  - vertex-consumer: platform vertex consumer
-  - pose-stack: platform pose stack (for correct normals under scale)
-  - x y z: vertex position (numbers)
-  - r g b a: color components (ints 0-255)
-  - u v: texture coords (numbers)
-  - overlay: overlay coords (int)
-  - uv2: light/uv2 packed int
-  - nx ny nz: model-space normal (numbers)
-
-  This delegates to a platform-provided function bound to `*submit-vertex-fn*`.
-  "
   [vertex-consumer pose-stack x y z r g b a u v overlay uv2 nx ny nz]
-  (or *submit-vertex-fn*
-      (throw (ex-info "No platform submit-vertex function bound"
-                      {:hint "Call platform-impl/init-platform! to bind buffer helpers"})))
-  (try
-    (*submit-vertex-fn* vertex-consumer pose-stack x y z r g b a u v overlay uv2 nx ny nz)
-    (catch Exception e
-      (throw e))))
+  (let [submit-fn (or (buffer-op :submit-vertex)
+                      (throw (ex-info "No platform submit-vertex function bound"
+                                      {:hint "Call install-render-buffer-ops! during client init"})))]
+    (submit-fn vertex-consumer pose-stack x y z r g b a u v overlay uv2 nx ny nz)))

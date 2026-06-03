@@ -140,6 +140,23 @@
         (str "Content skill runtime bundle residues:\n"
              (str/join "\n" violations)))))
 
+(def ^:private platform-impl-var-pattern
+  #"cn\.li\.mcmod\.platform\.[a-z0-9-]+/\*[a-z0-9-]+\*")
+
+(deftest no-direct-platform-impl-var-access-guard-test
+  (let [violations
+        (for [file (scan-entry-sources ["src/main/clojure/cn/li/ac"]
+                                        #(not (fx-file? %)))
+              :let [rel (.getPath file)
+                    source (slurp file)]
+              line (str/split-lines source)
+              [idx text] (map vector (range) line)
+              :when (re-find platform-impl-var-pattern text)]
+          (str rel ":" (inc idx) ": " (str/trim text)))]
+    (is (empty? violations)
+        (str "ac must use platform *-wrappers, not impl vars:\n"
+             (str/join "\n" violations)))))
+
 (deftest no-dead-skill-op-vector-keys-guard-test
   (let [violations
         (for [file (scan-entry-sources ["src/main/clojure/cn/li/ac/content/ability"]

@@ -25,6 +25,25 @@
    :channel channel
    :owner-key [:ctx ctx-id]})
 
+(deftest init-registers-owner-aware-thunder-clap-fx-test
+  (let [registered-level* (atom nil)
+        registered-handler* (atom nil)]
+    (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
+                                                         (reset! registered-level* [effect-id effect-map])
+                                                         nil)
+                  fx-registry/register-fx-channels! (fn [channels handler]
+                                                      (reset! registered-handler* {:channels channels
+                                                                                   :handler handler})
+                                                      nil)]
+      (thunder-clap-fx/init!)
+      (is (= :thunder-clap (first @registered-level*)))
+      (is (fn? (:enqueue-state-fn (second @registered-level*))))
+      (is (= #{:thunder-clap/fx-start
+               :thunder-clap/fx-update
+               :thunder-clap/fx-perform
+               :thunder-clap/fx-end}
+             (set (:channels @registered-handler*)))))))
+
 (deftest fx-handler-routes-four-stages-with-ctx-metadata-test
   (let [handler* (atom nil)
         enqueued* (atom [])]

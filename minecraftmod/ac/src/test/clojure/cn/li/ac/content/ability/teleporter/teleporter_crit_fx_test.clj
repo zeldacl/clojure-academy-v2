@@ -8,6 +8,21 @@
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.i18n]))
 
+(deftest init-registers-teleporter-crit-channel-test
+  (let [registered-level* (atom nil)
+        registered-handler* (atom nil)]
+    (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
+                                                         (reset! registered-level* [effect-id effect-map])
+                                                         nil)
+                  fx-registry/register-fx-channels! (fn [channels handler]
+                                                      (reset! registered-handler* {:channels channels
+                                                                                   :handler handler})
+                                                      nil)]
+      (crit-fx/init!)
+      (is (= :teleporter-crit (first @registered-level*)))
+      (is (= #{:teleporter/fx-crit-hit}
+             (set (:channels @registered-handler*)))))))
+
 (deftest fx-handler-routes-crit-payload-test
   (let [handler* (atom nil)
         enqueued* (atom [])]

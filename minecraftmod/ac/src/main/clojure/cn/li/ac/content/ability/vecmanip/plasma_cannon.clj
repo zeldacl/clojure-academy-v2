@@ -25,6 +25,7 @@
                         [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
                         [cn.li.mcmod.platform.raycast :as raycast]
+            [cn.li.mcmod.platform.teleportation :as teleportation]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.util.log :as log]))
@@ -65,9 +66,7 @@
   (exp01 (skill-effects/skill-exp player-id plasma-cannon-skill-id)))
 
 (defn- get-player-position [player-id]
-  (or (when-let [tp (resolve 'cn.li.mcmod.platform.teleportation/*teleportation*)]
-        (when-let [impl @tp]
-          ((resolve 'cn.li.mcmod.platform.teleportation/get-player-position) impl player-id)))
+  (or (teleportation/get-player-position* player-id)
       (skill-effects/player-path player-id :position {:world-id "minecraft:overworld" :x 0.0 :y 64.0 :z 0.0})))
 
 (defn- get-world-id [player-id]
@@ -87,7 +86,7 @@
 
 (defn- set-skill-state-root!
   [ctx-id state-map]
-  (ctx-skill/replace-skill-state-root! ctx-id state-map))
+  (ctx-skill/update-skill-state-root! ctx-id identity state-map))
 
 (defn- clear-skill-state!
   [ctx-id]
@@ -133,14 +132,14 @@
 
 ;; Simplified block-hit check: cast ray from last-pos to new-pos
 (defn- block-hit? [world-id last-pos new-pos]
-  (when raycast/*raycast*
+  (when (raycast/available?)
     (let [dx (- (double (:x new-pos)) (double (:x last-pos)))
           dy (- (double (:y new-pos)) (double (:y last-pos)))
           dz (- (double (:z new-pos)) (double (:z last-pos)))
           dist (geom/vlen {:x dx :y dy :z dz})]
       (when (> dist 1.0e-6)
         (let [dir (geom/vnorm {:x dx :y dy :z dz})
-              hit (raycast/raycast-blocks raycast/*raycast*
+              hit (raycast/raycast-blocks*
                                          world-id
                                          (double (:x last-pos))
                                          (double (:y last-pos))
@@ -160,21 +159,20 @@
         dmg (damage-amount exp)
         radius (explosion-radius exp)]
     ;; Damage all living entities in 10-block radius (excluding caster)
-    (when world-effects/*world-effects*
-      (let [entities (world-effects/find-entities-in-radius
-                       world-effects/*world-effects* world-id tx ty tz (cfg-double :combat.damage-radius))]
+    (when (world-effects/available?)
+      (let [entities (world-effects/find-entities-in-radius* world-id tx ty tz (cfg-double :combat.damage-radius))]
         (doseq [entity entities]
           (when-not (= (:uuid entity) player-id)
-            (when entity-damage/*entity-damage*
+            (when (entity-damage/available?)
               ;; TODO: use apply-damage-bypass-immunity! once protocol is extended (Bug 4)
-              (entity-damage/apply-direct-damage! entity-damage/*entity-damage*
+              (entity-damage/apply-direct-damage!*
                                                   world-id
                                                   (:uuid entity)
                                                   dmg
                                                   :explosion))))))
     ;; Create Minecraft explosion (no fire, destroys terrain)
-    (when world-effects/*world-effects*
-      (world-effects/create-explosion! world-effects/*world-effects*
+    (when (world-effects/available?)
+      (world-effects/create-explosion!*
                                        world-id tx ty tz radius false))
     ;; Note: Experience is now granted in key-up (on fire), not here
     (log/info "PlasmaCannon: Exploded at" [tx ty tz]
@@ -190,13 +188,13 @@
       eye-y (+ (double (:y player-pos)) (cfg-double :targeting.eye-height))
       eye-z (double (:z player-pos))
       max-distance (cfg-double :targeting.raycast-distance)]
-    (if raycast/*raycast*
-      (let [look (raycast/get-player-look-vector raycast/*raycast* player-id)
+    (if (raycast/available?)
+      (let [look (raycast/get-player-look-vector* player-id)
             dx (double (or (:x look) 0.0))
             dy (double (or (:y look) 0.0))
             dz (double (or (:z look) 1.0))
             ;; Combined trace: living entities + blocks, 100 blocks
-            hit (raycast/raycast-combined raycast/*raycast*
+            hit (raycast/raycast-combined*
                                           world-id
                                           eye-x eye-y eye-z
                                           dx dy dz max-distance)]

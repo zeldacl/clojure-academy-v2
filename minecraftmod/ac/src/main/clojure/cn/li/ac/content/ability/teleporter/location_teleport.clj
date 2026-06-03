@@ -81,12 +81,12 @@
     false))
 
 (defn- current-pos [player-id]
-  (when teleportation/*teleportation*
-    (teleportation/get-player-position teleportation/*teleportation* player-id)))
+  (when (teleportation/available?)
+    (teleportation/get-player-position* player-id)))
 
 (defn- all-locations [player-id]
-  (if position-store/*named-position-store*
-    (vec (position-store/list-locations position-store/*named-position-store* player-id))
+  (if (position-store/available?)
+    (vec (position-store/list-locations* player-id))
     []))
 
 (defn- max-saved-location-count []
@@ -94,11 +94,10 @@
 
 (defn- location-limit-reached?
   [player-id location-name]
-  (let [store position-store/*named-position-store*]
-    (and store
-         (not (position-store/has-location? store player-id location-name))
-         (>= (long (or (position-store/get-location-count store player-id) 0))
-             (max-saved-location-count)))))
+  (and (position-store/available?)
+       (not (position-store/has-location?* player-id location-name))
+       (>= (long (or (position-store/get-location-count* player-id) 0))
+           (max-saved-location-count))))
 
 (defn- location-limits []
   {:cross-dimension-exp-threshold
@@ -161,7 +160,7 @@
         (str/blank? name*)
         {:success? false :error :invalid-name}
 
-        (not position-store/*named-position-store*)
+        (not (position-store/available?))
         {:success? false :error :service-unavailable}
 
         :else
@@ -170,8 +169,7 @@
             {:success? false
              :error :location-limit-reached
              :max-locations (max-saved-location-count)}
-            (let [ok? (position-store/save-location!
-                        position-store/*named-position-store*
+            (let [ok? (position-store/save-location!*
                         player-id
                         name*
                         (:world-id pos)
@@ -195,12 +193,11 @@
         (str/blank? name*)
         {:success? false :error :invalid-name}
 
-        (not position-store/*named-position-store*)
+        (not (position-store/available?))
         {:success? false :error :service-unavailable}
 
         :else
-        {:success? (boolean (position-store/delete-location!
-                  position-store/*named-position-store*
+        {:success? (boolean (position-store/delete-location!*
                               player-id
                               name*))
          :name name*}))
@@ -224,14 +221,14 @@
   Returns {:success? boolean ...} for client RPC callbacks."
   [player-id location-name]
   (try
-    (if (or (not teleportation/*teleportation*)
-            (not position-store/*named-position-store*))
+    (if (or (not (teleportation/available?))
+            (not (position-store/available?)))
       {:success? false :error :service-unavailable}
       (let [name* (norm-name location-name)
             exp (double (or (skill-exp player-id) 0.0))
             pos (current-pos player-id)
             dest (when (not (str/blank? name*))
-                   (position-store/get-location position-store/*named-position-store* player-id name*))]
+                   (position-store/get-location* player-id name*))]
         (cond
           (str/blank? name*)
           {:success? false :error :invalid-name}
@@ -262,8 +259,7 @@
               {:success? false :error :err-cp :cp-cost cp}
 
               :else
-              (let [result (teleportation/teleport-with-entities!
-                             teleportation/*teleportation*
+              (let [result (teleportation/teleport-with-entities!*
                              player-id
                              (:world-id dest)
                              (:x dest)
@@ -274,7 +270,7 @@
                 (if-not (:success result)
                   {:success? false :error :teleport-failed}
                   (do
-                    (teleportation/reset-fall-damage! teleportation/*teleportation* player-id)
+                    (teleportation/reset-fall-damage!* player-id)
                     (add-exp! player-id (compute-exp-gain _dist))
                     (when cross-dim?
                       (ach-dispatcher/trigger-custom-event! player-id "teleporter.ignore_barrier"))

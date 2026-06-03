@@ -12,21 +12,13 @@
   (let [ctx* (atom initial-ctx)]
     {:ctx* ctx*
      :get-context (fn [_] @ctx*)
-     :replace-skill-state-root! (fn [_ state-map]
-                                  (swap! ctx* assoc :skill-state state-map)
-                                  nil)
-     :assoc-skill-state! (fn [_ k v]
-                           (swap! ctx* assoc-in (into [:skill-state] (if (vector? k) k [k])) v)
-                           nil)
-     :clear-skill-state! (fn [_]
-                           (swap! ctx* dissoc :skill-state)
-                           nil)}))
+     :update-skill-state-root! (fn [_ f & args]
+                        (swap! ctx* update :skill-state (fn [ss] (apply f (or ss {}) args))))}))
 
 (deftest flesh-ripping-tick-caches-trace-and-sends-update-fx-test
-  (let [{:keys [ctx* replace-skill-state-root! assoc-skill-state!]} (make-context-mocks {:skill-state {}})
+  (let [{:keys [ctx* update-skill-state-root!]} (make-context-mocks {:skill-state {}})
         fx-calls* (atom [])]
-    (with-redefs [ctx-skill/replace-skill-state-root! replace-skill-state-root!
-                  ctx-skill/assoc-skill-state! assoc-skill-state!
+    (with-redefs [ctx-skill/update-skill-state-root! update-skill-state-root!
                   helper/skill-exp (fn [_ _] 0.5)
                   helper/cfg-lerp (fn [_ field _]
                                     (case field
@@ -110,7 +102,6 @@
                                             (swap! fx-calls* conj [channel payload])
                                             nil)
                   rand (fn [] 0.0)]
-      (binding [potion/*potion-effects* :mock]
         (flesh/flesh-ripping-up! {:player-id "p1" :ctx-id "ctx-1" :cost-ok? true})))
 
     (is (= [["minecraft:overworld" "target-1" 8.0]] @damage-calls*))
@@ -170,7 +161,6 @@
                                             (swap! fx-calls* conj [channel payload])
                                             nil)
                   rand (fn [] 0.0)]
-      (binding [potion/*potion-effects* :mock]
         (flesh/flesh-ripping-up! {:player-id "p1" :ctx-id "ctx-1b" :cost-ok? true})))
 
     (is (= [[:flesh-ripping/fx-perform {:target-x 1.0
@@ -226,8 +216,8 @@
     (is (= 0 @fx-calls*))))
 
 (deftest flesh-ripping-abort-clears-skill-state-test
-  (let [{:keys [ctx* clear-skill-state!]} (make-context-mocks {:skill-state {:hold-ticks 3 :trace {:hit? true}}})]
-    (with-redefs [ctx-skill/clear-skill-state! clear-skill-state!]
+  (let [{:keys [ctx* update-skill-state-root!]} (make-context-mocks {:skill-state {:hold-ticks 3 :trace {:hit? true}}})]
+    (with-redefs [ctx-skill/update-skill-state-root! update-skill-state-root!]
       (flesh/flesh-ripping-abort! {:ctx-id "ctx-4"}))
     (is (nil? (:skill-state @ctx*)))))
 

@@ -94,13 +94,11 @@
                    (fn [_id#] ctx-data#)
                    ctx-skill/update-skill-state-root!
                    (fn [_a# _b# & _rest#] nil)
-                   world-effects/*world-effects* :mock
-                   world-effects/find-entities-in-radius
+                   world-effects/find-entities-in-radius*
                    (fn [_a# _b# _c# _d# _e# _f#] [(arrow-entity)])
-                   entity-motion/*entity-motion* :mock
-                   entity-motion/set-velocity!
+                   entity-motion/set-velocity!*
                    (fn [_a# _b# _c# _d# _e# _f#] (swap! set-vel-calls# conj :called))
-                   entity-motion/discard-entity!
+                   entity-motion/discard-entity!*
                    (fn [_a# _b# _c#] nil)
                    skill-effects/perform-resource!
                    (fn [_a# _b# cp# _d#]

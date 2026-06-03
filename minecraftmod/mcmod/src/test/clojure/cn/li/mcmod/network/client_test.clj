@@ -142,9 +142,11 @@
              @calls)))))
 
 (deftest default-send-request-contract-test
-  (binding [dispatch/*platform-version* :unknown]
-    (try
-      (client/send-request "m" {} 0)
-      (is false)
-      (catch clojure.lang.ExceptionInfo e
-        (is (= :unknown (:version (ex-data e))))))))
+  (dispatch/call-with-platform-version
+   :unknown
+   (fn []
+     (try
+       (client/send-request "m" {} 0)
+       (is false)
+       (catch clojure.lang.ExceptionInfo e
+         (is (= :unknown (:version (ex-data e)))))))))

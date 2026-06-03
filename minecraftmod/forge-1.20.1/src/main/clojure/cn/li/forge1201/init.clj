@@ -24,8 +24,7 @@
     :forge-1.20.1
     (fn []
       ;; Bind platform-neutral event bridge to Forge IMC dispatcher.
-      (alter-var-root #'platform-events/*fire-event-fn*
-                      (constantly imc-dispatch/dispatch-event!))
+      (platform-events/install-fire-event-fn! imc-dispatch/dispatch-event! "Forge")
       ;; Register custom advancement triggers.
       (ModTriggers/init)
       ;; Ensure discovered content init providers are registered through the generic content SPI.

@@ -30,8 +30,7 @@
                   skill-config/tunable-double stub-tunable-double
                   geom/world-id-of (fn [_] "w")
                   geom/eye-pos (fn [_] {:x 1.0 :y 64.0 :z 2.0})
-                  raycast/*raycast* :mock-raycast
-                  raycast/get-player-look-vector (fn [_ _] {:x 0.0 :y 0.0 :z 1.0})
+                  raycast/get-player-look-vector* (fn [_ _] {:x 0.0 :y 0.0 :z 1.0})
                   entity/player-spawn-entity-by-id! (fn [& args]
                                                       (swap! spawn-calls* conj args)
                                                       true)
@@ -70,8 +69,7 @@
                   skill-config/tunable-double stub-tunable-double
                   geom/world-id-of (fn [_] "w")
                   geom/eye-pos (fn [_] {:x 1.0 :y 64.0 :z 2.0})
-                  raycast/*raycast* :mock-raycast
-                  raycast/get-player-look-vector (fn [& _] nil)
+                  raycast/get-player-look-vector* (fn [& _] nil)
                   entity/player-spawn-entity-by-id! (fn [& args]
                                                       (swap! spawn-calls* conj args)
                                                       true)

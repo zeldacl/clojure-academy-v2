@@ -26,7 +26,6 @@
         (log/info "Fabric player motion already installed, skipping")
         (do
           (server-context/install-server-context!)
-          (alter-var-root #'pm/*player-motion*
-                          (constantly (fabric-player-motion)))
+          (pm/install-player-motion! (fabric-player-motion) "Fabric player motion")
           (alter-var-root #'*installed?* (constantly true))
           (log/info "Fabric player motion installed"))))))

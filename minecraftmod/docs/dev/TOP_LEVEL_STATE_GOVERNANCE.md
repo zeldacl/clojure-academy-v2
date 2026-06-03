@@ -77,6 +77,37 @@ Rules:
 4. Notes should state the migration phase or retained duplicate/freeze policy.
 5. Do not whitelist by namespace prefix, glob, or vague symbol names.
 
+## `mcmod.platform` SPI globals (S1)
+
+Platform adapter namespaces under `mcmod/src/main/clojure/cn/li/mcmod/platform/`
+hold **process-static** loader installs only:
+
+- **Private runtime vars** — `^:private ^:dynamic *runtime*`, `*world-ops*`,
+  `*be-ops*`, or factory fns. Installed only via public `install-*!` in the
+  owning namespace (called from `mc1201` / Forge / Fabric bootstrap).
+- **Public operation wrappers** — `...*` suffix functions used by `ac` and
+  `mcmod` content. They return nil/false/empty when unavailable; factories
+  still fail-fast when required at init.
+- **Static registries** — capability type registry, UI widget factories,
+  command/integration/energy hook runtimes. Duplicate registration with
+  different values fails; tests may call documented `reset-*!` helpers.
+
+**Content rule:** `ac/src/main` must not reference `cn.li.mcmod.platform.*/\*…\*`
+implementation vars or `resolve` platform impl symbols. Use wrappers and
+`available?` / `call-with-runtime` in tests.
+
+Loader registry: Forge uses `forge1201.registry.state`; Fabric uses
+`fabric1201.registry.fabric-dispatch`. The removed `mcmod.platform.registry`
+multimethod path must not be reintroduced.
+
+**GUI block-state broadcast (required platform multimethod):** Server→client tile
+GUI sync dispatches via `cn.li.ac.gui.platform-adapter.sync-api/broadcast-gui-state!*`
+on `platform-dispatch/current-platform-version` (same pattern as
+`mcmod.network.client/send-request`). Each loader registers `defmethod` in
+`forge1201.gui.block-sync-broadcast` / `fabric1201.gui.block-sync-broadcast` and
+calls `assert-gui-broadcast-dispatch!` from GUI network bootstrap. Do not use
+optional `available?` guards or `install-platform-broadcast!` for this path.
+
 ## Current migration focus
 
 P0 starts with player state, dispatcher route/context state, sync scheduler, and

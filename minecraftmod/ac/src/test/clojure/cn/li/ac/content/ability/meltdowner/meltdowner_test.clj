@@ -90,7 +90,6 @@
                   beam/execute-beam! (fn [_ _] {:beam-result {:performed? true :reflection-hit? false}})
                   geom/world-id-of (fn [_] "w")
                   geom/eye-pos (fn [_] {:x 0.0 :y 64.0 :z 0.0})]
-      (binding [raycast/*raycast* (raycast-stub {:x 0.0 :y 0.0 :z 1.0}
                      (fn [& _] nil))]
       (#'cn.li.ac.content.ability.meltdowner.meltdowner/meltdowner-on-up!
        {:player-id "p1" :ctx-id "ctx-2" :hold-ticks 30}))
@@ -146,14 +145,13 @@
                                              (case field-id
                                                :combat.damage 40.0
                                                0.0))]
-      (binding [raycast/*raycast* (raycast-stub {:dx 0.0 :dy 0.0 :dz 1.0}
                                                  (fn [world-id sx sy sz dx dy dz max-distance]
                                                    (reset! ray-input* {:world-id world-id
                                                                        :start [sx sy sz]
                                                                        :dir [dx dy dz]
                                                                        :max-distance max-distance})
                                                    {:hit-type :entity :uuid "target-1"}))
-                entity-damage/*entity-damage* (reify entity-damage/IEntityDamage
+                (entity-damage/available?) (reify entity-damage/IEntityDamage
                                                (apply-direct-damage! [_ world-id entity-id damage source-type]
                                                  (swap! damage-calls* conj [world-id entity-id damage source-type])
                                                  true)

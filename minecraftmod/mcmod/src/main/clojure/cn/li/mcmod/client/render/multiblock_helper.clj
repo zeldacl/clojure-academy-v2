@@ -210,7 +210,7 @@
 (defn should-render-multiblock?
   "Whether this BE should run the multiblock TESR (one model for the whole footprint).
 
-  For `:controller-parts` multiblocks only the **controller** BE may draw: part
+  For `:controller-parts` multiblocks only the **controller* BE may draw: part
   specs omit the full footprint, so canonical checks would otherwise succeed at
   every part cell. Other multiblock modes keep the prior canonical / sub-id rules.
 

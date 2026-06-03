@@ -52,22 +52,22 @@
 (defn- try-ignite-block!
   "Attempt to ignite block at position with given probability."
   [world-id x y z probability]
-  (when (and block-manip/*block-manipulation*
+  (when (and (block-manip/available?)
              (< (rand) probability))
-    (let [current-block (block-manip/get-block block-manip/*block-manipulation*
+    (let [current-block (block-manip/get-block*
                                                 world-id x (inc y) z)]
       (when (or (nil? current-block)
                 (= current-block "minecraft:air"))
-        (block-manip/set-block! block-manip/*block-manipulation*
+        (block-manip/set-block!*
                                 world-id x (inc y) z
                                 "minecraft:fire")))))
 
 (defn- try-fishing!
   "Attempt to reward cooked fish when Arc-Gen strikes water."
   [world-id x y z probability player]
-  (when (and block-manip/*block-manipulation*
+  (when (and (block-manip/available?)
              (< (rand) probability))
-    (when (block-manip/liquid-block? block-manip/*block-manipulation*
+    (when (block-manip/liquid-block?*
                                      world-id x y z)
       (when-let [fish-stack (pitem/create-item-stack-by-id fish-item-id 1)]
         (entity/player-give-item-stack! player fish-stack)
@@ -76,10 +76,10 @@
 (defn- apply-stun!
   "Apply stun effect to entity (slowness + weakness)."
   [_world-id entity-uuid]
-  (when (and potion-effects/*potion-effects* entity-uuid)
-    (potion-effects/apply-potion-effect! potion-effects/*potion-effects*
+  (when (and (potion-effects/available?) entity-uuid)
+    (potion-effects/apply-potion-effect!*
                                          entity-uuid :slowness 40 1)
-    (potion-effects/apply-potion-effect! potion-effects/*potion-effects*
+    (potion-effects/apply-potion-effect!*
                                          entity-uuid :weakness 40 1)
     (log/debug "Arc Gen: stun effect applied to" entity-uuid)))
 
@@ -99,11 +99,11 @@
           can-stun?     (>= exp (cfg-double :effect.stun-exp-threshold))
           world-id      (geom/world-id-of player-id)
           eye           (geom/eye-pos player-id)
-          look-vec      (when raycast/*raycast*
-                          (raycast/get-player-look-vector raycast/*raycast* player-id))]
+          look-vec      (when (raycast/available?)
+                          (raycast/get-player-look-vector* player-id))]
       (when look-vec
-        (let [hit-result (when raycast/*raycast*
-                           (raycast/raycast-combined raycast/*raycast*
+        (let [hit-result (when (raycast/available?)
+                           (raycast/raycast-combined*
                                                      world-id
                                                      (:x eye) (:y eye) (:z eye)
                                                      (double (:x look-vec))
@@ -125,8 +125,8 @@
           (cond
             (= hit-type :entity)
             (let [entity-uuid (:entity-uuid hit-result)]
-              (when (and entity-damage/*entity-damage* entity-uuid)
-                (entity-damage/apply-direct-damage! entity-damage/*entity-damage*
+              (when (and (entity-damage/available?) entity-uuid)
+                (entity-damage/apply-direct-damage!*
                                                     world-id
                                                     entity-uuid
                                                     damage
@@ -140,8 +140,8 @@
             (let [block-x (int (:block-x hit-result))
                   block-y (int (:block-y hit-result))
                   block-z (int (:block-z hit-result))]
-              (if (and block-manip/*block-manipulation*
-                   (block-manip/liquid-block? block-manip/*block-manipulation*
+              (if (and (block-manip/available?)
+                   (block-manip/liquid-block?*
                                 world-id block-x block-y block-z))
               (try-fishing! world-id block-x block-y block-z fish-prob player)
               (try-ignite-block! world-id block-x block-y block-z ignite-prob))

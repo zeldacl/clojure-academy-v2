@@ -75,7 +75,7 @@
         (recur (- p 1.0) picked-index selected)))))
 
 (defn- apply-body-intensify-buffs! [player-id charge-ticks exp]
-  (when potion-effects/*potion-effects*
+  (when (potion-effects/available?)
     (let [prob            (get-probability charge-ticks)
           duration        (get-buff-time charge-ticks exp)
           hunger-duration (get-hunger-buff-time charge-ticks)
@@ -83,12 +83,10 @@
           shuffled        (vec (shuffle (base-effects)))]
       (doseq [{:keys [effect max-amplifier]}
               (select-random-effects shuffled prob)]
-        (potion-effects/apply-potion-effect!
-         potion-effects/*potion-effects*
+        (potion-effects/apply-potion-effect!*
          player-id effect duration (min level max-amplifier)))
-      (potion-effects/apply-potion-effect!
-       potion-effects/*potion-effects*
-             player-id :hunger hunger-duration (cfg-int :effect.hunger-amplifier)))))
+      (potion-effects/apply-potion-effect!*
+       player-id :hunger hunger-duration (cfg-int :effect.hunger-amplifier)))))
 
 (defskill body-intensify
   :id          :body-intensify

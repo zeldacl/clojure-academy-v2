@@ -1,43 +1,27 @@
 (ns cn.li.mcmod.platform.teleportation
-  "Protocol for teleportation mechanics.
-
-  Platform (forge) implements this protocol and binds to *teleportation*.
-  Game logic (ac) calls protocol methods without importing Minecraft classes.")
+  "Protocol for teleportation mechanics."
+  (:require [cn.li.mcmod.platform.runtime :as prt]))
 
 (defprotocol ITeleportation
-  "Teleportation mechanics for players."
+  (teleport-player! [this player-uuid world-id x y z])
+  (teleport-with-entities! [this player-uuid world-id x y z radius])
+  (reset-fall-damage! [this player-uuid])
+  (get-player-position [this player-uuid])
+  (get-player-dimension [this player-uuid]))
 
-  (teleport-player! [this player-uuid world-id x y z]
-    "Teleport player to position in same or different dimension.
-    - player-uuid: string (player UUID)
-    - world-id: string (dimension identifier, e.g., \"minecraft:overworld\", \"minecraft:the_nether\")
-    - x, y, z: double coordinates
-    Returns: true if teleported successfully, false otherwise")
+(def ^:private ^:dynamic *runtime* nil)
 
-  (teleport-with-entities! [this player-uuid world-id x y z radius]
-    "Teleport player and nearby entities to position.
-    - player-uuid: string (player UUID)
-    - world-id: string (dimension identifier)
-    - x, y, z: double coordinates
-    - radius: double radius to include nearby entities
-    Returns: map {:success boolean :teleported-count int}")
+(defn install-teleportation!
+  [impl label]
+  (prt/install-impl! #'*runtime* impl (or label "teleportation")))
 
-  (reset-fall-damage! [this player-uuid]
-    "Reset player's fall damage state.
-    - player-uuid: string (player UUID)
-    Returns: true if reset successfully, false otherwise")
+(defn available? [] (prt/impl-available? #'*runtime*))
+(defn current [] (prt/impl-current #'*runtime*))
+(defn call-with-runtime [rt f] (binding [*runtime* rt] (f)))
 
-  (get-player-position [this player-uuid]
-    "Get player's current position.
-    - player-uuid: string (player UUID)
-    Returns: map {:world-id string :x double :y double :z double} or nil if player not found")
-
-  (get-player-dimension [this player-uuid]
-    "Get player's current dimension.
-    - player-uuid: string (player UUID)
-    Returns: string (dimension identifier) or nil if player not found"))
-
-(def ^:dynamic *teleportation*
-  "Bound by platform (forge) to a reified ITeleportation implementation.
-  nil until platform init runs."
-  nil)
+(prt/def-impl-wrappers '*runtime* ITeleportation
+  [teleport-player!* teleport-player! player-uuid world-id x y z]
+  [teleport-with-entities!* teleport-with-entities! player-uuid world-id x y z radius]
+  [reset-fall-damage!* reset-fall-damage! player-uuid]
+  [get-player-position* get-player-position player-uuid]
+  [get-player-dimension* get-player-dimension player-uuid])

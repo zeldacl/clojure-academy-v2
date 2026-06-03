@@ -36,15 +36,15 @@
 
 (defn- entity-trace
   [player-id]
-  (when raycast/*raycast*
-    (raycast/raycast-from-player raycast/*raycast*
+  (when (raycast/available?)
+    (raycast/raycast-from-player*
                                  player-id
                                  (cfg-double :targeting.raycast-distance)
                                  true)))
 
 (defn- set-skill-state-root!
   [ctx-id state-map]
-  (ctx-skill/replace-skill-state-root! ctx-id state-map))
+  (ctx-skill/update-skill-state-root! ctx-id identity state-map))
 
 (defn- clear-skill-state!
   [ctx-id]
@@ -133,16 +133,13 @@
                             impulse (hit-impulse eye hit-pos)
                             knockback (when (>= exp* (cfg-double :movement.knockback-exp-threshold))
                                         (knockback-velocity player-id hit-pos))]
-                        (when entity-damage/*entity-damage*
-                          (entity-damage/apply-direct-damage!
-                           entity-damage/*entity-damage* world-id target-id damage :generic))
-                        (when (and knockback entity-motion/*entity-motion*)
-                          (entity-motion/set-velocity!
-                           entity-motion/*entity-motion* world-id target-id
+                        (when (entity-damage/available?)
+                          (entity-damage/apply-direct-damage!* world-id target-id damage :generic))
+                        (when (and knockback (entity-motion/available?))
+                          (entity-motion/set-velocity!* world-id target-id
                            (:x knockback) (:y knockback) (:z knockback)))
-                        (when entity-motion/*entity-motion*
-                          (entity-motion/add-velocity!
-                           entity-motion/*entity-motion* world-id target-id
+                        (when (entity-motion/available?)
+                          (entity-motion/add-velocity!* world-id target-id
                            (:x impulse) (:y impulse) (:z impulse)))
                         (fx/send-perform! ctx-id :directed-shock/fx-perform
                                           {:target-id target-id

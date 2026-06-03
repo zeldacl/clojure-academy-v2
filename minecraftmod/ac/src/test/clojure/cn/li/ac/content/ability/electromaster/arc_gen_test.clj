@@ -36,14 +36,10 @@
 (deftest miss-does-not-grant-exp-test
   (let [exp-calls* (atom [])
         fx-calls* (atom [])]
-    (with-redefs [raycast/*raycast* :mock
-                  entity-damage/*entity-damage* :mock
-                  block-manip/*block-manipulation* :mock
-                  potion-effects/*potion-effects* :mock
                   geom/world-id-of (fn [_] "w")
                   geom/eye-pos (fn [_] {:x 0.0 :y 64.0 :z 0.0})
-                  raycast/get-player-look-vector (fn [_ _] {:x 0.0 :y 0.0 :z 1.0})
-                  raycast/raycast-combined (fn [& _] nil)
+                  raycast/get-player-look-vector* (fn [_ _] {:x 0.0 :y 0.0 :z 1.0})
+                  raycast/raycast-combined* (fn [& _] nil)
                   skill-effects/skill-exp (fn [& _] 0.25)
                   skill-effects/add-skill-exp! (fn [& args] (swap! exp-calls* conj args) nil)
                   skill-config/lerp-double stub-lerp
@@ -62,19 +58,15 @@
   (let [ignite-calls* (atom [])
         fish-give* (atom [])
         exp-calls* (atom [])]
-    (with-redefs [raycast/*raycast* :mock
-                  entity-damage/*entity-damage* :mock
-                  block-manip/*block-manipulation* :mock
-                  potion-effects/*potion-effects* :mock
                   geom/world-id-of (fn [_] "w")
                   geom/eye-pos (fn [_] {:x 1.0 :y 64.0 :z 1.0})
-                  raycast/get-player-look-vector (fn [_ _] {:x 0.0 :y 0.0 :z 1.0})
-                  raycast/raycast-combined (fn [& _]
+                  raycast/get-player-look-vector* (fn [_ _] {:x 0.0 :y 0.0 :z 1.0})
+                  raycast/raycast-combined* (fn [& _]
                                              {:type :block
                                               :x 1.0 :y 64.0 :z 6.0
                                               :block-x 1 :block-y 64 :block-z 6})
-                  block-manip/liquid-block? (fn [& _] true)
-                  block-manip/set-block! (fn [& args] (swap! ignite-calls* conj args) nil)
+                  block-manip/liquid-block?* (fn [& _] true)
+                  block-manip/set-block!* (fn [& args] (swap! ignite-calls* conj args) nil)
                   pitem/create-item-stack-by-id (fn [_ _] {:item-id "minecraft:cooked_cod" :count 1})
                   entity/player-give-item-stack! (fn [player stack]
                                                    (swap! fish-give* conj [player stack])
@@ -93,19 +85,15 @@
 
 (deftest entity-hit-at-max-exp-applies-stun-test
   (let [potion-calls* (atom [])]
-    (with-redefs [raycast/*raycast* :mock
-                  entity-damage/*entity-damage* :mock
-                  block-manip/*block-manipulation* :mock
-                  potion-effects/*potion-effects* :mock
                   geom/world-id-of (fn [_] "w")
                   geom/eye-pos (fn [_] {:x 0.0 :y 64.0 :z 0.0})
-                  raycast/get-player-look-vector (fn [_ _] {:x 0.0 :y 0.0 :z 1.0})
-                  raycast/raycast-combined (fn [& _]
+                  raycast/get-player-look-vector* (fn [_ _] {:x 0.0 :y 0.0 :z 1.0})
+                  raycast/raycast-combined* (fn [& _]
                                              {:type :entity
                                               :x 0.0 :y 64.0 :z 5.0
                                               :entity-uuid "mob-1"})
-                  entity-damage/apply-direct-damage! (fn [& _] true)
-                  potion-effects/apply-potion-effect! (fn [& args]
+                  entity-damage/apply-direct-damage!* (fn [& _] true)
+                  potion-effects/apply-potion-effect!* (fn [& args]
                                                         (swap! potion-calls* conj args)
                                                         nil)
                   skill-effects/skill-exp (fn [& _] 1.0)
@@ -123,14 +111,10 @@
 (deftest miss-range-drives-fx-end-and-no-entity-arc-spawn-test
   (let [fx-calls* (atom [])
         spawn-calls* (atom [])]
-    (with-redefs [raycast/*raycast* :mock
-                  entity-damage/*entity-damage* :mock
-                  block-manip/*block-manipulation* :mock
-                  potion-effects/*potion-effects* :mock
                   geom/world-id-of (fn [_] "w")
                   geom/eye-pos (fn [_] {:x 10.0 :y 64.0 :z 20.0})
-                  raycast/get-player-look-vector (fn [_ _] {:x 0.0 :y 0.0 :z 1.0})
-                  raycast/raycast-combined (fn [& _] nil)
+                  raycast/get-player-look-vector* (fn [_ _] {:x 0.0 :y 0.0 :z 1.0})
+                  raycast/raycast-combined* (fn [& _] nil)
                   skill-effects/skill-exp (fn [& _] 1.0)
                   skill-effects/add-skill-exp! (fn [& _] nil)
                   skill-config/lerp-double stub-lerp

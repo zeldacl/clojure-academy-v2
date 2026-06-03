@@ -28,6 +28,22 @@
    :channel channel
    :owner-key [:ctx ctx-id]})
 
+(deftest init-registers-owner-aware-ray-barrage-fx-test
+  (let [registered-level* (atom nil)
+        registered-handler* (atom nil)]
+    (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
+                                                         (reset! registered-level* [effect-id effect-map])
+                                                         nil)
+                  fx-registry/register-fx-channels! (fn [channels handler]
+                                                      (reset! registered-handler* {:channels channels
+                                                                                   :handler handler})
+                                                      nil)]
+      (rb-fx/init!)
+      (is (= :ray-barrage (first @registered-level*)))
+      (is (fn? (:enqueue-state-fn (second @registered-level*))))
+      (is (= #{:ray-barrage/fx-preray :ray-barrage/fx-barrage :ray-barrage/fx-beam}
+             (set (:channels @registered-handler*)))))))
+
 (deftest fx-handler-routes-ray-barrage-beam-test
   (let [handler* (atom nil)
         enqueued* (atom [])

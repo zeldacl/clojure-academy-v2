@@ -19,6 +19,28 @@
 
 (use-fixtures :each with-fresh-mag-manip-fx-runtime)
 
+(deftest init-registers-mag-manip-fx-channels-test
+  (let [registered-level* (atom nil)
+        registered-hand* (atom nil)
+        registered-handler* (atom nil)]
+    (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
+                                                         (reset! registered-level* [effect-id effect-map])
+                                                         nil)
+                  hand-effects/register-hand-effect! (fn [effect-id effect-map]
+                                                       (reset! registered-hand* [effect-id effect-map])
+                                                       nil)
+                  fx-registry/register-fx-channels! (fn [channels handler]
+                                                      (reset! registered-handler* {:channels channels
+                                                                                   :handler handler})
+                                                      nil)]
+      (mag-manip-fx/init!)
+      (is (= :mag-manip (first @registered-level*)))
+      (is (= :mag-manip (first @registered-hand*)))
+      (is (= #{:mag-manip/fx-hold
+               :mag-manip/fx-throw
+               :mag-manip/fx-end}
+             (set (:channels @registered-handler*)))))))
+
 (deftest fx-handler-routes-hold-throw-end-and-queues-sounds-test
   (let [handler* (atom nil)
         hand-enqueued* (atom [])

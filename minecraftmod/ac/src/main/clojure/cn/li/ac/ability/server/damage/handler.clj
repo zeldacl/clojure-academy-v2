@@ -36,7 +36,7 @@
   ([handler-id skill-id handler-fn]
    (register-toggle-damage-handler! handler-id skill-id handler-fn 100))
   ([handler-id skill-id handler-fn priority]
-   (when damage-interception/*damage-interception*
+   (when (damage-interception/available?)
      (let [session-id (runtime-hooks/require-player-state-session-id "damage.handler")
            wrapped-handler (fn [player-id attacker-id damage damage-source]
                             ;; Check if toggle skill is active by looking for active contexts
@@ -60,8 +60,7 @@
                                   [damage nil]))
                               ;; No player state - pass through
                               [damage nil]))]
-       (damage-interception/register-damage-handler! damage-interception/*damage-interception*
-                                                     handler-id
+       (damage-interception/register-damage-handler!* handler-id
                                                      wrapped-handler
                                                      priority)))))
 
@@ -73,9 +72,7 @@
 
   Returns: true if unregistered successfully"
   [handler-id]
-  (when damage-interception/*damage-interception*
-    (damage-interception/unregister-damage-handler! damage-interception/*damage-interception*
-                                                    handler-id)))
+  (damage-interception/unregister-damage-handler!* handler-id))
 
 ;; ============================================================================
 ;; Attack-cancel-check registry

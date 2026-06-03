@@ -23,6 +23,8 @@
                         [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.potion-effects :as potion-effects]
+            [cn.li.mcmod.platform.raycast :as raycast]
+            [cn.li.mcmod.platform.teleportation :as teleportation]
             [cn.li.mcmod.util.log :as log]))
 
 ;; ---------------------------------------------------------------------------
@@ -83,10 +85,7 @@
 
 (defn- get-player-look-vector
   [player-id]
-  (when-let [raycast (resolve 'cn.li.mcmod.platform.raycast/*raycast*)]
-    (when-let [rc-impl @raycast]
-      ((resolve 'cn.li.mcmod.platform.raycast/get-player-look-vector)
-       rc-impl player-id))))
+  (raycast/get-player-look-vector* player-id))
 
 (defn- enforce-overload-floor!
   [player-id ctx-data]
@@ -103,9 +102,7 @@
   (ctx-skill/update-skill-state-root! ctx-id f))
 
 (defn- get-player-position [player-id]
-  (when-let [teleportation (resolve 'cn.li.mcmod.platform.teleportation/*teleportation*)]
-    (when-let [tp-impl @teleportation]
-      ((resolve 'cn.li.mcmod.platform.teleportation/get-player-position) tp-impl player-id))))
+  (teleportation/get-player-position* player-id))
 
 (defn- in-front-cone?
   "Check if entity is within 60° cone in front of player."
@@ -136,9 +133,8 @@
 
 (defn light-shield-deactivate!
   [{:keys [player-id ctx-id]}]
-  (when potion-effects/*potion-effects*
-    (potion-effects/apply-potion-effect!
-      potion-effects/*potion-effects*
+  (when (potion-effects/available?)
+    (potion-effects/apply-potion-effect!*
       player-id :slowness
       (cfg-int :effect.deactivate-slowness-duration-ticks)
       (cfg-int :effect.slowness-amplifier)))
@@ -151,9 +147,8 @@
 
 (defn- maybe-touch-damage!
   [{:keys [ctx-id player-id exp pos world-id look-vec ticks]}]
-  (when (and pos world-effects/*world-effects*)
-    (let [entities (world-effects/find-entities-in-radius
-                    world-effects/*world-effects*
+  (when (and pos (world-effects/available?))
+    (let [entities (world-effects/find-entities-in-radius*
                     world-id (:x pos) (:y pos) (:z pos)
                     (cfg-double :combat.touch-radius))]
       (doseq [entity entities]
@@ -161,14 +156,13 @@
                    (not= (:uuid entity) player-id)
                    (in-front-cone? pos look-vec entity)
                    (consume-absorb! player-id exp))
-          (when entity-damage/*entity-damage*
+          (when (entity-damage/available?)
             (md-damage/mark-target! player-id (:uuid entity)
                                     {:ctx-id ctx-id
                                      :target-pos {:x (:x entity)
                                                   :y (:y entity)
                                                   :z (:z entity)}})
-            (entity-damage/apply-direct-damage!
-             entity-damage/*entity-damage*
+            (entity-damage/apply-direct-damage!*
              world-id (:uuid entity)
              (cfg-lerp :combat.touch-damage exp)
              :magic)
@@ -210,9 +204,8 @@
 
 (defn light-shield-abort!
   [{:keys [ctx-id player-id]}]
-  (when potion-effects/*potion-effects*
-    (potion-effects/apply-potion-effect!
-      potion-effects/*potion-effects*
+  (when (potion-effects/available?)
+    (potion-effects/apply-potion-effect!*
       player-id :slowness
       (cfg-int :effect.abort-slowness-duration-ticks)
       (cfg-int :effect.slowness-amplifier)))
@@ -232,9 +225,8 @@
           world-id (or (:world-id pos)
                        (skill-effects/player-path player-id [:position :world-id])
                        "minecraft:overworld")
-          entities (when (and pos world-effects/*world-effects*)
-                     (world-effects/find-entities-in-radius
-                      world-effects/*world-effects*
+          entities (when (and pos (world-effects/available?))
+                     (world-effects/find-entities-in-radius*
                       world-id (:x pos) (:y pos) (:z pos)
                       (cfg-double :combat.touch-radius)))
           attacker (some #(when (= (str (:uuid %)) (str attacker-id)) %) entities)]

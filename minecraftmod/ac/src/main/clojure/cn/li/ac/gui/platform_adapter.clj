@@ -4,7 +4,6 @@
   Loader modules must not import this namespace. AC calls `install-into-mcmod!`
   during content load to register container behavior into mcmod."
   (:require [cn.li.ac.gui.platform-adapter.dispatcher-api :as dispatcher-api]
-            [cn.li.ac.gui.platform-adapter.sync-api :as sync-api]
             [cn.li.ac.gui.slot-validators :as slot-validators]
             [cn.li.mcmod.gui.adapter.platform-registry :as platform-registry]))
 

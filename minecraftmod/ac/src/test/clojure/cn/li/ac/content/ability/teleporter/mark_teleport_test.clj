@@ -15,21 +15,13 @@
   (let [ctx* (atom initial)]
     {:ctx* ctx*
      :get-context (fn [_] @ctx*)
-     :replace-skill-state-root! (fn [_ state-map]
-                                  (swap! ctx* assoc :skill-state state-map)
-                                  nil)
-     :assoc-skill-state! (fn [_ k v]
-                           (swap! ctx* assoc-in (into [:skill-state] (if (vector? k) k [k])) v)
-                           nil)
      :update-skill-state-root! (fn [_ f & args]
-                                 (swap! ctx* update :skill-state (fn [ss] (apply f (or ss {}) args))))}))
+                        (swap! ctx* update :skill-state (fn [ss] (apply f (or ss {}) args))))}))
 
 (deftest mark-teleport-on-key-down-initializes-hold-state-test
-  (let [{:keys [ctx* get-context replace-skill-state-root! assoc-skill-state! update-skill-state-root!]}
+  (let [{:keys [ctx* get-context update-skill-state-root!]}
         (make-context-mocks {:skill-state {:legacy true}})]
     (with-redefs [ctx/get-context get-context
-                  ctx-skill/replace-skill-state-root! replace-skill-state-root!
-                  ctx-skill/assoc-skill-state! assoc-skill-state!
                   ctx-skill/update-skill-state-root! update-skill-state-root!]
       (mark/mark-teleport-on-key-down {:ctx-id "ctx-1"}))
 
@@ -37,7 +29,7 @@
            (:skill-state @ctx*)))))
 
 (deftest mark-teleport-on-key-up-short-tap-success-sends-perform-and-applies-effects-test
-  (let [{:keys [ctx* get-context replace-skill-state-root! assoc-skill-state! update-skill-state-root!]}
+  (let [{:keys [ctx* get-context update-skill-state-root!]}
         (make-context-mocks {:skill-state {:hold-ticks 0 :has-target false}})
         teleport-calls* (atom [])
         reset-calls* (atom [])
@@ -45,8 +37,6 @@
         exp-calls* (atom [])
         cooldown-calls* (atom [])]
     (with-redefs [ctx/get-context get-context
-                  ctx-skill/replace-skill-state-root! replace-skill-state-root!
-                  ctx-skill/assoc-skill-state! assoc-skill-state!
                   ctx-skill/update-skill-state-root! update-skill-state-root!
                   ctx/ctx-send-to-client! (fn [ctx-id channel payload]
                                             (swap! fx-calls* conj [ctx-id channel payload])
@@ -60,22 +50,20 @@
                   skill-effects/skill-exp (fn [_ _] 0.5)
                   skill-effects/current-cp (fn [_] 1000.0)
                   entity/player-creative? (fn [_] false)
-                  teleportation/get-player-position (fn [_ _]
+                  teleportation/get-player-position* (fn [_ _]
                                                      {:world-id "minecraft:overworld"
                                                       :x 1.0 :y 64.0 :z 3.0})
-                  teleportation/teleport-player! (fn [_ player-id world-id x y z]
+                  teleportation/teleport-player!* (fn [_ player-id world-id x y z]
                                                    (swap! teleport-calls* conj [player-id world-id x y z])
                                                    true)
-                  teleportation/reset-fall-damage! (fn [_ player-id]
+                  teleportation/reset-fall-damage!* (fn [_ player-id]
                                                      (swap! reset-calls* conj player-id)
                                                      true)
-                  raycast/get-player-look-vector (fn [_ _] {:x 1.0 :y 0.0 :z 0.0})
-                  raycast/raycast-combined (fn [& _]
+                  raycast/get-player-look-vector* (fn [_ _] {:x 1.0 :y 0.0 :z 0.0})
+                  raycast/raycast-combined* (fn [& _]
                                             {:hit-type :entity
                                              :hit-x 10.0 :hit-y 62.4 :hit-z 12.0
                                              :eye-height 1.6})]
-      (binding [teleportation/*teleportation* :mock-tp
-                raycast/*raycast* :mock-raycast]
         (mark/mark-teleport-on-key-up {:player-id "p1"
                                        :ctx-id "ctx-2"
                                        :player :player
@@ -91,7 +79,7 @@
     (is (= true (get-in @ctx* [:skill-state :has-target])))))
 
 (deftest mark-teleport-on-key-up-cost-fail-has-no-side-effects-test
-  (let [{:keys [ctx* get-context replace-skill-state-root! assoc-skill-state! update-skill-state-root!]}
+  (let [{:keys [ctx* get-context update-skill-state-root!]}
         (make-context-mocks {:skill-state {:hold-ticks 5
                                            :has-target true
                                            :world-id "minecraft:overworld"
@@ -102,16 +90,13 @@
         exp-calls* (atom 0)
         cooldown-calls* (atom 0)]
     (with-redefs [ctx/get-context get-context
-                  ctx-skill/replace-skill-state-root! replace-skill-state-root!
-                  ctx-skill/assoc-skill-state! assoc-skill-state!
                   ctx-skill/update-skill-state-root! update-skill-state-root!
                   ctx/ctx-send-to-client! (fn [& _] (swap! fx-calls* inc) nil)
                   skill-effects/add-skill-exp! (fn [& _] (swap! exp-calls* inc) nil)
                   skill-effects/set-main-cooldown! (fn [& _] (swap! cooldown-calls* inc) nil)
-                  teleportation/get-player-position (fn [& _] nil)
-                  teleportation/teleport-player! (fn [& _] (swap! teleport-calls* inc) true)]
-      (binding [teleportation/*teleportation* :mock-tp
-                raycast/*raycast* nil]
+                  teleportation/get-player-position* (fn [& _] nil)
+                  teleportation/teleport-player!* (fn [& _] (swap! teleport-calls* inc) true)]
+                (raycast/available?) nil]
         (mark/mark-teleport-on-key-up {:player-id "p1"
                                        :ctx-id "ctx-3"
                                        :player :player
@@ -124,7 +109,7 @@
     (is (= true (get-in @ctx* [:skill-state :has-target])))))
 
 (deftest mark-teleport-on-key-up-min-distance-does-not-perform-test
-  (let [{:keys [get-context replace-skill-state-root! assoc-skill-state! update-skill-state-root!]}
+  (let [{:keys [get-context update-skill-state-root!]}
         (make-context-mocks {:skill-state {:hold-ticks 2
                                            :has-target true
                                            :world-id "minecraft:overworld"
@@ -133,16 +118,13 @@
         teleport-calls* (atom 0)
         fx-calls* (atom 0)]
     (with-redefs [ctx/get-context get-context
-                  ctx-skill/replace-skill-state-root! replace-skill-state-root!
-                  ctx-skill/assoc-skill-state! assoc-skill-state!
                   ctx-skill/update-skill-state-root! update-skill-state-root!
                   ctx/ctx-send-to-client! (fn [& _] (swap! fx-calls* inc) nil)
-                  teleportation/get-player-position (fn [& _] nil)
-                  teleportation/teleport-player! (fn [& _] (swap! teleport-calls* inc) true)
+                  teleportation/get-player-position* (fn [& _] nil)
+                  teleportation/teleport-player!* (fn [& _] (swap! teleport-calls* inc) true)
                   skill-effects/add-skill-exp! (fn [& _] nil)
                   skill-effects/set-main-cooldown! (fn [& _] nil)]
-      (binding [teleportation/*teleportation* :mock-tp
-                raycast/*raycast* nil]
+                (raycast/available?) nil]
         (mark/mark-teleport-on-key-up {:player-id "p1"
                                        :ctx-id "ctx-4"
                                        :player :player
@@ -152,7 +134,7 @@
     (is (= 0 @fx-calls*))))
 
 (deftest mark-teleport-on-key-up-teleport-failure-does-not-send-perform-test
-  (let [{:keys [get-context replace-skill-state-root! assoc-skill-state! update-skill-state-root!]}
+  (let [{:keys [get-context update-skill-state-root!]}
         (make-context-mocks {:skill-state {:hold-ticks 1
                                            :has-target true
                                            :world-id "minecraft:overworld"
@@ -162,17 +144,14 @@
         exp-calls* (atom 0)
         cooldown-calls* (atom 0)]
     (with-redefs [ctx/get-context get-context
-                  ctx-skill/replace-skill-state-root! replace-skill-state-root!
-                  ctx-skill/assoc-skill-state! assoc-skill-state!
                   ctx-skill/update-skill-state-root! update-skill-state-root!
                   ctx/ctx-send-to-client! (fn [& _] (swap! fx-calls* inc) nil)
-                  teleportation/get-player-position (fn [& _] nil)
-                  teleportation/teleport-player! (fn [& _] false)
-                  teleportation/reset-fall-damage! (fn [& _] true)
+                  teleportation/get-player-position* (fn [& _] nil)
+                  teleportation/teleport-player!* (fn [& _] false)
+                  teleportation/reset-fall-damage!* (fn [& _] true)
                   skill-effects/add-skill-exp! (fn [& _] (swap! exp-calls* inc) nil)
                   skill-effects/set-main-cooldown! (fn [& _] (swap! cooldown-calls* inc) nil)]
-      (binding [teleportation/*teleportation* :mock-tp
-                raycast/*raycast* nil]
+                (raycast/available?) nil]
         (mark/mark-teleport-on-key-up {:player-id "p1"
                                        :ctx-id "ctx-5"
                                        :player :player

@@ -70,7 +70,7 @@
                         :ticks (long (or ticks 0))
                         :balls (long (or balls 0))}))
       :fire
-      (let [store** (cond
+      (let [store* (cond
                       (and start end)
                       (update-in store* [:beams owner-key*] (fnil conj [])
                                  (merge base-meta
@@ -91,7 +91,7 @@
                       :else store*)]
         (client-sounds/queue-sound-effect! (:queue-owner base-meta)
           {:type :sound :sound-id "my_mod:md.em_fire" :volume 0.35 :pitch (+ 0.85 (rand 0.3))})
-        store**)
+        store*)
       :end
       (-> store*
           (update :charge-state dissoc owner-key*)

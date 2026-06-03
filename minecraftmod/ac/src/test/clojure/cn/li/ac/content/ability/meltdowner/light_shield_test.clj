@@ -140,11 +140,10 @@
                     skill-effects/player-path (fn [& _] {:world-id "w" :x 0.0 :y 64.0 :z 0.0})
                     ls/get-player-position (fn [_] {:world-id "w" :x 0.0 :y 64.0 :z 0.0})
                     ls/get-player-look-vector (fn [_] {:x 1.0 :y 0.0 :z 0.0})
-                    world-effects/find-entities-in-radius (fn [& _]
+                    world-effects/find-entities-in-radius* (fn [& _]
                                                             [{:uuid "enemy-1"
                                                               :x 1.0 :y 64.0 :z 0.0
                                                               :living? true}])]
-        (binding [world-effects/*world-effects* :world]
           (is (= [4.0 {:absorbed 6.0}]
                  (reduce-damage! "p-3" "enemy-1" 10.0 :magic))))
         (is (= [["p-3" :light-shield 0.0024000000000000002]] @exp-calls*))
@@ -181,8 +180,7 @@
                     skill-effects/set-main-cooldown! (fn [player-id skill-id ticks]
                                                        (swap! cooldown-calls* conj [player-id skill-id ticks])
                                                        true)
-                    potion-effects/*potion-effects* :mock
-                    potion-effects/apply-potion-effect! (fn [& _]
+                    potion-effects/apply-potion-effect!* (fn [& _]
                                                           (swap! potion-calls* inc)
                                                           nil)]
         (ls/light-shield-tick! {:player-id "p-3" :ctx-id "ctx-3" :cost-ok? true})
@@ -204,8 +202,7 @@
                                                  :effect.abort-slowness-duration-ticks 40
                                                  :effect.slowness-amplifier 1
                                                  1))
-                    potion-effects/*potion-effects* :mock
-                    potion-effects/apply-potion-effect! (fn [& args]
+                    potion-effects/apply-potion-effect!* (fn [& args]
                                                           (swap! potion-calls* conj args)
                                                           nil)]
         (ls/light-shield-abort! {:player-id "p-4" :ctx-id "ctx-4"})

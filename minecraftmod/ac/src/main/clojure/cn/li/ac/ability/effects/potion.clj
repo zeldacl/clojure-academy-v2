@@ -3,11 +3,11 @@
 
 (defn- apply-potion!
   [evt {:keys [target effect-id ticks amplifier]}]
-  (when (and potion-effects/*potion-effects* target)
+  (when (and (potion-effects/available?) target)
     (let [uuid (or (when (map? target) (:uuid target))
                    (get evt target))]
       (when uuid
-        (potion-effects/apply-potion-effect! potion-effects/*potion-effects*
+        (potion-effects/apply-potion-effect!*
                                              uuid effect-id (int ticks) (int amplifier)))))
   evt)
 

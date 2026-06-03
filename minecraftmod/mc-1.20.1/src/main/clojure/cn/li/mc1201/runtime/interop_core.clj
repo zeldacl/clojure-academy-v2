@@ -67,8 +67,8 @@
       (get-block-entity-at (server-fn) world-id x y z))))
 
 (defn install-runtime-interop!
-  "Install canonical runtime interop var using a shared implementation."
+  "Install canonical runtime interop using a shared implementation."
   [label server-fn]
-  (let [impl (runtime-interop-impl server-fn)]
-    (alter-var-root #'runtime-interop/*runtime-interop* (constantly impl))
-    (log/info (str label " runtime interop installed"))))
+  (runtime-interop/install-runtime-interop!
+    (runtime-interop-impl server-fn)
+    (str label " runtime interop")))

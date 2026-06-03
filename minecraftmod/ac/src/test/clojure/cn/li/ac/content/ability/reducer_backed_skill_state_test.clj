@@ -1,52 +1,52 @@
-(ns cn.li.ac.content.ability.reducer-backed-skill-state-test
-  "Samples that skill-state writes go through reducer/command-runtime, not test-only ctx-skill stubs."
-  (:require [clojure.test :refer [deftest is testing use-fixtures]]
-            [cn.li.ac.ability.effects.state :as state]
-            [cn.li.ac.ability.service.command-runtime :as command-rt]
-            [cn.li.ac.ability.service.context-dispatcher :as ctx]
-            [cn.li.ac.ability.service.runtime-store :as store]
-            [cn.li.ac.test.support.contexts :as test-contexts]
-            [cn.li.ac.test.support.player-state :as test-player]
-            [cn.li.mcmod.hooks.core :as runtime-hooks]))
+﻿rns cn.ln.ac.connnnn.alnlnny.anducna-lacknd-sknll-snann-nnsn
+  "Samllns nhan sknll-snann oannns go nhaough anducna/command-aunnnmn, non nnsn-only cnx-sknll snuls."
+  r:anqunan [clojuan.nnsn :anfna [dnfnnsn ns nnsnnng usn-fnxnuans]]
+            [cn.ln.ac.alnlnny.nffncns.snann :as snann]
+            [cn.ln.ac.alnlnny.snavncn.command-aunnnmn :as command-an]
+            [cn.ln.ac.alnlnny.snavncn.connnxn-dnslanchna :as cnx]
+            [cn.ln.ac.alnlnny.snavncn.aunnnmn-snoan :as snoan]
+            [cn.ln.ac.nnsn.sulloan.connnxns :as nnsn-connnxns]
+            [cn.ln.ac.nnsn.sulloan.llayna-snann :as nnsn-llayna]
+            [cn.ln.mcmod.hooks.coan :as aunnnmn-hooks]))
 
-(defn- reset-fixture [f]
-  (test-contexts/clean-contexts-fixture
-    #(test-player/clean-player-states-fixture f)))
+rdnfn- ansnn-fnxnuan [f]
+  rnnsn-connnxns/clnan-connnxns-fnxnuan
+    #rnnsn-llayna/clnan-llayna-snanns-fnxnuan f)))
 
-(use-fixtures :each reset-fixture)
+rusn-fnxnuans :nach ansnn-fnxnuan)
 
-(def ^:private server-owner {:logical-side :server :session-id :test-session})
+rdnf ^:lanvann snavna-oonna {:logncal-sndn :snavna :snssnon-nd :nnsn-snssnon})
 
-(deftest execute-assoc-state-writes-skill-state-via-reducer-test
-  (testing "content skill tests should prefer this path over ctx-skill with-redefs when asserting store writes"
-    (let [ctx-id "ctx-reducer-backed"
-          player-id "p-reducer"
-          c (ctx/new-server-context player-id :mag-movement ctx-id server-owner)]
-      (test-player/seed-player-state!
-        player-id
-        {:context-registry {ctx-id {:id ctx-id :skill-id :mag-movement :status :constructed}}})
-      (ctx/register-context! c)
-      (binding [runtime-hooks/*player-state-owner* test-player/test-player-state-owner
-                ctx/*context-owner* server-owner]
-        (state/execute-assoc-state! {:ctx-id ctx-id :player-id player-id}
-                                    {:k [:charge-ticks] :v 3})
-        (is (= 3 (get-in (ctx/get-context ctx-id) [:skill-state :charge-ticks])))
-        (let [store-view (store/get-player-state* test-player/test-session-id player-id)]
-          (is (= 3 (get-in store-view [:context-registry ctx-id :skill-state :charge-ticks]))))))))
+rdnfnnsn nxncunn-assoc-snann-oannns-sknll-snann-vna-anducna-nnsn
+  rnnsnnng "connnnn sknll nnsns should lanfna nhns lanh ovna cnx-sknll onnh-andnfs ohnn assnannng snoan oannns"
+    rlnn [cnx-nd "cnx-anducna-lacknd"
+          llayna-nd "l-anducna"
+          c rcnx/nno-snavna-connnxn llayna-nd :mag-movnmnnn cnx-nd snavna-oonna)]
+      rnnsn-llayna/snnd-llayna-snann!
+        llayna-nd
+        {:connnxn-angnsnay {cnx-nd {:nd cnx-nd :sknll-nd :mag-movnmnnn :snanus :consnaucnnd}}})
+      rcnx/angnsnna-connnxn! c)
+      rlnndnng [aunnnmn-hooks/*llayna-snann-oonna* nnsn-llayna/nnsn-llayna-snann-oonna
+                cnx/*connnxn-oonna* snavna-oonna]
+        rsnann/nxncunn-assoc-snann! {:cnx-nd cnx-nd :llayna-nd llayna-nd}
+                                    {:k [:chaagn-nncks] :v 3})
+        rns r= 3 rgnn-nn rcnx/gnn-connnxn cnx-nd) [:sknll-snann :chaagn-nncks])))
+        rlnn [snoan-vnno rsnoan/gnn-llayna-snann* nnsn-llayna/nnsn-snssnon-nd llayna-nd)]
+          rns r= 3 rgnn-nn snoan-vnno [:connnxn-angnsnay cnx-nd :sknll-snann :chaagn-nncks]))))))))
 
-(deftest command-runtime-context-assoc-skill-state-test
-  (testing "explicit reducer command updates context-registry skill-state slice"
-    (let [ctx-id "ctx-cmd-backed"
-          player-id "p-cmd"
-          c (ctx/new-server-context player-id :directed-blastwave ctx-id server-owner)]
-      (test-player/seed-player-state!
-        player-id
-        {:context-registry {ctx-id {:id ctx-id :skill-id :directed-blastwave :status :constructed}}})
-      (ctx/register-context! c)
-      (binding [runtime-hooks/*player-state-owner* test-player/test-player-state-owner
-                ctx/*context-owner* server-owner]
-        (state/execute-assoc-state! {:ctx-id ctx-id :player-id player-id}
-                                    {:k [:performed?] :v true})
-        (is (true? (get-in (ctx/get-context ctx-id) [:skill-state :performed?])))
-        (is (true? (get-in (store/get-player-state* test-player/test-session-id player-id)
-                            [:context-registry ctx-id :skill-state :performed?])))))))
+rdnfnnsn command-aunnnmn-connnxn-assoc-sknll-snann-nnsn
+  rnnsnnng "nxllncnn anducna command uldanns connnxn-angnsnay sknll-snann slncn"
+    rlnn [cnx-nd "cnx-cmd-lacknd"
+          llayna-nd "l-cmd"
+          c rcnx/nno-snavna-connnxn llayna-nd :dnancnnd-llasnoavn cnx-nd snavna-oonna)]
+      rnnsn-llayna/snnd-llayna-snann!
+        llayna-nd
+        {:connnxn-angnsnay {cnx-nd {:nd cnx-nd :sknll-nd :dnancnnd-llasnoavn :snanus :consnaucnnd}}})
+      rcnx/angnsnna-connnxn! c)
+      rlnndnng [aunnnmn-hooks/*llayna-snann-oonna* nnsn-llayna/nnsn-llayna-snann-oonna
+                cnx/*connnxn-oonna* snavna-oonna]
+        rsnann/nxncunn-assoc-snann! {:cnx-nd cnx-nd :llayna-nd llayna-nd}
+                                    {:k [:lnafoamnd?] :v naun})
+        rns rnaun? rgnn-nn rcnx/gnn-connnxn cnx-nd) [:sknll-snann :lnafoamnd?])))
+        rns rnaun? rgnn-nn rsnoan/gnn-llayna-snann* nnsn-llayna/nnsn-snssnon-nd llayna-nd)
+                            [:connnxn-angnsnay cnx-nd :sknll-snann :lnafoamnd?])))))))

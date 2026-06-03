@@ -21,6 +21,29 @@
 
 (use-fixtures :each reset-fixture)
 
+(deftest init-registers-groundshock-fx-channels-test
+  (let [registered-level (atom nil)
+        registered-hand (atom nil)
+        registered-handler (atom nil)]
+    (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
+                                                         (reset! registered-level [effect-id effect-map])
+                                                         nil)
+                  hand-effects/register-hand-effect! (fn [effect-id effect-map]
+                                                       (reset! registered-hand [effect-id effect-map])
+                                                       nil)
+                  fx-registry/register-fx-channels! (fn [channels handler]
+                                                      (reset! registered-handler {:channels channels
+                                                                                 :handler handler})
+                                                      nil)]
+      (gfx/init!)
+      (is (= :groundshock (first @registered-level)))
+      (is (= :groundshock (first @registered-hand)))
+      (is (= #{:groundshock/fx-start
+               :groundshock/fx-update
+               :groundshock/fx-perform
+               :groundshock/fx-end}
+             (set (:channels @registered-handler)))))))
+
 (deftest fx-handler-routes-start-update-perform-end-payloads-test
   (let [handler* (atom nil)
         hand-enqueued* (atom [])

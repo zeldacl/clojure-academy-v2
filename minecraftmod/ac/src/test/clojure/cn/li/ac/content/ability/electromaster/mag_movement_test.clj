@@ -188,15 +188,14 @@
 (deftest resolve-target-uses-hit-vec-and-eye-height-test
   (with-redefs [mag-movement/is-metal-block? (fn [_] true)
                 mag-movement/is-metal-entity? (fn [_] true)
-                raycast/*raycast* :mock
-                raycast/get-player-look-vector (fn [_ _] {:x 0.0 :y 0.0 :z 1.0})
+                raycast/get-player-look-vector* (fn [_ _] {:x 0.0 :y 0.0 :z 1.0})
                 geom/eye-pos (fn [_] {:x 10.0 :y 20.0 :z 30.0})
                 geom/world-id-of (fn [_] "w")
                 mag-movement/cfg-double (fn [k]
                                           (case k
                                             :targeting.range 25.0
                                             0.0))
-                raycast/raycast-combined (fn [_ _ _ _ _ _ _ _ _]
+                raycast/raycast-combined* (fn [_ _ _ _ _ _ _ _ _]
                                            {:hit-type :block
                                             :block-id "minecraft:iron_block"
                                             :x 1.25 :y 2.5 :z 3.75})]
@@ -209,15 +208,14 @@
            (@#'cn.li.ac.content.ability.electromaster.mag-movement/resolve-target "p1"))))
   (with-redefs [mag-movement/is-metal-block? (fn [_] true)
                 mag-movement/is-metal-entity? (fn [_] true)
-                raycast/*raycast* :mock
-                raycast/get-player-look-vector (fn [_ _] {:x 0.0 :y 0.0 :z 1.0})
+                raycast/get-player-look-vector* (fn [_ _] {:x 0.0 :y 0.0 :z 1.0})
                 geom/eye-pos (fn [_] {:x 10.0 :y 20.0 :z 30.0})
                 geom/world-id-of (fn [_] "w")
                 mag-movement/cfg-double (fn [k]
                                           (case k
                                             :targeting.range 25.0
                                             0.0))
-                raycast/raycast-combined (fn [_ _ _ _ _ _ _ _ _]
+                raycast/raycast-combined* (fn [_ _ _ _ _ _ _ _ _]
                                            {:hit-type :entity
                                             :type "minecraft:iron_golem"
                                             :uuid "e-1"

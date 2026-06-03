@@ -1,10 +1,7 @@
 (ns cn.li.ac.wireless.core.capability-resolver
-  "Resolve wireless capabilities from tiles or VBlocks.
-
-  VBlocks remain pure position references; this namespace is the runtime boundary
-  that turns a position into an `IWireless*` capability. Direct tile implementation
-  fallback is kept for test stubs and simple adapters."
+  "Resolve wireless capabilities from tiles or VBlocks."
   (:require [cn.li.ac.wireless.core.vblock :as vb]
+            [cn.li.mcmod.block.tile-logic :as tile-logic]
             [cn.li.mcmod.platform.be :as platform-be])
   (:import [cn.li.acapi.wireless
             IWirelessGenerator
@@ -14,11 +11,12 @@
             WirelessCapabilityKeys]))
 
 (defn tile-capability
-  "Resolve a capability from a tile, falling back to direct interface implementation."
+  "Resolve a capability from a tile via tile-logic, with direct-interface fallback."
   [tile cap-key fallback-class]
   (when tile
     (try
-      (or (platform-be/get-capability tile cap-key)
+      (or (when-let [tile-id (platform-be/get-block-id tile)]
+            (tile-logic/get-capability tile-id cap-key tile nil))
           (when (instance? fallback-class tile) tile))
       (catch Exception _
         (when (instance? fallback-class tile) tile)))))

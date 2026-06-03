@@ -8,6 +8,8 @@
             [cn.li.mcmod.platform.resource :as resource]
             [cn.li.mcmod.platform.world :as world]
             [cn.li.mcmod.platform.be :as be]
+            [cn.li.mcmod.block.tile-logic :as tile-logic]
+            [cn.li.mcmod.platform.capability :as platform-capability]
             [cn.li.mc1201.reflect-util :as ru]
             [cn.li.mc1201.platform.class-access :as class-access]
             [cn.li.mc1201.platform.item-ops :as item-ops]
@@ -49,25 +51,23 @@
 
 (defn- install-player-feedback! []
   (install-when! player-feedback-installed?
-    (alter-var-root
-      #'player-feedback/*player-feedback*
-      (constantly
-        (reify player-feedback/IPlayerFeedback
-          (send-player-feedback! [_ player-uuid {:keys [message args translate?]}]
-            (try
-              (when-let [^net.minecraft.server.level.ServerPlayer player (network-transport-spi/find-player-by-uuid player-uuid)]
-                (let [argv (object-array (mapv str (or args [])))
-                      component (if translate?
-                                  (Component/translatable (str message) argv)
-                                  (Component/literal (if (seq args)
-                                                       (apply format (str message) args)
-                                                       (str message))))]
-                  (.sendSystemMessage player component)
-                  true))
-              (catch Throwable t
-                (log/warn "Failed to send player feedback" player-uuid (ex-message t))
-                false))))))
-    (log/info "mc1201 player feedback installed")))
+    (player-feedback/install-player-feedback!
+      (reify player-feedback/IPlayerFeedback
+        (send-player-feedback! [_ player-uuid {:keys [message args translate?]}]
+          (try
+            (when-let [^net.minecraft.server.level.ServerPlayer player (network-transport-spi/find-player-by-uuid player-uuid)]
+              (let [argv (object-array (mapv str (or args [])))
+                    component (if translate?
+                                (Component/translatable (str message) argv)
+                                (Component/literal (if (seq args)
+                                                     (apply format (str message) args)
+                                                     (str message))))]
+                (.sendSystemMessage player component)
+                true))
+            (catch Throwable t
+              (log/warn "Failed to send player feedback" player-uuid (ex-message t))
+              false))))
+      "mc1201 player feedback")))
 
 (defn install-block-state-protocol-only!
   "Install only BlockState protocol extensions (no Level extensions)."
@@ -117,11 +117,13 @@
                                               n (int (ru/inst this "size"))]
                                           (when (and (>= idx 0) (< idx n))
                                             (ru/inst this "getCompound" idx))))})
-      (alter-var-root #'nbt/*nbt-factory*
-                      (constantly {:create-compound #(ru/ctor compound-tag-cls)
-                                   :create-list #(ru/ctor list-tag-cls)}))
-      (alter-var-root #'nbt/*nbt-has-key-fn*
-                      (constantly (fn [this key] (ru/inst this "contains" key)))))))
+      (nbt/install-nbt-factory! {:create-compound #(ru/ctor compound-tag-cls)
+                                 :create-list #(ru/ctor list-tag-cls)}
+                                "mc1201")
+      (nbt/install-nbt-has-key-fn! (fn [this key] (ru/inst this "contains" key))
+                                   "mc1201")
+      (tile-logic/install-capability-get-factory! platform-capability/get-handler-factory
+                                                  "mc1201"))))
 
 (defn- install-position! [_adapter]
   (install-when! pos-installed?
@@ -130,10 +132,9 @@
               {:pos-x (fn [this] (ru/inst this "getX"))
                :pos-y (fn [this] (ru/inst this "getY"))
                :pos-z (fn [this] (ru/inst this "getZ"))})
-      (alter-var-root #'pos/*position-factory*
-                      (constantly (fn [x y z] (ru/ctor block-pos-cls (int x) (int y) (int z)))))
-      (alter-var-root #'pos/*pos-above-fn*
-                      (constantly (fn [p] (ru/inst p "above")))))))
+      (pos/install-position-factory! (fn [x y z] (ru/ctor block-pos-cls (int x) (int y) (int z)))
+                                     "mc1201")
+      (pos/install-pos-above-fn! (fn [p] (ru/inst p "above")) "mc1201"))))
 
 (defn- install-item! [adapter]
   (install-item-protocols-only! adapter)
@@ -191,23 +192,26 @@
                  :world-can-see-sky (fn [this p] (ru/inst this "canSeeSky" p))})
         (catch Throwable t
           (log/warn "Skipping IWorldAccess extension for" level-cls "during bootstrap-sensitive init:" (.getMessage t))))
-      (alter-var-root #'world/*world-get-tile-entity-fn* (constantly (fn [level p] (ru/inst level "getBlockEntity" p))))
-      (alter-var-root #'world/*world-get-block-state-fn* (constantly (fn [level p] (ru/inst level "getBlockState" p))))
-      (alter-var-root #'world/*world-set-block-fn* (constantly (fn [level p s flags] (ru/inst level "setBlock" p s (int flags)))))
-      (alter-var-root #'world/*world-remove-block-fn* (constantly (fn [level p] (ru/inst level "destroyBlock" p false))))
-      (alter-var-root #'world/*world-break-block-fn* (constantly (fn [level p drop?] (ru/inst level "destroyBlock" p (boolean drop?)))))
-      (alter-var-root #'world/*world-place-block-by-id-fn* (constantly (fn [level block-id p flags] (world-block-ops/world-place-block-by-id adapter level block-id p flags))))
-      (alter-var-root #'world/*world-is-chunk-loaded-fn* (constantly (fn [level cx cz] (ru/inst level "hasChunk" (int cx) (int cz)))))
-      (alter-var-root #'world/*world-get-day-time-fn* (constantly (fn [level] (ru/inst level "getDayTime"))))
-      (alter-var-root #'world/*world-get-dimension-id-fn* (constantly (fn [level] (str (ru/inst (ru/inst level "dimension") "location")))))
-      (alter-var-root #'world/*world-get-players-fn* (constantly (fn [level] (seq (ru/inst level "players")))))
-      (alter-var-root #'world/*world-is-raining-fn* (constantly (fn [level] (ru/inst level "isRaining"))))
-      (alter-var-root #'world/*world-is-client-side-fn* (constantly (fn [level]
-                                                                       (try
-                                                                         (ru/inst level "isClientSide")
-                                                                         (catch Throwable _
-                                                                           (ru/field level "isClientSide"))))))
-      (alter-var-root #'world/*world-can-see-sky-fn* (constantly (fn [level p] (ru/inst level "canSeeSky" p)))))))
+      (world/install-world-ops!
+        {:world-get-tile-entity (fn [level p] (ru/inst level "getBlockEntity" p))
+         :world-get-block-state (fn [level p] (ru/inst level "getBlockState" p))
+         :world-set-block (fn [level p s flags] (ru/inst level "setBlock" p s (int flags)))
+         :world-remove-block (fn [level p] (ru/inst level "destroyBlock" p false))
+         :world-break-block (fn [level p drop?] (ru/inst level "destroyBlock" p (boolean drop?)))
+         :world-place-block-by-id (fn [level block-id p flags]
+                                    (world-block-ops/world-place-block-by-id adapter level block-id p flags))
+         :world-is-chunk-loaded? (fn [level cx cz] (ru/inst level "hasChunk" (int cx) (int cz)))
+         :world-get-day-time (fn [level] (ru/inst level "getDayTime"))
+         :world-get-dimension-id (fn [level] (str (ru/inst (ru/inst level "dimension") "location")))
+         :world-get-players (fn [level] (seq (ru/inst level "players")))
+         :world-is-raining (fn [level] (ru/inst level "isRaining"))
+         :world-is-client-side (fn [level]
+                                 (try
+                                   (ru/inst level "isClientSide")
+                                   (catch Throwable _
+                                     (ru/field level "isClientSide"))))
+         :world-can-see-sky (fn [level p] (ru/inst level "canSeeSky" p))}
+        "mc1201"))))
 
 (defn install-entity-protocols-only!
   "Install only entity/player/inventory/menu protocol extensions."
@@ -311,11 +315,12 @@
 (defn- install-resource-factory! []
   (install-when! resource-installed?
     (let [rl-cls (ru/class-noinit "net.minecraft.resources.ResourceLocation")]
-      (alter-var-root #'resource/*resource-factory*
-                      (constantly (fn [namespace path]
-                                    (if namespace
-                                      (ru/ctor rl-cls (str namespace) (str path))
-                                      (ru/ctor rl-cls (str path)))))))))
+      (resource/install-resource-factory!
+        (fn [namespace path]
+          (if namespace
+            (ru/ctor rl-cls (str namespace) (str path))
+            (ru/ctor rl-cls (str path))))
+        "mc1201"))))
 
 (defn install-resource-factory-only!
   "Install only the shared resource location factory.
@@ -331,15 +336,13 @@
   This is bootstrap-safe and useful for incremental migration on sensitive loaders."
   [item-stack-of-fn create-item-stack-by-id-fn item-stack-empty?-fn]
   (install-when! item-factories-installed?
-    (alter-var-root #'item/*item-factory*
-                    (constantly (fn [nbt-tag]
-                                  (item-stack-of-fn nbt-tag))))
-    (alter-var-root #'item/*item-stack-resolver*
-                    (constantly
-                     (fn [item-id count]
-                       (let [stack (create-item-stack-by-id-fn (str item-id) (int count))]
-                         (when (and stack (not (item-stack-empty?-fn stack)))
-                           stack)))))
+    (item/install-item-factories!
+      {:item-factory (fn [nbt-tag] (item-stack-of-fn nbt-tag))
+       :item-stack-resolver (fn [item-id count]
+                              (let [stack (create-item-stack-by-id-fn (str item-id) (int count))]
+                                (when (and stack (not (item-stack-empty?-fn stack)))
+                                  stack)))}
+      "mc1201")
     (log/info "mc1201 shared item factories initialized")))
 
 (defn install-be-fns-only!
@@ -350,12 +353,7 @@
   :be-set-custom-state!, :be-get-block-id, :be-set-changed!"
   [fns-map]
   (install-when! be-fns-installed?
-    (alter-var-root #'be/*be-get-level-fn* (constantly (:be-get-level fns-map)))
-    (alter-var-root #'be/*be-get-world-fn* (constantly (:be-get-world fns-map)))
-    (alter-var-root #'be/*be-get-custom-state-fn* (constantly (:be-get-custom-state fns-map)))
-    (alter-var-root #'be/*be-set-custom-state-fn* (constantly (:be-set-custom-state! fns-map)))
-    (alter-var-root #'be/*be-get-block-id-fn* (constantly (:be-get-block-id fns-map)))
-    (alter-var-root #'be/*be-set-changed-fn* (constantly (:be-set-changed! fns-map)))
+    (be/install-be-ops! fns-map "mc1201")
     (log/info "mc1201 shared block-entity function hooks initialized")))
 
 (defn install-world-fns-only!
@@ -368,19 +366,7 @@
   :world-get-players, :world-is-raining, :world-is-client-side, :world-can-see-sky"
   [fns-map]
   (install-when! world-fns-installed?
-    (alter-var-root #'world/*world-get-tile-entity-fn* (constantly (:world-get-tile-entity fns-map)))
-    (alter-var-root #'world/*world-get-block-state-fn* (constantly (:world-get-block-state fns-map)))
-    (alter-var-root #'world/*world-set-block-fn* (constantly (:world-set-block fns-map)))
-    (alter-var-root #'world/*world-remove-block-fn* (constantly (:world-remove-block fns-map)))
-    (alter-var-root #'world/*world-break-block-fn* (constantly (:world-break-block fns-map)))
-    (alter-var-root #'world/*world-place-block-by-id-fn* (constantly (:world-place-block-by-id fns-map)))
-    (alter-var-root #'world/*world-is-chunk-loaded-fn* (constantly (:world-is-chunk-loaded? fns-map)))
-    (alter-var-root #'world/*world-get-day-time-fn* (constantly (:world-get-day-time fns-map)))
-    (alter-var-root #'world/*world-get-dimension-id-fn* (constantly (:world-get-dimension-id fns-map)))
-    (alter-var-root #'world/*world-get-players-fn* (constantly (:world-get-players fns-map)))
-    (alter-var-root #'world/*world-is-raining-fn* (constantly (:world-is-raining fns-map)))
-    (alter-var-root #'world/*world-is-client-side-fn* (constantly (:world-is-client-side fns-map)))
-    (alter-var-root #'world/*world-can-see-sky-fn* (constantly (:world-can-see-sky fns-map)))
+    (world/install-world-ops! fns-map "mc1201")
     (log/info "mc1201 shared world function hooks initialized")))
 
 (defn install-platform-core!

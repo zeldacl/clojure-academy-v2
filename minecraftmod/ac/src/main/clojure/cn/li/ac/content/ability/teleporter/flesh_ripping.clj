@@ -17,7 +17,7 @@
                         [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.content.ability.teleporter.tp-skill-helper :as helper]
-                        [cn.li.mcmod.platform.potion-effects :as potion]
+            [cn.li.mcmod.platform.potion-effects :as potion-effects]
             [cn.li.mcmod.util.log :as log]))
 
 ;; ---------------------------------------------------------------------------
@@ -40,7 +40,7 @@
 
 (defn- set-skill-state-root!
   [ctx-id state-map]
-  (ctx-skill/replace-skill-state-root! ctx-id state-map))
+  (ctx-skill/update-skill-state-root! ctx-id identity state-map))
 
 (defn- clear-skill-state!
   [ctx-id]
@@ -89,9 +89,8 @@
                                       :skill-id flesh-ripping-skill-id}))
           (when (and (< (rand) (helper/cfg-probability flesh-ripping-skill-id
                                                         :effect.nausea-chance))
-                     potion/*potion-effects*)
-            (potion/apply-potion-effect!
-              potion/*potion-effects*
+                     (potion-effects/available?))
+            (potion-effects/apply-potion-effect!*
               e-uuid :nausea
               (helper/cfg-int flesh-ripping-skill-id :effect.nausea-duration-ticks)
               (helper/cfg-int flesh-ripping-skill-id :effect.nausea-amplifier)))

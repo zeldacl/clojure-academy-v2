@@ -96,7 +96,7 @@
                        {:active? false :performed? (boolean performed?)
                         :ticks 0 :charge-ratio 0.0}))
       :perform
-      (let [store** (if (and start end)
+      (let [store* (if (and start end)
                       (let [life (+ 16 (rand-int 8))]
                         (update-in store* [:rays owner-key*] (fnil conj [])
                                    (merge base-meta
@@ -108,7 +108,7 @@
                       store*)]
         (client-sounds/queue-sound-effect! (:queue-owner base-meta)
           {:type :sound :sound-id fire-sound :volume 0.5 :pitch 1.0})
-        store**)
+        store*)
       :reflect
       (if (and start end)
         (let [life (+ 10 (rand-int 6))]

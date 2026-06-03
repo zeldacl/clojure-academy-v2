@@ -58,7 +58,7 @@
                   geom/eye-pos (fn [_] {:x 0.0 :y 64.0 :z 0.0})
                   ctx/ctx-send-to-client! (fn [_ channel _] (swap! fx* conj channel) nil)
                   ctx/ctx-send-to-except-local! (fn [_ channel _] (swap! fx* conj channel) nil)
-                  world-effects/find-entities-in-radius (fn [& _] [])
+                  world-effects/find-entities-in-radius* (fn [& _] [])
                   beam/execute-beam! (fn [_ _]
                                        (swap! run-calls* inc)
                                        {:beam-result {:performed? true
@@ -69,7 +69,6 @@
                   skill-effects/add-skill-exp! (fn [& args]
                                                  (swap! exp-calls* conj args)
                                                  nil)]
-      (binding [raycast/*raycast* (reify raycast/IRaycast
                                     (raycast-blocks [_ _ _ _ _ _ _ _ _] nil)
                                     (raycast-entities [_ _ _ _ _ _ _ _ _] nil)
                                     (raycast-combined [_ _ _ _ _ _ _ _ _]
@@ -99,7 +98,7 @@
                   geom/eye-pos (fn [_] {:x 0.0 :y 64.0 :z 0.0})
           ctx/ctx-send-to-client! (fn [_ channel _] (swap! fx* conj channel) nil)
           ctx/ctx-send-to-except-local! (fn [_ channel _] (swap! fx* conj channel) nil)
-                  world-effects/find-entities-in-radius (fn [& _]
+                  world-effects/find-entities-in-radius* (fn [& _]
                                                          [{:uuid "enemy-a" :x 1.0 :y 64.0 :z 5.0 :eye-height 1.6}
                                                           {:uuid "enemy-b" :x -1.0 :y 64.0 :z 5.0 :eye-height 1.6}])
                   beam/execute-beam! (fn [_ spec]
@@ -110,7 +109,6 @@
                                                  (swap! exp-calls* conj args)
                                                  nil)
                   md-damage/mark-target! (fn [& _] true)]
-      (binding [raycast/*raycast* (reify raycast/IRaycast
                                     (raycast-blocks [_ _ _ _ _ _ _ _ _] nil)
                                     (raycast-entities [_ _ _ _ _ _ _ _ _] nil)
                                     (raycast-combined [_ _ _ _ _ _ _ _ _]
@@ -119,7 +117,6 @@
                                        :type "entity.my_mod.silbarn"})
                                     (get-player-look-vector [_ _] {:x 0.0 :y 0.0 :z 1.0})
                                     (raycast-from-player [_ _ _ _] nil))
-                world-effects/*world-effects* :stub]
         (rb/ray-barrage-perform! {:player-id "p1" :ctx-id "ctx-scatter"})))
 
     (is (= [10.0 10.0 10.0] @run-calls*))
@@ -140,7 +137,7 @@
                   geom/eye-pos (fn [_] {:x 0.0 :y 64.0 :z 0.0})
               ctx/ctx-send-to-client! (fn [_ channel _] (swap! fx* conj channel) nil)
               ctx/ctx-send-to-except-local! (fn [_ channel _] (swap! fx* conj channel) nil)
-                  world-effects/find-entities-in-radius (fn [& _] [{:uuid "enemy" :x 0.0 :y 64.0 :z 6.0 :eye-height 1.6}])
+                  world-effects/find-entities-in-radius* (fn [& _] [{:uuid "enemy" :x 0.0 :y 64.0 :z 6.0 :eye-height 1.6}])
                   beam/execute-beam! (fn [_ _]
                                        (swap! run-calls* inc)
                                        {:beam-result {:performed? true
@@ -149,7 +146,6 @@
                   skill-effects/add-skill-exp! (fn [& args]
                                                  (swap! exp-calls* conj args)
                                                  nil)]
-      (binding [raycast/*raycast* (reify raycast/IRaycast
                                     (raycast-blocks [_ _ _ _ _ _ _ _ _] nil)
                                     (raycast-entities [_ _ _ _ _ _ _ _ _] nil)
                                     (raycast-combined [_ _ _ _ _ _ _ _ _]
@@ -164,7 +160,6 @@
                                          :is-hit true}))
                                     (get-player-look-vector [_ _] {:x 0.0 :y 0.0 :z 1.0})
                                     (raycast-from-player [_ _ _ _] nil))
-                world-effects/*world-effects* :stub]
         (rb/ray-barrage-perform! {:player-id "p1" :ctx-id "ctx-2"})
         (rb/ray-barrage-perform! {:player-id "p1" :ctx-id "ctx-2"})))
 

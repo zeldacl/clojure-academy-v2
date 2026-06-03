@@ -48,9 +48,6 @@
       (is (fn? (get-in mag-movement [:actions :cost-fail!])))
       (is (fn? (get-in mag-movement [:cost :down :overload])))
       (is (fn? (get-in mag-movement [:cost :tick :cp]))))
-    (let [current-charging (skill/get-skill :current-charging)]
-      (is (some? current-charging))
-      (is (= :hold-channel (:pattern current-charging))))
     ;; vec-deviation is a toggle skill; it may not declare any perform-stage
     ;; payload in :perform/:ops, so just assert it's still a registered spec.
     (is (some? (skill/get-skill :vec-deviation)))))

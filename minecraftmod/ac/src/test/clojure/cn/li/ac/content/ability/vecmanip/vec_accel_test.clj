@@ -125,21 +125,21 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest check-ground-raycast-no-raycast-platform-test
-  (testing "when raycast/*raycast* is nil, returns nil without NPE"
-    (with-redefs [raycast/*raycast* nil]
-      (is (nil? (check-ground-raycast "player-1"))
-          "returns nil when no raycast platform"))))
+  (testing "when raycast runtime is absent, returns nil without NPE"
+    (raycast/call-with-runtime nil
+                               (fn []
+                                 (is (nil? (check-ground-raycast "player-1"))
+                                           "nil teleportation runtime yields nil position")))))
 
 ;; ---------------------------------------------------------------------------
 ;; 5. check-ground-raycast �?no teleportation platform (nil guard)
 ;; ---------------------------------------------------------------------------
 
 (deftest check-ground-raycast-no-teleport-position-test
-  (testing "when teleportation/*teleportation* is nil, returns nil without NPE even with mock raycast"
-    (with-config-mocks
-      (with-redefs [raycast/*raycast*               :mock-rc
-                    teleportation/*teleportation*   nil]
-        (is (nil? (check-ground-raycast "player-1"))
+  (testing "when teleportation runtime is absent, returns nil without NPE"
+    (teleportation/call-with-runtime nil
+                                     (fn []
+                                       (is (nil? (check-ground-raycast "player-1"))
             "nil teleportation platform �?get-player-position returns nil �?result nil")))))
 
 ;; ---------------------------------------------------------------------------
@@ -158,11 +158,9 @@
                       (fn [_id] test-ctx)
                       ctx-skill/update-skill-state-root!
                       (fn [_id f & args] (swap! update-calls conj (apply list f args)))
-                      player-motion/*player-motion* :mock-pm
-                      player-motion/set-velocity!
+                      player-motion/set-velocity!*
                       (fn [_pm _pid x y z] (swap! vel-calls conj {:x x :y y :z z}))
-                      teleportation/*teleportation* :mock-tp
-                      teleportation/reset-fall-damage!
+                      teleportation/reset-fall-damage!*
                       (fn [_tp _pid] nil)
                       skill-effects/set-main-cooldown! (fn [& _] nil)
                       skill-effects/add-skill-exp!     (fn [& _] nil)]
@@ -189,8 +187,7 @@
         (with-redefs [ctx/get-context            (fn [_id] test-ctx)
                       ctx-skill/assoc-skill-state!     (fn [& _] nil)
                       ctx-skill/update-skill-state-root! (fn [& _] nil)
-                      player-motion/*player-motion* :mock-pm
-                      player-motion/set-velocity!
+                      player-motion/set-velocity!*
                       (fn [& _] (swap! vel-calls conj :called))
                       skill-effects/set-main-cooldown! (fn [& _] nil)
                       skill-effects/add-skill-exp!     (fn [& _] nil)]

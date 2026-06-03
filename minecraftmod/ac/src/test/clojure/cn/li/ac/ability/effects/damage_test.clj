@@ -28,13 +28,11 @@
   (let [calls (atom [])
         dmg (recording-damage calls)
         evt {:player-id "att" :world-id "overworld" :target :victim :victim "u1" :amount 7.0 :damage-type :magic}]
-    (binding [entity-damage/*entity-damage* dmg]
       (is (= evt (damage/execute-damage-direct! evt {:target :victim :amount 7.0 :damage-type :magic}))))
     (is (= [{:world-id "overworld" :uuid "u1" :damage 7.0 :source :magic}] @calls))))
 
 (deftest damage-direct-skips-when-unbound-test
   (let [evt {:player-id "p" :world-id "w" :target :t :t "u9" :amount 3.0}]
-    (binding [entity-damage/*entity-damage* nil]
       (is (= evt (damage/execute-damage-direct! evt {:target :t :amount 3.0}))))))
 
 (deftest damage-aoe-falloff-and-exclude-test
@@ -48,8 +46,7 @@
              :radius 10.0
              :amount 100.0
              :damage-type :generic}]
-    (binding [entity-damage/*entity-damage* dmg
-              world-effects/*world-effects* wfx]
+              (world-effects/available?) wfx]
       (damage/execute-damage-aoe! evt {:center :center
                                        :radius 10.0
                                        :amount 100.0

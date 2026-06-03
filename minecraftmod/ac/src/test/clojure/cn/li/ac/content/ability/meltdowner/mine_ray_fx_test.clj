@@ -29,6 +29,24 @@
    :channel channel
    :owner-key [:ctx ctx-id]})
 
+(deftest init-registers-owner-aware-mine-ray-fx-test
+  (let [registered-level* (atom nil)
+        registered-handler* (atom nil)]
+    (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
+                                                         (reset! registered-level* [effect-id effect-map])
+                                                         nil)
+                  fx-registry/register-fx-channels! (fn [channels handler]
+                                                      (reset! registered-handler* {:channels channels
+                                                                                   :handler handler})
+                                                      nil)]
+      (mr-fx/init!)
+      (is (= :mine-ray (first @registered-level*)))
+      (is (fn? (:enqueue-state-fn (second @registered-level*))))
+      (is (= #{:mine-ray/fx-start
+               :mine-ray/fx-progress
+               :mine-ray/fx-end}
+             (set (:channels @registered-handler*)))))))
+
 (deftest start-progress-tick-end-manage-state-test
   (let [enqueue-state! (var-get #'cn.li.ac.content.ability.meltdowner.mine-ray-fx/enqueue-state!)
         tick-state! (var-get #'cn.li.ac.content.ability.meltdowner.mine-ray-fx/tick-state!)

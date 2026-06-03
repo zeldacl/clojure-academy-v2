@@ -1,6 +1,7 @@
 (ns cn.li.ac.core.content-loader
   "AC runtime content loading orchestration."
   (:require [cn.li.ac.gui.platform-adapter :as platform-gui]
+            [cn.li.ac.gui.platform-adapter.sync-bootstrap :as gui-sync-bootstrap]
             [cn.li.ac.registry.content-namespaces :as content-ns]
             [cn.li.ac.registry.hooks :as hooks]
             [cn.li.ac.wireless.gui.sync.handler :as wireless-sync-handler]
@@ -16,12 +17,6 @@
     {:get-world wireless-sync-handler/get-world
      :get-tile-at wireless-sync-handler/get-tile-at}))
 
-(defn- install-integration-hooks!
-  []
-  (when-let [install-hooks!
-             (requiring-resolve 'cn.li.ac.integration.platform-bridge/install-integration-hooks!)]
-    (install-hooks!)))
-
 (def ^:private runtime-content-loader-lock
   (Object.))
 
@@ -31,8 +26,8 @@
 (defn- load-runtime-content-once!
   []
   (platform-gui/install-into-mcmod!)
+  (gui-sync-bootstrap/register-client-push-handler!)
   (register-network-edit-helpers!)
-  (install-integration-hooks!)
   (content-ns/load-all!)
   (let [gui-ids (gui-registry/get-all-gui-ids)]
     (log/info "Registering screen factories for GUI IDs:" gui-ids)

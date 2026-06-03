@@ -26,6 +26,25 @@
    :channel :vec-reflection/fx-reflect-entity
    :owner-key [:ctx ctx-id]})
 
+(deftest init-registers-owner-aware-vec-reflection-fx-test
+  (let [registered-level* (atom nil)
+        registered-handler* (atom nil)]
+    (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
+                                                         (reset! registered-level* [effect-id effect-map])
+                                                         nil)
+                  fx-registry/register-fx-channels! (fn [channels handler]
+                                                      (reset! registered-handler* {:channels channels
+                                                                                   :handler handler})
+                                                      nil)]
+      (vrfx/init!)
+      (is (= :vec-reflection (first @registered-level*)))
+      (is (fn? (:enqueue-state-fn (second @registered-level*))))
+      (is (= #{:vec-reflection/fx-start
+               :vec-reflection/fx-end
+               :vec-reflection/fx-reflect-entity
+               :vec-reflection/fx-play}
+             (set (:channels @registered-handler*)))))))
+
 (deftest enqueue-reflect-entity-requires-reflected-flag-test
   (let [enqueue-state! (var-get #'cn.li.ac.content.ability.vecmanip.vec-reflection-fx/enqueue-state!)]
     (is (= (vrfx/default-vec-reflection-fx-runtime-state)
@@ -40,6 +59,36 @@
     (let [waves (get (:wave-effects (vrfx/vec-reflection-fx-snapshot)) [:ctx "ctx-main"])]
       (is (= 1 (count waves)))
       (is (= 3.0 (:z (first waves)))))))
+
+(deftest init-registers-reflected-flag-through-fx-channel-handler-test
+  (let [registered-handler* (atom nil)
+        enqueued* (atom [])]
+    (with-redefs [level-effects/register-level-effect! (fn [& _] nil)
+                  fx-registry/register-fx-channels! (fn [_ handler]
+                                                      (reset! registered-handler* handler)
+                                                      nil)
+                  level-effects/enqueue-level-effect! (fn [effect-id payload fx-context]
+                                                        (swap! enqueued* conj [effect-id payload fx-context])
+                                                        nil)
+                  client-sounds/queue-current-sound-effect! (fn [& _] nil)]
+      (vrfx/init!)
+      (@registered-handler* "ctx-1" :vec-reflection/fx-reflect-entity
+       {:x 1.0 :y 2.0 :z 3.0 :reflected? true})
+      (@registered-handler* "ctx-1" :vec-reflection/fx-reflect-entity
+       {:x 4.0 :y 5.0 :z 6.0 :reflected? false})
+      (is (= [[:vec-reflection {:mode :reflect-entity
+                                :x 1.0
+                                :y 2.0
+                                :z 3.0
+                                :reflected? true}
+               {:ctx-id "ctx-1" :channel :vec-reflection/fx-reflect-entity}]
+              [:vec-reflection {:mode :reflect-entity
+                                :x 4.0
+                                :y 5.0
+                                :z 6.0
+                                :reflected? false}
+               {:ctx-id "ctx-1" :channel :vec-reflection/fx-reflect-entity}]]
+             @enqueued*)))))
 
 (deftest two-owners-keep-vec-reflection-state-and-waves-independent-test
   (let [enqueue-state! (var-get #'cn.li.ac.content.ability.vecmanip.vec-reflection-fx/enqueue-state!)]
