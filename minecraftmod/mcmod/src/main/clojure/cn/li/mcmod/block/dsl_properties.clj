@@ -25,7 +25,7 @@
 
 (defrecord RenderingProperties
   [model-parent textures model-textures has-item-form?
-   flat-item-icon? creative-tab light-level]
+  flat-item-icon? creative-tab light-level render-shape]
   ;; Rendering and visual properties of a block: models, textures, lighting, creative tab.
   ;;
   ;; Fields:
@@ -36,6 +36,7 @@
   ;; - flat-item-icon?: Use flat 2D item icon instead of 3D block model
   ;; - creative-tab: Creative tab for block items (:misc, :building, :decorations, etc.)
   ;; - light-level: Light emission level (0-15, 0 = no light, 15 = brightest)
+  ;; - render-shape: Optional world render shape hint (:model, :invisible, :entityblock-animated)
   )
 
 (defrecord BlockStateConfig

@@ -18,6 +18,7 @@
   (world-can-see-sky [this pos]))
 
 (def ^:private ^:dynamic *world-ops* nil)
+(def ^:private ^:const missing-op ::missing-op)
 
 (defn install-world-ops!
   "Install world operation fns map. Keys match install-world-fns-only! in mc1201."
@@ -28,9 +29,11 @@
 (defn call-with-world-ops [ops f] (binding [*world-ops* ops] (f)))
 
 (defn- world-op [k & args]
-  (when-let [ops *world-ops*]
-    (when-let [f (get ops k)]
-      (apply f args))))
+  (if-let [ops *world-ops*]
+    (if-let [f (get ops k)]
+      (apply f args)
+      missing-op)
+    missing-op))
 
 (defn block-to-chunk-coord [block-coord]
   (bit-shift-right block-coord 4))
@@ -43,59 +46,85 @@
   (block-state-set-property [this prop value]))
 
 (defn world-is-client-side* [this]
-  (if-let [r (world-op :world-is-client-side this)]
-    (boolean r)
-    (world-is-client-side this)))
+  (let [r (world-op :world-is-client-side this)]
+    (if (identical? r missing-op)
+      (world-is-client-side this)
+      (boolean r))))
 
 (defn world-get-tile-entity* [this pos]
-  (or (world-op :world-get-tile-entity this pos)
-      (world-get-tile-entity this pos)))
+  (let [r (world-op :world-get-tile-entity this pos)]
+    (if (identical? r missing-op)
+      (world-get-tile-entity this pos)
+      r)))
 
 (defn world-get-block-state* [this pos]
-  (or (world-op :world-get-block-state this pos)
-      (world-get-block-state this pos)))
+  (let [r (world-op :world-get-block-state this pos)]
+    (if (identical? r missing-op)
+      (world-get-block-state this pos)
+      r)))
 
 (defn world-set-block* [this pos state flags]
-  (boolean (or (world-op :world-set-block this pos state flags)
-               (world-set-block this pos state flags))))
+  (let [r (world-op :world-set-block this pos state flags)]
+    (boolean (if (identical? r missing-op)
+               (world-set-block this pos state flags)
+               r))))
 
 (defn world-remove-block* [this pos]
-  (boolean (or (world-op :world-remove-block this pos)
-               (world-remove-block this pos))))
+  (let [r (world-op :world-remove-block this pos)]
+    (boolean (if (identical? r missing-op)
+               (world-remove-block this pos)
+               r))))
 
 (defn world-break-block* [this pos drop?]
-  (boolean (or (world-op :world-break-block this pos drop?)
-               (world-break-block this pos drop?))))
+  (let [r (world-op :world-break-block this pos drop?)]
+    (boolean (if (identical? r missing-op)
+               (world-break-block this pos drop?)
+               r))))
 
 (defn world-place-block-by-id* [this block-id pos flags]
-  (boolean (or (world-op :world-place-block-by-id this block-id pos flags)
-               (world-place-block-by-id this block-id pos flags))))
+  (let [r (world-op :world-place-block-by-id this block-id pos flags)]
+    (boolean (if (identical? r missing-op)
+               (world-place-block-by-id this block-id pos flags)
+               r))))
 
 (defn world-is-chunk-loaded?* [this chunk-x chunk-z]
-  (boolean (or (world-op :world-is-chunk-loaded? this chunk-x chunk-z)
-               (world-is-chunk-loaded? this chunk-x chunk-z))))
+  (let [r (world-op :world-is-chunk-loaded? this chunk-x chunk-z)]
+    (boolean (if (identical? r missing-op)
+               (world-is-chunk-loaded? this chunk-x chunk-z)
+               r))))
 
 (defn world-get-day-time* [this]
-  (long (or (world-op :world-get-day-time this)
-            (world-get-day-time this))))
+  (let [r (world-op :world-get-day-time this)]
+    (long (if (identical? r missing-op)
+            (world-get-day-time this)
+            r))))
 
 (defn world-get-dimension-id* [this]
-  (some-> (or (world-op :world-get-dimension-id this)
-              (world-get-dimension-id this))
-          str))
+  (let [r (world-op :world-get-dimension-id this)]
+    (some-> (if (identical? r missing-op)
+              (world-get-dimension-id this)
+              r)
+            str)))
 
 (defn world-get-players* [this]
-  (or (seq (world-op :world-get-players this))
-      (seq (world-get-players this))
-      []))
+  (let [r (world-op :world-get-players this)]
+    (if (identical? r missing-op)
+      (or (seq (world-get-players this))
+          [])
+      (or (seq r)
+          []))))
 
 (defn world-is-raining* [this]
-  (boolean (or (world-op :world-is-raining this)
-               (world-is-raining this))))
+  (let [r (world-op :world-is-raining this)]
+    (boolean (if (identical? r missing-op)
+               (world-is-raining this)
+               r))))
 
 (defn world-can-see-sky* [this pos]
-  (boolean (or (world-op :world-can-see-sky this pos)
-               (world-can-see-sky this pos))))
+  (let [r (world-op :world-can-see-sky this pos)]
+    (boolean (if (identical? r missing-op)
+               (world-can-see-sky this pos)
+               r))))
 
 (defn is-chunk-loaded-at-block?
   "Check if chunk containing block position is loaded."

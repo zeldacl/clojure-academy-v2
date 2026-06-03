@@ -5,29 +5,31 @@
 
 (def ^:private matrix-slot-schema-id :wireless-matrix)
 
+(def ^:private matrix-slot-schema-config
+  {:schema-id matrix-slot-schema-id
+   :slots [{:id :plate-a :type :plate :x 78 :y 11}
+           {:id :plate-b :type :plate :x 53 :y 60}
+           {:id :plate-c :type :plate :x 104 :y 60}
+           {:id :core :type :core :x 78 :y 36}]})
+
+(defonce ^:private matrix-slot-schema-registration
+  (delay
+    (slot-schema/register-slot-schema! matrix-slot-schema-config)))
+
 (defn ensure-matrix-slot-schema! []
-  (slot-schema/register-slot-schema!
-    {:schema-id matrix-slot-schema-id
-     :slots [{:id :plate-a :type :plate :x 78 :y 11}
-             {:id :plate-b :type :plate :x 53 :y 60}
-             {:id :plate-c :type :plate :x 104 :y 60}
-             {:id :core :type :core :x 78 :y 36}]})
+  @matrix-slot-schema-registration
   matrix-slot-schema-id)
 
 (defn plate-slot-indexes []
-  (ensure-matrix-slot-schema!)
   (slot-schema/slot-indexes-by-type matrix-slot-schema-id :plate))
 
 (defn core-slot-index []
-  (ensure-matrix-slot-schema!)
   (slot-schema/slot-index matrix-slot-schema-id :core))
 
 (defn all-slot-indexes []
-  (ensure-matrix-slot-schema!)
   (slot-schema/all-slot-indexes matrix-slot-schema-id))
 
 (defn slot-count []
-  (ensure-matrix-slot-schema!)
   (slot-schema/tile-slot-count matrix-slot-schema-id))
 
 (defn required-plate-count []

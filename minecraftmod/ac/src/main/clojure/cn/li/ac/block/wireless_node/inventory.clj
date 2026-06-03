@@ -7,26 +7,28 @@
 
 (def node-slot-schema-id :wireless-node)
 
+(def ^:private node-slot-schema-config
+  {:schema-id node-slot-schema-id
+   :slots [{:id :input :type :energy :x 42 :y 10}
+           {:id :output :type :output :x 42 :y 80}]})
+
+(defonce ^:private node-slot-schema-registration
+  (delay
+    (slot-schema/register-slot-schema! node-slot-schema-config)))
+
 (defn ensure-node-slot-schema! []
-  (slot-schema/register-slot-schema!
-    {:schema-id node-slot-schema-id
-     :slots [{:id :input :type :energy :x 42 :y 10}
-             {:id :output :type :output :x 42 :y 80}]}))
+  @node-slot-schema-registration)
 
 (defn node-input-slot-index []
-  (ensure-node-slot-schema!)
   (slot-schema/slot-index node-slot-schema-id :input))
 
 (defn node-output-slot-index []
-  (ensure-node-slot-schema!)
   (slot-schema/slot-index node-slot-schema-id :output))
 
 (defn node-slot-indexes []
-  (ensure-node-slot-schema!)
   (slot-schema/all-slot-indexes node-slot-schema-id))
 
 (defn node-slot-count []
-  (ensure-node-slot-schema!)
   (slot-schema/tile-slot-count node-slot-schema-id))
 
 (def node-container-fns

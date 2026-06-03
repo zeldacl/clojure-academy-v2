@@ -102,7 +102,8 @@
                                        true)
                      :flat-item-icon? (boolean (:flat-item-icon? rendering-opts))
                      :creative-tab (or (:creative-tab rendering-opts) props/default-creative-tab)
-                     :light-level (or (:light-level rendering-opts) props/default-light-level)})
+                     :light-level (or (:light-level rendering-opts) props/default-light-level)
+                     :render-shape (:render-shape rendering-opts)})
 
         block-state (props/map->BlockStateConfig
                       {:block-state-properties (:block-state-properties block-state-opts)})

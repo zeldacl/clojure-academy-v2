@@ -61,24 +61,9 @@
 
 (def wireless-matrix-id :wireless-matrix)
 
-(def ^:private matrix-slot-schema-guard-lock
-  (Object.))
-
-(def ^:private ^:dynamic *wireless-matrix-slot-schema-installed?*
-  false)
-
 (defn- ensure-wireless-matrix-slot-schema!
   []
-  (when-not (var-get #'*wireless-matrix-slot-schema-installed?*)
-    (locking matrix-slot-schema-guard-lock
-      (when-not (var-get #'*wireless-matrix-slot-schema-installed?*)
-        (slot-schema/register-slot-schema!
-          {:schema-id wireless-matrix-id
-           :slots [{:id :plate-a :type :plate :x 78 :y 11}
-                   {:id :plate-b :type :plate :x 53 :y 60}
-                   {:id :plate-c :type :plate :x 104 :y 60}
-                   {:id :core :type :core :x 78 :y 36}]})
-        (alter-var-root #'*wireless-matrix-slot-schema-installed?* (constantly true))))))
+  (matrix-inventory/ensure-matrix-slot-schema!))
 
 (def ^:private inventory-pred
   (fn [slot-index player-inventory-start]

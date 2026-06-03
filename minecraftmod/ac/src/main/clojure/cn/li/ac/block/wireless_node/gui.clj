@@ -53,11 +53,7 @@
 
 (defn- ensure-wireless-node-slot-schema!
   []
-  (or (node-inventory/ensure-node-slot-schema!)
-      (slot-schema/register-slot-schema!
-        {:schema-id wireless-node-id
-         :slots [{:id :input :type :energy :x 42 :y 10}
-                 {:id :output :type :output :x 42 :y 80}]})))
+  (node-inventory/ensure-node-slot-schema!))
 
 (def ^:private inventory-pred
   (fn [slot-index player-inventory-start]

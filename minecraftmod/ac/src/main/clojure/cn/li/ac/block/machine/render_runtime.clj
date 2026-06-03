@@ -65,8 +65,22 @@
      ~@body))
 
 (defn register-client-renderer-init!
-  [init-sym]
+  [init-ref]
   (when-let [register-fn (try (requiring-resolve 'cn.li.mcmod.client.render.init/register-renderer-init-fn!)
                               (catch Exception _ nil))]
-    (register-fn init-sym)
-    (log/info "Registered client renderer init" init-sym)))
+    (let [init-fn (cond
+                    (fn? init-ref) init-ref
+                    (var? init-ref) init-ref
+                    (symbol? init-ref)
+                    (or (try (requiring-resolve init-ref)
+                             (catch Exception _ nil))
+                        (fn []
+                          (throw (ex-info "Failed to resolve renderer init symbol"
+                                          {:symbol init-ref}))))
+                    :else
+                    (fn []
+                      (throw (ex-info "Unsupported renderer init ref"
+                                      {:value init-ref
+                                       :type (type init-ref)}))))]
+      (register-fn init-fn)
+      (log/info "Registered client renderer init" init-ref))))

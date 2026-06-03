@@ -45,6 +45,10 @@ tasks.matching { it.name == 'checkClojure' }.configureEach {
     }
 }
 
+tasks.matching { it.name in ['compileClojure', 'checkClojure'] }.configureEach {
+    dependsOn ':mcmod:compileClojure'
+}
+
 def acTestOnlyNamespaces = (System.getProperty('ac.test.only') ?: '')
     .split(',')
     .collect { it.trim() }

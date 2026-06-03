@@ -62,7 +62,15 @@
           (throw (ex-info "Block :model-textures values must be non-empty texture path strings"
                           {:invalid-value texture-path
                            :model-name model-name
-                           :id (:id block-spec)}))))))
+                           :id (:id block-spec)})))))
+
+    (let [render-shape (:render-shape rendering)
+          valid-render-shapes #{:model :invisible :entityblock-animated}]
+      (when (and (some? render-shape)
+                 (not (contains? valid-render-shapes render-shape)))
+        (throw (ex-info "Block :render-shape must be one of :model, :invisible, :entityblock-animated"
+                        {:render-shape render-shape
+                         :id (:id block-spec)})))))
 
   ;; Validate multi-block configuration
   (let [multi-block (:multi-block block-spec)]

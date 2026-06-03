@@ -38,6 +38,7 @@
                  :rendering {:model-parent "minecraft:block/cube_all"
                              :textures {:all (modid/asset-path "block" "cat_engine")}
                              :flat-item-icon? true
-                             :light-level 0}
+                             :light-level 0
+                             :render-shape :invisible}
                  :events {:on-right-click cat-logic/cat-right-click!}})]
      :client-renderer 'cn.li.ac.block.cat-engine.render/init!}))

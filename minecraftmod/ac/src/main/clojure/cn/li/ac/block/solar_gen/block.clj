@@ -38,7 +38,8 @@
                             :sounds :stone}
                  :rendering {:model-parent "minecraft:block/cube_all"
                              :textures {:all (modid/asset-path "block" "solar_gen")}
-                             :flat-item-icon? true}
+                             :flat-item-icon? true
+                             :render-shape :invisible}
                  :events {:on-right-click solar-logic/open-solar-gui!}})]
      :network-handler solar-handlers/register-network-handlers!
      :client-renderer 'cn.li.ac.block.solar-gen.render/init!}))

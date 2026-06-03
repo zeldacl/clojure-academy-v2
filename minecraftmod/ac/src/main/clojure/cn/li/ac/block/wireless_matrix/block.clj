@@ -26,12 +26,14 @@
                         :sounds :stone}
              :rendering {:light-level 1.0}}
     :controller {:registry-name "matrix"
-                 :rendering {:flat-item-icon? true}
+           :rendering {:flat-item-icon? true
+             :render-shape :invisible}
                  :events {:on-right-click matrix-logic/handle-matrix-right-click
                           :on-place (matrix-logic/handle-matrix-place)
                           :on-break (matrix-logic/handle-matrix-break)}}
     :part {:registry-name "matrix_part"
-           :rendering {:model-parent "minecraft:block/block"}
+          :rendering {:model-parent "minecraft:block/block"
+            :render-shape :invisible}
            :events {:on-right-click matrix-logic/handle-matrix-right-click}}))
 
 (defn init-wireless-matrix! []

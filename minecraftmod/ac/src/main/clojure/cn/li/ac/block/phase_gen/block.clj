@@ -39,7 +39,8 @@
                             :sounds :metal}
                  :rendering {:model-parent "minecraft:block/block"
                              :textures {:all (modid/asset-path "block" "phase_gen")}
-                             :flat-item-icon? true}
+                             :flat-item-icon? true
+                             :render-shape :invisible}
                  :events {:on-right-click phase-logic/open-phase-gen-gui!}})]
      :network-handler phase-handlers/register-network-handlers!
      :client-renderer 'cn.li.ac.block.phase-gen.render/init!}))

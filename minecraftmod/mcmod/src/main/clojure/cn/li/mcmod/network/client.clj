@@ -132,14 +132,20 @@
              (unregister-owner-push-handler! [owner-key msg-id]
                (swap! state* update :push-handlers dissoc [owner-key msg-id])
                nil)
+             (has-owner-push-handler-msg-id? [msg-id]
+               (boolean
+                (some (fn [[[ _owner-key entry-msg-id] _handler-fn]]
+                        (= msg-id entry-msg-id))
+                      (:push-handlers @state*))))
              (handle-owner-push! [owner-key msg-id payload]
                (if-let [handler (get-in @state* [:push-handlers [owner-key msg-id]])]
                  (try
                    (handler payload)
+                   true
                    (catch Exception e
-                     (log/error "Error in push handler" msg-id ":" (ex-message e))))
-                 (log/warn "No push handler registered for" msg-id))
-               nil)]
+                     (log/error "Error in push handler" msg-id ":" (ex-message e))
+                     true))
+                 false))]
        {:kind ::client-network-session
         :snapshot snapshot
         :dispose! dispose!
@@ -150,6 +156,7 @@
         :handle-response! handle-response!
         :register-owner-push-handler! register-owner-push-handler!
         :unregister-owner-push-handler! unregister-owner-push-handler!
+        :has-owner-push-handler-msg-id? has-owner-push-handler-msg-id?
         :handle-owner-push! handle-owner-push!}))))
 
 (defn client-network-session?
@@ -355,6 +362,11 @@
      ((:unregister-owner-push-handler! session) (push-owner-key owner) msg-id))
    nil))
 
+(defn- owner-requires-scoped-push-handler?
+  [owner]
+  (or (:screen-id owner)
+      (:channel-id owner)))
+
 (defn handle-push
   "Handle one-way server push message.
 
@@ -370,8 +382,15 @@
      (log/warn "No push handler registered for" msg-id)))
   ([owner msg-id payload]
    (if-let [session (resolve-client-network-session owner {:allow-install? false})]
-     ((:handle-owner-push! session) (push-owner-key owner) msg-id payload)
-     (log/warn "No push handler registered for" msg-id))))
+     (if ((:handle-owner-push! session) (push-owner-key owner) msg-id payload)
+       nil
+       (if (or (owner-requires-scoped-push-handler? owner)
+               ((:has-owner-push-handler-msg-id? session) msg-id))
+         (log/warn "No push handler registered for" msg-id)
+         (handle-push msg-id payload)))
+     (if (owner-requires-scoped-push-handler? owner)
+       (log/warn "No push handler registered for" msg-id)
+       (handle-push msg-id payload)))))
 
 (defmulti send-request
   "Platform-specific transport for RPC requests"

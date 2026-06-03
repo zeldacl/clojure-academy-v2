@@ -45,3 +45,10 @@
     (client/register-push-handler! "push/global" (fn [payload] (swap! calls conj payload)))
     (packet/dispatch-client-response! -1 {:msg-id "push/global" :payload {:value 42}})
     (is (= [{:value 42}] @calls))))
+
+(deftest dispatch-client-response-owner-session-falls-back-to-global-push-handlers-test
+  (let [calls (atom [])
+        owner {:client-session-id :session-a}]
+    (client/register-push-handler! "push/global" (fn [payload] (swap! calls conj payload)))
+    (packet/dispatch-client-response! owner -1 {:msg-id "push/global" :payload {:value 7}})
+    (is (= [{:value 7}] @calls))))

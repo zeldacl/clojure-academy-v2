@@ -25,10 +25,12 @@
                        :sounds :metal}}
     :controller {:registry-name "wind_gen_main"
                  :rendering {:flat-item-icon? true
+             :render-shape :invisible
                              :textures {:all (modid/asset-path "block" "windgen_main")}}
                  :events {:on-right-click wind-logic/open-wind-main-gui!}}
     :part {:registry-name "wind_gen_main_part"
-           :rendering {:model-parent "minecraft:block/cube_all"
+          :rendering {:model-parent "minecraft:block/cube_all"
+            :render-shape :invisible
                        :textures {:all (modid/asset-path "block" "windgen_main")}}
            :events {:on-right-click wind-logic/open-wind-main-gui!}})
 
@@ -45,10 +47,12 @@
                        :sounds :metal}}
     :controller {:registry-name "wind_gen_base"
                  :rendering {:flat-item-icon? true
+             :render-shape :invisible
                              :textures {:all (modid/asset-path "block" "windgen_base")}}
                  :events {:on-right-click wind-logic/open-wind-base-gui!}}
     :part {:registry-name "wind_gen_base_part"
-           :rendering {:model-parent "minecraft:block/cube_all"
+          :rendering {:model-parent "minecraft:block/cube_all"
+            :render-shape :invisible
                        :textures {:all (modid/asset-path "block" "windgen_base")}}
            :events {:on-right-click wind-logic/open-wind-base-gui!}}))
 
@@ -92,6 +96,7 @@
                  :events {:on-place wind-logic/on-wind-pillar-placed!}
                  :rendering {:model-parent "minecraft:block/cube_all"
                              :textures {:all (modid/asset-path "block" "windgen_pillar")}
-                             :flat-item-icon? true}})]
+                             :flat-item-icon? true
+                             :render-shape :invisible}})]
      :network-handler wind-handlers/register-network-handlers!
      :client-renderer 'cn.li.ac.block.wind-gen.render/init!}))

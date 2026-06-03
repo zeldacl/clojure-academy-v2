@@ -21,10 +21,12 @@
     :controller {:registry-name "developer_normal"
                  :rendering {:light-level 1.0
                              :flat-item-icon? true
+             :render-shape :invisible
                              :textures {:all (modid/asset-path "block" "dev_normal")}}
                  :events {:on-right-click (dev-logic/open-developer-gui-for "developer-normal")}}
     :part {:registry-name "developer_normal_part"
-           :rendering {:model-parent "minecraft:block/cube_all"
+          :rendering {:model-parent "minecraft:block/cube_all"
+            :render-shape :invisible
                        :textures {:all (modid/asset-path "block" "dev_normal")}}})
 
   (bdsl/defmultiblock 'developer-advanced
@@ -38,10 +40,12 @@
     :controller {:registry-name "developer_advanced"
                  :rendering {:light-level 2.0
                              :flat-item-icon? true
+             :render-shape :invisible
                              :textures {:all (modid/asset-path "block" "dev_advanced")}}
                  :events {:on-right-click (dev-logic/open-developer-gui-for "developer-advanced")}}
     :part {:registry-name "developer_advanced_part"
-           :rendering {:model-parent "minecraft:block/cube_all"
+          :rendering {:model-parent "minecraft:block/cube_all"
+            :render-shape :invisible
                        :textures {:all (modid/asset-path "block" "dev_advanced")}}}))
 
 (defn init-developer!
