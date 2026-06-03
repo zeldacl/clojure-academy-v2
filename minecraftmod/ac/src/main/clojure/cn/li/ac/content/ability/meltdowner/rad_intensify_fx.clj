@@ -1,6 +1,6 @@
 (ns cn.li.ac.content.ability.meltdowner.rad-intensify-fx
   "Client-side visual hint for rad-intensify target marks."
-  (:require [cn.li.ac.ability.client.fx-registry :as fx-registry]
+  (:require [cn.li.ac.ability.client.fx-spec :as fx-spec]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.render-util :as ru]))
 
@@ -90,15 +90,11 @@
 
 (defn init!
   []
-  (level-effects/register-level-effect! rad-intensify-effect-id
-    {:initial-state (default-rad-intensify-fx-runtime-state)
-     :enqueue-state-fn enqueue-state!
-     :tick-state-fn tick-state!
-     :build-plan-fn build-plan})
-  (fx-registry/register-fx-channels!
-    [:rad-intensify/fx-mark]
-    (fn [ctx-id channel payload]
-      (when (= channel :rad-intensify/fx-mark)
-        (level-effects/enqueue-level-effect! rad-intensify-effect-id payload
-                                             {:ctx-id ctx-id :channel channel}))))
+  (fx-spec/register!
+    {:id rad-intensify-effect-id
+     :level {:initial-state (default-rad-intensify-fx-runtime-state)
+             :enqueue-state-fn enqueue-state!
+             :tick-state-fn tick-state!
+             :build-plan-fn build-plan}
+     :channels {:mark {:topic :rad-intensify/fx-mark}}})
   nil)

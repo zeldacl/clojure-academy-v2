@@ -31,40 +31,45 @@
 
 (deftest init-registers-mag-movement-fx-channels-test
   (let [registered-effect* (atom nil)
-        registered-handler* (atom nil)]
+        registered-topics* (atom #{})]
     (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
                                                           (reset! registered-effect* [effect-id effect-map])
                                                           nil)
-                  fx-registry/register-fx-channels! (fn [channels handler]
-                                                      (reset! registered-handler* {:channels channels
-                                                                                   :handler handler})
+                  fx-registry/register-fx-channel! (fn [topic _handler]
+                                                      (swap! registered-topics* conj topic)
                                                       nil)]
       (mag-movement-fx/init!)
       (is (= :mag-movement (first @registered-effect*)))
       (is (= #{:mag-movement/fx-start :mag-movement/fx-update :mag-movement/fx-end}
-             (set (:channels @registered-handler*)))))))
+             @registered-topics*)))))
 
 (deftest fx-handler-routes-start-update-end-test
-  (let [handler* (atom nil)
+  (let [handlers* (atom {})
         enqueued* (atom [])]
     (with-redefs [level-effects/register-level-effect! (fn [& _] nil)
-                  fx-registry/register-fx-channels! (fn [_ handler]
-                                                      (reset! handler* handler)
+                  fx-registry/register-fx-channel! (fn [topic handler]
+                                                      (swap! handlers* assoc topic handler)
                                                       nil)
                   level-effects/enqueue-level-effect! (fn [effect-id payload fx-context]
                                                         (swap! enqueued* conj [effect-id payload fx-context])
                                                         nil)]
       (mag-movement-fx/init!)
-      (@handler* "ctx" :mag-movement/fx-start {:target {:x 1.0 :y 2.0 :z 3.0}})
-      (@handler* "ctx" :mag-movement/fx-update {:target {:x 2.0 :y 3.0 :z 4.0}})
-      (@handler* "ctx" :mag-movement/fx-end {})
-      (is (= [[:mag-movement {:target {:x 1.0 :y 2.0 :z 3.0} :mode :start}
-               {:ctx-id "ctx" :channel :mag-movement/fx-start}]
-              [:mag-movement {:target {:x 2.0 :y 3.0 :z 4.0} :mode :update}
-               {:ctx-id "ctx" :channel :mag-movement/fx-update}]
-              [:mag-movement {:mode :end}
-               {:ctx-id "ctx" :channel :mag-movement/fx-end}]]
-             @enqueued*)))))
+      ((get @handlers* :mag-movement/fx-start) "ctx" :mag-movement/fx-start {:target {:x 1.0 :y 2.0 :z 3.0}})
+      ((get @handlers* :mag-movement/fx-update) "ctx" :mag-movement/fx-update {:target {:x 2.0 :y 3.0 :z 4.0}})
+      ((get @handlers* :mag-movement/fx-end) "ctx" :mag-movement/fx-end {})
+      (is (= 3 (count @enqueued*)))
+      (let [[_effect-id payload fx-context] (first @enqueued*)]
+        (is (= :mag-movement _effect-id))
+        (is (= :start (:mode payload)))
+        (is (= [:ctx "ctx"] (:owner-key payload)))
+        (is (= "ctx" (:ctx-id payload)))
+        (is (= :mag-movement/fx-start (:channel payload)))
+        (is (= {:x 1.0 :y 2.0 :z 3.0} (:target payload)))
+        (is (= "ctx" (:ctx-id fx-context)))
+        (is (= :mag-movement/fx-start (:channel fx-context)))
+        (is (= [:ctx "ctx"] (:owner-key fx-context))))
+      (is (= :update (:mode (nth (second @enqueued*) 1))))
+      (is (= :end (:mode (nth (nth @enqueued* 2) 1)))))))
 
 (deftest enqueue-and-end-are-idempotent-test
   (let [enqueue-state! (var-get #'cn.li.ac.content.ability.electromaster.mag-movement-fx/enqueue-state!)]

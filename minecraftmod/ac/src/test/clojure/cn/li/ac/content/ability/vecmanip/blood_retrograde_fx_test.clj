@@ -35,13 +35,12 @@
 
 (deftest init-registers-blood-retrograde-fx-channels-test
   (let [registered-effect (atom nil)
-        registered-handler (atom nil)]
+        registered-topics* (atom #{})]
     (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
                                                          (reset! registered-effect [effect-id effect-map])
                                                          nil)
-                  fx-registry/register-fx-channels! (fn [channels handler]
-                                                      (reset! registered-handler {:channels channels
-                                                                                  :handler handler})
+                  fx-registry/register-fx-channel! (fn [topic _handler]
+                                                      (swap! registered-topics* conj topic)
                                                       nil)]
       (brfx/init!)
       (is (= :blood-retrograde (first @registered-effect)))
@@ -49,18 +48,18 @@
                :blood-retrograde/fx-update
                :blood-retrograde/fx-end
                :blood-retrograde/fx-perform}
-             (set (:channels @registered-handler)))))))
+             @registered-topics*)))))
 
 (deftest fx-handler-routes-start-update-perform-end-test
-  (let [handler* (atom nil)
+  (let [handlers* (atom {})
         enqueue-fn* (atom nil)
         enqueued-effects* (atom [])
         sound-calls* (atom [])]
     (with-redefs [level-effects/register-level-effect! (fn [_effect-id effect-map]
                                                          (reset! enqueue-fn* (:enqueue-state-fn effect-map))
                                                          nil)
-                  fx-registry/register-fx-channels! (fn [_ handler]
-                                                      (reset! handler* handler)
+                  fx-registry/register-fx-channel! (fn [topic handler]
+                                                      (swap! handlers* assoc topic handler)
                                                       nil)
                   level-effects/enqueue-level-effect! (fn [effect-id payload fx-context]
                                                         (swap! enqueued-effects* conj [effect-id payload fx-context])
@@ -75,25 +74,48 @@
                                                               (swap! sound-calls* conj payload)
                                                               nil)]
       (brfx/init!)
-      (@handler* "ctx-1" :blood-retrograde/fx-start nil)
-      (@handler* "ctx-1" :blood-retrograde/fx-update {:ticks 7 :charge-ratio 0.35})
-      (@handler* "ctx-1" :blood-retrograde/fx-perform {:sound-pos {:x 1.0 :y 2.0 :z 3.0}
+      ((get @handlers* :blood-retrograde/fx-start) "ctx-1" :blood-retrograde/fx-start nil)
+      ((get @handlers* :blood-retrograde/fx-update) "ctx-1" :blood-retrograde/fx-update {:ticks 7 :charge-ratio 0.35})
+      ((get @handlers* :blood-retrograde/fx-perform) "ctx-1" :blood-retrograde/fx-perform {:sound-pos {:x 1.0 :y 2.0 :z 3.0}
                                                        :splashes [{:x 1.0 :y 2.0 :z 3.0 :size 1.4}]
                                                        :sprays [{:x 4.0 :y 5.0 :z 6.0 :face :up :size 1.2 :rotation 0.0
                                                                 :offset-u 0.0 :offset-v 0.0 :texture-id 1}]})
-      (@handler* "ctx-1" :blood-retrograde/fx-end {:performed? true})
-      (is (= [[:blood-retrograde {:mode :start}
-               {:ctx-id "ctx-1" :channel :blood-retrograde/fx-start}]
-              [:blood-retrograde {:mode :update :ticks 7 :charge-ratio 0.35}
-               {:ctx-id "ctx-1" :channel :blood-retrograde/fx-update}]
+      ((get @handlers* :blood-retrograde/fx-end) "ctx-1" :blood-retrograde/fx-end {:performed? true})
+      (is (= [[:blood-retrograde {:mode :start
+                                  :owner-key [:ctx "ctx-1"]
+                                  :ctx-id "ctx-1"
+                                  :channel :blood-retrograde/fx-start}
+               {:ctx-id "ctx-1"
+                :channel :blood-retrograde/fx-start
+                :owner-key [:ctx "ctx-1"]}]
+              [:blood-retrograde {:mode :update
+                                  :owner-key [:ctx "ctx-1"]
+                                  :ctx-id "ctx-1"
+                                  :channel :blood-retrograde/fx-update
+                                  :ticks 7
+                                  :charge-ratio 0.35}
+               {:ctx-id "ctx-1"
+                :channel :blood-retrograde/fx-update
+                :owner-key [:ctx "ctx-1"]}]
               [:blood-retrograde {:mode :perform
+                                  :owner-key [:ctx "ctx-1"]
+                                  :ctx-id "ctx-1"
+                                  :channel :blood-retrograde/fx-perform
                                   :sound-pos {:x 1.0 :y 2.0 :z 3.0}
                                   :splashes [{:x 1.0 :y 2.0 :z 3.0 :size 1.4}]
                                   :sprays [{:x 4.0 :y 5.0 :z 6.0 :face :up :size 1.2 :rotation 0.0
                                             :offset-u 0.0 :offset-v 0.0 :texture-id 1}]}
-               {:ctx-id "ctx-1" :channel :blood-retrograde/fx-perform}]
-              [:blood-retrograde {:mode :end :performed? true}
-               {:ctx-id "ctx-1" :channel :blood-retrograde/fx-end}]]
+               {:ctx-id "ctx-1"
+                :channel :blood-retrograde/fx-perform
+                :owner-key [:ctx "ctx-1"]}]
+              [:blood-retrograde {:mode :end
+                                  :owner-key [:ctx "ctx-1"]
+                                  :ctx-id "ctx-1"
+                                  :channel :blood-retrograde/fx-end
+                                  :performed? true}
+               {:ctx-id "ctx-1"
+                :channel :blood-retrograde/fx-end
+                :owner-key [:ctx "ctx-1"]}]]
              @enqueued-effects*))
       (is (= 1 (count @sound-calls*)))
       (is (= "my_mod:vecmanip.blood_retro" (:sound-id (first @sound-calls*)))))))

@@ -6,7 +6,7 @@
   - trigger-start / trigger-update / trigger-end"
   (:require [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.effects.beam-ops :as fx-beam]
-            [cn.li.ac.ability.client.fx-registry :as fx-registry]
+            [cn.li.ac.ability.client.fx-spec :as fx-spec]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]))
@@ -295,20 +295,16 @@
 
 (defn init!
   []
-  (level-effects/register-level-effect! jet-engine-effect-id
-    {:initial-state (default-jet-engine-fx-runtime-state)
-     :enqueue-state-fn enqueue-state!
-     :tick-state-fn tick-state!
-     :build-plan-fn build-plan})
-  (fx-registry/register-fx-channels!
-    [:jet-engine/fx-start
-     :jet-engine/fx-update
-     :jet-engine/fx-end
-     :jet-engine/fx-trigger-start
-     :jet-engine/fx-trigger-update
-     :jet-engine/fx-trigger-end]
-    (fn [ctx-id _channel payload]
-      (level-effects/enqueue-level-effect! jet-engine-effect-id
-                                           payload
-                                           {:ctx-id ctx-id})))
+  (fx-spec/register!
+    {:id jet-engine-effect-id
+     :level {:initial-state (default-jet-engine-fx-runtime-state)
+             :enqueue-state-fn enqueue-state!
+             :tick-state-fn tick-state!
+             :build-plan-fn build-plan}
+     :channels {:start {:topic :jet-engine/fx-start}
+                :update {:topic :jet-engine/fx-update}
+                :end {:topic :jet-engine/fx-end}
+                :trigger-start {:topic :jet-engine/fx-trigger-start}
+                :trigger-update {:topic :jet-engine/fx-trigger-update}
+                :trigger-end {:topic :jet-engine/fx-trigger-end}}})
   nil)

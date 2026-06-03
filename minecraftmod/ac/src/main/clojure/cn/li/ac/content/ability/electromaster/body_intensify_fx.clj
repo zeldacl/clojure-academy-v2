@@ -1,7 +1,7 @@
 (ns cn.li.ac.content.ability.electromaster.body-intensify-fx
   "Client FX for body-intensify."
   (:require [cn.li.ac.ability.client.effects.sounds :as client-sounds]
-            [cn.li.ac.ability.client.fx-registry :as fx-registry]
+            [cn.li.ac.ability.client.fx-spec :as fx-spec]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 
 (def ^:private activate-sound-id "my_mod:em.intensify_activate")
@@ -22,5 +22,9 @@
 
 (defn init!
   []
-  (fx-registry/register-fx-channel! :body-intensify/fx-end on-fx-end)
+  (fx-spec/register!
+    {:id :body-intensify
+     :channels {:end {:topic :body-intensify/fx-end
+                     :targets [:immediate]
+                     :immediate-fn on-fx-end}}})
   nil)

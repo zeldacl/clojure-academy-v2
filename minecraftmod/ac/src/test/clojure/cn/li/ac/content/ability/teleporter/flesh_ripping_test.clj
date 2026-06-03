@@ -4,21 +4,24 @@
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.effects.geom :as geom]
+            [cn.li.ac.ability.fx :as fx]
+            [cn.li.ac.test.support.fx-mocks :as fx-mocks]
             [cn.li.ac.content.ability.teleporter.flesh-ripping :as flesh]
             [cn.li.ac.content.ability.teleporter.tp-skill-helper :as helper]
-            [cn.li.mcmod.platform.potion-effects :as potion]))
+            [cn.li.mcmod.platform.potion-effects :as potion-effects]))
 
 (defn- make-context-mocks [initial-ctx]
   (let [ctx* (atom initial-ctx)]
     {:ctx* ctx*
      :get-context (fn [_] @ctx*)
      :update-skill-state-root! (fn [_ f & args]
-                        (swap! ctx* update :skill-state (fn [ss] (apply f (or ss {}) args))))}))
+                                 (swap! ctx* update :skill-state (fn [ss] (apply f (or ss {}) args))))}))
 
 (deftest flesh-ripping-tick-caches-trace-and-sends-update-fx-test
   (let [{:keys [ctx* update-skill-state-root!]} (make-context-mocks {:skill-state {}})
-        fx-calls* (atom [])]
+        {:keys [calls* send!]} (fx-mocks/capture-fx-send!)]
     (with-redefs [ctx-skill/update-skill-state-root! update-skill-state-root!
+                  fx/send! send!
                   helper/skill-exp (fn [_ _] 0.5)
                   helper/cfg-lerp (fn [_ field _]
                                     (case field
@@ -29,10 +32,7 @@
                                            :entity-x 1.0
                                            :entity-y 2.0
                                            :entity-z 3.0})
-                  geom/world-id-of (fn [_] "minecraft:overworld")
-                  ctx/ctx-send-to-client! (fn [_ctx-id channel payload]
-                                            (swap! fx-calls* conj [channel payload])
-                                            nil)]
+                  geom/world-id-of (fn [_] "minecraft:overworld")]
       (flesh/flesh-ripping-tick! {:player-id "p1" :ctx-id "ctx-0" :hold-ticks 7}))
 
     (is (= 7 (get-in @ctx* [:skill-state :hold-ticks])))
@@ -43,12 +43,13 @@
             :target-y 2.0
             :target-z 3.0}
            (get-in @ctx* [:skill-state :trace])))
-    (is (= [[:flesh-ripping/fx-update {:target-x 1.0
-                                       :target-y 2.0
-                                       :target-z 3.0
-                                       :hit? true
-                                       :target-uuid "target-1"}]]
-           @fx-calls*))))
+    (is (= [["ctx-0" :flesh-ripping/fx-update :update
+             {:target-x 1.0
+              :target-y 2.0
+              :target-z 3.0
+              :hit? true
+              :target-uuid "target-1"}]]
+           @calls*))))
 
 (deftest flesh-ripping-hit-critical-emits-crit-fx-test
   (let [{:keys [get-context]} (make-context-mocks {:skill-state {:trace {:world-id "minecraft:overworld"
@@ -89,20 +90,21 @@
                                                :message-args ["x2.6"]
                                                :damage-after damage
                                                :applied? true})
-                  potion/apply-potion-effect! (fn [_ target-id effect duration amplifier]
-                                                (swap! potion-calls* conj [target-id effect duration amplifier])
-                                                true)
+                  potion-effects/available? (constantly true)
+                  potion-effects/apply-potion-effect!* (fn [_ target-id effect duration amplifier]
+                                                         (swap! potion-calls* conj [target-id effect duration amplifier])
+                                                         true)
                   skill-effects/add-skill-exp! (fn [player-id skill-id amount]
                                                  (swap! exp-calls* conj [player-id skill-id amount])
                                                  nil)
                   skill-effects/set-main-cooldown! (fn [player-id skill-id ticks]
                                                      (swap! cooldown-calls* conj [player-id skill-id ticks])
                                                      nil)
-                  ctx/ctx-send-to-client! (fn [_ctx-id channel payload]
-                                            (swap! fx-calls* conj [channel payload])
-                                            nil)
+                  fx/send! (fn [_ctx-id entry _evt payload]
+                             (swap! fx-calls* conj [(:topic entry) payload])
+                             nil)
                   rand (fn [] 0.0)]
-        (flesh/flesh-ripping-up! {:player-id "p1" :ctx-id "ctx-1" :cost-ok? true})))
+      (flesh/flesh-ripping-up! {:player-id "p1" :ctx-id "ctx-1" :cost-ok? true}))
 
     (is (= [["minecraft:overworld" "target-1" 8.0]] @damage-calls*))
     (is (= [["target-1" :nausea 60 0]] @potion-calls*))
@@ -154,14 +156,15 @@
                                               {:critical? true
                                                :crit-level 2
                                                :applied? false})
-                  potion/apply-potion-effect! (fn [& _] true)
+                  potion-effects/available? (constantly true)
+                  potion-effects/apply-potion-effect!* (fn [& _] true)
                   skill-effects/add-skill-exp! (fn [& _] nil)
                   skill-effects/set-main-cooldown! (fn [& _] nil)
-                  ctx/ctx-send-to-client! (fn [_ctx-id channel payload]
-                                            (swap! fx-calls* conj [channel payload])
-                                            nil)
+                  fx/send! (fn [_ctx-id entry _evt payload]
+                             (swap! fx-calls* conj [(:topic entry) payload])
+                             nil)
                   rand (fn [] 0.0)]
-        (flesh/flesh-ripping-up! {:player-id "p1" :ctx-id "ctx-1b" :cost-ok? true})))
+      (flesh/flesh-ripping-up! {:player-id "p1" :ctx-id "ctx-1b" :cost-ok? true}))
 
     (is (= [[:flesh-ripping/fx-perform {:target-x 1.0
                                         :target-y 2.0
@@ -187,7 +190,7 @@
                   helper/deal-magic-damage! (fn [& _] (swap! damage-calls* inc))
                   skill-effects/add-skill-exp! (fn [& _] (swap! exp-calls* inc))
                   skill-effects/set-main-cooldown! (fn [& _] (swap! cooldown-calls* inc))
-                  ctx/ctx-send-to-client! (fn [& _] (swap! fx-calls* inc))]
+                  fx/send! (fn [& _] (swap! fx-calls* inc) nil)]
       (flesh/flesh-ripping-up! {:player-id "p1" :ctx-id "ctx-2" :cost-ok? false}))
 
     (is (= 0 @damage-calls*))
@@ -207,7 +210,7 @@
                   helper/deal-magic-damage! (fn [& _] (swap! damage-calls* inc))
                   skill-effects/add-skill-exp! (fn [& _] (swap! exp-calls* inc))
                   skill-effects/set-main-cooldown! (fn [& _] (swap! cooldown-calls* inc))
-                  ctx/ctx-send-to-client! (fn [& _] (swap! fx-calls* inc))]
+                  fx/send! (fn [& _] (swap! fx-calls* inc) nil)]
       (flesh/flesh-ripping-up! {:player-id "p1" :ctx-id "ctx-3" :cost-ok? true}))
 
     (is (= 0 @damage-calls*))
@@ -220,4 +223,3 @@
     (with-redefs [ctx-skill/update-skill-state-root! update-skill-state-root!]
       (flesh/flesh-ripping-abort! {:ctx-id "ctx-4"}))
     (is (nil? (:skill-state @ctx*)))))
-

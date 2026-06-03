@@ -10,6 +10,7 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill]]
+            [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
@@ -104,37 +105,27 @@
          (<= (+ cur-overload overload-needed) max-overload))))
 
 (defn- send-mark-start! [ctx-id target]
-  (ctx/ctx-send-to-client! ctx-id :jet-engine/fx-start
-                           {:mode :mark-start
-                            :target target}))
+  (fx/send! ctx-id {:topic :jet-engine/fx-start :mode :mark-start} nil {:target target}))
 
 (defn- send-mark-update! [ctx-id target hold-ticks]
-  (ctx/ctx-send-to-client! ctx-id :jet-engine/fx-update
-                           {:mode :mark-update
-                            :target target
-                            :hold-ticks (long hold-ticks)}))
+  (fx/send! ctx-id {:topic :jet-engine/fx-update :mode :mark-update} nil
+            {:target target
+             :hold-ticks (long hold-ticks)}))
 
 (defn- send-mark-end! [ctx-id target]
-  (ctx/ctx-send-to-client! ctx-id :jet-engine/fx-end
-                           {:mode :mark-end
-                            :target target}))
+  (fx/send! ctx-id {:topic :jet-engine/fx-end :mode :mark-end} nil {:target target}))
 
 (defn- send-trigger-start! [ctx-id start target velocity]
-  (ctx/ctx-send-to-client! ctx-id :jet-engine/fx-trigger-start
-                           {:mode :trigger-start
-                            :start start
+  (fx/send! ctx-id {:topic :jet-engine/fx-trigger-start :mode :trigger-start} nil {:start start
                             :target target
                             :velocity velocity}))
 
 (defn- send-trigger-update! [ctx-id pos trigger-ticks]
-  (ctx/ctx-send-to-client! ctx-id :jet-engine/fx-trigger-update
-                           {:mode :trigger-update
-                            :pos pos
+  (fx/send! ctx-id {:topic :jet-engine/fx-trigger-update :mode :trigger-update} nil {:pos pos
                             :trigger-ticks trigger-ticks}))
 
 (defn- send-trigger-end! [ctx-id]
-  (ctx/ctx-send-to-client! ctx-id :jet-engine/fx-trigger-end
-                           {:mode :trigger-end}))
+  (fx/send! ctx-id {:topic :jet-engine/fx-trigger-end :mode :trigger-end}))
 
 (defn- mark-hit-and-damage!
   [player-id ctx-id world-id hit hit-uuids]

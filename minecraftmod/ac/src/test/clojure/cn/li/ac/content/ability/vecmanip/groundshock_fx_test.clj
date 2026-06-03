@@ -24,16 +24,15 @@
 (deftest init-registers-groundshock-fx-channels-test
   (let [registered-level (atom nil)
         registered-hand (atom nil)
-        registered-handler (atom nil)]
+        registered-topics* (atom #{})]
     (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
                                                          (reset! registered-level [effect-id effect-map])
                                                          nil)
                   hand-effects/register-hand-effect! (fn [effect-id effect-map]
                                                        (reset! registered-hand [effect-id effect-map])
                                                        nil)
-                  fx-registry/register-fx-channels! (fn [channels handler]
-                                                      (reset! registered-handler {:channels channels
-                                                                                 :handler handler})
+                  fx-registry/register-fx-channel! (fn [topic _handler]
+                                                      (swap! registered-topics* conj topic)
                                                       nil)]
       (gfx/init!)
       (is (= :groundshock (first @registered-level)))
@@ -42,16 +41,16 @@
                :groundshock/fx-update
                :groundshock/fx-perform
                :groundshock/fx-end}
-             (set (:channels @registered-handler)))))))
+             @registered-topics*)))))
 
 (deftest fx-handler-routes-start-update-perform-end-payloads-test
-  (let [handler* (atom nil)
+  (let [handlers* (atom {})
         hand-enqueued* (atom [])
         level-enqueued* (atom [])]
     (with-redefs [level-effects/register-level-effect! (fn [& _] nil)
                   hand-effects/register-hand-effect! (fn [& _] nil)
-                  fx-registry/register-fx-channels! (fn [_ handler]
-                                                      (reset! handler* handler)
+                  fx-registry/register-fx-channel! (fn [topic handler]
+                                                      (swap! handlers* assoc topic handler)
                                                       nil)
                   hand-effects/enqueue-hand-effect! (fn [effect-id payload]
                                                       (swap! hand-enqueued* conj [effect-id payload])
@@ -60,11 +59,11 @@
                                                         (swap! level-enqueued* conj [effect-id payload fx-context])
                                                         nil)]
       (gfx/init!)
-      (@handler* "ctx-1" :groundshock/fx-start nil)
-      (@handler* "ctx-1" :groundshock/fx-update {:charge-ticks 7})
-      (@handler* "ctx-1" :groundshock/fx-perform {:affected-blocks [{:x 1 :y 2 :z 3 :block-id "minecraft:stone"}]
+      ((get @handlers* :groundshock/fx-start) "ctx-1" :groundshock/fx-start nil)
+      ((get @handlers* :groundshock/fx-update) "ctx-1" :groundshock/fx-update {:charge-ticks 7})
+      ((get @handlers* :groundshock/fx-perform) "ctx-1" :groundshock/fx-perform {:affected-blocks [{:x 1 :y 2 :z 3 :block-id "minecraft:stone"}]
                                                    :broken-blocks [{:x 1 :y 2 :z 3}]})
-      (@handler* "ctx-1" :groundshock/fx-end {:performed? false})
+      ((get @handlers* :groundshock/fx-end) "ctx-1" :groundshock/fx-end {:performed? false})
 
       (is (= [[:groundshock {:owner-key [:ctx "ctx-1"]
                              :ctx-id "ctx-1"
@@ -86,9 +85,14 @@
                              :performed? false}]]
              @hand-enqueued*))
       (is (= [[:groundshock {:mode :perform
+                             :owner-key [:ctx "ctx-1"]
+                             :ctx-id "ctx-1"
+                             :channel :groundshock/fx-perform
                              :affected-blocks [{:x 1 :y 2 :z 3 :block-id "minecraft:stone"}]
                              :broken-blocks [{:x 1 :y 2 :z 3}]}
-               {:ctx-id "ctx-1" :channel :groundshock/fx-perform}]]
+               {:ctx-id "ctx-1"
+                :channel :groundshock/fx-perform
+                :owner-key [:ctx "ctx-1"]}]]
              @level-enqueued*)))))
 
 (deftest two-owners-keep-groundshock-hand-state-independent-test

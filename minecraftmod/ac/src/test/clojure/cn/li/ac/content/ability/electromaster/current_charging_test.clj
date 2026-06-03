@@ -1,10 +1,12 @@
 (ns cn.li.ac.content.ability.electromaster.current-charging-test
-  (:require [clojure.test :refer [deftest is]]
+  (:require [clojure.test :refer [deftest is use-fixtures]]
+            [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
             [cn.li.ac.content.ability.electromaster.current-charging :as current-charging]
             [cn.li.ac.energy.operations :as energy]
+            [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.runtime-interop :as interop]))
 
@@ -16,11 +18,26 @@
   (var-get (ns-resolve 'cn.li.ac.content.ability.electromaster.current-charging
                        'current_charging_skill)))
 
+(defn- apply-skill-state-update [current f args]
+  (if (and (= f identity) (= 1 (count args)))
+    (first args)
+    (apply f current args)))
+
 (defn- mk-context-store [ctx-id seed]
   (atom {ctx-id seed}))
 
+(use-fixtures :each (fn [f] (ps-fix/with-test-player-state-owner f)))
+
 (deftest pattern-is-hold-channel-test
   (is (= :hold-channel (:pattern (skill-def)))))
+
+(defn- skill-state-command-mocks [contexts*]
+  {#'current-charging/set-skill-state!
+   (fn [ctx-id k v]
+     (swap! contexts* update ctx-id assoc-in (into [:skill-state] (if (vector? k) k [k])) v))
+   #'current-charging/clear-skill-state!
+   (fn [ctx-id]
+     (swap! contexts* update ctx-id dissoc :skill-state))})
 
 (deftest down-action-initializes-state-and-starts-fx-test
   (let [ctx-id "ctx-1"
@@ -31,11 +48,15 @@
                   current-charging/cfg-lerp (fn [_ _] 52.0)
                   ctx/get-context (fn [id] (get @contexts* id))
                   ctx-skill/update-skill-state-root! (fn [id f & args]
-                                        (swap! contexts* update id #(apply f % args))
+                                        (swap! contexts* update id
+                                               (fn [ctx-data]
+                                                 (let [current (or (:skill-state ctx-data) {})
+                                                       next-state (apply-skill-state-update current f args)]
+                                                   (assoc ctx-data :skill-state next-state))))
                                         nil)
-                  ctx/ctx-send-to-client! (fn [id ch payload]
-                                            (swap! fx* conj [id ch payload])
-                                            nil)]
+                  fx/send! (fn [id entry _evt payload]
+                             (swap! fx* conj [id (:topic entry) payload])
+                             nil)]
       (down! {:player-id "p1" :ctx-id ctx-id :exp 0.4}))
     (is (= {:mode :item
             :is-item true
@@ -62,30 +83,35 @@
         charge* (atom [])
         floor* (atom [])
         tick! (get (skill-actions) :tick!)]
-    (with-redefs [current-charging/main-hand-item (fn [_] :stack)
-                  current-charging/cfg-lerp (fn [_ _] 30.0)
-                  current-charging/cfg-double (fn [k]
-                                                (case k
-                                                  :progression.exp-effective 0.0001
-                                                  :progression.exp-ineffective 0.00003
-                                                  0.0))
-                  energy/is-energy-item-supported? (fn [_] true)
-                  energy/charge-energy-to-item (fn [stack amt sim?]
-                                                 (swap! charge* conj [stack amt sim?])
-                                                 nil)
-                  skill-effects/add-skill-exp! (fn [pid sid amount]
-                                                 (swap! exp* conj [pid sid amount])
-                                                 nil)
-                  skill-effects/enforce-overload-floor! (fn [pid floor]
-                                                          (swap! floor* conj [pid floor])
-                                                          nil)
-                  ctx/get-context (fn [id] (get @contexts* id))
-                  ctx-skill/update-skill-state-root! (fn [id f & args]
-                                        (swap! contexts* update id #(apply f % args))
-                                        nil)
-                  ctx/ctx-send-to-client! (fn [id ch payload]
-                                            (swap! fx* conj [id ch payload])
-                                            nil)]
+    (with-redefs (merge (skill-state-command-mocks contexts*)
+                       {current-charging/main-hand-item (fn [_] :stack)
+                        current-charging/cfg-lerp (fn [_ _] 30.0)
+                        current-charging/cfg-double (fn [k]
+                                                     (case k
+                                                       :progression.exp-effective 0.0001
+                                                       :progression.exp-ineffective 0.00003
+                                                       0.0))
+                        energy/is-energy-item-supported? (fn [_] true)
+                        energy/charge-energy-to-item (fn [stack amt sim?]
+                                                      (swap! charge* conj [stack amt sim?])
+                                                      nil)
+                        skill-effects/add-skill-exp! (fn [pid sid amount]
+                                                       (swap! exp* conj [pid sid amount])
+                                                       nil)
+                        skill-effects/enforce-overload-floor! (fn [pid floor]
+                                                                (swap! floor* conj [pid floor])
+                                                                nil)
+                        ctx/get-context (fn [id] (get @contexts* id))
+                        ctx-skill/update-skill-state-root! (fn [id f & args]
+                                                              (swap! contexts* update id
+                                                                     (fn [ctx-data]
+                                                                       (let [current (or (:skill-state ctx-data) {})
+                                                                             next-state (apply-skill-state-update current f args)]
+                                                                         (assoc ctx-data :skill-state next-state))))
+                                                              nil)
+                        fx/send! (fn [id entry _evt payload]
+                                   (swap! fx* conj [id (:topic entry) payload])
+                                   nil)})
       (tick! {:player-id "p1" :ctx-id ctx-id}))
     (is (= 1 (get-in @contexts* [ctx-id :skill-state :charge-ticks])))
     (is (true? (get-in @contexts* [ctx-id :skill-state :good?])))
@@ -107,29 +133,34 @@
         fx* (atom [])
         spawned* (atom [])
         tick! (get (skill-actions) :tick!)]
-    (with-redefs [current-charging/cfg-lerp (fn [_ _] 20.0)
-                  current-charging/cfg-double (fn [_] 0.0001)
-                  current-charging/charge-block-target! (fn [_ _]
-                                                          {:effective? true
-                                                           :charged 8.0
-                                                           :block-pos [1 2 3]
-                                                           :ray-end {:x 1.0 :y 2.0 :z 3.0}})
-                  skill-effects/add-skill-exp! (fn [& _] nil)
-                  skill-effects/enforce-overload-floor! (fn [& _] nil)
-                  interop/get-player-view* (fn [_ _]
-                                            {:world-id "minecraft:overworld"
-                                             :x 0.0 :y 64.0 :z 0.0
-                                             :look-x 1.0 :look-y 0.0 :look-z 0.0})
-                  entity/player-spawn-entity-by-id! (fn [player eid yaw]
-                                                      (swap! spawned* conj [player eid yaw])
-                                                      true)
-                  ctx/get-context (fn [id] (get @contexts* id))
-                  ctx-skill/update-skill-state-root! (fn [id f & args]
-                                        (swap! contexts* update id #(apply f % args))
-                                        nil)
-                  ctx/ctx-send-to-client! (fn [id ch payload]
-                                            (swap! fx* conj [id ch payload])
-                                            nil)]
+    (with-redefs (merge (skill-state-command-mocks contexts*)
+                       {current-charging/cfg-lerp (fn [_ _] 20.0)
+                        current-charging/cfg-double (fn [_] 0.0001)
+                        current-charging/charge-block-target! (fn [_ _]
+                                                                 {:effective? true
+                                                                  :charged 8.0
+                                                                  :block-pos [1 2 3]
+                                                                  :ray-end {:x 1.0 :y 2.0 :z 3.0}})
+                        skill-effects/add-skill-exp! (fn [& _] nil)
+                        skill-effects/enforce-overload-floor! (fn [& _] nil)
+                        interop/get-player-view* (fn [_ _]
+                                                   {:world-id "minecraft:overworld"
+                                                    :x 0.0 :y 64.0 :z 0.0
+                                                    :look-x 1.0 :look-y 0.0 :look-z 0.0})
+                        entity/player-spawn-entity-by-id! (fn [player eid yaw]
+                                                           (swap! spawned* conj [player eid yaw])
+                                                           true)
+                        ctx/get-context (fn [id] (get @contexts* id))
+                        ctx-skill/update-skill-state-root! (fn [id f & args]
+                                                              (swap! contexts* update id
+                                                                     (fn [ctx-data]
+                                                                       (let [current (or (:skill-state ctx-data) {})
+                                                                             next-state (apply-skill-state-update current f args)]
+                                                                         (assoc ctx-data :skill-state next-state))))
+                                                              nil)
+                        fx/send! (fn [id entry _evt payload]
+                                   (swap! fx* conj [id (:topic entry) payload])
+                                   nil)})
       (tick! {:player-id "p1" :ctx-id ctx-id :player {:uuid "p1"}}))
     (is (= [[{:uuid "p1"} "my_mod:entity_arc" 0.0]] @spawned*))
     (is (= [[ctx-id :current-charging/fx-update
@@ -148,17 +179,22 @@
         fx* (atom [])
         terminated* (atom [])
         cost-fail! (get (skill-actions) :cost-fail!)]
-    (with-redefs [ctx/get-context (fn [id] (get @contexts* id))
-                  ctx-skill/update-skill-state-root! (fn [id f & args]
-                                        (swap! contexts* update id #(apply f % args))
-                                        nil)
-                  ctx/ctx-send-to-client! (fn [id ch payload]
-                                            (swap! fx* conj [id ch payload])
-                                            nil)
-                  ctx/terminate-context! (fn [id _]
-                                           (swap! terminated* conj id)
-                                           nil)]
-      (cost-fail! {:ctx-id ctx-id}))
-    (is (= [[ctx-id :current-charging/fx-end {:is-item false}]] @fx*))
-    (is (= [ctx-id] @terminated*))
-    (is (nil? (get-in @contexts* [ctx-id :skill-state])))))
+    (with-redefs (merge (skill-state-command-mocks contexts*)
+                       {ctx/get-context (fn [id] (get @contexts* id))
+                        ctx-skill/update-skill-state-root! (fn [id f & args]
+                                                            (swap! contexts* update id
+                                                                   (fn [ctx-data]
+                                                                     (let [current (or (:skill-state ctx-data) {})
+                                                                           next-state (apply-skill-state-update current f args)]
+                                                                       (assoc ctx-data :skill-state next-state))))
+                                                            nil)
+                        fx/send! (fn [id entry _evt payload]
+                                   (swap! fx* conj [id (:topic entry) payload])
+                                   nil)
+                        ctx/terminate-context! (fn [id _]
+                                                 (swap! terminated* conj id)
+                                                 nil)})
+      (cost-fail! {:ctx-id ctx-id})
+      (is (= [[ctx-id :current-charging/fx-end {:is-item false}]] @fx*))
+      (is (= [ctx-id] @terminated*))
+      (is (nil? (get-in @contexts* [ctx-id :skill-state]))))))

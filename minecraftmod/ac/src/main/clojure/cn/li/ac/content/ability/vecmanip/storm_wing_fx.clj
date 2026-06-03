@@ -2,7 +2,7 @@
   "Client FX for Storm Wing: tornado ring visuals + dirt particles."
   (:require [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
-            [cn.li.ac.ability.client.fx-registry :as fx-registry]
+            [cn.li.ac.ability.client.fx-spec :as fx-spec]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.render-util :as ru]))
 
@@ -158,28 +158,19 @@
 
 (defn init!
   []
-  (level-effects/register-level-effect! storm-wing-effect-id
-    {:initial-state (default-storm-wing-fx-runtime-state)
-     :enqueue-state-fn enqueue-state!
-     :tick-state-fn tick-state!
-     :build-plan-fn build-plan})
-  (fx-registry/register-fx-channels!
-    [:storm-wing/fx-start :storm-wing/fx-update :storm-wing/fx-end]
-    (fn [ctx-id channel payload]
-      (case channel
-        :storm-wing/fx-start
-        (level-effects/enqueue-level-effect! storm-wing-effect-id
-          {:mode :start :charge-ticks (long (or (:charge-ticks payload) 70))}
-          {:ctx-id ctx-id :channel channel})
-        :storm-wing/fx-update
-        (level-effects/enqueue-level-effect! storm-wing-effect-id
-          {:mode :update
-           :phase (or (:phase payload) :charging)
-           :charge-ticks (long (or (:charge-ticks payload) 0))
-           :charge-ratio (double (or (:charge-ratio payload) 0.0))}
-          {:ctx-id ctx-id :channel channel})
-        :storm-wing/fx-end
-        (level-effects/enqueue-level-effect! storm-wing-effect-id
-          {:mode :end}
-          {:ctx-id ctx-id :channel channel}))))
+  (fx-spec/register!
+    {:id storm-wing-effect-id
+     :level {:initial-state (default-storm-wing-fx-runtime-state)
+             :enqueue-state-fn enqueue-state!
+             :tick-state-fn tick-state!
+             :build-plan-fn build-plan}
+     :channels {:start {:topic :storm-wing/fx-start :mode :start
+                        :level-payload (fn [_ _ p]
+                                         {:charge-ticks (long (or (:charge-ticks p) 70))})}
+                :update {:topic :storm-wing/fx-update :mode :update
+                         :level-payload (fn [_ _ p]
+                                          {:phase (or (:phase p) :charging)
+                                           :charge-ticks (long (or (:charge-ticks p) 0))
+                                           :charge-ratio (double (or (:charge-ratio p) 0.0))})}
+                :end {:topic :storm-wing/fx-end :mode :end}}})
   nil)

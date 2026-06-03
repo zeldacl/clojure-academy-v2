@@ -29,31 +29,30 @@
 
 (deftest init-registers-directed-shock-fx-channels-test
   (let [registered-hand* (atom nil)
-        registered-handler* (atom nil)]
+        registered-topics* (atom #{})]
     (with-redefs [hand-effects/register-hand-effect! (fn [effect-id effect-map]
                                                        (reset! registered-hand* [effect-id effect-map]))
-                  fx-registry/register-fx-channels! (fn [channels handler]
-                                                      (reset! registered-handler* {:channels channels
-                                                                                   :handler handler}))]
+                  fx-registry/register-fx-channel! (fn [topic _handler]
+                                                      (swap! registered-topics* conj topic))]
       (dsfx/init!)
       (is (= :directed-shock (first @registered-hand*)))
       (is (= #{:directed-shock/fx-start
                :directed-shock/fx-perform
                :directed-shock/fx-end}
-             (set (:channels @registered-handler*)))))))
+             @registered-topics*)))))
 
 (deftest fx-handler-routes-start-perform-end-test
-  (let [handler* (atom nil)
+  (let [handlers* (atom {})
         hand-enqueued* (atom [])]
     (with-redefs [hand-effects/register-hand-effect! (fn [& _] nil)
-                  fx-registry/register-fx-channels! (fn [_ handler]
-                                                      (reset! handler* handler))
+                  fx-registry/register-fx-channel! (fn [topic handler]
+                                                      (swap! handlers* assoc topic handler))
                   hand-effects/enqueue-hand-effect! (fn [effect-id payload]
                                                       (swap! hand-enqueued* conj [effect-id payload]))]
       (dsfx/init!)
-      (@handler* "ctx-1" :directed-shock/fx-start nil)
-      (@handler* "ctx-1" :directed-shock/fx-perform nil)
-      (@handler* "ctx-1" :directed-shock/fx-end {:performed? false})
+      ((get @handlers* :directed-shock/fx-start) "ctx-1" :directed-shock/fx-start nil)
+      ((get @handlers* :directed-shock/fx-perform) "ctx-1" :directed-shock/fx-perform nil)
+      ((get @handlers* :directed-shock/fx-end) "ctx-1" :directed-shock/fx-end {:performed? false})
       (is (= [[:directed-shock {:owner-key [:ctx "ctx-1"]
                 :ctx-id "ctx-1"
                 :channel :directed-shock/fx-start

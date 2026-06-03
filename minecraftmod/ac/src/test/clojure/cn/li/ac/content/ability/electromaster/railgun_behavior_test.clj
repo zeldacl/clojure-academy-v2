@@ -1,15 +1,14 @@
 (ns cn.li.ac.content.ability.electromaster.railgun-behavior-test
-  (:require 
+  (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.service.runtime-store :as store]
-[clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.item-actions :as item-actions]
             [cn.li.ac.ability.effects.beam :as beam]
+            [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
             [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.ac.content.ability.electromaster.railgun :as railgun]
-            [cn.li.mcmod.platform.block-manipulation :as block-manip]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
-            [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.util.log :as log]))
 
@@ -32,14 +31,17 @@
 
 (deftest beam-uses-trace-origin-but-keeps-visual-origin-test
   (let [calls (atom [])]
-    (with-redefs [ctx/ctx-send-to-client! (fn [_ctx-id ch payload]
-                                            (swap! calls conj [:fx ch payload]))
+    (with-redefs [world-effects/available? (constantly true)
                   world-effects/find-entities-in-radius*
                   (fn [& args]
                     (swap! calls conj [:search args])
                     [{:uuid "e-1" :x 3.0 :y 2.0 :z 3.0}])
+                  entity-damage/available? (constantly true)
                   entity-damage/apply-direct-damage!* (fn [& _]
-                                                       (swap! calls conj [:damage]))]
+                                                       (swap! calls conj [:damage]))
+                  fx/send! (fn [_ctx-id entry _evt payload]
+                             (swap! calls conj [:fx (:topic entry) payload])
+                             nil)]
       (let [evt {:ctx-id "ctx-1"
                  :player-id "p1"
                  :world-id "w1"
@@ -56,9 +58,8 @@
                                          :break-blocks? false
                                          :fx-topic :railgun/fx-shot})]
         (is (true? (get-in out [:beam-result :performed?])))
-        (is (= ["w1" 1.0 2.0 3.0 10.0] (-> @calls first second rest vec)))
-        (is (= [:fx :railgun/fx-shot {:mode :perform
-                                      :start {:x 10.0 :y 20.0 :z 30.0}
+        (is (= ["w1" 1.0 2.0 3.0 10.0] (vec (second (first @calls)))))
+        (is (= [:fx :railgun/fx-shot {:start {:x 10.0 :y 20.0 :z 30.0}
                                       :end {:x 10.0 :y 20.0 :z 35.0}
                                       :hit-distance 5.0}]
                (second @calls)))
@@ -73,7 +74,14 @@
                           :session-id :test-session
                           :status ctx/STATUS-ALIVE
                           :skill-state {:mode :item-charge :charge-ticks 3 :fired false}})
-  (with-redefs [log/debug (fn [& _])]
+  (with-redefs [log/debug (fn [& _])
+                ctx-skill/update-skill-state-root! (fn [ctx-id f & args]
+                                                     (when-let [ctx (ctx/get-context ctx-id)]
+                                                       (let [current (or (:skill-state ctx) {})
+                                                             next-state (if (and (= f identity) (= 1 (count args)))
+                                                                          (first args)
+                                                                          (apply f current args))]
+                                                         (ctx/register-context! (assoc ctx :skill-state next-state)))))]
     (binding [ctx/*context-owner* {:logical-side :server :session-id :test-session}]
       (is (true? (railgun/register-coin-throw! "p1" {:timestamp-ms 12345})))
       (is (= :item-charge-cancelled (get-in (ctx/get-context "ctx-1") [:skill-state :mode]))))))
@@ -81,8 +89,8 @@
 (deftest coin-progress-threshold-status-test
   (let [below (#'railgun/qte-status 0.59)
         active (#'railgun/qte-status 0.6)
-    edge (#'railgun/qte-status 0.7)
-    perform (#'railgun/qte-status 0.71)]
+        edge (#'railgun/qte-status 0.7)
+        perform (#'railgun/qte-status 0.71)]
     (is (true? (:has-window? below)))
     (is (false? (:active? below)))
     (is (false? (:perform? below)))
@@ -90,8 +98,8 @@
     (is (true? (:active? active)))
     (is (false? (:perform? active)))
 
-  (is (true? (:active? edge)))
-  (is (false? (:perform? edge)))
+    (is (true? (:active? edge)))
+    (is (false? (:perform? edge)))
 
     (is (true? (:active? perform)))
     (is (true? (:perform? perform)))))
@@ -100,7 +108,8 @@
   (ps-fix/seed-player-state! "p1" (store/fresh-player-state))
   (railgun/register-coin-throw! "p1" {:timestamp-ms 42})
   (store/update-player-state!* ps-fix/test-session-id "p1" assoc-in [:runtime :railgun :coin-judged-uuid] "coin-1")
-  (with-redefs [world-effects/find-entities-in-radius* (fn [& _]
+  (with-redefs [world-effects/available? (constantly true)
+                world-effects/find-entities-in-radius* (fn [& _]
                                                          [{:type "entity_coin_throwing"
                                                            :uuid "coin-1"
                                                            :motion-progress 0.95}])
@@ -111,5 +120,4 @@
     (let [status (#'railgun/read-coin-qte-status "p1")]
       (is (false? (:has-window? status)))
       (is (false? (:perform? status))))))
-
 

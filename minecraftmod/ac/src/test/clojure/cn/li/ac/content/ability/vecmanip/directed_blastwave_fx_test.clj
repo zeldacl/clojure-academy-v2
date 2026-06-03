@@ -28,13 +28,12 @@
 
 (deftest init-registers-owner-aware-directed-blastwave-fx-test
   (let [registered-level* (atom nil)
-        registered-handler* (atom nil)]
+        registered-topics* (atom #{})]
     (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
                                                          (reset! registered-level* [effect-id effect-map])
                                                          nil)
-                  fx-registry/register-fx-channels! (fn [channels handler]
-                                                      (reset! registered-handler* {:channels channels
-                                                                                   :handler handler})
+                  fx-registry/register-fx-channel! (fn [topic _handler]
+                                                      (swap! registered-topics* conj topic)
                                                       nil)]
       (blastwave-fx/init!)
       (is (= :directed-blastwave (first @registered-level*)))
@@ -43,7 +42,7 @@
                :directed-blastwave/fx-update
                :directed-blastwave/fx-perform
                :directed-blastwave/fx-end}
-             (set (:channels @registered-handler*)))))))
+             @registered-topics*)))))
 
 (deftest enqueue-perform-spawns-wave-and-queues-sound-test
   (let [enqueue-state! (var-get #'cn.li.ac.content.ability.vecmanip.directed-blastwave-fx/enqueue-state!)

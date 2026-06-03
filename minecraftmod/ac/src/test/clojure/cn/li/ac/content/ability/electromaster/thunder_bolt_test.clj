@@ -1,10 +1,10 @@
 (ns cn.li.ac.content.ability.electromaster.thunder-bolt-test
   (:require [clojure.test :refer [deftest is]]
+            [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.content.ability.electromaster.thunder-bolt :as thunder-bolt]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
-            [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
@@ -44,9 +44,13 @@
         cooldown* (atom [])
         lightning* (atom [])
         damage* (atom [])]
+    (with-redefs [raycast/available? (constantly true)
+                  world-effects/available? (constantly true)
+                  entity-damage/available? (constantly true)
+                  potion-effects/available? (constantly true)
                   geom/world-id-of (fn [_] "w")
                   geom/eye-pos (fn [_] {:x 0.0 :y 64.0 :z 0.0})
-                  raycast/get-player-look-vector* (fn [_ _] {:x 0.0 :y 0.0 :z 1.0})
+                  raycast/get-player-look-vector* (fn [_] {:x 0.0 :y 0.0 :z 1.0})
                   raycast/raycast-combined* (fn [& _] nil)
                   world-effects/find-entities-in-radius* (fn [& _] [])
                   world-effects/spawn-lightning!* (fn [& args]
@@ -66,9 +70,9 @@
                   skill-config/tunable-double stub-double
                   skill-config/tunable-int stub-int
                   skill-config/probability (fn [& _] 1.0)
-                  ctx/ctx-send-to-client! (fn [ctx-id channel payload]
-                                            (swap! fx* conj [ctx-id channel payload])
-                                            nil)]
+                  fx/send! (fn [ctx-id entry _evt payload]
+                             (swap! fx* conj [ctx-id (:topic entry) payload])
+                             nil)]
       (thunder-bolt/thunder-bolt-perform! {:player-id "p1" :ctx-id "ctx-1" :exp 0.5})
       (is (empty? @damage*))
       (is (empty? @lightning*))
@@ -87,9 +91,13 @@
         fx* (atom [])
         potion* (atom [])
         lightning* (atom [])]
+    (with-redefs [raycast/available? (constantly true)
+                  world-effects/available? (constantly true)
+                  entity-damage/available? (constantly true)
+                  potion-effects/available? (constantly true)
                   geom/world-id-of (fn [_] "w")
                   geom/eye-pos (fn [_] {:x 1.0 :y 66.0 :z 1.0})
-                  raycast/get-player-look-vector* (fn [_ _] {:x 0.0 :y 0.0 :z 1.0})
+                  raycast/get-player-look-vector* (fn [_] {:x 0.0 :y 0.0 :z 1.0})
                   raycast/raycast-combined* (fn [& _]
                                              {:hit-type :entity
                                               :uuid "mob-1"
@@ -101,7 +109,7 @@
                   world-effects/find-entities-in-radius* (fn [& _]
                                                           [{:uuid "mob-1" :x 10.0 :y 64.0 :z 10.0}
                                                            {:uuid "mob-2" :x 10.5 :y 64.0 :z 9.5 :eye-height 1.6}])
-                  entity-damage/apply-direct-damage!* (fn [_ _world-id target-id damage _]
+                  entity-damage/apply-direct-damage!* (fn [_world-id target-id damage _]
                                                        (swap! damage* conj [target-id damage])
                                                        true)
                   potion-effects/apply-potion-effect!* (fn [& args]
@@ -116,9 +124,9 @@
                   skill-config/tunable-double stub-double
                   skill-config/tunable-int stub-int
                   skill-config/probability (fn [& _] 1.0)
-                  ctx/ctx-send-to-client! (fn [ctx-id channel payload]
-                                            (swap! fx* conj [ctx-id channel payload])
-                                            nil)
+                  fx/send! (fn [ctx-id entry _evt payload]
+                             (swap! fx* conj [ctx-id (:topic entry) payload])
+                             nil)
                   rand (fn [] 0.0)]
       (thunder-bolt/thunder-bolt-perform! {:player-id "p2" :ctx-id "ctx-2" :exp 0.6})
       (is (= 2 (count @damage*)))
@@ -136,9 +144,13 @@
         exp* (atom [])
         potion* (atom [])
         lightning* (atom [])]
+    (with-redefs [raycast/available? (constantly true)
+                  world-effects/available? (constantly true)
+                  entity-damage/available? (constantly true)
+                  potion-effects/available? (constantly true)
                   geom/world-id-of (fn [_] "w")
                   geom/eye-pos (fn [_] {:x 2.0 :y 64.0 :z 2.0})
-                  raycast/get-player-look-vector* (fn [_ _] {:x 0.0 :y 0.0 :z 1.0})
+                  raycast/get-player-look-vector* (fn [_] {:x 0.0 :y 0.0 :z 1.0})
                   raycast/raycast-combined* (fn [& _]
                                              {:hit-type :block
                                               :hit-x 8.0 :hit-y 65.0 :hit-z 8.0
@@ -149,7 +161,7 @@
                   world-effects/find-entities-in-radius* (fn [& _]
                                                           [{:uuid "mob-a" :x 8.0 :y 65.0 :z 8.0 :eye-height 1.2}
                                                            {:uuid "mob-b" :x 9.0 :y 65.0 :z 8.0 :eye-height 1.4}])
-                  entity-damage/apply-direct-damage!* (fn [_ _world-id target-id damage _]
+                  entity-damage/apply-direct-damage!* (fn [_world-id target-id damage _]
                                                        (swap! damage* conj [target-id damage])
                                                        true)
                   potion-effects/apply-potion-effect!* (fn [& args]
@@ -164,7 +176,7 @@
                   skill-config/tunable-double stub-double
                   skill-config/tunable-int stub-int
                   skill-config/probability (fn [& _] 1.0)
-                  ctx/ctx-send-to-client! (fn [& _] nil)]
+                  fx/send! (fn [& _] nil)]
       (thunder-bolt/thunder-bolt-perform! {:player-id "p3" :ctx-id "ctx-3" :exp 0.4})
       (is (= 2 (count @damage*)))
       (is (empty? @potion*))
@@ -173,9 +185,13 @@
 
 (deftest slowness-requires-exp-threshold-test
   (let [potion* (atom [])]
+    (with-redefs [raycast/available? (constantly true)
+                  world-effects/available? (constantly true)
+                  entity-damage/available? (constantly true)
+                  potion-effects/available? (constantly true)
                   geom/world-id-of (fn [_] "w")
                   geom/eye-pos (fn [_] {:x 1.0 :y 66.0 :z 1.0})
-                  raycast/get-player-look-vector* (fn [_ _] {:x 0.0 :y 0.0 :z 1.0})
+                  raycast/get-player-look-vector* (fn [_] {:x 0.0 :y 0.0 :z 1.0})
                   raycast/raycast-combined* (fn [& _]
                                              {:hit-type :entity
                                               :uuid "mob-low"
@@ -194,8 +210,7 @@
                   skill-config/tunable-double stub-double
                   skill-config/tunable-int stub-int
                   skill-config/probability (fn [& _] 1.0)
-                  ctx/ctx-send-to-client! (fn [& _] nil)
+                  fx/send! (fn [& _] nil)
                   rand (fn [] 0.0)]
       (thunder-bolt/thunder-bolt-perform! {:player-id "p4" :ctx-id "ctx-4" :exp 0.1})
       (is (empty? @potion*)))))
-

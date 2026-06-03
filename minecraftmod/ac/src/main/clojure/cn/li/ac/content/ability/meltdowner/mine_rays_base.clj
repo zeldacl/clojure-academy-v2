@@ -12,7 +12,8 @@
   - Mine-ray-luck grants fortune-style extra drops
 
   No Minecraft imports."
-  (:require            [cn.li.ac.ability.service.context-dispatcher :as ctx]
+  (:require            [cn.li.ac.ability.fx :as fx]
+            [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
                         [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.effects.geom :as geom]
@@ -70,9 +71,9 @@
                                    (double (or (get-in ctx-data [:skill-state :countdown]) 0.0))
                                    0.0)
                   new-countdown (+ prev-countdown countdown-delta)]
-              (ctx/ctx-send-to-client! ctx-id :mine-ray/fx-progress
-                                       {:x hx :y hy :z hz
-                                        :progress (min 1.0 new-countdown)})
+              (fx/send! ctx-id {:topic :mine-ray/fx-progress} nil
+                        {:x hx :y hy :z hz
+                         :progress (min 1.0 new-countdown)})
               (if (>= new-countdown 1.0)
                 (when (bm/can-break-block?* player-id world-id hx hy hz)
                   (if (pos? (long (or fortune-level 0)))

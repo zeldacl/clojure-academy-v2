@@ -22,35 +22,43 @@
 
 (deftest init-registers-rad-intensify-fx-channel-test
   (let [registered-level* (atom nil)
-        registered-handler* (atom nil)]
+        registered-topics* (atom #{})]
     (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
                                                          (reset! registered-level* [effect-id effect-map])
                                                          nil)
-                  fx-registry/register-fx-channels! (fn [channels handler]
-                                                      (reset! registered-handler* {:channels channels
-                                                                                   :handler handler})
+                  fx-registry/register-fx-channel! (fn [topic _handler]
+                                                      (swap! registered-topics* conj topic)
                                                       nil)]
       (rad-fx/init!)
       (is (= :rad-intensify-mark (first @registered-level*)))
       (is (fn? (:enqueue-state-fn (second @registered-level*))))
       (is (= #{:rad-intensify/fx-mark}
-             (set (:channels @registered-handler*)))))))
+             @registered-topics*)))))
 
 (deftest fx-handler-routes-mark-event-test
-  (let [handler* (atom nil)
+  (let [handlers* (atom {})
         enqueued* (atom [])]
     (with-redefs [level-effects/register-level-effect! (fn [& _] nil)
-                  fx-registry/register-fx-channels! (fn [_ handler]
-                                                      (reset! handler* handler)
+                  fx-registry/register-fx-channel! (fn [topic handler]
+                                                      (swap! handlers* assoc topic handler)
                                                       nil)
                   level-effects/enqueue-level-effect! (fn [effect-id payload fx-context]
                                                         (swap! enqueued* conj [effect-id payload fx-context])
                                                         nil)]
       (rad-fx/init!)
-      (@handler* "ctx-rad" :rad-intensify/fx-mark {:target-id "t-1" :ticks-left 60 :x 1.0 :y 64.0 :z 2.0})
+      ((get @handlers* :rad-intensify/fx-mark) "ctx-rad" :rad-intensify/fx-mark {:target-id "t-1" :ticks-left 60 :x 1.0 :y 64.0 :z 2.0})
       (is (= [[:rad-intensify-mark
-               {:target-id "t-1" :ticks-left 60 :x 1.0 :y 64.0 :z 2.0}
-               {:ctx-id "ctx-rad" :channel :rad-intensify/fx-mark}]]
+               {:owner-key [:ctx "ctx-rad"]
+                :ctx-id "ctx-rad"
+                :channel :rad-intensify/fx-mark
+                :target-id "t-1"
+                :ticks-left 60
+                :x 1.0
+                :y 64.0
+                :z 2.0}
+               {:ctx-id "ctx-rad"
+                :channel :rad-intensify/fx-mark
+                :owner-key [:ctx "ctx-rad"]}]]
              @enqueued*)))))
 
 (deftest mark-ttl-decays-and-expires-test

@@ -16,6 +16,7 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill]]
+            [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.util.balance :as bal]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
@@ -109,9 +110,7 @@
   (let [look-dir (normalize-look-dir look-vec)
     dir (geom/vnorm look-dir)
             end (geom/v+ start-pos (geom/v* dir (cfg-double :reflection.shot-distance)))]
-        (ctx/ctx-send-to-client! ctx-id :meltdowner/fx-reflect
-                                 {:mode  :reflect
-                                  :start start-pos
+        (fx/send! ctx-id {:topic :meltdowner/fx-reflect :mode :reflect} nil {:start start-pos
                                   :end   end})
         (let [hit (when (raycast/available?)
                     (raycast/raycast-entities*
@@ -185,7 +184,7 @@
     (when-let [floor (get-in (ctx/get-context ctx-id) [:skill-state :overload-floor])]
       (enforce-overload-floor! player-id floor))
     (when (> ticks (ticks-tolerant))
-      (ctx/ctx-send-to-client! ctx-id :meltdowner/fx-end {:performed? false})
+      (fx/send! ctx-id {:topic :meltdowner/fx-end} nil {:performed? false})
       (ctx/terminate-context! ctx-id nil)
       (log/debug "Meltdowner aborted: over tolerant ticks" ticks))))
 
@@ -195,7 +194,7 @@
         exp   (skill-exp player-id)]
     (if (< ticks (ticks-min))
       (do
-        (ctx/ctx-send-to-client! ctx-id :meltdowner/fx-end {:performed? false})
+        (fx/send! ctx-id {:topic :meltdowner/fx-end} nil {:performed? false})
         (ctx/terminate-context! ctx-id nil)
         (log/debug "Meltdowner: insufficient charge ticks" ticks))
       (let [{:keys [performed? reflection-hit?]}
@@ -210,11 +209,11 @@
                                              (int (* (time-rate ct)
                                                      (cfg-double :cooldown.base-multiplier)
                                                      (cfg-lerp :cooldown.ticks exp))))
-            (ctx/ctx-send-to-client! ctx-id :meltdowner/fx-end {:performed? true})
+            (fx/send! ctx-id {:topic :meltdowner/fx-end} nil {:performed? true})
             (ctx/terminate-context! ctx-id nil)
             (log/debug "Meltdowner performed; reflection?" (boolean reflection-hit?)))
           (do
-            (ctx/ctx-send-to-client! ctx-id :meltdowner/fx-end {:performed? false})
+            (fx/send! ctx-id {:topic :meltdowner/fx-end} nil {:performed? false})
             (ctx/terminate-context! ctx-id nil)
             (log/debug "Meltdowner: beam failed")))))))
 
@@ -260,13 +259,11 @@
                     :tick!      meltdowner-on-tick!
                     :up!        meltdowner-on-up!
                     :abort!     (fn [{:keys [ctx-id]}]
-                                  (ctx/ctx-send-to-client! ctx-id :meltdowner/fx-end
-                                                           {:performed? false})
+                                  (fx/send! ctx-id {:topic :meltdowner/fx-end} nil {:performed? false})
                                   (ctx/terminate-context! ctx-id nil))
                     :cost-fail! (fn [{:keys [ctx-id cost-stage]}]
                                   (when (= cost-stage :tick)
-                                    (ctx/ctx-send-to-client! ctx-id :meltdowner/fx-end
-                                                             {:performed? false}))
+                                    (fx/send! ctx-id {:topic :meltdowner/fx-end} nil {:performed? false}))
                                   (ctx/terminate-context! ctx-id nil))}
   :prerequisites   [{:skill-id :scatter-bomb :min-exp 0.8}
                     {:skill-id :light-shield :min-exp 0.8}])

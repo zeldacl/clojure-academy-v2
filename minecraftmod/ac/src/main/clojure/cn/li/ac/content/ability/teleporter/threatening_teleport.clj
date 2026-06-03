@@ -11,6 +11,7 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill]]
+            [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
@@ -125,15 +126,15 @@
     (set-skill-state-root! ctx-id {:hold-ticks (long hold-ticks)
                      :trace trace})
     (when trace
-      (ctx/ctx-send-to-client! ctx-id :threatening-tp/fx-update
-                               {:start-x (:start-x trace)
-                                :start-y (:start-y trace)
-                                :start-z (:start-z trace)
-                                :drop-x (:drop-x trace)
-                                :drop-y (:drop-y trace)
-                                :drop-z (:drop-z trace)
-                                :attacked? (:attacked? trace)
-                                :target-uuid (:target-uuid trace)}))))
+      (fx/send! ctx-id {:topic :threatening-teleport/fx-update :mode :update} nil
+                {:start-x (:start-x trace)
+                 :start-y (:start-y trace)
+                 :start-z (:start-z trace)
+                 :drop-x (:drop-x trace)
+                 :drop-y (:drop-y trace)
+                 :drop-z (:drop-z trace)
+                 :attacked? (:attacked? trace)
+                 :target-uuid (:target-uuid trace)}))))
 
 (defn threatening-tp-up!
   [{:keys [player-id ctx-id player cost-ok?]}]
@@ -154,29 +155,29 @@
             (let [damage-result (when attacked?
                                   (helper/deal-magic-damage! player-id world-id target-uuid damage))]
               (when (helper/crit-applied? damage-result)
-                (ctx/ctx-send-to-client! ctx-id :teleporter/fx-crit-hit
-                                         {:x (:drop-x trace)
-                                          :y (:drop-y trace)
-                                          :z (:drop-z trace)
-                                          :crit-level (:crit-level damage-result)
-                                          :crit-rate (:crit-rate damage-result)
-                                          :message-key (:message-key damage-result)
-                                          :message-args (:message-args damage-result)
-                                          :target-uuid target-uuid
-                                          :skill-id threatening-teleport-skill-id}))
+                (fx/send! ctx-id {:topic :teleporter/fx-crit-hit} nil
+                          {:x (:drop-x trace)
+                           :y (:drop-y trace)
+                           :z (:drop-z trace)
+                           :crit-level (:crit-level damage-result)
+                           :crit-rate (:crit-rate damage-result)
+                           :message-key (:message-key damage-result)
+                           :message-args (:message-args damage-result)
+                           :target-uuid target-uuid
+                           :skill-id threatening-teleport-skill-id}))
               (skill-effects/add-skill-exp! player-id threatening-teleport-skill-id (exp-gain attacked?))
               (let [cd (helper/cfg-lerp-int threatening-teleport-skill-id :cooldown.ticks exp)]
                 (skill-effects/set-main-cooldown! player-id threatening-teleport-skill-id cd))
               (ach-dispatcher/trigger-custom-event! player-id "teleporter.threatening_teleport")
-              (ctx/ctx-send-to-client! ctx-id :threatening-tp/fx-perform
-                                       {:start-x (:start-x trace)
-                                        :start-y (:start-y trace)
-                                        :start-z (:start-z trace)
-                                        :drop-x (:drop-x trace)
-                                        :drop-y (:drop-y trace)
-                                        :drop-z (:drop-z trace)
-                                        :attacked? attacked?
-                                        :dropped? drop?}))))))
+              (fx/send! ctx-id {:topic :threatening-teleport/fx-perform :mode :perform} nil
+                        {:start-x (:start-x trace)
+                         :start-y (:start-y trace)
+                         :start-z (:start-z trace)
+                         :drop-x (:drop-x trace)
+                         :drop-y (:drop-y trace)
+                         :drop-z (:drop-z trace)
+                         :attacked? attacked?
+                         :dropped? drop?}))))))
     (catch Exception e
       (log/warn "ThreateningTeleport up! failed:" (ex-message e)))))
 
@@ -216,8 +217,8 @@
                    :tick!  threatening-tp-tick!
                    :up!    threatening-tp-up!
                    :abort! threatening-tp-abort!}
-  :fx             {:start {:topic :threatening-tp/fx-start :payload (fn [_] {})}
-                   :update {:topic :threatening-tp/fx-update :payload (fn [_] {})}
-                   :end   {:topic :threatening-tp/fx-end   :payload (fn [_] {})}}
+  :fx             {:start {:topic :threatening-teleport/fx-start :payload (fn [_] {})}
+                   :update {:topic :threatening-teleport/fx-update :payload (fn [_] {})}
+                   :end   {:topic :threatening-teleport/fx-end   :payload (fn [_] {})}}
   :prerequisites  [])
 

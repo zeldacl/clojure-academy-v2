@@ -1,5 +1,6 @@
 (ns cn.li.ac.content.ability.vecmanip.vec-deviation-test
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
+            [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
@@ -95,11 +96,13 @@
                    ctx-skill/update-skill-state-root!
                    (fn [_a# _b# & _rest#] nil)
                    world-effects/find-entities-in-radius*
-                   (fn [_a# _b# _c# _d# _e# _f#] [(arrow-entity)])
+                   (fn [& _#] [(arrow-entity)])
+                   world-effects/available? (constantly true)
                    entity-motion/set-velocity!*
-                   (fn [_a# _b# _c# _d# _e# _f#] (swap! set-vel-calls# conj :called))
+                   (fn [& _#] (swap! set-vel-calls# conj :called))
                    entity-motion/discard-entity!*
-                   (fn [_a# _b# _c#] nil)
+                   (fn [& _#] nil)
+                   entity-motion/available? (constantly true)
                    skill-effects/perform-resource!
                    (fn [_a# _b# cp# _d#]
                      (swap! consume-calls# conj cp#)
@@ -109,7 +112,7 @@
                    arbitration/dual-active?    (fn [_p#] dual?#)
                    arbitration/claim-projectile! (fn [_a# _b# _c#] claim?#)
                    cn.li.ac.content.ability.vecmanip.arbitration/current-tick (fn [] 999)
-                   ctx/ctx-send-to-client! (fn [_a# _b# _c#] nil)]
+                   fx/send! (fn [& _fx#] nil)]
        ~@body)))
 
 ;; ---------------------------------------------------------------------------

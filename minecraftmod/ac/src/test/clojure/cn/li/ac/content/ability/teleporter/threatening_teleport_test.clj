@@ -4,6 +4,8 @@
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
+            [cn.li.ac.ability.fx :as fx]
+            [cn.li.ac.test.support.fx-mocks :as fx-mocks]
             [cn.li.ac.content.ability.teleporter.threatening-teleport :as tt]
             [cn.li.ac.content.ability.teleporter.tp-skill-helper :as helper]
             [cn.li.ac.ability.effects.geom :as geom]
@@ -15,7 +17,11 @@
     {:ctx* ctx*
      :get-context (fn [_] @ctx*)
      :update-skill-state-root! (fn [_ f & args]
-                        (swap! ctx* update :skill-state (fn [ss] (apply f (or ss {}) args))))}))
+                                 (swap! ctx* update :skill-state
+                                        (fn [ss]
+                                          (if (and (= f identity) (= 1 (count args)))
+                                            (first args)
+                                            (apply f (or ss {}) args)))))}))
 
 (deftest threatening-tp-up-cost-fail-no-side-effects-test
   (let [{:keys [get-context]} (make-context-mocks {:skill-state {:trace {:world-id "w"
@@ -30,7 +36,7 @@
                   helper/deal-magic-damage! (fn [& _] (swap! damage-calls* inc))
                   skill-effects/add-skill-exp! (fn [& _] (swap! exp-calls* inc))
                   skill-effects/set-main-cooldown! (fn [& _] (swap! cooldown-calls* inc))
-                  ctx/ctx-send-to-client! (fn [& _] (swap! fx-calls* inc))
+                  fx/send! (fn [& _] (swap! fx-calls* inc))
                   ach-dispatcher/trigger-custom-event! (fn [& _] (swap! ach-calls* inc))]
       (tt/threatening-tp-up! {:player-id "p1" :ctx-id "ctx-1" :player :player :cost-ok? false}))
 
@@ -42,31 +48,32 @@
 
 (deftest threatening-tp-tick-updates-trace-and-sends-update-fx-test
   (let [{:keys [ctx* get-context update-skill-state-root!]} (make-context-mocks {:skill-state {}})
-        fx-updates* (atom [])]
+        {:keys [calls* send!]} (fx-mocks/capture-fx-send!)]
     (with-redefs [ctx/get-context get-context
                   ctx-skill/update-skill-state-root! update-skill-state-root!
-                  ctx/ctx-send-to-client! (fn [_ctx-id channel payload]
-                                            (swap! fx-updates* conj [channel payload]))
+                  fx/send! send!
                   helper/skill-exp (fn [_ _] 0.5)
                   helper/cfg-lerp (fn [_ _ _] 12.0)
                   helper/player-position (fn [_] {:x 1.0 :y 2.0 :z 3.0})
                   helper/player-look-vec (fn [_] {:x 0.0 :y 0.0 :z 1.0})
                   geom/world-id-of (fn [_] "minecraft:overworld")
+                  raycast/available? (constantly true)
                   raycast/raycast-combined* (fn [& _]
-                                             {:hit-type :entity
-                                              :entity-uuid "enemy"
-                                              :hit-x 4.0 :hit-y 5.0 :hit-z 6.0
-                                              :distance 7.0})]
-        (tt/threatening-tp-tick! {:player-id "p1" :ctx-id "ctx-2" :hold-ticks 9})))
+                                              {:hit-type :entity
+                                               :entity-uuid "enemy"
+                                               :hit-x 4.0 :hit-y 5.0 :hit-z 6.0
+                                               :distance 7.0})]
+      (tt/threatening-tp-tick! {:player-id "p1" :ctx-id "ctx-2" :hold-ticks 9}))
 
     (is (= 9 (get-in @ctx* [:skill-state :hold-ticks])))
     (is (= true (get-in @ctx* [:skill-state :trace :attacked?])))
     (is (= "enemy" (get-in @ctx* [:skill-state :trace :target-uuid])))
-    (is (= [[:threatening-tp/fx-update {:start-x 1.0 :start-y 3.62 :start-z 3.0
-                                         :drop-x 4.0 :drop-y 5.0 :drop-z 6.0
-                                         :attacked? true
-                                         :target-uuid "enemy"}]]
-          @fx-updates*))))
+    (is (= [["ctx-2" :threatening-teleport/fx-update :update
+             {:start-x 1.0 :start-y 3.62 :start-z 3.0
+              :drop-x 4.0 :drop-y 5.0 :drop-z 6.0
+              :attacked? true
+              :target-uuid "enemy"}]]
+           @calls*))))
 
 (deftest threatening-tp-up-hit-success-test
   (let [{:keys [get-context]} (make-context-mocks {:skill-state {:trace {:world-id "minecraft:overworld"
@@ -78,10 +85,10 @@
         exp-calls* (atom [])
         cooldown-calls* (atom [])
         fx-calls* (atom [])
+        crit-fx-calls* (atom [])
         ach-calls* (atom [])
         consume-calls* (atom 0)
-        drop-calls* (atom [])
-        crit-fx-calls* (atom [])]
+        drop-calls* (atom [])]
     (with-redefs [ctx/get-context get-context
                   helper/skill-exp (fn [_ _] 0.5)
                   helper/cfg-lerp (fn [_ field _]
@@ -123,10 +130,11 @@
                                                  (swap! exp-calls* conj [player-id skill-id amount]))
                   skill-effects/set-main-cooldown! (fn [player-id skill-id ticks]
                                                      (swap! cooldown-calls* conj [player-id skill-id ticks]))
-                  ctx/ctx-send-to-client! (fn [_ctx-id channel payload]
-                                            (swap! fx-calls* conj [channel payload])
-                                            (when (= channel :teleporter/fx-crit-hit)
-                                              (swap! crit-fx-calls* conj payload)))
+                  fx/send! (fn [ctx-id entry _evt payload]
+                             (swap! fx-calls* conj [(:topic entry) payload])
+                             (when (= (:topic entry) :teleporter/fx-crit-hit)
+                               (swap! crit-fx-calls* conj payload))
+                             nil)
                   ach-dispatcher/trigger-custom-event! (fn [player-id event-id]
                                                          (swap! ach-calls* conj [player-id event-id]))
                   rand (fn [] 0.0)]
@@ -138,8 +146,8 @@
     (is (= [["p1" :threatening-teleport 0.003]] @exp-calls*))
     (is (= [["p1" :threatening-teleport 22]] @cooldown-calls*))
     (is (= [["p1" "teleporter.threatening_teleport"]] @ach-calls*))
-    (let [perform-payload (some (fn [[ch payload]]
-                                  (when (= ch :threatening-tp/fx-perform)
+    (let [perform-payload (some (fn [[topic payload]]
+                                  (when (= topic :threatening-teleport/fx-perform)
                                     payload))
                                 @fx-calls*)]
       (is (some? perform-payload))
@@ -191,13 +199,13 @@
                   skill-effects/add-skill-exp! (fn [& _] nil)
                   skill-effects/set-main-cooldown! (fn [& _] nil)
                   ach-dispatcher/trigger-custom-event! (fn [& _] nil)
-                  ctx/ctx-send-to-client! (fn [_ctx-id channel payload]
-                                            (swap! fx-calls* conj [channel payload])
-                                            (when (= channel :teleporter/fx-crit-hit)
-                                              (swap! crit-fx-calls* conj payload)))
+                  fx/send! (fn [_ctx-id entry _evt payload]
+                             (swap! fx-calls* conj [(:topic entry) payload])
+                             (when (= (:topic entry) :teleporter/fx-crit-hit)
+                               (swap! crit-fx-calls* conj payload))
+                             nil)
                   rand (fn [] 0.0)]
       (tt/threatening-tp-up! {:player-id "p1" :ctx-id "ctx-4" :player :player :cost-ok? true}))
 
     (is (empty? @crit-fx-calls*))
-    (is (some (fn [[channel _]] (= channel :threatening-tp/fx-perform)) @fx-calls*))))
-
+    (is (some (fn [[topic _]] (= topic :threatening-teleport/fx-perform)) @fx-calls*))))

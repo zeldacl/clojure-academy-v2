@@ -4,6 +4,8 @@
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
+            [cn.li.ac.ability.fx :as fx]
+            [cn.li.ac.test.support.fx-mocks :as fx-mocks]
             [cn.li.ac.content.ability.teleporter.penetrate-teleport :as pt]
             [cn.li.ac.content.ability.teleporter.tp-skill-helper :as helper]
             [cn.li.ac.ability.effects.geom :as geom]))
@@ -15,7 +17,7 @@
      :listeners* listeners*
      :get-context (fn [_] @ctx*)
      :update-skill-state-root! (fn [_ f & args]
-                        (swap! ctx* update :skill-state (fn [ss] (apply f (or ss {}) args))))
+                                 (swap! ctx* update :skill-state (fn [ss] (apply f (or ss {}) args))))
      :ctx-on! (fn [_ channel handler]
                 (swap! listeners* assoc channel handler)
                 nil)}))
@@ -63,7 +65,7 @@
 (deftest penetrate-up-success-and-cost-fail-side-effects-test
   (let [exp-calls* (atom [])
         cooldown-calls* (atom [])
-        fx-calls* (atom [])
+        {:keys [calls* send!]} (fx-mocks/capture-fx-send!)
         ach-calls* (atom [])
         teleport-calls* (atom [])]
     (with-redefs [pt/ensure-up-resolve! (fn [_ctx-id _player-id]
@@ -81,8 +83,7 @@
                                                  (swap! exp-calls* conj [player-id skill-id amount]))
                   skill-effects/set-main-cooldown! (fn [player-id skill-id ticks]
                                                      (swap! cooldown-calls* conj [player-id skill-id ticks]))
-                  ctx/ctx-send-to-client! (fn [ctx-id channel payload]
-                                            (swap! fx-calls* conj [ctx-id channel payload]))
+                  fx/send! send!
                   ach-dispatcher/trigger-custom-event! (fn [player-id event-id]
                                                          (swap! ach-calls* conj [player-id event-id]))]
       (pt/penetrate-tp-up! {:player-id "p1" :ctx-id "ctx-ok" :cost-ok? true})
@@ -91,6 +92,5 @@
     (is (= [["p1" "minecraft:overworld" 10.0 64.0 12.0]] @teleport-calls*))
     (is (= [["p1" :penetrate-teleport 0.008]] @exp-calls*))
     (is (= [["p1" :penetrate-teleport 40]] @cooldown-calls*))
-    (is (= [["ctx-ok" :penetrate-tp/fx-perform {:x 10.0 :y 64.0 :z 12.0}]] @fx-calls*))
+    (is (= [["ctx-ok" :penetrate-teleport/fx-perform :perform {:x 10.0 :y 64.0 :z 12.0}]] @calls*))
     (is (= [["p1" "teleporter.ignore_barrier"]] @ach-calls*))))
-

@@ -2,7 +2,7 @@
 	"Client FX for VecAccel: trajectory preview ribbon."
 	(:require [cn.li.ac.ability.client.effects.beam-ops :as fx-beam]
 						[cn.li.ac.ability.client.effects.sounds :as client-sounds]
-						[cn.li.ac.ability.client.fx-registry :as fx-registry]
+						[cn.li.ac.ability.client.fx-spec :as fx-spec]
 						[cn.li.ac.ability.client.level-effects :as level-effects]))
 
 (def ^:private vec-accel-effect-id :vec-accel)
@@ -140,37 +140,21 @@
 
 (defn init!
 	[]
-	(level-effects/register-level-effect! vec-accel-effect-id
-		{:initial-state (default-vec-accel-fx-runtime-state)
-		 :enqueue-state-fn enqueue-state!
-		 :tick-state-fn tick-state!
-		 :build-plan-fn build-plan})
-	(fx-registry/register-fx-channels!
-		[:vec-accel/fx-start :vec-accel/fx-update :vec-accel/fx-perform :vec-accel/fx-end]
-		(fn [ctx-id channel payload]
-			(case channel
-				:vec-accel/fx-start
-				(level-effects/enqueue-level-effect! vec-accel-effect-id
-					(merge (select-keys payload [:effect-instance-id :source-player-id :world-id])
-								 {:mode :start})
-					{:ctx-id ctx-id :channel channel})
-				:vec-accel/fx-update
-				(level-effects/enqueue-level-effect! vec-accel-effect-id
-					(merge (select-keys payload [:effect-instance-id :source-player-id :world-id])
-								 {:mode :update
-									:charge-ticks (long (or (:charge-ticks payload) 0))
-									:can-perform? (boolean (:can-perform? payload))
-									:look-dir (:look-dir payload)
-									:init-vel (:init-vel payload)})
-					{:ctx-id ctx-id :channel channel})
-				:vec-accel/fx-perform
-				(level-effects/enqueue-level-effect! vec-accel-effect-id
-					(merge (select-keys payload [:effect-instance-id :source-player-id :world-id])
-								 {:mode :perform})
-					{:ctx-id ctx-id :channel channel})
-				:vec-accel/fx-end
-				(level-effects/enqueue-level-effect! vec-accel-effect-id
-					(merge (select-keys payload [:effect-instance-id :source-player-id :world-id])
-								 {:mode :end :performed? (boolean (:performed? payload))})
-					{:ctx-id ctx-id :channel channel}))))
+	(fx-spec/register!
+		{:id vec-accel-effect-id
+		 :level {:initial-state (default-vec-accel-fx-runtime-state)
+						 :enqueue-state-fn enqueue-state!
+						 :tick-state-fn tick-state!
+						 :build-plan-fn build-plan}
+		 :channels {:start {:topic :vec-accel/fx-start :mode :start}
+								:update {:topic :vec-accel/fx-update :mode :update
+												 :level-payload (fn [_ _ p]
+																				{:charge-ticks (long (or (:charge-ticks p) 0))
+																				 :can-perform? (boolean (:can-perform? p))
+																				 :look-dir (:look-dir p)
+																				 :init-vel (:init-vel p)})}
+								:perform {:topic :vec-accel/fx-perform :mode :perform}
+								:end {:topic :vec-accel/fx-end :mode :end
+											:level-payload (fn [_ _ p]
+																			 {:performed? (boolean (:performed? p))})}}})
 	nil)

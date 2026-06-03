@@ -16,6 +16,7 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill]]
+            [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
@@ -77,30 +78,26 @@
                              (cfg-lerp :cost.attack.cp exp))]
     (boolean success?)))
 
-(defn- send-fx-to-local-and-nearby! [ctx-id channel payload]
-  (ctx/ctx-send-to-client! ctx-id channel payload)
-  (ctx/ctx-send-to-except-local! ctx-id channel payload))
-
 (defn- send-start-fx! [ctx-id]
-  (send-fx-to-local-and-nearby! ctx-id :electron-missile/fx-start {}))
+  (fx/send-local-and-nearby! ctx-id {:topic :electron-missile/fx-start} nil {}))
 
 (defn- send-update-fx! [ctx-id ticks active-balls]
-  (send-fx-to-local-and-nearby! ctx-id :electron-missile/fx-update
-                                {:ticks ticks
-                                 :balls active-balls}))
+  (fx/send-local-and-nearby! ctx-id {:topic :electron-missile/fx-update} nil
+                               {:ticks ticks
+                                :balls active-balls}))
 
 (defn- send-fire-fx! [ctx-id start-pos target]
-  (send-fx-to-local-and-nearby! ctx-id :electron-missile/fx-fire
-                                {:target-x (:x target)
-                                 :target-y (:y target)
-                                 :target-z (:z target)
-                                 :start start-pos
-                                 :end {:x (:x target)
-                                       :y (+ (double (:y target)) (double (or (:eye-height target) 0.0)))
-                                       :z (:z target)}}))
+  (fx/send-local-and-nearby! ctx-id {:topic :electron-missile/fx-fire} nil
+                               {:target-x (:x target)
+                                :target-y (:y target)
+                                :target-z (:z target)
+                                :start start-pos
+                                :end {:x (:x target)
+                                      :y (+ (double (:y target)) (double (or (:eye-height target) 0.0)))
+                                      :z (:z target)}}))
 
 (defn- send-end-fx! [ctx-id]
-  (send-fx-to-local-and-nearby! ctx-id :electron-missile/fx-end {}))
+  (fx/send-local-and-nearby! ctx-id {:topic :electron-missile/fx-end} nil {}))
 
 (defn- set-skill-state-root!
   [ctx-id state-map]

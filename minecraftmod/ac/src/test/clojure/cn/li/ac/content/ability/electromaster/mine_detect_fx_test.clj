@@ -34,40 +34,49 @@
 
 (deftest init-registers-mine-detect-fx-channels-test
   (let [registered-effect* (atom nil)
-        registered-handler* (atom nil)]
+        registered-topics* (atom #{})]
     (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
                                                           (reset! registered-effect* [effect-id effect-map])
                                                           nil)
-                  fx-registry/register-fx-channels! (fn [channels handler]
-                                                      (reset! registered-handler* {:channels channels
-                                                                                   :handler handler})
+                  fx-registry/register-fx-channel! (fn [topic _handler]
+                                                      (swap! registered-topics* conj topic)
                                                       nil)]
       (mine-detect-fx/init!)
       (is (= :mine-detect (first @registered-effect*)))
       (is (= #{:mine-detect/fx-perform :mine-detect/fx-end}
-             (set (:channels @registered-handler*)))))))
+             @registered-topics*)))))
 
 (deftest fx-handler-routes-perform-and-end-test
-  (let [handler* (atom nil)
+  (let [handlers* (atom {})
         enqueued* (atom [])]
     (with-redefs [level-effects/register-level-effect! (fn [& _] nil)
-                  fx-registry/register-fx-channels! (fn [_ handler]
-                                                      (reset! handler* handler)
+                  fx-registry/register-fx-channel! (fn [topic handler]
+                                                      (swap! handlers* assoc topic handler)
                                                       nil)
                   level-effects/enqueue-level-effect! (fn [effect-id payload fx-context]
                                                         (swap! enqueued* conj [effect-id payload fx-context])
                                                         nil)]
       (mine-detect-fx/init!)
-      (@handler* "ctx" :mine-detect/fx-perform {:range 30.0 :advanced? true :life-ticks 100 :rescan-interval 5})
-      (@handler* "ctx" :mine-detect/fx-end {})
+      ((get @handlers* :mine-detect/fx-perform) "ctx" :mine-detect/fx-perform {:range 30.0 :advanced? true :life-ticks 100 :rescan-interval 5})
+      ((get @handlers* :mine-detect/fx-end) "ctx" :mine-detect/fx-end {})
       (is (= [[:mine-detect {:mode :perform
+                             :owner-key [:ctx "ctx"]
+                             :ctx-id "ctx"
+                             :channel :mine-detect/fx-perform
                              :range 30.0
                              :advanced? true
                              :life-ticks 100
                              :rescan-interval 5}
-               {:ctx-id "ctx" :channel :mine-detect/fx-perform}]
-              [:mine-detect {:mode :end}
-               {:ctx-id "ctx" :channel :mine-detect/fx-end}]]
+               {:ctx-id "ctx"
+                :channel :mine-detect/fx-perform
+                :owner-key [:ctx "ctx"]}]
+              [:mine-detect {:mode :end
+                             :owner-key [:ctx "ctx"]
+                             :ctx-id "ctx"
+                             :channel :mine-detect/fx-end}
+               {:ctx-id "ctx"
+                :channel :mine-detect/fx-end
+                :owner-key [:ctx "ctx"]}]]
              @enqueued*)))))
 
 (deftest enqueue-perform-queues-sound-and-initializes-state-test

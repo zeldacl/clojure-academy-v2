@@ -1,7 +1,7 @@
 (ns cn.li.ac.content.ability.teleporter.flashing-fx
 	"Client FX for Flashing: movement preview + perform burst + cleanup."
 	(:require [cn.li.ac.ability.client.level-effects :as level-effects]
-						[cn.li.ac.ability.client.fx-registry :as fx-registry]
+						[cn.li.ac.ability.client.fx-spec :as fx-spec]
 						[cn.li.ac.ability.client.effects.particles :as client-particles]
 						[cn.li.ac.ability.client.effects.sounds :as client-sounds]))
 
@@ -113,56 +113,26 @@
 (defn- build-plan [_cp _hcp _tick]
 	nil)
 
+(defn- preview-to-payload [_ctx-id _channel p]
+	{:to-x (:to-x p) :to-y (:to-y p) :to-z (:to-z p)})
+
 (defn init!
 	[]
-	(level-effects/register-level-effect! flashing-effect-id
-		{:initial-state (default-flashing-fx-runtime-state)
-		 :enqueue-state-fn enqueue-state!
-		 :tick-state-fn tick-state!
-		 :build-plan-fn build-plan})
-	(fx-registry/register-fx-channels!
-		[:flashing/fx-state-start
-		 :flashing/fx-preview-start
-		 :flashing/fx-preview-update
-		 :flashing/fx-preview-end
-		 :flashing/fx-perform
-		 :flashing/fx-state-end]
-		(fn [ctx-id channel payload]
-			(let [meta-payload (select-keys payload [:effect-instance-id :source-player-id :world-id])]
-				(case channel
-					:flashing/fx-state-start
-					(level-effects/enqueue-level-effect! :flashing (merge meta-payload {:mode :state-start})
-																							 {:ctx-id ctx-id :channel channel})
-
-					:flashing/fx-preview-start
-					(level-effects/enqueue-level-effect! :flashing
-						(merge meta-payload
-									 {:mode :preview-start
-										:to-x (:to-x payload) :to-y (:to-y payload) :to-z (:to-z payload)})
-						{:ctx-id ctx-id :channel channel})
-
-					:flashing/fx-preview-update
-					(level-effects/enqueue-level-effect! :flashing
-						(merge meta-payload
-									 {:mode :preview-update
-										:to-x (:to-x payload) :to-y (:to-y payload) :to-z (:to-z payload)})
-						{:ctx-id ctx-id :channel channel})
-
-					:flashing/fx-preview-end
-					(level-effects/enqueue-level-effect! :flashing (merge meta-payload {:mode :preview-end})
-																							 {:ctx-id ctx-id :channel channel})
-
-					:flashing/fx-perform
-					(level-effects/enqueue-level-effect! :flashing
-						(merge meta-payload
-									 {:mode :perform
-										:from-x (:from-x payload) :from-y (:from-y payload) :from-z (:from-z payload)
-										:to-x (:to-x payload) :to-y (:to-y payload) :to-z (:to-z payload)})
-						{:ctx-id ctx-id :channel channel})
-
-					:flashing/fx-state-end
-					(level-effects/enqueue-level-effect! :flashing (merge meta-payload {:mode :state-end})
-																							 {:ctx-id ctx-id :channel channel})
-
-					nil))))
+	(fx-spec/register!
+		{:id flashing-effect-id
+		 :level {:initial-state (default-flashing-fx-runtime-state)
+						 :enqueue-state-fn enqueue-state!
+						 :tick-state-fn tick-state!
+						 :build-plan-fn build-plan}
+		 :channels {:state-start {:topic :flashing/fx-state-start :mode :state-start}
+								:preview-start {:topic :flashing/fx-preview-start :mode :preview-start
+																:level-payload preview-to-payload}
+								:preview-update {:topic :flashing/fx-preview-update :mode :preview-update
+																 :level-payload preview-to-payload}
+								:preview-end {:topic :flashing/fx-preview-end :mode :preview-end}
+								:perform {:topic :flashing/fx-perform :mode :perform
+													:level-payload (fn [_ctx-id _channel p]
+																					 (merge (preview-to-payload _ctx-id _channel p)
+																									{:from-x (:from-x p) :from-y (:from-y p) :from-z (:from-z p)}))}
+								:state-end {:topic :flashing/fx-state-end :mode :state-end}}})
 	nil)

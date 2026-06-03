@@ -1,7 +1,7 @@
 (ns cn.li.ac.content.ability.meltdowner.ray-barrage-fx
   "Client FX for RayBarrage skill: multi-beam flash with electric afterimages."
   (:require [cn.li.ac.ability.client.effects.sounds :as client-sounds]
-            [cn.li.ac.ability.client.fx-registry :as fx-registry]
+            [cn.li.ac.ability.client.fx-spec :as fx-spec]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.render-util :as ru]))
 
@@ -82,35 +82,34 @@
                              col)]))
             beams)}))
 
+(defn- preray-sound! [_ctx-id _channel _payload]
+  (client-sounds/queue-current-sound-effect!
+    {:type :sound :sound-id "my_mod:md.ray_barrage" :volume 0.35 :pitch 0.95}))
+
+(defn- barrage-sound! [_ctx-id _channel _payload]
+  (client-sounds/queue-current-sound-effect!
+    {:type :sound :sound-id "my_mod:md.ray_barrage" :volume 0.45 :pitch 1.1}))
+
 (defn init!
   []
-  (level-effects/register-level-effect! ray-barrage-effect-id
-    {:initial-state (default-ray-barrage-fx-runtime-state)
-     :enqueue-state-fn enqueue-state!
-     :tick-state-fn tick-state!
-     :build-plan-fn build-plan})
-  (fx-registry/register-fx-channels!
-    [:ray-barrage/fx-preray :ray-barrage/fx-barrage :ray-barrage/fx-beam]
-    (fn [ctx-id channel payload]
-      (case channel
-        :ray-barrage/fx-preray
-        (client-sounds/queue-current-sound-effect!
-          {:type :sound :sound-id "my_mod:md.ray_barrage" :volume 0.35 :pitch 0.95})
-
-        :ray-barrage/fx-barrage
-        (client-sounds/queue-current-sound-effect!
-          {:type :sound :sound-id "my_mod:md.ray_barrage" :volume 0.45 :pitch 1.1})
-
-        :ray-barrage/fx-beam
-        (let [origin (or (:start payload) (:origin payload))
-              beam-end (or (:end payload) (:beam-end payload))]
-          (when (and (map? origin) (map? beam-end))
-            (let [meta-payload (select-keys payload [:effect-instance-id :source-player-id :world-id])]
-              (level-effects/enqueue-level-effect! ray-barrage-effect-id
-                (merge meta-payload
-                       {:from-x (:x origin) :from-y (:y origin) :from-z (:z origin)
-                        :to-x (:x beam-end) :to-y (:y beam-end) :to-z (:z beam-end)})
-                {:ctx-id ctx-id :channel channel}))))
-
-        nil)))
+  (fx-spec/register!
+    {:id ray-barrage-effect-id
+     :level {:initial-state (default-ray-barrage-fx-runtime-state)
+             :enqueue-state-fn enqueue-state!
+             :tick-state-fn tick-state!
+             :build-plan-fn build-plan}
+     :channels {:preray {:topic :ray-barrage/fx-preray :targets [:immediate]
+                         :immediate-fn preray-sound!}
+                :barrage {:topic :ray-barrage/fx-barrage :targets [:immediate]
+                          :immediate-fn barrage-sound!}
+                :beam {:topic :ray-barrage/fx-beam
+                       :handler (fn [ctx-id channel payload]
+                                  (let [origin (or (:start payload) (:origin payload))
+                                        beam-end (or (:end payload) (:beam-end payload))]
+                                    (when (and (map? origin) (map? beam-end))
+                                      (level-effects/enqueue-level-effect! ray-barrage-effect-id
+                                        (merge (fx-spec/select-meta payload)
+                                               {:from-x (:x origin) :from-y (:y origin) :from-z (:z origin)
+                                                :to-x (:x beam-end) :to-y (:y beam-end) :to-z (:z beam-end)})
+                                        {:ctx-id ctx-id :channel channel}))))}}})
   nil)

@@ -6,6 +6,7 @@
   Cooldown: manual, lerp(60,40) ticks by exp
   Exp:      +0.005 on successful throw"
   (:require [clojure.string :as str]
+            [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.dsl :refer [defskill]]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
@@ -186,10 +187,9 @@
                             :hold-ticks 0
                             :held-block held-block
                             :focus focus})
-    (ctx/ctx-send-to-client! ctx-id :mag-manip/fx-hold
-                             {:mode :hold-start
-                              :focus focus
-                              :block-id (:block-id held-block)})))
+    (fx/send! ctx-id {:topic :mag-manip/fx-hold :mode :hold-start} nil
+              {:focus focus
+               :block-id (:block-id held-block)})))
 
 (defn- on-down [{:keys [player-id ctx-id player]}]
   (let [exp (skill-exp player-id)
@@ -238,10 +238,9 @@
           (set-skill-state-root! ctx-id
                                  (assoc ss :hold-ticks ticks :focus focus))
           (when (zero? (mod ticks 2))
-            (ctx/ctx-send-to-client! ctx-id :mag-manip/fx-hold
-                                     {:mode :hold-loop
-                                      :focus focus
-                                      :block-id (get-in ss [:held-block :block-id])})))))))
+            (fx/send! ctx-id {:topic :mag-manip/fx-hold :mode :hold-loop} nil
+                      {:focus focus
+                       :block-id (get-in ss [:held-block :block-id])})))))))
 
 ;; Original s_perform: check dist < 5 blocks, throw, damage always 10.
 ;; Cooldown and exp applied manually - only on successful throw.
@@ -260,14 +259,14 @@
             too-far?
             (do
               (release-or-rollback! player held-block)
-              (ctx/ctx-send-to-client! ctx-id :mag-manip/fx-end {:mode :end :reason :too-far})
+              (fx/send! ctx-id {:topic :mag-manip/fx-end :mode :end} nil {:reason :too-far})
               (set-skill-state-root! ctx-id
                                      (assoc ss :fired false :mode :too-far)))
 
             (not cost-ok?)
             (do
               (release-or-rollback! player held-block)
-              (ctx/ctx-send-to-client! ctx-id :mag-manip/fx-end {:mode :end :reason :no-resource})
+              (fx/send! ctx-id {:topic :mag-manip/fx-end :mode :end} nil {:reason :no-resource})
               (set-skill-state-root! ctx-id
                                      (assoc ss :fired false :mode :no-resource)))
 
@@ -312,13 +311,12 @@
               (when-not (try-place-thrown-block! world-id end (:block-id held-block))
                 (release-or-rollback! player held-block))
 
-              (ctx/ctx-send-to-client! ctx-id :mag-manip/fx-throw
-                                       {:mode :throw
-                                        :start start
-                                        :end end
-                                        :hit-type (:hit-type hit)
-                                        :block-id (:block-id held-block)})
-              (ctx/ctx-send-to-client! ctx-id :mag-manip/fx-end {:mode :end :reason :performed})
+              (fx/send! ctx-id {:topic :mag-manip/fx-throw :mode :throw} nil
+                        {:start start
+                         :end end
+                         :hit-type (:hit-type hit)
+                         :block-id (:block-id held-block)})
+              (fx/send! ctx-id {:topic :mag-manip/fx-end :mode :end} nil {:reason :performed})
 
               ;; Manual cooldown and exp - only on successful throw
               (skill-effects/set-main-cooldown! player-id mag-manip-skill-id
@@ -336,7 +334,7 @@
   (when-let [ctx-data (ctx/get-context ctx-id)]
     (when-let [held (get-in ctx-data [:skill-state :held-block])]
       (release-or-rollback! player held)
-      (ctx/ctx-send-to-client! ctx-id :mag-manip/fx-end {:mode :end :reason :abort}))
+      (fx/send! ctx-id {:topic :mag-manip/fx-end :mode :end} nil {:reason :abort}))
     (clear-skill-state! ctx-id)))
 
 ;; --- Skill definition ---

@@ -3,7 +3,6 @@
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.hand-effects :as hand-effects]
-            [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.content.ability.electromaster.mag-manip-fx :as mag-manip-fx]))
 
 (defn- with-fresh-mag-manip-fx-runtime [f]
@@ -20,48 +19,37 @@
 (use-fixtures :each with-fresh-mag-manip-fx-runtime)
 
 (deftest init-registers-mag-manip-fx-channels-test
-  (let [registered-level* (atom nil)
-        registered-hand* (atom nil)
-        registered-handler* (atom nil)]
-    (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
-                                                         (reset! registered-level* [effect-id effect-map])
-                                                         nil)
-                  hand-effects/register-hand-effect! (fn [effect-id effect-map]
+  (let [registered-hand* (atom nil)
+        registered-topics* (atom #{})]
+    (with-redefs [hand-effects/register-hand-effect! (fn [effect-id effect-map]
                                                        (reset! registered-hand* [effect-id effect-map])
                                                        nil)
-                  fx-registry/register-fx-channels! (fn [channels handler]
-                                                      (reset! registered-handler* {:channels channels
-                                                                                   :handler handler})
+                  fx-registry/register-fx-channel! (fn [topic _handler]
+                                                      (swap! registered-topics* conj topic)
                                                       nil)]
       (mag-manip-fx/init!)
-      (is (= :mag-manip (first @registered-level*)))
       (is (= :mag-manip (first @registered-hand*)))
       (is (= #{:mag-manip/fx-hold
                :mag-manip/fx-throw
                :mag-manip/fx-end}
-             (set (:channels @registered-handler*)))))))
+             @registered-topics*)))))
 
 (deftest fx-handler-routes-hold-throw-end-and-queues-sounds-test
-  (let [handler* (atom nil)
-        hand-enqueued* (atom [])
-  level-enqueued* (atom [])]
-    (with-redefs [level-effects/register-level-effect! (fn [& _] nil)
-                  hand-effects/register-hand-effect! (fn [& _] nil)
-                  fx-registry/register-fx-channels! (fn [_ handler]
-                                                      (reset! handler* handler)
+  (let [handlers* (atom {})
+        hand-enqueued* (atom [])]
+    (with-redefs [hand-effects/register-hand-effect! (fn [& _] nil)
+                  fx-registry/register-fx-channel! (fn [topic handler]
+                                                      (swap! handlers* assoc topic handler)
                                                       nil)
                   hand-effects/enqueue-hand-effect! (fn [effect-id payload]
                                                       (swap! hand-enqueued* conj [effect-id payload])
-                                                      nil)
-                  level-effects/enqueue-level-effect! (fn [effect-id payload fx-context]
-                                                        (swap! level-enqueued* conj [effect-id payload fx-context])
                                                       nil)]
       (mag-manip-fx/init!)
-      (@handler* "ctx-1" :mag-manip/fx-hold {:mode :hold-start :block-id "minecraft:iron_block"})
-      (@handler* "ctx-1" :mag-manip/fx-hold {:mode :hold-loop :block-id "minecraft:iron_block"})
-      (@handler* "ctx-1" :mag-manip/fx-throw {:start {:x 0.0 :y 0.0 :z 0.0}
+      ((get @handlers* :mag-manip/fx-hold) "ctx-1" :mag-manip/fx-hold {:mode :hold-start :block-id "minecraft:iron_block"})
+      ((get @handlers* :mag-manip/fx-hold) "ctx-1" :mag-manip/fx-hold {:mode :hold-loop :block-id "minecraft:iron_block"})
+      ((get @handlers* :mag-manip/fx-throw) "ctx-1" :mag-manip/fx-throw {:start {:x 0.0 :y 0.0 :z 0.0}
                                                :end {:x 0.0 :y 0.0 :z 5.0}})
-      (@handler* "ctx-1" :mag-manip/fx-end {:mode :end :reason :performed})
+      ((get @handlers* :mag-manip/fx-end) "ctx-1" :mag-manip/fx-end {:mode :end :reason :performed})
 
       (is (= [[:mag-manip {:owner-key [:ctx "ctx-1"]
                            :ctx-id "ctx-1"
@@ -84,11 +72,7 @@
                            :channel :mag-manip/fx-end
                            :mode :end
                            :reason :performed}]]
-             @hand-enqueued*))
-      (is (= (mapv (fn [[effect-id payload]]
-                     [effect-id payload {:ctx-id "ctx-1" :channel (:channel payload)}])
-                   @hand-enqueued*)
-             @level-enqueued*)))))
+             @hand-enqueued*)))))
 
 (deftest two-owners-keep-mag-manip-state-independent-test
   (mag-manip-fx/reset-mag-manip-fx-for-test!)

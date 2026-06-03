@@ -9,6 +9,7 @@
   Cooldown: ticks * lerp(10,6,exp)
   Exp: 0.003 per use"
   (:require [cn.li.ac.ability.dsl :refer [defskill]]
+            [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.util.balance :as bal]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
@@ -197,9 +198,9 @@
    :cost-fail! (fn [{:keys [ctx-id cost-stage]}]
                  (mark-performed! ctx-id false)
                  (when (= cost-stage :tick)
-                   (ctx/ctx-send-to-client! ctx-id :thunder-clap/fx-end
-                                            (merge {:mode :end :ctx-id ctx-id}
-                                                   (end-payload {:ctx-id ctx-id}))))
+                   (fx/send! ctx-id {:topic :thunder-clap/fx-end :mode :end} nil
+                             (merge {:ctx-id ctx-id}
+                                    (end-payload {:ctx-id ctx-id}))))
                  (ctx/terminate-context! ctx-id nil))
    :abort!     (fn [{:keys [ctx-id]}]
                  (mark-performed! ctx-id false))}

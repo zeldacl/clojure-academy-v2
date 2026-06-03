@@ -2,7 +2,7 @@
   "Client FX for Magnetic Movement: beam between hand and target."
   (:require [cn.li.ac.ability.client.effects.beam-ops :as fx-beam]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
-            [cn.li.ac.ability.client.fx-registry :as fx-registry]
+            [cn.li.ac.ability.client.fx-spec :as fx-spec]
             [cn.li.ac.ability.client.level-effects :as level-effects]))
 
 (def ^:private loop-sound "my_mod:em.move_loop")
@@ -122,20 +122,13 @@
                                    (magnetic-beam-style tick)))})))
 
 (defn init! []
-  (level-effects/register-level-effect! mag-movement-effect-id
-    {:initial-state (default-mag-movement-fx-runtime-state)
-     :enqueue-state-fn enqueue-state!
-     :tick-state-fn tick-state!
-     :build-plan-fn build-plan})
-  (fx-registry/register-fx-channels!
-    [:mag-movement/fx-start :mag-movement/fx-update :mag-movement/fx-end]
-    (fn [ctx-id channel payload]
-      (let [mode (case channel
-                   :mag-movement/fx-start :start
-                   :mag-movement/fx-update :update
-                   :mag-movement/fx-end :end)]
-        (level-effects/enqueue-level-effect!
-          mag-movement-effect-id
-          (assoc payload :mode mode)
-          {:ctx-id ctx-id :channel channel}))))
+  (fx-spec/register!
+    {:id mag-movement-effect-id
+     :level {:initial-state (default-mag-movement-fx-runtime-state)
+             :enqueue-state-fn enqueue-state!
+             :tick-state-fn tick-state!
+             :build-plan-fn build-plan}
+     :channels {:start {:topic :mag-movement/fx-start :mode :start}
+                :update {:topic :mag-movement/fx-update :mode :update}
+                :end {:topic :mag-movement/fx-end :mode :end}}})
   nil)

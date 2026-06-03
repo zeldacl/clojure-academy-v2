@@ -1,7 +1,7 @@
 (ns cn.li.ac.content.ability.electromaster.arc-gen-fx
   "Client FX for Arc-Gen: short electric arc beam and weak arc sound."
   (:require [cn.li.ac.ability.client.effects.sounds :as client-sounds]
-            [cn.li.ac.ability.client.fx-registry :as fx-registry]
+            [cn.li.ac.ability.client.fx-spec :as fx-spec]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.render-util :as ru]))
 
@@ -108,18 +108,15 @@
       {:ops (vec ops)})))
 
 (defn init! []
-  (level-effects/register-level-effect! arc-gen-effect-id
-    {:initial-state (default-arc-gen-fx-runtime-state)
-     :enqueue-state-fn enqueue-state!
-     :tick-state-fn tick-state!
-     :build-plan-fn build-plan})
-  (fx-registry/register-fx-channel! :arc-gen/fx-perform
-    (fn [ctx-id channel payload]
-      (level-effects/enqueue-level-effect! arc-gen-effect-id
-        (merge (select-keys payload [:effect-instance-id :source-player-id :world-id])
-               {:mode :perform
-                :start (:start payload)
-                :end (:end payload)
-                :hit-type (:hit-type payload)})
-        {:ctx-id ctx-id :channel channel})))
+  (fx-spec/register!
+    {:id arc-gen-effect-id
+     :level {:initial-state (default-arc-gen-fx-runtime-state)
+             :enqueue-state-fn enqueue-state!
+             :tick-state-fn tick-state!
+             :build-plan-fn build-plan}
+     :channels {:perform {:topic :arc-gen/fx-perform :mode :perform
+                         :level-payload (fn [_ _ p]
+                                          {:start (:start p)
+                                           :end (:end p)
+                                           :hit-type (:hit-type p)})}}})
   nil)

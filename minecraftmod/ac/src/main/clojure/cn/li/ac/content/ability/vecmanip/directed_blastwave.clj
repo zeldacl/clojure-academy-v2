@@ -6,7 +6,7 @@
   Cooldown: lerp(80,50) ticks by exp
   Exp: +0.0025 on hit / +0.0012 on miss"
   (:require            [cn.li.ac.ability.dsl :refer [defskill]]
-            [cn.li.ac.content.ability.fx-helpers :as fx]
+            [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
@@ -52,7 +52,7 @@
 
 (defn- terminate-with-end!
   [ctx-id performed?]
-  (fx/send-end! ctx-id :directed-blastwave/fx-end {:performed? performed?})
+  (fx/send! ctx-id {:topic :directed-blastwave/fx-end :mode :end} nil {:performed? performed?})
   (when-let [ctx-data (ctx/get-context ctx-id)]
     (set-skill-state-root! ctx-id (assoc (:skill-state ctx-data) :performed? performed?)))
   (clear-skill-state! ctx-id)
@@ -149,9 +149,8 @@
              (set-skill-state-root! ctx-id
                                     {:charge-ticks 0 :punched? false
                                      :punch-ticks 0 :performed? false})
-             (fx/send-start! ctx-id :directed-blastwave/fx-start)
-             (fx/send-update! ctx-id :directed-blastwave/fx-update
-                              {:charge-ticks 0 :punched? false}))
+             (fx/send! ctx-id {:topic :directed-blastwave/fx-start :mode :start})
+             (fx/send! ctx-id {:topic :directed-blastwave/fx-update :mode :update} nil {:charge-ticks 0 :punched? false}))
    :tick!  (fn [{:keys [ctx-id]}]
              (when-let [ctx-data (ctx/get-context ctx-id)]
                (let [ss          (:skill-state ctx-data)
@@ -159,9 +158,9 @@
                      punched?    (boolean (:punched? ss))
                      next-punch  (if punched? (inc (long (or (:punch-ticks ss) 0))) 0)]
                  (set-skill-state-root! ctx-id (assoc ss :charge-ticks next-charge :punch-ticks next-punch))
-                 (fx/send-update! ctx-id :directed-blastwave/fx-update
-                                  {:charge-ticks (long (max 0 next-charge))
-                                   :punched? punched?})
+                 (fx/send! ctx-id {:topic :directed-blastwave/fx-update :mode :update} nil
+                           {:charge-ticks (long (max 0 next-charge))
+                            :punched? punched?})
                  (cond
                    (>= next-charge (cfg-int :charge.max-tolerant-ticks))
                    (terminate-with-end! ctx-id false)
@@ -204,8 +203,7 @@
                              (entity-motion/add-velocity!* world-id (:uuid entity)
                               (:x push) (:y push) (:z push)))))
                        (break-nearby-blocks! player-id world-id hit-pos exp*)
-                       (fx/send-perform! ctx-id :directed-blastwave/fx-perform
-                                         {:pos hit-pos
+                       (fx/send! ctx-id {:topic :directed-blastwave/fx-perform :mode :perform} nil {:pos hit-pos
                                           :look-dir (or look {:x 0.0 :y 0.0 :z 1.0})
                                           :charge-ticks (long (max 0 charge-ticks))})
                         (set-skill-state-root! ctx-id

@@ -2,14 +2,13 @@
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.ac.test.support.wireless-stubs :as stubs]
             [cn.li.ac.wireless.api :as wireless-api]
+            [cn.li.ac.wireless.core.capability-resolver :as resolver]
             [cn.li.ac.wireless.data.network-state :as network-state]
             [cn.li.ac.wireless.data.world-registry :as world-registry]
             [cn.li.ac.wireless.service.commands :as commands]
             [cn.li.ac.wireless.core.vblock :as vb]
-            [cn.li.ac.wireless.core.capability-resolver :as resolver]
             [cn.li.mcmod.platform.be :as platform-be]
-            [cn.li.mcmod.platform.events :as platform-events])
-  (:import [cn.li.acapi.wireless WirelessCapabilityKeys]))
+            [cn.li.mcmod.platform.events :as platform-events]))
 
 (deftest create-network-fires-topology-map-when-created
   (testing "create-network! posts map event when create succeeds"
@@ -38,7 +37,7 @@
                   vb/create-vmatrix (fn [_] :matrix-vb)
                   cn.li.ac.wireless.data.network-lookup/get-network-by-matrix (constantly nil)
                   commands/create-network! (fn [_ _ _ _] false)
-                  resolver/matrix-capability (fn [_] (stubs/fake-matrix))
+                  resolver/matrix-capability (constantly (stubs/fake-matrix))
                   platform-events/fire-event! (fn [evt] (swap! events conj evt))]
       (is (false? (wireless-api/create-network! :matrix-tile "ssid-a" "pw")))
       (is (empty? @events)))))
@@ -46,7 +45,7 @@
 (deftest destroy-network-fires-when-destroyed
   (let [events (atom [])
         matrix (stubs/fake-matrix)
-        net (network-state/create-wireless-net {:world :world} :matrix-vb "ssid-z" "pw")]
+      net (network-state/create-wireless-net {:world :world} :matrix-vb "ssid-z" "pw")]
     (with-redefs [wireless-api/get-wireless-net-by-matrix (fn [_] net)
                   platform-be/be-get-world-safe (fn [_] :world)
                   world-registry/get-world-data (fn [_] :world-data)
@@ -77,9 +76,9 @@
                     vb/create-vnode (fn [_] :node-vb)
                     commands/link-node-to-network! (fn [_ _ _ _] true)
                     resolver/matrix-capability (fn [tile]
-                                                 (when (= tile :matrix-tile) matrix))
+                                                   (when (= tile :matrix-tile) matrix))
                     resolver/node-capability (fn [tile]
-                                               (when (= tile :node-tile) node))
+                                                 (when (= tile :node-tile) node))
                     platform-events/fire-event! (fn [evt] (swap! events conj evt))]
         (is (true? (wireless-api/link-node-to-network! :node-tile :matrix-tile "pw")))
         (is (= 1 (count @events)))
@@ -101,7 +100,7 @@
                     vb/create-vgenerator (fn [_] :gen-vb)
                     commands/link-generator-to-connection! (fn [_ _ _] true)
                     resolver/node-capability (fn [tile]
-                                               (when (= tile :node-tile) node))
+                                                 (when (= tile :node-tile) node))
                     resolver/generator-capability (fn [tile]
                                                     (when (= tile :gen-tile) gen))
                     platform-events/fire-event! (fn [evt] (swap! events conj evt))]
@@ -124,7 +123,7 @@
                     vb/create-vreceiver (fn [_] :rec-vb)
                     commands/link-receiver-to-connection! (fn [_ _ _] true)
                     resolver/node-capability (fn [tile]
-                                               (when (= tile :node-tile) node))
+                                                 (when (= tile :node-tile) node))
                     resolver/receiver-capability (fn [tile]
                                                    (when (= tile :rec-tile) rec))
                     platform-events/fire-event! (fn [evt] (swap! events conj evt))]
@@ -133,4 +132,4 @@
         (let [event (first @events)]
           (is (= :receiver-linked (:action event)))
           (is (= node (:node event)))
-          (is (= rec (:receiver event)))))))))
+          (is (= rec (:receiver event))))))))

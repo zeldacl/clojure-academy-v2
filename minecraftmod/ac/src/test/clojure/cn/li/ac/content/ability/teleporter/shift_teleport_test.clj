@@ -4,6 +4,8 @@
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
+            [cn.li.ac.ability.fx :as fx]
+            [cn.li.ac.test.support.fx-mocks :as fx-mocks]
             [cn.li.ac.content.ability.teleporter.shift-teleport :as shift]
             [cn.li.ac.content.ability.teleporter.tp-skill-helper :as helper]
             [cn.li.mcmod.platform.entity :as entity]
@@ -12,13 +14,56 @@
 
 (def ^:private test-context-owner {:logical-side :server :session-id :test-session})
 
+(defn- make-context-mocks [initial-ctx]
+  (let [ctx* (atom initial-ctx)]
+    {:ctx* ctx*
+     :get-context (fn [& _] @ctx*)
+     :update-skill-state-root! (fn [_ f & args]
+                                 (swap! ctx* update :skill-state
+                                        (fn [ss]
+                                          (if (and (= f identity) (= 1 (count args)))
+                                            (first args)
+                                            (apply f (or ss {}) args)))))}))
+
+(defn- shift-tp-platform-redefs [block-hit entities]
+  [raycast/available? (constantly true)
+   raycast/raycast-blocks* (fn [& _] block-hit)
+   world-effects/available? (constantly true)
+   world-effects/find-entities-in-aabb* (fn [& _] entities)])
+
+(defn- shift-tp-trace
+  [entities & {:keys [eye drop dest place face target-hit?]
+               :or {eye {:x 1.0 :y 65.6 :z 3.0}
+                    drop [20.5 65.0 21.5]
+                    dest [20.5 65.0 21.5]
+                    place [20 65 21]
+                    face :up
+                    target-hit? true}}]
+  {:world-id "minecraft:overworld"
+   :eye-pos eye
+   :drop-x (nth drop 0) :drop-y (nth drop 1) :drop-z (nth drop 2)
+   :dest-x (nth dest 0) :dest-y (nth dest 1) :dest-z (nth dest 2)
+   :place-x (nth place 0) :place-y (nth place 1) :place-z (nth place 2)
+   :face face
+   :target-hit? target-hit?
+   :range 25.0
+   :exp 0.5
+   :entities entities})
+
+(defn- shift-tp-ctx-trace-redef [trace]
+  (make-context-mocks {:skill-state {:trace trace}}))
+
 (deftest shift-tp-up-place-success-hit-critical-emits-crit-fx-test
-  (let [exp-calls* (atom [])
+  (let [{:keys [get-context]} (shift-tp-ctx-trace-redef
+                               (shift-tp-trace [{:uuid "enemy-1" :x 12.0 :y 64.9 :z 13.4 :width 0.6 :height 1.8}
+                                                {:uuid "enemy-2" :x 13.0 :y 64.8 :z 14.3 :width 0.6 :height 1.8}]))
+        exp-calls* (atom [])
         cooldown-calls* (atom [])
         fx-calls* (atom [])
         damage-calls* (atom [])
         consume-calls* (atom [])]
-    (with-redefs [helper/skill-exp (fn [_ _] 0.5)
+    (with-redefs [ctx/get-context get-context
+                  helper/skill-exp (fn [_ _] 0.5)
                   helper/cfg-lerp (fn [_ field _]
                                     (case field
                                       :targeting.range 25.0
@@ -36,12 +81,6 @@
                   helper/player-position (fn [_] {:x 1.0 :y 64.0 :z 3.0})
                   helper/player-look-vec (fn [_] {:x 0.0 :y 0.0 :z 1.0})
                   geom/world-id-of (fn [_] "minecraft:overworld")
-                  raycast/raycast-blocks* (fn [& _] {:x 20 :y 64 :z 21 :face :up})
-                  world-effects/find-entities-in-aabb* (fn [& _]
-                                                        [{:uuid "enemy-1" :x 12.0 :y 64.9 :z 13.4 :width 0.6 :height 1.8}
-                                                         {:uuid "enemy-2" :x 13.0 :y 64.8 :z 14.3 :width 0.6 :height 1.8}
-                                                         {:uuid "p1" :x 1.0 :y 64.0 :z 3.0 :width 0.6 :height 1.8}
-                                                         {:uuid "off-line" :x 30.0 :y 65.0 :z 30.0 :width 0.6 :height 1.8}])
                   entity/player-main-hand-placeable-block? (fn [_] true)
                   entity/player-creative? (fn [_] false)
                   entity/player-drop-main-hand-item-at! (fn [& _] false)
@@ -69,12 +108,10 @@
                   skill-effects/set-main-cooldown! (fn [player-id skill-id ticks]
                                                      (swap! cooldown-calls* conj [player-id skill-id ticks])
                                                      nil)
-                  ctx/ctx-send-to-client! (fn [_ctx-id ch payload]
-                                            (swap! fx-calls* conj [ch payload])
-                                            nil)]
-            ctx/*context-owner* test-context-owner]
-        (shift/shift-tp-up! {:player-id "p1" :ctx-id "ctx-1" :player :player :cost-ok? true})))
-
+                  fx/send! (fn [_ctx-id entry _evt payload]
+                             (swap! fx-calls* conj [(:topic entry) payload])
+                             nil)]
+      (shift/shift-tp-up! {:player-id "p1" :ctx-id "ctx-1" :player :player :cost-ok? true}))
     (is (= [["minecraft:overworld" "enemy-1" 20.0]
             ["minecraft:overworld" "enemy-2" 20.0]]
            @damage-calls*))
@@ -83,20 +120,26 @@
     (is (= [["p1" :shift-teleport 18]] @cooldown-calls*))
     (is (= :teleporter/fx-crit-hit (first (first @fx-calls*))))
     (is (= {:x 12.0
-        :y 64.9
-        :z 13.4
-        :crit-level 1
-        :crit-rate 1.6
-        :message-key "ability.teleporter.critical_hit"
-        :message-args ["x1.6"]
-        :target-uuid "enemy-1"
-        :skill-id :shift-teleport}
-         (second (first @fx-calls*))))
-    (is (= :shift-tp/fx-perform (first (second @fx-calls*))))))
+            :y 64.9
+            :z 13.4
+            :crit-level 1
+            :crit-rate 1.6
+            :message-key "ability.teleporter.critical_hit"
+            :message-args ["x1.6"]
+            :target-uuid "enemy-1"
+            :skill-id :shift-teleport}
+           (second (first @fx-calls*))))
+    (is (= :shift-teleport/fx-perform (first (second @fx-calls*))))))
 
 (deftest shift-tp-up-critical-but-not-applied-skips-crit-fx-test
-  (let [fx-calls* (atom [])]
-    (with-redefs [helper/skill-exp (fn [_ _] 0.5)
+  (let [{:keys [get-context]} (shift-tp-ctx-trace-redef
+                               (shift-tp-trace [{:uuid "enemy-1" :x 12.0 :y 64.9 :z 13.4 :width 0.6 :height 1.8}]
+                                               :drop [20.5 65.0 21.5]
+                                               :dest [20.5 65.0 21.5]
+                                               :place [20 65 21]))
+        fx-calls* (atom [])]
+    (with-redefs [ctx/get-context get-context
+                  helper/skill-exp (fn [_ _] 0.5)
                   helper/cfg-lerp (fn [_ field _]
                                     (case field
                                       :targeting.range 25.0
@@ -114,9 +157,6 @@
                   helper/player-position (fn [_] {:x 1.0 :y 64.0 :z 3.0})
                   helper/player-look-vec (fn [_] {:x 0.0 :y 0.0 :z 1.0})
                   geom/world-id-of (fn [_] "minecraft:overworld")
-                  raycast/raycast-blocks* (fn [& _] {:x 20 :y 64 :z 21 :face :up})
-                  world-effects/find-entities-in-aabb* (fn [& _]
-                                                        [{:uuid "enemy-1" :x 12.0 :y 64.9 :z 13.4 :width 0.6 :height 1.8}])
                   entity/player-main-hand-placeable-block? (fn [_] true)
                   entity/player-creative? (fn [_] false)
                   entity/player-drop-main-hand-item-at! (fn [& _] false)
@@ -133,21 +173,19 @@
                                                :applied? false})
                   skill-effects/add-skill-exp! (fn [& _] nil)
                   skill-effects/set-main-cooldown! (fn [& _] nil)
-                  ctx/ctx-send-to-client! (fn [_ctx-id ch payload]
-                                            (swap! fx-calls* conj [ch payload])
-                                            nil)]
-            ctx/*context-owner* test-context-owner]
-        (shift/shift-tp-up! {:player-id "p1" :ctx-id "ctx-1b" :player :player :cost-ok? true})))
-
-    (is (= [[:shift-tp/fx-perform {:from-x 1.0
-                                   :from-y 65.6
-                                   :from-z 3.0
-                                   :x 20.5
-                                   :y 65.0
-                                   :z 21.5
-                                   :target-count 1
-                                   :placed? true
-                                   :dropped? false}]]
+                  fx/send! (fn [_ctx-id entry _evt payload]
+                             (swap! fx-calls* conj [(:topic entry) payload])
+                             nil)]
+      (shift/shift-tp-up! {:player-id "p1" :ctx-id "ctx-1b" :player :player :cost-ok? true}))
+    (is (= [[:shift-teleport/fx-perform {:from-x 1.0
+                                         :from-y 65.6
+                                         :from-z 3.0
+                                         :x 20.5
+                                         :y 65.0
+                                         :z 21.5
+                                         :target-count 1
+                                         :placed? true
+                                         :dropped? false}]]
            @fx-calls*))))
 
 (deftest shift-tp-up-cost-fail-no-side-effects-test
@@ -157,29 +195,28 @@
         damage-calls* (atom 0)
         teleport-calls* (atom 0)
         place-calls* (atom 0)]
-    (with-redefs [helper/skill-exp (fn [_ _] 0.5)
-                  helper/cfg-lerp (fn [_ _ _] 20.0)
-                  helper/player-position (fn [_] {:x 1.0 :y 2.0 :z 3.0})
-                  helper/player-look-vec (fn [_] {:x 0.0 :y 0.0 :z 1.0})
-                  helper/cfg-double (fn [_ _] 1.6)
-                  geom/world-id-of (fn [_] "minecraft:overworld")
-                  raycast/raycast-blocks* (fn [& _] {:x 4 :y 5 :z 6 :face :up})
-                  world-effects/find-entities-in-aabb* (fn [& _] [])
-                  entity/player-main-hand-placeable-block? (fn [_] true)
-                  entity/player-drop-main-hand-item-at! (fn [& _] true)
-                  entity/player-place-main-hand-block-at-hit! (fn [& _]
-                                                                (swap! place-calls* inc)
-                                                                {:placed? true
-                                                                 :fallback-drop? false
-                                                                 :pos {:x 4 :y 5 :z 6}
-                                                                 :face :up})
-                  entity/player-consume-main-hand-item! (fn [& _] true)
-                  helper/teleport-to! (fn [& _] (swap! teleport-calls* inc) true)
-                  helper/deal-magic-damage! (fn [& _] (swap! damage-calls* inc))
-                  skill-effects/add-skill-exp! (fn [& _] (swap! exp-calls* inc))
-                  skill-effects/set-main-cooldown! (fn [& _] (swap! cooldown-calls* inc))
-                  ctx/ctx-send-to-client! (fn [& _] (swap! fx-calls* inc))]
-            ctx/*context-owner* test-context-owner]
+    (with-redefs (into [helper/skill-exp (fn [_ _] 0.5)
+                          helper/cfg-lerp (fn [_ _ _] 20.0)
+                          helper/player-position (fn [_] {:x 1.0 :y 2.0 :z 3.0})
+                          helper/player-look-vec (fn [_] {:x 0.0 :y 0.0 :z 1.0})
+                          helper/cfg-double (fn [_ _] 1.6)
+                          geom/world-id-of (fn [_] "minecraft:overworld")
+                          entity/player-main-hand-placeable-block? (fn [_] true)
+                          entity/player-drop-main-hand-item-at! (fn [& _] true)
+                          entity/player-place-main-hand-block-at-hit! (fn [& _]
+                                                                        (swap! place-calls* inc)
+                                                                        {:placed? true
+                                                                         :fallback-drop? false
+                                                                         :pos {:x 4 :y 5 :z 6}
+                                                                         :face :up})
+                          entity/player-consume-main-hand-item! (fn [& _] true)
+                          helper/teleport-to! (fn [& _] (swap! teleport-calls* inc) true)
+                          helper/deal-magic-damage! (fn [& _] (swap! damage-calls* inc))
+                          skill-effects/add-skill-exp! (fn [& _] (swap! exp-calls* inc))
+                          skill-effects/set-main-cooldown! (fn [& _] (swap! cooldown-calls* inc))
+                          fx/send! (fn [& _] (swap! fx-calls* inc) nil)]
+                 (shift-tp-platform-redefs {:x 4 :y 5 :z 6 :face :up} []))
+      (binding [ctx/*context-owner* test-context-owner]
         (shift/shift-tp-up! {:player-id "p1" :ctx-id "ctx-2" :player :player :cost-ok? false})))
 
     (is (= 0 @place-calls*))
@@ -190,10 +227,17 @@
     (is (= 0 @fx-calls*))))
 
 (deftest shift-tp-up-place-fail-fallback-drop-test
-  (let [teleport-calls* (atom 0)
+  (let [{:keys [get-context]} (shift-tp-ctx-trace-redef
+                               (shift-tp-trace []
+                                               :eye {:x 1.0 :y 3.6 :z 3.0}
+                                               :drop [8.5 10.0 10.5]
+                                               :dest [8.5 10.0 10.5]
+                                               :place [8 10 10]))
+        teleport-calls* (atom 0)
         drop-calls* (atom [])
         consume-calls* (atom 0)]
-    (with-redefs [helper/skill-exp (fn [_ _] 0.5)
+    (with-redefs [ctx/get-context get-context
+                  helper/skill-exp (fn [_ _] 0.5)
                   helper/cfg-lerp (fn [_ _ _] 20.0)
                   helper/cfg-double (fn [_ field]
                                       (case field
@@ -204,13 +248,11 @@
                   helper/player-position (fn [_] {:x 1.0 :y 2.0 :z 3.0})
                   helper/player-look-vec (fn [_] {:x 0.0 :y 0.0 :z 1.0})
                   geom/world-id-of (fn [_] "minecraft:overworld")
-                  raycast/raycast-blocks* (fn [& _] {:x 8 :y 9 :z 10 :face :up})
-                  world-effects/find-entities-in-aabb* (fn [& _] [])
                   entity/player-main-hand-placeable-block? (fn [_] true)
                   entity/player-creative? (fn [_] false)
                   entity/player-drop-main-hand-item-at! (fn [_ n x y z]
-                                                          (swap! drop-calls* conj [n x y z])
-                                                          true)
+                                                         (swap! drop-calls* conj [n x y z])
+                                                         true)
                   entity/player-place-main-hand-block-at-hit! (fn [& _]
                                                                 {:placed? false
                                                                  :fallback-drop? true
@@ -223,28 +265,25 @@
                   helper/deal-magic-damage! (fn [& _] {:critical? false})
                   skill-effects/add-skill-exp! (fn [& _] nil)
                   skill-effects/set-main-cooldown! (fn [& _] nil)
-                  ctx/ctx-send-to-client! (fn [& _] nil)]
-            ctx/*context-owner* test-context-owner]
-        (shift/shift-tp-up! {:player-id "p1" :ctx-id "ctx-3" :player :player :cost-ok? true})))
-
+                  fx/send! (fn [& _] nil)]
+      (shift/shift-tp-up! {:player-id "p1" :ctx-id "ctx-3" :player :player :cost-ok? true}))
     (is (= 1 @teleport-calls*))
     (is (= [[1 8.5 10.0 10.5]] @drop-calls*))
     (is (= 0 @consume-calls*))))
 
 (deftest shift-tp-up-invalid-main-hand-skips-execution-test
   (let [teleport-calls* (atom 0)]
-    (with-redefs [helper/skill-exp (fn [_ _] 0.5)
-                  helper/cfg-lerp (fn [_ _ _] 20.0)
-                  helper/player-position (fn [_] {:x 1.0 :y 2.0 :z 3.0})
-                  helper/player-look-vec (fn [_] {:x 0.0 :y 0.0 :z 1.0})
-                  helper/cfg-double (fn [_ _] 1.6)
-                  geom/world-id-of (fn [_] "minecraft:overworld")
-                  raycast/raycast-blocks* (fn [& _] {:x 8 :y 9 :z 10 :face :up})
-                  world-effects/find-entities-in-aabb* (fn [& _] [])
-                  entity/player-main-hand-placeable-block? (fn [_] false)
-                  helper/teleport-to! (fn [& _] (swap! teleport-calls* inc) true)
-                  ctx/ctx-send-to-client! (fn [& _] nil)]
-            ctx/*context-owner* test-context-owner]
+    (with-redefs (into [helper/skill-exp (fn [_ _] 0.5)
+                          helper/cfg-lerp (fn [_ _ _] 20.0)
+                          helper/player-position (fn [_] {:x 1.0 :y 2.0 :z 3.0})
+                          helper/player-look-vec (fn [_] {:x 0.0 :y 0.0 :z 1.0})
+                          helper/cfg-double (fn [_ _] 1.6)
+                          geom/world-id-of (fn [_] "minecraft:overworld")
+                          entity/player-main-hand-placeable-block? (fn [_] false)
+                          helper/teleport-to! (fn [& _] (swap! teleport-calls* inc) true)
+                          fx/send! (fn [& _] nil)]
+                 (shift-tp-platform-redefs {:x 8 :y 9 :z 10 :face :up} []))
+      (binding [ctx/*context-owner* test-context-owner]
         (shift/shift-tp-up! {:player-id "p1" :ctx-id "ctx-4" :player :player :cost-ok? true})))
 
     (is (= 0 @teleport-calls*))))
@@ -252,35 +291,40 @@
 (deftest shift-tp-down-respects-cost-gate-test
   (let [updates* (atom [])]
     (with-redefs [ctx-skill/update-skill-state-root! (fn [ctx-id f & args]
-                                        (swap! updates* conj [ctx-id f args])
-                                        nil)]
+                                                       (swap! updates* conj [ctx-id f args])
+                                                       nil)]
       (shift/shift-tp-down! {:ctx-id "ctx-cost-fail" :cost-ok? false})
       (shift/shift-tp-down! {:ctx-id "ctx-cost-ok" :cost-ok? true}))
 
     (is (= 1 (count @updates*)))
     (is (= "ctx-cost-ok" (ffirst @updates*)))
-    (is (= assoc (second (first @updates*))))))
+    (is (= identity (second (first @updates*))))))
 
 (deftest shift-tp-tick-invalid-main-hand-clears-trace-and-skips-fx-test
   (let [updates* (atom [])
         fx-calls* (atom 0)]
     (with-redefs [entity/player-main-hand-placeable-block? (fn [_] false)
                   ctx-skill/update-skill-state-root! (fn [ctx-id f & args]
-                                        (swap! updates* conj [ctx-id f args])
-                                        nil)
-                  ctx/ctx-send-to-client! (fn [& _] (swap! fx-calls* inc) nil)]
+                                                       (swap! updates* conj [ctx-id f args])
+                                                       nil)
+                  fx/send! (fn [& _] (swap! fx-calls* inc) nil)]
       (shift/shift-tp-tick! {:player-id "p1" :player :player :ctx-id "ctx-tick" :hold-ticks 9}))
 
     (is (= 1 (count @updates*)))
     (is (= 0 @fx-calls*))
-    (let [[_ _ args] (first @updates*)
-          [_ skill-state] args]
-      (is (= {:hold-ticks 9 :hand-valid? false :trace nil} skill-state)))))
+    (let [[_ _ args] (first @updates*)]
+      (is (= {:hold-ticks 9 :hand-valid? false :trace nil} (first args))))))
 
 (deftest shift-tp-up-creative-mode-skips-consume-test
-  (let [consume-calls* (atom 0)
+  (let [{:keys [get-context]} (shift-tp-ctx-trace-redef
+                               (shift-tp-trace []
+                                               :drop [8.5 65.0 10.5]
+                                               :dest [8.5 65.0 10.5]
+                                               :place [8 65 10]))
+        consume-calls* (atom 0)
         teleport-calls* (atom 0)]
-    (with-redefs [helper/skill-exp (fn [_ _] 0.5)
+    (with-redefs [ctx/get-context get-context
+                  helper/skill-exp (fn [_ _] 0.5)
                   helper/cfg-lerp (fn [_ field _]
                                     (case field
                                       :targeting.range 25.0
@@ -298,8 +342,6 @@
                   helper/player-position (fn [_] {:x 1.0 :y 64.0 :z 3.0})
                   helper/player-look-vec (fn [_] {:x 0.0 :y 0.0 :z 1.0})
                   geom/world-id-of (fn [_] "minecraft:overworld")
-                  raycast/raycast-blocks* (fn [& _] {:x 8 :y 64 :z 10 :face :up})
-                  world-effects/find-entities-in-aabb* (fn [& _] [])
                   entity/player-main-hand-placeable-block? (fn [_] true)
                   entity/player-creative? (fn [_] true)
                   entity/player-drop-main-hand-item-at! (fn [& _] false)
@@ -315,10 +357,7 @@
                   helper/deal-magic-damage! (fn [& _] {:critical? false})
                   skill-effects/add-skill-exp! (fn [& _] nil)
                   skill-effects/set-main-cooldown! (fn [& _] nil)
-                  ctx/ctx-send-to-client! (fn [& _] nil)]
-            ctx/*context-owner* test-context-owner]
-        (shift/shift-tp-up! {:player-id "p1" :ctx-id "ctx-creative" :player :player :cost-ok? true})))
-
+                  fx/send! (fn [& _] nil)]
+      (shift/shift-tp-up! {:player-id "p1" :ctx-id "ctx-creative" :player :player :cost-ok? true}))
     (is (= 1 @teleport-calls*))
     (is (= 0 @consume-calls*))))
-

@@ -1,5 +1,6 @@
 (ns cn.li.ac.content.ability.meltdowner.electron-missile-test
   (:require [clojure.test :refer [deftest is]]
+            [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.content.ability.meltdowner.electron-missile :as missile]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
@@ -16,7 +17,20 @@
     {:ctx* ctx*
      :get-context (fn [_] @ctx*)
      :update-skill-state-root! (fn [_ f & args]
-                        (swap! ctx* update :skill-state (fn [ss] (apply f (or ss {}) args))))}))
+                        (swap! ctx* update :skill-state
+                               (fn [ss]
+                                 (let [current (or ss {})
+                                       next-state (if (and (= f identity) (= 1 (count args)))
+                                                    (first args)
+                                                    (apply f current args))]
+                                   next-state))))}))
+
+(defn- capture-local-and-nearby-fx! [local-fx* nearby-fx*]
+  (fn [ctx-id entry _evt payload]
+    (case (:to entry)
+      :client (swap! local-fx* conj [ctx-id (:topic entry) payload])
+      :except-local (swap! nearby-fx* conj [ctx-id (:topic entry) payload]))
+    nil))
 
 (defn- stub-lerp-double [_skill-id field-id _exp]
        (case field-id
@@ -55,12 +69,7 @@
                   skill-effects/skill-exp (fn [& _] 0.4)
                   skill-config/tunable-double stub-tunable-double
                   ctx-skill/update-skill-state-root! update-skill-state-root!
-                  ctx/ctx-send-to-client! (fn [ctx-id ch payload]
-                                            (swap! local-fx* conj [ctx-id ch payload])
-                                            nil)
-                  ctx/ctx-send-to-except-local! (fn [ctx-id ch payload]
-                                                  (swap! nearby-fx* conj [ctx-id ch payload])
-                                                  nil)]
+                  fx/send! (capture-local-and-nearby-fx! local-fx* nearby-fx*)]
       (missile/electron-missile-down! {:player-id "p1"
                                        :ctx-id "ctx-1"
                                        :cost-ok? true}))
@@ -86,12 +95,7 @@
                                                          nil)
                   ctx/get-context get-context
                   ctx-skill/update-skill-state-root! update-skill-state-root!
-                  ctx/ctx-send-to-client! (fn [ctx-id ch payload]
-                                            (swap! local-fx* conj [ctx-id ch payload])
-                                            nil)
-                  ctx/ctx-send-to-except-local! (fn [ctx-id ch payload]
-                                                  (swap! nearby-fx* conj [ctx-id ch payload])
-                                                  nil)
+                  fx/send! (capture-local-and-nearby-fx! local-fx* nearby-fx*)
                   geom/world-id-of (fn [_] "w")
                   geom/eye-pos (fn [_] {:x 1.0 :y 65.0 :z 2.0})
                   entity/player-spawn-entity-by-id! (fn [& args]
@@ -129,33 +133,30 @@
                                                  nil)
                   ctx/get-context get-context
                   ctx-skill/update-skill-state-root! update-skill-state-root!
-                  ctx/ctx-send-to-client! (fn [ctx-id ch payload]
-                                            (swap! local-fx* conj [ctx-id ch payload])
-                                            nil)
-                  ctx/ctx-send-to-except-local! (fn [ctx-id ch payload]
-                                                  (swap! nearby-fx* conj [ctx-id ch payload])
-                                                  nil)
+                  fx/send! (capture-local-and-nearby-fx! local-fx* nearby-fx*)
                   geom/world-id-of (fn [_] "w")
                   geom/eye-pos (fn [_] {:x 0.0 :y 64.0 :z 0.0})
+                  world-effects/available? (constantly true)
                   world-effects/find-entities-in-radius* (fn [& _]
                                                          [{:uuid "t-1"
                                                            :x 3.0 :y 64.0 :z 0.0
                                                            :eye-height 1.6
                                                            :living? true}])
+                  entity-damage/available? (constantly true)
                   entity-damage/apply-direct-damage!* (fn [& args]
                                                        (swap! damage-calls* conj args)
                                                        true)
                   md-damage/mark-target! (fn [player-id uuid fx-context]
                                            (swap! mark-calls* conj [player-id uuid fx-context])
                                            nil)]
-        (missile/electron-missile-tick! {:player-id "p1"
-                                         :ctx-id "ctx-3"
-                                         :player {:id "player-obj"}})))
+      (missile/electron-missile-tick! {:player-id "p1"
+                                       :ctx-id "ctx-3"
+                                       :player {:id "player-obj"}}))
 
     (is (= 1 (count @damage-calls*)))
-       (is (= [["p1" "t-1" {:ctx-id "ctx-3"
-                                                 :target-pos {:x 3.0 :y 64.0 :z 0.0}}]]
-                 @mark-calls*))
+    (is (= [["p1" "t-1" {:ctx-id "ctx-3"
+                          :target-pos {:x 3.0 :y 64.0 :z 0.0}}]]
+           @mark-calls*))
     (is (= [["p1" :electron-missile 0.001]] @exp-calls*))
     (is (= {:ticks 9 :active-balls 0 :active? true :overload-floor 200.0}
            (:skill-state @ctx*)))
@@ -175,12 +176,7 @@
                                                      (swap! cooldown-calls* conj [player-id skill-id ticks])
                                                      nil)
                   ctx-skill/update-skill-state-root! update-skill-state-root!
-                  ctx/ctx-send-to-client! (fn [ctx-id ch payload]
-                                            (swap! local-fx* conj [ctx-id ch payload])
-                                            nil)
-                  ctx/ctx-send-to-except-local! (fn [ctx-id ch payload]
-                                                  (swap! nearby-fx* conj [ctx-id ch payload])
-                                                  nil)]
+                  fx/send! (capture-local-and-nearby-fx! local-fx* nearby-fx*)]
       (missile/electron-missile-up! {:player-id "p1" :ctx-id "ctx-4"})
       (missile/electron-missile-abort! {:ctx-id "ctx-4"}))
 
@@ -192,7 +188,7 @@
     (is (= @local-fx* @nearby-fx*))))
 
 (deftest electron-missile-tick-max-hold-terminates-context-test
-  (let [{:keys [ctx* get-context update-skill-state-root!]} 
+  (let [{:keys [ctx* get-context update-skill-state-root!]}
         (make-context-mocks {:skill-state {:ticks 80 :active-balls 2 :active? true :overload-floor 200.0}})
         local-fx* (atom [])
         nearby-fx* (atom [])
@@ -207,12 +203,7 @@
                   ctx/terminate-context! (fn [& args]
                                            (swap! terminate-calls* conj args)
                                            nil)
-                  ctx/ctx-send-to-client! (fn [ctx-id ch payload]
-                                            (swap! local-fx* conj [ctx-id ch payload])
-                                            nil)
-                  ctx/ctx-send-to-except-local! (fn [ctx-id ch payload]
-                                                  (swap! nearby-fx* conj [ctx-id ch payload])
-                                                  nil)
+                  fx/send! (capture-local-and-nearby-fx! local-fx* nearby-fx*)
                   geom/world-id-of (fn [_] "w")
                   geom/eye-pos (fn [_] {:x 1.0 :y 65.0 :z 2.0})]
       (missile/electron-missile-tick! {:player-id "p1"
@@ -224,4 +215,3 @@
     (is (= @local-fx* @nearby-fx*))
     (is (= {:ticks 80 :active-balls 2 :active? true :overload-floor 200.0}
            (:skill-state @ctx*)))))
-

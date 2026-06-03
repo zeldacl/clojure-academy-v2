@@ -1,7 +1,7 @@
 (ns cn.li.ac.content.ability.vecmanip.blood-retrograde-fx
 	"Client FX for Blood Retrograde: splashes, sprays, walk speed."
 	(:require [cn.li.ac.ability.client.effects.sounds :as client-sounds]
-						[cn.li.ac.ability.client.fx-registry :as fx-registry]
+						[cn.li.ac.ability.client.fx-spec :as fx-spec]
 						[cn.li.ac.ability.client.level-effects :as level-effects]
 						[cn.li.ac.ability.client.render-util :as ru]))
 
@@ -212,34 +212,23 @@
 
 (defn init!
 	[]
-	(level-effects/register-level-effect! blood-retrograde-effect-id
-		{:initial-state (default-blood-retrograde-fx-runtime-state)
-		 :enqueue-state-fn enqueue-state!
-		 :tick-state-fn tick-state!
-		 :build-plan-fn build-plan})
-	(fx-registry/register-fx-channels!
-		[:blood-retrograde/fx-start :blood-retrograde/fx-update
-		 :blood-retrograde/fx-end :blood-retrograde/fx-perform]
-		(fn [ctx-id channel payload]
-			(case channel
-				:blood-retrograde/fx-start
-				(level-effects/enqueue-level-effect! blood-retrograde-effect-id {:mode :start}
-																						 {:ctx-id ctx-id :channel channel})
-				:blood-retrograde/fx-update
-				(level-effects/enqueue-level-effect! blood-retrograde-effect-id
-					{:mode :update
-					 :ticks (long (or (:ticks payload) 0))
-					 :charge-ratio (double (or (:charge-ratio payload) 0.0))}
-					{:ctx-id ctx-id :channel channel})
-				:blood-retrograde/fx-end
-				(level-effects/enqueue-level-effect! blood-retrograde-effect-id
-					{:mode :end :performed? (boolean (:performed? payload))}
-					{:ctx-id ctx-id :channel channel})
-				:blood-retrograde/fx-perform
-				(level-effects/enqueue-level-effect! blood-retrograde-effect-id
-					{:mode :perform
-					 :sound-pos (:sound-pos payload)
-					 :splashes (:splashes payload)
-					 :sprays (:sprays payload)}
-					{:ctx-id ctx-id :channel channel}))))
+	(fx-spec/register!
+		{:id blood-retrograde-effect-id
+		 :level {:initial-state (default-blood-retrograde-fx-runtime-state)
+						 :enqueue-state-fn enqueue-state!
+						 :tick-state-fn tick-state!
+						 :build-plan-fn build-plan}
+		 :channels {:start {:topic :blood-retrograde/fx-start :mode :start}
+								:update {:topic :blood-retrograde/fx-update :mode :update
+												 :level-payload (fn [_ _ p]
+																				{:ticks (long (or (:ticks p) 0))
+																				 :charge-ratio (double (or (:charge-ratio p) 0.0))})}
+								:end {:topic :blood-retrograde/fx-end :mode :end
+											:level-payload (fn [_ _ p]
+																			 {:performed? (boolean (:performed? p))})}
+								:perform {:topic :blood-retrograde/fx-perform :mode :perform
+													:level-payload (fn [_ _ p]
+																					 {:sound-pos (:sound-pos p)
+																						:splashes (:splashes p)
+																						:sprays (:sprays p)})}}})
 	nil)

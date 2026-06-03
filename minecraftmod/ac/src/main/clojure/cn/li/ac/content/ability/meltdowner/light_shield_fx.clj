@@ -2,7 +2,7 @@
   "Client FX for LightShield: glowing barrier effect."
   (:require [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
-            [cn.li.ac.ability.client.fx-registry :as fx-registry]
+            [cn.li.ac.ability.client.fx-spec :as fx-spec]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.render-util :as ru]))
 
@@ -109,28 +109,20 @@
                               (ru/with-alpha {:r 165 :g 245 :b 255} 90))]
       {:ops (vec (cons glow-op ring-ops))})))
 
+(defn- shield-end-sound! [_ctx-id _channel _payload]
+  (client-sounds/queue-current-sound-effect!
+    {:type :sound :sound-id "my_mod:md.shield_loop" :volume 0.35 :pitch 0.95}))
+
 (defn init!
   []
-  (level-effects/register-level-effect! light-shield-effect-id
-    {:initial-state (default-light-shield-fx-runtime-state)
-     :enqueue-state-fn enqueue-state!
-     :tick-state-fn tick-state!
-     :build-plan-fn build-plan})
-  (fx-registry/register-fx-channels!
-    [:light-shield/fx-start :light-shield/fx-end]
-    (fn [ctx-id channel payload]
-      (let [meta-payload (select-keys payload [:effect-instance-id :source-player-id :world-id])]
-        (case channel
-          :light-shield/fx-start
-          (level-effects/enqueue-level-effect! light-shield-effect-id
-            (merge meta-payload {:mode :start})
-            {:ctx-id ctx-id :channel channel})
-          :light-shield/fx-end
-          (do
-            (client-sounds/queue-current-sound-effect!
-              {:type :sound :sound-id "my_mod:md.shield_loop" :volume 0.35 :pitch 0.95})
-            (level-effects/enqueue-level-effect! light-shield-effect-id
-              (merge meta-payload {:mode :end})
-              {:ctx-id ctx-id :channel channel}))
-          nil))))
+  (fx-spec/register!
+    {:id light-shield-effect-id
+     :level {:initial-state (default-light-shield-fx-runtime-state)
+             :enqueue-state-fn enqueue-state!
+             :tick-state-fn tick-state!
+             :build-plan-fn build-plan}
+     :channels {:start {:topic :light-shield/fx-start :mode :start}
+                :end {:topic :light-shield/fx-end :mode :end
+                      :targets [:level :immediate]
+                      :immediate-fn shield-end-sound!}}})
   nil)

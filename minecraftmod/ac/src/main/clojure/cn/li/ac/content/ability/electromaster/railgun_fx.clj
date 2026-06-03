@@ -1,7 +1,7 @@
 (ns cn.li.ac.content.ability.electromaster.railgun-fx
   "Client FX for Railgun: beam effects + charge hand aura."
   (:require [cn.li.ac.ability.client.effects.beam-ops :as fx-beam]
-            [cn.li.ac.ability.client.fx-registry :as fx-registry]
+            [cn.li.ac.ability.client.fx-spec :as fx-spec]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.ac.ability.client.runtime :as client-runtime]))
@@ -142,14 +142,12 @@
 
 (defn init!
   []
-  (level-effects/register-level-effect! railgun-effect-id
-    {:initial-state (default-railgun-fx-runtime-state)
-     :enqueue-state-fn enqueue-state!
-     :tick-state-fn tick-state!
-     :build-plan-fn build-plan})
-  (fx-registry/register-fx-channels!
-    [:railgun/fx-shot :railgun/fx-reflect]
-    (fn [ctx-id channel payload]
-      (level-effects/enqueue-level-effect! railgun-effect-id payload
-                                           {:ctx-id ctx-id :channel channel})))
+  (fx-spec/register!
+    {:id railgun-effect-id
+     :level {:initial-state (default-railgun-fx-runtime-state)
+             :enqueue-state-fn enqueue-state!
+             :tick-state-fn tick-state!
+             :build-plan-fn build-plan}
+     :channels {:shot {:topic :railgun/fx-shot}
+                :reflect {:topic :railgun/fx-reflect}}})
   nil)

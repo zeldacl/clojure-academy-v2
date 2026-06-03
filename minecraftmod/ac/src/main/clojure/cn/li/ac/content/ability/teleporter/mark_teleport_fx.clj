@@ -2,7 +2,7 @@
   "Client FX for Mark Teleport: ground ring + billboard marker."
   (:require [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
-            [cn.li.ac.ability.client.fx-registry :as fx-registry]
+            [cn.li.ac.ability.client.fx-spec :as fx-spec]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.render-util :as ru]))
 
@@ -137,31 +137,20 @@
       {:ops (vec ops)})))
 
 (defn init! []
-  (level-effects/register-level-effect! mark-teleport-effect-id
-                                        {:initial-state (default-mark-teleport-fx-runtime-state)
-                                         :enqueue-state-fn enqueue-state!
-                                         :tick-state-fn tick-state!
-                                         :build-plan-fn build-plan})
-  (fx-registry/register-fx-channels!
-    [:mark-teleport/fx-start :mark-teleport/fx-update :mark-teleport/fx-end :mark-teleport/fx-perform]
-    (fn [ctx-id channel payload]
-      (let [meta-payload (select-keys payload [:effect-instance-id :source-player-id :world-id])]
-        (case channel
-          :mark-teleport/fx-start
-          (level-effects/enqueue-level-effect! :mark-teleport (merge meta-payload {:mode :start})
-                                               {:ctx-id ctx-id :channel channel})
-          :mark-teleport/fx-update
-          (level-effects/enqueue-level-effect! :mark-teleport
-                                               (merge meta-payload {:mode :update :target (:target payload)
-                                                                    :distance (double (or (:distance payload) 0.0))})
-                                               {:ctx-id ctx-id :channel channel})
-          :mark-teleport/fx-end
-          (level-effects/enqueue-level-effect! :mark-teleport (merge meta-payload {:mode :end})
-                                               {:ctx-id ctx-id :channel channel})
-          :mark-teleport/fx-perform
-          (level-effects/enqueue-level-effect! :mark-teleport
-                                               (merge meta-payload {:mode :perform :target (:target payload)
-                                                                    :distance (double (or (:distance payload) 0.0))})
-                                               {:ctx-id ctx-id :channel channel})
-          nil))))
+  (fx-spec/register!
+    {:id mark-teleport-effect-id
+     :level {:initial-state (default-mark-teleport-fx-runtime-state)
+             :enqueue-state-fn enqueue-state!
+             :tick-state-fn tick-state!
+             :build-plan-fn build-plan}
+     :channels {:start {:topic :mark-teleport/fx-start :mode :start}
+                :update {:topic :mark-teleport/fx-update :mode :update
+                         :level-payload (fn [_ _ p]
+                                          {:target (:target p)
+                                           :distance (double (or (:distance p) 0.0))})}
+                :end {:topic :mark-teleport/fx-end :mode :end}
+                :perform {:topic :mark-teleport/fx-perform :mode :perform
+                          :level-payload (fn [_ _ p]
+                                           {:target (:target p)
+                                            :distance (double (or (:distance p) 0.0))})}}})
   nil)

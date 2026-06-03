@@ -28,13 +28,12 @@
 
 (deftest init-registers-owner-aware-vec-accel-fx-test
   (let [registered-level* (atom nil)
-        registered-handler* (atom nil)]
+        registered-topics* (atom #{})]
     (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
                                                          (reset! registered-level* [effect-id effect-map])
                                                          nil)
-                  fx-registry/register-fx-channels! (fn [channels handler]
-                                                      (reset! registered-handler* {:channels channels
-                                                                                   :handler handler})
+                  fx-registry/register-fx-channel! (fn [topic _handler]
+                                                      (swap! registered-topics* conj topic)
                                                       nil)]
       (vafx/init!)
       (is (= :vec-accel (first @registered-level*)))
@@ -43,7 +42,7 @@
                :vec-accel/fx-update
                :vec-accel/fx-perform
                :vec-accel/fx-end}
-             (set (:channels @registered-handler*)))))))
+             @registered-topics*)))))
 
 (deftest update-keeps-preview-state-per-owner-test
   (let [enqueue-state! (var-get #'cn.li.ac.content.ability.vecmanip.vec-accel-fx/enqueue-state!)]
@@ -78,18 +77,18 @@
         (is (some? (get (:effect-state after-clear) [:ctx "ctx-b"])))))))
 
 (deftest init-handler-routes-update-through-level-effects-test
-  (let [registered-handler* (atom nil)
+  (let [handlers* (atom {})
         enqueued* (atom [])]
     (with-redefs [level-effects/register-level-effect! (fn [& _] nil)
-                  fx-registry/register-fx-channels! (fn [_ handler]
-                                                      (reset! registered-handler* handler)
+                  fx-registry/register-fx-channel! (fn [topic handler]
+                                                      (swap! handlers* assoc topic handler)
                                                       nil)
                   level-effects/enqueue-level-effect! (fn [effect-id payload fx-context]
                                                         (swap! enqueued* conj [effect-id payload fx-context])
                                                         nil)
                   client-sounds/queue-current-sound-effect! (fn [& _] nil)]
       (vafx/init!)
-      (@registered-handler* "ctx-1" :vec-accel/fx-update
+      ((get @handlers* :vec-accel/fx-update) "ctx-1" :vec-accel/fx-update
        {:source-player-id "player-a"
         :charge-ticks 9
         :can-perform? true
@@ -97,11 +96,16 @@
         :init-vel {:x 0.0 :y 0.5 :z 1.0}})
       (is (= [[:vec-accel {:source-player-id "player-a"
                            :mode :update
+                           :owner-key [:ctx "ctx-1"]
+                           :ctx-id "ctx-1"
+                           :channel :vec-accel/fx-update
                            :charge-ticks 9
                            :can-perform? true
                            :look-dir {:x 1.0 :y 0.0 :z 0.0}
                            :init-vel {:x 0.0 :y 0.5 :z 1.0}}
-               {:ctx-id "ctx-1" :channel :vec-accel/fx-update}]]
+               {:ctx-id "ctx-1"
+                :channel :vec-accel/fx-update
+                :owner-key [:ctx "ctx-1"]}]]
              @enqueued*)))))
 
 (deftest vec-accel-fx-runtime-isolation-test

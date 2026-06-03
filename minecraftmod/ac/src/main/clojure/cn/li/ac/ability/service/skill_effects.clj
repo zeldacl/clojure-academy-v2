@@ -256,7 +256,8 @@
 (defn emit-fx!
   "Emit fx stage for a context event."
   [spec evt stage]
-  (fx/send! (:ctx-id evt) (:fx spec) stage evt))
+  (when-let [entry (get-in spec [:fx stage])]
+    (fx/send! (:ctx-id evt) entry evt)))
 
 (defn get-player-state
   "Return full player state map or nil when absent."

@@ -1,9 +1,8 @@
 (ns cn.li.ac.content.ability.electromaster.mag-manip-fx
 	"Client FX for Mag Manip hold/throw lifecycle."
 	(:require [cn.li.ac.ability.client.effects.sounds :as client-sounds]
-						[cn.li.ac.ability.client.fx-registry :as fx-registry]
-						[cn.li.ac.ability.client.hand-effects :as hand-effects]
-						[cn.li.ac.ability.client.level-effects :as level-effects]))
+						[cn.li.ac.ability.client.fx-spec :as fx-spec]
+						[cn.li.ac.ability.client.hand-effects :as hand-effects]))
 
 (def ^:private hold-loop-sound "my_mod:em.lf_loop")
 (def ^:private perform-sound "my_mod:em.mag_manip")
@@ -18,10 +17,6 @@
 (defn default-mag-manip-fx-runtime-state
 	[]
 	{:states {}})
-
-(defn- default-mag-manip-level-runtime-state
-	[]
-	{})
 
 (defn mag-manip-fx-snapshot []
 	(or (hand-effects/effect-state-snapshot mag-manip-effect-id)
@@ -123,45 +118,22 @@
 						y (+ 0.02 (* 0.01 (Math/sin phase)))]
 				{:translate [0.0 y 0.0]}))))
 
-(defn- build-level-plan [_camera-pos _hand-center-pos _tick]
-	nil)
-
-(defn- enqueue-level-state!
-	[store _event]
-	(or store (default-mag-manip-level-runtime-state)))
-
-(defn- tick-level-state!
-	[store]
-	(or store (default-mag-manip-level-runtime-state)))
-
-(defn- on-fx-channel [ctx-id channel payload]
-	(let [mode (case channel
-							 :mag-manip/fx-hold (:mode payload)
-							 :mag-manip/fx-throw :throw
-							 :mag-manip/fx-end :end
-							 nil)]
-		(when mode
-			(let [owner-meta {:owner-key [:ctx ctx-id]
-												:ctx-id ctx-id
-												:channel channel}
-						effect-payload (merge owner-meta (assoc (or payload {}) :mode mode))]
-				(hand-effects/enqueue-hand-effect! mag-manip-effect-id effect-payload)
-				(level-effects/enqueue-level-effect! :mag-manip effect-payload
-																						 {:ctx-id ctx-id :channel channel})))))
+(defn- on-fx-hold [ctx-id channel payload]
+	(when-let [mode (:mode payload)]
+		(hand-effects/enqueue-hand-effect! mag-manip-effect-id
+			(merge {:owner-key [:ctx ctx-id]
+							:ctx-id ctx-id
+							:channel channel}
+						 (assoc (or payload {}) :mode mode)))))
 
 (defn init! []
-	(hand-effects/register-hand-effect! mag-manip-effect-id
-		{:initial-state (default-mag-manip-fx-runtime-state)
-		 :enqueue-state-fn enqueue-state!
-		 :tick-state-fn tick-state!
-		 :transform-fn current-hand-transform})
-	(level-effects/register-level-effect! :mag-manip
-		{:initial-state (default-mag-manip-level-runtime-state)
-		 :enqueue-state-fn enqueue-level-state!
-		 :tick-state-fn tick-level-state!
-		 :build-plan-fn build-level-plan})
-	(fx-registry/register-fx-channels! [:mag-manip/fx-hold
-																			:mag-manip/fx-throw
-																			:mag-manip/fx-end]
-		on-fx-channel)
+	(fx-spec/register!
+		{:id mag-manip-effect-id
+		 :hand {:initial-state (default-mag-manip-fx-runtime-state)
+						:enqueue-state-fn enqueue-state!
+						:tick-state-fn tick-state!
+						:transform-fn current-hand-transform}
+		 :channels {:hold {:topic :mag-manip/fx-hold :targets [:hand] :handler on-fx-hold}
+								:throw {:topic :mag-manip/fx-throw :mode :throw :targets [:hand]}
+								:end {:topic :mag-manip/fx-end :mode :end :targets [:hand]}}})
 	nil)

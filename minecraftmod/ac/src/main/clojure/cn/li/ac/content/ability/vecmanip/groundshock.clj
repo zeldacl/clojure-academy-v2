@@ -16,7 +16,7 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill]]
-            [cn.li.ac.content.ability.fx-helpers :as fx]
+            [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
@@ -189,7 +189,7 @@
     (set-skill-state-root! ctx-id
                            {:charge-ticks 0
                             :performed? false})
-    (fx/send-start! ctx-id :groundshock/fx-start)
+    (fx/send! ctx-id {:topic :groundshock/fx-start :mode :start})
     (log/debug "Groundshock: Charge started")
     (catch Exception e
       (log/warn "Groundshock key-down failed:" (ex-message e)))))
@@ -203,8 +203,8 @@
             charge-ticks (long (or (:charge-ticks skill-state) 0))
             next-charge (inc charge-ticks)]
         (set-skill-state-root! ctx-id (assoc skill-state :charge-ticks next-charge))
-        (fx/send-update! ctx-id :groundshock/fx-update
-             {:charge-ticks (long (max 0 next-charge))})))
+        (fx/send! ctx-id {:topic :groundshock/fx-update :mode :update} nil
+                  {:charge-ticks (long (max 0 next-charge))})))
     (catch Exception e
       (log/warn "Groundshock key-tick failed:" (ex-message e)))))
 
@@ -362,7 +362,7 @@
                  (player-motion/is-on-ground?* player-id))
           (if-not cost-ok?
             (do
-              (fx/send-end! ctx-id :groundshock/fx-end {:performed? false})
+              (fx/send! ctx-id {:topic :groundshock/fx-end :mode :end} nil {:performed? false})
               (log/debug "Groundshock perform failed: insufficient resource"))
             (if-let [pos (get-player-position player-id)]
               (if-let [flat-dir (horizontal-look-with-fallback player-id)]
@@ -380,20 +380,20 @@
                   (apply-cooldown! player-id exp)
                   (add-exp! player-id (cfg-double :progression.exp-use))
                   (set-skill-state-root! ctx-id (assoc skill-state :performed? true))
-                  (fx/send-perform! ctx-id :groundshock/fx-perform
-                                   {:affected-blocks (:affected-blocks result)
-                                    :broken-blocks (finalize-broken-blocks @broken-blocks*)})
+                  (fx/send! ctx-id {:topic :groundshock/fx-perform :mode :perform} nil
+                            {:affected-blocks (:affected-blocks result)
+                             :broken-blocks (finalize-broken-blocks @broken-blocks*)})
                   (log/info "Groundshock: Affected" affected-count "blocks/entities"))
                 (do
-                  (fx/send-end! ctx-id :groundshock/fx-end {:performed? false})
+                  (fx/send! ctx-id {:topic :groundshock/fx-end :mode :end} nil {:performed? false})
                   (log/debug "Groundshock: Missing horizontal look vector")))
               (do
-                (fx/send-end! ctx-id :groundshock/fx-end {:performed? false})
+                (fx/send! ctx-id {:topic :groundshock/fx-end :mode :end} nil {:performed? false})
                 (log/debug "Groundshock: Missing player position"))))
 
           ;; Invalid conditions
           (do
-            (fx/send-end! ctx-id :groundshock/fx-end {:performed? false})
+            (fx/send! ctx-id {:topic :groundshock/fx-end :mode :end} nil {:performed? false})
             (log/debug "Groundshock: Invalid conditions (charge:" charge-ticks ")")))))
     (catch Exception e
       (log/warn "Groundshock key-up failed:" (ex-message e)))))
@@ -402,7 +402,7 @@
   "Clean up state on abort."
   [{:keys [ctx-id]}]
   (try
-    (fx/send-end! ctx-id :groundshock/fx-end {:performed? false})
+    (fx/send! ctx-id {:topic :groundshock/fx-end :mode :end} nil {:performed? false})
     (clear-skill-state! ctx-id)
     (log/debug "Groundshock aborted")
     (catch Exception e

@@ -1,6 +1,6 @@
 (ns cn.li.ac.content.ability.electromaster.thunder-clap-fx
   "Client FX for Thunder Clap: surround ring + target mark + walk speed."
-  (:require [cn.li.ac.ability.client.fx-registry :as fx-registry]
+  (:require [cn.li.ac.ability.client.fx-spec :as fx-spec]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.render-util :as ru]))
 
@@ -211,44 +211,28 @@
 
 (defn init!
   []
-  (level-effects/register-level-effect! thunder-clap-effect-id
-    {:initial-state (default-thunder-clap-fx-runtime-state)
-     :enqueue-state-fn enqueue-state!
-     :tick-state-fn tick-state!
-     :build-plan-fn build-plan})
-  (fx-registry/register-fx-channels!
-    [:thunder-clap/fx-start :thunder-clap/fx-update :thunder-clap/fx-perform :thunder-clap/fx-end]
-    (fn [ctx-id channel payload]
-      (case channel
-        :thunder-clap/fx-start
-        (level-effects/enqueue-level-effect! thunder-clap-effect-id
-                                             (merge (select-keys payload [:effect-instance-id :source-player-id :world-id])
-                                                    {:mode :start})
-                                             {:ctx-id ctx-id :channel channel})
-        :thunder-clap/fx-update
-        (level-effects/enqueue-level-effect! thunder-clap-effect-id
-          (merge (select-keys payload [:effect-instance-id :source-player-id :world-id])
-                 {:mode :update
-                  :ticks (long (or (:ticks payload) 0))
-                  :charge-ratio (double (or (:charge-ratio payload) 0.0))
-                  :target (get payload :target)})
-          {:ctx-id ctx-id :channel channel})
-        :thunder-clap/fx-perform
-        (level-effects/enqueue-level-effect! thunder-clap-effect-id
-          (merge (select-keys payload [:effect-instance-id :source-player-id :world-id])
-                 {:mode :perform
-                  :performed? (boolean (:performed? payload))
-                  :ticks (long (or (:ticks payload) (:charge-ticks payload) 0))
-                  :charge-ratio (double (or (:charge-ratio payload) 0.0))
-                  :target (get payload :target)})
-          {:ctx-id ctx-id :channel channel})
-        :thunder-clap/fx-end
-        (level-effects/enqueue-level-effect! thunder-clap-effect-id
-          (merge (select-keys payload [:effect-instance-id :source-player-id :world-id])
-                 {:mode :end
-                  :performed? (boolean (:performed? payload))
-                  :ticks (long (or (:ticks payload) (:charge-ticks payload) 0))
-                  :charge-ratio (double (or (:charge-ratio payload) 0.0))
-                  :target (get payload :target)})
-          {:ctx-id ctx-id :channel channel}))))
+  (fx-spec/register!
+    {:id thunder-clap-effect-id
+     :level {:initial-state (default-thunder-clap-fx-runtime-state)
+             :enqueue-state-fn enqueue-state!
+             :tick-state-fn tick-state!
+             :build-plan-fn build-plan}
+     :channels {:start {:topic :thunder-clap/fx-start :mode :start}
+                :update {:topic :thunder-clap/fx-update :mode :update
+                         :level-payload (fn [_ _ p]
+                                          {:ticks (long (or (:ticks p) 0))
+                                           :charge-ratio (double (or (:charge-ratio p) 0.0))
+                                           :target (get p :target)})}
+                :perform {:topic :thunder-clap/fx-perform :mode :perform
+                          :level-payload (fn [_ _ p]
+                                           {:performed? (boolean (:performed? p))
+                                            :ticks (long (or (:ticks p) (:charge-ticks p) 0))
+                                            :charge-ratio (double (or (:charge-ratio p) 0.0))
+                                            :target (get p :target)})}
+                :end {:topic :thunder-clap/fx-end :mode :end
+                      :level-payload (fn [_ _ p]
+                                       {:performed? (boolean (:performed? p))
+                                        :ticks (long (or (:ticks p) (:charge-ticks p) 0))
+                                        :charge-ratio (double (or (:charge-ratio p) 0.0))
+                                        :target (get p :target)})}}})
   nil)

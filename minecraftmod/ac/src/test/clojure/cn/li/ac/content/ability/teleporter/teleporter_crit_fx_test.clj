@@ -10,42 +10,46 @@
 
 (deftest init-registers-teleporter-crit-channel-test
   (let [registered-level* (atom nil)
-        registered-handler* (atom nil)]
+        registered-topics* (atom #{})]
     (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
                                                          (reset! registered-level* [effect-id effect-map])
                                                          nil)
-                  fx-registry/register-fx-channels! (fn [channels handler]
-                                                      (reset! registered-handler* {:channels channels
-                                                                                   :handler handler})
+                  fx-registry/register-fx-channel! (fn [topic _handler]
+                                                      (swap! registered-topics* conj topic)
                                                       nil)]
       (crit-fx/init!)
       (is (= :teleporter-crit (first @registered-level*)))
       (is (= #{:teleporter/fx-crit-hit}
-             (set (:channels @registered-handler*)))))))
+             @registered-topics*)))))
 
 (deftest fx-handler-routes-crit-payload-test
-  (let [handler* (atom nil)
+  (let [handlers* (atom {})
         enqueued* (atom [])]
     (with-redefs [level-effects/register-level-effect! (fn [& _] nil)
-                  fx-registry/register-fx-channels! (fn [_ handler]
-                                                      (reset! handler* handler)
+                  fx-registry/register-fx-channel! (fn [topic handler]
+                                                      (swap! handlers* assoc topic handler)
                                                       nil)
                   level-effects/enqueue-level-effect! (fn [effect-id payload fx-context]
                                                         (swap! enqueued* conj [effect-id payload fx-context])
                                                         nil)]
       (crit-fx/init!)
-      (@handler* "ctx-1" :teleporter/fx-crit-hit {:x 1.0 :y 2.0 :z 3.0 :crit-level 2 :crit-rate 2.6 :message-key "ability.teleporter.critical_hit" :message-args ["x2.6"] :target-uuid "t" :skill-id :flesh-ripping})
+      ((get @handlers* :teleporter/fx-crit-hit) "ctx-1" :teleporter/fx-crit-hit {:x 1.0 :y 2.0 :z 3.0 :crit-level 2 :crit-rate 2.6 :message-key "ability.teleporter.critical_hit" :message-args ["x2.6"] :target-uuid "t" :skill-id :flesh-ripping})
       (is (= [[:teleporter-crit {:mode :crit-hit
+                                 :owner-key [:ctx "ctx-1"]
+                                 :ctx-id "ctx-1"
+                                 :channel :teleporter/fx-crit-hit
                                  :x 1.0
                                  :y 2.0
                                  :z 3.0
                                  :crit-level 2
-                 :crit-rate 2.6
-                 :message-key "ability.teleporter.critical_hit"
-                 :message-args ["x2.6"]
+                                 :crit-rate 2.6
+                                 :message-key "ability.teleporter.critical_hit"
+                                 :message-args ["x2.6"]
                                  :target-uuid "t"
                                  :skill-id :flesh-ripping}
-                {:ctx-id "ctx-1" :channel :teleporter/fx-crit-hit}]]
+                {:ctx-id "ctx-1"
+                 :channel :teleporter/fx-crit-hit
+                 :owner-key [:ctx "ctx-1"]}]]
              @enqueued*)))))
 
     (deftest enqueue-crit-hit-emits-level-scaled-effects-and-notice-test

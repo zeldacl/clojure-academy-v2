@@ -2,7 +2,7 @@
   "Client FX for MineDetect: local ore scan + textured highlight rendering."
   (:require [clojure.string :as str]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
-            [cn.li.ac.ability.client.fx-registry :as fx-registry]
+            [cn.li.ac.ability.client.fx-spec :as fx-spec]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.render-util :as ru]))
 
@@ -228,25 +228,17 @@
 
 (defn init!
   []
-  (level-effects/register-level-effect! mine-detect-effect-id
-    {:initial-state (default-mine-detect-fx-runtime-state)
-     :enqueue-state-fn enqueue-state!
-     :tick-state-fn tick-state!
-     :build-plan-fn build-plan})
-  (fx-registry/register-fx-channels!
-    [:mine-detect/fx-perform :mine-detect/fx-end]
-    (fn [ctx-id channel payload]
-      (case channel
-        :mine-detect/fx-perform
-        (level-effects/enqueue-level-effect! mine-detect-effect-id
-                                             {:mode :perform
-                                              :range (:range payload)
-                                              :advanced? (:advanced? payload)
-                                              :life-ticks (:life-ticks payload)
-                                              :rescan-interval (:rescan-interval payload)}
-                                             {:ctx-id ctx-id :channel channel})
-        :mine-detect/fx-end
-        (level-effects/enqueue-level-effect! mine-detect-effect-id {:mode :end}
-                                             {:ctx-id ctx-id :channel channel})
-        nil)))
+  (fx-spec/register!
+    {:id mine-detect-effect-id
+     :level {:initial-state (default-mine-detect-fx-runtime-state)
+             :enqueue-state-fn enqueue-state!
+             :tick-state-fn tick-state!
+             :build-plan-fn build-plan}
+     :channels {:perform {:topic :mine-detect/fx-perform :mode :perform
+                         :level-payload (fn [_ _ p]
+                                          {:range (:range p)
+                                           :advanced? (:advanced? p)
+                                           :life-ticks (:life-ticks p)
+                                           :rescan-interval (:rescan-interval p)})}
+                :end {:topic :mine-detect/fx-end :mode :end}}})
   nil)

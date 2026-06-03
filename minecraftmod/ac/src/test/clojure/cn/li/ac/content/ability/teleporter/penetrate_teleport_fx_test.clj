@@ -22,21 +22,20 @@
 
 (deftest init-registers-penetrate-fx-channels-test
   (let [registered-level* (atom nil)
-        registered-handler* (atom nil)]
+        registered-topics* (atom #{})]
     (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
                                                          (reset! registered-level* [effect-id effect-map])
                                                          nil)
-                  fx-registry/register-fx-channels! (fn [channels handler]
-                                                      (reset! registered-handler* {:channels channels
-                                                                                   :handler handler})
+                  fx-registry/register-fx-channel! (fn [topic _handler]
+                                                      (swap! registered-topics* conj topic)
                                                       nil)]
       (pfx/init!)
       (is (= :penetrate-teleport (first @registered-level*)))
-      (is (= #{:penetrate-tp/fx-start
-               :penetrate-tp/fx-update
-               :penetrate-tp/fx-perform
-               :penetrate-tp/fx-end}
-             (set (:channels @registered-handler*)))))))
+      (is (= #{:penetrate-teleport/fx-start
+               :penetrate-teleport/fx-update
+               :penetrate-teleport/fx-perform
+               :penetrate-teleport/fx-end}
+             @registered-topics*)))))
 
 (deftest perform-and-tick-emit-particles-and-sound-test
   (let [particle-calls* (atom [])
@@ -50,12 +49,12 @@
                                                       nil)]
       (pfx/init!)
       (level-effects/enqueue-level-effect! :penetrate-teleport {:mode :start}
-                                           {:ctx-id "ctx-1" :channel :penetrate-tp/fx-test :owner-key [:ctx "ctx-1"]})
+                                           {:ctx-id "ctx-1" :channel :penetrate-teleport/fx-start :owner-key [:ctx "ctx-1"]})
       (level-effects/enqueue-level-effect! :penetrate-teleport {:mode :update :available? true :distance 12.0 :x 1.0 :y 2.0 :z 3.0}
-                                           {:ctx-id "ctx-1" :channel :penetrate-tp/fx-test :owner-key [:ctx "ctx-1"]})
+                                           {:ctx-id "ctx-1" :channel :penetrate-teleport/fx-update :owner-key [:ctx "ctx-1"]})
       (dotimes [_ 3] (level-effects/tick-level-effects!))
       (level-effects/enqueue-level-effect! :penetrate-teleport {:mode :perform :x 4.0 :y 5.0 :z 6.0}
-                                           {:ctx-id "ctx-1" :channel :penetrate-tp/fx-test :owner-key [:ctx "ctx-1"]})
+                                           {:ctx-id "ctx-1" :channel :penetrate-teleport/fx-perform :owner-key [:ctx "ctx-1"]})
       (is (true? (get-in (pfx/penetrate-teleport-fx-snapshot) [:fx-state [:ctx "ctx-1"] :available?])))
       (is (= 2 (count @particle-calls*)))
       (is (= 1 (count @sound-calls*))))))
@@ -70,7 +69,7 @@
         (fn []
           (pfx/init!)
           (level-effects/enqueue-level-effect! :penetrate-teleport {:mode :start}
-                                               {:ctx-id "ctx-a" :channel :penetrate-tp/fx-test :owner-key [:ctx "ctx-a"]})
+                                               {:ctx-id "ctx-a" :channel :penetrate-teleport/fx-start :owner-key [:ctx "ctx-a"]})
           (is (= #{[:ctx "ctx-a"]}
                  (set (keys (:fx-state (pfx/penetrate-teleport-fx-snapshot))))))))
       (level-effects/call-with-level-effect-runtime runtime-b
@@ -79,7 +78,7 @@
           (is (= {:fx-state {}}
                  (pfx/penetrate-teleport-fx-snapshot)))
           (level-effects/enqueue-level-effect! :penetrate-teleport {:mode :start}
-                                               {:ctx-id "ctx-b" :channel :penetrate-tp/fx-test :owner-key [:ctx "ctx-b"]})
+                                               {:ctx-id "ctx-b" :channel :penetrate-teleport/fx-start :owner-key [:ctx "ctx-b"]})
           (is (= #{[:ctx "ctx-b"]}
                  (set (keys (:fx-state (pfx/penetrate-teleport-fx-snapshot))))))))
       (level-effects/call-with-level-effect-runtime runtime-a

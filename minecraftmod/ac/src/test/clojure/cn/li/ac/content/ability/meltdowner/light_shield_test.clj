@@ -1,5 +1,6 @@
 (ns cn.li.ac.content.ability.meltdowner.light-shield-test
   (:require [clojure.test :refer [deftest is testing]]
+            [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
@@ -17,8 +18,8 @@
 (deftest activate-does-not-manually-send-fx-test
   (testing "activate! initializes state but does not manually emit client FX"
     (with-redefs [ctx-skill/update-skill-state-root! (fn [& _] nil)
-                  ctx/ctx-send-to-client! (fn [& _]
-                                            (throw (ex-info "manual fx send should not happen" {})))
+                  fx/send! (fn [& _]
+                             (throw (ex-info "manual fx send should not happen" {})))
                   skill-effects/player-path (fn [& _] 12.0)
                   skill-config/tunable-int (fn [& _] 1)]
       (is (nil? (ls/light-shield-activate! {:ctx-id "ctx-1" :player-id "p-1"}))))))
@@ -140,12 +141,13 @@
                     skill-effects/player-path (fn [& _] {:world-id "w" :x 0.0 :y 64.0 :z 0.0})
                     ls/get-player-position (fn [_] {:world-id "w" :x 0.0 :y 64.0 :z 0.0})
                     ls/get-player-look-vector (fn [_] {:x 1.0 :y 0.0 :z 0.0})
+                    world-effects/available? (constantly true)
                     world-effects/find-entities-in-radius* (fn [& _]
-                                                            [{:uuid "enemy-1"
-                                                              :x 1.0 :y 64.0 :z 0.0
-                                                              :living? true}])]
-          (is (= [4.0 {:absorbed 6.0}]
-                 (reduce-damage! "p-3" "enemy-1" 10.0 :magic))))
+                                                             [{:uuid "enemy-1"
+                                                               :x 1.0 :y 64.0 :z 0.0
+                                                               :living? true}])]
+        (is (= [4.0 {:absorbed 6.0}]
+               (reduce-damage! "p-3" "enemy-1" 10.0 :magic)))
         (is (= [["p-3" :light-shield 0.0024000000000000002]] @exp-calls*))
         (is (seq @update-calls*))))))
 
@@ -180,9 +182,10 @@
                     skill-effects/set-main-cooldown! (fn [player-id skill-id ticks]
                                                        (swap! cooldown-calls* conj [player-id skill-id ticks])
                                                        true)
+                    potion-effects/available? (constantly true)
                     potion-effects/apply-potion-effect!* (fn [& _]
-                                                          (swap! potion-calls* inc)
-                                                          nil)]
+                                                           (swap! potion-calls* inc)
+                                                           nil)]
         (ls/light-shield-tick! {:player-id "p-3" :ctx-id "ctx-3" :cost-ok? true})
         (is (= 1 @remove-calls*))
         (is (= 1 @potion-calls*))
@@ -202,9 +205,10 @@
                                                  :effect.abort-slowness-duration-ticks 40
                                                  :effect.slowness-amplifier 1
                                                  1))
+                    potion-effects/available? (constantly true)
                     potion-effects/apply-potion-effect!* (fn [& args]
-                                                          (swap! potion-calls* conj args)
-                                                          nil)]
+                                                           (swap! potion-calls* conj args)
+                                                           nil)]
         (ls/light-shield-abort! {:player-id "p-4" :ctx-id "ctx-4"})
         (is (= 1 @remove-calls*))
         (is (= 1 (count @potion-calls*)))

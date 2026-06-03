@@ -2,7 +2,7 @@
   "Client FX for ScatterBomb: ball spawn + scatter beam flashes."
   (:require [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
-            [cn.li.ac.ability.client.fx-registry :as fx-registry]
+            [cn.li.ac.ability.client.fx-spec :as fx-spec]
             [cn.li.ac.ability.client.level-effects :as level-effects]))
 
 (def ^:private scatter-bomb-effect-id :scatter-bomb)
@@ -100,30 +100,18 @@
 
 (defn init!
   []
-  (level-effects/register-level-effect! scatter-bomb-effect-id
-    {:initial-state (default-scatter-bomb-fx-runtime-state)
-     :enqueue-state-fn enqueue-state!
-     :tick-state-fn tick-state!
-     :build-plan-fn build-plan})
-  (fx-registry/register-fx-channels!
-    [:scatter-bomb/fx-start :scatter-bomb/fx-ball :scatter-bomb/fx-beam :scatter-bomb/fx-end]
-    (fn [ctx-id channel payload]
-      (let [meta-payload (select-keys payload [:effect-instance-id :source-player-id :world-id])]
-        (case channel
-          :scatter-bomb/fx-start
-          (level-effects/enqueue-level-effect! scatter-bomb-effect-id (merge meta-payload {:mode :start})
-                                               {:ctx-id ctx-id :channel channel})
-          :scatter-bomb/fx-ball
-          (level-effects/enqueue-level-effect! scatter-bomb-effect-id
-            (merge meta-payload
-                   {:mode :ball :x (:x payload) :y (:y payload) :z (:z payload) :count (:count payload)})
-            {:ctx-id ctx-id :channel channel})
-          :scatter-bomb/fx-beam
-          (level-effects/enqueue-level-effect! scatter-bomb-effect-id
-            (merge meta-payload {:mode :beam :start (:start payload) :end (:end payload)})
-            {:ctx-id ctx-id :channel channel})
-          :scatter-bomb/fx-end
-          (level-effects/enqueue-level-effect! scatter-bomb-effect-id (merge meta-payload {:mode :end})
-                                               {:ctx-id ctx-id :channel channel})
-          nil))))
+  (fx-spec/register!
+    {:id scatter-bomb-effect-id
+     :level {:initial-state (default-scatter-bomb-fx-runtime-state)
+             :enqueue-state-fn enqueue-state!
+             :tick-state-fn tick-state!
+             :build-plan-fn build-plan}
+     :channels {:start {:topic :scatter-bomb/fx-start :mode :start}
+                :ball {:topic :scatter-bomb/fx-ball :mode :ball
+                       :level-payload (fn [_ _ p]
+                                        {:x (:x p) :y (:y p) :z (:z p) :count (:count p)})}
+                :beam {:topic :scatter-bomb/fx-beam :mode :beam
+                       :level-payload (fn [_ _ p]
+                                        {:start (:start p) :end (:end p)})}
+                :end {:topic :scatter-bomb/fx-end :mode :end}}})
   nil)

@@ -10,6 +10,7 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill]]
+            [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
                         [cn.li.ac.ability.service.skill-effects :as skill-effects]
@@ -198,7 +199,7 @@
           (skill-effects/add-skill-exp! player-id flashing-skill-id
                                         (helper/cfg-double flashing-skill-id :progression.exp-blink))
           (ach-dispatcher/trigger-custom-event! player-id "teleporter.flashing")
-          (ctx/ctx-send-to-client! ctx-id :flashing/fx-perform preview)
+          (fx/send! ctx-id {:topic :flashing/fx-perform :mode :perform} nil preview)
           true)))))
 
 (defn- update-preview!
@@ -210,7 +211,7 @@
                                     (assoc :active? true)
                                     (assoc :direction direction)
                                     (assoc :preview preview))))
-    (ctx/ctx-send-to-client! ctx-id mode preview)))
+    (fx/send! ctx-id {:topic mode} nil preview)))
 
 (defn- register-movement-listeners!
   [ctx-id]
@@ -234,7 +235,7 @@
                        (when-let [direction (movement-key->direction key)]
                          (perform-flash! (:player-uuid active-ctx) ctx-id direction)
                          (clear-preview! ctx-id)
-                         (ctx/ctx-send-to-client! ctx-id :flashing/fx-preview-end {:direction direction}))))))
+                         (fx/send! ctx-id {:topic :flashing/fx-preview-end} nil {:direction direction}))))))
               (set-skill-state! ctx-id [:listeners-installed?] true)))
 
 (defn flashing-activate!
@@ -263,7 +264,7 @@
 
 (defn flashing-deactivate!
   [{:keys [player-id ctx-id]}]
-  (ctx/ctx-send-to-client! ctx-id :flashing/fx-state-end {})
+  (fx/send! ctx-id {:topic :flashing/fx-state-end} nil {})
   (update-skill-state-root! ctx-id
                             (fn [st]
                               (-> (or st {})
@@ -275,7 +276,7 @@
 
 (defn flashing-abort!
   [{:keys [player-id ctx-id]}]
-  (ctx/ctx-send-to-client! ctx-id :flashing/fx-state-end {})
+  (fx/send! ctx-id {:topic :flashing/fx-state-end} nil {})
   (update-skill-state-root! ctx-id
                             (fn [st]
                               (-> (or st {})

@@ -15,6 +15,7 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill]]
+            [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
                         [cn.li.ac.ability.service.skill-effects :as skill-effects]
@@ -230,13 +231,11 @@
                                                           (:target-y target)
                                                           (:target-z target))]
               (when success
-                (ctx/ctx-send-to-client! ctx-id
-                                         :mark-teleport/fx-perform
-                                         (merge {:mode :perform
-                                                 :skill-id mark-teleport-skill-id
-                                                 :player-id player-id
-                                                 :ctx-id ctx-id}
-                                                (or (build-target-fx-payload target) {})))
+                (fx/send! ctx-id {:topic :mark-teleport/fx-perform :mode :perform} nil
+                          (merge {:skill-id mark-teleport-skill-id
+                                  :player-id player-id
+                                  :ctx-id ctx-id}
+                                 (or (build-target-fx-payload target) {})))
                 (teleportation/reset-fall-damage!* player-id)
                 (add-exp! player-id (* (helper/cfg-double mark-teleport-skill-id
                                                           :progression.exp-per-distance)

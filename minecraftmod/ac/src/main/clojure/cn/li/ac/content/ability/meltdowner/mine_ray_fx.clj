@@ -2,7 +2,7 @@
   "Client FX for all mine-ray variants: beam glow + block progress indicator."
   (:require [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
-            [cn.li.ac.ability.client.fx-registry :as fx-registry]
+            [cn.li.ac.ability.client.fx-spec :as fx-spec]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.render-util :as ru]))
 
@@ -139,29 +139,17 @@
 
 (defn init!
   []
-  (level-effects/register-level-effect! mine-ray-effect-id
-    {:initial-state (default-mine-ray-fx-runtime-state)
-     :enqueue-state-fn enqueue-state!
-     :tick-state-fn tick-state!
-     :build-plan-fn build-plan})
-  (fx-registry/register-fx-channels!
-    [:mine-ray/fx-start :mine-ray/fx-progress :mine-ray/fx-end]
-    (fn [ctx-id channel payload]
-      (let [meta-payload (select-keys payload [:effect-instance-id :source-player-id :world-id])]
-        (case channel
-          :mine-ray/fx-start
-          (level-effects/enqueue-level-effect! mine-ray-effect-id
-            (merge meta-payload {:mode :start :variant (:variant payload)})
-            {:ctx-id ctx-id :channel channel})
-          :mine-ray/fx-progress
-          (level-effects/enqueue-level-effect! mine-ray-effect-id
-            (merge meta-payload
-                   {:mode :progress
-                    :x (:x payload) :y (:y payload) :z (:z payload)
-                    :progress (:progress payload)})
-            {:ctx-id ctx-id :channel channel})
-          :mine-ray/fx-end
-          (level-effects/enqueue-level-effect! mine-ray-effect-id (merge meta-payload {:mode :end})
-                                               {:ctx-id ctx-id :channel channel})
-          nil))))
+  (fx-spec/register!
+    {:id mine-ray-effect-id
+     :level {:initial-state (default-mine-ray-fx-runtime-state)
+             :enqueue-state-fn enqueue-state!
+             :tick-state-fn tick-state!
+             :build-plan-fn build-plan}
+     :channels {:start {:topic :mine-ray/fx-start :mode :start
+                        :level-payload (fn [_ _ p] {:variant (:variant p)})}
+                :progress {:topic :mine-ray/fx-progress :mode :progress
+                           :level-payload (fn [_ _ p]
+                                            {:x (:x p) :y (:y p) :z (:z p)
+                                             :progress (:progress p)})}
+                :end {:topic :mine-ray/fx-end :mode :end}}})
   nil)

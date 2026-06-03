@@ -2,7 +2,7 @@
   "Client FX for ShiftTeleport: portal particles at arrival point."
   (:require [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
-            [cn.li.ac.ability.client.fx-registry :as fx-registry]
+            [cn.li.ac.ability.client.fx-spec :as fx-spec]
             [cn.li.ac.ability.client.level-effects :as level-effects]))
 
 (def ^:private shift-teleport-effect-id :shift-teleport)
@@ -117,39 +117,22 @@
 (defn- build-plan [_cp _hcp _tick] nil)
 
 (defn init! []
-  (level-effects/register-level-effect! shift-teleport-effect-id
-                                        {:initial-state (default-shift-teleport-fx-runtime-state)
-                                         :enqueue-state-fn enqueue-state!
-                                         :tick-state-fn tick-state!
-                                         :build-plan-fn build-plan})
-  (fx-registry/register-fx-channels!
-    [:shift-tp/fx-start :shift-tp/fx-update :shift-tp/fx-perform :shift-tp/fx-end]
-    (fn [ctx-id channel payload]
-      (let [meta-payload (select-keys payload [:effect-instance-id :source-player-id :world-id])]
-        (case channel
-          :shift-tp/fx-start
-          (level-effects/enqueue-level-effect! :shift-teleport (merge meta-payload {:mode :start})
-                                               {:ctx-id ctx-id :channel channel})
-          :shift-tp/fx-update
-          (level-effects/enqueue-level-effect! :shift-teleport
-                                               (merge meta-payload
-                                                      {:mode :update
-                                                       :x (:x payload)
-                                                       :y (:y payload)
-                                                       :z (:z payload)
-                                                       :target-count (:target-count payload)
-                                                       :target-hit? (:target-hit? payload)
-                                                       :hand-valid? (:hand-valid? payload)})
-                                               {:ctx-id ctx-id :channel channel})
-          :shift-tp/fx-perform
-          (level-effects/enqueue-level-effect! :shift-teleport
-                                               (merge meta-payload
-                                                      {:mode :perform
-                                                       :x (:x payload) :y (:y payload) :z (:z payload)
-                                                       :from-x (:from-x payload) :from-y (:from-y payload) :from-z (:from-z payload)})
-                                               {:ctx-id ctx-id :channel channel})
-          :shift-tp/fx-end
-          (level-effects/enqueue-level-effect! :shift-teleport (merge meta-payload {:mode :end})
-                                               {:ctx-id ctx-id :channel channel})
-          nil))))
+  (fx-spec/register!
+    {:id shift-teleport-effect-id
+     :level {:initial-state (default-shift-teleport-fx-runtime-state)
+             :enqueue-state-fn enqueue-state!
+             :tick-state-fn tick-state!
+             :build-plan-fn build-plan}
+     :channels {:start {:topic :shift-teleport/fx-start :mode :start}
+                :update {:topic :shift-teleport/fx-update :mode :update
+                         :level-payload (fn [_ _ p]
+                                          {:x (:x p) :y (:y p) :z (:z p)
+                                           :target-count (:target-count p)
+                                           :target-hit? (:target-hit? p)
+                                           :hand-valid? (:hand-valid? p)})}
+                :perform {:topic :shift-teleport/fx-perform :mode :perform
+                          :level-payload (fn [_ _ p]
+                                           {:x (:x p) :y (:y p) :z (:z p)
+                                            :from-x (:from-x p) :from-y (:from-y p) :from-z (:from-z p)})}
+                :end {:topic :shift-teleport/fx-end :mode :end}}})
   nil)

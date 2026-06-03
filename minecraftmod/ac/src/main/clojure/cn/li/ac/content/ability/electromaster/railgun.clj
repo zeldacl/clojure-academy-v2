@@ -6,6 +6,7 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill]]
+            [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
@@ -206,9 +207,7 @@
                           max-distance)
             dir         {:x (:dx look-vec) :y (:dy look-vec) :z (:dz look-vec)}
             end-pos     (geom/v+ start-pos (geom/v* dir actual-dist))]
-        (ctx/ctx-send-to-client! ctx-id :railgun/fx-reflect
-                                 {:mode         :reflect
-                                  :start        start-pos
+        (fx/send! ctx-id {:topic :railgun/fx-reflect :mode :reflect} nil {:start        start-pos
                                   :end          end-pos
                                   :hit-distance actual-dist})
         (when (and (= (:hit-type hit) :entity) (entity-damage/available?))

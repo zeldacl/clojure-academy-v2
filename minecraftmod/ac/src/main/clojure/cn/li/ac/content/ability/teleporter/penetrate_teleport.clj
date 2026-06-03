@@ -9,6 +9,7 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill]]
+            [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
                         [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
@@ -270,7 +271,7 @@
                                            (double (:distance resolved))))
           (ach-dispatcher/trigger-custom-event! player-id "teleporter.ignore_barrier")
           (skill-effects/set-main-cooldown! player-id penetrate-teleport-skill-id (cooldown-ticks exp))
-          (ctx/ctx-send-to-client! ctx-id :penetrate-tp/fx-perform dest))
+          (fx/send! ctx-id {:topic :penetrate-teleport/fx-perform :mode :perform} nil dest))
         (log/debug "PenetrateTP: execute failed" {:cost-ok? cost-ok?
                                                    :available? (:available? resolved)})))
     (catch Exception e
@@ -305,9 +306,9 @@
                    :tick!  penetrate-tp-tick!
                    :up!    penetrate-tp-up!
                    :abort! penetrate-tp-abort!}
-  :fx             {:start {:topic :penetrate-tp/fx-start :payload (fn [_] {})}
-                   :update {:topic :penetrate-tp/fx-update :payload (fn [{:keys [ctx-id]}]
+  :fx             {:start {:topic :penetrate-teleport/fx-start :payload (fn [_] {})}
+                   :update {:topic :penetrate-teleport/fx-update :payload (fn [{:keys [ctx-id]}]
                                                                       (preview-payload ctx-id))}
-                   :end   {:topic :penetrate-tp/fx-end   :payload (fn [_] {})}}
+                   :end   {:topic :penetrate-teleport/fx-end   :payload (fn [_] {})}}
   :prerequisites  [{:skill-id :threatening-teleport :min-exp 0.5}])
 

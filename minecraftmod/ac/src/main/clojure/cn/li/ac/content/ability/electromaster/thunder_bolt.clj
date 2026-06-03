@@ -6,6 +6,7 @@
   Cooldown: lerp(120,50) ticks by exp
   Exp: +0.005 effective / +0.003 ineffective"
   (:require [cn.li.ac.ability.dsl :refer [defskill]]
+            [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
@@ -161,9 +162,7 @@
                                       (double (:z impact))))
     (when direct-hit?
       (try-apply-slowness! target-uuid exp*))
-    (ctx/ctx-send-to-client! ctx-id
-                             :thunder-bolt/fx-perform
-                             {:start eye
+    (fx/send! ctx-id {:topic :thunder-bolt/fx-perform} nil {:start eye
                               :end impact
                               :aoe-points aoe-points
                               :source-player-id player-id

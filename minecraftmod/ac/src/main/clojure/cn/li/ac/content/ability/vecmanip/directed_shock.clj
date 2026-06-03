@@ -11,7 +11,7 @@
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
                         [cn.li.ac.ability.skill-config :as skill-config]
-            [cn.li.ac.content.ability.fx-helpers :as fx]
+            [cn.li.ac.ability.fx :as fx]
                         [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.entity-motion :as entity-motion]
             [cn.li.mcmod.platform.raycast :as raycast]
@@ -52,7 +52,7 @@
 
 (defn- terminate-with-end!
   [ctx-id performed?]
-  (fx/send-end! ctx-id :directed-shock/fx-end {:performed? performed?})
+  (fx/send! ctx-id {:topic :directed-shock/fx-end :mode :end} nil {:performed? performed?})
   (when-let [ctx-data (ctx/get-context ctx-id)]
     (set-skill-state-root! ctx-id (assoc (:skill-state ctx-data) :performed? performed?)))
   (clear-skill-state! ctx-id)
@@ -100,7 +100,7 @@
                                     :performed? false
                                     :punched? false
                                     :punch-ticks 0})
-            (fx/send-start! ctx-id :directed-shock/fx-start))
+            (fx/send! ctx-id {:topic :directed-shock/fx-start :mode :start}))
    :tick! (fn [{:keys [ctx-id]}]
             (when-let [ctx-data (ctx/get-context ctx-id)]
               (if (true? (get-in ctx-data [:skill-state :punched?]))
@@ -141,8 +141,7 @@
                         (when (entity-motion/available?)
                           (entity-motion/add-velocity!* world-id target-id
                            (:x impulse) (:y impulse) (:z impulse)))
-                        (fx/send-perform! ctx-id :directed-shock/fx-perform
-                                          {:target-id target-id
+                        (fx/send! ctx-id {:topic :directed-shock/fx-perform :mode :perform} nil {:target-id target-id
                                            :world-id world-id
                                            :impulse impulse
                                            :knockback knockback})

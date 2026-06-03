@@ -19,42 +19,53 @@
 (use-fixtures :each with-fresh-current-charging-fx-runtime)
 
 (deftest init-registers-current-charging-fx-channels-test
-  (let [registered-handler* (atom nil)
+  (let [registered-topics* (atom #{})
         registered-hand* (atom nil)]
     (with-redefs [hand-effects/register-hand-effect! (fn [effect-id effect-map]
                                                        (reset! registered-hand* [effect-id effect-map])
                                                        nil)
                   hand-effects/reset-hand-effect-state-for-test! (fn [& _] nil)
-                  fx-registry/register-fx-channels! (fn [channels handler]
-                                                      (reset! registered-handler* {:channels channels
-                                                                                   :handler handler})
+                  fx-registry/register-fx-channel! (fn [topic _handler]
+                                                      (swap! registered-topics* conj topic)
                                                       nil)]
       (current-charging-fx/init!)
       (is (= :current-charging (first @registered-hand*)))
-      (is (= [:current-charging/fx-start
-              :current-charging/fx-update
-              :current-charging/fx-end]
-             (:channels @registered-handler*)))
-      (is (fn? (:handler @registered-handler*))))))
+      (is (= #{:current-charging/fx-start
+               :current-charging/fx-update
+               :current-charging/fx-end}
+             @registered-topics*)))))
 
 (deftest fx-handler-routes-through-hand-effects-test
-  (let [handler* (atom nil)
+  (let [handlers* (atom {})
         hand-enqueued* (atom [])]
     (with-redefs [hand-effects/register-hand-effect! (fn [& _] nil)
                   hand-effects/reset-hand-effect-state-for-test! (fn [& _] nil)
-                  fx-registry/register-fx-channels! (fn [_ handler]
-                                                      (reset! handler* handler)
+                  fx-registry/register-fx-channel! (fn [topic handler]
+                                                      (swap! handlers* assoc topic handler)
                                                       nil)
                   hand-effects/enqueue-hand-effect! (fn [effect-id payload]
                                                       (swap! hand-enqueued* conj [effect-id payload])
                                                       nil)]
       (current-charging-fx/init!)
-      (@handler* "ctx-1" :current-charging/fx-start {:is-item true})
-      (@handler* "ctx-1" :current-charging/fx-update {:good? true :charge-ticks 20})
-      (@handler* "ctx-1" :current-charging/fx-end {:is-item true})
-      (is (= [[:current-charging {:is-item true :mode :start :ctx-id "ctx-1"}]
-              [:current-charging {:good? true :charge-ticks 20 :mode :update :ctx-id "ctx-1"}]
-              [:current-charging {:is-item true :mode :end :ctx-id "ctx-1"}]]
+      ((get @handlers* :current-charging/fx-start) "ctx-1" :current-charging/fx-start {:is-item true})
+      ((get @handlers* :current-charging/fx-update) "ctx-1" :current-charging/fx-update {:good? true :charge-ticks 20})
+      ((get @handlers* :current-charging/fx-end) "ctx-1" :current-charging/fx-end {:is-item true})
+      (is (= [[:current-charging {:mode :start
+                                   :owner-key [:ctx "ctx-1"]
+                                   :ctx-id "ctx-1"
+                                   :channel :current-charging/fx-start
+                                   :is-item true}]
+              [:current-charging {:mode :update
+                                   :owner-key [:ctx "ctx-1"]
+                                   :ctx-id "ctx-1"
+                                   :channel :current-charging/fx-update
+                                   :good? true
+                                   :charge-ticks 20}]
+              [:current-charging {:mode :end
+                                   :owner-key [:ctx "ctx-1"]
+                                   :ctx-id "ctx-1"
+                                   :channel :current-charging/fx-end
+                                   :is-item true}]]
              @hand-enqueued*)))))
 
 (deftest fx-state-updates-and-queues-loop-sound-test

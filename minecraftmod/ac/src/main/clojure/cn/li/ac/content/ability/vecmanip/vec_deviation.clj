@@ -15,6 +15,7 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill]]
+            [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.content.ability.vecmanip.arbitration :as arbitration]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
@@ -126,19 +127,17 @@
   (fx-common/add-skill-exp! player-id :vec-deviation amount))
 
 (defn- send-fx-stop-entity! [ctx-id entity marked?]
-  (ctx/ctx-send-to-client! ctx-id :vec-deviation/fx-stop-entity
-                           {:mode :stop-entity
-                            :x (double (or (:x entity) 0.0))
-                            :y (double (or (:y entity) 0.0))
-                            :z (double (or (:z entity) 0.0))
-                            :marked? (boolean marked?)}))
+  (fx/send! ctx-id {:topic :vec-deviation/fx-stop-entity :mode :stop-entity} nil
+            {:x (double (or (:x entity) 0.0))
+             :y (double (or (:y entity) 0.0))
+             :z (double (or (:z entity) 0.0))
+             :marked? (boolean marked?)}))
 
 (defn- send-fx-play! [ctx-id pos]
-  (ctx/ctx-send-to-client! ctx-id :vec-deviation/fx-play
-                           {:mode :play
-                            :x (double (or (:x pos) 0.0))
-                            :y (double (or (:y pos) 0.0))
-                            :z (double (or (:z pos) 0.0))}))
+  (fx/send! ctx-id {:topic :vec-deviation/fx-play :mode :play} nil
+            {:x (double (or (:x pos) 0.0))
+             :y (double (or (:y pos) 0.0))
+             :z (double (or (:z pos) 0.0))}))
 
 ;; ============================================================================
 ;; DSL actions (used by :pattern :toggle)

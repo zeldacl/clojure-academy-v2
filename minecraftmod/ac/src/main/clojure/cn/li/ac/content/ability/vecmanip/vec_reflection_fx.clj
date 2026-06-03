@@ -1,7 +1,7 @@
 (ns cn.li.ac.content.ability.vecmanip.vec-reflection-fx
   "Client FX for VecReflection: double ring + reflection wave billboards."
   (:require [cn.li.ac.ability.client.effects.sounds :as client-sounds]
-            [cn.li.ac.ability.client.fx-registry :as fx-registry]
+            [cn.li.ac.ability.client.fx-spec :as fx-spec]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.render-util :as ru]))
 
@@ -164,35 +164,23 @@
 
 (defn init!
   []
-  (level-effects/register-level-effect! vec-reflection-effect-id
-    {:initial-state (default-vec-reflection-fx-runtime-state)
-     :enqueue-state-fn enqueue-state!
-     :tick-state-fn tick-state!
-     :build-plan-fn build-plan})
-  (fx-registry/register-fx-channels!
-    [:vec-reflection/fx-start :vec-reflection/fx-end
-     :vec-reflection/fx-reflect-entity :vec-reflection/fx-play]
-    (fn [ctx-id channel payload]
-      (case channel
-        :vec-reflection/fx-start
-        (level-effects/enqueue-level-effect! vec-reflection-effect-id {:mode :start}
-                                             {:ctx-id ctx-id :channel channel})
-        :vec-reflection/fx-end
-        (level-effects/enqueue-level-effect! vec-reflection-effect-id {:mode :end}
-                                             {:ctx-id ctx-id :channel channel})
-        :vec-reflection/fx-reflect-entity
-        (level-effects/enqueue-level-effect! vec-reflection-effect-id
-          {:mode :reflect-entity
-           :x (double (or (:x payload) 0.0))
-           :y (double (or (:y payload) 0.0))
-           :z (double (or (:z payload) 0.0))
-           :reflected? (boolean (:reflected? payload))}
-          {:ctx-id ctx-id :channel channel})
-        :vec-reflection/fx-play
-        (level-effects/enqueue-level-effect! vec-reflection-effect-id
-          {:mode :play
-           :x (double (or (:x payload) 0.0))
-           :y (double (or (:y payload) 0.0))
-           :z (double (or (:z payload) 0.0))}
-          {:ctx-id ctx-id :channel channel}))))
+  (fx-spec/register!
+    {:id vec-reflection-effect-id
+     :level {:initial-state (default-vec-reflection-fx-runtime-state)
+             :enqueue-state-fn enqueue-state!
+             :tick-state-fn tick-state!
+             :build-plan-fn build-plan}
+     :channels {:start {:topic :vec-reflection/fx-start :mode :start}
+                :end {:topic :vec-reflection/fx-end :mode :end}
+                :reflect-entity {:topic :vec-reflection/fx-reflect-entity :mode :reflect-entity
+                                 :level-payload (fn [_ _ p]
+                                                  {:x (double (or (:x p) 0.0))
+                                                   :y (double (or (:y p) 0.0))
+                                                   :z (double (or (:z p) 0.0))
+                                                   :reflected? (boolean (:reflected? p))})}
+                :play {:topic :vec-reflection/fx-play :mode :play
+                       :level-payload (fn [_ _ p]
+                                        {:x (double (or (:x p) 0.0))
+                                         :y (double (or (:y p) 0.0))
+                                         :z (double (or (:z p) 0.0))})}}})
   nil)

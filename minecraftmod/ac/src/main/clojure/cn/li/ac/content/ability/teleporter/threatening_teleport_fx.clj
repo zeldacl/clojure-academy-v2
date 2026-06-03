@@ -2,7 +2,7 @@
   "Client FX for ThreateningTeleport: aim indicator + teleport flash."
   (:require [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
-            [cn.li.ac.ability.client.fx-registry :as fx-registry]
+            [cn.li.ac.ability.client.fx-spec :as fx-spec]
             [cn.li.ac.ability.client.level-effects :as level-effects]))
 
 (def ^:private threatening-teleport-effect-id :threatening-teleport)
@@ -95,43 +95,21 @@
 (defn- build-plan [_cp _hcp _tick] nil)
 
 (defn init! []
-  (level-effects/register-level-effect! threatening-teleport-effect-id
-                                        {:initial-state (default-threatening-teleport-fx-runtime-state)
-                                         :enqueue-state-fn enqueue-state!
-                                         :tick-state-fn tick-state!
-                                         :build-plan-fn build-plan})
-  (fx-registry/register-fx-channels!
-    [:threatening-tp/fx-start :threatening-tp/fx-update :threatening-tp/fx-perform :threatening-tp/fx-end]
-    (fn [ctx-id channel payload]
-      (let [meta-payload (select-keys payload [:effect-instance-id :source-player-id :world-id])]
-        (case channel
-          :threatening-tp/fx-start
-          (level-effects/enqueue-level-effect! :threatening-teleport (merge meta-payload {:mode :start})
-                                               {:ctx-id ctx-id :channel channel})
-          :threatening-tp/fx-update
-          (level-effects/enqueue-level-effect! :threatening-teleport
-                                               (merge meta-payload
-                                                      {:mode :update
-                                                       :drop-x (:drop-x payload)
-                                                       :drop-y (:drop-y payload)
-                                                       :drop-z (:drop-z payload)
-                                                       :attacked? (:attacked? payload)})
-                                               {:ctx-id ctx-id :channel channel})
-          :threatening-tp/fx-perform
-          (level-effects/enqueue-level-effect! :threatening-teleport
-                                               (merge meta-payload
-                                                      {:mode :perform
-                                                       :start-x (:start-x payload)
-                                                       :start-y (:start-y payload)
-                                                       :start-z (:start-z payload)
-                                                       :drop-x (:drop-x payload)
-                                                       :drop-y (:drop-y payload)
-                                                       :drop-z (:drop-z payload)
-                                                       :attacked? (:attacked? payload)
-                                                       :dropped? (:dropped? payload)})
-                                               {:ctx-id ctx-id :channel channel})
-          :threatening-tp/fx-end
-          (level-effects/enqueue-level-effect! :threatening-teleport (merge meta-payload {:mode :end})
-                                               {:ctx-id ctx-id :channel channel})
-          nil))))
+  (fx-spec/register!
+    {:id threatening-teleport-effect-id
+     :level {:initial-state (default-threatening-teleport-fx-runtime-state)
+             :enqueue-state-fn enqueue-state!
+             :tick-state-fn tick-state!
+             :build-plan-fn build-plan}
+     :channels {:start {:topic :threatening-teleport/fx-start :mode :start}
+                :update {:topic :threatening-teleport/fx-update :mode :update
+                         :level-payload (fn [_ _ p]
+                                          {:drop-x (:drop-x p) :drop-y (:drop-y p) :drop-z (:drop-z p)
+                                           :attacked? (:attacked? p)})}
+                :perform {:topic :threatening-teleport/fx-perform :mode :perform
+                          :level-payload (fn [_ _ p]
+                                           {:start-x (:start-x p) :start-y (:start-y p) :start-z (:start-z p)
+                                            :drop-x (:drop-x p) :drop-y (:drop-y p) :drop-z (:drop-z p)
+                                            :attacked? (:attacked? p) :dropped? (:dropped? p)})}
+                :end {:topic :threatening-teleport/fx-end :mode :end}}})
   nil)

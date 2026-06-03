@@ -1,7 +1,7 @@
 (ns cn.li.ac.content.ability.vecmanip.vec-deviation-fx
   "Client FX for VecDeviation: ring overlay + deflection wave billboards."
   (:require [cn.li.ac.ability.client.effects.sounds :as client-sounds]
-            [cn.li.ac.ability.client.fx-registry :as fx-registry]
+            [cn.li.ac.ability.client.fx-spec :as fx-spec]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.render-util :as ru]))
 
@@ -158,35 +158,23 @@
 
 (defn init!
   []
-  (level-effects/register-level-effect! vec-deviation-effect-id
-    {:initial-state (default-vec-deviation-fx-runtime-state)
-     :enqueue-state-fn enqueue-state!
-     :tick-state-fn tick-state!
-     :build-plan-fn build-plan})
-  (fx-registry/register-fx-channels!
-    [:vec-deviation/fx-start :vec-deviation/fx-end
-     :vec-deviation/fx-stop-entity :vec-deviation/fx-play]
-    (fn [ctx-id channel payload]
-      (case channel
-        :vec-deviation/fx-start
-        (level-effects/enqueue-level-effect! vec-deviation-effect-id {:mode :start}
-                                             {:ctx-id ctx-id :channel channel})
-        :vec-deviation/fx-end
-        (level-effects/enqueue-level-effect! vec-deviation-effect-id {:mode :end}
-                                             {:ctx-id ctx-id :channel channel})
-        :vec-deviation/fx-stop-entity
-        (level-effects/enqueue-level-effect! vec-deviation-effect-id
-          {:mode :stop-entity
-           :x (double (or (:x payload) 0.0))
-           :y (double (or (:y payload) 0.0))
-           :z (double (or (:z payload) 0.0))
-           :marked? (boolean (:marked? payload))}
-          {:ctx-id ctx-id :channel channel})
-        :vec-deviation/fx-play
-        (level-effects/enqueue-level-effect! vec-deviation-effect-id
-          {:mode :play
-           :x (double (or (:x payload) 0.0))
-           :y (double (or (:y payload) 0.0))
-           :z (double (or (:z payload) 0.0))}
-          {:ctx-id ctx-id :channel channel}))))
+  (fx-spec/register!
+    {:id vec-deviation-effect-id
+     :level {:initial-state (default-vec-deviation-fx-runtime-state)
+             :enqueue-state-fn enqueue-state!
+             :tick-state-fn tick-state!
+             :build-plan-fn build-plan}
+     :channels {:start {:topic :vec-deviation/fx-start :mode :start}
+                :end {:topic :vec-deviation/fx-end :mode :end}
+                :stop-entity {:topic :vec-deviation/fx-stop-entity :mode :stop-entity
+                              :level-payload (fn [_ _ p]
+                                               {:x (double (or (:x p) 0.0))
+                                                :y (double (or (:y p) 0.0))
+                                                :z (double (or (:z p) 0.0))
+                                                :marked? (boolean (:marked? p))})}
+                :play {:topic :vec-deviation/fx-play :mode :play
+                       :level-payload (fn [_ _ p]
+                                        {:x (double (or (:x p) 0.0))
+                                         :y (double (or (:y p) 0.0))
+                                         :z (double (or (:z p) 0.0))})}}})
   nil)

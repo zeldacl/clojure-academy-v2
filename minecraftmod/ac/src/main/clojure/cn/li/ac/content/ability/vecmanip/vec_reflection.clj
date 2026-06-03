@@ -3,7 +3,7 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill]]
-            [cn.li.ac.content.ability.fx-helpers :as fx]
+            [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.content.ability.vecmanip.arbitration :as arbitration]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
@@ -236,22 +236,20 @@
   (fx-common/add-skill-exp! player-id vec-reflection-skill-id amount))
 
 (defn- send-fx-reflect-entity! [ctx-id entity]
-  (ctx/ctx-send-to-client! ctx-id :vec-reflection/fx-reflect-entity
-                           {:mode :reflect-entity
-                            :x (double (or (:x entity) 0.0))
-                            :y (double (+ (double (or (:y entity) 0.0))
-                                          (* 0.6 (double (or (:eye-height entity)
-                                                             (:height entity)
-                                                             0.0)))))
-                            :z (double (or (:z entity) 0.0))
-                            :reflected? true}))
+  (fx/send! ctx-id {:topic :vec-reflection/fx-reflect-entity :mode :reflect-entity} nil
+            {:x (double (or (:x entity) 0.0))
+             :y (double (+ (double (or (:y entity) 0.0))
+                           (* 0.6 (double (or (:eye-height entity)
+                                              (:height entity)
+                                              0.0)))))
+             :z (double (or (:z entity) 0.0))
+             :reflected? true}))
 
 (defn- send-fx-play! [ctx-id pos]
-  (ctx/ctx-send-to-client! ctx-id :vec-reflection/fx-play
-                           {:mode :play
-                            :x (double (or (:x pos) 0.0))
-                            :y (double (or (:y pos) 0.0))
-                            :z (double (or (:z pos) 0.0))}))
+  (fx/send! ctx-id {:topic :vec-reflection/fx-play :mode :play} nil
+            {:x (double (or (:x pos) 0.0))
+             :y (double (or (:y pos) 0.0))
+             :z (double (or (:z pos) 0.0))}))
 
 (defn- try-find-attacker-pos [player-id attacker-id]
   (or (when-let [st (fx-common/get-player-state attacker-id)]
@@ -277,7 +275,7 @@
           (do
             (toggle/remove-toggle! ctx-id :vec-reflection)
             (update-skill-state-root! ctx-id #(dissoc % :vec-reflection-visited :vec-reflection-visited-map :vec-reflection-overload-keep))
-            (fx/send-end! ctx-id :vec-reflection/fx-end)
+            (fx/send! ctx-id {:topic :vec-reflection/fx-end :mode :end})
             (log/info "VecReflection: Deactivated"))
           (do
             (toggle/activate-toggle! ctx-id :vec-reflection)
@@ -285,7 +283,7 @@
             (let [overload-keep (cfg-lerp :cost.overload-keep exp)]
               (set-skill-state-key! ctx-id :vec-reflection-overload-keep overload-keep)
               (enforce-overload-floor! player-id overload-keep))
-            (fx/send-start! ctx-id :vec-reflection/fx-start)
+            (fx/send! ctx-id {:topic :vec-reflection/fx-start :mode :start})
             (log/info "VecReflection: Activated")))))
     (catch Exception e
       (log/warn "VecReflection key-down failed:" (ex-message e)))))
@@ -301,7 +299,7 @@
 
         (when-not cost-ok?
           (toggle/deactivate-toggle! ctx-id :vec-reflection)
-          (fx/send-end! ctx-id :vec-reflection/fx-end)
+          (fx/send! ctx-id {:topic :vec-reflection/fx-end :mode :end})
           (log/info "VecReflection: Deactivated (insufficient CP)"))
 
         (when (and cost-ok?
@@ -352,7 +350,7 @@
                             (if-not (consume-cp! player-id reflect-cost)
                               (do
                                 (toggle/deactivate-toggle! ctx-id :vec-reflection)
-                                (fx/send-end! ctx-id :vec-reflection/fx-end)
+                                (fx/send! ctx-id {:topic :vec-reflection/fx-end :mode :end})
                                 (log/info "VecReflection: Deactivated (insufficient reflect CP)"))
                               (do
                                 (if (and (world-effects/available?)
@@ -411,7 +409,7 @@
   (try
     (toggle/remove-toggle! ctx-id :vec-reflection)
     (update-skill-state-root! ctx-id #(dissoc % :vec-reflection-visited :vec-reflection-visited-map :vec-reflection-overload-keep))
-    (fx/send-end! ctx-id :vec-reflection/fx-end)
+    (fx/send! ctx-id {:topic :vec-reflection/fx-end :mode :end})
     (log/debug "VecReflection aborted")
     (catch Exception e
       (log/warn "VecReflection key-abort failed:" (ex-message e)))))

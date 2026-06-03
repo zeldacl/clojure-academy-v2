@@ -1,7 +1,7 @@
 (ns cn.li.ac.content.ability.vecmanip.directed-blastwave-fx
   "Client FX for Directed Blastwave: charge ring + expanding wave rings."
   (:require [cn.li.ac.ability.client.effects.sounds :as client-sounds]
-            [cn.li.ac.ability.client.fx-registry :as fx-registry]
+            [cn.li.ac.ability.client.fx-spec :as fx-spec]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.render-util :as ru]))
 
@@ -222,33 +222,22 @@
 
 (defn init!
   []
-  (level-effects/register-level-effect! directed-blastwave-effect-id
-    {:initial-state (default-directed-blastwave-fx-runtime-state)
-     :enqueue-state-fn enqueue-state!
-     :tick-state-fn tick-state!
-     :build-plan-fn build-plan})
-  (fx-registry/register-fx-channels!
-    [:directed-blastwave/fx-start :directed-blastwave/fx-update
-     :directed-blastwave/fx-perform :directed-blastwave/fx-end]
-    (fn [ctx-id channel payload]
-      (case channel
-        :directed-blastwave/fx-start
-        (level-effects/enqueue-level-effect! directed-blastwave-effect-id {:mode :start}
-                                             {:ctx-id ctx-id :channel channel})
-        :directed-blastwave/fx-update
-        (level-effects/enqueue-level-effect! directed-blastwave-effect-id
-          {:mode :update
-           :charge-ticks (long (or (:charge-ticks payload) 0))
-           :punched? (boolean (:punched? payload))}
-          {:ctx-id ctx-id :channel channel})
-        :directed-blastwave/fx-perform
-        (level-effects/enqueue-level-effect! directed-blastwave-effect-id
-          {:mode :perform
-           :pos (:pos payload) :look-dir (:look-dir payload)
-           :charge-ticks (long (or (:charge-ticks payload) 0))}
-          {:ctx-id ctx-id :channel channel})
-        :directed-blastwave/fx-end
-        (level-effects/enqueue-level-effect! directed-blastwave-effect-id
-          {:mode :end :performed? (boolean (:performed? payload))}
-          {:ctx-id ctx-id :channel channel}))))
+  (fx-spec/register!
+    {:id directed-blastwave-effect-id
+     :level {:initial-state (default-directed-blastwave-fx-runtime-state)
+             :enqueue-state-fn enqueue-state!
+             :tick-state-fn tick-state!
+             :build-plan-fn build-plan}
+     :channels {:start {:topic :directed-blastwave/fx-start :mode :start}
+                :update {:topic :directed-blastwave/fx-update :mode :update
+                         :level-payload (fn [_ _ p]
+                                          {:charge-ticks (long (or (:charge-ticks p) 0))
+                                           :punched? (boolean (:punched? p))})}
+                :perform {:topic :directed-blastwave/fx-perform :mode :perform
+                          :level-payload (fn [_ _ p]
+                                           {:pos (:pos p) :look-dir (:look-dir p)
+                                            :charge-ticks (long (or (:charge-ticks p) 0))})}
+                :end {:topic :directed-blastwave/fx-end :mode :end
+                      :level-payload (fn [_ _ p]
+                                       {:performed? (boolean (:performed? p))})}}})
   nil)

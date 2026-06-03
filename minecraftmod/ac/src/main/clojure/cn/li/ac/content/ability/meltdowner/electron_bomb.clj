@@ -12,6 +12,7 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill]]
+            [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
@@ -59,9 +60,9 @@
             mdball-entity-id
             0.0))
         ;; Send spawn FX first; the delayed task owns the actual hit settlement.
-        (ctx/ctx-send-to-client! ctx-id :electron-bomb/fx-spawn
-                                 {:x (:x eye) :y (:y eye) :z (:z eye)
-                                  :dx (:x look-vec) :dy (:y look-vec) :dz (:z look-vec)})
+        (fx/send! ctx-id {:topic :electron-bomb/fx-spawn} nil
+                  {:x (:x eye) :y (:y eye) :z (:z eye)
+                   :dx (:x look-vec) :dy (:y look-vec) :dz (:z look-vec)})
         (delayed-projectiles/schedule-electron-bomb-beam!
           {:player-id player-id
            :ctx-id ctx-id

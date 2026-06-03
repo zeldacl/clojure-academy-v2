@@ -28,39 +28,42 @@
 
 (deftest init-registers-thunder-bolt-fx-test
   (let [registered-level* (atom nil)
-        registered-handler* (atom nil)]
+        registered-topics* (atom #{})]
     (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
                                                          (reset! registered-level* [effect-id effect-map])
                                                          nil)
-                  fx-registry/register-fx-channel! (fn [channel handler]
-                                                     (reset! registered-handler* {:channel channel
-                                                                                  :handler handler})
+                  fx-registry/register-fx-channel! (fn [topic _handler]
+                                                     (swap! registered-topics* conj topic)
                                                      nil)]
       (tb-fx/init!)
       (is (= :thunder-bolt-strike (first @registered-level*)))
       (is (fn? (:enqueue-state-fn (second @registered-level*))))
-      (is (= :thunder-bolt/fx-perform (:channel @registered-handler*))))))
+      (is (= #{:thunder-bolt/fx-perform} @registered-topics*)))))
 
 (deftest fx-handler-routes-payload-to-level-effect-test
-  (let [handler* (atom nil)
+  (let [handlers* (atom {})
         enqueued* (atom [])]
     (with-redefs [level-effects/register-level-effect! (fn [& _] nil)
-                  fx-registry/register-fx-channel! (fn [_channel handler]
-                                                     (reset! handler* handler)
+                  fx-registry/register-fx-channel! (fn [topic handler]
+                                                     (swap! handlers* assoc topic handler)
                                                      nil)
                   level-effects/enqueue-level-effect! (fn [effect-id payload fx-context]
                                                         (swap! enqueued* conj [effect-id payload fx-context])
                                                         nil)]
       (tb-fx/init!)
-      (@handler* "ctx-1" :thunder-bolt/fx-perform {:start {:x 0.0 :y 64.0 :z 0.0}
+      ((get @handlers* :thunder-bolt/fx-perform) "ctx-1" :thunder-bolt/fx-perform {:start {:x 0.0 :y 64.0 :z 0.0}
                                                     :end {:x 1.0 :y 65.0 :z 1.0}
                                                     :aoe-points [{:x 2.0 :y 65.0 :z 1.0}]})
       (is (= [[:thunder-bolt-strike
-               {:start {:x 0.0 :y 64.0 :z 0.0}
+               {:owner-key [:ctx "ctx-1"]
+                :ctx-id "ctx-1"
+                :channel :thunder-bolt/fx-perform
+                :start {:x 0.0 :y 64.0 :z 0.0}
                 :end {:x 1.0 :y 65.0 :z 1.0}
                 :aoe-points [{:x 2.0 :y 65.0 :z 1.0}]}
                {:ctx-id "ctx-1"
-                :channel :thunder-bolt/fx-perform}]]
+                :channel :thunder-bolt/fx-perform
+                :owner-key [:ctx "ctx-1"]}]]
              @enqueued*)))))
 
 (deftest enqueue-main-and-aoe-arcs-tick-and-build-plan-test

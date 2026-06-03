@@ -17,6 +17,7 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill]]
+            [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
@@ -116,11 +117,11 @@
                             :y (:y hit-result)
                             :z (:z hit-result)})]
 
-          (ctx/ctx-send-to-client! ctx-id :arc-gen/fx-perform
-                                   {:start eye
-                                    :end   (or hit-pos
-                                               (geom/v+ eye (geom/v* look-vec range)))
-                                    :hit-type hit-type})
+          (fx/send! ctx-id {:topic :arc-gen/fx-perform :mode :perform} nil
+                    {:start eye
+                     :end   (or hit-pos
+                                (geom/v+ eye (geom/v* look-vec range)))
+                     :hit-type hit-type})
 
           (cond
             (= hit-type :entity)

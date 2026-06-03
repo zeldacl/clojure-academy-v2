@@ -2,7 +2,7 @@
 	"Client FX for Plasma Cannon: charge particles + explosion."
 	(:require [cn.li.ac.ability.client.effects.particles :as client-particles]
 						[cn.li.ac.ability.client.effects.sounds :as client-sounds]
-						[cn.li.ac.ability.client.fx-registry :as fx-registry]
+						[cn.li.ac.ability.client.fx-spec :as fx-spec]
 						[cn.li.ac.ability.client.level-effects :as level-effects]))
 
 (def ^:private plasma-cannon-effect-id :plasma-cannon)
@@ -176,40 +176,25 @@
 
 (defn init!
 	[]
-	(level-effects/register-level-effect! plasma-cannon-effect-id
-		{:initial-state (default-plasma-cannon-fx-runtime-state)
-		 :enqueue-state-fn enqueue-state!
-		 :tick-state-fn tick-state!
-		 :build-plan-fn build-plan})
-	(fx-registry/register-fx-channels!
-		[:plasma-cannon/fx-start :plasma-cannon/fx-update
-		 :plasma-cannon/fx-perform :plasma-cannon/fx-end]
-		(fn [ctx-id channel payload]
-			(case channel
-				:plasma-cannon/fx-start
-				(level-effects/enqueue-level-effect! plasma-cannon-effect-id
-					(merge (select-keys payload [:effect-instance-id :source-player-id :world-id])
-								 {:mode :start :charge-pos (:charge-pos payload)})
-					{:ctx-id ctx-id :channel channel})
-				:plasma-cannon/fx-update
-				(level-effects/enqueue-level-effect! plasma-cannon-effect-id
-					(merge (select-keys payload [:effect-instance-id :source-player-id :world-id])
-								 {:mode :update
-									:charge-ticks (long (or (:charge-ticks payload) 0))
-									:fully-charged? (boolean (:fully-charged? payload))
-									:charge-pos (:charge-pos payload)
-									:flight-ticks (long (or (:flight-ticks payload) 0))
-									:state (or (:state payload) :charging)
-									:destination (:destination payload)})
-					{:ctx-id ctx-id :channel channel})
-				:plasma-cannon/fx-perform
-				(level-effects/enqueue-level-effect! plasma-cannon-effect-id
-					(merge (select-keys payload [:effect-instance-id :source-player-id :world-id])
-								 {:mode :perform :pos (:pos payload)})
-					{:ctx-id ctx-id :channel channel})
-				:plasma-cannon/fx-end
-				(level-effects/enqueue-level-effect! plasma-cannon-effect-id
-					(merge (select-keys payload [:effect-instance-id :source-player-id :world-id])
-								 {:mode :end :performed? (boolean (:performed? payload))})
-					{:ctx-id ctx-id :channel channel}))))
+	(fx-spec/register!
+		{:id plasma-cannon-effect-id
+		 :level {:initial-state (default-plasma-cannon-fx-runtime-state)
+						 :enqueue-state-fn enqueue-state!
+						 :tick-state-fn tick-state!
+						 :build-plan-fn build-plan}
+		 :channels {:start {:topic :plasma-cannon/fx-start :mode :start
+												:level-payload (fn [_ _ p] {:charge-pos (:charge-pos p)})}
+								:update {:topic :plasma-cannon/fx-update :mode :update
+												 :level-payload (fn [_ _ p]
+																				{:charge-ticks (long (or (:charge-ticks p) 0))
+																				 :fully-charged? (boolean (:fully-charged? p))
+																				 :charge-pos (:charge-pos p)
+																				 :flight-ticks (long (or (:flight-ticks p) 0))
+																				 :state (or (:state p) :charging)
+																				 :destination (:destination p)})}
+								:perform {:topic :plasma-cannon/fx-perform :mode :perform
+													:level-payload (fn [_ _ p] {:pos (:pos p)})}
+								:end {:topic :plasma-cannon/fx-end :mode :end
+											:level-payload (fn [_ _ p]
+																			 {:performed? (boolean (:performed? p))})}}})
 	nil)

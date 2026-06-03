@@ -13,6 +13,7 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill]]
+            [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
                         [cn.li.ac.ability.service.skill-effects :as skill-effects]
@@ -243,13 +244,13 @@
                      :hand-valid? hand-valid?
                      :trace trace})
     (when trace
-      (ctx/ctx-send-to-client! ctx-id :shift-tp/fx-update
-                               {:x (:dest-x trace)
-                                :y (:dest-y trace)
-                                :z (:dest-z trace)
-                                :target-count (count (:entities trace))
-                                :target-hit? (:target-hit? trace)
-                                :hand-valid? hand-valid?}))))
+      (fx/send! ctx-id {:topic :shift-teleport/fx-update :mode :update} nil
+                {:x (:dest-x trace)
+                 :y (:dest-y trace)
+                 :z (:dest-z trace)
+                 :target-count (count (:entities trace))
+                 :target-hit? (:target-hit? trace)
+                 :hand-valid? hand-valid?}))))
 
 (defn shift-tp-up!
   [{:keys [player-id player ctx-id cost-ok?]}]
@@ -275,16 +276,16 @@
                                                                            target-uuid
                                                                            damage)]
                               (when (helper/crit-applied? damage-result)
-                                (ctx/ctx-send-to-client! ctx-id :teleporter/fx-crit-hit
-                                                         {:x (double (:x entity))
-                                                          :y (double (:y entity))
-                                                          :z (double (:z entity))
-                                                          :crit-level (:crit-level damage-result)
-                                                          :crit-rate (:crit-rate damage-result)
-                                                          :message-key (:message-key damage-result)
-                                                          :message-args (:message-args damage-result)
-                                                          :target-uuid target-uuid
-                                                          :skill-id shift-teleport-skill-id}))
+                                (fx/send! ctx-id {:topic :teleporter/fx-crit-hit} nil
+                                          {:x (double (:x entity))
+                                           :y (double (:y entity))
+                                           :z (double (:z entity))
+                                           :crit-level (:crit-level damage-result)
+                                           :crit-rate (:crit-rate damage-result)
+                                           :message-key (:message-key damage-result)
+                                           :message-args (:message-args damage-result)
+                                           :target-uuid target-uuid
+                                           :skill-id shift-teleport-skill-id}))
                               (inc n)))
                           0
                           (:entities trace))
@@ -294,16 +295,16 @@
                                             (* (double exp-base) (double (inc hit-count))))
               (let [cd (helper/cfg-lerp-int shift-teleport-skill-id :cooldown.ticks (:exp trace))]
                 (skill-effects/set-main-cooldown! player-id shift-teleport-skill-id cd))
-              (ctx/ctx-send-to-client! ctx-id :shift-tp/fx-perform
-                                       {:from-x (get-in trace [:eye-pos :x])
-                                        :from-y (get-in trace [:eye-pos :y])
-                                        :from-z (get-in trace [:eye-pos :z])
-                                        :x (:dest-x trace)
-                                        :y (:dest-y trace)
-                                        :z (:dest-z trace)
-                                        :target-count (count (:entities trace))
-                                        :placed? (:placed? place-drop-result)
-                                        :dropped? (:dropped? place-drop-result)})))))
+              (fx/send! ctx-id {:topic :shift-teleport/fx-perform :mode :perform} nil
+                        {:from-x (get-in trace [:eye-pos :x])
+                         :from-y (get-in trace [:eye-pos :y])
+                         :from-z (get-in trace [:eye-pos :z])
+                         :x (:dest-x trace)
+                         :y (:dest-y trace)
+                         :z (:dest-z trace)
+                         :target-count (count (:entities trace))
+                         :placed? (:placed? place-drop-result)
+                         :dropped? (:dropped? place-drop-result)})))))
       (when-not trace
         (log/debug "ShiftTeleport: failed to resolve trace target")))
     (catch Exception e
@@ -343,8 +344,8 @@
                    :tick!  shift-tp-tick!
                    :up!    shift-tp-up!
                    :abort! shift-tp-abort!}
-  :fx             {:start {:topic :shift-tp/fx-start :payload (fn [_] {})}
-                   :update {:topic :shift-tp/fx-update :payload (fn [_] {})}
-                   :end   {:topic :shift-tp/fx-end   :payload (fn [_] {})}}
+  :fx             {:start {:topic :shift-teleport/fx-start :payload (fn [_] {})}
+                   :update {:topic :shift-teleport/fx-update :payload (fn [_] {})}
+                   :end   {:topic :shift-teleport/fx-end   :payload (fn [_] {})}}
   :prerequisites  [{:skill-id :location-teleport :min-exp 0.5}])
 

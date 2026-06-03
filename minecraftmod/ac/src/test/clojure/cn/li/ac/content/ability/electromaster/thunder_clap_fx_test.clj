@@ -27,13 +27,12 @@
 
 (deftest init-registers-owner-aware-thunder-clap-fx-test
   (let [registered-level* (atom nil)
-        registered-handler* (atom nil)]
+        registered-topics* (atom #{})]
     (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
                                                          (reset! registered-level* [effect-id effect-map])
                                                          nil)
-                  fx-registry/register-fx-channels! (fn [channels handler]
-                                                      (reset! registered-handler* {:channels channels
-                                                                                   :handler handler})
+                  fx-registry/register-fx-channel! (fn [topic _handler]
+                                                      (swap! registered-topics* conj topic)
                                                       nil)]
       (thunder-clap-fx/init!)
       (is (= :thunder-clap (first @registered-level*)))
@@ -42,56 +41,79 @@
                :thunder-clap/fx-update
                :thunder-clap/fx-perform
                :thunder-clap/fx-end}
-             (set (:channels @registered-handler*)))))))
+             @registered-topics*)))))
 
 (deftest fx-handler-routes-four-stages-with-ctx-metadata-test
-  (let [handler* (atom nil)
+  (let [handlers* (atom {})
         enqueued* (atom [])]
     (with-redefs [level-effects/register-level-effect! (fn [& _] nil)
-                  fx-registry/register-fx-channels! (fn [_ handler]
-                                                      (reset! handler* handler)
+                  fx-registry/register-fx-channel! (fn [topic handler]
+                                                      (swap! handlers* assoc topic handler)
                                                       nil)
                   level-effects/enqueue-level-effect! (fn [effect-id payload fx-context]
                                                         (swap! enqueued* conj [effect-id payload fx-context])
                                                         nil)]
       (thunder-clap-fx/init!)
-      (@handler* "ctx-tc" :thunder-clap/fx-start {:source-player-id "player-a"})
-      (@handler* "ctx-tc" :thunder-clap/fx-update {:ticks 5
+      ((get @handlers* :thunder-clap/fx-start) "ctx-tc" :thunder-clap/fx-start {:source-player-id "player-a"})
+      ((get @handlers* :thunder-clap/fx-update) "ctx-tc" :thunder-clap/fx-update {:ticks 5
                                                     :charge-ratio 0.5
                                                     :target {:x 1.0 :y 64.0 :z 1.0}
                                                     :source-player-id "player-a"})
-      (@handler* "ctx-tc" :thunder-clap/fx-perform {:performed? true
+      ((get @handlers* :thunder-clap/fx-perform) "ctx-tc" :thunder-clap/fx-perform {:performed? true
                                                      :charge-ticks 6
                                                      :charge-ratio 0.6
                                                      :target {:x 1.0 :y 64.0 :z 1.0}
                                                      :source-player-id "player-a"})
-      (@handler* "ctx-tc" :thunder-clap/fx-end {:performed? true
+      ((get @handlers* :thunder-clap/fx-end) "ctx-tc" :thunder-clap/fx-end {:performed? true
                                                  :charge-ticks 6
                                                  :charge-ratio 0.6
                                                  :target {:x 1.0 :y 64.0 :z 1.0}
                                                  :source-player-id "player-a"})
-      (is (= [[:thunder-clap {:source-player-id "player-a" :mode :start}
-               {:ctx-id "ctx-tc" :channel :thunder-clap/fx-start}]
+      (is (= [[:thunder-clap {:source-player-id "player-a"
+                              :mode :start
+                              :owner-key [:ctx "ctx-tc"]
+                              :ctx-id "ctx-tc"
+                              :channel :thunder-clap/fx-start}
+               {:ctx-id "ctx-tc"
+                :channel :thunder-clap/fx-start
+                :owner-key [:ctx "ctx-tc"]}]
               [:thunder-clap {:source-player-id "player-a"
                               :mode :update
+                              :owner-key [:ctx "ctx-tc"]
+                              :ctx-id "ctx-tc"
+                              :channel :thunder-clap/fx-update
                               :ticks 5
                               :charge-ratio 0.5
                               :target {:x 1.0 :y 64.0 :z 1.0}}
-               {:ctx-id "ctx-tc" :channel :thunder-clap/fx-update}]
+               {:ctx-id "ctx-tc"
+                :channel :thunder-clap/fx-update
+                :owner-key [:ctx "ctx-tc"]}]
               [:thunder-clap {:source-player-id "player-a"
                               :mode :perform
+                              :owner-key [:ctx "ctx-tc"]
+                              :ctx-id "ctx-tc"
+                              :channel :thunder-clap/fx-perform
                               :performed? true
+                              :charge-ticks 6
                               :ticks 6
                               :charge-ratio 0.6
                               :target {:x 1.0 :y 64.0 :z 1.0}}
-               {:ctx-id "ctx-tc" :channel :thunder-clap/fx-perform}]
+               {:ctx-id "ctx-tc"
+                :channel :thunder-clap/fx-perform
+                :owner-key [:ctx "ctx-tc"]}]
               [:thunder-clap {:source-player-id "player-a"
                               :mode :end
+                              :owner-key [:ctx "ctx-tc"]
+                              :ctx-id "ctx-tc"
+                              :channel :thunder-clap/fx-end
                               :performed? true
+                              :charge-ticks 6
                               :ticks 6
                               :charge-ratio 0.6
                               :target {:x 1.0 :y 64.0 :z 1.0}}
-               {:ctx-id "ctx-tc" :channel :thunder-clap/fx-end}]]
+               {:ctx-id "ctx-tc"
+                :channel :thunder-clap/fx-end
+                :owner-key [:ctx "ctx-tc"]}]]
              @enqueued*)))))
 
 (deftest start-update-perform-end-manage-state-test

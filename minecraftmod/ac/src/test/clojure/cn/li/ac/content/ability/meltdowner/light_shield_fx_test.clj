@@ -31,20 +31,19 @@
 
 (deftest init-registers-owner-aware-light-shield-fx-test
   (let [registered-level* (atom nil)
-        registered-handler* (atom nil)]
+        registered-topics* (atom #{})]
     (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
                                                          (reset! registered-level* [effect-id effect-map])
                                                          nil)
-                  fx-registry/register-fx-channels! (fn [channels handler]
-                                                      (reset! registered-handler* {:channels channels
-                                                                                   :handler handler})
+                  fx-registry/register-fx-channel! (fn [topic _handler]
+                                                      (swap! registered-topics* conj topic)
                                                       nil)]
       (ls-fx/init!)
       (is (= :light-shield (first @registered-level*)))
       (is (fn? (:enqueue-state-fn (second @registered-level*))))
       (is (= #{:light-shield/fx-start
                :light-shield/fx-end}
-             (set (:channels @registered-handler*)))))))
+             @registered-topics*)))))
 
 (deftest start-end-update-state-and-build-plan-test
   (let [enqueue-state! (var-get #'cn.li.ac.content.ability.meltdowner.light-shield-fx/enqueue-state!)

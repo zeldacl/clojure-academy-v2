@@ -16,11 +16,11 @@
       (is (fn? (:handler @registered*))))))
 
 (deftest fx-handler-plays-local-effect-when-performed-test
-  (let [handler* (atom nil)
+  (let [handlers* (atom {})
         sounds* (atom [])
         local-fx* (atom [])]
-    (with-redefs [fx-registry/register-fx-channel! (fn [_ handler]
-                                                     (reset! handler* handler)
+    (with-redefs [fx-registry/register-fx-channel! (fn [topic handler]
+                                                     (swap! handlers* assoc topic handler)
                                                      nil)
                   client-sounds/queue-current-sound-effect! (fn [payload]
                                                                (swap! sounds* conj payload)
@@ -29,8 +29,8 @@
                                                      (swap! local-fx* conj [effect-key payload])
                                                      nil)]
       (body-intensify-fx/init!)
-      (@handler* "ctx-1" :body-intensify/fx-end {:performed? true})
-      (@handler* "ctx-2" :body-intensify/fx-end {:performed? false})
+      ((get @handlers* :body-intensify/fx-end) "ctx-1" :body-intensify/fx-end {:performed? true})
+      ((get @handlers* :body-intensify/fx-end) "ctx-2" :body-intensify/fx-end {:performed? false})
       (is (= 1 (count @sounds*)))
       (is (= [[:mcmod/spawn-local-scripted-effect {:effect-id "intensify_effect"
                        :ctx-id "ctx-1"

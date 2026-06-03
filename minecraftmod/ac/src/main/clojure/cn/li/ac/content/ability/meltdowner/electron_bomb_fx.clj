@@ -2,7 +2,7 @@
 	"Client FX for ElectronBomb: orbiting ball spawn + beam flash."
 	(:require [cn.li.ac.ability.client.effects.particles :as client-particles]
 						[cn.li.ac.ability.client.effects.sounds :as client-sounds]
-						[cn.li.ac.ability.client.fx-registry :as fx-registry]
+						[cn.li.ac.ability.client.fx-spec :as fx-spec]
 						[cn.li.ac.ability.client.level-effects :as level-effects]
 						[cn.li.ac.ability.client.render-util :as ru]))
 
@@ -171,33 +171,18 @@
 
 (defn init!
 	[]
-	(level-effects/register-level-effect! electron-bomb-effect-id
-		{:initial-state (default-electron-bomb-fx-runtime-state)
-		 :enqueue-state-fn enqueue-state!
-		 :tick-state-fn tick-state!
-		 :build-plan-fn build-plan})
-	(fx-registry/register-fx-channels!
-		[:electron-bomb/fx-spawn :electron-bomb/fx-beam :electron-bomb/fx-end]
-		(fn [ctx-id channel payload]
-			(let [meta-payload (select-keys payload [:effect-instance-id :source-player-id :world-id])]
-				(case channel
-					:electron-bomb/fx-spawn
-					(level-effects/enqueue-level-effect! electron-bomb-effect-id
-						(merge meta-payload
-									 {:mode :spawn
-										:x (:x payload) :y (:y payload) :z (:z payload)
-										:dx (:dx payload) :dy (:dy payload) :dz (:dz payload)})
-						{:ctx-id ctx-id :channel channel})
-					:electron-bomb/fx-beam
-					(level-effects/enqueue-level-effect! electron-bomb-effect-id
-						(merge meta-payload
-									 {:mode :beam
-										:start (:start payload)
-										:end (:end payload)})
-						{:ctx-id ctx-id :channel channel})
-					:electron-bomb/fx-end
-					(level-effects/enqueue-level-effect! electron-bomb-effect-id
-						(merge meta-payload {:mode :end})
-						{:ctx-id ctx-id :channel channel})
-					nil))))
+	(fx-spec/register!
+		{:id electron-bomb-effect-id
+		 :level {:initial-state (default-electron-bomb-fx-runtime-state)
+						 :enqueue-state-fn enqueue-state!
+						 :tick-state-fn tick-state!
+						 :build-plan-fn build-plan}
+		 :channels {:spawn {:topic :electron-bomb/fx-spawn :mode :spawn
+											 :level-payload (fn [_ _ p]
+																				{:x (:x p) :y (:y p) :z (:z p)
+																				 :dx (:dx p) :dy (:dy p) :dz (:dz p)})}
+								:beam {:topic :electron-bomb/fx-beam :mode :beam
+											 :level-payload (fn [_ _ p]
+																				{:start (:start p) :end (:end p)})}
+								:end {:topic :electron-bomb/fx-end :mode :end}}})
 	nil)

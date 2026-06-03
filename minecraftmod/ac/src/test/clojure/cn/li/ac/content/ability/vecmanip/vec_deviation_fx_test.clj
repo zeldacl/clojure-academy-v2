@@ -28,13 +28,12 @@
 
 (deftest init-registers-owner-aware-vec-deviation-fx-test
   (let [registered-level* (atom nil)
-        registered-handler* (atom nil)]
+        registered-topics* (atom #{})]
     (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
                                                          (reset! registered-level* [effect-id effect-map])
                                                          nil)
-                  fx-registry/register-fx-channels! (fn [channels handler]
-                                                      (reset! registered-handler* {:channels channels
-                                                                                   :handler handler})
+                  fx-registry/register-fx-channel! (fn [topic _handler]
+                                                      (swap! registered-topics* conj topic)
                                                       nil)]
       (vdfx/init!)
       (is (= :vec-deviation (first @registered-level*)))
@@ -43,7 +42,7 @@
                :vec-deviation/fx-end
                :vec-deviation/fx-stop-entity
                :vec-deviation/fx-play}
-             (set (:channels @registered-handler*)))))))
+             @registered-topics*)))))
 
 (deftest enqueue-stop-entity-requires-marked-flag-test
   (let [enqueue-state! (var-get #'cn.li.ac.content.ability.vecmanip.vec-deviation-fx/enqueue-state!)]
@@ -61,33 +60,43 @@
       (is (= 3.0 (:z (first waves)))))))
 
 (deftest init-registers-marked-flag-through-fx-channel-handler-test
-  (let [registered-handler* (atom nil)
+  (let [handlers* (atom {})
         enqueued* (atom [])]
     (with-redefs [level-effects/register-level-effect! (fn [& _] nil)
-                  fx-registry/register-fx-channels! (fn [_ handler]
-                                                      (reset! registered-handler* handler)
+                  fx-registry/register-fx-channel! (fn [topic handler]
+                                                      (swap! handlers* assoc topic handler)
                                                       nil)
                   level-effects/enqueue-level-effect! (fn [effect-id payload fx-context]
                                                         (swap! enqueued* conj [effect-id payload fx-context])
                                                         nil)
                   client-sounds/queue-current-sound-effect! (fn [& _] nil)]
       (vdfx/init!)
-      (@registered-handler* "ctx-1" :vec-deviation/fx-stop-entity
+      ((get @handlers* :vec-deviation/fx-stop-entity) "ctx-1" :vec-deviation/fx-stop-entity
        {:x 1.0 :y 2.0 :z 3.0 :marked? true})
-      (@registered-handler* "ctx-1" :vec-deviation/fx-stop-entity
+      ((get @handlers* :vec-deviation/fx-stop-entity) "ctx-1" :vec-deviation/fx-stop-entity
        {:x 4.0 :y 5.0 :z 6.0 :marked? false})
       (is (= [[:vec-deviation {:mode :stop-entity
+                               :owner-key [:ctx "ctx-1"]
+                               :ctx-id "ctx-1"
+                               :channel :vec-deviation/fx-stop-entity
                                :x 1.0
                                :y 2.0
                                :z 3.0
                                :marked? true}
-               {:ctx-id "ctx-1" :channel :vec-deviation/fx-stop-entity}]
+               {:ctx-id "ctx-1"
+                :channel :vec-deviation/fx-stop-entity
+                :owner-key [:ctx "ctx-1"]}]
               [:vec-deviation {:mode :stop-entity
+                               :owner-key [:ctx "ctx-1"]
+                               :ctx-id "ctx-1"
+                               :channel :vec-deviation/fx-stop-entity
                                :x 4.0
                                :y 5.0
                                :z 6.0
                                :marked? false}
-               {:ctx-id "ctx-1" :channel :vec-deviation/fx-stop-entity}]]
+               {:ctx-id "ctx-1"
+                :channel :vec-deviation/fx-stop-entity
+                :owner-key [:ctx "ctx-1"]}]]
              @enqueued*)))))
 
 (deftest two-owners-keep-vec-deviation-state-and-waves-independent-test

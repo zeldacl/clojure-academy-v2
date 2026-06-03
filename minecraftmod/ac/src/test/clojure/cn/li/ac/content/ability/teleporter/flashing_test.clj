@@ -3,6 +3,8 @@
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
+            [cn.li.ac.ability.fx :as fx]
+            [cn.li.ac.test.support.fx-mocks :as fx-mocks]
             [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
             [cn.li.ac.content.ability.teleporter.flashing :as flashing]
             [cn.li.ac.content.ability.teleporter.tp-skill-helper :as helper]
@@ -55,8 +57,9 @@
                   ctx-skill/update-skill-state-root! update-skill-state-root!
                   ctx/ctx-on! ctx-on!
                   ctx/terminate-context! (fn [& _] nil)
-                  ctx/ctx-send-to-client! (fn [ctx-id channel payload]
-                                            (swap! fx* conj [ctx-id channel payload]))
+                  fx/send! (fn [_ctx-id entry _evt payload]
+                            (swap! fx* conj [(:topic entry) payload])
+                            nil)
                   helper/skill-exp (fn [_ _] 0.5)
                   helper/cfg-lerp (fn [_ field _]
                                     (case field
@@ -102,7 +105,7 @@
     (is (= [["p1" :flashing 0.001]] @exp*))
     (is (= [["p1" "teleporter.flashing"]] @ach*))
     (is (seq @reset-fall*))
-    (is (some #(= :flashing/fx-perform (second %)) @fx*))))
+    (is (some #(= :flashing/fx-perform (first %)) @fx*))))
 
 (deftest flashing-timeout-terminates-on-movement-event-test
   (let [{:keys [ctx* listeners* get-context update-skill-state-root! ctx-on!]}
@@ -136,8 +139,9 @@
                   ctx-skill/update-skill-state-root! update-skill-state-root!
                   ctx/ctx-on! ctx-on!
                   ctx/terminate-context! (fn [& _] nil)
-                  ctx/ctx-send-to-client! (fn [ctx-id channel payload]
-                                            (swap! fx* conj [ctx-id channel payload]))
+                  fx/send! (fn [_ctx-id entry _evt payload]
+                            (swap! fx* conj [(:topic entry) payload])
+                            nil)
                   helper/skill-exp (fn [_ _] 0.5)
                   helper/cfg-lerp (fn [_ field _]
                                     (case field
@@ -169,7 +173,7 @@
                   helper/raycast-blocks (fn [& _] {:x 10 :y 66 :z 9})]
       (flashing/flashing-activate! {:ctx-id "ctx-1" :player-id "p1" :cost-ok? true})
       ((get @listeners* :flashing/move-down) {:key :forward}))
-    (let [[_ctx-id _channel payload] (last @fx*)]
+    (let [[topic payload] (last @fx*)]
       (is (= 10.0 (:to-x payload)))
       (is (< (Math/abs (- 65.45 (double (:to-y payload)))) 1.0e-6))
       (is (< (Math/abs (- 9.4 (double (:to-z payload)))) 1.0e-6)))))

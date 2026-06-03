@@ -22,7 +22,7 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill]]
-            [cn.li.ac.content.ability.fx-helpers :as fx]
+            [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
@@ -187,7 +187,8 @@
                               :charge-ticks 0
                               :charge-ticks-needed charge-needed
                               :vx 0.0 :vy 0.0 :vz 0.0})
-      (fx/send-start! ctx-id :storm-wing/fx-start {:charge-ticks (long charge-needed)}))
+      (fx/send! ctx-id {:topic :storm-wing/fx-start :mode :start} nil
+                {:charge-ticks (long charge-needed)}))
     (catch Exception e
       (log/error "StormWing key-down failed:" e)
       (clear-skill-state! ctx-id))))
@@ -206,10 +207,10 @@
                     needed (long (:charge-ticks-needed skill-state 70))
                     new-ct (inc ct)]
                 (update-skill-state-root! ctx-id #(assoc % :charge-ticks new-ct))
-                (fx/send-update! ctx-id :storm-wing/fx-update
-                                {:phase :charging
-                                 :charge-ticks (long new-ct)
-                                 :charge-ratio (min 1.0 (/ (double new-ct) (double needed)))})
+                (fx/send! ctx-id {:topic :storm-wing/fx-update :mode :update} nil
+                          {:phase :charging
+                           :charge-ticks (long new-ct)
+                           :charge-ratio (min 1.0 (/ (double new-ct) (double needed)))})
                 (when (>= new-ct needed)
                   ;; Transition to flying
                   (update-skill-state-root! ctx-id #(assoc % :phase :flying))
@@ -286,28 +287,27 @@
                           (log/warn "StormWing: Failed to grant exp to player" player-id))
 
                         ;; FX update
-                        (fx/send-update! ctx-id :storm-wing/fx-update
-                                        {:phase :flying
+                        (fx/send! ctx-id {:topic :storm-wing/fx-update :mode :update} nil {:phase :flying
                                          :charge-ticks 0
                                          :charge-ratio 1.0})))
                     ;; pos为nil，无法继续飞行，立即终止
                     (do
                       (log/warn "StormWing: Player position unavailable, terminating")
                       (apply-cooldown! player-id exp)
-                      (fx/send-end! ctx-id :storm-wing/fx-end)
+                      (fx/send! ctx-id {:topic :storm-wing/fx-end :mode :end})
                       (update-skill-state-root! ctx-id #(assoc % :phase :terminated))))
 
                 ;; Insufficient resources: terminate
                 (do
                   (apply-cooldown! player-id exp)
-                  (fx/send-end! ctx-id :storm-wing/fx-end)
+                  (fx/send! ctx-id {:topic :storm-wing/fx-end :mode :end})
                   (update-skill-state-root! ctx-id #(assoc % :phase :terminated))))))))))
     (catch Exception e
       (log/error "StormWing key-tick failed:" e)
       ;; 主动终止技能状态，防止无限飞行
       (when-let [exp (try (skill-exp player-id) (catch Exception _ 0.0))]
         (apply-cooldown! player-id exp))
-      (fx/send-end! ctx-id :storm-wing/fx-end)
+      (fx/send! ctx-id {:topic :storm-wing/fx-end :mode :end})
       (update-skill-state-root! ctx-id #(assoc % :phase :terminated)))))
 
 (defn storm-wing-on-key-up
@@ -315,7 +315,7 @@
   (try
     (let [exp (skill-exp player-id)]
       (apply-cooldown! player-id exp)
-      (fx/send-end! ctx-id :storm-wing/fx-end)
+      (fx/send! ctx-id {:topic :storm-wing/fx-end :mode :end})
       (clear-skill-state! ctx-id))
     (catch Exception e
       (log/error "StormWing key-up failed:" e)
@@ -326,7 +326,7 @@
   (try
     (let [exp (skill-exp player-id)]
       (apply-cooldown! player-id exp)
-      (fx/send-end! ctx-id :storm-wing/fx-end)
+      (fx/send! ctx-id {:topic :storm-wing/fx-end :mode :end})
       (clear-skill-state! ctx-id))
     (catch Exception e
       (log/error "StormWing key-abort failed:" e)

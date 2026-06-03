@@ -7,7 +7,7 @@
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.content.ability :as ability-content]
             [cn.li.ac.content.ability.electromaster.body-intensify :as body-intensify]
-            [cn.li.ac.content.ability.fx-helpers :as fx]
+            [cn.li.ac.ability.fx :as fx]
             [cn.li.mcmod.platform.potion-effects :as potion-effects]))
 
 (defn- potion-effects-stub
@@ -26,33 +26,37 @@
 (deftest apply-body-intensify-buffs-includes-first-effect-test
   (let [apply-buffs! (var-get #'cn.li.ac.content.ability.electromaster.body-intensify/apply-body-intensify-buffs!)
         applied* (atom [])]
-    (with-redefs [body-intensify/get-probability (fn [_] 1.0)
-                  body-intensify/get-buff-time (fn [_ _] 100)
-                  body-intensify/get-hunger-buff-time (fn [_] 60)
-                  body-intensify/get-buff-level (fn [_] 1)
-                  body-intensify/base-effects (fn [] [{:effect :speed :max-amplifier 3}
-                                                      {:effect :jump-boost :max-amplifier 3}])
-                  body-intensify/cfg-int (fn [_] 0)
-                  shuffle identity
-                  rand (fn [] 0.0)]
-        (apply-buffs! "player-a" 20 0.2)))
-    (is (= :speed (:effect (first @applied*))))
-    (is (= :hunger (:effect (last @applied*))))))
+    (potion-effects/call-with-runtime (potion-effects-stub applied*)
+      (fn []
+        (with-redefs [body-intensify/get-probability (fn [_] 1.0)
+                      body-intensify/get-buff-time (fn [_ _] 100)
+                      body-intensify/get-hunger-buff-time (fn [_] 60)
+                      body-intensify/get-buff-level (fn [_] 1)
+                      body-intensify/base-effects (fn [] [{:effect :speed :max-amplifier 3}
+                                                          {:effect :jump-boost :max-amplifier 3}])
+                      body-intensify/cfg-int (fn [_] 0)
+                      shuffle identity
+                      rand (fn [] 0.0)]
+          (apply-buffs! "player-a" 20 0.2))
+        (is (= :speed (:effect (first @applied*))))
+        (is (= :hunger (:effect (last @applied*))))))))
 
 (deftest apply-body-intensify-buffs-with-empty-pool-still-applies-hunger-test
   (let [apply-buffs! (var-get #'cn.li.ac.content.ability.electromaster.body-intensify/apply-body-intensify-buffs!)
         applied* (atom [])]
-    (with-redefs [body-intensify/get-probability (fn [_] 2.0)
-                  body-intensify/get-buff-time (fn [_ _] 100)
-                  body-intensify/get-hunger-buff-time (fn [_] 60)
-                  body-intensify/get-buff-level (fn [_] 1)
-                  body-intensify/base-effects (fn [] [])
-                  body-intensify/cfg-int (fn [_] 0)
-                  shuffle identity
-                  rand (fn [] 0.0)]
-        (apply-buffs! "player-b" 20 0.2)))
-    (is (= 1 (count @applied*)))
-    (is (= :hunger (:effect (first @applied*))))))
+    (potion-effects/call-with-runtime (potion-effects-stub applied*)
+      (fn []
+        (with-redefs [body-intensify/get-probability (fn [_] 2.0)
+                      body-intensify/get-buff-time (fn [_ _] 100)
+                      body-intensify/get-hunger-buff-time (fn [_] 60)
+                      body-intensify/get-buff-level (fn [_] 1)
+                      body-intensify/base-effects (fn [] [])
+                      body-intensify/cfg-int (fn [_] 0)
+                      shuffle identity
+                      rand (fn [] 0.0)]
+          (apply-buffs! "player-b" 20 0.2))
+        (is (= 1 (count @applied*)))
+        (is (= :hunger (:effect (first @applied*))))))))
 
 (deftest up-action-requires-min-charge-before-performing-test
   (ability-content/init-ability-content!)
@@ -72,8 +76,8 @@
                                                  (swap! exp-calls* conj [player-id skill-id amount]))
                   skill-effects/set-main-cooldown! (fn [player-id skill-id ticks]
                                                      (swap! cooldown-calls* conj [player-id skill-id ticks]))
-                  fx/send-end! (fn [ctx-id channel payload]
-                                 (swap! end-calls* conj [ctx-id channel payload]))
+                  fx/send! (fn [ctx-id entry _evt payload]
+                            (swap! end-calls* conj [ctx-id (:topic entry) (:mode entry) payload]))
                   ctx-skill/update-skill-state-root! (fn [& _] nil)
                   ctx/terminate-context! (fn [ctx-id _]
                                            (swap! terminate-calls* conj ctx-id))]

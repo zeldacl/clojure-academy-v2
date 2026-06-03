@@ -65,15 +65,15 @@
     (enqueue! :mark-teleport (event "ctx-a" :mark-teleport/fx-update {:mode :update :target {:x 1.0 :y 64.0 :z 1.0} :distance 3.0}))
     (enqueue! :mark-teleport (event "ctx-b" :mark-teleport/fx-update {:mode :update :target {:x 2.0 :y 64.0 :z 2.0} :distance 9.0}))
 
-    (enqueue! :penetrate-teleport (event "ctx-a" :penetrate-tp/fx-start {:mode :start}))
-    (enqueue! :penetrate-teleport (event "ctx-b" :penetrate-tp/fx-start {:mode :start}))
-    (enqueue! :penetrate-teleport (event "ctx-a" :penetrate-tp/fx-update {:mode :update :x 1.0 :y 64.0 :z 1.0 :available? false :distance 5.0}))
-    (enqueue! :penetrate-teleport (event "ctx-b" :penetrate-tp/fx-update {:mode :update :x 2.0 :y 64.0 :z 2.0 :available? true :distance 7.0}))
+    (enqueue! :penetrate-teleport (event "ctx-a" :penetrate-teleport/fx-start {:mode :start}))
+    (enqueue! :penetrate-teleport (event "ctx-b" :penetrate-teleport/fx-start {:mode :start}))
+    (enqueue! :penetrate-teleport (event "ctx-a" :penetrate-teleport/fx-update {:mode :update :x 1.0 :y 64.0 :z 1.0 :available? false :distance 5.0}))
+    (enqueue! :penetrate-teleport (event "ctx-b" :penetrate-teleport/fx-update {:mode :update :x 2.0 :y 64.0 :z 2.0 :available? true :distance 7.0}))
 
-    (enqueue! :shift-teleport (event "ctx-a" :shift-tp/fx-start {:mode :start}))
-    (enqueue! :shift-teleport (event "ctx-b" :shift-tp/fx-start {:mode :start}))
-    (enqueue! :shift-teleport (event "ctx-a" :shift-tp/fx-update {:mode :update :x 1.0 :y 64.0 :z 1.0 :target-count 0 :target-hit? false :hand-valid? true}))
-    (enqueue! :shift-teleport (event "ctx-b" :shift-tp/fx-update {:mode :update :x 2.0 :y 64.0 :z 2.0 :target-count 2 :target-hit? true :hand-valid? true}))
+    (enqueue! :shift-teleport (event "ctx-a" :shift-teleport/fx-start {:mode :start}))
+    (enqueue! :shift-teleport (event "ctx-b" :shift-teleport/fx-start {:mode :start}))
+    (enqueue! :shift-teleport (event "ctx-a" :shift-teleport/fx-update {:mode :update :x 1.0 :y 64.0 :z 1.0 :target-count 0 :target-hit? false :hand-valid? true}))
+    (enqueue! :shift-teleport (event "ctx-b" :shift-teleport/fx-update {:mode :update :x 2.0 :y 64.0 :z 2.0 :target-count 2 :target-hit? true :hand-valid? true}))
 
     (is (= 1.0 (get-in (flashing-fx/flashing-fx-snapshot) [:fx-state [:ctx "ctx-a"] :preview :x])))
     (is (= 2.0 (get-in (flashing-fx/flashing-fx-snapshot) [:fx-state [:ctx "ctx-b"] :preview :x])))

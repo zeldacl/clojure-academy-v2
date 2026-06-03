@@ -12,6 +12,7 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill]]
+            [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
                         [cn.li.ac.ability.service.skill-effects :as skill-effects]
@@ -58,12 +59,12 @@
     (set-skill-state-root! ctx-id {:hold-ticks (long hold-ticks)
                      :trace trace})
     (when trace
-      (ctx/ctx-send-to-client! ctx-id :flesh-ripping/fx-update
-                               {:target-x (:target-x trace)
-                                :target-y (:target-y trace)
-                                :target-z (:target-z trace)
-                                :hit? (:hit? trace)
-                                :target-uuid (:target-uuid trace)}))))
+      (fx/send! ctx-id {:topic :flesh-ripping/fx-update :mode :update} nil
+                {:target-x (:target-x trace)
+                 :target-y (:target-y trace)
+                 :target-z (:target-z trace)
+                 :hit? (:hit? trace)
+                 :target-uuid (:target-uuid trace)}))))
 
 (defn flesh-ripping-up!
   [{:keys [player-id ctx-id cost-ok?]}]
@@ -77,16 +78,16 @@
               e-uuid (:target-uuid trace)
               damage-result (helper/deal-magic-damage! player-id world-id e-uuid damage)]
           (when (helper/crit-applied? damage-result)
-            (ctx/ctx-send-to-client! ctx-id :teleporter/fx-crit-hit
-                                     {:x (:target-x trace)
-                                      :y (:target-y trace)
-                                      :z (:target-z trace)
-                                      :crit-level (:crit-level damage-result)
-                                      :crit-rate (:crit-rate damage-result)
-                                      :message-key (:message-key damage-result)
-                                      :message-args (:message-args damage-result)
-                                      :target-uuid e-uuid
-                                      :skill-id flesh-ripping-skill-id}))
+            (fx/send! ctx-id {:topic :teleporter/fx-crit-hit} nil
+                      {:x (:target-x trace)
+                       :y (:target-y trace)
+                       :z (:target-z trace)
+                       :crit-level (:crit-level damage-result)
+                       :crit-rate (:crit-rate damage-result)
+                       :message-key (:message-key damage-result)
+                       :message-args (:message-args damage-result)
+                       :target-uuid e-uuid
+                       :skill-id flesh-ripping-skill-id}))
           (when (and (< (rand) (helper/cfg-probability flesh-ripping-skill-id
                                                         :effect.nausea-chance))
                      (potion-effects/available?))
@@ -99,12 +100,12 @@
                                                            :progression.exp-hit))
           (let [cd (helper/cfg-lerp-int flesh-ripping-skill-id :cooldown.ticks exp)]
             (skill-effects/set-main-cooldown! player-id flesh-ripping-skill-id cd))
-          (ctx/ctx-send-to-client! ctx-id :flesh-ripping/fx-perform
-                                   {:target-x (:target-x trace)
-                                    :target-y (:target-y trace)
-                                    :target-z (:target-z trace)
-                                    :hit? true
-                                    :target-uuid e-uuid}))
+          (fx/send! ctx-id {:topic :flesh-ripping/fx-perform :mode :perform} nil
+                    {:target-x (:target-x trace)
+                     :target-y (:target-y trace)
+                     :target-z (:target-z trace)
+                     :hit? true
+                     :target-uuid e-uuid}))
         (log/debug "FleshRipping: no entity in range or cost failed")))
     (catch Exception e
       (log/warn "FleshRipping up! failed:" (ex-message e)))))

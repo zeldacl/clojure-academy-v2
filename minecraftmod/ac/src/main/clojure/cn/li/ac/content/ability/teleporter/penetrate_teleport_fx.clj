@@ -2,7 +2,7 @@
   "Client FX for PenetrateTP: brief glow through wall."
   (:require [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
-            [cn.li.ac.ability.client.fx-registry :as fx-registry]
+            [cn.li.ac.ability.client.fx-spec :as fx-spec]
             [cn.li.ac.ability.client.level-effects :as level-effects]))
 
 (def ^:private penetrate-teleport-effect-id :penetrate-teleport)
@@ -94,33 +94,20 @@
 (defn- build-plan [_cp _hcp _tick] nil)
 
 (defn init! []
-  (level-effects/register-level-effect! penetrate-teleport-effect-id
-                                        {:initial-state (default-penetrate-teleport-fx-runtime-state)
-                                         :enqueue-state-fn enqueue-state!
-                                         :tick-state-fn tick-state!
-                                         :build-plan-fn build-plan})
-  (fx-registry/register-fx-channels!
-    [:penetrate-tp/fx-start :penetrate-tp/fx-update :penetrate-tp/fx-perform :penetrate-tp/fx-end]
-    (fn [ctx-id channel payload]
-      (let [meta-payload (select-keys payload [:effect-instance-id :source-player-id :world-id])]
-        (case channel
-          :penetrate-tp/fx-start
-          (level-effects/enqueue-level-effect! :penetrate-teleport (merge meta-payload {:mode :start})
-                                               {:ctx-id ctx-id :channel channel})
-          :penetrate-tp/fx-update
-          (level-effects/enqueue-level-effect! :penetrate-teleport
-                                               (merge meta-payload
-                                                      {:mode :update
-                                                       :distance (:distance payload)
-                                                       :available? (:available? payload)
-                                                       :x (:x payload) :y (:y payload) :z (:z payload)})
-                                               {:ctx-id ctx-id :channel channel})
-          :penetrate-tp/fx-perform
-          (level-effects/enqueue-level-effect! :penetrate-teleport
-                                               (merge meta-payload {:mode :perform :x (:x payload) :y (:y payload) :z (:z payload)})
-                                               {:ctx-id ctx-id :channel channel})
-          :penetrate-tp/fx-end
-          (level-effects/enqueue-level-effect! :penetrate-teleport (merge meta-payload {:mode :end})
-                                               {:ctx-id ctx-id :channel channel})
-          nil))))
+  (fx-spec/register!
+    {:id penetrate-teleport-effect-id
+     :level {:initial-state (default-penetrate-teleport-fx-runtime-state)
+             :enqueue-state-fn enqueue-state!
+             :tick-state-fn tick-state!
+             :build-plan-fn build-plan}
+     :channels {:start {:topic :penetrate-teleport/fx-start :mode :start}
+                :update {:topic :penetrate-teleport/fx-update :mode :update
+                         :level-payload (fn [_ _ p]
+                                          {:distance (:distance p)
+                                           :available? (:available? p)
+                                           :x (:x p) :y (:y p) :z (:z p)})}
+                :perform {:topic :penetrate-teleport/fx-perform :mode :perform
+                          :level-payload (fn [_ _ p]
+                                           {:x (:x p) :y (:y p) :z (:z p)})}
+                :end {:topic :penetrate-teleport/fx-end :mode :end}}})
   nil)

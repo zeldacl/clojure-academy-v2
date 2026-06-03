@@ -1,7 +1,7 @@
 (ns cn.li.ac.content.ability.electromaster.thunder-bolt-fx
 	"Client FX for Thunder Bolt: electric arc effects."
 	(:require [cn.li.ac.ability.client.effects.sounds :as client-sounds]
-						[cn.li.ac.ability.client.fx-registry :as fx-registry]
+						[cn.li.ac.ability.client.fx-spec :as fx-spec]
 						[cn.li.ac.ability.client.level-effects :as level-effects]
 						[cn.li.ac.ability.client.render-util :as ru]))
 
@@ -105,14 +105,11 @@
 
 (defn init!
 	[]
-	(level-effects/register-level-effect! thunder-bolt-effect-id
-		{:initial-state (default-thunder-bolt-fx-runtime-state)
-		 :enqueue-state-fn enqueue-state!
-		 :tick-state-fn tick-state!
-		 :build-plan-fn build-plan})
-	(fx-registry/register-fx-channel! :thunder-bolt/fx-perform
-		(fn [ctx-id channel payload]
-			(level-effects/enqueue-level-effect! thunder-bolt-effect-id payload
-																					 {:ctx-id ctx-id
-																						:channel channel})))
+	(fx-spec/register!
+		{:id thunder-bolt-effect-id
+		 :level {:initial-state (default-thunder-bolt-fx-runtime-state)
+						:enqueue-state-fn enqueue-state!
+						:tick-state-fn tick-state!
+						:build-plan-fn build-plan}
+		 :channels {:perform {:topic :thunder-bolt/fx-perform}}})
 	nil)

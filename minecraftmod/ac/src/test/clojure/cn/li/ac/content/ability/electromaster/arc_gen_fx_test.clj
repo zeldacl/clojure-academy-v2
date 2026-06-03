@@ -27,37 +27,41 @@
 
 (deftest init-registers-arc-gen-fx-channel-test
   (let [registered-level* (atom nil)
-        registered-handler* (atom nil)]
+        registered-topics* (atom #{})]
     (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
                                                          (reset! registered-level* [effect-id effect-map])
                                                          nil)
-                  fx-registry/register-fx-channel! (fn [channel handler]
-                                                     (reset! registered-handler* {:channel channel
-                                                                                  :handler handler})
+                  fx-registry/register-fx-channel! (fn [topic _handler]
+                                                     (swap! registered-topics* conj topic)
                                                      nil)]
       (arc-fx/init!)
       (is (= :arc-gen (first @registered-level*)))
-      (is (= :arc-gen/fx-perform (:channel @registered-handler*))))))
+      (is (= #{:arc-gen/fx-perform} @registered-topics*)))))
 
 (deftest fx-handler-routes-perform-payload-test
-  (let [handler* (atom nil)
+  (let [handlers* (atom {})
         enqueued* (atom [])]
     (with-redefs [level-effects/register-level-effect! (fn [& _] nil)
-                  fx-registry/register-fx-channel! (fn [_ handler]
-                                                     (reset! handler* handler)
+                  fx-registry/register-fx-channel! (fn [topic handler]
+                                                     (swap! handlers* assoc topic handler)
                                                      nil)
                   level-effects/enqueue-level-effect! (fn [effect-id payload fx-context]
                                                         (swap! enqueued* conj [effect-id payload fx-context])
                                                         nil)]
       (arc-fx/init!)
-      (@handler* "ctx-arc" :arc-gen/fx-perform {:start {:x 1.0 :y 2.0 :z 3.0}
+      ((get @handlers* :arc-gen/fx-perform) "ctx-arc" :arc-gen/fx-perform {:start {:x 1.0 :y 2.0 :z 3.0}
                                                  :end {:x 4.0 :y 5.0 :z 6.0}
                                                  :hit-type :entity})
       (is (= [[:arc-gen {:mode :perform
+                         :owner-key [:ctx "ctx-arc"]
+                         :ctx-id "ctx-arc"
+                         :channel :arc-gen/fx-perform
                          :start {:x 1.0 :y 2.0 :z 3.0}
                          :end {:x 4.0 :y 5.0 :z 6.0}
                          :hit-type :entity}
-               {:ctx-id "ctx-arc" :channel :arc-gen/fx-perform}]]
+               {:ctx-id "ctx-arc"
+                :channel :arc-gen/fx-perform
+                :owner-key [:ctx "ctx-arc"]}]]
              @enqueued*)))))
 
 (deftest enqueue-perform-adds-arc-and-plays-sound-test

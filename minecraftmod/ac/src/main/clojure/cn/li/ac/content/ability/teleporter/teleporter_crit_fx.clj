@@ -1,7 +1,7 @@
 (ns cn.li.ac.content.ability.teleporter.teleporter-crit-fx
   "Client FX for teleporter critical hits shared across teleporter attack skills."
   (:require [cn.li.ac.ability.client.level-effects :as level-effects]
-            [cn.li.ac.ability.client.fx-registry :as fx-registry]
+            [cn.li.ac.ability.client.fx-spec :as fx-spec]
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
@@ -57,27 +57,11 @@
   nil)
 
 (defn init! []
-  (level-effects/register-level-effect! :teleporter-crit
-    {:initial-state (default-teleporter-crit-fx-runtime-state)
-     :enqueue-state-fn enqueue!
-     :tick-state-fn tick!
-     :build-plan-fn build-plan})
-  (fx-registry/register-fx-channels!
-    [:teleporter/fx-crit-hit]
-    (fn [ctx-id channel payload]
-      (case channel
-        :teleporter/fx-crit-hit
-        (level-effects/enqueue-level-effect! :teleporter-crit
-          {:mode :crit-hit
-           :x (:x payload)
-           :y (:y payload)
-           :z (:z payload)
-           :crit-level (:crit-level payload)
-            :crit-rate (:crit-rate payload)
-            :message-key (:message-key payload)
-            :message-args (:message-args payload)
-           :target-uuid (:target-uuid payload)
-           :skill-id (:skill-id payload)}
-          {:ctx-id ctx-id :channel channel})
-        nil)))
+  (fx-spec/register!
+    {:id :teleporter-crit
+     :level {:initial-state (default-teleporter-crit-fx-runtime-state)
+             :enqueue-state-fn enqueue!
+             :tick-state-fn tick!
+             :build-plan-fn build-plan}
+     :channels {:crit-hit {:topic :teleporter/fx-crit-hit :mode :crit-hit}}})
   nil)

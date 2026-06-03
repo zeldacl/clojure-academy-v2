@@ -1,10 +1,10 @@
 (ns cn.li.ac.content.ability.meltdowner.electron-bomb-test
   (:require [clojure.test :refer [deftest is]]
+            [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.content.ability.meltdowner.electron-bomb :as electron-bomb]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.effects.geom :as geom]
-            [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.delayed-projectiles :as delayed-projectiles]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.entity :as entity]))
@@ -30,13 +30,14 @@
                   skill-config/tunable-double stub-tunable-double
                   geom/world-id-of (fn [_] "w")
                   geom/eye-pos (fn [_] {:x 1.0 :y 64.0 :z 2.0})
-                  raycast/get-player-look-vector* (fn [_ _] {:x 0.0 :y 0.0 :z 1.0})
+                  raycast/available? (constantly true)
+                  raycast/get-player-look-vector* (fn [_] {:x 0.0 :y 0.0 :z 1.0})
                   entity/player-spawn-entity-by-id! (fn [& args]
                                                       (swap! spawn-calls* conj args)
                                                       true)
-                  ctx/ctx-send-to-client! (fn [ctx-id channel payload]
-                                            (swap! fx-calls* conj [ctx-id channel payload])
-                                            nil)
+                  fx/send! (fn [ctx-id entry _evt payload]
+                             (swap! fx-calls* conj [ctx-id (:topic entry) payload])
+                             nil)
                   delayed-projectiles/mdball-near-expire-delay (fn [] 15)
                   delayed-projectiles/schedule-electron-bomb-beam! (fn [task]
                                                                      (swap! scheduled* conj task)
@@ -69,13 +70,14 @@
                   skill-config/tunable-double stub-tunable-double
                   geom/world-id-of (fn [_] "w")
                   geom/eye-pos (fn [_] {:x 1.0 :y 64.0 :z 2.0})
+                  raycast/available? (constantly true)
                   raycast/get-player-look-vector* (fn [& _] nil)
                   entity/player-spawn-entity-by-id! (fn [& args]
                                                       (swap! spawn-calls* conj args)
                                                       true)
-                  ctx/ctx-send-to-client! (fn [ctx-id channel payload]
-                                            (swap! fx-calls* conj [ctx-id channel payload])
-                                            nil)
+                  fx/send! (fn [ctx-id entry _evt payload]
+                             (swap! fx-calls* conj [ctx-id (:topic entry) payload])
+                             nil)
                   delayed-projectiles/mdball-near-expire-delay (fn [] 15)
                   delayed-projectiles/schedule-electron-bomb-beam! (fn [task]
                                                                      (swap! scheduled* conj task)

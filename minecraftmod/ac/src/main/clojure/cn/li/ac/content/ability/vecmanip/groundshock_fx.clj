@@ -2,7 +2,7 @@
   "Client FX for Groundshock: level-effect particles + hand-effect animation."
   (:require [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.hand-effects :as hand-effects]
-            [cn.li.ac.ability.client.fx-registry :as fx-registry]
+            [cn.li.ac.ability.client.fx-spec :as fx-spec]
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]))
 
@@ -148,37 +148,24 @@
 ;; ---------------------------------------------------------------------------
 
 (defn init! []
-  (level-effects/register-level-effect! :groundshock
-    {:initial-state (default-groundshock-level-runtime-state)
-     :enqueue-state-fn level-enqueue!
-     :tick-state-fn level-tick!
-     :build-plan-fn level-build-plan})
-  (hand-effects/register-hand-effect! groundshock-hand-effect-id
-    {:initial-state (default-groundshock-fx-runtime-state)
-     :enqueue-state-fn hand-enqueue-state!
-     :tick-state-fn hand-tick-state!})
-  (fx-registry/register-fx-channels!
-    [:groundshock/fx-start :groundshock/fx-update :groundshock/fx-perform :groundshock/fx-end]
-    (fn [ctx-id channel payload]
-      (let [owner-context {:ctx-id ctx-id :channel channel}
-            owner-meta {:owner-key [:ctx ctx-id]
-                        :ctx-id ctx-id
-                        :channel channel}]
-        (case channel
-          :groundshock/fx-start
-          (hand-effects/enqueue-hand-effect! groundshock-hand-effect-id (merge owner-meta {:mode :start}))
-          :groundshock/fx-update
-          (hand-effects/enqueue-hand-effect! groundshock-hand-effect-id
-            (merge owner-meta {:mode :update :charge-ticks (long (or (:charge-ticks payload) 0))}))
-          :groundshock/fx-perform
-          (do
-            (hand-effects/enqueue-hand-effect! groundshock-hand-effect-id (merge owner-meta {:mode :perform}))
-            (level-effects/enqueue-level-effect! :groundshock
-              {:mode :perform
-               :affected-blocks (:affected-blocks payload)
-               :broken-blocks (:broken-blocks payload)}
-              owner-context))
-          :groundshock/fx-end
-          (hand-effects/enqueue-hand-effect! groundshock-hand-effect-id
-            (merge owner-meta {:mode :end :performed? (boolean (:performed? payload))}))))))
+  (fx-spec/register!
+    {:id :groundshock
+     :level {:initial-state (default-groundshock-level-runtime-state)
+             :enqueue-state-fn level-enqueue!
+             :tick-state-fn level-tick!
+             :build-plan-fn level-build-plan}
+     :hand {:initial-state (default-groundshock-fx-runtime-state)
+            :enqueue-state-fn hand-enqueue-state!
+            :tick-state-fn hand-tick-state!}
+     :channels {:start {:topic :groundshock/fx-start :mode :start :targets [:hand]}
+                :update {:topic :groundshock/fx-update :mode :update :targets [:hand]
+                         :hand-payload (fn [_ _ p]
+                                         {:charge-ticks (long (or (:charge-ticks p) 0))})}
+                :perform {:topic :groundshock/fx-perform :mode :perform :targets [:hand :level]
+                          :level-payload (fn [_ _ p]
+                                           {:affected-blocks (:affected-blocks p)
+                                            :broken-blocks (:broken-blocks p)})}
+                :end {:topic :groundshock/fx-end :mode :end :targets [:hand]
+                      :hand-payload (fn [_ _ p]
+                                      {:performed? (boolean (:performed? p))})}}})
   nil)

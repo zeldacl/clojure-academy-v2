@@ -7,6 +7,7 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill]]
+            [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
@@ -86,29 +87,20 @@
     :look-dir look-dir}
    (beam-spec damage)))
 
-(defn- send-fx-to-local-and-nearby!
-  [ctx-id channel payload]
-  (ctx/ctx-send-to-client! ctx-id channel payload)
-  (ctx/ctx-send-to-except-local! ctx-id channel payload))
-
 (defn- send-preray-fx!
   [ctx-id eye target-end hit?]
-  (send-fx-to-local-and-nearby!
-    ctx-id
-    :ray-barrage/fx-preray
-    {:start {:x (:x eye) :y (:y eye) :z (:z eye)}
-     :end {:x (:x target-end) :y (:y target-end) :z (:z target-end)}
-     :hit? (boolean hit?)}))
+  (fx/send-local-and-nearby! ctx-id {:topic :ray-barrage/fx-preray} nil
+                               {:start {:x (:x eye) :y (:y eye) :z (:z eye)}
+                                :end {:x (:x target-end) :y (:y target-end) :z (:z target-end)}
+                                :hit? (boolean hit?)}))
 
 (defn- send-barrage-fx!
   [ctx-id silbarn-hit scatter-count]
-  (send-fx-to-local-and-nearby!
-    ctx-id
-    :ray-barrage/fx-barrage
-    {:silbarn {:x (double (or (:x silbarn-hit) (:hit-x silbarn-hit) 0.0))
-               :y (double (or (:y silbarn-hit) (:hit-y silbarn-hit) 0.0))
-               :z (double (or (:z silbarn-hit) (:hit-z silbarn-hit) 0.0))}
-     :scatter-count (int scatter-count)}))
+  (fx/send-local-and-nearby! ctx-id {:topic :ray-barrage/fx-barrage} nil
+                               {:silbarn {:x (double (or (:x silbarn-hit) (:hit-x silbarn-hit) 0.0))
+                                          :y (double (or (:y silbarn-hit) (:hit-y silbarn-hit) 0.0))
+                                          :z (double (or (:z silbarn-hit) (:hit-z silbarn-hit) 0.0))}
+                                :scatter-count (int scatter-count)}))
 
 (defn- front-hit-end
   [eye look-dir front-hit]

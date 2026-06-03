@@ -13,6 +13,7 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill]]
+            [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
@@ -106,7 +107,7 @@
                {:balls        0
             :hold-ticks   0
             :overload-floor floor})
-      (ctx/ctx-send-to-client! ctx-id :scatter-bomb/fx-start {}))))
+      (fx/send! ctx-id {:topic :scatter-bomb/fx-start} nil {}))))
 
 (defn scatter-bomb-tick!
   [{:keys [player-id ctx-id player]}]
@@ -126,7 +127,7 @@
               player-id
               (cfg-double :effect.anti-afk-damage)
               :magic))
-          (ctx/ctx-send-to-client! ctx-id :scatter-bomb/fx-end {:balls balls})
+          (fx/send! ctx-id {:topic :scatter-bomb/fx-end} nil {:balls balls})
           (ctx/terminate-context! ctx-id nil))
         ;; Spawn new ball every N ticks
         (when (and (<= ticks (cfg-int :projectile.max-hold-ticks))
@@ -139,9 +140,9 @@
             (when player
               (entity/player-spawn-entity-by-id! player mdball-entity-id 0.0))
             (let [eye (geom/eye-pos player-id)]
-              (ctx/ctx-send-to-client! ctx-id :scatter-bomb/fx-ball
-                                       {:x (:x eye) :y (:y eye) :z (:z eye)
-                                        :count new-balls}))))))))
+              (fx/send! ctx-id {:topic :scatter-bomb/fx-ball} nil
+                        {:x (:x eye) :y (:y eye) :z (:z eye)
+                         :count new-balls}))))))))
 
 (defn scatter-bomb-up!
   [{:keys [player-id ctx-id]}]
@@ -175,17 +176,17 @@
             player-id scatter-bomb-skill-id
             (int (* balls (cfg-lerp :cooldown.ticks-per-ball exp))))
           (log/debug "ScatterBomb: fired" balls "balls"))))
-    (ctx/ctx-send-to-client! ctx-id :scatter-bomb/fx-end {:balls balls})))
+    (fx/send! ctx-id {:topic :scatter-bomb/fx-end} nil {:balls balls})))
 
 (defn scatter-bomb-cost-fail!
   [{:keys [ctx-id cost-stage]}]
   (when (= cost-stage :tick)
     (let [balls (int (or (get-in (ctx/get-context ctx-id) [:skill-state :balls]) 0))]
-      (ctx/ctx-send-to-client! ctx-id :scatter-bomb/fx-end {:balls balls}))))
+      (fx/send! ctx-id {:topic :scatter-bomb/fx-end} nil {:balls balls}))))
 
 (defn scatter-bomb-abort!
   [{:keys [ctx-id]}]
-  (ctx/ctx-send-to-client! ctx-id :scatter-bomb/fx-end {:balls 0}))
+  (fx/send! ctx-id {:topic :scatter-bomb/fx-end} nil {:balls 0}))
 
 ;; ---------------------------------------------------------------------------
 ;; Skill registration

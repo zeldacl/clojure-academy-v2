@@ -3,7 +3,7 @@
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
-            [cn.li.ac.content.ability.fx-helpers :as fx]
+            [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.content.ability.vecmanip.blood-retrograde :as br]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
@@ -88,26 +88,29 @@
                   ctx-skill/update-skill-state-root! update-skill-state-root!
                   ctx/terminate-context! terminate-context!
                   geom/world-id-of (fn [_] "w")
+                  raycast/available? (constantly true)
+                  entity-damage/available? (constantly true)
                   raycast/raycast-from-player* (fn [& _]
                                                 {:entity-id "target-1"
                                                  :x 1.0 :y 2.0 :z 3.0})
                   raycast/raycast-blocks* (fn [& _]
                                            {:x 1.0 :y 2.0 :z 3.0 :face :up})
-                  fx/send-update! (fn [& _] nil)
-                  fx/send-perform! (fn [ctx-id ch payload]
-                                     (swap! perform-calls* conj [ctx-id ch payload]))
-                  fx/send-end! (fn [ctx-id ch payload]
-                                 (swap! end-calls* conj [ctx-id ch payload]))
+                  fx/send! (fn [ctx-id entry _evt payload]
+                            (case (:topic entry)
+                              :blood-retrograde/fx-perform
+                              (swap! perform-calls* conj [ctx-id (:topic entry) (:mode entry) payload])
+                              :blood-retrograde/fx-end
+                              (swap! end-calls* conj [ctx-id (:topic entry) (:mode entry) payload])
+                              nil))
                   entity-damage/apply-direct-damage!* (fn [_ world-id target-id damage kind]
                                                       (swap! damage-calls* conj [world-id target-id damage kind]))
                   skill-effects/set-main-cooldown! (fn [player-id skill-id ticks]
                                                      (swap! cooldown-calls* conj [player-id skill-id ticks]))
                   skill-effects/add-skill-exp! (fn [player-id skill-id amount]
                                                  (swap! exp-calls* conj [player-id skill-id amount]))]
-        (br/blood-retrograde-on-key-tick {:player-id "p1"
-                                          :ctx-id "ctx-1"
-                                          :cost-ok? true})))
-
+      (br/blood-retrograde-on-key-tick {:player-id "p1"
+                                        :ctx-id "ctx-1"
+                                        :cost-ok? true}))
     (is (= [["w" "target-1" 30.0 :generic]] @damage-calls*))
     (is (= [["p1" :blood-retrograde 90]] @cooldown-calls*))
     (is (= [["p1" :blood-retrograde 0.002]] @exp-calls*))
@@ -134,19 +137,20 @@
                   ctx-skill/update-skill-state-root! update-skill-state-root!
                   ctx/terminate-context! terminate-context!
                   geom/world-id-of (fn [_] "w")
+                  raycast/available? (constantly true)
+                  entity-damage/available? (constantly true)
                   raycast/raycast-from-player* (fn [& _] nil)
-                  fx/send-update! (fn [& _] nil)
-                  fx/send-perform! (fn [& _] nil)
-                  fx/send-end! (fn [ctx-id ch payload]
-                                 (swap! end-calls* conj [ctx-id ch payload]))
+                  fx/send! (fn [ctx-id entry _evt payload]
+                            (when (= :blood-retrograde/fx-end (:topic entry))
+                              (swap! end-calls* conj [ctx-id (:topic entry) (:mode entry) payload]))
+                            nil)
                   entity-damage/apply-direct-damage!* (fn [& _]
                                                       (swap! damage-calls* conj :damage))]
         (br/blood-retrograde-on-key-up {:player-id "p1"
-                                        :ctx-id "ctx-2"
-                                        :cost-ok? true})))
-
+                                       :ctx-id "ctx-2"
+                                       :cost-ok? true}))
     (is (empty? @damage-calls*))
-    (is (= [["ctx-2" :blood-retrograde/fx-end {:performed? false}]] @end-calls*))
+    (is (= [["ctx-2" :blood-retrograde/fx-end :end {:performed? false}]] @end-calls*))
     (is (= ["ctx-2"] @terminate-calls))
     (is (false? (get-in @ctx-state [:skill-state :performed?] false)))
     (is (true? (get-in @ctx-state [:skill-state :ended?])))))

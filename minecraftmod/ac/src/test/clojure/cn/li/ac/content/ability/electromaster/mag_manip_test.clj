@@ -3,6 +3,8 @@
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
+            [cn.li.ac.ability.fx :as fx]
+            [cn.li.ac.test.support.fx-mocks :as fx-mocks]
             [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.ac.content.ability.electromaster.mag-manip :as mag-manip]
             [cn.li.mcmod.platform.block-manipulation :as block-manip]
@@ -22,20 +24,26 @@
   (let [ctx-id "ctx-world"
         contexts* (mk-context-store ctx-id {})
         down! (get (skill-actions) :down!)]
-      (with-redefs [mag-manip/skill-exp (fn [_] 0.8)
-                    mag-manip/pick-up-target-block (fn [_ _]
-                                                     {:world-id "w"
-                                                      :x 1 :y 2 :z 3
-                                                      :block-id "minecraft:iron_block"})
-                    entity/player-get-main-hand-item-id (fn [_] nil)
-                    block-manip/can-break-block?* (fn [& _] true)
-                    block-manip/break-block!* (fn [& _] false)
-                    ctx/get-context (fn [id] (get @contexts* id))
-                    ctx-skill/update-skill-state-root! (fn [id f & args]
-                                          (swap! contexts* update id #(apply f % args))
-                                          nil)
-                    ctx/ctx-send-to-client! (fn [& _] nil)]
-        (down! {:player-id "p1" :ctx-id ctx-id :player {:id "p"}})))
+    (with-redefs [mag-manip/skill-exp (fn [_] 0.8)
+                  mag-manip/pick-up-target-block (fn [_ _]
+                                                   {:world-id "w"
+                                                    :x 1 :y 2 :z 3
+                                                    :block-id "minecraft:iron_block"})
+                  entity/player-get-main-hand-item-id (fn [_] nil)
+                  block-manip/available? (constantly true)
+                  block-manip/can-break-block?* (fn [& _] true)
+                  block-manip/break-block!* (fn [& _] false)
+                  ctx/get-context (fn [id] (get @contexts* id))
+                  ctx-skill/update-skill-state-root! (fn [id f & args]
+                                                      (swap! contexts* update id
+                                                             (fn [ctx]
+                                                               (assoc ctx :skill-state
+                                                                      (if (and (= f identity) (= 1 (count args)))
+                                                                        (first args)
+                                                                        (apply f (or (:skill-state ctx) {}) args)))))
+                                                      nil)
+                  fx/send! (fn [& _] nil)]
+      (down! {:player-id "p1" :ctx-id ctx-id :player {:id "p"}}))
     (is (= :capture-failed (get-in @contexts* [ctx-id :skill-state :mode])))))
 
 (deftest up-too-far-rolls-back-hand-item-test
@@ -47,7 +55,7 @@
                                                                 :from-hand? true
                                                                 :from-world? false}}})
         give-calls* (atom [])
-        fx* (atom [])
+        {:keys [calls* send!]} (fx-mocks/capture-fx-send!)
         up! (get (skill-actions) :up!)]
     (with-redefs [mag-manip/skill-exp (fn [_] 0.5)
                   mag-manip/max-hold-distance-sq (fn [] 1.0)
@@ -60,16 +68,19 @@
                                                    true)
                   ctx/get-context (fn [id] (get @contexts* id))
                   ctx-skill/update-skill-state-root! (fn [id f & args]
-                                        (swap! contexts* update id #(apply f % args))
-                                        nil)
-                  ctx/ctx-send-to-client! (fn [id ch payload]
-                                            (swap! fx* conj [id ch payload])
-                                            nil)]
+                                                        (swap! contexts* update id
+                                                               (fn [ctx]
+                                                                 (assoc ctx :skill-state
+                                                                        (if (and (= f identity) (= 1 (count args)))
+                                                                          (first args)
+                                                                          (apply f (or (:skill-state ctx) {}) args)))))
+                                                        nil)
+                  fx/send! send!]
       (up! {:player-id "p1" :ctx-id ctx-id :player {:id "p"} :cost-ok? true}))
     (is (= 1 (count @give-calls*)))
     (is (= :too-far (get-in @contexts* [ctx-id :skill-state :mode])))
-    (is (= [ctx-id :mag-manip/fx-end {:mode :end :reason :too-far}]
-           (last @fx*)))))
+    (is (= [[ctx-id :mag-manip/fx-end :end {:reason :too-far}]]
+           @calls*))))
 
 (deftest up-success-applies-cooldown-and-exp-test
   (let [ctx-id "ctx-success"
@@ -96,9 +107,14 @@
                                                  nil)
                   ctx/get-context (fn [id] (get @contexts* id))
                   ctx-skill/update-skill-state-root! (fn [id f & args]
-                                        (swap! contexts* update id #(apply f % args))
-                                        nil)
-                  ctx/ctx-send-to-client! (fn [& _] nil)]
+                                                        (swap! contexts* update id
+                                                               (fn [ctx]
+                                                                 (assoc ctx :skill-state
+                                                                        (if (and (= f identity) (= 1 (count args)))
+                                                                          (first args)
+                                                                          (apply f (or (:skill-state ctx) {}) args)))))
+                                                        nil)
+                  fx/send! (fn [& _] nil)]
       (up! {:player-id "p1" :ctx-id ctx-id :player {:id "p"} :cost-ok? true}))
     (is (= :thrown (get-in @contexts* [ctx-id :skill-state :mode])))
     (is (= 1 (count @cooldown*)))

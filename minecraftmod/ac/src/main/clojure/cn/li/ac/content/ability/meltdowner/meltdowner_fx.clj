@@ -2,7 +2,7 @@
   "Client FX for Meltdowner: charge ring + beam rays + walk speed."
   (:require [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.effects.beam-ops :as fx-beam]
-            [cn.li.ac.ability.client.fx-registry :as fx-registry]
+            [cn.li.ac.ability.client.fx-spec :as fx-spec]
             [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]))
 
@@ -223,43 +223,27 @@
 
 (defn init!
   []
-  (level-effects/register-level-effect! :meltdowner
-    {:initial-state (default-meltdowner-fx-runtime-state)
-     :enqueue-state-fn enqueue!
-     :tick-state-fn tick!
-     :build-plan-fn build-plan})
-  (fx-registry/register-fx-channels!
-    [:meltdowner/fx-start :meltdowner/fx-update :meltdowner/fx-end
-     :meltdowner/fx-perform :meltdowner/fx-reflect]
-    (fn [ctx-id channel payload]
-      (let [meta-payload (select-keys payload [:effect-instance-id :source-player-id :world-id])]
-        (case channel
-          :meltdowner/fx-start
-          (level-effects/enqueue-level-effect! :meltdowner
-            (merge meta-payload {:mode :start})
-            {:ctx-id ctx-id :channel channel})
-          :meltdowner/fx-update
-          (level-effects/enqueue-level-effect! :meltdowner
-            (merge meta-payload
-                   {:mode :update
-                    :ticks (long (or (:ticks payload) 0))
-                    :charge-ratio (double (or (:charge-ratio payload) 0.0))})
-            {:ctx-id ctx-id :channel channel})
-          :meltdowner/fx-end
-          (level-effects/enqueue-level-effect! :meltdowner
-            (merge meta-payload {:mode :end :performed? (boolean (:performed? payload))})
-            {:ctx-id ctx-id :channel channel})
-          :meltdowner/fx-perform
-          (level-effects/enqueue-level-effect! :meltdowner
-            (merge meta-payload
-                   {:mode :perform
-                    :charge-ticks (int (or (:charge-ticks payload) 20))
-                    :beam-length (double (or (:beam-length payload) 30.0))
-                    :start (:start payload)
-                    :end (:end payload)})
-            {:ctx-id ctx-id :channel channel})
-          :meltdowner/fx-reflect
-          (level-effects/enqueue-level-effect! :meltdowner
-            (merge meta-payload {:mode :reflect :start (:start payload) :end (:end payload)})
-            {:ctx-id ctx-id :channel channel})))))
+  (fx-spec/register!
+    {:id :meltdowner
+     :level {:initial-state (default-meltdowner-fx-runtime-state)
+             :enqueue-state-fn enqueue!
+             :tick-state-fn tick!
+             :build-plan-fn build-plan}
+     :channels {:start {:topic :meltdowner/fx-start :mode :start}
+                :update {:topic :meltdowner/fx-update :mode :update
+                         :level-payload (fn [_ _ p]
+                                          {:ticks (long (or (:ticks p) 0))
+                                           :charge-ratio (double (or (:charge-ratio p) 0.0))})}
+                :end {:topic :meltdowner/fx-end :mode :end
+                      :level-payload (fn [_ _ p]
+                                       {:performed? (boolean (:performed? p))})}
+                :perform {:topic :meltdowner/fx-perform :mode :perform
+                          :level-payload (fn [_ _ p]
+                                           {:charge-ticks (int (or (:charge-ticks p) 20))
+                                            :beam-length (double (or (:beam-length p) 30.0))
+                                            :start (:start p)
+                                            :end (:end p)})}
+                :reflect {:topic :meltdowner/fx-reflect :mode :reflect
+                          :level-payload (fn [_ _ p]
+                                           {:start (:start p) :end (:end p)})}}})
   nil)

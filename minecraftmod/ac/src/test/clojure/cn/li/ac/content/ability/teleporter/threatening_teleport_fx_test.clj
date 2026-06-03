@@ -21,39 +21,38 @@
 
 (deftest init-registers-threatening-teleport-fx-channels-test
   (let [registered-level* (atom nil)
-        registered-handler* (atom nil)]
+        registered-topics* (atom #{})]
     (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
                                                          (reset! registered-level* [effect-id effect-map])
                                                          nil)
-                  fx-registry/register-fx-channels! (fn [channels handler]
-                                                      (reset! registered-handler* {:channels channels
-                                                                                   :handler handler})
+                  fx-registry/register-fx-channel! (fn [topic _handler]
+                                                      (swap! registered-topics* conj topic)
                                                       nil)]
       (tfx/init!)
       (is (= :threatening-teleport (first @registered-level*)))
-      (is (= #{:threatening-tp/fx-start
-               :threatening-tp/fx-update
-               :threatening-tp/fx-perform
-               :threatening-tp/fx-end}
-             (set (:channels @registered-handler*)))))))
+      (is (= #{:threatening-teleport/fx-start
+               :threatening-teleport/fx-update
+               :threatening-teleport/fx-perform
+               :threatening-teleport/fx-end}
+             @registered-topics*)))))
 
 (deftest two-owners-keep-threatening-teleport-state-independent-test
   (with-redefs [client-particles/current-effect-owner (fn [] {:client-session-id "threatening-teleport-test"})]
     (tfx/init!)
     (level-effects/enqueue-level-effect! :threatening-teleport {:mode :start}
-                                         {:ctx-id "ctx-a" :channel :threatening-tp/fx-update :owner-key [:ctx "ctx-a"]})
+                                         {:ctx-id "ctx-a" :channel :threatening-teleport/fx-start :owner-key [:ctx "ctx-a"]})
     (level-effects/enqueue-level-effect! :threatening-teleport {:mode :start}
-                                         {:ctx-id "ctx-b" :channel :threatening-tp/fx-update :owner-key [:ctx "ctx-b"]})
+                                         {:ctx-id "ctx-b" :channel :threatening-teleport/fx-start :owner-key [:ctx "ctx-b"]})
     (level-effects/enqueue-level-effect! :threatening-teleport {:mode :update :drop-x 1.0 :drop-y 2.0 :drop-z 3.0 :attacked? true}
-                                         {:ctx-id "ctx-a" :channel :threatening-tp/fx-update :owner-key [:ctx "ctx-a"]})
+                                         {:ctx-id "ctx-a" :channel :threatening-teleport/fx-update :owner-key [:ctx "ctx-a"]})
     (level-effects/enqueue-level-effect! :threatening-teleport {:mode :update :drop-x 4.0 :drop-y 5.0 :drop-z 6.0 :attacked? false}
-                                         {:ctx-id "ctx-b" :channel :threatening-tp/fx-update :owner-key [:ctx "ctx-b"]})
+                                         {:ctx-id "ctx-b" :channel :threatening-teleport/fx-update :owner-key [:ctx "ctx-b"]})
     (let [snapshot (tfx/threatening-teleport-fx-snapshot)]
       (is (true? (:attacked? (get (:fx-state snapshot) [:ctx "ctx-a"]))))
       (is (= {:x 4.0 :y 5.0 :z 6.0}
              (:aim (get (:fx-state snapshot) [:ctx "ctx-b"])))))
     (level-effects/enqueue-level-effect! :threatening-teleport {:mode :end}
-                                         {:ctx-id "ctx-a" :channel :threatening-tp/fx-end :owner-key [:ctx "ctx-a"]})
+                                         {:ctx-id "ctx-a" :channel :threatening-teleport/fx-end :owner-key [:ctx "ctx-a"]})
     (let [snapshot (tfx/threatening-teleport-fx-snapshot)]
       (is (nil? (get (:fx-state snapshot) [:ctx "ctx-a"])))
       (is (some? (get (:fx-state snapshot) [:ctx "ctx-b"]))))

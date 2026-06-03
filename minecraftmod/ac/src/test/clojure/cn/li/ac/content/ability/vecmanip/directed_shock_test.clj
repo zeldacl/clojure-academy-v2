@@ -4,7 +4,7 @@
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
-            [cn.li.ac.content.ability.fx-helpers :as fx]
+            [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.content.ability.vecmanip.directed-shock :as ds]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.entity-motion :as entity-motion]))
@@ -69,13 +69,13 @@
                       ctx/get-context get-context
                       ctx-skill/update-skill-state-root! update-skill-state-root!
                       ctx/terminate-context! terminate-context!
-                      fx/send-end! (fn [ctx-id ch payload]
-                                     (swap! end-calls* conj [ctx-id ch payload]))
+                      fx/send! (fn [ctx-id entry _evt payload]
+                                 (swap! end-calls* conj [ctx-id (:topic entry) (:mode entry) payload]))
                       ds/entity-trace (fn [_]
                                         (swap! trace-calls* inc)
                                         nil)]
               (up-fn {:player-id "p1" :ctx-id "ctx-1" :exp 0.5 :cost-ok? true}))
-        (is (= [["ctx-1" :directed-shock/fx-end {:performed? false}]] @end-calls*))
+        (is (= [["ctx-1" :directed-shock/fx-end :end {:performed? false}]] @end-calls*))
         (is (= ["ctx-1"] @terminate-calls*))
         (is (= 0 @trace-calls*))))))
 
@@ -107,16 +107,18 @@
                                                 (swap! add-velocity-calls* conj [world-id target-id x y z]))
                   entity-motion/set-velocity!* (fn [_ world-id target-id x y z]
                                                 (swap! set-velocity-calls* conj [world-id target-id x y z]))
-                  fx/send-perform! (fn [ctx-id ch payload]
-                                     (swap! perform-calls* conj [ctx-id ch payload]))
-                  fx/send-end! (fn [ctx-id ch payload]
-                                 (swap! end-calls* conj [ctx-id ch payload]))
+                  fx/send! (fn [ctx-id entry _evt payload]
+                             (case (:topic entry)
+                               :directed-shock/fx-perform
+                               (swap! perform-calls* conj [ctx-id (:topic entry) (:mode entry) payload])
+                               :directed-shock/fx-end
+                               (swap! end-calls* conj [ctx-id (:topic entry) (:mode entry) payload])
+                               nil))
                   skill-effects/set-main-cooldown! (fn [player-id skill-id ticks]
                                                      (swap! cooldown-calls* conj [player-id skill-id ticks]))
                   skill-effects/add-skill-exp! (fn [player-id skill-id amount]
                                                  (swap! exp-calls* conj [player-id skill-id amount]))]
-        (up-fn {:player-id "p1" :ctx-id "ctx-hit" :exp 0.3 :cost-ok? true})))
-
+      (up-fn {:player-id "p1" :ctx-id "ctx-hit" :exp 0.3 :cost-ok? true}))
     (is (= [["w" "e1" 12.0 :generic]] @damage-calls*))
     (is (= 1 (count @set-velocity-calls*)))
     (is (= 1 (count @add-velocity-calls*)))
@@ -145,15 +147,15 @@
                   geom/world-id-of (fn [_] "w")
                   geom/eye-pos (fn [_] {:x 0.0 :y 1.62 :z 0.0})
                   ds/entity-trace (fn [_] nil)
-                  fx/send-end! (fn [ctx-id ch payload]
-                                 (swap! end-calls* conj [ctx-id ch payload]))
+                  fx/send! (fn [ctx-id entry _evt payload]
+                            (swap! end-calls* conj [ctx-id (:topic entry) (:mode entry) payload]))
                   skill-effects/set-main-cooldown! (fn [player-id skill-id ticks]
                                                      (swap! cooldown-calls* conj [player-id skill-id ticks]))
                   skill-effects/add-skill-exp! (fn [player-id skill-id amount]
                                                  (swap! exp-calls* conj [player-id skill-id amount]))]
       (up-fn {:player-id "p1" :ctx-id "ctx-miss" :exp 0.3 :cost-ok? true}))
 
-    (is (= [["ctx-miss" :directed-shock/fx-end {:performed? false}]] @end-calls*))
+    (is (= [["ctx-miss" :directed-shock/fx-end :end {:performed? false}]] @end-calls*))
     (is (= ["ctx-miss"] @terminate-calls*))
     (is (empty? @cooldown-calls*))
     (is (= [["p1" :directed-shock 0.001]] @exp-calls*))
@@ -168,11 +170,11 @@
                   ctx/get-context get-context
                   ctx-skill/update-skill-state-root! update-skill-state-root!
                   ctx/terminate-context! terminate-context!
-                  fx/send-end! (fn [ctx-id ch payload]
-                                 (swap! end-calls* conj [ctx-id ch payload]))]
+                  fx/send! (fn [ctx-id entry _evt payload]
+                            (swap! end-calls* conj [ctx-id (:topic entry) (:mode entry) payload]))]
       (tick-fn {:ctx-id "ctx-punch"}))
 
-    (is (= [["ctx-punch" :directed-shock/fx-end {:performed? true}]] @end-calls*))
+    (is (= [["ctx-punch" :directed-shock/fx-end :end {:performed? true}]] @end-calls*))
     (is (= ["ctx-punch"] @terminate-calls*))
     (is (nil? (:skill-state @ctx*)))))
 
@@ -184,11 +186,11 @@
     (with-redefs [ctx/get-context get-context
                   ctx-skill/update-skill-state-root! update-skill-state-root!
                   ctx/terminate-context! terminate-context!
-                  fx/send-end! (fn [ctx-id ch payload]
-                                 (swap! end-calls* conj [ctx-id ch payload]))]
+                  fx/send! (fn [ctx-id entry _evt payload]
+                            (swap! end-calls* conj [ctx-id (:topic entry) (:mode entry) payload]))]
       (abort-fn {:ctx-id "ctx-abort"}))
 
-    (is (= [["ctx-abort" :directed-shock/fx-end {:performed? false}]] @end-calls*))
+    (is (= [["ctx-abort" :directed-shock/fx-end :end {:performed? false}]] @end-calls*))
     (is (= ["ctx-abort"] @terminate-calls*))
     (is (nil? (:skill-state @ctx*)))))
 

@@ -80,7 +80,7 @@
     (let [fx-src (slurp "src/main/clojure/cn/li/ac/content/ability/vecmanip/plasma_cannon_fx.clj")]
       (is (.contains fx-src ":charge-pos (:charge-pos payload)")
           "enqueue! :start case should extract charge-pos from payload")
-      (is (.contains fx-src "register-fx-channels!")
+      (is (.contains fx-src "fx-spec/register!")
           "FX handlers should be properly registered"))))
 
 ;; ============================================================================

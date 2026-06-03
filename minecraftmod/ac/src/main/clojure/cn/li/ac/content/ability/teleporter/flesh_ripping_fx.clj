@@ -1,7 +1,7 @@
 (ns cn.li.ac.content.ability.teleporter.flesh-ripping-fx
   "Client FX for FleshRipping: red particle burst on target."
   (:require [cn.li.ac.ability.client.level-effects :as level-effects]
-            [cn.li.ac.ability.client.fx-registry :as fx-registry]
+            [cn.li.ac.ability.client.fx-spec :as fx-spec]
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]))
 
@@ -116,42 +116,24 @@
 
 (defn- build-plan [_cp _hcp _tick] nil)
 
+(defn- flesh-target-payload [_ctx-id _channel p]
+  {:target-x (:target-x p)
+   :target-y (:target-y p)
+   :target-z (:target-z p)
+   :hit? (:hit? p)
+   :target-uuid (:target-uuid p)})
+
 (defn init! []
-  (level-effects/register-level-effect! flesh-ripping-effect-id
-    {:initial-state (default-flesh-ripping-fx-state)
-     :enqueue-state-fn enqueue-state!
-     :tick-state-fn tick-state!
-     :build-plan-fn build-plan})
-  (fx-registry/register-fx-channels!
-    [:flesh-ripping/fx-start :flesh-ripping/fx-update :flesh-ripping/fx-perform :flesh-ripping/fx-end]
-    (fn [ctx-id channel payload]
-      (let [meta-payload (select-keys payload [:effect-instance-id :source-player-id :world-id])]
-        (case channel
-          :flesh-ripping/fx-start
-          (level-effects/enqueue-level-effect! :flesh-ripping (merge meta-payload {:mode :start})
-                                               {:ctx-id ctx-id :channel channel})
-        :flesh-ripping/fx-update
-        (level-effects/enqueue-level-effect! :flesh-ripping
-          (merge meta-payload
-                 {:mode :update
-                  :target-x (:target-x payload)
-                  :target-y (:target-y payload)
-                  :target-z (:target-z payload)
-                  :hit? (:hit? payload)
-                  :target-uuid (:target-uuid payload)})
-          {:ctx-id ctx-id :channel channel})
-        :flesh-ripping/fx-perform
-        (level-effects/enqueue-level-effect! :flesh-ripping
-          (merge meta-payload
-                 {:mode :perform
-                  :target-x (:target-x payload)
-                  :target-y (:target-y payload)
-                  :target-z (:target-z payload)
-                  :hit? (:hit? payload)
-                  :target-uuid (:target-uuid payload)})
-          {:ctx-id ctx-id :channel channel})
-        :flesh-ripping/fx-end
-        (level-effects/enqueue-level-effect! :flesh-ripping (merge meta-payload {:mode :end})
-                                             {:ctx-id ctx-id :channel channel})
-        nil))))
+  (fx-spec/register!
+    {:id flesh-ripping-effect-id
+     :level {:initial-state (default-flesh-ripping-fx-state)
+             :enqueue-state-fn enqueue-state!
+             :tick-state-fn tick-state!
+             :build-plan-fn build-plan}
+     :channels {:start {:topic :flesh-ripping/fx-start :mode :start}
+                :update {:topic :flesh-ripping/fx-update :mode :update
+                         :level-payload flesh-target-payload}
+                :perform {:topic :flesh-ripping/fx-perform :mode :perform
+                          :level-payload flesh-target-payload}
+                :end {:topic :flesh-ripping/fx-end :mode :end}}})
   nil)

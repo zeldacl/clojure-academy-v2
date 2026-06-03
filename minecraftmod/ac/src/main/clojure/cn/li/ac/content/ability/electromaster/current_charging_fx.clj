@@ -1,7 +1,7 @@
 (ns cn.li.ac.content.ability.electromaster.current-charging-fx
   "Client FX for current-charging."
   (:require [cn.li.ac.ability.client.effects.sounds :as client-sounds]
-            [cn.li.ac.ability.client.fx-registry :as fx-registry]
+            [cn.li.ac.ability.client.fx-spec :as fx-spec]
             [cn.li.ac.ability.client.hand-effects :as hand-effects]))
 
 (def ^:private visual-max-ticks 40)
@@ -166,30 +166,17 @@
     (or store (default-current-charging-fx-runtime-state))
     (default-current-charging-fx-runtime-state)))
 
-(defn- on-fx-channel [ctx-id channel payload]
-  (let [payload* (or payload {})
-        mode (case channel
-               :current-charging/fx-start :start
-               :current-charging/fx-update :update
-               :current-charging/fx-end :end
-               nil)]
-    (when mode
-      (hand-effects/enqueue-hand-effect!
-        current-charging-effect-id
-        (assoc payload* :mode mode :ctx-id ctx-id)))))
-
 (defn init!
   []
-  (hand-effects/register-hand-effect! current-charging-effect-id
-    {:initial-state (default-current-charging-fx-runtime-state)
-     :enqueue-state-fn enqueue-state!
-     :tick-state-fn tick-state!})
+  (fx-spec/register!
+    {:id current-charging-effect-id
+     :hand {:initial-state (default-current-charging-fx-runtime-state)
+            :enqueue-state-fn enqueue-state!
+            :tick-state-fn tick-state!}
+     :channels {:start {:topic :current-charging/fx-start :mode :start :targets [:hand]}
+                :update {:topic :current-charging/fx-update :mode :update :targets [:hand]}
+                :end {:topic :current-charging/fx-end :mode :end :targets [:hand]}}})
   (hand-effects/reset-hand-effect-state-for-test!
     current-charging-effect-id
     (default-current-charging-fx-runtime-state))
-  (fx-registry/register-fx-channels!
-    [:current-charging/fx-start
-     :current-charging/fx-update
-     :current-charging/fx-end]
-    on-fx-channel)
   nil)

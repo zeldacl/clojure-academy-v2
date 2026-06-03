@@ -11,7 +11,7 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill]]
-            [cn.li.ac.content.ability.fx-helpers :as fx]
+            [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
@@ -186,12 +186,12 @@
 (defn- send-fx-perform! [ctx-id player-id world-id target-id hit]
   (let [target-info (get-target-info world-id target-id hit)
         look-dir (get-player-look player-id)]
-    (fx/send-perform! ctx-id :blood-retrograde/fx-perform
-                      {:sound-pos {:x (:x target-info)
-                                   :y (+ (double (:y target-info)) (* (double (:height target-info)) 0.5))
-                                   :z (:z target-info)}
-                       :splashes (splash-payloads look-dir target-info)
-                       :sprays (spray-hit-payloads player-id world-id target-info)})))
+    (fx/send! ctx-id {:topic :blood-retrograde/fx-perform :mode :perform} nil
+              {:sound-pos {:x (:x target-info)
+                           :y (+ (double (:y target-info)) (* (double (:height target-info)) 0.5))
+                           :z (:z target-info)}
+               :splashes (splash-payloads look-dir target-info)
+               :sprays (spray-hit-payloads player-id world-id target-info)})))
 
 (defn- finish! [ctx-id performed?]
   (update-skill-state-root! ctx-id
@@ -200,7 +200,7 @@
                                      :executed? true
                                      :ended? true
                                      :performed? (boolean performed?))))
-  (fx/send-end! ctx-id :blood-retrograde/fx-end {:performed? (boolean performed?)})
+  (fx/send! ctx-id {:topic :blood-retrograde/fx-end :mode :end} nil {:performed? (boolean performed?)})
   (ctx/terminate-context! ctx-id nil))
 
 (defn- try-perform! [player-id ctx-id hit cost-ok?]
@@ -229,8 +229,8 @@
                          {:ticks 0
                           :executed? false
                           :ended? false})
-  (fx/send-start! ctx-id :blood-retrograde/fx-start)
-  (fx/send-update! ctx-id :blood-retrograde/fx-update {:ticks 0 :charge-ratio 0.0})
+  (fx/send! ctx-id {:topic :blood-retrograde/fx-start :mode :start})
+  (fx/send! ctx-id {:topic :blood-retrograde/fx-update :mode :update} nil {:ticks 0 :charge-ratio 0.0})
   (log/debug "BloodRetrograde charge started"))
 
 (defn blood-retrograde-on-key-tick
@@ -242,9 +242,9 @@
       (when-not executed?
         (let [ticks (inc (long (or (:ticks skill-state) 0)))]
           (update-skill-state-root! ctx-id #(assoc % :ticks ticks))
-          (fx/send-update! ctx-id :blood-retrograde/fx-update
-                           {:ticks (long ticks)
-                            :charge-ratio (exp01 (/ (double ticks) (cfg-double :charge.fx-ratio-ticks)))})
+          (fx/send! ctx-id {:topic :blood-retrograde/fx-update :mode :update} nil
+                    {:ticks (long ticks)
+                     :charge-ratio (exp01 (/ (double ticks) (cfg-double :charge.fx-ratio-ticks)))})
           (when (>= ticks (cfg-int :charge.max-ticks))
             (let [hit (when (raycast/available?)
                         (raycast/raycast-from-player* player-id (cfg-double :targeting.distance) true))
@@ -270,7 +270,7 @@
   [{:keys [ctx-id]}]
   (when-let [ctx-data (ctx/get-context ctx-id)]
     (when-not (get-in ctx-data [:skill-state :ended?])
-      (fx/send-end! ctx-id :blood-retrograde/fx-end {:performed? false})))
+      (fx/send! ctx-id {:topic :blood-retrograde/fx-end :mode :end} nil {:performed? false})))
   (clear-skill-state! ctx-id)
   (log/debug "BloodRetrograde aborted"))
 

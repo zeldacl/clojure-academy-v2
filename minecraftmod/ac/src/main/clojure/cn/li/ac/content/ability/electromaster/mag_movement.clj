@@ -16,7 +16,7 @@
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
-                        [cn.li.ac.ability.effects.fx :as fx-op]
+                        [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.effects.motion :as motion-op]
             [cn.li.ac.ability.effects.state :as state-op]
@@ -178,8 +178,7 @@
                                           (max (cfg-double :progression.exp-min)
                                                (* (cfg-double :progression.exp-distance-scale) traveled)))))
         (motion-op/execute-reset-fall-damage! evt nil)
-        (fx-op/execute-fx! evt {:topic :mag-movement/fx-end
-              :payload {:mode :end}})
+        (fx/send! (:ctx-id evt) {:topic :mag-movement/fx-end :mode :end} evt)
           (clear-skill-state! ctx-id)
         (ctx/terminate-context! ctx-id nil)))))
 
@@ -202,13 +201,11 @@
                     :motion-x (double (or (:x velocity-now) 0.0))
                     :motion-y (double (or (:y velocity-now) 0.0))
                     :motion-z (double (or (:z velocity-now) 0.0))}))
-        (fx-op/execute-fx! evt {:topic :mag-movement/fx-start
-              :payload {:mode :start}})
-        (fx-op/execute-fx! evt {:topic   :mag-movement/fx-update
-              :payload {:mode   :update
-                  :target {:x (double target-x)
-                     :y (double target-y)
-                     :z (double target-z)}}})
+        (fx/send! (:ctx-id evt) {:topic :mag-movement/fx-start :mode :start} evt)
+        (fx/send! (:ctx-id evt) {:topic :mag-movement/fx-update :mode :update} evt
+                  {:target {:x (double target-x)
+                            :y (double target-y)
+                            :z (double target-z)}})
         (log/debug "MagMovement started" (:target-kind target-state)))
       (do
         (set-skill-state-root! ctx-id {:has-target false :finalized? false})
@@ -268,9 +265,8 @@
                                                 :motion-x next-x
                                                 :motion-y next-y
                                                 :motion-z next-z))
-                  (fx-op/execute-fx! evt {:topic   :mag-movement/fx-update
-                                          :payload {:mode   :update
-                                                    :target {:x tx :y ty :z tz}}})
+                  (fx/send! (:ctx-id evt) {:topic :mag-movement/fx-update :mode :update} evt
+                            {:target {:x tx :y ty :z tz}})
                   (when (zero? (mod movement-ticks 10))
                     (log/debug "MagMovement: moving for" (/ movement-ticks 20.0) "seconds")))))))))))
 

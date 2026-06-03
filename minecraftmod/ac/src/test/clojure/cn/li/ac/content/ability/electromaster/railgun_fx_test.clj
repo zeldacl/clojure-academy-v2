@@ -26,40 +26,44 @@
 
 (deftest init-registers-owner-aware-railgun-fx-test
   (let [registered-level* (atom nil)
-        registered-handler* (atom nil)]
+        registered-topics* (atom #{})]
     (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
                                                          (reset! registered-level* [effect-id effect-map])
                                                          nil)
-                  fx-registry/register-fx-channels! (fn [channels handler]
-                                                      (reset! registered-handler* {:channels channels
-                                                                                   :handler handler})
+                  fx-registry/register-fx-channel! (fn [topic _handler]
+                                                      (swap! registered-topics* conj topic)
                                                       nil)]
       (railgun-fx/init!)
       (is (= :railgun-shot (first @registered-level*)))
       (is (fn? (:enqueue-state-fn (second @registered-level*))))
       (is (= #{:railgun/fx-shot :railgun/fx-reflect}
-             (set (:channels @registered-handler*)))))))
+             @registered-topics*)))))
 
 (deftest fx-handler-routes-with-ctx-metadata-test
-  (let [handler* (atom nil)
+  (let [handlers* (atom {})
         enqueued* (atom [])]
     (with-redefs [level-effects/register-level-effect! (fn [& _] nil)
-                  fx-registry/register-fx-channels! (fn [_ handler]
-                                                      (reset! handler* handler)
+                  fx-registry/register-fx-channel! (fn [topic handler]
+                                                      (swap! handlers* assoc topic handler)
                                                       nil)
                   level-effects/enqueue-level-effect! (fn [effect-id payload fx-context]
                                                         (swap! enqueued* conj [effect-id payload fx-context])
                                                         nil)]
       (railgun-fx/init!)
-      (@handler* "ctx-rail" :railgun/fx-shot {:mode :block-hit
+      ((get @handlers* :railgun/fx-shot) "ctx-rail" :railgun/fx-shot {:mode :block-hit
                                                :start {:x 0.0 :y 64.0 :z 0.0}
                                                :end {:x 8.0 :y 64.0 :z 0.0}
                                                :world-id "minecraft:overworld"})
       (is (= [[:railgun-shot {:mode :block-hit
+                              :owner-key [:ctx "ctx-rail"]
+                              :ctx-id "ctx-rail"
+                              :channel :railgun/fx-shot
                               :start {:x 0.0 :y 64.0 :z 0.0}
                               :end {:x 8.0 :y 64.0 :z 0.0}
                               :world-id "minecraft:overworld"}
-               {:ctx-id "ctx-rail" :channel :railgun/fx-shot}]]
+               {:ctx-id "ctx-rail"
+                :channel :railgun/fx-shot
+                :owner-key [:ctx "ctx-rail"]}]]
              @enqueued*)))))
 
 (deftest enqueue-perform-adds-beam-and-builds-plan-test

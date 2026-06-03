@@ -7,7 +7,7 @@
     :reflect-can-fn  (fn [uuid] -> bool)   called to check each candidate
     :reflect-shot-fn (fn [uuid] -> bool?)  called when reflection triggers, returns hit?"
   (:require [cn.li.ac.ability.effects.geom :as geom]
-            [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.fx :as fx]
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.block-manipulation :as block-manip]))
@@ -163,11 +163,10 @@
         (when (and break-blocks? (pos? benergy))
           (break-blocks! player-id world-id trace dir block-dist benergy r st))
         (when fx-topic
-          (ctx/ctx-send-to-client! (:ctx-id evt) fx-topic
-                                   {:mode         :perform
-                                    :start        eye
-                                    :end          end-pos
-                                    :hit-distance visual-dist}))
+          (fx/send! (:ctx-id evt) {:topic fx-topic :mode :perform} evt
+                    {:start eye
+                     :end end-pos
+                     :hit-distance visual-dist}))
         (assoc evt :beam-result {:performed?       true
                                  :reflection-hit?  (:reflection-hit? result)
                                  :normal-hit-count (:normal-hit-count result)

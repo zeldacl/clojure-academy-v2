@@ -2,7 +2,7 @@
   "Client FX for ElectronMissile: orbiting sparks + impact flash per fired ball."
   (:require [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
-            [cn.li.ac.ability.client.fx-registry :as fx-registry]
+            [cn.li.ac.ability.client.fx-spec :as fx-spec]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.render-util :as ru]))
 
@@ -166,40 +166,23 @@
 
 (defn init!
   []
-  (level-effects/register-level-effect! electron-missile-effect-id
-    {:initial-state (default-electron-missile-fx-runtime-state)
-     :enqueue-state-fn enqueue-state!
-     :tick-state-fn tick-state!
-     :build-plan-fn build-plan})
-  (fx-registry/register-fx-channels!
-    [:electron-missile/fx-start :electron-missile/fx-update :electron-missile/fx-fire :electron-missile/fx-end]
-    (fn [ctx-id channel payload]
-      (let [meta-payload (select-keys payload [:effect-instance-id :source-player-id :world-id])]
-        (case channel
-          :electron-missile/fx-start
-          (level-effects/enqueue-level-effect! electron-missile-effect-id
-            (merge meta-payload {:mode :start})
-            {:ctx-id ctx-id :channel channel})
-          :electron-missile/fx-update
-          (level-effects/enqueue-level-effect! electron-missile-effect-id
-            (merge meta-payload
-                   {:mode :update
-                    :ticks (long (or (:ticks payload) 0))
-                    :balls (long (or (:balls payload) 0))})
-            {:ctx-id ctx-id :channel channel})
-          :electron-missile/fx-fire
-          (level-effects/enqueue-level-effect! electron-missile-effect-id
-            (merge meta-payload
-                   {:mode :fire
-                    :start (:start payload)
-                    :end (:end payload)
-                    :target-x (:target-x payload)
-                    :target-y (:target-y payload)
-                    :target-z (:target-z payload)})
-            {:ctx-id ctx-id :channel channel})
-          :electron-missile/fx-end
-          (level-effects/enqueue-level-effect! electron-missile-effect-id
-            (merge meta-payload {:mode :end})
-            {:ctx-id ctx-id :channel channel})
-          nil))))
+  (fx-spec/register!
+    {:id electron-missile-effect-id
+     :level {:initial-state (default-electron-missile-fx-runtime-state)
+             :enqueue-state-fn enqueue-state!
+             :tick-state-fn tick-state!
+             :build-plan-fn build-plan}
+     :channels {:start {:topic :electron-missile/fx-start :mode :start}
+                :update {:topic :electron-missile/fx-update :mode :update
+                         :level-payload (fn [_ _ p]
+                                          {:ticks (long (or (:ticks p) 0))
+                                           :balls (long (or (:balls p) 0))})}
+                :fire {:topic :electron-missile/fx-fire :mode :fire
+                       :level-payload (fn [_ _ p]
+                                        {:start (:start p)
+                                         :end (:end p)
+                                         :target-x (:target-x p)
+                                         :target-y (:target-y p)
+                                         :target-z (:target-z p)})}
+                :end {:topic :electron-missile/fx-end :mode :end}}})
   nil)

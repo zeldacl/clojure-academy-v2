@@ -110,7 +110,17 @@
     (assert! (map? fx-v)
              {:message "FX entry must be a map" :skill-id id :fx-key fx-k :value fx-v})
     (assert! (keyword? (:topic fx-v))
-             {:message "FX entry requires keyword :topic" :skill-id id :fx-key fx-k :value fx-v})))
+             {:message "FX entry requires keyword :topic" :skill-id id :fx-key fx-k :value fx-v})
+    (when (contains? fx-v :mode)
+      (assert! (keyword? (:mode fx-v))
+               {:message "FX entry :mode must be a keyword" :skill-id id :fx-key fx-k}))
+    (when (contains? fx-v :to)
+      (assert! (contains? #{:client :self :except-local} (:to fx-v))
+               {:message "FX entry :to must be :client, :self, or :except-local"
+                :skill-id id :fx-key fx-k :value (:to fx-v)}))
+    (when (contains? fx-v :payload)
+      (assert! (fn? (:payload fx-v))
+               {:message "FX entry :payload must be a function" :skill-id id :fx-key fx-k}))))
 
 (defn validate-map-fields!
   [{:keys [id perform ops aim exp] :as spec}]

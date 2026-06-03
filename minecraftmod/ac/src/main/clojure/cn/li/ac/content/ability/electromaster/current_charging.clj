@@ -5,6 +5,7 @@
   Cost: overload lerp(65,48) on down; CP lerp(3,7)/tick while charging
   Exp: +0.0001 effective / +0.00003 ineffective per tick"
   (:require [cn.li.ac.ability.dsl :refer [defskill]]
+            [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
@@ -57,8 +58,8 @@
 
 (defn- end-and-terminate!
   [ctx-id is-item player-id]
-  (ctx/ctx-send-to-client! ctx-id :current-charging/fx-end
-                           (fx-payload player-id {:is-item (boolean is-item)}))
+  (fx/send! ctx-id {:topic :current-charging/fx-end :mode :end} nil
+            (fx-payload player-id {:is-item (boolean is-item)}))
   (clear-skill-state! ctx-id)
   (ctx/terminate-context! ctx-id nil))
 
@@ -75,12 +76,12 @@
                                         (cfg-double :progression.exp-effective)
                                         (cfg-double :progression.exp-ineffective)))
         (set-skill-state! ctx-id [:good?] (boolean effective?))
-        (ctx/ctx-send-to-client! ctx-id :current-charging/fx-update
-               (fx-payload player-id
-                     {:is-item true
-                      :good? (boolean effective?)
-                      :charge-ticks charge-ticks
-                      :exp exp}))))))
+        (fx/send! ctx-id {:topic :current-charging/fx-update :mode :update} nil
+                  (fx-payload player-id
+                              {:is-item true
+                               :good? (boolean effective?)
+                               :charge-ticks charge-ticks
+                               :exp exp}))))))
 
 (defn- charge-block-target!
   "Raycast for a block from player view and charge any energy receiver/node.
@@ -133,14 +134,14 @@
     (set-skill-state! ctx-id [:target] ray-end)
     (set-skill-state! ctx-id [:block-pos] block-pos)
     (set-skill-state! ctx-id [:charged] (double charged))
-    (ctx/ctx-send-to-client! ctx-id :current-charging/fx-update
-                 (fx-payload player-id
-                       {:is-item false
-                        :good? (boolean effective?)
-                        :charged (double charged)
-                        :charge-ticks charge-ticks
-                        :target ray-end
-                        :block-pos block-pos}))))
+    (fx/send! ctx-id {:topic :current-charging/fx-update :mode :update} nil
+              (fx-payload player-id
+                          {:is-item false
+                           :good? (boolean effective?)
+                           :charged (double charged)
+                           :charge-ticks charge-ticks
+                           :target ray-end
+                           :block-pos block-pos}))))
 
   (declare current_charging_skill)
 
@@ -189,8 +190,8 @@
                        :target nil
                        :block-pos nil
                        :charged 0.0})
-               (ctx/ctx-send-to-client! ctx-id :current-charging/fx-start
-                                        (fx-payload player-id {:is-item is-item}))))
+               (fx/send! ctx-id {:topic :current-charging/fx-start :mode :start} nil
+                         (fx-payload player-id {:is-item is-item}))))
    :tick!  (fn [{:keys [player-id ctx-id player]}]
              (when-let [skill-state (:skill-state (ctx/get-context ctx-id))]
                (let [is-item (boolean (:is-item skill-state))
@@ -214,14 +215,14 @@
                                         :charge-ticks charge-ticks})))))
    :up!    (fn [{:keys [ctx-id]}]
              (when-let [{:keys [skill-state player-id]} (ctx/get-context ctx-id)]
-               (ctx/ctx-send-to-client! ctx-id :current-charging/fx-end
-                                        (fx-payload player-id
-                                                    {:is-item (boolean (:is-item skill-state))}))
+               (fx/send! ctx-id {:topic :current-charging/fx-end :mode :end} nil
+                         (fx-payload player-id
+                                     {:is-item (boolean (:is-item skill-state))}))
                (clear-skill-state! ctx-id)))
    :abort! (fn [{:keys [ctx-id]}]
              (when-let [{:keys [skill-state player-id]} (ctx/get-context ctx-id)]
-               (ctx/ctx-send-to-client! ctx-id :current-charging/fx-end
-                                        (fx-payload player-id
-                                                    {:is-item (boolean (:is-item skill-state))})))
+               (fx/send! ctx-id {:topic :current-charging/fx-end :mode :end} nil
+                         (fx-payload player-id
+                                     {:is-item (boolean (:is-item skill-state))})))
              (clear-skill-state! ctx-id))}
   :prerequisites [{:skill-id :arc-gen :min-exp 0.3}])

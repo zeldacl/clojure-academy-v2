@@ -1,7 +1,7 @@
 (ns cn.li.ac.content.ability.vecmanip.directed-shock-fx
   "Client FX for Directed Shock: first-person hand prepare/punch animation."
   (:require [cn.li.ac.ability.client.hand-effects :as hand-effects]
-            [cn.li.ac.ability.client.fx-registry :as fx-registry]
+            [cn.li.ac.ability.client.fx-spec :as fx-spec]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]))
 
 (def ^:private sound-id "my_mod:vecmanip.directed_shock")
@@ -132,24 +132,15 @@
 ;; ---------------------------------------------------------------------------
 
 (defn init! []
-  (hand-effects/register-hand-effect! directed-shock-effect-id
-    {:initial-state (default-directed-shock-fx-state)
-     :enqueue-state-fn enqueue-state!
-     :tick-state-fn tick-state!
-     :transform-fn transform})
-  (fx-registry/register-fx-channels!
-    [:directed-shock/fx-start :directed-shock/fx-perform :directed-shock/fx-end]
-    (fn [ctx-id channel payload]
-      (let [owner-meta {:owner-key [:ctx ctx-id]
-                        :ctx-id ctx-id
-                        :channel channel}]
-        (case channel
-          :directed-shock/fx-start
-          (hand-effects/enqueue-hand-effect! directed-shock-effect-id (merge owner-meta {:mode :start}))
-          :directed-shock/fx-perform
-          (hand-effects/enqueue-hand-effect! directed-shock-effect-id (merge owner-meta {:mode :perform}))
-          :directed-shock/fx-end
-          (hand-effects/enqueue-hand-effect!
-            directed-shock-effect-id
-            (merge owner-meta {:mode :end :performed? (boolean (:performed? payload))}))))))
+  (fx-spec/register!
+    {:id directed-shock-effect-id
+     :hand {:initial-state (default-directed-shock-fx-state)
+            :enqueue-state-fn enqueue-state!
+            :tick-state-fn tick-state!
+            :transform-fn transform}
+     :channels {:start {:topic :directed-shock/fx-start :mode :start :targets [:hand]}
+                :perform {:topic :directed-shock/fx-perform :mode :perform :targets [:hand]}
+                :end {:topic :directed-shock/fx-end :mode :end :targets [:hand]
+                      :hand-payload (fn [_ _ p]
+                                      {:performed? (boolean (:performed? p))})}}})
   nil)

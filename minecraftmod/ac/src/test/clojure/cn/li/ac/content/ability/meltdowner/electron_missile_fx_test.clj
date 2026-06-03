@@ -31,13 +31,12 @@
 
 (deftest init-registers-owner-aware-electron-missile-fx-test
   (let [registered-level* (atom nil)
-        registered-handler* (atom nil)]
+        registered-topics* (atom #{})]
     (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
                                                          (reset! registered-level* [effect-id effect-map])
                                                          nil)
-                  fx-registry/register-fx-channels! (fn [channels handler]
-                                                      (reset! registered-handler* {:channels channels
-                                                                                   :handler handler})
+                  fx-registry/register-fx-channel! (fn [topic _handler]
+                                                      (swap! registered-topics* conj topic)
                                                       nil)]
       (em-fx/init!)
       (is (= :electron-missile (first @registered-level*)))
@@ -46,47 +45,69 @@
                :electron-missile/fx-update
                :electron-missile/fx-end
                :electron-missile/fx-fire}
-             (set (:channels @registered-handler*)))))))
+             @registered-topics*)))))
 
 (deftest fx-handler-routes-events-with-ctx-metadata-test
-  (let [handler* (atom nil)
+  (let [handlers* (atom {})
         enqueued* (atom [])]
     (with-redefs [level-effects/register-level-effect! (fn [& _] nil)
-                  fx-registry/register-fx-channels! (fn [_ handler]
-                                                      (reset! handler* handler)
+                  fx-registry/register-fx-channel! (fn [topic handler]
+                                                      (swap! handlers* assoc topic handler)
                                                       nil)
                   level-effects/enqueue-level-effect! (fn [effect-id payload fx-context]
                                                         (swap! enqueued* conj [effect-id payload fx-context])
                                                         nil)]
       (em-fx/init!)
-      (@handler* "ctx-em" :electron-missile/fx-start {:source-player-id "player-a"})
-      (@handler* "ctx-em" :electron-missile/fx-update {:ticks 12
+      ((get @handlers* :electron-missile/fx-start) "ctx-em" :electron-missile/fx-start {:source-player-id "player-a"})
+      ((get @handlers* :electron-missile/fx-update) "ctx-em" :electron-missile/fx-update {:ticks 12
                                                         :balls 3
                                                         :source-player-id "player-a"})
-      (@handler* "ctx-em" :electron-missile/fx-fire {:target-x 1.0
+      ((get @handlers* :electron-missile/fx-fire) "ctx-em" :electron-missile/fx-fire {:target-x 1.0
                                                       :target-y 64.0
                                                       :target-z 2.0
                                                       :start {:x 0.0 :y 64.0 :z 0.0}
                                                       :end {:x 1.0 :y 65.5 :z 2.0}
                                                       :source-player-id "player-a"})
-      (@handler* "ctx-em" :electron-missile/fx-end {:source-player-id "player-a"})
-      (is (= [[:electron-missile {:mode :start :source-player-id "player-a"}
-               {:ctx-id "ctx-em" :channel :electron-missile/fx-start}]
+      ((get @handlers* :electron-missile/fx-end) "ctx-em" :electron-missile/fx-end {:source-player-id "player-a"})
+      (is (= [[:electron-missile {:mode :start
+                                  :owner-key [:ctx "ctx-em"]
+                                  :ctx-id "ctx-em"
+                                  :channel :electron-missile/fx-start
+                                  :source-player-id "player-a"}
+               {:ctx-id "ctx-em"
+                :channel :electron-missile/fx-start
+                :owner-key [:ctx "ctx-em"]}]
               [:electron-missile {:mode :update
+                                  :owner-key [:ctx "ctx-em"]
+                                  :ctx-id "ctx-em"
+                                  :channel :electron-missile/fx-update
                                   :ticks 12
                                   :balls 3
                                   :source-player-id "player-a"}
-               {:ctx-id "ctx-em" :channel :electron-missile/fx-update}]
+               {:ctx-id "ctx-em"
+                :channel :electron-missile/fx-update
+                :owner-key [:ctx "ctx-em"]}]
               [:electron-missile {:mode :fire
+                                  :owner-key [:ctx "ctx-em"]
+                                  :ctx-id "ctx-em"
+                                  :channel :electron-missile/fx-fire
                                   :start {:x 0.0 :y 64.0 :z 0.0}
                                   :end {:x 1.0 :y 65.5 :z 2.0}
                                   :target-x 1.0
                                   :target-y 64.0
                                   :target-z 2.0
                                   :source-player-id "player-a"}
-               {:ctx-id "ctx-em" :channel :electron-missile/fx-fire}]
-              [:electron-missile {:mode :end :source-player-id "player-a"}
-               {:ctx-id "ctx-em" :channel :electron-missile/fx-end}]]
+               {:ctx-id "ctx-em"
+                :channel :electron-missile/fx-fire
+                :owner-key [:ctx "ctx-em"]}]
+              [:electron-missile {:mode :end
+                                  :owner-key [:ctx "ctx-em"]
+                                  :ctx-id "ctx-em"
+                                  :channel :electron-missile/fx-end
+                                  :source-player-id "player-a"}
+               {:ctx-id "ctx-em"
+                :channel :electron-missile/fx-end
+                :owner-key [:ctx "ctx-em"]}]]
              @enqueued*)))))
 
 (deftest fire-adds-beam-and-end-clears-state-test

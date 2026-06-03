@@ -10,6 +10,7 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill]]
+            [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
@@ -58,14 +59,11 @@
           player-id :blindness
           (cfg-int :effect.blindness-duration-ticks)
           (cfg-int :effect.blindness-amplifier)))
-      (ctx/ctx-send-to-client!
-        ctx-id
-        :mine-detect/fx-perform
-        {:mode :perform
-         :life-ticks 100
-         :rescan-interval 5
-         :range (double range)
-         :advanced? advanced?})
+      (fx/send! ctx-id {:topic :mine-detect/fx-perform :mode :perform} nil
+                {:life-ticks 100
+                 :rescan-interval 5
+                 :range (double range)
+                 :advanced? advanced?})
       (skill-effects/add-skill-exp! player-id mine-detect-skill-id
                                     (cfg-double :progression.exp-cast))
       (skill-effects/set-main-cooldown! player-id mine-detect-skill-id

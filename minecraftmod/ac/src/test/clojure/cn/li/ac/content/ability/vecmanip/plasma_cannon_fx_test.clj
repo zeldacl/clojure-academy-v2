@@ -29,13 +29,12 @@
 
 (deftest init-registers-plasma-cannon-fx-channels-test
   (let [registered-level* (atom nil)
-        registered-handler* (atom nil)]
+        registered-topics* (atom #{})]
     (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
                                                          (reset! registered-level* [effect-id effect-map])
                                                          nil)
-                  fx-registry/register-fx-channels! (fn [channels handler]
-                                                      (reset! registered-handler* {:channels channels
-                                                                                   :handler handler})
+                  fx-registry/register-fx-channel! (fn [topic _handler]
+                                                      (swap! registered-topics* conj topic)
                                                       nil)]
       (pcfx/init!)
       (is (= :plasma-cannon (first @registered-level*)))
@@ -44,45 +43,65 @@
                :plasma-cannon/fx-update
                :plasma-cannon/fx-perform
                :plasma-cannon/fx-end}
-             (set (:channels @registered-handler*)))))))
+             @registered-topics*)))))
 
 (deftest fx-handler-routes-start-update-perform-end-payloads-test
-  (let [registered-handler* (atom nil)
+  (let [handlers* (atom {})
         enqueued* (atom [])]
     (with-redefs [level-effects/register-level-effect! (fn [& _] nil)
-                  fx-registry/register-fx-channels! (fn [_ handler]
-                                                      (reset! registered-handler* handler)
+                  fx-registry/register-fx-channel! (fn [topic handler]
+                                                      (swap! handlers* assoc topic handler)
                                                       nil)
                   level-effects/enqueue-level-effect! (fn [effect-id payload fx-context]
                                                         (swap! enqueued* conj [effect-id payload fx-context])
                                                         nil)]
       (pcfx/init!)
-      (@registered-handler* "ctx-1" :plasma-cannon/fx-start {:charge-pos {:x 1.0 :y 64.0 :z 1.0}})
-      (@registered-handler* "ctx-1" :plasma-cannon/fx-update {:charge-ticks 24
+      ((get @handlers* :plasma-cannon/fx-start) "ctx-1" :plasma-cannon/fx-start {:charge-pos {:x 1.0 :y 64.0 :z 1.0}})
+      ((get @handlers* :plasma-cannon/fx-update) "ctx-1" :plasma-cannon/fx-update {:charge-ticks 24
                                                                 :fully-charged? true
                                                                 :charge-pos {:x 1.0 :y 64.0 :z 1.0}
                                                                 :flight-ticks 2
                                                                 :state :go
                                                                 :destination {:x 4.0 :y 64.0 :z 4.0}})
-      (@registered-handler* "ctx-1" :plasma-cannon/fx-perform {:pos {:x 2.0 :y 65.0 :z 2.0}})
-      (@registered-handler* "ctx-1" :plasma-cannon/fx-end {:performed? true})
+      ((get @handlers* :plasma-cannon/fx-perform) "ctx-1" :plasma-cannon/fx-perform {:pos {:x 2.0 :y 65.0 :z 2.0}})
+      ((get @handlers* :plasma-cannon/fx-end) "ctx-1" :plasma-cannon/fx-end {:performed? true})
       (is (= [[:plasma-cannon {:mode :start
+                               :owner-key [:ctx "ctx-1"]
+                               :ctx-id "ctx-1"
+                               :channel :plasma-cannon/fx-start
                                :charge-pos {:x 1.0 :y 64.0 :z 1.0}}
-               {:ctx-id "ctx-1" :channel :plasma-cannon/fx-start}]
+               {:ctx-id "ctx-1"
+                :channel :plasma-cannon/fx-start
+                :owner-key [:ctx "ctx-1"]}]
               [:plasma-cannon {:mode :update
+                               :owner-key [:ctx "ctx-1"]
+                               :ctx-id "ctx-1"
+                               :channel :plasma-cannon/fx-update
                                :charge-ticks 24
                                :fully-charged? true
                                :charge-pos {:x 1.0 :y 64.0 :z 1.0}
                                :flight-ticks 2
                                :state :go
                                :destination {:x 4.0 :y 64.0 :z 4.0}}
-               {:ctx-id "ctx-1" :channel :plasma-cannon/fx-update}]
+               {:ctx-id "ctx-1"
+                :channel :plasma-cannon/fx-update
+                :owner-key [:ctx "ctx-1"]}]
               [:plasma-cannon {:mode :perform
+                               :owner-key [:ctx "ctx-1"]
+                               :ctx-id "ctx-1"
+                               :channel :plasma-cannon/fx-perform
                                :pos {:x 2.0 :y 65.0 :z 2.0}}
-               {:ctx-id "ctx-1" :channel :plasma-cannon/fx-perform}]
+               {:ctx-id "ctx-1"
+                :channel :plasma-cannon/fx-perform
+                :owner-key [:ctx "ctx-1"]}]
               [:plasma-cannon {:mode :end
+                               :owner-key [:ctx "ctx-1"]
+                               :ctx-id "ctx-1"
+                               :channel :plasma-cannon/fx-end
                                :performed? true}
-               {:ctx-id "ctx-1" :channel :plasma-cannon/fx-end}]]
+               {:ctx-id "ctx-1"
+                :channel :plasma-cannon/fx-end
+                :owner-key [:ctx "ctx-1"]}]]
              @enqueued*)))))
 
 (deftest tick-build-plan-and-perform-effects-test

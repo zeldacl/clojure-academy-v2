@@ -26,8 +26,8 @@
       (store/reset-store!))))
 
 (deftest player-look-and-position-nil-without-bindings-test
-  (is (nil? (raycast/call-with-runtime nil (fn [] (h/player-look-vec "p")))))
-  (is (nil? (teleportation/call-with-runtime nil (fn [] (h/player-position "p"))))))
+  (is (nil? (h/player-look-vec "p")))
+  (is (nil? (h/player-position "p"))))
 
 (defn- stub-raycast
   [look-vec raycast-result]
@@ -40,11 +40,11 @@
     (raycast-from-player [_ _player-uuid _max-dist _living?] raycast-result)))
 
 (deftest player-look-vec-delegates-test
-  (let [stub (stub-raycast {:x 0.0 :y 1.0 :z 0.0} nil)]
-    (raycast/call-with-runtime
-      stub
-      (fn []
-        (is (= {:x 0.0 :y 1.0 :z 0.0} (h/player-look-vec "p1")))))))
+  (with-redefs [raycast/available? (constantly true)
+                raycast/get-player-look-vector* (fn [player-id]
+                                                  (when (= "p1" player-id)
+                                                    {:x 0.0 :y 1.0 :z 0.0}))]
+    (is (= {:x 0.0 :y 1.0 :z 0.0} (h/player-look-vec "p1")))))
 
 (deftest teleport-to-success-and-fall-reset-test
   (let [tp-calls (atom [])
@@ -59,12 +59,10 @@
                  true)
                (get-player-position [_ _] nil)
                (get-player-dimension [_ _] nil))]
-    (teleportation/call-with-runtime
-      stub
-      (fn []
-        (is (true? (h/teleport-to! "u1" "minecraft:overworld" 1.0 2.0 3.0)))
-        (is (= [["u1" "minecraft:overworld" 1.0 2.0 3.0]] @tp-calls))
-        (is (= ["u1"] @reset-calls))))))
+    (teleportation/call-with-runtime stub
+      #(is (true? (h/teleport-to! "u1" "minecraft:overworld" 1.0 2.0 3.0))))
+    (is (= [["u1" "minecraft:overworld" 1.0 2.0 3.0]] @tp-calls))
+    (is (= ["u1"] @reset-calls))))
 
 (deftest teleport-to-failure-skips-fall-reset-test
   (let [tp-called? (atom false)
@@ -76,20 +74,20 @@
                (reset-fall-damage! [_ _] (is false "reset should not run"))
                (get-player-position [_ _] nil)
                (get-player-dimension [_ _] nil))]
-    (teleportation/call-with-runtime
-      stub
-      (fn []
-        (is (false? (h/teleport-to! "u1" "w" 0 0 0)))
-        (is (true? @tp-called?))))))
+    (teleportation/call-with-runtime stub
+      #(is (false? (h/teleport-to! "u1" "w" 0 0 0))))
+    (is (true? @tp-called?))))
+
+(defn- with-raycast-from-player [result f]
+  (with-redefs [raycast/available? (constantly true)
+                raycast/raycast-from-player* (fn [_ _ _] result)]
+    (f)))
 
 (deftest raycast-entity-filters-self-and-nil-miss-test
   (let [hit {:hit-entity true :entity-uuid "other"}]
-    (is (nil? (raycast/call-with-runtime (stub-raycast nil nil)
-                                         (fn [] (h/raycast-entity "p" 8.0)))))
-    (is (nil? (raycast/call-with-runtime (stub-raycast nil hit)
-                                         (fn [] (h/raycast-entity "other" 8.0)))))
-    (is (= hit (raycast/call-with-runtime (stub-raycast nil hit)
-                                          (fn [] (h/raycast-entity "self-id" 8.0)))))))
+    (is (nil? (with-raycast-from-player nil #(h/raycast-entity "p" 8.0))))
+    (is (nil? (with-raycast-from-player hit #(h/raycast-entity "other" 8.0))))
+    (is (= hit (with-raycast-from-player hit #(h/raycast-entity "self-id" 8.0))))))
 
 (deftest deal-magic-damage-plain-arity-test
   (let [last-args (atom nil)
@@ -99,14 +97,11 @@
                  true)
                (apply-aoe-damage! [_ _ _ _ _ _ _ _ _] ())
                (apply-reflection-damage! [_ _ _ _ _ _ _] ()))]
-    (is (nil? (entity-damage/call-with-runtime
-               nil
-               (fn [] (h/deal-magic-damage! "world" "e1" 5.5)))))
-    (entity-damage/call-with-runtime
-      stub
-      (fn []
-        (is (true? (h/deal-magic-damage! "world" "e1" 5.5)))
-        (is (= ["world" "e1" 5.5 :magic] @last-args))))))
+    (is (nil? (h/deal-magic-damage! "world" "e1" 5.5)))
+    (entity-damage/call-with-runtime stub
+      #(do
+         (is (true? (h/deal-magic-damage! "world" "e1" 5.5)))
+         (is (= ["world" "e1" 5.5 :magic] @last-args))))))
 
 (deftest crit-applied-gates-on-both-critical-and-applied-test
   (is (true? (h/crit-applied? {:critical? true :applied? true})))
@@ -134,7 +129,8 @@
     (store/reset-store!)
     (try
       (store/set-player-state!* ps-fix/test-session-id attacker {:ability-data attacker-ad})
-        (with-redefs [rand (fn [] 0.0)
+      (entity-damage/call-with-runtime stub
+        #(with-redefs [rand (fn [] 0.0)
                       skill-effects/add-skill-exp! (fn [pid sid amount]
                                                      (swap! exp-calls conj [pid sid amount])
                                                      nil)
@@ -182,10 +178,11 @@
     (store/reset-store!)
     (try
       (store/set-player-state!* ps-fix/test-session-id attacker {:ability-data attacker-ad})
-        (with-redefs [rand (fn [] 1.0)
-                      skill-effects/add-skill-exp! (fn [& _] (is false "no exp on non-crit"))
-                      ach-dispatcher/trigger-custom-event! (fn [& _] (is false "no achievement event on non-crit"))]
-          (let [result (h/deal-magic-damage! attacker "w" "victim" 10.0)]
+      (entity-damage/call-with-runtime stub
+        #(with-redefs [rand (fn [] 1.0)
+                       skill-effects/add-skill-exp! (fn [& _] (is false "no exp on non-crit"))
+                       ach-dispatcher/trigger-custom-event! (fn [& _] (is false "no achievement event on non-crit"))]
+           (let [result (h/deal-magic-damage! attacker "w" "victim" 10.0)]
             (is (= false (:critical? result)))
             (is (nil? (:crit-level result)))
             (is (= 1.0 (double (:crit-rate result))))
@@ -216,7 +213,8 @@
     (store/reset-store!)
     (try
       (store/set-player-state!* ps-fix/test-session-id attacker {:ability-data attacker-ad})
-        (with-redefs [rand (fn [] 0.0)
+      (entity-damage/call-with-runtime stub
+        #(with-redefs [rand (fn [] 0.0)
                       h/cfg-lerp (fn [_ field _]
                                    (case field
                                      :critical.level0-probability 0.0
@@ -260,7 +258,8 @@
     (store/reset-store!)
     (try
       (store/set-player-state!* ps-fix/test-session-id attacker {:ability-data attacker-ad})
-        (with-redefs [rand (fn [] 0.0)
+      (entity-damage/call-with-runtime stub
+        #(with-redefs [rand (fn [] 0.0)
                       skill-effects/add-skill-exp! (fn [& _] (is false "no exp when passives unlearned"))
                       player-feedback/send-chat-message! (fn [& _] (is false "no feedback when passives unlearned"))
                       ach-dispatcher/trigger-custom-event! (fn [& _] (is false "no events when passives unlearned"))]
@@ -289,7 +288,8 @@
     (store/reset-store!)
     (try
       (store/set-player-state!* ps-fix/test-session-id attacker {:ability-data attacker-ad})
-        (with-redefs [rand (fn [] 0.0)
+      (entity-damage/call-with-runtime stub
+        #(with-redefs [rand (fn [] 0.0)
                       skill-effects/add-skill-exp! (fn [pid sid amount]
                                                      (swap! exp-calls conj [pid sid amount])
                                                      nil)

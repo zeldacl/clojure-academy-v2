@@ -30,13 +30,12 @@
 
 (deftest init-registers-owner-aware-electron-bomb-fx-test
   (let [registered-level* (atom nil)
-        registered-handler* (atom nil)]
+        registered-topics* (atom #{})]
     (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
                                                          (reset! registered-level* [effect-id effect-map])
                                                          nil)
-                  fx-registry/register-fx-channels! (fn [channels handler]
-                                                      (reset! registered-handler* {:channels channels
-                                                                                   :handler handler})
+                  fx-registry/register-fx-channel! (fn [topic _handler]
+                                                      (swap! registered-topics* conj topic)
                                                       nil)]
       (electron-bomb-fx/init!)
       (is (= :electron-bomb (first @registered-level*)))
@@ -44,35 +43,52 @@
       (is (= #{:electron-bomb/fx-spawn
                :electron-bomb/fx-beam
                :electron-bomb/fx-end}
-             (set (:channels @registered-handler*)))))))
+             @registered-topics*)))))
 
 (deftest fx-handler-routes-events-with-ctx-metadata-test
-  (let [handler* (atom nil)
+  (let [handlers* (atom {})
         enqueued* (atom [])]
     (with-redefs [level-effects/register-level-effect! (fn [& _] nil)
-                  fx-registry/register-fx-channels! (fn [_ handler]
-                                                      (reset! handler* handler)
+                  fx-registry/register-fx-channel! (fn [topic handler]
+                                                      (swap! handlers* assoc topic handler)
                                                       nil)
                   level-effects/enqueue-level-effect! (fn [effect-id payload fx-context]
                                                         (swap! enqueued* conj [effect-id payload fx-context])
                                                         nil)]
       (electron-bomb-fx/init!)
-      (@handler* "ctx-eb" :electron-bomb/fx-spawn {:x 1.0 :y 64.0 :z 2.0 :dx 0.0 :dy 0.0 :dz 1.0})
-      (@handler* "ctx-eb" :electron-bomb/fx-beam {:start {:x 1.0 :y 64.0 :z 2.0}
+      ((get @handlers* :electron-bomb/fx-spawn) "ctx-eb" :electron-bomb/fx-spawn {:x 1.0 :y 64.0 :z 2.0 :dx 0.0 :dy 0.0 :dz 1.0})
+      ((get @handlers* :electron-bomb/fx-beam) "ctx-eb" :electron-bomb/fx-beam {:start {:x 1.0 :y 64.0 :z 2.0}
                                                    :end {:x 1.0 :y 64.0 :z 17.0}
                                                    :performed? true
                                                    :target-uuid "target-1"})
-      (@handler* "ctx-eb" :electron-bomb/fx-end {})
+      ((get @handlers* :electron-bomb/fx-end) "ctx-eb" :electron-bomb/fx-end {})
       (is (= [[:electron-bomb {:mode :spawn
+                               :owner-key [:ctx "ctx-eb"]
+                               :ctx-id "ctx-eb"
+                               :channel :electron-bomb/fx-spawn
                                :x 1.0 :y 64.0 :z 2.0
                                :dx 0.0 :dy 0.0 :dz 1.0}
-               {:ctx-id "ctx-eb" :channel :electron-bomb/fx-spawn}]
+               {:ctx-id "ctx-eb"
+                :channel :electron-bomb/fx-spawn
+                :owner-key [:ctx "ctx-eb"]}]
               [:electron-bomb {:mode :beam
+                               :owner-key [:ctx "ctx-eb"]
+                               :ctx-id "ctx-eb"
+                               :channel :electron-bomb/fx-beam
                                :start {:x 1.0 :y 64.0 :z 2.0}
-                               :end {:x 1.0 :y 64.0 :z 17.0}}
-               {:ctx-id "ctx-eb" :channel :electron-bomb/fx-beam}]
-              [:electron-bomb {:mode :end}
-               {:ctx-id "ctx-eb" :channel :electron-bomb/fx-end}]]
+                               :end {:x 1.0 :y 64.0 :z 17.0}
+                               :performed? true
+                               :target-uuid "target-1"}
+               {:ctx-id "ctx-eb"
+                :channel :electron-bomb/fx-beam
+                :owner-key [:ctx "ctx-eb"]}]
+              [:electron-bomb {:mode :end
+                               :owner-key [:ctx "ctx-eb"]
+                               :ctx-id "ctx-eb"
+                               :channel :electron-bomb/fx-end}
+               {:ctx-id "ctx-eb"
+                :channel :electron-bomb/fx-end
+                :owner-key [:ctx "ctx-eb"]}]]
              @enqueued*)))))
 
 (deftest spawn-beam-and-tick-state-test
