@@ -18,6 +18,8 @@
   "Tab index for the inventory (inv-window) page. Only this tab has slot interaction enabled."
   0)
 
+(declare send-set-tab!)
+
 (defn slots-active?
   "True when the current tab is inv-window (slot interaction and highlight should be enabled).
    Call only when container has :tab-index; returns false if :tab-index is missing."
@@ -76,6 +78,35 @@
   [owner container-id]
   (when (integer? container-id)
     (container-state/clear-tab-index-by-container-id! owner container-id)))
+
+(defn- owner-client-session-id
+  [owner]
+  (when (map? owner)
+    (or (:client-session-id owner)
+        (:session-id owner))))
+
+(defn- send-set-tab-safe!
+  [owner tab-index container-id]
+  (let [owner-session-id (owner-client-session-id owner)]
+    (try
+      (cond
+        owner-session-id
+        (send-set-tab! owner tab-index container-id)
+
+        runtime-hooks/*client-session-id*
+        (send-set-tab! tab-index container-id)
+
+        :else
+        (log/debug "Skip set-tab sync: missing client owner/session"
+                   {:container-id container-id
+                    :tab-index tab-index
+                    :owner owner}))
+      (catch Exception e
+        (log/warn "Skip set-tab sync: send failed"
+                  {:container-id container-id
+                   :tab-index tab-index
+                   :owner owner
+                   :reason (ex-message e)})))))
 
 (defn slots-active-for-menu?
   "True when slot clicks should be allowed for this menu. Prefers client-set tab by container id, else container :tab-index."
@@ -184,16 +215,18 @@
           (when-let [idx (page-id->index pages new-id)]
             (when (tabbed-container? container)
               (reset! (:tab-index container) (int idx)))
-            (when (integer? container-id)
+            (when (and (integer? container-id)
+                       (owner-client-session-id owner))
               (set-tab-index-by-container-id! owner container-id (int idx)))
-            (send-set-tab! owner idx container-id)))))
+            (send-set-tab-safe! owner idx container-id)))))
 
     ;; initial sync of current tab
     (when-let [cur (and current-atom @current-atom)]
       (when-let [idx (page-id->index pages cur)]
         (when (tabbed-container? container)
           (reset! (:tab-index container) (int idx)))
-        (when (integer? container-id)
+        (when (and (integer? container-id)
+                   (owner-client-session-id owner))
           (set-tab-index-by-container-id! owner container-id (int idx)))
-        (send-set-tab! owner idx container-id)))))
+        (send-set-tab-safe! owner idx container-id)))))
 
