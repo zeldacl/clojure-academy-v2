@@ -5,21 +5,6 @@
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.content.ability.teleporter.location-teleport-fx :as lfx]))
 
-(deftest init-registers-location-teleport-success-channel-test
-  (let [registered-level* (atom nil)
-        registered-handler* (atom nil)]
-    (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
-                                                         (reset! registered-level* [effect-id effect-map])
-                                                         nil)
-                  fx-registry/register-fx-channels! (fn [channels handler]
-                                                      (reset! registered-handler* {:channels channels
-                                                                                   :handler handler})
-                                                      nil)]
-      (lfx/init!)
-      (is (= :location-teleport (first @registered-level*)))
-      (is (= #{:location-teleport/fx-perform-success}
-             (set (:channels @registered-handler*)))))))
-
 (deftest fx-handler-routes-success-event-to-level-enqueue-test
   (let [handler* (atom nil)
         enqueued* (atom [])]

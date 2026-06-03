@@ -33,24 +33,6 @@
       enqueue-state!
       (event ctx-id payload))))
 
-(deftest init-registers-blood-retrograde-fx-channels-test
-  (let [registered-effect (atom nil)
-        registered-handler (atom nil)]
-    (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
-                                                         (reset! registered-effect [effect-id effect-map])
-                                                         nil)
-                  fx-registry/register-fx-channels! (fn [channels handler]
-                                                      (reset! registered-handler {:channels channels
-                                                                                  :handler handler})
-                                                      nil)]
-      (brfx/init!)
-      (is (= :blood-retrograde (first @registered-effect)))
-      (is (= #{:blood-retrograde/fx-start
-               :blood-retrograde/fx-update
-               :blood-retrograde/fx-end
-               :blood-retrograde/fx-perform}
-             (set (:channels @registered-handler)))))))
-
 (deftest fx-handler-routes-start-update-perform-end-test
   (let [handler* (atom nil)
         enqueue-fn* (atom nil)

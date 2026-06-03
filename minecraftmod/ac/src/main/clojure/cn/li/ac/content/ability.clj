@@ -125,7 +125,6 @@
           (run-namespace-init! ns-sym)))
       ;; Register generic item actions (not skill-specific)
       (item-actions/register-item-action! "ac:app_skill_tree" :open-skill-tree)
-      (discovery/freeze-provider-discovery!)
       (category/freeze-category-registry!)
       (skill-registry/freeze-skill-registry!)
       (item-actions/freeze-item-action-registries!)

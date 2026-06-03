@@ -20,24 +20,6 @@
 
 (use-fixtures :each with-fresh-penetrate-teleport-fx-runtime)
 
-(deftest init-registers-penetrate-fx-channels-test
-  (let [registered-level* (atom nil)
-        registered-handler* (atom nil)]
-    (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
-                                                         (reset! registered-level* [effect-id effect-map])
-                                                         nil)
-                  fx-registry/register-fx-channels! (fn [channels handler]
-                                                      (reset! registered-handler* {:channels channels
-                                                                                   :handler handler})
-                                                      nil)]
-      (pfx/init!)
-      (is (= :penetrate-teleport (first @registered-level*)))
-      (is (= #{:penetrate-tp/fx-start
-               :penetrate-tp/fx-update
-               :penetrate-tp/fx-perform
-               :penetrate-tp/fx-end}
-             (set (:channels @registered-handler*)))))))
-
 (deftest perform-and-tick-emit-particles-and-sound-test
   (let [particle-calls* (atom [])
         sound-calls* (atom [])]

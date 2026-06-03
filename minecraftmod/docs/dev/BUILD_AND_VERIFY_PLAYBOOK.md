@@ -57,7 +57,9 @@
 - `verifyPlatformHookCoverage`：跨平台 hook 契约覆盖校验聚合入口。
 - `verifyPlatformNoBusinessHookIds`：校验 `mcmod`/`mc1201`/平台 hook 层未硬编码业务 hook-id 字面量。
 - `verifyPlatformNoAbilityMessageIds`：校验 `mcmod`/`mc1201`/平台主源码未硬编码 AC ability runtime message-id 字面量；message catalog 必须留在 `ac`。
-- `verifyCurrentPlatforms`：当前纳入平台（Forge+Fabric）矩阵基线（含 smoke + hook coverage）。
+- `verifyCurrentPlatforms`：当前纳入平台（Forge+Fabric）矩阵基线（compile + hook coverage + cleanup 守卫；**不含** smoke）。
+- `verifyCurrentPlatformsWithSmoke`：在 `verifyCurrentPlatforms` 基础上追加 `verifyPlatformSmoke`（Fabric datagen 烟雾）。
+- `verifyForgeClojureUnitTests`：手动运行 Forge/shared Clojure 单测（`:forge-1.20.1:runForgeClojureTests`）；**未**纳入 `verifyLocalPrGate` 或 `verifyForgeTesting`。
 - `verifyArchitectureBoundaries`：跨层依赖边界扫描（阻止核心层误依赖平台/Minecraft 类）；任务按文件单次扫描并声明输入/通过标记输出，源文件未变时热运行可 UP-TO-DATE。
 - `verifyCleanupResidueGuards`：聚合 cleanup/SSoT 回归守卫；子任务声明源输入与通过标记输出，源文件未变时热运行可跳过重复扫描。
 - `verifyAbilityArchitectureStrict`：能力系统 **reducer-only** 门禁（禁止旁路写 store、旧 context mutation API、`:sync-*-data` 等）；见 [ABILITY_SYSTEM_MAINTENANCE.md](../04-systems/ABILITY_SYSTEM_MAINTENANCE.md)。
@@ -104,9 +106,7 @@
 - Forge GameTest 如需兼容旧环境并清理 25565 监听者，可显式增加：`-PforgeGameTestCleanPort25565=true`
 - 生成覆盖率：
   - `.\gradlew.bat :ac:coverageAcClojureTests`
-- 本地校验覆盖率不低于基线（与 CI 一致，Linux/macOS）：
-  - `bash scripts/ac_coverage_ratchet.sh ac/coverage-baseline.txt ac/build/reports/coverage/index.html`
-  - `bash scripts/mcmod_coverage_ratchet.sh mcmod/coverage-baseline.txt mcmod/build/reports/coverage/index.html`
+- 覆盖率 ratchet：当前仓库**未**提供 `scripts/ac_coverage_ratchet.sh` / `scripts/mcmod_coverage_ratchet.sh`；请手动对照 `ac/coverage-baseline.txt` 与 `mcmod/coverage-baseline.txt` 中的基线，或在本机自行实现同等校验后再纳入 CI。
 
 ## 范围说明
 

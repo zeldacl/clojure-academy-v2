@@ -82,6 +82,9 @@
   "Run content-owned client renderer initialization.
   Called by mcmod during client initialization."
   []
+  (when-let [init-ability-client-fx!
+             (requiring-resolve 'cn.li.ac.content.ability-client/init-client-fx!)]
+    (init-ability-client-fx!))
   (when-let [install-terminal-hooks!
              (requiring-resolve 'cn.li.ac.terminal.client.actions/install-ui-hooks!)]
     (install-terminal-hooks!))

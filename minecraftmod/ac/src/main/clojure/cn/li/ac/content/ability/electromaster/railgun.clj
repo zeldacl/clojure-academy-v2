@@ -75,17 +75,17 @@
     true
     (entity/player-consume-main-hand-item! player 1)))
 
+(defn- clear-skill-state!
+  [ctx-id]
+  (ctx-skill/clear-skill-state! ctx-id))
+
 (defn- set-skill-state!
   [ctx-id k v]
   (ctx-skill/assoc-skill-state! ctx-id k v))
 
 (defn- set-skill-state-root!
   [ctx-id state-map]
-  (ctx-skill/update-skill-state-root! ctx-id identity state-map))
-
-(defn- clear-skill-state!
-  [ctx-id]
-  (ctx-skill/clear-skill-state! ctx-id))
+  (ctx-skill/replace-skill-state-root! ctx-id state-map))
 
 (defn register-coin-throw!
   "Register a railgun coin throw state.
@@ -95,12 +95,14 @@
   [player-id payload]
   (let [_now-ms (long (or (:timestamp-ms payload) (System/currentTimeMillis)))]
     ;; Abort any in-progress item charge so the coin QTE takes priority.
-    (doseq [[ctx-id ctx-data] (ctx/get-all-contexts)]
-      (when (and (= (:player-uuid ctx-data) player-id)
-                 (= :item-charge (get-in ctx-data [:skill-state :mode])))
-        (set-skill-state-root! ctx-id {:fired false
-                                       :mode :item-charge-cancelled
-                                       :charge-ticks 0})))
+    (doseq [[_ctx-key ctx-data] (ctx/get-all-contexts)]
+      (let [ctx-id (:id ctx-data)]
+        (when (and (some? ctx-id)
+                   (= (:player-uuid ctx-data) player-id)
+                   (= :item-charge (get-in ctx-data [:skill-state :mode])))
+          (set-skill-state-root! ctx-id {:fired false
+                                         :mode :item-charge-cancelled
+                                         :charge-ticks 0}))))
     ;; New coin throw resets one-shot judgement lock.
     (skill-effects/clear-railgun-coin-judged! player-id)
     true))
@@ -182,7 +184,7 @@
         (>= (double current-cp) (double consumption))))))
 
 (defn- vec-reflection-consume-cp! [target-player-id incoming-damage]
-  (when-let [state (skill-effects/get-player-state target-player-id)]
+  (when (skill-effects/get-player-state target-player-id)
     (let [exp        (skill-effects/skill-exp target-player-id :vec-reflection)
           consumption (* (double incoming-damage)
                          (cfg-lerp :reflection.cp-consumption-per-damage exp))]

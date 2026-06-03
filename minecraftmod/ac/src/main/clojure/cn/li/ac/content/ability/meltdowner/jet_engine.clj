@@ -92,7 +92,7 @@
 
 (defn- set-skill-state-root!
   [ctx-id state-map]
-  (ctx-skill/update-skill-state-root! ctx-id identity state-map))
+  (ctx-skill/replace-skill-state-root! ctx-id state-map))
 
 (defn- can-afford-release? [player-id]
   (let [cp-needed (release-cp-cost player-id)

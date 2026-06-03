@@ -11,8 +11,8 @@
 - `forge-1.20.1` keeps `GameTest` as a thin runtime adapter check (registration, datapack loading, minimal world-level execution), no duplicated gameplay logic.
 
 ## Out of Scope (This Iteration)
-- Enabling `fabric-1.20.1` in `settings.gradle`.
-- Adding Fabric run tasks or Fabric GameTest execution.
+- Fabric Clojure unit test runner / `fabric-1.20.1` `*_test.clj` 自动发现执行（模块已 include，仅 compile/datagen 烟雾维护）。
+- Fabric GameTest execution.
 
 ## Fabric Extension Hooks (Reserved)
 - Keep shared behavior contracts platform-neutral (inputs, expected outputs, invariants).
@@ -25,9 +25,17 @@ Refactors are allowed when existing structure blocks reliable tests, but each re
 2. New/updated tests prove the same outcomes before and after refactor.
 3. No architecture boundary break: `ac` and `mcmod` remain free of `net.minecraft.*`.
 
+## Cleanup Notes (2026-06)
+
+- Inventory: [TEST_CLEANUP_INVENTORY.md](TEST_CLEANUP_INVENTORY.md)
+- Report: [TEST_CLEANUP_REPORT.md](TEST_CLEANUP_REPORT.md)
+
 ## Verification Entry Points
 - `gradlew unitTestCompile`
+- `gradlew quickUnitTests`（`ac` + `mcmod`）
+- `gradlew verifyLocalPrGate`（平台矩阵 + `quickUnitTests`）
 - `gradlew verifyForgeBaseline`
+- `gradlew verifyForgeClojureUnitTests`（Forge/shared Clojure 单测，手动）
 - `gradlew runForgeGameTests`
 - `gradlew validateForgeGameTestLog`
 - `gradlew verifyForgeTesting`

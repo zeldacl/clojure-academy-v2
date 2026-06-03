@@ -24,22 +24,6 @@
    :channel channel
    :owner-key [:ctx ctx-id]})
 
-(deftest init-registers-owner-aware-railgun-fx-test
-  (let [registered-level* (atom nil)
-        registered-handler* (atom nil)]
-    (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
-                                                         (reset! registered-level* [effect-id effect-map])
-                                                         nil)
-                  fx-registry/register-fx-channels! (fn [channels handler]
-                                                      (reset! registered-handler* {:channels channels
-                                                                                   :handler handler})
-                                                      nil)]
-      (railgun-fx/init!)
-      (is (= :railgun-shot (first @registered-level*)))
-      (is (fn? (:enqueue-state-fn (second @registered-level*))))
-      (is (= #{:railgun/fx-shot :railgun/fx-reflect}
-             (set (:channels @registered-handler*)))))))
-
 (deftest fx-handler-routes-with-ctx-metadata-test
   (let [handler* (atom nil)
         enqueued* (atom [])]

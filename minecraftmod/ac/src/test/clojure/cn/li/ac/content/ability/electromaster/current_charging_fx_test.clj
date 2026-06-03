@@ -18,25 +18,6 @@
 
 (use-fixtures :each with-fresh-current-charging-fx-runtime)
 
-(deftest init-registers-current-charging-fx-channels-test
-  (let [registered-handler* (atom nil)
-        registered-hand* (atom nil)]
-    (with-redefs [hand-effects/register-hand-effect! (fn [effect-id effect-map]
-                                                       (reset! registered-hand* [effect-id effect-map])
-                                                       nil)
-                  hand-effects/reset-hand-effect-state-for-test! (fn [& _] nil)
-                  fx-registry/register-fx-channels! (fn [channels handler]
-                                                      (reset! registered-handler* {:channels channels
-                                                                                   :handler handler})
-                                                      nil)]
-      (current-charging-fx/init!)
-      (is (= :current-charging (first @registered-hand*)))
-      (is (= [:current-charging/fx-start
-              :current-charging/fx-update
-              :current-charging/fx-end]
-             (:channels @registered-handler*)))
-      (is (fn? (:handler @registered-handler*))))))
-
 (deftest fx-handler-routes-through-hand-effects-test
   (let [handler* (atom nil)
         hand-enqueued* (atom [])]

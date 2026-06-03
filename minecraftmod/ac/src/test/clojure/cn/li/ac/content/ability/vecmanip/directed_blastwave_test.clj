@@ -53,16 +53,27 @@
         terminate-calls (atom [])]
     {:ctx-state ctx-state
      :terminate-calls terminate-calls
-     :get-context (fn [_] @ctx-state)
+     :get-context (fn
+                    ([_] @ctx-state)
+                    ([_ _] @ctx-state))
+     :replace-skill-state-root! (fn [_ state-map]
+                                  (swap! ctx-state assoc :skill-state state-map)
+                                  nil)
+     :assoc-skill-state! (fn [_ k v]
+                           (swap! ctx-state assoc-in (into [:skill-state] (if (vector? k) k [k])) v)
+                           nil)
+     :clear-skill-state! (fn [_]
+                           (swap! ctx-state dissoc :skill-state)
+                           nil)
      :update-skill-state-root! (fn [_ f & args]
-                        (swap! ctx-state update :skill-state
-                               (fn [ss] (apply f (or ss {}) args))))
+                                 (swap! ctx-state update :skill-state
+                                        (fn [ss] (apply f (or ss {}) args))))
      :terminate-context! (fn [ctx-id _]
                            (swap! terminate-calls conj ctx-id))}))
 
 (deftest charge-window-invalid-release-terminates-test
   (let [up-fn (get-in spec [:actions :up!])
-        {:keys [ctx-state get-context update-skill-state-root! terminate-context! terminate-calls]}
+        {:keys [ctx-state get-context replace-skill-state-root! assoc-skill-state! clear-skill-state! update-skill-state-root! terminate-context! terminate-calls]}
         (make-context-mocks {:skill-state {:charge-ticks 6 :performed? false}})
         end-calls* (atom [])]
     (with-redefs [db/cfg-int mock-cfg-int
@@ -70,6 +81,9 @@
                   db/cfg-lerp mock-cfg-lerp
                   db/cfg-lerp-int mock-cfg-lerp-int
                   ctx/get-context get-context
+                  ctx-skill/replace-skill-state-root! replace-skill-state-root!
+                  ctx-skill/assoc-skill-state! assoc-skill-state!
+                  ctx-skill/clear-skill-state! clear-skill-state!
                   ctx-skill/update-skill-state-root! update-skill-state-root!
                   ctx/terminate-context! terminate-context!
                   fx/send-end! (fn [ctx-id ch payload]
@@ -82,7 +96,7 @@
 
 (deftest nil-trace-uses-body-position-and-awards-miss-exp-test
   (let [up-fn (get-in spec [:actions :up!])
-        {:keys [ctx-state get-context update-skill-state-root! terminate-context! terminate-calls]}
+        {:keys [ctx-state get-context replace-skill-state-root! assoc-skill-state! clear-skill-state! update-skill-state-root! terminate-context! terminate-calls]}
         (make-context-mocks {:skill-state {:charge-ticks 10 :performed? false :punched? false :punch-ticks 0}})
         perform-calls* (atom [])
         cooldown-calls* (atom [])
@@ -92,6 +106,9 @@
                   db/cfg-lerp mock-cfg-lerp
                   db/cfg-lerp-int mock-cfg-lerp-int
                   ctx/get-context get-context
+                  ctx-skill/replace-skill-state-root! replace-skill-state-root!
+                  ctx-skill/assoc-skill-state! assoc-skill-state!
+                  ctx-skill/clear-skill-state! clear-skill-state!
                   ctx-skill/update-skill-state-root! update-skill-state-root!
                   ctx/terminate-context! terminate-context!
                   geom/world-id-of (fn [_] "w")
@@ -121,7 +138,7 @@
 
 (deftest hit-path-applies-damage-velocity-and-cooldown-test
   (let [up-fn (get-in spec [:actions :up!])
-        {:keys [ctx-state get-context update-skill-state-root! terminate-context! terminate-calls]}
+        {:keys [ctx-state get-context replace-skill-state-root! assoc-skill-state! clear-skill-state! update-skill-state-root! terminate-context! terminate-calls]}
         (make-context-mocks {:skill-state {:charge-ticks 10 :performed? false :punched? false :punch-ticks 0}})
         damage-calls* (atom [])
         set-velocity-calls* (atom [])
@@ -134,6 +151,9 @@
                   db/cfg-lerp mock-cfg-lerp
                   db/cfg-lerp-int mock-cfg-lerp-int
                   ctx/get-context get-context
+                  ctx-skill/replace-skill-state-root! replace-skill-state-root!
+                  ctx-skill/assoc-skill-state! assoc-skill-state!
+                  ctx-skill/clear-skill-state! clear-skill-state!
                   ctx-skill/update-skill-state-root! update-skill-state-root!
                   ctx/terminate-context! terminate-context!
                   geom/world-id-of (fn [_] "w")
@@ -174,12 +194,13 @@
 
 (deftest punch-tick-terminates-successful-context-test
   (let [tick-fn (get-in spec [:actions :tick!])
-        {:keys [ctx-state get-context update-skill-state-root! terminate-context! terminate-calls]}
+        {:keys [ctx-state get-context replace-skill-state-root! clear-skill-state! terminate-context! terminate-calls]}
         (make-context-mocks {:skill-state {:charge-ticks 12 :performed? true :punched? true :punch-ticks 6}})
         end-calls* (atom [])]
     (with-redefs [db/cfg-int mock-cfg-int
                   ctx/get-context get-context
-                  ctx-skill/update-skill-state-root! update-skill-state-root!
+                  ctx-skill/replace-skill-state-root! replace-skill-state-root!
+                  ctx-skill/clear-skill-state! clear-skill-state!
                   ctx/terminate-context! terminate-context!
                   fx/send-end! (fn [ctx-id ch payload]
                                  (swap! end-calls* conj [ctx-id ch payload]))]
@@ -192,11 +213,12 @@
 
 (deftest abort-terminates-context-test
   (let [abort-fn (get-in spec [:actions :abort!])
-        {:keys [ctx-state get-context update-skill-state-root! terminate-context! terminate-calls]}
+        {:keys [ctx-state get-context replace-skill-state-root! clear-skill-state! terminate-context! terminate-calls]}
         (make-context-mocks {:skill-state {:charge-ticks 3 :performed? false}})
         end-calls* (atom [])]
     (with-redefs [ctx/get-context get-context
-                  ctx-skill/update-skill-state-root! update-skill-state-root!
+                  ctx-skill/replace-skill-state-root! replace-skill-state-root!
+                  ctx-skill/clear-skill-state! clear-skill-state!
                   ctx/terminate-context! terminate-context!
                   fx/send-end! (fn [ctx-id ch payload]
                                  (swap! end-calls* conj [ctx-id ch payload]))]

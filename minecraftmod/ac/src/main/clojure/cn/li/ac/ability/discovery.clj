@@ -1,92 +1,22 @@
 (ns cn.li.ac.ability.discovery
-	"Discovery/registration layer for AC ability content.
+  "Discovery layer for AC ability content.
 
-	This namespace now builds provider lists from a classpath scanner,
-	while preserving the existing provider registry API surface."
-	(:require [cn.li.ac.discovery.registry :as discovery-registry]
-					[cn.li.ac.ability.discovery-descriptor :as discovery-descriptor]
-					[cn.li.ac.discovery.scanner :as scanner]
-					[cn.li.mcmod.util.log :as log]))
-
-(defonce ^:private bootstrap-attempts* (atom 0))
-
-(defn bootstrap-attempts-snapshot
-	[]
-	@bootstrap-attempts*)
-
-(defn reset-bootstrap-attempts-for-test!
-	([]
-	 (reset-bootstrap-attempts-for-test! 0))
-	([attempts]
-	 (reset! bootstrap-attempts* (long (or attempts 0)))
-	 nil))
-
-(declare register-provider! registered-providers)
-
-(defn- provider-by-id
-	[provider-id]
-	(some #(when (= (:id %) provider-id) %) (registered-providers)))
-
-(defn- merge-provider!
-	[provider]
-	(let [existing (provider-by-id (:id provider))
-				merged (if existing
-						 (-> existing
-								 (assoc :priority (min (long (:priority existing)) (long (:priority provider))))
-								 (update :skill-namespaces #(vec (distinct (concat % (:skill-namespaces provider)))))
-								 (update :fx-namespaces #(vec (distinct (concat % (:fx-namespaces provider))))))
-						 provider)]
-		(register-provider! merged)))
-
-(defn register-provider!
-	"Register or replace an ability content provider."
-	[provider]
-	(discovery-registry/register-provider! provider))
-
-(defn unregister-provider!
-	[provider-id]
-	(discovery-registry/unregister-provider! provider-id))
-
-(defn registered-providers
-	[]
-	(discovery-registry/registered-providers))
-
-(defn bootstrap-default-providers!
-	"Discover and register built-in ability providers from classpath.
-
-	Safe to call repeatedly."
-	[]
-	(when (or (zero? (count (registered-providers)))
-					(< (bootstrap-attempts-snapshot) 1))
-		(swap! bootstrap-attempts* inc)
-		(let [scanned-providers (scanner/discover-ability-providers)
-				descriptor-providers (discovery-descriptor/bundled-provider-descriptors)]
-			(when (and (empty? scanned-providers) (empty? descriptor-providers))
-				(log/warn "Ability discovery returned no providers; check classpath/resource layout"))
-			(doseq [provider scanned-providers]
-				(register-provider! provider))
-			(doseq [provider descriptor-providers]
-				(merge-provider! provider))))
-	(registered-providers))
-
-(defn freeze-provider-discovery!
-	[]
-	(discovery-registry/freeze-provider-registry!))
+  Scanner is the single source of truth for skill/fx namespaces."
+  (:require [cn.li.ac.discovery.scanner :as scanner]
+            [cn.li.mcmod.util.log :as log]))
 
 (defn discovered-skill-namespaces
-	"Return server-side skill namespaces in deterministic load order."
-	[]
-	(bootstrap-default-providers!)
-	(->> (registered-providers)
-			 (mapcat :skill-namespaces)
-			 distinct
-			 vec))
+  "Return server-side skill namespaces in deterministic load order."
+  []
+  (let [{:keys [skill]} (scanner/discover-ability-namespaces)]
+    (when (empty? skill)
+      (log/warn "Ability scanner returned no skill namespaces"))
+    (vec skill)))
 
 (defn discovered-fx-namespaces
-	"Return client-side FX namespaces in deterministic load order."
-	[]
-	(bootstrap-default-providers!)
-	(->> (registered-providers)
-			 (mapcat :fx-namespaces)
-			 distinct
-			 vec))
+  "Return client-side FX namespaces in deterministic load order."
+  []
+  (let [{:keys [fx]} (scanner/discover-ability-namespaces)]
+    (when (empty? fx)
+      (log/warn "Ability scanner returned no fx namespaces"))
+    (vec fx)))

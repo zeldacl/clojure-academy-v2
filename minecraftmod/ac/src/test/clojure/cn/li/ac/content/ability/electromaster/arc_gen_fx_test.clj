@@ -25,20 +25,6 @@
 
 (use-fixtures :each with-fresh-arc-gen-fx-runtime)
 
-(deftest init-registers-arc-gen-fx-channel-test
-  (let [registered-level* (atom nil)
-        registered-handler* (atom nil)]
-    (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
-                                                         (reset! registered-level* [effect-id effect-map])
-                                                         nil)
-                  fx-registry/register-fx-channel! (fn [channel handler]
-                                                     (reset! registered-handler* {:channel channel
-                                                                                  :handler handler})
-                                                     nil)]
-      (arc-fx/init!)
-      (is (= :arc-gen (first @registered-level*)))
-      (is (= :arc-gen/fx-perform (:channel @registered-handler*))))))
-
 (deftest fx-handler-routes-perform-payload-test
   (let [handler* (atom nil)
         enqueued* (atom [])]

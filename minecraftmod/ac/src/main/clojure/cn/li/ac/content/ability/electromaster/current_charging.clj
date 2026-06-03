@@ -36,17 +36,17 @@
   (cond-> (or payload {})
     (some? player-id) (assoc :source-player-id player-id)))
 
+(defn- clear-skill-state!
+  [ctx-id]
+  (ctx-skill/clear-skill-state! ctx-id))
+
 (defn- set-skill-state!
   [ctx-id k v]
   (ctx-skill/assoc-skill-state! ctx-id k v))
 
 (defn- set-skill-state-root!
   [ctx-id state-map]
-  (ctx-skill/update-skill-state-root! ctx-id identity state-map))
-
-(defn- clear-skill-state!
-  [ctx-id]
-  (ctx-skill/clear-skill-state! ctx-id))
+  (ctx-skill/replace-skill-state-root! ctx-id state-map))
 
 (defn- next-charge-ticks!
   [ctx-id]
@@ -179,16 +179,16 @@
              (let [is-item (boolean (main-hand-item player-id))
                    exp* (double (or exp 0.0))
                    overload-floor (cfg-lerp :cost.down.overload exp*)]
-           (set-skill-state-root! ctx-id
-                      {:mode (if is-item :item :block)
-                       :is-item is-item
-                       :good? false
-                       :exp exp*
-                       :charge-ticks 0
-                       :overload-floor overload-floor
-                       :target nil
-                       :block-pos nil
-                       :charged 0.0})
+          (set-skill-state-root! ctx-id
+                                 {:mode (if is-item :item :block)
+                                  :is-item is-item
+                                  :good? false
+                                  :exp exp*
+                                  :charge-ticks 0
+                                  :overload-floor overload-floor
+                                  :target nil
+                                  :block-pos nil
+                                  :charged 0.0})
                (ctx/ctx-send-to-client! ctx-id :current-charging/fx-start
                                         (fx-payload player-id {:is-item is-item}))))
    :tick!  (fn [{:keys [player-id ctx-id player]}]

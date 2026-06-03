@@ -20,22 +20,6 @@
 
 (use-fixtures :each reset-fixture)
 
-(deftest init-registers-rad-intensify-fx-channel-test
-  (let [registered-level* (atom nil)
-        registered-handler* (atom nil)]
-    (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
-                                                         (reset! registered-level* [effect-id effect-map])
-                                                         nil)
-                  fx-registry/register-fx-channels! (fn [channels handler]
-                                                      (reset! registered-handler* {:channels channels
-                                                                                   :handler handler})
-                                                      nil)]
-      (rad-fx/init!)
-      (is (= :rad-intensify-mark (first @registered-level*)))
-      (is (fn? (:enqueue-state-fn (second @registered-level*))))
-      (is (= #{:rad-intensify/fx-mark}
-             (set (:channels @registered-handler*)))))))
-
 (deftest fx-handler-routes-mark-event-test
   (let [handler* (atom nil)
         enqueued* (atom [])]

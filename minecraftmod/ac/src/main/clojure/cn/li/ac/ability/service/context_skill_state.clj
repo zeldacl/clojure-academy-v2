@@ -19,17 +19,30 @@
      (ctx/get-context owner ctx-id)
      (ctx/get-context ctx-id))))
 
+(declare update-skill-state-root!)
+
 (defn assoc-skill-state!
   [ctx-id k v]
-  (ctx-cmd/assoc-skill-state! (current-owner) ctx-id k v))
+  (let [path (if (vector? k) k [k])]
+    (update-skill-state-root! ctx-id update :skill-state #(assoc-in (or % {}) path v))))
 
 (defn update-skill-state-root!
   [ctx-id f & args]
   (let [ctx-data (or (get-context ctx-id) {})
-        current (or (:skill-state ctx-data) {})
-        next-state (apply f current args)]
+        next-ctx (apply f ctx-data args)
+        next-state (cond
+                     (and (map? next-ctx) (contains? next-ctx :skill-state))
+                     (or (:skill-state next-ctx) {})
+                     (map? next-ctx)
+                     next-ctx
+                     :else
+                     {})]
     (ctx-cmd/replace-skill-state-root! (current-owner) ctx-id next-state)))
+
+(defn replace-skill-state-root!
+  [ctx-id state-map]
+  (update-skill-state-root! ctx-id assoc :skill-state state-map))
 
 (defn clear-skill-state!
   [ctx-id]
-  (ctx-cmd/clear-skill-state! (current-owner) ctx-id))
+  (update-skill-state-root! ctx-id dissoc :skill-state))

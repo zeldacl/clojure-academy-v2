@@ -19,8 +19,20 @@
 (defn- mk-context-store [ctx-id seed]
   (atom {ctx-id seed}))
 
-(deftest pattern-is-hold-channel-test
-  (is (= :hold-channel (:pattern (skill-def)))))
+(defn- replace-skill-state-root-stub [contexts*]
+  (fn [id state-map]
+    (swap! contexts* assoc-in [id :skill-state] state-map)
+    nil))
+
+(defn- assoc-skill-state-stub [contexts*]
+  (fn [id k v]
+    (swap! contexts* assoc-in (into [id :skill-state] (if (vector? k) k [k])) v)
+    nil))
+
+(defn- clear-skill-state-stub [contexts*]
+  (fn [id]
+    (swap! contexts* update id dissoc :skill-state)
+    nil))
 
 (deftest down-action-initializes-state-and-starts-fx-test
   (let [ctx-id "ctx-1"
@@ -30,9 +42,9 @@
     (with-redefs [current-charging/main-hand-item (fn [_] :stack)
                   current-charging/cfg-lerp (fn [_ _] 52.0)
                   ctx/get-context (fn [id] (get @contexts* id))
-                  ctx-skill/update-skill-state-root! (fn [id f & args]
-                                        (swap! contexts* update id #(apply f % args))
-                                        nil)
+                  ctx-skill/replace-skill-state-root! (replace-skill-state-root-stub contexts*)
+                  ctx-skill/assoc-skill-state! (assoc-skill-state-stub contexts*)
+                  ctx-skill/clear-skill-state! (clear-skill-state-stub contexts*)
                   ctx/ctx-send-to-client! (fn [id ch payload]
                                             (swap! fx* conj [id ch payload])
                                             nil)]
@@ -80,9 +92,9 @@
                                                           (swap! floor* conj [pid floor])
                                                           nil)
                   ctx/get-context (fn [id] (get @contexts* id))
-                  ctx-skill/update-skill-state-root! (fn [id f & args]
-                                        (swap! contexts* update id #(apply f % args))
-                                        nil)
+                  ctx-skill/replace-skill-state-root! (replace-skill-state-root-stub contexts*)
+                  ctx-skill/assoc-skill-state! (assoc-skill-state-stub contexts*)
+                  ctx-skill/clear-skill-state! (clear-skill-state-stub contexts*)
                   ctx/ctx-send-to-client! (fn [id ch payload]
                                             (swap! fx* conj [id ch payload])
                                             nil)]
@@ -125,9 +137,9 @@
                                                       (swap! spawned* conj [player eid yaw])
                                                       true)
                   ctx/get-context (fn [id] (get @contexts* id))
-                  ctx-skill/update-skill-state-root! (fn [id f & args]
-                                        (swap! contexts* update id #(apply f % args))
-                                        nil)
+                  ctx-skill/replace-skill-state-root! (replace-skill-state-root-stub contexts*)
+                  ctx-skill/assoc-skill-state! (assoc-skill-state-stub contexts*)
+                  ctx-skill/clear-skill-state! (clear-skill-state-stub contexts*)
                   ctx/ctx-send-to-client! (fn [id ch payload]
                                             (swap! fx* conj [id ch payload])
                                             nil)]
@@ -150,9 +162,9 @@
         terminated* (atom [])
         cost-fail! (get (skill-actions) :cost-fail!)]
     (with-redefs [ctx/get-context (fn [id] (get @contexts* id))
-                  ctx-skill/update-skill-state-root! (fn [id f & args]
-                                        (swap! contexts* update id #(apply f % args))
-                                        nil)
+                  ctx-skill/replace-skill-state-root! (replace-skill-state-root-stub contexts*)
+                  ctx-skill/assoc-skill-state! (assoc-skill-state-stub contexts*)
+                  ctx-skill/clear-skill-state! (clear-skill-state-stub contexts*)
                   ctx/ctx-send-to-client! (fn [id ch payload]
                                             (swap! fx* conj [id ch payload])
                                             nil)

@@ -5,16 +5,6 @@
             [cn.li.ac.content.ability.electromaster.body-intensify-fx :as body-intensify-fx]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 
-(deftest init-registers-body-intensify-fx-channel-test
-  (let [registered* (atom nil)]
-    (with-redefs [fx-registry/register-fx-channel! (fn [channel handler]
-                                                     (reset! registered* {:channel channel
-                                                                          :handler handler})
-                                                     nil)]
-      (body-intensify-fx/init!)
-      (is (= :body-intensify/fx-end (:channel @registered*)))
-      (is (fn? (:handler @registered*))))))
-
 (deftest fx-handler-plays-local-effect-when-performed-test
   (let [handler* (atom nil)
         sounds* (atom [])

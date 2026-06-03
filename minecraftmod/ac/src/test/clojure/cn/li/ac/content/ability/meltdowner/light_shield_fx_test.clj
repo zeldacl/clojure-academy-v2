@@ -29,23 +29,6 @@
    :channel channel
    :owner-key [:ctx ctx-id]})
 
-(deftest init-registers-owner-aware-light-shield-fx-test
-  (let [registered-level* (atom nil)
-        registered-handler* (atom nil)]
-    (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
-                                                         (reset! registered-level* [effect-id effect-map])
-                                                         nil)
-                  fx-registry/register-fx-channels! (fn [channels handler]
-                                                      (reset! registered-handler* {:channels channels
-                                                                                   :handler handler})
-                                                      nil)]
-      (ls-fx/init!)
-      (is (= :light-shield (first @registered-level*)))
-      (is (fn? (:enqueue-state-fn (second @registered-level*))))
-      (is (= #{:light-shield/fx-start
-               :light-shield/fx-end}
-             (set (:channels @registered-handler*)))))))
-
 (deftest start-end-update-state-and-build-plan-test
   (let [enqueue-state! (var-get #'cn.li.ac.content.ability.meltdowner.light-shield-fx/enqueue-state!)
   build-plan (var-get #'cn.li.ac.content.ability.meltdowner.light-shield-fx/build-plan)

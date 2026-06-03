@@ -18,10 +18,36 @@
      :terminate-calls* terminate-calls*
      :get-context (fn [_] @ctx*)
      :update-skill-state-root! (fn [_ctx-id f & args]
-                                 (swap! ctx* update :skill-state #(apply f % args)))
+                                 (swap! ctx* update :skill-state #(apply f (or % {}) args)))
      :terminate-context! (fn [ctx-id terminate-fn]
                            (swap! terminate-calls* conj [ctx-id terminate-fn])
                            nil)}))
+
+(deftest thunder-clap-public-spec-uses-action-tunables-test
+  (testing "ThunderClap cost and targeting values exposed through the public skill spec"
+    (let [spec thunder-clap/thunder-clap
+          ctx* (atom {:skill-state {}})
+          down-overload (get-in spec [:cost :down :overload])
+          tick-cp (get-in spec [:cost :tick :cp])
+          down-action (get-in spec [:actions :down!])
+          tick-action (get-in spec [:actions :tick!])]
+      (with-redefs [thunder-clap/cfg-lerp (fn [field exp]
+                                            (case field
+                                              :cost.down.overload (+ 100.0 (* 200.0 exp))
+                                              :cost.tick.cp (+ 10.0 (* 20.0 exp))
+                                              0.0))
+                    thunder-clap/min-ticks (fn [] 50)
+                    thunder-clap/targeting-range (fn [] 77.0)
+                    thunder-clap/resolve-raycast-target (fn [_] {:x 1.0 :y 2.0 :z 3.0})
+                    ctx/get-context (fn ([_] @ctx*) ([_ _] @ctx*))
+                    ctx-skill/update-skill-state-root! (fn [_ f & args]
+                                                         (swap! ctx* update :skill-state #(apply f (or % {}) args))
+                                                         nil)]
+        (is (= 200.0 (down-overload {:exp 0.5})))
+        (is (= 20.0 (tick-cp {:hold-ticks 50 :exp 0.5})))
+        (is (= 0.0 (tick-cp {:hold-ticks 51 :exp 0.5})))
+        (is (nil? (down-action {:ctx-id "ctx-1" :player-id "p1"})))
+        (is (nil? (tick-action {:ctx-id "ctx-1" :player-id "p1"})))))))
 
 (deftest thunder-clap-short-release-remains-unperformed-test
   (testing "release before the minimum charge keeps performed false and surfaces it through the end payload"

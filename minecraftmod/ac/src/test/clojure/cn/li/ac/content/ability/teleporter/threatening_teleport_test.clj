@@ -14,8 +14,12 @@
   (let [ctx* (atom initial-ctx)]
     {:ctx* ctx*
      :get-context (fn [_] @ctx*)
-     :update-skill-state-root! (fn [_ f & args]
-                        (swap! ctx* update :skill-state (fn [ss] (apply f (or ss {}) args))))}))
+     :replace-skill-state-root! (fn [_ state-map]
+                                  (swap! ctx* assoc :skill-state state-map)
+                                  nil)
+     :assoc-skill-state! (fn [_ k v]
+                           (swap! ctx* assoc-in (into [:skill-state] (if (vector? k) k [k])) v)
+                           nil)}))
 
 (deftest threatening-tp-up-cost-fail-no-side-effects-test
   (let [{:keys [get-context]} (make-context-mocks {:skill-state {:trace {:world-id "w"
@@ -41,10 +45,11 @@
     (is (= 0 @ach-calls*))))
 
 (deftest threatening-tp-tick-updates-trace-and-sends-update-fx-test
-  (let [{:keys [ctx* get-context update-skill-state-root!]} (make-context-mocks {:skill-state {}})
+  (let [{:keys [ctx* get-context replace-skill-state-root! assoc-skill-state!]} (make-context-mocks {:skill-state {}})
         fx-updates* (atom [])]
     (with-redefs [ctx/get-context get-context
-                  ctx-skill/update-skill-state-root! update-skill-state-root!
+                  ctx-skill/replace-skill-state-root! replace-skill-state-root!
+                  ctx-skill/assoc-skill-state! assoc-skill-state!
                   ctx/ctx-send-to-client! (fn [_ctx-id channel payload]
                                             (swap! fx-updates* conj [channel payload]))
                   helper/skill-exp (fn [_ _] 0.5)

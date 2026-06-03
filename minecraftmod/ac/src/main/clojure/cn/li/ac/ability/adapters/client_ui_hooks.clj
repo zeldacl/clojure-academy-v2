@@ -17,7 +17,6 @@
             [cn.li.ac.ability.client.screens.location-teleport :as location-teleport-screen]
             [cn.li.ac.ability.client.screens.preset-editor :as preset-editor-screen]
             [cn.li.ac.ability.client.screens.skill-tree :as skill-tree-screen]
-            [cn.li.ac.content.ability.electromaster.current-charging-fx :as current-charging-fx]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-manager :as ctx-mgr]
             [cn.li.ac.ability.model.preset :as preset-data]
@@ -490,11 +489,19 @@
 
 (defn- current-charging-visual-state
   [player-uuid]
-  (current-charging-fx/current-state player-uuid))
+  (if-let [current-state-fn
+           (requiring-resolve 'cn.li.ac.content.ability.electromaster.current-charging-fx/current-state)]
+    (current-state-fn player-uuid)
+    {:active? false
+     :blending? false
+     :is-item false
+     :good? false
+     :charge-ticks 0
+     :charge-ratio 0.0}))
 
 (defn- current-charging-overlay-elements
   [player-uuid screen-width screen-height]
-  (let [{:keys [active? blending? is-item good? charge-ticks charge-ratio]} (current-charging-fx/current-state player-uuid)
+  (let [{:keys [active? blending? is-item good? charge-ticks charge-ratio]} (current-charging-visual-state player-uuid)
         visible? (or active? blending? (pos? (long (or charge-ticks 0))))]
     (when visible?
       (let [bar-width 140

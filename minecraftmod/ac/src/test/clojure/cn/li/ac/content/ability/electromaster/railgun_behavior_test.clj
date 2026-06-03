@@ -1,12 +1,15 @@
 (ns cn.li.ac.content.ability.electromaster.railgun-behavior-test
-  (:require 
-            [cn.li.ac.ability.service.runtime-store :as store]
-[clojure.test :refer [deftest is use-fixtures]]
+  (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [cn.li.ac.ability.item-actions :as item-actions]
             [cn.li.ac.ability.effects.beam :as beam]
+            [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
-            [cn.li.ac.test.support.player-state :as ps-fix]
+            [cn.li.ac.ability.service.runtime-store :as store]
+            [cn.li.ac.ability.skill-config :as skill-config]
+            [cn.li.ac.content.ability :as ability-content]
             [cn.li.ac.content.ability.electromaster.railgun :as railgun]
+            [cn.li.ac.test.support.player-state :as ps-fix]
+            [cn.li.mcmod.config.registry :as config-reg]
             [cn.li.mcmod.platform.block-manipulation :as block-manip]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.raycast :as raycast]
@@ -70,35 +73,79 @@
 
 (deftest coin-throw-aborts-item-charge-and-opens-window-test
   (ps-fix/seed-player-state! "p1" (store/fresh-player-state))
-  (ctx/register-context! {:id "ctx-1"
-                          :player-uuid "p1"
-                          :skill-id :railgun
-                          :logical-side :server
-                          :session-id :test-session
-                          :status ctx/STATUS-ALIVE
-                          :skill-state {:mode :item-charge :charge-ticks 3 :fired false}})
+  (binding [ctx/*context-owner* {:logical-side :server :session-id :test-session :player-uuid "p1"}]
+    (ctx/register-context! {:id "ctx-1"
+                            :player-uuid "p1"
+                            :skill-id :railgun
+                            :logical-side :server
+                            :session-id :test-session
+                            :status ctx/STATUS-ALIVE
+                            :skill-state {:mode :item-charge :charge-ticks 3 :fired false}}))
   (with-redefs [log/debug (fn [& _])]
-    (binding [ctx/*context-owner* {:logical-side :server :session-id :test-session}]
+    (binding [ctx/*context-owner* {:logical-side :server :session-id :test-session :player-uuid "p1"}]
       (is (true? (railgun/register-coin-throw! "p1" {:timestamp-ms 12345})))
-      (is (= :item-charge-cancelled (get-in (ctx/get-context "ctx-1") [:skill-state :mode]))))))
+      (is (some #(= :item-charge-cancelled (get-in % [:skill-state :mode]))
+                (vals (ctx/get-all-contexts)))))))
 
 (deftest coin-progress-threshold-status-test
   (let [below (#'railgun/qte-status 0.59)
         active (#'railgun/qte-status 0.6)
-    edge (#'railgun/qte-status 0.7)
-    perform (#'railgun/qte-status 0.71)]
+        edge (#'railgun/qte-status 0.7)
+        perform (#'railgun/qte-status 0.71)]
     (is (true? (:has-window? below)))
     (is (false? (:active? below)))
     (is (false? (:perform? below)))
-
     (is (true? (:active? active)))
     (is (false? (:perform? active)))
-
-  (is (true? (:active? edge)))
-  (is (false? (:perform? edge)))
-
+    (is (true? (:active? edge)))
+    (is (false? (:perform? edge)))
     (is (true? (:active? perform)))
     (is (true? (:perform? perform)))))
+
+(defn- seed-electromaster-config! [values]
+  (let [domain (skill-config/category-domain :electromaster)]
+    (config-reg/register-config-descriptors!
+      domain
+      (get skill-config/descriptors-by-category :electromaster))
+    (config-reg/ensure-default-values!
+      domain
+      (get skill-config/default-values-by-category :electromaster))
+    (config-reg/set-config-values! domain values)))
+
+(deftest railgun-qte-down-cost-uses-action-tunable-curve-test
+  (testing "railgun cost functions exposed through the public skill spec read action tunables"
+    (ps-fix/with-test-player-state-owner
+      (fn []
+        (let [descriptors (config-reg/get-descriptor-registry)
+              values (config-reg/get-value-registry)]
+          (try
+            (do
+              (config-reg/set-descriptor-registry! {})
+              (config-reg/set-value-registry! {})
+              (store/reset-store!)
+              (ability-content/init-ability-content!)
+              (let [player-id "railgun-config-test-player"]
+                (seed-electromaster-config!
+                  {(skill-config/config-key :railgun :cost.down.cp) [1000.0 2000.0]
+                   (skill-config/config-key :railgun :cost.down.overload) [300.0 100.0]})
+                (ps-fix/seed-player-state!
+                  player-id
+                  (-> (store/fresh-player-state)
+                      (assoc-in [:ability-data :skill-exps :railgun] 0.5)))
+                (with-redefs [railgun/read-coin-qte-status (fn [_]
+                                                            {:has-window? true
+                                                             :active? true
+                                                             :perform? true
+                                                             :progress 0.75})]
+                  (let [spec (skill-registry/get-skill :railgun)
+                        down-cp (get-in spec [:cost :down :cp])
+                        down-overload (get-in spec [:cost :down :overload])]
+                    (is (= 1500.0 (down-cp {:player-id player-id})))
+                    (is (= 200.0 (down-overload {:player-id player-id})))))))
+            (finally
+              (config-reg/set-descriptor-registry! descriptors)
+              (config-reg/set-value-registry! values)
+              (store/reset-store!))))))))
 
 (deftest read-coin-qte-status-skips-already-judged-coin-test
   (ps-fix/seed-player-state! "p1" (store/fresh-player-state))

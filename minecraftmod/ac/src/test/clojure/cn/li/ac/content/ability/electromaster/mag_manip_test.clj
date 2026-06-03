@@ -18,6 +18,16 @@
 (defn- mk-context-store [ctx-id seed]
   (atom {ctx-id seed}))
 
+(defn- replace-skill-state-root-stub [contexts*]
+  (fn [id state-map]
+    (swap! contexts* assoc-in [id :skill-state] state-map)
+    nil))
+
+(defn- assoc-skill-state-stub [contexts*]
+  (fn [id k v]
+    (swap! contexts* assoc-in (into [id :skill-state] (if (vector? k) k [k])) v)
+    nil))
+
 (deftest down-world-capture-requires-successful-break-test
   (let [ctx-id "ctx-world"
         contexts* (mk-context-store ctx-id {})
@@ -32,9 +42,8 @@
                     block-manip/can-break-block? (fn [& _] true)
                     block-manip/break-block! (fn [& _] false)
                     ctx/get-context (fn [id] (get @contexts* id))
-                    ctx-skill/update-skill-state-root! (fn [id f & args]
-                                          (swap! contexts* update id #(apply f % args))
-                                          nil)
+                    ctx-skill/replace-skill-state-root! (replace-skill-state-root-stub contexts*)
+                    ctx-skill/assoc-skill-state! (assoc-skill-state-stub contexts*)
                     ctx/ctx-send-to-client! (fn [& _] nil)]
         (down! {:player-id "p1" :ctx-id ctx-id :player {:id "p"}})))
     (is (= :capture-failed (get-in @contexts* [ctx-id :skill-state :mode])))))
@@ -60,9 +69,8 @@
                                                    (swap! give-calls* conj [player stack])
                                                    true)
                   ctx/get-context (fn [id] (get @contexts* id))
-                  ctx-skill/update-skill-state-root! (fn [id f & args]
-                                        (swap! contexts* update id #(apply f % args))
-                                        nil)
+                  ctx-skill/replace-skill-state-root! (replace-skill-state-root-stub contexts*)
+                  ctx-skill/assoc-skill-state! (assoc-skill-state-stub contexts*)
                   ctx/ctx-send-to-client! (fn [id ch payload]
                                             (swap! fx* conj [id ch payload])
                                             nil)]
@@ -96,9 +104,8 @@
                                                  (swap! exp* conj [pid sid amount])
                                                  nil)
                   ctx/get-context (fn [id] (get @contexts* id))
-                  ctx-skill/update-skill-state-root! (fn [id f & args]
-                                        (swap! contexts* update id #(apply f % args))
-                                        nil)
+                  ctx-skill/replace-skill-state-root! (replace-skill-state-root-stub contexts*)
+                  ctx-skill/assoc-skill-state! (assoc-skill-state-stub contexts*)
                   ctx/ctx-send-to-client! (fn [& _] nil)]
       (up! {:player-id "p1" :ctx-id ctx-id :player {:id "p"} :cost-ok? true}))
     (is (= :thrown (get-in @contexts* [ctx-id :skill-state :mode])))

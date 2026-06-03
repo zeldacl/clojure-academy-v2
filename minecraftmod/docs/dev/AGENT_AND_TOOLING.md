@@ -136,13 +136,13 @@
 ### 覆盖率与 ratchet（ac）
 
 - 生成报告：`cmd /c .\gradlew.bat :ac:coverageAcClojureTests`（HTML 在 `ac/build/reports/coverage/index.html`）。
-- **Soft ratchet**：CI 用 `scripts/ac_coverage_ratchet.sh` 从 `ac/build/reports/coverage/index.html` 的 **Totals** 行解析 **% Lines**，要求不低于 `ac/coverage-baseline.txt` 中的基线减去 **0.5** 个百分点。
+- **Soft ratchet（手动）**：生成报告后对照 `ac/coverage-baseline.txt`（当前基线约 31% 行覆盖）；ratchet shell 脚本尚未接入仓库，勿假设 CI 会自动执行。
 - 有意提升整体行覆盖后，将 `ac/coverage-baseline.txt` 更新为新百分比（可四舍五入一位小数），随 PR 提交。
 
 ### 覆盖率与 ratchet（mcmod）
 
 - 生成报告：`cmd /c .\gradlew.bat :mcmod:coverageMcmodClojureTests`（HTML 在 `mcmod/build/reports/coverage/index.html`）。
-- **Soft ratchet**：CI 用 `scripts/mcmod_coverage_ratchet.sh` 从 `index.html` 的 **Totals** 行解析 **% Lines**，要求不低于 `mcmod/coverage-baseline.txt` 中的基线减去 **0.5** 个百分点。
+- **Soft ratchet（手动）**：生成报告后对照 `mcmod/coverage-baseline.txt`（当前基线约 52.89% 行覆盖）；ratchet shell 脚本尚未接入仓库。
 - 提升基线后更新 `mcmod/coverage-baseline.txt`（建议一位小数），随 PR 提交。
 - `coverageMcmodClojureTests` 通过 `--ns-exclude-regex` 排除 `cn.li.mcmod.client.obj` 与 `cn.li.mcmod.platform.position`（前者体量与单测 ROI，后者避免 Cloverage 与 `IBlockPos` 测试桩的协议冲突）；详见 [BUILD_AND_VERIFY_PLAYBOOK.md](BUILD_AND_VERIFY_PLAYBOOK.md)。
 

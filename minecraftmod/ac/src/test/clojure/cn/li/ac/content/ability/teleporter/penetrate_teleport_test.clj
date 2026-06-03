@@ -14,16 +14,24 @@
     {:ctx* ctx*
      :listeners* listeners*
      :get-context (fn [_] @ctx*)
+     :replace-skill-state-root! (fn [_ state-map]
+                                  (swap! ctx* assoc :skill-state state-map)
+                                  nil)
+     :assoc-skill-state! (fn [_ k v]
+                           (swap! ctx* assoc-in (into [:skill-state] (if (vector? k) k [k])) v)
+                           nil)
      :update-skill-state-root! (fn [_ f & args]
-                        (swap! ctx* update :skill-state (fn [ss] (apply f (or ss {}) args))))
+                                 (swap! ctx* update :skill-state (fn [ss] (apply f (or ss {}) args))))
      :ctx-on! (fn [_ channel handler]
                 (swap! listeners* assoc channel handler)
                 nil)}))
 
 (deftest penetrate-down-registers-distance-listener-and-updates-state-test
-  (let [{:keys [ctx* listeners* get-context update-skill-state-root! ctx-on!]}
+  (let [{:keys [ctx* listeners* get-context replace-skill-state-root! assoc-skill-state! update-skill-state-root! ctx-on!]}
         (make-context-mocks {:skill-state {}})]
     (with-redefs [ctx/get-context get-context
+                  ctx-skill/replace-skill-state-root! replace-skill-state-root!
+                  ctx-skill/assoc-skill-state! assoc-skill-state!
                   ctx-skill/update-skill-state-root! update-skill-state-root!
                   ctx/ctx-on! ctx-on!
                   helper/skill-exp (fn [_ _] 0.2)
@@ -44,10 +52,12 @@
     (is (= true (get-in @ctx* [:skill-state :preview :available?])))))
 
 (deftest penetrate-tick-refreshes-preview-and-resets-up-resolve-test
-  (let [{:keys [ctx* get-context update-skill-state-root!]}
+  (let [{:keys [ctx* get-context replace-skill-state-root! assoc-skill-state! update-skill-state-root!]}
         (make-context-mocks {:skill-state {:desired-distance 6.0
                                            :up-resolve {:distance 3.0}}})]
     (with-redefs [ctx/get-context get-context
+                  ctx-skill/replace-skill-state-root! replace-skill-state-root!
+                  ctx-skill/assoc-skill-state! assoc-skill-state!
                   ctx-skill/update-skill-state-root! update-skill-state-root!
                   pt/resolve-preview (fn [_player-id desired]
                                        {:distance desired

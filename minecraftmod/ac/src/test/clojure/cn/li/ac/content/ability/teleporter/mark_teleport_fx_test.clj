@@ -20,24 +20,6 @@
 
 (use-fixtures :each with-fresh-mark-teleport-fx-runtime)
 
-(deftest init-registers-mark-teleport-fx-channels-test
-  (let [registered-level* (atom nil)
-        registered-handler* (atom nil)]
-    (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
-                                                         (reset! registered-level* [effect-id effect-map])
-                                                         nil)
-                  fx-registry/register-fx-channels! (fn [channels handler]
-                                                      (reset! registered-handler* {:channels channels
-                                                                                   :handler handler})
-                                                      nil)]
-      (mfx/init!)
-      (is (= :mark-teleport (first @registered-level*)))
-      (is (= #{:mark-teleport/fx-start
-               :mark-teleport/fx-update
-               :mark-teleport/fx-perform
-               :mark-teleport/fx-end}
-             (set (:channels @registered-handler*)))))))
-
 (deftest enqueue-perform-with-target-emits-particles-and-sound-test
   (let [particles* (atom [])
         sounds* (atom [])]

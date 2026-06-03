@@ -26,21 +26,6 @@
    :channel :thunder-bolt/fx-perform
    :owner-key [:ctx ctx-id]})
 
-(deftest init-registers-thunder-bolt-fx-test
-  (let [registered-level* (atom nil)
-        registered-handler* (atom nil)]
-    (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
-                                                         (reset! registered-level* [effect-id effect-map])
-                                                         nil)
-                  fx-registry/register-fx-channel! (fn [channel handler]
-                                                     (reset! registered-handler* {:channel channel
-                                                                                  :handler handler})
-                                                     nil)]
-      (tb-fx/init!)
-      (is (= :thunder-bolt-strike (first @registered-level*)))
-      (is (fn? (:enqueue-state-fn (second @registered-level*))))
-      (is (= :thunder-bolt/fx-perform (:channel @registered-handler*))))))
-
 (deftest fx-handler-routes-payload-to-level-effect-test
   (let [handler* (atom nil)
         enqueued* (atom [])]

@@ -47,9 +47,6 @@
 (defn- cfg-lerp [field-id exp]
   (skill-config/lerp-double scatter-bomb-skill-id field-id exp))
 
-(defn- cfg-lerp-int [field-id exp]
-  (skill-config/lerp-int scatter-bomb-skill-id field-id exp))
-
 (defn- current-hold-ticks
   [ctx-id]
   (long (or (get-in (ctx/get-context ctx-id) [:skill-state :hold-ticks]) 0)))
@@ -60,7 +57,7 @@
 
 (defn- set-skill-state-root!
   [ctx-id state-map]
-  (ctx-skill/update-skill-state-root! ctx-id identity state-map))
+  (ctx-skill/replace-skill-state-root! ctx-id state-map))
 
 (defn- beam-config []
   {:radius          (cfg-double :beam.radius)

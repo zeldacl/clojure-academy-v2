@@ -16,6 +16,12 @@
     {:get-world wireless-sync-handler/get-world
      :get-tile-at wireless-sync-handler/get-tile-at}))
 
+(defn- install-integration-hooks!
+  []
+  (when-let [install-hooks!
+             (requiring-resolve 'cn.li.ac.integration.platform-bridge/install-integration-hooks!)]
+    (install-hooks!)))
+
 (def ^:private runtime-content-loader-lock
   (Object.))
 
@@ -26,6 +32,7 @@
   []
   (platform-gui/install-into-mcmod!)
   (register-network-edit-helpers!)
+  (install-integration-hooks!)
   (content-ns/load-all!)
   (let [gui-ids (gui-registry/get-all-gui-ids)]
     (log/info "Registering screen factories for GUI IDs:" gui-ids)

@@ -5,8 +5,7 @@
             [cn.li.ac.ability.config :as ability]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.config.common :as config-common]
-            [cn.li.ac.config.gameplay :as gameplay]
-            [cn.li.forge1201.config.bridge :as bridge]))
+            [cn.li.ac.config.gameplay :as gameplay]))
 
 (deftest gameplay-descriptors-are-ac-owned
   (testing "AC gameplay descriptors include platform-supported UI primitive types"
@@ -49,6 +48,7 @@
                                   ".toml")))))))
 
 (deftest config-storage-is-initialized
-  (testing "registered-configs atom exists and is a map"
-    (is (contains? (ns-publics 'cn.li.forge1201.config.bridge) 'registered-configs))
-    (is (map? @bridge/registered-configs))))
+  (testing "private registered-config storage defaults to a map"
+    (let [registered-configs-var (ns-resolve 'cn.li.forge1201.config.bridge '*registered-configs*)]
+      (is (some? registered-configs-var))
+      (is (map? (var-get registered-configs-var))))))

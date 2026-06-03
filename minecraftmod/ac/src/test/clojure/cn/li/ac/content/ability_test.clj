@@ -24,8 +24,7 @@
 
 (deftest init-ability-content-freezes-registries-once-test
   (let [freeze-calls* (atom [])]
-    (let [one-pass [:discovery
-                    :category
+    (let [one-pass [:category
                     :skill
                     :item-actions
                     :attack-checks
@@ -34,9 +33,6 @@
                     :lifecycle]
           two-pass (vec (concat one-pass one-pass))]
                 (with-redefs [discovery/discovered-skill-namespaces (fn [] [])
-                      discovery/freeze-provider-discovery! (fn []
-                                    (swap! freeze-calls* conj :discovery)
-                                    nil)
                       category/register-category! (fn [_] nil)
                       item-actions/register-item-action! (fn [& _] nil)
                       category/freeze-category-registry! (fn []

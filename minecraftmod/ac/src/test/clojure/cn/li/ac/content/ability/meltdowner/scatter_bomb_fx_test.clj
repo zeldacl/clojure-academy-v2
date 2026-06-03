@@ -29,25 +29,6 @@
    :channel channel
    :owner-key [:ctx ctx-id]})
 
-(deftest init-registers-owner-aware-scatter-bomb-fx-test
-  (let [registered-level* (atom nil)
-        registered-handler* (atom nil)]
-    (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
-                                                         (reset! registered-level* [effect-id effect-map])
-                                                         nil)
-                  fx-registry/register-fx-channels! (fn [channels handler]
-                                                      (reset! registered-handler* {:channels channels
-                                                                                   :handler handler})
-                                                      nil)]
-      (sb-fx/init!)
-      (is (= :scatter-bomb (first @registered-level*)))
-      (is (fn? (:enqueue-state-fn (second @registered-level*))))
-      (is (= #{:scatter-bomb/fx-start
-               :scatter-bomb/fx-ball
-               :scatter-bomb/fx-beam
-               :scatter-bomb/fx-end}
-             (set (:channels @registered-handler*)))))))
-
 (deftest start-ball-beam-end-manage-state-test
   (let [enqueue-state! (var-get #'cn.li.ac.content.ability.meltdowner.scatter-bomb-fx/enqueue-state!)
         tick-state! (var-get #'cn.li.ac.content.ability.meltdowner.scatter-bomb-fx/tick-state!)

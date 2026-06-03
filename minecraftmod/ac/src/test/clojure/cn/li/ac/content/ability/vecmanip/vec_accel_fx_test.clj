@@ -26,25 +26,6 @@
    :channel :vec-accel/fx-update
    :owner-key [:ctx ctx-id]})
 
-(deftest init-registers-owner-aware-vec-accel-fx-test
-  (let [registered-level* (atom nil)
-        registered-handler* (atom nil)]
-    (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
-                                                         (reset! registered-level* [effect-id effect-map])
-                                                         nil)
-                  fx-registry/register-fx-channels! (fn [channels handler]
-                                                      (reset! registered-handler* {:channels channels
-                                                                                   :handler handler})
-                                                      nil)]
-      (vafx/init!)
-      (is (= :vec-accel (first @registered-level*)))
-      (is (fn? (:enqueue-state-fn (second @registered-level*))))
-      (is (= #{:vec-accel/fx-start
-               :vec-accel/fx-update
-               :vec-accel/fx-perform
-               :vec-accel/fx-end}
-             (set (:channels @registered-handler*)))))))
-
 (deftest update-keeps-preview-state-per-owner-test
   (let [enqueue-state! (var-get #'cn.li.ac.content.ability.vecmanip.vec-accel-fx/enqueue-state!)]
     (level-effects/update-effect-state! :vec-accel

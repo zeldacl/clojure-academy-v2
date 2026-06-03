@@ -21,7 +21,7 @@
 (defn- normalize-path->ns
   [path]
   (-> path
-      (str/replace #"\\\\" "/")
+      (str/replace #"\\" "/")
       (str/replace #"\.clj$" "")
       (str/replace #"_" "-")
       (str/replace #"/" ".")
@@ -33,7 +33,7 @@
     (->> (file-seq root)
          (filter #(.isFile ^File %))
          (map #(.getPath ^File %))
-         (map #(str/replace % #"\\\\" "/"))
+         (map #(str/replace % #"\\" "/"))
          (filter #(str/ends-with? % ".clj")))))
 
 (defn- classpath-file-paths
@@ -41,7 +41,7 @@
   (let [root (io/resource ability-resource-prefix)]
     (when (and root (= "file" (.getProtocol root)))
       (let [root-file (io/file (.toURI root))
-            root-path (str/replace (.getPath root-file) #"\\\\" "/")
+            root-path (str/replace (.getPath root-file) #"\\" "/")
             prefix (str root-path "/")]
         (->> (file-clj-paths root-file)
              (map #(subs % (count prefix)))
@@ -68,13 +68,17 @@
   []
   ;; Fallback for local dev where classpath resource may not yet be available.
   (let [user-dir (System/getProperty "user.dir")
-        ac-root (io/file user-dir "ac" "src" "main" "clojure" "cn" "li" "ac" "content" "ability")
-        prefix (str/replace (.getPath ac-root) #"\\\\" "/")]
-    (if (.exists ac-root)
-      (->> (file-clj-paths ac-root)
-           (map #(subs % (inc (count prefix))))
-         (map #(str ability-resource-prefix "/" %)))
-      [])))
+        candidate-roots [(io/file user-dir "ac" "src" "main" "clojure" "cn" "li" "ac" "content" "ability")
+                         (io/file user-dir "src" "main" "clojure" "cn" "li" "ac" "content" "ability")]]
+    (->> candidate-roots
+         (filter #(.exists ^File %))
+         (mapcat (fn [^File ac-root]
+                   (let [prefix (str/replace (.getPath ac-root) #"\\" "/")]
+                     (->> (file-clj-paths ac-root)
+                          (map #(subs % (inc (count prefix))))
+                          (map #(str ability-resource-prefix "/" %))))))
+         distinct
+         vec)))
 
 (defn discover-ability-namespaces
   "Return discovered namespaces under cn.li.ac.content.ability.*.

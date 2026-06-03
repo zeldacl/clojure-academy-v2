@@ -1,7 +1,10 @@
 (ns cn.li.ac.content.ability.electromaster.thunder-bolt-test
-  (:require [clojure.test :refer [deftest is]]
+  (:require [clojure.test :refer [deftest is testing]]
+            [cn.li.ac.ability.registry.skill :as skill-registry]
+            [cn.li.ac.content.ability :as ability-content]
             [cn.li.ac.content.ability.electromaster.thunder-bolt :as thunder-bolt]
             [cn.li.ac.ability.skill-config :as skill-config]
+            [cn.li.mcmod.config.registry :as config-reg]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
@@ -37,6 +40,44 @@
     :effect.slowness-duration-ticks 40
     :effect.slowness-amplifier 3
     0))
+
+(defn- with-config-registry [f]
+  (let [descriptors (config-reg/get-descriptor-registry)
+        values (config-reg/get-value-registry)]
+    (try
+      (config-reg/set-descriptor-registry! {})
+      (config-reg/set-value-registry! {})
+      (f)
+      (finally
+        (config-reg/set-descriptor-registry! descriptors)
+        (config-reg/set-value-registry! values)))))
+
+(defn- seed-electromaster-config! [values]
+  (let [domain (skill-config/category-domain :electromaster)]
+    (config-reg/register-config-descriptors!
+      domain
+      (get skill-config/descriptors-by-category :electromaster))
+    (config-reg/ensure-default-values!
+      domain
+      (get skill-config/default-values-by-category :electromaster))
+    (config-reg/set-config-values! domain values)))
+
+(deftest thunder-bolt-public-spec-uses-tunables-test
+  (testing "ThunderBolt public skill spec should consume runtime tunables"
+    (with-config-registry
+      (fn []
+        (ability-content/init-ability-content!)
+        (seed-electromaster-config!
+          {(skill-config/config-key :thunder-bolt :cost.down.cp) [100.0 220.0]
+           (skill-config/config-key :thunder-bolt :cost.down.overload) [10.0 40.0]
+           (skill-config/config-key :thunder-bolt :cooldown.ticks) [90.0 30.0]})
+        (let [spec (skill-registry/get-skill :thunder-bolt)
+              cp-fn (get-in spec [:cost :down :cp])
+              overload-fn (get-in spec [:cost :down :overload])
+              cooldown-fn (:cooldown-ticks spec)]
+          (is (= 160.0 (cp-fn {:exp 0.5})))
+          (is (= 25.0 (overload-fn {:exp 0.5})))
+          (is (= 60.0 (double (cooldown-fn {:exp 0.5})))))))))
 
 (deftest miss-sends-fallback-fx-and-grants-ineffective-exp-test
   (let [fx* (atom [])

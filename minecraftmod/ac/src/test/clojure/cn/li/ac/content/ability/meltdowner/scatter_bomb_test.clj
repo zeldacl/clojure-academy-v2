@@ -18,8 +18,12 @@
     {:ctx* ctx*
      :messages* messages*
      :get-context (fn [_] @ctx*)
-     :update-skill-state-root! (fn [_ f & args]
-                        (swap! ctx* #(apply f % args)))
+     :replace-skill-state-root! (fn [_ state-map]
+                                  (swap! ctx* assoc :skill-state state-map)
+                                  nil)
+     :assoc-skill-state! (fn [_ k v]
+                           (swap! ctx* assoc-in (into [:skill-state] (if (vector? k) k [k])) v)
+                           nil)
      :send! (fn [ctx-id channel payload]
               (swap! messages* conj [ctx-id channel payload])
               nil)}))
@@ -54,11 +58,12 @@
     0))
 
 (deftest scatter-bomb-down-initializes-state-and-start-fx-test
-  (let [{:keys [ctx* update-skill-state-root! send! messages*]} (context-mocks {:skill-state {:legacy true}})]
+  (let [{:keys [ctx* replace-skill-state-root! assoc-skill-state! send! messages*]} (context-mocks {:skill-state {:legacy true}})]
     (with-redefs [skill-effects/skill-exp (fn [& _] 0.0)
                   skill-config/lerp-double stub-lerp-double
                   skill-config/tunable-double stub-tunable-double
-                  ctx-skill/update-skill-state-root! update-skill-state-root!
+                  ctx-skill/replace-skill-state-root! replace-skill-state-root!
+                  ctx-skill/assoc-skill-state! assoc-skill-state!
                   ctx/ctx-send-to-client! send!]
       (scatter/scatter-bomb-down! {:player-id "p1" :ctx-id "ctx-1" :cost-ok? true}))
     (is (= {:balls 0 :hold-ticks 0 :overload-floor 120.0}
@@ -66,13 +71,14 @@
     (is (= [["ctx-1" :scatter-bomb/fx-start {}]] @messages*))))
 
 (deftest scatter-bomb-tick-spawns-ball-at-cadence-test
-  (let [{:keys [ctx* get-context update-skill-state-root! send! messages*]}
+  (let [{:keys [ctx* get-context replace-skill-state-root! assoc-skill-state! send! messages*]}
   (context-mocks {:skill-state {:balls 0 :hold-ticks 19 :overload-floor 120.0}})
         floor-calls* (atom [])
         spawn-calls* (atom [])
         damage-calls* (atom [])]
     (with-redefs [ctx/get-context get-context
-                  ctx-skill/update-skill-state-root! update-skill-state-root!
+                  ctx-skill/replace-skill-state-root! replace-skill-state-root!
+                  ctx-skill/assoc-skill-state! assoc-skill-state!
                   ctx/ctx-send-to-client! send!
                   skill-config/tunable-int stub-tunable-int
                   skill-config/tunable-double stub-tunable-double
@@ -101,12 +107,13 @@
     (is (= :scatter-bomb/fx-ball (second (first @messages*))))))
 
 (deftest scatter-bomb-tick-anti-afk-damages-and-terminates-test
-  (let [{:keys [ctx* get-context update-skill-state-root! send! messages*]}
+  (let [{:keys [get-context replace-skill-state-root! assoc-skill-state! send! messages*]}
         (context-mocks {:skill-state {:balls 2 :hold-ticks 199 :overload-floor 120.0}})
         damage-calls* (atom [])
         terminate-calls* (atom [])]
     (with-redefs [ctx/get-context get-context
-                  ctx-skill/update-skill-state-root! update-skill-state-root!
+                  ctx-skill/replace-skill-state-root! replace-skill-state-root!
+                  ctx-skill/assoc-skill-state! assoc-skill-state!
                   ctx/ctx-send-to-client! send!
                   ctx/terminate-context! (fn [ctx-id terminate-fn]
                                            (swap! terminate-calls* conj [ctx-id terminate-fn])
@@ -131,11 +138,12 @@
     (is (= ["ctx-afk" :scatter-bomb/fx-end {:balls 2}] (last @messages*)))))
 
 (deftest scatter-bomb-tick-after-hold-window-does-not-spawn-new-ball-test
-  (let [{:keys [ctx* get-context update-skill-state-root! send! messages*]}
+  (let [{:keys [ctx* get-context replace-skill-state-root! assoc-skill-state! send! messages*]}
         (context-mocks {:skill-state {:balls 4 :hold-ticks 80 :overload-floor 120.0}})
         spawn-calls* (atom [])]
     (with-redefs [ctx/get-context get-context
-                  ctx-skill/update-skill-state-root! update-skill-state-root!
+                  ctx-skill/replace-skill-state-root! replace-skill-state-root!
+                  ctx-skill/assoc-skill-state! assoc-skill-state!
                   ctx/ctx-send-to-client! send!
                   skill-config/tunable-int stub-tunable-int
                   skill-config/tunable-double stub-tunable-double

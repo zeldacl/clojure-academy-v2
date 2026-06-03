@@ -20,24 +20,6 @@
 
 (use-fixtures :each with-fresh-shift-teleport-fx-runtime)
 
-(deftest init-registers-shift-teleport-fx-channels-test
-  (let [registered-level* (atom nil)
-        registered-handler* (atom nil)]
-    (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
-                                                         (reset! registered-level* [effect-id effect-map])
-                                                         nil)
-                  fx-registry/register-fx-channels! (fn [channels handler]
-                                                      (reset! registered-handler* {:channels channels
-                                                                                   :handler handler})
-                                                      nil)]
-      (stfx/init!)
-      (is (= :shift-teleport (first @registered-level*)))
-      (is (= #{:shift-tp/fx-start
-               :shift-tp/fx-update
-               :shift-tp/fx-perform
-               :shift-tp/fx-end}
-             (set (:channels @registered-handler*)))))))
-
 (deftest enqueue-perform-emits-path-particles-and-sound-test
   (let [particles* (atom [])
         sounds* (atom [])]

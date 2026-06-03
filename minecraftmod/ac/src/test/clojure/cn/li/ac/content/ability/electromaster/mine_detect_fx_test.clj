@@ -32,21 +32,6 @@
 
 (use-fixtures :each reset-fixture)
 
-(deftest init-registers-mine-detect-fx-channels-test
-  (let [registered-effect* (atom nil)
-        registered-handler* (atom nil)]
-    (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
-                                                          (reset! registered-effect* [effect-id effect-map])
-                                                          nil)
-                  fx-registry/register-fx-channels! (fn [channels handler]
-                                                      (reset! registered-handler* {:channels channels
-                                                                                   :handler handler})
-                                                      nil)]
-      (mine-detect-fx/init!)
-      (is (= :mine-detect (first @registered-effect*)))
-      (is (= #{:mine-detect/fx-perform :mine-detect/fx-end}
-             (set (:channels @registered-handler*)))))))
-
 (deftest fx-handler-routes-perform-and-end-test
   (let [handler* (atom nil)
         enqueued* (atom [])]

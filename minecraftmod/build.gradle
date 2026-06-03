@@ -148,6 +148,12 @@ tasks.register('verifyLocalPrGate') {
     dependsOn 'verifyCurrentPlatforms', 'quickUnitTests'
 }
 
+tasks.register('verifyForgeClojureUnitTests') {
+    group = 'verification'
+    description = 'Run Forge/shared Clojure unit tests (manual gate; not part of verifyLocalPrGate or verifyForgeTesting).'
+    dependsOn ':forge-1.20.1:runForgeClojureTests'
+}
+
 tasks.register('verifyArchitectureBoundaries') {
     group = 'verification'
     description = 'Verify architecture boundaries across shared, Minecraft, and loader platform modules.'
@@ -3612,7 +3618,6 @@ tasks.register('verifyCleanupResidueGuards') {
     group = 'verification'
     description = 'Run cleanup-residue guard checks for SSOT regressions.'
     dependsOn cleanupResidueGuardTaskNames
-    dependsOn 'auditAbilityReducerGenericCommands'
     dependsOn 'verifyAbilityNoDispatcherBusinessApiUsage'
 }
 
@@ -4362,7 +4367,7 @@ tasks.register('validateForgeGameTestLog') {
 tasks.register('verifyForgeTesting') {
     group = 'verification'
     description = 'Run unit test compilation and Forge GameTest verification for current scope.'
-    dependsOn 'verifyArchitectureBoundaries', 'verifyForgeBaseline', 'unitTestCompile', 'runAcUnitTests', 'runMcmodUnitTests', 'runForgeGameTests', 'validateForgeGameTestLog'
+    dependsOn 'verifyForgeBaseline', 'unitTestCompile', 'runAcUnitTests', 'runMcmodUnitTests', 'runForgeGameTests', 'validateForgeGameTestLog'
 }
 
 

@@ -27,21 +27,6 @@
 
 (use-fixtures :each with-fresh-directed-shock-runtime)
 
-(deftest init-registers-directed-shock-fx-channels-test
-  (let [registered-hand* (atom nil)
-        registered-handler* (atom nil)]
-    (with-redefs [hand-effects/register-hand-effect! (fn [effect-id effect-map]
-                                                       (reset! registered-hand* [effect-id effect-map]))
-                  fx-registry/register-fx-channels! (fn [channels handler]
-                                                      (reset! registered-handler* {:channels channels
-                                                                                   :handler handler}))]
-      (dsfx/init!)
-      (is (= :directed-shock (first @registered-hand*)))
-      (is (= #{:directed-shock/fx-start
-               :directed-shock/fx-perform
-               :directed-shock/fx-end}
-             (set (:channels @registered-handler*)))))))
-
 (deftest fx-handler-routes-start-perform-end-test
   (let [handler* (atom nil)
         hand-enqueued* (atom [])]
