@@ -15,36 +15,21 @@
 
 (def ^:private tank-size 8000)
 
-(def ^:private phase-render-resource-lock
-  (Object.))
+(def ^:private phase-render-resource-lock (Object.))
+(def ^:private ^:dynamic *phase-model* nil)
+(def ^:private ^:dynamic *phase-textures* nil)
 
-(def ^:private ^:dynamic *phase-model*
-  nil)
+(def ^:private phase-model
+  (machine-render-runtime/lazy-resource phase-render-resource-lock #'*phase-model*
+                                        #(res/load-obj-model "ip_gen")))
 
-(def ^:private ^:dynamic *phase-textures*
-  nil)
-
-(defn- phase-model
-  []
-  (or (var-get #'*phase-model*)
-      (locking phase-render-resource-lock
-        (or (var-get #'*phase-model*)
-            (let [m (res/load-obj-model "ip_gen")]
-              (alter-var-root #'*phase-model* (constantly m))
-              m)))))
-
-(defn- phase-textures
-  []
-  (or (var-get #'*phase-textures*)
-      (locking phase-render-resource-lock
-        (or (var-get #'*phase-textures*)
-            (let [textures [(res/texture-location "models/ip_gen0")
-                            (res/texture-location "models/ip_gen1")
-                            (res/texture-location "models/ip_gen2")
-                            (res/texture-location "models/ip_gen3")
-                            (res/texture-location "models/ip_gen4")]]
-              (alter-var-root #'*phase-textures* (constantly textures))
-              textures)))))
+(def ^:private phase-textures
+  (machine-render-runtime/lazy-resource phase-render-resource-lock #'*phase-textures*
+                                        #(vec [(res/texture-location "models/ip_gen0")
+                                               (res/texture-location "models/ip_gen1")
+                                               (res/texture-location "models/ip_gen2")
+                                               (res/texture-location "models/ip_gen3")
+                                               (res/texture-location "models/ip_gen4")])))
 
 (defn- clamp-frame
   [v]

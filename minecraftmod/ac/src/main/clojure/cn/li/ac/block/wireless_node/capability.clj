@@ -1,6 +1,7 @@
 (ns cn.li.ac.block.wireless-node.capability
   "Wireless node API/capability implementations."
-  (:require [cn.li.ac.block.wireless-node.state :as node-state]
+  (:require [cn.li.ac.block.machine.runtime :as machine-runtime]
+            [cn.li.ac.block.wireless-node.state :as node-state]
             [cn.li.ac.wireless.config :as node-config]
             [cn.li.mcmod.block.state-schema :as state-schema]
             [cn.li.mcmod.platform.be :as platform-be]
@@ -57,7 +58,8 @@
           can-recv (- max-e cur)
           actual   (min can-recv (double max-receive))]
       (when (and (not simulate) (pos? actual))
-        (platform-be/set-custom-state! be (assoc state :energy (+ cur actual))))
+        (machine-runtime/commit-transform! be node-state/node-default-state
+                                         #(assoc % :energy (+ cur actual))))
       (int actual)))
 
   (extractEnergy [_ max-extract simulate]
@@ -65,7 +67,8 @@
           cur    (double (state-schema/get-field node-state/node-state-schema state :energy))
           actual (min cur (double max-extract))]
       (when (and (not simulate) (pos? actual))
-        (platform-be/set-custom-state! be (assoc state :energy (- cur actual))))
+        (machine-runtime/commit-transform! be node-state/node-default-state
+                                         #(assoc % :energy (- cur actual))))
       (int actual)))
 
   (getEnergyStored [_]

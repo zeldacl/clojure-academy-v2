@@ -36,7 +36,7 @@
 					 :screen-factory-fn-kw :create-node-screen
 					 :slot-schema-id :wireless-node
 					 :message-domain :node
-					 :init-fn 'cn.li.ac.block.wireless-node.gui/init!}
+					 :init-fn 'cn.li.ac.block.wireless-node.gui/init-wireless-node-gui!}
 	 :wireless-matrix {:gui-name "wireless-matrix"
 					 :gui-id 1
 					 :display-name "Wireless Matrix"

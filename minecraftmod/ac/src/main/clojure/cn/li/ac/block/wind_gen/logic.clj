@@ -5,16 +5,15 @@
             [cn.li.ac.block.wind-gen.config :as wind-config]
             [cn.li.ac.block.wind-gen.schema :as wind-schema]
             [cn.li.ac.energy.operations :as energy]
-            [cn.li.ac.gui.open :as gui-open]
             [cn.li.mcmod.platform.world :as world]
             [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.item :as item]
             [cn.li.mcmod.util.log :as log]))
 
-(def main-rt (machine-runtime/schema-runtime wind-schema/wind-gen-main-schema :server-only? true))
-(def base-rt (machine-runtime/schema-runtime wind-schema/wind-gen-base-schema :server-only? true))
-(def pillar-rt (machine-runtime/schema-runtime wind-schema/wind-gen-pillar-schema :server-only? true))
+(def ^:private main-rt (machine-runtime/schema-runtime wind-schema/wind-gen-main-schema :server-only? true))
+(def ^:private base-rt (machine-runtime/schema-runtime wind-schema/wind-gen-base-schema :server-only? true))
+(def ^:private pillar-rt (machine-runtime/schema-runtime wind-schema/wind-gen-pillar-schema :server-only? true))
 
 (def main-default-state (:default-state main-rt))
 (def base-default-state (:default-state base-rt))
@@ -320,11 +319,14 @@
        :messages [{:type :literal
                    :text "wind_gen_pillar must be in the same x/z column above wind_gen_base or wind_gen_main controller."}]})))
 
-(defn open-wind-main-gui! [{:keys [player world pos sneaking item-stack]}]
-  ;; When holding pillar item, return nil so BlockItem placement runs (PASS).
-  (when (and player world pos (not sneaking) (not (pillar-item-stack? item-stack)))
-    (gui-open/open-gui-by-type player :wind-gen-main world pos)))
+(def open-wind-main-gui!
+  (machine-runtime/make-open-gui-handler*
+    :wind-gen-main
+    (fn [{:keys [item-stack]}]
+      (not (pillar-item-stack? item-stack)))))
 
-(defn open-wind-base-gui! [{:keys [player world pos sneaking item-stack]}]
-  (when (and player world pos (not sneaking) (not (pillar-item-stack? item-stack)))
-    (gui-open/open-gui-by-type player :wind-gen-base world pos)))
+(def open-wind-base-gui!
+  (machine-runtime/make-open-gui-handler*
+    :wind-gen-base
+    (fn [{:keys [item-stack]}]
+      (not (pillar-item-stack? item-stack)))))

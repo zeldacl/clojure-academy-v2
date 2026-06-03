@@ -116,4 +116,7 @@
     :nbt-key "Facing"
     :type :string
     :default "north"
-    :persist? true}])
+    :persist? true
+    :block-state {:prop "facing"
+                 :type :horizontal-facing
+                 :default "north"}}])

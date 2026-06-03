@@ -30,6 +30,7 @@
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.mcmod.gui.spec :as gui-reg]
             [cn.li.ac.block.gui.sync :as gui-sync]
+            [cn.li.ac.block.machine.runtime :as machine-runtime]
             [cn.li.ac.wireless.gui.container.common :as common]
             [cn.li.ac.wireless.gui.container.move :as move-common]
             [cn.li.ac.wireless.gui.container.schema-runtime :as schema-runtime]
@@ -242,8 +243,7 @@
   (gui-sync/schema-sync-fns node-schema/unified-node-schema
                             {:after-sync! update-derived-sync-fields!}))
 
-(defn sync-to-client! [container]
-  ((:sync-to-client! node-sync) container))
+(def sync-to-client! (:sync-to-client! node-sync))
 
 (def get-sync-data (:get-sync-data node-sync))
 (def apply-sync-data! (:apply-sync-data! node-sync))
@@ -252,27 +252,27 @@
   (common/still-valid? container player))
 
 (defn tick! [container]
-  (sync-to-client! container)
-  (swap! (:charge-ticker container) inc))
+  (gui-sync/sync-tick! container sync-to-client!
+                       {:ticker-key :charge-ticker
+                        :derived-sync! update-derived-sync-fields!}))
 
 (defn handle-button-click! [container button-id data]
   (let [tile (:tile-entity container)]
     (when-not (map? tile)
       (case (int button-id)
-        0 (let [state  (or (platform-be/get-custom-state tile) {})
-                state' (update state :enabled not)]
-            (platform-be/set-custom-state! tile state')
-            (log/info "Toggled node connection:" (:enabled state')))
+        0 (let [state (or (platform-be/get-custom-state tile) node-state/node-default-state)]
+            (machine-runtime/commit-transform! tile node-state/node-default-state
+                                               #(update % :enabled not)
+                                               :blockstate-updater node-state/update-block-state!)
+            (log/info "Toggled node connection:" (:enabled state)))
         1 (when-let [new-ssid (:ssid data)]
-            (let [state  (or (platform-be/get-custom-state tile) {})
-                  state' (assoc state :node-name new-ssid)]
-              (platform-be/set-custom-state! tile state')
-              (log/info "Set node SSID to:" new-ssid)))
+            (machine-runtime/commit-transform! tile node-state/node-default-state
+                                               #(assoc % :node-name new-ssid))
+            (log/info "Set node SSID to:" new-ssid))
         2 (when-let [new-password (:password data)]
-            (let [state  (or (platform-be/get-custom-state tile) {})
-                  state' (assoc state :password new-password)]
-              (platform-be/set-custom-state! tile state')
-              (log/info "Set node password")))
+            (machine-runtime/commit-transform! tile node-state/node-default-state
+                                               #(assoc % :password new-password))
+            (log/info "Set node password"))
         (log/warn "Unknown button ID:" button-id)))))
 
 (defn quick-move-stack [container slot-index player-inventory-start]
@@ -503,7 +503,7 @@
 (def ^:private ^:dynamic *wireless-node-gui-installed?*
   false)
 
-(defn init!
+(defn init-wireless-node-gui!
   "Initialize Node GUI module"
   []
   (when-not (var-get #'*wireless-node-gui-installed?*)

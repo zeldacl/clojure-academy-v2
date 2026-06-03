@@ -4,6 +4,8 @@
 						[cn.li.mcmod.network.server :as net-server]
 						[cn.li.ac.wireless.gui.message.registry :as msg-registry]
 						[cn.li.ac.wireless.gui.sync.handler :as net-helpers]
+						[cn.li.ac.block.machine.handlers :as machine-handlers]
+						[cn.li.ac.block.machine.runtime :as machine-runtime]
 						[cn.li.mcmod.platform.be :as platform-be]
 						[cn.li.mcmod.platform.position :as pos]
 						[cn.li.ac.block.ability-interferer.logic :as interferer-logic]
@@ -21,29 +23,25 @@
 			 vec))
 
 (defn- handle-get-status [payload player]
-	(let [world (net-helpers/get-world player)
-				tile (net-helpers/get-tile-at world payload)]
-		(if tile
-			(let [state (or (platform-be/get-custom-state tile) interferer-logic/interferer-default-state)]
-				{:energy (:energy state 0.0)
-				 :max-energy (:max-energy state 0.0)
-				 :range (:range state 0.0)
-				 :enabled (:enabled state false)
-				 :placer-name (:placer-name state "")
-				 :whitelist (:whitelist state [])
-				 :affected-player-count (:affected-player-count state 0)})
-			{:energy 0.0 :max-energy 0.0 :range 0.0 :enabled false
-			 :placer-name "" :whitelist [] :affected-player-count 0})))
+	(machine-handlers/tile-status-response payload player interferer-logic/interferer-default-state
+		(fn [state]
+			{:energy (:energy state 0.0)
+			 :max-energy (:max-energy state 0.0)
+			 :range (:range state 0.0)
+			 :enabled (:enabled state false)
+			 :placer-name (:placer-name state "")
+			 :whitelist (:whitelist state [])
+			 :affected-player-count (:affected-player-count state 0)})))
 
 (defn- handle-change-range [payload player]
 	(let [world (net-helpers/get-world player)
 				tile (net-helpers/get-tile-at world payload)
 				requested (:range payload)]
 		(if (and tile (number? requested))
-			(let [state (or (platform-be/get-custom-state tile) interferer-logic/interferer-default-state)
-						state' (assoc state :range (interferer-logic/clamp-range requested))]
-				(platform-be/set-custom-state! tile state')
-				(platform-be/set-changed! tile)
+			(let [state' (assoc (or (platform-be/get-custom-state tile) interferer-logic/interferer-default-state)
+			                    :range (interferer-logic/clamp-range requested))]
+				(machine-runtime/commit-from-tile! tile interferer-logic/interferer-default-state state'
+				                                   :blockstate-updater interferer-logic/interferer-blockstate-updater)
 				{:success true :range (:range state')})
 			{:success false})))
 
@@ -53,15 +51,12 @@
 				new-enabled (boolean (:enabled payload))]
 		(if tile
 			(let [state (or (platform-be/get-custom-state tile) interferer-logic/interferer-default-state)
-						src-id (interferer-logic/source-id world (pos/position-get-block-pos tile))
-						uuids (set (:affected-player-uuids state []))
 						state' (if new-enabled
-										 (assoc state :enabled true)
-										 (do
-											 (interferer-logic/clear-interference-by-uuids! uuids src-id)
-											 (assoc state :enabled false :affected-player-count 0 :affected-player-uuids [])))]
-				(platform-be/set-custom-state! tile state')
-				(platform-be/set-changed! tile)
+						         (assoc state :enabled true)
+						         (assoc state :enabled false :affected-player-count 0 :affected-player-uuids []))]
+				(machine-runtime/commit-from-tile! tile interferer-logic/interferer-default-state state'
+				                                   :blockstate-updater interferer-logic/interferer-blockstate-updater
+				                                   :after-commit! interferer-logic/interferer-after-commit!)
 				{:success true :enabled (:enabled state')})
 			{:success false})))
 
@@ -70,11 +65,11 @@
 				tile (net-helpers/get-tile-at world payload)
 				names (:whitelist payload)]
 		(if (and tile (sequential? names))
-			(let [state (or (platform-be/get-custom-state tile) interferer-logic/interferer-default-state)
-						cleaned (normalize-whitelist names)
-						state' (assoc state :whitelist cleaned)]
-				(platform-be/set-custom-state! tile state')
-				(platform-be/set-changed! tile)
+			(let [cleaned (normalize-whitelist names)
+			      state' (assoc (or (platform-be/get-custom-state tile) interferer-logic/interferer-default-state)
+			                    :whitelist cleaned)]
+				(machine-runtime/commit-from-tile! tile interferer-logic/interferer-default-state state'
+				                                   :blockstate-updater interferer-logic/interferer-blockstate-updater)
 				{:success true :whitelist cleaned})
 			{:success false})))
 
@@ -84,10 +79,10 @@
 				player-name (:player-name payload)]
 		(if (and tile (not (str/blank? (str player-name))))
 			(let [state (or (platform-be/get-custom-state tile) interferer-logic/interferer-default-state)
-						whitelist (:whitelist state [])
-						new-whitelist (normalize-whitelist (conj (vec whitelist) player-name))]
-				(platform-be/set-custom-state! tile (assoc state :whitelist new-whitelist))
-				(platform-be/set-changed! tile)
+						new-whitelist (normalize-whitelist (conj (vec (:whitelist state [])) player-name))]
+				(machine-runtime/commit-from-tile! tile interferer-logic/interferer-default-state
+				                                   (assoc state :whitelist new-whitelist)
+				                                   :blockstate-updater interferer-logic/interferer-blockstate-updater)
 				{:success true :whitelist new-whitelist})
 			{:success false})))
 
@@ -97,10 +92,10 @@
 				player-name (:player-name payload)]
 		(if (and tile (not (str/blank? (str player-name))))
 			(let [state (or (platform-be/get-custom-state tile) interferer-logic/interferer-default-state)
-						whitelist (:whitelist state [])
-						new-whitelist (normalize-whitelist (remove #(= % player-name) whitelist))]
-				(platform-be/set-custom-state! tile (assoc state :whitelist new-whitelist))
-				(platform-be/set-changed! tile)
+						new-whitelist (normalize-whitelist (remove #(= % player-name) (:whitelist state [])))]
+				(machine-runtime/commit-from-tile! tile interferer-logic/interferer-default-state
+				                                   (assoc state :whitelist new-whitelist)
+				                                   :blockstate-updater interferer-logic/interferer-blockstate-updater)
 				{:success true :whitelist new-whitelist})
 			{:success false})))
 

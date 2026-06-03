@@ -1,133 +1,61 @@
 (ns cn.li.ac.block.wireless-matrix.render
-  "CLIENT-ONLY: Wireless matrix block entity renderer.
-
-  This namespace must be loaded via side-checked requiring-resolve from the
-  platform layer. It uses platform-agnostic protocols only, no direct Minecraft
-  class imports.
-
-  Renders the 2x2x2 matrix structure with:
-  - Static base (Main) and core (Core) parts
-  - Animated shield plates (rotating and floating)
-
-  Platform-agnostic rendering logic. Platform-specific TESR classes
-  should be defined in forge/fabric modules using gen-class."
+  "CLIENT-ONLY: Wireless matrix block entity renderer."
   (:require [cn.li.ac.block.machine.render-runtime :as machine-render-runtime]
-            [cn.li.mcmod.client.resources :as res]
+            [cn.li.ac.block.wireless-matrix.logic :as matrix-logic]
             [cn.li.mcmod.client.obj :as obj]
-            [cn.li.mcmod.util.render :as render]
-            [cn.li.mcmod.client.render.tesr-api :as tesr-api]
             [cn.li.mcmod.client.render.multiblock-helper :as mb-helper]
-            [cn.li.mcmod.client.render.pose :as pose]
             [cn.li.mcmod.client.render.obj-tesr-common :as obj-tesr]
-            [cn.li.ac.block.wireless-matrix.logic :as matrix-logic]))
+            [cn.li.mcmod.client.render.pose :as pose]
+            [cn.li.mcmod.client.render.tesr-api :as tesr-api]
+            [cn.li.mcmod.client.resources :as res]
+            [cn.li.mcmod.util.render :as render]))
 
-;; ============================================================================
-;; Resources (loaded once on initialization)
-;; ============================================================================
+(def ^:private matrix-render-resource-lock (Object.))
+(def ^:private ^:dynamic *matrix-model* nil)
+(def ^:private ^:dynamic *matrix-texture* nil)
 
-(def ^:private matrix-render-resource-lock
-  (Object.))
+(def ^:private matrix-model
+  (machine-render-runtime/lazy-resource matrix-render-resource-lock #'*matrix-model*
+                                        #(res/load-obj-model "matrix")))
 
-(def ^:private ^:dynamic *matrix-model*
-  nil)
+(def ^:private matrix-texture
+  (machine-render-runtime/lazy-resource matrix-render-resource-lock #'*matrix-texture*
+                                        #(res/texture-location "models/matrix")))
 
-(def ^:private ^:dynamic *matrix-texture*
-  nil)
+(defonce ^:private shield-cache
+  (machine-render-runtime/create-cache-runtime :last-shield-hw-state nil))
 
-(defn- matrix-model
-  []
-  (or (var-get #'*matrix-model*)
-      (locking matrix-render-resource-lock
-        (or (var-get #'*matrix-model*)
-            (let [m (res/load-obj-model "matrix")]
-              (alter-var-root #'*matrix-model* (constantly m))
-              m)))))
+(def ^:dynamic *wireless-matrix-render-runtime* (:runtime shield-cache))
 
-(defn- matrix-texture
-  []
-  (or (var-get #'*matrix-texture*)
-      (locking matrix-render-resource-lock
-        (or (var-get #'*matrix-texture*)
-            (let [t (res/texture-location "models/matrix")]
-              (alter-var-root #'*matrix-texture* (constantly t))
-              t)))))
+(defn last-shield-hw-state-atom []
+  (machine-render-runtime/cache-atom *wireless-matrix-render-runtime* :last-shield-hw-state))
 
-(defn create-wireless-matrix-render-runtime
-  ([]
-   (create-wireless-matrix-render-runtime nil))
-  ([initial-state]
-   (machine-render-runtime/create-render-runtime {:last-shield-hw-state initial-state})))
+(defn last-shield-hw-state-snapshot []
+  (machine-render-runtime/cache-snapshot *wireless-matrix-render-runtime* :last-shield-hw-state))
 
-(defonce ^:private installed-wireless-matrix-render-runtime
-  (create-wireless-matrix-render-runtime))
-
-(def ^:dynamic *wireless-matrix-render-runtime*
-  installed-wireless-matrix-render-runtime)
-
-(defn current-wireless-matrix-render-runtime
-  []
-  *wireless-matrix-render-runtime*)
-
-(defmacro with-wireless-matrix-render-runtime
-  [runtime & body]
-  `(binding [*wireless-matrix-render-runtime* ~runtime]
-     ~@body))
-
-(defn call-with-wireless-matrix-render-runtime
-  [runtime f]
-  (binding [*wireless-matrix-render-runtime* runtime]
-    (f)))
-
-(defn last-shield-hw-state-atom
-  []
-  (machine-render-runtime/cache-atom (current-wireless-matrix-render-runtime) :last-shield-hw-state))
-
-(defn last-shield-hw-state-snapshot
-  []
-  (machine-render-runtime/cache-snapshot (current-wireless-matrix-render-runtime) :last-shield-hw-state))
-
-(defn clear-last-shield-hw-state!
-  []
-  (machine-render-runtime/reset-cache-for-test!
-    (current-wireless-matrix-render-runtime) :last-shield-hw-state nil))
+(defn clear-last-shield-hw-state! []
+  ((:reset-for-test! shield-cache) nil))
 
 (defn reset-last-shield-hw-state-for-test!
-  ([]
-   (clear-last-shield-hw-state!))
-  ([state]
-   (machine-render-runtime/reset-cache-for-test!
-     (current-wireless-matrix-render-runtime) :last-shield-hw-state state)))
-
-;; ============================================================================
-;; Rendering Functions
-;; ============================================================================
+  ([] (clear-last-shield-hw-state!))
+  ([state] ((:reset-for-test! shield-cache) state)))
 
 (defn render-base
-  "Render static base and core parts using buffered VertexConsumer
-
-  Args:
-  - tile: TileMatrix instance
-  - pose-stack, vertex-consumer, packed-light, packed-overlay"
   [_tile pose-stack vertex-consumer packed-light packed-overlay]
   (obj-tesr/render-obj-parts! (matrix-model) ["Main" "Core"] pose-stack vertex-consumer packed-light packed-overlay))
 
 (defn render-shields
-  "Render animated shield plates using PoseStack and buffered vertex consumer.
-
-  Args:
-  - tile: TileMatrix
-  - partial-ticks, pose-stack, vertex-consumer, packed-light, packed-overlay"
   [tile _partial-ticks pose-stack vertex-consumer packed-light packed-overlay]
-    (let [plate-count (int (matrix-logic/get-plate-count tile))
-      core-level (matrix-logic/get-core-level tile)
+  (let [plate-count (int (matrix-logic/get-plate-count tile))
+        core-level (matrix-logic/get-core-level tile)
         active-plates (if (and (= plate-count 3) (> core-level 0)) 3 0)
         time (render/get-render-time)
         dtheta (/ 360.0 (max active-plates 1))
         phase (mod (* time 50.0) 360.0)
-        ht-phase-offset 40.0]
-    (let [hw-state {:plate-count plate-count :core-level core-level :active-plates active-plates}]
-      (when (not= hw-state (last-shield-hw-state-snapshot))
-        (reset! (last-shield-hw-state-atom) hw-state)))
+        ht-phase-offset 40.0
+        hw-state {:plate-count plate-count :core-level core-level :active-plates active-plates}]
+    (when (not= hw-state (last-shield-hw-state-snapshot))
+      (reset! (last-shield-hw-state-atom) hw-state))
     (dotimes [i active-plates]
       (pose/push-pose pose-stack)
       (try
@@ -140,11 +68,6 @@
           (pose/pop-pose pose-stack))))))
 
 (defn render-at-origin
-  "Main render function - renders complete matrix at multiblock origin
-
-  Args:
-  - tile: TileMatrix instance
-  - partial-ticks, pose-stack, buffer-source, packed-light, packed-overlay"
   [tile partial-ticks pose-stack buffer-source packed-light packed-overlay]
   (obj-tesr/translate-obj-y-lift! pose-stack)
   (obj-tesr/with-solid-vc-and-obj-bindings! buffer-source (matrix-texture)
@@ -152,68 +75,16 @@
       (render-base tile pose-stack vc packed-light packed-overlay)
       (render-shields tile partial-ticks pose-stack vc packed-light packed-overlay))))
 
-;; ============================================================================
-;; TESR API Implementation
-;; ============================================================================
-
-;; Register the Matrix renderer
 (defn register!
-  "Register this renderer for wireless-matrix scripted block entities.
-  Should be called during platform initialization."
   []
   (let [renderer
         (reify tesr-api/ITileEntityRenderer
           (render-tile [_ tile-entity partial-ticks pose-stack buffer-source packed-light packed-overlay]
             (mb-helper/render-multiblock-tesr
-             tile-entity
-             render-at-origin
-             partial-ticks pose-stack buffer-source packed-light packed-overlay)))]
+             tile-entity render-at-origin partial-ticks pose-stack buffer-source packed-light packed-overlay)))]
     (tesr-api/register-scripted-tile-renderer! "wireless-matrix" renderer)
-    ;; Multiblock part tiles share the same BlockEntity type and renderer dispatch.
     (tesr-api/register-scripted-tile-renderer! "wireless-matrix-part" renderer)))
 
 (defn init!
   []
   (machine-render-runtime/register-client-renderer-init! 'cn.li.ac.block.wireless-matrix.render/register!))
-
-;; ============================================================================
-;; Platform Integration Notes
-;; ============================================================================
-
-;; Platform-specific TESR classes have been created in:
-;;
-;; Forge 1.16.5:
-;;   forge-1.16.5/src/.../my_mod/forge1165/client/render/matrix_tesr.clj
-;;   - Generates: my_mod.forge1165.client.render.MatrixTESR
-;;   - Extends: platform tile-entity renderer base class
-;;
-;; Fabric 1.20.1:
-;;   fabric-1.20.1/src/.../my_mod/fabric1201/client/render/matrix_renderer.clj
-;;   - Generates: my_mod.fabric1201.client.render.MatrixBlockEntityRenderer
-;;   - Implements: platform block-entity renderer interface
-;;
-;; Both delegate to:
-;;   - multiblock-helper/render-multiblock-tesr (coordinate transformation)
-;;   - matrix-renderer/render-at-origin (actual rendering)
-
-;; ============================================================================
-;; Design Notes
-;; ============================================================================
-
-;; Multiblock Rendering Flow:
-;; 1. Minecraft calls render() on platform-specific TESR
-;; 2. RenderBlockMulti.render() checks if this is the origin block (subID=0)
-;; 3. If origin, translates to pivot and rotates based on direction
-;; 4. Platform TESR calls render-at-origin (this function)
-;; 5. Our code renders model parts at (0,0,0) in local coordinates
-;;
-;; Animation Timing:
-;; - get-render-time returns seconds since game start
-;; - Shields rotate at 50°/sec (full rotation every 7.2 seconds)
-;; - Vertical oscillation period: ~5.65 seconds (1.111 rad/sec)
-;; - Phase offset creates "wave" effect across 3 plates
-;;
-;; Model Parts (from matrix.obj):
-;; - "Main": Base structure
-;; - "Core": Central core
-;; - "Shield": Rotating plate (rendered 3 times if active)

@@ -1,5 +1,6 @@
 (ns cn.li.ac.block.cat-engine.capability
-	(:require [cn.li.mcmod.platform.be :as platform-be]
+	(:require [cn.li.ac.block.machine.runtime :as machine-runtime]
+						[cn.li.mcmod.platform.be :as platform-be]
 						[cn.li.mcmod.platform.position :as pos]
 						[cn.li.ac.block.cat-engine.config :as cat-config]
 						[cn.li.ac.block.cat-engine.logic :as cat-logic])
@@ -16,8 +17,8 @@
 		(let [state (or (platform-be/get-custom-state be) cat-logic/cat-default-state)
 					max-energy (double (get state :max-energy (cat-config/max-energy)))
 					clamped (-> (double energy) (max 0.0) (min max-energy))]
-			(platform-be/set-custom-state! be (assoc state :energy clamped))
-			(platform-be/set-changed! be)))
+			(machine-runtime/commit-transform! be cat-logic/cat-default-state
+			                                 #(assoc % :energy clamped))))
 
 	(getProvidedEnergy [_ req]
 		(let [state (or (platform-be/get-custom-state be) cat-logic/cat-default-state)
@@ -26,11 +27,11 @@
 					actual (min requested energy)]
 			(when (or (pos? actual)
 								(not= (double (get state :this-tick-gen 0.0)) 0.0))
-				(platform-be/set-custom-state! be (assoc state
-																						:energy (- energy actual)
-																						:this-tick-gen (double actual)
-																						:gen-speed (double actual)))
-				(platform-be/set-changed! be))
+				(machine-runtime/commit-transform! be cat-logic/cat-default-state
+				                                 #(assoc %
+				                                         :energy (- energy actual)
+				                                         :this-tick-gen (double actual)
+				                                         :gen-speed (double actual))))
 			(double actual)))
 
 	(getGeneratorBandwidth [_]

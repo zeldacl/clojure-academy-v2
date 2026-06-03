@@ -15,7 +15,7 @@
       (with-redefs [runtime/state-or-default (fn [_ _] @be)
                     cn.li.mcmod.platform.be/set-custom-state!
                     (fn [_ state] (reset! be state))]
-        (is (= 2 ((:get-size fns) nil)))
-        ((:set-item! fns) nil 0 :item-a)
+        (is (= 2 ((:get-size fns) be)))
+        ((:set-item! fns) be 0 :item-a)
         (is (= :item-a (get-in @be [:inventory 0])))
-        (is (= :item-a ((:get-item fns) nil 0)))))))
+        (is (= :item-a ((:get-item fns) be 0)))))))

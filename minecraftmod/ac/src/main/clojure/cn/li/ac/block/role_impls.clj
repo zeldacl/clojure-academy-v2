@@ -9,7 +9,8 @@
   Note: WirelessMatrixImpl, WirelessNodeImpl, and ClojureEnergyImpl are defined
   in their respective block files (wireless_matrix/block.clj, wireless_node/block.clj)
   to avoid duplication."
-  (:require [cn.li.mcmod.platform.be :as platform-be]
+  (:require [cn.li.ac.block.machine.runtime :as machine-runtime]
+            [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.platform.position :as pos])
   (:import [cn.li.acapi.wireless IWirelessGenerator]))
 
@@ -28,7 +29,7 @@
           max-out (if (pos? bw) bw req)
           actual (min (double req) cur max-out)]
       (when (pos? actual)
-        (platform-be/set-custom-state! be (assoc state :energy (- cur actual))))
+        (machine-runtime/commit-transform! be {} #(assoc % :energy (- cur actual))))
       (double actual)))
 
   (getGeneratorBandwidth [_]

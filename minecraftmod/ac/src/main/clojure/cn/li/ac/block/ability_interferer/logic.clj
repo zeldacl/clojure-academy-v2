@@ -27,14 +27,11 @@
 (def interferer-scripted-load-fn (:load-fn interferer-rt))
 (def interferer-scripted-save-fn (:save-fn interferer-rt))
 
-(def interferer-blockstate-fields
-	(filterv :block-state interferer-schema/ability-interferer-schema))
-
 (def interferer-block-state-properties
-	(state-schema/extract-block-state-properties interferer-blockstate-fields))
+  (:block-state-properties interferer-rt))
 
 (def interferer-blockstate-updater
-	(state-schema/build-block-state-updater interferer-blockstate-fields))
+  (:blockstate-updater interferer-rt))
 
 (def battery-slot 0)
 (def total-slots 1)
@@ -109,15 +106,23 @@
 	(doseq [uuid uuids]
 		(remove-interference-effect-by-uuid! uuid src-id)))
 
+(defn- scan-affected-uuids
+  [level pos state]
+  (let [range (clamp-range (:range state (interferer-config/default-range)))
+        whitelist (set (map str (:whitelist state [])))
+        players (find-players-in-range level pos range)]
+    {:range range
+     :uuids (vec (set (keep uuid/player-uuid
+                            (remove #(contains? whitelist (player-name %)) players))))}))
+
 (defn interferer-tick-state
+  "Pure state step; ability I/O runs in interferer-after-commit!."
   [base-state {:keys [level pos]}]
   (let [ticker (inc (long (get base-state :update-ticker 0)))
         state0 (assoc base-state
                       :update-ticker ticker
                       :max-energy (double (interferer-config/max-energy))
                       :range (clamp-range (:range base-state)))
-        src-id (source-id level pos)
-        prev-uuids (set (:affected-player-uuids state0 []))
         battery-item (get-in state0 [:inventory battery-slot])
         state1 (if (and battery-item (energy/is-energy-item-supported? battery-item))
                  (let [cur-energy (double (:energy state0 0.0))
@@ -129,46 +134,52 @@
                      (assoc state0 :energy (+ cur-energy (min pulled wanted)))
                      state0))
                  state0)
-        state2 (if (and (not (:enabled state1 false)) (seq prev-uuids))
-                 (do
-                   (clear-interference-by-uuids! prev-uuids src-id)
-                   (assoc state1 :affected-player-count 0 :affected-player-uuids []))
-                 state1)
-        state3 (if (and (:enabled state2 false)
-                        (zero? (mod ticker (interferer-config/check-interval))))
-                 (let [range (clamp-range (:range state2 (interferer-config/default-range)))
-                       players (find-players-in-range level pos range)
-                       whitelist (set (map str (:whitelist state2 [])))
-                       affected-players (remove #(contains? whitelist (player-name %)) players)
-                       affected-uuids (set (keep uuid/player-uuid affected-players))
-                       player-count (count affected-uuids)
-                       energy-cost (interferer-config/calculate-energy-cost range)
-                       current-energy (double (:energy state2 0.0))]
-                   (if (>= current-energy energy-cost)
-                     (do
-                       (doseq [u (set/difference prev-uuids affected-uuids)]
-                         (remove-interference-effect-by-uuid! u src-id))
-                       (doseq [player affected-players]
-                         (apply-interference-effect! player src-id))
-                       (assoc state2
-                              :range range
-                              :energy (- current-energy energy-cost)
-                              :affected-player-count player-count
-                              :affected-player-uuids (vec affected-uuids)))
-                     (do
-                       (clear-interference-by-uuids! prev-uuids src-id)
-                       (assoc state2
-                              :enabled false
-                              :affected-player-count 0
-                              :affected-player-uuids []))))
-                 state2)]
-    state3))
+        state2 (if (not (:enabled state1 false))
+                 (assoc state1 :affected-player-count 0 :affected-player-uuids [])
+                 state1)]
+    (if (and (:enabled state2 false)
+             (zero? (mod ticker (interferer-config/check-interval))))
+      (let [{:keys [range uuids]} (scan-affected-uuids level pos state2)
+            energy-cost (interferer-config/calculate-energy-cost range)
+            current-energy (double (:energy state2 0.0))]
+        (if (>= current-energy energy-cost)
+          (assoc state2
+                 :range range
+                 :energy (- current-energy energy-cost)
+                 :affected-player-count (count uuids)
+                 :affected-player-uuids uuids)
+          (assoc state2
+                 :enabled false
+                 :affected-player-count 0
+                 :affected-player-uuids [])))
+      state2)))
+
+(defn interferer-after-commit!
+  [_be level pos old-state new-state _ctx]
+  (when (and level pos (not= old-state new-state))
+    (let [src-id (source-id level pos)
+          prev (set (:affected-player-uuids old-state []))
+          next (set (:affected-player-uuids new-state []))
+          removed (set/difference prev next)
+          added (set/difference next prev)]
+      (doseq [u removed]
+        (remove-interference-effect-by-uuid! u src-id))
+      (when (seq added)
+        (let [range (clamp-range (:range new-state (interferer-config/default-range)))
+              whitelist (set (map str (:whitelist new-state [])))
+              players (find-players-in-range level pos range)]
+          (doseq [player players
+                  :let [uid (uuid/player-uuid player)]
+                  :when (and uid (contains? added uid)
+                             (not (contains? whitelist (player-name player))))]
+            (apply-interference-effect! player src-id)))))))
 
 (def interferer-tick-fn
   (machine-runtime/make-tick-fn
     {:default-state interferer-default-state
      :tick-state interferer-tick-state
-     :blockstate-updater interferer-blockstate-updater}))
+     :blockstate-updater interferer-blockstate-updater
+     :after-commit! interferer-after-commit!}))
 
 (defn- can-place-battery? [_be slot item _face]
   (and (= slot battery-slot) (energy/is-energy-item-supported? item)))

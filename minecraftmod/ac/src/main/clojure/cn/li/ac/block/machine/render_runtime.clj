@@ -27,36 +27,42 @@
    (reset! (cache-atom runtime cache-key) value)
    nil))
 
-(defn install-render-runtime!
-  "Install a named render runtime into a namespace via dynamic var.
+(defn create-cache-runtime
+  "Create installed render runtime with one or more cache keys.
 
-  Returns map:
-  {:runtime-var sym
-   :installed-var sym
-   :create-fn (fn [initial-cache] -> runtime)
-   :current-fn sym
-   :with-macro sym
-   :call-with-fn sym}"
-  [{:keys [ns-sym runtime-sym installed-sym cache-keys]
-    :or {cache-keys [:cache]}}]
-  (let [create-sym (symbol (str (name ns-sym) "/create-" (name runtime-sym)))
-        current-sym (symbol (str (name ns-sym) "/current-" (name runtime-sym)))
-        with-sym (symbol (str (name ns-sym) "/with-" (name runtime-sym)))
-        call-sym (symbol (str (name ns-sym) "/call-with-" (name runtime-sym)))]
-    {:create-fn
-     (fn create-render-runtime*
-       ([] (create-render-runtime* {}))
-       ([initial-cache]
-        (create-render-runtime
-          (into {}
-                (for [k cache-keys]
-                  [k (get initial-cache k {})])))))
-     :cache-keys cache-keys
-     :runtime-var runtime-sym
-     :installed-var installed-sym
-     :current-fn current-sym
-     :with-macro with-sym
-     :call-with-fn call-sym}))
+  Returns `{:runtime map :current-fn fn :with-binding macro usage via binding}`.
+  Callers typically:
+  - (defonce ^:private installed (create-cache-runtime :fan-rot-cache))
+  - (def ^:dynamic *rt* (:runtime installed))
+  - (defn current-rt [] *rt*)"
+  ([cache-key]
+   (create-cache-runtime cache-key {}))
+  ([cache-key initial-value]
+   (let [runtime (create-render-runtime {cache-key initial-value})]
+     {:runtime runtime
+      :cache-key cache-key
+      :snapshot #(cache-snapshot runtime cache-key)
+      :clear! #(clear-cache! runtime cache-key)
+      :reset-for-test! (fn
+                         ([] (reset-cache-for-test! runtime cache-key))
+                         ([v] (reset-cache-for-test! runtime cache-key v)))})))
+
+(defn lazy-resource
+  "Return a thunk that loads `resource` once under `lock` and stores in `var-sym`."
+  [lock var-sym loader]
+  (fn []
+    (or (var-get var-sym)
+        (locking lock
+          (or (var-get var-sym)
+              (let [v (loader)]
+                (alter-var-root var-sym (constantly v))
+                v))))))
+
+(defmacro with-bound-runtime
+  "Bind `runtime` to dynamic var `runtime-var-sym` for test isolation."
+  [runtime-var-sym runtime & body]
+  `(binding [~runtime-var-sym ~runtime]
+     ~@body))
 
 (defn register-client-renderer-init!
   [init-sym]

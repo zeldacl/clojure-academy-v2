@@ -39,57 +39,27 @@
           az (+ minz (/ (- maxz minz) (* 2.0 z-cells)))]
       [ax miny az])))
 
-(def ^:private developer-render-resource-lock
-  (Object.))
+(def ^:private developer-render-resource-lock (Object.))
+(def ^:private ^:dynamic *normal-model* nil)
+(def ^:private ^:dynamic *normal-tex* nil)
+(def ^:private ^:dynamic *advanced-model* nil)
+(def ^:private ^:dynamic *advanced-tex* nil)
 
-(def ^:private ^:dynamic *normal-model*
-  nil)
+(def ^:private normal-model
+  (machine-render-runtime/lazy-resource developer-render-resource-lock #'*normal-model*
+                                        #(res/load-obj-model "developer_normal")))
 
-;; OBJ uses dedicated UV-unwrapped texture, not the tiny block icon tile.
-(def ^:private ^:dynamic *normal-tex*
-  nil)
+(def ^:private normal-tex
+  (machine-render-runtime/lazy-resource developer-render-resource-lock #'*normal-tex*
+                                        #(res/texture-location "models/developer_normal")))
 
-(def ^:private ^:dynamic *advanced-model*
-  nil)
+(def ^:private advanced-model
+  (machine-render-runtime/lazy-resource developer-render-resource-lock #'*advanced-model*
+                                        #(res/load-obj-model "developer_advanced")))
 
-(def ^:private ^:dynamic *advanced-tex*
-  nil)
-
-(defn- normal-model
-  []
-  (or (var-get #'*normal-model*)
-      (locking developer-render-resource-lock
-        (or (var-get #'*normal-model*)
-            (let [m (res/load-obj-model "developer_normal")]
-              (alter-var-root #'*normal-model* (constantly m))
-              m)))))
-
-(defn- normal-tex
-  []
-  (or (var-get #'*normal-tex*)
-      (locking developer-render-resource-lock
-        (or (var-get #'*normal-tex*)
-            (let [t (res/texture-location "models/developer_normal")]
-              (alter-var-root #'*normal-tex* (constantly t))
-              t)))))
-
-(defn- advanced-model
-  []
-  (or (var-get #'*advanced-model*)
-      (locking developer-render-resource-lock
-        (or (var-get #'*advanced-model*)
-            (let [m (res/load-obj-model "developer_advanced")]
-              (alter-var-root #'*advanced-model* (constantly m))
-              m)))))
-
-(defn- advanced-tex
-  []
-  (or (var-get #'*advanced-tex*)
-      (locking developer-render-resource-lock
-        (or (var-get #'*advanced-tex*)
-            (let [t (res/texture-location "models/developer_advanced")]
-              (alter-var-root #'*advanced-tex* (constantly t))
-              t)))))
+(def ^:private advanced-tex
+  (machine-render-runtime/lazy-resource developer-render-resource-lock #'*advanced-tex*
+                                        #(res/texture-location "models/developer_advanced")))
 
 (defn- render-obj-at-origin!
   [model-fn tex-fn _tile _partial-ticks pose-stack buffer-source packed-light packed-overlay]

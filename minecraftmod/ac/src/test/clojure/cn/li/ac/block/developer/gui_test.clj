@@ -221,18 +221,16 @@
   (is (= 1 @gui-calls)))))
 
 (deftest developer-on-close-clears-user-session-state-test
-  (let [saved (atom nil)
-    changed (atom 0)]
+  (let [saved (atom nil)]
     (with-redefs [world/world-is-client-side* (fn [_] false)
-      entity/player-get-level (fn [_] :server-level)
-      platform-be/get-custom-state (fn [_] {:user-uuid "u1"
-                    :user-name "Player"
-                    :is-developing true})
-      platform-be/set-custom-state! (fn [_ st] (reset! saved st))
-      platform-be/set-changed! (fn [_] (swap! changed inc))]
-  (developer-gui/on-close {:tile-entity :tile-1
-           :player :player-1})
-  (is (= "" (:user-uuid @saved)))
-  (is (= "" (:user-name @saved)))
-  (is (false? (:is-developing @saved)))
-  (is (= 1 @changed)))))
+                  entity/player-get-level (fn [_] :server-level)
+                  platform-be/get-custom-state (fn [_] {:user-uuid "u1"
+                                                        :user-name "Player"
+                                                        :is-developing true})
+                  platform-be/set-custom-state! (fn [_ st] (reset! saved st))
+                  platform-be/set-changed! (fn [_] nil)]
+      (developer-gui/on-close {:tile-entity :tile-1
+                               :player :player-1})
+      (is (= "" (:user-uuid @saved)))
+      (is (= "" (:user-name @saved)))
+      (is (false? (:is-developing @saved))))))

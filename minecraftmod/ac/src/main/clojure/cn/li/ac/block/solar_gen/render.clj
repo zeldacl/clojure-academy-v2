@@ -1,14 +1,5 @@
 (ns cn.li.ac.block.solar-gen.render
-  "CLIENT-ONLY: Solar generator block entity renderer.
-
-  This namespace must be loaded via side-checked requiring-resolve from the
-  platform layer. It uses platform-agnostic protocols only, no direct Minecraft
-  class imports.
-
-  Ported from AcademyCraft's RenderSolarGen:
-  - Rotate 90 degrees around Y
-  - Scale by 0.014
-  - Render solar.obj with models/solar texture"
+  "CLIENT-ONLY: Solar generator block entity renderer."
   (:require [cn.li.ac.block.machine.render-runtime :as machine-render-runtime]
             [cn.li.mcmod.client.resources :as res]
             [cn.li.mcmod.client.obj :as obj]
@@ -17,46 +8,25 @@
             [cn.li.mcmod.client.render.pose :as pose]
             [cn.li.mcmod.util.log :as log]))
 
-(def ^:private solar-render-resource-lock
-  (Object.))
+(def ^:private solar-render-resource-lock (Object.))
+(def ^:private ^:dynamic *solar-model* nil)
+(def ^:private ^:dynamic *solar-texture* nil)
 
-(def ^:private ^:dynamic *solar-model*
-  nil)
+(def ^:private solar-model
+  (machine-render-runtime/lazy-resource solar-render-resource-lock #'*solar-model*
+                                        #(res/load-obj-model "solar")))
 
-(def ^:private ^:dynamic *solar-texture*
-  nil)
-
-(defn- solar-model
-  []
-  (or (var-get #'*solar-model*)
-      (locking solar-render-resource-lock
-        (or (var-get #'*solar-model*)
-            (let [m (res/load-obj-model "solar")]
-              (alter-var-root #'*solar-model* (constantly m))
-              m)))))
-
-(defn- solar-texture
-  []
-  (or (var-get #'*solar-texture*)
-      (locking solar-render-resource-lock
-        (or (var-get #'*solar-texture*)
-            (let [t (res/texture-location "models/solar")]
-              (alter-var-root #'*solar-texture* (constantly t))
-              t)))))
+(def ^:private solar-texture
+  (machine-render-runtime/lazy-resource solar-render-resource-lock #'*solar-texture*
+                                        #(res/texture-location "models/solar")))
 
 (defn render-at-origin
   [_tile pose-stack buffer-source packed-light packed-overlay]
   (pose/push-pose pose-stack)
   (try
-    (let [;; rotate 90 degrees around Y
-          ;; Lift slightly above the support block top to avoid origin-cell
-          ;; depth conflict that makes the block below appear transparent.
-          _ (pose/translate pose-stack (double 0.5) (double 0.02) (double 0.5))
+    (let [_ (pose/translate pose-stack (double 0.5) (double 0.02) (double 0.5))
           _ (pose/apply-y-rotation pose-stack 90.0)
-          ;; scale
           _ (pose/scale pose-stack (float 0.014) (float 0.014) (float 0.014))
-          ;; Use culled solid buffer so the model underside doesn't overlay the
-          ;; supporting block's top texture.
           vc (rb/get-solid-buffer buffer-source (solar-texture))]
       (binding [obj/*skip-flat-bottom-plane* true
                 obj/*bottom-plane-epsilon* 0.0008]
@@ -65,7 +35,6 @@
       (pose/pop-pose pose-stack))))
 
 (defn register!
-  "Register SolarGen renderer by block-id for generic ScriptedBlockEntity."
   []
   (tesr-api/register-scripted-tile-renderer!
     "solar-gen"
@@ -74,7 +43,7 @@
         (try
           (render-at-origin nil pose-stack buffer-source packed-light packed-overlay)
           (catch Exception e
-            (log/error "Error in solar renderer:"(ex-message e))
+            (log/error "Error in solar renderer:" (ex-message e))
             (.printStackTrace e)))))))
 
 (defn init!

@@ -14,6 +14,7 @@
 | 网络系统（Network） | [NETWORK_SYSTEM_MAINTENANCE.md](NETWORK_SYSTEM_MAINTENANCE.md) | `mcmod/network`、`forge1201/events` |
 | 注册系统（Registry） | [REGISTRY_SYSTEM_MAINTENANCE.md](REGISTRY_SYSTEM_MAINTENANCE.md) | `mcmod/registry`、`ac/registry`、`forge1201/registry.clj` |
 | DSL 基础设施（Block/Item/NBT/Tile） | [DSL_SYSTEM_MAINTENANCE.md](DSL_SYSTEM_MAINTENANCE.md) | `mcmod/block`、`mcmod/item`、`mcmod/nbt`、`ac/block`、`ac/item` |
+| Block 机器统一模式 | [AC_MODULE_LAYERING.md](../02-architecture/AC_MODULE_LAYERING.md#block-machines-shared) | `ac/block/machine/*`、`ac/block/gui/sync` |
 
 ## 二级支撑系统（持续补齐）
 

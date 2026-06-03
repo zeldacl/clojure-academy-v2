@@ -54,7 +54,9 @@
 
 (defn sync-tick!
   "Increment an optional ticker atom and run a sync function."
-  [container sync-to-client! & [{:keys [ticker-key]}]]
+  [container sync-to-client! & [{:keys [ticker-key derived-sync!]}]]
   (when-let [ticker (and ticker-key (get container ticker-key))]
     (swap! ticker inc))
-  (sync-to-client! container))
+  (sync-to-client! container)
+  (when derived-sync!
+    (derived-sync! container)))

@@ -8,7 +8,6 @@
             [cn.li.ac.block.machine.matter-unit :as matter-unit]
             [cn.li.ac.block.machine.runtime :as machine-runtime]
             [cn.li.ac.energy.operations :as energy]
-            [cn.li.mcmod.block.state-schema :as state-schema]
             [cn.li.mcmod.platform.item :as pitem]
             [cn.li.mcmod.platform.world :as world]))
 
@@ -20,17 +19,11 @@
 (def fusor-scripted-load-fn (:load-fn fusor-rt))
 (def fusor-scripted-save-fn (:save-fn fusor-rt))
 
-(def fusor-blockstate-fields
-  (filterv :block-state fusor-schema/imag-fusor-schema))
-
 (def fusor-block-state-properties
-  (merge (state-schema/extract-block-state-properties fusor-blockstate-fields)
-         {:facing {:name "facing"
-                   :type :horizontal-facing
-                   :default "north"}}))
+  (:block-state-properties fusor-rt))
 
 (def fusor-blockstate-updater
-  (state-schema/build-block-state-updater fusor-blockstate-fields))
+  (:blockstate-updater fusor-rt))
 
 ;; Inventory helpers
 (def input-slot 0)

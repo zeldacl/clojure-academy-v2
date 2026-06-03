@@ -1,7 +1,6 @@
 (ns cn.li.ac.block.developer.logic
 	(:require [clojure.string :as str]
             [cn.li.ac.block.machine.runtime :as machine-runtime]
-            [cn.li.ac.gui.open :as gui-open]
 						[cn.li.mcmod.block.dsl :as bdsl]
 						[cn.li.mcmod.block.state-schema :as state-schema]
 						[cn.li.mcmod.platform.world :as world]
@@ -83,43 +82,43 @@
 		{:default-state dev-default-state
 		 :tick-state developer-tick-state}))
 
-(defn open-developer-gui-for [controller-block-id]
-	(fn [{:keys [player world pos sneaking]}]
-		(when (and player world pos (not sneaking))
-			(try
-				(let [block-spec (bdsl/get-block-spec controller-block-id)
-							controller-pos (or (when block-spec (bdsl/resolve-multi-block-master-pos world pos block-spec)) pos)]
-					(if (world/world-is-client-side* world)
-						(gui-open/open-gui-by-type player :developer world controller-pos)
-						(when-let [be (world/world-get-tile-entity* world controller-pos)]
-							(let [state (machine-runtime/state-or-default be dev-default-state)
-										pid (uuid/player-uuid player)
-										cur (str (:user-uuid state ""))]
-								(when (or (str/blank? cur) (= cur pid))
-									(machine-runtime/commit-state! be world controller-pos state
-									                               (assoc state :user-uuid pid :user-name (entity/player-get-name player)))
-									(gui-open/open-gui-by-type player :developer world controller-pos))))))
-				(catch Exception e
-					(log/error "Failed to open Developer GUI:" (ex-message e))
-					nil)))))
+(defn- resolve-developer-open-pos [controller-block-id]
+	(fn [{:keys [world pos]}]
+		(let [block-spec (bdsl/get-block-spec controller-block-id)]
+			(or (when block-spec (bdsl/resolve-multi-block-master-pos world pos block-spec))
+			    pos))))
 
-(defn- commit-dev-state! [tile new-state]
-	(let [world (platform-be/be-get-world-safe tile)
-				pos (when world (try (pos/position-get-block-pos tile) (catch Exception _ nil)))
-				old (machine-runtime/state-or-default tile dev-default-state)]
-		(machine-runtime/commit-state! tile world pos old new-state)))
+(defn- developer-server-before-open!
+	[{:keys [player world]} open-pos]
+	(when-let [be (world/world-get-tile-entity* world open-pos)]
+		(let [state (machine-runtime/state-or-default be dev-default-state)
+					pid (uuid/player-uuid player)
+					cur (str (:user-uuid state ""))]
+			(when (or (str/blank? cur) (= cur pid))
+				(machine-runtime/commit-state! be world open-pos state
+				                               (assoc state :user-uuid pid
+				                                      :user-name (entity/player-get-name player)))
+				true))))
+
+(defn open-developer-gui-for [controller-block-id]
+	(machine-runtime/make-open-gui-handler*
+		:developer
+		(constantly true)
+		:resolve-open-pos (resolve-developer-open-pos controller-block-id)
+		:server-before-open! developer-server-before-open!))
 
 (defn create-dev-receiver-cap [be]
 	(wireless-impl/create-wireless-receiver
 		be
 		(fn [] (machine-runtime/state-or-default be dev-default-state))
-		(fn [s] (commit-dev-state! be s))
+		(fn [s] (machine-runtime/commit-from-tile! be dev-default-state s))
 		{:after-inject!
 		 (fn [^double accepted]
 			 (when (pos? accepted)
 				 (let [st (machine-runtime/state-or-default be dev-default-state)
 							 cur (double (:wireless-inject-this-tick st 0.0))]
-					 (commit-dev-state! be (assoc st :wireless-inject-this-tick (+ cur accepted))))))}))
+					 (machine-runtime/commit-from-tile! be dev-default-state
+					                                    (assoc st :wireless-inject-this-tick (+ cur accepted))))))}))
 
 (defn try-pull-energy! [tile ^double amount]
 	(boolean
@@ -128,7 +127,7 @@
 				(let [state (machine-runtime/state-or-default tile dev-default-state)
 							e (double (get state :energy 0.0))]
 					(when (>= e amount)
-						(commit-dev-state! tile (assoc state :energy (- e amount)))
+						(machine-runtime/commit-from-tile! tile dev-default-state (assoc state :energy (- e amount)))
 						true)))
 			(catch Exception _ false))))
 

@@ -20,6 +20,12 @@ Block DSL 提供声明式方式定义方块元数据，**由 `cn.li.mcmod.protoc
 
 完整启动链、与 `deftile`/Forge 注册的关系见 **`docs/02-architecture/Runtime_And_DSL_CN.md`**。
 
+### AC 机器方块注册（`ac/block`）
+
+业务方块不直接散落 `register-block!`，而是通过 **`cn.li.ac.block.machine.registration/init-machine!`** 一次性注册 tile、capability、container、block spec 与 hooks。块 spec 仍由 `bdsl/create-block-spec` 或 **`bdsl/defmultiblock`** 生成；`ac/block` 内多方块推荐 **仅使用 `defmultiblock`**（与 wind、matrix、developer 一致）。`create-block-spec` 的 `:multi-block` 保留为 mcmod DSL 通用能力，新内容优先 `defmultiblock`。
+
+状态与 GUI 约定见 **`docs/02-architecture/AC_MODULE_LAYERING.md`** 中 Block machines 一节。
+
 ## 核心概念
 
 ### 1. Block DSL 核心 (`cn.li.mcmod.block.dsl`)

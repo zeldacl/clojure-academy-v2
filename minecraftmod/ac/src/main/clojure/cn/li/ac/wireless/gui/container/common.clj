@@ -1,6 +1,7 @@
 (ns cn.li.ac.wireless.gui.container.common
   "Shared container utility functions for wireless GUI system."
-  (:require [cn.li.mcmod.platform.be :as platform-be]
+  (:require [cn.li.ac.block.machine.runtime :as machine-runtime]
+            [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.util.log :as log]))
@@ -26,9 +27,9 @@
         (when inventory-atom
           (swap! inventory-atom assoc slot-index item-stack)))
       (try
-        (let [state (or (platform-be/get-custom-state tile) {})
-              state' (assoc-in state [:inventory slot-index] item-stack)]
-          (platform-be/set-custom-state! tile state'))
+        (let [default-state (or (platform-be/get-custom-state tile) {})]
+          (machine-runtime/commit-transform! tile default-state
+                                           #(assoc-in % [:inventory slot-index] item-stack)))
         (catch Exception _ nil)))))
 
 (defn still-valid?
@@ -70,13 +71,11 @@
   [container slot-index item-stack default-state post-write]
   (let [tile (:tile-entity container)]
     (try
-      (let [state  (or (platform-be/get-custom-state tile) default-state)
-            state' (-> state
-                       (assoc-in [:inventory slot-index] item-stack)
-                       post-write)]
-        (log/debug "set-slot-item-be! state-before=" state)
-        (log/debug "set-slot-item-be! state-after=" state')
-        (platform-be/set-custom-state! tile state'))
+      (machine-runtime/commit-transform! tile default-state
+                                         (fn [state]
+                                           (-> state
+                                               (assoc-in [:inventory slot-index] item-stack)
+                                               post-write)))
       (catch Exception e
         (log/error "set-slot-item-be! failed:" (ex-message e))))))
 

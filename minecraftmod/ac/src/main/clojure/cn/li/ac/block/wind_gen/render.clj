@@ -12,101 +12,75 @@
 						[cn.li.mcmod.platform.position :as pos]
 						[cn.li.mcmod.platform.be :as platform-be]))
 
-(def ^:private wind-render-resource-lock
-	(Object.))
+(def ^:private wind-render-resource-lock (Object.))
+(def ^:private ^:dynamic *base-model* nil)
+(def ^:private ^:dynamic *main-model* nil)
+(def ^:private ^:dynamic *fan-model* nil)
+(def ^:private ^:dynamic *pillar-model* nil)
+(def ^:private ^:dynamic *base-tex-normal* nil)
+(def ^:private ^:dynamic *base-tex-disabled* nil)
+(def ^:private ^:dynamic *main-tex* nil)
+(def ^:private ^:dynamic *fan-tex* nil)
+(def ^:private ^:dynamic *pillar-tex* nil)
 
-(def ^:private ^:dynamic *wind-render-resources*
-	{:base-model nil
-	 :main-model nil
-	 :fan-model nil
-	 :pillar-model nil
-	 :base-tex-normal nil
-	 :base-tex-disabled nil
-	 :main-tex nil
-	 :fan-tex nil
-	 :pillar-tex nil})
+(def ^:private base-model
+	(machine-render-runtime/lazy-resource wind-render-resource-lock #'*base-model*
+	                                    #(res/load-obj-model "windgen_base")))
 
-(defn- wind-resource
-	[k loader]
-	(or (get (var-get #'*wind-render-resources*) k)
-			(locking wind-render-resource-lock
-				(or (get (var-get #'*wind-render-resources*) k)
-						(let [v (loader)]
-							(alter-var-root #'*wind-render-resources* assoc k v)
-							v)))))
+(def ^:private main-model
+	(machine-render-runtime/lazy-resource wind-render-resource-lock #'*main-model*
+	                                    #(res/load-obj-model "windgen_main")))
 
-(defn- base-model []
-	(wind-resource :base-model #(res/load-obj-model "windgen_base")))
+(def ^:private fan-model
+	(machine-render-runtime/lazy-resource wind-render-resource-lock #'*fan-model*
+	                                    #(res/load-obj-model "windgen_fan")))
 
-(defn- main-model []
-	(wind-resource :main-model #(res/load-obj-model "windgen_main")))
+(def ^:private pillar-model
+	(machine-render-runtime/lazy-resource wind-render-resource-lock #'*pillar-model*
+	                                    #(res/load-obj-model "windgen_pillar")))
 
-(defn- fan-model []
-	(wind-resource :fan-model #(res/load-obj-model "windgen_fan")))
+(def ^:private base-tex-normal
+	(machine-render-runtime/lazy-resource wind-render-resource-lock #'*base-tex-normal*
+	                                    #(res/texture-location "models/windgen_base")))
 
-(defn- pillar-model []
-	(wind-resource :pillar-model #(res/load-obj-model "windgen_pillar")))
+(def ^:private base-tex-disabled
+	(machine-render-runtime/lazy-resource wind-render-resource-lock #'*base-tex-disabled*
+	                                    #(res/texture-location "models/windgen_base_disabled")))
 
-(defn- base-tex-normal []
-	(wind-resource :base-tex-normal #(res/texture-location "models/windgen_base")))
+(def ^:private main-tex
+	(machine-render-runtime/lazy-resource wind-render-resource-lock #'*main-tex*
+	                                    #(res/texture-location "models/windgen_main")))
 
-(defn- base-tex-disabled []
-	(wind-resource :base-tex-disabled #(res/texture-location "models/windgen_base_disabled")))
+(def ^:private fan-tex
+	(machine-render-runtime/lazy-resource wind-render-resource-lock #'*fan-tex*
+	                                    #(res/texture-location "models/windgen_fan")))
 
-(defn- main-tex []
-	(wind-resource :main-tex #(res/texture-location "models/windgen_main")))
+(def ^:private pillar-tex
+	(machine-render-runtime/lazy-resource wind-render-resource-lock #'*pillar-tex*
+	                                    #(res/texture-location "models/windgen_pillar")))
 
-(defn- fan-tex []
-	(wind-resource :fan-tex #(res/texture-location "models/windgen_fan")))
+(defonce ^:private fan-cache
+	(machine-render-runtime/create-cache-runtime :fan-rot-cache))
 
-(defn- pillar-tex []
-	(wind-resource :pillar-tex #(res/texture-location "models/windgen_pillar")))
-
-(defn create-wind-gen-render-runtime
-	([]
-	 (create-wind-gen-render-runtime {}))
-	([initial-cache]
-	 (machine-render-runtime/create-render-runtime {:fan-rot-cache initial-cache})))
-
-(defonce ^:private installed-wind-gen-render-runtime
-	(create-wind-gen-render-runtime))
-
-(def ^:dynamic *wind-gen-render-runtime*
-	installed-wind-gen-render-runtime)
-
-(defn current-wind-gen-render-runtime
-  []
-	*wind-gen-render-runtime*)
-
-(defmacro with-wind-gen-render-runtime
-  [runtime & body]
-	`(binding [*wind-gen-render-runtime* ~runtime]
-		 ~@body))
-
-(defn call-with-wind-gen-render-runtime
-  [runtime f]
-	(binding [*wind-gen-render-runtime* runtime]
-		(f)))
+(def ^:dynamic *wind-gen-render-runtime* (:runtime fan-cache))
 
 (defn- fan-rot-cache-atom
 	[]
-	(machine-render-runtime/cache-atom (current-wind-gen-render-runtime) :fan-rot-cache))
+	(machine-render-runtime/cache-atom *wind-gen-render-runtime* :fan-rot-cache))
 
 (defn fan-rot-cache-snapshot
 	[]
-	(machine-render-runtime/cache-snapshot (current-wind-gen-render-runtime) :fan-rot-cache))
+	(machine-render-runtime/cache-snapshot *wind-gen-render-runtime* :fan-rot-cache))
 
 (defn clear-fan-rot-cache!
 	[]
-	(machine-render-runtime/clear-cache! (current-wind-gen-render-runtime) :fan-rot-cache))
+	((:clear! fan-cache)))
 
 (defn reset-fan-rot-cache-for-test!
 	([]
-	 (machine-render-runtime/reset-cache-for-test!
-		 (current-wind-gen-render-runtime) :fan-rot-cache))
+	 ((:reset-for-test! fan-cache)))
 	([cache]
-	 (machine-render-runtime/reset-cache-for-test!
-		 (current-wind-gen-render-runtime) :fan-rot-cache cache)))
+	 ((:reset-for-test! fan-cache) cache)))
 
 (defn- tile-key [tile]
 	(let [p (pos/position-get-block-pos tile)]

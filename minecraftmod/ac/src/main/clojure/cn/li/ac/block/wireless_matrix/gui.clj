@@ -354,20 +354,26 @@
       (core/get-core-level core-item)
       0)))
 
-(defn sync-to-client! [container]
-  (let [plates   (count-plates container)
+(def ^:private matrix-sync
+  (gui-sync/schema-sync-fns matrix-schema/unified-matrix-schema))
+
+(def sync-to-client! (:sync-to-client! matrix-sync))
+
+(def get-sync-data (:get-sync-data matrix-sync))
+(def apply-sync-data! (:apply-sync-data! matrix-sync))
+
+(defn- matrix-derived-sync! [container]
+  (let [plates (count-plates container)
         core-lvl (get-core-level container)
-  working? (matrix-inventory/is-working? {:core-level core-lvl :plate-count plates})
+        working? (matrix-inventory/is-working? {:core-level core-lvl :plate-count plates})
         old-plates @(:plate-count container)
         old-core @(:core-level container)]
-    ;; Only update if values changed
     (when (not= core-lvl old-core)
       (reset! (:core-level container) core-lvl))
     (when (not= plates old-plates)
       (reset! (:plate-count container) plates))
     (when (not= working? @(:is-working container))
       (reset! (:is-working container) working?))
-    ;; Only sync stats if core or plates changed
     (when (or (not= core-lvl old-core) (not= plates old-plates))
       (sync-helpers/with-throttled-sync! (:sync-ticker container) 100
         (fn []
@@ -376,17 +382,13 @@
             (reset! (:range container) (:range stats))
             (sync-helpers/query-matrix-network-capacity! container stats)))))))
 
-(def ^:private matrix-sync
-  (gui-sync/schema-sync-fns matrix-schema/unified-matrix-schema))
-
-(def get-sync-data (:get-sync-data matrix-sync))
-(def apply-sync-data! (:apply-sync-data! matrix-sync))
-
 (defn still-valid? [container player]
   (common/still-valid? container player))
 
 (defn tick! [container]
-  (sync-to-client! container))
+  (gui-sync/sync-tick! container sync-to-client!
+                       {:ticker-key :sync-ticker
+                        :derived-sync! matrix-derived-sync!}))
 
 (defn handle-button-click! [container button-id _data]
   (case (int button-id)

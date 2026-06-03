@@ -46,12 +46,49 @@
         (is (= {:old {:energy 0.5} :new {:energy 1.0}} @committed))
         (is (= {:old {:energy 0.5} :new {:energy 1.0}} @after))))))
 
+(deftest commit-transform-test
+  (testing "commit-transform! applies transform through commit boundary"
+    (let [committed (atom nil)
+          tile {}]
+      (with-redefs [runtime/state-or-default (fn [_ _] {:energy 0.0})
+                    runtime/commit-state!
+                    (fn [_ _ _ old new & _]
+                      (reset! committed {:old old :new new}))]
+        (runtime/commit-transform! tile {:energy 0.0} #(assoc % :energy 5.0))
+        (is (= {:old {:energy 0.0} :new {:energy 5.0}} @committed))))))
+
 (deftest make-open-gui-handler-test
   (testing "open handler requires player world pos and respects sneaking"
     (let [handler (runtime/make-open-gui-handler :solar)
           opened (atom false)]
-      (with-redefs [cn.li.ac.gui.open/open-gui-by-type (fn [& _] (reset! opened true))]
+      (with-redefs [world/world-is-client-side* (fn [_] true)
+                    cn.li.ac.gui.open/open-gui-by-type (fn [& _] (reset! opened true))]
         (handler {:player :p :world :w :pos :pos :sneaking true})
         (is (false? @opened))
         (handler {:player :p :world :w :pos :pos})
         (is (true? @opened))))))
+
+(deftest make-open-gui-handler-predicate-test
+  (testing "make-open-gui-handler* respects can-open? predicate"
+    (let [handler (runtime/make-open-gui-handler* :wind-gen-main (fn [_] false))
+          opened (atom false)]
+      (with-redefs [world/world-is-client-side* (fn [_] true)
+                    cn.li.ac.gui.open/open-gui-by-type (fn [& _] (reset! opened true))]
+        (handler {:player :p :world :w :pos :pos})
+        (is (false? @opened))))))
+
+(deftest make-open-gui-handler-multiblock-options-test
+  (testing "resolve-open-pos and server-before-open! hooks"
+    (let [opened (atom nil)
+          handler (runtime/make-open-gui-handler*
+                    :developer
+                    (constantly true)
+                    :resolve-open-pos (fn [_] :controller-pos)
+                    :server-before-open! (fn [_ _] true))]
+      (with-redefs [world/world-is-client-side* (fn [_] false)
+                    cn.li.ac.gui.open/open-gui-by-type
+                    (fn [player gui-type world pos]
+                      (reset! opened {:player player :gui-type gui-type :world world :pos pos}))]
+        (handler {:player :p :world :w :pos :part-pos})
+        (is (= {:player :p :gui-type :developer :world :w :pos :controller-pos}
+               @opened))))))

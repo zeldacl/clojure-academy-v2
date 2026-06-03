@@ -19,9 +19,7 @@
 (def former-scripted-save-fn (:save-fn former-rt))
 
 (def former-block-state-properties
-  {:facing {:name "facing"
-            :type :horizontal-facing
-            :default "north"}})
+  (:block-state-properties former-rt))
 
 (def input-slot 0)
 (def output-slot 1)

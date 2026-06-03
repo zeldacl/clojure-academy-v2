@@ -18,6 +18,7 @@
             [cn.li.ac.wireless.gui.container.common :as common]
             [cn.li.ac.block.developer.schema :as dev-schema]
             [cn.li.ac.block.developer.logic :as dev-logic]
+            [cn.li.ac.block.machine.runtime :as machine-runtime]
             [cn.li.ac.block.developer.panel :as dev-panel]
             [cn.li.ac.config.modid :as modid]
             [cn.li.ac.ability.util.uuid :as uuid]
@@ -91,10 +92,8 @@
       (let [lvl (entity/player-get-level pl)]
         (when (and lvl (not (world/world-is-client-side* lvl)))
           (try
-            (let [st (or (platform-be/get-custom-state tile) {})]
-              (platform-be/set-custom-state! tile
-                (assoc st :user-uuid "" :user-name "" :is-developing false))
-              (platform-be/set-changed! tile))
+            (machine-runtime/commit-transform! tile dev-logic/dev-default-state
+                                               #(assoc % :user-uuid "" :user-name "" :is-developing false))
             (catch Exception e
               (log/debug "Developer on-close tile update:" (ex-message e)))))))))
 

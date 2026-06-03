@@ -9,27 +9,40 @@
 
 (defonce-guard developer-installed?)
 
-(defn- developer-multiblock-positions []
-  dev-logic/developer-multiblock-positions)
+(defn- register-developer-multiblocks! []
+  (bdsl/defmultiblock 'developer-normal
+    :multi-block {:positions dev-logic/developer-multiblock-positions
+                  :rotation-center [0.5 0.0 0.5]
+                  :pivot-xz-override [0.0 0.0]
+                  :tesr-use-raw-rotation-center? true
+                  :tesr-y-deg-override 0.0}
+    :common {:physical {:material :metal :hardness 4.0 :resistance 10.0
+                       :requires-tool true :harvest-tool :pickaxe :harvest-level 2 :sounds :metal}}
+    :controller {:registry-name "developer_normal"
+                 :rendering {:light-level 1.0
+                             :flat-item-icon? true
+                             :textures {:all (modid/asset-path "block" "dev_normal")}}
+                 :events {:on-right-click (dev-logic/open-developer-gui-for "developer-normal")}}
+    :part {:registry-name "developer_normal_part"
+           :rendering {:model-parent "minecraft:block/cube_all"
+                       :textures {:all (modid/asset-path "block" "dev_normal")}}})
 
-(defn- developer-block-spec [id registry-name tier-kw]
-  (bdsl/create-block-spec
-    id
-    {:multi-block {:positions (developer-multiblock-positions)
-                   :rotation-center [0.5 0.0 0.5]
-                   :pivot-xz-override [0.0 0.0]
-                   :tesr-use-raw-rotation-center? true
-                   :tesr-y-deg-override 0.0
-                   :mode :controller-parts
-                   :controller-block-id id
-                   :part-block-id (str id "-part")}
-     :registry-name registry-name
-     :physical {:material :metal :hardness 4.0 :resistance 10.0
-                :requires-tool true :harvest-tool :pickaxe :harvest-level 2 :sounds :metal}
-     :rendering {:light-level (if (= tier-kw :advanced) 2.0 1.0)
-                 :flat-item-icon? true
-                 :textures {:all (modid/asset-path "block" (if (= tier-kw :advanced) "dev_advanced" "dev_normal"))}}
-     :events {:on-right-click (dev-logic/open-developer-gui-for id)}}))
+  (bdsl/defmultiblock 'developer-advanced
+    :multi-block {:positions dev-logic/developer-multiblock-positions
+                  :rotation-center [0.5 0.0 0.5]
+                  :pivot-xz-override [0.0 0.0]
+                  :tesr-use-raw-rotation-center? true
+                  :tesr-y-deg-override 0.0}
+    :common {:physical {:material :metal :hardness 4.0 :resistance 10.0
+                       :requires-tool true :harvest-tool :pickaxe :harvest-level 2 :sounds :metal}}
+    :controller {:registry-name "developer_advanced"
+                 :rendering {:light-level 2.0
+                             :flat-item-icon? true
+                             :textures {:all (modid/asset-path "block" "dev_advanced")}}
+                 :events {:on-right-click (dev-logic/open-developer-gui-for "developer-advanced")}}
+    :part {:registry-name "developer_advanced_part"
+           :rendering {:model-parent "minecraft:block/cube_all"
+                       :textures {:all (modid/asset-path "block" "dev_advanced")}}}))
 
 (defn init-developer!
   []
@@ -51,9 +64,6 @@
      :tile-ids ["developer-normal" "developer-advanced"]
      :capabilities [{:key :wireless-receiver :interface IWirelessReceiver
                      :factory dev-logic/create-dev-receiver-cap}]
-     :blocks [(developer-block-spec "developer-normal" "developer_normal" :normal)
-              (developer-block-spec "developer-normal-part" "developer_normal_part" :normal)
-              (developer-block-spec "developer-advanced" "developer_advanced" :advanced)
-              (developer-block-spec "developer-advanced-part" "developer_advanced_part" :advanced)]
+     :after register-developer-multiblocks!
      :network-handler dev-handlers/register-network-handlers!
      :client-renderer 'cn.li.ac.block.developer.render/init!}))

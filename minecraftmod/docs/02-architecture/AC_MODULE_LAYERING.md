@@ -31,7 +31,7 @@ foundation → domain/model → data/repository/persistence → service/applicat
 | `cn.li.ac.wireless.api` | `service.commands`、`service.queries`、事件发射 | 无线对外**唯一**入口；已删除 `topology-service` / `query-service` 等第二套路径。 |
 | `cn.li.ac.wireless.data.world` | `data.persistence`、生命周期钩子 | **仅** SavedData 与 `on-world-load/save/tick`；不代理 lookup，也不 re-export 拓扑命令。可变状态提交在 `data.world-registry`。 |
 | `cn.li.ac.wireless.core.vblock` | `data.vblock-codec`、`core.vblock-resolver` | runtime record 兼容保留，NBT codec 与 world resolver 分离。 |
-| `cn.li.ac.block.wireless-node.logic` | `state`、`inventory`、`tick`、`capability`、`sync-broadcast` | 方块放置/破坏/GUI 打开等事件 glue；tick 与 sync 在专用 namespace。 |
+| `cn.li.ac.block.wireless-node.logic` | `state`、`inventory`、`tick`、`capability` | 方块放置/破坏/GUI 打开等事件 glue；tick 在 `tick` namespace。 |
 | `cn.li.ac.energy.api.impl` | `service.provider-registry`、`service.subscription`、`service.transfer-executor` | 协议实现瘦身为适配层。 |
 | `cn.li.ac.ability.registry.developer-type` / developer block callers | `ability.domain.developer` | developer 类型、等级门槛、能量 pacing 单一事实源。 |
 
@@ -53,7 +53,7 @@ foundation → domain/model → data/repository/persistence → service/applicat
 - Server tick（`make-tick-fn` + `after-commit!` blockstate）：`cn.li.ac.block.wireless-node.tick`。
 - Java/capability implementation：`cn.li.ac.block.wireless-node.capability`。
 - 方块右键/放置/破坏事件 glue：`cn.li.ac.block.wireless-node.logic`。
-- Server GUI 广播（无 client GUI 依赖）：`cn.li.ac.block.wireless-node.sync-broadcast`。
+- 邻近客户端状态广播（无 client GUI 依赖）：`cn.li.ac.block.machine.sync`（channel `"node"`）。
 
 ### Wireless Matrix Block
 
@@ -61,11 +61,23 @@ foundation → domain/model → data/repository/persistence → service/applicat
 - Slot schema 与 plate/core 计数：`cn.li.ac.block.wireless-matrix.inventory`。
 - Capability / Java proxy：`cn.li.ac.block.wireless-matrix.capability`。
 - Tick、容器、方块事件：`cn.li.ac.block.wireless-matrix.logic`。
-- Server GUI 广播：`cn.li.ac.block.wireless-matrix.sync-broadcast`。
+- 邻近客户端状态广播：`cn.li.ac.block.machine.sync`（channel `"matrix"`）。
 
 ### Block machines (shared)
 
-- 统一注册/tick/容器/GUI：`cn.li.ac.block.machine.registration`、`machine.runtime`、`machine.container`。
+所有 scripted 机器方块经 `init-machine!` 注册，状态写入唯一走 `machine.runtime/commit-state!`（或 `commit-transform!` / `commit-from-tile!`）。
+
+| 模块 | 职责 |
+|------|------|
+| `cn.li.ac.block.machine.registration` | `init-machine!`：tile、capability、container、block、hooks |
+| `cn.li.ac.block.machine.runtime` | `schema-runtime`、`make-tick-fn`、`commit-state!`、GUI 打开 |
+| `cn.li.ac.block.machine.container` | 声明式 hopper 容器（经 commit 写 inventory） |
+| `cn.li.ac.block.machine.sync` | 服务端 world broadcast（node/matrix 等） |
+| `cn.li.ac.block.machine.render-runtime` | 客户端 TESR init、资源懒加载、动画 cache |
+| `cn.li.ac.block.gui.sync` | schema GUI 容器与 `schema-sync-fns` |
+| `cn.li.ac.block.machine.wireless-handlers` | 发电机/开发者无线链路 handler 共享 |
+
+目录约定：`<machine>/block.clj`（仅 init）、`schema.clj`、`logic.clj`、`gui.clj`（CLIENT）、`handlers.clj`、`render.clj`（CLIENT）。多方块结构在 `ac/block` 内统一用 `bdsl/defmultiblock`。
 
 ### Energy
 

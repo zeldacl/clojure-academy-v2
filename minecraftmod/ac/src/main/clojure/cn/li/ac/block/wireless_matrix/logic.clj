@@ -6,7 +6,7 @@
             [cn.li.ac.block.wireless-matrix.inventory :as matrix-inventory]
             [cn.li.ac.block.wireless-matrix.schema :as matrix-schema]
             [cn.li.ac.block.wireless-matrix.state :as matrix-state]
-            [cn.li.ac.block.wireless-matrix.sync-broadcast :as matrix-sync]
+            [cn.li.ac.block.machine.sync :as machine-sync]
             [cn.li.ac.item.constraint-plate :as plate]
             [cn.li.ac.item.mat-core :as core]
             [cn.li.ac.wireless.config :as matrix-config]
@@ -60,11 +60,13 @@
     (if (and (zero? (:sub-id state1 0))
              (zero? (mod ticker (matrix-config/gui-sync-interval))))
       (try
-        (let [payload (matrix-sync-payload state1 pos be)
-              old-payload (::last-broadcast-state state1)]
-          (when (and level pos (not= payload old-payload))
-            (matrix-sync/broadcast-matrix-state! level pos payload))
-          (assoc state1 ::last-broadcast-state payload))
+        (let [old-payload (::last-broadcast-state state1)
+              payload (machine-sync/broadcast-if-changed!
+                        level pos matrix-schema/unified-matrix-schema state1 old-payload "matrix"
+                        :be be
+                        :extra-payload (fn [_ state pos be]
+                                         (matrix-sync-payload state pos be)))]
+          (cond-> state1 payload (assoc ::last-broadcast-state payload)))
         (catch Exception e
           (log/debug "Matrix sync skipped:" (ex-message e))
           state1))

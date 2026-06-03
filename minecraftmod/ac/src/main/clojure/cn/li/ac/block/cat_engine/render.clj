@@ -13,66 +13,35 @@
             [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.platform.position :as pos]))
 
-(def ^:private cat-engine-texture-lock
-  (Object.))
+(def ^:private cat-engine-texture-lock (Object.))
+(def ^:private ^:dynamic *cat-engine-texture* nil)
 
-(def ^:private ^:dynamic *cat-engine-texture*
-  nil)
+(def ^:private cat-engine-texture
+  (machine-render-runtime/lazy-resource cat-engine-texture-lock #'*cat-engine-texture*
+                                        #(res/texture-location "block/cat_engine")))
 
-(defn- cat-engine-texture
-  []
-  (or (var-get #'*cat-engine-texture*)
-      (locking cat-engine-texture-lock
-        (or (var-get #'*cat-engine-texture*)
-            (let [tex (res/texture-location "block/cat_engine")]
-              (alter-var-root #'*cat-engine-texture* (constantly tex))
-              tex)))))
+(defonce ^:private rotor-cache
+  (machine-render-runtime/create-cache-runtime :rotor-cache))
 
-(defn create-cat-engine-render-runtime
-  ([]
-   (create-cat-engine-render-runtime {}))
-  ([initial-cache]
-   (machine-render-runtime/create-render-runtime {:rotor-cache initial-cache})))
-
-(defonce ^:private installed-cat-engine-render-runtime
-  (create-cat-engine-render-runtime))
-
-(def ^:dynamic *cat-engine-render-runtime*
-  installed-cat-engine-render-runtime)
-
-(defn current-cat-engine-render-runtime
-  []
-  *cat-engine-render-runtime*)
-
-(defmacro with-cat-engine-render-runtime
-  [runtime & body]
-  `(binding [*cat-engine-render-runtime* ~runtime]
-     ~@body))
-
-(defn call-with-cat-engine-render-runtime
-  [runtime f]
-  (binding [*cat-engine-render-runtime* runtime]
-    (f)))
+(def ^:dynamic *cat-engine-render-runtime* (:runtime rotor-cache))
 
 (defn rotor-cache-atom
   []
-  (machine-render-runtime/cache-atom (current-cat-engine-render-runtime) :rotor-cache))
+  (machine-render-runtime/cache-atom *cat-engine-render-runtime* :rotor-cache))
 
 (defn rotor-cache-snapshot
   []
-  (machine-render-runtime/cache-snapshot (current-cat-engine-render-runtime) :rotor-cache))
+  (machine-render-runtime/cache-snapshot *cat-engine-render-runtime* :rotor-cache))
 
 (defn clear-rotor-cache!
   []
-  (machine-render-runtime/clear-cache! (current-cat-engine-render-runtime) :rotor-cache))
+  ((:clear! rotor-cache)))
 
 (defn reset-rotor-cache-for-test!
   ([]
-   (machine-render-runtime/reset-cache-for-test!
-     (current-cat-engine-render-runtime) :rotor-cache))
+   ((:reset-for-test! rotor-cache)))
   ([cache]
-   (machine-render-runtime/reset-cache-for-test!
-     (current-cat-engine-render-runtime) :rotor-cache cache)))
+   ((:reset-for-test! rotor-cache) cache)))
 
 (defn- tile-key [tile]
   (let [p (pos/position-get-block-pos tile)]

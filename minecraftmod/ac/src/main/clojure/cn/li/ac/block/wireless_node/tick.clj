@@ -3,7 +3,7 @@
   (:require [cn.li.ac.block.machine.runtime :as machine-runtime]
             [cn.li.ac.block.wireless-node.inventory :as node-inventory]
             [cn.li.ac.block.wireless-node.state :as node-state]
-            [cn.li.ac.block.wireless-node.sync-broadcast :as node-sync]
+            [cn.li.ac.block.machine.sync :as machine-sync]
             [cn.li.ac.energy.operations :as energy]
             [cn.li.ac.wireless.config :as node-config]
             [cn.li.ac.wireless.core.vblock :as vb]
@@ -75,11 +75,12 @@
     (if (zero? (mod ticker (node-config/sync-interval)))
       (let [state4 (try (tick-check-network state3 level pos be) (catch Exception _ state3))
             old-sync (::last-broadcast-state state4)
-            new-sync (-> (state-schema/schema->sync-payload node-state/node-state-schema state4 pos)
-                         (assoc :max-energy (node-state/node-max-energy state4)))]
-        (when (and level pos (not= new-sync old-sync))
-          (try (node-sync/broadcast-node-state! level pos new-sync) (catch Exception _)))
-        (assoc state4 ::last-broadcast-state new-sync))
+            new-sync (machine-sync/broadcast-if-changed!
+                       level pos node-state/node-state-schema state4 old-sync "node"
+                       :be be
+                       :extra-payload (fn [payload _ _ _]
+                                        (assoc payload :max-energy (node-state/node-max-energy state4))))]
+        (cond-> state4 new-sync (assoc ::last-broadcast-state new-sync)))
       state3)))
 
 (def node-scripted-tick-fn
