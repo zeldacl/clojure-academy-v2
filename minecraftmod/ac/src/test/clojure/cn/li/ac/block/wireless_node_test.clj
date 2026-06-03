@@ -4,7 +4,6 @@
             [cn.li.ac.energy.operations :as energy]
             [cn.li.ac.block.wireless-node.gui :as node-gui]
             [cn.li.ac.block.wireless-node.inventory :as node-inventory]
-            [cn.li.ac.block.wireless-node.logic :as wnode]
             [cn.li.ac.block.wireless-node.owner :as node-owner]
             [cn.li.ac.block.wireless-node.network-infra :as node-infra]
             [cn.li.ac.block.wireless-node.state :as node-state]
@@ -16,10 +15,10 @@
 (deftest node-types-source-of-truth-test
   (testing "node-types mirrors config contract"
     (is (= (node-config/node-types)
-           (wnode/node-types))))
+           (node-state/node-types))))
 
   (testing "all required tiers exist with positive max-energy"
-    (let [tiers (wnode/node-types)]
+    (let [tiers (node-state/node-types)]
       (doseq [tier [:basic :standard :advanced]]
         (is (contains? tiers tier))
         (is (pos? (get-in tiers [tier :max-energy])))))))
@@ -27,33 +26,26 @@
 (deftest node-max-energy-test
   (testing "node-max-energy follows tier"
     (is (= (node-config/max-energy :basic)
-           (wnode/node-max-energy {:node-type :basic})))
+           (node-state/node-max-energy {:node-type :basic})))
     (is (= (node-config/max-energy :standard)
-           (wnode/node-max-energy {:node-type :standard})))
+           (node-state/node-max-energy {:node-type :standard})))
     (is (= (node-config/max-energy :advanced)
-           (wnode/node-max-energy {:node-type :advanced}))))
+           (node-state/node-max-energy {:node-type :advanced}))))
 
   (testing "missing tier falls back to basic"
     (is (= (node-config/max-energy :basic)
-           (wnode/node-max-energy {})))))
+           (node-state/node-max-energy {})))))
 
 (deftest energy-to-blockstate-level-test
   (testing "energy maps to level range 0..4"
     (let [state {:node-type :basic}
-          max-energy (double (wnode/node-max-energy state))]
-      (is (= 0 (wnode/energy->blockstate-level 0.0 state)))
-      (is (= 2 (wnode/energy->blockstate-level (/ max-energy 2.0) state)))
-      (is (= 4 (wnode/energy->blockstate-level max-energy state)))
-      (is (= 4 (wnode/energy->blockstate-level (* max-energy 2.0) state))))))
+          max-energy (double (node-state/node-max-energy state))]
+      (is (= 0 (node-state/energy->blockstate-level 0.0 state)))
+      (is (= 2 (node-state/energy->blockstate-level (/ max-energy 2.0) state)))
+      (is (= 4 (node-state/energy->blockstate-level max-energy state)))
+      (is (= 4 (node-state/energy->blockstate-level (* max-energy 2.0) state))))))
 
-(deftest split-namespace-facade-test
-  (testing "logic facade keeps existing public entry points"
-    (is (identical? node-state/node-default-state wnode/node-default-state))
-    (is (= node-state/node-state-schema wnode/node-state-schema))
-    (is (= node-state/node-max-energy wnode/node-max-energy))
-    (is (= node-inventory/node-container-fns wnode/node-container-fns))
-    (is (fn? wnode/->WirelessNodeImpl))
-    (is (fn? wnode/->ClojureEnergyImpl)))
+(deftest inventory-namespace-owns-slot-metadata-test
   (testing "inventory namespace owns slot metadata"
     (node-inventory/ensure-node-slot-schema!)
     (is (= 2 (node-inventory/node-slot-count)))
@@ -94,15 +86,15 @@
 
 (deftest node-gui-slot-placement-policy-test
   (with-redefs [slot-schema/slot-type (fn [_ idx]
-                                                         (case idx
-                                                           0 :energy
-                                                           1 :output
-                                                           :unknown))
+                                         (case idx
+                                           0 :energy
+                                           1 :output
+                                           :unknown))
                 energy/is-energy-item-supported? (fn [item] (= item :energy-item))]
     (testing "input slot accepts energy items only"
       (is (true? (node-gui/can-place-item? nil 0 :energy-item)))
       (is (false? (node-gui/can-place-item? nil 0 :ordinary-item))))
 
-    (testing "output slot now accepts energy items only"
+    (testing "output slot accepts energy items only"
       (is (true? (node-gui/can-place-item? nil 1 :energy-item)))
       (is (false? (node-gui/can-place-item? nil 1 :ordinary-item))))))

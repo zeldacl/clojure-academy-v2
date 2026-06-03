@@ -1,8 +1,9 @@
 (ns cn.li.ac.block.imag-fusor.handlers
   "Imaginary Fusor network handlers."
-  (:require [cn.li.mcmod.network.server :as net-server]
-            [cn.li.ac.block.imag-fusor.logic :as fusor-logic]
+  (:require [cn.li.ac.block.imag-fusor.logic :as fusor-logic]
+            [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.ac.wireless.gui.sync.handler :as net-helpers]
+            [cn.li.mcmod.network.server :as net-server]
             [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.util.log :as log]))
 
@@ -25,6 +26,5 @@
        :liquid-amount 0 :tank-size 0 :working false})))
 
 (defn register-network-handlers! []
-  (let [msg-fn (requiring-resolve 'cn.li.ac.wireless.gui.message.registry/msg)]
-    (net-server/register-handler (msg-fn :imag-fusor :get-status) handle-get-status)
-    (log/info "Imaginary Fusor network handlers registered")))
+  (net-server/register-handler (msg-registry/msg :imag-fusor :get-status) handle-get-status)
+  (log/info "Imaginary Fusor network handlers registered"))

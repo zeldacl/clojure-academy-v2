@@ -34,7 +34,10 @@
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.ac.wireless.gui.sync.handler :as net-helpers]
             [cn.li.mcmod.util.log :as log]
+            [cn.li.ac.block.wireless-matrix.capability :as matrix-capability]
+            [cn.li.ac.block.wireless-matrix.inventory :as matrix-inventory]
             [cn.li.ac.block.wireless-matrix.logic :as matrix-logic]
+            [cn.li.ac.block.wireless-matrix.state :as matrix-state]
             [cn.li.ac.block.wireless-matrix.schema :as matrix-schema]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.mcmod.gui.spec :as gui-reg]
@@ -275,7 +278,7 @@
   (if (map? tile)
     [nil tile]
     (try
-      (let [state (or (platform-be/get-custom-state tile) matrix-logic/matrix-default-state)]
+      (let [state (or (platform-be/get-custom-state tile) matrix-state/matrix-default-state)]
         [tile state])
       (catch Exception e
         (log/warn "Could not resolve customState from BE:"(ex-message e))
@@ -287,7 +290,7 @@
   [tile player]
   (let [[be state] (resolve-state tile)
         entity (or be tile)
-        proxy (matrix-logic/->MatrixJavaProxy entity)]
+        proxy (matrix-capability/->MatrixJavaProxy entity)]
     (gui-sync/create-schema-container
       matrix-schema/unified-matrix-schema
       state
@@ -318,8 +321,8 @@
   (let [tile (:tile-entity container)]
     (log/debug "set-slot-item! - tile=" tile " slot=" slot-index " item=" item-stack)
     (common/set-slot-item-be! container slot-index item-stack
-                              matrix-logic/matrix-default-state
-                              matrix-logic/recalculate-counts)
+                              matrix-state/matrix-default-state
+                              matrix-inventory/recalculate-counts)
     (when tile
       (log/debug "set-slot-item! after-write - plate=" (matrix-logic/get-plate-count tile)
                 " core=" (matrix-logic/get-core-level tile)))
@@ -354,7 +357,7 @@
 (defn sync-to-client! [container]
   (let [plates   (count-plates container)
         core-lvl (get-core-level container)
-  working? (matrix-logic/is-working? {:core-level core-lvl :plate-count plates})
+  working? (matrix-inventory/is-working? {:core-level core-lvl :plate-count plates})
         old-plates @(:plate-count container)
         old-core @(:core-level container)]
     ;; Only update if values changed
@@ -411,9 +414,6 @@
 ;; ============================================================================
 ;; Sync Packet Handling (from matrix_sync.clj)
 ;; ============================================================================
-
-(defn broadcast-matrix-state [world pos sync-data]
-  (sync-helpers/broadcast-state world pos sync-data "matrix"))
 
 (defn- matrix-source-container? [source]
   (= (:container-type source) :matrix))

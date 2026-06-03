@@ -1,13 +1,14 @@
 (ns cn.li.ac.block.wireless-node.block
   "Wireless Node block - thin coordinator."
-  (:require [cn.li.mcmod.block.dsl :as bdsl]
-            [cn.li.mcmod.block.tile-dsl :as tdsl]
-            [cn.li.mcmod.block.tile-logic :as tile-logic]
-            [cn.li.mcmod.platform.capability :as platform-cap]
-            [cn.li.ac.registry.hooks :as hooks]
-            [cn.li.ac.block.wireless-node.logic :as node-logic]
+  (:require [cn.li.ac.block.machine.registration :as machine-reg]
+            [cn.li.ac.block.wireless-node.capability :as node-capability]
             [cn.li.ac.block.wireless-node.handlers :as node-handlers]
-            [cn.li.mcmod.util.log :as log])
+            [cn.li.ac.block.wireless-node.inventory :as node-inventory]
+            [cn.li.ac.block.wireless-node.logic :as node-events]
+            [cn.li.ac.block.wireless-node.state :as node-state]
+            [cn.li.ac.block.wireless-node.tick :as node-tick]
+            [cn.li.ac.util.init-guard :refer [defonce-guard]]
+            [cn.li.mcmod.block.dsl :as bdsl])
   (:import [cn.li.acapi.wireless IWirelessNode]
            [cn.li.mcmod.energy IEnergyCapable]))
 
@@ -16,102 +17,47 @@
    (bdsl/get-block-spec "wireless-node-standard")
    (bdsl/get-block-spec "wireless-node-advanced")])
 
-(def ^:private wireless-node-guard-lock
-  (Object.))
+(defonce-guard wireless-node-installed?)
 
-(def ^:private ^:dynamic *wireless-node-installed?*
-  false)
+(defn- node-block-spec [id registry-name node-type]
+  (bdsl/create-block-spec
+    id
+    {:registry-name registry-name
+     :physical {:material :metal
+                :hardness 2.5
+                :resistance 6.0
+                :requires-tool true
+                :harvest-tool :pickaxe
+                :harvest-level 1
+                :sounds :metal}
+     :rendering {:model-parent "minecraft:block/cube_all"}
+     :block-state {:block-state-properties node-state/block-state-properties}
+     :events {:on-right-click (node-events/handle-node-right-click node-type)
+              :on-place (node-events/handle-node-place node-type)
+              :on-break (node-events/handle-node-break node-type)}}))
 
-(defn init-wireless-nodes! []
-  (when-not (var-get #'*wireless-node-installed?*)
-    (locking wireless-node-guard-lock
-      (when-not (var-get #'*wireless-node-installed?*)
-        (node-logic/ensure-node-slot-schema!)
-    (tile-logic/register-tile-kind!
-      :wireless-node
-      {:tick-fn node-logic/node-scripted-tick-fn
-       :read-nbt-fn node-logic/node-scripted-load-fn
-       :write-nbt-fn node-logic/node-scripted-save-fn})
-    (tdsl/register-tile!
-      (tdsl/create-tile-spec
-        "wireless-node-basic"
-        {:registry-name "node_basic"
-         :impl :scripted
-         :blocks ["wireless-node-basic"]
-         :tile-kind :wireless-node}))
-    (tdsl/register-tile!
-      (tdsl/create-tile-spec
-        "wireless-node-standard"
-        {:registry-name "node_standard"
-         :impl :scripted
-         :blocks ["wireless-node-standard"]
-         :tile-kind :wireless-node}))
-    (tdsl/register-tile!
-      (tdsl/create-tile-spec
-        "wireless-node-advanced"
-        {:registry-name "node_advanced"
-         :impl :scripted
-         :blocks ["wireless-node-advanced"]
-         :tile-kind :wireless-node}))
-    (platform-cap/declare-capability! :wireless-node IWirelessNode
-      (fn [be _side] (node-logic/->WirelessNodeImpl be)))
-    (platform-cap/declare-capability! :wireless-energy IEnergyCapable
-      (fn [be _side] (node-logic/->ClojureEnergyImpl be)))
-    (doseq [tile-id ["wireless-node-basic" "wireless-node-standard" "wireless-node-advanced"]]
-      (tile-logic/register-tile-capability! tile-id :wireless-node)
-      (tile-logic/register-tile-capability! tile-id :wireless-energy)
-      (tile-logic/register-container! tile-id node-logic/node-container-fns))
-    (bdsl/register-block!
-      (bdsl/create-block-spec
-        "wireless-node-basic"
-        {:registry-name "node_basic"
-         :physical {:material :metal
-                    :hardness 2.5
-                    :resistance 6.0
-                    :requires-tool true
-                    :harvest-tool :pickaxe
-                    :harvest-level 1
-                    :sounds :metal}
-         :rendering {:model-parent "minecraft:block/cube_all"}
-         :block-state {:block-state-properties node-logic/block-state-properties}
-         :events {:on-right-click (node-logic/handle-node-right-click :basic)
-                  :on-place (node-logic/handle-node-place :basic)
-                  :on-break (node-logic/handle-node-break :basic)}}))
-    (bdsl/register-block!
-      (bdsl/create-block-spec
-        "wireless-node-standard"
-        {:registry-name "node_standard"
-         :physical {:material :metal
-                    :hardness 2.5
-                    :resistance 6.0
-                    :requires-tool true
-                    :harvest-tool :pickaxe
-                    :harvest-level 1
-                    :sounds :metal}
-         :rendering {:model-parent "minecraft:block/cube_all"}
-         :block-state {:block-state-properties node-logic/block-state-properties}
-         :events {:on-right-click (node-logic/handle-node-right-click :standard)
-                  :on-place (node-logic/handle-node-place :standard)
-                  :on-break (node-logic/handle-node-break :standard)}}))
-    (bdsl/register-block!
-      (bdsl/create-block-spec
-        "wireless-node-advanced"
-        {:registry-name "node_advanced"
-         :physical {:material :metal
-                    :hardness 2.5
-                    :resistance 6.0
-                    :requires-tool true
-                    :harvest-tool :pickaxe
-                    :harvest-level 1
-                    :sounds :metal}
-         :rendering {:model-parent "minecraft:block/cube_all"}
-         :block-state {:block-state-properties node-logic/block-state-properties}
-         :events {:on-right-click (node-logic/handle-node-right-click :advanced)
-                  :on-place (node-logic/handle-node-place :advanced)
-                  :on-break (node-logic/handle-node-break :advanced)}}))
-    (hooks/register-network-handler! node-handlers/register-network-handlers!)
-        (log/info "Initialized Wireless Nodes (thin coordinator):")
-        (doseq [[tier cfg] (node-logic/node-types)]
-          (log/info "  -" (name tier) ": max-energy=" (:max-energy cfg)))
-        (alter-var-root #'*wireless-node-installed?* (constantly true))
-        (log/info "  - Capabilities :wireless-node + :wireless-energy registered")))))
+(defn init-wireless-nodes!
+  []
+  (machine-reg/init-machine!
+    {:guard wireless-node-installed?
+     :log-label "Wireless Nodes"
+     :before node-inventory/ensure-node-slot-schema!
+     :tile-kind {:tile-kind :wireless-node
+                 :tick-fn node-tick/node-scripted-tick-fn
+                 :read-nbt-fn node-state/node-scripted-load-fn
+                 :write-nbt-fn node-state/node-scripted-save-fn}
+     :tiles [{:id "wireless-node-basic" :registry-name "node_basic" :blocks ["wireless-node-basic"] :tile-kind :wireless-node}
+             {:id "wireless-node-standard" :registry-name "node_standard" :blocks ["wireless-node-standard"] :tile-kind :wireless-node}
+             {:id "wireless-node-advanced" :registry-name "node_advanced" :blocks ["wireless-node-advanced"] :tile-kind :wireless-node}]
+     :tile-ids ["wireless-node-basic" "wireless-node-standard" "wireless-node-advanced"]
+     :capabilities [{:key :wireless-node :interface IWirelessNode
+                     :factory (fn [be _side] (node-capability/->WirelessNodeImpl be))}
+                    {:key :wireless-energy :interface IEnergyCapable
+                     :factory (fn [be _side] (node-capability/->ClojureEnergyImpl be))}]
+     :containers {"wireless-node-basic" node-inventory/node-container-fns
+                  "wireless-node-standard" node-inventory/node-container-fns
+                  "wireless-node-advanced" node-inventory/node-container-fns}
+     :blocks [(node-block-spec "wireless-node-basic" "node_basic" :basic)
+              (node-block-spec "wireless-node-standard" "node_standard" :standard)
+              (node-block-spec "wireless-node-advanced" "node_advanced" :advanced)]
+     :network-handler node-handlers/register-network-handlers!}))

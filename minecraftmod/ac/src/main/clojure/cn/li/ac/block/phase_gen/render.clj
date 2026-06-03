@@ -4,7 +4,8 @@
   Ported from AcademyCraft's RenderPhaseGen:
   - Use ip_gen.obj
   - Texture frame depends on liquid amount ratio (0..4)."
-  (:require [cn.li.mcmod.client.resources :as res]
+  (:require [cn.li.ac.block.machine.render-runtime :as machine-render-runtime]
+            [cn.li.mcmod.client.resources :as res]
             [cn.li.mcmod.client.obj :as obj]
             [cn.li.mcmod.client.render.tesr-api :as tesr-api]
             [cn.li.mcmod.client.render.buffer :as rb]
@@ -84,18 +85,6 @@
             (log/error "Error in phase generator renderer:" (ex-message e))
             (.printStackTrace e)))))))
 
-(def ^:private phase-renderer-guard-lock
-  (Object.))
-
-(def ^:private ^:dynamic *phase-renderer-installed?*
-  false)
-
 (defn init!
   []
-  (when-let [register-fn (requiring-resolve 'cn.li.mcmod.client.render.init/register-renderer-init-fn!)]
-    (when-not (var-get #'*phase-renderer-installed?*)
-      (locking phase-renderer-guard-lock
-        (when-not (var-get #'*phase-renderer-installed?*)
-          (register-fn register!)
-          (alter-var-root #'*phase-renderer-installed?* (constantly true))
-          (log/info "Registered phase generator renderer"))))))
+  (machine-render-runtime/register-client-renderer-init! 'cn.li.ac.block.phase-gen.render/register!))

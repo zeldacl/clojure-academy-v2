@@ -1,0 +1,42 @@
+(ns cn.li.ac.block.wireless-node-tick-test
+  (:require [clojure.test :refer [deftest is testing]]
+            [cn.li.ac.block.wireless-node.state :as node-state]
+            [cn.li.ac.block.wireless-node.tick :as node-tick]
+            [cn.li.ac.wireless.config :as node-config]
+            [cn.li.mcmod.platform.be :as platform-be]
+            [cn.li.mcmod.platform.world :as world]))
+
+(deftest node-tick-state-increments-ticker-test
+  (is (= 1 (:update-ticker (node-tick/node-tick-state {} {:level :w :pos :p :be :be})))))
+
+(deftest node-scripted-tick-fn-uses-machine-wrapper-test
+  (testing "tick fn commits via machine runtime on server"
+    (let [saved (atom nil)
+          blockstate-calls (atom 0)
+          be {:id "wireless-node-basic"}]
+      (with-redefs [world/world-is-client-side* (fn [_] false)
+                    platform-be/get-block-id (fn [_] "wireless-node-basic")
+                    platform-be/get-custom-state (fn [_] nil)
+                    node-tick/tick-charge-in (fn [s] s)
+                    node-tick/tick-charge-out (fn [s] s)
+                    node-tick/tick-check-network (fn [s _ _ _] s)
+                    node-state/update-block-state!
+                    (fn [_ _ _] (swap! blockstate-calls inc))
+                    platform-be/set-custom-state! (fn [_ st] (reset! saved st))
+                    platform-be/set-changed! (fn [_] nil)]
+        (node-tick/node-scripted-tick-fn :level :pos nil be)
+        (is (some? @saved))
+        (is (= 1 (:update-ticker @saved))))))
+
+(deftest sync-blockstate-compares-broadcast-metadata-test
+  (testing "after-commit updates blockstate when energy level changes on sync tick"
+    (let [blockstate-calls (atom 0)
+          old {:update-ticker (node-config/sync-interval)
+               :node-type :basic
+               :energy 0.0
+               ::last-broadcast-state {:energy 0.0 :enabled false}}
+          new (assoc old :energy (node-state/node-max-energy old))]
+      (with-redefs [node-state/update-block-state!
+                    (fn [_ _ _] (swap! blockstate-calls inc))]
+        (#'node-tick/sync-blockstate-if-changed! nil :level :pos old new nil)
+        (is (= 1 @blockstate-calls)))))))

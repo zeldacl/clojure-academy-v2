@@ -1,10 +1,13 @@
 (ns cn.li.ac.block.developer.logic
 	(:require [clojure.string :as str]
+            [cn.li.ac.block.machine.runtime :as machine-runtime]
+            [cn.li.ac.gui.open :as gui-open]
 						[cn.li.mcmod.block.dsl :as bdsl]
 						[cn.li.mcmod.block.state-schema :as state-schema]
 						[cn.li.mcmod.platform.world :as world]
 						[cn.li.mcmod.platform.be :as platform-be]
 						[cn.li.mcmod.platform.entity :as entity]
+						[cn.li.mcmod.platform.position :as pos]
 						[cn.li.ac.ability.util.uuid :as uuid]
 						[cn.li.ac.ability.domain.developer :as developer]
 						[cn.li.ac.block.developer.config :as dev-config]
@@ -12,17 +15,13 @@
 						[cn.li.ac.block.energy-converter.wireless-impl :as wireless-impl]
 						[cn.li.mcmod.util.log :as log]))
 
-(def dev-state-schema
-	(state-schema/filter-server-fields dev-schema/developer-schema))
+(def ^:private dev-rt
+	(machine-runtime/schema-runtime dev-schema/developer-schema :server-only? true))
 
-(def dev-default-state
-	(state-schema/schema->default-state dev-state-schema))
-
-(def dev-scripted-load-fn
-	(state-schema/schema->load-fn dev-state-schema))
-
-(def dev-scripted-save-fn
-	(state-schema/schema->save-fn dev-state-schema))
+(def dev-state-schema (:server-schema dev-rt))
+(def dev-default-state (:default-state dev-rt))
+(def dev-scripted-load-fn (:load-fn dev-rt))
+(def dev-scripted-save-fn (:save-fn dev-rt))
 
 (def developer-multiblock-positions
 	[[0 0 0]
@@ -66,70 +65,70 @@
 						(assoc state :is-developing false)))
 				state))))
 
-(defn developer-tick-fn [level pos _block-state be]
-	(when (and level (not (world/world-is-client-side* level)))
-		(let [state0 (or (platform-be/get-custom-state be) dev-default-state)
-					ticker (inc (long (get state0 :update-ticker 0)))
-					state1 (-> state0 (assoc :update-ticker ticker) (ensure-tier-defaults be))
-					state2 (if (zero? (mod ticker (dev-config/validate-interval)))
-									 (let [block-spec (some-> (platform-be/get-block-id be) bdsl/get-block-spec)]
-										 (assoc state1 :structure-valid (boolean (and block-spec (validate-structure level pos block-spec)))))
-									 state1)
-					state3 (if-not (:structure-valid state2 false) (assoc state2 :is-developing false) state2)
-					state4 (if (:structure-valid state3 false) (tick-development state3 ticker) state3)
-					state5 (-> state4
-										 (assoc :wireless-inject-last-tick (double (:wireless-inject-this-tick state4 0.0)))
-										 (assoc :wireless-inject-this-tick 0.0))]
-			(when (not= state5 (platform-be/get-custom-state be))
-				(platform-be/set-custom-state! be state5)
-				(platform-be/set-changed! be)))))
+(defn developer-tick-state [state {:keys [level pos be]}]
+	(let [ticker (inc (long (get state :update-ticker 0)))
+				state1 (-> state (assoc :update-ticker ticker) (ensure-tier-defaults be))
+				state2 (if (zero? (mod ticker (dev-config/validate-interval)))
+								 (let [block-spec (some-> (platform-be/get-block-id be) bdsl/get-block-spec)]
+									 (assoc state1 :structure-valid (boolean (and block-spec (validate-structure level pos block-spec)))))
+								 state1)
+				state3 (if-not (:structure-valid state2 false) (assoc state2 :is-developing false) state2)
+				state4 (if (:structure-valid state3 false) (tick-development state3 ticker) state3)]
+		(-> state4
+				(assoc :wireless-inject-last-tick (double (:wireless-inject-this-tick state4 0.0)))
+				(assoc :wireless-inject-this-tick 0.0))))
+
+(def developer-tick-fn
+	(machine-runtime/make-tick-fn
+		{:default-state dev-default-state
+		 :tick-state developer-tick-state}))
 
 (defn open-developer-gui-for [controller-block-id]
 	(fn [{:keys [player world pos sneaking]}]
 		(when (and player world pos (not sneaking))
 			(try
-				(if-let [open-gui-by-type (requiring-resolve 'cn.li.ac.gui.open/open-gui-by-type)]
-					(let [block-spec (bdsl/get-block-spec controller-block-id)
-								controller-pos (or (when block-spec (bdsl/resolve-multi-block-master-pos world pos block-spec)) pos)]
-						(if (world/world-is-client-side* world)
-							(open-gui-by-type player :developer world controller-pos)
-							(when-let [be (world/world-get-tile-entity* world controller-pos)]
-								(let [state (or (platform-be/get-custom-state be) dev-default-state)
-											pid (uuid/player-uuid player)
-											cur (str (:user-uuid state ""))]
-									(when (or (str/blank? cur) (= cur pid))
-										(platform-be/set-custom-state! be (assoc state :user-uuid pid :user-name (entity/player-get-name player)))
-										(platform-be/set-changed! be)
-										(open-gui-by-type player :developer world controller-pos))))))
-					(do (log/error "Developer GUI open fn not found") nil))
+				(let [block-spec (bdsl/get-block-spec controller-block-id)
+							controller-pos (or (when block-spec (bdsl/resolve-multi-block-master-pos world pos block-spec)) pos)]
+					(if (world/world-is-client-side* world)
+						(gui-open/open-gui-by-type player :developer world controller-pos)
+						(when-let [be (world/world-get-tile-entity* world controller-pos)]
+							(let [state (machine-runtime/state-or-default be dev-default-state)
+										pid (uuid/player-uuid player)
+										cur (str (:user-uuid state ""))]
+								(when (or (str/blank? cur) (= cur pid))
+									(machine-runtime/commit-state! be world controller-pos state
+									                               (assoc state :user-uuid pid :user-name (entity/player-get-name player)))
+									(gui-open/open-gui-by-type player :developer world controller-pos))))))
 				(catch Exception e
 					(log/error "Failed to open Developer GUI:" (ex-message e))
 					nil)))))
 
+(defn- commit-dev-state! [tile new-state]
+	(let [world (platform-be/be-get-world-safe tile)
+				pos (when world (try (pos/position-get-block-pos tile) (catch Exception _ nil)))
+				old (machine-runtime/state-or-default tile dev-default-state)]
+		(machine-runtime/commit-state! tile world pos old new-state)))
+
 (defn create-dev-receiver-cap [be]
 	(wireless-impl/create-wireless-receiver
 		be
-		(fn [] (or (platform-be/get-custom-state be) dev-default-state))
-		(fn [s]
-			(platform-be/set-custom-state! be s)
-			(platform-be/set-changed! be))
+		(fn [] (machine-runtime/state-or-default be dev-default-state))
+		(fn [s] (commit-dev-state! be s))
 		{:after-inject!
 		 (fn [^double accepted]
 			 (when (pos? accepted)
-				 (let [st (or (platform-be/get-custom-state be) dev-default-state)
+				 (let [st (machine-runtime/state-or-default be dev-default-state)
 							 cur (double (:wireless-inject-this-tick st 0.0))]
-					 (platform-be/set-custom-state! be (assoc st :wireless-inject-this-tick (+ cur accepted)))
-					 (platform-be/set-changed! be))))}))
+					 (commit-dev-state! be (assoc st :wireless-inject-this-tick (+ cur accepted))))))}))
 
 (defn try-pull-energy! [tile ^double amount]
 	(boolean
 		(try
 			(when tile
-				(let [state (or (platform-be/get-custom-state tile) dev-default-state)
+				(let [state (machine-runtime/state-or-default tile dev-default-state)
 							e (double (get state :energy 0.0))]
 					(when (>= e amount)
-						(platform-be/set-custom-state! tile (assoc state :energy (- e amount)))
-						(platform-be/set-changed! tile)
+						(commit-dev-state! tile (assoc state :energy (- e amount)))
 						true)))
 			(catch Exception _ false))))
 

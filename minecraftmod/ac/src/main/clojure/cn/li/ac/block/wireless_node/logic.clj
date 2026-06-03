@@ -1,113 +1,48 @@
 (ns cn.li.ac.block.wireless-node.logic
-  "Stable entry point for Wireless Node block logic.
-
-  Implementation has been split by responsibility:
-  - `wireless-node.state` owns schema/default/tier/blockstate projection.
-  - `wireless-node.inventory` owns slot schema and container inventory ops.
-  - `wireless-node.tick` owns server tick, charge, network status, and sync.
-  - `wireless-node.capability` owns Java capability implementations.
-
-  Keep this namespace as the stable entry point used by block registration,
-  schema metadata, tests, and external callers."
-  (:require [cn.li.ac.block.wireless-node.capability :as node-capability]
-            [cn.li.ac.block.wireless-node.inventory :as node-inventory]
+  "Wireless Node block event handlers (placement, break, GUI open)."
+  (:require [cn.li.ac.block.machine.runtime :as machine-runtime]
             [cn.li.ac.block.wireless-node.owner :as node-owner]
             [cn.li.ac.block.wireless-node.state :as node-state]
-            [cn.li.ac.block.wireless-node.tick :as node-tick]
-            [cn.li.ac.wireless.core.vblock :as vb]
+            [cn.li.mcmod.platform.world :as platform-world]
             [cn.li.ac.wireless.api :as wireless-api]
+            [cn.li.ac.wireless.core.vblock :as vb]
             [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.platform.position :as ppos]
-            [cn.li.mcmod.platform.world :as platform-world]
             [cn.li.mcmod.util.log :as log]))
 
-;; ============================================================================
-;; State/schema exports
-;; ============================================================================
+(defn handle-node-right-click
+  [_node-type]
+  (machine-runtime/make-open-gui-handler :node))
 
-(def node-state-schema node-state/node-state-schema)
-(def node-default-state node-state/node-default-state)
-(def node-scripted-load-fn node-state/node-scripted-load-fn)
-(def node-scripted-save-fn node-state/node-scripted-save-fn)
-(def block-state-properties node-state/block-state-properties)
-
-(def node-types node-state/node-types)
-(def node-max-energy node-state/node-max-energy)
-(def energy->blockstate-level node-state/energy->blockstate-level)
-
-;; ============================================================================
-;; Inventory/tick/capability exports
-;; ============================================================================
-
-(def ensure-node-slot-schema! node-inventory/ensure-node-slot-schema!)
-(def node-container-fns node-inventory/node-container-fns)
-
-(def node-scripted-tick-fn node-tick/node-scripted-tick-fn)
-(def tick-charge-in node-tick/tick-charge-in)
-(def tick-charge-out node-tick/tick-charge-out)
-(def tick-check-network node-tick/tick-check-network)
-
-(def ->WirelessNodeImpl node-capability/->WirelessNodeImpl)
-(def ->ClojureEnergyImpl node-capability/->ClojureEnergyImpl)
-
-;; ============================================================================
-;; Event Handlers
-;; ============================================================================
-
-(defn handle-node-right-click [node-type]
-  (fn [event-data]
-    (log/info "Wireless Node (" (name node-type) ") right-clicked!")
-    (let [{:keys [player world pos]} event-data
-          be    (platform-world/world-get-tile-entity* world pos)
-          state (when be (or (platform-be/get-custom-state be) node-state/node-default-state))]
-      (if state
-        (do
-          (log/info "Node status:")
-          (log/info "  Energy:" (:energy state) "/" (node-state/node-max-energy state))
-          (log/info "  Connected:" (:enabled state))
-          (log/info "  Name:" (:node-name state))
-          (try
-            (if-let [open-gui-by-type (requiring-resolve 'cn.li.ac.gui.open/open-gui-by-type)]
-              (let [result (open-gui-by-type player :node world pos)]
-                (log/info "Opened Node GUI")
-                result)
-              (do (log/error "Node GUI registry function not found") nil))
-            (catch Exception e
-              (log/error "Failed to open Node GUI:" (ex-message e))
-              nil)))
-        (log/info "No tile entity found!")))))
-
-(defn handle-node-place [node-type]
-  (fn [event-data]
+(defn handle-node-place
+  [node-type]
+  (fn [{:keys [player world pos]}]
     (log/info "Placing Wireless Node (" (name node-type) ")")
-    (let [{:keys [player world pos]} event-data
-          player-name (node-owner/player-name player)
-          node-vb      (vb/create-vnode (ppos/pos-x pos) (ppos/pos-y pos) (ppos/pos-z pos))
-          be          (platform-world/world-get-tile-entity* world pos)]
+    (let [player-name (node-owner/player-name player)
+          node-vb (vb/create-vnode (ppos/pos-x pos) (ppos/pos-y pos) (ppos/pos-z pos))
+          be (platform-world/world-get-tile-entity* world pos)]
       (when be
-        (let [state (or (platform-be/get-custom-state be) node-state/node-default-state)]
-          (platform-be/set-custom-state! be (assoc state
-                                             :node-type   node-type
-                                             :placer-name player-name))))
+        (let [state (or (platform-be/get-custom-state be) node-state/node-default-state)
+              state' (assoc state :node-type node-type :placer-name player-name)]
+          (machine-runtime/commit-state! be world pos state state')))
       (try
         (wireless-api/register-node-spatial! world node-vb)
         (catch Exception _))
       (log/info "Node placed by" player-name "at" pos))))
 
-(defn handle-node-break [node-type]
-  (fn [event-data]
-    (log/info "Breaking Wireless Node (" (name node-type) ")")
-    (let [{:keys [world pos]} event-data
-          node-vb (vb/create-vnode (ppos/pos-x pos) (ppos/pos-y pos) (ppos/pos-z pos))
-          be      (platform-world/world-get-tile-entity* world pos)]
+(defn handle-node-break
+  [_node-type]
+  (fn [{:keys [world pos]}]
+    (log/info "Breaking Wireless Node")
+    (let [node-vb (vb/create-vnode (ppos/pos-x pos) (ppos/pos-y pos) (ppos/pos-z pos))
+          be (platform-world/world-get-tile-entity* world pos)]
       (when be
         (let [state (or (platform-be/get-custom-state be) node-state/node-default-state)]
           (doseq [item (:inventory state [])]
             (when item (log/info "Dropping item:" item)))))
       (try
-        (do
-          (wireless-api/unregister-node-spatial! world node-vb)
-          (when be
-            (wireless-api/unlink-node-from-network! be)
-            (wireless-api/destroy-node-connection-for-node! be)))
+        (wireless-api/unregister-node-spatial! world node-vb)
+        (when be
+          (wireless-api/unlink-node-from-network! be)
+          (wireless-api/destroy-node-connection-for-node! be))
         (catch Exception _)))))

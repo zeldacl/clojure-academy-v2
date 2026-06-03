@@ -6,7 +6,10 @@
 
   This file contains node-specific blockstate logic extracted from blockstate_definition.clj
   to colocate it with the node block implementation."
-  (:require [clojure.string :as str]))
+  (:require [clojure.string :as str]
+            [cn.li.ac.block.wireless-node.schema :as node-schema]
+            [cn.li.ac.wireless.config :as wireless-config]
+            [cn.li.mcmod.config :as mcmod-config]))
 
 ;; ============================================================================
 ;; BlockState Definition Record (copied from blockstate_definition.clj)
@@ -24,24 +27,14 @@
 ;; Node BlockState Generation
 ;; ============================================================================
 
-(defn- resolve-var-value
-  [sym]
-  (some-> (requiring-resolve sym) deref))
+(defn- node-types* []
+  (wireless-config/node-types))
 
-(defn- node-types*
-  []
-  (if-let [f (requiring-resolve 'cn.li.ac.wireless.config/node-types)]
-    (f)
-    {}))
-
-(defn- blockstate-property-fields*
-  []
-  (or (resolve-var-value 'cn.li.ac.block.wireless-node.schema/blockstate-property-fields)
-      []))
+(defn- blockstate-property-fields* []
+  node-schema/blockstate-property-fields)
 
 (defn- mod-id []
-  (or (resolve-var-value 'cn.li.mcmod.config/*mod-id*)
-      "my_mod"))
+  (or @mcmod-config/*mod-id* "my_mod"))
 
 (defn- extract-blockstate-props
   "Extract BlockState properties from schema into a map.

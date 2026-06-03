@@ -1,31 +1,31 @@
 (ns cn.li.ac.block.wind-gen.logic
   "Wind Generator business logic and helpers."
   (:require [clojure.string :as str]
-            [cn.li.mcmod.block.state-schema :as state-schema]
+            [cn.li.ac.block.machine.runtime :as machine-runtime]
+            [cn.li.ac.block.wind-gen.config :as wind-config]
+            [cn.li.ac.block.wind-gen.schema :as wind-schema]
+            [cn.li.ac.energy.operations :as energy]
+            [cn.li.ac.gui.open :as gui-open]
             [cn.li.mcmod.platform.world :as world]
             [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.item :as item]
-            [cn.li.ac.block.wind-gen.config :as wind-config]
-            [cn.li.ac.block.wind-gen.schema :as wind-schema]
-            [cn.li.ac.energy.operations :as energy]
             [cn.li.mcmod.util.log :as log]))
 
-;; Schema and state helpers
-(def main-state-schema (state-schema/filter-server-fields wind-schema/wind-gen-main-schema))
-(def base-state-schema (state-schema/filter-server-fields wind-schema/wind-gen-base-schema))
-(def pillar-state-schema (state-schema/filter-server-fields wind-schema/wind-gen-pillar-schema))
+(def main-rt (machine-runtime/schema-runtime wind-schema/wind-gen-main-schema :server-only? true))
+(def base-rt (machine-runtime/schema-runtime wind-schema/wind-gen-base-schema :server-only? true))
+(def pillar-rt (machine-runtime/schema-runtime wind-schema/wind-gen-pillar-schema :server-only? true))
 
-(def main-default-state (state-schema/schema->default-state main-state-schema))
-(def base-default-state (state-schema/schema->default-state base-state-schema))
-(def pillar-default-state (state-schema/schema->default-state pillar-state-schema))
+(def main-default-state (:default-state main-rt))
+(def base-default-state (:default-state base-rt))
+(def pillar-default-state (:default-state pillar-rt))
 
-(def main-scripted-load-fn (state-schema/schema->load-fn main-state-schema))
-(def main-scripted-save-fn (state-schema/schema->save-fn main-state-schema))
-(def base-scripted-load-fn (state-schema/schema->load-fn base-state-schema))
-(def base-scripted-save-fn (state-schema/schema->save-fn base-state-schema))
-(def pillar-scripted-load-fn (state-schema/schema->load-fn pillar-state-schema))
-(def pillar-scripted-save-fn (state-schema/schema->save-fn pillar-state-schema))
+(def main-scripted-load-fn (:load-fn main-rt))
+(def main-scripted-save-fn (:save-fn main-rt))
+(def base-scripted-load-fn (:load-fn base-rt))
+(def base-scripted-save-fn (:save-fn base-rt))
+(def pillar-scripted-load-fn (:load-fn pillar-rt))
+(def pillar-scripted-save-fn (:save-fn pillar-rt))
 
 ;; Block identification
 (def ^:private wind-main-ids #{"wind-gen-main" "wind-gen-main-part" "wind_gen_main" "wind_gen_main_part"})
@@ -141,73 +141,77 @@
           state))
       state)))
 
-(defn main-tick-fn [level p _block-state be]
-  (when (and level (not (world/world-is-client-side* level)) (sub-id-zero? be))
-    (let [state0 (or (platform-be/get-custom-state be) main-default-state)
-          ticker (inc (int (get state0 :update-ticker 0)))
-          state1 (assoc state0 :update-ticker ticker)]
-      (if (zero? (mod ticker (wind-config/structure-update-interval)))
-        (let [fan? (boolean (fan-item-stack? (get-in state1 [:inventory 0])))
-              base-info (find-base-below level p)
-              complete? (and base-info (>= (:pillars base-info 0) (wind-config/min-pillars)))
-              obstacle-free? (and complete? (no-obstacle? level p (:direction state1 :north)))
-              state2 (assoc state1
-                       :fan-installed fan?
-                       :complete (boolean complete?)
-                       :no-obstacle (boolean obstacle-free?)
-                       :status (if complete? "COMPLETE" "INCOMPLETE"))]
-          (when (not= state2 state0)
-            (platform-be/set-custom-state! be state2)
-            (platform-be/set-changed! be)))
-        (when (not= state1 state0)
-          (platform-be/set-custom-state! be state1))))))
+(defn main-tick-state
+  [state {:keys [level pos]}]
+  (let [ticker (inc (int (get state :update-ticker 0)))
+        state1 (assoc state :update-ticker ticker)]
+    (if (zero? (mod ticker (wind-config/structure-update-interval)))
+      (let [fan? (boolean (fan-item-stack? (get-in state1 [:inventory 0])))
+            base-info (find-base-below level pos)
+            complete? (and base-info (>= (:pillars base-info 0) (wind-config/min-pillars)))
+            obstacle-free? (and complete? (no-obstacle? level pos (:direction state1 :north)))]
+        (assoc state1
+          :fan-installed fan?
+          :complete (boolean complete?)
+          :no-obstacle (boolean obstacle-free?)
+          :status (if complete? "COMPLETE" "INCOMPLETE")))
+      state1)))
 
-(defn base-tick-fn [level p _block-state be]
-  (when (and level (not (world/world-is-client-side* level)) (sub-id-zero? be))
-    (let [state0 (or (platform-be/get-custom-state be) base-default-state)
-          ticker (inc (int (get state0 :update-ticker 0)))
-          state1 (assoc state0 :update-ticker ticker)
-          scan-info (when (zero? (mod ticker (wind-config/structure-update-interval)))
-                      (find-main-above-from-base level p))
-          state2 (if scan-info
-                   (let [comp (:completeness scan-info :base-only)
-                         mpos (:main-pos scan-info)]
-                     (cond-> (assoc state1 :completeness (name comp))
-                       mpos (assoc :main-pos-x (pos/pos-x mpos)
-                                   :main-pos-y (pos/pos-y mpos)
-                                   :main-pos-z (pos/pos-z mpos))))
-                   state1)
-          main-pos (when (= (:completeness state2) "complete")
-                     (let [mx (:main-pos-x state2)
-                           my (:main-pos-y state2)
-                           mz (:main-pos-z state2)]
-                       (when (and (number? mx) (number? my) (number? mz))
-                         (pos/create-block-pos mx my mz))))
-          main-be (when main-pos (world/world-get-tile-entity* level main-pos))
-          main-state (when main-be (platform-be/get-custom-state main-be))
-          working? (and (= (:completeness state2) "complete")
-                        (true? (:no-obstacle main-state))
-                        (true? (:fan-installed main-state)))
-          gen-speed (if working? (wind-config/calculate-generation-rate (:main-pos-y state2)) 0.0)
-          energy-before (double (get state2 :energy 0.0))
-          max-energy (double (wind-config/max-energy-base))
-          energy-after (min max-energy (+ energy-before gen-speed))
-          state3 (assoc state2
-                   :energy energy-after
-                   :max-energy max-energy
-                   :gen-speed (double gen-speed)
-                   :status (completeness->status (keyword (:completeness state2 "base-only")) working?))
-          state4 (maybe-charge-output-item state3)]
-      (when (not= state4 state0)
-        (platform-be/set-custom-state! be state4)
-        (platform-be/set-changed! be)))))
+(defn base-tick-state
+  [state {:keys [level pos]}]
+  (let [ticker (inc (int (get state :update-ticker 0)))
+        state1 (assoc state :update-ticker ticker)
+        scan-info (when (zero? (mod ticker (wind-config/structure-update-interval)))
+                    (find-main-above-from-base level pos))
+        state2 (if scan-info
+                 (let [comp (:completeness scan-info :base-only)
+                       mpos (:main-pos scan-info)]
+                   (cond-> (assoc state1 :completeness (name comp))
+                     mpos (assoc :main-pos-x (pos/pos-x mpos)
+                                 :main-pos-y (pos/pos-y mpos)
+                                 :main-pos-z (pos/pos-z mpos))))
+                 state1)
+        main-pos (when (= (:completeness state2) "complete")
+                   (let [mx (:main-pos-x state2)
+                         my (:main-pos-y state2)
+                         mz (:main-pos-z state2)]
+                     (when (and (number? mx) (number? my) (number? mz))
+                       (pos/create-block-pos mx my mz))))
+        main-be (when main-pos (world/world-get-tile-entity* level main-pos))
+        main-state (when main-be (platform-be/get-custom-state main-be))
+        working? (and (= (:completeness state2) "complete")
+                      (true? (:no-obstacle main-state))
+                      (true? (:fan-installed main-state)))
+        gen-speed (if working? (wind-config/calculate-generation-rate (:main-pos-y state2)) 0.0)
+        energy-before (double (get state2 :energy 0.0))
+        max-energy (double (wind-config/max-energy-base))
+        energy-after (min max-energy (+ energy-before gen-speed))
+        state3 (assoc state2
+                 :energy energy-after
+                 :max-energy max-energy
+                 :gen-speed (double gen-speed)
+                 :status (completeness->status (keyword (:completeness state2 "base-only")) working?))]
+    (maybe-charge-output-item state3)))
 
-(defn pillar-tick-fn [level _p _block-state be]
-  (when (and level (not (world/world-is-client-side* level)))
-    (let [state0 (or (platform-be/get-custom-state be) pillar-default-state)
-          state1 (update state0 :update-ticker (fnil inc 0))]
-      (when (not= state1 state0)
-        (platform-be/set-custom-state! be state1)))))
+(defn pillar-tick-state
+  [state _ctx]
+  (update state :update-ticker (fnil inc 0)))
+
+(defn- controller-tick-fn
+  [tick-spec]
+  (let [inner (machine-runtime/make-tick-fn tick-spec)]
+    (fn [level pos block-state be]
+      (when (sub-id-zero? be)
+        (inner level pos block-state be)))))
+
+(def main-tick-fn
+  (controller-tick-fn {:default-state main-default-state :tick-state main-tick-state}))
+
+(def base-tick-fn
+  (controller-tick-fn {:default-state base-default-state :tick-state base-tick-state}))
+
+(def pillar-tick-fn
+  (machine-runtime/make-tick-fn {:default-state pillar-default-state :tick-state pillar-tick-state}))
 
 (defn- main-controller-pos-at
   [level p bid]
@@ -317,16 +321,10 @@
                    :text "wind_gen_pillar must be in the same x/z column above wind_gen_base or wind_gen_main controller."}]})))
 
 (defn open-wind-main-gui! [{:keys [player world pos sneaking item-stack]}]
-  ;; Follow Minecraft 1.20 use order:
-  ;; when player is holding the pillar block item, let item placement run (PASS).
+  ;; When holding pillar item, return nil so BlockItem placement runs (PASS).
   (when (and player world pos (not sneaking) (not (pillar-item-stack? item-stack)))
-    (if-let [open-gui-by-type (requiring-resolve 'cn.li.ac.gui.open/open-gui-by-type)]
-      (open-gui-by-type player :wind-gen-main world pos)
-      nil)))
+    (gui-open/open-gui-by-type player :wind-gen-main world pos)))
 
 (defn open-wind-base-gui! [{:keys [player world pos sneaking item-stack]}]
-  ;; Keep placement path for pillar item: return nil/PASS to let BlockItem#useOn run.
   (when (and player world pos (not sneaking) (not (pillar-item-stack? item-stack)))
-    (if-let [open-gui-by-type (requiring-resolve 'cn.li.ac.gui.open/open-gui-by-type)]
-      (open-gui-by-type player :wind-gen-base world pos)
-      nil)))
+    (gui-open/open-gui-by-type player :wind-gen-base world pos)))

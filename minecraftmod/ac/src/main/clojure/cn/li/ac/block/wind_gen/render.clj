@@ -1,6 +1,7 @@
 (ns cn.li.ac.block.wind-gen.render
 	"CLIENT-ONLY: Wind Generator block entity renderers."
-	(:require [cn.li.mcmod.client.resources :as res]
+	(:require [cn.li.ac.block.machine.render-runtime :as machine-render-runtime]
+						[cn.li.mcmod.client.resources :as res]
 						[cn.li.mcmod.client.obj :as obj]
 						[cn.li.mcmod.client.render.tesr-api :as tesr-api]
 						[cn.li.mcmod.client.render.multiblock-helper :as mb-helper]
@@ -65,7 +66,7 @@
 	([]
 	 (create-wind-gen-render-runtime {}))
 	([initial-cache]
-	 {:fan-rot-cache (atom initial-cache)}))
+	 (machine-render-runtime/create-render-runtime {:fan-rot-cache initial-cache})))
 
 (defonce ^:private installed-wind-gen-render-runtime
 	(create-wind-gen-render-runtime))
@@ -89,23 +90,23 @@
 
 (defn- fan-rot-cache-atom
 	[]
-	(:fan-rot-cache (current-wind-gen-render-runtime)))
+	(machine-render-runtime/cache-atom (current-wind-gen-render-runtime) :fan-rot-cache))
 
 (defn fan-rot-cache-snapshot
 	[]
-	@(fan-rot-cache-atom))
+	(machine-render-runtime/cache-snapshot (current-wind-gen-render-runtime) :fan-rot-cache))
 
 (defn clear-fan-rot-cache!
 	[]
-	(reset! (fan-rot-cache-atom) {})
-	nil)
+	(machine-render-runtime/clear-cache! (current-wind-gen-render-runtime) :fan-rot-cache))
 
 (defn reset-fan-rot-cache-for-test!
 	([]
-	 (clear-fan-rot-cache!))
+	 (machine-render-runtime/reset-cache-for-test!
+		 (current-wind-gen-render-runtime) :fan-rot-cache))
 	([cache]
-	 (reset! (fan-rot-cache-atom) cache)
-	 nil))
+	 (machine-render-runtime/reset-cache-for-test!
+		 (current-wind-gen-render-runtime) :fan-rot-cache cache)))
 
 (defn- tile-key [tile]
 	(let [p (pos/position-get-block-pos tile)]
@@ -198,18 +199,6 @@
 		(tesr-api/register-scripted-tile-renderer! "wind-gen-main-part" main-renderer)
 		(tesr-api/register-scripted-tile-renderer! "wind-gen-pillar" pillar-renderer)))
 
-(def ^:private wind-renderer-guard-lock
-	(Object.))
-
-(def ^:private ^:dynamic *wind-renderer-installed?*
-	false)
-
 (defn init!
 	[]
-	(when-let [register-fn (requiring-resolve 'cn.li.mcmod.client.render.init/register-renderer-init-fn!)]
-		(when-not (var-get #'*wind-renderer-installed?*)
-			(locking wind-renderer-guard-lock
-				(when-not (var-get #'*wind-renderer-installed?*)
-					(register-fn register!)
-					(alter-var-root #'*wind-renderer-installed?* (constantly true))
-					(log/info "Registered wind generator renderers"))))))
+	(machine-render-runtime/register-client-renderer-init! 'cn.li.ac.block.wind-gen.render/register!))

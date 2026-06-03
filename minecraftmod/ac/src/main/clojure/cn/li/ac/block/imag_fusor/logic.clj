@@ -1,28 +1,24 @@
 (ns cn.li.ac.block.imag-fusor.logic
   "Imaginary Fusor business logic."
-  (:require [cn.li.mcmod.block.state-schema :as state-schema]
-            [cn.li.mcmod.platform.world :as world]
-            [cn.li.mcmod.platform.be :as platform-be]
-            [cn.li.mcmod.platform.item :as pitem]
-            [cn.li.mcmod.platform.nbt :as nbt]
-            [cn.li.ac.block.imag-fusor.config :as fusor-config]
-            [cn.li.ac.block.imag-fusor.schema :as fusor-schema]
+  (:require [cn.li.ac.block.imag-fusor.config :as fusor-config]
             [cn.li.ac.block.imag-fusor.recipes :as recipes]
+            [cn.li.ac.block.imag-fusor.schema :as fusor-schema]
+            [cn.li.ac.block.machine.container :as machine-container]
+            [cn.li.ac.block.machine.inventory-stack :as inv]
+            [cn.li.ac.block.machine.matter-unit :as matter-unit]
+            [cn.li.ac.block.machine.runtime :as machine-runtime]
             [cn.li.ac.energy.operations :as energy]
-            [cn.li.mcmod.util.log :as log]))
+            [cn.li.mcmod.block.state-schema :as state-schema]
+            [cn.li.mcmod.platform.item :as pitem]
+            [cn.li.mcmod.platform.world :as world]))
 
-;; Schema and state helpers
-(def fusor-state-schema
-  (state-schema/filter-server-fields fusor-schema/imag-fusor-schema))
+(def ^:private fusor-rt
+  (machine-runtime/schema-runtime fusor-schema/imag-fusor-schema :server-only? true))
 
-(def fusor-default-state
-  (state-schema/schema->default-state fusor-state-schema))
-
-(def fusor-scripted-load-fn
-  (state-schema/schema->load-fn fusor-state-schema))
-
-(def fusor-scripted-save-fn
-  (state-schema/schema->save-fn fusor-state-schema))
+(def fusor-state-schema (:server-schema fusor-rt))
+(def fusor-default-state (:default-state fusor-rt))
+(def fusor-scripted-load-fn (:load-fn fusor-rt))
+(def fusor-scripted-save-fn (:save-fn fusor-rt))
 
 (def fusor-blockstate-fields
   (filterv :block-state fusor-schema/imag-fusor-schema))
@@ -44,37 +40,19 @@
 (def imag-output-slot fusor-config/imag-output-slot-index)
 (def total-slots fusor-config/total-slots)
 
-(defn- stack-empty?
-  [stack]
-  (or (nil? stack)
-      (try (boolean (pitem/item-is-empty? stack))
-           (catch Exception _ false))))
+(def ^:private stack-empty? inv/stack-empty?)
+(def ^:private stack-count inv/stack-count)
 
-(defn- stack-count
-  [stack]
-  (if (stack-empty? stack)
-    0
-    (try (int (pitem/item-get-count stack))
-         (catch Exception _ 0))))
-
-(defn- stack-id
-  [stack]
-  (recipes/item-id-from-stack stack))
-
-(defn- rebuild-stack
-  [stack new-count]
+(defn- rebuild-stack [stack new-count]
   (when (and stack (pos? (int new-count)))
-    (when-let [item-id (stack-id stack)]
+    (when-let [item-id (recipes/item-id-from-stack stack)]
       (pitem/create-item-stack-by-id item-id (int new-count)))))
 
-(defn- consume-stack
-  [stack amount]
+(defn- consume-stack [stack amount]
   (let [left (- (stack-count stack) (int amount))]
-    (when (pos? left)
-      (rebuild-stack stack left))))
+    (when (pos? left) (rebuild-stack stack left))))
 
-(defn- merge-stack-count
-  [existing produced]
+(defn- merge-stack-count [existing produced]
   (cond
     (stack-empty? produced) existing
     (stack-empty? existing) produced
@@ -88,41 +66,8 @@
   [state]
   (get-in state [:inventory output-slot]))
 
-(defn- matter-unit-kind
-  [stack]
-  (when (and (not (stack-empty? stack))
-             (= (stack-id stack) fusor-config/matter-unit-item-id))
-    (let [tag (try (pitem/item-get-tag-compound stack) (catch Exception _ nil))
-          tag-kind (when tag (try (nbt/nbt-get-string tag "matterKind") (catch Exception _ nil)))]
-      (or (case (some-> tag-kind str)
-            "none" :none
-            "phase-liquid" :phase-liquid
-            nil)
-          (case (int (try (pitem/item-get-damage stack) (catch Exception _ -1)))
-            0 :none
-            1 :phase-liquid
-            nil)))))
-
-(defn- phase-liquid-unit?
-  [stack]
-  (= :phase-liquid (matter-unit-kind stack)))
-
-(defn- empty-matter-unit?
-  [stack]
-  (= :none (matter-unit-kind stack)))
-
-(defn- make-empty-matter-unit
-  [count]
-  (let [stack (pitem/create-item-stack-by-id fusor-config/matter-unit-item-id (int count))]
-    (when stack
-      (try
-        (let [tag (pitem/item-get-or-create-tag stack)]
-          (nbt/nbt-set-string! tag "matterKind" "none"))
-        (catch Exception _ nil))
-      (try
-        (pitem/item-set-damage! stack fusor-config/matter-unit-none-meta)
-        (catch Exception _ nil))
-      stack)))
+(defn- phase-liquid-unit? [stack]
+  (matter-unit/phase-liquid-unit? stack fusor-config/matter-unit-item-id))
 
 ;; Crafting logic
 (defn- get-current-recipe
@@ -211,38 +156,15 @@
         state))
     state))
 
-(defn- can-convert-phase-unit?
-  [state]
-  (let [input-unit (get-in state [:inventory imag-input-slot])
-        output-unit (get-in state [:inventory imag-output-slot])
-        liquid (int (:liquid-amount state 0))
-        tank-size (int (:tank-size state fusor-config/tank-size))
-        has-input (and (phase-liquid-unit? input-unit)
-                       (pos? (stack-count input-unit)))
-        can-store (<= (+ liquid fusor-config/liquid-per-unit) tank-size)
-        can-output (or (stack-empty? output-unit)
-                       (and (empty-matter-unit? output-unit)
-                            (< (stack-count output-unit)
-                               (int (or (try (pitem/item-get-max-stack-size output-unit)
-                                             (catch Exception _ 16))
-                                        16)))))]
-    (and has-input can-store can-output)))
-
-(defn- convert-phase-unit
-  [state]
-  (if (can-convert-phase-unit? state)
-    (let [input-unit (get-in state [:inventory imag-input-slot])
-          output-unit (get-in state [:inventory imag-output-slot])
-          new-input (consume-stack input-unit 1)
-          add-count (if (stack-empty? output-unit) 1 (inc (stack-count output-unit)))
-          new-output (or (when-not (stack-empty? output-unit)
-                           (rebuild-stack output-unit add-count))
-                         (make-empty-matter-unit add-count))]
-      (-> state
-          (assoc :liquid-amount (+ (int (:liquid-amount state 0)) fusor-config/liquid-per-unit))
-          (assoc-in [:inventory imag-input-slot] new-input)
-          (assoc-in [:inventory imag-output-slot] new-output)))
-    state))
+(defn- convert-phase-unit [state]
+  (matter-unit/convert-phase-unit-state
+    state
+    {:liquid-in-slot imag-input-slot
+     :liquid-out-slot imag-output-slot
+     :liquid-per-unit fusor-config/liquid-per-unit
+     :tank-size (int (:tank-size state fusor-config/tank-size))
+     :matter-unit-item-id fusor-config/matter-unit-item-id
+     :max-output-stack 16}))
 
 (defn- update-idle-state
   [state]
@@ -260,105 +182,49 @@
     (inc (mod (quot (long day-time) 8) 4))
     0))
 
-(defn- update-be-state!
-  [be level pos state]
-  (platform-be/set-custom-state! be state)
-  (platform-be/set-changed! be)
-  (when (seq fusor-blockstate-fields)
-    (fusor-blockstate-updater state level pos)))
+(defn fusor-tick-state
+  [state {:keys [level]}]
+  (let [state (assoc state
+                     :update-ticker (inc (long (get state :update-ticker 0)))
+                     :tank-size (int (:tank-size state fusor-config/tank-size))
+                     :check-cooldown (int (:check-cooldown state fusor-config/check-interval)))
+        energy-item (get-in state [:inventory energy-slot])
+        state (if (and energy-item (energy/is-energy-item-supported? energy-item))
+                (let [cur-energy (double (:energy state 0.0))
+                      max-energy (double (:max-energy state fusor-config/max-energy))
+                      needed (- max-energy cur-energy)
+                      pulled (double (energy/pull-energy-from-item energy-item needed false))]
+                  (if (pos? pulled)
+                    (assoc state :energy (+ cur-energy pulled))
+                    state))
+                state)
+        state (convert-phase-unit state)
+        state (if (:working state false)
+                (tick-crafting state)
+                (update-idle-state state))]
+    (assoc state :frame (animated-frame (:working state false)
+                                        (world/world-get-day-time* level)))))
 
-;; Tick logic
-(defn fusor-tick-fn
-  [level pos _block-state be]
-  (when (and level (not (world/world-is-client-side* level)))
-    (let [state (or (platform-be/get-custom-state be) fusor-default-state)
-          ticker (inc (get state :update-ticker 0))
-          state (assoc state
-                       :update-ticker ticker
-                       :tank-size (int (:tank-size state fusor-config/tank-size))
-                       :check-cooldown (int (:check-cooldown state fusor-config/check-interval)))
+(def fusor-tick-fn
+  (machine-runtime/make-tick-fn
+    {:default-state fusor-default-state
+     :tick-state fusor-tick-state
+     :blockstate-updater fusor-blockstate-updater}))
 
-          ;; Charge from energy slot
-          energy-item (get-in state [:inventory energy-slot])
-          state (if (and energy-item (energy/is-energy-item-supported? energy-item))
-                  (let [cur-energy (double (:energy state 0.0))
-                        max-energy (double (:max-energy state fusor-config/max-energy))
-                        needed (- max-energy cur-energy)
-                        pulled (double (energy/pull-energy-from-item energy-item needed false))]
-                    (if (pos? pulled)
-                      (assoc state :energy (+ cur-energy pulled))
-                      state))
-                  state)
+(defn- can-place? [_be slot item _face]
+  (or (and (= slot input-slot) (boolean (recipes/find-recipe item)))
+      (and (= slot imag-input-slot) (phase-liquid-unit? item))
+      (and (= slot energy-slot) (energy/is-energy-item-supported? item))))
 
-          ;; Matter unit => liquid tank
-          state (convert-phase-unit state)
+(defn- can-take? [_be slot _item _face]
+  (or (= slot output-slot) (= slot imag-output-slot) (= slot energy-slot)))
 
-          ;; Process crafting
-          state (if (:working state false)
-                  (tick-crafting state)
-                  (update-idle-state state))
-
-          state (assoc state :frame (animated-frame (:working state false)
-                                                    (world/world-get-day-time* level)))]
-
-      (when (not= state (platform-be/get-custom-state be))
-        (update-be-state! be level pos state)))))
-
-;; Container functions
 (def fusor-container-fns
-  {:get-size (fn [_be] total-slots)
+  (machine-container/make-inventory-container-fns
+    {:default-state fusor-default-state
+     :slot-count total-slots
+     :can-place? can-place?
+     :can-take? can-take?}))
 
-   :get-item (fn [be slot]
-               (get-in (or (platform-be/get-custom-state be) fusor-default-state)
-                       [:inventory slot]))
-
-   :set-item! (fn [be slot item]
-                (let [state (or (platform-be/get-custom-state be) fusor-default-state)
-                      state' (assoc-in state [:inventory slot] item)]
-                  (platform-be/set-custom-state! be state')))
-
-   :remove-item (fn [be slot amount]
-                  (let [state (or (platform-be/get-custom-state be) fusor-default-state)
-                        item (get-in state [:inventory slot])]
-                    (when item
-                      (let [cnt (pitem/item-get-count item)]
-                        (if (<= cnt amount)
-                          (do (platform-be/set-custom-state! be (assoc-in state [:inventory slot] nil))
-                              item)
-                          (pitem/item-split item amount))))))
-
-   :remove-item-no-update (fn [be slot]
-                            (let [state (or (platform-be/get-custom-state be) fusor-default-state)
-                                  item (get-in state [:inventory slot])]
-                              (platform-be/set-custom-state! be (assoc-in state [:inventory slot] nil))
-                              item))
-
-   :clear! (fn [be]
-             (platform-be/set-custom-state! be
-               (assoc (or (platform-be/get-custom-state be) fusor-default-state)
-                      :inventory (vec (repeat total-slots nil)))))
-
-   :still-valid? (fn [_be _player] true)
-
-   :can-place-through-face? (fn [_be slot item _face]
-                   (or (and (= slot input-slot)
-                      (boolean (recipes/find-recipe item)))
-                     (and (= slot imag-input-slot)
-                      (phase-liquid-unit? item))
-                                   (and (= slot energy-slot)
-                                        (energy/is-energy-item-supported? item))))
-
-   :can-take-through-face? (fn [_be slot _item _face]
-                 (or (= slot output-slot)
-                   (= slot imag-output-slot)
-                                 (= slot energy-slot)))})
-
-(defn open-fusor-gui! [{:keys [player world pos sneaking] :as _ctx}]
-  (when (and player world pos (not sneaking))
-    (try
-      (if-let [open-gui-by-type (requiring-resolve 'cn.li.ac.gui.open/open-gui-by-type)]
-        (open-gui-by-type player :imag-fusor world pos)
-        (do (log/error "Imag Fusor GUI open fn not found") nil))
-      (catch Exception e
-        (log/error "Failed to open Imag Fusor GUI:" (ex-message e))
-        nil))))
+(def open-fusor-gui!
+  (machine-runtime/make-open-gui-handler :imag-fusor))

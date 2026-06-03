@@ -3,7 +3,6 @@
             [cn.li.ac.block.developer.handlers :as handlers]
             [cn.li.ac.wireless.gui.sync.handler :as sync-handler]
             [cn.li.mcmod.platform.be :as platform-be]
-            [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.ac.wireless.api :as wireless-api]
@@ -93,47 +92,6 @@
       (is (= {:success true}
              (handlers/handle-stop-development {:pos-x 1 :pos-y 2 :pos-z 3} :player)))
       (is (false? (:is-developing @saved))))))
-
-(deftest handle-list-nodes-safe-defaults-test
-  (with-redefs [sync-handler/get-world (fn [_] :world)
-                sync-handler/get-tile-at (fn [_ _] :tile)
-                pos/position-get-block-pos (fn [_] :tile-pos)
-                wireless-api/get-node-conn-by-receiver (fn [_] nil)
-                wireless-api/get-nodes-in-range (fn [_ _] [])]
-    (is (= {:linked nil :avail []}
-           (handlers/handle-list-nodes {:pos-x 1 :pos-y 2 :pos-z 3} :player)))))
-
-(deftest handle-connect-and-disconnect-test
-  (testing "connect success path"
-    (let [link-calls (atom [])]
-      (with-redefs [sync-handler/get-world (fn [_] :world)
-                    sync-handler/get-tile-at (fn [_ payload]
-                                               (if (contains? payload :node-x) :node :recv))
-                    wireless-api/link-receiver-to-node! (fn [recv node pass need-auth?]
-                                                          (swap! link-calls conj [recv node pass need-auth?])
-                                                          true)]
-        (is (= {:success true}
-               (handlers/handle-connect {:pos-x 1 :pos-y 2 :pos-z 3
-                                         :node-x 9 :node-y 8 :node-z 7
-                                         :password "pw"
-                                         :need-auth? false}
-                                        :player)))
-        (is (= [[:node :recv "pw" false]] @link-calls)))))
-
-  (testing "connect failure without node payload"
-    (with-redefs [sync-handler/get-world (fn [_] :world)
-                  sync-handler/get-tile-at (fn [_ _] :recv)]
-      (is (= {:success false}
-             (handlers/handle-connect {:pos-x 1 :pos-y 2 :pos-z 3} :player)))))
-
-  (testing "disconnect success path"
-    (let [unlink-calls (atom 0)]
-      (with-redefs [sync-handler/get-world (fn [_] :world)
-                    sync-handler/get-tile-at (fn [_ _] :recv)
-                    wireless-api/unlink-receiver-from-node! (fn [_] (swap! unlink-calls inc))]
-        (is (= {:success true}
-               (handlers/handle-disconnect {:pos-x 1 :pos-y 2 :pos-z 3} :player)))
-        (is (= 1 @unlink-calls))))))
 
 (deftest register-network-handlers-registers-all-actions-test
   (let [calls (atom [])]

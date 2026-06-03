@@ -3,7 +3,8 @@
 
   Renders a floating rotating quad using the cat_engine block texture.
   Behavior mirrors legacy AcademyCraft TESR animation speed driven by :this-tick-gen."
-  (:require [cn.li.mcmod.client.resources :as res]
+  (:require [cn.li.ac.block.machine.render-runtime :as machine-render-runtime]
+            [cn.li.mcmod.client.resources :as res]
             [cn.li.mcmod.client.render.tesr-api :as tesr-api]
             [cn.li.mcmod.client.render.buffer :as rb]
             [cn.li.mcmod.client.render.pose :as pose]
@@ -31,7 +32,7 @@
   ([]
    (create-cat-engine-render-runtime {}))
   ([initial-cache]
-   {:rotor-cache (atom initial-cache)}))
+   (machine-render-runtime/create-render-runtime {:rotor-cache initial-cache})))
 
 (defonce ^:private installed-cat-engine-render-runtime
   (create-cat-engine-render-runtime))
@@ -55,23 +56,23 @@
 
 (defn rotor-cache-atom
   []
-  (:rotor-cache (current-cat-engine-render-runtime)))
+  (machine-render-runtime/cache-atom (current-cat-engine-render-runtime) :rotor-cache))
 
 (defn rotor-cache-snapshot
   []
-  @(rotor-cache-atom))
+  (machine-render-runtime/cache-snapshot (current-cat-engine-render-runtime) :rotor-cache))
 
 (defn clear-rotor-cache!
   []
-  (reset! (rotor-cache-atom) {})
-  nil)
+  (machine-render-runtime/clear-cache! (current-cat-engine-render-runtime) :rotor-cache))
 
 (defn reset-rotor-cache-for-test!
   ([]
-   (clear-rotor-cache!))
+   (machine-render-runtime/reset-cache-for-test!
+     (current-cat-engine-render-runtime) :rotor-cache))
   ([cache]
-   (reset! (rotor-cache-atom) cache)
-   nil))
+   (machine-render-runtime/reset-cache-for-test!
+     (current-cat-engine-render-runtime) :rotor-cache cache)))
 
 (defn- tile-key [tile]
   (let [p (pos/position-get-block-pos tile)]
@@ -143,18 +144,6 @@
           (catch Exception e
             (log/error "Error in cat-engine renderer:" (ex-message e))))))))
 
-(def ^:private cat-renderer-guard-lock
-  (Object.))
-
-(def ^:private ^:dynamic *cat-renderer-installed?*
-  false)
-
 (defn init!
   []
-  (when-let [register-fn (requiring-resolve 'cn.li.mcmod.client.render.init/register-renderer-init-fn!)]
-    (when-not (var-get #'*cat-renderer-installed?*)
-      (locking cat-renderer-guard-lock
-        (when-not (var-get #'*cat-renderer-installed?*)
-          (register-fn register!)
-          (alter-var-root #'*cat-renderer-installed?* (constantly true))
-          (log/info "Registered cat-engine renderer"))))))
+  (machine-render-runtime/register-client-renderer-init! 'cn.li.ac.block.cat-engine.render/register!))

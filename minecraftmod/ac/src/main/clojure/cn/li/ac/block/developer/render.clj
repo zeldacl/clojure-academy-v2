@@ -6,7 +6,8 @@
   then matrix-style Y lift in block space.
 
   Loaded only from client init via hooks; uses mcmod protocols only."
-  (:require [cn.li.mcmod.client.resources :as res]
+  (:require [cn.li.ac.block.machine.render-runtime :as machine-render-runtime]
+            [cn.li.mcmod.client.resources :as res]
             [cn.li.mcmod.client.obj :as obj]
             [cn.li.mcmod.client.render.tesr-api :as tesr-api]
             [cn.li.mcmod.client.render.multiblock-helper :as mb-helper]
@@ -131,18 +132,6 @@
     (tesr-api/register-scripted-tile-renderer! "developer-advanced" a)
     (tesr-api/register-scripted-tile-renderer! "developer-advanced-part" a)))
 
-(def ^:private developer-renderer-guard-lock
-  (Object.))
-
-(def ^:private ^:dynamic *developer-renderer-installed?*
-  false)
-
 (defn init!
   []
-  (when-let [register-fn (requiring-resolve 'cn.li.mcmod.client.render.init/register-renderer-init-fn!)]
-    (when-not (var-get #'*developer-renderer-installed?*)
-      (locking developer-renderer-guard-lock
-        (when-not (var-get #'*developer-renderer-installed?*)
-          (register-fn register!)
-          (alter-var-root #'*developer-renderer-installed?* (constantly true))
-          (log/info "Registered developer OBJ tile renderers (normal + advanced)"))))))
+  (machine-render-runtime/register-client-renderer-init! 'cn.li.ac.block.developer.render/register!))

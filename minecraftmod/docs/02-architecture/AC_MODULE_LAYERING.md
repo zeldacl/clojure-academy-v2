@@ -31,7 +31,7 @@ foundation → domain/model → data/repository/persistence → service/applicat
 | `cn.li.ac.wireless.api` | `service.commands`、`service.queries`、事件发射 | 无线对外**唯一**入口；已删除 `topology-service` / `query-service` 等第二套路径。 |
 | `cn.li.ac.wireless.data.world` | `data.persistence`、生命周期钩子 | **仅** SavedData 与 `on-world-load/save/tick`；不代理 lookup，也不 re-export 拓扑命令。可变状态提交在 `data.world-registry`。 |
 | `cn.li.ac.wireless.core.vblock` | `data.vblock-codec`、`core.vblock-resolver` | runtime record 兼容保留，NBT codec 与 world resolver 分离。 |
-| `cn.li.ac.block.wireless-node.logic` | `state`、`inventory`、`tick`、`capability` | 旧 logic 仅保留 facade 和方块事件 handler。 |
+| `cn.li.ac.block.wireless-node.logic` | `state`、`inventory`、`tick`、`capability`、`sync-broadcast` | 方块放置/破坏/GUI 打开等事件 glue；tick 与 sync 在专用 namespace。 |
 | `cn.li.ac.energy.api.impl` | `service.provider-registry`、`service.subscription`、`service.transfer-executor` | 协议实现瘦身为适配层。 |
 | `cn.li.ac.ability.registry.developer-type` / developer block callers | `ability.domain.developer` | developer 类型、等级门槛、能量 pacing 单一事实源。 |
 
@@ -50,9 +50,22 @@ foundation → domain/model → data/repository/persistence → service/applicat
 
 - 状态 schema、默认值、tier、blockstate 投影：`cn.li.ac.block.wireless-node.state`。
 - Slot schema 与 container 操作：`cn.li.ac.block.wireless-node.inventory`。
-- Server tick：`cn.li.ac.block.wireless-node.tick`。
+- Server tick（`make-tick-fn` + `after-commit!` blockstate）：`cn.li.ac.block.wireless-node.tick`。
 - Java/capability implementation：`cn.li.ac.block.wireless-node.capability`。
-- 方块右键/放置/破坏事件 glue：保留在 `cn.li.ac.block.wireless-node.logic`。
+- 方块右键/放置/破坏事件 glue：`cn.li.ac.block.wireless-node.logic`。
+- Server GUI 广播（无 client GUI 依赖）：`cn.li.ac.block.wireless-node.sync-broadcast`。
+
+### Wireless Matrix Block
+
+- 状态与 controller 解析：`cn.li.ac.block.wireless-matrix.state`。
+- Slot schema 与 plate/core 计数：`cn.li.ac.block.wireless-matrix.inventory`。
+- Capability / Java proxy：`cn.li.ac.block.wireless-matrix.capability`。
+- Tick、容器、方块事件：`cn.li.ac.block.wireless-matrix.logic`。
+- Server GUI 广播：`cn.li.ac.block.wireless-matrix.sync-broadcast`。
+
+### Block machines (shared)
+
+- 统一注册/tick/容器/GUI：`cn.li.ac.block.machine.registration`、`machine.runtime`、`machine.container`。
 
 ### Energy
 

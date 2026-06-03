@@ -61,10 +61,8 @@
 
 (deftest developer-open-gui-forwards-to-platform-gui-test
   (let [calls (atom [])]
-    (with-redefs [requiring-resolve
-                  (fn [sym]
-                    (when (= sym 'cn.li.ac.gui.open/open-gui-by-type)
-                      (fn [& args] (swap! calls conj args))))
+    (with-redefs [cn.li.ac.gui.open/open-gui-by-type
+                  (fn [& args] (swap! calls conj args))
                   bdsl/get-block-spec (fn [_] nil)
                   world/world-is-client-side* (fn [_] true)]
       ((developer-logic/open-developer-gui-for "developer-normal")

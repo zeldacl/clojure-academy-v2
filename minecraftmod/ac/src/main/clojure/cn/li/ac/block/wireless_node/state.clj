@@ -1,22 +1,19 @@
 (ns cn.li.ac.block.wireless-node.state
   "Wireless node state schema, defaults, tier helpers, and blockstate projection."
   (:require [clojure.string :as str]
+            [cn.li.ac.block.machine.runtime :as machine-runtime]
             [cn.li.ac.block.wireless-node.schema :as node-schema]
             [cn.li.ac.wireless.config :as node-config]
             [cn.li.mcmod.block.state-schema :as state-schema]
             [cn.li.mcmod.platform.be :as platform-be]))
 
-(def node-state-schema
-  (state-schema/filter-server-fields node-schema/unified-node-schema))
+(def ^:private node-rt
+  (machine-runtime/schema-runtime node-schema/unified-node-schema :server-only? true))
 
-(def node-default-state
-  (state-schema/schema->default-state node-state-schema))
-
-(def node-scripted-load-fn
-  (state-schema/schema->load-fn node-state-schema))
-
-(def node-scripted-save-fn
-  (state-schema/schema->save-fn node-state-schema))
+(def node-state-schema (:server-schema node-rt))
+(def node-default-state (:default-state node-rt))
+(def node-scripted-load-fn (:load-fn node-rt))
+(def node-scripted-save-fn (:save-fn node-rt))
 
 (def block-state-properties
   (state-schema/extract-block-state-properties node-schema/blockstate-property-fields))

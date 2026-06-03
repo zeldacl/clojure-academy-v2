@@ -1,8 +1,9 @@
 (ns cn.li.ac.block.wind-gen.handlers
   "Wind Generator network handlers."
-  (:require [cn.li.mcmod.network.server :as net-server]
-            [cn.li.ac.block.wind-gen.logic :as wind-logic]
+  (:require [cn.li.ac.block.wind-gen.logic :as wind-logic]
+            [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.ac.wireless.gui.sync.handler :as net-helpers]
+            [cn.li.mcmod.network.server :as net-server]
             [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.util.log :as log]))
 
@@ -26,10 +27,6 @@
      :completeness (str (:completeness state "BASE_ONLY"))}))
 
 (defn register-network-handlers! []
-  (let [msg-main (-> (requiring-resolve 'cn.li.ac.wireless.gui.message.registry/msg)
-                     (apply [:wind-gen :get-status-main]))
-        msg-base (-> (requiring-resolve 'cn.li.ac.wireless.gui.message.registry/msg)
-                     (apply [:wind-gen :get-status-base]))]
-    (net-server/register-handler msg-main handle-get-status-main)
-    (net-server/register-handler msg-base handle-get-status-base)
-    (log/info "Wind Generator network handlers registered")))
+  (net-server/register-handler (msg-registry/msg :wind-gen :get-status-main) handle-get-status-main)
+  (net-server/register-handler (msg-registry/msg :wind-gen :get-status-base) handle-get-status-base)
+  (log/info "Wind Generator network handlers registered"))

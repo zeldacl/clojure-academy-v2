@@ -35,7 +35,8 @@
             [cn.li.ac.wireless.gui.container.schema-runtime :as schema-runtime]
             [cn.li.ac.wireless.gui.sync.helpers :as sync-helpers]
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
-            [cn.li.ac.block.wireless-node.logic :as node-logic]
+            [cn.li.ac.block.wireless-node.inventory :as node-inventory]
+            [cn.li.ac.block.wireless-node.state :as node-state]
             [cn.li.ac.block.wireless-node.owner :as node-owner]
             [cn.li.ac.block.wireless-node.schema :as node-schema]
             [cn.li.mcmod.gui.animation :as anim]
@@ -51,7 +52,7 @@
 
 (defn- ensure-wireless-node-slot-schema!
   []
-  (or (node-logic/ensure-node-slot-schema!)
+  (or (node-inventory/ensure-node-slot-schema!)
       (slot-schema/register-slot-schema!
         {:schema-id wireless-node-id
          :slots [{:id :input :type :energy :x 42 :y 10}
@@ -286,9 +287,6 @@
 ;; ============================================================================
 ;; Sync Packet Handling (from node_sync.clj)
 ;; ============================================================================
-
-(defn broadcast-node-state [world pos sync-data]
-  (sync-helpers/broadcast-state world pos sync-data "node"))
 
 (defn- sync-routing-metadata
   [source]
