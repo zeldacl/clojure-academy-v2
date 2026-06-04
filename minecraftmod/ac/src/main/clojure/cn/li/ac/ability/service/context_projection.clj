@@ -5,7 +5,8 @@
   context-dispatcher; business fields (status, input-state, skill-state,
   keepalive) are read from [:context-registry] in runtime-store only."
   (:require [cn.li.ac.ability.service.context-domain :as context-domain]
-            [cn.li.ac.ability.service.runtime-store :as store]))
+            [cn.li.ac.ability.service.runtime-store :as store]
+            [cn.li.mcmod.runtime.owner :as owner]))
 
 (defn- session-id->store-session
   [session-id]
@@ -22,7 +23,7 @@
   [transport-ctx]
   (if-not (map? transport-ctx)
     transport-ctx
-    (let [session-id (:session-id transport-ctx)
+    (let [session-id (owner/transport-store-session-id transport-ctx)
           player-uuid (:player-uuid transport-ctx)
           ctx-id (:id transport-ctx)
           projected (store-context session-id player-uuid ctx-id)]

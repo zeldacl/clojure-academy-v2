@@ -15,8 +15,7 @@
 (defn- server-owner [player-uuid]
   {:logical-side :server
    :server-session-id test-server-session-id
-   :session-id [test-server-session-id player-uuid]
-   :player-uuid player-uuid})
+   :player-uuid (str player-uuid)})
 
 (defn- with-server-player-owner
   [player-uuid f]

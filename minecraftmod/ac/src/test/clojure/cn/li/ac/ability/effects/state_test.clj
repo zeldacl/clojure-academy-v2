@@ -11,7 +11,8 @@
     (test-contexts/clean-contexts-fixture
      #(ps-fix/clean-player-states-fixture f))))
 
-(def ^:private test-context-owner {:logical-side :server :session-id :test-session})
+(def ^:private test-context-owner
+  {:logical-side :server :server-session-id :test-session :player-uuid "p"})
 
 (deftest assoc-state-op-test
   (let [c (ctx/new-server-context "p" :sk "ctx-st" test-context-owner)]

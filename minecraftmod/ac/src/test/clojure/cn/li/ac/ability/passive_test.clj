@@ -98,7 +98,8 @@
                             "u3"
                             (assoc (store/fresh-player-state)
                                    :ability-data (ad/learn-skill (ad/new-ability-data) :passive-skill)))
-  (binding [runtime-hooks/*player-state-owner* {:session-id :passive-session}]
+  (binding [runtime-hooks/*player-state-owner* {:server-session-id :passive-session
+                                                :player-uuid "p-passive"}]
     (is (true? (passive/learned-skill? "u3" :passive-skill)))
     ))
 

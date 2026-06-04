@@ -296,7 +296,6 @@
       owner-map
       [(require-client-owner-value owner ":client-session-id"
                                    (or (:client-session-id owner-map)
-                                       (:session-id owner-map)
                                        (current-client-session-id)))
        (require-client-owner-value owner ":player-uuid"
                                    (some-> (or (:player-uuid owner-map)
@@ -378,7 +377,8 @@
   [player-uuid]
   (when-let [session-id (current-client-session-id)]
     {:logical-side :client
-     :session-id [session-id player-uuid]}))
+     :client-session-id session-id
+     :player-uuid (str player-uuid)}))
 
 (defn- player-contexts
   [player-uuid]

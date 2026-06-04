@@ -29,6 +29,7 @@
             [cn.li.ac.ability.messages :as catalog]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
+            [cn.li.mcmod.runtime.owner :as owner]
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.util.log :as log]))
 
@@ -142,7 +143,6 @@
     (if (vector? owner-map)
       owner-map
        (let [session-id (or (:client-session-id owner-map)
-                            (:session-id owner-map)
                             (current-client-session-id))
              player-uuid (some-> (or (:player-uuid owner-map)
                                      (:uuid owner-map))
@@ -244,15 +244,17 @@
 
 (defn- client-context-owner
   [player-uuid]
-  {:logical-side :client
-   :session-id (client-ui-owner-key player-uuid)})
+  (let [[session-id _screen-id uuid] (client-ui-owner-key {:player-uuid player-uuid})]
+    {:logical-side :client
+     :client-session-id session-id
+     :player-uuid uuid}))
 
 (defn- client-context-owner-from-owner
   [owner]
-  (let [[session-id player-uuid] (client-ui-owner-key owner)]
+  (let [[session-id _screen-id uuid] (client-ui-owner-key owner)]
     {:logical-side :client
-     :session-id [session-id player-uuid]
-     :player-uuid player-uuid}))
+     :client-session-id session-id
+     :player-uuid uuid}))
 
 (defn- player-contexts
   [player-uuid]
@@ -557,28 +559,35 @@
           (update-client-ui-runtime! assoc-in [:slot-context-ids slot-key] ctx-id)
           ctx-id))))
 
+(defn- send-with-client-owner!
+  [player-uuid msg-id payload & [callback]]
+  (net-client/send-to-server (client-context-owner player-uuid)
+                             msg-id
+                             payload
+                             callback))
+
 (defn- send-slot-key-message!
   [msg-id player-uuid key-idx]
   (when-let [skill-id (client-keybinds/get-skill-id-for-slot-public player-uuid key-idx)]
     (when-let [ctx-id (context-id-for-slot! player-uuid key-idx skill-id)]
-      (net-client/send-to-server msg-id {:ctx-id ctx-id
-                                         :skill-id skill-id
-                                         :key-idx key-idx})
+      (send-with-client-owner! player-uuid msg-id {:ctx-id ctx-id
+                                                   :skill-id skill-id
+                                                   :key-idx key-idx})
       ctx-id)))
 
 (defn- send-slot-keepalive!
   [player-uuid key-idx]
   (let [slot-key (slot-context-key player-uuid key-idx)]
     (when-let [ctx-id (get (slot-context-ids-snapshot) slot-key)]
-      (net-client/send-to-server catalog/MSG-CTX-KEEPALIVE {:ctx-id ctx-id})
+      (send-with-client-owner! player-uuid catalog/MSG-CTX-KEEPALIVE {:ctx-id ctx-id})
       ctx-id)))
 
 (defn- send-slot-key-up-message!
   [player-uuid key-idx]
   (let [slot-key (slot-context-key player-uuid key-idx)]
     (when-let [ctx-id (get (slot-context-ids-snapshot) slot-key)]
-      (net-client/send-to-server catalog/MSG-SLOT-KEY-UP {:ctx-id ctx-id
-                                                          :key-idx key-idx})
+      (send-with-client-owner! player-uuid catalog/MSG-SLOT-KEY-UP {:ctx-id ctx-id
+                                                                   :key-idx key-idx})
       (update-client-ui-runtime! update :slot-context-ids dissoc slot-key)
       ctx-id)))
 
@@ -587,10 +596,13 @@
   (let [slot-key (slot-context-key player-uuid key-idx)]
     (update-client-ui-runtime! update :slot-key-tick-ms dissoc slot-key)
     (when-let [ctx-id (get (slot-context-ids-snapshot) slot-key)]
-      (net-client/send-to-server catalog/MSG-SLOT-KEY-ABORT {:ctx-id ctx-id
-                                                             :key-idx key-idx})
+      (send-with-client-owner! player-uuid catalog/MSG-SLOT-KEY-ABORT {:ctx-id ctx-id
+                                                                       :key-idx key-idx})
       (update-client-ui-runtime! update :slot-context-ids dissoc slot-key)
-      (ctx/terminate-context! ctx-id nil)
+      (with-client-context-owner player-uuid
+        (fn [_owner]
+          (binding [ctx/*context-owner* (client-context-owner player-uuid)]
+            (ctx/terminate-context! ctx-id nil))))
       ctx-id)))
 
 (defn- clear-slot-key-ticks!
@@ -650,10 +662,10 @@
         (and old-usable (not new-usable)))))
 
 (defn- flush-buffered-context-message!
-  [ctx-id {:keys [channel payload]}]
-  (net-client/send-to-server catalog/MSG-CTX-CHANNEL {:ctx-id ctx-id
-                                                      :channel channel
-                                                      :payload payload}))
+  [player-uuid ctx-id {:keys [channel payload]}]
+  (send-with-client-owner! player-uuid catalog/MSG-CTX-CHANNEL {:ctx-id ctx-id
+                                                                :channel channel
+                                                                :payload payload}))
 
 (defn- send-slot-wheel-message!
   [player-uuid key-idx delta]
@@ -664,10 +676,10 @@
           ctx-id (get (slot-context-ids-snapshot) slot-key)
           skill-id (client-keybinds/get-skill-id-for-slot-public player-uuid key-idx)]
       (when (and ctx-id (= skill-id :penetrate-teleport))
-        (net-client/send-to-server catalog/MSG-CTX-CHANNEL
-                                   {:ctx-id ctx-id
-                                    :channel :penetrate-tp/set-distance
-                                    :payload {:delta (double delta)}})))))
+        (send-with-client-owner! player-uuid catalog/MSG-CTX-CHANNEL
+                                 {:ctx-id ctx-id
+                                  :channel :penetrate-tp/set-distance
+                                  :payload {:delta (double delta)}})))))
 
 (defn- active-flashing-context-ids
   [player-uuid]
@@ -688,10 +700,10 @@
 (defn- send-flashing-movement-message!
   [player-uuid channel movement-key]
   (doseq [ctx-id (active-flashing-context-ids player-uuid)]
-    (net-client/send-to-server catalog/MSG-CTX-CHANNEL
-                               {:ctx-id ctx-id
-                                :channel channel
-                                :payload {:key movement-key}})))
+    (send-with-client-owner! player-uuid catalog/MSG-CTX-CHANNEL
+                             {:ctx-id ctx-id
+                              :channel channel
+                              :payload {:key movement-key}})))
 
 (defn- vec-reflection-active?
   [player-uuid]
@@ -898,7 +910,12 @@
           (client-keybinds/update-default-group! uuid))))
     (net-client/register-push-handler! catalog/MSG-CTX-ESTABLISH
       (fn [{:keys [ctx-id server-id]}]
-        (ctx/transition-to-alive! ctx-id server-id (partial flush-buffered-context-message! ctx-id))))
+        (when-let [owner (runtime-hooks/current-player-state-owner)]
+          (binding [ctx/*context-owner* owner]
+            (ctx/transition-to-alive! owner ctx-id server-id
+                                      (fn [msg]
+                                        (flush-buffered-context-message!
+                                         (:player-uuid owner) ctx-id msg)))))))
     (net-client/register-push-handler! catalog/MSG-CTX-TERMINATE
       (fn [{:keys [ctx-id]}]
         (remove-slot-context! ctx-id)
@@ -1021,7 +1038,6 @@
      :client-clear-owner-state!
      (fn [owner]
        (when-let [session-id (or (:client-session-id (when (map? owner) owner))
-                                 (:session-id (when (map? owner) owner))
                                  (current-client-session-id))]
          (combat-notice/clear-session! combat-notice-component session-id))
        (clear-client-owned-runtime-state! owner))
@@ -1072,24 +1088,25 @@
        (build-client-overlay-plan player-uuid screen-width screen-height overlay-state))
 
      :client-req-learn-skill!
-     (fn [skill-id extra callback]
-       (client-api/req-learn-skill! skill-id extra callback))
+     (fn [player-uuid skill-id extra callback]
+       (client-api/req-learn-skill! (client-context-owner player-uuid) skill-id extra callback))
 
      :client-req-level-up!
-     (fn [callback]
-       (client-api/req-level-up! callback))
+     (fn [player-uuid callback]
+       (client-api/req-level-up! (client-context-owner player-uuid) callback))
 
      :client-req-set-activated!
-     (fn [activated callback]
-       (client-api/req-set-activated! activated callback))
+     (fn [player-uuid activated callback]
+       (client-api/req-set-activated! (client-context-owner player-uuid) activated callback))
 
      :client-req-set-preset-slot!
-     (fn [preset-idx key-idx cat-id ctrl-id callback]
-       (client-api/req-set-preset-slot! preset-idx key-idx cat-id ctrl-id callback))
+     (fn [player-uuid preset-idx key-idx cat-id ctrl-id callback]
+       (client-api/req-set-preset-slot! (client-context-owner player-uuid)
+                                        preset-idx key-idx cat-id ctrl-id callback))
 
      :client-req-switch-preset!
-     (fn [preset-idx callback]
-       (client-api/req-switch-preset! preset-idx callback))
+     (fn [player-uuid preset-idx callback]
+       (client-api/req-switch-preset! (client-context-owner player-uuid) preset-idx callback))
 
      :client-open-managed-screen!
      (fn [screen-key payload]

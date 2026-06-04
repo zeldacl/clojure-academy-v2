@@ -1,34 +1,7 @@
 (ns cn.li.mcmod.gui.owner-contract
-  "Canonical GUI owner and message envelope contracts (clojure.spec + fail-fast validators)."
+  "GUI-specific owner contract wrappers; canonical validation lives in runtime.owner."
   (:require [clojure.spec.alpha :as s]
-            [clojure.string :as str]))
-
-(s/def ::logical-side #{:client :server})
-(s/def ::player-uuid string?)
-(s/def ::session-token (s/or :keyword keyword? :vector vector? :symbol symbol?))
-(s/def ::client-session-id ::session-token)
-(s/def ::server-session-id ::session-token)
-
-(s/def ::client-owner
-  (s/and
-   (s/keys :req-un [::client-session-id]
-           :opt-un [::player-uuid ::logical-side ::screen-id ::channel-id ::timeout-ms
-                   ::client-network-session])
-   (fn [m]
-     (and (nil? (:server-session-id m))
-          (or (nil? (:logical-side m))
-              (= :client (:logical-side m)))))))
-
-(s/def ::server-owner
-  (s/and
-   (s/keys :req-un [::server-session-id ::player-uuid]
-           :opt-un [::logical-side])
-   (fn [m]
-     (and (nil? (:client-session-id m))
-          (or (nil? (:logical-side m))
-              (= :server (:logical-side m)))))))
-
-(s/def ::owner (s/or :client ::client-owner :server ::server-owner))
+            [cn.li.mcmod.runtime.owner :as runtime-owner]))
 
 (s/def ::msg-id string?)
 (s/def ::payload map?)
@@ -52,70 +25,41 @@
               (number? (:pos-y m))
               (number? (:pos-z m)))))))
 
-(defn- normalize-player-uuid
-  [owner]
-  (when (map? owner)
-    (let [uuid (some-> (:player-uuid owner) str)]
-      (when (not (str/blank? uuid))
-        (assoc owner :player-uuid uuid)))))
+(defn valid-client-owner? [owner]
+  (runtime-owner/valid-client-owner? owner))
 
-(defn- contract-ex-info
-  [contract value explain]
-  (ex-info (str contract " contract violation")
-           {:contract contract
-            :value value
-            :explain explain}))
+(defn valid-server-owner? [owner]
+  (runtime-owner/valid-server-owner? owner))
 
-(defn- require*
-  [spec contract value]
-  (let [value* (or (normalize-player-uuid value) value)]
-    (if (s/valid? spec value*)
-      value*
-      (throw (contract-ex-info contract value* (s/explain-data spec value*))))))
+(defn valid-owner? [owner]
+  (runtime-owner/valid-owner? owner))
 
-(defn- require-player-uuid!
-  [contract owner]
-  (when (str/blank? (:player-uuid owner))
-    (throw (ex-info (str contract " requires :player-uuid")
-                    {:contract contract
-                     :value owner
-                     :required :player-uuid})))
-  owner)
+(defn explain-owner [owner]
+  (runtime-owner/explain-owner owner))
 
-(defn valid-client-owner?
-  [owner]
-  (s/valid? ::client-owner (normalize-player-uuid owner)))
+(defn require-client-owner [owner]
+  (runtime-owner/require-client-owner owner))
 
-(defn valid-server-owner?
-  [owner]
-  (s/valid? ::server-owner (normalize-player-uuid owner)))
+(defn require-server-owner [owner]
+  (runtime-owner/require-server-owner owner))
 
-(defn valid-owner?
-  [owner]
-  (s/valid? ::owner (normalize-player-uuid owner)))
-
-(defn explain-owner
-  [owner]
-  (s/explain-data ::owner (normalize-player-uuid owner)))
-
-(defn require-client-owner
-  "Require canonical client owner with :client-session-id and :player-uuid."
-  [owner]
-  (require-player-uuid! :client-owner
-                        (require* ::client-owner :client-owner owner)))
-
-(defn require-server-owner
-  [owner]
-  (require* ::server-owner :server-owner owner))
-
-(defn require-owner
-  [owner]
-  (require* ::owner :owner owner))
+(defn require-owner [owner]
+  (runtime-owner/require-owner owner))
 
 (defn require-message-envelope
   [envelope]
-  (require* ::message-envelope :message-envelope envelope))
+  (if (s/valid? ::message-envelope envelope)
+    envelope
+    (throw (ex-info "message-envelope contract violation"
+                    {:contract :message-envelope
+                     :value envelope
+                     :explain (s/explain-data ::message-envelope envelope)}))))
 
 (defn require-sync-routing
   [routing]
-  (require* ::sync-routing :sync-routing routing))
+  (if (s/valid? ::sync-routing routing)
+    routing
+    (throw (ex-info "sync-routing contract violation"
+                    {:contract :sync-routing
+                     :value routing
+                     :explain (s/explain-data ::sync-routing routing)}))))

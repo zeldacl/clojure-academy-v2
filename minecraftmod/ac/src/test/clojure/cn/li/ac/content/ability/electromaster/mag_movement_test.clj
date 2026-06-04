@@ -12,7 +12,8 @@
             [cn.li.ac.content.ability.electromaster.mag-movement :as mag-movement]
             [cn.li.mcmod.platform.raycast :as raycast]))
 
-(def ^:private test-context-owner {:logical-side :server :session-id :test-session})
+(def ^:private test-context-owner
+  {:logical-side :server :server-session-id :test-session :player-uuid "p1"})
 
 (defn- with-test-context-owner [f]
   (binding [ctx/*context-owner* test-context-owner]

@@ -48,7 +48,8 @@
 
 (deftest perform-resource-uses-bound-owner-session-test
   (store/set-player-state!* :skill-effects-session "p1" (store/fresh-player-state))
-  (binding [runtime-hooks/*player-state-owner* {:session-id :skill-effects-session}]
+  (binding [runtime-hooks/*player-state-owner* {:server-session-id :skill-effects-session
+                                                :player-uuid "p-effects"}]
     (is (map? (skill-effects/perform-resource! "p1" 1.0 1.0 false)))
     ))
 

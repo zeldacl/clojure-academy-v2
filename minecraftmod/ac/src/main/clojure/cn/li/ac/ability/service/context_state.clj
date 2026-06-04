@@ -16,7 +16,8 @@
             [cn.li.ac.ability.registry.event :as evt]
             [cn.li.ac.ability.rules.cooldown-rules :as cd-rules]
             [cn.li.mcmod.util.log :as log]
-            [cn.li.mcmod.hooks.core :as runtime-hooks]))
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
+            [cn.li.mcmod.runtime.owner :as owner]))
 
 (def INPUT-IDLE :idle)
 (def INPUT-ACTIVE :active)
@@ -39,11 +40,7 @@
 
 (defn- resolved-session-id
   [owner]
-  (or (:server-session-id owner)
-      (:client-session-id owner)
-      (let [session-id (:session-id owner)]
-        (when (and (some? session-id) (not (vector? session-id)))
-          session-id))
+  (or (some-> owner owner/store-session-id)
       (runtime-hooks/require-player-state-session-id "context-state")))
 
 (defn- runtime-player-state
@@ -69,27 +66,39 @@
       :exp exp
       :payload payload})))
 
+(defn- with-context-owner-binding
+  [owner f]
+  (let [owner* (or owner ctx/*context-owner*
+                    (runtime-hooks/current-player-state-owner))]
+    (when-not owner*
+      (throw (ex-info "Skill callback requires bound context owner"
+                      {:context-owner ctx/*context-owner*})))
+    (binding [ctx/*context-owner* owner*]
+      (f))))
+
 (defn- dispatch-skill-callback!
   ([ctx-map cb-key event-type payload]
    (dispatch-skill-callback! nil ctx-map cb-key event-type payload))
   ([owner ctx-map cb-key event-type payload]
-   (when-let [spec (skill/get-skill (:skill-id ctx-map))]
-     (let [evt* (event-payload owner ctx-map payload)
-           action-key (get callback->action-key cb-key)
-           callback-fn (get-in spec [:actions action-key])]
-       (when (fn? callback-fn)
-         (try
-           (callback-fn evt*)
-           (catch Exception e
-             (log/warn "Skill callback failed" (:id spec) cb-key (ex-message e)))))))
-   (evt/fire-ability-event!
-    {:event/type event-type
-     :event/side :server
-     :ctx-id (:id ctx-map)
-     :server-id (:server-id ctx-map)
-     :player-id (:player-uuid ctx-map)
-     :skill-id (:skill-id ctx-map)
-     :payload payload})))
+   (with-context-owner-binding owner
+     (fn []
+       (when-let [spec (skill/get-skill (:skill-id ctx-map))]
+         (let [evt* (event-payload owner ctx-map payload)
+               action-key (get callback->action-key cb-key)
+               callback-fn (get-in spec [:actions action-key])]
+           (when (fn? callback-fn)
+             (try
+               (callback-fn evt*)
+               (catch Exception e
+                 (log/warn "Skill callback failed" (:id spec) cb-key (ex-message e)))))))
+       (evt/fire-ability-event!
+        {:event/type event-type
+         :event/side :server
+         :ctx-id (:id ctx-map)
+         :server-id (:server-id ctx-map)
+         :player-id (:player-uuid ctx-map)
+         :skill-id (:skill-id ctx-map)
+         :payload payload})))))
 
 (defn- set-input-state!
   ([ctx-id state]
@@ -164,19 +173,19 @@
   ([ctx-id payload terminate-fn]
    (handle-key-down! nil ctx-id payload terminate-fn))
   ([owner ctx-id payload terminate-fn]
-   (when-let [ctx-map (if owner (ctx/get-context owner ctx-id) (ctx/get-context ctx-id))]
-     (when (and (= (:status ctx-map) ctx/STATUS-ALIVE)
-                (or (nil? (:input-state ctx-map))
-                    (= (:input-state ctx-map) INPUT-IDLE)))
-       (if (in-main-cooldown? owner ctx-map)
-         (do
-           (if owner
-             (ctx/terminate-context! owner ctx-id terminate-fn)
-             (ctx/terminate-context! ctx-id terminate-fn))
-           false)
-         (let [new-ctx (set-input-state! owner ctx-id INPUT-ACTIVE)]
-           (dispatch-skill-callback! owner new-ctx :on-key-down evt/EVT-CONTEXT-KEY-DOWN payload)
-           true))))))
+   (with-context-owner-binding owner
+     (fn []
+       (when-let [ctx-map (ctx/get-context ctx-id)]
+         (when (and (= (:status ctx-map) ctx/STATUS-ALIVE)
+                    (or (nil? (:input-state ctx-map))
+                        (= (:input-state ctx-map) INPUT-IDLE)))
+           (if (in-main-cooldown? owner ctx-map)
+             (do
+               (ctx/terminate-context! ctx-id terminate-fn)
+               false)
+             (let [new-ctx (set-input-state! owner ctx-id INPUT-ACTIVE)]
+               (dispatch-skill-callback! owner new-ctx :on-key-down evt/EVT-CONTEXT-KEY-DOWN payload)
+               true))))))))
 
 (defn handle-key-tick!
   ([ctx-id payload]
@@ -184,11 +193,13 @@
   ([ctx-id payload terminate-fn]
    (handle-key-tick! nil ctx-id payload terminate-fn))
   ([owner ctx-id payload terminate-fn]
-   (when-let [ctx-map (if owner (ctx/get-context owner ctx-id) (ctx/get-context ctx-id))]
-     (when (and (= (:status ctx-map) ctx/STATUS-ALIVE)
-                (= (:input-state ctx-map) INPUT-ACTIVE))
-       (dispatch-skill-callback! owner ctx-map :on-key-tick evt/EVT-CONTEXT-KEY-TICK payload)
-       true))))
+   (with-context-owner-binding owner
+     (fn []
+       (when-let [ctx-map (ctx/get-context ctx-id)]
+         (when (and (= (:status ctx-map) ctx/STATUS-ALIVE)
+                    (= (:input-state ctx-map) INPUT-ACTIVE))
+           (dispatch-skill-callback! owner ctx-map :on-key-tick evt/EVT-CONTEXT-KEY-TICK payload)
+           true))))))
 
 (defn handle-key-up!
   ([ctx-id payload]
@@ -196,27 +207,27 @@
   ([ctx-id payload terminate-fn]
    (handle-key-up! nil ctx-id payload terminate-fn))
   ([owner ctx-id payload terminate-fn]
-   (when-let [ctx-map (if owner (ctx/get-context owner ctx-id) (ctx/get-context ctx-id))]
-     (when (and (= (:status ctx-map) ctx/STATUS-ALIVE)
-                (= (:input-state ctx-map) INPUT-ACTIVE))
-       (let [released-ctx (set-input-state! owner ctx-id INPUT-RELEASED)]
-         (dispatch-skill-callback! owner released-ctx :on-key-up evt/EVT-CONTEXT-KEY-UP payload)
-           (let [latest-ctx (if owner (ctx/get-context owner ctx-id) (ctx/get-context ctx-id))
-               spec (skill/get-skill (:skill-id latest-ctx))
-             pattern-handled? (boolean (and spec (pattern-owned-spec? spec)))]
-           (when-not pattern-handled?
-             (evt/fire-ability-event!
-              (evt/make-skill-perform-event (:player-uuid released-ctx) (:skill-id released-ctx)))
-             (when (should-apply-main-cooldown? spec)
-               (apply-main-cooldown! owner released-ctx)))
-           (if (should-terminate-context-on-key-up? spec)
-             (if owner
-               (ctx/terminate-context! owner ctx-id terminate-fn)
-               (ctx/terminate-context! ctx-id terminate-fn))
-             (if (should-keep-active-on-key-up? spec)
-               (set-input-state! owner ctx-id INPUT-ACTIVE)
-               (set-input-state! owner ctx-id INPUT-IDLE))))
-         true)))))
+   (with-context-owner-binding owner
+     (fn []
+       (when-let [ctx-map (ctx/get-context ctx-id)]
+         (when (and (= (:status ctx-map) ctx/STATUS-ALIVE)
+                    (= (:input-state ctx-map) INPUT-ACTIVE))
+           (let [released-ctx (set-input-state! owner ctx-id INPUT-RELEASED)]
+             (do
+               (dispatch-skill-callback! owner released-ctx :on-key-up evt/EVT-CONTEXT-KEY-UP payload)
+               (let [latest-ctx (ctx/get-context ctx-id)
+                     spec (skill/get-skill (:skill-id latest-ctx))]
+                 (when-not (boolean (and spec (pattern-owned-spec? spec)))
+                   (evt/fire-ability-event!
+                    (evt/make-skill-perform-event (:player-uuid released-ctx) (:skill-id released-ctx)))
+                   (when (should-apply-main-cooldown? spec)
+                     (apply-main-cooldown! owner released-ctx)))
+                 (if (should-terminate-context-on-key-up? spec)
+                   (ctx/terminate-context! ctx-id terminate-fn)
+                   (if (should-keep-active-on-key-up? spec)
+                     (set-input-state! owner ctx-id INPUT-ACTIVE)
+                     (set-input-state! owner ctx-id INPUT-IDLE)))
+               true)))))))))
 
 (defn handle-key-abort!
   ([ctx-id payload]
@@ -224,11 +235,12 @@
   ([ctx-id payload terminate-fn]
    (handle-key-abort! nil ctx-id payload terminate-fn))
   ([owner ctx-id payload terminate-fn]
-   (when-let [ctx-map (if owner (ctx/get-context owner ctx-id) (ctx/get-context ctx-id))]
-     (when (not= (:status ctx-map) ctx/STATUS-TERMINATED)
-       (let [aborted-ctx (set-input-state! owner ctx-id INPUT-ABORTED)]
-         (dispatch-skill-callback! owner aborted-ctx :on-key-abort evt/EVT-CONTEXT-KEY-ABORT payload)
-         (if owner
-           (ctx/terminate-context! owner ctx-id terminate-fn)
-           (ctx/terminate-context! ctx-id terminate-fn))
-         true)))))
+   (with-context-owner-binding owner
+     (fn []
+       (when-let [ctx-map (ctx/get-context ctx-id)]
+         (when (not= (:status ctx-map) ctx/STATUS-TERMINATED)
+           (let [aborted-ctx (set-input-state! owner ctx-id INPUT-ABORTED)]
+             (do
+               (dispatch-skill-callback! owner aborted-ctx :on-key-abort evt/EVT-CONTEXT-KEY-ABORT payload)
+               (ctx/terminate-context! ctx-id terminate-fn)
+               true))))))))

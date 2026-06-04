@@ -5,8 +5,10 @@
 
 (use-fixtures :each test-contexts/clean-contexts-fixture)
 
-(def ^:private test-client-context-owner {:logical-side :client :session-id :test-session})
-(def ^:private test-server-context-owner {:logical-side :server :session-id :test-session})
+(def ^:private test-client-context-owner
+  {:logical-side :client :client-session-id :test-session :player-uuid "p1"})
+(def ^:private test-server-context-owner
+  {:logical-side :server :server-session-id :test-session :player-uuid "p1"})
 
 (deftest constructed-context-buffers-and-flushes-in-order-on-establish-test
   (let [ctx-id "ctx-protocol-buffer"
@@ -62,48 +64,46 @@
   (let [ctx-id "ctx-side-shared"
         client-sends (atom [])
         server-sends (atom [])]
-    (ctx/register-route-fns! {:logical-side :client
-                              :session-id :session-a
-                              :to-server (fn [ctx-id* channel payload _ctx-map]
-                                           (swap! client-sends conj [ctx-id* channel payload]))})
-    (ctx/register-route-fns! {:logical-side :server
-                              :session-id :session-a
-                              :to-client (fn [ctx-id* channel payload _ctx-map]
-                                           (swap! server-sends conj [ctx-id* channel payload]))})
-    (ctx/register-context! (assoc (ctx/new-context "p1" :arc-gen {:logical-side :client :session-id :session-a})
-                                  :id ctx-id
-                                  :status ctx/STATUS-ALIVE))
-    (ctx/register-context! (ctx/new-server-context "p1" :arc-gen ctx-id {:logical-side :server :session-id :session-a}))
+    (let [client-owner {:logical-side :client :client-session-id :session-a :player-uuid "p1"}
+          server-owner {:logical-side :server :server-session-id :session-a :player-uuid "p1"}]
+      (ctx/register-route-fns! (assoc client-owner
+                                      :to-server (fn [ctx-id* channel payload _ctx-map]
+                                                   (swap! client-sends conj [ctx-id* channel payload]))))
+      (ctx/register-route-fns! (assoc server-owner
+                                      :to-client (fn [ctx-id* channel payload _ctx-map]
+                                                   (swap! server-sends conj [ctx-id* channel payload]))))
+      (ctx/register-context! (assoc (ctx/new-context "p1" :arc-gen client-owner)
+                                    :id ctx-id
+                                    :status ctx/STATUS-ALIVE))
+      (ctx/register-context! (ctx/new-server-context "p1" :arc-gen ctx-id server-owner))
 
-    (is (= 2 (count (ctx/get-all-contexts))))
-    (is (= :client (:logical-side (ctx/get-context {:logical-side :client :session-id :session-a} ctx-id))))
-    (is (= :server (:logical-side (ctx/get-context {:logical-side :server :session-id :session-a} ctx-id))))
+      (is (= 2 (count (ctx/get-all-contexts))))
+      (is (= :client (:logical-side (ctx/get-context client-owner ctx-id))))
+      (is (= :server (:logical-side (ctx/get-context server-owner ctx-id))))
 
-    (binding [ctx/*context-owner* {:logical-side :client :session-id :session-a}]
-      (ctx/ctx-send-to-server! ctx-id :up {:n 1}))
-    (binding [ctx/*context-owner* {:logical-side :server :session-id :session-a}]
-      (ctx/ctx-send-to-client! ctx-id :down {:n 2}))
+      (binding [ctx/*context-owner* client-owner]
+        (ctx/ctx-send-to-server! ctx-id :up {:n 1}))
+      (binding [ctx/*context-owner* server-owner]
+        (ctx/ctx-send-to-client! ctx-id :down {:n 2}))
 
-    (is (= [[ctx-id :up {:n 1}]] @client-sends))
-    (is (= [[ctx-id :down {:n 2}]] @server-sends))))
+      (is (= [[ctx-id :up {:n 1}]] @client-sends))
+      (is (= [[ctx-id :down {:n 2}]] @server-sends)))))
 
 (deftest same-id-server-contexts-pass-explicit-context-to-route-test
   (let [ctx-id "ctx-owned-route"
         route-calls (atom [])
-        owner-a {:logical-side :server :session-id :session-a}
-        owner-b {:logical-side :server :session-id :session-b}]
-    (ctx/register-route-fns! {:logical-side :server
-                              :session-id :session-a
-                              :to-client (fn [ctx-id* channel payload ctx-map]
-                                           (swap! route-calls conj [:to-client (:player-uuid ctx-map) ctx-id* channel payload]))
-                              :to-except-local (fn [ctx-id* channel payload ctx-map]
-                                                 (swap! route-calls conj [:to-except-local (:player-uuid ctx-map) ctx-id* channel payload]))})
-    (ctx/register-route-fns! {:logical-side :server
-                              :session-id :session-b
-                              :to-client (fn [ctx-id* channel payload ctx-map]
-                                           (swap! route-calls conj [:to-client (:player-uuid ctx-map) ctx-id* channel payload]))
-                              :to-except-local (fn [ctx-id* channel payload ctx-map]
-                                                 (swap! route-calls conj [:to-except-local (:player-uuid ctx-map) ctx-id* channel payload]))})
+        owner-a {:logical-side :server :server-session-id :session-a :player-uuid "player-a"}
+        owner-b {:logical-side :server :server-session-id :session-b :player-uuid "player-b"}]
+    (ctx/register-route-fns! (assoc owner-a
+                                    :to-client (fn [ctx-id* channel payload ctx-map]
+                                                 (swap! route-calls conj [:to-client (:player-uuid ctx-map) ctx-id* channel payload]))
+                                    :to-except-local (fn [ctx-id* channel payload ctx-map]
+                                                       (swap! route-calls conj [:to-except-local (:player-uuid ctx-map) ctx-id* channel payload]))))
+    (ctx/register-route-fns! (assoc owner-b
+                                    :to-client (fn [ctx-id* channel payload ctx-map]
+                                                 (swap! route-calls conj [:to-client (:player-uuid ctx-map) ctx-id* channel payload]))
+                                    :to-except-local (fn [ctx-id* channel payload ctx-map]
+                                                       (swap! route-calls conj [:to-except-local (:player-uuid ctx-map) ctx-id* channel payload]))))
     (ctx/register-context! (ctx/new-server-context "player-a" :arc-gen ctx-id owner-a))
     (ctx/register-context! (ctx/new-server-context "player-b" :arc-gen ctx-id owner-b))
 

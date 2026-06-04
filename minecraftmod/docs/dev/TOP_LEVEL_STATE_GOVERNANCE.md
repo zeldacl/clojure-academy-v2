@@ -26,7 +26,7 @@ composite owner rather than a namespace singleton when any of these dimensions
 can differ at runtime:
 
 - `:logical-side`
-- `:server-session-id`
+- `:server-session-id` / `:client-session-id`（canonical；能力/GUI 上层用 `mcmod.runtime.owner`，勿直读 `:session-id`）
 - `:world-id`
 - `:player-uuid`
 - `:container-id`

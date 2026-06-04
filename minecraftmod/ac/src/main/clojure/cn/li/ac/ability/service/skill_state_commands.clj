@@ -4,13 +4,8 @@
   All writes go through command-runtime; missing session/player/context fails fast."
   (:require [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.ability.service.context-projection :as ctx-proj]
-            [cn.li.mcmod.hooks.core :as runtime-hooks]))
-
-(defn- require-session-id
-  [session-id]
-  (or session-id
-      (runtime-hooks/player-state-session-id)
-      (runtime-hooks/require-player-state-session-id "skill-state-commands")))
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
+            [cn.li.mcmod.runtime.owner :as owner]))
 
 (defn- require-owner
   [owner]
@@ -21,16 +16,11 @@
 
 (defn- owner->session-player
   [owner]
-  (let [owner-map (require-owner owner)
-        session-id (or (:server-session-id owner-map)
-                       (let [sid (:session-id owner-map)]
-                         (when (vector? sid) (first sid)))
-                       (require-session-id nil))
-        player-uuid (or (:player-uuid owner-map)
-                        (when (vector? (:session-id owner-map))
-                          (second (:session-id owner-map))))]
+  (let [owner-map (owner/require-owner (require-owner owner))
+        session-id (owner/store-session-id owner-map)
+        player-uuid (owner/player-uuid owner-map)]
     (when-not (and session-id player-uuid)
-      (throw (ex-info "skill-state command owner requires session-id and player-uuid"
+      (throw (ex-info "skill-state command owner requires store session and player-uuid"
                       {:owner owner-map})))
     [session-id player-uuid]))
 

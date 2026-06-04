@@ -3,7 +3,8 @@
 
   forge/fabric adapters invoke these functions from platform events.
   content modules register concrete handlers during core initialization."
-  (:require [cn.li.mcmod.content.registry :as content-registry]))
+  (:require [cn.li.mcmod.content.registry :as content-registry]
+            [cn.li.mcmod.runtime.owner :as runtime-owner]))
 
 (def ^:private noop
   (fn [& _] nil))
@@ -126,11 +127,10 @@
   *player-state-owner*)
 
 (defn player-state-session-id
-  "Resolve session-id from an owner map, preferring server > client > generic."
+  "Resolve store session-id from a canonical owner map (server > client)."
   ([owner]
-   (or (:server-session-id owner)
-       (:client-session-id owner)
-       (:session-id owner)))
+   (when owner
+     (runtime-owner/store-session-id owner)))
   ([]
    (player-state-session-id (current-player-state-owner))))
 
@@ -160,19 +160,16 @@
                         {:player-state-owner owner})))))
 
 (defn player-state-client-session-id
-  "Resolve client session-id from an owner map, preferring client > generic."
+  "Resolve client session-id from a canonical owner map."
   ([owner]
-   (or (:client-session-id owner)
-       (:session-id owner)))
+   (:client-session-id owner))
   ([]
    (player-state-client-session-id (current-player-state-owner))))
 
 (defn context-player-state-session-id
-  "Resolve session-id from command/action context metadata owner, with runtime owner fallback."
+  "Resolve store session-id from command/action context metadata owner, with runtime owner fallback."
   [context]
-  (or (-> context :metadata :player-state-owner :server-session-id)
-      (-> context :metadata :player-state-owner :client-session-id)
-      (-> context :metadata :player-state-owner :session-id)
+  (or (some-> context :metadata :player-state-owner runtime-owner/store-session-id)
       (player-state-session-id)))
 
 (defn require-context-player-state-session-id

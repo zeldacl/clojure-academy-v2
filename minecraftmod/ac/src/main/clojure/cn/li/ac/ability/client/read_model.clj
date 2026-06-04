@@ -4,7 +4,8 @@
   Centralizes owner/session resolution and runtime-store reads so UI modules
   avoid depending on store wiring details."
   (:require [cn.li.ac.ability.service.runtime-store :as store]
-            [cn.li.mcmod.hooks.core :as runtime-hooks]))
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
+            [cn.li.mcmod.runtime.owner :as owner]))
 
 (defn- require-owner-value
   [owner label value]
@@ -15,7 +16,7 @@
                      :required label}))))
 
 (defn owner-key
-  "Normalize owner to [session-id screen-id player-uuid]."
+  "Normalize owner to [client-session-id screen-id player-uuid] for UI indexing."
   [owner screen-id]
   (let [owner-map (cond
                     (vector? owner) owner
@@ -26,7 +27,6 @@
       owner-map
       [(require-owner-value owner ":client-session-id"
                             (or (:client-session-id owner-map)
-                                (:session-id owner-map)
                                 runtime-hooks/*client-session-id*))
        screen-id
        (require-owner-value owner ":player-uuid"
@@ -34,13 +34,22 @@
                                         (:uuid owner-map))
                                     str))])))
 
+(defn canonical-client-owner
+  [owner screen-id]
+  (let [[session-id _screen-id player-uuid] (owner-key owner screen-id)]
+    {:logical-side :client
+     :client-session-id session-id
+     :player-uuid player-uuid}))
+
 (defn with-player-state-owner
   "Bind client owner context and run f as (f session-id player-uuid)."
   [owner-key f]
-  (let [[session-id _screen-id player-uuid] owner-key]
+  (let [[session-id _screen-id player-uuid] owner-key
+        client-owner {:logical-side :client
+                      :client-session-id session-id
+                      :player-uuid player-uuid}]
     (binding [runtime-hooks/*client-session-id* session-id]
-      (runtime-hooks/with-player-state-owner {:client-session-id session-id
-                                              :player-uuid player-uuid}
+      (runtime-hooks/with-player-state-owner client-owner
         (f session-id player-uuid)))))
 
 (defn get-player-state
@@ -58,21 +67,16 @@
 (defn get-player-contexts
   "Read client-visible contexts from projected player-state context-registry."
   [owner-key]
-  (let [[session-id _screen-id player-uuid] owner-key
-        player-state (or (get-player-state owner-key) {})
-        expected-session [session-id player-uuid]]
+  (let [[_session-id _screen-id player-uuid] owner-key
+        player-state (or (get-player-state owner-key) {})]
     (->> (or (:context-registry player-state) {})
          vals
          (filter map?)
-         ;; Some projected context maps do not persist owner metadata.
-         ;; Treat missing metadata as already owner-scoped by player-state.
          (filter #(or (nil? (:player-uuid %))
-                      (= (some-> player-uuid str)
+                      (= (str player-uuid)
                          (some-> (:player-uuid %) str))))
          (filter #(or (nil? (:logical-side %))
                       (= :client (:logical-side %))))
-         (filter #(or (nil? (:session-id %))
-                      (= expected-session (:session-id %))))
          vec)))
 
 (defn get-player-contexts-for-player
@@ -83,7 +87,5 @@
      []))
   ([player-uuid session-id screen-id]
    (if session-id
-     (let [player-uuid* (str player-uuid)
-           projected (get-player-contexts [session-id screen-id player-uuid*])]
-       projected)
+     (get-player-contexts [session-id screen-id (str player-uuid)])
      [])))

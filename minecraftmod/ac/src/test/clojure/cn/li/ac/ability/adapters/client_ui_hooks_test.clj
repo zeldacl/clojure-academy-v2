@@ -245,16 +245,14 @@
         owner {:client-session-id :session-a
                :player-uuid "p1"}
         context-owner {:logical-side :client
-                       :session-id [:session-a "p1"]
+                       :client-session-id :session-a
                        :player-uuid "p1"}
         screen-calls (atom [])
         keybind-clears (atom [])]
     (binding [ctx/*context-owner* context-owner
               runtime-hooks/*player-state-owner* owner]
-      (ctx/register-context! {:id "ctx-cleanup"
-                              :player-uuid "p1"
-                              :logical-side :client
-                              :session-id [:session-a "p1"]})
+      (ctx/register-context! (assoc (ctx/new-context "p1" :arc-gen context-owner)
+                                    :id "ctx-cleanup"))
                   (store/set-player-state!* :session-a "p1" {:resource-data {:activated true}}))
     (client-ui-hooks/set-slot-context-for-test! owner 0 "ctx-cleanup")
     (client-ui-hooks/seed-vm-wave-state-for-test! owner [{:radius 1.0}] 42)

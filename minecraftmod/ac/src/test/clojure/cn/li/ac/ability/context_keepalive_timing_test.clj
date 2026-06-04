@@ -7,7 +7,8 @@
 
 (use-fixtures :each test-contexts/clean-contexts-fixture)
 
-(def ^:private test-context-owner {:logical-side :server :session-id :test-session})
+(def ^:private test-context-owner
+  {:logical-side :server :server-session-id :test-session :player-uuid "p-keepalive"})
 
 (defn- with-system-property
   [k v f]

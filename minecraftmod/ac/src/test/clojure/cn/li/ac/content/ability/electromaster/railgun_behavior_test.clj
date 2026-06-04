@@ -67,24 +67,22 @@
 
 (deftest coin-throw-aborts-item-charge-and-opens-window-test
   (ps-fix/seed-player-state! "p1" (store/fresh-player-state))
-  (ctx/register-context! {:id "ctx-1"
-                          :player-uuid "p1"
-                          :skill-id :railgun
-                          :logical-side :server
-                          :session-id :test-session
-                          :status ctx/STATUS-ALIVE
-                          :skill-state {:mode :item-charge :charge-ticks 3 :fired false}})
-  (with-redefs [log/debug (fn [& _])
-                ctx-skill/update-skill-state-root! (fn [ctx-id f & args]
-                                                     (when-let [ctx (ctx/get-context ctx-id)]
-                                                       (let [current (or (:skill-state ctx) {})
-                                                             next-state (if (and (= f identity) (= 1 (count args)))
-                                                                          (first args)
-                                                                          (apply f current args))]
-                                                         (ctx/register-context! (assoc ctx :skill-state next-state)))))]
-    (binding [ctx/*context-owner* {:logical-side :server :session-id :test-session}]
-      (is (true? (railgun/register-coin-throw! "p1" {:timestamp-ms 12345})))
-      (is (= :item-charge-cancelled (get-in (ctx/get-context "ctx-1") [:skill-state :mode]))))))
+  (let [owner {:logical-side :server :server-session-id :test-session :player-uuid "p1"}]
+    (ctx/register-context!
+     (assoc (ctx/new-server-context "p1" :railgun "ctx-1" owner)
+            :status ctx/STATUS-ALIVE
+            :skill-state {:mode :item-charge :charge-ticks 3 :fired false}))
+    (with-redefs [log/debug (fn [& _])
+                  ctx-skill/update-skill-state-root! (fn [ctx-id f & args]
+                                                       (when-let [ctx (ctx/get-context ctx-id)]
+                                                         (let [current (or (:skill-state ctx) {})
+                                                               next-state (if (and (= f identity) (= 1 (count args)))
+                                                                            (first args)
+                                                                            (apply f current args))]
+                                                           (ctx/register-context! (assoc ctx :skill-state next-state)))))]
+      (binding [ctx/*context-owner* owner]
+        (is (true? (railgun/register-coin-throw! "p1" {:timestamp-ms 12345})))
+        (is (= :item-charge-cancelled (get-in (ctx/get-context "ctx-1") [:skill-state :mode])))))))
 
 (deftest coin-progress-threshold-status-test
   (let [below (#'railgun/qte-status 0.59)

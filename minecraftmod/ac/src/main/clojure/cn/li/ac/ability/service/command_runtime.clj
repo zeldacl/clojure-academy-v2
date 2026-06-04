@@ -11,7 +11,8 @@
             [cn.li.ac.ability.service.runtime-store :as store]
 [cn.li.ac.ability.effects.interpreter :as interpreter]
             [cn.li.ac.ability.service.reducer :as reducer]
-            [cn.li.mcmod.hooks.core :as runtime-hooks]))
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
+            [cn.li.mcmod.runtime.owner :as owner]))
 
 (def ^:private default-command-trace-ttl-ms 60000)
 (def ^:private default-max-command-traces 2048)
@@ -104,7 +105,12 @@
     (if cached
       (assoc cached :idempotent-replay? true)
       (let [owner (or (runtime-hooks/current-player-state-owner)
-                      {:session-id session-id})
+                      (when session-id
+                        (if (runtime-hooks/player-state-server-session-id)
+                          {:logical-side :server
+                           :server-session-id session-id}
+                          {:logical-side :client
+                           :client-session-id session-id})))
             state (store/get-or-create-player-state! session-id uuid)
             result (reducer/apply-command state normalized)
             _ (contracts/assert-reducer-result! result)
@@ -134,7 +140,9 @@
     (contracts/assert-command! command))
     (let [session-id (resolve-session-id session-id)
       owner (or (runtime-hooks/current-player-state-owner)
-        {:session-id session-id})
+                (when session-id
+                  {:logical-side :server
+                   :server-session-id session-id}))
         state (store/get-or-create-player-state! session-id uuid)
         normalized (mapv #(ensure-command-owner-fields session-id uuid %) commands)
         result (reducer/apply-commands state normalized)

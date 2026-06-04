@@ -12,7 +12,9 @@
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.world-effects :as world-effects]))
 
-(def ^:private test-context-owner {:logical-side :server :session-id :test-session})
+(defn- test-context-owner
+  [player-uuid]
+  {:logical-side :server :server-session-id :test-session :player-uuid (str player-uuid)})
 
 (defn- make-context-mocks [initial-ctx]
   (let [ctx* (atom initial-ctx)]
@@ -216,7 +218,7 @@
                           skill-effects/set-main-cooldown! (fn [& _] (swap! cooldown-calls* inc))
                           fx/send! (fn [& _] (swap! fx-calls* inc) nil)]
                  (shift-tp-platform-redefs {:x 4 :y 5 :z 6 :face :up} []))
-      (binding [ctx/*context-owner* test-context-owner]
+      (binding [ctx/*context-owner* (test-context-owner "p1")]
         (shift/shift-tp-up! {:player-id "p1" :ctx-id "ctx-2" :player :player :cost-ok? false})))
 
     (is (= 0 @place-calls*))
@@ -283,7 +285,7 @@
                           helper/teleport-to! (fn [& _] (swap! teleport-calls* inc) true)
                           fx/send! (fn [& _] nil)]
                  (shift-tp-platform-redefs {:x 8 :y 9 :z 10 :face :up} []))
-      (binding [ctx/*context-owner* test-context-owner]
+      (binding [ctx/*context-owner* (test-context-owner "p1")]
         (shift/shift-tp-up! {:player-id "p1" :ctx-id "ctx-4" :player :player :cost-ok? true})))
 
     (is (= 0 @teleport-calls*))))

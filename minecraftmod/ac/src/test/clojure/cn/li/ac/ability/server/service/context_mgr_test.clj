@@ -11,7 +11,8 @@
             [cn.li.ac.ability.model.ability :as ad]
             [cn.li.ac.ability.model.resource :as rd]
             [cn.li.ac.ability.messages :as catalog]
-            [cn.li.mcmod.hooks.core :as runtime-hooks]))
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
+            [cn.li.mcmod.runtime.owner :as owner]))
 
 (defn- reset-fixture [f]
   (test-contexts/clean-contexts-fixture
@@ -33,15 +34,16 @@
 
 (use-fixtures :each reset-fixture)
 
-(def ^:private test-context-owner {:logical-side :server :session-id :test-session})
+(defn- test-context-owner
+  [player-uuid]
+  {:logical-side :server :server-session-id :test-session :player-uuid (str player-uuid)})
 (def ^:private test-server-session-id :test-session)
 
 (defn- server-owner
   [player-uuid]
   {:logical-side :server
    :server-session-id test-server-session-id
-   :session-id [test-server-session-id player-uuid]
-   :player-uuid player-uuid})
+   :player-uuid (str player-uuid)})
 
 (defn- with-server-player-owner
   [player-uuid f]
@@ -68,7 +70,7 @@
     (cm/register-send-fns! {:to-server (fn [msg-id payload]
                                           (swap! out conj [msg-id payload]))
                             :to-client nil})
-    (let [c (binding [ctx/*context-owner* test-context-owner]
+    (let [c (binding [ctx/*context-owner* (test-context-owner "player-1")]
           (cm/activate-context! "player-1" :arc-gen))]
       (is (= 1 (count @out)))
       (is (= catalog/MSG-CTX-BEGIN-LINK (first (first @out))))
@@ -81,7 +83,7 @@
     (cm/register-send-fns! {:to-client (fn [uuid msg-id payload]
                                          (swap! out conj [uuid msg-id payload]))
                             :to-server nil})
-    (let [res (binding [ctx/*context-owner* test-context-owner]
+    (let [res (binding [ctx/*context-owner* (test-context-owner "p2")]
           (cm/establish-context! "p2" "cid-1" :arc-gen))]
       (is (some? res))
       (is (= 1 (count (filter #(= catalog/MSG-CTX-ESTABLISH (second %)) @out)))))))
@@ -92,7 +94,7 @@
     (cm/register-send-fns! {:to-client (fn [uuid msg-id payload]
                                          (swap! out conj [uuid msg-id payload]))
                             :to-server nil})
-    (binding [ctx/*context-owner* test-context-owner]
+    (binding [ctx/*context-owner* (test-context-owner "p3")]
       (cm/establish-context! "p3" "cid-x" :other-skill))
     (is (some #(= catalog/MSG-CTX-TERMINATE (second %)) @out))))
 
@@ -115,21 +117,20 @@
         fresh-ts (System/currentTimeMillis)
         old-ctx-id "ctx-old-terminated"
         fresh-ctx-id "ctx-fresh-terminated"]
-    (ctx/register-context! (assoc (ctx/new-server-context "p-old" :arc-gen old-ctx-id test-context-owner)
+    (ctx/register-context! (assoc (ctx/new-server-context "p-old" :arc-gen old-ctx-id (test-context-owner "p-old"))
                                   :status ctx/STATUS-TERMINATED
                                   :terminated-at-ms old-ts))
-    (ctx/register-context! (assoc (ctx/new-server-context "p-fresh" :arc-gen fresh-ctx-id test-context-owner)
+    (ctx/register-context! (assoc (ctx/new-server-context "p-fresh" :arc-gen fresh-ctx-id (test-context-owner "p-fresh"))
                                   :status ctx/STATUS-TERMINATED
                                   :terminated-at-ms fresh-ts))
     (cm/tick-context-manager!)
-    (binding [ctx/*context-owner* test-context-owner]
-      (is (nil? (ctx/get-context old-ctx-id)))
-      (is (some? (ctx/get-context fresh-ctx-id))))))
+    (is (nil? (ctx/get-context (test-context-owner "p-old") old-ctx-id)))
+    (is (some? (ctx/get-context (test-context-owner "p-fresh") fresh-ctx-id)))))
 
 (deftest tick-context-manager-terminates-expired-alive-context-test
   (let [ctx-id "ctx-timeout"
         terminated (atom [])]
-    (ctx/register-context! (assoc (ctx/new-server-context "p-timeout" :arc-gen ctx-id test-context-owner)
+    (ctx/register-context! (assoc (ctx/new-server-context "p-timeout" :arc-gen ctx-id (test-context-owner "p-timeout"))
                                   :last-keepalive-ms (- (System/currentTimeMillis) 5000)))
     (cm/register-send-fns! {:to-client (fn [_uuid msg-id payload]
                                          (when (= catalog/MSG-CTX-TERMINATE msg-id)
@@ -137,7 +138,7 @@
                             :to-server nil})
     (cm/tick-context-manager!)
     (is (= [ctx-id] @terminated))
-    (binding [ctx/*context-owner* test-context-owner]
+    (binding [ctx/*context-owner* (test-context-owner "p-timeout")]
       (is (= ctx/STATUS-TERMINATED (:status (ctx/get-context ctx-id)))))))
 
 (deftest tick-player-contexts-drives-only-owned-active-server-contexts-test
@@ -164,7 +165,9 @@
 
 (deftest abort-player-contexts-only-terminates-owned-server-contexts-test
   (let [terminated (atom [])
-        client-ctx (assoc (ctx/new-context "p1" :arc-gen {:logical-side :client :session-id [:session-a "p1"]})
+        client-ctx (assoc (ctx/new-context "p1" :arc-gen {:logical-side :client
+                                                         :client-session-id :session-a
+                                                         :player-uuid "p1"})
                           :status ctx/STATUS-ALIVE)]
     (ctx/register-context! (assoc (ctx/new-server-context "p1" :arc-gen "server-ctx" (server-owner "p1"))
                                   :status ctx/STATUS-ALIVE))
@@ -180,7 +183,9 @@
            (:status (binding [ctx/*context-owner* (server-owner "p1")]
                       (ctx/get-context "server-ctx")))))
     (is (= ctx/STATUS-ALIVE
-           (:status (ctx/get-context {:logical-side :client :session-id [:session-a "p1"]}
+           (:status (ctx/get-context {:logical-side :client
+                                     :client-session-id :session-a
+                                     :player-uuid "p1"}
                                      (:id client-ctx)))))))
 
 (deftest dispatcher-timing-can-be-overridden-via-system-properties-test
@@ -225,7 +230,8 @@
                                                   :player-uuid player-id}]
       (let [res (cm/establish-context! player-id "cid-alt" skill-id)]
         (is (some? res))
-        (is (= [alt-session player-id] (:session-id res)))
+        (is (= alt-session (owner/transport-store-session-id res)))
+        (is (= player-id (:player-uuid res)))
         (is (= 1 (count (filter #(= catalog/MSG-CTX-ESTABLISH (second %)) @out))))))))
 
 (deftest context-manager-session-resolution-still-fail-fast-test

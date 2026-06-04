@@ -16,8 +16,7 @@
 (defn- server-owner [player-uuid]
   {:logical-side :server
    :server-session-id test-server-session-id
-   :session-id [test-server-session-id player-uuid]
-   :player-uuid player-uuid})
+   :player-uuid (str player-uuid)})
 
 (defn- with-server-player-owner
   [player-uuid f]
@@ -182,7 +181,7 @@
     (let [ctx-id "ctx-begin-owned"
           establish-calls (atom [])]
       (ctx/register-context! (assoc (owned-server-context "owner" ctx-id)
-                                    :session-id [test-server-session-id "attacker"]))
+                                    :player-uuid "attacker"))
       (with-redefs [ctx-mgr/establish-context! (fn [& args]
                                                  (swap! establish-calls conj args))]
         (is (nil? (with-server-player-owner "owner"

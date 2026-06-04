@@ -11,27 +11,31 @@
     (test-contexts/clean-contexts-fixture
      #(test-player/clean-player-states-fixture f))))
 
-(def ^:private test-server-context-owner {:logical-side :server :session-id :test-session})
-(def ^:private test-client-context-owner {:logical-side :client :session-id :test-session})
+(defn- server-context-owner
+  [player-uuid]
+  {:logical-side :server :server-session-id :test-session :player-uuid (str player-uuid)})
+
+(def ^:private test-client-context-owner
+  {:logical-side :client :client-session-id :test-session :player-uuid "p"})
 
 (deftest context-creation-requires-explicit-owner-test
   (testing "ownerless client contexts fail fast"
     (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                          #"Context owner requires :session-id"
+                          #"Opaque ctx-id resolution requires"
                           (ctx/new-context "p" :skill))))
   (testing "ownerless server contexts fail fast"
     (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                          #"Context owner requires :session-id"
+                          #"Opaque ctx-id resolution requires"
                           (ctx/new-server-context "p" :skill "ctx-ownerless")))))
 
 (deftest nested-update-context-test
-  (let [c (ctx/new-server-context "p" :skill "ctx-nested" test-server-context-owner)]
+  (let [c (ctx/new-server-context "p" :skill "ctx-nested" (server-context-owner "p"))]
     (test-player/seed-player-state!
      "p"
      {:context-registry {"ctx-nested" {:id "ctx-nested" :skill-id :skill :status :constructed}}})
     (ctx/register-context! c)
     (binding [runtime-hooks/*player-state-owner* test-player/test-player-state-owner
-              ctx/*context-owner* test-server-context-owner]
+              ctx/*context-owner* (server-context-owner "p")]
       (state/execute-assoc-state! {:ctx-id "ctx-nested" :player-id "p"} {:k [:a :b] :v 1})
       (is (= 1 (get-in (ctx/get-context "ctx-nested") [:skill-state :a :b])))
       (state/execute-assoc-state! {:ctx-id "ctx-nested" :player-id "p"} {:k [] :v {:a {}}})
@@ -45,9 +49,9 @@
       (is (= 1 (count (:message-buffer (ctx/get-context (:id c)))))))))
 
 (deftest get-all-contexts-for-player-test
-  (let [a (ctx/new-server-context "p1" :s1 "id-a" test-server-context-owner)
-        b (ctx/new-server-context "p1" :s2 "id-b" test-server-context-owner)
-        c (ctx/new-server-context "p2" :s3 "id-c" test-server-context-owner)]
+  (let [a (ctx/new-server-context "p1" :s1 "id-a" (server-context-owner "p1"))
+        b (ctx/new-server-context "p1" :s2 "id-b" (server-context-owner "p1"))
+        c (ctx/new-server-context "p2" :s3 "id-c" (server-context-owner "p2"))]
     (ctx/register-context! a)
     (ctx/register-context! b)
     (ctx/register-context! c)
@@ -55,9 +59,9 @@
     (is (= 1 (count (ctx/get-all-contexts-for-player "p2"))))))
 
 (deftest get-all-contexts-for-player-can-filter-by-owner-test
-  (let [client-a {:logical-side :client :session-id [:session-a "p1"]}
-        client-b {:logical-side :client :session-id [:session-b "p1"]}
-        server-a {:logical-side :server :session-id "p1"}
+  (let [client-a {:logical-side :client :client-session-id :session-a :player-uuid "p1"}
+        client-b {:logical-side :client :client-session-id :session-b :player-uuid "p1"}
+        server-a {:logical-side :server :server-session-id :session-server :player-uuid "p1"}
         ctx-a (ctx/new-context "p1" :s1 client-a)
         ctx-b (ctx/new-context "p1" :s2 client-b)
         ctx-c (ctx/new-server-context "p1" :s3 "id-server" server-a)]
@@ -85,7 +89,7 @@
       (is (empty? (:message-buffer (ctx/get-context id)))))))
 
 (deftest update-missing-context-does-not-create-phantom-test
-  (binding [ctx/*context-owner* test-server-context-owner]
+  (binding [ctx/*context-owner* (server-context-owner "p")]
     (state/execute-assoc-state! {:ctx-id "missing-context" :player-id "p"}
                                 {:k :last-keepalive-ms :v 1})
     (is (nil? (ctx/get-context "missing-context"))))
@@ -97,10 +101,10 @@
                         (ctx/get-context "ctx-ownerless"))))
 
 (deftest active-contexts-filters-terminated-and-supports-player-query-test
-  (let [alive (ctx/new-server-context "p1" :s1 "ctx-alive" test-server-context-owner)
-        terminated (assoc (ctx/new-server-context "p1" :s2 "ctx-dead" test-server-context-owner)
+  (let [alive (ctx/new-server-context "p1" :s1 "ctx-alive" (server-context-owner "p1"))
+        terminated (assoc (ctx/new-server-context "p1" :s2 "ctx-dead" (server-context-owner "p1"))
                           :status ctx/STATUS-TERMINATED)
-        other (ctx/new-server-context "p2" :s3 "ctx-other" test-server-context-owner)]
+        other (ctx/new-server-context "p2" :s3 "ctx-other" (server-context-owner "p2"))]
     (ctx/register-context! alive)
     (ctx/register-context! terminated)
     (ctx/register-context! other)

@@ -51,7 +51,6 @@
       owner-map
       [(require-screen-owner-value owner ":client-session-id"
                                    (or (:client-session-id owner-map)
-                                       (:session-id owner-map)
                                        runtime-hooks/*client-session-id*))
        :location-teleport
        (require-screen-owner-value owner ":player-uuid"

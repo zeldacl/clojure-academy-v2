@@ -151,7 +151,8 @@
                     source (slurp file)]
               line (str/split-lines source)
               [idx text] (map vector (range) line)
-              :when (re-find platform-impl-var-pattern text)]
+              :when (and (string? text)
+                         (re-find platform-impl-var-pattern text))]
           (str rel ":" (inc idx) ": " (str/trim text)))]
     (is (empty? violations)
         (str "ac must use platform *-wrappers, not impl vars:\n"
@@ -166,8 +167,35 @@
               line (str/split-lines source)
               [idx text] (map vector (range) line)
               key dead-skill-op-keys
-              :when (str/includes? text key)]
+              :when (and (string? text) (str/includes? text key))]
           (str rel ":" (inc idx) ": " (str/trim text)))]
     (is (empty? violations)
         (str "Dead :on-down/:on-tick/:on-up skill op vectors:\n"
+             (str/join "\n" violations)))))
+
+(def ^:private legacy-session-id-owner-allowlist
+  #{"src/main/clojure/cn/li/ac/ability/service/command_runtime.clj"
+    "src/main/clojure/cn/li/ac/ability/effects/interpreter.clj"})
+
+(def ^:private legacy-session-id-owner-patterns
+  [":session-id [" "{:session-id" "(assoc :session-id" "(:session-id "
+   "clear-session-contexts!"])
+
+(deftest no-legacy-session-id-owner-guard-test
+  (let [violations
+        (for [file (scan-sources ["src/main/clojure/cn/li/ac/ability"])
+              :let [rel (.getPath file)
+                    norm (str/replace rel "\\" "/")]
+              :when (not (contains? legacy-session-id-owner-allowlist norm))
+              :let [source (slurp file)]
+              line (str/split-lines source)
+              [idx text] (map vector (range) line)
+              pattern legacy-session-id-owner-patterns
+              :when (and (string? text)
+                         (str/includes? text pattern)
+                         (not (str/includes? text "transport-session-id"))
+                         (not (str/includes? text "store-session-id")))]
+          (str norm ":" (inc idx) ": " (str/trim text)))]
+    (is (empty? violations)
+        (str "Legacy :session-id owner usage (use mcmod.runtime.owner):\n"
              (str/join "\n" violations)))))

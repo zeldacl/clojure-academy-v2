@@ -188,15 +188,13 @@
 
 (deftest get-context-player-uuid-requires-owner-or-unique-match-test
   (let [get-player-uuid (:get-context-player-uuid (server-hooks/runtime-server-hooks))
-        session-a [:server-a "player-a"]
-        session-b [:server-b "player-b"]]
-    (binding [ctx/*context-owner* {:logical-side :server :session-id session-a}]
-      (ctx/register-context! {:id "dup-ctx" :player-uuid "player-a" :logical-side :server :session-id session-a})
-      (ctx/register-context! {:id "unique-ctx" :player-uuid "player-a" :logical-side :server :session-id session-a}))
-    (binding [ctx/*context-owner* {:logical-side :server :session-id session-b}]
-      (ctx/register-context! {:id "dup-ctx" :player-uuid "player-b" :logical-side :server :session-id session-b}))
+        owner-a {:logical-side :server :server-session-id :server-a :player-uuid "player-a"}
+        owner-b {:logical-side :server :server-session-id :server-b :player-uuid "player-b"}]
+    (ctx/register-context! (ctx/new-server-context "player-a" :sk "dup-ctx" owner-a))
+    (ctx/register-context! (ctx/new-server-context "player-a" :sk "unique-ctx" owner-a))
+    (ctx/register-context! (ctx/new-server-context "player-b" :sk "dup-ctx" owner-b))
     (is (= "player-a"
-           (binding [ctx/*context-owner* {:logical-side :server :session-id session-a}]
+           (binding [ctx/*context-owner* owner-a]
              (get-player-uuid "dup-ctx"))))
     (is (= "player-a" (get-player-uuid "unique-ctx")))
     (is (nil? (get-player-uuid "dup-ctx")))))
@@ -208,9 +206,9 @@
                                           (fn []
                                             (swap! called conj [:reset-runtimes])
                                             nil))
-    (with-redefs [ctx/clear-session-contexts! (fn [session-id]
-                                                   (swap! called conj [:contexts session-id])
-                                                   nil)
+    (with-redefs [ctx/clear-store-session-contexts! (fn [session-id]
+                                                      (swap! called conj [:contexts session-id])
+                                                      nil)
                   store/remove-session! (fn [_ability-store session-id]
                                           (swap! called conj [:player-states session-id])
                                           nil)

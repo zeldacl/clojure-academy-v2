@@ -51,7 +51,8 @@
 (deftest run-command-in-session-uses-installed-session-resolver-test
   (testing "bound owner session is used when explicit session id is nil"
     (let [captured-command (atom nil)]
-      (binding [runtime-hooks/*player-state-owner* {:session-id "injected-session"}]
+      (binding [runtime-hooks/*player-state-owner* {:server-session-id "injected-session"
+                                                    :player-uuid "player-A"}]
         (with-redefs [store/get-or-create-player-state! (fn [_session-id _uuid] baseline-state)
                       store/set-player-state!* (fn [_session-id _uuid _state] nil)
                       store/mark-player-dirty! (fn [_session-id _uuid] nil)
@@ -111,7 +112,8 @@
                     {:command :change-category-with-level :new-category :electromaster :new-level 4}
                     {:command :clear-all-cooldowns}]
           run-sequence (fn [session-id]
-                         (binding [runtime-hooks/*player-state-owner* {:session-id session-id}]
+                         (binding [runtime-hooks/*player-state-owner* {:server-session-id session-id
+                                                                       :player-uuid uuid}]
                            (let [executed (atom [])
                                  result (with-redefs [interpreter/execute-reducer-result!
                                                       (fn [reducer-result]

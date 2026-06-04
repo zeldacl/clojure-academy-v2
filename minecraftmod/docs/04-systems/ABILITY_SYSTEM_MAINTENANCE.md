@@ -55,6 +55,23 @@ flowchart LR
 - `cn.li.ac.ability.service.context-registry` 命名空间（纯转发）
 - 在技能或 handler 内直接 `assoc` player-state / context-registry
 
+## Runtime owner（canonical，2026-06）
+
+能力运行时与 context 传输使用 **canonical owner**，由 `cn.li.mcmod.runtime.owner` 统一校验与派生：
+
+| API | 用途 |
+|-----|------|
+| `require-server-owner` / `require-client-owner` | 平台边界构造后校验 |
+| `store-session-id` | `runtime-store` 分区（`:server-session-id` / `:client-session-id`） |
+| `route-key` | context 传输路由（同 store 下按 player 隔离相同 `ctx-id`） |
+| `attach-transport-owner-metadata!` / `public-context` | 传输层私有 `:owner/*` 元数据；返回给技能/内容的 context **不得**含 session 或 route 字段 |
+
+**禁止**在 `ac/ability` 与 `ac/content/ability` 使用已废止的 `{:session-id ...}` owner 或从 context map 解构 `:session-id`。技能回调入口由 `context-state` / dispatcher 绑定 `ctx/*context-owner*`，内容层可继续只传 `ctx-id`。客户端 ability RPC（`client.api`）首参必须为 canonical client owner。
+
+命令 map 上的 `:session-id` 字段（`command-runtime` 注入的 store 分区）与 owner map 无关，勿混用。
+
+Context 生命周期清理仅使用 `ctx/clear-store-session-contexts!` 与 `ctx/clear-owner-contexts!`；**无** `clear-session-contexts!` 等旧别名。
+
 ## 模块边界
 
 - `mcmod/ability`：能力抽象与通用协议（无 AC 业务 wire id 硬编码）。

@@ -15,19 +15,21 @@
 
 (use-fixtures :each clean-fixture)
 
-(def ^:private runtime-owner {:logical-side :server :session-id :test-session})
+(defn- runtime-owner
+  [player-uuid]
+  {:logical-side :server :server-session-id :test-session :player-uuid (str player-uuid)})
 
 (deftest execute-assoc-state-paths-skill-state-via-reducer-test
   (testing "content skill paths should stay lean once ctx-skill only-handoffs stop assigning store paths"
     (let [ctx-id "ctx-reducer-backed"
           player-id "p-reducer"
-          c (ctx/new-server-context player-id :mag-movement ctx-id runtime-owner)]
+          c (ctx/new-server-context player-id :mag-movement ctx-id (runtime-owner player-id))]
       (test-player/seed-player-state!
         player-id
         {:context-registry {ctx-id {:id ctx-id :skill-id :mag-movement :status :constructed}}})
       (ctx/register-context! c)
       (binding [runtime-hooks/*player-state-owner* test-player/test-player-state-owner
-                ctx/*context-owner* runtime-owner]
+                ctx/*context-owner* (runtime-owner player-id)]
         (state/execute-assoc-state! {:ctx-id ctx-id :player-id player-id}
                                     {:k [:charge-ticks] :v 3})
         (is (= 3 (get-in (ctx/get-context ctx-id) [:skill-state :charge-ticks])))
@@ -38,13 +40,13 @@
   (testing "executing reducer command updates context-registry skill-state slice"
     (let [ctx-id "ctx-cmd-backed"
           player-id "p-cmd"
-          c (ctx/new-server-context player-id :directed-blastwave ctx-id runtime-owner)]
+          c (ctx/new-server-context player-id :directed-blastwave ctx-id (runtime-owner player-id))]
       (test-player/seed-player-state!
         player-id
         {:context-registry {ctx-id {:id ctx-id :skill-id :directed-blastwave :status :constructed}}})
       (ctx/register-context! c)
       (binding [runtime-hooks/*player-state-owner* test-player/test-player-state-owner
-                ctx/*context-owner* runtime-owner]
+                ctx/*context-owner* (runtime-owner player-id)]
         (state/execute-assoc-state! {:ctx-id ctx-id :player-id player-id}
                                     {:k [:launched?] :v true})
         (is (true? (get-in (ctx/get-context ctx-id) [:skill-state :launched?])))

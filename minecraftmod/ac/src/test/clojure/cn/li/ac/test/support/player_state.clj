@@ -3,7 +3,8 @@
             [cn.li.ac.ability.service.runtime-store :as store]
 [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
-(def test-player-state-owner {:server-session-id :test-session})
+(def test-player-state-owner {:server-session-id :test-session
+                              :player-uuid "test-player"})
 
 (def test-session-id
   (:server-session-id test-player-state-owner))

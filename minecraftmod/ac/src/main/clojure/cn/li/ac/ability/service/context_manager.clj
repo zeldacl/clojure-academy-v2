@@ -20,6 +20,7 @@
             [cn.li.ac.ability.model.resource :as rdata]
             [cn.li.ac.ability.messages :as catalog]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
+            [cn.li.mcmod.runtime.owner :as owner]
             [cn.li.mcmod.util.log :as log]))
 
 (def ^:private default-terminated-context-grace-ms 1000)
@@ -56,8 +57,7 @@
   (let [server-session-id (resolve-server-session-id "Server context owner")]
     {:logical-side :server
      :server-session-id server-session-id
-     :session-id [server-session-id player-uuid]
-     :player-uuid player-uuid}))
+     :player-uuid (str player-uuid)}))
 
 (defn- server-player-state
   [player-uuid]
@@ -71,8 +71,7 @@
          vals
          (filter (fn [ctx-map]
                    (and (= :server (:logical-side ctx-map))
-                        (= (:session-id owner) (:session-id ctx-map))
-                        (= player-uuid (:player-uuid ctx-map))
+                        (= (str player-uuid) (:player-uuid ctx-map))
                         (= ctx/STATUS-ALIVE (:status ctx-map))
                         (= ctx-state/INPUT-ACTIVE (:input-state ctx-map)))))
          (sort-by (juxt :id :server-id)))))
@@ -87,9 +86,10 @@
                    (ctx/new-context player-uuid skill-id owner)
                    (ctx/new-context player-uuid skill-id))]
      (ctx/register-context! new-ctx)
-     (transport/send-to-server! catalog/MSG-CTX-BEGIN-LINK
-                                {:ctx-id (:id new-ctx)
-                                 :skill-id skill-id})
+     (binding [ctx/*context-owner* owner]
+       (transport/send-to-server! catalog/MSG-CTX-BEGIN-LINK
+                                  {:ctx-id (:id new-ctx)
+                                   :skill-id skill-id}))
      (log/debug "Context activated (client):" (:id new-ctx) skill-id)
      new-ctx)))
 
@@ -142,8 +142,10 @@
 
 (defn- context-owner-from-map
   [ctx-map]
-  {:logical-side (:logical-side ctx-map)
-   :session-id (:session-id ctx-map)})
+  (or (owner/canonical-owner-from-transport ctx-map)
+      (when-let [side (:logical-side ctx-map)]
+        (cond-> {:logical-side side}
+          (:player-uuid ctx-map) (assoc :player-uuid (str (:player-uuid ctx-map)))))))
 
 (defn- timeout-expired-server-contexts
   []
@@ -210,7 +212,7 @@
       (ctx-state/handle-key-tick! owner id {:ctx-id id
                                             :skill-id skill-id}
                                   send-terminated-context!))
-    (when-let [server-session-id (:server-session-id owner)]
+    (when-let [server-session-id (owner/store-session-id owner)]
       (command-rt/run-command-in-session!
        server-session-id
        player-uuid

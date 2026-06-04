@@ -241,7 +241,7 @@
 
    :on-server-stop!
    (fn [session-id]
-    (ctx/clear-session-contexts! session-id)
+    (ctx/clear-store-session-contexts! session-id)
      (store/remove-session! (store/get-store) session-id)
      (world-registry/clear-session-world-data! session-id)
      (when (platform-hooks/platform-fn-registered? fn-reset-server-runtimes)

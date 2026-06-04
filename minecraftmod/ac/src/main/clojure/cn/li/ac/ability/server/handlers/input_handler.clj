@@ -43,15 +43,12 @@
 
 (defn- sync-keepalive-command!
 	[owner ctx-id]
-	(let [server-session-id (:server-session-id owner)
-				[_session-id player-uuid] (:session-id owner)]
-		(when (and server-session-id player-uuid)
-			(command-rt/run-command-in-session!
-				server-session-id
-				player-uuid
-				{:command :touch-context-keepalive
-				 :ctx-id ctx-id
-				 :timestamp-ms (System/currentTimeMillis)}))))
+	(handlers-common/run-player-command!
+	 owner
+	 (:player-uuid owner)
+	 {:command :touch-context-keepalive
+		:ctx-id ctx-id
+		:timestamp-ms (System/currentTimeMillis)}))
 
 (defn- refresh-owned-alive-context!
 	[ctx-id player]

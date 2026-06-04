@@ -22,7 +22,8 @@
 
 (use-fixtures :each reset-fixture)
 
-(def ^:private test-context-owner {:logical-side :server :session-id :test-session})
+(def ^:private test-context-owner
+  {:logical-side :server :server-session-id :test-session :player-uuid "p-gate"})
 
 (defn- seed-player!
   [player-uuid skill-id resource-data]

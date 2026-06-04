@@ -1,14 +1,13 @@
 (ns cn.li.ac.ability.effects.state
   (:require [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
-            [cn.li.mcmod.hooks.core :as runtime-hooks]))
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
+            [cn.li.mcmod.runtime.owner :as owner]))
 
 (defn- resolve-session-id
   [evt]
-  (or (runtime-hooks/player-state-session-id)
-      (let [ctx-map (ctx/get-context (:ctx-id evt))
-            sid (:session-id ctx-map)]
-        (if (vector? sid) (first sid) sid))
+  (or (some-> ctx/*context-owner* owner/store-session-id)
+      (runtime-hooks/player-state-session-id)
       (runtime-hooks/require-player-state-session-id "effects-state")))
 
 (defn execute-assoc-state!
@@ -33,7 +32,7 @@
                  :ctx-id ctx-id
                  :k state-key
                  :max max})
-  next-tick (long (or (get-in result [:state :context-registry ctx-id :skill-state state-key]) 0))]
+        next-tick (long (or (get-in result [:state :context-registry ctx-id :skill-state state-key]) 0))]
     (assoc evt state-key next-tick)))
 
 (defn execute-terminate!
@@ -53,7 +52,3 @@
      {:command :enforce-overload-floor
       :floor-value floor-val})
     evt))
-
-
-
-

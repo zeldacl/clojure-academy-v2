@@ -1,6 +1,7 @@
 (ns cn.li.ac.ability.client.effects.queue-infra
   "Shared queue helpers for client-side effect pipelines."
-  (:require [cn.li.mcmod.hooks.core :as runtime-hooks]))
+  (:require [cn.li.mcmod.hooks.core :as runtime-hooks]
+            [cn.li.mcmod.runtime.owner :as owner]))
 
 (defn- require-owner-value
   [kind owner label value]
@@ -11,20 +12,16 @@
                      :required label}))))
 
 (defn normalize-session-id
+  "Resolve store partition key from a canonical client owner map or bare session token."
   [kind owner-or-session]
   (cond
     (map? owner-or-session)
-    (require-owner-value kind owner-or-session
-                         ":client-session-id"
-                         (or (:client-session-id owner-or-session)
-                             (:session-id owner-or-session)
-                             (runtime-hooks/player-state-client-session-id)
-                             runtime-hooks/*client-session-id*))
-
-    (and (vector? owner-or-session)
-         (= 2 (count owner-or-session))
-         (vector? (first owner-or-session)))
-    (first owner-or-session)
+    (or (owner/store-session-id owner-or-session)
+        (require-owner-value kind owner-or-session
+                             ":client-session-id"
+                             (or (:client-session-id owner-or-session)
+                                 (runtime-hooks/player-state-client-session-id)
+                                 runtime-hooks/*client-session-id*)))
 
     (some? owner-or-session)
     owner-or-session
@@ -39,7 +36,8 @@
   [kind]
   (or (runtime-hooks/current-player-state-owner)
       (when runtime-hooks/*client-session-id*
-        {:client-session-id runtime-hooks/*client-session-id*})
+        {:logical-side :client
+         :client-session-id runtime-hooks/*client-session-id*})
       (throw (ex-info (format "Current %s effect owner requires :client-session-id" kind)
                       {:required ":client-session-id"}))))
 
