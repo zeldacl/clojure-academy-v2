@@ -12,9 +12,7 @@
   Also extends the cn.li.mcmod.network.client/send-request multimethod for the
   :forge-1.20.1 dispatch value so the GUI's send-to-server calls work."
   (:require [cn.li.forge1201.gui.block-sync-broadcast]
-            [cn.li.mc1201.client.session :as client-session]
             [cn.li.mcmod.gui.sync-api :as gui-sync-api]
-            [cn.li.mc1201.reflect-util :as ru]
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.network.server :as net-server]
@@ -34,12 +32,18 @@
 
 (defn- with-client-response-owner
   [payload f]
-  (let [session-id (client-session/client-session-id)
+  (let [client-session-id-fn (requiring-resolve 'cn.li.mc1201.client.session/client-session-id)
+        with-bound-client-owner-fn (requiring-resolve 'cn.li.mc1201.client.session/with-bound-client-owner)
+        session-id (when client-session-id-fn
+                     (client-session-id-fn))
         player-uuid (payload-player-uuid payload)]
+    (when-not with-bound-client-owner-fn
+      (throw (ex-info "Client GUI network response owner binding unavailable"
+                      {:payload payload})))
     (when-not session-id
       (throw (ex-info "Client GUI network response requires bound client session"
                       {:payload payload})))
-    (client-session/with-bound-client-owner
+    (with-bound-client-owner-fn
      (cond-> {:logical-side :client :client-session-id session-id}
        player-uuid (assoc :player-uuid player-uuid))
      f)))

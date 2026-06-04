@@ -16,6 +16,7 @@
             [cn.li.ac.ability.service.context-manager :as ctx-mgr]
             [cn.li.ac.ability.service.delayed-projectiles :as delayed-projectiles]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.gui.registry-verify :as gui-registry-verify]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
             [cn.li.ac.ability.service.platform-hooks :as platform-hooks]            [cn.li.ac.block.developer.logic :as developer-logic]
             [cn.li.ac.ability.service.player-runtime-commands :as player-runtime-cmd]
@@ -326,7 +327,9 @@
    :register-network-handlers!
    (fn []
      (if (platform-hooks/platform-fn-registered? fn-register-network-handlers)
-       ((platform-hooks/get-platform-fn fn-register-network-handlers))
+       (do
+         ((platform-hooks/get-platform-fn fn-register-network-handlers))
+         (gui-registry-verify/finalize-gui-network-registration!))
        (log/warn "Ability network register-handlers! not available")))
 
    :subscribe-achievement-trigger!

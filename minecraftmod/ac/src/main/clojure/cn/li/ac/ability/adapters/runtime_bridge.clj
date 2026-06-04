@@ -49,6 +49,21 @@
     :clone? true
     :order 10}])
 
+(def ^:private ac-runtime-hook-keys
+  #{:get-skills-for-category
+    :client-get-skill-by-controllable
+    :client-update-ability-data!
+    :client-update-resource-data!
+    :client-update-cooldown-data!
+    :client-update-preset-data!
+    :client-req-learn-skill!
+    :client-req-level-up!
+    :client-req-set-activated!
+    :client-req-set-preset-slot!
+    :client-req-switch-preset!
+    :client-trigger-mode-switch!
+    :client-trigger-preset-switch!})
+
 (defn- install-sync-descriptors!
   []
   (doseq [descriptor sync-descriptors]
@@ -83,6 +98,7 @@
     (install-sync-descriptors!)
     (install-player-persistence-descriptors!)
     (client-ui/install-client-input-descriptors!)
+    (runtime-hooks/register-runtime-hook-keys! ac-runtime-hook-keys)
     (runtime-hooks/register-power-runtime-hooks!
       (merge (server-hooks/runtime-server-hooks)
              (client-ui/runtime-client-ui-hooks)

@@ -1,9 +1,14 @@
 (ns cn.li.mc1201.gui.registry.common
   "Shared helpers for platform GUI registry implementations."
-  (:require [cn.li.mc1201.client.session :as client-session]
-            [cn.li.mcmod.util.log :as log])
+  (:require [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.network FriendlyByteBuf]
            [net.minecraft.world.entity.player Inventory Player]))
+
+(defn- with-current-client-owner*
+  [f]
+  (if-let [with-owner (requiring-resolve 'cn.li.mc1201.client.session/with-current-client-owner)]
+    (with-owner f)
+    (f)))
 
 (defn create-wrapped-container
   [create-container-fn wrap-container-fn resolve-handler-type-fn gui-id sync-or-window-id error-prefix]
@@ -58,7 +63,7 @@
       (fn []
         (create-container-fn handler gui-id player world pos))
       (fn [wid menu-type clj-container]
-        (client-session/with-current-client-owner
+        (with-current-client-owner*
           #(create-menu-proxy-fn wid
                                  menu-type
                                  clj-container

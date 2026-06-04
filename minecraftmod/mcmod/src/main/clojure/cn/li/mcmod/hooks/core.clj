@@ -106,6 +106,9 @@
 (defonce ^:private installed-hooks-core-runtime
   (create-hooks-core-runtime))
 
+(defonce ^:private allowed-runtime-hook-keys*
+  (atom (set (keys (default-runtime-hooks-state)))))
+
 (defn- hooks-core-state-atom []
   (:state* installed-hooks-core-runtime))
 
@@ -115,8 +118,15 @@
 (defn- update-hooks-core-state! [f & args]
   (apply swap! (hooks-core-state-atom) f args))
 
-(def ^:private allowed-runtime-hook-keys
-  (set (keys (default-runtime-hooks-state))))
+
+(defn register-runtime-hook-keys!
+  "Extend the set of allowed runtime hook keys before registration.
+
+  This is used by content modules to opt into content-owned hook/request
+  entrypoints while keeping the neutral contract validation fail-fast."
+  [hook-keys]
+  (swap! allowed-runtime-hook-keys* into (set hook-keys))
+  nil)
 
 (defn- validate-hooks!
   [hooks]
@@ -124,12 +134,12 @@
     (throw (schema/contract-ex-info :runtime-hooks
                                     hooks
                                     (schema/explain hooks-map-schema hooks))))
-  (let [unknown-keys (seq (remove allowed-runtime-hook-keys (keys hooks)))]
+  (let [unknown-keys (seq (remove @allowed-runtime-hook-keys* (keys hooks)))]
     (when unknown-keys
       (throw (ex-info "Unknown runtime hook keys"
                       {:contract :runtime-hooks
                        :unknown-hook-keys (vec unknown-keys)
-                       :allowed-hook-keys allowed-runtime-hook-keys}))))
+                       :allowed-hook-keys @allowed-runtime-hook-keys*}))))
   hooks)
 
 (def ^:dynamic *client-session-id*
