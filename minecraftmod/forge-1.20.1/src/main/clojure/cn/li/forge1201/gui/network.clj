@@ -13,6 +13,7 @@
   :forge-1.20.1 dispatch value so the GUI's send-to-server calls work."
   (:require [cn.li.ac.gui.platform-adapter.sync-api :as gui-sync-api]
             [cn.li.forge1201.gui.block-sync-broadcast]
+            [cn.li.mc1201.client.session :as client-session]
             [cn.li.mc1201.reflect-util :as ru]
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
@@ -22,21 +23,6 @@
   (:import [cn.li.forge1201.network ClojureNetwork]
            [net.minecraft.server.level ServerPlayer]
            [clojure.lang IFn]))
-
-(defn- client-session-id
-  []
-  (when-let [mc (try
-                  (let [minecraft-cls (ru/class-noinit "net.minecraft.client.Minecraft")]
-                    (ru/static minecraft-cls "getInstance"))
-                  (catch Throwable _
-                    nil))]
-    (when-let [connection (try
-                            (ru/inst mc "getConnection")
-                            (catch Throwable _
-                              nil))]
-      [:client-session
-       (System/identityHashCode mc)
-       (System/identityHashCode connection)])))
 
 (defn- payload-player-uuid
   [payload]
@@ -48,16 +34,20 @@
 
 (defn- with-client-response-owner
   [payload f]
-  (let [session-id (client-session-id)
+  (let [session-id (client-session/client-session-id)
         player-uuid (payload-player-uuid payload)]
-    (binding [runtime-hooks/*client-session-id* session-id
-              runtime-hooks/*player-state-owner* (cond-> {:client-session-id session-id}
-                                                   player-uuid (assoc :player-uuid player-uuid))]
-      (f))))
+    (when-not session-id
+      (throw (ex-info "Client GUI network response requires bound client session"
+                      {:payload payload})))
+    (client-session/with-bound-client-owner
+     (cond-> {:logical-side :client :client-session-id session-id}
+       player-uuid (assoc :player-uuid player-uuid))
+     f)))
 
 (defn- server-player-owner
   [^ServerPlayer player]
-  {:server-session-id (when-let [server (.getServer player)]
+  {:logical-side :server
+   :server-session-id (when-let [server (.getServer player)]
                         [:server (System/identityHashCode server)])
    :player-uuid (str (.getUUID player))})
 

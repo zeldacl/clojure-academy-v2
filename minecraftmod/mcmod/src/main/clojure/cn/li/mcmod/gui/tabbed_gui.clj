@@ -4,6 +4,8 @@
    This is shared client/server tab switching logic used by platform GUI/menu bridges."
   (:require [cn.li.mcmod.gui.container-state :as container-state]
             [cn.li.mcmod.gui.cgui-core :as cgui-core]
+            [cn.li.mcmod.gui.owner-contract :as owner-contract]
+            [cn.li.mcmod.gui.registry-contract :as registry-contract]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.network.server :as net-server]
@@ -55,11 +57,11 @@
         player-id (require-owner-value {:player player}
                                        ":player-uuid"
                                        (some-> player player-key))]
-    {:logical-side :server
-     :server-session-id server-session-id
-     :session-id [server-session-id player-id]
-     :player-uuid player-id
-     :player player}))
+    (owner-contract/require-server-owner
+     {:logical-side :server
+      :server-session-id server-session-id
+      :player-uuid player-id
+      :player player})))
 
 (defn set-tab-index-by-container-id!
   "Set current tab index for a container id (client-side)."
@@ -81,23 +83,16 @@
 
 (defn- owner-client-session-id
   [owner]
-  (when (map? owner)
-    (or (:client-session-id owner)
-        (:session-id owner))))
+  (when (owner-contract/valid-client-owner? owner)
+    (:client-session-id owner)))
 
 (defn- send-set-tab-safe!
   [owner tab-index container-id]
   (let [owner-session-id (owner-client-session-id owner)]
     (try
-      (cond
-        owner-session-id
+      (if owner-session-id
         (send-set-tab! owner tab-index container-id)
-
-        runtime-hooks/*client-session-id*
-        (send-set-tab! tab-index container-id)
-
-        :else
-        (log/debug "Skip set-tab sync: missing client owner/session"
+        (log/debug "Skip set-tab sync: missing canonical client owner"
                    {:container-id container-id
                     :tab-index tab-index
                     :owner owner}))
@@ -182,7 +177,8 @@
 (defn register-set-tab-handler!
   "Register the set-tab C2S handler. Call once during init (e.g. from core)."
   []
-  (net-server/register-handler set-tab-msg-id handle-set-tab)
+  (net-server/register-handler set-tab-msg-id handle-set-tab
+                               {:owner-spec :server :payload-routing :none})
   (log/info "Registered set-tab network handler"))
 
 (defn send-set-tab!

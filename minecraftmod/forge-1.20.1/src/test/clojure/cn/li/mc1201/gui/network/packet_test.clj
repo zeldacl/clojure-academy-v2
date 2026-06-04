@@ -17,7 +17,11 @@
 
 (deftest dispatch-client-response-respects-explicit-owner-test
   (let [session (client/create-client-network-session)
-        owner {:client-session-id :session-a :screen-id :screen-a :client-network-session session}
+        owner {:logical-side :client
+               :client-session-id :session-a
+               :player-uuid "player-a"
+               :screen-id :screen-a
+               :client-network-session session}
         calls (atom [])]
     (with-redefs [client/send-request (fn [& _] nil)]
       (client/send-to-server owner "req" {} (fn [resp] (swap! calls conj [:response resp])))
@@ -48,7 +52,9 @@
 
 (deftest dispatch-client-response-owner-session-falls-back-to-global-push-handlers-test
   (let [calls (atom [])
-        owner {:client-session-id :session-a}]
+        owner {:logical-side :client
+               :client-session-id :session-a
+               :player-uuid "player-a"}]
     (client/register-push-handler! "push/global" (fn [payload] (swap! calls conj payload)))
     (packet/dispatch-client-response! owner -1 {:msg-id "push/global" :payload {:value 7}})
     (is (= [{:value 7}] @calls))))

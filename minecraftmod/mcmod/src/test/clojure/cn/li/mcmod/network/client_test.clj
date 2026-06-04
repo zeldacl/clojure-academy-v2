@@ -58,8 +58,16 @@
 (deftest owner-scoped-pending-requests-test
   (let [session-a (client/create-client-network-session)
         session-b (client/create-client-network-session)
-        owner-a {:client-session-id :session-a :screen-id :screen :client-network-session session-a}
-        owner-b {:client-session-id :session-b :screen-id :screen :client-network-session session-b}
+        owner-a {:logical-side :client
+                 :client-session-id :session-a
+                 :player-uuid "player-a"
+                 :screen-id :screen
+                 :client-network-session session-a}
+        owner-b {:logical-side :client
+                 :client-session-id :session-b
+                 :player-uuid "player-b"
+                 :screen-id :screen
+                 :client-network-session session-b}
         responses (atom [])]
     (with-redefs [client/send-request (fn [& _] nil)]
       (client/send-to-server owner-a "req" {} (fn [resp] (swap! responses conj [:a resp])))
@@ -77,7 +85,12 @@
 
 (deftest pending-requests-expire-by-timeout-test
   (let [session (client/create-client-network-session)
-        owner {:client-session-id :session-a :screen-id :screen :timeout-ms 1 :client-network-session session}]
+        owner {:logical-side :client
+               :client-session-id :session-a
+               :player-uuid "player-a"
+               :screen-id :screen
+               :timeout-ms 1
+               :client-network-session session}]
     (with-redefs [client/send-request (fn [& _] nil)]
       (client/send-to-server owner "req" {} identity))
     (is (= [[(client/client-owner-key owner) 1]]
@@ -97,8 +110,16 @@
 (deftest owner-scoped-push-handler-test
   (let [session-a (client/create-client-network-session)
         session-b (client/create-client-network-session)
-        owner-a {:client-session-id :session-a :screen-id :screen-a :client-network-session session-a}
-        owner-b {:client-session-id :session-a :screen-id :screen-b :client-network-session session-b}
+        owner-a {:logical-side :client
+                 :client-session-id :session-a
+                 :player-uuid "player-a"
+                 :screen-id :screen-a
+                 :client-network-session session-a}
+        owner-b {:logical-side :client
+                 :client-session-id :session-a
+                 :player-uuid "player-b"
+                 :screen-id :screen-b
+                 :client-network-session session-b}
         calls (atom [])]
     (client/register-push-handler! "push/state" (fn [payload] (swap! calls conj [:static payload])))
     (client/register-push-handler! owner-a "push/state" (fn [payload] (swap! calls conj [:a payload])))

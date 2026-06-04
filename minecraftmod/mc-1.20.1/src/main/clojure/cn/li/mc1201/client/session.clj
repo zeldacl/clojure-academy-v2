@@ -27,7 +27,8 @@
   [player-uuid]
   (when-let [session-id (client-session-id)]
     (when player-uuid
-      {:client-session-id session-id
+      {:logical-side :client
+       :client-session-id session-id
        :player-uuid (str player-uuid)})))
 
 (defn current-local-player-owner
@@ -57,14 +58,14 @@
 (defn with-bound-client-owner
   [owner f]
   (let [owner* (or owner {})
-        session-id (or (:client-session-id owner*)
-                       (:session-id owner*))
+        session-id (:client-session-id owner*)
         player-uuid (some-> (:player-uuid owner*) str)]
     (when-not session-id
       (throw (ex-info "Client owner requires :client-session-id"
                       {:owner owner})))
     (binding [runtime-hooks/*client-session-id* session-id
-              runtime-hooks/*player-state-owner* (cond-> {:client-session-id session-id}
+              runtime-hooks/*player-state-owner* (cond-> {:logical-side :client
+                                                          :client-session-id session-id}
                                                    player-uuid (assoc :player-uuid player-uuid))]
       (f))))
 

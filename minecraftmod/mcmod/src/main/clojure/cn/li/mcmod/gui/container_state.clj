@@ -81,10 +81,9 @@
 
 (defn- session-key
 	[owner]
-	(require-owner-value owner ":session-id"
+	(require-owner-value owner ":server-session-id or :client-session-id"
 											 (or (:server-session-id owner)
-													 (:client-session-id owner)
-													 (:session-id owner))))
+													 (:client-session-id owner))))
 
 (defn- owner-player-key
 	[owner]
@@ -122,7 +121,7 @@
 (defn- container-owner
 	[container]
 	(or (:owner container)
-			(select-keys container [:server-session-id :client-session-id :session-id :player-uuid :player])))
+			(select-keys container [:server-session-id :client-session-id :player-uuid :player :owner :logical-side])))
 
 (defn owner-from-container
 	"Resolve an explicit owner map from a Clojure container."

@@ -23,16 +23,31 @@
    (str (segment->token prefix) "_" (segment->token domain) "_" (segment->token action))))
 
 (defn build-domain-spec
-  "Build message spec for a domain and validate duplicate actions early."
+  "Build message spec for a domain and validate duplicate actions early.
+
+  Arities:
+  - [domain actions] — default prefix
+  - [domain actions contract] — third arg is a contract map
+  - [prefix domain actions] — third arg is the action vector
+  - [prefix domain actions contract]
+
+  Contract keys:
+  - :owner-spec (:server|:client)
+  - :payload-routing (:none|:sync-routing)"
   ([domain actions]
-   (build-domain-spec default-prefix domain actions))
-  ([prefix domain actions]
+   (build-domain-spec default-prefix domain actions {}))
+  ([a b c]
+   (if (map? c)
+     (build-domain-spec default-prefix a b c)
+     (build-domain-spec a b c {})))
+  ([prefix domain actions contract]
    (let [dupes (->> actions frequencies (keep (fn [[k n]] (when (> n 1) k))))]
      (when (seq dupes)
        (throw (ex-info "Duplicate actions in domain"
                        {:domain domain :duplicate-actions (vec dupes)})))
      {:prefix prefix
       :domain domain
+      :contract contract
       :messages (into {}
                       (map (fn [action]
                              [action (message-id prefix domain action)]))
@@ -41,7 +56,8 @@
                      {:prefix prefix
                       :domain domain
                       :action action
-                      :msg-id (message-id prefix domain action)})
+                      :msg-id (message-id prefix domain action)
+                      :contract contract})
                    actions)})))
 
 (defn build-catalog

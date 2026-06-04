@@ -22,6 +22,14 @@
 	 :developer [:get-status :start-development :stop-development :list-nodes :connect :disconnect]
 	 :ability-interferer [:get-status :change-range :toggle-enabled :set-whitelist :add-to-whitelist :remove-from-whitelist]})
 
+(def message-domain-contracts
+	"Registry-phase handler contracts for wireless GUI message domains.
+
+	Validated when domains are registered and again after runtime handler wiring."
+	(into {}
+	      (map (fn [domain] [domain {:owner-spec :server :payload-routing :sync-routing}]))
+	      (keys message-domain-actions)))
+
 (def gui-definitions
 	"Static AC GUI registration metadata keyed by content GUI key.
 
@@ -179,6 +187,12 @@
 	"Return the declared action vector for a message domain."
 	[domain]
 	(get message-domain-actions domain))
+
+(defn message-domain-contract
+	"Return the registry contract map for a wireless GUI message domain."
+	[domain]
+	(or (get message-domain-contracts domain)
+		(throw (ex-info "Unknown wireless GUI message domain contract" {:domain domain}))))
 
 (defn missing-message-domains
 	"Return required domains that are absent from the manifest."

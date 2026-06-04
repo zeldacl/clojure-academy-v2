@@ -22,8 +22,10 @@
 
 (deftest domain-spec-validation-test
   (testing "build-domain-spec constructs expected map"
-    (let [spec (msg-dsl/build-domain-spec wireless-prefix :demo [:alpha :beta])]
+    (let [spec (msg-dsl/build-domain-spec wireless-prefix :demo [:alpha :beta]
+                                          {:owner-spec :server :payload-routing :sync-routing})]
       (is (= :demo (:domain spec)))
+      (is (= :server (get-in spec [:contract :owner-spec])))
       (is (= "wireless_demo_alpha" (get-in spec [:messages :alpha])))
       (is (= 2 (count (:specs spec))))))
   (testing "duplicate actions are rejected"

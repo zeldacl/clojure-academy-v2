@@ -2,10 +2,13 @@
   "Shared GUI spec builders and validation."
   (:require [clojure.string :as str]
             [cn.li.mcmod.gui.registry :as gui-registry]
+            [cn.li.mcmod.gui.registry-contract :as registry-contract]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]))
 
 (defn- validate-gui-spec!
   [gui-spec]
+  (when-let [screen-contract (:screen-contract gui-spec)]
+    (registry-contract/validate-screen-contract! screen-contract))
   (when-not (and (:id gui-spec) (string? (:id gui-spec)) (not (str/blank? (:id gui-spec))))
     (throw (ex-info "GUI must have a non-empty string :id" {:id (:id gui-spec) :spec gui-spec})))
 
@@ -76,6 +79,9 @@
         buttons-vec (mapv parse-button (or (:buttons layout-opts) (:buttons options) []))
         labels-vec (mapv parse-label (or (:labels layout-opts) (:labels options) []))
         spec {:id gui-id
+              :screen-contract (registry-contract/normalize-screen-contract
+                                 (or (:screen-contract options)
+                                     (registry-contract/default-client-screen-contract)))
               :gui-id (:gui-id options)
               :registration {:display-name (:display-name registration-opts)
                              :gui-type (:gui-type registration-opts)

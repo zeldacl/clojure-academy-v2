@@ -29,6 +29,14 @@
                                                 :player-uuid player-uuid}]
     (f)))
 
+(defn- with-client-player-state-owner
+  [player-uuid f]
+  (binding [runtime-hooks/*client-session-id* :test-client-session
+            runtime-hooks/*player-state-owner* {:logical-side :client
+                                                :client-session-id :test-client-session
+                                                :player-uuid player-uuid}]
+    (f)))
+
 (defn- widget-tree []
   (let [root (cgui-core/create-widget :name "main")
         parent-left (cgui-core/create-widget :name "parent_left")
@@ -158,6 +166,75 @@
         :wireless-inject-last-tick (atom 0.0)}
        {:switch-wireless-tab! nil})
       (with-player-state-owner
+        "player-uuid"
+        (fn []
+          (is (fn? @frame-handler))
+          (@frame-handler nil)
+          (is (true? (cgui-core/visible? (cgui-core/find-widget root "parent_left/panel_ability/btn_upgrade")))))))))
+
+(deftest developer-panel-frame-handler-requires-bound-owner-test
+  (let [root (widget-tree)
+        frame-handler (atom nil)
+        container {:player :player-1
+                   :tile-entity :tile-1
+                   :energy (atom 0.0)
+                   :max-energy (atom 50000.0)
+                   :is-developing (atom false)
+                   :wireless-bandwidth (atom 1000.0)
+                   :wireless-inject-last-tick (atom 0.0)}]
+    (with-redefs [events/on-left-click (fn [widget _handler] widget)
+                  events/on-frame (fn [_widget handler]
+                                   (reset! frame-handler handler)
+                                   nil)
+                  uuid/player-uuid (fn [_] "player-uuid")
+                  platform-be/get-block-id (fn [_] :developer-advanced)
+                  developer-domain/developer-type-for-block-id (fn [_] :advanced)
+                  skill-query/get-controllable-skills-at-level (fn [& _] [])
+                  store/get-player-state* (fn [_ _] {:ability-data {}})
+                  category/get-category (fn [_] nil)
+                  msg-registry/msg (fn [domain action] [domain action])
+                  net-client/send-to-server (fn [& _] nil)]
+      (developer-panel/attach-classic-developer-bindings! root container {:switch-wireless-tab! nil})
+      (binding [runtime-hooks/*player-state-owner* nil
+                runtime-hooks/*client-session-id* nil]
+        (is (fn? @frame-handler))
+        (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                              #"developer.panel requires bound session-id"
+                              (@frame-handler nil)))))))
+
+(deftest developer-panel-frame-handler-uses-canonical-client-owner-test
+  (let [root (widget-tree)
+        frame-handler (atom nil)
+        container {:player :player-1
+                   :tile-entity :tile-1
+                   :energy (atom 0.0)
+                   :max-energy (atom 50000.0)
+                   :is-developing (atom false)
+                   :wireless-bandwidth (atom 1000.0)
+                   :wireless-inject-last-tick (atom 0.0)}]
+    (with-redefs [events/on-left-click (fn [widget _handler] widget)
+                  events/on-frame (fn [_widget handler]
+                                   (reset! frame-handler handler)
+                                   nil)
+                  uuid/player-uuid (fn [_] "player-uuid")
+                  platform-be/get-block-id (fn [_] :developer-advanced)
+                  developer-domain/developer-type-for-block-id (fn [_] :advanced)
+                  developer-domain/min-for-level (fn [_] :normal)
+                  developer-domain/gte? (fn [_ _] true)
+                  skill-query/get-controllable-skills-at-level (fn [& _] [])
+                  store/get-player-state* (fn [_session uuid]
+                                          (is (= :test-client-session _session))
+                                          (is (= "player-uuid" uuid))
+                                          {:ability-data {:category-id :electromaster
+                                                          :level 2
+                                                          :level-progress 0.0}})
+                  category/get-category (fn [_] {:name-key "ac.category.electromaster"})
+                  category/get-prog-incr-rate (fn [_] 1.0)
+                  msg-registry/msg (fn [domain action] [domain action])
+                  net-helpers/tile-pos-payload (fn [_] {:pos-x 1 :pos-y 2 :pos-z 3})
+                  net-client/send-to-server (fn [& _] nil)]
+      (developer-panel/attach-classic-developer-bindings! root container {:switch-wireless-tab! nil})
+      (with-client-player-state-owner
         "player-uuid"
         (fn []
           (is (fn? @frame-handler))

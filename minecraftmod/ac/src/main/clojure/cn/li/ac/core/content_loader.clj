@@ -1,6 +1,7 @@
 (ns cn.li.ac.core.content-loader
   "AC runtime content loading orchestration."
-  (:require [cn.li.ac.gui.platform-adapter :as platform-gui]
+  (:require [cn.li.ac.gui.registry-verify :as gui-registry-verify]
+            [cn.li.ac.gui.platform-adapter :as platform-gui]
             [cn.li.ac.gui.platform-adapter.sync-bootstrap :as gui-sync-bootstrap]
             [cn.li.ac.registry.content-namespaces :as content-ns]
             [cn.li.ac.registry.hooks :as hooks]
@@ -42,7 +43,8 @@
           (log/info "Registered screen factory" screen-fn-kw "for GUI ID" gui-id
                     "gui-type=" gui-type "declared?" (boolean declared-screen-fn-kw))))))
   (hooks/call-all-network-handlers!)
-  (tabbed-gui/register-set-tab-handler!))
+  (tabbed-gui/register-set-tab-handler!)
+  (gui-registry-verify/finalize-gui-network-registration!))
 
 (defn activate-runtime-content!
   "Load and initialize AC runtime content once. Safe to call repeatedly."

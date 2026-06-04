@@ -1,6 +1,7 @@
 (ns cn.li.mcmod.network.server
   "Server-side RPC handler registry for GUI/network logic"
-  (:require [cn.li.mcmod.util.log :as log]))
+  (:require [cn.li.mcmod.gui.registry-contract :as registry-contract]
+            [cn.li.mcmod.util.log :as log]))
 
 (defn default-network-server-runtime-state
   []
@@ -61,23 +62,36 @@
     (throw (ex-info "Network server handlers are frozen" {}))))
 
 (defn register-handler
-  "Register a request handler.
+  "Register a request handler with an explicit registry contract.
 
   Args:
   - msg-id: string message identifier
-  - handler-fn: (fn [payload player] response-map)"
-  [msg-id handler-fn]
-  (assert-not-frozen!)
-  (update-network-server-state!
-    update :handlers
-    (fn [registry]
-      (if-let [existing (get registry msg-id)]
-        (if (identical? existing handler-fn)
-          registry
-          (throw (ex-info "Conflicting network handler id" {:msg-id msg-id})))
-        (assoc registry msg-id handler-fn))))
-  (log/info "Registered network handler for" msg-id)
-  nil)
+  - handler-fn: (fn [payload player] response-map)
+  - contract: optional map with :owner-spec and :payload-routing"
+  ([msg-id handler-fn]
+   (register-handler msg-id handler-fn (registry-contract/default-server-gui-handler-contract)))
+  ([msg-id handler-fn contract]
+   (registry-contract/validate-handler-fn! msg-id handler-fn)
+   (let [entry (registry-contract/handler-entry handler-fn contract)]
+     (assert-not-frozen!)
+     (update-network-server-state!
+       update :handlers
+       (fn [registry]
+         (if-let [existing (get registry msg-id)]
+           (if (and (identical? (registry-contract/registered-handler-fn existing)
+                                 handler-fn)
+                    (registry-contract/contracts-compatible?
+                     (registry-contract/registered-handler-contract existing)
+                     (:contract entry)))
+             registry
+             (throw (ex-info "Conflicting network handler id"
+                             {:msg-id msg-id
+                              :existing (registry-contract/registered-handler-contract existing)
+                              :new (:contract entry)})))
+           (assoc registry msg-id entry))))
+     (log/info "Registered network handler for" msg-id
+               "owner-spec=" (:owner-spec (:contract entry)))
+     nil)))
 
 (defn freeze-handlers!
   []
@@ -103,7 +117,8 @@
   - player: player entity
   - respond-fn: (fn [request-id response-map]) or nil"
   [msg-id request-id payload player respond-fn]
-  (if-let [handler (get (:handlers (network-server-state-snapshot)) msg-id)]
+  (if-let [handler (some-> (get (:handlers (network-server-state-snapshot)) msg-id)
+                            registry-contract/registered-handler-fn)]
     (try
       (let [response (handler payload player)]
         (when (and respond-fn (>= request-id 0))

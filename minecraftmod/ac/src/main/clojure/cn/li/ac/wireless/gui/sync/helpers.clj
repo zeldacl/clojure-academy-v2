@@ -18,8 +18,7 @@
 (defn- owner-session-id
   [owner]
   (or (:server-session-id owner)
-      (:client-session-id owner)
-      (:session-id owner)))
+      (:client-session-id owner)))
 
 (defn- owner-player-uuid
   [owner]
@@ -35,9 +34,9 @@
   [payload]
   (let [owner (select-keys payload [:server-session-id
                                     :client-session-id
-                                    :session-id
                                     :player-uuid
-                                    :player])]
+                                    :player
+                                    :logical-side])]
     (cond-> owner
       (and (nil? (owner-session-id owner))
            runtime-hooks/*client-session-id*)
@@ -58,9 +57,10 @@
   (or (:owner container)
       (select-keys container [:server-session-id
                               :client-session-id
-                              :session-id
                               :player-uuid
-                              :player])))
+                              :player
+                              :logical-side
+                              :owner])))
 
 (defn- owner-matches?
   [expected-owner container]

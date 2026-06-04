@@ -1,5 +1,6 @@
 (ns cn.li.ac.wireless.gui.message.registry
-  (:require [cn.li.mcmod.gui.message.dsl :as msg-dsl]))
+  (:require [cn.li.mcmod.gui.message.dsl :as msg-dsl]
+            [cn.li.mcmod.gui.registry-contract :as registry-contract]))
 
 (defn default-wireless-message-registry-runtime-state
   []
@@ -69,16 +70,19 @@
   nil)
 
 (defn register-block-messages!
-  [domain actions]
-  (let [spec (msg-dsl/build-domain-spec message-prefix domain actions)]
-    (if-let [existing (get (:domains (wireless-message-registry-state-snapshot)) domain)]
-      (when-not (= existing spec)
-        (throw (ex-info "Conflicting wireless GUI message domain"
-                        {:domain domain :existing existing :new spec})))
-      (do
-        (assert-registry-open!)
-        (update-wireless-message-registry-state! assoc-in [:domains domain] spec)))
-    spec))
+  ([domain actions]
+   (register-block-messages! domain actions (registry-contract/default-server-gui-handler-contract)))
+  ([domain actions contract]
+   (let [contract* (registry-contract/normalize-message-domain-contract domain contract)
+         spec (msg-dsl/build-domain-spec message-prefix domain actions contract*)]
+     (if-let [existing (get (:domains (wireless-message-registry-state-snapshot)) domain)]
+       (when-not (= existing spec)
+         (throw (ex-info "Conflicting wireless GUI message domain"
+                         {:domain domain :existing existing :new spec})))
+       (do
+         (assert-registry-open!)
+         (update-wireless-message-registry-state! assoc-in [:domains domain] spec)))
+     spec)))
 
 (defn get-domain-spec [domain]
   (get (:domains (wireless-message-registry-state-snapshot)) domain))

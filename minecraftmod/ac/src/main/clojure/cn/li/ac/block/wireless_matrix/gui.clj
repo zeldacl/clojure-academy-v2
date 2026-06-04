@@ -414,8 +414,8 @@
                          {:container-id container-id})
                        (select-keys owner [:server-session-id
                                            :client-session-id
-                                           :session-id
-                                           :player-uuid]))]
+                                           :player-uuid
+                                           :logical-side]))]
     (when (seq routing)
       routing)))
 

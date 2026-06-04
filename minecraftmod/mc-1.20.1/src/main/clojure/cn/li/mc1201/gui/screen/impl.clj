@@ -4,6 +4,9 @@
   Platform adapters should supply only registration API and optional render-tail
   callbacks (e.g. Forge event bus hooks)."
   (:require [cn.li.mc1201.gui.cgui.runtime :as cgui-rt]
+            [cn.li.mc1201.client.session :as client-session]
+            [cn.li.mcmod.gui.container-state :as container-state]
+            [cn.li.mcmod.gui.owner-contract :as owner-contract]
             [cn.li.mcmod.gui.registry :as gui-reg]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.client.gui GuiGraphics]
@@ -40,6 +43,28 @@
   (reset! left-atom (.getGuiLeft screen))
   (reset! top-atom (.getGuiTop screen)))
 
+(defn owner-for-screen-menu
+  "Resolve canonical client owner for a Minecraft menu's Clojure container."
+  [menu]
+  (when menu
+    (some-> menu
+            container-state/get-container-for-menu
+            container-state/owner-from-container
+            owner-contract/require-client-owner)))
+
+(defn with-screen-client-owner
+  "Execute f with *player-state-owner* bound from the menu's Clojure container."
+  [menu f]
+  (if-let [owner (owner-for-screen-menu menu)]
+    (client-session/with-bound-client-owner owner f)
+    (throw (ex-info "CGUI screen requires canonical client owner on menu container"
+                    {:menu menu}))))
+
+(defn- with-screen-cgui
+  [menu label f]
+  (with-screen-client-owner menu
+    #(with-cgui-error label f)))
+
 (defn create-cgui-container-screen
   "Build a CGuiContainerScreen proxy using shared widget runtime behavior.
 
@@ -64,7 +89,7 @@
       (render [^GuiGraphics gg mouse-x mouse-y partial-ticks]
         (let [^CGuiContainerScreen s this]
           (when root
-            (with-cgui-error "CGUI frame-tick error"
+            (with-screen-cgui menu "CGUI frame-tick error"
               #(do
                  (cgui-rt/resize-root! root (.getXSize s) (.getYSize s))
                  (cgui-rt/frame-tick! root {:partial-ticks partial-ticks}))))
@@ -74,11 +99,12 @@
               (.callSuperRenderBackground s gg)
               (sync-root-bounds! s left top)
               (when root
-                (with-cgui-error "CGUI non-slot tab render error"
+                (with-screen-cgui menu "CGUI non-slot tab render error"
                   #(cgui-rt/render-tree! gg root @left @top)))
               (.callSuperRenderTooltip s gg (int mouse-x) (int mouse-y))))
           (when on-render-tail!
-            (on-render-tail! s gg mouse-x mouse-y partial-ticks))))
+            (with-screen-client-owner menu
+              #(on-render-tail! s gg mouse-x mouse-y partial-ticks)))))
 
       (renderLabels [^GuiGraphics _gg _mouse-x _mouse-y]
         (comment "skip labels"))
@@ -87,12 +113,12 @@
         (let [^CGuiContainerScreen s this]
           (sync-root-bounds! s left top))
         (when root
-          (with-cgui-error "CGUI renderBg error"
+          (with-screen-cgui menu "CGUI renderBg error"
             #(cgui-rt/render-tree! gg root @left @top))))
 
       (mouseClicked [mouse-x mouse-y button]
         (when root
-          (with-cgui-error "CGUI mouse-click error"
+          (with-screen-cgui menu "CGUI mouse-click error"
             #(cgui-rt/mouse-click! root (int mouse-x) (int mouse-y) @left @top button)))
         (let [^CGuiContainerScreen s this]
           (if (slots-enabled-for-click? cgui-screen)
@@ -107,7 +133,7 @@
 
       (mouseDragged [mouse-x mouse-y button drag-x drag-y]
         (when root
-          (with-cgui-error "CGUI mouse-drag error"
+          (with-screen-cgui menu "CGUI mouse-drag error"
             #(cgui-rt/mouse-drag! root (int mouse-x) (int mouse-y) @left @top)))
         (let [^CGuiContainerScreen s this]
           (if (slots-enabled-for-click? cgui-screen)
@@ -117,7 +143,7 @@
       (keyPressed [key-code scan-code modifiers]
         (let [editing? (and root (cgui-rt/focused-editable-textbox? root))]
           (when root
-            (with-cgui-error "CGUI key-input error"
+            (with-screen-cgui menu "CGUI key-input error"
               #(cgui-rt/key-input! root key-code scan-code (char 0))))
           (if editing?
             true
@@ -127,7 +153,7 @@
       (charTyped [code-point modifiers]
         (let [editing? (and root (cgui-rt/focused-editable-textbox? root))]
           (when root
-            (with-cgui-error "CGUI char-input error"
+            (with-screen-cgui menu "CGUI char-input error"
               #(cgui-rt/key-input! root 0 0 (char code-point))))
           (if editing?
             true
@@ -136,7 +162,7 @@
 
       (removed []
         (when root
-          (with-cgui-error "CGUI dispose error"
+          (with-screen-cgui menu "CGUI dispose error"
             #(cgui-rt/dispose! root)))))))
 
 (defn fallback-container-screen

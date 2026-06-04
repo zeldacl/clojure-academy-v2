@@ -1,6 +1,7 @@
 (ns cn.li.mc1201.gui.registry.common
   "Shared helpers for platform GUI registry implementations."
-  (:require [cn.li.mcmod.util.log :as log])
+  (:require [cn.li.mc1201.client.session :as client-session]
+            [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.network FriendlyByteBuf]
            [net.minecraft.world.entity.player Inventory Player]))
 
@@ -57,10 +58,11 @@
       (fn []
         (create-container-fn handler gui-id player world pos))
       (fn [wid menu-type clj-container]
-        (create-menu-proxy-fn wid
-                              menu-type
-                              clj-container
-                              (assoc bridge-opts :player player)))
+        (client-session/with-current-client-owner
+          #(create-menu-proxy-fn wid
+                                 menu-type
+                                 clj-container
+                                 (assoc bridge-opts :player player))))
       resolve-menu-type-fn
       gui-id
       window-id

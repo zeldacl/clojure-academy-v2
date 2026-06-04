@@ -40,7 +40,7 @@
 
 (deftest active-player-menu-and-id-lifecycle-test
   (testing "runtime state registers and unregisters the full menu lifecycle"
-    (let [owner {:session-id :session-a :player-uuid "player-1"}
+    (let [owner {:logical-side :client :client-session-id :session-a :player-uuid "player-1"}
           container {:gui-type :node :id 1}
           menu (FakePlatformObject. nil 17)]
   (state/register-active-container! owner container)
@@ -70,8 +70,8 @@
   (testing "two players may have the same Minecraft window id without overwriting each other"
     (let [p1 (FakePlatformObject. "player-1" nil)
           p2 (FakePlatformObject. "player-2" nil)
-        owner-1 {:session-id :session-a :player p1}
-        owner-2 {:session-id :session-a :player p2}
+        owner-1 {:logical-side :client :client-session-id :session-a :player p1}
+        owner-2 {:logical-side :client :client-session-id :session-a :player p2}
           c1 {:gui-type :node :id :p1}
           c2 {:gui-type :node :id :p2}]
       (state/register-container-by-id! owner-1 7 c1)
@@ -86,7 +86,7 @@
 
 (deftest player-container-stack-removes-only-closed-container-test
   (testing "closing one container does not wipe another active container for the same player"
-    (let [owner {:session-id :session-stack :player-uuid "player-stack"}
+    (let [owner {:logical-side :client :client-session-id :session-stack :player-uuid "player-stack"}
           c1 {:gui-type :first}
           c2 {:gui-type :second}]
       (state/register-player-container! owner c1)

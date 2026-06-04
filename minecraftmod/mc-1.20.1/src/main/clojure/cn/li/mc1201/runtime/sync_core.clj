@@ -63,8 +63,7 @@
 
 (defn- session-id
   [owner]
-  (let [sid (or (:server-session-id owner)
-                (:session-id owner))]
+  (let [sid (:server-session-id owner)]
     (when-not sid
       (throw (ex-info "Sync scheduler owner requires :server-session-id"
                       {:owner owner})))

@@ -1,6 +1,7 @@
 (ns cn.li.mcmod.network.client
   "Client-side RPC request/response support for GUI/network logic"
-  (:require [cn.li.mcmod.hooks.core :as runtime-hooks]
+  (:require [cn.li.mcmod.gui.owner-contract :as owner-contract]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.platform.dispatch :as platform-dispatch]
             [cn.li.mcmod.util.log :as log]))
 
@@ -28,15 +29,14 @@
 
 (defn- client-session-id
   [owner]
-  (require-owner-value owner ":client-session-id"
-                       (or (:client-session-id owner)
-                           (:session-id owner)
-                           runtime-hooks/*client-session-id*)))
+  (if (some? owner)
+    (:client-session-id (owner-contract/require-client-owner owner))
+    (require-owner-value owner ":client-session-id"
+                         runtime-hooks/*client-session-id*)))
 
 (defn- maybe-client-session-id
   [owner]
-  (or (:client-session-id owner)
-      (:session-id owner)
+  (or (some-> owner :client-session-id)
       runtime-hooks/*client-session-id*))
 
 (defn- client-channel-id
@@ -412,10 +412,11 @@
   ([msg-id payload callback]
    (send-to-server nil msg-id payload callback))
   ([owner msg-id payload callback]
-   (let [session (resolve-client-network-session owner {:allow-install? true})
-         owner-key (client-owner-key owner)
+   (let [owner* (when owner (owner-contract/require-client-owner owner))
+         session (resolve-client-network-session owner* {:allow-install? true})
+         owner-key (client-owner-key owner*)
          request-id (if callback
                       ((:next-request-id! session) owner-key)
                       -1)]
-     ((:register-callback! session) owner-key request-id callback (when (map? owner) (:timeout-ms owner)))
+     ((:register-callback! session) owner-key request-id callback (when (map? owner*) (:timeout-ms owner*)))
      (send-request msg-id payload request-id))))

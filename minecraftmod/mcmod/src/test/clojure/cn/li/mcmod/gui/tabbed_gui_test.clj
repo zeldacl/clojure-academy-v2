@@ -16,8 +16,8 @@
             (container-state/clear-all!)))))))
 
 (deftest same-container-id-tab-state-is-isolated-by-owner-test
-  (let [owner-a {:session-id :session-a :player-uuid "player-a"}
-        owner-b {:session-id :session-a :player-uuid "player-b"}
+  (let [owner-a {:logical-side :client :client-session-id :session-a :player-uuid "player-a"}
+        owner-b {:logical-side :client :client-session-id :session-a :player-uuid "player-b"}
         container-id 9]
     (try
       (tabbed/set-tab-index-by-container-id! owner-a container-id 1)

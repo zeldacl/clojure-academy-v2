@@ -9,6 +9,7 @@
             [cn.li.mcmod.gui.adapter.platform-registry :as platform]
             [cn.li.mcmod.gui.tabbed-gui :as tabbed]
             [cn.li.mcmod.gui.container.schema :as container-schema]
+            [cn.li.mcmod.gui.owner-contract :as owner-contract]
             [cn.li.mc1201.gui.slots.tabbed :as tabbed-slots]
             [cn.li.mc1201.gui.slots.sync :as slots-sync]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
@@ -19,6 +20,30 @@
            [net.minecraft.world.inventory AbstractContainerMenu Slot]
            [net.minecraft.world.item ItemStack]))
 
+(defn- owner-map-for-player-context
+  "Build canonical menu owner from resolved session/player fields (testable without MC Player)."
+  [{:keys [player player-uuid server-session-id client-session-id]}]
+  (owner-contract/require-owner
+   (cond
+     (and server-session-id player-uuid)
+     {:logical-side :server
+      :server-session-id server-session-id
+      :player-uuid player-uuid
+      :player player}
+
+     (and client-session-id player-uuid)
+     {:logical-side :client
+      :client-session-id client-session-id
+      :player-uuid player-uuid
+      :player player}
+
+     :else
+     (throw (ex-info "GUI menu owner requires session id and player UUID"
+                     {:player player
+                      :server-session-id server-session-id
+                      :client-session-id client-session-id
+                      :player-uuid player-uuid})))))
+
 (defn- owner-for-player
   [^Player player]
   (let [player-uuid (some-> player .getUUID str)
@@ -27,26 +52,13 @@
                             (when-let [server (some-> server-player .getServer)]
                               [:server (System/identityHashCode server)])
                             (catch Throwable _ nil))
-        client-session-id (or runtime-hooks/*client-session-id*
-                              (when (and player (nil? server-session-id))
-                                [:client-player (System/identityHashCode player)]))]
-    (cond
-      (and server-session-id player-uuid)
-      {:server-session-id server-session-id
-       :player-uuid player-uuid
-       :player player}
-
-      (and client-session-id player-uuid)
-      {:client-session-id client-session-id
-       :player-uuid player-uuid
-       :player player}
-
-      :else
-      (throw (ex-info "GUI menu owner requires session id and player UUID"
-                      {:player player
-                       :server-session-id server-session-id
-                       :client-session-id client-session-id
-                       :player-uuid player-uuid})))))
+        client-session-id (when (nil? server-session-id)
+                            runtime-hooks/*client-session-id*)]
+    (owner-map-for-player-context
+     {:player player
+      :player-uuid player-uuid
+      :server-session-id server-session-id
+      :client-session-id client-session-id})))
 
 (defn- enrich-container-owner
   [clj-container owner]

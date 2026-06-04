@@ -154,10 +154,12 @@ def forgeRunDataRequested = {
 
 tasks.matching { it.name == 'compileTestClojure' }.configureEach {
     if (!forgeTestOnlyNamespaces.isEmpty()) {
-        namespaces.set(forgeTestOnlyNamespaces)
+        def effective = (forgeTestOnlyNamespaces + ['cn.li.forge1201.test-runner']) as Set
+        namespaces.set(effective)
         inputs.property('forge.test.only', forgeTestOnlyNamespaces.join(','))
         doFirst {
-            logger.lifecycle('[forge-1.20.1:compileTestClojure] focused namespace compile active, namespaces={}', forgeTestOnlyNamespaces.size())
+            logger.lifecycle('[forge-1.20.1:compileTestClojure] focused namespace compile active, requested={}, effective={}',
+                forgeTestOnlyNamespaces.size(), effective.size())
         }
     }
 }

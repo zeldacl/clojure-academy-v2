@@ -52,10 +52,18 @@
     (server/register-handler "same" handler)
     (server/register-handler "same" handler)
     (is (= #{"same"} (set (keys (:handlers (server/handlers-snapshot))))))
+    (is (= :server
+           (get-in (server/handlers-snapshot) [:handlers "same" :contract :owner-spec])))
     (is (thrown-with-msg?
          clojure.lang.ExceptionInfo
          #"Conflicting network handler id"
          (server/register-handler "same" (fn [_ _] {:other true}))))))
+
+(deftest register-handler-rejects-invalid-owner-spec-test
+  (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                        #"Server GUI handler contract requires :owner-spec :server"
+                        (server/register-handler "bad" (fn [_ _] nil)
+                                                 {:owner-spec :client}))))
 
 (deftest frozen-handlers-reject-registration-test
   (server/freeze-handlers!)

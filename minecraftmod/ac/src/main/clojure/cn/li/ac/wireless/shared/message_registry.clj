@@ -8,5 +8,9 @@
 (defn register-all!
   []
   (doseq [[domain actions] gui-manifest/message-domain-actions]
-    (msg-registry/register-block-messages! domain actions))
+    (msg-registry/register-block-messages!
+      domain
+      actions
+      (gui-manifest/message-domain-contract domain)))
+  (msg-registry/freeze-registry!)
   true)
