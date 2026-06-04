@@ -1,6 +1,7 @@
 (ns cn.li.forge1201.runtime.item-handler
   "Item use event handler for runtime-driven items (Forge layer)."
     (:require [cn.li.mc1201.runtime.event.item-use :as item-use]
+              [cn.li.forge1201.runtime.owner :as runtime-owner]
               [cn.li.mcmod.util.log :as log])
   (:import [net.minecraftforge.event.entity.player PlayerInteractEvent$RightClickItem]
            [net.minecraftforge.event.entity.living LivingEntityUseItemEvent$Finish]
@@ -19,7 +20,10 @@
                       (.isClientSide (.level ^Player entity)))
                :client
                :server)]
-      (item-use/handle-finish-using! entity stack side "Forge")))
+      (if (instance? Player entity)
+        (runtime-owner/with-player-owner ^Player entity side
+          #(item-use/handle-finish-using! entity stack side "Forge"))
+        (item-use/handle-finish-using! entity stack side "Forge"))))
 
 (defn- on-item-use
   "Handle item right-click event."
@@ -28,13 +32,14 @@
         player (.getEntity event)
         stack (.getItemStack event)
         side (if (.isClientSide (.level player)) :client :server)
-        {:keys [consume?]} (item-use/handle-use
-                            player
-                            hand
-                            stack
-                            side
-                            {}
-                            "Forge")]
+        {:keys [consume?]} (runtime-owner/with-player-owner player side
+                            #(item-use/handle-use
+                              player
+                              hand
+                              stack
+                              side
+                              {}
+                              "Forge"))]
     (when consume?
       (.setCancellationResult event InteractionResult/CONSUME)
       (.setCanceled event true))))

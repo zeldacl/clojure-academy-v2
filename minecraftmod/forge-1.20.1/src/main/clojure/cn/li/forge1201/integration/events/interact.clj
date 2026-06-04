@@ -5,7 +5,8 @@
             [cn.li.mcmod.util.log :as log]
             [cn.li.mc1201.integration.event-handlers :as event-handlers]
             [cn.li.forge1201.integration.events.event-apply :as event-apply]
-            [cn.li.forge1201.integration.events.gui-open-port :as gui-open-port])
+            [cn.li.forge1201.integration.events.gui-open-port :as gui-open-port]
+            [cn.li.forge1201.runtime.owner :as runtime-owner])
   (:import [net.minecraftforge.event.entity.player PlayerInteractEvent$RightClickBlock
             PlayerInteractEvent$LeftClickBlock]
            [net.minecraft.world InteractionHand]))
@@ -35,7 +36,8 @@
       (when (= hand InteractionHand/MAIN_HAND)
         (let [block-state (.getBlockState level pos)
               item-stack (.getItemInHand player hand)
-              ret (handle-right-click
+                ret (runtime-owner/with-player-owner player (if (.isClientSide level) :client :server)
+                  #(handle-right-click
                     {:x (.getX pos)
                      :y (.getY pos)
                      :z (.getZ pos)
@@ -45,7 +47,7 @@
                      :hand hand
                      :item-stack item-stack
                      :world level
-                     :block (.getBlock block-state)})]
+                     :block (.getBlock block-state)}))]
           (cond
             (event-handlers/runtime-active-result? ret)
             (do
@@ -70,7 +72,8 @@
           hand (.getHand evt)]
       (when (= hand InteractionHand/MAIN_HAND)
         (when (event-handlers/runtime-active-result?
-                (event-handlers/handle-block-left-click {:player player}))
+          (runtime-owner/with-player-owner player (if (.isClientSide (.level player)) :client :server)
+            #(event-handlers/handle-block-left-click {:player player})))
           (event-apply/cancel-event! evt))))
     (catch Throwable t
       (log/error "[FORGE-LEFT-CLICK-BLOCK-EVENT] EXCEPTION:" (ex-message t))

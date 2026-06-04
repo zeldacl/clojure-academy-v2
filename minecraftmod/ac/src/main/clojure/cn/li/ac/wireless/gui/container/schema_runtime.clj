@@ -10,16 +10,52 @@
   [tile]
   (or (common/get-tile-state tile) {}))
 
+(defn- present-value
+  [state k]
+  (let [v (get state k ::missing)]
+    (when (not= ::missing v)
+      v)))
+
+(defn- normalize-gui-state
+  [schema state]
+  (reduce
+   (fn [state* field]
+     (let [k (:key field)]
+       (if (nil? (present-value state* k))
+         (if (contains? field :default)
+           (assoc state* k (:default field))
+           (dissoc state* k))
+         state*)))
+   (or state {})
+   schema))
+
+(defn- raw-gui-value
+  [field state]
+  (let [state* (normalize-gui-state [field] state)
+        k (:key field)]
+    (cond
+      (:gui-init field) ((:gui-init field) state*)
+      (some? (present-value state* k)) (get state* k)
+      (contains? field :default) (:default field)
+      :else nil)))
+
+(defn- coerce-gui-value
+  [field value]
+  (let [coerce-fn (or (:gui-coerce field) identity)]
+    (if (and (nil? value) (:gui-coerce field))
+      (throw (ex-info "GUI schema field requires non-nil value before coercion"
+                      {:field-key (:key field)
+                       :gui-container-key (:gui-container-key field (:key field))}))
+      (coerce-fn value))))
+
 (defn build-gui-atoms
-  [schema tile]
-  (let [state (resolve-state tile)]
+  [schema state]
+  (let [state* (normalize-gui-state schema state)]
     (into {}
           (for [field schema
                 :when (or (:gui-sync? field) (:gui-only? field))
-                :let [k (:gui-container-key field (:key field))
-                      init-fn (or (:gui-init field)
-                                  (fn [s] (get s (:key field) (:default field))))]]
-            [k (atom (init-fn state))]))))
+                :let [k (:gui-container-key field (:key field))]]
+            [k (atom (coerce-gui-value field (raw-gui-value field state*)))]))))
 
 (defn build-sync-field-mappings
   [schema]
@@ -33,15 +69,13 @@
 (defn build-sync-to-client-fn
   [schema]
   (fn [container]
-    (let [state (resolve-state (:tile-entity container))]
+    (let [state (normalize-gui-state schema (resolve-state (:tile-entity container)))]
       (doseq [field schema
               :when (:gui-sync? field)
               :let [container-key (:gui-container-key field (:key field))
-                    state-key (:key field)
-                    coerce-fn (or (:gui-coerce field) identity)
-                    value (get state state-key (:default field))]]
+                    value (raw-gui-value field state)]]
         (when-let [atom-ref (get container container-key)]
-          (let [new-val (coerce-fn value)]
+          (let [new-val (coerce-gui-value field value)]
             (when (not= @atom-ref new-val)
               (reset! atom-ref new-val))))))))
 
@@ -59,11 +93,10 @@
   (fn [container data]
     (doseq [field schema
             :when (:gui-sync? field)
-            :let [k (:gui-container-key field (:key field))
-                  coerce-fn (or (:gui-coerce field) identity)]]
+            :let [k (:gui-container-key field (:key field))]]
       (when-let [atom-ref (get container k)]
         (when (contains? data k)
-          (reset! atom-ref (coerce-fn (get data k))))))))
+          (reset! atom-ref (coerce-gui-value field (raw-gui-value field {(:key field) (get data k)}))))))))
 
 (defn build-on-close-fn
   [schema]

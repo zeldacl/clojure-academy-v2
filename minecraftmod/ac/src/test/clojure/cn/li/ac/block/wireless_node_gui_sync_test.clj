@@ -1,6 +1,7 @@
 (ns cn.li.ac.block.wireless-node-gui-sync-test
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [cn.li.ac.block.wireless-node.gui :as node-gui]
+            [cn.li.ac.block.wireless-node.state :as node-state]
             [cn.li.ac.wireless.gui.sync.helpers :as sync-helpers]
             [cn.li.ac.wireless.gui.container.common :as common]
             [cn.li.mcmod.gui.container-state :as container-state]
@@ -46,6 +47,13 @@
                 pos/pos-y second
                 pos/pos-z #(nth % 2)]
     (f)))
+
+(deftest create-container-normalizes-node-default-state-test
+  (let [container (node-gui/create-container node-state/node-default-state :player)]
+    (is (= :node (:container-type container)))
+    (is (= :basic @(:node-type container)))
+    (is (= 15000 @(:max-energy container)))
+    (is (= 0 @(:tab-index container)))))
 
 (deftest update-derived-sync-fields-transfer-rate-test
   (testing "charging-in only maps to transfer rate 100"
