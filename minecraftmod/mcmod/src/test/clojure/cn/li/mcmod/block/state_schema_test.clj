@@ -50,6 +50,24 @@
         (is (= {:energy 9 :pos-x 1 :pos-y 2 :pos-z 3}
                (schema/schema->sync-payload specs {:energy 9} :p)))))))
 
+      (deftest default-state-uses-explicit-defaults-only-test
+        (let [specs [{:key :energy :default 0 :persist? true :nbt-key "energy" :type :int}
+           {:key :derived :gui-only? true :gui-init (fn [state] (get state :derived 42))}
+           {:key :explicit-nil :default nil :persist? false}]]
+          (is (= {:energy 0 :explicit-nil nil}
+            (schema/schema->default-state specs)))
+          (is (false? (contains? (schema/schema->default-state specs) :derived)))))
+
+      (deftest field-schema-contract-fails-during-schema-construction-test
+        (is (thrown-with-msg? clojure.lang.ExceptionInfo
+               #"block-state-field-schema contract violation"
+               (schema/merge-field-definitions
+                [[{:default 0 :persist? true :nbt-key "missing-key"}]])))
+        (is (thrown-with-msg? clojure.lang.ExceptionInfo
+               #"block-state-field-schema contract violation"
+               (schema/merge-field-definitions
+                [[{:key :editable :network-editable? true}]]))))
+
 (deftest block-state-updater-contract-test
   (let [fields [{:key :power :default 0 :block-state {:prop "power" :type :integer}}
                 {:key :mode :default 1 :block-state {:prop "mode" :type :integer

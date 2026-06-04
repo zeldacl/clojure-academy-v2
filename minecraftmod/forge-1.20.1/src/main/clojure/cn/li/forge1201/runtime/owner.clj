@@ -1,6 +1,7 @@
 (ns cn.li.forge1201.runtime.owner
   "Canonical runtime owner helpers for Forge event boundaries."
-  (:require [cn.li.mcmod.hooks.core :as runtime-hooks])
+  (:require [cn.li.mcmod.hooks.core :as runtime-hooks]
+            [cn.li.mcmod.runtime.owner :as owner-contract])
   (:import [net.minecraft.server.level ServerPlayer]
            [net.minecraft.world.entity.player Player]))
 
@@ -25,9 +26,10 @@
       (throw (ex-info "Forge server player owner requires player UUID"
                       {:player player
                        :server-session-id session-id})))
-    {:logical-side :server
-     :server-session-id session-id
-     :player-uuid uuid}))
+    (owner-contract/require-server-owner
+     {:logical-side :server
+      :server-session-id session-id
+      :player-uuid uuid})))
 
 (defn client-owner
   [^Player player]
@@ -43,9 +45,10 @@
       (throw (ex-info "Forge client player owner requires player UUID"
                       {:player player
                        :client-session-id session-id})))
-    {:logical-side :client
-     :client-session-id session-id
-     :player-uuid uuid}))
+    (owner-contract/require-client-owner
+     {:logical-side :client
+      :client-session-id session-id
+      :player-uuid uuid})))
 
 (defn owner-for-player
   [^Player player side]

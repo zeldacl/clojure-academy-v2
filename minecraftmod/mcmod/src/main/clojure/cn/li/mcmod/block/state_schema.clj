@@ -14,7 +14,50 @@
             [cn.li.mcmod.platform.nbt :as nbt]
             [cn.li.mcmod.platform.be :as pbe]
             [cn.li.mcmod.nbt.dsl :as nbt-dsl]
-            [cn.li.mcmod.block.inventory-helpers :as inv-helpers]))
+            [cn.li.mcmod.block.inventory-helpers :as inv-helpers]
+            [cn.li.mcmod.schema.core :as schema]))
+
+(def ^:private field-spec-schema
+  [:and
+   [:map
+    [:key keyword?]
+    [:default {:optional true} any?]
+    [:persist? {:optional true} boolean?]
+    [:gui-sync? {:optional true} boolean?]
+    [:gui-only? {:optional true} boolean?]
+    [:gui-init {:optional true} fn?]
+    [:gui-coerce {:optional true} fn?]
+    [:gui-container-key {:optional true} keyword?]
+    [:gui-payload-key {:optional true} keyword?]
+    [:gui-close-reset {:optional true} any?]
+    [:nbt-key {:optional true} string?]
+    [:type {:optional true} keyword?]
+    [:load-fn {:optional true} fn?]
+    [:save-fn {:optional true} fn?]
+    [:block-state {:optional true}
+     [:map
+      [:prop string?]
+      [:type keyword?]
+      [:min {:optional true} any?]
+      [:max {:optional true} any?]
+      [:default {:optional true} any?]
+      [:xf {:optional true} any?]]]
+    [:network-editable? {:optional true} boolean?]
+    [:network-msg {:optional true} keyword?]
+    [:doc {:optional true} string?]]
+   [:fn (fn [field]
+          (or (not (:network-editable? field))
+              (:network-msg field)))]] )
+
+(def ^:private field-schema
+  [:vector field-spec-schema])
+
+(def ^:private valid-field-schema* (schema/validator field-schema))
+
+(defn validate-field-schema!
+  "Validate a block state FieldSpec vector at namespace load/compile time."
+  [schema*]
+  (schema/require-valid field-schema valid-field-schema* :block-state-field-schema schema*))
 
 (def ^:private ^:dynamic *network-get-world-fn*
   (fn [_] nil))
@@ -52,14 +95,24 @@
 ;; ============================================================================
 
 (defn schema->default-state
-  "Build the default state map from each FieldSpec's :default value."
+  "Build the default state map from explicitly declared FieldSpec defaults.
+
+  A missing `:default` is different from `:default nil`; do not synthesize nil
+  defaults because doing so turns ordinary `(get state k fallback)` GUI init
+  code into `(get {:k nil} k fallback)`, bypassing the fallback."
   [schema]
-  (into {} (map (fn [spec] [(:key spec) (:default spec)]) schema)))
+  (validate-field-schema! schema)
+  (into {}
+        (keep (fn [spec]
+                (when (contains? spec :default)
+                  [(:key spec) (:default spec)])))
+        schema))
 
 (defn get-field
   "Return the value of key from state, falling back to the schema default.
   Returns nil when the key is absent from both state and schema."
   [schema state key]
+  (validate-field-schema! schema)
   (if-let [spec (first (filter #(= (:key %) key) schema))]
     (get state key (:default spec))
     (get state key)))
@@ -76,6 +129,7 @@
   - Fields with :load-fn delegate to (load-fn tag nbt-key default).
   - Other persisted fields use the internal 1.20.1 NBT readers."
   [schema]
+  (validate-field-schema! schema)
   (let [defaults (schema->default-state schema)]
     (fn [tag]
       (reduce
@@ -103,6 +157,7 @@
   - Fields with :save-fn delegate to (save-fn state tag nbt-key).
   - Other fields use the internal 1.20.1 NBT writers."
   [schema]
+  (validate-field-schema! schema)
   (let [defaults (schema->default-state schema)]
     (fn [be tag]
       (let [state (or (pbe/get-custom-state be) defaults)]
@@ -126,6 +181,7 @@
   Includes all fields where :gui-sync? is true, plus :pos-x/:pos-y/:pos-z
   derived from pos (a BlockPos-like object with .getX/.getY/.getZ)."
   [schema state pos]
+  (validate-field-schema! schema)
   (-> (reduce
         (fn [m spec]
           (if (:gui-sync? spec)
@@ -156,9 +212,10 @@
   [field-groups]
   (let [all-fields (apply concat field-groups)
         by-key (group-by :key all-fields)]
-    (vec
+    (validate-field-schema!
+     (vec
       (for [[_k fields] by-key]
-        (apply merge fields)))))
+        (apply merge fields))))))
 
 ;; ============================================================================
 ;; BlockState Utilities (Nested Format)
