@@ -125,11 +125,13 @@ ext.configureAcContentRuntime = {
 ext.addSharedClojureRuntimeDeps = { String runtimeConfigName = null ->
     dependencies {
         implementation "org.clojure:clojure:1.12.4"
+        implementation "metosin:malli:0.16.4"
         implementation "org.clojure:spec.alpha:0.3.218"
         implementation "org.clojure:core.specs.alpha:0.2.62"
 
         if (runtimeConfigName) {
             add(runtimeConfigName, "org.clojure:clojure:1.12.4")
+            add(runtimeConfigName, "metosin:malli:0.16.4")
             add(runtimeConfigName, "org.clojure:spec.alpha:0.3.218")
             add(runtimeConfigName, "org.clojure:core.specs.alpha:0.2.62")
         }
@@ -142,6 +144,7 @@ ext.configureSharedClojureShadowJar = {
         archiveClassifier = 'shadow'
         dependencies {
             include(dependency('org.clojure:clojure'))
+            include(dependency('metosin:malli'))
             include(dependency('org.clojure:spec.alpha'))
             include(dependency('org.clojure:core.specs.alpha'))
         }

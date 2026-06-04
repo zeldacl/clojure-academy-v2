@@ -6,6 +6,7 @@
   - Keep core platform-neutral: stores metadata only; platforms query via registry metadata."
   (:require [clojure.string :as str]
             [cn.li.mcmod.block.tile-logic :as tile-logic]
+            [cn.li.mcmod.schema.core :as schema]
             [cn.li.mcmod.protocol.core :as registry-core]
             [cn.li.mcmod.util.log :as log]))
 
@@ -49,13 +50,28 @@ Structure:
        (remove str/blank?)
        vec))
 
+(def ^:private tile-id-schema
+  [:and string? [:fn (complement str/blank?)]])
+
+(def ^:private tile-impl-schema
+  keyword?)
+
+(def ^:private tile-blocks-schema
+  [:and
+   [:vector string?]
+   [:fn seq]])
+
+(def ^:private valid-tile-id* (schema/validator tile-id-schema))
+(def ^:private valid-tile-impl* (schema/validator tile-impl-schema))
+(def ^:private valid-tile-blocks* (schema/validator tile-blocks-schema))
+
 (defn validate-tile-spec
   [{:keys [id impl blocks] :as spec}]
-  (when-not (and (string? id) (not (str/blank? id)))
+  (when-not (schema/valid? valid-tile-id* id)
     (throw (ex-info "TileSpec must have non-empty string :id" {:spec spec})))
-  (when-not (keyword? impl)
+  (when-not (schema/valid? valid-tile-impl* impl)
     (throw (ex-info "TileSpec :impl must be a keyword" {:id id :impl impl})))
-  (when-not (and (vector? blocks) (seq blocks) (every? string? blocks))
+  (when-not (schema/valid? valid-tile-blocks* blocks)
     (throw (ex-info "TileSpec :blocks must be a non-empty vector of block-id strings"
                     {:id id :blocks blocks})))
   true)

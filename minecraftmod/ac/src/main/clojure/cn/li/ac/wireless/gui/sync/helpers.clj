@@ -3,10 +3,9 @@
   
   Provides common functions for broadcasting state and applying sync payloads
   to reduce code duplication between node and matrix sync implementations."
-  (:require [cn.li.ac.gui.platform-adapter.sync-api :as gui-sync-api]
+  (:require [cn.li.mcmod.gui.sync-api :as gui-sync-api]
             [cn.li.mcmod.util.log :as log]
             [cn.li.ac.ability.util.uuid :as uuid]
-            [cn.li.ac.wireless.core.vblock :as vb]
             [cn.li.ac.wireless.core.capability-resolver :as resolver]
             [cn.li.ac.wireless.data.network-state :as network-state]
             [cn.li.ac.wireless.api :as wireless-api]
@@ -320,8 +319,6 @@
   (try
     (let [tile  (:tile-entity container)
           world (platform-be/be-get-level tile)
-          block-pos (pos/position-get-block-pos tile)
-          node-vblock (vb/create-vnode (pos/pos-x block-pos) (pos/pos-y block-pos) (pos/pos-z block-pos))
           network (wireless-api/get-wireless-net-by-node tile)]
       (if network
         (do
@@ -353,9 +350,6 @@
   [container stats]
   (try
     (let [tile  (:tile-entity container)
-          world (platform-be/be-get-level tile)
-          block-pos (pos/position-get-block-pos tile)
-          matrix-vblock (vb/create-vmatrix (pos/pos-x block-pos) (pos/pos-y block-pos) (pos/pos-z block-pos))
           network (wireless-api/get-wireless-net-by-matrix tile)
           stats-cap     (long (or (:capacity stats) 0))]
       (if network

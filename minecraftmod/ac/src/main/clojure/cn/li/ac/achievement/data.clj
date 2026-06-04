@@ -5,19 +5,22 @@
   - no Minecraft/Forge imports
   - no platform behavior
   - safe for both runtime and datagen reads."
-  (:require [clojure.string :as str]))
+  (:require [clojure.string :as str]
+            [cn.li.mcmod.schema.recipe :as recipe-schema]))
 
 (def tabs
-  [{:id :default
-    :background "my_mod:textures/gui/advancements/bg_default.png"}
-   {:id :electromaster
-    :background "my_mod:textures/gui/advancements/bg_electromaster.png"}
-   {:id :meltdowner
-    :background "my_mod:textures/gui/advancements/bg_meltdowner.png"}
-   {:id :teleporter
-    :background "my_mod:textures/gui/advancements/bg_teleporter.png"}
-   {:id :vecmanip
-    :background "my_mod:textures/gui/advancements/bg_vecmanip.png"}])
+  (recipe-schema/require-achievement-tabs!
+    :ac-achievement-tabs
+    [{:id :default
+      :background "my_mod:textures/gui/advancements/bg_default.png"}
+     {:id :electromaster
+      :background "my_mod:textures/gui/advancements/bg_electromaster.png"}
+     {:id :meltdowner
+      :background "my_mod:textures/gui/advancements/bg_meltdowner.png"}
+     {:id :teleporter
+      :background "my_mod:textures/gui/advancements/bg_teleporter.png"}
+     {:id :vecmanip
+      :background "my_mod:textures/gui/advancements/bg_vecmanip.png"}]))
 
 (defn- text-key
   [id suffix]
@@ -64,7 +67,9 @@
     :items [item-id]}])
 
 (def achievements
-  [(base-ach {:id "phase_liquid" :tab :default :parent nil :icon "my_mod:phase_liquid"
+  (recipe-schema/require-achievements!
+    :ac-achievements
+    [(base-ach {:id "phase_liquid" :tab :default :parent nil :icon "my_mod:phase_liquid"
               :criteria (inventory-criterion "my_mod:phase_liquid") :trigger-key nil}
              {:en-title "Harvest Phase Liquid" :en-desc "Obtain phase liquid."
               :zh-title "收获相位液" :zh-desc "获得相位液。"})
@@ -229,5 +234,5 @@
               :trigger-key {:kind :skill-perform :skill-id :blood-retrograde}} {})
    (base-ach {:id "vecmanip.vec_reflection" :tab :vecmanip :parent "vecmanip.blood_retro" :icon "my_mod:vec_reflection"
               :criteria (custom-criterion "vecmanip.vec_reflection")
-              :trigger-key {:kind :skill-perform :skill-id :vec-reflection}} {})])
+              :trigger-key {:kind :skill-perform :skill-id :vec-reflection}} {})]))
 

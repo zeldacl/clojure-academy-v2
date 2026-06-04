@@ -3,38 +3,50 @@
 
   Upper layers should use this API instead of reading :server-session-id, :client-session-id,
   or generic :session-id directly."
-  (:require [clojure.spec.alpha :as s]
-            [clojure.string :as str]))
+  (:require [clojure.string :as str]
+            [cn.li.mcmod.schema.core :as schema]))
 
 (def ^:private transport-route-key :owner/route-key)
 (def ^:private transport-store-session :owner/store-session-id)
 
-(s/def ::logical-side #{:client :server})
-(s/def ::player-uuid string?)
-(s/def ::session-token (s/or :keyword keyword? :vector vector? :symbol symbol?))
-(s/def ::client-session-id ::session-token)
-(s/def ::server-session-id ::session-token)
+(def ^:private session-token-schema
+  [:or keyword? vector? symbol?])
 
-(s/def ::client-owner
-  (s/and
-   (s/keys :req-un [::client-session-id]
-           :opt-un [::player-uuid ::logical-side ::screen-id ::channel-id ::timeout-ms
-                   ::client-network-session])
-   (fn [m]
-     (and (nil? (:server-session-id m))
-          (or (nil? (:logical-side m))
-              (= :client (:logical-side m)))))))
+(def ^:private logical-side-schema
+  [:enum :client :server])
 
-(s/def ::server-owner
-  (s/and
-   (s/keys :req-un [::server-session-id ::player-uuid]
-           :opt-un [::logical-side])
-   (fn [m]
-     (and (nil? (:client-session-id m))
-          (or (nil? (:logical-side m))
-              (= :server (:logical-side m)))))))
+(def ^:private client-owner-schema
+  [:and
+   [:map
+    [:client-session-id session-token-schema]
+    [:player-uuid {:optional true} string?]
+    [:logical-side {:optional true} logical-side-schema]
+    [:screen-id {:optional true} any?]
+    [:channel-id {:optional true} any?]
+    [:timeout-ms {:optional true} any?]
+    [:client-network-session {:optional true} any?]]
+   [:fn (fn [m]
+          (and (nil? (:server-session-id m))
+               (or (nil? (:logical-side m))
+                   (= :client (:logical-side m)))))]])
 
-(s/def ::owner (s/or :client ::client-owner :server ::server-owner))
+(def ^:private server-owner-schema
+  [:and
+   [:map
+    [:server-session-id session-token-schema]
+    [:player-uuid string?]
+    [:logical-side {:optional true} logical-side-schema]]
+   [:fn (fn [m]
+          (and (nil? (:client-session-id m))
+               (or (nil? (:logical-side m))
+                   (= :server (:logical-side m)))))]])
+
+(def ^:private owner-schema
+  [:or client-owner-schema server-owner-schema])
+
+(def ^:private valid-client-owner* (schema/validator client-owner-schema))
+(def ^:private valid-server-owner* (schema/validator server-owner-schema))
+(def ^:private valid-owner* (schema/validator owner-schema))
 
 (defn- normalize-player-uuid
   [owner]
@@ -51,11 +63,11 @@
             :explain explain}))
 
 (defn- require*
-  [spec contract value]
+  [schema* validator* contract value]
   (let [value* (or (normalize-player-uuid value) value)]
-    (if (s/valid? spec value*)
+    (if (schema/valid? validator* value*)
       value*
-      (throw (contract-ex-info contract value* (s/explain-data spec value*))))))
+      (throw (contract-ex-info contract value* (schema/explain schema* value*))))))
 
 (defn- require-player-uuid!
   [contract owner]
@@ -67,29 +79,29 @@
   owner)
 
 (defn valid-client-owner? [owner]
-  (s/valid? ::client-owner (normalize-player-uuid owner)))
+  (schema/valid? valid-client-owner* (normalize-player-uuid owner)))
 
 (defn valid-server-owner? [owner]
-  (s/valid? ::server-owner (normalize-player-uuid owner)))
+  (schema/valid? valid-server-owner* (normalize-player-uuid owner)))
 
 (defn valid-owner? [owner]
-  (s/valid? ::owner (normalize-player-uuid owner)))
+  (schema/valid? valid-owner* (normalize-player-uuid owner)))
 
 (defn explain-owner [owner]
-  (s/explain-data ::owner (normalize-player-uuid owner)))
+  (schema/explain owner-schema (normalize-player-uuid owner)))
 
 (defn require-client-owner
   [owner]
   (require-player-uuid! :client-owner
-                        (require* ::client-owner :client-owner owner)))
+                        (require* client-owner-schema valid-client-owner* :client-owner owner)))
 
 (defn require-server-owner
   [owner]
-  (require* ::server-owner :server-owner owner))
+  (require* server-owner-schema valid-server-owner* :server-owner owner))
 
 (defn require-owner
   [owner]
-  (require* ::owner :owner owner))
+  (require* owner-schema valid-owner* :owner owner))
 
 (defn logical-side
   [owner]

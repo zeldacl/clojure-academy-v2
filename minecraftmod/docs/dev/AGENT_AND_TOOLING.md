@@ -170,6 +170,35 @@
 9. **目录与文件须合规**：新建或移动源码前对照 [PROJECT_LAYOUT.md](../01-overview/PROJECT_LAYOUT.md) 与模块既有子域划分；命名空间路径与目录一一对应，禁止在根目录或随意子包下堆放“临时”文件。
 10. **慎用顶层全局变量**：非必要不得新增命名空间级 `def` / `defonce` / `^:private def`（含可变 atom 与“方便缓存”的单例）；优先参数传递、显式 owner（world/player/session 等）或不可变注册表。若确须保留，须在代码旁注明**无法编译**或**无法实现功能**的具体原因；可变顶层状态见 [TOP_LEVEL_STATE_GOVERNANCE.md](TOP_LEVEL_STATE_GOVERNANCE.md)，新增须跑 `auditTopLevelMutableState` 并更新白名单（如适用）。
 
+### Malli 终极判定法则（强制）
+
+面向未来所有新概念（如气压系统、药水效果、自定义维度），不再先查“静态矩阵”，而是统一执行以下三问流程；**顺序不可交换**：
+
+1. **频率判定（第一优先级）**：该数据/约束是否处于每秒高频执行路径（Tick、移动、渲染、WorldGen、AI、内层数学、NBT 字段读写循环）？
+  - 若是：**禁止 Malli**（含 `m/validate`、`m/explain`、生产期 instrumentation）。
+  - 做法：使用 Java interop + type hint + 已验证数据输入，确保热路径只做业务计算。
+2. **边界判定**：该数据是否由玩家行为、系统事件或时间边界触发（发包、存盘、配置加载、资源重载、开界面、达成成就、命令、注册期）？
+  - 若是：**全面使用 Malli**，并优先用 compiled validator；只在失败分支生成 explain。
+  - 注：若某“边界”实际由 tick 高频触发（如每 tick 群发包），回退到第 1 条按高频禁用处理。
+3. **前移判定**：该约束能否在打包 Jar、AOT、宏展开或 REPL 保存时定死？
+  - 若能：必须前移到 macro/load-time/registration/datagen 阶段，在开发机与 CI 提前失败。
+  - 目标：玩家运行时不承担 schema 成本，AOT 后热路径保持 0 额外开销。
+
+#### 典型落位与禁用面
+
+- **推荐（低频边界）**：配置/资源读取、datagen metadata、GUI message envelope、注册期 contract、成就触发数据、命令参数。
+- **前移（编译/注册期）**：Block/Item/Fluid/Entity/Tile descriptor、recipe 常量、provider manifest、可静态确定的 schema。
+- **绝对禁用（执行内层）**：render loop、worldgen 执行、tick 回调、AI/motion、NBT 读写内层循环。
+
+#### PR 必填自证项
+
+凡新增 Malli 校验的 PR，必须说明：
+
+1. 校验触发位置（macro/load-time/registration/runtime-boundary/test-only）。
+2. 为什么不属于高频热路径。
+3. 是否可进一步前移；若不能，给出原因。
+4. 生产环境剩余开销预期（应为“低频可接受”或“0 热路径开销”）。
+
 #### FP 通用原则 — P.I.C.A.S.O.（毕加索原则）
 
 面向函数式编程的六条通用准则；编写 `mcmod` / `ac` 逻辑时作为上述强制原则的展开：

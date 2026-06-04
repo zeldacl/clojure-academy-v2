@@ -10,3 +10,6 @@ ac/src/main/clojure/cn/li/ac/ability/service/context_dispatcher.clj	dispatcher-r
 ac/src/main/clojure/cn/li/ac/content/ability/meltdowner/damage_helper.clj	last-radiation-tick-id*	S2_RUNTIME_COMPONENT	ability/player-runtime	Server-tick dedup guard when tick-marks! runs more than once per server tick.
 ac/src/main/clojure/cn/li/ac/ability/spi_lifecycle.clj	lifecycle-registry-runtime-ref*	S2_RUNTIME_COMPONENT	ability/runtime-container	Installable lifecycle registry runtime pointer for composition-root wiring.
 ac/src/main/clojure/cn/li/ac/ability/discovery.clj	bootstrap-attempts*	S2_RUNTIME_COMPONENT	ability/discovery	Process-local bootstrap attempt counter for classpath provider discovery idempotency and tests.
+ac/src/main/clojure/cn/li/ac/block/wireless_matrix/inventory.clj	matrix-slot-schema-registration	S2_RUNTIME_COMPONENT	ac/wireless-matrix	Lazy, process-local registration guard for wireless-matrix slot schema bootstrap.
+ac/src/main/clojure/cn/li/ac/block/wireless_node/inventory.clj	node-slot-schema-registration	S2_RUNTIME_COMPONENT	ac/wireless-node	Lazy, process-local registration guard for wireless-node slot schema bootstrap.
+ac/src/main/clojure/cn/li/ac/gui/platform_adapter/sync_bootstrap.clj	client-handler-installed?	S2_RUNTIME_COMPONENT	ac/gui-client-sync	Client-only idempotency guard preventing duplicate push-handler registration.

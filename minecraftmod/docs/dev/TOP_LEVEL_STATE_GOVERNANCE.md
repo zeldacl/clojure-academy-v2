@@ -101,7 +101,7 @@ Loader registry: Forge uses `forge1201.registry.state`; Fabric uses
 multimethod path must not be reintroduced.
 
 **GUI block-state broadcast (required platform multimethod):** Server→client tile
-GUI sync dispatches via `cn.li.ac.gui.platform-adapter.sync-api/broadcast-gui-state!*`
+GUI sync dispatches via `cn.li.mcmod.gui.sync-api/broadcast-gui-state!*`
 on `platform-dispatch/current-platform-version` (same pattern as
 `mcmod.network.client/send-request`). Each loader registers `defmethod` in
 `forge1201.gui.block-sync-broadcast` / `fabric1201.gui.block-sync-broadcast` and

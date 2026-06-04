@@ -1,7 +1,7 @@
 (ns cn.li.fabric1201.gui.network.server
   "Fabric 1.20.1 GUI/RPC server transport."
-  (:require [cn.li.ac.gui.platform-adapter.sync-api :as gui-sync-api]
-            [cn.li.fabric1201.gui.block-sync-broadcast]
+  (:require [cn.li.fabric1201.gui.block-sync-broadcast]
+            [cn.li.mcmod.gui.sync-api :as gui-sync-api]
             [cn.li.fabric1201.gui.network.shared :as shared]
             [cn.li.mc1201.gui.network.packet :as packet-base]
             [cn.li.mc1201.reflect-util :as ru]

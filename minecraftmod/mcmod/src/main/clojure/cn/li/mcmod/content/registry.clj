@@ -3,7 +3,8 @@
 
   This namespace stores only host-readable descriptor envelopes. Content-owned
   values remain opaque payload/metadata/handler data behind neutral field names."
-  (:require [clojure.set :as set]))
+  (:require [clojure.set :as set]
+            [cn.li.mcmod.schema.core :as schema]))
 
 (def ^:private allowed-categories
   #{:content-action
@@ -51,6 +52,34 @@
     :clone?
     :order})
 
+(def ^:private category-input-schema
+  [:or keyword? string?])
+
+(def ^:private category-schema
+  (into [:enum] (sort allowed-categories)))
+
+(def ^:private descriptor-id-schema
+  [:or keyword? [:and string? [:fn (complement empty?)]]])
+
+(def ^:private descriptor-schema
+  map?)
+
+(def ^:private field-key-schema
+  (into [:enum] (sort allowed-field-keys)))
+
+(def ^:private descriptor-field-keyword-set-schema
+  [:set keyword?])
+
+(def ^:private descriptor-field-set-schema
+  [:set field-key-schema])
+
+(def ^:private valid-category-input* (schema/validator category-input-schema))
+(def ^:private valid-category* (schema/validator category-schema))
+(def ^:private valid-descriptor-id* (schema/validator descriptor-id-schema))
+(def ^:private valid-descriptor* (schema/validator descriptor-schema))
+(def ^:private valid-descriptor-field-keyword-set* (schema/validator descriptor-field-keyword-set-schema))
+(def ^:private valid-descriptor-field-set* (schema/validator descriptor-field-set-schema))
+
 ;; ============================================================================
 ;; Runtime Container
 ;; ============================================================================
@@ -77,12 +106,13 @@
 
 (defn- normalize-category
   [category]
-  (let [category-key (cond
-                       (keyword? category) category
-                       (string? category) (keyword category)
-                       :else (throw (ex-info "Descriptor category must be a keyword or string"
-                                             {:category category})))]
-    (when-not (contains? allowed-categories category-key)
+  (when-not (schema/valid? valid-category-input* category)
+    (throw (ex-info "Descriptor category must be a keyword or string"
+                    {:category category})))
+  (let [category-key (if (keyword? category)
+                       category
+                       (keyword category))]
+    (when-not (schema/valid? valid-category* category-key)
       (throw (ex-info "Descriptor category is not registered as a neutral host category"
                       {:category category-key
                        :allowed-categories allowed-categories})))
@@ -90,27 +120,26 @@
 
 (defn- validate-descriptor-id!
   [descriptor-id]
-  (when-not (or (keyword? descriptor-id)
-                (and (string? descriptor-id) (not (empty? descriptor-id))))
+  (when-not (schema/valid? valid-descriptor-id* descriptor-id)
     (throw (ex-info "Descriptor id must be a keyword or non-empty string"
                     {:descriptor-id descriptor-id}))))
 
 (defn- validate-field-keys!
   [descriptor]
-  (let [field-keys (set (keys descriptor))
-        non-keyword-fields (remove keyword? field-keys)
-        unknown-fields (set/difference field-keys allowed-field-keys)]
-    (when (seq non-keyword-fields)
-      (throw (ex-info "Descriptor field names must be keywords"
-                      {:fields (vec non-keyword-fields)})))
-    (when (seq unknown-fields)
-      (throw (ex-info "Descriptor field names must use the neutral host envelope"
-                      {:fields (vec unknown-fields)
-                       :allowed-fields allowed-field-keys})))))
+  (let [field-keys (set (keys descriptor))]
+    (when-not (schema/valid? valid-descriptor-field-keyword-set* field-keys)
+      (let [non-keyword-fields (->> field-keys (remove keyword?) vec)]
+        (throw (ex-info "Descriptor field names must be keywords"
+                        {:fields non-keyword-fields}))))
+    (when-not (schema/valid? valid-descriptor-field-set* field-keys)
+      (let [unknown-fields (vec (set/difference field-keys allowed-field-keys))]
+        (throw (ex-info "Descriptor field names must use the neutral host envelope"
+                        {:fields unknown-fields
+                         :allowed-fields allowed-field-keys}))))))
 
 (defn- normalize-descriptor
   [descriptor-id descriptor]
-  (when-not (map? descriptor)
+  (when-not (schema/valid? valid-descriptor* descriptor)
     (throw (ex-info "Descriptor must be a map"
                     {:descriptor descriptor})))
   (validate-descriptor-id! descriptor-id)

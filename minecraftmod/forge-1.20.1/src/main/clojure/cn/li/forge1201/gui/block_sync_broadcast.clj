@@ -1,7 +1,7 @@
 (ns cn.li.forge1201.gui.block-sync-broadcast
   "Forge server broadcast for block GUI state (chunk-tracking players)."
-  (:require [cn.li.ac.gui.platform-adapter.sync-api :as gui-sync-api]
-            [cn.li.mc1201.gui.network.block-sync :as block-sync]
+  (:require [cn.li.mc1201.gui.network.block-sync :as block-sync]
+            [cn.li.mcmod.gui.sync-api :as gui-sync-api]
             [cn.li.mc1201.runtime.network-payload :as network-payload]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.forge1201.network ClojureNetwork]

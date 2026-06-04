@@ -1,7 +1,6 @@
 (ns cn.li.mcmod.gui.registry-contract
   "Registry-phase GUI/network contracts validated at handler and catalog registration time."
-  (:require [clojure.spec.alpha :as s]
-            [clojure.string :as str]))
+  (:require [cn.li.mcmod.schema.core :as schema]))
 
 (def known-owner-specs
   #{:server :client})
@@ -9,18 +8,23 @@
 (def known-payload-routings
   #{:none :sync-routing})
 
-(s/def ::owner-spec known-owner-specs)
+(def ^:private owner-spec-schema
+  [:enum :server :client])
 
-(s/def ::payload-routing known-payload-routings)
+(def ^:private payload-routing-schema
+  [:enum :none :sync-routing])
 
-(s/def ::handler-contract
-  (s/keys :req-un [::owner-spec]
-          :opt-un [::payload-routing]))
+(def ^:private handler-contract-schema
+  [:map
+   [:owner-spec owner-spec-schema]
+   [:payload-routing {:optional true} payload-routing-schema]])
 
-(s/def ::screen-contract
-  (s/keys :req-un [::owner-spec]))
+(def ^:private screen-contract-schema
+  [:map
+   [:owner-spec owner-spec-schema]])
 
-(s/def ::message-domain-contract ::handler-contract)
+(def ^:private valid-handler-contract* (schema/validator handler-contract-schema))
+(def ^:private valid-screen-contract* (schema/validator screen-contract-schema))
 
 (defn default-server-gui-handler-contract
   []
@@ -39,10 +43,10 @@
             :explain explain}))
 
 (defn- require-contract*
-  [spec contract-type value]
-  (if (s/valid? spec value)
+  [schema* validator* contract-type value]
+  (if (schema/valid? validator* value)
     value
-    (throw (contract-ex-info contract-type value (s/explain-data spec value)))))
+    (throw (contract-ex-info contract-type value (schema/explain schema* value)))))
 
 (defn normalize-handler-contract
   [contract]
@@ -57,7 +61,7 @@
    (validate-handler-contract! (default-server-gui-handler-contract)))
   ([contract]
    (let [normalized (normalize-handler-contract contract)]
-     (require-contract* ::handler-contract :handler-contract normalized)
+     (require-contract* handler-contract-schema valid-handler-contract* :handler-contract normalized)
      (when-not (= :server (:owner-spec normalized))
        (throw (ex-info "Server GUI handler contract requires :owner-spec :server"
                        {:contract normalized})))
@@ -69,7 +73,7 @@
      (when-not (= :client (:owner-spec normalized))
        (throw (ex-info "Block CGUI screen contract requires :owner-spec :client"
                        {:contract normalized})))
-     (require-contract* ::screen-contract :screen-contract normalized))))
+     (require-contract* screen-contract-schema valid-screen-contract* :screen-contract normalized))))
 
 (defn validate-handler-fn!
   "Fail fast when handler is not a function."

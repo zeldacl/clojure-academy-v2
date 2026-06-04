@@ -1,29 +1,29 @@
 (ns cn.li.mcmod.gui.owner-contract
   "GUI-specific owner contract wrappers; canonical validation lives in runtime.owner."
-  (:require [clojure.spec.alpha :as s]
-            [cn.li.mcmod.runtime.owner :as runtime-owner]))
+  (:require [cn.li.mcmod.runtime.owner :as runtime-owner]
+            [cn.li.mcmod.schema.core :as schema]))
 
-(s/def ::msg-id string?)
-(s/def ::payload map?)
-(s/def ::request-id int?)
+(def ^:private message-envelope-schema
+  [:map
+   [:msg-id string?]
+   [:payload map?]
+   [:request-id {:optional true} int?]])
 
-(s/def ::message-envelope
-  (s/keys :req-un [::msg-id ::payload]
-          :opt-un [::request-id]))
+(def ^:private sync-routing-schema
+  [:and
+   [:map
+    [:container-id {:optional true} int?]
+    [:pos-x {:optional true} number?]
+    [:pos-y {:optional true} number?]
+    [:pos-z {:optional true} number?]]
+   [:fn (fn [m]
+          (or (integer? (:container-id m))
+              (and (number? (:pos-x m))
+                   (number? (:pos-y m))
+                   (number? (:pos-z m)))))]])
 
-(s/def ::container-id int?)
-(s/def ::pos-x number?)
-(s/def ::pos-y number?)
-(s/def ::pos-z number?)
-
-(s/def ::sync-routing
-  (s/and
-   map?
-   (fn [m]
-     (or (integer? (:container-id m))
-         (and (number? (:pos-x m))
-              (number? (:pos-y m))
-              (number? (:pos-z m)))))))
+(def ^:private valid-message-envelope* (schema/validator message-envelope-schema))
+(def ^:private valid-sync-routing* (schema/validator sync-routing-schema))
 
 (defn valid-client-owner? [owner]
   (runtime-owner/valid-client-owner? owner))
@@ -48,18 +48,18 @@
 
 (defn require-message-envelope
   [envelope]
-  (if (s/valid? ::message-envelope envelope)
+  (if (schema/valid? valid-message-envelope* envelope)
     envelope
     (throw (ex-info "message-envelope contract violation"
                     {:contract :message-envelope
                      :value envelope
-                     :explain (s/explain-data ::message-envelope envelope)}))))
+                     :explain (schema/explain message-envelope-schema envelope)}))))
 
 (defn require-sync-routing
   [routing]
-  (if (s/valid? ::sync-routing routing)
+  (if (schema/valid? valid-sync-routing* routing)
     routing
     (throw (ex-info "sync-routing contract violation"
                     {:contract :sync-routing
                      :value routing
-                     :explain (s/explain-data ::sync-routing routing)}))))
+                     :explain (schema/explain sync-routing-schema routing)}))))

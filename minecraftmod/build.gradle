@@ -1833,6 +1833,7 @@ tasks.register('verifyAbilitySkillConfigCoverage') {
         fileTree('ac/src/main/clojure/cn/li/ac/content/ability') {
             include '**/*.clj'
             exclude '**/generic/**'
+            exclude '**/*_fx.clj'
             exclude '**/build/**', '**/.gradle/**'
         }.files.each { File f ->
             def text = f.getText('UTF-8')

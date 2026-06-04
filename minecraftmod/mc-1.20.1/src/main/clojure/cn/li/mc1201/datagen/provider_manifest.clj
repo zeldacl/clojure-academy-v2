@@ -3,7 +3,8 @@
 
   Provider creation remains platform-specific, but provider order and logical
   provider set live here so Forge/Fabric setup files cannot drift apart."
-  (:require [clojure.string :as str]))
+  (:require [clojure.string :as str]
+            [cn.li.mcmod.schema.core :as schema]))
 
 (def ^:private provider-groups
   {:lang {:label "Lang"
@@ -35,6 +36,51 @@
 (def ^:private platform-provider-keys
   {:forge-1.20.1 :forge
    :fabric-1.20.1 :fabric})
+
+(def ^:private provider-group-entry-schema
+  [:and
+   map?
+   [:fn
+    (fn [m]
+   (and (string? (:label m))
+     (string? (:summary-label m))
+     (map? (:forge m))
+     (keyword? (get-in m [:forge :factory]))
+     (map? (:fabric m))
+     (keyword? (get-in m [:fabric :factory]))
+     (if-let [langs (:languages m)]
+       (and (vector? langs)
+         (every? string? langs))
+       true)))]])
+
+(def ^:private provider-groups-schema
+  [:map-of keyword? provider-group-entry-schema])
+
+(def ^:private platform-orders-schema
+  [:map-of keyword? [:vector keyword?]])
+
+(def ^:private platform-provider-keys-schema
+  [:map-of keyword? keyword?])
+
+(def ^:private valid-provider-groups* (schema/validator provider-groups-schema))
+(def ^:private valid-platform-orders* (schema/validator platform-orders-schema))
+(def ^:private valid-platform-provider-keys* (schema/validator platform-provider-keys-schema))
+
+(defn- validate-manifest!
+  []
+  (when-not (schema/valid? valid-provider-groups* provider-groups)
+    (throw (schema/contract-ex-info :datagen-provider-groups
+                                    provider-groups
+                                    (schema/explain provider-groups-schema provider-groups))))
+  (when-not (schema/valid? valid-platform-orders* platform-orders)
+    (throw (schema/contract-ex-info :datagen-platform-orders
+                                    platform-orders
+                                    (schema/explain platform-orders-schema platform-orders))))
+  (when-not (schema/valid? valid-platform-provider-keys* platform-provider-keys)
+    (throw (schema/contract-ex-info :datagen-platform-provider-keys
+                                    platform-provider-keys
+                                    (schema/explain platform-provider-keys-schema platform-provider-keys))))
+  nil)
 
 (defn- provider-group
   [group-id]
@@ -74,6 +120,7 @@
 
 (defn providers-for
   [platform-key]
+  (validate-manifest!)
   (let [order (or (get platform-orders platform-key)
                   (throw (ex-info "Unknown datagen provider manifest"
                                   {:platform platform-key

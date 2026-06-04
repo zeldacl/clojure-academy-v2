@@ -4,10 +4,16 @@
   forge/fabric adapters invoke these functions from platform events.
   content modules register concrete handlers during core initialization."
   (:require [cn.li.mcmod.content.registry :as content-registry]
+            [cn.li.mcmod.schema.core :as schema]
             [cn.li.mcmod.runtime.owner :as runtime-owner]))
 
 (def ^:private noop
   (fn [& _] nil))
+
+(def ^:private hooks-map-schema
+  [:map-of keyword? fn?])
+
+(def ^:private valid-hooks-map* (schema/validator hooks-map-schema))
 
 (defn- default-runtime-hooks-state []
   {:on-player-login! noop
@@ -109,6 +115,23 @@
 (defn- update-hooks-core-state! [f & args]
   (apply swap! (hooks-core-state-atom) f args))
 
+(def ^:private allowed-runtime-hook-keys
+  (set (keys (default-runtime-hooks-state))))
+
+(defn- validate-hooks!
+  [hooks]
+  (when-not (schema/valid? valid-hooks-map* hooks)
+    (throw (schema/contract-ex-info :runtime-hooks
+                                    hooks
+                                    (schema/explain hooks-map-schema hooks))))
+  (let [unknown-keys (seq (remove allowed-runtime-hook-keys (keys hooks)))]
+    (when unknown-keys
+      (throw (ex-info "Unknown runtime hook keys"
+                      {:contract :runtime-hooks
+                       :unknown-hook-keys (vec unknown-keys)
+                       :allowed-hook-keys allowed-runtime-hook-keys}))))
+  hooks)
+
 (def ^:dynamic *client-session-id*
   "Client runtime session id bound by platform client adapters while invoking
   client-side hooks. Content code must fail fast when this is not available
@@ -190,7 +213,7 @@
 (defn register-power-runtime-hooks!
   "Register/replace power runtime hook fns."
   [hooks]
-  (update-hooks-core-state! merge hooks)
+  (update-hooks-core-state! merge (validate-hooks! hooks))
   nil)
 
 (defn register-action!

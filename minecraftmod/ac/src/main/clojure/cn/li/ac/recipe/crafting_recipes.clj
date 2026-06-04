@@ -1,7 +1,8 @@
 (ns cn.li.ac.recipe.crafting-recipes
   "Single source of truth for vanilla crafting/smelting recipe metadata.
    Recipes are ported from AcademyCraft 1.12 `default.recipe` and adapted for 1.20."
-  (:require [cn.li.ac.config.modid :as modid]))
+  (:require [cn.li.ac.config.modid :as modid]
+            [cn.li.mcmod.schema.recipe :as recipe-schema]))
 
 (defn- m
   [path]
@@ -43,7 +44,8 @@
   []
   (let [plate-iron (item (m "reinforced_iron_plate"))
         bed-tag (tag "minecraft:beds")]
-    [(shapeless "imag_silicon_piece_from_wafer"
+    (recipe-schema/require-recipes! :ac-crafting-recipes
+      [(shapeless "imag_silicon_piece_from_wafer"
        [(item (m "wafer"))]
        {:item (m "imag_silicon_piece") :count 2})
      (shaped "data_chip_from_plate_iron"
@@ -428,4 +430,4 @@
         \R (item (m "reso_crystal"))
         \P plate-iron
         \D (item "minecraft:diamond")}
-       {:item (m "magnetic_coil") :count 1})]))
+       {:item (m "magnetic_coil") :count 1})])))

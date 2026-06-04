@@ -1,5 +1,5 @@
 (ns cn.li.mcmod.events.world-save-cache
-  "Runtime component for temporarily bridging world-save payloads across
+  "Runtime component for carrying world-save payloads across
   world save/unload and the next matching world load.")
 
 (defn- require-world-owner-value

@@ -1,7 +1,7 @@
 (ns cn.li.ac.energy.service.node-manager
   "Wireless node and receiver energy management service.
 
-  Provides a thin, compatibility-safe service layer over the existing
+  Provides a focused service layer over the existing
   IWirelessNode / IWirelessReceiver contracts."
   (:require [cn.li.ac.energy.domain.container :as container])
   (:import [cn.li.acapi.wireless IWirelessNode IWirelessReceiver]))

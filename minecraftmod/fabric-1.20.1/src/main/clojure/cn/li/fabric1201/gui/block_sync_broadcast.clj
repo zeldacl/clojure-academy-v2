@@ -1,7 +1,7 @@
 (ns cn.li.fabric1201.gui.block-sync-broadcast
   "Fabric server broadcast for block GUI state (players tracking block pos)."
-  (:require [cn.li.ac.gui.platform-adapter.sync-api :as gui-sync-api]
-            [cn.li.fabric1201.gui.network.shared :as shared]
+  (:require [cn.li.fabric1201.gui.network.shared :as shared]
+            [cn.li.mcmod.gui.sync-api :as gui-sync-api]
             [cn.li.mc1201.gui.network.block-sync :as block-sync]
             [cn.li.mc1201.gui.network.packet :as packet-base]
             [cn.li.mcmod.util.log :as log])

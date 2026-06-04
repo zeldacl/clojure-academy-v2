@@ -1,5 +1,6 @@
 (ns cn.li.mcmod.datagen.metadata
-  "Platform-neutral datagen metadata registry populated by game content.")
+  "Platform-neutral datagen metadata registry populated by game content."
+  (:require [cn.li.mcmod.schema.recipe :as recipe-schema]))
 
 (defn create-datagen-metadata-runtime
   []
@@ -34,17 +35,26 @@
 
 (defn set-achievement-tabs!
   [tabs]
-  (update-datagen-metadata-runtime! assoc :achievement-tabs (vec (or tabs [])))
+  (update-datagen-metadata-runtime!
+   assoc
+   :achievement-tabs
+   (recipe-schema/require-achievement-tabs! :achievement-tabs (vec (or tabs []))))
   nil)
 
 (defn set-achievements!
   [all-achievements]
-  (update-datagen-metadata-runtime! assoc :achievements (vec (or all-achievements [])))
+  (update-datagen-metadata-runtime!
+   assoc
+   :achievements
+   (recipe-schema/require-achievements! :achievements (vec (or all-achievements []))))
   nil)
 
 (defn set-translations!
   [translation-maps]
-  (update-datagen-metadata-runtime! assoc :translations (or translation-maps {:en_us {} :zh_cn {}}))
+  (update-datagen-metadata-runtime!
+   assoc
+   :translations
+   (recipe-schema/require-translations! :translations (or translation-maps {:en_us {} :zh_cn {}})))
   nil)
 
 (defn merge-translations!
@@ -60,7 +70,10 @@
 
 (defn set-recipes!
   [all-recipes]
-  (update-datagen-metadata-runtime! assoc :recipes (vec (or all-recipes [])))
+  (update-datagen-metadata-runtime!
+   assoc
+   :recipes
+   (recipe-schema/require-recipes! :recipes (vec (or all-recipes []))))
   nil)
 
 (defn register-achievement-data!
