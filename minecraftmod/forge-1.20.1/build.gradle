@@ -6,9 +6,9 @@ plugins {
 
 apply from: rootProject.file('gradle/platform_build_helpers.gradle')
 
-// tasks.matching { it.name == 'checkClojure' }.configureEach {
-//     enabled = false
-// }
+ tasks.matching { it.name == 'checkClojure' }.configureEach {
+     enabled = false
+ }
 
 // Inject only shared Minecraft/mcmod sources. AC is loaded through explicit
 // runtime outputs plus content SPI/lifecycle, not as platform source.

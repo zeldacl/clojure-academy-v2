@@ -1,42 +1,36 @@
 (ns cn.li.ac.block.wireless-matrix-owner-test
   (:require [clojure.test :refer [deftest is testing]]
-            [cn.li.ac.block.wireless-matrix.handlers :as handlers]
             [cn.li.ac.block.wireless-matrix.logic :as logic]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.be :as platform-be]
-            [cn.li.mcmod.platform.world :as world])
-  (:import [cn.li.acapi.wireless IWirelessMatrix]))
+            [cn.li.mcmod.platform.world :as world]))
 
-(defn- matrix-cap-with-owner [owner]
-  (reify IWirelessMatrix
-    (getMatrixCapacity [_] 4)
-    (getMatrixBandwidth [_] 128.0)
-    (getMatrixRange [_] 16.0)
-    (getSsid [_] "")
-    (getPassword [_] "")
-    (getPlacerName [_] owner)))
-
-(deftest owner-check-accepts-canonical-and-legacy-owner-format
+(deftest owner-authorized-check
   (with-redefs [entity/player-get-name (fn [_] "alice")]
     (testing "exact canonical owner"
-      (is (true? (handlers/owner? (matrix-cap-with-owner "alice") :player))))
+      (is (true? (logic/owner-authorized? "alice" :player))))
 
     (testing "legacy owner string"
-      (is (true? (handlers/owner?
-                  (matrix-cap-with-owner "ServerPlayer['alice'/123, l='ServerLevel[test]', x=0.0, y=0.0, z=0.0]")
+      (is (true? (logic/owner-authorized?
+                  "ServerPlayer['alice'/123, l='ServerLevel[test]', x=0.0, y=0.0, z=0.0]"
                   :player))))
 
     (testing "blank owner remains permissive"
-      (is (true? (handlers/owner? (matrix-cap-with-owner "") :player))))
+      (is (true? (logic/owner-authorized? "" :player))))
 
     (testing "whitespace-only owner remains permissive"
-      (is (true? (handlers/owner? (matrix-cap-with-owner "   ") :player))))
+      (is (true? (logic/owner-authorized? "   " :player))))
 
     (testing "different owner is rejected"
-      (is (false? (handlers/owner? (matrix-cap-with-owner "bob") :player))))
+      (is (false? (logic/owner-authorized? "bob" :player))))
 
     (testing "owner comparison is case-sensitive"
-      (is (false? (handlers/owner? (matrix-cap-with-owner "Alice") :player))))))
+      (is (false? (logic/owner-authorized? "Alice" :player))))))
+
+(deftest placer-name-from-state
+  (is (= "Dev" (logic/placer-name {:placer-name "Dev"})))
+  (is (= "" (logic/placer-name {})))
+  (is (= "" (logic/placer-name nil))))
 
 (deftest handle-matrix-place-persists-canonical-player-name
   (let [saved-state (atom nil)

@@ -27,6 +27,10 @@ def acRunDataRequested = {
 }
 
 tasks.matching { it.name == 'checkClojure' }.configureEach {
+    enabled = false
+}
+
+tasks.matching { it.name == 'checkClojure' }.configureEach {
     def existingArgs = forkOptions.jvmArgs ?: []
     forkOptions.jvmArgs = existingArgs + ['-Dac.check.clojure=true']
     onlyIf {

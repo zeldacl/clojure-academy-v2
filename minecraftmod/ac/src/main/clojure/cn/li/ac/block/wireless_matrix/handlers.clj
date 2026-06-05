@@ -33,23 +33,20 @@
       (when ctrl
         (resolver/matrix-capability ctrl)))))
 
-(defn owner?
-  [^IWirelessMatrix matrix-cap player]
-  (let [placer-name (str (.getPlacerName matrix-cap))
-        player-name (str (entity/player-get-name player))]
-    (or (str/blank? placer-name)
-        (= placer-name player-name)
-        ;; Backward compatibility for old values like
-        ;; "ServerPlayer['name'/...,...]".
-        (str/includes? placer-name (str "'" player-name "'")))))
+(defn- owner-authorized?
+  "Check if player owns the matrix tile by reading placer-name directly
+   from the BE's customState (aligned with node/handlers owner-authorized?)."
+  [ctrl player]
+  (let [state (matrix-logic/safe-state ctrl)
+        placer (matrix-logic/placer-name state)]
+    (matrix-logic/owner-authorized? placer player)))
 
 (defn owner-controller
   [payload player]
   (let [{:keys [be]} (resolve-world-tile payload player)
-        ctrl (resolve-controller be)
-        cap (matrix-wireless-cap be)]
-    (when (and ctrl cap (owner? cap player))
-      {:ctrl ctrl :cap cap})))
+        ctrl (resolve-controller be)]
+    (when (and ctrl (owner-authorized? ctrl player))
+      {:ctrl ctrl})))
 
 (defn wireless-network
   [ctrl]
@@ -73,11 +70,14 @@
 ;; ============================================================================
 
 (defn gather-info-response
-  [network cap]
+  [network cap ctrl]
   (let [{:keys [ssid password load]} (wireless-api/network-snapshot network)]
     {:ssid ssid
      :password password
-     :owner (if cap (str (.getPlacerName ^IWirelessMatrix cap)) "Unknown")
+     :owner (cond
+              cap  (str (.getPlacerName ^IWirelessMatrix cap))
+              ctrl (-> ctrl matrix-logic/safe-state matrix-logic/placer-name)
+              :else "Unknown")
      :load (or load 0)
      :max-capacity (if cap (.getMatrixCapacity ^IWirelessMatrix cap) 16)
      :range (if cap (.getMatrixRange ^IWirelessMatrix cap) 64.0)
@@ -119,7 +119,7 @@
         ctrl (resolve-controller be)
         cap (matrix-wireless-cap be)
         network (wireless-network ctrl)]
-    (gather-info-response network cap)))
+    (gather-info-response network cap ctrl)))
 
 (defn- with-owner-controller
   [action payload player f]

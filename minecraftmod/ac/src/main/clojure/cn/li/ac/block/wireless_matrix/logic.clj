@@ -1,6 +1,7 @@
 (ns cn.li.ac.block.wireless-matrix.logic
   "Wireless matrix tick, container, block events, state lifecycle, inventory, and stats."
-  (:require [cn.li.ac.block.machine.container :as machine-container]
+  (:require [clojure.string :as str]
+            [cn.li.ac.block.machine.container :as machine-container]
             [cn.li.ac.block.machine.runtime :as machine-runtime]
             [cn.li.ac.block.wireless-matrix.schema :as matrix-schema]
             [cn.li.ac.block.machine.sync :as machine-sync]
@@ -147,6 +148,31 @@
   (if-let [ctrl (resolve-controller-be be)]
     (get (safe-state ctrl) :core-level 0)
     0))
+
+;; ============================================================================
+;; Ownership helpers (aligned with wireless-node pattern)
+;; ============================================================================
+
+(defn placer-name
+  "Normalize matrix placer from tile custom state map.
+   Returns empty string when placer cannot be resolved.
+   (Analogous to node-logic/owner-name)"
+  [state]
+  (str (get (or state {}) :placer-name "")))
+
+(defn owner-authorized?
+  "True when player is allowed to edit matrix owner-protected fields.
+   Backward compatibility: accept older owner serialization that embeds
+   the player's name as `...'<name>'...`.
+   (Analogous to node-logic/owner-authorized?)"
+  [placer player]
+  (let [owner (str placer)
+        player-name (try (str (entity/player-get-name player))
+                         (catch Exception _ ""))]
+    (or (str/blank? owner)
+        (= owner player-name)
+        (and (not (str/blank? player-name))
+             (str/includes? owner (str "'" player-name "'"))))))
 
 ;; ============================================================================
 ;; Tick

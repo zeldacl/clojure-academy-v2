@@ -210,6 +210,8 @@
                           :initialized (boolean (if (contains? response :initialized)
                                                   (get response :initialized)
                                                   (get response :ssid)))})]
+              (log/error "Received gather-info response:" response)
+              (log/error "Parsed MatrixNetworkData:" data)
               (callback data))
             (catch Exception e
               (log/error "Error processing gather-info response:"(ex-message e))))))
@@ -451,7 +453,7 @@
             :pos-x       (pos/pos-x block-pos)
             :pos-y       (pos/pos-y block-pos)
             :pos-z       (pos/pos-z block-pos)
-            :placer-name (or (:placer-name tile) "Unknown")}
+            :placer-name (or (matrix-logic/placer-name (matrix-logic/safe-state tile)) "Unknown")}
            (when container?
              (sync-routing-metadata source))
            (schema/build-sync-packet-fields matrix-schema/gui-container-fields container))))
@@ -480,8 +482,13 @@
   - data: MatrixNetworkData"
   [info-area tile player data]
   (try
-    (let [placer (try (.getPlacerName ^ IWirelessMatrix tile) (catch Exception _ (:owner data)))
+    (let [placer (or (try (.getPlacerName ^IWirelessMatrix tile) (catch Exception _ nil))
+                     (-> tile matrix-logic/safe-state matrix-logic/placer-name)
+                     (:owner data "Unknown"))
+          _ (log/error "Rebuilding InfoArea with matrix-logic/safe-state: " (matrix-logic/safe-state tile))
+          _ (log/error "Rebuilding InfoArea with matrix-logic/placer-name: " (try (matrix-logic/placer-name (matrix-logic/safe-state tile)) (catch Exception _ "Error")))
           player-name (try (some-> player entity/player-get-name str) (catch Exception _ ""))
+          _ (log/error "Rebuilding InfoArea for player: " player-name)
           is-owner? (and (not (str/blank? (str placer)))
                          (= (str placer) player-name))
           policy (matrix-info-area-policy (boolean (network-initialized? data)) is-owner?)
