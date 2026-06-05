@@ -536,13 +536,17 @@
                   y (tech-ui/add-button
                       info-area "INIT"
                       (fn []
+                        (log/info "Matrix INIT button clicked!")
                         (let [ssid (if-let [tb @ssid-cell] (comp/get-text tb) "")
                               pass (if-let [tb @pass-cell] (comp/get-text tb) "")]
+                          (log/info "Matrix INIT ssid=" ssid "pass=" pass)
                           (send-init-network tile ssid pass
                             (fn [success]
+                              (log/info "Matrix init-network result:" success)
                               (when success
                                 (send-gather-info tile
                                   (fn [new-data]
+                                    (log/info "Matrix gather-info after init, rebuilding...")
                                     (rebuild-info-area! info-area tile player new-data))))))))
                       y)]
               y)

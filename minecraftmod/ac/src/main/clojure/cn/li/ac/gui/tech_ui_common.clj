@@ -389,7 +389,8 @@
     (let [value-box (comp/get-textbox-component value-area)]
 
       (when (instance? clojure.lang.IAtom content-cell)
-        (reset! content-cell value-box))
+        (reset! content-cell value-box)
+        (log/info "add-property: content-cell populated for" label "editable?" editable?))
     
       (when editable?
         (comp/set-editable! value-box true)
@@ -436,10 +437,11 @@
   Returns: Updated Y offset"
   [info-area text on-click y-offset]
   (maybe-init-elem-y! info-area y-offset)
-  (let [button-widget (cgui-core/create-widget :pos [50 0] :size [50 8])
+  (let [button-widget (cgui-core/create-widget :name (str "btn_" text) :pos [50 0] :size [50 8])
         text-box (comp/text-box :text text :color 0xFFFFFFFF :scale 0.9)]
     (comp/add-component! button-widget text-box)
-    (events/on-left-click button-widget on-click)
+    (events/on-left-click button-widget (events/make-click-handler on-click))
+    (log/info "add-button: registered left-click on" text "size:" (cgui-core/get-size button-widget) "pos:" (cgui-core/get-pos button-widget))
     (events/on-frame button-widget
       (fn [evt]
         (let [lum (if (:hovering evt) 1.0 0.8)
@@ -450,6 +452,7 @@
                    (bit-shift-left color-val 8)
                    color-val)))))
     (info-area-element! info-area button-widget)
+    (log/info "add-button:" text "added, final pos:" (cgui-core/get-pos button-widget) "info-area children:" (count (cgui-core/get-widgets info-area)))
     (double (:elem-y @(info-area-state-atom info-area)))))
 
 ;; ============================================================================
@@ -628,6 +631,15 @@
         mw (double (nth main-size 0 gui-width))
         mh (double (nth main-size 1 gui-height))
         main (cgui-core/create-widget :name "tech_ui_main" :pos [0 0] :size [mw mh])
+        ;; Initialize CGUI runtime state on the root widget so that
+        ;; gain-focus!, key-input!, and focused-editable-textbox? can
+        ;; find the focus atom. Mirrors create-cgui in cgui_screen.clj.
+        _ (when-not (:cgui-focus @(:metadata main))
+            (swap! (:metadata main) assoc
+                   :cgui-focus (atom nil)
+                   :dragging-node (atom nil)
+                   :last-drag-time (atom 0)
+                   :last-start-time (atom 0)))
         current (atom (when (seq pages) (:id (first pages))))
         pages-map (into {} (map (fn [p] [(:id p) p]) pages))]
 

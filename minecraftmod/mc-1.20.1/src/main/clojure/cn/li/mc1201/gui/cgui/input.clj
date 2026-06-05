@@ -3,6 +3,7 @@
   (:require [cn.li.mcmod.gui.components :as components]
             [cn.li.mcmod.gui.events :as events]
             [cn.li.mcmod.gui.cgui-screen :as cgui-screen]
+            [cn.li.mcmod.gui.cgui-core :as cgui-core]
             [cn.li.mc1201.gui.cgui.traversal :as traversal]
             [cn.li.mcmod.util.log :as log]))
 
@@ -34,7 +35,10 @@
   (when-let [hit (traversal/hit-test root mx my left top)]
     (when (== 0 button)
       (cgui-screen/gain-focus! root hit))
-    (log/debug "CGUI mouse-click! mx:" mx "my:" my "left:" left "top:" top "button:" button)
+    (log/info "CGUI mouse-click! mx:" mx "my:" my "left:" left "top:" top "button:" button "hit:" (when hit (or @(:name hit) "unnamed"))
+              "has-left-click?" (when hit (boolean (seq (get @(:events hit) :left-click))))
+              "hit-pos:" (when hit (cgui-core/get-pos hit))
+              "hit-size:" (when hit (cgui-core/get-size hit)))
     (events/emit-widget-event!
      hit
      (if (== 0 button) :left-click :right-click)
