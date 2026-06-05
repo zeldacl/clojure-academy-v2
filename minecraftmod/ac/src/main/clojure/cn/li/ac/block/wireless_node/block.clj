@@ -3,10 +3,7 @@
   (:require [cn.li.ac.block.machine.registration :as machine-reg]
             [cn.li.ac.block.wireless-node.capability :as node-capability]
             [cn.li.ac.block.wireless-node.handlers :as node-handlers]
-            [cn.li.ac.block.wireless-node.inventory :as node-inventory]
-            [cn.li.ac.block.wireless-node.logic :as node-events]
-            [cn.li.ac.block.wireless-node.state :as node-state]
-            [cn.li.ac.block.wireless-node.tick :as node-tick]
+            [cn.li.ac.block.wireless-node.logic :as node-logic]
             [cn.li.ac.util.init-guard :refer [defonce-guard]]
             [cn.li.mcmod.block.dsl :as bdsl])
   (:import [cn.li.acapi.wireless IWirelessNode]
@@ -31,21 +28,21 @@
                 :harvest-level 1
                 :sounds :metal}
      :rendering {:model-parent "minecraft:block/cube_all"}
-     :block-state {:block-state-properties node-state/block-state-properties}
-     :events {:on-right-click (node-events/handle-node-right-click node-type)
-              :on-place (node-events/handle-node-place node-type)
-              :on-break (node-events/handle-node-break node-type)}}))
+     :block-state {:block-state-properties node-logic/block-state-properties}
+     :events {:on-right-click (node-logic/handle-node-right-click node-type)
+              :on-place (node-logic/handle-node-place node-type)
+              :on-break (node-logic/handle-node-break node-type)}}))
 
 (defn init-wireless-nodes!
   []
   (machine-reg/init-machine!
     {:guard wireless-node-installed?
      :log-label "Wireless Nodes"
-     :before node-inventory/ensure-node-slot-schema!
+     :before node-logic/ensure-node-slot-schema!
      :tile-kind {:tile-kind :wireless-node
-                 :tick-fn node-tick/node-scripted-tick-fn
-                 :read-nbt-fn node-state/node-scripted-load-fn
-                 :write-nbt-fn node-state/node-scripted-save-fn}
+                 :tick-fn node-logic/node-scripted-tick-fn
+                 :read-nbt-fn node-logic/node-scripted-load-fn
+                 :write-nbt-fn node-logic/node-scripted-save-fn}
      :tiles [{:id "wireless-node-basic" :registry-name "node_basic" :blocks ["wireless-node-basic"] :tile-kind :wireless-node}
              {:id "wireless-node-standard" :registry-name "node_standard" :blocks ["wireless-node-standard"] :tile-kind :wireless-node}
              {:id "wireless-node-advanced" :registry-name "node_advanced" :blocks ["wireless-node-advanced"] :tile-kind :wireless-node}]
@@ -54,9 +51,9 @@
                      :factory (fn [be _side] (node-capability/->WirelessNodeImpl be))}
                     {:key :wireless-energy :interface IEnergyCapable
                      :factory (fn [be _side] (node-capability/->ClojureEnergyImpl be))}]
-     :containers {"wireless-node-basic" node-inventory/node-container-fns
-                  "wireless-node-standard" node-inventory/node-container-fns
-                  "wireless-node-advanced" node-inventory/node-container-fns}
+     :containers {"wireless-node-basic" node-logic/node-container-fns
+                  "wireless-node-standard" node-logic/node-container-fns
+                  "wireless-node-advanced" node-logic/node-container-fns}
      :blocks [(node-block-spec "wireless-node-basic" "node_basic" :basic)
               (node-block-spec "wireless-node-standard" "node_standard" :standard)
               (node-block-spec "wireless-node-advanced" "node_advanced" :advanced)]

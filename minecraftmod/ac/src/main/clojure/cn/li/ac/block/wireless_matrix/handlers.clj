@@ -1,74 +1,175 @@
 (ns cn.li.ac.block.wireless-matrix.handlers
-	"Wireless Matrix network handlers."
-	(:require [cn.li.mcmod.network.server :as net-server]
-						[cn.li.ac.wireless.gui.message.registry :as msg-registry]
-						[cn.li.ac.block.wireless-matrix.network-infra :as infra]
-						[cn.li.ac.block.wireless-matrix.network-presenter :as presenter]
-						[cn.li.mcmod.util.log :as log]))
+  "Wireless Matrix network message handlers and infrastructure."
+  (:require [clojure.string :as str]
+            [cn.li.mcmod.network.server :as net-server]
+            [cn.li.ac.wireless.gui.message.registry :as msg-registry]
+            [cn.li.ac.block.wireless-matrix.logic :as matrix-logic]
+            [cn.li.ac.wireless.gui.sync.handler :as net-helpers]
+            [cn.li.ac.wireless.core.capability-resolver :as resolver]
+            [cn.li.ac.wireless.api :as wireless-api]
+            [cn.li.mcmod.platform.entity :as entity]
+            [cn.li.mcmod.util.log :as log])
+  (:import [cn.li.acapi.wireless IWirelessMatrix]))
 
-(defn- msg [action]
-	(msg-registry/msg :matrix action))
+;; ============================================================================
+;; Infrastructure (from network_infra.clj)
+;; ============================================================================
+
+(defn resolve-world-tile
+  [payload player]
+  (let [world (net-helpers/get-world player)
+        be (net-helpers/get-tile-at world payload)]
+    {:world world :be be}))
+
+(defn resolve-controller
+  [be]
+  (when be
+    (matrix-logic/resolve-controller-be be)))
+
+(defn matrix-wireless-cap
+  [be]
+  (when be
+    (let [ctrl (matrix-logic/resolve-controller-be be)]
+      (when ctrl
+        (resolver/matrix-capability ctrl)))))
+
+(defn owner?
+  [^IWirelessMatrix matrix-cap player]
+  (let [placer-name (str (.getPlacerName matrix-cap))
+        player-name (str (entity/player-get-name player))]
+    (or (str/blank? placer-name)
+        (= placer-name player-name)
+        ;; Backward compatibility for old values like
+        ;; "ServerPlayer['name'/...,...]".
+        (str/includes? placer-name (str "'" player-name "'")))))
+
+(defn owner-controller
+  [payload player]
+  (let [{:keys [be]} (resolve-world-tile payload player)
+        ctrl (resolve-controller be)
+        cap (matrix-wireless-cap be)]
+    (when (and ctrl cap (owner? cap player))
+      {:ctrl ctrl :cap cap})))
+
+(defn wireless-network
+  [ctrl]
+  (when ctrl
+    (wireless-api/get-wireless-net-by-matrix ctrl)))
+
+(defn create-network!
+  [ctrl ssid password]
+  (boolean (wireless-api/create-network! ctrl ssid password)))
+
+(defn change-ssid!
+  [network new-ssid]
+  (wireless-api/change-network-ssid! network new-ssid))
+
+(defn change-password!
+  [network new-password]
+  (wireless-api/change-network-password! network new-password))
+
+;; ============================================================================
+;; Response DTO builders (from network_presenter.clj)
+;; ============================================================================
+
+(defn gather-info-response
+  [network cap]
+  (let [{:keys [ssid password load]} (wireless-api/network-snapshot network)]
+    {:ssid ssid
+     :password password
+     :owner (if cap (str (.getPlacerName ^IWirelessMatrix cap)) "Unknown")
+     :load (or load 0)
+     :max-capacity (if cap (.getMatrixCapacity ^IWirelessMatrix cap) 16)
+     :range (if cap (.getMatrixRange ^IWirelessMatrix cap) 64.0)
+     :bandwidth (if cap (.getMatrixBandwidth ^IWirelessMatrix cap) 100)
+     :initialized (boolean network)}))
+
+;; ============================================================================
+;; Message ID helper
+;; ============================================================================
+
+(defn- msg
+  [action]
+  (msg-registry/msg :matrix action))
+
+;; ============================================================================
+;; Internal helpers
+;; ============================================================================
 
 (defn- payload-pos
-	[payload]
-	(select-keys payload [:pos-x :pos-y :pos-z]))
+  [payload]
+  (select-keys payload [:pos-x :pos-y :pos-z]))
 
 (defn- fail
-	[action payload owner-check reason]
-	(log/warn "Matrix handler rejected"
-			  {:action action
-			   :owner-check owner-check
-			   :pos (payload-pos payload)
-			   :reason reason})
-	{:success false})
+  [action payload owner-check reason]
+  (log/warn "Matrix handler rejected"
+            {:action action
+             :owner-check owner-check
+             :pos (payload-pos payload)
+             :reason reason})
+  {:success false})
 
-(defn handle-gather-info [payload player]
-	(let [{:keys [be]} (infra/resolve-world-tile payload player)
-				ctrl (infra/resolve-controller be)
-				cap (infra/matrix-wireless-cap be)
-				network (infra/wireless-network ctrl)]
-		(presenter/gather-info-response network cap)))
+;; ============================================================================
+;; Handler functions
+;; ============================================================================
 
-(defn- with-owner-controller [action payload player f]
-	(if-let [{:keys [ctrl]} (infra/owner-controller payload player)]
-		(f ctrl)
-		(fail action payload false :not-owner)))
+(defn handle-gather-info
+  [payload player]
+  (let [{:keys [be]} (resolve-world-tile payload player)
+        ctrl (resolve-controller be)
+        cap (matrix-wireless-cap be)
+        network (wireless-network ctrl)]
+    (gather-info-response network cap)))
 
-(defn handle-init-network [payload player]
-	(with-owner-controller :init payload player
-		(fn [tile]
-			(let [{:keys [ssid password]} payload]
-				(try
-					{:success (infra/create-network! tile ssid password)}
-					(catch Exception e
-						(log/error "Failed to initialize network:" {:action :init :owner-check true :pos (payload-pos payload)} (ex-message e))
-						(fail :init payload true :exception)))))))
+(defn- with-owner-controller
+  [action payload player f]
+  (if-let [{:keys [ctrl]} (owner-controller payload player)]
+    (f ctrl)
+    (fail action payload false :not-owner)))
 
-(defn handle-change-ssid [payload player]
-	(with-owner-controller :change-ssid payload player
-		(fn [tile]
-			(if-let [network (infra/wireless-network tile)]
-				(try
-					{:success (infra/change-ssid! network (:new-ssid payload))}
-					(catch Exception e
-						(log/error "Failed to change SSID:" {:action :change-ssid :owner-check true :pos (payload-pos payload)} (ex-message e))
-						(fail :change-ssid payload true :exception)))
-				(fail :change-ssid payload true :network-not-found)))))
+(defn handle-init-network
+  [payload player]
+  (with-owner-controller :init payload player
+    (fn [tile]
+      (let [{:keys [ssid password]} payload]
+        (try
+          {:success (create-network! tile ssid password)}
+          (catch Exception e
+            (log/error "Failed to initialize network:" {:action :init :owner-check true :pos (payload-pos payload)} (ex-message e))
+            (fail :init payload true :exception)))))))
 
-(defn handle-change-password [payload player]
-	(with-owner-controller :change-password payload player
-		(fn [tile]
-			(if-let [network (infra/wireless-network tile)]
-				(try
-					{:success (infra/change-password! network (:new-password payload))}
-					(catch Exception e
-						(log/error "Failed to change password:" {:action :change-password :owner-check true :pos (payload-pos payload)} (ex-message e))
-						(fail :change-password payload true :exception)))
-				(fail :change-password payload true :network-not-found)))))
+(defn handle-change-ssid
+  [payload player]
+  (with-owner-controller :change-ssid payload player
+    (fn [tile]
+      (if-let [network (wireless-network tile)]
+        (try
+          {:success (change-ssid! network (:new-ssid payload))}
+          (catch Exception e
+            (log/error "Failed to change SSID:" {:action :change-ssid :owner-check true :pos (payload-pos payload)} (ex-message e))
+            (fail :change-ssid payload true :exception)))
+        (fail :change-ssid payload true :network-not-found)))))
 
-(defn register-network-handlers! []
-	(net-server/register-handler (msg :gather-info) handle-gather-info)
-	(net-server/register-handler (msg :init) handle-init-network)
-	(net-server/register-handler (msg :change-ssid) handle-change-ssid)
-	(net-server/register-handler (msg :change-password) handle-change-password)
-	(log/info "Matrix network handlers registered"))
+(defn handle-change-password
+  [payload player]
+  (with-owner-controller :change-password payload player
+    (fn [tile]
+      (if-let [network (wireless-network tile)]
+        (try
+          {:success (change-password! network (:new-password payload))}
+          (catch Exception e
+            (log/error "Failed to change password:" {:action :change-password :owner-check true :pos (payload-pos payload)} (ex-message e))
+            (fail :change-password payload true :exception)))
+        (fail :change-password payload true :network-not-found)))))
+
+;; ============================================================================
+;; Registration
+;; ============================================================================
+
+(defn register-network-handlers!
+  []
+  (net-server/register-handler (msg :gather-info) handle-gather-info)
+  (net-server/register-handler (msg :init) handle-init-network)
+  (net-server/register-handler (msg :change-ssid) handle-change-ssid)
+  (net-server/register-handler (msg :change-password) handle-change-password)
+  (log/info "Matrix network handlers registered"))

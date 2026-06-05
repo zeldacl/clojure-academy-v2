@@ -109,7 +109,7 @@
     :block-state {:prop "energy"
                   :type :integer
                   :min 0 :max 4 :default 0
-                  :xf 'cn.li.ac.block.wireless-node.state/energy->blockstate-level}
+                  :xf 'cn.li.ac.block.wireless-node.logic/energy->blockstate-level}
     :doc "Energy level (0-4) displayed as visual bar"}
 
    {:key :enabled

@@ -48,7 +48,7 @@
 
 | 区域 | 约定 |
 |------|------|
-| `ac/block/wireless_*` | 经 `wireless.api` 入网/挂接/破坏清理；tick 经 `wireless-node.tick` |
+| `ac/block/wireless_*` | 经 `wireless.api` 入网/挂接/破坏清理；tick 经 `wireless-node.logic` |
 | `ac/wireless/gui` | 查询经 `wireless.api` 或 snapshot；勿直接改 world-state |
 | `cn.li.ac.energy.operations` | 仅委托 `wireless.api` 查询连接状态 |
 | `api` 模块 Java | `cn.li.acapi.wireless.IWireless*` — capability 契约，非 Clojure 领域模型 |

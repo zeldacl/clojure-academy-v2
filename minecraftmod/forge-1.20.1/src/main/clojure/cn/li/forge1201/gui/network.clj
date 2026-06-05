@@ -33,10 +33,15 @@
 (defn- with-client-response-owner
   [payload f]
   (let [client-session-id-fn (requiring-resolve 'cn.li.mc1201.client.session/client-session-id)
+        local-player-uuid-fn (requiring-resolve 'cn.li.mc1201.client.session/local-player-uuid)
         with-bound-client-owner-fn (requiring-resolve 'cn.li.mc1201.client.session/with-bound-client-owner)
         session-id (when client-session-id-fn
                      (client-session-id-fn))
-        player-uuid (payload-player-uuid payload)]
+        ;; Response payloads rarely carry :player-uuid; fall back to the local
+        ;; Minecraft player so require-client-owner validation passes during dispatch.
+        player-uuid (or (payload-player-uuid payload)
+                        (when local-player-uuid-fn
+                          (try (local-player-uuid-fn) (catch Exception _ nil))))]
     (when-not with-bound-client-owner-fn
       (throw (ex-info "Client GUI network response owner binding unavailable"
                       {:payload payload})))

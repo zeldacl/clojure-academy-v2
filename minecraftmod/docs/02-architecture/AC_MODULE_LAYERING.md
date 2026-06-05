@@ -48,19 +48,14 @@ foundation → domain/model → data/repository/persistence → service/applicat
 
 ### Wireless Node Block
 
-- 状态 schema、默认值、tier、blockstate 投影：`cn.li.ac.block.wireless-node.state`。
-- Slot schema 与 container 操作：`cn.li.ac.block.wireless-node.inventory`。
-- Server tick（`make-tick-fn` + `after-commit!` blockstate）：`cn.li.ac.block.wireless-node.tick`。
+- 状态 schema、默认值、tier、blockstate 投影、slot schema、container 操作、server tick、所有权验证、方块事件：`cn.li.ac.block.wireless-node.logic`。
 - Java/capability implementation：`cn.li.ac.block.wireless-node.capability`。
-- 方块右键/放置/破坏事件 glue：`cn.li.ac.block.wireless-node.logic`。
 - 邻近客户端状态广播（无 client GUI 依赖）：`cn.li.ac.block.machine.sync`（channel `"node"`）。
 
 ### Wireless Matrix Block
 
-- 状态与 controller 解析：`cn.li.ac.block.wireless-matrix.state`。
-- Slot schema 与 plate/core 计数：`cn.li.ac.block.wireless-matrix.inventory`。
+- 状态、controller 解析、slot schema、plate/core 计数、stats 公式、tick、容器、方块事件：`cn.li.ac.block.wireless-matrix.logic`。
 - Capability / Java proxy：`cn.li.ac.block.wireless-matrix.capability`。
-- Tick、容器、方块事件：`cn.li.ac.block.wireless-matrix.logic`。
 - 邻近客户端状态广播：`cn.li.ac.block.machine.sync`（channel `"matrix"`）。
 
 ### Block machines (shared)

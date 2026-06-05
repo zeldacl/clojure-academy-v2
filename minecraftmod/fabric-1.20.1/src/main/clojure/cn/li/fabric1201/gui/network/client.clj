@@ -39,7 +39,12 @@
 (defn- with-client-response-owner
   [payload f]
   (let [session-id (client-session-id)
-        player-uuid (payload-player-uuid payload)]
+        local-player-uuid-fn (requiring-resolve 'cn.li.mc1201.client.session/local-player-uuid)
+        ;; Response payloads rarely carry :player-uuid; fall back to the local
+        ;; Minecraft player so require-client-owner validation passes during dispatch.
+        player-uuid (or (payload-player-uuid payload)
+                        (when local-player-uuid-fn
+                          (try (local-player-uuid-fn) (catch Exception _ nil))))]
     (binding [runtime-hooks/*client-session-id* session-id
               runtime-hooks/*player-state-owner* (cond-> {:client-session-id session-id}
                                                    player-uuid (assoc :player-uuid player-uuid))]

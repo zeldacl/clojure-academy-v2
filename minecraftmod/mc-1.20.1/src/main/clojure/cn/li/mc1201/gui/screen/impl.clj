@@ -187,7 +187,8 @@
                          nil)))]
     (if factory-fn
       (try
-        (let [screen-data (factory-fn menu player-inventory title)]
+        (let [screen-data (client-session/with-current-client-owner
+                            #(factory-fn menu player-inventory title))]
           (if (cgui-screen-container? screen-data)
             (create-cgui-container-screen menu player-inventory title screen-data {:on-render-tail! on-render-tail!})
             (fallback-container-screen menu player-inventory title)))

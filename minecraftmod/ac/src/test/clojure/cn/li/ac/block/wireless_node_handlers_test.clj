@@ -1,7 +1,7 @@
 (ns cn.li.ac.block.wireless-node-handlers-test
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.ac.block.wireless-node.handlers :as handlers]
-            [cn.li.ac.block.wireless-node.owner :as node-owner]
+            [cn.li.ac.block.wireless-node.logic :as node-logic]
             [cn.li.ac.wireless.gui.sync.handler :as sync-handler]
             [cn.li.mcmod.platform.be :as platform-be]))
 
@@ -23,7 +23,7 @@
                                                                         (reset! called [payload player])
                                                                         {:success true})}
                     ;; owner helper compatibility: compare against this normalized name
-                    node-owner/player-name (fn [_] "owner")]
+                    node-logic/player-name (fn [_] "owner")]
         (is (= {:success true}
                (handlers/handle-change-name {:node-name "new-name"} :player)))
         (is (= [{:node-name "new-name"} :player] @called))))))

@@ -35,9 +35,7 @@
             [cn.li.ac.wireless.gui.sync.handler :as net-helpers]
             [cn.li.mcmod.util.log :as log]
             [cn.li.ac.block.wireless-matrix.capability :as matrix-capability]
-            [cn.li.ac.block.wireless-matrix.inventory :as matrix-inventory]
             [cn.li.ac.block.wireless-matrix.logic :as matrix-logic]
-            [cn.li.ac.block.wireless-matrix.state :as matrix-state]
             [cn.li.ac.block.wireless-matrix.schema :as matrix-schema]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.mcmod.gui.spec :as gui-reg]
@@ -52,7 +50,9 @@
             [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.item :as pitem]
-            [cn.li.mcmod.platform.position :as pos])
+            [cn.li.mcmod.platform.position :as pos]
+            [cn.li.mcmod.gui.owner-contract :as owner-contract]
+            [cn.li.mcmod.hooks.core :as runtime-hooks])
   (:import [cn.li.acapi.wireless IWirelessMatrix]))
 
 ;; ============================================================================
@@ -63,7 +63,7 @@
 
 (defn- ensure-wireless-matrix-slot-schema!
   []
-  (matrix-inventory/ensure-matrix-slot-schema!))
+  (matrix-logic/ensure-matrix-slot-schema!))
 
 (def ^:private inventory-pred
   (fn [slot-index player-inventory-start]
@@ -169,40 +169,57 @@
 ;; Network Messages
 ;; ============================================================================
 
+(defn- current-client-owner
+  "Resolve a client owner for GUI-initiated server requests.
+  Tries platform-level session resolution first, falls back to dynamic bindings,
+  returns nil when no session can be resolved."
+  []
+  (let [;; Try the platform-level session (available on client render thread).
+        platform-owner (when-let [f (requiring-resolve 'cn.li.mc1201.client.session/current-local-player-owner)]
+                         (try (f) (catch Exception _ nil)))
+        session-id (or (:client-session-id platform-owner)
+                       runtime-hooks/*client-session-id*)
+        player-uuid (or (:player-uuid platform-owner)
+                        (some-> runtime-hooks/*player-state-owner* :player-uuid))]
+    (when session-id
+      (cond-> {:logical-side :client :client-session-id session-id}
+        player-uuid (assoc :player-uuid player-uuid)))))
+
 (defn send-gather-info
   "Query network information from server
-  
+
   Args:
   - tile: TileMatrix instance
   - callback: (fn [MatrixNetworkData] ...) - receives query result"
   [tile callback]
   (try
-    (net-client/send-to-server
-      (msg :gather-info)
-      (net-helpers/tile-pos-payload tile)
-      (fn [response]
-        (try
-          (let [data (map->MatrixNetworkData
-                       {:ssid (get response :ssid)
-                        :password (get response :password)
-                        :owner (get response :owner "Unknown")
-                        :load (get response :load 0)
-                        :max-capacity (get response :max-capacity 16)
-                        :range (get response :range 64)
-                        :bandwidth (get response :bandwidth 100)
-                        ;; Prefer server-provided initialized state; fall back to ssid for compatibility.
-                        :initialized (boolean (if (contains? response :initialized)
-                                                (get response :initialized)
-                                                (get response :ssid)))})]
-            (callback data))
-          (catch Exception e
-            (log/error "Error processing gather-info response:"(ex-message e))))))
+    (if-let [owner (current-client-owner)]
+      (net-client/send-to-server owner
+        (msg :gather-info)
+        (net-helpers/tile-pos-payload tile)
+        (fn [response]
+          (try
+            (let [data (map->MatrixNetworkData
+                         {:ssid (get response :ssid)
+                          :password (get response :password)
+                          :owner (get response :owner "Unknown")
+                          :load (get response :load 0)
+                          :max-capacity (get response :max-capacity 16)
+                          :range (get response :range 64)
+                          :bandwidth (get response :bandwidth 100)
+                          :initialized (boolean (if (contains? response :initialized)
+                                                  (get response :initialized)
+                                                  (get response :ssid)))})]
+              (callback data))
+            (catch Exception e
+              (log/error "Error processing gather-info response:"(ex-message e))))))
+      (log/debug "Skip gather-info: no client session bound"))
     (catch Exception e
       (log/error "Error sending gather-info:"(ex-message e)))))
 
 (defn send-init-network
   "Initialize network on server
-  
+
   Args:
   - tile: TileMatrix instance
   - ssid: String - network name
@@ -210,46 +227,52 @@
   - callback: (fn [success] ...) - receives init result"
   [tile ssid password callback]
   (try
-    (net-client/send-to-server
-      (msg :init)
-      (assoc (net-helpers/tile-pos-payload tile)
-             :ssid ssid
-             :password password)
-      (fn [response]
-        (try
-          (callback (get response :success false))
-          (catch Exception e
-            (log/error "Error processing init response:"(ex-message e))))))
+    (if-let [owner (current-client-owner)]
+      (net-client/send-to-server owner
+        (msg :init)
+        (assoc (net-helpers/tile-pos-payload tile)
+               :ssid ssid
+               :password password)
+        (fn [response]
+          (try
+            (callback (get response :success false))
+            (catch Exception e
+              (log/error "Error processing init response:"(ex-message e))))))
+      (log/debug "Skip init-network: no client session bound"))
     (catch Exception e
       (log/error "Error sending init:"(ex-message e)))))
 
 (defn send-change-ssid
   "Change network SSID
-  
+
   Args:
   - tile: TileMatrix instance
   - new-ssid: String"
   [tile new-ssid]
   (try
-    (net-client/send-to-server
-      (msg :change-ssid)
-      (assoc (net-helpers/tile-pos-payload tile)
-             :new-ssid new-ssid))
+    (if-let [owner (current-client-owner)]
+      (net-client/send-to-server owner
+        (msg :change-ssid)
+        (assoc (net-helpers/tile-pos-payload tile)
+               :new-ssid new-ssid))
+      (log/debug "Skip change-ssid: no client session bound"))
     (catch Exception e
       (log/error "Error sending change-ssid:"(ex-message e)))))
 
 (defn send-change-password
   "Change network password
-  
+
   Args:
   - tile: TileMatrix instance
   - new-password: String"
   [tile new-password]
   (try
-    (net-client/send-to-server
-      (msg :change-password)
-      (assoc (net-helpers/tile-pos-payload tile)
-             :new-password new-password))
+    (if-let [owner (current-client-owner)]
+      (net-client/send-to-server owner
+        (msg :change-password)
+        (assoc (net-helpers/tile-pos-payload tile)
+               :new-password new-password))
+      (log/debug "Skip change-password: no client session bound"))
     (catch Exception e
       (log/error "Error sending change-password:"(ex-message e)))))
 
@@ -263,7 +286,7 @@
   (if (map? tile)
     [nil tile]
     (try
-      (let [state (or (platform-be/get-custom-state tile) matrix-state/matrix-default-state)]
+      (let [state (or (platform-be/get-custom-state tile) matrix-logic/matrix-default-state)]
         [tile state])
       (catch Exception e
         (log/warn "Could not resolve customState from BE:"(ex-message e))
@@ -306,8 +329,8 @@
   (let [tile (:tile-entity container)]
     (log/debug "set-slot-item! - tile=" tile " slot=" slot-index " item=" item-stack)
     (common/set-slot-item-be! container slot-index item-stack
-                              matrix-state/matrix-default-state
-                              matrix-inventory/recalculate-counts)
+                              matrix-logic/matrix-default-state
+                              matrix-logic/recalculate-counts)
     (when tile
       (log/debug "set-slot-item! after-write - plate=" (matrix-logic/get-plate-count tile)
                 " core=" (matrix-logic/get-core-level tile)))
@@ -350,7 +373,7 @@
 (defn- matrix-derived-sync! [container]
   (let [plates (count-plates container)
         core-lvl (get-core-level container)
-        working? (matrix-inventory/is-working? {:core-level core-lvl :plate-count plates})
+        working? (matrix-logic/is-working? {:core-level core-lvl :plate-count plates})
         old-plates @(:plate-count container)
         old-core @(:core-level container)]
     (when (not= core-lvl old-core)

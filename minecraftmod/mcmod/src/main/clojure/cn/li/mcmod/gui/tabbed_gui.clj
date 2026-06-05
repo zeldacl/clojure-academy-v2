@@ -193,7 +193,8 @@
   ([owner tab-index container-id]
    (net-client/send-to-server owner set-tab-msg-id
      (cond-> {:tab-index (int tab-index)}
-       (some? container-id) (assoc :container-id (int container-id))))))
+       (some? container-id) (assoc :container-id (int container-id)))
+     nil)))
 
 (defn attach-tab-sync!
   "Attach generic tab-change sync between a TechUI instance and a container.

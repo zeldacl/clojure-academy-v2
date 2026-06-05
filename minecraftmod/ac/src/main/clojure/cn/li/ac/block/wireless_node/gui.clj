@@ -36,9 +36,7 @@
             [cn.li.ac.wireless.gui.container.schema-runtime :as schema-runtime]
             [cn.li.ac.wireless.gui.sync.helpers :as sync-helpers]
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
-            [cn.li.ac.block.wireless-node.inventory :as node-inventory]
-            [cn.li.ac.block.wireless-node.state :as node-state]
-            [cn.li.ac.block.wireless-node.owner :as node-owner]
+            [cn.li.ac.block.wireless-node.logic :as node-logic]
             [cn.li.ac.block.wireless-node.schema :as node-schema]
             [cn.li.mcmod.gui.animation :as anim]
             [cn.li.mcmod.platform.be :as platform-be]
@@ -53,7 +51,7 @@
 
 (defn- ensure-wireless-node-slot-schema!
   []
-  (node-inventory/ensure-node-slot-schema!))
+  (node-logic/ensure-node-slot-schema!))
 
 (def ^:private inventory-pred
   (fn [slot-index player-inventory-start]
@@ -188,7 +186,7 @@
 
 (defn get-owner [container]
   (let [tile (:tile-entity container)]
-    (node-owner/owner-name (tile-state tile))))
+    (node-logic/owner-name (tile-state tile))))
 
 (defn can-place-item? [_container slot-index item-stack]
   (case (slot-schema/slot-type node-slot-schema-id slot-index)
@@ -256,17 +254,17 @@
   (let [tile (:tile-entity container)]
     (when-not (map? tile)
       (case (int button-id)
-        0 (let [state (or (platform-be/get-custom-state tile) node-state/node-default-state)]
-            (machine-runtime/commit-transform! tile node-state/node-default-state
+        0 (let [state (or (platform-be/get-custom-state tile) node-logic/node-default-state)]
+            (machine-runtime/commit-transform! tile node-logic/node-default-state
                                                #(update % :enabled not)
-                                               :blockstate-updater node-state/update-block-state!)
+                                               :blockstate-updater node-logic/update-block-state!)
             (log/info "Toggled node connection:" (:enabled state)))
         1 (when-let [new-ssid (:ssid data)]
-            (machine-runtime/commit-transform! tile node-state/node-default-state
+            (machine-runtime/commit-transform! tile node-logic/node-default-state
                                                #(assoc % :node-name new-ssid))
             (log/info "Set node SSID to:" new-ssid))
         2 (when-let [new-password (:password data)]
-            (machine-runtime/commit-transform! tile node-state/node-default-state
+            (machine-runtime/commit-transform! tile node-logic/node-default-state
                                                #(assoc % :password new-password))
             (log/info "Set node password"))
         (log/warn "Unknown button ID:" button-id)))))
@@ -351,7 +349,7 @@
   (try
     (let [tile (:tile-entity container)
           owner-name (get-owner container)
-          is-owner? (node-owner/owner-authorized? owner-name player)
+          is-owner? (node-logic/owner-authorized? owner-name player)
           policy (node-info-area-policy is-owner?)]
 
       (tech-ui/reset-info-area! info-area)

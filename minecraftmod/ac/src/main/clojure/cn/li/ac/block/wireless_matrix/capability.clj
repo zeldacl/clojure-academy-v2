@@ -1,8 +1,6 @@
 (ns cn.li.ac.block.wireless-matrix.capability
   "Wireless matrix Java/Clojure capability implementations."
-  (:require [cn.li.ac.block.wireless-matrix.inventory :as matrix-inventory]
-            [cn.li.ac.block.wireless-matrix.state :as matrix-state]
-            [cn.li.ac.block.wireless-matrix.stats :as matrix-stats]
+  (:require [cn.li.ac.block.wireless-matrix.logic :as matrix-logic]
             [cn.li.ac.block.wireless-matrix.schema :as matrix-schema]
             [cn.li.mcmod.block.state-schema :as schema]
             [cn.li.mcmod.platform.position :as pos])
@@ -10,15 +8,15 @@
 
 (defn matrix-stats-for-counts
   [core-level plate-count]
-  (matrix-stats/stats-for-counts (matrix-inventory/required-plate-count) core-level plate-count))
+  (matrix-logic/stats-for-counts (matrix-logic/required-plate-count) core-level plate-count))
 
 (defn- matrix-params [be]
-  (let [state (matrix-state/safe-state be)
+  (let [state (matrix-logic/safe-state be)
         core-lv (int (schema/get-field matrix-schema/unified-matrix-schema state :core-level))]
     (matrix-stats-for-counts core-lv (:plate-count state 0))))
 
 (defn- be-str-field [be k]
-  (str (schema/get-field matrix-schema/unified-matrix-schema (matrix-state/safe-state be) k)))
+  (str (schema/get-field matrix-schema/unified-matrix-schema (matrix-logic/safe-state be) k)))
 
 (deftype WirelessMatrixImpl [be]
   IWirelessMatrix

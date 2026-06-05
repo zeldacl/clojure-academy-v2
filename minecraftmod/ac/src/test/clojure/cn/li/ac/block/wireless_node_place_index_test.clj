@@ -1,7 +1,7 @@
 (ns cn.li.ac.block.wireless-node-place-index-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.block.wireless-node.logic :as wnode]
-            [cn.li.ac.block.wireless-node.owner :as node-owner]
+            [cn.li.ac.block.wireless-node.logic :as node-logic]
             [cn.li.ac.test.support.wireless-stubs :as stubs]
             [cn.li.ac.wireless.core.vblock :as vb]
             [cn.li.ac.wireless.core.spatial-index :as si]
@@ -28,7 +28,7 @@
         (let [pos (ppos/create-block-pos 0 0 0)]
         (with-redefs [platform-be/get-custom-state (fn [_] nil)
                       platform-be/set-custom-state! (fn [_ _] nil)
-                      node-owner/player-name (fn [_] "tester")]
+                      node-logic/player-name (fn [_] "tester")]
           (handler {:player :player :world world-id :pos pos})
           (let [wd (world/get-world-data world-id)]
             (is (some? wd) "placing a node should ensure world-data exists")

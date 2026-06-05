@@ -1,7 +1,7 @@
 (ns cn.li.ac.block.wireless-network-presenter-test
   (:require [clojure.test :refer [deftest is]]
-            [cn.li.ac.block.wireless-matrix.network-presenter :as matrix-presenter]
-            [cn.li.ac.block.wireless-node.network-presenter :as node-presenter]
+            [cn.li.ac.block.wireless-matrix.handlers :as matrix-handlers]
+            [cn.li.ac.block.wireless-node.handlers :as node-handlers]
             [cn.li.ac.test.support.wireless-stubs :as stubs]
             [cn.li.ac.wireless.core.vblock :as vb]
             [cn.li.ac.wireless.data.network-state :as network-state]))
@@ -18,7 +18,7 @@
   (let [linked (network "linked" "secret")
         avail (network "other" "")]
     (is (= {:ssid "linked" :is-encrypted? true}
-           (node-presenter/linked->dto linked)))
+           (node-handlers/linked->dto linked)))
     (is (= {:linked {:ssid "linked" :is-encrypted? true}
             :avail [{:ssid "other"
                      :is-encrypted? false
@@ -26,7 +26,7 @@
                      :capacity 64
                      :bandwidth 128.0
                      :range 16.0}]}
-           (node-presenter/list-networks-response
+           (node-handlers/list-networks-response
              {:linked linked
               :linked-ssid "linked"
               :avail [linked avail]
@@ -46,4 +46,4 @@
             :range 16.0
             :bandwidth 128.0
             :initialized true}
-           (matrix-presenter/gather-info-response network (stubs/fake-matrix))))))
+           (matrix-handlers/gather-info-response network (stubs/fake-matrix))))))
