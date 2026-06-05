@@ -25,8 +25,7 @@
   - Dynamic SSID/password display (owner can edit after init)
   - Initialization form for owner to create network"
   
-  (:require [clojure.string :as str]
-            [cn.li.mcmod.gui.cgui-core :as cgui-core]
+  (:require [cn.li.mcmod.gui.cgui-core :as cgui-core]
             [cn.li.mcmod.gui.cgui-screen :as cgui-screen]
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.ac.gui.tech-ui-common :as tech-ui]
@@ -48,7 +47,6 @@
             [cn.li.ac.wireless.gui.sync.helpers :as sync-helpers]
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.mcmod.platform.be :as platform-be]
-            [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.item :as pitem]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.gui.owner-contract :as owner-contract]
@@ -482,15 +480,11 @@
   - data: MatrixNetworkData"
   [info-area tile player data]
   (try
-    (let [placer (or (try (.getPlacerName ^IWirelessMatrix tile) (catch Exception _ nil))
-                     (-> tile matrix-logic/safe-state matrix-logic/placer-name)
+    (let [state (matrix-logic/safe-state tile)
+          placer (or (try (.getPlacerName ^IWirelessMatrix tile) (catch Exception _ nil))
+                     (matrix-logic/placer-name state)
                      (:owner data "Unknown"))
-          _ (log/error "Rebuilding InfoArea with matrix-logic/safe-state: " (matrix-logic/safe-state tile))
-          _ (log/error "Rebuilding InfoArea with matrix-logic/placer-name: " (try (matrix-logic/placer-name (matrix-logic/safe-state tile)) (catch Exception _ "Error")))
-          player-name (try (some-> player entity/player-get-name str) (catch Exception _ ""))
-          _ (log/error "Rebuilding InfoArea for player: " player-name)
-          is-owner? (and (not (str/blank? (str placer)))
-                         (= (str placer) player-name))
+          is-owner? (matrix-logic/owner-authorized? state player)
           policy (matrix-info-area-policy (boolean (network-initialized? data)) is-owner?)
           cap (:max-capacity data)
           range (:range data)

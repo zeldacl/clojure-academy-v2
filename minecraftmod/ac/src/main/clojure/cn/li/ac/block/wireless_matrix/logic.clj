@@ -1,6 +1,7 @@
 (ns cn.li.ac.block.wireless-matrix.logic
   "Wireless matrix tick, container, block events, state lifecycle, inventory, and stats."
   (:require [clojure.string :as str]
+            [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.ac.block.machine.container :as machine-container]
             [cn.li.ac.block.machine.runtime :as machine-runtime]
             [cn.li.ac.block.wireless-matrix.schema :as matrix-schema]
@@ -160,19 +161,32 @@
   [state]
   (str (get (or state {}) :placer-name "")))
 
+(defn placer-uuid
+  "Return the placer's UUID string from tile custom state map, or nil.
+   New placements store this alongside :placer-name; legacy saves may lack it."
+  [state]
+  (get (or state {}) :placer-uuid))
+
 (defn owner-authorized?
   "True when player is allowed to edit matrix owner-protected fields.
-   Backward compatibility: accept older owner serialization that embeds
-   the player's name as `...'<name>'...`.
-   (Analogous to node-logic/owner-authorized?)"
-  [placer player]
-  (let [owner (str placer)
-        player-name (try (str (entity/player-get-name player))
-                         (catch Exception _ ""))]
-    (or (str/blank? owner)
-        (= owner player-name)
-        (and (not (str/blank? player-name))
-             (str/includes? owner (str "'" player-name "'"))))))
+   Primary: UUID comparison (stable, canonical identity).
+   Fallback: name-based comparison for legacy saves that lack :placer-uuid,
+   including backward compatibility with older owner serialization that embeds
+   the player's name as `...'<name>'...`."
+  [state player]
+  (let [stored-uuid (placer-uuid state)
+        player-uuid (uuid/player-uuid player)]
+    (if (and stored-uuid player-uuid (not (str/blank? stored-uuid)) (not (str/blank? player-uuid)))
+      ;; Primary path: UUID comparison
+      (= stored-uuid player-uuid)
+      ;; Legacy fallback: name-based comparison
+      (let [owner (placer-name state)
+            player-name (try (str (entity/player-get-name player))
+                             (catch Exception _ ""))]
+        (or (str/blank? owner)
+            (= owner player-name)
+            (and (not (str/blank? player-name))
+                 (str/includes? owner (str "'" player-name "'"))))))))
 
 ;; ============================================================================
 ;; Tick
@@ -241,10 +255,13 @@
   []
   (fn [{:keys [player world pos]}]
     (when-let [be (world/world-get-tile-entity* world pos)]
-      (let [player-name (try (entity/player-get-name player)
-                             (catch Exception _ (str player)))
+      (let [player-uuid (uuid/player-uuid player)
+            player-name (try (str (or (entity/player-get-name player) ""))
+                             (catch Exception _ ""))
             state (safe-state be)
-            state' (assoc state :placer-name (str player-name))]
+            state' (-> state
+                       (assoc :placer-uuid player-uuid)
+                       (assoc :placer-name player-name))]
         (machine-runtime/commit-state! be world pos state state')))))
 
 (defn handle-matrix-break

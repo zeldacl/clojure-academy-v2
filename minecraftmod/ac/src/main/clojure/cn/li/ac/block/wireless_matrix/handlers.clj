@@ -34,12 +34,11 @@
         (resolver/matrix-capability ctrl)))))
 
 (defn- owner-authorized?
-  "Check if player owns the matrix tile by reading placer-name directly
-   from the BE's customState (aligned with node/handlers owner-authorized?)."
+  "Check if player owns the matrix tile by reading UUID and placer-name
+   directly from the BE's customState (aligned with node/handlers owner-authorized?)."
   [ctrl player]
-  (let [state (matrix-logic/safe-state ctrl)
-        placer (matrix-logic/placer-name state)]
-    (matrix-logic/owner-authorized? placer player)))
+  (let [state (matrix-logic/safe-state ctrl)]
+    (matrix-logic/owner-authorized? state player)))
 
 (defn owner-controller
   [payload player]
