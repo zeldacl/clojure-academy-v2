@@ -108,7 +108,7 @@
 (def node-container-fns
   (machine-container/make-inventory-container-fns
     {:default-state node-default-state
-     :slot-count (node-slot-count)
+     :slot-count node-slot-count
      :slots-for-face (fn [_be _face] (int-array (node-slot-indexes)))
      :can-place? (fn [_be slot item _face]
                    (and (= slot (node-input-slot-index))
@@ -259,10 +259,8 @@
     (log/info "Breaking Wireless Node")
     (let [node-vb (vb/create-vnode (ppos/pos-x pos) (ppos/pos-y pos) (ppos/pos-z pos))
           be (platform-world/world-get-tile-entity* world pos)]
-      (when be
-        (let [state (or (platform-be/get-custom-state be) node-default-state)]
-          (doseq [item (:inventory state [])]
-            (when item (log/info "Dropping item:" item)))))
+      ;; Inventory items are dropped automatically by SharedScriptedBlock.onRemove
+      ;; via Containers.dropContents.
       (try
         (wireless-api/unregister-node-spatial! world node-vb)
         (when be

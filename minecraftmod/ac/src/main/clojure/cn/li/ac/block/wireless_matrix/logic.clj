@@ -232,7 +232,7 @@
 (def matrix-container-fns
   (machine-container/make-inventory-container-fns
     {:default-state matrix-default-state
-     :slot-count (slot-count)
+     :slot-count slot-count
      :transform-state recalculate-counts
      :slots-for-face (fn [_be _face] (int-array (all-slot-indexes)))
      :can-place? (fn [_be slot item _face]
@@ -267,7 +267,7 @@
 (defn handle-matrix-break
   []
   (fn [{:keys [world pos]}]
+    ;; Inventory items are dropped automatically by SharedScriptedBlock.onRemove
+    ;; via Containers.dropContents. This handler exists for future cleanup hooks.
     (when-let [be (world/world-get-tile-entity* world pos)]
-      (doseq [[idx item] (map-indexed vector (:inventory (safe-state be) []))]
-        (when item
-          (log/info "Dropping item from slot" idx ":" item))))))
+      :break-handled)))

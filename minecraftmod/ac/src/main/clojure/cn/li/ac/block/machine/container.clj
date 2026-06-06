@@ -14,7 +14,7 @@
 
   Options:
   - :default-state map
-  - :slot-count int
+  - :slot-count int or (fn [] int) — thunk supported for lazy schema resolution
   - :inventory-key keyword (default :inventory)
   - :can-place? (fn [be slot item face] -> bool)
   - :can-take? (fn [be slot item face] -> bool)
@@ -24,7 +24,8 @@
            blockstate-updater]
     :or {inventory-key :inventory
          transform-state identity}}]
-  (let [assoc-slot (fn [state slot item]
+  (let [slot-count-fn (if (fn? slot-count) slot-count (fn [] (int (or slot-count 0))))
+        assoc-slot (fn [state slot item]
                      (assoc-in state [inventory-key slot] item))
         apply-transform (fn [state]
                           (transform-state state))
@@ -32,7 +33,7 @@
                   (machine-runtime/commit-transform!
                     be default-state (constantly state')
                     :blockstate-updater blockstate-updater))]
-    {:get-size (fn [_be] slot-count)
+    {:get-size (fn [_be] (slot-count-fn))
      :get-item (fn [be slot]
                  (get-in (machine-runtime/state-or-default be default-state) [inventory-key slot]))
      :set-item! (fn [be slot item]
@@ -57,8 +58,8 @@
                (commit! be
                         (apply-transform
                           (assoc (machine-runtime/state-or-default be default-state)
-                                 inventory-key (vec (repeat slot-count nil))))))
+                                 inventory-key (vec (repeat (slot-count-fn) nil))))))
      :still-valid? (fn [_be _player] true)
-     :slots-for-face (or slots-for-face (fn [_be _face] (int-array (range slot-count))))
+     :slots-for-face (or slots-for-face (fn [_be _face] (int-array (range (slot-count-fn)))))
      :can-place-through-face? (or can-place? (fn [_be _slot _item _face] false))
      :can-take-through-face? (or can-take? (fn [_be _slot _item _face] false))}))
