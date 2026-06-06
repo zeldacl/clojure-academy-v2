@@ -250,12 +250,16 @@
   - new-ssid: String"
   [tile new-ssid]
   (try
+    (log/info "send-change-ssid called, new-ssid:" new-ssid)
     (if-let [owner (current-client-owner)]
-      (net-client/send-to-server owner
-        (msg :change-ssid)
-        (assoc (net-helpers/tile-pos-payload tile)
-               :new-ssid new-ssid))
-      (log/debug "Skip change-ssid: no client session bound"))
+      (do
+        (log/info "send-change-ssid: sending to server")
+        (net-client/send-to-server owner
+          (msg :change-ssid)
+          (assoc (net-helpers/tile-pos-payload tile)
+                 :new-ssid new-ssid)
+          nil))
+      (log/warn "Skip change-ssid: no client session bound"))
     (catch Exception e
       (log/error "Error sending change-ssid:"(ex-message e)))))
 
@@ -267,12 +271,16 @@
   - new-password: String"
   [tile new-password]
   (try
+    (log/info "send-change-password called, new-password:" new-password)
     (if-let [owner (current-client-owner)]
-      (net-client/send-to-server owner
-        (msg :change-password)
-        (assoc (net-helpers/tile-pos-payload tile)
-               :new-password new-password))
-      (log/debug "Skip change-password: no client session bound"))
+      (do
+        (log/info "send-change-password: sending to server")
+        (net-client/send-to-server owner
+          (msg :change-password)
+          (assoc (net-helpers/tile-pos-payload tile)
+                 :new-password new-password)
+          nil))
+      (log/warn "Skip change-password: no client session bound"))
     (catch Exception e
       (log/error "Error sending change-password:"(ex-message e)))))
 

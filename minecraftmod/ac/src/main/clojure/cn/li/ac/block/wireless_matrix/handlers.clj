@@ -139,27 +139,37 @@
 
 (defn handle-change-ssid
   [payload player]
+  (log/info "handle-change-ssid received, payload:" (pr-str payload))
   (with-owner-controller :change-ssid payload player
     (fn [tile]
+      (log/info "handle-change-ssid: owner authorized, looking up network for tile:" tile)
       (if-let [network (wireless-network tile)]
         (try
+          (log/info "handle-change-ssid: changing network SSID to" (:new-ssid payload))
           {:success (change-ssid! network (:new-ssid payload))}
           (catch Exception e
             (log/error "Failed to change SSID:" {:action :change-ssid :owner-check true :pos (payload-pos payload)} (ex-message e))
             (fail :change-ssid payload true :exception)))
-        (fail :change-ssid payload true :network-not-found)))))
+        (do
+          (log/warn "handle-change-ssid: network not found for tile")
+          (fail :change-ssid payload true :network-not-found))))))
 
 (defn handle-change-password
   [payload player]
+  (log/info "handle-change-password received, payload:" (pr-str payload))
   (with-owner-controller :change-password payload player
     (fn [tile]
+      (log/info "handle-change-password: owner authorized, looking up network for tile:" tile)
       (if-let [network (wireless-network tile)]
         (try
+          (log/info "handle-change-password: changing network password")
           {:success (change-password! network (:new-password payload))}
           (catch Exception e
             (log/error "Failed to change password:" {:action :change-password :owner-check true :pos (payload-pos payload)} (ex-message e))
             (fail :change-password payload true :exception)))
-        (fail :change-password payload true :network-not-found)))))
+        (do
+          (log/warn "handle-change-password: network not found for tile")
+          (fail :change-password payload true :network-not-found))))))
 
 ;; ============================================================================
 ;; Registration

@@ -243,7 +243,7 @@
                        :player-get-level (fn [this] (player-ops/player-level adapter this))
                        :player-creative? (fn [this] (ru/inst this "isCreative"))
                        :player-spectator? (fn [this] (ru/inst this "isSpectator"))
-                       :player-get-name (fn [this] (str (ru/inst this "getName")))
+                       :player-get-name (fn [this] (.getString (ru/inst this "getName")))
                        :player-get-uuid (fn [this] (ru/inst this "getUUID"))
                        :player-get-main-hand-item-id (fn [this]
                                                        (let [stack (ru/player-main-hand-stack this)]

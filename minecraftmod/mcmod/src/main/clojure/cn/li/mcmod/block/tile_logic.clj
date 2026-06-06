@@ -160,14 +160,15 @@
   Returns a handler object for (tile-id, cap-key, be, side), or nil.
   Looks up handler-factory-fn from platform/capability-type-registry."
   [tile-id cap-key be side]
-  (when (get-in (registry-core/snapshot capability-registry) [tile-id cap-key])
-    (try
-      (when-let [get-factory (capability-get-factory)]
-        (when-let [factory (get-factory cap-key)]
-          (factory be side)))
-      (catch Exception e
-        (log/error "get-capability error" tile-id cap-key (ex-message e))
-        nil))))
+  (let [k (if (keyword? cap-key) cap-key (keyword cap-key))]
+    (when (get-in (registry-core/snapshot capability-registry) [tile-id k])
+      (try
+        (when-let [get-factory (capability-get-factory)]
+          (when-let [factory (get-factory k)]
+            (factory be side)))
+        (catch Exception e
+          (log/error "get-capability error" tile-id k (ex-message e))
+          nil)))))
 
 ;; ============================================================================
 ;; Container registry

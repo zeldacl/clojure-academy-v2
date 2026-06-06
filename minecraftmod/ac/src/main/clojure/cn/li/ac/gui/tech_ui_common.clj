@@ -406,8 +406,10 @@
           (cgui-core/add-widget! value-area left)
           (cgui-core/add-widget! value-area right))
         (when on-change
+          (log/info "add-property: registering on-confirm-input for" label)
           (events/on-confirm-input value-box
             (fn [new-val]
+              (log/info "add-property: on-confirm-input fired for" label "new-val:" new-val)
               (on-change new-val)
               (when color-change?
                 (comp/set-text-color! value-box idle-color))))
