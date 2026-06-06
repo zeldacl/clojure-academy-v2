@@ -22,6 +22,13 @@
 (deftype WirelessGeneratorImpl [be]
   IWirelessGenerator
 
+  (getEnergy [_]
+    (let [state (or (platform-be/get-custom-state be) {})]
+      (double (get state :energy 0.0))))
+
+  (setEnergy [_ energy]
+    (machine-runtime/commit-transform! be {} #(assoc % :energy (double energy))))
+
   (getProvidedEnergy [_ req]
     (let [state (or (platform-be/get-custom-state be) {})
           cur (double (get state :energy 0.0))

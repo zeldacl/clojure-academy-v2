@@ -14,6 +14,10 @@
     (let [state (or (platform-be/get-custom-state be) node-logic/node-default-state)]
       (double (state-schema/get-field node-logic/node-state-schema state :energy))))
 
+  (setEnergy [_ energy]
+    (machine-runtime/commit-transform! be node-logic/node-default-state
+                                       #(assoc % :energy (double energy))))
+
   (getMaxEnergy [_]
     (let [state (or (platform-be/get-custom-state be) node-logic/node-default-state)]
       (double (node-logic/node-max-energy state))))

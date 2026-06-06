@@ -90,23 +90,24 @@
 
 (defn nearby-chunk-keys
   "Find all chunks within a given search radius from position (x, y, z).
-  
+
   Returns a sequence of chunk keys whose bounding boxes overlap the search sphere.
   This uses chunk-range approximation (conservative, may include chunks beyond radius).
-  
+
   Args:
     x (int): World x coordinate
     y (int): World y coordinate
     z (int): World z coordinate
     search-radius (int): Search radius in blocks
-    
+
   Returns:
     Sequence of [cx cy cz] chunk keys"
   [x y z search-radius]
-  (let [chunk-range (inc (quot search-radius 16))
-        cx (quot x 16)
-        cy (quot y 16)
-        cz (quot z 16)]
+  (let [radius (long search-radius)
+        chunk-range (inc (quot radius 16))
+        cx (quot (long x) 16)
+        cy (quot (long y) 16)
+        cz (quot (long z) 16)]
     (for [dx (range (- chunk-range) (inc chunk-range))
           dy (range (- chunk-range) (inc chunk-range))
           dz (range (- chunk-range) (inc chunk-range))]
@@ -114,20 +115,21 @@
 
 (defn chunk-range
   "Calculate chunk range from center position and search radius.
-  
+
   Args:
     x, y, z (int): Center position coordinates
     search-radius (int): Search radius in blocks
-    
+
   Returns:
     {:center-chunk [cx cy cz]
      :range chunk-range
      :num-chunks int}: Chunk range info"
   [x y z search-radius]
-  (let [chunk-range (inc (quot search-radius 16))
-        cx (quot x 16)
-        cy (quot y 16)
-        cz (quot z 16)
+  (let [radius (long search-radius)
+        chunk-range (inc (quot radius 16))
+        cx (quot (long x) 16)
+        cy (quot (long y) 16)
+        cz (quot (long z) 16)
         num-chunks (* (inc (* 2 chunk-range))
                       (inc (* 2 chunk-range))
                       (inc (* 2 chunk-range)))]

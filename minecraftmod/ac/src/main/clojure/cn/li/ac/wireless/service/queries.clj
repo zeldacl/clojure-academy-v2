@@ -12,6 +12,7 @@
             [cn.li.ac.wireless.data.world-registry :as world-registry]
             [cn.li.ac.wireless.domain.model :as model]
             [cn.li.mcmod.platform.be :as platform-be]
+            [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.platform.position :as pos])
   (:import [cn.li.acapi.wireless IWirelessNode]))
 
@@ -72,6 +73,8 @@
         world-data (world-registry/get-world-data world)
         nearby-chunks (spatial/get-nearby-chunks x y z search-range)
         candidate-vblocks (spatial/get-vblocks-in-chunks world-data nearby-chunks)
+        _ (log/info "[find-available-nodes-at] pos=" [x y z] "search-range=" search-range "nearby-chunks=" (count nearby-chunks) "candidate-vblocks=" (count candidate-vblocks))
+        _ (let [si (world-registry/spatial-index world-data)] (log/info "[find-available-nodes-at] spatial-index total keys=" (count si) "keys=" (pr-str (keys si))))
         range-sq (* search-range search-range)
         matching-nodes
         (reduce

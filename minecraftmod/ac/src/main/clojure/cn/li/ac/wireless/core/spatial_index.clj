@@ -7,7 +7,8 @@
   This module is a pure atom-based data structure with no dependency on
   world.clj or network.clj, deliberately breaking the circular-dependency
   that previously forced network.clj to duplicate removal logic."
-  (:require [cn.li.ac.foundation.position :as pos]))
+  (:require [cn.li.ac.foundation.position :as pos]
+            [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
 ;; Construction
@@ -67,6 +68,9 @@
 (defn vblocks-in-index
   "Return the union of all vblocks in `chunk-keys` from an index value."
   [index chunk-keys]
+  (log/info "[vblocks-in-index] index-keys=" (pr-str (keys index)))
+  (doseq [ck (take 3 chunk-keys)]
+    (log/info "[vblocks-in-index] lookup-key=" (pr-str ck) "found=" (boolean (get index ck))))
   (reduce (fn [acc chunk-key]
             (if-let [vblocks (get index chunk-key)]
               (into acc vblocks)

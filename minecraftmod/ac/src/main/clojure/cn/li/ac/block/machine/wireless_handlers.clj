@@ -60,11 +60,14 @@
         (fn [payload player]
           (let [world (net-helpers/get-world player)
                 tile (net-helpers/get-tile-at world payload)]
+            (log/info "[handle-list-nodes] tile=" (some? tile) "world=" (some? world))
             (if tile
               (let [tile-pos (pos/position-get-block-pos tile)
-                    linked-node (get-linked-node tile)]
+                    linked-node (get-linked-node tile)
+                    avail (available-nodes world tile-pos linked-node)]
+                (log/info "[handle-list-nodes] linked-node=" (some? linked-node) "avail-count=" (count avail))
                 {:linked (wireless-node->info linked-node)
-                 :avail (available-nodes world tile-pos linked-node)})
+                 :avail avail})
               {:linked nil :avail []})))
         handle-connect
         (fn [payload player]
