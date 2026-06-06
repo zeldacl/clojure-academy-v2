@@ -24,8 +24,9 @@ public abstract class AbstractScriptedBlockEntity extends BlockEntity {
     private final String tileId;
     private final String blockId;
 
-    /** Primary state: Clojure persistent map. Null until first NBT load or tick. */
-    private Object customState = null;
+    /** Primary state: Clojure persistent map. Null until first NBT load or tick.
+     *  Volatile so render-thread reads see server-thread writes on integrated server. */
+    private volatile Object customState = null;
 
     protected AbstractScriptedBlockEntity(BlockEntityType<?> type,
                                           BlockPos pos,

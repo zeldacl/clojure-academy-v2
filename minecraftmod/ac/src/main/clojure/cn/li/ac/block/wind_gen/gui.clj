@@ -1,6 +1,8 @@
 (ns cn.li.ac.block.wind-gen.gui
   "CLIENT-ONLY: Wind Generator GUI (main + base)."
-  (:require [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
+  (:require [cn.li.ac.gui.status-poller :as poller]
+            [cn.li.ac.wireless.gui.message.registry :as msg-registry]
+             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.mcmod.gui.spec :as gui-reg]
             [cn.li.mcmod.platform.item :as item]
@@ -40,8 +42,19 @@
 (def ^:private main-sync-data (:get-sync-data main-sync-fns))
 (def ^:private apply-main-sync! (:apply-sync-data! main-sync-fns))
 
+
+(def ^:private main-poll-status!
+  (let [p (poller/create-poller
+            #(msg-registry/msg :wind-gen :get-status-main)
+            (fn [c resp]
+              (when-let [v (:complete resp)] (reset! (:complete c) (boolean v)))
+              (when-let [v (:no-obstacle resp)] (reset! (:no-obstacle c) (boolean v)))
+              (when-let [v (:fan-installed resp)] (reset! (:fan-installed c) (boolean v)))
+              (when-let [v (:status resp)] (reset! (:status c) (str v)))))]
+    (fn [c t] (p c t))))
+
 (defn- create-main-screen [container minecraft-container _player]
-  (main-sync! container)
+  (main-poll-status! container (:tile-entity container))
   (let [inv-page (tech-ui/create-inventory-page "windmain")
         pages [inv-page]
         info (fn [info-area]
@@ -70,8 +83,21 @@
 (def ^:private base-sync-data (:get-sync-data base-sync-fns))
 (def ^:private apply-base-sync! (:apply-sync-data! base-sync-fns))
 
+
+(def ^:private base-poll-status!
+  (let [p (poller/create-poller
+            #(msg-registry/msg :wind-gen :get-status-base)
+            (fn [c resp]
+              (when-let [v (:energy resp)] (reset! (:energy c) (double v)))
+              (when-let [v (:max-energy resp)] (reset! (:max-energy c) (double v)))
+              (when-let [v (:gen-speed resp)] (reset! (:gen-speed c) (double v)))
+              (when-let [v (:status resp)] (reset! (:status c) (str v)))))]
+    (fn [c t] (p c t))))
+
 (defn- create-base-screen [container minecraft-container _player]
-  (base-sync! container)
+  (base-poll-status! container (:tile-entity container))
+    (events/on-frame (:window (tech-ui/create-rework-page "guis/rework/page_windbase.xml"))
+      (fn [_] (swap! poll-ticker inc) (when (zero? (mod @poll-ticker 20)) (base-poll-status! container (:tile-entity container)))))
   (let [inv-page (tech-ui/create-rework-page "guis/rework/page_windbase.xml")
         wireless-window (wireless-tab/create-wireless-panel {:role :generator :container container})
         pages [inv-page {:id "wireless" :window wireless-window}]

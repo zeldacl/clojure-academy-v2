@@ -40,15 +40,18 @@
   (swap! index-atom add-to-index vblock))
 
 (defn remove-from-index
-  "Remove `vblock` from an immutable spatial index value."
+  "Remove `vblock` from an immutable spatial index value.
+   Returns index unchanged when vblock has nil coordinates."
   [index vblock]
-  (let [chunk-key (pos/pos->chunk-key (:x vblock) (:y vblock) (:z vblock))]
-    (if-let [chunk-set (get index chunk-key)]
-      (let [new-set (disj chunk-set vblock)]
-        (if (empty? new-set)
-          (dissoc index chunk-key)
-          (assoc index chunk-key new-set)))
-      index)))
+  (if (or (nil? (:x vblock)) (nil? (:y vblock)) (nil? (:z vblock)))
+    index
+    (let [chunk-key (pos/pos->chunk-key (:x vblock) (:y vblock) (:z vblock))]
+      (if-let [chunk-set (get index chunk-key)]
+        (let [new-set (disj chunk-set vblock)]
+          (if (empty? new-set)
+            (dissoc index chunk-key)
+            (assoc index chunk-key new-set)))
+        index))))
 
 (defn remove-from-index!
   "Remove `vblock` from `index-atom`.  Removes the bucket entirely when empty."

@@ -95,10 +95,36 @@
 (def ^:private effect-solar-texture
   (modid/asset-path "textures" "guis/effect/effect_solar.png"))
 
+(defn- gen-msg [action]
+  ((requiring-resolve 'cn.li.ac.wireless.gui.message.registry/msg) :generator action))
+
+(defn- poll-status!
+  "Send get-status query to server and update container atoms with response."
+  [container tile]
+  (let [owner (requiring-resolve 'cn.li.ac.wireless.gui.sync.handler/tile-pos-payload)]
+    (when-let [payload (and owner (try (owner tile) (catch Exception _ nil)))]
+      ((requiring-resolve 'cn.li.mcmod.network.client/send-to-server)
+       (gen-msg :get-status)
+       payload
+       (fn [resp]
+         (when resp
+           (when-let [v (:energy resp)] (reset! (:energy container) (double v)))
+           (when-let [v (:max-energy resp)] (reset! (:max-energy container) (double v)))
+           (when-let [v (:status resp)] (reset! (:status container) (str v)))
+           (when-let [v (:gen-speed resp)] (reset! (:gen-speed container) (double v)))))))))
+
+(def ^:private poll-ticker (atom 0))
+
 (defn- attach-anim-frame!
-  "Attach per-frame UV update to `ui_block/anim_frame` so runtime renders 3-frame effect texture.
-   Degrades gracefully if widget is missing."
+  "Attach per-frame UV update to `ui_block/anim_frame` and status poller."
   [inv-window container]
+  ;; Status poller: query server every 20 frames for tile state
+  (events/on-frame inv-window
+    (fn [_]
+      (swap! poll-ticker inc)
+      (when (zero? (mod @poll-ticker 20))
+        (poll-status! container (:tile-entity container)))))
+  ;; Anim frame texture update
   (when-let [anim-frame (cgui-core/find-widget inv-window "ui_block/anim_frame")]
     (events/on-frame anim-frame
       (fn [_]
@@ -107,7 +133,6 @@
                 v1 (+ v0 (/ 1.0 3.0))]
             (comp/render-texture-region anim-frame effect-solar-texture 0 0 0 0 0.0 v0 1.0 v1))
           (catch Exception _e
-            ;; Keep UI alive even if texture path/resource fails at runtime.
             nil))))))
 
 (defn create-solar-gui

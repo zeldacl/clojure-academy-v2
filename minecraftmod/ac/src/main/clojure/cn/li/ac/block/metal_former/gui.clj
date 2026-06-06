@@ -1,6 +1,8 @@
 (ns cn.li.ac.block.metal-former.gui
   "CLIENT-ONLY: Metal Former GUI"
-  (:require [clojure.string :as str]
+  (:require [cn.li.ac.gui.status-poller :as poller]
+            [cn.li.ac.wireless.gui.message.registry :as msg-registry]
+             [clojure.string :as str]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.gui.cgui-core :as cgui-core]
             [cn.li.mcmod.gui.components :as comp]
@@ -61,6 +63,19 @@
 (defn- still-valid? [_container _player] true)
 
 (def ^:private sync-to-client! (:sync-to-client! former-sync))
+(def ^:private poll-ticker (atom 0))
+
+(def ^:private former-poll-status!
+  (let [p (poller/create-poller
+            #(msg-registry/msg :metal-former :get-status)
+            (fn [c resp]
+              (when-let [v (:energy resp)] (reset! (:energy c) (double v)))
+              (when-let [v (:max-energy resp)] (reset! (:max-energy c) (double v)))
+              (when-let [v (:work-counter resp)] (reset! (:work-counter c) (int v)))
+              (when-let [v (:mode resp)] (reset! (:mode c) (str v)))
+              (when-let [v (:working resp)] (reset! (:working c) (boolean v)))))]
+    (fn [c t] (p c t))))
+
 
 (defn- get-sync-data [container]
   (assoc ((:get-sync-data former-sync) container)
@@ -87,7 +102,9 @@
 
 (defn- bind-progress!
   [inv-window container]
-  (when-let [widget (cgui-core/find-widget inv-window "progress")]
+  (events/on-frame inv-window
+      (fn [_] (swap! poll-ticker inc) (when (zero? (mod @poll-ticker 20)) (former-poll-status! container (:tile-entity container)))))
+    (when-let [widget (cgui-core/find-widget inv-window "progress")]
     (when-let [bar (comp/get-component widget :progressbar)]
       (events/on-frame widget
         (fn [_]
@@ -117,7 +134,7 @@
 
 (defn- create-screen
   [container minecraft-container _player]
-  (sync-to-client! container)
+  (former-poll-status! container (:tile-entity container))
   (let [inv-page (tech-ui/create-rework-page "guis/rework/page_metalformer.xml")
         inv-window (:window inv-page)
       pages [inv-page]

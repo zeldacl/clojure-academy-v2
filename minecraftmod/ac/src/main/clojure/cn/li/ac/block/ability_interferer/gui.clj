@@ -1,6 +1,8 @@
 (ns cn.li.ac.block.ability-interferer.gui
   "CLIENT-ONLY: Ability Interferer GUI"
-  (:require [clojure.string :as str]
+  (:require [cn.li.ac.gui.status-poller :as poller]
+            [cn.li.ac.wireless.gui.message.registry :as msg-registry]
+             [clojure.string :as str]
             [cn.li.mcmod.gui.cgui-core :as cgui-core]
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.mcmod.gui.events :as events]
@@ -127,6 +129,18 @@
       (assoc (net-helpers/tile-pos-payload tile) :enabled enabled?))))
 
 (def ^:private sync-to-client! (:sync-to-client! interferer-sync))
+(def ^:private poll-ticker (atom 0))
+
+(def ^:private interferer-poll-status!
+  (let [p (poller/create-poller
+            #(msg-registry/msg :ability-interferer :get-status)
+            (fn [c resp]
+              (when-let [v (:energy resp)] (reset! (:energy c) (double v)))
+              (when-let [v (:max-energy resp)] (reset! (:max-energy c) (double v)))
+              (when-let [v (:enabled resp)] (reset! (:enabled c) (boolean v)))
+              (when-let [v (:range resp)] (reset! (:range c) (double v)))))]
+    (fn [c t] (p c t))))
+
 (def ^:private get-sync-data (:get-sync-data interferer-sync))
 (def ^:private apply-sync-data! (:apply-sync-data! interferer-sync))
 
@@ -346,7 +360,7 @@
   (rebuild-whitelist-zone! inv-window container))
 
 (defn- create-screen [container minecraft-container _player]
-  (sync-to-client! container)
+  (interferer-poll-status! container (:tile-entity container))
   (let [inv-page (tech-ui/create-rework-page "guis/rework/page_interfere.xml")
         inv-window (:window inv-page)
       pages [inv-page]
