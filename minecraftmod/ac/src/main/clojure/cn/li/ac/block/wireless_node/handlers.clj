@@ -97,17 +97,22 @@
 
 (defn list-networks-response
   [{:keys [linked avail linked-ssid matrix-cap-fn matrix-capacity matrix-bandwidth matrix-range]}]
-  {:linked (linked->dto linked)
-   :avail (->> avail
-               (remove (fn [net] (= (wireless-api/network-ssid net) linked-ssid)))
-               (mapv (fn [net]
-                       (let [matrix-cap (matrix-cap-fn net)]
-                         (available-net->dto
-                           net
-                           matrix-cap
-                           {:matrix-capacity matrix-capacity
-                            :matrix-bandwidth matrix-bandwidth
-                            :matrix-range matrix-range})))))})
+  (log/info "[list-networks-response] avail-in=" (count avail)
+            "linked-ssid=" (pr-str linked-ssid))
+  (let [after-remove (remove (fn [net] (= (wireless-api/network-ssid net) linked-ssid)) avail)
+        _ (log/info "[list-networks-response] after-remove count=" (count (vec after-remove)))
+        result {:linked (linked->dto linked)
+                :avail (mapv (fn [net]
+                              (let [matrix-cap (matrix-cap-fn net)]
+                                (available-net->dto
+                                  net
+                                  matrix-cap
+                                  {:matrix-capacity matrix-capacity
+                                   :matrix-bandwidth matrix-bandwidth
+                                   :matrix-range matrix-range})))
+                            after-remove)}]
+    (log/info "[list-networks-response] result avail=" (pr-str (:avail result)))
+    result))
 
 ;; ============================================================================
 ;; Message ID helper
@@ -161,7 +166,9 @@
 
 (defn handle-list-networks
   [payload player]
+  (log/info "[handle-list-networks] ENTER payload=" (pr-str (select-keys payload [:pos-x :pos-y :pos-z])))
   (let [{:keys [world tile]} (resolve-world-tile payload player)]
+    (log/info "[handle-list-networks] world=" (pr-str world) "tile=" (pr-str tile))
     (if tile
       (let [linked (linked-network tile)
             linked-ssid (when linked (wireless-api/network-ssid linked))
@@ -169,16 +176,22 @@
             y (double (:pos-y payload))
             z (double (:pos-z payload))
             range (node-range tile)
-            avail (available-networks world x y z range)]
-        (list-networks-response
-          {:linked linked
-           :avail avail
-           :linked-ssid linked-ssid
-           :matrix-cap-fn (fn [net] (matrix-capability world net))
-           :matrix-capacity matrix-capacity
-           :matrix-bandwidth matrix-bandwidth
-           :matrix-range matrix-range}))
-      {:linked nil :avail []})))
+            _ (log/info "[handle-list-networks] pos=" [x y z] "range=" range "linked-ssid=" (pr-str linked-ssid))
+            avail (available-networks world x y z range)
+            _ (log/info "[handle-list-networks] avail count=" (count avail))
+            result (list-networks-response
+                     {:linked linked
+                      :avail avail
+                      :linked-ssid linked-ssid
+                      :matrix-cap-fn (fn [net] (matrix-capability world net))
+                      :matrix-capacity matrix-capacity
+                      :matrix-bandwidth matrix-bandwidth
+                      :matrix-range matrix-range})]
+        (log/info "[handle-list-networks] result avail count=" (count (:avail result)))
+        result)
+      (do
+        (log/warn "[handle-list-networks] tile is nil, returning empty")
+        {:linked nil :avail []}))))
 
 (defn handle-connect
   [payload player]

@@ -10,7 +10,8 @@
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.ac.wireless.gui.sync.handler :as net-helpers]
             [cn.li.ac.wireless.gui.tab.role-config :as role-config]
-            [cn.li.ac.wireless.gui.tab.view :as tab-view]))
+            [cn.li.ac.wireless.gui.tab.view :as tab-view]
+            [cn.li.mcmod.util.log :as log]))
 
 (defn- panel-network-owner
   [container]
@@ -25,11 +26,14 @@
   [panel owner payload cfg {:keys [connected-row-logo-path]}]
   (let [{:keys [list-msg disconnect-msg connect-msg name-fn connect-payload-fn]} cfg]
     (letfn [(rebuild! []
+              (log/info "[install-panel-rebuild!] sending" (list-msg) "payload=" (pr-str payload))
               (net-client/send-to-server
                 owner
                 (list-msg)
                 payload
                 (fn [resp]
+                  (log/info "[install-panel-rebuild!] response received, resp=" (pr-str resp))
+                  (log/info "[install-panel-rebuild!] avail=" (pr-str (:avail resp)))
                   (tab-view/rebuild-page! panel
                                           {:linked       (:linked resp)
                                            :avail        (vec (:avail resp []))

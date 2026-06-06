@@ -5,7 +5,8 @@
 						[cn.li.mcmod.gui.components :as comp]
 						[cn.li.mcmod.gui.events :as events]
 						[cn.li.ac.wireless.gui.component.widget-helpers :as wh]
-						[cn.li.ac.config.modid :as modid]))
+						[cn.li.ac.config.modid :as modid]
+						[cn.li.mcmod.util.log :as log]))
 
 (defn- ensure-template-hidden! [elem-template]
 	(when elem-template
@@ -38,16 +39,15 @@
 	(let [wlist (cgui-core/find-widget wireless-root "zone_elementlist")
 				elem-template (cgui-core/find-widget wireless-root "zone_elementlist/element")
 				connected-elem (cgui-core/find-widget wireless-root "elem_connected")
-				btn-up (cgui-core/find-widget wireless-root "btn_arrowup")
-				btn-down (cgui-core/find-widget wireless-root "btn_arrowdown")
-				elist (comp/element-list :spacing 2)
-				linked-atom (atom linked)]
+				linked-atom (atom linked)
+				_ (log/info "[rebuild-page!] wlist=" (pr-str (some? wlist)) "avail=" (count avail) "linked=" (pr-str linked))
+				_ (log/info "[rebuild-page!] elem-template=" (pr-str (some? elem-template)))]
 
-		(when wlist
-			(comp/add-component! wlist elist))
-		(ensure-template-hidden! elem-template)
-		(attach-scroll-buttons! btn-up btn-down elist)
+		;; Hide the template element
+		(when elem-template
+			(cgui-core/set-visible! elem-template false))
 
+		;; Update connected element
 		(when connected-elem
 			(let [icon-connect (cgui-core/find-widget connected-elem "icon_connect")
 						icon-logo (cgui-core/find-widget connected-elem "icon_logo")
@@ -59,9 +59,9 @@
 				(when icon-connect
 					(events/unlisten! icon-connect :left-click)
 					(wh/set-drawtexture! icon-connect
-														(if connected?
-															(modid/asset-path "textures" "guis/icons/icon_connected.png")
-															(modid/asset-path "textures" "guis/icons/icon_unconnected.png")))
+						(if connected?
+							(modid/asset-path "textures" "guis/icons/icon_connected.png")
+							(modid/asset-path "textures" "guis/icons/icon_unconnected.png")))
 					(wh/set-drawtexture-color! icon-connect (wh/alpha-argb 0xFFFFFFFF alpha))
 					(wh/set-tint-enabled! icon-connect connected?)
 					(events/on-left-click icon-connect
@@ -73,9 +73,17 @@
 				(when text-name
 					(wh/set-textbox-text! text-name name))))
 
-		(when elist
-			(comp/list-clear! elist)
-			(doseq [target avail]
+		;; Remove old element children (except the hidden template) and add new ones
+		(when wlist
+			;; Remove previous copies (keep the template widget if present)
+			(let [old-children @(:children wlist)
+						template-id (:id elem-template)]
+				(doseq [child old-children]
+					(when (and template-id (not= (:id child) template-id))
+						(cgui-core/remove-widget! wlist child))))
+
+			;; Add each available network as a direct child of zone_elementlist
+			(doseq [[idx target] (map vector (range) avail)]
 				(when elem-template
 					(let [elem (cgui-core/copy-widget elem-template)
 								text-name (cgui-core/find-widget elem "text_name")
@@ -85,6 +93,10 @@
 								pass-box (when input-pass (wh/widget-textbox input-pass))
 								encrypted? (boolean (encrypted?-fn target))]
 
+						;; Position: y = index * 16 (element height) from top of zone_elementlist
+						(cgui-core/set-pos! elem 0 (* idx 16))
+						(cgui-core/set-visible! elem true)
+
 						(when text-name
 							(wh/set-textbox-text! text-name (name-fn target)))
 
@@ -93,18 +105,15 @@
 								(when icon-key
 									(cgui-core/set-visible! icon-key true)
 									(wh/set-drawtexture-color! icon-key (wh/alpha-argb 0xFFFFFFFF 0.6)))
-
 								(when input-pass
 									(cgui-core/set-visible! input-pass true))
-
 								(when (and input-pass pass-box)
-									;; enter to confirm
-									(events/on-confirm-input pass-box
-										(fn [_]
-											(let [pwd (comp/get-text pass-box)]
+									;; use input-pass widget so :owner-widget points to correct copy
+									(events/on-confirm-input input-pass
+										(fn [event]
+											(let [pwd (:value event)]
 												(connect-fn target pwd)
 												(comp/set-text! pass-box ""))))
-									;; focus brightens key icon
 									(events/on-gain-focus input-pass
 										(fn [_]
 											(when icon-key
@@ -124,10 +133,10 @@
 										(connect-fn target pwd)
 										(when pass-box (comp/set-text! pass-box ""))))))
 
-						(comp/list-add! elist elem)))))
+						;; Add as direct child of zone_elementlist
+						(cgui-core/add-widget! wlist elem)))))
 
 		wireless-root))
-
 (defn setup-panel-logo!
 	"Apply logo texture and optional breathe effect to the panel icon_logo widget."
 	[root {:keys [logo-path logo-breathe?]} override-path]
