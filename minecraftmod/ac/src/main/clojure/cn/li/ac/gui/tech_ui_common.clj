@@ -301,17 +301,20 @@
     (doseq [[elem idx] (map vector elements (range))]
       (let [bar-x (+ 22 (* idx 16))
             bar (cgui-core/create-widget :pos [bar-x 22] :size [16 143])
-            progress (comp/progress-bar
-                       :direction :vertical
-                       :progress 0.0
-                       :color-full (:color elem)
-                       :color-empty 0x20404040)]
-        (comp/add-component! bar progress)
-        (events/on-frame bar
-          (fn [_]
-            (let [value ((:value-fn elem))
-                  clamped (Math/max 0.03 (Math/min 1.0 (double value)))]
-              (comp/set-progress! progress clamped))))
+            progress-spec (comp/progress-bar
+                            :direction :vertical
+                            :progress 0.0
+                            :color-full (:color elem)
+                            :color-empty 0x20404040)]
+        (comp/add-component! bar progress-spec)
+        ;; IMPORTANT: get the actual component (with state atom) from the widget,
+        ;; NOT the initial spec map. set-progress! needs the real component.
+        (let [progress-comp (comp/get-widget-component bar :progressbar)]
+          (events/on-frame bar
+            (fn [_]
+              (let [value ((:value-fn elem))
+                    clamped (Math/max 0.03 (Math/min 1.0 (double value)))]
+                (comp/set-progress! progress-comp clamped)))))
         (cgui-core/add-widget! hist-widget bar)))
     
     (info-area-element! info-area hist-widget)
