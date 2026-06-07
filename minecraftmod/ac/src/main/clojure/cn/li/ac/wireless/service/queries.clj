@@ -73,6 +73,9 @@
         world-data (world-registry/get-world-data world)
         nearby-chunks (spatial/get-nearby-chunks x y z search-range)
         candidate-vblocks (spatial/get-vblocks-in-chunks world-data nearby-chunks)
+        ;; Deduplicate by world position — the same node can appear as both
+        ;; :node (from network) and :node-conn (from connection) vblock types.
+        candidate-vblocks (map first (vals (group-by (fn [vb] [(:x vb) (:y vb) (:z vb)]) candidate-vblocks)))
         _ (log/info "[find-available-nodes-at] pos=" [x y z] "search-range=" search-range "nearby-chunks=" (count nearby-chunks) "candidate-vblocks=" (count candidate-vblocks))
         _ (let [si (world-registry/spatial-index world-data)] (log/info "[find-available-nodes-at] spatial-index total keys=" (count si) "keys=" (pr-str (keys si))))
         range-sq (* search-range search-range)
