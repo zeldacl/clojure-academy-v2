@@ -113,6 +113,7 @@
        root
        {:player :player-1
         :tile-entity :tile-1
+        :container-id 17
         :energy (atom 0.0)
         :max-energy (atom 50000.0)
         :is-developing (atom false)
@@ -159,6 +160,7 @@
        root
        {:player :player-1
         :tile-entity :tile-1
+        :container-id 17
         :energy (atom 0.0)
         :max-energy (atom 50000.0)
         :is-developing (atom false)
@@ -177,6 +179,7 @@
         frame-handler (atom nil)
         container {:player :player-1
                    :tile-entity :tile-1
+                   :container-id 17
                    :energy (atom 0.0)
                    :max-energy (atom 50000.0)
                    :is-developing (atom false)
@@ -207,6 +210,7 @@
         frame-handler (atom nil)
         container {:player :player-1
                    :tile-entity :tile-1
+                   :container-id 17
                    :energy (atom 0.0)
                    :max-energy (atom 50000.0)
                    :is-developing (atom false)
@@ -271,6 +275,7 @@
        root
        {:player :player-1
         :tile-entity :tile-1
+        :container-id 17
         :energy (atom 0.0)
         :max-energy (atom 50000.0)
         :is-developing (atom false)

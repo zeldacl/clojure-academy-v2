@@ -56,9 +56,11 @@
 (extend-protocol IContainerOperations
   Object
   (tick-container! [container]
-    (if-let [cfg (gui-registry/get-config-by-container container)]
-      (when-let [f (lifecycle-value cfg :tick-fn)] (f container))
-      (log/warn "Unknown container type for tick")))
+    (if-let [f (:server-menu-sync! container)]
+      (f container)
+      (when-let [cfg (gui-registry/get-config-by-container container)]
+        (when-let [f (lifecycle-value cfg :server-menu-sync-fn)]
+          (f container)))))
 
   (validate-container [container player]
     (if-let [cfg (gui-registry/get-config-by-container container)]
@@ -68,9 +70,15 @@
       false))
 
   (sync-container! [container]
-    (if-let [cfg (gui-registry/get-config-by-container container)]
-      (when-let [f (sync-value cfg :sync-get)] (f container))
-      (log/warn "Unknown container type for sync")))
+    (cond
+      (fn? (:server-menu-sync! container))
+      ((:server-menu-sync! container) container)
+
+      :else
+      (when-let [cfg (gui-registry/get-config-by-container container)]
+        (when-let [f (or (lifecycle-value cfg :server-menu-sync-fn)
+                         (sync-value cfg :server-menu-sync!))]
+          (f container)))))
 
   (handle-button-click! [container button-id player]
     (if-let [cfg (gui-registry/get-config-by-container container)]
@@ -109,21 +117,6 @@
 ;; Safe Operation Wrappers
 ;; ============================================================================
 
-(defn safe-tick!
-  "Safely tick container with error handling
-  
-  Args:
-  - container: Any container implementing IContainerOperations
-  
-  Returns: true if successful, false if error"
-  [container]
-  (try
-    (tick-container! container)
-    true
-    (catch Exception e
-      (log/error "Error ticking container:"(ex-message e))
-      false)))
-
 (defn safe-validate
   "Safely validate container with error handling
   
@@ -139,19 +132,14 @@
       (log/error "Error validating container:"(ex-message e))
       false)))
 
-(defn safe-sync!
-  "Safely sync container with error handling
-  
-  Args:
-  - container: Any container implementing IContainerOperations
-  
-  Returns: true if successful, false if error"
+(defn server-menu-sync!
+  "Lightweight server menu sync: refresh container atoms from tile state only."
   [container]
   (try
     (sync-container! container)
     true
     (catch Exception e
-      (log/error "Error syncing container:"(ex-message e))
+      (log/error "Error in server menu sync:" (ex-message e))
       false)))
 
 (defn safe-handle-button-click!
@@ -328,7 +316,7 @@
 ;;
 ;; Usage in platform bridge:
 ;;   (defn -tick [this]
-;;     (dispatcher/safe-tick! (get-clojure-container this)))
+;;     (dispatcher/server-menu-sync! (get-clojure-container this)))
 ;;
 ;;   (defn -stillValid [this player]
 ;;     (dispatcher/safe-validate (get-clojure-container this) player))

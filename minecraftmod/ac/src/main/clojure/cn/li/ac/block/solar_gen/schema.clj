@@ -27,6 +27,7 @@
     :persist? true
     :gui-sync? true
     :gui-coerce double
+    :gui-data-slot-scale 100
     :gui-close-reset 0.0
     :doc "Current energy stored"}
 
@@ -50,6 +51,7 @@
    {:key :energy
     :gui-sync? true
     :gui-coerce double
+    :gui-data-slot-scale 100
     :gui-close-reset 0.0
     :doc "Current energy (synced from server)"}
 
@@ -59,6 +61,7 @@
     :gui-init (fn [s] (double (get s :max-energy (solar-config/max-energy))))
     :gui-sync? true
     :gui-coerce double
+    :gui-data-slot-scale 100
     :gui-close-reset 0.0
     :doc "Max energy capacity (constant for solar gen)"}
 
@@ -66,7 +69,8 @@
     :gui-only? true
     :gui-init (fn [s] (str (get s :status "STOPPED")))
     :gui-sync? true
-    :gui-coerce str
+    :gui-data-slot? true
+    :gui-data-slot-status-codes ["STOPPED" "WEAK" "STRONG"]
     :gui-close-reset ""
     :doc "Generation status (STOPPED/WEAK/STRONG)"}
 
@@ -75,6 +79,7 @@
     :gui-init (fn [s] (double (get s :gen-speed 0.0)))
     :gui-sync? true
     :gui-coerce double
+    :gui-data-slot-scale 100
     :gui-close-reset 0.0
     :doc "Current generation rate (IF/T)"}
 
@@ -82,6 +87,7 @@
     :gui-only? true
     :gui-init (fn [_] 0)
     :gui-sync? false
+    :gui-data-slot? false
     :gui-coerce int
     :gui-close-reset 0
     :doc "Current GUI tab index (client-only)"}
@@ -90,6 +96,7 @@
     :gui-only? true
     :gui-init (fn [_] 0)
     :gui-sync? false
+    :gui-data-slot? false
     :gui-coerce int
     :gui-close-reset 0
     :doc "Query throttle ticker (client-only)"}])
@@ -106,6 +113,8 @@
     :default "STOPPED"
     :persist? false
     :gui-sync? true
+    :gui-data-slot? true
+    :gui-data-slot-status-codes ["STOPPED" "WEAK" "STRONG"]
     :doc "Generation status (server-side, synced to GUI)"}
 
    {:key :gen-speed
@@ -113,6 +122,8 @@
     :default 0.0
     :persist? false
     :gui-sync? true
+    :gui-coerce double
+    :gui-data-slot-scale 100
     :doc "Current generation rate (server-side, synced to GUI)"}])
 
 ;; ============================================================================

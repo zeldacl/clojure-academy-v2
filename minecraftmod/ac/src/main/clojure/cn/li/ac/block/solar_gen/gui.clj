@@ -50,7 +50,12 @@
 
 (defn create-container [tile player]
   (let [state (or (common/get-tile-state tile) {})]
-    (gui-sync/create-schema-container solar-schema/unified-solar-schema tile player :solar {:state state})))
+    (gui-sync/create-schema-container solar-schema/unified-solar-schema
+                                      tile
+                                      player
+                                      :solar
+                                      {:gui-id (gui-manifest/gui-id :solar-gen)
+                                       :state state})))
 
 (defn get-slot-count [_container]
   (slot-schema/tile-slot-count solar-slot-schema-id))
@@ -68,12 +73,7 @@
 
 (defn still-valid? [_container _player] true)
 
-(def sync-to-client! (:sync-to-client! solar-sync))
-(def get-sync-data (:get-sync-data solar-sync))
-(def apply-sync-data! (:apply-sync-data! solar-sync))
-
-(defn tick! [container]
-  (gui-sync/sync-tick! container sync-to-client! {:ticker-key :sync-ticker}))
+(def server-menu-sync! (:server-menu-sync! solar-sync))
 
 (defn handle-button-click! [_container _button-id _player] nil)
 
@@ -95,35 +95,9 @@
 (def ^:private effect-solar-texture
   (modid/asset-path "textures" "guis/effect/effect_solar.png"))
 
-(defn- gen-msg [action]
-  ((requiring-resolve 'cn.li.ac.wireless.gui.message.registry/msg) :generator action))
-
-(defn- poll-status!
-  "Send get-status query to server and update container atoms with response."
-  [container tile]
-  (let [owner (requiring-resolve 'cn.li.ac.wireless.gui.sync.handler/tile-pos-payload)]
-    (when-let [payload (and owner (try (owner tile) (catch Exception _ nil)))]
-      ((requiring-resolve 'cn.li.mcmod.network.client/send-to-server)
-       (gen-msg :get-status)
-       payload
-       (fn [resp]
-         (when resp
-           (when-let [v (:energy resp)] (reset! (:energy container) (double v)))
-           (when-let [v (:max-energy resp)] (reset! (:max-energy container) (double v)))
-           (when-let [v (:status resp)] (reset! (:status container) (str v)))
-           (when-let [v (:gen-speed resp)] (reset! (:gen-speed container) (double v)))))))))
-
-(def ^:private poll-ticker (atom 0))
-
 (defn- attach-anim-frame!
-  "Attach per-frame UV update to `ui_block/anim_frame` and status poller."
+  "Attach per-frame UV update to `ui_block/anim_frame`."
   [inv-window container]
-  ;; Status poller: query server every 20 frames for tile state
-  (events/on-frame inv-window
-    (fn [_]
-      (swap! poll-ticker inc)
-      (when (zero? (mod @poll-ticker 20))
-        (poll-status! container (:tile-entity container)))))
   ;; Anim frame texture update
   (when-let [anim-frame (cgui-core/find-widget inv-window "ui_block/anim_frame")]
     (events/on-frame anim-frame
@@ -141,7 +115,9 @@
   (try
     (let [inv-page (tech-ui/create-rework-page "guis/rework/page_solar.xml")
           inv-window (:window inv-page)
-          wireless-window (wireless-tab/create-wireless-panel {:role :generator :container container})
+          wireless-window (wireless-tab/create-wireless-panel {:role :generator
+                                                               :container container
+                                                               :menu (:menu opts)})
           wireless-page {:id "wireless" :window wireless-window}
           pages [inv-page wireless-page]
           max-e (fn [] (max 1.0 (double @(:max-energy container))))
@@ -207,9 +183,7 @@
          {:container-predicate solar-container?
        :container-fn create-container
        :screen-fn create-screen
-       :tick-fn tick!
-       :sync-get get-sync-data
-       :sync-apply apply-sync-data!
+       :server-menu-sync-fn server-menu-sync!
        :validate-fn still-valid?
        :close-fn on-close
        :button-click-fn handle-button-click!

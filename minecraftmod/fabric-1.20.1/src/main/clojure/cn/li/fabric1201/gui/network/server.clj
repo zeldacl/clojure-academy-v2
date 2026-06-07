@@ -1,8 +1,6 @@
 (ns cn.li.fabric1201.gui.network.server
   "Fabric 1.20.1 GUI/RPC server transport."
-  (:require [cn.li.fabric1201.gui.block-sync-broadcast]
-            [cn.li.mcmod.gui.sync-api :as gui-sync-api]
-            [cn.li.fabric1201.gui.network.shared :as shared]
+  (:require [cn.li.fabric1201.gui.network.shared :as shared]
             [cn.li.mc1201.gui.network.packet :as packet-base]
             [cn.li.mc1201.reflect-util :as ru]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
@@ -74,6 +72,5 @@
           (Reflector/invokeStaticMethod ServerPlayNetworking "registerGlobalReceiver"
                                         (to-array [shared/c2s-channel receiver]))
           (alter-var-root #'*server-initialized?* (constantly true))
-          (gui-sync-api/assert-gui-broadcast-dispatch! :fabric-1.20.1)
           (log/info "Fabric GUI network server transport initialized")))))
   nil)

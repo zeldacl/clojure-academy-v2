@@ -1,28 +1,21 @@
 (ns cn.li.ac.block.wireless-node.handlers
   "Wireless Node network message handlers and infrastructure."
-  (:require [clojure.string :as str]
-            [cn.li.mcmod.network.server :as net-server]
-            [cn.li.mcmod.block.state-schema :as state-schema]
+  (:require [cn.li.mcmod.network.server :as net-server]
+            [cn.li.mcmod.block.inventory-helpers :as inv-helpers]
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.ac.wireless.api :as wireless-api]
             [cn.li.ac.block.wireless-node.logic :as node-logic]
-            [cn.li.ac.block.wireless-node.schema :as node-schema]
             [cn.li.ac.wireless.config :as search-config]
             [cn.li.ac.wireless.core.capability-resolver :as resolver]
             [cn.li.ac.wireless.gui.sync.handler :as net-helpers]
+            [cn.li.ac.block.machine.handlers :as machine-handlers]
             [cn.li.mcmod.platform.be :as platform-be]
+            [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.acapi.wireless IWirelessNode IWirelessMatrix]))
 
-;; ============================================================================
-;; Infrastructure (from network_infra.clj)
-;; ============================================================================
-
-(defn resolve-world-tile
-  [payload player]
-  (let [world (net-helpers/get-world player)
-        tile (net-helpers/get-tile-at world payload)]
-    {:world world :tile tile}))
+(defn- open-tile [payload player]
+  (machine-handlers/open-container-tile payload player))
 
 (defn linked-network
   [tile]
@@ -74,10 +67,6 @@
   (wireless-api/unlink-node-from-network! tile)
   true)
 
-;; ============================================================================
-;; Response DTO builders (from network_presenter.clj)
-;; ============================================================================
-
 (defn linked->dto
   [linked]
   (when linked
@@ -97,10 +86,7 @@
 
 (defn list-networks-response
   [{:keys [linked avail linked-ssid matrix-cap-fn matrix-capacity matrix-bandwidth matrix-range]}]
-  (log/info "[list-networks-response] avail-in=" (count avail)
-            "linked-ssid=" (pr-str linked-ssid))
   (let [after-remove (remove (fn [net] (= (wireless-api/network-ssid net) linked-ssid)) avail)
-        _ (log/info "[list-networks-response] after-remove count=" (count (vec after-remove)))
         result {:linked (linked->dto linked)
                 :avail (mapv (fn [net]
                               (let [matrix-cap (matrix-cap-fn net)]
@@ -111,20 +97,10 @@
                                    :matrix-bandwidth matrix-bandwidth
                                    :matrix-range matrix-range})))
                             after-remove)}]
-    (log/info "[list-networks-response] result avail=" (pr-str (:avail result)))
     result))
 
-;; ============================================================================
-;; Message ID helper
-;; ============================================================================
-
-(defn- msg
-  [action]
+(defn- msg [action]
   (msg-registry/msg :node action))
-
-;; ============================================================================
-;; Authorization helpers
-;; ============================================================================
 
 (defn- owner-authorized?
   [tile player]
@@ -133,69 +109,58 @@
 
 (defn- with-owner-authorization
   [payload player handler-fn]
-  (let [world (net-helpers/get-world player)
-        tile (net-helpers/get-tile-at world payload)]
+  (let [tile (open-tile payload player)]
     (if (and tile (owner-authorized? tile player))
-      (handler-fn payload player)
+      (handler-fn payload player tile)
       {:success false})))
-
-;; ============================================================================
-;; Handler functions
-;; ============================================================================
-
-(defn handle-get-status
-  [payload player]
-  (let [{:keys [tile]} (resolve-world-tile payload player)]
-    (if tile
-      (if-let [net (linked-network tile)]
-        {:linked (linked->dto net)}
-        {:linked nil})
-      {:linked false})))
-
-;; Network handlers for change-name and change-password are auto-generated from schema
-(def generated-network-handlers
-  (state-schema/build-network-handlers node-schema/network-editable-fields))
 
 (defn handle-change-name
   [payload player]
-  (with-owner-authorization payload player (get generated-network-handlers :change-name)))
+  (with-owner-authorization payload player
+    (fn [_ _ tile]
+      (let [new-value (:node-name payload)]
+        (if (and tile new-value)
+          (do (inv-helpers/update-be-field! tile :node-name new-value)
+              {:success true})
+          {:success false})))))
 
 (defn handle-change-password
   [payload player]
-  (with-owner-authorization payload player (get generated-network-handlers :change-password)))
+  (with-owner-authorization payload player
+    (fn [_ _ tile]
+      (let [new-value (:password payload)]
+        (if (and tile new-value)
+          (do (inv-helpers/update-be-field! tile :password new-value)
+              {:success true})
+          {:success false})))))
 
 (defn handle-list-networks
   [payload player]
-  (log/info "[handle-list-networks] ENTER payload=" (pr-str (select-keys payload [:pos-x :pos-y :pos-z])))
-  (let [{:keys [world tile]} (resolve-world-tile payload player)]
-    (log/info "[handle-list-networks] world=" (pr-str world) "tile=" (pr-str tile))
+  (let [tile (open-tile payload player)
+        world (net-helpers/get-world player)]
     (if tile
       (let [linked (linked-network tile)
             linked-ssid (when linked (wireless-api/network-ssid linked))
-            x (double (:pos-x payload))
-            y (double (:pos-y payload))
-            z (double (:pos-z payload))
+            block-pos (pos/position-get-block-pos tile)
+            x (double (pos/pos-x block-pos))
+            y (double (pos/pos-y block-pos))
+            z (double (pos/pos-z block-pos))
             range (node-range tile)
-            _ (log/info "[handle-list-networks] pos=" [x y z] "range=" range "linked-ssid=" (pr-str linked-ssid))
-            avail (available-networks world x y z range)
-            _ (log/info "[handle-list-networks] avail count=" (count avail))
-            result (list-networks-response
-                     {:linked linked
-                      :avail avail
-                      :linked-ssid linked-ssid
-                      :matrix-cap-fn (fn [net] (matrix-capability world net))
-                      :matrix-capacity matrix-capacity
-                      :matrix-bandwidth matrix-bandwidth
-                      :matrix-range matrix-range})]
-        (log/info "[handle-list-networks] result avail count=" (count (:avail result)))
-        result)
-      (do
-        (log/warn "[handle-list-networks] tile is nil, returning empty")
-        {:linked nil :avail []}))))
+            avail (available-networks world x y z range)]
+        (list-networks-response
+          {:linked linked
+           :avail avail
+           :linked-ssid linked-ssid
+           :matrix-cap-fn (fn [net] (matrix-capability world net))
+           :matrix-capacity matrix-capacity
+           :matrix-bandwidth matrix-bandwidth
+           :matrix-range matrix-range}))
+      {:linked nil :avail []})))
 
 (defn handle-connect
   [payload player]
-  (let [{:keys [world tile]} (resolve-world-tile payload player)
+  (let [world (net-helpers/get-world player)
+        tile (open-tile payload player)
         ssid (:ssid payload)
         password (:password payload)]
     (if (and world tile ssid)
@@ -204,18 +169,13 @@
 
 (defn handle-disconnect
   [payload player]
-  (let [{:keys [world tile]} (resolve-world-tile payload player)]
-    (if (and world tile)
+  (let [tile (open-tile payload player)]
+    (if tile
       {:success (disconnect-node! tile)}
       {:success false})))
 
-;; ============================================================================
-;; Registration
-;; ============================================================================
-
 (defn register-network-handlers!
   []
-  (net-server/register-handler (msg :get-status) handle-get-status)
   (net-server/register-handler (msg :change-name) handle-change-name)
   (net-server/register-handler (msg :change-password) handle-change-password)
   (net-server/register-handler (msg :list-networks) handle-list-networks)

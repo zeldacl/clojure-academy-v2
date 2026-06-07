@@ -33,7 +33,7 @@
           old {:update-ticker (node-config/sync-interval)
                :node-type :basic
                :energy 0.0
-               ::last-broadcast-state {:energy 0.0 :enabled false}}
+               :enabled false}
           new (assoc old :energy (node-logic/node-max-energy old))]
       (with-redefs [node-logic/update-block-state!
                     (fn [_ _ _] (swap! blockstate-calls inc))]

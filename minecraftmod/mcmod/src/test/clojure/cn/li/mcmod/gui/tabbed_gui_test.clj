@@ -15,23 +15,11 @@
           (finally
             (container-state/clear-all!)))))))
 
-(deftest same-container-id-tab-state-is-isolated-by-owner-test
-  (let [owner-a {:logical-side :client :client-session-id :session-a :player-uuid "player-a"}
-        owner-b {:logical-side :client :client-session-id :session-a :player-uuid "player-b"}
-        container-id 9]
-    (try
-      (tabbed/set-tab-index-by-container-id! owner-a container-id 1)
-      (tabbed/set-tab-index-by-container-id! owner-b container-id 0)
-
-      (is (= 1 (tabbed/get-tab-index-by-container-id owner-a container-id)))
-      (is (= 0 (tabbed/get-tab-index-by-container-id owner-b container-id)))
-
-      (tabbed/clear-tab-index-by-container-id! owner-a container-id)
-      (is (nil? (tabbed/get-tab-index-by-container-id owner-a container-id)))
-      (is (= 0 (tabbed/get-tab-index-by-container-id owner-b container-id)))
-      (finally
-        (tabbed/clear-tab-index-by-container-id! owner-a container-id)
-        (tabbed/clear-tab-index-by-container-id! owner-b container-id)))))
+(deftest slots-active-uses-container-tab-index-test
+  (let [container {:tab-index (atom 0)}]
+    (is (true? (tabbed/slots-active? container)))
+    (reset! (:tab-index container) 1)
+    (is (false? (tabbed/slots-active? container)))))
 
 (deftest attach-tab-sync-skips-network-send-when-owner-and-runtime-session-missing-test
   (let [pages [{:id "inv"} {:id "wireless"}]
@@ -43,8 +31,7 @@
                                            (swap! sent-calls conj args))]
         (tabbed/attach-tab-sync! pages tech-ui container 17)
         (reset! (:current tech-ui) "wireless")))
-    (is (empty? @sent-calls))
-    (is (= 1 @(:tab-index container)))))
+    (is (empty? @sent-calls))))
 
 (deftest attach-tab-sync-sends-scoped-owner-when-available-test
   (let [owner {:client-session-id :session-a :player-uuid "player-a"}

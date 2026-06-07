@@ -110,8 +110,6 @@
     (state/register-player-container! owner-b c2)
     (state/register-container-by-id! owner-a 7 c1)
     (state/register-container-by-id! owner-b 7 c2)
-    (state/set-tab-index-by-container-id! owner-a 7 1)
-    (state/set-tab-index-by-container-id! owner-b 7 0)
 
     (state/clear-session-containers! :server-a)
 
@@ -119,8 +117,6 @@
     (is (identical? c2 (state/get-player-container owner-b)))
     (is (nil? (state/get-container-by-id owner-a 7)))
     (is (identical? c2 (state/get-container-by-id owner-b 7)))
-    (is (nil? (state/get-tab-index-by-container-id owner-a 7)))
-    (is (= 0 (state/get-tab-index-by-container-id owner-b 7)))
     (is (= [c2] (vec (state/list-active-containers owner-b))))))
 
 (deftest client-container-side-channel-stays-absent-test
@@ -128,4 +124,6 @@
     (is (nil? (ns-resolve 'cn.li.mcmod.gui.container-state 'client-container)))
     (is (nil? (ns-resolve 'cn.li.mcmod.gui.container-state 'set-client-container!)))
     (is (nil? (ns-resolve 'cn.li.mcmod.gui.container-state 'get-client-container)))
-    (is (nil? (ns-resolve 'cn.li.mcmod.gui.container-state 'clear-client-container!)))))
+    (is (nil? (ns-resolve 'cn.li.mcmod.gui.container-state 'clear-client-container!)))
+    (is (nil? (ns-resolve 'cn.li.mcmod.gui.container-state 'set-tab-index-by-container-id!)))
+    (is (nil? (ns-resolve 'cn.li.mcmod.gui.tabbed-gui 'set-tab-index-by-container-id!)))))

@@ -1,5 +1,5 @@
 (ns cn.li.mcmod.gui.spec-test
-        (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.test :refer [deftest is testing]]
             [cn.li.mcmod.gui.spec :as gui-spec]))
 
 (deftest create-block-gui-spec-test
@@ -16,10 +16,7 @@
                   :container-predicate ::container-predicate
                   :container-fn ::container-fn
                   :screen-fn ::screen-fn
-                  :tick-fn ::tick-fn
-                  :sync-get ::sync-get
-                  :sync-apply ::sync-apply
-                  :payload-sync-apply-fn ::payload-sync-apply
+                  :server-menu-sync-fn ::server-menu-sync!
                   :validate-fn ::validate
                   :close-fn ::close
                   :button-click-fn ::button-click
@@ -41,14 +38,9 @@
       (is (= {:container-predicate ::container-predicate
               :container-fn ::container-fn
               :screen-fn ::screen-fn
-              :tick-fn ::tick-fn}
+              :server-menu-sync-fn ::server-menu-sync!}
              (select-keys (:lifecycle spec)
-                          [:container-predicate :container-fn :screen-fn :tick-fn])))
-      (is (= {:sync-get ::sync-get
-              :sync-apply ::sync-apply
-              :payload-sync-apply-fn ::payload-sync-apply}
-             (select-keys (:sync spec)
-                          [:sync-get :sync-apply :payload-sync-apply-fn])))
+                          [:container-predicate :container-fn :screen-fn :server-menu-sync-fn])))
       (is (= {:validate-fn ::validate
               :close-fn ::close
               :button-click-fn ::button-click}

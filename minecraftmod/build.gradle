@@ -2131,8 +2131,8 @@ tasks.register('verifyGuiNetworkTransportBoundaries') {
             if (!forgeRegistryText.contains('registry-common/create-client-menu!')) {
                 violations << 'forge1201.adapter.gui-registry must delegate client menu construction to registry-common/create-client-menu!'
             }
-            if (!forgeRegistryText.contains('registry-common/read-block-pos')) {
-                violations << 'forge1201.adapter.gui-registry must delegate BlockPos decode to registry-common/read-block-pos'
+            if (!forgeRegistryText.contains('registry-common/read-extended-open-payload')) {
+                violations << 'forge1201.adapter.gui-registry must delegate extended open payload decode to registry-common/read-extended-open-payload'
             }
             ['registry-common/create-wrapped-container', '.readBlockPos'].each { token ->
                 if (forgeRegistryText.contains(token)) {
@@ -2565,6 +2565,22 @@ tasks.register('verifyAcBlockGuiSyncHelpers') {
                 if (text.contains('gui-dsl/create-gui-spec')) {
                     violations << "${path}: direct create-gui-spec call should use mcmod.gui.spec"
                 }
+                ['sync-to-client!',
+                 'make-sync-packet',
+                 'payload-sync-apply-fn',
+                 'create-poller',
+                 'status-poller',
+                 'ac/gui-block-state-sync',
+                 'broadcast-if-changed!',
+                 'tile-pos-payload',
+                 'tab-index-by-container-id'].each { token ->
+                    if (text.contains(token)) {
+                        violations << "${path}: deprecated container sync residue: ${token}"
+                    }
+                }
+                if (!text.contains(':server-menu-sync-fn')) {
+                    violations << "${path}: must register :server-menu-sync-fn"
+                }
             }
         }
         if (!violations.isEmpty()) {
@@ -2572,6 +2588,67 @@ tasks.register('verifyAcBlockGuiSyncHelpers') {
         }
 
         logger.lifecycle('[verifyAcBlockGuiSyncHelpers] passed. AC block GUIs use shared sync helpers and mcmod GUI spec builders where applicable.')
+    }
+}
+
+tasks.register('verifyContainerSyncResidueGuards') {
+    group = 'verification'
+    description = 'Verify deprecated block GUI S2C/poller sync paths stay removed from source.'
+
+    doLast {
+        def violations = []
+        def deletedFiles = [
+            file('ac/src/main/clojure/cn/li/ac/block/machine/sync.clj'),
+            file('ac/src/main/clojure/cn/li/ac/gui/status_poller.clj'),
+            file('ac/src/main/clojure/cn/li/ac/gui/platform_adapter/sync_bootstrap.clj'),
+            file('ac/src/main/clojure/cn/li/ac/gui/platform_adapter/sync_api.clj'),
+            file('ac/src/main/clojure/cn/li/ac/wireless/gui/sync/helpers.clj'),
+            file('mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/network/block_sync.clj'),
+            file('forge-1.20.1/src/main/clojure/cn/li/forge1201/gui/block_sync_broadcast.clj'),
+            file('fabric-1.20.1/src/main/clojure/cn/li/fabric1201/gui/block_sync_broadcast.clj')
+        ]
+        deletedFiles.each { File f ->
+            if (f.exists()) {
+                violations << "deleted container sync file returned: ${project.rootDir.toPath().relativize(f.toPath()).toString().replace('\\', '/')}"
+            }
+        }
+
+        def forbiddenTokens = [
+            'ac/gui-block-state-sync',
+            'payload-sync-apply-fn',
+            'make-sync-packet',
+            'broadcast-if-changed!',
+            'cn.li.ac.gui.status-poller',
+            'create-poller',
+            'tab-index-by-container-id',
+            'safe-sync!',
+            'safe-tick!',
+            'get-status-ack',
+            ':get-status'
+        ]
+        fileTree(project.rootDir) {
+            include 'ac/src/main/**/*.clj'
+            include 'mcmod/src/main/**/*.clj'
+            include 'mc-1.20.1/src/main/**/*.clj'
+            include 'forge-1.20.1/src/main/**/*.clj'
+            include 'fabric-1.20.1/src/main/**/*.clj'
+            exclude '**/build/**', '**/.gradle/**'
+            exclude 'ac/src/main/clojure/cn/li/ac/ability/**'
+            exclude 'mcmod/src/main/clojure/cn/li/mcmod/gui/animation.clj'
+        }.files.each { File f ->
+            def text = f.getText('UTF-8')
+            forbiddenTokens.each { token ->
+                if (text.contains(token)) {
+                    violations << "${project.rootDir.toPath().relativize(f.toPath()).toString().replace('\\', '/')}: ${token}"
+                }
+            }
+        }
+
+        if (!violations.isEmpty()) {
+            throw new GradleException("Container sync residue guard failed:\n - ${violations.join('\n - ')}")
+        }
+
+        logger.lifecycle('[verifyContainerSyncResidueGuards] passed. Deprecated block GUI sync residues stay absent.')
     }
 }
 
@@ -3551,6 +3628,7 @@ def cleanupResidueGuardTaskNames = [
     'verifyEntityHookRegistrySpecs',
     'verifyBlockDslNoRuntimeEvents',
     'verifyAcBlockGuiSyncHelpers',
+    'verifyContainerSyncResidueGuards',
     'verifyTechUiScreenBuilder',
     'verifyWirelessGuiTabApi',
     'verifyTerminalMessageIdsStatic',

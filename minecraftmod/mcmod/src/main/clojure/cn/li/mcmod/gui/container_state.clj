@@ -16,8 +16,7 @@
 	{:active-containers {}
 	 :player-containers {}
 	 :menu-containers {}
-	 :containers-by-id {}
-	 :tab-index-by-container-id {}})
+	 :containers-by-id {}})
 
 (defn create-container-state-runtime
 	[]
@@ -183,15 +182,6 @@
 	[state owner container-id]
 	(update state :containers-by-id dissoc (container-owner-key owner container-id)))
 
-(defn- set-tab-index-state
-	[state owner container-id tab-index]
-	(assoc-in state [:tab-index-by-container-id (container-owner-key owner container-id)]
-						(int tab-index)))
-
-(defn- clear-tab-index-state
-	[state owner container-id]
-	(update state :tab-index-by-container-id dissoc (container-owner-key owner container-id)))
-
 (defn- clear-owner-state
 	[state owner]
 	(let [base-key (owner-base-key owner)]
@@ -204,10 +194,6 @@
 				(update :containers-by-id
 								remove-map-entries
 								(fn [state-key _container]
-									(owner-key-prefix? base-key state-key)))
-				(update :tab-index-by-container-id
-								remove-map-entries
-								(fn [state-key _tab-index]
 									(owner-key-prefix? base-key state-key)))
 				(update :menu-containers
 								remove-map-entries
@@ -231,10 +217,6 @@
 			(update :containers-by-id
 							remove-map-entries
 							(fn [state-key _container]
-								(session-key-prefix? session-id state-key)))
-			(update :tab-index-by-container-id
-							remove-map-entries
-							(fn [state-key _tab-index]
 								(session-key-prefix? session-id state-key)))
 			(update :menu-containers
 							remove-map-entries
@@ -350,23 +332,6 @@
 	[owner container-id]
 	(when (some? container-id)
 		(get-in (snapshot) [:containers-by-id (container-owner-key owner container-id)])))
-
-(defn set-tab-index-by-container-id!
-	[owner container-id tab-index]
-	(when (integer? container-id)
-		(update-state! set-tab-index-state owner container-id tab-index))
-	nil)
-
-(defn get-tab-index-by-container-id
-	[owner container-id]
-	(when (integer? container-id)
-		(get-in (snapshot) [:tab-index-by-container-id (container-owner-key owner container-id)])))
-
-(defn clear-tab-index-by-container-id!
-	[owner container-id]
-	(when (integer? container-id)
-		(update-state! clear-tab-index-state owner container-id))
-	nil)
 
 (defn get-menu-container-id
 	"Get a Minecraft menu/container window id via platform protocol or reflection."

@@ -1,8 +1,6 @@
 (ns cn.li.ac.block.imag-fusor.gui
   "CLIENT-ONLY: Imaginary Fusor GUI"
-  (:require [cn.li.ac.gui.status-poller :as poller]
-            [cn.li.ac.wireless.gui.message.registry :as msg-registry]
-             [cn.li.mcmod.gui.cgui-core :as cgui-core]
+  (:require [cn.li.mcmod.gui.cgui-core :as cgui-core]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.mcmod.gui.events :as events]
@@ -34,7 +32,12 @@
 (defn create-container
   [tile player]
   (let [state (or (common/get-tile-state tile) {})]
-    (gui-sync/create-schema-container fusor-schema/imag-fusor-schema tile player fusor-gui-type {:state state})))
+    (gui-sync/create-schema-container fusor-schema/imag-fusor-schema
+                                      tile
+                                      player
+                                      fusor-gui-type
+                                      {:gui-id (gui-manifest/gui-id :imag-fusor)
+                                       :state state})))
 
 (defn get-slot-count [_container]
   (slot-schema/tile-slot-count fusor-slot-schema-id))
@@ -58,29 +61,7 @@
 
 (defn still-valid? [_container _player] true)
 
-(def sync-to-client! (:sync-to-client! fusor-sync))
-(def ^:private poll-ticker (atom 0))
-
-(def ^:private fusor-poll-status!
-  (let [p (poller/create-poller
-            #(msg-registry/msg :imag-fusor :get-status)
-            (fn [c resp]
-              (when-let [v (:energy resp)] (reset! (:energy c) (double v)))
-              (when-let [v (:max-energy resp)] (reset! (:max-energy c) (double v)))
-              (when-let [v (:crafting-progress resp)] (reset! (:crafting-progress c) (int v)))
-              (when-let [v (:work-progress resp)] (reset! (:work-progress c) (double v)))
-              (when-let [v (:max-progress resp)] (reset! (:max-progress c) (int v)))
-              (when-let [v (:current-recipe-liquid resp)] (reset! (:current-recipe-liquid c) (int v)))
-              (when-let [v (:liquid-amount resp)] (reset! (:liquid-amount c) (int v)))
-              (when-let [v (:tank-size resp)] (reset! (:tank-size c) (int v)))
-              (when-let [v (:working resp)] (reset! (:working c) (boolean v)))))]
-    (fn [c t] (p c t))))
-
-(def get-sync-data (:get-sync-data fusor-sync))
-(def apply-sync-data! (:apply-sync-data! fusor-sync))
-
-(defn tick! [container]
-  (sync-to-client! container))
+(def server-menu-sync! (:server-menu-sync! fusor-sync))
 
 (defn handle-button-click! [_container _button-id _player] nil)
 
@@ -88,9 +69,7 @@
 
 (defn- bind-progress!
   [inv-window container]
-  (events/on-frame inv-window
-      (fn [_] (swap! poll-ticker inc) (when (zero? (mod @poll-ticker 20)) (fusor-poll-status! container (:tile-entity container)))))
-    (when-let [widget (cgui-core/find-widget inv-window "progress")]
+  (when-let [widget (cgui-core/find-widget inv-window "progress")]
     (when-let [bar (comp/get-component widget :progressbar)]
       (events/on-frame widget
         (fn [_]
@@ -162,9 +141,7 @@
              {:container-predicate fusor-container?
        :container-fn create-container
        :screen-fn create-screen
-       :tick-fn tick!
-       :sync-get get-sync-data
-       :sync-apply apply-sync-data!
+       :server-menu-sync-fn server-menu-sync!
        :validate-fn still-valid?
        :close-fn on-close
        :button-click-fn handle-button-click!

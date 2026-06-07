@@ -69,7 +69,6 @@
   [gui-id options]
   (let [registration-opts (:registration options)
         lifecycle-opts (:lifecycle options)
-        sync-opts (:sync options)
         operations-opts (:operations options)
         slot-operations-opts (:slot-operations options)
         layout-opts (:layout options)
@@ -91,10 +90,7 @@
               :lifecycle {:container-fn (:container-fn lifecycle-opts)
                           :container-predicate (:container-predicate lifecycle-opts)
                           :screen-fn (:screen-fn lifecycle-opts)
-                          :tick-fn (:tick-fn lifecycle-opts)}
-              :sync {:sync-get (:sync-get sync-opts)
-                     :sync-apply (:sync-apply sync-opts)
-                     :payload-sync-apply-fn (:payload-sync-apply-fn sync-opts)}
+                          :server-menu-sync-fn (:server-menu-sync-fn lifecycle-opts)}
               :operations {:validate-fn (:validate-fn operations-opts)
                            :close-fn (:close-fn operations-opts)
                            :button-click-fn (:button-click-fn operations-opts)
@@ -127,11 +123,7 @@
   [gui-name opts]
   (let [layout (or (:slot-layout opts)
                    (when (:slot-schema-id opts)
-                     (slot-schema/get-slot-layout (:slot-schema-id opts))))
-        sync (cond-> {:sync-get (:sync-get opts)
-                      :sync-apply (:sync-apply opts)}
-               (:payload-sync-apply-fn opts)
-               (assoc :payload-sync-apply-fn (:payload-sync-apply-fn opts)))]
+                     (slot-schema/get-slot-layout (:slot-schema-id opts))))]
     (create-gui-spec
       gui-name
       {:gui-id (:gui-id opts)
@@ -143,8 +135,7 @@
        :lifecycle {:container-predicate (:container-predicate opts)
                    :container-fn (:container-fn opts)
                    :screen-fn (:screen-fn opts)
-                   :tick-fn (:tick-fn opts)}
-       :sync sync
+                   :server-menu-sync-fn (:server-menu-sync-fn opts)}
        :operations {:validate-fn (:validate-fn opts)
                     :close-fn (:close-fn opts)
                     :button-click-fn (:button-click-fn opts)}

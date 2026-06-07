@@ -4,7 +4,9 @@
   This namespace replaces cross-module usage of mcmod.gui.schema-builders,
   keeping GUI schema runtime logic inside AC where concrete container behavior
   is defined."
-  (:require [cn.li.ac.wireless.gui.container.common :as common]))
+  (:require [cn.li.ac.wireless.gui.container.common :as common]
+            [cn.li.mcmod.gui.container.data-slot-codec :as data-slot-codec]
+            [cn.li.mcmod.gui.container.data-slot-specs :as data-slot-specs]))
 
 (defn- resolve-state
   [tile]
@@ -57,15 +59,6 @@
                 :let [k (:gui-container-key field (:key field))]]
             [k (atom (coerce-gui-value field (raw-gui-value field state*)))]))))
 
-(defn build-sync-field-mappings
-  [schema]
-  (into {}
-        (for [field schema
-              :when (:gui-sync? field)
-              :let [container-key (:gui-container-key field (:key field))
-                    payload-key (:gui-payload-key field (:key field))]]
-          [payload-key container-key])))
-
 (defn build-sync-to-client-fn
   [schema]
   (fn [container]
@@ -79,25 +72,6 @@
             (when (not= @atom-ref new-val)
               (reset! atom-ref new-val))))))))
 
-(defn build-get-sync-data-fn
-  [schema]
-  (fn [container]
-    (into {}
-          (for [field schema
-                :when (:gui-sync? field)
-                :let [k (:gui-container-key field (:key field))]]
-            [k (when-let [a (get container k)] @a)]))))
-
-(defn build-apply-sync-data-fn
-  [schema]
-  (fn [container data]
-    (doseq [field schema
-            :when (:gui-sync? field)
-            :let [k (:gui-container-key field (:key field))]]
-      (when-let [atom-ref (get container k)]
-        (when (contains? data k)
-          (reset! atom-ref (coerce-gui-value field (raw-gui-value field {(:key field) (get data k)}))))))))
-
 (defn build-on-close-fn
   [schema]
   (fn [container]
@@ -107,3 +81,35 @@
                   reset-val (:gui-close-reset field)]]
       (when-let [atom-ref (get container k)]
         (reset! atom-ref reset-val)))))
+
+(defn build-data-slot-field-specs
+  "Build ordered DataSlot specs for encodable :gui-data-slot? / :gui-sync? fields."
+  [schema & {:keys [gui-id max-slots include-tab?]
+             :or {max-slots data-slot-specs/default-max-data-slots
+                  include-tab? false}}]
+  (let [field-key (fn [f] (or (:gui-container-key f) (:key f)))
+        has-tab-in-schema? (some #(= :tab-index (field-key %)) schema)
+        reserve-tab? (and include-tab? (not has-tab-in-schema?))
+        base-specs (data-slot-specs/build-field-specs schema
+                                                    :gui-id gui-id
+                                                    :max-slots (- max-slots (if reserve-tab? 1 0)))
+        tab-spec (when reserve-tab?
+                   {:field-key :tab-index
+                    :container-key :tab-index
+                    :codec (data-slot-codec/int-codec)
+                    :sort-key "000-tab-index"})]
+    (if tab-spec
+      (into [tab-spec] base-specs)
+      base-specs)))
+
+(defn build-server-menu-sync!
+  "Lightweight server-only refresh: tile state -> container atoms. No network I/O."
+  [schema]
+  (let [sync-from-tile* (build-sync-to-client-fn schema)]
+    (fn server-menu-sync! [container]
+      (sync-from-tile* container))))
+
+(defn attach-data-slot-specs!
+  [container schema & opts]
+  (assoc container
+         :data-slot-field-specs (apply build-data-slot-field-specs schema opts)))

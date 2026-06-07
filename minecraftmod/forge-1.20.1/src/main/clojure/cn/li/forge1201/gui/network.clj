@@ -11,9 +11,7 @@
 
   Also extends the cn.li.mcmod.network.client/send-request multimethod for the
   :forge-1.20.1 dispatch value so the GUI's send-to-server calls work."
-  (:require [cn.li.forge1201.gui.block-sync-broadcast]
-            [cn.li.mcmod.gui.sync-api :as gui-sync-api]
-            [cn.li.mcmod.network.client :as net-client]
+  (:require [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.network.server :as net-server]
             [cn.li.mcmod.util.log :as log]
@@ -130,5 +128,4 @@
                  payload))))]
 
     (invoke-network-static "init" req-handler resp-handler))
-  (gui-sync-api/assert-gui-broadcast-dispatch! :forge-1.20.1)
   (log/info "Forge 1.20.1 GUI network system initialized"))

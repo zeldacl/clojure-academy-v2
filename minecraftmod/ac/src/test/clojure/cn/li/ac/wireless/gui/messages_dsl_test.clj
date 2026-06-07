@@ -8,7 +8,7 @@
             [cn.li.ac.wireless.shared.message-registry :as shared-registry]))
 
 (def expected-node-actions
-  #{:get-status :change-name :change-password :list-networks :connect :disconnect})
+  #{:change-name :change-password :list-networks :connect :disconnect})
 
 (def expected-matrix-actions
   #{:gather-info :init :change-ssid :change-password :sync-state})
@@ -16,9 +16,8 @@
 (def ^:private wireless-prefix "wireless")
 
 (deftest message-id-format-test
-  (is (= "wireless_node_get_status" (msg-dsl/message-id wireless-prefix :node :get-status)))
-  (is (= "wireless_matrix_gather_info" (msg-dsl/message-id wireless-prefix :matrix :gather-info)))
-  (is (= "wireless_wind_gen_get_status_main" (msg-dsl/message-id wireless-prefix :wind-gen :get-status-main))))
+  (is (= "wireless_node_change_name" (msg-dsl/message-id wireless-prefix :node :change-name)))
+  (is (= "wireless_matrix_gather_info" (msg-dsl/message-id wireless-prefix :matrix :gather-info))))
 
 (deftest domain-spec-validation-test
   (testing "build-domain-spec constructs expected map"
@@ -65,8 +64,8 @@
       (is (some? matrix-spec))
       (is (contains? (:domains catalog) :node))
       (is (contains? (:domains catalog) :matrix))
-      (is (empty? (gui-manifest/missing-message-domains [:node :matrix :generator :wind-gen
-                                                         :phase-gen :imag-fusor :metal-former
+      (is (empty? (gui-manifest/missing-message-domains [:node :matrix :generator
+                                                         :metal-former
                                                          :developer :ability-interferer]))))
 
     (testing "registered actions match expected sets"
@@ -76,10 +75,10 @@
              (set (keys (:messages (msg-registry/get-domain-spec :metal-former)))))))
 
     (testing "catalog lookups are bidirectional"
-      (is (= "wireless_node_get_status" (wireless-msgs/msg :node :get-status)))
+      (is (= "wireless_node_change_name" (wireless-msgs/msg :node :change-name)))
       (is (= "wireless_matrix_init" (wireless-msgs/msg :matrix :init)))
-      (is (= {:domain :node :action :get-status}
-             (wireless-msgs/find-by-msg-id "wireless_node_get_status")))
+      (is (= {:domain :node :action :change-name}
+             (wireless-msgs/find-by-msg-id "wireless_node_change_name")))
     )
   )
 )

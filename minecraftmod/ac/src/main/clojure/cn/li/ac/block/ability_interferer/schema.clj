@@ -8,7 +8,8 @@
     :default 0.0
     :persist? true
     :gui-sync? true
-    :gui-coerce double}
+    :gui-coerce double
+    :gui-data-slot-scale 100}
 
    {:key :max-energy
     :nbt-key "MaxEnergy"
@@ -16,7 +17,8 @@
     :default 10000.0
     :persist? true
     :gui-sync? true
-    :gui-coerce double}
+    :gui-coerce double
+    :gui-data-slot-scale 100}
 
    {:key :range
     :nbt-key "Range"
@@ -25,6 +27,7 @@
     :persist? true
     :gui-sync? true
     :gui-coerce double
+    :gui-data-slot-scale 100
     :network-editable? true
     :network-msg :change-range}
 
@@ -34,6 +37,7 @@
     :default false
     :persist? true
     :gui-sync? true
+    :gui-coerce boolean
     :block-state {:prop "on"
             :type :boolean
             :default false}
@@ -45,14 +49,16 @@
     :type :string
     :default ""
     :persist? true
-    :gui-sync? true}
+    :gui-sync? true
+    :gui-data-slot? false}
 
    {:key :whitelist
     :nbt-key "Whitelist"
     :type :string-list
     :default []
     :persist? true
-    :gui-sync? true}
+    :gui-sync? true
+    :gui-data-slot? false}
 
    {:key :affected-player-count
     :nbt-key "AffectedPlayerCount"

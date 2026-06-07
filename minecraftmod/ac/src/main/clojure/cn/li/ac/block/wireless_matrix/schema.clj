@@ -26,6 +26,7 @@
     :default ""
     :persist? true
     :gui-sync? true
+    :gui-data-slot? false
     :doc "Player who placed this block (owner)"}
 
    ;; Installed components
@@ -155,6 +156,7 @@
     :gui-init (fn [_] 0.0)
     :gui-sync? true
     :gui-coerce double
+    :gui-data-slot-scale 100
     :gui-close-reset 0.0
     :doc "Network range (derived from core-level and plate-count)"}
 
@@ -162,6 +164,7 @@
     :gui-only? true
     :gui-init (fn [_] 0)
     :gui-sync? false
+    :gui-data-slot? false
     :gui-coerce int
     :gui-close-reset 0
     :doc "Query throttle ticker (client-only)"}])

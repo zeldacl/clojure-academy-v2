@@ -1,7 +1,6 @@
 (ns cn.li.ac.core.content-loader
   "AC runtime content loading orchestration."
   (:require [cn.li.ac.gui.platform-adapter :as platform-gui]
-            [cn.li.ac.gui.platform-adapter.sync-bootstrap :as gui-sync-bootstrap]
             [cn.li.ac.registry.content-namespaces :as content-ns]
             [cn.li.ac.registry.hooks :as hooks]
             [cn.li.ac.wireless.gui.sync.handler :as wireless-sync-handler]
@@ -26,7 +25,6 @@
 (defn- load-runtime-content-once!
   []
   (platform-gui/install-into-mcmod!)
-  (gui-sync-bootstrap/register-client-push-handler!)
   (register-network-edit-helpers!)
   (content-ns/load-all!)
   (let [gui-ids (gui-registry/get-all-gui-ids)]

@@ -10,17 +10,8 @@
    [:request-id {:optional true} int?]])
 
 (def ^:private sync-routing-schema
-  [:and
-   [:map
-    [:container-id {:optional true} int?]
-    [:pos-x {:optional true} number?]
-    [:pos-y {:optional true} number?]
-    [:pos-z {:optional true} number?]]
-   [:fn (fn [m]
-          (or (integer? (:container-id m))
-              (and (number? (:pos-x m))
-                   (number? (:pos-y m))
-                   (number? (:pos-z m)))))]])
+  [:map
+   [:container-id int?]])
 
 (def ^:private valid-message-envelope* (schema/validator message-envelope-schema))
 (def ^:private valid-sync-routing* (schema/validator sync-routing-schema))

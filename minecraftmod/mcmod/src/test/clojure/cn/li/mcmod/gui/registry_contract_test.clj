@@ -24,14 +24,14 @@
                            {:owner-spec :server})))))
 
 (deftest verify-catalog-handlers-test
-  (let [catalog {:specs [{:domain :node :action :get-status :msg-id "wireless_node_get_status"}]}
+  (let [catalog {:specs [{:domain :node :action :change-name :msg-id "wireless_node_change_name"}]}
         contracts {:node {:owner-spec :server :payload-routing :sync-routing}}]
     (try
       (net-server/reset-handlers-for-test!)
       (is (thrown-with-msg? clojure.lang.ExceptionInfo
                             #"No network handler registered"
                             (registry-contract/verify-catalog-handlers! {} catalog contracts)))
-      (net-server/register-handler "wireless_node_get_status" (fn [_ _] {}) contracts)
+      (net-server/register-handler "wireless_node_change_name" (fn [_ _] {}) contracts)
       (is (nil? (registry-contract/verify-catalog-handlers!
                  (:handlers (net-server/handlers-snapshot))
                  catalog
@@ -40,7 +40,7 @@
                             #"Handler contract does not match"
                             (do
                               (net-server/reset-handlers-for-test!)
-                              (net-server/register-handler "wireless_node_get_status"
+                              (net-server/register-handler "wireless_node_change_name"
                                                              (fn [_ _] {})
                                                              {:owner-spec :server
                                                               :payload-routing :none})

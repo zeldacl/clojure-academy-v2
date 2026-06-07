@@ -41,7 +41,7 @@
       (reset! a (coerce (get data key))))))
 
 (defn sync-field-mappings
-  "Build mapping vector expected by apply-sync-payload-template!.
+  "Build mapping vector from schema sync fields.
 
   Emits :key when payload-key is same as key, otherwise emits [key payload-key]."
   [fields]

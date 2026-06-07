@@ -1,8 +1,6 @@
 (ns cn.li.ac.block.wind-gen.gui
   "CLIENT-ONLY: Wind Generator GUI (main + base)."
-  (:require [cn.li.ac.gui.status-poller :as poller]
-            [cn.li.ac.wireless.gui.message.registry :as msg-registry]
-             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
+  (:require [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.mcmod.gui.spec :as gui-reg]
             [cn.li.mcmod.platform.item :as item]
@@ -29,7 +27,11 @@
       (or (= rn "windgen_fan") (= rn "my_mod:windgen_fan") (.endsWith s ":windgen_fan")))))
 
 (defn- create-main-container [tile player]
-  (gui-sync/create-schema-container wind-schema/wind-gen-main-schema tile player :wind-gen-main))
+  (gui-sync/create-schema-container wind-schema/wind-gen-main-schema
+                                    tile
+                                    player
+                                    :wind-gen-main
+                                    {:gui-id (gui-manifest/gui-id :wind-gen-main)}))
 
 (defn- main-slot-count [_] (slot-schema/tile-slot-count main-schema-id))
 (defn- main-get-slot [container slot] (common/get-slot-item-be container slot))
@@ -38,23 +40,9 @@
 (defn- main-can-place? [_ _slot stack] (boolean (fan-item-stack? stack)))
 (defn- main-still-valid? [_ _player] true)
 
-(def ^:private main-sync! (:sync-to-client! main-sync-fns))
-(def ^:private main-sync-data (:get-sync-data main-sync-fns))
-(def ^:private apply-main-sync! (:apply-sync-data! main-sync-fns))
-
-
-(def ^:private main-poll-status!
-  (let [p (poller/create-poller
-            #(msg-registry/msg :wind-gen :get-status-main)
-            (fn [c resp]
-              (when-let [v (:complete resp)] (reset! (:complete c) (boolean v)))
-              (when-let [v (:no-obstacle resp)] (reset! (:no-obstacle c) (boolean v)))
-              (when-let [v (:fan-installed resp)] (reset! (:fan-installed c) (boolean v)))
-              (when-let [v (:status resp)] (reset! (:status c) (str v)))))]
-    (fn [c t] (p c t))))
+(def ^:private main-server-menu-sync! (:server-menu-sync! main-sync-fns))
 
 (defn- create-main-screen [container minecraft-container _player]
-  (main-poll-status! container (:tile-entity container))
   (let [inv-page (tech-ui/create-inventory-page "windmain")
         pages [inv-page]
         info (fn [info-area]
@@ -70,7 +58,11 @@
 (defn- main-container? [container] (= (:container-type container) :wind-gen-main))
 
 (defn- create-base-container [tile player]
-  (gui-sync/create-schema-container wind-schema/wind-gen-base-schema tile player :wind-gen-base))
+  (gui-sync/create-schema-container wind-schema/wind-gen-base-schema
+                                    tile
+                                    player
+                                    :wind-gen-base
+                                    {:gui-id (gui-manifest/gui-id :wind-gen-base)}))
 
 (defn- base-slot-count [_] (slot-schema/tile-slot-count base-schema-id))
 (defn- base-get-slot [container slot] (common/get-slot-item-be container slot))
@@ -79,27 +71,13 @@
 (defn- base-can-place? [_ _slot stack] (boolean (energy/is-energy-item-supported? stack)))
 (defn- base-still-valid? [_ _player] true)
 
-(def ^:private base-sync! (:sync-to-client! base-sync-fns))
-(def ^:private base-sync-data (:get-sync-data base-sync-fns))
-(def ^:private apply-base-sync! (:apply-sync-data! base-sync-fns))
-
-
-(def ^:private base-poll-status!
-  (let [p (poller/create-poller
-            #(msg-registry/msg :wind-gen :get-status-base)
-            (fn [c resp]
-              (when-let [v (:energy resp)] (reset! (:energy c) (double v)))
-              (when-let [v (:max-energy resp)] (reset! (:max-energy c) (double v)))
-              (when-let [v (:gen-speed resp)] (reset! (:gen-speed c) (double v)))
-              (when-let [v (:status resp)] (reset! (:status c) (str v)))))]
-    (fn [c t] (p c t))))
+(def ^:private base-server-menu-sync! (:server-menu-sync! base-sync-fns))
 
 (defn- create-base-screen [container minecraft-container _player]
-  (base-poll-status! container (:tile-entity container))
-    (events/on-frame (:window (tech-ui/create-rework-page "guis/rework/page_windbase.xml"))
-      (fn [_] (swap! poll-ticker inc) (when (zero? (mod @poll-ticker 20)) (base-poll-status! container (:tile-entity container)))))
   (let [inv-page (tech-ui/create-rework-page "guis/rework/page_windbase.xml")
-        wireless-window (wireless-tab/create-wireless-panel {:role :generator :container container})
+        wireless-window (wireless-tab/create-wireless-panel {:role :generator
+                                                             :container container
+                                                             :menu minecraft-container})
         pages [inv-page {:id "wireless" :window wireless-window}]
         max-e (fn [] (max 1.0 (double @(:max-energy container))))
         info (fn [info-area]
@@ -129,9 +107,7 @@
              {:container-predicate main-container?
           :container-fn create-main-container
           :screen-fn create-main-screen
-          :tick-fn main-sync!
-          :sync-get main-sync-data
-          :sync-apply apply-main-sync!
+          :server-menu-sync-fn main-server-menu-sync!
           :validate-fn main-still-valid?
           :close-fn (:on-close main-sync-fns)
           :slot-count-fn main-slot-count
@@ -146,9 +122,7 @@
              {:container-predicate base-container?
               :container-fn create-base-container
               :screen-fn create-base-screen
-              :tick-fn base-sync!
-              :sync-get base-sync-data
-              :sync-apply apply-base-sync!
+              :server-menu-sync-fn base-server-menu-sync!
               :validate-fn base-still-valid?
               :close-fn (:on-close base-sync-fns)
               :slot-count-fn base-slot-count

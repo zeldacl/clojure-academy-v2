@@ -12,9 +12,8 @@
   []
   (slot-validators/register-default-slot-validators!)
   (platform-registry/register-gui-platform-impl!
-    {:safe-tick! dispatcher-api/safe-tick!
+    {:server-menu-sync! dispatcher-api/server-menu-sync!
      :safe-validate dispatcher-api/safe-validate
-     :safe-sync! dispatcher-api/safe-sync!
      :safe-close! dispatcher-api/safe-close!
      :slot-count dispatcher-api/slot-count
      :slot-get-item dispatcher-api/slot-get-item

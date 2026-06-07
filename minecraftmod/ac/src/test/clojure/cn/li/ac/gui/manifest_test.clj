@@ -65,5 +65,4 @@
                                   (keep :message-domain)
                                   set)]
       (is (empty? (manifest/missing-message-domains referenced-domains)))
-      (is (= (set (manifest/message-actions :metal-former))
-             #{:get-status :alternate})))))
+      (is (= #{:alternate} (manifest/message-actions :metal-former)))))

@@ -92,9 +92,10 @@
         ;; This factory is invoked on the CLIENT when Forge recreates the menu
         ;; after receiving the open-screen packet.
           (let [handler (gui-handler/get-gui-handler)
-              pos (registry-common/read-block-pos buf)]
+                {:keys [gui-id buf-gui-id pos]} (registry-common/read-extended-open-payload buf)
+                resolved-gui-id (or buf-gui-id gui-id)]
           (registry-common/create-client-menu!
-            {:gui-id gui-id
+            {:gui-id resolved-gui-id
              :window-id window-id
              :player-inventory player-inventory
              :pos pos
@@ -156,7 +157,7 @@
             provider
             (reify java.util.function.Consumer
               (accept [_ buf]
-                (registry-common/write-block-pos! buf pos)))))
+                (registry-common/write-extended-open-payload! buf gui-id pos)))))
         (do
           (log/info "[OPEN-GUI-FOR-PLAYER] Opening screen without position data...")
           (NetworkHooks/openScreen player provider)))

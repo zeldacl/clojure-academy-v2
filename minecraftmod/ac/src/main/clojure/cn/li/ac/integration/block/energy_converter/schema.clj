@@ -19,17 +19,20 @@
     :default 0.0
     :persist? false
     :gui-sync? true
-    :gui-coerce double}
+    :gui-coerce double
+    :gui-data-slot-scale 100}
 
    {:key :max-energy
     :type :double
     :default (double ec-config/default-energy-capacity)
     :persist? false
     :gui-sync? true
-    :gui-coerce double}
+    :gui-coerce double
+    :gui-data-slot-scale 100}
 
    {:key :wireless-enabled
     :type :boolean
     :default true
     :persist? false
-    :gui-sync? true}])
+    :gui-sync? true
+    :gui-coerce boolean}])

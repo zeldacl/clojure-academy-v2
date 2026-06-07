@@ -42,7 +42,12 @@
 
 (defn create-container [tile player]
   (let [state (or (common/get-tile-state tile) {})]
-    (gui-sync/create-schema-container dev-schema/unified-developer-schema tile player :developer {:state state})))
+    (gui-sync/create-schema-container dev-schema/unified-developer-schema
+                                      tile
+                                      player
+                                      :developer
+                                      {:gui-id (gui-manifest/gui-id :developer)
+                                       :state state})))
 
 (defn get-slot-count [_container]
   (slot-schema/tile-slot-count developer-gui-id))
@@ -76,12 +81,7 @@
              holder (str (:user-uuid st ""))]
          (or (str/blank? holder) (= holder pid)))))
 
-(def sync-to-client! (:sync-to-client! developer-sync))
-(def get-sync-data (:get-sync-data developer-sync))
-(def apply-sync-data! (:apply-sync-data! developer-sync))
-
-(defn tick! [container]
-  (gui-sync/sync-tick! container sync-to-client! {:ticker-key :sync-ticker}))
+(def server-menu-sync! (:server-menu-sync! developer-sync))
 
 (defn handle-button-click! [_container _button-id _player] nil)
 
@@ -100,11 +100,14 @@
 (defn create-developer-gui
   [container _player & [opts]]
   (try
-    (let [inv-page (tech-ui/create-inventory-page "phasegen")
+    (let [container (cond-> container
+                    (:menu opts) (assoc :minecraft-container (:menu opts)))
+          inv-page (tech-ui/create-inventory-page "phasegen")
           node-icon (modid/asset-path "textures" "guis/icons/icon_node.png")
           wireless-window (wireless-tab/create-wireless-panel
                 {:role :receiver
                  :container container
+                 :menu (:menu opts)
                  :tab-logo-path node-icon
                  :connected-row-logo-path node-icon
                  :defer-initial-rebuild? true})
@@ -198,9 +201,7 @@
              {:container-predicate developer-container?
        :container-fn create-container
        :screen-fn create-screen
-       :tick-fn tick!
-       :sync-get get-sync-data
-       :sync-apply apply-sync-data!
+       :server-menu-sync-fn server-menu-sync!
        :validate-fn still-valid?
        :close-fn on-close
        :button-click-fn handle-button-click!

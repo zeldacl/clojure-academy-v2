@@ -10,7 +10,8 @@
     :default 0.0
     :persist? true
     :gui-sync? true
-    :gui-coerce double}
+    :gui-coerce double
+    :gui-data-slot-scale 100}
 
    {:key :max-energy
     :nbt-key "MaxEnergy"
@@ -18,7 +19,8 @@
     :default 6000.0
     :persist? true
     :gui-sync? true
-    :gui-coerce double}
+    :gui-coerce double
+    :gui-data-slot-scale 100}
 
    {:key :gen-speed
     :nbt-key "GenSpeed"
@@ -26,7 +28,8 @@
     :default 0.0
     :persist? true
     :gui-sync? true
-    :gui-coerce double}
+    :gui-coerce double
+    :gui-data-slot-scale 100}
 
    {:key :liquid-amount
     :nbt-key "LiquidAmount"
@@ -58,7 +61,8 @@
     :type :string
     :default "IDLE"
     :persist? true
-    :gui-sync? true}
+    :gui-sync? true
+    :gui-data-slot? false}
 
    {:key :update-ticker
     :type :int

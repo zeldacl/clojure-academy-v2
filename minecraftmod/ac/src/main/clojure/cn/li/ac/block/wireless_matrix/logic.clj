@@ -5,7 +5,6 @@
             [cn.li.ac.block.machine.container :as machine-container]
             [cn.li.ac.block.machine.runtime :as machine-runtime]
             [cn.li.ac.block.wireless-matrix.schema :as matrix-schema]
-            [cn.li.ac.block.machine.sync :as machine-sync]
             [cn.li.ac.item.constraint-plate :as plate]
             [cn.li.ac.item.mat-core :as core]
             [cn.li.ac.wireless.config :as matrix-config]
@@ -202,19 +201,14 @@
                :range (.getMatrixRange impl)))))
 
 (defn matrix-tick-state
-  [state {:keys [level pos be]}]
+  [state {:keys [pos be]}]
   (let [ticker (inc (int (get state :update-ticker 0)))
         state1 (assoc state :update-ticker ticker)]
     (if (and (zero? (:sub-id state1 0))
              (zero? (mod ticker (matrix-config/gui-sync-interval))))
       (try
-        (let [old-payload (::last-broadcast-state state1)
-              payload (machine-sync/broadcast-if-changed!
-                        level pos matrix-schema/unified-matrix-schema state1 old-payload "matrix"
-                        :be be
-                        :extra-payload (fn [_ state pos be]
-                                         (matrix-sync-payload state pos be)))]
-          (cond-> state1 payload (assoc ::last-broadcast-state payload)))
+        (matrix-sync-payload state1 pos be)
+        state1
         (catch Exception e
           (log/debug "Matrix sync skipped:" (ex-message e))
           state1))
@@ -269,5 +263,5 @@
   (fn [{:keys [world pos]}]
     ;; Inventory items are dropped automatically by SharedScriptedBlock.onRemove
     ;; via Containers.dropContents. This handler exists for future cleanup hooks.
-    (when-let [be (world/world-get-tile-entity* world pos)]
+    (when (world/world-get-tile-entity* world pos)
       :break-handled)))

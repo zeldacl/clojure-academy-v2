@@ -21,9 +21,7 @@
             [cn.li.ac.wireless.gui.container.common :as common]
             [cn.li.ac.block.phase-gen.schema :as phase-schema]
             [cn.li.ac.block.phase-gen.config :as phase-config]
-            [cn.li.mcmod.util.log :as log]
-            [cn.li.ac.gui.status-poller :as poller]
-            [cn.li.ac.wireless.gui.message.registry :as msg-registry]))
+            [cn.li.mcmod.util.log :as log]))
 
 (def ^:private phase-slot-schema-id :phase-gen)
 (def ^:private phase-gui-type :phase-gen)
@@ -51,7 +49,11 @@
 
 (defn create-container
   [tile player]
-  (gui-sync/create-schema-container phase-schema/phase-gen-schema tile player phase-gui-type))
+  (gui-sync/create-schema-container phase-schema/phase-gen-schema
+                                    tile
+                                    player
+                                    phase-gui-type
+                                    {:gui-id (gui-manifest/gui-id :phase-gen)}))
 
 (defn get-slot-count [_container]
   (slot-schema/tile-slot-count phase-slot-schema-id))
@@ -75,24 +77,7 @@
 
 (defn still-valid? [_container _player] true)
 
-(def sync-to-client! (:sync-to-client! phase-sync))
-
-(def ^:private phase-poll-status!
-  (let [p (poller/create-poller
-            #(msg-registry/msg :generator :get-status)
-            (fn [c resp]
-              (when-let [v (:energy resp)] (reset! (:energy c) (double v)))
-              (when-let [v (:max-energy resp)] (reset! (:max-energy c) (double v)))
-              (when-let [v (:gen-speed resp)] (reset! (:gen-speed c) (double v)))
-              (when-let [v (:status resp)] (reset! (:status c) (str v)))
-              (when-let [v (:liquid-amount resp)] (reset! (:liquid-amount c) (int v)))
-              (when-let [v (:tank-size resp)] (reset! (:tank-size c) (int v)))))]
-    (fn [c t] (p c t))))
-(def get-sync-data (:get-sync-data phase-sync))
-(def apply-sync-data! (:apply-sync-data! phase-sync))
-
-(defn tick! [container]
-  (sync-to-client! container))
+(def server-menu-sync! (:server-menu-sync! phase-sync))
 
 (defn handle-button-click! [_container _button-id _player] nil)
 
@@ -105,8 +90,6 @@
     (comp/add-component! widget tb)
     (cgui-core/add-widget! parent widget)
     {:widget widget :text-box tb}))
-
-(def ^:private poll-ticker (atom 0))
 
 (defn- attach-panel-readouts!
   [inv-window container]
@@ -121,12 +104,6 @@
         bat-hint (add-panel-text! inv-window 35 89 30 8 "BAT" 0xA0FFFFFF 0.7)]
     (doseq [hint [(:widget in-hint) (:widget out-hint) (:widget bat-hint)]]
       (events/on-frame hint (fn [_] nil)))
-    ;; Status poller: query server every 20 frames
-    (events/on-frame inv-window
-      (fn [_]
-        (swap! poll-ticker inc)
-        (when (zero? (mod @poll-ticker 20))
-          (phase-poll-status! container (:tile-entity container)))))
     (events/on-frame (:widget liquid-val)
       (fn [_]
         (let [liq (int (or @(:liquid-amount container) 0))
@@ -153,9 +130,10 @@
 
 (defn create-screen
   [container minecraft-container _player]
-  (phase-poll-status! container (:tile-entity container))
   (let [inv-page (tech-ui/create-inventory-page "phasegen")
-        wireless-window (wireless-tab/create-wireless-panel {:role :generator :container container})
+        wireless-window (wireless-tab/create-wireless-panel {:role :generator
+                                                             :container container
+                                                             :menu minecraft-container})
         pages [inv-page {:id "wireless" :window wireless-window}]
         max-e (fn [] (max 1.0 (double (or @(:max-energy container) (phase-config/max-energy)))))
         max-liquid (fn [] (max 1.0 (double (or @(:tank-size container) (phase-config/tank-size)))))]
@@ -204,9 +182,7 @@
              {:container-predicate phase-container?
        :container-fn create-container
        :screen-fn create-screen
-       :tick-fn tick!
-       :sync-get get-sync-data
-       :sync-apply apply-sync-data!
+       :server-menu-sync-fn server-menu-sync!
        :validate-fn still-valid?
        :close-fn on-close
        :button-click-fn handle-button-click!

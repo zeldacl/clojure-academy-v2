@@ -9,7 +9,8 @@
     :default 0.0
     :persist? true
     :gui-sync? true
-    :gui-coerce double}
+    :gui-coerce double
+    :gui-data-slot-scale 100}
 
    {:key :max-energy
     :nbt-key "MaxEnergy"
@@ -17,7 +18,8 @@
     :default 3000.0
     :persist? true
     :gui-sync? true
-    :gui-coerce double}
+    :gui-coerce double
+    :gui-data-slot-scale 100}
 
      {:key :work-counter
     :nbt-key "WorkCounter"
@@ -32,14 +34,16 @@
     :type :string
     :default "plate"
     :persist? true
-    :gui-sync? true}
+    :gui-sync? true
+    :gui-data-slot? false}
 
    {:key :working
     :nbt-key "Working"
     :type :boolean
     :default false
     :persist? true
-    :gui-sync? true}
+    :gui-sync? true
+    :gui-coerce boolean}
 
    {:key :current-recipe-id
     :nbt-key "CurrentRecipeId"

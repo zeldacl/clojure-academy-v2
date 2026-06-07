@@ -1,6 +1,7 @@
 (ns cn.li.mcmod.network.server
   "Server-side RPC handler registry for GUI/network logic"
   (:require [cn.li.mcmod.gui.registry-contract :as registry-contract]
+            [cn.li.mcmod.gui.owner-contract :as owner-contract]
             [cn.li.mcmod.util.log :as log]))
 
 (defn default-network-server-runtime-state
@@ -107,6 +108,12 @@
   []
   (network-server-state-snapshot))
 
+(defn- validate-payload-routing!
+  [contract payload]
+  (when (= :sync-routing (:payload-routing contract))
+    (owner-contract/require-sync-routing payload))
+  payload)
+
 (defn handle-request
   "Handle an incoming request and send a response if needed.
 
@@ -117,16 +124,18 @@
   - player: player entity
   - respond-fn: (fn [request-id response-map]) or nil"
   [msg-id request-id payload player respond-fn]
-  (if-let [handler (some-> (get (:handlers (network-server-state-snapshot)) msg-id)
-                            registry-contract/registered-handler-fn)]
-    (try
-      (let [response (handler payload player)]
-        (when (and respond-fn (>= request-id 0))
-          (respond-fn request-id (or response {}))))
-      (catch Exception e
-        (log/error "Error handling request" msg-id ":"(ex-message e))
-        (when (and respond-fn (>= request-id 0))
-          (respond-fn request-id {:success false :error(ex-message e)}))))
+  (if-let [entry (get (:handlers (network-server-state-snapshot)) msg-id)]
+    (let [handler (registry-contract/registered-handler-fn entry)
+          contract (registry-contract/registered-handler-contract entry)]
+      (try
+        (let [payload* (validate-payload-routing! contract payload)
+              response (handler payload* player)]
+          (when (and respond-fn (>= request-id 0))
+            (respond-fn request-id (or response {}))))
+        (catch Exception e
+          (log/error "Error handling request" msg-id ":" (ex-message e))
+          (when (and respond-fn (>= request-id 0))
+            (respond-fn request-id {:success false :error (ex-message e)})))))
     (do
       (log/warn "No handler registered for" msg-id)
       (when (and respond-fn (>= request-id 0))

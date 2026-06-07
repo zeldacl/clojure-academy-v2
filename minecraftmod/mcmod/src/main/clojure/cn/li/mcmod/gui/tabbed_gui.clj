@@ -3,6 +3,7 @@
 
    This is shared client/server tab switching logic used by platform GUI/menu bridges."
   (:require [cn.li.mcmod.gui.container-state :as container-state]
+            [cn.li.mcmod.gui.container.sync-routing :as sync-routing]
             [cn.li.mcmod.gui.cgui-core :as cgui-core]
             [cn.li.mcmod.gui.owner-contract :as owner-contract]
             [cn.li.mcmod.gui.registry-contract :as registry-contract]
@@ -63,24 +64,6 @@
       :player-uuid player-id
       :player player})))
 
-(defn set-tab-index-by-container-id!
-  "Set current tab index for a container id (client-side)."
-  [owner container-id tab-index]
-  (when (integer? container-id)
-    (container-state/set-tab-index-by-container-id! owner container-id tab-index)))
-
-(defn get-tab-index-by-container-id
-  "Get tab index for container id, or nil if not set."
-  [owner container-id]
-  (when (integer? container-id)
-    (container-state/get-tab-index-by-container-id owner container-id)))
-
-(defn clear-tab-index-by-container-id!
-  "Clear tab state when menu is closed."
-  [owner container-id]
-  (when (integer? container-id)
-    (container-state/clear-tab-index-by-container-id! owner container-id)))
-
 (defn- owner-client-session-id
   [owner]
   (when (owner-contract/valid-client-owner? owner)
@@ -104,14 +87,9 @@
                    :reason (ex-message e)})))))
 
 (defn slots-active-for-menu?
-  "True when slot clicks should be allowed for this menu. Prefers client-set tab by container id, else container :tab-index."
-  [menu container]
-  (let [cid (when menu (container-state/get-menu-container-id menu))
-      owner (container-state/owner-from-container container)
-      tid (when cid (get-tab-index-by-container-id owner cid))]
-    (if (some? tid)
-      (zero? (int tid))
-      (slots-active? container))))
+  "True when slot clicks should be allowed. Uses container :tab-index (DataSlot authority)."
+  [_menu container]
+  (slots-active? container))
 
 (defn page-id->index
   "Map page id (e.g. \"inv\", \"panel\") to 0-based tab index from pages sequence.
@@ -151,79 +129,61 @@
     (catch Exception _ nil)))
 
 (defn- handle-set-tab
-  "Server handler for set-tab: update the container that the player's OPEN MENU uses
-   (so clicked/slots see it)."
+  "Server handler for set-tab: update tab-index on the player's validated open container."
   [payload player]
-  (let [tab-index (int (or (:tab-index payload) 0))
-        menu (get-player-menu player)
-        menu-container (when menu (container-state/get-container-for-menu menu))
-        owner (if menu-container
-                (container-state/owner-from-container menu-container)
-                (server-owner-for-player player))
-        container (or menu-container
-                      (when (and menu (container-state/get-menu-container-id menu))
-                        (container-state/get-container-by-id owner (container-state/get-menu-container-id menu)))
-                      (when (some? (:container-id payload))
-                        (container-state/get-container-by-id owner (int (:container-id payload))))
-                      (container-state/get-player-container owner))]
-    (if (and container (tabbed-container? container))
-      (do
-        (reset! (:tab-index container) tab-index)
-        (log/info "Set tab-index to" tab-index "for player" (entity/player-get-name player)))
-      (when-not container
-        (log/warn "set-tab: no container for player" (entity/player-get-name player)))))
+  (try
+    (sync-routing/with-open-container
+      payload
+      player
+      (fn [container _payload _player]
+        (when (tabbed-container? container)
+          (reset! (:tab-index container) (int (or (:tab-index payload) 0)))
+          (log/info "Set tab-index to" @(:tab-index container) "for player"
+                    (entity/player-get-name player)))))
+    (catch Exception e
+      (log/warn "set-tab rejected:" (ex-message e) {:payload payload})))
   {})
 
 (defn register-set-tab-handler!
   "Register the set-tab C2S handler. Call once during init (e.g. from core)."
   []
   (net-server/register-handler set-tab-msg-id handle-set-tab
-                               {:owner-spec :server :payload-routing :none})
+                               {:owner-spec :server :payload-routing :sync-routing})
   (log/info "Registered set-tab network handler"))
 
 (defn send-set-tab!
-  "Client: send tab index and optional container-id to server.
-   tab-index: 0 = inv-window (slots enabled), >= 1 = other panels (slots disabled)."
-  ([tab-index]
-   (send-set-tab! tab-index nil))
+  "Client: send tab index and required container-id to server."
   ([tab-index container-id]
+   (when-not (integer? container-id)
+     (throw (ex-info "set-tab requires container-id" {:tab-index tab-index})))
    (net-client/send-to-server set-tab-msg-id
-     (cond-> {:tab-index (int tab-index)}
-       (some? container-id) (assoc :container-id (int container-id)))))
+     {:tab-index (int tab-index)
+      :container-id (int container-id)}))
   ([owner tab-index container-id]
+   (when-not (integer? container-id)
+     (throw (ex-info "set-tab requires container-id" {:tab-index tab-index})))
    (net-client/send-to-server owner set-tab-msg-id
-     (cond-> {:tab-index (int tab-index)}
-       (some? container-id) (assoc :container-id (int container-id)))
+     {:tab-index (int tab-index)
+      :container-id (int container-id)}
      nil)))
 
 (defn attach-tab-sync!
   "Attach generic tab-change sync between a TechUI instance and a container.
 
-   pages: sequential collection of page maps (same sequence passed to create-tech-ui)
-   tech-ui: map returned by create-tech-ui (expects :current atom)
-   container: container map (may contain :tab-index atom)
-   container-id: optional integer id from `gui/get-menu-container-id`"
+   container-id: required integer from `container-state/get-menu-container-id`."
   [pages tech-ui container container-id]
-    (let [current-atom (:current tech-ui)
-      owner (container-state/owner-from-container container)]
+  (when-not (integer? container-id)
+    (throw (ex-info "attach-tab-sync! requires container-id" {:container-id container-id})))
+  (let [current-atom (:current tech-ui)
+        owner (container-state/owner-from-container container)]
     (when (some? current-atom)
       (add-watch current-atom :tab-sync
         (fn [_ _ _ new-id]
           (when-let [idx (page-id->index pages new-id)]
-            (when (tabbed-container? container)
-              (reset! (:tab-index container) (int idx)))
-            (when (and (integer? container-id)
-                       (owner-client-session-id owner))
-              (set-tab-index-by-container-id! owner container-id (int idx)))
             (send-set-tab-safe! owner idx container-id)))))
 
-    ;; initial sync of current tab
     (when-let [cur (and current-atom @current-atom)]
       (when-let [idx (page-id->index pages cur)]
         (when (tabbed-container? container)
-          (reset! (:tab-index container) (int idx)))
-        (when (and (integer? container-id)
-                   (owner-client-session-id owner))
-          (set-tab-index-by-container-id! owner container-id (int idx)))
-        (send-set-tab-safe! owner idx container-id)))))
+          (send-set-tab-safe! owner idx container-id))))))
 

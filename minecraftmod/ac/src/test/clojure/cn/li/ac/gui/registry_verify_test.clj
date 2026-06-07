@@ -25,14 +25,14 @@
 
 (deftest verify-wireless-handler-registration-test
   (let [contract (gui-manifest/message-domain-contract :node)]
-    (msg-registry/register-block-messages! :node [:get-status] contract)
-    (net-server/register-handler "wireless_node_get_status" (fn [_ _] {}) contract)
+    (msg-registry/register-block-messages! :node [:change-name] contract)
+    (net-server/register-handler "wireless_node_change_name" (fn [_ _] {}) contract)
     (is (nil? (registry-verify/verify-wireless-message-handler-registration!)))))
 
 (deftest finalize-freezes-registries-test
   (let [contract (gui-manifest/message-domain-contract :developer)]
-    (msg-registry/register-block-messages! :developer [:get-status] contract)
-    (net-server/register-handler "wireless_developer_get_status" (fn [_ _] {}) contract)
+    (msg-registry/register-block-messages! :developer [:start-development] contract)
+    (net-server/register-handler "wireless_developer_start_development" (fn [_ _] {}) contract)
     (registry-verify/finalize-gui-network-registration!)
     (is (true? (:frozen? (net-server/handlers-snapshot))))
     (is (true? (:frozen? (msg-registry/registry-snapshot))))))

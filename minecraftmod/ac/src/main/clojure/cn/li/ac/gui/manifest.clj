@@ -13,14 +13,11 @@
 	These domains are consumed by cn.li.ac.wireless.shared.message-registry during
 	content startup and by tests/guards that need one source of truth."
 	{:matrix [:gather-info :init :change-ssid :change-password]
-	 :node [:get-status :change-name :change-password :list-networks :connect :disconnect]
-	 :generator [:get-status :list-nodes :connect :disconnect]
-	 :wind-gen [:get-status-main :get-status-base]
-	 :phase-gen [:get-status]
-	 :imag-fusor [:get-status]
-	 :metal-former [:get-status :alternate]
-	 :developer [:get-status :start-development :stop-development :list-nodes :connect :disconnect]
-	 :ability-interferer [:get-status :change-range :toggle-enabled :set-whitelist :add-to-whitelist :remove-from-whitelist]})
+	 :node [:change-name :change-password :list-networks :connect :disconnect]
+	 :generator [:list-nodes :connect :disconnect]
+	 :metal-former [:alternate]
+	 :developer [:start-development :stop-development :list-nodes :connect :disconnect]
+	 :ability-interferer [:change-range :toggle-enabled :set-whitelist :add-to-whitelist :remove-from-whitelist]})
 
 (def message-domain-contracts
 	"Registry-phase handler contracts for wireless GUI message domains.
@@ -70,7 +67,6 @@
 				 :registry-name "wind_gen_main_gui"
 				 :screen-factory-fn-kw :create-wind-main-screen
 				 :slot-schema-id :wind-gen-main
-				 :message-domain :wind-gen
 				 :init-fn 'cn.li.ac.block.wind-gen.gui/init-wind-gen-gui!}
 	 :wind-gen-base {:gui-name "wind-gen-base"
 				 :gui-id 4
@@ -79,7 +75,6 @@
 				 :registry-name "wind_gen_base_gui"
 				 :screen-factory-fn-kw :create-wind-base-screen
 				 :slot-schema-id :wind-gen-base
-				 :message-domain :wind-gen
 				 :init-fn 'cn.li.ac.block.wind-gen.gui/init-wind-gen-gui!}
 	 :imag-fusor {:gui-name "imag-fusor"
 			  :gui-id 5
@@ -88,7 +83,6 @@
 			  :registry-name "imag_fusor_gui"
 			  :screen-factory-fn-kw :create-imag-fusor-screen
 			  :slot-schema-id :imag-fusor
-			  :message-domain :imag-fusor
 			  :init-fn 'cn.li.ac.block.imag-fusor.gui/init-imag-fusor-gui!}
 	 :metal-former {:gui-name "metal-former"
 				 :gui-id 6
@@ -106,7 +100,6 @@
 			 :registry-name "phase_gen_gui"
 			 :screen-factory-fn-kw :create-phase-gen-screen
 			 :slot-schema-id :phase-gen
-			 :message-domain :phase-gen
 			 :init-fn 'cn.li.ac.block.phase-gen.gui/init-phase-gen-gui!}
 	 :developer {:gui-name "developer"
 			 :gui-id 13

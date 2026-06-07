@@ -37,8 +37,7 @@
 
 (def ^:private converter-sync
 	(gui-sync/schema-sync-fns ec-schema/energy-converter-gui-schema
-		{:after-sync! reset-derived-mode!
-		 :after-apply! apply-derived-mode!}))
+		{:after-sync! reset-derived-mode!}))
 
 (defn- create-container
 	[tile player]
@@ -48,7 +47,8 @@
 			 tile
 			 player
 			 converter-gui-type
-			 {:state state
+			 {:gui-id (gui-manifest/gui-id :energy-converter)
+				:state state
 				:base {:block-id block-id
 						 :wireless-mode (atom (block-wireless-mode block-id))
 						 :status (atom (if (output-block? block-id) "OUTPUT" "INPUT"))}})))
@@ -62,34 +62,22 @@
 (defn- can-place-item? [_container _slot-index _item-stack] false)
 (defn- still-valid? [_container _player] true)
 
-(def ^:private sync-to-client! (:sync-to-client! converter-sync))
-
-(defn- get-sync-data
-	[container]
-	(assoc ((:get-sync-data converter-sync) container)
-		:status @(:status container)
-		:wireless-mode @(:wireless-mode container)))
-
-(def ^:private apply-sync-data! (:apply-sync-data! converter-sync))
-
-(defn- tick!
-	[container]
-	(gui-sync/sync-tick! container sync-to-client!))
+(def ^:private server-menu-sync! (:server-menu-sync! converter-sync))
 
 (def ^:private on-close (:on-close converter-sync))
 (defn- handle-button-click! [_container _button-id _player] nil)
 
 (defn- create-wireless-page
-	[container]
+	[container & [opts]]
 	(wireless-tab/create-wireless-panel
 		{:role (if (= @(:wireless-mode container) :generator) :generator :receiver)
-		 :container container}))
+		 :container container
+		 :menu (:menu opts)}))
 
 (defn- create-screen
 	[container minecraft-container _player]
-	(sync-to-client! container)
 	(let [inv-page (tech-ui/create-inventory-page "inventory")
-				wireless-page {:id "wireless" :window (create-wireless-page container)}
+				wireless-page {:id "wireless" :window (create-wireless-page container {:menu minecraft-container})}
 				pages [inv-page wireless-page]
 				max-e (fn [] (max 1.0 (double @(:max-energy container))))
 				ratio (fn [] (/ (double @(:energy container)) (max-e)))
@@ -132,9 +120,7 @@
 					 {:container-predicate converter-container?
 			 :container-fn create-container
 			 :screen-fn create-screen
-			 :tick-fn tick!
-			 :sync-get get-sync-data
-			 :sync-apply apply-sync-data!
+			 :server-menu-sync-fn server-menu-sync!
 			 :validate-fn still-valid?
 			 :close-fn on-close
 			 :button-click-fn handle-button-click!

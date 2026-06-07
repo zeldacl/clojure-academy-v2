@@ -31,6 +31,7 @@
     :default :basic
     :persist? true
     :gui-sync? true
+    :gui-data-slot-enum {:basic 0 :standard 1 :advanced 2}
     :gui-coerce keyword
     :gui-close-reset :basic
     :doc "Node tier: :basic, :standard, or :advanced"}
@@ -41,6 +42,7 @@
     :default ""
     :persist? true
     :gui-sync? true
+    :gui-data-slot? false
     :gui-close-reset ""
     :doc "Player who placed this block (owner)"}
 
@@ -51,7 +53,8 @@
     :default 0.0
     :persist? true
     :gui-sync? true
-    :gui-coerce int
+    :gui-coerce double
+    :gui-data-slot-scale 100
     :gui-close-reset 0
     :doc "Current energy stored"}
 
@@ -62,6 +65,7 @@
     :default "Unnamed"
     :persist? true
     :gui-sync? true
+    :gui-data-slot? false
     :gui-container-key :ssid
     :gui-payload-key :node-name
     :gui-close-reset ""
@@ -73,6 +77,7 @@
     :default ""
     :persist? true
     :gui-sync? true
+    :gui-data-slot? false
     :gui-close-reset ""
     :doc "Network password"}
 
@@ -82,6 +87,7 @@
     :default false
     :persist? true
     :gui-sync? true
+    :gui-coerce boolean
     :gui-container-key :is-online
     :gui-payload-key :enabled
     :gui-close-reset false
@@ -128,18 +134,21 @@
   [;; Synced from server
    {:key :energy
     :gui-sync? true
-    :gui-coerce int
+    :gui-coerce double
+    :gui-data-slot-scale 100
     :gui-close-reset 0
     :doc "Current energy (synced from server)"}
 
    {:key :node-type
     :gui-sync? true
+    :gui-data-slot-enum {:basic 0 :standard 1 :advanced 2}
     :gui-coerce keyword
     :gui-close-reset :basic
     :doc "Node tier (synced from server)"}
 
    {:key :placer-name
     :gui-sync? true
+    :gui-data-slot? false
     :gui-close-reset ""
     :doc "Owner name (synced from server)"}
 
@@ -147,11 +156,13 @@
     :gui-container-key :ssid
     :gui-payload-key :node-name
     :gui-sync? true
+    :gui-data-slot? false
     :gui-close-reset ""
     :doc "Network SSID (synced from server)"}
 
    {:key :password
     :gui-sync? true
+    :gui-data-slot? false
     :gui-close-reset ""
     :doc "Network password (synced from server)"}
 
@@ -159,23 +170,27 @@
     :gui-container-key :is-online
     :gui-payload-key :enabled
     :gui-sync? true
+    :gui-coerce boolean
     :gui-close-reset false
     :doc "Connection state (synced from server)"}
 
    {:key :charging-in
     :gui-sync? true
+    :gui-coerce boolean
     :gui-close-reset false
     :doc "Charging from input slot (ephemeral, synced from server)"}
 
    {:key :charging-out
     :gui-sync? true
+    :gui-coerce boolean
     :gui-close-reset false
     :doc "Charging to output slot (ephemeral, synced from server)"}
 
    {:key :tab-index
     :gui-only? true
     :gui-init (fn [_] 0)
-    :gui-sync? true
+    :gui-sync? false
+    :gui-data-slot? false
     :gui-coerce int
     :gui-close-reset 0
     :doc "Current GUI tab index (client-only)"}])
@@ -249,6 +264,7 @@
     :gui-only? true
     :gui-init (fn [_] 0)
     :gui-sync? false
+    :gui-data-slot? false
     :gui-coerce int
     :gui-close-reset 0
     :doc "Query throttle ticker (client-only)"}])
@@ -265,6 +281,7 @@
     :default false
     :persist? false
     :gui-sync? true
+    :gui-coerce boolean
     :gui-close-reset false
     :doc "Currently charging from input slot (server-side, synced to GUI)"}
 
@@ -273,6 +290,7 @@
     :default false
     :persist? false
     :gui-sync? true
+    :gui-coerce boolean
     :gui-close-reset false
     :doc "Currently charging to output slot (server-side, synced to GUI)"}
 
@@ -332,7 +350,7 @@
 
   3. GUI-CONTAINER (9 fields)
      - Client-side GUI container atoms
-     - Used by: gui.clj (create-container, sync-to-client!)
+     - Used by: gui.clj (create-container, server-menu-sync!)
      - Examples: energy, node-type, ssid, password, is-online, charging-in/out, tab-index
 
   4. NETWORK-EDITABLE (2 fields)

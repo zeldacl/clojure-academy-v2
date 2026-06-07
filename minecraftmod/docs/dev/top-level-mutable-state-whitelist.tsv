@@ -12,5 +12,4 @@ ac/src/main/clojure/cn/li/ac/ability/spi_lifecycle.clj	lifecycle-registry-runtim
 ac/src/main/clojure/cn/li/ac/ability/discovery.clj	bootstrap-attempts*	S2_RUNTIME_COMPONENT	ability/discovery	Process-local bootstrap attempt counter for classpath provider discovery idempotency and tests.
 ac/src/main/clojure/cn/li/ac/block/wireless_matrix/inventory.clj	matrix-slot-schema-registration	S2_RUNTIME_COMPONENT	ac/wireless-matrix	Lazy, process-local registration guard for wireless-matrix slot schema bootstrap.
 ac/src/main/clojure/cn/li/ac/block/wireless_node/inventory.clj	node-slot-schema-registration	S2_RUNTIME_COMPONENT	ac/wireless-node	Lazy, process-local registration guard for wireless-node slot schema bootstrap.
-ac/src/main/clojure/cn/li/ac/gui/platform_adapter/sync_bootstrap.clj	client-handler-installed?	S2_RUNTIME_COMPONENT	ac/gui-client-sync	Client-only idempotency guard preventing duplicate push-handler registration.
 mcmod/src/main/clojure/cn/li/mcmod/hooks/core.clj	allowed-runtime-hook-keys*	S2_RUNTIME_COMPONENT	mcmod/hooks-core	Process-local allowlist for neutral runtime-hook validation extended by AC during startup.

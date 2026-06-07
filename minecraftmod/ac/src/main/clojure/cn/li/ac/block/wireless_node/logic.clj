@@ -3,7 +3,6 @@
   (:require [clojure.string :as str]
             [cn.li.ac.block.machine.container :as machine-container]
             [cn.li.ac.block.machine.runtime :as machine-runtime]
-            [cn.li.ac.block.machine.sync :as machine-sync]
             [cn.li.ac.block.wireless-node.schema :as node-schema]
             [cn.li.ac.energy.operations :as energy]
             [cn.li.ac.wireless.api :as wireless-api]
@@ -196,10 +195,9 @@
 (defn- sync-blockstate-if-changed!
   [_be level pos old-state new-state _ctx]
   (when (and level pos (zero? (mod (get new-state :update-ticker 0) (node-config/sync-interval))))
-    (let [old-sync (::last-broadcast-state old-state)
-          old-level (energy->blockstate-level (:energy old-sync 0) new-state)
+    (let [old-level (energy->blockstate-level (:energy old-state 0) new-state)
           new-level (energy->blockstate-level (:energy new-state 0) new-state)
-          old-enabled (:enabled old-sync false)
+          old-enabled (:enabled old-state false)
           new-enabled (:enabled new-state false)]
       (when (or (not= new-level old-level) (not= new-enabled old-enabled))
         (update-block-state! new-state level pos)))))
@@ -211,14 +209,9 @@
         state2 (try (tick-charge-in state1) (catch Exception _ state1))
         state3 (try (tick-charge-out state2) (catch Exception _ state2))]
     (if (zero? (mod ticker (node-config/sync-interval)))
-      (let [state4 (try (tick-check-network state3 level pos be) (catch Exception _ state3))
-            old-sync (::last-broadcast-state state4)
-            new-sync (machine-sync/broadcast-if-changed!
-                       level pos node-state-schema state4 old-sync "node"
-                       :be be
-                       :extra-payload (fn [payload _ _ _]
-                                        (assoc payload :max-energy (node-max-energy state4))))]
-        (cond-> state4 new-sync (assoc ::last-broadcast-state new-sync)))
+      (try
+        (tick-check-network state3 level pos be)
+        (catch Exception _ state3))
       state3)))
 
 (def node-scripted-tick-fn

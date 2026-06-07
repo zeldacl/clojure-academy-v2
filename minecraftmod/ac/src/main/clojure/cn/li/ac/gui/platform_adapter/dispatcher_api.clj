@@ -3,9 +3,8 @@
   (:require [cn.li.ac.wireless.gui.container.dispatcher :as dispatcher]
             [cn.li.mcmod.gui.registry :as gui-registry]))
 
-(def safe-tick! dispatcher/safe-tick!)
 (def safe-validate dispatcher/safe-validate)
-(def safe-sync! dispatcher/safe-sync!)
+(def server-menu-sync! dispatcher/server-menu-sync!)
 (def safe-handle-button-click! dispatcher/safe-handle-button-click!)
 (def safe-handle-text-input! dispatcher/safe-handle-text-input!)
 (def safe-close! dispatcher/safe-close!)

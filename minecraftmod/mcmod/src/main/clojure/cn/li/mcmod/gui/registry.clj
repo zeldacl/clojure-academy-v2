@@ -96,14 +96,14 @@
 (defn get-container-fn [gui-id]
   (some-> (get-gui-by-gui-id gui-id) (get-in [:lifecycle :container-fn])))
 
+(defn get-server-menu-sync-fn [gui-id]
+  (some-> (get-gui-by-gui-id gui-id) (get-in [:lifecycle :server-menu-sync-fn])))
+
 (defn get-screen-fn [gui-id]
   (some-> (get-gui-by-gui-id gui-id) (get-in [:lifecycle :screen-fn])))
 
 (defn get-container-predicate [gui-id]
   (some-> (get-gui-by-gui-id gui-id) (get-in [:lifecycle :container-predicate])))
-
-(defn get-payload-sync-apply-fn [gui-id]
-  (some-> (get-gui-by-gui-id gui-id) (get-in [:sync :payload-sync-apply-fn])))
 
 (defn get-slot-range [gui-id section]
   (if-let [layout (get-slot-layout gui-id)]

@@ -1,5 +1,5 @@
 (ns cn.li.ac.block.developer.panel
-  "Classic AcademyCraft `page_developer.xml`: load once, bind widgets to container + optional status poll.
+  "Classic AcademyCraft `page_developer.xml`: load once, bind widgets to container atoms.
   Full wireless list is embedded under `parent_right/area` from code (`gui.clj`); the Wireless tab reuses the same page."
   (:require 
             [cn.li.ac.ability.service.runtime-store :as store]
@@ -23,6 +23,7 @@
             [cn.li.ac.ability.rules.learning-rules :as learning-rules]
             [cn.li.ac.ability.config :as cfg]
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
+            [cn.li.mcmod.gui.container.action-payload :as action-payload]
             [cn.li.ac.wireless.gui.sync.handler :as net-helpers]
             [cn.li.mcmod.platform.be :as platform-be]))
 
@@ -184,25 +185,24 @@
       (log/error "developer classic XML:" (ex-message e))
       (cgui-core/create-widget :name "main" :pos [0 0] :size [400 187]))))
 
-(defn- sync-remote-node-name!
-  [root container last-net-ms]
-  (let [now (long (System/currentTimeMillis))
-        tile (:tile-entity container)]
-    (when (and tile (> (- now ^long @last-net-ms) 500))
-      (reset! last-net-ms now)
-      (net-client/send-to-server (dev-msg :get-status) (net-helpers/tile-pos-payload tile)
-        (fn [resp]
-          (when (map? resp)
-            (set-text-path! root "parent_left/panel_machine/button_wireless/text_nodename"
-              (if-let [n (:linked resp)]
-                (or (:node-name n) "N/A")
-                "N/A"))))))))
+(defn- refresh-linked-node-label!
+  [root container]
+  (when (:tile-entity container)
+    (net-client/send-to-server
+      (dev-msg :list-nodes)
+      (action-payload/action-payload container {})
+      (fn [resp]
+        (when (map? resp)
+          (set-text-path! root "parent_left/panel_machine/button_wireless/text_nodename"
+            (if-let [n (:linked resp)]
+              (or (:node-name n) "N/A")
+              "N/A")))))))
 
 (defn attach-classic-developer-bindings!
   "`switch-wireless-tab!` �?thunk (e.g. `tabbed-gui/switch-tab!` to the `:wireless` page)."
   [root container {:keys [switch-wireless-tab!]}]
-  (let [pl (:player container)
-        last-net-ms (atom 0)]
+  (let [pl (:player container)]
+    (refresh-linked-node-label! root container)
     (when-let [learn (cgui-core/find-widget root "parent_left/panel_ability/btn_upgrade")]
       (events/on-left-click learn
         (fn [_]
@@ -229,7 +229,6 @@
           (set-progress-path! root "parent_left/panel_ability/logo_progress" cat-prog01)
           (set-progress-path! root "parent_left/panel_machine/progress_power" power01)
           (set-progress-path! root "parent_left/panel_machine/progress_syncrate" sync01)
-          (set-visible-path! root "parent_left/panel_ability/btn_upgrade" can-upgrade?)
-          (sync-remote-node-name! root container last-net-ms))))
+          (set-visible-path! root "parent_left/panel_ability/btn_upgrade" can-upgrade?))))
     root))
 

@@ -38,32 +38,34 @@
 (deftest request-set-range-keeps-authoritative-range-until-sync-test
   (let [calls (atom [])
         container {:tile-entity :tile
+                   :container-id 3
                    :range (atom 10.0)
                    :pending-range (atom nil)}]
-    (with-redefs [sync-handler/tile-pos-payload (fn [_] {:pos-x 1 :pos-y 2 :pos-z 3})
-            msg-registry/msg (fn [_ action] [:ability-interferer action])
+    (with-redefs [msg-registry/msg (fn [_ action] [:ability-interferer action])
             net-client/send-to-server (fn [msg-id payload]
                           (swap! calls conj [msg-id payload]))]
       ((pv 'request-set-range!) container 42.0)
       (is (= 10.0 @(:range container)))
       (is (= 42.0 @(:pending-range container)))
       (is (= 1 (count @calls)))
-      (is (= 42.0 (get-in @calls [0 1 :range]))))))
+      (is (= 42.0 (get-in @calls [0 1 :range])))
+      (is (= 3 (get-in @calls [0 1 :container-id]))))))
 
 (deftest request-set-enabled-keeps-authoritative-enabled-until-sync-test
   (let [calls (atom [])
         container {:tile-entity :tile
+                   :container-id 3
                    :enabled (atom false)
                    :pending-enabled (atom nil)}]
-    (with-redefs [sync-handler/tile-pos-payload (fn [_] {:pos-x 1 :pos-y 2 :pos-z 3})
-            msg-registry/msg (fn [_ action] [:ability-interferer action])
+    (with-redefs [msg-registry/msg (fn [_ action] [:ability-interferer action])
             net-client/send-to-server (fn [msg-id payload]
                           (swap! calls conj [msg-id payload]))]
       ((pv 'request-set-enabled!) container true)
       (is (false? @(:enabled container)))
       (is (true? @(:pending-enabled container)))
       (is (= 1 (count @calls)))
-      (is (true? (get-in @calls [0 1 :enabled]))))))
+      (is (true? (get-in @calls [0 1 :enabled])))
+      (is (= 3 (get-in @calls [0 1 :container-id]))))))
 
 (deftest after-sync-or-apply-clears-pending-and-refreshes-view-test
   (let [refresh-calls (atom 0)

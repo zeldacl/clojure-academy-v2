@@ -8,9 +8,7 @@
             [cn.li.mcmod.gui.container-state :as cs]
             [cn.li.mcmod.gui.adapter.platform-registry :as platform]
             [cn.li.mcmod.gui.tabbed-gui :as tabbed]
-            [cn.li.mcmod.gui.container.schema :as container-schema]
             [cn.li.mcmod.gui.owner-contract :as owner-contract]
-            [cn.li.mc1201.gui.slots.tabbed :as tabbed-slots]
             [cn.li.mc1201.gui.slots.sync :as slots-sync]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.util.log :as log])
@@ -90,21 +88,11 @@
       (.callSuperRemoved s player)))
   (log/info log-message (str player)))
 
-(defn- broadcast-and-sync!
-  [this clj-container before-super-broadcast!]
-  (when before-super-broadcast!
-    (before-super-broadcast!))
+(defn- broadcast-menu-changes!
+  [this clj-container]
+  (platform/server-menu-sync! clj-container)
   (let [^CMenuBridge s this]
-    (.callSuperBroadcastChanges s))
-  (let [sync-get (:sync-get clj-container)
-        last-sent (:sync-last-sent clj-container)
-        has-sent? (:sync-has-sent? clj-container)]
-    (if (and sync-get last-sent has-sent?)
-      (let [payload (sync-get clj-container)]
-        (when (container-schema/sync-payload-dirty? last-sent has-sent? payload)
-          (container-schema/cache-sync-payload! last-sent has-sent? payload)
-          (platform/safe-sync! clj-container)))
-      (platform/safe-sync! clj-container))))
+    (.callSuperBroadcastChanges s)))
 
 (defn- quick-move-stack
   [this clj-container player slot-index error-prefix]
@@ -210,8 +198,6 @@
                                            quick-move-error-prefix "Error in quickMoveStack:"}}]
   (let [owner (owner-for-player player)
         clj-container (enrich-container-owner clj-container owner)
-        tab-slot (when (tabbed/tabbed-container? clj-container)
-                   (tabbed-slots/create-tab-data-slot clj-container))
         menu (proxy [CMenuBridge] [menu-type (int window-id)]
                (stillValid [player]
                  (boolean (platform/safe-validate clj-container player)))
@@ -221,17 +207,11 @@
                   this
                   clj-container
                   player
-                  {:on-container-id tabbed/clear-tab-index-by-container-id!
-                   :call-super-removed? call-super-removed?
+                  {:call-super-removed? call-super-removed?
                    :log-message remove-log-message}))
 
                (broadcastChanges []
-                 (broadcast-and-sync!
-                  this
-                  clj-container
-                  (fn []
-                    (tabbed-slots/sync-tab-slot-from-container! tab-slot clj-container)
-                    (slots-sync/sync-data-slots-from-container! clj-container))))
+                 (broadcast-menu-changes! this clj-container))
 
                (clicked [slot-index button click-type player]
                  (when (or (not (tabbed/tabbed-container? clj-container))
@@ -246,8 +226,8 @@
 
                (canTakeItemForPickAll [_stack _slot] true)
                (canDragTo [_slot] true))]
-    (slots-sync/setup-menu-slots! menu clj-container tab-slot {:get-slot-layout get-slot-layout
-                                                               :default-player-inventory-mode default-player-inventory-mode})
+    (slots-sync/setup-menu-slots! menu clj-container nil {:get-slot-layout get-slot-layout
+                                                        :default-player-inventory-mode default-player-inventory-mode})
     (finalize-menu-registration! menu window-id clj-container owner)))
 
 (defn create-platform-menu-proxy

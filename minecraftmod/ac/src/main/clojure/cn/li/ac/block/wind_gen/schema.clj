@@ -22,28 +22,33 @@
     :type :boolean
     :default false
     :persist? true
-    :gui-sync? true}
+    :gui-sync? true
+    :gui-coerce boolean}
 
    {:key :no-obstacle
     :nbt-key "NoObstacle"
     :type :boolean
     :default false
     :persist? true
-    :gui-sync? true}
+    :gui-sync? true
+    :gui-coerce boolean}
 
    {:key :fan-installed
     :nbt-key "FanInstalled"
     :type :boolean
     :default false
     :persist? true
-    :gui-sync? true}
+    :gui-sync? true
+    :gui-coerce boolean}
 
    {:key :status
     :nbt-key "Status"
     :type :string
     :default "STOPPED"
     :persist? true
-    :gui-sync? true}
+    :gui-sync? true
+    :gui-data-slot? true
+    :gui-data-slot-status-codes ["STOPPED" "WEAK" "STRONG"]}
 
    {:key :update-ticker
     :type :int
@@ -59,7 +64,8 @@
     :type :boolean
     :default false
     :persist? false
-    :gui-sync? true}])
+    :gui-sync? true
+    :gui-coerce boolean}])
 
 ;; ============================================================================
 ;; Wind Generator Base Schema
@@ -73,7 +79,8 @@
     :default 0.0
     :persist? true
     :gui-sync? true
-    :gui-coerce double}
+    :gui-coerce double
+    :gui-data-slot-scale 100}
 
    {:key :max-energy
     :nbt-key "MaxEnergy"
@@ -81,7 +88,8 @@
     :default 20000.0
     :persist? true
     :gui-sync? true
-    :gui-coerce double}
+    :gui-coerce double
+    :gui-data-slot-scale 100}
 
      {:key :gen-speed
     :nbt-key "GenSpeed"
@@ -89,7 +97,8 @@
     :default 0.0
     :persist? true
     :gui-sync? true
-    :gui-coerce double}
+    :gui-coerce double
+    :gui-data-slot-scale 100}
 
      {:key :inventory
     :nbt-key "Inventory"
@@ -105,14 +114,16 @@
     :type :string
     :default "BASE_ONLY"
     :persist? true
-    :gui-sync? true}
+    :gui-sync? true
+    :gui-data-slot? false}
 
    {:key :status
     :nbt-key "Status"
     :type :string
     :default "IDLE"
     :persist? true
-    :gui-sync? true}
+    :gui-sync? true
+    :gui-data-slot? false}
 
    {:key :update-ticker
     :type :int
@@ -123,7 +134,8 @@
     :type :boolean
     :default false
     :persist? false
-    :gui-sync? true}
+    :gui-sync? true
+    :gui-coerce boolean}
 
    {:key :main-pos-x
     :nbt-key "MainPosX"

@@ -1,8 +1,6 @@
 (ns cn.li.ac.block.metal-former.gui
   "CLIENT-ONLY: Metal Former GUI"
-  (:require [cn.li.ac.gui.status-poller :as poller]
-            [cn.li.ac.wireless.gui.message.registry :as msg-registry]
-             [clojure.string :as str]
+  (:require [clojure.string :as str]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.gui.cgui-core :as cgui-core]
             [cn.li.mcmod.gui.components :as comp]
@@ -18,7 +16,7 @@
             [cn.li.ac.block.metal-former.recipes :as recipes]
             [cn.li.ac.block.metal-former.schema :as former-schema]
             [cn.li.ac.wireless.gui.container.common :as common]
-            [cn.li.ac.wireless.gui.sync.handler :as net-helpers]
+            [cn.li.mcmod.gui.container.action-payload :as action-payload]
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.ac.energy.operations :as energy]))
 
@@ -41,7 +39,11 @@
 
 (defn- create-container
   [tile player]
-  (gui-sync/create-schema-container former-gui-schema tile player former-gui-type))
+  (gui-sync/create-schema-container former-gui-schema
+                                    tile
+                                    player
+                                    former-gui-type
+                                    {:gui-id (gui-manifest/gui-id :metal-former)}))
 
 (defn- get-slot-count [_container]
   (slot-schema/tile-slot-count former-slot-schema-id))
@@ -62,49 +64,23 @@
 
 (defn- still-valid? [_container _player] true)
 
-(def ^:private sync-to-client! (:sync-to-client! former-sync))
-(def ^:private poll-ticker (atom 0))
-
-(def ^:private former-poll-status!
-  (let [p (poller/create-poller
-            #(msg-registry/msg :metal-former :get-status)
-            (fn [c resp]
-              (when-let [v (:energy resp)] (reset! (:energy c) (double v)))
-              (when-let [v (:max-energy resp)] (reset! (:max-energy c) (double v)))
-              (when-let [v (:work-counter resp)] (reset! (:work-counter c) (int v)))
-              (when-let [v (:mode resp)] (reset! (:mode c) (str v)))
-              (when-let [v (:working resp)] (reset! (:working c) (boolean v)))))]
-    (fn [c t] (p c t))))
-
-
-(defn- get-sync-data [container]
-  (assoc ((:get-sync-data former-sync) container)
-         :mode (recipes/mode->string @(:mode container))))
-
-(def ^:private apply-sync-data! (:apply-sync-data! former-sync))
-
-(defn- tick! [container]
-  (gui-sync/sync-tick! container sync-to-client!))
+(def ^:private server-menu-sync! (:server-menu-sync! former-sync))
 
 (def ^:private on-close (:on-close former-sync))
 (defn- handle-button-click! [_container _button-id _player] nil)
 
 (defn- request-alternate!
   [container dir]
-  (let [tile (:tile-entity container)
-        payload (assoc (net-helpers/tile-pos-payload tile) :dir (int dir))]
-    (net-client/send-to-server
-      (msg :alternate)
-      payload
-      (fn [resp]
-        (when-let [mode (:mode resp)]
-          (reset! (:mode container) (recipes/normalize-mode mode)))))))
+  (net-client/send-to-server
+    (msg :alternate)
+    (action-payload/action-payload container {:dir (int dir)})
+    (fn [resp]
+      (when (and (:success resp) (:mode resp))
+        (reset! (:mode container) (recipes/normalize-mode (:mode resp)))))))
 
 (defn- bind-progress!
   [inv-window container]
-  (events/on-frame inv-window
-      (fn [_] (swap! poll-ticker inc) (when (zero? (mod @poll-ticker 20)) (former-poll-status! container (:tile-entity container)))))
-    (when-let [widget (cgui-core/find-widget inv-window "progress")]
+  (when-let [widget (cgui-core/find-widget inv-window "progress")]
     (when-let [bar (comp/get-component widget :progressbar)]
       (events/on-frame widget
         (fn [_]
@@ -134,7 +110,6 @@
 
 (defn- create-screen
   [container minecraft-container _player]
-  (former-poll-status! container (:tile-entity container))
   (let [inv-page (tech-ui/create-rework-page "guis/rework/page_metalformer.xml")
         inv-window (:window inv-page)
       pages [inv-page]
@@ -187,9 +162,7 @@
              {:container-predicate former-container?
        :container-fn create-container
        :screen-fn create-screen
-       :tick-fn tick!
-       :sync-get get-sync-data
-       :sync-apply apply-sync-data!
+       :server-menu-sync-fn server-menu-sync!
        :validate-fn still-valid?
        :close-fn on-close
        :button-click-fn handle-button-click!

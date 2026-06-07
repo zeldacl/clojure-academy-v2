@@ -3,6 +3,7 @@
   (:require [cn.li.ac.wireless.api :as wireless-api]
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.ac.wireless.gui.sync.handler :as net-helpers]
+            [cn.li.mcmod.gui.container.sync-routing :as sync-routing]
             [cn.li.mcmod.network.server :as net-server]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.util.log :as log])
@@ -35,6 +36,11 @@
                      (same-block-pos? p linked-pos))))
          (mapv wireless-node->info))))
 
+(defn- tile-from-payload
+  [payload player]
+  (let [container (sync-routing/require-open-container! payload player)]
+    (:tile-entity container)))
+
 (defn register-link-handlers!
   "Register list/connect/disconnect handlers for a wireless-linked machine.
 
@@ -43,60 +49,57 @@
   - :get-linked-node (fn [tile] -> node or nil)
   - :link! (fn [tile node password need-auth?] -> bool)
   - :unlink! (fn [tile] -> nil)
-  - :status-fn optional (fn [payload player tile] -> map) for :get-status
   - :extra-handlers optional map msg-keyword -> handler
   - :log-label optional string"
-  [{:keys [message-domain get-linked-node link! unlink! status-fn extra-handlers log-label]}]
+  [{:keys [message-domain get-linked-node link! unlink! extra-handlers log-label]}]
   (let [msg (fn [action] (msg-registry/msg message-domain action))
-        handle-get-status
-        (fn [payload player]
-          (let [world (net-helpers/get-world player)
-                tile (net-helpers/get-tile-at world payload)]
-            (if (and tile status-fn)
-              (status-fn payload player tile)
-              (let [linked (some-> tile get-linked-node wireless-node->info)]
-                {:linked linked :avail []}))))
         handle-list-nodes
         (fn [payload player]
-          (let [world (net-helpers/get-world player)
-                tile (net-helpers/get-tile-at world payload)]
-            (log/info "[handle-list-nodes] tile=" (some? tile) "world=" (some? world))
-            (if tile
-              (let [tile-pos (pos/position-get-block-pos tile)
-                    linked-node (get-linked-node tile)
-                    avail (available-nodes world tile-pos linked-node)]
-                (log/info "[handle-list-nodes] linked-node=" (some? linked-node) "avail-count=" (count avail))
-                {:linked (wireless-node->info linked-node)
-                 :avail avail})
-              {:linked nil :avail []})))
+          (try
+            (let [tile (tile-from-payload payload player)
+                  world (net-helpers/get-world player)]
+              (log/info "[handle-list-nodes]" log-label "tile=" (some? tile))
+              (if tile
+                (let [tile-pos (pos/position-get-block-pos tile)
+                      linked-node (get-linked-node tile)
+                      avail (available-nodes world tile-pos linked-node)]
+                  {:success true
+                   :linked (wireless-node->info linked-node)
+                   :avail avail})
+                {:success false :linked nil :avail []}))
+            (catch Exception e
+              {:success false :error (ex-message e)})))
         handle-connect
         (fn [payload player]
-          (let [world (net-helpers/get-world player)
-                device (net-helpers/get-tile-at world payload)
-                node-pos (select-keys payload [:node-x :node-y :node-z])
-                pass (:password payload "")
-                need-auth? (boolean (:need-auth? payload true))]
-            (if (and world device
-                     (number? (:node-x node-pos))
-                     (number? (:node-y node-pos))
-                     (number? (:node-z node-pos)))
-              (if-let [node (net-helpers/get-tile-at world {:pos-x (:node-x node-pos)
-                                                             :pos-y (:node-y node-pos)
-                                                             :pos-z (:node-z node-pos)})]
-                {:success (boolean (link! device node pass need-auth?))}
-                {:success false})
-              {:success false})))
+          (try
+            (let [world (net-helpers/get-world player)
+                  device (tile-from-payload payload player)
+                  node-pos (select-keys payload [:node-x :node-y :node-z])
+                  pass (:password payload "")
+                  need-auth? (boolean (:need-auth? payload true))]
+              (if (and world device
+                       (number? (:node-x node-pos))
+                       (number? (:node-y node-pos))
+                       (number? (:node-z node-pos)))
+                (if-let [node (net-helpers/get-tile-at world {:pos-x (:node-x node-pos)
+                                                              :pos-y (:node-y node-pos)
+                                                              :pos-z (:node-z node-pos)})]
+                  {:success (boolean (link! device node pass need-auth?))}
+                  {:success false})
+                {:success false}))
+            (catch Exception e
+              {:success false :error (ex-message e)})))
         handle-disconnect
         (fn [payload player]
-          (let [world (net-helpers/get-world player)
-                device (net-helpers/get-tile-at world payload)]
-            (if (and world device)
-              (do (unlink! device) {:success true})
-              {:success false})))]
-    (net-server/register-handler (msg :get-status) handle-get-status)
+          (try
+            (let [device (tile-from-payload payload player)]
+              (if device
+                (do (unlink! device) {:success true})
+                {:success false}))
+            (catch Exception e
+              {:success false :error (ex-message e)})))]
     (net-server/register-handler (msg :list-nodes) handle-list-nodes)
     (net-server/register-handler (msg :connect) handle-connect)
     (net-server/register-handler (msg :disconnect) handle-disconnect)
     (doseq [[action handler] (or extra-handlers {})]
-      (net-server/register-handler (msg action) handler))
-    (log/info (or log-label (str message-domain " wireless link handlers registered")))))
+      (net-server/register-handler (msg action) handler))))

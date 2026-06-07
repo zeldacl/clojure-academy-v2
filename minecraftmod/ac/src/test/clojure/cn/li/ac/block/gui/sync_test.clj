@@ -1,14 +1,18 @@
 (ns cn.li.ac.block.gui.sync-test
   (:require [clojure.test :refer [deftest is testing]]
-            [cn.li.ac.block.gui.sync :as gui-sync]))
+            [cn.li.ac.block.gui.sync :as gui-sync]
+            [cn.li.mcmod.gui.container.data-slot-specs :as data-slot-specs]))
 
 (def sample-schema
   [{:key :energy
     :gui-sync? true
+    :gui-data-slot? true
+    :gui-coerce int
     :gui-container-key :energy-atom
     :gui-init (fn [state] (:energy state))}
    {:key :label
     :gui-only? true
+    :gui-data-slot? false
     :gui-container-key :label-atom
     :gui-init (fn [state] (:label state))}
    {:key :mode
@@ -19,27 +23,29 @@
 (def nil-default-schema
   [{:key :node-type
     :gui-sync? true
+    :gui-data-slot? true
     :default :basic
+    :gui-data-slot-enum {:basic 0 :standard 1 :advanced 2}
     :gui-coerce keyword}
    {:key :max-energy
     :gui-sync? true
+    :gui-data-slot? true
     :gui-only? true
     :gui-init (fn [state] (int (get state :max-energy 15000)))
     :gui-coerce int}
    {:key :tab-index
-    :gui-sync? true
+    :gui-sync? false
+    :gui-data-slot? false
     :gui-only? true
     :gui-init (fn [_] 0)
     :gui-coerce int}])
 
 (deftest create-schema-container-exposes-sync-hooks-test
-  (testing "schema-backed containers expose cached sync helpers"
-    (let [container (gui-sync/create-schema-container sample-schema nil nil :test {:state {:energy 7 :label "hello"}})]
-      (is (fn? (:sync-get container)))
-      (is (contains? container :sync-last-sent))
-      (is (contains? container :sync-has-sent?))
-      (is (= {:energy-atom 7}
-             ((:sync-get container) container)))
+  (testing "schema-backed containers expose server menu sync and data slot specs"
+    (let [container (gui-sync/create-schema-container sample-schema nil nil :test
+                                                      {:state {:energy 7 :label "hello"}})]
+      (is (fn? (:server-menu-sync! container)))
+      (is (seq (:data-slot-field-specs container)))
       (is (= "hello" @(get container :label-atom)))
       (is (= 7 @(get container :energy-atom))))))
 
@@ -52,3 +58,15 @@
       (is (= :basic @(:node-type container)))
       (is (= 15000 @(:max-energy container)))
       (is (= 0 @(:tab-index container))))))
+
+(deftest data-slot-budget-enforced-test
+  (testing "schemas exceeding budget fail at registration time"
+    (let [fields (mapv (fn [i]
+                         {:key (keyword (str "f" i))
+                          :gui-sync? true
+                          :gui-data-slot? true
+                          :gui-coerce int})
+                       (range 20))]
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                            #"field budget exceeded"
+                            (data-slot-specs/build-field-specs fields :max-slots 16))))))

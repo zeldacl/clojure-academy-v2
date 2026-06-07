@@ -4,6 +4,7 @@
             [cn.li.mcmod.network.server :as net-server]
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.ac.block.wireless-matrix.logic :as matrix-logic]
+            [cn.li.ac.block.machine.handlers :as machine-handlers]
             [cn.li.ac.wireless.gui.sync.handler :as net-helpers]
             [cn.li.ac.wireless.core.capability-resolver :as resolver]
             [cn.li.ac.wireless.api :as wireless-api]
@@ -15,11 +16,8 @@
 ;; Infrastructure (from network_infra.clj)
 ;; ============================================================================
 
-(defn resolve-world-tile
-  [payload player]
-  (let [world (net-helpers/get-world player)
-        be (net-helpers/get-tile-at world payload)]
-    {:world world :be be}))
+(defn- open-tile [payload player]
+  (machine-handlers/open-container-tile payload player))
 
 (defn resolve-controller
   [be]
@@ -34,15 +32,13 @@
         (resolver/matrix-capability ctrl)))))
 
 (defn- owner-authorized?
-  "Check if player owns the matrix tile by reading UUID and placer-name
-   directly from the BE's customState (aligned with node/handlers owner-authorized?)."
   [ctrl player]
   (let [state (matrix-logic/safe-state ctrl)]
     (matrix-logic/owner-authorized? state player)))
 
 (defn owner-controller
   [payload player]
-  (let [{:keys [be]} (resolve-world-tile payload player)
+  (let [be (open-tile payload player)
         ctrl (resolve-controller be)]
     (when (and ctrl (owner-authorized? ctrl player))
       {:ctrl ctrl})))
@@ -96,25 +92,20 @@
 ;; ============================================================================
 
 (defn- payload-pos
-  [payload]
-  (select-keys payload [:pos-x :pos-y :pos-z]))
+  [_payload]
+  nil)
 
 (defn- fail
-  [action payload owner-check reason]
+  [action _payload owner-check reason]
   (log/warn "Matrix handler rejected"
             {:action action
              :owner-check owner-check
-             :pos (payload-pos payload)
              :reason reason})
   {:success false})
 
-;; ============================================================================
-;; Handler functions
-;; ============================================================================
-
 (defn handle-gather-info
   [payload player]
-  (let [{:keys [be]} (resolve-world-tile payload player)
+  (let [be (open-tile payload player)
         ctrl (resolve-controller be)
         cap (matrix-wireless-cap be)
         network (wireless-network ctrl)]

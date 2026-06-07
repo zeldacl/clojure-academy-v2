@@ -12,7 +12,8 @@
     :default 0.0
     :persist? true
     :gui-sync? true
-    :gui-coerce double}
+    :gui-coerce double
+    :gui-data-slot-scale 100}
 
    {:key :max-energy
     :nbt-key "MaxEnergy"
@@ -20,7 +21,8 @@
     :default 50000.0
     :persist? true
     :gui-sync? true
-    :gui-coerce double}
+    :gui-coerce double
+    :gui-data-slot-scale 100}
 
    {:key :wireless-bandwidth
     :nbt-key "WirelessBW"
@@ -29,6 +31,7 @@
     :persist? true
     :gui-sync? true
     :gui-coerce double
+    :gui-data-slot-scale 100
     :doc "IF per tick cap for wireless inject (receiver path)."}
 
    {:key :tier
@@ -37,6 +40,7 @@
     :default "normal"
     :persist? true
     :gui-sync? true
+    :gui-data-slot? false
     :gui-coerce str}
 
    {:key :user-uuid
@@ -44,14 +48,16 @@
     :type :string
     :default ""
     :persist? true
-    :gui-sync? true}
+    :gui-sync? true
+    :gui-data-slot? false}
 
    {:key :user-name
     :nbt-key "UserName"
     :type :string
     :default ""
     :persist? true
-    :gui-sync? true}
+    :gui-sync? true
+    :gui-data-slot? false}
 
    {:key :development-progress
     :nbt-key "DevelopmentProgress"
@@ -59,21 +65,24 @@
     :default 0.0
     :persist? true
     :gui-sync? true
-    :gui-coerce double}
+    :gui-coerce double
+    :gui-data-slot-scale 100}
 
    {:key :is-developing
     :nbt-key "IsDeveloping"
     :type :boolean
     :default false
     :persist? true
-    :gui-sync? true}
+    :gui-sync? true
+    :gui-coerce boolean}
 
    {:key :structure-valid
     :nbt-key "StructureValid"
     :type :boolean
     :default false
     :persist? true
-    :gui-sync? true}
+    :gui-sync? true
+    :gui-coerce boolean}
 
    {:key :inventory
     :nbt-key (nbt-keys/get-key :developer-inventory)
@@ -96,6 +105,7 @@
     :persist? false
     :gui-sync? true
     :gui-coerce double
+    :gui-data-slot-scale 100
     :doc "IF accepted from wireless this game tick (server, flushed each tick)."}
 
    {:key :wireless-inject-last-tick
@@ -104,6 +114,7 @@
     :persist? false
     :gui-sync? true
     :gui-coerce double
+    :gui-data-slot-scale 100
     :doc "IF accepted from wireless previous tick (for classic sync-rate bar)."}])
 
 (def ^:private gui-only-fields
@@ -112,6 +123,7 @@
     :gui-only? true
     :gui-init (fn [_] 0)
     :gui-sync? false
+    :gui-data-slot? false
     :gui-coerce int
     :gui-close-reset 0}
 
@@ -119,6 +131,7 @@
     :gui-only? true
     :gui-init (fn [_] 0)
     :gui-sync? false
+    :gui-data-slot? false
     :gui-coerce int
     :gui-close-reset 0}])
 

@@ -7,19 +7,22 @@
     :nbt-key "Energy"
     :type :double
     :default 0.0
-    :persist? true}
+    :persist? true
+    :gui-sync? false}
 
    {:key :max-energy
     :nbt-key "MaxEnergy"
     :type :double
     :default 2000.0
-    :persist? true}
+    :persist? true
+    :gui-sync? false}
 
    {:key :this-tick-gen
     :nbt-key "TickGen"
     :type :double
     :default 0.0
-    :persist? true}
+    :persist? true
+    :gui-sync? false}
 
    {:key :gen-speed
     :type :double
@@ -30,7 +33,9 @@
     :nbt-key "LinkedNodeName"
     :type :string
     :default ""
-    :persist? true}
+    :persist? true
+    :gui-sync? false
+    :gui-data-slot? false}
 
    {:key :linked-node-x
     :nbt-key "LinkedNodeX"
@@ -54,7 +59,9 @@
     :nbt-key "HasLink"
     :type :boolean
     :default false
-    :persist? true}
+    :persist? true
+    :gui-sync? false
+    :gui-coerce boolean}
 
    {:key :update-ticker
     :type :int

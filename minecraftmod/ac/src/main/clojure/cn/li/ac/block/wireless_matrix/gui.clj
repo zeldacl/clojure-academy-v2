@@ -31,7 +31,7 @@
             [cn.li.ac.gui.tech-ui-common :as tech-ui]
             [cn.li.ac.gui.manifest :as gui-manifest]
             [cn.li.mcmod.network.client :as net-client]
-            [cn.li.ac.wireless.gui.sync.handler :as net-helpers]
+            [cn.li.mcmod.gui.container.action-payload :as action-payload]
             [cn.li.mcmod.util.log :as log]
             [cn.li.ac.block.wireless-matrix.capability :as matrix-capability]
             [cn.li.ac.block.wireless-matrix.logic :as matrix-logic]
@@ -43,13 +43,9 @@
             [cn.li.ac.item.mat-core :as core]
             [cn.li.ac.wireless.gui.container.common :as common]
             [cn.li.ac.wireless.gui.container.move :as move-common]
-            [cn.li.mcmod.gui.container.schema :as schema]
-            [cn.li.ac.wireless.gui.sync.helpers :as sync-helpers]
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.mcmod.platform.be :as platform-be]
-            [cn.li.mcmod.platform.item :as pitem]
             [cn.li.mcmod.platform.position :as pos]
-            [cn.li.mcmod.gui.owner-contract :as owner-contract]
             [cn.li.mcmod.hooks.core :as runtime-hooks])
   (:import [cn.li.acapi.wireless IWirelessMatrix]))
 
@@ -97,15 +93,6 @@
 
 (def gui-width tech-ui/gui-width)
 (def gui-height tech-ui/gui-height)
-
-;; ============================================================================
-;; Field Schema (imported from schema.clj)
-;; ============================================================================
-
-(defn sync-field-mappings
-  "Return the field-mappings vector for apply-sync-payload-template!."
-  []
-  (schema/sync-field-mappings matrix-schema/gui-container-fields))
 
 ;; ============================================================================
 ;; Data Structures
@@ -184,17 +171,13 @@
         player-uuid (assoc :player-uuid player-uuid)))))
 
 (defn send-gather-info
-  "Query network information from server
-
-  Args:
-  - tile: TileMatrix instance
-  - callback: (fn [MatrixNetworkData] ...) - receives query result"
-  [tile callback]
+  "Query network information from server."
+  [container callback]
   (try
     (if-let [owner (current-client-owner)]
       (net-client/send-to-server owner
         (msg :gather-info)
-        (net-helpers/tile-pos-payload tile)
+        (action-payload/action-payload container {})
         (fn [response]
           (try
             (let [data (map->MatrixNetworkData
@@ -208,8 +191,6 @@
                           :initialized (boolean (if (contains? response :initialized)
                                                   (get response :initialized)
                                                   (get response :ssid)))})]
-              (log/error "Received gather-info response:" response)
-              (log/error "Parsed MatrixNetworkData:" data)
               (callback data))
             (catch Exception e
               (log/error "Error processing gather-info response:"(ex-message e))))))
@@ -218,21 +199,12 @@
       (log/error "Error sending gather-info:"(ex-message e)))))
 
 (defn send-init-network
-  "Initialize network on server
-
-  Args:
-  - tile: TileMatrix instance
-  - ssid: String - network name
-  - password: String - network password
-  - callback: (fn [success] ...) - receives init result"
-  [tile ssid password callback]
+  [container ssid password callback]
   (try
     (if-let [owner (current-client-owner)]
       (net-client/send-to-server owner
         (msg :init)
-        (assoc (net-helpers/tile-pos-payload tile)
-               :ssid ssid
-               :password password)
+        (action-payload/action-payload container {:ssid ssid :password password})
         (fn [response]
           (try
             (callback (get response :success false))
@@ -243,43 +215,25 @@
       (log/error "Error sending init:"(ex-message e)))))
 
 (defn send-change-ssid
-  "Change network SSID
-
-  Args:
-  - tile: TileMatrix instance
-  - new-ssid: String"
-  [tile new-ssid]
+  [container new-ssid]
   (try
-    (log/info "send-change-ssid called, new-ssid:" new-ssid)
     (if-let [owner (current-client-owner)]
-      (do
-        (log/info "send-change-ssid: sending to server")
-        (net-client/send-to-server owner
-          (msg :change-ssid)
-          (assoc (net-helpers/tile-pos-payload tile)
-                 :new-ssid new-ssid)
-          nil))
+      (net-client/send-to-server owner
+        (msg :change-ssid)
+        (action-payload/action-payload container {:new-ssid new-ssid})
+        nil)
       (log/warn "Skip change-ssid: no client session bound"))
     (catch Exception e
       (log/error "Error sending change-ssid:"(ex-message e)))))
 
 (defn send-change-password
-  "Change network password
-
-  Args:
-  - tile: TileMatrix instance
-  - new-password: String"
-  [tile new-password]
+  [container new-password]
   (try
-    (log/info "send-change-password called, new-password:" new-password)
     (if-let [owner (current-client-owner)]
-      (do
-        (log/info "send-change-password: sending to server")
-        (net-client/send-to-server owner
-          (msg :change-password)
-          (assoc (net-helpers/tile-pos-payload tile)
-                 :new-password new-password)
-          nil))
+      (net-client/send-to-server owner
+        (msg :change-password)
+        (action-payload/action-payload container {:new-password new-password})
+        nil)
       (log/warn "Skip change-password: no client session bound"))
     (catch Exception e
       (log/error "Error sending change-password:"(ex-message e)))))
@@ -312,7 +266,8 @@
       state
       player
       :matrix
-      {:base {:tile-entity entity
+      {:gui-id (gui-manifest/gui-id :wireless-matrix)
+       :base {:tile-entity entity
               :tile-java proxy}})))
 
 ;; ============================================================================
@@ -355,56 +310,13 @@
 ;; Container Sync (from matrix_container.clj)
 ;; ============================================================================
 
-(defn- count-plates [container]
-  (reduce (fn [count slot-idx]
-            (let [stk (get-slot-item container slot-idx)]
-              (if (and stk (not (pitem/item-is-empty? stk)))
-                (inc count)
-                count)))
-          0
-          (slot-schema/slot-indexes-by-type matrix-slot-schema-id :plate)))
-
-(defn- get-core-level [container]
-  (let [core-item (get-slot-item container (slot-schema/slot-index matrix-slot-schema-id :core))]
-    (if (and core-item (core/is-mat-core? core-item))
-      (core/get-core-level core-item)
-      0)))
-
 (def ^:private matrix-sync
   (gui-sync/schema-sync-fns matrix-schema/unified-matrix-schema))
 
-(def sync-to-client! (:sync-to-client! matrix-sync))
-
-(def get-sync-data (:get-sync-data matrix-sync))
-(def apply-sync-data! (:apply-sync-data! matrix-sync))
-
-(defn- matrix-derived-sync! [container]
-  (let [plates (count-plates container)
-        core-lvl (get-core-level container)
-        working? (matrix-logic/is-working? {:core-level core-lvl :plate-count plates})
-        old-plates @(:plate-count container)
-        old-core @(:core-level container)]
-    (when (not= core-lvl old-core)
-      (reset! (:core-level container) core-lvl))
-    (when (not= plates old-plates)
-      (reset! (:plate-count container) plates))
-    (when (not= working? @(:is-working container))
-      (reset! (:is-working container) working?))
-    (when (or (not= core-lvl old-core) (not= plates old-plates))
-      (sync-helpers/with-throttled-sync! (:sync-ticker container) 100
-        (fn []
-          (let [stats (matrix-logic/matrix-stats-for-counts core-lvl plates)]
-            (reset! (:bandwidth container) (:bandwidth stats))
-            (reset! (:range container) (:range stats))
-            (sync-helpers/query-matrix-network-capacity! container stats)))))))
+(def server-menu-sync! (:server-menu-sync! matrix-sync))
 
 (defn still-valid? [container player]
   (common/still-valid? container player))
-
-(defn tick! [container]
-  (gui-sync/sync-tick! container sync-to-client!
-                       {:ticker-key :sync-ticker
-                        :derived-sync! matrix-derived-sync!}))
 
 (defn handle-button-click! [container button-id _data]
   (case (int button-id)
@@ -430,47 +342,6 @@
   ((:on-close matrix-sync) container))
 
 ;; ============================================================================
-;; Sync Packet Handling (from matrix_sync.clj)
-;; ============================================================================
-
-(defn- matrix-source-container? [source]
-  (= (:container-type source) :matrix))
-
-(defn- sync-routing-metadata
-  [source]
-  (let [owner (:owner source)
-        routing (merge (when-let [container-id (or (:container-id source)
-                                                   (:window-id source)
-                                                   (:id source))]
-                         {:container-id container-id})
-                       (select-keys owner [:server-session-id
-                                           :client-session-id
-                                           :player-uuid
-                                           :logical-side]))]
-    (when (seq routing)
-      routing)))
-
-(defn make-sync-packet [source]
-  (let [container? (matrix-source-container? source)
-        tile       (if container? (:tile-entity source) source)
-        container  (when container? source)
-        block-pos  (pos/position-get-block-pos tile)]
-    (merge {:gui-id      (gui-manifest/gui-id :wireless-matrix)
-            :pos-x       (pos/pos-x block-pos)
-            :pos-y       (pos/pos-y block-pos)
-            :pos-z       (pos/pos-z block-pos)
-            :placer-name (or (matrix-logic/placer-name (matrix-logic/safe-state tile)) "Unknown")}
-           (when container?
-             (sync-routing-metadata source))
-           (schema/build-sync-packet-fields matrix-schema/gui-container-fields container))))
-
-(defn apply-matrix-sync-payload! [payload]
-  (sync-helpers/apply-sync-payload-template!
-    payload
-    (sync-field-mappings)
-    "matrix"))
-
-;; ============================================================================
 ;; Component Builders
 ;; ============================================================================
 
@@ -479,16 +350,10 @@
 ;; ============================================================================
 
 (defn rebuild-info-area!
-  "Rebuild InfoArea based on network state (参照Scala GuiMatrix2.rebuildInfo)
-  
-  Args:
-  - info-area: InfoArea widget
-  - tile: TileMatrix
-  - player: EntityPlayer
-  - data: MatrixNetworkData"
-  [info-area tile player data]
+  [info-area container player data]
   (try
-    (let [state (matrix-logic/safe-state tile)
+    (let [tile (:tile-entity container)
+          state (matrix-logic/safe-state tile)
           placer (or (try (.getPlacerName ^IWirelessMatrix tile) (catch Exception _ nil))
                      (matrix-logic/placer-name state)
                      (:owner data "Unknown"))
@@ -518,14 +383,14 @@
                     info-area "ssid" (:ssid data) y
                     :editable? (:editable-ssid? policy)
                     :on-change (fn [new-ssid]
-                                (send-change-ssid tile new-ssid)))
+                                (send-change-ssid container new-ssid)))
                 y (tech-ui/add-sepline info-area "change_pass" y)
                 y (tech-ui/add-property
                     info-area "password" (:password data) y
                     :editable? (:editable-password? policy)
                     :masked? true
                     :on-change (fn [new-pass]
-                                (send-change-password tile new-pass)))]
+                                (send-change-password container new-pass)))]
             y)
           (if (:show-init? policy)
             (let [ssid-cell (atom nil)
@@ -548,14 +413,12 @@
                         (let [ssid (if-let [tb @ssid-cell] (comp/get-text tb) "")
                               pass (if-let [tb @pass-cell] (comp/get-text tb) "")]
                           (log/info "Matrix INIT ssid=" ssid "pass=" pass)
-                          (send-init-network tile ssid pass
+                          (send-init-network container ssid pass
                             (fn [success]
-                              (log/info "Matrix init-network result:" success)
                               (when success
-                                (send-gather-info tile
+                                (send-gather-info container
                                   (fn [new-data]
-                                    (log/info "Matrix gather-info after init, rebuilding...")
-                                    (rebuild-info-area! info-area tile player new-data))))))))
+                                    (rebuild-info-area! info-area container player new-data))))))))
                       y)]
               y)
             (if (:show-noinit? policy)
@@ -578,7 +441,9 @@
   Returns: Root CGui widget"
   [container player & [opts]]
   (try
-    (let [tile (or (:tile-entity container)
+    (let [container (cond-> container
+                      (:menu opts) (assoc :minecraft-container (:menu opts)))
+          tile (or (:tile-entity container)
                    (:tile container))
 
           ;; Create inventory page using shared builder
@@ -602,9 +467,9 @@
         5)
       
       ;; Initialize network data and build InfoArea
-      (send-gather-info tile
+      (send-gather-info container
         (fn [data]
-          (rebuild-info-area! info-area tile player data)))
+          (rebuild-info-area! info-area container player data)))
       
       ;; Add info area to main widget
       (cgui-core/add-widget! main-widget info-area)
@@ -681,10 +546,7 @@
                  {:container-predicate matrix-container?
                   :container-fn create-container
                   :screen-fn create-screen
-                  :tick-fn tick!
-                  :sync-get get-sync-data
-                  :sync-apply apply-sync-data!
-                  :payload-sync-apply-fn apply-matrix-sync-payload!
+                  :server-menu-sync-fn server-menu-sync!
                   :validate-fn still-valid?
                   :close-fn on-close
                   :button-click-fn handle-button-click!

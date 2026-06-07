@@ -41,9 +41,8 @@
   [k & args]
   (apply (platform-impl-fn! k) args))
 
-(defn safe-tick! [container] (invoke-platform! :safe-tick! container))
+(defn server-menu-sync! [container] (invoke-platform! :server-menu-sync! container))
 (defn safe-validate [container player] (invoke-platform! :safe-validate container player))
-(defn safe-sync! [container] (invoke-platform! :safe-sync! container))
 (defn safe-close! [container] (invoke-platform! :safe-close! container))
 (defn slot-count [container] (invoke-platform! :slot-count container))
 (defn slot-get-item [container idx] (invoke-platform! :slot-get-item container idx))

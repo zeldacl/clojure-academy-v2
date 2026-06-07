@@ -68,8 +68,10 @@
 (deftest sync-routing-contract-test
   (testing "container-id routing passes"
     (is (owner-contract/require-sync-routing {:container-id 17})))
-  (testing "pos routing passes"
-    (is (owner-contract/require-sync-routing {:pos-x 1 :pos-y 2 :pos-z 3})))
+  (testing "pos-only routing fails"
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                          #"sync-routing contract violation"
+                          (owner-contract/require-sync-routing {:pos-x 1 :pos-y 2 :pos-z 3}))))
   (testing "empty routing fails"
     (is (thrown-with-msg? clojure.lang.ExceptionInfo
                           #"sync-routing contract violation"

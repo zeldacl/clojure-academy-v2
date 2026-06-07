@@ -4,23 +4,25 @@
             [cn.li.mcmod.gui.adapter.platform-registry :as platform]
             [cn.li.mcmod.gui.tabbed-gui :as tabbed]
             [cn.li.mc1201.gui.menu.container :as ca]
-            [cn.li.mc1201.gui.slots.common :as slots-common])
+            [cn.li.mc1201.gui.slots.common :as slots-common]
+            [cn.li.mc1201.gui.slots.data-slot :as data-slot])
   (:import [cn.li.mc1201.gui CMenuBridge]
-           [net.minecraft.server.level ServerPlayer]
-           [net.minecraft.world.inventory DataSlot]))
+           [net.minecraft.server.level ServerPlayer]))
 
-(defn sync-data-slots-from-container!
+(defn ensure-container-data-slots!
+  "Materialize atom-backed DataSlots on container when specs are present."
   [clj-container]
-  (when-let [data-slots (:data-slots clj-container)]
-    (doseq [[k ^DataSlot slot] data-slots]
-      (when-let [atom-ref (get clj-container k)]
-        (.set slot (int @atom-ref))))))
+  (if (and (:data-slot-field-specs clj-container)
+           (empty? (:data-slots clj-container)))
+    (data-slot/materialize-data-slots! clj-container (:data-slot-field-specs clj-container))
+    clj-container))
 
 (defn setup-menu-slots!
-  [^CMenuBridge menu clj-container tab-slot {:keys [get-slot-layout default-player-inventory-mode]
-                                             :or {get-slot-layout gui-reg/get-slot-layout
-                                                  default-player-inventory-mode :full}}]
-  (let [gui-id (platform/get-gui-id-for-container clj-container)
+  [^CMenuBridge menu clj-container _tab-slot {:keys [get-slot-layout default-player-inventory-mode]
+                                               :or {get-slot-layout gui-reg/get-slot-layout
+                                                    default-player-inventory-mode :full}}]
+  (let [clj-container (ensure-container-data-slots! clj-container)
+        gui-id (platform/get-gui-id-for-container clj-container)
         ^ServerPlayer player (:player clj-container)
         player-inventory (when player (.getInventory player))
         slot-layout (when gui-id (get-slot-layout gui-id))
@@ -30,11 +32,7 @@
         tile-inventory (ca/create-tile-inventory-adapter clj-container)
         tabbed? (tabbed/tabbed-container? clj-container)
         active?-fn (when tabbed? (fn [] (tabbed/slots-active? clj-container)))]
-    (when tab-slot
-      (.addDataSlotPublic menu tab-slot))
-    (when-let [data-slots (:data-slots clj-container)]
-      (doseq [^DataSlot data-slot (vals data-slots)]
-        (.addDataSlotPublic menu data-slot)))
+    (data-slot/register-data-slots-on-menu! menu clj-container)
     (when (and gui-id player-inventory)
       (slots-common/add-gui-slots!
         (fn [slot] (.addSlotPublic menu slot))

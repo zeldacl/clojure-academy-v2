@@ -1,8 +1,6 @@
 (ns cn.li.ac.block.ability-interferer.gui
   "CLIENT-ONLY: Ability Interferer GUI"
-  (:require [cn.li.ac.gui.status-poller :as poller]
-            [cn.li.ac.wireless.gui.message.registry :as msg-registry]
-             [clojure.string :as str]
+  (:require [clojure.string :as str]
             [cn.li.mcmod.gui.cgui-core :as cgui-core]
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.mcmod.gui.events :as events]
@@ -17,7 +15,7 @@
             [cn.li.ac.gui.manifest :as gui-manifest]
             [cn.li.ac.gui.tech-ui-common :as tech-ui]
             [cn.li.ac.wireless.gui.container.common :as common]
-            [cn.li.ac.wireless.gui.sync.handler :as net-helpers]
+            [cn.li.mcmod.gui.container.action-payload :as action-payload]
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.ac.energy.operations :as energy]))
 
@@ -69,8 +67,7 @@
 (def ^:private interferer-sync
   (gui-sync/schema-sync-fns interferer-schema/ability-interferer-schema
                             {:after-sync! (fn [container]
-                                            (after-sync-or-apply! container nil))
-                             :after-apply! after-sync-or-apply!}))
+                                            (after-sync-or-apply! container nil))}))
 
 (defn- create-container [tile player]
   (let [state (or (common/get-tile-state tile) {})]
@@ -78,7 +75,8 @@
                                       tile
                                       player
                                       interferer-gui-type
-                                      {:state state
+                                      {:gui-id (gui-manifest/gui-id :ability-interferer)
+                                       :state state
                   :base {:whitelist-edit (atom (str/join "," (get state :whitelist [])))
                     :focused-whitelist-name (atom nil)
                     :whitelist-scroll-index (atom 0)
@@ -104,48 +102,27 @@
 (defn- still-valid? [_container _player] true)
 
 (defn- request-set-whitelist! [container names]
-  (let [tile (:tile-entity container)]
-    (net-client/send-to-server
-      (msg :set-whitelist)
-      (assoc (net-helpers/tile-pos-payload tile)
-             :whitelist (vec names)))))
+  (net-client/send-to-server
+    (msg :set-whitelist)
+    (action-payload/action-payload container {:whitelist (vec names)})))
 
 (defn- request-set-range! [container new-range]
-  (let [tile (:tile-entity container)
-        r (cfg/clamp-range new-range)]
+  (let [r (cfg/clamp-range new-range)]
     (when-let [pending-range (:pending-range container)]
       (reset! pending-range r))
     (net-client/send-to-server
       (msg :change-range)
-      (assoc (net-helpers/tile-pos-payload tile) :range r))))
+      (action-payload/action-payload container {:range r}))))
 
 (defn- request-set-enabled! [container v]
-  (let [tile (:tile-entity container)
-        enabled? (boolean v)]
+  (let [enabled? (boolean v)]
     (when-let [pending-enabled (:pending-enabled container)]
       (reset! pending-enabled enabled?))
     (net-client/send-to-server
       (msg :toggle-enabled)
-      (assoc (net-helpers/tile-pos-payload tile) :enabled enabled?))))
+      (action-payload/action-payload container {:enabled enabled?}))))
 
-(def ^:private sync-to-client! (:sync-to-client! interferer-sync))
-(def ^:private poll-ticker (atom 0))
-
-(def ^:private interferer-poll-status!
-  (let [p (poller/create-poller
-            #(msg-registry/msg :ability-interferer :get-status)
-            (fn [c resp]
-              (when-let [v (:energy resp)] (reset! (:energy c) (double v)))
-              (when-let [v (:max-energy resp)] (reset! (:max-energy c) (double v)))
-              (when-let [v (:enabled resp)] (reset! (:enabled c) (boolean v)))
-              (when-let [v (:range resp)] (reset! (:range c) (double v)))))]
-    (fn [c t] (p c t))))
-
-(def ^:private get-sync-data (:get-sync-data interferer-sync))
-(def ^:private apply-sync-data! (:apply-sync-data! interferer-sync))
-
-(defn- tick! [container]
-  (gui-sync/sync-tick! container sync-to-client!))
+(def ^:private server-menu-sync! (:server-menu-sync! interferer-sync))
 
 (def ^:private on-close (:on-close interferer-sync))
 (defn- handle-button-click! [_container _button-id _player] nil)
@@ -360,7 +337,6 @@
   (rebuild-whitelist-zone! inv-window container))
 
 (defn- create-screen [container minecraft-container _player]
-  (interferer-poll-status! container (:tile-entity container))
   (let [inv-page (tech-ui/create-rework-page "guis/rework/page_interfere.xml")
         inv-window (:window inv-page)
       pages [inv-page]
@@ -416,9 +392,7 @@
        :container-predicate interferer-container?
        :container-fn create-container
        :screen-fn create-screen
-       :tick-fn tick!
-       :sync-get get-sync-data
-       :sync-apply apply-sync-data!
+       :server-menu-sync-fn server-menu-sync!
        :validate-fn still-valid?
        :close-fn on-close
        :button-click-fn handle-button-click!

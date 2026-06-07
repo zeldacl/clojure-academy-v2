@@ -9,7 +9,8 @@
     :default 0.0
     :persist? true
     :gui-sync? true
-    :gui-coerce double}
+    :gui-coerce double
+    :gui-data-slot-scale 100}
 
    {:key :max-energy
     :nbt-key "MaxEnergy"
@@ -17,7 +18,8 @@
     :default 20000.0
     :persist? true
     :gui-sync? true
-    :gui-coerce double}
+    :gui-coerce double
+    :gui-data-slot-scale 100}
 
    {:key :crafting-progress
     :nbt-key "CraftingProgress"
@@ -41,7 +43,8 @@
     :default 0.0
     :persist? true
     :gui-sync? true
-    :gui-coerce double}
+    :gui-coerce double
+    :gui-data-slot-scale 100}
 
      {:key :liquid-amount
     :nbt-key "LiquidAmount"
@@ -64,7 +67,8 @@
     :type :boolean
     :default false
     :persist? true
-    :gui-sync? true}
+    :gui-sync? true
+    :gui-coerce boolean}
 
   {:key :frame
    :nbt-key "Frame"

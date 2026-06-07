@@ -23,7 +23,7 @@
             [cn.li.mcmod.gui.tabbed-gui :as tabbed-gui]
             [cn.li.ac.gui.tech-ui-common :as tech-ui]
             [cn.li.mcmod.network.client :as net-client]
-            [cn.li.ac.wireless.gui.sync.handler :as net-helpers]
+            [cn.li.mcmod.gui.container.action-payload :as action-payload]
             [cn.li.ac.wireless.gui.tab :as wireless-tab]
             [cn.li.mcmod.util.log :as log]
             [cn.li.ac.energy.operations :as energy-stub]
@@ -33,8 +33,6 @@
             [cn.li.ac.block.machine.runtime :as machine-runtime]
             [cn.li.ac.wireless.gui.container.common :as common]
             [cn.li.ac.wireless.gui.container.move :as move-common]
-            [cn.li.ac.wireless.gui.container.schema-runtime :as schema-runtime]
-            [cn.li.ac.wireless.gui.sync.helpers :as sync-helpers]
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.ac.block.wireless-node.logic :as node-logic]
             [cn.li.ac.block.wireless-node.schema :as node-schema]
@@ -90,14 +88,6 @@
 ;; Note: gui-width and gui-height removed - use tech-ui/gui-width directly if needed
 
 ;; ============================================================================
-;; Schema-Based Generation (Client-Side)
-;; ============================================================================
-
-;; Generate from schema
-(defn sync-field-mappings []
-  (schema-runtime/build-sync-field-mappings node-schema/unified-node-schema))
-
-;; ============================================================================
 ;; Animation System (Node status)
 ;; ============================================================================
 
@@ -110,41 +100,23 @@
     {:begin 0 :frames 1 :frame-time 1000}))
 
 (defn create-anim-widget
-  "Create animation widget, poller and attach frame handler.
-
-    Args:
-    - tile: tile entity used by status poller
-    - target-window: the window widget to which the anim widget will be added
-    - opts: optional map {:pos [x y] :size [w h] :scale s}
-
-    Returns: map {:widget widget :anim-state anim-state :poller poller}
-    "
-  [tile & [opts]]
+  "Create animation widget and attach frame handler."
+  [container & [opts]]
   (let [opts (or opts {})
         pos (get opts :pos [42 35.5])
         size (get opts :size [186 75])
         scale (get opts :scale 0.5)
         anim-state (anim/create-animation-state)
-        ;; Create status poller with query function
-        poller (anim/create-status-poller
-                 (fn []
-                   (net-client/send-to-server
-                     (msg :get-status)
-                     (net-helpers/tile-pos-payload tile)
-                     (fn [response]
-                       (let [is-linked (boolean (:linked response))]
-                         (reset! (:current-state anim-state)
-                                 (if is-linked :linked :unlinked))))))
-                 2000)
         widget (apply cgui-core/create-widget
                       (concat [:pos pos :size size]
                               (when scale [:scale scale])))]
-    ;; attach per-frame update: animation + poller + render
+    ;; attach per-frame update: animation + render
     (events/on-frame widget
                      (fn [_]
+                       (let [linked? (boolean (when-let [linked (:linked container)] @linked))]
+                         (reset! (:current-state anim-state) (if linked? :linked :unlinked)))
                        (let [config (get-animation-config @(:current-state anim-state))]
                          (anim/update-animation! anim-state config))
-                       ((:update-fn poller))
                        (let [config (get-animation-config @(:current-state anim-state))
                              absolute-frame (+ (:begin config) @(:current-frame anim-state))]
                          (anim/render-animation-frame!
@@ -153,7 +125,7 @@
                            0 0 186 75
                            absolute-frame
                            10))))
-    {:widget widget :anim-state anim-state :poller poller}))
+    {:widget widget :anim-state anim-state}))
 
 ;; ============================================================================
 ;; Container Creation (from node_container.clj)
@@ -171,7 +143,11 @@
 (defn create-container [tile player]
   (let [[be _state] (resolve-state tile)
         entity     (or be tile)]
-    (gui-sync/create-schema-container node-schema/unified-node-schema entity player :node)))
+    (gui-sync/create-schema-container node-schema/unified-node-schema
+                                      entity
+                                      player
+                                      :node
+                                      {:gui-id (gui-manifest/gui-id :wireless-node)})))
 
 ;; ============================================================================
 ;; Slot Management (from node_container.clj)
@@ -209,21 +185,21 @@
 
 (defn create-wireless-panel
   "Shared wireless tab (node mode)."
-  [container]
-  (wireless-tab/create-wireless-panel {:role :node :container container}))
+  [container & [opts]]
+  (wireless-tab/create-wireless-panel {:role :node
+                                       :container container
+                                       :menu (:menu opts)}))
 
 ;; ============================================================================
 ;; Container Sync (from node_container.clj)
 ;; ============================================================================
 
 (defn- update-derived-sync-fields!
+  "Local tile-state derived fields only; no network queries during menu sync."
   [container]
   (let [tile (:tile-entity container)
         state (or (common/get-tile-state tile) {})
         current-rate @(:transfer-rate container)]
-    (when-let [ticker (:sync-ticker container)]
-      (sync-helpers/with-throttled-sync! ticker 100
-        (fn [] (sync-helpers/query-node-network-capacity! container))))
     (when-let [rate-atom (:transfer-rate container)]
       (let [rate (cond
                    (and (:charging-in state) (:charging-out state)) 200
@@ -237,18 +213,10 @@
   (gui-sync/schema-sync-fns node-schema/unified-node-schema
                             {:after-sync! update-derived-sync-fields!}))
 
-(def sync-to-client! (:sync-to-client! node-sync))
-
-(def get-sync-data (:get-sync-data node-sync))
-(def apply-sync-data! (:apply-sync-data! node-sync))
+(def server-menu-sync! (:server-menu-sync! node-sync))
 
 (defn still-valid? [container player]
   (common/still-valid? container player))
-
-(defn tick! [container]
-  (gui-sync/sync-tick! container sync-to-client!
-                       {:ticker-key :charge-ticker
-                        :derived-sync! update-derived-sync-fields!}))
 
 (defn handle-button-click! [container button-id data]
   (let [tile (:tile-entity container)]
@@ -278,61 +246,11 @@
   (log/debug "Closing wireless node container")
   ((:on-close node-sync) container))
 
-;; ============================================================================
-;; Sync Packet Handling (from node_sync.clj)
-;; ============================================================================
-
-(defn- sync-routing-metadata
-  [source]
-  (let [owner (:owner source)
-        routing (merge (when-let [container-id (or (:container-id source)
-                                                   (:window-id source)
-                                                   (:id source))]
-                         {:container-id container-id})
-                       (select-keys owner [:server-session-id
-                                           :client-session-id
-                                           :player-uuid
-                                           :logical-side]))]
-    (when (seq routing)
-      routing)))
-
-(defn make-sync-packet [source]
-  (let [container? (= (:container-type source) :node)
-        tile      (if container? (:tile-entity source) source)
-        block-pos (when tile
-                    (try (pos/position-get-block-pos tile) (catch Exception _ nil)))
-        state     (tile-state tile)]
-    (when block-pos
-      (merge {:gui-id (gui-manifest/gui-id :wireless-node)
-              :pos-x  (pos/pos-x block-pos)
-              :pos-y  (pos/pos-y block-pos)
-              :pos-z  (pos/pos-z block-pos)}
-             (when container?
-               (sync-routing-metadata source))
-             (when state
-               (into {}
-                 (for [field node-schema/unified-node-schema
-                       :when (:gui-sync? field)
-                       :let [k (:key field)
-                             container-key (:gui-container-key field k)
-                             value (if container?
-                                    (when-let [a (get source container-key)] @a)
-                                    (get state k))]]
-                   [container-key value])))))))
-
-(defn apply-node-sync-payload! [payload]
-  (sync-helpers/apply-sync-payload-template!
-    payload
-    (sync-field-mappings)
-    "node"))
-
 (defn node-info-area-policy
   "Compute editable policy for node info-area fields."
   [is-owner?]
   {:editable-node-name? (boolean is-owner?)
    :editable-password? (boolean is-owner?)})
-
-;; Removed extract-position wrapper - use sync-helpers/extract-position directly
 
 ;; ============================================================================
 ;; InfoArea Builder (TechUI)
@@ -381,8 +299,7 @@
                     :on-change (fn [new-name]
                                 (net-client/send-to-server
                                   (msg :change-name)
-                                  (assoc (net-helpers/tile-pos-payload tile)
-                                         :node-name new-name))))
+                                  (action-payload/action-payload container {:node-name new-name}))))
                 y (tech-ui/add-property
                     info-area "Password" @(:password container) y
                   :editable? (:editable-password? policy)
@@ -390,8 +307,7 @@
                     :on-change (fn [new-pass]
                                 (net-client/send-to-server
                                   (msg :change-password)
-                                  (assoc (net-helpers/tile-pos-payload tile)
-                                         :password new-pass))))]
+                                  (action-payload/action-payload container {:password new-pass}))))]
             y)
           (tech-ui/add-property info-area "Node Name" @(:ssid container) y))))
     (catch Exception e
@@ -412,9 +328,9 @@
   Returns: Root CGui widget"
   [container player & [opts]]
   (try
-    (let [tile (:tile-entity container)
+    (let [container (cond-> container
+                      (:menu opts) (assoc :minecraft-container (:menu opts)))
           inv-page (tech-ui/create-inventory-page "node")
-          _ (log/info "DEBUG: inv-page created, id=" (:id inv-page) "window size=" (cgui-core/get-size (:window inv-page)) "visible=" (cgui-core/visible? (:window inv-page)))
           ;; Use the inventory page window as the size reference so that the
           ;; wrapper container matches the XML layout (176x187) instead of
           ;; the smaller TechUI logical width. This prevents the background
@@ -423,10 +339,10 @@
           info-area (tech-ui/create-info-area)
           _ (log/info "DEBUG: info-area created, size=" (cgui-core/get-size info-area))
           ;; create animation widget (includes anim-state and poller)
-          {:keys [widget]} (create-anim-widget tile)
+          {:keys [widget]} (create-anim-widget container)
           anim-widget widget
           _ (log/info "DEBUG: anim-widget created, size=" (cgui-core/get-size anim-widget) "visible=" (cgui-core/visible? anim-widget))
-          wireless-panel (create-wireless-panel container)
+          wireless-panel (create-wireless-panel container {:menu (:menu opts)})
           _ (log/info "DEBUG: wireless-panel created, size=" (cgui-core/get-size wireless-panel) "visible=" (cgui-core/visible? wireless-panel))
           pages [inv-page {:id "wireless" :window wireless-panel}]
           _ (log/info "DEBUG: pages created, count=" (count pages))
@@ -510,10 +426,7 @@
              {:container-predicate node-container?
               :container-fn create-container
               :screen-fn create-screen
-              :tick-fn tick!
-              :sync-get get-sync-data
-              :sync-apply apply-sync-data!
-              :payload-sync-apply-fn apply-node-sync-payload!
+              :server-menu-sync-fn server-menu-sync!
               :validate-fn still-valid?
               :close-fn on-close
               :button-click-fn handle-button-click!
