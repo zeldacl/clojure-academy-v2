@@ -293,9 +293,14 @@
         _ (cgui-core/set-z-level! hist-widget 10)]
     
     ;; Add histogram bars
+    ;; NOTE: CGUI does NOT scale child widget positions by parent scale,
+    ;; only sizes. Since hist-widget is scaled 0.4, bar positions must be
+    ;; pre-scaled (multiplied by 0.4) to align with the background texture.
+    ;; Chart area in texture coords: x=[34,200] y=[56,199].
+    ;; At scale 0.4 screen space: y-axis~13.6, x-axis~79.2, chart-top~22.4.
     (doseq [[elem idx] (map vector elements (range))]
-      (let [bar-x (+ 56 (* idx 40))
-            bar (cgui-core/create-widget :pos [bar-x 78] :size [16 120])
+      (let [bar-x (+ 22 (* idx 16))
+            bar (cgui-core/create-widget :pos [bar-x 22] :size [16 143])
             progress (comp/progress-bar
                        :direction :vertical
                        :progress 0.0

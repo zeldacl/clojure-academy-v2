@@ -359,7 +359,7 @@
                 color-empty (unchecked-int (or (:color-empty state) 0x404040))]
             (if (= dir :vertical)
               (let [fill-h (round-int (* progress h-int))]
-                (.fill gg x (+ y h-int (- fill-h)) (+ x w-int) (+ y h-int) color-empty)
+                (.fill gg x y (+ x w-int) (+ y h-int (- fill-h)) color-empty)
                 (.fill gg x (+ y h-int (- fill-h)) (+ x w-int) (+ y h-int) color-full))
               (let [fill-w (round-int (* progress w-int))]
                 (.fill gg x y (+ x w-int) (+ y h-int) color-empty)
