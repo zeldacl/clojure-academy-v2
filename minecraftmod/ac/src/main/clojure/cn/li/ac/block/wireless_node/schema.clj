@@ -238,19 +238,19 @@
 
    {:key :capacity
     :gui-only? true
-    :gui-init (fn [_] 0)
+    :gui-init (fn [s] (int (get s :capacity 0)))
     :gui-sync? true
     :gui-coerce int
     :gui-close-reset 0
-    :doc "Network capacity (queried from server)"}
+    :doc "Network capacity (synced from server tick)"}
 
    {:key :max-capacity
     :gui-only? true
-    :gui-init (fn [_] 0)
+    :gui-init (fn [s] (int (get s :max-capacity 0)))
     :gui-sync? true
     :gui-coerce int
     :gui-close-reset 0
-    :doc "Max network capacity (queried from server)"}
+    :doc "Max network capacity (synced from server tick)"}
 
    {:key :charge-ticker
     :gui-only? true

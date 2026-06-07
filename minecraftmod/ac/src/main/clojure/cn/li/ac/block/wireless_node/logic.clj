@@ -181,16 +181,18 @@
       (assoc state :charging-out false))))
 
 (defn tick-check-network
-  "Update :enabled flag based on wireless network lookup. Returns updated state."
+  "Update :enabled flag and capacity fields based on wireless network lookup. Returns updated state."
   [state level block-pos node-tile]
   (try
     (let [vblock (vb/create-vnode (ppos/pos-x block-pos) (ppos/pos-y block-pos) (ppos/pos-z block-pos))
           _ (wireless-api/register-node-spatial! level vblock)
           network (wireless-api/get-wireless-net-by-node node-tile)
-          connected? (network-state/active? network)]
-      (assoc state :enabled connected?))
+          connected? (network-state/active? network)
+          load (if network (network-state/get-load network) 0)
+          max-cap (if network (network-state/get-capacity network) 0)]
+      (assoc state :enabled connected? :capacity load :max-capacity max-cap))
     (catch Exception _
-      (assoc state :enabled false))))
+      (assoc state :enabled false :capacity 0 :max-capacity 0))))
 
 (defn- sync-blockstate-if-changed!
   [_be level pos old-state new-state _ctx]
