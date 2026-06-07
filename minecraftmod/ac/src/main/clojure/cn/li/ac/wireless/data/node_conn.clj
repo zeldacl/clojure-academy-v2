@@ -138,7 +138,11 @@
     (fn [_]
       (let [world-data (:world-data conn)
             conn (entity-commit/resolve-connection world-data conn)
-            conn* (update-state conn #(update % device-key conj device-vb))]
+            ;; Clear :disposed flag — a previously empty connection may have been
+            ;; disposed by validate!, but adding a device revives it.
+            conn* (update-state conn #(-> %
+                                          (update device-key conj device-vb)
+                                          (assoc :disposed false)))]
         (entity-commit/replace-connection-in-state! world-data conn conn*)
         (world-registry/update-state!
           world-data

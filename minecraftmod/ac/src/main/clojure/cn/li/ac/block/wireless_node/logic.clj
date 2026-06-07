@@ -8,7 +8,10 @@
             [cn.li.ac.wireless.api :as wireless-api]
             [cn.li.ac.wireless.config :as node-config]
             [cn.li.ac.wireless.core.vblock :as vb]
+            [cn.li.ac.wireless.data.network-lookup :as network-lookup]
             [cn.li.ac.wireless.data.network-state :as network-state]
+            [cn.li.ac.wireless.data.node-conn :as node-conn]
+            [cn.li.ac.wireless.data.world-registry :as world-registry]
             [cn.li.mcmod.block.state-schema :as state-schema]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.mcmod.platform.be :as platform-be]
@@ -181,16 +184,25 @@
       (assoc state :charging-out false))))
 
 (defn tick-check-network
-  "Update :enabled flag and capacity fields based on wireless network lookup. Returns updated state."
+  "Update :enabled flag and capacity fields based on wireless network lookup.
+   :capacity = generator + receiver count on THIS node (NodeConn load).
+   :max-capacity = matrix capacity of the network this node belongs to."
   [state level block-pos node-tile]
   (try
     (let [vblock (vb/create-vnode (ppos/pos-x block-pos) (ppos/pos-y block-pos) (ppos/pos-z block-pos))
           _ (wireless-api/register-node-spatial! level vblock)
           network (wireless-api/get-wireless-net-by-node node-tile)
           connected? (network-state/active? network)
-          load (if network (network-state/get-load network) 0)
+          world-data (or (:world-data network)
+                         (world-registry/get-world-data level))
+          ;; NodeConn stores node as :node-conn type (via create-vnode-conn).
+          ;; Must use matching VBlock for the node-lookup key.
+          node-conn-vb (vb/create-vnode-conn node-tile)
+          conn-load (if-let [conn (network-lookup/get-node-connection world-data node-conn-vb)]
+                      (node-conn/get-load conn)
+                      0)
           max-cap (if network (network-state/get-capacity network) 0)]
-      (assoc state :enabled connected? :capacity load :max-capacity max-cap))
+      (assoc state :enabled connected? :capacity conn-load :max-capacity max-cap))
     (catch Exception _
       (assoc state :enabled false :capacity 0 :max-capacity 0))))
 
