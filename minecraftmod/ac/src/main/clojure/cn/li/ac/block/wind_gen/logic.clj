@@ -5,11 +5,14 @@
             [cn.li.ac.block.wind-gen.config :as wind-config]
             [cn.li.ac.block.wind-gen.schema :as wind-schema]
             [cn.li.ac.energy.operations :as energy]
+            [cn.li.ac.wireless.api :as wireless-api]
+            [cn.li.ac.wireless.data.node-conn :as node-conn]
             [cn.li.mcmod.platform.world :as world]
             [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.item :as item]
-            [cn.li.mcmod.util.log :as log]))
+            [cn.li.mcmod.util.log :as log])
+  (:import [cn.li.acapi.wireless IWirelessGenerator IWirelessNode]))
 
 (def ^:private main-rt (machine-runtime/schema-runtime wind-schema/wind-gen-main-schema :server-only? true))
 (def ^:private base-rt (machine-runtime/schema-runtime wind-schema/wind-gen-base-schema :server-only? true))
@@ -330,3 +333,22 @@
     :wind-gen-base
     (fn [{:keys [item-stack]}]
       (not (pillar-item-stack? item-stack)))))
+
+(defn get-linked-node ^IWirelessNode [tile]
+  (let [gen-pos (try (pos/position-get-block-pos tile) (catch Exception _ nil))
+        pos-str (when gen-pos (str (pos/pos-x gen-pos) "," (pos/pos-y gen-pos) "," (pos/pos-z gen-pos)))]
+    (if-let [conn (try (wireless-api/get-node-conn-by-generator tile)
+                       (catch Exception e
+                         (log/debug "[wind-gen get-linked-node] exception:" (ex-message e))
+                         nil))]
+      (if-let [node (try (node-conn/get-node conn)
+                       (catch Exception e
+                         (log/debug "[wind-gen get-linked-node] get-node exception:" (ex-message e))
+                         nil))]
+        node
+        (do
+          (log/info "[wind-gen get-linked-node] connection found but node tile not resolved for gen at" pos-str)
+          nil))
+      (do
+        (log/info "[wind-gen get-linked-node] no connection found for generator at" pos-str)
+        nil))))

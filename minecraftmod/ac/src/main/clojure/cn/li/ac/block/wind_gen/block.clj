@@ -6,7 +6,9 @@
             [cn.li.ac.block.wind-gen.logic :as wind-logic]
             [cn.li.ac.config.modid :as modid]
             [cn.li.ac.util.init-guard :refer [defonce-guard]]
-            [cn.li.mcmod.block.dsl :as bdsl])
+            [cn.li.mcmod.block.dsl :as bdsl]
+            [cn.li.mcmod.block.tile-logic :as tile-logic]
+            [cn.li.mcmod.platform.capability :as platform-cap])
   (:import [cn.li.acapi.wireless IWirelessGenerator]))
 
 (defonce-guard wind-gen-installed?)
@@ -79,10 +81,17 @@
               :read-nbt-fn wind-logic/pillar-scripted-load-fn
               :write-nbt-fn wind-logic/pillar-scripted-save-fn}]
      :tile-ids ["wind-gen-base"]
-     :capabilities [{:key :wind-generator
-                     :interface IWirelessGenerator
-                     :factory (fn [be _side] (impls/->WirelessGeneratorImpl be))}]
-     :after register-wind-multiblocks!
+     ;; :wireless-generator capability is declared by the first generator that loads
+     ;; (typically solar-gen). We declare it here only if not already present, then
+     ;; always register this tile for the capability key.
+     :after (fn []
+              (register-wind-multiblocks!)
+              (when-not (cn.li.mcmod.platform.capability/get-capability-entry :wireless-generator)
+                (cn.li.mcmod.platform.capability/declare-capability!
+                  :wireless-generator IWirelessGenerator
+                  (fn [be _side] (impls/->WirelessGeneratorImpl be))))
+              (doseq [tile-id ["wind-gen-base"]]
+                (tile-logic/register-tile-capability! tile-id :wireless-generator)))
      :blocks [(bdsl/create-block-spec
                 "wind-gen-pillar"
                 {:registry-name "wind_gen_pillar"

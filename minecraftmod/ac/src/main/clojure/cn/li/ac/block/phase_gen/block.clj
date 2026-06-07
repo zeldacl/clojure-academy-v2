@@ -6,7 +6,9 @@
             [cn.li.ac.block.role-impls :as impls]
             [cn.li.ac.config.modid :as modid]
             [cn.li.ac.util.init-guard :refer [defonce-guard]]
-            [cn.li.mcmod.block.dsl :as bdsl])
+            [cn.li.mcmod.block.dsl :as bdsl]
+            [cn.li.mcmod.block.tile-logic :as tile-logic]
+            [cn.li.mcmod.platform.capability :as platform-cap])
   (:import [cn.li.acapi.wireless IWirelessGenerator]))
 
 (defonce-guard phase-gen-installed?)
@@ -24,9 +26,15 @@
               :write-nbt-fn phase-logic/phase-scripted-save-fn}]
      :tile-ids ["phase-gen"]
      :containers {"phase-gen" phase-logic/phase-container-fns}
-     :capabilities [{:key :phase-generator
-                     :interface IWirelessGenerator
-                     :factory (fn [be _side] (impls/->WirelessGeneratorImpl be))}]
+     ;; :wireless-generator capability is declared by the first generator that loads.
+     ;; We declare here only if not already present, then register this tile.
+     :after #(do
+               (when-not (cn.li.mcmod.platform.capability/get-capability-entry :wireless-generator)
+                 (cn.li.mcmod.platform.capability/declare-capability!
+                   :wireless-generator IWirelessGenerator
+                   (fn [be _side] (impls/->WirelessGeneratorImpl be))))
+               (doseq [tile-id ["phase-gen"]]
+                 (tile-logic/register-tile-capability! tile-id :wireless-generator)))
      :blocks [(bdsl/create-block-spec
                 "phase-gen"
                 {:registry-name "phase_gen"

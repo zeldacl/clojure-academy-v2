@@ -6,6 +6,8 @@
   (:require [cn.li.ac.wireless.data.world-registry :as world-registry]
             [cn.li.ac.wireless.data.persistence :as persistence]
             [cn.li.ac.wireless.data.world-runtime :as runtime]
+            [cn.li.ac.wireless.data.node-conn :as node-conn]
+            [cn.li.ac.wireless.core.vblock :as vb]
             [cn.li.mcmod.platform.nbt :as nbt]
             [cn.li.mcmod.events.world-lifecycle :as world-lifecycle]
             [cn.li.mcmod.util.log :as log]))
@@ -82,23 +84,40 @@
   [world saved-data]
   (if saved-data
     (if-let [wi-data (get-saved-data-world-data world saved-data)]
-      (let [registered (register-world-data! world wi-data)]
-        (log/info "Restored WiWorldData for world from save")
+      (let [registered (register-world-data! world wi-data)
+            net-count (count (world-registry/networks registered))
+            conn-count (count (world-registry/connections registered))]
+        (log/info "Restored WiWorldData for world from save:"
+                  net-count "networks," conn-count "connections")
+        (doseq [conn (world-registry/connections registered)]
+          (let [gens (node-conn/get-generators conn)
+                recs (node-conn/get-receivers conn)]
+            (log/info "  Loaded connection: node=" (vb/vblock-to-string (:node conn))
+                      "generators=" (count gens) "receivers=" (count recs))
+            (doseq [g gens]
+              (log/info "    generator:" (vb/vblock-to-string g)))))
         registered)
       (let [fresh (create-world-data world)]
+        (log/info "No saved WiWorldData found, created fresh world data")
         (register-world-data! world fresh)))
     (let [fresh (create-world-data world)]
+      (log/info "No saved-data provided, created fresh world data")
       (register-world-data! world fresh))))
 
 (defn on-world-save
   "Called before world save - prepare data for serialization."
   [world]
   (if-let [wi-data (get-world-data-non-create world)]
-    (do
+    (let [pre-conn-count (count (world-registry/connections wi-data))]
       (runtime/network-impl-validator wi-data)
       (runtime/node-connection-impl-validator wi-data)
-      (log/info "Prepared WiWorldData for save")
-      (persistence/world-data-to-nbt wi-data))
+      (let [post-conn-count (count (world-registry/connections wi-data))
+            nbt-data (persistence/world-data-to-nbt wi-data)]
+        (log/info "Prepared WiWorldData for save: connections"
+                  pre-conn-count "->" post-conn-count
+                  "(after validation), networks"
+                  (count (world-registry/networks wi-data)))
+        nbt-data))
     nil))
 
 (defn on-world-tick
