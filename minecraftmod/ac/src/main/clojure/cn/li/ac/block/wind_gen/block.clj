@@ -29,7 +29,8 @@
                  :rendering {:flat-item-icon? true
              :render-shape :invisible
                              :textures {:all (modid/asset-path "block" "windgen_main")}}
-                 :events {:on-right-click wind-logic/open-wind-main-gui!}}
+                 :events {:on-right-click wind-logic/open-wind-main-gui!
+                          :on-place wind-logic/on-wind-main-placed!}}
     :part {:registry-name "wind_gen_main_part"
           :rendering {:model-parent "minecraft:block/cube_all"
             :render-shape :invisible

@@ -322,6 +322,24 @@
        :messages [{:type :literal
                    :text "wind_gen_pillar must be in the same x/z column above wind_gen_base or wind_gen_main controller."}]})))
 
+(defn on-wind-main-placed!
+  "Validate that wind-gen-main is placed on top of a wind-gen-pillar (not beside it).
+   Returns {:cancel-place? true} if no pillar is found directly below the controller."
+  [{:keys [world pos] :as _ctx}]
+  (when (and world pos (not (world/world-is-client-side* world)))
+    (let [below-pos (pos/create-block-pos (pos/pos-x pos) (dec (pos/pos-y pos)) (pos/pos-z pos))
+          below-be (world/world-get-tile-entity* world below-pos)
+          below-id (when below-be (platform-be/get-block-id below-be))]
+      (when-not (wind-pillar-id? below-id)
+        (log/info "wind-gen-main place rejected: no pillar directly below"
+                  {:pos [(pos/pos-x pos) (pos/pos-y pos) (pos/pos-z pos)]
+                   :below-pos [(pos/pos-x below-pos) (pos/pos-y below-pos) (pos/pos-z below-pos)]
+                   :below-id below-id
+                   :below-id-path (id-path below-id)})
+        {:cancel-place? true
+         :messages [{:type :literal
+                     :text "wind_gen_main must be placed on top of wind_gen_pillar."}]}))))
+
 (def open-wind-main-gui!
   (machine-runtime/make-open-gui-handler*
     :wind-gen-main
