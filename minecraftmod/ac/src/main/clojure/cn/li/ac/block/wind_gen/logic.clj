@@ -1,6 +1,7 @@
 (ns cn.li.ac.block.wind-gen.logic
   "Wind Generator business logic and helpers."
   (:require [clojure.string :as str]
+            [cn.li.ac.block.machine.container :as machine-container]
             [cn.li.ac.block.machine.runtime :as machine-runtime]
             [cn.li.ac.block.wind-gen.config :as wind-config]
             [cn.li.ac.block.wind-gen.schema :as wind-schema]
@@ -370,3 +371,27 @@
       (do
         (log/info "[wind-gen get-linked-node] no connection found for generator at" pos-str)
         nil))))
+
+;; ============================================================================
+;; Container fns — required for inventory drop-on-break (Containers.dropContents)
+;; ============================================================================
+
+(def main-container-fns
+  "Container for wind-gen-main: single fan/blade slot."
+  (machine-container/make-inventory-container-fns
+    {:default-state main-default-state
+     :slot-count (constantly 1)
+     :inventory-key :inventory
+     :can-place? (fn [_be _slot item _face]
+                   (boolean (fan-item-stack? item)))
+     :can-take? (fn [_be _slot _item _face] true)}))
+
+(def base-container-fns
+  "Container for wind-gen-base: single energy-item output slot."
+  (machine-container/make-inventory-container-fns
+    {:default-state base-default-state
+     :slot-count (constantly 1)
+     :inventory-key :inventory
+     :can-place? (fn [_be _slot item _face]
+                   (energy/is-energy-item-supported? item))
+     :can-take? (fn [_be _slot _item _face] true)}))

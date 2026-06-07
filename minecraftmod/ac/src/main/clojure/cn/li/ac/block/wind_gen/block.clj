@@ -82,6 +82,8 @@
               :read-nbt-fn wind-logic/pillar-scripted-load-fn
               :write-nbt-fn wind-logic/pillar-scripted-save-fn}]
      :tile-ids ["wind-gen-base"]
+     :containers {"wind-gen-main" wind-logic/main-container-fns
+                  "wind-gen-base" wind-logic/base-container-fns}
      ;; :wireless-generator capability is declared by the first generator that loads
      ;; (typically solar-gen). We declare it here only if not already present, then
      ;; always register this tile for the capability key.

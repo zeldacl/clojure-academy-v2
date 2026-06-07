@@ -66,6 +66,8 @@
               :read-nbt-fn dev-logic/dev-scripted-load-fn
               :write-nbt-fn dev-logic/dev-scripted-save-fn}]
      :tile-ids ["developer-normal" "developer-advanced"]
+     :containers {"developer-normal" dev-logic/dev-container-fns
+                  "developer-advanced" dev-logic/dev-container-fns}
      :capabilities [{:key :wireless-receiver :interface IWirelessReceiver
                      :factory dev-logic/create-dev-receiver-cap}]
      :after register-developer-multiblocks!

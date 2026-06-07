@@ -1,5 +1,6 @@
 (ns cn.li.ac.block.developer.logic
 	(:require [clojure.string :as str]
+            [cn.li.ac.block.machine.container :as machine-container]
             [cn.li.ac.block.machine.runtime :as machine-runtime]
 						[cn.li.mcmod.block.dsl :as bdsl]
 						[cn.li.mcmod.block.state-schema :as state-schema]
@@ -136,3 +137,15 @@
 
 (defn get-max-energy [tile]
 	(double (get (or (platform-be/get-custom-state tile) {}) :max-energy 50000.0)))
+;; ============================================================================
+;; Container fns - required for inventory drop-on-break (Containers.dropContents)
+;; ============================================================================
+
+(def dev-container-fns
+  "Container for developer (normal + advanced): 2 generic item slots."
+  (machine-container/make-inventory-container-fns
+    {:default-state dev-default-state
+     :slot-count (constantly 2)
+     :inventory-key :inventory
+     :can-place? (fn [_be _slot _item _face] true)
+     :can-take? (fn [_be _slot _item _face] true)}))
