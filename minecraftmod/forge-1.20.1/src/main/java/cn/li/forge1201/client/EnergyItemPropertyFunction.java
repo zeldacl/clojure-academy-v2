@@ -25,13 +25,15 @@ public enum EnergyItemPropertyFunction implements ItemPropertyFunction {
         if (mx <= 0.0D) {
             mx = 1.0D;
         }
-        double r = cur / mx;
-        if (r < 0.0D) {
+        // Use >= so that a full (or overfull) battery always maps to 1.0,
+        // even when fractional IF/t accumulation leaves cur one ULP below mx.
+        if (cur <= 0.0D) {
             return 0.0F;
         }
-        if (r > 1.0D) {
+        if (cur >= mx) {
             return 1.0F;
         }
+        double r = cur / mx;
         return (float) r;
     }
 }

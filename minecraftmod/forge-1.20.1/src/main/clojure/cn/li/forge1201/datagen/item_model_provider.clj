@@ -25,7 +25,10 @@
         ^ItemModelBuilder builder (.withExistingParent provider (str model-name) parent-rl)]
     (doseq [[layer texture-id] (:textures json)]
       (.texture builder (name layer) ^ResourceLocation (rl/parse-resource-location texture-id modid/*mod-id*)))
-    (doseq [{:keys [predicate model]} (:overrides json)]
+    ;; Forge model pipeline reverses the override array at load time,
+    ;; so write overrides in reverse order (half first, then full) so that
+    ;; after reversal the highest threshold (1.0) is checked first.
+    (doseq [{:keys [predicate model]} (reverse (:overrides json))]
       (let [override-builder (.override builder)
             model-file (ModelFile$ExistingModelFile. (rl/parse-resource-location model modid/*mod-id*) exfile-helper)]
         (doseq [[predicate-id value] predicate]
