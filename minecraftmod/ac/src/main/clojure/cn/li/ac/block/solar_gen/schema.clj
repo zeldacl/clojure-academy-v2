@@ -69,6 +69,7 @@
     :gui-only? true
     :gui-init (fn [s] (str (get s :status "STOPPED")))
     :gui-sync? true
+    :gui-coerce str
     :gui-data-slot? true
     :gui-data-slot-status-codes ["STOPPED" "WEAK" "STRONG"]
     :gui-close-reset ""
@@ -113,6 +114,7 @@
     :default "STOPPED"
     :persist? false
     :gui-sync? true
+    :gui-coerce str
     :gui-data-slot? true
     :gui-data-slot-status-codes ["STOPPED" "WEAK" "STRONG"]
     :doc "Generation status (server-side, synced to GUI)"}

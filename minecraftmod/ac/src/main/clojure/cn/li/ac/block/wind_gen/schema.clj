@@ -47,6 +47,7 @@
     :default "STOPPED"
     :persist? true
     :gui-sync? true
+    :gui-coerce str
     :gui-data-slot? true
     :gui-data-slot-status-codes ["STOPPED" "WEAK" "STRONG"]}
 

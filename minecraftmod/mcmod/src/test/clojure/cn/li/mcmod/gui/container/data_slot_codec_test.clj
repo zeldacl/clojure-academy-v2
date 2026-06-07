@@ -17,7 +17,16 @@
 
 (deftest status-codec-test
   (let [c (codec/string-status-codec ["STOPPED" "WEAK" "STRONG"])]
-    (is (= "STRONG" (codec/decode-value c (codec/encode-value c "STRONG"))))))
+    (is (= "STRONG" (codec/decode-value c (codec/encode-value c "STRONG"))))
+    (is (= "WEAK" (codec/decode-value c (codec/encode-value c :WEAK))))))
+
+(deftest codec-for-field-status-codes-test
+  (let [field {:key :status
+               :gui-data-slot? true
+               :gui-data-slot-status-codes ["STOPPED" "WEAK" "STRONG"]}
+        c (codec/codec-for-gui-field field)]
+    (is (some? c))
+    (is (= "WEAK" (codec/decode-value c (codec/encode-value c "WEAK"))))))
 
 (deftest keyword-enum-codec-test
   (let [c (codec/keyword-enum-codec [:basic :advanced])]

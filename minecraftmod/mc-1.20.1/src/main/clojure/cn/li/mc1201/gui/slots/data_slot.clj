@@ -1,7 +1,8 @@
 (ns cn.li.mc1201.gui.slots.data-slot
   "Atom-backed Minecraft DataSlot implementations."
   (:require [cn.li.mcmod.gui.container.data-slot-codec :as codec])
-  (:import [net.minecraft.world.inventory DataSlot]))
+  (:import [cn.li.mc1201.gui AtomBackedDataSlot AtomBackedDataSlot$Getter AtomBackedDataSlot$Setter]
+           [net.minecraft.world.inventory DataSlot]))
 
 (defn create-atom-backed-data-slot
   "Create a DataSlot whose get/set encode/decode a container atom."
@@ -10,11 +11,14 @@
     (throw (ex-info "DataSlot requires atom ref" {:atom-ref atom-ref})))
   (let [encode (:encode field-codec)
         decode (:decode field-codec)]
-    (proxy [DataSlot] []
-      (get [_]
-        (codec/clamp-int (encode @atom-ref)))
-      (set [_ v]
-        (reset! atom-ref (decode (int v)))))))
+    (AtomBackedDataSlot.
+     (reify AtomBackedDataSlot$Getter
+       (getAsInt [_]
+         (codec/clamp-int (encode @atom-ref))))
+     (reify AtomBackedDataSlot$Setter
+       (^void accept [_ ^int v]
+         (reset! atom-ref (decode v))
+         nil)))))
 
 (defn materialize-data-slots!
   "Attach atom-backed DataSlots to container under :data-slots (vector, stable order)."

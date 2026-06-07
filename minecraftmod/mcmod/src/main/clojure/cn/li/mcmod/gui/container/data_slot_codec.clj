@@ -53,7 +53,18 @@
 
 (defn string-status-codec
   [status-strings]
-  (keyword-enum-codec (map keyword status-strings)))
+  (let [ordered (vec status-strings)
+        normalize (fn [v]
+                    (cond
+                      (string? v) v
+                      (keyword? v) (name v)
+                      :else (str v)))
+        code->int (into {} (map-indexed (fn [i s] [s i]) ordered))
+        int->code (into {} (map-indexed (fn [i s] [i s]) ordered))]
+    {:kind :string-status
+     :encode (fn [v]
+               (clamp-int (get code->int (normalize v) 0)))
+     :decode (fn [i] (get int->code (int i) (first ordered)))}))
 
 (defn codec-for-gui-field
   "Infer a DataSlot codec from a GUI schema field map, or nil when not encodable."
@@ -61,13 +72,16 @@
   (or (:gui-data-slot-codec field)
       (let [coerce (:gui-coerce field)]
         (cond
+          (some? (:gui-data-slot-status-codes field))
+          (string-status-codec (:gui-data-slot-status-codes field))
+
           (= coerce int) (int-codec)
           (= coerce boolean) (boolean-codec)
           (= coerce double) (scaled-double-codec {:scale (or (:gui-data-slot-scale field) 100)})
           (= coerce keyword) (when-let [codes (:gui-data-slot-enum field)]
                                (enum-codec codes (clojure.set/map-invert codes)))
           (= coerce str) (when-let [statuses (:gui-data-slot-status-codes field)]
-                            (string-status-codec statuses))
+                           (string-status-codec statuses))
           :else nil))))
 
 (defn encodable-gui-field?
