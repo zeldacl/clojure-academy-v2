@@ -281,10 +281,10 @@
                 info-area
                 [(tech-ui/hist-energy
                    (fn [] @(:energy container))
-                   @(:max-energy container))
+                   (fn [] @(:max-energy container)))
                  (tech-ui/hist-capacity
                    (fn [] @(:capacity container))
-                   (max 1 @(:max-capacity container)))]
+                   (fn [] (max 1 @(:max-capacity container))))]
                 0)
             y (tech-ui/add-sepline info-area "Info" y)
             y (tech-ui/add-property info-area "Range"

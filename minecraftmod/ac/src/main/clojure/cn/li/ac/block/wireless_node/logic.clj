@@ -207,7 +207,9 @@
 (defn node-tick-state
   [state {:keys [level pos be]}]
   (let [ticker (inc (long (get state :update-ticker 0)))
-        state1 (assoc state :update-ticker ticker)
+        state1 (-> state
+                   (assoc :update-ticker ticker)
+                   (assoc :max-energy (node-max-energy state)))
         state2 (try (tick-charge-in state1) (catch Exception _ state1))
         state3 (try (tick-charge-out state2) (catch Exception _ state2))]
     (if (zero? (mod ticker (node-config/sync-interval)))

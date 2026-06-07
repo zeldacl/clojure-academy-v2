@@ -472,28 +472,34 @@
 ;; ============================================================================
 
 (defn hist-energy
-  "Create energy histogram element"
+  "Create energy histogram element.
+   max-energy may be a number or a (fn [] number) for dynamic updates."
   [energy-fn max-energy]
-  {:label "Energy"
-   :color 0xFF25c4ff
-   :value-fn (fn [] (/ (double (energy-fn)) (double max-energy)))
-   :desc-fn (fn [] (str (int (energy-fn)) " IF"))})
+  (let [max-fn (if (fn? max-energy) max-energy (fn [] max-energy))]
+    {:label "Energy"
+     :color 0xFF25c4ff
+     :value-fn (fn [] (/ (double (energy-fn)) (double (max-fn))))
+     :desc-fn (fn [] (str (int (energy-fn)) " IF"))}))
 
 (defn hist-capacity
-  "Create capacity histogram element"
+  "Create capacity histogram element.
+   max-capacity may be a number or a (fn [] number) for dynamic updates."
   [load-fn max-capacity]
-  {:label "Capacity"
-   :color 0xFFff6c00
-   :value-fn (fn [] (/ (double (load-fn)) (double max-capacity)))
-   :desc-fn (fn [] (str (load-fn) "/" max-capacity))})
+  (let [max-fn (if (fn? max-capacity) max-capacity (fn [] max-capacity))]
+    {:label "Capacity"
+     :color 0xFFff6c00
+     :value-fn (fn [] (/ (double (load-fn)) (double (max-fn))))
+     :desc-fn (fn [] (str (load-fn) "/" (max-fn)))}))
 
 (defn hist-buffer
-  "Create buffer histogram element"
+  "Create buffer histogram element.
+   max-buffer may be a number or a (fn [] number) for dynamic updates."
   [buffer-fn max-buffer]
-  {:label "Buffer"
-   :color 0xFF25f7ff
-   :value-fn (fn [] (/ (double (buffer-fn)) (double max-buffer)))
-   :desc-fn (fn [] (str (int (buffer-fn)) " IF"))})
+  (let [max-fn (if (fn? max-buffer) max-buffer (fn [] max-buffer))]
+    {:label "Buffer"
+     :color 0xFF25f7ff
+     :value-fn (fn [] (/ (double (buffer-fn)) (double (max-fn))))
+     :desc-fn (fn [] (str (int (buffer-fn)) " IF"))}))
 
 ;; ============================================================================
 ;; InfoArea容器创建
