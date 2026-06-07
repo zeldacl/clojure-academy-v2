@@ -125,7 +125,7 @@
        :run-common-setup! run-common-setup!}))
     (catch Exception e
       (log/error "Forge initialization lifecycle failed" e)
-      (throw e))))
+      (throw (Error. "Critical mod initialization failure" e)))))
 
 (defn init-lifecycle-with-error-handling!
   "Run lifecycle with AOT/checkClojure error handling.

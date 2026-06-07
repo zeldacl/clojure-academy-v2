@@ -1,7 +1,9 @@
 (ns cn.li.ac.block.solar-gen.logic
-  (:require [cn.li.ac.block.machine.runtime :as machine-runtime]
+  (:require [cn.li.ac.block.machine.container :as machine-container]
+            [cn.li.ac.block.machine.runtime :as machine-runtime]
             [cn.li.ac.block.solar-gen.config :as solar-config]
             [cn.li.ac.block.solar-gen.schema :as solar-schema]
+            [cn.li.ac.energy.operations :as energy]
             [cn.li.ac.wireless.api :as wireless-api]
             [cn.li.ac.wireless.data.node-conn :as node-conn]
             [cn.li.mcmod.platform.position :as pos]
@@ -37,9 +39,23 @@
         current (double (get state :energy 0.0))
         max-energy (solar-config/max-energy)
         new-energy (min max-energy (+ current gen))
-        changed? (and (> gen 0) (not= new-energy current))]
-    (cond-> (assoc state :status status :max-energy max-energy :gen-speed (double gen))
-      changed? (assoc :energy new-energy))))
+        changed? (and (> gen 0) (not= new-energy current))
+        state' (cond-> (assoc state :status status :max-energy max-energy :gen-speed (double gen))
+                 changed? (assoc :energy new-energy))]
+    ;; Charge energy into the battery/item in the output slot
+    (let [stack (get-in state' [:inventory 0])
+          cur (double (get state' :energy 0.0))]
+      (if (and stack (energy/is-energy-item-supported? stack) (pos? cur))
+        (let [item-cur (double (energy/get-item-energy stack))
+              item-max (double (energy/get-item-max-energy stack))
+              need (max 0.0 (- item-max item-cur))
+              amount (min cur need)
+              leftover (double (energy/charge-energy-to-item stack amount false))
+              accepted (max 0.0 (- amount leftover))]
+          (if (pos? accepted)
+            (assoc state' :energy (- cur accepted))
+            state'))
+        state'))))
 
 (def solar-tick-fn
   (machine-runtime/make-tick-fn
@@ -48,6 +64,14 @@
      :mark-changed? (fn [old-state new-state]
                       (and (pos? (get new-state :gen-speed 0.0))
                            (not= (:energy old-state) (:energy new-state))))}))
+
+(def solar-container-fns
+  (machine-container/make-inventory-container-fns
+    {:default-state solar-default-state
+     :slot-count (constantly 1)
+     :can-place? (fn [_be _slot item _face]
+                   (energy/is-energy-item-supported? item))
+     :can-take? (fn [_be _slot _item _face] true)}))
 
 (def open-solar-gui!
   (machine-runtime/make-open-gui-handler :solar))

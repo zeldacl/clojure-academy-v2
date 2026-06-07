@@ -81,7 +81,7 @@
 (def ^:private node-slot-schema-config
   {:schema-id node-slot-schema-id
    :slots [{:id :input :type :energy :x 42 :y 10}
-           {:id :output :type :output :x 42 :y 80}]})
+           {:id :output :type :energy :x 42 :y 80}]})
 
 (defonce ^:private node-slot-schema-registration
   (delay
@@ -113,8 +113,9 @@
      :slot-count node-slot-count
      :slots-for-face (fn [_be _face] (int-array (node-slot-indexes)))
      :can-place? (fn [_be slot item _face]
-                   (and (= slot (node-input-slot-index))
-                        (energy/is-energy-item-supported? item)))
+                   (and (energy/is-energy-item-supported? item)
+                        (or (= slot (node-input-slot-index))
+                            (= slot (node-output-slot-index)))))
      :can-take? (fn [_be slot _item _face]
                   (= slot (node-output-slot-index)))}))
 

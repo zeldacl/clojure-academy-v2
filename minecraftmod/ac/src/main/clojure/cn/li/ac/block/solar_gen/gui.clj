@@ -67,7 +67,7 @@
   (common/get-slot-item-be container slot-index))
 
 (defn set-slot-item! [container slot-index item-stack]
-  (common/set-slot-item-be! container slot-index item-stack {} identity))
+  (common/set-slot-item-be! container slot-index item-stack {:inventory [nil]} identity))
 
 (defn slot-changed! [_container _slot-index] nil)
 

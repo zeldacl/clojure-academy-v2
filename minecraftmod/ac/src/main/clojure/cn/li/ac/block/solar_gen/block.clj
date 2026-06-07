@@ -23,6 +23,7 @@
               :read-nbt-fn solar-logic/solar-scripted-load-fn
               :write-nbt-fn solar-logic/solar-scripted-save-fn}]
      :tile-ids ["solar-gen"]
+     :containers {"solar-gen" solar-logic/solar-container-fns}
      :capabilities [{:key :wireless-generator
                      :interface IWirelessGenerator
                      :factory (fn [be _side] (impls/->WirelessGeneratorImpl be))}]

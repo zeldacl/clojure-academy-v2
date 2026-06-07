@@ -9,6 +9,7 @@
   CRITICAL: This file contains PURE DATA ONLY (no function definitions).
   It can be safely imported by both server-side (block.clj) and client-side (gui.clj) code."
   (:require [cn.li.mcmod.block.state-schema :as state-schema]
+            [cn.li.mcmod.block.inventory-helpers :as inv-helpers]
             [cn.li.ac.config.nbt-keys :as nbt-keys]
             [cn.li.ac.block.solar-gen.config :as solar-config]))
 
@@ -32,12 +33,14 @@
     :doc "Current energy stored"}
 
    ;; Inventory
-   {:key :battery
+   {:key :inventory
     :nbt-key (nbt-keys/get-key :battery)
-    :type :itemstack
-    :default nil
+    :type :inventory
+    :default [nil]
     :persist? true
     :gui-sync? false
+    :load-fn inv-helpers/load-inventory
+    :save-fn inv-helpers/save-inventory
     :doc "Battery item slot"}])
 
 ;; ============================================================================

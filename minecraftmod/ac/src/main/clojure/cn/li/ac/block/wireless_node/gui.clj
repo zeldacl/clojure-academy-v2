@@ -177,7 +177,8 @@
   (common/set-slot-item-be! container slot-index item-stack {} identity))
 
 (defn slot-changed! [_container slot-index]
-  (log/info "Node container slot" slot-index "changed"))
+  ;(log/info "Node container slot" slot-index "changed")
+  )
 
 ;; ============================================================================
 ;; Wireless Page (network list + connect)
