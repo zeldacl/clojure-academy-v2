@@ -327,12 +327,14 @@
             key-area (cgui-core/create-widget :pos [4 0] :size [32 8])
             icon (cgui-core/create-widget :pos [-3 0.5] :size [6 6])
             value-area (cgui-core/create-widget :pos [info-area-key-length 0] :size [40 8])
-            key-box (comp/text-box :text (str (:label elem)) :color 0xFFAAAAAA :scale 0.8)
-            value-box (comp/text-box :text (str ((:desc-fn elem))) :color 0xFFFFFFFF :scale 0.8)]
+            key-box-spec (comp/text-box :text (str (:label elem)) :color 0xFFAAAAAA :scale 0.8)
+            value-box-spec (comp/text-box :text (str ((:desc-fn elem))) :color 0xFFFFFFFF :scale 0.8)]
         (comp/add-component! icon (comp/draw-texture nil (:color elem)))
-        (comp/add-component! key-area key-box)
-        (comp/add-component! value-area value-box)
-        (events/on-frame value-area (fn [_] (comp/set-text! value-box ((:desc-fn elem)))))
+        (comp/add-component! key-area key-box-spec)
+        (comp/add-component! value-area value-box-spec)
+        ;; Get the actual textbox component (with state atom), NOT the spec map.
+        (let [value-box (comp/get-widget-component value-area :textbox)]
+          (events/on-frame value-area (fn [_] (comp/set-text! value-box ((:desc-fn elem))))))
         (cgui-core/add-widget! row key-area)
         (cgui-core/add-widget! row icon)
         (cgui-core/add-widget! row value-area)
