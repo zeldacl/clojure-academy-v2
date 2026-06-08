@@ -85,8 +85,6 @@
 ;; Glyph Atlas
 ;; ============================================================================
 
-(def ^:private ^:const atlas-size 2048)
-
 (defn- new-atlas-texture!
   "Create a new empty RGBA texture for the glyph atlas."
   []

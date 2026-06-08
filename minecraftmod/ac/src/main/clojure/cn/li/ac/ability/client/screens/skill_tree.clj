@@ -72,6 +72,21 @@
 
 (def ^:private max-progress-segments 24)
 
+;; ============================================================================
+;; Font options — matching AcademyCraft SkillTree.scala:181-190
+;; ============================================================================
+
+(def fo-skill-title      {:font :ac-bold  :font-size 12 :align :center})
+(def fo-skill-desc       {:font :ac-normal :font-size 9  :align :center})
+(def fo-skill-prog       {:font :ac-normal :font-size 8  :align :center :color 0xFFa1e1ff})
+(def fo-skill-unlearned  {:font :ac-normal :font-size 10 :align :center :color 0xFFff5555})
+(def fo-skill-unlearned2 {:font :ac-normal :font-size 10 :align :center :color 0xAAffffff})
+(def fo-skill-req        {:font :ac-normal :font-size 9  :align :right  :color 0xAAffffff})
+(def fo-skill-req-detail  {:font :ac-normal :font-size 9  :align :left   :color 0xEEffffff})
+(def fo-skill-req-detail2 {:font :ac-normal :font-size 9  :align :left   :color 0xFFee5858})
+(def fo-level-title      {:font :ac-bold  :font-size 12 :align :center})
+(def fo-level-req        {:font :ac-normal :font-size 9  :align :center})
+
 (defn- translate-field
   [spec text-key fallback]
   (if-let [key-name (get spec text-key)]
@@ -329,7 +344,7 @@
       :segments max-progress-segments
       :filled-segments (int (max 0 (min max-progress-segments progress-segments)))
       :progress exp}
-     {:kind :text :x (+ x 24) :y (+ y 6) :text (str skill-name) :color 0xFFFFFFFF}]))
+     {:kind :text :x (+ x 24) :y (+ y 6) :text (str skill-name) :font :ac-normal :font-size 9 :align :left :color 0xFFFFFFFF}]))
 
 (defn build-draw-ops
   "Build draw ops for the generic hosted skill tree screen."
@@ -337,19 +352,19 @@
   (if-let [render-data (build-screen-render-data owner)]
     (let [ability (:ability-info render-data)
           header [{:kind :fill :x 0 :y 0 :w 420 :h 260 :color 0xA0101010}
-                  {:kind :text :x 12 :y 8 :text (str "Category: " (:category-name ability)) :color 0xFFFFFFFF}
-                  {:kind :text :x 12 :y 22 :text (format "Level: %d" (int (or (:level ability) 0))) :color 0xFFE8E8E8}
+                  {:kind :text :x 12 :y 8 :text (str "Category: " (:category-name ability)) :font :ac-normal :font-size 9 :align :left :color 0xFFFFFFFF}
+                  {:kind :text :x 12 :y 22 :text (format "Level: %d" (int (or (:level ability) 0))) :font :ac-normal :font-size 9 :align :left :color 0xFFE8E8E8}
                   {:kind :text :x 12 :y 36 :text (format "CP: %.0f / %.0f"
                                                           (double (or (get-in ability [:cp :cur]) 0.0))
                                                           (double (or (get-in ability [:cp :max]) 0.0)))
-                   :color 0xFFAED7FF}
+                   :font :ac-normal :font-size 9 :align :left :color 0xFFAED7FF}
                   {:kind :text :x 12 :y 50 :text (format "Overload: %.0f / %.0f"
                                                           (double (or (get-in ability [:overload :cur]) 0.0))
                                                           (double (or (get-in ability [:overload :max]) 0.0)))
-                   :color 0xFFFFB8A6}]
+                   :font :ac-normal :font-size 9 :align :left :color 0xFFFFB8A6}]
           level-up (when (get-in render-data [:ability-info :can-level-up])
                      [{:kind :fill :x 10 :y 200 :w 80 :h 20 :color 0xAA22AA22}
-                      {:kind :text :x 18 :y 206 :text "Level Up" :color 0xFFFFFFFF}])
+                      {:kind :text :x 18 :y 206 :text "Level Up" :font :ac-normal :font-size 9 :align :center :color 0xFFFFFFFF}])
           connection-ops (mapcat line->fill-ops (or (:connections render-data) []))
           nodes (mapcat node-ops (or (:skill-nodes render-data) []))
           hover-id (:hover-skill render-data)
@@ -357,12 +372,13 @@
                        (first (filter #(= (:skill-id %) hover-id) (:skill-nodes render-data))))
           tooltip (when hover-node
                     [{:kind :fill :x 230 :y 8 :w 180 :h 68 :color 0xC0202020}
-                     {:kind :text :x 236 :y 14 :text (str (:skill-name hover-node)) :color 0xFFFFFFFF}
-                     {:kind :text :x 236 :y 28 :text (str (:skill-description hover-node)) :color 0xFFDDDDDD}
+                     {:kind :text :x 236 :y 14 :text (str (:skill-name hover-node)) :font :ac-bold :font-size 12 :align :left :color 0xFFFFFFFF}
+                     {:kind :text :x 236 :y 28 :text (str (:skill-description hover-node)) :font :ac-normal :font-size 9 :align :left :color 0xFFDDDDDD}
                      {:kind :text :x 236 :y 42 :text (format "Progress: %d%%"
                                                              (int (Math/round (* 100.0 (double (:exp hover-node))))))
-                      :color 0xFFDDDDDD}
+                      :font :ac-normal :font-size 8 :align :left :color 0xFFDDDDDD}
                      {:kind :text :x 236 :y 56 :text (if (:learned hover-node) "Learned" "Not learned")
+                      :font :ac-normal :font-size 8 :align :left
                       :color (if (:learned hover-node) 0xFF88FF88 0xFFFF8888)}])]
       (vec (concat header level-up connection-ops nodes tooltip)))
     []))

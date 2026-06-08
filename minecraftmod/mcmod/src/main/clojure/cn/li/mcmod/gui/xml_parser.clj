@@ -279,19 +279,23 @@
             x-offset (parse/parse-float (text-at component-node :xOffset "0") 0.0)
             y-offset (parse/parse-float (text-at component-node :yOffset "0") 0.0)
             z-level (parse/parse-float (text-at component-node :zLevel "0") 0.0)]
-        (comp/add-component! widget
-                             (comp/text-box :text content
-                                            :color color
-                                            :font-size font-size
-                                            :align align
-                                            :height-align height-align
-                                            :masked? does-echo?
-                                            :shadow? false
-                                            :localized? localized?
-                                            :emit? emit?
-                                            :x-offset x-offset
-                                            :y-offset y-offset
-                                            :z-level z-level))
+        (let [font-name (text-at component-node :font "")
+              font-kw (when (and font-name (not= font-name ""))
+                        (keyword (clojure.string/lower-case (clojure.string/replace font-name "_" "-"))))]
+          (comp/add-component! widget
+                               (comp/text-box :text content
+                                              :color color
+                                              :font-size font-size
+                                              :align align
+                                              :height-align height-align
+                                              :masked? does-echo?
+                                              :shadow? false
+                                              :localized? localized?
+                                              :emit? emit?
+                                              :x-offset x-offset
+                                              :y-offset y-offset
+                                              :z-level z-level
+                                              :font font-kw)))
         (when-let [tb (comp/get-textbox-component widget)]
           (comp/set-editable! tb allow-edit?)))
 
