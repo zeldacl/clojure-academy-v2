@@ -209,7 +209,7 @@
 (defn- make-text-widget
   [x y w h text color]
   (let [wgt (cgui-core/create-widget :pos [x y] :size [w h])
-        tb (comp/text-box :text text :color color :scale 0.7)]
+        tb (comp/text-box :text text :color color :font-size 8)]
     (comp/add-component! wgt tb)
     [wgt tb]))
 

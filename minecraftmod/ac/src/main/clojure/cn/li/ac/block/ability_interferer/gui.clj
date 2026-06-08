@@ -246,7 +246,7 @@
   [panel container]
   (close-add-input-widget! panel container)
   (let [box (cgui-core/create-widget :name "interferer_whitelist_input" :pos [50 5] :size [56 10])
-        tb (comp/text-box :text "" :color 0xFFFFFFFF :scale 0.8)
+        tb (comp/text-box :text "" :font :ac-normal :font-size 10 :color 0xFFFFFFFF)
         tb-native (comp/add-component! box tb)]
     (comp/set-editable! tb-native true)
     (events/on-confirm-input tb-native

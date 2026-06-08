@@ -327,8 +327,8 @@
             key-area (cgui-core/create-widget :pos [4 0] :size [32 8])
             icon (cgui-core/create-widget :pos [-3 0.5] :size [6 6])
             value-area (cgui-core/create-widget :pos [info-area-key-length 0] :size [40 8])
-            key-box-spec (comp/text-box :text (str (:label elem)) :color 0xFFAAAAAA :scale 0.8)
-            value-box-spec (comp/text-box :text (str ((:desc-fn elem))) :color 0xFFFFFFFF :scale 0.8)]
+            key-box-spec (comp/text-box :text (str (:label elem)) :font :ac-normal :font-size 8 :color 0xFFAAAAAA)
+            value-box-spec (comp/text-box :text (str ((:desc-fn elem))) :font :ac-normal :font-size 8 :color 0xFFFFFFFF)]
         (comp/add-component! icon (comp/draw-texture nil (:color elem)))
         (comp/add-component! key-area key-box-spec)
         (comp/add-component! value-area value-box-spec)
@@ -360,8 +360,9 @@
     (comp/add-component! sep-widget
       (comp/text-box
         :text label
-        :color 0x99FFFFFF
-        :scale 0.6))
+        :font :ac-normal
+        :font-size 6
+        :color 0x99FFFFFF))
     (info-area-element! info-area sep-widget)
     (info-area-blank! info-area 3)
     (double (:elem-y @(info-area-state-atom info-area)))))
@@ -385,12 +386,12 @@
         ;; remaining width for value (roughly)
         value-area (cgui-core/create-widget :pos [info-area-key-length 0]
                                        :size [(max 1 (- info-area-expect-width info-area-key-length 10)) 8])
-        label-box (comp/text-box :text (str label) :color 0xFFAAAAAA :scale 0.8)
+        label-box (comp/text-box :text (str label) :font :ac-normal :font-size 8 :color 0xFFAAAAAA)
         value-text (if (fn? value) (value) (str value))
         idle-color 0xFFFFFFFF
         edit-color 0xFF2180d8
         value-color (if editable? edit-color idle-color)
-        value-box-spec (comp/text-box :text value-text :color value-color :scale 0.8 :masked? masked?)]
+        value-box-spec (comp/text-box :text value-text :font :ac-normal :font-size 8 :color value-color :masked? masked?)]
     
     (comp/add-component! key-area label-box)
     (comp/add-component! value-area value-box-spec)
@@ -408,7 +409,7 @@
         (let [box (fn [ch x]
                     ;; size 0 so it won't steal focus in hit-test, but still renders text
                     (let [w (cgui-core/create-widget :pos [x 0] :size [0 0])
-                          tb (comp/text-box :text ch :color 0xFFAAAAAA :scale 0.8)]
+                          tb (comp/text-box :text ch :font :ac-normal :font-size 8 :color 0xFFAAAAAA)]
                       (comp/add-component! w tb)
                       w))
               left (box "[" -4)
@@ -450,7 +451,7 @@
   [info-area text on-click y-offset]
   (maybe-init-elem-y! info-area y-offset)
   (let [button-widget (cgui-core/create-widget :name (str "btn_" text) :pos [50 0] :size [50 8])
-        text-box (comp/text-box :text text :color 0xFFFFFFFF :scale 0.9)]
+        text-box (comp/text-box :text text :font :ac-normal :font-size 9 :align :center :color 0xFFFFFFFF)]
     (comp/add-component! button-widget text-box)
     (events/on-left-click button-widget (events/make-click-handler on-click))
     (log/info "add-button: registered left-click on" text "size:" (cgui-core/get-size button-widget) "pos:" (cgui-core/get-pos button-widget))

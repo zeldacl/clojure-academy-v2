@@ -128,7 +128,6 @@
       :textbox (make-component :textbox
                                {:text (str (:text spec ""))
                                 :color (:color spec 0xFFFFFF)
-                                :scale (:scale spec 1.0)
                                 :font-size (double (:font-size spec 8.0))
                                 :align (:align spec :left)
                                 :height-align (:height-align spec :top)
@@ -141,7 +140,8 @@
                                 :localized? (boolean (:localized? spec false))
                                 :caret-pos 0
                                 :display-offset 0
-                                :editable? (:editable? spec false)})
+                                :editable? (:editable? spec false)
+                                :font (:font spec nil)})
       :progressbar (make-component :progressbar
                                    {:direction (:direction spec :horizontal)
                                     :progress (double (:progress spec 0.0))
@@ -203,13 +203,12 @@
     widget))
 
 (defn text-box
-  [& {:keys [text color scale font-size align height-align x-offset y-offset z-level emit? shadow? masked? localized?]
-      :or {text "" color 0xFFFFFF scale 1.0 font-size 8.0 align :left height-align :top
-           x-offset 0.0 y-offset 0.0 z-level 0.0 emit? true shadow? true masked? false localized? false}}]
+  [& {:keys [text color font-size align height-align x-offset y-offset z-level emit? shadow? masked? localized? font]
+      :or {text "" color 0xFFFFFF font-size 8.0 align :left height-align :top
+           x-offset 0.0 y-offset 0.0 z-level 0.0 emit? true shadow? true masked? false localized? false font nil}}]
   {::kind :textbox
    :text text
    :color color
-   :scale scale
    :font-size font-size
    :align align
    :height-align height-align
@@ -219,7 +218,8 @@
    :emit? emit?
    :shadow? shadow?
    :masked? masked?
-   :localized? localized?})
+   :localized? localized?
+   :font font})
 
 (defn set-text! [text-box text]
   (swap! (component-state text-box) assoc :text (str text))
@@ -364,7 +364,7 @@
   [& {:keys [text x y width height text-color on-click]
       :or {text "Button" x 0 y 0 width 60 height 14 text-color 0xFFFFFF}}]
   (let [widget (cgui-core/create-widget :pos [x y] :size [width height])
-        label (text-box :text text :color text-color :scale 0.7 :shadow? true)]
+        label (text-box :text text :color text-color :font-size 8 :shadow? true)]
     (add-component! widget (outline :color 0x404040 :width 1.0))
     (add-component! widget label)
     (when on-click
@@ -384,7 +384,7 @@
                :color-full color
                :color-empty 0x404040})
         label-box (create-native-component
-                    {::kind :textbox :text label :color 0xFFFFFF :scale 0.6 :shadow? true})]
+                    {::kind :textbox :text label :color 0xFFFFFF :font-size 8 :shadow? true})]
     (add-component! panel bar)
     (add-component! panel label-box)
     (events/on-frame panel
@@ -400,9 +400,9 @@
       :or {label "" x 0 y 0 width 70 label-color 0xAAAAAA value-color 0xFFFFFF}}]
   (let [widget (cgui-core/create-widget :pos [x y] :size [width 12])
         label-box (create-native-component
-                    {::kind :textbox :text (str label ": ") :color label-color :scale 0.7 :shadow? true})
+                    {::kind :textbox :text (str label ": ") :color label-color :font-size 8 :shadow? true})
         value-box (create-native-component
-                    {::kind :textbox :text "" :color value-color :scale 0.7 :shadow? true})]
+                    {::kind :textbox :text "" :color value-color :font-size 8 :shadow? true})]
     (add-component! widget label-box)
     (add-component! widget value-box)
     widget))

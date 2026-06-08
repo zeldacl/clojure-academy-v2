@@ -200,13 +200,13 @@
     (cgui-core/add-widget! panel bg)
     ;; Title
     (let [title (cgui-core/create-widget :pos [10 8] :size [180 14])
-          tb (comp/text-box :text (str "Learn: " skill-name) :color 0xFFFFFFFF :scale 0.9)]
+          tb (comp/text-box :text (str "Learn: " skill-name) :font :ac-bold :font-size 12 :align :center :color 0xFFFFFFFF)]
       (comp/add-component! title tb)
       (cgui-core/add-widget! panel title))
     ;; Learn button
     (let [btn (cgui-core/create-widget :pos [50 90] :size [100 20])
           btn-bg (comp/draw-texture nil 0xFF226622)
-          btn-tb (comp/text-box :text "Learn" :color 0xFFFFFFFF :scale 0.9)]
+          btn-tb (comp/text-box :text "Learn" :font :ac-normal :font-size 9 :align :center :color 0xFFFFFFFF)]
       (comp/add-component! btn btn-bg)
       (comp/add-component! btn btn-tb)
       (events/on-left-click btn (fn [_] (close-fn)))
@@ -246,20 +246,20 @@
     (cgui-core/add-widget! panel bg)
     ;; Title
     (let [title (cgui-core/create-widget :pos [10 8] :size [160 14])
-          tb (comp/text-box :text "Level Up" :color 0xFFFFFFFF :scale 0.9)]
+          tb (comp/text-box :text "Level Up" :font :ac-bold :font-size 12 :align :center :color 0xFFFFFFFF)]
       (comp/add-component! title tb)
       (cgui-core/add-widget! panel title))
     ;; Description
     (let [desc (cgui-core/create-widget :pos [10 28] :size [160 24])
           lvl (some-> (:tier container) deref normalize-tier)
           txt (format "Level up your ability.\nRequires %s developer or better." (name (or lvl :normal)))
-          tb (comp/text-box :text txt :color 0xFFCCCCCC :scale 0.7)]
+          tb (comp/text-box :text txt :font :ac-normal :font-size 9 :align :center :color 0xFFCCCCCC)]
       (comp/add-component! desc tb)
       (cgui-core/add-widget! panel desc))
     ;; Confirm button
     (let [btn (cgui-core/create-widget :pos [40 72] :size [100 20])
           btn-bg (comp/draw-texture nil 0xFF226622)
-          btn-tb (comp/text-box :text "Confirm" :color 0xFFFFFFFF :scale 0.9)]
+          btn-tb (comp/text-box :text "Confirm" :font :ac-normal :font-size 9 :align :center :color 0xFFFFFFFF)]
       (comp/add-component! btn btn-bg)
       (comp/add-component! btn btn-tb)
       (events/on-left-click btn
@@ -325,7 +325,7 @@
             (comp/add-component! node-w fill)
             ;; Label
             (let [label (cgui-core/create-widget :pos [(+ node-x size 4) (+ node-y 2)] :size [120 12])
-                  tb (comp/text-box :text (str skill-name) :color 0xFFFFFFFF :scale 0.6)]
+                  tb (comp/text-box :text (str skill-name) :font :ac-normal :font-size 9 :align :left :color 0xFFFFFFFF)]
               (comp/add-component! label tb)
               (cgui-core/add-widget! area-widget label))
             ;; Click handler

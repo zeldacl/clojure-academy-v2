@@ -79,13 +79,13 @@
         bg (cgui-core/create-widget :pos [0 0] :size [450 360])
         _ (comp/add-component! bg (comp/draw-texture (modid/asset-path "textures" "guis/data_terminal/app_back.png")))
         title (cgui-core/create-widget :pos [0 20] :size [450 30])
-        _ (comp/add-component! title (comp/text-box :text "Media Player" :color 0xFFFFFFFF :scale 1.5))
+        _ (comp/add-component! title (comp/text-box :text "Media Player" :font :ac-normal :font-size 28 :color 0xFFFFFFFF))
         content-lines (into ["AcademyCraft Media Library" ""]
                             (status-lines owner))
         widgets (map-indexed
                  (fn [idx line]
                    (let [w (cgui-core/create-widget :pos [30 (+ 70 (* idx 15))] :size [390 15])]
-                     (comp/add-component! w (comp/text-box :text line :color 0xFFFFFFFF :scale 0.75))
+                     (comp/add-component! w (comp/text-box :text line :font :ac-normal :font-size 8 :color 0xFFFFFFFF))
                      w))
                  content-lines)]
     (cgui-core/add-widget! root bg)

@@ -84,9 +84,9 @@
 (def on-close (:on-close phase-sync))
 
 (defn- add-panel-text!
-  [parent x y w h text color scale]
+  [parent x y w h text color font-size]
   (let [widget (cgui-core/create-widget :pos [x y] :size [w h])
-        tb (comp/text-box :text text :color color :scale scale)]
+        tb (comp/text-box :text text :font :ac-normal :font-size font-size :color color)]
     (comp/add-component! widget tb)
     (cgui-core/add-widget! parent widget)
     {:widget widget :text-box tb}))
@@ -95,13 +95,13 @@
   [inv-window container]
   ;; Do not edit XML; add a thin runtime overlay to match legacy PhaseGen feel.
   ;; Left side: liquid/tank. Right side: energy/buffer. Near slots: input/output hints.
-  (let [liquid-label (add-panel-text! inv-window 15 31 56 8 "LIQUID" 0xD0D6C8FF 0.75)
-        liquid-val (add-panel-text! inv-window 15 39 68 8 "0 / 8000 mB" 0xFFFFFFFF 0.78)
-        energy-label (add-panel-text! inv-window 96 31 58 8 "ENERGY" 0xD0AEEBFF 0.75)
-        energy-val (add-panel-text! inv-window 96 39 70 8 "0 / 6000 IF" 0xFFFFFFFF 0.78)
-        in-hint (add-panel-text! inv-window 38 23 22 8 "IN" 0xA0FFFFFF 0.7)
-        out-hint (add-panel-text! inv-window 106 61 26 8 "OUT" 0xA0FFFFFF 0.7)
-        bat-hint (add-panel-text! inv-window 35 89 30 8 "BAT" 0xA0FFFFFF 0.7)]
+  (let [liquid-label (add-panel-text! inv-window 15 31 56 8 "LIQUID" 0xD0D6C8FF 8)
+        liquid-val (add-panel-text! inv-window 15 39 68 8 "0 / 8000 mB" 0xFFFFFFFF 8)
+        energy-label (add-panel-text! inv-window 96 31 58 8 "ENERGY" 0xD0AEEBFF 8)
+        energy-val (add-panel-text! inv-window 96 39 70 8 "0 / 6000 IF" 0xFFFFFFFF 8)
+        in-hint (add-panel-text! inv-window 38 23 22 8 "IN" 0xA0FFFFFF 8)
+        out-hint (add-panel-text! inv-window 106 61 26 8 "OUT" 0xA0FFFFFF 8)
+        bat-hint (add-panel-text! inv-window 35 89 30 8 "BAT" 0xA0FFFFFF 8)]
     (doseq [hint [(:widget in-hint) (:widget out-hint) (:widget bat-hint)]]
       (events/on-frame hint (fn [_] nil)))
     (events/on-frame (:widget liquid-val)

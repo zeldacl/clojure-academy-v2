@@ -7,13 +7,13 @@
             [cn.li.mcmod.util.log :as log]))
 
 (defn- create-text-page-gui
-  [{:keys [title size lines title-scale line-scale]}]
+  [{:keys [title size lines title-font-size line-font-size]}]
   (let [[w h] size
         root (cgui-core/create-widget :size size)
         bg (cgui-core/create-widget :pos [0 0] :size size)
         _ (comp/add-component! bg (comp/draw-texture (modid/asset-path "textures" "guis/data_terminal/app_back.png")))
         title-w (cgui-core/create-widget :pos [0 20] :size [w 30])
-        _ (comp/add-component! title-w (comp/text-box :text title :color 0xFFFFFFFF :scale (or title-scale 1.5)))
+        _ (comp/add-component! title-w (comp/text-box :text title :font :ac-normal :font-size (or title-font-size 12) :color 0xFFFFFFFF))
         content-y 70
         line-h (if (< w 420) 13 15)
         content-widgets (map-indexed
@@ -23,8 +23,9 @@
                                          :size [(- w 60) line-h])]
                              (comp/add-component! widget
                                                 (comp/text-box :text line
-                                                               :color 0xFFFFFFFF
-                                                               :scale (or line-scale 0.75)))
+                                                               :font :ac-normal
+                                                               :font-size (or line-font-size 8)
+                                                               :color 0xFFFFFFFF))
                              widget))
                          lines)]
     (cgui-core/add-widget! root bg)
@@ -40,7 +41,7 @@
     (create-text-page-gui
       {:title "Academy Craft"
        :size [400 300]
-       :title-scale 2.0
+       :title-font-size 42
        :lines ["Version: 2.0.0"
                ""
                "Created by: WeAthFolD"

@@ -12,7 +12,7 @@
         bg (cgui-core/create-widget :pos [0 0] :size [450 400])
         _ (comp/add-component! bg (comp/draw-texture (modid/asset-path "textures" "guis/data_terminal/app_back.png")))
         title (cgui-core/create-widget :pos [0 20] :size [450 30])
-        _ (comp/add-component! title (comp/text-box :text "Frequency Transmitter" :color 0xFFFFFFFF :scale 1.5))
+        _ (comp/add-component! title (comp/text-box :text "Frequency Transmitter" :font :ac-normal :font-size 14 :color 0xFFFFFFFF))
         lines ["Frequency Transmitter"
                ""
                "Use this app as a reference for wireless linking."
@@ -24,7 +24,7 @@
         widgets (map-indexed
                  (fn [idx line]
                    (let [w (cgui-core/create-widget :pos [30 (+ content-y (* idx 13))] :size [390 13])]
-                     (comp/add-component! w (comp/text-box :text line :color 0xFFFFFFFF :scale 0.7))
+                     (comp/add-component! w (comp/text-box :text line :font :ac-normal :font-size 8 :color 0xFFFFFFFF))
                      w))
                  lines)]
     (cgui-core/add-widget! root bg)
