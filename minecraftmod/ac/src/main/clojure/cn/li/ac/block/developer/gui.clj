@@ -1,18 +1,21 @@
 (ns cn.li.ac.block.developer.gui
-  "Ability Developer TechUI: classic `page_developer.xml` + embedded wireless list in `parent_right/area` + Inv + wireless tab (list fetch lazy until Wireless tab is opened).
+  "Ability Developer GUI: single-screen classic page_developer.xml + overlays.
 
-  Loaded with content init; uses `unified-developer-schema` for container atoms/sync.
-  GUI close clears tile session (`TileDeveloper` unuse / onGuiClosed)."
+  - No TechUI tabs (original AcademyCraft is single-screen)
+  - No visible inventory slots (original has 2 internal TE slots for automation,
+    not user-visible in GUI)
+  - Wireless panel: black-cover overlay popup triggered by wireless button
+  - Info area: energy histogram + status properties (right sidebar)
+  - Right panel: mode dispatch via panel.clj (skill-tree / console / reset-console)"
   (:require [clojure.string :as str]
             [cn.li.mcmod.gui.cgui-core :as cgui-core]
             [cn.li.mcmod.gui.cgui-screen :as cgui-screen]
-            [cn.li.mcmod.gui.tabbed-gui :as tabbed-gui]
+            [cn.li.mcmod.gui.components :as comp]
+            [cn.li.mcmod.gui.events :as events]
             [cn.li.ac.gui.tech-ui-common :as tech-ui]
-            [cn.li.mcmod.gui.container-state :as container-state]
             [cn.li.ac.gui.manifest :as gui-manifest]
             [cn.li.ac.wireless.gui.tab :as wireless-tab]
             [cn.li.mcmod.util.log :as log]
-            [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.mcmod.gui.spec :as gui-reg]
             [cn.li.ac.block.gui.sync :as gui-sync]
             [cn.li.ac.wireless.gui.container.common :as common]
@@ -28,34 +31,30 @@
 
 (def ^:private developer-gui-id :developer-gui)
 
-;; Classic `page_developer.xml` is 400×187; add gutter + InfoArea min width (matches `tech_ui_common` default).
-(def ^:private developer-tech-main-w (+ 400.0 7.0 100.0))
-(def ^:private developer-tech-main-h (double tech-ui/gui-height))
+;; Classic page_developer.xml is 400×187
+(def ^:private developer-main-w 400.0)
+(def ^:private developer-main-h 187.0)
+(def ^:private info-area-width 100.0)
 
-;; Vanilla player-inventory menu image width ≈176; extend to fit TechUI main (see `screen_impl` containerTick).
-(def ^:private developer-forge-image-dx 331)
+(def gui-width (long (+ developer-main-w 7.0 info-area-width)))
+(def gui-height (long developer-main-h))
 
-(def gui-width tech-ui/gui-width)
-(def gui-height tech-ui/gui-height)
 (def ^:private developer-sync
   (gui-sync/schema-sync-fns dev-schema/unified-developer-schema))
+
+;; ============================================================================
+;; Container — internal inventory (2 slots, not user-visible) + state sync
+;; ============================================================================
 
 (defn create-container [tile player]
   (let [state (or (common/get-tile-state tile) {})]
     (gui-sync/create-schema-container dev-schema/unified-developer-schema
-                                      tile
-                                      player
-                                      :developer
+                                      tile player :developer
                                       {:gui-id (gui-manifest/gui-id :developer)
                                        :state state})))
 
 (defn get-slot-count [_container]
-  (slot-schema/tile-slot-count developer-gui-id))
-
-(defn- normalize-inventory-2
-  [state]
-  (let [v (vec (take 2 (concat (vec (:inventory state [])) (repeat nil))))]
-    (assoc state :inventory v)))
+  0)  ;; No visible slots — inventory is internal-only for automation
 
 (defn can-place-item? [_container _slot-index _item-stack]
   true)
@@ -66,7 +65,9 @@
 (defn set-slot-item! [container slot-index item-stack]
   (common/set-slot-item-be! container slot-index item-stack
                             dev-logic/dev-default-state
-                            normalize-inventory-2)
+                            (fn [state]
+                              (let [v (vec (take 2 (concat (vec (:inventory state [])) (repeat nil))))]
+                                (assoc state :inventory v))))
   (when-let [tile (:tile-entity container)]
     (try (platform-be/set-changed! tile) (catch Exception _ nil)))
   nil)
@@ -77,7 +78,7 @@
   (and (common/still-valid? container player)
        (let [tile (:tile-entity container)
              st (or (common/get-tile-state tile) {})
-         pid (uuid/player-uuid player)
+             pid (uuid/player-uuid player)
              holder (str (:user-uuid st ""))]
          (or (str/blank? holder) (= holder pid)))))
 
@@ -93,52 +94,78 @@
         (when (and lvl (not (world/world-is-client-side* lvl)))
           (try
             (machine-runtime/commit-transform! tile dev-logic/dev-default-state
-                                               #(assoc % :user-uuid "" :user-name "" :is-developing false))
+              #(assoc % :user-uuid "" :user-name "" :is-developing false))
             (catch Exception e
               (log/debug "Developer on-close tile update:" (ex-message e)))))))))
 
+;; ============================================================================
+;; Wireless overlay
+;; ============================================================================
+
+(defn- create-wireless-overlay!
+  "Create a black-cover overlay containing the wireless link panel.
+  Clicking the cover (outside the panel) or pressing ESC dismisses it."
+  [root container]
+  (try
+    (let [[rw rh] (cgui-core/get-size root)
+          cover (cgui-core/create-widget :pos [0 0] :size [rw rh])
+          _ (comp/add-component! cover (comp/draw-texture nil 0x80000000))
+          node-icon (modid/asset-path "textures" "guis/icons/icon_node.png")
+          ;; Create wireless panel
+          {:keys [window]} (wireless-tab/create-wireless-panel
+                             {:role :receiver
+                              :container container
+                              :tab-logo-path node-icon
+                              :connected-row-logo-path node-icon
+                              :defer-initial-rebuild? false})
+          ;; Position it centered
+          [ww wh] (cgui-core/get-size window)
+          cx (int (/ (- rw ww) 2))
+          cy (int (/ (- rh wh) 2))
+          _ (cgui-core/set-pos! window cx cy)
+          ;; Close on clicking the cover background
+          close-fn #(cgui-core/remove-widget! root cover)]
+      ;; Add window to cover, cover to root
+      (cgui-core/add-widget! cover window)
+      (cgui-core/add-widget! root cover)
+      ;; Click on cover background closes it (the window absorbs its own clicks)
+      (events/on-left-click cover
+        (fn [evt]
+          (let [mx (int (:x evt 0))
+                my (int (:y evt 0))]
+            (when (or (< mx cx) (> mx (+ cx ww))
+                      (< my cy) (> my (+ cy wh)))
+              (close-fn)))))
+      ;; ESC key handling — close overlay first
+      (events/on-key-press cover
+        (fn [evt]
+          (when (= 256 (:keyCode evt))  ;; GLFW_KEY_ESCAPE
+            (close-fn))))
+      cover)
+    (catch Exception e
+      (log/error "Wireless overlay:" (ex-message e))
+      nil)))
+
+;; ============================================================================
+;; GUI assembly — single screen
+;; ============================================================================
+
 (defn create-developer-gui
+  "Create the single-screen developer GUI: page_developer.xml root + info area.
+  No tabs, no visible inventory slots, no embedded wireless."
   [container _player & [opts]]
   (try
     (let [container (cond-> container
-                    (:menu opts) (assoc :minecraft-container (:menu opts)))
-          inv-page (tech-ui/create-inventory-page "phasegen")
-          node-icon (modid/asset-path "textures" "guis/icons/icon_node.png")
-          wireless-window (wireless-tab/create-wireless-panel
-                {:role :receiver
-                 :container container
-                 :menu (:menu opts)
-                 :tab-logo-path node-icon
-                 :connected-row-logo-path node-icon
-                 :defer-initial-rebuild? true})
-          activate-wireless-tab! (wireless-tab/developer-wireless-tab-lazy-activator
-                                   wireless-window container node-icon)
+                      (:menu opts) (assoc :minecraft-container (:menu opts)))
           classic-root (dev-panel/load-classic-developer-page)
-          _ (when-let [area (cgui-core/find-widget classic-root "parent_right/area")]
-              (wireless-tab/create-embedded-developer-wireless-panel!
-                container area {:connected-row-logo-path node-icon}))
-          pages [inv-page
-                 {:id "developer" :window classic-root}
-                 {:id "wireless" :window wireless-window}]
-          container-id (when-let [m (:menu opts)] (container-state/get-menu-container-id m))
-          ;; Do not use `apply` here: `(apply create-tech-ui [p1 p2 p3] opts-map)` treats the
-          ;; map as a seq of MapEntries and breaks page maps (nil :id / :window).
-          tech-ui (tech-ui/create-tech-ui pages
-                    {:main-size [developer-tech-main-w developer-tech-main-h]})
-          ;; `page_inv` / `page_wireless` root uses XML CENTER align; wide `:main-size` would
-          ;; center 176px-wide pages in `tech_ui_main` (~165px right shift vs matrix).
-          _ (doseq [w [(:window inv-page) wireless-window]]
-              (cgui-core/set-w-align! w :left)
-              (cgui-core/set-h-align! w :top))
-          _ (when-let [cur-atom (:current tech-ui)]
-              (add-watch cur-atom :developer-wireless-tab-lazy
-                (fn [_ _ _old new-id]
-                  (when (= "wireless" new-id)
-                    (activate-wireless-tab!)))))
-          _ (tabbed-gui/attach-tab-sync! pages tech-ui container container-id)
-          main-widget (:window tech-ui)
-          _ (dev-panel/attach-classic-developer-bindings! classic-root container
-              {:switch-wireless-tab! #(tabbed-gui/switch-tab! tech-ui pages "wireless")})
+          ;; Attach left panel bindings + right panel mode dispatch
+          _ (dev-panel/attach-classic-developer-bindings!
+              classic-root container
+              {:on-wireless-click
+               (fn []
+                 ;; Open wireless overlay on the root
+                 (create-wireless-overlay! classic-root container))})
+          ;; Info area (right sidebar)
           info-area (tech-ui/create-info-area)
           max-e (fn [] (max 1.0 (double @(:max-energy container))))
           y0 (tech-ui/add-histogram
@@ -149,66 +176,60 @@
           y2 (tech-ui/add-property info-area "tier" (fn [] (str @(:tier container))) y1)
           y3 (tech-ui/add-property info-area "structure_ok" (fn [] (str @(:structure-valid container))) y2)
           _y4 (tech-ui/add-property info-area "developing" (fn [] (str @(:is-developing container))) y3)]
-      (cgui-core/set-position! info-area (+ (cgui-core/get-width main-widget) 7) 5)
+      ;; Position info area to the right of the classic page
+      (cgui-core/set-position! info-area (+ developer-main-w 7.0) 5.0)
       (tech-ui/reset-info-area! info-area)
-      (cgui-core/add-widget! main-widget info-area)
-      (log/info "Created Ability Developer TechUI (classic panel + phasegen inv)")
+      (cgui-core/add-widget! classic-root info-area)
+      (log/info "Created Ability Developer GUI (classic single-screen)")
       (if (:menu opts)
-        {:root main-widget :current (:current tech-ui)}
-        main-widget))
+        {:root classic-root}
+        classic-root))
     (catch Exception e
       (log/error "Developer GUI:" (ex-message e))
       (throw e))))
 
 (defn create-screen
+  "Wrap the developer GUI as a CGuiScreenContainer."
   [container minecraft-container player]
   (let [gui (create-developer-gui container player {:menu minecraft-container})
         root (if (map? gui) (:root gui) gui)
         base (cgui-screen/create-cgui-screen-container root minecraft-container)]
-    (if (map? gui)
-      (-> base
-          (tech-ui/assoc-tech-ui-screen-size)
-          (assoc :size-dx developer-forge-image-dx
-                 :current-tab-atom (:current gui)))
-      (-> base
-          (tech-ui/assoc-tech-ui-screen-size)
-          (assoc :size-dx developer-forge-image-dx)))))
+    (-> base
+        (tech-ui/assoc-tech-ui-screen-size)
+        (assoc :size-dx 331))))  ;; extended width for info area
+
+;; ============================================================================
+;; Registration
+;; ============================================================================
 
 (defn- developer-container? [container]
   (and (map? container)
        (contains? container :tile-entity)
        (= :developer (:container-type container))))
 
-(def ^:private developer-gui-guard-lock
-  (Object.))
-
-(def ^:private ^:dynamic *developer-gui-installed?*
-  false)
+(def ^:private ^:dynamic *developer-gui-installed?* false)
+(def ^:private developer-gui-guard-lock (Object.))
 
 (defn init-developer-gui!
   []
   (when-not (var-get #'*developer-gui-installed?*)
     (locking developer-gui-guard-lock
       (when-not (var-get #'*developer-gui-installed?*)
-        (slot-schema/register-slot-schema!
-          {:schema-id developer-gui-id
-           ;; AcademyCraft 1.0.7: `TileDeveloper` inv size 2; `ContainerNode`-style slots on `ui_phasegen`.
-           :slots [{:id :inv-0 :type :generic :x 42 :y 10}
-                   {:id :inv-1 :type :generic :x 42 :y 80}]})
-    (gui-reg/register-block-gui!
-      (gui-manifest/gui-name :developer)
-      (merge (gui-manifest/gui-registration :developer)
-             {:container-predicate developer-container?
-       :container-fn create-container
-       :screen-fn create-screen
-       :server-menu-sync-fn server-menu-sync!
-       :validate-fn still-valid?
-       :close-fn on-close
-       :button-click-fn handle-button-click!
-       :slot-count-fn get-slot-count
-       :slot-get-fn get-slot-item
-       :slot-set-fn set-slot-item!
-       :slot-can-place-fn can-place-item?
-        :slot-changed-fn slot-changed!}))
+        ;; Register GUI — no visible slot schema (internal inventory only)
+        (gui-reg/register-block-gui!
+          (gui-manifest/gui-name :developer)
+          (merge (gui-manifest/gui-registration :developer)
+                 {:container-predicate developer-container?
+                  :container-fn create-container
+                  :screen-fn create-screen
+                  :server-menu-sync-fn server-menu-sync!
+                  :validate-fn still-valid?
+                  :close-fn on-close
+                  :button-click-fn handle-button-click!
+                  :slot-count-fn get-slot-count
+                  :slot-get-fn get-slot-item
+                  :slot-set-fn set-slot-item!
+                  :slot-can-place-fn can-place-item?
+                  :slot-changed-fn slot-changed!}))
         (alter-var-root #'*developer-gui-installed?* (constantly true))
-        (log/info "Ability Developer GUI registered (gui-id 13)")))))
+        (log/info "Ability Developer GUI registered (single-screen, gui-id 13)")))))
