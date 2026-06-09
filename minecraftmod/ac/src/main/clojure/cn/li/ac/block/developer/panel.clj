@@ -85,7 +85,7 @@
       (modid/asset-path "textures" icon-str))))
 
 (defn- default-ability-icon-path []
-  (modid/asset-path "textures" "abilities/electromaster/icon.png"))
+  (modid/asset-path "textures" "guis/icons/icon_nocategory.png"))
 
 (defn- normalize-tier [tier]
   (let [k (keyword (or tier :normal))]
@@ -125,10 +125,9 @@
                     (default-ability-icon-path))
         exp-label (if has-category?
                     (if (>= lvl 5) "MAX"
-                        (if thresh (format "EXP %.0f%%" (* 100.0 cat-prog01)) "N/A"))
-                    "N/A")
+                        (if thresh (format "EXP %.0f%%" (* 100.0 cat-prog01)) "EXP 0%"))
+                    "EXP 0%")
         level-label (cond dev? "Learning"
-                          (not has-category?) "No Category"
                           :else (format "Level %d" lvl))]
     {:has-category? has-category?
      :can-upgrade? can-upgrade?
