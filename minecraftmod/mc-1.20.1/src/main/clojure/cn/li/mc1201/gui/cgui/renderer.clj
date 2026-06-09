@@ -1,5 +1,13 @@
 (ns cn.li.mc1201.gui.cgui.renderer
-  "CLIENT-ONLY CGUI rendering and root sizing logic."
+  "CLIENT-ONLY CGUI rendering and root sizing logic.
+
+  Font size contract (matching original AcademyCraft FontOption behaviour):
+  :font-size N produces N px text on screen.
+  Formula: font-scale = font-size / CGUI-FONT-BASE-HEIGHT.
+  CGUI-FONT-BASE-HEIGHT = 8.0 px (the glyph height on the font sheet).
+  Guarantee: both minecraft:default (8px bitmap glyphs) and TTF providers
+  with size: 8.0 (see font_datagen.clj) produce 8px base glyphs — so
+  :font-size N is always N px regardless of which font is active."
   (:require [cn.li.mcmod.gui.cgui-core :as cgui-core]
             [cn.li.mc1201.gui.cgui.font :as font-api]
             [cn.li.mc1201.gui.cgui.assets :as assets]
@@ -19,6 +27,11 @@
    (create-cgui-renderer-runtime {}))
   ([initial-cache]
    {:texture-size-cache (atom initial-cache)}))
+
+;; Contract: font providers must produce 8px glyphs on the font sheet.
+;; minecraft:default = 8px bitmap.  TTF must use size:8.0 (see font_datagen.clj).
+;; Result: :font-size N always = N px on screen, matching original AcademyCraft.
+(def ^:const cgui-font-base-height 8.0)
 
 (defonce ^:private installed-cgui-renderer-runtime
   (create-cgui-renderer-runtime))
@@ -282,7 +295,7 @@
                        raw-text)
                 color (unchecked-int (or (:color state) 0xFFFFFF))
                 font-size (double (or (:font-size state) 8.0))
-                font-scale (* (/ font-size 8.0) (double scale))
+                font-scale (* (/ font-size cgui-font-base-height) (double scale))
                 align (or (:align state) :left)
                 height-align (or (:height-align state) :top)
                 x-offset (double (or (:x-offset state) 0.0))

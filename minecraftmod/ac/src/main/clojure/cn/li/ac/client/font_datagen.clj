@@ -18,7 +18,7 @@
   (if (bundled-ttf?)
     [{:type "ttf"
       :file "my_mod:ac_normal.ttf"
-      :size 11.0
+      :size 8.0
       :oversample 2.0
       :shift [0 0]}
      {:type "reference"

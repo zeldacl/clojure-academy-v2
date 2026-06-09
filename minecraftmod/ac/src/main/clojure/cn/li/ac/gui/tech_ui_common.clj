@@ -327,8 +327,8 @@
             key-area (cgui-core/create-widget :pos [4 0] :size [32 8])
             icon (cgui-core/create-widget :pos [-3 0.5] :size [6 6])
             value-area (cgui-core/create-widget :pos [info-area-key-length 0] :size [40 8])
-            key-box-spec (comp/text-box :text (str (:label elem)) :font :ac-normal :font-size 8 :color 0xFFAAAAAA)
-            value-box-spec (comp/text-box :text (str ((:desc-fn elem))) :font :ac-normal :font-size 8 :color 0xFFFFFFFF)]
+            key-box-spec (comp/text-box :text (str (:label elem)) :font :ac-normal :font-size 8 :color 0xFFAAAAAA :emit? false)
+            value-box-spec (comp/text-box :text (str ((:desc-fn elem))) :font :ac-normal :font-size 8 :color 0xFFFFFFFF :emit? false)]
         (comp/add-component! icon (comp/draw-texture nil (:color elem)))
         (comp/add-component! key-area key-box-spec)
         (comp/add-component! value-area value-box-spec)
@@ -362,7 +362,8 @@
         :text label
         :font :ac-normal
         :font-size 6
-        :color 0x99FFFFFF))
+        :color 0x99FFFFFF
+        :emit? false))
     (info-area-element! info-area sep-widget)
     (info-area-blank! info-area 3)
     (double (:elem-y @(info-area-state-atom info-area)))))
@@ -386,12 +387,12 @@
         ;; remaining width for value (roughly)
         value-area (cgui-core/create-widget :pos [info-area-key-length 0]
                                        :size [(max 1 (- info-area-expect-width info-area-key-length 10)) 8])
-        label-box (comp/text-box :text (str label) :font :ac-normal :font-size 8 :color 0xFFAAAAAA)
+        label-box (comp/text-box :text (str label) :font :ac-normal :font-size 8 :color 0xFFAAAAAA :emit? false)
         value-text (if (fn? value) (value) (str value))
         idle-color 0xFFFFFFFF
         edit-color 0xFF2180d8
         value-color (if editable? edit-color idle-color)
-        value-box-spec (comp/text-box :text value-text :font :ac-normal :font-size 8 :color value-color :masked? masked?)]
+        value-box-spec (comp/text-box :text value-text :font :ac-normal :font-size 8 :color value-color :masked? masked? :emit? false)]
     
     (comp/add-component! key-area label-box)
     (comp/add-component! value-area value-box-spec)
