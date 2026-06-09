@@ -66,7 +66,8 @@
     :persist? true
     :gui-sync? true
     :gui-coerce double
-    :gui-data-slot-scale 100}
+    :gui-data-slot-scale 100
+    :doc "GUI projection of timed develop session progress in [0,1]; source of truth is :development-data."}
 
    {:key :is-developing
     :nbt-key "IsDeveloping"
@@ -75,6 +76,27 @@
     :persist? true
     :gui-sync? true
     :gui-coerce boolean}
+
+   {:key :development-data
+    :default nil
+    :persist? false
+    :doc "Runtime DevelopData map for timed session; not saved to NBT."}
+
+   {:key :development-action
+    :default nil
+    :persist? false
+    :doc "Active session action (:level-up / :learn-skill / :reset / :awaken)."}
+
+   {:key :development-payload
+    :default nil
+    :persist? false
+    :doc "Action-specific payload passed to completion commands."}
+
+   {:key :development-complete?
+    :type :boolean
+    :default false
+    :persist? false
+    :doc "Transient flag set when develop tick reaches done; cleared by after-commit."}
 
    {:key :structure-valid
     :nbt-key "StructureValid"

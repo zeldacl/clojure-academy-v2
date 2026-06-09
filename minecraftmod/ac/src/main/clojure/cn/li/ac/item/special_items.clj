@@ -1,17 +1,12 @@
 (ns cn.li.ac.item.special-items
   "Special migrated items with original gameplay behavior."
-  (:require 
-            [cn.li.ac.ability.service.runtime-store :as store]
-[cn.li.mcmod.hooks.core :as runtime-hooks]
-[cn.li.mcmod.item.dsl :as idsl]
+  (:require [cn.li.mcmod.item.dsl :as idsl]
             [clojure.string :as str]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.item :as pitem]
             [cn.li.mcmod.platform.nbt :as nbt]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.world :as world]
-            [cn.li.ac.ability.service.command-runtime :as command-rt]
-            [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.util.log :as log]))
 
@@ -23,7 +18,18 @@
    "induction_factor_teleporter" :teleporter
    "induction_factor_vecmanip" :vecmanip})
 
-(def ^:private magnetic-coil-item-id "my_mod:magnetic_coil")
+(def induction-factor-item-ids
+  (mapv (fn [suffix] (str "my_mod:" suffix))
+        (keys induction-factor->category)))
+
+(defn induction-factor-catalog
+  "Vector of [item-id category-kw] for developer material checks."
+  []
+  (mapv (fn [[suffix category]]
+          [(str "my_mod:" suffix) category])
+        induction-factor->category))
+
+(def magnetic-coil-item-id "my_mod:magnetic_coil")
 (def ^:private matter-unit-item-id "my_mod:matter_unit")
 (def ^:private imag-phase-block-id "my_mod:imag_phase")
 (def ^:private mag-hook-entity-id "my_mod:entity_mag_hook")
@@ -43,51 +49,9 @@
      :mask-texture "my_mod:textures/item/matter_unit_overlay.png"}))
 
 (defn- apply-induction-factor!
-  [{:keys [player item-id side]}]
-  (when (= side :server)
-    (let [session-id (runtime-hooks/require-player-state-session-id "special-items")
-          normalized-id (last (str/split (str item-id) #":" 2))
-          target-category (get induction-factor->category normalized-id)]
-      (when target-category
-      (let [uuid (uuid/player-uuid player)
-          state (store/get-or-create-player-state! session-id uuid)
-          ability (:ability-data state)
-          current-category (:category-id ability)
-          current-level (int (:level ability 1))]
-          (cond
-            (nil? current-category)
-            (do
-              (command-rt/run-command-in-session! session-id
-                                                  uuid
-                                                  {:command :change-category
-                                                   :new-category target-category})
-              (entity/player-consume-main-hand-item! player 1)
-              (log/info "Applied induction factor for initial category" {:uuid uuid :category target-category}))
-
-            (= current-category target-category)
-            nil
-
-            (and (>= current-level 3)
-                 (pos? (int (entity/player-count-item-by-id player magnetic-coil-item-id))))
-            (let [new-level (max 1 (dec current-level))
-                  consumed-factor? (entity/player-consume-main-hand-item! player 1)
-                  consumed-coil? (entity/player-consume-item-by-id! player magnetic-coil-item-id 1)]
-              (when (and consumed-factor? consumed-coil?)
-                (command-rt/run-command-in-session!
-                 session-id
-                 uuid
-                 {:command :change-category-with-level
-                  :new-category target-category
-                  :new-level new-level})
-                (log/info "Applied induction factor category transform"
-                          {:uuid uuid
-                           :from current-category
-                           :to target-category
-                           :level new-level})))
-
-            :else
-            nil)))))
-  {:consume? true})
+  "Induction factors are consumed via the developer block timed session, not direct use."
+  [_ctx]
+  {:consume? false})
 
 (defn- get-matter-kind
   [item-stack]

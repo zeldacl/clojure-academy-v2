@@ -3,7 +3,10 @@
             [cn.li.ac.ability.service.runtime-store :as store]
 [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.client.managed-screens :as managed-screens]
-            [cn.li.ac.ability.client.screens.skill-tree :as screen]            [cn.li.ac.ability.registry.skill-query :as skill]
+            [cn.li.ac.ability.client.screens.skill-tree :as screen]
+            [cn.li.ac.ability.registry.category :as category]
+            [cn.li.ac.ability.registry.skill :as skill-registry]
+            [cn.li.ac.ability.registry.skill-query :as skill]
             [cn.li.ac.ability.rules.learning-rules :as learning-rules]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.i18n :as i18n]))
@@ -19,9 +22,8 @@
 (use-fixtures :each reset-screen-fixture)
 
 (deftest build-screen-render-data-translates-skill-name-and-description-test
-  (let [player-state {:ability-data {:category-id :generic
-                                     :category {:category-id :generic
-                                                :name-key "ability.category.generic"}
+  (let [category-spec {:category-id :generic :name-key "ability.category.generic"}
+        player-state {:ability-data {:category-id :generic
                                      :learned-skills #{:generic/brain-course}
                                      :skill-exps {:generic/brain-course 0.35}
                                      :level 3}
@@ -42,7 +44,11 @@
                        "ability.skill.generic.brain_course.desc" "Undergo focused neural training to raise your maximum CP by 1000."}]
       (with-redefs [store/get-player-state* (fn [_ _] player-state)
               store/get-or-create-player-state! (fn [_ _] player-state)
+                  category/get-category (fn [_] category-spec)
+                  category/get-prog-incr-rate (fn [_] 1.0)
                   skill/get-skills-for-category (fn [_] [skill-spec])
+                  skill/get-controllable-skills-at-level (fn [_ _] [skill-spec])
+                  skill-registry/get-skill (fn [_] skill-spec)
                   skill/get-skill-icon-path (fn [_] "textures/abilities/generic/skills/brain_course.png")
                   learning-rules/check-all-conditions (fn [_ _ _ _] {:pass? true :failures []})
                   i18n/*translate-fn* (fn [k] (get translate-map (str k) (str k)))]
@@ -64,9 +70,8 @@
                         (screen/screen-state-snapshot {:client-session-id :session-a}))))
 
 (deftest build-draw-ops-includes-hover-description-tooltip-test
-  (let [player-state {:ability-data {:category-id :generic
-                                     :category {:category-id :generic
-                                                :name-key "ability.category.generic"}
+  (let [category-spec {:category-id :generic :name-key "ability.category.generic"}
+        player-state {:ability-data {:category-id :generic
                                      :learned-skills #{:generic/brain-course}
                                      :skill-exps {:generic/brain-course 0.35}
                                      :level 3}
@@ -87,7 +92,11 @@
                        "ability.skill.generic.brain_course.desc" "Undergo focused neural training to raise your maximum CP by 1000."}]
       (with-redefs [store/get-player-state* (fn [_ _] player-state)
               store/get-or-create-player-state! (fn [_ _] player-state)
+                  category/get-category (fn [_] category-spec)
+                  category/get-prog-incr-rate (fn [_] 1.0)
                   skill/get-skills-for-category (fn [_] [skill-spec])
+                  skill/get-controllable-skills-at-level (fn [_ _] [skill-spec])
+                  skill-registry/get-skill (fn [_] skill-spec)
                   skill/get-skill-icon-path (fn [_] "textures/abilities/generic/skills/brain_course.png")
                   learning-rules/check-all-conditions (fn [_ _ _ _] {:pass? true :failures []})
                   i18n/*translate-fn* (fn [k] (get translate-map (str k) (str k)))]

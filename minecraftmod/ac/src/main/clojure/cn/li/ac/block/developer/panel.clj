@@ -30,11 +30,11 @@
             [cn.li.ac.ability.rules.learning-rules :as learning-rules]
             [cn.li.ac.ability.config :as cfg]
             [cn.li.ac.ability.client.screens.skill-tree :as skill-tree]
-            [cn.li.ac.ability.client.api :as api]
             [cn.li.ac.block.developer.console :as dev-console]
+            [cn.li.ac.item.special-items :as special-items]
+            [cn.li.mcmod.platform.entity :as entity]
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.mcmod.gui.container.action-payload :as action-payload]
-            [cn.li.ac.wireless.gui.sync.handler :as net-helpers]
             [cn.li.mcmod.platform.be :as platform-be]))
 
 ;; ============================================================================
@@ -70,6 +70,13 @@
 
 (defn- dev-msg [action]
   (msg-registry/msg :developer action))
+
+(defn- req-start-development!
+  [container action & [extra callback]]
+  (net-client/send-to-server
+    (dev-msg :start-development)
+    (action-payload/action-payload container (merge {:action action} extra))
+    (or callback (fn [_] nil))))
 
 (defn- texture-path-from-category-icon [icon-str]
   (when (string? icon-str)
@@ -186,15 +193,21 @@
 (defn- create-skill-detail-overlay!
   "Create overlay showing skill details + learn button."
   [root container skill-id _developer-type]
-  (let [player (:player container)
-        cover (create-black-cover root)
+  (let [cover (create-black-cover root)
         close-fn #(cgui-core/remove-widget! root cover)
         panel (create-centered-panel cover 200 140)
         bg (cgui-core/create-widget :pos [0 0] :size [200 140])
         skill-spec (skill/get-skill skill-id)
         skill-name (or (:name skill-spec) (name skill-id) "Unknown")]
-    ;; Close on background click
-    (events/on-left-click cover (fn [_] (close-fn)))
+    ;; Close overlay when clicking outside the panel (not on panel children)
+    (events/on-left-click cover
+      (fn [evt]
+        (let [mx (int (:x evt 0)) my (int (:y evt 0))
+              [px py] (cgui-core/get-pos panel)
+              [pw ph] (cgui-core/get-size panel)]
+          (when (or (< mx px) (> mx (+ px pw))
+                    (< my py) (> my (+ py ph)))
+            (close-fn)))))
     ;; Background
     (comp/add-component! bg (comp/draw-texture nil 0xC0202020))
     (cgui-core/add-widget! panel bg)
@@ -209,7 +222,10 @@
           btn-tb (comp/text-box :text "Learn" :font :ac-normal :font-size 9 :align :center :color 0xFFFFFFFF)]
       (comp/add-component! btn btn-bg)
       (comp/add-component! btn btn-tb)
-      (events/on-left-click btn (fn [_] (close-fn)))
+      (events/on-left-click btn
+        (fn [_]
+          (req-start-development! container :learn-skill {:skill-id (name skill-id)})
+          (close-fn)))
       (cgui-core/add-widget! panel btn))
     ;; Progress bar
     (let [prog-w (cgui-core/create-widget :pos [10 115] :size [180 8])
@@ -235,13 +251,18 @@
 (defn- create-level-up-overlay!
   "Create overlay for ability level-up."
   [root container developer-type]
-  (let [player (:player container)
-        owner (when player [:dev-level-up (uuid/player-uuid player)])
-        cover (create-black-cover root)
+  (let [cover (create-black-cover root)
         close-fn #(cgui-core/remove-widget! root cover)
         panel (create-centered-panel cover 180 120)
         bg (cgui-core/create-widget :pos [0 0] :size [180 120])]
-    (events/on-left-click cover (fn [_] (close-fn)))
+    (events/on-left-click cover
+      (fn [evt]
+        (let [mx (int (:x evt 0)) my (int (:y evt 0))
+              [px py] (cgui-core/get-pos panel)
+              [pw ph] (cgui-core/get-size panel)]
+          (when (or (< mx px) (> mx (+ px pw))
+                    (< my py) (> my (+ py ph)))
+            (close-fn)))))
     (comp/add-component! bg (comp/draw-texture nil 0xC0202020))
     (cgui-core/add-widget! panel bg)
     ;; Title
@@ -264,9 +285,7 @@
       (comp/add-component! btn btn-tb)
       (events/on-left-click btn
         (fn [_]
-          (when owner
-            (api/req-level-up! owner (fn [resp]
-                                       (log/debug "Level-up response:" resp))))
+          (req-start-development! container :level-up)
           (close-fn)))
       (cgui-core/add-widget! panel btn))
     ;; Progress bar
@@ -290,17 +309,23 @@
 ;; Right panel — mode dispatch
 ;; ============================================================================
 
+(defn- player-holding-magnetic-coil? [player]
+  (and player
+       (satisfies? entity/IEntityOps player)
+       (= special-items/magnetic-coil-item-id (entity/player-get-main-hand-item-id player))))
+
 (defn- right-panel-mode
   "Pure: determine what to render in parent_right/area."
-  [player-state container player]
+  [_player-state container player]
   (let [uuid-str (when player (uuid/player-uuid player))
         pstate (when uuid-str (store/get-player-state*
                                 (runtime-hooks/require-player-state-session-id "developer.panel")
                                 uuid-str))
         ad (:ability-data pstate)
-        has-cat? (boolean (:category-id ad))]
+        has-cat? (boolean (:category-id ad))
+        holding-coil? (player-holding-magnetic-coil? player)]
     (cond
-      ;; TODO: detect magnetic coil in main hand when API is available
+      (and has-cat? holding-coil?) :reset-console
       (not has-cat?) :console
       :else :skill-tree)))
 
@@ -309,10 +334,12 @@
   [root area-widget container player]
   (cgui-core/clear-widgets! area-widget)
   (try
-    (let [owner (when player [:dev-skill-tree (uuid/player-uuid player)])
-          render-data (skill-tree/build-screen-render-data owner)
-          nodes (:skill-nodes render-data)
-          dev-type (current-developer-type container)]
+    (let [uuid-str (when player (uuid/player-uuid player))
+          session-id (runtime-hooks/require-player-state-session-id "developer.panel")
+          pstate (when uuid-str (store/get-player-state* session-id uuid-str))
+          dev-type (current-developer-type container)
+          render-data (skill-tree/build-render-data-for-player-state pstate dev-type)
+          nodes (:skill-nodes render-data)]
       (when (seq nodes)
         (doseq [{:keys [x y learned can-learn skill-id skill-name]} nodes
                 :when (and skill-id x y)]
@@ -338,20 +365,23 @@
 
 (defn- render-console-area!
   "Render text console in parent_right/area."
-  [area-widget container player mode]
+  [root area-widget container player mode]
   (cgui-core/clear-widgets! area-widget)
-  (let [owner (when player [:dev-console (uuid/player-uuid player)])
+  (let [start-action (if (= :reset mode) :reset :level-up)
         [_panel] (dev-console/create-console area-widget
                    {:mode mode
-                    :owner owner
                     :container container
-                    :player-name (or @(:user-name container) "Player")})]))
+                    :player-name (or @(:user-name container) "Player")
+                    :focus-root root
+                    :on-start-development
+                    (fn []
+                      (req-start-development! container start-action))})]))
 
 ;; ============================================================================
 ;; Wireless node label refresh
 ;; ============================================================================
 
-(defn- refresh-linked-node-label!
+(defn refresh-linked-node-label!
   [root container]
   (when (:tile-entity container)
     (net-client/send-to-server
@@ -427,8 +457,8 @@
               (when (not= mode @last-mode)
                 (reset! last-mode mode)
                 (case mode
-                  :console (render-console-area! right-area container pl :learn)
-                  :reset-console (render-console-area! right-area container pl :reset)
+                  :console (render-console-area! root right-area container pl :learn)
+                  :reset-console (render-console-area! root right-area container pl :reset)
                   :skill-tree (render-skill-tree-area! root right-area container pl))))))))
 
     root))

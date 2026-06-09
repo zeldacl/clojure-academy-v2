@@ -1,7 +1,8 @@
 (ns cn.li.mc1201.gui.cgui.traversal
   "CLIENT-ONLY widget tree traversal and hit-testing helpers for CGUI."
   (:require [clojure.string :as str]
-            [cn.li.mcmod.gui.cgui-core :as cgui-core]))
+            [cn.li.mcmod.gui.cgui-core :as cgui-core]
+            [cn.li.mcmod.gui.events :as events]))
 
 (defn collect-widgets-z-ordered
   [root abs-pos parent-scale parent-size]
@@ -34,23 +35,55 @@
       (cons [root next-pos cum-scale]
             (mapcat #(collect-widgets-z-ordered % next-pos cum-scale next-parent-size) children)))))
 
-(defn hit-test
-  "Return the deepest visible widget containing point `(mx,my)` in screen space."
+(defn- point-inside-widget?
+  [mx-rel my-rel abs-x abs-y scale widget]
+  (let [[w h] (cgui-core/get-size widget)
+        x0 (double abs-x)
+        y0 (double abs-y)
+        x1 (+ x0 (* (double w) (double scale)))
+        y1 (+ y0 (* (double h) (double scale)))]
+    (and (>= (double mx-rel) x0)
+         (< (double mx-rel) x1)
+         (>= (double my-rel) y0)
+         (< (double my-rel) y1))))
+
+(defn hit-path
+  "Return widgets from root to deepest hit along z-order (deepest last)."
   [root mx my left top]
   (let [mx-rel (- mx left)
         my-rel (- my top)
         widgets (collect-widgets-z-ordered root [0 0] 1.0 nil)]
-    ;; Iterate in render order and keep the last matching widget (top-most in painter order).
-    (reduce (fn [best [widget [abs-x abs-y] scale]]
-              (let [[w h] (cgui-core/get-size widget)
-                    x0 (double abs-x)
-                    y0 (double abs-y)
-                    x1 (+ x0 (* (double w) (double scale)))
-                    y1 (+ y0 (* (double h) (double scale)))
-                    inside (and (>= (double mx-rel) x0)
-                                (< (double mx-rel) x1)
-                                (>= (double my-rel) y0)
-                                (< (double my-rel) y1))]
-                (if inside widget best)))
-            nil
-            widgets)))
+  ;; Iterate in render order and keep the last matching widget (top-most in painter order).
+    (loop [path []
+           best nil
+           remaining widgets]
+      (if (empty? remaining)
+        (if best (conj path best) path)
+        (let [[widget [abs-x abs-y] scale] (first remaining)
+              inside (point-inside-widget? mx-rel my-rel abs-x abs-y scale widget)]
+          (recur (if inside (conj path widget) path)
+                 (if inside widget best)
+                 (rest remaining)))))))
+
+(defn widget-has-click-handler?
+  [widget event-key]
+  (boolean (seq (events/get-widget-event-handlers widget event-key))))
+
+(defn find-interactive-ancestor
+  "From deepest hit, walk up the hit-path and return the nearest widget with a click handler."
+  [hit-path event-key]
+  (some #(when (widget-has-click-handler? % event-key) %)
+        (reverse hit-path)))
+
+(defn hit-test
+  "Return the deepest visible widget containing point `(mx,my)` in screen space."
+  [root mx my left top]
+  (let [path (hit-path root mx my left top)]
+    (when (seq path) (last path))))
+
+(defn hit-test-interactive
+  "Return deepest hit or nearest ancestor that handles `event-key` (:left-click / :right-click)."
+  [root mx my left top event-key]
+  (let [path (hit-path root mx my left top)]
+    (or (find-interactive-ancestor path event-key)
+        (when (seq path) (last path)))))

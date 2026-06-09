@@ -23,6 +23,7 @@
             [cn.li.ac.block.developer.logic :as dev-logic]
             [cn.li.ac.block.machine.runtime :as machine-runtime]
             [cn.li.ac.block.developer.panel :as dev-panel]
+            [cn.li.ac.block.developer.session :as dev-session]
             [cn.li.ac.config.modid :as modid]
             [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.mcmod.platform.entity :as entity]
@@ -94,7 +95,7 @@
         (when (and lvl (not (world/world-is-client-side* lvl)))
           (try
             (machine-runtime/commit-transform! tile dev-logic/dev-default-state
-              #(assoc % :user-uuid "" :user-name "" :is-developing false))
+              #(-> % (assoc :user-uuid "" :user-name "") dev-session/clear-session))
             (catch Exception e
               (log/debug "Developer on-close tile update:" (ex-message e)))))))))
 
@@ -104,8 +105,9 @@
 
 (defn- create-wireless-overlay!
   "Create a black-cover overlay containing the wireless link panel.
-  Clicking the cover (outside the panel) or pressing ESC dismisses it."
-  [root container]
+  Clicking the cover (outside the panel) or pressing ESC dismisses it.
+  Optional :on-close runs after the overlay is removed (e.g. refresh node label)."
+  [root container & [{:keys [on-close]}]]
   (try
     (let [[rw rh] (cgui-core/get-size root)
           cover (cgui-core/create-widget :pos [0 0] :size [rw rh])
@@ -124,7 +126,8 @@
           cy (int (/ (- rh wh) 2))
           _ (cgui-core/set-pos! window cx cy)
           ;; Close on clicking the cover background
-          close-fn #(cgui-core/remove-widget! root cover)]
+          close-fn #(do (cgui-core/remove-widget! root cover)
+                        (when on-close (on-close)))]
       ;; Add window to cover, cover to root
       (cgui-core/add-widget! cover window)
       (cgui-core/add-widget! root cover)
@@ -158,13 +161,14 @@
     (let [container (cond-> container
                       (:menu opts) (assoc :minecraft-container (:menu opts)))
           classic-root (dev-panel/load-classic-developer-page)
+          _ (tech-ui/init-cgui-root-metadata! classic-root)
           ;; Attach left panel bindings + right panel mode dispatch
-          _ (dev-panel/attach-classic-developer-bindings!
+              _ (dev-panel/attach-classic-developer-bindings!
               classic-root container
               {:on-wireless-click
                (fn []
-                 ;; Open wireless overlay on the root
-                 (create-wireless-overlay! classic-root container))})
+                 (create-wireless-overlay! classic-root container
+                   {:on-close #(dev-panel/refresh-linked-node-label! classic-root container)}))})
           ;; Info area (right sidebar)
           info-area (tech-ui/create-info-area)
           max-e (fn [] (max 1.0 (double @(:max-energy container))))

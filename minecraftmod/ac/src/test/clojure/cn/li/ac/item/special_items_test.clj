@@ -63,38 +63,23 @@
    player-uuid
    (assoc (store/fresh-player-state) :ability-data ability-data)))
 
-(deftest induction-factor-initial-category-awakens-player-test
+(deftest induction-factor-right-click-does-not-mutate-ability-state-test
   (let [player-state* (atom {:inventory {}})
         player (StubPlayer. player-state*)
         player-uuid "p1"]
     (seed-player! player-uuid (adata/new-ability-data))
     (with-redefs [uuid/player-uuid (constantly player-uuid)]
-      (#'special-items/apply-induction-factor!
-       {:player player
-        :item-id "my_mod:induction_factor_electromaster"
-        :side :server}))
-    (is (= :electromaster
-          (get-in (store/get-player-state* ps-fix/test-session-id player-uuid) [:ability-data :category-id])))
-    (is (= 1 (:main-hand-consumed @player-state*)))))
+      (is (= {:consume? false}
+             (#'special-items/apply-induction-factor!
+              {:player player
+               :item-id "my_mod:induction_factor_electromaster"
+               :side :server}))))
+    (is (nil? (get-in (store/get-player-state* ps-fix/test-session-id player-uuid)
+                      [:ability-data :category-id])))
+    (is (nil? (:main-hand-consumed @player-state*)))))
 
-(deftest induction-factor-category-transform-consumes-coil-and-drops-level-test
-  (let [player-state* (atom {:inventory {"my_mod:magnetic_coil" 1}})
-        player (StubPlayer. player-state*)
-        player-uuid "p1"
-        ability-data (-> (adata/new-ability-data)
-                         (assoc :category-id :meltdowner)
-                         (adata/set-level 5))]
-    (seed-player! player-uuid ability-data)
-    (with-redefs [uuid/player-uuid (constantly player-uuid)]
-      (#'special-items/apply-induction-factor!
-       {:player player
-        :item-id "my_mod:induction_factor_electromaster"
-        :side :server}))
-    (is (= :electromaster
-          (get-in (store/get-player-state* ps-fix/test-session-id player-uuid) [:ability-data :category-id])))
-    (is (= 4
-          (get-in (store/get-player-state* ps-fix/test-session-id player-uuid) [:ability-data :level])))
-    (is (= 1 (:main-hand-consumed @player-state*)))
-    (is (= 0
-          (get-in @player-state* [:inventory "my_mod:magnetic_coil"])))))
+(deftest induction-factor-catalog-lists-all-factors-test
+  (is (= 4 (count (special-items/induction-factor-catalog))))
+  (is (some #(= "my_mod:induction_factor_electromaster" (first %))
+            (special-items/induction-factor-catalog))))
 

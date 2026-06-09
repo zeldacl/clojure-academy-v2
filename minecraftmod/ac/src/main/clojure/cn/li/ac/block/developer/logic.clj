@@ -12,6 +12,7 @@
 						[cn.li.ac.ability.domain.developer :as developer]
 						[cn.li.ac.block.developer.config :as dev-config]
 						[cn.li.ac.block.developer.schema :as dev-schema]
+						[cn.li.ac.block.developer.session :as dev-session]
 						[cn.li.ac.block.energy-converter.wireless-impl :as wireless-impl]
 						[cn.li.mcmod.util.log :as log]))
 
@@ -51,19 +52,11 @@
 								:wireless-bandwidth (:wireless-bandwidth cfg)})
 				ensure-inventory-shape)))
 
-(defn- tick-development [state ^long ticker]
-	(if-not (:is-developing state)
-		state
-		(let [tier (keyword (:tier state :normal))
-					{:keys [energy-per-stimulation stimulation-interval-ticks]}
-					(dev-config/tier-config tier)]
-			(if (zero? (mod ticker (long stimulation-interval-ticks)))
-				(let [e (double (:energy state 0.0))
-							cost (double energy-per-stimulation)]
-					(if (>= e cost)
-						(-> state (update :energy - cost) (update :development-progress + 1.0))
-						(assoc state :is-developing false)))
-				state))))
+(defn- developer-after-commit!
+	[be _level _pos _old-state new-state _ctx]
+	(when (:development-complete? new-state)
+		(dev-session/apply-completion! new-state)
+		(machine-runtime/commit-transform! be dev-default-state dev-session/clear-session)))
 
 (defn developer-tick-state [state {:keys [level pos be]}]
 	(let [ticker (inc (long (get state :update-ticker 0)))
@@ -72,8 +65,12 @@
 								 (let [block-spec (some-> (platform-be/get-block-id be) bdsl/get-block-spec)]
 									 (assoc state1 :structure-valid (boolean (and block-spec (validate-structure level pos block-spec)))))
 								 state1)
-				state3 (if-not (:structure-valid state2 false) (assoc state2 :is-developing false) state2)
-				state4 (if (:structure-valid state3 false) (tick-development state3 ticker) state3)]
+				state3 (if-not (:structure-valid state2 false)
+								 (dev-session/clear-session state2)
+								 state2)
+				state4 (if (:is-developing state3)
+								 (dev-session/tick-development-state state3)
+								 state3)]
 		(-> state4
 				(assoc :wireless-inject-last-tick (double (:wireless-inject-this-tick state4 0.0)))
 				(assoc :wireless-inject-this-tick 0.0))))
@@ -81,7 +78,8 @@
 (def developer-tick-fn
 	(machine-runtime/make-tick-fn
 		{:default-state dev-default-state
-		 :tick-state developer-tick-state}))
+		 :tick-state developer-tick-state
+		 :after-commit! developer-after-commit!}))
 
 (defn- resolve-developer-open-pos [controller-block-id]
 	(fn [{:keys [world pos]}]

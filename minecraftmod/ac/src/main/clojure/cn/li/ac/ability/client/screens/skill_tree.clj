@@ -178,14 +178,18 @@
      :exp progress
      :progress-segments (int (Math/round (* progress max-progress-segments)))}))
 
+(defn- resolve-category
+  [ability-data]
+  (when-let [cat-id (:category-id ability-data)]
+    (category/get-category cat-id)))
+
 (defn build-ability-info-render-data
   "Build render data for ability info panel."
   [player-state]
   (let [ability-data (:ability-data player-state)
         resource-data (:resource-data player-state)
-        category (:category ability-data)]
-    {:category-name (or (:name category)
-                        (translate-field category :name-key "Unknown")
+        category (resolve-category ability-data)]
+    {:category-name (or (when category (translate-field category :name-key nil))
                         "Unknown")
      :level (:level ability-data)
      :cp {:cur (:cur-cp resource-data)
@@ -194,27 +198,35 @@
                 :max (:max-overload resource-data)}
     :can-level-up (can-level-up-ability? ability-data)}))
 
+(defn build-render-data-for-player-state
+  "Build skill-tree render data from projected player-state (embedded GUIs, tests)."
+  [player-state developer-type & [{:keys [hover-skill]}]]
+  (when player-state
+    (let [ability-data (:ability-data player-state)
+          cat-id (:category-id ability-data)
+          category (when cat-id (category/get-category cat-id))
+          skills (when cat-id (skill/get-skills-for-category cat-id))
+          positions (when skills (calculate-skill-positions skills))
+          dev-type (or developer-type :normal)]
+      {:ability-info (build-ability-info-render-data player-state)
+       :category-color (:color category)
+       :skill-nodes (when positions
+                      (mapv #(build-skill-node-render-data % player-state dev-type) positions))
+       :connections (when positions
+                     (build-skill-connections positions player-state dev-type))
+       :hover-skill hover-skill})))
+
 (defn build-screen-render-data
   "Build complete screen render data. Called by forge layer."
   [owner]
   (let [state (screen-state-snapshot owner)
         owner-key (screen-owner-key owner)]
-  (when-let [_player-uuid (:player-uuid state)]
-    (when-let [player-state (and owner-key (get-screen-player-state owner-key))]
-      (let [ability-data (:ability-data player-state)
-            category (:category ability-data)
-            skills (when category
-                    (skill/get-skills-for-category (:category-id category)))
-            positions (when skills
-                       (calculate-skill-positions skills))
-            dev-type (or (:developer-type (:learn-context state)) :normal)]
-        {:ability-info (build-ability-info-render-data player-state)
-         :category-color (:color category)
-         :skill-nodes (when positions
-                       (mapv #(build-skill-node-render-data % player-state dev-type) positions))
-         :connections (when positions
-            (build-skill-connections positions player-state dev-type))
-          :hover-skill (:hover-skill state)})))))
+    (when-let [_player-uuid (:player-uuid state)]
+      (when-let [player-state (and owner-key (get-screen-player-state owner-key))]
+        (build-render-data-for-player-state
+          player-state
+          (:developer-type (:learn-context state))
+          {:hover-skill (:hover-skill state)})))))
 
 ;; ============================================================================
 ;; Event Handlers (Called by Forge Layer)
@@ -241,9 +253,9 @@
           (api/req-learn-skill! skill-id pos-extra nil)))))))
 
 (defn on-level-up-click
-  "Handle level-up button click."
-  []
-  (api/req-level-up! nil))
+  "Handle level-up button click (terminal skill tree — instant request)."
+  [owner]
+  (api/req-level-up! owner))
 
 (defn handle-screen-click!
   "Handle clicks inside the skill tree screen using current render data."
@@ -263,7 +275,7 @@
                  (get-in render-data [:ability-info :can-level-up])
                  (>= mouse-x 10) (<= mouse-x 90)
                  (>= mouse-y 200) (<= mouse-y 220))
-        (on-level-up-click)
+        (on-level-up-click owner)
         (reset! clicked? true))
 
       (boolean @clicked?))

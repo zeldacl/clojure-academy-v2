@@ -32,17 +32,19 @@
 
 (defn mouse-click!
   [root mx my left top button]
-  (when-let [hit (traversal/hit-test root mx my left top)]
-    (when (== 0 button)
-      (cgui-screen/gain-focus! root hit))
-    (log/info "CGUI mouse-click! mx:" mx "my:" my "left:" left "top:" top "button:" button "hit:" (when hit (or @(:name hit) "unnamed"))
-              "has-left-click?" (when hit (boolean (seq (get @(:events hit) :left-click))))
-              "hit-pos:" (when hit (cgui-core/get-pos hit))
-              "hit-size:" (when hit (cgui-core/get-size hit)))
-    (events/emit-widget-event!
-     hit
-     (if (== 0 button) :left-click :right-click)
-     {:x mx :y my :button button})))
+  (let [event-key (if (== 0 button) :left-click :right-click)
+        hit (traversal/hit-test-interactive root mx my left top event-key)]
+    (when hit
+      (when (== 0 button)
+        (cgui-screen/gain-focus! root hit))
+      (log/info "CGUI mouse-click! mx:" mx "my:" my "left:" left "top:" top "button:" button "hit:" (or @(:name hit) "unnamed")
+                "has-left-click?" (boolean (seq (get @(:events hit) :left-click)))
+                "hit-pos:" (cgui-core/get-pos hit)
+                "hit-size:" (cgui-core/get-size hit))
+      (events/emit-widget-event!
+       hit
+       event-key
+       {:x mx :y my :button button}))))
 
 (defn mouse-drag!
   [root mx my left top]

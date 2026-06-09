@@ -2,15 +2,15 @@
   "Text console widget for Ability Developer right panel.
 
   Modes:
-  - :learn  — no ability category, offers 'learn' command (level-up via api/req-level-up!)
-  - :reset  — holding magnetic coil, offers 'reset' command
+  - :learn  — no ability category, offers 'learn' command (starts timed :level-up / awaken session)
+  - :reset  — holding magnetic coil, offers 'reset' command (starts timed :reset session)
 
   Pure state transitions + CGUI rendering via in-place textbox updates.
   Key events use camelCase keys as emitted by input/key-input!."
-  (:require [cn.li.mcmod.gui.cgui-core :as cgui-core]
+  (:require             [cn.li.mcmod.gui.cgui-core :as cgui-core]
+            [cn.li.mcmod.gui.cgui-screen :as cgui-screen]
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.mcmod.gui.events :as events]
-            [cn.li.ac.ability.client.api :as api]
             [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
@@ -46,7 +46,7 @@
    :cursor-visible true
    :cursor-timer 0.0
    :exec-cmd nil
-   :owner nil                 ;; set after create-console
+   :on-start-development nil  ;; set after create-console
    :container nil})           ;; set after create-console
 
 ;; Boot text generators
@@ -139,9 +139,9 @@
       [(assoc state :lines [] :phase :idle :exec-cmd nil) nil]
       "learn"
       (if (= :learn (:mode state))
-        (if (:owner state)
+        (if (:on-start-development state)
           (do
-            (api/req-level-up! (:owner state) (fn [_] nil))
+            ((:on-start-development state))
             [(-> (base :developing)
                  (update :lines conj (msg :dev-begin))
                  (update :lines clamp-lines)
@@ -157,11 +157,18 @@
          nil])
       "reset"
       (if (= :reset (:mode state))
-        [(-> (base :developing)
-             (update :lines conj (msg :reset-begin))
-             (update :lines clamp-lines)
-             (assoc :dev-progress 0.0))
-         :developing]
+        (if (:on-start-development state)
+          (do
+            ((:on-start-development state))
+            [(-> (base :developing)
+                 (update :lines conj (msg :reset-begin))
+                 (update :lines clamp-lines)
+                 (assoc :dev-progress 0.0))
+             :developing])
+          [(-> (base :idle)
+               (update :lines conj (msg :no-developer))
+               (update :lines clamp-lines))
+           nil])
         [(-> (base :idle)
              (update :lines conj (msg :invalid-cmd))
              (update :lines clamp-lines))
@@ -218,12 +225,14 @@
 
   opts keys:
   - :mode — :learn or :reset
-  - :owner — canonical client owner (for api/req-level-up!)
   - :container — developer GUI container (for reading progress/energy)
-  - :player-name — player display name"
-  [parent-area {:keys [mode owner container player-name]}]
+  - :player-name — player display name
+  - :focus-root — CGUI root widget for keyboard focus
+  - :on-start-development — (fn []) called when learn/reset command runs"
+  [parent-area {:keys [mode container player-name focus-root on-start-development]}]
   (let [state-a (atom (assoc (init-state mode player-name)
-                             :owner owner :container container))
+                             :container container
+                             :on-start-development on-start-development))
         [p-width p-height] (cgui-core/get-size parent-area)
         ;; Pre-create text widgets for max visual lines + input line
         total-lines (inc max-lines)
@@ -310,5 +319,8 @@
               st' (process-key st evt)]
           (when (not= st st')
             (reset! state-a st')))))
+
+    (when focus-root
+      (cgui-screen/gain-focus! focus-root panel))
 
     [state-a panel]))

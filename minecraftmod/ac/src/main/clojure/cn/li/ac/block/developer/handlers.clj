@@ -1,7 +1,7 @@
 (ns cn.li.ac.block.developer.handlers
-  (:require [clojure.string :as str]
-            [cn.li.ac.ability.util.uuid :as uuid]
+  (:require [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.ac.block.developer.logic :as dev-logic]
+            [cn.li.ac.block.developer.session :as dev-session]
             [cn.li.ac.block.machine.runtime :as machine-runtime]
             [cn.li.ac.block.machine.wireless-handlers :as wireless-handlers]
             [cn.li.ac.block.machine.handlers :as machine-handlers]
@@ -28,25 +28,21 @@
     (if-not tile
       {:success false :reason "no-tile"}
       (let [state (machine-runtime/state-or-default tile dev-logic/dev-default-state)
-            pid (uuid/player-uuid player)
-            holder (str (:user-uuid state ""))]
-        (cond
-          (not (:structure-valid state false)) {:success false :reason "invalid-structure"}
-          (and (not (str/blank? holder)) (not= holder pid)) {:success false :reason "wrong-user"}
-          :else
-          (do
-            (machine-runtime/commit-state! tile world nil state
-                                           (assoc state :is-developing true
-                                                  :user-uuid pid
-                                                  :user-name (entity/player-get-name player)))
-            {:success true}))))))
+            result (dev-session/validate-and-start state player payload)]
+        (if (:ok? result)
+          (let [new-state (-> (:state result)
+                              (assoc :user-uuid (uuid/player-uuid player)
+                                     :user-name (entity/player-get-name player)))]
+            (machine-runtime/commit-state! tile world nil state new-state)
+            {:success true})
+          {:success false :reason (:reason result "rejected")})))))
 
 (defn handle-stop-development [payload player]
   (let [tile (open-tile payload player)
         world (net-helpers/get-world player)]
     (if tile
       (let [state (machine-runtime/state-or-default tile dev-logic/dev-default-state)
-            state' (assoc state :is-developing false)]
+            state' (dev-session/clear-session state)]
         (machine-runtime/commit-state! tile world nil state state')
         {:success true})
       {:success false})))

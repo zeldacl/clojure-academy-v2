@@ -507,6 +507,20 @@
 ;; InfoArea容器创建
 ;; ============================================================================
 
+(defn init-cgui-root-metadata!
+  "Initialize CGUI runtime atoms on a root widget (focus, drag state).
+  Safe to call multiple times; only creates missing atoms."
+  [root]
+  (when root
+    (swap! (:metadata root)
+           (fn [m]
+             (cond-> m
+               (not (:cgui-focus m)) (assoc :cgui-focus (atom nil))
+               (not (:dragging-node m)) (assoc :dragging-node (atom nil))
+               (not (:last-drag-time m)) (assoc :last-drag-time (atom 0))
+               (not (:last-start-time m)) (assoc :last-start-time (atom 0))))))
+  root)
+
 (defn create-info-area
   "Create InfoArea container with BlendQuad background
   
@@ -654,12 +668,7 @@
         ;; Initialize CGUI runtime state on the root widget so that
         ;; gain-focus!, key-input!, and focused-editable-textbox? can
         ;; find the focus atom. Mirrors create-cgui in cgui_screen.clj.
-        _ (when-not (:cgui-focus @(:metadata main))
-            (swap! (:metadata main) assoc
-                   :cgui-focus (atom nil)
-                   :dragging-node (atom nil)
-                   :last-drag-time (atom 0)
-                   :last-start-time (atom 0)))
+        _ (init-cgui-root-metadata! main)
         current (atom (when (seq pages) (:id (first pages))))
         pages-map (into {} (map (fn [p] [(:id p) p]) pages))]
 
