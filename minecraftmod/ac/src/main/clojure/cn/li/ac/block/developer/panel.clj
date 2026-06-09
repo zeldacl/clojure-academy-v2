@@ -35,6 +35,7 @@
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.mcmod.gui.container.action-payload :as action-payload]
+            [cn.li.mcmod.gui.container-state :as container-state]
             [cn.li.mcmod.platform.be :as platform-be]))
 
 ;; ============================================================================
@@ -381,17 +382,22 @@
 ;; ============================================================================
 
 (defn refresh-linked-node-label!
+  "Send :list-nodes to server and update the wireless button label.
+  Uses container owner for response routing (matching wireless overlay pattern)."
   [root container]
   (when (:tile-entity container)
-    (net-client/send-to-server
-      (dev-msg :list-nodes)
-      (action-payload/action-payload container {})
-      (fn [resp]
-        (when (map? resp)
-          (set-text-path! root "parent_left/panel_machine/button_wireless/text_nodename"
-            (if-let [n (:linked resp)]
-              (or (:node-name n) "N/A")
-              "N/A")))))))
+    (let [owner (try (container-state/owner-from-container container)
+                     (catch Exception _ nil))]
+      (net-client/send-to-server
+        owner
+        (dev-msg :list-nodes)
+        (action-payload/action-payload container {})
+        (fn [resp]
+          (when (map? resp)
+            (set-text-path! root "parent_left/panel_machine/button_wireless/text_nodename"
+              (if-let [n (:linked resp)]
+                (or (:node-name n) "N/A")
+                "N/A"))))))))
 
 ;; ============================================================================
 ;; Main attach function — binds left and right panels
