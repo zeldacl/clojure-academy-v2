@@ -289,100 +289,52 @@
                 y-offset (double (or (:y-offset state) 0.0))
                 z-level (double (or (:z-level state) 0.0))
                 emit? (if (contains? state :emit?) (:emit? state) true)
-                custom-font (when-let [fname (:font state)]
-                              (font-api/get-font fname))
+                font-desc (when-let [fname (:font state)]
+                            (font-api/get-font fname))
+                ^Font mc-font (MinecraftClientAccess/getFont)
+                ^net.minecraft.network.chat.Component text-comp
+                (font-api/text-component text font-desc)
+                text-w (* (double (.width mc-font text-comp)) font-scale)
+                text-h (* 8.0 font-scale)
+                aligned-dx (case align
+                             :center (/ (- (double w-int) text-w) 2.0)
+                             :right  (- (double w-int) text-w)
+                             0.0)
+                aligned-dy (case height-align
+                             :center (/ (- (double h-int) text-h) 2.0)
+                             :bottom (- (double h-int) text-h)
+                             0.0)
+                text-sx (+ (double x) aligned-dx x-offset)
+                text-sy (+ (double y) aligned-dy y-offset)
                 ^PoseStack ps (.pose gg)]
             (when (seq text)
-              (if custom-font
-                ;; Custom TrueType font rendering path
-                (let [tw (font-api/text-width custom-font text font-size)
-                      th font-size
-                      aligned-dx (case align
-                                   :center (/ (- (double w-int) tw) 2.0)
-                                   :right  (- (double w-int) tw)
-                                   0.0)
-                      aligned-dy (case height-align
-                                   :center (/ (- (double h-int) th) 2.0)
-                                   :bottom (- (double h-int) th)
-                                   0.0)
-                      text-sx (+ (double x) aligned-dx x-offset)
-                      text-sy (+ (double y) aligned-dy y-offset)]
-                  (let [pushed? (atom false)
-                        scissor-enabled? (atom false)]
-                    (try
-                      (.pushPose ps)
-                      (reset! pushed? true)
-                      (when (not= 0.0 z-level)
-                        (.translate ps 0.0 0.0 z-level))
-                      (when emit?
-                        (.enableScissor gg x y (+ x w-int) (+ y h-int))
-                        (reset! scissor-enabled? true))
-                      ;; Custom font draws directly via BufferBuilder;
-                      ;; apply widget-local transform via PoseStack translate
-                      (.translate ps text-sx text-sy 0.0)
-                      (font-api/draw-text! gg custom-font text 0.0 0.0
-                                           font-size color align)
-                      (catch Exception e
-                        (log/debug "CGUI custom-font textbox render error:" (.getMessage e)))
-                      (finally
-                        (when @scissor-enabled?
-                          (try (.disableScissor gg) (catch Exception _ nil)))
-                        (when @pushed?
-                          (try (.popPose ps) (catch Exception _ nil)))))))
-                ;; Default Minecraft font rendering path
-                (let [^Font font (MinecraftClientAccess/getFont)
-                      text-w (* (double (.width font ^String text)) font-scale)
-                      text-h (* 8.0 font-scale)
-                      aligned-dx (case align
-                                   :center (/ (- (double w-int) text-w) 2.0)
-                                   :right  (- (double w-int) text-w)
-                                   0.0)
-                      aligned-dy (case height-align
-                                   :center (/ (- (double h-int) text-h) 2.0)
-                                   :bottom (- (double h-int) text-h)
-                                   0.0)
-                      text-sx (+ (double x) aligned-dx x-offset)
-                      text-sy (+ (double y) aligned-dy y-offset)]
-                  (let [pushed? (atom false)
-                        scissor-enabled? (atom false)]
-                    (try
-                      (.pushPose ps)
-                      (reset! pushed? true)
-                      (when (not= 0.0 z-level)
-                        (.translate ps 0.0 0.0 z-level))
-                      (when emit?
-                        (.enableScissor gg x y (+ x w-int) (+ y h-int))
-                        (reset! scissor-enabled? true))
-                      (.translate ps text-sx text-sy 0.0)
-                      (.scale ps (float font-scale) (float font-scale) 1.0)
-                      (.drawString gg font ^String text (int 0) (int 0)
-                                   color (boolean (:shadow? state)))
-                      (catch Exception e
-                        (log/debug "CGUI textbox render error:" (.getMessage e)))
-                      (finally
-                        (when @scissor-enabled?
-                          (try (.disableScissor gg) (catch Exception _ nil)))
-                        (when @pushed?
-                          (try (.popPose ps) (catch Exception _ nil)))))))))
+              (let [pushed? (atom false)
+                    scissor-enabled? (atom false)]
+                (try
+                  (.pushPose ps)
+                  (reset! pushed? true)
+                  (when (not= 0.0 z-level)
+                    (.translate ps 0.0 0.0 z-level))
+                  (when emit?
+                    (.enableScissor gg x y (+ x w-int) (+ y h-int))
+                    (reset! scissor-enabled? true))
+                  (.translate ps text-sx text-sy 0.0)
+                  (.scale ps (float font-scale) (float font-scale) 1.0)
+                  (.drawString gg mc-font text-comp (int 0) (int 0)
+                               color (boolean (:shadow? state)))
+                  (catch Exception e
+                    (log/debug "CGUI textbox render error:" (.getMessage e)))
+                  (finally
+                    (when @scissor-enabled?
+                      (try (.disableScissor gg) (catch Exception _ nil)))
+                    (when @pushed?
+                      (try (.popPose ps) (catch Exception _ nil)))))))
             (when (and (:editable? state)
                        (some-> @(:metadata root) :focused?))
               (let [pushed? (atom false)]
                 (try
-                  (let [^Font font (MinecraftClientAccess/getFont)
-                        caret-visible? (< (mod (System/currentTimeMillis) 1000) 500)
-                        caret-local-x (* (double (.width font ^String text)) font-scale)
-                        text-w (* (double (.width font ^String text)) font-scale)
-                        text-h (* 8.0 font-scale)
-                        aligned-dx (case align
-                                     :center (/ (- (double w-int) text-w) 2.0)
-                                     :right  (- (double w-int) text-w)
-                                     0.0)
-                        aligned-dy (case height-align
-                                     :center (/ (- (double h-int) text-h) 2.0)
-                                     :bottom (- (double h-int) text-h)
-                                     0.0)
-                        text-sx (+ (double x) aligned-dx x-offset)
-                        text-sy (+ (double y) aligned-dy y-offset)]
+                  (let [caret-visible? (< (mod (System/currentTimeMillis) 1000) 500)
+                        caret-local-x text-w]
                     (when caret-visible?
                       (.pushPose ps)
                       (reset! pushed? true)
@@ -390,7 +342,7 @@
                         (.translate ps 0.0 0.0 z-level))
                       (.translate ps (+ text-sx caret-local-x) text-sy 0.0)
                       (.scale ps (float font-scale) (float font-scale) 1.0)
-                      (.drawString gg font "|" (int 0) (int 0)
+                      (.drawString gg mc-font "|" (int 0) (int 0)
                                    color (boolean (:shadow? state)))))
                   (catch Exception _ nil)
                   (finally

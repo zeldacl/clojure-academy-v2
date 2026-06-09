@@ -4,6 +4,7 @@
   This namespace is the Fabric-specific shell between the shared provider
   manifest and FabricDataGenerator Pack APIs."
   (:require [cn.li.fabric1201.datagen.advancement-provider :as advancement-provider]
+            [cn.li.fabric1201.datagen.font-provider :as font-provider]
             [cn.li.fabric1201.datagen.item-model-provider :as item-model-provider]
             [cn.li.fabric1201.datagen.lang-provider :as lang-provider]
             [cn.li.fabric1201.datagen.recipe-provider :as recipe-provider]
@@ -19,6 +20,7 @@
     :lang (lang-provider/create-provider output (:language provider))
     :blockstate (blockstate-shell/create-provider output blockstate-provider-name)
     :item-model (item-model-provider/create-provider output)
+    :font (font-provider/create-provider output)
     :advancement (advancement-provider/create-provider output)
     :recipe (recipe-provider/create-provider output)
     (throw (ex-info "Unknown Fabric datagen provider factory"

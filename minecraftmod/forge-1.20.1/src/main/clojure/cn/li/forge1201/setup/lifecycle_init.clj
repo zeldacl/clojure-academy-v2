@@ -8,7 +8,9 @@
   3. Resource Init - BlockState properties and DSL initialization
   4. Content Registration - All block/item/fluid/entity/sound/effect/particle registration
   5. Mod Bus Setup - Deferred register + lifecycle listener wiring
-  6. Common Setup - Event subscription and runtime adapter initialization
+  5. Mod Bus Setup - Deferred register + lifecycle listener wiring
+  
+  Common setup runs later on FMLCommonSetupEvent (see mod.clj/on-common-setup).
   
   This separates concerns so each phase is testable and reusable."
   (:require [cn.li.forge1201.init :as init]
@@ -16,9 +18,9 @@
             [cn.li.mc1201.lifecycle.orchestrator :as lifecycle-orchestrator]
             [cn.li.mc1201.lifecycle.platform-manifest :as platform-manifest]
             [cn.li.mcmod.lifecycle :as lifecycle]
-            [cn.li.mcmod.util.log :as log]
-            [cn.li.forge1201.setup.common :as setup-common])
-  (:import [cn.li.mcmod.platform.spi PlatformBootstraps]))
+            [cn.li.mcmod.util.log :as log])
+  (:import [cn.li.mcmod.platform.spi PlatformBootstraps]
+           [cn.li.forge1201.bootstrap ForgeBootstrapGuard]))
 
 ;; =============================================================================
 ;; Phase 1: Platform Initialization
@@ -92,40 +94,30 @@
   (log/info "[LIFECYCLE] Phase 5: Mod bus setup complete"))
 
 ;; =============================================================================
-;; Phase 6: Common Setup
-;; =============================================================================
-
-(defn run-common-setup!
-  "Run common setup side effects (event wiring, GUI init, runtime adapters).
-  
-  Called during FMLCommonSetupEvent or in mod constructor after phases 1-5."
-  []
-  (log/info "[LIFECYCLE] Phase 6: Common setup")
-  (setup-common/run-common-setup!)
-  (log/info "[LIFECYCLE] Phase 6: Common setup complete"))
-
-;; =============================================================================
 ;; Orchestration
 ;; =============================================================================
 
 (defn init-lifecycle!
-  "Run complete Forge initialization lifecycle (all 6 phases).
+  "Run complete Forge initialization lifecycle (constructor phases).
   
   This is the high-level orchestrator called from mod.clj constructor."
   [opts registration-steps]
-  (try
-    (lifecycle-orchestrator/run-lifecycle!
-     (platform-manifest/build-lifecycle
-      :forge-1.20.1
-      {:init-platform! init-platform!
-       :activate-runtime-content! activate-runtime-content!
-       :init-resource-definitions! init-resource-definitions!
-       :register-content! #(register-all-content! registration-steps)
-       :setup-mod-bus! #(setup-mod-bus! opts)
-       :run-common-setup! run-common-setup!}))
-    (catch Exception e
-      (log/error "Forge initialization lifecycle failed" e)
-      (throw (Error. "Critical mod initialization failure" e)))))
+  (if-not (ForgeBootstrapGuard/markLifecycleInitializedIfAbsent)
+    (do
+      (log/info "[LIFECYCLE] Forge bootstrap already initialized; skipping duplicate invocation")
+      nil)
+    (try
+      (lifecycle-orchestrator/run-lifecycle!
+       (platform-manifest/build-lifecycle
+        :forge-1.20.1
+        {:init-platform! init-platform!
+         :activate-runtime-content! activate-runtime-content!
+         :init-resource-definitions! init-resource-definitions!
+         :register-content! #(register-all-content! registration-steps)
+         :setup-mod-bus! #(setup-mod-bus! opts)}))
+      (catch Exception e
+        (log/error "Forge initialization lifecycle failed" e)
+        (throw (Error. "Critical mod initialization failure" e))))))
 
 (defn init-lifecycle-with-error-handling!
   "Run lifecycle with AOT/checkClojure error handling.

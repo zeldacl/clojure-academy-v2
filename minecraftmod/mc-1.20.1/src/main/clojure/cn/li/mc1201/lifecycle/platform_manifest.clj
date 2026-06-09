@@ -18,9 +18,7 @@
              {:id :content-registration
               :actions [:register-content!]}
              {:id :mod-bus-setup
-              :actions [:setup-mod-bus!]}
-             {:id :common-setup
-              :actions [:run-common-setup!]}]}
+              :actions [:setup-mod-bus!]}]}
 
    :fabric-1.20.1
    {:label "fabric-1.20.1"

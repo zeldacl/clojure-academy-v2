@@ -8,7 +8,8 @@
 				[cn.li.forge1201.setup.registry-binding :as registry-binding])
 	(:import [net.minecraftforge.eventbus.api IEventBus]
 				 [net.minecraftforge.fml.javafmlmod FMLJavaModLoadingContext]
-				 [cn.li.forge1201.gametest ForgeGameTestRegistration]))
+				 [cn.li.forge1201.gametest ForgeGameTestRegistration]
+				 [cn.li.forge1201.bootstrap ForgeBootstrapGuard]))
 
 (defn- resolve-mod-bus
 	[]
@@ -50,10 +51,12 @@
 
 (defn run-registration-phases!
 	[opts]
-	(let [^IEventBus mod-bus (resolve-mod-bus)]
-		(doseq [[_phase phase-fn] (registration-phase-plan opts)]
-			(phase-fn mod-bus opts))
-		nil))
+	(if-not (ForgeBootstrapGuard/markModBusRegisteredIfAbsent)
+		nil
+		(let [^IEventBus mod-bus (resolve-mod-bus)]
+			(doseq [[_phase phase-fn] (registration-phase-plan opts)]
+				(phase-fn mod-bus opts))
+			nil)))
 
 (defn register-mod-bus!
 	[opts]

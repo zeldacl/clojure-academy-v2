@@ -11,7 +11,8 @@
     [cn.li.forge1201.adapter.gui-registry :as gui-registry-impl]
     [cn.li.mcmod.config :as modid]
     [cn.li.mcmod.util.log :as log])
-  (:import [net.minecraftforge.fml.event.lifecycle FMLClientSetupEvent]))
+  (:import [net.minecraftforge.fml.event.lifecycle FMLClientSetupEvent
+                                                   FMLCommonSetupEvent]))
 
 (defn- current-mod-id
   []
@@ -120,9 +121,14 @@
 ;; ============================================================================
 
 ;; Helper: Common setup phase (subscribed to FMLCommonSetupEvent during bootstrap)
-(defn on-common-setup [_event]
+(defn on-common-setup [^FMLCommonSetupEvent event]
   (log/info "FMLCommonSetupEvent - Common setup phase")
-  (setup-common/run-common-setup!))
+  ;; Forge fires lifecycle events on parallel mod-loading workers; defer registry
+  ;; and network wiring to the main thread to avoid racing Forge internals.
+  (.enqueueWork event
+                (reify Runnable
+                  (run [_]
+                    (setup-common/run-common-setup!)))))
 
 ;; Helper: Client setup phase (called from event handler)
 (defn on-client-setup [^FMLClientSetupEvent event]

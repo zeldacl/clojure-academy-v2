@@ -33,7 +33,7 @@
     :section :generic
     :type :string
     :default (:font default-values)
-    :comment "Preferred AC UI font name."}])
+    :comment "Reserved label for a bundled UI font; Minecraft loads fonts from assets/<modid>/font/*.json + TTF in the jar, not from OS font names."}])
 
 (defn- value
   [k]

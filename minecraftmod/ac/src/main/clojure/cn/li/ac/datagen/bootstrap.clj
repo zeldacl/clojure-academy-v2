@@ -5,6 +5,7 @@
   not depend on AC business namespaces."
   (:require [cn.li.ac.ability.datagen.registry :as ability-datagen]
             [cn.li.ac.block.platform-bridge :as block-bridge]
+            [cn.li.ac.client.font-datagen :as font-datagen]
             [cn.li.ac.wireless.datagen.registry :as wireless-datagen]
             [cn.li.ac.energy.datagen.registry :as energy-datagen]))
 
@@ -17,6 +18,7 @@
   ;; Blockstate/model providers consult mcmod blockstate hooks at generation time.
   ;; Install AC overrides here so node multipart and texture rules are applied.
   (block-bridge/install-blockstate-hooks!)
+  (font-datagen/register-datagen-metadata!)
   (ability-datagen/register-datagen-metadata!)
   (wireless-datagen/register-datagen-metadata!)
   (energy-datagen/register-datagen-metadata!)

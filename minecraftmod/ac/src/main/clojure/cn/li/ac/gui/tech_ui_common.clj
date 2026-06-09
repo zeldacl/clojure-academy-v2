@@ -535,8 +535,8 @@
                          [cur-w cur-h] (cgui-core/get-size info-area)
                          nw (move cur-w expect-width)
                          nh (move cur-h expect-height)
-                         ;; fade in over ~0.3s after 0.3s delay (same shape as old TechUI)
-                         balpha (-> (/ (- t (double blend-start-time) 0.3) 0.3)
+                         ;; fade in over ~0.3s from open (no initial alpha-zero hold)
+                         balpha (-> (/ (- t (double blend-start-time)) 0.3)
                                     (max 0.0) (min 1.0))
                          a (int (Math/round (* 255.0 balpha)))]
                      (cgui-core/set-size! info-area nw nh)
