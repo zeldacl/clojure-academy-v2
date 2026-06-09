@@ -49,6 +49,7 @@ public class MyMod1201 {
         } catch (Throwable t) {
             System.err.println("Failed to load Clojure mod implementation:");
             t.printStackTrace();
+            throw new RuntimeException("Clojure mod initialization failed — terminating Minecraft startup", t);
         }
     }
 }

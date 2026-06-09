@@ -3,6 +3,19 @@
             [cn.li.mc1201.gui.screen.impl :as screen-impl]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
+(deftest resolve-image-size-test
+  (testing "nil when no size override"
+    (is (nil? (screen-impl/resolve-image-size {:type :cgui-screen-container}))))
+  (testing "delta adds to vanilla defaults (TechUI)"
+    (is (= [207 186]
+           (screen-impl/resolve-image-size {:size-dx 31 :size-dy 20}))))
+  (testing "absolute image size takes precedence (developer centering)"
+    (is (= [0 0]
+           (screen-impl/resolve-image-size {:image-width 0 :image-height 0}))))
+  (testing "partial absolute falls back missing axis to default"
+    (is (= [0 166]
+           (screen-impl/resolve-image-size {:image-width 0})))))
+
 (deftest cgui-screen-container-contract-test
   (testing "accepts the expected CGUI screen map shape"
     (is (#'screen-impl/cgui-screen-container?

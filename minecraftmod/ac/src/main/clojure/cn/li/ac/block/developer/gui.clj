@@ -195,8 +195,11 @@
         root (if (map? gui) (:root gui) gui)
         base (cgui-screen/create-cgui-screen-container root minecraft-container)]
     (-> base
-        (tech-ui/assoc-tech-ui-screen-size)
-        (assoc :size-dx 331))))  ;; extended width for info area
+        ;; Original AcademyCraft: CGuiScreen (full-screen GuiScreen).
+        ;; imageWidth=0 → guiLeft=screenWidth/2; XML root CENTER/CENTER → centered.
+        (assoc :image-width 0
+               :image-height 0
+               :current-tab-atom (atom :developer)))))  ;; hide inventory slots
 
 ;; ============================================================================
 ;; Registration

@@ -14,6 +14,28 @@
 
 (def ^:private inv-tab-id "inv")
 
+;; Vanilla AbstractContainerScreen defaults (MC 1.20.1 inventory GUI size).
+(def default-image-width 176)
+(def default-image-height 166)
+
+(defn resolve-image-size
+  "Resolve target imageWidth/imageHeight for a :cgui-screen-container map.
+
+  Priority:
+  1. Explicit :image-width / :image-height (absolute)
+  2. :size-dx / :size-dy added to vanilla defaults (TechUI)
+  3. nil — keep vanilla defaults unchanged"
+  [cgui-screen]
+  (if (or (contains? cgui-screen :image-width)
+          (contains? cgui-screen :image-height))
+    [(int (or (:image-width cgui-screen) default-image-width))
+     (int (or (:image-height cgui-screen) default-image-height))]
+    (let [dx (int (or (:size-dx cgui-screen) 0))
+          dy (int (or (:size-dy cgui-screen) 0))]
+      (when (or (not= 0 dx) (not= 0 dy))
+        [(+ default-image-width dx)
+         (+ default-image-height dy)]))))
+
 (defn cgui-screen-container?
   [m]
   (and (map? m)
@@ -76,15 +98,14 @@
   (let [root (:cgui cgui-screen)
         left (atom 0)
         top (atom 0)
-        size-dx (int (or (:size-dx cgui-screen) 0))
-        size-dy (int (or (:size-dy cgui-screen) 0))]
+        target-size (resolve-image-size cgui-screen)]
     (proxy [CGuiContainerScreen] [menu player-inventory title]
-      (containerTick []
+      (init []
         (let [^CGuiContainerScreen s this]
-          (when (or (not= 0 size-dx) (not= 0 size-dy))
-            (.setImageSize s
-                           (int (+ size-dx (.getImageWidthPublic s)))
-                           (int (+ size-dy (.getImageHeightPublic s)))))))
+          (when target-size
+            (let [[w h] target-size]
+              (.setImageSize s w h)))
+          (proxy-super init)))
 
       (render [^GuiGraphics gg mouse-x mouse-y partial-ticks]
         (let [^CGuiContainerScreen s this]
