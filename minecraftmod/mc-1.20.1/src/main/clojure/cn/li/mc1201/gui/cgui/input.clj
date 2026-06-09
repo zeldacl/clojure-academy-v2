@@ -31,20 +31,24 @@
               (catch Exception _ nil))))))))
 
 (defn mouse-click!
+  "Match original AcademyCraft (LambdaLib2 CGUI): event goes to the
+  deepest widget only — no ancestor bubbling.  Focus likewise goes to
+  the deepest widget, so editable textboxes inside overlays work."
   [root mx my left top button]
   (let [event-key (if (== 0 button) :left-click :right-click)
-        hit (traversal/hit-test-interactive root mx my left top event-key)]
+        hit (traversal/hit-test root mx my left top)]
     (when hit
       (when (== 0 button)
         (cgui-screen/gain-focus! root hit))
-      (log/info "CGUI mouse-click! mx:" mx "my:" my "left:" left "top:" top "button:" button "hit:" (or @(:name hit) "unnamed")
+      (log/info "CGUI mouse-click! mx:" mx "my:" my "left:" left "top:" top "button:" button
+                "hit:" (or @(:name hit) "unnamed")
                 "has-left-click?" (boolean (seq (get @(:events hit) :left-click)))
                 "hit-pos:" (cgui-core/get-pos hit)
                 "hit-size:" (cgui-core/get-size hit))
       (events/emit-widget-event!
        hit
        event-key
-       {:x mx :y my :button button}))))
+       {:x (- mx left) :y (- my top) :button button}))))
 
 (defn mouse-drag!
   [root mx my left top]

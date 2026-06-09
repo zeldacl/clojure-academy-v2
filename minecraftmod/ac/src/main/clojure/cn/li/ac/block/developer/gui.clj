@@ -114,7 +114,7 @@
           _ (comp/add-component! cover (comp/draw-texture nil 0x80000000))
           node-icon (modid/asset-path "textures" "guis/icons/icon_node.png")
           ;; Create wireless panel
-          {:keys [window]} (wireless-tab/create-wireless-panel
+          window (wireless-tab/create-wireless-panel
                              {:role :receiver
                               :container container
                               :tab-logo-path node-icon
@@ -125,21 +125,20 @@
           cx (int (/ (- rw ww) 2))
           cy (int (/ (- rh wh) 2))
           _ (cgui-core/set-pos! window cx cy)
-          ;; Close on clicking the cover background
+          ;; Disable XML CENTER alignment so manual positioning is exact
+          _ (cgui-core/set-w-align! window :left)
+          _ (cgui-core/set-h-align! window :top)
           close-fn #(do (cgui-core/remove-widget! root cover)
                         (when on-close (on-close)))]
       ;; Add window to cover, cover to root
       (cgui-core/add-widget! cover window)
       (cgui-core/add-widget! root cover)
-      ;; Click on cover background closes it (the window absorbs its own clicks)
-      (events/on-left-click cover
-        (fn [evt]
-          (let [mx (int (:x evt 0))
-                my (int (:y evt 0))]
-            (when (or (< mx cx) (> mx (+ cx ww))
-                      (< my cy) (> my (+ cy wh)))
-              (close-fn)))))
-      ;; ESC key handling — close overlay first
+      ;; Click on cover background closes overlay (matches original
+      ;; AcademyCraft: cover.listens[LeftClickEvent](() => cover.end())).
+      ;; No coordinate check — hit-test dispatches to deepest widget,
+      ;; so child clicks never bubble up to cover.
+      (events/on-left-click cover (fn [_] (close-fn)))
+      ;; ESC key — handled by screen keyTyped in original; we attach to cover
       (events/on-key-press cover
         (fn [evt]
           (when (= 256 (:keyCode evt))  ;; GLFW_KEY_ESCAPE
