@@ -74,6 +74,22 @@
           (let [st (:state tb)]
             (boolean (and st (:editable? @st)))))))))
 
+(defn focused-widget-owns-key?
+  "Returns true when the given tree root has a focused widget that
+  handles :key events (either via an editable textbox or explicit
+  on-key-press handlers). Used by screen proxies to decide whether to
+  consume keyboard input instead of forwarding to vanilla handling."
+  [root]
+  (when root
+    (let [m @(:metadata root)
+          focus-atom (:cgui-focus m)
+          focus (when focus-atom @focus-atom)]
+      (when focus
+        (or (when-let [tb (components/get-widget-component focus :textbox)]
+              (let [st (:state tb)]
+                (boolean (and st (:editable? @st)))))
+            (boolean (seq (events/get-widget-event-handlers focus :key))))))))
+
 (defn key-input!
   [root key-code scan-code typed-char]
   (when root

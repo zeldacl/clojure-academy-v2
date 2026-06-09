@@ -34,3 +34,7 @@
 (defn focused-editable-textbox?
   [root]
   (input/focused-editable-textbox? root))
+
+(defn focused-widget-owns-key?
+  [root]
+  (input/focused-widget-owns-key? root))

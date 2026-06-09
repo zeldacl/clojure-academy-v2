@@ -216,8 +216,8 @@
 (defn- make-text-widget
   [x y w h text color]
   (let [wgt (cgui-core/create-widget :pos [x y] :size [w h])
-        tb (comp/text-box :text text :color color :font-size 8)]
-    (comp/add-component! wgt tb)
+        _ (comp/add-component! wgt (comp/text-box :text text :color color :font-size 8))
+        tb (comp/get-widget-component wgt :textbox)]
     [wgt tb]))
 
 (defn create-console
@@ -319,6 +319,11 @@
               st' (process-key st evt)]
           (when (not= st st')
             (reset! state-a st')))))
+
+    ;; Left-click handler: makes the panel "interactive" so hit-test-interactive
+    ;; returns the panel (not a child text widget) on mouse click. This keeps
+    ;; keyboard focus on the widget that actually handles :key events.
+    (events/on-left-click panel (fn [_] nil))
 
     (when focus-root
       (cgui-screen/gain-focus! focus-root panel))

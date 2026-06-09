@@ -162,21 +162,21 @@
             true)))
 
       (keyPressed [key-code scan-code modifiers]
-        (let [editing? (and root (cgui-rt/focused-editable-textbox? root))]
+        (let [owns-key? (and root (cgui-rt/focused-widget-owns-key? root))]
           (when root
             (with-screen-cgui menu "CGUI key-input error"
               #(cgui-rt/key-input! root key-code scan-code (char 0))))
-          (if editing?
+          (if owns-key?
             true
             (let [^CGuiContainerScreen s this]
               (.callSuperKeyPressed s key-code scan-code modifiers)))))
 
       (charTyped [code-point modifiers]
-        (let [editing? (and root (cgui-rt/focused-editable-textbox? root))]
+        (let [owns-key? (and root (cgui-rt/focused-widget-owns-key? root))]
           (when root
             (with-screen-cgui menu "CGUI char-input error"
               #(cgui-rt/key-input! root 0 0 (char code-point))))
-          (if editing?
+          (if owns-key?
             true
             (let [^CGuiContainerScreen s this]
               (.callSuperCharTyped s code-point modifiers)))))
