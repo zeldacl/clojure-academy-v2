@@ -425,10 +425,14 @@
         (fn [_]
           (create-level-up-overlay! root container (current-developer-type container)))))
 
-    ;; Wireless button → overlay callback
+    ;; Wireless button → overlay callback.
+    ;; deepest-only dispatch: clicks on text/icon children must forward to parent.
     (when-let [wbtn (cgui-core/find-widget root "parent_left/panel_machine/button_wireless")]
       (when on-wireless-click
-        (events/on-left-click wbtn (fn [_] (on-wireless-click)))))
+        (let [forward (fn [_] (on-wireless-click))]
+          (events/on-left-click wbtn forward)
+          (doseq [child (cgui-core/get-widgets wbtn)]
+            (events/on-left-click child forward)))))
 
     ;; Frame handler — updates left panel + right panel mode dispatch
     (let [right-area (cgui-core/find-widget root "parent_right/area")
