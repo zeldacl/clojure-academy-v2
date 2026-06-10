@@ -4,12 +4,10 @@
   Orchestrates the pipeline:
     1. Detect a suitable system TrueType font (system-font-detector).
     2. Look up calibrated TTF provider parameters (font-profiles).
-    3. Build the virtual PackResources (SystemFontVirtualPack).
-    4. Register it via Forge's AddPackFindersEvent.
-    5. Set the CGUI fallback-scale-factor when no system font is available.
-
-  Called from Java (@Mod.EventBusSubscriber → AddPackFindersEvent handler)
-  via ClojureInterop/invoke."
+    3. Build three font JSON variants (normal index 0, bold index 1, italic index 0).
+    4. Build the virtual PackResources (SystemFontVirtualPack).
+    5. Register it via Forge's AddPackFindersEvent.
+    6. Set the CGUI fallback-scale-factor and base-height."
   (:require [cn.li.mc1201.client.font.system-font-detector :as detector]
             [cn.li.mc1201.client.font.font-profiles :as profiles]
             [cn.li.mc1201.gui.cgui.font :as cgui-font]
@@ -24,9 +22,6 @@
 (defonce ^:private setup-called? (atom false))
 
 (defn- setup-fallback!
-  "Configure the CGUI fallback scale factor for the minecraft:default bitmap font.
-  The factor compensates for the thicker pixel strokes so the visual size matches
-  the TrueType reference."
   []
   (let [scale (double (:fallback-scale profiles/fallback-profile))]
     (log/info "No system font detected; CGUI fallback-scale: %.2f" (float scale))
@@ -34,40 +29,33 @@
     nil))
 
 (defn- setup-ttf-pack!
-  "Detect system font, build calibrated JSON, create virtual pack, register it
-  via AddPackFindersEvent. Returns true if a pack was registered."
   [^AddPackFindersEvent event]
   (when-let [{:keys [path profile ext]} (detector/detect-system-font)]
     (if-let [{:keys [size shift] :as prof} (profiles/profile-for profile)]
-      (let [pack-resources (SystemFontVirtualPack. path ext (profiles/build-font-json prof ext))
+      (let [jsons (profiles/build-font-jsons prof ext)
+            pack-resources (SystemFontVirtualPack. path ext
+                              (:normal jsons) (:bold jsons) (:italic jsons))
             resources-supplier
             (reify Pack$ResourcesSupplier
-              (open [_ _id]
-                pack-resources))
+              (open [_ _id] pack-resources))
             pack-info
             (Pack$Info. (Component/literal "Injected system TrueType font for smooth text rendering.")
-                        15 15    ;; resource-format data-format (MC 1.20.1 = 15)
-                        (FeatureFlagSet/of)
-                        true)    ;; hidden — don't show in resource-pack UI
+                        15 15 (FeatureFlagSet/of) true)
             pack
-            (Pack/create
-              "my_mod/system_font"
+            (Pack/create "my_mod/system_font"
               (Component/literal "System Font Pack")
-              true                                   ;; required — always enabled
-              resources-supplier
-              pack-info
-              PackType/CLIENT_RESOURCES
-              Pack$Position/TOP                      ;; top priority
-              true                                   ;; hidden
-              PackSource/DEFAULT)
+              true resources-supplier pack-info
+              PackType/CLIENT_RESOURCES Pack$Position/TOP
+              true PackSource/DEFAULT)
             repo-source
             (reify RepositorySource
-              (loadPacks [_ consumer]
-                (.accept consumer pack)))]
+              (loadPacks [_ consumer] (.accept consumer pack)))]
         (log/info "System font detected: %s (profile :%s, size %.1f)"
                   (str path) (name profile) (double size))
         (cgui-font/set-cgui-font-base-height! size)
         (cgui-font/set-fallback-scale-factor! 1.0)
+        (when-let [cf (:color-factor prof)]
+          (cgui-font/set-ttf-color-factor! cf))
         (.addRepositorySource event repo-source)
         true)
       (do
@@ -76,10 +64,6 @@
         false))))
 
 (defn on-add-pack-finders!
-  "Handler for Forge AddPackFindersEvent (called from Java @Mod.EventBusSubscriber).
-
-  Only acts on CLIENT_RESOURCES — server-side data packs are ignored.
-  Idempotent: only runs detection + registration once."
   [^AddPackFindersEvent event]
   (when (= PackType/CLIENT_RESOURCES (.getPackType event))
     (when (compare-and-set! setup-called? false true)

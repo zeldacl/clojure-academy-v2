@@ -18,28 +18,28 @@ import java.util.HashSet;
 import java.util.Set;
 
 /**
- * A virtual {@link PackResources} that injects a TrueType system font into the
- * Minecraft resource system at runtime.
- *
- * <p>MC 1.20's {@code stbtt_InitFont} cannot parse TTC files.  When a
- * {@code .ttc} (TrueType Collection) is detected, this class reconstructs the
- * first sub-font as a standalone TTF with relocated table offsets.</p>
+ * A virtual {@link PackResources} that injects TrueType system font variants
+ * (regular, bold, italic) into the Minecraft resource system at runtime.
  */
 public final class SystemFontVirtualPack implements PackResources {
 
     private static final String NAMESPACE = "my_mod";
 
-    private final byte[] fontJsonBytes;
     private final byte[] fontFileBytes;
-    private final String fontExt;
+    private final byte[] normalJsonBytes;
+    private final byte[] boldJsonBytes;
+    private final byte[] italicJsonBytes;
     private final String fontResourcePath;
 
     public SystemFontVirtualPack(final Path systemFontPath,
                                  final String fontExt,
-                                 final String fontJson) throws IOException {
-        this.fontExt = fontExt;
-        this.fontJsonBytes = fontJson.getBytes(StandardCharsets.UTF_8);
+                                 final byte[] normalJsonBytes,
+                                 final byte[] boldJsonBytes,
+                                 final byte[] italicJsonBytes) throws IOException {
         this.fontFileBytes = extractFirstTtf(Files.readAllBytes(systemFontPath));
+        this.normalJsonBytes = normalJsonBytes;
+        this.boldJsonBytes = boldJsonBytes;
+        this.italicJsonBytes = italicJsonBytes;
         this.fontResourcePath = "font/system_font." + fontExt;
     }
 
@@ -48,52 +48,31 @@ public final class SystemFontVirtualPack implements PackResources {
     // =========================================================================
 
     private static byte[] extractFirstTtf(final byte[] raw) {
-        if (raw.length < 12) {
-            return raw;
-        }
+        if (raw.length < 12) return raw;
         final String tag = new String(raw, 0, 4, StandardCharsets.US_ASCII);
-        if (!"ttcf".equals(tag)) {
-            return raw;
-        }
-
+        if (!"ttcf".equals(tag)) return raw;
         final ByteBuffer buf = ByteBuffer.wrap(raw).order(ByteOrder.BIG_ENDIAN);
         final int firstOffset = buf.getInt(12);
-        if (firstOffset <= 0 || firstOffset >= raw.length) {
-            return raw;
-        }
-
-        // --- read TTF header at firstOffset ---
+        if (firstOffset <= 0 || firstOffset >= raw.length) return raw;
         final int numTables = Short.toUnsignedInt(buf.getShort(firstOffset + 4));
         final int headerSize = 12 + 16 * numTables;
-
-        // --- compute total TTF size: max table end ---
         int maxEnd = headerSize;
         for (int i = 0; i < numTables; i++) {
-            final int recordBase = firstOffset + 12 + i * 16;
-            final int tableOff = buf.getInt(recordBase + 8);
-            final int tableLen = buf.getInt(recordBase + 12);
-            final int end = (tableOff + tableLen) - firstOffset;
-            if (end > maxEnd) {
-                maxEnd = end;
-            }
+            final int rb = firstOffset + 12 + i * 16;
+            final int end = (buf.getInt(rb + 8) + buf.getInt(rb + 12)) - firstOffset;
+            if (end > maxEnd) maxEnd = end;
         }
-
-        // --- build standalone TTF ---
         final byte[] result = new byte[maxEnd];
-        // Copy header (table records still have absolute offsets)
         System.arraycopy(raw, firstOffset, result, 0, headerSize);
-
         final ByteBuffer resultBuf = ByteBuffer.wrap(result).order(ByteOrder.BIG_ENDIAN);
-        // Relocate table offsets and copy table data
         for (int i = 0; i < numTables; i++) {
-            final int recordBase = 12 + i * 16;
-            final int origTableOff = buf.getInt(firstOffset + recordBase + 8);
-            final int tableLen = buf.getInt(firstOffset + recordBase + 12);
-            final int newOff = origTableOff - firstOffset;
-            resultBuf.putInt(recordBase + 8, newOff);
-            System.arraycopy(raw, origTableOff, result, newOff, tableLen);
+            final int rb = 12 + i * 16;
+            final int origOff = buf.getInt(firstOffset + rb + 8);
+            final int len = buf.getInt(firstOffset + rb + 12);
+            final int newOff = origOff - firstOffset;
+            resultBuf.putInt(rb + 8, newOff);
+            System.arraycopy(raw, origOff, result, newOff, len);
         }
-
         return result;
     }
 
@@ -109,12 +88,12 @@ public final class SystemFontVirtualPack implements PackResources {
     @Override
     public IoSupplier<InputStream> getResource(final PackType type,
                                                final ResourceLocation location) {
-        if (!NAMESPACE.equals(location.getNamespace())) {
-            return null;
-        }
+        if (!NAMESPACE.equals(location.getNamespace())) return null;
+
         final String path = location.getPath();
-        if ("font/ac_normal.json".equals(path)) {
-            return () -> new ByteArrayInputStream(fontJsonBytes);
+        final byte[] jsonBytes = jsonBytesFor(path);
+        if (jsonBytes != null) {
+            return () -> new ByteArrayInputStream(jsonBytes);
         }
         if (fontResourcePath.equals(path)) {
             return () -> new ByteArrayInputStream(fontFileBytes);
@@ -122,21 +101,30 @@ public final class SystemFontVirtualPack implements PackResources {
         return null;
     }
 
+    private byte[] jsonBytesFor(final String path) {
+        switch (path) {
+            case "font/ac_normal.json": return normalJsonBytes;
+            case "font/ac_bold.json":   return boldJsonBytes;
+            case "font/ac_italic.json": return italicJsonBytes;
+            default: return null;
+        }
+    }
+
     @Override
     public void listResources(final PackType type,
                               final String namespace,
                               final String prefix,
                               final ResourceOutput output) {
-        if (!NAMESPACE.equals(namespace)) {
-            return;
-        }
+        if (!NAMESPACE.equals(namespace)) return;
         if ("font".equals(prefix) || "font/".equals(prefix)) {
-            output.accept(
-                new ResourceLocation(NAMESPACE, "font/ac_normal.json"),
-                () -> new ByteArrayInputStream(fontJsonBytes));
-            output.accept(
-                new ResourceLocation(NAMESPACE, fontResourcePath),
-                () -> new ByteArrayInputStream(fontFileBytes));
+            output.accept(new ResourceLocation(NAMESPACE, "font/ac_normal.json"),
+                          () -> new ByteArrayInputStream(normalJsonBytes));
+            output.accept(new ResourceLocation(NAMESPACE, "font/ac_bold.json"),
+                          () -> new ByteArrayInputStream(boldJsonBytes));
+            output.accept(new ResourceLocation(NAMESPACE, "font/ac_italic.json"),
+                          () -> new ByteArrayInputStream(italicJsonBytes));
+            output.accept(new ResourceLocation(NAMESPACE, fontResourcePath),
+                          () -> new ByteArrayInputStream(fontFileBytes));
         }
     }
 
@@ -151,22 +139,17 @@ public final class SystemFontVirtualPack implements PackResources {
     }
 
     @Override
-    public String packId() {
-        return "my_mod/system_font_virtual";
-    }
+    public String packId() { return "my_mod/system_font_virtual"; }
 
     @Override
     public <T> T getMetadataSection(
-            final net.minecraft.server.packs.metadata.MetadataSectionSerializer<T> serializer) {
+            final net.minecraft.server.packs.metadata.MetadataSectionSerializer<T> ser) {
         return null;
     }
 
     @Override
-    public boolean isHidden() {
-        return true;
-    }
+    public boolean isHidden() { return true; }
 
     @Override
-    public void close() {
-    }
+    public void close() {}
 }

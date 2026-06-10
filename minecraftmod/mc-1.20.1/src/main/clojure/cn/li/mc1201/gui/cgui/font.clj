@@ -47,6 +47,37 @@
   []
   @fallback-scale-factor)
 
+;; --- color compensation for TrueType vector fonts ---
+;; Vector fonts render lighter than pixel fonts at the same hex color because
+;; anti-aliased strokes use fewer opaque pixels.  Multiply neutral/gray tones
+;; by this factor (≤1.0 darkens) to match the visual weight of pixel text.
+;; Default 1.0 (no compensation); set by font-pack-setup when a system TTF is active.
+(defonce ^:private ttf-color-factor (atom 1.0))
+
+(defn set-ttf-color-factor! [v]
+  (reset! ttf-color-factor (double v)))
+
+(defn ^:private compensate-color
+  "Apply the TTF color-compensation factor to neutral (gray-tone) colors.
+  Leaves saturated / bright colors unchanged."
+  [color-int]
+  (let [factor @ttf-color-factor]
+    (if (== factor 1.0)
+      color-int
+      (let [r (bit-and (bit-shift-right color-int 16) 0xFF)
+            g (bit-and (bit-shift-right color-int 8) 0xFF)
+            b (bit-and color-int 0xFF)
+            max-diff (max (Math/abs (- r g)) (Math/abs (- g b)) (Math/abs (- r b)))]
+        (if (< max-diff 20) ;; neutral tone — R≈G≈B within 20
+          (let [r' (int (* (double r) factor))
+                g' (int (* (double g) factor))
+                b' (int (* (double b) factor))]
+            (bit-or (bit-and color-int 0xFF000000)
+                    (bit-shift-left r' 16)
+                    (bit-shift-left g' 8)
+                    b'))
+          color-int)))))
+
 (defonce ^:private registry (atom {}))
 
 (defn- resource-location
@@ -120,7 +151,7 @@
                :center (- (double x) (/ total-w 2.0))
                :right (- (double x) total-w)
                (double x))
-          color' (unchecked-int color)
+          color' (compensate-color (unchecked-int color))
           ^PoseStack ps (.pose gg)]
       (.pushPose ps)
       (try

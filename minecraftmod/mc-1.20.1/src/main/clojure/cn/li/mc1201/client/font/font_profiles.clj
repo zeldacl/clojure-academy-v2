@@ -2,20 +2,21 @@
   "Per-font calibration profiles for visual size consistency.
 
   Different system fonts have different 字面率 (visual fill ratio within the
-  em-square).  Microsoft YaHei fills nearly the entire square; PingFang leaves
-  considerable internal padding.  A uniform TTF provider `size` produces visibly
-  different text heights across platforms.
+  em-square) and anti-aliasing spread characteristics.  A uniform TTF provider
+  configuration produces visibly different text across platforms.
 
   This namespace provides a lookup table of calibrated parameters per font
   family, keyed by the profile keyword produced by system-font-detector.
 
-  Each entry may contain:
-    :size  — TTF provider `size` (glyph height on the font sheet, px)
-    :shift — TTF provider `shift`  [x y] offset for baseline alignment
+  Each entry contains:
+    :size       — TTF provider glyph height on the font sheet (px)
+    :shift      — [x y] offset for baseline alignment
+    :oversample — STB internal rasterisation multiplier (higher = sharper edges)
+    :color-factor — RGB multiplier for gray/neutral tones (vec fonts render
+                    lighter than pixel fonts; factor <1 compensates)
 
-  For the fallback (minecraft:default bitmap font), the entry contains:
-    :fallback-scale — scale factor multiplied onto the CGUI font-scale to
-                      visually match the reference TrueType appearance"
+  For the fallback (minecraft:default bitmap font):
+    :fallback-scale — multiplied onto the CGUI font-scale to reduce visual size."
   (:require [clojure.string :as str]))
 
 ;; ============================================================================
@@ -23,19 +24,14 @@
 ;; ============================================================================
 
 (def font-profiles
-  "Calibration map: profile keyword → {:size :shift} for TTF providers."
-  {:msyh      {:size 12.5 :shift [0.0 1.5]}  ; Microsoft YaHei — reference
-   :simhei    {:size 12.5 :shift [0.0 1.5]}  ; SimHei
-   :pingfang  {:size 13.0 :shift [0.0 1.5]}  ; PingFang — smaller 字面, bump size
-   :noto-sans {:size 12.5 :shift [0.0 1.5]}  ; Noto Sans CJK
-   :dejavu    {:size 12.5 :shift [0.0 1.5]}}); DejaVu Sans
+  {:msyh      {:size 9.5 :shift [0.0 1.0] :oversample 2.5 :color-factor 0.82}
+   :simhei    {:size 9.5 :shift [0.0 1.0] :oversample 3.0 :color-factor 0.85}
+   :pingfang  {:size 10.0 :shift [0.0 1.0] :oversample 2.5 :color-factor 0.80}
+   :noto-sans {:size 9.5 :shift [0.0 1.0] :oversample 2.5 :color-factor 0.82}
+   :dejavu    {:size 9.5 :shift [0.0 1.0] :oversample 3.0 :color-factor 0.85}})
 
 (def fallback-profile
-  "Profile applied when no system font is available.
-    :fallback-scale — multiplied onto the CGUI font-scale to reduce the visual
-                      size of the thicker bitmap glyphs so they match the
-                      TrueType reference appearance."
-  {:profile      :mc-default
+  {:profile        :mc-default
    :fallback-scale 0.85})
 
 ;; ============================================================================
@@ -43,8 +39,6 @@
 ;; ============================================================================
 
 (defn profile-for
-  "Look up the calibration profile for a font-type keyword.
-  Returns nil when the keyword is unknown (caller should use fallback-profile)."
   [font-type]
   (get font-profiles font-type))
 
@@ -52,16 +46,19 @@
 ;; JSON builder
 ;; ============================================================================
 
-(defn build-font-json
-  "Build the ac_normal.json content string for a given profile and font extension.
-
-  The JSON includes a TTF provider (with calibrated size and shift) followed by a
-  minecraft:default reference provider as fallback.
-
-  Uses plain string formatting — no external JSON library required.
-  The structure is fixed; only size, shift, and extension vary."
-  [{:keys [size shift]} font-ext]
+(defn- build-font-json
+  "Build a font JSON string for a TTF provider with the given index and profile."
+  [{:keys [size shift oversample]} font-ext index]
   (let [[sx sy] shift]
     (format
-     "{\"providers\":[{\"type\":\"ttf\",\"file\":\"my_mod:system_font.%s\",\"size\":%.1f,\"oversample\":5.0,\"shift\":[%.1f,%.1f],\"index\":0},{\"type\":\"reference\",\"id\":\"minecraft:default\"}]}"
-     font-ext (double size) (double sx) (double sy))))
+     "{\"providers\":[{\"type\":\"ttf\",\"file\":\"my_mod:system_font.%s\",\"size\":%.1f,\"oversample\":%.1f,\"shift\":[%.1f,%.1f],\"skip_mitering\":true,\"index\":%d},{\"type\":\"reference\",\"id\":\"minecraft:default\"}]}"
+     font-ext (double size) (double oversample) (double sx) (double sy) (int index))))
+
+(defn build-font-jsons
+  [profile font-ext]
+  (let [normal-json (build-font-json profile font-ext 0)
+        bold-json   (build-font-json profile font-ext 1)
+        italic-json normal-json]
+    {:normal (.getBytes normal-json "UTF-8")
+     :bold   (.getBytes bold-json "UTF-8")
+     :italic (.getBytes italic-json "UTF-8")}))
