@@ -7,7 +7,7 @@
   []
   {:achievement-tabs []
    :achievements []
-   :translations {:en_us {} :zh_cn {}}
+   :translations {:en_us {} :zh_cn {} :zh_tw {} :ja_jp {} :ko_kr {} :ru_ru {}}
    :recipes []
    :fonts []
    :item-overlay-fns {}})
@@ -56,7 +56,7 @@
   (update-datagen-metadata-runtime!
    assoc
    :translations
-   (recipe-schema/require-translations! :translations (or translation-maps {:en_us {} :zh_cn {}})))
+   (recipe-schema/require-translations! :translations (or translation-maps {:en_us {} :zh_cn {} :zh_tw {} :ja_jp {} :ko_kr {} :ru_ru {}})))
   nil)
 
 (defn merge-translations!
@@ -65,9 +65,13 @@
    update
    :translations
    (fn [existing]
-     (-> (or existing {:en_us {} :zh_cn {}})
+     (-> (or existing {:en_us {} :zh_cn {} :zh_tw {} :ja_jp {} :ko_kr {} :ru_ru {}})
          (update :en_us merge (:en_us translation-maps))
-         (update :zh_cn merge (:zh_cn translation-maps)))))
+         (update :zh_cn merge (:zh_cn translation-maps))
+         (update :zh_tw merge (:zh_tw translation-maps))
+         (update :ja_jp merge (:ja_jp translation-maps))
+         (update :ko_kr merge (:ko_kr translation-maps))
+         (update :ru_ru merge (:ru_ru translation-maps)))))
   nil)
 
 (defn set-recipes!

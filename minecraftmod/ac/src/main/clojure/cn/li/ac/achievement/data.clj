@@ -41,20 +41,33 @@
 
 (defn- base-ach
   [{:keys [id tab parent icon frame criteria trigger-key]}
-   {:keys [en-title en-desc zh-title zh-desc]}]
-  {:id id
-   :tab tab
-   :parent parent
-   :icon icon
-   :frame (or frame :task)
-   :hidden? false
-   :criteria criteria
-   :trigger-key trigger-key
-   :translation
-   {:en_us {(text-key id "") (or en-title (title-of id))
-            (text-key id ".description") (or en-desc (str "Complete " (title-of id) "."))}
-    :zh_cn {(text-key id "") (or zh-title (zh-title-of id))
-            (text-key id ".description") (or zh-desc (str "完成成就：" (or zh-title (zh-title-of id))))}}})
+   {:keys [en-title en-desc zh-title zh-desc
+           tw-title tw-desc ja-title ja-desc ko-title ko-desc ru-title ru-desc]}]
+  (let [en-title (or en-title (title-of id))
+        en-desc (or en-desc (str "Complete " (title-of id) "."))
+        zh-title (or zh-title (zh-title-of id))
+        zh-desc (or zh-desc (str "完成成就：" (or zh-title (zh-title-of id))))]
+    {:id id
+     :tab tab
+     :parent parent
+     :icon icon
+     :frame (or frame :task)
+     :hidden? false
+     :criteria criteria
+     :trigger-key trigger-key
+     :translation
+     {:en_us {(text-key id "") en-title
+              (text-key id ".description") en-desc}
+      :zh_cn {(text-key id "") zh-title
+              (text-key id ".description") zh-desc}
+      :zh_tw {(text-key id "") (or tw-title zh-title)
+              (text-key id ".description") (or tw-desc zh-desc)}
+      :ja_jp {(text-key id "") (or ja-title en-title)
+              (text-key id ".description") (or ja-desc en-desc)}
+      :ko_kr {(text-key id "") (or ko-title en-title)
+              (text-key id ".description") (or ko-desc en-desc)}
+      :ru_ru {(text-key id "") (or ru-title en-title)
+              (text-key id ".description") (or ru-desc en-desc)}}}))
 
 (defn- custom-criterion
   [id]

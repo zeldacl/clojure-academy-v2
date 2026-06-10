@@ -11,6 +11,18 @@
            "energy.my_mod.unit.if" "IF"}
    :zh_cn {"domain.my_mod.energy" "能量系统"
            "energy.my_mod.imaginary" "幻想能量"
+           "energy.my_mod.unit.if" "IF"}
+   :zh_tw {"domain.my_mod.energy" "能量系統"
+           "energy.my_mod.imaginary" "幻想能量"
+           "energy.my_mod.unit.if" "IF"}
+   :ja_jp {"domain.my_mod.energy" "エネルギーシステム"
+           "energy.my_mod.imaginary" "虚数エネルギー"
+           "energy.my_mod.unit.if" "IF"}
+   :ko_kr {"domain.my_mod.energy" "에너지 시스템"
+           "energy.my_mod.imaginary" "상상 에너지"
+           "energy.my_mod.unit.if" "IF"}
+   :ru_ru {"domain.my_mod.energy" "Энергетическая система"
+           "energy.my_mod.imaginary" "Воображаемая энергия"
            "energy.my_mod.unit.if" "IF"}})
 
 (defn register-datagen-metadata!

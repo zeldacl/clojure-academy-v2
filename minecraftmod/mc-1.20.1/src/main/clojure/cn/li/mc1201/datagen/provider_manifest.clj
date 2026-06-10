@@ -9,7 +9,7 @@
 (def ^:private provider-groups
   {:lang {:label "Lang"
           :summary-label "lang"
-          :languages ["en_us" "zh_cn"]
+          :languages ["en_us" "zh_cn" "zh_tw" "ja_jp" "ko_kr" "ru_ru"]
           :forge {:factory :lang}
           :fabric {:factory :lang}}
    :blockstate {:label "BlockState"

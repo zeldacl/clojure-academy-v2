@@ -169,7 +169,19 @@
                          "Channel electricity into energy blocks or held energy items while holding."}
                  :zh_cn {"ability.skill.electromaster.current_charging" "电流充能"
                          "ability.skill.electromaster.current_charging.desc"
-         "按住持续引导电流，为目标能量方块或手持能量物品充能。"}}
+         "按住持续引导电流，为目标能量方块或手持能量物品充能。"}
+                 :zh_tw {"ability.skill.electromaster.current_charging" "電流充能"
+                         "ability.skill.electromaster.current_charging.desc"
+         "按住持續引導電流，為目標能量方塊或手持能量物品充能。"}
+                 :ja_jp {"ability.skill.electromaster.current_charging" "電流充能"
+                         "ability.skill.electromaster.current_charging.desc"
+         "ホールドして電流を誘導し、対象のエネルギーブロックまたは手持ちのエネルギーアイテムを充能します。"}
+                 :ko_kr {"ability.skill.electromaster.current_charging" "전류 충전"
+                         "ability.skill.electromaster.current_charging.desc"
+         "홀드하여 전류를 유도하고 대상 에너지 블록 또는 손에 든 에너지 아이템을 충전합니다."}
+                 :ru_ru {"ability.skill.electromaster.current_charging" "Текущая зарядка"
+                         "ability.skill.electromaster.current_charging.desc"
+         "Удерживайте для направления тока, заряжая целевые энергоблоки или удерживаемые энергопредметы."}}
   :actions
   {:cost-fail! (fn [{:keys [ctx-id]}]
                  (let [skill-state (:skill-state (or (ctx/get-context ctx-id) {}))

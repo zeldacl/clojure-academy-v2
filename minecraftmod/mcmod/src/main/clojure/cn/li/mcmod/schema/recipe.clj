@@ -82,7 +82,11 @@
 (def translations-schema
 	[:map
 	 [:en_us [:map-of string? string?]]
-	 [:zh_cn [:map-of string? string?]]])
+	 [:zh_cn [:map-of string? string?]]
+	 [:zh_tw [:map-of string? string?]]
+	 [:ja_jp [:map-of string? string?]]
+	 [:ko_kr [:map-of string? string?]]
+	 [:ru_ru [:map-of string? string?]]])
 
 (def ^:private recipes-validator
 	(schema-core/validator recipes-schema))

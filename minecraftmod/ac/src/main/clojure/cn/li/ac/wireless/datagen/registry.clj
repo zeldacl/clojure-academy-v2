@@ -21,6 +21,26 @@
               {"domain.my_mod.wireless" "无线系统"
                "wireless.my_mod.network" "无线网络"
                "wireless.my_mod.node" "无线节点"}
+              descriptor-entries)
+     :zh_tw (merge
+              {"domain.my_mod.wireless" "無線系統"
+               "wireless.my_mod.network" "無線網路"
+               "wireless.my_mod.node" "無線節點"}
+              descriptor-entries)
+     :ja_jp (merge
+              {"domain.my_mod.wireless" "無線システム"
+               "wireless.my_mod.network" "無線ネットワーク"
+               "wireless.my_mod.node" "無線ノード"}
+              descriptor-entries)
+     :ko_kr (merge
+              {"domain.my_mod.wireless" "무선 시스템"
+               "wireless.my_mod.network" "무선 네트워크"
+               "wireless.my_mod.node" "무선 노드"}
+              descriptor-entries)
+     :ru_ru (merge
+              {"domain.my_mod.wireless" "Беспроводная система"
+               "wireless.my_mod.network" "Беспроводная сеть"
+               "wireless.my_mod.node" "Беспроводной узел"}
               descriptor-entries)}))
 
 (defn register-datagen-metadata!
