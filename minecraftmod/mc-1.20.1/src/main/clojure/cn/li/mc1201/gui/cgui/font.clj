@@ -17,6 +17,36 @@
 
 (def ^:private font-namespace "my_mod")
 
+;; --- dynamic base-height (default 8.0 for minecraft:default bitmap) ---
+;; Set to the TTF provider :size when a system font is active so that
+;; :font-size N always produces N px on screen regardless of the TTF size.
+(defonce ^:private cgui-font-base-height (atom 8.0))
+
+(defn set-cgui-font-base-height! [v]
+  (reset! cgui-font-base-height (double v)))
+
+(defn get-cgui-font-base-height []
+  @cgui-font-base-height)
+
+;; ---------------------------------------------------------------------------
+;; Fallback scale factor for minecraft:default bitmap font.
+;; Set by font-pack-setup at runtime: 1.0 when a system TTF is active,
+;; ~0.85 when the default bitmap is used (to compensate for thicker pixel
+;; strokes so the visual size matches TrueType reference text).
+;; ---------------------------------------------------------------------------
+(defonce ^:private fallback-scale-factor (atom 1.0))
+
+(defn set-fallback-scale-factor!
+  "Update the per-frame font-scale multiplier for bitmap-fallback mode.
+  Called once during client startup by font-pack-setup."
+  [v]
+  (reset! fallback-scale-factor (double v)))
+
+(defn get-fallback-scale-factor
+  "Return the current fallback scale factor."
+  []
+  @fallback-scale-factor)
+
 (defonce ^:private registry (atom {}))
 
 (defn- resource-location
@@ -66,7 +96,8 @@
 (defn- scaled-width
   [^Font mc-font ^Component comp font-size]
   (* (double (.width mc-font comp))
-     (/ (double font-size) 8.0)))
+     (/ (double font-size) (get-cgui-font-base-height))
+     (get-fallback-scale-factor)))
 
 (defn text-width
   "Width of `text` at CGui font-size (8pt = vanilla glyph grid)."
@@ -83,7 +114,7 @@
   (when (seq text)
     (let [^Font mc-font (MinecraftClientAccess/getFont)
           ^Component comp (text-component text font-desc)
-          scale (float (/ (double font-size) 8.0))
+          scale (float (* (/ (double font-size) (get-cgui-font-base-height)) (get-fallback-scale-factor)))
           total-w (scaled-width mc-font comp font-size)
           x' (case align
                :center (- (double x) (/ total-w 2.0))

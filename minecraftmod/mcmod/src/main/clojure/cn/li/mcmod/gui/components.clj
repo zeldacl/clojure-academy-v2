@@ -135,7 +135,7 @@
                                 :y-offset (double (:y-offset spec 0.0))
                                 :z-level (double (:z-level spec 0.0))
                                 :emit? (if (contains? spec :emit?) (:emit? spec) true)
-                                :shadow? (:shadow? spec true)
+                                :shadow? (:shadow? spec false)
                                 :masked? (:masked? spec false)
                                 :localized? (boolean (:localized? spec false))
                                 :caret-pos 0
@@ -205,7 +205,7 @@
 (defn text-box
   [& {:keys [text color font-size align height-align x-offset y-offset z-level emit? shadow? masked? localized? font]
       :or {text "" color 0xFFFFFF font-size 8.0 align :left height-align :top
-           x-offset 0.0 y-offset 0.0 z-level 0.0 emit? true shadow? true masked? false localized? false font nil}}]
+           x-offset 0.0 y-offset 0.0 z-level 0.0 emit? true shadow? false masked? false localized? false font nil}}]
   {::kind :textbox
    :text text
    :color color
@@ -364,7 +364,7 @@
   [& {:keys [text x y width height text-color on-click]
       :or {text "Button" x 0 y 0 width 60 height 14 text-color 0xFFFFFF}}]
   (let [widget (cgui-core/create-widget :pos [x y] :size [width height])
-        label (text-box :text text :color text-color :font-size 8 :shadow? true)]
+        label (text-box :text text :color text-color :font-size 8 :shadow? false)]
     (add-component! widget (outline :color 0x404040 :width 1.0))
     (add-component! widget label)
     (when on-click
@@ -384,7 +384,7 @@
                :color-full color
                :color-empty 0x404040})
         label-box (create-native-component
-                    {::kind :textbox :text label :color 0xFFFFFF :font-size 8 :shadow? true})]
+                    {::kind :textbox :text label :color 0xFFFFFF :font-size 8 :shadow? false})]
     (add-component! panel bar)
     (add-component! panel label-box)
     (events/on-frame panel
@@ -400,9 +400,9 @@
       :or {label "" x 0 y 0 width 70 label-color 0xAAAAAA value-color 0xFFFFFF}}]
   (let [widget (cgui-core/create-widget :pos [x y] :size [width 12])
         label-box (create-native-component
-                    {::kind :textbox :text (str label ": ") :color label-color :font-size 8 :shadow? true})
+                    {::kind :textbox :text (str label ": ") :color label-color :font-size 8 :shadow? false})
         value-box (create-native-component
-                    {::kind :textbox :text "" :color value-color :font-size 8 :shadow? true})]
+                    {::kind :textbox :text "" :color value-color :font-size 8 :shadow? false})]
     (add-component! widget label-box)
     (add-component! widget value-box)
     widget))

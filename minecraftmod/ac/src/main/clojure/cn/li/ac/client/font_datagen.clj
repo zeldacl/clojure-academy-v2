@@ -3,28 +3,19 @@
 
   See https://minecraft.wiki/w/Font
 
-  Important: a ttf provider with a missing file causes FontManager to reject
-  my_mod:ac_normal entirely — the reference provider after it will NOT apply.
-  Only emit ttf when assets/my_mod/font/ac_normal.ttf is actually bundled."
-  (:require [clojure.java.io :as io]
-            [cn.li.mcmod.datagen.metadata :as datagen-metadata]))
+  The baseline definition references minecraft:default only.  At runtime a
+  virtual resource pack (SystemFontVirtualPack) injects a ttf provider with
+  calibrated parameters when a system TrueType font is detected — zero font
+  files are bundled in the mod JAR.
 
-(defn- bundled-ttf?
-  []
-  (boolean (io/resource "assets/my_mod/font/ac_normal.ttf")))
+  When no system font is available the minecraft:default bitmap font is used
+  as a transparent fallback."
+  (:require [cn.li.mcmod.datagen.metadata :as datagen-metadata]))
 
 (defn- ac-normal-providers
   []
-  (if (bundled-ttf?)
-    [{:type "ttf"
-      :file "my_mod:ac_normal.ttf"
-      :size 8.0
-      :oversample 2.0
-      :shift [0 0]}
-     {:type "reference"
-      :id "minecraft:default"}]
-    [{:type "reference"
-      :id "minecraft:default"}]))
+  [{:type "reference"
+    :id "minecraft:default"}])
 
 (def baseline-font-definitions
   [{:id "ac_normal"
