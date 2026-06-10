@@ -47,7 +47,7 @@
       :or {name nil pos [0 0] size [0 0] scale 1.0 z-level 0}}]
   (new-widget {:name name :pos pos :size size :scale scale :z-level z-level :widget-type :container}))
 
-(defn copy-widget 
+(defn copy-widget
   "Deep copy a widget with all its properties and children.
    Preserves hierarchy structure and component state atoms."
   [widget]
@@ -58,6 +58,9 @@
                            :z-level @(-> widget :z-level)
                            :visible? @(-> widget :visible?)
                            :widget-type (:widget-type widget)})]
+    ;; preserve transform-meta (alignWidth / alignHeight) from source widget
+    (when-let [src-meta @(:metadata widget)]
+      (swap! (:metadata clone) merge src-meta))
     (reset! (:components clone)
             (mapv (fn [comp]
                     (if (and (map? comp) (:state comp))
