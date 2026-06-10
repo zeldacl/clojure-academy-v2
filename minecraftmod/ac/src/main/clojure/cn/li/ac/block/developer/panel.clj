@@ -375,20 +375,17 @@
       (log/error "Skill tree render failed:" (ex-message e)))))
 
 (defn- make-dev-start-callback
-  "Build a callback for dev-session failure that writes to console state atom."
+  "Build a callback that writes server rejection reason to console state."
   [state-ref]
   (fn [resp]
     (when-not (:success resp)
       (when-let [state-a @state-ref]
-        (swap! state-a
-          (fn [st]
-            (-> st
-                (update :lines
-                  (fn [ls]
-                    (-> ls
-                        (conj (str "ERROR: " (:reason resp "unknown")))
-                        (clamp-lines))))
-                (assoc :phase :idle :dev-grace 0 :exec-cmd nil))))))))
+        (let [err-msg (str "ERROR: " (:reason resp "unknown"))
+              update-fn (fn [st]
+                          (-> st
+                              (update :lines #(-> % (conj err-msg) (clamp-lines)))
+                              (assoc :phase :idle :dev-grace 0 :exec-cmd nil)))]
+          (swap! state-a update-fn))))))
 
 (defn- render-console-area!
   "Render text console in parent_right/area."
