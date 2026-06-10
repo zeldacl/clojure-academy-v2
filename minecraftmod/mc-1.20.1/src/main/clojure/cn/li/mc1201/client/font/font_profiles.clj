@@ -56,7 +56,7 @@
 
 (defn build-font-jsons
   [profile font-ext]
-  (let [normal-json (build-font-json profile font-ext 0)
+  (let [normal-json (build-font-json profile font-ext 1)
         bold-json   (build-font-json profile font-ext 1)
         italic-json normal-json]
     {:normal (.getBytes normal-json "UTF-8")
