@@ -10,7 +10,8 @@
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.ac.wireless.gui.sync.handler :as net-helpers]
             [cn.li.mcmod.network.server :as net-server]
-            [cn.li.mcmod.platform.entity :as entity])
+            [cn.li.mcmod.platform.entity :as entity]
+            [cn.li.mcmod.util.log :as log])
   (:import [cn.li.acapi.wireless IWirelessNode]))
 
 (defn- msg [action] (msg-registry/msg :developer action))
@@ -23,17 +24,25 @@
     (try (node-conn/get-node conn) (catch Exception _ nil))))
 
 (defn handle-start-development [payload player]
+  (log/info "[handle-start-development] received payload=" (pr-str payload)
+            "player=" (pr-str (some-> player entity/player-get-name)))
   (let [tile (open-tile payload player)
         world (net-helpers/get-world player)]
+    (log/info "[handle-start-development] tile=" (some? tile) "world=" (some? world))
     (if-not tile
-      {:success false :reason "no-tile"}
+      (do (log/warn "[handle-start-development] no tile found")
+          {:success false :reason "no-tile"})
       (let [state (machine-runtime/state-or-default tile dev-logic/dev-default-state)
             result (dev-session/validate-and-start state player payload)]
+        (log/info "[handle-start-development] result ok?=" (:ok? result)
+                  "reason=" (:reason result "none"))
         (if (:ok? result)
           (let [new-state (-> (:state result)
                               (assoc :user-uuid (uuid/player-uuid player)
                                      :user-name (entity/player-get-name player)))]
             (machine-runtime/commit-state! tile world nil state new-state)
+            (log/info "[handle-start-development] committed, is-developing=" (:is-developing new-state)
+                      "progress=" (:development-progress new-state))
             {:success true})
           {:success false :reason (:reason result "rejected")})))))
 

@@ -75,12 +75,20 @@
 (defn- req-start-development!
   [container action & [extra callback]]
   (let [owner (try (container-state/owner-from-container container)
-                   (catch Exception _ nil))]
+                   (catch Exception e
+                     (log/error "[req-start-development!] owner error:" (ex-message e))
+                     nil))
+        msg-id (dev-msg :start-development)
+        payload (action-payload/action-payload container (merge {:action action} extra))]
+    (log/info "[req-start-development!] sending" msg-id "action=" action
+              "owner=" (pr-str owner) "payload=" (pr-str payload))
     (net-client/send-to-server
       owner
-      (dev-msg :start-development)
-      (action-payload/action-payload container (merge {:action action} extra))
-      (or callback (fn [_] nil)))))
+      msg-id
+      payload
+      (fn [resp]
+        (log/info "[req-start-development!] response:" (pr-str resp))
+        (when callback (callback resp))))))
 
 (defn- texture-path-from-category-icon [icon-str]
   (when (string? icon-str)
@@ -371,14 +379,25 @@
   [root area-widget container player mode]
   (cgui-core/clear-widgets! area-widget)
   (let [start-action (if (= :reset mode) :reset :level-up)
-        [_panel] (dev-console/create-console area-widget
-                   {:mode mode
-                    :container container
-                    :player-name (or @(:user-name container) "Player")
-                    :focus-root root
-                    :on-start-development
-                    (fn []
-                      (req-start-development! container start-action))})]))
+        [_panel state-a] (dev-console/create-console area-widget
+                           {:mode mode
+                            :container container
+                            :player-name (or @(:user-name container) "Player")
+                            :focus-root root
+                            :on-start-development
+                            (fn []
+                              (req-start-development! container start-action nil
+                                (fn [resp]
+                                  (if (:success resp)
+                                    nil  ;; Server accepted — frame handler tracks progress
+                                    (swap! state-a
+                                      #(-> %
+                                           (update :lines
+                                             (fn [ls]
+                                               (-> ls
+                                                   (conj (str "ERROR: " (:reason resp "unknown")))
+                                                   (clamp-lines))))
+                                           (assoc :phase :idle :dev-grace 0 :exec-cmd nil)))))))}))]))
 
 ;; ============================================================================
 ;; Wireless node label refresh

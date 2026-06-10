@@ -330,8 +330,11 @@
                   (comp/set-text! textbox full)
                   (comp/set-text-color! textbox input-color))
                 :developing
-                (let [pct (int (* 100.0 (double (:dev-progress st'))))]
-                  (comp/set-text! textbox (str "Progress: " pct "%"))
+                (let [grace (int (:dev-grace st' 0))
+                      pct (int (* 100.0 (double (:dev-progress st'))))]
+                  (if (< grace 5)
+                    (comp/set-text! textbox "Requesting...")
+                    (comp/set-text! textbox (str "Progress: " pct "%")))
                   (comp/set-text-color! textbox dim-color))
                 :done
                 (let [result-text (if (= :success (:dev-result st'))
