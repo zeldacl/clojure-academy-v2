@@ -50,6 +50,8 @@
 				(merge {:tier (name tier)
 								:max-energy (:max-energy cfg)
 								:wireless-bandwidth (:wireless-bandwidth cfg)})
+				;; Initialize energy to max on first tick (only when still 0)
+				(update :energy (fn [e] (if (zero? (double (or e 0.0))) (:max-energy cfg) e)))
 				ensure-inventory-shape)))
 
 (defn- developer-after-commit!
@@ -71,9 +73,12 @@
 				state4 (if (:is-developing state3)
 								 (dev-session/tick-development-state state3)
 								 state3)]
-		(-> state4
-				(assoc :wireless-inject-last-tick (double (:wireless-inject-this-tick state4 0.0)))
-				(assoc :wireless-inject-this-tick 0.0))))
+		(let [inject-this-tick (double (:wireless-inject-this-tick state4 0.0))
+		      max-e (double (:max-energy state4 50000.0))]
+		  (-> state4
+		      (update :energy (fn [e] (min max-e (+ (double (or e 0.0)) inject-this-tick))))
+		      (assoc :wireless-inject-last-tick inject-this-tick)
+		      (assoc :wireless-inject-this-tick 0.0)))))
 
 (def developer-tick-fn
 	(machine-runtime/make-tick-fn
@@ -111,13 +116,15 @@
 		be
 		(fn [] (machine-runtime/state-or-default be dev-default-state))
 		(fn [s] (machine-runtime/commit-from-tile! be dev-default-state s))
-		{:after-inject!
+		{:max-energy (fn [] (double (:max-energy (machine-runtime/state-or-default be dev-default-state) 50000.0)))
+		 :bandwidth (fn [] (double (:wireless-bandwidth (machine-runtime/state-or-default be dev-default-state) 1000.0)))
+		 :after-inject!
 		 (fn [^double accepted]
 			 (when (pos? accepted)
 				 (let [st (machine-runtime/state-or-default be dev-default-state)
-							 cur (double (:wireless-inject-this-tick st 0.0))]
-					 (machine-runtime/commit-from-tile! be dev-default-state
-					                                    (assoc st :wireless-inject-this-tick (+ cur accepted))))))}))
+						 cur (double (:wireless-inject-this-tick st 0.0))]
+				 (machine-runtime/commit-from-tile! be dev-default-state
+				                                    (assoc st :wireless-inject-this-tick (+ cur accepted))))))}))
 
 (defn try-pull-energy! [tile ^double amount]
 	(boolean

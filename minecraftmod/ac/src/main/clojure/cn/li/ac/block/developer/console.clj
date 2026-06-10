@@ -43,6 +43,7 @@
    :boot-timer 0.0            ;; seconds
    :dev-progress 0.0
    :dev-result nil
+   :dev-grace 0               ;; ticks since entering :developing (wait for server)
    :cursor-visible true
    :cursor-timer 0.0
    :exec-cmd nil
@@ -274,13 +275,29 @@
                     :developing
                     (let [container' (:container st)
                           prog (double (or (some-> container' @(:development-progress container')) 0.0))
-                          is-dev (boolean (some-> container' @(:is-developing container')))]
-                      (if (and (> prog 0.001) (not is-dev))
-                        ;; development completed
+                          is-dev (boolean (some-> container' @(:is-developing container')))
+                          grace (int (:dev-grace st 0))]
+                      (cond
+                        ;; Still in grace period — wait for server to set is-developing
+                        (< grace 5)
+                        (assoc st :dev-grace (inc grace) :dev-progress prog)
+
+                        ;; Grace expired, server didn't start (rejected or no energy)
+                        (and (>= grace 5) (not is-dev))
                         (-> st
-                            (assoc :phase :done :dev-progress prog
-                                   :dev-result (if (> prog 0.01) :success :failure)))
-                        (assoc st :dev-progress prog)))
+                            (update :lines conj (msg :dev-begin))
+                            (update :lines conj "ERROR: Development rejected. Check energy / induction factor.")
+                            (update :lines clamp-lines)
+                            (assoc :phase :idle :dev-grace 0))
+
+                        ;; Server finished (is-dev false, progress settled)
+                        (not is-dev)
+                        (assoc st :phase :done :dev-progress prog :dev-grace 0
+                               :dev-result (if (> prog 0.5) :success :failure))
+
+                        ;; Progressing normally
+                        :else
+                        (assoc st :dev-progress prog :dev-grace 0)))
                     :done
                     (tick-idle st dt-sec)
                     ;; :idle

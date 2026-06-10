@@ -71,23 +71,28 @@
   ([tile-entity get-state-fn set-state-fn]
    (create-wireless-receiver tile-entity get-state-fn set-state-fn nil))
   ([_tile-entity get-state-fn set-state-fn opts]
-   (let [after-inject! (when (map? opts) (:after-inject! opts))]
+   (let [after-inject! (when (map? opts) (:after-inject! opts))
+         max-energy-fn (:max-energy opts)
+         bandwidth-fn (:bandwidth opts)]
      (reify IWirelessReceiver
        (getRequiredEnergy [_]
          ;; How much energy we need
          (let [state (get-state-fn)
                current-energy (double (get state :energy 0.0))
-               max-energy (double (ec-config/energy-capacity))
-               space (- max-energy current-energy)
-               bandwidth (double (ec-config/transfer-bandwidth))]
+               max-energy (double (or (when max-energy-fn (max-energy-fn))
+                                      (ec-config/energy-capacity)))
+               space (max 0.0 (- max-energy current-energy))
+               bandwidth (double (or (when bandwidth-fn (bandwidth-fn))
+                                     (ec-config/transfer-bandwidth)))]
            (double (min space bandwidth))))
 
        (injectEnergy [_ amt]
          ;; Receive energy into internal buffer
          (let [state (get-state-fn)
                current-energy (double (get state :energy 0.0))
-               max-energy (double (ec-config/energy-capacity))
-               space (- max-energy current-energy)
+               max-energy (double (or (when max-energy-fn (max-energy-fn))
+                                      (ec-config/energy-capacity)))
+               space (max 0.0 (- max-energy current-energy))
                to-inject (min amt space)
                leftover (- amt to-inject)]
           (set-state-fn (-> state
@@ -107,7 +112,8 @@
 
        (getReceiverBandwidth [_]
          (let [state (get-state-fn)]
-           (double (ec-config/transfer-bandwidth))))))))
+           (double (or (when bandwidth-fn (bandwidth-fn))
+                       (ec-config/transfer-bandwidth)))))))))
 
 ;; ============================================================================
 ;; Wireless Integration Helpers

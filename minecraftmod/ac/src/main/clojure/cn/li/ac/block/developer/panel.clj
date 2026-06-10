@@ -74,10 +74,13 @@
 
 (defn- req-start-development!
   [container action & [extra callback]]
-  (net-client/send-to-server
-    (dev-msg :start-development)
-    (action-payload/action-payload container (merge {:action action} extra))
-    (or callback (fn [_] nil))))
+  (let [owner (try (container-state/owner-from-container container)
+                   (catch Exception _ nil))]
+    (net-client/send-to-server
+      owner
+      (dev-msg :start-development)
+      (action-payload/action-payload container (merge {:action action} extra))
+      (or callback (fn [_] nil)))))
 
 (defn- texture-path-from-category-icon [icon-str]
   (when (string? icon-str)
