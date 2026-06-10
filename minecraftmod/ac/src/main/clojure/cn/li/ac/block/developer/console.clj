@@ -249,6 +249,18 @@
     ;; Add panel to parent area
     (cgui-core/add-widget! parent-area panel)
 
+    ;; deepest-only dispatch: children receive mouse clicks and must forward
+    ;; focus to panel so keyboard input reaches the :key handler.
+    (let [click-noop (fn [_] nil)
+          key-handler (fn [evt]
+                        (let [st @state-a
+                              st' (process-key st evt)]
+                          (when (not= st st')
+                            (reset! state-a st'))))]
+      (doseq [{:keys [widget]} @line-widgets]
+        (events/on-left-click widget click-noop)
+        (events/on-key-press widget key-handler)))
+
     ;; Frame handler — tick state machine + update text widgets
     (events/on-frame panel
       (fn [evt]

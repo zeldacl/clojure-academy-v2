@@ -106,7 +106,7 @@
 		:resolve-open-pos (resolve-developer-open-pos controller-block-id)
 		:server-before-open! developer-server-before-open!))
 
-(defn create-dev-receiver-cap [be]
+(defn create-dev-receiver-cap [be & _]
 	(wireless-impl/create-wireless-receiver
 		be
 		(fn [] (machine-runtime/state-or-default be dev-default-state))

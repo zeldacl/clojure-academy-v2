@@ -386,18 +386,25 @@
   Uses container owner for response routing (matching wireless overlay pattern)."
   [root container]
   (when (:tile-entity container)
-    (let [owner (try (container-state/owner-from-container container)
-                     (catch Exception _ nil))]
+    (let [payload (action-payload/action-payload container {})
+          owner (try (container-state/owner-from-container container)
+                     (catch Exception e
+                       (log/error "[refresh-linked-node-label!] owner resolution error:" (ex-message e))
+                       nil))
+          _ (log/info "[refresh-linked-node-label!] sending list-nodes, owner=" (pr-str owner)
+                      "payload=" (pr-str payload))]
       (net-client/send-to-server
         owner
         (dev-msg :list-nodes)
-        (action-payload/action-payload container {})
+        payload
         (fn [resp]
+          (log/info "[refresh-linked-node-label!] response received:" (pr-str resp))
           (when (map? resp)
-            (set-text-path! root "parent_left/panel_machine/button_wireless/text_nodename"
-              (if-let [n (:linked resp)]
-                (or (:node-name n) "N/A")
-                "N/A"))))))))
+            (let [text (if-let [n (:linked resp)]
+                         (or (:node-name n) "N/A")
+                         "N/A")]
+              (log/info "[refresh-linked-node-label!] setting node label to:" text)
+              (set-text-path! root "parent_left/panel_machine/button_wireless/text_nodename" text))))))))
 
 ;; ============================================================================
 ;; Main attach function — binds left and right panels
