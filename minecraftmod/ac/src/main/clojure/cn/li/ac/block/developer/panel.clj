@@ -374,23 +374,31 @@
     (catch Exception e
       (log/error "Skill tree render failed:" (ex-message e)))))
 
+(defn- make-dev-start-callback
+  "Build a callback for dev-session failure that writes to console state atom."
+  [state-ref]
+  (fn [resp]
+    (when-not (:success resp)
+      (when-let [state-a @state-ref]
+        (swap! state-a
+          (fn [st]
+            (-> st
+                (update :lines
+                  (fn [ls]
+                    (-> ls
+                        (conj (str "ERROR: " (:reason resp "unknown")))
+                        (clamp-lines))))
+                (assoc :phase :idle :dev-grace 0 :exec-cmd nil))))))))
+
 (defn- render-console-area!
   "Render text console in parent_right/area."
   [root area-widget container player mode]
   (cgui-core/clear-widgets! area-widget)
   (let [start-action (if (= :reset mode) :reset :level-up)
         state-ref (atom nil)
-        on-start-dev
-        (fn []
-          (req-start-development! container start-action nil
-            (fn [resp]
-              (when-not (:success resp)
-                (when-let [state-a @state-ref]
-                  (swap! state-a
-                    (fn [st]
-                      (-> st
-                          (update :lines #(-> % (conj (str "ERROR: " (:reason resp "unknown"))) (clamp-lines)))
-                          (assoc :phase :idle :dev-grace 0 :exec-cmd nil))))))))
+        on-start-dev (fn []
+                       (req-start-development! container start-action nil
+                         (make-dev-start-callback state-ref)))
         [_panel state-a] (dev-console/create-console area-widget
                            {:mode mode
                             :container container
