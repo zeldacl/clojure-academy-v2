@@ -408,8 +408,7 @@
         (comp/set-editable! value-box true)
         ;; Visual brackets around editable value area.
         (let [box (fn [ch x]
-                    ;; size 0 so it won't steal focus in hit-test, but still renders text
-                    (let [w (cgui-core/create-widget :pos [x 0] :size [0 0])
+                    (let [w (cgui-core/create-widget :pos [x 0] :size [6 8])
                           tb (comp/text-box :text ch :font :ac-normal :font-size 8 :color 0xFFAAAAAA)]
                       (comp/add-component! w tb)
                       w))

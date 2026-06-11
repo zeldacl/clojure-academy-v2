@@ -181,7 +181,10 @@
          :creative-tab :misc
          :properties {:tooltip ["Matter Unit (Empty)"
                                 "Right click to collect/place imaginary phase liquid"]
-                      :model-texture "matter_unit"}
+                      :model-texture "matter_unit"
+                      :filled-variant {:nbt {"matterKind" "phase-liquid"}
+                                       :damage 1
+                                       :label "phase-liquid"}}
          :on-right-click use-matter-unit!}))
     (log/info "Special items initialized: induction factors, mag_hook, matter_unit")))
 

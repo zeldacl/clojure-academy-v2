@@ -15,7 +15,9 @@
         (reify java.util.function.Supplier
           (get [_]
             (try
-              (.getDefaultInstance Items/BARRIER)
+              (if-let [logo-item (registry-state/get-registered-item "logo")]
+                (net.minecraft.world.item.ItemStack. logo-item)
+                (.getDefaultInstance Items/BARRIER))
               (catch Exception _
                 net.minecraft.world.item.ItemStack/EMPTY))))
         display-items
@@ -28,7 +30,42 @@
                          (registry-state/get-registered-block-item item-id)
                          (registry-state/get-registered-item item-id))]
                   (when item-obj
-                    (.accept output (net.minecraft.world.item.ItemStack. ^ItemLike item-obj))))))))]
+                    (.accept output (net.minecraft.world.item.ItemStack. ^ItemLike item-obj))
+                    ;; Add filled / charged variants for stateful items
+                    ;; so players can spawn every variant from creative.
+                    (when (= (:type entry) :item)
+                      (when-let [spec (registry-metadata/get-item-spec item-id)]
+                        (let [props (:properties spec)]
+                          ;; Energy items: fully-charged variant
+                          (when (true? (:energy-item? props))
+                            (let [capacity (double (or (:energy-capacity props) 0.0))]
+                              (when (pos? capacity)
+                                (try
+                                  (let [full-stack (net.minecraft.world.item.ItemStack. ^ItemLike item-obj)
+                                        tag (.getOrCreateTag full-stack)
+                                        bandwidth (double (or (:energy-bandwidth props) 0.0))
+                                        battery-type (or (:battery-type props) item-id)]
+                                    (.putDouble tag "energy" capacity)
+                                    (.putDouble tag "maxEnergy" capacity)
+                                    (.putDouble tag "bandwidth" bandwidth)
+                                    (.putString tag "batteryType" battery-type)
+                                    (.accept output full-stack))
+                                  (catch Exception _ nil)))))
+                          ;; Generic filled-variant items (e.g. matter_unit)
+                          (when-let [variant (:filled-variant props)]
+                            (try
+                              (let [variant-stack (net.minecraft.world.item.ItemStack. ^ItemLike item-obj)
+                                    tag (.getOrCreateTag variant-stack)]
+                                (doseq [[k v] (:nbt variant)]
+                                  (cond
+                                    (string? v) (.putString tag k (str v))
+                                    (number? v) (.putDouble tag k (double v))
+                                    (instance? Boolean v) (.putBoolean tag k v)
+                                    :else nil))
+                                (when-let [dmg (:damage variant)]
+                                  (.setDamageValue variant-stack (int dmg)))
+                                (.accept output variant-stack))
+                              (catch Exception _ nil))))))))))]
     (-> (CreativeModeTab/builder)
         (.title (Component/translatable (str "itemGroup." mod-id ".items")))
         (.icon icon-supplier)

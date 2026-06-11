@@ -98,7 +98,7 @@
          :creative-tab :misc
          :properties {:tooltip ["能力硬币"
                                 "电磁炮 QTE 投掷触发物"]
-                      :model-texture "needle"}}))
+                      :model-texture "coin_front"}}))
     (idsl/register-item!
       (idsl/create-item-spec
         "brain_component"

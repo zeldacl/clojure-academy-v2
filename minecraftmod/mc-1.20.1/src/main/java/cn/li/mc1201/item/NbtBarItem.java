@@ -1,8 +1,14 @@
 package cn.li.mc1201.item;
 
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.TooltipFlag;
+import net.minecraft.world.level.Level;
+
+import javax.annotation.Nullable;
+import java.util.List;
 
 public class NbtBarItem extends Item {
 
@@ -58,5 +64,17 @@ public class NbtBarItem extends Item {
     @Override
     public int getBarColor(ItemStack stack) {
         return barColor;
+    }
+
+    @Override
+    public void appendHoverText(ItemStack stack, @Nullable Level level,
+                                List<Component> tooltip, TooltipFlag flag) {
+        super.appendHoverText(stack, level, tooltip, flag);
+        double current = getCurrentValue(stack);
+        double max = getMaxValue(stack);
+        long currentDisplay = Math.round(current);
+        long maxDisplay = Math.round(max);
+        tooltip.add(Component.translatable(
+            "tooltip.my_mod.energy_info", currentDisplay, maxDisplay));
     }
 }
