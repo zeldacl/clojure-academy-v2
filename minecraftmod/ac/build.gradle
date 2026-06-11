@@ -3,6 +3,12 @@ plugins {
     id "dev.clojurephant.clojure"
 }
 
+// Gradle detects that :mcmod:compileClojure output flows into :ac:compileJava classpath
+// but cannot infer a dependency automatically.
+tasks.named('compileJava').configure {
+    dependsOn project(':mcmod').tasks.named('compileClojure')
+}
+
 clojure {
     builds {
         main {

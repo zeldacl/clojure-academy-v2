@@ -4,6 +4,12 @@ plugins {
     id "com.github.johnrengelman.shadow"
 }
 
+// Gradle cannot infer that downstream compileClojure outputs feed into compileJava.
+tasks.named('compileJava').configure {
+    dependsOn project(':ac').tasks.named('compileClojure'),
+              project(':mcmod').tasks.named('compileClojure')
+}
+
 apply from: rootProject.file('gradle/platform_build_helpers.gradle')
 
 // Inject only shared Minecraft/mcmod sources. AC is loaded through explicit

@@ -6,6 +6,12 @@ plugins {
 
 apply from: rootProject.file('gradle/platform_build_helpers.gradle')
 
+// Gradle cannot infer that downstream compileClojure outputs feed into compileJava.
+tasks.named('compileJava').configure {
+    dependsOn project(':ac').tasks.named('compileClojure'),
+              project(':mcmod').tasks.named('compileClojure')
+}
+
  tasks.matching { it.name == 'checkClojure' }.configureEach {
      enabled = false
  }
