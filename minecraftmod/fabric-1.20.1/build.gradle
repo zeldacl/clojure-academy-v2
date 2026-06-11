@@ -123,10 +123,12 @@ tasks.named('classes').configure {
     setDependsOn([
         tasks.named('compileJava'),
         tasks.named('processResources'),
-        tasks.named('compileClojure'),
-        tasks.named('stripAotLvt')
+        tasks.named('compileClojure')
     ])
 }
+
+// LVT stripping only needed for packaging (TinyRemapper); skip for dev runs.
+tasks.named('jar').configure { dependsOn stripAotLvt }
 
 tasks.named('compileClojure').configure {
     dependsOn 'compileJava'

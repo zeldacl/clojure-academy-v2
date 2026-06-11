@@ -61,7 +61,8 @@ def stripAotLvt = tasks.register('stripAotLvt') {
         if (stripped > 0) logger.lifecycle('[stripAotLvt] stripped LVT from {} AOT classes', stripped)
     }
 }
-tasks.named('classes').configure { dependsOn stripAotLvt }
+// LVT stripping only needed for packaging (TinyRemapper); skip for dev runs.
+tasks.named('jar').configure { dependsOn stripAotLvt }
 
 configurations {
     cloverageRuntime
