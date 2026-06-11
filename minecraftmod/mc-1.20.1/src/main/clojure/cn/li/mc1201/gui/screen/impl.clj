@@ -162,14 +162,21 @@
             true)))
 
       (keyPressed [key-code scan-code modifiers]
-        (let [owns-key? (and root (cgui-rt/focused-widget-owns-key? root))]
-          (when root
-            (with-screen-cgui menu "CGUI key-input error"
-              #(cgui-rt/key-input! root key-code scan-code (char 0))))
-          (if owns-key?
-            true
-            (let [^CGuiContainerScreen s this]
-              (.callSuperKeyPressed s key-code scan-code modifiers)))))
+        ;; Per-screen key hook — matches original AcademyCraft TreeScreen.keyTyped:
+        ;;   if (key == KEY_ESCAPE) Option(gui.getWidget("link_page")).map(_.component[Cover].end())
+        ;;   else super.keyTyped(ch, key)
+        ;; Hook returns truthy → event consumed (skip CGUI dispatch + vanilla).
+        ;; Hook returns nil/false → normal CGUI dispatch → vanilla fallback.
+        (or (when-let [hook (:key-hook cgui-screen)]
+              (hook key-code scan-code modifiers))
+            (let [owns-key? (and root (cgui-rt/focused-widget-owns-key? root))]
+              (when root
+                (with-screen-cgui menu "CGUI key-input error"
+                  #(cgui-rt/key-input! root key-code scan-code (char 0))))
+              (if owns-key?
+                true
+                (let [^CGuiContainerScreen s this]
+                  (.callSuperKeyPressed s key-code scan-code modifiers))))))
 
       (charTyped [code-point modifiers]
         (let [owns-key? (and root (cgui-rt/focused-widget-owns-key? root))]
