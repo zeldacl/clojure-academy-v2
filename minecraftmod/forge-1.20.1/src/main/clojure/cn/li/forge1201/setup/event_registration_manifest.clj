@@ -6,7 +6,10 @@
   [{:listener-class net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent
     :handler on-common-setup}
    {:listener-class net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent
-    :handler on-client-setup}])
+    :handler on-client-setup}
+   ;; 1.20+ data-driven creative tab population (ModEventBus)
+   {:listener-class net.minecraftforge.event.BuildCreativeModeTabContentsEvent
+    :handler 'cn.li.forge1201.registry.creative-tab-event/handle-build-contents}])
 
 (defn common-event-listener-specs
   []
