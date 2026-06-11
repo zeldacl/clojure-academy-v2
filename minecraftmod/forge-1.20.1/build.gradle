@@ -12,14 +12,11 @@ tasks.named('compileJava').configure {
               project(':mcmod').tasks.named('compileClojure')
 }
 
- tasks.matching { it.name == 'checkClojure' }.configureEach {
-     enabled = false
- }
-
 // Inject only shared Minecraft/mcmod sources. AC is loaded through explicit
 // runtime outputs plus content SPI/lifecycle, not as platform source.
 configureInjectedPlatformSources()
 configureAcContentRuntime()
+configureMcmodContentRuntime()
 
 loom {
     // 现代 Loom 1.7+ 的 Forge 专用配置块
@@ -158,6 +155,24 @@ def forgeRunDataRequested = {
     }
 }
 
+def packageTaskNames = ['assemble', 'jar', 'shadowJar', 'remapJar'] as Set
+
+def forgePackageTaskRequested = {
+    gradle.startParameter.taskNames.any { String taskName ->
+        packageTaskNames.any { String packageTaskName ->
+            taskName == packageTaskName || taskName.endsWith(":${packageTaskName}")
+        }
+    }
+}
+
+def requireFullClojureCheckForPackage = {
+    if (forgePackageTaskRequested() && (project.hasProperty('checkNsOnly') || project.hasProperty('checkNsFile'))) {
+        throw new GradleException('Package tasks require full :forge-1.20.1:checkClojure; remove -PcheckNsOnly/-PcheckNsFile or run a focused check task separately.')
+    }
+}
+
+requireFullClojureCheckForPackage()
+
 tasks.matching { it.name == 'compileTestClojure' }.configureEach {
     if (!forgeTestOnlyNamespaces.isEmpty()) {
         def effective = (forgeTestOnlyNamespaces + ['cn.li.forge1201.test-runner']) as Set
@@ -215,6 +230,12 @@ tasks.named('jar', Jar).configure {
     // AOT classes exist in both build/clojure/main and build/classes/java/main
     // after copyClojureClassesToJavaOutput; keep the first entry when packaging.
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+tasks.matching { it.name in packageTaskNames }.configureEach {
+    dependsOn tasks.named('checkClojure')
+    dependsOn project(':ac').tasks.matching { it.name in ['checkClojure', 'checkMainClojure'] }
+    dependsOn project(':mcmod').tasks.matching { it.name in ['checkClojure', 'checkMainClojure'] }
 }
 
 clojure {
@@ -323,9 +344,9 @@ def stripClojureLVT = tasks.register('stripClojureLVT') {
 // `build/classes/java/main` on the transformed mod classpath. Copy (do not use Sync:
 // it would delete Java outputs) so `require` finds `__init.class` next to Java classes.
 def copyClojureClassesToJavaOutput = tasks.register('copyClojureClassesToJavaOutput', Copy) {
-    from strippedClojureAotDir
+    from clojureAotDir
     into layout.buildDirectory.dir('classes/java/main')
-    dependsOn stripClojureLVT
+    dependsOn tasks.named('compileClojure')
 }
 
 // 确保 Java 接口先编译，供 Clojure 调用
@@ -372,11 +393,30 @@ tasks.named('compileClojure').configure {
     }
 }
 
+def removeCheckClojureDependency = { Task task ->
+    task.setDependsOn(task.getDependsOn().findAll { dep ->
+        if (dep instanceof CharSequence) {
+            def depText = dep.toString()
+            return depText != 'checkClojure' && !depText.endsWith(':checkClojure')
+        }
+        if (dep?.metaClass?.hasProperty(dep, 'name')) {
+            return dep.name != 'checkClojure'
+        }
+        return true
+    })
+}
+
+tasks.named('classes').configure {
+    removeCheckClojureDependency(delegate as Task)
+}
+
 tasks.matching { it.name in ['runClient', 'runServer', 'runData'] }.configureEach {
+    removeCheckClojureDependency(delegate as Task)
     dependsOn tasks.named('copyClojureClassesToJavaOutput')
 }
 
 tasks.matching { it.name == 'runGametestServer' }.configureEach {
+    removeCheckClojureDependency(delegate as Task)
     dependsOn tasks.named('copyClojureClassesToJavaOutput')
     // Force DLI to read `gametestserverArgs` from launch.cfg instead of `serverArgs`.
     jvmArgs '-Dfabric.dli.env=gametestserver'
@@ -389,13 +429,6 @@ tasks.matching { it.name == 'checkClojure' }.configureEach {
     reflection = 'fail'
     mustRunAfter tasks.named('copyClojureClassesToJavaOutput')
     dependsOn tasks.named('cleanMirroredClojureClassesForCompile')
-    onlyIf {
-        if (forgeRunDataRequested()) {
-            logger.lifecycle('[forge-1.20.1:checkClojure] skipped because runData requested its own compile/runtime path')
-            return false
-        }
-        return true
-    }
     doFirst {
         def internalFile = file("$buildDir/tmp/checkClojure/internal.txt")
         internalFile.parentFile.mkdirs()

@@ -14,23 +14,59 @@ clojure {
 // Exclude Clojure sources from JAR — AOT classes are the only runtime representation.
 tasks.named('processResources').configure { exclude '**/*.clj', '**/*.cljc' }
 
-// Emit AOT classes directly to Java output.
+// mcmod Clojure imports local Java SPI/bootstrap classes; compile them first.
 tasks.named('compileClojure').configure {
-    destinationDirectory = layout.buildDirectory.dir('classes/java/main')
+    dependsOn 'compileJava'
+    classpath.from(files(layout.buildDirectory.dir('classes/java/main')))
+}
+
+// Ensure stale mirrored classes from previous output layouts do not shadow fresh Clojure output.
+tasks.named('compileJava').configure {
+    doFirst {
+        delete(layout.buildDirectory.dir('classes/java/main').get().asFile)
+    }
+}
+
+// Emit AOT classes directly to Java output.
+tasks.named('compileClojure').configure { task ->
+    def targetDirProvider = layout.buildDirectory.dir('clojure/main')
+    def targetDirFile = targetDirProvider.get().asFile
+    if (task.metaClass.hasProperty(task, 'destinationDirectory')) {
+        task.destinationDirectory = targetDirProvider
+    } else if (task.metaClass.hasProperty(task, 'destinationDir')) {
+        task.destinationDir = targetDirFile
+    } else {
+        throw new GradleException("compileClojure task does not expose destinationDirectory/destinationDir: ${task.class.name}")
+    }
 }
 
 // Strip LVT from AOT class files (same as forge-1.20.1).
 def stripAotLvt = tasks.register('stripAotLvt') {
     dependsOn tasks.named('compileClojure')
-    def classesDir = layout.buildDirectory.dir('classes/java/main')
+    def classesDir = layout.buildDirectory.dir('clojure/main')
+    def strippedDir = layout.buildDirectory.dir('clojure/main-stripped')
     inputs.dir(classesDir)
-    outputs.dir(classesDir)
+    outputs.dir(strippedDir)
     doLast {
         def dir = classesDir.get().asFile
-        if (!dir.isDirectory()) return
+        def outDir = strippedDir.get().asFile
+        delete(outDir)
+        if (!dir.isDirectory()) {
+            outDir.mkdirs()
+            return
+        }
         int stripped = 0
+        int copied = 0
         dir.eachFileRecurse { file ->
-            if (!file.name.endsWith('.class')) return
+            def rel = dir.toPath().relativize(file.toPath()).toString()
+            def target = new File(outDir, rel)
+            if (!file.name.endsWith('.class')) {
+                if (file.isFile()) {
+                    target.parentFile.mkdirs()
+                    target.bytes = file.bytes
+                }
+                return
+            }
             try {
                 def reader = new org.objectweb.asm.ClassReader(file.bytes)
                 def writer = new org.objectweb.asm.ClassWriter(0)
@@ -50,18 +86,30 @@ def stripAotLvt = tasks.register('stripAotLvt') {
                     }
                 }, 0)
                 if (dropped[0] > 0) {
-                    file.bytes = writer.toByteArray()
+                    target.parentFile.mkdirs()
+                    target.bytes = writer.toByteArray()
                     stripped++
+                } else {
+                    target.parentFile.mkdirs()
+                    target.bytes = file.bytes
+                    copied++
                 }
             } catch (Exception ex) {
                 logger.warn("[stripAotLvt] skipping ${file.name}: ${ex.message}")
             }
         }
-        if (stripped > 0) logger.lifecycle('[stripAotLvt] stripped LVT from {} AOT classes', stripped)
+        if (stripped > 0 || copied > 0) {
+            logger.lifecycle('[stripAotLvt] stripped LVT from {} AOT classes; copied {} unchanged', stripped, copied)
+        }
     }
 }
 // LVT stripping only needed for packaging (TinyRemapper); skip for dev runs.
-tasks.named('jar').configure { dependsOn stripAotLvt }
+tasks.named('jar', Jar).configure {
+    dependsOn stripAotLvt
+    // During migration, stale mirror classes can coexist with AOT outputs.
+    // Keep first entry so packaging stays deterministic and non-failing.
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
 
 configurations {
     cloverageRuntime

@@ -52,7 +52,7 @@
                :solid))}
           (fn []
             (is (= {:cancel-place? true :reason :multiblock-space-occupied}
-                   (mb/precheck-controller-place {:world :w :pos master :block-id "ctl-test"}))))))))
+                   (mb/precheck-controller-place {:world :w :pos master :block-id "ctl-test"})))))))))
 
 (deftest precheck-non-controller-yields-nil-test
   (is (nil? (mb/precheck-controller-place {:world :w :pos (test-pos 0 0 0) :block-id "not-a-controller"}))))
@@ -77,10 +77,10 @@
       (with-redefs [world/world-get-tile-entity* (constantly :fake-be)
                     pbe/get-custom-state (constantly {:controller-pos-x 10
                                                       :controller-pos-y 0
-                                                    :controller-pos-z 0})]
-      (let [r (mb/route-to-controller-context {:world :w
-                                               :pos (test-pos 1 2 3)
-                                               :block-id "part-test"})]
-        (is (= "part-test" (:original-block-id r)))
-        (is (= "ctl-test" (:block-id r)))
-        (is (= [10 0 0] [(pos/pos-x (:pos r)) (pos/pos-y (:pos r)) (pos/pos-z (:pos r))]))))))
+                                                      :controller-pos-z 0})]
+        (let [r (mb/route-to-controller-context {:world :w
+                                                 :pos (test-pos 1 2 3)
+                                                 :block-id "part-test"})]
+          (is (= "part-test" (:original-block-id r)))
+          (is (= "ctl-test" (:block-id r)))
+          (is (= [10 0 0] [(pos/pos-x (:pos r)) (pos/pos-y (:pos r)) (pos/pos-z (:pos r))])))))))

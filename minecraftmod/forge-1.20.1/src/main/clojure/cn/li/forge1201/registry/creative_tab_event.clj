@@ -41,7 +41,7 @@
 
 
 (defn- ^:private accept-filled-variant
-  "Add a generic filled-variant item (e.g. matter_unit) to the creative tab.
+  "Add a generic filled-variant item to the creative tab.
 
   Reads :filled-variant map from item spec properties and writes NBT + damage."
   [^BuildCreativeModeTabContentsEvent event ^ItemLike item-obj variant]

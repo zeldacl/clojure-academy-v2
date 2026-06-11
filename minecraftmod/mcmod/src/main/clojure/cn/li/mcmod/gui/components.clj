@@ -116,7 +116,7 @@
    {::kind :drawtexture :texture texture-path}))
 
 (defn mono-blend
-  "Replicates AcademyCraft Colors.monoBlend.
+  "Replicates LambdaLib2 Colors.monoBlend.
    Returns an ARGB int from a grayscale value and an alpha.
    - gray:  0.0 = black, 1.0 = white
    - alpha: 0.0 = fully transparent, 1.0 = fully opaque"

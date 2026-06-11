@@ -13,37 +13,37 @@
   translation key→value pairs for commands and UI elements"
   []
   {"en_us.json"
-   {"itemGroup.my_mod.items" "AcademyCraft"
+    {"itemGroup.my_mod.items" "My Mod"
     "command.mcmod.grant_advancement.success" "Granted advancement %s to %s"
     "command.mcmod.grant_advancement.not_found" "Advancement not found: %s"
     "tooltip.my_mod.energy_info" "%s ⚡ / %s ⚡"}
 
    "zh_cn.json"
-   {"itemGroup.my_mod.items" "AcademyCraft"
+    {"itemGroup.my_mod.items" "My Mod"
     "command.mcmod.grant_advancement.success" "已授予进度 %s 给 %s"
     "command.mcmod.grant_advancement.not_found" "未找到进度: %s"
     "tooltip.my_mod.energy_info" "%s ⚡ / %s ⚡"}
 
    "zh_tw.json"
-   {"itemGroup.my_mod.items" "AcademyCraft"
+    {"itemGroup.my_mod.items" "My Mod"
     "command.mcmod.grant_advancement.success" "已授予進度 %s 給 %s"
     "command.mcmod.grant_advancement.not_found" "未找到進度: %s"
     "tooltip.my_mod.energy_info" "%s ⚡ / %s ⚡"}
 
    "ja_jp.json"
-   {"itemGroup.my_mod.items" "AcademyCraft"
+    {"itemGroup.my_mod.items" "My Mod"
     "command.mcmod.grant_advancement.success" "進捗 %s を %s に付与しました"
     "command.mcmod.grant_advancement.not_found" "進捗が見つかりません: %s"
     "tooltip.my_mod.energy_info" "%s ⚡ / %s ⚡"}
 
    "ko_kr.json"
-   {"itemGroup.my_mod.items" "AcademyCraft"
+    {"itemGroup.my_mod.items" "My Mod"
     "command.mcmod.grant_advancement.success" "%s에게 발전 과제 %s을(를) 부여했습니다"
     "command.mcmod.grant_advancement.not_found" "발전 과제를 찾을 수 없습니다: %s"
     "tooltip.my_mod.energy_info" "%s ⚡ / %s ⚡"}
 
    "ru_ru.json"
-   {"itemGroup.my_mod.items" "AcademyCraft"
+    {"itemGroup.my_mod.items" "My Mod"
     "command.mcmod.grant_advancement.success" "Достижение %s выдано %s"
     "command.mcmod.grant_advancement.not_found" "Достижение не найдено: %s"
     "tooltip.my_mod.energy_info" "%s ⚡ / %s ⚡"}})

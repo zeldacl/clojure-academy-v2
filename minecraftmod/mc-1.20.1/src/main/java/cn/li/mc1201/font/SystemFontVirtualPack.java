@@ -147,7 +147,6 @@ public final class SystemFontVirtualPack implements PackResources {
         return null;
     }
 
-    @Override
     public boolean isHidden() { return true; }
 
     @Override

@@ -42,6 +42,13 @@
   - `cmd /c .\gradlew.bat runForgeGameTests`
   - `cmd /c .\gradlew.bat validateForgeGameTestLog`
   - `cmd /c .\gradlew.bat verifyForgeTesting`
+
+## 任务语义（Run vs Package）
+
+- **Run/开发任务**（`runClient`、`runServer`、`runData`、`runDatagen`、`runGametestServer`）：目标是“加载最新代码”，应保持轻路径；避免把 full `checkClojure`/LVT 打包链路硬塞入 run 图。
+- **Package/产物任务**（`assemble`、`jar`、`shadowJar`、`remapJar`）：必须走完整包级门禁（包含 `checkClojure`、AOT、必要的 remap/package 处理）。
+- 包级入口禁止与 `-PcheckNsOnly` / `-PcheckNsFile` 混用；需要做 focused check 时，单独执行检查任务，不要从 package 入口绕行。
+- 平台模块（Forge/Fabric）应消费 `ac` / `mcmod` 的编译产物与运行时输出，不再把这两个模块源码注入平台 sourceSets；`mc-1.20.1` 共享源码注入策略保持现状。
 - **故障定位**：
   - `cmd /c .\gradlew.bat :forge-1.20.1:bisectCompileClojure`
   - `cmd /c .\gradlew.bat :forge-1.20.1:bisectCheckClojure`

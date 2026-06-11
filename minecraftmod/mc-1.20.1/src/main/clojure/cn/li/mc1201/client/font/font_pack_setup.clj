@@ -6,7 +6,7 @@
     2. Look up calibrated TTF provider parameters (font-profiles).
     3. Build three font JSON variants (normal index 0, bold index 1, italic index 0).
     4. Build the virtual PackResources (SystemFontVirtualPack).
-    5. Register it via Forge's AddPackFindersEvent.
+    5. Register it through a platform-provided repository-source consumer.
     6. Set the CGUI fallback-scale-factor and base-height."
   (:require [cn.li.mc1201.client.font.system-font-detector :as detector]
             [cn.li.mc1201.client.font.font-profiles :as profiles]
@@ -17,7 +17,7 @@
            [net.minecraft.network.chat Component]
            [net.minecraft.world.flag FeatureFlagSet]
            [cn.li.mc1201.font SystemFontVirtualPack]
-           [net.minecraftforge.event AddPackFindersEvent]))
+           [java.util.function Consumer]))
 
 (defonce ^:private setup-called? (atom false))
 
@@ -29,7 +29,7 @@
     nil))
 
 (defn- setup-ttf-pack!
-  [^AddPackFindersEvent event]
+  [^Consumer add-repository-source!]
   (when-let [{:keys [path profile ext]} (detector/detect-system-font)]
     (if-let [{:keys [size shift] :as prof} (profiles/profile-for profile)]
       (let [jsons (profiles/build-font-jsons prof ext)
@@ -56,7 +56,7 @@
         (cgui-font/set-fallback-scale-factor! 1.0)
         (when-let [cf (:color-factor prof)]
           (cgui-font/set-ttf-color-factor! cf))
-        (.addRepositorySource event repo-source)
+        (.accept add-repository-source! repo-source)
         true)
       (do
         (log/warn "System font found but no calibration profile for :%s; falling back"
@@ -64,12 +64,11 @@
         false))))
 
 (defn on-add-pack-finders!
-  [^AddPackFindersEvent event]
-  (when (= PackType/CLIENT_RESOURCES (.getPackType event))
-    (when (compare-and-set! setup-called? false true)
-      (try
-        (when-not (setup-ttf-pack! event)
-          (setup-fallback!))
-        (catch Exception e
-          (log/error "System font pack setup failed: %s" (ex-message e))
-          (setup-fallback!))))))
+  [^Consumer add-repository-source!]
+  (when (compare-and-set! setup-called? false true)
+    (try
+      (when-not (setup-ttf-pack! add-repository-source!)
+        (setup-fallback!))
+      (catch Exception e
+        (log/error "System font pack setup failed: %s" (ex-message e))
+        (setup-fallback!)))))

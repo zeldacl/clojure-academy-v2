@@ -16,6 +16,7 @@ apply from: rootProject.file('gradle/platform_build_helpers.gradle')
 // runtime outputs plus content SPI/lifecycle, not as platform source.
 configureInjectedPlatformSources()
 configureAcContentRuntime()
+configureMcmodContentRuntime()
 
 loom {
     // Fabric does not use the Forge-specific Loom block.
@@ -55,6 +56,7 @@ dependencies {
     
     modImplementation "net.fabricmc:fabric-loader:0.15.11"
     modImplementation "net.fabricmc.fabric-api:fabric-api:0.92.0+1.20.1" // Fabric API
+    compileOnly "com.google.code.findbugs:jsr305:3.0.2"
 }
 
 addSharedClojureRuntimeDeps(null)
@@ -80,8 +82,16 @@ clojure {
 tasks.named('processResources').configure { exclude '**/*.clj', '**/*.cljc' }
 
 // Emit AOT classes directly to Java output.
-tasks.named('compileClojure').configure {
-    destinationDirectory = layout.buildDirectory.dir('classes/java/main')
+tasks.named('compileClojure').configure { task ->
+    def targetDirProvider = layout.buildDirectory.dir('classes/java/main')
+    def targetDirFile = targetDirProvider.get().asFile
+    if (task.metaClass.hasProperty(task, 'destinationDirectory')) {
+        task.destinationDirectory = targetDirProvider
+    } else if (task.metaClass.hasProperty(task, 'destinationDir')) {
+        task.destinationDir = targetDirFile
+    } else {
+        throw new GradleException("compileClojure task does not expose destinationDirectory/destinationDir: ${task.class.name}")
+    }
 }
 
 // Strip LVT from AOT class files.
@@ -138,6 +148,9 @@ tasks.named('jar').configure { dependsOn stripAotLvt }
 
 tasks.named('compileClojure').configure {
     dependsOn 'compileJava'
+    doFirst {
+        classpath = classpath + files(layout.buildDirectory.dir('classes/java/main')) + sourceSets.main.output.classesDirs
+    }
 }
 
 tasks.named('processResources').configure {

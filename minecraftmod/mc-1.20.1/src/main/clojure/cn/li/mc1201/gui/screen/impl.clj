@@ -162,7 +162,7 @@
             true)))
 
       (keyPressed [key-code scan-code modifiers]
-        ;; Per-screen key hook — matches original AcademyCraft TreeScreen.keyTyped:
+        ;; Per-screen key hook — matches original LambdaLib2 TreeScreen.keyTyped:
         ;;   if (key == KEY_ESCAPE) Option(gui.getWidget("link_page")).map(_.component[Cover].end())
         ;;   else super.keyTyped(ch, key)
         ;; Hook returns truthy → event consumed (skip CGUI dispatch + vanilla).

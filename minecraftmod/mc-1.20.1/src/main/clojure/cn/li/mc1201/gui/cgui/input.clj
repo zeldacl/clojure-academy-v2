@@ -31,7 +31,7 @@
               (catch Exception _ nil))))))))
 
 (defn mouse-click!
-  "Match original AcademyCraft (LambdaLib2 CGUI): event goes to the
+  "Match original LambdaLib2 CGUI behavior: event goes to the
   deepest widget only — no ancestor bubbling.  Focus likewise goes to
   the deepest widget, so editable textboxes inside overlays work."
   [root mx my left top button]

@@ -1,7 +1,7 @@
 (ns cn.li.mc1201.gui.cgui.renderer
   "CLIENT-ONLY CGUI rendering and root sizing logic.
 
-  Font size contract (matching original AcademyCraft FontOption behaviour):
+  Font size contract (matching original LambdaLib2 FontOption behavior):
   :font-size N produces N px text on screen.
   Formula: font-scale = font-size / CGUI-FONT-BASE-HEIGHT.
   CGUI-FONT-BASE-HEIGHT = 8.0 px (the glyph height on the font sheet).
@@ -31,7 +31,7 @@
 
 ;; Contract: font providers must produce 8px glyphs on the font sheet.
 ;; minecraft:default = 8px bitmap.  TTF must use size:8.0 (see font_datagen.clj).
-;; Result: :font-size N always = N px on screen, matching original AcademyCraft.
+;; Result: :font-size N always = N px on screen, matching original LambdaLib2 behavior.
 (def ^:const cgui-font-base-height 8.0)
 
 (defonce ^:private installed-cgui-renderer-runtime

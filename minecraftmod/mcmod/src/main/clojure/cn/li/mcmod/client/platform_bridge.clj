@@ -40,7 +40,7 @@
 
 (defn reset-client-bridge-for-test!
   []
-  (prt/install-impl! #'*client-bridge-ops* nil "client-bridge-test-reset")
+  (alter-var-root #'*client-bridge-ops* (constantly nil))
   nil)
 
 (defn on-slot-key-down!

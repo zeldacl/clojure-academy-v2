@@ -514,6 +514,6 @@
                   :reset-console (render-console-area! root right-area container pl :reset)
                   :skill-tree (render-skill-tree-area! root right-area container pl))))))))
 
-    root)))
+    root))
 
 

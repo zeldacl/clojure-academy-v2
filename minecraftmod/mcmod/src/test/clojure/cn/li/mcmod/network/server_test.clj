@@ -14,13 +14,13 @@
 (deftest handle-request-core-test
   (let [responses (atom [])]
     (server/register-handler "msg/a" (fn [payload _] {:ok (:x payload)}))
-    (server/handle-request "msg/a" 10 {:x 7} :player
+    (server/handle-request "msg/a" 10 {:x 7 :container-id 1} :player
                            (fn [req-id resp] (swap! responses conj [req-id resp])))
     (is (= [[10 {:ok 7}]] @responses)))
   (testing "nil handler response is normalized to empty map"
     (let [responses (atom [])]
       (server/register-handler "msg/b" (fn [_ _] nil))
-      (server/handle-request "msg/b" 1 {} :player
+      (server/handle-request "msg/b" 1 {:container-id 1} :player
                              (fn [req-id resp] (swap! responses conj [req-id resp])))
       (is (= [[1 {}]] @responses)))))
 
@@ -40,7 +40,7 @@
   (testing "handler exception returns structured error response"
     (let [responses (atom [])]
       (server/register-handler "boom" (fn [_ _] (throw (ex-info "broken" {}))))
-      (server/handle-request "boom" 6 {} :player
+      (server/handle-request "boom" 6 {:container-id 1} :player
                              (fn [req-id resp] (swap! responses conj [req-id resp])))
       (is (= 1 (count @responses)))
       (is (= 6 (ffirst @responses)))
@@ -81,7 +81,7 @@
       runtime-a
       (fn []
         (server/register-handler "a" (fn [payload _] {:ok (:v payload)}))
-        (server/handle-request "a" 1 {:v 11} :player
+        (server/handle-request "a" 1 {:v 11 :container-id 1} :player
                                (fn [req-id resp] (swap! responses* conj [:a req-id resp])))
         (is (= [[:a 1 {:ok 11}]] @responses*))))
     (server/call-with-network-server-runtime
@@ -89,13 +89,13 @@
       (fn []
         (is (empty? (:handlers (server/handlers-snapshot))))
         (server/register-handler "b" (fn [payload _] {:ok (:v payload)}))
-        (server/handle-request "b" 2 {:v 22} :player
+        (server/handle-request "b" 2 {:v 22 :container-id 2} :player
                                (fn [req-id resp] (swap! responses* conj [:b req-id resp])))
         (is (= [[:a 1 {:ok 11}] [:b 2 {:ok 22}]] @responses*))))
     (server/call-with-network-server-runtime
       runtime-a
       (fn []
-        (server/handle-request "a" 3 {:v 33} :player
+        (server/handle-request "a" 3 {:v 33 :container-id 3} :player
                                (fn [req-id resp] (swap! responses* conj [:a req-id resp])))
         (is (= [[:a 1 {:ok 11}] [:b 2 {:ok 22}] [:a 3 {:ok 33}]]
                @responses*))))))

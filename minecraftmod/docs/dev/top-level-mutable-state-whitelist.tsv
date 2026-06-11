@@ -10,6 +10,13 @@ ac/src/main/clojure/cn/li/ac/ability/service/context_dispatcher.clj	dispatcher-r
 ac/src/main/clojure/cn/li/ac/content/ability/meltdowner/damage_helper.clj	last-radiation-tick-id*	S2_RUNTIME_COMPONENT	ability/player-runtime	Server-tick dedup guard when tick-marks! runs more than once per server tick.
 ac/src/main/clojure/cn/li/ac/ability/spi_lifecycle.clj	lifecycle-registry-runtime-ref*	S2_RUNTIME_COMPONENT	ability/runtime-container	Installable lifecycle registry runtime pointer for composition-root wiring.
 ac/src/main/clojure/cn/li/ac/ability/discovery.clj	bootstrap-attempts*	S2_RUNTIME_COMPONENT	ability/discovery	Process-local bootstrap attempt counter for classpath provider discovery idempotency and tests.
-ac/src/main/clojure/cn/li/ac/block/wireless_matrix/inventory.clj	matrix-slot-schema-registration	S2_RUNTIME_COMPONENT	ac/wireless-matrix	Lazy, process-local registration guard for wireless-matrix slot schema bootstrap.
-ac/src/main/clojure/cn/li/ac/block/wireless_node/inventory.clj	node-slot-schema-registration	S2_RUNTIME_COMPONENT	ac/wireless-node	Lazy, process-local registration guard for wireless-node slot schema bootstrap.
+ac/src/main/clojure/cn/li/ac/block/wireless_matrix/logic.clj	matrix-slot-schema-registration	S2_RUNTIME_COMPONENT	ac/wireless-matrix	Lazy, process-local registration guard for wireless-matrix slot schema bootstrap.
+ac/src/main/clojure/cn/li/ac/block/wireless_node/logic.clj	node-slot-schema-registration	S2_RUNTIME_COMPONENT	ac/wireless-node	Lazy, process-local registration guard for wireless-node slot schema bootstrap.
+ac/src/main/clojure/cn/li/ac/client/toast.clj	toasts*	S2_RUNTIME_COMPONENT	ac/client-toast	Client-local transient toast queue used by overlay rendering.
+ac/src/main/clojure/cn/li/ac/client/font_init.clj	fonts-initialized?	S2_RUNTIME_COMPONENT	ac/client-font-init	Client-local one-time bootstrap guard for AC font registration.
+mc-1.20.1/src/main/clojure/cn/li/mc1201/client/font/font_pack_setup.clj	setup-called?	S2_RUNTIME_COMPONENT	mc1201/client-font-pack	Client-local one-time setup guard for injected font pack installation.
+mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/cgui/font.clj	cgui-font-base-height	S2_RUNTIME_COMPONENT	mc1201/cgui-font	Client-local mutable font metrics calibrated at runtime.
+mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/cgui/font.clj	fallback-scale-factor	S2_RUNTIME_COMPONENT	mc1201/cgui-font	Client-local fallback font scaling factor calibrated at runtime.
+mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/cgui/font.clj	ttf-color-factor	S2_RUNTIME_COMPONENT	mc1201/cgui-font	Client-local TrueType color compensation factor calibrated at runtime.
+mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/cgui/font.clj	registry	S2_RUNTIME_COMPONENT	mc1201/cgui-font	Client-local CGui font descriptor registry populated during startup.
 mcmod/src/main/clojure/cn/li/mcmod/hooks/core.clj	allowed-runtime-hook-keys*	S2_RUNTIME_COMPONENT	mcmod/hooks-core	Process-local allowlist for neutral runtime-hook validation extended by AC during startup.

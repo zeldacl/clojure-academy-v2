@@ -1,7 +1,8 @@
 (ns cn.li.mcmod.content
   "Helpers for triggering shared game content initialization via content SPI."
   (:require [clojure.string :as str])
-  (:import [cn.li.mcmod.content.spi ContentInitBootstraps ClojureNamespaceBootstrapInvoker]))
+  (:import [cn.li.mcmod.content.spi ContentInitBootstraps
+                                     ClojureNamespaceBootstrapInvoker]))
 
 (defn- content-core-namespace
   "Return the conventional Clojure entry namespace for a content id.
@@ -19,7 +20,9 @@
 (defn- require-content-core!
   [content-id]
   (when-let [ns-name (content-core-namespace content-id)]
-    (ClojureNamespaceBootstrapInvoker/requireAndInvoke ns-name "register-lifecycle-hooks!")
+    (ClojureNamespaceBootstrapInvoker/requireAndInvoke
+      ns-name
+      "register-lifecycle-hooks!")
     true))
 
 (defn register-content!
@@ -30,7 +33,7 @@
   platform/datagen caller so mcmod stays content-agnostic."
   [content-id]
   (try
-    (when-not (or (ContentInitBootstraps/register (str content-id))
+    (when-not (or (boolean (ContentInitBootstraps/register (str content-id)))
                   (require-content-core! content-id))
       (println (str "[my_mod] WARNING: no content bootstrap found for " content-id)))
     (catch Throwable t
@@ -48,7 +51,7 @@
   "Best-effort registration of every content module discovered through ServiceLoader."
   []
   (try
-    (let [registered (ContentInitBootstraps/registerAll)]
+    (let [registered (long (ContentInitBootstraps/registerAll))]
       (when (zero? registered)
         (println "[my_mod] WARNING: no content bootstrap providers found")))
     (catch Throwable t

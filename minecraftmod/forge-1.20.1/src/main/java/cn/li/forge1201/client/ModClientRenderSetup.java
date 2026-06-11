@@ -4,6 +4,7 @@ import cn.li.forge1201.MyMod1201;
 import cn.li.forge1201.client.render.ForgeClientRenderRegistry;
 import cn.li.mc1201.clj.ClojureInterop;
 import net.minecraft.server.packs.PackType;
+import net.minecraft.server.packs.repository.RepositorySource;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.EntityRenderersEvent;
 import net.minecraftforge.client.event.RegisterItemDecorationsEvent;
@@ -41,6 +42,6 @@ public final class ModClientRenderSetup {
         ClojureInterop.invoke(
             "cn.li.mc1201.client.font.font-pack-setup",
             "on-add-pack-finders!",
-            event);
+            (java.util.function.Consumer<RepositorySource>) event::addRepositorySource);
     }
 }
