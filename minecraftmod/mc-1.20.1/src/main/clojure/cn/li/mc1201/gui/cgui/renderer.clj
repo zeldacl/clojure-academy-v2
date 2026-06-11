@@ -12,6 +12,7 @@
             [cn.li.mc1201.gui.cgui.font :as font-api]
             [cn.li.mc1201.gui.cgui.assets :as assets]
             [cn.li.mc1201.gui.cgui.traversal :as traversal]
+            [cn.li.mcmod.gui.components :as gui-comp]
             [cn.li.mcmod.util.log :as log])
   (:import (net.minecraft.client Minecraft)
            (net.minecraft.client.gui GuiGraphics Font)
@@ -186,7 +187,7 @@
           (let [blend-tex (ensure-resource-location (:blend-tex state))
                 line-tex (ensure-resource-location (:line-tex state))
                 margin (double (or (:margin state) 4.0))
-                color-int (unchecked-int (or (:color state) 0x80FFFFFF))
+                color-int (unchecked-int (or (:color state) gui-comp/blend-quad-default-color))
                 r (/ (double (bit-and (bit-shift-right color-int 16) 0xFF)) 255.0)
                 g (/ (double (bit-and (bit-shift-right color-int 8) 0xFF)) 255.0)
                 b (/ (double (bit-and color-int 0xFF)) 255.0)

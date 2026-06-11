@@ -529,7 +529,7 @@
         bg (cgui-core/create-widget :name "info_area_bg" :pos [0 0] :size [info-area-expect-width info-area-min-height])
         state-a (info-area-state-atom info-area)]
     ;; True TechUI BlendQuad (nine-slice + line overlays), rendered by runtime.
-    (comp/add-component! bg (comp/blend-quad :margin 4.0 :color 0x80FFFFFF))
+    (comp/add-component! bg (comp/blend-quad :margin 4.0 :color comp/blend-quad-default-color))
     (cgui-core/set-z-level! bg -100)
     (cgui-core/add-widget! info-area bg)
     (swap! (:metadata info-area) assoc :tech-ui/info-area-bg bg)

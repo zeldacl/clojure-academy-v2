@@ -166,7 +166,7 @@
       :breathe-effect (make-component :breathe-effect {:phase 0.0 :speed 1.0})
       :blendquad (make-component :blendquad
                                  {:margin (double (:margin spec 4.0))
-                                  :color (unchecked-int (or (:color spec) 0x80FFFFFF))
+                                  :color (unchecked-int (or (:color spec) blend-quad-default-color))
                                   :blend-tex (:blend-tex spec "textures/guis/blend_quad.png")
                                   :line-tex (:line-tex spec "textures/guis/line.png")})
       (throw (ex-info "Unknown component kind" {:kind kind})))))
@@ -337,6 +337,22 @@
   (swap! (component-state elem-list) update :progress (fnil #(max 0 (dec %)) 0))
   elem-list)
 
+(defn mono-blend
+  "Replicates AcademyCraft Colors.monoBlend.
+   Returns an ARGB int from a grayscale value and an alpha.
+   - gray:  0.0 = black, 1.0 = white
+   - alpha: 0.0 = fully transparent, 1.0 = fully opaque"
+  [gray alpha]
+  (let [g (int (* 255.0 (double gray)))
+        a (int (* 255.0 (double alpha)))]
+    (unchecked-int (bit-or (bit-shift-left a 24)
+                           (bit-shift-left g 16)
+                           (bit-shift-left g 8)
+                           g))))
+
+;; Original: Colors.monoBlend(0.0f, 0.5f) — black at 50% alpha
+(def blend-quad-default-color (mono-blend 0.0 0.5))
+
 (defn breathe-effect []
   {::kind :breathe-effect})
 
@@ -345,9 +361,9 @@
 
   Keys:
   - :margin (default 4.0): outer margin for nine-slice.
-  - :color  (default 0x80FFFFFF): ARGB tint/alpha applied when rendering."
+  - :color  (default mono-blend 0.0 0.5, black 50% alpha): ARGB tint/alpha applied when rendering."
   [& {:keys [margin color]
-      :or {margin 4.0 color 0x80FFFFFF}}]
+      :or {margin 4.0 color blend-quad-default-color}}]
   {::kind :blendquad :margin margin :color color})
 
 (defn text-field
