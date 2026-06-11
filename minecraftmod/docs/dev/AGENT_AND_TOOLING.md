@@ -122,6 +122,7 @@
 2. **精确读取**：优先小范围读取，避免一次性加载超大文件。
 3. **上下文控制**：按任务最小化上下文，避免无关内容污染判断。
 4. **搜索排除**：忽略 `build/`、`.gradle/`、历史归档目录等噪音路径。
+5. **禁止手动修改 generated 目录**：`src/generated/` 下的所有文件由 DataGen（`runData`）自动生成，**禁止手工编辑**。修改逻辑应改对应的 DataProvider 源（如 `lang_data.clj`、`item_model_provider.clj` 等），然后重新跑 `runData` 重新生成。
 
 ## 测试约定（ac / mcmod）
 
