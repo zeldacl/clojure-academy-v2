@@ -91,8 +91,9 @@
 
   Items with :creative-tab nil are skipped (e.g. internal logo item)."
   [^BuildCreativeModeTabContentsEvent event]
-  (let [tab-location (.location (.getTabKey event))]
-    (when (= (.getNamespace tab-location) (modid/*mod-id*))
+  (let [tab-location (.location (.getTabKey event))
+        mod-id-str (var-get #'modid/*mod-id*)]
+    (when (= (.getNamespace tab-location) mod-id-str)
       (doseq [entry (registry-metadata/get-all-creative-tab-entries)]
         (when (some? (:tab entry))
           (accept-entry! event entry))))))

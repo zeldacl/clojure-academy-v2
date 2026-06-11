@@ -115,6 +115,22 @@
   ([texture-path]
    {::kind :drawtexture :texture texture-path}))
 
+(defn mono-blend
+  "Replicates AcademyCraft Colors.monoBlend.
+   Returns an ARGB int from a grayscale value and an alpha.
+   - gray:  0.0 = black, 1.0 = white
+   - alpha: 0.0 = fully transparent, 1.0 = fully opaque"
+  [gray alpha]
+  (let [g (int (* 255.0 (double gray)))
+        a (int (* 255.0 (double alpha)))]
+    (unchecked-int (bit-or (bit-shift-left a 24)
+                           (bit-shift-left g 16)
+                           (bit-shift-left g 8)
+                           g))))
+
+;; Original: Colors.monoBlend(0.0f, 0.5f) — black at 50% alpha
+(def blend-quad-default-color (mono-blend 0.0 0.5))
+
 (defn- create-native-component
   [spec]
   (let [kind (::kind spec)]
@@ -336,22 +352,6 @@
 (defn list-progress-last! [elem-list]
   (swap! (component-state elem-list) update :progress (fnil #(max 0 (dec %)) 0))
   elem-list)
-
-(defn mono-blend
-  "Replicates AcademyCraft Colors.monoBlend.
-   Returns an ARGB int from a grayscale value and an alpha.
-   - gray:  0.0 = black, 1.0 = white
-   - alpha: 0.0 = fully transparent, 1.0 = fully opaque"
-  [gray alpha]
-  (let [g (int (* 255.0 (double gray)))
-        a (int (* 255.0 (double alpha)))]
-    (unchecked-int (bit-or (bit-shift-left a 24)
-                           (bit-shift-left g 16)
-                           (bit-shift-left g 8)
-                           g))))
-
-;; Original: Colors.monoBlend(0.0f, 0.5f) — black at 50% alpha
-(def blend-quad-default-color (mono-blend 0.0 0.5))
 
 (defn breathe-effect []
   {::kind :breathe-effect})

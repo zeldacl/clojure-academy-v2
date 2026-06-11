@@ -64,22 +64,72 @@ remapJar {
 clojure {
     builds {
         main {
-            aotAll() 
+            aotAll()
             reflection = 'warn'
         }
     }
 }
 
+// Exclude Clojure sources from JAR.
+tasks.named('processResources').configure { exclude '**/*.clj', '**/*.cljc' }
+
+// Emit AOT classes directly to Java output.
 tasks.named('compileClojure').configure {
-    dependsOn 'compileJava'
+    destinationDirectory = layout.buildDirectory.dir('classes/java/main')
 }
 
+// Strip LVT from AOT class files.
+def stripAotLvt = tasks.register('stripAotLvt') {
+    dependsOn tasks.named('compileClojure')
+    def classesDir = layout.buildDirectory.dir('classes/java/main')
+    inputs.dir(classesDir)
+    outputs.dir(classesDir)
+    doLast {
+        def dir = classesDir.get().asFile
+        if (!dir.isDirectory()) return
+        int stripped = 0
+        dir.eachFileRecurse { file ->
+            if (!file.name.endsWith('.class')) return
+            try {
+                def reader = new org.objectweb.asm.ClassReader(file.bytes)
+                def writer = new org.objectweb.asm.ClassWriter(0)
+                def dropped = [0]
+                reader.accept(new org.objectweb.asm.ClassVisitor(
+                        org.objectweb.asm.Opcodes.ASM9, writer) {
+                    org.objectweb.asm.MethodVisitor visitMethod(int ac, String nm, String desc,
+                                                                  String sig, String[] ex) {
+                        def mv = super.visitMethod(ac, nm, desc, sig, ex)
+                        return new org.objectweb.asm.MethodVisitor(
+                                org.objectweb.asm.Opcodes.ASM9, mv) {
+                            void visitLocalVariable(String n, String d, String s,
+                                                    org.objectweb.asm.Label st,
+                                                    org.objectweb.asm.Label en,
+                                                    int idx) { dropped[0]++ }
+                        }
+                    }
+                }, 0)
+                if (dropped[0] > 0) {
+                    file.bytes = writer.toByteArray()
+                    stripped++
+                }
+            } catch (Exception ex) {
+                logger.warn("[stripAotLvt] skipping ${file.name}: ${ex.message}")
+            }
+        }
+        if (stripped > 0) logger.lifecycle('[stripAotLvt] stripped LVT from {} AOT classes', stripped)
+    }
+}
 tasks.named('classes').configure {
     setDependsOn([
         tasks.named('compileJava'),
         tasks.named('processResources'),
-        tasks.named('compileClojure')
+        tasks.named('compileClojure'),
+        tasks.named('stripAotLvt')
     ])
+}
+
+tasks.named('compileClojure').configure {
+    dependsOn 'compileJava'
 }
 
 tasks.named('processResources').configure {

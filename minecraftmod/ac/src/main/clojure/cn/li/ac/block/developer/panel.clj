@@ -395,7 +395,7 @@
                           (-> st
                               (update :lines #(-> % (conj err-msg) (clamp-lines)))
                               (assoc :phase :idle :dev-grace 0 :exec-cmd nil)))]
-          (swap! state-a update-fn)))))
+          (swap! state-a update-fn))))))
 
 (defn- render-console-area!
   "Render text console in parent_right/area."
