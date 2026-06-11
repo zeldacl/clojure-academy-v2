@@ -27,6 +27,7 @@
             [cn.li.ac.config.gameplay :as gameplay]
             [cn.li.ac.ability.util.toggle :as toggle]
             [cn.li.ac.ability.messages :as catalog]
+            [cn.li.ac.client.toast :as toast]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.runtime.owner :as owner]
@@ -864,7 +865,8 @@
                      :y (int (/ screen-height 2))
                      :phase phase
                      :intensity 1.0})]
-    {:elements (vec (concat base-elements current-charging-elements vm-wave (keep identity [crosshair])))}))
+    {:elements (vec (concat base-elements current-charging-elements vm-wave (keep identity [crosshair])
+                            (toast/build-toast-elements screen-width screen-height now-ms)))}))
 
 (defn- on-context-channel-push! [{:keys [ctx-id channel payload]}]
   (fx-registry/dispatch-fx-channel! ctx-id channel payload)

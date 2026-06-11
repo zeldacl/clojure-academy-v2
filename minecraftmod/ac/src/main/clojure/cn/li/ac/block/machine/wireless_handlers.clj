@@ -6,7 +6,8 @@
             [cn.li.mcmod.gui.container.sync-routing :as sync-routing]
             [cn.li.mcmod.network.server :as net-server]
             [cn.li.mcmod.platform.position :as pos]
-            [cn.li.mcmod.util.log :as log])
+            [cn.li.mcmod.util.log :as log]
+            [cn.li.ac.wireless.feedback :as feedback])
   (:import [cn.li.acapi.wireless IWirelessNode]))
 
 (defn wireless-node->info
@@ -84,20 +85,21 @@
                 (if-let [node (net-helpers/get-tile-at world {:pos-x (:node-x node-pos)
                                                               :pos-y (:node-y node-pos)
                                                               :pos-z (:node-z node-pos)})]
-                  {:success (boolean (link! device node pass need-auth?))}
-                  {:success false})
-                {:success false}))
+                  (let [result (link! device node pass need-auth?)]
+                    (assoc result :messages (feedback/result->messages message-domain result)))
+                  {:success false :messages (feedback/result->messages message-domain {:success false :reason :not-found})})
+                {:success false :messages (feedback/result->messages message-domain {:success false :reason :aborted})}))
             (catch Exception e
-              {:success false :error (ex-message e)})))
+              {:success false :error (ex-message e) :messages (feedback/result->messages message-domain {:success false :reason :aborted})})))
         handle-disconnect
         (fn [payload player]
           (try
             (let [device (tile-from-payload payload player)]
               (if device
-                (do (unlink! device) {:success true})
-                {:success false}))
+                (do (unlink! device) {:success true :messages (feedback/result->messages message-domain {:success true})})
+                {:success false :messages (feedback/result->messages message-domain {:success false :reason :aborted})}))
             (catch Exception e
-              {:success false :error (ex-message e)})))]
+              {:success false :error (ex-message e) :messages (feedback/result->messages message-domain {:success false :reason :aborted})})))]
     (net-server/register-handler (msg :list-nodes) handle-list-nodes)
     (net-server/register-handler (msg :connect) handle-connect)
     (net-server/register-handler (msg :disconnect) handle-disconnect)

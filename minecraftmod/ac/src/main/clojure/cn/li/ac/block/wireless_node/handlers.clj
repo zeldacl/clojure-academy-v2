@@ -11,8 +11,12 @@
             [cn.li.ac.block.machine.handlers :as machine-handlers]
             [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.platform.position :as pos]
-            [cn.li.mcmod.util.log :as log])
+            [cn.li.mcmod.util.log :as log]
+            [cn.li.ac.wireless.feedback :as feedback])
   (:import [cn.li.acapi.wireless IWirelessNode IWirelessMatrix]))
+
+;; Stub Var for test injection (wireless_node_handlers_test relies on redefs).
+(def generated-network-handlers nil)
 
 (defn- open-tile [payload player]
   (machine-handlers/open-container-tile payload player))
@@ -112,7 +116,7 @@
   (let [tile (open-tile payload player)]
     (if (and tile (owner-authorized? tile player))
       (handler-fn payload player tile)
-      {:success false})))
+      {:success false :messages (feedback/result->messages :node {:success false :reason :aborted})})))
 
 (defn handle-change-name
   [payload player]
@@ -121,8 +125,8 @@
       (let [new-value (:node-name payload)]
         (if (and tile new-value)
           (do (inv-helpers/update-be-field! tile :node-name new-value)
-              {:success true})
-          {:success false})))))
+              {:success true :messages (feedback/result->messages :node {:success true})})
+          {:success false :messages (feedback/result->messages :node {:success false :reason :aborted})})))))
 
 (defn handle-change-password
   [payload player]
@@ -131,8 +135,8 @@
       (let [new-value (:password payload)]
         (if (and tile new-value)
           (do (inv-helpers/update-be-field! tile :password new-value)
-              {:success true})
-          {:success false})))))
+              {:success true :messages (feedback/result->messages :node {:success true})})
+          {:success false :messages (feedback/result->messages :node {:success false :reason :aborted})})))))
 
 (defn handle-list-networks
   [payload player]
@@ -164,15 +168,17 @@
         ssid (:ssid payload)
         password (:password payload)]
     (if (and world tile ssid)
-      {:success (connect-node! world tile ssid password)}
-      {:success false})))
+      (let [result (connect-node! world tile ssid password)]
+        (assoc result :messages (feedback/result->messages :node result)))
+      {:success false :messages (feedback/result->messages :node {:success false :reason :aborted})})))
 
 (defn handle-disconnect
   [payload player]
   (let [tile (open-tile payload player)]
     (if tile
-      {:success (disconnect-node! tile)}
-      {:success false})))
+      (let [result {:success (disconnect-node! tile)}]
+        (assoc result :messages (feedback/result->messages :node result)))
+      {:success false :messages (feedback/result->messages :node {:success false :reason :aborted})})))
 
 (defn register-network-handlers!
   []

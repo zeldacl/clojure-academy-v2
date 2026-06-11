@@ -19,4 +19,4 @@
         (is (= 3 @(:plate-count container)))
         (is (= 2 @(:core-level container)))
         (is (false? @(:is-working container)))
-        (is (= 40.0 @(:bandwidth container))))))
+        (is (= 40.0 @(:bandwidth container)))))))

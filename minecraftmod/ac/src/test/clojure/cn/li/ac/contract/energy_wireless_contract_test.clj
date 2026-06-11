@@ -47,13 +47,13 @@
                        [5 0 0] (stubs/mutable-node {:energy 100.0 :max-energy 1000.0 :bandwidth 1.0e6})})]
       (stubs/with-tile-world tiles
         (fn []
-          (is (true? (commands/create-network! wd matrix-vb "contract-net" "pw")))
+          (is (:success (commands/create-network! wd matrix-vb "contract-net" "pw")))
           (let [net (lookup/get-network-by-ssid wd "contract-net")
                 node-a (get @tiles [3 0 0])
                 node-b (get @tiles [5 0 0])]
-            (is (false? (commands/link-node-to-network! wd net node-a-vb "wrong")))
-            (is (true? (commands/link-node-to-network! wd net node-a-vb "pw")))
-            (is (true? (commands/link-node-to-network! wd net node-b-vb "pw")))
+            (is (not (:success (commands/link-node-to-network! wd net node-a-vb "wrong"))))
+            (is (:success (commands/link-node-to-network! wd net node-a-vb "pw")))
+            (is (:success (commands/link-node-to-network! wd net node-b-vb "pw")))
             (with-redefs [network-config/update-interval-ticks (constantly 1)
                           network-config/buffer-max (constantly 1.0e6)
                           shuffle identity]
@@ -92,10 +92,10 @@
                        [100 0 0] (stubs/mutable-node {:energy 30.0 :max-energy 100.0})})]
       (stubs/with-tile-world tiles
         (fn []
-          (is (true? (commands/create-network! wd matrix-vb "cap-net" "pw")))
+          (is (:success (commands/create-network! wd matrix-vb "cap-net" "pw")))
           (let [net (lookup/get-network-by-ssid wd "cap-net")]
-            (is (true? (commands/link-node-to-network! wd net near-a "pw")))
-            (is (false? (commands/link-node-to-network! wd net near-b "pw")))
+            (is (:success (commands/link-node-to-network! wd net near-a "pw")))
+            (is (not (:success (commands/link-node-to-network! wd net near-b "pw"))))
             (commands/unlink-node-from-network! net near-a)
-            (is (false? (commands/link-node-to-network! wd net far-node "pw")))
-            (is (true? (commands/link-node-to-network! wd net near-b "pw")))))))))
+            (is (not (:success (commands/link-node-to-network! wd net far-node "pw"))))
+            (is (:success (commands/link-node-to-network! wd net near-b "pw")))))))))

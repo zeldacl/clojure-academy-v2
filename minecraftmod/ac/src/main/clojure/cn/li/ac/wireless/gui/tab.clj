@@ -11,6 +11,7 @@
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.ac.wireless.gui.tab.role-config :as role-config]
             [cn.li.ac.wireless.gui.tab.view :as tab-view]
+            [cn.li.ac.client.toast :as toast]
             [cn.li.mcmod.util.log :as log]))
 
 (defn- panel-network-owner
@@ -44,13 +45,19 @@
                                                             (net-client/send-to-server
                                                               owner
                                                               (disconnect-msg) routing-payload
-                                                              (fn [_] (rebuild!))))
+                                                              (fn [resp]
+                                                                (doseq [m (:messages resp)]
+                                                                  (toast/show-toast! {:message-key (:key m) :args (:args m)}))
+                                                                (rebuild!))))
                                            :connect-fn   (fn [target pass]
                                                            (net-client/send-to-server
                                                              owner
                                                              (connect-msg)
                                                              (connect-payload-fn routing-payload target pass)
-                                                             (fn [_] (rebuild!))))})
+                                                             (fn [resp]
+                                                               (doseq [m (:messages resp)]
+                                                                 (toast/show-toast! {:message-key (:key m) :args (:args m)}))
+                                                               (rebuild!))))})
                   (tab-view/set-connected-row-logo! panel connected-row-logo-path))))]
       (rebuild!))))
 

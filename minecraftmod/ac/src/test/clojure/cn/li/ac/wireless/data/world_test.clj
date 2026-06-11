@@ -87,8 +87,8 @@
 (deftest create-network-uniqueness-test
   (let [wd (world/create-world-data (test-world :w))
         matrix (vb/create-vmatrix 0 0 0)]
-    (is (true? (commands/create-network! wd matrix "s1" "pw")))
-    (is (false? (commands/create-network! wd matrix "s1" "pw2")))))
+    (is (:success (commands/create-network! wd matrix "s1" "pw")))
+    (is (not (:success (commands/create-network! wd matrix "s1" "pw2"))))))
 
 (deftest create-network-registers-lookups-test
   (let [w (test-world :w-lu)
@@ -97,7 +97,7 @@
         matrix-vb (vb/create-vmatrix 0 0 0)]
     (stubs/with-tile-world tiles
       (fn []
-        (is (true? (commands/create-network! wd matrix-vb "reg" "pw")))
+        (is (:success (commands/create-network! wd matrix-vb "reg" "pw")))
         (is (some? (lookup/get-network-by-matrix wd matrix-vb)))
         (is (some? (lookup/get-network-by-ssid wd "reg")))
         (is (pos? (count (world-registry/spatial-index wd))))))))
@@ -112,9 +112,9 @@
         node-vb (vb/create-vnode 3 0 0)]
     (stubs/with-tile-world tiles
       (fn []
-        (is (true? (commands/create-network! wd matrix-vb "dnet" "p")))
+        (is (:success (commands/create-network! wd matrix-vb "dnet" "p")))
         (let [net (lookup/get-network-by-ssid wd "dnet")]
-          (is (true? (commands/link-node-to-network! wd net node-vb "p")))
+          (is (:success (commands/link-node-to-network! wd net node-vb "p")))
           (is (some? (get (world-registry/net-lookup wd) node-vb)))
           (commands/destroy-network! wd net)
           (is (nil? (get (world-registry/net-lookup wd) node-vb)))
@@ -123,9 +123,9 @@
 (deftest change-network-ssid-refreshes-string-lookup-test
   (let [wd (world/create-world-data (test-world :w-rename))
         matrix-vb (vb/create-vmatrix 0 0 0)]
-    (is (true? (commands/create-network! wd matrix-vb "old" "p")))
+    (is (:success (commands/create-network! wd matrix-vb "old" "p")))
     (let [network (lookup/get-network-by-ssid wd "old")]
-      (is (true? (commands/change-network-ssid! network "new")))
+      (is (:success (commands/change-network-ssid! network "new")))
       (let [network (lookup/get-network-by-ssid wd "new")]
         (is (= "new" (network-state/get-ssid network)))
         (is (nil? (lookup/get-network-by-ssid wd "old")))
@@ -143,8 +143,8 @@
     (stubs/with-tile-world tiles
       (fn []
         (let [wd (world/create-world-data world-id)]
-          (is (true? (commands/create-network! wd matrix-vb "persist" "pw")))
-          (is (true? (commands/link-node-to-network! wd (lookup/get-network-by-ssid wd "persist") node-vb "pw")))
+          (is (:success (commands/create-network! wd matrix-vb "persist" "pw")))
+          (is (:success (commands/link-node-to-network! wd (lookup/get-network-by-ssid wd "persist") node-vb "pw")))
           (let [conn (commands/ensure-node-connection! wd node-conn-vb)]
             (is (true? (node-conn/add-generator! conn gen-vb))))
           (world/register-world-data! world-id wd)

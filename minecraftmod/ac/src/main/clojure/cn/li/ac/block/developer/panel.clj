@@ -55,6 +55,16 @@
     (when-let [pb (comp/get-widget-component w :progressbar)]
       (comp/set-progress! pb v))))
 
+(def ^:private max-console-lines 50)
+
+(defn- clamp-lines
+  "Keep at most `max-console-lines` entries, dropping oldest first."
+  [lines]
+  (let [cnt (count lines)]
+    (if (> cnt max-console-lines)
+      (subvec (vec lines) (- cnt max-console-lines))
+      (vec lines))))
+
 (defn- set-drawtexture-path! [root path texture-path]
   (when (string? texture-path)
     (when-let [w (cgui-core/find-widget root path)]
@@ -504,6 +514,6 @@
                   :reset-console (render-console-area! root right-area container pl :reset)
                   :skill-tree (render-skill-tree-area! root right-area container pl))))))))
 
-    root))
+    root)))
 
 

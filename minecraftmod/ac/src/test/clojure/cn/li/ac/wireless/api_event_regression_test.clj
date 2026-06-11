@@ -18,11 +18,11 @@
                     world-registry/get-world-data (fn [_] :world-data)
                     vb/create-vmatrix (fn [_] :matrix-vb)
                     cn.li.ac.wireless.data.network-lookup/get-network-by-matrix (constantly nil)
-                    commands/create-network! (fn [_ _ _ _] true)
+                    commands/create-network! (fn [_ _ _ _] {:success true})
                     resolver/matrix-capability (fn [tile]
                                                  (when (= tile :matrix-tile) matrix))
                     platform-events/fire-event! (fn [evt] (swap! events conj evt))]
-        (is (true? (wireless-api/create-network! :matrix-tile "ssid-a" "pw")))
+        (is (:success (wireless-api/create-network! :matrix-tile "ssid-a" "pw")))
         (is (= 1 (count @events)))
         (let [event (first @events)]
           (is (= :topology/network (:kind event)))
@@ -36,10 +36,10 @@
                   world-registry/get-world-data (fn [_] :world-data)
                   vb/create-vmatrix (fn [_] :matrix-vb)
                   cn.li.ac.wireless.data.network-lookup/get-network-by-matrix (constantly nil)
-                  commands/create-network! (fn [_ _ _ _] false)
+                  commands/create-network! (fn [_ _ _ _] {:success false})
                   resolver/matrix-capability (constantly (stubs/fake-matrix))
                   platform-events/fire-event! (fn [evt] (swap! events conj evt))]
-      (is (false? (wireless-api/create-network! :matrix-tile "ssid-a" "pw")))
+      (is (not (:success (wireless-api/create-network! :matrix-tile "ssid-a" "pw"))))
       (is (empty? @events)))))
 
 (deftest destroy-network-fires-when-destroyed
@@ -49,11 +49,11 @@
     (with-redefs [wireless-api/get-wireless-net-by-matrix (fn [_] net)
                   platform-be/be-get-world-safe (fn [_] :world)
                   world-registry/get-world-data (fn [_] :world-data)
-                  commands/destroy-network! (fn [_ _] true)
+                  commands/destroy-network! (fn [_ _] {:success true})
                   resolver/matrix-capability (fn [tile]
                                                (when (= tile :mt) matrix))
                   platform-events/fire-event! (fn [evt] (swap! events conj evt))]
-      (is (true? (wireless-api/destroy-network! :mt)))
+      (is (:success (wireless-api/destroy-network! :mt)))
       (is (= 1 (count @events)))
       (let [event (first @events)]
         (is (= :destroyed (:action event)))
@@ -74,13 +74,13 @@
                     platform-be/be-get-world-safe (fn [_] :world)
                     world-registry/get-world-data (fn [_] :world-data)
                     vb/create-vnode (fn [_] :node-vb)
-                    commands/link-node-to-network! (fn [_ _ _ _] true)
+                    commands/link-node-to-network! (fn [_ _ _ _] {:success true})
                     resolver/matrix-capability (fn [tile]
                                                    (when (= tile :matrix-tile) matrix))
                     resolver/node-capability (fn [tile]
                                                  (when (= tile :node-tile) node))
                     platform-events/fire-event! (fn [evt] (swap! events conj evt))]
-        (is (true? (wireless-api/link-node-to-network! :node-tile :matrix-tile "pw")))
+        (is (:success (wireless-api/link-node-to-network! :node-tile :matrix-tile "pw")))
         (is (= 1 (count @events)))
         (let [event (first @events)]
           (is (= :topology/node (:kind event)))
@@ -98,18 +98,30 @@
                     vb/create-vnode-conn (fn [_] :node-conn-vb)
                     commands/ensure-node-connection! (fn [_ _] :conn)
                     vb/create-vgenerator (fn [_] :gen-vb)
-                    commands/link-generator-to-connection! (fn [_ _ _] true)
+                    commands/link-generator-to-connection! (fn [_ _ _] {:success true})
                     resolver/node-capability (fn [tile]
                                                  (when (= tile :node-tile) node))
                     resolver/generator-capability (fn [tile]
                                                     (when (= tile :gen-tile) gen))
                     platform-events/fire-event! (fn [evt] (swap! events conj evt))]
-        (is (true? (wireless-api/link-generator-to-node! :gen-tile :node-tile "pw" true)))
+        (is (:success (wireless-api/link-generator-to-node! :gen-tile :node-tile "pw" true)))
         (is (= 1 (count @events)))
         (let [event (first @events)]
           (is (= :generator-linked (:action event)))
           (is (= node (:node event)))
           (is (= gen (:generator event))))))))
+
+(deftest link-generator-fails-on-wrong-password
+  (testing "link-generator-to-node! returns password reason when auth fails"
+    (let [events (atom [])
+          node (stubs/fake-node "correct-pw")]
+      (with-redefs [resolver/node-capability (fn [tile]
+                                               (when (= tile :node-tile) node))
+                    platform-events/fire-event! (fn [evt] (swap! events conj evt))]
+        (let [result (wireless-api/link-generator-to-node! :gen-tile :node-tile "wrong-pw" true)]
+          (is (not (:success result)))
+          (is (= :password (:reason result)))
+          (is (empty? @events)))))))
 
 (deftest link-receiver-fires-receiver-linked-map
   (testing "link-receiver-to-node! posts map when auth and link succeeds"
@@ -121,15 +133,27 @@
                     vb/create-vnode-conn (fn [_] :node-conn-vb)
                     commands/ensure-node-connection! (fn [_ _] :conn)
                     vb/create-vreceiver (fn [_] :rec-vb)
-                    commands/link-receiver-to-connection! (fn [_ _ _] true)
+                    commands/link-receiver-to-connection! (fn [_ _ _] {:success true})
                     resolver/node-capability (fn [tile]
                                                  (when (= tile :node-tile) node))
                     resolver/receiver-capability (fn [tile]
                                                    (when (= tile :rec-tile) rec))
                     platform-events/fire-event! (fn [evt] (swap! events conj evt))]
-        (is (true? (wireless-api/link-receiver-to-node! :rec-tile :node-tile "pw" true)))
+        (is (:success (wireless-api/link-receiver-to-node! :rec-tile :node-tile "pw" true)))
         (is (= 1 (count @events)))
         (let [event (first @events)]
           (is (= :receiver-linked (:action event)))
           (is (= node (:node event)))
           (is (= rec (:receiver event))))))))
+
+(deftest link-receiver-fails-on-wrong-password
+  (testing "link-receiver-to-node! returns password reason when auth fails"
+    (let [events (atom [])
+          node (stubs/fake-node "correct-pw")]
+      (with-redefs [resolver/node-capability (fn [tile]
+                                               (when (= tile :node-tile) node))
+                    platform-events/fire-event! (fn [evt] (swap! events conj evt))]
+        (let [result (wireless-api/link-receiver-to-node! :rec-tile :node-tile "wrong-pw" true)]
+          (is (not (:success result)))
+          (is (= :password (:reason result)))
+          (is (empty? @events)))))))
