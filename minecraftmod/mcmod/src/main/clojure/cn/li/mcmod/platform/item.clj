@@ -66,13 +66,19 @@
 
 (def ^:private ^:dynamic *item-factory* nil)
 (def ^:private ^:dynamic *item-stack-resolver* nil)
+(def ^:private ^:dynamic *item-tag-checker* nil)
+(def ^:private ^:dynamic *tag-item-resolver* nil)
 
 (defn install-item-factories!
-  [{:keys [item-factory item-stack-resolver] :as factories} label]
+  [{:keys [item-factory item-stack-resolver item-tag-checker tag-item-resolver] :as factories} label]
   (when item-factory
     (prt/install-impl! #'*item-factory* item-factory (str (or label "item") "-factory")))
   (when item-stack-resolver
     (prt/install-impl! #'*item-stack-resolver* item-stack-resolver (str (or label "item") "-resolver")))
+  (when item-tag-checker
+    (prt/install-impl! #'*item-tag-checker* item-tag-checker (str (or label "item") "-tag-checker")))
+  (when tag-item-resolver
+    (prt/install-impl! #'*tag-item-resolver* tag-item-resolver (str (or label "tag") "-item-resolver")))
   nil)
 
 (defn call-with-item-factories [factories f]
@@ -120,5 +126,27 @@
   "Check if item-id resolver has been initialized by platform code."
   []
   (some? *item-stack-resolver*))
+
+;; ============================================================================
+;; Tag Query Functions (1.20.1 recommended approach)
+;; ============================================================================
+
+(defn item-is-in-tag?
+  "Check if an ItemStack's item belongs to a tag.
+  tag-str: e.g. \"minecraft:copper_ores\" or \"forge:ores/tin\""
+  [stack tag-str]
+  (when (and stack *item-tag-checker* (string? tag-str))
+    (try (boolean (*item-tag-checker* stack tag-str))
+         (catch Exception _ false))))
+
+(defn create-item-stack-from-tag
+  "Create an ItemStack from the first item in a tag.
+  tag-str: e.g. \"forge:ingots/copper\"
+  count: stack size (default 1)
+  Returns nil if tag is empty or resolver not installed."
+  [tag-str count]
+  (when (and *tag-item-resolver* (string? tag-str))
+    (try (*tag-item-resolver* tag-str (int (or count 1)))
+         (catch Exception _ nil))))
 
 ;; `item-split` is implemented per-platform via the IItemStack protocol

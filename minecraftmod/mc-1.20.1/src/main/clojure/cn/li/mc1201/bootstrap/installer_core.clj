@@ -341,7 +341,34 @@
        :item-stack-resolver (fn [item-id count]
                               (let [stack (create-item-stack-by-id-fn (str item-id) (int count))]
                                 (when (and stack (not (item-stack-empty?-fn stack)))
-                                  stack)))}
+                                  stack)))
+       :item-tag-checker (fn [stack tag-str]
+                           (try
+                             (let [tag-str (str tag-str)
+                                   colon (.indexOf tag-str ":")
+                                   ns (if (pos? colon) (.substring tag-str 0 (int colon)) "minecraft")
+                                   path (if (pos? colon) (.substring tag-str (inc (int colon))) tag-str)
+                                   rl (net.minecraft.resources.ResourceLocation. ns path)
+                                   tag-key (net.minecraft.tags.TagKey/create
+                                            net.minecraft.core.registries.Registries/ITEM rl)]
+                               (boolean (.is ^net.minecraft.world.item.ItemStack stack tag-key)))
+                             (catch Throwable _ false)))
+       :tag-item-resolver (fn [tag-str count]
+                           (try
+                             (let [tag-str (str tag-str)
+                                   colon (.indexOf tag-str ":")
+                                   ns (if (pos? colon) (.substring tag-str 0 (int colon)) "minecraft")
+                                   path (if (pos? colon) (.substring tag-str (inc (int colon))) tag-str)
+                                   rl (net.minecraft.resources.ResourceLocation. ns path)
+                                   tag-key (net.minecraft.tags.TagKey/create
+                                            net.minecraft.core.registries.Registries/ITEM rl)
+                                   items (.iterator (net.minecraft.core.registries.BuiltInRegistries/ITEM
+                                                     (.getTagOrEmpty tag-key)))]
+                               (when (.hasNext items)
+                                 (let [item (.value ^net.minecraft.core.Holder (.next items))
+                                       stack (net.minecraft.world.item.ItemStack. item (int count))]
+                                   stack)))
+                             (catch Throwable _ nil)))}
       "mc1201")
     (log/info "mc1201 shared item factories initialized")))
 

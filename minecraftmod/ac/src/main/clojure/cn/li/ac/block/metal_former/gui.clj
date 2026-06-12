@@ -18,6 +18,7 @@
             [cn.li.ac.wireless.gui.container.common :as common]
             [cn.li.mcmod.gui.container.action-payload :as action-payload]
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
+            [cn.li.ac.wireless.gui.container.move :as move-common]
             [cn.li.ac.energy.operations :as energy]))
 
 (def ^:private former-slot-schema-id :metal-former)
@@ -59,10 +60,32 @@
 (defn- can-place-item? [_container slot-index item-stack]
   (let [slot-index (int slot-index)]
     (case slot-index
+      0 (recipes/is-valid-input-item? item-stack)
+      1 false
       2 (energy/is-energy-item-supported? item-stack)
-      true)))
+      false)))
 
 (defn- still-valid? [_container _player] true)
+
+(def ^:private inventory-pred
+  (fn [slot-index player-inventory-start]
+    (>= slot-index player-inventory-start)))
+
+(def ^:private quick-move-config
+  (delay
+    (slot-schema/build-quick-move-config
+      former-slot-schema-id
+      {:inventory-pred inventory-pred
+       :rules [{:accept? energy/is-energy-item-supported?
+                :slot-ids [:energy]}
+               {:accept? recipes/is-valid-input-item?
+                :slot-ids [:input]}]})))
+
+(defn- quick-move-stack
+  [container slot-index player-inventory-start]
+  (move-common/quick-move-with-rules
+    container slot-index player-inventory-start
+    @quick-move-config))
 
 (def ^:private server-menu-sync! (:server-menu-sync! former-sync))
 
@@ -170,5 +193,6 @@
        :slot-get-fn get-slot-item
        :slot-set-fn set-slot-item!
        :slot-can-place-fn can-place-item?
-        :slot-changed-fn slot-changed!}))
+       :slot-changed-fn slot-changed!
+       :quick-move-fn quick-move-stack}))
     (log/info "Metal Former GUI initialized")))

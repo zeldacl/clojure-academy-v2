@@ -67,24 +67,31 @@
       (str modid/MOD-ID ":" item-id))))
 
 (defn- stack-matches-item?
+  "Check if stack matches item-spec.
+  Supports both :item (exact ID) and :tag (1.20.1 item tag) matching.
+  Only one approach is used — tags are the 1.20.1 recommended way for ore inputs."
   [stack item-spec]
   (and (not (stack-empty? stack))
        item-spec
-       (let [expected-id (normalize-item-id (:item item-spec))
-             actual-id (item-id-from-stack stack)
-             min-count (int (or (:count item-spec) 1))]
-         (and expected-id
-              actual-id
-              (= expected-id actual-id)
-              (>= (stack-count stack) min-count)))))
+       (let [min-count (int (or (:count item-spec) 1))]
+         (and (>= (stack-count stack) min-count)
+              (or (when-let [tag (:tag item-spec)]
+                    (pitem/item-is-in-tag? stack tag))
+                  (let [expected-id (normalize-item-id (:item item-spec))
+                        actual-id (item-id-from-stack stack)]
+                    (and expected-id
+                         actual-id
+                         (= expected-id actual-id))))))))
 
 (defn- recipe-output-stack
   [recipe]
   (let [output (:output recipe)
-        item-id (normalize-item-id (:item output))
         count (int (or (:count output) 1))]
-    (when (and item-id (pos? count))
-      (pitem/create-item-stack-by-id item-id count))))
+    (when (pos? count)
+      (or (when-let [tag (:tag output)]
+            (pitem/create-item-stack-from-tag tag count))
+          (when-let [item-id (normalize-item-id (:item output))]
+            (pitem/create-item-stack-by-id item-id count))))))
 
 (defn- default-recipes
   []
@@ -110,6 +117,14 @@
       :mode "etch"
       :input {:item (str m ":wafer") :count 1}
       :output {:item (str m ":silbarn") :count 1}}
+     {:id "mf_incise_rail"
+      :mode "incise"
+      :input {:item "minecraft:rail" :count 1}
+      :output {:item (str m ":needle") :count 2}}
+     {:id "mf_plate_reinforced_iron_plate"
+      :mode "plate"
+      :input {:item (str m ":reinforced_iron_plate") :count 2}
+      :output {:item (str m ":coin") :count 3}}
      {:id "mf_plate_iron"
       :mode "plate"
       :input {:item "minecraft:iron_ingot" :count 1}
@@ -136,75 +151,77 @@
       :input {:item (str m ":crystal_ore") :count 1}
       :output {:item (str m ":crystal_low") :count 4}}
 
-     ;; 1.12 OreDictionary refine presets mapped to vanilla/tag-era equivalents.
-     {:id "mf_refine_gold_ore"
+     ;; Vanilla ore refine (1.20.1 tag-based — single recipe per ore type, covers all variants).
+     {:id "mf_refine_copper_ores"
       :mode "refine"
-      :input {:item "minecraft:gold_ore" :count 1}
-      :output {:item "minecraft:gold_ingot" :count 2}}
-     {:id "mf_refine_deepslate_gold_ore"
+      :input {:tag "minecraft:copper_ores" :count 1}
+      :output {:item "minecraft:copper_ingot" :count 2}}
+     {:id "mf_refine_iron_ores"
       :mode "refine"
-      :input {:item "minecraft:deepslate_gold_ore" :count 1}
-      :output {:item "minecraft:gold_ingot" :count 2}}
-     {:id "mf_refine_iron_ore"
-      :mode "refine"
-      :input {:item "minecraft:iron_ore" :count 1}
+      :input {:tag "minecraft:iron_ores" :count 1}
       :output {:item "minecraft:iron_ingot" :count 2}}
-     {:id "mf_refine_deepslate_iron_ore"
+     {:id "mf_refine_gold_ores"
       :mode "refine"
-      :input {:item "minecraft:deepslate_iron_ore" :count 1}
-      :output {:item "minecraft:iron_ingot" :count 2}}
-     {:id "mf_refine_emerald_ore"
+      :input {:tag "minecraft:gold_ores" :count 1}
+      :output {:item "minecraft:gold_ingot" :count 2}}
+     {:id "mf_refine_emerald_ores"
       :mode "refine"
-      :input {:item "minecraft:emerald_ore" :count 1}
+      :input {:tag "minecraft:emerald_ores" :count 1}
       :output {:item "minecraft:emerald" :count 2}}
-     {:id "mf_refine_deepslate_emerald_ore"
+     {:id "mf_refine_diamond_ores"
       :mode "refine"
-      :input {:item "minecraft:deepslate_emerald_ore" :count 1}
-      :output {:item "minecraft:emerald" :count 2}}
+      :input {:tag "minecraft:diamond_ores" :count 1}
+      :output {:item "minecraft:diamond" :count 2}}
+     {:id "mf_refine_redstone_ores"
+      :mode "refine"
+      :input {:tag "minecraft:redstone_ores" :count 1}
+      :output {:item "minecraft:redstone_block" :count 1}}
+     {:id "mf_refine_lapis_ores"
+      :mode "refine"
+      :input {:tag "minecraft:lapis_ores" :count 1}
+      :output {:item "minecraft:lapis_lazuli" :count 12}}
+     {:id "mf_refine_coal_ores"
+      :mode "refine"
+      :input {:tag "minecraft:coal_ores" :count 1}
+      :output {:item "minecraft:coal" :count 2}}
+     ;; Nether quartz has no vanilla ores tag — keep as item-based recipe.
      {:id "mf_refine_quartz_ore"
       :mode "refine"
       :input {:item "minecraft:nether_quartz_ore" :count 1}
       :output {:item "minecraft:quartz" :count 2}}
-     {:id "mf_refine_diamond_ore"
+     ;; Mod-compat refine recipes via forge tags (mirrors original OreDictionary presets).
+     {:id "mf_refine_tin_ores"
       :mode "refine"
-      :input {:item "minecraft:diamond_ore" :count 1}
-      :output {:item "minecraft:diamond" :count 2}}
-     {:id "mf_refine_deepslate_diamond_ore"
+      :input {:tag "forge:ores/tin" :count 1}
+      :output {:tag "forge:ingots/tin" :count 2}}
+     {:id "mf_refine_silver_ores"
       :mode "refine"
-      :input {:item "minecraft:deepslate_diamond_ore" :count 1}
-      :output {:item "minecraft:diamond" :count 2}}
-     {:id "mf_refine_redstone_ore"
+      :input {:tag "forge:ores/silver" :count 1}
+      :output {:tag "forge:ingots/silver" :count 2}}
+     {:id "mf_refine_lead_ores"
       :mode "refine"
-      :input {:item "minecraft:redstone_ore" :count 1}
-      :output {:item "minecraft:redstone_block" :count 1}}
-     {:id "mf_refine_deepslate_redstone_ore"
+      :input {:tag "forge:ores/lead" :count 1}
+      :output {:tag "forge:ingots/lead" :count 2}}
+     {:id "mf_refine_aluminum_ores"
       :mode "refine"
-      :input {:item "minecraft:deepslate_redstone_ore" :count 1}
-      :output {:item "minecraft:redstone_block" :count 1}}
-     {:id "mf_refine_lapis_ore"
+      :input {:tag "forge:ores/aluminum" :count 1}
+      :output {:tag "forge:ingots/aluminum" :count 2}}
+     {:id "mf_refine_nickel_ores"
       :mode "refine"
-      :input {:item "minecraft:lapis_ore" :count 1}
-      :output {:item "minecraft:lapis_lazuli" :count 12}}
-     {:id "mf_refine_deepslate_lapis_ore"
+      :input {:tag "forge:ores/nickel" :count 1}
+      :output {:tag "forge:ingots/nickel" :count 2}}
+     {:id "mf_refine_platinum_ores"
       :mode "refine"
-      :input {:item "minecraft:deepslate_lapis_ore" :count 1}
-      :output {:item "minecraft:lapis_lazuli" :count 12}}
-     {:id "mf_refine_coal_ore"
+      :input {:tag "forge:ores/platinum" :count 1}
+      :output {:tag "forge:ingots/platinum" :count 2}}
+     {:id "mf_refine_iridium_ores"
       :mode "refine"
-      :input {:item "minecraft:coal_ore" :count 1}
-      :output {:item "minecraft:coal" :count 2}}
-     {:id "mf_refine_deepslate_coal_ore"
+      :input {:tag "forge:ores/iridium" :count 1}
+      :output {:tag "forge:ingots/iridium" :count 2}}
+     {:id "mf_refine_mithril_ores"
       :mode "refine"
-      :input {:item "minecraft:deepslate_coal_ore" :count 1}
-      :output {:item "minecraft:coal" :count 2}}
-     {:id "mf_refine_copper_ore"
-      :mode "refine"
-      :input {:item "minecraft:copper_ore" :count 1}
-      :output {:item "minecraft:copper_ingot" :count 2}}
-     {:id "mf_refine_deepslate_copper_ore"
-      :mode "refine"
-      :input {:item "minecraft:deepslate_copper_ore" :count 1}
-      :output {:item "minecraft:copper_ingot" :count 2}}]))
+      :input {:tag "forge:ores/mithril" :count 1}
+      :output {:tag "forge:ingots/mithril" :count 2}}]))
 
 (def ^:private recipe-store-lock
   (Object.))
@@ -282,6 +299,15 @@
                (stack-matches-item? input-item (:input recipe))))
         (recipes-snapshot)))))
 
+(defn is-valid-input-item?
+  "Check if an item stack matches any Metal Former recipe input, regardless of mode.
+  Mirrors SlotMFItem.isItemValid() in the original AcademyCraft."
+  [stack]
+  (boolean
+    (some (fn [recipe]
+            (stack-matches-item? stack (:input recipe)))
+          (recipes-snapshot))))
+
 (defn can-accept-input?
   [recipe input-item mode]
   (and recipe
@@ -290,17 +316,23 @@
 
 (defn can-output?
   [recipe output-slot-item]
-  (let [result-stack (recipe-output-stack recipe)]
+  (let [output-spec (:output recipe)
+        result-stack (recipe-output-stack recipe)]
     (cond
       (nil? result-stack) false
       (stack-empty? output-slot-item) true
       :else
-      (and (try (pitem/item-is-equal? output-slot-item result-stack)
-                (catch Exception _ false))
-           (<= (+ (stack-count output-slot-item) (stack-count result-stack))
-               (int (or (try (pitem/item-get-max-stack-size output-slot-item)
-                             (catch Exception _ 64))
-                        64)))))))
+      (let [items-compatible?
+            (or (when-let [tag (:tag output-spec)]
+                  ;; Tag-based output: check if existing item also belongs to the same tag
+                  (pitem/item-is-in-tag? output-slot-item tag))
+                (try (pitem/item-is-equal? output-slot-item result-stack)
+                     (catch Exception _ false)))]
+        (and items-compatible?
+             (<= (+ (stack-count output-slot-item) (stack-count result-stack))
+                 (int (or (try (pitem/item-get-max-stack-size output-slot-item)
+                               (catch Exception _ 64))
+                          64))))))))
 
 (defn build-output-stack
   [recipe]
