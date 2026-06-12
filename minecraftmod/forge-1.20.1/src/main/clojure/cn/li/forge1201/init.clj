@@ -4,6 +4,7 @@
             [cn.li.mcmod.platform.events :as platform-events]
             [cn.li.mcmod.lifecycle :as lifecycle]
             [cn.li.mcmod.content :as content]
+            [cn.li.forge1201.capability.fluid-handler :as fluid-handler]
             [cn.li.forge1201.integration.imc-dispatch :as imc-dispatch]
             [cn.li.forge1201.achievement.bridge :as achievement-bridge])
   (:import [cn.li.forge1201.trigger ModTriggers]))
@@ -27,6 +28,9 @@
       (platform-events/install-fire-event-fn! imc-dispatch/dispatch-event! "Forge")
       ;; Register custom advancement triggers.
       (ModTriggers/init)
+      ;; Register Forge-specific capabilities (must precede content init so that
+      ;; handler factories are available when register-tile-capability! is called).
+      (fluid-handler/register!)
       ;; Ensure discovered content init providers are registered through the generic content SPI.
       (content/register-all-content!)
       (lifecycle/run-content-init!)

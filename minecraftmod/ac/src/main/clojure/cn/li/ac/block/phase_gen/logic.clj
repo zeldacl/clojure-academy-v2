@@ -47,30 +47,37 @@
 
 (defn phase-tick-state
   [state _ctx]
-  (let [state1 (-> state
-                   machine-runtime/inc-update-ticker
-                   (assoc :tank-size (int (phase-config/tank-size))
-                          :max-energy (double (phase-config/max-energy)))
-                   (#(matter-unit/convert-phase-unit-state
-                       %
-                       {:liquid-in-slot phase-config/liquid-in-slot
-                        :liquid-out-slot phase-config/liquid-out-slot
-                        :liquid-per-unit (phase-config/liquid-per-unit)
-                        :tank-size (phase-config/tank-size)
-                        :matter-unit-item-id phase-config/matter-unit-item-id
-                        :max-output-stack 16})))
-        {:keys [drain gen]} (calc-generation state1)
-        cur-energy (double (get state1 :energy 0.0))
-        liquid-before (int (get state1 :liquid-amount 0))
-        state2 (-> state1
-                   (assoc :energy (+ cur-energy gen))
-                   (assoc :liquid-amount (max 0 (- liquid-before drain)))
-                   (assoc :gen-speed (double gen))
-                   (assoc :status (cond
-                                    (<= liquid-before 0) "NO_LIQUID"
-                                    (pos? gen) "GENERATING"
-                                    :else "IDLE")))]
-    (maybe-charge-output-item state2)))
+  ;; Original AcademyCraft order (TileGeneratorBase.update → TilePhaseGen.update):
+  ;; 1) Drain liquid → generate energy (this tick uses liquid from previous round)
+  ;; 2) Consume matter unit → add liquid (available for NEXT tick)
+  ;; 3) Charge output energy item
+  (let [state-prep (-> state
+                       machine-runtime/inc-update-ticker
+                       (assoc :tank-size (int (phase-config/tank-size))
+                              :max-energy (double (phase-config/max-energy))))
+        ;; Step 1: Generate energy from liquid currently in tank
+        {:keys [drain gen]} (calc-generation state-prep)
+        cur-energy (double (get state-prep :energy 0.0))
+        liquid-before (int (get state-prep :liquid-amount 0))
+        state-gen (-> state-prep
+                      (assoc :energy (+ cur-energy gen))
+                      (assoc :liquid-amount (max 0 (- liquid-before drain)))
+                      (assoc :gen-speed (double gen))
+                      (assoc :status (cond
+                                       (<= liquid-before 0) "NO_LIQUID"
+                                       (pos? gen) "GENERATING"
+                                       :else "IDLE")))
+        ;; Step 2: Consume phase-liquid matter unit → add liquid for next tick
+        state-post (matter-unit/convert-phase-unit-state
+                     state-gen
+                     {:liquid-in-slot phase-config/liquid-in-slot
+                      :liquid-out-slot phase-config/liquid-out-slot
+                      :liquid-per-unit (phase-config/liquid-per-unit)
+                      :tank-size (phase-config/tank-size)
+                      :matter-unit-item-id phase-config/matter-unit-item-id
+                      :max-output-stack 16})]
+    ;; Step 3: Charge energy to output slot item
+    (maybe-charge-output-item state-post)))
 
 (def phase-tick-fn
   (machine-runtime/make-tick-fn

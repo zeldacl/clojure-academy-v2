@@ -33,13 +33,17 @@
                  (cn.li.mcmod.platform.capability/declare-capability!
                    :wireless-generator IWirelessGenerator
                    (fn [be _side] (impls/->WirelessGeneratorImpl be))))
+               ;; :fluid-handler capability is declared by the Forge shim
+               ;; (cn.li.forge1201.capability.fluid-handler) during platform init.
+               ;; Here we just associate the phase-gen tile with it.
                (doseq [tile-id ["phase-gen"]]
-                 (tile-logic/register-tile-capability! tile-id :wireless-generator)))
+                 (tile-logic/register-tile-capability! tile-id :wireless-generator)
+                 (tile-logic/register-tile-capability! tile-id :fluid-handler)))
      :blocks [(bdsl/create-block-spec
                 "phase-gen"
                 {:registry-name "phase_gen"
-                 :physical {:material :metal
-                            :hardness 3.0
+                 :physical {:material :stone
+                            :hardness 2.5
                             :resistance 6.0
                             :requires-tool true
                             :harvest-tool :pickaxe
