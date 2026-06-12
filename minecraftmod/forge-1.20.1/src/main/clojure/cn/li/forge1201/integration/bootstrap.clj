@@ -104,6 +104,11 @@
 	[fluid-supplier]
 	(ForgeBootstrapHelper/createLiquidBlock fluid-supplier))
 
+(defn create-scripted-liquid-block
+	[fluid-supplier block-id tile-id]
+	(ForgeBootstrapHelper/createScriptedLiquidBlock
+		fluid-supplier ^String block-id ^String tile-id))
+
 (defn create-fluid-bucket
 	[fluid-supplier]
 	(ForgeBootstrapHelper/createFluidBucket fluid-supplier))

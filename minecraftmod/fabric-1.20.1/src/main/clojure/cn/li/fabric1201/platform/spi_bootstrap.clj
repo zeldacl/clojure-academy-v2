@@ -42,7 +42,17 @@
        :be-get-custom-state  (fn [x] (ru/inst x "getCustomState"))
        :be-set-custom-state! (fn [x s] (ru/inst x "setCustomState" s))
        :be-get-block-id  (fn [x] (ru/inst x "getBlockId"))
-       :be-set-changed!  (fn [x] (ru/inst x "setChanged"))})))
+       :be-set-changed!  (fn [x] (ru/inst x "setChanged"))
+       :be-get-fluid-height (fn [x]
+                              (try
+                                (when-let [level (ru/inst x "getLevel")]
+                                  (let [pos (ru/inst x "getBlockPos")
+                                        state (ru/inst level "getBlockState" pos)
+                                        fluid-state (ru/inst state "getFluidState")]
+                                    (if (ru/inst fluid-state "isEmpty")
+                                      0.0
+                                      (double (ru/inst fluid-state "getOwnHeight")))))
+                                (catch Exception _ 0.0)))})))
 
 (def ^:private fabric-adapter
   (reify class-access/ClassAccess

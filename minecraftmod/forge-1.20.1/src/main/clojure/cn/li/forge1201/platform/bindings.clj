@@ -122,3 +122,18 @@
 (defn be-set-changed!
 	[^ScriptedBlockEntity be]
 	(.setChanged be))
+
+(defn be-get-fluid-height
+	"Return fluid surface height (0.0-1.0) at the block entity's position.
+	Uses FluidState.getOwnHeight() — the 1.20 API."
+	[^ScriptedBlockEntity be]
+	(try
+		(when-let [^net.minecraft.world.level.Level level (.getLevel be)]
+			(let [pos (.getBlockPos be)
+				  ^net.minecraft.world.level.block.state.BlockState state (.getBlockState level pos)
+				  ^net.minecraft.world.level.material.FluidState fluid-state (.getFluidState state)]
+				(if (.isEmpty fluid-state)
+					0.0
+					(double (.getOwnHeight fluid-state)))))
+		(catch Exception _
+			0.0)))

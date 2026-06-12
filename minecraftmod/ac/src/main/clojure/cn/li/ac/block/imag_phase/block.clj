@@ -1,9 +1,14 @@
 (ns cn.li.ac.block.imag-phase.block
-  "Imaginary phase fluid block port for 1.20."
+  "Imaginary phase fluid block port for 1.20.
+
+  Registers a fluid + block with an animated overlay TESR that mirrors
+  the original AcademyCraft RenderImagPhaseLiquid (3 scrolling layers)."
   (:require [cn.li.ac.config.modid :as modid]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.ac.block.imag-phase.handlers :as imag-phase-handlers]
+            [cn.li.ac.registry.hooks :as hooks]
             [cn.li.mcmod.block.dsl :as bdsl]
+            [cn.li.mcmod.block.tile-dsl :as tdsl]
             [cn.li.mcmod.fluid.dsl :as fdsl]
             [cn.li.mcmod.util.log :as log]))
 
@@ -36,8 +41,16 @@
                  :has-bucket? true
                  :bucket-registry-name "imag_phase_bucket"
                  :bucket-item-id "imag-phase-bucket"}}))
-    ;; Keep a block-spec entry so existing metadata/event dispatch can route interactions.
-    ;; Forge registration swaps this block-id to a LiquidBlock when fluid metadata exists.
+    ;; Register a tile so has-block-entity? returns true, enabling
+    ;; ScriptedLiquidBlock creation and TESR attachment.
+    (tdsl/register-tile!
+      (tdsl/create-tile-spec
+        "imag-phase"
+        {:impl :scripted
+         :blocks ["imag-phase"]}))
+    ;; Block spec: has-item-form? true so a BlockItem is generated (animated
+    ;; icon via phase_liquid.png.mcmeta). Forge registration selects
+    ;; ScriptedLiquidBlock when fluid metadata exists and has-block-entity?.
     (bdsl/register-block!
       (bdsl/create-block-spec
         "imag-phase"
@@ -49,7 +62,8 @@
                     :sounds :stone}
          :rendering {:model-parent "minecraft:block/cube_all"
                      :textures {:all (modid/asset-path "block" "phase_liquid")}
-                     :has-item-form? false}
-            :events {:on-right-click imag-phase-handlers/handle-imag-phase-click}}))
-    (log/info "Initialized Imag Phase fluid block")))
-
+                     :has-item-form? true}
+         :events {:on-right-click imag-phase-handlers/handle-imag-phase-click}}))
+    ;; Attach the animated TESR overlay (3 scrolling layers)
+    (hooks/register-client-renderer! 'cn.li.ac.block.imag-phase.render/init!)
+    (log/info "Initialized Imag Phase fluid block with TESR")))

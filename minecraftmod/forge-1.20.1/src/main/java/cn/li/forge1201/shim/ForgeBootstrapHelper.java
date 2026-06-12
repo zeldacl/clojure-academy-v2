@@ -1,5 +1,6 @@
 package cn.li.forge1201.shim;
 
+import cn.li.forge1201.block.ScriptedLiquidBlock;
 import cn.li.forge1201.block.entity.ScriptedBlockEntity;
 import cn.li.mc1201.block.SharedBootstrapBlockHelper;
 import cn.li.mc1201.block.SharedDynamicStateBlock;
@@ -202,6 +203,13 @@ public final class ForgeBootstrapHelper {
 
     public static Block createLiquidBlock(Supplier<? extends FlowingFluid> fluidSupplier) {
         return new LiquidBlock(fluidSupplier, BlockBehaviour.Properties.copy(Blocks.WATER));
+    }
+
+    public static Block createScriptedLiquidBlock(Supplier<? extends FlowingFluid> fluidSupplier,
+                                                   String blockId,
+                                                   String tileId) {
+        return new ScriptedLiquidBlock(fluidSupplier, blockId, tileId,
+            BlockBehaviour.Properties.copy(Blocks.WATER));
     }
 
     public static Item createFluidBucket(Supplier<? extends Fluid> fluidSupplier) {

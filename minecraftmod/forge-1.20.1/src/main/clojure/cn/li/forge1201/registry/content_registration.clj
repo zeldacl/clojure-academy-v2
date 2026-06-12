@@ -150,6 +150,14 @@
                                       (get [_]
                                         (let [get-props (requiring-resolve 'cn.li.mc1201.block.blockstate-properties/get-all-properties)]
                                           (cond
+                                            (and fluid-id has-be?)
+                                            (when-let [fluid-source-ro (get (registry-source-snapshot registered-fluids-source) fluid-id)]
+                                              (bootstrap/create-scripted-liquid-block
+                                                (reify java.util.function.Supplier
+                                                  (get [_]
+                                                    (.get ^RegistryObject fluid-source-ro)))
+                                                block-id
+                                                tile-id))
                                             fluid-id
                                             (when-let [fluid-source-ro (get (registry-source-snapshot registered-fluids-source) fluid-id)]
                                               (bootstrap/create-liquid-block
@@ -376,7 +384,10 @@
       (registry-state/register-item! item-id registered-obj)))
   (doseq [block-id (registry-metadata/get-all-block-ids)]
     (when (and (registry-metadata/should-create-block-item? block-id)
-               (not (registry-metadata/fluid-block? block-id)))
+               (or (not (registry-metadata/fluid-block? block-id))
+                   ;; Allow BlockItem for fluid blocks that have a block entity
+                   ;; (e.g. imag_phase needs item form for animated inventory icon)
+                   (registry-metadata/has-block-entity? block-id)))
       (let [registry-name (registry-metadata/get-block-registry-name block-id)
             block-registered (registry-state/get-registered-block-ro block-id)
             registered-obj (.register ^DeferredRegister items-register registry-name

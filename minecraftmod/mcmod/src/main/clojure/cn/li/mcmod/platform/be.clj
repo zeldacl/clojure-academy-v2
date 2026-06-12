@@ -89,3 +89,17 @@
       (catch Exception e
         (call-log :warn "set-changed! failed:" (ex-message e))
         nil))))
+
+(defn get-fluid-height
+  "Get the fluid surface height (0.0-1.0) for the block at this BE's position.
+
+  Returns 0.0 if there is no fluid, the BE has no level, or the platform
+  binding is not installed."
+  [be]
+  (when be
+    (try
+      (if-let [f (get *be-ops* :be-get-fluid-height)]
+        (f be)
+        0.0)
+      (catch Exception _
+        0.0))))
