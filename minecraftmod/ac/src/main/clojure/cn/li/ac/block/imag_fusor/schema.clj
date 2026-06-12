@@ -15,7 +15,7 @@
    {:key :max-energy
     :nbt-key "MaxEnergy"
     :type :double
-    :default 20000.0
+    :default 2000.0
     :persist? true
     :gui-sync? true
     :gui-coerce double
@@ -115,6 +115,12 @@
    :persist? true
    :gui-sync? false
    :gui-coerce int}
+
+   {:key :sound-cooldown
+    :type :int
+    :default 0
+    :persist? false
+    :gui-sync? false}
 
    {:key :facing
     :nbt-key "Facing"

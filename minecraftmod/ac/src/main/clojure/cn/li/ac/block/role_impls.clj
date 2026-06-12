@@ -5,6 +5,7 @@
   The customState map is the single source of truth for tile data (Design-3).
 
   WirelessGeneratorImpl → implements IWirelessGenerator
+  WirelessReceiverImpl → implements IWirelessReceiver
 
   Note: WirelessMatrixImpl, WirelessNodeImpl, and ClojureEnergyImpl are defined
   in their respective block files (wireless_matrix/block.clj, wireless_node/block.clj)
@@ -12,7 +13,7 @@
   (:require [cn.li.ac.block.machine.runtime :as machine-runtime]
             [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.platform.position :as pos])
-  (:import [cn.li.acapi.wireless IWirelessGenerator]))
+  (:import [cn.li.acapi.wireless IWirelessGenerator IWirelessReceiver]))
 
 ;; ============================================================================
 ;; WirelessGeneratorImpl
@@ -46,3 +47,46 @@
   Object
   (toString [_]
     (str "WirelessGeneratorImpl@" (pos/position-get-block-pos be))))
+
+;; ============================================================================
+;; WirelessReceiverImpl
+;; Implements IWirelessReceiver for ScriptedBlockEntity whose customState stores :energy.
+;; Used by ImagFusor and similar energy-consuming machines.
+;; ============================================================================
+
+(deftype WirelessReceiverImpl [be max-energy-fn bandwidth-fn]
+  IWirelessReceiver
+
+  (getRequiredEnergy [_]
+    (let [state (or (platform-be/get-custom-state be) {})
+          cur (double (get state :energy 0.0))
+          max-e (double (max-energy-fn state))]
+      (max 0.0 (- max-e cur))))
+
+  (injectEnergy [_ amt]
+    (let [state (or (platform-be/get-custom-state be) {})
+          cur (double (get state :energy 0.0))
+          max-e (double (max-energy-fn state))
+          req (max 0.0 (double amt))
+          space (- max-e cur)
+          give (min req space)]
+      (when (pos? give)
+        (machine-runtime/commit-transform! be {} #(assoc % :energy (+ cur give))))
+      (- req give)))
+
+  (pullEnergy [_ amt]
+    (let [state (or (platform-be/get-custom-state be) {})
+          cur (double (get state :energy 0.0))
+          req (max 0.0 (double amt))
+          give (min req cur)]
+      (when (pos? give)
+        (machine-runtime/commit-transform! be {} #(assoc % :energy (- cur give))))
+      (double give)))
+
+  (getReceiverBandwidth [_]
+    (let [state (or (platform-be/get-custom-state be) {})]
+      (double (max 0.0 (double (bandwidth-fn state))))))
+
+  Object
+  (toString [_]
+    (str "WirelessReceiverImpl@" (pos/position-get-block-pos be))))

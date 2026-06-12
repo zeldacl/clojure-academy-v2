@@ -128,4 +128,23 @@ public class SharedScriptedBlock extends ScriptedCarrierBlockBase {
     public int getLightBlock(BlockState state, BlockGetter level, BlockPos pos) {
         return super.getLightBlock(state, level, pos);
     }
+
+    /**
+     * Dynamic light emission for working machines.
+     * If the block has an integer "frame" property and the machine is working (frame &gt; 0),
+     * emit light level 6 (matching original AcademyCraft getLightValue for ImagFusor).
+     */
+    @Override
+    public int getLightEmission(BlockState state, BlockGetter level, BlockPos pos) {
+        for (Property<?> prop : state.getProperties()) {
+            if ("frame".equals(prop.getName()) && prop instanceof net.minecraft.world.level.block.state.properties.IntegerProperty) {
+                int frame = state.getValue((net.minecraft.world.level.block.state.properties.IntegerProperty) prop);
+                if (frame > 0) {
+                    return 6;
+                }
+                break;
+            }
+        }
+        return super.getLightEmission(state, level, pos);
+    }
 }

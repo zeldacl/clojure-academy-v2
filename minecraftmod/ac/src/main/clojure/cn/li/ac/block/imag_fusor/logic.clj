@@ -1,5 +1,13 @@
 (ns cn.li.ac.block.imag-fusor.logic
-  "Imaginary Fusor business logic."
+  "Imaginary Fusor business logic.
+
+   Original AcademyCraft parity notes:
+   - Working sound: Original plays machine.imag_fusor_work loop (volume 0.6)
+     via TileEntitySound when !isActionBlocked(). Not yet implemented — requires
+     forge-layer client-side BlockEntity loop-sound infrastructure.
+   - Dynamic light: Original emits light level 6 when working (getLightValue).
+     Not yet implemented — requires forge-layer Block.getLightEmission override
+     keyed on the frame blockstate property."
   (:require [cn.li.ac.block.imag-fusor.config :as fusor-config]
             [cn.li.ac.block.imag-fusor.recipes :as recipes]
             [cn.li.ac.block.imag-fusor.schema :as fusor-schema]
@@ -9,7 +17,9 @@
             [cn.li.ac.block.machine.runtime :as machine-runtime]
             [cn.li.ac.energy.operations :as energy]
             [cn.li.mcmod.platform.item :as pitem]
-            [cn.li.mcmod.platform.world :as world]))
+            [cn.li.mcmod.platform.position :as pos]
+            [cn.li.mcmod.platform.world :as world]
+            [cn.li.mcmod.platform.world-effects :as world-effects]))
 
 (def ^:private fusor-rt
   (machine-runtime/schema-runtime fusor-schema/imag-fusor-schema :server-only? true))
@@ -121,22 +131,27 @@
     (let [recipe (get-current-recipe state)
           input-item (get-input-item state)
           output-item (get-output-item state)
-          energy (:energy state 0.0)
+          energy (double (:energy state 0.0))
           liquid-amount (int (:liquid-amount state 0))
           max-progress (max 1 (int (:max-progress state fusor-config/craft-time-ticks)))]
-      (if (recipes/can-craft? recipe input-item output-item energy liquid-amount)
-        (let [progress (double (:work-progress state 0.0))
-              work-step (/ 1.0 (double max-progress))
-              new-progress (+ progress work-step)
-              new-energy (- (double energy) fusor-config/energy-per-tick)
-              percent (int (Math/floor (* 100.0 (min 1.0 new-progress))))
-              next-state (assoc state
-                                :energy new-energy
-                                :work-progress (min 1.0 new-progress)
-                                :crafting-progress percent)]
-          (if (>= new-progress 1.0)
-            (finish-working next-state recipe)
-            next-state))
+      (if (recipes/can-continue-crafting? recipe input-item output-item energy liquid-amount)
+        ;; Energy is deducted every tick while working, even when action-blocked.
+        ;; Matches original pullEnergy() in updateWork() guard clause.
+        (let [new-energy (- energy fusor-config/energy-per-tick)]
+          (if (recipes/is-action-blocked? recipe input-item output-item)
+            ;; Soft block: pause progress but keep working state (energy already consumed).
+            (assoc state :energy new-energy)
+            (let [progress (double (:work-progress state 0.0))
+                  work-step (/ 1.0 (double max-progress))
+                  new-progress (+ progress work-step)
+                  percent (int (Math/floor (* 100.0 (min 1.0 new-progress))))
+                  next-state (assoc state
+                                  :energy new-energy
+                                  :work-progress (min 1.0 new-progress)
+                                  :crafting-progress percent)]
+              (if (>= new-progress 1.0)
+                (finish-working next-state recipe)
+                next-state))))
         (abort-working state)))
     state))
 
@@ -175,12 +190,32 @@
     (inc (mod (quot (long day-time) 8) 4))
     0))
 
+(def fusor-sound-id "my_mod:machine.imag_fusor_work")
+(def ^:private fusor-sound-interval 20)
+
+(defn- trigger-work-sound!
+  "Play working sound at block position when sound cooldown reaches 0."
+  [level pos]
+  (try
+    (when (world-effects/available?)
+      (let [world-id (world/world-get-dimension-id* level)
+            x (pos/position-get-x pos)
+            y (pos/position-get-y pos)
+            z (pos/position-get-z pos)]
+        (world-effects/play-sound!* world-id
+                                     (double x) (double y) (double z)
+                                     fusor-sound-id
+                                     :blocks
+                                     0.6 1.0)))
+    (catch Exception _ nil)))
+
 (defn fusor-tick-state
-  [state {:keys [level]}]
+  [state {:keys [level pos]}]
   (let [state (assoc state
                      :update-ticker (inc (long (get state :update-ticker 0)))
                      :tank-size (int (:tank-size state fusor-config/tank-size))
-                     :check-cooldown (int (:check-cooldown state fusor-config/check-interval)))
+                     :check-cooldown (int (:check-cooldown state fusor-config/check-interval))
+                     :sound-cooldown (int (get state :sound-cooldown 0)))
         energy-item (get-in state [:inventory energy-slot])
         state (if (and energy-item (energy/is-energy-item-supported? energy-item))
                 (let [cur-energy (double (:energy state 0.0))
@@ -194,8 +229,15 @@
         state (convert-phase-unit state)
         state (if (:working state false)
                 (tick-crafting state)
-                (update-idle-state state))]
-    (assoc state :frame (animated-frame (:working state false)
+                (update-idle-state state))
+        ;; Working sound (original AcademyCraft: machine.imag_fusor_work loop at volume 0.6)
+        sound-cooldown (dec (int (:sound-cooldown state fusor-sound-interval)))
+        working? (:working state false)
+        state (if (and working? (<= sound-cooldown 0))
+                (do (trigger-work-sound! level pos)
+                    (assoc state :sound-cooldown fusor-sound-interval))
+                (assoc state :sound-cooldown (if working? sound-cooldown 0)))]
+    (assoc state :frame (animated-frame working?
                                         (world/world-get-day-time* level)))))
 
 (def fusor-tick-fn

@@ -68,6 +68,11 @@
   "MatterUnit damage/meta for MAT_PHASE_LIQUID in original AC."
   1)
 
+;; Wireless receiver (original AcademyCraft TileReceiverBase uses LATENCY_MK1 = 50)
+(def receiver-bandwidth
+  "Wireless receiver bandwidth (IF/tick). Original LATENCY_MK1 = 50."
+  50.0)
+
 ;; Sync interval
 (def sync-interval
   "Ticks between GUI sync broadcasts"

@@ -13,6 +13,7 @@
             [cn.li.mcmod.gui.spec :as gui-reg]
             [cn.li.ac.block.gui.sync :as gui-sync]
             [cn.li.ac.wireless.gui.container.common :as common]
+            [cn.li.ac.wireless.gui.tab :as wireless-tab]
             [cn.li.ac.block.imag-fusor.config :as cfg]
             [cn.li.ac.block.imag-fusor.schema :as fusor-schema]
             [cn.li.ac.block.imag-fusor.recipes :as recipes]))
@@ -88,7 +89,11 @@
   [container minecraft-container _player]
   (let [inv-page (tech-ui/create-rework-page "guis/rework/page_imagfusor.xml")
         inv-window (:window inv-page)
-      pages [inv-page]
+        ;; Wireless receiver tab (original AcademyCraft: WirelessPage.userPage(tile))
+        wireless-window (wireless-tab/create-wireless-panel {:role :receiver
+                                                              :container container
+                                                              :menu minecraft-container})
+        pages [inv-page {:id "wireless" :window wireless-window}]
         max-e (fn [] (max 1.0 (double (or @(:max-energy container) cfg/max-energy))))
         max-liquid (fn [] (max 1.0 (double (or @(:tank-size container) cfg/tank-size))))]
     (tech-ui/create-tech-screen-container

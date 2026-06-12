@@ -168,3 +168,45 @@
        (>= (double energy) cfg/energy-per-tick)
        (>= (int liquid-amount) (int (:consume-liquid recipe 0)))
        (can-output? recipe output-item)))
+
+;; --- Two-level crafting check (original AcademyCraft parity) ---
+
+(defn can-continue-crafting?
+  "Hard-abort guard: return false when crafting must stop and reset progress.
+   Mirrors original TileImagFusor.updateWork() hard-fail conditions:
+   input type changed, energy/liquid insufficient, output item type mismatch."
+  [recipe input-item output-item energy liquid-amount]
+  (and recipe
+       input-item
+       (stack-matches-item? input-item (:input recipe))
+       (>= (double energy) cfg/energy-per-tick)
+       (>= (int liquid-amount) (int (:consume-liquid recipe 0)))
+       (let [result-stack (recipe-output-stack recipe)]
+         (or (nil? output-item)
+             (and result-stack
+                  (try (= (item-id-from-stack output-item)
+                          (item-id-from-stack result-stack))
+                       (catch Exception _ false)))))))
+
+(defn is-action-blocked?
+  "Soft-block check: return true when progress should pause but NOT reset.
+   Mirrors original TileImagFusor.isActionBlocked() conditions:
+   output slot full or NBT mismatch (same item type but different data)."
+  [recipe input-item output-item]
+  (or (nil? recipe)
+      (let [input-count (stack-count input-item)
+            consume-count (int (get-in recipe [:input :count] 1))]
+        (< input-count consume-count))
+      (when-let [result-stack (recipe-output-stack recipe)]
+        (and output-item
+             (try (= (item-id-from-stack output-item)
+                     (item-id-from-stack result-stack))
+                  (catch Exception _ false))
+             (or (not (try (pitem/item-is-equal? output-item result-stack)
+                           (catch Exception _ false)))
+                 (let [output-count (stack-count output-item)
+                       result-count (stack-count result-stack)
+                       max-size (int (or (try (pitem/item-get-max-stack-size output-item)
+                                              (catch Exception _ 64))
+                                         64))]
+                   (> (+ output-count result-count) max-size)))))))
