@@ -1,6 +1,9 @@
 (ns cn.li.ac.block.wind-gen.gui
   "CLIENT-ONLY: Wind Generator GUI (main + base)."
   (:require [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
+            [cn.li.mcmod.gui.cgui-core :as cgui-core]
+            [cn.li.mcmod.gui.components :as comp]
+            [cn.li.mcmod.gui.events :as events]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.mcmod.gui.spec :as gui-reg]
             [cn.li.mcmod.platform.item :as item]
@@ -84,7 +87,51 @@
                (let [y0 (tech-ui/add-histogram info-area [(tech-ui/hist-buffer (fn [] (double @(:energy container))) (max-e))] 0)
                      y1 (tech-ui/add-sepline info-area "Info" y0)
                      y2 (tech-ui/add-property info-area "gen_speed" (fn [] (format "%.2fIF/T" (double @(:gen-speed container)))) y1)]
-                 (tech-ui/add-property info-area "status" (fn [] @(:status container)) y2)))]
+                 (tech-ui/add-property info-area "status" (fn [] @(:status container)) y2)))
+        ;; Structure completeness display — icon opacity changes matching AcademyCraft
+        page-widget (:window inv-page)
+        ui-block (some-> page-widget (cgui-core/find-widget "ui_block"))]
+    ;; Set up icon opacity based on completeness/status
+    (when ui-block
+      (let [icon-main (cgui-core/find-widget ui-block "icon_main")
+            icon-middle (cgui-core/find-widget ui-block "icon_middle")
+            icon-base (cgui-core/find-widget ui-block "icon_base")
+            dt-main (when icon-main (comp/get-drawtexture-component icon-main))
+            dt-middle (when icon-middle (comp/get-drawtexture-component icon-middle))
+            dt-base (when icon-base (comp/get-drawtexture-component icon-base))
+            ;; Preserve the base RGB from initial texture color
+            base-rgb-main (when dt-main (bit-and @(:state dt-main) :color 0x00FFFFFF))
+            base-rgb-middle (when dt-middle (bit-and @(:state dt-middle) :color 0x00FFFFFF))
+            base-rgb-base (when dt-base (bit-and @(:state dt-base) :color 0x00FFFFFF))
+            set-dt-alpha! (fn [dt base-rgb alpha-float]
+                            (when (and dt base-rgb)
+                              (let [a (int (* (double alpha-float) 255.0))
+                                    c (unchecked-int (bit-or (long base-rgb) (bit-shift-left a 24)))]
+                                (swap! (:state dt) assoc :color c))))]
+        (events/on-frame ui-block
+          (fn [_]
+            (let [completeness @(:completeness container)
+                  status @(:status container)]
+              (case completeness
+                "complete"
+                (if (= status "COMPLETE")
+                  ;; COMPLETE: tower fully present and generating — all icons bright
+                  (do (set-dt-alpha! dt-main base-rgb-main 1.0)
+                      (set-dt-alpha! dt-middle base-rgb-middle 1.0)
+                      (set-dt-alpha! dt-base base-rgb-base 1.0))
+                  ;; COMPLETE_NOT_WORKING: tower complete but blocked/no-fan — main dimmed
+                  (do (set-dt-alpha! dt-main base-rgb-main 0.6)
+                      (set-dt-alpha! dt-middle base-rgb-middle 1.0)
+                      (set-dt-alpha! dt-base base-rgb-base 1.0)))
+                "no_top"
+                ;; NO_TOP: base + pillars found but main not found — main very dim
+                (do (set-dt-alpha! dt-main base-rgb-main 0.2)
+                    (set-dt-alpha! dt-middle base-rgb-middle 1.0)
+                    (set-dt-alpha! dt-base base-rgb-base 1.0))
+                ;; BASE_ONLY: only base present — main and middle very dim
+                (do (set-dt-alpha! dt-main base-rgb-main 0.2)
+                    (set-dt-alpha! dt-middle base-rgb-middle 0.2)
+                    (set-dt-alpha! dt-base base-rgb-base 1.0))))))))
     (tech-ui/create-tech-screen-container
       {:pages pages
        :container container
