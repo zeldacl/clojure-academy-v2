@@ -211,8 +211,15 @@
       state2)))
 
 (defn interferer-after-commit!
+  "1.20-idiomatic: cheap in-memory :enabled comparison first; only touch world
+   BlockState when the visual property actually changes. Ability interference
+   effects (player registration) are handled after the BlockState check."
   [_be level pos old-state new-state _ctx]
   (when (and level pos (not= old-state new-state))
+    ;; BlockState update (1.20 pattern: cheap comparison before world access)
+    (when (not= (:enabled old-state) (:enabled new-state))
+      (interferer-blockstate-updater new-state level pos))
+    ;; Ability interference effects
     (let [src-id (source-id level pos)
           prev (set (:affected-player-uuids old-state []))
           next (set (:affected-player-uuids new-state []))
@@ -239,10 +246,15 @@
         (unregister-active-interferer! src-id)))))
 
 (def interferer-tick-fn
+  "BlockState updates follow the vanilla 1.20 pattern:
+   :after-commit! does a cheap in-memory :enabled comparison first;
+   :blockstate-updater is intentionally omitted — only touches world
+   BlockState when :enabled actually changes (rare: energy depletion or
+   owner toggle). Handlers pass blockstate-updater explicitly for
+   immediate visual feedback."
   (machine-runtime/make-tick-fn
     {:default-state interferer-default-state
      :tick-state interferer-tick-state
-     :blockstate-updater interferer-blockstate-updater
      :after-commit! interferer-after-commit!}))
 
 ;; ============================================================================

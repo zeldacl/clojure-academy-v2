@@ -240,11 +240,25 @@
     (assoc state :frame (animated-frame working?
                                         (world/world-get-day-time* level)))))
 
+(defn- sync-fusor-blockstate!
+  "1.20-idiomatic BlockState update: cheap in-memory comparison of :frame and
+   :facing values; only touch world BlockState when visual properties differ.
+   :frame cycles 1-4 during crafting (every ~8 ticks); :facing is static."
+  [_be level pos old-state new-state _ctx]
+  (when (and level pos)
+    (when (or (not= (:frame old-state 0) (:frame new-state 0))
+              (not= (:facing old-state "north") (:facing new-state "north")))
+      (fusor-blockstate-updater new-state level pos))))
+
 (def fusor-tick-fn
+  "BlockState updates follow the vanilla 1.20 pattern:
+   :after-commit! does a cheap in-memory :frame/:facing comparison first;
+   :blockstate-updater is intentionally omitted — avoids reading world
+   BlockState every tick (87% of ticks have no frame change)."
   (machine-runtime/make-tick-fn
     {:default-state fusor-default-state
      :tick-state fusor-tick-state
-     :blockstate-updater fusor-blockstate-updater}))
+     :after-commit! sync-fusor-blockstate!}))
 
 (defn- can-place? [_be slot item _face]
   (or (and (= slot input-slot) (boolean (recipes/find-recipe item)))
