@@ -17,7 +17,7 @@
 	 :generator [:list-nodes :connect :disconnect]
 	 :metal-former [:alternate]
 	 :developer [:start-development :stop-development :list-nodes :connect :disconnect]
-	 :ability-interferer [:change-range :toggle-enabled :set-whitelist :add-to-whitelist :remove-from-whitelist]})
+	 :ability-interferer [:change-range :toggle-enabled :set-whitelist :add-to-whitelist :remove-from-whitelist :list-nodes :connect :disconnect]})
 
 (def message-domain-contracts
 	"Registry-phase handler contracts for wireless GUI message domains.

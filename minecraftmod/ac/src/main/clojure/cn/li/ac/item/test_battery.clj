@@ -44,7 +44,7 @@
 ;; Battery Helper Functions
 ;; ============================================================================
 
-(defn- get-battery-type
+(defn get-battery-type
   [item-stack]
   (when item-stack
     (let [item-obj (item/item-get-item item-stack)

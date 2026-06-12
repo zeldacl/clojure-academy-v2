@@ -14,7 +14,9 @@
             [cn.li.ac.block.ability-interferer.schema :as interferer-schema]
             [cn.li.ac.gui.manifest :as gui-manifest]
             [cn.li.ac.gui.tech-ui-common :as tech-ui]
+            [cn.li.ac.item.test-battery :as battery]
             [cn.li.ac.wireless.gui.container.common :as common]
+            [cn.li.ac.wireless.gui.tab :as wireless-tab]
             [cn.li.mcmod.gui.container.action-payload :as action-payload]
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.ac.energy.operations :as energy]))
@@ -97,7 +99,8 @@
 (defn- slot-changed! [_container _slot-index] nil)
 
 (defn- can-place-item? [_container _slot-index item-stack]
-  (boolean (energy/is-energy-item-supported? item-stack)))
+  "Only accept energy_unit items in the battery slot (matching original AcademyCraft)."
+  (= :energy-unit (battery/get-battery-type item-stack)))
 
 (defn- still-valid? [_container _player] true)
 
@@ -339,7 +342,11 @@
 (defn- create-screen [container minecraft-container _player]
   (let [inv-page (tech-ui/create-rework-page "guis/rework/page_interfere.xml")
         inv-window (:window inv-page)
-      pages [inv-page]
+        wireless-window (wireless-tab/create-wireless-panel
+                          {:role :ability-interferer
+                           :container container
+                           :menu minecraft-container})
+        pages [inv-page {:id "wireless" :window wireless-window}]
         max-e (fn [] (max 1.0 (double @(:max-energy container))))
         wl-text (fn []
                   (let [wl @(:whitelist container)]

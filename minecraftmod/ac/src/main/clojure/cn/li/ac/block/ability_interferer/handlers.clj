@@ -5,8 +5,11 @@
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.ac.block.machine.handlers :as machine-handlers]
             [cn.li.ac.block.machine.runtime :as machine-runtime]
+            [cn.li.ac.block.machine.wireless-handlers :as wireless-handlers]
             [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.ac.block.ability-interferer.logic :as interferer-logic]
+            [cn.li.ac.wireless.api :as wireless-api]
+            [cn.li.ac.wireless.data.node-conn :as node-conn]
             [cn.li.mcmod.util.log :as log]))
 
 (defn- msg [action] (msg-registry/msg :ability-interferer action))
@@ -84,10 +87,20 @@
         {:success true})
       {:success false})))
 
+(defn- get-linked-node-for-interferer [tile]
+  (when-let [conn (try (wireless-api/get-node-conn-by-receiver tile) (catch Exception _ nil))]
+    (try (node-conn/get-node conn) (catch Exception _ nil))))
+
 (defn register-network-handlers! []
   (net-server/register-handler (msg :change-range) handle-change-range)
   (net-server/register-handler (msg :toggle-enabled) handle-toggle-enabled)
   (net-server/register-handler (msg :set-whitelist) handle-set-whitelist)
   (net-server/register-handler (msg :add-to-whitelist) handle-add-to-whitelist)
   (net-server/register-handler (msg :remove-from-whitelist) handle-remove-from-whitelist)
+  (wireless-handlers/register-link-handlers!
+    {:message-domain :ability-interferer
+     :get-linked-node get-linked-node-for-interferer
+     :link! wireless-api/link-receiver-to-node!
+     :unlink! wireless-api/unlink-receiver-from-node!
+     :log-label "Ability Interferer wireless"})
   (log/info "Ability Interferer network handlers registered"))

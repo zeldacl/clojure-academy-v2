@@ -8,10 +8,14 @@
             [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.ac.block.ability-interferer.config :as interferer-config]
             [cn.li.ac.block.ability-interferer.schema :as interferer-schema]
+            [cn.li.ac.block.energy-converter.wireless-impl :as wireless-impl]
             [cn.li.ac.block.machine.container :as machine-container]
             [cn.li.ac.block.machine.runtime :as machine-runtime]
             [cn.li.ac.energy.operations :as energy]
+            [cn.li.ac.item.test-battery :as battery]
+            [cn.li.ac.wireless.api :as wireless-api]
             [cn.li.mcmod.block.state-schema :as state-schema]
+            [cn.li.mcmod.events.world-lifecycle :as world-lifecycle]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.platform.entity :as entity]
@@ -56,17 +60,24 @@
 	(or (try (world/world-get-players* level) (catch Exception _ nil)) []))
 
 (defn- find-players-in-range [level pos range]
-	(let [cx (+ 0.5 (double (pos/pos-x pos)))
-				cy (+ 0.5 (double (pos/pos-y pos)))
-				cz (+ 0.5 (double (pos/pos-z pos)))
-				max-d2 (* (double range) (double range))]
-		(->> (raw-level-players level)
-				 (filter (fn [p]
-									 (and p
-												(not (player-creative? p))
-												(not (player-spectator? p))
-												(<= (double (entity/entity-distance-to-sqr p cx cy cz)) max-d2))))
-				 vec)))
+  "Find players within a cubic AABB centered on the block (matching original AcademyCraft behavior)."
+  (let [cx (+ 0.5 (double (pos/pos-x pos)))
+        cy (+ 0.5 (double (pos/pos-y pos)))
+        cz (+ 0.5 (double (pos/pos-z pos)))
+        r (double range)
+        min-x (- cx r) max-x (+ cx r)
+        min-y (- cy r) max-y (+ cy r)
+        min-z (- cz r) max-z (+ cz r)]
+    (->> (raw-level-players level)
+         (filter (fn [p]
+                   (and p
+                        (not (player-creative? p))
+                        (not (player-spectator? p))
+                        (let [ppos (.position p)]
+                          (and (<= min-x (.x ppos) max-x)
+                               (<= min-y (.y ppos) max-y)
+                               (<= min-z (.z ppos) max-z))))))
+         vec)))
 
 (defn- apply-interference-effect! [player src-id]
 	(when-let [uuid (uuid/player-uuid player)]
@@ -105,6 +116,51 @@
 (defn clear-interference-by-uuids! [uuids src-id]
 	(doseq [uuid uuids]
 		(remove-interference-effect-by-uuid! uuid src-id)))
+
+;; ============================================================================
+;; Global registry of active interferers (for tile invalidation detection)
+;; ============================================================================
+
+(defonce ^:private active-interferers (atom {}))
+;; {source-id {:level world :pos block-pos :affected-uuids #{...}}}
+
+(def ^:private active-interferers-tick-counter (atom 0))
+
+(defn- register-active-interferer! [src-id level pos uuids]
+  (swap! active-interferers assoc src-id {:level level :pos pos :affected-uuids (set uuids)}))
+
+(defn- unregister-active-interferer! [src-id]
+  (swap! active-interferers dissoc src-id))
+
+(defn- update-active-interferer-uuids! [src-id uuids]
+  (swap! active-interferers (fn [m]
+                              (if (contains? m src-id)
+                                (assoc-in m [src-id :affected-uuids] (set uuids))
+                                m))))
+
+(defn- cleanup-stale-interferers!
+  "World-tick handler: check all registered interferers for chunk unload.
+   Matching original AcademyCraft's !tile.isInvalid per-tick check."
+  [world]
+  (swap! active-interferers-tick-counter inc)
+  (when (zero? (mod @active-interferers-tick-counter 40))
+    (let [stale (atom [])]
+      (doseq [[src-id {:keys [level pos affected-uuids]}] @active-interferers]
+        (when (and level pos)
+          (try
+            (when-not (world/world-is-chunk-loaded?* level pos)
+              (swap! stale conj src-id)
+              (log/warn "[Interferer] Chunk unloaded for" src-id "- cleaning up" (count affected-uuids) "players")
+              (doseq [u affected-uuids]
+                (remove-interference-effect-by-uuid! u src-id)))
+            (catch Exception e
+              (log/warn "[Interferer] Error checking chunk for" src-id ":" (ex-message e))))))
+      (when (seq @stale)
+        (swap! active-interferers #(apply dissoc % @stale))))))
+
+;; ============================================================================
+;; Scan and tick
+;; ============================================================================
 
 (defn- scan-affected-uuids
   [level pos state]
@@ -162,8 +218,10 @@
           next (set (:affected-player-uuids new-state []))
           removed (set/difference prev next)
           added (set/difference next prev)]
+      ;; Remove interference from players who left range
       (doseq [u removed]
         (remove-interference-effect-by-uuid! u src-id))
+      ;; Add interference to new players in range
       (when (seq added)
         (let [range (clamp-range (:range new-state (interferer-config/default-range)))
               whitelist (set (map str (:whitelist new-state [])))
@@ -172,7 +230,13 @@
                   :let [uid (uuid/player-uuid player)]
                   :when (and uid (contains? added uid)
                              (not (contains? whitelist (player-name player))))]
-            (apply-interference-effect! player src-id)))))))
+            (apply-interference-effect! player src-id))))
+      ;; Update the global registry for tile invalidation tracking
+      (if (seq next)
+        (if (contains? @active-interferers src-id)
+          (update-active-interferer-uuids! src-id next)
+          (register-active-interferer! src-id level pos next))
+        (unregister-active-interferer! src-id)))))
 
 (def interferer-tick-fn
   (machine-runtime/make-tick-fn
@@ -181,11 +245,18 @@
      :blockstate-updater interferer-blockstate-updater
      :after-commit! interferer-after-commit!}))
 
-(defn- can-place-battery? [_be slot item _face]
-  (and (= slot battery-slot) (energy/is-energy-item-supported? item)))
+;; ============================================================================
+;; Container functions
+;; ============================================================================
 
-(defn- can-take-battery? [_be slot _item _face]
-  (= slot battery-slot))
+(defn- can-place-battery? [_be slot item _face]
+  "Only accept energy_unit items in the battery slot (matching original AcademyCraft)."
+  (and (= slot battery-slot)
+       (= :energy-unit (battery/get-battery-type item))))
+
+(defn- can-take-battery? [_be _slot _item _face]
+  "Block automated extraction (matching original AcademyCraft)."
+  false)
 
 (def interferer-container-fns
   (machine-container/make-inventory-container-fns
@@ -196,6 +267,10 @@
 
 (def open-interferer-gui!
   (machine-runtime/make-open-gui-handler :ability-interferer))
+
+;; ============================================================================
+;; Block lifecycle: place, break
+;; ============================================================================
 
 (defn on-interferer-placed! [{:keys [player world pos] :as _ctx}]
 	(when (and player world pos)
@@ -226,5 +301,37 @@
 							uuids (set (:affected-player-uuids state []))
 							src-id (source-id world pos)]
 					(when (seq uuids)
-						(clear-interference-by-uuids! uuids src-id)))))))
+						(clear-interference-by-uuids! uuids src-id))
+          ;; Remove from global registry
+          (unregister-active-interferer! src-id))))))
 
+;; ============================================================================
+;; IWirelessReceiver capability (matching original TileReceiverBase)
+;; ============================================================================
+
+(defn create-interferer-wireless-receiver
+  "Create IWirelessReceiver implementation for the ability interferer.
+   Wireless energy goes into the same :energy pool as battery pull,
+   matching original AcademyCraft TileReceiverBase behavior."
+  [be]
+  (wireless-impl/create-wireless-receiver
+    be
+    (fn [] (machine-runtime/state-or-default be interferer-default-state))
+    (fn [st] (machine-runtime/commit-from-tile! be interferer-default-state st))
+    {:max-energy (fn [] (interferer-config/max-energy))
+     :bandwidth (fn [] (interferer-config/battery-pull-per-tick))}))
+
+;; ============================================================================
+;; World-tick cleanup registration
+;; ============================================================================
+
+(def ^:private world-tick-cleanup-registered? (atom false))
+
+(defn ensure-world-tick-cleanup!
+  "Register the stale interferer cleanup handler if not already registered."
+  []
+  (when (compare-and-set! world-tick-cleanup-registered? false true)
+    (world-lifecycle/register-world-lifecycle-handler!
+      {:on-tick (fn [world]
+                  (cleanup-stale-interferers! world))})
+    (log/info "Ability Interferer world-tick cleanup handler registered")))

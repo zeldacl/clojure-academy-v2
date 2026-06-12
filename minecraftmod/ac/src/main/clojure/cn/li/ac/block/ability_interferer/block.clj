@@ -5,7 +5,8 @@
             [cn.li.ac.block.machine.registration :as machine-reg]
             [cn.li.ac.config.modid :as modid]
             [cn.li.ac.util.init-guard :refer [defonce-guard]]
-            [cn.li.mcmod.block.dsl :as bdsl]))
+            [cn.li.mcmod.block.dsl :as bdsl])
+  (:import [cn.li.acapi.wireless IWirelessReceiver]))
 
 (defonce-guard ability-interferer-installed?)
 
@@ -34,9 +35,13 @@
                  :rendering {:model-parent "minecraft:block/cube_all"
                              :textures {:all (modid/asset-path "block" "ability_interf_off")}
                              :flat-item-icon? true
-                             :light-level 3}
+                             :light-level 0}
                  :block-state {:block-state-properties interferer-logic/interferer-block-state-properties}
                  :events {:on-right-click interferer-logic/open-interferer-gui!
                           :on-place interferer-logic/on-interferer-placed!
                           :on-break interferer-logic/on-interferer-break!}})]
-     :network-handler interferer-handlers/register-network-handlers!}))
+     :network-handler interferer-handlers/register-network-handlers!
+     :capabilities [{:key :wireless-receiver
+                     :interface IWirelessReceiver
+                     :factory-fn (fn [be] (interferer-logic/create-interferer-wireless-receiver be))}]})
+   (interferer-logic/ensure-world-tick-cleanup!))

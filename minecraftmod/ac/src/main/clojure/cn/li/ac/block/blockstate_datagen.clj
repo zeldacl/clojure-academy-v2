@@ -180,7 +180,10 @@
                     "east" {:north left :south right :east front :west back}
                     "west" {:north right :south left :east back :west front}
                     {:north front :south back :east right :west left})]
-        (merge {:down down :up top} sides)))))
+        (merge {:down down :up top} sides)))
+    ;; Ability Interferer: ON state uses ability_interf_on texture
+    (when (= model-name "ability_interferer")
+      {:all (str (mod-id) ":block/ability_interf_on")})))
 
 (defn default-item-model-id
   "Default item model for complex blocks that use variant geometry."
