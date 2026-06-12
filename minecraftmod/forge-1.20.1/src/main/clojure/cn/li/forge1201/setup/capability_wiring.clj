@@ -10,8 +10,12 @@
   (consumer-support/add-normal-listener! mod-bus listener-class f))
 
 (defn- forge-built-in-capability?
+  "Forge built-in capabilities are already registered by Forge itself and must NOT
+  be registered again via RegisterCapabilitiesEvent."
   [^Class java-type]
-  (= "net.minecraftforge.energy.IEnergyStorage" (.getName java-type)))
+  (let [name (.getName java-type)]
+    (or (= "net.minecraftforge.energy.IEnergyStorage" name)
+        (= "net.minecraftforge.fluids.capability.IFluidHandler" name))))
 
 (defn register-capability-listener!
   [^IEventBus mod-bus]

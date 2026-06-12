@@ -24,7 +24,7 @@
      :blocks [(bdsl/create-block-spec
                 "metal-former"
                 {:registry-name "metal_former"
-                 :physical {:material :rock
+                 :physical {:material :stone
                             :hardness 3.0
                             :resistance 6.0
                             :requires-tool true

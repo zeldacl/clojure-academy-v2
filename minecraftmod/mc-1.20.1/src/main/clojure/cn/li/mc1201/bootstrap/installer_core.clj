@@ -362,8 +362,7 @@
                                    rl (net.minecraft.resources.ResourceLocation. ns path)
                                    tag-key (net.minecraft.tags.TagKey/create
                                             net.minecraft.core.registries.Registries/ITEM rl)
-                                   items (.iterator (net.minecraft.core.registries.BuiltInRegistries/ITEM
-                                                     (.getTagOrEmpty tag-key)))]
+                                   items (.iterator (.getTagOrEmpty net.minecraft.core.registries.BuiltInRegistries/ITEM tag-key))]
                                (when (.hasNext items)
                                  (let [item (.value ^net.minecraft.core.Holder (.next items))
                                        stack (net.minecraft.world.item.ItemStack. item (int count))]

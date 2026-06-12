@@ -35,7 +35,8 @@
   tile-ids: vector of tile id strings"
   [capabilities tile-ids]
   (doseq [{:keys [key interface factory]} capabilities]
-    (platform-cap/declare-capability! key interface factory)
+    (when-not (platform-cap/get-capability-entry key)
+      (platform-cap/declare-capability! key interface factory))
     (doseq [tile-id tile-ids]
       (tile-logic/register-tile-capability! tile-id key))))
 

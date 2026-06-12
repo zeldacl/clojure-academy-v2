@@ -67,7 +67,7 @@
                 amount (.getAmount resource)
                 current (int (get state :liquid-amount 0))
                 capacity (int (get state :tank-size 8000))
-                can-fill (Math/max 0 (Math/min amount (- capacity current)))]
+                can-fill (max 0 (min amount (- capacity current)))]
             (when (and (pos? can-fill) (= action IFluidHandler$FluidAction/EXECUTE))
               (let [new-state (assoc state :liquid-amount (+ current can-fill))]
                 (platform-be/set-custom-state! be new-state)
@@ -75,10 +75,10 @@
             (int can-fill))
           0))
 
-      (drain [_ max-drain action]
+      (^FluidStack drain [_ ^int max-drain ^IFluidHandler$FluidAction action]
         (let [state (platform-be/get-custom-state be)
               current (int (get state :liquid-amount 0))
-              can-drain (Math/min current (int max-drain))]
+              can-drain (min current (int max-drain))]
           (if (and fluid (pos? can-drain))
             (do
               (when (= action IFluidHandler$FluidAction/EXECUTE)
@@ -88,12 +88,12 @@
               (FluidStack. fluid can-drain))
             FluidStack/EMPTY)))
 
-      (drain [_ resource action]
+      (^FluidStack drain [_ ^FluidStack resource ^IFluidHandler$FluidAction action]
         (if (and fluid resource (= (.getFluid resource) fluid))
           (let [state (platform-be/get-custom-state be)
                 amount (.getAmount resource)
                 current (int (get state :liquid-amount 0))
-                can-drain (Math/min current amount)]
+                can-drain (min current amount)]
             (if (pos? can-drain)
               (do
                 (when (= action IFluidHandler$FluidAction/EXECUTE)

@@ -1,20 +1,16 @@
 (ns cn.li.ac.block.imag-fusor.handlers
-  "Imaginary Fusor network handlers (wireless receiver linking)."
-  (:require [cn.li.ac.block.machine.wireless-handlers :as wireless-handlers]
-            [cn.li.ac.wireless.api :as wireless-api]
-            [cn.li.ac.wireless.data.node-conn :as node-conn]
-            [cn.li.mcmod.util.log :as log]))
+  "Imaginary Fusor network handlers.
 
-(defn- get-linked-node-for-fusor [tile]
-  (when-let [conn (try (wireless-api/get-node-conn-by-receiver tile) (catch Exception _ nil))]
-    (try (node-conn/get-node conn) (catch Exception _ nil))))
+  Imag Fusor reuses the :developer message domain handlers registered by the
+  Developer block. The link!/unlink!/get-linked-node logic is tile-generic:
+  `get-node-conn-by-receiver` works for any IWirelessReceiver tile.
+  The GUI uses (wireless-tab/create-wireless-panel {:role :receiver}) which
+  sends :developer messages → handled by developer's registered handlers."
+  (:require [cn.li.mcmod.util.log :as log]))
 
 (defn register-network-handlers!
   []
-  (wireless-handlers/register-link-handlers!
-    {:message-domain :developer
-     :get-linked-node get-linked-node-for-fusor
-     :link! wireless-api/link-receiver-to-node!
-     :unlink! wireless-api/unlink-receiver-from-node!
-     :log-label "Imag Fusor wireless"})
-  (log/info "Imaginary Fusor network handlers registered"))
+  ;; :developer domain handlers already registered by developer block.
+  ;; Imag Fusor GUI uses (wireless-tab/create-wireless-panel {:role :receiver})
+  ;; which sends :developer messages → handled by developer's registered handlers.
+  (log/info "Imaginary Fusor network handlers registered (reuses :developer domain)"))

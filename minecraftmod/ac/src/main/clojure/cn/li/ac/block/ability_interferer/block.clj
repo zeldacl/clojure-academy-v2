@@ -43,5 +43,5 @@
      :network-handler interferer-handlers/register-network-handlers!
      :capabilities [{:key :wireless-receiver
                      :interface IWirelessReceiver
-                     :factory-fn (fn [be] (interferer-logic/create-interferer-wireless-receiver be))}]})
+                     :factory (fn [be _side] (interferer-logic/create-interferer-wireless-receiver be))}]})
    (interferer-logic/ensure-world-tick-cleanup!))
