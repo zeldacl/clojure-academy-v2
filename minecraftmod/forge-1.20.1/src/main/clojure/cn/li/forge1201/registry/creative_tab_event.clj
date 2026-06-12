@@ -11,10 +11,12 @@
   - Adds each item + optional NBT variants (energy fully-charged, filled-variant)."
   (:require [cn.li.forge1201.registry.state :as registry-state]
             [cn.li.mcmod.config :as modid]
-            [cn.li.mcmod.protocol.metadata :as registry-metadata])
+            [cn.li.mcmod.protocol.metadata :as registry-metadata]
+            [clojure.string :as str])
   (:import [net.minecraft.world.item ItemStack]
            [net.minecraft.world.level ItemLike]
-           [net.minecraftforge.event BuildCreativeModeTabContentsEvent]))
+           [net.minecraftforge.event BuildCreativeModeTabContentsEvent]
+           [net.minecraft.network.chat Component]))
 
 
 ;; ── NBT variant helpers ──────────────────────────────────────────────
@@ -43,8 +45,10 @@
 (defn- ^:private accept-filled-variant
   "Add a generic filled-variant item to the creative tab.
 
-  Reads :filled-variant map from item spec properties and writes NBT + damage."
-  [^BuildCreativeModeTabContentsEvent event ^ItemLike item-obj variant]
+  Reads :filled-variant map from item spec properties and writes NBT + damage.
+  Sets a translation-key-based hover name to distinguish the variant from the
+  default item: `item.<modid>.<item-id>_<label-as-snake-case>`."
+  [^BuildCreativeModeTabContentsEvent event ^ItemLike item-obj variant item-id]
   (try
     (let [variant-stack (ItemStack. item-obj)
           tag (.getOrCreateTag variant-stack)]
@@ -56,6 +60,12 @@
           :else nil))
       (when-let [dmg (:damage variant)]
         (.setDamageValue variant-stack (int dmg)))
+      ;; Distinct display name so the variant doesn't duplicate the default entry
+      (when-let [label (:label variant)]
+        (let [label-key (str/replace (str label) #"-" "_")
+              mod-id (var-get #'modid/*mod-id*)
+              translation-key (str "item." mod-id "." item-id "_" label-key)]
+          (.setHoverName variant-stack (Component/translatable translation-key))))
       (.accept event variant-stack))
     (catch Exception _ nil)))
 
@@ -79,7 +89,7 @@
             (when (true? (:energy-item? props))
               (accept-energy-charged-variant event id item-obj spec))
             (when-let [variant (:filled-variant props)]
-              (accept-filled-variant event item-obj variant))))))))
+              (accept-filled-variant event item-obj variant id))))))))
 
 
 (defn handle-build-contents
