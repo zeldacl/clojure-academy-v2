@@ -20,11 +20,17 @@ clojure {
 // Exclude Clojure sources from JAR — AOT classes are the only runtime representation.
 tasks.named('processResources').configure { exclude '**/*.clj', '**/*.cljc' }
 
-// Emit AOT classes directly to Java output.
+// Emit AOT classes to a dedicated Clojure output directory (not classes/java/main).
+// Sharing output directories between compileJava and compileClojure is a Gradle
+// anti-pattern: task output tracking breaks, and one task may silently delete the
+// other's outputs. Keep them isolated so the build is deterministic.
 tasks.named('compileClojure').configure { task ->
-    def targetDirProvider = layout.buildDirectory.dir('classes/java/main')
+    def targetDirProvider = layout.buildDirectory.dir('clojure/main')
     def targetDirFile = targetDirProvider.get().asFile
     task.forkOptions.memoryMaximumSize = '512m'
+    // Ensure Java classes are on the Clojure compile classpath.
+    dependsOn 'compileJava'
+    classpath.from(files(layout.buildDirectory.dir('classes/java/main')))
     if (task.metaClass.hasProperty(task, 'destinationDirectory')) {
         task.destinationDirectory = targetDirProvider
     } else if (task.metaClass.hasProperty(task, 'destinationDir')) {
@@ -38,15 +44,30 @@ tasks.named('compileClojure').configure { task ->
 // Clojure 1.12 AOT can emit slot_index=-1 entries that crash TinyRemapper.
 def stripAotLvt = tasks.register('stripAotLvt') {
     dependsOn tasks.named('compileClojure')
-    def classesDir = layout.buildDirectory.dir('classes/java/main')
+    def classesDir = layout.buildDirectory.dir('clojure/main')
+    def strippedDir = layout.buildDirectory.dir('clojure/main-stripped')
     inputs.dir(classesDir)
-    outputs.dir(classesDir)
+    outputs.dir(strippedDir)
     doLast {
         def dir = classesDir.get().asFile
-        if (!dir.isDirectory()) return
+        def outDir = strippedDir.get().asFile
+        delete(outDir)
+        if (!dir.isDirectory()) {
+            outDir.mkdirs()
+            return
+        }
         int stripped = 0
+        int copied = 0
         dir.eachFileRecurse { file ->
-            if (!file.name.endsWith('.class')) return
+            def rel = dir.toPath().relativize(file.toPath()).toString()
+            def target = new File(outDir, rel)
+            if (!file.name.endsWith('.class')) {
+                if (file.isFile()) {
+                    target.parentFile.mkdirs()
+                    target.bytes = file.bytes
+                }
+                return
+            }
             try {
                 def reader = new org.objectweb.asm.ClassReader(file.bytes)
                 def writer = new org.objectweb.asm.ClassWriter(0)
@@ -66,14 +87,21 @@ def stripAotLvt = tasks.register('stripAotLvt') {
                     }
                 }, 0)
                 if (dropped[0] > 0) {
-                    file.bytes = writer.toByteArray()
+                    target.parentFile.mkdirs()
+                    target.bytes = writer.toByteArray()
                     stripped++
+                } else {
+                    target.parentFile.mkdirs()
+                    target.bytes = file.bytes
+                    copied++
                 }
             } catch (Exception ex) {
                 logger.warn("[stripAotLvt] skipping ${file.name}: ${ex.message}")
             }
         }
-        if (stripped > 0) logger.lifecycle('[stripAotLvt] stripped LVT from {} AOT classes', stripped)
+        if (stripped > 0 || copied > 0) {
+            logger.lifecycle('[stripAotLvt] stripped LVT from {} AOT classes; copied {} unchanged', stripped, copied)
+        }
     }
 }
 // LVT stripping only needed for packaging (TinyRemapper); skip for dev runs.

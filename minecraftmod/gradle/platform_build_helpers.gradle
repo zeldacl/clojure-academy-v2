@@ -111,6 +111,7 @@ ext.configureAcContentRuntime = {
     def acProject = project(':ac')
     def acClojureSources = acProject.file('src/main/clojure')
     def acJavaClasses = acProject.layout.buildDirectory.dir('classes/java/main')
+    def acClojureAotClasses = acProject.layout.buildDirectory.dir('clojure/main')
     def acResources = acProject.layout.buildDirectory.dir('resources/main')
 
     dependencies {
@@ -128,6 +129,12 @@ ext.configureAcContentRuntime = {
         from(acProject.sourceSets.main.output) {
             exclude 'META-INF/MANIFEST.MF'
         }
+        // AC AOT Clojure classes are output to clojure/main (isolated from Java
+        // output to avoid Gradle task output tracking conflicts).
+        from(acClojureAotClasses) {
+            include '**/*.class'
+            exclude 'META-INF/MANIFEST.MF'
+        }
         from(acClojureSources) {
             include '**/*.clj'
         }
@@ -136,6 +143,10 @@ ext.configureAcContentRuntime = {
     tasks.matching { it.name == 'shadowJar' }.configureEach {
         dependsOn acProject.tasks.named('classes')
         from(acProject.sourceSets.main.output) {
+            exclude 'META-INF/MANIFEST.MF'
+        }
+        from(acClojureAotClasses) {
+            include '**/*.class'
             exclude 'META-INF/MANIFEST.MF'
         }
         from(acClojureSources) {
@@ -164,10 +175,17 @@ ext.configureAcContentRuntime = {
         mustRunAfter tasks.named('compileJava')
         includeEmptyDirs = false
         duplicatesStrategy = DuplicatesStrategy.INCLUDE
+        // AC Java-compiled classes (includes AcContentInitBootstrap etc.)
         from(acJavaClasses) {
             include '**/*.class'
             exclude 'META-INF/MANIFEST.MF'
         }
+        // AC Clojure AOT classes (compiled to clojure/main, separated from Java output)
+        from(acClojureAotClasses) {
+            include '**/*.class'
+            exclude 'META-INF/MANIFEST.MF'
+        }
+        // AC Clojure runtime sources (for dev launchers that load .clj directly)
         from(acClojureSources) {
             include '**/*.clj'
             include '**/*.cljc'
@@ -175,6 +193,9 @@ ext.configureAcContentRuntime = {
         into layout.buildDirectory.dir('classes/java/main')
         inputs.files(acJavaClasses)
             .withPropertyName('acJavaClasses')
+            .withPathSensitivity(PathSensitivity.RELATIVE)
+        inputs.files(acClojureAotClasses)
+            .withPropertyName('acClojureAotClasses')
             .withPathSensitivity(PathSensitivity.RELATIVE)
         inputs.files(acClojureSources)
             .withPropertyName('acClojureSources')

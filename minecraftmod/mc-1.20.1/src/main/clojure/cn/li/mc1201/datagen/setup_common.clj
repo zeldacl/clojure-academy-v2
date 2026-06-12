@@ -51,4 +51,5 @@
                       "counts=" initial))))
     (catch Throwable t
       (println (str "[" modid/*mod-id* "] WARNING: failed to load content for datagen: "
-                    (ex-message t))))))
+                    (ex-message t)))
+      (.printStackTrace t))))

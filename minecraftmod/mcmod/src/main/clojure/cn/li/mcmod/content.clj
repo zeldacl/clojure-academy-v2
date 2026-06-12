@@ -57,6 +57,6 @@
     (catch Throwable t
       (println "[my_mod] WARNING: ContentInitBootstraps/registerAll() failed:"
                (ex-message t))
-      nil))
+      (.printStackTrace t)))
   nil)
 
