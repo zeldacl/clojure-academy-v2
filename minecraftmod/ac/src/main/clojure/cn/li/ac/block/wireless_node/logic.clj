@@ -208,8 +208,14 @@
       (assoc state :enabled false :capacity 0 :max-capacity 0))))
 
 (defn- sync-blockstate-if-changed!
+  "1.20-idiomatic BlockState update: cheap in-memory comparison first, then
+   only touch the world BlockState when the visual level actually differs.
+   Mirrors the vanilla pattern used by Furnace (lit), Respawn Anchor (charges), etc.
+
+   Called via :after-commit! in make-tick-fn every tick the state changes,
+   and also usable as a safety net for direct state commits."
   [_be level pos old-state new-state _ctx]
-  (when (and level pos (zero? (mod (get new-state :update-ticker 0) (node-config/sync-interval))))
+  (when (and level pos)
     (let [old-level (energy->blockstate-level (:energy old-state 0) new-state)
           new-level (energy->blockstate-level (:energy new-state 0) new-state)
           old-enabled (:enabled old-state false)
@@ -232,6 +238,10 @@
       state3)))
 
 (def node-scripted-tick-fn
+  "BlockState updates follow the vanilla 1.20 pattern (e.g. Furnace lit):
+   :after-commit! does a cheap in-memory energy-level comparison first;
+   :blockstate-updater is intentionally omitted — avoid reading world
+   BlockState every tick when the visual level hasn't changed."
   (machine-runtime/make-tick-fn
     {:default-state node-default-state
      :initial-state (fn [be _ctx]

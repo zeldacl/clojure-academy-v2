@@ -63,7 +63,8 @@
           actual   (min can-recv (double max-receive))]
       (when (and (not simulate) (pos? actual))
         (machine-runtime/commit-transform! be node-logic/node-default-state
-                                         #(assoc % :energy (+ cur actual))))
+                                         #(assoc % :energy (+ cur actual))
+                                         :blockstate-updater node-logic/update-block-state!))
       (int actual)))
 
   (extractEnergy [_ max-extract simulate]
@@ -72,7 +73,8 @@
           actual (min cur (double max-extract))]
       (when (and (not simulate) (pos? actual))
         (machine-runtime/commit-transform! be node-logic/node-default-state
-                                         #(assoc % :energy (- cur actual))))
+                                         #(assoc % :energy (- cur actual))
+                                         :blockstate-updater node-logic/update-block-state!))
       (int actual)))
 
   (getEnergyStored [_]
