@@ -27,7 +27,8 @@
     :part {:registry-name "developer_normal_part"
           :rendering {:model-parent "minecraft:block/cube_all"
             :render-shape :invisible
-                       :textures {:all (modid/asset-path "block" "dev_normal")}}})
+                       :textures {:all (modid/asset-path "block" "dev_normal")}}
+           :events {:on-right-click (dev-logic/open-developer-gui-for "developer-normal")}})
 
   (bdsl/defmultiblock 'developer-advanced
     :multi-block {:positions dev-logic/developer-multiblock-positions
@@ -46,7 +47,8 @@
     :part {:registry-name "developer_advanced_part"
           :rendering {:model-parent "minecraft:block/cube_all"
             :render-shape :invisible
-                       :textures {:all (modid/asset-path "block" "dev_advanced")}}}))
+                       :textures {:all (modid/asset-path "block" "dev_advanced")}}
+           :events {:on-right-click (dev-logic/open-developer-gui-for "developer-advanced")}}))
 
 (defn init-developer!
   []

@@ -87,9 +87,10 @@
       (log/info (str log-prefix " Identified block-id:" block-id))
 
       (if block-id
-        (if (bquery/has-block-event-handler? block-id :on-right-click)
+        (if (or (bquery/has-block-event-handler? block-id :on-right-click)
+                (bquery/is-part-block? block-id))
           (do
-            (log/info (str log-prefix " Block has registered handler, dispatching..."))
+            (log/info (str log-prefix " Block has registered handler (or is part block), dispatching..."))
             (let [ret (dispatcher-fn (assoc event-data :block-id block-id))]
               (log/info (str log-prefix " Dispatcher returned:" ret))
               (event-feedback/emit-feedback! event-data ret)
