@@ -430,4 +430,53 @@
         \R (item (m "reso_crystal"))
         \P plate-iron
         \D (item "minecraft:diamond")}
-       {:item (m "magnetic_coil") :count 1})])))
+       {:item (m "magnetic_coil") :count 1})
+     ;; ============================================================
+     ;; Energy Converter (Energy Bridge) blocks
+     ;; Ported from AcademyCraft 1.12 RFSupport / IC2Support recipes
+     ;; ============================================================
+     (shaped "converter_rf_input"
+       ["abc"
+        " d "]
+       {\a (item (m "energy_unit"))
+        \b (item (m "machine_frame"))
+        \c (item (m "constraint_plate"))
+        \d (item (m "energy_convert_component"))}
+       {:item (m "converter_rf_input") :count 1})
+     (shaped "converter_rf_output"
+       ["abc"
+        " d "]
+       {\a (item (m "energy_unit"))
+        \b (item (m "machine_frame"))
+        \c (item (m "reso_crystal"))
+        \d (item (m "energy_convert_component"))}
+       {:item (m "converter_rf_output") :count 1})
+     (shaped "converter_eu_input"
+       ["abc"
+        " d "]
+       {\a (item (m "energy_unit"))
+        \b (item (m "machine_frame"))
+        \c (item "minecraft:copper_ingot")
+        \d (item (m "energy_convert_component"))}
+       {:item (m "converter_eu_input") :count 1})
+     (shaped "converter_eu_output"
+       ["abc"
+        " d "]
+       {\a (item (m "crystal_low"))
+        \b (item (m "machine_frame"))
+        \c (item "minecraft:copper_ingot")
+        \d (item (m "energy_convert_component"))}
+       {:item (m "converter_eu_output") :count 1})
+     ;; Reversible Input <-> Output conversion (shapeless)
+     (shapeless "converter_rf_input_from_output"
+       [(item (m "converter_rf_output"))]
+       {:item (m "converter_rf_input") :count 1})
+     (shapeless "converter_rf_output_from_input"
+       [(item (m "converter_rf_input"))]
+       {:item (m "converter_rf_output") :count 1})
+     (shapeless "converter_eu_input_from_output"
+       [(item (m "converter_eu_output"))]
+       {:item (m "converter_eu_input") :count 1})
+     (shapeless "converter_eu_output_from_input"
+       [(item (m "converter_eu_input"))]
+       {:item (m "converter_eu_output") :count 1})])))

@@ -76,28 +76,12 @@
 
 (defn- create-screen
 	[container minecraft-container _player]
-	(let [inv-page (tech-ui/create-inventory-page "inventory")
-				wireless-page {:id "wireless" :window (create-wireless-page container {:menu minecraft-container})}
-				pages [inv-page wireless-page]
-				max-e (fn [] (max 1.0 (double @(:max-energy container))))
-				ratio (fn [] (/ (double @(:energy container)) (max-e)))
-				mode-s (fn [] (if (= @(:wireless-mode container) :generator) "GEN" "RECV"))
-				enabled-s (fn [] (if @(:wireless-enabled container) "ON" "OFF"))]
+	(let [wireless-page {:id "wireless" :window (create-wireless-page container {:menu minecraft-container})}
+				pages [wireless-page]]
 		(tech-ui/create-tech-screen-container
 			{:pages pages
 			 :container container
-			 :minecraft-container minecraft-container
-			 :build-info-area!
-			 (fn [info-area]
-				 (let [y0 (tech-ui/add-histogram info-area
-													 [(tech-ui/hist-buffer (fn [] (double @(:energy container))) max-e)]
-													 0)
-						 y1 (tech-ui/add-sepline info-area "Converter" y0)
-						 y2 (tech-ui/add-property info-area "block" (fn [] (str (:block-id container))) y1)
-						 y3 (tech-ui/add-property info-area "status" (fn [] @(:status container)) y2)
-						 y4 (tech-ui/add-property info-area "wireless" enabled-s y3)
-						 y5 (tech-ui/add-property info-area "load" (fn [] (format "%.1f%%" (* 100.0 (ratio)))) y4)]
-					 (tech-ui/add-property info-area "mode" mode-s y5)))})))
+			 :minecraft-container minecraft-container})))
 
 (defn- converter-container?
 	[container]

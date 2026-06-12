@@ -5,8 +5,7 @@
 (def default-state
   {:energy 0.0
    :max-energy (double ec-config/default-energy-capacity)
-   :wireless-enabled true
-  :wireless-bandwidth (double ec-config/default-transfer-bandwidth)})
+   :wireless-bandwidth (double ec-config/default-transfer-bandwidth)})
 
 (defn default-state-map []
   (assoc default-state
@@ -28,11 +27,4 @@
     :persist? false
     :gui-sync? true
     :gui-coerce double
-    :gui-data-slot-scale 100}
-
-   {:key :wireless-enabled
-    :type :boolean
-    :default true
-    :persist? false
-    :gui-sync? true
-    :gui-coerce boolean}])
+    :gui-data-slot-scale 100}])

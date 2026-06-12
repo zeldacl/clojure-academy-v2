@@ -119,11 +119,6 @@
 ;; Wireless Integration Helpers
 ;; ============================================================================
 
-(defn is-wireless-enabled?
-  "Check if wireless mode is enabled for this converter."
-  [state]
-  (boolean (get state :wireless-enabled false)))
-
 (defn get-wireless-mode
   "Get wireless mode: 'generator' or 'receiver'."
   [state]
@@ -210,8 +205,7 @@
   Returns:
     Transfer rate in IF/tick"
   [tile-entity state]
-  (if (and (is-wireless-enabled? state)
-           (is-linked? tile-entity state))
+  (if (is-linked? tile-entity state)
     (let [mode (get-wireless-mode state)]
       (case mode
         "generator"

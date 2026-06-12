@@ -22,9 +22,6 @@
                     (nbt/nbt-get-double tag "Energy")
                     0.0)
           :max-energy (double (ec-config/energy-capacity))
-          :wireless-enabled (if (nbt/nbt-has-key-safe? tag "WirelessEnabled")
-                              (nbt/nbt-get-boolean tag "WirelessEnabled")
-                              true)
           :wireless-bandwidth (double (ec-config/transfer-bandwidth))}))
 
 (defn write-nbt-fn
@@ -32,7 +29,6 @@
   (let [state (or (platform-be/get-custom-state be) (ec-schema/default-state-map))]
     (nbt/nbt-set-double! tag "Energy" (double (get-energy be)))
     (nbt/nbt-set-double! tag "MaxEnergy" (double (ec-config/energy-capacity)))
-    (nbt/nbt-set-boolean! tag "WirelessEnabled" (boolean (get state :wireless-enabled true)))
     (nbt/nbt-set-double! tag "WirelessBandwidth" (double (ec-config/transfer-bandwidth)))))
 
 (deftype ConverterEnergyImpl [be can-recv? can-ext?]

@@ -22,7 +22,6 @@
    :password "Password"
    :enabled "Enabled"
    :node-inventory "NodeInventory"
-  :wireless-enabled "WirelessEnabled"
   :wireless-mode "WirelessMode"
   :wireless-bandwidth "WirelessBandwidth"
 

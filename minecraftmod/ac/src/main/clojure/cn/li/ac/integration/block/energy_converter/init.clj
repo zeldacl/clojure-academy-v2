@@ -58,13 +58,12 @@
 		(bdsl/create-block-spec
 			block-id
 			{:registry-name registry-name
-			 :physical {:material :metal
+			 :physical {:material :stone
 									:hardness 2.5
-									:resistance 6.0
 									:requires-tool true
 									:harvest-tool :pickaxe
-									:harvest-level 1
-									:sounds :metal}
+									:harvest-level 0
+									:sounds :stone}
 			 :rendering {:model-parent "minecraft:block/cube_all"
 									:textures {:all (modid/asset-path "block" texture)}
 									:flat-item-icon? true}
