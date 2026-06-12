@@ -1,12 +1,19 @@
 (ns cn.li.mc1201.datagen.item-model-provider-core
   "Shared item model datagen helpers for loader-specific providers."
-  (:require [cn.li.mcmod.config :as modid]
+  (:require [clojure.string :as str]
+            [cn.li.mcmod.config :as modid]
             [cn.li.mcmod.item.dsl :as item-dsl]
+            [cn.li.mcmod.protocol.metadata :as registry-metadata]
             [cn.li.mc1201.datagen.item-model-patterns :as item-model-patterns]))
 
 (defn- texture-path
+  "Build a full texture ResourceLocation string from a texture name.
+  If the name already contains a colon, return it as-is (full path e.g.
+  'my_mod:block/phase_liquid'). Otherwise prepend modid:item/."
   [texture-name]
-  (str (str modid/*mod-id*) ":item/" texture-name))
+  (if (str/includes? (str texture-name) ":")
+    (str texture-name)
+    (str (str modid/*mod-id*) ":item/" texture-name)))
 
 (defn- normalize-parent
   [parent]
@@ -39,6 +46,24 @@
                          {:predicate {(str mod-id ":energy") 0.5}
                           :model (str mod-id ":item/" half-model)}]}}]))
 
+(defn- fluid-bucket-model-entries
+  "Generate item model entries for fluid bucket items from the fluid DSL.
+  Bucket items are registered via Forge's fluid registration, not in item-dsl,
+  so the standard gather-model-specs path misses them."
+  []
+  (keep (fn [fluid-id]
+          (when-let [fluid-spec (registry-metadata/get-fluid-spec fluid-id)]
+            (when (get-in fluid-spec [:block :has-bucket?])
+              (let [still-texture (get-in fluid-spec [:rendering :still-texture])
+                    bucket-registry-name (get-in fluid-spec [:block :bucket-registry-name])]
+                (when (and bucket-registry-name still-texture)
+                  {:model-name bucket-registry-name
+                   :json {:parent "item/generated"
+                          :textures {:layer0 (if (str/includes? still-texture ":")
+                                               still-texture
+                                               (str modid/*mod-id* ":item/" still-texture))}}})))))
+        (registry-metadata/get-all-fluid-ids)))
+
 (defn gather-model-specs
   []
   (let [all-item-names (item-dsl/list-items)
@@ -48,10 +73,12 @@
                              (let [item-spec (item-dsl/get-item item-name)]
                                (when-not (item-model-patterns/energy-tier-item? item-spec)
                                  (item-model-patterns/simple-model-spec item-name item-spec))))
-                           all-item-names)]
+                           all-item-names)
+        bucket-entries (fluid-bucket-model-entries)]
     {:all-item-count (count all-item-names)
      :energy-tier-count (count energy-tier-items)
      :simple-count (count simple-items)
+     :bucket-count (count bucket-entries)
      :models (vec
               (concat
                (mapcat (fn [item-name]
@@ -59,4 +86,5 @@
                                                     (get-in (item-dsl/get-item item-name)
                                                             [:properties :item-model-energy-levels])))
                        energy-tier-items)
-               (map simple-model-entry simple-items)))}))
+               (map simple-model-entry simple-items)
+               bucket-entries))}))
