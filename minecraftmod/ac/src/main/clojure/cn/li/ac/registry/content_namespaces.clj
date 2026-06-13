@@ -46,9 +46,11 @@
                   cn.li.ac.achievement.dispatcher]
     :init-fns '[cn.li.ac.achievement.dispatcher/init-dispatcher!]}
    {:phase :system
-    :namespaces '[cn.li.ac.terminal.init]
-    :init-fns '[cn.li.ac.terminal.init/init-terminal!]
-    :trace-tag :terminal-init}])
+    :namespaces '[cn.li.ac.terminal.init
+                  cn.li.ac.tutorial.init]
+    :init-fns '[cn.li.ac.terminal.init/init-terminal!
+                cn.li.ac.tutorial.init/init-tutorial!]
+    :trace-tag :system-init}])
 
 (def ^:private phase-provider-guard-lock
   (Object.))

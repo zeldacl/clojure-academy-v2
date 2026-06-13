@@ -15,6 +15,8 @@
          :cooldown-data    {...}  ; {[ctrl-id sub-id] ticks}
          :preset-data      {...}  ; active-preset/slots
          :context-registry {...}  ; {ctx-id {:id :skill-id :status :player-uuid}}
+         :terminal-data    {...}  ; terminal-installed? / installed-apps
+         :tutorial-data    {...}  ; activated-tuts / misaka-id / first-open?
          :dirty?           bool}}}}}
   
   Usage:

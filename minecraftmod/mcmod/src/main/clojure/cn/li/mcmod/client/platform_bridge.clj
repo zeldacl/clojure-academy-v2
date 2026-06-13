@@ -87,9 +87,12 @@
        (log/debug "Client bridge screen host not available" {:screen-key screen-key}))))
 
 (defn open-simple-gui!
-  [gui-widget title]
-  (or (bridge-op :open-simple-gui gui-widget title)
-      (log/debug "Client bridge simple GUI not available")))
+  ([gui-widget title]
+   (or (bridge-op :open-simple-gui gui-widget title)
+       (log/debug "Client bridge simple GUI not available")))
+  ([gui-widget title opts]
+   (or (bridge-op :open-simple-gui gui-widget title opts)
+       (log/debug "Client bridge simple GUI not available"))))
 
 (defn run-client-effect!
   "Run a content-owned local client effect through the installed platform host."

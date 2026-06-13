@@ -1,0 +1,112 @@
+(ns cn.li.ac.tutorial.model
+  "Pure-data model for tutorial player state.
+
+  State schema:
+    {:activated-tuts     #{keyword}   ; activated tutorial ids
+     :condition-flags    #{int}       ; fulfilled condition indices (Phase 5)
+     :misaka-id          int-or-nil   ; random Misaka No. (1000–19000)
+     :tutorial-acquired? boolean      ; auto-give item already done
+     :first-open?        boolean}     ; first-open animation not yet played
+
+  Follows the terminal/model.clj `state-key` pattern for S2 runtime-store
+  integration via tutorial/player.clj.")
+
+(def state-key :tutorial-data)
+
+;; --- Constructors ---
+
+(defn fresh-state
+  "Return initial tutorial state for a new player."
+  []
+  {:activated-tuts     #{}
+   :condition-flags    #{}
+   :misaka-id          nil
+   :tutorial-acquired? false
+   :first-open?        true})
+
+;; --- Normalization ---
+
+(defn normalize-state
+  "Coerce persisted or legacy state into the canonical shape.
+  Returns fresh-state when passed nil."
+  [d]
+  (if (nil? d)
+    (fresh-state)
+    (-> d
+        (update :activated-tuts
+                (fn [v] (set (or v #{}))))
+        (update :condition-flags
+                (fn [v] (set (or v #{}))))
+        (update :tutorial-acquired? boolean)
+        (update :first-open? boolean)
+        (update :misaka-id
+                (fn [v] (when (integer? v) v))))))
+
+;; --- Activation ---
+
+(defn activate-tutorial
+  "Mark a tutorial id as activated.  Idempotent."
+  [d tut-id]
+  (update d :activated-tuts
+          (fnil conj #{}) (keyword tut-id)))
+
+(defn is-activated?
+  "True when `tut-id` has been explicitly activated."
+  [d tut-id]
+  (contains? (:activated-tuts d) (keyword tut-id)))
+
+;; --- Misaka ID ---
+
+(def ^:private misaka-id-min 1000)
+(def ^:private misaka-id-max 19000)
+
+(defn ensure-misaka-id
+  "Assign a random Misaka No. if not already set.  Idempotent.
+  Returns updated state."
+  [d]
+  (if (:misaka-id d)
+    d
+    (assoc d :misaka-id
+           (+ misaka-id-min
+              (rand-int (- misaka-id-max misaka-id-min))))))
+
+;; --- Tutorial-acquired flag (auto-give) ---
+
+(defn mark-tutorial-acquired!
+  "Mark that the tutorial item has been auto-given.  Idempotent."
+  [d]
+  (assoc d :tutorial-acquired? true))
+
+(defn tutorial-acquired?
+  "True if the auto-give tutorial item has already been granted."
+  [d]
+  (boolean (:tutorial-acquired? d)))
+
+;; --- First-open flag (animation) ---
+
+(defn mark-first-open-done!
+  "Mark that the first-open animation has been played."
+  [d]
+  (assoc d :first-open? false))
+
+(defn first-open?
+  "True when the first-open animation should play."
+  [d]
+  (boolean (:first-open? d)))
+
+;; --- Condition flags (Phase 5: condition-based unlock) ---
+
+(defn mark-condition!
+  "Record that a condition index has been fulfilled.  Idempotent."
+  [d condition-index]
+  (update d :condition-flags (fnil conj #{}) (int condition-index)))
+
+(defn condition-met?
+  "True if the condition index has been fulfilled."
+  [d condition-index]
+  (contains? (:condition-flags d) (int condition-index)))
+
+(defn any-condition-met?
+  "True if at least one of the condition indices has been fulfilled."
+  [d condition-indexes]
+  (some #(condition-met? d %) condition-indexes))

@@ -35,6 +35,22 @@
                                (when-let [open-fn (requiring-resolve
                                                    'cn.li.ac.terminal.client.actions/open-tutorial!)]
                                  (open-fn player)))
+                             ;; Server side: first-use acquisition + achievement trigger
+                             (when (= side :server)
+                               (when-let [session-id-fn (requiring-resolve
+                                                         'cn.li.mcmod.hooks.core/require-player-state-session-id)]
+                                 (let [session-id (session-id-fn "tutorial.item")
+                                       uuid-str (str (.getUUID player))]
+                                   ;; Mark as acquired (original AC auto-give equivalent)
+                                   (when-let [acquire-fn (requiring-resolve
+                                                          'cn.li.ac.tutorial.auto-give/ensure-acquired!)]
+                                     (acquire-fn session-id uuid-str player))
+                                   ;; Trigger open_misaka_cloud achievement (original AC MSG_TRIGGER)
+                                   (try
+                                     (when-let [trigger-fn (requiring-resolve
+                                                            'cn.li.ac.achievement.dispatcher/trigger-custom-event!)]
+                                       (trigger-fn "open_misaka_cloud" uuid-str))
+                                     (catch Throwable _ nil)))))
                              {:consume? true}))}))
     (idsl/register-item!
       (idsl/create-item-spec

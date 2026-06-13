@@ -83,33 +83,3 @@
                "Note: Some settings can be changed"
                "in Minecraft's Options menu."]})
     "Settings"))
-
-(defn open-tutorial!
-  [player]
-  (log/info "Opening tutorial for player:" player)
-  (client-bridge/open-simple-gui!
-    (create-text-page-gui
-      {:title "Academy Craft Tutorial"
-       :size [500 400]
-       :lines ["Welcome to Academy Craft!"
-               ""
-               "Getting Started:"
-               "1. Open your Skill Tree (default: K key)"
-               "2. Learn abilities by clicking on skill nodes"
-               "3. Assign skills to hotkeys (Z, X, C, V)"
-               ""
-               "Using Abilities:"
-               "- Press assigned hotkey to activate"
-               "- Hold key for continuous abilities"
-               "- Watch your CP (Compute Power) bar"
-               ""
-               "Managing Presets:"
-               "- Create multiple skill loadouts"
-               "- Switch between presets quickly"
-               "- Customize for different situations"
-               ""
-               "Energy System:"
-               "- Use generators to produce energy"
-               "- Build wireless networks for power"
-               "- Connect nodes to share energy"]})
-    "Tutorial"))

@@ -43,7 +43,8 @@
                                               {:load-player-state! runtime-nbt/load-player-state!
                                                :mark-player-dirty! runtime-sync/mark-player-dirty!
                                                :send-sync-now! runtime-network/send-sync-to-client!
-                                               :clear-player-dirty! runtime-sync/clear-player-dirty!}))))
+                                               :clear-player-dirty! runtime-sync/clear-player-dirty!}))
+))
 
 (defn- on-player-logout [^PlayerEvent$PlayerLoggedOutEvent evt]
   (when-let [^ServerPlayer p (server-player (.getEntity evt))]

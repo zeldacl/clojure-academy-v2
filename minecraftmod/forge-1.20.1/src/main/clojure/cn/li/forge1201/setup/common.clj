@@ -8,6 +8,7 @@
 						[cn.li.forge1201.integration.forge-energy :as forge-energy]
 						[cn.li.forge1201.integration.ic2-energy :as ic2-energy]
 						[cn.li.forge1201.runtime.item-handler :as runtime-item-handler]
+						[cn.li.forge1201.integration.tutorial-events :as tutorial-events]
 						[cn.li.forge1201.integration.imc-dispatch :as imc-dispatch]
 						[cn.li.forge1201.setup.event-registration :as event-registration]
 						[cn.li.mcmod.util.log :as log])
@@ -23,6 +24,7 @@
 			(forge-energy/init-forge-energy!)
 			(ic2-energy/init-ic2-energy!)
 			(runtime-item-handler/init!)
+			(tutorial-events/init!)
 			(imc-dispatch/init!)
 			(event-registration/register-common-event-listeners!)
 			(log/info "Forge common setup wiring complete"))))
