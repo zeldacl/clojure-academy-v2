@@ -5,6 +5,7 @@
   Follows terminal/client/runtime.clj pattern but simplified since tutorial
   state is read-only on the client (activation only happens on server)."
   (:require [cn.li.ac.tutorial.messages :as tut-msg]
+            [cn.li.ac.tutorial.client.notification :as notification]
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.util.log :as log]))
 
@@ -44,16 +45,24 @@
   nil)
 
 (defn apply-sync!
-  "Update the client state cache from a server sync response."
+  "Update the client state cache from a server sync response.
+  Detects newly activated tutorials and shows a toast notification
+  (matching upstream NotifyUI behavior)."
   [data]
-  (swap! client-state merge
-         {:activated-tuts (set (:activated-tuts data))
-          :misaka-id      (:misaka-id data)
-          :first-open?    (boolean (:first-open? data))
-          :ready?         true})
-  (log/debug "Tutorial client state synced"
-             {:activated (count (:activated-tuts data))
-              :misaka (:misaka-id data)})
+  (let [old-activated (:activated-tuts @client-state)
+        new-activated (set (:activated-tuts data))
+        new-ids (clojure.set/difference new-activated old-activated)]
+    (swap! client-state merge
+           {:activated-tuts new-activated
+            :misaka-id      (:misaka-id data)
+            :first-open?    (boolean (:first-open? data))
+            :ready?         true})
+    (log/debug "Tutorial client state synced"
+               {:activated (count new-activated)
+                :misaka (:misaka-id data)})
+    ;; Show toast for newly activated tutorials (matching upstream NotifyUI)
+    (when (and (:ready? @client-state) (seq new-ids))
+      (notification/show-activation-toasts! new-ids)))
   nil)
 
 (defn is-activated?
