@@ -29,6 +29,10 @@
    :teleporter :cn.li.ac/ability-skills-teleporter
    :vecmanip :cn.li.ac/ability-skills-vecmanip})
 
+(def tutorial-domain
+  "Config registry domain for AcademyCraft tutorial settings."
+  :cn.li.ac/tutorial)
+
 (defn ability-skill-category-domain
   "Return the config domain for a skill category."
   [category-id]
@@ -65,3 +69,8 @@
   (if-let [domain (ability-skill-category-domain category-id)]
     (config-reg/get-config-values domain)
     {}))
+
+(defn tutorial-config
+  "Return current tutorial domain config map from mcmod registry."
+  []
+  (config-reg/get-config-values tutorial-domain))

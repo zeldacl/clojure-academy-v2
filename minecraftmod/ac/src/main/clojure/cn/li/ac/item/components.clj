@@ -31,27 +31,22 @@
                       :model-texture "tutorial"}
          :on-right-click (fn [event-data]
                            (let [{:keys [player side]} event-data]
+                             ;; Client side: open tutorial GUI (original AC GuiTutorial)
                              (when (= side :client)
                                (when-let [open-fn (requiring-resolve
                                                    'cn.li.ac.terminal.client.actions/open-tutorial!)]
                                  (open-fn player)))
-                             ;; Server side: first-use acquisition + achievement trigger
+                             ;; Server side: trigger open_misaka_cloud achievement
+                             ;; (original AC MSG_TRIGGER → ACAdvancements.trigger)
                              (when (= side :server)
-                               (when-let [session-id-fn (requiring-resolve
-                                                         'cn.li.mcmod.hooks.core/require-player-state-session-id)]
-                                 (let [session-id (session-id-fn "tutorial.item")
-                                       uuid-str (str (.getUUID player))]
-                                   ;; Mark as acquired (original AC auto-give equivalent)
-                                   (when-let [acquire-fn (requiring-resolve
-                                                          'cn.li.ac.tutorial.auto-give/ensure-acquired!)]
-                                     (acquire-fn session-id uuid-str player))
-                                   ;; Trigger open_misaka_cloud achievement (original AC MSG_TRIGGER)
-                                   (try
-                                     (when-let [trigger-fn (requiring-resolve
-                                                            'cn.li.ac.achievement.dispatcher/trigger-custom-event!)]
-                                       (trigger-fn "open_misaka_cloud" uuid-str))
-                                     (catch Throwable _ nil)))))
-                             {:consume? true}))}))
+                               (try
+                                 (when-let [trigger-fn (requiring-resolve
+                                                        'cn.li.ac.achievement.dispatcher/trigger-custom-event!)]
+                                   ;; Fix: trigger-custom-event! signature is [uuid event-id]
+                                   (trigger-fn (str (.getUUID player)) "open_misaka_cloud"))
+                                 (catch Throwable _ nil)))
+                             ;; Item is NOT consumed (matches original AC: EnumActionResult.SUCCESS)
+                             {:consume? false}))}))
     (idsl/register-item!
       (idsl/create-item-spec
         "terminal_installer"

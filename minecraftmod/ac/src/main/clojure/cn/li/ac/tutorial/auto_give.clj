@@ -1,37 +1,41 @@
 (ns cn.li.ac.tutorial.auto-give
-  "Tutorial item auto-give support.
+  "Tutorial item auto-give on first player login.
 
   Original AcademyCraft TutorialData had a 10-tick server-side scheduler that
-  auto-spawned the tutorial item on login (config flag `giveCloudTerminal`).
+  auto-spawned the tutorial item on first login (config flag `giveCloudTerminal`,
+  default true).  This function is called from the Forge lifecycle layer after
+  player state is loaded, matching the original AC behavior.
 
-  Current implementation: the tutorial item's :on-right-click handler checks
-  `tutorial-acquired?` and marks it on first use.  A full periodic auto-give
-  on login requires a server-tick hook with Player reference, which needs
-  platform lifecycle integration — deferred to a future enhancement.
-
-  Provides the state-check function shared between right-click handler
-  and (future) login hook."
-  (:require [cn.li.ac.tutorial.player :as tut-player]
-            [cn.li.mcmod.hooks.core :as runtime-hooks]
+  The tutorial item is NOT consumed on use (components.clj sets {:consume? false}),
+  so the auto-give only needs to run once per player lifetime."
+  (:require [cn.li.ac.tutorial.config :as tut-config]
+            [cn.li.ac.tutorial.player :as tut-player]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.item :as pitem]
             [cn.li.mcmod.util.log :as log]))
 
 (def tutorial-item-id "my_mod:tutorial")
 
-(defn ensure-acquired!
-  "Ensure the player has been marked as tutorial-acquired.  Called from the
-  tutorial item's on-right-click handler (server side) when the player uses
-  the tutorial item for the first time.
+(defn auto-give-on-login!
+  "Check and perform tutorial item auto-give on player login.
 
-  Also gives a spare tutorial item so the player keeps one after use
-  (the item is not consumed by right-click, matching original AC behavior)."
+  Respects the `give-cloud-terminal` config flag (default true).
+  Idempotent: only grants the item once per player, tracked by the
+  tutorial-acquired? flag in the player's tutorial state.
+
+  Args:
+    session-id  - server session identifier ([:server identity-hash])
+    uuid-str    - player UUID string
+    player      - platform player entity (implements IEntityOps)
+
+  Returns truthy if the item was granted, nil otherwise."
   [session-id uuid-str player]
-  (when-not (tut-player/tutorial-acquired? session-id uuid-str)
-    (try
-      (when-let [stack (pitem/create-item-stack-by-id tutorial-item-id 1)]
-        (entity/player-give-item-stack! player stack))
-      (catch Exception e
-        (log/warn "Failed to give spare tutorial item:" (ex-message e))))
-    (tut-player/mark-tutorial-acquired! session-id uuid-str)
-    (log/info "Tutorial item acquired for player" {:uuid uuid-str})))
+  (when (tut-config/give-cloud-terminal-enabled?)
+    (when-not (tut-player/tutorial-acquired? session-id uuid-str)
+      (try
+        (when-let [stack (pitem/create-item-stack-by-id tutorial-item-id 1)]
+          (entity/player-give-item-stack! player stack)
+          (tut-player/mark-tutorial-acquired! session-id uuid-str)
+          (log/info "Tutorial item auto-given to player" {:uuid uuid-str}))
+        (catch Exception e
+          (log/warn "Failed to auto-give tutorial item:" (ex-message e)))))))

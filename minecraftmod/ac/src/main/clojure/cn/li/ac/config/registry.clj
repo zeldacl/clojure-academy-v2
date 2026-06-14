@@ -11,6 +11,7 @@
 						[cn.li.ac.block.wind-gen.config :as wind-config]
 						[cn.li.ac.config.common :as config-common]
 						[cn.li.ac.integration.block.energy-converter.config :as energy-converter-config]
+						[cn.li.ac.tutorial.config :as tutorial-config]
 						[cn.li.mcmod.config.registry :as config-reg]))
 
 (def wireless-descriptors
@@ -72,6 +73,12 @@
 	(config-reg/ensure-default-values!
 		config-common/ability-devices-domain
 		ability-devices-default-values)
+(config-reg/register-config-descriptors!
+			config-common/tutorial-domain
+			tutorial-config/descriptors)
+		(config-reg/ensure-default-values!
+			config-common/tutorial-domain
+			tutorial-config/default-values)
 	(doseq [category-id ability-skill-config/category-ids
 				:let [domain (ability-skill-config/category-domain category-id)]]
 		(config-reg/register-config-descriptors!

@@ -137,9 +137,13 @@
           (mouse-drag-cgui! gui-widget left top mouse-x mouse-y resolved-log-label)
           false))
       (keyPressed [key-code scan-code modifiers]
-        (if interactive?
-          (key-press-cgui! gui-widget key-code scan-code resolved-log-label)
-          false))
+        ;; ESC key (256) always closes the screen — matches Minecraft GuiScreen
+        ;; default behavior and original AcademyCraft CGuiScreen handling.
+        (if (= key-code 256)
+          (do (.setScreen (Minecraft/getInstance) nil) true)
+          (if interactive?
+            (key-press-cgui! gui-widget key-code scan-code resolved-log-label)
+            false)))
       (charTyped [code-point modifiers]
         (if interactive?
           (char-typed-cgui! gui-widget code-point resolved-log-label)

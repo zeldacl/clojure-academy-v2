@@ -111,12 +111,12 @@
         :tag :view :display-text "Resonant Crystal Ore"}]
       (when (query-recipes? "my_mod:constrained_plate")
         [{:type :recipe :recipe-kind "MetalFormer" :tag :craft
-          :display-text "Crafting: Constraint Plate"}]))
+          :display-text "Crafting: Constraint Plate" :item-id "my_mod:constrained_plate"}]))
 
     :phase_generator
     (if (query-recipes? "my_mod:phase_gen")
       [{:type :recipe :recipe-kind "ImagFusor" :tag :craft
-        :display-text "Crafting: Phase Generator"}]
+        :display-text "Crafting: Phase Generator" :item-id "my_mod:phase_gen"}]
       [{:type :icon :item-id "my_mod:phase_gen"
         :texture (modid/asset-path "textures/block" "phase_gen.png")
         :tag :view :display-text "Phase Generator"}])
@@ -124,7 +124,7 @@
     :solar_generator
     (if (query-recipes? "my_mod:solar_gen")
       [{:type :recipe :recipe-kind "Smelting" :tag :craft
-        :display-text "Crafting: Solar Generator"}]
+        :display-text "Crafting: Solar Generator" :item-id "my_mod:solar_gen"}]
       [{:type :icon :item-id "my_mod:solar_gen"
         :texture (modid/asset-path "textures/block" "solar_gen.png")
         :tag :view :display-text "Solar Generator"}])
@@ -132,26 +132,26 @@
     :wind_generator
     (if (query-recipes? "my_mod:windgen_base")
       [{:type :recipe :recipe-kind "MetalFormer" :tag :craft
-        :display-text "Crafting: Wind Generator"}]
+        :display-text "Crafting: Wind Generator" :item-id "my_mod:windgen_main"}]
       [{:type :icon :item-id "my_mod:windgen_base"
         :texture (modid/asset-path "textures/block" "windgen_base.png")
         :tag :view :display-text "Wind Generator"}])
 
     :imag_fusor
     [{:type :recipe :recipe-kind "ImagFusor" :tag :craft
-      :display-text "Crafting: Imag Fusor"}]
+      :display-text "Crafting: Imag Fusor" :item-id "my_mod:imag_fusor"}]
 
     :metal_former
     [{:type :recipe :recipe-kind "MetalFormer" :tag :craft
-      :display-text "Crafting: Metal Former"}]
+      :display-text "Crafting: Metal Former" :item-id "my_mod:metal_former"}]
 
     :terminal
     [{:type :recipe :recipe-kind "Smelting" :tag :craft
-      :display-text "Crafting: Terminal Installer"}]
+      :display-text "Crafting: Terminal Installer" :item-id "my_mod:terminal_installer"}]
 
     :ability_developer
     [{:type :recipe :recipe-kind "MetalFormer" :tag :craft
-      :display-text "Crafting: Ability Developer"}]
+      :display-text "Crafting: Ability Developer" :item-id "my_mod:developer_normal"}]
 
     []))
 
