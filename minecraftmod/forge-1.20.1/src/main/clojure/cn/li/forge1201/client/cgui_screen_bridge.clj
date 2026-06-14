@@ -292,6 +292,14 @@
         (if interactive?
           (mouse-drag-cgui! gui-widget left top mouse-x mouse-y resolved-log-label)
           false))
+      (mouseMoved [mouse-x mouse-y]
+        ;; Track mouse position relative to CGUI root for hover detection.
+        ;; Subtract left/top offsets so frame handlers can compare against
+        ;; widget-local coordinates (0,0 = top-left of root widget).
+        (swap! (:metadata gui-widget) assoc
+               :last-mouse-x (int (- mouse-x @left))
+               :last-mouse-y (int (- mouse-y @top)))
+        nil)
       (keyPressed [key-code scan-code modifiers]
         ;; ESC key (256) always closes the screen — matches Minecraft GuiScreen
         ;; default behavior and original AcademyCraft CGuiScreen handling.

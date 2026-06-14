@@ -627,6 +627,44 @@
       (do (reset! (:anim-start ui) (System/currentTimeMillis))
           (setup-first-open-animation! root (:anim-start ui)))
       (setup-static-glow! root))
+    ;; --- Hover detection for ViewGroup tag buttons ---
+    ;; Bridge's mouseMoved stores mouse position in root metadata
+    ;; (relative to root origin). Frame handler checks if mouse is
+    ;; over a tag button and updates brief text (matching upstream
+    ;; GuiTutorial tag_area hover behavior).
+    (let [hover-last-tag-idx (atom -1)
+          ;; Tag layout constants — tags are N×18 inside tag-area
+          ;; right-panel.x + showWindow.x + tag-area.x = 265.5 + 0 + 12 = 277.5
+          ;; right-panel.y + showWindow.y + tag-area.y = 0 + 0 + 120.75 = 120.75
+          tag-base-x (+ rx 12.0)
+          tag-base-y 120.75
+          tag-size 18.0
+          tag-step 17.0]
+      (events/on-frame root
+        (fn [_]
+          (let [mx (get @(:metadata root) :last-mouse-x -1)
+                my (get @(:metadata root) :last-mouse-y -1)
+                pvs (:pvs ui)
+                {:keys [view-groups]} @pvs
+                tag-count (count (or view-groups []))
+                ;; Find which tag (if any) the mouse is over
+                hover-idx (when (and (>= my tag-base-y)
+                                     (< my (+ tag-base-y tag-size)))
+                            (loop [i 0]
+                              (when (< i tag-count)
+                                (let [tx (+ tag-base-x (* i tag-step))]
+                                  (if (and (>= mx tx) (< mx (+ tx tag-size)))
+                                    i
+                                    (recur (inc i)))))))]
+            ;; Only update brief text on hover change (avoid flicker)
+            (when (not= @hover-last-tag-idx hover-idx)
+              (reset! hover-last-tag-idx hover-idx)
+              (when-let [bw (cgui-core/find-widget root "brief-text")]
+                (when-let [tb (comp/get-textbox-component bw)]
+                  (comp/set-text! tb
+                    (if (and hover-idx (>= hover-idx 0) (< hover-idx tag-count))
+                      (or (:display-text (nth view-groups hover-idx)) "")
+                      (preview/display-text pvs))))))))))
     ;; Open the screen — bridge handles 3D preview rendering via preview atoms
     (client-bridge/open-simple-gui! root "MisakaCloud Terminal"
       {:preview-item-atom (:preview-item ui)

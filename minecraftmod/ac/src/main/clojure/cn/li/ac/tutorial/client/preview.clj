@@ -72,18 +72,43 @@
     (comp/add-component! w (comp/draw-texture texture-path))
     w))
 
+(defn- hide-recipe-detail-widgets!
+  "Hide recipe-detail child widgets that are not applicable for standard
+  Minecraft crafting recipes.
+
+  - MetalFormer 'mode' widget (shows etch/incise/plate/refine icon):
+    upstream uses custom recipe type with mode; current project uses
+    standard crafting recipes → mode is always hidden.
+  - ImagFusor 'amount' widget (shows consumeLiquid): upstream custom
+    recipe type; standard crafting has no liquid → amount hidden.
+  - Progress bar widgets: show animated progress; hidden for standard
+    crafting recipes since there's no processing-time concept."
+  [recipe-widget recipe-kind]
+  (case recipe-kind
+    "MetalFormer" (when-let [mode (cgui-core/find-widget recipe-widget "mode")]
+                    (cgui-core/set-visible! mode false))
+    "ImagFusor" (do (when-let [amount (cgui-core/find-widget recipe-widget "amount")]
+                      (cgui-core/set-visible! amount false))
+                    (when-let [progress (cgui-core/find-widget recipe-widget "progress")]
+                      (cgui-core/set-visible! progress false)))
+    "Smelting"   nil)
+  recipe-widget)
+
 (defn- create-recipe-preview
   "Load a recipe display widget from tutorial_windows.xml.
-  `recipe-kind` is the widget name: \"ImagFusor\", \"MetalFormer\", or \"Smelting\"."
+  `recipe-kind` is the widget name: \"ImagFusor\", \"MetalFormer\", or \"Smelting\".
+  Hides non-applicable detail widgets (mode, amount, progress)."
   [recipe-kind]
-  (or (load-recipe-widget (name recipe-kind))
+  (let [kind-str (name recipe-kind)]
+    (if-let [w (load-recipe-widget kind-str)]
+      (hide-recipe-detail-widgets! w kind-str)
       (let [w (cgui-core/create-widget :pos [20 20] :size [94 94])]
         (comp/add-component! w
                              (comp/text-box
-                              :text (str "Recipe: " (name recipe-kind))
+                              :text (str "Recipe: " kind-str)
                               :font-size 8.0
                               :color 0xFFAAAAAA))
-        w)))
+        w))))
 
 (defn- create-block-preview-widget
   "Create a placeholder widget for 3D block preview.
