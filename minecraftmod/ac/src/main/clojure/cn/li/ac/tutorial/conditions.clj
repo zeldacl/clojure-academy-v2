@@ -103,12 +103,19 @@
 ;; Item event → condition matching
 ;; ============================================================================
 
+(def ^:private obtained-event-types #{:item-crafted :item-smelted :item-pickup})
+
 (defn- match-condition?
   "Check if `condition` matches the given `item-id` and `event-type`.
-  event-type is one of :item-crafted, :item-smelted, :item-pickup."
+  event-type is one of :item-crafted, :item-smelted, :item-pickup.
+
+  :item-obtained acts as an OR of the three concrete event types,
+  matching upstream Conditions.itemObtained() semantics."
   [condition item-id event-type]
-  (and (= (:type condition) event-type)
-       (= (:item-id condition) item-id)))
+  (and (= (:item-id condition) item-id)
+       (or (= (:type condition) event-type)
+           (and (= (:type condition) :item-obtained)
+                (contains? obtained-event-types event-type)))))
 
 (defn find-matching-conditions
   "Find all condition indices that match an item event.

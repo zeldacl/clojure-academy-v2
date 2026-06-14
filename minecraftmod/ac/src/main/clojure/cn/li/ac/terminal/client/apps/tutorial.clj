@@ -34,9 +34,12 @@
 (def lw 85.0)  (def lx 7.0)   (def lix 6.6) (def liy 7.0)
 (def liw 72.0) (def eh 12.0)   ;; entry height 12px matches original
 (def cx (+ lx lw)) (def cw 172.0)
-(def cox 2.0)  (def cow (- cw (* 2 cox)))  (def coy 4.0)
-(def coh (- panel-h (* 2 coy)))  ;; content visible height
-(def rx (+ cx cw)) (def rw 158.5)
+;; cox = 5.0: text widget x=2 + 3px internal pad (matches upstream glTranslated(3,3-delta,0))
+(def cox 5.0)  (def cow 160.0)  ;; upstream text widget: 160×210.5
+(def coy 0.0)  (def coh (- panel-h coy))  ;; content visible height
+;; Upstream showWindow at x = rightPart.x + rightPart.width - showWindow.width
+;; = 92 + 332 - 158.5 = 265.5
+(def rx 265.5) (def rw 158.5)
 (def rix 6.0)  (def riw (- rw (* 2 rix)))
 
 ;; Right panel sub-regions (from tutorial.xml)
@@ -66,9 +69,7 @@
 ;; --- Content helpers ---
 
 (defn- clear-content! [content-ctr]
-  (dotimes [n 200]
-    (when-let [w (cgui-core/find-widget content-ctr (str "ct-" n))]
-      (cgui-core/remove-widget! content-ctr w))))
+  (cgui-core/clear-widgets! content-ctr))
 
 (defn- render-content! [content-ctr content-str misaka-id]
   (clear-content! content-ctr)
@@ -90,7 +91,7 @@
         y))))
 
 (defn- reposition-content! [content-ctr scroll-y]
-  (cgui-core/set-pos! content-ctr [(+ cx cox) (- coy @scroll-y)]))
+  (cgui-core/set-pos! content-ctr (+ cx cox) (- coy @scroll-y)))
 
 (defn- clamp-scroll! [scroll-y max-scroll]
   (let [clamped (max 0.0 (min (double @scroll-y) (double max-scroll)))]
@@ -158,9 +159,12 @@
     (int (* 255.0 t t (- 3.0 (* 2.0 t))))))
 
 (defn- apply-logo-alpha! [root logo-name alpha]
+  "Set the draw-texture component's alpha channel to `alpha` (0-255).
+  Preserves the RGB channels (0x00FFFFFF mask)."
   (when-let [lw (cgui-core/find-widget root logo-name)]
     (when-let [dt (comp/get-drawtexture-component lw)]
-      (swap! (:state dt) assoc :color
+      ;; dt is already an atom; swap! directly on it
+      (swap! dt assoc :color
              (unchecked-int (bit-or (bit-shift-left alpha 24) 0x00FFFFFF))))))
 
 (defn- setup-logo-fade-out!
@@ -207,11 +211,12 @@
             (doseq [[logo-name start-ms dur-ms] logo-timings]
               (apply-logo-alpha! root logo-name (logo-fade-alpha elapsed start-ms dur-ms)))
             ;; logo3 y-movement: y=63→-36, start 700ms, duration 400ms
+            ;; blendy: y0=63 → y1=-36, moving UP in screen space
+            ;; screen-y = gh/2 + (y offset relative to center)
             (when-let [l3 (cgui-core/find-widget root "logo3")]
               (let [y-t (max 0.0 (min 1.0 (/ (- elapsed 700.0) 400.0)))
                     l3y (+ 63.0 (* y-t (- -36.0 63.0)))]
-                ;; Update y relative to center
-                (cgui-core/set-pos! l3 [(- (/ gw 2) 18.625) (- (/ gh 2) l3y)])))
+                (cgui-core/set-pos! l3 (- (/ gw 2) 18.625) (+ (/ gh 2) l3y))))
             ;; Glow line animation: dt = elapsed - glow-frame-offset-ms
             (let [dt (- elapsed glow-frame-offset-ms)
                   b1 300.0 b2 200.0]
@@ -221,22 +226,22 @@
                   (let [len (* ln (/ dt b1))]
                     (when (> len cl)
                       (when-let [gr (cgui-core/find-widget root "glow-right")]
-                        (cgui-core/set-pos! gr [(- logo1-center-x cl) (second (cgui-core/get-pos gr))])
-                        (cgui-core/set-size! gr [(- len cl) glow-h])
+                        (cgui-core/set-pos! gr (- logo1-center-x cl) (second (cgui-core/get-pos gr)))
+                        (cgui-core/set-size! gr (- len cl) glow-h)
                         (cgui-core/set-visible! gr true))
                       (when-let [gl (cgui-core/find-widget root "glow-left")]
-                        (cgui-core/set-pos! gl [(- logo1-center-x len) (second (cgui-core/get-pos gl))])
-                        (cgui-core/set-size! gl [(- len cl) glow-h])
+                        (cgui-core/set-pos! gl (- logo1-center-x len) (second (cgui-core/get-pos gl)))
+                        (cgui-core/set-size! gl (- len cl) glow-h)
                         (cgui-core/set-visible! gl true))))
                   ;; Phase 2: contract
                   (let [ldt (min (- dt b1) b2)
                         len2 (+ (* (- ln cl cl) (- 1.0 (/ ldt b2))) cl)]
                     (when-let [gr (cgui-core/find-widget root "glow-right")]
-                      (cgui-core/set-pos! gr [(- logo1-center-x (- ln len2)) (second (cgui-core/get-pos gr))])
-                      (cgui-core/set-size! gr [(- ln (- ln len2)) glow-h]))
+                      (cgui-core/set-pos! gr (- logo1-center-x (- ln len2)) (second (cgui-core/get-pos gr)))
+                      (cgui-core/set-size! gr (- ln (- ln len2)) glow-h))
                     (when-let [gl (cgui-core/find-widget root "glow-left")]
-                      (cgui-core/set-pos! gl [(- logo1-center-x ln) (second (cgui-core/get-pos gl))])
-                      (cgui-core/set-size! gl [(- ln (- ln len2)) glow-h])))))
+                      (cgui-core/set-pos! gl (- logo1-center-x ln) (second (cgui-core/get-pos gl)))
+                      (cgui-core/set-size! gl (- ln (- ln len2)) glow-h)))))
             ;; listArea visible when dt > 2.0s (matching original)
             (when (>= elapsed 2400)
               ;; Reveal only left-panel (listArea); center/right wait for first click
@@ -259,18 +264,23 @@
 
 (defn open! [player]
   (log/info "Opening tutorial GUI")
-  (let [root (cgui-core/create-widget :size [gw gh])
-        entries (tut-registry/all-tutorials)
-        activated (into #{} (keep #(when (:default-installed? %) (:id %)) entries))
-        pvs (atom (preview/create-preview-state :welcome))
-        scroll-y (atom 0.0)
-        max-scroll (atom 0.0)
-        scroll-progress (atom 0.0)
-        content-ctr (cgui-core/create-widget :pos [(+ cx cox) coy] :size [cow 5000.0])
-        current-tut-id (atom nil)
-        player-uuid (some-> player .getUUID str)
-        first-open? (client-state/first-open? player-uuid)
-        anim-start (atom nil)
+  ;; Sync client state from server before building UI
+  (let [player-uuid (some-> player .getUUID str)
+        _ (client-state/ensure-client-state! player-uuid)
+        _ (client-state/request-sync! {:player-uuid player-uuid})
+        lang (tut-content/current-lang)]
+    (let [root (cgui-core/create-widget :size [gw gh])
+          entries (tut-registry/all-tutorials)
+          activated (into #{} (keep #(when (:default-installed? %) (:id %)) entries))
+          pvs (atom (preview/create-preview-state :welcome))
+          scroll-y (atom 0.0)
+          max-scroll (atom 0.0)
+          scroll-progress (atom 0.0)
+          content-ctr (cgui-core/create-widget :pos [(+ cx cox) coy] :size [cow 5000.0])
+          current-tut-id (atom nil)
+          ;; player-uuid bound in outer let above
+          first-open? (client-state/first-open? player-uuid)
+          anim-start (atom nil)
         ;; 3D preview atoms (fed to cgui_screen_bridge)
         preview-item (atom nil)
         preview-type (atom :icon)]
@@ -286,7 +296,7 @@
       (doseq [[idx tut] (map-indexed vector entries)]
         (let [y (+ liy (* idx eh))
               active? (contains? activated (:id tut))
-              title (or (:title (tut-content/load-tutorial-content (:id tut)))
+              title (or (:title (tut-content/load-tutorial-content lang (:id tut)))
                         (name (:id tut)))
               ew (cgui-core/create-widget :pos [lix y] :size [liw eh])]
           (comp/add-component! ew
@@ -311,48 +321,62 @@
                       (when cp (cgui-core/set-visible! cp active?))
                       (when rp (cgui-core/set-visible! rp true))))
                   (reset! current-tut-id (:id tut))
-                  (let [cd (tut-content/load-tutorial-content (:id tut))]
+                  (let [cd (tut-content/load-tutorial-content lang (:id tut))]
                     ;; Center panel visibility follows tut.isActivated(player)
                     (when-let [cp (cgui-core/find-widget root "center-panel")]
                       (cgui-core/set-visible! cp active?))
+                    ;; Always reset scroll on tutorial switch (matching upstream)
+                    (reset! scroll-y 0.0)
+                    (reset! scroll-progress 0.0)
+                    (when-let [thumb (cgui-core/find-widget root "scroll-thumb")]
+                      (cgui-core/set-pos! thumb (- cw scroll-track-w) scroll-thumb-min-y))
                     (when active?
                       (let [misaka-id (client-state/get-misaka-id player-uuid)
                             total-h (render-content! content-ctr (:content cd) misaka-id)]
-                        (reset! max-scroll (max 0.0 (- total-h coh)))
-                        (reset! scroll-y 0.0)
-                        (reset! scroll-progress 0.0)
-                        (reposition-content! content-ctr scroll-y)))
-                    (reset! pvs (preview/create-preview-state (:id tut)))
-                    (refresh-preview! root pvs
-                                     :preview-item preview-item
-                                     :preview-type preview-type)
-                    ;; Update title + brief text in rightWindow
-                    (when-let [tw (cgui-core/find-widget root "title-text")]
-                      (when-let [tb (comp/get-textbox-component tw)]
-                        (comp/set-text! tb (or (:title cd) ""))))
-                    (when-let [bw (cgui-core/find-widget root "brief-text")]
-                      (when-let [tb (comp/get-textbox-component bw)]
-                        (comp/set-text! tb (or (:brief cd) "")))))))))
+                        ;; +10px bottom overshoot matches upstream ht+10
+                        (reset! max-scroll (max 0.0 (+ (- total-h coh) 10.0)))))
+                    (reposition-content! content-ctr scroll-y))
+                  (reset! pvs (preview/create-preview-state (:id tut)))
+                  (refresh-preview! root pvs
+                                   :preview-item preview-item
+                                   :preview-type preview-type)
+                  ;; Update title text in rightWindow
+                  (when-let [tw (cgui-core/find-widget root "title-text")]
+                    (when-let [tb (comp/get-textbox-component tw)]
+                      (comp/set-text! tb (or (:title cd) ""))))
+                  ;; Render brief as markdown (matching upstream info.getBrief().render())
+                  (when-let [bw (cgui-core/find-widget root "brief-text")]
+                    (cgui-core/clear-widgets! bw)
+                    (let [brief-segs (mr/render-segments (:brief cd) (client-state/get-misaka-id player-uuid))]
+                      (loop [sg brief-segs y 0.0 n 0]
+                        (when (seq sg)
+                          (let [seg (first sg)
+                                w (cgui-core/create-widget :pos [0.0 y] :size [riw mr/line-height])]
+                            (comp/add-component! w
+                              (comp/text-box :text (:text seg) :font-size (:font-size seg)
+                                             :color (:color seg) :font (when (:bold? seg) :ac-bold)))
+                            (cgui-core/set-name! w (str "brief-" n))
+                            (cgui-core/add-widget! bw w)
+                            (recur (rest sg) (+ y mr/line-height) (inc n)))))))))))
           (cgui-core/add-widget! lp ew)))
       (cgui-core/set-name! lp "left-panel")
       (when first-open? (cgui-core/set-visible! lp false))
       (cgui-core/add-widget! root lp))
 
-    ;; Center panel — scrollable content (172×220.5 + 9.5 scroll track)
-    (let [cp (cgui-core/create-widget :pos [cx 0] :size [cw panel-h])]
+    ;; Center panel — scrollable content + scroll bar (children, matching upstream)
+    (let [cp (cgui-core/create-widget :pos [cx 0] :size [cw panel-h])
+          ;; Scroll bar inside center-panel, right-aligned (matching upstream scroll_1/scroll_2)
+          track-x (- cw scroll-track-w)  ;; relative to center-panel: 172-9.5=162.5
+          thumb-travel (- scroll-thumb-max-y scroll-thumb-min-y)
+          thumb-x (- cw scroll-track-w)]  ;; same x inside center-panel
       (cgui-core/add-widget! cp content-ctr)
-      (cgui-core/set-name! cp "center-panel")
-      (when first-open? (cgui-core/set-visible! cp false))
-      (cgui-core/add-widget! root cp))
-    ;; Scroll track + thumb (right of center panel)
-    (let [track-x (+ cx cw)  ;; 92+172=264
-          track (cgui-core/create-widget
-                 :pos [track-x 2.0] :size [scroll-track-w scroll-track-h])]
-      (comp/add-component! track (comp/draw-texture (gui-tex "button/widget_scroll_1.png")))
-      (cgui-core/set-name! track "scroll-track")
-      (cgui-core/add-widget! root track))
-    (let [thumb-travel (- scroll-thumb-max-y scroll-thumb-min-y)
-          thumb-x (+ cx cw)]
+      ;; Scroll track
+      (let [track (cgui-core/create-widget
+                   :pos [track-x 2.0] :size [scroll-track-w scroll-track-h])]
+        (comp/add-component! track (comp/draw-texture (gui-tex "button/widget_scroll_1.png")))
+        (cgui-core/set-name! track "scroll-track")
+        (cgui-core/add-widget! cp track))
+      ;; Scroll thumb
       (let [thumb (cgui-core/create-widget
                    :pos [thumb-x scroll-thumb-min-y] :size [scroll-track-w scroll-thumb-h])]
         (comp/add-component! thumb (comp/draw-texture (gui-tex "button/widget_scroll_2.png")))
@@ -366,7 +390,7 @@
                 (clamp-scroll! scroll-y @max-scroll)
                 (let [progress (/ @scroll-y @max-scroll)
                       thumb-y (+ scroll-thumb-min-y (* progress thumb-travel))]
-                  (cgui-core/set-pos! thumb [thumb-x thumb-y])
+                  (cgui-core/set-pos! thumb thumb-x thumb-y)
                   (reset! scroll-progress progress)
                   (reposition-content! content-ctr scroll-y))))))
         (events/on-mouse-scroll thumb
@@ -376,17 +400,21 @@
                 (reset! scroll-y (max 0.0 (min @max-scroll new-y)))
                 (let [progress (/ @scroll-y @max-scroll)
                       thumb-y (+ scroll-thumb-min-y (* progress thumb-travel))]
-                  (cgui-core/set-pos! thumb [thumb-x thumb-y])
+                  (cgui-core/set-pos! thumb thumb-x thumb-y)
                   (reposition-content! content-ctr scroll-y))))))
-        (cgui-core/add-widget! root thumb)))
+        (cgui-core/add-widget! cp thumb))
+      (cgui-core/set-name! cp "center-panel")
+      (when first-open? (cgui-core/set-visible! cp false))
+      (cgui-core/add-widget! root cp))
 
     ;; Right panel — split into showWindow (TOP 158.5×136) + rightWindow (BOTTOM 158.5×82)
     (let [rp (cgui-core/create-widget :pos [rx 0] :size [rw panel-h])]
       ;; --- showWindow (TOP: 158.5×136) ---
       (let [sw (cgui-core/create-widget :pos [0 0] :size [rw show-window-h])]
-        ;; preview-area: 134×134, centered in showWindow (tutorial.xml area widget)
+        ;; preview-area: 134×134 in showWindow (136h), center-aligned with y=-2 offset
+        ;; upstream: alignHeight=CENTER, y=-2 → top = (136-134)/2 + (-2) = -1
         (let [pa (cgui-core/create-widget
-                  :pos [(/ (- rw 134.0) 2) 0] :size [134.0 134.0])]
+                  :pos [(/ (- rw 134.0) 2) -1.0] :size [134.0 134.0])]
           (cgui-core/set-name! pa "preview-area")
           (cgui-core/add-widget! sw pa))
         ;; Preview nav buttons (texture-based, matching original)
@@ -437,27 +465,28 @@
     (let [logo-cx (/ gw 2)
           l0h 137.0 l1h 59.0 l3h 37.25]
       (let [l0 (cgui-core/create-widget
-                :pos [(- logo-cx 112.375) (- (/ gh 2) l0h 32.5)]
+                ;; y=-32.5 relative to center, matching tutorial.xml
+                :pos [(- logo-cx 112.375) (- (/ gh 2) 32.5)]
                 :size [224.75 l0h])]
-        (comp/add-component! l0 (comp/draw-texture (gui-tex "tutorial/logo0.png") [255 255 255 0]))
+        (comp/add-component! l0 (comp/draw-texture (gui-tex "tutorial/logo0.png") 0x00FFFFFF))
         (cgui-core/set-name! l0 "logo0")
         (cgui-core/add-widget! root l0))
       (let [l1 (cgui-core/create-widget
                 :pos [(- logo-cx 112.375) (- (/ gh 2) 59.0)]
                 :size [224.75 l1h])]
-        (comp/add-component! l1 (comp/draw-texture (gui-tex "tutorial/logo1.png") [255 255 255 0]))
+        (comp/add-component! l1 (comp/draw-texture (gui-tex "tutorial/logo1.png") 0x00FFFFFF))
         (cgui-core/set-name! l1 "logo1")
         (cgui-core/add-widget! root l1))
       (let [l2 (cgui-core/create-widget
                 :pos [(- logo-cx 112.375) (- (/ gh 2) 59.0)]
                 :size [224.75 l1h])]
-        (comp/add-component! l2 (comp/draw-texture (gui-tex "tutorial/logo2.png") [255 255 255 0]))
+        (comp/add-component! l2 (comp/draw-texture (gui-tex "tutorial/logo2.png") 0x00FFFFFF))
         (cgui-core/set-name! l2 "logo2")
         (cgui-core/add-widget! root l2))
       (let [l3 (cgui-core/create-widget
                 :pos [(- logo-cx 18.625) (- (/ gh 2) 36.0)]
                 :size [l3h l3h])]
-        (comp/add-component! l3 (comp/draw-texture (gui-tex "tutorial/logo3.png") [255 255 255 0]))
+        (comp/add-component! l3 (comp/draw-texture (gui-tex "tutorial/logo3.png") 0x00FFFFFF))
         (cgui-core/set-name! l3 "logo3")
         (cgui-core/add-widget! root l3)))
 
@@ -481,7 +510,9 @@
 
     ;; First-open animation or direct open
     (if first-open?
-      (setup-first-open-animation! root anim-start)
+      (do
+        (reset! anim-start (System/currentTimeMillis))
+        (setup-first-open-animation! root anim-start))
       ;; Non-first-open: show logo1 + static glow, hide other logos
       ;; center/right panels hidden until first entry click
       (do
@@ -489,16 +520,20 @@
           (when-let [lw (cgui-core/find-widget root nm)]
             (cgui-core/set-visible! lw false)))
         ;; Static glow lines on logo1: lineglow(200,500,5) / lineglow(-500,-200,5)
+        ;; Pre-compute positions without relying on get-pos returning valid data
         (let [ln 500.0 ln2 300.0 cl 50.0 glow-h 5.0
               logo1-x (- (/ gw 2) 112.375)
               logo1-w 224.75
-              logo1-center-x (+ logo1-x (/ logo1-w 2))]
+              logo1-center-x (+ logo1-x (/ logo1-w 2))
+              glow-y (+ (- (/ gh 2) 59.0) (/ 59.0 2) 15 (- (/ glow-h 2)))]
           (when-let [gr (cgui-core/find-widget root "glow-right")]
-            (cgui-core/set-pos! gr [(- logo1-center-x cl) (second (cgui-core/get-pos gr))])
-            (cgui-core/set-size! gr [(- ln cl) glow-h]))
+            (cgui-core/set-pos! gr (- logo1-center-x cl) glow-y)
+            (cgui-core/set-size! gr (- ln cl) glow-h))
           (when-let [gl (cgui-core/find-widget root "glow-left")]
-            (cgui-core/set-pos! gl [(- logo1-center-x ln) (second (cgui-core/get-pos gl))])
-            (cgui-core/set-size! gl [(- ln cl) glow-h])))))
+            (cgui-core/set-pos! gl (- logo1-center-x ln) glow-y)
+            (cgui-core/set-size! gl (- ln cl) glow-h))
+          ;; Non-first-open: logo1 should be fully visible (upstream alpha=255)
+          (apply-logo-alpha! root "logo1" 255)))))
 
     ;; 3D rotating item preview — atoms already created in main let block
     (client-bridge/open-simple-gui! root "MisakaCloud Terminal"

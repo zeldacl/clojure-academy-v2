@@ -61,9 +61,27 @@
         (log/debug "render-3d-preview! failed for" item-id ":" (ex-message e))
         nil))))
 
+(defn- resolve-recipe-kw
+  "Map a string recipe-kind to the keyword used by recipe-query/first-recipe-for."
+  [recipe-kind-str]
+  (case recipe-kind-str
+    "ImagFusor"   :imag-fusor
+    "MetalFormer" :metal-former
+    "Smelting"    :smelting
+    :smelting))
+
+(defn- slot-positions
+  "Return {:scale :in-x :in-y :out-x :out-y} for a recipe kind.
+  Positions from tutorial_windows.xml slot_in/slot_out transforms."
+  [recipe-kind-str]
+  (case recipe-kind-str
+    "ImagFusor"   {:scale 0.6 :in-x 19.0 :in-y 62.5 :out-x 147.0 :out-y 62.5}
+    "MetalFormer" {:scale 0.5 :in-x 11.33 :in-y 88.5 :out-x 155.33 :out-y 88.5}
+    {:scale 0.6 :in-x 30.0 :in-y 43.17 :out-x 123.33 :out-y 43.17}))
+
 (defn- render-recipe-preview!
   "Render recipe items over the CGUI recipe background.
-  Queries smelting recipes and renders items at slot positions."
+  Handles Smelting, ImagFusor, and MetalFormer recipe kinds."
   [^GuiGraphics graphics root left-pos top-pos recipe-data _tick]
   (when (and recipe-data (map? recipe-data))
     (try
@@ -72,14 +90,16 @@
               [ax ay] (cgui-core/get-pos area)
               find-recipe (requiring-resolve 'cn.li.forge1201.integration.recipe-query/first-recipe-for)
               resolve-stack (requiring-resolve 'cn.li.forge1201.integration.recipe-query/item-id->stack)
-              recipe (when find-recipe (find-recipe item-id :smelting))]
-          (when (and recipe (= (keyword recipe-kind) :smelting))
-            (let [scale 0.6
+              rkind (str recipe-kind)
+              rkw (resolve-recipe-kw rkind)
+              recipe (when find-recipe (find-recipe item-id rkw))]
+          (when recipe
+            (let [{:keys [scale in-x in-y out-x out-y]} (slot-positions rkind)
                   slot-size (* 32.0 scale)
-                  slot-in-cx  (+ left-pos ax (* 30.0 scale) (/ slot-size 2))
-                  slot-in-cy  (+ top-pos ay (* 43.17 scale) (/ slot-size 2))
-                  slot-out-cx (+ left-pos ax (* 123.33 scale) (/ slot-size 2))
-                  slot-out-cy (+ top-pos ay (* 43.17 scale) (/ slot-size 2))
+                  slot-in-cx  (+ left-pos ax (* in-x scale) (/ slot-size 2))
+                  slot-in-cy  (+ top-pos ay (* in-y scale) (/ slot-size 2))
+                  slot-out-cx (+ left-pos ax (* out-x scale) (/ slot-size 2))
+                  slot-out-cy (+ top-pos ay (* out-y scale) (/ slot-size 2))
                   item-scale (/ slot-size 16.0)
                   ps (.pose graphics)
                   input-stack (when-let [input-id (first (:input recipe))]

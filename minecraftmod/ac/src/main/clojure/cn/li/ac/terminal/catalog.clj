@@ -13,7 +13,7 @@
     :description "Configure game settings"
     :category :system}
    {:id :tutorial
-    :name "Tutorial"
+    :name "MisakaCloud"
     :icon "my_mod:textures/guis/apps/tutorial/icon.png"
     :icons ["my_mod:textures/guis/apps/tutorial/icon_0.png"
             "my_mod:textures/guis/apps/tutorial/icon_1.png"
