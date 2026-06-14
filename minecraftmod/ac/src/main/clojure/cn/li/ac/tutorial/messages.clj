@@ -3,8 +3,9 @@
   handlers.  Follows terminal/messages.clj pattern.")
 
 (def message-ids
-  {:tutorial/sync          1008   ;; server → client: full state
-   :tutorial/request-sync  1009}) ;; client → server: request sync
+  {:tutorial/sync                 1008   ;; server → client: full state
+   :tutorial/request-sync         1009   ;; client → server: request sync
+   :tutorial/mark-first-open-done 1010}) ;; client → server: animation played
 
 (defn msg-id
   [action]

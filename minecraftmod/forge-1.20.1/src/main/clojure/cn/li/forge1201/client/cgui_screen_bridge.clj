@@ -27,6 +27,17 @@
         (ItemStack. Items/STONE)))
     (catch Exception _ (ItemStack. Items/STONE))))
 
+(defn- resolve-block-state
+  "Resolve a block-id string like \"my_mod:constrained_ore\" to a BlockState."
+  [^String block-id]
+  (try
+    (let [parts (str/split block-id #":" 2)
+          rl (ResourceLocation. (first parts) (second parts))
+          block (.get BuiltInRegistries/BLOCK rl)]
+      (when block
+        (.defaultBlockState block)))
+    (catch Exception _ nil)))
+
 (defn- render-3d-preview!
   [^GuiGraphics graphics root left-pos top-pos item-id tick]
   (when item-id
@@ -48,11 +59,42 @@
             (.popPose ps))))
       (catch Exception _ nil))))
 
+(defn- render-block-preview!
+  "Render a rotating 3D block in the preview area.
+  Uses BlockRenderer.renderSingleBlock (modern 1.20.1 API) instead of
+  the old GL 1.x Tessellator approach from AcademyCraft 1.12."
+  [^GuiGraphics graphics root left-pos top-pos ^String block-id tick]
+  (when block-id
+    (try
+      (when-let [block-state (resolve-block-state block-id)]
+        (when-let [area (cgui-core/find-widget root "preview-area")]
+          (let [[ax ay] (cgui-core/get-pos area)
+                [aw ah] (cgui-core/get-size area)
+                cx (+ left-pos ax (quot aw 2))
+                cy (+ top-pos ay (quot ah 2))
+                scale (/ (min aw ah) 35.0)
+                angle (mod (* tick 1.5) 360.0)
+                ^Minecraft mc (Minecraft/getInstance)
+                block-renderer (.getBlockRenderer mc)
+                buffer-source (.bufferSource graphics)
+                ps (.pose graphics)]
+            (.pushPose ps)
+            (.translate ps (double cx) (double cy) 120.0)
+            (.scale ps (double scale) (double scale) (double scale))
+            (.mulPose ps (.rotationDegrees Axis/YP (float angle)))
+            (.mulPose ps (.rotationDegrees Axis/XP 30.0))
+            (.translate ps -0.5 -0.5 -0.5)
+            (.renderSingleBlock block-renderer block-state ps buffer-source
+                               15728880  ;; packedLight (fullbright)
+                               0)  ;; NO_OVERLAY
+            (.popPose ps))))
+      (catch Exception _ nil))))
+
 ;; -- Screen rendering --
 
 (defn- render-cgui-screen!
   [^Screen screen-this ^GuiGraphics graphics gui-widget left top partial-tick
-   log-label tick-counter preview-item-atom]
+   log-label tick-counter preview-item-atom preview-type-atom]
   (try
     (.renderBackground screen-this graphics)
     (let [^Minecraft mc (Minecraft/getInstance)
@@ -66,9 +108,12 @@
       (reset! top top-pos)
       (cgui-rt/frame-tick! gui-widget {:partial-ticks partial-tick})
       (cgui-rt/render-tree! graphics gui-widget left-pos top-pos)
-      (let [tick (swap! tick-counter inc)]
-        (when-let [item-id (some-> preview-item-atom deref)]
-          (render-3d-preview! graphics gui-widget left-pos top-pos item-id tick))))
+      (let [tick (swap! tick-counter inc)
+            preview-type (some-> preview-type-atom deref)]
+        ;; Only render 3D for block preview; icon/recipe handled by CGUI
+        (when (= preview-type :block-3d)
+          (when-let [block-id (some-> preview-item-atom deref)]
+            (render-block-preview! graphics gui-widget left-pos top-pos block-id tick)))))
     (catch Exception e
       (log/error "Error rendering" log-label ":" (.getMessage e))
       (log/error "Exception:" e))))
@@ -121,7 +166,7 @@
 ;; -- Screen construction --
 
 (defn- create-cgui-screen
-  [gui-widget title {:keys [log-label interactive? preview-item-atom]}]
+  [gui-widget title {:keys [log-label interactive? preview-item-atom preview-type-atom]}]
   (let [left (atom 0)
         top (atom 0)
         tick-counter (atom 0)
@@ -129,7 +174,7 @@
     (proxy [Screen] [(Component/literal title)]
       (render [^GuiGraphics graphics mouse-x mouse-y partial-tick]
         (render-cgui-screen! this graphics gui-widget left top partial-tick
-                             resolved-log-label tick-counter preview-item-atom))
+                             resolved-log-label tick-counter preview-item-atom preview-type-atom))
       (mouseClicked [mouse-x mouse-y button]
         (mouse-click-cgui! gui-widget left top mouse-x mouse-y button resolved-log-label))
       (mouseDragged [mouse-x mouse-y button drag-x drag-y]

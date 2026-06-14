@@ -26,10 +26,15 @@
 
 ;; --- Keybinding lookup ---
 
-(def key-name-lookup
-  "Mapping from ![key id=\"...\"] values to display names."
-  {"open_data_terminal" "Open Data Terminal"
-   "ability_activation"  "Ability Activation"})
+(defn- resolve-key-name
+  "Dynamically resolve a keybinding id to its display name.
+  Falls back to the bracketed id when the lookup is unavailable."
+  [key-id]
+  (try
+    (when-let [f (requiring-resolve 'cn.li.ac.client.keybinding/get-key-display-name)]
+      (or (f key-id) (str "[" key-id "]")))
+    (catch Throwable _
+      (str "[" key-id "]"))))
 
 ;; --- Tag resolution ---
 
@@ -44,7 +49,7 @@
   (-> line
       (str/replace key-tag-re
                    (fn [[_ key-id]]
-                     (get key-name-lookup key-id (str "[" key-id "]"))))
+                     (resolve-key-name key-id)))
       (str/replace misaka-tag-re
                    (if misaka-id
                      (str "Misaka No." misaka-id)

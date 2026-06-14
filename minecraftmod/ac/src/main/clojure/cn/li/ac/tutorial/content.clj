@@ -17,7 +17,8 @@
 (def ^:private resource-root "assets/my_mod/tutorials")
 
 (def ^:private supported-langs
-  "Languages that have tutorial translations available."
+  "Languages that have tutorial translations available.
+  Must match the directory names under tutorials/."
   #{"en_US" "zh_CN"})
 
 (defn- resource-path
@@ -72,15 +73,17 @@
 (def ^:private fallback-lang "en_US")
 
 (defn- resolve-lang
-  "Return `lang` if it is a supported language, otherwise fall back to en_US."
+  "Case-insensitive match `lang` against supported-langs, returning the canonical
+  directory name.  Falls back to en_US when unsupported."
   [lang]
-  (let [normalized (some-> lang str/lower-case)]
-    (if (contains? supported-langs normalized)
-      normalized
-      (do
-        (when lang
-          (log/debug "Tutorial content: unsupported lang" lang "falling back to" fallback-lang))
-        fallback-lang))))
+  (if-let [canonical (and lang
+                         (some #(when (= (str/lower-case %) (str/lower-case lang)) %)
+                               supported-langs))]
+    canonical
+    (do
+      (when lang
+        (log/debug "Tutorial content: unsupported lang" lang "falling back to" fallback-lang))
+      fallback-lang)))
 
 ;; --- Content loading ---
 

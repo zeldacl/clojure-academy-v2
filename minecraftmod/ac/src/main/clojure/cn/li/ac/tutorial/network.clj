@@ -28,9 +28,22 @@
       (log/error "Error handling tutorial request-sync:" (ex-message e))
       {:error (ex-message e)})))
 
+(defn handle-mark-first-open-done
+  "Client reports that the first-open animation has played.
+  Persists the flag on the server side so subsequent opens skip the animation."
+  [_payload player]
+  (try
+    (let [uuid-str (uuid/player-uuid player)]
+      (tut-player/mark-first-open-done! (session-id) uuid-str)
+      {:ok true})
+    (catch Exception e
+      (log/error "Error handling mark-first-open-done:" (ex-message e))
+      {:error (ex-message e)})))
+
 ;; --- Registration ---
 
 (defn register-handlers!
   []
   (net-server/register-handler (tut-msg/msg-id :tutorial/request-sync) handle-request-sync)
+  (net-server/register-handler (tut-msg/msg-id :tutorial/mark-first-open-done) handle-mark-first-open-done)
   (log/info "Tutorial network handlers registered"))
