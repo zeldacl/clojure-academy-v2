@@ -297,6 +297,8 @@
     (comp/add-component! bg (comp/tint 0xC0101010))
     (cgui-core/add-widget! root bg)))
 
+(declare make-entry-click-handler)
+
 (defn- build-left-panel!
   "Build left sidebar with tutorial entry list."
   [root entries activated lang first-open? content-ctr ui player-uuid]
@@ -357,7 +359,7 @@
                     total-h (render-content! content-ctr (:content cd) misaka-id)]
                 ;; +10px bottom overshoot matches upstream ht+10
                 (reset! max-scroll (max 0.0 (+ (- total-h coh) 10.0)))))
-            (reposition-content! content-ctr scroll-y))
+            (reposition-content! content-ctr scroll-y)
           (reset! pvs (preview/create-preview-state (:id tut)))
           (refresh-preview! root pvs
                            :preview-item preview-item
@@ -369,7 +371,7 @@
           ;; Render brief as markdown (matching upstream info.getBrief().render())
           (when-let [bw (cgui-core/find-widget root "brief-text")]
             (render-brief-markdown! bw (:brief cd)
-                                   (client-state/get-misaka-id player-uuid))))))))
+                                   (client-state/get-misaka-id player-uuid)))))))))
 
 (defn- build-center-panel!
   "Build center panel containing scrollable content area and scroll bar.
