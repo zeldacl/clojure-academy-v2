@@ -6,7 +6,8 @@
      :condition-flags    #{int}       ; fulfilled condition indices (Phase 5)
      :misaka-id          int-or-nil   ; random Misaka No. (1000–19000)
      :tutorial-acquired? boolean      ; auto-give item already done
-     :first-open?        boolean}     ; first-open animation not yet played
+     :first-open?        boolean      ; first-open animation not yet played
+     :dirty?             boolean}     ; conditions changed, pending activation check
 
   Follows the terminal/model.clj `state-key` pattern for S2 runtime-store
   integration via tutorial/player.clj.")
@@ -22,7 +23,8 @@
    :condition-flags    #{}
    :misaka-id          nil
    :tutorial-acquired? false
-   :first-open?        true})
+   :first-open?        true
+   :dirty?             false})
 
 ;; --- Normalization ---
 
@@ -39,6 +41,7 @@
                 (fn [v] (set (or v #{}))))
         (update :tutorial-acquired? boolean)
         (update :first-open? boolean)
+        (update :dirty? boolean)
         (update :misaka-id
                 (fn [v] (when (integer? v) v))))))
 
@@ -110,3 +113,20 @@
   "True if at least one of the condition indices has been fulfilled."
   [d condition-indexes]
   (some #(condition-met? d %) condition-indexes))
+
+;; --- Dirty flag (tick-based batching) ---
+
+(defn mark-dirty!
+  "Set the dirty flag to true.  Used after marking new condition flags."
+  [d]
+  (assoc d :dirty? true))
+
+(defn clear-dirty!
+  "Clear the dirty flag after pending activations have been processed."
+  [d]
+  (assoc d :dirty? false))
+
+(defn dirty?
+  "True when conditions have changed and activation check is pending."
+  [d]
+  (boolean (:dirty? d)))

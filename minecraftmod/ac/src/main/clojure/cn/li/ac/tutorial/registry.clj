@@ -1,5 +1,5 @@
 (ns cn.li.ac.tutorial.registry
-  "Immutable tutorial registry — 13 entries matching original AcademyCraft
+  "Immutable tutorial registry — 14 entries matching original AcademyCraft
   TutorialInit definitions.
 
   Each entry is a map:
@@ -87,7 +87,11 @@
     :default-installed? false
     :conditions [{:type :item-obtained :item-id (item "developer_portable")}
                  {:type :item-obtained :item-id (item "dev_normal")}
-                 {:type :item-obtained :item-id (item "dev_advanced")}]}])
+                 {:type :item-obtained :item-id (item "dev_advanced")}]}
+
+   {:id :energy_bridge
+    :default-installed? true
+    :conditions []}])
 
 ;; --- Queries ---
 

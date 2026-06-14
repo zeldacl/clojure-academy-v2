@@ -32,7 +32,9 @@
   []
   (when-not @tutorial-cond-map*
     (reset! tutorial-cond-map*
-            (conds/build-tutorial-condition-map (tut-registry/all-tutorials))))
+            (-> (tut-registry/all-tutorials)
+                (conds/extend-terminal-conditions)
+                (conds/build-tutorial-condition-map))))
   @tutorial-cond-map*)
 
 (defn on-item-event!
@@ -43,27 +45,44 @@
     item-id     — runtime item id (e.g. \"my_mod:constrained_ore\")
     event-type  — :item-crafted | :item-smelted | :item-pickup
 
-  Looks up matching condition indices, marks them in player state,
-  then checks which tutorials should now be activated."
+  Marks matching condition flags and sets the dirty flag.  Actual
+  activation checking is deferred to process-pending-activations!,
+  called by a 3-tick interval server tick handler (matching upstream
+  TutorialData TickScheduler)."
   [player-uuid item-id event-type]
   (let [session-id (runtime-hooks/require-player-state-session-id "tutorial.events")
         matching (conds/find-matching-conditions item-id event-type)]
     (when (seq matching)
-      ;; Mark all matching conditions as fulfilled
+      ;; Mark all matching conditions as fulfilled + set dirty flag
       (tut-player/update-state! session-id player-uuid
                                 (fn [state]
-                                  (reduce model/mark-condition! state matching)))
-      ;; Check for new activations
-      (let [state (tut-player/state session-id player-uuid)
-            cond-map (ensure-tutorial-cond-map!)
+                                  (-> state
+                                      (reduce model/mark-condition! matching)
+                                      (model/mark-dirty!)))))))
+
+(defn process-pending-activations!
+  "Called periodically (every 3 server ticks) to check whether any
+  dirty player state has newly-satisfied tutorial conditions.
+
+  Args:
+    player-uuid — player UUID string
+
+  Reads the player's tutorial state.  If dirty, checks for new
+  activations, activates any newly-qualifying tutorials, and clears
+  the dirty flag.  Idempotent when state is clean."
+  [player-uuid]
+  (let [session-id (runtime-hooks/require-player-state-session-id "tutorial.events")
+        state (tut-player/state session-id player-uuid)]
+    (when (model/dirty? state)
+      (let [cond-map (ensure-tutorial-cond-map!)
             new-acts (conds/check-new-activations state cond-map)]
         (doseq [tut-id new-acts]
           (tut-player/activate-tutorial! session-id player-uuid tut-id)
-          (log/info "Tutorial activated by condition"
+          (log/info "Tutorial activated by condition (batched)"
                     {:player player-uuid
-                     :tutorial (name tut-id)
-                     :item item-id
-                     :event event-type})
+                     :tutorial (name tut-id)})
           (when-let [hook @tutorial-activated-hook*]
             (try (hook player-uuid tut-id)
-                 (catch Throwable _))))))))
+                 (catch Throwable _)))))
+      ;; Clear dirty flag regardless of whether new activations were found
+      (tut-player/update-state! session-id player-uuid model/clear-dirty!))))

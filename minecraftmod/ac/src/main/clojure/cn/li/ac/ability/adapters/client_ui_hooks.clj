@@ -835,6 +835,12 @@
                 (vec (concat (keep identity [cp-bar overload-bar activation-indicator combat-notice preset-indicator overload-pulse])
                  skill-slots))))
 
+(defn- tutorial-notification-elements [screen-width screen-height now-ms]
+  (try
+    (when-let [build-notif (requiring-resolve 'cn.li.ac.tutorial.client.notification/build-notification-elements)]
+      (build-notif screen-width screen-height now-ms))
+    (catch Throwable _ [])))
+
 (defn build-client-overlay-plan [player-uuid screen-width screen-height overlay-state]
   (let [player-state (get-client-player-state player-uuid)
         activated-override {:value (if (some? (:activated-override overlay-state))
@@ -866,7 +872,8 @@
                      :phase phase
                      :intensity 1.0})]
     {:elements (vec (concat base-elements current-charging-elements vm-wave (keep identity [crosshair])
-                            (toast/build-toast-elements screen-width screen-height now-ms)))}))
+                            (toast/build-toast-elements screen-width screen-height now-ms)
+                            (tutorial-notification-elements screen-width screen-height now-ms)))}))
 
 (defn- on-context-channel-push! [{:keys [ctx-id channel payload]}]
   (fx-registry/dispatch-fx-channel! ctx-id channel payload)

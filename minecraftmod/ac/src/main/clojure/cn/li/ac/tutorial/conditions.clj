@@ -17,7 +17,39 @@
       newly activated.
 
   All functions are pure — no platform imports."
-  (:require [cn.li.ac.tutorial.model :as model]))
+  (:require [cn.li.ac.tutorial.model :as model]
+            [clojure.string :as str]))
+
+;; ============================================================================
+;; Terminal app condition extension (must precede condition-index init)
+;; ============================================================================
+
+(def ^:private non-preinstalled-app-ids
+  "App IDs that require an installer item (not pre-installed with terminal).
+  Matching upstream TutorialInit.java line 77-82: for each non-pre-installed
+  app, an itemObtained condition is added for its installer item.
+  Convention: app_<id-with-underscores> — see app_installers.clj."
+  #{:skill-tree :freq-transmitter :media-player})
+
+(defn- app-installer-item-id
+  "Convert an app keyword id to its installer item id string.
+  E.g. :skill-tree → \"my_mod:app_skill_tree\""
+  [app-id]
+  (str "my_mod:app_" (str/replace (name app-id) "-" "_")))
+
+(defn extend-terminal-conditions
+  "Add item-obtained conditions for non-pre-installed terminal apps to
+  the :terminal tutorial entry.  Returns updated tutorials vector."
+  [tutorials]
+  (mapv (fn [tut]
+          (if (= (:id tut) :terminal)
+            (let [extra-conds (mapv (fn [app-id]
+                                      {:type :item-obtained
+                                       :item-id (app-installer-item-id app-id)})
+                                    non-preinstalled-app-ids)]
+              (update tut :conditions into extra-conds))
+            tut))
+        tutorials))
 
 ;; ============================================================================
 ;; Condition index
@@ -45,10 +77,14 @@
 
 (defn ensure-condition-index!
   "Initialize the global condition index from the tutorial registry.
-  Idempotent — builds the index once and caches it."
+  Idempotent — builds the index once and caches it.
+  Extends terminal tutorial conditions dynamically (matching upstream)."
   [tutorials]
   (when-not @condition-index-cache
-    (reset! condition-index-cache (build-condition-index tutorials)))
+    (reset! condition-index-cache
+            (-> tutorials
+                (extend-terminal-conditions)
+                (build-condition-index))))
   @condition-index-cache)
 
 (defn condition-index

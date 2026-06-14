@@ -66,6 +66,58 @@
 ;; Per-player persistent via server-side TutorialData (model/mark-first-open-done!).
 ;; Client cache synced through client-state.
 
+;; --- Content cache ---
+;; Lazy cache: [tut-id lang misaka-id] → {:segs [...] :total-h N}
+;; Caches the expensive markdown parse; widget creation from segments is cheap.
+;; Key includes misaka-id since !(misakaname) tag rendering depends on it.
+
+(def ^:private content-cache (atom {}))
+
+(defn- cached-render-content! [content-ctr tut-id lang content-str misaka-id]
+  (let [cache-key [tut-id lang (str misaka-id)]
+        cached (get @content-cache cache-key)]
+    (if cached
+      ;; Rebuild widgets from cached segments (fast — no markdown parsing)
+      (do
+        (cgui-core/clear-widgets! content-ctr)
+        (doseq [[i seg] (map-indexed vector (:segs cached))]
+          (let [image? (= (:type seg) :image)
+                h (if image? (or (:img-h seg) 100.0) mr/line-height)
+                y (:y-offset seg 0.0)
+                w (cgui-core/create-widget :pos [0.0 y] :size [cow h])]
+            (if image?
+              (comp/add-component! w (comp/draw-texture (:texture-path seg)))
+              (let [{:keys [text font-size color bold?]} seg]
+                (comp/add-component! w (comp/text-box :text text :font-size font-size
+                                                      :color color :font (when bold? :ac-bold)))))
+            (cgui-core/set-name! w (str "ct-" i))
+            (cgui-core/add-widget! content-ctr w)))
+        (:total-h cached))
+      ;; Parse + cache + render
+      (let [segs (mr/render-segments content-str misaka-id)
+            total-h (loop [sg segs y 0.0 n 0]
+                      (if (seq sg)
+                        (let [seg (first sg)
+                              image? (= (:type seg) :image)
+                              h (if image? (or (:img-h seg) 100.0) mr/line-height)]
+                          (recur (rest sg) (+ y h) (inc n)))
+                        y))]
+        (cgui-core/clear-widgets! content-ctr)
+        (doseq [[i seg] (map-indexed vector segs)]
+          (let [image? (= (:type seg) :image)
+                h (if image? (or (:img-h seg) 100.0) mr/line-height)
+                y (:y-offset seg 0.0)
+                w (cgui-core/create-widget :pos [0.0 y] :size [cow h])]
+            (if image?
+              (comp/add-component! w (comp/draw-texture (:texture-path seg)))
+              (let [{:keys [text font-size color bold?]} seg]
+                (comp/add-component! w (comp/text-box :text text :font-size font-size
+                                                      :color color :font (when bold? :ac-bold)))))
+            (cgui-core/set-name! w (str "ct-" i))
+            (cgui-core/add-widget! content-ctr w)))
+        (swap! content-cache assoc cache-key {:segs segs :total-h total-h})
+        total-h))))
+
 ;; --- Content helpers ---
 
 (defn- clear-content! [content-ctr]
@@ -106,9 +158,10 @@
     (when preview-type
       (reset! preview-type (or (:type view) :icon)))
     (when preview-item
-      (let [data (if (= (:type view) :recipe)
-                   {:recipe-kind (name (:recipe-kind view))
-                    :item-id (:item-id view)}
+      (let [vtype (:type view)
+            data (case vtype
+                   (:recipe :crafting-grid) {:recipe-kind (name (:recipe-kind view))
+                                              :item-id (:item-id view)}
                    (or (:item-id view) (:texture view) (:block-id view)))]
         (reset! preview-item data))))
   ;; Clear and rebuild preview widget
@@ -313,7 +366,7 @@
         (comp/add-component! ew
           (comp/text-box :text title :font-size 8.0
                          :color (if active? learned-color unlearned-color)
-                         :align :left))
+                         :align :left :height-align :center))
         (events/on-left-click ew
           (make-entry-click-handler root tut active? player-uuid lang content-ctr ui))
         (cgui-core/add-widget! lp ew)))
@@ -356,7 +409,8 @@
               (cgui-core/set-pos! thumb (- cw scroll-track-w) scroll-thumb-min-y))
             (when active?
               (let [misaka-id (client-state/get-misaka-id player-uuid)
-                    total-h (render-content! content-ctr (:content cd) misaka-id)]
+                    total-h (cached-render-content! content-ctr (:id tut) lang
+                                                    (:content cd) misaka-id)]
                 ;; +10px bottom overshoot matches upstream ht+10
                 (reset! max-scroll (max 0.0 (+ (- total-h coh) 10.0)))))
             (reposition-content! content-ctr scroll-y)
@@ -379,6 +433,7 @@
   [root content-ctr first-open? ui]
   (let [{:keys [scroll-y max-scroll scroll-progress]} ui
         cp (cgui-core/create-widget :pos [cx 0] :size [cw panel-h])
+        _ (swap! (:metadata cp) assoc :clip-children? true)
         track-x (- cw scroll-track-w)
         thumb-travel (- scroll-thumb-max-y scroll-thumb-min-y)
         thumb-x (- cw scroll-track-w)]

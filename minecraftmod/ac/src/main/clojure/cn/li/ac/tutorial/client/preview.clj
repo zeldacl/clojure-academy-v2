@@ -101,6 +101,19 @@
     (cgui-core/set-name! w "preview-item")
     w))
 
+(def ^:private crafting-grid-bg
+  (modid/asset-path "textures/guis" "tutorial/crafting_grid.png"))
+
+(defn- create-crafting-grid-preview
+  "Create a crafting table recipe grid widget.
+  Shows a 3x3 grid background; individual item renders are
+  handled by the forge bridge overlay (like :recipe type)."
+  [_item-id]
+  (let [w (cgui-core/create-widget :pos [10 5] :size [114 114])]
+    (comp/add-component! w (comp/draw-texture crafting-grid-bg))
+    (cgui-core/set-name! w "preview-grid")
+    w))
+
 ;; ============================================================================
 ;; ViewGroup data — aligned to original TutorialInit.java
 ;; ============================================================================
@@ -186,11 +199,18 @@
                       (catalog))
                     (catch Throwable _ nil))
           app-groups (mapv (fn [app]
-                            {:tag :view
-                             :display-text (str "App: " (:name app))
-                             :sub-views [{:type :icon
-                                         :texture (:icon app)
-                                         :item-id (name (:id app))}]})
+                            (let [app-installer-id (str "my_mod:app_"
+                                                       (clojure.string/replace (name (:id app)) "-" "_"))
+                                  has-recipe? (query-recipes? app-installer-id)]
+                              {:tag (if has-recipe? :craft :view)
+                               :display-text (str "App: " (:name app))
+                               :sub-views [(if has-recipe?
+                                             {:type :crafting-grid
+                                              :recipe-kind "Crafting"
+                                              :item-id app-installer-id}
+                                             {:type :icon
+                                              :texture (:icon app)
+                                              :item-id (name (:id app))})]}))
                           (or apps []))]
       (into base app-groups))
 
@@ -211,10 +231,11 @@
   "Build a CGUI widget for a single sub-view."
   [view]
   (case (:type view)
-    :icon     (create-icon-preview (:texture view))
-    :recipe   (create-recipe-preview (:recipe-kind view))
-    :block-3d (create-block-preview-widget (:block-id view))
-    :item-3d  (create-item-preview-widget (:item-id view))
+    :icon           (create-icon-preview (:texture view))
+    :recipe         (create-recipe-preview (:recipe-kind view))
+    :block-3d       (create-block-preview-widget (:block-id view))
+    :item-3d        (create-item-preview-widget (:item-id view))
+    :crafting-grid  (create-crafting-grid-preview (:item-id view))
     nil))
 
 ;; ============================================================================
