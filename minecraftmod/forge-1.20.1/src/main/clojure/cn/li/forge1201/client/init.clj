@@ -208,4 +208,9 @@
 
   (energy-item-model-properties/register!)
 
+  ;; Register tutorial activation hook
+  (when-let [install-hook (requiring-resolve 'cn.li.ac.tutorial.events/install-tutorial-activated-hook!)]
+    (install-hook (fn [player-uuid tut-id]
+                    (log/info "Tutorial activated:" (name tut-id) "for player" player-uuid))))
+
   (log/info "Forge 1.20.1 client-side systems initialized"))

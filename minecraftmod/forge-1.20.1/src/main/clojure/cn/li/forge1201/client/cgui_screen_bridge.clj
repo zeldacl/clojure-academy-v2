@@ -57,7 +57,46 @@
             (.mulPose ps (.rotationDegrees Axis/YP (float angle)))
             (.renderFakeItem graphics stack -8 -8)
             (.popPose ps))))
-      (catch Exception _ nil))))
+      (catch Exception e
+        (log/debug "render-3d-preview! failed for" item-id ":" (ex-message e))
+        nil))))
+
+(defn- render-recipe-preview!
+  "Render recipe items over the CGUI recipe background.
+  Queries smelting recipes and renders items at slot positions."
+  [^GuiGraphics graphics root left-pos top-pos recipe-data _tick]
+  (when (and recipe-data (map? recipe-data))
+    (try
+      (when-let [area (cgui-core/find-widget root "preview-area")]
+        (let [{:keys [recipe-kind item-id]} recipe-data
+              [ax ay] (cgui-core/get-pos area)
+              find-recipe (requiring-resolve 'cn.li.forge1201.integration.recipe-query/first-recipe-for)
+              resolve-stack (requiring-resolve 'cn.li.forge1201.integration.recipe-query/item-id->stack)
+              recipe (when find-recipe (find-recipe item-id :smelting))]
+          (when (and recipe (= (keyword recipe-kind) :smelting))
+            (let [scale 0.6
+                  slot-size (* 32.0 scale)
+                  slot-in-cx  (+ left-pos ax (* 30.0 scale) (/ slot-size 2))
+                  slot-in-cy  (+ top-pos ay (* 43.17 scale) (/ slot-size 2))
+                  slot-out-cx (+ left-pos ax (* 123.33 scale) (/ slot-size 2))
+                  slot-out-cy (+ top-pos ay (* 43.17 scale) (/ slot-size 2))
+                  item-scale (/ slot-size 16.0)
+                  ps (.pose graphics)
+                  input-stack (when-let [input-id (first (:input recipe))]
+                                (when resolve-stack (resolve-stack input-id)))
+                  output-stack (when-let [output-id (:output recipe)]
+                                (when resolve-stack (resolve-stack output-id)))]
+              (when input-stack
+                (.pushPose ps) (.translate ps (double slot-in-cx) (double slot-in-cy) 110.0)
+                (.scale ps (double item-scale) (double item-scale) (double item-scale))
+                (.renderFakeItem graphics input-stack -8 -8) (.popPose ps))
+              (when output-stack
+                (.pushPose ps) (.translate ps (double slot-out-cx) (double slot-out-cy) 110.0)
+                (.scale ps (double item-scale) (double item-scale) (double item-scale))
+                (.renderFakeItem graphics output-stack -8 -8) (.popPose ps))))))
+      (catch Exception e
+        (log/debug "render-recipe-preview! failed:" (ex-message e))
+        nil))))
 
 (defn- render-block-preview!
   "Render a rotating 3D block in the preview area.
@@ -88,7 +127,9 @@
                                15728880  ;; packedLight (fullbright)
                                0)  ;; NO_OVERLAY
             (.popPose ps))))
-      (catch Exception _ nil))))
+      (catch Exception e
+        (log/debug "render-block-preview! failed for" block-id ":" (ex-message e))
+        nil))))
 
 ;; -- Screen rendering --
 
@@ -117,6 +158,7 @@
         (case preview-type
           :block-3d (render-block-preview! graphics gui-widget left-pos top-pos preview-data tick)
           :item-3d  (render-3d-preview! graphics gui-widget left-pos top-pos preview-data tick)
+          :recipe   (render-recipe-preview! graphics gui-widget left-pos top-pos preview-data tick)
           nil)))
     (catch Exception e
       (log/error "Error rendering" log-label ":" (.getMessage e))

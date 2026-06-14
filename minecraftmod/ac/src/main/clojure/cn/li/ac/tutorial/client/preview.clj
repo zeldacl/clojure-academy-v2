@@ -179,9 +179,20 @@
                   :item-id "my_mod:metal_former"}]}]
 
     :terminal
-    [{:tag :craft :display-text "Crafting: Terminal Installer"
-      :sub-views [{:type :recipe :recipe-kind "Smelting"
-                  :item-id "my_mod:terminal_installer"}]}]
+    (let [base [{:tag :craft :display-text "Crafting: Terminal Installer"
+                 :sub-views [{:type :recipe :recipe-kind "Smelting"
+                             :item-id "my_mod:terminal_installer"}]}]
+          apps (try (when-let [catalog (requiring-resolve 'cn.li.ac.terminal.catalog/ordered-apps)]
+                      (catalog))
+                    (catch Throwable _ nil))
+          app-groups (mapv (fn [app]
+                            {:tag :view
+                             :display-text (str "App: " (:name app))
+                             :sub-views [{:type :icon
+                                         :texture (:icon app)
+                                         :item-id (name (:id app))}]})
+                          (or apps []))]
+      (into base app-groups))
 
     :ability_developer
     [{:tag :craft :display-text "Crafting: Portable Developer"

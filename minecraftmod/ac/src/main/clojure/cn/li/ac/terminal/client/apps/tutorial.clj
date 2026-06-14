@@ -163,6 +163,24 @@
       (swap! (:state dt) assoc :color
              (unchecked-int (bit-or (bit-shift-left alpha 24) 0x00FFFFFF))))))
 
+(defn- setup-logo-fade-out!
+  "Fade out logos over duration-ms, matching upstream blend(reverse)."
+  [root fade-start-ms logo-names duration-ms]
+  (let [done? (atom false)]
+    (events/on-frame root
+      (fn [_]
+        (when (and (not @done?) @fade-start-ms)
+          (let [elapsed (- (System/currentTimeMillis) @fade-start-ms)
+                t (max 0.0 (min 1.0 (/ elapsed (double duration-ms))))
+                alpha (- 255 (int (* 255.0 t)))]
+            (doseq [nm logo-names]
+              (apply-logo-alpha! root nm alpha))
+            (when (>= elapsed duration-ms)
+              (doseq [nm logo-names]
+                (when-let [lw (cgui-core/find-widget root nm)]
+                  (cgui-core/set-visible! lw false)))
+              (reset! done? true))))))))
+
 (defn- setup-first-open-animation!
   "Register a frame handler matching original GuiTutorial first-open animation:
   - 4 logos fade in with staggered timing
@@ -283,8 +301,9 @@
                                       (catch Throwable _ false)))]
                   ;; First-click transition: hide logos + glow, show center/right panels
                   (when (nil? @current-tut-id)
-                    (doseq [nm ["logo0" "logo1" "logo2" "logo3"
-                                "glow-right" "glow-left"]]
+                    (setup-logo-fade-out! root (atom (System/currentTimeMillis))
+                                         ["logo0" "logo1" "logo2" "logo3"] 300)
+                    (doseq [nm ["glow-right" "glow-left"]]
                       (when-let [w (cgui-core/find-widget root nm)]
                         (cgui-core/set-visible! w false)))
                     (let [cp (cgui-core/find-widget root "center-panel")
@@ -349,6 +368,15 @@
                       thumb-y (+ scroll-thumb-min-y (* progress thumb-travel))]
                   (cgui-core/set-pos! thumb [thumb-x thumb-y])
                   (reset! scroll-progress progress)
+                  (reposition-content! content-ctr scroll-y))))))
+        (events/on-mouse-scroll thumb
+          (fn [evt]
+            (when (pos? @max-scroll)
+              (let [new-y (+ @scroll-y (* (:delta-y evt) 10.0))]
+                (reset! scroll-y (max 0.0 (min @max-scroll new-y)))
+                (let [progress (/ @scroll-y @max-scroll)
+                      thumb-y (+ scroll-thumb-min-y (* progress thumb-travel))]
+                  (cgui-core/set-pos! thumb [thumb-x thumb-y])
                   (reposition-content! content-ctr scroll-y))))))
         (cgui-core/add-widget! root thumb)))
 
