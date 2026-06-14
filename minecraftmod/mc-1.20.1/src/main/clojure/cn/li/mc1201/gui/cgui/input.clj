@@ -94,6 +94,12 @@
                 (boolean (and st (:editable? @st)))))
             (boolean (seq (events/get-widget-event-handlers focus :key))))))))
 
+(defn mouse-scroll!
+  [root mx my left top delta-x delta-y]
+  (when-let [hit (traversal/hit-test root mx my left top)]
+    (events/emit-widget-event! hit :mouse-scroll
+      {:x (- mx left) :y (- my top) :delta-x delta-x :delta-y delta-y})))
+
 (defn key-input!
   [root key-code scan-code typed-char]
   (when root

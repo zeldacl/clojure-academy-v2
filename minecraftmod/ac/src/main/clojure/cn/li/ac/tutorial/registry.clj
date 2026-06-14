@@ -91,6 +91,10 @@
 
 ;; --- Queries ---
 
+(def ^:dynamic *show-all?*
+  "Debug flag: when true, all tutorials are treated as learned."
+  false)
+
 (defn all-tutorials
   "Return the ordered vector of all tutorial entries."
   []
@@ -106,16 +110,19 @@
   "Split tutorials into {:learned [...] :unlearned [...]} based on player state.
 
   A tutorial is considered 'learned' (visible/activated) when:
+    - *show-all?* is true (debug mode), OR
     - its :default-installed? is true, OR
     - its :id is present in tutorial-state's :activated-tuts set.
 
   `tutorial-state` is a map from tutorial/model.clj (fresh-state shape)."
   [tutorial-state]
-  (let [activated (set (:activated-tuts tutorial-state))]
+  (if *show-all?*
+    {:learned tutorials :unlearned []}
+    (let [activated (set (:activated-tuts tutorial-state))]
     (reduce (fn [acc tut]
               (if (or (:default-installed? tut)
                       (contains? activated (:id tut)))
                 (update acc :learned conj tut)
                 (update acc :unlearned conj tut)))
             {:learned [] :unlearned []}
-            tutorials)))
+            tutorials))))

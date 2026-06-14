@@ -93,6 +93,14 @@
     (cgui-core/set-name! w "preview-block")
     w))
 
+(defn- create-item-preview-widget
+  "Create a placeholder widget for 3D item preview.
+  Actual rendering is done by the forge bridge layer."
+  [_item-id]
+  (let [w (cgui-core/create-widget :pos [0 0] :size [134 134])]
+    (cgui-core/set-name! w "preview-item")
+    w))
+
 ;; ============================================================================
 ;; ViewGroup data — aligned to original TutorialInit.java
 ;; ============================================================================
@@ -142,15 +150,13 @@
     [{:tag :craft :display-text "Crafting: Phase Generator"
       :sub-views [(if (query-recipes? "my_mod:phase_gen")
                     {:type :recipe :recipe-kind "ImagFusor" :item-id "my_mod:phase_gen"}
-                    {:type :icon :item-id "my_mod:phase_gen"
-                     :texture (modid/asset-path "textures/block" "phase_gen.png")})]}]
+                    {:type :item-3d :item-id "my_mod:phase_gen"})]}]
 
     :solar_generator
     [{:tag :craft :display-text "Crafting: Solar Generator"
       :sub-views [(if (query-recipes? "my_mod:solar_gen")
                     {:type :recipe :recipe-kind "Smelting" :item-id "my_mod:solar_gen"}
-                    {:type :icon :item-id "my_mod:solar_gen"
-                     :texture (modid/asset-path "textures/block" "solar_gen.png")})]}]
+                    {:type :item-3d :item-id "my_mod:solar_gen"})]}]
 
     :wind_generator
     (vec (for [[item-id display-name]
@@ -197,6 +203,7 @@
     :icon     (create-icon-preview (:texture view))
     :recipe   (create-recipe-preview (:recipe-kind view))
     :block-3d (create-block-preview-widget (:block-id view))
+    :item-3d  (create-item-preview-widget (:item-id view))
     nil))
 
 ;; ============================================================================

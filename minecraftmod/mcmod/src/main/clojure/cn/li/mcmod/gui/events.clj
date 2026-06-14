@@ -175,6 +175,11 @@
   [widget handler]
   (listen! widget :add-widget handler))
 
+(defn on-mouse-scroll
+  "Create mouse scroll event handler."
+  [widget handler]
+  (listen! widget :mouse-scroll handler))
+
 ;; ============================================================================
 ;; Event Chaining DSL
 ;; ============================================================================

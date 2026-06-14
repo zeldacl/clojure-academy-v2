@@ -102,18 +102,22 @@
           screen-width (.getGuiScaledWidth window)
           screen-height (.getGuiScaledHeight window)
           [gui-width gui-height] (cgui-core/get-size gui-widget)
-          left-pos (int (/ (- screen-width gui-width) 2))
-          top-pos (int (/ (- screen-height gui-height) 2))]
+          ref-width 427.0
+          scale (float (/ screen-width ref-width))
+          left-pos (int (/ (- screen-width (* gui-width scale)) 2))
+          top-pos (int (/ (- screen-height (* gui-height scale)) 2))]
+      (cgui-core/set-scale! gui-widget (double scale))
       (reset! left left-pos)
       (reset! top top-pos)
       (cgui-rt/frame-tick! gui-widget {:partial-ticks partial-tick})
       (cgui-rt/render-tree! graphics gui-widget left-pos top-pos)
       (let [tick (swap! tick-counter inc)
-            preview-type (some-> preview-type-atom deref)]
-        ;; Only render 3D for block preview; icon/recipe handled by CGUI
-        (when (= preview-type :block-3d)
-          (when-let [block-id (some-> preview-item-atom deref)]
-            (render-block-preview! graphics gui-widget left-pos top-pos block-id tick)))))
+            preview-type (some-> preview-type-atom deref)
+            preview-data (some-> preview-item-atom deref)]
+        (case preview-type
+          :block-3d (render-block-preview! graphics gui-widget left-pos top-pos preview-data tick)
+          :item-3d  (render-3d-preview! graphics gui-widget left-pos top-pos preview-data tick)
+          nil)))
     (catch Exception e
       (log/error "Error rendering" log-label ":" (.getMessage e))
       (log/error "Exception:" e))))
@@ -189,6 +193,11 @@
           (if interactive?
             (key-press-cgui! gui-widget key-code scan-code resolved-log-label)
             false)))
+      (mouseScrolled [mouse-x mouse-y scroll-delta-x scroll-delta-y]
+        (try (cgui-rt/mouse-scroll! gui-widget (int mouse-x) (int mouse-y) @left @top
+                                    (double scroll-delta-x) (double scroll-delta-y))
+             true
+             (catch Exception _ false)))
       (charTyped [code-point modifiers]
         (if interactive?
           (char-typed-cgui! gui-widget code-point resolved-log-label)

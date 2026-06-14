@@ -32,41 +32,37 @@
    "![brief]"   :brief
    "![content]" :content})
 
-(defn- take-section
-  "Extract one section body from lines, starting after the marker line.
-  Returns [section-text remaining-lines] or [nil '()]."
-  [marker-keyword lines]
-  (let [[header & body] lines]
-    (if-let [section-kw (section-markers (str/trim header))]
-      (let [[sec-lines rest-lines]
-            (split-with (fn [line]
-                          (not (contains? section-markers (str/trim line))))
-                        body)
-            text (->> sec-lines
-                      (str/join "\n")
-                      str/trim)]
-        (if (= section-kw marker-keyword)
-          [text rest-lines]
-          ;; wrong section — recurse into rest
-          (take-section marker-keyword (cons (first body) (rest body)))))
-      ;; header didn't match a section marker — skip it
-      (take-section marker-keyword (rest lines)))))
-
 (defn parse-sections
-  "Parse raw markdown text into {:title :brief :content} map.
+  "Single-pass parser. Walk lines once, accumulating text per section.
+  When a section marker line is encountered, finalize the current section
+  and start the next one. Lines before the first marker are discarded.
+
   Sections are delimited by lines containing exactly:
     ![title]   → :title
     ![brief]   → :brief
     ![content] → :content
 
-  Missing sections default to empty string."
+  Missing sections default to empty string.
+  Content lines that look like ![something] but are NOT section markers
+  (e.g. markdown images ![alt](url)) are treated as ordinary content."
   [raw-text]
   (let [lines (str/split-lines (or raw-text ""))]
-    (reduce (fn [acc [section-name section-kw]]
-              (let [[text _] (take-section section-kw lines)]
-                (assoc acc section-kw (or text ""))))
-            {:title "" :brief "" :content ""}
-            section-markers)))
+    (loop [remaining lines
+           current-section nil
+           sections {:title "" :brief "" :content ""}
+           current-lines []]
+      (if-let [line (first remaining)]
+        (if-let [sec-kw (section-markers (str/trim line))]
+          (let [sections' (if current-section
+                           (assoc sections current-section
+                                  (->> (reverse current-lines) (str/join "\n") str/trim))
+                           sections)]
+            (recur (rest remaining) sec-kw sections' []))
+          (recur (rest remaining) current-section sections (cons line current-lines)))
+        (if current-section
+          (assoc sections current-section
+                 (->> (reverse current-lines) (str/join "\n") str/trim))
+          sections)))))
 
 ;; --- Language resolution ---
 

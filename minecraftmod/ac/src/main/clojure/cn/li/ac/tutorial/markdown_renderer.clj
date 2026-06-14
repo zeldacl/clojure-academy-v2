@@ -44,6 +44,9 @@
 (def ^:private misaka-tag-re
   #"!\[misakaname\]")
 
+(def ^:private image-re
+  #"!\[([^\]]*)\]\(([^\)]+)\)")
+
 (defn- resolve-inline-tags
   [line misaka-id]
   (-> line
@@ -71,6 +74,10 @@
 
 (defn- is-empty-line? [line]
   (str/blank? (str/trim line)))
+
+(def default-image-height
+  "Default pixel height for markdown images in tutorial content."
+  100.0)
 
 ;; --- Word wrapping ---
 
@@ -100,11 +107,13 @@
                      (conj acc chunk)))))))))
 
 (defn- wrap-segments
-  "Apply word-wrapping to a vector of segment specs."
+  "Apply word-wrapping to text segments. Image segments pass through unchanged."
   [segments]
   (mapcat (fn [seg]
-            (let [lines (wrap-line (:text seg) (:font-size seg) max-content-width)]
-              (map (fn [line] (assoc seg :text line)) lines)))
+            (if (= (:type seg) :image)
+              [seg]
+              (let [lines (wrap-line (:text seg) (:font-size seg) max-content-width)]
+                (map (fn [line] (assoc seg :text line)) lines))))
           segments))
 
 ;; --- Main API ---
@@ -130,8 +139,20 @@
            (if (empty? remaining)
              segs
              (let [line (first remaining)
-                   more (rest remaining)]
+                   more (rest remaining)
+                   trimmed (str/trim line)]
                (cond
+                 ;; Standalone image: ![alt](path) matched against full trimmed line
+                 (let [m (re-find image-re trimmed)]
+                   (and m (= trimmed m)))
+                 (let [[_ alt-img texture-path] (re-find image-re trimmed)]
+                   (recur more
+                          (conj segs
+                                {:type :image
+                                 :texture-path texture-path
+                                 :alt alt-img
+                                 :img-h default-image-height})))
+
                  (is-empty-line? line)
                  (recur more
                         (conj segs
@@ -154,5 +175,5 @@
                           (conj segs
                                 {:text clean-text :font-size default-font-size
                                  :color default-color :bold? bold?})))))))]
-     ;; Word-wrap segments to fit within content panel width
+     ;; Word-wrap text segments; skip image segments
      (vec (wrap-segments segments)))))

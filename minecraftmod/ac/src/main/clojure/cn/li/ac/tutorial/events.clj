@@ -13,6 +13,17 @@
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.util.log :as log]))
 
+;; --- Tutorial activated hook ---
+(def ^:private tutorial-activated-hook*
+  "Callback fired when a tutorial is newly activated."
+  (atom nil))
+
+(defn install-tutorial-activated-hook!
+  "Register a callback that fires on tutorial activation.
+  Callback receives [player-uuid-string tut-id-keyword]."
+  [hook-fn]
+  (reset! tutorial-activated-hook* hook-fn))
+
 ;; Cache the tutorial-condition-map after first build
 (def ^:private tutorial-cond-map*
   (atom nil))
@@ -52,4 +63,7 @@
                     {:player player-uuid
                      :tutorial (name tut-id)
                      :item item-id
-                     :event event-type}))))))
+                     :event event-type})
+          (when-let [hook @tutorial-activated-hook*]
+            (try (hook player-uuid tut-id)
+                 (catch Throwable _))))))))

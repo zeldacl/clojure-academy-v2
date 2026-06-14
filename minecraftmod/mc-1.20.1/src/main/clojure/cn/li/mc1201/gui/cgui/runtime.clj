@@ -27,6 +27,10 @@
   [root key-code scan-code typed-char]
   (input/key-input! root key-code scan-code typed-char))
 
+(defn mouse-scroll!
+  [root mx my left top delta-x delta-y]
+  (input/mouse-scroll! root mx my left top delta-x delta-y))
+
 (defn dispose!
   [_root]
   nil)

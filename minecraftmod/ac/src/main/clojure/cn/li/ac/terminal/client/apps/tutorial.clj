@@ -75,13 +75,18 @@
   (let [segs (mr/render-segments content-str misaka-id)]
     (loop [sg segs y 0.0 n 0]
       (if (seq sg)
-        (let [{:keys [text font-size color bold?]} (first sg)
-              w (cgui-core/create-widget :pos [0.0 y] :size [cow mr/line-height])]
-          (comp/add-component! w (comp/text-box :text text :font-size font-size
-                                                :color color :font (when bold? :ac-bold)))
+        (let [seg (first sg)
+              image? (= (:type seg) :image)
+              h (if image? (or (:img-h seg) 100.0) mr/line-height)
+              w (cgui-core/create-widget :pos [0.0 y] :size [cow h])]
+          (if image?
+            (comp/add-component! w (comp/draw-texture (:texture-path seg)))
+            (let [{:keys [text font-size color bold?]} seg]
+              (comp/add-component! w (comp/text-box :text text :font-size font-size
+                                                    :color color :font (when bold? :ac-bold)))))
           (cgui-core/set-name! w (str "ct-" n))
           (cgui-core/add-widget! content-ctr w)
-          (recur (rest sg) (+ y mr/line-height) (inc n)))
+          (recur (rest sg) (+ y h) (inc n)))
         y))))
 
 (defn- reposition-content! [content-ctr scroll-y]
@@ -100,7 +105,11 @@
     (when preview-type
       (reset! preview-type (or (:type view) :icon)))
     (when preview-item
-      (reset! preview-item (or (:item-id view) (:texture view) (:block-id view)))))
+      (let [data (if (= (:type view) :recipe)
+                   {:recipe-kind (name (:recipe-kind view))
+                    :item-id (:item-id view)}
+                   (or (:item-id view) (:texture view) (:block-id view)))]
+        (reset! preview-item data))))
   ;; Clear and rebuild preview widget
   (when-let [area (cgui-core/find-widget root "preview-area")]
     (when-let [old (cgui-core/find-widget area "current-preview")]
@@ -320,14 +329,14 @@
     (let [track-x (+ cx cw)  ;; 92+172=264
           track (cgui-core/create-widget
                  :pos [track-x 2.0] :size [scroll-track-w scroll-track-h])]
-      (comp/add-component! track (comp/tint 0x22FFFFFF))
+      (comp/add-component! track (comp/draw-texture (gui-tex "button/widget_scroll_1.png")))
       (cgui-core/set-name! track "scroll-track")
       (cgui-core/add-widget! root track))
     (let [thumb-travel (- scroll-thumb-max-y scroll-thumb-min-y)
           thumb-x (+ cx cw)]
       (let [thumb (cgui-core/create-widget
                    :pos [thumb-x scroll-thumb-min-y] :size [scroll-track-w scroll-thumb-h])]
-        (comp/add-component! thumb (comp/tint 0x88FFFFFF))
+        (comp/add-component! thumb (comp/draw-texture (gui-tex "button/widget_scroll_2.png")))
         (comp/add-component! thumb (comp/draggable))
         (cgui-core/set-name! thumb "scroll-thumb")
         (events/on-drag thumb

@@ -126,7 +126,7 @@
         bg (cgui-core/create-widget :pos [0 0] :size [151 151])
         _ (comp/add-component! bg (comp/draw-texture (modid/asset-path "textures" "guis/data_terminal/app_back.png")))
         icon (cgui-core/create-widget :pos [9 32] :size [110 110])
-        icon-texture (or (:icon app) (modid/asset-path "textures" "guis/apps/default/icon.png"))
+        icon-texture (or (catalog/app-icon app) (modid/asset-path "textures" "guis/apps/default/icon.png"))
         _ (comp/add-component! icon (comp/draw-texture icon-texture [255 255 255 (if installed? 255 160)]))
         text (cgui-core/create-widget :pos [0 148] :size [151 21])
         _ (comp/add-component! text (comp/text-box :text (:name app) :font :ac-normal :font-size 32 :align :center :color 0xFFFFFFFF))

@@ -7,7 +7,7 @@
   ac.tutorial.client.preview to build recipe display widgets."
   (:require [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.client Minecraft]
-           [net.minecraft.world.item.crafting RecipeType RecipeManager]
+           [net.minecraft.world.item.crafting RecipeType RecipeManager Recipe Ingredient]
            [net.minecraft.world.item ItemStack]
            [net.minecraft.core.registries BuiltInRegistries]
            [net.minecraft.resources ResourceLocation]))
@@ -63,3 +63,21 @@
   [^String target-id]
   (when-let [result (find-recipes target-id)]
     (or (seq (:crafting result)) (seq (:smelting result)))))
+
+(defn first-recipe-for
+  "Get the first recipe of a given kind for `target-id`.
+  Returns {:input [item-id...] :output item-id :count N} or nil."
+  [^String target-id recipe-kind]
+  (when-let [result (find-recipes target-id)]
+    (when-let [recipes (get result (case recipe-kind :smelting :smelting :crafting :crafting nil))]
+      (when-let [^Recipe recipe (first (seq recipes))]
+        (try
+          (let [^ItemStack output (.getResultItem recipe nil)]
+            {:input (mapv (fn [^Ingredient ing]
+                            (when-let [stacks (.getItems ing)]
+                              (when-let [^ItemStack s (first (seq stacks))]
+                                (stack->item-id s))))
+                          (.getIngredients recipe))
+             :output (stack->item-id output)
+             :count (.getCount output)})
+          (catch Exception _ nil))))))

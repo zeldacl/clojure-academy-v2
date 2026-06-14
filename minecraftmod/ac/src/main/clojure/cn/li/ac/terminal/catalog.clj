@@ -15,6 +15,9 @@
    {:id :tutorial
     :name "Tutorial"
     :icon "my_mod:textures/guis/apps/tutorial/icon.png"
+    :icons ["my_mod:textures/guis/apps/tutorial/icon_0.png"
+            "my_mod:textures/guis/apps/tutorial/icon_1.png"
+            "my_mod:textures/guis/apps/tutorial/icon_2.png"]
     :description "Learn how to use your abilities"
     :category :help}
    {:id :freq-transmitter
@@ -51,6 +54,18 @@
 (defn app-exists?
   [app-id]
   (boolean (app-by-id app-id)))
+
+(def ^:private picked-icons (atom {}))
+
+(defn app-icon [app]
+  (if-let [icons (seq (:icons app))]
+    (let [app-id (:id app)]
+      (if-let [cached (get @picked-icons app-id)]
+        cached
+        (let [picked (nth icons (rand-int (count icons)))]
+          (swap! picked-icons assoc app-id picked)
+          picked)))
+    (:icon app)))
 
 (defn app-count
   []
