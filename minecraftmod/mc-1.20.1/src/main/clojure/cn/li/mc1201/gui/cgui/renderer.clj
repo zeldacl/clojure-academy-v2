@@ -391,18 +391,73 @@
 
           :else nil)))))
 
+(defn- compute-child-abs-pos
+  "Compute a child widget's absolute position given parent position/size/scale.
+  Mirrors the alignment + pivot logic in traversal/collect-widgets-z-ordered."
+  [parent-abs-pos parent-size parent-scale child]
+  (let [own-scale (double (or @(:scale child) 1.0))
+        cum-scale (* (double parent-scale) own-scale)
+        [px py] parent-abs-pos
+        [wx wy] (cgui-core/get-pos child)
+        [pw ph] (or parent-size [0 0])
+        [w h] (cgui-core/get-size child)
+        tm (get @(:metadata child) :transform-meta {})
+        pivot-x (or (:pivot-x tm) 0.0)
+        pivot-y (or (:pivot-y tm) 0.0)
+        align-w (:align-width tm)
+        align-h (:align-height tm)
+        align-offset-x (case align-w :center (int (Math/round (double (/ (- pw w) 2.0)))) :right (int (Math/round (double (- pw w)))) 0)
+        align-offset-y (case align-h :center (int (Math/round (double (/ (- ph h) 2.0)))) :middle (int (Math/round (double (/ (- ph h) 2.0)))) :bottom (int (Math/round (double (- ph h)))) 0)
+        pivot-shift-x (* (double pivot-x) (double w))
+        pivot-shift-y (* (double pivot-y) (double h))]
+    [(+ px (int align-offset-x) (int wx) (int (- pivot-shift-x)))
+     (+ py (int align-offset-y) (int wy) (int (- pivot-shift-y)))
+     cum-scale]))
+
+(defn- render-widget-tree!
+  "Recursively render a widget and its children.
+  When the widget has :clip-children? true in its metadata, enables
+  scissor to clip child content to the widget's visual bounds."
+  [^GuiGraphics gg widget abs-pos scale left top]
+  ;; Render own components
+  (render-widget! gg widget abs-pos scale left top)
+  ;; Render children (with optional scissor clipping)
+  (let [children (cgui-core/get-widgets widget)
+        clip? (get @(:metadata widget) :clip-children? false)
+        [abs-x abs-y] abs-pos
+        [w h] (cgui-core/get-size widget)
+        wx (int (+ left abs-x))
+        wy (int (+ top abs-y))
+        ww (round-int (* (double w) scale))
+        wh (round-int (* (double h) scale))]
+    (when (and clip? (seq children))
+      (.enableScissor gg wx wy (+ wx ww) (+ wy wh)))
+    (doseq [c children]
+      (try
+        (let [[c-abs-x c-abs-y c-scale] (compute-child-abs-pos abs-pos [w h] scale c)]
+          (render-widget-tree! gg c [c-abs-x c-abs-y] c-scale left top))
+        (catch Exception e
+          (log/debug "CGUI render children error:" (.getMessage e)))))
+    (when (and clip? (seq children))
+      (.disableScissor gg))))
+
 (defn render-tree!
   [^GuiGraphics gg root left top]
   (when root
     (let [visible (cgui-core/visible? root)
-          size (cgui-core/get-size root)
-          widgets (traversal/collect-widgets-z-ordered root [0 0] 1.0 nil)
-          widget-count (count widgets)]
+          size (cgui-core/get-size root)]
       (when (not (get @(:metadata root) :cgui-render-debug-logged false))
-        (log/info "CGUI render-tree! root visible:" visible "size:" size "widget count:" widget-count)
+        (let [widgets (traversal/collect-widgets-z-ordered root [0 0] 1.0 nil)]
+          (log/info "CGUI render-tree! root visible:" visible "size:" size
+                    "widget count:" (count widgets)))
         (swap! (:metadata root) assoc :cgui-render-debug-logged true))
-      (doseq [[widget [abs-x abs-y] scale] widgets]
-        (try
-          (render-widget! gg widget [abs-x abs-y] scale left top)
-          (catch Exception e
-            (log/debug "CGUI render widget error:" (.getMessage e))))))))
+      ;; Render root's own components
+      (render-widget! gg root [0 0] 1.0 left top)
+      ;; Render root's direct children recursively
+      (let [[w h] size]
+        (doseq [c (cgui-core/get-widgets root)]
+          (try
+            (let [[c-abs-x c-abs-y c-scale] (compute-child-abs-pos [0 0] [w h] 1.0 c)]
+              (render-widget-tree! gg c [c-abs-x c-abs-y] c-scale left top))
+            (catch Exception e
+              (log/debug "CGUI render-tree! child error:" (.getMessage e)))))))))

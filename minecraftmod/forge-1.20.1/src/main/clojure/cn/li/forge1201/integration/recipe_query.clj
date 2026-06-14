@@ -69,7 +69,10 @@
   Returns {:input [item-id...] :output item-id :count N} or nil."
   [^String target-id recipe-kind]
   (when-let [result (find-recipes target-id)]
-    (when-let [recipes (get result (case recipe-kind :smelting :smelting :crafting :crafting nil))]
+    (when-let [recipes (get result (case recipe-kind
+                                     :smelting :smelting
+                                     (:crafting :imag-fusor :metal-former) :crafting
+                                     nil))]
       (when-let [^Recipe recipe (first (seq recipes))]
         (try
           (let [^ItemStack output (.getResultItem recipe nil)]

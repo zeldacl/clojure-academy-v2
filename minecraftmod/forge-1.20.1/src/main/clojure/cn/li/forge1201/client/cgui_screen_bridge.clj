@@ -118,6 +118,50 @@
         (log/debug "render-recipe-preview! failed:" (ex-message e))
         nil))))
 
+(defn- render-crafting-grid-preview!
+  "Render crafting table recipe items over the CGUI crafting grid background."
+  [^GuiGraphics graphics root left-pos top-pos recipe-data _tick]
+  (when (and recipe-data (map? recipe-data))
+    (try
+      (when-let [area (cgui-core/find-widget root "preview-area")]
+        (let [{:keys [item-id]} recipe-data
+              find-recipe (requiring-resolve 'cn.li.forge1201.integration.recipe-query/first-recipe-for)
+              resolve-stack (requiring-resolve 'cn.li.forge1201.integration.recipe-query/item-id->stack)
+              recipe (when find-recipe (find-recipe item-id :crafting))]
+          (when recipe
+            (let [[ax ay] (cgui-core/get-pos area)
+                  grid-offset-x 11.0 grid-offset-y 6.0
+                  slot-size 18.0 slot-gap 2.0
+                  output-offset-x 94.0 output-offset-y 42.0 output-size 24.0
+                  inputs (:input recipe)
+                  output-stack (when-let [output-id (:output recipe)]
+                                 (when resolve-stack (resolve-stack output-id)))
+                  ps (.pose graphics)]
+              (doseq [[idx input-id] (map-indexed vector (take 9 inputs))]
+                (when (and input-id resolve-stack)
+                  (when-let [stack (resolve-stack input-id)]
+                    (let [row (quot idx 3) col (rem idx 3)
+                          cx (+ left-pos ax grid-offset-x (* col (+ slot-size slot-gap)) (/ slot-size 2))
+                          cy (+ top-pos ay grid-offset-y (* row (+ slot-size slot-gap)) (/ slot-size 2))
+                          item-scale (/ slot-size 16.0)]
+                      (.pushPose ps)
+                      (.translate ps (double cx) (double cy) 110.0)
+                      (.scale ps (double item-scale) (double item-scale) (double item-scale))
+                      (.renderFakeItem graphics stack -8 -8)
+                      (.popPose ps)))))
+              (when output-stack
+                (let [ocx (+ left-pos ax output-offset-x (/ output-size 2))
+                      ocy (+ top-pos ay output-offset-y (/ output-size 2))
+                      oscale (/ output-size 24.0)]
+                  (.pushPose ps)
+                  (.translate ps (double ocx) (double ocy) 110.0)
+                  (.scale ps (double oscale) (double oscale) (double oscale))
+                  (.renderFakeItem graphics output-stack -12 -12)
+                  (.popPose ps)))))))
+      (catch Exception e
+        (log/debug "render-crafting-grid-preview! failed:" (ex-message e))
+        nil))))
+
 (defn- render-block-preview!
   "Render a rotating 3D block in the preview area.
   Uses BlockRenderer.renderSingleBlock (modern 1.20.1 API) instead of
@@ -178,7 +222,8 @@
         (case preview-type
           :block-3d (render-block-preview! graphics gui-widget left-pos top-pos preview-data tick)
           :item-3d  (render-3d-preview! graphics gui-widget left-pos top-pos preview-data tick)
-          :recipe   (render-recipe-preview! graphics gui-widget left-pos top-pos preview-data tick)
+          :recipe         (render-recipe-preview! graphics gui-widget left-pos top-pos preview-data tick)
+          :crafting-grid  (render-crafting-grid-preview! graphics gui-widget left-pos top-pos preview-data tick)
           nil)))
     (catch Exception e
       (log/error "Error rendering" log-label ":" (.getMessage e))
