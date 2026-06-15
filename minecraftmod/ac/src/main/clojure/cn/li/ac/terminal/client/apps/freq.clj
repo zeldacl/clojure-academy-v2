@@ -1,5 +1,6 @@
 (ns cn.li.ac.terminal.client.apps.freq
-  "CLIENT-ONLY: frequency transmitter static help page."
+  "CLIENT-ONLY: DEPRECATED — replaced by freq_transmitter.clj (interactive app).
+  Kept as a reference.  Use cn.li.ac.terminal.client.apps.freq-transmitter/open! instead."
   (:require [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.gui.cgui-core :as cgui-core]

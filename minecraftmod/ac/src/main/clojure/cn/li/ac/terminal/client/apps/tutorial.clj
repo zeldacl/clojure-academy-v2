@@ -36,7 +36,7 @@
 (def cx (+ lx lw)) (def cw 172.0)
 ;; cox = 5.0: text widget x=2 + 3px internal pad (matches upstream glTranslated(3,3-delta,0))
 (def cox 5.0)  (def cow 160.0)  ;; upstream text widget: 160×210.5
-(def coy 0.0)  (def coh (- panel-h coy))  ;; content visible height
+(def coy 0.0)  (def coh 210.5)  ;; content visible height (matches upstream centerPart/text height)
 ;; Upstream showWindow at x = rightPart.x + rightPart.width - showWindow.width
 ;; = 92 + 332 - 158.5 = 265.5
 (def rx 265.5) (def rw 158.5)
@@ -470,6 +470,7 @@
                  :pos [thumb-x scroll-thumb-min-y] :size [scroll-track-w scroll-thumb-h])]
       (comp/add-component! thumb (comp/draw-texture (gui-tex "button/widget_scroll_2.png")))
       (comp/add-component! thumb (comp/draggable))
+      (comp/add-component! thumb (comp/tint 0xCCFFFFFF 0xFFFFFFFF {:affect-texture? true}))
       (cgui-core/set-name! thumb "scroll-thumb")
       (events/on-drag thumb
         (fn [evt]
@@ -505,7 +506,7 @@
     (let [sw (cgui-core/create-widget :pos [0 0] :size [rw show-window-h])]
       ;; preview-area: 134×134 in showWindow (136h), center-aligned with y=-2 offset
       (let [pa (cgui-core/create-widget
-                :pos [(/ (- rw 134.0) 2) -1.0] :size [134.0 134.0])]
+                :pos [(/ (- rw 134.0) 2) -2.0] :size [134.0 134.0])]
         (cgui-core/set-name! pa "preview-area")
         (cgui-core/add-widget! sw pa))
       ;; Preview nav buttons
@@ -536,7 +537,7 @@
         (comp/add-component! tw (comp/text-box :text "" :font-size 10.0 :color 0xFFFFFFFF))
         (cgui-core/set-name! tw "title-text")
         (cgui-core/add-widget! rw tw))
-      (let [bw (cgui-core/create-widget :pos [3 15] :size [riw 64])]
+      (let [bw (cgui-core/create-widget :pos [3 15] :size [riw 69])]
         (comp/add-component! bw (comp/text-box :text "Select a tutorial"
                                                :font-size 8.0 :color 0xFFFFFFFF))
         (cgui-core/set-name! bw "brief-text")

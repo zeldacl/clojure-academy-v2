@@ -33,7 +33,13 @@
     :section :generic
     :type :string
     :default (:font default-values)
-    :comment "Reserved label for a bundled UI font; Minecraft loads fonts from assets/<modid>/font/*.json + TTF in the jar, not from OS font names."}])
+    :comment "Reserved label for a bundled UI font; Minecraft loads fonts from assets/<modid>/font/*.json + TTF in the jar, not from OS font names."}
+   {:key :heads-or-tails
+    :path "generic.heads-or-tails"
+    :section :generic
+    :type :boolean
+    :default false
+    :comment "Whether the Heads or Tails coin flip game is enabled."}])
 
 (defn- value
   [k]

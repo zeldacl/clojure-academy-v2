@@ -1,17 +1,18 @@
 (ns cn.li.ac.terminal.client.apps
   "CLIENT-ONLY: terminal app launchers keyed by catalog app id."
-  (:require [cn.li.ac.terminal.client.apps.freq :as freq]
+  (:require [cn.li.ac.terminal.client.apps.about :as about]
+            [cn.li.ac.terminal.client.apps.freq-transmitter :as freq-transmitter]
             [cn.li.ac.terminal.client.apps.media :as media]
+            [cn.li.ac.terminal.client.apps.settings :as settings]
             [cn.li.ac.terminal.client.apps.skill-tree :as skill-tree]
-            [cn.li.ac.terminal.client.apps.static-pages :as static-pages]
             [cn.li.ac.terminal.client.apps.tutorial :as tutorial-app]
             [cn.li.mcmod.util.log :as log]))
 
 (def launchers
-  {:about static-pages/open-about!
-   :settings static-pages/open-settings!
+  {:about about/open-about!
+   :settings settings/open-settings!
    :tutorial tutorial-app/open!
-   :freq-transmitter freq/open!
+   :freq-transmitter freq-transmitter/open!
    :media-player media/open!
    :skill-tree skill-tree/open!})
 

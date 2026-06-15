@@ -10,7 +10,7 @@
            [net.minecraftforge.eventbus.api IEventBus]
            [net.minecraftforge.fml ModLoadingContext]
            [net.minecraftforge.fml.event.config ModConfigEvent]
-           [net.minecraftforge.fml.config ModConfig$Type]))
+           [net.minecraftforge.fml.config ModConfig ModConfig$Type]))
 
 (def ^:private config-registry-lock
   (Object.))
@@ -117,7 +117,11 @@
 
 (defn- handle-config-event!
   [^ModConfigEvent event]
-  (let [file-name (some-> event .getConfig .getFileName)]
+  (let [^ModConfig mod-config (.getConfig event)
+        file-name (.getFileName mod-config)]
+    ;; Capture ModConfig reference for later .save() calls
+    (locking config-registry-lock
+      (alter-var-root #'*registered-configs* assoc-in [file-name :mod-config] mod-config))
     (when-let [domain-info (get (registered-configs-snapshot) file-name)]
       (load-domain-values! domain-info))))
 
@@ -136,6 +140,36 @@
                                             (accept [_ event]
                                               (handle-config-event! event))))
     nil))
+
+(defn registered-config-for-domain
+  "Find the domain-info map by domain keyword. Returns nil if not found."
+  [domain]
+  (some (fn [[_ v]] (when (= (:domain v) domain) v))
+        (registered-configs-snapshot)))
+
+(defn set-config-value!
+  "Set a single config value via Forge's ConfigValue.set() and persist to TOML file.
+  domain — e.g. :cn.li.ac/ability
+  key    — e.g. :attack-player
+  value  — the new value (boolean/int/double/string)"
+  [domain key value]
+  (locking config-registry-lock
+    (if-let [domain-info (registered-config-for-domain domain)]
+      (if-let [^ForgeConfigSpec$ConfigValue cfg-value (get (:entries domain-info) key)]
+        (do
+          (.set cfg-value value)
+          ;; Persist to TOML file
+          (when-let [^ModConfig mod-cfg (:mod-config domain-info)]
+            (.save mod-cfg))
+          ;; Also update in-memory registry for immediate getter visibility
+          (config-reg/set-config-values! domain {key value})
+          true)
+        (do
+          (log/warn "set-config-value!: unknown key" {:domain domain :key key :available (keys (:entries domain-info))})
+          false))
+      (do
+        (log/warn "set-config-value!: unknown domain" {:domain domain})
+        false))))
 
 ;; This namespace intentionally contains only ForgeConfigSpec/event plumbing.
 ;; Config domains, defaults, and typed accessors live in content/shared modules.
