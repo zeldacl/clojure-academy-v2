@@ -57,11 +57,9 @@
                       :model-texture "terminal_installer"}
          :on-right-click (fn [event-data]
                            (let [{:keys [player side]} event-data]
-                             (when (= side :client)
-                               (when-let [open-fn (requiring-resolve
-                                                   'cn.li.ac.terminal.client.actions/open-terminal!)]
-                                 (open-fn player)))
-                             {:consume? true}))}))
+                             (or (when (= side :server)
+                                   ((requiring-resolve 'cn.li.ac.item.terminal-installer-handler/handle-right-click) player))
+                                 {:consume? true})))}))
     (idsl/register-item!
       (idsl/create-item-spec
         "silbarn"

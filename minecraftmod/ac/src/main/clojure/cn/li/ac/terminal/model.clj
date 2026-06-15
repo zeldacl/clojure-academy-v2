@@ -25,7 +25,10 @@
 
 (defn install-terminal
   [terminal-data]
-  (assoc (normalize-state terminal-data) :terminal-installed? true))
+  (let [data (normalize-state terminal-data)]
+    (if (:terminal-installed? data)
+      data
+      (assoc data :terminal-installed? true))))
 
 (defn uninstall-terminal
   [_terminal-data]

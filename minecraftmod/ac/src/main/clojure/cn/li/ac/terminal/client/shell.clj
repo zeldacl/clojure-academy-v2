@@ -4,6 +4,7 @@
             [cn.li.ac.config.modid :as modid]
             [cn.li.ac.terminal.catalog :as catalog]
             [cn.li.ac.terminal.client.apps :as client-apps]
+            [cn.li.ac.terminal.client.install-effect :as install-effect]
             [cn.li.ac.terminal.client.runtime :as runtime]
             [cn.li.ac.terminal.messages :as terminal-messages]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
@@ -261,6 +262,8 @@
       (cgui-core/create-widget :size [640 785]))))
 
 (defn open-terminal
+  "Open terminal screen if installed. Installation is handled server-side by item handler
+   (matching original ItemTerminalInstaller.onItemRightClick server-driven flow)."
   [player]
   (log/info "Opening terminal for player:" (entity/player-get-name player))
   (try
@@ -269,14 +272,7 @@
                              (fn [response]
                                (if (:terminal-installed? response)
                                  (client-bridge/open-screen! :ac/terminal {:player player})
-                                 (do
-                                   (log/info "Terminal not installed, installing...")
-                                   (install-terminal! owner
-                                                      (fn [install-response]
-                                                        (when (:success install-response)
-                                                          (client-bridge/open-screen! :ac/terminal {:player player}))
-                                                        (when-not (:success install-response)
-                                                          (log/error "Failed to install terminal")))))))))
+                                 (log/info "Terminal not installed, use item to install first")))))
     (catch Exception e
       (log/error "Error opening terminal:" (ex-message e)))))
 
@@ -287,5 +283,45 @@
       :ac/terminal-gui
       (fn [{:keys [player]}]
         (create-terminal-gui player)))
+    ;; Register push handler for terminal install effect (matching original
+    ;; @Listener(channel="install") → AuxGuiHandler.register(new TerminalInstallEffect()))
+    (net-client/register-push-handler!
+      (terminal-messages/msg-id :terminal-install-effect)
+      (fn [_payload]
+        (let [mc (some-> (Class/forName "net.minecraft.client.Minecraft")
+                         (.getMethod "getInstance" (into-array Class []))
+                         (.invoke nil (into-array Object [])))]
+          (when-let [player (and mc (try (.get (.getField (Class/forName "net.minecraft.client.Minecraft") "player") mc)
+                                         (catch Exception _ nil)))]
+            (install-effect/show! player)))))
     (log/info "AC terminal UI hooks installed"))
   nil)
+
+;; ============================================================================
+;; Terminal toggle for key binding (matching original @RegACKeyHandler "open_data_terminal")
+;; ============================================================================
+
+(defn- mc-reflect []
+  (try (some-> (Class/forName "net.minecraft.client.Minecraft")
+               (.getMethod "getInstance" (into-array Class []))
+               (.invoke nil (into-array Object [])))
+       (catch Exception _ nil)))
+
+(defn- terminal-screen-active? []
+  (when-let [mc (mc-reflect)]
+    (try (some? (.get (.getField (Class/forName "net.minecraft.client.Minecraft") "screen") mc))
+         (catch Exception _ false))))
+
+(defn- mc-close-screen! []
+  (when-let [mc (mc-reflect)]
+    (try (.invoke (.getMethod (Class/forName "net.minecraft.client.Minecraft") "setScreen"
+                             (into-array Class [(Class/forName "net.minecraft.client.gui.screens.Screen")]))
+                  mc (into-array Object [nil]))
+         (catch Exception _ nil))))
+
+(defn toggle-terminal!
+  "Toggle terminal UI open/close. Matching original @RegACKeyHandler(name=\"open_data_terminal\", keyID=KEY_LMENU)."
+  [player]
+  (if (terminal-screen-active?)
+    (mc-close-screen!)
+    (open-terminal player)))

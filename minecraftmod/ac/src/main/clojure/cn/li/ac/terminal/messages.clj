@@ -5,7 +5,8 @@
   {:install-terminal 1000
    :install-app 1001
    :uninstall-app 1002
-   :get-state 1003})
+   :get-state 1003
+   :terminal-install-effect 1004})
 
 (defn msg-id
   [action]

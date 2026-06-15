@@ -107,6 +107,14 @@
                   cur-activated (power-runtime/runtime-activated? uuid)]
               (overlay-state/set-client-activated! owner (not cur-activated))
               (emit-keyboard-input! toggle-primary-state-input-id uuid :short-press)))})))))
+    ;; Terminal open/close key (matching original @RegACKeyHandler("open_data_terminal", KEY_LMENU))
+    (when (= key GLFW/GLFW_KEY_LEFT_ALT)
+      (when (and (= action GLFW/GLFW_PRESS)
+                 (not (current-screen-open?)))
+        (when-let [toggle-fn (requiring-resolve 'cn.li.ac.terminal.client.actions/toggle-terminal!)]
+          (when-let [^Minecraft mc (Minecraft/getInstance)]
+            (when-let [player (.player mc)]
+              (toggle-fn player)))))))
 
 (defn- create-key-mapping [^String translation-key key-code ^String category]
   (KeyMapping. translation-key InputConstants$Type/KEYSYM (int key-code) category))
@@ -143,7 +151,9 @@
         screen-key-mappings (merge
                               {:primary (create-key-mapping "key.content.open_primary_screen" GLFW/GLFW_KEY_GRAVE_ACCENT category)
                                :secondary (create-key-mapping "key.content.open_secondary_screen" GLFW/GLFW_KEY_G category)
-                               :mode-toggle (create-key-mapping "key.content.mode_toggle" GLFW/GLFW_KEY_V category)}
+                               :mode-toggle (create-key-mapping "key.content.mode_toggle" GLFW/GLFW_KEY_V category)
+                               ;; Terminal open/close key (matching original @RegACKeyHandler "open_data_terminal" KEY_LMENU)
+                               :terminal (create-key-mapping "settings.my_mod.prop.open_data_terminal" GLFW/GLFW_KEY_LEFT_ALT category)}
                               ;; Cycle key: C if original scheme (slot keys don't use C), N if alternative
                               (if (= scheme :original)
                                 {:cycle-selection (create-key-mapping "key.content.cycle_selection" GLFW/GLFW_KEY_C category)}

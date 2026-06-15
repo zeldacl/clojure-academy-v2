@@ -19,3 +19,7 @@
 (defn open-skill-tree!
   ([player] (skill-tree/open! player))
   ([player learn-context] (skill-tree/open! player learn-context)))
+
+(defn toggle-terminal!
+  [player]
+  (shell/toggle-terminal! player))

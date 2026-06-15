@@ -15,12 +15,26 @@
 
 (defn handle-install-terminal
   [_payload player]
-  (try
-    (player/install-terminal! (session-id) (uuid/player-uuid player))
-    {:success true}
-    (catch Exception e
-      (log/error "Error installing terminal:" (ex-message e))
-      {:success false :error (ex-message e)})))
+  (let [sid (session-id)
+        uid (uuid/player-uuid player)]
+    (if (player/terminal-installed? sid uid)
+      {:success false :error :already-installed}
+      (try
+        (player/install-terminal! sid uid)
+        ;; Trigger terminal_installed achievement (matches original ACAdvancements.trigger)
+        (try
+          (when-let [trigger-fn (requiring-resolve 'cn.li.ac.achievement.dispatcher/trigger-custom-event!)]
+            (trigger-fn uid "terminal_installed"))
+          (catch Throwable _ nil))
+        ;; Push install effect to client (matches original NetworkMessage.sendTo("install"))
+        (try
+          (when-let [send-push (requiring-resolve 'cn.li.mc1201.runtime.network-core/send-to-client!)]
+            (send-push uid (terminal-messages/msg-id :terminal-install-effect) {}))
+          (catch Throwable _ nil))
+        {:success true}
+        (catch Exception e
+          (log/error "Error installing terminal:" (ex-message e))
+          {:success false :error (ex-message e)})))))
 
 (defn handle-install-app
   [payload player]

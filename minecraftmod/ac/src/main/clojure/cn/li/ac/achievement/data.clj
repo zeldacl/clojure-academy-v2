@@ -113,6 +113,13 @@
               :trigger-key {:kind :custom :event-id "open_misaka_cloud"}}
              {:en-title "First Contact" :en-desc "Open the Misaka Cloud Terminal."
               :zh-title "第一次接触" :zh-desc "打开御坂云终端。"})
+   ;; Matching original ACAdvancements.terminal_installed — custom trigger fired on terminal install
+   (base-ach {:id "terminal_installed" :tab :default :parent "open_misaka_cloud"
+              :icon "my_mod:terminal_installer"
+              :criteria (custom-criterion "terminal_installed")
+              :trigger-key {:kind :custom :event-id "terminal_installed"}}
+             {:en-title "Technology Changes Life" :en-desc "Install Data Terminal."
+              :zh-title "科技改变生活" :zh-desc "安装数据终端。"})
 
    ;; Electromaster
    (base-ach {:id "electromaster.lv1" :tab :electromaster :parent nil :icon "my_mod:arc_gen"
