@@ -71,11 +71,11 @@
                                  (.addProperty "texture" (str mod-id ":textures/" texture)))))
         _ (.add json "custom" mats)
         ;; Display transforms per perspective
-        display-json (doto (com.google.gson.JsonObject.)
-                       (->> (reduce-kv (fn [^com.google.gson.JsonObject obj k v]
-                                          (.add obj (name k) (perspective-json v)))
-                                        (com.google.gson.JsonObject.)
-                                        display)))]
+        display-json (reduce-kv (fn [^com.google.gson.JsonObject obj k v]
+                                  (.add obj (name k) (perspective-json v))
+                                  obj)
+                                (com.google.gson.JsonObject.)
+                                display)]
     (.add json "display" display-json)
     json))
 
@@ -84,15 +84,22 @@
 
   Uses ItemModelBuilder.customLoader to emit a forge:obj loader model with
   perspective display transforms matching the original AcademyCraft
-  BakedModelForTEISR transform matrices."
+  BakedModelForTEISR transform matrices.
+
+  In Forge 1.20.1 (47.1.0), customLoader takes a single BiFunction argument,
+  not a BiFunction + ExistingFileHelper pair. The BiFunction receives the
+  parent builder and existing-file helper, and must return a
+  CustomLoaderBuilder whose toJson() produces the final model JSON."
   [^ItemModelProvider provider ^ExistingFileHelper exfile-helper {:keys [model-name] :as spec}]
   (let [^ItemModelBuilder builder (.withExistingParent provider (str model-name) "item/generated")
-        mod-id (str modid/*mod-id*)]
+        mod-id (str modid/*mod-id*)
+        loader-rl (rl/parse-resource-location "forge:obj")]
     (.customLoader builder
                    (reify java.util.function.BiFunction
-                     (apply [_ _builder _helper]
-                       (obj-model-json mod-id spec)))
-                   exfile-helper)
+                     (apply [_ parent-builder helper]
+                       (proxy [net.minecraftforge.client.model.generators.CustomLoaderBuilder] [loader-rl parent-builder helper]
+                         (toJson [_]
+                           (obj-model-json mod-id spec))))))
     builder))
 
 (defn create
