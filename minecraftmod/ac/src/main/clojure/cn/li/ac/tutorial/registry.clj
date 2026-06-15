@@ -1,6 +1,6 @@
 (ns cn.li.ac.tutorial.registry
-  "Immutable tutorial registry — 14 entries matching original AcademyCraft
-  TutorialInit definitions.
+  "Immutable tutorial registry — 13 entries exactly matching original AcademyCraft
+  TutorialInit definitions (registration order preserved).
 
   Each entry is a map:
     :id                  keyword    ; tutorial id
@@ -12,7 +12,8 @@
      :item-id string}              ; runtime item id e.g. \"my_mod:constrained_ore\"
 
   Note: energy_bridge.md exists in resources but was NEVER registered in the
-  original AcademyCraft TutorialInit.java — we preserve that decision.
+  original AcademyCraft TutorialInit.java — we preserve that decision by NOT
+  including it here.
 
   Pattern follows catalog.clj `apps` vector style.")
 
@@ -24,24 +25,9 @@
 ;; --- Tutorial entries ---
 
 (def tutorials
-  "Ordered vector of all 13 registered tutorials."
+  "Ordered vector of all 13 registered tutorials, matching original
+  AcademyCraft TutorialInit.java registration order exactly."
   [{:id :welcome
-    :default-installed? true
-    :conditions []}
-
-   {:id :ability_basis
-    :default-installed? true
-    :conditions []}
-
-   {:id :develop_ability
-    :default-installed? true
-    :conditions []}
-
-   {:id :misc
-    :default-installed? true
-    :conditions []}
-
-   {:id :wireless_network
     :default-installed? true
     :conditions []}
 
@@ -89,7 +75,19 @@
                  {:type :item-obtained :item-id (item "dev_normal")}
                  {:type :item-obtained :item-id (item "dev_advanced")}]}
 
-   {:id :energy_bridge
+   {:id :ability_basis
+    :default-installed? true
+    :conditions []}
+
+   {:id :misc
+    :default-installed? true
+    :conditions []}
+
+   {:id :develop_ability
+    :default-installed? true
+    :conditions []}
+
+   {:id :wireless_network
     :default-installed? true
     :conditions []}])
 

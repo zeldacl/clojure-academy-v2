@@ -208,9 +208,26 @@
 
   (energy-item-model-properties/register!)
 
-  ;; Register tutorial activation hook
+  ;; Register tutorial activation hook (server-side only, for logging)
   (when-let [install-hook (requiring-resolve 'cn.li.ac.tutorial.events/install-tutorial-activated-hook!)]
     (install-hook (fn [player-uuid tut-id]
                     (log/info "Tutorial activated:" (name tut-id) "for player" player-uuid))))
+
+  ;; Register client tick handler for periodic tutorial state sync.
+  ;; Keeps client state current so activation notifications appear
+  ;; without requiring the tutorial GUI to be open (matching upstream
+  ;; AcademyCraft NotifyUI real-time behavior).
+  (try
+    (.addListener (MinecraftForge/EVENT_BUS)
+                  net.minecraftforge.eventbus.api.EventPriority/NORMAL
+                  false
+                  net.minecraftforge.event.TickEvent$ClientTickEvent
+                  (reify java.util.function.Consumer
+                    (accept [_ evt]
+                      (when (= (.phase evt) net.minecraftforge.event.TickEvent$Phase/END)
+                        (when-let [sync-fn (requiring-resolve 'cn.li.ac.tutorial.client.state/tick-background-sync!)]
+                          (sync-fn))))))
+    (catch Throwable _
+      (log/warn "Failed to register tutorial background sync")))
 
   (log/info "Forge 1.20.1 client-side systems initialized"))

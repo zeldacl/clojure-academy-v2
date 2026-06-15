@@ -318,7 +318,7 @@
 (defn- render-brief-markdown! [brief-widget brief-str misaka-id]
   "Render tutorial brief text as markdown segments in the brief widget."
   (cgui-core/clear-widgets! brief-widget)
-  (let [brief-segs (mr/render-segments brief-str misaka-id)]
+  (let [brief-segs (mr/render-segments brief-str misaka-id 130.0)]
     (loop [sg brief-segs y 0.0 n 0]
       (when (seq sg)
         (let [seg (first sg)
@@ -353,22 +353,41 @@
 (declare make-entry-click-handler)
 
 (defn- build-left-panel!
-  "Build left sidebar with tutorial entry list."
-  [root entries activated lang first-open? content-ctr ui player-uuid]
-  (let [lp (cgui-core/create-widget :pos [lx 0] :size [lw panel-h])]
+  "Build left sidebar with tutorial entry list.
+  Groups entries by activation status matching upstream GuiTutorial._build():
+  learned (white) entries first, then unlearned (gray) entries.
+  Uses client-state cache for condition-activated tutorials, falling back
+  to default-installed? when client-state is not yet ready."
+  [root entries lang first-open? content-ctr ui player-uuid]
+  (let [lp (cgui-core/create-widget :pos [lx 0] :size [lw panel-h])
+        ;; Determine activation per-entry using client-state when available
+        ready? (client-state/ready?)
+        is-active? (fn [tut]
+                     (or (:default-installed? tut)
+                         (and ready?
+                           (client-state/is-activated? player-uuid (:id tut)))))
+        ;; Split into activated (white) and unactivated (gray), preserving
+        ;; registration order within each group (matching upstream groupByLearned)
+        {:keys [active inactive]} (reduce (fn [acc tut]
+                                            (if (is-active? tut)
+                                              (update acc :active conj tut)
+                                              (update acc :inactive conj tut)))
+                                          {:active [] :inactive []}
+                                          entries)
+        grouped (concat active inactive)]
     (comp/add-component! lp (comp/draw-texture (gui-tex "window_tutorial_left.png")))
-    (doseq [[idx tut] (map-indexed vector entries)]
+    (doseq [[idx tut] (map-indexed vector grouped)]
       (let [y (+ liy (* idx eh))
-            active? (contains? activated (:id tut))
+            active? (is-active? tut)
             title (or (:title (tut-content/load-tutorial-content lang (:id tut)))
                       (name (:id tut)))
             ew (cgui-core/create-widget :pos [lix y] :size [liw eh])]
         (comp/add-component! ew
-          (comp/text-box :text title :font-size 8.0
+          (comp/text-box :text title :font-size 10.0
                          :color (if active? learned-color unlearned-color)
                          :align :left :height-align :center))
         (events/on-left-click ew
-          (make-entry-click-handler root tut active? player-uuid lang content-ctr ui))
+          (make-entry-click-handler root tut player-uuid lang content-ctr ui))
         (cgui-core/add-widget! lp ew)))
     (cgui-core/set-name! lp "left-panel")
     (when first-open? (cgui-core/set-visible! lp false))
@@ -377,8 +396,10 @@
 (defn- make-entry-click-handler
   "Return a click handler closure for a tutorial entry widget.
   Handles first-click transition, content loading, scroll reset,
-  preview refresh, title and brief rendering."
-  [root tut initial-active? player-uuid lang content-ctr ui]
+  preview refresh, title and brief rendering.
+  Re-checks activation from client-state on each click (matches upstream
+  GuiTutorial which reads tut.isActivated(player) at click time)."
+  [root tut player-uuid lang content-ctr ui]
   (let [{:keys [current-tut-id scroll-y max-scroll scroll-progress
                 pvs preview-item preview-type anim-start]} ui]
     (fn [_]
@@ -571,22 +592,58 @@
       (cgui-core/add-widget! root gl))))
 
 (defn- setup-static-glow! [root]
-  "Non-first-open static glow on logo1. Hides logos 0,2,3; shows static glow lines."
+  "Non-first-open glow on logo1 matching upstream GuiTutorial non-first-open
+  FrameEvent handler.  Hides logos 0,2,3; shows glow lines at the original
+  positions (ln-ln2 → ln on right, -ln → -(ln-ln2) on left, width = ln2).
+  Registers a per-frame handler that modulates glow alpha with a slow sine
+  wave for the subtle breathing effect matching ACRenderingHelper.drawGlow."
   (doseq [nm ["logo0" "logo2" "logo3"]]
     (when-let [lw (cgui-core/find-widget root nm)]
       (cgui-core/set-visible! lw false)))
-  (let [ln 500.0 cl 50.0 glow-h 5.0
+  (let [ln     500.0   ;; outer edge of glow (matches original `ln`)
+        ln2    300.0   ;; glow width (matches original `ln2`)
+        glow-h 5.0     ;; glow line height (matches original `ht`)
         logo1-x (- (/ gw 2) 112.375)
         logo1-w 224.75
         logo1-center-x (+ logo1-x (/ logo1-w 2))
-        glow-y (+ (- (/ gh 2) 59.0) (/ 59.0 2) 15 (- (/ glow-h 2)))]
+        glow-y (+ (- (/ gh 2) 59.0) (/ 59.0 2) 15 (- (/ glow-h 2)))
+        ;; Glow positions matching original non-first-open:
+        ;;   lineglow(ln - ln2, ln, ht)  → right: x0=200, x1=500 relative to center
+        ;;   lineglow(-ln, -(ln - ln2), ht) → left:  x0=-500, x1=-200 relative to center
+        right-start (+ logo1-center-x (- ln ln2))    ;; 200px right of center
+        left-start  (- logo1-center-x ln)            ;; 500px left of center
+        glow-width  ln2                              ;; 300px wide
+        ;; Breathing animation state
+        start-ms (System/currentTimeMillis)
+        period-ms 2800.0  ;; ~2.8s per breath cycle
+        base-alpha 0x44   ;; ~27% opacity at rest
+        amp-alpha  0x33]  ;; amplitude → oscillates between ~7% and ~47%
+    ;; Position glow widgets
     (when-let [gr (cgui-core/find-widget root "glow-right")]
-      (cgui-core/set-pos! gr (- logo1-center-x cl) glow-y)
-      (cgui-core/set-size! gr (- ln cl) glow-h))
+      (cgui-core/set-pos! gr right-start glow-y)
+      (cgui-core/set-size! gr glow-width glow-h))
     (when-let [gl (cgui-core/find-widget root "glow-left")]
-      (cgui-core/set-pos! gl (- logo1-center-x ln) glow-y)
-      (cgui-core/set-size! gl (- ln cl) glow-h))
-    (apply-logo-alpha! root "logo1" 255)))
+      (cgui-core/set-pos! gl left-start glow-y)
+      (cgui-core/set-size! gl glow-width glow-h))
+    (apply-logo-alpha! root "logo1" 255)
+    ;; Per-frame alpha breathing — matches original ACRenderingHelper.drawGlow
+    ;; subtle animated glow effect on logo1 return visits
+    (let [done? (atom false)]
+      (events/on-frame root
+        (fn [_]
+          (when-not @done?
+            (let [elapsed (- (System/currentTimeMillis) start-ms)
+                  phase (/ (mod elapsed period-ms) period-ms)
+                  sin-val (Math/sin (* 2.0 Math/PI phase))
+                  ;; Map sin [-1,1] to alpha range [base-amp, base+amp]
+                  alpha (bit-and 0xFF (unchecked-int (+ base-alpha (* amp-alpha sin-val))))
+                  argb (bit-or (bit-shift-left alpha 24) 0x00FFFFFF)]
+              (when-let [gr (cgui-core/find-widget root "glow-right")]
+                (when-let [tint-comp (comp/get-tint-component gr)]
+                  (comp/set-tint! tint-comp argb)))
+              (when-let [gl (cgui-core/find-widget root "glow-left")]
+                (when-let [tint-comp (comp/get-tint-component gl)]
+                  (comp/set-tint! tint-comp argb))))))))))
 
 ;; --- Main open! function ---
 
@@ -600,7 +657,6 @@
         lang (tut-content/current-lang)
         root (cgui-core/create-widget :size [gw gh])
         entries (tut-registry/all-tutorials)
-        activated (into #{} (keep #(when (:default-installed? %) (:id %)) entries))
         first-open? (client-state/first-open? player-uuid)
         content-ctr (cgui-core/create-widget
                      :pos [(+ cx cox) coy] :size [cow 5000.0])
@@ -615,7 +671,7 @@
             :anim-start       (atom nil)}]
     ;; Build UI sections
     (build-background! root)
-    (build-left-panel! root entries activated lang first-open? content-ctr
+    (build-left-panel! root entries lang first-open? content-ctr
                        ui player-uuid)
     (build-center-panel! root content-ctr first-open? ui)
     (build-right-panel! root (:pvs ui) (:preview-item ui) (:preview-type ui)

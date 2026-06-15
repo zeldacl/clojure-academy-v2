@@ -108,11 +108,11 @@
 
 (defn- wrap-segments
   "Apply word-wrapping to text segments. Image segments pass through unchanged."
-  [segments]
+  [segments max-width-px]
   (mapcat (fn [seg]
             (if (= (:type seg) :image)
               [seg]
-              (let [lines (wrap-line (:text seg) (:font-size seg) max-content-width)]
+              (let [lines (wrap-line (:text seg) (:font-size seg) max-width-px)]
                 (map (fn [line] (assoc seg :text line)) lines))))
           segments))
 
@@ -128,10 +128,12 @@
      :bold?     boolean}
 
   Args:
-    raw-content — parsed markdown content string
-    misaka-id   — int or nil, for ![misakaname] resolution"
-  ([raw-content] (render-segments raw-content nil))
-  ([raw-content misaka-id]
+    raw-content  — parsed markdown content string
+    misaka-id    — int or nil, for ![misakaname] resolution
+    max-width-px — pixel width limit for word-wrapping (default 150, brief uses 130)"
+  ([raw-content] (render-segments raw-content nil max-content-width))
+  ([raw-content misaka-id] (render-segments raw-content misaka-id max-content-width))
+  ([raw-content misaka-id max-width-px]
    (let [lines (str/split-lines (or raw-content ""))
          segments
          (loop [remaining lines
@@ -176,4 +178,4 @@
                                 {:text clean-text :font-size default-font-size
                                  :color default-color :bold? bold?})))))))]
      ;; Word-wrap text segments; skip image segments
-     (vec (wrap-segments segments)))))
+     (vec (wrap-segments segments max-width-px)))))

@@ -85,6 +85,32 @@
   []
   (:ready? @client-state))
 
+;; --- Periodic background sync ---
+;; Keeps client state current without requiring the GUI to be open,
+;; enabling real-time activation notifications matching upstream NotifyUI.
+
+(def ^:private last-sync-ms (atom 0))
+(def ^:private sync-interval-ms 5000)
+
+(defn tick-background-sync!
+  "Call this from the client tick handler.  Sends a nil-owner request-sync
+  every sync-interval-ms (default 5s) to keep tutorial state current.
+  Activation notifications are shown automatically when apply-sync! detects
+  newly activated tutorial ids."
+  []
+  (try
+    (let [now (System/currentTimeMillis)]
+      (when (>= (- now @last-sync-ms) sync-interval-ms)
+        (reset! last-sync-ms now)
+        (net-client/send-to-server
+          (tut-msg/msg-id :tutorial/request-sync)
+          {}
+          (fn [response]
+            (when response
+              (apply-sync! response))))))
+    (catch Throwable _
+      nil)))
+
 ;; --- Testing ---
 
 (defn reset-state!
