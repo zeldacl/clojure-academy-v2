@@ -86,7 +86,7 @@
   - 实现 ImagEnergyItem 接口
   - 用于测试充放电功能
   - 属性：maxEnergy=10000, bandwidth=100
-  - 文件：`item/test_battery.clj`
+  - 文件：`item/item_energy_base.clj` + `energy/service/item_manager.clj`
 
 ## 🟡 中优先级任务（完整功能）
 
@@ -321,7 +321,7 @@
    - 原因：客户端渲染需要
 
 2. **测试能量物品** 🔴
-   - 创建 `item/test_battery.clj`
+   - 创建 `item/item_energy_base.clj` + `energy/service/item_manager.clj`
    - 实现 ImagEnergyItem 接口
    - 用于验证充放电功能
    - 原因：测试Node充电系统

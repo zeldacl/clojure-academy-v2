@@ -20,7 +20,7 @@
             [cn.li.ac.block.developer.console :as dev-console]
             [cn.li.ac.block.developer.panel :as dev-panel]
             [cn.li.ac.gui.tech-ui-common :as tech-ui]
-            [cn.li.ac.item.test-battery :as test-battery]
+            [cn.li.ac.energy.operations :as energy]
             [cn.li.ac.item.special-items :as special-items]
             [cn.li.mcmod.gui.cgui-core :as cgui-core]
             [cn.li.mcmod.gui.components :as comp]
@@ -53,8 +53,8 @@
   "Read current energy from the player's held developer_portable item."
   [player]
   (let [^ItemStack stack (get-player-held-stack player)]
-    (if (and stack (test-battery/is-battery? stack))
-      (double (or (test-battery/get-battery-energy stack) 0.0))
+    (if (and stack (energy/is-energy-item-supported? stack))
+      (double (energy/get-item-energy stack))
       0.0)))
 
 (defn- update-held-item-energy!

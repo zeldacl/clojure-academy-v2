@@ -14,7 +14,7 @@
             [cn.li.ac.block.ability-interferer.schema :as interferer-schema]
             [cn.li.ac.gui.manifest :as gui-manifest]
             [cn.li.ac.gui.tech-ui-common :as tech-ui]
-            [cn.li.ac.item.test-battery :as battery]
+            [cn.li.ac.item.item-energy-base :as energy-base]
             [cn.li.ac.wireless.gui.container.common :as common]
             [cn.li.ac.wireless.gui.tab :as wireless-tab]
             [cn.li.mcmod.gui.container.action-payload :as action-payload]
@@ -100,7 +100,7 @@
 
 (defn- can-place-item? [_container _slot-index item-stack]
   "Only accept energy_unit items in the battery slot (matching original AcademyCraft)."
-  (= :energy-unit (battery/get-battery-type item-stack)))
+  (= :energy-unit (energy-base/get-energy-item-type item-stack)))
 
 (defn- still-valid? [_container _player] true)
 

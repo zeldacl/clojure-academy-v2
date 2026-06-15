@@ -1,12 +1,12 @@
 (ns cn.li.ac.energy.operations-test
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.ac.energy.operations :as op]
-            [cn.li.ac.item.test-battery :as battery]
+            [cn.li.ac.energy.service.item-manager :as item-manager]
             [cn.li.ac.wireless.api :as wireless-api])
   (:import [cn.li.acapi.wireless IWirelessNode IWirelessReceiver]))
 
 (deftest item-non-battery-path-test
-  (with-redefs [battery/is-battery? (constantly false)]
+  (with-redefs [item-manager/is-energy-item-supported? (constantly false)]
     (is (false? (op/is-energy-item-supported? :stk)))
     (is (= 0.0 (op/get-item-energy :stk)))
     (is (= 0.0 (op/get-item-max-energy :stk)))
@@ -16,13 +16,13 @@
     (is (= 0.0 (op/pull-energy-from-item :stk 5.0 false)))))
 
 (deftest item-battery-delegation-test
-  (with-redefs [battery/is-battery? (constantly true)
-                battery/get-battery-energy (fn [_] 12.0)
-                battery/get-max-battery-energy (fn [_] 99.0)
-                battery/get-battery-bandwidth (fn [_] 7.0)
-                battery/set-battery-energy! (fn [_ e] [:set e])
-                battery/charge-battery! (fn [_ a ig] (- a 3))
-                battery/pull-from-battery! (fn [_ a ig] (min a 4.0))]
+  (with-redefs [item-manager/is-energy-item-supported? (constantly true)
+                item-manager/get-item-energy (fn [_] 12.0)
+                item-manager/get-item-capacity (fn [_] 99.0)
+                item-manager/get-item-bandwidth (fn [_] 7.0)
+                item-manager/set-item-energy! (fn [_ e] [:set e])
+                item-manager/charge-energy-to-item (fn [_ a ig] (- a 3))
+                item-manager/pull-energy-from-item (fn [_ a ig] (min a 4.0))]
     (is (true? (op/is-energy-item-supported? :stk)))
     (is (= 12.0 (op/get-item-energy :stk)))
     (is (= 99.0 (op/get-item-max-energy :stk)))

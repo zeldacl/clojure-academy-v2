@@ -116,7 +116,7 @@ Full command: `.\gradlew :mcmod:compileClojure :ac:compileClojure :forge-1.20.1:
 | `forge/datagen/lang_provider.clj` | 15 | Load translations from ac metadata instead of hardcoding | Low |
 | `forge/integration/jei_impl.clj` | 64, 71 | JEI title-key translation + block icon from registry | Low |
 | `forge/integration/ic2_energy.clj` | 51 | Config option for EU conversion rate | Low |
-| `ac/item/test_battery.clj` | 41 | Battery items disabled — missing texture resources | Low |
+| `ac/item/item_energy_base.clj` (was `test_battery.clj`) | 41 | Battery items disabled — missing texture resources | Low |
 | `entity_coin_throwing` | — | Missing player XZ follow + collect semantics | Medium |
 
 ---

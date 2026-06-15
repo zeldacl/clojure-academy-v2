@@ -2,7 +2,7 @@
   "Energy-backed item declarations migrated from original AcademyCraft."
   (:require [cn.li.mcmod.item.dsl :as idsl]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
-            [cn.li.ac.item.test-battery :as test-battery]
+            [cn.li.ac.item.item-energy-base :as energy-base]
             [cn.li.mcmod.util.log :as log]))
 
 (defonce-guard energy-items-installed?)
@@ -26,7 +26,7 @@
 (defn init-energy-items!
   []
   (with-init-guard energy-items-installed?
-    (test-battery/init-test-batteries!)
+    (energy-base/init-energy-items!)
     (idsl/register-item!
       (idsl/create-item-spec
         "energy_unit"

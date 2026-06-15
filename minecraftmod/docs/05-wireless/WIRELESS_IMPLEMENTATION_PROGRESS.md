@@ -117,8 +117,8 @@
 
 ### 2. 测试物品实现
 
-#### 2.1 测试电池 (`item/test_battery.clj`)
-- ✅ **TestBattery记录**: 实现 ImagEnergyItem 协议
+#### 2.1 能源物品 (`item/item_energy_base.clj` + `energy/service/item_manager.clj`)
+- ✅ **ItemEnergyBase记录**: 实现 ImagEnergyItem 协议
 - ✅ 三种电池配置:
   - **基础电池**: 10,000 IF, 100 IF/t
   - **高级电池**: 50,000 IF, 500 IF/t
@@ -942,7 +942,8 @@ root-widget (WidgetContainer 176×200)
 ### 新创建文件
 1. `wireless/interfaces.clj` (170 lines) - 无线系统协议
 2. `energy/imag_energy_item.clj` (50 lines) - 能量物品协议
-3. `item/test_battery.clj` (195 lines) - 测试电池实现
+3. `item/item_energy_base.clj` (70 lines) - 能源物品定义 (对齐原版 ItemEnergyBase)
+   `energy/service/item_manager.clj` (rewritten) - 能源物品操作 (对齐原版 IFItemManager)
 4. `item/constraint_plate.clj` (20 lines) - 限制板物品
 5. `item/mat_core.clj` (110 lines) - 矩阵核心物品 (4等级)
 6. `block/wireless_matrix.clj` (390 lines) - 无线矩阵方块实现 + 物品栏状态 + NBT DSL

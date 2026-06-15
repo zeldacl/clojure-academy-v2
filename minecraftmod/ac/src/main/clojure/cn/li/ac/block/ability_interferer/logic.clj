@@ -12,7 +12,7 @@
             [cn.li.ac.block.machine.container :as machine-container]
             [cn.li.ac.block.machine.runtime :as machine-runtime]
             [cn.li.ac.energy.operations :as energy]
-            [cn.li.ac.item.test-battery :as battery]
+            [cn.li.ac.item.item-energy-base :as energy-base]
             [cn.li.ac.wireless.api :as wireless-api]
             [cn.li.mcmod.block.state-schema :as state-schema]
             [cn.li.mcmod.events.world-lifecycle :as world-lifecycle]
@@ -264,7 +264,7 @@
 (defn- can-place-battery? [_be slot item _face]
   "Only accept energy_unit items in the battery slot (matching original AcademyCraft)."
   (and (= slot battery-slot)
-       (= :energy-unit (battery/get-battery-type item))))
+       (= :energy-unit (energy-base/get-energy-item-type item))))
 
 (defn- can-take-battery? [_be _slot _item _face]
   "Block automated extraction (matching original AcademyCraft)."
