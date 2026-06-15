@@ -18,6 +18,8 @@
             [cn.li.fabric1201.client.runtime-bridge :as runtime-bridge]
             [cn.li.fabric1201.mod :as mod])
   (:import [cn.li.fabric1201.client FabricClientRenderSetup]
+           [net.minecraft.client Minecraft]
+           [net.minecraft.network.chat Component]
            [cn.li.fabric1201.shim FabricClientHelper]
            [cn.li.fabric1201.shim FabricClientHelper$RendererFactory]
            [cn.li.fabric1201.client.render BlockEntityRendererImpl]
@@ -93,7 +95,13 @@
       :slot-key-abort runtime-bridge/on-slot-key-abort!
      :movement-key-down runtime-bridge/on-movement-key-down!
      :movement-key-tick runtime-bridge/on-movement-key-tick!
-     :movement-key-up runtime-bridge/on-movement-key-up!}))
+     :movement-key-up runtime-bridge/on-movement-key-up!
+	     :get-client-player #(.player (Minecraft/getInstance))
+	     :screen-active? #(some? (.screen (Minecraft/getInstance)))
+	     :close-screen! #(.setScreen (Minecraft/getInstance) nil)
+	     :send-system-message! (fn [player translatable-key & args]
+	                              (.sendSystemMessage player
+	                                (Component/translatable translatable-key (into-array Object args))))}))
 
 (defn init-client
   "Initialize client-side systems for Fabric 1.20.1."

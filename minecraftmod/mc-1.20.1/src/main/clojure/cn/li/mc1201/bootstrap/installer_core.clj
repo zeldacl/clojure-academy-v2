@@ -254,6 +254,10 @@
                                                             (if (ru/stack-empty? stack)
                                                               0
                                                               (int (ru/inst stack "getCount")))))
+                       :player-get-main-hand-item-stack (fn [this]
+                                                          (let [stack (ru/player-main-hand-stack this)]
+                                                            (when-not (ru/stack-empty? stack)
+                                                              stack)))
                        :player-main-hand-placeable-block? (fn [this]
                                                            (boolean (:placeable? (block-item-info this))))
                            :player-place-main-hand-block-at-hit! (fn [this _world-id x y z face]

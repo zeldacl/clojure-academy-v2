@@ -106,7 +106,7 @@
             (let [uuid (:player-uuid owner)
                   cur-activated (power-runtime/runtime-activated? uuid)]
               (overlay-state/set-client-activated! owner (not cur-activated))
-              (emit-keyboard-input! toggle-primary-state-input-id uuid :short-press)))})))))
+              (emit-keyboard-input! toggle-primary-state-input-id uuid :short-press)))}))
     ;; Terminal open/close key (matching original @RegACKeyHandler("open_data_terminal", KEY_LMENU))
     (when (= key GLFW/GLFW_KEY_LEFT_ALT)
       (when (and (= action GLFW/GLFW_PRESS)
@@ -114,7 +114,7 @@
         (when-let [toggle-fn (requiring-resolve 'cn.li.ac.terminal.client.actions/toggle-terminal!)]
           (when-let [^Minecraft mc (Minecraft/getInstance)]
             (when-let [player (.player mc)]
-              (toggle-fn player)))))))
+              (toggle-fn player)))))))))
 
 (defn- create-key-mapping [^String translation-key key-code ^String category]
   (KeyMapping. translation-key InputConstants$Type/KEYSYM (int key-code) category))

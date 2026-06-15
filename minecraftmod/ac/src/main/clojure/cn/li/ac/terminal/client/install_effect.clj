@@ -4,8 +4,7 @@
   Original: TerminalInstallEffect.java (AuxGui with 4s progress bar, fade-in/out, key_hint).
   Architecture upgrade: CGui screen instead of AuxGui; same animation parameters and flow.
 
-  Uses Java reflection for Minecraft interop since ac layer cannot statically
-  import net.minecraft.* classes (compile-time classpath isolation)."
+  All Minecraft interop goes through cn.li.mcmod.client.platform-bridge ops."
   (:require [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.gui.cgui-core :as cgui-core]
@@ -21,62 +20,6 @@
 (def ^:private blend-in 0.2)
 (def ^:private blend-out 0.2)
 
-;; ============================================================================
-;; Minecraft reflection helpers (compile-time classpath isolation)
-;; ============================================================================
-
-(defn- mc-get-instance
-  "Reflectively call Minecraft.getInstance()."
-  []
-  (try
-    (let [mc-class (Class/forName "net.minecraft.client.Minecraft")
-          method (.getMethod mc-class "getInstance" (into-array Class []))]
-      (.invoke method nil (into-array Object [])))
-    (catch Exception _ nil)))
-
-(defn- mc-get-player
-  "Get client player from Minecraft instance."
-  [mc]
-  (when mc
-    (try
-      (let [player-field (.getField (Class/forName "net.minecraft.client.Minecraft") "player")]
-        (.get player-field mc))
-      (catch Exception _ nil))))
-
-(defn- mc-get-screen
-  "Get current screen from Minecraft instance."
-  [mc]
-  (when mc
-    (try
-      (let [screen-field (.getField (Class/forName "net.minecraft.client.Minecraft") "screen")]
-        (.get screen-field mc))
-      (catch Exception _ nil))))
-
-(defn- mc-set-screen
-  "Set Minecraft screen to nil (close current screen)."
-  [mc]
-  (when mc
-    (try
-      (.invoke (.getMethod (Class/forName "net.minecraft.client.Minecraft") "setScreen"
-                           (into-array Class [(Class/forName "net.minecraft.client.gui.screens.Screen")]))
-               mc (into-array Object [nil]))
-      (catch Exception _ nil))))
-
-(defn- player-send-system-msg
-  "Call player.sendSystemMessage(Component) reflectively."
-  [player translatable-key key-name]
-  (when player
-    (try
-      (let [component-class (Class/forName "net.minecraft.network.chat.Component")
-            translatable-method (.getMethod component-class "translatable"
-                                            (into-array Class [String (Class/forName "[Ljava.lang.Object;")]))
-            msg (.invoke translatable-method nil
-                         (into-array Object [translatable-key (into-array Object [key-name])]))
-            send-method (.getMethod (Class/forName "net.minecraft.world.entity.player.Player")
-                                    "sendSystemMessage"
-                                    (into-array Class [component-class]))]
-        (.invoke send-method player (into-array Object [msg])))
-      (catch Exception _ nil))))
 
 ;; ============================================================================
 ;; Animation blending (matching TerminalInstallEffect.initBlender)
@@ -162,12 +105,11 @@
                        (>= (- (now-seconds) @start) (+ anim-length wait-time)))
               (vreset! done? true)
               ;; Show key_hint message (matching original PlayerUtils.sendChat)
-              (when-let [mc (mc-get-instance)]
-                (when-let [p (mc-get-player mc)]
-                  (player-send-system-msg p "terminal.my_mod.key_hint" "Left Alt"))
-                ;; Close effect screen → open terminal (matching original onKeyUp)
-                (mc-set-screen mc)
-                (client-bridge/open-screen! :ac/terminal {:player player}))))))
+              (when-let [p (client-bridge/get-client-player)]
+                (client-bridge/send-system-message! p "terminal.my_mod.key_hint" "Left Alt"))
+              ;; Close effect screen → open terminal (matching original onKeyUp)
+              (client-bridge/close-screen!)
+              (client-bridge/open-screen! :ac/terminal {:player player})))))
       main)
     (catch Exception e
       (cgui-core/create-widget :size [640 785]))))

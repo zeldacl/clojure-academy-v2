@@ -56,7 +56,7 @@ public class ObjCompositeBakedModel implements BakedModel {
     public @NotNull List<BakedQuad> getQuads(@Nullable BlockState state, @Nullable Direction side,
                                               @NotNull RandomSource rand,
                                               @NotNull ItemDisplayContext displayContext) {
-        return selectModel(displayContext).getQuads(state, side, rand, displayContext);
+        return selectModel(displayContext).getQuads(state, side, rand);
     }
 
     @Override

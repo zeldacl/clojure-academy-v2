@@ -31,8 +31,9 @@
             [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.util.log :as log]
             [clojure.string :as str])
-  (:import [net.minecraft.world.entity.player Player]
-           [net.minecraft.world.item ItemStack]))
+  ;; Minecraft classes accessed via platform abstractions (cn.li.mcmod.platform.*);
+  ;; no direct :import needed — avoids compile-time classpath coupling to Minecraft jars.
+  )
 
 ;; ============================================================================
 ;; Portable Container — mimics block container atoms for CGUI panels
@@ -43,16 +44,15 @@
 (def ^:private session-ns-prefix "developer.portable")
 
 (defn- get-player-held-stack
-  "Get the player's main-hand ItemStack. Platform-specific call.
-  TODO: abstract behind entity protocol for Fabric support."
-  [^Player player]
+  "Get the player's main-hand ItemStack via platform abstraction."
+  [player]
   (when player
-    (.getMainHandItem player)))
+    (entity/player-get-main-hand-item-stack player)))
 
 (defn- current-energy-from-held-item
   "Read current energy from the player's held developer_portable item."
   [player]
-  (let [^ItemStack stack (get-player-held-stack player)]
+  (let [stack (get-player-held-stack player)]
     (if (and stack (energy/is-energy-item-supported? stack))
       (double (energy/get-item-energy stack))
       0.0)))

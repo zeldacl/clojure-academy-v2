@@ -17,7 +17,9 @@
   "Install client bridge callbacks from a map of handler functions."
   [{:keys [slot-key-down slot-key-tick slot-key-up slot-key-abort
            movement-key-down movement-key-tick movement-key-up
-           open-screen open-simple-gui run-client-effect]}]
+           open-screen open-simple-gui run-client-effect
+           get-client-player screen-active? close-screen!
+           send-system-message!]}]
   (prt/install-impl! #'*client-bridge-ops*
                      {:slot-key-down slot-key-down
                       :slot-key-tick slot-key-tick
@@ -28,7 +30,11 @@
                       :movement-key-up movement-key-up
                       :open-screen open-screen
                       :open-simple-gui open-simple-gui
-                      :run-client-effect run-client-effect}
+                      :run-client-effect run-client-effect
+                      :get-client-player get-client-player
+                      :screen-active? screen-active?
+                      :close-screen! close-screen!
+                      :send-system-message! send-system-message!}
                      "client-bridge")
   nil)
 
@@ -101,3 +107,34 @@
   ([effect-key payload]
    (or (bridge-op :run-client-effect effect-key payload)
        (log/debug "Client bridge effect host not available" {:effect-key effect-key}))))
+
+;; ============================================================================
+;; Minecraft client access ops — avoids Class/forName reflection in ac layer
+;; ============================================================================
+
+(defn get-client-player
+  "Return the current client-side Player instance, or nil."
+  []
+  (or (bridge-op :get-client-player)
+      (do (log/debug "Client bridge get-client-player not available")
+          nil)))
+
+(defn screen-active?
+  "Return true when any Minecraft screen is currently open."
+  []
+  (or (bridge-op :screen-active?)
+      (do (log/debug "Client bridge screen-active? not available")
+          false)))
+
+(defn close-screen!
+  "Close the current Minecraft screen (set to nil). No-op if no screen is open."
+  []
+  (or (bridge-op :close-screen!)
+      (log/debug "Client bridge close-screen! not available")))
+
+(defn send-system-message!
+  "Send a translatable system message to a player.
+  Args: [player translatable-key & format-args]"
+  [player translatable-key & args]
+  (or (apply bridge-op :send-system-message! player translatable-key args)
+      (log/debug "Client bridge send-system-message! not available")))

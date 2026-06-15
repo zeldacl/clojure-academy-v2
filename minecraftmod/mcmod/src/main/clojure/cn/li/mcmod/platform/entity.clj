@@ -32,6 +32,10 @@
   (player-get-main-hand-item-count [player]
     "Return stack count of player's main-hand item. Returns 0 when empty")
 
+  (player-get-main-hand-item-stack [player]
+    "Return the raw ItemStack from the player's main hand, or nil when empty.
+    Callers must use cn.li.mcmod.platform.item functions to inspect the stack.")
+
   (player-main-hand-placeable-block? [player]
     "Return true when player's main-hand item is a placeable block item.")
 

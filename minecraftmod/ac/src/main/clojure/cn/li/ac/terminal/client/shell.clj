@@ -288,12 +288,8 @@
     (net-client/register-push-handler!
       (terminal-messages/msg-id :terminal-install-effect)
       (fn [_payload]
-        (let [mc (some-> (Class/forName "net.minecraft.client.Minecraft")
-                         (.getMethod "getInstance" (into-array Class []))
-                         (.invoke nil (into-array Object [])))]
-          (when-let [player (and mc (try (.get (.getField (Class/forName "net.minecraft.client.Minecraft") "player") mc)
-                                         (catch Exception _ nil)))]
-            (install-effect/show! player)))))
+        (when-let [player (client-bridge/get-client-player)]
+          (install-effect/show! player))))
     (log/info "AC terminal UI hooks installed"))
   nil)
 
@@ -301,27 +297,10 @@
 ;; Terminal toggle for key binding (matching original @RegACKeyHandler "open_data_terminal")
 ;; ============================================================================
 
-(defn- mc-reflect []
-  (try (some-> (Class/forName "net.minecraft.client.Minecraft")
-               (.getMethod "getInstance" (into-array Class []))
-               (.invoke nil (into-array Object [])))
-       (catch Exception _ nil)))
-
-(defn- terminal-screen-active? []
-  (when-let [mc (mc-reflect)]
-    (try (some? (.get (.getField (Class/forName "net.minecraft.client.Minecraft") "screen") mc))
-         (catch Exception _ false))))
-
-(defn- mc-close-screen! []
-  (when-let [mc (mc-reflect)]
-    (try (.invoke (.getMethod (Class/forName "net.minecraft.client.Minecraft") "setScreen"
-                             (into-array Class [(Class/forName "net.minecraft.client.gui.screens.Screen")]))
-                  mc (into-array Object [nil]))
-         (catch Exception _ nil))))
 
 (defn toggle-terminal!
   "Toggle terminal UI open/close. Matching original @RegACKeyHandler(name=\"open_data_terminal\", keyID=KEY_LMENU)."
   [player]
-  (if (terminal-screen-active?)
-    (mc-close-screen!)
+  (if (client-bridge/screen-active?)
+    (client-bridge/close-screen!)
     (open-terminal player)))

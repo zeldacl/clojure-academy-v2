@@ -27,6 +27,9 @@
             [cn.li.mcmod.client.render.pose :as pose]
             [cn.li.mcmod.client.render.buffer :as buffer])
   (:import [cn.li.forge1201.shim ForgeClientHelper]
+           [net.minecraft.client Minecraft]
+           [net.minecraft.network.chat Component]
+           [net.minecraftforge.common MinecraftForge]
            [net.minecraftforge.client.event EntityRenderersEvent$RegisterRenderers]
            [net.minecraftforge.client.event RegisterKeyMappingsEvent]
            [net.minecraft.client KeyMapping]
@@ -166,7 +169,13 @@
                             :mcmod/remove-local-scripted-effect
                             (runtime-bridge/remove-local-scripted-effect! (:entity-uuid payload))
 
-                            (log/debug "Unhandled client effect key" effect-key)))}))
+                            (log/debug "Unhandled client effect key" effect-key)))
+	     :get-client-player #(.player (Minecraft/getInstance))
+	     :screen-active? #(some? (.screen (Minecraft/getInstance)))
+	     :close-screen! #(.setScreen (Minecraft/getInstance) nil)
+	     :send-system-message! (fn [player translatable-key & args]
+	                              (.sendSystemMessage player
+	                                (Component/translatable translatable-key (into-array Object args))))}))
 
 (defn register-key-mappings!
   "Register all runtime KeyMapping instances to Forge input system."

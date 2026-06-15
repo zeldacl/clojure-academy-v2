@@ -73,7 +73,7 @@
       (charTyped [code-point modifiers]
         (let [consumed? (cgui-screen-char-typed root code-point modifiers)]
           (when-not consumed?
-            (proxy-super charTyped code-point modifiers)))))
+            (proxy-super charTyped code-point modifiers))))
 
       (mouseClicked [mouse-x mouse-y button]
         (when root
