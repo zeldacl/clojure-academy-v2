@@ -7,6 +7,7 @@ import net.minecraft.server.packs.PackType;
 import net.minecraft.server.packs.repository.RepositorySource;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.EntityRenderersEvent;
+import net.minecraftforge.client.event.ModelEvent;
 import net.minecraftforge.client.event.RegisterItemDecorationsEvent;
 import net.minecraftforge.event.AddPackFindersEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -31,6 +32,33 @@ public final class ModClientRenderSetup {
     @SubscribeEvent
     public static void onRegisterItemDecorations(RegisterItemDecorationsEvent event) {
         ForgeClientRenderRegistry.registerItemDecorations(event);
+    }
+
+    /**
+     * Register {@code item_id_3d} model variants for every item with
+     * {@code :item-model-3d-obj} metadata so they are baked alongside normal
+     * item models.
+     */
+    @SubscribeEvent
+    public static void onRegisterAdditionalModels(ModelEvent.RegisterAdditional event) {
+        ClojureInterop.requireNamespace("cn.li.forge1201.client.obj-model-baking");
+        ClojureInterop.invoke(
+            "cn.li.forge1201.client.obj-model-baking",
+            "register-additional-obj-models!",
+            event);
+    }
+
+    /**
+     * Replace each item's baked model with a generic {@code ObjCompositeBakedModel}
+     * that delegates between the 2D flat icon (GUI) and the 3D OBJ model (hand/world).
+     */
+    @SubscribeEvent
+    public static void onModifyBakingResult(ModelEvent.ModifyBakingResult event) {
+        ClojureInterop.requireNamespace("cn.li.forge1201.client.obj-model-baking");
+        ClojureInterop.invoke(
+            "cn.li.forge1201.client.obj-model-baking",
+            "replace-obj-composite-models!",
+            event);
     }
 
     @SubscribeEvent

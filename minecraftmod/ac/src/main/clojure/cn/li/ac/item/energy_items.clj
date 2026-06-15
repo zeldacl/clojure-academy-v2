@@ -8,10 +8,19 @@
 (defonce-guard energy-items-installed?)
 
 (defn- open-portable-developer!
+  "Right-click handler for developer_portable item.
+  Opens the classic AcademyCraft CGUI developer screen (page_developer.xml)
+  with machine panel, skill tree, overlays, and console — the same rich UI
+  used by block-based developers."
   [{:keys [player side]}]
   (when (= side :client)
-    (when-let [open-fn (requiring-resolve 'cn.li.ac.terminal.client.actions/open-skill-tree!)]
-      (open-fn player {:developer-type :portable})))
+    ;; Build the CGUI screen data (platform-agnostic)
+    (when-let [screen-data (requiring-resolve 'cn.li.ac.item.developer-portable/create-screen)]
+      (let [screen-map (screen-data player)]
+        ;; Open via platform CGUI screen host
+        (when-let [open-fn (requiring-resolve 'cn.li.mc1201.gui.screen.cgui-screen-host/open-cgui-screen!)]
+          (open-fn (:cgui screen-map) (:session-id screen-map)
+                   {:title "Portable Developer"})))))
   {:consume? true})
 
 (defn init-energy-items!
@@ -39,16 +48,20 @@
         {:max-stack-size 1
          :creative-tab :tools
          :properties {:tooltip ["便携式能力开发仪"
-                                "容量: 100000 IF"
-                                "迁移阶段占位实现"]
-                      ;; Same layout as AcademyCraft item models: empty base + overrides
-                      ;; on <modid>:energy for half/full (see forge datagen + client register!).
+                                "容量: 10000 IF"]
                       :item-model-energy-levels {:texture-empty "developer_portable_empty"
                                                  :texture-half "developer_portable_half"
                                                  :texture-full "developer_portable_full"}
                       :energy-item? true
-                      :energy-capacity 100000.0
-                      :energy-bandwidth 100.0
-                      :battery-type "developer_portable"}
+                      :energy-capacity 10000.0
+                      :energy-bandwidth 0.3
+                      :battery-type "developer_portable"
+                      :item-model-3d-obj {:obj-model "models/developer_portable.obj"
+                                          :texture "models/developer_portable"
+                                          :display {:firstperson_righthand {:rotation [0 180 0] :scale [0.3 0.3 0.3] :translation [0.34 -0.1 -0.1]}
+                                                    :firstperson_lefthand {:rotation [0 180 0] :scale [0.3 0.3 0.3] :translation [0.34 -0.1 -0.1]}
+                                                    :thirdperson_righthand {:rotation [0 180 0] :scale [0.2 0.2 0.2]}
+                                                    :thirdperson_lefthand {:rotation [0 180 0] :scale [0.2 0.2 0.2]}
+                                                    :ground {:scale [-0.15 -0.15 0.15] :translation [0 0.1 0]}}}}
          :on-right-click open-portable-developer!}))
     (log/info "Energy items initialized: energy_unit, developer_portable")))

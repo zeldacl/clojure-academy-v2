@@ -69,14 +69,18 @@
   (let [all-item-names (item-dsl/list-items)
         energy-tier-items (filter #(item-model-patterns/energy-tier-item? (item-dsl/get-item %))
                                   all-item-names)
+        obj-3d-items (filter #(item-model-patterns/obj-3d-item? (item-dsl/get-item %))
+                              all-item-names)
         simple-items (keep (fn [item-name]
                              (let [item-spec (item-dsl/get-item item-name)]
-                               (when-not (item-model-patterns/energy-tier-item? item-spec)
+                               (when-not (or (item-model-patterns/energy-tier-item? item-spec)
+                                            (item-model-patterns/obj-3d-item? item-spec))
                                  (item-model-patterns/simple-model-spec item-name item-spec))))
                            all-item-names)
         bucket-entries (fluid-bucket-model-entries)]
     {:all-item-count (count all-item-names)
      :energy-tier-count (count energy-tier-items)
+     :obj-3d-count (count obj-3d-items)
      :simple-count (count simple-items)
      :bucket-count (count bucket-entries)
      :models (vec
@@ -86,5 +90,11 @@
                                                     (get-in (item-dsl/get-item item-name)
                                                             [:properties :item-model-energy-levels])))
                        energy-tier-items)
+               (map (fn [item-name]
+                      (let [item-spec (item-dsl/get-item item-name)]
+                        (item-model-patterns/obj-3d-model-spec
+                          item-name
+                          (get-in item-spec [:properties :item-model-3d-obj]))))
+                    obj-3d-items)
                (map simple-model-entry simple-items)
                bucket-entries))}))

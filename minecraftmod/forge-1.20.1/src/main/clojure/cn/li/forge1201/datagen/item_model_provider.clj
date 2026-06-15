@@ -1,15 +1,17 @@
 (ns cn.li.forge1201.datagen.item-model-provider
-  "Forge 1.20.1 Item Model生成器 - 直接从item定义提取
+  "Forge 1.20.1 Item Model datagen — generates model JSON from item DSL.
 
-   架构：
-   - core/item/*.clj: 定义items，model信息存储在:properties :model中
-   - 本文件: 使用Forge/Minecraft API从item registry生成JSON（平台特定）
-
-   优势：数据不分散，直接从item定义提取，单一信息源
+  Supported model types:
+  - :item/generated (simple items with a single layer texture)
+  - Energy-tier items (generated base + half/full tier models with :energy predicate)
+  - forge:obj 3D items (OBJ model with display transforms per perspective)
 
   Optional :item-model-energy-levels in :properties generates base + tiered
   sibling models and overrides on predicate <modid>:energy (see client
-  `energy-item-model-properties`)."
+  `energy-item-model-properties`).
+
+  Optional :item-model-3d-obj in :properties generates a forge:obj loader model
+  with perspective-specific display transforms."
   (:require [cn.li.mcmod.config :as modid]
             [cn.li.mc1201.datagen.resource-location :as rl]
             [cn.li.mc1201.datagen.item-model-provider-core :as item-model-core])
@@ -37,15 +39,78 @@
         (.end override-builder)))
     builder))
 
+;; ============================================================================
+;; OBJ 3D model generation
+;; ============================================================================
+
+(defn- ^com.google.gson.JsonArray float-array
+  "Build a Gson JsonArray from numeric values."
+  [xs]
+  (let [arr (com.google.gson.JsonArray.)]
+    (doseq [x xs] (.add arr (float x)))
+    arr))
+
+(defn- ^com.google.gson.JsonObject perspective-json
+  [{:keys [rotation scale translation]}]
+  (let [obj (com.google.gson.JsonObject.)]
+    (when rotation (.add obj "rotation" (float-array rotation)))
+    (when scale (.add obj "scale" (float-array scale)))
+    (when translation (.add obj "translation" (float-array translation)))
+    obj))
+
+(defn- ^com.google.gson.JsonObject obj-model-json
+  [mod-id {:keys [obj-model texture display]}]
+  (let [json (com.google.gson.JsonObject.)
+        _ (.addProperty json "loader" "forge:obj")
+        _ (.addProperty json "model" (str mod-id ":" obj-model))
+        _ (.addProperty json "flip-v" true)
+        _ (.addProperty json "detectCullableFaces" false)
+        ;; Material: default → texture
+        mats (doto (com.google.gson.JsonObject.)
+               (.add "default" (doto (com.google.gson.JsonObject.)
+                                 (.addProperty "texture" (str mod-id ":textures/" texture)))))
+        _ (.add json "custom" mats)
+        ;; Display transforms per perspective
+        display-json (doto (com.google.gson.JsonObject.)
+                       (->> (reduce-kv (fn [^com.google.gson.JsonObject obj k v]
+                                          (.add obj (name k) (perspective-json v)))
+                                        (com.google.gson.JsonObject.)
+                                        display)))]
+    (.add json "display" display-json)
+    json))
+
+(defn- apply-obj-model-spec!
+  "Generate a forge:obj model JSON for a 3D item via datagen.
+
+  Uses ItemModelBuilder.customLoader to emit a forge:obj loader model with
+  perspective display transforms matching the original AcademyCraft
+  BakedModelForTEISR transform matrices."
+  [^ItemModelProvider provider ^ExistingFileHelper exfile-helper {:keys [model-name] :as spec}]
+  (let [^ItemModelBuilder builder (.withExistingParent provider (str model-name) "item/generated")
+        mod-id (str modid/*mod-id*)]
+    (.customLoader builder
+                   (reify java.util.function.BiFunction
+                     (apply [_ _builder _helper]
+                       (obj-model-json mod-id spec)))
+                   exfile-helper)
+    builder))
+
 (defn create
-  "创建Item Model DataProvider实例 (factory signature: PackOutput -> DataProvider)"
+  "Create Item Model DataProvider instance (factory signature: PackOutput -> DataProvider)"
   [^PackOutput pack-output ^ExistingFileHelper exfile-helper]
   (proxy [ItemModelProvider] [pack-output modid/*mod-id* exfile-helper]
     (registerModels []
       (let [this-provider ^ItemModelProvider this
-            {:keys [all-item-count energy-tier-count simple-count models]} (item-model-core/gather-model-specs)]
+            {:keys [all-item-count energy-tier-count obj-3d-count simple-count bucket-count models]}
+            (item-model-core/gather-model-specs)]
+        ;; Standard models: item/generated, energy-tier, fluid buckets
+        ;; OBJ 3D models: forge:obj loader
         (doseq [model-spec models]
-          (apply-model-spec! this-provider exfile-helper model-spec))
+          (if (:obj-model model-spec)
+            (apply-obj-model-spec! this-provider exfile-helper model-spec)
+            (apply-model-spec! this-provider exfile-helper model-spec)))
         (println (str "[item-model-provider] summary: items=" all-item-count
                       ", energy-tier=" energy-tier-count
-                      ", simple-model=" simple-count))))))
+                      ", obj-3d=" obj-3d-count
+                      ", simple-model=" simple-count
+                      ", buckets=" bucket-count))))))

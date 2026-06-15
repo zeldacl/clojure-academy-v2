@@ -25,7 +25,7 @@
 (def battery-configs
   ^{:doc "Battery configurations: name -> [max-energy bandwidth]"}
   {:energy-unit        [10000.0 20.0]
-   :developer-portable [100000.0 100.0]})
+   :developer-portable [10000.0 0.3]})
 
 (defn create-battery
   "Create a battery with specified configuration"

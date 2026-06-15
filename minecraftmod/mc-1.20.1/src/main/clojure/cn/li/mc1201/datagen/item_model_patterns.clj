@@ -41,3 +41,18 @@
   "Predicate: does an item spec request energy-tier models?"
   [item-spec]
   (boolean (get-in item-spec [:properties :item-model-energy-levels])))
+
+(defn obj-3d-item?
+  "Predicate: does an item spec request a forge:obj 3D model?"
+  [item-spec]
+  (boolean (get-in item-spec [:properties :item-model-3d-obj])))
+
+(defn obj-3d-model-spec
+  "Build the 3D OBJ model spec from item DSL properties.
+  Returns a map with :model-name (suffixed with _3d), :obj-model, :texture, :display."
+  [item-id {:keys [obj-model texture display]}]
+  (let [base (registry-model-basename item-id)]
+    {:model-name (str base "_3d")
+     :obj-model (or obj-model (str "models/" base ".obj"))
+     :texture (or texture (str "models/" base))
+     :display (or display {})}))
