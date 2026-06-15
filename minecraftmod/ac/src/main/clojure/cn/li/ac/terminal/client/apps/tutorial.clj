@@ -24,6 +24,7 @@
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.mcmod.gui.events :as events]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.util.log :as log]))
 
@@ -470,7 +471,7 @@
                  :pos [thumb-x scroll-thumb-min-y] :size [scroll-track-w scroll-thumb-h])]
       (comp/add-component! thumb (comp/draw-texture (gui-tex "button/widget_scroll_2.png")))
       (comp/add-component! thumb (comp/draggable))
-      (comp/add-component! thumb (comp/tint 0xCCFFFFFF 0xFFFFFFFF {:affect-texture? true}))
+      (comp/add-component! thumb (comp/tint 0xCCFFFFFF))
       (cgui-core/set-name! thumb "scroll-thumb")
       (events/on-drag thumb
         (fn [evt]
@@ -654,7 +655,8 @@
   (log/info "Opening tutorial GUI")
   (let [player-uuid (some-> player .getUUID str)
         _ (client-state/ensure-client-state! player-uuid)
-        _ (client-state/request-sync! {:player-uuid player-uuid})
+        _ (client-state/request-sync! {:client-session-id runtime-hooks/*client-session-id*
+                                        :player-uuid player-uuid})
         lang (tut-content/current-lang)
         root (cgui-core/create-widget :size [gw gh])
         entries (tut-registry/all-tutorials)

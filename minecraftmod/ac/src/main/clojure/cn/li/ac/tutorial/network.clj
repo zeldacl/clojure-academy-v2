@@ -44,6 +44,8 @@
 
 (defn register-handlers!
   []
-  (net-server/register-handler (tut-msg/msg-id :tutorial/request-sync) handle-request-sync)
-  (net-server/register-handler (tut-msg/msg-id :tutorial/mark-first-open-done) handle-mark-first-open-done)
+  (net-server/register-handler (tut-msg/msg-id :tutorial/request-sync) handle-request-sync
+                               {:owner-spec :server :payload-routing :none})
+  (net-server/register-handler (tut-msg/msg-id :tutorial/mark-first-open-done) handle-mark-first-open-done
+                               {:owner-spec :server :payload-routing :none})
   (log/info "Tutorial network handlers registered"))

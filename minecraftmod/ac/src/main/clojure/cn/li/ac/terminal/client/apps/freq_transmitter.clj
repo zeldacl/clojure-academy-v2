@@ -94,7 +94,7 @@
                 ;; Scan button
                 (let [btn (cgui-core/create-widget :pos [120 80] :size [120 30])]
                   (comp/add-component! btn
-                    (comp/tint (if scanning? 0xFF555555 0xFF334455) 0xFF5577AA))
+                    (comp/tint (if scanning? 0xFF555555 0xFF334455)))
                   (let [lbl (cgui-core/create-widget :pos [0 0] :size [120 30])]
                     (comp/add-component! lbl
                       (comp/text-box
@@ -142,7 +142,7 @@
                   (cgui-core/add-widget! cw iw))
                 ;; Apply button
                 (let [btn (cgui-core/create-widget :pos [120 110] :size [120 28])]
-                  (comp/add-component! btn (comp/tint 0xFF336633 0xFF55AA55))
+                  (comp/add-component! btn (comp/tint 0xFF336633))
                   (let [lbl (cgui-core/create-widget :pos [0 0] :size [120 28])]
                     (comp/add-component! lbl
                       (comp/text-box :text "Apply" :font-size 10.0
@@ -154,7 +154,7 @@
                   (cgui-core/add-widget! cw btn))
                 ;; Rescan button
                 (let [btn (cgui-core/create-widget :pos [120 148] :size [120 24])]
-                  (comp/add-component! btn (comp/tint 0xFF443333 0xFF775555))
+                  (comp/add-component! btn (comp/tint 0xFF443333))
                   (let [lbl (cgui-core/create-widget :pos [0 0] :size [120 24])]
                     (comp/add-component! lbl
                       (comp/text-box :text "Rescan" :font-size 8.0
@@ -173,7 +173,7 @@
                                 :color 0xFF88FF88))
                 (cgui-core/add-widget! cw mw)
                 (let [btn (cgui-core/create-widget :pos [120 100] :size [120 28])]
-                  (comp/add-component! btn (comp/tint 0xFF334455 0xFF5577AA))
+                  (comp/add-component! btn (comp/tint 0xFF334455))
                   (let [lbl (cgui-core/create-widget :pos [0 0] :size [120 28])]
                     (comp/add-component! lbl
                       (comp/text-box :text "Done" :font-size 10.0

@@ -2,11 +2,11 @@
   "Pure terminal network message identifiers shared by client GUI and server handlers.")
 
 (def message-ids
-  {:install-terminal 1000
-   :install-app 1001
-   :uninstall-app 1002
-   :get-state 1003
-   :terminal-install-effect 1004})
+  {:install-terminal         "terminal:install-terminal"
+   :install-app              "terminal:install-app"
+   :uninstall-app            "terminal:uninstall-app"
+   :get-state                "terminal:get-state"
+   :terminal-install-effect  "terminal:install-effect"})
 
 (defn msg-id
   [action]
