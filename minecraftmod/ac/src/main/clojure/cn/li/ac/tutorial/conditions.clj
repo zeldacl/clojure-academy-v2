@@ -92,7 +92,8 @@
   Returns the integer index or nil if not found."
   [condition]
   (when-let [idx @condition-index-cache]
-    (let [i (.indexOf idx condition)]
+    (let [^java.util.List idx idx
+          i (.indexOf idx condition)]
       (when (>= i 0) i))))
 
 ;; ============================================================================

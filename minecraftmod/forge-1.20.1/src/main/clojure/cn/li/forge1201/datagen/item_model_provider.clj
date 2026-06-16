@@ -43,23 +43,23 @@
 ;; OBJ 3D model generation
 ;; ============================================================================
 
-(defn- ^com.google.gson.JsonArray float-array
+(defn- json-float-array
   "Build a Gson JsonArray from numeric values."
-  [xs]
+  ^com.google.gson.JsonArray [xs]
   (let [arr (com.google.gson.JsonArray.)]
-    (doseq [x xs] (.add arr (float x)))
+    (doseq [x xs] (.add arr (Float/valueOf (float x))))
     arr))
 
-(defn- ^com.google.gson.JsonObject perspective-json
-  [{:keys [rotation scale translation]}]
+(defn- perspective-json
+  ^com.google.gson.JsonObject [{:keys [rotation scale translation]}]
   (let [obj (com.google.gson.JsonObject.)]
-    (when rotation (.add obj "rotation" (float-array rotation)))
-    (when scale (.add obj "scale" (float-array scale)))
-    (when translation (.add obj "translation" (float-array translation)))
+    (when rotation (.add obj "rotation" (json-float-array rotation)))
+    (when scale (.add obj "scale" (json-float-array scale)))
+    (when translation (.add obj "translation" (json-float-array translation)))
     obj))
 
-(defn- ^com.google.gson.JsonObject obj-model-json
-  [mod-id {:keys [obj-model texture display]}]
+(defn- obj-model-json
+  ^com.google.gson.JsonObject [mod-id {:keys [obj-model texture display]}]
   (let [json (com.google.gson.JsonObject.)
         _ (.addProperty json "loader" "forge:obj")
         _ (.addProperty json "model" (str mod-id ":" obj-model))
@@ -90,7 +90,7 @@
   not a BiFunction + ExistingFileHelper pair. The BiFunction receives the
   parent builder and existing-file helper, and must return a
   CustomLoaderBuilder whose toJson() produces the final model JSON."
-  [^ItemModelProvider provider ^ExistingFileHelper exfile-helper {:keys [model-name] :as spec}]
+  [^ItemModelProvider provider ^ExistingFileHelper _exfile-helper {:keys [model-name] :as spec}]
   (let [^ItemModelBuilder builder (.withExistingParent provider (str model-name) "item/generated")
         mod-id (str modid/*mod-id*)
         loader-rl (rl/parse-resource-location "forge:obj")]

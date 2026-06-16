@@ -5,10 +5,11 @@
   Queries Minecraft's RecipeManager for crafting/furnace recipes matching
   a given output item.  Returns data structures usable by
   ac.tutorial.client.preview to build recipe display widgets."
-  (:require [cn.li.mcmod.util.log :as log])
+  (:require [clojure.string :as str]
+            [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.client Minecraft]
            [net.minecraft.world.item.crafting RecipeType RecipeManager Recipe Ingredient]
-           [net.minecraft.world.item ItemStack]
+           [net.minecraft.world.item ItemStack Item]
            [net.minecraft.core.registries BuiltInRegistries]
            [net.minecraft.resources ResourceLocation]))
 
@@ -16,11 +17,11 @@
   "Resolve an ItemStack from a runtime item-id string."
   [^String item-id]
   (try
-    (let [parts (clojure.string/split item-id #":" 2)
+    (let [parts (str/split item-id #":" 2)
           rl (if (= 2 (count parts))
                (ResourceLocation. (first parts) (second parts))
                (ResourceLocation. item-id))
-          item (.get BuiltInRegistries/ITEM rl)]
+            ^Item item (.get BuiltInRegistries/ITEM rl)]
       (when item (ItemStack. item)))
     (catch Exception _ nil)))
 
@@ -39,7 +40,7 @@
   [^RecipeManager rm ^RecipeType rtype target-id]
   (try
     (let [recipes (.getAllRecipesFor rm rtype)]
-      (filter (fn [recipe]
+      (filter (fn [^Recipe recipe]
                 (= target-id (stack->item-id (.getResultItem recipe nil))))
               recipes))
     (catch Exception _ nil)))

@@ -7,7 +7,8 @@
             [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.position :as pos]
-            [cn.li.mcmod.util.log :as log]))
+            [cn.li.mcmod.util.log :as log])
+  (:import [cn.li.acapi.wireless IWirelessMatrix IWirelessNode]))
 
 ;; Message IDs (same as client-side)
 (def freq-scan-msg   1005)
@@ -18,7 +19,7 @@
 (defn- handle-scan
   "Ray-trace from the player's look direction to find a wireless device.
   Returns device info (type, SSID, password) if found."
-  [payload player]
+  [_payload player]
   (try
     (let [hit (entity/player-raytrace-block player 5.0 false)]
       (if hit
@@ -34,11 +35,11 @@
             (let [network (wireless/get-wireless-net-by-matrix tile)
                   ssid (if network
                          (wireless/network-ssid network)
-                         (.getSsid matrix-cap))]
+                         (.getSsid ^IWirelessMatrix matrix-cap))]
               {:success true
                :device {:type :matrix
                         :ssid (or ssid "")
-                        :password (.getPassword matrix-cap)
+                        :password (.getPassword ^IWirelessMatrix matrix-cap)
                         :has-network (some? network)
                         :node-count (if network (wireless/network-load network) 0)}})
 
@@ -46,11 +47,11 @@
             (let [network (wireless/get-wireless-net-by-node tile)
                   ssid (if network
                          (wireless/network-ssid network)
-                         (.getNodeName node-cap))]
+                         (.getNodeName ^IWirelessNode node-cap))]
               {:success true
                :device {:type :node
                         :ssid (or ssid "")
-                        :password (.getPassword node-cap)
+                        :password (.getPassword ^IWirelessNode node-cap)
                         :linked? (wireless/is-node-linked? tile)}})
 
             :else

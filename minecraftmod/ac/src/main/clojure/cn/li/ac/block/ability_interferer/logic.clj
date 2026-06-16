@@ -73,10 +73,12 @@
                    (and p
                         (not (player-creative? p))
                         (not (player-spectator? p))
-                        (let [ppos (.position p)]
-                          (and (<= min-x (.x ppos) max-x)
-                               (<= min-y (.y ppos) max-y)
-                               (<= min-z (.z ppos) max-z))))))
+                            (let [x (entity/entity-get-x p)
+                            y (entity/entity-get-y p)
+                            z (entity/entity-get-z p)]
+                           (and (<= min-x x max-x)
+                             (<= min-y y max-y)
+                             (<= min-z z max-z))))))
          vec)))
 
 (defn- apply-interference-effect! [player src-id]

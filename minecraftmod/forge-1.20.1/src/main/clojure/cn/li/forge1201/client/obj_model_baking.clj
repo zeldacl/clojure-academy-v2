@@ -8,12 +8,15 @@
 
   Pattern mirrors register-scripted-block-entity-renderers!: a single generic
   Java class (ObjCompositeBakedModel) is driven by Clojure metadata iteration."
-  (:require [cn.li.mcmod.config :as modid]
+  (:require [clojure.string :as str]
+            [cn.li.mcmod.config :as modid]
             [cn.li.mcmod.item.dsl :as item-dsl]
             [cn.li.mc1201.datagen.item-model-patterns :as model-patterns]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.client.resources.model BakedModel ModelResourceLocation]
            [net.minecraft.resources ResourceLocation]
+           [net.minecraftforge.client.event ModelEvent$RegisterAdditional ModelEvent$ModifyBakingResult]
+           [java.util Map]
            [cn.li.forge1201.client.render.item ObjCompositeBakedModel]))
 
 (defn- obj-3d-item-ids
@@ -25,12 +28,12 @@
 (defn- item-id->basename
   [item-id]
   ;; Must match registry-model-basename in item-model-patterns
-  (clojure.string/replace (str item-id) #"-" "_"))
+  (str/replace (str item-id) #"-" "_"))
 
 (defn register-additional-obj-models!
   "ModelEvent.RegisterAdditional handler.
   Registers the _3d variant for every item with :item-model-3d-obj."
-  [event]
+  [^ModelEvent$RegisterAdditional event]
   (let [mod-id (str modid/*mod-id*)]
     (doseq [item-id (obj-3d-item-ids)]
       (let [basename (item-id->basename item-id)
@@ -44,8 +47,8 @@
   "ModelEvent.ModifyBakingResult handler.
   Replaces each item's baked model with an ObjCompositeBakedModel that
   delegates to the 2D model for GUI/ground and the 3D OBJ model for handheld."
-  [event]
-  (let [registry (.getModels event)
+  [^ModelEvent$ModifyBakingResult event]
+  (let [^Map registry (.getModels event)
         mod-id (str modid/*mod-id*)]
     (doseq [item-id (obj-3d-item-ids)]
       (let [basename (item-id->basename item-id)
@@ -55,8 +58,8 @@
             world-mrl (ModelResourceLocation.
                         (ResourceLocation. mod-id (str basename "_3d"))
                         "inventory")
-            gui-model (.get registry gui-mrl)
-            world-model (.get registry world-mrl)]
+            ^BakedModel gui-model (.get registry gui-mrl)
+            ^BakedModel world-model (.get registry world-mrl)]
         (if (and gui-model world-model)
           (do
             (.put registry gui-mrl (ObjCompositeBakedModel. gui-model world-model))

@@ -11,6 +11,15 @@
   (entity-distance-to-sqr [entity x y z]
     "Calculate squared distance from entity to coordinates: returns double")
 
+  (entity-get-x [entity]
+    "Return entity X coordinate as double")
+
+  (entity-get-y [entity]
+    "Return entity Y coordinate as double")
+
+  (entity-get-z [entity]
+    "Return entity Z coordinate as double")
+
   (player-get-level [player]
     "Return the Level/World for a player")
 

@@ -9,7 +9,8 @@
            [net.minecraft.network.chat Component]
            [net.minecraft.client Minecraft]
            [com.mojang.math Axis]
-           [net.minecraft.world.item ItemStack Items]
+           [net.minecraft.world.item ItemStack Items Item]
+           [net.minecraft.world.level.block Block]
            [net.minecraft.core.registries BuiltInRegistries]
            [net.minecraft.resources ResourceLocation]))
 
@@ -21,7 +22,7 @@
           rl (if (= 2 (count parts))
                (ResourceLocation. (first parts) (second parts))
                (ResourceLocation. item-id))
-          item (.get BuiltInRegistries/ITEM rl)]
+          ^Item item (.get BuiltInRegistries/ITEM rl)]
       (if (and item (not= item Items/AIR))
         (ItemStack. item)
         (ItemStack. Items/STONE)))
@@ -33,7 +34,7 @@
   (try
     (let [parts (str/split block-id #":" 2)
           rl (ResourceLocation. (first parts) (second parts))
-          block (.get BuiltInRegistries/BLOCK rl)]
+          ^Block block (.get BuiltInRegistries/BLOCK rl)]
       (when block
         (.defaultBlockState block)))
     (catch Exception _ nil)))

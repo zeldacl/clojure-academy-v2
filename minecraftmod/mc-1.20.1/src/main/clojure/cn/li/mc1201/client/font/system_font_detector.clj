@@ -55,10 +55,11 @@
   []
   (try
     (some (fn [{:keys [path profile ext]}]
-            (let [p (try
+            (let [^Path p (try
                       (.getPath (FileSystems/getDefault) path (into-array String []))
                       (catch Exception _ nil))]
-              (when (and p (try (.toFile p) (catch Exception _ nil))
+              (when (and p
+                         (try (Files/exists p (make-array java.nio.file.LinkOption 0)) (catch Exception _ false))
                          (try (Files/isReadable p) (catch Exception _ false)))
                 {:path p :profile profile :ext ext})))
           font-search-list)

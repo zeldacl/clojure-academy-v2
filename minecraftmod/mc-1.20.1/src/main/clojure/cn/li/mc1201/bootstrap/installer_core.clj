@@ -17,7 +17,8 @@
             [cn.li.mc1201.runtime.spi.network-transport :as network-transport-spi]
             [cn.li.mc1201.platform.world-block-ops :as world-block-ops]
             [cn.li.mc1201.platform.menu-inventory-ops :as menu-inventory-ops])
-  (:import [net.minecraft.network.chat Component]))
+  (:import [net.minecraft.network.chat Component]
+           [net.minecraft.world.phys Vec3]))
 
 (def ^:private ^:dynamic item-protocols-installed? false)
 (def ^:private ^:dynamic pos-installed? false)
@@ -240,10 +241,21 @@
                                 nil)))
           player-impl {:entity-distance-to-sqr (fn [this x y z]
                                                  (ru/inst this "distanceToSqr" (double x) (double y) (double z)))
+                       :entity-get-x (fn [this]
+                                       (let [^Vec3 pos (ru/inst this "position")]
+                                         (double (.-x pos))))
+                       :entity-get-y (fn [this]
+                                       (let [^Vec3 pos (ru/inst this "position")]
+                                         (double (.-y pos))))
+                       :entity-get-z (fn [this]
+                                       (let [^Vec3 pos (ru/inst this "position")]
+                                         (double (.-z pos))))
                        :player-get-level (fn [this] (player-ops/player-level adapter this))
                        :player-creative? (fn [this] (ru/inst this "isCreative"))
                        :player-spectator? (fn [this] (ru/inst this "isSpectator"))
-                       :player-get-name (fn [this] (.getString (ru/inst this "getName")))
+                       :player-get-name (fn [this]
+                                          (let [^Component name-component (ru/inst this "getName")]
+                                            (.getString name-component)))
                        :player-get-uuid (fn [this] (ru/inst this "getUUID"))
                        :player-get-main-hand-item-id (fn [this]
                                                        (let [stack (ru/player-main-hand-stack this)]
@@ -304,7 +316,16 @@
                        :player-get-container-menu (fn [this] (player-ops/player-container-menu adapter this))}]
       (extend entity-cls entity/IEntityOps
               {:entity-distance-to-sqr (fn [this x y z]
-                                         (ru/inst this "distanceToSqr" (double x) (double y) (double z)))})
+                                         (ru/inst this "distanceToSqr" (double x) (double y) (double z)))
+               :entity-get-x (fn [this]
+                               (let [^Vec3 pos (ru/inst this "position")]
+                                 (double (.-x pos))))
+               :entity-get-y (fn [this]
+                               (let [^Vec3 pos (ru/inst this "position")]
+                                 (double (.-y pos))))
+               :entity-get-z (fn [this]
+                               (let [^Vec3 pos (ru/inst this "position")]
+                                 (double (.-z pos))))})
       (extend player-cls entity/IEntityOps player-impl)
       (when server-player-cls
         (extend server-player-cls entity/IEntityOps player-impl))
@@ -368,7 +389,7 @@
                                             net.minecraft.core.registries.Registries/ITEM rl)
                                    items (.iterator (.getTagOrEmpty net.minecraft.core.registries.BuiltInRegistries/ITEM tag-key))]
                                (when (.hasNext items)
-                                 (let [item (.value ^net.minecraft.core.Holder (.next items))
+                                 (let [^net.minecraft.world.item.Item item (.value ^net.minecraft.core.Holder (.next items))
                                        stack (net.minecraft.world.item.ItemStack. item (int count))]
                                    stack)))
                              (catch Throwable _ nil)))}

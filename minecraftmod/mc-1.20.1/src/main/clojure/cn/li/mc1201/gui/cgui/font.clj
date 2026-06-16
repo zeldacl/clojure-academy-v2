@@ -9,7 +9,7 @@
   - Measure and draw with net.minecraft.client.gui.Font + GuiGraphics.drawString.
 
   CGui keywords (:ac-normal, :ac-bold, :ac-italic) map to font ids and style flags."
-  (:import [net.minecraft.network.chat Component Style]
+  (:import [net.minecraft.network.chat Component Style MutableComponent]
            [net.minecraft.resources ResourceLocation]
            [net.minecraft.client.gui Font GuiGraphics]
            [com.mojang.blaze3d.vertex PoseStack]
@@ -111,7 +111,7 @@
   (contains? @registry name))
 
 (defn- build-style
-  [{:keys [location bold italic]}]
+  ^Style [{:keys [location bold italic]}]
   (cond-> Style/EMPTY
     (instance? ResourceLocation location) (.withFont ^ResourceLocation location)
     bold (.withBold true)
@@ -121,7 +121,8 @@
   "Build a Component using the registered font descriptor (or plain text when nil)."
   (^Component [^String text font-desc]
    (if font-desc
-     (.withStyle (Component/literal (or text "")) (build-style font-desc))
+     (let [^MutableComponent c (Component/literal (or text ""))]
+       (.withStyle c ^Style (build-style font-desc)))
      (Component/literal (or text "")))))
 
 (defn- scaled-width
@@ -157,7 +158,7 @@
       (try
         (.translate ps x' (double y) 0.0)
         (.scale ps scale scale 1.0)
-        (.drawString gg mc-font comp 0 0 color' (boolean shadow?))
+        (.drawString gg mc-font comp (int 0) (int 0) (int color') (boolean shadow?))
         (finally
           (.popPose ps))))))
 

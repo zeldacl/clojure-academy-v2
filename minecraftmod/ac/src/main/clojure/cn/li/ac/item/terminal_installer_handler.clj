@@ -1,7 +1,9 @@
 (ns cn.li.ac.item.terminal-installer-handler
   "Server-driven terminal installer right-click handler matching original
    ItemTerminalInstaller.onItemRightClick (AcademyCraft Forge 1.12)."
-  (:require [cn.li.mcmod.util.log :as log]))
+  (:require [cn.li.ac.ability.util.uuid :as uuid]
+            [cn.li.mcmod.platform.entity :as entity]
+            [cn.li.mcmod.util.log :as log]))
 
 (defn handle-right-click
   "Server-side handler for terminal_installer right-click.
@@ -10,7 +12,7 @@
    - Not installed → install + achievement + push effect, consume unless creative
    Uses requiring-resolve for cross-layer dynamic dispatch."
   [player]
-  (let [uuid-str (str (.getUUID player))
+    (let [uuid-str (uuid/player-uuid player)
         sid (when-let [f (requiring-resolve 'cn.li.mcmod.hooks.core/require-player-state-session-id)]
               (f "terminal.installer"))
         installed? (boolean
@@ -38,4 +40,4 @@
             (catch Throwable _ nil)))
         ;; Consume item unless creative mode
         ;; (matching original: if(!player.capabilities.isCreativeMode) stack.setCount(...))
-        {:consume? (not (.isCreative player))}))))
+        {:consume? (not (boolean (entity/player-creative? player)))}))))

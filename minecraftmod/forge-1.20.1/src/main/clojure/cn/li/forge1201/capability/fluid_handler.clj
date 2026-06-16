@@ -9,6 +9,7 @@
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.forge1201.capability CapabilityRegistry]
            [net.minecraft.resources ResourceLocation]
+           [net.minecraft.world.level.material Fluid]
            [net.minecraftforge.common.capabilities ForgeCapabilities]
            [net.minecraftforge.fluids FluidStack]
            [net.minecraftforge.fluids.capability IFluidHandler]
@@ -43,7 +44,7 @@
   Only accepts `my_mod:imag_phase` fluid (parity: original TilePhaseGen only
   accepted ACFluids.fluidImagProj)."
   [be]
-  (let [fluid (resolve-phase-fluid)]
+  (let [^Fluid fluid (resolve-phase-fluid)]
     (reify IFluidHandler
       (getTanks [_] 1)
 
@@ -59,10 +60,13 @@
           (int (get state :tank-size 8000))))
 
       (isFluidValid [_ _tank stack]
-        (boolean (and fluid stack (= (.getFluid stack) fluid))))
+        (let [^FluidStack stack stack]
+          (boolean (and fluid stack (= (.getFluid stack) fluid)))))
 
       (fill [_ resource action]
-        (if (and fluid resource (= (.getFluid resource) fluid))
+        (let [^FluidStack resource resource
+              ^IFluidHandler$FluidAction action action]
+          (if (and fluid resource (= (.getFluid resource) fluid))
           (let [state (platform-be/get-custom-state be)
                 amount (.getAmount resource)
                 current (int (get state :liquid-amount 0))
@@ -73,7 +77,7 @@
                 (platform-be/set-custom-state! be new-state)
                 (try (platform-be/set-changed! be) (catch Exception _ nil))))
             (int can-fill))
-          0))
+          0)))
 
       (^FluidStack drain [_ ^int max-drain ^IFluidHandler$FluidAction action]
         (let [state (platform-be/get-custom-state be)

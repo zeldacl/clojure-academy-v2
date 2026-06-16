@@ -98,14 +98,8 @@
   (let [root (:cgui cgui-screen)
         left (atom 0)
         top (atom 0)
-        target-size (resolve-image-size cgui-screen)]
-    (proxy [CGuiContainerScreen] [menu player-inventory title]
-      (init []
-        (let [^CGuiContainerScreen s this]
-          (when target-size
-            (let [[w h] target-size]
-              (.setImageSize s w h)))
-          (proxy-super init)))
+        target-size (resolve-image-size cgui-screen)
+        ^CGuiContainerScreen screen (proxy [CGuiContainerScreen] [menu player-inventory title]
 
       (render [^GuiGraphics gg mouse-x mouse-y partial-ticks]
         (let [^CGuiContainerScreen s this]
@@ -191,7 +185,11 @@
       (removed []
         (when root
           (with-screen-cgui menu "CGUI dispose error"
-            #(cgui-rt/dispose! root)))))))
+            #(cgui-rt/dispose! root)))))]
+    (when target-size
+      (let [[w h] target-size]
+        (.setImageSize screen w h)))
+    screen))
 
 (defn fallback-container-screen
   [menu player-inventory title]

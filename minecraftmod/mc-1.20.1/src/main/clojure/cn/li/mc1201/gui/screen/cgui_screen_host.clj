@@ -48,9 +48,6 @@
   (let [left (atom 0)
         top (atom 0)]
     (proxy [Screen] [(Component/literal title)]
-      (init []
-        (proxy-super init))
-
       (render [^GuiGraphics graphics mouse-x mouse-y partial-ticks]
         (try
           (let [^Screen s this
@@ -67,13 +64,10 @@
             (log/error "Error rendering CGUI screen " title e))))
 
       (keyPressed [^long key-code ^long scan-code ^long modifiers]
-        (or (cgui-screen-key-pressed root key-code scan-code modifiers opts)
-            (proxy-super keyPressed key-code scan-code modifiers)))
+        (boolean (cgui-screen-key-pressed root key-code scan-code modifiers opts)))
 
       (charTyped [code-point modifiers]
-        (let [consumed? (cgui-screen-char-typed root code-point modifiers)]
-          (when-not consumed?
-            (proxy-super charTyped code-point modifiers))))
+        (boolean (cgui-screen-char-typed root code-point modifiers)))
 
       (mouseClicked [mouse-x mouse-y button]
         (when root

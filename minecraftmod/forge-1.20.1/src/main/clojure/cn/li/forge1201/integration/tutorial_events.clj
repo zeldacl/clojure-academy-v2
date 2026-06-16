@@ -6,7 +6,8 @@
   requiring-resolve.
 
   Uses the same MinecraftForge/EVENT_BUS pattern as item_handler.clj."
-  (:require [cn.li.mcmod.util.log :as log])
+  (:require [cn.li.ac.ability.util.uuid :as uuid]
+            [cn.li.mcmod.util.log :as log])
   (:import [net.minecraftforge.event.entity.player PlayerEvent$ItemCraftedEvent
                                                  PlayerEvent$ItemSmeltedEvent]
            [net.minecraftforge.event.entity.player EntityItemPickupEvent]
@@ -145,7 +146,7 @@
                                  (some-> mc .getSingleplayerServer .getPlayerList
                                          (.getPlayer uuid))
                                  (when-let [level (some-> mc .level)]
-                                   (some (fn [p] (when (= (.getUUID p) uuid) p))
+                                       (some (fn [p] (when (= (uuid/player-uuid p) (str uuid)) p))
                                          (.players level))))]
                     (when player
                       (.post MinecraftForge/EVENT_BUS

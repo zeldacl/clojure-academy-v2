@@ -3,6 +3,7 @@
   
   These items are used to construct matrix cores, nodes, and other wireless components."
   (:require [cn.li.mcmod.item.dsl :as idsl]
+            [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.util.log :as log]))
 
@@ -43,7 +44,7 @@
                                  (when-let [trigger-fn (requiring-resolve
                                                         'cn.li.ac.achievement.dispatcher/trigger-custom-event!)]
                                    ;; Fix: trigger-custom-event! signature is [uuid event-id]
-                                   (trigger-fn (str (.getUUID player)) "open_misaka_cloud"))
+                                   (trigger-fn (uuid/player-uuid player) "open_misaka_cloud"))
                                  (catch Throwable _ nil)))
                              ;; Item is NOT consumed (matches original AC: EnumActionResult.SUCCESS)
                              {:consume? false}))}))

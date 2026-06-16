@@ -16,8 +16,7 @@
                     lighter than pixel fonts; factor <1 compensates)
 
   For the fallback (minecraft:default bitmap font):
-    :fallback-scale — multiplied onto the CGUI font-scale to reduce visual size."
-  (:require [clojure.string :as str]))
+    :fallback-scale — multiplied onto the CGUI font-scale to reduce visual size.")
 
 ;; ============================================================================
 ;; Profiles
@@ -56,9 +55,9 @@
 
 (defn build-font-jsons
   [profile font-ext]
-  (let [normal-json (build-font-json profile font-ext 1)
-        bold-json   (build-font-json profile font-ext 1)
+  (let [^String normal-json (build-font-json profile font-ext 1)
+        ^String bold-json   (build-font-json profile font-ext 1)
         italic-json normal-json]
-    {:normal (.getBytes normal-json "UTF-8")
-     :bold   (.getBytes bold-json "UTF-8")
-     :italic (.getBytes italic-json "UTF-8")}))
+    {:normal (.getBytes ^String normal-json "UTF-8")
+     :bold   (.getBytes ^String bold-json "UTF-8")
+     :italic (.getBytes ^String italic-json "UTF-8")}))

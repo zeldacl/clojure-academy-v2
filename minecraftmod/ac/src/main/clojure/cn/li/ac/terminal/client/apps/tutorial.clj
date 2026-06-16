@@ -13,7 +13,8 @@
 
   Scroll: content widgets inside a container whose y-position is offset by
   scroll-y, controlled by drag on the scroll-thumb widget."
-  (:require [cn.li.ac.tutorial.content :as tut-content]
+  (:require [cn.li.ac.ability.util.uuid :as uuid]
+            [cn.li.ac.tutorial.content :as tut-content]
             [cn.li.ac.tutorial.registry :as tut-registry]
             [cn.li.ac.tutorial.markdown-renderer :as mr]
             [cn.li.ac.tutorial.client.preview :as preview]
@@ -476,7 +477,7 @@
       (events/on-drag thumb
         (fn [evt]
           (when (pos? @max-scroll)
-            (let [scroll-delta (* (/ (double (.dy evt)) thumb-travel) @max-scroll)]
+            (let [scroll-delta (* (/ (double (:dy evt)) thumb-travel) @max-scroll)]
               (swap! scroll-y + scroll-delta)
               (clamp-scroll! scroll-y @max-scroll)
               (let [progress (/ @scroll-y @max-scroll)
@@ -653,7 +654,7 @@
   "Open the tutorial GUI. Syncs client state, builds the three-panel widget tree,
   sets up first-open animation (or static glow for return visits), and opens the screen."
   (log/info "Opening tutorial GUI")
-  (let [player-uuid (some-> player .getUUID str)
+  (let [player-uuid (uuid/player-uuid player)
         _ (client-state/ensure-client-state! player-uuid)
         _ (client-state/request-sync! {:client-session-id runtime-hooks/*client-session-id*
                                         :player-uuid player-uuid})

@@ -6,7 +6,7 @@
   approach recommended by official Forge docs."
   (:require [cn.li.forge1201.registry.state :as registry-state])
   (:import [net.minecraft.network.chat Component]
-           [net.minecraft.world.item CreativeModeTab Items]
+           [net.minecraft.world.item CreativeModeTab Items Item]
            [net.minecraftforge.registries DeferredRegister]))
 
 (defn build-creative-tab
@@ -21,7 +21,7 @@
         (reify java.util.function.Supplier
           (get [_]
             (try
-              (if-let [logo-item (registry-state/get-registered-item "logo")]
+              (if-let [^Item logo-item (registry-state/get-registered-item "logo")]
                 (net.minecraft.world.item.ItemStack. logo-item)
                 (.getDefaultInstance Items/BARRIER))
               (catch Exception _

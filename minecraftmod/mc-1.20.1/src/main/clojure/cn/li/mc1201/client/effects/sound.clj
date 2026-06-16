@@ -4,6 +4,7 @@
             [cn.li.mcmod.hooks.core :as power-runtime]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.client Minecraft]
+           [net.minecraft.client.sounds SoundManager]
            [net.minecraft.core.registries BuiltInRegistries]
            [net.minecraft.sounds SoundSource SoundEvent]
            [net.minecraft.resources ResourceLocation]))
@@ -49,7 +50,7 @@
 (defn stop-sound!
   "Stop a playing sound by its ResourceLocation id (e.g. \"my_mod:em.arc_strong\")."
   [sound-id]
-  (when-let [sm (get-sound-manager)]
+  (when-let [^SoundManager sm (get-sound-manager)]
     (let [loc (ResourceLocation. (namespace sound-id) (name sound-id))]
       (.stop sm ^ResourceLocation loc))))
 
@@ -57,7 +58,7 @@
   "Stop all sounds in the PLAYERS category (covers media playback).
   Matches original AcademyCraft MediaBackend stop behavior."
   []
-  (when-let [sm (get-sound-manager)]
+  (when-let [^SoundManager sm (get-sound-manager)]
     (.stop sm SoundSource/PLAYERS)))
 
 (defn init!
