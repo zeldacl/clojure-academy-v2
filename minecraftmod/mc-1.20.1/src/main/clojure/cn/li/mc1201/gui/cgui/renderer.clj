@@ -252,9 +252,7 @@
                     r (/ (double (bit-and (bit-shift-right color-int 16) 0xFF)) 255.0)
                     g (/ (double (bit-and (bit-shift-right color-int 8) 0xFF)) 255.0)
                     b (/ (double (bit-and color-int 0xFF)) 255.0)
-                    a (if (pos? (bit-and color-int 0xFF000000))
-                        (/ (double (bit-and (bit-shift-right color-int 24) 0xFF)) 255.0)
-                        1.0)]
+                    a (/ (double (bit-and (bit-shift-right color-int 24) 0xFF)) 255.0)]
                 (when (and (pos? src-w) (pos? src-h))
                   (try
                     (RenderSystem/enableBlend)

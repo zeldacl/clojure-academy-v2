@@ -218,8 +218,8 @@
   Preserves the RGB channels (0x00FFFFFF mask)."
   (when-let [lw (cgui-core/find-widget root logo-name)]
     (when-let [dt (comp/get-drawtexture-component lw)]
-      ;; dt is already an atom; swap! directly on it
-      (swap! dt assoc :color
+      ;; dt is the component map; swap! on its state atom
+      (swap! (:state dt) assoc :color
              (unchecked-int (bit-or (bit-shift-left alpha 24) 0x00FFFFFF))))))
 
 (defn- setup-logo-fade-out!
