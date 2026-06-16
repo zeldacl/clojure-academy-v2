@@ -2,6 +2,7 @@ package cn.li.mc1201.runtime;
 
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 
@@ -45,5 +46,17 @@ public final class BlockRegistryShared {
 
     public static Block getAirBlock() {
         return Blocks.AIR;
+    }
+
+    public static Block blockByItem(Item item) {
+        if (item == null) {
+            return null;
+        }
+        return Block.byItem(item);
+    }
+
+    public static boolean isPlaceableBlockItem(Item item) {
+        Block block = blockByItem(item);
+        return block != null && block != Blocks.AIR;
     }
 }

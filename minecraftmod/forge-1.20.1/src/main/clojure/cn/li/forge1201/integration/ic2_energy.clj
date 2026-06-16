@@ -1,11 +1,8 @@
 (ns cn.li.forge1201.integration.ic2-energy
   "IC2 Energy integration - exposes AC energy converters as IC2 EU providers/consumers.
 
-  This module provides optional IC2 (Industrial Craft 2) integration, allowing
-  AC energy converters to interact with IC2's EU (Energy Units) system.
-
-  IC2 integration is completely optional - if IC2 is not present, this module
-  will not be loaded and no errors will occur."
+  SANCTIONED REFLECTION ISLAND: optional third-party ic2.api.* types are not
+  Minecraft/Forge symbols and are allowlisted by verifyNoPlatformReflection."
   (:require [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.platform.energy-integration :as energy-integration])
   (:import [cn.li.mcmod.energy IEnergyCapable]

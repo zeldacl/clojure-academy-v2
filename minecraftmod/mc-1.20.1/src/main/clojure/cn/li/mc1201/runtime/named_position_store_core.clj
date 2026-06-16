@@ -5,9 +5,9 @@
   rather than using loader-specific lifecycle hooks. NBT storage location is
   selected by content-owned persistence descriptors."
   (:require [cn.li.mc1201.runtime.entity-query-core :as query-core]
-            [cn.li.mc1201.reflect-util :as ru]
             [cn.li.mcmod.hooks.core :as power-runtime]
             [cn.li.mcmod.platform.named-position-store :as position-store]
+            [cn.li.mcmod.platform.player-persistent-data :as player-pd]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.server MinecraftServer]
            [net.minecraft.server.level ServerPlayer]
@@ -26,7 +26,7 @@
 (defn- get-positions-tag
   ^CompoundTag [^ServerPlayer player]
   (when-let [store-key (nbt-store-key)]
-    (let [^CompoundTag persistent-data (ru/inst player "getPersistentData")]
+    (let [^CompoundTag persistent-data (player-pd/get-persistent-data! player)]
       (if (.contains persistent-data store-key)
         (.getCompound persistent-data store-key)
         (let [new-tag (CompoundTag.)]

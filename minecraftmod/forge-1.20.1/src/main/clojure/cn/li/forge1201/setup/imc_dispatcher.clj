@@ -2,10 +2,10 @@
 	"Forge mod-bus listener for processing incoming IMC registrations."
 	(:require [cn.li.forge1201.integration.imc-dispatch :as imc-dispatch]
 						[cn.li.mcmod.util.log :as log])
-	(:import [clojure.lang Reflector]
-				 [java.util.function Consumer Supplier]
+	(:import [java.util.function Consumer Supplier]
 					 [net.minecraftforge.eventbus.api EventPriority IEventBus]
-					 [net.minecraftforge.fml.event.lifecycle InterModProcessEvent]))
+					 [net.minecraftforge.fml.event.lifecycle InterModProcessEvent]
+					 [net.minecraftforge.fml InterModComms$IMCMessage]))
 
 (def ^:private event-priority EventPriority/NORMAL)
 
@@ -16,19 +16,13 @@
 		(catch Throwable _
 			nil)))
 
-(defn- invoke-noarg
-	[obj member]
-	(safe-invoke #(Reflector/invokeNoArgInstanceMember obj member)))
-
 (defn- imc-method-key
-	[msg]
-	(or (invoke-noarg msg "method")
-			(invoke-noarg msg "getMethod")))
+	[^InterModComms$IMCMessage msg]
+	(str (.method msg)))
 
 (defn- imc-supplier
-	[msg]
-	(or (invoke-noarg msg "messageSupplier")
-			(invoke-noarg msg "getMessageSupplier")))
+	[^InterModComms$IMCMessage msg]
+	(.messageSupplier msg))
 
 (defn- resolve-payload
 	[msg]
@@ -40,7 +34,7 @@
 
 (defn- handle-imc-message!
 	[msg]
-	(let [method-key (str (imc-method-key msg))
+	(let [method-key (imc-method-key msg)
 				payload (resolve-payload msg)]
 		(case method-key
 			"register_network_handler"

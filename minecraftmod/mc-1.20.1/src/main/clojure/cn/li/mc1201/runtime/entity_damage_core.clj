@@ -4,32 +4,16 @@
   Keeps generic shaping/calculation logic in shared mc1201 while platform layers
   own world/entity lookup and concrete damage application calls."
   (:require [cn.li.mcmod.hooks.core :as power-runtime])
-  (:import [net.minecraft.world.entity LivingEntity]
+  (:import [cn.li.mc1201.runtime DamageSourceShared]
+           [net.minecraft.world.entity LivingEntity]
+           [net.minecraft.world.level Level]
            [net.minecraft.world.phys Vec3]))
 
-(defn source-type->method-name
-  [source-type]
-  (case source-type
-    :magic "magic"
-    :lightning "lightningBolt"
-    :explosion "explosion"
-    :generic "generic"
-    "generic"))
-
 (defn resolve-damage-source
-  "Resolve level.damageSources().<kind>() via reflection, returning nil on failure.
-  Keep reflection path bootstrap-safe for both Forge/Fabric AOT/runtime contexts."
-  [level source-type]
+  "Resolve level.damageSources().<kind>() via shared Java accessor."
+  [^Level level source-type]
   (when level
-    (try
-      (let [sources-method (.getMethod (class level) "damageSources" (into-array Class []))
-            ^Object sources (.invoke sources-method level (object-array []))
-            sources-class (class sources)
-            method-name (source-type->method-name source-type)
-            dam-method (.getMethod sources-class method-name (into-array Class []))]
-        (.invoke dam-method sources (object-array [])))
-      (catch Exception _
-        nil))))
+    (DamageSourceShared/resolveKeyword level source-type)))
 
 (defn entity-pos-map
   [^LivingEntity entity]

@@ -4,6 +4,8 @@
 
   Uses shared mc1201 installer with a Forge-specific adapter implementation."
   (:require [cn.li.mcmod.util.log :as log]
+            [cn.li.mcmod.platform.gui-open :as gui-open]
+            [cn.li.mcmod.platform.player-persistent-data :as player-pd]
             [cn.li.mc1201.bootstrap.platform-init :as platform-init]
             [cn.li.mc1201.platform.class-access :as class-access]
             [cn.li.mc1201.platform.item-ops :as item-ops]
@@ -39,9 +41,7 @@
 
 (defn- resolve-local-player-class []
   (when (side/client-side?)
-    (-> (Class/forName "cn.li.forge1201.bridge.ClientPlatformBridge")
-        (.getMethod "getLocalPlayerClass" (into-array Class []))
-        (.invoke nil (object-array [])))))
+    (cn.li.forge1201.bridge.ClientPlatformBridge/getLocalPlayerClass)))
 
 (defn- raytrace-block-map [player reach fluid-source-only?]
   (when-let [^BlockHitResult hit (RuntimeAccessShared/playerRaytraceBlock player (double (or reach 5.0)) (boolean fluid-source-only?))]
@@ -64,7 +64,7 @@
     (item-stack-class [_] (RuntimeAccessShared/getItemStackClass))
     (item-class [_] (RuntimeAccessShared/getItemClass))
     (block-state-class [_] (RuntimeAccessShared/getBlockStateClass))
-    (level-class [_] (Class/forName "net.minecraft.world.level.Level"))
+    (level-class [_] (RuntimeAccessShared/getLevelClass))
     (scripted-be-class [_] nil)
 
     item-ops/ItemOps
@@ -129,6 +129,7 @@
            :world-is-chunk-loaded? (resolve-binding! 'world-is-chunk-loaded?)
            :world-get-day-time (resolve-binding! 'world-get-day-time)
            :world-get-dimension-id (resolve-binding! 'world-get-dimension-id)
+           :world-server-session-id (resolve-binding! 'world-server-session-id)
            :world-get-players (resolve-binding! 'world-get-players)
            :world-is-raining (resolve-binding! 'world-is-raining)
            :world-is-client-side (resolve-binding! 'world-is-client-side)
@@ -141,5 +142,7 @@
            :be-set-changed! (resolve-binding! 'be-set-changed!)
            :be-get-fluid-height (resolve-binding! 'be-get-fluid-height)})
         (alter-var-root #'*initialized?* (constantly true))
+        (gui-open/install-open-menu! (resolve-binding! 'open-player-menu!) "forge")
+        (player-pd/install-player-persistent-data! (resolve-binding! 'player-persistent-data) "forge")
         (log/info "forge platform SPI bootstrap initialized via ServiceLoader entrypoint"))))
   nil)

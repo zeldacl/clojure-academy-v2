@@ -21,7 +21,7 @@
                                              :opts opts}))
 
                         :else
-                        (throw (Exception. (str "Unknown requiring-resolve: " sym))))))]
+                        (throw (Exception. (str "Unknown requiring-resolve: " sym)))))]
         (is (= {:consume? true}
                (#'energy-items/open-portable-developer! {:player :player-1
                                                          :side :client})))
@@ -30,7 +30,7 @@
                  :root :mock-root
                  :session-id "mock-session"
                  :opts {:title "Portable Developer"}}]
-               @calls)))))
+               @calls))))))
 
 (deftest portable-developer-skips-on-server-side-test
   (testing "portable developer does nothing on server side"

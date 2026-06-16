@@ -70,7 +70,7 @@ The linter script lives in `tools/aot-linter/aot_safety.clj` and the allowlist i
 
 - **现象**：`No matching ctor found for ... Pack$Info`
   - 根因：跨映射/运行时环境构造签名漂移。
-  - 处理：使用反射候选构造（本仓库已在 `font_pack_setup.clj` 实装），避免硬编码单签名。
+  - 处理：在 `mc-1.20.1` Java（`PackInfoFactory` / `SystemFontVirtualPack`）中直接构造，Clojure 只调用 Java accessor；勿在 Clojure 用反射候选构造。
 
 ### 4) 如何验证“防呆机制”确实生效
 

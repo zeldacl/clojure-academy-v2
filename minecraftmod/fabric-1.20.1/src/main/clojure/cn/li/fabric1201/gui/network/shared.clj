@@ -13,16 +13,6 @@
 (def s2c-channel
   (ResourceLocation. mod-config/*mod-id* "clj_rpc_s2c"))
 
-(defn jproxy
-  [^Class iface invoke-fn]
-  (java.lang.reflect.Proxy/newProxyInstance
-    (.getClassLoader iface)
-    (into-array Class [iface])
-    (reify java.lang.reflect.InvocationHandler
-      (invoke [_ _ method args]
-        (let [^java.lang.reflect.Method method method]
-          (invoke-fn (.getName method) args))))))
-
 (defn make-buf
   [payload]
   (doto (FriendlyByteBuf. (Unpooled/buffer))

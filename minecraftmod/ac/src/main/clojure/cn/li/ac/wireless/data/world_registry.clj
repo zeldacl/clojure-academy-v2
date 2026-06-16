@@ -1,6 +1,7 @@
 (ns cn.li.ac.wireless.data.world-registry
 	"World-scoped registry and base data model for wireless runtime state."
 	(:require [cn.li.ac.wireless.core.spatial-index :as si]
+						[cn.li.mcmod.platform.world-owner-key :as world-owner-key]
 						[cn.li.mcmod.util.log :as log]))
 
 (defrecord WiWorldData
@@ -48,55 +49,11 @@
 	[runtime & body]
 	`(call-with-world-registry-runtime ~runtime (fn [] ~@body)))
 
-(defn- require-world-owner-value
-	[world label value]
-	(if (some? value)
-		value
-		(throw (ex-info (format "Wireless world owner requires %s" label)
-								{:world world
-								 :required label}))))
-
-(defn- invoke-no-arg
-	[target method-name]
-	(try
-		(clojure.lang.Reflector/invokeInstanceMethod target method-name (object-array 0))
-		(catch Throwable _ nil)))
-
-(defn- resource-key-value
-	[value]
-	(cond
-		(nil? value) nil
-		(or (keyword? value) (string? value) (symbol? value) (number? value)) value
-		:else (or (some-> value (invoke-no-arg "location") str)
-						(some-> value (invoke-no-arg "getValue") str)
-						(str value))))
-
-(defn- server-session-id
-	[world]
-	(require-world-owner-value
-		world
-		":server-session-id"
-		(if (map? world)
-			(or (:server-session-id world) (:session-id world))
-			(when-let [server (invoke-no-arg world "getServer")]
-				[:server (System/identityHashCode server)]))))
-
-(defn- world-id
-	[world]
-	(require-world-owner-value
-		world
-		":world-id"
-		(cond
-			(map? world) (or (:world-id world) (:dimension-id world))
-			(or (keyword? world) (string? world) (symbol? world) (number? world)) nil
-			:else (or (some-> world (invoke-no-arg "dimension") resource-key-value)
-							(some-> world (invoke-no-arg "getRegistryKey") resource-key-value)))))
-
 (defn world-key
 	"Return the stable registry key for a world.
 	The key intentionally avoids using the mutable world object identity directly."
 	[world]
-	[(server-session-id world) (world-id world)])
+	(world-owner-key/world-key world))
 
 (defn- attach-world-ref
 	[runtime world wi-data]
@@ -289,7 +246,7 @@
 	"Remove all wireless world data owned by one server session."
 	[owner-or-session-id]
 	(let [session-id (if (map? owner-or-session-id)
-									(server-session-id owner-or-session-id)
+									(first (world-owner-key/world-key owner-or-session-id))
 									owner-or-session-id)]
 		(swap! (runtime-state-atom)
 				   (fn [registry-state]

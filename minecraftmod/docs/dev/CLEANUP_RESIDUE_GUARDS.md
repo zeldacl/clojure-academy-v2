@@ -150,7 +150,7 @@ Do not delete files just because their name contains `bridge`, `adapter`, or
 - `mcmod/platform/*` protocols and platform dispatch seams.
 - `mc-1.20.1/runtime/*_spi.clj` and shared runtime core modules.
 - Forge/Fabric event registration glue and loader lifecycle entrypoints.
-- Fabric startup reflection/class-noinit wrappers.
+- Forge capability wiring via `ForgeCapabilities` tokens (`ForgeProvidedCapabilitySupport`); no string-based MC/Forge class-name reflection in Clojure.
 - Forge missing-mapping/world-save compatibility handlers.
 
 Cleanup should target duplicated business logic, dead fallback aliases, and

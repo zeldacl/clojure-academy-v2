@@ -5,8 +5,9 @@
             [cn.li.mcmod.content.registry :as content-registry]
             [cn.li.mcmod.block.tile-logic :as tile-logic]
             [cn.li.mcmod.util.log :as log])
-  (:import [cn.li.mcmod.energy IEnergyCapable]
-           [cn.li.forge1201.capability ForgeEnergyAdapter]
+  (:import [cn.li.forge1201.capability CapabilityRegistry ForgeEnergyAdapter]
+           [cn.li.mcmod.energy IEnergyCapable]
+           [net.minecraftforge.common.capabilities ForgeCapabilities]
            [net.minecraftforge.energy IEnergyStorage]))
 
 (defn- fe-conversion-rate
@@ -56,6 +57,7 @@
   []
   (let [descriptors (vec (forge-energy-descriptors))]
     (doseq [capability-key (distinct (map target-capability-key descriptors))]
+      (CapabilityRegistry/register (name capability-key) ForgeCapabilities/ENERGY)
       (platform-cap/declare-capability! capability-key IEnergyStorage get-forge-energy-capability))
     (doseq [descriptor descriptors
             tile-id (target-tile-ids descriptor)]

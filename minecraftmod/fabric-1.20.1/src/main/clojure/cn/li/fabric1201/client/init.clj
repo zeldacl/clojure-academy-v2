@@ -16,6 +16,7 @@
             [cn.li.fabric1201.client.hand-effect-renderer :as hand-effect-renderer]
             [cn.li.fabric1201.client.level-effect-renderer :as level-effect-renderer]
             [cn.li.fabric1201.client.runtime-bridge :as runtime-bridge]
+            [cn.li.mc1201.client.gl-ops :as gl-ops]
             [cn.li.fabric1201.mod :as mod])
   (:import [cn.li.fabric1201.client FabricClientRenderSetup]
            [net.minecraft.client Minecraft]
@@ -38,6 +39,7 @@
   (log/info "Registering block renderers for Fabric 1.20.1...")
   (try
     (render/register-texture-binder! bind-texture-fabric!)
+    (render/register-gl-ops! (gl-ops/ops-map))
     (render-init/register-default-renderer-init-fns!)
     (render-init/register-all-renderers!)
     (catch Exception e

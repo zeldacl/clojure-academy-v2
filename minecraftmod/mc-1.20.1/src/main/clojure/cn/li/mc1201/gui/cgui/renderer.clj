@@ -19,8 +19,7 @@
            (net.minecraft.client.renderer.texture TextureManager)
            (com.mojang.blaze3d.vertex PoseStack)
            (com.mojang.blaze3d.systems RenderSystem)
-           (cn.li.mc1201.client MinecraftClientAccess GuiGraphicsHelper)
-           (java.lang.reflect Field)
+           (cn.li.mc1201.client MinecraftClientAccess GuiGraphicsHelper TextureSizeAccess)
            (org.lwjgl.opengl GL11)))
 
 (defn create-cgui-renderer-runtime
@@ -89,24 +88,13 @@
                      (try
                        (get-texture-size-from-resource resource-location)
                        (catch Exception _ nil))
-                     (let [^Minecraft mc (MinecraftClientAccess/getMinecraft)
-                           ^TextureManager tm (try (.getTextureManager mc) (catch Exception _ nil))
-                           tex (try (when tm (.getTexture tm resource-location)) (catch Exception _ nil))]
-                       (try
-                         (when tex
-                           (try
-                             (let [cls (class tex)
-                                   ^Field wf (try (.getDeclaredField cls "width") (catch Exception _ nil))
-                                   ^Field hf (try (.getDeclaredField cls "height") (catch Exception _ nil))]
-                               (when (and wf hf)
-                                 (.setAccessible wf true)
-                                 (.setAccessible hf true)
-                                 (let [w (.getInt wf tex)
-                                       h (.getInt hf tex)]
-                                   (when (and (number? w) (number? h)) [(int w) (int h)]))))
-                             (catch Exception _ nil))
-                           )
-                         (catch Exception _ nil))))]
+                     (try
+                       (let [^Minecraft mc (MinecraftClientAccess/getMinecraft)
+                             ^TextureManager tm (try (.getTextureManager mc) (catch Exception _ nil))]
+                         (when tm
+                           (let [dims (TextureSizeAccess/sizeFromManager tm resource-location)]
+                             (when dims [(aget dims 0) (aget dims 1)]))))
+                       (catch Exception _ nil)))]
           (when size (swap! (texture-size-cache-atom) assoc k size))
           size)))))
 

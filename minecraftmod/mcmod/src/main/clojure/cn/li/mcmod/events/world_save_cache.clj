@@ -1,54 +1,11 @@
 (ns cn.li.mcmod.events.world-save-cache
   "Runtime component for carrying world-save payloads across
-  world save/unload and the next matching world load.")
-
-(defn- require-world-owner-value
-  [world label value]
-  (if (some? value)
-    value
-    (throw (ex-info (format "World save cache requires %s" label)
-                    {:world world
-                     :required label}))))
-
-(defn- invoke-no-arg
-  [target method-name]
-  (try
-    (clojure.lang.Reflector/invokeInstanceMethod target method-name (object-array 0))
-    (catch Throwable _ nil)))
-
-(defn- resource-key-value
-  [value]
-  (cond
-    (nil? value) nil
-    (or (keyword? value) (string? value) (symbol? value) (number? value)) value
-    :else (or (some-> value (invoke-no-arg "location") str)
-              (some-> value (invoke-no-arg "getValue") str)
-              (str value))))
-
-(defn- server-session-id
-  [world]
-  (require-world-owner-value
-    world
-    ":server-session-id"
-    (if (map? world)
-      (or (:server-session-id world) (:session-id world))
-      (when-let [server (invoke-no-arg world "getServer")]
-        [:server (System/identityHashCode server)]))))
-
-(defn- world-id
-  [world]
-  (require-world-owner-value
-    world
-    ":world-id"
-    (cond
-      (map? world) (or (:world-id world) (:dimension-id world))
-      (or (keyword? world) (string? world) (symbol? world) (number? world)) nil
-      :else (or (some-> world (invoke-no-arg "dimension") resource-key-value)
-                (some-> world (invoke-no-arg "getRegistryKey") resource-key-value)))))
+  world save/unload and the next matching world load."
+  (:require [cn.li.mcmod.platform.world-owner-key :as world-owner-key]))
 
 (defn world-key
   [world]
-  [(server-session-id world) (world-id world)])
+  (world-owner-key/world-key world))
 
 (defn create-world-save-cache-runtime
   []
@@ -120,7 +77,7 @@
 (defn clear-session-saved-data!
   [owner-or-session-id]
   (let [session-id (if (map? owner-or-session-id)
-                     (server-session-id owner-or-session-id)
+                     (first (world-key owner-or-session-id))
                      owner-or-session-id)]
     (update-pending-save-data!
       (fn [pending]

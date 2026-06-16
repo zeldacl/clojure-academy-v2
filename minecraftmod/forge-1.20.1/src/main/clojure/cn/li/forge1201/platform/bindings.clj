@@ -61,6 +61,19 @@
 	[^Level level]
 	(str (.location (.dimension level))))
 
+(defn world-server-session-id
+  [^Level level]
+  (when-let [sid (cn.li.mc1201.runtime.RuntimeAccessShared/getWorldServerSessionId level)]
+    [:server sid]))
+
+(defn open-player-menu!
+  [^net.minecraft.world.entity.player.Player player factory]
+  (.openMenu player factory))
+
+(defn player-persistent-data
+  [^net.minecraft.server.level.ServerPlayer player]
+  (.getPersistentData player))
+
 (defn world-get-players
 	[^Level level]
 	(seq (.players level)))

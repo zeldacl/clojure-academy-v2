@@ -14,6 +14,8 @@ import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.ClipContext;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
@@ -61,6 +63,18 @@ public final class RuntimeAccessShared {
 
     public static Class<?> getBlockStateClass() {
         return BlockState.class;
+    }
+
+    public static Class<?> getLevelClass() {
+        return Level.class;
+    }
+
+    public static Object getWorldServerSessionId(Object levelObj) {
+        if (!(levelObj instanceof Level level)) {
+            return null;
+        }
+        MinecraftServer server = level.getServer();
+        return server != null ? System.identityHashCode(server) : null;
     }
 
     public static boolean blockStateIsAir(Object state) {

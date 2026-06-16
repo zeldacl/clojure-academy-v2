@@ -12,6 +12,7 @@
   (world-is-chunk-loaded? [this chunk-x chunk-z])
   (world-get-day-time [this])
   (world-get-dimension-id [this])
+  (world-server-session-id [this])
   (world-get-players [this])
   (world-is-raining [this])
   (world-is-client-side [this])
@@ -105,6 +106,12 @@
               (world-get-dimension-id this)
               r)
             str)))
+
+(defn world-server-session-id* [this]
+  (let [r (world-op :world-server-session-id this)]
+    (if (identical? r missing-op)
+      (world-server-session-id this)
+      r)))
 
 (defn world-get-players* [this]
   (let [r (world-op :world-get-players this)]

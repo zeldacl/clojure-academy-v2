@@ -334,17 +334,12 @@
 		(get-in (snapshot) [:containers-by-id (container-owner-key owner container-id)])))
 
 (defn get-menu-container-id
-	"Get a Minecraft menu/container window id via platform protocol or reflection."
-	[menu]
-	(when menu
-		(or (try
-					(entity/menu-get-container-id menu)
-					(catch Exception _ nil))
-				(try
-					(let [f (.getDeclaredField (class menu) "containerId")]
-						(.setAccessible f true)
-						(.get f menu))
-					(catch Exception _ nil)))))
+  "Get a Minecraft menu/container window id via platform protocol."
+  [menu]
+  (when menu
+    (try
+      (entity/menu-get-container-id menu)
+      (catch Exception _ nil))))
 
 (defn resolve-container-for-menu
 	"Resolve a Clojure container for a menu, falling back to containerId lookup."

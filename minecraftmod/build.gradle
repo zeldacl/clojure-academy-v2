@@ -872,13 +872,13 @@ tasks.register('verifyAotBootstrapSafetyNegativeFixture') {
 registerBaselineVerificationTask(
     'verifyForgeBaseline',
     'Compile baseline Clojure sources for ac, mcmod, and forge-1.20.1.',
-    ['verifyArchitectureBoundaries', 'verifyAotBootstrapSafety', ':ac:compileClojure', ':mcmod:compileClojure', ':forge-1.20.1:compileClojure']
+    ['verifyArchitectureBoundaries', 'verifyAotBootstrapSafety', 'verifyNoPlatformReflection', ':ac:compileClojure', ':mcmod:compileClojure', ':forge-1.20.1:compileClojure']
 )
 
 registerBaselineVerificationTask(
     'verifyFabricBaseline',
     'Compile baseline sources for fabric-1.20.1 (minimal-maintenance gate).',
-    ['verifyArchitectureBoundaries', 'verifyAotBootstrapSafety', ':fabric-1.20.1:compileJava', ':fabric-1.20.1:compileClojure']
+    ['verifyArchitectureBoundaries', 'verifyAotBootstrapSafety', 'verifyNoPlatformReflection', ':fabric-1.20.1:compileJava', ':fabric-1.20.1:compileClojure']
 )
 
 subprojects {
@@ -3782,6 +3782,79 @@ cleanupResidueGuardTaskNames.each { guardTaskName ->
             markerFile.parentFile.mkdirs()
             markerFile.setText("passed ${task.path} ${new Date().format('yyyy-MM-dd HH:mm:ss')}${System.lineSeparator()}", 'UTF-8')
         }
+    }
+}
+
+tasks.register('verifyNoPlatformReflection') {
+    group = 'verification'
+    description = 'Fail if main Clojure sources use Loom-breaking Minecraft/Forge/Fabric reflection (IC2 island allowlisted).'
+
+    def clojureMainSources = fileTree(project.rootDir) {
+        include 'mc-1.20.1/src/main/**/*.clj'
+        include 'mcmod/src/main/**/*.clj'
+        include 'ac/src/main/**/*.clj'
+        include 'forge-1.20.1/src/main/**/*.clj'
+        include 'fabric-1.20.1/src/main/**/*.clj'
+        exclude '**/build/**', '**/.gradle/**', '**/bin/**'
+    }
+
+    def allowlistedRelativePaths = [
+        'forge-1.20.1/src/main/clojure/cn/li/forge1201/integration/ic2_energy.clj'
+    ] as Set
+
+    def forbiddenPatterns = [
+        [name: 'Class/forName on Minecraft', pattern: ~/Class\/forName\s+["']net\.minecraft/],
+        [name: 'Class/forName on Forge', pattern: ~/Class\/forName\s+["']net\.minecraftforge/],
+        [name: 'Class/forName on Fabric', pattern: ~/Class\/forName\s+["']net\.fabricmc/],
+        [name: 'clojure.lang.Reflector', pattern: ~/clojure\.lang\.Reflector/],
+        [name: 'bare Reflector/', pattern: ~/(?<![\w.-])Reflector\//],
+        [name: 'java.lang.reflect import', pattern: ~/\[java\.lang\.reflect/],
+        [name: '.getMethod', pattern: ~/\.getMethod\b/],
+        [name: '.getField', pattern: ~/\.getField\b/],
+        [name: '.getDeclaredField', pattern: ~/\.getDeclaredField\b/],
+        [name: '.setAccessible', pattern: ~/\.setAccessible\b/],
+        [name: 'Proxy/newProxyInstance', pattern: ~/Proxy\/newProxyInstance/],
+        [name: 'reflect-util require', pattern: ~/cn\.li\.mc1201\.reflect-util/],
+        [name: 'bootstrap-interop-core require', pattern: ~/cn\.li\.mc1201\.runtime\.bootstrap-interop-core/]
+    ]
+
+    inputs.files(clojureMainSources)
+        .withPropertyName('noPlatformReflectionSources')
+        .withPathSensitivity(org.gradle.api.tasks.PathSensitivity.RELATIVE)
+    outputs.dir(layout.buildDirectory.dir('verification/verifyNoPlatformReflection'))
+
+    doLast {
+        def violations = []
+        clojureMainSources.files.findAll { it.isFile() }.sort { it.path }.each { File sourceFile ->
+            def rel = project.rootDir.toPath().relativize(sourceFile.toPath()).toString().replace('\\', '/')
+            if (allowlistedRelativePaths.contains(rel)) {
+                return
+            }
+            sourceFile.readLines('UTF-8').eachWithIndex { String line, int idx ->
+                forbiddenPatterns.each { spec ->
+                    if (spec.pattern.matcher(line).find()) {
+                        violations << [
+                            file: rel,
+                            line: idx + 1,
+                            rule: spec.name,
+                            text: line.trim()
+                        ]
+                    }
+                }
+            }
+        }
+
+        if (!violations.isEmpty()) {
+            logger.error('[verifyNoPlatformReflection] {} violation(s):', violations.size())
+            violations.each { v ->
+                logger.error('  {}:{} [{}] {}', v.file, v.line, v.rule, v.text)
+            }
+            throw new GradleException('verifyNoPlatformReflection failed. Remove platform reflection or allowlist the sanctioned IC2 island only.')
+        }
+        def marker = layout.buildDirectory.file('verification/verifyNoPlatformReflection/passed.txt').get().asFile
+        marker.parentFile.mkdirs()
+        marker.setText("passed at ${new Date()}\n", 'UTF-8')
+        logger.lifecycle('[verifyNoPlatformReflection] passed. Scanned main Clojure sources with IC2 allowlist.')
     }
 }
 

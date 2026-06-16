@@ -1,6 +1,7 @@
 (ns cn.li.mc1201.gui.provider.common
   "Shared helper functions for GUI provider bridges."
-  (:import [net.minecraft.world.entity.player Player]))
+  (:import [net.minecraft.world.entity.player Player]
+           [net.minecraft.world.level.block.entity BlockEntity]))
 
 (defn tile->pos
   [tile-entity ^Player player]
@@ -13,6 +14,6 @@
 
     :else
     (try
-      (clojure.lang.Reflector/invokeInstanceMethod tile-entity "getBlockPos" (object-array []))
+      (.getBlockPos ^BlockEntity tile-entity)
       (catch Exception _
         (.blockPosition player)))))

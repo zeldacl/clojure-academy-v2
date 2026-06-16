@@ -4,9 +4,8 @@
             [cn.li.forge1201.setup.consumer-support :as consumer-support]
             [cn.li.mc1201.entity.hooks :as entity-hooks]
             [cn.li.mcmod.util.log :as log])
-  (:import [net.minecraftforge.eventbus.api IEventBus]))
-
-(def ^:private key-mappings-class-name "net.minecraftforge.client.event.RegisterKeyMappingsEvent")
+  (:import [net.minecraftforge.client.event RegisterKeyMappingsEvent]
+           [net.minecraftforge.eventbus.api IEventBus]))
 
 (defn- add-listener!
   [^IEventBus mod-bus ^Class listener-class f]
@@ -20,12 +19,11 @@
 (defn register-client-key-mappings!
   [^IEventBus mod-bus]
   (try
-    (let [rk-class (Class/forName key-mappings-class-name)]
-      (add-listener! mod-bus rk-class
-                     (fn [event]
-                       (when-let [register-keys! (side/resolve-client-fn 'cn.li.forge1201.client.init 'register-key-mappings!)]
-                         (register-keys! event))))
-      true)
+    (add-listener! mod-bus RegisterKeyMappingsEvent
+                   (fn [event]
+                     (when-let [register-keys! (side/resolve-client-fn 'cn.li.forge1201.client.init 'register-key-mappings!)]
+                       (register-keys! event))))
+    true
     (catch Exception e
       (log/error "Failed to register key mapping listener" e)
       nil)))

@@ -1,20 +1,26 @@
 (ns cn.li.fabric1201.platform.spi-bootstrap
-  "Bridge-invoked Fabric platform initializer.
-
-  Loaded via Java ServiceLoader provider at runtime.
-  Keeps bootstrap-sensitive logic out of plain namespace loading paths."
+  "Bridge-invoked Fabric platform initializer."
   (:require [cn.li.mcmod.util.log :as log]
-            [cn.li.mcmod.platform.position :as pos]
-            [cn.li.mcmod.platform.be :as be]
+            [cn.li.mcmod.platform.gui-open :as gui-open]
+            [cn.li.mcmod.platform.player-persistent-data :as player-pd]
+            [cn.li.mc1201.bootstrap.platform-init :as platform-init]
+            [cn.li.mc1201.bootstrap.installer-core :as core]
             [cn.li.mc1201.platform.class-access :as class-access]
             [cn.li.mc1201.platform.item-ops :as item-ops]
             [cn.li.mc1201.platform.player-ops :as player-ops]
             [cn.li.mc1201.platform.world-block-ops :as world-block-ops]
             [cn.li.mc1201.platform.menu-inventory-ops :as menu-inventory-ops]
-            [cn.li.mc1201.bootstrap.platform-init :as platform-init]
-            [cn.li.mc1201.bootstrap.installer-core :as core]
-            [cn.li.mc1201.runtime.bootstrap-interop-core :as bootstrap-core]
-            [cn.li.mc1201.reflect-util :as ru]))
+            [cn.li.fabric1201.platform.bindings :as bindings])
+  (:import [cn.li.fabric1201.block.entity ScriptedBlockEntity]
+           [cn.li.mc1201.runtime BlockRegistryShared ItemInventoryShared ItemPlayerOpsShared ItemRegistryShared ParticleEntityShared RuntimeAccessShared]
+           [net.minecraft.core BlockPos]
+           [net.minecraft.world.entity Entity]
+           [net.minecraft.world.entity.item ItemEntity]
+           [net.minecraft.world.entity.player Player]
+           [net.minecraft.world.level Level]
+           [net.minecraft.world.item ItemStack]
+           [net.minecraft.world.level.block.state BlockState]
+           [net.minecraft.world.phys BlockHitResult]))
 
 (def ^:private platform-init-guard-lock
   (Object.))
@@ -22,99 +28,97 @@
 (def ^:private ^:dynamic *initialized?*
   false)
 
+(defn- resolve-binding! [binding-name]
+  (require 'cn.li.fabric1201.platform.bindings)
+  (or (ns-resolve 'cn.li.fabric1201.platform.bindings binding-name)
+      (throw (ex-info "Missing Fabric platform binding"
+                      {:binding binding-name}))))
+
+(defn- raytrace-block-map [player reach fluid-source-only?]
+  (when-let [^BlockHitResult hit (RuntimeAccessShared/playerRaytraceBlock player (double (or reach 5.0)) (boolean fluid-source-only?))]
+    (let [^BlockPos hit-pos (.getBlockPos hit)
+          ^BlockPos place-pos (.relative hit-pos (.getDirection hit))
+          ^Level level (RuntimeAccessShared/getEntityLevel player)
+          ^BlockState hit-state (.getBlockState level hit-pos)]
+      {:hit-pos {:x (.getX hit-pos) :y (.getY hit-pos) :z (.getZ hit-pos)}
+       :place-pos {:x (.getX place-pos) :y (.getY place-pos) :z (.getZ place-pos)}
+       :block-id (BlockRegistryShared/getBlockKey (.getBlock hit-state))})))
+
 (defn- install-be-ops! []
-  (let [scripted-be-cls (ru/class-noinit "cn.li.fabric1201.block.entity.ScriptedBlockEntity")]
-    (extend scripted-be-cls be/IBlockEntity
-            {:be-get-level (fn [this] (ru/inst this "getLevel"))
-             :be-get-world (fn [this] (ru/inst this "getLevel"))
-             :be-get-custom-state (fn [this] (ru/inst this "getCustomState"))
-             :be-set-custom-state! (fn [this state] (ru/inst this "setCustomState" state))
-             :be-get-block-id (fn [this] (ru/inst this "getBlockId"))
-             :be-set-changed! (fn [this] (ru/inst this "setChanged"))})
-
-    (extend scripted-be-cls pos/IHasPosition
-            {:position-get-block-pos (fn [this] (ru/inst this "getBlockPos"))
-             :position-get-pos (fn [this] (ru/inst this "getBlockPos"))})
-
-    (core/install-be-fns-only!
-      {:be-get-level     (fn [x] (ru/inst x "getLevel"))
-       :be-get-world     (fn [x] (ru/inst x "getLevel"))
-       :be-get-custom-state  (fn [x] (ru/inst x "getCustomState"))
-       :be-set-custom-state! (fn [x s] (ru/inst x "setCustomState" s))
-       :be-get-block-id  (fn [x] (ru/inst x "getBlockId"))
-       :be-set-changed!  (fn [x] (ru/inst x "setChanged"))
-       :be-get-fluid-height (fn [x]
-                              (try
-                                (when-let [level (ru/inst x "getLevel")]
-                                  (let [pos (ru/inst x "getBlockPos")
-                                        state (ru/inst level "getBlockState" pos)
-                                        fluid-state (ru/inst state "getFluidState")]
-                                    (if (ru/inst fluid-state "isEmpty")
-                                      0.0
-                                      (double (ru/inst fluid-state "getOwnHeight")))))
-                                (catch Exception _ 0.0)))})))
+  (core/install-be-fns-only!
+    {:be-get-level (fn [^ScriptedBlockEntity be] (.getLevel be))
+     :be-get-world (fn [^ScriptedBlockEntity be] (.getLevel be))
+     :be-get-custom-state (fn [^ScriptedBlockEntity be] (.getCustomState be))
+     :be-set-custom-state! (fn [^ScriptedBlockEntity be state] (.setCustomState be state))
+     :be-get-block-id (fn [^ScriptedBlockEntity be] (.getBlockId be))
+     :be-set-changed! (fn [^ScriptedBlockEntity be] (.setChanged be))
+     :be-get-fluid-height (fn [^ScriptedBlockEntity be]
+                            (try
+                              (when-let [^Level level (.getLevel be)]
+                                (let [^BlockPos pos (.getBlockPos be)
+                                      ^BlockState state (.getBlockState level pos)
+                                      fluid-state (.getFluidState state)]
+                                  (if (.isEmpty fluid-state)
+                                    0.0
+                                    (double (.getOwnHeight fluid-state)))))
+                              (catch Exception _ 0.0)))}))
 
 (def ^:private fabric-adapter
   (reify class-access/ClassAccess
-    (entity-class [_] (ru/class-noinit "net.minecraft.world.entity.Entity"))
-    (player-class [_] (ru/class-noinit "net.minecraft.world.entity.player.Player"))
-    (server-player-class [_] (ru/class-noinit "net.minecraft.server.level.ServerPlayer"))
+    (entity-class [_] (RuntimeAccessShared/getEntityClass))
+    (player-class [_] (RuntimeAccessShared/getPlayerClass))
+    (server-player-class [_] (RuntimeAccessShared/getServerPlayerClass))
     (local-player-class [_] nil)
-    (inventory-class [_] (ru/class-noinit "net.minecraft.world.entity.player.Inventory"))
-    (menu-class [_] (ru/class-noinit "net.minecraft.world.inventory.AbstractContainerMenu"))
-    (item-stack-class [_] (ru/class-noinit "net.minecraft.world.item.ItemStack"))
-    (item-class [_] (ru/class-noinit "net.minecraft.world.item.Item"))
-    (block-state-class [_] (ru/class-noinit "net.minecraft.world.level.block.state.BlockState"))
-    (level-class [_] (ru/class-noinit "net.minecraft.world.level.Level"))
-    (scripted-be-class [_]
-      (try
-        (ru/class-noinit "cn.li.fabric1201.block.entity.ScriptedBlockEntity")
-        (catch Throwable _ nil)))
+    (inventory-class [_] (RuntimeAccessShared/getInventoryClass))
+    (menu-class [_] (RuntimeAccessShared/getAbstractContainerMenuClass))
+    (item-stack-class [_] (RuntimeAccessShared/getItemStackClass))
+    (item-class [_] (RuntimeAccessShared/getItemClass))
+    (block-state-class [_] (RuntimeAccessShared/getBlockStateClass))
+    (level-class [_] (RuntimeAccessShared/getLevelClass))
+    (scripted-be-class [_] ScriptedBlockEntity)
 
     item-ops/ItemOps
-    (item-registry-name [_ item] (bootstrap-core/item-key-string item))
-    (block-registry-name [_ block] (bootstrap-core/block-key-string block))
-    (item-stack-of [_ nbt-tag]
-      (let [item-stack-cls (ru/class-noinit "net.minecraft.world.item.ItemStack")]
-        (ru/static item-stack-cls "of" nbt-tag)))
-    (create-item-stack-by-id [_ item-id count]
-      (try
-        (let [builtins-cls (ru/class-noinit "net.minecraft.core.registries.BuiltInRegistries")
-              item-registry (.get (.getField builtins-cls "ITEM") nil)
-              rl (ru/make-rl item-id)
-              item (ru/inst item-registry "get" rl)
-              item-stack-cls (ru/class-noinit "net.minecraft.world.item.ItemStack")]
-          (when item
-            (ru/ctor item-stack-cls item (int count))))
-        (catch Throwable _ nil)))
-    (item-stack-empty? [_ stack] (bootstrap-core/stack-empty? stack))
+    (item-registry-name [_ item] (ItemInventoryShared/getItemKeyString item))
+    (block-registry-name [_ block] (BlockRegistryShared/getBlockKey block))
+    (item-stack-of [_ nbt] (RuntimeAccessShared/itemStackOf nbt))
+    (create-item-stack-by-id [_ item-id count] (ItemRegistryShared/createItemStackById (str item-id) (int count)))
+    (item-stack-empty? [_ stack] (ItemInventoryShared/isItemStackEmpty stack))
 
     player-ops/PlayerOps
-    (player-level [_ player] (bootstrap-core/player-level player))
-    (player-container-menu [_ player] (ru/field player "containerMenu"))
-    (count-player-item-by-id [_ player item-id] (bootstrap-core/count-player-item-by-id player item-id))
-    (consume-player-item-by-id! [_ player item-id amount] (bootstrap-core/consume-player-item-by-id! player item-id amount))
+    (player-level [_ player] (RuntimeAccessShared/getEntityLevel player))
+    (player-container-menu [_ player] (RuntimeAccessShared/getPlayerContainerMenu player))
+    (count-player-item-by-id [_ player item-id] (ItemPlayerOpsShared/countPlayerItemById player (str item-id)))
+    (consume-player-item-by-id! [_ player item-id amount] (ItemPlayerOpsShared/consumePlayerItemById player (str item-id) (int (or amount 0))))
     (drop-player-main-hand-item-at! [_ player amount x y z]
-      (bootstrap-core/drop-player-main-hand-item-at player amount x y z))
-    (give-player-item-stack! [_ player stack] (bootstrap-core/give-player-item-stack player stack))
-    (spawn-entity-by-id! [_ player entity-id speed] (bootstrap-core/spawn-entity-by-id-from-player player entity-id speed))
-    (raytrace-block [_ player reach fluid-source-only?] (bootstrap-core/raytrace-block-map player reach fluid-source-only?))
+      (let [n (int (max 0 (or amount 0)))]
+        (cond
+          (nil? player) false
+          (zero? n) true
+          (boolean (.isCreative ^Player player)) true
+          :else
+          (let [^ItemStack stack (.getMainHandItem ^Player player)]
+            (if (or (nil? stack)
+                    (.isEmpty stack)
+                    (< (int (.getCount stack)) n))
+              false
+              (let [^ItemStack drop-stack (.copy stack)
+                    ^Level level (RuntimeAccessShared/getEntityLevel player)]
+                (.setCount drop-stack n)
+                (.shrink stack n)
+                (if (or (nil? level) (.isClientSide level))
+                  true
+                  (boolean (.addFreshEntity level (ItemEntity. level (double x) (double y) (double z) drop-stack))))))))))
+    (give-player-item-stack! [_ player stack] (ItemPlayerOpsShared/givePlayerItemStack player stack))
+    (spawn-entity-by-id! [_ player entity-id speed] (ParticleEntityShared/spawnEntityByIdFromPlayer player (str entity-id) (float (or speed 1.0))))
+    (raytrace-block [_ player reach fluid-source-only?] (raytrace-block-map player reach fluid-source-only?))
 
     menu-inventory-ops/MenuInventoryOps
-    (inventory-owner [_ inventory] (bootstrap-core/inventory-owner inventory))
-    (menu-container-id [_ menu] (ru/field menu "containerId"))
+    (inventory-owner [_ inventory] (RuntimeAccessShared/getInventoryPlayer inventory))
+    (menu-container-id [_ menu] (RuntimeAccessShared/getMenuContainerId menu))
 
     world-block-ops/WorldBlockOps
     (world-place-block-by-id [_ level block-id pos flags]
-      (try
-        (let [builtins-cls (ru/class-noinit "net.minecraft.core.registries.BuiltInRegistries")
-              block-registry (.get (.getField builtins-cls "BLOCK") nil)
-              rl (ru/make-rl block-id)
-              block (ru/inst block-registry "get" rl)]
-          (if (nil? block)
-            false
-            (boolean (ru/inst level "setBlock" pos (ru/inst block "defaultBlockState") (int flags)))))
-        (catch Throwable _ false)))))
+      ((resolve-binding! 'world-place-block-by-id) level block-id pos flags))))
 
 (defn init-platform!
   "Initialize Fabric 1.20.1 platform implementations via SPI entrypoint."
@@ -122,8 +126,26 @@
   (when-not (var-get #'*initialized?*)
     (locking platform-init-guard-lock
       (when-not (var-get #'*initialized?*)
-        (platform-init/install-platform-core! fabric-adapter)
+        (platform-init/install-platform-foundation+hooks!
+          fabric-adapter
+          {:world-get-tile-entity (resolve-binding! 'world-get-tile-entity)
+           :world-get-block-state (resolve-binding! 'world-get-block-state)
+           :world-set-block (resolve-binding! 'world-set-block)
+           :world-remove-block (resolve-binding! 'world-remove-block)
+           :world-break-block (resolve-binding! 'world-break-block)
+           :world-place-block-by-id (resolve-binding! 'world-place-block-by-id)
+           :world-is-chunk-loaded? (resolve-binding! 'world-is-chunk-loaded?)
+           :world-get-day-time (resolve-binding! 'world-get-day-time)
+           :world-get-dimension-id (resolve-binding! 'world-get-dimension-id)
+           :world-server-session-id (resolve-binding! 'world-server-session-id)
+           :world-get-players (resolve-binding! 'world-get-players)
+           :world-is-raining (resolve-binding! 'world-is-raining)
+           :world-is-client-side (resolve-binding! 'world-is-client-side)
+           :world-can-see-sky (resolve-binding! 'world-can-see-sky)}
+          nil)
         (install-be-ops!)
+        (gui-open/install-open-menu! (resolve-binding! 'open-player-menu!) "fabric")
+        (player-pd/install-player-persistent-data! (resolve-binding! 'player-persistent-data) "fabric")
         (alter-var-root #'*initialized?* (constantly true))
         (log/info "fabric platform SPI bootstrap initialized via ServiceLoader entrypoint"))))
   nil)

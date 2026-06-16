@@ -1,7 +1,9 @@
 (ns cn.li.mc1201.gui.registry.open
   "Shared helper functions for GUI open flows in platform registry adapters."
-  (:require [cn.li.mcmod.util.log :as log])
-  (:import [net.minecraft.world.entity.player Player]))
+  (:require [cn.li.mcmod.platform.gui-open :as gui-open]
+            [cn.li.mcmod.util.log :as log])
+  (:import [net.minecraft.world.entity.player Player]
+           [net.minecraft.world.level.block.entity BlockEntity]))
 
 (defn resolve-optional-block-pos
   "Resolve BlockPos from tile entity when available, otherwise nil.
@@ -11,7 +13,7 @@
     (try
       (if (map? tile-entity)
         (:pos tile-entity)
-        (clojure.lang.Reflector/invokeInstanceMethod tile-entity "getBlockPos" (object-array [])))
+        (.getBlockPos ^BlockEntity tile-entity))
       (catch Exception _
         nil))))
 
@@ -30,9 +32,6 @@
   (log/error prefix "Exception:" e))
 
 (defn open-player-menu-with-fallback!
-  "Try openHandledScreen first, then openMenu as fallback for cross-loader compatibility."
+  "Open a player menu via the platform-injected loader-specific implementation."
   [player factory]
-  (try
-    (clojure.lang.Reflector/invokeInstanceMethod player "openHandledScreen" (object-array [factory]))
-    (catch Exception _
-      (clojure.lang.Reflector/invokeInstanceMethod player "openMenu" (object-array [factory])))))
+  (gui-open/open-player-menu! player factory))

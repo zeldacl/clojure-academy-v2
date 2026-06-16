@@ -10,14 +10,25 @@
             [cn.li.mcmod.platform.be :as be]
             [cn.li.mcmod.block.tile-logic :as tile-logic]
             [cn.li.mcmod.platform.capability :as platform-capability]
-            [cn.li.mc1201.reflect-util :as ru]
             [cn.li.mc1201.platform.class-access :as class-access]
             [cn.li.mc1201.platform.item-ops :as item-ops]
             [cn.li.mc1201.platform.player-ops :as player-ops]
             [cn.li.mc1201.runtime.spi.network-transport :as network-transport-spi]
             [cn.li.mc1201.platform.world-block-ops :as world-block-ops]
             [cn.li.mc1201.platform.menu-inventory-ops :as menu-inventory-ops])
-  (:import [net.minecraft.network.chat Component]
+  (:import [cn.li.mc1201.runtime BlockRegistryShared RuntimeAccessShared]
+           [net.minecraft.core BlockPos]
+           [net.minecraft.nbt CompoundTag ListTag]
+           [net.minecraft.network.chat Component]
+           [net.minecraft.resources ResourceLocation]
+           [net.minecraft.server.level ServerPlayer]
+           [net.minecraft.world.entity Entity]
+           [net.minecraft.world.entity.player Inventory Player]
+           [net.minecraft.world.inventory AbstractContainerMenu]
+           [net.minecraft.world.item Item ItemStack]
+           [net.minecraft.world.level Level]
+           [net.minecraft.world.level.block.state BlockState StateDefinition]
+           [net.minecraft.world.level.block.state.properties Property]
            [net.minecraft.world.phys Vec3]))
 
 (def ^:private ^:dynamic item-protocols-installed? false)
@@ -50,13 +61,36 @@
 (declare install-item-protocols-only!)
 (declare install-item-factories-only!)
 
+(defn- world-server-session-id-value
+  [^Level level]
+  (when-let [sid (RuntimeAccessShared/getWorldServerSessionId level)]
+    [:server sid]))
+
+(defn- world-ops-map
+  [adapter]
+  {:world-get-tile-entity (fn [^Level level p] (.getBlockEntity level p))
+   :world-get-block-state (fn [^Level level p] (.getBlockState level p))
+   :world-set-block (fn [^Level level p s flags] (.setBlock level p s (int flags)))
+   :world-remove-block (fn [^Level level p] (.destroyBlock level p false))
+   :world-break-block (fn [^Level level p drop?] (.destroyBlock level p (boolean drop?)))
+   :world-place-block-by-id (fn [^Level level block-id p flags]
+                              (world-block-ops/world-place-block-by-id adapter level block-id p flags))
+   :world-is-chunk-loaded? (fn [^Level level cx cz] (.hasChunk level (int cx) (int cz)))
+   :world-get-day-time (fn [^Level level] (.getDayTime level))
+   :world-get-dimension-id (fn [^Level level] (str (.location (.dimension level))))
+   :world-server-session-id world-server-session-id-value
+   :world-get-players (fn [^Level level] (seq (.players level)))
+   :world-is-raining (fn [^Level level] (.isRaining level))
+   :world-is-client-side (fn [^Level level] (.isClientSide level))
+   :world-can-see-sky (fn [^Level level p] (.canSeeSky level p))})
+
 (defn- install-player-feedback! []
   (install-when! player-feedback-installed?
     (player-feedback/install-player-feedback!
       (reify player-feedback/IPlayerFeedback
         (send-player-feedback! [_ player-uuid {:keys [message args translate?]}]
           (try
-            (when-let [^net.minecraft.server.level.ServerPlayer player (network-transport-spi/find-player-by-uuid player-uuid)]
+            (when-let [^ServerPlayer player (network-transport-spi/find-player-by-uuid player-uuid)]
               (let [argv (object-array (mapv str (or args [])))
                     component (if translate?
                                 (Component/translatable (str message) argv)
@@ -72,70 +106,73 @@
 
 (defn install-block-state-protocol-only!
   "Install only BlockState protocol extensions (no Level extensions)."
-  [adapter]
+  [_adapter]
   (install-when! block-state-protocols-installed?
-    (let [block-state-cls (class-access/block-state-class adapter)]
-      (extend block-state-cls world/IBlockStateOps
-              {:block-state-is-air (fn [this] (ru/inst this "isAir"))
-               :block-state-get-block (fn [this] (ru/inst this "getBlock"))
-               :block-state-get-state-definition (fn [this] (ru/inst (ru/inst this "getBlock") "getStateDefinition"))
-               :block-state-get-property (fn [_this state-def prop-name] (ru/inst state-def "getProperty" prop-name))
-               :block-state-set-property (fn [this prop value] (ru/inst this "setValue" prop value))}))
+    (extend-type BlockState
+      world/IBlockStateOps
+      (block-state-is-air [this] (.isAir this))
+      (block-state-get-block [this] (.getBlock this))
+      (block-state-get-state-definition [this]
+        (.getStateDefinition (.getBlock this)))
+      (block-state-get-property [_this ^StateDefinition state-def prop-name]
+        (.getProperty state-def (str prop-name)))
+      (block-state-set-property [this ^Property prop value]
+        (.setValue this prop value)))
     (log/info "mc1201 shared block-state protocols initialized")))
 
 (defn- install-nbt! []
   (install-when! nbt-installed?
-    (let [compound-tag-cls (ru/class-noinit "net.minecraft.nbt.CompoundTag")
-          list-tag-cls (ru/class-noinit "net.minecraft.nbt.ListTag")]
-      (extend compound-tag-cls nbt/INBTCompound
-              {:nbt-set-int! (fn [this key value] (ru/inst this "putInt" key (int value)) this)
-               :nbt-get-int (fn [this key] (ru/inst this "getInt" key))
-               :nbt-set-string! (fn [this key value] (ru/inst this "putString" key (str value)) this)
-               :nbt-get-string (fn [this key] (ru/inst this "getString" key))
-               :nbt-set-boolean! (fn [this key value] (ru/inst this "putBoolean" key (boolean value)) this)
-               :nbt-get-boolean (fn [this key] (ru/inst this "getBoolean" key))
-               :nbt-set-double! (fn [this key value] (ru/inst this "putDouble" key (double value)) this)
-               :nbt-get-double (fn [this key] (ru/inst this "getDouble" key))
-               :nbt-set-tag! (fn [this key tag] (ru/inst this "put" key tag) this)
-               :nbt-get-tag (fn [this key] (ru/inst this "get" key))
-               :nbt-get-compound (fn [this key] (ru/inst this "getCompound" key))
-               :nbt-get-list (fn [this key] (ru/inst this "getList" key 10))
-               :nbt-has-key? (fn [this key] (ru/inst this "contains" key))
-               :nbt-set-float! (fn [this key value] (ru/inst this "putFloat" key (float value)) this)
-               :nbt-get-float (fn [this key] (ru/inst this "getFloat" key))
-               :nbt-set-long! (fn [this key value] (ru/inst this "putLong" key (long value)) this)
-               :nbt-get-long (fn [this key] (ru/inst this "getLong" key))})
-      (extend list-tag-cls nbt/INBTList
-              {:nbt-append! (fn [this element] (ru/inst this "add" element) this)
-               :nbt-list-size (fn [this] (ru/inst this "size"))
-               :nbt-list-get (fn [this index]
-                               (let [idx (int index)
-                                     n (int (ru/inst this "size"))]
-                                 (when (and (>= idx 0) (< idx n))
-                                   (ru/inst this "get" idx))))
-               :nbt-list-get-compound (fn [this index]
-                                        (let [idx (int index)
-                                              n (int (ru/inst this "size"))]
-                                          (when (and (>= idx 0) (< idx n))
-                                            (ru/inst this "getCompound" idx))))})
-      (nbt/install-nbt-factory! {:create-compound #(ru/ctor compound-tag-cls)
-                                 :create-list #(ru/ctor list-tag-cls)}
-                                "mc1201")
-      (nbt/install-nbt-has-key-fn! (fn [this key] (ru/inst this "contains" key))
-                                   "mc1201")
-      (tile-logic/install-capability-get-factory! platform-capability/get-handler-factory
-                                                  "mc1201"))))
+    (extend-type CompoundTag
+      nbt/INBTCompound
+      (nbt-set-int! [this key value] (.putInt this (str key) (int value)) this)
+      (nbt-get-int [this key] (.getInt this (str key)))
+      (nbt-set-string! [this key value] (.putString this (str key) (str value)) this)
+      (nbt-get-string [this key] (.getString this (str key)))
+      (nbt-set-boolean! [this key value] (.putBoolean this (str key) (boolean value)) this)
+      (nbt-get-boolean [this key] (.getBoolean this (str key)))
+      (nbt-set-double! [this key value] (.putDouble this (str key) (double value)) this)
+      (nbt-get-double [this key] (.getDouble this (str key)))
+      (nbt-set-tag! [this key tag] (.put this (str key) tag) this)
+      (nbt-get-tag [this key] (.get this (str key)))
+      (nbt-get-compound [this key] (.getCompound this (str key)))
+      (nbt-get-list [this key] (.getList this (str key) 10))
+      (nbt-has-key? [this key] (.contains this (str key)))
+      (nbt-set-float! [this key value] (.putFloat this (str key) (float value)) this)
+      (nbt-get-float [this key] (.getFloat this (str key)))
+      (nbt-set-long! [this key value] (.putLong this (str key) (long value)) this)
+      (nbt-get-long [this key] (.getLong this (str key))))
+    (extend-type ListTag
+      nbt/INBTList
+      (nbt-append! [this element] (.add this element) this)
+      (nbt-list-size [this] (.size this))
+      (nbt-list-get [this index]
+        (let [idx (int index)
+              n (int (.size this))]
+          (when (and (>= idx 0) (< idx n))
+            (.get this idx))))
+      (nbt-list-get-compound [this index]
+        (let [idx (int index)
+              n (int (.size this))]
+          (when (and (>= idx 0) (< idx n))
+            (.getCompound this idx)))))
+    (nbt/install-nbt-factory! {:create-compound #(CompoundTag.)
+                               :create-list #(ListTag.)}
+                              "mc1201")
+    (nbt/install-nbt-has-key-fn! (fn [^CompoundTag this key] (.contains this (str key)))
+                                 "mc1201")
+    (tile-logic/install-capability-get-factory! platform-capability/get-handler-factory
+                                                "mc1201")))
 
 (defn- install-position! [_adapter]
   (install-when! pos-installed?
-    (let [block-pos-cls (ru/class-noinit "net.minecraft.core.BlockPos")]
-      (extend block-pos-cls pos/IBlockPos
-              {:pos-x (fn [this] (ru/inst this "getX"))
-               :pos-y (fn [this] (ru/inst this "getY"))
-               :pos-z (fn [this] (ru/inst this "getZ"))})
-      (pos/install-position-factory! (fn [x y z] (ru/ctor block-pos-cls (int x) (int y) (int z)))
-                                     "mc1201")
-      (pos/install-pos-above-fn! (fn [p] (ru/inst p "above")) "mc1201"))))
+    (extend-type BlockPos
+      pos/IBlockPos
+      (pos-x [this] (.getX this))
+      (pos-y [this] (.getY this))
+      (pos-z [this] (.getZ this)))
+    (pos/install-position-factory! (fn [x y z] (BlockPos. (int x) (int y) (int z)))
+                                   "mc1201")
+    (pos/install-pos-above-fn! (fn [^BlockPos p] (.above p)) "mc1201")))
 
 (defn- install-item! [adapter]
   (install-item-protocols-only! adapter)
@@ -148,131 +185,100 @@
   "Install only item protocols for ItemStack/Item classes."
   [adapter]
   (install-when! item-protocols-installed?
-      (let [item-stack-cls (class-access/item-stack-class adapter)
-        item-cls (class-access/item-class adapter)]
-      (extend item-stack-cls item/IItemStack
-              {:item-is-empty? (fn [this] (ru/inst this "isEmpty"))
-               :item-get-count (fn [this] (ru/inst this "getCount"))
-               :item-get-max-stack-size (fn [this] (ru/inst this "getMaxStackSize"))
-               :item-is-equal? (fn [this other] (ru/static item-stack-cls "matches" this other))
-               :item-save-to-nbt (fn [this n] (ru/inst this "save" n))
-               :item-get-or-create-tag (fn [this] (ru/inst this "getOrCreateTag"))
-               :item-get-max-damage (fn [this] (ru/inst this "getMaxDamage"))
-               :item-set-damage! (fn [this dmg] (ru/inst this "setDamageValue" (int dmg)))
-               :item-get-damage (fn [this] (ru/inst this "getDamageValue"))
-               :item-get-item (fn [this] (ru/inst this "getItem"))
-               :item-get-tag-compound (fn [this] (ru/inst this "getTag"))
-               :item-split (fn [this amount] (ru/inst this "split" (int amount)))})
-      (extend item-cls item/IItem
-              {:item-get-description-id (fn [this] (ru/inst this "getDescriptionId"))
-               :item-get-registry-name (fn [this] (item-ops/item-registry-name adapter this))})
-      (log/info "mc1201 shared item protocols initialized"))))
+    (extend-type ItemStack
+      item/IItemStack
+      (item-is-empty? [this] (.isEmpty this))
+      (item-get-count [this] (.getCount this))
+      (item-get-max-stack-size [this] (.getMaxStackSize this))
+      (item-is-equal? [this other] (ItemStack/matches this other))
+      (item-save-to-nbt [this n] (.save this n))
+      (item-get-or-create-tag [this] (.getOrCreateTag this))
+      (item-get-max-damage [this] (.getMaxDamage this))
+      (item-set-damage! [this dmg] (.setDamageValue this (int dmg)))
+      (item-get-damage [this] (.getDamageValue this))
+      (item-get-item [this] (.getItem this))
+      (item-get-tag-compound [this] (.getTag this))
+      (item-split [this amount] (.split this (int amount))))
+    (extend-type Item
+      item/IItem
+      (item-get-description-id [this] (.getDescriptionId this))
+      (item-get-registry-name [this] (item-ops/item-registry-name adapter this)))
+    (log/info "mc1201 shared item protocols initialized")))
 
 (defn- install-world! [adapter]
   (install-when! world-installed?
-    (let [level-cls (class-access/level-class adapter)]
-      (install-block-state-protocol-only! adapter)
-      (try
-        (extend level-cls world/IWorldAccess
-                {:world-get-tile-entity (fn [this p] (ru/inst this "getBlockEntity" p))
-                 :world-get-block-state (fn [this p] (ru/inst this "getBlockState" p))
-                 :world-set-block (fn [this p s flags] (ru/inst this "setBlock" p s (int flags)))
-                 :world-remove-block (fn [this p] (ru/inst this "destroyBlock" p false))
-                 :world-break-block (fn [this p drop?] (ru/inst this "destroyBlock" p (boolean drop?)))
-                 :world-place-block-by-id (fn [this block-id p flags] (world-block-ops/world-place-block-by-id adapter this block-id p flags))
-                 :world-is-chunk-loaded? (fn [this cx cz] (ru/inst this "hasChunk" (int cx) (int cz)))
-                 :world-get-day-time (fn [this] (ru/inst this "getDayTime"))
-                 :world-get-dimension-id (fn [this] (str (ru/inst (ru/inst this "dimension") "location")))
-                 :world-get-players (fn [this] (seq (ru/inst this "players")))
-                 :world-is-raining (fn [this] (ru/inst this "isRaining"))
-                 :world-is-client-side (fn [this]
-                                         (try
-                                           (ru/inst this "isClientSide")
-                                           (catch Throwable _
-                                             (ru/field this "isClientSide"))))
-                 :world-can-see-sky (fn [this p] (ru/inst this "canSeeSky" p))})
-        (catch Throwable t
-          (log/warn "Skipping IWorldAccess extension for" level-cls "during bootstrap-sensitive init:" (.getMessage t))))
-      (world/install-world-ops!
-        {:world-get-tile-entity (fn [level p] (ru/inst level "getBlockEntity" p))
-         :world-get-block-state (fn [level p] (ru/inst level "getBlockState" p))
-         :world-set-block (fn [level p s flags] (ru/inst level "setBlock" p s (int flags)))
-         :world-remove-block (fn [level p] (ru/inst level "destroyBlock" p false))
-         :world-break-block (fn [level p drop?] (ru/inst level "destroyBlock" p (boolean drop?)))
-         :world-place-block-by-id (fn [level block-id p flags]
-                                    (world-block-ops/world-place-block-by-id adapter level block-id p flags))
-         :world-is-chunk-loaded? (fn [level cx cz] (ru/inst level "hasChunk" (int cx) (int cz)))
-         :world-get-day-time (fn [level] (ru/inst level "getDayTime"))
-         :world-get-dimension-id (fn [level] (str (ru/inst (ru/inst level "dimension") "location")))
-         :world-get-players (fn [level] (seq (ru/inst level "players")))
-         :world-is-raining (fn [level] (ru/inst level "isRaining"))
-         :world-is-client-side (fn [level]
-                                 (try
-                                   (ru/inst level "isClientSide")
-                                   (catch Throwable _
-                                     (ru/field level "isClientSide"))))
-         :world-can-see-sky (fn [level p] (ru/inst level "canSeeSky" p))}
-        "mc1201"))))
+    (install-block-state-protocol-only! adapter)
+  (try
+    (extend-type Level
+      world/IWorldAccess
+      (world-get-tile-entity [this p] (.getBlockEntity this p))
+      (world-get-block-state [this p] (.getBlockState this p))
+      (world-set-block [this p s flags] (.setBlock this p s (int flags)))
+      (world-remove-block [this p] (.destroyBlock this p false))
+      (world-break-block [this p drop?] (.destroyBlock this p (boolean drop?)))
+      (world-place-block-by-id [this block-id p flags]
+        (world-block-ops/world-place-block-by-id adapter this block-id p flags))
+      (world-is-chunk-loaded? [this cx cz] (.hasChunk this (int cx) (int cz)))
+      (world-get-day-time [this] (.getDayTime this))
+      (world-get-dimension-id [this] (str (.location (.dimension this))))
+      (world-server-session-id [this] (world-server-session-id-value this))
+      (world-get-players [this] (seq (.players this)))
+      (world-is-raining [this] (.isRaining this))
+      (world-is-client-side [this] (.isClientSide this))
+      (world-can-see-sky [this p] (.canSeeSky this p)))
+    (catch Throwable t
+      (log/warn "Skipping IWorldAccess extension for Level during bootstrap-sensitive init:" (.getMessage t))))
+    (world/install-world-ops! (world-ops-map adapter) "mc1201")))
 
 (defn install-entity-protocols-only!
   "Install only entity/player/inventory/menu protocol extensions."
   [adapter]
   (install-when! entity-installed?
-    (let [entity-cls (class-access/entity-class adapter)
-          player-cls (class-access/player-class adapter)
-          server-player-cls (class-access/server-player-class adapter)
-          inventory-cls (class-access/inventory-class adapter)
-          menu-cls (class-access/menu-class adapter)
-          block-cls (ru/class-noinit "net.minecraft.world.level.block.Block")
-          blocks-cls (ru/class-noinit "net.minecraft.world.level.block.Blocks")
-          block-pos-cls (ru/class-noinit "net.minecraft.core.BlockPos")
-          air-block (.get (.getField blocks-cls "AIR") nil)
-          block-item-info (fn [this]
+    (let [block-item-info (fn [^Player this]
                             (try
-                              (let [stack (ru/player-main-hand-stack this)]
-                                (when-not (ru/stack-empty? stack)
-                                  (let [item (ru/inst stack "getItem")
-                                        block (ru/static block-cls "byItem" item)
-                                        placeable? (boolean (and block (not= block air-block)))
+                              (let [^ItemStack stack (.getMainHandItem this)]
+                                (when-not (.isEmpty stack)
+                                  (let [^Item item (.getItem stack)
+                                        placeable? (BlockRegistryShared/isPlaceableBlockItem item)
                                         item-id (item-ops/item-registry-name adapter item)]
                                     {:placeable? placeable?
                                      :item-id item-id})))
                               (catch Throwable _
                                 nil)))
-          player-impl {:entity-distance-to-sqr (fn [this x y z]
-                                                 (ru/inst this "distanceToSqr" (double x) (double y) (double z)))
-                       :entity-get-x (fn [this]
-                                       (let [^Vec3 pos (ru/inst this "position")]
-                                         (double (.-x pos))))
-                       :entity-get-y (fn [this]
-                                       (let [^Vec3 pos (ru/inst this "position")]
-                                         (double (.-y pos))))
-                       :entity-get-z (fn [this]
-                                       (let [^Vec3 pos (ru/inst this "position")]
-                                         (double (.-z pos))))
+          player-impl {:entity-distance-to-sqr (fn [^Entity this x y z]
+                                                 (.distanceToSqr this (double x) (double y) (double z)))
+                       :entity-get-x (fn [^Entity this]
+                                       (let [^Vec3 pos (.position this)]
+                                         (double (.x pos))))
+                       :entity-get-y (fn [^Entity this]
+                                       (let [^Vec3 pos (.position this)]
+                                         (double (.y pos))))
+                       :entity-get-z (fn [^Entity this]
+                                       (let [^Vec3 pos (.position this)]
+                                         (double (.z pos))))
                        :player-get-level (fn [this] (player-ops/player-level adapter this))
-                       :player-creative? (fn [this] (ru/inst this "isCreative"))
-                       :player-spectator? (fn [this] (ru/inst this "isSpectator"))
-                       :player-get-name (fn [this]
-                                          (let [^Component name-component (ru/inst this "getName")]
+                       :player-creative? (fn [^Player this] (.isCreative this))
+                       :player-spectator? (fn [^Player this] (.isSpectator this))
+                       :player-get-name (fn [^Player this]
+                                          (let [^Component name-component (.getName this)]
                                             (.getString name-component)))
-                       :player-get-uuid (fn [this] (ru/inst this "getUUID"))
-                       :player-get-main-hand-item-id (fn [this]
-                                                       (let [stack (ru/player-main-hand-stack this)]
-                                                         (when-not (ru/stack-empty? stack)
-                                                           (item-ops/item-registry-name adapter (ru/inst stack "getItem")))))
-                       :player-get-main-hand-item-count (fn [this]
-                                                          (let [stack (ru/player-main-hand-stack this)]
-                                                            (if (ru/stack-empty? stack)
+                       :player-get-uuid (fn [^Entity this] (.getUUID this))
+                       :player-get-main-hand-item-id (fn [^Player this]
+                                                       (let [^ItemStack stack (.getMainHandItem this)]
+                                                         (when-not (.isEmpty stack)
+                                                           (item-ops/item-registry-name adapter (.getItem stack)))))
+                       :player-get-main-hand-item-count (fn [^Player this]
+                                                          (let [^ItemStack stack (.getMainHandItem this)]
+                                                            (if (.isEmpty stack)
                                                               0
-                                                              (int (ru/inst stack "getCount")))))
-                       :player-get-main-hand-item-stack (fn [this]
-                                                          (let [stack (ru/player-main-hand-stack this)]
-                                                            (when-not (ru/stack-empty? stack)
+                                                              (int (.getCount stack)))))
+                       :player-get-main-hand-item-stack (fn [^Player this]
+                                                          (let [^ItemStack stack (.getMainHandItem this)]
+                                                            (when-not (.isEmpty stack)
                                                               stack)))
                        :player-main-hand-placeable-block? (fn [this]
                                                            (boolean (:placeable? (block-item-info this))))
-                           :player-place-main-hand-block-at-hit! (fn [this _world-id x y z face]
+                       :player-place-main-hand-block-at-hit! (fn [^Player this _world-id x y z face]
                                                               (let [px (int x)
                                                                     py (int y)
                                                                     pz (int z)
@@ -285,7 +291,7 @@
                                                                     (if-not (and placeable? (seq item-id))
                                                                       base-result
                                                                       (let [level (player-ops/player-level adapter this)
-                                                                            pos (ru/ctor block-pos-cls px py pz)
+                                                                            ^BlockPos pos (BlockPos. px py pz)
                                                                             placed? (boolean (world-block-ops/world-place-block-by-id adapter level item-id pos 3))]
                                                                         (assoc base-result
                                                                                :placed? placed?
@@ -293,18 +299,18 @@
                                                                     base-result)
                                                                   (catch Throwable _
                                                                     base-result))))
-                       :player-consume-main-hand-item! (fn [this amount]
+                       :player-consume-main-hand-item! (fn [^Player this amount]
                                                          (let [n (int (max 0 (or amount 0)))]
                                                            (cond
                                                              (zero? n) true
-                                                             (boolean (ru/inst this "isCreative")) true
+                                                             (.isCreative this) true
                                                              :else
-                                                             (let [stack (ru/player-main-hand-stack this)]
-                                                               (if (or (ru/stack-empty? stack)
-                                                                       (< (int (ru/inst stack "getCount")) n))
+                                                             (let [^ItemStack stack (.getMainHandItem this)]
+                                                               (if (or (.isEmpty stack)
+                                                                       (< (int (.getCount stack)) n))
                                                                  false
                                                                  (do
-                                                                   (ru/inst stack "shrink" n)
+                                                                   (.shrink stack n)
                                                                    true))))))
                        :player-drop-main-hand-item-at! (fn [this amount x y z]
                                                          (player-ops/drop-player-main-hand-item-at! adapter this amount x y z))
@@ -314,38 +320,37 @@
                        :player-spawn-entity-by-id! (fn [this entity-id speed] (player-ops/spawn-entity-by-id! adapter this entity-id speed))
                        :player-raytrace-block (fn [this reach fluid-source-only?] (player-ops/raytrace-block adapter this reach fluid-source-only?))
                        :player-get-container-menu (fn [this] (player-ops/player-container-menu adapter this))}]
-      (extend entity-cls entity/IEntityOps
-              {:entity-distance-to-sqr (fn [this x y z]
-                                         (ru/inst this "distanceToSqr" (double x) (double y) (double z)))
-               :entity-get-x (fn [this]
-                               (let [^Vec3 pos (ru/inst this "position")]
-                                 (double (.-x pos))))
-               :entity-get-y (fn [this]
-                               (let [^Vec3 pos (ru/inst this "position")]
-                                 (double (.-y pos))))
-               :entity-get-z (fn [this]
-                               (let [^Vec3 pos (ru/inst this "position")]
-                                 (double (.-z pos))))})
-      (extend player-cls entity/IEntityOps player-impl)
-      (when server-player-cls
-        (extend server-player-cls entity/IEntityOps player-impl))
-            (when-let [local-player-cls (class-access/local-player-class adapter)]
+      (extend-type Entity
+        entity/IEntityOps
+        (entity-distance-to-sqr [this x y z]
+          (.distanceToSqr ^Entity this (double x) (double y) (double z)))
+        (entity-get-x [this]
+          (let [^Vec3 pos (.position ^Entity this)]
+            (double (.x pos))))
+        (entity-get-y [this]
+          (let [^Vec3 pos (.position ^Entity this)]
+            (double (.y pos))))
+        (entity-get-z [this]
+          (let [^Vec3 pos (.position ^Entity this)]
+            (double (.z pos)))))
+      (extend Player entity/IEntityOps player-impl)
+      (extend ServerPlayer entity/IEntityOps player-impl)
+      (when-let [local-player-cls (class-access/local-player-class adapter)]
         (extend local-player-cls entity/IEntityOps player-impl))
-      (extend inventory-cls entity/IEntityOps
-              {:inventory-get-player (fn [this] (menu-inventory-ops/inventory-owner adapter this))})
-      (extend menu-cls entity/IEntityOps
-              {:menu-get-container-id (fn [this] (menu-inventory-ops/menu-container-id adapter this))})
+      (extend Inventory entity/IEntityOps
+        {:inventory-get-player (fn [this] (menu-inventory-ops/inventory-owner adapter this))})
+      (extend AbstractContainerMenu entity/IEntityOps
+        {:menu-get-container-id (fn [this] (menu-inventory-ops/menu-container-id adapter this))})
       (log/info "mc1201 shared entity protocols initialized"))))
 
 (defn- install-resource-factory! []
   (install-when! resource-installed?
-    (let [rl-cls (ru/class-noinit "net.minecraft.resources.ResourceLocation")]
-      (resource/install-resource-factory!
-        (fn [namespace path]
-          (if namespace
-            (ru/ctor rl-cls (str namespace) (str path))
-            (ru/ctor rl-cls (str path))))
-        "mc1201"))))
+    (resource/install-resource-factory!
+      (fn [namespace path]
+        (if namespace
+          (ResourceLocation. (str namespace) (str path))
+          (ResourceLocation. (str path))))
+      "mc1201")))
 
 (defn install-resource-factory-only!
   "Install only the shared resource location factory.
@@ -373,10 +378,10 @@
                                    colon (.indexOf tag-str ":")
                                    ns (if (pos? colon) (.substring tag-str 0 (int colon)) "minecraft")
                                    path (if (pos? colon) (.substring tag-str (inc (int colon))) tag-str)
-                                   rl (net.minecraft.resources.ResourceLocation. ns path)
+                                   rl (ResourceLocation. ns path)
                                    tag-key (net.minecraft.tags.TagKey/create
                                             net.minecraft.core.registries.Registries/ITEM rl)]
-                               (boolean (.is ^net.minecraft.world.item.ItemStack stack tag-key)))
+                               (boolean (.is ^ItemStack stack tag-key)))
                              (catch Throwable _ false)))
        :tag-item-resolver (fn [tag-str count]
                            (try
@@ -384,13 +389,13 @@
                                    colon (.indexOf tag-str ":")
                                    ns (if (pos? colon) (.substring tag-str 0 (int colon)) "minecraft")
                                    path (if (pos? colon) (.substring tag-str (inc (int colon))) tag-str)
-                                   rl (net.minecraft.resources.ResourceLocation. ns path)
+                                   rl (ResourceLocation. ns path)
                                    tag-key (net.minecraft.tags.TagKey/create
                                             net.minecraft.core.registries.Registries/ITEM rl)
                                    items (.iterator (.getTagOrEmpty net.minecraft.core.registries.BuiltInRegistries/ITEM tag-key))]
                                (when (.hasNext items)
-                                 (let [^net.minecraft.world.item.Item item (.value ^net.minecraft.core.Holder (.next items))
-                                       stack (net.minecraft.world.item.ItemStack. item (int count))]
+                                 (let [^Item item (.value ^net.minecraft.core.Holder (.next items))
+                                       stack (ItemStack. item (int count))]
                                    stack)))
                              (catch Throwable _ nil)))}
       "mc1201")
@@ -414,7 +419,8 @@
   :world-get-tile-entity, :world-get-block-state, :world-set-block,
   :world-remove-block, :world-break-block, :world-place-block-by-id,
   :world-is-chunk-loaded?, :world-get-day-time, :world-get-dimension-id,
-  :world-get-players, :world-is-raining, :world-is-client-side, :world-can-see-sky"
+  :world-server-session-id, :world-get-players, :world-is-raining,
+  :world-is-client-side, :world-can-see-sky"
   [fns-map]
   (install-when! world-fns-installed?
     (world/install-world-ops! fns-map "mc1201")
