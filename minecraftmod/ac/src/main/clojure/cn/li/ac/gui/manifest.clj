@@ -12,7 +12,7 @@
 
 	These domains are consumed by cn.li.ac.wireless.shared.message-registry during
 	content startup and by tests/guards that need one source of truth."
-	{:matrix [:gather-info :init :change-ssid :change-password :sync-state]
+	{:matrix [:gather-info :init :change-ssid :change-password]
 	 :node [:change-name :change-password :list-networks :connect :disconnect]
 	 :generator [:list-nodes :connect :disconnect]
 	 :metal-former [:alternate]
