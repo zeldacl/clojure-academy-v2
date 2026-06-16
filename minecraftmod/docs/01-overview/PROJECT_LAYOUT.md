@@ -28,6 +28,13 @@
 - **`ac`**：`ac/src/main/clojure/cn/li/ac/...` → **`cn.li.ac.*`**
 - **`forge-1.20.1`**：`forge-1.20.1/src/main/clojure/cn/li/forge1201/...` → **`cn.li.forge1201.*`**
 
+### `mcmod` 关键基础命名空间（AOT/运行时）
+
+- `mcmod/src/main/clojure/cn/li/mcmod/aot.clj` → `cn.li.mcmod.aot`
+  - 编译期检测与运行期护栏：`compiling?` / `compile-context` / `ensure-runtime!`
+- `mcmod/src/main/clojure/cn/li/mcmod/runtime/deferred.clj` → `cn.li.mcmod.runtime.deferred`
+  - 统一惰性初始化持有器（替代平台各自实现），防止 AOT 期间误触发 registry/bootstrap 路径
+
 资源与注册用 id 仍以根目录 **`gradle.properties`** 的 `mod_id`（如 `my_mod`）、**`assets/my_mod/`**、`data/my_mod/` 为准。
 
 ## 数据终端（`ac/terminal`）

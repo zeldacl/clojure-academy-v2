@@ -9,7 +9,9 @@
     [cn.li.forge1201.registry.state :as registry-state]
     [cn.li.forge1201.gui.init :as gui-init]
     [cn.li.forge1201.adapter.gui-registry :as gui-registry-impl]
+    [cn.li.mcmod.aot :as aot]
     [cn.li.mcmod.config :as modid]
+    [cn.li.mcmod.runtime.deferred :as deferred]
     [cn.li.mcmod.util.log :as log])
   (:import [net.minecraftforge.fml.event.lifecycle FMLClientSetupEvent
                                                    FMLCommonSetupEvent]))
@@ -18,78 +20,88 @@
   []
   modid/*mod-id*)
 
-(def ^:private forge-mod-cache-lock
-  (Object.))
+;; ============================================================================
+;; Unified deferred holders (replaces old cached-once! + dynamic vars)
+;; ============================================================================
 
-(defn- cached-once!
-  [v init-fn]
-  (or (var-get v)
-      (locking forge-mod-cache-lock
-        (or (var-get v)
-            (let [created (init-fn)]
-              (alter-var-root v (constantly created))
-              created)))))
+;; Basic properties
+(def ^:private base-props-holder
+  (deferred/deferred #(bootstrap/create-stone-properties)))
 
-(def ^:private ^:dynamic *base-properties* nil)
-(def ^:private ^:dynamic *carrier-properties* nil)
-(def ^:private ^:dynamic *blocks-register* nil)
-(def ^:private ^:dynamic *items-register* nil)
-(def ^:private ^:dynamic *creative-tabs-register* nil)
+(def ^:private carrier-props-holder
+  (deferred/deferred #(bootstrap/carrier-block-properties @base-props-holder)))
+
+;; Core registries
+(def ^:private blocks-reg-holder
+  (deferred/deferred #(bootstrap/create-blocks-register (current-mod-id))))
+
+(def ^:private items-reg-holder
+  (deferred/deferred #(bootstrap/create-items-register (current-mod-id))))
+
+(def ^:private creative-tabs-reg-holder
+  (deferred/deferred #(bootstrap/create-creative-tabs-register (current-mod-id))))
+
+;; Additional registries
+(def ^:private block-entities-reg-holder
+  (deferred/deferred #(bootstrap/create-block-entity-types-register (current-mod-id))))
+
+(def ^:private fluid-types-reg-holder
+  (deferred/deferred #(bootstrap/create-fluid-types-register (current-mod-id))))
+
+(def ^:private fluids-reg-holder
+  (deferred/deferred #(bootstrap/create-fluids-register (current-mod-id))))
+
+(def ^:private sounds-reg-holder
+  (deferred/deferred #(bootstrap/create-sounds-register (current-mod-id))))
+
+(def ^:private effects-reg-holder
+  (deferred/deferred #(bootstrap/create-effects-register (current-mod-id))))
+
+(def ^:private particle-types-reg-holder
+  (deferred/deferred #(bootstrap/create-particle-types-register (current-mod-id))))
+
+;; ============================================================================
+;; Getter functions (delegates to deferred holders)
+;; ============================================================================
 
 (defn base-properties []
-  (cached-once! #'*base-properties* #(bootstrap/create-stone-properties)))
+  @base-props-holder)
 
 (defn carrier-properties []
-  (cached-once! #'*carrier-properties* #(bootstrap/carrier-block-properties (base-properties))))
+  @carrier-props-holder)
 
 (defn blocks-register []
-  (cached-once! #'*blocks-register* #(bootstrap/create-blocks-register (current-mod-id))))
+  @blocks-reg-holder)
 
 (defn items-register []
-  (cached-once! #'*items-register* #(bootstrap/create-items-register (current-mod-id))))
+  @items-reg-holder)
 
 (defn creative-tabs-register []
-  (cached-once! #'*creative-tabs-register* #(bootstrap/create-creative-tabs-register (current-mod-id))))
+  @creative-tabs-reg-holder)
 
-(defn- aot-compilation?
-  []
-  (boolean *compile-files*))
+(defn block-entities-register []
+  @block-entities-reg-holder)
 
-(defn- clojurephant-compilation?
-  []
-  (boolean (System/getProperty "clojure.server.clojurephant")))
+(defn fluid-types-register []
+  @fluid-types-reg-holder)
+
+(defn fluids-register []
+  @fluids-reg-holder)
+
+(defn sounds-register []
+  @sounds-reg-holder)
+
+(defn effects-register []
+  @effects-reg-holder)
+
+(defn particle-types-register []
+  @particle-types-reg-holder)
 
 (defn- datagen-run?
   []
   (or (= "true" (System/getProperty "ac.datagen"))
       (= "true" (System/getProperty "forge.datagen"))
       (= "true" (System/getProperty "fabric.datagen"))))
-
-;; BlockEntity types
-(def ^:private ^:dynamic *block-entities-register* nil)
-(def ^:private ^:dynamic *fluid-types-register* nil)
-(def ^:private ^:dynamic *fluids-register* nil)
-(def ^:private ^:dynamic *sounds-register* nil)
-(def ^:private ^:dynamic *effects-register* nil)
-(def ^:private ^:dynamic *particle-types-register* nil)
-
-(defn block-entities-register []
-  (cached-once! #'*block-entities-register* #(bootstrap/create-block-entity-types-register (current-mod-id))))
-
-(defn fluid-types-register []
-  (cached-once! #'*fluid-types-register* #(bootstrap/create-fluid-types-register (current-mod-id))))
-
-(defn fluids-register []
-  (cached-once! #'*fluids-register* #(bootstrap/create-fluids-register (current-mod-id))))
-
-(defn sounds-register []
-  (cached-once! #'*sounds-register* #(bootstrap/create-sounds-register (current-mod-id))))
-
-(defn effects-register []
-  (cached-once! #'*effects-register* #(bootstrap/create-effects-register (current-mod-id))))
-
-(defn particle-types-register []
-  (cached-once! #'*particle-types-register* #(bootstrap/create-particle-types-register (current-mod-id))))
 
 (defn- build-registration-context
   []
@@ -153,14 +165,9 @@
 
 ;; Runtime bootstrap entrypoint for Java @Mod bridge.
 (defn start-forge-mod! []
-  (let [aot? (aot-compilation?)
-        cphant? (clojurephant-compilation?)
-        check? (= "true" (System/getProperty "ac.check.clojure"))]
+  (let [compiling? (aot/compiling?)]
     (log/info "[BOOTSTRAP_TRACE] start-forge-mod! enter"
-              {:aot aot?
-               :clojurephant cphant?
-               :ac-check check?
-               :compile-files (boolean *compile-files*)})
+              {:compile-context (aot/compile-context)})
     (lifecycle-init/init-lifecycle-with-error-handling!
       {:datagen-run? (datagen-run?)
        :on-common-setup on-common-setup
@@ -176,4 +183,4 @@
       :creative-tabs-register (creative-tabs-register)
       :gui-menu-register (gui-registry-impl/menu-register)}
       (registration-steps)
-      aot? cphant? check?)))
+      compiling?)))

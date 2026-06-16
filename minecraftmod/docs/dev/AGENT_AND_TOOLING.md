@@ -20,6 +20,7 @@
 - **测试与验证入口**：
   - `cmd /c .\gradlew.bat :mcmod:compileClojure :ac:compileClojure :forge-1.20.1:compileJava :forge-1.20.1:compileClojure :fabric-1.20.1:compileJava :fabric-1.20.1:compileClojure -x :forge-1.20.1:processResources -x :fabric-1.20.1:processResources`（Windows 上优先用于源码级边界重构验证；规避 stale resource file lock 噪音）
   - `cmd /c .\gradlew.bat verifyArchitectureBoundaries`
+  - `cmd /c .\gradlew.bat verifyAotBootstrapSafety`
   - `cmd /c .\gradlew.bat verifyNonAcNoBusinessRuntimeHookApis`
   - `cmd /c .\gradlew.bat verifyNonAcNoBusinessSemanticResidue`
   - `cmd /c .\gradlew.bat verifyCleanupResidueGuards`
@@ -163,6 +164,13 @@
 | 带注入的 pipeline（`with-redefs` 动态 var） | 纯 GUI 布局、粒子/音效注册胶水 |
 
 ## 代码与运行时规则
+
+## AOT 启动期安全（Clojure 编译）
+
+- 说明文档：[`AOT_BOOTSTRAP.md`](AOT_BOOTSTRAP.md)
+- 快速排查：见 `AOT_BOOTSTRAP.md` 的「开发注意事项（必读）」与「出问题时怎么查（SOP）」
+- 目标：禁止在命名空间顶层触发 Minecraft registry/bootstrap 相关访问，避免 `IllegalArgumentException: Not bootstrapped`。
+- 静态门禁：`verifyAotBootstrapSafety`（`tools/aot-linter/aot_safety.clj` + `docs/dev/aot-linter-allowlist.edn`）。
 
 ### Clojure 设计与实现原则（强制）
 

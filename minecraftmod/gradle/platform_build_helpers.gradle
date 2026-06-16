@@ -253,3 +253,95 @@ ext.configureSharedClojureShadowJar = {
         }
     }
 }
+
+ext.registerStripAotLvtTask = { Map opts ->
+    def taskName = opts.taskName ?: 'stripAotLvt'
+    def inputDirProvider = opts.inputDirProvider
+    def outputDirProvider = opts.outputDirProvider ?: inputDirProvider
+    def dependsOnTask = opts.dependsOnTask
+    def skipWhenMissing = opts.containsKey('skipWhenMissing') ? opts.skipWhenMissing : true
+    def transformClassBytes = opts.transformClassBytes
+
+    if (inputDirProvider == null) {
+        throw new GradleException("registerStripAotLvtTask requires inputDirProvider")
+    }
+
+    tasks.register(taskName) {
+        if (dependsOnTask != null) {
+            dependsOn dependsOnTask
+        }
+        inputs.dir(inputDirProvider)
+        outputs.dir(outputDirProvider)
+        doLast {
+            def inDir = inputDirProvider.get().asFile
+            def outDir = outputDirProvider.get().asFile
+            def inPlace = inDir.canonicalPath == outDir.canonicalPath
+
+            if (!inDir.isDirectory()) {
+                if (!skipWhenMissing) {
+                    throw new GradleException("[${taskName}] input directory not found: ${inDir}")
+                }
+                if (!outDir.exists()) {
+                    outDir.mkdirs()
+                }
+                logger.lifecycle("[${taskName}] skipping - input dir missing: {}", inDir)
+                return
+            }
+
+            if (!inPlace) {
+                delete(outDir)
+                outDir.mkdirs()
+            }
+
+            int scanned = 0
+            int rewritten = 0
+            int copied = 0
+
+            inDir.eachFileRecurse { file ->
+                if (!file.isFile()) {
+                    return
+                }
+
+                def rel = inDir.toPath().relativize(file.toPath()).toString()
+                def target = inPlace ? file : new File(outDir, rel)
+
+                if (!file.name.endsWith('.class')) {
+                    if (!inPlace) {
+                        target.parentFile.mkdirs()
+                        target.bytes = file.bytes
+                    }
+                    return
+                }
+
+                scanned++
+                try {
+                    def bytes = file.bytes
+                    def transformed = transformClassBytes != null ? transformClassBytes(file, bytes) : [bytes: bytes, rewritten: false]
+                    if (transformed == null) {
+                        transformed = [bytes: bytes, rewritten: false]
+                    }
+                    def outBytes = transformed.bytes ?: bytes
+                    def wasRewritten = transformed.rewritten == true
+
+                    if (wasRewritten) {
+                        if (!inPlace) {
+                            target.parentFile.mkdirs()
+                        }
+                        target.bytes = outBytes
+                        rewritten++
+                    } else {
+                        if (!inPlace) {
+                            target.parentFile.mkdirs()
+                            target.bytes = outBytes
+                        }
+                        copied++
+                    }
+                } catch (Exception ex) {
+                    logger.warn("[${taskName}] skipping ${file.name}: ${ex.message}")
+                }
+            }
+
+            logger.lifecycle("[${taskName}] scanned {} class files; rewrote {} with dropped LVT entries; copied {} unchanged", scanned, rewritten, copied)
+        }
+    }
+}

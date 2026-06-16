@@ -263,6 +263,12 @@ tasks.register('verifyArchitectureBoundaries') {
                 shouldCheckLine: { String line -> !isSkippableLine(line) && isLikelyCodeLine(line) }
             ],
             [
+                rule: 'MIXIN_MUST_BE_JAVA',
+                scopes: ['forge1201', 'fabric1201'] as Set,
+                pattern: ~/^\(ns\s+cn\.li\.(?:forge|fabric)\d*\.mixin(?:\.|\b)/,
+                shouldCheckLine: { String line -> !isSkippableLine(line) && isLikelyCodeLine(line) }
+            ],
+            [
                 rule: 'PLATFORM_NO_AC_STATIC_OR_HARDCODED_DEPENDENCY',
                 scopes: ['forge1201', 'fabric1201'] as Set,
                 pattern: ~/cn\.li\.ac\./,
@@ -783,17 +789,103 @@ def registerBaselineVerificationTask = { String taskName, String description, Li
     }
 }
 
+tasks.register('verifyAotBootstrapSafety', JavaExec) {
+    group = 'verification'
+    description = 'Run static AOT bootstrap safety linter on top-level Clojure forms.'
+
+    def lintScript = file('tools/aot-linter/aot_safety.clj')
+    def allowlist = file('docs/dev/aot-linter-allowlist.edn')
+    def lintSources = fileTree(project.rootDir) {
+        include 'ac/src/main/clojure/**/*.clj'
+        include 'mcmod/src/main/clojure/**/*.clj'
+        include 'mc-1.20.1/src/main/clojure/**/*.clj'
+        include 'forge-1.20.1/src/main/clojure/**/*.clj'
+        include 'fabric-1.20.1/src/main/clojure/**/*.clj'
+        exclude '**/build/**', '**/.gradle/**', '**/bin/**'
+    }
+
+    inputs.file(lintScript)
+        .withPropertyName('aotLintScript')
+        .withPathSensitivity(org.gradle.api.tasks.PathSensitivity.RELATIVE)
+    inputs.file(allowlist)
+        .withPropertyName('aotLintAllowlist')
+        .withPathSensitivity(org.gradle.api.tasks.PathSensitivity.RELATIVE)
+    inputs.files(lintSources)
+        .withPropertyName('aotLintSources')
+        .withPathSensitivity(org.gradle.api.tasks.PathSensitivity.RELATIVE)
+
+    classpath = configurations.detachedConfiguration(
+        dependencies.create('org.clojure:clojure:1.12.4'),
+        dependencies.create('org.clojure:tools.reader:1.3.6')
+    )
+
+    mainClass = 'clojure.main'
+    args lintScript.absolutePath
+    workingDir = project.rootDir
+}
+
+tasks.register('verifyAotBootstrapSafetyNegativeFixture') {
+    group = 'verification'
+    description = 'Verify AOT linter fails on an intentional top-level registry-touch fixture with precise diagnostics.'
+
+    def lintScript = file('tools/aot-linter/aot_safety.clj')
+    def fixtureFile = file('tools/aot-linter/fixtures/bad_top_level_registry.clj')
+
+    inputs.file(lintScript)
+        .withPropertyName('aotLintScriptNegativeFixture')
+        .withPathSensitivity(org.gradle.api.tasks.PathSensitivity.RELATIVE)
+    inputs.file(fixtureFile)
+        .withPropertyName('aotLintNegativeFixtureSource')
+        .withPathSensitivity(org.gradle.api.tasks.PathSensitivity.RELATIVE)
+
+    doLast {
+        def output = new ByteArrayOutputStream()
+        def result = javaexec {
+            classpath = configurations.detachedConfiguration(
+                dependencies.create('org.clojure:clojure:1.12.4'),
+                dependencies.create('org.clojure:tools.reader:1.3.6')
+            )
+            mainClass = 'clojure.main'
+            args lintScript.absolutePath
+            systemProperty 'aot.lint.sourceDirs', 'tools/aot-linter/fixtures'
+            workingDir = project.rootDir
+            standardOutput = output
+            errorOutput = output
+            ignoreExitValue = true
+        }
+
+        def text = output.toString('UTF-8')
+        if (result.exitValue == 0) {
+            throw new GradleException('Expected verifyAotBootstrapSafety negative fixture to fail, but it passed.')
+        }
+        if (!text.contains('bad_top_level_registry.clj')) {
+            throw new GradleException('Negative fixture failure did not include file path details. Output:\n' + text)
+        }
+        if (!text.contains('symbol=Blocks/STONE')) {
+            throw new GradleException('Negative fixture failure did not include detected symbol details. Output:\n' + text)
+        }
+
+        logger.lifecycle('[verifyAotBootstrapSafetyNegativeFixture] passed. intentional violation was detected with file+symbol diagnostics.')
+    }
+}
+
 registerBaselineVerificationTask(
     'verifyForgeBaseline',
     'Compile baseline Clojure sources for ac, mcmod, and forge-1.20.1.',
-    ['verifyArchitectureBoundaries', ':ac:compileClojure', ':mcmod:compileClojure', ':forge-1.20.1:compileClojure']
+    ['verifyArchitectureBoundaries', 'verifyAotBootstrapSafety', ':ac:compileClojure', ':mcmod:compileClojure', ':forge-1.20.1:compileClojure']
 )
 
 registerBaselineVerificationTask(
     'verifyFabricBaseline',
     'Compile baseline sources for fabric-1.20.1 (minimal-maintenance gate).',
-    ['verifyArchitectureBoundaries', ':fabric-1.20.1:compileJava', ':fabric-1.20.1:compileClojure']
+    ['verifyArchitectureBoundaries', 'verifyAotBootstrapSafety', ':fabric-1.20.1:compileJava', ':fabric-1.20.1:compileClojure']
 )
+
+subprojects {
+    tasks.matching { it.name in ['assemble', 'jar', 'remapJar'] }.configureEach {
+        dependsOn(rootProject.tasks.named('verifyAotBootstrapSafety'))
+    }
+}
 
 tasks.register('verifyFabricStrictReflection') {
     group = 'verification'

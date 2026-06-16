@@ -73,7 +73,7 @@ clojure {
     builds {
         main {
             aotAll()
-            reflection = 'warn'
+            reflection = 'fail'
         }
     }
 }
@@ -81,9 +81,15 @@ clojure {
 // Exclude Clojure sources from JAR.
 tasks.named('processResources').configure { exclude '**/*.clj', '**/*.cljc' }
 
-// Emit AOT classes directly to Java output.
+def fabricClojureAotDir = layout.buildDirectory.dir('clojure/main')
+
+// Emit AOT classes to isolated Clojure output. Packaging consumes this output
+// dir directly; dev runs still mirror classes into classes/java/main.
+sourceSets.main.output.dir(fabricClojureAotDir, builtBy: tasks.named('compileClojure'))
+
+// Emit AOT classes to dedicated Clojure output directory.
 tasks.named('compileClojure').configure { task ->
-    def targetDirProvider = layout.buildDirectory.dir('classes/java/main')
+    def targetDirProvider = fabricClojureAotDir
     def targetDirFile = targetDirProvider.get().asFile
     if (task.metaClass.hasProperty(task, 'destinationDirectory')) {
         task.destinationDirectory = targetDirProvider
@@ -94,52 +100,54 @@ tasks.named('compileClojure').configure { task ->
     }
 }
 
-// Strip LVT from AOT class files.
-def stripAotLvt = tasks.register('stripAotLvt') {
-    dependsOn tasks.named('compileClojure')
-    def classesDir = layout.buildDirectory.dir('classes/java/main')
-    inputs.dir(classesDir)
-    outputs.dir(classesDir)
-    doLast {
-        def dir = classesDir.get().asFile
-        if (!dir.isDirectory()) return
-        int stripped = 0
-        dir.eachFileRecurse { file ->
-            if (!file.name.endsWith('.class')) return
-            try {
-                def reader = new org.objectweb.asm.ClassReader(file.bytes)
-                def writer = new org.objectweb.asm.ClassWriter(0)
-                def dropped = [0]
-                reader.accept(new org.objectweb.asm.ClassVisitor(
-                        org.objectweb.asm.Opcodes.ASM9, writer) {
-                    org.objectweb.asm.MethodVisitor visitMethod(int ac, String nm, String desc,
-                                                                  String sig, String[] ex) {
-                        def mv = super.visitMethod(ac, nm, desc, sig, ex)
-                        return new org.objectweb.asm.MethodVisitor(
-                                org.objectweb.asm.Opcodes.ASM9, mv) {
-                            void visitLocalVariable(String n, String d, String s,
-                                                    org.objectweb.asm.Label st,
-                                                    org.objectweb.asm.Label en,
-                                                    int idx) { dropped[0]++ }
-                        }
+// Strip LVT from isolated AOT class files before packaging/remap.
+def stripAotLvt = registerStripAotLvtTask(
+    taskName: 'stripAotLvt',
+    inputDirProvider: fabricClojureAotDir,
+    outputDirProvider: fabricClojureAotDir,
+    dependsOnTask: tasks.named('compileClojure'),
+    transformClassBytes: { File _file, byte[] bytes ->
+        def reader = new org.objectweb.asm.ClassReader(bytes)
+        def writer = new org.objectweb.asm.ClassWriter(0)
+        def dropped = [0]
+        reader.accept(new org.objectweb.asm.ClassVisitor(org.objectweb.asm.Opcodes.ASM9, writer) {
+            @Override
+            org.objectweb.asm.MethodVisitor visitMethod(int ac, String nm, String desc,
+                                                        String sig, String[] ex) {
+                def mv = super.visitMethod(ac, nm, desc, sig, ex)
+                return new org.objectweb.asm.MethodVisitor(org.objectweb.asm.Opcodes.ASM9, mv) {
+                    @Override
+                    void visitLocalVariable(String n, String d, String s,
+                                            org.objectweb.asm.Label st,
+                                            org.objectweb.asm.Label en,
+                                            int idx) {
+                        dropped[0]++
                     }
-                }, 0)
-                if (dropped[0] > 0) {
-                    file.bytes = writer.toByteArray()
-                    stripped++
                 }
-            } catch (Exception ex) {
-                logger.warn("[stripAotLvt] skipping ${file.name}: ${ex.message}")
             }
+        }, 0)
+        if (dropped[0] > 0) {
+            return [bytes: writer.toByteArray(), rewritten: true]
         }
-        if (stripped > 0) logger.lifecycle('[stripAotLvt] stripped LVT from {} AOT classes', stripped)
+        return [bytes: bytes, rewritten: false]
     }
+)
+
+// Loom dev runs commonly resolve classes from classes/java/main. Mirror AOT
+// classes there for runtime requires without coupling package DAG to Java output.
+def copyClojureClassesToJavaOutput = tasks.register('copyClojureClassesToJavaOutput', Copy) {
+    from fabricClojureAotDir
+    into layout.buildDirectory.dir('classes/java/main')
+    dependsOn tasks.named('compileClojure')
+    include '**/*.class'
 }
+
 tasks.named('classes').configure {
     setDependsOn([
         tasks.named('compileJava'),
         tasks.named('processResources'),
-        tasks.named('compileClojure')
+        tasks.named('compileClojure'),
+        tasks.named('copyClojureClassesToJavaOutput')
     ])
 }
 
@@ -149,8 +157,29 @@ tasks.named('jar').configure { dependsOn stripAotLvt }
 tasks.named('compileClojure').configure {
     dependsOn 'compileJava'
     doFirst {
-        classpath = classpath + files(layout.buildDirectory.dir('classes/java/main')) + sourceSets.main.output.classesDirs
+        def javaOut = layout.buildDirectory.dir('classes/java/main').get().asFile
+        def mustExist = [
+            'cn/li/mc1201/client/MinecraftClientAccess.class',
+            'cn/li/mc1201/gui/AtomBackedDataSlot.class',
+            'cn/li/mc1201/entity/ScriptedEntitySpecAccess.class'
+        ]
+        def missing = mustExist.findAll { rel -> !new File(javaOut, rel).exists() }
+        if (!missing.isEmpty()) {
+            throw new GradleException(
+                """
+Fabric compileClojure requires Java bridge/accessor classes from build/classes/java/main.
+Missing classes:\n - ${missing.join('\n - ')}
+
+This usually means compileJava was skipped (for example: -x compileJava) or failed earlier.
+Run without skipping compileJava so Java outputs are available before compileClojure.
+                """.stripIndent().trim()
+            )
+        }
     }
+}
+
+tasks.matching { it.name in ['runClient', 'runServer', 'runData', 'runDatagen', 'datagen'] }.configureEach {
+    dependsOn tasks.named('copyClojureClassesToJavaOutput')
 }
 
 tasks.named('processResources').configure {
@@ -170,7 +199,7 @@ tasks.named('processResources').configure {
 }
 
 tasks.matching { it.name == 'checkClojure' }.configureEach {
-    reflection = project.hasProperty('fabricStrictReflection') ? 'fail' : 'warn'
+    reflection = 'fail'
     dependsOn tasks.named('compileClojure')
 }
 

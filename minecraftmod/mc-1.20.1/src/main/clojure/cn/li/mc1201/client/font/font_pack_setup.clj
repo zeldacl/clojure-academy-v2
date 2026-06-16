@@ -13,13 +13,44 @@
             [cn.li.mc1201.gui.cgui.font :as cgui-font]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.server.packs PackType]
-           [net.minecraft.server.packs.repository Pack Pack$ResourcesSupplier Pack$Info Pack$Position PackSource RepositorySource]
+           [net.minecraft.server.packs.repository Pack Pack$ResourcesSupplier Pack$Position PackSource RepositorySource]
            [net.minecraft.network.chat Component]
            [net.minecraft.world.flag FeatureFlagSet]
            [cn.li.mc1201.font SystemFontVirtualPack]
+           [java.util Optional]
            [java.util.function Consumer]))
 
 (defonce ^:private setup-called? (atom false))
+
+(defn- try-pack-info-ctor
+  [pack-info-class args]
+  (try
+    (clojure.lang.Reflector/invokeConstructor pack-info-class (to-array args))
+    (catch Throwable _
+      nil)))
+
+(defn- make-pack-info
+  []
+  (let [pack-info-class (Class/forName "net.minecraft.server.packs.repository.Pack$Info")
+        desc (Component/literal "Injected system TrueType font for smooth text rendering.")
+        flags (FeatureFlagSet/of)
+        candidates [[desc 15 15 flags true]
+                    [desc 15 flags true]
+                    [desc 15 flags]
+                    [desc 15 true]
+                    [desc 15 15 flags true (Optional/empty)]
+                    [desc 15 flags true (Optional/empty)]
+                    [desc 15 15 flags true false]
+                    [desc 15 flags true false]]]
+    (or
+      (some #(try-pack-info-ctor pack-info-class %) candidates)
+      (let [ctor-sigs (map (fn [ctor]
+                             (mapv #(.getSimpleName ^Class %)
+                                   (.getParameterTypes ^java.lang.reflect.Constructor ctor)))
+                           (.getConstructors pack-info-class))]
+        (throw (ex-info "No compatible Pack$Info constructor found"
+                        {:candidates candidates
+                         :constructors ctor-sigs}))))))
 
 (defn- setup-fallback!
   []
@@ -38,9 +69,7 @@
             resources-supplier
             (reify Pack$ResourcesSupplier
               (open [_ _id] pack-resources))
-            pack-info
-            (Pack$Info. (Component/literal "Injected system TrueType font for smooth text rendering.")
-                        15 15 (FeatureFlagSet/of) true)
+            pack-info (make-pack-info)
             pack
             (Pack/create "my_mod/system_font"
               (Component/literal "System Font Pack")

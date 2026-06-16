@@ -17,6 +17,7 @@
             [cn.li.forge1201.setup.mod-bus :as setup-mod-bus]
             [cn.li.mc1201.lifecycle.orchestrator :as lifecycle-orchestrator]
             [cn.li.mc1201.lifecycle.platform-manifest :as platform-manifest]
+            [cn.li.mcmod.aot :as aot]
             [cn.li.mcmod.lifecycle :as lifecycle]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.mcmod.platform.spi PlatformBootstraps]
@@ -124,20 +125,18 @@
   
   Returns [state exception] for use with gen-class :init contract.
   - state: [] (empty state)
-  - exception: nil on success, ex-info on failure (with type :bootstrap-skip)"
-  [opts registration-steps aot? cphant? check?]
-  (if (or aot? cphant? check?)
+  - exception: nil on success, ex-info on failure (with type :bootstrap-skip)
+  
+  Args:
+    opts: registration context opts
+    registration-steps: list of registration functions
+    compiling?: boolean from (aot/compiling?) - true if AOT/checkClojure/build"
+  [opts registration-steps compiling?]
+  (if compiling?
     (do
-      (log/warn "[LIFECYCLE] Skipping bootstrap-sensitive path"
-                {:reason {:aot aot? :clojurephant cphant? :ac-check check?}})
+      (log/warn "[LIFECYCLE] Skipping bootstrap-sensitive path during compilation")
       [[] nil])
-    (try
+    (do
+      (aot/ensure-runtime! "cn.li.forge1201.setup.lifecycle-init/init-lifecycle-with-error-handling!")
       (init-lifecycle! opts registration-steps)
-      [[] nil]
-      (catch IllegalArgumentException e
-        (let [msg (some-> e .getMessage str)]
-          (if (and msg (.contains msg "Not bootstrapped"))
-            (do
-              (log/warn "Skipping Forge initialization during checkClojure: Minecraft registries not bootstrapped")
-              [[] nil])
-            (throw e)))))))
+      [[] nil])))

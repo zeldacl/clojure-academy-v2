@@ -1,6 +1,7 @@
 (ns cn.li.mc1201.bootstrap.init-common
   "Shared platform init orchestration for Java entrypoints."
-  (:require [cn.li.mcmod.platform.dispatch :as platform-dispatch]
+  (:require [cn.li.mcmod.aot :as aot]
+            [cn.li.mcmod.platform.dispatch :as platform-dispatch]
             [cn.li.mcmod.platform.resource :as platform-resource]
             [cn.li.mcmod.platform.position :as platform-position]
             [cn.li.mcmod.platform.nbt :as platform-nbt]
@@ -24,29 +25,17 @@
                       {:platform platform-key
                        :missing missing})))))
 
-(defn compilation-context?
-  []
-  (let [aot? (boolean *compile-files*)
-        cphant? (boolean (System/getProperty "clojure.server.clojurephant"))
-        check? (= "true" (System/getProperty "ac.check.clojure"))]
-    {:aot aot?
-     :clojurephant cphant?
-     :ac-check check?
-     :skip? (or aot? cphant? check?)}))
-
 (defn init-from-java!
   [platform-key on-runtime-init]
-  (let [{:keys [aot clojurephant ac-check skip?] :as ctx} (compilation-context?)]
+  (let [ctx (aot/compile-context)]
     (log/info "[BOOTSTRAP_TRACE_INIT] init-from-java enter"
               {:platform platform-key
-               :aot aot
-               :clojurephant clojurephant
-               :ac-check ac-check})
-    (if skip?
+               :compile-context ctx})
+    (if (aot/compiling?)
       (log/info "[BOOTSTRAP_TRACE_INIT] skip content init during compilation/check" {:platform platform-key})
       (do
         (assert-platform-ready! platform-key)
         (set-platform-version! platform-key)
         (when (fn? on-runtime-init)
           (on-runtime-init))
-        (log/info "Platform adapter initialized" {:platform platform-key :ctx (dissoc ctx :skip?)})))))
+        (log/info "Platform adapter initialized" {:platform platform-key})))))
