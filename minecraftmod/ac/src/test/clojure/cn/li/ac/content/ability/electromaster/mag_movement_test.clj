@@ -1,23 +1,16 @@
 (ns cn.li.ac.content.ability.electromaster.mag-movement-test
   (:require [clojure.test :refer [deftest is]]
-            [cn.li.ac.test.support.player-state :as ps-fix]
-            [cn.li.ac.ability.service.context-dispatcher :as ctx]
-            [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
             [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.test.support.fx-mocks :as fx-mocks]
+            [cn.li.ac.test.support.skill-context :as skill-ctx]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.effects.motion :as motion-op]
             [cn.li.ac.ability.effects.state :as state-op]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
+            [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
             [cn.li.ac.content.ability.electromaster.mag-movement :as mag-movement]
             [cn.li.mcmod.platform.raycast :as raycast]))
-
-(def ^:private test-context-owner
-  {:logical-side :server :server-session-id :test-session :player-uuid "p1"})
-
-(defn- with-test-context-owner [f]
-  (binding [ctx/*context-owner* test-context-owner]
-    (ps-fix/with-test-player-state-owner f)))
 
 (defn- skill-actions []
   (:actions (var-get (ns-resolve 'cn.li.ac.content.ability.electromaster.mag-movement
@@ -27,37 +20,48 @@
   (var-get (ns-resolve 'cn.li.ac.content.ability.electromaster.mag-movement
                        'mag-movement-skill)))
 
-(defn- mk-context-store [ctx-id seed]
-  (atom {ctx-id seed}))
+(defn- context-mocks
+  [seed & {:keys [terminate-calls*]}]
+  (let [ctx* (atom seed)
+        get-context (fn
+                      ([_ctx-id] @ctx*)
+                      ([_owner _ctx-id] @ctx*))
+        update-skill-state-root! (fn [_ctx-id f & args]
+                                   (swap! ctx*
+                                          (fn [ctx-data]
+                                            (let [current (or (:skill-state ctx-data) {})
+                                                  next-state (if (and (= f identity) (= 1 (count args)))
+                                                               (first args)
+                                                               (apply f current args))]
+                                              (assoc ctx-data :skill-state next-state))))
+                                   nil)
+        assoc-skill-state! (fn [_ctx-id k v]
+                             (swap! ctx*
+                                    (fn [ctx-data]
+                                      (let [path (if (vector? k) k [k])]
+                                        (update ctx-data :skill-state #(assoc-in (or % {}) path v)))))
+                             nil)
+        clear-skill-state! (fn [_ctx-id]
+                             (swap! ctx* dissoc :skill-state)
+                             nil)
+        terminate-context! (fn
+                             ([ctx-id _]
+                              (when terminate-calls*
+                                (swap! terminate-calls* conj ctx-id))
+                              nil)
+                             ([_owner ctx-id _]
+                              (when terminate-calls*
+                                (swap! terminate-calls* conj ctx-id))
+                              nil))]
+    {:ctx* ctx*
+     :get-context get-context
+     :update-skill-state-root! update-skill-state-root!
+     :assoc-skill-state! assoc-skill-state!
+     :clear-skill-state! clear-skill-state!
+     :terminate-context! terminate-context!}))
 
-(defn- mock-update-skill-state-root! [contexts* id f & args]
-  (swap! contexts* update id
-         (fn [ctx]
-           (assoc ctx :skill-state
-                  (if (and (= f identity) (= 1 (count args)))
-                    (first args)
-                    (apply f (or (:skill-state ctx) {}) args))))))
-
-(defn- mag-private-var [sym]
-  (find-var (symbol "cn.li.ac.content.ability.electromaster.mag-movement" (name sym))))
-
-(defn- skill-state-redef-pairs [contexts*]
-  [(mag-private-var 'set-skill-state-root!)
-   (fn [ctx-id state-map]
-     (mock-update-skill-state-root! contexts* ctx-id identity state-map)
-     nil)
-   (mag-private-var 'set-skill-state!)
-   (fn [ctx-id k v]
-     (swap! contexts* update ctx-id
-            (fn [ctx]
-              (let [path (if (vector? k) k [k])]
-                (update ctx :skill-state #(assoc-in (or % {}) path v)))))
-     nil)
-   (mag-private-var 'clear-skill-state!)
-   (fn [ctx-id]
-     (swap! contexts* update ctx-id dissoc :skill-state)
-     nil)
-   ctx/get-context (fn [id] (get @contexts* id))])
+(defn- with-mag-env [f]
+  (skill-ctx/with-server-skill-context f))
 
 (deftest pattern-is-hold-channel-and-cost-fail-present-test
   (let [spec (skill-def)]
@@ -66,145 +70,159 @@
 
 (deftest cost-fail-down-finalizes-without-exp-test
   (let [ctx-id "ctx-down-fail"
-        contexts* (mk-context-store ctx-id {:skill-state {:has-target false :finalized? false}})
+        terminated* (atom [])
+        {:keys [ctx* get-context update-skill-state-root! assoc-skill-state!
+                clear-skill-state! terminate-context!]}
+        (context-mocks {:skill-state {:has-target false :finalized? false}}
+                       :terminate-calls* terminated*)
         {:keys [calls* send!]} (fx-mocks/capture-fx-send!)
         exp* (atom [])
-        terminated* (atom [])
         cost-fail! (get (skill-actions) :cost-fail!)]
-    (with-redefs (into (skill-state-redef-pairs contexts*)
-                       [ctx/terminate-context! (fn [id _]
-                                                (swap! terminated* conj id)
-                                                nil)
-                        fx/send! send!
-                        motion-op/execute-reset-fall-damage! (fn [_evt _params] nil)
-                        skill-effects/add-skill-exp! (fn [player-id skill-id amount]
-                                                       (swap! exp* conj [player-id skill-id amount])
-                                                       nil)])
-      (with-test-context-owner
-        #(cost-fail! {:ctx-id ctx-id :player-id "p1" :cost-stage :down})))
+    (with-mag-env
+      #(with-redefs [ctx/get-context get-context
+                    ctx/terminate-context! terminate-context!
+                    ctx-skill/update-skill-state-root! update-skill-state-root!
+                    ctx-skill/assoc-skill-state! assoc-skill-state!
+                    ctx-skill/clear-skill-state! clear-skill-state!
+                    fx/send! send!
+                    motion-op/execute-reset-fall-damage! (fn [_evt _params] nil)
+                    skill-effects/add-skill-exp! (fn [player-id skill-id amount]
+                                                   (swap! exp* conj [player-id skill-id amount])
+                                                   nil)]
+         (cost-fail! {:ctx-id ctx-id :player-id "p1" :cost-stage :down})))
     (is (empty? @exp*))
     (is (= [[ctx-id :mag-movement/fx-end :end nil]] @calls*))
     (is (= [ctx-id] @terminated*))
-    (is (nil? (get-in @contexts* [ctx-id :skill-state])))))
+    (is (nil? (:skill-state @ctx*)))))
 
 (deftest down-no-target-terminates-without-exp-test
   (let [ctx-id "ctx-no-target"
-        contexts* (mk-context-store ctx-id {})
+        terminated* (atom [])
+        {:keys [ctx* get-context update-skill-state-root! assoc-skill-state!
+                clear-skill-state! terminate-context!]}
+        (context-mocks {} :terminate-calls* terminated*)
         {:keys [calls* send!]} (fx-mocks/capture-fx-send!)
         exp* (atom [])
-        terminated* (atom [])
         down! (get (skill-actions) :down!)]
-    (with-redefs (into (skill-state-redef-pairs contexts*)
-                       [mag-movement/resolve-target (fn [_] nil)
-                        mag-movement/player-pos (fn [_] {:x 0.0 :y 0.0 :z 0.0})
-                        ctx/terminate-context! (fn [id _]
-                                                (swap! terminated* conj id)
-                                                nil)
-                        fx/send! send!
-                        motion-op/execute-reset-fall-damage! (fn [_evt _params] nil)
-                        skill-effects/add-skill-exp! (fn [& args]
-                                                       (swap! exp* conj args)
-                                                       nil)])
-      (with-test-context-owner
-        #(down! {:ctx-id ctx-id :player-id "p1" :exp 0.4})))
+    (with-mag-env
+      #(with-redefs [mag-movement/resolve-target (fn [_] nil)
+                    mag-movement/player-pos (fn [_] {:x 0.0 :y 0.0 :z 0.0})
+                    ctx/get-context get-context
+                    ctx/terminate-context! terminate-context!
+                    ctx-skill/update-skill-state-root! update-skill-state-root!
+                    ctx-skill/assoc-skill-state! assoc-skill-state!
+                    ctx-skill/clear-skill-state! clear-skill-state!
+                    fx/send! send!
+                    motion-op/execute-reset-fall-damage! (fn [_evt _params] nil)
+                    skill-effects/add-skill-exp! (fn [& args]
+                                                   (swap! exp* conj args)
+                                                   nil)]
+         (down! {:ctx-id ctx-id :player-id "p1" :exp 0.4})))
     (is (empty? @exp*))
     (is (= [[ctx-id :mag-movement/fx-end :end nil]] @calls*))
     (is (= [ctx-id] @terminated*))
-    (is (nil? (get-in @contexts* [ctx-id :skill-state])))))
+    (is (nil? (:skill-state @ctx*)))))
 
 (deftest tick-cost-fail-finalizes-once-with-exp-test
   (let [ctx-id "ctx-tick-fail"
-        contexts* (mk-context-store ctx-id {:skill-state {:has-target true
-                                                          :finalized? false
-                                                          :target-kind :block
-                                                          :target-x 1.0
-                                                          :target-y 0.0
-                                                          :target-z 0.0
-                                                          :motion-x 0.0
-                                                          :motion-y 0.0
-                                                          :motion-z 0.0
-                                                          :movement-ticks 0
-                                                          :start-x 0.0
-                                                          :start-y 0.0
-                                                          :start-z 0.0
-                                                          :overload-floor 10.0}})
+        terminated* (atom [])
+        {:keys [ctx* get-context update-skill-state-root! assoc-skill-state!
+                clear-skill-state! terminate-context!]}
+        (context-mocks {:skill-state {:has-target true
+                                       :finalized? false
+                                       :target-kind :block
+                                       :target-x 1.0
+                                       :target-y 0.0
+                                       :target-z 0.0
+                                       :motion-x 0.0
+                                       :motion-y 0.0
+                                       :motion-z 0.0
+                                       :movement-ticks 0
+                                       :start-x 0.0
+                                       :start-y 0.0
+                                       :start-z 0.0
+                                       :overload-floor 10.0}}
+                       :terminate-calls* terminated*)
         {:keys [calls* send!]} (fx-mocks/capture-fx-send!)
         exp* (atom [])
-        terminated* (atom [])
         tick! (get (skill-actions) :tick!)]
-    (with-redefs (into (skill-state-redef-pairs contexts*)
-                       [mag-movement/player-pos (fn [_] {:x 3.0 :y 4.0 :z 0.0})
-                        mag-movement/cfg-double (fn [k]
-                                                   (case k
-                                                     :progression.exp-min 0.005
-                                                     :progression.exp-distance-scale 0.0011
-                                                     :movement.acceleration 0.08
-                                                     :targeting.target-update-radius 4.0
-                                                     0.0))
-                        ctx/terminate-context! (fn [id _]
-                                                (swap! terminated* conj id)
-                                                nil)
-                        fx/send! send!
-                        motion-op/execute-reset-fall-damage! (fn [_evt _params] nil)
-                        state-op/execute-overload-floor! (fn [_evt _params] nil)
-                        skill-effects/add-skill-exp! (fn [player-id skill-id amount]
-                                                       (swap! exp* conj [player-id skill-id amount])
-                                                       nil)])
-      (with-test-context-owner
-        #(do
-           (tick! {:ctx-id ctx-id :player-id "p1" :cost-ok? false})
-           (tick! {:ctx-id ctx-id :player-id "p1" :cost-ok? false}))))
+    (with-mag-env
+      #(with-redefs [mag-movement/player-pos (fn [_] {:x 3.0 :y 4.0 :z 0.0})
+                    mag-movement/cfg-double (fn [k]
+                                             (case k
+                                               :progression.exp-min 0.005
+                                               :progression.exp-distance-scale 0.0011
+                                               :movement.acceleration 0.08
+                                               :targeting.target-update-radius 4.0
+                                               0.0))
+                    ctx/get-context get-context
+                    ctx/terminate-context! terminate-context!
+                    ctx-skill/update-skill-state-root! update-skill-state-root!
+                    ctx-skill/assoc-skill-state! assoc-skill-state!
+                    ctx-skill/clear-skill-state! clear-skill-state!
+                    fx/send! send!
+                    motion-op/execute-reset-fall-damage! (fn [_evt _params] nil)
+                    state-op/execute-overload-floor! (fn [_evt _params] nil)
+                    skill-effects/add-skill-exp! (fn [player-id skill-id amount]
+                                                   (swap! exp* conj [player-id skill-id amount])
+                                                   nil)]
+         (tick! {:ctx-id ctx-id :player-id "p1" :cost-ok? false})
+         (tick! {:ctx-id ctx-id :player-id "p1" :cost-ok? false})))
     (is (= 1 (count @exp*)))
     (is (= 1 (count (filter #(= :mag-movement/fx-end (second %)) @calls*))))
     (is (= [ctx-id] @terminated*))
-    (is (nil? (get-in @contexts* [ctx-id :skill-state])))))
+    (is (nil? (:skill-state @ctx*)))))
 
 (deftest tick-target-lost-finalizes-with-exp-test
   (let [ctx-id "ctx-target-lost"
-        contexts* (mk-context-store ctx-id {:skill-state {:has-target true
-                                                          :finalized? false
-                                                          :target-kind :entity
-                                                          :target-world-id "w"
-                                                          :target-entity-uuid "e1"
-                                                          :target-x 2.0
-                                                          :target-y 0.0
-                                                          :target-z 0.0
-                                                          :motion-x 0.0
-                                                          :motion-y 0.0
-                                                          :motion-z 0.0
-                                                          :movement-ticks 2
-                                                          :start-x 0.0
-                                                          :start-y 0.0
-                                                          :start-z 0.0
-                                                          :overload-floor 10.0}})
+        terminated* (atom [])
+        {:keys [ctx* get-context update-skill-state-root! assoc-skill-state!
+                clear-skill-state! terminate-context!]}
+        (context-mocks {:skill-state {:has-target true
+                                       :finalized? false
+                                       :target-kind :entity
+                                       :target-world-id "w"
+                                       :target-entity-uuid "e1"
+                                       :target-x 2.0
+                                       :target-y 0.0
+                                       :target-z 0.0
+                                       :motion-x 0.0
+                                       :motion-y 0.0
+                                       :motion-z 0.0
+                                       :movement-ticks 2
+                                       :start-x 0.0
+                                       :start-y 0.0
+                                       :start-z 0.0
+                                       :overload-floor 10.0}}
+                       :terminate-calls* terminated*)
         {:keys [calls* send!]} (fx-mocks/capture-fx-send!)
         exp* (atom [])
-        terminated* (atom [])
         tick! (get (skill-actions) :tick!)]
-    (with-redefs (into (skill-state-redef-pairs contexts*)
-                       [mag-movement/update-entity-target (fn [_] nil)
-                        mag-movement/player-pos (fn [_] {:x 0.0 :y 0.0 :z 5.0})
-                        mag-movement/cfg-double (fn [k]
-                                                   (case k
-                                                     :progression.exp-min 0.005
-                                                     :progression.exp-distance-scale 0.0011
-                                                     :targeting.target-update-radius 4.0
-                                                     0.0))
-                        ctx/terminate-context! (fn [id _]
-                                                (swap! terminated* conj id)
-                                                nil)
-                        fx/send! send!
-                        motion-op/execute-reset-fall-damage! (fn [_evt _params] nil)
-                        state-op/execute-overload-floor! (fn [_evt _params] nil)
-                        skill-effects/add-skill-exp! (fn [player-id skill-id amount]
-                                                       (swap! exp* conj [player-id skill-id amount])
-                                                       nil)])
-      (with-test-context-owner
-        #(tick! {:ctx-id ctx-id :player-id "p1" :cost-ok? true})))
+    (with-mag-env
+      #(with-redefs [mag-movement/update-entity-target (fn [_] nil)
+                    mag-movement/player-pos (fn [_] {:x 0.0 :y 0.0 :z 5.0})
+                    mag-movement/cfg-double (fn [k]
+                                             (case k
+                                               :progression.exp-min 0.005
+                                               :progression.exp-distance-scale 0.0011
+                                               :targeting.target-update-radius 4.0
+                                               0.0))
+                    ctx/get-context get-context
+                    ctx/terminate-context! terminate-context!
+                    ctx-skill/update-skill-state-root! update-skill-state-root!
+                    ctx-skill/assoc-skill-state! assoc-skill-state!
+                    ctx-skill/clear-skill-state! clear-skill-state!
+                    fx/send! send!
+                    motion-op/execute-reset-fall-damage! (fn [_evt _params] nil)
+                    state-op/execute-overload-floor! (fn [_evt _params] nil)
+                    skill-effects/add-skill-exp! (fn [player-id skill-id amount]
+                                                   (swap! exp* conj [player-id skill-id amount])
+                                                   nil)]
+         (tick! {:ctx-id ctx-id :player-id "p1" :cost-ok? true})))
     (is (= 1 (count @exp*)))
     (is (= [[ctx-id :mag-movement/fx-end :end nil]] @calls*))
     (is (= [ctx-id] @terminated*))
-    (is (nil? (get-in @contexts* [ctx-id :skill-state])))))
+    (is (nil? (:skill-state @ctx*)))))
 
 (deftest resolve-target-uses-hit-vec-and-eye-height-test
   (with-redefs [mag-movement/is-metal-block? (fn [_] true)
@@ -255,41 +273,43 @@
 
 (deftest up-then-abort-does-not-double-finalize-test
   (let [ctx-id "ctx-up-abort"
-        contexts* (mk-context-store ctx-id {:skill-state {:has-target true
-                                                          :finalized? false
-                                                          :target-kind :block
-                                                          :target-x 1.0
-                                                          :target-y 0.0
-                                                          :target-z 0.0
-                                                          :movement-ticks 5
-                                                          :start-x 0.0
-                                                          :start-y 0.0
-                                                          :start-z 0.0}})
+        terminated* (atom [])
+        {:keys [ctx* get-context update-skill-state-root! assoc-skill-state!
+                clear-skill-state! terminate-context!]}
+        (context-mocks {:skill-state {:has-target true
+                                       :finalized? false
+                                       :target-kind :block
+                                       :target-x 1.0
+                                       :target-y 0.0
+                                       :target-z 0.0
+                                       :movement-ticks 5
+                                       :start-x 0.0
+                                       :start-y 0.0
+                                       :start-z 0.0}}
+                       :terminate-calls* terminated*)
         {:keys [calls* send!]} (fx-mocks/capture-fx-send!)
         exp* (atom [])
-        terminated* (atom [])
         up! (get (skill-actions) :up!)
         abort! (get (skill-actions) :abort!)]
-    (with-redefs (into (skill-state-redef-pairs contexts*)
-                       [mag-movement/player-pos (fn [_] {:x 1.0 :y 0.0 :z 0.0})
-                        mag-movement/cfg-double (fn [k]
-                                                   (case k
-                                                     :progression.exp-min 0.005
-                                                     :progression.exp-distance-scale 0.0011
-                                                     0.0))
-                        ctx/terminate-context! (fn [id _]
-                                                (swap! terminated* conj id)
-                                                nil)
-                        fx/send! send!
-                        motion-op/execute-reset-fall-damage! (fn [_evt _params] nil)
-                        skill-effects/add-skill-exp! (fn [player-id skill-id amount]
-                                                       (swap! exp* conj [player-id skill-id amount])
-                                                       nil)])
-      (with-test-context-owner
-        #(do
-           (up! {:ctx-id ctx-id :player-id "p1"})
-           (abort! {:ctx-id ctx-id :player-id "p1"}))))
+    (with-mag-env
+      #(with-redefs [mag-movement/player-pos (fn [_] {:x 1.0 :y 0.0 :z 0.0})
+                    mag-movement/cfg-double (fn [k]
+                                             (case k
+                                               :progression.exp-min 0.005
+                                               :progression.exp-distance-scale 0.0011
+                                               0.0))
+                    ctx/get-context get-context
+                    ctx/terminate-context! terminate-context!
+                    ctx-skill/update-skill-state-root! update-skill-state-root!
+                    ctx-skill/assoc-skill-state! assoc-skill-state!
+                    ctx-skill/clear-skill-state! clear-skill-state!
+                    fx/send! send!
+                    motion-op/execute-reset-fall-damage! (fn [_evt _params] nil)
+                    skill-effects/add-skill-exp! (fn [player-id skill-id amount]
+                                                   (swap! exp* conj [player-id skill-id amount])
+                                                   nil)]
+         (up! {:ctx-id ctx-id :player-id "p1"})
+         (abort! {:ctx-id ctx-id :player-id "p1"})))
     (is (= 1 (count @exp*)))
     (is (= 1 (count @calls*)))
     (is (= [ctx-id] @terminated*))))
-

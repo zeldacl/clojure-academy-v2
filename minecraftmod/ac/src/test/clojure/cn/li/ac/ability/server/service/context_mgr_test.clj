@@ -4,6 +4,7 @@
 [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.test.support.contexts :as test-contexts]
             [cn.li.ac.test.support.player-state :as test-player]
+            [cn.li.ac.test.support.owner :as owner-support]
             [cn.li.ac.ability.service.context-manager :as cm]
             [cn.li.ac.ability.service.context-state :as ctx-rt]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]            [cn.li.ac.ability.registry.skill :as skill-registry]
@@ -66,11 +67,14 @@
                    :resource-data resource-data})))
 
 (deftest activate-context-sends-begin-link-test
-  (let [out (atom [])]
+  (let [out (atom [])
+        client-owner (owner-support/client-owner :test-session "player-1")]
     (cm/register-send-fns! {:to-server (fn [msg-id payload]
                                           (swap! out conj [msg-id payload]))
                             :to-client nil})
-    (let [c (binding [ctx/*context-owner* (test-context-owner "player-1")]
+    (let [c (binding [ctx/*context-owner* client-owner
+                      runtime-hooks/*player-state-owner* {:client-session-id :test-session
+                                                          :player-uuid "player-1"}]
           (cm/activate-context! "player-1" :arc-gen))]
       (is (= 1 (count @out)))
       (is (= catalog/MSG-CTX-BEGIN-LINK (first (first @out))))

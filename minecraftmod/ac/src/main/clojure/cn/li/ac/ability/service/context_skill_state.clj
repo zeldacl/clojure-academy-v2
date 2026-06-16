@@ -27,7 +27,9 @@
   [ctx-id f & args]
   (let [ctx-data (or (get-context ctx-id) {})
         current (or (:skill-state ctx-data) {})
-        next-state (apply f current args)]
+        next-state (if (and (= f identity) (= 1 (count args)))
+                     (first args)
+                     (apply f current args))]
     (ctx-cmd/replace-skill-state-root! (current-owner) ctx-id next-state)))
 
 (defn clear-skill-state!

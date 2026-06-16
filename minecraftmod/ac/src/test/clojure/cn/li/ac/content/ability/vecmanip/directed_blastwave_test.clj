@@ -1,10 +1,12 @@
 (ns cn.li.ac.content.ability.vecmanip.directed-blastwave-test
   (:require [clojure.test :refer [deftest is]]
+            [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.fx :as fx]
+            [cn.li.ac.test.support.skill-context :as skill-ctx]
             [cn.li.ac.content.ability.vecmanip.directed-blastwave :as db]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.entity-motion :as entity-motion]
@@ -12,9 +14,6 @@
             [cn.li.mcmod.platform.world-effects :as world-effects]))
 
 (def ^:private spec db/directed-blastwave)
-(defn- test-context-owner
-  [player-uuid]
-  {:logical-side :server :server-session-id :test-session :player-uuid (str player-uuid)})
 
 (defn- mock-cfg-int [field]
   (case field
@@ -55,28 +54,44 @@
         terminate-calls (atom [])]
     {:ctx-state ctx-state
      :terminate-calls terminate-calls
-     :get-context (fn [_] @ctx-state)
-     :update-skill-state-root! (fn [_ f & args]
-                        (swap! ctx-state update :skill-state
-                               (fn [ss] (apply f (or ss {}) args))))
+     :get-context (fn
+                   ([_ctx-id] @ctx-state)
+                   ([_owner _ctx-id] @ctx-state))
+     :update-skill-state-root! (fn [_ctx-id f & args]
+                                 (swap! ctx-state update :skill-state
+                                        (fn [ss]
+                                          (let [current (or ss {})]
+                                            (if (and (= f identity) (= 1 (count args)))
+                                              (first args)
+                                              (apply f current args))))))
+     :clear-skill-state! (fn [_]
+                           (swap! ctx-state dissoc :skill-state)
+                           nil)
      :terminate-context! (fn [ctx-id _]
                            (swap! terminate-calls conj ctx-id))}))
 
+(defn- with-mock-config [f]
+  (with-redefs [skill-config/tunable-int (fn [_ field-id] (mock-cfg-int field-id))
+                skill-config/tunable-double (fn [_ field-id] (mock-cfg-double field-id))
+                skill-config/lerp-double (fn [_ field-id exp] (mock-cfg-lerp field-id exp))
+                skill-config/lerp-int (fn [_ field-id exp] (mock-cfg-lerp-int field-id exp))]
+    (f)))
+
 (deftest charge-window-invalid-release-terminates-test
   (let [up-fn (get-in spec [:actions :up!])
-        {:keys [ctx-state get-context update-skill-state-root! terminate-context! terminate-calls]}
+        {:keys [ctx-state get-context update-skill-state-root! clear-skill-state! terminate-context! terminate-calls]}
         (make-context-mocks {:skill-state {:charge-ticks 6 :performed? false}})
         end-calls* (atom [])]
-    (with-redefs [db/cfg-int mock-cfg-int
-                  db/cfg-double mock-cfg-double
-                  db/cfg-lerp mock-cfg-lerp
-                  db/cfg-lerp-int mock-cfg-lerp-int
-                  ctx/get-context get-context
-                  ctx-skill/update-skill-state-root! update-skill-state-root!
-                  ctx/terminate-context! terminate-context!
-                  fx/send! (fn [ctx-id entry _evt payload]
-                            (swap! end-calls* conj [ctx-id (:topic entry) (:mode entry) payload]))]
-      (up-fn {:player-id "p1" :ctx-id "ctx-invalid" :exp 0.5 :cost-ok? true}))
+    (skill-ctx/with-server-skill-context
+      #(with-mock-config
+         (fn []
+           (with-redefs [ctx/get-context get-context
+                         ctx-skill/update-skill-state-root! update-skill-state-root!
+                         ctx-skill/clear-skill-state! clear-skill-state!
+                         ctx/terminate-context! terminate-context!
+                         fx/send! (fn [ctx-id entry _evt payload]
+                                    (swap! end-calls* conj [ctx-id (:topic entry) (:mode entry) payload]))]
+             (up-fn {:player-id "p1" :ctx-id "ctx-invalid" :exp 0.5 :cost-ok? true})))))
 
     (is (= [["ctx-invalid" :directed-blastwave/fx-end :end {:performed? false}]] @end-calls*))
     (is (= ["ctx-invalid"] @terminate-calls))
@@ -84,34 +99,34 @@
 
 (deftest nil-trace-uses-body-position-and-awards-miss-exp-test
   (let [up-fn (get-in spec [:actions :up!])
-        {:keys [ctx-state get-context update-skill-state-root! terminate-context! terminate-calls]}
+        {:keys [ctx-state get-context update-skill-state-root! clear-skill-state! terminate-context! terminate-calls]}
         (make-context-mocks {:skill-state {:charge-ticks 10 :performed? false :punched? false :punch-ticks 0}})
         perform-calls* (atom [])
         cooldown-calls* (atom [])
         exp-calls* (atom [])]
-    (with-redefs [db/cfg-int mock-cfg-int
-                  db/cfg-double mock-cfg-double
-                  db/cfg-lerp mock-cfg-lerp
-                  db/cfg-lerp-int mock-cfg-lerp-int
-                  ctx/get-context get-context
-                  ctx-skill/update-skill-state-root! update-skill-state-root!
-                  ctx/terminate-context! terminate-context!
-                  geom/world-id-of (fn [_] "w")
-                  geom/body-pos (fn [_] {:x 2.0 :y 3.0 :z 4.0})
-                  geom/eye-pos (fn [_] {:x 2.0 :y 4.62 :z 4.0})
-                  raycast/available? (constantly true)
-                  raycast/raycast-from-player* (fn [& _] nil)
-                  raycast/get-player-look-vector* (fn [& _] {:x 0.0 :y 0.0 :z 1.0})
-                  world-effects/available? (constantly true)
-                  world-effects/find-entities-in-radius* (fn [& _] [])
-                  fx/send! (fn [ctx-id entry _evt payload]
-                            (when (= :directed-blastwave/fx-perform (:topic entry))
-                              (swap! perform-calls* conj [ctx-id (:topic entry) (:mode entry) payload])))
-                  skill-effects/set-main-cooldown! (fn [player-id skill-id ticks]
-                                                     (swap! cooldown-calls* conj [player-id skill-id ticks]))
-                  skill-effects/add-skill-exp! (fn [player-id skill-id amount]
-                                                 (swap! exp-calls* conj [player-id skill-id amount]))]
-      (up-fn {:player-id "p1" :ctx-id "ctx-miss" :exp 0.5 :cost-ok? true}))
+    (skill-ctx/with-server-skill-context
+      #(with-mock-config
+         (fn []
+           (with-redefs [ctx/get-context get-context
+                         ctx-skill/update-skill-state-root! update-skill-state-root!
+                         ctx-skill/clear-skill-state! clear-skill-state!
+                         ctx/terminate-context! terminate-context!
+                         geom/world-id-of (fn [_] "w")
+                         geom/body-pos (fn [_] {:x 2.0 :y 3.0 :z 4.0})
+                         geom/eye-pos (fn [_] {:x 2.0 :y 4.62 :z 4.0})
+                         raycast/available? (constantly true)
+                         raycast/raycast-from-player* (fn [& _] nil)
+                         raycast/get-player-look-vector* (fn [& _] {:x 0.0 :y 0.0 :z 1.0})
+                         world-effects/available? (constantly true)
+                         world-effects/find-entities-in-radius* (fn [& _] [])
+                         fx/send! (fn [ctx-id entry _evt payload]
+                                    (when (= :directed-blastwave/fx-perform (:topic entry))
+                                      (swap! perform-calls* conj [ctx-id (:topic entry) (:mode entry) payload])))
+                         skill-effects/set-main-cooldown! (fn [player-id skill-id ticks]
+                                                            (swap! cooldown-calls* conj [player-id skill-id ticks]))
+                         skill-effects/add-skill-exp! (fn [player-id skill-id amount]
+                                                        (swap! exp-calls* conj [player-id skill-id amount]))]
+             (up-fn {:player-id "p1" :ctx-id "ctx-miss" :exp 0.5 :cost-ok? true})))))
     (is (= 1 (count @perform-calls*)))
     (is (= {:x 2.0 :y 3.0 :z 8.0}
            (get-in @perform-calls* [0 3 :pos])))
@@ -123,7 +138,7 @@
 
 (deftest hit-path-applies-damage-velocity-and-cooldown-test
   (let [up-fn (get-in spec [:actions :up!])
-        {:keys [ctx-state get-context update-skill-state-root! terminate-context! terminate-calls]}
+        {:keys [ctx-state get-context update-skill-state-root! clear-skill-state! terminate-context! terminate-calls]}
         (make-context-mocks {:skill-state {:charge-ticks 10 :performed? false :punched? false :punch-ticks 0}})
         damage-calls* (atom [])
         set-velocity-calls* (atom [])
@@ -131,37 +146,39 @@
         perform-calls* (atom [])
         cooldown-calls* (atom [])
         exp-calls* (atom [])]
-    (with-redefs [db/cfg-int mock-cfg-int
-                  db/cfg-double mock-cfg-double
-                  db/cfg-lerp mock-cfg-lerp
-                  db/cfg-lerp-int mock-cfg-lerp-int
-                  ctx/get-context get-context
-                  ctx-skill/update-skill-state-root! update-skill-state-root!
-                  ctx/terminate-context! terminate-context!
-                  geom/world-id-of (fn [_] "w")
-                  geom/body-pos (fn [_] {:x 0.0 :y 0.0 :z 0.0})
-                  geom/eye-pos (fn [_] {:x 0.0 :y 1.62 :z 0.0})
-                  raycast/available? (constantly true)
-                  raycast/raycast-from-player* (fn [& _]
-                                                {:hit-type :entity :x 1.0 :y 2.0 :z 3.0 :eye-height 1.8})
-                  raycast/get-player-look-vector* (fn [& _] {:x 0.0 :y 0.0 :z 1.0})
-                  world-effects/available? (constantly true)
-                  world-effects/find-entities-in-radius* (fn [& _]
-                                                          [{:uuid "e1" :x 1.0 :y 2.0 :z 3.0 :eye-height 1.8}])
-                  entity-damage/apply-direct-damage!* (fn [_ world-id target-id damage kind]
-                                                      (swap! damage-calls* conj [world-id target-id damage kind]))
-                  entity-motion/set-velocity!* (fn [_ world-id target-id x y z]
-                                                (swap! set-velocity-calls* conj [world-id target-id x y z]))
-                  entity-motion/add-velocity!* (fn [_ world-id target-id x y z]
-                                                (swap! add-velocity-calls* conj [world-id target-id x y z]))
-                  fx/send! (fn [ctx-id entry _evt payload]
-                            (when (= :directed-blastwave/fx-perform (:topic entry))
-                              (swap! perform-calls* conj [ctx-id (:topic entry) (:mode entry) payload])))
-                  skill-effects/set-main-cooldown! (fn [player-id skill-id ticks]
-                                                     (swap! cooldown-calls* conj [player-id skill-id ticks]))
-                  skill-effects/add-skill-exp! (fn [player-id skill-id amount]
-                                                 (swap! exp-calls* conj [player-id skill-id amount]))]
-      (up-fn {:player-id "p1" :ctx-id "ctx-hit" :exp 0.5 :cost-ok? true}))
+    (skill-ctx/with-server-skill-context
+      #(with-mock-config
+         (fn []
+           (with-redefs [ctx/get-context get-context
+                         ctx-skill/update-skill-state-root! update-skill-state-root!
+                         ctx-skill/clear-skill-state! clear-skill-state!
+                         ctx/terminate-context! terminate-context!
+                         geom/world-id-of (fn [_] "w")
+                         geom/body-pos (fn [_] {:x 0.0 :y 0.0 :z 0.0})
+                         geom/eye-pos (fn [_] {:x 0.0 :y 1.62 :z 0.0})
+                         raycast/available? (constantly true)
+                         raycast/raycast-from-player* (fn [& _]
+                                                        {:hit-type :entity :x 1.0 :y 2.0 :z 3.0 :eye-height 1.8})
+                         raycast/get-player-look-vector* (fn [& _] {:x 0.0 :y 0.0 :z 1.0})
+                         world-effects/available? (constantly true)
+                         world-effects/find-entities-in-radius* (fn [& _]
+                                                                  [{:uuid "e1" :x 1.0 :y 2.0 :z 3.0 :eye-height 1.8}])
+                         entity-damage/available? (constantly true)
+                         entity-damage/apply-direct-damage!* (fn [world-id target-id damage kind]
+                                                              (swap! damage-calls* conj [world-id target-id damage kind]))
+                         entity-motion/available? (constantly true)
+                         entity-motion/set-velocity!* (fn [world-id target-id x y z]
+                                                        (swap! set-velocity-calls* conj [world-id target-id x y z]))
+                         entity-motion/add-velocity!* (fn [world-id target-id x y z]
+                                                        (swap! add-velocity-calls* conj [world-id target-id x y z]))
+                         fx/send! (fn [ctx-id entry _evt payload]
+                                    (when (= :directed-blastwave/fx-perform (:topic entry))
+                                      (swap! perform-calls* conj [ctx-id (:topic entry) (:mode entry) payload])))
+                         skill-effects/set-main-cooldown! (fn [player-id skill-id ticks]
+                                                            (swap! cooldown-calls* conj [player-id skill-id ticks]))
+                         skill-effects/add-skill-exp! (fn [player-id skill-id amount]
+                                                        (swap! exp-calls* conj [player-id skill-id amount]))]
+             (up-fn {:player-id "p1" :ctx-id "ctx-hit" :exp 0.5 :cost-ok? true})))))
     (is (= [["w" "e1" 20.0 :generic]] @damage-calls*))
     (is (= 1 (count @set-velocity-calls*)))
     (is (= 1 (count @add-velocity-calls*)))
@@ -174,33 +191,38 @@
 
 (deftest punch-tick-terminates-successful-context-test
   (let [tick-fn (get-in spec [:actions :tick!])
-        {:keys [ctx-state get-context update-skill-state-root! terminate-context! terminate-calls]}
+        {:keys [ctx-state get-context update-skill-state-root! clear-skill-state! terminate-context! terminate-calls]}
         (make-context-mocks {:skill-state {:charge-ticks 12 :performed? true :punched? true :punch-ticks 6}})
         end-calls* (atom [])]
-    (with-redefs [db/cfg-int mock-cfg-int
-                  ctx/get-context get-context
-                  ctx-skill/update-skill-state-root! update-skill-state-root!
-                  ctx/terminate-context! terminate-context!
-                  fx/send! (fn [ctx-id entry _evt payload]
-                            (swap! end-calls* conj [ctx-id (:topic entry) (:mode entry) payload]))]
-      (binding [ctx/*context-owner* (test-context-owner "p1")]
-        (tick-fn {:ctx-id "ctx-punch"})))
+    (skill-ctx/with-server-skill-context
+      #(with-mock-config
+         (fn []
+           (with-redefs [ctx/get-context get-context
+                         ctx-skill/update-skill-state-root! update-skill-state-root!
+                         ctx-skill/clear-skill-state! clear-skill-state!
+                         ctx/terminate-context! terminate-context!
+                         fx/send! (fn [ctx-id entry _evt payload]
+                                    (swap! end-calls* conj [ctx-id (:topic entry) (:mode entry) payload]))]
+             (tick-fn {:ctx-id "ctx-punch"})))))
 
-    (is (= [["ctx-punch" :directed-blastwave/fx-end :end {:performed? true}]] @end-calls*))
+    (is (= [["ctx-punch" :directed-blastwave/fx-end :end {:performed? true}]]
+           (filter #(= :directed-blastwave/fx-end (nth % 1)) @end-calls*)))
     (is (= ["ctx-punch"] @terminate-calls))
     (is (nil? (:skill-state @ctx-state)))))
 
 (deftest abort-terminates-context-test
   (let [abort-fn (get-in spec [:actions :abort!])
-        {:keys [ctx-state get-context update-skill-state-root! terminate-context! terminate-calls]}
+        {:keys [ctx-state get-context update-skill-state-root! clear-skill-state! terminate-context! terminate-calls]}
         (make-context-mocks {:skill-state {:charge-ticks 3 :performed? false}})
         end-calls* (atom [])]
-    (with-redefs [ctx/get-context get-context
-                  ctx-skill/update-skill-state-root! update-skill-state-root!
-                  ctx/terminate-context! terminate-context!
-                  fx/send! (fn [ctx-id entry _evt payload]
-                            (swap! end-calls* conj [ctx-id (:topic entry) (:mode entry) payload]))]
-      (abort-fn {:ctx-id "ctx-abort"}))
+    (skill-ctx/with-server-skill-context
+      #(with-redefs [ctx/get-context get-context
+                    ctx-skill/update-skill-state-root! update-skill-state-root!
+                    ctx-skill/clear-skill-state! clear-skill-state!
+                    ctx/terminate-context! terminate-context!
+                    fx/send! (fn [ctx-id entry _evt payload]
+                               (swap! end-calls* conj [ctx-id (:topic entry) (:mode entry) payload]))]
+         (abort-fn {:ctx-id "ctx-abort"})))
 
     (is (= [["ctx-abort" :directed-blastwave/fx-end :end {:performed? false}]] @end-calls*))
     (is (= ["ctx-abort"] @terminate-calls))

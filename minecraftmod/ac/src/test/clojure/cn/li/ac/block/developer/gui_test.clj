@@ -153,7 +153,7 @@
                                                                   :level-progress 0.0}})
                   category/get-category (fn [_] {:name-key "ac.category.electromaster"})
                   category/get-prog-incr-rate (fn [_] 1.0)
-                  net-helpers/tile-pos-payload (fn [_] {:pos-x 1 :pos-y 2 :pos-z 3})]
+                  net-helpers/tile-pos-payload (fn [_] {:container-id 17 :pos-x 1 :pos-y 2 :pos-z 3})]
       (developer-panel/attach-classic-developer-bindings!
         root
         {:player :player-1
@@ -238,7 +238,7 @@
                   category/get-category (fn [_] {:name-key "ac.category.electromaster"})
                   category/get-prog-incr-rate (fn [_] 1.0)
                   msg-registry/msg (fn [domain action] [domain action])
-                  net-helpers/tile-pos-payload (fn [_] {:pos-x 1 :pos-y 2 :pos-z 3})
+                  net-helpers/tile-pos-payload (fn [_] {:container-id 17 :pos-x 1 :pos-y 2 :pos-z 3})
                   net-client/send-to-server (fn [& _] nil)]
       (developer-panel/attach-classic-developer-bindings! root container {:on-wireless-click nil})
       (with-client-player-state-owner

@@ -8,6 +8,7 @@
             [cn.li.ac.config.modid :as modid]
             [cn.li.ac.config.registry :as config-registry]
             [cn.li.ac.entity.hook-catalog :as entity-hook-catalog]
+            [cn.li.ac.tutorial.events :as tutorial-events]
             [cn.li.mcmod.util.log :as log]))
 
 (defn init
@@ -22,6 +23,7 @@
   (when-let [init-wireless-world-data! (requiring-resolve 'cn.li.ac.wireless.data.world/init-world-data!)]
     (init-wireless-world-data!))
   (config-registry/init-configs!)
+  (tutorial-events/register-platform-handlers!)
   (ability-runtime/install-runtime-hooks!
     (ability-runtime-container/create-ability-runtime-container))
   nil)

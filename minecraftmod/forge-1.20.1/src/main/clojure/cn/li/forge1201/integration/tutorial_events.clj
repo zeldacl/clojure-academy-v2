@@ -2,11 +2,10 @@
   "Forge event listeners for tutorial condition-based unlock.
 
   Listens to ItemCraftedEvent, EntityItemPickupEvent, ItemSmeltedEvent
-  and dispatches matching condition checks to ac/tutorial/events via
-  requiring-resolve.
+  and dispatches matching condition checks through mcmod platform hooks.
 
   Uses the same MinecraftForge/EVENT_BUS pattern as item_handler.clj."
-  (:require [cn.li.ac.ability.util.uuid :as uuid]
+  (:require [cn.li.mcmod.platform.tutorial-events :as tutorial-platform]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraftforge.event.entity.player PlayerEvent$ItemCraftedEvent
                                                  PlayerEvent$ItemSmeltedEvent]
@@ -42,14 +41,10 @@
 ;; ============================================================================
 
 (defn- dispatch-item-event!
-  "Resolve the ac tutorial event handler and call it for an item event."
   [^Player player item-id event-type]
   (when (and player item-id)
     (try
-      (let [uuid-str (str (.getUUID player))]
-        (when-let [handler (requiring-resolve
-                            'cn.li.ac.tutorial.events/on-item-event!)]
-          (handler uuid-str item-id event-type)))
+      (tutorial-platform/on-item-event! (str (.getUUID player)) item-id event-type)
       (catch Throwable _))))
 
 (defn- on-item-crafted
@@ -92,10 +87,26 @@
       (when (zero? (mod c 3))
         (let [^ServerPlayer player (.player event)]
           (try
-            (when-let [process-fn (requiring-resolve
-                                    'cn.li.ac.tutorial.events/process-pending-activations!)]
-              (process-fn (str (.getUUID player))))
+            (tutorial-platform/process-pending-activations! (str (.getUUID player)))
             (catch Throwable _)))))))
+
+(defn- install-forge-tutorial-activated-bridge!
+  []
+  (tutorial-platform/register-tutorial-activated-hook!
+   (fn [player-uuid tut-id]
+     (try
+       (let [uuid (java.util.UUID/fromString player-uuid)
+             mc (Minecraft/getInstance)
+             player (if (and mc (.hasSingleplayerServer mc))
+                      (some-> mc .getSingleplayerServer .getPlayerList (.getPlayer uuid))
+                      (when-let [level (some-> mc .level)]
+                        (some (fn [^Player p]
+                                (when (= (str (.getUUID p)) (str uuid)) p))
+                              (.players level))))]
+         (when player
+           (.post MinecraftForge/EVENT_BUS
+                (cn.li.forge1201.event.TutorialActivatedEvent. player (name tut-id)))))
+       (catch Throwable _)))))
 
 ;; ============================================================================
 ;; Registration
@@ -126,33 +137,14 @@
                       EntityItemPickupEvent
                       (reify java.util.function.Consumer
                         (accept [_ evt] (on-item-pickup evt))))
-        ;; Tick handler for batched activation checking (matching upstream
-        ;; TutorialData TickScheduler.every(3))
         (.addListener (MinecraftForge/EVENT_BUS)
                       EventPriority/NORMAL false
                       TickEvent$PlayerTickEvent
                       (reify java.util.function.Consumer
                         (accept [_ evt] (on-player-tick evt))))
-        ;; Install tutorial activation hook → Forge EventBus bridge
         (try
-          (when-let [install-hook (requiring-resolve
-                                    'cn.li.ac.tutorial.events/install-tutorial-activated-hook!)]
-            (install-hook
-              (fn [player-uuid tut-id]
-                (try
-                  (let [uuid (java.util.UUID/fromString player-uuid)
-                        mc (Minecraft/getInstance)
-                        player (if (and mc (.hasSingleplayerServer mc))
-                                 (some-> mc .getSingleplayerServer .getPlayerList
-                                         (.getPlayer uuid))
-                                 (when-let [level (some-> mc .level)]
-                                       (some (fn [p] (when (= (uuid/player-uuid p) (str uuid)) p))
-                                         (.players level))))]
-                    (when player
-                      (.post MinecraftForge/EVENT_BUS
-                             (cn.li.forge1201.event.TutorialActivatedEvent. player (name tut-id)))))
-                  (catch Throwable _)))))
-        (catch Throwable _))
+          (install-forge-tutorial-activated-bridge!)
+          (catch Throwable _))
         (reset! listener-registered? true)
         (log/info "Tutorial item event listeners registered"))))
   nil)

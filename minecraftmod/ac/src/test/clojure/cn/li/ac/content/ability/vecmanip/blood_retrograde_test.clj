@@ -40,7 +40,12 @@
      :terminate-calls terminate-calls
      :get-context (fn [_] @ctx-state)
      :update-skill-state-root! (fn [_ctx-id f & args]
-                                 (swap! ctx-state update :skill-state #(apply f % args)))
+                                 (swap! ctx-state update :skill-state
+                                        (fn [ss]
+                                          (let [current (or ss {})]
+                                            (if (and (= f identity) (= 1 (count args)))
+                                              (first args)
+                                              (apply f current args))))))
      :terminate-context! (fn [ctx-id _]
                            (swap! terminate-calls conj ctx-id))}))
 
@@ -102,7 +107,7 @@
                               :blood-retrograde/fx-end
                               (swap! end-calls* conj [ctx-id (:topic entry) (:mode entry) payload])
                               nil))
-                  entity-damage/apply-direct-damage!* (fn [_ world-id target-id damage kind]
+                  entity-damage/apply-direct-damage!* (fn [world-id target-id damage kind]
                                                       (swap! damage-calls* conj [world-id target-id damage kind]))
                   skill-effects/set-main-cooldown! (fn [player-id skill-id ticks]
                                                      (swap! cooldown-calls* conj [player-id skill-id ticks]))

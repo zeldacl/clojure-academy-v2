@@ -1,38 +1,42 @@
 (ns cn.li.ac.content.ability.teleporter.mark-teleport-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
+            [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.test.support.fx-mocks :as fx-mocks]
             [cn.li.ac.test.support.player-state :as ps-fix]
+            [cn.li.ac.test.support.skill-context :as skill-ctx]
             [cn.li.ac.content.ability.teleporter.mark-teleport :as mark]
+            [cn.li.ac.content.ability.teleporter.tp-skill-helper :as helper]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.teleportation :as teleportation]))
 
-(use-fixtures :each ps-fix/clean-player-states-fixture)
+(defn- with-mark-env [f]
+  (skill-ctx/with-server-skill-context f))
 
-(defn- make-context-mocks [initial]
-  (let [ctx* (atom initial)]
-    {:ctx* ctx*
-     :get-context (fn [_] @ctx*)
-     :update-skill-state-root! (fn [_ f & args]
-                                 (swap! ctx* update :skill-state (fn [ss] (apply f (or ss {}) args))))}))
+(use-fixtures :each (fn [f]
+                      (ps-fix/clean-player-states-fixture
+                        #(with-mark-env f))))
 
 (deftest mark-teleport-on-key-down-initializes-hold-state-test
-  (let [{:keys [ctx* get-context update-skill-state-root!]}
-        (make-context-mocks {:skill-state {:legacy true}})]
+  (let [mocks (skill-ctx/content-ctx-mocks {:skill-state {:legacy true}})
+        {:keys [ctx* get-context update-skill-state-root! assoc-skill-state! clear-skill-state!]}
+        mocks]
     (with-redefs [ctx/get-context get-context
-                  ctx-skill/update-skill-state-root! update-skill-state-root!]
+                  ctx-skill/update-skill-state-root! update-skill-state-root!
+                  ctx-skill/assoc-skill-state! assoc-skill-state!
+                  ctx-skill/clear-skill-state! clear-skill-state!]
       (mark/mark-teleport-on-key-down {:ctx-id "ctx-1"}))
-
     (is (= {:hold-ticks 0 :has-target false}
            (:skill-state @ctx*)))))
 
 (deftest mark-teleport-on-key-up-short-tap-success-sends-perform-and-applies-effects-test
-  (let [{:keys [ctx* get-context update-skill-state-root!]}
-        (make-context-mocks {:skill-state {:hold-ticks 0 :has-target false}})
+  (let [mocks (skill-ctx/content-ctx-mocks {:skill-state {:hold-ticks 0 :has-target false}})
+        {:keys [ctx* get-context update-skill-state-root! assoc-skill-state! clear-skill-state!]}
+        mocks
         teleport-calls* (atom [])
         reset-calls* (atom [])
         {:keys [calls* send!]} (fx-mocks/capture-fx-send!)
@@ -40,6 +44,8 @@
         cooldown-calls* (atom [])]
     (with-redefs [ctx/get-context get-context
                   ctx-skill/update-skill-state-root! update-skill-state-root!
+                  ctx-skill/assoc-skill-state! assoc-skill-state!
+                  ctx-skill/clear-skill-state! clear-skill-state!
                   fx/send! send!
                   skill-effects/add-skill-exp! (fn [player-id skill-id amount]
                                                  (swap! exp-calls* conj [player-id skill-id amount])
@@ -49,28 +55,58 @@
                                                      nil)
                   skill-effects/skill-exp (fn [_ _] 0.5)
                   skill-effects/current-cp (fn [_] 1000.0)
+                  skill-config/lerp-double (fn [_ field-id _]
+                                             (case field-id
+                                               :targeting.range 60.0
+                                               :cost.up.cp-per-block 4.0
+                                               :cost.up.overload 20.0
+                                               :progression.exp-per-distance 0.00018
+                                               0.0))
+                  skill-config/lerp-int (fn [_ _ _] 0)
+                  skill-config/tunable-double (fn [_ field-id]
+                                                (case field-id
+                                                  :targeting.range-per-hold-tick 4.0
+                                                  :targeting.min-distance 3.0
+                                                  :targeting.eye-height 0.0
+                                                  0.0))
+                  helper/cfg-double (fn [_ field-id]
+                                      (case field-id
+                                        :targeting.min-distance 3.0
+                                        :targeting.range-per-hold-tick 4.0
+                                        :targeting.eye-height 0.0
+                                        :progression.exp-per-distance 0.00018
+                                        0.0))
+                  helper/cfg-lerp (fn [_ field-id _]
+                                    (case field-id
+                                      :targeting.range 60.0
+                                      :cost.up.cp-per-block 4.0
+                                      :cost.up.overload 20.0
+                                      0.0))
+                  helper/cfg-lerp-int (fn [_ field-id _]
+                                        (case field-id
+                                          :cooldown.ticks 600
+                                          0))
                   entity/player-creative? (fn [_] false)
                   teleportation/available? (constantly true)
                   teleportation/get-player-position* (fn [_]
                                                        {:world-id "minecraft:overworld"
                                                         :x 1.0 :y 64.0 :z 3.0})
-                  teleportation/teleport-player!* (fn [_ player-id world-id x y z]
+                  teleportation/teleport-player!* (fn [player-id world-id x y z]
                                                     (swap! teleport-calls* conj [player-id world-id x y z])
                                                     true)
-                  teleportation/reset-fall-damage!* (fn [_ player-id]
+                  teleportation/reset-fall-damage!* (fn [player-id]
                                                       (swap! reset-calls* conj player-id)
                                                       true)
                   raycast/available? (constantly true)
-                  raycast/get-player-look-vector* (fn [_] {:x 1.0 :y 0.0 :z 0.0})
+                  raycast/get-player-look-vector* (fn [_] {:x 0.0 :y 0.0 :z 1.0})
                   raycast/raycast-combined* (fn [& _]
                                               {:hit-type :entity
-                                               :hit-x 10.0 :hit-y 62.4 :hit-z 12.0
+                                               :hit-x 1.0 :hit-y 62.4 :hit-z 6.5
                                                :eye-height 1.6})]
       (mark/mark-teleport-on-key-up {:player-id "p1"
                                      :ctx-id "ctx-2"
                                      :player :player
                                      :cost-ok? true}))
-
     (is (= 1 (count @teleport-calls*)))
     (is (= ["p1"] @reset-calls*))
     (is (= 1 (count @exp-calls*)))
@@ -81,18 +117,24 @@
     (is (= true (get-in @ctx* [:skill-state :has-target])))))
 
 (deftest mark-teleport-on-key-up-cost-fail-has-no-side-effects-test
-  (let [{:keys [ctx* get-context update-skill-state-root!]}
-        (make-context-mocks {:skill-state {:hold-ticks 5
-                                           :has-target true
-                                           :world-id "minecraft:overworld"
-                                           :target-x 7.0 :target-y 70.0 :target-z 9.0
-                                           :distance 9.0 :exp 0.4}})
+  (let [mocks (skill-ctx/content-ctx-mocks {:skill-state {:hold-ticks 5
+                                                          :has-target true
+                                                          :world-id "minecraft:overworld"
+                                                          :target-x 7.0 :target-y 70.0 :target-z 9.0
+                                                          :distance 9.0 :exp 0.4}})
+        {:keys [ctx* get-context update-skill-state-root! assoc-skill-state! clear-skill-state!]}
+        mocks
         teleport-calls* (atom 0)
         fx-calls* (atom 0)
         exp-calls* (atom 0)
         cooldown-calls* (atom 0)]
     (with-redefs [ctx/get-context get-context
                   ctx-skill/update-skill-state-root! update-skill-state-root!
+                  ctx-skill/assoc-skill-state! assoc-skill-state!
+                  ctx-skill/clear-skill-state! clear-skill-state!
+                  skill-config/tunable-double (fn [_ _] 3.0)
+                  helper/cfg-double (fn [_ _] 3.0)
+                  raycast/available? (constantly false)
                   fx/send! (fn [& _] (swap! fx-calls* inc) nil)
                   skill-effects/add-skill-exp! (fn [& _] (swap! exp-calls* inc) nil)
                   skill-effects/set-main-cooldown! (fn [& _] (swap! cooldown-calls* inc) nil)
@@ -103,7 +145,6 @@
                                      :ctx-id "ctx-3"
                                      :player :player
                                      :cost-ok? false}))
-
     (is (= 0 @teleport-calls*))
     (is (= 0 @fx-calls*))
     (is (= 0 @exp-calls*))
@@ -111,16 +152,28 @@
     (is (= true (get-in @ctx* [:skill-state :has-target])))))
 
 (deftest mark-teleport-on-key-up-min-distance-does-not-perform-test
-  (let [{:keys [get-context update-skill-state-root!]}
-        (make-context-mocks {:skill-state {:hold-ticks 2
-                                           :has-target true
-                                           :world-id "minecraft:overworld"
-                                           :target-x 4.0 :target-y 65.0 :target-z 4.0
-                                           :distance 2.5 :exp 0.4}})
+  (let [mocks (skill-ctx/content-ctx-mocks {:skill-state {:hold-ticks 2
+                                                          :has-target true
+                                                          :world-id "minecraft:overworld"
+                                                          :target-x 4.0 :target-y 65.0 :target-z 4.0
+                                                          :distance 2.5 :exp 0.4}})
+        {:keys [get-context update-skill-state-root! assoc-skill-state! clear-skill-state!]}
+        mocks
         teleport-calls* (atom 0)
         fx-calls* (atom 0)]
     (with-redefs [ctx/get-context get-context
                   ctx-skill/update-skill-state-root! update-skill-state-root!
+                  ctx-skill/assoc-skill-state! assoc-skill-state!
+                  ctx-skill/clear-skill-state! clear-skill-state!
+                  skill-config/tunable-double (fn [_ field-id]
+                                                (case field-id
+                                                  :targeting.min-distance 3.0
+                                                  0.0))
+                  helper/cfg-double (fn [_ field-id]
+                                      (case field-id
+                                        :targeting.min-distance 3.0
+                                        0.0))
+                  raycast/available? (constantly false)
                   fx/send! (fn [& _] (swap! fx-calls* inc) nil)
                   teleportation/available? (constantly true)
                   teleportation/get-player-position* (fn [& _] nil)
@@ -131,22 +184,27 @@
                                      :ctx-id "ctx-4"
                                      :player :player
                                      :cost-ok? true}))
-
     (is (= 0 @teleport-calls*))
     (is (= 0 @fx-calls*))))
 
 (deftest mark-teleport-on-key-up-teleport-failure-does-not-send-perform-test
-  (let [{:keys [get-context update-skill-state-root!]}
-        (make-context-mocks {:skill-state {:hold-ticks 1
-                                           :has-target true
-                                           :world-id "minecraft:overworld"
-                                           :target-x 10.0 :target-y 64.0 :target-z 12.0
-                                           :distance 8.0 :exp 0.5}})
+  (let [mocks (skill-ctx/content-ctx-mocks {:skill-state {:hold-ticks 1
+                                                          :has-target true
+                                                          :world-id "minecraft:overworld"
+                                                          :target-x 10.0 :target-y 64.0 :target-z 12.0
+                                                          :distance 8.0 :exp 0.5}})
+        {:keys [get-context update-skill-state-root! assoc-skill-state! clear-skill-state!]}
+        mocks
         fx-calls* (atom 0)
         exp-calls* (atom 0)
         cooldown-calls* (atom 0)]
     (with-redefs [ctx/get-context get-context
                   ctx-skill/update-skill-state-root! update-skill-state-root!
+                  ctx-skill/assoc-skill-state! assoc-skill-state!
+                  ctx-skill/clear-skill-state! clear-skill-state!
+                  skill-config/tunable-double (fn [_ _] 3.0)
+                  helper/cfg-double (fn [_ _] 3.0)
+                  raycast/available? (constantly false)
                   fx/send! (fn [& _] (swap! fx-calls* inc) nil)
                   teleportation/available? (constantly true)
                   teleportation/get-player-position* (fn [& _] nil)
@@ -158,7 +216,6 @@
                                      :ctx-id "ctx-5"
                                      :player :player
                                      :cost-ok? true}))
-
     (is (= 0 @fx-calls*))
     (is (= 0 @exp-calls*))
     (is (= 0 @cooldown-calls*))))

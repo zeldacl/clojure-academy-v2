@@ -1,6 +1,7 @@
 (ns cn.li.forge1201.config.bridge
   (:require [clojure.string :as str]
             [cn.li.mcmod.config.registry :as config-reg]
+            [cn.li.mcmod.platform.config-persist :as config-persist]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.forge1201.bridge ConfigEventBridge]
            [java.util.function Consumer]
@@ -170,6 +171,11 @@
       (do
         (log/warn "set-config-value!: unknown domain" {:domain domain})
         false))))
+
+(defn install-config-persist-op!
+  []
+  (config-persist/install-config-persist-op! #'set-config-value! "forge-config-persist")
+  nil)
 
 ;; This namespace intentionally contains only ForgeConfigSpec/event plumbing.
 ;; Config domains, defaults, and typed accessors live in content/shared modules.

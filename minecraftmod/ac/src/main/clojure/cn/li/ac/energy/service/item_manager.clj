@@ -36,15 +36,17 @@
 (defn get-item-capacity
   "Read maximum energy capacity from an item stack."
   [item-stack]
-  (if-let [config (energy-base/get-energy-item-config item-stack)]
-    (energy-item/get-max-energy config)
+  (if (is-energy-item-supported? item-stack)
+    (let [config (energy-base/get-energy-item-config item-stack)]
+      (energy-item/get-max-energy config))
     0.0))
 
 (defn get-item-bandwidth
   "Read item transfer bandwidth."
   [item-stack]
-  (if-let [config (energy-base/get-energy-item-config item-stack)]
-    (energy-item/get-bandwidth config)
+  (if (is-energy-item-supported? item-stack)
+    (let [config (energy-base/get-energy-item-config item-stack)]
+      (energy-item/get-bandwidth config))
     0.0))
 
 (defn set-item-energy!

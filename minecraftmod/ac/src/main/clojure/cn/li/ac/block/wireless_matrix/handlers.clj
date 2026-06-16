@@ -104,6 +104,13 @@
              :reason reason})
   {:success false :reason reason})
 
+(defn- normalize-handler-result
+  [result]
+  (cond
+    (map? result) result
+    (boolean? result) {:success result}
+    :else {:success false}))
+
 (defn handle-gather-info
   [payload player]
   (let [be (open-tile payload player)
@@ -118,6 +125,11 @@
     (f ctrl)
     (fail action payload false :not-owner)))
 
+(defn- with-result-messages
+  [domain result]
+  (let [normalized (normalize-handler-result result)]
+    (assoc normalized :messages (feedback/result->messages domain normalized))))
+
 (defn handle-init-network
   [payload player]
   (with-owner-controller :init payload player
@@ -126,9 +138,11 @@
             result (try
                      (create-network! tile ssid password)
                      (catch Exception e
-                       (log/error "Failed to initialize network:" {:action :init :owner-check true :pos (payload-pos payload)} (ex-message e))
+                       (log/error "Failed to initialize network:"
+                                  {:action :init :owner-check true :pos (payload-pos payload)}
+                                  (ex-message e))
                        (fail :init payload true :exception)))]
-        (assoc result :messages (feedback/result->messages :matrix result))))))
+        (with-result-messages :matrix result)))))
 
 (defn handle-change-ssid
   [payload player]
@@ -141,13 +155,14 @@
                        (log/info "handle-change-ssid: changing network SSID to" (:new-ssid payload))
                        (change-ssid! network (:new-ssid payload))
                        (catch Exception e
-                         (log/error "Failed to change SSID:" {:action :change-ssid :owner-check true :pos (payload-pos payload)} (ex-message e))
+                         (log/error "Failed to change SSID:"
+                                    {:action :change-ssid :owner-check true :pos (payload-pos payload)}
+                                    (ex-message e))
                          (fail :change-ssid payload true :exception)))]
-          (assoc result :messages (feedback/result->messages :matrix result)))
-        (let [result (fail :change-ssid payload true :network-not-found)]
-          (do
-            (log/warn "handle-change-ssid: network not found for tile")
-            (assoc result :messages (feedback/result->messages :matrix result))))))))
+          (with-result-messages :matrix result))
+        (do
+          (log/warn "handle-change-ssid: network not found for tile")
+          (with-result-messages :matrix (fail :change-ssid payload true :network-not-found)))))))
 
 (defn handle-change-password
   [payload player]
@@ -160,17 +175,14 @@
                        (log/info "handle-change-password: changing network password")
                        (change-password! network (:new-password payload))
                        (catch Exception e
-                         (log/error "Failed to change password:" {:action :change-password :owner-check true :pos (payload-pos payload)} (ex-message e))
+                         (log/error "Failed to change password:"
+                                    {:action :change-password :owner-check true :pos (payload-pos payload)}
+                                    (ex-message e))
                          (fail :change-password payload true :exception)))]
-          (assoc result :messages (feedback/result->messages :matrix result)))
-        (let [result (fail :change-password payload true :network-not-found)]
-          (do
-            (log/warn "handle-change-password: network not found for tile")
-            (assoc result :messages (feedback/result->messages :matrix result))))))))
-
-;; ============================================================================
-;; Registration
-;; ============================================================================
+          (with-result-messages :matrix result))
+        (do
+          (log/warn "handle-change-password: network not found for tile")
+          (with-result-messages :matrix (fail :change-password payload true :network-not-found)))))))
 
 (defn register-network-handlers!
   []

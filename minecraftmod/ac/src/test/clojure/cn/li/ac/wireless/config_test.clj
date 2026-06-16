@@ -51,7 +51,8 @@
 
 (deftest matrix-stats-formula-uses-wireless-config-test
   (testing "shared Matrix formula honors wireless config overrides"
-    (with-redefs [config-reg/get-config-values
+    (with-redefs [matrix-logic/required-plate-count (constantly 3)
+                  config-reg/get-config-values
                   (fn [domain]
                     (is (= config-common/wireless-domain domain))
                     {:matrix-capacity-per-core-level 10
@@ -60,9 +61,7 @@
       (is (= {:capacity 40
               :bandwidth 320.0
               :range 60.0}
-             (matrix-logic/matrix-stats-for-counts
-               4
-               (matrix-logic/required-plate-count))))
+             (matrix-logic/matrix-stats-for-counts 4 3)))
       (is (= {:capacity 0 :bandwidth 0.0 :range 0.0}
              (matrix-logic/matrix-stats-for-counts 4 0))))))
 

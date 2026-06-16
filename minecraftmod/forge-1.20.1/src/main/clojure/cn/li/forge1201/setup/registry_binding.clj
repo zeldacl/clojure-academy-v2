@@ -11,6 +11,7 @@
 (defn register-config-phase!
   [^IEventBus mod-bus _opts]
   (config-bridge/register-all! mod-bus)
+  (config-bridge/install-config-persist-op!)
   nil)
 
 (defn register-registry-phase!

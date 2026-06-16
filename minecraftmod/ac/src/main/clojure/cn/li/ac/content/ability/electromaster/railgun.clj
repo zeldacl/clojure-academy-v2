@@ -96,10 +96,10 @@
   [player-id payload]
   (let [_now-ms (long (or (:timestamp-ms payload) (System/currentTimeMillis)))]
     ;; Abort any in-progress item charge so the coin QTE takes priority.
-    (doseq [[ctx-id ctx-data] (ctx/get-all-contexts)]
+    (doseq [[_ctx-key ctx-data] (ctx/get-all-contexts)]
       (when (and (= (:player-uuid ctx-data) player-id)
                  (= :item-charge (get-in ctx-data [:skill-state :mode])))
-        (set-skill-state-root! ctx-id {:fired false
+        (set-skill-state-root! (:id ctx-data) {:fired false
                                        :mode :item-charge-cancelled
                                        :charge-ticks 0})))
     ;; New coin throw resets one-shot judgement lock.

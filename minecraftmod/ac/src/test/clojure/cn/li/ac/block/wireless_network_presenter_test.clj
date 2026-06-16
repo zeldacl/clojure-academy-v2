@@ -46,4 +46,4 @@
             :range 16.0
             :bandwidth 128.0
             :initialized true}
-           (matrix-handlers/gather-info-response network (stubs/fake-matrix))))))
+           (matrix-handlers/gather-info-response network (stubs/fake-matrix) nil)))))

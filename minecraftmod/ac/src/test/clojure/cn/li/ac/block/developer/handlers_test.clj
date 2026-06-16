@@ -4,19 +4,20 @@
             [cn.li.ac.block.developer.session :as dev-session]
             [cn.li.ac.block.machine.handlers :as machine-handlers]
             [cn.li.ac.block.machine.runtime :as machine-runtime]
-            [cn.li.ac.wireless.gui.sync.handler :as sync-handler]
+            [cn.li.ac.test.support.network :as network-support]
+            [cn.li.ac.wireless.gui.sync.handler :as net-helpers]
             [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.mcmod.network.server :as net-server]))
-
 (def ^:private payload {:container-id 7})
 
 (deftest handle-start-development-guards-and-success-test
   (testing "rejects invalid structure"
-    (with-redefs [machine-handlers/open-container-tile (fn [_ _] :tile)
-                  sync-handler/get-world (fn [_] :world)
+    (with-redefs [machine-handlers/open-container-tile (network-support/open-tile-mock :tile)
+                  net-helpers/get-world (fn [_] :world)
+                  entity/player-get-name (fn [_] "Player")
                   platform-be/get-custom-state (fn [_] {:structure-valid false})
                   dev-session/validate-and-start (fn [_ _ _]
                                                    {:ok? false :reason "invalid-structure"})]
@@ -24,8 +25,9 @@
              (handlers/handle-start-development (assoc payload :action :level-up) :player)))))
 
   (testing "rejects wrong user"
-    (with-redefs [machine-handlers/open-container-tile (fn [_ _] :tile)
-                  sync-handler/get-world (fn [_] :world)
+    (with-redefs [machine-handlers/open-container-tile (network-support/open-tile-mock :tile)
+                  net-helpers/get-world (fn [_] :world)
+                  entity/player-get-name (fn [_] "Player")
                   machine-runtime/state-or-default (fn [_ _]
                                                        {:structure-valid true :user-uuid "owner"})
                   uuid/player-uuid (fn [_] "other")]
@@ -33,30 +35,26 @@
              (handlers/handle-start-development payload :player)))))
 
   (testing "starts development for current user"
-    (let [saved (atom nil)
-          changed (atom 0)]
-      (with-redefs [machine-handlers/open-container-tile (fn [_ _] :tile)
-                    sync-handler/get-world (fn [_] :world)
-                    platform-be/get-custom-state (fn [_] {:structure-valid true :user-uuid ""})
-                    platform-be/set-custom-state! (fn [_ st] (reset! saved st))
-                    platform-be/set-changed! (fn [_] (swap! changed inc))
+    (let [saved (atom nil)]
+      (with-redefs [machine-handlers/open-container-tile (network-support/open-tile-mock :tile)
+                    net-helpers/get-world (fn [_] :world)
                     uuid/player-uuid (fn [_] "self")
                     entity/player-get-name (fn [_] "Player")
                     dev-session/validate-and-start (fn [state _ _]
                                                      {:ok? true
                                                       :state (assoc state :is-developing true
-                                                                    :development-progress 0.0)})]
+                                                                    :development-progress 0.0)})
+                    machine-runtime/commit-state! (fn [_ _ _ _ st] (reset! saved st))]
         (is (= {:success true}
                (handlers/handle-start-development (assoc payload :action :level-up) :player)))
         (is (= "self" (:user-uuid @saved)))
         (is (= "Player" (:user-name @saved)))
-        (is (true? (:is-developing @saved)))
-        (is (= 1 @changed))))))
+        (is (true? (:is-developing @saved)))))))
 
 (deftest handle-stop-development-test
   (let [saved (atom nil)]
-    (with-redefs [machine-handlers/open-container-tile (fn [_ _] :tile)
-                  sync-handler/get-world (fn [_] :world)
+    (with-redefs [machine-handlers/open-container-tile (network-support/open-tile-mock :tile)
+                  net-helpers/get-world (fn [_] :world)
                   machine-runtime/state-or-default (fn [_ _]
                                                        {:is-developing true
                                                         :development-progress 0.42

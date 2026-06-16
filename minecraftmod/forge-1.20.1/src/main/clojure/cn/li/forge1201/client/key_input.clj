@@ -8,6 +8,7 @@
             [cn.li.mc1201.client.input.mode-switch :as mode-switch]
             [cn.li.mc1201.client.overlay.state :as overlay-state]
             [cn.li.forge1201.client.overlay-renderer :as overlay-renderer]
+            [cn.li.mcmod.client.content-actions :as content-actions]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.client KeyMapping Minecraft Options]
            [com.mojang.blaze3d.platform InputConstants$Type]
@@ -111,10 +112,9 @@
     (when (= key GLFW/GLFW_KEY_LEFT_ALT)
       (when (and (= action GLFW/GLFW_PRESS)
                  (not (current-screen-open?)))
-        (when-let [toggle-fn (requiring-resolve 'cn.li.ac.terminal.client.actions/toggle-terminal!)]
-          (when-let [^Minecraft mc (Minecraft/getInstance)]
-            (when-let [player (.player mc)]
-              (toggle-fn player)))))))))
+        (when-let [^Minecraft mc (Minecraft/getInstance)]
+          (when-let [player (.player mc)]
+            (content-actions/toggle-terminal! player))))))))
 
 (defn- create-key-mapping [^String translation-key key-code ^String category]
   (KeyMapping. translation-key InputConstants$Type/KEYSYM (int key-code) category))

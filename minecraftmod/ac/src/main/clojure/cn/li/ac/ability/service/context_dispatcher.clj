@@ -173,7 +173,12 @@
 
 (defn- context-owner-counter-key
 	[owner-map logical-side]
-	(route-owner-key (assoc owner-map :logical-side logical-side)))
+	(let [side (case logical-side
+							 (:client "client" :logical-side/client) :client
+							 (:server "server" :logical-side/server) :server
+							 (:any "any") :any
+							 logical-side)]
+		[side (owner/route-key owner-map side)]))
 
 (defn- next-context-id!
 	[counter-key owner prefix]
@@ -318,6 +323,12 @@
 
 (defn snapshot-context-registry []
 	(get-all-contexts))
+
+(defn snapshot-transport-contexts
+  "Return full transport context maps including private owner metadata.
+  Intended for internal lifecycle managers only."
+  []
+  (vals (transport-contexts-snapshot)))
 
 (defn clear-owner-contexts!
 	[owner]

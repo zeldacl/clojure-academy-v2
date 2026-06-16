@@ -122,8 +122,12 @@
   `required-plate-count` is passed in by the block logic because the plate slot
   layout is structural, not a player config value."
   [required-plate-count core-level plate-count]
-  (let [core-lv (int core-level)]
-    (if (and (> core-lv 0) (= (int plate-count) (int required-plate-count)))
+  (let [core-lv (int core-level)
+        plates (int plate-count)
+        required (int required-plate-count)]
+    (if (and (> core-lv 0)
+             (> required 0)
+             (= plates required))
       {:capacity (int (* (matrix-config/capacity-per-core-level) core-lv))
        :bandwidth (double (* core-lv core-lv (matrix-config/bandwidth-factor)))
        :range (double (* (matrix-config/range-base) (Math/sqrt core-lv)))}

@@ -143,6 +143,11 @@
 (defn- context-owner-from-map
   [ctx-map]
   (or (owner/canonical-owner-from-transport ctx-map)
+      (when-let [ctx-id (:id ctx-map)]
+        (some->> (ctx/snapshot-transport-contexts)
+                (filter #(= ctx-id (:id %)))
+                first
+                owner/canonical-owner-from-transport))
       (when-let [side (:logical-side ctx-map)]
         (cond-> {:logical-side side}
           (:player-uuid ctx-map) (assoc :player-uuid (str (:player-uuid ctx-map)))))))
@@ -151,8 +156,7 @@
   []
   (let [now (System/currentTimeMillis)
   timeout-ms (keepalive-timeout-ms)]
-      (->> (ctx/snapshot-context-registry)
-         vals
+      (->> (ctx/snapshot-transport-contexts)
          (filter (fn [ctx-map]
                    (and (= :server (:logical-side ctx-map))
               (= ctx/STATUS-ALIVE (:status ctx-map))
@@ -170,8 +174,7 @@
   []
   (let [now (System/currentTimeMillis)
   grace-ms (terminated-context-grace-ms)]
-      (->> (ctx/snapshot-context-registry)
-         vals
+      (->> (ctx/snapshot-transport-contexts)
          (filter (fn [ctx-map]
             (and (= ctx/STATUS-TERMINATED (:status ctx-map))
                         (:terminated-at-ms ctx-map)

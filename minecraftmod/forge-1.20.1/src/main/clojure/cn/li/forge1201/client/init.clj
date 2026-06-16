@@ -5,6 +5,8 @@
   platform layer. It contains client-only initialization code including
   renderer registration and texture binding."
   (:require [cn.li.mcmod.client.platform-bridge :as client-bridge]
+            [cn.li.mcmod.client.content-actions :as content-actions]
+            [cn.li.mcmod.platform.tutorial-events :as tutorial-platform]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.util.render :as render]
             [cn.li.mcmod.protocol.metadata :as registry-metadata]
@@ -224,9 +226,9 @@
   (energy-item-model-properties/register!)
 
   ;; Register tutorial activation hook (server-side only, for logging)
-  (when-let [install-hook (requiring-resolve 'cn.li.ac.tutorial.events/install-tutorial-activated-hook!)]
-    (install-hook (fn [player-uuid tut-id]
-                    (log/info "Tutorial activated:" (name tut-id) "for player" player-uuid))))
+  (tutorial-platform/register-tutorial-activated-hook!
+   (fn [player-uuid tut-id]
+     (log/info "Tutorial activated:" (name tut-id) "for player" player-uuid)))
 
   ;; Register client tick handler for periodic tutorial state sync.
   ;; Keeps client state current so activation notifications appear
@@ -241,8 +243,7 @@
                     (accept [_ evt]
                       (let [^TickEvent$ClientTickEvent evt evt]
                         (when (= (.phase evt) TickEvent$Phase/END)
-                          (when-let [sync-fn (requiring-resolve 'cn.li.ac.tutorial.client.state/tick-background-sync!)]
-                            (sync-fn)))))))
+                          (content-actions/tick-tutorial-background-sync!))))))
     (catch Throwable _
       (log/warn "Failed to register tutorial background sync")))
 

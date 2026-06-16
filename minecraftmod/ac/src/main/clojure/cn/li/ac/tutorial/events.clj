@@ -1,7 +1,7 @@
 (ns cn.li.ac.tutorial.events
   "Server-side tutorial item event handlers.
 
-  Called from platform glue (Forge event listeners) via requiring-resolve.
+  Platform glue dispatches through cn.li.mcmod.platform.tutorial-events.
   When a player crafts, picks up, or smelts an item, this namespace checks
   whether any tutorial conditions are now met and activates those tutorials.
 
@@ -11,18 +11,14 @@
             [cn.li.ac.tutorial.model :as model]
             [cn.li.ac.tutorial.conditions :as conds]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
+            [cn.li.mcmod.platform.tutorial-events :as tutorial-platform]
             [cn.li.mcmod.util.log :as log]))
-
-;; --- Tutorial activated hook ---
-(def ^:private tutorial-activated-hook*
-  "Callback fired when a tutorial is newly activated."
-  (atom nil))
 
 (defn install-tutorial-activated-hook!
   "Register a callback that fires on tutorial activation.
   Callback receives [player-uuid-string tut-id-keyword]."
   [hook-fn]
-  (reset! tutorial-activated-hook* hook-fn))
+  (tutorial-platform/register-tutorial-activated-hook! hook-fn))
 
 ;; Cache the tutorial-condition-map after first build
 (def ^:private tutorial-cond-map*
@@ -81,8 +77,14 @@
           (log/info "Tutorial activated by condition (batched)"
                     {:player player-uuid
                      :tutorial (name tut-id)})
-          (when-let [hook @tutorial-activated-hook*]
-            (try (hook player-uuid tut-id)
-                 (catch Throwable _)))))
-      ;; Clear dirty flag regardless of whether new activations were found
+          (try (tutorial-platform/notify-tutorial-activated! player-uuid tut-id)
+               (catch Throwable _))))
       (tut-player/update-state! session-id player-uuid model/clear-dirty!))))
+
+(defn register-platform-handlers!
+  "Register tutorial business handlers with the mcmod platform bridge."
+  []
+  (tutorial-platform/register-tutorial-handlers!
+   {:on-item-event! on-item-event!
+    :process-pending-activations! process-pending-activations!})
+  nil)

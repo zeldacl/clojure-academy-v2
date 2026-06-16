@@ -13,6 +13,7 @@
             [cn.li.ac.ability.client.screens.location-teleport :as location-teleport-screen]
             [cn.li.ac.ability.client.screens.preset-editor :as preset-editor-screen]
             [cn.li.ac.ability.client.screens.skill-tree :as skill-tree-screen]
+            [cn.li.ac.test.support.network :as network-support]
             [cn.li.ac.content.ability.electromaster.current-charging-fx :as current-charging-fx]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.config.gameplay :as gameplay]
@@ -89,12 +90,7 @@
                   (fn [_owner player-uuid skill-id]
                     (swap! activated conj {:player-uuid player-uuid :skill-id skill-id})
                     {:id "ctx-client-1"})
-                  net-client/send-to-server
-                  (fn
-                    ([msg-id payload]
-                     (swap! sent conj {:msg-id msg-id :payload payload}))
-                    ([msg-id payload _callback]
-                     (swap! sent conj {:msg-id msg-id :payload payload})))]
+                  net-client/send-to-server (network-support/capture-send-to-server! sent)]
       ((:client-on-slot-key-down! hooks) "p1" 0)
       ((:client-on-slot-key-tick! hooks) "p1" 0)
       ((:client-on-slot-key-up! hooks) "p1" 0)
@@ -119,11 +115,7 @@
                       (swap! activated conj {:player-uuid player-uuid
                               :skill-id skill-id})
                       {:id "ctx-should-not-exist"})
-              net-client/send-to-server (fn
-                      ([msg-id payload]
-                       (swap! sent conj {:msg-id msg-id :payload payload}))
-                      ([msg-id payload _callback]
-                       (swap! sent conj {:msg-id msg-id :payload payload})))]
+              net-client/send-to-server (network-support/capture-send-to-server! sent)]
             ((:client-on-slot-key-tick! hooks) "p1" 0)
             (is (empty? @activated))
             (is (empty? @sent)))))
@@ -134,12 +126,7 @@
         hooks (client-ui-hooks/runtime-client-ui-hooks)]
     (with-redefs [client-keybinds/get-skill-id-for-slot-public (fn [_ _] :railgun)
                   ctx-mgr/activate-context! (fn [_owner _player-uuid _skill-id] {:id "ctx-client-abort"})
-                  net-client/send-to-server
-                  (fn
-                    ([msg-id payload]
-                     (swap! sent conj {:msg-id msg-id :payload payload}))
-                    ([msg-id payload _callback]
-                     (swap! sent conj {:msg-id msg-id :payload payload})))
+                  net-client/send-to-server (network-support/capture-send-to-server! sent)
                   ctx/terminate-context! (fn
                                            ([ctx-id terminate-fn]
                                             (swap! terminated conj [ctx-id terminate-fn])
@@ -164,12 +151,7 @@
         hooks (client-ui-hooks/runtime-client-ui-hooks)]
     (with-redefs [client-keybinds/get-skill-id-for-slot-public (fn [_ _] :railgun)
                   ctx-mgr/activate-context! (fn [_owner _player-uuid _skill-id] {:id "ctx-client-abort-all"})
-                  net-client/send-to-server
-                  (fn
-                    ([msg-id payload]
-                     (swap! sent conj {:msg-id msg-id :payload payload}))
-                    ([msg-id payload _callback]
-                     (swap! sent conj {:msg-id msg-id :payload payload})))
+                  net-client/send-to-server (network-support/capture-send-to-server! sent)
                   ctx/terminate-context! (fn
                                            ([ctx-id terminate-fn]
                                             (swap! terminated conj [ctx-id terminate-fn])
@@ -310,12 +292,7 @@
                   ctx-mgr/activate-context!
                   (fn [_owner _player-uuid _skill-id] {:id "ctx-penetrate"})
                   gameplay/use-mouse-wheel-enabled? (fn [] true)
-                  net-client/send-to-server
-                  (fn
-                    ([msg-id payload]
-                     (swap! sent conj {:msg-id msg-id :payload payload}))
-                    ([msg-id payload _callback]
-                     (swap! sent conj {:msg-id msg-id :payload payload})))]
+                  net-client/send-to-server (network-support/capture-send-to-server! sent)]
       ((:client-on-slot-key-down! hooks) "p1" 0)
       ((:client-on-slot-wheel! hooks) "p1" 0 2.0)
       ((:client-on-slot-wheel! hooks) "p1" 1 2.0)
@@ -327,7 +304,7 @@
                :payload {:ctx-id "ctx-penetrate"
                          :channel :penetrate-tp/set-distance
                          :payload {:delta 2.0}}}]
-             @sent)))))
+             (network-support/sent-without-callbacks @sent))))))
 
 
 (deftest client-terminated-push-clears-slot-context-and-terminates-local-context-test
@@ -378,9 +355,7 @@
     (with-redefs [net-client/register-push-handler! (fn [msg-id handler-fn]
                                                       (swap! handlers assoc msg-id handler-fn)
                                                       nil)
-                  net-client/send-to-server (fn [msg-id payload]
-                                              (swap! sent conj {:msg-id msg-id :payload payload})
-                                              nil)
+                  net-client/send-to-server (network-support/capture-send-to-server! sent)
                   ctx/terminate-context! (fn
                                            ([ctx-id terminate-fn]
                                             (swap! terminated conj [ctx-id terminate-fn])
@@ -400,7 +375,7 @@
                                                                 :learned-skills []}})
       (is (= [{:msg-id catalog/MSG-SLOT-KEY-ABORT
                :payload {:ctx-id "ctx-runtime-reset" :key-idx 0}}]
-             @sent))
+             (network-support/sent-without-callbacks @sent)))
       (is (= [["ctx-runtime-reset" nil]] @terminated))
       (is (= ["p1"] @cleared))
       (is (= [:default] @cleared-groups))
@@ -420,9 +395,7 @@
     (with-redefs [net-client/register-push-handler! (fn [msg-id handler-fn]
                                                       (swap! handlers assoc msg-id handler-fn)
                                                       nil)
-                  net-client/send-to-server (fn [msg-id payload]
-                                              (swap! sent conj {:msg-id msg-id :payload payload})
-                                              nil)
+                  net-client/send-to-server (network-support/capture-send-to-server! sent)
                   ctx/terminate-context! (fn
                                            ([ctx-id terminate-fn]
                                             (swap! terminated conj [ctx-id terminate-fn])
@@ -440,7 +413,7 @@
                                                                   :interferences #{}}})
       (is (= [{:msg-id catalog/MSG-SLOT-KEY-ABORT
                :payload {:ctx-id "ctx-resource-reset" :key-idx 0}}]
-             @sent))
+             (network-support/sent-without-callbacks @sent)))
       (is (= [["ctx-resource-reset" nil]] @terminated))
       (is (= ["p1"] @cleared))
       (is (empty? (:slot-context-ids (client-ui-hooks/client-ui-state-snapshot "p1")))))))
@@ -617,12 +590,7 @@
                   ctx/get-context (fn [_owner ctx-id]
                                     (when (= ctx-id "ctx-flashing")
                                       {:id "ctx-flashing" :skill-id :flashing}))
-                  net-client/send-to-server
-                  (fn
-                    ([msg-id payload]
-                     (swap! sent conj {:msg-id msg-id :payload payload}))
-                    ([msg-id payload _callback]
-                     (swap! sent conj {:msg-id msg-id :payload payload})))]
+                  net-client/send-to-server (network-support/capture-send-to-server! sent)]
       ((:client-on-slot-key-down! hooks) "p1" 0)
       ((:client-on-movement-key-down! hooks) "p1" :forward)
       ((:client-on-movement-key-tick! hooks) "p1" :forward)

@@ -8,9 +8,13 @@
   []
   (let [calls* (atom [])]
     {:calls* calls*
-     :send! (fn [ctx-id entry _evt payload]
-              (swap! calls* conj [ctx-id (:topic entry) (:mode entry) payload])
-              nil)}))
+     :send! (fn
+              ([ctx-id entry _evt]
+               (swap! calls* conj [ctx-id (:topic entry) (:mode entry) nil])
+               nil)
+              ([ctx-id entry _evt payload]
+               (swap! calls* conj [ctx-id (:topic entry) (:mode entry) payload])
+               nil))}))
 
 (defn capture-fx-topics!
   "Returns `{:topics* atom :send! fn}` recording only topics."

@@ -7,6 +7,7 @@
             [cn.li.ac.ability.client.keybinds :as client-keybinds]
             [cn.li.ac.content.ability.electromaster.current-charging-fx :as current-charging-fx]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]            [cn.li.ac.ability.skill-config :as skill-config]
+            [cn.li.ac.test.support.network :as network-support]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.network.client :as net-client]))
 
@@ -29,11 +30,11 @@
                                      :player-uuid "p1"
                                      :skill-id :flashing
                                      :status ctx/STATUS-TERMINATED})
-                  net-client/send-to-server (fn
-                                              ([msg-id payload]
-                                               (swap! sent conj [msg-id payload]))
-                                              ([msg-id payload _callback]
-                                               (swap! sent conj [msg-id payload])))]
+                  net-client/send-to-server (fn [& args]
+                                              (let [[msg-id payload] (if (= 4 (count args))
+                                                                       [(nth args 1) (nth args 2)]
+                                                                       [(first args) (second args)])]
+                                                (swap! sent conj [msg-id payload])))]
       (binding [runtime-hooks/*client-session-id* test-client-session]
         ((:client-on-movement-key-down! hooks) "p1" :forward)
         ((:client-on-movement-key-tick! hooks) "p1" :forward)

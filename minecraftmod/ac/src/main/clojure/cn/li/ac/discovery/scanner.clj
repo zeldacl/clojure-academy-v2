@@ -20,12 +20,14 @@
 
 (defn- normalize-path->ns
   [path]
-  (-> path
-      (str/replace #"\\\\" "/")
-      (str/replace #"\.clj$" "")
-      (str/replace #"_" "-")
-      (str/replace #"/" ".")
-      symbol))
+  (let [dot-name (-> path
+                     (str/replace #"\\\\" "/")
+                     (str/replace #"\.clj$" "")
+                     (str/replace #"_" "-")
+                     (str/replace #"/" "."))]
+    (if-let [idx (str/last-index-of dot-name ".")]
+      (symbol (subs dot-name 0 idx) (subs dot-name (inc idx)))
+      (symbol dot-name))))
 
 (defn- file-clj-paths
   [^File root]
@@ -68,13 +70,17 @@
   []
   ;; Fallback for local dev where classpath resource may not yet be available.
   (let [user-dir (System/getProperty "user.dir")
-        ac-root (io/file user-dir "ac" "src" "main" "clojure" "cn" "li" "ac" "content" "ability")
-        prefix (str/replace (.getPath ac-root) #"\\\\" "/")]
-    (if (.exists ac-root)
-      (->> (file-clj-paths ac-root)
-           (map #(subs % (inc (count prefix))))
-         (map #(str ability-resource-prefix "/" %)))
-      [])))
+        candidates [(io/file user-dir "ac" "src" "main" "clojure" "cn" "li" "ac" "content" "ability")
+                    (io/file user-dir "minecraftmod" "ac" "src" "main" "clojure" "cn" "li" "ac" "content" "ability")
+                    (io/file user-dir ".." "ac" "src" "main" "clojure" "cn" "li" "ac" "content" "ability")]]
+    (mapcat
+     (fn [ac-root]
+       (when (.exists ac-root)
+         (let [prefix (str/replace (.getPath ac-root) #"\\\\" "/")]
+           (->> (file-clj-paths ac-root)
+                (map #(subs % (inc (count prefix))))
+                (map #(str ability-resource-prefix "/" %))))))
+     candidates)))
 
 (defn discover-ability-namespaces
   "Return discovered namespaces under cn.li.ac.content.ability.*.

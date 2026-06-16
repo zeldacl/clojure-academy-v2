@@ -85,6 +85,9 @@
   (when-let [install-terminal-hooks!
              (requiring-resolve 'cn.li.ac.terminal.client.actions/install-ui-hooks!)]
     (install-terminal-hooks!))
+  (when-let [install-client-actions!
+             (requiring-resolve 'cn.li.ac.client.platform-hooks/install-client-content-actions!)]
+    (install-client-actions!))
   (when-let [init-ac-fonts!
              (requiring-resolve 'cn.li.ac.client.font-init/init-fonts!)]
     (init-ac-fonts!))

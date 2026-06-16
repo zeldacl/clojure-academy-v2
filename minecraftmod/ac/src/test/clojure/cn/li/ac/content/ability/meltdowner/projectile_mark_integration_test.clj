@@ -205,6 +205,8 @@
                   geom/eye-pos (fn [_] {:x 0.0 :y 64.0 :z 0.0})
                   raycast/available? (constantly true)
                   raycast/get-player-look-vector* (fn [_] {:x 0.0 :y 0.0 :z 1.0})
+                  raycast/raycast-combined* (fn [& _]
+                                              {:hit-type :block :x 0.0 :y 64.0 :z 5.0})
                   ctx-mgr/push-channel-to-player! (fn [& _] nil)
                   ctx-mgr/push-channel-to-nearby-players! (fn [& _] nil)]
       (ray-barrage/ray-barrage-perform! {:player-id attacker :ctx-id "ctx-rb"}))

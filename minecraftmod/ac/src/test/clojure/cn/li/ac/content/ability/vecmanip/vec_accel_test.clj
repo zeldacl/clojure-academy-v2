@@ -155,13 +155,16 @@
           perform-fn   (get-in spec [:actions :perform!])]
       (with-config-mocks
         (with-redefs [ctx/get-context
-                      (fn [_id] test-ctx)
+                      (fn ([id] test-ctx)
+                          ([_owner id] test-ctx))
                       ctx-skill/update-skill-state-root!
                       (fn [_id f & args] (swap! update-calls conj (apply list f args)))
+                      player-motion/available? (constantly true)
                       player-motion/set-velocity!*
-                      (fn [_pm _pid x y z] (swap! vel-calls conj {:x x :y y :z z}))
+                      (fn [pid x y z] (swap! vel-calls conj {:player-id pid :x x :y y :z z}))
+                      teleportation/available? (constantly true)
                       teleportation/reset-fall-damage!*
-                      (fn [_tp _pid] nil)
+                      (fn [_pid] nil)
                       skill-effects/set-main-cooldown! (fn [& _] nil)
                       skill-effects/add-skill-exp!     (fn [& _] nil)]
           (perform-fn {:player-id "p1" :ctx-id "ctx-1" :exp 0.5})))
@@ -184,9 +187,10 @@
                                    :init-vel     {:x 1.0 :y 0.0 :z 0.0}}}
           perform-fn (get-in spec [:actions :perform!])]
       (with-config-mocks
-        (with-redefs [ctx/get-context            (fn [_id] test-ctx)
+        (with-redefs [ctx/get-context            (fn ([id] test-ctx) ([_ id] test-ctx))
                       ctx-skill/assoc-skill-state!     (fn [& _] nil)
                       ctx-skill/update-skill-state-root! (fn [& _] nil)
+                      player-motion/available? (constantly true)
                       player-motion/set-velocity!*
                       (fn [& _] (swap! vel-calls conj :called))
                       skill-effects/set-main-cooldown! (fn [& _] nil)

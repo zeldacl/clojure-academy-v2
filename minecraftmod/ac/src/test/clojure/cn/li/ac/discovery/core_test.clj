@@ -22,7 +22,7 @@
 
 (deftest base-family-and-fx-namespace-landscan-test
   (is (= :electromaster
-         (core/base-family 'cn.li.ac.content.ability.electromaster.railgun))
-      "family segment is the sixth dot-separated path index 5")
-  (is (true? (core/fx-namespace? 'cn.li.ac.content.ability.electromaster.railgun-fx)))
-  (is (false? (core/fx-namespace? 'cn.li.ac.content.ability.electromaster.railgun))))
+         (core/base-family 'cn.li.ac.content.ability.electromaster/railgun))
+      "family segment follows the ability path segment")
+  (is (true? (core/fx-namespace? 'cn.li.ac.content.ability.electromaster/railgun-fx)))
+  (is (false? (core/fx-namespace? 'cn.li.ac.content.ability.electromaster/railgun))))

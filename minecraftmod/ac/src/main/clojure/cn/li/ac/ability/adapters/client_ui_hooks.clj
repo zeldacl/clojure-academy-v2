@@ -245,17 +245,17 @@
 
 (defn- client-context-owner
   [player-uuid]
-  (let [[session-id _screen-id uuid] (client-ui-owner-key {:player-uuid player-uuid})]
+  (let [[session-id player-uuid*] (client-ui-owner-key {:player-uuid player-uuid})]
     {:logical-side :client
      :client-session-id session-id
-     :player-uuid uuid}))
+     :player-uuid player-uuid*}))
 
 (defn- client-context-owner-from-owner
   [owner]
-  (let [[session-id _screen-id uuid] (client-ui-owner-key owner)]
+  (let [[session-id player-uuid] (client-ui-owner-key owner)]
     {:logical-side :client
      :client-session-id session-id
-     :player-uuid uuid}))
+     :player-uuid player-uuid}))
 
 (defn- player-contexts
   [player-uuid]

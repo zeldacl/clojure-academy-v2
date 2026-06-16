@@ -31,27 +31,29 @@
 
 (deftest electron-bomb-settlement-hit-path-test
   (let [calls (atom [])]
-    (with-redefs [raycast/raycast-entities* (fn [& _]
+    (with-redefs [raycast/available? (constantly true)
+                  entity-damage/available? (constantly true)
+                  raycast/raycast-entities* (fn [& _]
                                              {:uuid "target-1"
                                               :x 4.0
                                               :y 65.0
                                               :z 6.0
                                               :distance 9.0})
                   entity-damage/apply-direct-damage!* (fn [& args]
-                                                      (swap! calls conj [:damage args])
+                                                      (swap! calls conj [:damage (vec args)])
                                                       true)
                   md-damage/mark-target! (fn [& args]
-                                           (swap! calls conj [:mark args])
+                                           (swap! calls conj [:mark (vec args)])
                                            true)
                   skill-effects/add-skill-exp! (fn [& args]
-                                                 (swap! calls conj [:exp args])
+                                                 (swap! calls conj [:exp (vec args)])
                                                  true)
                   ctx-mgr/push-channel-to-player! (fn [& args]
-                                                   (swap! calls conj [:fx args])
+                                                   (swap! calls conj [:fx (vec args)])
                                                    true)
                   ctx-mgr/push-channel-to-nearby-players! (fn [& args]
-                                                           (swap! calls conj [:fx-nearby args])
-                                                   true)]
+                                                           (swap! calls conj [:fx-nearby (vec args)])
+                                                           true)]
       (dp/schedule-electron-bomb-beam!
        {:player-id "p1"
         :ctx-id "ctx-1"
@@ -62,7 +64,7 @@
         :exp-gain 0.125
         :delay-ticks 1})
       (dp/tick-player! "p1")
-      (is (= [[:damage [:damage "w" "target-1" 12.5 :magic]]
+      (is (= [[:damage ["w" "target-1" 12.5 :magic]]
           [:mark ["p1" "target-1" {:ctx-id "ctx-1"
                   :target-pos {:x 4.0 :y 65.0 :z 6.0}}]]
               [:exp ["p1" :electron-bomb 0.125]]

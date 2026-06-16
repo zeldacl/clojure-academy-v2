@@ -3,14 +3,14 @@
   SettingsUI.  Loads settings.xml layout, populates checkbox rows from config
   descriptors, and persists toggles via Forge ConfigValue.set() + ModConfig.save().
 
-  Uses requiring-resolve for forge1201.config.bridge because forge-1.20.1 is
-  not a direct compile-time dependency of the ac module."
+  Uses cn.li.mcmod.platform.config-persist for loader-specific file persistence."
   (:require [cn.li.ac.ability.config :as ability-config]
             [cn.li.ac.config.common :as config-common]
             [cn.li.ac.config.gameplay :as gameplay-config]
             [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.config.registry :as config-reg]
+            [cn.li.mcmod.platform.config-persist :as config-persist]
             [cn.li.mcmod.gui.cgui-core :as cgui-core]
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.mcmod.gui.events :as events]
@@ -53,14 +53,10 @@
 
 ;; --- Checkbox row builder ---
 
-(defn- set-forge-config-value!
-  "Persist a config value via the Forge bridge (dynamic resolution because
-  forge-1.20.1 is not a compile-time dependency of ac module)."
+(defn- persist-config-value!
+  "Persist a config value through the platform adapter when available."
   [domain key value]
-  (try
-    (when-let [set-fn (requiring-resolve 'cn.li.forge1201.config.bridge/set-config-value!)]
-      (set-fn domain key value))
-    (catch Throwable _ nil)))
+  (config-persist/persist-config-value! domain key value))
 
 (defn- build-checkbox-row
   "Copy the t_checkbox template from the XML doc, set label text, wire
@@ -84,7 +80,7 @@
         (events/on-left-click box-w
           (fn [_]
             (let [new-val (not (get))]
-              (set-forge-config-value! domain key new-val)
+              (persist-config-value! domain key new-val)
               (update-tex! new-val))))))
     row))
 

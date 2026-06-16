@@ -15,13 +15,19 @@
   [provider]
   [(:priority provider) (name (:id provider))])
 
+(defn- ns-string
+  [ns-sym]
+  (if-let [ns (namespace ns-sym)]
+    (str ns "." (name ns-sym))
+    (name ns-sym)))
+
 (defn base-family
   "Resolve family keyword from ability namespace symbol.
-  Example: cn.li.ac.content.ability.electromaster.railgun -> :electromaster"
+  Example: cn.li.ac.content.ability.electromaster/railgun -> :electromaster"
   [ns-sym]
-  (let [parts (str/split (name ns-sym) #"\\.")]
-    (when (>= (count parts) 6)
-      (keyword (nth parts 5)))))
+  (let [path (or (namespace ns-sym) (name ns-sym))]
+    (when-let [after-ability (second (str/split path #"ability\." 2))]
+      (keyword (first (str/split after-ability #"\."))))))
 
 (defn fx-namespace?
   [ns-sym]

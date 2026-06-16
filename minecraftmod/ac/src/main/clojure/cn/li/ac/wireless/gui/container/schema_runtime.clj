@@ -36,8 +36,8 @@
   (let [state* (normalize-gui-state [field] state)
         k (:key field)]
     (cond
-      (:gui-init field) ((:gui-init field) state*)
       (some? (present-value state* k)) (get state* k)
+      (:gui-init field) ((:gui-init field) state*)
       (contains? field :default) (:default field)
       :else nil)))
 
