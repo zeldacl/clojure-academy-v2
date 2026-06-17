@@ -15,6 +15,6 @@ ac/src/main/clojure/cn/li/ac/block/wireless_node/logic.clj	node-slot-schema-regi
 ac/src/main/clojure/cn/li/ac/client/toast.clj	toasts*	S2_RUNTIME_COMPONENT	ac/client-toast	Client-local transient toast queue used by overlay rendering.
 ac/src/main/clojure/cn/li/ac/client/font_init.clj	fonts-initialized?	S2_RUNTIME_COMPONENT	ac/client-font-init	Client-local one-time bootstrap guard for AC font registration.
 mc-1.20.1/src/main/clojure/cn/li/mc1201/client/font/msdf_setup.clj	setup-called?	S2_RUNTIME_COMPONENT	mc1201/msdf-setup	Client-local one-time bootstrap guard for MSDF shadow font initialization.
-mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/cgui/font.clj	msdf-base-height	S2_RUNTIME_COMPONENT	mc1201/cgui-font	Fixed MSDF design height (8px) for CGUI font-size scaling.
+mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/cgui/font.clj	msdf-base-height	S2_RUNTIME_COMPONENT	mc1201/cgui-font	STB em height (8px) divisor for CGUI font-size scaling.
 mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/cgui/font.clj	registry	S2_RUNTIME_COMPONENT	mc1201/cgui-font	Client-local CGui font descriptor registry populated during startup.
 mcmod/src/main/clojure/cn/li/mcmod/hooks/core.clj	allowed-runtime-hook-keys*	S2_RUNTIME_COMPONENT	mcmod/hooks-core	Process-local allowlist for neutral runtime-hook validation extended by AC during startup.

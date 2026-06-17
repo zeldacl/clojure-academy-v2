@@ -108,6 +108,23 @@ public final class MsdfFontFace implements AutoCloseable {
         }
     }
 
+    /** Pixel bitmap box at {@link #scale()}, matching vanilla {@code TrueTypeGlyphProvider}. */
+    public int[] getBitmapBox(final int glyphIndex) {
+        try (MemoryStack stack = MemoryStack.stackPush()) {
+            final IntBuffer x0 = stack.mallocInt(1);
+            final IntBuffer y0 = stack.mallocInt(1);
+            final IntBuffer x1 = stack.mallocInt(1);
+            final IntBuffer y1 = stack.mallocInt(1);
+            STBTruetype.stbtt_GetGlyphBitmapBoxSubpixel(
+                    fontInfo, glyphIndex, scale, scale, 0.0f, 0.0f, x0, y0, x1, y1);
+            return new int[] { x0.get(0), y0.get(0), x1.get(0), y1.get(0) };
+        }
+    }
+
+    public float ascentPixels() {
+        return ascent * scale;
+    }
+
     public STBTTVertex.Buffer getGlyphShape(final int glyphIndex) {
         return STBTruetype.stbtt_GetGlyphShape(fontInfo, glyphIndex);
     }

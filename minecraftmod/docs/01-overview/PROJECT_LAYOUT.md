@@ -100,6 +100,8 @@
 
 **Follow-up 能力（已实现）**：单字符串内 per-glyph bold/outline/glow（shader 解码顶点色标志）；`getGlyph` 触发的异步 MTSDF 预烘焙；atlas LRU（默认 4096 glyph）；`start-glow-breath!` ClientTick 呼吸发光。
 
+**字号契约**：`:font-size N` = 屏幕上 **N 像素高**（同 LambdaLib2 `FontOption.fontSize`）。STB 在 8px em 下烘焙；`scale = N / 8`。布局 quad 用 typographic bounds，不含 MSDF bake padding（AC 原版栅格 cell 24×1.4 仅作参考常量 `AC_CHAR_SIZE`）。
+
 **平台初始化**：Forge / Fabric `client/init` 调用 `msdf-setup/init!`；`runtime_bridge` 每 tick 调用 `msdf-tick/client-tick!`。
 
 ## 新增内容应落在何处

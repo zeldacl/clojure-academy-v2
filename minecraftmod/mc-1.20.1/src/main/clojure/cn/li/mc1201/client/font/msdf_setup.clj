@@ -22,11 +22,11 @@
             (log/info "MSDF shadow font initialized from %s" (str path))
             (log/warn "MSDF font face loaded but shader/font not ready; CGUI will use vanilla fallback")))
         (do
-          (cgui-font/set-msdf-base-height! 8.0)
+          (cgui-font/set-msdf-base-height! (float MsdfFontManager/CGUI_BASE_HEIGHT))
           (log/info "No system font detected; CGUI MSDF unavailable, using vanilla font")))
       (catch Exception e
         (log/error "MSDF font setup failed: %s" (ex-message e))
-        (cgui-font/set-msdf-base-height! 8.0)))))
+        (cgui-font/set-msdf-base-height! (float MsdfFontManager/CGUI_BASE_HEIGHT))))))
 
 (defn msdf-ready?
   []

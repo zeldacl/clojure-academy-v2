@@ -16,7 +16,23 @@ import java.util.List;
 public final class MsdfFontManager {
 
     public static final ResourceLocation SHADOW_FONT_ID = new ResourceLocation("my_mod", "msdf_shadow");
+
+    /**
+     * AcademyCraft {@code ClientResources} loads AWT {@code Font.PLAIN} at 24pt.
+     * LambdaLib2 {@code TrueTypeFont} cell: {@code (int)(font.getSize() * 1.4)}.
+     * Used for documentation / future tuning only; screen contract stays {@code :font-size N} = N px.
+     */
+    public static final float AC_AWT_FONT_PT = 24.0f;
+    public static final float AC_CHAR_SIZE_FACTOR = 1.4f;
+    public static final float AC_CHAR_SIZE = AC_AWT_FONT_PT * AC_CHAR_SIZE_FACTOR;
+
+    /** STB em height when baking MSDF (screen px = {@code :font-size N} via CGUI scale). */
     public static final float DESIGN_PIXEL_HEIGHT = 8.0f;
+
+    /**
+     * Divisor for CGUI {@code :font-size N}. {@code scale = N / CGUI_BASE_HEIGHT};
+     * with typographic glyph bounds, screen height = N pixels.
+     */
     public static final float CGUI_BASE_HEIGHT = 8.0f;
 
     private static volatile boolean initialized;

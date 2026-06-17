@@ -1,8 +1,8 @@
 (ns cn.li.mc1201.gui.cgui.font
   "CLIENT-ONLY CGui font bridge using MSDF shadow font (zero bundled assets).
 
-  CGui keywords (:ac-normal, :ac-bold, :ac-italic) map to style flags.
-  Bold is shader-driven (advance-neutral); italic uses vanilla Style.withItalic."
+  Font-size contract: :font-size N draws at N screen pixels (LambdaLib2 FontOption.fontSize).
+  STB em height = 8px; scale = N / 8. Layout uses typographic bounds (no MSDF bake padding)."
   (:require [clojure.string :as str])
   (:import [net.minecraft.network.chat Component Style MutableComponent TextColor]
            [net.minecraft.client.gui Font GuiGraphics Font$DisplayMode]
@@ -12,7 +12,7 @@
            [cn.li.mc1201.client.font.msdf MsdfFontManager MsdfTextFx MsdfGlyphFlags MsdfGlowAnimator]))
 
 (defonce ^:private registry (atom {}))
-(defonce ^:private msdf-base-height (atom 8.0))
+(defonce ^:private msdf-base-height (atom (double MsdfFontManager/CGUI_BASE_HEIGHT)))
 
 (defn set-msdf-base-height! [v]
   (reset! msdf-base-height (double v)))

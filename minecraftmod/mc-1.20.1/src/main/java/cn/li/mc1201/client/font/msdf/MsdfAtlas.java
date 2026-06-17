@@ -116,23 +116,36 @@ public final class MsdfAtlas {
 
         final float invW = 1.0f / page.texture.getPixels().getWidth();
         final float invH = 1.0f / page.texture.getPixels().getHeight();
-        final float u0 = x * invW;
-        final float v0 = y * invH;
-        final float u1 = (x + w) * invW;
-        final float v1 = (y + h) * invH;
 
-        final float lsb = face.getLeftSideBearing(glyphIndex);
-        final float ascent = face.ascent() * face.scale();
         final int pad = BAKE_PADDING;
+        final int[] bb = face.getBitmapBox(glyphIndex);
+        final int bx0 = bb[0];
+        final int by0 = bb[1];
+        final int bx1 = bb[2];
+        final int by1 = bb[3];
+        final int negY0 = -by0;
+        final int negY1 = -by1;
+        final int typoW = Math.max(1, bx1 - bx0);
+        final int typoH = Math.max(1, negY0 - negY1);
 
-        final float left = lsb - pad;
-        final float right = w - pad - lsb;
-        final float up = ascent + pad;
-        final float down = h - pad - ascent;
+        // Typographic quad (vanilla TrueTypeGlyphProvider); MSDF bake pad stays in texture only.
+        final float lsbScaled = face.getLeftSideBearing(glyphIndex);
+        final float bearingX = lsbScaled + bx0;
+        final float bearingY = face.ascentPixels() - negY0;
+        final float left = bearingX;
+        final float right = bearingX + typoW;
+        final float up = bearingY;
+        final float down = bearingY + typoH;
+
+        // UV maps the typographic region inside the padded MSDF slot (aligned with MsdfEngine pad).
+        final float innerU0 = (x + pad) * invW;
+        final float innerV0 = (y + pad) * invH;
+        final float innerU1 = (x + pad + typoW) * invW;
+        final float innerV1 = (y + pad + typoH) * invH;
 
         final BakedSlot slot = new BakedSlot(
                 page.textureId, page.index,
-                u0, v0, u1, v1,
+                innerU0, innerV0, innerU1, innerV1,
                 left, right, up, down,
                 w, h);
         bakedCache.put(glyphIndex, slot);

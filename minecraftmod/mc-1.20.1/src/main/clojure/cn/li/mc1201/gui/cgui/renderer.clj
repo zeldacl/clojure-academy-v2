@@ -1,8 +1,7 @@
 (ns cn.li.mc1201.gui.cgui.renderer
   "CLIENT-ONLY CGUI rendering and root sizing logic.
 
-  Font size contract: :font-size N produces N px on screen via MSDF shadow font
-  (fixed 8px design height) or vanilla fallback when MSDF is unavailable."
+  Font size contract: :font-size N = N screen pixels. STB bake height 8px; scale = N / 8."
   (:require [cn.li.mcmod.gui.cgui-core :as cgui-core]
             [cn.li.mc1201.gui.cgui.font :as font-api]
             [cn.li.mc1201.gui.cgui.assets :as assets]
@@ -23,7 +22,7 @@
   ([initial-cache]
    {:texture-size-cache (atom initial-cache)}))
 
-;; MSDF design height = 8px; :font-size N scales to N px on screen.
+;; STB em 8px; :font-size N → N px on screen (typographic bounds, no bake padding in layout).
 
 (defonce ^:private installed-cgui-renderer-runtime
   (create-cgui-renderer-runtime))
