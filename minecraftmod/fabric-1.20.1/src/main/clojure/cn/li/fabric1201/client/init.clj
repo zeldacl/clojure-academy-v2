@@ -120,4 +120,6 @@
   (level-effect-renderer/init!)
   (screen-host/init!)
   (runtime-bridge/init!)
+  (when-let [msdf-init (requiring-resolve 'cn.li.mc1201.client.font.msdf-setup/init!)]
+    (msdf-init))
   (log/info "Fabric client initialization complete"))

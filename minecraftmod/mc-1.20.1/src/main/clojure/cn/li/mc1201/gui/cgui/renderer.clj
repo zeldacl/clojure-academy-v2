@@ -1,13 +1,8 @@
 (ns cn.li.mc1201.gui.cgui.renderer
   "CLIENT-ONLY CGUI rendering and root sizing logic.
 
-  Font size contract (matching original LambdaLib2 FontOption behavior):
-  :font-size N produces N px text on screen.
-  Formula: font-scale = font-size / CGUI-FONT-BASE-HEIGHT.
-  CGUI-FONT-BASE-HEIGHT = 8.0 px (the glyph height on the font sheet).
-  Guarantee: both minecraft:default (8px bitmap glyphs) and TTF providers
-  with size: 8.0 (see font_datagen.clj) produce 8px base glyphs — so
-  :font-size N is always N px regardless of which font is active."
+  Font size contract: :font-size N produces N px on screen via MSDF shadow font
+  (fixed 8px design height) or vanilla fallback when MSDF is unavailable."
   (:require [cn.li.mcmod.gui.cgui-core :as cgui-core]
             [cn.li.mc1201.gui.cgui.font :as font-api]
             [cn.li.mc1201.gui.cgui.assets :as assets]
@@ -28,10 +23,7 @@
   ([initial-cache]
    {:texture-size-cache (atom initial-cache)}))
 
-;; Contract: font providers must produce 8px glyphs on the font sheet.
-;; minecraft:default = 8px bitmap.  TTF must use size:8.0 (see font_datagen.clj).
-;; Result: :font-size N always = N px on screen, matching original LambdaLib2 behavior.
-(def ^:const cgui-font-base-height 8.0)
+;; MSDF design height = 8px; :font-size N scales to N px on screen.
 
 (defonce ^:private installed-cgui-renderer-runtime
   (create-cgui-renderer-runtime))
@@ -282,8 +274,7 @@
                        raw-text)
                 color (unchecked-int (or (:color state) 0xFFFFFF))
                 font-size (double (or (:font-size state) 8.0))
-                font-scale (* (/ font-size (font-api/get-cgui-font-base-height)) (double scale)
-                             (font-api/get-fallback-scale-factor))
+                font-scale (* (/ font-size (font-api/get-msdf-base-height)) (double scale))
                 align (or (:align state) :left)
                 height-align (or (:height-align state) :top)
                 x-offset (double (or (:x-offset state) 0.0))
@@ -292,11 +283,8 @@
                 emit? (if (contains? state :emit?) (:emit? state) true)
                 font-desc (when-let [fname (:font state)]
                             (font-api/get-font fname))
-                ^Font mc-font (MinecraftClientAccess/getFont)
-                ^net.minecraft.network.chat.Component text-comp
-                (font-api/text-component text font-desc)
-                text-w (* (double (.width mc-font text-comp)) font-scale)
-                text-h (* 8.0 font-scale)
+                text-w (* (font-api/text-width font-desc text font-size) (double scale))
+                text-h (* font-size (double scale))
                 aligned-dx (case align
                              :center (/ (- (double w-int) text-w) 2.0)
                              :right  (- (double w-int) text-w)
@@ -320,9 +308,9 @@
                     (.enableScissor gg x y (+ x w-int) (+ y h-int))
                     (reset! scissor-enabled? true))
                   (.translate ps text-sx text-sy 0.0)
-                  (.scale ps (float font-scale) (float font-scale) 1.0)
-                  (.drawString gg mc-font text-comp (int 0) (int 0)
-                               color (boolean (:shadow? state)))
+                  (.scale ps (float scale) (float scale) 1.0)
+                  (font-api/draw-text! gg font-desc text 0 0 font-size color :left
+                                       (boolean (:shadow? state)))
                   (catch Exception e
                     (log/debug "CGUI textbox render error:" (.getMessage e)))
                   (finally
@@ -335,7 +323,8 @@
               (let [pushed? (atom false)]
                 (try
                   (let [caret-visible? (< (mod (System/currentTimeMillis) 1000) 500)
-                        caret-local-x text-w]
+                        caret-local-x text-w
+                        ^Font mc-font (MinecraftClientAccess/getFont)]
                     (when caret-visible?
                       (.pushPose ps)
                       (reset! pushed? true)

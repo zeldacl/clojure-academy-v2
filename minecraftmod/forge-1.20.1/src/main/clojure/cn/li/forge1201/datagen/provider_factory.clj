@@ -4,7 +4,6 @@
   This namespace is the Forge-specific shell between the shared provider manifest
   and Forge/Minecraft DataGenerator APIs."
   (:require [cn.li.forge1201.datagen.advancement-provider :as adv]
-            [cn.li.forge1201.datagen.font-provider :as font]
             [cn.li.forge1201.datagen.item-model-provider :as imp]
             [cn.li.forge1201.datagen.lang-provider :as lang]
             [cn.li.forge1201.datagen.recipe-provider :as rp]
@@ -19,7 +18,6 @@
   {:blockstate (fn [pack-output _exfile-helper]
                  (blockstate-shell/create-provider pack-output blockstate-provider-name))
    :item-model imp/create
-   :font font/create
    :lang lang/create
    :recipe rp/create
    :advancement adv/create})

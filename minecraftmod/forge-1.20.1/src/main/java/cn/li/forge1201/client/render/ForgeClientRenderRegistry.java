@@ -4,6 +4,7 @@ import clojure.java.api.Clojure;
 import clojure.lang.IFn;
 import cn.li.forge1201.MyMod1201;
 import cn.li.forge1201.entity.ModEntities;
+import cn.li.mc1201.client.font.msdf.MsdfRenderTypes;
 import cn.li.mc1201.client.render.EffectRendererDispatcher;
 import cn.li.mc1201.client.render.ModRenderTypes;
 import cn.li.mc1201.client.render.RenderProfileBootstrap;
@@ -107,6 +108,12 @@ public final class ForgeClientRenderRegistry {
                 plasmaBodyShader = shader;
                 ModRenderTypes.setPlasmaBodyShader(shader);
             }
+        );
+        event.registerShader(
+            new ShaderInstance(event.getResourceProvider(),
+                new ResourceLocation(MyMod1201.MODID, "msdf_text"),
+                MsdfRenderTypes.MSDF_TEXT_FORMAT),
+            MsdfRenderTypes::setMsdfShader
         );
     }
 

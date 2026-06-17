@@ -20,10 +20,6 @@
                 :summary-label "item-model"
                 :forge {:factory :item-model}
                 :fabric {:factory :item-model}}
-   :font {:label "Font"
-          :summary-label "font"
-          :forge {:factory :font}
-          :fabric {:factory :font}}
    :recipe {:label "Recipe"
             :summary-label "recipe"
             :forge {:factory :recipe}
@@ -34,8 +30,8 @@
                  :fabric {:factory :advancement}}})
 
 (def ^:private platform-orders
-  {:forge-1.20.1 [:blockstate :item-model :font :lang :recipe :advancement]
-   :fabric-1.20.1 [:lang :blockstate :item-model :font :advancement :recipe]})
+  {:forge-1.20.1 [:blockstate :item-model :lang :recipe :advancement]
+   :fabric-1.20.1 [:lang :blockstate :item-model :advancement :recipe]})
 
 (def ^:private platform-provider-keys
   {:forge-1.20.1 :forge

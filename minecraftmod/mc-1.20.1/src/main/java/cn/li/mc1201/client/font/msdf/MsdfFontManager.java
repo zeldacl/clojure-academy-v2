@@ -1,0 +1,82 @@
+package cn.li.mc1201.client.font.msdf;
+
+import com.mojang.blaze3d.font.GlyphProvider;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.font.FontSet;
+import net.minecraft.client.renderer.texture.TextureManager;
+import net.minecraft.resources.ResourceLocation;
+
+import java.nio.file.Path;
+import java.util.List;
+
+/**
+ * Shadow MSDF font: isolated FontSet + Font for mod CGUI text.
+ */
+public final class MsdfFontManager {
+
+    public static final ResourceLocation SHADOW_FONT_ID = new ResourceLocation("my_mod", "msdf_shadow");
+    public static final float DESIGN_PIXEL_HEIGHT = 8.0f;
+    public static final float CGUI_BASE_HEIGHT = 8.0f;
+
+    private static volatile boolean initialized;
+    private static volatile boolean available;
+    private static Font shadowFont;
+    private static MsdfAtlas atlas;
+    private static MsdfGlyphProvider provider;
+
+    private MsdfFontManager() {
+    }
+
+    public static boolean init(final Path fontPath) {
+        if (initialized) {
+            return available;
+        }
+        synchronized (MsdfFontManager.class) {
+            if (initialized) {
+                return available;
+            }
+            initialized = true;
+            try {
+                final Minecraft mc = Minecraft.getInstance();
+                final TextureManager textureManager = mc.getTextureManager();
+                final MsdfFontFace face = new MsdfFontFace(fontPath, DESIGN_PIXEL_HEIGHT);
+                atlas = new MsdfAtlas(textureManager);
+                provider = new MsdfGlyphProvider(face, atlas, MsdfAtlas.DEFAULT_PX_RANGE);
+
+                final FontSet fontSet = new FontSet(textureManager, SHADOW_FONT_ID);
+                fontSet.reload(List.<GlyphProvider>of(provider));
+                shadowFont = new Font(rl -> fontSet, false);
+                available = true;
+            } catch (Exception e) {
+                available = false;
+                shadowFont = null;
+            }
+            return available;
+        }
+    }
+
+    public static boolean isAvailable() {
+        return available && shadowFont != null && MsdfRenderTypes.getMsdfShader() != null;
+    }
+
+    public static boolean hasFontFace() {
+        return available && shadowFont != null;
+    }
+
+    public static Font shadowFont() {
+        return shadowFont;
+    }
+
+    public static MsdfGlyphProvider provider() {
+        return provider;
+    }
+
+    public static MsdfAtlas atlas() {
+        return atlas;
+    }
+
+    public static float cguiBaseHeight() {
+        return CGUI_BASE_HEIGHT;
+    }
+}

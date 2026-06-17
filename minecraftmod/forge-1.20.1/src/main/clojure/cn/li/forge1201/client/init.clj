@@ -217,6 +217,8 @@
   (overlay-renderer/init!)
   (screen-host/init!)
   (cgui-screen-bridge/init!)
+  (when-let [msdf-init (requiring-resolve 'cn.li.mc1201.client.font.msdf-setup/init!)]
+    (msdf-init))
   (particle/init!)
   (sound/init!)
   (hand-effect-renderer/init!)

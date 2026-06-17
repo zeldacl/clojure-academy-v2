@@ -1,167 +1,231 @@
 (ns cn.li.mc1201.gui.cgui.font
-  "CLIENT-ONLY CGui font bridge using vanilla FontManager resource-pack fonts.
+  "CLIENT-ONLY CGui font bridge using MSDF shadow font (zero bundled assets).
 
-  Minecraft, Forge, and Fabric share the same client font pipeline (no loader-specific
-  font draw API):
-  - Define fonts under assets/<namespace>/font/<id>.json (ttf / reference providers).
-    See https://minecraft.wiki/w/Font
-  - Select a font in text via Component style `font` (e.g. my_mod:ac_normal).
-  - Measure and draw with net.minecraft.client.gui.Font + GuiGraphics.drawString.
-
-  CGui keywords (:ac-normal, :ac-bold, :ac-italic) map to font ids and style flags."
+  CGui keywords (:ac-normal, :ac-bold, :ac-italic) map to style flags.
+  Bold is shader-driven (advance-neutral); italic uses vanilla Style.withItalic."
+  (:require [clojure.string :as str])
   (:import [net.minecraft.network.chat Component Style MutableComponent]
-           [net.minecraft.resources ResourceLocation]
-           [net.minecraft.client.gui Font GuiGraphics]
+           [net.minecraft.client.gui Font GuiGraphics Font$DisplayMode]
            [com.mojang.blaze3d.vertex PoseStack]
-           [cn.li.mc1201.client MinecraftClientAccess]))
-
-(def ^:private font-namespace "my_mod")
-
-;; --- dynamic base-height (default 8.0 for minecraft:default bitmap) ---
-;; Set to the TTF provider :size when a system font is active so that
-;; :font-size N always produces N px on screen regardless of the TTF size.
-(defonce ^:private cgui-font-base-height (atom 8.0))
-
-(defn set-cgui-font-base-height! [v]
-  (reset! cgui-font-base-height (double v)))
-
-(defn get-cgui-font-base-height []
-  @cgui-font-base-height)
-
-;; ---------------------------------------------------------------------------
-;; Fallback scale factor for minecraft:default bitmap font.
-;; Set by font-pack-setup at runtime: 1.0 when a system TTF is active,
-;; ~0.85 when the default bitmap is used (to compensate for thicker pixel
-;; strokes so the visual size matches TrueType reference text).
-;; ---------------------------------------------------------------------------
-(defonce ^:private fallback-scale-factor (atom 1.0))
-
-(defn set-fallback-scale-factor!
-  "Update the per-frame font-scale multiplier for bitmap-fallback mode.
-  Called once during client startup by font-pack-setup."
-  [v]
-  (reset! fallback-scale-factor (double v)))
-
-(defn get-fallback-scale-factor
-  "Return the current fallback scale factor."
-  []
-  @fallback-scale-factor)
-
-;; --- color compensation for TrueType vector fonts ---
-;; Vector fonts render lighter than pixel fonts at the same hex color because
-;; anti-aliased strokes use fewer opaque pixels.  Multiply neutral/gray tones
-;; by this factor (≤1.0 darkens) to match the visual weight of pixel text.
-;; Default 1.0 (no compensation); set by font-pack-setup when a system TTF is active.
-(defonce ^:private ttf-color-factor (atom 1.0))
-
-(defn set-ttf-color-factor! [v]
-  (reset! ttf-color-factor (double v)))
-
-(defn ^:private compensate-color
-  "Apply the TTF color-compensation factor to neutral (gray-tone) colors.
-  Leaves saturated / bright colors unchanged."
-  [color-int]
-  (let [factor @ttf-color-factor]
-    (if (== factor 1.0)
-      color-int
-      (let [r (bit-and (bit-shift-right color-int 16) 0xFF)
-            g (bit-and (bit-shift-right color-int 8) 0xFF)
-            b (bit-and color-int 0xFF)
-            max-diff (max (Math/abs (- r g)) (Math/abs (- g b)) (Math/abs (- r b)))]
-        (if (< max-diff 20) ;; neutral tone — R≈G≈B within 20
-          (let [r' (int (* (double r) factor))
-                g' (int (* (double g) factor))
-                b' (int (* (double b) factor))]
-            (bit-or (bit-and color-int 0xFF000000)
-                    (bit-shift-left r' 16)
-                    (bit-shift-left g' 8)
-                    b'))
-          color-int)))))
+           [org.joml Matrix4f]
+           [cn.li.mc1201.client MinecraftClientAccess]
+           [cn.li.mc1201.client.font.msdf MsdfFontManager MsdfTextFx]))
 
 (defonce ^:private registry (atom {}))
+(defonce ^:private msdf-base-height (atom 8.0))
 
-(defn- resource-location
-  [path]
-  (ResourceLocation. font-namespace path))
+(defn set-msdf-base-height! [v]
+  (reset! msdf-base-height (double v)))
+
+(defn get-msdf-base-height []
+  @msdf-base-height)
 
 (defn register-font!
   "Register a CGui font keyword.
 
   `spec` keys:
-  - :location — ResourceLocation or string path under font-namespace (required)
-  - :bold — apply bold style when drawing (optional)
-  - :italic — apply italic style when drawing (optional)"
-  [name {:keys [location bold italic]}]
-  (let [loc (cond
-              (instance? ResourceLocation location) location
-              (string? location) (resource-location location)
-              :else (resource-location "ac_normal"))]
-    (swap! registry assoc name {:location loc
-                                :bold (boolean bold)
-                                :italic (boolean italic)})
-    name))
+  - :bold? — shader thickness (optional)
+  - :italic? — vanilla italic style (optional)"
+  [name {:keys [bold? italic?]}]
+  (swap! registry assoc name {:bold? (boolean bold?) :italic? (boolean italic?)})
+  name)
 
-(defn get-font
-  "Look up a registered font descriptor by keyword. Returns nil if not found."
-  [name]
+(defn get-font [name]
   (get @registry name))
 
-(defn font-exists?
-  [name]
+(defn font-exists? [name]
   (contains? @registry name))
 
-(defn- build-style
-  ^Style [{:keys [location bold italic]}]
-  (cond-> Style/EMPTY
-    (instance? ResourceLocation location) (.withFont ^ResourceLocation location)
-    bold (.withBold true)
-    italic (.withItalic true)))
+(defn- msdf-active? []
+  (MsdfFontManager/isAvailable))
 
-(defn text-component
-  "Build a Component using the registered font descriptor (or plain text when nil)."
-  (^Component [^String text font-desc]
-   (if font-desc
-     (let [^MutableComponent c (Component/literal (or text ""))]
-       (.withStyle c ^Style (build-style font-desc)))
-     (Component/literal (or text "")))))
+(defn- vanilla-font ^Font []
+  (MinecraftClientAccess/getFont))
 
-(defn- scaled-width
-  [^Font mc-font ^Component comp font-size]
-  (* (double (.width mc-font comp))
-     (/ (double font-size) (get-cgui-font-base-height))
-     (get-fallback-scale-factor)))
+(defn- shadow-font ^Font []
+  (MsdfFontManager/shadowFont))
 
-(defn text-width
-  "Width of `text` at CGui font-size (8pt = vanilla glyph grid)."
-  [font-desc ^String text font-size]
-  (scaled-width (MinecraftClientAccess/getFont)
-                (text-component text font-desc)
-                font-size))
+(defn- build-style ^Style [{:keys [italic?]}]
+  (if italic?
+    (.withItalic Style/EMPTY true)
+    Style/EMPTY))
+
+(defn- int->color-argb [color-int]
+  (bit-or (bit-and color-int 0xFFFFFF) 0xFF000000))
+
+(defn- codepoints [^String text]
+  (.toArray (.codePoints text)))
+
+(defn- segment-runs [^String text]
+  (let [face (when (MsdfFontManager/hasFontFace)
+               (.face (MsdfFontManager/provider)))
+        cps (codepoints text)]
+    (cond
+      (or (nil? face) (zero? (alength cps)))
+      [{:msdf? false :text (or text "")}]
+
+      :else
+      (let [runs (reduce
+                  (fn [acc cp]
+                    (let [ch (Character/toString cp)
+                          msdf? (.hasGlyph face cp)]
+                      (if (empty? acc)
+                        [{:msdf? msdf? :text ch}]
+                        (let [last-run (peek acc)
+                              same? (= msdf? (:msdf? last-run))]
+                          (if same?
+                            (conj (pop acc) (update last-run :text str ch))
+                            (conj acc {:msdf? msdf? :text ch}))))))
+                  []
+                  (map #(aget cps %) (range (alength cps))))]
+        (if (seq runs) runs [{:msdf? false :text text}])))))
+
+(defn- scale-factor [font-size]
+  (* (/ (double font-size) (get-msdf-base-height)) 1.0))
+
+(defn- component-for-run [^String text font-desc]
+  (let [^MutableComponent c (Component/literal (or text ""))]
+    (.withStyle c ^Style (build-style (or font-desc {})))))
+
+(defn- draw-run! [^GuiGraphics gg ^Font font ^Component comp x y color shadow?]
+  (let [^PoseStack ps (.pose gg)
+        matrix (.pose (.last ps))
+        buffer (.bufferSource gg)
+        display Font$DisplayMode/NORMAL
+        light 15728880]
+    (.drawInBatch font comp (float x) (float y) (int color) (boolean shadow?)
+                  ^Matrix4f matrix buffer display 0 light)))
+
+(defn- segmented-width [font-desc ^String text]
+  (let [^Font shadow (shadow-font)
+        ^Font vanilla (vanilla-font)
+        run-widths (map (fn [{:keys [msdf? text]}]
+                          (let [^Component comp (component-for-run text font-desc)
+                                ^Font font (if msdf? shadow vanilla)]
+                            (double (.width font comp))))
+                        (segment-runs text))]
+    (reduce + 0.0 run-widths)))
+
+(defn text-width [font-desc ^String text font-size]
+  (let [scale (scale-factor font-size)]
+    (cond
+      (str/blank? text) 0.0
+      (or (msdf-active?) (MsdfFontManager/hasFontFace))
+      (* scale (segmented-width font-desc text))
+
+      :else
+      (* (double (.width (vanilla-font) (Component/literal text))) scale))))
+
+(defn- aligned-x [align x total-w]
+  (case align
+    :center (- (double x) (/ total-w 2.0))
+    :right (- (double x) total-w)
+    (double x)))
+
+(defn- draw-vanilla-run! [^GuiGraphics gg font-desc ^String text x y font-size color shadow?]
+  (let [^Font mc-font (vanilla-font)
+        ^Component comp (component-for-run text font-desc)
+        scale (float (scale-factor font-size))
+        ^PoseStack ps (.pose gg)]
+    (.pushPose ps)
+    (try
+      (.translate ps (double x) (double y) 0.0)
+      (.scale ps scale scale 1.0)
+      (.drawString gg mc-font comp 0 0 (int color) (boolean shadow?))
+      (finally
+        (.popPose ps)))))
+
+(defn- draw-msdf-runs! [^GuiGraphics gg font-desc ^String text x y font-size color shadow?]
+  (let [bold? (boolean (:bold? font-desc))
+        scale (scale-factor font-size)
+        color' (int->color-argb (unchecked-int color))
+        ^Font shadow (shadow-font)
+        ^Font vanilla (vanilla-font)
+        ^PoseStack ps (.pose gg)]
+    (MsdfTextFx/resetForDraw bold?)
+    (.pushPose ps)
+    (try
+      (.translate ps (double x) (double y) 0.0)
+      (.scale ps (float scale) (float scale) 1.0)
+      (loop [runs (segment-runs text) dx 0.0]
+        (when (seq runs)
+          (let [{:keys [msdf? text]} (first runs)
+                ^Component comp (component-for-run text font-desc)
+                ^Font font (if msdf? shadow vanilla)
+                w (double (.width font comp))]
+            (draw-run! gg font comp dx 0 color' shadow?)
+            (recur (rest runs) (+ dx w)))))
+      (finally
+        (.popPose ps)))
+    (.endBatch (.bufferSource gg))))
+
+(defn- draw-fallback-runs! [^GuiGraphics gg font-desc ^String text x y font-size color shadow?]
+  "Segmented vanilla draw when MSDF face exists but shader is not ready (layout parity)."
+  (let [scale (scale-factor font-size)
+        color' (int->color-argb (unchecked-int color))
+        ^Font vanilla (vanilla-font)
+        ^PoseStack ps (.pose gg)]
+    (.pushPose ps)
+    (try
+      (.translate ps (double x) (double y) 0.0)
+      (.scale ps (float scale) (float scale) 1.0)
+      (loop [runs (segment-runs text) dx 0.0]
+        (when (seq runs)
+          (let [{:keys [text]} (first runs)
+                ^Component comp (component-for-run text font-desc)
+                w (double (.width vanilla comp))]
+            (draw-run! gg vanilla comp dx 0 color' shadow?)
+            (recur (rest runs) (+ dx w)))))
+      (finally
+        (.popPose ps)))
+    (.endBatch (.bufferSource gg))))
 
 (defn draw-text!
-  "Draw `text` at (`x`,`y`) with vanilla Font + GuiGraphics.
+  "Draw `text` at (`x`,`y`) with MSDF shadow font (or vanilla fallback).
 
   `align` is one of :left, :center, :right (relative to `x`)."
   [^GuiGraphics gg font-desc ^String text x y font-size color align shadow?]
   (when (seq text)
-    (let [^Font mc-font (MinecraftClientAccess/getFont)
-          ^Component comp (text-component text font-desc)
-          scale (float (* (/ (double font-size) (get-cgui-font-base-height)) (get-fallback-scale-factor)))
-          total-w (scaled-width mc-font comp font-size)
-          x' (case align
-               :center (- (double x) (/ total-w 2.0))
-               :right (- (double x) total-w)
-               (double x))
-          color' (compensate-color (unchecked-int color))
-          ^PoseStack ps (.pose gg)]
-      (.pushPose ps)
-      (try
-        (.translate ps x' (double y) 0.0)
-        (.scale ps scale scale 1.0)
-        (.drawString gg mc-font comp (int 0) (int 0) (int color') (boolean shadow?))
-        (finally
-          (.popPose ps))))))
+    (let [total-w (text-width font-desc text font-size)
+          x' (aligned-x align x total-w)]
+      (cond
+        (msdf-active?)
+        (draw-msdf-runs! gg font-desc text x' y font-size color shadow?)
 
-(def default-mc-font
-  "Marker for callers that intentionally use the default minecraft font."
-  nil)
+        (MsdfFontManager/hasFontFace)
+        (draw-fallback-runs! gg font-desc text x' y font-size color shadow?)
+
+        :else
+        (draw-vanilla-run! gg font-desc text x' y font-size color shadow?)))))
+
+(def default-mc-font nil)
+
+(defn set-outline! [r g b a width]
+  (MsdfTextFx/setOutline (float r) (float g) (float b) (float a) (float width)))
+
+(defn set-glow! [r g b a radius]
+  (MsdfTextFx/setGlow (float r) (float g) (float b) (float a) (float radius)))
+
+(defn set-shadow-offset! [x y]
+  (MsdfTextFx/setShadowOffset (float x) (float y)))
+
+(defmacro with-text-fx
+  "Apply MSDF text effects for `body`, then reset uniforms.
+
+  `fx` keys: :outline [r g b a width], :glow [r g b a radius],
+  :shadow-offset [x y], :thickness float."
+  [[{:keys [outline glow shadow-offset thickness]}] & body]
+  `(try
+     ~(when outline `(set-outline! ~@(map float outline)))
+     ~(when glow `(set-glow! ~@(map float glow)))
+     ~(when shadow-offset `(set-shadow-offset! ~@(map float shadow-offset)))
+     ~(when thickness `(MsdfTextFx/setThicknessOffset (float ~thickness)))
+     (do ~@body)
+     (finally
+       (MsdfTextFx/resetForDraw false))))
+
+(defn get-cgui-font-base-height []
+  (get-msdf-base-height))
+
+(defn get-fallback-scale-factor []
+  1.0)

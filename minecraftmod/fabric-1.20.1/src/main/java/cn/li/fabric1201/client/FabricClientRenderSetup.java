@@ -2,6 +2,7 @@ package cn.li.fabric1201.client;
 
 import cn.li.fabric1201.entity.FabricEntities;
 import cn.li.fabric1201.shim.FabricClientHelper;
+import cn.li.mc1201.client.font.msdf.MsdfRenderTypes;
 import cn.li.mc1201.client.render.EffectRendererDispatcher;
 import cn.li.mc1201.client.render.RenderProfileBootstrap;
 import cn.li.mc1201.client.render.effect.ScriptedBlockBodyRenderer;
@@ -10,15 +11,32 @@ import cn.li.mc1201.entity.spec.ScriptedBlockBodySpec;
 import cn.li.mc1201.entity.spec.ScriptedEffectSpec;
 import cn.li.mc1201.entity.spec.ScriptedMarkerSpec;
 import cn.li.mc1201.entity.spec.ScriptedRaySpec;
+import net.fabricmc.fabric.api.client.rendering.v1.CoreShaderRegistrationCallback;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.client.renderer.entity.ThrownItemRenderer;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EntityType;
+
+import java.io.IOException;
 
 /**
  * Fabric entity renderer registration for scripted runtime entities.
  */
 public final class FabricClientRenderSetup {
     private FabricClientRenderSetup() {
+    }
+
+    public static void registerClientHooks() {
+        CoreShaderRegistrationCallback.EVENT.register(context -> {
+            try {
+                context.register(
+                        new ResourceLocation("my_mod", "msdf_text"),
+                        MsdfRenderTypes.MSDF_TEXT_FORMAT,
+                        MsdfRenderTypes::setMsdfShader);
+            } catch (IOException e) {
+                throw new RuntimeException("Failed to register MSDF text shader", e);
+            }
+        });
     }
 
     public static void registerEntityRenderers() {

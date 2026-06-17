@@ -9,7 +9,6 @@
    :achievements []
    :translations {:en_us {} :zh_cn {} :zh_tw {} :ja_jp {} :ko_kr {} :ru_ru {}}
    :recipes []
-   :fonts []
    :item-overlay-fns {}})
 
 (def ^:private datagen-metadata-lock
@@ -105,22 +104,6 @@
 
 (defn get-recipes []
   (:recipes (datagen-metadata-runtime-state)))
-
-(defn set-fonts!
-  [fonts]
-  (let [normalized (vec (or fonts []))]
-    (doseq [{:keys [id providers]} normalized]
-      (when (or (not (string? id)) (str/blank? id))
-        (throw (ex-info "font definition requires non-blank string :id"
-                        {:font-definition {:id id :providers providers}})))
-      (when-not (sequential? providers)
-        (throw (ex-info "font definition requires sequential :providers"
-                        {:font-definition {:id id :providers providers}}))))
-    (update-datagen-metadata-runtime! assoc :fonts normalized)
-    nil))
-
-(defn get-fonts []
-  (:fonts (datagen-metadata-runtime-state)))
 
 (defn register-item-overlay-fn!
   [overlay-id f]

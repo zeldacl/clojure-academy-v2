@@ -2,6 +2,7 @@ package cn.li.fabric1201;
 
 import clojure.java.api.Clojure;
 import clojure.lang.IFn;
+import cn.li.fabric1201.client.FabricClientRenderSetup;
 import net.fabricmc.api.ClientModInitializer;
 
 /**
@@ -10,6 +11,7 @@ import net.fabricmc.api.ClientModInitializer;
 public class MyModFabricClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
+        FabricClientRenderSetup.registerClientHooks();
         try {
             IFn require = Clojure.var("clojure.core", "require");
 

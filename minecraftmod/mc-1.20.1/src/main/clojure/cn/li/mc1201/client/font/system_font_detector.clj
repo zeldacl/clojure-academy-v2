@@ -13,7 +13,7 @@
   "Ordered list of candidate system fonts.  Earlier entries take priority.
   Each entry maps:
     :path   — absolute filesystem path string
-    :profile — keyword matching a key in font-profiles.clj
+    :profile — keyword identifying the font family (legacy; unused by MSDF pipeline)
     :ext    — file extension (ttf or ttc)"
   [{:path "C:\\Windows\\Fonts\\simhei.ttf"
     :profile :simhei
