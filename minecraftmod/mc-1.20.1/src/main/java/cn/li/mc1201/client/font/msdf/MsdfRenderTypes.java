@@ -20,7 +20,7 @@ public final class MsdfRenderTypes extends RenderType {
             new ShaderStateShard(MsdfRenderTypes::bindMsdfShader);
 
     private static final Function<ResourceLocation, RenderType> MSDF_TEXT_NORMAL =
-            Util.memoize(texture -> createMsdfText(texture, "normal", LEQUAL_DEPTH_TEST, NO_LAYERING));
+            Util.memoize(texture -> createMsdfText(texture, "normal", NO_DEPTH_TEST, NO_LAYERING));
 
     private static final Function<ResourceLocation, RenderType> MSDF_TEXT_SEE_THROUGH =
             Util.memoize(texture -> createMsdfText(texture, "see_through", GREATER_DEPTH_TEST, NO_LAYERING));
@@ -50,7 +50,7 @@ public final class MsdfRenderTypes extends RenderType {
                 CompositeState.builder()
                         .setShaderState(MSDF_SHADER_STATE)
                         .setTransparencyState(TRANSLUCENT_TRANSPARENCY)
-                        .setLightmapState(LIGHTMAP)
+                        .setLightmapState(NO_LIGHTMAP)
                         .setDepthTestState(depthTest)
                         .setLayeringState(layering)
                         .setWriteMaskState(COLOR_WRITE)

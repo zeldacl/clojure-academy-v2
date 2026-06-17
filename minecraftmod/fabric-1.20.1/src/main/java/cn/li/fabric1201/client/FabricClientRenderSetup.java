@@ -2,8 +2,11 @@ package cn.li.fabric1201.client;
 
 import cn.li.fabric1201.entity.FabricEntities;
 import cn.li.fabric1201.shim.FabricClientHelper;
+import cn.li.mc1201.clj.ClojureInterop;
 import cn.li.mc1201.client.font.msdf.MsdfRenderTypes;
 import cn.li.mc1201.client.render.EffectRendererDispatcher;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import cn.li.mc1201.client.render.RenderProfileBootstrap;
 import cn.li.mc1201.client.render.effect.ScriptedBlockBodyRenderer;
 import cn.li.mc1201.entity.ScriptedEntitySpecAccess;
@@ -23,6 +26,8 @@ import java.io.IOException;
  * Fabric entity renderer registration for scripted runtime entities.
  */
 public final class FabricClientRenderSetup {
+    private static final Logger LOGGER = LogManager.getLogger();
+
     private FabricClientRenderSetup() {
     }
 
@@ -33,8 +38,10 @@ public final class FabricClientRenderSetup {
                         new ResourceLocation("my_mod", "msdf_text"),
                         MsdfRenderTypes.MSDF_TEXT_FORMAT,
                         MsdfRenderTypes::setMsdfShader);
+                ClojureInterop.requireNamespace("cn.li.mc1201.client.font.msdf-setup");
+                ClojureInterop.invoke("cn.li.mc1201.client.font.msdf-setup", "on-shader-ready!");
             } catch (IOException e) {
-                throw new RuntimeException("Failed to register MSDF text shader", e);
+                LOGGER.error("Failed to register MSDF text shader", e);
             }
         });
     }

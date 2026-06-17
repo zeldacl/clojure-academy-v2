@@ -272,7 +272,7 @@
                 text (if (and (:masked? state) (seq raw-text))
                        (apply str (repeat (count raw-text) \*))
                        raw-text)
-                color (unchecked-int (or (:color state) 0xFFFFFF))
+                color (font-api/normalize-color-int (or (:color state) 0xFFFFFF))
                 font-size (double (or (:font-size state) 8.0))
                 font-scale (* (/ font-size (font-api/get-msdf-base-height)) (double scale))
                 align (or (:align state) :left)
@@ -312,7 +312,7 @@
                   (font-api/draw-text! gg font-desc text 0 0 font-size color :left
                                        (boolean (:shadow? state)))
                   (catch Exception e
-                    (log/debug "CGUI textbox render error:" (.getMessage e)))
+                    (log/warn "CGUI textbox render error:" (.getMessage e)))
                   (finally
                     (when @scissor-enabled?
                       (try (.disableScissor gg) (catch Exception _ nil)))

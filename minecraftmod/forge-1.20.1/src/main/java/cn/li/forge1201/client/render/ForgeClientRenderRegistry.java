@@ -4,8 +4,11 @@ import clojure.java.api.Clojure;
 import clojure.lang.IFn;
 import cn.li.forge1201.MyMod1201;
 import cn.li.forge1201.entity.ModEntities;
+import cn.li.mc1201.clj.ClojureInterop;
 import cn.li.mc1201.client.font.msdf.MsdfRenderTypes;
 import cn.li.mc1201.client.render.EffectRendererDispatcher;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import cn.li.mc1201.client.render.ModRenderTypes;
 import cn.li.mc1201.client.render.RenderProfileBootstrap;
 import cn.li.mc1201.client.render.effect.ScriptedBlockBodyRenderer;
@@ -31,6 +34,7 @@ import java.io.IOException;
  * Centralized client rendering registration entrypoint for Forge.
  */
 public final class ForgeClientRenderRegistry {
+    private static final Logger LOGGER = LogManager.getLogger();
     private static ShaderInstance plasmaBodyShader;
 
     private ForgeClientRenderRegistry() {
@@ -109,12 +113,18 @@ public final class ForgeClientRenderRegistry {
                 ModRenderTypes.setPlasmaBodyShader(shader);
             }
         );
-        event.registerShader(
-            new ShaderInstance(event.getResourceProvider(),
-                new ResourceLocation(MyMod1201.MODID, "msdf_text"),
-                MsdfRenderTypes.MSDF_TEXT_FORMAT),
-            MsdfRenderTypes::setMsdfShader
-        );
+        try {
+            event.registerShader(
+                new ShaderInstance(event.getResourceProvider(),
+                    new ResourceLocation(MyMod1201.MODID, "msdf_text"),
+                    MsdfRenderTypes.MSDF_TEXT_FORMAT),
+                MsdfRenderTypes::setMsdfShader
+            );
+            ClojureInterop.requireNamespace("cn.li.mc1201.client.font.msdf-setup");
+            ClojureInterop.invoke("cn.li.mc1201.client.font.msdf-setup", "on-shader-ready!");
+        } catch (IOException e) {
+            LOGGER.error("Failed to register MSDF text shader", e);
+        }
     }
 
     public static ShaderInstance getPlasmaBodyShader() {

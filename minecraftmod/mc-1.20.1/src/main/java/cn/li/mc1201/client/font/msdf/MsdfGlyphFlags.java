@@ -15,6 +15,9 @@ public final class MsdfGlyphFlags {
     }
 
     public static int encodeRgb(final int rgb, final int flags) {
+        if ((flags & FLAG_MASK) == 0) {
+            return rgb & 0xFFFFFF;
+        }
         return (rgb & 0xFFFFF8) | (flags & FLAG_MASK);
     }
 

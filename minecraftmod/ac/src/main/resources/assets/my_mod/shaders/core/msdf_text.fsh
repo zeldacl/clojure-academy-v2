@@ -3,7 +3,6 @@
 #moj_import <fog.glsl>
 
 uniform sampler2D Sampler0;
-uniform sampler2D Sampler2;
 uniform vec4 ColorModulator;
 uniform float FogStart;
 uniform float FogEnd;
@@ -20,7 +19,6 @@ uniform vec2 u_ShadowOffset;
 in float vertexDistance;
 in vec4 vertexColor;
 in vec2 texCoord0;
-in vec2 texCoord2;
 
 out vec4 fragColor;
 
@@ -41,8 +39,10 @@ void main() {
     float w = clamp(0.5 / length(vec2(dFdx(sdShape), dFdy(sdShape))), 0.0, 0.5);
 
     int blueBits = int(floor(vertexColor.b * 255.0 + 0.5));
-    int glyphFlags = blueBits & 7;
-    vec3 textRgb = vec3(vertexColor.r, vertexColor.g, float(blueBits & ~7) / 255.0);
+    // Unencoded white (255) must not activate per-glyph flag bits in the blue channel.
+    int glyphFlags = (blueBits == 255) ? 0 : (blueBits & 7);
+    vec3 textRgb = vec3(vertexColor.r, vertexColor.g,
+                        float((blueBits == 255) ? 255 : (blueBits & ~7)) / 255.0);
 
     float thicknessOffset = u_ThicknessOffset;
     float outlineWidth = u_OutlineWidth;
@@ -84,6 +84,7 @@ void main() {
     }
 
     finalColor = mix(finalColor, vec4(textRgb, 1.0), fontAlpha);
+    finalColor.a = max(finalColor.a, fontAlpha) * vertexColor.a;
 
     if (finalColor.a < 0.01) {
         discard;

@@ -20,9 +20,10 @@ public final class MsdfGlyphProvider implements GlyphProvider {
         this.supportedGlyphs = scanSupportedGlyphs(face);
     }
 
+    /** Match vanilla {@code TrueTypeGlyphProvider} BMP scan (not full Unicode). */
     private static IntSet scanSupportedGlyphs(final MsdfFontFace face) {
         final IntOpenHashSet set = new IntOpenHashSet();
-        for (int cp = 0; cp <= 0x10FFFF; cp++) {
+        for (int cp = 0; cp < 65535; cp++) {
             if (face.hasGlyph(cp)) {
                 set.add(cp);
             }
@@ -38,7 +39,7 @@ public final class MsdfGlyphProvider implements GlyphProvider {
             return null;
         }
         atlas.prefetchGlyph(face, glyphIndex);
-        return new MsdfGlyphInfo(face, atlas, glyphIndex, pxRange);
+        return new MsdfGlyphInfo(face, atlas, glyphIndex);
     }
 
     @Override

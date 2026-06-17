@@ -5,9 +5,9 @@
   STB em height = 8px; scale = N / 8. Layout uses typographic bounds (no MSDF bake padding)."
   (:require [clojure.string :as str])
   (:import [net.minecraft.network.chat Component Style MutableComponent TextColor]
-           [net.minecraft.client.gui Font GuiGraphics Font$DisplayMode]
+           [net.minecraft.client.gui Font GuiGraphics]
            [com.mojang.blaze3d.vertex PoseStack]
-           [org.joml Matrix4f]
+           [com.mojang.blaze3d.systems RenderSystem]
            [cn.li.mc1201.client MinecraftClientAccess]
            [cn.li.mc1201.client.font.msdf MsdfFontManager MsdfTextFx MsdfGlyphFlags MsdfGlowAnimator]))
 
@@ -40,7 +40,12 @@
 (defn font-exists? [name]
   (contains? @registry name))
 
+(defn- ensure-msdf-ready! []
+  (when-let [ensure! (requiring-resolve 'cn.li.mc1201.client.font.msdf-setup/ensure-ready!)]
+    (ensure!)))
+
 (defn- msdf-active? []
+  (ensure-msdf-ready!)
   (MsdfFontManager/isAvailable))
 
 (defn- vanilla-font ^Font []
@@ -54,25 +59,34 @@
     (.withItalic Style/EMPTY true)
     Style/EMPTY))
 
-(defn- int->color-argb [color-int]
-  (bit-or (bit-and color-int 0xFFFFFF) 0xFF000000))
+(def ^:private argb-alpha-mask -16777216) ; 0xFF000000 as signed int
+
+(defn normalize-color-int
+  "Ensure ARGB with full alpha; always returns a signed 32-bit int (Minecraft tint)."
+  [color-int]
+  (unchecked-int
+   (bit-or (bit-and (long (or color-int 0)) 0xFFFFFF) argb-alpha-mask)))
+
+(defn- rgb-int [color-int]
+  (bit-and (unchecked-int color-int) 0xFFFFFF))
 
 (defn- codepoints [^String text]
   (.toArray (.codePoints text)))
 
+(defn- msdf-glyph? [cp]
+  (MsdfFontManager/hasGlyph (int cp)))
+
 (defn- segment-runs [^String text]
-  (let [face (when (MsdfFontManager/hasFontFace)
-               (.face (MsdfFontManager/provider)))
-        cps (codepoints text)]
+  (let [cps (codepoints text)]
     (cond
-      (or (nil? face) (zero? (alength cps)))
+      (or (not (MsdfFontManager/hasFontFace)) (zero? (alength cps)))
       [{:msdf? false :text (or text "")}]
 
       :else
       (let [runs (reduce
                   (fn [acc cp]
                     (let [ch (Character/toString cp)
-                          msdf? (.hasGlyph face cp)]
+                          msdf? (msdf-glyph? cp)]
                       (if (empty? acc)
                         [{:msdf? msdf? :text ch}]
                         (let [last-run (peek acc)
@@ -96,7 +110,7 @@
   [^String text base-color glyph-styles ^long start-offset]
   (let [cps (codepoints text)
         n (alength cps)
-        base-rgb (bit-and (unchecked-int base-color) 0xFFFFFF)]
+        base-rgb (rgb-int base-color)]
     (loop [i 0 acc (Component/empty)]
       (if (>= i n)
         acc
@@ -119,17 +133,16 @@
     (component-for-run text font-desc)))
 
 (defn- draw-run! [^GuiGraphics gg ^Font font ^Component comp x y color shadow?]
-  (let [^PoseStack ps (.pose gg)
-        matrix (.pose (.last ps))
-        buffer (.bufferSource gg)
-        display Font$DisplayMode/NORMAL
-        light 15728880]
-    (.drawInBatch font comp (float x) (float y) (int color) (boolean shadow?)
-                  ^Matrix4f matrix buffer display 0 light)))
+  (RenderSystem/enableBlend)
+  (RenderSystem/defaultBlendFunc)
+  (RenderSystem/disableDepthTest)
+  (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0)
+  (.drawString gg font comp (int x) (int y) (unchecked-int color) (boolean shadow?)))
 
 (defn- segmented-width [font-desc ^String text & {:keys [glyph-styles]}]
   (let [^Font shadow (shadow-font)
         ^Font vanilla (vanilla-font)
+        use-shadow? (MsdfFontManager/hasFontFace)
         base-color 0xFFFFFF]
     (loop [runs (segment-runs text) cp-offset 0 width 0.0]
       (if (empty? runs)
@@ -138,7 +151,7 @@
               ^Component comp (if msdf?
                                 (component-for-msdf-run text font-desc base-color glyph-styles cp-offset)
                                 (component-for-run text font-desc))
-              ^Font font (if msdf? shadow vanilla)
+              ^Font font (if use-shadow? shadow vanilla)
               w (double (.width font comp))]
           (recur (rest runs) (+ cp-offset (.length text)) (+ width w)))))))
 
@@ -146,6 +159,7 @@
   ([font-desc ^String text font-size]
    (text-width font-desc text font-size nil))
   ([font-desc ^String text font-size glyph-styles]
+   (ensure-msdf-ready!)
    (let [scale (scale-factor font-size)]
      (cond
        (str/blank? text) 0.0
@@ -170,7 +184,7 @@
     (try
       (.translate ps (double x) (double y) 0.0)
       (.scale ps scale scale 1.0)
-      (.drawString gg mc-font comp 0 0 (int color) (boolean shadow?))
+      (.drawString gg mc-font comp 0 0 (unchecked-int color) (boolean shadow?))
       (finally
         (.popPose ps)))))
 
@@ -179,9 +193,13 @@
   (let [use-per-glyph? (some? glyph-styles)
         bold? (and (not use-per-glyph?) (boolean (:bold? font-desc)))
         scale (scale-factor font-size)
-        color' (int->color-argb (unchecked-int color))
+        color' (normalize-color-int
+                (MsdfGlyphFlags/encodeRgb
+                 (rgb-int color)
+                 bold? false false))
         ^Font shadow (shadow-font)
         ^Font vanilla (vanilla-font)
+        use-shadow? (or (msdf-active?) (MsdfFontManager/hasFontFace))
         ^PoseStack ps (.pose gg)]
     (MsdfTextFx/resetForDraw bold?)
     (.pushPose ps)
@@ -194,35 +212,19 @@
                 ^Component comp (if msdf?
                                   (component-for-msdf-run text font-desc color' glyph-styles cp-offset)
                                   (component-for-run text font-desc))
-                ^Font font (if msdf? shadow vanilla)
+                ^Font font (if use-shadow? shadow vanilla)
                 w (double (.width font comp))
-                draw-color (if (and msdf? glyph-styles) 0xFFFFFFFF color')]
+                draw-color (if (and msdf? glyph-styles) -1 color')]
             (draw-run! gg font comp dx 0 draw-color shadow?)
             (recur (rest runs) (+ dx w) (+ cp-offset (.length text))))))
       (finally
         (.popPose ps)))
     (.endBatch (.bufferSource gg))))
 
-(defn- draw-fallback-runs! [^GuiGraphics gg font-desc ^String text x y font-size color shadow?]
-  "Segmented vanilla draw when MSDF face exists but shader is not ready (layout parity)."
-  (let [scale (scale-factor font-size)
-        color' (int->color-argb (unchecked-int color))
-        ^Font vanilla (vanilla-font)
-        ^PoseStack ps (.pose gg)]
-    (.pushPose ps)
-    (try
-      (.translate ps (double x) (double y) 0.0)
-      (.scale ps (float scale) (float scale) 1.0)
-      (loop [runs (segment-runs text) dx 0.0]
-        (when (seq runs)
-          (let [{:keys [text]} (first runs)
-                ^Component comp (component-for-run text font-desc)
-                w (double (.width vanilla comp))]
-            (draw-run! gg vanilla comp dx 0 color' shadow?)
-            (recur (rest runs) (+ dx w)))))
-      (finally
-        (.popPose ps)))
-    (.endBatch (.bufferSource gg))))
+(defn- draw-fallback-runs! [^GuiGraphics gg font-desc ^String text x y font-size color shadow?
+                       & {:keys [glyph-styles]}]
+  "Shadow-font draw when face is loaded; same path as MSDF (no vanilla pixel fallback)."
+  (draw-msdf-runs! gg font-desc text x y font-size color shadow? :glyph-styles glyph-styles))
 
 (defn draw-text!
   "Draw `text` at (`x`,`y`) with MSDF shadow font (or vanilla fallback).
@@ -234,6 +236,7 @@
    (draw-text! gg font-desc text x y font-size color align shadow? nil))
   ([^GuiGraphics gg font-desc ^String text x y font-size color align shadow? glyph-styles]
    (when (seq text)
+     (ensure-msdf-ready!)
      (let [total-w (text-width font-desc text font-size glyph-styles)
            x' (aligned-x align x total-w)]
        (cond
@@ -242,7 +245,8 @@
                           :glyph-styles glyph-styles)
 
          (MsdfFontManager/hasFontFace)
-         (draw-fallback-runs! gg font-desc text x' y font-size color shadow?)
+         (draw-fallback-runs! gg font-desc text x' y font-size color shadow?
+                              :glyph-styles glyph-styles)
 
          :else
          (draw-vanilla-run! gg font-desc text x' y font-size color shadow?))))))
