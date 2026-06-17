@@ -1,9 +1,8 @@
 (ns cn.li.ac.item.components
   "Component items - building blocks for Wireless Matrix system
-  
+
   These items are used to construct matrix cores, nodes, and other wireless components."
   (:require [cn.li.mcmod.item.dsl :as idsl]
-            [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.util.log :as log]))
 
@@ -23,31 +22,6 @@
          :properties {:tooltip ["基础计算晶圆"
                                 "用于构建矩阵核心"]
                       :model-texture "wafer"}}))
-    (idsl/register-item!
-      (idsl/create-item-spec
-        "tutorial"
-        {:max-stack-size 64
-         :creative-tab :misc
-         :properties {:tooltip ["教程物品"]
-                      :model-texture "tutorial"}
-         :on-right-click (fn [event-data]
-                           (let [{:keys [player side]} event-data]
-                             ;; Client side: open tutorial GUI (original AC GuiTutorial)
-                             (when (= side :client)
-                               (when-let [open-fn (requiring-resolve
-                                                   'cn.li.ac.terminal.client.actions/open-tutorial!)]
-                                 (open-fn player)))
-                             ;; Server side: trigger open_misaka_cloud achievement
-                             ;; (original AC MSG_TRIGGER → ACAdvancements.trigger)
-                             (when (= side :server)
-                               (try
-                                 (when-let [trigger-fn (requiring-resolve
-                                                        'cn.li.ac.achievement.dispatcher/trigger-custom-event!)]
-                                   ;; Fix: trigger-custom-event! signature is [uuid event-id]
-                                   (trigger-fn (uuid/player-uuid player) "open_misaka_cloud"))
-                                 (catch Throwable _ nil)))
-                             ;; Item is NOT consumed (matches original AC: EnumActionResult.SUCCESS)
-                             {:consume? false}))}))
     (idsl/register-item!
       (idsl/create-item-spec
         "terminal_installer"
@@ -148,6 +122,6 @@
          :creative-tab nil
          :properties {:tooltip ["AcademyCraft"]
                       :model-texture "logo"}}))
-    (log/info "Component items initialized: wafer, tutorial, terminal-installer, silbarn,"
+    (log/info "Component items initialized: wafer, terminal-installer, silbarn,"
               "reso-crystal, resonance-component, reinforced-iron-plate, needle, coin,"
               "brain-component, energy-convert-component, info-component, magnetic-coil, logo")))

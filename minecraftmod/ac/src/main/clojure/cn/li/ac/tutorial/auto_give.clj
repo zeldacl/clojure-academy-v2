@@ -6,7 +6,7 @@
   default true).  This function is called from the Forge lifecycle layer after
   player state is loaded, matching the original AC behavior.
 
-  The tutorial item is NOT consumed on use (components.clj sets {:consume? false}),
+  The tutorial item is NOT consumed on use (cn.li.ac.tutorial.item sets {:consume? false}),
   so the auto-give only needs to run once per player lifetime."
   (:require [cn.li.ac.tutorial.config :as tut-config]
             [cn.li.ac.tutorial.player :as tut-player]

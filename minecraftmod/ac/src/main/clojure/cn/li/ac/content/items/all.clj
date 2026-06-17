@@ -1,6 +1,7 @@
 (ns cn.li.ac.content.items.all
   "Content entrypoint for AC item declarations."
   (:require [cn.li.ac.item.components :as components]
+            [cn.li.ac.tutorial.item :as tutorial-item]
             [cn.li.ac.item.app-installers :as app-installers]
             [cn.li.ac.item.constraint-plate :as constraint-plate]
             [cn.li.ac.item.energy-items :as energy-items]
@@ -18,6 +19,7 @@
   (with-init-guard items-installed?
     (materials/init-materials!)
     (components/init-components!)
+    (tutorial-item/init-tutorial-item!)
     (app-installers/init-app-installers!)
     (constraint-plate/init-constraint-plate!)
     (energy-items/init-energy-items!)
