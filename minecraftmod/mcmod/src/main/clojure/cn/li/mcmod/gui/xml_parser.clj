@@ -239,8 +239,8 @@
             does-draw? (not= false (parse/parse-bool (text-at component-node :doesDraw "true")))
             pivot-x (parse/parse-float (text-at component-node :pivotX "0") 0)
             pivot-y (parse/parse-float (text-at component-node :pivotY "0") 0)
-            align-w (some-> (text-at component-node :alignWidth "LEFT") str/upper-case keyword)
-            align-h (some-> (text-at component-node :alignHeight "TOP") str/upper-case keyword)
+            align-w (some-> (text-at component-node :alignWidth "LEFT") str/lower-case keyword)
+            align-h (some-> (text-at component-node :alignHeight "TOP") str/lower-case keyword)
             does-listen (not= false (parse/parse-bool (text-at component-node :doesListenKey "true")))
             z-level (parse/parse-float (text-at component-node :zLevel "0") 0)]
         (cgui-core/set-size! widget w h)

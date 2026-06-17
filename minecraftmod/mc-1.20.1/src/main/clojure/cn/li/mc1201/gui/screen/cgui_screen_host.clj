@@ -5,6 +5,7 @@
   This mirrors the original AcademyCraft TreeScreen extends CGuiScreen pattern.
   Used by the portable developer and other standalone CGUI screens."
   (:require [cn.li.mc1201.gui.cgui.runtime :as cgui-rt]
+            [cn.li.mcmod.gui.cgui-core :as cgui-core]
             [cn.li.mcmod.hooks.core :as client-ui]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.client.gui.screens Screen]
@@ -58,6 +59,17 @@
             (when root
               (binding [client-ui/*client-session-id* (or session-id "")]
                 (cgui-rt/resize-root! root w h)
+                ;; Apply root CENTER/CENTER alignment — matching original
+                ;; AcademyCraft CGuiScreen (full-screen overlay) behavior
+                ;; where LambdaLib2 centered the root widget on screen.
+                (let [tm (get @(:metadata root) :transform-meta {})
+                      align-w (:align-width tm)
+                      align-h (:align-height tm)
+                      [rw rh] (cgui-core/get-size root)]
+                  (when (= align-w :center)
+                    (reset! left (long (/ (- (double w) (double rw)) 2.0))))
+                  (when (= align-h :center)
+                    (reset! top (long (/ (- (double h) (double rh)) 2.0)))))
                 (cgui-rt/frame-tick! root {:partial-ticks partial-ticks})
                 (cgui-rt/render-tree! graphics root @left @top))))
           (catch Exception e

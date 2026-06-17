@@ -5,6 +5,7 @@
   callbacks (e.g. Forge event bus hooks)."
   (:require [cn.li.mc1201.gui.cgui.runtime :as cgui-rt]
             [cn.li.mc1201.client.session :as client-session]
+            [cn.li.mcmod.gui.cgui-core :as cgui-core]
             [cn.li.mcmod.gui.container-state :as container-state]
             [cn.li.mcmod.gui.owner-contract :as owner-contract]
             [cn.li.mcmod.gui.registry :as gui-reg]
@@ -65,6 +66,22 @@
   (reset! left-atom (.getGuiLeft screen))
   (reset! top-atom (.getGuiTop screen)))
 
+(defn- apply-root-alignment!
+  "When root widget has CENTER/CENTER alignment from XML, override left/top
+  to center it on the full screen.  This matches original AcademyCraft
+  CGuiScreen (full-screen overlay) where LambdaLib2 handled alignment.
+  For roots without CENTER alignment (programmatic TechUI containers),
+  left/top stay at the vanilla guiLeft/guiTop."
+  [root left-atom top-atom screen-w screen-h]
+  (let [tm (get @(:metadata root) :transform-meta {})
+        align-w (:align-width tm)
+        align-h (:align-height tm)
+        [rw rh] (cgui-core/get-size root)]
+    (when (= align-w :center)
+      (reset! left-atom (long (/ (- (double screen-w) (double rw)) 2.0))))
+    (when (= align-h :center)
+      (reset! top-atom (long (/ (- (double screen-h) (double rh)) 2.0))))))
+
 (defn owner-for-screen-menu
   "Resolve canonical client owner for a Minecraft menu's Clojure container."
   [menu]
@@ -113,6 +130,10 @@
             (do
               (.callSuperRenderBackground s gg)
               (sync-root-bounds! s left top)
+              ;; Apply root CENTER/CENTER alignment (matching original
+              ;; AcademyCraft CGuiScreen full-screen overlay behavior).
+              (when root
+                (apply-root-alignment! root left top (.-width s) (.-height s)))
               (when root
                 (with-screen-cgui menu "CGUI non-slot tab render error"
                   #(cgui-rt/render-tree! gg root @left @top)))
@@ -126,7 +147,10 @@
 
       (renderBg [^GuiGraphics gg _partial-ticks _mouse-x _mouse-y]
         (let [^CGuiContainerScreen s this]
-          (sync-root-bounds! s left top))
+          (sync-root-bounds! s left top)
+          ;; Apply root CENTER/CENTER alignment.
+          (when root
+            (apply-root-alignment! root left top (.-width s) (.-height s))))
         (when root
           (with-screen-cgui menu "CGUI renderBg error"
             #(cgui-rt/render-tree! gg root @left @top))))

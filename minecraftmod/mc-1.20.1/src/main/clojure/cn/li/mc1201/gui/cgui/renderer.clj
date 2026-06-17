@@ -2,7 +2,8 @@
   "CLIENT-ONLY CGUI rendering and root sizing logic.
 
   Font size contract: :font-size N = N screen pixels. STB bake height 8px; scale = N / 8."
-  (:require [cn.li.mcmod.gui.cgui-core :as cgui-core]
+  (:require [clojure.string :as str]
+            [cn.li.mcmod.gui.cgui-core :as cgui-core]
             [cn.li.mc1201.gui.cgui.font :as font-api]
             [cn.li.mc1201.gui.cgui.assets :as assets]
             [cn.li.mc1201.gui.cgui.traversal :as traversal]
@@ -378,8 +379,8 @@
         tm (get @(:metadata child) :transform-meta {})
         pivot-x (or (:pivot-x tm) 0.0)
         pivot-y (or (:pivot-y tm) 0.0)
-        align-w (:align-width tm)
-        align-h (:align-height tm)
+        align-w (when-let [a (:align-width tm)] (-> a name str/lower-case keyword))
+        align-h (when-let [a (:align-height tm)] (-> a name str/lower-case keyword))
         align-offset-x (case align-w :center (int (Math/round (double (/ (- pw w) 2.0)))) :right (int (Math/round (double (- pw w)))) 0)
         align-offset-y (case align-h :center (int (Math/round (double (/ (- ph h) 2.0)))) :middle (int (Math/round (double (/ (- ph h) 2.0)))) :bottom (int (Math/round (double (- ph h)))) 0)
         pivot-shift-x (* (double pivot-x) (double w))
