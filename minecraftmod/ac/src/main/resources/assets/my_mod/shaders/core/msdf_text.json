@@ -26,6 +26,7 @@
     { "name": "FogColor", "type": "float", "count": 4, "values": [0.0, 0.0, 0.0, 0.0] },
     { "name": "FogShape", "type": "int", "count": 1, "values": [0] },
     { "name": "u_ThicknessOffset", "type": "float", "count": 1, "values": [0.0] },
+    { "name": "u_BoldThickness", "type": "float", "count": 1, "values": [0.05] },
     { "name": "u_OutlineColor", "type": "float", "count": 4, "values": [0.0, 0.0, 0.0, 1.0] },
     { "name": "u_OutlineWidth", "type": "float", "count": 1, "values": [0.0] },
     { "name": "u_GlowColor", "type": "float", "count": 4, "values": [1.0, 0.8, 0.0, 0.5] },

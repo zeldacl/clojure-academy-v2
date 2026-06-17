@@ -37,6 +37,7 @@ public final class MsdfGlyphProvider implements GlyphProvider {
         if (glyphIndex == 0) {
             return null;
         }
+        atlas.prefetchGlyph(face, glyphIndex);
         return new MsdfGlyphInfo(face, atlas, glyphIndex, pxRange);
     }
 

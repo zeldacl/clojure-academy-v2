@@ -92,6 +92,10 @@ public final class MsdfRenderTypes extends RenderType {
         if (uThickness != null) {
             uThickness.set(MsdfTextFx.getThicknessOffset());
         }
+        var uBoldThickness = shader.getUniform("u_BoldThickness");
+        if (uBoldThickness != null) {
+            uBoldThickness.set(MsdfTextFx.BOLD_THICKNESS);
+        }
         var uOutlineColor = shader.getUniform("u_OutlineColor");
         if (uOutlineColor != null) {
             uOutlineColor.set(

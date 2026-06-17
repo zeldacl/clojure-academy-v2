@@ -57,6 +57,10 @@ public final class MsdfTextFx {
     glowRadius = radius;
   }
 
+  public static void setGlowRadius(final float radius) {
+    glowRadius = radius;
+  }
+
   public static void setShadowOffset(final float x, final float y) {
     shadowOffsetX = x;
     shadowOffsetY = y;

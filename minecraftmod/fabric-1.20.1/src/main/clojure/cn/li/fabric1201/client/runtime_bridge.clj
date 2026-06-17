@@ -246,6 +246,8 @@
   (tick-content-keys!)
   (particle/tick-particles!)
   (sound/tick-sounds!)
+  (when-let [msdf-tick (requiring-resolve 'cn.li.mc1201.client.font.msdf-tick/client-tick!)]
+    (msdf-tick))
   (client-session/with-current-client-session #(power-runtime/client-tick!)))
 
 (defn init!

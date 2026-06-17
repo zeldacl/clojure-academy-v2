@@ -79,4 +79,21 @@ public final class MsdfFontManager {
     public static float cguiBaseHeight() {
         return CGUI_BASE_HEIGHT;
     }
+
+    public static void shutdown() {
+        if (provider != null) {
+            provider.close();
+            provider = null;
+        }
+        if (atlas != null) {
+            atlas.shutdown();
+            atlas = null;
+        }
+        shadowFont = null;
+        available = false;
+    }
+
+    public static void clientTick() {
+        MsdfGlowAnimator.clientTick();
+    }
 }

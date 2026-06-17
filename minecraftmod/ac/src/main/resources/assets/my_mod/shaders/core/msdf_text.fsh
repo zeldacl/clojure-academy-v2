@@ -10,6 +10,7 @@ uniform float FogEnd;
 uniform vec4 FogColor;
 
 uniform float u_ThicknessOffset;
+uniform float u_BoldThickness;
 uniform vec4 u_OutlineColor;
 uniform float u_OutlineWidth;
 uniform vec4 u_GlowColor;
@@ -39,22 +40,39 @@ void main() {
 
     float w = clamp(0.5 / length(vec2(dFdx(sdShape), dFdy(sdShape))), 0.0, 0.5);
 
-    float fontBase = 0.5 - u_ThicknessOffset;
+    int blueBits = int(floor(vertexColor.b * 255.0 + 0.5));
+    int glyphFlags = blueBits & 7;
+    vec3 textRgb = vec3(vertexColor.r, vertexColor.g, float(blueBits & ~7) / 255.0);
+
+    float thicknessOffset = u_ThicknessOffset;
+    float outlineWidth = u_OutlineWidth;
+    float glowRadius = u_GlowRadius;
+    if (glyphFlags != 0) {
+        if ((glyphFlags & 1) != 0) {
+            thicknessOffset = u_BoldThickness;
+        } else {
+            thicknessOffset = 0.0;
+        }
+        outlineWidth = ((glyphFlags & 2) != 0) ? u_OutlineWidth : 0.0;
+        glowRadius = ((glyphFlags & 4) != 0) ? u_GlowRadius : 0.0;
+    }
+
+    float fontBase = 0.5 - thicknessOffset;
     float fontAlpha = smoothstep(fontBase - w, fontBase + w, sdShape);
 
-    float outlineBase = fontBase - u_OutlineWidth;
+    float outlineBase = fontBase - outlineWidth;
     float outlineAlpha = smoothstep(outlineBase - w, outlineBase + w, sdEffects);
 
-    float glowBase = outlineBase - u_GlowRadius;
+    float glowBase = outlineBase - glowRadius;
     float glowAlpha = smoothstep(glowBase, fontBase, sdEffects);
 
     vec4 finalColor = vec4(0.0);
 
-    if (u_GlowRadius > 0.0) {
+    if (glowRadius > 0.0) {
         finalColor = mix(finalColor, u_GlowColor, glowAlpha * u_GlowColor.a);
     }
 
-    if (u_OutlineWidth > 0.0) {
+    if (outlineWidth > 0.0) {
         finalColor = mix(finalColor, u_OutlineColor, outlineAlpha * u_OutlineColor.a);
     }
 
@@ -65,7 +83,7 @@ void main() {
         finalColor = mix(finalColor, u_GlowColor, shadowAlpha * u_GlowColor.a * 0.5);
     }
 
-    finalColor = mix(finalColor, vertexColor, fontAlpha);
+    finalColor = mix(finalColor, vec4(textRgb, 1.0), fontAlpha);
 
     if (finalColor.a < 0.01) {
         discard;

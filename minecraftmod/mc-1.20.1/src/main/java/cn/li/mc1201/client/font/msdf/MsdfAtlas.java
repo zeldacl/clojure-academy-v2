@@ -6,25 +6,41 @@ import net.minecraft.client.renderer.texture.TextureManager;
 import net.minecraft.resources.ResourceLocation;
 
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Multi-page RGBA atlas for MSDF glyphs with shelf packing.
+ * Multi-page RGBA atlas for MSDF glyphs with shelf packing, async MTSDF generation,
+ * and LRU glyph-slot eviction.
  */
 public final class MsdfAtlas {
 
     public static final int PAGE_SIZE = 512;
     public static final int DEFAULT_PX_RANGE = 8;
-  /** Conservative outer pad so bold/outline/glow never clip; stable per-glyph cache key. */
+    public static final int MAX_CACHED_GLYPHS = 4096;
+    /** Conservative outer pad so bold/outline/glow never clip; stable per-glyph cache key. */
     public static final int BAKE_PADDING =
             DEFAULT_PX_RANGE + (int) Math.ceil(MsdfTextFx.maxBakeFieldOffset() * DEFAULT_PX_RANGE) + 2;
     private static final String NAMESPACE = "my_mod";
 
     private final TextureManager textureManager;
     private final List<AtlasPage> pages = new ArrayList<>();
-    private final Map<Integer, BakedSlot> bakedCache = new HashMap<>();
+    private final Map<Integer, BakedSlot> bakedCache = new LinkedHashMap<>(256, 0.75f, true) {
+        @Override
+        protected boolean removeEldestEntry(final Map.Entry<Integer, BakedSlot> eldest) {
+            return size() > MAX_CACHED_GLYPHS;
+        }
+    };
+    private final ConcurrentHashMap<Integer, CompletableFuture<MsdfEngine.MsdfPixels>> pendingPixels =
+            new ConcurrentHashMap<>();
+    private final ExecutorService bakeExecutor = Executors.newSingleThreadExecutor(new BakeThreadFactory());
 
     public MsdfAtlas(final TextureManager textureManager) {
         this.textureManager = textureManager;
@@ -38,14 +54,52 @@ public final class MsdfAtlas {
             int pixelWidth, int pixelHeight) {
     }
 
+    public void prefetchGlyph(final MsdfFontFace face, final int glyphIndex) {
+        if (glyphIndex == 0 || bakedCache.containsKey(glyphIndex)) {
+            return;
+        }
+        pendingPixels.computeIfAbsent(glyphIndex, idx ->
+                CompletableFuture.supplyAsync(
+                        () -> MsdfEngine.generate(face, idx, DEFAULT_PX_RANGE, BAKE_PADDING),
+                        bakeExecutor));
+    }
+
     public BakedSlot bakeGlyph(final MsdfFontFace face, final int glyphIndex) {
         final BakedSlot cached = bakedCache.get(glyphIndex);
         if (cached != null) {
+            touchGlyph(glyphIndex);
             return cached;
         }
 
-        final MsdfEngine.MsdfPixels pixels =
-                MsdfEngine.generate(face, glyphIndex, DEFAULT_PX_RANGE, BAKE_PADDING);
+        final MsdfEngine.MsdfPixels pixels = resolvePixels(face, glyphIndex);
+        return uploadPixels(face, glyphIndex, pixels);
+    }
+
+    private void touchGlyph(final int glyphIndex) {
+        final BakedSlot slot = bakedCache.remove(glyphIndex);
+        if (slot != null) {
+            bakedCache.put(glyphIndex, slot);
+        }
+    }
+
+    private MsdfEngine.MsdfPixels resolvePixels(final MsdfFontFace face, final int glyphIndex) {
+        final CompletableFuture<MsdfEngine.MsdfPixels> pending = pendingPixels.remove(glyphIndex);
+        if (pending != null) {
+            if (pending.isDone() && !pending.isCompletedExceptionally()) {
+                final MsdfEngine.MsdfPixels ready = pending.getNow(null);
+                if (ready != null) {
+                    return ready;
+                }
+            }
+            pending.cancel(false);
+        }
+        return MsdfEngine.generate(face, glyphIndex, DEFAULT_PX_RANGE, BAKE_PADDING);
+    }
+
+    private BakedSlot uploadPixels(
+            final MsdfFontFace face,
+            final int glyphIndex,
+            final MsdfEngine.MsdfPixels pixels) {
         final int w = pixels.width;
         final int h = pixels.height;
 
@@ -85,8 +139,20 @@ public final class MsdfAtlas {
         return slot;
     }
 
+    public int cachedGlyphCount() {
+        return bakedCache.size();
+    }
+
+    public void shutdown() {
+        bakeExecutor.shutdownNow();
+        pendingPixels.clear();
+    }
+
     public ResourceLocation textureIdForPage(final int pageIndex) {
         if (pageIndex < 0 || pageIndex >= pages.size()) {
+            if (pages.isEmpty()) {
+                throw new IllegalStateException("MSDF atlas has no pages");
+            }
             return pages.get(0).textureId;
         }
         return pages.get(pageIndex).textureId;
@@ -102,6 +168,17 @@ public final class MsdfAtlas {
             return null;
         }
         throw new IllegalStateException("Glyph too large for atlas page: " + w + "x" + h);
+    }
+
+    private static final class BakeThreadFactory implements ThreadFactory {
+        private final AtomicInteger seq = new AtomicInteger();
+
+        @Override
+        public Thread newThread(final Runnable r) {
+            final Thread thread = new Thread(r, "my_mod-msdf-bake-" + seq.incrementAndGet());
+            thread.setDaemon(true);
+            return thread;
+        }
     }
 
     private final class AtlasPage {

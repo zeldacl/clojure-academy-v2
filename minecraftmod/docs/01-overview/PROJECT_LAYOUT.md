@@ -82,6 +82,26 @@
 
 维护说明：[ABILITY_SYSTEM_MAINTENANCE.md](../04-systems/ABILITY_SYSTEM_MAINTENANCE.md)。
 
+## CGUI MSDF 字体（`mc-1.20.1` + `ac` 注册）
+
+零资源 MTSDF 阴影字体，替代已删除的 TTF virtual-pack 栈。CGUI 作用域（`:ac-normal` / `:ac-bold` / `:ac-italic`）；HUD 与其它 vanilla 文本不在此路径。
+
+| 路径 | 命名空间 / 类 | 说明 |
+|------|----------------|------|
+| `mc-1.20.1/.../font/msdf/*.java` | `cn.li.mc1201.client.font.msdf.*` | STB 加载、`MsdfEngine` MTSDF 生成、多页 atlas（LRU + 异步预烘焙）、`GlyphProvider` SPI、`MsdfRenderTypes`、shader uniform |
+| `mc-1.20.1/.../font/msdf_setup.clj` | `cn.li.mc1201.client.font.msdf-setup` | 系统字体探测 → `MsdfFontManager` 初始化 |
+| `mc-1.20.1/.../font/msdf_tick.clj` | `cn.li.mc1201.client.font.msdf-tick` | ClientTick 发光呼吸等动画 |
+| `mc-1.20.1/.../gui/cgui/font.clj` | `cn.li.mc1201.gui.cgui.font` | CGUI 桥：`text-width` / `draw-text!`、分段 MSDF/vanilla、per-glyph 标志（顶点色蓝通道低 3 位）、`with-text-fx` |
+| `mc-1.20.1/.../gui/cgui/renderer.clj` | `cn.li.mc1201.gui.cgui.renderer` | `:textbox` 组件接线 |
+| `ac/.../client/font_init.clj` | `cn.li.ac.client.font-init` | 注册 `:ac-*` 字体关键字（flag-only） |
+| `ac/.../assets/my_mod/shaders/core/msdf_text.*` | — | MSDF 文本 shader（median + fwidth AA + 效果层） |
+| `forge-1.20.1/.../ForgeClientRenderRegistry` | — | `RegisterShadersEvent` 注册 `my_mod:msdf_text` |
+| `fabric-1.20.1/.../FabricClientRenderSetup` | — | `CoreShaderRegistrationCallback` 同等注册 |
+
+**Follow-up 能力（已实现）**：单字符串内 per-glyph bold/outline/glow（shader 解码顶点色标志）；`getGlyph` 触发的异步 MTSDF 预烘焙；atlas LRU（默认 4096 glyph）；`start-glow-breath!` ClientTick 呼吸发光。
+
+**平台初始化**：Forge / Fabric `client/init` 调用 `msdf-setup/init!`；`runtime_bridge` 每 tick 调用 `msdf-tick/client-tick!`。
+
 ## 新增内容应落在何处
 
 1. 在 **`mcmod`** 扩展 DSL / 元数据 / 协议（若涉及新抽象）。
