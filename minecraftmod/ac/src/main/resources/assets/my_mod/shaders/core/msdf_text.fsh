@@ -34,7 +34,7 @@ void main() {
     vec4 field = sampleField(texCoord0);
     vec3 msd = field.rgb;
     float sdShape = median(msd.r, msd.g, msd.b);
-    float sdEffects = field.a;
+    float sdEffects = sdShape;
 
     float w = clamp(0.5 / length(vec2(dFdx(sdShape), dFdy(sdShape))), 0.0, 0.5);
 

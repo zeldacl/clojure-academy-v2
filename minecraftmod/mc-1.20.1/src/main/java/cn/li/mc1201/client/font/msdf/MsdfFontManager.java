@@ -22,8 +22,8 @@ public final class MsdfFontManager {
 
     public static final ResourceLocation SHADOW_FONT_ID = new ResourceLocation("my_mod", "msdf_shadow");
 
-    public static final float DESIGN_PIXEL_HEIGHT = 8.0f;
-    public static final float CGUI_BASE_HEIGHT = 8.0f;
+    public static final float DESIGN_PIXEL_HEIGHT = 32.0f;
+    public static final float CGUI_BASE_HEIGHT = 32.0f;
 
     private static Font shadowFont;
     private static FontSet shadowFontSet;
