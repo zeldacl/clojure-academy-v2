@@ -81,38 +81,52 @@
 
 ;; --- Word wrapping ---
 
-(defn- estimate-char-width
-  "Estimate pixel width of a character at font-size.
-  Heuristic: ~0.75 * font-size pixels per character."
-  [font-size]
-  (* font-size 0.75))
+(defn- find-break-index
+  "Return the index in `s` where the text width first exceeds `max-px`.
+  Returns the full length if it never exceeds."
+  [s font-desc font-size max-px text-width-fn]
+  (loop [i 1]
+    (if (> i (count s))
+      (count s)
+      (if (> (text-width-fn font-desc (subs s 0 i) font-size) max-px)
+        (dec i)   ; i-1 is the last index that still fits
+        (recur (inc i))))))
 
-(defn- wrap-line
-  "Split a single line into sub-lines that fit within max-px pixels.
-  Preserves word boundaries where possible. Hard-breaks long words."
-  [line font-size max-px]
-  (let [char-w (estimate-char-width font-size)
-        max-chars (max 1 (int (/ max-px char-w)))]
-    (if (<= (count line) max-chars)
-      [line]
-      (loop [remaining line
-             acc []]
-        (if (empty? remaining)
-          acc
-          (let [chunk (subs remaining 0 (min max-chars (count remaining)))]
-            (if-let [last-space (str/last-index-of chunk " ")]
-              (recur (subs remaining (inc last-space))
-                     (conj acc (subs remaining 0 last-space)))
-              (recur (subs remaining max-chars)
-                     (conj acc chunk)))))))))
+(defn- wrap-line-proportional
+  "Split a single line into sub-lines that fit within max-px pixels, using
+  `text-width-fn` for per-character width measurement.  Works for both
+  proportional and monospace fonts.
+
+  text-width-fn: (fn [font-desc text font-size]) → pixel width
+  font-desc:     map with :bold? key (or nil for default)"
+  [line font-desc font-size max-px text-width-fn]
+  (if (<= (text-width-fn font-desc line font-size) max-px)
+    [line]
+    (loop [remaining line
+           acc []]
+      (if (empty? remaining)
+        acc
+        (let [break-at (max 1 (find-break-index remaining font-desc font-size max-px text-width-fn))
+              chunk   (subs remaining 0 break-at)]
+          (if-let [last-space (str/last-index-of chunk " ")]
+            ;; Break at the last word boundary within the fitting chunk
+            (recur (subs remaining (inc last-space))
+                   (conj acc (subs remaining 0 last-space)))
+            ;; No space — hard-break at the fitting boundary
+            (recur (subs remaining break-at)
+                   (conj acc chunk))))))))
 
 (defn- wrap-segments
-  "Apply word-wrapping to text segments. Image segments pass through unchanged."
-  [segments max-width-px]
+  "Apply word-wrapping to text segments using proportional width measurement.
+  text-width-fn must be a fn of (font-desc, text, font-size) → pixel width."
+  [segments max-width-px text-width-fn]
   (mapcat (fn [seg]
             (if (= (:type seg) :image)
               [seg]
-              (let [lines (wrap-line (:text seg) (:font-size seg) max-width-px)]
+              (let [font-desc (when (:bold? seg) {:bold? true})
+                    lines (wrap-line-proportional
+                            (:text seg) font-desc (:font-size seg)
+                            max-width-px text-width-fn)]
                 (map (fn [line] (assoc seg :text line)) lines))))
           segments))
 
@@ -127,14 +141,24 @@
      :color     int (ARGB)
      :bold?     boolean}
 
+  text-width-fn (optional): (fn [font-desc text font-size]) → pixel width.
+  When nil, resolves font-api/text-width at runtime for proportional
+  wrapping; falls back to a conservative char-count estimate.
+
   Args:
-    raw-content  — parsed markdown content string
-    misaka-id    — int or nil, for ![misakaname] resolution
-    max-width-px — pixel width limit for word-wrapping (default 150, brief uses 130)"
-  ([raw-content] (render-segments raw-content nil max-content-width))
-  ([raw-content misaka-id] (render-segments raw-content misaka-id max-content-width))
-  ([raw-content misaka-id max-width-px]
-   (let [lines (str/split-lines (or raw-content ""))
+    raw-content    — parsed markdown content string
+    misaka-id      — int or nil, for ![misakaname] resolution
+    max-width-px   — pixel width limit for word-wrapping
+    text-width-fn  — nil or proportional width measurer"
+  ([raw-content] (render-segments raw-content nil max-content-width nil))
+  ([raw-content misaka-id] (render-segments raw-content misaka-id max-content-width nil))
+  ([raw-content misaka-id max-width-px] (render-segments raw-content misaka-id max-width-px nil))
+  ([raw-content misaka-id max-width-px text-width-fn]
+   (let [text-width-fn (or text-width-fn
+                           (requiring-resolve 'cn.li.mc1201.gui.cgui.font/text-width)
+                           (fn [_font-desc text font-size]
+                             (* (count text) font-size 0.6)))
+         lines (str/split-lines (or raw-content ""))
          segments
          (loop [remaining lines
                 segs []]
@@ -178,4 +202,4 @@
                                 {:text clean-text :font-size default-font-size
                                  :color default-color :bold? bold?})))))))]
      ;; Word-wrap text segments; skip image segments
-     (vec (wrap-segments segments max-width-px)))))
+     (vec (wrap-segments segments max-width-px text-width-fn)))))

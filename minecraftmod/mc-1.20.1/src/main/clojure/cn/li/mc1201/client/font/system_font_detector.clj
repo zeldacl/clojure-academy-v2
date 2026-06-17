@@ -15,15 +15,15 @@
     :path   — absolute filesystem path string
     :profile — keyword identifying the font family (legacy; unused by MSDF pipeline)
     :ext    — file extension (ttf or ttc)"
-  [{:path "C:\\Windows\\Fonts\\simhei.ttf"
-    :profile :simhei
-    :ext "ttf"}
+  [{:path "C:\\Windows\\Fonts\\msyh.ttc"
+    :profile :msyh
+    :ext "ttc"}
    {:path "C:\\Windows\\Fonts\\msyh.ttf"
     :profile :msyh
     :ext "ttf"}
-   {:path "C:\\Windows\\Fonts\\msyh.ttc"
-    :profile :msyh
-    :ext "ttc"}
+   {:path "C:\\Windows\\Fonts\\simhei.ttf"
+    :profile :simhei
+    :ext "ttf"}
    {:path "C:\\Windows\\Fonts\\simsun.ttc"
     :profile :simhei
     :ext "ttc"}

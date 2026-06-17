@@ -14,13 +14,15 @@ import java.nio.file.Path;
 import java.util.List;
 
 /**
- * Shadow font: isolated FontSet + Font for mod CGUI text (vanilla TrueTypeGlyphProvider / stitch).
+ * Shadow font: isolated FontSet + Font for mod CGUI text.
+ * Supports monospace/proportional dual mode via {@link MSDFAwareGlyph}.
  */
 public final class MsdfFontManager {
 
     private static final Logger LOGGER = LogManager.getLogger();
 
-    public static final ResourceLocation SHADOW_FONT_ID = new ResourceLocation("my_mod", "msdf_shadow");
+    public static final ResourceLocation SHADOW_FONT_ID =
+            new ResourceLocation("my_mod", "msdf_shadow");
 
     public static final float DESIGN_PIXEL_HEIGHT = 32.0f;
     public static final float CGUI_BASE_HEIGHT = 32.0f;
@@ -30,14 +32,16 @@ public final class MsdfFontManager {
     private static MsdfFontFace face;
     private static volatile boolean bakeProbed;
 
-    private MsdfFontManager() {
-    }
+    private static volatile boolean monospace;
+    private static volatile float monospaceAdvance;
+
+    private MsdfFontManager() {}
+
+    // -------- init / lifecycle --------
 
     public static boolean init(final Path fontPath) {
         synchronized (MsdfFontManager.class) {
-            if (shadowFont != null) {
-                return true;
-            }
+            if (shadowFont != null) return true;
             try {
                 final Minecraft mc = Minecraft.getInstance();
                 if (mc == null) {
@@ -46,20 +50,24 @@ public final class MsdfFontManager {
                 }
 
                 face = new MsdfFontFace(fontPath, DESIGN_PIXEL_HEIGHT);
-                final GlyphProvider glyphProvider = face.glyphProvider();
+                final GlyphProvider vanilla = face.glyphProvider();
+                final GlyphProvider provider =
+                        new MonospaceAwareGlyphProvider(vanilla, face);
 
-                final FontSet fontSet = new FontSet(mc.getTextureManager(), SHADOW_FONT_ID);
-                fontSet.reload(List.of(glyphProvider));
+                final FontSet fontSet =
+                        new FontSet(mc.getTextureManager(), SHADOW_FONT_ID);
+                fontSet.reload(List.of(provider));
                 shadowFontSet = fontSet;
                 shadowFont = new Font(rl -> shadowFontSet, false);
 
+                // Pre-warm glyph cache
                 if (RenderSystem.isOnRenderThread()) {
                     fontSet.getGlyph('A');
                     fontSet.getGlyph(0x4E2D);
                 }
 
                 LOGGER.info(
-                        "MSDF shadow font loaded from {} (glyph A={}, U+4E2D={}, pipeline=vanilla-truetype)",
+                        "MSDF shadow font loaded from {} (A={}, U+4E2D={})",
                         fontPath,
                         face.hasGlyph('A'),
                         face.hasGlyph(0x4E2D));
@@ -72,47 +80,46 @@ public final class MsdfFontManager {
         }
     }
 
-    public static boolean isAvailable() {
-        return hasFontFace();
-    }
-
-    public static boolean hasFontFace() {
-        return shadowFont != null && face != null;
-    }
-
-    public static boolean hasGlyph(final int codePoint) {
-        return face != null && face.hasGlyph(codePoint);
-    }
-
-    public static Font shadowFont() {
-        return shadowFont;
-    }
-
-    public static float cguiBaseHeight() {
-        return CGUI_BASE_HEIGHT;
-    }
-
     public static void shutdown() {
-        if (face != null) {
-            face.close();
-            face = null;
-        }
+        if (face != null) { face.close(); face = null; }
         shadowFont = null;
         shadowFontSet = null;
         bakeProbed = false;
     }
 
+    // -------- monospace mode --------
+
+    public static void setMonospace(final boolean v) { monospace = v; }
+    public static boolean isMonospace() { return monospace; }
+
+    /** Fixed advance for monospace mode, derived from '0' glyph width. */
+    public static float monospaceAdvance() { return monospaceAdvance; }
+
+    // -------- accessors --------
+
+    public static boolean isAvailable() { return hasFontFace(); }
+    public static boolean hasFontFace() { return shadowFont != null && face != null; }
+    public static boolean hasGlyph(final int codePoint) {
+        return face != null && face.hasGlyph(codePoint);
+    }
+    public static Font shadowFont() { return shadowFont; }
+    public static float cguiBaseHeight() { return CGUI_BASE_HEIGHT; }
+
+    // -------- tick --------
+
     public static void clientTick() {
         if (!bakeProbed && shadowFont != null) {
             bakeProbed = true;
             try {
-                final int wA = shadowFont.width(Component.literal("A"));
-                final int wCjk = shadowFont.width(Component.literal("\u4E2D"));
-                LOGGER.info("MSDF shadow bake probe: width(A)={}, width(U+4E2D)={}", wA, wCjk);
+                monospaceAdvance = shadowFont.width(Component.literal("0"));
+                final int wi = shadowFont.width(Component.literal("i"));
+                final int wW = shadowFont.width(Component.literal("W"));
+                final int wCjk = shadowFont.width(Component.literal("中"));
+                LOGGER.info("MSDF probe: i={} W={} U+4E2D={} monoAdv={}",
+                        wi, wW, wCjk, monospaceAdvance);
             } catch (Exception e) {
-                LOGGER.warn("MSDF shadow bake probe failed", e);
+                LOGGER.warn("MSDF probe failed", e);
             }
         }
-        MsdfGlowAnimator.clientTick();
     }
 }

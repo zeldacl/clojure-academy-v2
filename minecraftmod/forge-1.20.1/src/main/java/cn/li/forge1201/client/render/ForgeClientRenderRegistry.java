@@ -118,7 +118,12 @@ public final class ForgeClientRenderRegistry {
                 new ShaderInstance(event.getResourceProvider(),
                     new ResourceLocation(MyMod1201.MODID, "msdf_text"),
                     MsdfRenderTypes.MSDF_TEXT_FORMAT),
-                MsdfRenderTypes::setMsdfShader
+                shader -> {
+                    MsdfRenderTypes.setMsdfShader(shader);
+                    ClojureInterop.requireNamespace("cn.li.mc1201.gui.cgui.font");
+                    ClojureInterop.invoke("cn.li.mc1201.gui.cgui.font",
+                            "set-msdf-shader!", shader);
+                }
             );
             ClojureInterop.requireNamespace("cn.li.mc1201.client.font.msdf-setup");
             ClojureInterop.invoke("cn.li.mc1201.client.font.msdf-setup", "on-shader-ready!");
