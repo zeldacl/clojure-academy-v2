@@ -12,23 +12,29 @@
 (defn frame-tick!
   [root event]
   (when root
-    (doseq [[widget _ _] (traversal/collect-widgets-z-ordered root [0 0] 1.0 nil)]
-      (try
-        (events/emit-widget-event! widget :frame event)
-        (catch Exception _ nil)))
-    (let [m @(:metadata root)
-          dnode-atom (:dragging-node m)
-          last-drag-atom (:last-drag-time m)]
-      (when (and dnode-atom @dnode-atom)
-        (let [now (System/currentTimeMillis)
-              last @last-drag-atom]
-          (when (and last (> (- now last) drag-time-tol-ms))
-            (try
-              (let [dnode @dnode-atom]
-                (events/emit-widget-event! dnode :drag-stop {:time now})
-                (reset! dnode-atom nil)
-                (reset! last-drag-atom 0))
-              (catch Exception _ nil))))))))
+    (try
+      (doseq [[widget _ _] (traversal/collect-widgets-z-ordered root [0 0] 1.0 nil)]
+        (try
+          (events/emit-widget-event! widget :frame event)
+          (catch Exception _ nil)))
+      (catch Exception e
+        (log/error "[FRAME-TICK-WALK] " (.getMessage e))))
+    (try
+      (let [m @(:metadata root)
+            dnode-atom (:dragging-node m)
+            last-drag-atom (:last-drag-time m)]
+        (when (and dnode-atom @dnode-atom)
+          (let [now (System/currentTimeMillis)
+                last @last-drag-atom]
+            (when (and last (> (- now last) drag-time-tol-ms))
+              (try
+                (let [dnode @dnode-atom]
+                  (events/emit-widget-event! dnode :drag-stop {:time now})
+                  (reset! dnode-atom nil)
+                  (reset! last-drag-atom 0))
+                (catch Exception _ nil))))))
+      (catch Exception e
+        (log/error "[FRAME-TICK-META] " (.getMessage e))))))
 
 (defn mouse-click!
   "Match original LambdaLib2 CGUI behavior: event goes to the
@@ -37,45 +43,45 @@
   [root mx my left top button]
   (let [event-key (if (== 0 button) :left-click :right-click)
         hit (traversal/hit-test root mx my left top)]
+    (log/info "[MOUSE-CLICK] mx:" mx "my:" my "button:" button "hit-found:" (boolean hit))
     (when hit
-      (when (== 0 button)
-        (cgui-screen/gain-focus! root hit))
-      (log/info "CGUI mouse-click! mx:" mx "my:" my "left:" left "top:" top "button:" button
-                "hit:" (or @(:name hit) "unnamed")
-                "has-left-click?" (boolean (seq (get @(:events hit) :left-click)))
-                "hit-pos:" (cgui-core/get-pos hit)
-                "hit-size:" (cgui-core/get-size hit))
-      (events/emit-widget-event!
-       hit
-       event-key
-       {:x (- mx left) :y (- my top) :button button}))))
+      (try
+        (log/info "[MOUSE-CLICK] hit pos:" (try (cgui-core/get-pos hit) (catch Exception e (str "ERR:" (.getMessage e)))))
+        (when (== 0 button)
+          (cgui-screen/gain-focus! root hit))
+        (log/info "[MOUSE-CLICK] emitting" event-key "to hit")
+        (events/emit-widget-event! hit event-key {:x (- mx left) :y (- my top) :button button})
+        (catch Exception e
+          (log/error "[MOUSE-CLICK] error in handler:" (.getMessage e)))))))
 
 (defn mouse-drag!
   [root mx my left top]
-  (let [rx (- mx left)
-        ry (- my top)
-        m @(:metadata root)
-        prev-x (:last-mouse-x m)
-        prev-y (:last-mouse-y m)
-        dx (if prev-x (- rx prev-x) 0)
-        dy (if prev-y (- ry prev-y) 0)
-        dnode-atom (:dragging-node m)
-        now (System/currentTimeMillis)]
-    ;; Update stored position so next call computes correct delta
-    (swap! (:metadata root) assoc :last-mouse-x rx :last-mouse-y ry)
-    (when-let [hit (or (when dnode-atom @dnode-atom)
-                       (traversal/hit-test root rx ry 0 0))]
-      (let [last-drag-atom (:last-drag-time m)
-            start-atom (:last-start-time m)]
-        (when (and dnode-atom (nil? @dnode-atom))
-          (reset! dnode-atom hit)
-          (reset! start-atom now)
-          (events/emit-widget-event! hit :drag-start {:x rx :y ry :dx dx :dy dy :time now}))
-        (when dnode-atom
-          (reset! last-drag-atom now))
-        (events/emit-widget-event! hit :drag {:x rx :y ry :dx dx :dy dy}))
-      ;; Also process as mouse-move to update last position for next delta
-      nil)))
+  (try
+    (let [rx (- mx left)
+          ry (- my top)
+          m @(:metadata root)
+          prev-x (:last-mouse-x m)
+          prev-y (:last-mouse-y m)
+          dx (if prev-x (- rx prev-x) 0)
+          dy (if prev-y (- ry prev-y) 0)
+          dnode-atom (:dragging-node m)
+          now (System/currentTimeMillis)]
+      ;; Update stored position so next call computes correct delta
+      (swap! (:metadata root) assoc :last-mouse-x rx :last-mouse-y ry)
+      (when-let [hit (or (when dnode-atom @dnode-atom)
+                         (traversal/hit-test root rx ry 0 0))]
+        (let [last-drag-atom (:last-drag-time m)
+              start-atom (:last-start-time m)]
+          (when (and dnode-atom (nil? @dnode-atom))
+            (reset! dnode-atom hit)
+            (reset! start-atom now)
+            (events/emit-widget-event! hit :drag-start {:x rx :y ry :dx dx :dy dy :time now}))
+          (when dnode-atom
+            (reset! last-drag-atom now))
+          (events/emit-widget-event! hit :drag {:x rx :y ry :dx dx :dy dy}))
+        nil))
+    (catch Exception e
+      (log/error "[MOUSE-DRAG] " (.getMessage e)))))
 
 (defn focused-editable-textbox?
   "Returns true when the given tree root has a focused widget with an editable textbox."

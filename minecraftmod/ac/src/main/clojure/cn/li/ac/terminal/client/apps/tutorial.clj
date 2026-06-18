@@ -119,7 +119,7 @@
                 h (if image? (or (:img-h seg) 100.0) mr/line-height)
                 w (cgui-core/create-widget :pos [0.0 y] :size [cow h])]
             (if image?
-              (comp/add-component! w (comp/draw-texture (:texture-path seg)))
+              (comp/add-component! w (comp/draw-texture (:texture-path seg) 0xFFFFFFFF))
               (let [{:keys [text font-size color bold?]} seg]
                 (comp/add-component! w (comp/text-box :text text :font-size font-size
                                                       :color color :font (when bold? :ac-bold)))))
@@ -313,17 +313,23 @@
 
 (defn- render-brief-markdown! [brief-widget brief-str misaka-id]
   (cgui-core/clear-widgets! brief-widget)
+  ;; Upstream: glTranslated(3, 15, 0); renderer.widthLimit=130
   (let [brief-segs (mr/render-segments brief-str misaka-id 130.0)]
-    (loop [sg brief-segs y 15.0 n 0]  ;; y=15 matches upstream glTranslated(3, 15, 0)
+    (loop [sg brief-segs y 15.0 n 0]
       (when (seq sg)
         (let [seg (first sg)
-              w (cgui-core/create-widget :pos [0.0 y] :size [riw mr/line-height])]
-          (comp/add-component! w
-            (comp/text-box :text (:text seg) :font-size (:font-size seg)
-                           :color (:color seg) :font (when (:bold? seg) :ac-bold)))
+              image? (= (:type seg) :image)
+              h (if image? (or (:img-h seg) 100.0) mr/line-height)
+              seg-w (if image? (or (:img-w seg) 130.0) 130.0)
+              w (cgui-core/create-widget :pos [3.0 y] :size [seg-w h])]
+          (if image?
+            (comp/add-component! w (comp/draw-texture (:texture-path seg)))
+            (comp/add-component! w
+              (comp/text-box :text (:text seg) :font-size (:font-size seg)
+                             :color (:color seg) :font (when (:bold? seg) :ac-bold))))
           (cgui-core/set-name! w (str "brief-" n))
           (cgui-core/add-widget! brief-widget w)
-          (recur (rest sg) (+ y mr/line-height) (inc n)))))))
+          (recur (rest sg) (+ y h) (inc n)))))))
 
 ;; --- Scroll helpers ---
 
@@ -331,7 +337,7 @@
   (reset! scroll-y 0.0)
   (reset! scroll-progress 0.0)
   (when-let [thumb @thumb-widget]
-    (cgui-core/set-pos! thumb (- cw scroll-track-w) scroll-thumb-min-y))
+    (cgui-core/set-pos! thumb 0.0 scroll-thumb-min-y))
   (when (pos? @max-scroll)
     (reset! max-scroll 0.0))
   (reposition-content! content-ctr scroll-y))
@@ -406,7 +412,7 @@
             (reset! scroll-y 0.0)
             (reset! scroll-progress 0.0)
             (when-let [thumb (find-widget-recursive root "scroll-thumb")]
-              (cgui-core/set-pos! thumb (- cw scroll-track-w) scroll-thumb-min-y))
+              (cgui-core/set-pos! thumb 0.0 scroll-thumb-min-y))
             (when active?
               (let [misaka-id (client-state/get-misaka-id player-uuid)
                     total-h (cached-render-content! content-ctr (:id tut) lang
@@ -429,9 +435,7 @@
   (let [{:keys [scroll-y max-scroll scroll-progress]} ui
         cp (find-widget-recursive root "center-panel")
         _ (swap! (:metadata cp) assoc :clip-children? true)
-        track-x (- cw scroll-track-w)
         thumb-travel (- scroll-thumb-max-y scroll-thumb-min-y)
-        thumb-x (- cw scroll-track-w)
         thumb (find-widget-recursive root "scroll-thumb")]
     (cgui-core/add-widget! cp content-ctr)
     (events/on-drag thumb
@@ -442,7 +446,7 @@
             (clamp-scroll! scroll-y @max-scroll)
             (let [progress (/ @scroll-y @max-scroll)
                   thumb-y (+ scroll-thumb-min-y (* progress thumb-travel))]
-              (cgui-core/set-pos! thumb thumb-x thumb-y)
+              (cgui-core/set-pos! thumb 0.0 thumb-y)
               (reset! scroll-progress progress)
               (reposition-content! content-ctr scroll-y))))))
     (events/on-mouse-scroll thumb
@@ -452,7 +456,7 @@
             (reset! scroll-y (max 0.0 (min @max-scroll new-y)))
             (let [progress (/ @scroll-y @max-scroll)
                   thumb-y (+ scroll-thumb-min-y (* progress thumb-travel))]
-              (cgui-core/set-pos! thumb thumb-x thumb-y)
+              (cgui-core/set-pos! thumb 0.0 thumb-y)
               (reposition-content! content-ctr scroll-y))))))
     (when first-open? (cgui-core/set-visible! cp false))))
 
@@ -471,10 +475,13 @@
         (events/on-left-click bl (fn [_] (preview/cycle-sub-view! pvs :prev) (refresh!))))
       (when-let [br (find-widget-recursive root "btn-right")]
         (events/on-left-click br (fn [_] (preview/cycle-sub-view! pvs :next) (refresh!)))))
-    (let [tw (cgui-core/create-widget :pos [3 3] :size [riw 14])]
+    ;; Upstream: font.draw(title, 3, 3) inside the text widget (not rightWindow directly).
+    ;; text widget is CENTER-aligned in rightWindow → title must be its child.
+    (let [bw (find-widget-recursive root "brief-text")
+          tw (cgui-core/create-widget :pos [3 3] :size [130 14])]
       (comp/add-component! tw (comp/text-box :text "" :font-size 10.0 :color 0xFFFFFFFF))
       (cgui-core/set-name! tw "title-text")
-      (cgui-core/add-widget! rw tw))))
+      (cgui-core/add-widget! bw tw))))
 
 (defn- build-glow-lines! [root]
   ;; Upstream: glow drawn in logo1's FrameEvent with glTranslated(width/2, height/2+15, 0).
@@ -557,6 +564,12 @@
     (cgui-core/set-name! (find-widget-recursive root "scroll_2") "scroll-thumb")
     (let [rw (find-widget-recursive root "rightWindow")]
       (cgui-core/set-name! (cgui-core/find-widget rw "text") "brief-text"))
+    ;; Reorder scrollbar: XML has thumb BEFORE track → track covers thumb.
+    ;; Move thumb to end of children so it renders on top of track.
+    (let [cp (find-widget-recursive root "center-panel")
+          thumb (find-widget-recursive root "scroll-thumb")]
+      (cgui-core/remove-widget! cp thumb)
+      (cgui-core/add-widget! cp thumb))
     ;; Initial visibility (matching original GuiTutorial __init lines 204-206, 350)
     ;; centerPart/showWindow/rightWindow always hidden; leftPart stays visible (blended in)
     (cgui-core/set-visible! (find-widget-recursive root "center-panel") false)

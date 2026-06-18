@@ -414,11 +414,12 @@
     (when (and clip? (seq children))
       (.enableScissor gg wx wy (+ wx ww) (+ wy wh)))
     (doseq [c children]
-      (try
-        (let [[c-abs-x c-abs-y c-scale] (compute-child-abs-pos abs-pos [w h] scale c)]
-          (render-widget-tree! gg c [c-abs-x c-abs-y] c-scale left top))
-        (catch Exception e
-          (log/debug "CGUI render children error:" (.getMessage e)))))
+      (when (cgui-core/visible? c)
+        (try
+          (let [[c-abs-x c-abs-y c-scale] (compute-child-abs-pos abs-pos [w h] scale c)]
+            (render-widget-tree! gg c [c-abs-x c-abs-y] c-scale left top))
+          (catch Exception e
+            (log/error "[RENDER-CHILD] " (.getMessage e) " child=" (pr-str (try (cgui-core/get-pos c) (catch Exception _ "?"))))))))
     (when (and clip? (seq children))
       (.disableScissor gg))))
 
@@ -437,8 +438,9 @@
       ;; Render root's direct children recursively
       (let [[w h] size]
         (doseq [c (cgui-core/get-widgets root)]
-          (try
-            (let [[c-abs-x c-abs-y c-scale] (compute-child-abs-pos [0 0] [w h] 1.0 c)]
-              (render-widget-tree! gg c [c-abs-x c-abs-y] c-scale left top))
-            (catch Exception e
-              (log/debug "CGUI render-tree! child error:" (.getMessage e)))))))))
+          (when (cgui-core/visible? c)
+            (try
+              (let [[c-abs-x c-abs-y c-scale] (compute-child-abs-pos [0 0] [w h] 1.0 c)]
+                (render-widget-tree! gg c [c-abs-x c-abs-y] c-scale left top))
+              (catch Exception e
+                (log/error "[RENDER-ROOT-CHILD] " (.getMessage e))))))))))

@@ -169,8 +169,9 @@
                    trimmed (str/trim line)]
                (cond
                  ;; Standalone image: ![alt](path) matched against full trimmed line
+                 ;; re-find returns [full-match & groups] vector → must compare (first m)
                  (let [m (re-find image-re trimmed)]
-                   (and m (= trimmed m)))
+                   (and m (= trimmed (first m))))
                  (let [[_ alt-img texture-path] (re-find image-re trimmed)]
                    (recur more
                           (conj segs

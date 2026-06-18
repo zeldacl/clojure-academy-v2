@@ -228,7 +228,7 @@
           nil)))
     (catch Exception e
       (log/error "Error rendering" log-label ":" (.getMessage e))
-      (log/error "Exception:" e))))
+      (log/error "[BRIDGE-RENDER-TRACE]" (with-out-str (.printStackTrace e))))))
 
 ;; -- Mouse/key handlers --
 
@@ -239,6 +239,7 @@
     true
     (catch Exception e
       (log/error "Error handling" log-label "mouse click:" (.getMessage e))
+      (log/error "[BRIDGE-CLICK-TRACE]" (with-out-str (.printStackTrace e)))
       false)))
 
 (defn- mouse-drag-cgui!
@@ -309,9 +310,9 @@
           (if interactive?
             (key-press-cgui! gui-widget key-code scan-code resolved-log-label)
             false)))
-      (mouseScrolled [mouse-x mouse-y scroll-delta-x scroll-delta-y]
+      (mouseScrolled [mouse-x mouse-y scroll-delta]
         (try (cgui-rt/mouse-scroll! gui-widget (int mouse-x) (int mouse-y) @left @top
-                                    (double scroll-delta-x) (double scroll-delta-y))
+                                    0.0 (double scroll-delta))
              true
              (catch Exception _ false)))
       (charTyped [code-point modifiers]
