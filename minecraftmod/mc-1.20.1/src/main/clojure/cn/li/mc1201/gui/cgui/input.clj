@@ -52,19 +52,30 @@
 
 (defn mouse-drag!
   [root mx my left top]
-  (when-let [hit (traversal/hit-test root mx my left top)]
-    (let [m @(:metadata root)
-          dnode-atom (:dragging-node m)
-          last-drag-atom (:last-drag-time m)
-          start-atom (:last-start-time m)
-          now (System/currentTimeMillis)]
-      (when (and dnode-atom (nil? @dnode-atom))
-        (reset! dnode-atom hit)
-        (reset! start-atom now)
-        (events/emit-widget-event! hit :drag-start {:x mx :y my :time now}))
-      (when dnode-atom
-        (reset! last-drag-atom now)))
-    (events/emit-widget-event! hit :drag {:x mx :y my})))
+  (let [rx (- mx left)
+        ry (- my top)
+        m @(:metadata root)
+        prev-x (:last-mouse-x m)
+        prev-y (:last-mouse-y m)
+        dx (if prev-x (- rx prev-x) 0)
+        dy (if prev-y (- ry prev-y) 0)
+        dnode-atom (:dragging-node m)
+        now (System/currentTimeMillis)]
+    ;; Update stored position so next call computes correct delta
+    (swap! (:metadata root) assoc :last-mouse-x rx :last-mouse-y ry)
+    (when-let [hit (or (when dnode-atom @dnode-atom)
+                       (traversal/hit-test root rx ry 0 0))]
+      (let [last-drag-atom (:last-drag-time m)
+            start-atom (:last-start-time m)]
+        (when (and dnode-atom (nil? @dnode-atom))
+          (reset! dnode-atom hit)
+          (reset! start-atom now)
+          (events/emit-widget-event! hit :drag-start {:x rx :y ry :dx dx :dy dy :time now}))
+        (when dnode-atom
+          (reset! last-drag-atom now))
+        (events/emit-widget-event! hit :drag {:x rx :y ry :dx dx :dy dy}))
+      ;; Also process as mouse-move to update last position for next delta
+      nil)))
 
 (defn focused-editable-textbox?
   "Returns true when the given tree root has a focused widget with an editable textbox."

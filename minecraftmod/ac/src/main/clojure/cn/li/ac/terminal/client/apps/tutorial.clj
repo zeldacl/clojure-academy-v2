@@ -42,7 +42,19 @@
 (def cx (+ lx lw)) (def cw 172.0)
 ;; cox = 5.0: text widget x=2 + 3px internal pad (matches upstream glTranslated(3,3-delta,0))
 (def cox 5.0)  (def cow 160.0)  ;; upstream text widget: 160×210.5
-(def coy 0.0)  (def coh 210.5)  ;; content visible height (matches upstream centerPart/text height)
+(def coy 3.0)  (def coh 210.5)  ;; coy=3 matches upstream glTranslated(3, 3-delta, 0); coh=210.5 text height
+;; rightPart from XML: x=92(=cx), w=332, h=220.5, alignHeight=CENTER in frame
+(def rpw 332.0)
+;; rightPart abs-y in frame = (frame.h - rightPart.h)/2 = (240-220.5)/2 = 9.75
+(def rp-abs-y (/ (- gh panel-h) 2.0))
+;; Logo1 from XML: 899×236, scale=0.25 → effective 224.75×59, CENTER in rightPart
+;; Alignment uses SCALED dims: offset-x = (rpw - 899*0.25)/2 = (332-224.75)/2 = 53.625
+;; offset-y = (panel-h - 236*0.25)/2 = (220.5-59)/2 = 80.75
+;; abs = parent.abs + offset + raw_pos (raw_pos is NOT scaled)
+(def logo1-abs-x (+ cx (/ (- rpw (* 899.0 0.25)) 2.0)))          ;; = 92+53.625 = 145.625
+(def logo1-abs-y (+ rp-abs-y (/ (- panel-h (* 236.0 0.25)) 2.0) 59.0))  ;; = 9.75+80.75+59 = 149.5
+;; Glow center y = logo1-abs-y + (236/2+15)*0.25 = 149.5+33.25 = 182.75
+(def glow-center-y (+ logo1-abs-y (* (+ (/ 236.0 2.0) 15.0) 0.25)))
 ;; Upstream showWindow at x = rightPart.x + rightPart.width - showWindow.width
 ;; = 92 + 332 - 158.5 = 265.5
 (def rx 265.5) (def rw 158.5)
@@ -86,45 +98,37 @@
 (defn- cached-render-content! [content-ctr tut-id lang content-str misaka-id]
   (let [cache-key [tut-id lang (str misaka-id)]
         cached (get @content-cache cache-key)]
-    (if cached
-      (do
-        (cgui-core/clear-widgets! content-ctr)
-        (doseq [[i seg] (map-indexed vector (:segs cached))]
-          (let [image? (= (:type seg) :image)
-                h (if image? (or (:img-h seg) 100.0) mr/line-height)
-                y (:y-offset seg 0.0)
-                w (cgui-core/create-widget :pos [0.0 y] :size [cow h])]
-            (if image?
-              (comp/add-component! w (comp/draw-texture (:texture-path seg)))
-              (let [{:keys [text font-size color bold?]} seg]
-                (comp/add-component! w (comp/text-box :text text :font-size font-size
-                                                      :color color :font (when bold? :ac-bold)))))
-            (cgui-core/set-name! w (str "ct-" i))
-            (cgui-core/add-widget! content-ctr w)))
-        (:total-h cached))
-      (let [segs (mr/render-segments content-str misaka-id)
-            total-h (loop [sg segs y 0.0 n 0]
+    (let [segs (if cached
+                 (:segs cached)
+                 (mr/render-segments content-str misaka-id))
+          total-h (if cached
+                    (:total-h cached)
+                    (loop [sg segs y 0.0]
                       (if (seq sg)
                         (let [seg (first sg)
-                              image? (= (:type seg) :image)
-                              h (if image? (or (:img-h seg) 100.0) mr/line-height)]
-                          (recur (rest sg) (+ y h) (inc n)))
-                        y))]
-        (cgui-core/clear-widgets! content-ctr)
-        (doseq [[i seg] (map-indexed vector segs)]
-          (let [image? (= (:type seg) :image)
+                              h (if (= (:type seg) :image)
+                                  (or (:img-h seg) 100.0)
+                                  mr/line-height)]
+                          (recur (rest sg) (+ y h)))
+                        y)))]
+      (cgui-core/clear-widgets! content-ctr)
+      (loop [sg segs y 0.0 n 0]
+        (when (seq sg)
+          (let [seg (first sg)
+                image? (= (:type seg) :image)
                 h (if image? (or (:img-h seg) 100.0) mr/line-height)
-                y (:y-offset seg 0.0)
                 w (cgui-core/create-widget :pos [0.0 y] :size [cow h])]
             (if image?
               (comp/add-component! w (comp/draw-texture (:texture-path seg)))
               (let [{:keys [text font-size color bold?]} seg]
                 (comp/add-component! w (comp/text-box :text text :font-size font-size
                                                       :color color :font (when bold? :ac-bold)))))
-            (cgui-core/set-name! w (str "ct-" i))
-            (cgui-core/add-widget! content-ctr w)))
-        (swap! content-cache assoc cache-key {:segs segs :total-h total-h})
-        total-h))))
+            (cgui-core/set-name! w (str "ct-" n))
+            (cgui-core/add-widget! content-ctr w)
+            (recur (rest sg) (+ y h) (inc n)))))
+      (when-not cached
+        (swap! content-cache assoc cache-key {:segs segs :total-h total-h}))
+      total-h)))
 
 ;; --- Content helpers ---
 
@@ -151,7 +155,7 @@
         y))))
 
 (defn- reposition-content! [content-ctr scroll-y]
-  (cgui-core/set-pos! content-ctr (+ cx cox) (- coy @scroll-y)))
+  (cgui-core/set-pos! content-ctr cox (- coy @scroll-y)))
 
 (defn- clamp-scroll! [scroll-y max-scroll]
   (let [clamped (max 0.0 (min (double @scroll-y) (double max-scroll)))]
@@ -238,17 +242,30 @@
 
 (defn- setup-first-open-animation!
   [root anim-start]
-  (let [logo-timings [["logo3" 100 300]
+  (let [;; Match upstream blend() calls:
+        ;;   blend(logo2 0.65 0.3), blend(logo0 1.75 0.3),
+        ;;   blend(leftPart 1.75 0.3), blend(logo1 1.3 0.3), blend(logo3 0.1 0.3)
+        logo-timings [["logo3" 100 300]
                       ["logo2" 650 300]
                       ["logo1" 1300 300]
-                      ["logo0" 1750 300]]
+                      ["logo0" 1750 300]
+                      ["left-panel" 1750 300]]
+        ;; Glow drawn in logo1-local unscaled space (matches upstream exactly).
+        ;; lineglow(cl, len, ht) / lineglow(-len, -cl, ht) in logo1's FrameEvent.
         ln 500.0 ln2 300.0 cl 50.0
-        glow-h 5.0
+        glow-h 12.0            ;; 3px visual / 0.25 logo1 scale
         glow-frame-offset-ms 400
-        logo1-x (- (/ gw 2) 112.375)
-        logo1-w 224.75
-        logo1-center-x (+ logo1-x (/ logo1-w 2))
+        ;; logo1 center in logo1-local = 899/2 = 449.5 (matches glTranslated(width/2, ...))
+        logo1-half-w (/ 899.0 2.0)
+        ;; glow y in logo1-local = (glow-center-y - logo1-abs-y) / 0.25 ≈ 133.0
+        glow-center-local (/ (- glow-center-y logo1-abs-y) 0.25)
+        glow-y (- glow-center-local (/ glow-h 2.0))
         done? (atom false)]
+    ;; Synchronous init: set alpha=0 and logo3 y=63 (matching upstream blend/blendy)
+    (doseq [[logo-name _ _] logo-timings]
+      (apply-logo-alpha! root logo-name 0))
+    (when-let [l3 (find-widget-recursive root "logo3")]
+      (cgui-core/set-pos! l3 0.0 63.0))
     (events/on-frame root
       (fn [_]
         (when (and (not @done?) @anim-start)
@@ -258,38 +275,36 @@
             (when-let [l3 (find-widget-recursive root "logo3")]
               (let [y-t (max 0.0 (min 1.0 (/ (- elapsed 700.0) 400.0)))
                     l3y (+ 63.0 (* y-t (- -36.0 63.0)))]
-                (cgui-core/set-pos! l3 (- (/ gw 2) 18.625) (+ (/ gh 2) l3y))))
+                (cgui-core/set-pos! l3 0.0 l3y)))
             (let [dt (- elapsed glow-frame-offset-ms)
                   b1 300.0 b2 200.0]
               (when (>= dt 0)
+                ;; Phase 1 (dt < b1): glow extends outward (upstream lineglow(cl, len, ht))
+                ;; Phase 2 (dt >= b1): inner ends contract (upstream lineglow(ln-len2, len, ht))
+                ;; All positions in logo1-local unscaled space.
                 (if (< dt b1)
                   (let [len (* ln (/ dt b1))]
                     (when (> len cl)
                       (when-let [gr (find-widget-recursive root "glow-right")]
-                        (cgui-core/set-pos! gr (- logo1-center-x cl) (second (cgui-core/get-pos gr)))
+                        (cgui-core/set-pos! gr (+ logo1-half-w cl) glow-y)
                         (cgui-core/set-size! gr (- len cl) glow-h)
                         (cgui-core/set-visible! gr true))
                       (when-let [gl (find-widget-recursive root "glow-left")]
-                        (cgui-core/set-pos! gl (- logo1-center-x len) (second (cgui-core/get-pos gl)))
+                        (cgui-core/set-pos! gl (- logo1-half-w len) glow-y)
                         (cgui-core/set-size! gl (- len cl) glow-h)
                         (cgui-core/set-visible! gl true))))
                   (let [ldt (min (- dt b1) b2)
                         len2 (+ (* (- ln cl cl) (- 1.0 (/ ldt b2))) cl)]
                     (when-let [gr (find-widget-recursive root "glow-right")]
-                      (cgui-core/set-pos! gr (- logo1-center-x (- ln len2)) (second (cgui-core/get-pos gr)))
-                      (cgui-core/set-size! gr (- ln (- ln len2)) glow-h))
+                      (cgui-core/set-pos! gr (+ logo1-half-w (- ln len2)) glow-y)
+                      (cgui-core/set-size! gr len2 glow-h))
                     (when-let [gl (find-widget-recursive root "glow-left")]
-                      (cgui-core/set-pos! gl (- logo1-center-x ln) (second (cgui-core/get-pos gl)))
-                      (cgui-core/set-size! gl (- ln (- ln len2)) glow-h))))))
+                      (cgui-core/set-pos! gl (- logo1-half-w ln) glow-y)
+                      (cgui-core/set-size! gl len2 glow-h))))))
+            ;; Upstream: listArea.transform.doesDraw = dt > 2.0
             (when (>= elapsed 2400)
-              (when-let [lp (find-widget-recursive root "left-panel")]
-                (cgui-core/set-visible! lp true))
-              (doseq [nm ["logo0" "logo1" "logo2" "logo3"]]
-                (when-let [lw (find-widget-recursive root nm)]
-                  (cgui-core/set-visible! lw false)))
-              (doseq [nm ["glow-right" "glow-left"]]
-                (when-let [gw (find-widget-recursive root nm)]
-                  (cgui-core/set-visible! gw false)))
+              (when-let [list-w (find-widget-recursive root "list")]
+                (cgui-core/set-visible! list-w true))
               (net-client/send-to-server (tut-msg/msg-id :tutorial/mark-first-open-done) {})
               (client-state/apply-sync! {:first-open? false})
               (reset! done? true))))))))
@@ -299,7 +314,7 @@
 (defn- render-brief-markdown! [brief-widget brief-str misaka-id]
   (cgui-core/clear-widgets! brief-widget)
   (let [brief-segs (mr/render-segments brief-str misaka-id 130.0)]
-    (loop [sg brief-segs y 0.0 n 0]
+    (loop [sg brief-segs y 15.0 n 0]  ;; y=15 matches upstream glTranslated(3, 15, 0)
       (when (seq sg)
         (let [seg (first sg)
               w (cgui-core/create-widget :pos [0.0 y] :size [riw mr/line-height])]
@@ -324,15 +339,16 @@
 ;; --- Widget builders ---
 
 (defn- build-background! [root]
-  (let [bg (cgui-core/create-widget :pos [0 0] :size [gw gh])]
-    (comp/add-component! bg (comp/tint 0xC0101010))
-    (cgui-core/add-widget! root bg)))
+  (comp/add-component! root (comp/tint 0xC0101010)))
 
 (declare make-entry-click-handler)
 
 (defn- populate-left-panel!
   [root entries lang first-open? content-ctr ui player-uuid]
   (let [lp (find-widget-recursive root "left-panel")
+        ;; Upstream: entries are children of listArea, not leftPart directly.
+        ;; Hiding listArea hides entries too (listArea.doesDraw = dt > 2.0).
+        list-w (cgui-core/find-widget lp "list")
         ready? (client-state/ready?)
         is-active? (fn [tut]
                      (or (:default-installed? tut)
@@ -345,20 +361,19 @@
                                           {:active [] :inactive []}
                                           entries)
         grouped (concat active inactive)]
-    (when first-open? (cgui-core/set-visible! lp false))
     (doseq [[idx tut] (map-indexed vector grouped)]
-      (let [y (+ liy (* idx eh))
+      (let [y (* idx eh)   ;; relative to list widget (which is at x=6.6,y=7.0 in leftPart)
             active? (is-active? tut)
             title (or (:title (tut-content/load-tutorial-content lang (:id tut)))
                       (name (:id tut)))
-            ew (cgui-core/create-widget :pos [lix y] :size [liw eh])]
+            ew (cgui-core/create-widget :pos [0.0 y] :size [liw eh])]
         (comp/add-component! ew
           (comp/text-box :text title :font-size 10.0
                          :color (if active? learned-color unlearned-color)
                          :align :left :height-align :center))
         (events/on-left-click ew
           (make-entry-click-handler root tut player-uuid lang content-ctr ui))
-        (cgui-core/add-widget! lp ew)))))
+        (cgui-core/add-widget! list-w ew)))))
 
 (defn- make-entry-click-handler
   [root tut player-uuid lang content-ctr ui]
@@ -370,10 +385,12 @@
                           (try (client-state/is-activated? player-uuid (:id tut))
                                (catch Throwable _ false)))]
           (when (nil? @current-tut-id)
-            (setup-logo-fade-out! root (atom (System/currentTimeMillis))
-                                 ["logo0" "logo1" "logo2" "logo3"] 300)
-            (doseq [nm ["glow-right" "glow-left"]]
+            ;; Upstream: blend(logos) fades+disposes logos.
+            ;; Glow widgets are children of logo1 → hidden automatically when logo1 is hidden.
+            (doseq [nm ["logo0" "logo1" "logo2" "logo3"]]
               (when-let [w (find-widget-recursive root nm)]
+                (when (comp/get-drawtexture-component w)
+                  (apply-logo-alpha! root nm 0))
                 (cgui-core/set-visible! w false)))
             ;; Show children individually (not rightPart — logos inside need visibility)
             (let [cp (find-widget-recursive root "center-panel")
@@ -460,60 +477,48 @@
       (cgui-core/add-widget! rw tw))))
 
 (defn- build-glow-lines! [root]
-  (let [glow-h 5.0
-        logo1-center-y (+ (- (/ gh 2) 59.0) (/ 59.0 2) 15)
-        glow-y (- logo1-center-y (/ glow-h 2))]
-    (let [gr (cgui-core/create-widget
-              :pos [(- (/ gw 2) 112.375) glow-y] :size [0 glow-h])]
-      (comp/add-component! gr (comp/tint 0x88FFFFFF))
-      (cgui-core/set-name! gr "glow-right")
-      (cgui-core/add-widget! root gr))
-    (let [gl (cgui-core/create-widget
-              :pos [(- (/ gw 2) 112.375) glow-y] :size [0 glow-h])]
-      (comp/add-component! gl (comp/tint 0x88FFFFFF))
-      (cgui-core/set-name! gl "glow-left")
-      (cgui-core/add-widget! root gl))))
+  ;; Upstream: glow drawn in logo1's FrameEvent with glTranslated(width/2, height/2+15, 0).
+  ;; As children of logo1, positions must be in logo1's UNSCALED space (div by 0.25).
+  ;; lineglow(ln-ln2, ln, ht) → right line from x=200 to x=500 in logo1-local.
+  ;; lineglow(-ln, -(ln-ln2), ht) → left line from x=-500 to x=-200.
+  (let [ls 0.25               ;; logo1 scale
+        glow-h (/ 3.0 ls)     ;; 3px visual → 12px in logo1-local
+        glow-center-local (/ (- glow-center-y logo1-abs-y) ls)  ;; ≈ 133.0
+        glow-y (- glow-center-local (/ glow-h 2))
+        glow-color 0xCCFFFFFF
+        logo1-w (find-widget-recursive root "logo1")]
+    (when logo1-w
+      (let [gr (cgui-core/create-widget :pos [0 glow-y] :size [0 glow-h])]
+        (comp/add-component! gr (comp/draw-texture nil glow-color))
+        (cgui-core/set-name! gr "glow-right")
+        (cgui-core/add-widget! logo1-w gr))
+      (let [gl (cgui-core/create-widget :pos [0 glow-y] :size [0 glow-h])]
+        (comp/add-component! gl (comp/draw-texture nil glow-color))
+        (cgui-core/set-name! gl "glow-left")
+        (cgui-core/add-widget! logo1-w gl)))))
 
 (defn- setup-static-glow! [root]
+  ;; Upstream non-firstOpen: static lineglow(ln-ln2, ln, ht) / lineglow(-ln, -(ln-ln2), ht)
+  ;; inside logo1's FrameEvent. Coordinates in logo1-local unscaled space.
   (doseq [nm ["logo0" "logo2" "logo3"]]
     (when-let [lw (find-widget-recursive root nm)]
       (cgui-core/set-visible! lw false)))
   (let [ln     500.0
         ln2    300.0
-        glow-h 5.0
-        logo1-x (- (/ gw 2) 112.375)
-        logo1-w 224.75
-        logo1-center-x (+ logo1-x (/ logo1-w 2))
-        glow-y (+ (- (/ gh 2) 59.0) (/ 59.0 2) 15 (- (/ glow-h 2)))
-        right-start (+ logo1-center-x (- ln ln2))
-        left-start  (- logo1-center-x ln)
-        glow-width  ln2
-        start-ms (System/currentTimeMillis)
-        period-ms 2800.0
-        base-alpha 0x44
-        amp-alpha  0x33]
+        glow-h 12.0            ;; 3px visual / 0.25 scale
+        logo1-half-w (/ 899.0 2.0)
+        glow-center-local (/ (- glow-center-y logo1-abs-y) 0.25)
+        glow-y (- glow-center-local (/ glow-h 2.0))
+        right-start (+ logo1-half-w (- ln ln2))   ;; 449.5 + 200 = 649.5
+        left-start  (- logo1-half-w ln)           ;; 449.5 - 500 = -50.5
+        glow-width  ln2]                          ;; 300
     (when-let [gr (find-widget-recursive root "glow-right")]
       (cgui-core/set-pos! gr right-start glow-y)
       (cgui-core/set-size! gr glow-width glow-h))
     (when-let [gl (find-widget-recursive root "glow-left")]
       (cgui-core/set-pos! gl left-start glow-y)
       (cgui-core/set-size! gl glow-width glow-h))
-    (apply-logo-alpha! root "logo1" 255)
-    (let [done? (atom false)]
-      (events/on-frame root
-        (fn [_]
-          (when-not @done?
-            (let [elapsed (- (System/currentTimeMillis) start-ms)
-                  phase (/ (mod elapsed period-ms) period-ms)
-                  sin-val (Math/sin (* 2.0 Math/PI phase))
-                  alpha (bit-and 0xFF (unchecked-int (+ base-alpha (* amp-alpha sin-val))))
-                  argb (bit-or (bit-shift-left alpha 24) 0x00FFFFFF)]
-              (when-let [gr (find-widget-recursive root "glow-right")]
-                (when-let [tint-comp (comp/get-tint-component gr)]
-                  (comp/set-tint! tint-comp argb)))
-              (when-let [gl (find-widget-recursive root "glow-left")]
-                (when-let [tint-comp (comp/get-tint-component gl)]
-                  (comp/set-tint! tint-comp argb))))))))))
+    (apply-logo-alpha! root "logo1" 255)))
 
 ;; --- Main open! function ---
 
@@ -531,7 +536,7 @@
         entries (tut-registry/all-tutorials)
         first-open? (client-state/first-open? player-uuid)
         content-ctr (cgui-core/create-widget
-                     :pos [(+ cx cox) coy] :size [cow 5000.0])
+                     :pos [cox coy] :size [cow 5000.0])
         ui {:current-tut-id   (atom nil)
             :scroll-y         (atom 0.0)
             :max-scroll       (atom 0.0)
@@ -552,12 +557,14 @@
     (cgui-core/set-name! (find-widget-recursive root "scroll_2") "scroll-thumb")
     (let [rw (find-widget-recursive root "rightWindow")]
       (cgui-core/set-name! (cgui-core/find-widget rw "text") "brief-text"))
-    ;; Initial visibility (matching original GuiTutorial __init)
+    ;; Initial visibility (matching original GuiTutorial __init lines 204-206, 350)
+    ;; centerPart/showWindow/rightWindow always hidden; leftPart stays visible (blended in)
+    (cgui-core/set-visible! (find-widget-recursive root "center-panel") false)
+    (cgui-core/set-visible! (find-widget-recursive root "showWindow") false)
+    (cgui-core/set-visible! (find-widget-recursive root "rightWindow") false)
     (when first-open?
-      (cgui-core/set-visible! (find-widget-recursive root "left-panel") false)
-      (cgui-core/set-visible! (find-widget-recursive root "center-panel") false)
-      (cgui-core/set-visible! (find-widget-recursive root "showWindow") false)
-      (cgui-core/set-visible! (find-widget-recursive root "rightWindow") false))
+      (when-let [list-w (find-widget-recursive root "list")]
+        (cgui-core/set-visible! list-w false)))
     ;; Logo initial alpha=0
     (doseq [nm ["logo0" "logo1" "logo2" "logo3"]]
       (apply-logo-alpha! root nm 0))

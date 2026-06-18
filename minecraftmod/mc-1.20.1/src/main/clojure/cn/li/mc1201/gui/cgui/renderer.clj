@@ -381,13 +381,19 @@
         pivot-y (or (:pivot-y tm) 0.0)
         align-w (when-let [a (:align-width tm)] (-> a name str/lower-case keyword))
         align-h (when-let [a (:align-height tm)] (-> a name str/lower-case keyword))
-        align-offset-x (case align-w :center (int (Math/round (double (/ (- pw w) 2.0)))) :right (int (Math/round (double (- pw w)))) 0)
-        align-offset-y (case align-h :center (int (Math/round (double (/ (- ph h) 2.0)))) :middle (int (Math/round (double (/ (- ph h) 2.0)))) :bottom (int (Math/round (double (- ph h)))) 0)
+        ;; LambdaLib2 uses SCALED widget dimensions; must match traversal.clj
+        sw (* (double w) own-scale)
+        sh (* (double h) own-scale)
+        align-offset-x (case align-w :center (/ (- pw sw) 2.0) :right (- pw sw) 0.0)
+        align-offset-y (case align-h :center (/ (- ph sh) 2.0) :middle (/ (- ph sh) 2.0) :bottom (- ph sh) 0.0)
         pivot-shift-x (* (double pivot-x) (double w))
         pivot-shift-y (* (double pivot-y) (double h))]
-    [(+ px (int align-offset-x) (int wx) (int (- pivot-shift-x)))
-     (+ py (int align-offset-y) (int wy) (int (- pivot-shift-y)))
-     cum-scale]))
+    ;; LambdaLib2: child screen pos = parent.abs + child.transform * parent_scale
+    (let [child-x (+ (double align-offset-x) (double wx) (double (- pivot-shift-x)))
+          child-y (+ (double align-offset-y) (double wy) (double (- pivot-shift-y)))]
+      [(+ px (int (Math/round (* child-x (double parent-scale)))))
+       (+ py (int (Math/round (* child-y (double parent-scale)))))
+       cum-scale])))
 
 (defn- render-widget-tree!
   "Recursively render a widget and its children.

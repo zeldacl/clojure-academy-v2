@@ -19,16 +19,23 @@
           pivot-y (or (:pivot-y tm) 0.0)
           align-w (when-let [a (:align-width tm)] (-> a name str/lower-case keyword))
           align-h (when-let [a (:align-height tm)] (-> a name str/lower-case keyword))
-          align-offset-x (case align-w :center (int (Math/round (double (/ (- pw w) 2.0)))) :right (int (Math/round (double (- pw w)))) 0)
+          ;; LambdaLib2 uses SCALED widget dimensions for alignment offset.
+          ;; e.g. logo1 raw 899×236, scale 0.25 → effective 224.75×59 centered in rightPart.
+          sw (* w own-scale)
+          sh (* h own-scale)
+          align-offset-x (case align-w :center (/ (- pw sw) 2.0) :right (- pw sw) 0.0)
           align-offset-y (case align-h
-                           :center (int (Math/round (double (/ (- ph h) 2.0))))
-                           :middle (int (Math/round (double (/ (- ph h) 2.0))))
-                           :bottom (int (Math/round (double (- ph h))))
-                           0)
+                           :center (/ (- ph sh) 2.0)
+                           :middle (/ (- ph sh) 2.0)
+                           :bottom (- ph sh)
+                           0.0)
           pivot-shift-x (* pivot-x w)
           pivot-shift-y (* pivot-y h)
-          abs-x (+ px align-offset-x wx (- pivot-shift-x))
-          abs-y (+ py align-offset-y wy (- pivot-shift-y))
+          ;; LambdaLib2: child screen pos = parent.abs + child.transform * parent.cumulative_scale
+          child-x (+ align-offset-x wx (- pivot-shift-x))
+          child-y (+ align-offset-y wy (- pivot-shift-y))
+          abs-x (+ px (* child-x parent-scale))
+          abs-y (+ py (* child-y parent-scale))
           children (cgui-core/get-widgets root)
           next-parent-size [w h]
           next-pos [abs-x abs-y]]
