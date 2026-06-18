@@ -4,7 +4,6 @@
   Separated from cn.li.ac.item.components because the tutorial item carries
   tutorial-specific business logic (terminal GUI open, achievement trigger)."
   (:require [cn.li.mcmod.item.dsl :as idsl]
-            [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.util.log :as log]
             [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]))
@@ -18,15 +17,16 @@
 (def ^:private tutorial-on-right-click
   (fn [event-data]
     (let [{:keys [player side]} event-data]
-      ;; Client side: open tutorial GUI (original AC GuiTutorial)
-      ;; Only open when clicking in the air — if targeting a block,
-      ;; let the block handler take priority (prevents GUI stacking).
+      ;; Client side: open tutorial GUI (original AC GuiTutorial).
+      ;; No raytrace guard needed — Forge's event chain naturally prevents
+      ;; double-open: RightClickBlock fires first; if a block handler consumes
+      ;; it (AC blocks) or vanilla Block.use succeeds (chests etc.), useItem is
+      ;; set to DENY and RightClickItem never fires.  The tutorial GUI only
+      ;; opens when the block interaction is PASS (dirt, air, etc.).
       (when (= side :client)
-        (let [targeting-block? (boolean (entity/player-raytrace-block player 5.0 false))]
-          (when-not targeting-block?
-            (when-let [open-fn (requiring-resolve
-                                'cn.li.ac.terminal.client.actions/open-tutorial!)]
-              (open-fn player)))))
+        (when-let [open-fn (requiring-resolve
+                            'cn.li.ac.terminal.client.actions/open-tutorial!)]
+          (open-fn player)))
       ;; Server side: trigger open_misaka_cloud achievement
       ;; (original AC MSG_TRIGGER → ACAdvancements.trigger)
       (when (= side :server)
@@ -35,8 +35,11 @@
                                  'cn.li.ac.achievement.dispatcher/trigger-custom-event!)]
             (trigger-fn (uuid/player-uuid player) "open_misaka_cloud"))
           (catch Throwable _ nil)))
-      ;; Item is NOT consumed (matches original AC: EnumActionResult.SUCCESS)
-      {:consume? false})))
+      ;; Item IS consumed (matches original AC: EnumActionResult.SUCCESS).
+      ;; Returning :consume? true tells the native Item.use() callback to
+      ;; return InteractionResult.SUCCESS, which short-circuits the Minecraft
+      ;; interaction chain and prevents any block GUI from opening.
+      {:consume? true})))
 
 ;; ============================================================================
 ;; Initialization

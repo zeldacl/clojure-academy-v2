@@ -1,5 +1,10 @@
 (ns cn.li.forge1201.runtime.item-handler
-  "Item use event handler for runtime-driven items (Forge layer)."
+  "Item use event handler for runtime-driven items (Forge layer).
+
+  RightClickItem listener kept as a fallback for runtime plan-actions when
+  Item.use() returns PASS.  The primary right-click path now goes through
+  the native `ScriptedItem.use()` / `NbtBarItem.use()` override which calls
+  the per-item DSL callback directly — no events needed."
     (:require [cn.li.mc1201.runtime.event.item-use :as item-use]
               [cn.li.forge1201.runtime.owner :as runtime-owner]
               [cn.li.mcmod.util.log :as log])
@@ -10,6 +15,10 @@
            [net.minecraft.world InteractionResult]
            [net.minecraft.world InteractionHand]
            [net.minecraft.world.entity.player Player]))
+
+;; ============================================================================
+;; Event handlers
+;; ============================================================================
 
 (defn- on-item-finish-using
   "Handle finish using item event (e.g. food/charge complete)."
@@ -26,7 +35,12 @@
         (item-use/handle-finish-using! entity stack side "Forge"))))
 
 (defn- on-item-use
-  "Handle item right-click event."
+  "Handle item right-click event — fallback path.
+  The primary right-click path is the native Item.use() override in
+  ScriptedItem/NbtBarItem which returns InteractionResult.SUCCESS when
+  a DSL handler consumes the interaction, blocking the block-interaction
+  chain at the source.  This listener handles the remaining case where
+  use() returns PASS and plan-actions need to run."
   [^PlayerInteractEvent$RightClickItem event]
   (let [^InteractionHand hand (.getHand event)
         player (.getEntity event)
