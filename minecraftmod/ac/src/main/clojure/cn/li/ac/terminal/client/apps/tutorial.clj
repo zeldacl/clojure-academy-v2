@@ -527,7 +527,7 @@
         ;; Load widget tree from tutorial.xml (matching original GuiTutorial)
         xml-path (modid/asset-path "guis" "tutorial.xml")
         doc (cgui-doc/read-xml xml-path)
-        root (cgui-core/find-widget doc "frame")
+        root (cgui-doc/get-widget doc "frame")
         entries (tut-registry/all-tutorials)
         first-open? (client-state/first-open? player-uuid)
         content-ctr (cgui-core/create-widget
