@@ -52,7 +52,10 @@
   [root mx my left top]
   (let [mx-rel (- mx left)
         my-rel (- my top)
-        widgets (collect-widgets-z-ordered root [0 0] 1.0 nil)]
+        ;; Pass root's own size as parent-size so alignment offsets compute to 0
+        ;; (the root has no screen parent — it's positioned by left/top directly).
+        root-size (cgui-core/get-size root)
+        widgets (collect-widgets-z-ordered root [0 0] 1.0 root-size)]
   ;; Iterate in render order and keep the last matching widget (top-most in painter order).
     (loop [path []
            best nil
