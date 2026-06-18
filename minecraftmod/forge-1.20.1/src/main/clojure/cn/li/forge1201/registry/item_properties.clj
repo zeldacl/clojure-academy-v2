@@ -4,11 +4,18 @@
   Builds a per-item `clojure.lang.IFn` callback closure that ScriptedItem/NbtBarItem
   call from their native `Item.use()` override.  The callback captures the DSL item
   spec's `:on-use` and `:on-right-click` handlers and maps `:consume?` to
-  `InteractionResultHolder.success` / `pass`.  Each item instance gets its own
+  `InteractionResultHolder.success` / `pass`.
+  The callback wraps handler execution with `with-player-owner` so that
+  `*client-owner*` / `*server-owner*` dynamic vars are bound (matching the
+  Forge RightClickItem event path).  Each item instance gets its own
   closure — the Java class stays generic."
+  (:require [cn.li.forge1201.runtime.owner :as runtime-owner])
   (:import [net.minecraft.world.food FoodProperties$Builder]
            [net.minecraft.world.item Item Item$Properties Rarity]
            [net.minecraft.world InteractionResultHolder]
+           [net.minecraft.world.entity.player Player]
+           [net.minecraft.world.level Level]
+           [net.minecraft.world InteractionHand]
            [cn.li.mc1201.item NbtBarItem ScriptedItem]))
 
 (defn- rarity->forge-rarity
@@ -51,9 +58,11 @@
   The callback captures the item-spec's :on-use and :on-right-click handlers
   via closure.  When Item.use() is called by the game, the callback:
     1. Derives :client/:server side from the Level
-    2. Fires :on-use first (logging, state prep)
-    3. Fires :on-right-click — its :consume? return drives SUCCESS vs PASS
-    4. Returns InteractionResultHolder/success or /pass accordingly"
+    2. Wraps execution with with-player-owner (binds *client-owner*/*server-owner*
+       matching Forge RightClickItem event path)
+    3. Fires :on-use first (logging, state prep)
+    4. Fires :on-right-click — its :consume? return drives SUCCESS vs PASS
+    5. Returns InteractionResultHolder/success or /pass accordingly"
   [item-spec]
   (let [on-use-fn (:on-use item-spec)
         on-right-click-fn (:on-right-click item-spec)]
@@ -65,16 +74,18 @@
                      ^net.minecraft.world.entity.player.Player player
                      ^net.minecraft.world.InteractionHand hand)
               event-data {:player player :item-stack stack :hand hand :side side}]
-          ;; 1. Always fire :on-use first (logging, state prep, etc.)
-          (when on-use-fn
-            (on-use-fn event-data))
-          ;; 2. Fire :on-right-click; :consume? drives SUCCESS vs PASS
-          (if on-right-click-fn
-            (let [ret (on-right-click-fn event-data)]
-              (if (:consume? ret)
-                (InteractionResultHolder/success stack)
-                (InteractionResultHolder/pass stack)))
-            (InteractionResultHolder/pass stack)))))))
+          ;; Wrap with player owner context so *client-owner*/*server-owner*
+          ;; dynamic vars are bound (matching Forge RightClickItem event path).
+          (runtime-owner/with-player-owner player side
+            (fn []
+              (when on-use-fn
+                (on-use-fn event-data))
+              (if on-right-click-fn
+                (let [ret (on-right-click-fn event-data)]
+                  (if (:consume? ret)
+                    (InteractionResultHolder/success stack)
+                    (InteractionResultHolder/pass stack)))
+                (InteractionResultHolder/pass stack)))))))))
 
 (defn create-standalone-item
   ^Item

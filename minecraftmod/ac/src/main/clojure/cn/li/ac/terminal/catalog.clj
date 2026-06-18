@@ -55,16 +55,13 @@
   [app-id]
   (boolean (app-by-id app-id)))
 
-(def ^:private picked-icons (atom {}))
-
 (defn app-icon [app]
   (if-let [icons (seq (:icons app))]
-    (let [app-id (:id app)]
-      (if-let [cached (get @picked-icons app-id)]
-        cached
-        (let [picked (nth icons (rand-int (count icons)))]
-          (swap! picked-icons assoc app-id picked)
-          picked)))
+    (let [r (rand)
+          idx (cond (< r 0.2) 0
+                    (< r 0.3) 1
+                    :else 2)]
+      (nth icons idx))
     (:icon app)))
 
 (defn app-count

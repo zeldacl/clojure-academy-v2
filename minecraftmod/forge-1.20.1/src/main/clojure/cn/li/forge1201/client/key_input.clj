@@ -107,14 +107,7 @@
             (let [uuid (:player-uuid owner)
                   cur-activated (power-runtime/runtime-activated? uuid)]
               (overlay-state/set-client-activated! owner (not cur-activated))
-              (emit-keyboard-input! toggle-primary-state-input-id uuid :short-press)))}))
-    ;; Terminal open/close key (matching original @RegACKeyHandler("open_data_terminal", KEY_LMENU))
-    (when (= key GLFW/GLFW_KEY_LEFT_ALT)
-      (when (and (= action GLFW/GLFW_PRESS)
-                 (not (current-screen-open?)))
-        (when-let [^Minecraft mc (Minecraft/getInstance)]
-          (when-let [player (.player mc)]
-            (content-actions/toggle-terminal! player))))))))
+              (emit-keyboard-input! toggle-primary-state-input-id uuid :short-press)))})))))
 
 (defn- create-key-mapping [^String translation-key key-code ^String category]
   (KeyMapping. translation-key InputConstants$Type/KEYSYM (int key-code) category))
@@ -300,6 +293,14 @@
 (defn tick-input! []
   (client-session/with-current-client-session
     (fn []
+      ;; Handle terminal toggle key (matching original @RegACKeyHandler "open_data_terminal" KEY_LMENU).
+      ;; Uses the registered :terminal KeyMapping -- player can rebind in Controls settings.
+      (when-let [^KeyMapping terminal-key (get-in (key-input-runtime-state-snapshot) [:screen-keys :terminal])]
+        (when (.consumeClick terminal-key)
+          (when-not (current-screen-open?)
+            (when-let [^Minecraft mc (Minecraft/getInstance)]
+              (when-let [player (.player mc)]
+                (content-actions/toggle-terminal! player))))))
       (if-let [owner (client-session/current-local-player-owner)]
         (let [scheme (get-key-scheme)
               activated? (boolean (overlay-state/get-client-activated owner))]
