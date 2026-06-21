@@ -30,8 +30,12 @@
   evt)
 
 (defn apply-consumed-right-click!
+  "Deny both item-use and block-use so Forge does not place an item or interact
+  with the block after the handler has already consumed the event.
+  On the server, additionally cancel the event with InteractionResult/CONSUME
+  to prevent the default processing path."
   [^PlayerInteractEvent evt client-side?]
-  (if client-side?
-    (deny-right-click-use! evt)
+  (deny-right-click-use! evt)
+  (when-not client-side?
     (cancel-player-interact-consume! evt))
   evt)
