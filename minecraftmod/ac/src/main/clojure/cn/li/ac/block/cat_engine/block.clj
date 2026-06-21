@@ -1,8 +1,8 @@
 (ns cn.li.ac.block.cat-engine.block
   "Cat Engine block - thin coordinator."
-  (:require [cn.li.ac.block.cat-engine.capability :as cat-cap]
-            [cn.li.ac.block.cat-engine.logic :as cat-logic]
+  (:require [cn.li.ac.block.cat-engine.logic :as cat-logic]
             [cn.li.ac.block.machine.registration :as machine-reg]
+            [cn.li.ac.block.role-impls :as impls]
             [cn.li.ac.config.modid :as modid]
             [cn.li.ac.util.init-guard :refer [defonce-guard]]
             [cn.li.mcmod.block.dsl :as bdsl])
@@ -22,9 +22,9 @@
               :read-nbt-fn cat-logic/cat-scripted-load-fn
               :write-nbt-fn cat-logic/cat-scripted-save-fn}]
      :tile-ids ["cat-engine"]
-     :capabilities [{:key :cat-engine-generator
+     :capabilities [{:key :wireless-generator
                      :interface IWirelessGenerator
-                     :factory (fn [be _side] (cat-cap/->CatEngineGeneratorImpl be))}]
+                     :factory (fn [be _side] (impls/->WirelessGeneratorImpl be))}]
      :blocks [(bdsl/create-block-spec
                 "cat-engine"
                 {:registry-name "cat_engine"

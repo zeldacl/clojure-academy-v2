@@ -63,8 +63,8 @@
 									 (assoc :update-ticker ticker
 													:energy (+ energy generated)
 													:max-energy max-energy
-													:this-tick-gen 0.0
-													:gen-speed 0.0))]
+													:this-tick-gen (double generated)
+													:gen-speed (double (cat-config/generator-bandwidth))))]
 		(sync-link-state be state1)))
 
 (def cat-tick-fn
@@ -86,7 +86,12 @@
 				(if (empty? nodes)
 					(right-click-result "ac.cat_engine.notfound")
 					(let [target-node (nth nodes (rand-int (count nodes)))
-								linked? (try (boolean (wireless-api/link-generator-to-node! be target-node "" false))
+								;; Resolve the tile entity at the node's position (matches solar/wind GUI pattern:
+								;; get-nodes-in-range returns capabilities for display, get-tile-at returns
+								;; tile entity for linking via link-generator-to-node!).
+								node-pos (try (.getBlockPos ^IWirelessNode target-node) (catch Exception _ nil))
+								node-be (when node-pos (world/world-get-tile-entity* world node-pos))
+								linked? (try (boolean (wireless-api/link-generator-to-node! be (or node-be target-node) "" false))
 														 (catch Exception _ false))]
 						(if linked?
 							(do (refresh-link-state! be)

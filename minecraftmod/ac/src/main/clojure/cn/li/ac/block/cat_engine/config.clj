@@ -11,8 +11,8 @@
   500.0)
 
 (def default-generator-bandwidth
-  "Wireless generator bandwidth used by IWirelessGenerator."
-  500.0)
+  "Wireless generator bandwidth. Matches upstream TileCatEngine(..., 200) = 200 IF/t."
+  200.0)
 
 (def descriptors
   [{:key :cat-engine-max-energy
