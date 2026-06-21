@@ -33,9 +33,14 @@
       (do (log/warn "[handle-start-development] no tile found")
           {:success false :reason "no-tile"})
       (let [state (machine-runtime/state-or-default tile dev-logic/dev-default-state)
+            ;; Force immediate structure validation so the player doesn't have
+            ;; to wait for the periodic tick to set :structure-valid.
+            structure-valid? (boolean (dev-logic/check-structure-valid? world tile))
+            state (assoc state :structure-valid structure-valid?)
             result (dev-session/validate-and-start state player payload)]
         (log/info "[handle-start-development] result ok?=" (:ok? result)
-                  "reason=" (:reason result "none"))
+                  "reason=" (:reason result "none")
+                  "structure-valid-now=" structure-valid?)
         (if (:ok? result)
           (let [new-state (-> (:state result)
                               (assoc :user-uuid (uuid/player-uuid player)

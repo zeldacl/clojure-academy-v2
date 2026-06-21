@@ -406,7 +406,7 @@
         on-start-dev (fn []
                        (req-start-development! container start-action nil
                          (make-dev-start-callback state-ref)))
-        [_panel state-a] (dev-console/create-console area-widget
+        [state-a _panel] (dev-console/create-console area-widget
                            {:mode mode
                             :container container
                             :player-name (or @(:user-name container) "Player")

@@ -155,7 +155,7 @@
 
 (defn link-generator-to-node!
 		[gen-tile node-tile password need-auth]
-		(when-let [node-cap (resolver/node-capability node-tile)]
+		(if-let [node-cap (resolver/node-capability node-tile)]
 			(if (or (not need-auth)
 						(= password (.getPassword ^IWirelessNode node-cap)))
 				(let [world (platform-be/be-get-world-safe node-tile)
@@ -172,7 +172,8 @@
 								 :node ^IWirelessNode node-cap
 								 :generator ^IWirelessGenerator gen-cap})))
 					result)
-				{:success false :reason :password})))
+				{:success false :reason :password})
+			{:success false :reason :not-a-node}))
 
 (defn unlink-generator-from-node!
 		[gen-tile]
@@ -192,7 +193,7 @@
 
 (defn link-receiver-to-node!
 		[rec-tile node-tile password need-auth]
-		(when-let [node-cap (resolver/node-capability node-tile)]
+		(if-let [node-cap (resolver/node-capability node-tile)]
 			(if (or (not need-auth)
 						(= password (.getPassword ^IWirelessNode node-cap)))
 				(let [world (platform-be/be-get-world-safe node-tile)
@@ -209,7 +210,8 @@
 								 :node ^IWirelessNode node-cap
 								 :receiver ^IWirelessReceiver rec-cap})))
 					result)
-				{:success false :reason :password})))
+				{:success false :reason :password})
+			{:success false :reason :not-a-node}))
 
 (defn unlink-receiver-from-node!
 		[rec-tile]

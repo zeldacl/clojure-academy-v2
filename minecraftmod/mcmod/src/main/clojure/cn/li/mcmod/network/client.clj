@@ -123,7 +123,8 @@
                    (try
                      (callback response)
                      (catch Exception e
-                       (log/error "Error in response callback:" (ex-message e)))))
+                       (log/error "Error in response callback (request-id=" request-id "):" (ex-message e))
+                       (.printStackTrace e))))
                  (log/warn "No pending request for response" request-id))
                nil)
              (register-owner-push-handler! [owner-key msg-id handler-fn]

@@ -36,6 +36,14 @@
 				 (log/debug "Developer structure validation failed:" (ex-message e))
 				 false)))
 
+(defn check-structure-valid?
+	"On-demand structure validation.  Called by handlers so players don't have to
+	wait for the periodic tick to set :structure-valid."
+	[world tile]
+	(when-let [block-id (platform-be/get-block-id tile)]
+		(when-let [block-spec (bdsl/get-block-spec block-id)]
+			(validate-structure world (pos/position-get-block-pos tile) block-spec))))
+
 (defn- tier-kw-for-block-id [block-id]
 	(or (developer/developer-type-for-block-id block-id) :normal))
 

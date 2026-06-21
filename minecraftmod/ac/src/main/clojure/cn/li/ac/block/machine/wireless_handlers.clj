@@ -70,6 +70,13 @@
                 {:success false :linked nil :avail []}))
             (catch Exception e
               {:success false :error (ex-message e)})))
+        build-link-response
+        (fn [device world]
+          (let [tile-pos (when world (pos/position-get-block-pos device))
+                linked-node (get-linked-node device)
+                avail (when world (available-nodes world tile-pos linked-node))]
+            {:linked (wireless-node->info linked-node)
+             :avail (or avail [])}))
         handle-connect
         (fn [payload player]
           (try
@@ -77,7 +84,8 @@
                   device (tile-from-payload payload player)
                   node-pos (select-keys payload [:node-x :node-y :node-z])
                   pass (:password payload "")
-                  need-auth? (boolean (:need-auth? payload true))]
+                  need-auth? (boolean (:need-auth? payload true))
+                  {:keys [linked avail]} (build-link-response device world)]
               (if (and world device
                        (number? (:node-x node-pos))
                        (number? (:node-y node-pos))
@@ -85,21 +93,36 @@
                 (if-let [node (net-helpers/get-tile-at world {:pos-x (:node-x node-pos)
                                                               :pos-y (:node-y node-pos)
                                                               :pos-z (:node-z node-pos)})]
-                  (let [result (link! device node pass need-auth?)]
-                    (assoc result :messages (feedback/result->messages message-domain result)))
-                  {:success false :messages (feedback/result->messages message-domain {:success false :reason :not-found})})
-                {:success false :messages (feedback/result->messages message-domain {:success false :reason :aborted})}))
+                  (let [result (link! device node pass need-auth?)
+                        {:keys [linked avail]} (build-link-response device world)]
+                    (assoc result :messages (feedback/result->messages message-domain result)
+                                   :linked linked :avail avail))
+                  {:success false :linked linked :avail avail
+                   :messages (feedback/result->messages message-domain {:success false :reason :not-found})})
+                {:success false :linked linked :avail avail
+                 :messages (feedback/result->messages message-domain {:success false :reason :aborted})}))
             (catch Exception e
-              {:success false :error (ex-message e) :messages (feedback/result->messages message-domain {:success false :reason :aborted})})))
+              (log/error "[handle-connect]" (ex-message e))
+              {:success false :error (ex-message e)
+               :messages (feedback/result->messages message-domain {:success false :reason :aborted})})))
         handle-disconnect
         (fn [payload player]
           (try
-            (let [device (tile-from-payload payload player)]
+            (let [device (tile-from-payload payload player)
+                  world (net-helpers/get-world player)
+                  {:keys [linked avail]} (when device (build-link-response device world))]
               (if device
-                (do (unlink! device) {:success true :messages (feedback/result->messages message-domain {:success true})})
-                {:success false :messages (feedback/result->messages message-domain {:success false :reason :aborted})}))
+                (do
+                  (unlink! device)
+                  (let [{:keys [linked avail]} (build-link-response device world)]
+                    {:success true :linked linked :avail avail
+                     :messages (feedback/result->messages message-domain {:success true})}))
+                {:success false :linked linked :avail avail
+                 :messages (feedback/result->messages message-domain {:success false :reason :aborted})}))
             (catch Exception e
-              {:success false :error (ex-message e) :messages (feedback/result->messages message-domain {:success false :reason :aborted})})))]
+              (log/error "[handle-disconnect]" (ex-message e))
+              {:success false :error (ex-message e)
+               :messages (feedback/result->messages message-domain {:success false :reason :aborted})})))]
     (net-server/register-handler (msg :list-nodes) handle-list-nodes)
     (net-server/register-handler (msg :connect) handle-connect)
     (net-server/register-handler (msg :disconnect) handle-disconnect)

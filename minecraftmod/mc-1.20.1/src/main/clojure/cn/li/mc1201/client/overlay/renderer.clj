@@ -156,16 +156,18 @@
       :else (str "my_mod:textures/" path))))
 
 (defn- argb [{:keys [a r g b]}]
-  (bit-or (bit-shift-left (int (or a 255)) 24)
-          (bit-shift-left (int (or r 255)) 16)
-          (bit-shift-left (int (or g 255)) 8)
-          (int (or b 255))))
+  (unchecked-int
+    (bit-or (bit-shift-left (unchecked-int (or a 255)) 24)
+            (bit-shift-left (unchecked-int (or r 255)) 16)
+            (bit-shift-left (unchecked-int (or g 255)) 8)
+            (unchecked-int (or b 255)))))
 
 (defn- rgb-vec->argb [[r g b] alpha]
-  (bit-or (bit-shift-left (int (* 255 (double alpha))) 24)
-          (bit-shift-left (int r) 16)
-          (bit-shift-left (int g) 8)
-          (int b)))
+  (unchecked-int
+    (bit-or (bit-shift-left (unchecked-int (* 255 (double alpha))) 24)
+            (bit-shift-left (unchecked-int r) 16)
+            (bit-shift-left (unchecked-int g) 8)
+            (unchecked-int b))))
 
 (defn- render-bar!
   [^GuiGraphics graphics {:keys [x y width height percent bg-texture fg-texture bar-color hint-percent icon-cutout scroll-offset]}]

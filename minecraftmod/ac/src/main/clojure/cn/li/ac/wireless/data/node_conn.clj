@@ -294,8 +294,12 @@
                           (recur (rest gens-remaining) (double (:transfer-left step))))
                         (recur (rest gens-remaining) transfer-left)))
 
-                    (do (remove-generator! conn gen-vb)
-                        (recur (rest gens-remaining) transfer-left)))
+                    ;; gen-cap nil — skip, don't remove.
+                    ;; Capability may be resolvable next tick.
+                    (do
+                      (log/debug (format "[transfer-from-generators!] skipping %s — gen-cap nil"
+                                         (vb/vblock-to-string gen-vb)))
+                      (recur (rest gens-remaining) transfer-left)))
 
                   (recur (rest gens-remaining) transfer-left))))))))))
 
@@ -324,9 +328,17 @@
                           (recur (rest recs-remaining) (- transfer-left actual)))
                         (recur (rest recs-remaining) transfer-left)))
 
-                    (do (remove-receiver! conn rec-vb)
-                        (recur (rest recs-remaining) transfer-left)))
+                    ;; rec-cap is nil — tile exists but doesn't expose IWirelessReceiver.
+                    ;; Don't remove; the receiver may be a multiblock controller whose
+                    ;; capability is resolved through tile-logic rather than instanceof.
+                    ;; Just skip this tick and try again next time.
+                    (do
+                      (log/debug (format "[transfer-to-receivers!] skipping %s — rec-cap nil (tile exists but no IWirelessReceiver resolved)"
+                                         (vb/vblock-to-string rec-vb)))
+                      (recur (rest recs-remaining) transfer-left)))
 
+                  ;; chunk not loaded — receiver block may be in unloaded area.
+                  ;; Don't remove; it will be re-validated when chunk loads again.
                   (recur (rest recs-remaining) transfer-left))))))))))
 
 ;; ============================================================================
