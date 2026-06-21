@@ -293,15 +293,14 @@
         _ (cgui-core/set-z-level! hist-widget 10)]
     
     ;; Add histogram bars
-    ;; NOTE: CGUI does NOT scale child widget positions by parent scale,
-    ;; only sizes. Since hist-widget is scaled 0.4, bar positions must be
-    ;; pre-scaled (multiplied by 0.4) to align with the background texture.
+    ;; compute-child-abs-pos (renderer.clj) DOES multiply child position by
+    ;; parent-scale, so bar positions must use ORIGINAL texture coordinates
+    ;; (NOT pre-scaled). The renderer handles scaling once.
     ;; Chart area in texture coords: x=[34,200] y=[56,199].
     ;; Original AcademyCraft bar: size(16,120).pos(56+idx*40, 78).
-    ;; Pre-scaled: x-start~22.4, step~16, y-start~31.2, bar-h~48.
     (doseq [[elem idx] (map vector elements (range))]
-      (let [bar-x (+ 22 (* idx 16))
-            bar (cgui-core/create-widget :pos [bar-x 31] :size [16 120])
+      (let [bar-x (+ 56 (* idx 40))
+            bar (cgui-core/create-widget :pos [bar-x 78] :size [16 120])
             progress-spec (comp/progress-bar
                             :direction :vertical
                             :progress 0.0
