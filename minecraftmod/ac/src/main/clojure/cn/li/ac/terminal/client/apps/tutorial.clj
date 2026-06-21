@@ -312,7 +312,10 @@
 ;; --- Brief markdown rendering ---
 
 (defn- render-brief-markdown! [brief-widget brief-str misaka-id]
-  (cgui-core/clear-widgets! brief-widget)
+  ;; Keep title-text; only remove old brief segments (named "brief-*")
+  (let [old-kids @(:children brief-widget)
+        title-kid (first (filter #(= (cgui-core/get-name %) "title-text") old-kids))]
+    (reset! (:children brief-widget) (if title-kid [title-kid] [])))
   ;; Upstream: glTranslated(3, 15, 0); renderer.widthLimit=130
   (let [brief-segs (mr/render-segments brief-str misaka-id 130.0)]
     (loop [sg brief-segs y 15.0 n 0]
@@ -438,26 +441,32 @@
         thumb-travel (- scroll-thumb-max-y scroll-thumb-min-y)
         thumb (find-widget-recursive root "scroll-thumb")]
     (cgui-core/add-widget! cp content-ctr)
-    (events/on-drag thumb
-      (fn [evt]
-        (when (pos? @max-scroll)
-          (let [scroll-delta (* (/ (double (:dy evt)) thumb-travel) @max-scroll)]
-            (swap! scroll-y + scroll-delta)
-            (clamp-scroll! scroll-y @max-scroll)
-            (let [progress (/ @scroll-y @max-scroll)
-                  thumb-y (+ scroll-thumb-min-y (* progress thumb-travel))]
-              (cgui-core/set-pos! thumb 0.0 thumb-y)
-              (reset! scroll-progress progress)
-              (reposition-content! content-ctr scroll-y))))))
-    (events/on-mouse-scroll thumb
-      (fn [evt]
-        (when (pos? @max-scroll)
-          (let [new-y (+ @scroll-y (* (:delta-y evt) 10.0))]
-            (reset! scroll-y (max 0.0 (min @max-scroll new-y)))
-            (let [progress (/ @scroll-y @max-scroll)
-                  thumb-y (+ scroll-thumb-min-y (* progress thumb-travel))]
-              (cgui-core/set-pos! thumb 0.0 thumb-y)
-              (reposition-content! content-ctr scroll-y))))))
+    (let [on-drag-fn (fn [evt]
+                       (when (pos? @max-scroll)
+                         (let [scroll-delta (* (/ (double (:dy evt)) thumb-travel) @max-scroll)]
+                           (swap! scroll-y + scroll-delta)
+                           (clamp-scroll! scroll-y @max-scroll)
+                           (let [progress (/ @scroll-y @max-scroll)
+                                 thumb-y (+ scroll-thumb-min-y (* progress thumb-travel))]
+                             (cgui-core/set-pos! thumb 0.0 thumb-y)
+                             (reset! scroll-progress progress)
+                             (reposition-content! content-ctr scroll-y)))))]
+      (events/on-drag thumb on-drag-fn)
+      (when-let [track (find-widget-recursive root "scroll-track")]
+        (events/on-drag track on-drag-fn)))
+    (let [on-scroll (fn [evt]
+                      (when (pos? @max-scroll)
+                        ;; MC delta: positive=down. Negate for scroll-up convention, boost to 40px/notch
+                        (let [new-y (+ @scroll-y (* (- (:delta-y evt)) 40.0))]
+                          (reset! scroll-y (max 0.0 (min @max-scroll new-y)))
+                          (let [progress (/ @scroll-y @max-scroll)
+                                thumb-y (+ scroll-thumb-min-y (* progress thumb-travel))]
+                            (cgui-core/set-pos! thumb 0.0 thumb-y)
+                            (reposition-content! content-ctr scroll-y)))))]
+      (events/on-mouse-scroll thumb on-scroll)
+      (events/on-mouse-scroll cp on-scroll)   ;; scroll anywhere in content area
+      (events/on-mouse-scroll content-ctr on-scroll)
+      (events/on-mouse-scroll root on-scroll))    ;; also from anywhere
     (when first-open? (cgui-core/set-visible! cp false))))
 
 (defn- wire-right-panel!
@@ -533,8 +542,9 @@
   (log/info "Opening tutorial GUI")
   (let [player-uuid (uuid/player-uuid player)
         _ (client-state/ensure-client-state! player-uuid)
-        _ (client-state/request-sync! {:client-session-id runtime-hooks/*client-session-id*
-                                        :player-uuid player-uuid})
+        ;; Force immediate sync (bypass 5s throttle) so misaka-id is ready before first click
+        _ (net-client/send-to-server (tut-msg/msg-id :tutorial/request-sync) {}
+                                    (fn [resp] (when resp (client-state/apply-sync! resp))))
         lang (tut-content/current-lang)
         ;; Load widget tree from tutorial.xml (matching original GuiTutorial)
         xml-path (modid/asset-path "guis" "tutorial.xml")
@@ -626,5 +636,6 @@
                       (or (:display-text (nth view-groups hover-idx)) "")
                       (preview/display-text pvs))))))))))
     (client-bridge/open-simple-gui! root "MisakaCloud Terminal"
-      {:preview-item-atom (:preview-item ui)
+      {:interactive? true
+       :preview-item-atom (:preview-item ui)
        :preview-type-atom  (:preview-type ui)})))

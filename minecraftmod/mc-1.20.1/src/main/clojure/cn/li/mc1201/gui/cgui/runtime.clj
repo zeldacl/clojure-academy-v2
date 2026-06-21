@@ -20,8 +20,8 @@
   (input/mouse-click! root mx my left top button))
 
 (defn mouse-drag!
-  [root mx my left top]
-  (input/mouse-drag! root mx my left top))
+  [root mx my dx dy left top]
+  (input/mouse-drag! root mx my dx dy left top))
 
 (defn key-input!
   [root key-code scan-code typed-char]

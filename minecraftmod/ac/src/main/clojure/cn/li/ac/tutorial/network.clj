@@ -22,7 +22,7 @@
           tut-state (tut-player/state (session-id) uuid-str)]
       (tut-player/ensure-state! (session-id) uuid-str)
       {:activated-tuts  (vec (:activated-tuts tut-state))
-       :misaka-id       (:misaka-id tut-state)
+       :misaka-id       (tut-player/get-misaka-id (session-id) uuid-str)
        :first-open?     (:first-open? tut-state)})
     (catch Exception e
       (log/error "Error handling tutorial request-sync:" (ex-message e))

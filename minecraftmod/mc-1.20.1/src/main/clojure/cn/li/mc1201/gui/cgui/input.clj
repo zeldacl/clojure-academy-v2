@@ -55,31 +55,27 @@
           (log/error "[MOUSE-CLICK] error in handler:" (.getMessage e)))))))
 
 (defn mouse-drag!
-  [root mx my left top]
+  "dx/dy are Minecraft's native drag delta — reliable, no position tracking needed."
+  [root mx my dx dy left top]
   (try
     (let [rx (- mx left)
           ry (- my top)
           m @(:metadata root)
-          prev-x (:last-mouse-x m)
-          prev-y (:last-mouse-y m)
-          dx (if prev-x (- rx prev-x) 0)
-          dy (if prev-y (- ry prev-y) 0)
           dnode-atom (:dragging-node m)
           now (System/currentTimeMillis)]
-      ;; Update stored position so next call computes correct delta
-      (swap! (:metadata root) assoc :last-mouse-x rx :last-mouse-y ry)
+      (when (and dnode-atom (nil? @dnode-atom))
+        (let [hit (traversal/hit-test root rx ry 0 0)]
+          (when hit
+            (reset! dnode-atom hit)
+            (let [ldt-atom (:last-drag-time m)]
+              (when ldt-atom (reset! ldt-atom now)))
+            (let [st-atom (:last-start-time m)]
+              (when st-atom (reset! st-atom now)))
+            (events/emit-widget-event! hit :drag-start {:x rx :y ry :dx 0 :dy 0 :time now}))))
       (when-let [hit (or (when dnode-atom @dnode-atom)
                          (traversal/hit-test root rx ry 0 0))]
-        (let [last-drag-atom (:last-drag-time m)
-              start-atom (:last-start-time m)]
-          (when (and dnode-atom (nil? @dnode-atom))
-            (reset! dnode-atom hit)
-            (reset! start-atom now)
-            (events/emit-widget-event! hit :drag-start {:x rx :y ry :dx dx :dy dy :time now}))
-          (when dnode-atom
-            (reset! last-drag-atom now))
-          (events/emit-widget-event! hit :drag {:x rx :y ry :dx dx :dy dy}))
-        nil))
+        (events/emit-widget-event! hit :drag {:x rx :y ry :dx dx :dy dy}))
+      nil)
     (catch Exception e
       (log/error "[MOUSE-DRAG] " (.getMessage e)))))
 
@@ -113,9 +109,13 @@
 
 (defn mouse-scroll!
   [root mx my left top delta-x delta-y]
-  (when-let [hit (traversal/hit-test root mx my left top)]
-    (events/emit-widget-event! hit :mouse-scroll
-      {:x (- mx left) :y (- my top) :delta-x delta-x :delta-y delta-y})))
+  ;; Walk the hit-path from deepest to root, find first widget with :mouse-scroll handler
+  (let [path (traversal/hit-path root mx my left top)
+        target (some #(when (seq (events/get-widget-event-handlers % :mouse-scroll)) %)
+                     (reverse path))]
+    (when target
+      (events/emit-widget-event! target :mouse-scroll
+        {:x (- mx left) :y (- my top) :delta-x delta-x :delta-y delta-y}))))
 
 (defn key-input!
   [root key-code scan-code typed-char]

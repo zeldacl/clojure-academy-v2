@@ -215,6 +215,10 @@
       (cgui-core/set-scale! gui-widget (double scale))
       (reset! left left-pos)
       (reset! top top-pos)
+      ;; Ensure drag metadata atoms exist (lazy init for mouse-drag!)
+      (when (nil? (:dragging-node @(:metadata gui-widget)))
+        (swap! (:metadata gui-widget) merge
+               {:dragging-node (atom nil) :last-drag-time (atom 0) :last-start-time (atom 0)}))
       (cgui-rt/frame-tick! gui-widget {:partial-ticks partial-tick})
       (cgui-rt/render-tree! graphics gui-widget left-pos top-pos)
       (let [tick (swap! tick-counter inc)
@@ -243,9 +247,9 @@
       false)))
 
 (defn- mouse-drag-cgui!
-  [gui-widget left top mouse-x mouse-y log-label]
+  [gui-widget left top mouse-x mouse-y drag-x drag-y log-label]
   (try
-    (cgui-rt/mouse-drag! gui-widget (int mouse-x) (int mouse-y) @left @top)
+    (cgui-rt/mouse-drag! gui-widget (int mouse-x) (int mouse-y) (int drag-x) (int drag-y) @left @top)
     true
     (catch Exception e
       (log/error "Error handling" log-label "mouse drag:" (.getMessage e))
@@ -292,7 +296,7 @@
         (mouse-click-cgui! gui-widget left top mouse-x mouse-y button resolved-log-label))
       (mouseDragged [mouse-x mouse-y button drag-x drag-y]
         (if interactive?
-          (mouse-drag-cgui! gui-widget left top mouse-x mouse-y resolved-log-label)
+          (mouse-drag-cgui! gui-widget left top mouse-x mouse-y drag-x drag-y resolved-log-label)
           false))
       (mouseMoved [mouse-x mouse-y]
         ;; Track mouse position relative to CGUI root for hover detection.
