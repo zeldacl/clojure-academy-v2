@@ -44,13 +44,12 @@
                                                :mark-player-dirty! runtime-sync/mark-player-dirty!
                                                :send-sync-now! runtime-network/send-sync-to-client!
                                                :clear-player-dirty! runtime-sync/clear-player-dirty!}))
-    ;; Tutorial auto-give: follows original AcademyCraft TutorialData behavior.
-    ;; Called after runtime state is fully loaded so tutorial player state exists.
-    ;; The auto-give uses explicit session-id (no dynamic binding dependency).
+    ;; Tutorial auto-give: mirrors upstream TutorialData @SerializeIncluded boolean.
+    ;; Uses player persistent NBT directly (not runtime-store) for reliable persistence.
     (try
       (when-let [auto-give-fn (requiring-resolve
                                'cn.li.ac.tutorial.auto-give/auto-give-on-login!)]
-        (auto-give-fn (server-session-id p) (str (.getUUID p)) p))
+        (auto-give-fn p))
       (catch Throwable _
         nil))))
 

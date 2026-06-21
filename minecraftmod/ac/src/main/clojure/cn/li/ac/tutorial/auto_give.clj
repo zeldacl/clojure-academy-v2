@@ -1,41 +1,36 @@
 (ns cn.li.ac.tutorial.auto-give
   "Tutorial item auto-give on first player login.
 
-  Original AcademyCraft TutorialData had a 10-tick server-side scheduler that
-  auto-spawned the tutorial item on first login (config flag `giveCloudTerminal`,
-  default true).  This function is called from the Forge lifecycle layer after
-  player state is loaded, matching the original AC behavior.
-
-  The tutorial item is NOT consumed on use (cn.li.ac.tutorial.item sets {:consume? false}),
-  so the auto-give only needs to run once per player lifetime."
+  Mirrors upstream AcademyCraft TutorialData: reads/writes a boolean
+  directly in player persistent NBT (like @SerializeIncluded), completely
+  independent of the runtime store lifecycle.  This guarantees reliable
+  persistence because Minecraft handles player NBT save/load natively."
   (:require [cn.li.ac.tutorial.config :as tut-config]
-            [cn.li.ac.tutorial.player :as tut-player]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.item :as pitem]
-            [cn.li.mcmod.util.log :as log]))
+            [cn.li.mcmod.platform.player-persistent-data :as player-pd]
+            [cn.li.mcmod.util.log :as log])
+  (:import [net.minecraft.server.level ServerPlayer]
+           [net.minecraft.nbt CompoundTag]))
 
 (def tutorial-item-id "my_mod:tutorial")
+(def ^:private nbt-key "academy_tutorial_acquired")
+
+(defn- tutorial-acquired-in-nbt?
+  [^CompoundTag tag]
+  (and (.contains tag nbt-key) (.getBoolean tag nbt-key)))
 
 (defn auto-give-on-login!
-  "Check and perform tutorial item auto-give on player login.
-
-  Respects the `give-cloud-terminal` config flag (default true).
-  Idempotent: only grants the item once per player, tracked by the
-  tutorial-acquired? flag in the player's tutorial state.
-
-  Args:
-    session-id  - server session identifier ([:server identity-hash])
-    uuid-str    - player UUID string
-    player      - platform player entity (implements IEntityOps)
-
-  Returns truthy if the item was granted, nil otherwise."
-  [session-id uuid-str player]
+  "Check NBT flag directly (matching upstream @SerializeIncluded boolean).
+  Called with just the ServerPlayer, resolved in the lifecycle hook."
+  [^ServerPlayer player]
   (when (tut-config/give-cloud-terminal-enabled?)
-    (when-not (tut-player/tutorial-acquired? session-id uuid-str)
-      (try
-        (when-let [stack (pitem/create-item-stack-by-id tutorial-item-id 1)]
-          (entity/player-give-item-stack! player stack)
-          (tut-player/mark-tutorial-acquired! session-id uuid-str)
-          (log/info "Tutorial item auto-given to player" {:uuid uuid-str}))
-        (catch Exception e
-          (log/warn "Failed to auto-give tutorial item:" (ex-message e)))))))
+    (let [tag (player-pd/get-persistent-data! player)]
+      (when-not (tutorial-acquired-in-nbt? tag)
+        (try
+          (when-let [stack (pitem/create-item-stack-by-id tutorial-item-id 1)]
+            (entity/player-give-item-stack! player stack)
+            (.putBoolean tag nbt-key true)
+            (log/info "Tutorial item auto-given to player" {:uuid (str (.getUUID player))}))
+          (catch Exception e
+            (log/warn "Failed to auto-give tutorial item:" (ex-message e))))))))

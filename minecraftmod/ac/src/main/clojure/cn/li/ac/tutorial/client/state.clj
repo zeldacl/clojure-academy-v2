@@ -71,9 +71,13 @@
   (contains? (:activated-tuts @client-state) (keyword tut-id)))
 
 (defn get-misaka-id
-  "Get the player's Misaka ID from the client cache."
-  [_player-uuid]
-  (:misaka-id @client-state))
+  "Return the player's Misaka No. from client cache, or a deterministic local
+  fallback (based on UUID hash) so the tutorial always shows a real number
+  even before the first server sync completes."
+  [player-uuid]
+  (or (:misaka-id @client-state)
+      (let [h (mod (Math/abs (hash (str player-uuid))) 18001)]
+        (+ 1000 h))))
 
 (defn first-open?
   "Return the first-open flag from the client cache."
