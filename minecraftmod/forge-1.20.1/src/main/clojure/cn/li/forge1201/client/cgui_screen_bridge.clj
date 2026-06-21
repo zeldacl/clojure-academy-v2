@@ -256,19 +256,27 @@
       false)))
 
 (defn- key-press-cgui!
+  "Dispatch a key-press to the CGUI widget tree and return whether it was consumed.
+  Keys are only consumed when a focused widget owns keyboard input (editable
+  textbox or registered :key handler).  All other keys pass through to vanilla
+  so chat (Enter/T), inventory (E), F-keys, movement, and every other vanilla
+  interaction continues to work while an interactive CGUI screen is open."
   [gui-widget key-code scan-code log-label]
   (try
     (cgui-rt/key-input! gui-widget key-code scan-code (char 0))
-    true
+    (boolean (cgui-rt/focused-widget-owns-key? gui-widget))
     (catch Exception e
       (log/error "Error handling" log-label "key press:" (.getMessage e))
       false)))
 
 (defn- char-typed-cgui!
+  "Dispatch a typed character to the CGUI widget tree and return whether it was
+  consumed.  Same contract as key-press-cgui! — only consumed when a focused
+  editable widget actually handles the character."
   [gui-widget code-point log-label]
   (try
     (cgui-rt/key-input! gui-widget 0 0 (char code-point))
-    true
+    (boolean (cgui-rt/focused-widget-owns-key? gui-widget))
     (catch Exception e
       (log/error "Error handling" log-label "char typed:" (.getMessage e))
       false)))
@@ -312,6 +320,10 @@
         (if (= key-code 256)
           (do (.setScreen (Minecraft/getInstance) nil) true)
           (if interactive?
+            ;; key-press-cgui! only returns true when a focused editable widget
+            ;; or a widget with :key handlers actually consumed the key.  All
+            ;; other keys (chat, inventory, F-keys, movement, etc.) pass through
+            ;; to vanilla Minecraft.
             (key-press-cgui! gui-widget key-code scan-code resolved-log-label)
             false)))
       (mouseScrolled [mouse-x mouse-y scroll-delta]

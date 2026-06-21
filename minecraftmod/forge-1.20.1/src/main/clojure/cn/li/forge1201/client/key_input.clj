@@ -93,6 +93,17 @@
   (let [key (.getKey event)
         action (.getAction event)
         now (System/nanoTime)]
+    ;; Diagnostic: log Enter key events to help trace why chat won't open
+    (when (and (= key GLFW/GLFW_KEY_ENTER)
+               (= action GLFW/GLFW_PRESS))
+      (let [screen-open? (current-screen-open?)
+            ^Minecraft mc (Minecraft/getInstance)
+            screen-class (when screen-open? (some-> (.screen mc) .getClass .getName))]
+        (log/info "[KEY-TRACE] Enter pressed"
+                  {:screen-open? screen-open?
+                   :event-canceled? (.isCanceled event)
+                   :screen-class screen-class
+                   :tick (System/currentTimeMillis)})))
     (when (= key GLFW/GLFW_KEY_V)
       (when-let [owner (client-session/current-local-player-owner)]
         (update-owner-mode-switch-state!
@@ -328,7 +339,11 @@
           (clear-client-input-session! session-id))))))
 
 (defn init! []
-  (register-keybinds!)
+  ;; NOTE: register-keybinds! must NOT be called here.  It is already invoked from
+  ;; register-key-mappings! on the RegisterKeyMappingsEvent, which fires before
+  ;; FMLClientSetupEvent.  Calling it again creates duplicate KeyMapping instances
+  ;; in the global KeyMapping.ALL list, which can interfere with vanilla key
+  ;; handling (e.g. preventing Enter from opening the chat).
   (when-not (var-get #'*raw-v-listener-registered?*)
     (locking listener-guard-lock
       (when-not (var-get #'*raw-v-listener-registered?*)
