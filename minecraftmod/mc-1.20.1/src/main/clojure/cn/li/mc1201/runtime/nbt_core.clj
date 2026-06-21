@@ -12,75 +12,60 @@
   (:import [net.minecraft.server.level ServerPlayer]
            [net.minecraft.nbt CompoundTag]))
 
-(defn- deep-merge-state
-  [& maps]
-  (apply merge-with
-         (fn [a b]
-           (if (and (map? a) (map? b))
-             (deep-merge-state a b)
-             b))
-         maps))
-
-(defn- fresh-state-or-empty
-  []
-  (or (power-runtime/fresh-player-state) {}))
-
 (defn- persistence-descriptors
   []
   (->> (power-runtime/list-player-persistence-descriptors)
        (sort-by (juxt #(long (or (:order %) 0)) (comp str :id)))))
 
-(defn- runtime-state-descriptor
-  []
-  (first (filter #(and (= :runtime-state (:kind %))
-                       (= :edn (:format %))
-                       (:nbt-key %))
-                 (persistence-descriptors))))
-
-(defn- runtime-state-key
-  []
-  (:nbt-key (runtime-state-descriptor)))
-
-(defn- normalize-loaded-state
-  [decoded]
-  (when (map? decoded)
-    (assoc (deep-merge-state (fresh-state-or-empty) decoded) :dirty? false)))
-
 (defn- player-tag
   ^CompoundTag [^ServerPlayer player]
   (player-pd/get-persistent-data! player))
 
+;; Per-domain NBT keys matching upstream AcademyCraft DataPart pattern.
+;; Each domain persists independently to its own NBT key.
+;; tutorial/terminal persist via their own player.clj, not here.
+(def ^:private domain-nbt-keys
+  {:ability-data  "ac_ability"
+   :resource-data "ac_resource"
+   :preset-data   "ac_preset"})
+
 (defn load-player-state!
-  "Load runtime state from persistent NBT into in-memory player-state atom."
+  "Load each domain independently from per-domain NBT keys into in-memory atom."
   [^ServerPlayer player]
   (let [uuid (str (.getUUID player))
         tag  (player-tag player)
-        state-key (runtime-state-key)]
-    (if (and state-key (.contains tag state-key))
-      (let [decoded (es/decode-edn-safe
-                     (.getString tag state-key)
-                     #(log/warn "Failed to decode runtime NBT EDN:" (ex-message %)))]
-        (if-let [state (normalize-loaded-state decoded)]
-          (do
-            (power-runtime/sync-player-state! uuid state)
-            (or (power-runtime/get-player-state uuid) state))
-          (do
-            (when (some? decoded)
-              (log/warn "Ignoring runtime NBT EDN with non-map root:" (pr-str (type decoded))))
-            (power-runtime/ensure-player-state! uuid))))
-      (power-runtime/ensure-player-state! uuid))))
+        loaded (reduce-kv (fn [m domain-key nbt-key]
+                            (if (.contains tag nbt-key)
+                              (try
+                                (let [decoded (es/decode-edn-safe (.getString tag nbt-key)
+                                                                  #(log/warn "Failed to decode" nbt-key ":" (ex-message %)))]
+                                  (if (map? decoded)
+                                    (assoc m domain-key decoded)
+                                    m))
+                                (catch Exception e
+                                  (log/warn "Error loading domain" nbt-key ":" (ex-message e))
+                                  m))
+                              m))
+                          {}
+                          domain-nbt-keys)]
+    (power-runtime/sync-player-state! uuid (merge (power-runtime/fresh-player-state) loaded {:dirty? false}))
+    (or (power-runtime/get-player-state uuid)
+        (power-runtime/fresh-player-state))))
 
 (defn save-player-state!
-  "Save in-memory runtime state to player persistent NBT."
+  "Save each domain independently to per-domain NBT keys."
   [^ServerPlayer player]
   (let [uuid  (str (.getUUID player))
-      state (power-runtime/ensure-player-state! uuid)
-        tag   (player-tag player)
-        state-key (runtime-state-key)]
-    (when state-key
-      (.putString tag state-key (es/encode-edn (dissoc state :dirty?)))
-      (power-runtime/mark-player-clean! uuid))
-    (boolean state-key)))
+        state (power-runtime/ensure-player-state! uuid)
+        tag   (player-tag player)]
+    (doseq [[domain-key nbt-key] domain-nbt-keys]
+      (when-let [domain-state (get state domain-key)]
+        (try
+          (.putString tag nbt-key (es/encode-edn domain-state))
+          (catch Exception e
+            (log/warn "Error saving domain" nbt-key ":" (ex-message e))))))
+    (power-runtime/mark-player-clean! uuid)
+    true))
 
 (defn- clone-content-owned-tags!
   [^ServerPlayer old-player ^ServerPlayer new-player]

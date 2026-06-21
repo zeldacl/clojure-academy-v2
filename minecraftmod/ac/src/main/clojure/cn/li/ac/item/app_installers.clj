@@ -5,31 +5,28 @@
             [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.ac.terminal.player :as term-player]
             [cn.li.ac.terminal.catalog :as term-catalog]
-            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.util.log :as log]))
 
 (defonce-guard app-installers-installed?)
 
 (defn- install-app-for-player!
   [player app-id]
-  (let [session-id (runtime-hooks/require-player-state-session-id "app-installers")
-        uuid-str (uuid/player-uuid player)]
-    (cond
-      (not (term-player/terminal-installed? session-id uuid-str))
-      (do
-        (log/info "Skip app install: terminal not installed" {:player uuid-str :app app-id})
-        {:consume? true})
+  (cond
+    (not (term-player/terminal-installed? player))
+    (do
+      (log/info "Skip app install: terminal not installed" {:player (uuid/player-uuid player) :app app-id})
+      {:consume? true})
 
-      (not (term-catalog/app-exists? app-id))
-      (do
-        (log/warn "Skip app install: app not registered" {:player uuid-str :app app-id})
-        {:consume? true})
+    (not (term-catalog/app-exists? app-id))
+    (do
+      (log/warn "Skip app install: app not registered" {:player (uuid/player-uuid player) :app app-id})
+      {:consume? true})
 
-      :else
-      (do
-        (term-player/install-app! session-id uuid-str app-id)
-        (log/info "Installed terminal app from installer item" {:player uuid-str :app app-id})
-        {:consume? true}))))
+    :else
+    (do
+      (term-player/install-app! player app-id)
+      (log/info "Installed terminal app from installer item" {:player (uuid/player-uuid player) :app app-id})
+      {:consume? true})))
 
 (defn- app-installer-handler
   [app-id]

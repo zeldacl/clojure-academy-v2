@@ -9,21 +9,7 @@
   (let [s (model/fresh-state)]
     (is (set? (:activated-tuts s)))
     (is (nil? (:misaka-id s)))
-    (is (false? (:tutorial-acquired? s)))
     (is (true? (:first-open? s)))))
-
-;; --- normalize-state ---
-
-(deftest normalize-state-nil
-  (let [s (model/normalize-state nil)]
-    (is (= #{} (:activated-tuts s)))
-    (is (nil? (:misaka-id s)))
-    (is (false? (:tutorial-acquired? s)))
-    (is (true? (:first-open? s)))))
-
-(deftest normalize-state-legacy-keys
-  (is (true? (:first-open? (model/normalize-state {:first-open? "truthy"}))))
-  (is (false? (:first-open? (model/normalize-state {:first-open? false})))))
 
 ;; --- activate-tutorial / is-activated? ---
 
@@ -47,14 +33,6 @@
     ;; idempotent
     (let [s2 (model/ensure-misaka-id s)]
       (is (= (:misaka-id s) (:misaka-id s2))))))
-
-;; --- tutorial-acquired ---
-
-(deftest tutorial-acquired-flag
-  (let [s (model/fresh-state)]
-    (is (false? (model/tutorial-acquired? s)))
-    (let [s2 (model/mark-tutorial-acquired! s)]
-      (is (true? (model/tutorial-acquired? s2))))))
 
 ;; --- first-open ---
 

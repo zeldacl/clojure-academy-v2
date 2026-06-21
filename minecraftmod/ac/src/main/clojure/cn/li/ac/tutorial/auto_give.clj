@@ -10,20 +10,19 @@
             [cn.li.mcmod.platform.item :as pitem]
             [cn.li.mcmod.platform.player-persistent-data :as player-pd]
             [cn.li.mcmod.util.log :as log])
-  (:import [net.minecraft.server.level ServerPlayer]
-           [net.minecraft.nbt CompoundTag]))
+  )
 
 (def tutorial-item-id "my_mod:tutorial")
 (def ^:private nbt-key "academy_tutorial_acquired")
 
 (defn- tutorial-acquired-in-nbt?
-  [^CompoundTag tag]
+  [tag]
   (and (.contains tag nbt-key) (.getBoolean tag nbt-key)))
 
 (defn auto-give-on-login!
   "Check NBT flag directly (matching upstream @SerializeIncluded boolean).
   Called with just the ServerPlayer, resolved in the lifecycle hook."
-  [^ServerPlayer player]
+  [player]
   (when (tut-config/give-cloud-terminal-enabled?)
     (let [tag (player-pd/get-persistent-data! player)]
       (when-not (tutorial-acquired-in-nbt? tag)

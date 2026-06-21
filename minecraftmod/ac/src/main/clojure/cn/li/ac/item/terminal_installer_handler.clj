@@ -13,12 +13,9 @@
    Uses requiring-resolve for cross-layer dynamic dispatch."
   [player]
     (let [uuid-str (uuid/player-uuid player)
-        sid (when-let [f (requiring-resolve 'cn.li.mcmod.hooks.core/require-player-state-session-id)]
-              (f "terminal.installer"))
         installed? (boolean
-                    (and sid
-                         (when-let [chk (requiring-resolve 'cn.li.ac.terminal.player/terminal-installed?)]
-                           (chk sid uuid-str))))]
+                    (when-let [chk (requiring-resolve 'cn.li.ac.terminal.player/terminal-installed?)]
+                      (chk player)))]
     (if installed?
       ;; Already installed → send "alrdy_installed" chat message, item NOT consumed
       (do
@@ -27,9 +24,8 @@
         {:consume? false})
       ;; Not installed → install, trigger achievement, push effect to client
       (do
-        (when sid
-          (when-let [install! (requiring-resolve 'cn.li.ac.terminal.player/install-terminal!)]
-            (install! sid uuid-str))
+        (when-let [install! (requiring-resolve 'cn.li.ac.terminal.player/install-terminal!)]
+          (install! player))
           (try
             (when-let [trigger (requiring-resolve 'cn.li.ac.achievement.dispatcher/trigger-custom-event!)]
               (trigger uuid-str "terminal_installed"))
@@ -37,7 +33,7 @@
           (try
             (when-let [send-push (requiring-resolve 'cn.li.mc1201.runtime.network-core/send-to-client!)]
               (send-push uuid-str 1004 {}))
-            (catch Throwable _ nil)))
+            (catch Throwable _ nil))
         ;; Consume item unless creative mode
         ;; (matching original: if(!player.capabilities.isCreativeMode) stack.setCount(...))
         {:consume? (not (boolean (entity/player-creative? player)))}))))

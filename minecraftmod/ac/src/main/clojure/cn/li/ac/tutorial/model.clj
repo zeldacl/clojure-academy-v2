@@ -5,7 +5,6 @@
     {:activated-tuts     #{keyword}   ; activated tutorial ids
      :condition-flags    #{int}       ; fulfilled condition indices (Phase 5)
      :misaka-id          int-or-nil   ; random Misaka No. (1000–19000)
-     :tutorial-acquired? boolean      ; auto-give item already done
      :first-open?        boolean      ; first-open animation not yet played
      :dirty?             boolean}     ; conditions changed, pending activation check
 
@@ -22,28 +21,8 @@
   {:activated-tuts     #{}
    :condition-flags    #{}
    :misaka-id          nil
-   :tutorial-acquired? false
    :first-open?        true
    :dirty?             false})
-
-;; --- Normalization ---
-
-(defn normalize-state
-  "Coerce persisted or legacy state into the canonical shape.
-  Returns fresh-state when passed nil."
-  [d]
-  (if (nil? d)
-    (fresh-state)
-    (-> d
-        (update :activated-tuts
-                (fn [v] (set (or v #{}))))
-        (update :condition-flags
-                (fn [v] (set (or v #{}))))
-        (update :tutorial-acquired? boolean)
-        (update :first-open? boolean)
-        (update :dirty? boolean)
-        (update :misaka-id
-                (fn [v] (when (integer? v) v))))))
 
 ;; --- Activation ---
 
@@ -72,18 +51,6 @@
     (assoc d :misaka-id
            (+ misaka-id-min
               (rand-int (- misaka-id-max misaka-id-min))))))
-
-;; --- Tutorial-acquired flag (auto-give) ---
-
-(defn mark-tutorial-acquired!
-  "Mark that the tutorial item has been auto-given.  Idempotent."
-  [d]
-  (assoc d :tutorial-acquired? true))
-
-(defn tutorial-acquired?
-  "True if the auto-give tutorial item has already been granted."
-  [d]
-  (boolean (:tutorial-acquired? d)))
 
 ;; --- First-open flag (animation) ---
 

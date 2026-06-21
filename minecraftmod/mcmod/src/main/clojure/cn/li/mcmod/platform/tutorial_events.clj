@@ -43,12 +43,12 @@
   nil)
 
 (defn on-item-event!
-  [player-uuid item-id event-type]
-  ((:on-item-event! (tutorial-events-snapshot)) player-uuid item-id event-type))
+  [player item-id event-type]
+  ((:on-item-event! (tutorial-events-snapshot)) player item-id event-type))
 
 (defn process-pending-activations!
-  [player-uuid]
-  ((:process-pending-activations! (tutorial-events-snapshot)) player-uuid))
+  [player]
+  ((:process-pending-activations! (tutorial-events-snapshot)) player))
 
 (defn notify-tutorial-activated!
   [player-uuid tut-id]

@@ -15,9 +15,10 @@
          :cooldown-data    {...}  ; {[ctrl-id sub-id] ticks}
          :preset-data      {...}  ; active-preset/slots
          :context-registry {...}  ; {ctx-id {:id :skill-id :status :player-uuid}}
-         :terminal-data    {...}  ; terminal-installed? / installed-apps
-         :tutorial-data    {...}  ; activated-tuts / misaka-id / first-open?
          :dirty?           bool}}}}}
+
+  Note: terminal-data and tutorial-data are now persisted directly to player
+  NBT (see terminal/player.clj and tutorial/player.clj), not via this store.
   
   Usage:
     ;; Get/set player state
@@ -33,10 +34,7 @@
     (snapshot)"
   (:require [cn.li.ac.ability.model.ability :as adata]
             [cn.li.ac.ability.model.resource :as rdata]
-            [cn.li.ac.ability.model.cooldown :as cdata]
-            [cn.li.ac.ability.model.preset :as pdata]
-            [cn.li.ac.ability.model.develop :as ddata]
-            [cn.li.ac.terminal.model :as terminal-model]))
+            [cn.li.ac.ability.model.preset :as pdata]))
 
 ;; ============================================================================
 ;; Store Protocol
@@ -92,14 +90,13 @@
 ;; ============================================================================
 
 (defn fresh-player-state
-  "Create a default empty player state map."
+  "Create a default empty player state map.
+   cooldown-data and develop-data are transient (upstream CooldownData/DevelopData
+   do not call setNBTStorage). They are lazily initialized on first access."
   []
   {:ability-data     (adata/new-ability-data)
    :resource-data    (rdata/new-resource-data)
-   :cooldown-data    (cdata/new-cooldown-data)
    :preset-data      (pdata/new-preset-data)
-    :develop-data     (ddata/new-develop-data)
-    :terminal-data    (terminal-model/fresh-state)
    :context-registry {}
    :dirty?           false})
 
@@ -220,11 +217,6 @@
                           (fn [state]
                             (apply f state args)))
     (update-player-state! global-store session-id player-uuid f)))
-
-(defn update-player-domain!
-  "Update a domain sub-key in the global store."
-  [session-id player-uuid domain-key f]
-  (update-player-state-domain! global-store session-id player-uuid domain-key f))
 
 (defn mark-player-dirty!
   "Mark player dirty in the global store."

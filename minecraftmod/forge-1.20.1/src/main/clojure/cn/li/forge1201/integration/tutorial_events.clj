@@ -44,7 +44,7 @@
   [^Player player item-id event-type]
   (when (and player item-id)
     (try
-      (tutorial-platform/on-item-event! (str (.getUUID player)) item-id event-type)
+      (tutorial-platform/on-item-event! player item-id event-type)
       (catch Throwable _))))
 
 (defn- on-item-crafted
@@ -87,7 +87,7 @@
       (when (zero? (mod c 3))
         (let [^ServerPlayer player (.player event)]
           (try
-            (tutorial-platform/process-pending-activations! (str (.getUUID player)))
+            (tutorial-platform/process-pending-activations! player)
             (catch Throwable _)))))))
 
 (defn- install-forge-tutorial-activated-bridge!
