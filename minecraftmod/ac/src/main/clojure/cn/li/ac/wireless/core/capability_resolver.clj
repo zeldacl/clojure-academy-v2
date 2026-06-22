@@ -16,12 +16,17 @@
   All capabilities must be registered via tile-logic/register-tile-capability!;
   there is no instance? fallback — a nil result means the capability is NOT present."
   [tile cap-key _fallback-class]
-  (when-let [tile-id (platform-be/get-block-id tile)]
-    (try (tile-logic/get-capability tile-id cap-key tile nil)
-         (catch Exception e
-           (log/error "[wireless] tile-capability: tile-logic threw for" cap-key
-                      "on" tile-id ":" (ex-message e))
-           nil))))
+  (when tile
+    (when-let [tile-id (try (platform-be/get-block-id tile)
+                            (catch Exception e
+                              (log/error "[wireless] tile-capability: get-block-id threw for" cap-key
+                                         ":" (ex-message e))
+                              nil))]
+      (try (tile-logic/get-capability tile-id cap-key tile nil)
+           (catch Exception e
+             (log/error "[wireless] tile-capability: tile-logic threw for" cap-key
+                        "on" tile-id ":" (ex-message e))
+             nil)))))
 
 (defn matrix-capability [tile]
   (tile-capability tile WirelessCapabilityKeys/MATRIX IWirelessMatrix))

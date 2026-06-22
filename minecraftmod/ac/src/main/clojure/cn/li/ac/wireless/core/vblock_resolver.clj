@@ -29,7 +29,9 @@
 
 (defn- has-capability?
   "Return true if tile exposes the named wireless capability via unified tile-logic.
-  No instance? fallback — capabilities MUST be registered via tile-logic."
+  No instance? fallback — capabilities MUST be registered via tile-logic.
+  NOTE: intentionally NOT delegated to capability-resolver/tile-capability
+  to avoid circular dependency (vblock -> capability_resolver -> vblock_resolver -> vblock)."
   [tile cap-key _fallback-class]
   (when-let [tile-id (platform-be/get-block-id tile)]
     (try (some? (tile-logic/get-capability tile-id cap-key tile nil))

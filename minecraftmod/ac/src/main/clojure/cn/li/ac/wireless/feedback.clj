@@ -40,9 +40,18 @@
                :not-found    "app.my_mod.freq_transmitter.e0"
                :not-a-node   "app.my_mod.freq_transmitter.e0"
                :not-a-receiver "app.my_mod.freq_transmitter.e0"
+               :not-a-generator "app.my_mod.freq_transmitter.e0"
                :aborted      "app.my_mod.freq_transmitter.e4"
                :success      "app.my_mod.freq_transmitter.e6"
-               :pending      "app.my_mod.freq_transmitter.e5"}})
+               :pending      "app.my_mod.freq_transmitter.e5"}
+   :ability-interferer {:password      "app.my_mod.freq_transmitter.e1"
+                        :capacity      "app.my_mod.freq_transmitter.e2"
+                        :range         "app.my_mod.freq_transmitter.e2"
+                        :not-a-node    "app.my_mod.freq_transmitter.e0"
+                        :not-a-receiver "app.my_mod.freq_transmitter.e0"
+                        :aborted       "app.my_mod.freq_transmitter.e4"
+                        :success       "app.my_mod.freq_transmitter.e6"
+                        :pending       "app.my_mod.freq_transmitter.e5"}})
 
 
 ;; ============================================================================

@@ -91,8 +91,9 @@
 								;; tile entity for linking via link-generator-to-node!).
 								node-pos (try (.getBlockPos ^IWirelessNode target-node) (catch Exception _ nil))
 								node-be (when node-pos (world/world-get-tile-entity* world node-pos))
-								linked? (try (boolean (wireless-api/link-generator-to-node! be (or node-be target-node) "" false))
-														 (catch Exception _ false))]
+								linked? (and node-be
+								         (try (:success (wireless-api/link-generator-to-node! be node-be "" false))
+								              (catch Exception _ false)))]
 						(if linked?
 							(do (refresh-link-state! be)
 									(right-click-result "ac.cat_engine.linked"
