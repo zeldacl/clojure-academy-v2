@@ -349,7 +349,11 @@
 
   resource-loc formats accepted:
     \"my_mod:guis/rework/page_inv.xml\"  -> assets/my_mod/guis/rework/page_inv.xml
-    \"assets/my_mod/guis/rework/page_inv.xml\""
+    \"assets/my_mod/guis/rework/page_inv.xml\"
+
+  When <Root> has a single <Widget> child, returns that widget directly.
+  When <Root> has multiple <Widget> children (e.g. tutorial_windows.xml),
+  returns a container whose :children are all the top-level widgets."
   [resource-loc]
   (log/info "[XML-PARSER] load-xml START:" resource-loc)
   (let [path (if (str/includes? resource-loc ":")
@@ -362,11 +366,19 @@
                             {:resource-loc resource-loc :path path})))
         _ (log/info "[XML-PARSER] XML resource found, parsing...")
         parsed (xml/parse (io/input-stream xml-resource))
-        root-widget-node (x/get-element parsed :Widget)]
-    (log/info "[XML-PARSER] XML parsed successfully, building widget...")
-    (let [result (build-widget root-widget-node)]
-      (log/info "[XML-PARSER] Widget built, size:" (cgui-core/get-size result) "visible:" (cgui-core/visible? result))
-      result)))
+        widget-nodes (x/get-elements parsed :Widget)]
+    (log/info "[XML-PARSER] XML parsed successfully, building widget(s)..." (count widget-nodes))
+    (if (= 1 (count widget-nodes))
+      ;; Single widget: return it directly (existing behaviour for most XML files)
+      (let [result (build-widget (first widget-nodes))]
+        (log/info "[XML-PARSER] Widget built, size:" (cgui-core/get-size result) "visible:" (cgui-core/visible? result))
+        result)
+      ;; Multiple widgets: wrap in a container so callers can access all via (:children root)
+      (let [container (cgui-core/create-container :name "root")]
+        (doseq [wn widget-nodes]
+          (cgui-core/add-widget! container (build-widget wn)))
+        (log/info "[XML-PARSER] Multi-widget container built," (count widget-nodes) "children")
+        container))))
 
 (defn get-widget
   "Get named widget from parsed widget tree.

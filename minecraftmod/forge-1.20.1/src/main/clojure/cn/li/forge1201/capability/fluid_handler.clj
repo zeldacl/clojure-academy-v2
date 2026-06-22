@@ -30,7 +30,7 @@
         (or *phase-fluid*
             (let [rl (ResourceLocation. "my_mod" "imag_phase")
                   fluid (try (.getValue ForgeRegistries/FLUIDS rl)
-                             (catch Exception _ nil))]
+                             (catch Exception e (log/debug "Fluid registry lookup failed:" (ex-message e)) nil))]
               (alter-var-root #'*phase-fluid* (constantly fluid))
               fluid)))))
 
@@ -75,7 +75,7 @@
             (when (and (pos? can-fill) (= action IFluidHandler$FluidAction/EXECUTE))
               (let [new-state (assoc state :liquid-amount (+ current can-fill))]
                 (platform-be/set-custom-state! be new-state)
-                (try (platform-be/set-changed! be) (catch Exception _ nil))))
+                (try (platform-be/set-changed! be) (catch Exception e (log/debug "set-changed! failed for fluid fill" (ex-message e)) nil))))
             (int can-fill))
           0)))
 
@@ -88,7 +88,7 @@
               (when (= action IFluidHandler$FluidAction/EXECUTE)
                 (let [new-state (assoc state :liquid-amount (- current can-drain))]
                   (platform-be/set-custom-state! be new-state)
-                  (try (platform-be/set-changed! be) (catch Exception _ nil))))
+                  (try (platform-be/set-changed! be) (catch Exception e (log/debug "set-changed! failed for fluid drain" (ex-message e)) nil))))
               (FluidStack. fluid can-drain))
             FluidStack/EMPTY)))
 
@@ -103,7 +103,7 @@
                 (when (= action IFluidHandler$FluidAction/EXECUTE)
                   (let [new-state (assoc state :liquid-amount (- current can-drain))]
                     (platform-be/set-custom-state! be new-state)
-                    (try (platform-be/set-changed! be) (catch Exception _ nil))))
+                    (try (platform-be/set-changed! be) (catch Exception e (log/debug "set-changed! failed for fluid energy" (ex-message e)) nil))))
                 (FluidStack. fluid can-drain))
               FluidStack/EMPTY))
           FluidStack/EMPTY)))))

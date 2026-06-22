@@ -244,22 +244,46 @@
 ;; ============================================================================
 
 (defn validate!
-  "Validate connection integrity
-  Returns true if valid, false if should be disposed"
+  "Validate connection integrity — remove stale individual devices and dispose
+  empty or orphaned connections.
+  Returns true if valid, false if should be disposed."
   [conn]
   (let [conn (entity-commit/resolve-connection (:world-data conn) conn)
         world (:world (:world-data conn))
         node-vb (:node conn)
-        conn (if (and (not (is-disposed? conn))
-                      (vb/is-chunk-loaded? node-vb world))
-               (let [node-exists? (some? (vb/vblock-get node-vb world))
-                     empty? (and (zero? (count (get-generators conn)))
-                                 (zero? (count (get-receivers conn))))]
-                 (if (or (not node-exists?) empty?)
-                   (set-disposed! conn true)
-                   conn))
-               conn)]
-    (not (is-disposed? conn))))
+        ;; --- per-device cleanup: remove receivers/generators whose chunk
+        ;;     is loaded but capability is gone (block broken, replaced, etc.) ---
+        stale-receiver? (fn [rec-vb]
+                          (and (vb/is-chunk-loaded? rec-vb world)
+                               (nil? (resolver/resolve-receiver-cap world rec-vb))))
+        stale-generator? (fn [gen-vb]
+                           (and (vb/is-chunk-loaded? gen-vb world)
+                                (nil? (resolver/resolve-generator-cap world gen-vb))))
+        stale-recs (filterv stale-receiver? (get-receivers conn))
+        stale-gens (filterv stale-generator? (get-generators conn))]
+    (doseq [r stale-recs]
+      (log/warn "[wireless] Validate: removing stale receiver — chunk loaded but :wireless-receiver capability missing:"
+                (vb/vblock-to-string r))
+      (remove-receiver! conn r))
+    (doseq [g stale-gens]
+      (log/warn "[wireless] Validate: removing stale generator — chunk loaded but :wireless-generator capability missing:"
+                (vb/vblock-to-string g))
+      (remove-generator! conn g))
+    ;; --- whole-connection dispose: node gone or everything empty ---
+    (let [conn (entity-commit/resolve-connection (:world-data conn) conn)]
+      (if (and (not (is-disposed? conn))
+               (vb/is-chunk-loaded? node-vb world))
+        (let [node-exists? (some? (vb/vblock-get node-vb world))
+              empty? (and (zero? (count (get-generators conn)))
+                          (zero? (count (get-receivers conn))))]
+          (if (or (not node-exists?) empty?)
+            (do (when empty?
+                  (log/info "[wireless] Validate: disposing empty connection for node"
+                            (vb/vblock-to-string node-vb)))
+                (set-disposed! conn true)
+                false)
+            true))
+        (not (is-disposed? conn))))))
 
 ;; ============================================================================
 ;; Energy Transfer
@@ -328,12 +352,11 @@
                           (recur (rest recs-remaining) (- transfer-left actual)))
                         (recur (rest recs-remaining) transfer-left)))
 
-                    ;; rec-cap is nil — tile exists but doesn't expose IWirelessReceiver.
-                    ;; Don't remove; the receiver may be a multiblock controller whose
-                    ;; capability is resolved through tile-logic rather than instanceof.
-                    ;; Just skip this tick and try again next time.
+                    ;; rec-cap is nil — tile exists but its :wireless-receiver capability
+                    ;; could not be resolved yet (e.g. multiblock controller).
+                    ;; Don't remove; just skip this tick and try again next time.
                     (do
-                      (log/debug (format "[transfer-to-receivers!] skipping %s — rec-cap nil (tile exists but no IWirelessReceiver resolved)"
+                      (log/debug (format "[transfer-to-receivers!] skipping %s — rec-cap nil (:wireless-receiver capability not resolved)"
                                          (vb/vblock-to-string rec-vb)))
                       (recur (rest recs-remaining) transfer-left)))
 
@@ -384,13 +407,22 @@
         world (:world (:world-data conn))]
     (nbt/nbt-set-tag! nbt-compound "node" (vblock-codec/vblock-to-nbt (:node conn)))
     (doseq [receiver-vb (get-receivers conn)]
-      (when (or (not (vb/is-chunk-loaded? receiver-vb world))
-                (resolver/resolve-receiver-cap world receiver-vb))
-        (nbt/nbt-append! receivers-list (vblock-codec/vblock-to-nbt receiver-vb))))
+      (let [chunk-loaded? (vb/is-chunk-loaded? receiver-vb world)]
+        (if-not chunk-loaded?
+          ;; Chunk not loaded — cannot verify, save to avoid data loss
+          (nbt/nbt-append! receivers-list (vblock-codec/vblock-to-nbt receiver-vb))
+          (if-let [cap (resolver/resolve-receiver-cap world receiver-vb)]
+            (nbt/nbt-append! receivers-list (vblock-codec/vblock-to-nbt receiver-vb))
+            (log/warn "[wireless] Save: skipping receiver, chunk loaded but :wireless-receiver capability missing — device removed or replaced:"
+                      (vb/vblock-to-string receiver-vb))))))
     (doseq [generator-vb (get-generators conn)]
-      (when (or (not (vb/is-chunk-loaded? generator-vb world))
-                (resolver/resolve-generator-cap world generator-vb))
-        (nbt/nbt-append! generators-list (vblock-codec/vblock-to-nbt generator-vb))))
+      (let [chunk-loaded? (vb/is-chunk-loaded? generator-vb world)]
+        (if-not chunk-loaded?
+          (nbt/nbt-append! generators-list (vblock-codec/vblock-to-nbt generator-vb))
+          (if-let [cap (resolver/resolve-generator-cap world generator-vb)]
+            (nbt/nbt-append! generators-list (vblock-codec/vblock-to-nbt generator-vb))
+            (log/warn "[wireless] Save: skipping generator, chunk loaded but :wireless-generator capability missing — device removed or replaced:"
+                      (vb/vblock-to-string generator-vb))))))
     (nbt/nbt-set-tag! nbt-compound "receivers" receivers-list)
     (nbt/nbt-set-tag! nbt-compound "generators" generators-list)
     nbt-compound))

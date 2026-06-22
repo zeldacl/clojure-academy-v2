@@ -27,20 +27,22 @@
              :not-found       "app.my_mod.freq_transmitter.e0"
              :aborted         "app.my_mod.freq_transmitter.e4"
              :success         "app.my_mod.freq_transmitter.e6"}
-   :generator {:password "app.my_mod.freq_transmitter.e1"
-               :capacity "app.my_mod.freq_transmitter.e2"
-               :range    "app.my_mod.freq_transmitter.e2"
-               :aborted  "app.my_mod.freq_transmitter.e4"
-               :success  "app.my_mod.freq_transmitter.e6"
-               :pending  "app.my_mod.freq_transmitter.e5"}
-   :developer {:password   "app.my_mod.freq_transmitter.e1"
-               :capacity   "app.my_mod.freq_transmitter.e2"
-               :range      "app.my_mod.freq_transmitter.e2"
-               :not-found  "app.my_mod.freq_transmitter.e0"
-               :not-a-node "app.my_mod.freq_transmitter.e0"
-               :aborted    "app.my_mod.freq_transmitter.e4"
-               :success    "app.my_mod.freq_transmitter.e6"
-               :pending    "app.my_mod.freq_transmitter.e5"}})
+   :generator {:password      "app.my_mod.freq_transmitter.e1"
+               :capacity      "app.my_mod.freq_transmitter.e2"
+               :range         "app.my_mod.freq_transmitter.e2"
+               :not-a-generator "app.my_mod.freq_transmitter.e0"
+               :aborted       "app.my_mod.freq_transmitter.e4"
+               :success       "app.my_mod.freq_transmitter.e6"
+               :pending       "app.my_mod.freq_transmitter.e5"}
+   :developer {:password     "app.my_mod.freq_transmitter.e1"
+               :capacity     "app.my_mod.freq_transmitter.e2"
+               :range        "app.my_mod.freq_transmitter.e2"
+               :not-found    "app.my_mod.freq_transmitter.e0"
+               :not-a-node   "app.my_mod.freq_transmitter.e0"
+               :not-a-receiver "app.my_mod.freq_transmitter.e0"
+               :aborted      "app.my_mod.freq_transmitter.e4"
+               :success      "app.my_mod.freq_transmitter.e6"
+               :pending      "app.my_mod.freq_transmitter.e5"}})
 
 
 ;; ============================================================================

@@ -18,7 +18,7 @@
   [tag]
   (when (.contains tag nbt-key)
     (try (clojure.edn/read-string (.getString tag nbt-key))
-         (catch Exception _ nil))))
+         (catch Exception e (log/warn "Failed to load tutorial NBT state:" (ex-message e)) nil))))
 
 (defn- save-state!
   [tag state]

@@ -109,6 +109,16 @@
   [world]
   (if-let [wi-data (get-world-data-non-create world)]
     (let [pre-conn-count (count (world-registry/connections wi-data))]
+      ;; Log pre-validation state for diagnostics
+      (doseq [conn (world-registry/connections wi-data)]
+        (let [recs (node-conn/get-receivers conn)
+              gens (node-conn/get-generators conn)]
+          (doseq [r recs]
+            (log/info "[on-world-save] connection node=" (vb/vblock-to-string (:node conn))
+                      "receiver=" (vb/vblock-to-string r)))
+          (doseq [g gens]
+            (log/info "[on-world-save] connection node=" (vb/vblock-to-string (:node conn))
+                      "generator=" (vb/vblock-to-string g)))))
       (runtime/network-impl-validator wi-data)
       (runtime/node-connection-impl-validator wi-data)
       (let [post-conn-count (count (world-registry/connections wi-data))

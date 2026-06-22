@@ -35,7 +35,7 @@
   [widget-name]
   (let [parse! (fn []
                  (try
-                   (when-let [read-xml (requiring-resolve 'cn.li.mcmod.gui.xml-parser/read-xml)]
+                   (if-let [read-xml (requiring-resolve 'cn.li.mcmod.gui.xml-parser/read-xml)]
                      (let [path (modid/asset-path "guis" "tutorial_windows.xml")
                            root (read-xml path)]
                        (when root
@@ -44,7 +44,8 @@
                                              (when (= widget-name (cgui-core/get-name w))
                                                w))
                                            (or widgets []))]
-                           found))))
+                           found)))
+                     (log/warn "xml-parser/read-xml unavailable; recipe widgets cannot be loaded"))
                    (catch Throwable e
                      (log/warn "Failed to load recipe widget" widget-name (ex-message e))
                      nil)))
@@ -57,8 +58,8 @@
     (when widget
       (try
         (cgui-core/copy-widget widget)
-        (catch Throwable _
-          ;; fallback: load fresh (best effort)
+        (catch Throwable e
+          (log/warn "Failed to clone recipe widget, re-parsing:" widget-name (ex-message e))
           (parse!))))))
 
 ;; ============================================================================
@@ -102,13 +103,14 @@
   (let [kind-str (name recipe-kind)]
     (if-let [w (load-recipe-widget kind-str)]
       (hide-recipe-detail-widgets! w kind-str)
-      (let [w (cgui-core/create-widget :pos [20 20] :size [94 94])]
-        (comp/add-component! w
-                             (comp/text-box
-                              :text (str "Recipe: " kind-str)
-                              :font-size 8.0
-                              :color 0xFFAAAAAA))
-        w))))
+      (do (log/warn "Recipe widget not found in tutorial_windows.xml, using text fallback:" kind-str)
+          (let [w (cgui-core/create-widget :pos [20 20] :size [94 94])]
+            (comp/add-component! w
+                                 (comp/text-box
+                                  :text (str "Recipe: " kind-str)
+                                  :font-size 8.0
+                                  :color 0xFFAAAAAA))
+            w)))))
 
 (defn- create-block-preview-widget
   "Create a placeholder widget for 3D block preview.
@@ -147,10 +149,14 @@
   "Check if the forge recipe query is available and has recipes for item-id."
   [item-id]
   (try
-    (when-let [has-fn (requiring-resolve
-                       'cn.li.forge1201.integration.recipe-query/has-recipes?)]
-      (has-fn item-id))
-    (catch Throwable _ false)))
+    (if-let [has-fn (requiring-resolve
+                     'cn.li.forge1201.integration.recipe-query/has-recipes?)]
+      (has-fn item-id)
+      (do (log/warn "Recipe query function (has-recipes?) unavailable; recipe previews may not show")
+          false))
+    (catch Throwable e
+      (log/warn "Recipe query failed for" item-id (ex-message e))
+      false)))
 
 (defn build-view-groups
   "Build the ViewGroup list for a tutorial, matching original AcademyCraft
@@ -222,7 +228,9 @@
                              :item-id "my_mod:terminal_installer"}]}]
           apps (try (when-let [catalog (requiring-resolve 'cn.li.ac.terminal.catalog/ordered-apps)]
                       (catalog))
-                    (catch Throwable _ nil))
+                    (catch Throwable e
+                      (log/warn "Failed to load terminal catalog; app tutorial entries may be missing:" (ex-message e))
+                      nil))
           app-groups (mapv (fn [app]
                             (let [app-installer-id (str "my_mod:app_"
                                                        (clojure.string/replace (name (:id app)) "-" "_"))

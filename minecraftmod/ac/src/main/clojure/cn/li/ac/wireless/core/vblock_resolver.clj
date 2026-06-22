@@ -6,7 +6,8 @@
   (:require [cn.li.mcmod.block.tile-logic :as tile-logic]
             [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.platform.position :as pos]
-            [cn.li.mcmod.platform.world :as world])
+            [cn.li.mcmod.platform.world :as world]
+            [cn.li.mcmod.util.log :as log])
   (:import [cn.li.acapi.wireless
             IWirelessGenerator
             IWirelessMatrix
@@ -27,34 +28,31 @@
     (world/world-is-chunk-loaded?* w chunk-x chunk-z)))
 
 (defn- has-capability?
-  "Return true if tile exposes the named wireless capability."
-  [tile cap-key fallback-class]
-  (when tile
-    (try
-      (or (when-let [tile-id (platform-be/get-block-id tile)]
-            (some? (tile-logic/get-capability tile-id cap-key tile nil)))
-          (instance? fallback-class tile))
-      (catch Exception _ false))))
+  "Return true if tile exposes the named wireless capability via unified tile-logic.
+  No instance? fallback — capabilities MUST be registered via tile-logic."
+  [tile cap-key _fallback-class]
+  (when-let [tile-id (platform-be/get-block-id tile)]
+    (try (some? (tile-logic/get-capability tile-id cap-key tile nil))
+         (catch Exception e
+           (log/error "[wireless] vblock-resolver: tile-logic threw for" cap-key
+                      "on" tile-id ":" (ex-message e))
+           false))))
 
 (defn- tile-has-wireless-matrix? [tile]
   (if (map? tile)
     (contains? tile :plate-count)
-    (or (has-capability? tile WirelessCapabilityKeys/MATRIX IWirelessMatrix)
-        (instance? IWirelessMatrix tile))))
+    (has-capability? tile WirelessCapabilityKeys/MATRIX IWirelessMatrix)))
 
 (defn- tile-has-wireless-node? [tile]
   (if (map? tile)
     (contains? tile :node-type)
-    (or (has-capability? tile WirelessCapabilityKeys/NODE IWirelessNode)
-        (instance? IWirelessNode tile))))
+    (has-capability? tile WirelessCapabilityKeys/NODE IWirelessNode)))
 
 (defn- tile-has-wireless-generator? [tile]
-  (or (has-capability? tile WirelessCapabilityKeys/GENERATOR IWirelessGenerator)
-      (instance? IWirelessGenerator tile)))
+  (has-capability? tile WirelessCapabilityKeys/GENERATOR IWirelessGenerator))
 
 (defn- tile-has-wireless-receiver? [tile]
-  (or (has-capability? tile WirelessCapabilityKeys/RECEIVER IWirelessReceiver)
-      (instance? IWirelessReceiver tile)))
+  (has-capability? tile WirelessCapabilityKeys/RECEIVER IWirelessReceiver))
 
 (defn vblock-get
   "Get the TileEntity/state for this vblock with chunk and capability checks."

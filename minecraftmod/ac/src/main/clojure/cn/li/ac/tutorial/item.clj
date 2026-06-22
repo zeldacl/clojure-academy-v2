@@ -34,7 +34,9 @@
           (when-let [trigger-fn (requiring-resolve
                                  'cn.li.ac.achievement.dispatcher/trigger-custom-event!)]
             (trigger-fn (uuid/player-uuid player) "open_misaka_cloud"))
-          (catch Throwable _ nil)))
+          (catch Throwable e
+            (log/warn "Failed to trigger open_misaka_cloud achievement:" (ex-message e))
+            nil)))
       ;; Item IS consumed (matches original AC: EnumActionResult.SUCCESS).
       ;; Returning :consume? true tells the native Item.use() callback to
       ;; return InteractionResult.SUCCESS, which short-circuits the Minecraft

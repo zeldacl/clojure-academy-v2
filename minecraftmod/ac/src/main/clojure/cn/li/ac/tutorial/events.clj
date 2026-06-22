@@ -50,7 +50,7 @@
           (log/info "Tutorial activated by condition (batched)"
                     {:player uuid-str :tutorial (name tut-id)})
           (try (tutorial-platform/notify-tutorial-activated! uuid-str tut-id)
-               (catch Throwable _)))))))
+               (catch Throwable e (log/warn "Tutorial activation processing failed:" (ex-message e)))))))))
 
 (defn register-platform-handlers!
   "Register tutorial business handlers with the mcmod platform bridge."

@@ -2,7 +2,8 @@
   "Resolve wireless capabilities from tiles or VBlocks."
   (:require [cn.li.ac.wireless.core.vblock :as vb]
             [cn.li.mcmod.block.tile-logic :as tile-logic]
-            [cn.li.mcmod.platform.be :as platform-be])
+            [cn.li.mcmod.platform.be :as platform-be]
+            [cn.li.mcmod.util.log :as log])
   (:import [cn.li.acapi.wireless
             IWirelessGenerator
             IWirelessMatrix
@@ -11,15 +12,16 @@
             WirelessCapabilityKeys]))
 
 (defn tile-capability
-  "Resolve a capability from a tile via tile-logic, with direct-interface fallback."
-  [tile cap-key fallback-class]
-  (when tile
-    (try
-      (or (when-let [tile-id (platform-be/get-block-id tile)]
-            (tile-logic/get-capability tile-id cap-key tile nil))
-          (when (instance? fallback-class tile) tile))
-      (catch Exception _
-        (when (instance? fallback-class tile) tile)))))
+  "Resolve a capability from a tile via the unified tile-logic system.
+  All capabilities must be registered via tile-logic/register-tile-capability!;
+  there is no instance? fallback — a nil result means the capability is NOT present."
+  [tile cap-key _fallback-class]
+  (when-let [tile-id (platform-be/get-block-id tile)]
+    (try (tile-logic/get-capability tile-id cap-key tile nil)
+         (catch Exception e
+           (log/error "[wireless] tile-capability: tile-logic threw for" cap-key
+                      "on" tile-id ":" (ex-message e))
+           nil))))
 
 (defn matrix-capability [tile]
   (tile-capability tile WirelessCapabilityKeys/MATRIX IWirelessMatrix))

@@ -10,6 +10,7 @@
   - Iterates the platform-neutral DSL registry metadata to discover items/blocks.
   - Adds each item + optional NBT variants (energy fully-charged, filled-variant)."
   (:require [cn.li.forge1201.registry.state :as registry-state]
+            [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.config :as modid]
             [cn.li.mcmod.protocol.metadata :as registry-metadata]
             [clojure.string :as str])
@@ -39,7 +40,7 @@
           (.putDouble tag "bandwidth" bandwidth)
           (.putString tag "batteryType" (str battery-type))
           (.accept event full-stack))
-        (catch Exception _ nil)))))
+        (catch Exception e (log/warn "Failed to create energy variant for" item-id (ex-message e)) nil)))))
 
 
 (defn- ^:private accept-filled-variant
@@ -67,7 +68,7 @@
               translation-key (str "item." mod-id "." item-id "_" label-key)]
           (.setHoverName variant-stack (Component/translatable translation-key))))
       (.accept event variant-stack))
-    (catch Exception _ nil)))
+    (catch Exception e (log/warn "Failed to create filled variant for" item-id (ex-message e)) nil)))
 
 
 ;; ── Event handler ────────────────────────────────────────────────────

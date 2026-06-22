@@ -23,7 +23,9 @@
                (ResourceLocation. item-id))
             ^Item item (.get BuiltInRegistries/ITEM rl)]
       (when item (ItemStack. item)))
-    (catch Exception _ nil)))
+    (catch Exception e
+      (log/warn "item-id->stack failed for" item-id ":" (ex-message e))
+      nil)))
 
 (defn- stack->item-id
   "Get runtime item-id string from an ItemStack."
@@ -33,7 +35,9 @@
       (let [item (.getItem stack)
             rl (.getKey BuiltInRegistries/ITEM item)]
         (when rl (str (.getNamespace rl) ":" (.getPath rl))))
-      (catch Exception _ nil))))
+      (catch Exception e
+        (log/warn "stack->item-id failed:" (ex-message e))
+        nil))))
 
 (defn- recipes-for-type
   "Get all recipes of a given RecipeType whose output matches target-id."
@@ -43,7 +47,9 @@
       (filter (fn [^Recipe recipe]
                 (= target-id (stack->item-id (.getResultItem recipe nil))))
               recipes))
-    (catch Exception _ nil)))
+    (catch Exception e
+      (log/warn "recipes-for-type failed for" target-id ":" (ex-message e))
+      nil)))
 
 (defn find-recipes
   "Find all recipes that produce `target-id` (e.g. \"my_mod:constrained_ore\").
@@ -84,4 +90,6 @@
                           (.getIngredients recipe))
              :output (stack->item-id output)
              :count (.getCount output)})
-          (catch Exception _ nil))))))
+          (catch Exception e
+            (log/warn "first-recipe-for failed for" target-id recipe-kind ":" (ex-message e))
+            nil))))))

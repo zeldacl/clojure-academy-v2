@@ -154,26 +154,27 @@
 				{:success false :reason :not-found})))
 
 (defn link-generator-to-node!
-		[gen-tile node-tile password need-auth]
-		(if-let [node-cap (resolver/node-capability node-tile)]
-			(if (or (not need-auth)
-						(= password (.getPassword ^IWirelessNode node-cap)))
-				(let [world (platform-be/be-get-world-safe node-tile)
-							world-data (world-registry/get-world-data world)
-							node-vb (vb/create-vnode-conn node-tile)
-							conn (commands/ensure-node-connection! world-data node-vb)
-							gen-vb (vb/create-vgenerator gen-tile)
-							result (commands/link-generator-to-connection! world-data conn gen-vb)]
-					(when (:success result)
-							(when-let [gen-cap (resolver/generator-capability gen-tile)]
-							(platform-events/fire-event!
-								{:kind :topology/node
-								 :action :generator-linked
-								 :node ^IWirelessNode node-cap
-								 :generator ^IWirelessGenerator gen-cap})))
-					result)
-				{:success false :reason :password})
-			{:success false :reason :not-a-node}))
+			[gen-tile node-tile password need-auth]
+			(if-let [node-cap (resolver/node-capability node-tile)]
+				(if-let [gen-cap (resolver/generator-capability gen-tile)]
+					(if (or (not need-auth)
+								(= password (.getPassword ^IWirelessNode node-cap)))
+						(let [world (platform-be/be-get-world-safe node-tile)
+									world-data (world-registry/get-world-data world)
+									node-vb (vb/create-vnode-conn node-tile)
+									conn (commands/ensure-node-connection! world-data node-vb)
+									gen-vb (vb/create-vgenerator gen-tile)
+									result (commands/link-generator-to-connection! world-data conn gen-vb)]
+							(when (:success result)
+								(platform-events/fire-event!
+									{:kind :topology/node
+									 :action :generator-linked
+									 :node ^IWirelessNode node-cap
+									 :generator ^IWirelessGenerator gen-cap}))
+							result)
+						{:success false :reason :password})
+					{:success false :reason :not-a-generator})
+				{:success false :reason :not-a-node}))
 
 (defn unlink-generator-from-node!
 		[gen-tile]
@@ -192,26 +193,27 @@
 	      result)))
 
 (defn link-receiver-to-node!
-		[rec-tile node-tile password need-auth]
-		(if-let [node-cap (resolver/node-capability node-tile)]
-			(if (or (not need-auth)
-						(= password (.getPassword ^IWirelessNode node-cap)))
-				(let [world (platform-be/be-get-world-safe node-tile)
-							world-data (world-registry/get-world-data world)
-							node-vb (vb/create-vnode-conn node-tile)
-							conn (commands/ensure-node-connection! world-data node-vb)
-							rec-vb (vb/create-vreceiver rec-tile)
-							result (commands/link-receiver-to-connection! world-data conn rec-vb)]
-					(when (:success result)
-							(when-let [rec-cap (resolver/receiver-capability rec-tile)]
-							(platform-events/fire-event!
-								{:kind :topology/node
-								 :action :receiver-linked
-								 :node ^IWirelessNode node-cap
-								 :receiver ^IWirelessReceiver rec-cap})))
-					result)
-				{:success false :reason :password})
-			{:success false :reason :not-a-node}))
+			[rec-tile node-tile password need-auth]
+			(if-let [node-cap (resolver/node-capability node-tile)]
+				(if-let [rec-cap (resolver/receiver-capability rec-tile)]
+					(if (or (not need-auth)
+								(= password (.getPassword ^IWirelessNode node-cap)))
+						(let [world (platform-be/be-get-world-safe node-tile)
+									world-data (world-registry/get-world-data world)
+									node-vb (vb/create-vnode-conn node-tile)
+									conn (commands/ensure-node-connection! world-data node-vb)
+									rec-vb (vb/create-vreceiver rec-tile)
+									result (commands/link-receiver-to-connection! world-data conn rec-vb)]
+							(when (:success result)
+								(platform-events/fire-event!
+									{:kind :topology/node
+									 :action :receiver-linked
+									 :node ^IWirelessNode node-cap
+									 :receiver ^IWirelessReceiver rec-cap}))
+							result)
+						{:success false :reason :password})
+					{:success false :reason :not-a-receiver})
+				{:success false :reason :not-a-node}))
 
 (defn unlink-receiver-from-node!
 		[rec-tile]
