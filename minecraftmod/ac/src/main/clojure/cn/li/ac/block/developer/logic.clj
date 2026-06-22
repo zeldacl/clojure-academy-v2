@@ -71,15 +71,15 @@
 	                            positions)]
 	        (if ctrl-tile
 	          (do
-	            (log/info "[check-structure-valid?] resolved part" block-id "-> controller")
+	            (log/debug "[check-structure-valid?] resolved part" block-id "-> controller")
 	            (recur world ctrl-tile))
-	          (log/info "[check-structure-valid?] could not resolve part" block-id "-> controller")))
-	      (log/info "[check-structure-valid?] no controller spec for" block-id))
+	          (log/debug "[check-structure-valid?] could not resolve part" block-id "-> controller")))
+	      (log/debug "[check-structure-valid?] no controller spec for" block-id))
 	    ;; Controller (or non-multiblock): validate directly
 	    (when block-spec
 	      (let [pos (pos/position-get-block-pos tile)
 	            result (validate-structure world pos block-spec)]
-	        (log/info "[check-structure-valid?] block-id=" block-id
+	        (log/debug "[check-structure-valid?] block-id=" block-id
 	                 "multiblock?=" (:multi-block? mb)
 	                 "result=" result)
 	        result)))))

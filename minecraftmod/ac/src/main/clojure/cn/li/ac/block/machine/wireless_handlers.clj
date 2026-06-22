@@ -112,6 +112,8 @@
                    :avail avail})
                 {:success false :linked nil :avail []}))
             (catch Exception e
+              (log/error "[handle-list-nodes]" (ex-message e))
+              (log/stacktrace "[handle-list-nodes]" e)
               {:success false :error (ex-message e)})))
         build-link-response
         (fn [device world]
@@ -149,6 +151,7 @@
                  :messages (feedback/result->messages message-domain {:success false :reason :aborted})})))
             (catch Exception e
               (log/error "[handle-connect]" (ex-message e))
+              (log/stacktrace "[handle-connect]" e)
               {:success false :error (ex-message e)
                :messages (feedback/result->messages message-domain {:success false :reason :aborted})})))
         handle-disconnect
@@ -167,6 +170,7 @@
                  :messages (feedback/result->messages message-domain {:success false :reason :aborted})}))
             (catch Exception e
               (log/error "[handle-disconnect]" (ex-message e))
+              (log/stacktrace "[handle-disconnect]" e)
               {:success false :error (ex-message e)
                :messages (feedback/result->messages message-domain {:success false :reason :aborted})})))]
     (net-server/register-handler (msg :list-nodes) handle-list-nodes)

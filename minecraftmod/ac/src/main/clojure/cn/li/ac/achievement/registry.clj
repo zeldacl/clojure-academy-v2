@@ -36,25 +36,20 @@
 
 (defn find-by-trigger
   [kind payload]
-  (->> data/achievements
-       (filter
-         (fn [{:keys [trigger-key]}]
-           (and trigger-key
-                (= kind (:kind trigger-key))
-                (case kind
-                  :level-change
-                  (and (= (:category payload) (:category trigger-key))
-                       (= (:level payload) (:level trigger-key)))
-
-                  :skill-learn
-                  (= (:skill-id payload) (:skill-id trigger-key))
-
-                  :skill-perform
-                  (= (:skill-id payload) (:skill-id trigger-key))
-
-                  :custom
-                  (= (:event-id payload) (:event-id trigger-key))
-
-                  false)))))
-       (map :id))
+  (keep (fn [{:keys [trigger-key id]}]
+          (when (and trigger-key
+                     (= kind (:kind trigger-key))
+                     (case kind
+                       :level-change
+                       (and (= (:category payload) (:category trigger-key))
+                            (= (:level payload) (:level trigger-key)))
+                       :skill-learn
+                       (= (:skill-id payload) (:skill-id trigger-key))
+                       :skill-perform
+                       (= (:skill-id payload) (:skill-id trigger-key))
+                       :custom
+                       (= (:event-id payload) (:event-id trigger-key))
+                       false))
+            id))
+        data/achievements))
 

@@ -14,3 +14,9 @@
 
 (defn error [& xs]
   (.error logger (str "[my_mod ERROR] " (apply str xs))))
+
+(defn stacktrace
+  "Log an ERROR message with full stack trace for the given Throwable.
+   msg: descriptive string, e: the exception/throwable to log."
+  [msg ^Throwable e]
+  (.error logger (str "[my_mod ERROR] " msg) e))

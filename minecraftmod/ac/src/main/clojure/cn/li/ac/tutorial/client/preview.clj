@@ -39,15 +39,15 @@
                      (let [path (modid/asset-path "guis" "tutorial_windows.xml")
                            root (read-xml path)]
                        (when root
-                         (let [widgets (:children root)
+                         (let [widgets @(:children root)
                                found (some (fn [w]
                                              (when (= widget-name (cgui-core/get-name w))
                                                w))
-                                           (or widgets []))]
+                                           widgets)]
                            found)))
                      (log/warn "xml-parser/read-xml unavailable; recipe widgets cannot be loaded"))
                    (catch Throwable e
-                     (log/warn "Failed to load recipe widget" widget-name (ex-message e))
+                     (log/stacktrace (str "Failed to load recipe widget " widget-name) e)
                      nil)))
         widget (if-let [cached (get @recipe-widget-cache widget-name)]
                  cached
@@ -59,7 +59,7 @@
       (try
         (cgui-core/copy-widget widget)
         (catch Throwable e
-          (log/warn "Failed to clone recipe widget, re-parsing:" widget-name (ex-message e))
+          (log/stacktrace (str "Failed to clone recipe widget, re-parsing: " widget-name) e)
           (parse!))))))
 
 ;; ============================================================================
@@ -288,7 +288,8 @@
   "Get the currently-selected ViewGroup from state."
   [state*]
   (let [{:keys [view-groups group-index]} @state*
-        i (max 0 (min (dec (max 1 (count view-groups))) group-index))]
+        idx (or group-index 0)
+        i (max 0 (min (dec (max 1 (count view-groups))) idx))]
     (when (seq view-groups)
       (nth view-groups i nil))))
 
@@ -298,7 +299,8 @@
   (when-let [vg (current-view-group state*)]
     (let [{:keys [sub-views sub-index]} vg
           svs (or sub-views [])
-          i (max 0 (min (dec (max 1 (count svs))) sub-index))]
+          idx (or sub-index 0)
+          i (max 0 (min (dec (max 1 (count svs))) idx))]
       (when (seq svs)
         (nth svs i nil)))))
 

@@ -20,12 +20,9 @@
 (defn node-connection-impl-validator
 	"Remove disposed/invalid node connections from world-data."
 	[world-data]
-	(doseq [item (world-registry/connections world-data)]
-		(when (or (node-conn/is-disposed? item)
-							(and (vb/is-chunk-loaded? (:node item) (:world world-data))
-									 (nil? (resolver/resolve-node-cap (:world world-data) (:node item)))))
-			(commands/destroy-node-connection! world-data item))))
-
+		(doseq [item (world-registry/connections world-data)]
+			(when (node-conn/is-disposed? item)
+				(commands/destroy-node-connection! world-data item))))
 (defn tick-world-data!
 	"Tick all world wireless items."
 	[world-data]

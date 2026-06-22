@@ -52,7 +52,8 @@
         (log/info "[MOUSE-CLICK] emitting" event-key "to hit")
         (events/emit-widget-event! hit event-key {:x (- mx left) :y (- my top) :button button})
         (catch Exception e
-          (log/error "[MOUSE-CLICK] error in handler:" (.getMessage e)))))))
+          (log/error "[MOUSE-CLICK] error in handler:" (.getMessage e))
+          (log/stacktrace "[MOUSE-CLICK]" e))))))
 
 (defn mouse-drag!
   "dx/dy are Minecraft's native drag delta — reliable, no position tracking needed."
