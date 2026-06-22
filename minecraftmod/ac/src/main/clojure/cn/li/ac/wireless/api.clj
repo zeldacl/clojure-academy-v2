@@ -153,83 +153,94 @@
 				(link-node-to-network! node-tile matrix-tile password)
 				{:success false :reason :not-found})))
 
-(defn link-generator-to-node!
-			[gen-tile node-tile password need-auth]
-			(if-let [node-cap (resolver/node-capability node-tile)]
-				(if-let [gen-cap (resolver/generator-capability gen-tile)]
-					(if (or (not need-auth)
-								(= password (.getPassword ^IWirelessNode node-cap)))
-						(let [world (platform-be/be-get-world-safe node-tile)
-									world-data (world-registry/get-world-data world)
-									node-vb (vb/create-vnode-conn node-tile)
-									conn (commands/ensure-node-connection! world-data node-vb)
-									gen-vb (vb/create-vgenerator gen-tile)
-									result (commands/link-generator-to-connection! world-data conn gen-vb)]
-							(when (:success result)
-								(platform-events/fire-event!
-									{:kind :topology/node
-									 :action :generator-linked
-									 :node ^IWirelessNode node-cap
-									 :generator ^IWirelessGenerator gen-cap}))
-							result)
-						{:success false :reason :password})
-					{:success false :reason :not-a-generator})
-				{:success false :reason :not-a-node}))
+;; ============================================================================
+;; Shared link / unlink plumbing
+;; ============================================================================
 
-(defn unlink-generator-from-node!
-		[gen-tile]
-		(when-let [conn (get-node-conn-by-generator gen-tile)]
-			(let [world (platform-be/be-get-world-safe gen-tile)
-	          gen-vb (vb/create-vgenerator gen-tile)
-	          result (commands/unlink-generator-from-connection! conn gen-vb)]
-	      (when (:success result)
-	        (when-let [gen-cap (resolver/generator-capability gen-tile)]
-	          (when-let [node-cap (resolver/resolve-node-cap world (:node conn))]
-	            (platform-events/fire-event!
-	              {:kind :topology/node
-	               :action :generator-unlinked
-	               :node ^IWirelessNode node-cap
-	               :generator ^IWirelessGenerator gen-cap}))))
-	      result)))
+(def ^:private device-ops
+  "Per-device-type capability and command dispatch — eliminates copy-paste
+  across the four link/unlink functions."
+  {:generator {:resolve-cap   resolver/generator-capability
+               :create-vb     vb/create-vgenerator
+               :link-cmd      commands/link-generator-to-connection!
+               :unlink-cmd    commands/unlink-generator-from-connection!
+               :get-conn      get-node-conn-by-generator
+               :link-action   :generator-linked
+               :unlink-action :generator-unlinked
+               :event-key     :generator
+               :not-device    :not-a-generator}
+   :receiver  {:resolve-cap   resolver/receiver-capability
+               :create-vb     vb/create-vreceiver
+               :link-cmd      commands/link-receiver-to-connection!
+               :unlink-cmd    commands/unlink-receiver-from-connection!
+               :get-conn      get-node-conn-by-receiver
+               :link-action   :receiver-linked
+               :unlink-action :receiver-unlinked
+               :event-key     :receiver
+               :not-device    :not-a-receiver}})
+
+(defn- link-device!
+  "Shared implementation for link-generator-to-node! / link-receiver-to-node!."
+  [device-tile node-tile password need-auth device-type]
+  (let [{:keys [resolve-cap create-vb link-cmd link-action event-key not-device]}
+        (get device-ops device-type)]
+    (if-let [node-cap (resolver/node-capability node-tile)]
+      (if-let [dev-cap (resolve-cap device-tile)]
+        (if (or (not need-auth)
+                (= password (.getPassword ^IWirelessNode node-cap)))
+          (let [world      (platform-be/be-get-world-safe node-tile)
+                world-data (world-registry/get-world-data world)
+                node-vb    (vb/create-vnode-conn node-tile)
+                conn       (commands/ensure-node-connection! world-data node-vb)
+                dev-vb     (create-vb device-tile)
+                result     (link-cmd world-data conn dev-vb)]
+            (when (:success result)
+              (platform-events/fire-event!
+                {:kind :topology/node :action link-action
+                 :node ^IWirelessNode node-cap
+                 event-key dev-cap}))
+            result)
+          {:success false :reason :password})
+        {:success false :reason not-device})
+      {:success false :reason :not-a-node})))
+
+(defn- unlink-device!
+  "Shared implementation for unlink-generator-from-node! / unlink-receiver-from-node!."
+  [device-tile device-type]
+  (let [{:keys [resolve-cap create-vb unlink-cmd get-conn unlink-action event-key]}
+        (get device-ops device-type)]
+    (when-let [conn (get-conn device-tile)]
+      (let [world  (platform-be/be-get-world-safe device-tile)
+            dev-vb (create-vb device-tile)
+            result (unlink-cmd conn dev-vb)]
+        (when (:success result)
+          (when-let [dev-cap (resolve-cap device-tile)]
+            (when-let [node-cap (resolver/resolve-node-cap world (:node conn))]
+              (platform-events/fire-event!
+                {:kind :topology/node :action unlink-action
+                 :node ^IWirelessNode node-cap
+                 event-key dev-cap}))))
+        result))))
+
+;; ============================================================================
+;; Public link / unlink API
+;; ============================================================================
+
+(defn link-generator-to-node!
+  [gen-tile node-tile password need-auth]
+  (link-device! gen-tile node-tile password need-auth :generator))
 
 (defn link-receiver-to-node!
-			[rec-tile node-tile password need-auth]
-			(if-let [node-cap (resolver/node-capability node-tile)]
-				(if-let [rec-cap (resolver/receiver-capability rec-tile)]
-					(if (or (not need-auth)
-								(= password (.getPassword ^IWirelessNode node-cap)))
-						(let [world (platform-be/be-get-world-safe node-tile)
-									world-data (world-registry/get-world-data world)
-									node-vb (vb/create-vnode-conn node-tile)
-									conn (commands/ensure-node-connection! world-data node-vb)
-									rec-vb (vb/create-vreceiver rec-tile)
-									result (commands/link-receiver-to-connection! world-data conn rec-vb)]
-							(when (:success result)
-								(platform-events/fire-event!
-									{:kind :topology/node
-									 :action :receiver-linked
-									 :node ^IWirelessNode node-cap
-									 :receiver ^IWirelessReceiver rec-cap}))
-							result)
-						{:success false :reason :password})
-					{:success false :reason :not-a-receiver})
-				{:success false :reason :not-a-node}))
+  [rec-tile node-tile password need-auth]
+  (link-device! rec-tile node-tile password need-auth :receiver))
+
+(defn unlink-generator-from-node!
+  [gen-tile]
+  (unlink-device! gen-tile :generator))
 
 (defn unlink-receiver-from-node!
-		[rec-tile]
-		(when-let [conn (get-node-conn-by-receiver rec-tile)]
-			(let [world (platform-be/be-get-world-safe rec-tile)
-	          rec-vb (vb/create-vreceiver rec-tile)
-	          result (commands/unlink-receiver-from-connection! conn rec-vb)]
-	      (when (:success result)
-	        (when-let [rec-cap (resolver/receiver-capability rec-tile)]
-	          (when-let [node-cap (resolver/resolve-node-cap world (:node conn))]
-	            (platform-events/fire-event!
-	              {:kind :topology/node
-	               :action :receiver-unlinked
-	               :node ^IWirelessNode node-cap
-	               :receiver ^IWirelessReceiver rec-cap}))))
-	      result)))
+  [rec-tile]
+  (unlink-device! rec-tile :receiver))
 
 (defn change-network-ssid!
 		[network new-ssid]

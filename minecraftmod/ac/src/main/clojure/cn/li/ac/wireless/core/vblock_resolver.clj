@@ -3,11 +3,9 @@
 
   This namespace owns world/chunk/tile/capability lookup. It deliberately stays
   separate from NBT codecs so persistence remains data-only."
-  (:require [cn.li.mcmod.block.tile-logic :as tile-logic]
-            [cn.li.mcmod.platform.be :as platform-be]
+  (:require [cn.li.ac.wireless.core.capability-lookup :as cap-lookup]
             [cn.li.mcmod.platform.position :as pos]
-            [cn.li.mcmod.platform.world :as world]
-            [cn.li.mcmod.util.log :as log])
+            [cn.li.mcmod.platform.world :as world])
   (:import [cn.li.acapi.wireless
             IWirelessGenerator
             IWirelessMatrix
@@ -28,17 +26,9 @@
     (world/world-is-chunk-loaded?* w chunk-x chunk-z)))
 
 (defn- has-capability?
-  "Return true if tile exposes the named wireless capability via unified tile-logic.
-  No instance? fallback — capabilities MUST be registered via tile-logic.
-  NOTE: intentionally NOT delegated to capability-resolver/tile-capability
-  to avoid circular dependency (vblock -> capability_resolver -> vblock_resolver -> vblock)."
-  [tile cap-key _fallback-class]
-  (when-let [tile-id (platform-be/get-block-id tile)]
-    (try (some? (tile-logic/get-capability tile-id cap-key tile nil))
-         (catch Exception e
-           (log/error "[wireless] vblock-resolver: tile-logic threw for" cap-key
-                      "on" tile-id ":" (ex-message e))
-           false))))
+  "Delegates to the shared capability-lookup/tile-capability — no more duplication."
+  [tile cap-key fallback-class]
+  (some? (cap-lookup/tile-capability tile cap-key fallback-class)))
 
 (defn- tile-has-wireless-matrix? [tile]
   (if (map? tile)

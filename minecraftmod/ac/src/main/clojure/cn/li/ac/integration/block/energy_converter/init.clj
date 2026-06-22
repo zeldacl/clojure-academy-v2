@@ -5,15 +5,21 @@
 	(:require [cn.li.mcmod.block.dsl :as bdsl]
 	          [cn.li.mcmod.block.tile-dsl :as tdsl]
 	          [cn.li.ac.config.modid :as modid]
-	          [cn.li.ac.integration.block.energy-converter.base :as ec-base]
+	          [cn.li.mcmod.block.tile-logic :as tile-logic]
+		          [cn.li.mcmod.platform.be :as platform-be]
+		          [cn.li.mcmod.platform.capability :as platform-cap]
+		          [cn.li.ac.integration.block.energy-converter.base :as ec-base]
 	          [cn.li.ac.integration.block.energy-converter.config :as ec-config]
+		          [cn.li.ac.integration.block.energy-converter.schema :as ec-schema]
 	          [cn.li.ac.integration.block.energy-converter.eu-input :as eu-input]
 	          [cn.li.ac.integration.block.energy-converter.eu-output :as eu-output]
 	          [cn.li.ac.integration.block.energy-converter.rf-input :as rf-input]
 	          [cn.li.ac.integration.block.energy-converter.rf-output :as rf-output]
+		          [cn.li.ac.block.energy-converter.wireless-impl :as ec-wireless]
 	          [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
 						[cn.li.ac.integration.block.energy-converter.platform-bridge :as ec-bridge]
-						[cn.li.mcmod.util.log :as log]))
+						[cn.li.mcmod.util.log :as log])
+		(:import [cn.li.acapi.wireless IWirelessGenerator IWirelessReceiver]))
 
 (def ^:private converter-definitions
 	[{:block-id rf-input/block-id
@@ -84,5 +90,29 @@
 	(with-init-guard converters-initialized?
 		(doseq [converter converter-definitions]
 			(register-converter-block! converter))
+		;; --- register wireless capabilities (idempotent) ---
+		(when-not (platform-cap/get-capability-entry :wireless-generator)
+			(platform-cap/declare-capability!
+				:wireless-generator IWirelessGenerator
+				(fn [be _side]
+					(ec-wireless/create-wireless-generator
+						be
+						(fn [] (or (platform-be/get-custom-state be) (ec-schema/default-state-map)))
+						(fn [s] (platform-be/set-custom-state! be s))))))
+		(when-not (platform-cap/get-capability-entry :wireless-receiver)
+			(platform-cap/declare-capability!
+				:wireless-receiver IWirelessReceiver
+				(fn [be _side]
+					(ec-wireless/create-wireless-receiver
+						be
+						(fn [] (or (platform-be/get-custom-state be) (ec-schema/default-state-map)))
+						(fn [s] (platform-be/set-custom-state! be s))
+						{:max-energy (fn [] (double (ec-config/energy-capacity)))
+						 :bandwidth (fn [] (double (ec-config/transfer-bandwidth)))}))))
+		;; receivers: rf-input, eu-input   |  generators: rf-output, eu-output
+		(doseq [tile-id ["rf-input" "eu-input"]]
+			(tile-logic/register-tile-capability! tile-id :wireless-receiver))
+		(doseq [tile-id ["rf-output" "eu-output"]]
+			(tile-logic/register-tile-capability! tile-id :wireless-generator))
 		(log/info "Energy converters initialized"
 							{:count (count ec-config/supported-blocks)})))

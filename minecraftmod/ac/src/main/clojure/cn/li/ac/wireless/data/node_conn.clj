@@ -31,10 +31,16 @@
    node
    state])
 
+(def ^:const stale-device-cooldown-ticks
+  "A device must be stale for this many consecutive ticks before removal.
+  20 ticks = 1 second, enough for multiblock structure validation to complete."
+  20)
+
 (defn- default-state
   []
   {:receivers []
    :generators []
+   :stale-counters {}   ; vblock-str -> consecutive stale tick count
    :disposed false})
 
 (defn create-node-conn
@@ -244,15 +250,14 @@
 ;; ============================================================================
 
 (defn validate!
-  "Validate connection integrity — remove stale individual devices and dispose
-  empty or orphaned connections.
+  "Validate connection integrity — count stale devices and remove only after
+  cooldown. Dispose empty or orphaned connections.
   Returns true if valid, false if should be disposed."
   [conn]
   (let [conn (entity-commit/resolve-connection (:world-data conn) conn)
         world (:world (:world-data conn))
         node-vb (:node conn)
-        ;; --- per-device cleanup: remove receivers/generators whose chunk
-        ;;     is loaded but capability is gone (block broken, replaced, etc.) ---
+        ;; --- per-device stale detection ---
         stale-receiver? (fn [rec-vb]
                           (and (vb/is-chunk-loaded? rec-vb world)
                                (nil? (resolver/resolve-receiver-cap world rec-vb))))
@@ -260,14 +265,44 @@
                            (and (vb/is-chunk-loaded? gen-vb world)
                                 (nil? (resolver/resolve-generator-cap world gen-vb))))
         stale-recs (filterv stale-receiver? (get-receivers conn))
-        stale-gens (filterv stale-generator? (get-generators conn))]
-    (doseq [r stale-recs]
-      (log/warn "[wireless] Validate: removing stale receiver — chunk loaded but :wireless-receiver capability missing:"
-                (vb/vblock-to-string r))
+        stale-gens (filterv stale-generator? (get-generators conn))
+        ;; --- tick counters: increment stale, reset healthy, purge orphans ---
+        counters   (or (:stale-counters (:state conn)) {})
+        ;; increment
+        counters   (reduce (fn [c rec-vb]
+                             (let [k (vb/vblock-to-string rec-vb)]
+                               (update c k (fnil inc 0))))
+                           counters stale-recs)
+        counters   (reduce (fn [c gen-vb]
+                             (let [k (vb/vblock-to-string gen-vb)]
+                               (update c k (fnil inc 0))))
+                           counters stale-gens)
+        ;; reset: healthy devices go back to 0
+        counters   (reduce (fn [c rec-vb]
+                             (let [k (vb/vblock-to-string rec-vb)]
+                               (dissoc c k)))
+                           counters (remove stale-receiver? (get-receivers conn)))
+        counters   (reduce (fn [c gen-vb]
+                             (let [k (vb/vblock-to-string gen-vb)]
+                               (dissoc c k)))
+                           counters (remove stale-generator? (get-generators conn)))
+        ;; --- commit updated counters ---
+        conn (let [updated (update-state conn #(assoc % :stale-counters counters))]
+               (entity-commit/replace-connection-in-state!
+                 (:world-data conn) conn updated)
+               updated)]
+    ;; --- remove devices that exceeded cooldown ---
+    (doseq [r stale-recs
+            :let [k (vb/vblock-to-string r)]
+            :when (>= (get counters k 0) stale-device-cooldown-ticks)]
+      (log/warn "[wireless] Validate: removing stale receiver after" stale-device-cooldown-ticks
+                "ticks — :wireless-receiver capability missing:" k)
       (remove-receiver! conn r))
-    (doseq [g stale-gens]
-      (log/warn "[wireless] Validate: removing stale generator — chunk loaded but :wireless-generator capability missing:"
-                (vb/vblock-to-string g))
+    (doseq [g stale-gens
+            :let [k (vb/vblock-to-string g)]
+            :when (>= (get counters k 0) stale-device-cooldown-ticks)]
+      (log/warn "[wireless] Validate: removing stale generator after" stale-device-cooldown-ticks
+                "ticks — :wireless-generator capability missing:" k)
       (remove-generator! conn g))
     ;; --- whole-connection dispose: node gone or everything empty ---
     (let [conn (entity-commit/resolve-connection (:world-data conn) conn)]
@@ -284,11 +319,6 @@
                 false)
             true))
         (not (is-disposed? conn))))))
-
-;; ============================================================================
-;; Energy Transfer
-;; ============================================================================
-
 (defn- transfer-from-generators!
   "Collect energy from generators to node"
   [conn node bandwidth]
