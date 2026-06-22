@@ -38,11 +38,51 @@
 
 (defn check-structure-valid?
 	"On-demand structure validation.  Called by handlers so players don't have to
-	wait for the periodic tick to set :structure-valid."
+	wait for the periodic tick to set :structure-valid.
+	If tile is a multiblock part, resolves to the controller first by enumerating
+	the multiblock's relative positions (controller = part - rel-offset)."
 	[world tile]
-	(when-let [block-id (platform-be/get-block-id tile)]
-		(when-let [block-spec (bdsl/get-block-spec block-id)]
-			(validate-structure world (pos/position-get-block-pos tile) block-spec))))
+	(let [block-id (platform-be/get-block-id tile)
+	      block-spec (some-> block-id bdsl/get-block-spec)
+	      mb (:multi-block block-spec)]
+	  ;; If we got a part block, resolve to the controller
+	  (if (and mb (= :controller-parts (:multiblock-mode mb))
+	           (:part-block-id mb) (not (:multi-block? mb)))
+	    (if-let [ctrl-spec (some-> (:controller-block-id mb) bdsl/get-block-spec)]
+	      (let [ctrl-mb (:multi-block ctrl-spec)
+	            positions (or (:multi-block-positions ctrl-mb))
+	            px (pos/pos-x (pos/position-get-block-pos tile))
+	            py (pos/pos-y (pos/position-get-block-pos tile))
+	            pz (pos/pos-z (pos/position-get-block-pos tile))
+	            ;; Enumerate relative positions: controller = part - rel-offset
+	            ctrl-tile (some (fn [rel-pos]
+	                              (let [rx (or (:relative-x rel-pos) (:x rel-pos) 0)
+	                                    ry (or (:relative-y rel-pos) (:y rel-pos) 0)
+	                                    rz (or (:relative-z rel-pos) (:z rel-pos) 0)
+	                                    cx (- px rx)
+	                                    cy (- py ry)
+	                                    cz (- pz rz)
+	                                    cpos (pos/create-block-pos cx cy cz)
+	                                    ctile (world/world-get-tile-entity* world cpos)]
+	                                (when (and ctile
+	                                           (= (:controller-block-id ctrl-mb)
+	                                              (platform-be/get-block-id ctile)))
+	                                  ctile)))
+	                            positions)]
+	        (if ctrl-tile
+	          (do
+	            (log/info "[check-structure-valid?] resolved part" block-id "-> controller")
+	            (recur world ctrl-tile))
+	          (log/info "[check-structure-valid?] could not resolve part" block-id "-> controller")))
+	      (log/info "[check-structure-valid?] no controller spec for" block-id))
+	    ;; Controller (or non-multiblock): validate directly
+	    (when block-spec
+	      (let [pos (pos/position-get-block-pos tile)
+	            result (validate-structure world pos block-spec)]
+	        (log/info "[check-structure-valid?] block-id=" block-id
+	                 "multiblock?=" (:multi-block? mb)
+	                 "result=" result)
+	        result)))))
 
 (defn- tier-kw-for-block-id [block-id]
 	(or (developer/developer-type-for-block-id block-id) :normal))

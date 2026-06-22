@@ -204,7 +204,7 @@
           ;; Check origin first - must be controller block
           (if-not origin-state
               (do
-                (log/debug "Multi-block validation failed: origin block missing at" origin-pos)
+                (log/info "Multi-block validation failed: origin block missing at" origin-pos)
                 false)
               ;; Check if origin is controller (when controller-parts mode)
               (if (and controller-id-str part-id-str)
@@ -212,7 +212,7 @@
                       origin-block-id-str (some-> origin-be platform-be/get-block-id dsl-block-id-str)]
                   (if (not= origin-block-id-str controller-id-str)
                     (do
-                      (log/debug "Multi-block validation failed: origin is not controller. Expected:" controller-id-str "Got:" origin-block-id-str)
+                      (log/info "Multi-block validation failed: origin is not controller. Expected:" controller-id-str "Got:" origin-block-id-str)
                       false)
                     ;; Check all other positions - must be part blocks
                     (let [result (every?
@@ -227,14 +227,14 @@
                                                  block-state (world/world-get-block-state* world pos)]
                                              (if-not block-state
                                                (do
-                                                 (log/debug "Multi-block validation failed: missing block at" pos "rel-pos" rel-pos)
+                                                 (log/info "Multi-block validation failed: missing block at" pos "rel-pos" rel-pos)
                                                  false)
                                                ;; Verify it's a part block
                                                (let [be (world/world-get-tile-entity* world pos)
                                                      bid-str (some-> be platform-be/get-block-id dsl-block-id-str)]
                                                  (if (not= bid-str part-id-str)
                                                    (do
-                                                     (log/debug "Multi-block validation failed: wrong block type at" pos ". Expected:" part-id-str "Got:" bid-str)
+                                                     (log/info "Multi-block validation failed: wrong block type at" pos ". Expected:" part-id-str "Got:" bid-str)
                                                      false)
                                                    true))))))
                                        (catch Exception e
@@ -242,7 +242,7 @@
                                          false)))
                                    (or positions []))]
                       (when result
-                        (log/debug "Multi-block validation passed for structure at" origin-pos))
+                        (log/info "Multi-block validation passed for structure at" origin-pos))
                       result)))
                 ;; No controller-parts mode, just check blocks exist
                 (let [result (every?
@@ -251,14 +251,14 @@
                                    (let [pos (abs-pos rel-pos)
                                          block-state (world/world-get-block-state* world pos)]
                                      (when-not block-state
-                                       (log/debug "Multi-block validation failed: missing block at" pos "rel-pos" rel-pos))
+                                       (log/info "Multi-block validation failed: missing block at" pos "rel-pos" rel-pos))
                                      (if block-state true false))
                                    (catch Exception e
                                      (log/debug "Error checking block at" rel-pos ":"(ex-message e))
                                      false)))
                                (or positions []))]
                   (when result
-                    (log/debug "Multi-block validation passed for structure at" origin-pos))
+                    (log/info "Multi-block validation passed for structure at" origin-pos))
                   result))))
 
         (catch Exception e

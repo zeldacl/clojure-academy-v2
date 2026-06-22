@@ -8,6 +8,7 @@
 						[cn.li.ac.wireless.data.network-lookup :as lookup]
 						[cn.li.ac.wireless.data.world-registry :as world-registry]
 						[cn.li.mcmod.platform.be :as platform-be]
+						[cn.li.mcmod.util.log :as log]
 						[cn.li.mcmod.platform.events :as platform-events])
 		(:import [cn.li.acapi.wireless
 							IWirelessGenerator
@@ -187,7 +188,7 @@
     (if-let [node-cap (resolver/node-capability node-tile)]
       (if-let [dev-cap (resolve-cap device-tile)]
         (if (or (not need-auth)
-                (= password (.getPassword ^IWirelessNode node-cap)))
+                (= (str password) (str (.getPassword ^IWirelessNode node-cap))))
           (let [world      (platform-be/be-get-world-safe node-tile)
                 world-data (world-registry/get-world-data world)
                 node-vb    (vb/create-vnode-conn node-tile)
@@ -200,9 +201,9 @@
                  :node ^IWirelessNode node-cap
                  event-key dev-cap}))
             result)
-          {:success false :reason :password})
-        {:success false :reason not-device})
-      {:success false :reason :not-a-node})))
+          (do (log/info "[link-device!]" device-type "password mismatch") {:success false :reason :password}))
+        (do (log/info "[link-device!]" device-type "device " (name device-type) " has no capability. block-id=" (some-> device-tile platform-be/get-block-id)) {:success false :reason not-device}))
+      (do (log/info "[link-device!]" device-type "target has no IWirelessNode. block-id=" (some-> node-tile platform-be/get-block-id)) {:success false :reason :not-a-node}))))
 
 (defn- unlink-device!
   "Shared implementation for unlink-generator-from-node! / unlink-receiver-from-node!."

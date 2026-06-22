@@ -129,6 +129,7 @@
 						(when icon-connect
 							(events/on-left-click icon-connect
 								(fn [_]
+										(log/info "[rebuild-page!] connect icon CLICKED for" (name-fn target))
 									(let [pwd (if (and encrypted? pass-box) (comp/get-text pass-box) "")]
 										(connect-fn target pwd)
 										(when pass-box (comp/set-text! pass-box ""))))))

@@ -9,15 +9,50 @@
             [cn.li.ac.wireless.data.node-conn :as node-conn]
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.ac.wireless.gui.sync.handler :as net-helpers]
+            [cn.li.mcmod.block.dsl :as bdsl]
             [cn.li.mcmod.network.server :as net-server]
+            [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.platform.entity :as entity]
+            [cn.li.mcmod.platform.position :as pos]
+            [cn.li.mcmod.platform.world :as world]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.acapi.wireless IWirelessNode]))
 
 (defn- msg [action] (msg-registry/msg :developer action))
 
 (defn- open-tile [payload player]
-  (machine-handlers/open-container-tile payload player))
+  (let [tile (machine-handlers/open-container-tile payload player)
+        block-id (some-> tile platform-be/get-block-id)
+        block-spec (some-> block-id bdsl/get-block-spec)
+        mb (:multi-block block-spec)]
+    ;; If the container gave us a multiblock part, resolve to the controller
+    ;; by enumerating relative positions (controller = part - rel-offset).
+    (if (and mb (= :controller-parts (:multiblock-mode mb))
+             (:part-block-id mb) (not (:multi-block? mb)))
+      (if-let [ctrl-spec (some-> (:controller-block-id mb) bdsl/get-block-spec)]
+        (let [ctrl-mb (:multi-block ctrl-spec)
+              positions (or (:multi-block-positions ctrl-mb))
+              world (net-helpers/get-world player)
+              px (pos/pos-x (pos/position-get-block-pos tile))
+              py (pos/pos-y (pos/position-get-block-pos tile))
+              pz (pos/pos-z (pos/position-get-block-pos tile))
+              ctrl-tile (some (fn [rel-pos]
+                                (let [rx (or (:relative-x rel-pos) (:x rel-pos) 0)
+                                      ry (or (:relative-y rel-pos) (:y rel-pos) 0)
+                                      rz (or (:relative-z rel-pos) (:z rel-pos) 0)
+                                      cx (- px rx)
+                                      cy (- py ry)
+                                      cz (- pz rz)
+                                      cpos (pos/create-block-pos cx cy cz)
+                                      ctile (world/world-get-tile-entity* world cpos)]
+                                  (when (and ctile
+                                             (= (:controller-block-id ctrl-mb)
+                                                (platform-be/get-block-id ctile)))
+                                    ctile)))
+                              positions)]
+          (or ctrl-tile tile))
+        tile)
+      tile)))
 
 (defn- get-linked-node-for-receiver [tile]
   (when-let [conn (try (wireless-api/get-node-conn-by-receiver tile) (catch Exception _ nil))]

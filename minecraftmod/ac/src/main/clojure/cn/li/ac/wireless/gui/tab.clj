@@ -50,6 +50,7 @@
                                                                   (toast/show-toast! {:message-key (:key m) :args (:args m)}))
                                                                 (rebuild!))))
                                            :connect-fn   (fn [target pass]
+                                                           (log/info "[install-panel-rebuild!] connect-fn CALLED target=" (pr-str target) "pass=" pass)
                                                            (net-client/send-to-server
                                                              owner
                                                              (connect-msg)

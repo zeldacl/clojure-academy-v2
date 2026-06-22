@@ -3,9 +3,12 @@
   (:require [cn.li.ac.wireless.api :as wireless-api]
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.ac.wireless.gui.sync.handler :as net-helpers]
+            [cn.li.mcmod.block.dsl :as bdsl]
             [cn.li.mcmod.gui.container.sync-routing :as sync-routing]
             [cn.li.mcmod.network.server :as net-server]
+            [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.platform.position :as pos]
+            [cn.li.mcmod.platform.world :as world]
             [cn.li.mcmod.util.log :as log]
             [cn.li.ac.wireless.feedback :as feedback])
   (:import [cn.li.acapi.wireless IWirelessNode]))
@@ -37,10 +40,50 @@
                      (same-block-pos? p linked-pos))))
          (mapv wireless-node->info))))
 
+(defn- resolve-controller-tile
+  "If tile is a multiblock part, find the controller by enumerating the
+  multiblock's relative positions, computing the candidate controller position
+  for each, and checking for a tile with the controller block-id."
+  [tile player]
+  (if-let [block-id (platform-be/get-block-id tile)]
+    (if-let [block-spec (bdsl/get-block-spec block-id)]
+      (let [mb (:multi-block block-spec)]
+        (if (and mb (= :controller-parts (:multiblock-mode mb))
+                 (:part-block-id mb) (not (:multi-block? mb)))
+          (if-let [ctrl-spec (some-> (:controller-block-id mb) bdsl/get-block-spec)]
+            (if-let [world (net-helpers/get-world player)]
+              (let [ctrl-mb (:multi-block ctrl-spec)
+                    positions (:multi-block-positions ctrl-mb)
+                    px (pos/pos-x (pos/position-get-block-pos tile))
+                    py (pos/pos-y (pos/position-get-block-pos tile))
+                    pz (pos/pos-z (pos/position-get-block-pos tile))]
+                ;; Try each relative position: controller = part - relative
+                (or (some (fn [rel-pos]
+                            (let [rx (or (:relative-x rel-pos) (:x rel-pos) 0)
+                                  ry (or (:relative-y rel-pos) (:y rel-pos) 0)
+                                  rz (or (:relative-z rel-pos) (:z rel-pos) 0)
+                                  cx (- px rx)
+                                  cy (- py ry)
+                                  cz (- pz rz)
+                                  cpos (pos/create-block-pos cx cy cz)
+                                  ctile (world/world-get-tile-entity* world cpos)]
+                              (when (and ctile
+                                         (= (:controller-block-id ctrl-mb)
+                                            (platform-be/get-block-id ctile)))
+                                ctile)))
+                          positions)
+                    tile))
+              tile)
+            tile)
+          tile))
+      tile)
+    tile))
+
 (defn- tile-from-payload
   [payload player]
-  (let [container (sync-routing/require-open-container! payload player)]
-    (:tile-entity container)))
+  (let [container (sync-routing/require-open-container! payload player)
+        tile (:tile-entity container)]
+    (resolve-controller-tile tile player)))
 
 (defn register-link-handlers!
   "Register list/connect/disconnect handlers for a wireless-linked machine.
@@ -84,8 +127,10 @@
                   device (tile-from-payload payload player)
                   node-pos (select-keys payload [:node-x :node-y :node-z])
                   pass (:password payload "")
-                  need-auth? (boolean (:need-auth? payload true))
-                  {:keys [linked avail]} (build-link-response device world)]
+                  need-auth? (boolean (:need-auth? payload true))]
+              (log/info "[handle-connect] device=" (some? device) "world=" (some? world)
+                        "node-pos=" (pr-str node-pos))
+              (let [{:keys [linked avail]} (build-link-response device world)]
               (if (and world device
                        (number? (:node-x node-pos))
                        (number? (:node-y node-pos))
@@ -95,12 +140,13 @@
                                                               :pos-z (:node-z node-pos)})]
                   (let [result (link! device node pass need-auth?)
                         {:keys [linked avail]} (build-link-response device world)]
+                    (log/info "[handle-connect] link result:" (pr-str result))
                     (assoc result :messages (feedback/result->messages message-domain result)
                                    :linked linked :avail avail))
                   {:success false :linked linked :avail avail
                    :messages (feedback/result->messages message-domain {:success false :reason :not-found})})
                 {:success false :linked linked :avail avail
-                 :messages (feedback/result->messages message-domain {:success false :reason :aborted})}))
+                 :messages (feedback/result->messages message-domain {:success false :reason :aborted})})))
             (catch Exception e
               (log/error "[handle-connect]" (ex-message e))
               {:success false :error (ex-message e)
