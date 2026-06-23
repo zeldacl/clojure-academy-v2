@@ -125,7 +125,7 @@
   [{:keys [ad cat dev? developer-type energy max-energy bandwidth]}]
   (let [cat-id (:category-id ad)
         has-category? (boolean cat)
-        lvl (if has-category? (long (:level ad 1)) 0)
+        lvl (if has-category? (long (or (:level ad) 1)) 0)
         level-prog (double (:level-progress ad 0.0))
         skills-at-level (when cat-id
                           (skill-query/get-controllable-skills-at-level cat-id lvl))

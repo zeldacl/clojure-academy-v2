@@ -132,7 +132,7 @@
                   need-auth? (boolean (:need-auth? payload true))]
               (log/info "[handle-connect] device=" (some? device) "world=" (some? world)
                         "node-pos=" (pr-str node-pos))
-              (let [{:keys [linked avail]} (build-link-response device world)]
+              (let [{:keys [linked avail]} (when device (build-link-response device world))]
               (if (and world device
                        (number? (:node-x node-pos))
                        (number? (:node-y node-pos))

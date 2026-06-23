@@ -30,27 +30,28 @@
     (if (and mb (= :controller-parts (:multiblock-mode mb))
              (:part-block-id mb) (not (:multi-block? mb)))
       (if-let [ctrl-spec (some-> (:controller-block-id mb) bdsl/get-block-spec)]
-        (let [ctrl-mb (:multi-block ctrl-spec)
-              positions (or (:multi-block-positions ctrl-mb))
-              world (net-helpers/get-world player)
-              px (pos/pos-x (pos/position-get-block-pos tile))
-              py (pos/pos-y (pos/position-get-block-pos tile))
-              pz (pos/pos-z (pos/position-get-block-pos tile))
-              ctrl-tile (some (fn [rel-pos]
-                                (let [rx (or (:relative-x rel-pos) (:x rel-pos) 0)
-                                      ry (or (:relative-y rel-pos) (:y rel-pos) 0)
-                                      rz (or (:relative-z rel-pos) (:z rel-pos) 0)
-                                      cx (- px rx)
-                                      cy (- py ry)
-                                      cz (- pz rz)
-                                      cpos (pos/create-block-pos cx cy cz)
-                                      ctile (world/world-get-tile-entity* world cpos)]
-                                  (when (and ctile
-                                             (= (:controller-block-id ctrl-mb)
-                                                (platform-be/get-block-id ctile)))
-                                    ctile)))
-                              positions)]
-          (or ctrl-tile tile))
+        (if-let [world (net-helpers/get-world player)]
+          (let [ctrl-mb (:multi-block ctrl-spec)
+                positions (or (:multi-block-positions ctrl-mb))
+                px (pos/pos-x (pos/position-get-block-pos tile))
+                py (pos/pos-y (pos/position-get-block-pos tile))
+                pz (pos/pos-z (pos/position-get-block-pos tile))
+                ctrl-tile (some (fn [rel-pos]
+                                  (let [rx (or (:relative-x rel-pos) (:x rel-pos) 0)
+                                        ry (or (:relative-y rel-pos) (:y rel-pos) 0)
+                                        rz (or (:relative-z rel-pos) (:z rel-pos) 0)
+                                        cx (- px rx)
+                                        cy (- py ry)
+                                        cz (- pz rz)
+                                        cpos (pos/create-block-pos cx cy cz)
+                                        ctile (world/world-get-tile-entity* world cpos)]
+                                    (when (and ctile
+                                               (= (:controller-block-id ctrl-mb)
+                                                  (platform-be/get-block-id ctile)))
+                                      ctile)))
+                                positions)]
+            (or ctrl-tile tile))
+          tile)
         tile)
       tile)))
 

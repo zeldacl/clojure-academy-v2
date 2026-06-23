@@ -171,7 +171,15 @@
     :default 15
     :min 1
     :max 1200
-    :comment "Ticks between matrix GUI sync broadcasts."}])
+    :comment "Ticks between matrix GUI sync broadcasts."}
+   {:key :stale-device-cooldown-ticks
+    :section :performance
+    :path "performance.stale-device-cooldown-ticks"
+    :type :int
+    :default 20
+    :min 1
+    :max 200
+    :comment "Ticks before a stale wireless device (capability gone) is removed from a connection."}])
 
 (def default-values
   (into {} (map (juxt :key :default) descriptors)))
@@ -233,3 +241,6 @@
 
 (defn gui-sync-interval []
   (:matrix-gui-sync-interval (cfg)))
+
+(defn stale-device-cooldown-ticks []
+  (:stale-device-cooldown-ticks (cfg)))

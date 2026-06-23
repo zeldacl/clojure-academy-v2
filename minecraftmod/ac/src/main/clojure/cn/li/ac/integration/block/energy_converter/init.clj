@@ -90,25 +90,23 @@
 	(with-init-guard converters-initialized?
 		(doseq [converter converter-definitions]
 			(register-converter-block! converter))
-		;; --- register wireless capabilities (idempotent) ---
-		(when-not (platform-cap/get-capability-entry :wireless-generator)
-			(platform-cap/declare-capability!
-				:wireless-generator IWirelessGenerator
-				(fn [be _side]
-					(ec-wireless/create-wireless-generator
-						be
-						(fn [] (or (platform-be/get-custom-state be) (ec-schema/default-state-map)))
-						(fn [s] (platform-be/set-custom-state! be s))))))
-		(when-not (platform-cap/get-capability-entry :wireless-receiver)
-			(platform-cap/declare-capability!
-				:wireless-receiver IWirelessReceiver
-				(fn [be _side]
-					(ec-wireless/create-wireless-receiver
-						be
-						(fn [] (or (platform-be/get-custom-state be) (ec-schema/default-state-map)))
-						(fn [s] (platform-be/set-custom-state! be s))
-						{:max-energy (fn [] (double (ec-config/energy-capacity)))
-						 :bandwidth (fn [] (double (ec-config/transfer-bandwidth)))}))))
+		;; --- register wireless capabilities (all registrations are idempotent) ---
+		(platform-cap/declare-capability!
+			:wireless-generator IWirelessGenerator
+			(fn [be _side]
+				(ec-wireless/create-wireless-generator
+					be
+					(fn [] (or (platform-be/get-custom-state be) (ec-schema/default-state-map)))
+					(fn [s] (platform-be/set-custom-state! be s)))))
+		(platform-cap/declare-capability!
+			:wireless-receiver IWirelessReceiver
+			(fn [be _side]
+				(ec-wireless/create-wireless-receiver
+					be
+					(fn [] (or (platform-be/get-custom-state be) (ec-schema/default-state-map)))
+					(fn [s] (platform-be/set-custom-state! be s))
+					{:max-energy (fn [] (double (ec-config/energy-capacity)))
+					 :bandwidth (fn [] (double (ec-config/transfer-bandwidth)))})))
 		;; receivers: rf-input, eu-input   |  generators: rf-output, eu-output
 		(doseq [tile-id ["rf-input" "eu-input"]]
 			(tile-logic/register-tile-capability! tile-id :wireless-receiver))

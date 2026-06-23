@@ -30,7 +30,7 @@
 		(try (node-conn/get-node conn) (catch Exception _ nil))))
 
 (defn sync-link-state [be state]
-	(if-let [node (get-linked-node be)]
+	(if-let [^IWirelessNode node (get-linked-node be)]
 		(let [p (.getBlockPos node)
 					node-name (try (str (.getNodeName node)) (catch Exception _ ""))]
 			(assoc state

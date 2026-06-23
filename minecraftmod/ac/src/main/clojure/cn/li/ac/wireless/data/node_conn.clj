@@ -16,7 +16,8 @@
             [cn.li.ac.wireless.domain.transfer :as transfer]
             [cn.li.ac.wireless.runtime.effects :as effects]
             [cn.li.mcmod.platform.nbt :as nbt]
-            [cn.li.mcmod.util.log :as log])
+            [cn.li.mcmod.util.log :as log]
+            [cn.li.ac.wireless.config :as wcfg])
   (:import [cn.li.acapi.wireless
             IWirelessGenerator
             IWirelessNode
@@ -31,10 +32,13 @@
    node
    state])
 
-(def ^:const stale-device-cooldown-ticks
+(defn- stale-device-cooldown-ticks
   "A device must be stale for this many consecutive ticks before removal.
-  20 ticks = 1 second, enough for multiblock structure validation to complete."
-  20)
+  Reads from wireless config (default 20 ticks = 1 second), enough for multiblock
+  structure validation to complete."
+  []
+  (try (wcfg/stale-device-cooldown-ticks)
+       (catch Exception _ 20)))
 
 (defn- default-state
   []
@@ -255,70 +259,80 @@
   Returns true if valid, false if should be disposed."
   [conn]
   (let [conn (entity-commit/resolve-connection (:world-data conn) conn)
-        world (:world (:world-data conn))
-        node-vb (:node conn)
-        ;; --- per-device stale detection ---
-        stale-receiver? (fn [rec-vb]
-                          (and (vb/is-chunk-loaded? rec-vb world)
-                               (nil? (resolver/resolve-receiver-cap world rec-vb))))
-        stale-generator? (fn [gen-vb]
-                           (and (vb/is-chunk-loaded? gen-vb world)
-                                (nil? (resolver/resolve-generator-cap world gen-vb))))
-        stale-recs (filterv stale-receiver? (get-receivers conn))
-        stale-gens (filterv stale-generator? (get-generators conn))
-        ;; --- tick counters: increment stale, reset healthy, purge orphans ---
-        counters   (or (:stale-counters (:state conn)) {})
-        ;; increment
-        counters   (reduce (fn [c rec-vb]
-                             (let [k (vb/vblock-to-string rec-vb)]
-                               (update c k (fnil inc 0))))
-                           counters stale-recs)
-        counters   (reduce (fn [c gen-vb]
-                             (let [k (vb/vblock-to-string gen-vb)]
-                               (update c k (fnil inc 0))))
-                           counters stale-gens)
-        ;; reset: healthy devices go back to 0
-        counters   (reduce (fn [c rec-vb]
-                             (let [k (vb/vblock-to-string rec-vb)]
-                               (dissoc c k)))
-                           counters (remove stale-receiver? (get-receivers conn)))
-        counters   (reduce (fn [c gen-vb]
-                             (let [k (vb/vblock-to-string gen-vb)]
-                               (dissoc c k)))
-                           counters (remove stale-generator? (get-generators conn)))
-        ;; --- commit updated counters ---
-        conn (let [updated (update-state conn #(assoc % :stale-counters counters))]
-               (entity-commit/replace-connection-in-state!
-                 (:world-data conn) conn updated)
-               updated)]
-    ;; --- remove devices that exceeded cooldown ---
-    (doseq [r stale-recs
-            :let [k (vb/vblock-to-string r)]
-            :when (>= (get counters k 0) stale-device-cooldown-ticks)]
-      (log/warn "[wireless] Validate: removing stale receiver after" stale-device-cooldown-ticks
-                "ticks — :wireless-receiver capability missing:" k)
-      (remove-receiver! conn r))
-    (doseq [g stale-gens
-            :let [k (vb/vblock-to-string g)]
-            :when (>= (get counters k 0) stale-device-cooldown-ticks)]
-      (log/warn "[wireless] Validate: removing stale generator after" stale-device-cooldown-ticks
-                "ticks — :wireless-generator capability missing:" k)
-      (remove-generator! conn g))
-    ;; --- whole-connection dispose: node gone or everything empty ---
-    (let [conn (entity-commit/resolve-connection (:world-data conn) conn)]
-      (if (and (not (is-disposed? conn))
-               (vb/is-chunk-loaded? node-vb world))
-        (let [node-exists? (some? (vb/vblock-get node-vb world))
-              empty? (and (zero? (count (get-generators conn)))
-                          (zero? (count (get-receivers conn))))]
-          (if (or (not node-exists?) empty?)
-            (do (when empty?
-                  (log/info "[wireless] Validate: disposing empty connection for node"
-                            (vb/vblock-to-string node-vb)))
-                (set-disposed! conn true)
-                false)
-            true))
-        (not (is-disposed? conn))))))
+        world (:world (:world-data conn))]
+    (if-not world
+      (do (log/warn "[wireless] Validate: world is nil for connection, skipping validation")
+          (not (is-disposed? conn)))
+      (let [node-vb (:node conn)
+            ;; --- per-device stale detection ---
+            stale-receiver? (fn [rec-vb]
+                              (and (vb/is-chunk-loaded? rec-vb world)
+                                   (nil? (resolver/resolve-receiver-cap world rec-vb))))
+            stale-generator? (fn [gen-vb]
+                               (and (vb/is-chunk-loaded? gen-vb world)
+                                    (nil? (resolver/resolve-generator-cap world gen-vb))))
+            stale-recs (filterv stale-receiver? (get-receivers conn))
+            stale-gens (filterv stale-generator? (get-generators conn))
+            ;; --- tick counters: increment stale, reset healthy, purge orphans ---
+            counters   (or (:stale-counters (:state conn)) {})
+            ;; increment
+            counters   (reduce (fn [c rec-vb]
+                                 (let [k (vb/vblock-to-string rec-vb)]
+                                   (update c k (fnil inc 0))))
+                               counters stale-recs)
+            counters   (reduce (fn [c gen-vb]
+                                 (let [k (vb/vblock-to-string gen-vb)]
+                                   (update c k (fnil inc 0))))
+                               counters stale-gens)
+            ;; reset: healthy devices go back to 0 (eager filterv per REVIEW.md §4)
+            counters   (reduce (fn [c rec-vb]
+                                 (let [k (vb/vblock-to-string rec-vb)]
+                                   (dissoc c k)))
+                               counters (filterv (complement stale-receiver?) (get-receivers conn)))
+            counters   (reduce (fn [c gen-vb]
+                                 (let [k (vb/vblock-to-string gen-vb)]
+                                   (dissoc c k)))
+                               counters (filterv (complement stale-generator?) (get-generators conn)))
+            ;; --- prune orphaned counters for devices no longer in the lists ---
+            active-keys (into #{} (map vb/vblock-to-string) (concat (get-receivers conn) (get-generators conn)))
+            counters   (reduce-kv (fn [c k _] (if (active-keys k) c (dissoc c k)))
+                                 counters counters)
+            ;; --- commit updated counters (wrapped in transact! for atomicity) ---
+            conn (world-registry/transact!
+                   (:world-data conn)
+                   (fn [_]
+                     (let [updated (update-state conn #(assoc % :stale-counters counters))]
+                       (entity-commit/replace-connection-in-state!
+                         (:world-data conn) conn updated)
+                       updated)))]
+        ;; --- remove devices that exceeded cooldown ---
+        (doseq [r stale-recs
+                :let [k (vb/vblock-to-string r)]
+                :when (>= (get counters k 0) (stale-device-cooldown-ticks))]
+          (log/warn "[wireless] Validate: removing stale receiver after" (stale-device-cooldown-ticks)
+                    "ticks — :wireless-receiver capability missing:" k)
+          (remove-receiver! conn r))
+        (doseq [g stale-gens
+                :let [k (vb/vblock-to-string g)]
+                :when (>= (get counters k 0) (stale-device-cooldown-ticks))]
+          (log/warn "[wireless] Validate: removing stale generator after" (stale-device-cooldown-ticks)
+                    "ticks — :wireless-generator capability missing:" k)
+          (remove-generator! conn g))
+        ;; --- whole-connection dispose: node gone or everything empty ---
+        (let [conn (entity-commit/resolve-connection (:world-data conn) conn)]
+          (if (and (not (is-disposed? conn))
+                   (vb/is-chunk-loaded? node-vb world))
+            (let [node-exists? (some? (vb/vblock-get node-vb world))
+                  empty? (and (zero? (count (get-generators conn)))
+                              (zero? (count (get-receivers conn))))]
+              (if (or (not node-exists?) empty?)
+                (do (when empty?
+                      (log/info "[wireless] Validate: disposing empty connection for node"
+                                (vb/vblock-to-string node-vb)))
+                    (set-disposed! conn true)
+                    false)
+                true))
+            (not (is-disposed? conn))))))))
 (defn- transfer-from-generators!
   "Collect energy from generators to node"
   [conn node bandwidth]
@@ -351,8 +365,9 @@
                     ;; gen-cap nil — skip, don't remove.
                     ;; Capability may be resolvable next tick.
                     (do
-                      (log/debug (format "[transfer-from-generators!] skipping %s — gen-cap nil"
-                                         (vb/vblock-to-string gen-vb)))
+                      (when (log/debug-enabled?)
+                        (log/debug (format "[transfer-from-generators!] skipping %s — gen-cap nil"
+                                           (vb/vblock-to-string gen-vb))))
                       (recur (rest gens-remaining) transfer-left)))
 
                   (recur (rest gens-remaining) transfer-left))))))))))
@@ -386,8 +401,9 @@
                     ;; could not be resolved yet (e.g. multiblock controller).
                     ;; Don't remove; just skip this tick and try again next time.
                     (do
-                      (log/debug (format "[transfer-to-receivers!] skipping %s — rec-cap nil (:wireless-receiver capability not resolved)"
-                                         (vb/vblock-to-string rec-vb)))
+                      (when (log/debug-enabled?)
+                        (log/debug (format "[transfer-to-receivers!] skipping %s — rec-cap nil (:wireless-receiver capability not resolved)"
+                                           (vb/vblock-to-string rec-vb))))
                       (recur (rest recs-remaining) transfer-left)))
 
                   ;; chunk not loaded — receiver block may be in unloaded area.

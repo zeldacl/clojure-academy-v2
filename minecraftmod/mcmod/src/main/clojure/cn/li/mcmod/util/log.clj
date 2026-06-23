@@ -15,6 +15,12 @@
 (defn error [& xs]
   (.error logger (str "[my_mod ERROR] " (apply str xs))))
 
+(defn debug-enabled?
+  "Returns true if DEBUG level logging is enabled for the mod logger.
+  Use this to guard expensive debug-level format-string construction on hot paths."
+  []
+  (.isDebugEnabled logger))
+
 (defn stacktrace
   "Log an ERROR message with full stack trace for the given Throwable.
    msg: descriptive string, e: the exception/throwable to log."

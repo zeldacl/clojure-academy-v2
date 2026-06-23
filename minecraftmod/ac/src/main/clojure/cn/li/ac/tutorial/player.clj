@@ -8,6 +8,7 @@
   automatically with the player entity."
   (:require [cn.li.ac.tutorial.model :as model]
             [cn.li.mcmod.platform.player-persistent-data :as player-pd]
+            [cn.li.mcmod.platform.nbt :as nbt]
             [cn.li.mcmod.util.log :as log]))
 
 (def ^:private nbt-key "academy_tutorial")
@@ -16,13 +17,13 @@
 
 (defn- load-state
   [tag]
-  (when (.contains tag nbt-key)
-    (try (clojure.edn/read-string (.getString tag nbt-key))
+  (when (nbt/nbt-has-key-safe? tag nbt-key)
+    (try (clojure.edn/read-string (nbt/nbt-get-string tag nbt-key))
          (catch Exception e (log/warn "Failed to load tutorial NBT state:" (ex-message e)) nil))))
 
 (defn- save-state!
   [tag state]
-  (.putString tag nbt-key (pr-str state)))
+  (nbt/nbt-set-string! tag nbt-key (pr-str state)))
 
 ;; --- Public API ---
 
