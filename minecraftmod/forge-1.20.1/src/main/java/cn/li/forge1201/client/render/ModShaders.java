@@ -24,4 +24,12 @@ public final class ModShaders {
     public static ShaderInstance getPlasmaBodyShader() {
         return ForgeClientRenderRegistry.getPlasmaBodyShader();
     }
+
+    public static ShaderInstance getSkillProgbarShader() {
+        return ForgeClientRenderRegistry.getSkillProgbarShader();
+    }
+
+    public static ShaderInstance getMonoShader() {
+        return ForgeClientRenderRegistry.getMonoShader();
+    }
 }

@@ -1,17 +1,39 @@
 (ns cn.li.ac.ability.client.screens.skill-tree
   "Skill tree screen logic (AC layer - no Minecraft imports)."
-  (:require 
-[cn.li.ac.ability.client.api :as api]
-            [cn.li.ac.ability.client.read-model :as read-model]
-            [cn.li.ac.ability.client.managed-screens :as managed-screens]
-            [cn.li.ac.ability.registry.skill-query :as skill]
-            [cn.li.ac.ability.registry.category :as category]
-            [cn.li.ac.ability.registry.skill :as skill-registry]
-            [cn.li.ac.ability.rules.learning-rules :as learning-rules]
-            [cn.li.ac.ability.model.ability :as adata]
-            [cn.li.ac.ability.config :as cfg]
-            [cn.li.mcmod.i18n :as i18n]))
+  (:require
+   [cn.li.ac.ability.client.api :as api]
+   [cn.li.ac.ability.client.read-model :as read-model]
+   [cn.li.ac.ability.client.managed-screens :as managed-screens]
+   [cn.li.ac.ability.registry.skill-query :as skill]
+   [cn.li.ac.ability.registry.category :as category]
+   [cn.li.ac.ability.registry.skill :as skill-registry]
+   [cn.li.ac.ability.rules.learning-rules :as learning-rules]
+   [cn.li.ac.ability.model.ability :as adata]
+   [cn.li.ac.ability.config :as cfg]
+   [cn.li.mcmod.i18n :as i18n]))
 
+(defn- now-ms [] (System/currentTimeMillis))
+(defn- clamp01 [v] (max 0.0 (min 1.0 (double v))))
+(defn- lerp [a b t] (+ a (* (- b a) (clamp01 t))))
+
+;; ============================================================================
+;; Constants (matching upstream SkillTree.scala)
+;; ============================================================================
+(def ^:private max-progress-segments 24)
+(def ^:private widget-size 16.0)
+(def ^:private total-size 23.0)
+(def ^:private prog-size 31.0)
+(def ^:private icon-size 14.0)
+(def ^:private draw-align (/ (- widget-size total-size) 2))   ;; -3.5
+(def ^:private prog-align (/ (- total-size prog-size) 2))      ;; -4.0
+(def ^:private align (/ (- total-size icon-size) 2))           ;; 4.5
+(def ^:private back-scale 1.01)
+(def ^:private back-scale-inv (/ 1.0 back-scale))
+(def ^:private max-du-skills 10.0)
+
+;; ============================================================================
+;; Condition checking
+;; ============================================================================
 (defn- check-learn-conditions
   [skill-id ability-data player-level developer-type]
   (if-let [skill-spec (skill-registry/get-skill skill-id)]
@@ -20,62 +42,35 @@
 
 (defn- can-level-up-ability?
   [ability-data]
-  (let [level (:level ability-data)
-        cat-id (:category-id ability-data)]
-    (and (< level (cfg/max-level))
-         (some? cat-id)
+  (let [level (:level ability-data) cat-id (:category-id ability-data)]
+    (and (< level (cfg/max-level)) (some? cat-id)
          (let [skills (skill/get-controllable-skills-at-level cat-id level)
                cat-rate (category/get-prog-incr-rate cat-id)]
-           (learning-rules/can-level-up? ability-data
-                                         skills
-                                         cat-rate
-                                         (cfg/prog-incr-rate)
-                                         (cfg/max-level))))))
+           (learning-rules/can-level-up? ability-data skills cat-rate
+                                         (cfg/prog-incr-rate) (cfg/max-level))))))
 
-;; Screen state (no Minecraft imports)
+;; ============================================================================
+;; Screen state
+;; ============================================================================
 (def ^:private default-screen-state
-  {:hover-skill nil
-   :player-uuid nil
-   :learn-context nil})
+  {:hover-skill nil :selected-skill nil :player-uuid nil :learn-context nil
+   :creation-time nil :mouse-x 0 :mouse-y 0 :hovered-skill-id nil :hover-start-time 0})
 
 (def screen-id :skill-tree)
 
-(defn screen-owner-key
-  [owner]
-  (read-model/owner-key owner :skill-tree))
-
-(defn- with-screen-player-state-owner
-  [owner f]
-  (read-model/with-player-state-owner (screen-owner-key owner) f))
-
-(defn- get-screen-player-state
-  [owner]
-  (read-model/get-player-state (screen-owner-key owner)))
-
-(defn- ensure-screen-player-state!
-  [owner]
-  (read-model/ensure-player-state! (screen-owner-key owner)))
-
-(defn screen-state-snapshot
-  ([owner]
-   (managed-screens/screen-state screen-id (screen-owner-key owner) default-screen-state)))
-
-(defn- swap-screen-state!
-  [owner f & args]
+(defn screen-owner-key [owner] (read-model/owner-key owner :skill-tree))
+(defn- get-screen-player-state [owner] (read-model/get-player-state (screen-owner-key owner)))
+(defn- ensure-screen-player-state! [owner] (read-model/ensure-player-state! (screen-owner-key owner)))
+(defn screen-state-snapshot [owner]
+  (managed-screens/screen-state screen-id (screen-owner-key owner) default-screen-state))
+(defn- swap-screen-state! [owner f & args]
   (let [owner-key (screen-owner-key owner)]
     (apply managed-screens/update-screen-state! screen-id owner-key default-screen-state f args)))
-
-(defn reset-screen-states-for-test!
-  []
-  (managed-screens/reset-managed-screen-state-for-test!)
-  nil)
-
-(def ^:private max-progress-segments 24)
+(defn reset-screen-states-for-test! [] (managed-screens/reset-managed-screen-state-for-test!) nil)
 
 ;; ============================================================================
 ;; Font options — matching AcademyCraft SkillTree.scala:181-190
 ;; ============================================================================
-
 (def fo-skill-title      {:font :ac-bold  :font-size 12 :align :center})
 (def fo-skill-desc       {:font :ac-normal :font-size 9  :align :center})
 (def fo-skill-prog       {:font :ac-normal :font-size 8  :align :center :color 0xFFa1e1ff})
@@ -87,312 +82,297 @@
 (def fo-level-title      {:font :ac-bold  :font-size 12 :align :center})
 (def fo-level-req        {:font :ac-normal :font-size 9  :align :center})
 
-(defn- translate-field
-  [spec text-key fallback]
-  (if-let [key-name (get spec text-key)]
-    (i18n/translate key-name)
-    fallback))
+(defn- translate-field [spec text-key fallback]
+  (if-let [key-name (get spec text-key)] (i18n/translate key-name) fallback))
 
 ;; ============================================================================
-;; Layout Calculations (Pure Functions)
+;; Layout Calculations
 ;; ============================================================================
+(defn calculate-skill-positions [skills]
+  (let [ordered (vec (sort-by (juxt :level :id) skills))
+        cx 200 cy 120 radius 80
+        n (max 1 (count ordered))]
+    (map-indexed (fn [idx s]
+                   (if-let [[px py] (:ui-position s)]
+                     {:skill s :x (int px) :y (int py) :idx idx}
+                     (let [angle (* idx (/ (* 2 Math/PI) n))]
+                       {:skill s :x (int (+ cx (* radius (Math/cos angle))))
+                        :y (int (+ cy (* radius (Math/sin angle)))) :idx idx})))
+                 ordered)))
 
-(defn calculate-skill-positions
-  "Calculate radial layout positions for skills."
-  [skills]
-  (let [ordered-skills (vec (sort-by (juxt :level :id) skills))
-        center-x 200
-        center-y 120
-        radius 80
-        skill-count (max 1 (count ordered-skills))]
-    (map-indexed
-      (fn [idx skill]
-        (if-let [[px py] (:ui-position skill)]
-          {:skill skill :x (int px) :y (int py)}
-          (let [angle (* idx (/ (* 2 Math/PI) skill-count))]
-            {:skill skill
-             :x (int (+ center-x (* radius (Math/cos angle))))
-             :y (int (+ center-y (* radius (Math/sin angle))))})))
-      ordered-skills)))
-
-(defn- build-skill-connections
-  [skill-positions player-state developer-type]
-  (let [ability-data (:ability-data player-state)
-        node-by-id (into {}
-                         (map (fn [{:keys [skill] :as node}]
-                                [(:id skill) node]))
-                         skill-positions)]
-    (vec
-      (remove nil?
-    (apply concat
-      (map (fn [{:keys [skill x y]}]
-        (let [target-skill-id (:id skill)
-                locked? (not (:pass? (check-learn-conditions
-                 target-skill-id
-                 ability-data
-                 (:level ability-data)
-                 developer-type)))]
-          (for [{source-skill-id :skill-id min-exp :min-exp}
-           (:prerequisites skill)
-           :let [{from-x :x from-y :y} (get node-by-id source-skill-id)]
-           :when from-x]
-            {:from-x (+ from-x 10)
-             :from-y (+ from-y 10)
-             :to-x (+ x 10)
-             :to-y (+ y 10)
-             :satisfied? (>= (or (adata/get-skill-exp ability-data source-skill-id) 0.0)
-              (double min-exp))
-             :locked? locked?})))
-           skill-positions))))))
+(defn- build-skill-connections [skill-positions player-state developer-type]
+  (let [ad (:ability-data player-state)
+        by-id (into {} (map (fn [s] [(:id (:skill s)) s]) skill-positions))]
+    (vec (remove nil? (apply concat
+          (map (fn [{:keys [skill x y]}]
+                 (let [tid (:id skill)
+                       locked? (not (:pass? (check-learn-conditions tid ad (:level ad) developer-type)))]
+                   (for [{sid :skill-id me :min-exp} (:prerequisites skill)
+                         :let [{fx :x fy :y} (get by-id sid)] :when fx]
+                     {:from-x (+ fx 10) :from-y (+ fy 10) :to-x (+ x 10) :to-y (+ y 10)
+                      :satisfied? (>= (or (adata/get-skill-exp ad sid) 0.0) (double me))
+                      :locked? locked?})))
+               skill-positions))))))
 
 ;; ============================================================================
 ;; Render Data Builders
 ;; ============================================================================
+(defn build-skill-node-render-data [skill-pos player-state developer-type]
+  (let [{:keys [skill x y idx]} skill-pos
+        sid (or (:skill-id skill) (:id skill))
+        ad (:ability-data player-state)
+        learned? (adata/is-learned? ad sid)
+        conds (check-learn-conditions sid ad (:level ad) developer-type)
+        exp (double (or (adata/get-skill-exp ad sid) 0.0))
+        prog (clamp01 exp)
+        m-alpha (cond learned? 1.0
+                      (let [pid (some-> (:prerequisites skill) first :skill-id)]
+                        (and pid (adata/is-learned? ad pid))) 0.7
+                      :else 0.25)]
+    {:x x :y y :idx idx :learned learned? :can-learn (:pass? conds)
+     :conditions (:failures conds) :skill-id sid
+     :skill-name (or (:name skill) (translate-field skill :name-key (name sid)) (name sid))
+     :skill-description (translate-field skill :description-key "")
+     :skill-icon (skill/get-skill-icon-path sid)
+     :skill-level (:level skill) :exp prog :m-alpha m-alpha
+     :progress-segments (int (Math/round (* prog max-progress-segments)))}))
 
-(defn build-skill-node-render-data
-  "Build render data for a single skill node."
-  [skill-pos player-state developer-type]
-  (let [{:keys [skill x y]} skill-pos
-        skill-id (or (:skill-id skill) (:id skill))
-        ability-data (:ability-data player-state)
-        learned? (adata/is-learned? ability-data skill-id)
-        conditions (check-learn-conditions
-                     skill-id
-                     ability-data
-                     (:level ability-data)
-                     developer-type)
-        skill-exp (double (or (adata/get-skill-exp ability-data skill-id) 0.0))
-          progress (double (max 0.0 (min 1.0 skill-exp)))]
-    {:x x
-     :y y
-     :learned learned?
-     :can-learn (:pass? conditions)
-     :conditions (:failures conditions)
-     :skill-id skill-id
-        :skill-name (or (:name skill)
-                  (translate-field skill :name-key (name skill-id))
-                  (name skill-id))
-        :skill-description (translate-field skill :description-key "")
-     :skill-icon (skill/get-skill-icon-path skill-id)
-     :skill-level (:level skill)
-     :exp progress
-     :progress-segments (int (Math/round (* progress max-progress-segments)))}))
+(defn- resolve-category [ad] (when-let [cid (:category-id ad)] (category/get-category cid)))
 
-(defn- resolve-category
-  [ability-data]
-  (when-let [cat-id (:category-id ability-data)]
-    (category/get-category cat-id)))
+(defn build-ability-info-render-data [ps]
+  (let [ad (:ability-data ps) rd (:resource-data ps) cat (resolve-category ad)]
+    {:category-name (or (when cat (translate-field cat :name-key nil)) "Unknown")
+     :level (:level ad) :cp {:cur (:cur-cp rd) :max (:max-cp rd)}
+     :overload {:cur (:cur-overload rd) :max (:max-overload rd)}
+     :can-level-up (can-level-up-ability? ad)}))
 
-(defn build-ability-info-render-data
-  "Build render data for ability info panel."
-  [player-state]
-  (let [ability-data (:ability-data player-state)
-        resource-data (:resource-data player-state)
-        category (resolve-category ability-data)]
-    {:category-name (or (when category (translate-field category :name-key nil))
-                        "Unknown")
-     :level (:level ability-data)
-     :cp {:cur (:cur-cp resource-data)
-          :max (:max-cp resource-data)}
-     :overload {:cur (:cur-overload resource-data)
-                :max (:max-overload resource-data)}
-    :can-level-up (can-level-up-ability? ability-data)}))
-
-(defn build-render-data-for-player-state
-  "Build skill-tree render data from projected player-state (embedded GUIs, tests)."
-  [player-state developer-type & [{:keys [hover-skill]}]]
-  (when player-state
-    (let [ability-data (:ability-data player-state)
-          cat-id (:category-id ability-data)
-          category (when cat-id (category/get-category cat-id))
-          skills (when cat-id (skill/get-skills-for-category cat-id))
-          positions (when skills (calculate-skill-positions skills))
-          dev-type (or developer-type :normal)]
-      {:ability-info (build-ability-info-render-data player-state)
-       :category-color (:color category)
-       :skill-nodes (when positions
-                      (mapv #(build-skill-node-render-data % player-state dev-type) positions))
-       :connections (when positions
-                     (build-skill-connections positions player-state dev-type))
+(defn build-render-data-for-player-state [ps dev-type & [{:keys [hover-skill]}]]
+  (when ps
+    (let [ad (:ability-data ps) cid (:category-id ad)
+          cat (when cid (category/get-category cid))
+          skills (when cid (skill/get-skills-for-category cid))
+          pos (when skills (calculate-skill-positions skills))]
+      {:ability-info (build-ability-info-render-data ps) :category-color (:color cat)
+       :skill-nodes (when pos (mapv #(build-skill-node-render-data % ps (or dev-type :normal)) pos))
+       :connections (when pos (build-skill-connections pos ps (or dev-type :normal)))
        :hover-skill hover-skill})))
 
-(defn build-screen-render-data
-  "Build complete screen render data. Called by forge layer."
-  [owner]
-  (let [state (screen-state-snapshot owner)
-        owner-key (screen-owner-key owner)]
-    (when-let [_player-uuid (:player-uuid state)]
-      (when-let [player-state (and owner-key (get-screen-player-state owner-key))]
-        (build-render-data-for-player-state
-          player-state
-          (:developer-type (:learn-context state))
-          {:hover-skill (:hover-skill state)})))))
+(defn build-screen-render-data [owner]
+  (let [st (screen-state-snapshot owner) ok (screen-owner-key owner)]
+    (when-let [_pu (:player-uuid st)]
+      (when-let [ps (and ok (get-screen-player-state ok))]
+        (build-render-data-for-player-state ps (:developer-type (:learn-context st))
+                                            {:hover-skill (:hover-skill st)})))))
 
 ;; ============================================================================
-;; Event Handlers (Called by Forge Layer)
+;; Event Handlers
 ;; ============================================================================
+(defn on-skill-click [owner sid]
+  (let [st (screen-state-snapshot owner)]
+    (if (= sid (:selected-skill st))
+      (swap-screen-state! owner assoc :selected-skill nil)
+      (swap-screen-state! owner assoc :selected-skill sid))))
 
-(defn on-skill-click
-  "Handle skill node click. Attempts to learn the skill if conditions are met."
-  [owner skill-id]
-  (let [state (screen-state-snapshot owner)
-        owner-key (screen-owner-key owner)]
-  (when-let [_player-uuid (:player-uuid state)]
-    (when-let [player-state (and owner-key (get-screen-player-state owner-key))]
-      (let [ability-data (:ability-data player-state)
-            ctx (:learn-context state)
-            dev-type (or (:developer-type ctx) :normal)
-            conditions (check-learn-conditions
-                           skill-id
-                           ability-data
-                           (:level ability-data)
-                           dev-type)
-            pos-extra (when (every? number? [(:pos-x ctx) (:pos-y ctx) (:pos-z ctx)])
-                        (select-keys ctx [:pos-x :pos-y :pos-z]))]
-        (when (:pass? conditions)
-          (api/req-learn-skill! skill-id pos-extra nil)))))))
+(defn on-skill-learn-click [owner sid]
+  (let [st (screen-state-snapshot owner) ok (screen-owner-key owner)]
+    (when-let [_pu (:player-uuid st)]
+      (when-let [ps (and ok (get-screen-player-state ok))]
+        (let [ad (:ability-data ps) ctx (:learn-context st)
+              dt (or (:developer-type ctx) :normal)
+              cs (check-learn-conditions sid ad (:level ad) dt)
+              pe (when (every? number? [(:pos-x ctx) (:pos-y ctx) (:pos-z ctx)])
+                   (select-keys ctx [:pos-x :pos-y :pos-z]))]
+          (when (:pass? cs) (api/req-learn-skill! sid pe nil)))))))
 
-(defn on-level-up-click
-  "Handle level-up button click (terminal skill tree — instant request)."
-  [owner]
-  (api/req-level-up! owner))
+(defn on-level-up-click [owner] (api/req-level-up! owner))
 
-(defn handle-screen-click!
-  "Handle clicks inside the skill tree screen using current render data."
-  [owner mouse-x mouse-y]
-  (if-let [render-data (build-screen-render-data owner)]
-    (let [clicked? (atom false)]
-      (doseq [node (:skill-nodes render-data)]
-        (when (and node (not @clicked?))
-          (let [dx (- mouse-x (:x node))
-                dy (- mouse-y (:y node))
-                dist-sq (+ (* dx dx) (* dy dy))]
-            (when (< dist-sq 400)
-              (on-skill-click owner (:skill-id node))
-              (reset! clicked? true)))))
+(defn handle-screen-click! [owner mx my]
+  (let [st (screen-state-snapshot owner) sel (:selected-skill st)]
+    (if sel
+      (let [dx 220 dy 70 dw 190 dh 130]
+        (cond (and (>= mx (+ dx 40)) (<= mx (+ dx 90)) (>= my (+ dy 100)) (<= my (+ dy 118)))
+              (do (on-skill-learn-click owner sel) true)
+              (and (>= mx dx) (<= mx (+ dx dw)) (>= my dy) (<= my (+ dy dh)))
+              (do (swap-screen-state! owner assoc :selected-skill nil) true)
+              :else (do (swap-screen-state! owner assoc :selected-skill nil) false)))
+      (if-let [rd (build-screen-render-data owner)]
+        (let [c? (atom false)]
+          (doseq [n (:skill-nodes rd)] (when (and n (not @c?))
+            (when (< (+ (* (- mx (:x n)) (- mx (:x n))) (* (- my (:y n)) (- my (:y n)))) 400)
+              (on-skill-click owner (:skill-id n)) (reset! c? true))))
+          (when (and (not @c?) (get-in rd [:ability-info :can-level-up])
+                     (>= mx 10) (<= mx 90) (>= my 200) (<= my 220))
+            (on-level-up-click owner) (reset! c? true))
+          (when (and (not @c?) (:selected-skill (screen-state-snapshot owner)))
+            (swap-screen-state! owner assoc :selected-skill nil))
+          (boolean @c?))
+        false))))
 
-      (when (and (not @clicked?)
-                 (get-in render-data [:ability-info :can-level-up])
-                 (>= mouse-x 10) (<= mouse-x 90)
-                 (>= mouse-y 200) (<= mouse-y 220))
-        (on-level-up-click owner)
-        (reset! clicked? true))
-
-      (boolean @clicked?))
-    false))
-
-(defn on-mouse-move
-  "Handle mouse movement for hover detection."
-  [owner mouse-x mouse-y]
-  (let [render-data (build-screen-render-data owner)
-        skill-nodes (:skill-nodes render-data)
-        hovered (when skill-nodes
-                 (first
-                   (filter
-                     (fn [node]
-                       (let [dx (- mouse-x (:x node))
-                             dy (- mouse-y (:y node))
-                             dist-sq (+ (* dx dx) (* dy dy))]
-                         (< dist-sq 400))) ; 20px radius squared
-                     skill-nodes)))]
-    (swap-screen-state! owner assoc :hover-skill (:skill-id hovered))))
+(defn on-mouse-move [owner mx my]
+  (let [rd (build-screen-render-data owner) nodes (:skill-nodes rd)
+        h (when nodes (first (filter #(< (+ (* (- mx (:x %)) (- mx (:x %))) (* (- my (:y %)) (- my (:y %)))) 400) nodes)))
+        prev (:hovered-skill-id (screen-state-snapshot owner))]
+    (swap-screen-state! owner
+      (fn [st] (-> st (assoc :mouse-x mx :mouse-y my :hover-skill (:skill-id h) :hovered-skill-id (:skill-id h))
+                   (cond-> (not= (:skill-id h) prev) (assoc :hover-start-time (now-ms))))))))
 
 (defn open-screen!
-  "Open skill tree screen. Returns command for forge layer.
-  Optional `learn-context`: `{:pos-x :pos-y :pos-z :developer-type}` from Ability Developer."
-  ([owner]
-   (open-screen! owner nil))
-  ([owner learn-context]
-    ;; Ensure player state exists before opening the UI.
-    (let [owner-key (screen-owner-key owner)
-          player-uuid (nth owner-key 2)]
-      (ensure-screen-player-state! owner)
-      (managed-screens/set-active-owner! screen-id owner-key)
-      (swap-screen-state! owner merge default-screen-state
-                          {:player-uuid player-uuid
-                           :learn-context learn-context}))
-    {:command :open-screen
-     :screen-type :skill-tree}))
+  ([owner] (open-screen! owner nil))
+  ([owner lc]
+   (let [ok (screen-owner-key owner) pu (nth ok 2)]
+     (ensure-screen-player-state! owner)
+     (managed-screens/set-active-owner! screen-id ok)
+     (swap-screen-state! owner merge default-screen-state
+                         {:player-uuid pu :learn-context lc :creation-time (now-ms)}))
+   {:command :open-screen :screen-type :skill-tree}))
 
-(defn close-screen!
-  "Close skill tree screen and clean up state."
-  ([owner]
-   (managed-screens/clear-screen-state! screen-id (screen-owner-key owner))))
+(defn close-screen! [owner]
+  (managed-screens/clear-screen-state! screen-id (screen-owner-key owner)))
 
 ;; ============================================================================
-;; Draw Ops (for generic forge screen host)
+;; Draw Ops — Line connections (rotated-quad)
 ;; ============================================================================
+(defn- build-line-ops [connections anim-time]
+  (mapcat (fn [{:keys [from-x from-y to-x to-y satisfied? locked?]}]
+            (let [color (cond locked? 0x60444444 satisfied? 0xB4A7FF7A :else 0x80999999)
+                  dx (- to-x from-x) dy (- to-y from-y)
+                  norm (Math/sqrt (+ (* dx dx) (* dy dy)))]
+              (when (pos? norm)
+                (let [ndx (/ dx norm) ndy (/ dy norm)
+                      x0 (+ from-x (* ndx 8.0)) y0 (+ from-y (* ndy 8.0))
+                      x1 (- to-x (* ndx 8.0)) y1 (- to-y (* ndy 8.0))]
+                  [{:kind :rotated-quad :x0 x0 :y0 y0 :x1 x1 :y1 y1
+                    :line-width 5.5 :color color}]))))
+          connections))
 
-(defn- line->fill-ops
-  [{:keys [from-x from-y to-x to-y satisfied? locked?]}]
-  (let [color (cond
-                locked? 0x60444444
-                satisfied? 0xB4A7FF7A
-                :else 0x80999999)
-        x1 (int from-x)
-        y1 (int from-y)
-        x2 (int to-x)
-        y2 (int to-y)
-        dx (- x2 x1)
-        dy (- y2 y1)
-        steps (max 1 (int (Math/ceil (Math/max (Math/abs dx) (Math/abs dy)))))]
-    (vec
-      (for [i (range (inc steps))]
-        (let [t (/ i (double steps))
-              x (+ x1 (* dx t))
-              y (+ y1 (* dy t))]
-          {:kind :fill :x (int x) :y (int y) :w 1 :h 1 :color color})))))
+;; ============================================================================
+;; Draw Ops — Skill nodes (textured, depth-layered, animated)
+;; ============================================================================
+(defn- node-ops [node anim-time hovered-id hover-start]
+  (let [{:keys [x y idx learned can-learn skill-name skill-icon
+                progress-segments exp m-alpha skill-id]} node
+        dt (max 0.0 (- anim-time (* idx 0.08) 0.1))
+        back-alpha (* m-alpha (clamp01 (* dt 10.0)))
+        icon-alpha (* m-alpha (clamp01 (* (- dt 0.08) 10.0)))
+        progress-blend (clamp01 (* (- dt 0.12) 2.0))
+        hover-now (= skill-id hovered-id)
+        hover-elapsed (if hover-start (/ (- (now-ms) hover-start) 1000.0) 0.0)
+        transit (clamp01 (/ hover-elapsed 0.1))
+        node-scale (if hover-now (lerp 1.0 1.2 transit) (lerp 1.2 1.0 transit))]
+    (if (<= back-alpha 0.001) []
+      [{:kind :push-pose}
+       {:kind :translate :x (+ x draw-align) :y (+ y draw-align) :z 10.0}
+       {:kind :scale :cx (/ total-size 2) :cy (/ total-size 2) :s node-scale}
+       {:kind :enable-blend}
+       {:kind :depth-mask :write? false}
+       {:kind :alpha-color :r 1.0 :g 1.0 :b 1.0 :a back-alpha}
+       {:kind :textured-quad :texture :skill-back :x 0 :y 0 :w (int total-size) :h (int total-size)}
+       {:kind :alpha-color :r 0.2 :g 0.2 :b 0.2 :a (* back-alpha 0.6)}
+       {:kind :textured-quad :texture :skill-outline :x (int prog-align) :y (int prog-align) :w (int prog-size) :h (int prog-size)}
+       {:kind :alpha-color :r 1.0 :g 1.0 :b 1.0 :a 1.0}
+       {:kind :depth-mask :write? true}
+       {:kind :color-mask :write? false}
+       {:kind :alpha-color :r 1.0 :g 1.0 :b 1.0 :a icon-alpha}
+       {:kind :color-mask :write? true}
+       (if learned
+         {:kind :icon-or-fill :texture skill-icon :x (int align) :y (int align) :w (int icon-size) :h (int icon-size) :fallback-color 0xFF2A2A2A}
+         {:kind :shader-progress-ring :shader-id :mono :texture-0 skill-icon :progress 0.0
+          :x (int align) :y (int align) :w (int icon-size) :h (int icon-size)})
+       (when learned
+         {:kind :shader-progress-ring :shader-id :skill-progbar
+          :texture-0 :skill-view-outline :texture-1 :skill-mask
+          :progress (float (* progress-blend exp))
+          :x (int prog-align) :y (int prog-align) :w (int prog-size) :h (int prog-size)})
+       {:kind :alpha-color :r 1.0 :g 1.0 :b 1.0 :a 1.0}
+       {:kind :depth-mask :write? false}
+       {:kind :disable-depth}
+       {:kind :pop-pose}
+       {:kind :text :x (+ x 24) :y (+ y 6) :text (str skill-name)
+        :font :ac-normal :font-size 9 :align :left :color 0xFFFFFFFF}])))
 
-(defn- node-ops
-  [{:keys [x y learned can-learn skill-name skill-icon progress-segments exp]}]
-  (let [base-color (cond
-                     learned 0xCC66CC66
-                     can-learn 0xCC6699FF
-                     :else 0xAA444444)]
-    [{:kind :fill :x x :y y :w 20 :h 20 :color base-color}
-     {:kind :icon-or-fill :x (+ x 2) :y (+ y 2) :w 16 :h 16 :texture skill-icon :fallback-color 0xFF2A2A2A}
-    {:kind :progress-ring
-      :x x :y y :size 20
-      :segments max-progress-segments
-      :filled-segments (int (max 0 (min max-progress-segments progress-segments)))
-      :progress exp}
-     {:kind :text :x (+ x 24) :y (+ y 6) :text (str skill-name) :font :ac-normal :font-size 9 :align :left :color 0xFFFFFFFF}]))
+;; ============================================================================
+;; Detail popup
+;; ============================================================================
+(defn- detail-popup-ops [node]
+  (let [dx 220 dy 70 dw 200 dh 145
+        {:keys [skill-name skill-icon skill-level skill-description learned can-learn exp]} node
+        ix (+ dx 10) iy (+ dy 8) isz 32]
+    (flatten
+      [{:kind :fill :x dx :y dy :w dw :h dh :color 0xD0101010}
+       {:kind :textured-quad :texture :skill-back :x ix :y iy :w isz :h isz}
+       {:kind :icon-or-fill :texture skill-icon :x (+ ix 4) :y (+ iy 4) :w 24 :h 24 :fallback-color 0xFF2A2A2A}
+       (when learned
+         {:kind :shader-progress-ring :shader-id :skill-progbar
+          :texture-0 :skill-view-outline :texture-1 :skill-mask :progress (float exp)
+          :x ix :y iy :w isz :h isz})
+       {:kind :text :x (+ dx 54) :y (+ dy 8) :text (str skill-name " (LV " skill-level ")")
+        :font :ac-bold :font-size 11 :align :left :color 0xFFFFFFFF}
+       (if learned
+         {:kind :text :x (+ dx 8) :y (+ dy 46) :text (format "EXP: %d%%" (int (* 100.0 exp)))
+          :font :ac-normal :font-size 9 :align :left :color 0xFFa1e1ff}
+         {:kind :text :x (+ dx 8) :y (+ dy 46) :text "Not learned"
+          :font :ac-normal :font-size 9 :align :left :color 0xFFFF5555})
+       {:kind :text :x (+ dx 8) :y (+ dy 60) :text (str skill-description)
+        :font :ac-normal :font-size 8 :align :left :color 0xFFDDDDDD}
+       (when (and (not learned) can-learn)
+         [{:kind :fill :x (+ dx 50) :y (+ dy 110) :w 60 :h 20 :color 0xAA4488FF}
+          {:kind :text :x (+ dx 60) :y (+ dy 113) :text "LEARN"
+           :font :ac-bold :font-size 9 :align :left :color 0xFFFFFFFF}])])))
 
-(defn build-draw-ops
-  "Build draw ops for the generic hosted skill tree screen."
-  [owner _mouse-x _mouse-y]
-  (if-let [render-data (build-screen-render-data owner)]
-    (let [ability (:ability-info render-data)
+;; ============================================================================
+;; Main draw ops builder
+;; ============================================================================
+(defn build-draw-ops [owner _mx _my]
+  (if-let [rd (build-screen-render-data owner)]
+    (let [st (screen-state-snapshot owner)
+          ct (:creation-time st)
+          anim (if ct (/ (- (now-ms) ct) 1000.0) 5.0)
+          ab (:ability-info rd)
+
+          ;; Parallax background
+          mx (:mouse-x st 0) my (:mouse-y st 0)
+          w 420 h 260
+          bg-dx (* (- (/ mx (max 1.0 (double w))) 0.5) 0.01)
+          bg-dy (* (- (/ my (max 1.0 (double h))) 0.5) 0.01)
+          bg-u (+ 0.5 bg-dx) bg-v (+ 0.5 bg-dy)
+          bg-ops [{:kind :raw-rect-uv :texture :bg-area :x 0 :y 0 :w w :h h
+                   :min-u (float bg-u) :max-u (float (+ bg-u back-scale-inv))
+                   :min-v (float bg-v) :max-v (float (+ bg-v back-scale-inv))}]
+
           header [{:kind :fill :x 0 :y 0 :w 420 :h 260 :color 0xA0101010}
-                  {:kind :text :x 12 :y 8 :text (str "Category: " (:category-name ability)) :font :ac-normal :font-size 9 :align :left :color 0xFFFFFFFF}
-                  {:kind :text :x 12 :y 22 :text (format "Level: %d" (int (or (:level ability) 0))) :font :ac-normal :font-size 9 :align :left :color 0xFFE8E8E8}
-                  {:kind :text :x 12 :y 36 :text (format "CP: %.0f / %.0f"
-                                                          (double (or (get-in ability [:cp :cur]) 0.0))
-                                                          (double (or (get-in ability [:cp :max]) 0.0)))
-                   :font :ac-normal :font-size 9 :align :left :color 0xFFAED7FF}
-                  {:kind :text :x 12 :y 50 :text (format "Overload: %.0f / %.0f"
-                                                          (double (or (get-in ability [:overload :cur]) 0.0))
-                                                          (double (or (get-in ability [:overload :max]) 0.0)))
-                   :font :ac-normal :font-size 9 :align :left :color 0xFFFFB8A6}]
-          level-up (when (get-in render-data [:ability-info :can-level-up])
+                  {:kind :text :x 12 :y 8  :text (str "Category: " (:category-name ab)) :font :ac-normal :font-size 9 :align :left :color 0xFFFFFFFF}
+                  {:kind :text :x 12 :y 22 :text (format "Level: %d" (int (or (:level ab) 0))) :font :ac-normal :font-size 9 :align :left :color 0xFFE8E8E8}
+                  {:kind :text :x 12 :y 36 :text (format "CP: %.0f / %.0f" (double (get-in ab [:cp :cur] 0.0)) (double (get-in ab [:cp :max] 0.0))) :font :ac-normal :font-size 9 :align :left :color 0xFFAED7FF}
+                  {:kind :text :x 12 :y 50 :text (format "Overload: %.0f / %.0f" (double (get-in ab [:overload :cur] 0.0)) (double (get-in ab [:overload :max] 0.0))) :font :ac-normal :font-size 9 :align :left :color 0xFFFFB8A6}]
+
+          level-up (when (:can-level-up ab)
                      [{:kind :fill :x 10 :y 200 :w 80 :h 20 :color 0xAA22AA22}
                       {:kind :text :x 18 :y 206 :text "Level Up" :font :ac-normal :font-size 9 :align :center :color 0xFFFFFFFF}])
-          connection-ops (mapcat line->fill-ops (or (:connections render-data) []))
-          nodes (mapcat node-ops (or (:skill-nodes render-data) []))
-          hover-id (:hover-skill render-data)
-          hover-node (when hover-id
-                       (first (filter #(= (:skill-id %) hover-id) (:skill-nodes render-data))))
+
+          ;; Animated connection lines
+          line-blend (clamp01 (* anim 5.0))
+          raw-conns (or (:connections rd) [])
+          anim-conns (mapv #(assoc % :to-x (lerp (:from-x %) (:to-x %) line-blend)
+                                     :to-y (lerp (:from-y %) (:to-y %) line-blend)) raw-conns)
+          connection-ops (build-line-ops anim-conns anim)
+
+          hid (:hovered-skill-id st)
+          hst (:hover-start-time st)
+          nodes (mapcat #(node-ops % anim hid hst) (or (:skill-nodes rd) []))
+
+          hover-id (:hover-skill rd)
+          hover-node (when hover-id (first (filter #(= (:skill-id %) hover-id) (:skill-nodes rd))))
           tooltip (when hover-node
                     [{:kind :fill :x 230 :y 8 :w 180 :h 68 :color 0xC0202020}
                      {:kind :text :x 236 :y 14 :text (str (:skill-name hover-node)) :font :ac-bold :font-size 12 :align :left :color 0xFFFFFFFF}
                      {:kind :text :x 236 :y 28 :text (str (:skill-description hover-node)) :font :ac-normal :font-size 9 :align :left :color 0xFFDDDDDD}
-                     {:kind :text :x 236 :y 42 :text (format "Progress: %d%%"
-                                                             (int (Math/round (* 100.0 (double (:exp hover-node))))))
-                      :font :ac-normal :font-size 8 :align :left :color 0xFFDDDDDD}
-                     {:kind :text :x 236 :y 56 :text (if (:learned hover-node) "Learned" "Not learned")
-                      :font :ac-normal :font-size 8 :align :left
-                      :color (if (:learned hover-node) 0xFF88FF88 0xFFFF8888)}])]
-      (vec (concat header level-up connection-ops nodes tooltip)))
+                     {:kind :text :x 236 :y 42 :text (format "Progress: %d%%" (int (* 100.0 (:exp hover-node)))) :font :ac-normal :font-size 8 :align :left :color 0xFFDDDDDD}
+                     {:kind :text :x 236 :y 56 :text (if (:learned hover-node) "Learned" "Not learned") :font :ac-normal :font-size 8 :align :left
+                      :color (if (:learned hover-node) 0xFF88FF88 0xFFFF8888)}])
+
+          sel-id (:selected-skill st)
+          sel-node (when sel-id (first (filter #(= (:skill-id %) sel-id) (:skill-nodes rd))))
+          detail-ops (when sel-node (detail-popup-ops sel-node))]
+
+      (vec (concat bg-ops header level-up connection-ops nodes tooltip detail-ops)))
     []))
-
-

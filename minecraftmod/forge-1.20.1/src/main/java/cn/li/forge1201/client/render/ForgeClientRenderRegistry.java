@@ -36,6 +36,8 @@ import java.io.IOException;
 public final class ForgeClientRenderRegistry {
     private static final Logger LOGGER = LogManager.getLogger();
     private static ShaderInstance plasmaBodyShader;
+    private static ShaderInstance skillProgbarShader;
+    private static ShaderInstance monoShader;
 
     private ForgeClientRenderRegistry() {
     }
@@ -130,9 +132,40 @@ public final class ForgeClientRenderRegistry {
         } catch (IOException e) {
             LOGGER.error("Failed to register MSDF text shader", e);
         }
+        // Skill tree shaders
+        try {
+            // Skill progress ring shader (radial wipe effect)
+            event.registerShader(
+                new ShaderInstance(event.getResourceProvider(),
+                    new ResourceLocation(MyMod1201.MODID, "skill_progbar"),
+                    com.mojang.blaze3d.vertex.DefaultVertexFormat.POSITION_TEX),
+                shader -> {
+                    skillProgbarShader = shader;
+                }
+            );
+            // Grayscale shader (for unlearned skill icons)
+            event.registerShader(
+                new ShaderInstance(event.getResourceProvider(),
+                    new ResourceLocation(MyMod1201.MODID, "mono"),
+                    com.mojang.blaze3d.vertex.DefaultVertexFormat.POSITION_TEX),
+                shader -> {
+                    monoShader = shader;
+                }
+            );
+        } catch (IOException e) {
+            LOGGER.error("Failed to register skill tree shaders", e);
+        }
     }
 
     public static ShaderInstance getPlasmaBodyShader() {
         return plasmaBodyShader;
+    }
+
+    public static ShaderInstance getSkillProgbarShader() {
+        return skillProgbarShader;
+    }
+
+    public static ShaderInstance getMonoShader() {
+        return monoShader;
     }
 }

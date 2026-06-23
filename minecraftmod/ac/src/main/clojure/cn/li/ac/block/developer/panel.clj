@@ -103,11 +103,11 @@
 (defn- texture-path-from-category-icon [icon-str]
   (when (string? icon-str)
     (if (str/starts-with? icon-str "textures/")
-      (modid/asset-path "textures" (subs icon-str (count "textures/")))
-      (modid/asset-path "textures" icon-str))))
+      (modid/namespaced-path (str/replace (subs icon-str (count "textures/")) ".png" ""))
+      (modid/namespaced-path (str/replace icon-str ".png" "")))))
 
 (defn- default-ability-icon-path []
-  (modid/asset-path "textures" "guis/icons/icon_nocategory.png"))
+  (modid/namespaced-path "guis/icons/icon_nocategory"))
 
 (defn- normalize-tier [tier]
   (let [k (keyword (or tier :normal))]
@@ -234,9 +234,22 @@
     (cgui-core/add-widget! panel bg)
     ;; Title
     (let [title (cgui-core/create-widget :pos [10 8] :size [180 14])
-          tb (comp/text-box :text (str "Learn: " skill-name) :font :ac-bold :font-size 12 :align :center :color 0xFFFFFFFF)]
+          tb (comp/text-box :text (str skill-name " (LV " (or (:level skill-spec) 1) ")") :font :ac-bold :font-size 12 :align :center :color 0xFFFFFFFF)]
       (comp/add-component! title tb)
       (cgui-core/add-widget! panel title))
+    ;; Description
+    (let [skill-desc (when (:description-key skill-spec) (i18n/translate (:description-key skill-spec)))
+          desc (cgui-core/create-widget :pos [10 24] :size [180 24])
+          tb (comp/text-box :text (or skill-desc "") :font :ac-normal :font-size 8 :align :center :color 0xFFDDDDDD)]
+      (comp/add-component! desc tb)
+      (cgui-core/add-widget! panel desc))
+    ;; Skill icon
+    (let [skill-icon-path (skill-query/get-skill-icon-path skill-id)]
+      (when skill-icon-path
+        (let [icon-w (cgui-core/create-widget :pos [80 48] :size [24 24])]
+          (comp/add-component! icon-w
+            (comp/draw-texture (modid/namespaced-path (str/replace (subs skill-icon-path (count "textures/")) ".png" "")) 0xFFFFFFFF))
+          (cgui-core/add-widget! panel icon-w))))
     ;; Learn button
     (let [btn (cgui-core/create-widget :pos [50 90] :size [100 20])
           btn-bg (comp/draw-texture nil 0xFF226622)
@@ -351,7 +364,7 @@
       :else :skill-tree)))
 
 (defn- render-skill-tree-area!
-  "Render skill tree nodes in parent_right/area."
+  "Render skill tree nodes in parent_right/area with textured backgrounds and connection lines."
   [root area-widget container player]
   (cgui-core/clear-widgets! area-widget)
   (try
@@ -360,29 +373,59 @@
           pstate (when uuid-str (store/get-player-state* session-id uuid-str))
           dev-type (current-developer-type container)
           render-data (skill-tree/build-render-data-for-player-state pstate dev-type)
-          nodes (:skill-nodes render-data)]
+          nodes (:skill-nodes render-data)
+          connections (:connections render-data)
+          ;; Skill back texture path
+          skill-back-path (modid/namespaced-path "guis/developer/skill_back")]
+      ;; Draw connection lines
+      (when (seq connections)
+        (doseq [{:keys [from-x from-y to-x to-y satisfied? locked?]} connections]
+          (let [color (cond locked? 0x60444444 satisfied? 0xB4A7FF7A :else 0x80999999)
+                steps (max 1 (int (Math/ceil (Math/max (Math/abs (- to-x from-x)) (Math/abs (- to-y from-y))))))]
+            (doseq [i (range steps)]
+              (let [t (/ i (double steps))
+                    px (+ from-x (* (- to-x from-x) t))
+                    py (+ from-y (* (- to-y from-y) t))]
+                (when-let [dot-w (cgui-core/create-widget :pos [(int px) (int py)] :size [2 2])]
+                  (comp/add-component! dot-w (comp/draw-texture nil color))
+                  (cgui-core/add-widget! area-widget dot-w)))))))
+      ;; Draw skill nodes
       (when (seq nodes)
-        (doseq [{:keys [x y learned can-learn skill-id skill-name]} nodes
+        (doseq [{:keys [x y learned can-learn skill-id skill-name skill-icon m-alpha]} nodes
                 :when (and skill-id x y)]
-          (let [node-x (int (+ x 10))
-                node-y (int (+ y 10))
-                size 16
-                color (cond learned 0xCC66CC66 can-learn 0xCC6699FF :else 0xAA444444)
-                node-w (cgui-core/create-widget :pos [node-x node-y] :size [size size])
-                fill (comp/draw-texture nil color)]
-            (comp/add-component! node-w fill)
+          (let [node-x (int (+ x (- 3.5)))  ;; DrawAlign offset matching upstream
+                node-y (int (+ y (- 3.5)))
+                total-size 23
+                icon-sz 14
+                icon-align (/ (- total-size icon-sz) 2)
+                ;; Textured background node
+                node-w (cgui-core/create-widget :pos [node-x node-y] :size [total-size total-size])
+                bg-tex (comp/draw-texture skill-back-path (if learned 0xFF66CC66 (if can-learn 0xFF6699FF 0xFF444444)))]
+            (comp/add-component! node-w bg-tex)
+            ;; Skill icon
+            (when skill-icon
+              (let [icon-path (modid/namespaced-path (str/replace (subs skill-icon (count "textures/")) ".png" ""))]
+                (let [icon-w (cgui-core/create-widget
+                              :pos [(+ node-x (int icon-align)) (+ node-y (int icon-align))]
+                              :size [icon-sz icon-sz])
+                      icon-tex (if (and (not learned) (not can-learn))
+                                 (comp/draw-texture icon-path 0x66444444)
+                                 (comp/draw-texture icon-path 0xFFFFFFFF))]
+                  (comp/add-component! icon-w icon-tex)
+                  (cgui-core/add-widget! area-widget icon-w))))
             ;; Label
-            (let [label (cgui-core/create-widget :pos [(+ node-x size 4) (+ node-y 2)] :size [120 12])
+            (let [label (cgui-core/create-widget :pos [(+ node-x total-size 4) (+ node-y 8)] :size [120 12])
                   tb (comp/text-box :text (str skill-name) :font :ac-normal :font-size 9 :align :left :color 0xFFFFFFFF)]
               (comp/add-component! label tb)
               (cgui-core/add-widget! area-widget label))
             ;; Click handler
-            (when can-learn
+            (when (or can-learn learned)
               (events/on-left-click node-w
                 (fn [_] (create-skill-detail-overlay! root container skill-id dev-type))))
             (cgui-core/add-widget! area-widget node-w)))))
     (catch Exception e
-      (log/error "Skill tree render failed:" (ex-message e)))))
+      (do (log/error "Skill tree render failed:" (ex-message e))
+          (log/stacktrace "Skill tree render failed" e)))))
 
 (defn- make-dev-start-callback
   "Build a callback that writes server rejection reason to console state."

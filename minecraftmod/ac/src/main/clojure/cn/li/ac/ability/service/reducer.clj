@@ -106,6 +106,7 @@
     :force?       bool (default false) — skip threshold check"
   [player-state {:keys [player-uuid force?] :or {force? false}}]
   (let [ability-data (:ability-data player-state)
+        resource-data (:resource-data player-state)
         cat-id (:category-id ability-data)
         current-level (:level ability-data)]
     
@@ -121,6 +122,9 @@
           (rejected player-state :not-enough-progress)
           
           (let [{:keys [data old-level new-level]} (learning/perform-level-up ability-data)
+                new-res (-> resource-data
+                            (rdata/reset-add-max)
+                            (rdata/recalc-max-values new-level))
                 events [(evt/make-level-change-event player-uuid old-level new-level)]
                 effects [{:effect/type :network-send
                           :channel :ability/level-up
@@ -129,7 +133,7 @@
                                     :new-level new-level}}
                          {:effect/type :persist-state
                           :domain :ability-data}]]
-            (ok (assoc player-state :ability-data data)
+            (ok (assoc player-state :ability-data data :resource-data new-res)
                 events
                 effects)))))))
 
