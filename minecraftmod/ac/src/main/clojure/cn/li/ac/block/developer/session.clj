@@ -177,8 +177,9 @@
                     (assoc :development-data ticked :development-progress prog)
                     (update :energy - ept))))))))))
 
-(defn- run-completion-command! [player-uuid action payload]
-  (let [session-id (runtime-hooks/require-player-state-session-id "developer.session")]
+(defn- run-completion-command! [player-uuid action payload session-id]
+  (let [session-id (or session-id
+                       (runtime-hooks/require-player-state-session-id "developer.session"))]
     (case action
       :awaken
       (command-rt/run-command-in-session!
@@ -206,5 +207,8 @@
   (when (:development-complete? state)
     (let [pid (str (:user-uuid state ""))]
       (when-not (str/blank? pid)
-        (run-completion-command! pid (:development-action state) (:development-payload state)))))
+        (run-completion-command! pid
+                                 (:development-action state)
+                                 (:development-payload state)
+                                 (:player-state-session-id state)))))
   nil)

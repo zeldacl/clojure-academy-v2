@@ -10,6 +10,7 @@
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.ac.wireless.gui.sync.handler :as net-helpers]
             [cn.li.mcmod.block.dsl :as bdsl]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.network.server :as net-server]
             [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.platform.entity :as entity]
@@ -78,9 +79,11 @@
                   "reason=" (:reason result "none")
                   "structure-valid-now=" structure-valid?)
         (if (:ok? result)
-          (let [new-state (-> (:state result)
+          (let [session-id (runtime-hooks/player-state-session-id)
+                new-state (-> (:state result)
                               (assoc :user-uuid (uuid/player-uuid player)
-                                     :user-name (entity/player-get-name player)))]
+                                     :user-name (entity/player-get-name player)
+                                     :player-state-session-id session-id))]
             (machine-runtime/commit-state! tile world nil state new-state)
             (log/info "[handle-start-development] committed, is-developing=" (:is-developing new-state)
                       "progress=" (:development-progress new-state))
