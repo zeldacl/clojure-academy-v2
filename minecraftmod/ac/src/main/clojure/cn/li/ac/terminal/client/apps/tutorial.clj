@@ -37,8 +37,8 @@
 
 (def gw 427.0) (def gh 240.0)  ;; frame: 427×240
 (def panel-h 220.5)              ;; leftPart/rightPart/centerPart height from tutorial.xml
-(def lw 85.0)  (def lx 7.0)   (def lix 6.6) (def liy 7.0)
-(def liw 72.0) (def eh 12.0)   ;; entry height 12px matches original
+(def lw 85.0)  (def lx 7.0)   (def lix 6.6) (def liy 7.0) (def lih 207.0)
+(def liw 72.0) (def eh 12.0)   ;; entry height 12px matches original; list height 207 from XML
 (def cx (+ lx lw)) (def cw 172.0)
 ;; cox = 5.0: text widget x=2 + 3px internal pad (matches upstream glTranslated(3,3-delta,0))
 (def cox 5.0)  (def cow 160.0)  ;; upstream text widget: 160×210.5
@@ -214,8 +214,9 @@
 ;; --- First-open animation ---
 
 (defn- logo-fade-alpha [elapsed-ms start-delay-ms duration-ms]
+  ;; Linear clamp matching upstream MathUtils.clampd(0, 1, (delta-start)/tin)
   (let [t (max 0.0 (min 1.0 (/ (- elapsed-ms start-delay-ms) duration-ms)))]
-    (int (* 255.0 t t (- 3.0 (* 2.0 t))))))
+    (int (* 255.0 t))))
 
 (defn- apply-logo-alpha! [root logo-name alpha]
   (when-let [lw (find-widget-recursive root logo-name)]
@@ -358,6 +359,11 @@
         ;; Upstream: entries are children of listArea, not leftPart directly.
         ;; Hiding listArea hides entries too (listArea.doesDraw = dt > 2.0).
         list-w (cgui-core/find-widget lp "list")
+        ;; Clip overflowing entries; scroll via mousewheel (matches upstream ElementList)
+        _ (swap! (:metadata list-w) assoc :clip-children? true)
+        ;; Scrollable content container for entry widgets
+        list-ctr (cgui-core/create-widget :pos [0 0] :size [liw 5000.0])
+        list-scroll-y (:list-scroll-y ui)
         ready? (client-state/ready?)
         is-active? (fn [tut]
                      (or (:default-installed? tut)
@@ -369,20 +375,61 @@
                                               (update acc :inactive conj tut)))
                                           {:active [] :inactive []}
                                           entries)
-        grouped (concat active inactive)]
+        grouped (concat active inactive)
+        total-h (* (count grouped) eh)
+        max-scroll (max 0.0 (- total-h lih))
+        ;; Hover state for entry tint (matching upstream Colors.whiteBlend(0.3f))
+        entry-widgets (atom [])
+        hovered-idx (atom -1)
+        ;; list-ctr root-local offsets: leftPanel.x + list.x, leftPanel.y + list.y
+        ctr-root-x (+ lx lix)
+        ctr-root-y (+ rp-abs-y liy)]
     (doseq [[idx tut] (map-indexed vector grouped)]
-      (let [y (* idx eh)   ;; relative to list widget (which is at x=6.6,y=7.0 in leftPart)
+      (let [y (* idx eh)   ;; relative to list-ctr (which scrolls inside list)
             active? (is-active? tut)
             title (or (:title (tut-content/load-tutorial-content lang (:id tut)))
                       (name (:id tut)))
             ew (cgui-core/create-widget :pos [0.0 y] :size [liw eh])]
+        ;; Text label with 3px indent matching upstream box.xOffset = 3
         (comp/add-component! ew
           (comp/text-box :text title :font-size 10.0
                          :color (if active? learned-color unlearned-color)
-                         :align :left :height-align :center))
+                         :align :left :height-align :center
+                         :x-offset 3.0))
+        ;; Tint component (idle transparent). Hover toggled via on-frame below.
+        (comp/add-component! ew (comp/tint 0x00000000))
         (events/on-left-click ew
           (make-entry-click-handler root tut player-uuid lang content-ctr ui))
-        (cgui-core/add-widget! list-w ew)))))
+        (cgui-core/add-widget! list-ctr ew)
+        (swap! entry-widgets conj ew)))
+    (cgui-core/add-widget! list-w list-ctr)
+    ;; Mousewheel scroll for list (same pattern as center panel)
+    (let [on-scroll (fn [evt]
+                      (let [delta-y (- (:delta-y evt))
+                            new-y (max 0.0 (min max-scroll (+ @list-scroll-y (* delta-y 40.0))))]
+                        (reset! list-scroll-y new-y)
+                        (cgui-core/set-pos! list-ctr 0.0 (- new-y))))]
+      (events/on-mouse-scroll list-w on-scroll))
+    ;; Hover detection: on-frame on list-ctr checks mouse position against
+    ;; entry bounds and toggles tint (matching upstream ElementList Tint hover).
+    (events/on-frame list-ctr
+      (fn [_]
+        (let [mx (- (get @(:metadata root) :last-mouse-x -1) ctr-root-x)
+              my (- (+ (get @(:metadata root) :last-mouse-y -1) @list-scroll-y) ctr-root-y)
+              new-idx (if (and (>= mx 0) (< mx liw)
+                              (>= my 0) (< my total-h))
+                        (int (/ my eh))
+                        -1)]
+          (when (not= new-idx @hovered-idx)
+            ;; Deactivate old hover
+            (when (and (>= @hovered-idx 0) (< @hovered-idx (count @entry-widgets)))
+              (when-let [t (comp/get-tint-component (nth @entry-widgets @hovered-idx))]
+                (swap! (:state t) assoc :color 0x00000000)))
+            ;; Activate new hover (30% white ≈ 0x4C alpha)
+            (when (>= new-idx 0)
+              (when-let [t (comp/get-tint-component (nth @entry-widgets new-idx))]
+                (swap! (:state t) assoc :color 0x4CFFFFFF)))
+            (reset! hovered-idx new-idx)))))))
 
 (defn- make-entry-click-handler
   [root tut player-uuid lang content-ctr ui]
@@ -497,19 +544,21 @@
   ;; As children of logo1, positions must be in logo1's UNSCALED space (div by 0.25).
   ;; lineglow(ln-ln2, ln, ht) → right line from x=200 to x=500 in logo1-local.
   ;; lineglow(-ln, -(ln-ln2), ht) → left line from x=-500 to x=-200.
+  ;; Uses a pre-rendered horizontal gradient texture (center white → edges transparent)
+  ;; matching upstream ACRenderingHelper.drawGlow gradient effect.
   (let [ls 0.25               ;; logo1 scale
         glow-h (/ 3.0 ls)     ;; 3px visual → 12px in logo1-local
         glow-center-local (/ (- glow-center-y logo1-abs-y) ls)  ;; ≈ 133.0
         glow-y (- glow-center-local (/ glow-h 2))
-        glow-color 0xCCFFFFFF
+        glow-tex (gui-tex "tutorial/glow_line.png")
         logo1-w (find-widget-recursive root "logo1")]
     (when logo1-w
       (let [gr (cgui-core/create-widget :pos [0 glow-y] :size [0 glow-h])]
-        (comp/add-component! gr (comp/draw-texture nil glow-color))
+        (comp/add-component! gr (comp/draw-texture glow-tex))
         (cgui-core/set-name! gr "glow-right")
         (cgui-core/add-widget! logo1-w gr))
       (let [gl (cgui-core/create-widget :pos [0 glow-y] :size [0 glow-h])]
-        (comp/add-component! gl (comp/draw-texture nil glow-color))
+        (comp/add-component! gl (comp/draw-texture glow-tex))
         (cgui-core/set-name! gl "glow-left")
         (cgui-core/add-widget! logo1-w gl)))))
 
@@ -558,6 +607,7 @@
             :scroll-y         (atom 0.0)
             :max-scroll       (atom 0.0)
             :scroll-progress  (atom 0.0)
+            :list-scroll-y    (atom 0.0)
             :pvs              (atom (preview/create-preview-state :welcome))
             :preview-item     (atom nil)
             :preview-type     (atom :icon)
@@ -637,5 +687,6 @@
                       (preview/display-text pvs))))))))))
     (client-bridge/open-simple-gui! root "MisakaCloud Terminal"
       {:interactive? true
+       :ref-width 480.0   ;; match original AcademyCraft REF_WIDTH = 480
        :preview-item-atom (:preview-item ui)
        :preview-type-atom  (:preview-type ui)})))

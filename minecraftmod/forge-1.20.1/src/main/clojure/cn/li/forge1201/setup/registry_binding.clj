@@ -5,6 +5,7 @@
             [cn.li.forge1201.setup.deferred-registries :as deferred-registries]
             [cn.li.forge1201.setup.lifecycle-listeners :as lifecycle-listeners])
   (:import [cn.li.forge1201.entity ModEntities]
+           [cn.li.forge1201.recipe ModRecipeTypes]
            [cn.li.forge1201.worldgen ModFeatures]
            [net.minecraftforge.eventbus.api IEventBus]))
 
@@ -27,6 +28,7 @@
                              creative-tabs-register
                              gui-menu-register]}]
   (ModEntities/register mod-bus)
+  (ModRecipeTypes/register mod-bus)
   (when (and (side/client-side?) (not datagen-run?))
     (lifecycle-listeners/register-client-hooks!))
   (ModFeatures/register mod-bus)

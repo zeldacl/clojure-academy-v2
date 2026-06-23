@@ -46,9 +46,6 @@
 
 (defonce ^:private notifications* (atom []))
 
-(defn- now-sec []
-  (/ (System/currentTimeMillis) 1000.0))
-
 (defn- lerp [a b t]
   (+ a (* t (- b a))))
 
@@ -78,7 +75,7 @@
               (swap! notifications* conj
                      {:title title
                       :tut-id tut-id
-                      :start-sec (now-sec)})))))
+                      :start-sec nil})))))
       (catch Throwable _))))
 
 ;; ============================================================================
@@ -90,14 +87,20 @@
   Called each frame from the overlay plan builder (client_ui_hooks.clj).
 
   Elements: {:kind :blit-texture ...} for textures, {:kind :text ...} for strings."
-  [screen-width screen-height _now-ms]
-  (let [now (now-sec)
-        active (remove #(> (- now (:start-sec %)) total-keep-time) @notifications*)]
-    ;; Cleanup expired notifications
-    (when-not (= (count active) (count @notifications*))
-      (reset! notifications* (vec active)))
+  [screen-width screen-height now-ms]
+  (let [now-sec (/ (double now-ms) 1000.0)
+        ;; Single atomic swap! — init start-sec for new notifications and
+        ;; remove expired ones. Avoids read-then-reset! race with enqueue.
+        active (swap! notifications*
+                (fn [notifs]
+                  (let [needs-init? (some #(nil? (:start-sec %)) notifs)
+                        initialized (if needs-init?
+                                      (mapv (fn [n] (if (:start-sec n) n (assoc n :start-sec now-sec)))
+                                            notifs)
+                                      notifs)]
+                    (filterv #(<= (- now-sec (:start-sec %)) total-keep-time) initialized))))]
     (if-let [notif (last active)]
-      (let [dt (- now (:start-sec notif))
+      (let [dt (- now-sec (:start-sec notif))
             ;; Compute per-element alpha based on animation phase
             bg-alpha (cond
                        (< dt blend-in-time)     (min 1.0 (/ dt 0.3))          ;; background fade-in over 0.3s

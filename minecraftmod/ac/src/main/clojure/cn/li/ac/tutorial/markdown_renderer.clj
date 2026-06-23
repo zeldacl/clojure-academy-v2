@@ -55,8 +55,8 @@
                      (resolve-key-name key-id)))
       (str/replace misaka-tag-re
                    (if misaka-id
-                     (str "Misaka No." misaka-id)
-                     "Misaka No.????"))))
+                     (str "__Misaka No." misaka-id "__")
+                     "__Misaka No.????__"))))
 
 ;; --- Segment helpers ---
 
@@ -196,7 +196,7 @@
 
                  :else
                  (let [text (resolve-inline-tags line misaka-id)
-                       bold? (is-bold-line? line)
+                       bold? (is-bold-line? text)
                        clean-text (if bold? (strip-bold-markers text) text)]
                    (recur more
                           (conj segs

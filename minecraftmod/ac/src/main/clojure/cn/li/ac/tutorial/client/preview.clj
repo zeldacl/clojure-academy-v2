@@ -73,36 +73,42 @@
     (comp/add-component! w (comp/draw-texture texture-path))
     w))
 
-(defn- hide-recipe-detail-widgets!
-  "Hide recipe-detail child widgets that are not applicable for standard
-  Minecraft crafting recipes.
+(defn- apply-recipe-detail-widgets!
+  "Show and populate recipe-detail child widgets that were previously hidden.
 
-  - MetalFormer 'mode' widget (shows etch/incise/plate/refine icon):
-    upstream uses custom recipe type with mode; current project uses
-    standard crafting recipes → mode is always hidden.
-  - ImagFusor 'amount' widget (shows consumeLiquid): upstream custom
-    recipe type; standard crafting has no liquid → amount hidden.
-  - Progress bar widgets: show animated progress; hidden for standard
-    crafting recipes since there's no processing-time concept."
+  Custom RecipeType registration (ModRecipeTypes) now supports ImagFusor and
+  MetalFormer recipes via the 1.20.1 RecipeManager. Detail widgets are shown
+  unconditionally for these machine types (matching upstream AcademyCraft).
+
+  - MetalFormer 'mode' widget: shows etch/incise/plate/refine mode icon.
+    Default texture set to white placeholder (mode textures TBD as assets).
+  - ImagFusor 'amount' widget: shows consumeLiquid in mB (uses XML default
+    placeholder value; populated with real data when recipe is resolved).
+  - ImagFusor 'progress' widget: shows animated processing progress bar.
+  - Smelting: no extra widgets."
   [recipe-widget recipe-kind]
   (case recipe-kind
     "MetalFormer" (when-let [mode (cgui-core/find-widget recipe-widget "mode")]
-                    (cgui-core/set-visible! mode false))
+                    (cgui-core/set-visible! mode true)
+                    ;; Replace LambdaLib2 missing.png with valid placeholder texture
+                    (when-let [dt (comp/get-drawtexture-component mode)]
+                      (swap! (:state dt) assoc :texture nil :color 0x00FFFFFF)))
     "ImagFusor" (do (when-let [amount (cgui-core/find-widget recipe-widget "amount")]
-                      (cgui-core/set-visible! amount false))
+                      (cgui-core/set-visible! amount true))
                     (when-let [progress (cgui-core/find-widget recipe-widget "progress")]
-                      (cgui-core/set-visible! progress false)))
+                      (cgui-core/set-visible! progress true)))
     "Smelting"   nil)
   recipe-widget)
 
 (defn- create-recipe-preview
   "Load a recipe display widget from tutorial_windows.xml.
   `recipe-kind` is the widget name: \"ImagFusor\", \"MetalFormer\", or \"Smelting\".
-  Hides non-applicable detail widgets (mode, amount, progress)."
+  Shows machine-specific detail widgets (mode, amount, progress) now that
+  custom RecipeType registration supports ImagFusor and Metal Former."
   [recipe-kind]
   (let [kind-str (name recipe-kind)]
     (if-let [w (load-recipe-widget kind-str)]
-      (hide-recipe-detail-widgets! w kind-str)
+      (apply-recipe-detail-widgets! w kind-str)
       (do (log/warn "Recipe widget not found in tutorial_windows.xml, using text fallback:" kind-str)
           (let [w (cgui-core/create-widget :pos [20 20] :size [94 94])]
             (comp/add-component! w

@@ -7,7 +7,8 @@
   ac.tutorial.client.preview to build recipe display widgets."
   (:require [clojure.string :as str]
             [cn.li.mcmod.util.log :as log])
-  (:import [net.minecraft.client Minecraft]
+  (:import [cn.li.forge1201.recipe ModRecipeTypes]
+           [net.minecraft.client Minecraft]
            [net.minecraft.world.item.crafting RecipeType RecipeManager Recipe Ingredient]
            [net.minecraft.world.item ItemStack Item]
            [net.minecraft.core.registries BuiltInRegistries]
@@ -53,14 +54,16 @@
 
 (defn find-recipes
   "Find all recipes that produce `target-id` (e.g. \"my_mod:constrained_ore\").
-  Returns a map: {:crafting [...recipes...] :smelting [...recipes...]}"
+  Returns a map: {:crafting [...] :smelting [...] :imag-fusor [...] :metal-former [...]}"
   [^String target-id]
   (try
     (when-let [^Minecraft mc (Minecraft/getInstance)]
       (when-let [level (.level mc)]
         (let [rm (.getRecipeManager level)]
           {:crafting (recipes-for-type rm RecipeType/CRAFTING target-id)
-           :smelting (recipes-for-type rm RecipeType/SMELTING target-id)})))
+           :smelting (recipes-for-type rm RecipeType/SMELTING target-id)
+           :imag-fusor (recipes-for-type rm ModRecipeTypes/IMAG_FUSOR_TYPE target-id)
+           :metal-former (recipes-for-type rm ModRecipeTypes/METAL_FORMER_TYPE target-id)})))
     (catch Exception e
       (log/debug "Recipe query failed for" target-id ":" (.getMessage e))
       nil)))
@@ -69,7 +72,8 @@
   "Quick check: does `target-id` have any recipes?"
   [^String target-id]
   (when-let [result (find-recipes target-id)]
-    (or (seq (:crafting result)) (seq (:smelting result)))))
+    (or (seq (:crafting result)) (seq (:smelting result))
+        (seq (:imag-fusor result)) (seq (:metal-former result)))))
 
 (defn first-recipe-for
   "Get the first recipe of a given kind for `target-id`.
@@ -78,7 +82,9 @@
   (when-let [result (find-recipes target-id)]
     (when-let [recipes (get result (case recipe-kind
                                      :smelting :smelting
-                                     (:crafting :imag-fusor :metal-former) :crafting
+                                     :imag-fusor :imag-fusor
+                                     :metal-former :metal-former
+                                     :crafting :crafting
                                      nil))]
       (when-let [^Recipe recipe (first (seq recipes))]
         (try

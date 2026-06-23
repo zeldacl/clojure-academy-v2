@@ -200,7 +200,7 @@
 
 (defn- render-cgui-screen!
   [^Screen screen-this ^GuiGraphics graphics gui-widget left top partial-tick
-   log-label tick-counter preview-item-atom preview-type-atom]
+   log-label tick-counter preview-item-atom preview-type-atom ref-width]
   (try
     (.renderBackground screen-this graphics)
     (let [^Minecraft mc (Minecraft/getInstance)
@@ -208,7 +208,6 @@
           screen-width (.getGuiScaledWidth window)
           screen-height (.getGuiScaledHeight window)
           [gui-width gui-height] (cgui-core/get-size gui-widget)
-          ref-width 427.0
           scale (float (/ screen-width ref-width))
           left-pos (int (/ (- screen-width (* gui-width scale)) 2))
           top-pos (int (/ (- screen-height (* gui-height scale)) 2))]
@@ -291,7 +290,8 @@
 ;; -- Screen construction --
 
 (defn- create-cgui-screen
-  [gui-widget title {:keys [log-label interactive? preview-item-atom preview-type-atom]}]
+  [gui-widget title {:keys [log-label interactive? preview-item-atom preview-type-atom ref-width]
+                     :or {ref-width 427.0}}]
   (let [left (atom 0)
         top (atom 0)
         tick-counter (atom 0)
@@ -299,7 +299,7 @@
     (proxy [Screen] [(Component/literal title)]
       (render [^GuiGraphics graphics mouse-x mouse-y partial-tick]
         (render-cgui-screen! this graphics gui-widget left top partial-tick
-                             resolved-log-label tick-counter preview-item-atom preview-type-atom))
+                             resolved-log-label tick-counter preview-item-atom preview-type-atom ref-width))
       (mouseClicked [mouse-x mouse-y button]
         (mouse-click-cgui! gui-widget left top mouse-x mouse-y button resolved-log-label))
       (mouseDragged [mouse-x mouse-y button drag-x drag-y]

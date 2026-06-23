@@ -60,7 +60,11 @@
   [f & args]
   (apply swap! (overlay-render-runtime-state-atom) f args))
 
-(defn- now-ms [] (System/currentTimeMillis))
+(defn- now-ms []
+  "Game-time milliseconds (pauses when game pauses). Falls back to wall-clock."
+  (if-let [level (.level (Minecraft/getInstance))]
+    (* (.getGameTime level) 50)
+    (System/currentTimeMillis)))
 
 (defn- render-owner-key
   [owner]
