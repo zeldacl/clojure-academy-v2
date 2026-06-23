@@ -17,7 +17,8 @@
             [cn.li.ac.ability.rules.cooldown-rules :as cd-rules]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
-            [cn.li.mcmod.runtime.owner :as owner]))
+            [cn.li.mcmod.runtime.owner :as owner]
+            [cn.li.ac.ability.service.skill-effects :as skill-effects]))
 
 (def INPUT-IDLE :idle)
 (def INPUT-ACTIVE :active)
@@ -85,7 +86,15 @@
        (when-let [spec (skill/get-skill (:skill-id ctx-map))]
          (let [evt* (event-payload owner ctx-map payload)
                action-key (get callback->action-key cb-key)
-               callback-fn (get-in spec [:actions action-key])]
+               callback-fn (get-in spec [:actions action-key])
+               stage (case cb-key
+                       :on-key-down :down
+                       :on-key-tick  :tick
+                       nil)
+               cost-ok? (if stage
+                          (skill-effects/apply-cost! spec stage evt*)
+                          true)
+               evt* (assoc evt* :cost-ok? cost-ok?)]
            (when (fn? callback-fn)
              (try
                (callback-fn evt*)

@@ -14,6 +14,7 @@
             [cn.li.ac.ability.client.hand-effects :as hand-effects]
             [cn.li.ac.ability.client.keybinds :as client-keybinds]
             [cn.li.ac.ability.client.managed-screens :as managed-screens]
+            [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.client.screens.location-teleport :as location-teleport-screen]
             [cn.li.ac.ability.client.screens.preset-editor :as preset-editor-screen]
             [cn.li.ac.ability.client.screens.skill-tree :as skill-tree-screen]
@@ -413,8 +414,6 @@
     :handler handle-cycle-selection-input!})
   nil)
 
-(defn- now-ms [] (System/currentTimeMillis))
-
 (defn- railgun-charge-item-max-ticks []
   (skill-config/tunable-int :railgun :charge.item-charge-ticks))
 
@@ -425,15 +424,15 @@
   (skill-config/tunable-int :railgun :qte.coin-window-ms))
 
 (defn- notify-charge-coin-throw!
-  [player-uuid]
+  [player-uuid now-ms]
   (update-client-ui-runtime!
     assoc-in
     [:charge-coin-state (client-ui-owner-key player-uuid)]
-    {:start-ms (now-ms)
+    {:start-ms (long now-ms)
      :window-ms (max 1 (long (railgun-coin-window-ms)))}))
 
 (defn- charge-coin-visual-state
-  [player-uuid]
+  [player-uuid now-ms]
   (let [contexts (player-contexts player-uuid)
         railgun-ctx (some (fn [ctx-data]
                             (when (and (= :railgun (:skill-id ctx-data))
@@ -449,11 +448,12 @@
        :charge-ticks charge-ticks
        :coin-active? false
        :coin-progress 0.0
+       :charge-start-ms nil
        :charge-ratio (max 0.0 (min 1.0 (- 1.0 (/ (double charge-ticks) max-charge-ticks))))}
       (let [owner-key (client-ui-owner-key player-uuid)
             {:keys [start-ms window-ms]} (get (charge-coin-state-snapshot) owner-key)
             has-window? (and start-ms window-ms)
-            elapsed (if has-window? (- (long (now-ms)) (long start-ms)) 0)
+            elapsed (if has-window? (- (long now-ms) (long start-ms)) 0)
             progress (if has-window?
                        (/ (double (max 0 elapsed)) (double (max 1 (long window-ms))))
                        0.0)
@@ -464,6 +464,7 @@
           (update-client-ui-runtime! update :charge-coin-state dissoc owner-key))
         {:active? (boolean active-window?)
          :charge-ticks 0
+         :charge-start-ms start-ms
          :coin-active? (boolean coin-active?)
          :coin-progress ratio
          :charge-ratio ratio}))))
@@ -847,6 +848,13 @@
                                      (boolean (:activated-override overlay-state))
                                      (boolean (get-in player-state [:resource-data :activated] false)))}
         hud-model (build-hud-model-from-state player-state activated-override)
+        now-ms (long (or (:now-ms overlay-state) (System/currentTimeMillis)))
+        charge-state (charge-coin-visual-state player-uuid now-ms)
+        hud-model (if (and (:active? charge-state) (:coin-active? charge-state))
+                    (let [exp (double (or (skill-effects/skill-exp player-uuid :railgun) 0.0))
+                          cost (skill-config/lerp-double :railgun :cost.down.cp exp)]
+                      (assoc hud-model :consumption-hint (double cost)))
+                    hud-model)
         cooldown-data (:cooldown-data player-state)
         activate-hint (client-keybinds/get-activate-hint player-uuid)
         preset-state (preset-switch-state-for-overlay player-uuid)
@@ -861,7 +869,6 @@
         reflection-active? (vec-reflection-active? player-uuid)
         deviation-active? (vec-deviation-active? player-uuid)
         vm-wave-active? (or reflection-active? deviation-active?)
-        now-ms (long (or (:now-ms overlay-state) (System/currentTimeMillis)))
         phase (double (/ (mod now-ms 1200) 1200.0))
         _ (update-vm-wave-circles! player-uuid vm-wave-active? screen-width screen-height now-ms)
         vm-wave (vm-wave-elements player-uuid now-ms)
@@ -1090,7 +1097,7 @@
      (fn [player-uuid key-idx]
        (let [active-ctxs (player-contexts player-uuid)
              skill-id (client-keybinds/get-skill-id-for-slot-public player-uuid key-idx)]
-         (:state (delegate-state/delegate-state-for-slot active-ctxs skill-id))))
+         (:state (delegate-state/delegate-state-for-slot active-ctxs skill-id player-uuid))))
 
      :client-build-overlay-plan
      (fn [player-uuid screen-width screen-height overlay-state]
@@ -1217,15 +1224,19 @@
      :client-notify-visual-event!
      (fn [event-key payload]
        (case event-key
-         :ac/charge-coin-throw (notify-charge-coin-throw! (:player-uuid payload))
+         :ac/charge-coin-throw (notify-charge-coin-throw! (:player-uuid payload) (:now-ms payload))
          nil))
 
      :client-visual-state
      (fn [state-key payload]
        (case state-key
-         :ac/charge-coin (charge-coin-visual-state (:player-uuid payload))
+         :ac/charge-coin (charge-coin-visual-state (:player-uuid payload) (:now-ms payload))
          :ac/body-intensify-charge (body-intensify-visual-state (:player-uuid payload))
          :ac/current-charging (current-charging-visual-state (:player-uuid payload))
+         :ac.delegate-state/railgun
+         (let [{:keys [active? coin-active?]}
+               (charge-coin-visual-state (:player-uuid payload) (:now-ms payload))]
+           (when active? (if coin-active? :active :charge)))
          nil))
 
      :client-trigger-mode-switch!

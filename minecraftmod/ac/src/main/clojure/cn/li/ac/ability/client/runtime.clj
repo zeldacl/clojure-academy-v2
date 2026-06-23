@@ -35,5 +35,5 @@
   (client-bridge/on-movement-key-up! player-uuid movement-key))
 
 (defn railgun-charge-visual-state
-  [player-uuid]
-  (power-runtime/client-visual-state :ac/charge-coin {:player-uuid player-uuid}))
+  [player-uuid now-ms]
+  (power-runtime/client-visual-state :ac/charge-coin {:player-uuid player-uuid :now-ms now-ms}))

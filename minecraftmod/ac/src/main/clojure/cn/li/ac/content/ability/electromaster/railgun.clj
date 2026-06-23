@@ -49,11 +49,11 @@
 (defn- item-charge-ticks [] (cfg-int :charge.item-charge-ticks))
 (defn- reflection-distance [] (cfg-double :reflection.distance))
 (defn- reflection-damage [] (cfg-double :reflection.damage))
-(defn- railgun-exp-gain [hit? reflection-hit?]
-  ;; Original: hitEntity (normal OR reflection hit) 锟?0.01, miss 锟?0.005
-  (if (or hit? reflection-hit?)
-    (cfg-double :progression.exp-reflection-hit)
-    (cfg-double :progression.exp-hit)))
+(defn- railgun-exp-gain [_hit? reflection-hit?]
+  ;; Original: hitEntity only set on reflection hit → 0.01; otherwise 0.005
+  (if reflection-hit?
+    (cfg-double :progression.exp-reflection-hit)   ;; 0.01 reflection hit only
+    (cfg-double :progression.exp-hit)))             ;; 0.005 normal hit or miss
 (defn- railgun-cooldown-ticks [exp]
   (cfg-lerp-int :cooldown.manual-ticks exp))
 
@@ -213,7 +213,7 @@
         (when (and (= (:hit-type hit) :entity) (entity-damage/available?))
           (entity-damage/apply-direct-damage!*
                                               world-id (:uuid hit)
-                                              (reflection-damage) :magic)
+                                              (reflection-damage) :generic)
           true)))))
 
 ;; ---------------------------------------------------------------------------
@@ -248,7 +248,7 @@
                      :max-distance    (cfg-double :beam.max-distance)
                      :visual-distance (cfg-double :beam.visual-distance)
                      :damage          damage
-                     :damage-type     :magic
+                     :damage-type     :generic
                      :break-blocks?   true
                      :block-energy    (cfg-lerp :beam.block-energy exp)
                      :fx-topic        :railgun/fx-shot})
@@ -414,11 +414,11 @@
   :description-key "ability.skill.electromaster.railgun.desc"
   :icon            "textures/abilities/electromaster/skills/railgun.png"
   :ui-position     [164 59]
-  :level           3
+  :level           4
   :controllable?   true
   :ctrl-id         :railgun
-  :cp-consume-speed 0.0
-  :overload-consume-speed 0.0
+  :cp-consume-speed 1.0
+  :overload-consume-speed 1.0
   :cooldown-ticks  1
   :pattern         :charge-window
   :cooldown        {:mode :manual}

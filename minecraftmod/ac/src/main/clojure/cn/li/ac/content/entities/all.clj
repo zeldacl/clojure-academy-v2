@@ -37,7 +37,7 @@
          :client-tracking-range 64
          :update-interval 1
          :properties {:effect {:life-ticks 15
-                               :follow-owner? true
+                               :follow-owner? false
                                :hook :intensify-arcs
                                :hook-params {:arc-life-ticks 3
                                              :tier-batch-base 3
@@ -86,7 +86,7 @@
          :client-tracking-range 64
          :update-interval 1
          :properties {:effect {:life-ticks 120
-                               :follow-owner? false
+                               :follow-owner? true
                                :hook :vertical-ballistic
                                :hook-params {:gravity 0.06
                                              :init-vel 0.92}}}}))
@@ -312,7 +312,7 @@
          :client-tracking-range 64
          :update-interval 1
          :properties {:effect {:life-ticks 120
-                               :follow-owner? true
+                               :follow-owner? false
                                :renderer-id "diamond-shield"
                                :hook :diamond-shield
                                :hook-params {:forward 1.0
@@ -328,7 +328,7 @@
          :client-tracking-range 64
          :update-interval 1
          :properties {:effect {:life-ticks 120
-                               :follow-owner? true
+                               :follow-owner? false
                                :renderer-id "md-shield"
                                :hook :md-shield
                                :hook-params {:forward 1.0
@@ -344,7 +344,7 @@
          :client-tracking-range 64
          :update-interval 1
          :properties {:effect {:life-ticks 100
-                               :follow-owner? true
+                               :follow-owner? false
                                :renderer-id "surround-arc"
                                :hook :surround-arc
                                :hook-params {:forward 1.0
@@ -360,7 +360,7 @@
          :client-tracking-range 64
          :update-interval 1
          :properties {:effect {:life-ticks 20
-                               :follow-owner? true
+                               :follow-owner? false
                                :renderer-id "arc-generic"
                                :hook :generic-arc
                                :hook-params {:forward 0.8

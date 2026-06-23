@@ -47,12 +47,14 @@
        (when-let [^ServerPlayer player (query-core/get-player-by-uuid server player-uuid)]
          (let [pos (BlockPos. (int x) (int y) (int z))]
            (when (break-guard-fn level pos player)
-             (when drop?
-               (let [state (.getBlockState level pos)]
+             (let [state (.getBlockState level pos)]
+               (when drop?
                  (if (pos? (int fortune-level))
                    (Block/dropResources state level pos (.getBlockEntity level pos) player
                                         (fortune-tool-stack fortune-level))
-                   (Block/dropResources state level pos))))
+                   (Block/dropResources state level pos)))
+               ;; Play vanilla block break sound + particles (matches original AcademyCraft)
+               (.levelEvent level 2001 pos (Block/getId state)))
              (.removeBlock level pos false)
              true))))
      (catch Exception e

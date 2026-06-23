@@ -6,7 +6,8 @@
             [cn.li.mcmod.hooks.core :as hooks-core]
             [cn.li.mcmod.protocol.metadata :as registry-metadata]
             [cn.li.mcmod.util.log :as log])
-  (:import [net.minecraft.core.registries BuiltInRegistries]
+  (:import [net.minecraft.client Minecraft]
+           [net.minecraft.core.registries BuiltInRegistries]
            [net.minecraft.resources ResourceLocation]
            [net.minecraft.world InteractionHand]
            [net.minecraft.world.entity.player Player]
@@ -65,6 +66,13 @@
                                            :side side}))
     item-id))
 
+(defn- game-time-ms
+  "Game-time in milliseconds (pauses when game pauses). Falls back to wall-clock."
+  []
+  (if-let [level (.level (Minecraft/getInstance))]
+    (* (.getGameTime level) 50)
+    (System/currentTimeMillis)))
+
 (defn- run-plan-actions!
   [^Player player hand ^ItemStack stack side player-uuid plan {:keys [open-screen-fn]}]
   (when plan
@@ -73,7 +81,7 @@
         :notify-local-effect
         (hooks-core/client-notify-visual-event!
           (or (:event-key action) (:effect-key action) :local-effect)
-          (merge {:player-uuid player-uuid}
+          (merge {:player-uuid player-uuid :now-ms (game-time-ms)}
                  (or (:payload action) {})))
 
         :open-screen

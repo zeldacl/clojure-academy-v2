@@ -66,7 +66,7 @@
                 remaining (when in-cooldown
                             (cd-data/get-remaining cooldown-data ctrl-id :main))
                 remaining-seconds (when remaining (/ remaining 20.0))
-                visual (dstate/delegate-state-for-slot active-contexts skill-id)]
+                visual (dstate/delegate-state-for-slot active-contexts skill-id player-uuid)]
             (when skill-id
               {:type :skill-slot
                :idx idx
