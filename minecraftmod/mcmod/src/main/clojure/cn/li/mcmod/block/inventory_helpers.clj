@@ -5,7 +5,8 @@
   Reusable across any block with inventory slots."
   (:require [cn.li.mcmod.platform.nbt :as nbt]
             [cn.li.mcmod.platform.item :as pitem]
-            [cn.li.mcmod.platform.be :as pbe]))
+            [cn.li.mcmod.platform.be :as pbe]
+            [cn.li.mcmod.util.log :as log]))
 
 (defn load-inventory
   "Deserialize NBT ListTag into item vector [slot0 slot1 ...].
@@ -64,6 +65,6 @@
   [be field value]
   (let [state (or (pbe/get-custom-state be) {})]
     (pbe/set-custom-state! be (assoc state field value))
-    (try (pbe/set-changed! be) (catch Exception _))
+    (try (pbe/set-changed! be) (catch Exception e (log/warn "set-changed! failed in update-be-field!:" (ex-message e))))
     be))
 

@@ -60,6 +60,6 @@
         (f)
         (catch Throwable t
           (log/error "Renderer init callback failed:" (ex-message t))
-          (.printStackTrace t)))))
+          (log/stacktrace "Renderer init callback" t)))))
   (log/info "Core renderers registered."))
 

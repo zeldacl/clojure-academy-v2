@@ -15,7 +15,8 @@
             [cn.li.mcmod.platform.be :as pbe]
             [cn.li.mcmod.nbt.dsl :as nbt-dsl]
             [cn.li.mcmod.block.inventory-helpers :as inv-helpers]
-            [cn.li.mcmod.schema.core :as schema]))
+            [cn.li.mcmod.schema.core :as schema]
+            [cn.li.mcmod.util.log :as log]))
 
 (def ^:private field-spec-schema
   [:and
@@ -249,7 +250,15 @@
   Handles :xf transform function (can be symbol or fn).
   Replaces old schema->block-state-updater (flat format)."
   [blockstate-fields]
-  (let [bs-specs (filterv :block-state blockstate-fields)]
+  (let [;; Pre-resolve symbol xf-fns at closure-creation time so requiring-resolve
+        ;; runs only once, not on every block state change.
+        bs-specs (mapv (fn [spec]
+                         (if-let [xf (:xf (:block-state spec))]
+                           (if (symbol? xf)
+                             (assoc-in spec [:block-state :xf] (requiring-resolve xf))
+                             spec)
+                           spec))
+                       (filterv :block-state blockstate-fields))]
     (fn [state level pos]
       (try
         (when-let [blk-state (platform-world/world-get-block-state* level pos)]
@@ -260,10 +269,7 @@
                                    raw-val   (get state (:key spec) (:default spec))
                                    xf-fn     (:xf (:block-state spec))
                                    val       (if xf-fn
-                                               (let [xf (if (symbol? xf-fn)
-                                                         (requiring-resolve xf-fn)
-                                                         xf-fn)]
-                                                 (xf raw-val state))
+                                               (xf-fn raw-val state)
                                                raw-val)
                                    prop      (when state-def
                                                (platform-world/block-state-get-property blk-state state-def prop-name))]
@@ -274,7 +280,8 @@
                            bs-specs)]
             (when (not= new-bs blk-state)
               (platform-world/world-set-block* level pos new-bs 3))))
-        (catch Exception _)))))
+        (catch Exception e
+          (log/warn "Failed to update block state for" pos ":" (ex-message e)))))))
 
 ;; ============================================================================
 ;; Network Handler Generation

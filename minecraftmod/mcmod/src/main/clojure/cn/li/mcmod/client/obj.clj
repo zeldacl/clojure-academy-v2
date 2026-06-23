@@ -511,10 +511,10 @@
 (defn- normalize-mtl-path-to-asset-relative [^String base-dir ^String rel-path]
   (let [clean (str/replace (strip-quotes-path rel-path) #"\\" "/")
         base (-> base-dir (str/replace #"\\" "/"))
-        p (.. (java.nio.file.Paths/get base (into-array String []))
-              (resolve clean)
-              normalize)]
-    (.toString p)))
+        p (doto ^java.nio.file.Path (java.nio.file.Paths/get base (into-array String []))
+            (.resolve clean)
+            .normalize)]
+    (.toString ^java.nio.file.Path p)))
 
 (defn- preprocess-obj-text
   "Strip UTF-8 BOM and Wavefront `\\` line continuations (see OBJ spec: general rules)."

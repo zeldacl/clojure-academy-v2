@@ -360,7 +360,7 @@
                (str "assets/" (str/replace resource-loc #":" "/"))
                resource-loc)
         xml-resource (or (io/resource path)
-                         (io/resource path (.getClassLoader (class read-xml))))
+                         (io/resource path (.getClassLoader ^Class (class read-xml))))
         _ (when-not xml-resource
             (throw (ex-info (str "XML resource not found: " path)
                             {:resource-loc resource-loc :path path})))

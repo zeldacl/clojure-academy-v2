@@ -37,10 +37,13 @@
 ;; the query interface that other modules should use. This allows the registry
 ;; to be extended with different storage mechanisms in the future.
 
+(def ^:private get-block-registry*
+  "Cached requiring-resolve — Var is resolved once, reused for every subsequent query."
+  (delay (requiring-resolve 'cn.li.mcmod.block.dsl-core/get-block-registry)))
+
 (defn- block-registry-state
   []
-  (let [get-block-registry (requiring-resolve 'cn.li.mcmod.block.dsl-core/get-block-registry)]
-    (registry-core/snapshot (get-block-registry))))
+  (registry-core/snapshot (@get-block-registry*)))
 
 (defn get-block-spec
   "Get a block specification by block-id from the registry

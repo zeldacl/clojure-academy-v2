@@ -290,7 +290,7 @@
             (pose/pop-pose pose-stack))))
       (catch Exception e
         (log/error "Error rendering multiblock:"(ex-message e))
-        (.printStackTrace e)))))
+        (log/stacktrace "Error rendering multiblock" e)))))
 
 ;; ============================================================================
 ;; Usage Example
