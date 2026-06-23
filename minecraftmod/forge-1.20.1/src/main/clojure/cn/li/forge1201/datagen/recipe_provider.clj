@@ -14,7 +14,8 @@
     (buildRecipes [^Consumer writer]
       (let [vanilla-emitted (recipe-provider-core/build-recipes! writer)
             recipes (recipe-core/load-recipes)
-            custom-emitted (recipe-core/emit-recipes! recipes
-                             recipe-provider-custom/custom-emitters)]
+            custom-emitters (recipe-provider-custom/custom-emitters writer)
+            custom-recipes (filter #(contains? custom-emitters (:type %)) recipes)
+            custom-emitted (recipe-core/emit-recipes! custom-recipes custom-emitters)]
         (println (str "[recipe-provider] generated recipes: vanilla=" vanilla-emitted
                       " custom=" custom-emitted))))))

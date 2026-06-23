@@ -93,13 +93,15 @@
     (throw (ex-info "Unsupported recipe type" {:type (:type recipe) :recipe recipe}))))
 
 (defn emit-recipes!
-  "Emit all recipes with type-based emitters map and return emitted count.
+  "Emit recipes that have a matching emitter.  Recipes whose type has no
+  emitter are silently skipped (they belong to a different emission pass,
+  e.g. custom types handled by the loader-specific provider).
 
-  `emitters` keys are recipe type keywords; values are unary functions that
-  receive the recipe map."
+  Returns the count of recipes that were actually emitted."
   [recipes emitters]
-  (doseq [recipe recipes]
-    (if-let [emit-fn (get emitters (:type recipe))]
-      (emit-fn recipe)
-      (throw (ex-info "Unsupported recipe type" {:recipe recipe}))))
-  (count recipes))
+  (let [emitted (atom 0)]
+    (doseq [recipe recipes]
+      (if-let [emit-fn (get emitters (:type recipe))]
+        (do (emit-fn recipe) (swap! emitted inc))
+        nil))  ;; skip — handled by custom-emitters pass in loader provider
+    @emitted))

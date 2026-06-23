@@ -52,11 +52,14 @@
                    (getAdvancementId [] nil))]
     (.accept writer finished)))
 
-(def custom-emitters
-  "Emitter map for custom recipe types.  Keyed by recipe type keyword."
-  {:imag-fusor (fn [^Consumer writer recipe]
+(defn custom-emitters
+  "Return emitter map for custom recipe types keyed by recipe type keyword.
+  Each emitter is a 1-arg fn [recipe]; the writer is captured in a closure
+  to match emit-recipes!'s calling convention."
+  [^Consumer writer]
+  {:imag-fusor (fn [recipe]
                  (emit-custom-recipe! writer recipe
                    (.get ModRecipeTypes/IMAG_FUSOR_SERIALIZER)))
-   :metal-former (fn [^Consumer writer recipe]
+   :metal-former (fn [recipe]
                    (emit-custom-recipe! writer recipe
                      (.get ModRecipeTypes/METAL_FORMER_SERIALIZER)))})
