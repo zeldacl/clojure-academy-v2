@@ -90,23 +90,16 @@
 	(with-init-guard converters-initialized?
 		(doseq [converter converter-definitions]
 			(register-converter-block! converter))
-		;; --- register wireless capabilities (all registrations are idempotent) ---
-		(platform-cap/declare-capability!
-			:wireless-generator IWirelessGenerator
-			(fn [be _side]
-				(ec-wireless/create-wireless-generator
-					be
-					(fn [] (or (platform-be/get-custom-state be) (ec-schema/default-state-map)))
-					(fn [s] (platform-be/set-custom-state! be s)))))
-		(platform-cap/declare-capability!
-			:wireless-receiver IWirelessReceiver
-			(fn [be _side]
-				(ec-wireless/create-wireless-receiver
-					be
-					(fn [] (or (platform-be/get-custom-state be) (ec-schema/default-state-map)))
-					(fn [s] (platform-be/set-custom-state! be s))
-					{:max-energy (fn [] (double (ec-config/energy-capacity)))
-					 :bandwidth (fn [] (double (ec-config/transfer-bandwidth)))})))
+		;; --- register wireless capability bindings ---
+		;; :wireless-generator and :wireless-receiver capabilities are declared
+		;; by standard machines (solar_gen, imag_fusor, etc.) with generic
+		;; WirelessGeneratorImpl / WirelessReceiverImpl factories that read
+		;; :energy, :gen-speed and :max-energy from custom state.
+		;; Energy converters use the same factories — :gen-speed is populated
+		;; at state init from ec-config/transfer-bandwidth.
+		;; Only bind tile-ids; do NOT re-declare the capability (global
+		;; singleton — second declare-capability! with a different factory
+		;; throws Duplicate capability registration).
 		;; receivers: rf-input, eu-input   |  generators: rf-output, eu-output
 		(doseq [tile-id ["rf-input" "eu-input"]]
 			(tile-logic/register-tile-capability! tile-id :wireless-receiver))

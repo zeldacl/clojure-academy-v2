@@ -33,7 +33,7 @@
   [^ItemStack stack]
   (when stack
     (try
-      (let [item (.getItem stack)
+      (let [^Item item (.getItem stack)
             rl (.getKey BuiltInRegistries/ITEM item)]
         (when rl (str (.getNamespace rl) ":" (.getPath rl))))
       (catch Exception e
@@ -62,8 +62,8 @@
         (let [rm (.getRecipeManager level)]
           {:crafting (recipes-for-type rm RecipeType/CRAFTING target-id)
            :smelting (recipes-for-type rm RecipeType/SMELTING target-id)
-           :imag-fusor (recipes-for-type rm ModRecipeTypes/IMAG_FUSOR_TYPE target-id)
-           :metal-former (recipes-for-type rm ModRecipeTypes/METAL_FORMER_TYPE target-id)})))
+           :imag-fusor (recipes-for-type rm (.get ModRecipeTypes/IMAG_FUSOR_TYPE) target-id)
+           :metal-former (recipes-for-type rm (.get ModRecipeTypes/METAL_FORMER_TYPE) target-id)})))
     (catch Exception e
       (log/debug "Recipe query failed for" target-id ":" (.getMessage e))
       nil)))

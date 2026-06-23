@@ -81,8 +81,9 @@
     (.save builder writer (ResourceLocation. modid/*mod-id* (str (:id recipe))))))
 
 (defn build-recipes!
-  "Emit all supported recipes through Minecraft recipe builders and return the
-  emitted count."
+  "Emit all supported vanilla recipes through Minecraft recipe builders.
+  Returns the emitted count. Custom recipe types (ImagFusor, MetalFormer)
+  are handled by the loader-specific provider (recipe-provider-custom)."
   [^Consumer writer]
   (let [recipes (recipe-core/load-recipes)]
     (recipe-core/emit-recipes!

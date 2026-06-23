@@ -423,6 +423,21 @@
     (add-component! widget value-box)
     widget))
 
+(defn gradient-fill
+  "Horizontal gradient fill component — renders a smooth left-to-right gradient
+  using Minecraft's built-in fillGradient (zero texture assets).
+
+  Matches upstream AcademyCraft ACRenderingHelper.drawGlow effect.
+  Gradient is split into two halves to achieve center-opaque → edges-transparent.
+
+  Args:
+    color-center — ARGB int at center (e.g. 0xFFFFFFFF for opaque white)
+    color-edge   — ARGB int at both edges (e.g. 0x00FFFFFF for transparent white)"
+  [color-center color-edge]
+  {:kind ::gradient-fill
+   :state (atom {:color-center color-center
+                 :color-edge color-edge})})
+
 (defn with-components
   [widget components]
   (doseq [comp components]

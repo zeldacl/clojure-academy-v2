@@ -4,6 +4,7 @@
   AC registers this through mcmod.lifecycle so platform datagen entrypoints do
   not depend on AC business namespaces."
   (:require [cn.li.ac.ability.datagen.registry :as ability-datagen]
+            [cn.li.ac.block.datagen.registry :as block-datagen]
             [cn.li.ac.block.platform-bridge :as block-bridge]
             [cn.li.ac.wireless.datagen.registry :as wireless-datagen]
             [cn.li.ac.energy.datagen.registry :as energy-datagen]))
@@ -18,6 +19,9 @@
   ;; Install AC overrides here so node multipart and texture rules are applied.
   (block-bridge/install-blockstate-hooks!)
   (ability-datagen/register-datagen-metadata!)
+  ;; Machine recipes must be collected after ability recipes (set-recipes!
+  ;; replaces); block-datagen reads existing recipes and appends machine ones.
+  (block-datagen/register-datagen-metadata!)
   (wireless-datagen/register-datagen-metadata!)
   (energy-datagen/register-datagen-metadata!)
   nil)

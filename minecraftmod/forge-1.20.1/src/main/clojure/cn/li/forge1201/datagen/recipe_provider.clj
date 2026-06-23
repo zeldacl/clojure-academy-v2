@@ -1,6 +1,8 @@
 (ns cn.li.forge1201.datagen.recipe-provider
   "Forge 1.20.1 recipe datagen provider."
-  (:require [cn.li.mc1201.datagen.recipe-provider-core :as recipe-provider-core])
+  (:require [cn.li.mc1201.datagen.recipe-core :as recipe-core]
+            [cn.li.mc1201.datagen.recipe-provider-core :as recipe-provider-core]
+            [cn.li.forge1201.datagen.recipe-provider-custom :as recipe-provider-custom])
   (:import [java.util.function Consumer]
            [net.minecraft.data PackOutput]
            [net.minecraft.data.recipes RecipeProvider]
@@ -10,5 +12,9 @@
   [^PackOutput pack-output ^ExistingFileHelper _exfile-helper]
   (proxy [RecipeProvider] [pack-output]
     (buildRecipes [^Consumer writer]
-      (let [emitted (recipe-provider-core/build-recipes! writer)]
-        (println (str "[recipe-provider] generated recipes=" emitted))))))
+      (let [vanilla-emitted (recipe-provider-core/build-recipes! writer)
+            recipes (recipe-core/load-recipes)
+            custom-emitted (recipe-core/emit-recipes! recipes
+                             recipe-provider-custom/custom-emitters)]
+        (println (str "[recipe-provider] generated recipes: vanilla=" vanilla-emitted
+                      " custom=" custom-emitted))))))

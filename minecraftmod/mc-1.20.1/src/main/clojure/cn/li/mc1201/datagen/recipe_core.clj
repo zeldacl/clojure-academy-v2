@@ -60,12 +60,36 @@
      :experience (float experience)
      :cookingtime (int cooking-time)}))
 
+(defn- machine-output-json
+  "Convert machine recipe output to JSON. Returns {:item ... :count ...} map."
+  [output]
+  (cond-> {:item (str (:item output))}
+    (> (int (:count output 1)) 1)
+    (assoc :count (int (:count output 1)))))
+
+(defn imag-fusor-json
+  [recipe]
+  {:type "my_mod:imag_fusor"
+   :input (ingredient-json (:input recipe))
+   :output (machine-output-json (:output recipe))
+   :consume_liquid (int (or (:consume-liquid recipe) 0))
+   :craft_time (int (or (:time recipe) 200))})
+
+(defn metal-former-json
+  [recipe]
+  {:type "my_mod:metal_former"
+   :input (ingredient-json (:input recipe))
+   :output (machine-output-json (:output recipe))
+   :mode (:mode recipe)})
+
 (defn recipe-json
   [recipe]
   (case (:type recipe)
     :shaped (shaped-json recipe)
     :shapeless (shapeless-json recipe)
     (:smelting :blasting :smoking :campfire-cooking) (cooking-json recipe)
+    :imag-fusor (imag-fusor-json recipe)
+    :metal-former (metal-former-json recipe)
     (throw (ex-info "Unsupported recipe type" {:type (:type recipe) :recipe recipe}))))
 
 (defn emit-recipes!

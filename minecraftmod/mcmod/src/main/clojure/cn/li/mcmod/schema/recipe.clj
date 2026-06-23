@@ -43,8 +43,26 @@
 	 [:experience [:and number? [:>= 0.0]]]
 	 [:cooking-time [:and int? [:>= 1]]]])
 
+(def imag-fusor-recipe-schema
+	[:map
+	 [:id non-blank-string-schema]
+	 [:type [:= :imag-fusor]]
+	 [:input ingredient-schema]
+	 [:output result-schema]
+	 [:consume-liquid {:optional true} [:and int? [:>= 0]]]
+	 [:time {:optional true} [:and int? [:>= 1]]]])
+
+(def metal-former-recipe-schema
+	[:map
+	 [:id non-blank-string-schema]
+	 [:type [:= :metal-former]]
+	 [:input ingredient-schema]
+	 [:output result-schema]
+	 [:mode [:enum "plate" "incise" "etch" "refine"]]])
+
 (def recipe-schema
-	[:or shaped-recipe-schema shapeless-recipe-schema smelting-recipe-schema])
+	[:or shaped-recipe-schema shapeless-recipe-schema smelting-recipe-schema
+	     imag-fusor-recipe-schema metal-former-recipe-schema])
 
 (def recipes-schema
 	[:sequential recipe-schema])

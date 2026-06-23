@@ -544,21 +544,26 @@
   ;; As children of logo1, positions must be in logo1's UNSCALED space (div by 0.25).
   ;; lineglow(ln-ln2, ln, ht) → right line from x=200 to x=500 in logo1-local.
   ;; lineglow(-ln, -(ln-ln2), ht) → left line from x=-500 to x=-200.
-  ;; Uses a pre-rendered horizontal gradient texture (center white → edges transparent)
-  ;; matching upstream ACRenderingHelper.drawGlow gradient effect.
+  ;;
+  ;; Uses gradient-fill component (banded fill() calls) matching upstream
+  ;; ACRenderingHelper.drawGlow gradient effect.  The upstream lineSegment
+  ;; solid line is rendered by the center-band opacity. Zero texture assets.
   (let [ls 0.25               ;; logo1 scale
         glow-h (/ 3.0 ls)     ;; 3px visual → 12px in logo1-local
         glow-center-local (/ (- glow-center-y logo1-abs-y) ls)  ;; ≈ 133.0
         glow-y (- glow-center-local (/ glow-h 2))
-        glow-tex (gui-tex "tutorial/glow_line.png")
+        ;; Center-opaque white → edge-transparent, matching upstream
+        ;; drawGlow(..., GLOW_COLOR=Colors.white()) + lineSegment
+        glow-center-color 0xCCFFFFFF
+        glow-edge-color   0x00FFFFFF
         logo1-w (find-widget-recursive root "logo1")]
     (when logo1-w
       (let [gr (cgui-core/create-widget :pos [0 glow-y] :size [0 glow-h])]
-        (comp/add-component! gr (comp/draw-texture glow-tex))
+        (comp/add-component! gr (comp/gradient-fill glow-center-color glow-edge-color))
         (cgui-core/set-name! gr "glow-right")
         (cgui-core/add-widget! logo1-w gr))
       (let [gl (cgui-core/create-widget :pos [0 glow-y] :size [0 glow-h])]
-        (comp/add-component! gl (comp/draw-texture glow-tex))
+        (comp/add-component! gl (comp/gradient-fill glow-center-color glow-edge-color))
         (cgui-core/set-name! gl "glow-left")
         (cgui-core/add-widget! logo1-w gl)))))
 

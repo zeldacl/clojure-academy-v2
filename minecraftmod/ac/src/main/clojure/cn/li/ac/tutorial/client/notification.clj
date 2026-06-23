@@ -11,7 +11,8 @@
   Rendered via overlay element builder (same pipeline as toast.clj).
   Called from client-state/apply-sync! when new tutorial activations arrive."
   (:require [cn.li.ac.config.modid :as modid]
-            [cn.li.mcmod.i18n :as i18n]))
+            [cn.li.mcmod.i18n :as i18n]
+            [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
 ;; Constants
@@ -76,13 +77,14 @@
                      {:title title
                       :tut-id tut-id
                       :start-sec nil})))))
-      (catch Throwable _))))
+      (catch Throwable t
+        (log/warn :tutorial-notification "Failed to queue activation toast:" (ex-message t))))))
 
 ;; ============================================================================
 ;; Overlay element builder
 ;; ============================================================================
 
-(defn build-notification-elements
+(defn build-notification-elements!
   "Return overlay elements for the currently active notification.
   Called each frame from the overlay plan builder (client_ui_hooks.clj).
 

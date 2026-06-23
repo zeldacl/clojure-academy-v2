@@ -85,7 +85,7 @@ public class ImagFusorRecipe implements Recipe<SimpleContainer> {
 
     @Override
     public RecipeType<?> getType() {
-        return ModRecipeTypes.IMAG_FUSOR_TYPE;
+        return ModRecipeTypes.IMAG_FUSOR_TYPE.get();
     }
 
     public static class Serializer implements RecipeSerializer<ImagFusorRecipe> {

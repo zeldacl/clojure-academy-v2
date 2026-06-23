@@ -837,7 +837,7 @@
 
 (defn- tutorial-notification-elements [screen-width screen-height now-ms]
   (try
-    (when-let [build-notif (requiring-resolve 'cn.li.ac.tutorial.client.notification/build-notification-elements)]
+    (when-let [build-notif (requiring-resolve 'cn.li.ac.tutorial.client.notification/build-notification-elements!)]
       (build-notif screen-width screen-height now-ms))
     (catch Throwable _ [])))
 

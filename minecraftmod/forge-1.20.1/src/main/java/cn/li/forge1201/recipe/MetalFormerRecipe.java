@@ -78,7 +78,7 @@ public class MetalFormerRecipe implements Recipe<SimpleContainer> {
 
     @Override
     public RecipeType<?> getType() {
-        return ModRecipeTypes.METAL_FORMER_TYPE;
+        return ModRecipeTypes.METAL_FORMER_TYPE.get();
     }
 
     public static class Serializer implements RecipeSerializer<MetalFormerRecipe> {

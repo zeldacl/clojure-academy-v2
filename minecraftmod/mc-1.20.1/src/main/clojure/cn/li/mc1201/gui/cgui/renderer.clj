@@ -261,6 +261,47 @@
                       (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0)))))
               (.fill gg x y (+ x w-int) (+ y h-int) (unchecked-int (or (:color state) 0xFFFFFF)))))
 
+          (kind-matches? kind :gradient-fill)
+          ;; Horizontal gradient glow fill matching upstream
+          ;; ACRenderingHelper.drawGlow. Uses multiple fill() bands with
+          ;; stepped alpha to approximate a smooth gradient without texture
+          ;; assets. Band count is a trade-off: more = smoother but more
+          ;; draw calls; 5 bands per side (10 total) gives reasonable
+          ;; smoothness for the typical 300px-wide glow line at ~0.25 scale.
+          (let [color-center (unchecked-int (or (:color-center state) 0xFFFFFFFF))
+                color-edge   (unchecked-int (or (:color-edge state) 0x00FFFFFF))
+                bands 5
+                half-w (double (/ w-int 2))
+                band-w (/ half-w bands)
+                ;; Extract ARGB components from edge and center colors
+                cc (fn [color]
+                     {:a (bit-and (bit-shift-right color 24) 0xFF)
+                      :r (bit-and (bit-shift-right color 16) 0xFF)
+                      :g (bit-and (bit-shift-right color 8) 0xFF)
+                      :b (bit-and color 0xFF)})
+                ec (cc color-edge)
+                mc (cc color-center)]
+            ;; Left half: edge (transparent) → center (opaque)
+            (dotimes [i bands]
+              (let [frac (/ (double i) bands)
+                    a (+ (:a ec) (long (* (- (:a mc) (:a ec)) frac)))
+                    r (+ (:r ec) (long (* (- (:r mc) (:r ec)) frac)))
+                    g (+ (:g ec) (long (* (- (:g mc) (:g ec)) frac)))
+                    b (+ (:b ec) (long (* (- (:b mc) (:b ec)) frac)))
+                    argb (unchecked-int (bit-or (bit-shift-left a 24) (bit-shift-left r 16) (bit-shift-left g 8) b))
+                    bx (int (+ x (* i band-w)))]
+                (.fill gg bx y (int (+ bx band-w)) (+ y h-int) argb)))
+            ;; Right half: center (opaque) → edge (transparent)
+            (dotimes [i bands]
+              (let [frac (/ (double i) bands)
+                    a (+ (:a mc) (long (* (- (:a ec) (:a mc)) frac)))
+                    r (+ (:r mc) (long (* (- (:r ec) (:r mc)) frac)))
+                    g (+ (:g mc) (long (* (- (:g ec) (:g mc)) frac)))
+                    b (+ (:b mc) (long (* (- (:b ec) (:b mc)) frac)))
+                    argb (unchecked-int (bit-or (bit-shift-left a 24) (bit-shift-left r 16) (bit-shift-left g 8) b))
+                    bx (int (+ x half-w (* i band-w)))]
+                (.fill gg bx y (int (+ bx band-w)) (+ y h-int) argb))))
+
           (kind-matches? kind :textbox)
           (let [raw-text (str (or (:text state) ""))
                 localized? (boolean (:localized? state))
