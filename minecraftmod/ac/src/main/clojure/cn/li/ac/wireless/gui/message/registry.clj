@@ -90,5 +90,10 @@
 (defn build-catalog []
   (msg-dsl/build-catalog (vals (:domains (wireless-message-registry-state-snapshot)))))
 
-(defn msg [domain action]
-  (msg-dsl/msg-id (build-catalog) domain action))
+(defn msg
+  "Resolve a message ID for the given domain+action.
+   Uses direct ID computation (matching build-domain-spec formula)
+   so callers don't depend on catalog being populated first.
+   Format: <prefix>_<domain>_<action> with underscores for hyphens."
+  [domain action]
+  (msg-dsl/message-id message-prefix domain action))

@@ -64,25 +64,39 @@
                                 "minecraft:fire")))))
 
 (defn- try-fishing!
-  "Attempt to reward cooked fish when Arc-Gen strikes water."
+  "Spawn cooked fish item entity at the water position matching original
+  ArcGenContext.s_perform: world.spawnEntity(new EntityItem(world, x, y, z, new ItemStack(Items.COOKED_FISH)))"
   [world-id x y z probability player]
   (when (and (block-manip/available?)
              (< (rand) probability))
     (when (block-manip/liquid-block?*
                                      world-id x y z)
       (when-let [fish-stack (pitem/create-item-stack-by-id fish-item-id 1)]
-        (entity/player-give-item-stack! player fish-stack)
-        (log/debug "Arc Gen: fishing reward granted at" x y z)))))
+        ;; Spawn item entity in world at hit position (matching original EntityItem spawn).
+        ;; Uses requiring-resolve to keep ac layer free of MC imports.
+        (let [spawn! (requiring-resolve 'cn.li.mc1201.runtime.world-effects-core/spawn-item-stack-at!)]
+          (if spawn!
+            (spawn! player world-id x y z fish-stack)
+            ;; Fallback: give directly to player if world spawn unavailable
+            (entity/player-give-item-stack! player fish-stack)))
+        (log/debug "Arc Gen: fishing reward spawned at" x y z)))))
 
-(defn- apply-stun!
-  "Apply stun effect to entity (slowness + weakness)."
-  [_world-id entity-uuid]
-  (when (and (potion-effects/available?) entity-uuid)
-    (potion-effects/apply-potion-effect!*
-                                         entity-uuid :slowness 40 1)
-    (potion-effects/apply-potion-effect!*
-                                         entity-uuid :weakness 40 1)
-    (log/debug "Arc Gen: stun effect applied to" entity-uuid)))
+(defn- normal-block?
+  "Check if block at position is a 'normal' solid block matching original
+  BlockSelectors.filNormal: non-tile-entity, non-air, full cube."
+  [world-id x y z]
+  (try
+    (when (block-manip/available?)
+      (let [block-id (block-manip/get-block* world-id x y z)]
+        (and block-id
+             (not= block-id "minecraft:air")
+             (not= block-id "minecraft:cave_air")
+             (not= block-id "minecraft:void_air")
+             ;; Skip known tile-entity / non-solid blocks (matching filNormal)
+             (not (some #(= block-id %) ["minecraft:water" "minecraft:lava"
+                                         "minecraft:grass" "minecraft:tall_grass"
+                                         "minecraft:dead_bush" "minecraft:fern"])))))
+    (catch Exception _ true)))  ;; conservative: allow on error
 
 ;; ---------------------------------------------------------------------------
 ;; Action
@@ -97,7 +111,6 @@
           fish-prob     (if (> exp (cfg-double :effect.fishing-exp-threshold))
                           (skill-config/probability arc-gen-skill-id :effect.fishing-probability)
                           0.0)
-          can-stun?     (>= exp (cfg-double :effect.stun-exp-threshold))
           world-id      (geom/world-id-of player-id)
           eye           (geom/eye-pos player-id)
           look-vec      (when (raycast/available?)
@@ -132,8 +145,6 @@
                                                     entity-uuid
                                                     damage
                                                     :lightning)
-                (when can-stun?
-                  (apply-stun! world-id entity-uuid))
                 (skill-effects/add-skill-exp! player-id arc-gen-skill-id
                                               (cfg-progression :progression.exp-entity exp))))
 
@@ -145,7 +156,9 @@
                    (block-manip/liquid-block?*
                                 world-id block-x block-y block-z))
               (try-fishing! world-id block-x block-y block-z fish-prob player)
-              (try-ignite-block! world-id block-x block-y block-z ignite-prob))
+              ;; Only ignite normal solid blocks (matching original BlockSelectors.filNormal filter)
+              (when (normal-block? world-id block-x block-y block-z)
+                (try-ignite-block! world-id block-x block-y block-z ignite-prob)))
               (skill-effects/add-skill-exp! player-id arc-gen-skill-id
                                             (cfg-progression :progression.exp-block exp)))
 

@@ -7,6 +7,7 @@
            [net.minecraft.sounds SoundSource SoundEvent]
            [net.minecraft.world.entity Entity EntityType LivingEntity]
            [net.minecraft.world.entity.item ItemEntity]
+           [net.minecraft.world.item ItemStack]
            [net.minecraft.world.entity.monster Monster]
            [net.minecraft.world.entity.projectile Projectile]
            [net.minecraft.world.level Level]
@@ -134,3 +135,21 @@
             {:success? false})))
       (catch Exception _
         {:success? false}))))
+
+(defn spawn-item-stack-at!
+  "Spawn an ItemEntity in the world at the given position.
+  item-stack is a platform item map with :id (registry name string) and :count (int).
+  Matching original AcademyCraft: world.spawnEntity(new EntityItem(world, x, y, z, itemStack))
+  Returns true on success, false on failure."
+  [player world-id x y z item-stack]
+  (try
+    (when-let [^Level level (some-> player .level)]
+      (let [item-id (:id item-stack)
+            count (int (max 1 (or (:count item-stack) 1)))
+            ^ItemStack mc-stack (ItemStack. (.get BuiltInRegistries/ITEM (ResourceLocation. (str item-id))) count)]
+        (let [^ItemEntity entity (ItemEntity. level (double x) (double y) (double z) mc-stack)]
+          (.setPickUpDelay entity 10)  ;; vanilla default, matching original EntityItem constructor
+          (.addFreshEntity level entity)
+          true)))
+    (catch Exception _
+      false)))
