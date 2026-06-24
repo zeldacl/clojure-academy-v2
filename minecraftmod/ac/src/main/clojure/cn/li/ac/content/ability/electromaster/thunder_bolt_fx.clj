@@ -95,7 +95,13 @@
 			 :core-width core-width
 			 :outer-color outer-a
 			 :inner-color inner-a
-			 :line-color (ru/with-alpha {:r 160 :g 220 :b 255} (int (+ 60 (* 140 life))))})))
+			 :line-color (ru/with-alpha {:r 160 :g 220 :b 255} (int (+ 60 (* 140 life))))
+				 :jitter-amount  (if is-aoe? (* 0.03 life) (* 0.08 (+ 0.3 (* 0.7 life))))
+				 :flicker-threshold (if is-aoe? (+ 0.5 (* 0.5 (rand))) (+ 0.3 (* 0.7 (rand))))
+				 :fork-count     (if is-aoe? 1 3)
+				 :fork-length    0.45
+				 :fork-angle     0.6
+				 :fork-width-frac 0.4})))
 
 (defn- build-plan [camera-pos _hand-center-pos _tick]
 	(let [current-arcs (all-arcs)

@@ -95,7 +95,7 @@
   :description-key "ability.skill.electromaster.body_intensify.desc"
   :icon        "textures/abilities/electromaster/skills/body_intensify.png"
   :ui-position [97 15]
-  :level       4
+  :level       3  ;; matching original Skill("body_intensify", 3)
   :controllable? true
   :ctrl-id     :body-intensify
   :pattern     :charge-window

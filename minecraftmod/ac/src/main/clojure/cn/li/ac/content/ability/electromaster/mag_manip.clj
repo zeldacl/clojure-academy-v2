@@ -348,7 +348,7 @@
   :description-key "ability.skill.electromaster.mag_manip.desc"
   :icon "textures/abilities/electromaster/skills/mag_manip.png"
   :ui-position [204 33]
-  :level 3
+  :level 2  ;; matching original Skill("mag_manip", 2)
   :controllable? true
   :ctrl-id :mag-manip
   :cp-consume-speed 0.0

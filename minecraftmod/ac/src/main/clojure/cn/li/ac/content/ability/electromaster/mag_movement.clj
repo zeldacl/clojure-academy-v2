@@ -291,7 +291,7 @@
   :description-key "ability.skill.electromaster.mag_movement.desc"
   :icon            "textures/abilities/electromaster/skills/mag_movement.png"
   :ui-position     [137 35]
-  :level           3
+  :level           2  ;; matching original Skill("mag_movement", 2)
   :controllable?   true
   :ctrl-id         :mag-movement
   :cp-consume-speed 0.0

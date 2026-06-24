@@ -184,7 +184,7 @@
   :description-key "ability.skill.electromaster.thunder_bolt.desc"
   :icon        "textures/abilities/electromaster/skills/thunder_bolt.png"
   :ui-position [86 67]
-  :level       2
+  :level       4  ;; matching original Skill("thunder_bolt", 4)
   :controllable? false
   :ctrl-id     :thunder-bolt
   :pattern     :instant
