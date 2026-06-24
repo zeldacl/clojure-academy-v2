@@ -535,6 +535,9 @@
     ;; text widget is CENTER-aligned in rightWindow → title must be its child.
     (let [bw (find-widget-recursive root "brief-text")
           tw (cgui-core/create-widget :pos [3 3] :size [130 14])]
+      ;; Clip overflowing brief content (matching upstream CGUI auto-scissor).
+      ;; Without this, markdown segments extend past rightWindow's bottom border.
+      (swap! (:metadata bw) assoc :clip-children? true)
       (comp/add-component! tw (comp/text-box :text "" :font-size 10.0 :color 0xFFFFFFFF))
       (cgui-core/set-name! tw "title-text")
       (cgui-core/add-widget! bw tw))))

@@ -35,17 +35,31 @@
   [widget-name]
   (let [parse! (fn []
                  (try
-                   (if-let [read-xml (requiring-resolve 'cn.li.mcmod.gui.xml-parser/read-xml)]
-                     (let [path (modid/asset-path "guis" "tutorial_windows.xml")
-                           root (read-xml path)]
-                       (when root
-                         (let [widgets @(:children root)
-                               found (some (fn [w]
-                                             (when (= widget-name (cgui-core/get-name w))
-                                               w))
-                                           widgets)]
-                           found)))
-                     (log/warn "xml-parser/read-xml unavailable; recipe widgets cannot be loaded"))
+                   (let [xml-ns (or (requiring-resolve 'cn.li.mcmod.gui.xml-parser)
+                                    (do (log/warn "xml-parser namespace not found, trying require...")
+                                        (try (require 'cn.li.mcmod.gui.xml-parser)
+                                             (requiring-resolve 'cn.li.mcmod.gui.xml-parser/read-xml)
+                                             (catch Throwable e2
+                                               (log/stacktrace "Failed to require xml-parser" e2)
+                                               nil))))]
+                     (if-let [read-xml (or (when (var? xml-ns) (var-get xml-ns))
+                                           (requiring-resolve 'cn.li.mcmod.gui.xml-parser/read-xml))]
+                       (let [path (modid/asset-path "guis" "tutorial_windows.xml")
+                             root (read-xml path)]
+                         (when root
+                           ;; Use cgui-core/get-widgets for reliable child access
+                           (let [widgets (cgui-core/get-widgets root)
+                                 found (some (fn [w]
+                                               (when (= widget-name (cgui-core/get-name w))
+                                                 w))
+                                             widgets)]
+                             (or found
+                                 ;; Fallback: search by recursive name match
+                                 (some (fn [w]
+                                         (when (= widget-name (cgui-core/get-name w))
+                                           w))
+                                       (mapcat #(cons % (cgui-core/get-widgets %)) widgets))))))
+                       (log/warn "xml-parser/read-xml unavailable; recipe widgets cannot be loaded")))
                    (catch Throwable e
                      (log/stacktrace (str "Failed to load recipe widget " widget-name) e)
                      nil)))
