@@ -83,22 +83,29 @@
   (msg-registry/msg :developer action))
 
 (defn- req-start-development!
+  "Send a development request. If container has :on-dev-start callback,
+  delegates to it (for portable/instant dev). Otherwise sends network
+  message for timed block-based development."
   [container action & [extra callback]]
-  (let [owner (try (container-state/owner-from-container container)
-                   (catch Exception e
-                     (log/error "[req-start-development!] owner error:" (ex-message e))
-                     nil))
-        msg-id (dev-msg :start-development)
-        payload (action-payload/action-payload container (merge {:action action} extra))]
-    (log/info "[req-start-development!] sending" msg-id "action=" action
-              "owner=" (pr-str owner) "payload=" (pr-str payload))
-    (net-client/send-to-server
-      owner
-      msg-id
-      payload
-      (fn [resp]
-        (log/info "[req-start-development!] response:" (pr-str resp))
-        (when callback (callback resp))))))
+  (if-let [handler (:on-dev-start container)]
+    ;; Portable/instant dev path — delegate to container's handler
+    (handler action extra callback)
+    ;; Block dev path — send network message for timed session
+    (let [owner (try (container-state/owner-from-container container)
+                     (catch Exception e
+                       (log/error "[req-start-development!] owner error:" (ex-message e))
+                       nil))
+          msg-id (dev-msg :start-development)
+          payload (action-payload/action-payload container (merge {:action action} extra))]
+      (log/info "[req-start-development!] sending" msg-id "action=" action
+                "owner=" (pr-str owner) "payload=" (pr-str payload))
+      (net-client/send-to-server
+        owner
+        msg-id
+        payload
+        (fn [resp]
+          (log/info "[req-start-development!] response:" (pr-str resp))
+          (when callback (callback resp)))))))
 
 (defn- texture-path-from-category-icon [icon-str]
   (when (string? icon-str)
@@ -531,8 +538,10 @@
   "Attach handlers to all widgets in the classic developer page.
 
   Callbacks:
-  - :on-wireless-click — called when wireless button clicked (for overlay)"
-  [root container {:keys [on-wireless-click]}]
+  - :on-wireless-click — called when wireless button clicked (for overlay)
+  - :on-develop-start — (optional) overrides req-start-development!
+    for portable/instant dev. Receives [container action extra]."
+  [root container {:keys [on-wireless-click on-develop-start]}]
   (let [pl (:player container)]
     ;; Wireless node label
     (refresh-linked-node-label! root container)
