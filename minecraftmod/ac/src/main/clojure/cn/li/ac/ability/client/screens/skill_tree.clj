@@ -108,10 +108,14 @@
                  (let [tid (:id skill)
                        locked? (not (:pass? (check-learn-conditions tid ad (:level ad) developer-type)))]
                    (for [{sid :skill-id me :min-exp} (:prerequisites skill)
-                         :let [{fx :x fy :y} (get by-id sid)] :when fx]
+                         :let [{fx :x fy :y} (get by-id sid)
+                               child-learned? (adata/is-learned? ad tid)
+                               parent-learned? (adata/is-learned? ad sid)]
+                         :when fx]
                      {:from-x (+ fx 8) :from-y (+ fy 8) :to-x (+ x 8) :to-y (+ y 8)
                       :satisfied? (>= (or (adata/get-skill-exp ad sid) 0.0) (double me))
-                      :locked? locked? :m-alpha (cond (adata/is-learned? ad sid) 1.0 :else 0.25)})))
+                      :locked? locked? :child-learned? child-learned?
+                      :m-alpha (cond child-learned? 1.0 parent-learned? 0.7 :else 0.25)})))
                skill-positions))))))
 
 ;; ============================================================================
@@ -236,8 +240,8 @@
 ;; Draw Ops — Line connections (rotated-quad)
 ;; ============================================================================
 (defn- build-line-ops [connections anim-time]
-  (mapcat (fn [{:keys [from-x from-y to-x to-y satisfied? locked? m-alpha]}]
-            (let [line-alpha (* (or m-alpha 0.7) (if satisfied? 1.0 0.4))
+  (mapcat (fn [{:keys [from-x from-y to-x to-y child-learned? m-alpha]}]
+            (let [line-alpha (* (or m-alpha 0.7) (if child-learned? 1.0 0.4))
                   alpha-byte (int (* 255.0 (clamp01 line-alpha)))
                   color (bit-or (bit-shift-left alpha-byte 24) 0xFFFFFF)
                   dx (- to-x from-x) dy (- to-y from-y)
@@ -299,27 +303,28 @@
 ;; Detail popup
 ;; ============================================================================
 (defn- detail-popup-ops [node anim-time]
-  (let [dx 220 dy 70 dw 200 dh 145
+  (let [dx 220 dy 70 dw 200 dh 155
         {:keys [skill-name skill-icon skill-level skill-description learned can-learn exp]} node
-        ;; Fade animation: 0.2s for cover, slightly delayed for panel
         cover-alpha (* 0.7 (clamp01 (* anim-time 5.0)))
         panel-alpha (clamp01 (* (- anim-time 0.05) 5.0))
-        ix (+ dx 10) iy (+ dy 8) isz 32
+        ;; drawActionIcon: BackSize=50, IconSize=27, IconAlign=(50-27)/2=11.5
+        back-sz 50 icon-sz 27 icon-align 11.5
         progress-at-1? (>= exp 0.999)]
     (flatten
       (concat
-        ;; Dark full-screen cover overlay (matching upstream Cover component)
+        ;; Dark full-screen cover overlay
         [{:kind :fill :x 0 :y 0 :w 420 :h 260 :color (bit-or (bit-shift-left (int (* 255.0 cover-alpha)) 24) 0x000000)}]
         (when (>= panel-alpha 0.01)
           [{:kind :fill :x dx :y dy :w dw :h dh :color (bit-or (bit-shift-left (int (* 255.0 panel-alpha)) 24) 0x101010)}
-           {:kind :textured-quad :texture :skill-back :x ix :y iy :w isz :h isz}
-           {:kind :icon-or-fill :texture skill-icon :x (+ ix 4) :y (+ iy 4) :w 24 :h 24 :fallback-color 0xFF2A2A2A}
+           ;; Skill icon with background (matching drawActionIcon)
+           {:kind :textured-quad :texture :skill-back :x (+ dx 50) :y (+ dy 8) :w back-sz :h back-sz}
+           {:kind :icon-or-fill :texture skill-icon :x (+ dx 50 icon-align) :y (+ dy 8 icon-align) :w icon-sz :h icon-sz :fallback-color 0xFF2A2A2A}
            (when learned
              {:kind :shader-progress-ring :shader-id :skill-progbar
               :texture-0 (if progress-at-1? :skill-view-outline-glow :skill-view-outline)
               :texture-1 :skill-mask :progress (float exp)
-              :x ix :y iy :w isz :h isz})
-           {:kind :text :x (+ dx 54) :y (+ dy 9) :text (str skill-name " (LV " skill-level ")")
+              :x (+ dx 50) :y (+ dy 8) :w back-sz :h back-sz})
+           {:kind :text :x (+ dx 105) :y (+ dy 9) :text (str skill-name " (LV " skill-level ")")
             :font :ac-bold :font-size 11 :align :left :color 0xFFFFFFFF}
            (if learned
              {:kind :text :x (+ dx 8) :y (+ dy 46) :text (format "EXP: %d%%" (int (* 100.0 exp)))
@@ -328,10 +333,10 @@
               :font :ac-normal :font-size 9 :align :left :color 0xFFFF5555})
            {:kind :text :x (+ dx 8) :y (+ dy 60) :text (str skill-description)
             :font :ac-normal :font-size 8 :align :left :color 0xFFDDDDDD}
-           (when (and (not learned) can-learn)
-             ;; Textured LEARN button matching upstream newButton()
-             [{:kind :textured-quad :texture :tex-button :x (+ dx 45) :y (+ dy 108) :w 32 :h 16}
-              {:kind :text :x (+ dx 52) :y (+ dy 110) :text "LEARN"
+           (when (not learned)
+             ;; LEARN button — always shown for unlearned skills (upstream behavior)
+             [{:kind :textured-quad :texture :tex-button :x (+ dx 55) :y (+ dy 125) :w 32 :h 16}
+              {:kind :text :x (+ dx 62) :y (+ dy 127) :text "LEARN"
                :font :ac-bold :font-size 9 :align :left :color 0xFFFFFFFF}])])))))
 
 ;; ============================================================================
@@ -344,15 +349,15 @@
           anim (if ct (/ (- (now-ms) ct) 1000.0) 5.0)
           ab (:ability-info rd)
 
-          ;; Parallax background
-          mx (:mouse-x st 0) my (:mouse-y st 0)
-          w 420 h 260
-          bg-dx (* (- (/ mx (max 1.0 (double w))) 0.5) 0.01)
-          bg-dy (* (- (/ my (max 1.0 (double h))) 0.5) 0.01)
-          scale-fn (fn [x] (+ (* (- x 0.5) back-scale-inv) 0.5))
-          bg-u (scale-fn (+ 0.5 bg-dx))
-          bg-v (scale-fn (+ 0.5 bg-dy))
-          bg-ops [{:kind :raw-rect-uv :texture :bg-area :x 0 :y 0 :w w :h h
+          ;; Parallax background — matching upstream: scale(dx*max_du), scale(dy*max_du)
+          mx (clamp01 (/ (:mouse-x st 0) (max 1.0 (double 420))))
+          my (clamp01 (/ (:mouse-y st 0) (max 1.0 (double 260))))
+          bg-dx (* (- mx 0.5) 0.01)
+          bg-dy (* (- my 0.5) 0.01)
+          bg-scale-fn (fn [x] (+ (* (- x 0.5) back-scale-inv) 0.5))
+          bg-u (bg-scale-fn bg-dx)
+          bg-v (bg-scale-fn bg-dy)
+          bg-ops [{:kind :raw-rect-uv :texture :bg-area :x 0 :y 0 :w (int 420) :h (int 260)
                    :min-u (float bg-u) :max-u (float (+ bg-u back-scale-inv))
                    :min-v (float bg-v) :max-v (float (+ bg-v back-scale-inv))}]
 
@@ -379,7 +384,7 @@
           hid (:hovered-skill-id st)
           hst (:hover-start-time st)
           raw-nodes (or (:skill-nodes rd) [])
-          shifted-nodes (mapv #(assoc % :x (+ (:x %) node-dx) :y (+ (:y %) node-dy)) raw-nodes)
+          shifted-nodes (mapv #(assoc % :x (- (:x %) node-dx) :y (- (:y %) node-dy)) raw-nodes)
           nodes (mapcat #(node-ops % anim hid hst) shifted-nodes)
 
           hover-id (:hover-skill rd)
