@@ -21,16 +21,15 @@
 ;; ============================================================================
 
 (let [mod-id (or mcmod-config/*mod-id* "my_mod")]
-  ;; Paths WITHOUT "textures/" and ".png" — Minecraft's SimpleTexture adds them automatically.
   (def ^:private skill-tree-textures
-    {:skill-back           (ResourceLocation. mod-id "guis/developer/skill_back")
-     :skill-outline        (ResourceLocation. mod-id "guis/developer/skill_outline")
-     :skill-mask           (ResourceLocation. mod-id "guis/developer/skill_radial_mask")
-     :skill-view-outline   (ResourceLocation. mod-id "guis/developer/skill_view_outline")
-     :skill-view-outline-glow (ResourceLocation. mod-id "guis/developer/skill_view_outline_glow")
-     :tex-line             (ResourceLocation. mod-id "guis/developer/line")
-     :tex-button           (ResourceLocation. mod-id "guis/developer/button")
-     :bg-area              (ResourceLocation. mod-id "guis/effect/effect_developer_background")}))
+    {:skill-back           (ResourceLocation. mod-id "textures/guis/developer/skill_back.png")
+     :skill-outline        (ResourceLocation. mod-id "textures/guis/developer/skill_outline.png")
+     :skill-mask           (ResourceLocation. mod-id "textures/guis/developer/skill_radial_mask.png")
+     :skill-view-outline   (ResourceLocation. mod-id "textures/guis/developer/skill_view_outline.png")
+     :skill-view-outline-glow (ResourceLocation. mod-id "textures/guis/developer/skill_view_outline_glow.png")
+     :tex-line             (ResourceLocation. mod-id "textures/guis/developer/line.png")
+     :tex-button           (ResourceLocation. mod-id "textures/guis/developer/button.png")
+     :bg-area              (ResourceLocation. mod-id "textures/guis/effect/effect_developer_background.png")}))
 
 (defn- get-skill-tree-texture [key]
   (get skill-tree-textures key))
@@ -93,18 +92,18 @@
                        :owner owner})))
     (merge payload owner {:player-uuid (:player-uuid owner)})))
 
-(defn- normalize-texture-path [path]
-  "Convert a content-owned texture path to namespaced ResourceLocation format.
-  Strips 'textures/' prefix and '.png' suffix because Minecraft's SimpleTexture
-  (used by TextureManager.getTexture / GuiGraphics.blit) adds them automatically."
+(defn- path->resource-location
+  "Build a ResourceLocation from a content texture path string.
+  Uses the 2-arg constructor directly (bypassing tryParse which may silently fail)."
+  [path]
   (when (and path (not (str/blank? path)))
-    (if (str/includes? path ":")
-      path
-      (let [mod-id (or mcmod-config/*mod-id* "my_mod")
-            stripped (cond-> path
-                       (str/starts-with? path "textures/") (subs (count "textures/"))
-                       (str/ends-with? path ".png") (subs 0 (- (count path) 4)))]
-        (str mod-id ":" stripped)))))
+    (let [mod-id (or mcmod-config/*mod-id* "my_mod")]
+      (if (str/includes? path ":")
+        (let [[ns p] (str/split path #":" 2)]
+          (ResourceLocation. ns p))
+        (if (str/starts-with? path "textures/")
+          (ResourceLocation. mod-id path)
+          (ResourceLocation. mod-id (str "textures/" path)))))))
 
 (defn- render-op! [^GuiGraphics graphics op poseStack]
   (case (:kind op)
@@ -145,17 +144,17 @@
     ;; --- Fills ---
     :fill (.fill graphics (:x op) (:y op) (+ (:x op) (:w op)) (+ (:y op) (:h op)) (:color op))
     ;; --- Textures ---
-    :icon-or-fill (if-let [loc (some-> (:texture op) normalize-texture-path ResourceLocation/tryParse)]
+    :icon-or-fill (if-let [loc (path->resource-location (:texture op))]
                     (.blit graphics loc (:x op) (:y op) 0 0 (:w op) (:h op) (:w op) (:h op))
                     (.fill graphics (:x op) (:y op) (+ (:x op) (:w op)) (+ (:y op) (:h op)) (:fallback-color op)))
     :textured-quad (let [tex-key (:texture op)
                          loc (if (keyword? tex-key) (get-skill-tree-texture tex-key)
-                                 (some-> tex-key normalize-texture-path ResourceLocation/tryParse))]
+                                 (path->resource-location tex-key))]
                      (when loc
                        (.blit graphics loc (:x op) (:y op) 0 0 (:w op) (:h op) (:w op) (:h op))))
     :raw-rect-uv   (let [tex-key (:texture op)
                          loc (if (keyword? tex-key) (get-skill-tree-texture tex-key)
-                                 (some-> tex-key normalize-texture-path ResourceLocation/tryParse))]
+                                 (path->resource-location tex-key))]
                      (when loc
                        (.innerBlit graphics loc
                                    (int (:x op)) (int (+ (:x op) (:w op)))
@@ -165,26 +164,39 @@
                                    (float (or (:max-u op) (+ (or (:u op) 0.0) (or (:tex-w op) 1.0))))
                                    (float (or (:min-v op) (:v op) 0.0))
                                    (float (or (:max-v op) (+ (or (:v op) 0.0) (or (:tex-h op) 1.0)))))))
-    ;; --- Connection line (rotated textured quad via staggered fill segments) ---
-    :rotated-quad (let [x0 (double (:x0 op)) y0 (double (:y0 op))
+    ;; --- Connection line (textured quad rotated along line direction) ---
+    :rotated-quad (let [^ResourceLocation tex (get-skill-tree-texture :tex-line)
+                        x0 (double (:x0 op)) y0 (double (:y0 op))
                         x1 (double (:x1 op)) y1 (double (:y1 op))
-                        width (int (Math/ceil (double (:line-width op 5.5))))
-                        steps (max 1 (int (Math/ceil (Math/max (Math/abs (- x1 x0)) (Math/abs (- y1 y0))))))]
-                    (doseq [i (range steps)]
-                      (let [t (/ i (double steps))
-                            px (int (+ x0 (* (- x1 x0) t)))
-                            py (int (+ y0 (* (- y1 y0) t)))]
-                        (.fill graphics px py (+ px width) (+ py width) (:color op 0x80999999)))))
+                        line-w (double (:line-width op 5.5))
+                        color (int (or (:color op) 0xFFFFFFFF))]
+                    (when (and tex (pos? color))
+                      (let [dx (- x1 x0) dy (- y1 y0)
+                            norm (Math/sqrt (+ (* dx dx) (* dy dy)))
+                            half-w (/ line-w 2.0)
+                            angle (Math/atan2 dy dx)]
+                        (.pushPose poseStack)
+                        (.translate poseStack x0 y0 0.0)
+                        (.mulPose poseStack (org.joml.Quaternionf. (org.joml.AxisAngle4f. (float angle) 0.0 0.0 1.0)))
+                        (RenderSystem/setShaderColor (float (/ (bit-and (bit-shift-right color 16) 0xFF) 255.0))
+                                                     (float (/ (bit-and (bit-shift-right color 8) 0xFF) 255.0))
+                                                     (float (/ (bit-and color 0xFF) 255.0))
+                                                     (float (/ (bit-and (bit-shift-right color 24) 0xFF) 255.0)))
+                        (RenderSystem/enableBlend)
+                        (RenderSystem/defaultBlendFunc)
+                        (.blit graphics tex 0 (int (- half-w)) 0 0 (int norm) (int line-w) (int norm) (int line-w))
+                        (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0)
+                        (.popPose poseStack))))
     ;; --- Shader-based progress ring ---
     :shader-progress-ring
     (let [^ShaderInstance si (shader-utils/resolve-shader (:shader-id op))
           tex-0-key (:texture-0 op)
           tex-1-key (:texture-1 op)
           loc-0 (if (keyword? tex-0-key) (get-skill-tree-texture tex-0-key)
-                    (some-> tex-0-key normalize-texture-path ResourceLocation/tryParse))
+                    (path->resource-location tex-0-key))
           loc-1 (when tex-1-key
                   (if (keyword? tex-1-key) (get-skill-tree-texture tex-1-key)
-                      (some-> tex-1-key normalize-texture-path ResourceLocation/tryParse)))
+                      (path->resource-location tex-1-key)))
           progress (float (or (:progress op) 0.0))]
       (if si
         (when loc-0

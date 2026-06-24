@@ -109,9 +109,9 @@
                        locked? (not (:pass? (check-learn-conditions tid ad (:level ad) developer-type)))]
                    (for [{sid :skill-id me :min-exp} (:prerequisites skill)
                          :let [{fx :x fy :y} (get by-id sid)] :when fx]
-                     {:from-x (+ fx 10) :from-y (+ fy 10) :to-x (+ x 10) :to-y (+ y 10)
+                     {:from-x (+ fx 8) :from-y (+ fy 8) :to-x (+ x 8) :to-y (+ y 8)
                       :satisfied? (>= (or (adata/get-skill-exp ad sid) 0.0) (double me))
-                      :locked? locked?})))
+                      :locked? locked? :m-alpha (cond (adata/is-learned? ad sid) 1.0 :else 0.25)})))
                skill-positions))))))
 
 ;; ============================================================================
@@ -192,8 +192,8 @@
 (defn handle-screen-click! [owner mx my]
   (let [st (screen-state-snapshot owner) sel (:selected-skill st)]
     (if sel
-      (let [dx 220 dy 70 dw 190 dh 130]
-        (cond (and (>= mx (+ dx 40)) (<= mx (+ dx 90)) (>= my (+ dy 100)) (<= my (+ dy 118)))
+      (let [dx 220 dy 70 dw 200 dh 145]
+        (cond (and (>= mx (+ dx 50)) (<= mx (+ dx 110)) (>= my (+ dy 110)) (<= my (+ dy 130)))
               (do (on-skill-learn-click owner sel) true)
               (and (>= mx dx) (<= mx (+ dx dw)) (>= my dy) (<= my (+ dy dh)))
               (do (swap-screen-state! owner assoc :selected-skill nil) true)
@@ -236,14 +236,16 @@
 ;; Draw Ops — Line connections (rotated-quad)
 ;; ============================================================================
 (defn- build-line-ops [connections anim-time]
-  (mapcat (fn [{:keys [from-x from-y to-x to-y satisfied? locked?]}]
-            (let [color (cond locked? 0x60444444 satisfied? 0xB4A7FF7A :else 0x80999999)
+  (mapcat (fn [{:keys [from-x from-y to-x to-y satisfied? locked? m-alpha]}]
+            (let [line-alpha (* (or m-alpha 0.7) (if satisfied? 1.0 0.4))
+                  alpha-byte (int (* 255.0 (clamp01 line-alpha)))
+                  color (bit-or (bit-shift-left alpha-byte 24) 0xFFFFFF)
                   dx (- to-x from-x) dy (- to-y from-y)
                   norm (Math/sqrt (+ (* dx dx) (* dy dy)))]
               (when (pos? norm)
                 (let [ndx (/ dx norm) ndy (/ dy norm)
-                      x0 (+ from-x (* ndx 8.0)) y0 (+ from-y (* ndy 8.0))
-                      x1 (- to-x (* ndx 8.0)) y1 (- to-y (* ndy 8.0))]
+                      x0 (+ from-x (* ndx 12.2)) y0 (+ from-y (* ndy 12.2))
+                      x1 (- to-x (* ndx 12.2)) y1 (- to-y (* ndy 12.2))]
                   [{:kind :rotated-quad :x0 x0 :y0 y0 :x1 x1 :y1 y1
                     :line-width 5.5 :color color}]))))
           connections))
@@ -281,12 +283,12 @@
          {:kind :icon-or-fill :texture skill-icon :x (int align) :y (int align) :w (int icon-size) :h (int icon-size) :fallback-color 0xFF2A2A2A}
          {:kind :shader-progress-ring :shader-id :mono :texture-0 skill-icon :progress 0.0
           :x (int align) :y (int align) :w (int icon-size) :h (int icon-size)})
+       {:kind :alpha-color :r 1.0 :g 1.0 :b 1.0 :a 1.0}
        (when learned
          {:kind :shader-progress-ring :shader-id :skill-progbar
-          :texture-0 :skill-view-outline :texture-1 :skill-mask
+          :texture-0 :skill-outline :texture-1 :skill-mask
           :progress (float (* progress-blend exp))
           :x (int prog-align) :y (int prog-align) :w (int prog-size) :h (int prog-size)})
-       {:kind :alpha-color :r 1.0 :g 1.0 :b 1.0 :a 1.0}
        {:kind :depth-mask :write? false}
        {:kind :disable-depth}
        {:kind :pop-pose}
@@ -296,31 +298,41 @@
 ;; ============================================================================
 ;; Detail popup
 ;; ============================================================================
-(defn- detail-popup-ops [node]
+(defn- detail-popup-ops [node anim-time]
   (let [dx 220 dy 70 dw 200 dh 145
         {:keys [skill-name skill-icon skill-level skill-description learned can-learn exp]} node
-        ix (+ dx 10) iy (+ dy 8) isz 32]
+        ;; Fade animation: 0.2s for cover, slightly delayed for panel
+        cover-alpha (* 0.7 (clamp01 (* anim-time 5.0)))
+        panel-alpha (clamp01 (* (- anim-time 0.05) 5.0))
+        ix (+ dx 10) iy (+ dy 8) isz 32
+        progress-at-1? (>= exp 0.999)]
     (flatten
-      [{:kind :fill :x dx :y dy :w dw :h dh :color 0xD0101010}
-       {:kind :textured-quad :texture :skill-back :x ix :y iy :w isz :h isz}
-       {:kind :icon-or-fill :texture skill-icon :x (+ ix 4) :y (+ iy 4) :w 24 :h 24 :fallback-color 0xFF2A2A2A}
-       (when learned
-         {:kind :shader-progress-ring :shader-id :skill-progbar
-          :texture-0 :skill-view-outline :texture-1 :skill-mask :progress (float exp)
-          :x ix :y iy :w isz :h isz})
-       {:kind :text :x (+ dx 54) :y (+ dy 8) :text (str skill-name " (LV " skill-level ")")
-        :font :ac-bold :font-size 11 :align :left :color 0xFFFFFFFF}
-       (if learned
-         {:kind :text :x (+ dx 8) :y (+ dy 46) :text (format "EXP: %d%%" (int (* 100.0 exp)))
-          :font :ac-normal :font-size 9 :align :left :color 0xFFa1e1ff}
-         {:kind :text :x (+ dx 8) :y (+ dy 46) :text "Not learned"
-          :font :ac-normal :font-size 9 :align :left :color 0xFFFF5555})
-       {:kind :text :x (+ dx 8) :y (+ dy 60) :text (str skill-description)
-        :font :ac-normal :font-size 8 :align :left :color 0xFFDDDDDD}
-       (when (and (not learned) can-learn)
-         [{:kind :fill :x (+ dx 50) :y (+ dy 110) :w 60 :h 20 :color 0xAA4488FF}
-          {:kind :text :x (+ dx 60) :y (+ dy 113) :text "LEARN"
-           :font :ac-bold :font-size 9 :align :left :color 0xFFFFFFFF}])])))
+      (concat
+        ;; Dark full-screen cover overlay (matching upstream Cover component)
+        [{:kind :fill :x 0 :y 0 :w 420 :h 260 :color (bit-or (bit-shift-left (int (* 255.0 cover-alpha)) 24) 0x000000)}]
+        (when (>= panel-alpha 0.01)
+          [{:kind :fill :x dx :y dy :w dw :h dh :color (bit-or (bit-shift-left (int (* 255.0 panel-alpha)) 24) 0x101010)}
+           {:kind :textured-quad :texture :skill-back :x ix :y iy :w isz :h isz}
+           {:kind :icon-or-fill :texture skill-icon :x (+ ix 4) :y (+ iy 4) :w 24 :h 24 :fallback-color 0xFF2A2A2A}
+           (when learned
+             {:kind :shader-progress-ring :shader-id :skill-progbar
+              :texture-0 (if progress-at-1? :skill-view-outline-glow :skill-view-outline)
+              :texture-1 :skill-mask :progress (float exp)
+              :x ix :y iy :w isz :h isz})
+           {:kind :text :x (+ dx 54) :y (+ dy 9) :text (str skill-name " (LV " skill-level ")")
+            :font :ac-bold :font-size 11 :align :left :color 0xFFFFFFFF}
+           (if learned
+             {:kind :text :x (+ dx 8) :y (+ dy 46) :text (format "EXP: %d%%" (int (* 100.0 exp)))
+              :font :ac-normal :font-size 9 :align :left :color 0xFFa1e1ff}
+             {:kind :text :x (+ dx 8) :y (+ dy 46) :text "Not learned"
+              :font :ac-normal :font-size 9 :align :left :color 0xFFFF5555})
+           {:kind :text :x (+ dx 8) :y (+ dy 60) :text (str skill-description)
+            :font :ac-normal :font-size 8 :align :left :color 0xFFDDDDDD}
+           (when (and (not learned) can-learn)
+             ;; Textured LEARN button matching upstream newButton()
+             [{:kind :textured-quad :texture :tex-button :x (+ dx 45) :y (+ dy 108) :w 32 :h 16}
+              {:kind :text :x (+ dx 52) :y (+ dy 110) :text "LEARN"
+               :font :ac-bold :font-size 9 :align :left :color 0xFFFFFFFF}])])))))
 
 ;; ============================================================================
 ;; Main draw ops builder
@@ -337,7 +349,9 @@
           w 420 h 260
           bg-dx (* (- (/ mx (max 1.0 (double w))) 0.5) 0.01)
           bg-dy (* (- (/ my (max 1.0 (double h))) 0.5) 0.01)
-          bg-u (+ 0.5 bg-dx) bg-v (+ 0.5 bg-dy)
+          scale-fn (fn [x] (+ (* (- x 0.5) back-scale-inv) 0.5))
+          bg-u (scale-fn (+ 0.5 bg-dx))
+          bg-v (scale-fn (+ 0.5 bg-dy))
           bg-ops [{:kind :raw-rect-uv :texture :bg-area :x 0 :y 0 :w w :h h
                    :min-u (float bg-u) :max-u (float (+ bg-u back-scale-inv))
                    :min-v (float bg-v) :max-v (float (+ bg-v back-scale-inv))}]
@@ -359,9 +373,14 @@
                                      :to-y (lerp (:from-y %) (:to-y %) line-blend)) raw-conns)
           connection-ops (build-line-ops anim-conns anim)
 
+          ;; Parallax offsets for skill nodes (upstream: max_du_skills = 10)
+          node-dx (* (- (/ (:mouse-x st 0) (max 1.0 (double 420))) 0.5) 10.0)
+          node-dy (* (- (/ (:mouse-y st 0) (max 1.0 (double 260))) 0.5) 10.0)
           hid (:hovered-skill-id st)
           hst (:hover-start-time st)
-          nodes (mapcat #(node-ops % anim hid hst) (or (:skill-nodes rd) []))
+          raw-nodes (or (:skill-nodes rd) [])
+          shifted-nodes (mapv #(assoc % :x (+ (:x %) node-dx) :y (+ (:y %) node-dy)) raw-nodes)
+          nodes (mapcat #(node-ops % anim hid hst) shifted-nodes)
 
           hover-id (:hover-skill rd)
           hover-node (when hover-id (first (filter #(= (:skill-id %) hover-id) (:skill-nodes rd))))
@@ -375,7 +394,7 @@
 
           sel-id (:selected-skill st)
           sel-node (when sel-id (first (filter #(= (:skill-id %) sel-id) (:skill-nodes rd))))
-          detail-ops (when sel-node (detail-popup-ops sel-node))]
+          detail-ops (when sel-node (detail-popup-ops sel-node anim))]
 
       (vec (concat bg-ops header level-up connection-ops nodes tooltip detail-ops)))
     []))
