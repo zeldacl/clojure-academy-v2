@@ -50,8 +50,9 @@
         pages [inv-page]
         info (fn [info-area]
                (let [y0 (tech-ui/add-sepline info-area "Info" 0)
-                     y1 (tech-ui/add-property info-area "fan" (fn [] (if @(:fan-installed container) "YES" "NO")) y0)]
-                 (tech-ui/add-property info-area "obstacle" (fn [] (if @(:no-obstacle container) "CLEAR" "BLOCKED")) y1)))]
+                     y1 (tech-ui/add-property info-area "altitude" (fn [] (str @(:altitude container))) y0)
+                     y2 (tech-ui/add-property info-area "fan" (fn [] (if @(:fan-installed container) "YES" "NO")) y1)]
+                 (tech-ui/add-property info-area "obstacle" (fn [] (if @(:no-obstacle container) "CLEAR" "BLOCKED")) y2)))]
     (tech-ui/create-tech-screen-container
       {:pages pages
        :container container
@@ -86,8 +87,9 @@
         info (fn [info-area]
                (let [y0 (tech-ui/add-histogram info-area [(tech-ui/hist-buffer (fn [] (double @(:energy container))) (max-e))] 0)
                      y1 (tech-ui/add-sepline info-area "Info" y0)
-                     y2 (tech-ui/add-property info-area "gen_speed" (fn [] (format "%.2fIF/T" (double @(:gen-speed container)))) y1)]
-                 (tech-ui/add-property info-area "status" (fn [] @(:status container)) y2)))
+                     y2 (tech-ui/add-property info-area "altitude" (fn [] (str @(:altitude container))) y1)
+                     y3 (tech-ui/add-property info-area "gen_speed" (fn [] (format "%.2fIF/T" (double @(:gen-speed container)))) y2)]
+                 (tech-ui/add-property info-area "status" (fn [] @(:status container)) y3)))
         ;; Structure completeness display — icon opacity changes matching AcademyCraft
         page-widget (:window inv-page)
         ui-block (some-> page-widget (cgui-core/find-widget "ui_block"))]
