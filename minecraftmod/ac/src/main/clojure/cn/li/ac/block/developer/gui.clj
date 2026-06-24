@@ -259,9 +259,9 @@
                    (when (= 256 key-code)  ;; GLFW_KEY_ESCAPE
                      (let [stack (:cover-end-fns @(:metadata root))
                            legacy-fn (:developer-cover-end-fn @(:metadata root))]
-                       (if-let [end-fns (seq stack)]
-                         (let [top-fn (peek end-fns)]
-                           (swap! (:metadata root) assoc :cover-end-fns (pop end-fns))
+                       (if (seq stack)
+                         (let [top-fn (peek stack)]
+                           (swap! (:metadata root) assoc :cover-end-fns (pop stack))
                            (when top-fn (top-fn)) true)
                          (when legacy-fn (legacy-fn) true)))))]
     (-> base

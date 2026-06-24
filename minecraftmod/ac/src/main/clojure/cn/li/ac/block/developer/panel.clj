@@ -283,7 +283,7 @@
     (let [skill-icon-path (skill-query/get-skill-icon-path skill-id)]
       (when skill-icon-path
         (let [icon-w (cgui-core/create-widget :pos [80 42] :size [24 24])
-              icon-path (modid/namespaced-path (str/replace (subs skill-icon-path (count "textures/")) ".png" ""))]
+              icon-path (modid/asset-path "textures" (subs skill-icon-path (count "textures/")))]
           (comp/add-component! icon-w (comp/draw-texture icon-path 0xFFFFFFFF))
           (cgui-core/add-widget! panel icon-w))))
     ;; Learn button + dev state display (btn in scope for hide during dev)
