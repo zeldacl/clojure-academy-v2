@@ -1,9 +1,10 @@
 (ns cn.li.ac.content.ability.electromaster.thunder-bolt-fx
-	"Client FX for Thunder Bolt: electric arc effects."
+	"Client FX for Thunder Bolt: zigzag electric arc effects."
 	(:require [cn.li.ac.ability.client.effects.sounds :as client-sounds]
 						[cn.li.ac.ability.client.fx-spec :as fx-spec]
 						[cn.li.ac.ability.client.level-effects :as level-effects]
-						[cn.li.ac.ability.client.render-util :as ru]))
+						[cn.li.ac.ability.client.render-util :as ru]
+						[cn.li.ac.ability.client.arc-patterns :as arc]))
 
 (def ^:private thunder-bolt-effect-id :thunder-bolt-strike)
 (def ^:private main-arc-life 20)
@@ -83,31 +84,16 @@
 					 (into {})))))
 
 (defn- arc-ops [cam-pos {:keys [start end ttl max-ttl is-aoe?]}]
-	(let [life (/ (double ttl) (double (max 1 max-ttl)))
-				width (if is-aoe?
-								(* 0.04 (+ 0.4 (* 0.6 life)))
-								(* 0.07 (+ 0.5 (* 0.5 life))))
-				core-width (* width 0.4)
-				outer-a (ru/with-alpha {:r 200 :g 230 :b 255} (int (+ 40 (* 180 life))))
-				inner-a (ru/with-alpha {:r 255 :g 255 :b 255} (int (+ 60 (* 180 life))))]
-		(ru/billboard-beam-ops cam-pos start end
-			{:width width
-			 :core-width core-width
-			 :outer-color outer-a
-			 :inner-color inner-a
-			 :line-color (ru/with-alpha {:r 160 :g 220 :b 255} (int (+ 60 (* 140 life))))
-				 :jitter-amount  (if is-aoe? (* 0.03 life) (* 0.08 (+ 0.3 (* 0.7 life))))
-				 :flicker-threshold (if is-aoe? (+ 0.5 (* 0.5 (rand))) (+ 0.3 (* 0.7 (rand))))
-				 :fork-count     (if is-aoe? 1 3)
-				 :fork-length    0.45
-				 :fork-angle     0.6
-				 :fork-width-frac 0.4})))
+  (ru/zigzag-arc-ops cam-pos start end
+    {:arc-pattern (if is-aoe? :aoe :strong)
+     :life-ratio (/ (double ttl) (double (max 1 max-ttl)))}))
 
 (defn- build-plan [camera-pos _hand-center-pos _tick]
-	(let [current-arcs (all-arcs)
-				plan (mapcat #(arc-ops camera-pos %) current-arcs)]
-		(when (seq plan)
-			{:ops (vec plan)})))
+  (arc/tick-wiggle-phase!)
+  (let [current-arcs (all-arcs)
+        plan (mapcat #(arc-ops camera-pos %) current-arcs)]
+    (when (seq plan)
+      {:ops (vec plan)})))
 
 (defn init!
 	[]
