@@ -21,7 +21,7 @@
   Returns device info (type, SSID, password) if found."
   [_payload player]
   (try
-    (let [hit (entity/player-raytrace-block player 5.0 false)]
+    (let [hit (entity/player-raytrace-block player 4.0 false)]
       (if hit
         (let [world (entity/player-get-level player)
               hit-bp (pos/create-block-pos (:x (:hit-pos hit))
@@ -74,7 +74,7 @@
         ;; Simplified: attempt to update the first network/device found
         ;; via ray-trace. In a full implementation, device identity would
         ;; be preserved from the scan phase.
-        (let [hit (entity/player-raytrace-block player 5.0 false)]
+        (let [hit (entity/player-raytrace-block player 4.0 false)]
           (if hit
             (let [world (entity/player-get-level player)
                   hit-bp (pos/create-block-pos (:x (:hit-pos hit))

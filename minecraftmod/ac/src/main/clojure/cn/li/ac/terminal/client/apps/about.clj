@@ -181,7 +181,20 @@
                             :color color :align align
                             :font (when (:bold? item) :ac-bold)))
             (when (:url item)
-              (events/on-left-click w (fn [_] (open-url! (:url item)))))
+              (events/on-left-click w (fn [_] (open-url! (:url item))))
+              ;; Link hover: change color on mouse over (matching original hover highlight)
+              (let [hover? (atom false)]
+                (events/on-frame w
+                  (fn [evt]
+                    (let [mx (:x evt 0) my (:y evt 0)
+                          [wx wy] (cgui-core/get-pos w)
+                          [ww wh] (cgui-core/get-size w)
+                          inside? (and (>= mx wx) (< mx (+ wx ww))
+                                      (>= my wy) (< my (+ wy wh)))]
+                      (when (not= inside? @hover?)
+                        (reset! hover? inside?)
+                        (comp/set-text-color! (comp/get-textbox-component w)
+                          (if inside? 0xFF8ECBFF 0xFF5BB4FF))))))))
             (cgui-core/add-widget! scroll-area w)))))))
 
 ;; --- Main UI ---
@@ -218,6 +231,9 @@
                 58.0))
             (update-tab-display! root :donate)
             (refresh-scroll-area! root current-tab drag-progress data)))))
+    ;; Clip scroll_area content (matching original GL11 depth-test mask clipping)
+    (when-let [sa (cgui-core/find-widget root "area/scroll_area")]
+      (swap! (:metadata sa) assoc :clip-children? true))
     ;; Drag bar — update progress on drag
     (when-let [db-w (cgui-core/find-widget root "area/drag_bar")]
       (events/on-drag db-w
@@ -241,6 +257,20 @@
               (let [bar-y (+ 58.0 (* new-progress (- 530.0 58.0)))]
                 (cgui-core/set-pos! db-w
                   (first (cgui-core/get-pos db-w)) bar-y)))))))
+    ;; Mouse wheel on scroll_area (global scroll, matching original handleMouseInput)
+    (when-let [sa (cgui-core/find-widget root "area/scroll_area")]
+      (events/on-mouse-scroll sa
+        (fn [evt]
+          (let [delta (* (:delta-y evt) 0.0002)
+                new-progress (max 0.0 (min 1.0 (- @drag-progress delta)))]
+            (when (not= @drag-progress new-progress)
+              (reset! drag-progress new-progress)
+              (when (= :credits @current-tab)
+                (refresh-scroll-area! root current-tab drag-progress data))
+              (when-let [db-w (cgui-core/find-widget root "area/drag_bar")]
+                (cgui-core/set-pos! db-w
+                  (first (cgui-core/get-pos db-w))
+                  (+ 58.0 (* new-progress (- 530.0 58.0))))))))))
     ;; Initial render
     (update-tab-display! root :credits)
     (refresh-scroll-area! root current-tab drag-progress data)

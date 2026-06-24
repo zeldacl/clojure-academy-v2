@@ -11,7 +11,8 @@
     :name "Settings"
     :icon "my_mod:textures/guis/apps/settings/icon.png"
     :description "Configure game settings"
-    :category :system}
+    :category :system
+    :pre-installed? true}
    {:id :tutorial
     :name "MisakaCloud"
     :icon "my_mod:textures/guis/apps/tutorial/icon.png"
@@ -19,7 +20,8 @@
             "my_mod:textures/guis/apps/tutorial/icon_1.png"
             "my_mod:textures/guis/apps/tutorial/icon_2.png"]
     :description "Learn how to use your abilities"
-    :category :help}
+    :category :help
+    :pre-installed? true}
    {:id :freq-transmitter
     :name "Frequency Transmitter"
     :icon "my_mod:textures/guis/apps/freq_transmitter/icon.png"
@@ -34,7 +36,8 @@
     :name "About"
     :icon "my_mod:textures/guis/apps/about/icon.png"
     :description "Credits and information"
-    :category :help}])
+    :category :help
+    :pre-installed? true}])
 
 (def ^:private apps-by-id-index
   (into {} (map (juxt :id identity) apps)))

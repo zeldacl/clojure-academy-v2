@@ -54,9 +54,15 @@
 (defn handle-get-state
   [_payload player]
   (try
-    (let [terminal-data (player/state player)]
-      {:terminal-installed? (:terminal-installed? terminal-data)
-       :installed-apps (vec (:installed-apps (model/normalize-state terminal-data)))
+    (let [terminal-data (player/state player)
+          normalized (model/normalize-state terminal-data)
+          explicit-installed (:installed-apps normalized)
+          ;; Include pre-installed apps (matching original isPreInstalled)
+          pre-installed (set (filter #(:pre-installed? (catalog/app-by-id %))
+                                     (catalog/app-ids)))
+          all-installed (into pre-installed explicit-installed)]
+      {:terminal-installed? (:terminal-installed? normalized)
+       :installed-apps (vec all-installed)
        :available-apps (catalog/app-ids)
        :app-count (catalog/app-count)})
     (catch Exception e

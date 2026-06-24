@@ -15,6 +15,7 @@
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.mcmod.gui.events :as events]
             [cn.li.mcmod.gui.xml-parser :as xml-parser]
+            [cn.li.mcmod.i18n :as i18n]
             [cn.li.mcmod.util.log :as log]))
 
 ;; --- Texture paths ---
@@ -68,7 +69,8 @@
         box-w  (cgui-core/find-widget row "box")]
     ;; Set label — matches original I18n.format("ac.settings.prop." + id)
     (when text-w
-      (comp/set-text! (comp/get-textbox-component text-w) (name key)))
+      (comp/set-text! (comp/get-textbox-component text-w)
+                      (or (i18n/translate (str "ac.settings.prop." (name key))) (name key))))
     ;; Set initial checkbox texture
     (let [update-tex! (fn [checked?]
                         (when box-w
@@ -108,6 +110,48 @@
           (comp/get-widget-component list-w :element-list)
           (build-checkbox-row doc p))))
     (cgui-core/add-widget! area list-w)
+    ;; ---- Key binding editor (matching original PropertyElements.KEY / t_key template) ----
+    (when-let [key-row (cgui-core/copy-widget (xml-parser/get-widget doc "t_key"))]
+      (let [recording? (atom false)
+            current-key (atom "LMENU")
+            text-w (cgui-core/find-widget key-row "text")
+            box-w  (cgui-core/find-widget key-row "box")]
+        (when text-w
+          (comp/set-text! (comp/get-textbox-component text-w) "Open Terminal"))
+        (when box-w
+          (comp/set-text! (comp/get-textbox-component box-w) @current-key)
+          (events/on-left-click box-w
+            (fn [_]
+              (reset! recording? true)
+              (comp/set-text! (comp/get-textbox-component box-w) "PRESS")
+              (events/on-key-press box-w
+                (fn key-capture [evt]
+                  (when @recording?
+                    (reset! recording? false)
+                    (let [key-name (or (:key-name evt)
+                                       (str "KEY_" (:keyCode evt)))]
+                      (comp/set-text! (comp/get-textbox-component box-w) key-name)
+                      (reset! current-key key-name)
+                      (events/unlisten! box-w :key-press key-capture))))))))
+        (comp/list-add!
+          (comp/get-widget-component list-w :element-list)
+          key-row)))
+    ;; ---- Callback button (matching original PropertyElements.CALLBACK / t_callback) ----
+    (when-let [cb-row (cgui-core/copy-widget (xml-parser/get-widget doc "t_callback"))]
+      (let [text-w (cgui-core/find-widget cb-row "text")
+            box-w  (cgui-core/find-widget cb-row "box")]
+        (when text-w
+          (comp/set-text! (comp/get-textbox-component text-w) "Restore Defaults"))
+        (when box-w
+          (comp/set-text! (comp/get-textbox-component box-w) "Reset")
+          (events/on-left-click box-w
+            (fn [_]
+              (doseq [p props]
+                (persist-config-value! (:domain p) (:key p) false))
+              (log/info "Settings: restored defaults"))))
+        (comp/list-add!
+          (comp/get-widget-component list-w :element-list)
+          cb-row)))
     ;; Wire scrollbar → element-list progress
     ;; The scrollbar has a drag-bar component; on-drag moves the bar,
     ;; and we sync element-list progress proportionally.
