@@ -16,6 +16,7 @@
             [cn.li.ac.block.metal-former.recipes :as recipes]
             [cn.li.ac.block.metal-former.schema :as former-schema]
             [cn.li.ac.wireless.gui.container.common :as common]
+            [cn.li.ac.wireless.gui.tab :as wireless-tab]
             [cn.li.mcmod.gui.container.action-payload :as action-payload]
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.ac.wireless.gui.container.move :as move-common]
@@ -113,12 +114,22 @@
             (comp/set-progress! bar (max 0.0 (min 1.0 progress)))))))))
 
 (defn- bind-mode-icon!
+  "Update mode icon texture + always show mode name label next to icon.
+  Matching original GuiMetalFormer drawTextBox(mode.toString, 6, -10) on hover;
+  CGUI widgets are cheaper than raw GL text, so we always display the label."
   [inv-window container]
   (when-let [widget (cgui-core/find-widget inv-window "icon_mode")]
     (when-let [dt (comp/get-drawtexture-component widget)]
-      (events/on-frame widget
-        (fn [_]
-          (comp/set-texture! dt (recipes/mode->icon-texture @(:mode container))))))))
+      ;; Mode name label — always visible next to icon (matching original tooltip location)
+      (let [label (cgui-core/create-widget :pos [6 -12] :size [56 10])
+            tb (comp/text-box :text "" :font :ac-normal :font-size 10
+                              :align :center :color 0xAAFFFFFF)]
+        (comp/add-component! label tb)
+        (cgui-core/add-widget! widget label)
+        (events/on-frame widget
+          (fn [_]
+            (comp/set-texture! dt (recipes/mode->icon-texture @(:mode container)))
+            (comp/set-text! tb (str/upper-case (recipes/mode->string @(:mode container))))))))))
 
 (defn- bind-buttons!
   [inv-window container]
@@ -135,7 +146,11 @@
   [container minecraft-container _player]
   (let [inv-page (tech-ui/create-rework-page "guis/rework/page_metalformer.xml")
         inv-window (:window inv-page)
-      pages [inv-page]
+        ;; Wireless receiver tab (matching original WirelessPage.userPage(tile))
+        wireless-window (wireless-tab/create-wireless-panel {:role :receiver
+                                                              :container container
+                                                              :menu minecraft-container})
+        pages [inv-page {:id "wireless" :window wireless-window}]
         max-e (fn [] (max 1.0 (double @(:max-energy container))))]
     (tech-ui/create-tech-screen-container
       {:pages pages
