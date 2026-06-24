@@ -255,6 +255,7 @@
   :name-key "ability.skill.teleporter.mark_teleport"
   :description-key "ability.skill.teleporter.mark_teleport.desc"
   :icon "textures/abilities/teleporter/skills/mark_teleport.png"
+  :ui-position [70 16]
   :level 2
   :controllable? true
   :ctrl-id :mark-teleport

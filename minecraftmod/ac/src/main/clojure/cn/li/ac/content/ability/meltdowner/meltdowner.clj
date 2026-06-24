@@ -233,7 +233,7 @@
   :name-key        "ability.skill.meltdowner.meltdowner"
   :description-key "ability.skill.meltdowner.meltdowner.desc"
   :icon            "textures/abilities/meltdowner/skills/meltdowner.png"
-  :ui-position     [128 80]
+  :ui-position     [115 40]
   :level           3
   :controllable?   true
   :ctrl-id         :meltdowner

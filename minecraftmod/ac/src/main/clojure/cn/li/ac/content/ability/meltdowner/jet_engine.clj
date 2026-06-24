@@ -285,7 +285,7 @@
   :name-key "ability.skill.meltdowner.jet_engine"
   :description-key "ability.skill.meltdowner.jet_engine.desc"
   :icon "textures/abilities/meltdowner/skills/jet_engine.png"
-  :ui-position [120 240]
+  :ui-position [170 32]
   :level 4
   :controllable? true
   :ctrl-id :jet-engine

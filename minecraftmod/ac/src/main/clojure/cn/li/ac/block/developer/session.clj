@@ -66,27 +66,41 @@
 (defn- err [reason] {:ok? false :reason reason})
 
 (defn- start-category-level-up [state dev-type ability-data cat-id level]
-  (let [skills (skill-query/get-controllable-skills-at-level cat-id level)
-        cat-rate (category/get-prog-incr-rate cat-id)
-        can? (learning-rules/can-level-up? ability-data skills cat-rate
-                                           (cfg/prog-incr-rate) (cfg/max-level))]
-    (if-not can?
-      (err "not-enough-progress")
-      (let [{:keys [develop-data error]}
-            (develop-rules/start-level-up (dev-model/new-develop-data) dev-type level)]
-        (if error (err (name error)) (ok-session state dev-type :level-up {} develop-data))))))
+  "Start level-up development. Validation happens at completion time
+  (matching original AcademyCraft DevelopData.tick which calls
+  type.validate() on the last stim tick, not at session start)."
+  (let [{:keys [develop-data error]}
+        (develop-rules/start-level-up (dev-model/new-develop-data) dev-type level)]
+    (if error
+      (err (name error))
+      (ok-session state dev-type :level-up
+                  {:cat-id cat-id :level level}
+                  develop-data)))))
 
 (defn- start-awaken-action [state player dev-type]
-  (if-let [{:keys [item-id category]} (find-induction-factor player)]
-    (let [{:keys [develop-data error]}
-          (develop-rules/start-level-up (dev-model/new-develop-data) dev-type 0)]
-      (cond
-        error (err (name error))
-        (not (entity/player-consume-item-by-id! player item-id 1)) (err "missing-induction-factor")
-        :else (ok-session state dev-type :awaken
-                          {:target-category category :induction-item-id item-id}
-                          develop-data)))
-    (err "missing-induction-factor")))
+  "Matching original AcademyCraft DevelopActionLevel.chooseCategory():
+   - If player has induction factor → consume it and use that category
+   - Otherwise → assign a random category (induction factor is OPTIONAL)"
+  (let [{:keys [develop-data error]}
+        (develop-rules/start-level-up (dev-model/new-develop-data) dev-type 0)]
+    (if error
+      (err (name error))
+      (if-let [{:keys [item-id category]} (find-induction-factor player)]
+        ;; Player has induction factor → consume it and use that category
+        (if (entity/player-consume-item-by-id! player item-id 1)
+          (ok-session state dev-type :awaken
+                      {:target-category category :induction-item-id item-id}
+                      develop-data)
+          (err "missing-induction-factor"))
+        ;; No induction factor → random category (matching original random awakening)
+        (let [categories (category/get-all-categories)
+              random-cat (when (seq categories)
+                           (nth categories (rand-int (count categories))))]
+          (if random-cat
+            (ok-session state dev-type :awaken
+                        {:target-category (:id random-cat) :random? true}
+                        develop-data)
+            (err "no-categories-available"))))))
 
 (defn- start-level-up-action [state player dev-type ability-data]
   (let [cat-id (:category-id ability-data)
@@ -113,6 +127,9 @@
         (err "unknown-skill")))))
 
 (defn- start-reset-action [state player dev-type ability-data]
+  "Pre-validate reset conditions. Items are consumed at COMPLETION time,
+  matching original AcademyCraft DevelopActionReset.onLearned() which
+  consumes items AFTER successful timed development."
   (let [cat-id (:category-id ability-data)
         level (int (:level ability-data 1))]
     (cond
@@ -121,20 +138,20 @@
       (not= special-items/magnetic-coil-item-id (entity/player-get-main-hand-item-id player)) (err "missing-magnetic-coil")
       :else
       (if-let [{:keys [item-id category]} (find-induction-factor player)]
-        (cond
-          (= category cat-id) (err "same-category")
-          :else
-          (let [{:keys [develop-data error]}
-                (develop-rules/start-level-up (dev-model/new-develop-data) dev-type level)]
-            (cond
-              error (err (name error))
-              (not (and (entity/player-consume-item-by-id! player item-id 1)
-                        (entity/player-consume-main-hand-item! player 1))) (err "missing-materials")
-              :else (ok-session state dev-type :reset
-                                {:target-category category
-                                 :new-level (max 1 (dec level))
-                                 :induction-item-id item-id}
-                                develop-data))))
+        (if (= category cat-id)
+          (err "same-category")
+          (let [max-stim (* level 10)  ;; reset-specific formula: level * 10 (matching original)]
+            (ok-session state dev-type :reset
+                        {:target-category category
+                         :new-level (max 1 (dec level))
+                         :induction-item-id item-id
+                         :player-uuid (uuid/player-uuid player)}
+                        (dev-model/start-develop
+                          (dev-model/new-develop-data) dev-type :reset
+                          {:target-category category
+                           :new-level (max 1 (dec level))
+                           :induction-item-id item-id}
+                          max-stim))))
         (err "missing-induction-factor")))))
 
 (defn validate-and-start
@@ -168,16 +185,52 @@
                   ticked develop-data
                   prog (dev-model/progress ticked)]
               (if (dev-model/done? ticked)
-                (assoc state
-                       :development-data ticked
-                       :development-progress 1.0
-                       :is-developing false
-                       :development-complete? true)
+                ;; Validate at completion (matching original AcademyCraft
+                ;; DevelopData.tick → type.validate() on last stim tick)
+                (let [ability-data (:ability-data (ability-state (some-> state :user-uuid identity)))
+                      valid? (case (:development-action state)
+                               :level-up
+                               (let [cat-id (:category-id ability-data)
+                                     skills (when cat-id
+                                              (skill-query/get-controllable-skills-at-level
+                                               cat-id (int (:level ability-data 1))))
+                                     cat-rate (when cat-id (category/get-prog-incr-rate cat-id))]
+                                 (or (not cat-id)  ;; awakening always succeeds
+                                     (learning-rules/can-level-up?
+                                      ability-data skills cat-rate
+                                      (cfg/prog-incr-rate) (cfg/max-level))))
+                               :learn-skill
+                               (let [skill-id (some-> (:development-payload state) :skill-id keyword)
+                                     skill-spec (when skill-id (skill-registry/get-skill skill-id))]
+                                 (if skill-spec
+                                   (:pass? (learning-rules/check-all-conditions
+                                            skill-spec ability-data
+                                            (int (:level ability-data 1))
+                                            (developer-type-from-state state)))
+                                   false))
+                               :awaken true   ;; always validated at start
+                               :reset
+                               ;; Re-validation deferred to run-completion-command!
+                               ;; (items consumed there, matching original onLearned timing)
+                               true
+                               true)]
+                  (if valid?
+                    (assoc state
+                           :development-data ticked
+                           :development-progress 1.0
+                           :is-developing false
+                           :development-complete? true)
+                    ;; Validation failed at completion → mark as failed
+                    (assoc state
+                           :development-data (dev-model/fail ticked)
+                           :development-progress (dev-model/progress ticked)
+                           :is-developing false
+                           :development-complete? false)))
                 (-> state
                     (assoc :development-data ticked :development-progress prog)
                     (update :energy - ept))))))))))
 
-(defn- run-completion-command! [player-uuid action payload session-id]
+(defn- run-completion-command! [player-uuid action payload session-id & [player]]
   (let [session-id (or session-id
                        (runtime-hooks/require-player-state-session-id "developer.session"))]
     (case action
@@ -195,20 +248,43 @@
          :skill-id (:skill-id payload)
          :check-conditions? false})
       :reset
-      (command-rt/run-command-in-session!
-        session-id player-uuid
-        {:command :change-category-with-level
-         :new-category (:target-category payload)
-         :new-level (:new-level payload)})
+      ;; Items consumed at COMPLETION time (matching original onLearned timing).
+      ;; Re-validate: magnetic coil in main hand + induction factor in inventory.
+      (if player
+        (let [item-id (:induction-item-id payload)
+              coil-ok? (= special-items/magnetic-coil-item-id
+                          (entity/player-get-main-hand-item-id player))
+              factor-ok? (and item-id
+                              (pos? (entity/player-count-item-by-id player item-id)))]
+          (if (and coil-ok? factor-ok?)
+            (do
+              (entity/player-consume-main-hand-item! player 1)
+              (entity/player-consume-item-by-id! player item-id 1)
+              (command-rt/run-command-in-session!
+                session-id player-uuid
+                {:command :change-category-with-level
+                 :new-category (:target-category payload)
+                 :new-level (:new-level payload)}))
+            nil))
+        ;; Fallback: no player reference, apply anyway (backward compat)
+        (command-rt/run-command-in-session!
+          session-id player-uuid
+          {:command :change-category-with-level
+           :new-category (:target-category payload)
+           :new-level (:new-level payload)}))
       nil)))
 
 (defn apply-completion!
-  [state]
-  (when (:development-complete? state)
-    (let [pid (str (:user-uuid state ""))]
-      (when-not (str/blank? pid)
-        (run-completion-command! pid
-                                 (:development-action state)
-                                 (:development-payload state)
-                                 (:player-state-session-id state)))))
+  "Apply completed development. For :reset action, consumes magnetic coil +
+  induction factor at completion time (matching original onLearned timing)."
+  ([state] (apply-completion! state nil))
+  ([state player]
+   (when (:development-complete? state)
+     (let [pid (str (:user-uuid state ""))]
+       (when-not (str/blank? pid)
+         (run-completion-command! pid
+                                  (:development-action state)
+                                  (:development-payload state)
+                                  (:player-state-session-id state)
+                                  player)))))
   nil)

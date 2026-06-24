@@ -135,6 +135,25 @@
 ;; Queries (Pure)
 ;; ============================================================================
 
+;; ============================================================================
+;; Skill Tree Visibility Filter
+;; ============================================================================
+
+(defn can-be-potentially-learned?
+  "Returns true if skill should be shown in the skill tree UI.
+   Matching original LearningHelper.canBePotentiallyLearned (SkillTree.scala:257-260).
+
+   A skill is visible when:
+   - Player level >= skill level, OR
+   - Skill is already learned, OR
+   - Parent is learned (or skill has no parent)"
+  [ability-data skill-spec]
+  (let [parent-id (some-> (:prerequisites skill-spec) first :skill-id)]
+    (or (>= (:level ability-data) (:level skill-spec))
+        (adata/is-learned? ability-data (:id skill-spec))
+        (nil? parent-id)
+        (adata/is-learned? ability-data parent-id))))
+
 (defn get-current-level
   "Get current ability level."
   [ability-data]

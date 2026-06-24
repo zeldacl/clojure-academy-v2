@@ -139,7 +139,8 @@
                        (if (>= lvl 5) 1.0 0.0))
                      0.0)
         can-upgrade? (and has-category? (< lvl 5)
-                          (developer/gte? developer-type (developer/min-for-level (inc lvl))))
+                          (developer/gte? developer-type (developer/min-for-level (inc lvl)))
+                          (if thresh (>= level-prog thresh) true))
         ability-name (if has-category? (i18n/translate (:name-key cat)) "N/A")
         icon-path (if has-category?
                     (or (some-> cat :icon texture-path-from-category-icon)
@@ -187,15 +188,57 @@
 ;; Overlay helpers
 ;; ============================================================================
 
-(defn- create-black-cover
-  "Create a semi-transparent black overlay widget that covers its parent.
-  Returns the cover widget."
-  [parent]
+(def ^:private cover-fade-duration 0.2)
+(def ^:private cover-max-alpha 0.7)
+
+(defn- time-secs [] (/ (double (System/currentTimeMillis)) 1000.0))
+
+(defn- create-fading-cover
+  "Create a black fading overlay widget matching original Cover component
+  (SkillTree.scala:897-927). Fade-in 0→0.7 alpha over 0.2s.
+  Returns {:cover <widget> :end-cover! <fn>}."
+  [parent root]
   (let [[pw ph] (cgui-core/get-size parent)
         cover (cgui-core/create-widget :pos [0 0] :size [pw ph])
-        _ (comp/add-component! cover
-            (comp/draw-texture nil 0x80000000))]  ;; black 50% alpha
-    cover))
+        _ (comp/add-component! cover (comp/draw-texture nil (comp/mono-blend 0.0 0.0)))
+        dt-comp (first (filter #(= (or (:kind %) (::kind %)) :drawtexture) @(:components cover)))
+        state (atom {:start-time (time-secs) :ended? false :end-start-time 0.0})]
+    ;; Fade animation frame handler
+    (events/on-frame cover
+      (fn [_]
+        (let [{:keys [start-time ended? end-start-time]} @state
+              t (time-secs)
+              elapsed (- t (if ended? end-start-time start-time))
+              src (min 1.0 (/ (max 0.0 elapsed) cover-fade-duration))
+              alpha (if ended?
+                      (* cover-max-alpha (- 1.0 src))
+                      (* cover-max-alpha src))]
+          ;; Update drawtexture color
+          (when dt-comp
+            (swap! (or (:state dt-comp) (atom {})) assoc :color (comp/mono-blend 0.0 (max 0.0 alpha))))
+          ;; Full-screen resize to match root
+          (let [[rw rh] (cgui-core/get-size root)]
+            (cgui-core/set-size! cover rw rh))
+          ;; Complete → remove
+          (when (and ended? (<= alpha 0.0))
+            (cgui-core/remove-widget! root cover)))))
+    ;; End function (call to start fade-out)
+    (let [end-fn (fn []
+                   (when-not (:ended? @state)
+                     (swap! state assoc :ended? true :end-start-time (time-secs))))]
+      {:cover cover :end-cover! end-fn})))
+
+(defn- register-overlay!
+  "Register overlay end-fn on root's overlay stack for ESC handling."
+  [root end-fn]
+  (let [stack (or (:cover-end-fns @(:metadata root)) [])]
+    (swap! (:metadata root) assoc :cover-end-fns (conj stack end-fn))))
+
+(defn- unregister-overlay!
+  "Remove overlay end-fn from root's overlay stack."
+  [root end-fn]
+  (swap! (:metadata root) update :cover-end-fns
+         (fn [stack] (vec (remove #{end-fn} (or stack []))))))
 
 (defn- create-centered-panel
   "Create a centered panel widget inside cover for overlay content."
@@ -212,70 +255,185 @@
 ;; ============================================================================
 
 (defn- create-skill-detail-overlay!
-  "Create overlay showing skill details + learn button."
+  "Create overlay matching original AcademyCraft skillViewArea (SkillTree.scala:633-776):
+  - 50x50 centered action icon with skill_back background + progress ring
+  - Learned mode: EXP display, description
+  - Unlearned mode: Not-learned text, condition icons, energy estimate, Learn button
+  - Pre-click validation: energy, level, conditions
+  - Development progress animation on action icon
+  - Rebuild after successful learning"
   [root container skill-id _developer-type]
-  (let [cover (create-black-cover root)
-        close-fn #(cgui-core/remove-widget! root cover)
-        panel (create-centered-panel cover 200 140)
-        bg (cgui-core/create-widget :pos [0 0] :size [200 140])
+  (let [{:keys [cover end-cover!]} (create-fading-cover root root)
+        close-fn (fn [should-rebuild?]
+                   (unregister-overlay! root end-cover!)
+                   (end-cover!)
+                   ;; Rebuild after successful learning (matching original RebuildEvent)
+                   (when should-rebuild?
+                     (when-let [area (cgui-core/find-widget root "parent_right/area")]
+                       (render-skill-tree-area! root area container
+                         (:player container)))))
+        _ (register-overlay! root end-cover!)
+        dev-type (or _developer-type :normal)
+        dev-spec (developer/developer-spec dev-type)
         skill-spec (skill/get-skill skill-id)
-        skill-name (or (:name skill-spec) (name skill-id) "Unknown")]
-    ;; Close overlay when clicking outside the panel (not on panel children)
+        skill-name (or (:name skill-spec) (:display-name skill-spec) (name skill-id) "Unknown")
+        skill-level (or (:level skill-spec) 1)
+        learned? (boolean (:learned? (skill-tree/build-skill-node-render-data
+                                       {:skill skill-spec :x 0 :y 0 :idx 0
+                                        :id skill-id :skill-id skill-id}
+                                       nil dev-type)))
+        ;; Energy estimation (matching original getEstimatedConsumption)
+        est-consumption (long (* (:cps dev-spec 700.0)
+                                (+ 3 (* skill-level skill-level 0.5))))
+        panel (create-centered-panel cover 200 170)
+        bg (cgui-core/create-widget :pos [0 0] :size [200 170])
+        ;; Shared state
+        should-rebuild (atom false)
+        can-close? (atom true)
+        dev-message (atom nil)
+        dev-progress-atom (atom 0.0)
+        skill-back-path (modid/namespaced-path "guis/developer/skill_back")
+        skill-outline-path (modid/namespaced-path "guis/developer/skill_view_outline")
+        skill-mask-path (modid/namespaced-path "guis/developer/skill_radial_mask")
+        skill-icon-path (some-> (skill-query/get-skill-icon-path skill-id)
+                                (modid/namespaced-path
+                                  (str/replace (subs % (count "textures/")) ".png" "")))]
+    ;; Close on click outside
     (events/on-left-click cover
       (fn [evt]
         (let [mx (int (:x evt 0)) my (int (:y evt 0))
               [px py] (cgui-core/get-pos panel)
               [pw ph] (cgui-core/get-size panel)]
-          (when (or (< mx px) (> mx (+ px pw))
-                    (< my py) (> my (+ py ph)))
-            (close-fn)))))
+          (when (or (< mx px) (> mx (+ px pw)) (< my py) (> my (+ py ph)))
+            (when @can-close? (close-fn @should-rebuild))))))
     ;; Background
-    (comp/add-component! bg (comp/draw-texture nil 0xC0202020))
+    (comp/add-component! bg (comp/draw-texture nil 0xD0101010))
     (cgui-core/add-widget! panel bg)
-    ;; Title
-    (let [title (cgui-core/create-widget :pos [10 8] :size [180 14])
-          tb (comp/text-box :text (str skill-name " (LV " (or (:level skill-spec) 1) ")") :font :ac-bold :font-size 12 :align :center :color 0xFFFFFFFF)]
-      (comp/add-component! title tb)
-      (cgui-core/add-widget! panel title))
-    ;; Description
-    (let [skill-desc (when (:description-key skill-spec) (i18n/translate (:description-key skill-spec)))
-          desc (cgui-core/create-widget :pos [10 24] :size [180 24])
-          tb (comp/text-box :text (or skill-desc "") :font :ac-normal :font-size 8 :align :center :color 0xFFDDDDDD)]
-      (comp/add-component! desc tb)
-      (cgui-core/add-widget! panel desc))
-    ;; Skill icon
-    (let [skill-icon-path (skill-query/get-skill-icon-path skill-id)]
+    ;; ---- Action icon: 50x50 centered (matching drawActionIcon) ----
+    (let [back-size 50 icon-sz 27 icon-align (/ (- back-size icon-sz) 2)
+          icon-x (+ 75 0)  ;; centered in 200-wide panel
+          icon-w (cgui-core/create-widget :pos [icon-x 8] :size [back-size back-size])]
+      (comp/add-component! icon-w (comp/draw-texture skill-back-path 0xFFFFFFFF))
+      ;; Skill icon on top
       (when skill-icon-path
-        (let [icon-w (cgui-core/create-widget :pos [80 48] :size [24 24])]
-          (comp/add-component! icon-w
-            (comp/draw-texture (modid/namespaced-path (str/replace (subs skill-icon-path (count "textures/")) ".png" "")) 0xFFFFFFFF))
-          (cgui-core/add-widget! panel icon-w))))
-    ;; Learn button
-    (let [btn (cgui-core/create-widget :pos [50 90] :size [100 20])
-          btn-bg (comp/draw-texture nil 0xFF226622)
-          btn-tb (comp/text-box :text "Learn" :font :ac-normal :font-size 9 :align :center :color 0xFFFFFFFF)]
-      (comp/add-component! btn btn-bg)
-      (comp/add-component! btn btn-tb)
-      (events/on-left-click btn
-        (fn [_]
-          (req-start-development! container :learn-skill {:skill-id (name skill-id)})
-          (close-fn)))
-      (cgui-core/add-widget! panel btn))
-    ;; Progress bar
-    (let [prog-w (cgui-core/create-widget :pos [10 115] :size [180 8])
-          prog-bar (comp/progress-bar :direction :right :progress 0.0
-                     :color-full 0xFF25c4ff :color-empty 0x40404040)]
-      (comp/add-component! prog-w prog-bar)
-      (cgui-core/set-visible! prog-w false)
-      (cgui-core/add-widget! panel prog-w)
-      (let [prog-comp (comp/get-widget-component prog-w :progressbar)]
-        (events/on-frame cover
-          (fn [_]
-            (let [is-dev (boolean @(:is-developing container))
-                  dev-prog (double (or @(:development-progress container) 0.0))]
-              (cgui-core/set-visible! prog-w is-dev)
-              (when is-dev
-                (comp/set-progress! prog-comp (min 1.0 dev-prog))))))))
+        (let [inner-w (cgui-core/create-widget
+                       :pos [(+ icon-x (int icon-align)) (+ 8 (int icon-align))]
+                       :size [icon-sz icon-sz])]
+          (comp/add-component! inner-w (comp/draw-texture skill-icon-path 0xFFFFFFFF))
+          (cgui-core/add-widget! panel inner-w)))
+      ;; Progress ring shader for development animation
+      (let [prog-ring-w (cgui-core/create-widget :pos [icon-x 8] :size [back-size back-size])
+            pq-comp (comp/shader-quad :shader-id :skill-progbar
+                                      :texture-0 skill-outline-path
+                                      :texture-1 skill-mask-path
+                                      :progress 0.0)]
+        (comp/add-component! prog-ring-w pq-comp)
+        (cgui-core/set-visible! prog-ring-w false)
+        (cgui-core/add-widget! panel prog-ring-w)
+        ;; Animate progress ring during development
+        (let [pq-state (comp/component-state pq-comp)]
+          (events/on-frame cover
+            (fn [_]
+              (let [is-dev (boolean @(:is-developing container))
+                    dev-prog (double (or @(:development-progress container) 0.0))]
+                (when is-dev
+                  (cgui-core/set-visible! prog-ring-w true)
+                  (swap! pq-state assoc :progress (float (min 1.0 dev-prog)))
+                  (reset! dev-progress-atom dev-prog)
+                  (swap! dev-message
+                         (fn [_] (str "Progress: " (int (* 100.0 (min 1.0 dev-prog))) "%"))))))))))
+      (cgui-core/add-widget! panel icon-w))
+    ;; ---- Text area ----
+    (if learned?
+      ;; === LEARNED MODE ===
+      (do
+        (let [title (cgui-core/create-widget :pos [10 62] :size [180 14])
+              tb (comp/text-box :text skill-name :font :ac-bold :font-size 12 :align :center :color 0xFFFFFFFF)]
+          (comp/add-component! title tb)
+          (cgui-core/add-widget! panel title))
+        (let [exp-text (str "EXP: " (int 0) "%")  ;; TODO: get actual skill exp
+              exp-w (cgui-core/create-widget :pos [10 78] :size [180 12])
+              tb (comp/text-box :text exp-text :font :ac-normal :font-size 8 :align :center :color 0xFFa1e1ff)]
+          (comp/add-component! exp-w tb)
+          (cgui-core/add-widget! panel exp-w))
+        (let [skill-desc (when (:description-key skill-spec) (i18n/translate (:description-key skill-spec)))
+              desc (cgui-core/create-widget :pos [10 94] :size [180 28])
+              tb (comp/text-box :text (or skill-desc "") :font :ac-normal :font-size 9 :align :center :color 0xFFDDDDDD)]
+          (comp/add-component! desc tb)
+          (cgui-core/add-widget! panel desc)))
+      ;; === UNLEARNED MODE ===
+      (do
+        (let [title-text (str skill-name " (LV " skill-level ")")
+              title (cgui-core/create-widget :pos [10 62] :size [180 14])
+              tb (comp/text-box :text title-text :font :ac-bold :font-size 12 :align :center :color 0xFFFFFFFF)]
+          (comp/add-component! title tb)
+          (cgui-core/add-widget! panel title))
+        (let [unlearned-w (cgui-core/create-widget :pos [10 78] :size [180 12])
+              tb (comp/text-box :text "Not learned" :font :ac-normal :font-size 10 :align :center :color 0xFFFF5555)]
+          (comp/add-component! unlearned-w tb)
+          (cgui-core/add-widget! panel unlearned-w))
+        ;; Condition icons
+        (let [conditions (:conditions skill-spec)]
+          (when (seq conditions)
+            (let [n (count conditions) cond-step 16
+                  start-x (int (- 100 (/ (* n cond-step) 2)))]
+              (doseq [[idx cond-spec] (map-indexed vector conditions)]
+                (let [cx (+ start-x (* idx cond-step))
+                      cond-icon (cgui-core/create-widget :pos [cx 92] :size [14 14])
+                      cond-color (case (:type cond-spec)
+                                   :any-skill-level 0xFF4488FF
+                                   :developer-type 0xFF44FF44
+                                   :prerequisite 0xFFFF8844
+                                   0xFF888888)]
+                  (comp/add-component! cond-icon (comp/draw-texture nil cond-color))
+                  (cgui-core/add-widget! panel cond-icon))))))
+        ;; Energy estimate + learn message
+        (let [req-w (cgui-core/create-widget :pos [10 108] :size [180 12])
+              req-text (str "Req: " est-consumption " IF")
+              msg-atom (atom req-text)]
+          (comp/add-component! req-w
+            (comp/text-box :text req-text :font :ac-normal :font-size 9 :align :center :color 0xAAFFFFFF))
+          (cgui-core/add-widget! panel req-w)
+          ;; Frame handler: update message during development
+          (events/on-frame req-w
+            (fn [_]
+              (when-let [msg @dev-message]
+                (let [tb (comp/get-widget-component req-w :textbox)]
+                  (comp/set-text! tb msg))))))
+        ;; Learn button
+        (let [btn (cgui-core/create-widget :pos [68 122] :size [64 16])
+              btn-bg (comp/draw-texture nil 0xFF226622)
+              btn-tb (comp/text-box :text "Learn" :font :ac-bold :font-size 9 :align :center :color 0xFFFFFFFF)]
+          (comp/add-component! btn btn-bg)
+          (comp/add-component! btn btn-tb)
+          (events/on-left-click btn
+            (fn [_]
+              ;; Pre-click validation (matching original button handler)
+              (let [energy (double (or @(:energy container) 0.0))]
+                (cond
+                  (< energy est-consumption)
+                  (reset! dev-message "Not enough energy")
+                  (> skill-level 5)
+                  (reset! dev-message (str "Requires level " skill-level))
+                  :else
+                  (do
+                    (req-start-development! container :learn-skill {:skill-id (name skill-id)})
+                    (reset! can-close? false)
+                    (swap! dev-message (fn [_] nil)))))))
+          (cgui-core/add-widget! panel btn))
+        ;; Development completion detection in frame handler
+        (let [prev-dev (atom false)]
+          (events/on-frame cover
+            (fn [_]
+              (let [is-dev (boolean @(:is-developing container))
+                    dev-complete (boolean @(:development-complete? container))]
+                (when (and (not is-dev) @prev-dev)
+                  (if dev-complete
+                    (do (reset! dev-message "Development succeeded!")
+                        (reset! should-rebuild true))
+                    (reset! dev-message "Development failed"))
+                  (reset! can-close? true))
+                (reset! prev-dev is-dev))))))))
     (cgui-core/add-widget! root cover)))
 
 ;; ============================================================================
@@ -283,10 +441,13 @@
 ;; ============================================================================
 
 (defn- create-level-up-overlay!
-  "Create overlay for ability level-up."
+  "Create overlay for ability level-up with Cover fade animation."
   [root container developer-type]
-  (let [cover (create-black-cover root)
-        close-fn #(cgui-core/remove-widget! root cover)
+  (let [{:keys [cover end-cover!]} (create-fading-cover root root)
+        close-fn (fn []
+                   (unregister-overlay! root end-cover!)
+                   (end-cover!))
+        _ (register-overlay! root end-cover!)
         panel (create-centered-panel cover 180 120)
         bg (cgui-core/create-widget :pos [0 0] :size [180 120])]
     (events/on-left-click cover
@@ -322,21 +483,42 @@
           (req-start-development! container :level-up)
           (close-fn)))
       (cgui-core/add-widget! panel btn))
-    ;; Progress bar
-    (let [prog-w (cgui-core/create-widget :pos [10 100] :size [160 8])
-          prog-bar (comp/progress-bar :direction :right :progress 0.0
-                     :color-full 0xFF25c4ff :color-empty 0x40404040)]
-      (comp/add-component! prog-w prog-bar)
-      (cgui-core/set-visible! prog-w false)
-      (cgui-core/add-widget! panel prog-w)
-      (let [prog-comp (comp/get-widget-component prog-w :progressbar)]
+    ;; Development state display (four-stage)
+    (let [status-w (cgui-core/create-widget :pos [10 96] :size [160 14])
+          status-tb (comp/text-box :text "" :font :ac-normal :font-size 8 :align :center :color 0xFFa1e1ff)]
+      (comp/add-component! status-w status-tb)
+      (cgui-core/set-visible! status-w false)
+      (cgui-core/add-widget! panel status-w)
+      (let [prev-dev (atom false)]
         (events/on-frame cover
           (fn [_]
             (let [is-dev (boolean @(:is-developing container))
-                  dev-prog (double (or @(:development-progress container) 0.0))]
-              (cgui-core/set-visible! prog-w is-dev)
-              (when is-dev
-                (comp/set-progress! prog-comp (min 1.0 dev-prog))))))))
+                  dev-prog (double (or @(:development-progress container) 0.0))
+                  dev-complete (boolean @(:development-complete? container))]
+              (cond
+                is-dev
+                (do
+                  (cgui-core/set-visible! status-w true)
+                  (comp/set-text! status-tb (str "Progress: " (int (* 100.0 (min 1.0 dev-prog))) "%"))
+                  (comp/set-text-color! status-tb 0xFF25c4ff)
+                  (cgui-core/set-visible! btn false))
+                (and (not is-dev) @prev-dev dev-complete)
+                (do
+                  (comp/set-text! status-tb "Level up successful")
+                  (comp/set-text-color! status-tb 0xFF88FF88)
+                  (cgui-core/set-visible! status-w true)
+                  (cgui-core/set-visible! btn false))
+                (and (not is-dev) @prev-dev (not dev-complete))
+                (do
+                  (comp/set-text! status-tb "Level up failed")
+                  (comp/set-text-color! status-tb 0xFFFF5555)
+                  (cgui-core/set-visible! status-w true)
+                  (cgui-core/set-visible! btn false))
+                :else
+                (do
+                  (cgui-core/set-visible! status-w false)
+                  (cgui-core/set-visible! btn true)))
+              (reset! prev-dev is-dev))))))
     (cgui-core/add-widget! root cover)))
 
 ;; ============================================================================
@@ -364,7 +546,12 @@
       :else :skill-tree)))
 
 (defn- render-skill-tree-area!
-  "Render skill tree nodes in parent_right/area with textured backgrounds and connection lines."
+  "Render skill tree nodes in parent_right/area matching original AcademyCraft
+  SkillTree.scala visual style:
+  - Connection lines as textured line.png quads
+  - Skill nodes with skill_back + skill_outline two-layer backgrounds
+  - m-alpha applied for learnability-based transparency
+  - Node labels with matching font"
   [root area-widget container player]
   (cgui-core/clear-widgets! area-widget)
   (try
@@ -375,54 +562,166 @@
           render-data (skill-tree/build-render-data-for-player-state pstate dev-type)
           nodes (:skill-nodes render-data)
           connections (:connections render-data)
-          ;; Skill back texture path
-          skill-back-path (modid/namespaced-path "guis/developer/skill_back")]
-      ;; Draw connection lines
+          ;; Texture paths matching original AcademyCraft
+          skill-back-path (modid/namespaced-path "guis/developer/skill_back")
+          skill-outline-path (modid/namespaced-path "guis/developer/skill_outline")
+          line-tex-path (modid/namespaced-path "guis/developer/line")
+          ;; Sizing constants matching SkillTree.scala:267-273
+          widget-size 16.0 total-size 23.0 prog-size 31.0 icon-sz 14.0
+          prog-align (/ (- total-size prog-size) 2)   ;; -4.0
+          icon-align (/ (- total-size icon-sz) 2)      ;; 4.5
+          draw-align (/ (- widget-size total-size) 2)] ;; -3.5
+      ;; ---- Connection lines: textured quads using line.png ----
+      ;; Original uses GL_QUADS with line.png texture; we approximate with
+      ;; 6x6 textured segments at sub-4px spacing along each connection.
       (when (seq connections)
         (doseq [{:keys [from-x from-y to-x to-y satisfied? locked?]} connections]
-          (let [color (cond locked? 0x60444444 satisfied? 0xB4A7FF7A :else 0x80999999)
-                steps (max 1 (int (Math/ceil (Math/max (Math/abs (- to-x from-x)) (Math/abs (- to-y from-y))))))]
+          (let [color (cond locked?     0x60444444
+                            satisfied?  0xB4A7FF7A
+                            :else       0x80999999)
+                dx (- to-x from-x)
+                dy (- to-y from-y)
+                dist (Math/sqrt (+ (* dx dx) (* dy dy)))
+                steps (max 2 (int (/ dist 3.5)))]
             (doseq [i (range steps)]
-              (let [t (/ i (double steps))
-                    px (+ from-x (* (- to-x from-x) t))
-                    py (+ from-y (* (- to-y from-y) t))]
-                (when-let [dot-w (cgui-core/create-widget :pos [(int px) (int py)] :size [2 2])]
-                  (comp/add-component! dot-w (comp/draw-texture nil color))
-                  (cgui-core/add-widget! area-widget dot-w)))))))
-      ;; Draw skill nodes
-      (when (seq nodes)
-        (doseq [{:keys [x y learned can-learn skill-id skill-name skill-icon m-alpha]} nodes
-                :when (and skill-id x y)]
-          (let [node-x (int (+ x (- 3.5)))  ;; DrawAlign offset matching upstream
-                node-y (int (+ y (- 3.5)))
-                total-size 23
-                icon-sz 14
-                icon-align (/ (- total-size icon-sz) 2)
-                ;; Textured background node
-                node-w (cgui-core/create-widget :pos [node-x node-y] :size [total-size total-size])
-                bg-tex (comp/draw-texture skill-back-path (if learned 0xFF66CC66 (if can-learn 0xFF6699FF 0xFF444444)))]
-            (comp/add-component! node-w bg-tex)
-            ;; Skill icon
-            (when skill-icon
-              (let [icon-path (modid/namespaced-path (str/replace (subs skill-icon (count "textures/")) ".png" ""))]
-                (let [icon-w (cgui-core/create-widget
-                              :pos [(+ node-x (int icon-align)) (+ node-y (int icon-align))]
-                              :size [icon-sz icon-sz])
-                      icon-tex (if (and (not learned) (not can-learn))
-                                 (comp/draw-texture icon-path 0x66444444)
-                                 (comp/draw-texture icon-path 0xFFFFFFFF))]
-                  (comp/add-component! icon-w icon-tex)
-                  (cgui-core/add-widget! area-widget icon-w))))
-            ;; Label
-            (let [label (cgui-core/create-widget :pos [(+ node-x total-size 4) (+ node-y 8)] :size [120 12])
-                  tb (comp/text-box :text (str skill-name) :font :ac-normal :font-size 9 :align :left :color 0xFFFFFFFF)]
-              (comp/add-component! label tb)
-              (cgui-core/add-widget! area-widget label))
-            ;; Click handler
-            (when (or can-learn learned)
-              (events/on-left-click node-w
-                (fn [_] (create-skill-detail-overlay! root container skill-id dev-type))))
-            (cgui-core/add-widget! area-widget node-w)))))
+              (let [t (/ (+ i 0.5) (double steps))
+                    cx (+ from-x (* dx t))
+                    cy (+ from-y (* dy t))
+                    bar-w (cgui-core/create-widget
+                           :pos [(int (- cx 3)) (int (- cy 3))]
+                           :size [6 6])]
+                (comp/add-component! bar-w (comp/draw-texture line-tex-path color))
+                (cgui-core/add-widget! area-widget bar-w))))))
+          ;; ---- Skill nodes with entry animation, hover scale, two-layer backgrounds ----
+          (when (seq nodes)
+            (let [area-create-time (System/currentTimeMillis)
+                  bg-tex-path (modid/namespaced-path "guis/effect/effect_developer_background")
+                  bg-widget (cgui-core/create-widget :pos [0 0] :size [257 139])]
+              (comp/add-component! bg-widget (comp/draw-texture bg-tex-path 0x22FFFFFF))
+              (cgui-core/add-widget! area-widget bg-widget)
+              (doseq [{:keys [x y learned can-learn skill-id skill-name
+                              skill-icon m-alpha] :as _nd} nodes
+                      :when (and skill-id x y)]
+                (let [idx (or (:idx _nd) 0)
+                      node-x (int (+ x draw-align))
+                      node-y (int (+ y draw-align))
+                      total-size (int total-size)
+                      bg-base (if learned 0xFF66CC66 (if can-learn 0xFF6699FF 0xFF444444))
+                      bg-a (int (* 255 m-alpha))
+                      bg-color (bit-or (bit-and bg-base 0x00FFFFFF) (bit-shift-left bg-a 24))
+                      outline-a (int (* 255 m-alpha 0.6))
+                      outline-color (bit-or 0x00333333 (bit-shift-left outline-a 24))
+                      icon-a (if (or learned can-learn) 255 (int (* 255 m-alpha)))
+                      icon-color (bit-or 0x00FFFFFF (bit-shift-left icon-a 24))
+                      blend-offset (+ (* idx 0.08) 0.1)]
+                  ;; Outline ring (behind)
+                  (let [outline-w (cgui-core/create-widget
+                                   :pos [(+ node-x (int prog-align)) (+ node-y (int prog-align))]
+                                   :size [(int prog-size) (int prog-size)])]
+                    (comp/add-component! outline-w (comp/draw-texture skill-outline-path outline-color))
+                    (cgui-core/add-widget! area-widget outline-w))
+                  ;; Back texture + icon + label on node widget
+                  (let [node-w (cgui-core/create-widget
+                                :pos [node-x node-y]
+                                :size [total-size total-size])
+                        tf (comp/transform :scale-x 1.0 :scale-y 1.0)
+                        _ (swap! (:metadata node-w) assoc :anim-state anim-state)]
+                    (comp/add-component! node-w tf)
+                    (comp/add-component! node-w (comp/draw-texture skill-back-path bg-color))
+                          ;; Skill icon (mono shader for unlearned icons)
+                    (when skill-icon
+                      (let [icon-path (modid/namespaced-path
+                                       (str/replace (subs skill-icon (count "textures/")) ".png" ""))]
+                        (let [icon-w (cgui-core/create-widget
+                                      :pos [(+ node-x (int icon-align)) (+ node-y (int icon-align))]
+                                      :size [(int icon-sz) (int icon-sz)])]
+                          (if (and (not learned) (not can-learn))
+                            (comp/add-component! icon-w
+                              (comp/shader-quad :shader-id :mono
+                                                :texture-0 icon-path :texture-1 nil :progress 0.0))
+                            (comp/add-component! icon-w (comp/draw-texture icon-path icon-color)))
+                          (cgui-core/add-widget! area-widget icon-w))))
+                    ;; Progress ring shader on learned nodes
+                    (when learned
+                      (let [view-outline-path (modid/namespaced-path "guis/developer/skill_view_outline")
+                            mask-path (modid/namespaced-path "guis/developer/skill_radial_mask")
+                            prog-w (cgui-core/create-widget
+                                    :pos [(+ node-x (int prog-align)) (+ node-y (int prog-align))]
+                                    :size [(int prog-size) (int prog-size)])
+                            {:keys [exp]} _nd
+                            skill-exp (double (or exp 0.0))]
+                        (comp/add-component! prog-w
+                          (comp/shader-quad :shader-id :skill-progbar
+                                            :texture-0 view-outline-path
+                                            :texture-1 mask-path
+                                            :progress skill-exp))
+                        (cgui-core/add-widget! area-widget prog-w)))
+                    ;; Label
+                    (let [label (cgui-core/create-widget
+                                 :pos [(+ node-x total-size 4) (+ node-y 8)]
+                                 :size [120 12])]
+                      (comp/add-component! label (comp/text-box :text (str skill-name) :font :ac-normal
+                                                                :font-size 9 :align :left :color 0xFFFFFFFF))
+                      (cgui-core/add-widget! area-widget label))
+                    ;; Entry animation: staggered fade-in per-node
+                    (events/on-frame node-w
+                      (fn [_]
+                        (let [dt-sec (max 0.0 (/ (- (System/currentTimeMillis) area-create-time) 1000.0))
+                              dt (- dt-sec blend-offset)
+                              back-alpha (* m-alpha (min 1.0 (max 0.0 (* dt 10.0))))
+                              icon-a2 (* m-alpha (min 1.0 (max 0.0 (* (- dt 0.08) 10.0))))
+                              bg-a2 (int (* 255 back-alpha))
+                              bg-new (bit-or (bit-and bg-base 0x00FFFFFF) (bit-shift-left bg-a2 24))]
+                          (when-let [dt-comp (first (filter #(= (or (:kind %) (::kind %)) :drawtexture) @(:components node-w)))]
+                            (swap! (or (:state dt-comp) (atom {})) assoc :color bg-new)))))
+                    ;; Click handler
+                    (when (or can-learn learned)
+                      (events/on-left-click node-w
+                        (fn [_] (create-skill-detail-overlay! root container skill-id dev-type))))
+                    (cgui-core/add-widget! area-widget node-w))))
+              ;; Area-level frame: parallax background + hover hit-testing
+              (events/on-frame area-widget
+                (fn [_]
+                  (let [root-meta @(:metadata root)
+                        mx (double (or (:last-mouse-x root-meta) 0.0))
+                        my (double (or (:last-mouse-y root-meta) 0.0))
+                        ;; Parallax offset
+                        [ax ay] (cgui-core/get-pos area-widget)
+                        lx (- mx ax) ly (- my ay)
+                        max-du 0.01 max-du-skills 10.0
+                        dx (- (min 1.0 (max 0.0 (/ mx 400.0))) 0.5)
+                        dy (- (min 1.0 (max 0.0 (/ my 187.0))) 0.5)
+                        bg-u (+ 0.5 (* dx max-du))
+                        bg-v (+ 0.5 (* dy max-du))
+                        scl (/ 1.0 1.01)]
+                    ;; Update parallax background UV
+                    (when-let [bg-dt-comp (first (filter #(= (or (:kind %) (::kind %)) :drawtexture) @(:components bg-widget)))]
+                      (swap! (or (:state bg-dt-comp) (atom {})) assoc
+                             :uv [(float bg-u) (float bg-v) (float scl) (float scl)]))
+                    ;; Hover hit-test for node widgets (matching SkillTree.scala hover scale logic)
+                    (doseq [child (cgui-core/get-widgets area-widget)]
+                      (when-let [anim-state (get @(:metadata child) :anim-state)]
+                        (when-let [an @anim-state]
+                          (let [tf-comp (first (filter #(= (or (:kind %) (::kind %)) :transform) @(:components child)))
+                                [cx cy] (cgui-core/get-pos child)
+                                [cw ch] (cgui-core/get-size child)
+                                within? (and (>= lx cx) (<= lx (+ cx cw))
+                                             (>= ly cy) (<= ly (+ cy ch)))
+                                now-ms (System/currentTimeMillis)]
+                            (when tf-comp
+                              (if within?
+                                (when (not= (:hover-state an) :hover)
+                                  (swap! anim-state assoc :hover-state :hover :last-transit-time now-ms))
+                                (when (not= (:hover-state an) :idle)
+                                  (swap! anim-state assoc :hover-state :idle :last-transit-time now-ms)))
+                              ;; Apply hover scale lerp via transform component
+                              (let [{:keys [hover-state last-transit-time]} an
+                                    t (max 0.0 (/ (- now-ms last-transit-time) 1000.0))
+                                    transit (min 1.0 (/ t 0.1))
+                                    scale (if (= :hover hover-state)
+                                            (+ 1.0 (* 0.2 transit))
+                                            (+ 1.2 (* -0.2 transit)))]
+                                (swap! (comp/component-state tf-comp) assoc :scale-x scale :scale-y scale))))))))))))))
     (catch Exception e
       (do (log/error "Skill tree render failed:" (ex-message e))
           (log/stacktrace "Skill tree render failed" e)))))

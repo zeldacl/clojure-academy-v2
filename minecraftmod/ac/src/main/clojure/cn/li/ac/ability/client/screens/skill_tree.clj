@@ -150,7 +150,10 @@
   (when ps
     (let [ad (:ability-data ps) cid (:category-id ad)
           cat (when cid (category/get-category cid))
-          skills (when cid (skill/get-skills-for-category cid))
+          skills (when cid
+                   (filter #(and (:enabled %)
+                                 (learning-rules/can-be-potentially-learned? ad %))
+                           (skill/get-skills-for-category cid)))
           pos (when skills (calculate-skill-positions skills))]
       {:ability-info (build-ability-info-render-data ps) :category-color (:color cat)
        :skill-nodes (when pos (mapv #(build-skill-node-render-data % ps (or dev-type :normal)) pos))

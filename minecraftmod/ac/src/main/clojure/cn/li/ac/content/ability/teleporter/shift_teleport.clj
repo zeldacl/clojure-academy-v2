@@ -324,7 +324,7 @@
   :name-key       "ability.skill.teleporter.shift_teleport"
   :description-key "ability.skill.teleporter.shift_teleport.desc"
   :icon           "textures/abilities/teleporter/skills/shift_teleport.png"
-  :ui-position    [60 120]
+  :ui-position    [175 47]
   :level          4
   :controllable?  true
   :ctrl-id        :shift-teleport

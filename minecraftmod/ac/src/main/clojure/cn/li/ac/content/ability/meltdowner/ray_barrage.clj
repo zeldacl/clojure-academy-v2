@@ -216,7 +216,7 @@
   :name-key       "ability.skill.meltdowner.ray_barrage"
   :description-key "ability.skill.meltdowner.ray_barrage.desc"
   :icon           "textures/abilities/meltdowner/skills/ray_barrage.png"
-  :ui-position    [60 200]
+  :ui-position    [140 10]
   :level          4
   :controllable?  false
   :ctrl-id        :ray-barrage

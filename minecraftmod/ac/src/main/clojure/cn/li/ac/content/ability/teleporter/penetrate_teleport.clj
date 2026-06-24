@@ -291,7 +291,7 @@
   :name-key       "ability.skill.teleporter.penetrate_teleport"
   :description-key "ability.skill.teleporter.penetrate_teleport.desc"
   :icon           "textures/abilities/teleporter/skills/penetrate_teleport.png"
-  :ui-position    [60 160]
+  :ui-position    [60 46]
   :level          2
   :controllable?  true
   :ctrl-id        :penetrate-teleport

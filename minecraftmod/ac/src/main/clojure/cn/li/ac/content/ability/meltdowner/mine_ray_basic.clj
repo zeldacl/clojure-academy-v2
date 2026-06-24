@@ -61,7 +61,7 @@
   :name-key       "ability.skill.meltdowner.mine_ray_basic"
   :description-key "ability.skill.meltdowner.mine_ray_basic.desc"
   :icon           "textures/abilities/meltdowner/skills/mine_ray_basic.png"
-  :ui-position    [128 160]
+  :ui-position    [140 70]
   :level          3
   :controllable?  true
   :ctrl-id        :mine-ray-basic

@@ -8,10 +8,12 @@
             [cn.li.mc1201.gui.cgui.assets :as assets]
             [cn.li.mc1201.gui.cgui.traversal :as traversal]
             [cn.li.mcmod.gui.components :as gui-comp]
+            [cn.li.mc1201.client.render.shader-utils :as shader-utils]
             [cn.li.mcmod.util.log :as log])
   (:import (net.minecraft.client Minecraft)
            (net.minecraft.client.gui GuiGraphics Font)
            (net.minecraft.client.renderer.texture TextureManager)
+           (net.minecraft.client.renderer ShaderInstance)
            (com.mojang.blaze3d.vertex PoseStack)
            (com.mojang.blaze3d.systems RenderSystem)
            (cn.li.mc1201.client MinecraftClientAccess GuiGraphicsHelper TextureSizeAccess)
@@ -405,6 +407,32 @@
           (kind-matches? kind :tint)
           nil
 
+          (kind-matches? kind :shader-quad)
+          (let [shader (shader-utils/resolve-shader (or (:shader-id state) :skill-progbar))
+                tex-0 (ensure-resource-location (:texture-0 state))
+                tex-1 (ensure-resource-location (:texture-1 state))
+                progress (float (or (:progress state) 0.0))]
+            (if shader
+              (try
+                (.setSampler ^ShaderInstance shader "TexSampler0" tex-0)
+                (when tex-1 (.setSampler ^ShaderInstance shader "TexSampler1" tex-1))
+                (RenderSystem/setShader (reify java.util.function.Supplier (get [_] shader)))
+                (when-let [u (.safeGetUniform ^ShaderInstance shader "Progress")]
+                  (.set u progress))
+                (.blit gg tex-0 x y 0 0 w-int h-int w-int h-int)
+                (RenderSystem/setShader (reify java.util.function.Supplier (get [_] nil)))
+                (catch Exception e
+                  (log/debug "CGUI shader-quad render error:" (.getMessage e))))
+              ;; Fallback: render without shader
+              (if tex-0
+                (try
+                  (RenderSystem/enableBlend)
+                  (RenderSystem/defaultBlendFunc)
+                  (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0)
+                  (blit-scaled-region! gg tex-0 x y w-int h-int 0 0 w-int h-int 0.0 w-int h-int)
+                  (catch Exception _))
+                (.fill gg x y (+ x w-int) (+ y h-int) 0xFF2A2A2A))))
+
           :else nil)))))
 
 (defn- compute-child-abs-pos
@@ -439,30 +467,57 @@
 (defn- render-widget-tree!
   "Recursively render a widget and its children.
   When the widget has :clip-children? true in its metadata, enables
-  scissor to clip child content to the widget's visual bounds."
+  scissor to clip child content to the widget's visual bounds.
+  When the widget has a :transform component, applies GL transform
+  to the widget and all its children (push/pop per widget)."
   [^GuiGraphics gg widget abs-pos scale left top]
-  ;; Render own components
-  (render-widget! gg widget abs-pos scale left top)
-  ;; Render children (with optional scissor clipping)
-  (let [children (cgui-core/get-widgets widget)
-        clip? (get @(:metadata widget) :clip-children? false)
+  ;; Check for transform component — if present, apply before own+children rendering
+  (let [components @(:components widget)
+        transform-comp (first (filter #(= (or (:kind %) (::kind %)) :transform) components))
+        has-transform? (boolean transform-comp)
+        ^PoseStack ps (.pose gg)
         [abs-x abs-y] abs-pos
         [w h] (cgui-core/get-size widget)
-        wx (int (+ left abs-x))
-        wy (int (+ top abs-y))
-        ww (round-int (* (double w) scale))
-        wh (round-int (* (double h) scale))]
-    (when (and clip? (seq children))
-      (.enableScissor gg wx wy (+ wx ww) (+ wy wh)))
-    (doseq [c children]
-      (when (cgui-core/visible? c)
-        (try
-          (let [[c-abs-x c-abs-y c-scale] (compute-child-abs-pos abs-pos [w h] scale c)]
-            (render-widget-tree! gg c [c-abs-x c-abs-y] c-scale left top))
-          (catch Exception e
-            (log/error "[RENDER-CHILD] " (.getMessage e) " child=" (pr-str (try (cgui-core/get-pos c) (catch Exception _ "?"))))))))
-    (when (and clip? (seq children))
-      (.disableScissor gg))))
+        w-int (round-int (* (double w) scale))
+        h-int (round-int (* (double h) scale))]
+    ;; Push transform pose BEFORE rendering widget + children
+    (when has-transform?
+      (let [state @(component-state transform-comp)
+            tx (double (or (:translate-x state) 0.0))
+            ty (double (or (:translate-y state) 0.0))
+            sx (double (or (:scale-x state) 1.0))
+            sy (double (or (:scale-y state) 1.0))
+            rot (double (or (:rotation state) 0.0))
+            cx (+ (double abs-x) (/ w-int 2))
+            cy (+ (double abs-y) (/ h-int 2))]
+        (.pushPose ps)
+        (.translate ps cx cy 0.0)
+        (when (not= 0.0 rot)
+          ;; Rotate around Z-axis (clockwise angle in radians)
+          (.mulPose ps (com.mojang.math.AxisAngle4f. (float rot) 0.0 0.0 1.0)))
+        (.scale ps (float sx) (float sy) 1.0)
+        (.translate ps (- cx) (- cy) 0.0)))
+    ;; Render own components
+    (render-widget! gg widget abs-pos scale left top)
+    ;; Render children (with optional scissor clipping)
+    (let [children (cgui-core/get-widgets widget)
+          clip? (get @(:metadata widget) :clip-children? false)
+          wx (int (+ left abs-x))
+          wy (int (+ top abs-y))]
+      (when (and clip? (seq children))
+        (.enableScissor gg wx wy (+ wx w-int) (+ wy wh)))
+      (doseq [c children]
+        (when (cgui-core/visible? c)
+          (try
+            (let [[c-abs-x c-abs-y c-scale] (compute-child-abs-pos abs-pos [w h] scale c)]
+              (render-widget-tree! gg c [c-abs-x c-abs-y] c-scale left top))
+            (catch Exception e
+              (log/error "[RENDER-CHILD] " (.getMessage e) " child=" (pr-str (try (cgui-core/get-pos c) (catch Exception _ "?"))))))))
+      (when (and clip? (seq children))
+        (.disableScissor gg)))
+    ;; Pop transform pose AFTER widget + children rendered
+    (when has-transform?
+      (.popPose ps))))
 
 (defn render-tree!
   [^GuiGraphics gg root left top]

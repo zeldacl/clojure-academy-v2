@@ -84,7 +84,7 @@
   :name-key       "ability.skill.electromaster.mine_detect"
   :description-key "ability.skill.electromaster.mine_detect.desc"
   :icon           "textures/abilities/electromaster/skills/mine_detect.png"
-  :ui-position    [130 110]
+  :ui-position    [225 12]
   :level          3
   :controllable?  false
   :ctrl-id        :mine-detect

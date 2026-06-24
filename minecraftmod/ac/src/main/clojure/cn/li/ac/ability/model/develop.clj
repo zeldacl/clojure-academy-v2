@@ -113,11 +113,17 @@
 (defn idle?       [d] (= :idle (:state d)))
 
 (defn progress
-  "Returns development progress as a float [0.0, 1.0]."
+  "Returns development progress as a float [0.0, 1.0].
+   Matches original AcademyCraft DevelopData.getDevelopProgress():
+   progress = (stim + tickThisStim/tps) / maxStim"
   [d]
   (if (<= (:max-stim d) 0)
     0.0
-    (/ (double (:stim d)) (double (:max-stim d)))))
+    (let [dt (developer/developer-spec (:developer-type d))
+          tps (max 1 (int (:tps dt)))
+          factional-stim (+ (double (:stim d))
+                           (/ (double (:tick-this-stim d)) (double tps)))]
+      (/ factional-stim (double (:max-stim d))))))
 
 (defn abort
   "Abort development, returning to idle."

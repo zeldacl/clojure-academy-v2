@@ -36,39 +36,127 @@
   [mode player-name]
   {:lines []
    :input ""
-   :phase :boot              ;; :boot | :idle | :executing | :developing | :done
+   :phase :boot              ;; :boot | :task-running | :idle | :executing | :developing | :done
    :mode mode
    :player-name (or player-name "Player")
-   :boot-step 0
-   :boot-timer 0.0            ;; seconds
    :dev-progress 0.0
    :dev-result nil
-   :dev-grace 0               ;; ticks since entering :developing (wait for server)
+   :dev-grace 0
    :cursor-visible true
    :cursor-timer 0.0
    :exec-cmd nil
-   :on-start-development nil  ;; set after create-console
-   :container nil})           ;; set after create-console
+   :on-start-development nil
+   :container nil
+   :task-queue []             ;; queued {:type :slow-print/:pause/:backspace-clear/:print :text ... :delay ...}
+   :current-task nil
+   :task-timer 0.0
+   :boot-texts-built? false})  ;; lazy init on first tick
 
-;; Boot text generators
-(def ^:private boot-texts
-  [[0.2 (fn [n] (str "Welcome, " n "."))]
-   [0.3 (fn [_] "Initializing developer firmware...")]
-   [0.15 (fn [_] "Memory check: 64%")]
-   [0.15 (fn [_] "Memory check: 72%")]
-   [0.15 (fn [_] "Memory check: 83%")]
-   [0.15 (fn [_] "Memory check: 91%")]
-   [0.15 (fn [_] "Memory check: 97%")]
-   [0.3 (fn [_] "Boot failed. Override mode active.")]
-   [0.4 (fn [_] "Type 'help' for available commands.")]])
+;; ============================================================================
+;; Task queue system — matching original SkillTree.scala slowPrintTask
+;; ============================================================================
 
-(def ^:private reset-boot-texts
-  [[0.2 (fn [n] (str "Emergency reset console. User: " n))]
-   [0.3 (fn [_] "WARNING: This will reset all ability progress.")]
-   [0.2 (fn [_] "Type 'help' for available commands.")]])
+(def ^:private per-char-delay 0.01)  ;; seconds per character
 
-(defn- boot-texts-for [mode]
-  (case mode :reset reset-boot-texts boot-texts))
+(defn- build-boot-tasks
+  "Build task queue for boot sequence with animated memory check.
+  Matching original SkillTree.scala:975-977 animSequence + slowPrintTask."
+  [mode player-name]
+  (let [base-tasks
+        (case mode
+          :reset
+          [{:type :slow-print :text (str "Emergency reset console. User: " player-name ".")}
+           {:type :slow-print :text "WARNING: This will reset all ability progress."}
+           {:type :slow-print :text "Type 'help' for available commands."}]
+          ;; Standard boot with memory check animation
+          (let [rng #(let [base (rand-int 6)]
+                      (+ (- base 3) (* % 10)))
+                mem-pcts (into []
+                           (map-indexed (fn [i base]
+                                          (let [pct (+ (* (inc i) 10) (rand-int 6) -3)]
+                                            (str "Memory check: " pct "%"))))
+                           (range 6))]
+            (concat
+              [{:type :slow-print :text (str "Welcome, " player-name ".")}
+               {:type :slow-print :text "Initializing developer firmware..."}]
+              ;; Animated memory check sequence (matching animSequence)
+              (mapcat (fn [text] [{:type :slow-print :text text}
+                                  {:type :pause :delay 0.3}
+                                  {:type :backspace-clear :count (count text)}])
+                      mem-pcts)
+              [{:type :print :text "97%"}
+               {:type :slow-print :text "Boot failed. Override mode active."}
+               ;; Matching original SkillTree.scala:981 — show hint when developer is present
+               {:type :slow-print :text "No ability category detected."}
+               {:type :slow-print :text "Type 'learn' to start."}])))]
+    (vec base-tasks)))
+
+(defn- process-current-task
+  "Process current task. Returns updated state."
+  [state dt-sec]
+  (let [task (:current-task state)
+        timer (+ (:task-timer state 0.0) dt-sec)]
+    (case (:type task)
+      :slow-print
+      (let [text (:text task)
+            char-idx (or (:char-idx task) 0)
+            chars-needed (int (/ timer per-char-delay))
+            next-idx (min (count text) chars-needed)]
+        (if (< char-idx (count text))
+          (let [chunk (subs text char-idx next-idx)]
+            (-> state
+                (update :task-timer (constantly 0.0))
+                (update :current-task assoc :char-idx next-idx)
+                (update-in [:lines (dec (count (:lines state)))]
+                           #(str % chunk))
+                (#(if (> (count (:lines %)) 0)
+                    (update-in % [:lines (dec (count (:lines %)))]
+                              str chunk)
+                    (update % :lines conj chunk)))))
+          (-> state
+              (assoc :current-task nil :task-timer 0.0))))
+      :pause
+      (if (>= timer (:delay task 0.0))
+        (assoc state :current-task nil :task-timer 0.0)
+        (assoc state :task-timer timer))
+      :print
+      (-> state
+          (update :lines conj (:text task))
+          (update :lines clamp-lines)
+          (assoc :current-task nil :task-timer 0.0))
+      :backspace-clear
+      (let [count-to-clear (:count task)
+            current-line  (or (last (:lines state)) "")
+            new-line (if (>= (count current-line) count-to-clear)
+                       (subs current-line 0 (- (count current-line) count-to-clear))
+                       "")]
+        (-> state
+            (assoc :lines (-> (:lines state) (butlast) vec))
+            (update :lines conj new-line)
+            (#(if (= new-line "")
+                (update % :lines (fn [ls] (if (empty? ls) ls (vec (butlast ls)))))
+                %))
+            (update :lines clamp-lines)
+            (assoc :current-task nil :task-timer 0.0)))
+      ;; no task
+      (assoc state :task-timer 0.0))))
+
+(defn- tick-task-running
+  "Process task queue: dequeue next task as needed."
+  [state dt-sec]
+  (if (:current-task state)
+    (process-current-task state dt-sec)
+    (if-let [next-task (first (:task-queue state))]
+      ;; Start new task: add empty output line for slow-print tasks
+      (let [state' (if (contains? #{:slow-print :backspace-clear :print} (:type next-task))
+                     (update state :lines conj "")
+                     state)]
+        (-> state'
+            (update :lines clamp-lines)
+            (assoc :current-task (dissoc next-task :char-idx) :task-timer 0.0)
+            (update :task-queue subvec 1)))
+      ;; Queue exhausted — transition to idle
+      (assoc state :phase :idle :task-queue [] :task-timer 0.0 :current-task nil))))
 
 (defn- clamp-lines [lines]
   (if (> (count lines) max-lines)
@@ -90,20 +178,15 @@
 ;; ============================================================================
 
 (defn- tick-boot
+  "Boot phase: build task queue on first tick, then delegate to task runner.
+   Matching original SkillTree.scala boot sequence with slow-print animation."
   [state dt-sec]
-  (let [texts (boot-texts-for (:mode state))
-        step (:boot-step state)]
-    (if (>= step (count texts))
-      (assoc state :phase :idle :boot-step step :boot-timer 0.0)
-      (let [timer' (+ (:boot-timer state) dt-sec)
-            [delay text-fn] (nth texts step)]
-        (if (>= timer' delay)
-          (-> state
-              (update :lines conj (text-fn (:player-name state)))
-              (update :lines clamp-lines)
-              (update :boot-step inc)
-              (assoc :boot-timer 0.0))
-          (assoc state :boot-timer timer'))))))
+  (if (:boot-texts-built? state)
+    (tick-task-running state dt-sec)
+    (let [tasks (build-boot-tasks (:mode state) (:player-name state))]
+      (-> state
+          (assoc :task-queue tasks :boot-texts-built? true :phase :task-running)
+          (tick-task-running dt-sec)))))
 
 (defn- tick-idle
   [state dt-sec]
@@ -113,16 +196,33 @@
       (assoc state :cursor-timer ct))))
 
 ;; ============================================================================
-;; Command execution
+;; Command registry — extensible, matching original Console += Command(...)
 ;; ============================================================================
 
+(defonce ^:private command-registry
+  "Atom: {command-name-str → (fn [state] [new-state action-kw])}.
+  Register commands via register-command! to add custom console commands."
+  (atom {}))
+
+(defn register-command!
+  "Register a console command. callback receives the current state atom
+  and the create-console options map, returns [new-state action-kw].
+  Matching original SkillTree.scala: console += Command(name, callback)"
+  [name callback]
+  (swap! command-registry assoc name callback)
+  nil)
+
 (defn- cmd-help [mode]
-  (case mode
-    :reset "Commands: reset, help, clear"
-    "Commands: learn, help, clear"))
+  (let [cmds (keys @command-registry)
+        names (sort (concat (case mode :reset ["reset"] ["learn"])
+                            ["help" "clear"
+                             (when (:on-start-development {})
+                               (case mode :reset "reset" "learn"))]))]
+    (str "Commands: " (str/join ", " (take 4 (distinct names))))))
 
 (defn- exec-cmd
-  "Execute a pending command. Returns [new-state action-kw]."
+  "Execute a pending command via registered handlers.
+  Returns [new-state action-kw]."
   [state]
   (let [cmd (:exec-cmd state)
         base (fn [phase]
@@ -130,54 +230,75 @@
                    (update :lines conj (str prompt-str))
                    (update :lines clamp-lines)
                    (assoc :phase phase :exec-cmd nil)))]
-    (case cmd
-      "help"
-      [(-> (base :idle)
-           (update :lines conj (cmd-help (:mode state)))
-           (update :lines clamp-lines))
-       nil]
-      "clear"
-      [(assoc state :lines [] :phase :idle :exec-cmd nil) nil]
-      "learn"
-      (if (= :learn (:mode state))
-        (if (:on-start-development state)
-          (do
-            ((:on-start-development state))
-            [(-> (base :developing)
-                 (update :lines conj (msg :dev-begin))
-                 (update :lines clamp-lines)
-                 (assoc :dev-progress 0.0))
-             :developing])
-          [(-> (base :idle)
-               (update :lines conj (msg :no-developer))
-               (update :lines clamp-lines))
-           nil])
-        [(-> (base :idle)
-             (update :lines conj (msg :invalid-cmd))
-             (update :lines clamp-lines))
-         nil])
-      "reset"
-      (if (= :reset (:mode state))
-        (if (:on-start-development state)
-          (do
-            ((:on-start-development state))
-            [(-> (base :developing)
-                 (update :lines conj (msg :reset-begin))
-                 (update :lines clamp-lines)
-                 (assoc :dev-progress 0.0))
-             :developing])
-          [(-> (base :idle)
-               (update :lines conj (msg :no-developer))
-               (update :lines clamp-lines))
-           nil])
-        [(-> (base :idle)
-             (update :lines conj (msg :invalid-cmd))
-             (update :lines clamp-lines))
-         nil])
-      ;; default
+    (if-let [handler (get @command-registry cmd)]
+      (handler state)
       [(-> (base :idle)
            (update :lines conj (msg :invalid-cmd))
            (update :lines clamp-lines))
+       nil])))
+
+;; ============================================================================
+;; Built-in command registrations
+;; ============================================================================
+
+(register-command! "help"
+  (fn [state]
+    [(-> (update state :lines conj (str prompt-str))
+         (update :lines conj (cmd-help (:mode state)))
+         (update :lines clamp-lines)
+         (assoc :phase :idle :exec-cmd nil))
+     nil]))
+
+(register-command! "clear"
+  (fn [state]
+    [(assoc state :lines [] :phase :idle :exec-cmd nil) nil]))
+
+(register-command! "learn"
+  (fn [state]
+    (if (= :learn (:mode state))
+      (if (:on-start-development state)
+        (do
+          ((:on-start-development state))
+          [(-> state
+               (update :lines conj (str prompt-str))
+               (update :lines conj (msg :dev-begin))
+               (update :lines conj "Progress: 00%")
+               (update :lines clamp-lines)
+               (assoc :phase :developing :exec-cmd nil :dev-progress 0.0 :done-timer 0.0))
+           :developing])
+        [(-> (update state :lines conj (str prompt-str))
+             (update :lines conj (msg :no-developer))
+             (update :lines clamp-lines)
+             (assoc :phase :idle :exec-cmd nil))
+         nil])
+      [(-> (update state :lines conj (str prompt-str))
+           (update :lines conj (msg :invalid-cmd))
+           (update :lines clamp-lines)
+           (assoc :phase :idle :exec-cmd nil))
+       nil])))
+
+(register-command! "reset"
+  (fn [state]
+    (if (= :reset (:mode state))
+      (if (:on-start-development state)
+        (do
+          ((:on-start-development state))
+          [(-> state
+               (update :lines conj (str prompt-str))
+               (update :lines conj (msg :reset-begin))
+               (update :lines conj "Progress: 00%")
+               (update :lines clamp-lines)
+               (assoc :phase :developing :exec-cmd nil :dev-progress 0.0 :done-timer 0.0))
+           :developing])
+        [(-> (update state :lines conj (str prompt-str))
+             (update :lines conj (msg :no-developer))
+             (update :lines clamp-lines)
+             (assoc :phase :idle :exec-cmd nil))
+         nil])
+      [(-> (update state :lines conj (str prompt-str))
+           (update :lines conj (msg :invalid-cmd))
+           (update :lines clamp-lines)
+           (assoc :phase :idle :exec-cmd nil))
        nil])))
 
 (defn process-key
@@ -269,6 +390,7 @@
               st @state-a
               st' (case (:phase st)
                     :boot (tick-boot st dt-sec)
+                    :task-running (tick-task-running st dt-sec)
                     :executing
                     (let [[s _action] (exec-cmd st)]
                       s)
@@ -276,6 +398,7 @@
                     (let [container' (:container st)
                           prog (double (or (some-> container' @(:development-progress container')) 0.0))
                           is-dev (boolean (some-> container' @(:is-developing container')))
+                          dev-complete (boolean (some-> container' @(:development-complete? container')))
                           grace (int (:dev-grace st 0))]
                       (cond
                         ;; Still in grace period — wait for server to set is-developing
@@ -290,16 +413,20 @@
                             (update :lines clamp-lines)
                             (assoc :phase :idle :dev-grace 0))
 
-                        ;; Server finished (is-dev false, progress settled)
+                        ;; Server finished (is-dev false) — use definitive server-side state
                         (not is-dev)
                         (assoc st :phase :done :dev-progress prog :dev-grace 0
-                               :dev-result (if (> prog 0.5) :success :failure))
+                               :dev-result (if dev-complete :success :failure))
 
                         ;; Progressing normally
                         :else
                         (assoc st :dev-progress prog :dev-grace 0)))
                     :done
-                    (tick-idle st dt-sec)
+                    ;; Auto-return to idle after 2 seconds
+                    (let [dt (+ (:done-timer st 0.0) dt-sec)]
+                      (if (>= dt 2.0)
+                        (assoc st :phase :idle :done-timer 0.0 :dev-progress 0.0 :dev-result nil)
+                        (assoc st :done-timer dt)))
                     ;; :idle
                     (tick-idle st dt-sec))]
           (when (not= st st')
@@ -338,7 +465,8 @@
                   (comp/set-text-color! textbox dim-color))
                 :done
                 (let [result-text (if (= :success (:dev-result st'))
-                                    (msg :done) (msg :done))]
+                                    "Development succeeded."
+                                    "Development failed.")]
                   (comp/set-text! textbox result-text)
                   (comp/set-text-color! textbox dim-color))
                 ;; :boot - blank

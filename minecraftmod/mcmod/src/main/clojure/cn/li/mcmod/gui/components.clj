@@ -311,6 +311,50 @@
   (swap! (component-state tint-comp) assoc :alpha alpha)
   tint-comp)
 
+(defn transform
+  "Create a transform component for CGUI widgets.
+   Applies translation, scale, and rotation around the widget center.
+   State keys: :translate-x, :translate-y, :scale-x, :scale-y, :rotation (radians)."
+  [& {:keys [translate-x translate-y scale-x scale-y rotation]
+      :or {translate-x 0.0 translate-y 0.0 scale-x 1.0 scale-y 1.0 rotation 0.0}}]
+  {::kind :transform
+   :state (atom {:translate-x (double translate-x)
+                 :translate-y (double translate-y)
+                 :scale-x (double scale-x)
+                 :scale-y (double scale-y)
+                 :rotation (double rotation)})})
+
+(defn set-transform!
+  "Update transform component state."
+  [t-comp & {:keys [translate-x translate-y scale-x scale-y rotation]}]
+  (swap! (component-state t-comp)
+    (fn [s]
+      (cond-> s
+        translate-x (assoc :translate-x (double translate-x))
+        translate-y (assoc :translate-y (double translate-y))
+        scale-x     (assoc :scale-x (double scale-x))
+        scale-y     (assoc :scale-y (double scale-y))
+        rotation    (assoc :rotation (double rotation))))))
+
+(defn shader-quad
+  "Create a shader-quad component for CGUI widgets.
+   Renders a textured quad with a custom GLSL shader.
+   :shader-id — keyword identifying the shader (:skill-progbar, :mono)
+   :texture-0 — primary texture path
+   :texture-1 — optional secondary texture path
+   :progress  — float uniform value (for skill-progbar shader)"
+  [& {:keys [shader-id texture-0 texture-1 progress]
+      :or {shader-id :skill-progbar progress 0.0}}]
+  {::kind :shader-quad
+   :state (atom {:shader-id shader-id
+                 :texture-0 texture-0
+                 :texture-1 texture-1
+                 :progress (double progress)})})
+
+(defn set-shader-quad-progress!
+  [sq-comp progress]
+  (swap! (component-state sq-comp) assoc :progress (double progress)))
+
 (defn draggable []
   {::kind :draggable})
 

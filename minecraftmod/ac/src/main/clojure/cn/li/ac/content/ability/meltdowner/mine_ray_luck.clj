@@ -59,7 +59,7 @@
   :name-key       "ability.skill.meltdowner.mine_ray_luck"
   :description-key "ability.skill.meltdowner.mine_ray_luck.desc"
   :icon           "textures/abilities/meltdowner/skills/mine_ray_luck.png"
-  :ui-position    [196 200]
+  :ui-position    [205 82]
   :level          5
   :controllable?  true
   :ctrl-id        :mine-ray-luck

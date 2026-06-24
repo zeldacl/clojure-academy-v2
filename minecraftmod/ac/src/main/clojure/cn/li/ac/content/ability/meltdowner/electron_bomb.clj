@@ -92,7 +92,7 @@
   :name-key       "ability.skill.meltdowner.electron_bomb"
   :description-key "ability.skill.meltdowner.electron_bomb.desc"
   :icon           "textures/abilities/meltdowner/skills/electron_bomb.png"
-  :ui-position    [70 120]
+  :ui-position    [15 45]
   :level          1
   :controllable?  false
   :ctrl-id        :electron-bomb

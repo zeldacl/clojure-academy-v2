@@ -249,18 +249,29 @@
   Adds :key-hook matching original AcademyCraft TreeScreen.keyTyped:
     override def keyTyped(ch, key) =
       if (key == KEY_ESCAPE) Option(gui.getWidget(\"link_page\")).map(_.component[Cover].end())
-      else super.keyTyped(ch, key)"
+      else super.keyTyped(ch, key)
+
+  Uses overlay stack: ESC pops the most recent overlay (LIFO), matching
+  original behavior where each overlay registers its own Cover.end()."
   [container minecraft-container player]
   (let [gui (create-developer-gui container player {:menu minecraft-container})
         root (if (map? gui) (:root gui) gui)
         base (cgui-screen/create-cgui-screen-container root minecraft-container)
-        ;; Per-screen ESC hook — checked BEFORE CGUI dispatch in keyPressed.
-        ;; Returns truthy to consume event (ESC handled), nil to proceed normally.
+        ;; Per-screen ESC hook — overlay stack (LIFO), matching original Cover pattern.
+        ;; Also supports legacy :developer-cover-end-fn for wireless overlay.
         key-hook (fn [key-code _scan-code _modifiers]
                    (when (= 256 key-code)  ;; GLFW_KEY_ESCAPE
-                     (when-let [end-fn (:developer-cover-end-fn @(:metadata root))]
-                       (end-fn)
-                       true)))]
+                     ;; Try overlay stack first (LIFO)
+                     (let [stack (:cover-end-fns @(:metadata root))
+                           legacy-fn (:developer-cover-end-fn @(:metadata root))]
+                       (if-let [end-fns (seq stack)]
+                         (let [top-fn (peek end-fns)]
+                           (swap! (:metadata root) assoc :cover-end-fns (pop end-fns))
+                           (when top-fn (top-fn))
+                           true)
+                         (when legacy-fn
+                           (legacy-fn)
+                           true))))))]
     (-> base
         ;; Original AcademyCraft: CGuiScreen (full-screen GuiScreen).
         ;; imageWidth=0 → guiLeft=screenWidth/2; XML root CENTER/CENTER → centered.

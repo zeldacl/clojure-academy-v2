@@ -204,7 +204,7 @@
   :name-key       "ability.skill.meltdowner.electron_missile"
   :description-key "ability.skill.meltdowner.electron_missile.desc"
   :icon           "textures/abilities/meltdowner/skills/electron_missile.png"
-  :ui-position    [60 240]
+  :ui-position    [210 35]
   :level          5
   :controllable?  true
   :ctrl-id        :electron-missile

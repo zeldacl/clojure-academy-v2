@@ -4,6 +4,7 @@
             [cn.li.mcmod.config :as mcmod-config]
             [cn.li.mcmod.hooks.core :as client-ui]
             [cn.li.mcmod.util.log :as log]
+            [cn.li.mc1201.client.render.shader-utils :as shader-utils]
             [clojure.string :as str])
   (:import [net.minecraft.client.gui.screens Screen]
            [net.minecraft.client.gui GuiGraphics Font]
@@ -33,25 +34,6 @@
 
 (defn- get-skill-tree-texture [key]
   (get skill-tree-textures key))
-
-;; ============================================================================
-;; Shader resolution (cross-module via forge ModShaders)
-;; ============================================================================
-
-(defn- resolve-shader
-  "Resolve a ShaderInstance from the Forge ModShaders registry by name.
-  Uses reflection to avoid compile-time dependency on forge module."
-  [shader-name]
-  (try
-    (let [mod-shaders-class (Class/forName "cn.li.forge1201.client.render.ModShaders")]
-      (case shader-name
-        :skill-progbar (some-> (.getDeclaredMethod mod-shaders-class "getSkillProgbarShader" (into-array Class []))
-                               (.invoke nil (into-array Object [])))
-        :mono (some-> (.getDeclaredMethod mod-shaders-class "getMonoShader" (into-array Class []))
-                      (.invoke nil (into-array Object [])))
-        nil))
-    (catch Exception _
-      nil)))
 
 ;; ============================================================================
 ;; Drawing helpers
@@ -195,7 +177,7 @@
                         (.fill graphics px py (+ px width) (+ py width) (:color op 0x80999999)))))
     ;; --- Shader-based progress ring ---
     :shader-progress-ring
-    (let [^ShaderInstance si (resolve-shader (:shader-id op))
+    (let [^ShaderInstance si (shader-utils/resolve-shader (:shader-id op))
           tex-0-key (:texture-0 op)
           tex-1-key (:texture-1 op)
           loc-0 (if (keyword? tex-0-key) (get-skill-tree-texture tex-0-key)

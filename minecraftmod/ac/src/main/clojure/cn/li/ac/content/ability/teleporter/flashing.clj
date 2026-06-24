@@ -292,7 +292,7 @@
   :name-key        "ability.skill.teleporter.flashing"
   :description-key "ability.skill.teleporter.flashing.desc"
   :icon            "textures/abilities/teleporter/skills/flashing.png"
-  :ui-position     [120 160]
+  :ui-position     [220 20]
   :level           5
   :controllable?   true
   :ctrl-id         :flashing

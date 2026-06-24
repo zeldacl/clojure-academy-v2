@@ -126,7 +126,7 @@
   :name-key       "ability.skill.teleporter.flesh_ripping"
   :description-key "ability.skill.teleporter.flesh_ripping.desc"
   :icon           "textures/abilities/teleporter/skills/flesh_ripping.png"
-  :ui-position    [180 120]
+  :ui-position    [130 12]
   :level          3
   :controllable?  true
   :ctrl-id        :flesh-ripping

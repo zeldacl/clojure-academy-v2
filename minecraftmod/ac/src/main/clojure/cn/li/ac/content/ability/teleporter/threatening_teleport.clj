@@ -195,7 +195,7 @@
   :name-key       "ability.skill.teleporter.threatening_teleport"
   :description-key "ability.skill.teleporter.threatening_teleport.desc"
   :icon           "textures/abilities/teleporter/skills/threatening_teleport.png"
-  :ui-position    [120 120]
+  :ui-position    [14 42]
   :level          1
   :controllable?  true
   :ctrl-id        :threatening-teleport
