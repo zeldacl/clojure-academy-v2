@@ -425,6 +425,8 @@
       (not has-cat?) :console
       :else :skill-tree)))
 
+(def ^:private skill-tree-creation-time (atom nil))
+
 (defn- render-skill-tree-area!
   "Render skill tree nodes in parent_right/area matching upstream SkillTree.scala."
   [root area-widget container player]
@@ -437,6 +439,9 @@
           render-data (skill-tree/build-render-data-for-player-state pstate dev-type)
           nodes (:skill-nodes render-data)
           connections (:connections render-data)
+          ;; Set creation time on first render
+          _ (when (nil? @skill-tree-creation-time) (reset! skill-tree-creation-time (System/currentTimeMillis)))
+          anim-time (/ (- (System/currentTimeMillis) @skill-tree-creation-time) 1000.0)
           ;; Upstream constants: WidgetSize=16, TotalSize=23, IconSize=14, ProgSize=31
           widget-size 16 total-size 23 icon-sz 14 prog-sz 31
           draw-align (/ (- widget-size total-size) 2)
@@ -444,71 +449,86 @@
           icon-align (/ (- total-size icon-sz) 2)
           skill-back-path (modid/asset-path "textures" "guis/developer/skill_back.png")
           skill-outline-path (modid/asset-path "textures" "guis/developer/skill_outline.png")
-          bg-area-path (modid/asset-path "textures" "guis/effect/effect_developer_background.png")]
+          bg-area-path (modid/asset-path "textures" "guis/effect/effect_developer_background.png")
+          ;; NOTE: Mouse parallax (upstream max_du_skills=10) not yet implemented.
+          ;; CGUI lacks on-mouse-move; needs platform bridge (future work).]
+          ;; Helper: staggered alpha per node index
+          node-alpha-fn (fn [idx] (max 0.0 (min 1.0 (* (- anim-time (* idx 0.08) 0.1) 10.0))))]
 
       ;; Parallax background (upstream: texAreaBack rawRect in FrameEvent)
       (let [bg-w (cgui-core/create-widget :pos [0 0] :size [(int 257) (int 139)])]
         (comp/add-component! bg-w (comp/draw-texture bg-area-path 0xFFFFFFFF))
         (cgui-core/add-widget! area-widget bg-w))
 
-      ;; Connection lines (upstream: center=WidgetSize/2=8, inset=12.2, alpha=mAlpha*learned)
+      ;; Connection lines with fade-in animation (upstream: lineBlend = dt*5)
       (when (seq connections)
-        (doseq [{:keys [from-x from-y to-x to-y child-learned? m-alpha]} connections]
-          (let [dx (- to-x from-x) dy (- to-y from-y)
-                norm (Math/sqrt (+ (* dx dx) (* dy dy)))]
-            (when (pos? norm)
-              (let [ndx (/ dx norm) ndy (/ dy norm)
-                    line-alpha (* (or m-alpha 0.7) (if child-learned? 1.0 0.4))
-                    alpha-byte (int (* 255.0 line-alpha))
-                    color (bit-or (bit-shift-left alpha-byte 24) 0xFFFFFF)
-                    x0 (+ from-x (* ndx 12.2)) y0 (+ from-y (* ndy 12.2))
-                    x1 (- to-x (* ndx 12.2)) y1 (- to-y (* ndy 12.2))
-                    steps (max 1 (int norm))]
-                (doseq [i (range (inc steps))]
-                  (let [t (/ i (double steps))
-                        px (int (+ x0 (* (- x1 x0) t)))
-                        py (int (+ y0 (* (- y1 y0) t)))]
-                    (when-let [dot-w (cgui-core/create-widget :pos [px py] :size [2 2])]
-                      (comp/add-component! dot-w (comp/draw-texture nil color))
-                      (cgui-core/add-widget! area-widget dot-w)))))))))
+        (let [line-blend (max 0.0 (min 1.0 (* anim-time 5.0)))]
+          (doseq [{:keys [from-x from-y to-x to-y child-learned? m-alpha]} connections]
+            (let [dx (- to-x from-x) dy (- to-y from-y)
+                  norm (Math/sqrt (+ (* dx dx) (* dy dy)))]
+              (when (pos? norm)
+                (let [ndx (/ dx norm) ndy (/ dy norm)
+                      line-alpha (* line-blend (or m-alpha 0.7) (if child-learned? 1.0 0.4))
+                      alpha-byte (int (* 255.0 line-alpha))
+                      color (bit-or (bit-shift-left alpha-byte 24) 0xFFFFFF)
+                      x0 (+ from-x (* ndx 12.2)) y0 (+ from-y (* ndy 12.2))
+                      x1 (- to-x (* ndx 12.2)) y1 (- to-y (* ndy 12.2))
+                      ;; Animated endpoint
+                      ax1 (+ x0 (* (- x1 x0) line-blend))
+                      ay1 (+ y0 (* (- y1 y0) line-blend))
+                      ;; Smoother line: 3x3 dots, fewer gaps
+                      steps (max 1 (int (* norm line-blend)))]
+                  (doseq [i (range (inc steps))]
+                    (let [t (/ i (max 1.0 (double steps)))
+                          px (int (+ x0 (* (- ax1 x0) t)))
+                          py (int (+ y0 (* (- ay1 y0) t)))]
+                      (when-let [dot-w (cgui-core/create-widget :pos [px py] :size [3 3])]
+                        (comp/add-component! dot-w (comp/draw-texture nil color))
+                        (cgui-core/add-widget! area-widget dot-w))))))))))
 
-      ;; Skill nodes (upstream: no labels, WidgetSize=16 circle with outline + icon)
+      ;; Skill nodes with staggered fade-in animation
       (when (seq nodes)
-        (doseq [{:keys [x y learned can-learn locked? skill-id skill-icon m-alpha]} nodes
+        (doseq [{:keys [x y idx learned can-learn locked? skill-id skill-icon m-alpha]} nodes
                 :when (and skill-id x y)]
           (let [node-x (int (+ x draw-align)) node-y (int (+ y draw-align))
                 node-w (cgui-core/create-widget :pos [node-x node-y] :size [widget-size widget-size])
-                ;; Upstream: skill_back is WHITE, only alpha-modulated (no tint)
-                eff-alpha (if locked? 0.25 (or m-alpha 0.7))
+                ;; Staggered fade-in per node (backAlpha, iconAlpha matching upstream)
+                fade-back (node-alpha-fn idx)
+                fade-icon (max 0.0 (min 1.0 (* (- anim-time (* idx 0.08) 0.18) 10.0)))
+                eff-alpha (* (if locked? 0.25 (or m-alpha 0.7)) fade-back)
                 node-alpha (int (* 255.0 eff-alpha))
-                ;; skill_back: white color × backAlpha (upstream glColor4d(1,1,1,backAlpha))
                 back-color (bit-or (bit-shift-left node-alpha 24) 0xFFFFFF)]
             (comp/add-component! node-w (comp/draw-texture skill-back-path back-color))
-            ;; skill_outline: dark gray (0.2,0.2,0.2) × backAlpha*0.6 (upstream glColor4d(0.2,0.2,0.2,backAlpha*0.6))
+            ;; skill_outline: dark gray for unlearned, bright progress tint for learned
+            ;; Upstream: learned shows shader-progress-ring; approximated here with blue tint
             (let [ol-alpha (int (* 255.0 (* eff-alpha 0.6)))
-                  ol-gray (max 0 (int (* 255.0 0.2)))
-                  ol-color (bit-or (bit-shift-left ol-alpha 24)
-                                   (bit-or (bit-shift-left ol-gray 16)
-                                           (bit-or (bit-shift-left ol-gray 8) ol-gray)))
+                  ol-color (if learned
+                             ;; Learned: bright blue-ish progress ring (matching host.clj progress-ring fill color 0xFF8FD3FF)
+                             (bit-or (bit-shift-left (int (* 255.0 1.0)) 24)
+                                     (bit-or (bit-shift-left 0x8F 16)
+                                             (bit-or (bit-shift-left 0xD3 8) 0xFF)))
+                             ;; Unlearned: dark gray (0.2,0.2,0.2)
+                             (let [g (max 0 (int (* 255.0 0.2)))]
+                               (bit-or (bit-shift-left ol-alpha 24)
+                                       (bit-or (bit-shift-left g 16)
+                                               (bit-or (bit-shift-left g 8) g)))))
                   ol-w (cgui-core/create-widget :pos [(+ node-x prog-align) (+ node-y prog-align)] :size [prog-sz prog-sz])]
               (comp/add-component! ol-w (comp/draw-texture skill-outline-path ol-color))
               (cgui-core/add-widget! area-widget ol-w))
-            ;; Skill icon: white × iconAlpha, grayscale if unlearned (upstream: ShaderMono when !learned)
-            (when skill-icon
+            ;; Skill icon with fade (matching upstream colors)
+            (when (and skill-icon (>= fade-icon 0.001))
               (let [icon-path (modid/asset-path "textures" (subs skill-icon (count "textures/")))
-                    icon-alpha (if locked? (int (* 255.0 0.25)) (int (* 255.0 (or m-alpha 1.0))))
-                    ;; Grayscale tint for unlearned skills (matching upstream ShaderMono)
-                    icon-color (if (and (not learned) (not locked?))
-                                (let [g (int (* 255.0 (or m-alpha 1.0)))]
-                                  (bit-or (bit-shift-left g 24)
-                                          (bit-or (bit-shift-left (int (* g 0.3)) 16)
-                                                  (bit-or (bit-shift-left (int (* g 0.59)) 8)
-                                                          (int (* g 0.11))))))
-                                (bit-or (bit-shift-left icon-alpha 24) 0xFFFFFF))
+                    ;; Learned: white × iconAlpha (upstream glColor4d(1,1,1,iconAlpha))
+                    ;; Unlearned: dim gray to simulate ShaderMono grayscale
+                    ;; Locked: very dim
+                    icon-alpha (cond locked? (int (* 255.0 0.25))
+                                    learned (int (* 255.0 (or m-alpha 1.0) fade-icon))
+                                    :else   (int (* 255.0 0.5 (or m-alpha 1.0) fade-icon)))
+                    icon-color (bit-or (bit-shift-left icon-alpha 24)
+                                       (if learned 0xFFFFFF 0x888888))
                     icon-w (cgui-core/create-widget :pos [(+ node-x icon-align) (+ node-y icon-align)] :size [icon-sz icon-sz])]
                 (comp/add-component! icon-w (comp/draw-texture icon-path icon-color))
                 (cgui-core/add-widget! area-widget icon-w)))
-            ;; Click handler (locked + unlearned-without-prereqs don't respond)
             (when (and (or can-learn learned) (not locked?))
               (events/on-left-click node-w
                 (fn [_] (create-skill-detail-overlay! root container skill-id dev-type))))
