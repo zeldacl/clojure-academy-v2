@@ -10,7 +10,8 @@
    [cn.li.ac.ability.rules.learning-rules :as learning-rules]
    [cn.li.ac.ability.model.ability :as adata]
    [cn.li.ac.ability.config :as cfg]
-   [cn.li.mcmod.i18n :as i18n]))
+   [cn.li.mcmod.i18n :as i18n]
+   [cn.li.mcmod.util.log :as log]))
 
 (defn- now-ms [] (System/currentTimeMillis))
 (defn- clamp01 [v] (max 0.0 (min 1.0 (double v))))
@@ -155,12 +156,10 @@
     (let [ad (:ability-data ps) cid (:category-id ad)
           cat (when cid (category/get-category cid))
           skills (when cid
-                   (filter #(and (:enabled %)
-                                 (learning-rules/can-be-potentially-learned? ad %))
-                           (skill/get-skills-for-category cid)))
+                   (filter :enabled (skill/get-skills-for-category cid)))
           pos (when skills (calculate-skill-positions skills))]
       {:ability-info (build-ability-info-render-data ps) :category-color (:color cat)
-       :skill-nodes (when pos (mapv #(build-skill-node-render-data % ps (or dev-type :normal)) pos))
+       :skill-nodes (when pos (mapv (fn [p] (let [n (build-skill-node-render-data p ps (or dev-type :normal))] (assoc n :locked? (> (:skill-level n) (:level (:ability-data ps)))))) pos))
        :connections (when pos (build-skill-connections pos ps (or dev-type :normal)))
        :hover-skill hover-skill})))
 
@@ -258,11 +257,16 @@
 ;; Draw Ops — Skill nodes (textured, depth-layered, animated)
 ;; ============================================================================
 (defn- node-ops [node anim-time hovered-id hover-start]
-  (let [{:keys [x y idx learned can-learn skill-name skill-icon
+  (let [{:keys [x y idx learned can-learn locked? skill-name skill-icon
                 progress-segments exp m-alpha skill-id]} node
+        effective-m-alpha (if locked? 0.25 (or m-alpha 0.7))
+        effective-can-learn (and can-learn (not locked?))
+        effective-learned (and learned (not locked?))
+        _ (when (and (zero? (long idx)) (nil? skill-icon))
+            (log/info "[skill-tree-debug] node-ops: first node skill-icon is nil! node=" (pr-str node)))
         dt (max 0.0 (- anim-time (* idx 0.08) 0.1))
-        back-alpha (* m-alpha (clamp01 (* dt 10.0)))
-        icon-alpha (* m-alpha (clamp01 (* (- dt 0.08) 10.0)))
+        back-alpha (* effective-m-alpha (clamp01 (* dt 10.0)))
+        icon-alpha (* effective-m-alpha (clamp01 (* (- dt 0.08) 10.0)))
         progress-blend (clamp01 (* (- dt 0.12) 2.0))
         hover-now (= skill-id hovered-id)
         hover-elapsed (if hover-start (/ (- (now-ms) hover-start) 1000.0) 0.0)
@@ -344,7 +348,14 @@
 ;; ============================================================================
 (defn build-draw-ops [owner _mx _my]
   (if-let [rd (build-screen-render-data owner)]
-    (let [st (screen-state-snapshot owner)
+    (let [_ (do (log/info "[skill-tree-debug] build-draw-ops called")
+                (log/info "[skill-tree-debug]   category-name:" (pr-str (get-in rd [:ability-info :category-name])))
+                (log/info "[skill-tree-debug]   level:" (pr-str (get-in rd [:ability-info :level])))
+                (log/info "[skill-tree-debug]   skill-nodes count:" (count (:skill-nodes rd)))
+                (when-let [n0 (first (:skill-nodes rd))]
+                  (log/info "[skill-tree-debug]   first node:" (pr-str (select-keys n0 [:skill-id :skill-name :skill-icon :learned :can-learn :x :y]))))
+                (log/info "[skill-tree-debug]   connections count:" (count (:connections rd))))
+          st (screen-state-snapshot owner)
           ct (:creation-time st)
           anim (if ct (/ (- (now-ms) ct) 1000.0) 5.0)
           ab (:ability-info rd)

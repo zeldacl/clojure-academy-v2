@@ -144,12 +144,18 @@
     ;; --- Fills ---
     :fill (.fill graphics (:x op) (:y op) (+ (:x op) (:w op)) (+ (:y op) (:h op)) (:color op))
     ;; --- Textures ---
-    :icon-or-fill (if-let [loc (path->resource-location (:texture op))]
-                    (.blit graphics loc (:x op) (:y op) 0 0 (:w op) (:h op) (:w op) (:h op))
-                    (.fill graphics (:x op) (:y op) (+ (:x op) (:w op)) (+ (:y op) (:h op)) (:fallback-color op)))
+    :icon-or-fill (let [raw-tex (:texture op)
+                        loc (path->resource-location raw-tex)]
+                    (when (nil? loc)
+                      (log/error "[skill-tree-debug] icon-or-fill FAILED to resolve texture:" (pr-str raw-tex) "normalized:" (pr-str (path->resource-location raw-tex))))
+                    (if loc
+                      (.blit graphics loc (:x op) (:y op) 0 0 (:w op) (:h op) (:w op) (:h op))
+                      (.fill graphics (:x op) (:y op) (+ (:x op) (:w op)) (+ (:y op) (:h op)) (:fallback-color op))))
     :textured-quad (let [tex-key (:texture op)
                          loc (if (keyword? tex-key) (get-skill-tree-texture tex-key)
                                  (path->resource-location tex-key))]
+                     (when (and (not (keyword? tex-key)) (nil? (path->resource-location tex-key)))
+                       (log/error "[skill-tree-debug] textured-quad FAILED to resolve:" (pr-str tex-key)))
                      (when loc
                        (.blit graphics loc (:x op) (:y op) 0 0 (:w op) (:h op) (:w op) (:h op))))
     :raw-rect-uv   (let [tex-key (:texture op)

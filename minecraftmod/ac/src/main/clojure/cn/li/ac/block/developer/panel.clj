@@ -426,7 +426,7 @@
       :else :skill-tree)))
 
 (defn- render-skill-tree-area!
-  "Render skill tree nodes in parent_right/area."
+  "Render skill tree nodes in parent_right/area matching upstream SkillTree.scala."
   [root area-widget container player]
   (cgui-core/clear-widgets! area-widget)
   (try
@@ -435,29 +435,77 @@
           pstate (when uuid-str (store/get-player-state* session-id uuid-str))
           dev-type (current-developer-type container)
           render-data (skill-tree/build-render-data-for-player-state pstate dev-type)
-          nodes (:skill-nodes render-data)]
+          nodes (:skill-nodes render-data)
+          connections (:connections render-data)
+          ;; Upstream constants: WidgetSize=16, TotalSize=23, IconSize=14, ProgSize=31
+          widget-size 16 total-size 23 icon-sz 14 prog-sz 31
+          draw-align (/ (- widget-size total-size) 2)
+          prog-align (/ (- total-size prog-sz) 2)
+          icon-align (/ (- total-size icon-sz) 2)
+          skill-back-path (modid/asset-path "textures" "guis/developer/skill_back.png")
+          skill-outline-path (modid/asset-path "textures" "guis/developer/skill_outline.png")
+          bg-area-path (modid/asset-path "textures" "guis/effect/effect_developer_background.png")]
+
+      ;; Parallax background (upstream: texAreaBack rawRect in FrameEvent)
+      (let [bg-w (cgui-core/create-widget :pos [0 0] :size [(int 257) (int 139)])]
+        (comp/add-component! bg-w (comp/draw-texture bg-area-path 0xFFFFFFFF))
+        (cgui-core/add-widget! area-widget bg-w))
+
+      ;; Connection lines (upstream: center=WidgetSize/2=8, inset=12.2, alpha=mAlpha*learned)
+      (when (seq connections)
+        (doseq [{:keys [from-x from-y to-x to-y child-learned? m-alpha]} connections]
+          (let [dx (- to-x from-x) dy (- to-y from-y)
+                norm (Math/sqrt (+ (* dx dx) (* dy dy)))]
+            (when (pos? norm)
+              (let [ndx (/ dx norm) ndy (/ dy norm)
+                    line-alpha (* (or m-alpha 0.7) (if child-learned? 1.0 0.4))
+                    alpha-byte (int (* 255.0 line-alpha))
+                    color (bit-or (bit-shift-left alpha-byte 24) 0xFFFFFF)
+                    x0 (+ from-x (* ndx 12.2)) y0 (+ from-y (* ndy 12.2))
+                    x1 (- to-x (* ndx 12.2)) y1 (- to-y (* ndy 12.2))
+                    steps (max 1 (int norm))]
+                (doseq [i (range (inc steps))]
+                  (let [t (/ i (double steps))
+                        px (int (+ x0 (* (- x1 x0) t)))
+                        py (int (+ y0 (* (- y1 y0) t)))]
+                    (when-let [dot-w (cgui-core/create-widget :pos [px py] :size [2 2])]
+                      (comp/add-component! dot-w (comp/draw-texture nil color))
+                      (cgui-core/add-widget! area-widget dot-w)))))))))
+
+      ;; Skill nodes (upstream: no labels, WidgetSize=16 circle with outline + icon)
       (when (seq nodes)
-        (doseq [{:keys [x y learned can-learn skill-id skill-name]} nodes
+        (doseq [{:keys [x y learned can-learn locked? skill-id skill-icon m-alpha]} nodes
                 :when (and skill-id x y)]
-          (let [node-x (int (+ x 10))
-                node-y (int (+ y 10))
-                size 16
-                color (cond learned 0xCC66CC66 can-learn 0xCC6699FF :else 0xAA444444)
-                node-w (cgui-core/create-widget :pos [node-x node-y] :size [size size])
-                fill (comp/draw-texture nil color)]
-            (comp/add-component! node-w fill)
-            ;; Label
-            (let [label (cgui-core/create-widget :pos [(+ node-x size 4) (+ node-y 2)] :size [120 12])
-                  tb (comp/text-box :text (str skill-name) :font :ac-normal :font-size 9 :align :left :color 0xFFFFFFFF)]
-              (comp/add-component! label tb)
-              (cgui-core/add-widget! area-widget label))
-            ;; Click handler
-            (when can-learn
+          (let [node-x (int (+ x draw-align)) node-y (int (+ y draw-align))
+                node-w (cgui-core/create-widget :pos [node-x node-y] :size [widget-size widget-size])
+                eff-alpha (if locked? 0.25 (or m-alpha 0.7))
+                node-alpha (int (* 255.0 eff-alpha))
+                node-color (bit-or (bit-shift-left node-alpha 24)
+                                   (cond learned 0x66CC66 can-learn 0x6699FF :else 0x444444))]
+            ;; Circular skill_back
+            (comp/add-component! node-w (comp/draw-texture skill-back-path node-color))
+            ;; Dark skill_outline ring
+            (let [ol-w (cgui-core/create-widget :pos [(+ node-x prog-align) (+ node-y prog-align)] :size [prog-sz prog-sz])
+                  ol-alpha (int (* 255.0 (* eff-alpha 0.6)))
+                  ol-color (bit-or (bit-shift-left ol-alpha 24) 0x333333)]
+              (comp/add-component! ol-w (comp/draw-texture skill-outline-path ol-color))
+              (cgui-core/add-widget! area-widget ol-w))
+            ;; Skill icon centered
+            (when skill-icon
+              (let [icon-path (modid/asset-path "textures" (subs skill-icon (count "textures/")))
+                    icon-alpha (if locked? (int (* 255.0 0.25)) 255)
+                    icon-color (bit-or (bit-shift-left icon-alpha 24) 0xFFFFFF)
+                    icon-w (cgui-core/create-widget :pos [(+ node-x icon-align) (+ node-y icon-align)] :size [icon-sz icon-sz])]
+                (comp/add-component! icon-w (comp/draw-texture icon-path icon-color))
+                (cgui-core/add-widget! area-widget icon-w)))
+            ;; Click handler (locked + unlearned-without-prereqs don't respond)
+            (when (and (or can-learn learned) (not locked?))
               (events/on-left-click node-w
                 (fn [_] (create-skill-detail-overlay! root container skill-id dev-type))))
             (cgui-core/add-widget! area-widget node-w)))))
     (catch Exception e
-      (log/error "Skill tree render failed:" (ex-message e)))))
+      (do (log/error "Skill tree render failed:" (ex-message e))
+          (log/stacktrace "Skill tree render failed" e)))))
 
 (defn- make-dev-start-callback
   "Build a callback that writes server rejection reason to console state."
