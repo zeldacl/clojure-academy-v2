@@ -32,14 +32,14 @@
     :kind :polyline-arc
     :state {:layer :lines
 	    :blend :alpha}
-    :params {:segments 20
+    :params {:segments 16
        :length 15.0
        :show-wiggle 0.2
-       :hide-wiggle 0.2
-       :wiggle-amp 0.5
+       :hide-wiggle 0.8
+       :wiggle-amp 0.8
 	     :wiggle-freq 7.0
-	     :color-a [110 190 255]
-	     :color-b [200 230 255]}}
+	     :color-a [140 220 255]
+	     :color-b [240 250 255]}}
 
    {:id "marker-billboard"
     :kind :billboard-cross
@@ -59,6 +59,34 @@
                :arc-life-ticks 3
                :tier-heights [2.0 1.8 1.5 1.0 0.5 0.0 -0.1]
                :tier-delays [0 1 3 4 6 7 8]}}
+
+     ;; Surround arc: orbiting rings around block (NORMAL) or player (THIN).
+     ;; Matching original EntitySurroundArc visual.
+     {:id "surround-arc"
+      :kind :ring-lines
+      :state {:layer :lines
+              :blend :alpha}
+      :params {:rings 3
+               :segments 16
+               :radius-start 0.3
+               :radius-step 0.4
+               :y 0.02
+               :color-a [110 200 255]
+               :color-b [80 150 220]}}
+
+     ;; THIN surround arc: 1 ring (item mode).
+     ;; Matching original EntitySurroundArc(THIN).
+     {:id "surround-arc-thin"
+      :kind :ring-lines
+      :state {:layer :lines
+              :blend :alpha}
+      :params {:rings 1
+               :segments 12
+               :radius-start 0.2
+               :radius-step 0.3
+               :y 0.02
+               :color-a [160 220 255]
+               :color-b [100 180 230]}}
 
      {:id "ray-composite"
       :kind :ray-composite

@@ -18,6 +18,7 @@
 
 (def ^:private current-charging-skill-id :current-charging)
 (def ^:private arc-entity-id "my_mod:entity_arc")
+(def ^:private surround-arc-entity-id "my_mod:entity_surround_arc")
 
 (defn- cfg-double [field-id]
   (skill-config/tunable-double current-charging-skill-id field-id))
@@ -188,7 +189,7 @@
                is-item (boolean (:is-item skill-state))
                player-id (:player-id (or (ctx/get-context ctx-id) {}))]
              (end-and-terminate! ctx-id is-item player-id)))
-   :down!  (fn [{:keys [player-id ctx-id exp]}]
+   :down!  (fn [{:keys [player-id ctx-id exp player]}]
              (let [is-item (boolean (main-hand-item player-id))
                    exp* (double (or exp 0.0))
                    overload-floor (cfg-lerp :cost.down.overload exp*)]
@@ -202,6 +203,13 @@
                        :target nil
                        :block-pos nil
                        :charged 0.0})
+               ;; Spawn surround arc entity (matching original EntitySurroundArc)
+               ;; NORMAL (3 rings) for block mode, THIN (1 ring) for item mode
+               (when player
+                 (entity/player-spawn-entity-by-id!
+                   player
+                   (if is-item "my_mod:entity_surround_arc_thin" surround-arc-entity-id)
+                   0.0))
                (fx/send! ctx-id {:topic :current-charging/fx-start :mode :start} nil
                          (fx-payload player-id {:is-item is-item}))))
    :tick!  (fn [{:keys [player-id ctx-id player]}]

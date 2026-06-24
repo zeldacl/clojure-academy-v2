@@ -351,6 +351,23 @@
                                :hook-params {:forward 1.0
                                              :vertical 1.1}}}}))
 
+    ;; THIN surround arc: 1 ring (item mode), matching EntitySurroundArc(THIN).
+    (edsl/register-entity!
+      (edsl/create-entity-spec
+        "entity_surround_arc_thin"
+        {:entity-kind :scripted-effect
+         :category :misc
+         :width 0.6
+         :height 0.6
+         :client-tracking-range 64
+         :update-interval 1
+         :properties {:effect {:life-ticks 100
+                               :follow-owner? false
+                               :renderer-id "surround-arc-thin"
+                               :hook :surround-arc
+                               :hook-params {:forward 0.8
+                                             :vertical 1.0}}}}))
+
     (edsl/register-entity!
       (edsl/create-entity-spec
         "entity_arc"
