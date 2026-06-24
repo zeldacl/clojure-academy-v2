@@ -12,7 +12,8 @@
 		:polyline-arc
 		:wire-box
 		:ray-composite
-		:ray-composite-lite})
+		:ray-composite-lite
+		:intensify-arcs})
 
 (def ^:private allowed-top-level-keys
 	#{:id :kind :version :enabled? :state :anim :params :budget})
