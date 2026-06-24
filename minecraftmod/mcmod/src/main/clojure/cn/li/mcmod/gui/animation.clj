@@ -42,19 +42,23 @@
     x, y, w, h - Widget position and size
     absolute-frame - Current frame index (0-based)
     total-frames - Total frames in vertical atlas
+    alpha - Optional alpha multiplier (default 1.0, range [0.0, 1.0])
 
   Texture layout: Frames stacked vertically, each frame is 1/total-frames of height.
   UV: (0, frame/total) to (1, frame/total + 1/total)"
-  [widget texture-path x y w h absolute-frame total-frames]
-  (let [u0 0.0
-        v0 (/ (double absolute-frame) total-frames)
-        u1 1.0
-        v1 (+ v0 (/ 1.0 total-frames))]
-    (comp/render-texture-region
-      widget
-      texture-path
-      x y w h
-      u0 v0 u1 v1)))
+  ([widget texture-path x y w h absolute-frame total-frames]
+   (render-animation-frame! widget texture-path x y w h absolute-frame total-frames 1.0))
+  ([widget texture-path x y w h absolute-frame total-frames alpha]
+   (let [u0 0.0
+         v0 (/ (double absolute-frame) total-frames)
+         u1 1.0
+         v1 (+ v0 (/ 1.0 total-frames))]
+     (comp/render-texture-region
+       widget
+       texture-path
+       x y w h
+       u0 v0 u1 v1
+       alpha))))
 
 (defn create-status-poller
   "Create throttled status poller.

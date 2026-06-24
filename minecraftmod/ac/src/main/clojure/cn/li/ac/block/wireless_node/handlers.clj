@@ -180,6 +180,13 @@
         (assoc result :messages (feedback/result->messages :node result)))
       {:success false :messages (feedback/result->messages :node {:success false :reason :aborted})})))
 
+(defn handle-query-link
+  "Handle periodic link-status query from client (matching original
+  GuiNode MSG_QUERY_LINK: WirelessHelper.isNodeLinked(node))."
+  [payload player]
+  (let [tile (open-tile payload player)]
+    {:linked (boolean (linked-network tile))}))
+
 (defn register-network-handlers!
   []
   (net-server/register-handler (msg :change-name) handle-change-name)
@@ -187,4 +194,5 @@
   (net-server/register-handler (msg :list-networks) handle-list-networks)
   (net-server/register-handler (msg :connect) handle-connect)
   (net-server/register-handler (msg :disconnect) handle-disconnect)
+  (net-server/register-handler (msg :query-link) handle-query-link)
   (log/info "Node GUI network handlers registered"))

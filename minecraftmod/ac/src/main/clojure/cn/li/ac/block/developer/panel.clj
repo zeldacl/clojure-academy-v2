@@ -562,10 +562,16 @@
             (events/on-left-click child forward)))))
 
     ;; Frame handler — updates left panel + right panel mode dispatch
+    ;; + periodic wireless label refresh (every 5s for multiplayer correctness)
     (let [right-area (cgui-core/find-widget root "parent_right/area")
-          last-mode (atom nil)]
+          last-mode (atom nil)
+          refresh-tick (atom 0)]
       (events/on-frame root
         (fn [_]
+          ;; Periodic wireless node label refresh (multiplayer safety)
+          (swap! refresh-tick inc)
+          (when (zero? (mod @refresh-tick 100))  ;; ~5s at 20tps
+            (refresh-linked-node-label! root container))
           ;; Left panel updates
           (let [{:keys [ability-name icon-path exp-label level-label
                         cat-prog01 power01 sync-rate can-upgrade?]}

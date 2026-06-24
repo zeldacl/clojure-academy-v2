@@ -100,7 +100,9 @@
     {:begin 0 :frames 1 :frame-time 1000}))
 
 (defn create-anim-widget
-  "Create animation widget and attach frame handler."
+  "Create animation widget with breathe-alpha rendering and 2-second
+  link status polling (matching original GuiNode MSG_QUERY_LINK for
+  multiplayer correctness)."
   [container & [opts]]
   (let [opts (or opts {})
         pos (get opts :pos [42 35.5])
@@ -109,22 +111,37 @@
         anim-state (anim/create-animation-state)
         widget (apply cgui-core/create-widget
                       (concat [:pos pos :size size]
-                              (when scale [:scale scale])))]
-    ;; attach per-frame update: animation + render
+                              (when scale [:scale scale])))
+        link-poll (atom {:last-query 0})]
     (events/on-frame widget
-                     (fn [_]
-                       (let [linked? (boolean (when-let [linked (:linked container)] @linked))]
-                         (reset! (:current-state anim-state) (if linked? :linked :unlinked)))
-                       (let [config (get-animation-config @(:current-state anim-state))]
-                         (anim/update-animation! anim-state config))
-                       (let [config (get-animation-config @(:current-state anim-state))
-                             absolute-frame (+ (:begin config) @(:current-frame anim-state))]
-                         (anim/render-animation-frame!
-                           widget
-                           (modid/asset-path "textures" "guis/effect/effect_node.png")
-                           0 0 186 75
-                           absolute-frame
-                           10))))
+      (fn [_]
+        ;; 2-second link status poll for multiplayer correctness
+        (let [now (System/currentTimeMillis)]
+          (when (> (- now (:last-query @link-poll)) 2000)
+            (swap! link-poll assoc :last-query now)
+            (net-client/send-to-server
+              (msg :query-link)
+              (action-payload/action-payload container {})
+              (fn [resp]
+                (when (and resp (contains? resp :linked))
+                  (when-let [linked-atom (:linked container)]
+                    (reset! linked-atom (boolean (:linked resp)))))))))
+        ;; Update animation state from linked atom
+        (let [linked? (boolean (when-let [linked (:linked container)] @linked))]
+          (reset! (:current-state anim-state) (if linked? :linked :unlinked)))
+        ;; Advance animation frame
+        (let [config (get-animation-config @(:current-state anim-state))]
+          (anim/update-animation! anim-state config))
+        ;; Render with breathe alpha
+        (let [config (get-animation-config @(:current-state anim-state))
+              absolute-frame (+ (:begin config) @(:current-frame anim-state))
+              time (/ (System/currentTimeMillis) 1000.0)
+              breathe-sin (* (+ 1.0 (Math/sin (/ time 0.8))) 0.5)
+              breathe-alpha (float (+ 0.675 (* breathe-sin 0.175)))]
+          (anim/render-animation-frame!
+            widget
+            (modid/asset-path "textures" "guis/effect/effect_node.png")
+            0 0 186 75 absolute-frame 10 breathe-alpha))))
     {:widget widget :anim-state anim-state}))
 
 ;; ============================================================================
@@ -258,12 +275,7 @@
 ;; ============================================================================
 
 (defn build-info-area!
-  "Build InfoArea for Node GUI
-  
-  Args:
-  - info-area: InfoArea widget
-  - container: NodeContainer
-  - player: EntityPlayer"
+  "Build InfoArea for Node GUI"
   [info-area container player]
   (try
     (let [tile (:tile-entity container)
@@ -319,27 +331,15 @@
 ;; ============================================================================
 
 (defn create-node-gui
-  "Create Wireless Node GUI (TechUI)
-  
-  Args:
-  - container: NodeContainer
-  - player: EntityPlayer
-  - opts: optional map, e.g. {:menu AbstractContainerMenu} (menu passed from screen factory)
-  
-  Returns: Root CGui widget"
+  "Create Wireless Node GUI (TechUI)"
   [container player & [opts]]
   (try
     (let [container (cond-> container
                       (:menu opts) (assoc :minecraft-container (:menu opts)))
           inv-page (tech-ui/create-inventory-page "node")
-          ;; Use the inventory page window as the size reference so that the
-          ;; wrapper container matches the XML layout (176x187) instead of
-          ;; the smaller TechUI logical width. This prevents the background
-          ;; from appearing zoomed or clipped.
           inv-window (:window inv-page)
           info-area (tech-ui/create-info-area)
           _ (log/info "DEBUG: info-area created, size=" (cgui-core/get-size info-area))
-          ;; create animation widget (includes anim-state and poller)
           {:keys [widget]} (create-anim-widget container)
           anim-widget widget
           _ (log/info "DEBUG: anim-widget created, size=" (cgui-core/get-size anim-widget) "visible=" (cgui-core/visible? anim-widget))
@@ -348,32 +348,23 @@
           pages [inv-page {:id "wireless" :window wireless-panel}]
           _ (log/info "DEBUG: pages created, count=" (count pages))
           container-id (when-let [m (:menu opts)] (container-state/get-menu-container-id m))
-          ;; Compose tech UI from pages (inventory, info, wireless)
           tech-ui (apply tech-ui/create-tech-ui pages)
           _ (log/info "DEBUG: tech-ui created, window size=" (cgui-core/get-size (:window tech-ui)) "current=" @(:current tech-ui))
-          ;; Attach generic tab-change sync (pages sequence, tech-ui map, container, container-id)
           _ (tabbed-gui/attach-tab-sync! pages tech-ui container container-id)
-          ;tech-ui (tech-ui/create-tech-ui)
           main-widget (:window tech-ui)
-          _ (log/info "DEBUG: main-widget extracted, size=" (cgui-core/get-size main-widget) "children count=" (count (cgui-core/get-widgets main-widget)))
-          ;show-info! (fn [] ((:show-page-fn tech-ui) "info"))
-          ;show-wireless! (fn [] ((:show-page-fn tech-ui) "wireless"))
-          ]
-      
+          _ (log/info "DEBUG: main-widget extracted, size=" (cgui-core/get-size main-widget) "children count=" (count (cgui-core/get-widgets main-widget)))]
+
       (cgui-core/add-widget! inv-window anim-widget)
       (log/info "DEBUG: anim-widget added to inv-window")
 
-      ;; Position and build info area (create-tech-ui has already attached it,
-      ;; but we need to position and populate it)
       (cgui-core/set-position! info-area (+ (cgui-core/get-width inv-window) 7) 5)
       (build-info-area! info-area container player)
       (log/info "DEBUG: info-area positioned and built")
 
       (cgui-core/add-widget! main-widget info-area)
       (log/info "DEBUG: info-area added to main-widget")
-      
+
       (log/info "Created Wireless Node GUI (TechUI)")
-      ;; When opts has :menu (screen path), return map so screen can block slot clicks when tab != inv
       (if (:menu opts)
         {:root main-widget :current (:current tech-ui)}
         main-widget))
@@ -387,9 +378,7 @@
 ;; ============================================================================
 
 (defn create-screen
-  "Create CGuiScreenContainer for Node GUI.
-   minecraft-container is the AbstractContainerMenu (menu); passed as opts for tabbed GUI sync.
-   Passes :current-tab-atom so client can block slot clicks when not on inv tab."
+  "Create CGuiScreenContainer for Node GUI."
   [container minecraft-container player]
   (let [gui (create-node-gui container player {:menu minecraft-container})
         root (if (map? gui) (:root gui) gui)

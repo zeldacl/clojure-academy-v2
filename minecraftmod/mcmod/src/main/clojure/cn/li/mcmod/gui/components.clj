@@ -204,19 +204,20 @@
   draw-tex)
 
 (defn render-texture-region
-  [widget texture-path _x _y _w _h u0 v0 u1 v1]
-  (let [dt (or (get-drawtexture-component widget)
-               (let [new-dt (create-native-component (texture texture-path))]
-                 (add-component! widget new-dt)
-                 new-dt))]
-    (set-texture! dt texture-path)
-    (swap! (component-state dt) assoc :uv [u0 v0 (- u1 u0) (- v1 v0)])
-    ;; Note: do NOT mutate widget transform here. Components should not have
-    ;; side effects on layout; the document loader / runtime are responsible
-    ;; for applying widget position/size/scale from XML. We only set component
-    ;; metadata (texture and uv). Callers that need a specific widget size should
-    ;; set it via the XML or document loader.
-    widget))
+  ([widget texture-path _x _y _w _h u0 v0 u1 v1]
+   (render-texture-region widget texture-path _x _y _w _h u0 v0 u1 v1 1.0))
+  ([widget texture-path _x _y _w _h u0 v0 u1 v1 alpha]
+   (let [dt (or (get-drawtexture-component widget)
+                (let [new-dt (create-native-component (texture texture-path))]
+                  (add-component! widget new-dt)
+                  new-dt))]
+     (set-texture! dt texture-path)
+     (swap! (component-state dt) assoc :uv [u0 v0 (- u1 u0) (- v1 v0)])
+     ;; Apply alpha: store as 0xAARRGGBB color with computed alpha
+     (let [a (int (* 255.0 (max 0.0 (min 1.0 (double alpha)))))
+           color (unchecked-int (bit-or (bit-shift-left a 24) 0x00FFFFFF))]
+       (swap! (component-state dt) assoc :color color))
+     widget)))
 
 (defn text-box
   [& {:keys [text color font-size align height-align x-offset y-offset z-level emit? shadow? masked? localized? font]
