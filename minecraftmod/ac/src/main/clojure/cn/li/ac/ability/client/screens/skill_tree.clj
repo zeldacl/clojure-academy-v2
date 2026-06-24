@@ -196,8 +196,8 @@
 (defn handle-screen-click! [owner mx my]
   (let [st (screen-state-snapshot owner) sel (:selected-skill st)]
     (if sel
-      (let [dx 220 dy 70 dw 200 dh 145]
-        (cond (and (>= mx (+ dx 50)) (<= mx (+ dx 110)) (>= my (+ dy 110)) (<= my (+ dy 130)))
+      (let [dx 220 dy 70 dw 200 dh 155]
+        (cond (and (>= mx (+ dx 55)) (<= mx (+ dx 87)) (>= my (+ dy 125)) (<= my (+ dy 141)))
               (do (on-skill-learn-click owner sel) true)
               (and (>= mx dx) (<= mx (+ dx dw)) (>= my dy) (<= my (+ dy dh)))
               (do (swap-screen-state! owner assoc :selected-skill nil) true)
