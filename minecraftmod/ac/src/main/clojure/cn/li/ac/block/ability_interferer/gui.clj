@@ -2,6 +2,7 @@
   "CLIENT-ONLY: Ability Interferer GUI"
   (:require [clojure.string :as str]
             [cn.li.mcmod.gui.cgui-core :as cgui-core]
+            [cn.li.mcmod.gui.cgui-screen :as cgui-screen]
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.mcmod.gui.events :as events]
             [cn.li.mcmod.gui.spec :as gui-reg]
@@ -131,13 +132,22 @@
 (defn- handle-button-click! [_container _button-id _player] nil)
 
 (defn- update-switch-texture!
+  "Update switch button texture + lum matching original GuiAbilityInterferer:
+   color.setRed/Green/Blue(if(state) 1 else 0.6f) + changes texture."
   [switch-widget enabled?]
   (when-let [dt (comp/get-drawtexture-component switch-widget)]
     (comp/set-texture!
       dt
       (if enabled?
         (modid/asset-path "textures" "guis/button/button_switch_on.png")
-        (modid/asset-path "textures" "guis/button/button_switch_off.png")))))
+        (modid/asset-path "textures" "guis/button/button_switch_off.png")))
+    ;; Lum adjustment matching original: ON=1.0 (255), OFF=0.6 (153)
+    (let [lum (if enabled? 0xFF 0x99)]
+      (swap! (:state dt) assoc :color
+             (unchecked-int (bit-or (bit-shift-left lum 16)
+                                   (bit-shift-left lum 8)
+                                   lum
+                                   0xFF000000))))))
 
 (defn- effective-range
   [container]
@@ -248,8 +258,10 @@
 (defn- open-add-input-widget!
   [panel container]
   (close-add-input-widget! panel container)
-  (let [box (cgui-core/create-widget :name "interferer_whitelist_input" :pos [50 5] :size [56 10])
-        tb (comp/text-box :text "" :font :ac-normal :font-size 10 :color 0xFFFFFFFF)
+  (let [box (cgui-core/create-widget :name "interferer_whitelist_input" :pos [50 5] :size [40 10])
+        ;; Semi-transparent white background matching original DrawTexture(null).setColor(255,255,255,50)
+        _ (comp/add-component! box (comp/draw-texture nil 0x32FFFFFF))
+        tb (comp/text-box :text "" :font :ac-normal :font-size 10 :color 0xFF000000)
         tb-native (comp/add-component! box tb)]
     (comp/set-editable! tb-native true)
     (events/on-confirm-input tb-native
@@ -262,6 +274,9 @@
       (fn [_]
         (close-add-input-widget! panel container)))
     (cgui-core/add-widget! panel box)
+    ;; Gain focus so keyboard input reaches the textbox (matching original box.gainFocus())
+    (when-let [root (get @(:metadata container) :focus-root)]
+      (cgui-screen/gain-focus! root box))
     (when-let [input-widget* (:add-input-widget container)]
       (reset! input-widget* box))))
 
@@ -269,11 +284,11 @@
   [inv-window container]
   (when-let [range-text (cgui-core/find-widget inv-window "panel_config/element_range/element_text_range")]
     (when-let [tb (comp/get-textbox-component range-text)]
-      (comp/set-text! tb (format "%.0f" (double (effective-range container)))))
+      (comp/set-text! tb (.toString (double (effective-range container)))))
     (events/on-frame range-text
       (fn [_]
         (when-let [tb (comp/get-textbox-component range-text)]
-          (comp/set-text! tb (format "%.0f" (double (effective-range container))))))))
+          (comp/set-text! tb (.toString (double (effective-range container))))))))
 
   (when-let [switch-btn (cgui-core/find-widget inv-window "panel_config/element_switch/element_btn_switch")]
     (update-switch-texture! switch-btn (effective-enabled container))
@@ -357,7 +372,9 @@
       {:pages pages
        :container container
        :minecraft-container minecraft-container
-       :bind! (fn [_]
+       :bind! (fn [root-widget]
+                ;; Store root for focus management (matching original box.gainFocus())
+                (swap! (:metadata container) assoc :focus-root root-widget)
                 (wire-xml-controls! inv-window container))
        :build-info-area!
        (fn [info-area]
@@ -366,7 +383,7 @@
                                          0)
                y1 (tech-ui/add-sepline info-area "Interferer" y0)
                y2 (tech-ui/add-property info-area "enabled" (fn [] (if (effective-enabled container) "ON" "OFF")) y1)
-                 y3 (tech-ui/add-property info-area "range" (fn [] (format "%.0f" (double (effective-range container)))) y2)
+                 y3 (tech-ui/add-property info-area "range" (fn [] (.toString (double (effective-range container)))) y2)
                y4 (tech-ui/add-property info-area "affected" (fn [] (str @(:affected-player-count container))) y3)
                y5 (tech-ui/add-property info-area "owner" (fn [] @(:placer-name container)) y4)]
                (tech-ui/add-property info-area "whitelist" wl-text y5)))})))
