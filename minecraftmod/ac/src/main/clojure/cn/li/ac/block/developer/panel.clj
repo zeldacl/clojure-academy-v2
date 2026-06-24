@@ -450,8 +450,13 @@
           skill-back-path (modid/asset-path "textures" "guis/developer/skill_back.png")
           skill-outline-path (modid/asset-path "textures" "guis/developer/skill_outline.png")
           bg-area-path (modid/asset-path "textures" "guis/effect/effect_developer_background.png")
-          ;; NOTE: Mouse parallax (upstream max_du_skills=10) not yet implemented.
-          ;; CGUI lacks on-mouse-move; needs platform bridge (future work).]
+          ;; Mouse parallax via platform bridge (upstream: max_du_skills=10)
+          [mx my] (cn.li.mcmod.client.platform-bridge/get-mouse-pos)
+          area-w 257 area-h 139
+          mouse-dx (- (/ mx (max 1.0 (double area-w))) 0.5)
+          mouse-dy (- (/ my (max 1.0 (double area-h))) 0.5)
+          parallax-x (* mouse-dx 10.0)  ;; max_du_skills = 10
+          parallax-y (* mouse-dy 10.0)
           ;; Helper: staggered alpha per node index
           node-alpha-fn (fn [idx] (max 0.0 (min 1.0 (* (- anim-time (* idx 0.08) 0.1) 10.0))))]
 
@@ -490,7 +495,7 @@
       (when (seq nodes)
         (doseq [{:keys [x y idx learned can-learn locked? skill-id skill-icon m-alpha]} nodes
                 :when (and skill-id x y)]
-          (let [node-x (int (+ x draw-align)) node-y (int (+ y draw-align))
+          (let [node-x (int (+ x draw-align (* parallax-x -1))) node-y (int (+ y draw-align (* parallax-y -1)))
                 node-w (cgui-core/create-widget :pos [node-x node-y] :size [widget-size widget-size])
                 ;; Staggered fade-in per node (backAlpha, iconAlpha matching upstream)
                 fade-back (node-alpha-fn idx)

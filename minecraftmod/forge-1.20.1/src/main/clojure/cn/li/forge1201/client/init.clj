@@ -180,6 +180,10 @@
 	     :get-client-player #(.player (Minecraft/getInstance))
 	     :screen-active? #(some? (.screen (Minecraft/getInstance)))
 	     :close-screen! #(.setScreen (Minecraft/getInstance) nil)
+       :get-mouse-pos (fn []
+                        (let [^net.minecraft.client.Minecraft mc (Minecraft/getInstance)
+                              mh (.mouseHandler mc)]
+                          [(double (.xpos mh)) (double (.ypos mh))]))
        :send-system-message! (fn [player translatable-key & args]
                                 (let [^LocalPlayer player player]
                                   (.sendSystemMessage player

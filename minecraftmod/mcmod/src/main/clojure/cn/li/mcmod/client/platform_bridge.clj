@@ -19,7 +19,7 @@
            movement-key-down movement-key-tick movement-key-up
            open-screen open-simple-gui run-client-effect
            get-client-player screen-active? close-screen!
-           send-system-message!]}]
+           send-system-message! get-mouse-pos]}]
   (prt/install-impl! #'*client-bridge-ops*
                      {:slot-key-down slot-key-down
                       :slot-key-tick slot-key-tick
@@ -34,7 +34,8 @@
                       :get-client-player get-client-player
                       :screen-active? screen-active?
                       :close-screen! close-screen!
-                      :send-system-message! send-system-message!}
+                      :send-system-message! send-system-message!
+                      :get-mouse-pos get-mouse-pos}
                      "client-bridge")
   nil)
 
@@ -138,3 +139,13 @@
   [player translatable-key & args]
   (or (apply bridge-op :send-system-message! player translatable-key args)
       (log/debug "Client bridge send-system-message! not available")))
+
+;; ============================================================================
+;; Mouse position access — avoids net.minecraft imports in ac layer
+;; ============================================================================
+
+(defn get-mouse-pos
+  "Return [x y] mouse position in the Minecraft window, or [0 0] if unavailable."
+  []
+  (or (bridge-op :get-mouse-pos)
+      [0 0]))
