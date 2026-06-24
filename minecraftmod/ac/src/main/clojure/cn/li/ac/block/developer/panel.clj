@@ -478,23 +478,33 @@
                 :when (and skill-id x y)]
           (let [node-x (int (+ x draw-align)) node-y (int (+ y draw-align))
                 node-w (cgui-core/create-widget :pos [node-x node-y] :size [widget-size widget-size])
+                ;; Upstream: skill_back is WHITE, only alpha-modulated (no tint)
                 eff-alpha (if locked? 0.25 (or m-alpha 0.7))
                 node-alpha (int (* 255.0 eff-alpha))
-                node-color (bit-or (bit-shift-left node-alpha 24)
-                                   (cond learned 0x66CC66 can-learn 0x6699FF :else 0x444444))]
-            ;; Circular skill_back
-            (comp/add-component! node-w (comp/draw-texture skill-back-path node-color))
-            ;; Dark skill_outline ring
-            (let [ol-w (cgui-core/create-widget :pos [(+ node-x prog-align) (+ node-y prog-align)] :size [prog-sz prog-sz])
-                  ol-alpha (int (* 255.0 (* eff-alpha 0.6)))
-                  ol-color (bit-or (bit-shift-left ol-alpha 24) 0x333333)]
+                ;; skill_back: white color × backAlpha (upstream glColor4d(1,1,1,backAlpha))
+                back-color (bit-or (bit-shift-left node-alpha 24) 0xFFFFFF)]
+            (comp/add-component! node-w (comp/draw-texture skill-back-path back-color))
+            ;; skill_outline: dark gray (0.2,0.2,0.2) × backAlpha*0.6 (upstream glColor4d(0.2,0.2,0.2,backAlpha*0.6))
+            (let [ol-alpha (int (* 255.0 (* eff-alpha 0.6)))
+                  ol-gray (max 0 (int (* 255.0 0.2)))
+                  ol-color (bit-or (bit-shift-left ol-alpha 24)
+                                   (bit-or (bit-shift-left ol-gray 16)
+                                           (bit-or (bit-shift-left ol-gray 8) ol-gray)))
+                  ol-w (cgui-core/create-widget :pos [(+ node-x prog-align) (+ node-y prog-align)] :size [prog-sz prog-sz])]
               (comp/add-component! ol-w (comp/draw-texture skill-outline-path ol-color))
               (cgui-core/add-widget! area-widget ol-w))
-            ;; Skill icon centered
+            ;; Skill icon: white × iconAlpha, grayscale if unlearned (upstream: ShaderMono when !learned)
             (when skill-icon
               (let [icon-path (modid/asset-path "textures" (subs skill-icon (count "textures/")))
-                    icon-alpha (if locked? (int (* 255.0 0.25)) 255)
-                    icon-color (bit-or (bit-shift-left icon-alpha 24) 0xFFFFFF)
+                    icon-alpha (if locked? (int (* 255.0 0.25)) (int (* 255.0 (or m-alpha 1.0))))
+                    ;; Grayscale tint for unlearned skills (matching upstream ShaderMono)
+                    icon-color (if (and (not learned) (not locked?))
+                                (let [g (int (* 255.0 (or m-alpha 1.0)))]
+                                  (bit-or (bit-shift-left g 24)
+                                          (bit-or (bit-shift-left (int (* g 0.3)) 16)
+                                                  (bit-or (bit-shift-left (int (* g 0.59)) 8)
+                                                          (int (* g 0.11))))))
+                                (bit-or (bit-shift-left icon-alpha 24) 0xFFFFFF))
                     icon-w (cgui-core/create-widget :pos [(+ node-x icon-align) (+ node-y icon-align)] :size [icon-sz icon-sz])]
                 (comp/add-component! icon-w (comp/draw-texture icon-path icon-color))
                 (cgui-core/add-widget! area-widget icon-w)))
