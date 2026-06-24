@@ -17,7 +17,8 @@
            (com.mojang.blaze3d.vertex PoseStack)
            (com.mojang.blaze3d.systems RenderSystem)
            (cn.li.mc1201.client MinecraftClientAccess GuiGraphicsHelper TextureSizeAccess)
-           (org.lwjgl.opengl GL11)))
+           (org.lwjgl.opengl GL11)
+           (org.joml Quaternionf)))
 
 (defn create-cgui-renderer-runtime
   ([]
@@ -494,7 +495,7 @@
         (.translate ps cx cy 0.0)
         (when (not= 0.0 rot)
           ;; Rotate around Z-axis (clockwise angle in radians)
-          (.mulPose ps (com.mojang.math.AxisAngle4f. (float rot) 0.0 0.0 1.0)))
+          (.mulPose ps (doto (org.joml.Quaternionf.) (.rotationZ (float rot)))))
         (.scale ps (float sx) (float sy) 1.0)
         (.translate ps (- cx) (- cy) 0.0)))
     ;; Render own components
@@ -505,7 +506,7 @@
           wx (int (+ left abs-x))
           wy (int (+ top abs-y))]
       (when (and clip? (seq children))
-        (.enableScissor gg wx wy (+ wx w-int) (+ wy wh)))
+        (.enableScissor gg wx wy (+ wx w-int) (+ wy h-int)))
       (doseq [c children]
         (when (cgui-core/visible? c)
           (try

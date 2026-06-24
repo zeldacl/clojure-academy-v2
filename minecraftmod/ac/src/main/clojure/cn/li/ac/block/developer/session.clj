@@ -66,21 +66,21 @@
 (defn- err [reason] {:ok? false :reason reason})
 
 (defn- start-category-level-up [state dev-type ability-data cat-id level]
-  "Start level-up development. Validation happens at completion time
-  (matching original AcademyCraft DevelopData.tick which calls
-  type.validate() on the last stim tick, not at session start)."
+  ;; Start level-up development. Validation happens at completion time
+  ;; matching original AcademyCraft DevelopData.tick which calls
+  ;; type.validate() on the last stim tick, not at session start.
   (let [{:keys [develop-data error]}
         (develop-rules/start-level-up (dev-model/new-develop-data) dev-type level)]
     (if error
       (err (name error))
       (ok-session state dev-type :level-up
                   {:cat-id cat-id :level level}
-                  develop-data)))))
+                  develop-data))))
 
 (defn- start-awaken-action [state player dev-type]
-  "Matching original AcademyCraft DevelopActionLevel.chooseCategory():
-   - If player has induction factor → consume it and use that category
-   - Otherwise → assign a random category (induction factor is OPTIONAL)"
+  ;; Matching original AcademyCraft DevelopActionLevel.chooseCategory():
+  ;; - If player has induction factor -> consume it and use that category
+  ;; - Otherwise -> assign a random category (induction factor is OPTIONAL)
   (let [{:keys [develop-data error]}
         (develop-rules/start-level-up (dev-model/new-develop-data) dev-type 0)]
     (if error
@@ -100,7 +100,7 @@
             (ok-session state dev-type :awaken
                         {:target-category (:id random-cat) :random? true}
                         develop-data)
-            (err "no-categories-available"))))))
+            (err "no-categories-available")))))))
 
 (defn- start-level-up-action [state player dev-type ability-data]
   (let [cat-id (:category-id ability-data)
@@ -127,9 +127,9 @@
         (err "unknown-skill")))))
 
 (defn- start-reset-action [state player dev-type ability-data]
-  "Pre-validate reset conditions. Items are consumed at COMPLETION time,
-  matching original AcademyCraft DevelopActionReset.onLearned() which
-  consumes items AFTER successful timed development."
+  ;; Pre-validate reset conditions. Items are consumed at COMPLETION time,
+  ;; matching original AcademyCraft DevelopActionReset.onLearned() which
+  ;; consumes items AFTER successful timed development.
   (let [cat-id (:category-id ability-data)
         level (int (:level ability-data 1))]
     (cond
@@ -140,7 +140,7 @@
       (if-let [{:keys [item-id category]} (find-induction-factor player)]
         (if (= category cat-id)
           (err "same-category")
-          (let [max-stim (* level 10)  ;; reset-specific formula: level * 10 (matching original)]
+          (let [max-stim (* level 10)]  ;; reset-specific formula: level * 10 (matching original)
             (ok-session state dev-type :reset
                         {:target-category category
                          :new-level (max 1 (dec level))
@@ -275,8 +275,8 @@
       nil)))
 
 (defn apply-completion!
-  "Apply completed development. For :reset action, consumes magnetic coil +
-  induction factor at completion time (matching original onLearned timing)."
+  ;; Apply completed development. For :reset action, consumes magnetic coil +
+  ;; induction factor at completion time (matching original onLearned timing).
   ([state] (apply-completion! state nil))
   ([state player]
    (when (:development-complete? state)
@@ -286,5 +286,4 @@
                                   (:development-action state)
                                   (:development-payload state)
                                   (:player-state-session-id state)
-                                  player)))))
-  nil)
+                                  player))))))

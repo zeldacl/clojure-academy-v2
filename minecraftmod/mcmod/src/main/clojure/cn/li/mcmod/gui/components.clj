@@ -52,7 +52,7 @@
   [widget]
   (vec @(:components widget)))
 
-(defn- component-state [component]
+(defn component-state [component]
   (or (:state component) (atom {})))
 
 (defn- make-component [kind initial-state]

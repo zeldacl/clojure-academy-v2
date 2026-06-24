@@ -7,7 +7,8 @@
 
   Pure state transitions + CGUI rendering via in-place textbox updates.
   Key events use camelCase keys as emitted by input/key-input!."
-  (:require             [cn.li.mcmod.gui.cgui-core :as cgui-core]
+  (:require [clojure.string :as str]
+            [cn.li.mcmod.gui.cgui-core :as cgui-core]
             [cn.li.mcmod.gui.cgui-screen :as cgui-screen]
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.mcmod.gui.events :as events]
@@ -91,6 +92,11 @@
                {:type :slow-print :text "Type 'learn' to start."}])))]
     (vec base-tasks)))
 
+(defn- clamp-lines [lines]
+  (if (> (count lines) max-lines)
+    (subvec lines (- (count lines) max-lines))
+    lines))
+
 (defn- process-current-task
   "Process current task. Returns updated state."
   [state dt-sec]
@@ -158,11 +164,6 @@
       ;; Queue exhausted — transition to idle
       (assoc state :phase :idle :task-queue [] :task-timer 0.0 :current-task nil))))
 
-(defn- clamp-lines [lines]
-  (if (> (count lines) max-lines)
-    (subvec lines (- (count lines) max-lines))
-    lines))
-
 ;; Messages
 (defn- msg [k]
   (case k
@@ -199,16 +200,14 @@
 ;; Command registry — extensible, matching original Console += Command(...)
 ;; ============================================================================
 
-(defonce ^:private command-registry
-  "Atom: {command-name-str → (fn [state] [new-state action-kw])}.
-  Register commands via register-command! to add custom console commands."
-  (atom {}))
+;; Atom: {command-name-str → (fn [state] [new-state action-kw])}.
+;; Register commands via register-command! to add custom console commands.
+(defonce ^:private command-registry (atom {}))
 
-(defn register-command!
-  "Register a console command. callback receives the current state atom
-  and the create-console options map, returns [new-state action-kw].
-  Matching original SkillTree.scala: console += Command(name, callback)"
-  [name callback]
+;; Register a console command. callback receives the current state atom
+;; and the create-console options map, returns [new-state action-kw].
+;; Matching original SkillTree.scala: console += Command(name, callback)
+(defn register-command! [name callback]
   (swap! command-registry assoc name callback)
   nil)
 
