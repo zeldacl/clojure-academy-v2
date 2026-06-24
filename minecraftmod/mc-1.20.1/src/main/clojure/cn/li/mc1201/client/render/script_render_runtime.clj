@@ -84,7 +84,7 @@
   nil)
 
 (def ^:private scripted-effect-kinds
-  #{:billboard-cross :ring-lines :polyline-arc})
+  #{:billboard-cross :ring-lines :polyline-arc :intensify-arcs})
 
 (def ^:private scripted-marker-kinds
   #{:billboard-cross})

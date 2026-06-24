@@ -38,6 +38,7 @@
          :update-interval 1
          :properties {:effect {:life-ticks 15
                                :follow-owner? false
+                               :renderer-id "intensify-arcs"
                                :hook :intensify-arcs
                                :hook-params {:arc-life-ticks 3
                                              :tier-batch-base 3

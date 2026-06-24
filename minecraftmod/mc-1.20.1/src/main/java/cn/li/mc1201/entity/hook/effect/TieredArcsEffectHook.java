@@ -2,9 +2,16 @@ package cn.li.mc1201.entity.hook.effect;
 
 import cn.li.mc1201.entity.ScriptedEffectEntity;
 import cn.li.mc1201.entity.spec.ScriptedEffectSpec;
+import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.VertexConsumer;
+import net.minecraft.client.Camera;
 import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.RenderType;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.util.RandomSource;
+import net.minecraft.world.phys.Vec3;
+import org.joml.Matrix4f;
 
 import java.util.Iterator;
 import java.util.List;

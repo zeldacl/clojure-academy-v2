@@ -48,6 +48,18 @@
     :params {:size 0.45
   	     :color [240 255 180]}}
 
+     ;; Tiered zigzag arcs for body intensify effect.
+     ;; Matching original EntityIntensifyEffect (EntitySurroundArc THIN
+     ;; with 7 height tiers, staggered delays, zigzag sub-arcs).
+     {:id "intensify-arcs"
+      :kind :intensify-arcs
+      :state {:layer :lines
+              :blend :alpha}
+      :params {:life-ticks 15
+               :arc-life-ticks 3
+               :tier-heights [2.0 1.8 1.5 1.0 0.5 0.0 -0.1]
+               :tier-delays [0 1 3 4 6 7 8]}}
+
      {:id "ray-composite"
       :kind :ray-composite
       :state {:layer :translucent
