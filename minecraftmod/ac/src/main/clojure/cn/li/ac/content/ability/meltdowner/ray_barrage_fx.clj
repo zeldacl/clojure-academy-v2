@@ -3,7 +3,8 @@
   (:require [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-spec :as fx-spec]
             [cn.li.ac.ability.client.level-effects :as level-effects]
-            [cn.li.ac.ability.client.render-util :as ru]))
+            [cn.li.ac.ability.client.render-util :as ru]
+            [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 
 (def ^:private ray-barrage-effect-id :ray-barrage)
 
@@ -84,11 +85,17 @@
 
 (defn- preray-sound! [_ctx-id _channel _payload]
   (client-sounds/queue-current-sound-effect!
-    {:type :sound :sound-id "my_mod:md.ray_barrage" :volume 0.35 :pitch 0.95}))
+    {:type :sound :sound-id "my_mod:md.ray_barrage" :volume 0.35 :pitch 0.95})
+  ;; Spawn EntityBarrageRayPre equivalent
+  (client-bridge/run-client-effect! :mcmod/spawn-local-scripted-effect
+    {:effect-id "entity_barrage_ray_pre"}))
 
 (defn- barrage-sound! [_ctx-id _channel _payload]
   (client-sounds/queue-current-sound-effect!
-    {:type :sound :sound-id "my_mod:md.ray_barrage" :volume 0.45 :pitch 1.1}))
+    {:type :sound :sound-id "my_mod:md.ray_barrage" :volume 0.45 :pitch 1.1})
+  ;; Spawn EntityMdRayBarrage equivalent
+  (client-bridge/run-client-effect! :mcmod/spawn-local-scripted-effect
+    {:effect-id "entity_md_ray_barrage"}))
 
 (defn init!
   []
