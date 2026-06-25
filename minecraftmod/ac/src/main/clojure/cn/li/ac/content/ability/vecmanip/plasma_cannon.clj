@@ -387,7 +387,8 @@
   :ctrl-id :plasma-cannon
   :cp-consume-speed 0.0
   :overload-consume-speed 0.0
-  :cooldown-ticks 1000
+  :cooldown-ticks (fn [{:keys [exp]}]
+                    (cfg-lerp-int :cooldown.ticks (double (or exp 0.0))))  ;; matching original lerp(1000, 600, exp)
   :pattern :charge-window
   :cooldown {:mode :manual}
   :cost {:down {:overload plasma-cannon-cost-down-overload}}

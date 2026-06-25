@@ -7,6 +7,7 @@
             [cn.li.mcmod.platform.nbt :as nbt]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.world :as world]
+            [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.util.log :as log]))
 
@@ -118,9 +119,24 @@
             :else
             {:consume? false}))))))
 
+(defn- play-mag-hook-throw-sound!
+  "Matches original ItemMagHook#onItemRightClick: egg-throw sound, volume 0.5,
+   pitch 0.4 / (rand[0,1) * 0.4 + 0.8) ~= [0.333, 0.5)."
+  [player]
+  (when (world-effects/available?)
+    (when-let [world-id (world/world-get-dimension-id* (entity/player-get-level player))]
+      (world-effects/play-sound!*
+        world-id
+        (entity/entity-get-x player) (entity/entity-get-y player) (entity/entity-get-z player)
+        "minecraft:entity.egg.throw"
+        :players
+        0.5
+        (/ 0.4 (+ (* (rand) 0.4) 0.8))))))
+
 (defn- throw-mag-hook!
   [{:keys [player side]}]
   (when (= side :server)
+    (play-mag-hook-throw-sound! player)
     (when (entity/player-spawn-entity-by-id! player mag-hook-entity-id 2.0)
       (entity/player-consume-main-hand-item! player 1)))
   {:consume? true})

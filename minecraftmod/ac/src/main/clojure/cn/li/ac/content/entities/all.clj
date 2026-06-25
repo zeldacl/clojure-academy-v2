@@ -21,7 +21,6 @@
          :properties {:projectile {:default-item-id "my_mod:mag_hook"
                                    :gravity 0.05
                                    :damage 4.0
-                                   :pickup-distance-sqr 2.25
                                    :drop-item-on-discard? true
                                    :hooks {:on-hit-block :anchor
                                            :on-hit-entity :damage-and-discard

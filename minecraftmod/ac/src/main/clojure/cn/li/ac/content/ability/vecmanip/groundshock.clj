@@ -420,7 +420,8 @@
   :ctrl-id :groundshock
   :cp-consume-speed 0.0
   :overload-consume-speed 0.0
-  :cooldown-ticks 80
+  :cooldown-ticks (fn [{:keys [exp]}]
+                    (cfg-lerp-int :cooldown.ticks (double (or exp 0.0))))  ;; matching original lerp(80, 40, exp)
   :pattern :release-cast
   :cooldown {:mode :manual}
   :cost {:up {:cp groundshock-cost-up-cp

@@ -8,8 +8,11 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityDimensions;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.ThrowableItemProjectile;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -80,6 +83,12 @@ public class ScriptedProjectileEntity extends ThrowableItemProjectile {
         this.setDeltaMovement(Vec3.ZERO);
         this.setNoGravity(true);
         this.noPhysics = true;
+        this.refreshDimensions();
+    }
+
+    @Override
+    public EntityDimensions getDimensions(Pose pose) {
+        return this.anchored ? EntityDimensions.scalable(1.0F, 1.0F) : super.getDimensions(pose);
     }
 
     @Override
@@ -106,12 +115,6 @@ public class ScriptedProjectileEntity extends ThrowableItemProjectile {
         BlockState state = this.level().getBlockState(this.anchorPos);
         if (state.isAir()) {
             dropConfiguredItemAndDiscard();
-            return;
-        }
-        double pickupDistanceSqr = spec == null ? 2.25D : Math.max(0.0D, spec.getPickupDistanceSqr());
-        Entity owner = this.getOwner();
-        if (owner != null && owner.distanceToSqr(this) <= pickupDistanceSqr) {
-            dropConfiguredItemAndDiscard();
         }
     }
 
@@ -136,10 +139,14 @@ public class ScriptedProjectileEntity extends ThrowableItemProjectile {
         Entity target = result.getEntity();
         Entity owner = this.getOwner();
         if (!this.level().isClientSide && target != owner) {
-            float damage = (float) (spec == null ? 0.0D : Math.max(0.0D, spec.getDamage()));
-            if (damage > 0.0F) {
-                DamageSource source = this.damageSources().thrown(this, owner == null ? this : owner);
-                target.hurt(source, damage);
+            if (!(target instanceof ScriptedProjectileEntity)) {
+                float damage = (float) (spec == null ? 0.0D : Math.max(0.0D, spec.getDamage()));
+                if (damage > 0.0F) {
+                    DamageSource source = owner instanceof Player player
+                        ? this.damageSources().playerAttack(player)
+                        : this.damageSources().thrown(this, owner == null ? this : owner);
+                    target.hurt(source, damage);
+                }
             }
             dropConfiguredItemAndDiscard();
         }
@@ -160,7 +167,7 @@ public class ScriptedProjectileEntity extends ThrowableItemProjectile {
     }
 
     @Override
-    public boolean canBeCollidedWith() {
+    public boolean isPickable() {
         return this.anchored;
     }
 
@@ -198,6 +205,9 @@ public class ScriptedProjectileEntity extends ThrowableItemProjectile {
             if (anchorFace == null) {
                 anchorFace = Direction.UP;
             }
+        }
+        if (anchored) {
+            this.refreshDimensions();
         }
     }
 }

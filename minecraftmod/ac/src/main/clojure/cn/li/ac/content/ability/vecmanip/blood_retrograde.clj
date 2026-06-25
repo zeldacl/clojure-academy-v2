@@ -286,7 +286,8 @@
   :ctrl-id :blood-retrograde
   :cp-consume-speed 0.0
   :overload-consume-speed 0.0
-  :cooldown-ticks 90
+  :cooldown-ticks (fn [{:keys [exp]}]
+                    (cfg-lerp-int :cooldown.ticks (double (or exp 0.0))))  ;; matching original lerp(90, 40, exp)
   :pattern :release-cast
   :cooldown {:mode :manual}
   :cost {:tick {:cp blood-retrograde-cost-release-tick
