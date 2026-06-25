@@ -440,7 +440,7 @@
           nodes (:skill-nodes render-data)
           connections (:connections render-data)
           ;; Set creation time on first render
-          _ (when (nil? @skill-tree-creation-time) (reset! skill-tree-creation-time (System/currentTimeMillis)))
+          _ (when (nil? @skill-tree-creation-time) (reset! skill-tree-creation-time (- (System/currentTimeMillis) 2000)))
           anim-time (/ (- (System/currentTimeMillis) @skill-tree-creation-time) 1000.0)
           ;; Upstream constants: WidgetSize=16, TotalSize=23, IconSize=14, ProgSize=31
           widget-size 16 total-size 23 icon-sz 14 prog-sz 31
@@ -467,29 +467,28 @@
 
       ;; Connection lines with fade-in animation (upstream: lineBlend = dt*5)
       (when (seq connections)
-        (let [line-blend (max 0.0 (min 1.0 (* anim-time 5.0)))]
-          (doseq [{:keys [from-x from-y to-x to-y child-learned? m-alpha]} connections]
+        (doseq [{:keys [from-x from-y to-x to-y child-learned? m-alpha child-idx]} connections]
             (let [dx (- to-x from-x) dy (- to-y from-y)
                   norm (Math/sqrt (+ (* dx dx) (* dy dy)))]
               (when (pos? norm)
                 (let [ndx (/ dx norm) ndy (/ dy norm)
-                      line-alpha (* line-blend (or m-alpha 0.7) (if child-learned? 1.0 0.4))
+                      line-alpha (* (max 0.0 (min 1.0 (* (- anim-time (* (or child-idx 0) 0.08) 0.1) 5.0))) (or m-alpha 0.7) (if child-learned? 1.0 0.4))
                       alpha-byte (int (* 255.0 line-alpha))
                       color (bit-or (bit-shift-left alpha-byte 24) 0xFFFFFF)
                       x0 (+ from-x (* ndx 12.2)) y0 (+ from-y (* ndy 12.2))
                       x1 (- to-x (* ndx 12.2)) y1 (- to-y (* ndy 12.2))
-                      ;; Animated endpoint
-                      ax1 (+ x0 (* (- x1 x0) line-blend))
-                      ay1 (+ y0 (* (- y1 y0) line-blend))
-                      ;; Smoother line: 3x3 dots, fewer gaps
-                      steps (max 1 (int (* norm line-blend)))]
+                      ;; Animated endpoint (per-node blend)
+                      lb (max 0.0 (min 1.0 (* (- anim-time (* (or child-idx 0) 0.08) 0.1) 5.0)))
+                      ax1 (+ x0 (* (- x1 x0) lb))
+                      ay1 (+ y0 (* (- y1 y0) lb))
+                      steps (max 1 (int (* norm lb)))]
                   (doseq [i (range (inc steps))]
                     (let [t (/ i (max 1.0 (double steps)))
                           px (int (+ x0 (* (- ax1 x0) t)))
                           py (int (+ y0 (* (- ay1 y0) t)))]
                       (when-let [dot-w (cgui-core/create-widget :pos [px py] :size [3 3])]
                         (comp/add-component! dot-w (comp/draw-texture nil color))
-                        (cgui-core/add-widget! area-widget dot-w))))))))))
+                        (cgui-core/add-widget! area-widget dot-w)))))))))
 
       ;; Skill nodes with staggered fade-in animation
       (when (seq nodes)
@@ -676,10 +675,15 @@
             (let [mode (right-panel-mode nil container pl)]
               (when (not= mode @last-mode)
                 (reset! last-mode mode)
+                (reset! skill-tree-creation-time nil)
+                (when (not= mode :skill-tree) (cgui-core/clear-widgets! right-area))
                 (case mode
                   :console (render-console-area! root right-area container pl :learn)
                   :reset-console (render-console-area! root right-area container pl :reset)
-                  :skill-tree (render-skill-tree-area! root right-area container pl))))))))
+                  :skill-tree nil
+                  nil))
+              (when (= mode :skill-tree)
+                (render-skill-tree-area! root right-area container pl)))))))
 
     root))
 

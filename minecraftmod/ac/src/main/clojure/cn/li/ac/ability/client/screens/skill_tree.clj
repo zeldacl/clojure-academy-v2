@@ -105,7 +105,7 @@
   (let [ad (:ability-data player-state)
         by-id (into {} (map (fn [s] [(:id (:skill s)) s]) skill-positions))]
     (vec (remove nil? (apply concat
-          (map (fn [{:keys [skill x y]}]
+          (map (fn [{:keys [skill x y idx] :as node}]
                  (let [tid (:id skill)
                        locked? (not (:pass? (check-learn-conditions tid ad (:level ad) developer-type)))]
                    (for [{sid :skill-id me :min-exp} (:prerequisites skill)
@@ -116,7 +116,8 @@
                      {:from-x (+ fx 8) :from-y (+ fy 8) :to-x (+ x 8) :to-y (+ y 8)
                       :satisfied? (>= (or (adata/get-skill-exp ad sid) 0.0) (double me))
                       :locked? locked? :child-learned? child-learned?
-                      :m-alpha (cond child-learned? 1.0 parent-learned? 0.7 :else 0.25)})))
+                      :child-idx (or (:idx (get by-id tid)) idx)
+                      :m-alpha (cond child-learned? 1.0 (empty? (:prerequisites skill)) 0.7 parent-learned? 0.7 :else 0.25)})))
                skill-positions))))))
 
 ;; ============================================================================
@@ -131,8 +132,9 @@
         exp (double (or (adata/get-skill-exp ad sid) 0.0))
         prog (clamp01 exp)
         m-alpha (cond learned? 1.0
+                      (empty? (:prerequisites skill)) 0.7   ;; no parent = always accessible
                       (let [pid (some-> (:prerequisites skill) first :skill-id)]
-                        (and pid (adata/is-learned? ad pid))) 0.7
+                        (adata/is-learned? ad pid)) 0.7      ;; parent learned
                       :else 0.25)]
     {:x x :y y :idx idx :learned learned? :can-learn (:pass? conds)
      :conditions (:failures conds) :skill-id sid
@@ -239,7 +241,7 @@
 ;; Draw Ops — Line connections (rotated-quad)
 ;; ============================================================================
 (defn- build-line-ops [connections anim-time]
-  (mapcat (fn [{:keys [from-x from-y to-x to-y child-learned? m-alpha]}]
+  (mapcat (fn [{:keys [from-x from-y to-x to-y child-learned? m-alpha child-idx]}]
             (let [line-alpha (* (or m-alpha 0.7) (if child-learned? 1.0 0.4))
                   alpha-byte (int (* 255.0 (clamp01 line-alpha)))
                   color (bit-or (bit-shift-left alpha-byte 24) 0xFFFFFF)
