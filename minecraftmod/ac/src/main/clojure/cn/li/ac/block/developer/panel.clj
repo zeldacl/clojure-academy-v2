@@ -430,6 +430,7 @@
 ;; ============================================================================
 
 (def ^:private skill-tree-creation-time (atom nil))
+(def ^:private skill-tree-hover (atom {:idx nil :start 0}))
 
 ;; Upstream constants
 (def ^:private widget-size 16)
@@ -488,13 +489,23 @@
               (cgui-core/add-widget! area-widget dot-w))))))))
 
 (defn- draw-skill-node!
-  "Render one skill node with background, outline, icon, and click handler."
-  [root area-widget container node anim-time parallax-x parallax-y dev-type]
+  "Render one skill node with background, outline, icon, and click handler.
+  node-scale: 1.0 idle, 1.2 hovered (upstream transit 0.1s)"
+  [root area-widget container node anim-time parallax-x parallax-y dev-type node-scale]
   (let [{:keys [x y idx learned can-learn locked? skill-id skill-icon m-alpha]} node
         {:keys [skill-back skill-outline]} (skill-tree-textures)
-        node-x (int (+ x draw-align (- parallax-x)))
-        node-y (int (+ y draw-align (- parallax-y)))
-        node-w (cgui-core/create-widget :pos [node-x node-y] :size [widget-size widget-size])
+        ;; Apply scale around visual center (upstream: glTranslate to center, scale, translate back)
+        scaled-widget (* widget-size node-scale)
+        scaled-total (* total-size node-scale)
+        scaled-prog (* prog-sz node-scale)
+        scaled-icon (* icon-sz node-scale)
+        scale-offset-w (/ (- widget-size scaled-widget) 2)
+        scale-offset-t (/ (- total-size scaled-total) 2)
+        scale-offset-p (/ (- prog-sz scaled-prog) 2)
+        scale-offset-i (/ (- icon-sz scaled-icon) 2)
+        node-x (int (+ x draw-align (- parallax-x) scale-offset-w))
+        node-y (int (+ y draw-align (- parallax-y) scale-offset-w))
+        node-w (cgui-core/create-widget :pos [node-x node-y] :size [(int scaled-widget) (int scaled-widget)])
         ba (back-alpha anim-time idx (or m-alpha 0.7))
         ia (icon-alpha anim-time idx (or m-alpha 0.7))
         eff-alpha (* (if locked? 0.25 (or m-alpha 0.7)) (/ ba (or m-alpha 0.7)))
@@ -505,7 +516,8 @@
     (if learned
       ;; Shader-based radial progress ring (matching upstream skill_progbar)
       (let [pb (progress-blend anim-time idx)
-            ol-w (cgui-core/create-widget :pos [(+ node-x prog-align) (+ node-y prog-align)] :size [prog-sz prog-sz])
+            ol-w (cgui-core/create-widget :pos [(int (+ node-x prog-align scale-offset-p)) (int (+ node-y prog-align scale-offset-p))]
+                                          :size [(int scaled-prog) (int scaled-prog)])
             {:keys [skill-outline]} (skill-tree-textures)
             mask-path (modid/asset-path "textures" "guis/developer/skill_radial_mask.png")
             outline-path (modid/asset-path "textures" (if (>= (or (:exp node) 0.0) 0.999)
@@ -519,7 +531,8 @@
       (let [ol-alpha (int (* 255.0 (* eff-alpha 0.6)))
             g (int (* 255.0 0.2))
             ol-color (bit-or (bit-shift-left ol-alpha 24) (bit-or (bit-shift-left g 16) (bit-or (bit-shift-left g 8) g)))
-            ol-w (cgui-core/create-widget :pos [(+ node-x prog-align) (+ node-y prog-align)] :size [prog-sz prog-sz])]
+            ol-w (cgui-core/create-widget :pos [(int (+ node-x prog-align scale-offset-p)) (int (+ node-y prog-align scale-offset-p))]
+                                          :size [(int scaled-prog) (int scaled-prog)])]
         (comp/add-component! ol-w (comp/draw-texture skill-outline ol-color))
         (cgui-core/add-widget! area-widget ol-w)))
     ;; Skill icon
@@ -528,7 +541,8 @@
         (let [icon-path (modid/asset-path "textures" (subs skill-icon (count "textures/")))
               alpha (int (* 255.0 ia-eff))
               icon-color (bit-or (bit-shift-left alpha 24) (if learned 0xFFFFFF 0x888888))
-              icon-w (cgui-core/create-widget :pos [(+ node-x icon-align) (+ node-y icon-align)] :size [icon-sz icon-sz])]
+              icon-w (cgui-core/create-widget :pos [(int (+ node-x icon-align scale-offset-i)) (int (+ node-y icon-align scale-offset-i))]
+                                            :size [(int scaled-icon) (int scaled-icon)])]
           (comp/add-component! icon-w (comp/draw-texture icon-path icon-color))
           (cgui-core/add-widget! area-widget icon-w))))
     ;; Click handler
@@ -559,9 +573,38 @@
       (draw-background! area-widget)
       (doseq [conn connections]
         (draw-connection-line! area-widget conn anim-time))
-      (doseq [node nodes]
-        (when (and (:skill-id node) (:x node) (:y node))
-          (draw-skill-node! root area-widget container node anim-time parallax-x parallax-y dev-type))))
+      ;; Hover detection: find closest node to mouse (upstream FrameEvent evt.hovering)
+      (let [closest-node (when (seq nodes)
+                           (apply min-key
+                             (fn [n]
+                               (let [cx (+ (:x n) draw-align (/ widget-size 2) (- parallax-x))
+                                     cy (+ (:y n) draw-align (/ widget-size 2) (- parallax-y))]
+                                 (+ (* (- mx cx) (- mx cx)) (* (- my cy) (- my cy)))))
+                             nodes))
+            hover-dist (when closest-node
+                         (let [cx (+ (:x closest-node) draw-align (/ widget-size 2) (- parallax-x))
+                               cy (+ (:y closest-node) draw-align (/ widget-size 2) (- parallax-y))]
+                           (Math/sqrt (+ (* (- mx cx) (- mx cx)) (* (- my cy) (- my cy))))))
+            hover-idx (:idx closest-node)
+            hover-now? (and closest-node (< (or hover-dist 999) 20))]
+        ;; Update hover atom for scale animation (upstream: transit 0.1s)
+        (if hover-now?
+          (when (not= hover-idx (:idx @skill-tree-hover))
+            (reset! skill-tree-hover {:idx hover-idx :start (System/currentTimeMillis)}))
+          (when (:idx @skill-tree-hover)
+            (reset! skill-tree-hover {:idx nil :start 0})))
+        (let [hover-idx (:idx @skill-tree-hover)
+              hover-start (:start @skill-tree-hover)
+              hover-transit (clamp01 (/ (- (System/currentTimeMillis) hover-start) 100.0))]
+          (doseq [node nodes]
+            (when (and (:skill-id node) (:x node) (:y node))
+              (let [node-hovered? (= (:idx node) hover-idx)
+                    node-scale (if node-hovered?
+                                 (+ 1.0 (* 0.2 hover-transit))    ;; 1.0 → 1.2
+                                 (if (= (:idx node) (:idx @skill-tree-hover))
+                                   (- 1.2 (* 0.2 hover-transit))  ;; 1.2 → 1.0
+                                   1.0))]
+                (draw-skill-node! root area-widget container node anim-time parallax-x parallax-y dev-type node-scale)))))))
     (catch Exception e
       (log/error "Skill tree render failed:" (ex-message e))
       (log/stacktrace "Skill tree render failed" e))))
