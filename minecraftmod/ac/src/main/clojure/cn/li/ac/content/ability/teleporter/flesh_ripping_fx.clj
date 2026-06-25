@@ -1,9 +1,10 @@
 (ns cn.li.ac.content.ability.teleporter.flesh-ripping-fx
-  "Client FX for FleshRipping: red particle burst on target."
+  "Client FX for FleshRipping: EntityMarker aim preview + EntityBloodSplash on hit.
+  Matching original AcademyCraft: gray marker (no target) → red marker (target locked)."
   (:require [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.fx-spec :as fx-spec]
-            [cn.li.ac.ability.client.effects.particles :as client-particles]
-            [cn.li.ac.ability.client.effects.sounds :as client-sounds]))
+            [cn.li.ac.ability.client.effects.sounds :as client-sounds]
+            [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 
 (def ^:private flesh-ripping-effect-id :flesh-ripping)
 (def ^:private stale-owner-ttl-ticks 80)
@@ -29,30 +30,44 @@
       (update (or state (default-flesh-ripping-fx-state)) :fx-state dissoc owner-key)))
   nil)
 
+(defn- spawn-marker!
+  "Spawn EntityMarker at player position (matching original l_startEffect)."
+  []
+  (client-bridge/run-client-effect! :mcmod/spawn-local-scripted-effect
+    {:effect-id "entity_marker"}))
+
+(defn- spawn-blood-splash!
+  "Spawn EntityBloodSplash at target (matching original EntityBloodSplash on hit)."
+  []
+  (client-bridge/run-client-effect! :mcmod/spawn-local-scripted-effect
+    {:effect-id "entity_blood_splash"}))
+
+(defn- remove-marker!
+  []
+  (client-bridge/run-client-effect! :mcmod/remove-local-scripted-effect
+    {:effect-id "entity_marker"}))
+
 (defn- enqueue-state! [state {:keys [payload ctx-id channel owner-key]}]
   (let [state* (or state (default-flesh-ripping-fx-state))
         owner-key* (or owner-key [:ctx ctx-id])
         {:keys [source-player-id world-id]} payload
         base-meta {:owner-key owner-key*
-                   :queue-owner (client-particles/current-effect-owner)
                    :ctx-id ctx-id
                    :channel channel
                    :source-player-id source-player-id
                    :world-id world-id}]
     (case (:mode payload)
       :start
-      (update state* :fx-state assoc owner-key*
-              (merge base-meta {:active? true :ttl 0 :aim nil :hit? false :target-uuid nil}))
+      (do
+        ;; Spawn EntityMarker at player (matching original l_startEffect)
+        (spawn-marker!)
+        (update state* :fx-state assoc owner-key*
+                (merge base-meta {:active? true :ttl 0 :aim nil :hit? false :target-uuid nil})))
 
       :update
       (update state* :fx-state update owner-key*
               (fn [st]
                 (assoc (merge base-meta (or st {:active? true :ttl 0}))
-                       :owner-key owner-key*
-                       :ctx-id ctx-id
-                       :channel channel
-                       :source-player-id source-player-id
-                       :world-id world-id
                        :active? true
                        :ttl 0
                        :aim {:x (double (or (:target-x payload) 0.0))
@@ -63,26 +78,19 @@
 
       :perform
       (do
-        (when-let [x (:target-x payload)]
-          (client-particles/queue-particle-effect! (:queue-owner base-meta)
-            {:type :particle :particle-type :damage-indicator
-             :x (double x) :y (+ (double (:target-y payload)) 1.0) :z (double (:target-z payload))
-             :count 12 :speed 0.1
-             :offset-x 0.4 :offset-y 0.6 :offset-z 0.4}))
         (when (:hit? payload)
-          (client-particles/queue-particle-effect! (:queue-owner base-meta)
-            {:type :particle :particle-type :portal
-             :x (double (or (:target-x payload) 0.0))
-             :y (+ 0.4 (double (or (:target-y payload) 0.0)))
-             :z (double (or (:target-z payload) 0.0))
-             :count 6 :speed 0.05
-             :offset-x 0.2 :offset-y 0.3 :offset-z 0.2}))
+          ;; EntityBloodSplash on hit (matching original EntityBloodSplash)
+          (spawn-blood-splash!))
         (client-sounds/queue-sound-effect! (:queue-owner base-meta)
-          {:type :sound :sound-id "my_mod:tp.flesh_ripping" :volume 0.6 :pitch 0.95})
+          {:type :sound :sound-id "my_mod:tp.guts" :volume 0.6 :pitch 0.95})
+        ;; Remove marker after perform
+        (remove-marker!)
         state*)
 
       :end
-      (update state* :fx-state dissoc owner-key*)
+      (do
+        (remove-marker!)
+        (update state* :fx-state dissoc owner-key*))
 
       state*)))
 
@@ -95,22 +103,7 @@
                   (let [next-st (update st :ttl (fnil inc 0))]
                     (if (> (long (:ttl next-st)) stale-owner-ttl-ticks)
                       acc
-                      (do
-                        (when (and (:active? next-st)
-                                   (:aim next-st)
-                                   (zero? (mod (long (:ttl next-st)) 3)))
-                          (client-particles/queue-particle-effect! (:queue-owner next-st)
-                            {:type :particle
-                             :particle-type (if (:hit? next-st) :damage-indicator :portal)
-                             :x (double (get-in next-st [:aim :x]))
-                             :y (+ 0.2 (double (get-in next-st [:aim :y])))
-                             :z (double (get-in next-st [:aim :z]))
-                             :count (if (:hit? next-st) 2 1)
-                             :speed 0.02
-                             :offset-x 0.12
-                             :offset-y 0.12
-                             :offset-z 0.12}))
-                        (assoc acc owner-key next-st)))))
+                      (assoc acc owner-key next-st))))
                 {}
                 states)))))
 
