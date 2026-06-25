@@ -2,6 +2,7 @@
   "Client FX for Meltdowner: charge ring + beam rays + walk speed."
   (:require [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.effects.beam-ops :as fx-beam]
+            [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.fx-spec :as fx-spec]
             [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]))
@@ -135,6 +136,21 @@
                                         (when (zero? (mod ticks 10))
                                           (client-sounds/queue-sound-effect! (:queue-owner st)
                                             {:type :sound :sound-id charge-loop-sound :volume 0.75 :pitch 1.0}))
+                                        ;; MdParticleFactory particles (matching original: 2-3 per tick)
+                                        (dotimes [_ (+ 2 (rand-int 2))]
+                                          (let [r (+ 0.7 (rand 0.3))
+                                                theta (rand (* 2 Math/PI))
+                                                h (+ -1.2 (rand 1.2))]
+                                            (client-particles/queue-particle-effect! (:queue-owner st)
+                                              {:type :particle :particle-type :electric-spark
+                                               :x (* r (Math/sin theta))
+                                               :y h
+                                               :z (* r (Math/cos theta))
+                                               :count 1 :speed 0.08
+                                               :offset-x 0.03 :offset-y 0.03 :offset-z 0.03
+                                               :motion-x (- (rand 0.06) 0.03)
+                                               :motion-y (+ 0.01 (rand 0.04))
+                                               :motion-z (- (rand 0.06) 0.03)})))
                                         [owner-key (assoc st :ticks ticks)]))))
                             (:effect-state store*))
         rays* (into {}
