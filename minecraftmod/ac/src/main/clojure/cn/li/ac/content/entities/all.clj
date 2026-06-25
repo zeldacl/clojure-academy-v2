@@ -368,6 +368,23 @@
                                :hook-params {:forward 0.8
                                              :vertical 1.0}}}}))
 
+    ;; Long-lived charging arc for current_charging block/item mode.
+    (edsl/register-entity!
+      (edsl/create-entity-spec
+        "entity_charging_arc"
+        {:entity-kind :scripted-effect
+         :category :misc
+         :width 0.8
+         :height 0.8
+         :client-tracking-range 64
+         :update-interval 1
+         :properties {:effect {:life-ticks 100000
+                               :follow-owner? false
+                               :renderer-id "charging-arc"
+                               :hook :generic-arc
+                               :hook-params {:forward 0.9
+                                             :vertical 1.0}}}}))
+
     (edsl/register-entity!
       (edsl/create-entity-spec
         "entity_arc"

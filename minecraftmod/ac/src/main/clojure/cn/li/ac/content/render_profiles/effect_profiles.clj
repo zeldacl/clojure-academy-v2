@@ -88,6 +88,16 @@
                :color-a [160 220 255]
                :color-b [100 180 230]}}
 
+     ;; Charging arc: longer continuous beam with heavy wiggle
+     ;; matching original ArcPatterns.chargingArc.
+     {:id "charging-arc"
+      :kind :polyline-arc
+      :state {:layer :lines :blend :alpha}
+      :params {:segments 24 :length 15.0
+               :show-wiggle 0.2 :hide-wiggle 0.8
+               :wiggle-amp 0.6 :wiggle-freq 8.0
+               :color-a [140 220 255] :color-b [240 250 255]}}
+
      {:id "ray-composite"
       :kind :ray-composite
       :state {:layer :translucent

@@ -18,7 +18,9 @@
 
 (def ^:private current-charging-skill-id :current-charging)
 (def ^:private arc-entity-id "my_mod:entity_arc")
+(def ^:private charging-arc-entity-id "my_mod:entity_charging_arc")
 (def ^:private surround-arc-entity-id "my_mod:entity_surround_arc")
+(def ^:private surround-arc-thin-entity-id "my_mod:entity_surround_arc_thin")
 
 (defn- cfg-double [field-id]
   (skill-config/tunable-double current-charging-skill-id field-id))
@@ -130,7 +132,7 @@
     (when (and player
                effective?
                (zero? (mod (long (or charge-ticks 0)) 6)))
-      (entity/player-spawn-entity-by-id! player arc-entity-id 0.0))
+      (entity/player-spawn-entity-by-id! player charging-arc-entity-id 0.0))
     (set-skill-state! ctx-id [:good?] (boolean effective?))
     (set-skill-state! ctx-id [:target] ray-end)
     (set-skill-state! ctx-id [:block-pos] block-pos)
