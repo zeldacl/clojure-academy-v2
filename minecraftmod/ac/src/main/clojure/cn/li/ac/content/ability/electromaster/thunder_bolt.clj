@@ -104,15 +104,12 @@
          vec)))
 
 (defn- apply-aoe-damage! [world-id center radius amount victims]
-  (reduce (fn [hit-count {:keys [uuid x y z]}]
-            (let [dx (- (double x) (double (:x center)))
-                  dy (- (double y) (double (:y center)))
-                  dz (- (double z) (double (:z center)))
-                  dist (Math/sqrt (+ (* dx dx) (* dy dy) (* dz dz)))
-                  final-damage (* (double amount) (bal/falloff-linear dist radius))]
-              (if (damage-entity! world-id uuid final-damage)
-                (inc hit-count)
-                hit-count)))
+  "Flat AOE damage matching original ThunderBolt: all targets in radius
+  receive the full aoeDamage (no distance falloff)."
+  (reduce (fn [hit-count {:keys [uuid]}]
+            (if (damage-entity! world-id uuid (double amount))
+              (inc hit-count)
+              hit-count))
           0
           victims))
 

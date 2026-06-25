@@ -215,7 +215,11 @@
                    :tick {:cp (fn [{:keys [player-id]}]
                                 (cfg-lerp :cost.tick.cp (skill-exp player-id)))}}
   :cooldown       {:mode :manual}
-  :cooldown-ticks 1
+  :cooldown-ticks (fn [{:keys [exp]}]
+                    (skill-config/lerp-int electron-missile-skill-id
+                                           :cooldown.ticks
+                                           (double (or exp 0.0))))
+  ;; matching original: clampi(700, 400, exp) — cooldown ∈ [400, 700] ticks
   :actions        {:down!  electron-missile-down!
                    :tick!  electron-missile-tick!
                    :up!    electron-missile-up!

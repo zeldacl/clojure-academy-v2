@@ -73,7 +73,7 @@
                 (cfg-lerp :cost.down.overload (skill-exp player-id)))}
                    :tick {:cp (fn [{:keys [player-id]}]
               (cfg-lerp :cost.tick.cp (skill-exp player-id)))} }
-    :cooldown-ticks (fn [_] (cfg-int :cooldown.ticks))
+    :cooldown-ticks (fn [{:keys [exp]}] (skill-config/lerp-int mine-ray-expert-skill-id :cooldown.ticks (double (or exp 0.0))))  ;; matching original lerp(50,25,exp)
   :actions        {:down!  mine-ray-expert-down!
                    :tick!  mine-ray-expert-tick!
                    :up!    mine-ray-expert-up!

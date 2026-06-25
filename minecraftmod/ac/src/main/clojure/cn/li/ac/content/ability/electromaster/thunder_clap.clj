@@ -40,9 +40,11 @@
   (max 1 (- (max-ticks) (min-ticks))))
 
 (defn- compute-overcharge-ratio
+  "Matching original: lerp(1.0, 1.2, (ticks - 40) / 60.0).
+  Divisor is 60 (not the max-min span), giving a sub-1.0 ratio range."
   [ticks]
   (bal/clamp01 (/ (- (double (or ticks 0)) (double (min-ticks)))
-                   (double (charge-window-span)))))
+                   (double (max-ticks)))))  ;; divisor = max-ticks (60), matching original
 
 (defn- resolve-fallback-target
   [player-id]
@@ -143,7 +145,7 @@
   :description-key "ability.skill.electromaster.thunder_clap.desc"
   :icon            "textures/abilities/electromaster/skills/thunder_clap.png"
   :ui-position     [204 80]
-  :level           1
+  :level           5  ;; matching original Skill("thunder_clap", 5)
   :controllable?   true
   :ctrl-id         :thunder-clap
   :pattern         :charge-window
