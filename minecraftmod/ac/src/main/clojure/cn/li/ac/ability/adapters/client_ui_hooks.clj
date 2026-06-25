@@ -15,7 +15,7 @@
             [cn.li.ac.ability.client.keybinds :as client-keybinds]
             [cn.li.ac.ability.client.managed-screens :as managed-screens]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
-            [cn.li.ac.ability.client.screens.location-teleport :as location-teleport-screen]
+            [cn.li.ac.content.ability.teleporter.location-teleport-screen :as location-teleport-screen]
             [cn.li.ac.ability.client.screens.preset-editor :as preset-editor-screen]
             [cn.li.ac.ability.client.screens.skill-tree :as skill-tree-screen]
             [cn.li.ac.content.ability.electromaster.current-charging-fx :as current-charging-fx]
@@ -894,6 +894,8 @@
 (defn register-client-push-handlers!
   []
   (when (mark-client-push-handlers-registered!)
+    ;; Register CGUI screens
+    (location-teleport-screen/init!)
     (net-client/register-push-handler! catalog/MSG-SYNC-RUNTIME
       (fn [{:keys [uuid ability-data]}]
         (when (and uuid ability-data)
@@ -1141,14 +1143,12 @@
                          :title "Preset Editor")
 
                   :ac/saved-position
-                  (assoc (location-teleport-screen/open-screen! owner payload)
-                         :title "Location Teleport"
-                         :char-typed? true)
+                  (do (location-teleport-screen/open-screen! owner payload)
+                      {:command :open-cgui-screen :screen-key :ac/saved-position})
 
                   :ac/location-teleport
-                  (assoc (location-teleport-screen/open-screen! owner payload)
-                         :title "Location Teleport"
-                         :char-typed? true)
+                  (do (location-teleport-screen/open-screen! owner payload)
+                      {:command :open-cgui-screen :screen-key :ac/saved-position})
 
                   nil))))))
 
@@ -1170,10 +1170,7 @@
             (condp = screen-key
               :ac/skill-tree (skill-tree-screen/build-draw-ops owner mouse-x mouse-y)
               :ac/preset-editor (build-preset-editor-draw-ops owner)
-              :ac/saved-position (location-teleport-screen/build-draw-ops owner mouse-x mouse-y)
-              :ac/location-teleport (location-teleport-screen/build-draw-ops owner mouse-x mouse-y)
-              [])
-            [])))
+              []))))
 
      :client-handle-managed-screen-hover!
      (fn [screen-key mouse-x mouse-y]
@@ -1181,8 +1178,6 @@
          #(when-let [owner (active-managed-screen-owner screen-key)]
             (condp = screen-key
               :ac/skill-tree (skill-tree-screen/on-mouse-move owner mouse-x mouse-y)
-              :ac/saved-position (location-teleport-screen/on-mouse-move owner mouse-x mouse-y)
-              :ac/location-teleport (location-teleport-screen/on-mouse-move owner mouse-x mouse-y)
               nil))))
 
      :client-handle-managed-screen-click!
@@ -1192,19 +1187,11 @@
             (condp = screen-key
               :ac/skill-tree (skill-tree-screen/handle-screen-click! owner mouse-x mouse-y)
               :ac/preset-editor (preset-editor-screen/handle-screen-click! owner mouse-x mouse-y)
-              :ac/saved-position (location-teleport-screen/handle-screen-click! owner mouse-x mouse-y)
-              :ac/location-teleport (location-teleport-screen/handle-screen-click! owner mouse-x mouse-y)
               false)
             false)))
 
      :client-handle-managed-screen-char-typed!
-     (fn [screen-key ch]
-       (call-with-managed-screen-runtime
-         #(when-let [owner (active-managed-screen-owner screen-key)]
-            (condp = screen-key
-              :ac/saved-position (location-teleport-screen/handle-char-typed! owner ch)
-              :ac/location-teleport (location-teleport-screen/handle-char-typed! owner ch)
-              nil))))
+     (fn [_ _] nil)
 
      :client-close-managed-screen!
      (fn [screen-key]
@@ -1213,8 +1200,6 @@
             (condp = screen-key
               :ac/skill-tree (skill-tree-screen/close-screen! owner)
               :ac/preset-editor (preset-editor-screen/close-screen! owner)
-              :ac/saved-position (location-teleport-screen/close-screen! owner)
-              :ac/location-teleport (location-teleport-screen/close-screen! owner)
               nil))))
 
      :client-register-push-handlers!
