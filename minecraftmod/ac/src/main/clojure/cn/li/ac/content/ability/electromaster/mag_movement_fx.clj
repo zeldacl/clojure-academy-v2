@@ -3,7 +3,9 @@
   (:require [cn.li.ac.ability.client.effects.beam-ops :as fx-beam]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-spec :as fx-spec]
-            [cn.li.ac.ability.client.level-effects :as level-effects]))
+            [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.ability.client.render-util :as ru]
+            [cn.li.ac.ability.client.arc-patterns :as arc]))
 
 (def ^:private loop-sound "my_mod:em.move_loop")
 (def ^:private mag-movement-effect-id :mag-movement)
@@ -105,6 +107,7 @@
           states)))))
 
 (defn- build-plan [camera-pos hand-center-pos tick]
+  (arc/tick-wiggle-phase!)
   (let [mag-move (some (fn [st]
                          (when (and (:active? st)
                                     (or (nil? (:source-player-id st))
@@ -116,10 +119,11 @@
     (when (and hand-center-pos
                (:active? mag-move)
                (map? (:target mag-move)))
-      {:ops (vec (fx-beam/beam-ops camera-pos
-                                   (dissoc hand-center-pos :player-uuid)
-                                   (:target mag-move)
-                                   (magnetic-beam-style tick)))})))
+      {:ops (vec (ru/zigzag-arc-ops camera-pos
+                                    (dissoc hand-center-pos :player-uuid)
+                                    (:target mag-move)
+                                    {:arc-pattern :thin-continuous
+                                     :life-ratio 1.0})))})))
 
 (defn init! []
   (fx-spec/register!
