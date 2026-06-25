@@ -113,6 +113,20 @@
            :z (+ (double (:target-z impact)) 0.5)
            :count 2 :speed 0.2
            :offset-x 0.25 :offset-y 0.25 :offset-z 0.25})))
+    ;; Orbiting particles during charge (matching original MSG_EFFECT_UPDATE)
+    (doseq [[_ st] (:charge-state store*)]
+      (when (and (:active? st) (pos? (long (:balls st 0))))
+        (dotimes [_ (inc (rand-int 2))]
+          (let [r (+ 0.5 (rand 0.5))
+                theta (rand (* 2 Math/PI))
+                h (+ -1.2 (rand 1.2))]
+            (client-particles/queue-particle-effect! (:queue-owner st)
+              {:type :particle :particle-type :electric-spark
+               :x (* r (Math/sin theta))
+               :y h
+               :z (* r (Math/cos theta))
+               :count 1 :speed 0.05
+               :offset-x 0.1 :offset-y 0.1 :offset-z 0.1})))))
     (doseq [beam beams]
       (when-let [end-pos (:end beam)]
         (client-particles/queue-particle-effect! (:queue-owner beam)
@@ -154,11 +168,19 @@
                         by-owner))))))
 
 (defn- build-plan
-  [_camera-pos _hand-center-pos _tick]
+  [camera-pos _hand-center-pos _tick]
   (let [{:keys [beams]} (electron-missile-fx-snapshot)
         ops (mapcat (fn [[_owner-key xs]]
-                      (map (fn [{:keys [start end]}]
-                             (ru/line-op start end {:r 170 :g 255 :b 190 :a 190}))
+                      (mapcat (fn [{:keys [start end ttl max-ttl]}]
+                                (let [life (/ (double ttl) (double (max 1 max-ttl)))]
+                                  (ru/billboard-beam-ops camera-pos start end
+                                    {:width       (* 0.04 (+ 0.3 (* 0.5 life)))
+                                     :core-width  (* 0.015 (+ 0.3 (* 0.5 life)))
+                                     :outer-color {:r 140 :g 255 :b 170 :a (int (+ 60 (* 140 life)))}
+                                     :inner-color {:r 220 :g 255 :b 220 :a (int (+ 80 (* 150 life)))}
+                                     :line-color  {:r 200 :g 255 :b 200 :a (int (+ 50 (* 120 life)))}
+                                     :flicker-threshold (+ 0.6 (* 0.4 (rand)))
+                                     :jitter-amount (* 0.02 life)})))
                            xs))
                     beams)]
     (when (seq ops)
