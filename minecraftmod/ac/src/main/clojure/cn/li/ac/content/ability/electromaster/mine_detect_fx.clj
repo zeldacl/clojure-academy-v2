@@ -46,9 +46,12 @@
   {:r 220 :g 235 :b 255 :a 185})
 
 (def ^:private advanced-tier-colors
-  {0 {:r 205 :g 225 :b 255 :a 165}
-   1 {:r 255 :g 210 :b 95 :a 190}
-   2 {:r 255 :g 120 :b 120 :a 210}})
+  ;; Matching original MineDetect colors array (5 tiers):
+  ;;   default(0) → harvest-level 0-3 mapped via Math.min(3, harvest+1)
+  {0 {:r 161 :g 181 :b 188 :a 165}    ;; harvest level 0 → tier 1 (original index 1)
+   1 {:r 87  :g 231 :b 248 :a 190}    ;; harvest level 1 → tier 2 (original index 2)
+   2 {:r 97  :g 204 :b 94  :a 210}    ;; harvest level 2 → tier 3 (original index 3)
+   3 {:r 235 :g 109 :b 84  :a 225}})   ;; harvest level 3 → tier 4 (original index 4)
 
 (defn- ore-block-id?
   [block-id]
@@ -74,12 +77,11 @@
     :else 0))
 
 (defn- advanced-tier
+  "Map ore harvest-level to color tier, matching original MineDetect:
+   Math.min(3, harvestLevel+1) → 0-3 index into colors array (size 4)."
   [{:keys [harvest-level block-id]}]
   (if (number? harvest-level)
-    (cond
-      (>= (long harvest-level) 3) 2
-      (>= (long harvest-level) 2) 1
-      :else 0)
+    (min 3 (inc (long harvest-level)))
     (fallback-advanced-tier (str block-id))))
 
 (defn- ore-color
@@ -89,12 +91,17 @@
     default-ore-color))
 
 (defn- faded-color
-  [color ticks life-ticks]
-  (let [progress (if (pos? life-ticks)
-                   (min 1.0 (/ (double ticks) (double life-ticks)))
-                   1.0)
-        alpha-scale (max 0.2 (- 1.0 progress))]
-    (ru/with-alpha color (int (* (double (:a color)) alpha-scale)))))
+  "Alpha based on distance from player, matching original calcAlpha:
+   alpha = 0.3 + (1 - dist/range * 2.2) * 0.7, clamped to [0.0, 1.0]"
+  [color player-pos ore-x ore-y ore-z range]
+  (let [dx (- (double ore-x) (double (:x player-pos 0.0)))
+        dy (- (double ore-y) (double (:y player-pos 0.0)))
+        dz (- (double ore-z) (double (:z player-pos 0.0)))
+        dist (Math/sqrt (+ (* dx dx) (* dy dy) (* dz dz)))
+        jdg (max 0.0 (- 1.0 (/ dist (double range) 2.2)))
+        alpha-factor (+ 0.3 (* jdg 0.7))
+        scaled-alpha (int (* (double (:a color)) (max 0.0 (min 1.0 alpha-factor))))]
+    (ru/with-alpha color scaled-alpha)))
 
 (defn- block-highlight-ops
   [x y z color]
@@ -216,11 +223,12 @@
                                      [owner-key st]))
                                  (:effect-state (mine-detect-fx-snapshot)))]
     (maybe-refresh-ores! owner-key hand-center-pos frame-context)
-    (let [{:keys [ticks life-ticks ores advanced?]} (get (:effect-state (mine-detect-fx-snapshot)) owner-key)
+    (let [{:keys [ores advanced? range]} (get (:effect-state (mine-detect-fx-snapshot)) owner-key)
           ops (into []
                     (mapcat (fn [{:keys [x y z] :as ore}]
                               (let [base-color (ore-color ore advanced?)
-                                    color (faded-color base-color ticks life-ticks)]
+                                    color (faded-color base-color hand-center-pos
+                                                       x y z range)]
                                 (block-highlight-ops x y z color))))
                     ores)]
       (when (seq ops)
