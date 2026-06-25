@@ -239,7 +239,14 @@
   :ctrl-id         :meltdowner
   :cp-consume-speed 0.0
   :overload-consume-speed 0.0
-  :cooldown-ticks  1
+  :cooldown-ticks (fn [{:keys [exp hold-ticks]}]
+                    (let [exp* (double (or exp 0.0))
+                          ct (long (or hold-ticks 20))
+                          ct-clamped (max (ticks-min) (min (ticks-max) ct))
+                          tr (cfg-lerp :charge.time-rate (/ (- (double ct-clamped) (double (ticks-min)))
+                                                            (double (max 1 (- (ticks-max) (ticks-min))))))]
+                      (int (* tr 20.0 (cfg-lerp :cooldown.ticks exp*)))))
+  ;; matching original: timeRate(ct) * 20 * lerp(15, 7, exp)
   :pattern         :charge-window
   :cooldown        {:mode :manual}
   :cost            {:down {:overload (fn [{:keys [player-id]}]

@@ -287,12 +287,17 @@
   :ctrl-id        :light-shield
   :cp-consume-speed 0.0
   :overload-consume-speed 0.0
-  :cooldown-ticks 1
+  :cooldown-ticks (fn [{:keys [player-id ctx-id]}]
+                    (let [exp (skill-exp player-id)
+                          ticks (long (or (some-> ctx-id ctx/get-context :skill-state :ticks) 0))]
+                      (skill-config/lerp-int light-shield-skill-id
+                                             :cooldown.ticks
+                                             (double (or exp 0.0)))))
+  ;; Note: deactivate handler overrides this with lerp(2*ticks, ticks, exp)
+  ;; matching original getCooldown(ct) = lerp(2*ct, ct, exp)
   :pattern        :toggle
   :cooldown       {:mode :manual}
-  :cost           {:down {:cp       (fn [{:keys [player-id]}]
-                (cfg-lerp :cost.down.cp (skill-exp player-id)))
-                          :overload (fn [{:keys [player-id]}]
+  :cost           {:down {:overload (fn [{:keys [player-id]}]
                 (cfg-lerp :cost.down.overload (skill-exp player-id)))}
                    :tick {:cp (fn [{:keys [player-id]}]
               (cfg-lerp :cost.tick.cp (skill-exp player-id)))} }
