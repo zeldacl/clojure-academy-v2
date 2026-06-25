@@ -187,6 +187,9 @@
                             :hold-ticks 0
                             :held-block held-block
                             :focus focus})
+    ;; Spawn visible block entity (matching original MagManipEntityBlock)
+    (when-let [player-id (get-in (ctx/get-context ctx-id) [:player-uuid])]
+      (entity/player-spawn-entity-by-id! player-id "my_mod:entity_magmanip_block_body" 0.0))
     (fx/send! ctx-id {:topic :mag-manip/fx-hold :mode :hold-start} nil
               {:focus focus
                :block-id (:block-id held-block)})))
