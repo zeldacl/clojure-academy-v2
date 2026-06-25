@@ -1,5 +1,5 @@
 (ns cn.li.ac.content.ability.meltdowner.light-shield-fx
-  "Client FX for LightShield: glowing barrier effect."
+  "Client FX for LightShield: glowing barrier + EntityMdShield equivalent."
   (:require [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-spec :as fx-spec]
@@ -59,19 +59,27 @@
   (let [store* (or store (default-light-shield-fx-runtime-state))]
     (update store* :effect-state
       (fn [states]
-        (into {}
-              (keep (fn [[owner-key st]]
-                      (when (:active? st)
-                        (let [ticks (inc (long (or (:ticks st) 0)))]
-                          (when (zero? (mod ticks 5))
-                            (client-particles/queue-particle-effect! (:queue-owner st)
-                              {:type :particle :particle-type :end-rod
-                               :x 0.0 :y 1.0 :z 0.0
-                               :count 3 :speed 0.15
-                               :offset-x 0.8 :offset-y 0.8 :offset-z 0.8
-                               :relative-to-camera? true}))
-                          [owner-key (assoc st :ticks ticks)]))))
-              states)))))
+        (reduce-kv
+          (fn [acc owner-key st]
+            (if-not (:active? st)
+              acc
+              (let [ticks (inc (long (or (:ticks st) 0)))]
+                ;; MdParticleFactory particles (matching original: 30% per tick)
+                (when (< (rand) 0.3)
+                  (let [s 0.5]
+                    (client-particles/queue-particle-effect! (:queue-owner st)
+                      {:type :particle :particle-type :electric-spark
+                       :x (+ (- (rand s) (/ s 2)) (- (rand 0.04) 0.02))
+                       :y (+ 1.0 (- (rand s) (/ s 2)) (- (rand 0.04) 0.02))
+                       :z (+ (- (rand s) (/ s 2)) (- (rand 0.04) 0.02))
+                       :count 1 :speed 0.08
+                       :offset-x 0.02 :offset-y 0.02 :offset-z 0.02
+                       :motion-x (- (rand 0.04) 0.02)
+                       :motion-y (- (rand 0.04) 0.02)
+                       :motion-z (- (rand 0.04) 0.02)})))
+                (assoc acc owner-key (assoc st :ticks ticks)))))
+          {}
+          states)))))
 
 (defn- build-plan
   [camera-pos hand-center-pos tick]
@@ -97,7 +105,7 @@
                      (range segments))
           right (ru/camera-facing-right-axis center camera-pos)
           up (ru/billboard-up-axis center camera-pos right)
-          half-size (+ 0.44 (* 0.07 (Math/sin (* 0.23 (double (or tick 0))))) )
+          half-size (+ 0.44 (* 0.07 (Math/sin (* 0.23 (double (or tick 0))))))
           side (ru/v* right half-size)
           lift (ru/v* up half-size)
           p0 (ru/v+ (ru/v- center side) lift)

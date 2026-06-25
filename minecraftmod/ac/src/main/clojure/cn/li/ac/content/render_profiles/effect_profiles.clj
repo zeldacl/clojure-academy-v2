@@ -41,6 +41,19 @@
 	     :color-a [140 220 255]
 	     :color-b [240 250 255]}}
 
+   ;; Diamond shield for LightShield (matching original EntityMdShield)
+   {:id "md-shield"
+    :kind :ring-lines
+    :state {:layer :lines
+            :blend :alpha}
+    :params {:rings 5
+             :segments 24
+             :radius-start 0.5
+             :radius-step 0.15
+             :y 0.02
+             :color-a [120 240 255]
+             :color-b [60 180 220]}}
+
    {:id "marker-billboard"
     :kind :billboard-cross
     :state {:layer :translucent

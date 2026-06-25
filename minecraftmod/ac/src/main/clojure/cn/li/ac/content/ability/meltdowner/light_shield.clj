@@ -23,6 +23,7 @@
                         [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.potion-effects :as potion-effects]
+            [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.teleportation :as teleportation]
             [cn.li.mcmod.util.log :as log]))
@@ -123,12 +124,15 @@
 ;; ---------------------------------------------------------------------------
 
 (defn light-shield-activate!
-  [{:keys [ctx-id player-id]}]
+  [{:keys [ctx-id player-id player]}]
   (let [overload-floor (double (or (skill-effects/player-path player-id [:resource-data :cur-overload] 0.0) 0.0))]
     (set-shield-state-path! ctx-id [:ticks] 0)
     (set-shield-state-path! ctx-id [:last-absorb-tick] (- (cfg-int :combat.absorb-interval-ticks)))
     (set-shield-state-path! ctx-id [:last-touch-tick] (- (cfg-int :combat.touch-interval-ticks)))
-    (set-shield-state-path! ctx-id [:overload-floor] overload-floor))
+    (set-shield-state-path! ctx-id [:overload-floor] overload-floor)
+    ;; Spawn EntityMdShield visual (matching original c_spawn: new EntityMdShield(player))
+    (when player
+      (entity/player-spawn-entity-by-id! player "my_mod:entity_md_shield" 0.0)))
   (log/info "LightShield: Activated"))
 
 (defn light-shield-deactivate!
