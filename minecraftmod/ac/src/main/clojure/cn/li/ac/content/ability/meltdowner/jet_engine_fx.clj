@@ -6,6 +6,7 @@
   - trigger-start / trigger-update / trigger-end"
   (:require [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.effects.beam-ops :as fx-beam]
+            [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.fx-spec :as fx-spec]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.render-util :as ru]
@@ -235,6 +236,22 @@
 (defn- tick-state!
   [store]
   (let [store* (or store (default-jet-engine-fx-runtime-state))]
+    ;; MdParticleFactory particles during trigger (matching original: 10-11 per tick)
+    (doseq [[_ st] (:fx-state store*)]
+      (when (= :triggering (:phase st))
+        (let [trigger-ticks (long (or (:trigger-ticks st) 0))
+              pos (:pos st)]
+          (dotimes [_ (+ 10 (rand-int 2))]
+            (client-particles/queue-particle-effect! (:queue-owner st)
+              {:type :particle :particle-type :electric-spark
+               :x (+ (double (:x pos)) (- (rand 0.6) 0.3))
+               :y (+ (double (:y pos)) (- (rand 0.6) 0.3))
+               :z (+ (double (:z pos)) (- (rand 0.6) 0.3))
+               :count 1 :speed 0.1
+               :offset-x 0.02 :offset-y 0.02 :offset-z 0.02
+               :motion-x (- (rand 0.04) 0.02)
+               :motion-y (- (rand 0.04) 0.02)
+               :motion-z (- (rand 0.04) 0.02)})))))
     (update store* :fx-state
       (fn [states]
         (into {}
@@ -288,10 +305,11 @@
         flash-op (when (pos? alpha)
                    {:type :screen-flash
                     :r 200 :g 220 :b 255 :a (min 85 alpha)})
+        ws (when (seq triggering-states) 0.07)  ;; walk speed during trigger (matching original)
         ops (cond-> (into mark-ops trigger-ops)
               flash-op (conj flash-op))]
-    (when (seq ops)
-      {:ops ops})))
+    (cond-> (when (seq ops) {:ops ops})
+      ws (assoc :local-walk-speed (float ws)))))
 
 (defn init!
   []
