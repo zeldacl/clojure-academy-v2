@@ -18,7 +18,8 @@
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.effects.world :as world-op]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
-                        [cn.li.mcmod.platform.raycast :as raycast]))
+                        [cn.li.mcmod.platform.raycast :as raycast]
+	            [cn.li.mcmod.platform.entity :as entity]))
 
 (def ^:private thunder-clap-skill-id :thunder-clap)
 
@@ -109,6 +110,17 @@
   (update-skill-state-root! ctx-id assoc :hit-pos (resolve-raycast-target player-id))
   nil)
 
+(defn- spawn-surround-and-mark!
+  "Spawn surround arc + ripple mark entities matching original ThunderClapContextC
+  c_spawnEffect: EntitySurroundArc(BOLD) + EntityRippleMark."
+  [{:keys [player-id ctx-id player]}]
+  (when player
+    ;; Surround arc around player (matching EntitySurroundArc BOLD)
+    (entity/player-spawn-entity-by-id! player "my_mod:entity_surround_arc" 0.0)
+    ;; Ripple mark at target position (matching EntityRippleMark)
+    (when-let [hit-pos (resolve-raycast-target player-id)]
+      (entity/player-spawn-entity-by-id! player "my_mod:entity_ripple_mark" 0.0))))
+
 (defn- mark-performed!
   [ctx-id performed? & {:as extra-state}]
   (update-skill-state-root! ctx-id merge
@@ -169,7 +181,7 @@
                     :end    {:topic   :thunder-clap/fx-end
                              :payload end-payload}}
   :actions
-  {:down!      refresh-hit-pos!
+  {:down!      (fn [evt] (refresh-hit-pos! evt) (spawn-surround-and-mark! evt))
    :tick!      refresh-hit-pos!
    :up!        (fn [{:keys [player-id ctx-id hold-ticks exp]}]
                  (let [ticks (long (or hold-ticks 0))]
