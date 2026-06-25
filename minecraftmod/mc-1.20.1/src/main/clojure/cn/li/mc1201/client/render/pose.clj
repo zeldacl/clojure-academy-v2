@@ -15,6 +15,15 @@
   [^PoseStack pose-stack angle]
   (.mulPose pose-stack (.rotationDegrees com.mojang.math.Axis/ZP (float angle))))
 
+(defn rotate-axis
+  "Rotate around an arbitrary (non-unit-length OK) axis, matching legacy GL11.glRotated semantics."
+  [^PoseStack pose-stack angle ax ay az]
+  (let [len (Math/sqrt (+ (* (double ax) ax) (* (double ay) ay) (* (double az) az)))
+        [ax ay az] (if (< len 1.0e-9) [1.0 0.0 0.0] [(/ ax len) (/ ay len) (/ az len)])]
+    (.mulPose pose-stack
+              (.rotationDegrees (com.mojang.math.Axis/of (org.joml.Vector3f. (float ax) (float ay) (float az)))
+                                 (float angle)))))
+
 (defn push-pose
   [^PoseStack pose-stack]
   (.pushPose pose-stack))

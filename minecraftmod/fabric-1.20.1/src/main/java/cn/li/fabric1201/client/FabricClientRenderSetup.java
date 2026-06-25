@@ -9,6 +9,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import cn.li.mc1201.client.render.RenderProfileBootstrap;
 import cn.li.mc1201.client.render.effect.ScriptedBlockBodyRenderer;
+import cn.li.mc1201.client.render.effect.SilbarnObjRenderer;
 import cn.li.mc1201.entity.ScriptedEntitySpecAccess;
 import cn.li.mc1201.entity.spec.ScriptedBlockBodySpec;
 import cn.li.mc1201.entity.spec.ScriptedEffectSpec;
@@ -119,7 +120,11 @@ public final class FabricClientRenderSetup {
                 : blockBodySpec.getRendererId();
 
         if ("block-body".equals(rendererId)) {
-            FabricClientHelper.registerEntityRenderer(blockBodyType, ScriptedBlockBodyRenderer::new);
+            if (blockBodySpec != null && "silbarn".equals(blockBodySpec.getHookId())) {
+                FabricClientHelper.registerEntityRenderer(blockBodyType, SilbarnObjRenderer::new);
+            } else {
+                FabricClientHelper.registerEntityRenderer(blockBodyType, ScriptedBlockBodyRenderer::new);
+            }
         }
     }
 

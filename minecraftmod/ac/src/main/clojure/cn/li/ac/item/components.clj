@@ -3,10 +3,41 @@
 
   These items are used to construct matrix cores, nodes, and other wireless components."
   (:require [cn.li.mcmod.item.dsl :as idsl]
+            [cn.li.mcmod.platform.entity :as entity]
+            [cn.li.mcmod.platform.world :as world]
+            [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.util.log :as log]))
 
 (defonce-guard components-installed?)
+
+;; ============================================================================
+;; Silbarn - thrown marker entity (matches original ItemSilbarn behavior)
+;; ============================================================================
+
+(def ^:private silbarn-entity-id "my_mod:entity_silbarn")
+
+(defn- play-silbarn-throw-sound!
+  "Matches original ItemSilbarn#onItemRightClick: egg-throw sound, volume 0.5,
+   pitch 0.4 / (rand[0,1) * 0.4 + 0.8) ~= [0.333, 0.5)."
+  [player]
+  (when (world-effects/available?)
+    (when-let [world-id (world/world-get-dimension-id* (entity/player-get-level player))]
+      (world-effects/play-sound!*
+        world-id
+        (entity/entity-get-x player) (entity/entity-get-y player) (entity/entity-get-z player)
+        "minecraft:entity.egg.throw"
+        :players
+        0.5
+        (/ 0.4 (+ (* (rand) 0.4) 0.8))))))
+
+(defn- throw-silbarn!
+  [{:keys [player side]}]
+  (when (= side :server)
+    (play-silbarn-throw-sound! player)
+    (when (entity/player-spawn-entity-by-id! player silbarn-entity-id 1.0)
+      (entity/player-consume-main-hand-item! player 1)))
+  {:consume? true})
 
 ;; ============================================================================
 ;; Initialization
@@ -42,7 +73,8 @@
          :creative-tab :misc
          :properties {:tooltip ["银质材料"
                                 "具有共鸣特性的稀有材料"]
-                      :model-texture "silbarn"}}))
+                      :model-texture "silbarn"}
+         :on-right-click throw-silbarn!}))
     (idsl/register-item!
       (idsl/create-item-spec
         "reso_crystal"

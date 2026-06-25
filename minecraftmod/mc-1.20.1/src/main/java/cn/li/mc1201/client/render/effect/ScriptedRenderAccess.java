@@ -37,6 +37,20 @@ final class ScriptedRenderAccess {
         return invokeString(entity, "getSyncedBlockId", "minecraft:stone");
     }
 
+    static boolean isSilbarnHit(Entity entity) {
+        return invokeBoolean(entity, "isSilbarnHit", false);
+    }
+
+    private static boolean invokeBoolean(Object target, String methodName, boolean defaultValue) {
+        try {
+            Method method = target.getClass().getMethod(methodName);
+            Object result = method.invoke(target);
+            return result instanceof Boolean b ? b : defaultValue;
+        } catch (Exception ignored) {
+            return defaultValue;
+        }
+    }
+
     static List<ArcDataView> getActiveArcs(Entity entity) {
         List<?> arcs = invokeList(entity, "getActiveArcs");
         if (arcs.isEmpty()) {

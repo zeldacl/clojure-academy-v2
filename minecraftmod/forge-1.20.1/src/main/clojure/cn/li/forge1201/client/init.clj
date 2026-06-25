@@ -98,6 +98,7 @@
    {:y-rotation pose-impl/rotate-y
     :x-rotation pose-impl/rotate-x
     :z-rotation pose-impl/rotate-z
+    :axis-rotation pose-impl/rotate-axis
     :push-pose pose-impl/push-pose
     :pop-pose pose-impl/pop-pose
     :translate pose-impl/translate

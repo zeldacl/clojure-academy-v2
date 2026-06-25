@@ -505,13 +505,13 @@
         "entity_silbarn"
         {:entity-kind :scripted-block-body
          :category :misc
-         :width 0.6
-         :height 0.6
+         :width 0.4
+         :height 0.4
          :client-tracking-range 64
          :update-interval 1
          :properties {:block-body {:default-block-id "minecraft:iron_block"
-                                   :gravity 0.05
-                                   :damage 6.0
+                                   :gravity 0.12
+                                   :damage 0.0
                                    :place-when-collide? false
                                    :renderer-id "block-body"
                                    :hook :silbarn}}}))))

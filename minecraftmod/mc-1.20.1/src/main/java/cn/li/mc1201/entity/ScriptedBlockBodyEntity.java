@@ -7,6 +7,7 @@ import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.sounds.SoundEvent;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
@@ -23,6 +24,15 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity {
     private static final String NBT_DAMAGE = "BlockBodyDamage";
     private static final String NBT_PLACE_WHEN_COLLIDE = "BlockBodyPlaceWhenCollide";
 
+    /** Matches original EntitySilbarn: zero gravity for the first 50 ticks, then settles to the configured value. */
+    private static final String HOOK_SILBARN = "silbarn";
+    private static final int SILBARN_GRAVITY_DELAY_TICKS = 50;
+    private static final int SILBARN_DESPAWN_DELAY_TICKS = 10;
+    private static final String SOUND_SILBARN_HEAVY = "my_mod:entity.silbarn_heavy";
+    private static final String SOUND_SILBARN_LIGHT = "my_mod:entity.silbarn_light";
+
+    private int silbarnDespawnCountdown = -1;
+
     private static final EntityDataAccessor<String> DATA_BLOCK_ID =
             SynchedEntityData.defineId(ScriptedBlockBodyEntity.class, EntityDataSerializers.STRING);
     private static final EntityDataAccessor<Float> DATA_GRAVITY =
@@ -30,6 +40,8 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity {
     private static final EntityDataAccessor<Float> DATA_DAMAGE =
             SynchedEntityData.defineId(ScriptedBlockBodyEntity.class, EntityDataSerializers.FLOAT);
     private static final EntityDataAccessor<Boolean> DATA_PLACE_WHEN_COLLIDE =
+            SynchedEntityData.defineId(ScriptedBlockBodyEntity.class, EntityDataSerializers.BOOLEAN);
+    private static final EntityDataAccessor<Boolean> DATA_SILBARN_HIT =
             SynchedEntityData.defineId(ScriptedBlockBodyEntity.class, EntityDataSerializers.BOOLEAN);
 
     private boolean syncedFieldsInitialized;
@@ -45,12 +57,42 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity {
         this.entityData.define(DATA_GRAVITY, 0.05F);
         this.entityData.define(DATA_DAMAGE, 0.0F);
         this.entityData.define(DATA_PLACE_WHEN_COLLIDE, false);
+        this.entityData.define(DATA_SILBARN_HIT, false);
     }
 
     @Override
     public void tick() {
         ensureSyncedFields();
         super.tick();
+        if (silbarnDespawnCountdown > 0) {
+            silbarnDespawnCountdown--;
+            if (silbarnDespawnCountdown == 0 && !this.level().isClientSide) {
+                this.discard();
+            }
+        }
+    }
+
+    private boolean isSilbarn() {
+        ScriptedBlockBodySpec spec = getBlockBodySpec();
+        return spec != null && HOOK_SILBARN.equals(spec.getHookId());
+    }
+
+    private void markSilbarnHit(boolean heavy) {
+        if (silbarnDespawnCountdown >= 0 || this.level().isClientSide) {
+            return;
+        }
+        silbarnDespawnCountdown = SILBARN_DESPAWN_DELAY_TICKS;
+        this.entityData.set(DATA_SILBARN_HIT, true);
+        SoundEvent sound = BuiltInRegistries.SOUND_EVENT.get(
+            new ResourceLocation(heavy ? SOUND_SILBARN_HEAVY : SOUND_SILBARN_LIGHT));
+        if (sound != null) {
+            this.playSound(sound, 0.5F, 1.0F);
+        }
+    }
+
+    /** Mirrors original EntitySilbarn's client-synced hit flag, used by the client renderer to hide the model. */
+    public boolean isSilbarnHit() {
+        return this.entityData.get(DATA_SILBARN_HIT);
     }
 
     private void ensureSyncedFields() {
@@ -100,7 +142,15 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity {
 
     @Override
     protected float getGravity() {
+        if (isSilbarn() && this.tickCount < SILBARN_GRAVITY_DELAY_TICKS) {
+            return 0.0F;
+        }
         return getSyncedGravity();
+    }
+
+    @Override
+    public boolean isPickable() {
+        return isSilbarn() || super.isPickable();
     }
 
     @Override
@@ -114,6 +164,11 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity {
         if (target == owner) {
             return;
         }
+        if (isSilbarn()) {
+            boolean heavy = target instanceof ScriptedBlockBodyEntity other && other.isSilbarn();
+            markSilbarnHit(heavy);
+            return;
+        }
         float damage = getSyncedDamage();
         if (damage > 0.0F) {
             DamageSource source = this.damageSources().thrown(this, owner == null ? this : owner);
@@ -125,7 +180,9 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity {
     protected void onHit(HitResult result) {
         super.onHit(result);
         if (result.getType() == HitResult.Type.BLOCK) {
-            if (isSyncedPlaceWhenCollide() && !this.level().isClientSide) {
+            if (isSilbarn()) {
+                markSilbarnHit(false);
+            } else if (isSyncedPlaceWhenCollide() && !this.level().isClientSide) {
                 this.discard();
             }
         }
@@ -167,6 +224,9 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity {
         if (tag.contains(NBT_PLACE_WHEN_COLLIDE)) {
             this.entityData.set(DATA_PLACE_WHEN_COLLIDE, tag.getBoolean(NBT_PLACE_WHEN_COLLIDE));
         }
-        syncedFieldsInitialized = true;
+        if (isSilbarn()) {
+            // Matches original EntitySilbarn#readEntityFromNBT: never survives a save/reload.
+            this.discard();
+        }
     }
 }

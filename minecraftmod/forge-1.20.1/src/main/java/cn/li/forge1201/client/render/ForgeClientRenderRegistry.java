@@ -12,6 +12,7 @@ import org.apache.logging.log4j.Logger;
 import cn.li.mc1201.client.render.ModRenderTypes;
 import cn.li.mc1201.client.render.RenderProfileBootstrap;
 import cn.li.mc1201.client.render.effect.ScriptedBlockBodyRenderer;
+import cn.li.mc1201.client.render.effect.SilbarnObjRenderer;
 import cn.li.mc1201.entity.ScriptedBlockBodyEntity;
 import cn.li.mc1201.entity.ScriptedEffectEntity;
 import cn.li.mc1201.entity.ScriptedMarkerEntity;
@@ -91,7 +92,11 @@ public final class ForgeClientRenderRegistry {
             ScriptedBlockBodySpec spec = ModEntities.getScriptedBlockBodySpec(registryName);
             String rendererId = spec == null ? "block-body" : spec.getRendererId();
             if ("block-body".equals(rendererId)) {
-                event.registerEntityRenderer(blockBodyType, ScriptedBlockBodyRenderer::new);
+                if (spec != null && "silbarn".equals(spec.getHookId())) {
+                    event.registerEntityRenderer(blockBodyType, SilbarnObjRenderer::new);
+                } else {
+                    event.registerEntityRenderer(blockBodyType, ScriptedBlockBodyRenderer::new);
+                }
             }
         }
 

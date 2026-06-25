@@ -13,7 +13,7 @@
 
 (defn install-pose-ops!
   "Install pose stack operations. Keys: :y-rotation :x-rotation :z-rotation
-  :push-pose :pop-pose :translate :scale :get-matrix — each a fn."
+  :axis-rotation :push-pose :pop-pose :translate :scale :get-matrix — each a fn."
   [ops-map label]
   (prt/install-impl! #'*pose-ops* ops-map (or label "pose-ops"))
   nil)
@@ -50,6 +50,15 @@
       (catch Exception e
         (log/error "Error applying Z-rotation:" (ex-message e))))
     (log/warn "No platform Z-rotation function bound; skipping rotation")))
+
+(defn apply-axis-rotation
+  [pose-stack angle-degrees ax ay az]
+  (if-let [f (pose-op :axis-rotation)]
+    (try
+      (f pose-stack angle-degrees ax ay az)
+      (catch Exception e
+        (log/error "Error applying axis-rotation:" (ex-message e))))
+    (log/warn "No platform axis-rotation function bound; skipping rotation")))
 
 (defn push-pose
   [pose-stack]
