@@ -11,8 +11,28 @@
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.platform.ui :as platform-ui]
+            [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.mcmod.util.log :as log]
             [clojure.string :as str]))
+
+;; ============================================================================
+;; Blend animation (matching original Blend class)
+;; ============================================================================
+
+(def ^:private elem-time-step 0.06)
+
+(defn- blend-alpha
+  "Compute blend alpha matching original Blend(timeOffset, length).alpha.
+   elapsed-sec — seconds since screen opened
+   time-offset — delay before this element starts blending
+   length      — blend duration in seconds
+   Returns alpha in [0.0, 1.0]."
+  [elapsed-sec time-offset length]
+  (let [dt (- elapsed-sec time-offset)]
+    (max 0.0 (min 1.0 (/ (max 0.0 dt) (double length))))))
+
+(defn- now-secs []
+  (/ (double (System/currentTimeMillis)) 1000.0))
 
 ;; ============================================================================
 ;; Screen state
@@ -120,9 +140,10 @@
                        (comp/text-box :text "TP" :font :ac-bold :font-size 8 :align :center :color 0xFFFFFFFF)))]
         (events/on-left-click tp-btn
           (fn [_]
+            (client-sounds/queue-current-sound-effect!
+              {:type :sound :sound-id "my_mod:tp.tp" :volume 0.5 :pitch 1.0})
             (send-action! player-uuid catalog/MSG-REQ-SAVED-POS-PERFORM {:name name}
                           owner-key root hovered-atom scroll-idx)
-            ;; Play teleport sound (matching original ACSounds "tp.tp" 0.5f)
             (client-bridge/close-screen!)))
         (cgui-core/add-widget! row tp-btn)))
     ;; Remove button
@@ -135,13 +156,27 @@
           (send-action! player-uuid catalog/MSG-REQ-SAVED-POS-REMOVE {:name name}
                         owner-key root hovered-atom scroll-idx)))
       (cgui-core/add-widget! row del-btn))
-    ;; Hover effect
-    (events/on-frame row
-      (fn [_]
-        (let [hovering? (boolean (:hovering? @(:metadata row)))]
-          (when tint-comp
-            (swap! (:state tint-comp) assoc :color (if hovering? 0x40FFFFFF 0x00000000)))
-          (reset! hovered-atom (when hovering? loc)))))
+    ;; Blend-in reveal overlay + hover effect
+    (let [reveal-dt (comp/draw-texture nil 0xCC1a2226)]
+      (comp/add-component! row reveal-dt)
+      (events/on-frame row
+        (fn [_]
+          ;; Blend-in reveal animation (matching original sequential row blend)
+          (let [creation-sec (or (get @(:metadata root) :creation-sec) (now-secs))
+                elapsed (- (now-secs) creation-sec)
+                bg-alpha (blend-alpha elapsed (* idx elem-time-step) 0.2)
+                ;; Reveal overlay: fade from opaque to transparent
+                reveal-a (int (* 255.0 (- 1.0 bg-alpha)))
+                _ (swap! (:state reveal-dt) assoc :color
+                     (unchecked-int (bit-or (bit-shift-left reveal-a 24) 0x001a2226)))
+                ;; Hover tint
+                hovering? (boolean (:hovering? @(:metadata row)))
+                hover-alpha (if hovering? 0x40FFFFFF
+                                    (let [a (int (* 255.0 0.1 bg-alpha))]
+                                      (unchecked-int (bit-or (bit-shift-left a 24) 0x00FFFFFF))))]
+            (when tint-comp
+              (swap! (:state tint-comp) assoc :color hover-alpha))
+            (reset! hovered-atom (when hovering? {:loc loc :row-y (+ list-y y)}))))))
     row))
 
 ;; ============================================================================
@@ -191,7 +226,10 @@
         (fn [_]
           (when tint-comp
             (swap! (:state tint-comp) assoc :color
-                   (if (boolean (:hovering? @(:metadata row))) 0x40FFFFFF 0x00000000))))))
+                   (if (boolean (:hovering? @(:metadata row))) 0x40FFFFFF 0x00000000)))
+          ;; Clear hovered-atom when hovering add row (no location data)
+          (when (boolean (:hovering? @(:metadata row)))
+            (reset! hovered-atom nil)))))
     (reset! scroll-idx (min @scroll-idx (max 0 (- total-count max-visible))))
     row))
 
@@ -213,18 +251,24 @@
     (cgui-core/add-widget! info status-w)
     (events/on-frame info
       (fn [_]
-        (if-let [hovered @hovered-atom]
-          (comp/set-text! status-tb
-            (str "Dim: " (or (:world-id hovered) "?")
-                 "  (" (int (or (:x hovered) 0)) ", " (int (or (:y hovered) 0)) ", " (int (or (:z hovered) 0)) ")"
-                 "  " (int (or (:cp-cost hovered) 0)) "IF"))
-          (let [st (screen-st nil)
-                exp (double (or (:exp st) 0.0))
-                limits (or (:limits st) {})
-                cross-exp (double (or (:cross-dimension-exp-threshold limits) 0.8))]
+        (if-let [{:keys [loc row-y]} @hovered-atom]
+          (do
+            ;; Reposition info panel to follow row y (matching original moveWidgetToAbsPos)
+            (cgui-core/set-position! info 0 (max list-y (- row-y list-y)))
             (comp/set-text! status-tb
-              (str "EXP: " (int (* 100.0 exp)) "%"
-                   "  " (if (>= exp cross-exp) "Cross-Dim OK" "Same Dim Only")))))))
+              (str "Dim: " (or (:world-id loc) "?")
+                   "  (" (int (or (:x loc) 0)) ", " (int (or (:y loc) 0)) ", " (int (or (:z loc) 0)) ")"
+                   "  " (int (or (:cp-cost loc) 0)) "IF")))
+          (do
+            ;; No hover — reset to top, show status
+            (cgui-core/set-position! info 0 0)
+            (let [st (screen-st nil)
+                  exp (double (or (:exp st) 0.0))
+                  limits (or (:limits st) {})
+                  cross-exp (double (or (:cross-dimension-exp-threshold limits) 0.8))]
+              (comp/set-text! status-tb
+                (str "EXP: " (int (* 100.0 exp)) "%"
+                     "  " (if (>= exp cross-exp) "Cross-Dim OK" "Same Dim Only"))))))))
     info))
 
 ;; ============================================================================
@@ -266,7 +310,8 @@
         total (count locations)
         hovered-atom (atom nil)
         scroll-idx (atom 0)
-        root (doto (cgui-core/create-widget :pos [0 0] :size [panel-w panel-h])
+        creation-sec (now-secs)
+        root (doto (cgui-core/create-widget :pos [0 0] :size [panel-w 0])  ;; start at 0 height for blend-in
                (comp/add-component! (comp/draw-texture nil 0xCC1a2226)))
         info-panel (build-info-panel hovered-atom)
         up-btn (doto (cgui-core/create-widget :pos [262 list-y] :size [16 14])
@@ -309,9 +354,19 @@
     (cgui-core/add-widget! list-ctr (build-add-row player-uuid owner-key (min max-visible total) total root hovered-atom scroll-idx))
     (cgui-core/add-widget! list-bg list-ctr)
     (cgui-core/add-widget! root status-line)
-    (let [counter (atom 0)]
+    (swap! (:metadata root) assoc :creation-sec creation-sec)
+    (let [counter (atom 0)
+          menu-blend-done? (atom false)]
       (events/on-frame root
         (fn [_]
+          ;; Menu blend-in animation (matching original Blend(0, 0.4))
+          (when-not @menu-blend-done?
+            (let [elapsed (- (now-secs) creation-sec)
+                  menu-alpha (blend-alpha elapsed 0.0 0.4)]
+              (cgui-core/set-size! root panel-w (* panel-h menu-alpha))
+              (when (>= menu-alpha 1.0)
+                (reset! menu-blend-done? true))))
+          ;; Periodic refresh
           (swap! counter inc)
           (when (zero? (mod @counter 100))
             (send-query! player-uuid owner-key root hovered-atom scroll-idx)))))
