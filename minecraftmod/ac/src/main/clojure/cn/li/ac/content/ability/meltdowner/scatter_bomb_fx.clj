@@ -3,7 +3,8 @@
   (:require [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-spec :as fx-spec]
-            [cn.li.ac.ability.client.level-effects :as level-effects]))
+            [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 
 (def ^:private scatter-bomb-effect-id :scatter-bomb)
 
@@ -75,7 +76,10 @@
              :y (double (or (:y end) 0.0))
              :z (double (or (:z end) 0.0))
              :count 4 :speed 0.15
-             :offset-x 0.4 :offset-y 0.4 :offset-z 0.4}))
+             :offset-x 0.4 :offset-y 0.4 :offset-z 0.4})
+          ;; Spawn EntityMdRaySmall equivalent (matching original SBNetDelegate)
+          (client-bridge/run-client-effect! :mcmod/spawn-local-scripted-effect
+            {:effect-id "entity_md_ray_small"}))
         (client-sounds/queue-current-sound-effect!
           {:type :sound :sound-id "my_mod:md.eb_explode" :volume 0.4 :pitch 1.2})
         store*)
