@@ -142,19 +142,22 @@
 		[(ru/line-op center pulse-end {:r 160 :g 255 :b 190 :a 200})]))
 
 (defn- beam-flash-ops [camera-pos beams]
-	(mapcat (fn [{:keys [start end ttl max-ttl]}]
-						(let [life-ratio (if (pos? (double (or max-ttl 1)))
-															 (/ (double (or ttl 1)) (double max-ttl))
-															 1.0)
-									alpha (int (+ 60 (* 160 life-ratio)))
-									width (+ 0.03 (* 0.05 life-ratio))]
-							(ru/billboard-beam-ops camera-pos start end
-																		 {:width width
-																			:core-width (* width 0.35)
-																			:outer-color {:r 140 :g 255 :b 170 :a alpha}
-																			:inner-color {:r 240 :g 255 :b 235 :a (min 255 (+ alpha 30))}
-																			:line-color {:r 200 :g 255 :b 200 :a alpha}})))
-					beams))
+  "Render with exact EntityMdRaySmall colors:
+   inner=0.03 rgba(216,248,216,230), outer=0.045 rgba(106,242,106,50), glow=0.3 a=128"
+  (mapcat (fn [{:keys [start end ttl max-ttl]}]
+            (let [life-ratio (if (pos? (or max-ttl 1)) (/ (or ttl 1.0) (double max-ttl)) 1.0)
+                  blend-in  (min 1.0 (/ (max 0 (- 1.0 life-ratio)) 0.28))
+                  blend-out (min 1.0 (/ life-ratio 0.57))
+                  am (* blend-in blend-out)
+                  shrink (if (< life-ratio 0.3) 0.0 1.0)]
+              (ru/billboard-beam-ops camera-pos start end
+                {:width 0.3
+                 :core-width 0.045
+                 :core-ratio 0.667
+                 :outer-color {:r 106 :g 242 :b 106 :a (int (* 50 am shrink))}
+                 :inner-color {:r 106 :g 242 :b 106 :a (int (* 128 am shrink))}
+                 :line-color  {:r 216 :g 248 :b 216 :a (int (* 230 am shrink))}})))
+          beams))
 
 (defn- build-plan [camera-pos _hand-center-pos _tick]
 	(let [{:keys [effect-state beams]} (electron-bomb-fx-snapshot)

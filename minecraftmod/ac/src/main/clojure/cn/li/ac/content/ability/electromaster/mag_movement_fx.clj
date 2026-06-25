@@ -123,7 +123,7 @@
                                     (dissoc hand-center-pos :player-uuid)
                                     (:target mag-move)
                                     {:arc-pattern :thin-continuous
-                                     :life-ratio 1.0})))})))
+                                     :life-ratio 1.0}))})))
 
 (defn init! []
   (fx-spec/register!
