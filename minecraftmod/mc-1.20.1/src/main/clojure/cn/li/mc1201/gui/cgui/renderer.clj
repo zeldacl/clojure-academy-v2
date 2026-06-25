@@ -264,6 +264,23 @@
                       (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0)))))
               (.fill gg x y (+ x w-int) (+ y h-int) (unchecked-int (or (:color state) 0xFFFFFF)))))
 
+          (kind-matches? kind :shader-progress)
+          (let [t0 (:texture-0 state) t1 (:texture-1 state)
+                tex-loc-0 (ensure-resource-location t0)
+                tex-loc-1 (ensure-resource-location t1)
+                ^ShaderInstance si (shader-utils/resolve-shader :skill-progbar)
+                progress (float (or (:progress state) 0.0))]
+            (when (and si tex-loc-0 tex-loc-1)
+              (try
+                (.setSampler si "TexSampler0" tex-loc-0)
+                (.setSampler si "TexSampler1" tex-loc-1)
+                (RenderSystem/setShader (reify java.util.function.Supplier (get [_] si)))
+                (when-let [u (.safeGetUniform si "Progress")] (.set u progress))
+                (.blit gg tex-loc-0 x y 0 0 w-int h-int w-int h-int)
+                (RenderSystem/setShader (reify java.util.function.Supplier (get [_] nil)))
+                (catch Exception e
+                  (log/debug "CGUI shader-progress render error:" (.getMessage e))))))
+
           (kind-matches? kind :gradient-fill)
           ;; Horizontal gradient glow fill matching upstream
           ;; ACRenderingHelper.drawGlow. Uses multiple fill() bands with

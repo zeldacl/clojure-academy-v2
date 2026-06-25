@@ -501,19 +501,27 @@
         node-alpha (int (* 255.0 eff-alpha))]
     ;; skill_back: white × backAlpha (upstream glColor4d(1,1,1,backAlpha))
     (comp/add-component! node-w (comp/draw-texture skill-back (bit-or (bit-shift-left node-alpha 24) 0xFFFFFF)))
-    ;; skill_outline: dark gray for unlearned, bright blue for learned (progress ring approximation)
-    (let [ol-alpha (int (* 255.0 (* eff-alpha 0.6)))
-          pb (progress-blend anim-time idx)
-          ol-color (if learned
-                     (let [b (+ 0.3 (* 0.7 pb (or (:exp node) 0.0)))]
-                       (bit-or (bit-shift-left (int (* 255.0 b)) 24)
-                               (bit-or (bit-shift-left (int (* 0x8F b)) 16)
-                                       (bit-or (bit-shift-left (int (* 0xD3 b)) 8) 0xFF))))
-                     (let [g (int (* 255.0 0.2))]
-                       (bit-or (bit-shift-left ol-alpha 24) (bit-or (bit-shift-left g 16) (bit-or (bit-shift-left g 8) g)))))
-          ol-w (cgui-core/create-widget :pos [(+ node-x prog-align) (+ node-y prog-align)] :size [prog-sz prog-sz])]
-      (comp/add-component! ol-w (comp/draw-texture skill-outline ol-color))
-      (cgui-core/add-widget! area-widget ol-w))
+    ;; skill_outline: dark gray for unlearned, shader progress ring for learned
+    (if learned
+      ;; Shader-based radial progress ring (matching upstream skill_progbar)
+      (let [pb (progress-blend anim-time idx)
+            ol-w (cgui-core/create-widget :pos [(+ node-x prog-align) (+ node-y prog-align)] :size [prog-sz prog-sz])
+            {:keys [skill-outline]} (skill-tree-textures)
+            mask-path (modid/asset-path "textures" "guis/developer/skill_radial_mask.png")
+            outline-path (modid/asset-path "textures" (if (>= (or (:exp node) 0.0) 0.999)
+                                                         "guis/developer/skill_view_outline_glow.png"
+                                                         "guis/developer/skill_view_outline.png"))]
+        (comp/add-component! ol-w (comp/shader-progress {:texture-0 outline-path
+                                                          :texture-1 mask-path
+                                                          :progress (float (* pb (or (:exp node) 0.0)))}))
+        (cgui-core/add-widget! area-widget ol-w))
+      ;; Unlearned: dark gray outline
+      (let [ol-alpha (int (* 255.0 (* eff-alpha 0.6)))
+            g (int (* 255.0 0.2))
+            ol-color (bit-or (bit-shift-left ol-alpha 24) (bit-or (bit-shift-left g 16) (bit-or (bit-shift-left g 8) g)))
+            ol-w (cgui-core/create-widget :pos [(+ node-x prog-align) (+ node-y prog-align)] :size [prog-sz prog-sz])]
+        (comp/add-component! ol-w (comp/draw-texture skill-outline ol-color))
+        (cgui-core/add-widget! area-widget ol-w)))
     ;; Skill icon
     (let [ia-eff (* (if locked? 0.25 (or m-alpha 1.0)) (/ ia (or m-alpha 0.7)))]
       (when (and skill-icon (>= ia-eff 0.001))

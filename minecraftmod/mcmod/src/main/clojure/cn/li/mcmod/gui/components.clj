@@ -115,6 +115,18 @@
   ([texture-path]
    {::kind :drawtexture :texture texture-path}))
 
+(defn shader-progress
+  "Shader-based radial progress ring component (matching host.clj :shader-progress-ring op).
+  texture-0: outline ring texture (e.g., skill_outline.png)
+  texture-1: radial mask texture (e.g., skill_radial_mask.png)
+  progress: float 0.0-1.0"
+  [{:keys [texture-0 texture-1 progress]
+    :or {progress 0.0}}]
+  {::kind :shader-progress
+   :texture-0 texture-0
+   :texture-1 texture-1
+   :progress (float progress)})
+
 (defn mono-blend
   "Replicates LambdaLib2 Colors.monoBlend.
    Returns an ARGB int from a grayscale value and an alpha.
