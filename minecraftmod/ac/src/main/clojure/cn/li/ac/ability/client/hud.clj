@@ -86,7 +86,9 @@
                :in-cooldown in-cooldown
                :cooldown-remaining (or remaining 0)
                :cooldown-seconds (or remaining-seconds 0.0)
-               :cooldown-total 100
+               :cooldown-total (or (get-in skill-spec [:cooldown-policy :ticks])
+                                  (:cooldown-ticks skill-spec)
+                                  100)
                :visual-state (:state visual)
                :alpha (:alpha visual)
                :glow-color (:glow-color visual)
