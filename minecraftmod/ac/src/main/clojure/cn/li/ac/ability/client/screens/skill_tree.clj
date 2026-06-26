@@ -197,12 +197,19 @@
 (defn handle-screen-click! [owner mx my]
   (let [st (screen-state-snapshot owner) sel (:selected-skill st)]
     (if sel
-      (let [dx 220 dy 70 dw 200 dh 155]
-        (cond (and (>= mx (+ dx 55)) (<= mx (+ dx 87)) (>= my (+ dy 125)) (<= my (+ dy 141)))
-              (do (on-skill-learn-click owner sel) true)
-              (and (>= mx dx) (<= mx (+ dx dw)) (>= my dy) (<= my (+ dy dh)))
-              (do (swap-screen-state! owner assoc :selected-skill nil) true)
-              :else (do (swap-screen-state! owner assoc :selected-skill nil) false)))
+      ;; Detail popup shown: cx=210, cy=130, btn at (194,202) size 32×16
+      (let [cx 210 cy 130
+            btn-x (- cx 16) btn-y (+ cy 72)   ; 194, 202
+            btn-x2 (+ btn-x 32) btn-y2 (+ btn-y 16)
+            sel-node (when-let [rd (build-screen-render-data owner)]
+                       (first (filter #(= (:skill-id %) sel) (:skill-nodes rd))))]
+        (cond
+          ;; LEARN button for unlearned skill
+          (and sel-node (not (:learned sel-node))
+               (>= mx btn-x) (<= mx btn-x2) (>= my btn-y) (<= my btn-y2))
+          (do (on-skill-learn-click owner sel) true)
+          ;; Click anywhere else dismisses popup
+          :else (do (swap-screen-state! owner assoc :selected-skill nil) true)))
       (if-let [rd (build-screen-render-data owner)]
         (let [c? (atom false)]
           (doseq [n (:skill-nodes rd)] (when (and n (not @c?))
@@ -307,41 +314,55 @@
 ;; Detail popup
 ;; ============================================================================
 (defn- detail-popup-ops [node anim-time]
-  (let [dx 220 dy 70 dw 200 dh 155
-        {:keys [skill-name skill-icon skill-level skill-description learned can-learn exp]} node
+  ;; Screen 420×260 → cx=210, cy=130
+  ;; Original skillViewArea: skillWid.centered().size(50,50), textArea.centered().pos(0,25)
+  (let [cx 210 cy 130
+        back-sz 50 icon-sz 27 icon-ofs 11
+        back-x (- cx 25) back-y (- cy 25)                       ; 185, 105
+        icon-x (+ back-x icon-ofs) icon-y (+ back-y icon-ofs)   ; 196, 116
+        ta-y (+ cy 20)       ; textArea top = cy-5+25 = 150
+        title-y (+ ta-y 3)   ; 153
+        info-y  (+ ta-y 15)  ; 165
+        learnq-y (+ ta-y 40) ; 190
+        btn-x (- cx 16) btn-y (+ ta-y 52)                       ; 194, 202
+        {:keys [skill-name skill-icon skill-level skill-description learned exp]} node
         cover-alpha (* 0.7 (clamp01 (* anim-time 5.0)))
         panel-alpha (clamp01 (* (- anim-time 0.05) 5.0))
-        ;; drawActionIcon: BackSize=50, IconSize=27, IconAlign=(50-27)/2=11.5
-        back-sz 50 icon-sz 27 icon-align 11.5
-        progress-at-1? (>= exp 0.999)]
-    (flatten
+        progress-at-1? (>= (or exp 0.0) 0.999)]
+    (filterv some?
       (concat
-        ;; Dark full-screen cover overlay
-        [{:kind :fill :x 0 :y 0 :w 420 :h 260 :color (bit-or (bit-shift-left (int (* 255.0 cover-alpha)) 24) 0x000000)}]
+        ;; Dark full-screen cover (original: blackCover)
+        [{:kind :fill :x 0 :y 0 :w 420 :h 260
+          :color (bit-or (bit-shift-left (int (* 255.0 cover-alpha)) 24) 0x000000)}]
         (when (>= panel-alpha 0.01)
-          [{:kind :fill :x dx :y dy :w dw :h dh :color (bit-or (bit-shift-left (int (* 255.0 panel-alpha)) 24) 0x101010)}
-           ;; Skill icon with background (matching drawActionIcon)
-           {:kind :textured-quad :texture :skill-back :x (+ dx 50) :y (+ dy 8) :w back-sz :h back-sz}
-           {:kind :icon-or-fill :texture skill-icon :x (+ dx 50 icon-align) :y (+ dy 8 icon-align) :w icon-sz :h icon-sz :fallback-color 0xFF2A2A2A}
-           (when learned
-             {:kind :shader-progress-ring :shader-id :skill-progbar
-              :texture-0 (if progress-at-1? :skill-view-outline-glow :skill-view-outline)
-              :texture-1 :skill-mask :progress (float exp)
-              :x (+ dx 50) :y (+ dy 8) :w back-sz :h back-sz})
-           {:kind :text :x (+ dx 105) :y (+ dy 9) :text (str skill-name " (LV " skill-level ")")
-            :font :ac-bold :font-size 11 :align :left :color 0xFFFFFFFF}
+          [;; skill_back 50×50 centered (texSkillBack in drawActionIcon)
+           {:kind :textured-quad :texture :skill-back :x back-x :y back-y :w back-sz :h back-sz}
+           ;; Skill icon 27×27 at offset 11 (original IconAlign≈11.5)
+           {:kind :icon-or-fill :texture skill-icon
+            :x icon-x :y icon-y :w icon-sz :h icon-sz :fallback-color 0xFF2A2A2A}
+           ;; Shader ring — progress=0 for popup (original drawActionIcon progress=0)
+           {:kind :shader-progress-ring :shader-id :skill-progbar
+            :texture-0 (if progress-at-1? :skill-view-outline-glow :skill-view-outline)
+            :texture-1 :skill-mask :progress (float 0.0)
+            :x back-x :y back-y :w back-sz :h back-sz}
+           ;; Title centered at cx
+           {:kind :text :x cx :y title-y :text (str skill-name " (LV " skill-level ")")
+            :font :ac-bold :font-size 12 :align :center :color 0xFFFFFFFF}
            (if learned
-             {:kind :text :x (+ dx 8) :y (+ dy 46) :text (format "EXP: %d%%" (int (* 100.0 exp)))
-              :font :ac-normal :font-size 9 :align :left :color 0xFFa1e1ff}
-             {:kind :text :x (+ dx 8) :y (+ dy 46) :text "Not learned"
-              :font :ac-normal :font-size 9 :align :left :color 0xFFFF5555})
-           {:kind :text :x (+ dx 8) :y (+ dy 60) :text (str skill-description)
-            :font :ac-normal :font-size 8 :align :left :color 0xFFDDDDDD}
-           (when (not learned)
-             ;; LEARN button — always shown for unlearned skills (upstream behavior)
-             [{:kind :textured-quad :texture :tex-button :x (+ dx 55) :y (+ dy 125) :w 32 :h 16}
-              {:kind :text :x (+ dx 62) :y (+ dy 127) :text "LEARN"
-               :font :ac-bold :font-size 9 :align :left :color 0xFFFFFFFF}])])))))
+             ;; Learned: EXP + description
+             [{:kind :text :x cx :y info-y
+               :text (format "EXP: %.0f%%" (* 100.0 (or exp 0.0)))
+               :font :ac-normal :font-size 9 :align :center :color 0xFFa1e1ff}
+              {:kind :text :x cx :y (+ ta-y 25) :text (str skill-description)
+               :font :ac-normal :font-size 9 :align :center :color 0xFFDDDDDD}]
+             ;; Unlearned: Not learned + LEARN button (button.png 32×16)
+             [{:kind :text :x cx :y info-y :text "Not learned"
+               :font :ac-normal :font-size 10 :align :center :color 0xFFff5555}
+              {:kind :text :x cx :y learnq-y :text "Learn?"
+               :font :ac-normal :font-size 9 :align :center :color 0xAAFFFFFF}
+              {:kind :textured-quad :texture :tex-button :x btn-x :y btn-y :w 32 :h 16}
+              {:kind :text :x cx :y (+ btn-y 4) :text "LEARN"
+               :font :ac-bold :font-size 9 :align :center :color 0xFF101010}])])))))
 
 ;; ============================================================================
 ;; Main draw ops builder

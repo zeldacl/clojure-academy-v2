@@ -126,6 +126,17 @@
                  :line-w (double (or line-w 5.5))
                  :color (unchecked-int (or color 0xFFFFFFFF))})})
 
+(defn shader-ring
+  "Radial progress ring via :skill-progbar shader. Uses :kind (non-namespaced) to bypass
+  create-native-component; handled by the :shader-quad case in renderer.clj.
+  texture-0: outline ring texture, texture-1: radial mask texture, progress: 0.0–1.0."
+  [{:keys [shader-id texture-0 texture-1 progress]}]
+  {:kind :shader-quad
+   :state (atom {:shader-id (or shader-id :skill-progbar)
+                 :texture-0 texture-0
+                 :texture-1 texture-1
+                 :progress (double (or progress 0.0))})})
+
 (defn shader-progress
   "Shader-based radial progress ring component (matching host.clj :shader-progress-ring op).
   texture-0: outline ring texture (e.g., skill_outline.png)
