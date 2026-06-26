@@ -101,10 +101,13 @@
       (:active-slots model)))))
 
 (defn build-activation-indicator-data
-  "Build activation indicator render data with activate key hint."
+  "Build activation indicator render data matching original AcademyCraft:
+   - centered status dot (green=activated, gray=inactive)
+   - V-key hint text to the right of the dot
+   - positioned near top-center of screen"
   [model activate-hint]
   {:type :activation-indicator
-   :x 120 :y 10
+   :y 10
    :activated (:activated model)
    :hint activate-hint})
 

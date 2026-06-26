@@ -818,7 +818,8 @@
   (let [cp-bar (some-> (:cp-bar hud-render-data) (assoc :kind :bar) (dissoc :type))
         overload-bar (some-> (:overload-bar hud-render-data) (assoc :kind :bar) (dissoc :type))
         activation-indicator (some-> (:activation-indicator hud-render-data)
-                                     (assoc :kind :activation-indicator)
+                                     (assoc :kind :activation-indicator
+                                            :x (int (/ screen-width 2)))
                                      (dissoc :type))
       combat-notice (some-> (:combat-notice hud-render-data)
             (assoc :kind :text)
