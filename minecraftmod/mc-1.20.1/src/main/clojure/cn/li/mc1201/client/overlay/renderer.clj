@@ -212,12 +212,24 @@
 ;; --- Interference visual effects ---
 
 (defn- jitter-offset [^long now-ms ^long axis-seed]
-  (let [tick (quot now-ms 150)
-        rng (java.util.Random. (+ tick (* axis-seed 65537)))]
-    (* 3.0 (- (* 2.0 (.nextFloat rng)) 1.0))))
+  "Random screen-jitter offset updated every 100ms, amplitude ±4px.
+   Uses a cheap linear-congruential hash instead of java.util.Random
+   to avoid per-frame allocation overhead."
+  (let [tick (quot now-ms 100)
+        ;; Cheap LCG: multiplier 1103515245, add 12345, mod 2^31
+        seed  (unchecked-add-int (unchecked-multiply-int (unchecked-add-int tick (int axis-seed))
+                                                         1103515245)
+                                 12345)
+        norm  (double (bit-and seed 0x7FFFFFFF))  ;; positive [0, 2^31)
+        rnd   (/ norm 2147483647.0)]              ;; [0, 1)
+    (* 4.0 (- (* 2.0 rnd) 1.0))))                ;; [-4, +4]
 
 (defn- flicker-alpha [^long now-ms]
-  (+ 0.5 (* 0.5 (Math/sin (* (double now-ms) 0.003)))))
+  "Screen alpha flicker: oscillates between 0.45 and 1.0 over ~2s.
+   The floor at 0.45 (matching original AcademyCraft) keeps the HUD
+   always partially visible during interference instead of going fully
+   transparent at the sine trough."
+  (+ 0.725 (* 0.275 (Math/sin (* (double now-ms) 0.003)))))
 
 (defn- draw-string! [^GuiGraphics graphics ^String text x y color]
   (let [^Minecraft mc (Minecraft/getInstance)
