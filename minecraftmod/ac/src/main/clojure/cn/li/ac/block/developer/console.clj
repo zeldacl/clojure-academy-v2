@@ -12,6 +12,7 @@
             [cn.li.mcmod.gui.cgui-screen :as cgui-screen]
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.mcmod.gui.events :as events]
+            [cn.li.mcmod.i18n :as i18n]
             [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
@@ -25,6 +26,21 @@
 (def ^:private input-color 0xFFFFFFFF)
 (def ^:private dim-color 0xFF008800)
 
+;; i18n key prefix — matching upstream ac.skill_tree.console.*
+(def ^:private console-i18n-prefix "skill_tree.my_mod.console.")
+
+(defn- loc
+  "Resolve a localized console string by key suffix.
+   Replaces literal \\n with actual newlines, matching upstream
+   localized() → replace(\"\\\\n\", \"\\n\")."
+  [k & fmt-args]
+  (let [raw (i18n/translate (str console-i18n-prefix (name k)))
+        text (if (string? raw) raw (str raw))
+        unescaped (str/replace text "\\n" "\n")]
+    (if (seq fmt-args)
+      (apply format unescaped fmt-args)
+      unescaped)))
+
 ;; Key codes matching mc-1.20.1 gui/cgui/input.clj enter-keys/backspace-keys
 (def ^:private enter-keys #{257 335 28})
 (def ^:private backspace-keys #{259 14})
@@ -34,12 +50,13 @@
 ;; ============================================================================
 
 (defn init-state
-  [mode player-name]
+  [mode player-name has-developer]
   {:lines []
    :input ""
    :phase :boot              ;; :boot | :task-running | :idle | :executing | :developing | :done
    :mode mode
    :player-name (or player-name "Player")
+   :has-developer (boolean has-developer)
    :dev-progress 0.0
    :dev-result nil
    :dev-grace 0
@@ -61,36 +78,44 @@
 
 (defn- build-boot-tasks
   "Build task queue for boot sequence with animated memory check.
-  Matching original SkillTree.scala:975-977 animSequence + slowPrintTask."
-  [mode player-name]
-  (let [base-tasks
-        (case mode
-          :reset
-          [{:type :slow-print :text (str "Emergency reset console. User: " player-name ".")}
-           {:type :slow-print :text "WARNING: This will reset all ability progress."}
-           {:type :slow-print :text "Type 'help' for available commands."}]
-          ;; Standard boot with memory check animation
-          (let [rng #(let [base (rand-int 6)]
-                      (+ (- base 3) (* % 10)))
-                mem-pcts (into []
-                           (map-indexed (fn [i base]
-                                          (let [pct (+ (* (inc i) 10) (rand-int 6) -3)]
-                                            (str "Memory check: " pct "%"))))
-                           (range 6))]
-            (concat
-              [{:type :slow-print :text (str "Welcome, " player-name ".")}
-               {:type :slow-print :text "Initializing developer firmware..."}]
-              ;; Animated memory check sequence (matching animSequence)
-              (mapcat (fn [text] [{:type :slow-print :text text}
-                                  {:type :pause :delay 0.3}
-                                  {:type :backspace-clear :count (count text)}])
-                      mem-pcts)
-              [{:type :print :text "97%"}
-               {:type :slow-print :text "Boot failed. Override mode active."}
-               ;; Matching original SkillTree.scala:981 — show hint when developer is present
-               {:type :slow-print :text "No ability category detected."}
-               {:type :slow-print :text "Type 'learn' to start."}])))]
-    (vec base-tasks)))
+   Matching upstream SkillTree.scala lines 970-985 exactly:
+     slowPrintTask(init) → pause(0.4) → animSequence(0.3, numSeq*) → slowPrintTask(startupText)"
+  [mode player-name has-developer]
+  (let [;; Memory check animation numbers (upstream: 1..6 → *10 + rand(6) - 3 → "X%")
+        mem-pcts (mapv (fn [i]
+                         (str (+ (* (inc i) 10) (rand-int 6) -3) "%"))
+                       (range 6))
+        ;; Final percentage: 64 + rand(4) → "64%".."67%"
+        final-pct (str (+ 64 (rand-int 4)) "%")
+        ;; Build animSequence items: 6 animated %s + final pct + boot_failed
+        anim-items (concat
+                     (mapcat (fn [text]
+                               [{:type :print :text text}      ;; instant output (matching animSequence begin)
+                                {:type :pause :delay 0.3}
+                                {:type :backspace-clear :count (count text)}])
+                             mem-pcts)
+                     [{:type :print :text final-pct}           ;; "65%" — final pct, backspaced
+                      {:type :pause :delay 0.3}
+                      {:type :backspace-clear :count (count final-pct)}
+                      {:type :print :text (loc :boot_failed)}])  ;; "Boot Failed.\n" — instant + newline
+        ;; Startup text matching upstream lines 978-985
+        startup-text (case mode
+                       :reset
+                       ;; emergency=true → always show override
+                       (loc :override)
+                       :learn
+                       (if has-developer
+                         ;; hasDeveloper=true → invalid_cat + learn_hint
+                         (str (loc :invalid_cat) (loc :learn_hint))
+                         ;; hasDeveloper=false → invalid_cat only
+                         (loc :invalid_cat)))
+        boot-tasks
+        (concat
+          [{:type :slow-print :text (loc :init player-name)}
+           {:type :pause :delay 0.4}]
+          anim-items
+          [{:type :slow-print :text startup-text}])]
+    (vec boot-tasks)))
 
 (defn- clamp-lines [lines]
   (if (> (count lines) max-lines)
@@ -98,7 +123,9 @@
     lines))
 
 (defn- process-current-task
-  "Process current task. Returns updated state."
+  "Process current task. Returns updated state.
+   Slow-print handles \\n by splitting text into separate console lines,
+   matching upstream output() which treats \\n as line delimiter."
   [state dt-sec]
   (let [task (:current-task state)
         timer (+ (:task-timer state 0.0) dt-sec)]
@@ -109,16 +136,22 @@
             chars-needed (int (/ timer per-char-delay))
             next-idx (min (count text) chars-needed)]
         (if (< char-idx (count text))
-          (let [chunk (subs text char-idx next-idx)]
-            (-> state
-                (update :task-timer (constantly 0.0))
-                (update :current-task assoc :char-idx next-idx)
-                (update-in [:lines (dec (count (:lines state)))]
-                           #(str % chunk))
-                (#(if (> (count (:lines %)) 0)
-                    (update-in % [:lines (dec (count (:lines %)))]
-                              str chunk)
-                    (update % :lines conj chunk)))))
+          (let [chunk (subs text char-idx next-idx)
+                ;; Process chunk character-by-character for \\n handling
+                ;; \\n → conj \"\" (start new line), other chars → append to last line
+                state' (reduce
+                         (fn [st ch]
+                           (if (= ch \newline)
+                             (update st :lines conj "")
+                             (let [lines (:lines st)]
+                               (if (seq lines)
+                                 (update-in st [:lines (dec (count lines))] str ch)
+                                 (update st :lines conj (str ch))))))
+                         state
+                         chunk)]
+            (-> state'
+                (assoc :task-timer 0.0)
+                (assoc-in [:current-task :char-idx] next-idx)))
           (-> state
               (assoc :current-task nil :task-timer 0.0))))
       :pause
@@ -126,10 +159,19 @@
         (assoc state :current-task nil :task-timer 0.0)
         (assoc state :task-timer timer))
       :print
-      (-> state
-          (update :lines conj (:text task))
-          (update :lines clamp-lines)
-          (assoc :current-task nil :task-timer 0.0))
+      (let [text (:text task)
+            ;; Split by \n: first part appends to current last line,
+            ;; remaining parts become new lines (matching upstream output())
+            parts (str/split text #"\n" -1)
+            first-part (first parts)
+            rest-parts (rest parts)
+            state' (if (seq (:lines state))
+                     (update-in state [:lines (dec (count (:lines state)))] str first-part)
+                     (update state :lines conj first-part))]
+        (-> state'
+            (update :lines #(reduce conj % rest-parts))
+            (update :lines clamp-lines)
+            (assoc :current-task nil :task-timer 0.0)))
       :backspace-clear
       (let [count-to-clear (:count task)
             current-line  (or (last (:lines state)) "")
@@ -153,24 +195,20 @@
   (if (:current-task state)
     (process-current-task state dt-sec)
     (if-let [next-task (first (:task-queue state))]
-      ;; Start new task: add empty output line for slow-print tasks
-      (let [state' (if (contains? #{:slow-print :backspace-clear :print} (:type next-task))
-                     (update state :lines conj "")
-                     state)]
-        (-> state'
-            (update :lines clamp-lines)
-            (assoc :current-task (dissoc next-task :char-idx) :task-timer 0.0)
-            (update :task-queue subvec 1)))
+      (-> state
+          (update :lines clamp-lines)
+          (assoc :current-task next-task :task-timer 0.0)
+          (update :task-queue subvec 1))
       ;; Queue exhausted — transition to idle
       (assoc state :phase :idle :task-queue [] :task-timer 0.0 :current-task nil))))
 
-;; Messages
+;; Messages — use i18n, matching upstream localized() keys
 (defn- msg [k]
   (case k
-    :dev-begin    "Starting development..."
+    :dev-begin    (loc :dev_begin)
     :no-developer "No developer device detected."
-    :invalid-cmd  "Unknown command. Type 'help'."
-    :reset-begin  "Starting reset..."
+    :invalid-cmd  (loc :invalid_command)
+    :reset-begin  (loc :reset_begin)
     :done         "Done."
     (str "ac.console." (name k))))
 
@@ -180,11 +218,11 @@
 
 (defn- tick-boot
   "Boot phase: build task queue on first tick, then delegate to task runner.
-   Matching original SkillTree.scala boot sequence with slow-print animation."
+   Matching upstream SkillTree.scala boot sequence with slow-print animation."
   [state dt-sec]
   (if (:boot-texts-built? state)
     (tick-task-running state dt-sec)
-    (let [tasks (build-boot-tasks (:mode state) (:player-name state))]
+    (let [tasks (build-boot-tasks (:mode state) (:player-name state) (:has-developer state))]
       (-> state
           (assoc :task-queue tasks :boot-texts-built? true :phase :task-running)
           (tick-task-running dt-sec)))))
@@ -214,9 +252,7 @@
 (defn- cmd-help [mode]
   (let [cmds (keys @command-registry)
         names (sort (concat (case mode :reset ["reset"] ["learn"])
-                            ["help" "clear"
-                             (when (:on-start-development {})
-                               (case mode :reset "reset" "learn"))]))]
+                            ["help" "clear"]))]
     (str "Commands: " (str/join ", " (take 4 (distinct names))))))
 
 (defn- exec-cmd
@@ -261,7 +297,7 @@
           [(-> state
                (update :lines conj (str prompt-str))
                (update :lines conj (msg :dev-begin))
-               (update :lines conj "Progress: 00%")
+               (update :lines conj (loc :progress "00"))
                (update :lines clamp-lines)
                (assoc :phase :developing :exec-cmd nil :dev-progress 0.0 :done-timer 0.0))
            :developing])
@@ -285,7 +321,7 @@
           [(-> state
                (update :lines conj (str prompt-str))
                (update :lines conj (msg :reset-begin))
-               (update :lines conj "Progress: 00%")
+               (update :lines conj (loc :progress "00"))
                (update :lines clamp-lines)
                (assoc :phase :developing :exec-cmd nil :dev-progress 0.0 :done-timer 0.0))
            :developing])
@@ -309,10 +345,8 @@
       (contains? enter-keys (int (or keyCode 0)))
       (let [cmd (clojure.string/trim (:input state))]
         (if (empty? cmd)
-          (-> state
-              (update :lines conj (str prompt-str " " (:input state)))
-              (update :lines clamp-lines)
-              (assoc :input ""))
+          ;; Empty enter: no-op (matching upstream)
+          state
           (-> state
               (update :lines conj (str prompt-str " " (:input state)))
               (update :lines clamp-lines)
@@ -323,8 +357,12 @@
         state
         (update state :input #(subs % 0 (dec (count %)))))
 
-      (and typedChar (not= typedChar (char 0)) (< (count (:input state)) 50)
-           (>= (int typedChar) 32))  ;; printable ASCII only
+      ;; Printable character filter: matching upstream ChatAllowedCharacters.isAllowedCharacter
+      ;; — allows standard printable chars, excludes § (section sign) and control chars
+      (and typedChar
+           (not= typedChar (char 0))
+           (not= typedChar \§)
+           (>= (int typedChar) 32))
       (update state :input str typedChar)
 
       :else
@@ -350,8 +388,8 @@
   - :player-name — player display name
   - :focus-root — CGUI root widget for keyboard focus
   - :on-start-development — (fn []) called when learn/reset command runs"
-  [parent-area {:keys [mode container player-name focus-root on-start-development]}]
-  (let [state-a (atom (assoc (init-state mode player-name)
+  [parent-area {:keys [mode container player-name focus-root on-start-development has-developer]}]
+  (let [state-a (atom (assoc (init-state mode player-name has-developer)
                              :container container
                              :on-start-development on-start-development))
         [p-width p-height] (cgui-core/get-size parent-area)
@@ -457,15 +495,22 @@
                   (comp/set-text-color! textbox input-color))
                 :developing
                 (let [grace (int (:dev-grace st' 0))
-                      pct (int (* 100.0 (double (:dev-progress st'))))]
+                      ;; Zero-padded progress matching upstream fmt(x)
+                      pct-str (format "%02d" (int (* 100.0 (double (:dev-progress st')))))]
                   (if (< grace 5)
                     (comp/set-text! textbox "Requesting...")
-                    (comp/set-text! textbox (str "Progress: " pct "%")))
+                    (comp/set-text! textbox (loc :progress pct-str)))
                   (comp/set-text-color! textbox dim-color))
                 :done
-                (let [result-text (if (= :success (:dev-result st'))
-                                    "Development succeeded."
-                                    "Development failed.")]
+                (let [succ? (= :success (:dev-result st'))
+                      mode (:mode st')
+                      result-text (if succ?
+                                    (if (= :reset mode)
+                                      (loc :reset_succ)
+                                      (loc :dev_succ))
+                                    (if (= :reset mode)
+                                      (loc :reset_fail)
+                                      (loc :dev_fail)))]
                   (comp/set-text! textbox result-text)
                   (comp/set-text-color! textbox dim-color))
                 ;; :boot - blank

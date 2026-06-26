@@ -850,7 +850,8 @@
                             :container container
                             :player-name (or @(:user-name container) "Player")
                             :focus-root root
-                            :on-start-development on-start-dev})]
+                            :on-start-development on-start-dev
+                            :has-developer (boolean (:tile-entity container))})]
     (reset! state-ref state-a)))
 
 ;; ============================================================================
