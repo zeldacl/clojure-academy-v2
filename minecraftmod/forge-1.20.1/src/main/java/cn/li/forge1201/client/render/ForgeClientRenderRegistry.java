@@ -44,6 +44,7 @@ public final class ForgeClientRenderRegistry {
     private static ShaderInstance skillProgbarShader;
     private static ShaderInstance monoShader;
     private static ShaderInstance cpbarOverloadShader;
+    private static ShaderInstance alphaDiscardShader;
 
     private ForgeClientRenderRegistry() {
     }
@@ -178,6 +179,15 @@ public final class ForgeClientRenderRegistry {
                     cpbarOverloadShader = shader;
                 }
             );
+            // Alpha discard shader (for depth masking in skill tree nodes)
+            event.registerShader(
+                new ShaderInstance(event.getResourceProvider(),
+                    new ResourceLocation(MyMod1201.MODID, "alpha_discard"),
+                    com.mojang.blaze3d.vertex.DefaultVertexFormat.POSITION_TEX),
+                shader -> {
+                    alphaDiscardShader = shader;
+                }
+            );
         } catch (IOException e) {
             LOGGER.error("Failed to register skill tree shaders", e);
         }
@@ -197,5 +207,9 @@ public final class ForgeClientRenderRegistry {
 
     public static ShaderInstance getCpbarOverloadShader() {
         return cpbarOverloadShader;
+    }
+
+    public static ShaderInstance getAlphaDiscardShader() {
+        return alphaDiscardShader;
     }
 }

@@ -13,7 +13,9 @@
            [net.minecraft.client.renderer ShaderInstance]
            [net.minecraft.resources ResourceLocation]
            [com.mojang.blaze3d.systems RenderSystem]
-           [com.mojang.blaze3d.vertex DefaultVertexFormat VertexFormat]
+           [com.mojang.blaze3d.vertex DefaultVertexFormat VertexFormat
+            Tesselator BufferBuilder BufferUploader PoseStack$Pose]
+           [org.joml Matrix4f]
            [org.lwjgl.opengl GL11]))
 
 ;; ============================================================================
@@ -68,6 +70,31 @@
       (.drawString graphics font text (int draw-x) (int y) (int color)))
     (when (not= 1.0 scale)
       (.popPose poseStack))))
+
+(defn- render-custom-shader-quad!
+  "Render a textured quad using a custom ShaderInstance — bypasses GuiGraphics/blit
+  which forcibly sets GameRenderer/positionTexShader, overriding any custom shader.
+
+  The caller must set the desired shader via RenderSystem/setShader BEFORE calling this,
+  and restore it afterwards. Texture must be bound via .setSampler on the shader instance.
+
+  Uses BufferBuilder + BufferUploader (the MC 1.20.1 recommended path for custom shaders)."
+  [^GuiGraphics graphics poseStack ^ShaderInstance si loc-0 loc-1 ^double x ^double y ^double w ^double h]
+  (let [^PoseStack$Pose entry (.last poseStack)
+        ^Matrix4f pose-matrix (.pose entry)
+        ^Tesselator tess (Tesselator/getInstance)
+        ^BufferBuilder bb (.getBuilder tess)
+        x1 (float x)  y1 (float y)
+        x2 (float (+ x w)) y2 (float (+ y h))
+        z (float 0)
+        u0 (float 0.0) v0 (float 0.0) u1 (float 1.0) v1 (float 1.0)]
+    (RenderSystem/setShaderTexture 0 loc-0)
+    (.begin bb VertexFormat$Mode/QUADS DefaultVertexFormat/POSITION_TEX)
+    (.vertex bb pose-matrix x1 y2 z) (.uv u0 v1) (.endVertex bb)
+    (.vertex bb pose-matrix x2 y2 z) (.uv u1 v1) (.endVertex bb)
+    (.vertex bb pose-matrix x2 y1 z) (.uv u1 v0) (.endVertex bb)
+    (.vertex bb pose-matrix x1 y1 z) (.uv u0 v0) (.endVertex bb)
+    (BufferUploader/drawWithShader (.end bb))))
 
 (defn- with-client-session
   [session-id f]
@@ -193,7 +220,8 @@
                         (.blit graphics tex 0 (int (- half-w)) 0 0 (int norm) (int line-w) (int norm) (int line-w))
                         (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0)
                         (.popPose poseStack))))
-    ;; --- Shader-based progress ring ---
+    ;; --- Shader-based progress ring (skill-progbar shader) ---
+    ;; Uses BufferBuilder to avoid blit() which overrides custom shaders.
     :shader-progress-ring
     (let [^ShaderInstance si (shader-utils/resolve-shader (:shader-id op))
           tex-0-key (:texture-0 op)
@@ -204,19 +232,65 @@
                   (if (keyword? tex-1-key) (get-skill-tree-texture tex-1-key)
                       (path->resource-location tex-1-key)))
           progress (float (or (:progress op) 0.0))]
-      (if si
-        (when loc-0
+      (if (and si loc-0)
+        (do
           (.setSampler si "TexSampler0" loc-0)
           (when loc-1 (.setSampler si "TexSampler1" loc-1))
           (RenderSystem/setShader (reify java.util.function.Supplier (get [_] si)))
           (when-let [u (.safeGetUniform si "Progress")]
             (.set u progress))
-          (.blit graphics loc-0 (:x op) (:y op) 0 0 (:w op) (:h op) (:w op) (:h op))
+          (render-custom-shader-quad! graphics poseStack si loc-0 loc-1
+                                      (double (:x op)) (double (:y op))
+                                      (double (:w op)) (double (:h op)))
           (RenderSystem/setShader (reify java.util.function.Supplier (get [_] nil))))
-        ;; Fallback: render icon without shader (for environments where shaders fail to load)
         (if loc-0
           (.blit graphics loc-0 (:x op) (:y op) 0 0 (:w op) (:h op) (:w op) (:h op))
           (.fill graphics (:x op) (:y op) (+ (:x op) (:w op)) (+ (:y op) (:h op)) 0xFF2A2A2A))))
+    ;; --- Mono shader blit (grayscale for unlearned skill icons) ---
+    :shader-mono-blit
+    (let [tex-key (:texture op)
+          loc (if (keyword? tex-key) (get-skill-tree-texture tex-key)
+                  (path->resource-location tex-key))
+          ^ShaderInstance si (shader-utils/resolve-shader :mono)]
+      (if (and si loc)
+        (do
+          (.setSampler si "TexSampler0" loc)
+          (RenderSystem/setShader (reify java.util.function.Supplier (get [_] si)))
+          (render-custom-shader-quad! graphics poseStack si loc nil
+                                      (double (:x op)) (double (:y op))
+                                      (double (:w op)) (double (:h op)))
+          (RenderSystem/setShader (reify java.util.function.Supplier (get [_] nil))))
+        (do
+          (RenderSystem/setShaderColor 0.53 0.53 0.53 1.0)
+          (.blit graphics loc (:x op) (:y op) 0 0 (:w op) (:h op) (:w op) (:h op))
+          (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0))))
+    ;; --- Alpha-discard depth mask (writes depth from texture alpha, GL 3.2 core replacement for glAlphaFunc) ---
+    :alpha-discard-depth-mask
+    (let [tex-key (:texture op)
+          loc (if (keyword? tex-key) (get-skill-tree-texture tex-key)
+                  (path->resource-location tex-key))
+          ^ShaderInstance si (shader-utils/resolve-shader :alpha-discard)
+          threshold (float (or (:alpha-threshold op) 0.3))]
+      (when (and si loc)
+        (.setSampler si "TexSampler0" loc)
+        (when-let [u (.safeGetUniform si "AlphaThreshold")]
+          (.set u threshold))
+        (RenderSystem/depthMask true)
+        (GL11/glColorMask false false false false)
+        (RenderSystem/setShader (reify java.util.function.Supplier (get [_] si)))
+        (render-custom-shader-quad! graphics poseStack si loc nil
+                                    (double (:x op)) (double (:y op))
+                                    (double (:w op)) (double (:h op)))
+        (RenderSystem/setShader (reify java.util.function.Supplier (get [_] nil)))
+        (GL11/glColorMask true true true true)))
+    ;; --- Set/clear custom shader (for multi-step shader operations) ---
+    :set-shader (let [^ShaderInstance si (shader-utils/resolve-shader (:shader-id op))]
+                  (when si
+                    (.setSampler si "TexSampler0" (if (keyword? (:texture-0 op))
+                                                    (get-skill-tree-texture (:texture-0 op))
+                                                    (path->resource-location (:texture-0 op))))
+                    (RenderSystem/setShader (reify java.util.function.Supplier (get [_] si)))))
+    :clear-shader (RenderSystem/setShader (reify java.util.function.Supplier (get [_] nil)))
     ;; --- Progress ring (fallback, non-shader) ---
     :progress-ring
     (let [segments (max 1 (int (or (:segments op) 24)))

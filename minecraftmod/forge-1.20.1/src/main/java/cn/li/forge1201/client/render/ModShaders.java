@@ -32,4 +32,8 @@ public final class ModShaders {
     public static ShaderInstance getMonoShader() {
         return ForgeClientRenderRegistry.getMonoShader();
     }
+
+    public static ShaderInstance getAlphaDiscardShader() {
+        return ForgeClientRenderRegistry.getAlphaDiscardShader();
+    }
 }

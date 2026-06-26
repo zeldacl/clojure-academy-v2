@@ -12,7 +12,8 @@
 
   Supported shader names:
     :skill-progbar — radial progress ring shader
-    :mono          — grayscale/monochrome shader"
+    :mono          — grayscale/monochrome shader
+    :alpha-discard — alpha-threshold discard shader (for depth masking)"
   [shader-name]
   (try
     (let [mod-shaders-class (Class/forName "cn.li.forge1201.client.render.ModShaders")]
