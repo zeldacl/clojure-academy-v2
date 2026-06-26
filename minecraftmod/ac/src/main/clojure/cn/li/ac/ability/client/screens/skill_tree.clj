@@ -266,10 +266,12 @@
 ;; ============================================================================
 ;; Draw Ops — Skill nodes (textured, depth-layered, animated)
 ;; ============================================================================
-(defn- node-ops [node anim-time hovered-id hover-start]
+(defn- node-ops [node anim-time hovered-id hover-start line-ops]
   "Build draw ops for a single skill node, matching upstream SkillTree.scala FrameEvent.
   Uses alpha-discard shader for depth masking (GL 3.2 core equivalent of alpha test),
-  mono shader for unlearned icons, and skill-progbar shader for progress rings."
+  mono shader for unlearned icons, and skill-progbar shader for progress rings.
+  Connection lines (to parent) are rendered inside the node's depth context at z=11
+  with GL_NOTEQUAL, matching upstream behavior."
   (let [{:keys [x y idx learned skill-icon exp m-alpha skill-id]} node
         effective-m-alpha (or m-alpha 0.7)
         dt (max 0.0 (- anim-time (* idx 0.08) 0.1))
@@ -282,51 +284,63 @@
         node-scale (if hover-now (lerp 1.0 1.2 transit) (lerp 1.2 1.0 transit))]
     (if (<= back-alpha 0.001) []
       (filterv some?
-        [{:kind :enable-depth}
-         {:kind :push-pose}
-         ;; Scale animation from center of TotalSize (matches upstream glTranslated→glScaled→glTranslated)
-         {:kind :translate :x (+ x draw-align) :y (+ y draw-align) :z 10.0}
-         {:kind :scale :cx (/ total-size 2) :cy (/ total-size 2) :s node-scale}
-         ;; 1. Draw skill_back without depth writes (background visible through transparency)
-         {:kind :enable-blend}
-         {:kind :depth-mask :write? false}
-         {:kind :alpha-color :r 1.0 :g 1.0 :b 1.0 :a back-alpha}
-         {:kind :textured-quad :texture :skill-back :x 0 :y 0 :w (int total-size) :h (int total-size)}
-         ;; 2. Dark gray outline back (for ALL nodes — learned and unlearned)
-         {:kind :alpha-color :r 0.2 :g 0.2 :b 0.2 :a (* back-alpha 0.6)}
-         {:kind :textured-quad :texture :skill-outline :x (int prog-align) :y (int prog-align) :w (int prog-size) :h (int prog-size)}
-         {:kind :alpha-color :r 1.0 :g 1.0 :b 1.0 :a 1.0}
-         ;; 3. Depth mask: write depth buffer from skill_back texture shape
-         ;;    Uses alpha-discard shader (GL 3.2 core replacement for deprecated glAlphaFunc)
-         ;;    Color writes disabled, depth writes enabled — only non-discarded fragments write depth
-         {:kind :alpha-discard-depth-mask :texture :skill-back :alpha-threshold 0.3
-          :x 0 :y 0 :w (int total-size) :h (int total-size)}
-         ;; 4. Depth mask from outline too (z+1 layer, higher alpha threshold)
-         {:kind :push-pose}
-         {:kind :translate :x 0 :y 0 :z 1}
-         {:kind :alpha-discard-depth-mask :texture :skill-outline :alpha-threshold 0.5
-          :x (int prog-align) :y (int prog-align) :w (int prog-size) :h (int prog-size)}
-         {:kind :pop-pose}
-         ;; 5. Disable depth writes (color already re-enabled by alpha-discard op)
-         {:kind :depth-mask :write? false}
-         ;; 6. Draw skill icon — depth-func EQUAL clips to mask area written above
-         {:kind :depth-func :func :equal}
-         (if learned
-           {:kind :icon-or-fill :texture skill-icon :x (int align) :y (int align) :w (int icon-size) :h (int icon-size) :fallback-color 0xFF2A2A2A}
-           {:kind :shader-mono-blit :texture skill-icon :x (int align) :y (int align) :w (int icon-size) :h (int icon-size)})
-         {:kind :depth-func :func :lequal}
-         ;; 7. Shader progress ring (learned only) — disables depth test during ring rendering
-         (when learned
-           {:kind :disable-depth})
-         (when learned
-           {:kind :shader-progress-ring :shader-id :skill-progbar
-            :texture-0 :skill-outline :texture-1 :skill-mask
-            :progress (float (* progress-blend (or exp 0.0)))
-            :x (int prog-align) :y (int prog-align) :w (int prog-size) :h (int prog-size)})
-         (when learned
-           {:kind :enable-depth})
-         {:kind :pop-pose}
-         {:kind :disable-depth}]))))
+        (concat
+          ;; === Node core rendering (depth writes at z=10, scale animation) ===
+          [{:kind :enable-depth}
+           {:kind :push-pose}
+           ;; Scale animation from center of TotalSize (matches upstream glTranslated→glScaled→glTranslated)
+           {:kind :translate :x (+ x draw-align) :y (+ y draw-align) :z 10.0}
+           {:kind :scale :cx (/ total-size 2) :cy (/ total-size 2) :s node-scale}
+           ;; 1. Draw skill_back without depth writes (background visible through transparency)
+           {:kind :enable-blend}
+           {:kind :depth-mask :write? false}
+           {:kind :alpha-color :r 1.0 :g 1.0 :b 1.0 :a back-alpha}
+           {:kind :textured-quad :texture :skill-back :x 0 :y 0 :w (int total-size) :h (int total-size)}
+           ;; 2. Dark gray outline back (for ALL nodes — learned and unlearned)
+           {:kind :alpha-color :r 0.2 :g 0.2 :b 0.2 :a (* back-alpha 0.6)}
+           {:kind :textured-quad :texture :skill-outline :x (int prog-align) :y (int prog-align) :w (int prog-size) :h (int prog-size)}
+           {:kind :alpha-color :r 1.0 :g 1.0 :b 1.0 :a 1.0}
+           ;; 3. Depth mask: write depth buffer from skill_back texture shape
+           {:kind :alpha-discard-depth-mask :texture :skill-back :alpha-threshold 0.3
+            :x 0 :y 0 :w (int total-size) :h (int total-size)}
+           ;; 4. Depth mask from outline too (z+1 layer, higher alpha threshold)
+           {:kind :push-pose}
+           {:kind :translate :x 0 :y 0 :z 1}
+           {:kind :alpha-discard-depth-mask :texture :skill-outline :alpha-threshold 0.5
+            :x (int prog-align) :y (int prog-align) :w (int prog-size) :h (int prog-size)}
+           {:kind :pop-pose}
+           ;; 5. Disable depth writes (color already re-enabled by alpha-discard op)
+           {:kind :depth-mask :write? false}
+           ;; 6. Draw skill icon — depth-func EQUAL clips to mask area written above
+           {:kind :depth-func :func :equal}
+           (if learned
+             {:kind :icon-or-fill :texture skill-icon :x (int align) :y (int align) :w (int icon-size) :h (int icon-size) :fallback-color 0xFF2A2A2A}
+             {:kind :shader-mono-blit :texture skill-icon :x (int align) :y (int align) :w (int icon-size) :h (int icon-size)})
+           {:kind :depth-func :func :lequal}
+           ;; 7. Shader progress ring (learned only) — disables depth test during ring rendering
+           (when learned
+             {:kind :disable-depth})
+           (when learned
+             {:kind :shader-progress-ring :shader-id :skill-progbar
+              :texture-0 :skill-outline :texture-1 :skill-mask
+              :progress (float (* progress-blend (or exp 0.0)))
+              :x (int prog-align) :y (int prog-align) :w (int prog-size) :h (int prog-size)})
+           (when learned
+             {:kind :enable-depth})
+           {:kind :pop-pose}]
+          ;; === Connection line (upstream: glDepthFunc GL_NOTEQUAL, glTranslated 0,0,11) ===
+          ;; Rendered after exiting the node's matrix, matching upstream z=11 depth block.
+          ;; NOTEQUAL means the line passes where depth differs from the outline mask (z=11).
+          (if (seq line-ops)
+            (concat
+              [{:kind :depth-func :func :notequal}
+               {:kind :push-pose}
+               {:kind :translate :x 0 :y 0 :z 11}]
+              line-ops
+              [{:kind :pop-pose}
+               {:kind :depth-func :func :lequal}])
+            [])
+          [{:kind :disable-depth}])))))
 
 ;; ============================================================================
 ;; Detail popup
@@ -418,7 +432,10 @@
           node-dx (* (- (clamp01 (/ (:mouse-x st 0) (max 1.0 (double 420)))) 0.5) 10.0)
           node-dy (* (- (clamp01 (/ (:mouse-y st 0) (max 1.0 (double 260)))) 0.5) 10.0)
 
-          ;; Animated connection lines — per-node stagger and parallax applied to endpoints
+          ;; Animated connection lines — grouped by child node's index.
+          ;; Rendered inside each node's depth context with glDepthFunc(GL_NOTEQUAL),
+          ;; matching upstream SkillTree.scala where lineDrawer is invoked per-node
+          ;; after the node's glPopMatrix() at z=11.
           raw-conns (or (:connections rd) [])
           anim-conns (mapv (fn [c]
                              (let [child-idx (or (:child-idx c) 0)
@@ -430,12 +447,15 @@
                                  :to-x   (- (lerp (:from-x c) (:to-x c) lb) node-dx)
                                  :to-y   (- (lerp (:from-y c) (:to-y c) lb) node-dy))))
                            raw-conns)
-          connection-ops (build-line-ops anim-conns anim)
+          ;; Group connections by child-idx so each node picks up its parent-connecting line
+          conns-by-idx (group-by :child-idx anim-conns)
           hid (:hovered-skill-id st)
           hst (:hover-start-time st)
           raw-nodes (or (:skill-nodes rd) [])
           shifted-nodes (mapv #(assoc % :x (- (:x %) node-dx) :y (- (:y %) node-dy)) raw-nodes)
-          nodes (mapcat #(node-ops % anim hid hst) shifted-nodes)
+          nodes (mapcat (fn [idx n]
+                          (node-ops n anim hid hst (build-line-ops (get conns-by-idx idx) anim)))
+                        (range) shifted-nodes)
 
           hover-id (:hover-skill rd)
           hover-node (when hover-id (first (filter #(= (:skill-id %) hover-id) (:skill-nodes rd))))
@@ -451,5 +471,5 @@
           sel-node (when sel-id (first (filter #(= (:skill-id %) sel-id) (:skill-nodes rd))))
           detail-ops (when sel-node (detail-popup-ops sel-node anim))]
 
-      (vec (concat bg-ops header level-up connection-ops nodes tooltip detail-ops)))
+      (vec (concat bg-ops header level-up nodes tooltip detail-ops)))
     []))
