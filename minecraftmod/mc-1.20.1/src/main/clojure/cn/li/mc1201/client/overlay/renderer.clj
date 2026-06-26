@@ -267,7 +267,7 @@
 
 (defn- render-bar!
   [^GuiGraphics graphics {:keys [x y width height percent bg-texture fg-texture bar-color hint-percent
-                                  icon-cutout scroll-offset color-stops category-icon overloaded]}]
+                                  icon-cutout scroll-offset color-stops category-icon overloaded full-glow?]}]
   (let [filled-width (int (* (double percent) width))
         bg-path (normalize-texture-path bg-texture)
         fg-path (normalize-texture-path fg-texture)
@@ -332,6 +332,13 @@
         (let [cx (+ (int x) (:x-offset icon-cutout))
               cy (+ (int y) (quot (- (int height) 16) 2))]
           (.blit graphics icon-loc cx cy 0 0 16 16 16 16))))
+    ;; Full-CP glow: pulsing white overlay when CP reaches 100%,
+    ;; matching original AcademyCraft max-CP visual feedback.
+    (when full-glow?
+      (let [pulse (float (+ 0.2 (* 0.15 (Math/sin (* (System/currentTimeMillis) 0.004)))))
+            a (int (* 255.0 pulse))]
+        (.fill graphics (int x) (int y) (int (+ x width)) (int (+ y height))
+               (unchecked-int (bit-or (bit-shift-left a 24) 0x00FFFFFF)))))
     ;; Overload highlight pulse (mimics cpbar_overload shader's highlight effect)
     (when overloaded
       (let [pulse-alpha (float (+ 0.3 (* 0.35 (Math/sin (* (System/currentTimeMillis) 0.003)))))

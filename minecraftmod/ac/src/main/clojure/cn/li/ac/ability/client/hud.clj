@@ -16,7 +16,13 @@
                                              :hud))
 
 (defn build-cp-bar-render-data
-  "Build CP bar render data with color gradient and consumption hint."
+  "Build CP bar render data matching original AcademyCraft CPBar:
+   - bg-texture (back_normal.png) drawn at full width as the bar frame
+   - fg-texture (cp.png) clipped via scissor to the filled percentage —
+     the texture itself carries the red→yellow→white gradient
+   - right-side 16×16 cutout for the category icon
+   - red consumption-hint line showing predicted CP after active skill cost
+   - pulsing white overlay when CP reaches 100%"
   [model]
   (let [{:keys [cur max]} (:cp model)
         percent (if (and max (pos? max)) (/ cur max) 0.0)
@@ -25,18 +31,15 @@
                        (/ (- cur consumption-hint) max)
                        nil)]
     {:type :cp-bar
-     :x 10 :y 10
+     :x 8 :y 8
      :width 100 :height 10
      :percent (double percent)
      :hint-percent (when hint-percent (max 0.0 (double hint-percent)))
-     ;; Reserve a small right-side icon region to mimic the old cpbar_cp mask.
      :icon-cutout {:x-offset 84 :w 16}
      :bg-texture "my_mod:textures/guis/cpbar/back_normal.png"
      :fg-texture "my_mod:textures/guis/cpbar/cp.png"
-     :color-stops [{:pct 0.0  :r 1.0 :g 0.16 :b 0.16}   ;; red
-                   {:pct 0.35 :r 1.0 :g 0.85 :b 0.1}    ;; yellow
-                   {:pct 1.0  :r 1.0 :g 1.0  :b 1.0}]    ;; white
-     :category-icon (:category-icon model)}))
+     :category-icon (:category-icon model)
+     :full-glow? (>= percent 1.0)}))
 
 (defn build-overload-bar-render-data
   "Build overload bar render data."
