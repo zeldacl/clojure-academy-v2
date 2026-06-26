@@ -32,6 +32,7 @@
             [cn.li.ac.client.toast :as toast]
             [cn.li.ac.ability.client.debug-overlay :as debug-overlay]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
+            [cn.li.mcmod.i18n :as i18n]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.runtime.owner :as owner]
             [cn.li.mcmod.network.client :as net-client]
@@ -525,7 +526,7 @@
          {:kind :text
           :x (- (int (/ screen-width 2)) 55)
           :y (- y 12)
-          :text (if is-item "Current Charging - Item" "Current Charging - Block")
+          :text (i18n/translate (if is-item "ac.current_charging.item" "ac.current_charging.block"))
           :color {:r 255 :g 255 :b 255 :a 240}}
          {:kind :fill
           :x (- (int (/ screen-width 2)) 2)
@@ -537,6 +538,66 @@
           :y (- (int (/ screen-height 2)) 2)
           :w 16 :h 4
           :color {:r 120 :g 220 :b 255 :a (if active? 200 120)}}]))))
+
+(defn- coin-qte-overlay-elements
+  "Build golden coin-QTE timing window overlay elements.
+   Rendered when railgun is in coin-QTE mode with an active timing window.
+   Shows a ring/bar at screen center indicating window progress and the
+   coin-active threshold marker, matching original AcademyCraft QTE UI."
+  [player-uuid screen-width screen-height now-ms]
+  (let [coin-state (charge-coin-visual-state player-uuid now-ms)]
+    (when (and (:active? coin-state) (pos? (:coin-progress coin-state)))
+      (let [cx (int (/ screen-width 2))
+            cy (int (/ screen-height 2))
+            progress (double (:coin-progress coin-state))
+            coin-active? (boolean (:coin-active? coin-state))
+            threshold (double (railgun-coin-active-threshold))
+            ;; Ring geometry
+            ring-radius 24
+            ring-thickness 3
+            segments 48
+            dot-count 12
+            ;; Colors
+            window-color (if coin-active?
+                          {:r 255 :g 215 :b 0 :a 220}   ;; gold when in active zone
+                          {:r 180 :g 150 :b 50 :a 160}) ;; dim amber outside zone
+            threshold-color {:r 255 :g 220 :b 80 :a 240}
+            bg-color {:r 20 :g 18 :b 10 :a 100}]
+        (concat
+          ;; Background disc
+          [{:kind :fill
+            :x (- cx ring-radius) :y (- cy ring-radius)
+            :w (* 2 ring-radius) :h (* 2 ring-radius)
+            :color bg-color}]
+          ;; Progress arc — dots around the ring showing window progress
+          (for [i (range dot-count)
+                :let [angle (* 2.0 Math/PI (/ i dot-count))
+                      dot-active? (< (/ i dot-count) progress)
+                      dx (int (* ring-radius (Math/cos angle)))
+                      dy (int (* ring-radius (Math/sin angle)))
+                      dot-size 3]]
+            {:kind :fill
+             :x (+ cx dx (- dot-size)) :y (+ cy dy (- dot-size))
+             :w (* 2 dot-size) :h (* 2 dot-size)
+             :color (if dot-active?
+                     (update window-color :a #(int (* % (if coin-active? 1.0 0.6))))
+                     (assoc window-color :a 40))})
+          ;; Threshold marker — small bright dot at the threshold angle
+          (let [threshold-angle (* 2.0 Math/PI threshold)
+                tx (int (* ring-radius (Math/cos threshold-angle)))
+                ty (int (* ring-radius (Math/sin threshold-angle)))
+                marker-size 2]
+            [{:kind :fill
+              :x (+ cx tx (- marker-size)) :y (+ cy ty (- marker-size))
+              :w (* 2 marker-size) :h (* 2 marker-size)
+              :color threshold-color}])
+          ;; Center text: progress percentage
+          [{:kind :text
+            :x (- cx 14) :y (- cy 4)
+            :text (str (int (* 100.0 progress)) "%")
+            :color (if coin-active?
+                    {:r 255 :g 215 :b 0 :a 255}
+                    {:r 180 :g 150 :b 50 :a 200})}])))))
 
 (defn- preset-switch-state-for-overlay
   [player-uuid]
@@ -942,6 +1003,7 @@
                          :now-ms (long (or (:now-ms overlay-state) (System/currentTimeMillis))))
         base-elements (hud-render-data->overlay-elements hud-render-data screen-width screen-height)
         current-charging-elements (current-charging-overlay-elements player-uuid screen-width screen-height)
+        coin-qte-elements (coin-qte-overlay-elements player-uuid screen-width screen-height now-ms)
         reflection-active? (vec-reflection-active? player-uuid)
         deviation-active? (vec-deviation-active? player-uuid)
         vm-wave-active? (or reflection-active? deviation-active?)
@@ -961,7 +1023,7 @@
                      :y (int (/ screen-height 2))
                      :phase phase
                      :intensity (double (or vec-reflection-intensity 1.0))})]
-    {:elements (vec (concat base-elements current-charging-elements vm-wave (keep identity [crosshair])
+    {:elements (vec (concat base-elements current-charging-elements coin-qte-elements vm-wave (keep identity [crosshair])
                             (toast/build-toast-elements screen-width screen-height now-ms)
                             (tutorial-notification-elements screen-width screen-height now-ms)
                             (debug-overlay/build-debug-overlay-elements player-state)))

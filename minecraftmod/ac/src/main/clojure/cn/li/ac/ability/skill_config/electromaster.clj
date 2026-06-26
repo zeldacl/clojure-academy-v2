@@ -60,6 +60,7 @@
    {:skill-id :body-intensify :id :cooldown.ticks :path "cooldown.ticks" :section-suffix "cooldown" :type :double-list :min 1.0 :list-count 2 :default [900.0 600.0] :comment "BodyIntensify cooldown lerp endpoints."}
    {:skill-id :body-intensify :id :progression.exp-use :path "progression.exp-use" :section-suffix "progression" :type :double :min 0.0 :default 0.01 :comment "BodyIntensify exp gained on successful release."}
 
+   {:skill-id :current-charging :id :charge.visual-max-ticks :path "charge.visual-max-ticks" :section-suffix "charge" :type :int :min 1 :default 40 :comment "CurrentCharging max ticks used for client-side charge bar normalization."}
    {:skill-id :current-charging :id :targeting.range :path "targeting.range" :section-suffix "targeting" :type :double :min 0.0 :default 15.0 :comment "CurrentCharging block raycast range."}
    {:skill-id :current-charging :id :effect.charge-amount :path "effect.charge-amount" :section-suffix "effect" :type :double-list :min 0.0 :list-count 2 :default [15.0 35.0] :comment "CurrentCharging energy transfer amount lerp endpoints."}
    {:skill-id :current-charging :id :cost.down.overload :path "cost.down.overload" :section-suffix "cost.down" :type :double-list :min 0.0 :list-count 2 :default [65.0 48.0] :comment "CurrentCharging down-stage overload cost lerp endpoints."}

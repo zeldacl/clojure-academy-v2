@@ -2,9 +2,15 @@
   "Client FX for current-charging."
   (:require [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-spec :as fx-spec]
-            [cn.li.ac.ability.client.hand-effects :as hand-effects]))
+            [cn.li.ac.ability.client.hand-effects :as hand-effects]
+            [cn.li.ac.ability.skill-config :as skill-config]
+            [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 
-(def ^:private visual-max-ticks 40)
+(defn- visual-max-ticks
+  "Read the visual-max-ticks for current-charging from skill config.
+   Falls back to 40 ticks (2 seconds at 20 tps)."
+  []
+  (max 1 (int (or (skill-config/tunable-int :current-charging :charge.visual-max-ticks) 40))))
 (def ^:private current-charging-effect-id :current-charging)
 
 (def ^:private default-state
@@ -80,11 +86,12 @@
   (state-for-selector (current-store) selector))
 
 (defn- now-ms []
-  (System/currentTimeMillis))
+  ;; Use game-time so charge animations pause with the game.
+  (client-bridge/game-time-ms))
 
 (defn- normalize-ratio [charge-ticks]
   (let [ticks (max 0 (long (or charge-ticks 0)))
-        ratio (/ (double ticks) (double visual-max-ticks))]
+        ratio (/ (double ticks) (double (visual-max-ticks)))]
     (max 0.0 (min 1.0 ratio))))
 
 (defn- owner-key [ctx-id payload]

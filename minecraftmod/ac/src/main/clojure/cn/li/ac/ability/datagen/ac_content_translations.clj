@@ -215,6 +215,9 @@
     "tutorial.my_mod.crafting" "Crafting: %s"
     "tutorial.my_mod.misaka" "Misaka No.%d"
     "tutorial.my_mod.update" "Cloud Terminal updated"
+    "ac.current_charging.item" "Current Charging - Item"
+    "ac.current_charging.block" "Current Charging - Block"
+    "ac.railgun.coin_active" "Coin Active"
    }
    :zh_cn
    {
@@ -423,6 +426,9 @@
     "tutorial.my_mod.crafting" "合成: %s"
     "tutorial.my_mod.misaka" "御坂%d号"
     "tutorial.my_mod.update" "云终端更新"
+    "ac.current_charging.item" "电流充电 - 物品"
+    "ac.current_charging.block" "电流充电 - 方块"
+    "ac.railgun.coin_active" "硬币激活"
    }
    :zh_tw
    {
@@ -631,6 +637,9 @@
     "tutorial.my_mod.crafting" "合成: %s"
     "tutorial.my_mod.misaka" "御坂%d號"
     "tutorial.my_mod.update" "雲終端更新"
+    "ac.current_charging.item" "電流充電 - 物品"
+    "ac.current_charging.block" "電流充電 - 方塊"
+    "ac.railgun.coin_active" "硬幣激活"
    }
    :ja_jp
    {
@@ -836,6 +845,9 @@
     "tutorial.my_mod.crafting" "クラフト: %s"
     "tutorial.my_mod.misaka" "ミサカ%d号"
     "tutorial.my_mod.update" "端末アップデート"
+    "ac.current_charging.item" "電流充電 - アイテム"
+    "ac.current_charging.block" "電流充電 - ブロック"
+    "ac.railgun.coin_active" "コインアクティブ"
    }
    :ko_kr
    {
@@ -1044,6 +1056,9 @@
     "tutorial.my_mod.crafting" "조합: %s"
     "tutorial.my_mod.misaka" "어판 %d번"
     "tutorial.my_mod.update" "클라우드 터미널이 업데이트되었습니다."
+    "ac.current_charging.item" "전류 충전 - 아이템"
+    "ac.current_charging.block" "전류 충전 - 블록"
+    "ac.railgun.coin_active" "코인 활성화"
    }
    :ru_ru
    {
@@ -1252,5 +1267,8 @@
     "tutorial.my_mod.crafting" "Crafting: %s"
     "tutorial.my_mod.misaka" "Misaka Не.%d"
     "tutorial.my_mod.update" "Cloud Terminal обновлен"
+    "ac.current_charging.item" "Токовая зарядка - Предмет"
+    "ac.current_charging.block" "Токовая зарядка - Блок"
+    "ac.railgun.coin_active" "Монета активна"
    }
   })
