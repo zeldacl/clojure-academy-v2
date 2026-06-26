@@ -194,7 +194,10 @@
                          (if-let [level (.level mc)]
                            (* (.getGameTime level) 50)
                            (System/currentTimeMillis))
-                         (System/currentTimeMillis)))}))
+                         (System/currentTimeMillis)))
+       :font-width (fn [^String text]
+                     (let [^net.minecraft.client.Minecraft mc (Minecraft/getInstance)]
+                       (.width (.-font mc) text)))}))
 
 (defn register-key-mappings!
   "Register all runtime KeyMapping instances to Forge input system."

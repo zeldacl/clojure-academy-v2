@@ -19,7 +19,7 @@
            movement-key-down movement-key-tick movement-key-up
            open-screen open-simple-gui run-client-effect
            get-client-player screen-active? close-screen!
-           send-system-message! get-mouse-pos game-time-ms]}]
+           send-system-message! get-mouse-pos game-time-ms font-width]}]
   (prt/install-impl! #'*client-bridge-ops*
                      {:slot-key-down slot-key-down
                       :slot-key-tick slot-key-tick
@@ -36,7 +36,8 @@
                       :close-screen! close-screen!
                       :send-system-message! send-system-message!
                       :get-mouse-pos get-mouse-pos
-                      :game-time-ms game-time-ms}
+                      :game-time-ms game-time-ms
+                      :font-width font-width}
                      "client-bridge")
   nil)
 
@@ -157,3 +158,10 @@
   []
   (or (bridge-op :game-time-ms)
       (System/currentTimeMillis)))
+
+(defn font-width
+  "Return the pixel width of a string using the Minecraft default font.
+   Falls back to an approximate width (6px per char) if the bridge is not installed."
+  [^String text]
+  (or (bridge-op :font-width text)
+      (* 6 (count text))))
