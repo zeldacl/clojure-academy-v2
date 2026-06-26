@@ -3,6 +3,7 @@
   (:require [cn.li.ac.ability.adapters.client-effect-hooks :as client-effects]
             [cn.li.ac.ability.adapters.client-ui-hooks :as client-ui]
             [cn.li.ac.ability.adapters.server-hooks :as server-hooks]
+            [cn.li.ac.ability.client.debug-overlay :as debug-overlay]
             [cn.li.ac.ability.client.keybinds :as client-keybinds]
             [cn.li.ac.ability.runtime-container :as runtime-container]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
@@ -62,7 +63,12 @@
     :client-req-set-preset-slot!
     :client-req-switch-preset!
     :client-trigger-mode-switch!
-    :client-trigger-preset-switch!})
+    :client-trigger-preset-switch!
+    :toggle-debug-overlay-state!})
+
+(def ^:private debug-overlay-hooks
+  {:toggle-debug-overlay-state!
+   (fn [] (debug-overlay/toggle-debug-state!))})
 
 (defn- install-sync-descriptors!
   []
@@ -102,5 +108,6 @@
     (runtime-hooks/register-power-runtime-hooks!
       (merge (server-hooks/runtime-server-hooks)
              (client-ui/runtime-client-ui-hooks)
-             (client-effects/runtime-client-effect-hooks)))
+             (client-effects/runtime-client-effect-hooks)
+             debug-overlay-hooks))
     (log/info "AC ability runtime hooks installed"))))

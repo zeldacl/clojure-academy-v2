@@ -91,7 +91,8 @@
    :client-tick! noop
    :client-tick-hand-effects! noop
    :client-drain-camera-pitch-deltas! (fn [_owner] [])
-   :client-current-hand-transform (fn [] nil)})
+   :client-current-hand-transform (fn [] nil)
+   :toggle-debug-overlay-state! noop})
 
 ;; ============================================================================
 ;; Runtime Container
@@ -583,3 +584,6 @@
 (defn client-current-hand-transform
   []
   ((:client-current-hand-transform (hooks-core-state-snapshot))))
+
+(defn toggle-debug-overlay-state! []
+  ((:toggle-debug-overlay-state! (hooks-core-state-snapshot))))

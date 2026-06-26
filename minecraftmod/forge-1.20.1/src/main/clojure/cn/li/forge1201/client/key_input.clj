@@ -157,7 +157,9 @@
                                :secondary (create-key-mapping "key.content.open_secondary_screen" GLFW/GLFW_KEY_G category)
                                :mode-toggle (create-key-mapping "key.content.mode_toggle" GLFW/GLFW_KEY_V category)
                                ;; Terminal open/close key (matching original @RegACKeyHandler "open_data_terminal" KEY_LMENU)
-                               :terminal (create-key-mapping "settings.my_mod.prop.open_data_terminal" GLFW/GLFW_KEY_LEFT_ALT category)}
+                               :terminal (create-key-mapping "settings.my_mod.prop.open_data_terminal" GLFW/GLFW_KEY_LEFT_ALT category)
+                               ;; Debug overlay toggle (matching original DebugConsole F4)
+                               :debug-overlay (create-key-mapping "key.content.debug_overlay" GLFW/GLFW_KEY_F4 category)}
                               ;; Cycle key: C if original scheme (slot keys don't use C), N if alternative
                               (if (= scheme :original)
                                 {:cycle-selection (create-key-mapping "key.content.cycle_selection" GLFW/GLFW_KEY_C category)}
@@ -312,6 +314,10 @@
             (when-let [^Minecraft mc (Minecraft/getInstance)]
               (when-let [player (.player mc)]
                 (content-actions/toggle-terminal! player))))))
+      ;; Handle F4 debug overlay toggle
+      (when-let [^KeyMapping debug-key (get-in (key-input-runtime-state-snapshot) [:screen-keys :debug-overlay])]
+        (when (.consumeClick debug-key)
+          (power-runtime/toggle-debug-overlay-state!)))
       (if-let [owner (client-session/current-local-player-owner)]
         (let [scheme (get-key-scheme)
               activated? (boolean (overlay-state/get-client-activated owner))]
