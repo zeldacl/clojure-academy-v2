@@ -7,6 +7,7 @@
             [cn.li.forge1201.datagen.item-model-provider :as imp]
             [cn.li.forge1201.datagen.lang-provider :as lang]
             [cn.li.forge1201.datagen.recipe-provider :as rp]
+            [cn.li.forge1201.datagen.worldgen-provider :as worldgen]
             [cn.li.mc1201.datagen.blockstate-provider-shell :as blockstate-shell])
   (:import [net.minecraft.data DataGenerator DataProvider$Factory]
            [net.minecraftforge.common.data ExistingFileHelper]))
@@ -20,7 +21,8 @@
    :item-model imp/create
    :lang lang/create
    :recipe rp/create
-   :advancement adv/create})
+   :advancement adv/create
+   :worldgen worldgen/create})
 
 (defn- provider-factory
   [{:keys [factory] :as provider}]

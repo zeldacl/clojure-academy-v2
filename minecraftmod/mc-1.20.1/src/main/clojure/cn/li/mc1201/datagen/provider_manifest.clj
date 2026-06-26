@@ -27,11 +27,15 @@
    :advancement {:label "Advancement"
                  :summary-label "advancement"
                  :forge {:factory :advancement}
-                 :fabric {:factory :advancement}}})
+                 :fabric {:factory :advancement}}
+   :worldgen {:label "WorldGen"
+              :summary-label "worldgen"
+              :forge {:factory :worldgen}
+              :fabric {:factory :worldgen}}})
 
 (def ^:private platform-orders
-  {:forge-1.20.1 [:blockstate :item-model :lang :recipe :advancement]
-   :fabric-1.20.1 [:lang :blockstate :item-model :advancement :recipe]})
+  {:forge-1.20.1 [:blockstate :item-model :lang :recipe :advancement :worldgen]
+   :fabric-1.20.1 [:lang :blockstate :item-model :advancement :recipe :worldgen]})
 
 (def ^:private platform-provider-keys
   {:forge-1.20.1 :forge

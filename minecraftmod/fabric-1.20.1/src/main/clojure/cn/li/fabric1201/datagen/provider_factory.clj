@@ -7,6 +7,7 @@
             [cn.li.fabric1201.datagen.item-model-provider :as item-model-provider]
             [cn.li.fabric1201.datagen.lang-provider :as lang-provider]
             [cn.li.fabric1201.datagen.recipe-provider :as recipe-provider]
+            [cn.li.fabric1201.datagen.worldgen-provider :as worldgen-provider]
             [cn.li.mc1201.datagen.blockstate-provider-shell :as blockstate-shell])
   (:import [net.fabricmc.fabric.api.datagen.v1 FabricDataGenerator$Pack FabricDataGenerator$Pack$Factory]))
 
@@ -21,6 +22,7 @@
     :item-model (item-model-provider/create-provider output)
     :advancement (advancement-provider/create-provider output)
     :recipe (recipe-provider/create-provider output)
+    :worldgen (worldgen-provider/create-provider output)
     (throw (ex-info "Unknown Fabric datagen provider factory"
                     {:provider provider}))))
 
