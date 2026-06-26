@@ -14,6 +14,7 @@
             [cn.li.fabric1201.config.bridge :as config-bridge]
             [cn.li.mcmod.lifecycle :as lifecycle]
             [cn.li.mcmod.protocol.core :as registry-core]
+            [cn.li.mcmod.runtime.deferred :as deferred]
             [cn.li.mcmod.protocol.metadata :as registry-metadata]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mc1201.entity.hooks :as entity-hooks])
@@ -23,47 +24,48 @@
   []
   modid/*mod-id*)
 
-(def ^:private ^:dynamic *registered-blocks-state* {})
-(def ^:private ^:dynamic *registered-items-state* {})
-(def ^:private ^:dynamic *registered-block-entities-state* {})
+;; Unified deferred holders (AOT-safe lazy + runtime tripwire)
+(defonce registered-blocks-holder
+  (deferred/deferred #(registry-core/atom-registry {})))
 
-(defonce registered-blocks (registry-core/var-root-registry #'*registered-blocks-state*))
-(defonce registered-items (registry-core/var-root-registry #'*registered-items-state*))
-(defonce registered-block-entities (registry-core/var-root-registry #'*registered-block-entities-state*))
+(defonce registered-items-holder
+  (deferred/deferred #(registry-core/atom-registry {})))
 
-(def ^:private fabric-properties-lock
-  (Object.))
+(defonce registered-block-entities-holder
+  (deferred/deferred #(registry-core/atom-registry {})))
 
-(def ^:private ^:dynamic *base-properties*
-  nil)
+(defonce base-properties-holder
+  (deferred/deferred #(FabricBootstrapHelper/createStoneProperties)))
 
-(def ^:private ^:dynamic *carrier-properties*
-  nil)
+(defonce carrier-properties-holder
+  (deferred/deferred #(FabricBootstrapHelper/carrierBlockProperties @base-properties-holder)))
+
+(defn- registered-blocks
+  []
+  @registered-blocks-holder)
+
+(defn- registered-items
+  []
+  @registered-items-holder)
+
+(defn- registered-block-entities
+  []
+  @registered-block-entities-holder)
 
 (defn- base-properties
   []
-  (or (var-get #'*base-properties*)
-      (locking fabric-properties-lock
-        (or (var-get #'*base-properties*)
-            (let [p (FabricBootstrapHelper/createStoneProperties)]
-              (alter-var-root #'*base-properties* (constantly p))
-              p)))))
+  @base-properties-holder)
 
 (defn- carrier-properties
   []
-  (or (var-get #'*carrier-properties*)
-      (locking fabric-properties-lock
-        (or (var-get #'*carrier-properties*)
-            (let [p (FabricBootstrapHelper/carrierBlockProperties (base-properties))]
-              (alter-var-root #'*carrier-properties* (constantly p))
-              p)))))
+  @carrier-properties-holder)
 
 (defn- registration-context
   []
   {:mod-id (current-mod-id)
-   :registered-blocks registered-blocks
-   :registered-items registered-items
-   :registered-block-entities registered-block-entities
+    :registered-blocks (registered-blocks)
+    :registered-items (registered-items)
+    :registered-block-entities (registered-block-entities)
    :base-properties (base-properties)
    :carrier-properties (carrier-properties)})
 
@@ -87,17 +89,17 @@
 (defn get-registered-block
   "Get a registered block by its DSL ID."
   [block-id]
-  (registry-core/lookup registered-blocks block-id))
+  (registry-core/lookup (registered-blocks) block-id))
 
 (defn get-registered-item
   "Get a registered item by its DSL ID."
   [item-id]
-  (registry-core/lookup registered-items item-id))
+  (registry-core/lookup (registered-items) item-id))
 
 (defn get-registered-block-entity-type
   "Get a registered BlockEntityType by tile-id or block-id."
   [tile-or-block-id]
-  (let [be-snapshot (registry-core/snapshot registered-block-entities)
+  (let [be-snapshot (registry-core/snapshot (registered-block-entities))
         tile-id (or (when (contains? be-snapshot tile-or-block-id)
                       tile-or-block-id)
                     (registry-metadata/get-block-tile-id tile-or-block-id))]
@@ -106,4 +108,4 @@
 (defn get-registered-block-item
   "Get a registered block item by its block ID."
   [block-id]
-  (registry-core/lookup registered-items (str block-id "-item")))
+  (registry-core/lookup (registered-items) (str block-id "-item")))
