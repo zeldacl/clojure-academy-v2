@@ -56,7 +56,8 @@
 ;; ============================================================================
 (def ^:private default-screen-state
   {:hover-skill nil :selected-skill nil :player-uuid nil :learn-context nil
-   :creation-time nil :mouse-x 0 :mouse-y 0 :hovered-skill-id nil :hover-start-time 0})
+   :creation-time nil :mouse-x 0 :mouse-y 0 :hovered-skill-id nil
+   :hover-node-transitions {}})
 
 (def screen-id :skill-tree)
 
@@ -226,11 +227,30 @@
 
 (defn on-mouse-move [owner mx my]
   (let [rd (build-screen-render-data owner) nodes (:skill-nodes rd)
+        st (screen-state-snapshot owner)
         h (when nodes (first (filter #(< (+ (* (- mx (:x %)) (- mx (:x %))) (* (- my (:y %)) (- my (:y %)))) 400) nodes)))
-        prev (:hovered-skill-id (screen-state-snapshot owner))]
-    (swap-screen-state! owner
-      (fn [st] (-> st (assoc :mouse-x mx :mouse-y my :hover-skill (:skill-id h) :hovered-skill-id (:skill-id h))
-                   (cond-> (not= (:skill-id h) prev) (assoc :hover-start-time (now-ms))))))))
+        new-id (:skill-id h)
+        prev-id (:hovered-skill-id st)
+        transitions (:hover-node-transitions st {})
+        now (now-ms)]
+    ;; Always update mouse position (for parallax background)
+    (if (not= new-id prev-id)
+      ;; Transition gate — only switch state when previous animation completed
+      ;; (upstream: if transitProgress == 1, then check evt.hovering)
+      (let [prev-trans (get transitions prev-id)
+            prev-done? (or (nil? prev-trans)
+                          (>= (/ (- now (:start prev-trans)) 100.0) 1.0))]
+        (when prev-done?
+          (let [new-transitions (-> transitions
+                                   (cond-> prev-id (assoc prev-id {:start now :dir :out}))
+                                   (cond-> new-id (assoc new-id {:start now :dir :in})))]
+            (swap-screen-state! owner
+              (fn [st] (-> st
+                          (assoc :mouse-x mx :mouse-y my
+                                 :hover-skill new-id :hovered-skill-id new-id
+                                 :hover-node-transitions new-transitions)))))))
+      ;; Same node — just update mouse position
+      (swap-screen-state! owner assoc :mouse-x mx :mouse-y my))))
 
 (defn open-screen!
   ([owner] (open-screen! owner nil))
@@ -266,22 +286,25 @@
 ;; ============================================================================
 ;; Draw Ops — Skill nodes (textured, depth-layered, animated)
 ;; ============================================================================
-(defn- node-ops [node anim-time hovered-id hover-start line-ops]
+(defn- node-ops [node anim-time hovered-id hover-transitions line-ops]
   "Build draw ops for a single skill node, matching upstream SkillTree.scala FrameEvent.
-  Uses alpha-discard shader for depth masking (GL 3.2 core equivalent of alpha test),
-  mono shader for unlearned icons, and skill-progbar shader for progress rings.
-  Connection lines (to parent) are rendered inside the node's depth context at z=11
-  with GL_NOTEQUAL, matching upstream behavior."
+  Uses per-node hover transitions with transit gate (upstream: StateIdle↔StateHover FSM)."
   (let [{:keys [x y idx learned skill-icon exp m-alpha skill-id]} node
         effective-m-alpha (or m-alpha 0.7)
         dt (max 0.0 (- anim-time (* idx 0.08) 0.1))
         back-alpha (* effective-m-alpha (clamp01 (* dt 10.0)))
         icon-alpha (* effective-m-alpha (clamp01 (* (- dt 0.08) 10.0)))
         progress-blend (clamp01 (* (- dt 0.12) 2.0))
-        hover-now (= skill-id hovered-id)
-        hover-elapsed (if hover-start (/ (- (now-ms) hover-start) 1000.0) 0.0)
-        transit (clamp01 (/ hover-elapsed 0.1))
-        node-scale (if hover-now (lerp 1.0 1.2 transit) (lerp 1.2 1.0 transit))]
+        ;; Per-node hover FSM (upstream: each widget has own state/lastTransit)
+        trans (get hover-transitions skill-id)
+        trans-start (:start trans)
+        trans-dir (:dir trans)
+        trans-elapsed (if trans-start (/ (- (now-ms) trans-start) 1000.0) 2.0)
+        transit (clamp01 (/ trans-elapsed 0.1))
+        node-scale (case trans-dir
+                     :in  (lerp 1.0 1.2 transit)
+                     :out (lerp 1.2 1.0 transit)
+                     1.0)]
     (if (<= back-alpha 0.001) []
       (filterv some?
         (concat
@@ -450,11 +473,11 @@
           ;; Group connections by child-idx so each node picks up its parent-connecting line
           conns-by-idx (group-by :child-idx anim-conns)
           hid (:hovered-skill-id st)
-          hst (:hover-start-time st)
+          htrans (:hover-node-transitions st {})
           raw-nodes (or (:skill-nodes rd) [])
           shifted-nodes (mapv #(assoc % :x (- (:x %) node-dx) :y (- (:y %) node-dy)) raw-nodes)
           nodes (mapcat (fn [idx n]
-                          (node-ops n anim hid hst (build-line-ops (get conns-by-idx idx) anim)))
+                          (node-ops n anim hid htrans (build-line-ops (get conns-by-idx idx) anim)))
                         (range) shifted-nodes)
 
           hover-id (:hover-skill rd)

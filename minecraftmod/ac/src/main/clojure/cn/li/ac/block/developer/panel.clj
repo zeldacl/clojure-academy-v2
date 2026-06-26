@@ -795,12 +795,17 @@
             hover-idx (:idx closest-node)
             hover-now? (and closest-node (< (or hover-dist 999) 20))
             prev-idx (:hover-idx @skill-tree-hover)]
-        ;; Update hover atom with direction-aware transition (upstream: StateIdle↔StateHover)
-        (if hover-now?
-          (when (not= hover-idx prev-idx)
-            (reset! skill-tree-hover {:hover-idx hover-idx :prev-idx prev-idx :start now}))
-          (when prev-idx
-            (reset! skill-tree-hover {:hover-idx nil :prev-idx prev-idx :start now})))
+        ;; Update hover atom with transition gate (upstream: transitProgress == 1 guard)
+        ;; Only switch state when the current animation has completed, preventing jitter
+        ;; during rapid mouse sweeps across nodes.
+        (let [current-transit (clamp01 (/ (- now (:start @skill-tree-hover)) 100.0))
+              gate-open? (>= current-transit 1.0)]
+          (when gate-open?
+            (if hover-now?
+              (when (not= hover-idx prev-idx)
+                (reset! skill-tree-hover {:hover-idx hover-idx :prev-idx prev-idx :start now}))
+              (when prev-idx
+                (reset! skill-tree-hover {:hover-idx nil :prev-idx prev-idx :start now})))))
         (let [hover-idx (:hover-idx @skill-tree-hover)
               unhover-idx (:prev-idx @skill-tree-hover)
               hover-start (:start @skill-tree-hover)
