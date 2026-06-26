@@ -12,6 +12,7 @@ public class MyModFabricClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         FabricClientRenderSetup.registerClientHooks();
+        FabricClientRenderSetup.registerParticleProviders();
         try {
             IFn require = Clojure.var("clojure.core", "require");
 

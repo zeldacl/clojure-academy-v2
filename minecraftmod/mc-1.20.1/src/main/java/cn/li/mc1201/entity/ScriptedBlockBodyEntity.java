@@ -1,7 +1,9 @@
 package cn.li.mc1201.entity;
 
 import cn.li.mc1201.entity.spec.ScriptedBlockBodySpec;
+import net.minecraft.core.particles.SimpleParticleType;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
@@ -87,6 +89,34 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity {
             new ResourceLocation(heavy ? SOUND_SILBARN_HEAVY : SOUND_SILBARN_LIGHT));
         if (sound != null) {
             this.playSound(sound, 0.5F, 1.0F);
+        }
+        spawnSilbarnFragParticles();
+    }
+
+    private void spawnSilbarnFragParticles() {
+        if (!(this.level() instanceof ServerLevel serverLevel)) {
+            return;
+        }
+        var fragTypeRaw = BuiltInRegistries.PARTICLE_TYPE.get(new ResourceLocation("my_mod", "silbarn_frag"));
+        if (!(fragTypeRaw instanceof SimpleParticleType fragType)) {
+            return;
+        }
+        // Matches original EntitySilbarn#spawnEffects: 18-27 fragments in random sphere distribution
+        int n = 18 + this.random.nextInt(10);
+        for (int i = 0; i < n; i++) {
+            double vel = 0.08 + this.random.nextDouble() * 0.10;
+            double vsq = vel * vel;
+            double vx = this.random.nextDouble() * vel;
+            double vxsq = vx * vx;
+            double vy = this.random.nextDouble() * Math.sqrt(Math.max(0.0, vsq - vxsq));
+            double vz = Math.sqrt(Math.max(0.0, vsq - vxsq - vy * vy));
+            vx *= this.random.nextBoolean() ? 1 : -1;
+            vy *= this.random.nextBoolean() ? 1 : -1;
+            vz *= this.random.nextBoolean() ? 1 : -1;
+            vy += 0.2; // upward bias matches original
+            // count=0: single particle with exact velocity (dx/dy/dz used as vx/vy/vz)
+            serverLevel.sendParticles(fragType, this.getX(), this.getY(), this.getZ(),
+                    0, vx, vy, vz, 0.0);
         }
     }
 

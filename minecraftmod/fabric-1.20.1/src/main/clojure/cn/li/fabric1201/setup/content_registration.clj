@@ -227,6 +227,14 @@
           :scripted-block-body (register-scripted-block-body-spec! registry-name entity-spec)
           nil)))))
 
+(defn register-all-particles!
+  []
+  (doseq [particle-id (or (metadata-call 'cn.li.mcmod.protocol.metadata/get-all-particle-ids) [])]
+    (let [registry-name (metadata-call 'cn.li.mcmod.protocol.metadata/get-particle-registry-name particle-id)
+          particle-spec (metadata-call 'cn.li.mcmod.protocol.metadata/get-particle-spec particle-id)
+          always-show? (boolean (:always-show? particle-spec))]
+      (fabric-dispatch/register-particle registry-name always-show?))))
+
 (defn register-content!
   [{:keys [mod-id] :as ctx}]
   (register-scripted-tile-hooks!)
@@ -234,4 +242,5 @@
   (register-block-entities! (assoc ctx :mod-id mod-id))
   (register-all-items! ctx)
   (register-all-entities!)
+  (register-all-particles!)
   nil)

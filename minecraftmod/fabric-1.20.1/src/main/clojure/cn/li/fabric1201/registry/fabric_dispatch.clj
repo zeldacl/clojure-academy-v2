@@ -2,7 +2,8 @@
   "Fabric 1.20.1 registry dispatch."
   (:require [cn.li.mcmod.config :as modid]
             [cn.li.mcmod.util.log :as log])
-  (:import [cn.li.mc1201.runtime RegistryDispatchShared]
+  (:import [cn.li.fabric1201.shim FabricParticleHelper]
+           [cn.li.mc1201.runtime RegistryDispatchShared]
            [net.minecraft.world.item Item]
            [net.minecraft.world.level.block Block]))
 
@@ -15,3 +16,8 @@
   [item-id ^Item item-instance]
   (log/info "Registering item with Fabric BuiltInRegistries:" item-id)
   (RegistryDispatchShared/registerItem modid/*mod-id* (str item-id) item-instance))
+
+(defn register-particle
+  [particle-id always-show?]
+  (log/info "Registering particle with Fabric BuiltInRegistries:" particle-id)
+  (FabricParticleHelper/registerParticle modid/*mod-id* (str particle-id) (boolean always-show?)))

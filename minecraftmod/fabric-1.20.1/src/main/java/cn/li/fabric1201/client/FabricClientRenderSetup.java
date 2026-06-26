@@ -8,6 +8,7 @@ import cn.li.mc1201.client.render.EffectRendererDispatcher;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import cn.li.mc1201.client.render.RenderProfileBootstrap;
+import cn.li.mc1201.client.particle.SilbarnFragParticle;
 import cn.li.mc1201.client.render.effect.ScriptedBlockBodyRenderer;
 import cn.li.mc1201.client.render.effect.SilbarnObjRenderer;
 import cn.li.mc1201.entity.ScriptedEntitySpecAccess;
@@ -15,9 +16,12 @@ import cn.li.mc1201.entity.spec.ScriptedBlockBodySpec;
 import cn.li.mc1201.entity.spec.ScriptedEffectSpec;
 import cn.li.mc1201.entity.spec.ScriptedMarkerSpec;
 import cn.li.mc1201.entity.spec.ScriptedRaySpec;
+import net.fabricmc.fabric.api.client.particle.v1.ParticleFactoryRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.CoreShaderRegistrationCallback;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.client.renderer.entity.ThrownItemRenderer;
+import net.minecraft.core.particles.SimpleParticleType;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EntityType;
 
@@ -50,6 +54,13 @@ public final class FabricClientRenderSetup {
                 LOGGER.error("Failed to register MSDF text shader", e);
             }
         });
+    }
+
+    public static void registerParticleProviders() {
+        var fragTypeRaw = BuiltInRegistries.PARTICLE_TYPE.get(new ResourceLocation("my_mod", "silbarn_frag"));
+        if (fragTypeRaw instanceof SimpleParticleType spt) {
+            ParticleFactoryRegistry.getInstance().register(spt, SilbarnFragParticle.Provider::new);
+        }
     }
 
     public static void registerEntityRenderers() {

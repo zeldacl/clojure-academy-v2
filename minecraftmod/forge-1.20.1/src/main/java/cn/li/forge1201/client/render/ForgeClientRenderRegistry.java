@@ -11,6 +11,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import cn.li.mc1201.client.render.ModRenderTypes;
 import cn.li.mc1201.client.render.RenderProfileBootstrap;
+import cn.li.mc1201.client.particle.SilbarnFragParticle;
 import cn.li.mc1201.client.render.effect.ScriptedBlockBodyRenderer;
 import cn.li.mc1201.client.render.effect.SilbarnObjRenderer;
 import cn.li.mc1201.entity.ScriptedBlockBodyEntity;
@@ -23,10 +24,13 @@ import cn.li.mc1201.entity.spec.ScriptedMarkerSpec;
 import cn.li.mc1201.entity.spec.ScriptedRaySpec;
 import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.client.renderer.entity.ThrownItemRenderer;
+import net.minecraft.core.particles.SimpleParticleType;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EntityType;
 import net.minecraftforge.client.event.EntityRenderersEvent;
 import net.minecraftforge.client.event.RegisterItemDecorationsEvent;
+import net.minecraftforge.client.event.RegisterParticleProvidersEvent;
 import net.minecraftforge.client.event.RegisterShadersEvent;
 
 import java.io.IOException;
@@ -108,6 +112,13 @@ public final class ForgeClientRenderRegistry {
 
     public static void registerItemDecorations(RegisterItemDecorationsEvent event) {
         // Content-specific item decorators are registered by descriptor-driven client hooks.
+    }
+
+    public static void registerParticleProviders(RegisterParticleProvidersEvent event) {
+        var fragTypeRaw = BuiltInRegistries.PARTICLE_TYPE.get(new ResourceLocation("my_mod", "silbarn_frag"));
+        if (fragTypeRaw instanceof SimpleParticleType spt) {
+            event.registerSpriteSet(spt, SilbarnFragParticle.Provider::new);
+        }
     }
 
     public static void registerShaders(RegisterShadersEvent event) throws IOException {
