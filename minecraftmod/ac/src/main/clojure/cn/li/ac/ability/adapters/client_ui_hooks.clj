@@ -718,6 +718,22 @@
                  (toggle/is-toggle-active? ctx-data :vec-reflection)))
                   (ctx/get-all-contexts))))
 
+(defn- vec-reflection-crosshair-intensity
+  "Compute dynamic crosshair marker intensity for VecReflection.
+   Fades in over ~1s (20 ticks) when first activated, sustained at 1.0 thereafter.
+   Matching original AcademyCraft's pulsing reflection indicator."
+  [player-uuid]
+  (some (fn [[_ctx-id ctx-data]]
+          (when (and (= (:player-uuid ctx-data) player-uuid)
+                     (ctx/active-context? ctx-data)
+                     (toggle/is-toggle-active? ctx-data :vec-reflection))
+            (let [toggle-state (get-in ctx-data [:skill-state :toggle :vec-reflection])
+                  ticks (long (or (:total-ticks toggle-state) 0))
+                  ;; Fade in over first 20 ticks (1 second), then full intensity
+                  fade-in (min 1.0 (/ (double ticks) 20.0))]
+              (double fade-in))))
+        (ctx/get-all-contexts)))
+
 (defn- vec-deviation-active?
   [player-uuid]
   (boolean
@@ -929,12 +945,14 @@
         phase (double (/ (mod now-ms 1200) 1200.0))
         _ (update-vm-wave-circles! player-uuid vm-wave-active? screen-width screen-height now-ms)
         vm-wave (vm-wave-elements player-uuid now-ms)
+        vec-reflection-intensity (when reflection-active?
+                                   (vec-reflection-crosshair-intensity player-uuid))
         crosshair (when reflection-active?
               {:kind :content-crosshair
                      :x (int (/ screen-width 2))
                      :y (int (/ screen-height 2))
                      :phase phase
-                     :intensity 1.0})]
+                     :intensity (double (or vec-reflection-intensity 1.0))})]
     {:elements (vec (concat base-elements current-charging-elements vm-wave (keep identity [crosshair])
                             (toast/build-toast-elements screen-width screen-height now-ms)
                             (tutorial-notification-elements screen-width screen-height now-ms)
