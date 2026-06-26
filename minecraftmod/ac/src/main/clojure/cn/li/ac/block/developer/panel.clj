@@ -267,35 +267,48 @@
         ad (:ability-data pstate)
         learned? (adata/is-learned? ad skill-id)
         skill-exp (double (if learned? (or (adata/get-skill-exp ad skill-id) 0.0) 0.0))
-        ;; Layout — cover is 400×187, cx=200, cy=93
-        ;; Original: skillWid.centered().size(50,50)
+        player-level (int (or (:level ad) 1))
+        ;; Layout — cover is 400×187, cy=93
+        ;; Upstream: skillWid.centered().size(50,50)
+        ;; textArea: centered, pos(0,25) → textBase = cy + 20
+        ;; Text lines: (0,3) title, (0,15) not-learned/EXP, (0,25) cond icons, (0,40) message, (0,55) button
         cx 200 cy 93
-        back-sz 50 icon-sz 27 icon-ofs 11
-        back-x (- cx 25) back-y (- cy 25)   ; 175, 68
-        icon-x (+ back-x icon-ofs) icon-y (+ back-y icon-ofs)  ; 186, 79
-        ;; Original: textArea.size(0,10).centered().pos(0,25) → ta-y = cy-5+25 = 113
-        ta-y (+ cy 20)       ; 113
-        title-y (+ ta-y 3)   ; 116
-        info-y  (+ ta-y 15)  ; 128
-        cond-y  (+ ta-y 25)  ; 138
-        learnq-y (+ ta-y 40) ; 153
-        btn-x (- cx 16) btn-y (+ ta-y 52)  ; 184, 165
+        back-sz 50 icon-sz 27
+        icon-ofs (/ (- back-sz icon-sz) 2)
+        back-x (- cx 25) back-y (- cy 25)
+        icon-x (+ back-x icon-ofs) icon-y (+ back-y icon-ofs)
+        text-base (+ cy 20)
+        title-y   (+ text-base 3)
+        info-y    (+ text-base 15)
+        cond-y    (+ text-base 25)
+        msg-y     (+ text-base 40)
+        btn-y     (+ text-base 55)
+        btn-x     (- cx 16)
         ;; Textures
-        progress-at-1? (>= skill-exp 0.999)
-        outline-path (modid/asset-path "textures"
-                       (if progress-at-1?
-                         "guis/developer/skill_view_outline_glow.png"
-                         "guis/developer/skill_view_outline.png"))
-        mask-path (modid/asset-path "textures" "guis/developer/skill_radial_mask.png")
+        outline-base (modid/asset-path "textures" "guis/developer/skill_view_outline.png")
+        outline-glow (modid/asset-path "textures" "guis/developer/skill_view_outline_glow.png")
+        mask-path    (modid/asset-path "textures" "guis/developer/skill_radial_mask.png")
         skill-back-path (modid/asset-path "textures" "guis/developer/skill_back.png")
         button-tex-path (modid/asset-path "textures" "guis/developer/button.png")
         skill-icon-path (when-let [ip (skill-query/get-skill-icon-path skill-id)]
                           (modid/asset-path "textures" (subs ip (count "textures/"))))
-        ;; ring-comp shared across learned/unlearned branches for on-frame update
-        ring-comp (comp/shader-ring {:texture-0 outline-path
+        ;; i18n
+        skill-not-learned-text (i18n/translate "skill_tree.my_mod.skill_not_learned")
+        req-text   (i18n/translate "skill_tree.my_mod.req")
+        learn-q-text (format (i18n/translate "skill_tree.my_mod.learn_question") (format "%.0f" (double est-consumption)))
+        message-atom (atom learn-q-text)
+        progress-atom (atom 0.0)
+        ring-comp (comp/shader-ring {:texture-0 outline-base
                                      :texture-1 mask-path
                                      :progress 0.0})
-        can-close? (atom true)]
+        can-close? (atom true)
+        msg-tb-ref (atom nil)
+        ;; Prerequisites as condition icons
+        prerequisites (or (:prerequisites skill-spec) [])
+        cond-icon-sz 14
+        cond-step 16
+        cond-len (* cond-step (count prerequisites))
+        cond-start-x (- (/ cond-len 2))]
 
     ;; Close on cover click — guard button area so button click doesn't also close
     (events/on-left-click cover
@@ -323,21 +336,23 @@
       (comp/add-component! ring-w ring-comp)
       (cgui-core/add-widget! cover ring-w))
 
-    ;; Title: "SkillName (LV X)" centered on full-width widget
-    (let [title-w (cgui-core/create-widget :pos [0 title-y] :size [400 14])
-          title-tb (comp/text-box :text (str skill-name " (LV " skill-level ")")
-                                  :font :ac-bold :font-size 12 :align :center :color 0xFFFFFFFF)]
+    ;; Title — upstream: learned = just name, unlearned = "Name (LV X)"
+    (let [title-text (if learned? skill-name (str skill-name " (LV " skill-level ")"))
+          title-w (cgui-core/create-widget :pos [0 title-y] :size [400 14])
+          title-tb (comp/text-box :text title-text :font :ac-bold :font-size 12 :align :center :color 0xFFFFFFFF)]
       (comp/add-component! title-w title-tb)
       (cgui-core/add-widget! cover title-w))
 
     (if learned?
       ;; ── Learned mode: EXP + description ──────────────────────────────────
       (do
-        (let [exp-w (cgui-core/create-widget :pos [0 info-y] :size [400 12])
-              exp-tb (comp/text-box :text (format "EXP: %.0f%%" (* 100.0 skill-exp))
-                                    :font :ac-normal :font-size 9 :align :center :color 0xFFa1e1ff)]
+        ;; EXP line (foSkillProg: 8, CENTER, 0xFFa1e1ff)
+        (let [exp-text (str (i18n/translate "skill_tree.my_mod.skill_exp") " " (int (* 100.0 skill-exp)) "%")
+              exp-w (cgui-core/create-widget :pos [0 info-y] :size [400 12])
+              exp-tb (comp/text-box :text exp-text :font :ac-normal :font-size 8 :align :center :color 0xFFa1e1ff)]
           (comp/add-component! exp-w exp-tb)
           (cgui-core/add-widget! cover exp-w))
+        ;; Description (foSkillDesc: 9, CENTER)
         (when (and skill-spec (:description-key skill-spec))
           (let [desc-w (cgui-core/create-widget :pos [0 cond-y] :size [400 12])
                 desc-tb (comp/text-box :text (i18n/translate (:description-key skill-spec))
@@ -345,79 +360,91 @@
             (comp/add-component! desc-w desc-tb)
             (cgui-core/add-widget! cover desc-w))))
 
-      ;; ── Unlearned mode: Not learned + req + button ───────────────────────
+      ;; ── Unlearned mode ───────────────────────────────────────────────────
       (let [btn (cgui-core/create-widget :pos [btn-x btn-y] :size [32 16])
             btn-tex (comp/draw-texture button-tex-path 0xFFFFFFFF)
-            btn-tb (comp/text-box :text "LEARN" :font :ac-bold :font-size 9 :align :center :color 0xFF101010)
-            status-w (cgui-core/create-widget :pos [0 (+ btn-y 22)] :size [400 14])
-            status-tb (comp/text-box :text "" :font :ac-normal :font-size 8 :align :center :color 0xFFa1e1ff)]
+            btn-tb (comp/text-box :text "LEARN" :font :ac-bold :font-size 9 :align :center :color 0xFF101010)]
 
-        ;; "Not learned" (red, fo-skill-unlearned)
+        ;; "Not learned" — foSkillUnlearned (10, CENTER, red)
         (let [nl-w (cgui-core/create-widget :pos [0 info-y] :size [400 12])
-              nl-tb (comp/text-box :text "Not learned"
-                                   :font :ac-normal :font-size 10 :align :center :color 0xFFff5555)]
+              nl-tb (comp/text-box :text skill-not-learned-text :font :ac-normal :font-size 10 :align :center :color 0xFFff5555)]
           (comp/add-component! nl-w nl-tb)
           (cgui-core/add-widget! cover nl-w))
 
-        ;; Req label (energy estimate)
+        ;; Req label (foSkillReq: 9, RIGHT)
         (let [req-w (cgui-core/create-widget :pos [0 cond-y] :size [400 12])
-              req-tb (comp/text-box :text (str "Req: " est-consumption " IF")
+              req-tb (comp/text-box :text (str req-text " " (format "%.0f" (double est-consumption)))
                                     :font :ac-normal :font-size 9 :align :center :color 0xAAFFFFFF)]
           (comp/add-component! req-w req-tb)
           (cgui-core/add-widget! cover req-w))
 
-        ;; learn_question (matching original: "Learn? (Estm. Consumption: X IF)")
-        (let [lq-w (cgui-core/create-widget :pos [0 learnq-y] :size [400 12])
-              lq-tb (comp/text-box :text (format "Learn? (Estm. Consumption: %d IF)" est-consumption)
-                                   :font :ac-normal :font-size 9 :align :center :color 0xAAFFFFFF)]
-          (comp/add-component! lq-w lq-tb)
-          (cgui-core/add-widget! cover lq-w))
+        ;; Condition icons (upstream: skill.getDevConditions → 14×14 icons row)
+        (when (seq prerequisites)
+          (doseq [[idx {:keys [skill-id min-exp]}] (map-indexed vector prerequisites)]
+            (let [icon-path (when-let [ip (skill-query/get-skill-icon-path skill-id)]
+                             (modid/asset-path "textures" (subs ip (count "textures/"))))
+                  accepted? (>= (double (or (adata/get-skill-exp ad skill-id) 0.0)) (double min-exp))
+                  cx-cond (+ cx cond-start-x (* idx cond-step))
+                  cond-w (cgui-core/create-widget :pos [cx-cond cond-y] :size [cond-icon-sz cond-icon-sz])
+                  cond-color (if accepted? 0xFFFFFFFF 0xFF888888)]
+              (when icon-path
+                (comp/add-component! cond-w (comp/draw-texture icon-path cond-color))
+                (cgui-core/add-widget! cover cond-w)))))
 
-        ;; LEARN button: button.png 32×16 (matching original newButton())
+        ;; learn_question / message — foSkillUnlearned2 (10, CENTER), dynamic
+        (let [msg-w (cgui-core/create-widget :pos [0 msg-y] :size [400 12])
+              msg-tb (comp/text-box :text @message-atom :font :ac-normal :font-size 10 :align :center :color 0xAAFFFFFF)]
+          (reset! msg-tb-ref msg-tb)
+          (comp/add-component! msg-w msg-tb)
+          (cgui-core/add-widget! cover msg-w))
+
+        ;; LEARN button: button.png 32×16
         (comp/add-component! btn btn-tex)
         (comp/add-component! btn btn-tb)
         (events/on-left-click btn
           (fn [_]
             (let [energy (double (or @(:energy container) 0.0))]
-              (if (< energy est-consumption)
-                (do (comp/set-text! status-tb "Not enough energy")
-                    (comp/set-text-color! status-tb 0xFFFF5555)
-                    (cgui-core/set-visible! status-w true))
+              (cond
+                (< energy est-consumption)
+                (reset! message-atom (i18n/translate "skill_tree.my_mod.noenergy"))
+                (> skill-level player-level)
+                (reset! message-atom (format (i18n/translate "skill_tree.my_mod.level_fail") skill-level))
+                (not (learning-rules/can-learn? skill-spec ad player-level dev-type))
+                (reset! message-atom (i18n/translate "skill_tree.my_mod.condition_fail"))
+                :else
                 (do (req-start-development! container :learn-skill {:skill-id (name skill-id)})
-                    (reset! can-close? false))))))
-        (cgui-core/add-widget! cover btn)
+                    (reset! can-close? false)))))
+        (cgui-core/add-widget! cover btn))
 
-        ;; Status line (hidden until dev starts/completes)
-        (comp/add-component! status-w status-tb)
-        (cgui-core/set-visible! status-w false)
-        (cgui-core/add-widget! cover status-w)
-
-        ;; Dev progress monitor — updates ring + status text each frame
+        ;; Dev progress monitor — updates ring + message each frame (upstream: FrameEvent on ret)
         (let [prev-dev (atom false)]
           (events/on-frame cover
             (fn [_]
               (let [is-dev (boolean @(:is-developing container))
                     dev-prog (double (or @(:development-progress container) 0.0))
-                    dev-complete (boolean @(:development-complete? container))]
-                ;; Ring tracks development progress (original: updating drawActionIcon progress)
-                (swap! (:state ring-comp) assoc :progress (if is-dev dev-prog 0.0))
+                    dev-complete (boolean @(:development-complete? container))
+                    prog01 (float (if is-dev (min 1.0 dev-prog) (float @progress-atom)))
+                    glow? (>= (double prog01) 0.999)]
+                ;; Ring tracks dev progress + glow texture (upstream: drawActionIcon glow)
+                (swap! (:state ring-comp) assoc
+                       :progress prog01
+                       :texture-0 (if glow? outline-glow outline-base))
+                ;; Message replaces learn_question (upstream: message var)
                 (cond
                   is-dev
-                  (do (cgui-core/set-visible! status-w true)
-                      (comp/set-text! status-tb (str "Progress: " (int (* 100.0 (min 1.0 dev-prog))) "%"))
-                      (comp/set-text-color! status-tb 0xFF25c4ff)
-                      (cgui-core/set-visible! btn false))
+                  (let [pct (int (* 100.0 (min 1.0 dev-prog)))]
+                    (reset! message-atom (str (i18n/translate "skill_tree.my_mod.progress") " " pct "%")))
                   (and (not is-dev) @prev-dev dev-complete)
-                  (do (comp/set-text! status-tb "Development succeeded!")
-                      (comp/set-text-color! status-tb 0xFF88FF88)
-                      (cgui-core/set-visible! status-w true)
+                  (do (reset! message-atom (i18n/translate "skill_tree.my_mod.dev_successful"))
+                      (reset! progress-atom 1.0)
                       (reset! can-close? true))
                   (and (not is-dev) @prev-dev (not dev-complete))
-                  (do (comp/set-text! status-tb "Development failed")
-                      (comp/set-text-color! status-tb 0xFFFF5555)
-                      (cgui-core/set-visible! status-w true)
+                  (do (reset! message-atom (i18n/translate "skill_tree.my_mod.dev_failed"))
                       (reset! can-close? true))
                   :else nil)
+                ;; Push updated message to textbox
+                (when-let [tb @msg-tb-ref]
+                  (comp/set-text! tb @message-atom))
                 (reset! prev-dev is-dev)))))))
 
     (cgui-core/add-widget! root cover)))
