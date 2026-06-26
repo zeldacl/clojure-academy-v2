@@ -515,7 +515,7 @@
        (swap-preset-switch-state! owner assoc
                                   :previous-preset (:current-preset current-state)
                                   :current-preset (:preset-idx switch-cmd)
-                                  :show-until-ms (+ (System/currentTimeMillis)
+                                  :show-until-ms (+ (client-bridge/game-time-ms)
                                                     PRESET-INDICATOR-DURATION-MS))
        (processor/execute-input-command! owner switch-cmd)
        (update-default-group! player-uuid)

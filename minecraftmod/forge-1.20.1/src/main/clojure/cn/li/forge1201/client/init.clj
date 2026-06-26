@@ -188,7 +188,13 @@
        :send-system-message! (fn [player translatable-key & args]
                                 (let [^LocalPlayer player player]
                                   (.sendSystemMessage player
-                                    (Component/translatable translatable-key (into-array Object args)))))}))
+                                    (Component/translatable translatable-key (into-array Object args)))))
+       :game-time-ms (fn []
+                       (if-let [^net.minecraft.client.Minecraft mc (Minecraft/getInstance)]
+                         (if-let [level (.level mc)]
+                           (* (.getGameTime level) 50)
+                           (System/currentTimeMillis))
+                         (System/currentTimeMillis)))}))
 
 (defn register-key-mappings!
   "Register all runtime KeyMapping instances to Forge input system."

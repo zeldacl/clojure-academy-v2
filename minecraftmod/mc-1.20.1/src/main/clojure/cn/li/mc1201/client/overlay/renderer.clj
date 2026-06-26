@@ -428,7 +428,7 @@
 
 (defn- render-selection-indicator!
   [^GuiGraphics graphics {:keys [x y current total fade]}]
-  (let [square-size 8
+  (let [square-size 6
         gap 3
         total-width (+ (* total square-size) (* (dec total) gap))
         start-x (- x (int (/ total-width 2)))

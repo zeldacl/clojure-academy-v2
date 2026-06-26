@@ -19,7 +19,7 @@
            movement-key-down movement-key-tick movement-key-up
            open-screen open-simple-gui run-client-effect
            get-client-player screen-active? close-screen!
-           send-system-message! get-mouse-pos]}]
+           send-system-message! get-mouse-pos game-time-ms]}]
   (prt/install-impl! #'*client-bridge-ops*
                      {:slot-key-down slot-key-down
                       :slot-key-tick slot-key-tick
@@ -35,7 +35,8 @@
                       :screen-active? screen-active?
                       :close-screen! close-screen!
                       :send-system-message! send-system-message!
-                      :get-mouse-pos get-mouse-pos}
+                      :get-mouse-pos get-mouse-pos
+                      :game-time-ms game-time-ms}
                      "client-bridge")
   nil)
 
@@ -149,3 +150,10 @@
   []
   (or (bridge-op :get-mouse-pos)
       [0 0]))
+
+(defn game-time-ms
+  "Return the current game time in milliseconds (pauses when game pauses).
+   Falls back to System/currentTimeMillis if the bridge is not installed."
+  []
+  (or (bridge-op :game-time-ms)
+      (System/currentTimeMillis)))

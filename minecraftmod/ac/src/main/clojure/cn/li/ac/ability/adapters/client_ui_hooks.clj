@@ -837,7 +837,7 @@
                         (-> p
                             (assoc :kind :selection-indicator
                                    :x (int (/ screen-width 2))
-                                   :y (- screen-height 60))
+                                   :y (- screen-height 45))
                             (dissoc :type)))
                       (or (:preset-indicators hud-render-data) []))
         overload-pulse (when-let [ol-bar (:overload-bar hud-render-data)]

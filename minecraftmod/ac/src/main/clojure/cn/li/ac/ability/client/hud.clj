@@ -135,8 +135,7 @@
   (let [now (or now-ms (System/currentTimeMillis))
         combat-notice (build-combat-notice-data combat-notice-component now)
         preset-indicators (when preset-state
-                            (let [now* (System/currentTimeMillis)
-                                  remaining (- (:show-until-ms preset-state 0) now*)]
+                            (let [remaining (- (:show-until-ms preset-state 0) now)]
                               (when (pos? remaining)
                                 (let [current-idx (:current-preset preset-state 0)
                                       previous-idx (:previous-preset preset-state 0)
@@ -152,8 +151,9 @@
                                        :current previous-idx :total 4 :fade prev-fade})
                                     [{:type :preset-indicator
                                       :current current-idx :total 4 :fade curr-fade}]))))))
-        ;; Flatten preset indicators for backward compat: first element in list is used as :preset-indicator
-        preset-indicator (first preset-indicators)
+        ;; Flatten for backward compat: always pick the CURRENT preset (last element,
+        ;; since the vector is built as [previous current] during transitions).
+        preset-indicator (last preset-indicators)
         ;; Numbers display (hold V to see CP/OL values, fades in/out)
         numbers-texts (when (and showing-numbers? hud-model)
                         (let [dt (- (long now) (long (or last-show-value-change-ms 0)))
