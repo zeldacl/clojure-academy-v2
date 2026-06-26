@@ -201,7 +201,7 @@
 (def ^:private cover-fade-duration 0.2)
 (def ^:private cover-max-alpha 0.7)
 
-(defn- time-secs [] (/ (double (System/currentTimeMillis)) 1000.0))
+(defn- time-secs [] (/ (double (client-bridge/game-time-ms)) 1000.0))
 
 (defn- create-fading-cover
   "Create a fading black overlay matching original Cover component.
