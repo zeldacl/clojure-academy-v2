@@ -42,13 +42,18 @@
      :full-glow? (>= percent 1.0)}))
 
 (defn build-overload-bar-render-data
-  "Build overload bar render data."
+  "Build overload bar render data matching original AcademyCraft:
+   - bg-texture switches between back_normal.png (fine) and back_overload.png (overloaded)
+   - fg-texture (front_overload.png) clipped via scissor, with scroll-offset
+     driving a horizontal U-scroll animation — the texture itself carries
+     the cyan→green→pink gradient
+   - overloaded flag triggers CPU pulse highlight (cpbar_overload shader approximation)"
   [model now-ms]
   (let [{:keys [cur max fine]} (:overload model)
         percent (if (and max (pos? max)) (/ cur max) 0.0)
         scroll-offset (double (mod (/ (double (or now-ms 0)) 2000.0) 1.0))]
     {:type :overload-bar
-     :x 10 :y 25
+     :x 8 :y 22
      :width 100 :height 10
      :percent (double percent)
      :overloaded (not fine)
@@ -56,10 +61,7 @@
      :bg-texture (if fine
                    "my_mod:textures/guis/cpbar/back_normal.png"
                    "my_mod:textures/guis/cpbar/back_overload.png")
-     :fg-texture "my_mod:textures/guis/cpbar/front_overload.png"
-     :color-stops [{:pct 0.0  :r 0.04 :g 0.87 :b 0.87}   ;; cyan
-                   {:pct 0.55 :r 0.14 :g 0.94 :b 0.62}   ;; greenish
-                   {:pct 1.0  :r 0.31 :g 0.96 :b 0.39}]}))  ;; pinkish-red
+     :fg-texture "my_mod:textures/guis/cpbar/front_overload.png"}))
 
 (defn build-skill-slot-render-data
   "Build skill slot render data with cooldown info and delegate visual state."
