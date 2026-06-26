@@ -822,7 +822,8 @@
                                             :x (int (/ screen-width 2)))
                                      (dissoc :type))
       combat-notice (some-> (:combat-notice hud-render-data)
-            (assoc :kind :text)
+            (assoc :kind :text
+                   :x (int (/ screen-width 2)))
             (dissoc :type))
          skill-slots (mapv (fn [slot]
               (-> slot
@@ -1042,7 +1043,8 @@
 
 (defn runtime-client-ui-hooks
   []
-  (let [combat-notice-component (combat-notice/create-combat-notice-component)]
+  (let [combat-notice-component (combat-notice/create-combat-notice-component
+                                  {:now-ms-fn #(client-bridge/game-time-ms)})]
     {:client-get-skill-by-controllable
      (fn [cat-id ctrl-id]
        (skill-query/get-skill-by-controllable cat-id ctrl-id))

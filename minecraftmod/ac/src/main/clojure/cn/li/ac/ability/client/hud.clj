@@ -119,7 +119,6 @@
                                                                        :teleporter-crit
                                                                        now-ms)]
       {:type :combat-notice
-       :x 120
        :y 26
        :text text
        :color {:a (int (* 255.0 (double alpha)))

@@ -2,7 +2,7 @@
   "Transient client-side combat notices rendered through the shared ability HUD."
   (:require [cn.li.mcmod.i18n :as i18n]))
 
-(def ^:private default-duration-ms 1600)
+(def ^:private default-duration-ms 2000)
 
 (defn- now-ms []
   (System/currentTimeMillis))
