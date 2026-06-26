@@ -786,7 +786,9 @@
             (assoc-in runtime-state [:vm-wave-circles owner-key] next-circles)
             (update runtime-state :vm-wave-circles dissoc owner-key)))))))
 
-(defn- vm-wave-elements [player-uuid now-ms]
+(defn- vm-wave-elements [player-uuid now-ms tint]
+  "Build VM wave circle overlay elements with optional color tint.
+   tint: [r g b] vector — blue for VecReflection, green for VecDeviation."
   (->> (get (vm-wave-circles-snapshot) (client-ui-owner-key player-uuid) [])
        (map (fn [{:keys [x y born-ms life-ms start-size end-size seed]}]
               (let [elapsed (double (max 0 (- now-ms (long born-ms))))
@@ -804,7 +806,8 @@
                  :y (int (- y hs))
                  :w (int s)
                  :h (int s)
-                 :alpha (double (max 0.0 (min 1.0 alpha)))})))
+                 :alpha (double (max 0.0 (min 1.0 alpha)))
+                 :tint tint})))
        (filter #(pos? (:alpha %)))
        vec))
 
@@ -944,7 +947,12 @@
         vm-wave-active? (or reflection-active? deviation-active?)
         phase (double (/ (mod now-ms 1200) 1200.0))
         _ (update-vm-wave-circles! player-uuid vm-wave-active? screen-width screen-height now-ms)
-        vm-wave (vm-wave-elements player-uuid now-ms)
+        vm-wave-tint (cond
+                       (and reflection-active? deviation-active?) [0.4 0.7 1.0]  ;; both: cyan-blue blend
+                       reflection-active? [0.3 0.6 1.0]                           ;; VecReflection: blue
+                       deviation-active? [0.3 1.0 0.6]                            ;; VecDeviation: green
+                       :else [1.0 1.0 1.0])                                       ;; fallback: white
+        vm-wave (vm-wave-elements player-uuid now-ms vm-wave-tint)
         vec-reflection-intensity (when reflection-active?
                                    (vec-reflection-crosshair-intensity player-uuid))
         crosshair (when reflection-active?

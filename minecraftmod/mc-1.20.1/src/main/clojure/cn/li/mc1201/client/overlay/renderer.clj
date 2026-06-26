@@ -460,15 +460,16 @@
             (.fill graphics (+ sx square-size) y (+ sx square-size 1) (+ y square-size) (unchecked-int glow))))))))
 
 (defn- render-blit-texture!
-  [^GuiGraphics graphics {:keys [texture x y w h alpha u v tex-w tex-h]}]
+  [^GuiGraphics graphics {:keys [texture x y w h alpha u v tex-w tex-h tint]}]
   (when (and texture (pos? (int (or w 0))) (pos? (int (or h 0))))
     (when-let [loc (ResourceLocation/tryParse (normalize-texture-path texture))]
       (let [a (float (double (or alpha 1.0)))
             u (float (double (or u 0.0)))
             v (float (double (or v 0.0)))
             tw (float (double (or tex-w w)))
-            th (float (double (or tex-h h)))]
-        (RenderSystem/setShaderColor 1.0 1.0 1.0 a)
+            th (float (double (or tex-h h)))
+            [tr tg tb] (if (vector? tint) tint [1.0 1.0 1.0])]
+        (RenderSystem/setShaderColor (float tr) (float tg) (float tb) a)
         (.blit graphics loc (int x) (int y) u v (int w) (int h) tw th)
         (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0)))))
 
