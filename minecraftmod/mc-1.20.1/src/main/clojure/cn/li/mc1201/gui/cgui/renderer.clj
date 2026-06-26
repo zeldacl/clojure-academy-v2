@@ -264,6 +264,34 @@
                       (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0)))))
               (.fill gg x y (+ x w-int) (+ y h-int) (unchecked-int (or (:color state) 0xFFFFFF)))))
 
+          (kind-matches? kind :rotated-line)
+          (let [tex-loc (ensure-resource-location (:tex state))
+                dx (double (or (:dx state) 0.0))
+                dy (double (or (:dy state) 0.0))
+                line-w (double (or (:line-w state) 5.5))
+                half-w (/ line-w 2.0)
+                norm (Math/sqrt (+ (* dx dx) (* dy dy)))
+                angle (Math/atan2 dy dx)
+                color-int (unchecked-int (or (:color state) 0xFFFFFFFF))
+                ca (/ (double (bit-and (bit-shift-right color-int 24) 0xFF)) 255.0)
+                cr (/ (double (bit-and (bit-shift-right color-int 16) 0xFF)) 255.0)
+                cg (/ (double (bit-and (bit-shift-right color-int 8) 0xFF)) 255.0)
+                cb (/ (double (bit-and color-int 0xFF)) 255.0)]
+            (when (and tex-loc (> norm 0.5))
+              (try
+                (RenderSystem/enableBlend)
+                (RenderSystem/defaultBlendFunc)
+                (RenderSystem/setShaderColor (float cr) (float cg) (float cb) (float ca))
+                (let [^PoseStack ps (.pose gg)]
+                  (.pushPose ps)
+                  (.translate ps (double x) (double y) 0.0)
+                  (.mulPose ps (doto (Quaternionf.) (.rotationZ (float angle))))
+                  (.blit gg tex-loc 0 (int (- half-w)) 0 0 (int norm) (int line-w) (int norm) (int line-w))
+                  (.popPose ps))
+                (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0)
+                (catch Exception e
+                  (log/debug "CGUI rotated-line render error:" (.getMessage e))))))
+
           (kind-matches? kind :shader-progress)
           (let [t0 (:texture-0 state) t1 (:texture-1 state)
                 tex-loc-0 (ensure-resource-location t0)

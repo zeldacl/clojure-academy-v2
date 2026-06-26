@@ -115,6 +115,17 @@
   ([texture-path]
    {::kind :drawtexture :texture texture-path}))
 
+(defn rotated-line
+  "Textured rotated line. Draws from widget pos to (pos+[dx dy]) using a stretched texture.
+  tex: resource path, dx/dy: endpoint offset from widget pos, line-w: thickness px, color: ARGB."
+  [{:keys [tex dx dy line-w color]}]
+  {:kind :rotated-line
+   :state (atom {:tex tex
+                 :dx (double (or dx 0.0))
+                 :dy (double (or dy 0.0))
+                 :line-w (double (or line-w 5.5))
+                 :color (unchecked-int (or color 0xFFFFFFFF))})})
+
 (defn shader-progress
   "Shader-based radial progress ring component (matching host.clj :shader-progress-ring op).
   texture-0: outline ring texture (e.g., skill_outline.png)

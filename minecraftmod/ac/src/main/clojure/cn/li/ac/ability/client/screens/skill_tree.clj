@@ -261,11 +261,9 @@
 (defn- node-ops [node anim-time hovered-id hover-start]
   (let [{:keys [x y idx learned can-learn locked? skill-name skill-icon
                 progress-segments exp m-alpha skill-id]} node
-        effective-m-alpha (if locked? 0.25 (or m-alpha 0.7))
+        effective-m-alpha (or m-alpha 0.7)
         effective-can-learn (and can-learn (not locked?))
         effective-learned (and learned (not locked?))
-        _ (when (and (zero? (long idx)) (nil? skill-icon))
-            (log/info "[skill-tree-debug] node-ops: first node skill-icon is nil! node=" (pr-str node)))
         dt (max 0.0 (- anim-time (* idx 0.08) 0.1))
         back-alpha (* effective-m-alpha (clamp01 (* dt 10.0)))
         icon-alpha (* effective-m-alpha (clamp01 (* (- dt 0.08) 10.0)))
@@ -350,14 +348,7 @@
 ;; ============================================================================
 (defn build-draw-ops [owner _mx _my]
   (if-let [rd (build-screen-render-data owner)]
-    (let [_ (do (log/info "[skill-tree-debug] build-draw-ops called")
-                (log/info "[skill-tree-debug]   category-name:" (pr-str (get-in rd [:ability-info :category-name])))
-                (log/info "[skill-tree-debug]   level:" (pr-str (get-in rd [:ability-info :level])))
-                (log/info "[skill-tree-debug]   skill-nodes count:" (count (:skill-nodes rd)))
-                (when-let [n0 (first (:skill-nodes rd))]
-                  (log/info "[skill-tree-debug]   first node:" (pr-str (select-keys n0 [:skill-id :skill-name :skill-icon :learned :can-learn :x :y]))))
-                (log/info "[skill-tree-debug]   connections count:" (count (:connections rd))))
-          st (screen-state-snapshot owner)
+    (let [st (screen-state-snapshot owner)
           ct (:creation-time st)
           anim (if ct (/ (- (now-ms) ct) 1000.0) 5.0)
           ab (:ability-info rd)
@@ -384,16 +375,23 @@
                      [{:kind :fill :x 10 :y 200 :w 80 :h 20 :color 0xAA22AA22}
                       {:kind :text :x 18 :y 206 :text "Level Up" :font :ac-normal :font-size 9 :align :center :color 0xFFFFFFFF}])
 
-          ;; Animated connection lines
-          line-blend (clamp01 (* anim 5.0))
-          raw-conns (or (:connections rd) [])
-          anim-conns (mapv #(assoc % :to-x (lerp (:from-x %) (:to-x %) line-blend)
-                                     :to-y (lerp (:from-y %) (:to-y %) line-blend)) raw-conns)
-          connection-ops (build-line-ops anim-conns anim)
-
           ;; Parallax offsets for skill nodes (upstream: max_du_skills = 10)
           node-dx (* (- (/ (:mouse-x st 0) (max 1.0 (double 420))) 0.5) 10.0)
           node-dy (* (- (/ (:mouse-y st 0) (max 1.0 (double 260))) 0.5) 10.0)
+
+          ;; Animated connection lines — per-node stagger and parallax applied to endpoints
+          raw-conns (or (:connections rd) [])
+          anim-conns (mapv (fn [c]
+                             (let [child-idx (or (:child-idx c) 0)
+                                   dt (max 0.0 (- anim (* child-idx 0.08) 0.1))
+                                   lb (clamp01 (* dt 5.0))]
+                               (assoc c
+                                 :from-x (- (:from-x c) node-dx)
+                                 :from-y (- (:from-y c) node-dy)
+                                 :to-x   (- (lerp (:from-x c) (:to-x c) lb) node-dx)
+                                 :to-y   (- (lerp (:from-y c) (:to-y c) lb) node-dy))))
+                           raw-conns)
+          connection-ops (build-line-ops anim-conns anim)
           hid (:hovered-skill-id st)
           hst (:hover-start-time st)
           raw-nodes (or (:skill-nodes rd) [])

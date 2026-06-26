@@ -477,16 +477,12 @@
             color (bit-or (bit-shift-left alpha-byte 24) 0xFFFFFF)
             x0 (+ from-x (* ndx 12.2)) y0 (+ from-y (* ndy 12.2))
             x1 (- to-x (* ndx 12.2)) y1 (- to-y (* ndy 12.2))
-            ax1 (+ x0 (* (- x1 x0) lb))
-            ay1 (+ y0 (* (- y1 y0) lb))
-            steps (max 1 (int (* norm lb)))]
-        (doseq [i (range (inc steps))]
-          (let [t (/ i (max 1.0 (double steps)))
-                px (int (+ x0 (* (- ax1 x0) t)))
-                py (int (+ y0 (* (- ay1 y0) t)))]
-            (when-let [dot-w (cgui-core/create-widget :pos [px py] :size [3 3])]
-              (comp/add-component! dot-w (comp/draw-texture nil color))
-              (cgui-core/add-widget! area-widget dot-w))))))))
+            edx (* (- x1 x0) lb)
+            edy (* (- y1 y0) lb)
+            tex (modid/asset-path "textures" "guis/developer/line.png")
+            line-w (cgui-core/create-widget :pos [(int x0) (int y0)] :size [1 1])]
+        (comp/add-component! line-w (comp/rotated-line {:tex tex :dx edx :dy edy :line-w 5.5 :color color}))
+        (cgui-core/add-widget! area-widget line-w)))))
 
 (defn- draw-skill-node!
   "Render one skill node with background, outline, icon, and click handler.
@@ -508,7 +504,7 @@
         node-w (cgui-core/create-widget :pos [node-x node-y] :size [(int scaled-widget) (int scaled-widget)])
         ba (back-alpha anim-time idx (or m-alpha 0.7))
         ia (icon-alpha anim-time idx (or m-alpha 0.7))
-        eff-alpha (* (if locked? 0.25 (or m-alpha 0.7)) (/ ba (or m-alpha 0.7)))
+        eff-alpha ba
         node-alpha (int (* 255.0 eff-alpha))]
     ;; skill_back: white × backAlpha (upstream glColor4d(1,1,1,backAlpha))
     (comp/add-component! node-w (comp/draw-texture skill-back (bit-or (bit-shift-left node-alpha 24) 0xFFFFFF)))
@@ -536,7 +532,7 @@
         (comp/add-component! ol-w (comp/draw-texture skill-outline ol-color))
         (cgui-core/add-widget! area-widget ol-w)))
     ;; Skill icon
-    (let [ia-eff (* (if locked? 0.25 (or m-alpha 1.0)) (/ ia (or m-alpha 0.7)))]
+    (let [ia-eff ia]
       (when (and skill-icon (>= ia-eff 0.001))
         (let [icon-path (modid/asset-path "textures" (subs skill-icon (count "textures/")))
               alpha (int (* 255.0 ia-eff))
@@ -564,7 +560,7 @@
           nodes (:skill-nodes render-data)
           connections (:connections render-data)
           _ (when (nil? @skill-tree-creation-time)
-              (reset! skill-tree-creation-time (- (System/currentTimeMillis) 2000)))
+              (reset! skill-tree-creation-time (System/currentTimeMillis)))
           anim-time (/ (- (System/currentTimeMillis) @skill-tree-creation-time) 1000.0)
           [mx my] (cn.li.mcmod.client.platform-bridge/get-mouse-pos)
           area-w 257 area-h 139
@@ -572,7 +568,13 @@
           parallax-y (* (- (/ my (max 1.0 (double area-h))) 0.5) 10.0)]
       (draw-background! area-widget)
       (doseq [conn connections]
-        (draw-connection-line! area-widget conn anim-time))
+        (draw-connection-line! area-widget
+          (assoc conn
+            :from-x (- (:from-x conn) parallax-x)
+            :from-y (- (:from-y conn) parallax-y)
+            :to-x   (- (:to-x conn) parallax-x)
+            :to-y   (- (:to-y conn) parallax-y))
+          anim-time))
       ;; Hover detection: find closest node to mouse (upstream FrameEvent evt.hovering)
       (let [closest-node (when (seq nodes)
                            (apply min-key
