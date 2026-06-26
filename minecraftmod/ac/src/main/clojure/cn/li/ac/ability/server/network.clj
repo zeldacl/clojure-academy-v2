@@ -107,20 +107,26 @@
   ;; Registration
   ;; ============================================================================
 
+  ;; Ability handlers do not operate on open GUI containers; they carry
+  ;; self-contained payloads (activated, skill-id, category-id, etc.) and do
+  ;; not need sync-routing validation.
+  (def ^:private ability-handler-contract
+    {:owner-spec :server :payload-routing :none})
+
 (defn register-handlers! []
-  (net-srv/register-handler catalog/MSG-REQ-LEARN-NODE     handle-learn-skill-request)
-  (net-srv/register-handler catalog/MSG-REQ-LEVEL-UP       level-handler/handle-level-up-request)
-  (net-srv/register-handler catalog/MSG-REQ-SET-PRESET     preset-handler/handle-set-preset-request)
-  (net-srv/register-handler catalog/MSG-REQ-SWITCH-PRESET  preset-handler/handle-switch-preset-request)
-  (net-srv/register-handler catalog/MSG-REQ-SET-ACTIVATED  activation-handler/handle-set-activated-request)
-  (net-srv/register-handler catalog/MSG-CTX-BEGIN-LINK     context-handler/handle-begin-link-context)
-  (net-srv/register-handler catalog/MSG-CTX-KEEPALIVE      context-handler/handle-keepalive-context)
-  (net-srv/register-handler catalog/MSG-CTX-TERMINATE      context-handler/handle-terminate-context)
-  (net-srv/register-handler catalog/MSG-CTX-CHANNEL        context-handler/handle-channel-context)
-  (net-srv/register-handler catalog/MSG-SLOT-KEY-DOWN      input-handler/handle-key-down-skill)
-  (net-srv/register-handler catalog/MSG-SLOT-KEY-TICK      input-handler/handle-key-tick-skill)
-  (net-srv/register-handler catalog/MSG-SLOT-KEY-UP        input-handler/handle-key-up-skill)
-  (net-srv/register-handler catalog/MSG-SLOT-KEY-ABORT     input-handler/handle-key-abort-skill)
+  (net-srv/register-handler catalog/MSG-REQ-LEARN-NODE     handle-learn-skill-request    ability-handler-contract)
+  (net-srv/register-handler catalog/MSG-REQ-LEVEL-UP       level-handler/handle-level-up-request ability-handler-contract)
+  (net-srv/register-handler catalog/MSG-REQ-SET-PRESET     preset-handler/handle-set-preset-request ability-handler-contract)
+  (net-srv/register-handler catalog/MSG-REQ-SWITCH-PRESET  preset-handler/handle-switch-preset-request ability-handler-contract)
+  (net-srv/register-handler catalog/MSG-REQ-SET-ACTIVATED  activation-handler/handle-set-activated-request ability-handler-contract)
+  (net-srv/register-handler catalog/MSG-CTX-BEGIN-LINK     context-handler/handle-begin-link-context ability-handler-contract)
+  (net-srv/register-handler catalog/MSG-CTX-KEEPALIVE      context-handler/handle-keepalive-context ability-handler-contract)
+  (net-srv/register-handler catalog/MSG-CTX-TERMINATE      context-handler/handle-terminate-context ability-handler-contract)
+  (net-srv/register-handler catalog/MSG-CTX-CHANNEL        context-handler/handle-channel-context ability-handler-contract)
+  (net-srv/register-handler catalog/MSG-SLOT-KEY-DOWN      input-handler/handle-key-down-skill ability-handler-contract)
+  (net-srv/register-handler catalog/MSG-SLOT-KEY-TICK      input-handler/handle-key-tick-skill ability-handler-contract)
+  (net-srv/register-handler catalog/MSG-SLOT-KEY-UP        input-handler/handle-key-up-skill ability-handler-contract)
+  (net-srv/register-handler catalog/MSG-SLOT-KEY-ABORT     input-handler/handle-key-abort-skill ability-handler-contract)
   (log/info "Ability network handlers registered"))
 
 

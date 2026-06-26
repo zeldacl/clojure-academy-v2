@@ -333,6 +333,9 @@
   :prerequisites [{:skill-id :penetrate-teleport :min-exp 0.8}
                   {:skill-id :mark-teleport :min-exp 0.8}])
 
+(def ^:private teleporter-handler-contract
+  {:owner-spec :server :payload-routing :none})
+
 (defn init!
   []
   (net-srv/register-handler catalog/MSG-REQ-SAVED-POS-QUERY
@@ -342,23 +345,27 @@
         (action-response :query
                          {:success? (boolean (:success? snapshot))
                           :error (:error snapshot)}
-                         snapshot))))
+                         snapshot)))
+    teleporter-handler-contract)
   (net-srv/register-handler catalog/MSG-REQ-SAVED-POS-ADD
     (fn [{:keys [name]} player]
       (let [player-id (uuid/player-uuid player)]
         (response-for :add
                       #(save-current-location! player-id name)
-                      player-id))))
+                      player-id)))
+    teleporter-handler-contract)
   (net-srv/register-handler catalog/MSG-REQ-SAVED-POS-REMOVE
     (fn [{:keys [name]} player]
       (let [player-id (uuid/player-uuid player)]
         (response-for :remove
                       #(delete-saved-location! player-id name)
-                      player-id))))
+                      player-id)))
+    teleporter-handler-contract)
   (net-srv/register-handler catalog/MSG-REQ-SAVED-POS-PERFORM
     (fn [{:keys [name]} player]
       (let [player-id (uuid/player-uuid player)]
         (response-for :perform
                       #(perform-location-teleport! player-id name)
-                      player-id))))
+                      player-id)))
+    teleporter-handler-contract)
   nil)

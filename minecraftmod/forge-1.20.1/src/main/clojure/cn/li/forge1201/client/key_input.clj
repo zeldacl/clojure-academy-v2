@@ -115,11 +115,17 @@
           :on-up #(overlay-renderer/on-mode-switch-key-state! owner false)
           :on-short-up
           (fn []
-            (let [uuid (:player-uuid owner)]
-              ;; Emit the keyboard event. The AC layer's activate handler stack
-              ;; (trigger-mode-switch!) will determine whether to toggle or abort,
-              ;; and will update overlay state via the set-client-overlay-activated! hook.
-              (emit-keyboard-input! toggle-primary-state-input-id uuid :short-press)))})))))
+            ;; Bind client-session-id so the AC layer's handler chain
+            ;; (trigger-mode-switch! → has-category? → get-client-player-state)
+            ;; can resolve the session-id dynamic var. Mirrors tick-input! and
+            ;; on-mouse-scroll! which both wrap in with-current-client-session.
+            (client-session/with-current-client-session
+              (fn []
+                (let [uuid (:player-uuid owner)]
+                  ;; Emit the keyboard event. The AC layer's activate handler stack
+                  ;; (trigger-mode-switch!) will determine whether to toggle or abort,
+                  ;; and will update overlay state via the set-client-overlay-activated! hook.
+                  (emit-keyboard-input! toggle-primary-state-input-id uuid :short-press)))))})))))
 
 (defn- create-key-mapping [^String translation-key key-code ^String category]
   (KeyMapping. translation-key InputConstants$Type/KEYSYM (int key-code) category))

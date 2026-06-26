@@ -470,7 +470,8 @@
                  current (boolean (get-in state [:resource-data :activated]))]
              (log/info "[V-TRACE][AC][CLIENT][TOGGLE]"
                        {:uuid (str player-uuid) :current current :next (not current)})
-             (processor/execute-input-command! (cmd-builder/toggle-activated-command current))
+             (processor/execute-input-command! (current-client-owner player-uuid)
+                                               (cmd-builder/toggle-activated-command current))
              (runtime-hooks/set-client-overlay-activated! player-uuid (not current)))))))))
 
 (defn tick-keys!
@@ -516,7 +517,7 @@
                                   :current-preset (:preset-idx switch-cmd)
                                   :show-until-ms (+ (System/currentTimeMillis)
                                                     PRESET-INDICATOR-DURATION-MS))
-       (processor/execute-input-command! switch-cmd)
+       (processor/execute-input-command! owner switch-cmd)
        (update-default-group! player-uuid)
        (log/info "[PRESET-SWITCH]" {:preset (:preset-idx switch-cmd)})))))
 
@@ -544,7 +545,7 @@
     :on-key-down-fn  (fn [uuid]
                (let [state   (get-client-player-state uuid)
                              current (boolean (get-in state [:resource-data :activated]))]
-                         (api/req-set-activated! (not current) nil)))
+                         (api/req-set-activated! (current-client-owner uuid) (not current) nil)))
     :hint-fn         (fn [uuid]
                        (if (activated? uuid)
                          "ac.activate.hint.deactivate"

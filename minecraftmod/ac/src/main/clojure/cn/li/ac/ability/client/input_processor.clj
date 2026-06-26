@@ -83,8 +83,8 @@
   Supported commands:
     {:command :set-activated :activated bool}
     {:command :switch-preset :preset-idx int}"
-  [{:keys [command] :as cmd}]
+  [owner {:keys [command] :as cmd}]
   (case command
-    :set-activated (api/req-set-activated! (:activated cmd) nil)
-    :switch-preset (api/req-switch-preset!  (:preset-idx cmd) nil)
+    :set-activated (api/req-set-activated! owner (:activated cmd) nil)
+    :switch-preset (api/req-switch-preset!  owner (:preset-idx cmd) nil)
     nil))
