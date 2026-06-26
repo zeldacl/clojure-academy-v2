@@ -427,10 +427,14 @@
 ;; ============================================================================
 
 (defn- create-level-up-overlay!
-  "Create overlay for ability level-up with Cover fade, ESC stack, dev state."
+  "Create overlay for ability level-up matching upstream levelUpArea.
+  Layout: cover → skill_back(50×50 centered) + icon(27×27) + shader ring
+         → textArea(centered, +25px) → button(32×16, centered, +40px)
+  i18n keys: skill_tree.my_mod.uplevel / req / level_question / noenergy / dev_*"
   [root container developer-type]
   (let [{:keys [cover end-cover!]} (create-fading-cover root root)
-        close-fn (fn [should-rebuild?]
+        should-rebuild (atom false) can-close? (atom true)
+        close-fn (fn []
                    (unregister-overlay! root end-cover!)
                    (end-cover!))
         _ (register-overlay! root end-cover!)
@@ -443,61 +447,116 @@
         current-level (int (or (:level ad) 1))
         target-level (inc current-level)
         est-consumption (long (* (:cps dev-spec 700.0) (+ 3 (* target-level target-level 0.5))))
-        panel (create-centered-panel cover 180 140)
-        bg (cgui-core/create-widget :pos [0 0] :size [180 140])
-        should-rebuild (atom false) can-close? (atom true)]
-    (events/on-left-click cover
-      (fn [evt]
-        (let [mx (int (:x evt 0)) my (int (:y evt 0))
-              [px py] (cgui-core/get-pos panel) [pw ph] (cgui-core/get-size panel)]
-          (when (and @can-close? (or (< mx px) (> mx (+ px pw)) (< my py) (> my (+ py ph))))
-            (close-fn @should-rebuild)))))
-    (comp/add-component! bg (comp/draw-texture nil 0xC0202020))
-    (cgui-core/add-widget! panel bg)
-    ;; Title
-    (let [title (cgui-core/create-widget :pos [10 8] :size [160 14])
-          tb (comp/text-box :text (str "Level Up to Lv." target-level) :font :ac-bold :font-size 12 :align :center :color 0xFFFFFFFF)]
-      (comp/add-component! title tb) (cgui-core/add-widget! panel title))
-    ;; Energy estimate
-    (let [energy-w (cgui-core/create-widget :pos [10 26] :size [160 12])
-          energy-tb (comp/text-box :text (str "Req: " est-consumption " IF") :font :ac-normal :font-size 9 :align :center :color 0xAAFFFFFF)]
-      (comp/add-component! energy-w energy-tb) (cgui-core/add-widget! panel energy-w))
-    ;; Confirm button
-    ;; Confirm button + dev state display (btn in scope for hide during dev)
-    (let [btn (cgui-core/create-widget :pos [40 50] :size [100 20])
-          btn-bg (comp/draw-texture nil 0xFF226622)
-          btn-tb (comp/text-box :text "Confirm" :font :ac-normal :font-size 9 :align :center :color 0xFFFFFFFF)
-          status-w (cgui-core/create-widget :pos [10 80] :size [160 14])
-          status-tb (comp/text-box :text "" :font :ac-normal :font-size 8 :align :center :color 0xFFa1e1ff)]
-      (comp/add-component! btn btn-bg) (comp/add-component! btn btn-tb)
-      (events/on-left-click btn
-        (fn [_]
-          (let [energy (double (or @(:energy container) 0.0))]
-            (if (< energy est-consumption)
-              (reset! should-rebuild false)
-              (do (req-start-development! container :level-up)
-                  (reset! can-close? false))))))
-      (cgui-core/add-widget! panel btn)
-      (comp/add-component! status-w status-tb)
-      (cgui-core/set-visible! status-w false) (cgui-core/add-widget! panel status-w)
-      (let [prev-dev (atom false)]
-        (events/on-frame cover
-          (fn [_]
-            (let [is-dev (boolean @(:is-developing container))
-                  dev-prog (double (or @(:development-progress container) 0.0))
-                  dev-complete (boolean @(:development-complete? container))]
-              (cond is-dev
-                    (do (cgui-core/set-visible! status-w true)
-                        (comp/set-text! status-tb (str "Progress: " (int (* 100.0 (min 1.0 dev-prog))) "%"))
-                        (comp/set-text-color! status-tb 0xFF25c4ff) (cgui-core/set-visible! btn false))
-                    (and (not is-dev) @prev-dev dev-complete)
-                    (do (comp/set-text! status-tb "Level up successful!") (comp/set-text-color! status-tb 0xFF88FF88)
-                        (cgui-core/set-visible! status-w true) (reset! should-rebuild true) (reset! can-close? true))
-                    (and (not is-dev) @prev-dev (not dev-complete))
-                    (do (comp/set-text! status-tb "Level up failed") (comp/set-text-color! status-tb 0xFFFF5555)
-                        (cgui-core/set-visible! status-w true) (reset! can-close? true))
-                    :else (cgui-core/set-visible! status-w false))
-              (reset! prev-dev is-dev))))))
+        ;; Cover dimensions (fills root)
+        cw (nth (cgui-core/get-size root) 0)
+        ch (nth (cgui-core/get-size root) 1)
+        ;; Centered icon widget 50×50 — matching upstream wid.centered().size(50,50)
+        icon-back-sz 50
+        icon-inner-sz 27
+        icon-ofs (/ (- icon-back-sz icon-inner-sz) 2)
+        icon-cx (int (/ cw 2))
+        icon-cy (int (/ ch 2))
+        icon-x (- icon-cx 25)
+        icon-y (- icon-cy 25)
+        icon-inner-x (+ icon-x icon-ofs)
+        icon-inner-y (+ icon-y icon-ofs)
+        ;; Text area: centered, pos(0, 25) → textY = cy + 25
+        text-base-y (+ icon-cy 25)
+        ;; Button: centered, pos(0, 40) → btnY = textArea center + 40 ≈ cy + 25 + 40
+        btn-sz 32
+        btn-x (- icon-cx (/ btn-sz 2))
+        btn-y (+ text-base-y 40)
+        ;; Textures
+        skill-back-path (modid/asset-path "textures" "guis/developer/skill_back.png")
+        outline-path (modid/asset-path "textures" "guis/developer/skill_view_outline.png")
+        mask-path (modid/asset-path "textures" "guis/developer/skill_radial_mask.png")
+        button-tex-path (modid/asset-path "textures" "guis/developer/button.png")
+        ;; Condition icon — upstream: Resources.getTexture("abilities/condition/any" + (level+1))
+        condition-icon-key (str "abilities/condition/any" target-level)
+        condition-icon-path (modid/asset-path "textures" (str condition-icon-key ".png"))
+        ;; i18n
+        lvltext (format (i18n/translate "skill_tree.my_mod.uplevel") (str "Lv." target-level))
+        reqtext (str (i18n/translate "skill_tree.my_mod.req") " " (format "%.0f" (double est-consumption)))
+        hint-atom (atom (i18n/translate "skill_tree.my_mod.level_question"))
+        progress-atom (atom 0.0)
+        ;; Shader ring component (shared, updated on-frame)
+        ring-comp (comp/shader-ring {:texture-0 outline-path
+                                     :texture-1 mask-path
+                                     :progress 0.0})
+        prev-dev (atom false)
+        hint-tb-ref (atom nil)    ;; holds the dynamic hint textbox for on-frame updates
+        ;; Helper: build the overlay widgets (closes over let bindings)
+        build-overlay-widgets! (fn []
+                                 ;; ── Close on cover click (outside icon area) ──
+                                 (events/on-left-click cover
+                                   (fn [evt]
+                                     (let [mx (int (:x evt 0)) my (int (:y evt 0))
+                                           on-btn? (and (>= mx btn-x) (<= mx (+ btn-x btn-sz))
+                                                        (>= my btn-y) (<= my (+ btn-y 16)))]
+                                       (when (and @can-close? (not on-btn?))
+                                         (close-fn)))))
+                                 ;; ── skill_back 50×50 centered ──
+                                 (let [sb-w (cgui-core/create-widget :pos [icon-x icon-y] :size [icon-back-sz icon-back-sz])]
+                                   (comp/add-component! sb-w (comp/draw-texture skill-back-path 0xFFFFFFFF))
+                                   (cgui-core/add-widget! cover sb-w))
+                                 ;; ── Condition icon 27×27 at offset IconAlign ──
+                                 (let [ic-w (cgui-core/create-widget :pos [icon-inner-x icon-inner-y] :size [icon-inner-sz icon-inner-sz])]
+                                   (comp/add-component! ic-w (comp/draw-texture condition-icon-path 0xFFFFFFFF))
+                                   (cgui-core/add-widget! cover ic-w))
+                                 ;; ── Shader ring 50×50 (overlaid on icon, progress driven by dev state) ──
+                                 (let [ring-w (cgui-core/create-widget :pos [icon-x icon-y] :size [icon-back-sz icon-back-sz])]
+                                   (comp/add-component! ring-w ring-comp)
+                                   (cgui-core/add-widget! cover ring-w))
+                                 ;; ── Text area: three lines matching upstream ──
+                                 (let [w (cgui-core/create-widget :pos [0 (+ text-base-y 3)] :size [cw 14])
+                                       tb (comp/text-box :text lvltext :font :ac-bold :font-size 12 :align :center :color 0xFFFFFFFF)]
+                                   (comp/add-component! w tb) (cgui-core/add-widget! cover w))
+                                 (let [w (cgui-core/create-widget :pos [0 (+ text-base-y 16)] :size [cw 12])
+                                       tb (comp/text-box :text reqtext :font :ac-normal :font-size 9 :align :center :color 0xAAFFFFFF)]
+                                   (comp/add-component! w tb) (cgui-core/add-widget! cover w))
+                                 (let [w (cgui-core/create-widget :pos [0 (+ text-base-y 26)] :size [cw 12])
+                                       hint-tb (comp/text-box :text @hint-atom :font :ac-normal :font-size 9 :align :center :color 0xAAFFFFFF)]
+                                   (reset! hint-tb-ref hint-tb)
+                                   (comp/add-component! w hint-tb) (cgui-core/add-widget! cover w))
+                                 ;; ── Button: newButton() — 32×16 texButton + text ──
+                                 (let [btn-w (cgui-core/create-widget :pos [btn-x btn-y] :size [btn-sz 16])
+                                       btn-tex (comp/draw-texture button-tex-path 0xFFFFFFFF)
+                                       btn-tb (comp/text-box :text "LEARN" :font :ac-bold :font-size 9 :align :center :color 0xFF101010)]
+                                   (comp/add-component! btn-w btn-tex)
+                                   (comp/add-component! btn-w btn-tb)
+                                   (events/on-left-click btn-w
+                                     (fn [_]
+                                       (let [energy (double (or @(:energy container) 0.0))]
+                                         (if (< energy est-consumption)
+                                           (reset! hint-atom (i18n/translate "skill_tree.my_mod.noenergy"))
+                                           (do (req-start-development! container :level-up)
+                                               (reset! can-close? false))))))
+                                   (cgui-core/add-widget! cover btn-w))
+                                 ;; ── Dev state monitor (FrameEvent on cover) ──
+                                 (events/on-frame cover
+                                   (fn [_]
+                                     (let [is-dev (boolean @(:is-developing container))
+                                           dev-prog (double (or @(:development-progress container) 0.0))
+                                           dev-complete (boolean @(:development-complete? container))]
+                                       (swap! (:state ring-comp) assoc :progress (if is-dev (float dev-prog) (float @progress-atom)))
+                                       (cond
+                                         is-dev
+                                         (do (reset! hint-atom (i18n/translate "skill_tree.my_mod.dev_developing"))
+                                             (reset! progress-atom dev-prog))
+                                         (and (not is-dev) @prev-dev dev-complete)
+                                         (do (reset! hint-atom (i18n/translate "skill_tree.my_mod.dev_successful"))
+                                             (reset! progress-atom 1.0)
+                                             (reset! can-close? true)
+                                             (reset! should-rebuild true))
+                                         (and (not is-dev) @prev-dev (not dev-complete))
+                                         (do (reset! hint-atom (i18n/translate "skill_tree.my_mod.dev_failed"))
+                                             (reset! can-close? true))
+                                         :else nil)
+                                       (when-let [tb @hint-tb-ref]
+                                         (comp/set-text! tb @hint-atom))
+                                       (reset! prev-dev is-dev)))))]
+
+    (build-overlay-widgets!)
     (cgui-core/add-widget! root cover)))
 
 ;; ============================================================================
