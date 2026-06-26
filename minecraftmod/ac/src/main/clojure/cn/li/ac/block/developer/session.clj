@@ -35,10 +35,16 @@
             {:item-id item-id :category category}))
         (special-items/induction-factor-catalog)))
 
-(defn- ability-state [player]
-  (let [session-id (runtime-hooks/require-player-state-session-id "developer.session")
-        pid (uuid/player-uuid player)]
-    (store/get-or-create-player-state! session-id pid)))
+(defn- ability-state
+  "Get or create player ability state. Accepts either:
+   - [session-id pid] : explicit ids (used during tile tick, no player context)
+   - [player]         : a player entity (used during request handling)"
+  ([session-id pid]
+   (store/get-or-create-player-state! session-id pid))
+  ([player]
+   (let [session-id (runtime-hooks/require-player-state-session-id "developer.session")
+         pid (uuid/player-uuid player)]
+     (store/get-or-create-player-state! session-id pid))))
 
 (defn- validate-common [state player]
   (cond
@@ -187,7 +193,7 @@
               (if (dev-model/done? ticked)
                 ;; Validate at completion (matching original AcademyCraft
                 ;; DevelopData.tick → type.validate() on last stim tick)
-                (let [ability-data (:ability-data (ability-state (some-> state :user-uuid identity)))
+                (let [ability-data (:ability-data (ability-state (:player-state-session-id state) (:user-uuid state)))
                       valid? (case (:development-action state)
                                :level-up
                                (let [cat-id (:category-id ability-data)
