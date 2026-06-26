@@ -891,11 +891,11 @@
         overloaded? (not (get resource-data :overload-fine true))
         activated? (boolean (get resource-data :activated false))
         bg-mask (cond
-                  overloaded? {:r 0.82 :g 0.08 :b 0.08 :a 0.67}   ;; red, original CRL_OVERRIDE
+                  overloaded? {:r 0.82 :g 0.08 :b 0.08 :a 0.65}   ;; red, original CRL_OVERRIDE
                   (and activated? cat-color) {:r (double (nth cat-color 0))
                                               :g (double (nth cat-color 1))
                                               :b (double (nth cat-color 2))
-                                              :a 0.4}
+                                              :a 0.35}              ;; subtle category tint
                   :else {:r 0.0 :g 0.0 :b 0.0 :a 0.0})            ;; invisible
         ;; Interference detection
         interfered? (boolean (seq (:interferences resource-data)))

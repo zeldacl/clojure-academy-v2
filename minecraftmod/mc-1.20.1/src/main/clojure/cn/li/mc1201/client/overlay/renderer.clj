@@ -511,19 +511,14 @@
                               :showing-numbers? (owner-state :showing-numbers? owner false)
                               :last-show-value-change-ms (owner-state :last-show-value-change-ms owner 0)
                               :now-ms now}))
-            ;; --- BackgroundMask: smooth and render ---
+            ;; --- BackgroundMask: compute smoothed color (side effect) ---
             bg-mask-target (:background-mask overlay-plan)
-            _ (when bg-mask-target
-                (let [cur (get-in @(overlay-render-runtime-state-atom) [:background-mask-color owner-key]
-                                  {:r 0.0 :g 0.0 :b 0.0 :a 0.0 :last-ms now})
-                      smoothed (smooth-mask-color cur bg-mask-target now)]
-                  (update-overlay-render-runtime! assoc-in [:background-mask-color owner-key] smoothed)
-                  (when (> (:a smoothed) 0.01)
-                    (.fill graphics 0 0 (int screen-width) (int screen-height)
-                           (unchecked-int (bit-or (bit-shift-left (int (* 255.0 (double (:a smoothed)))) 24)
-                                                  (bit-shift-left (int (* 255.0 (double (:r smoothed)))) 16)
-                                                  (bit-shift-left (int (* 255.0 (double (:g smoothed)))) 8)
-                                                  (int (* 255.0 (double (:b smoothed))))))))))
+            smoothed-mask (when bg-mask-target
+                            (let [cur (get-in @(overlay-render-runtime-state-atom) [:background-mask-color owner-key]
+                                              {:r 0.0 :g 0.0 :b 0.0 :a 0.0 :last-ms now})
+                                  smoothed (smooth-mask-color cur bg-mask-target now)]
+                              (update-overlay-render-runtime! assoc-in [:background-mask-color owner-key] smoothed)
+                              smoothed))
             ;; --- Interference: jitter pose + flicker alpha ---
             interfered? (boolean (:interfered? overlay-plan))
             pose (.pose graphics)
@@ -534,6 +529,13 @@
                   (.pushPose pose)
                   (.translate pose (double jx) (double jy) 0.0)
                   (RenderSystem/setShaderColor 1.0 1.0 1.0 fa)))
+            ;; --- BackgroundMask: render (within interference push so mask jitters with HUD) ---
+            _ (when (and smoothed-mask (> (:a smoothed-mask) 0.01))
+                (.fill graphics 0 0 (int screen-width) (int screen-height)
+                       (unchecked-int (bit-or (bit-shift-left (int (* 255.0 (double (:a smoothed-mask)))) 24)
+                                              (bit-shift-left (int (* 255.0 (double (:r smoothed-mask)))) 16)
+                                              (bit-shift-left (int (* 255.0 (double (:g smoothed-mask)))) 8)
+                                              (int (* 255.0 (double (:b smoothed-mask))))))))
             ;; --- Smooth CP/Overload percents (pure transform, no side effects) ---
             elements (vec (:elements overlay-plan))
             elements (mapv (fn [elem]
