@@ -351,11 +351,11 @@
 
 (defn- render-content-slot!
   "Render a skill slot matching original AcademyCraft layout:
-   - 20x20 background square for key label
-   - 16x16 skill icon to the right of key label
-   - Skill name text below the icon
-   - Cooldown overlay covers icon from bottom-up
-   - Glow borders on active/charge delegate states"
+   - 20x20 background square for key label at left
+   - 16x16 skill icon to the right of key label (2px gap)
+   - Skill name text to the right of icon
+   - Cooldown overlay covers icon from top (shrinks upward as cooldown expires)
+   - Glow borders on active/charge delegate states around key label square"
   [^GuiGraphics graphics {:keys [x y key-label content-icon content-label disabled? status-seconds
                                  visual-state alpha glow-color sin-effect?
                                  cooldown-total cooldown-remaining]}]
@@ -365,8 +365,8 @@
                    :charge (rgb-vec->argb (or glow-color [255 173 55]) (* 0.4 effective-alpha))
                    :active (rgb-vec->argb (or glow-color [70 179 255]) (* 0.4 effective-alpha))
                    (unchecked-int (rgb-vec->argb [0 0 0] (* 0.5 effective-alpha))))
-        icon-x (+ x 14)
-        icon-y y]
+        icon-x (+ x 22)   ;; 2px gap after 20px key box
+        icon-y (+ y 2)]   ;; vertically centered: (20-16)/2 = 2px padding
     ;; Key label background square (20x20)
     (.fill graphics x y (+ x 20) (+ y 20) (unchecked-int bg-color))
     ;; Glow borders for non-idle visual states (around key label square)
@@ -385,7 +385,8 @@
     (when content-icon
       (when-let [icon-loc (ResourceLocation/tryParse (normalize-texture-path content-icon))]
         (.blit graphics icon-loc icon-x icon-y 0 0 16 16 16 16))
-      ;; Cooldown overlay: gray bar covers icon from bottom-up
+      ;; Cooldown overlay: gray bar covers icon from top,
+      ;; shrinking upward as cooldown expires (matching original AC)
       (when (and disabled? (pos? (long (or cooldown-total 0))))
         (let [remaining (double (or cooldown-remaining 0))
               total (double cooldown-total)
@@ -395,9 +396,9 @@
             (.fill graphics icon-x icon-y
                    (+ icon-x 16) (+ icon-y overlay-h)
                    (int 0x7F888888))))))  ;; 50% alpha gray
-    ;; Skill name text below icon
-    (draw-string! graphics (str content-label) (+ x 2) (+ y 21) 0xCCCCCC)
-    ;; Disabled: full gray overlay on key label square + icon
+    ;; Skill name text to the right of icon
+    (draw-string! graphics (str content-label) (+ x 42) (+ y 6) 0xCCCCCC)
+    ;; Disabled: full gray overlay on key label square
     (when disabled?
       (.fill graphics x y (+ x 20) (+ y 20) -1073741824)
       (when (pos? (double (or status-seconds 0.0)))
