@@ -583,67 +583,77 @@
         (cgui-core/add-widget! area-widget line-w)))))
 
 (defn- draw-skill-node!
-  "Render one skill node with background, outline, icon, and click handler.
-  node-scale: 1.0 idle, 1.2 hovered (upstream transit 0.1s)"
+  "Render one skill node matching original SkillTree.scala layering.
+  Layer order (bottom→top): skill_back → dark outline → icon → shader ring → click-catcher."
   [root area-widget container node anim-time parallax-x parallax-y dev-type node-scale]
   (let [{:keys [x y idx learned can-learn locked? skill-id skill-icon m-alpha]} node
         {:keys [skill-back skill-outline]} (skill-tree-textures)
-        ;; Apply scale around visual center (upstream: glTranslate to center, scale, translate back)
-        scaled-widget (* widget-size node-scale)
-        scaled-total (* total-size node-scale)
-        scaled-prog (* prog-sz node-scale)
-        scaled-icon (* icon-sz node-scale)
-        scale-offset-w (/ (- widget-size scaled-widget) 2)
-        scale-offset-t (/ (- total-size scaled-total) 2)
-        scale-offset-p (/ (- prog-sz scaled-prog) 2)
-        scale-offset-i (/ (- icon-sz scaled-icon) 2)
-        node-x (int (+ x draw-align (- parallax-x) scale-offset-w))
-        node-y (int (+ y draw-align (- parallax-y) scale-offset-w))
-        node-w (cgui-core/create-widget :pos [node-x node-y] :size [(int scaled-widget) (int scaled-widget)])
         ba (back-alpha anim-time idx (or m-alpha 0.7))
-        ia (icon-alpha anim-time idx (or m-alpha 0.7))
-        eff-alpha ba
-        node-alpha (int (* 255.0 eff-alpha))]
-    ;; skill_back: white × backAlpha (upstream glColor4d(1,1,1,backAlpha))
-    (comp/add-component! node-w (comp/draw-texture skill-back (bit-or (bit-shift-left node-alpha 24) 0xFFFFFF)))
-    ;; skill_outline: dark gray for unlearned, shader progress ring for learned
-    (if learned
-      ;; Shader-based radial progress ring (matching upstream skill_progbar)
-      (let [pb (progress-blend anim-time idx)
-            ol-w (cgui-core/create-widget :pos [(int (+ node-x prog-align scale-offset-p)) (int (+ node-y prog-align scale-offset-p))]
-                                          :size [(int scaled-prog) (int scaled-prog)])
-            {:keys [skill-outline]} (skill-tree-textures)
-            mask-path (modid/asset-path "textures" "guis/developer/skill_radial_mask.png")
-            outline-path (modid/asset-path "textures" (if (>= (or (:exp node) 0.0) 0.999)
-                                                         "guis/developer/skill_view_outline_glow.png"
-                                                         "guis/developer/skill_view_outline.png"))]
-        (comp/add-component! ol-w (comp/shader-ring {:texture-0 outline-path
-                                                         :texture-1 mask-path
-                                                         :progress (float (* pb (or (:exp node) 0.0)))}))
-        (cgui-core/add-widget! area-widget ol-w))
-      ;; Unlearned: dark gray outline
-      (let [ol-alpha (int (* 255.0 (* eff-alpha 0.6)))
-            g (int (* 255.0 0.2))
-            ol-color (bit-or (bit-shift-left ol-alpha 24) (bit-or (bit-shift-left g 16) (bit-or (bit-shift-left g 8) g)))
-            ol-w (cgui-core/create-widget :pos [(int (+ node-x prog-align scale-offset-p)) (int (+ node-y prog-align scale-offset-p))]
-                                          :size [(int scaled-prog) (int scaled-prog)])]
-        (comp/add-component! ol-w (comp/draw-texture skill-outline ol-color))
-        (cgui-core/add-widget! area-widget ol-w)))
-    ;; Skill icon
-    (let [ia-eff ia]
-      (when (and skill-icon (>= ia-eff 0.001))
-        (let [icon-path (modid/asset-path "textures" (subs skill-icon (count "textures/")))
-              alpha (int (* 255.0 ia-eff))
-              icon-color (bit-or (bit-shift-left alpha 24) (if learned 0xFFFFFF 0x888888))
-              icon-w (cgui-core/create-widget :pos [(int (+ node-x icon-align scale-offset-i)) (int (+ node-y icon-align scale-offset-i))]
-                                            :size [(int scaled-icon) (int scaled-icon)])]
-          (comp/add-component! icon-w (comp/draw-texture icon-path icon-color))
-          (cgui-core/add-widget! area-widget icon-w))))
-    ;; Click handler
-    (when (and (or can-learn learned) (not locked?))
-      (events/on-left-click node-w
-        (fn [_] (create-skill-detail-overlay! root container skill-id dev-type))))
-    (cgui-core/add-widget! area-widget node-w)))
+        ia (icon-alpha anim-time idx (or m-alpha 0.7))]
+    (when (>= ba 0.001)
+      (let [;; Scale around TotalSize center (original: glTranslate to TotalSize/2, glScale, translate back)
+            ;; screen top-left of the scaled TotalSize block:
+            ;;   x + DrawAlign + TotalSize*(1-s)/2 - parallax
+            center-x (+ x draw-align (/ (* total-size (- 1.0 node-scale)) 2.0) (- parallax-x))
+            center-y (+ y draw-align (/ (* total-size (- 1.0 node-scale)) 2.0) (- parallax-y))
+            ;; All positions derived from center-x/y, offsets scaled by node-scale
+            back-px (int center-x) back-py (int center-y) back-sz (int (* total-size node-scale))
+            ol-px   (int (+ center-x (* prog-align node-scale)))
+            ol-py   (int (+ center-y (* prog-align node-scale))) ol-sz (int (* prog-sz node-scale))
+            ic-px   (int (+ center-x (* icon-align node-scale)))
+            ic-py   (int (+ center-y (* icon-align node-scale))) ic-sz (int (* icon-sz node-scale))
+            ;; Colors
+            ba-byte (int (* 255.0 ba))
+            back-color (bit-or (bit-shift-left ba-byte 24) 0xFFFFFF)
+            ol-byte (int (* 255.0 (* ba 0.6)))
+            g-byte  (int (* 255.0 0.2))
+            ol-color (bit-or (bit-shift-left ol-byte 24)
+                             (bit-or (bit-shift-left g-byte 16)
+                                     (bit-or (bit-shift-left g-byte 8) g-byte)))]
+
+        ;; 1. skill_back (TotalSize=23, bottom) — white × backAlpha
+        (let [bk-w (cgui-core/create-widget :pos [back-px back-py] :size [back-sz back-sz])]
+          (comp/add-component! bk-w (comp/draw-texture skill-back back-color))
+          (cgui-core/add-widget! area-widget bk-w))
+
+        ;; 2. Dark outline (all nodes) — original draws this for both learned and unlearned
+        (let [ol-w (cgui-core/create-widget :pos [ol-px ol-py] :size [ol-sz ol-sz])]
+          (comp/add-component! ol-w (comp/draw-texture skill-outline ol-color))
+          (cgui-core/add-widget! area-widget ol-w))
+
+        ;; 3. Skill icon — white for learned, gray tint for unlearned (matching original mono shader)
+        (when (and skill-icon (>= ia 0.001))
+          (let [icon-path (modid/asset-path "textures" (subs skill-icon (count "textures/")))
+                ia-byte  (int (* 255.0 ia))
+                icon-color (bit-or (bit-shift-left ia-byte 24) (if learned 0xFFFFFF 0x888888))
+                ic-w (cgui-core/create-widget :pos [ic-px ic-py] :size [ic-sz ic-sz])]
+            (comp/add-component! ic-w (comp/draw-texture icon-path icon-color))
+            (cgui-core/add-widget! area-widget ic-w)))
+
+        ;; 4. Shader progress ring (learned only, on top of icon)
+        (when learned
+          (let [pb (progress-blend anim-time idx)
+                mask-path (modid/asset-path "textures" "guis/developer/skill_radial_mask.png")
+                ring-path (modid/asset-path "textures"
+                            (if (>= (or (:exp node) 0.0) 0.999)
+                              "guis/developer/skill_view_outline_glow.png"
+                              "guis/developer/skill_view_outline.png"))
+                ring-w (cgui-core/create-widget :pos [ol-px ol-py] :size [ol-sz ol-sz])]
+            (comp/add-component! ring-w (comp/shader-ring {:texture-0 ring-path
+                                                            :texture-1 mask-path
+                                                            :progress (float (* pb (or (:exp node) 0.0)))}))
+            (cgui-core/add-widget! area-widget ring-w)))
+
+        ;; 5. Transparent click-catcher (topmost) at original WidgetSize position (x,y without DrawAlign)
+        ;;    matching original: widget.pos(sx, sy).size(WidgetSize, WidgetSize) → click area = 16×16
+        (when (and (or can-learn learned) (not locked?))
+          (let [click-px (int (- x parallax-x))
+                click-py (int (- y parallax-y))
+                click-sz (int (* widget-size node-scale))
+                click-w  (cgui-core/create-widget :pos [click-px click-py] :size [click-sz click-sz])]
+            (events/on-left-click click-w
+              (fn [_] (create-skill-detail-overlay! root container skill-id dev-type)))
+            (cgui-core/add-widget! area-widget click-w)))))))
 
 (defn- render-skill-tree-area!
   "Render skill tree nodes in parent_right/area."
@@ -673,17 +683,18 @@
             :to-x   (- (:to-x conn) parallax-x)
             :to-y   (- (:to-y conn) parallax-y))
           anim-time))
-      ;; Hover detection: find closest node to mouse (upstream FrameEvent evt.hovering)
+      ;; Hover detection: node center = (x + WidgetSize/2 - parallax, y + WidgetSize/2 - parallax)
+      ;; Original: widget at (sx,sy) size 16×16, center = (sx+8, sy+8) with parallax applied
       (let [closest-node (when (seq nodes)
                            (apply min-key
                              (fn [n]
-                               (let [cx (+ (:x n) draw-align (/ widget-size 2) (- parallax-x))
-                                     cy (+ (:y n) draw-align (/ widget-size 2) (- parallax-y))]
+                               (let [cx (+ (:x n) (/ widget-size 2) (- parallax-x))
+                                     cy (+ (:y n) (/ widget-size 2) (- parallax-y))]
                                  (+ (* (- mx cx) (- mx cx)) (* (- my cy) (- my cy)))))
                              nodes))
             hover-dist (when closest-node
-                         (let [cx (+ (:x closest-node) draw-align (/ widget-size 2) (- parallax-x))
-                               cy (+ (:y closest-node) draw-align (/ widget-size 2) (- parallax-y))]
+                         (let [cx (+ (:x closest-node) (/ widget-size 2) (- parallax-x))
+                               cy (+ (:y closest-node) (/ widget-size 2) (- parallax-y))]
                            (Math/sqrt (+ (* (- mx cx) (- mx cx)) (* (- my cy) (- my cy))))))
             hover-idx (:idx closest-node)
             hover-now? (and closest-node (< (or hover-dist 999) 20))]
