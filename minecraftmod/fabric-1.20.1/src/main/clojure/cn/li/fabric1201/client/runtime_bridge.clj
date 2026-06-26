@@ -208,9 +208,10 @@
          :on-up #(overlay-renderer/on-mode-switch-key-state! owner false)
          :on-short-up
          (fn []
-           (let [uuid (:player-uuid owner)
-                 cur-activated (power-runtime/runtime-activated? uuid)]
-             (overlay-state/set-client-activated! owner (not cur-activated))
+           (let [uuid (:player-uuid owner)]
+             ;; Emit the keyboard event. The AC layer's activate handler stack
+             ;; (trigger-mode-switch!) will determine whether to toggle or abort,
+             ;; and will update overlay state via the set-client-overlay-activated! hook.
              (emit-keyboard-input! toggle-primary-state-input-id uuid :short-press)))}))))
 
 (defn- tick-cycle-selection! []
@@ -253,6 +254,13 @@
 (defn init!
   []
   (power-runtime/client-register-push-handlers!)
+  ;; Register the overlay activation hook: called by AC layer after activate handler
+  ;; stack resolves to provide immediate client-side HUD feedback.
+  (power-runtime/register-power-runtime-hooks!
+   {:set-client-overlay-activated!
+    (fn [player-uuid activated]
+      (when-let [owner (client-session/current-local-player-owner)]
+        (overlay-state/set-client-activated! owner activated)))})
   (when-not (var-get #'*tick-listener-registered?*)
     (locking tick-listener-guard-lock
       (when-not (var-get #'*tick-listener-registered?*)

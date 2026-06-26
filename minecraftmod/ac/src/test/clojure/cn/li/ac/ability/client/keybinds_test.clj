@@ -112,8 +112,10 @@
 (deftest default-abort-handler-uses-client-abort-hook-test
   (let [aborted (atom [])]
     (keybinds/install-default-handlers!)
-    (with-redefs [read-model/get-player-contexts-for-player (fn [& _] [{:id "ctx-1" :status :alive}])
+    (with-redefs [read-model/get-player-state (fn [& _] {:ability-data {:category-id :test-cat}})
+                  read-model/get-player-contexts-for-player (fn [& _] [{:id "ctx-1" :status :alive}])
                   runtime-hooks/client-abort-all! (fn [] (swap! aborted conj :abort-hook))
+                  runtime-hooks/set-client-overlay-activated! (fn [_ _] nil)
                   ctx/abort-all-contexts-for-player! (fn [& _]
                                                        (throw (ex-info "legacy abort path should not be used" {})))]
       (keybinds/trigger-mode-switch! "p1"))

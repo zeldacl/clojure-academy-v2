@@ -361,6 +361,11 @@
   [player-uuid]
   (boolean (get-in (get-client-player-state player-uuid) [:resource-data :activated])))
 
+(defn- has-category?
+  "Check if player has learned a category (original AcademyCraft: aData.hasCategory())."
+  [player-uuid]
+  (some? (get-in (get-client-player-state player-uuid) [:ability-data :category-id])))
+
 (defn- get-client-player-uuid
   "Get current client player UUID. Must be provided by forge layer."
   []
@@ -386,6 +391,14 @@
   (read-model/get-player-contexts-for-player (str player-uuid)
                                              (current-client-session-id)
                                              :keybinds))
+
+(defn- has-active-contexts?
+  "Check if the player has any non-terminated contexts.
+  Used by activate handler stack: if true, V-key short-press aborts
+  delegates instead of toggling activation."
+  [player-uuid]
+  (seq (filter #(not= (:status %) :terminated)
+               (player-contexts player-uuid))))
 
 (defn on-skill-key-event
   "Handle skill key state change. Uses delegate system with pre-checks."
@@ -422,22 +435,43 @@
 
 (defn trigger-mode-switch!
   "V key short-press handler. Delegates to the active activate handler.
-  If no handler matches, falls through to default toggle."
+  If no handler matches, falls through to default toggle.
+
+  Mirrors original AcademyCraft ClientHandler + ClientRuntime.getActivateHandler():
+   1. hasCategory? guard — only toggle if player has learned a category
+   2. If has active delegates → abort them (keep activation state unchanged)
+   3. Otherwise → toggle activation state"
   ([]
    (trigger-mode-switch! nil))
   ([player-uuid]
    (when-let [player-uuid (or player-uuid (get-client-player-uuid))]
-     (if-let [handler (get-active-handler player-uuid)]
-       (do
-         (log/info "[V-TRACE][AC][CLIENT][HANDLER]"
-                   {:handler-id (:id handler) :uuid (str player-uuid)})
-         ((:on-key-down-fn handler) player-uuid))
-       ;; Fallback: build toggle command and execute
-       (let [state   (get-client-player-state player-uuid)
-             current (boolean (get-in state [:resource-data :activated]))]
-         (log/info "[V-TRACE][AC][CLIENT][TOGGLE]"
-                   {:uuid (str player-uuid) :current current :next (not current)})
-         (processor/execute-input-command! (cmd-builder/toggle-activated-command current)))))))
+     ;; hasCategory check matching original: aData.hasCategory()
+     (when (has-category? player-uuid)
+       ;; Determine whether abort handler will match BEFORE running the stack.
+       ;; When has-active-contexts? is true, the priority-10 abort-delegates
+       ;; handler will fire → aborts contexts WITHOUT toggling activation.
+       ;; When false, the priority-0 default-toggle handler fires → toggles.
+       (let [will-abort? (boolean (has-active-contexts? player-uuid))]
+         (if-let [handler (get-active-handler player-uuid)]
+           (do
+             (log/info "[V-TRACE][AC][CLIENT][HANDLER]"
+                       {:handler-id (:id handler) :uuid (str player-uuid)})
+             ((:on-key-down-fn handler) player-uuid)
+             ;; After handler runs, update client overlay state for
+             ;; immediate HUD feedback (no server round-trip delay).
+             ;; - Abort: activation unchanged → leave overlay state alone
+             ;; - Toggle: activation toggled → update overlay immediately
+             (when-not will-abort?
+               (let [state (get-client-player-state player-uuid)
+                     current (boolean (get-in state [:resource-data :activated]))]
+                 (runtime-hooks/set-client-overlay-activated! player-uuid (not current)))))
+           ;; Fallback: no handler matched → build and execute toggle command
+           (let [state   (get-client-player-state player-uuid)
+                 current (boolean (get-in state [:resource-data :activated]))]
+             (log/info "[V-TRACE][AC][CLIENT][TOGGLE]"
+                       {:uuid (str player-uuid) :current current :next (not current)})
+             (processor/execute-input-command! (cmd-builder/toggle-activated-command current))
+             (runtime-hooks/set-client-overlay-activated! player-uuid (not current)))))))))
 
 (defn tick-keys!
   "Main tick function called by forge layer. key-state-fn returns boolean for each key."
@@ -498,12 +532,6 @@
 ;; ============================================================================
 ;; Default Activate Handlers
 ;; ============================================================================
-
-(defn- has-active-contexts?
-  "Check if the player has any non-terminated contexts."
-  [player-uuid]
-  (seq (filter #(not= (:status %) :terminated)
-               (player-contexts player-uuid))))
 
 (defn install-default-handlers!
   "Register default activate handlers. Call once at init."

@@ -58,6 +58,7 @@
    :client-send-context-local! noop
    :client-build-overlay-plan (fn [_ _ _ _] nil)
    :client-build-hud-render-data (fn [_ _ _ _] nil)
+   :set-client-overlay-activated! (fn [_ _] nil)
    :client-open-managed-screen! (fn [_ _] nil)
    :client-build-managed-screen-draw-ops (fn [_ _ _] [])
    :client-build-managed-screen-render-data (fn [_] nil)
@@ -440,6 +441,13 @@
 (defn client-build-hud-render-data
   [hud-model screen-width screen-height render-state]
   ((:client-build-hud-render-data (hooks-core-state-snapshot)) hud-model screen-width screen-height render-state))
+
+(defn set-client-overlay-activated!
+  "Notify the overlay layer that activation state has changed for a player.
+  Called by the AC layer after the activate handler stack resolves.
+  player-uuid is a string, activated is a boolean."
+  [player-uuid activated]
+  ((:set-client-overlay-activated! (hooks-core-state-snapshot)) player-uuid activated))
 
 (defn client-open-managed-screen!
   [screen-key payload]
