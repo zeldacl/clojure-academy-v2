@@ -78,7 +78,7 @@
             (when skill-id
               {:type :skill-slot
                :idx idx
-               :x (- screen-width 150)
+               :x (- screen-width 120)
                :y (+ (- screen-height 100) (* idx 22))
                :key-label (nth ["Z" "X" "C" "B"] idx)
                :skill-icon (skill-query/get-skill-icon-path skill-id)

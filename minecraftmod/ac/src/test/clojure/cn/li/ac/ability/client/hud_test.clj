@@ -43,7 +43,7 @@
                 skill-query/get-skill-icon-path (fn [_] "textures/skills/railgun.png")
                 cd-data/in-cooldown? (fn [_ _ _] false)
                 cd-data/get-remaining (fn [_ _ _] 0)
-                dstate/delegate-state-for-slot (fn [_ _] {:state :idle :alpha 1.0 :glow-color nil :sin-effect? false})]
+                dstate/delegate-state-for-slot (fn [_ _ _] {:state :idle :alpha 1.0 :glow-color nil :sin-effect? false})]
     (let [slots (hud/build-skill-slot-render-data
                  {:active-slots [[:electromaster :railgun]]}
                  320

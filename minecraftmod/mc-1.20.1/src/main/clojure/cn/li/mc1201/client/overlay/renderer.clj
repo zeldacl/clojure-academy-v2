@@ -343,15 +343,26 @@
                                       (int 25))))))))
 
 (defn- render-content-slot!
+  "Render a skill slot matching original AcademyCraft layout:
+   - 20x20 background square for key label
+   - 16x16 skill icon to the right of key label
+   - Skill name text below the icon
+   - Cooldown overlay covers icon from bottom-up
+   - Glow borders on active/charge delegate states"
   [^GuiGraphics graphics {:keys [x y key-label content-icon content-label disabled? status-seconds
                                  visual-state alpha glow-color sin-effect?
                                  cooldown-total cooldown-remaining]}]
   (let [effective-alpha (double (or alpha 1.0))
+        ;; Background for key label square
         bg-color (case visual-state
                    :charge (rgb-vec->argb (or glow-color [255 173 55]) (* 0.4 effective-alpha))
                    :active (rgb-vec->argb (or glow-color [70 179 255]) (* 0.4 effective-alpha))
-                   (unchecked-int (rgb-vec->argb [0 0 0] (* 0.5 effective-alpha))))]
+                   (unchecked-int (rgb-vec->argb [0 0 0] (* 0.5 effective-alpha))))
+        icon-x (+ x 14)
+        icon-y y]
+    ;; Key label background square (20x20)
     (.fill graphics x y (+ x 20) (+ y 20) (unchecked-int bg-color))
+    ;; Glow borders for non-idle visual states (around key label square)
     (when (and glow-color (not= visual-state :idle))
       (let [border-alpha (if sin-effect?
                            (* 0.6 effective-alpha (+ 0.5 (* 0.5 (Math/sin (* (/ (System/currentTimeMillis) 300.0) Math/PI)))))
@@ -360,11 +371,11 @@
         (.fill graphics (dec x) (dec y) (+ x 21) y (unchecked-int border-color))
         (.fill graphics (dec x) (+ y 20) (+ x 21) (+ y 21) (unchecked-int border-color))
         (.fill graphics (dec x) y x (+ y 20) (unchecked-int border-color))
-        (.fill graphics (+ x 20) y (+ x 21) (+ y 20) (unchecked-int border-color)))))
-  (draw-string! graphics (str key-label) (+ x 2) (+ y 2) 0xFFFFFF)
-  (when content-icon
-    (let [icon-x (+ x 25)
-          icon-y (int y)]
+        (.fill graphics (+ x 20) y (+ x 21) (+ y 20) (unchecked-int border-color))))
+    ;; Key label text centered in the 20x20 square
+    (draw-string! graphics (str key-label) (+ x 6) (+ y 6) 0xFFFFFF)
+    ;; Skill icon (16x16 to the right of key label)
+    (when content-icon
       (when-let [icon-loc (ResourceLocation/tryParse (normalize-texture-path content-icon))]
         (.blit graphics icon-loc icon-x icon-y 0 0 16 16 16 16))
       ;; Cooldown overlay: gray bar covers icon from bottom-up
@@ -372,16 +383,18 @@
         (let [remaining (double (or cooldown-remaining 0))
               total (double cooldown-total)
               progress (/ remaining total)
-              overlay-h (int (* 16.0 (- 1.0 progress)))]
+              overlay-h (int (* 16.0 progress))]
           (when (pos? overlay-h)
-            (.fill graphics icon-x (+ icon-y overlay-h)
-                   (+ icon-x 16) (+ icon-y 16)
-                   (int 0x7F888888)))))))  ;; 50% alpha gray
-  (draw-string! graphics (str content-label) (+ x 45) (+ y 6) 0xFFFFFF)
-  (when disabled?
-    (.fill graphics x y (+ x 20) (+ y 20) -1073741824)
-    (when (pos? status-seconds)
-      (draw-string! graphics (format "%.1fs" status-seconds) (+ x 3) (+ y 10) 0xFFFFFF))))
+            (.fill graphics icon-x icon-y
+                   (+ icon-x 16) (+ icon-y overlay-h)
+                   (int 0x7F888888))))))  ;; 50% alpha gray
+    ;; Skill name text below icon
+    (draw-string! graphics (str content-label) (+ x 2) (+ y 21) 0xCCCCCC)
+    ;; Disabled: full gray overlay on key label square + icon
+    (when disabled?
+      (.fill graphics x y (+ x 20) (+ y 20) -1073741824)
+      (when (pos? (double (or status-seconds 0.0)))
+        (draw-string! graphics (format "%.1fs" status-seconds) (+ x 3) (+ y 10) 0xFFFFFF)))))
 
 (defn- render-crosshair-marker!
   [^GuiGraphics graphics {:keys [x y phase intensity]}]
@@ -442,10 +455,18 @@
 (defn- render-element! [^GuiGraphics graphics element screen-width screen-height]
   (case (:kind element)
     :bar (render-bar! graphics element)
-    :activation-indicator (when (:activated element)
-                            (draw-string! graphics "*" (:x element) (:y element) 0x00FF00)
-                            (when-let [hint (:hint element)]
-                              (draw-string! graphics (str hint) (+ (:x element) 12) (:y element) 0xCCCCCC)))
+    :activation-indicator
+    (let [activated? (boolean (:activated element))
+          dot-size 6
+          dot-x (:x element)
+          dot-y (+ (:y element) 4)
+          dot-color (if activated? 0xFF00CC00 0xFF555555)]
+      ;; Small status dot: green = activated, gray = inactive
+      (.fill graphics dot-x dot-y (+ dot-x dot-size) (+ dot-y dot-size) (unchecked-int dot-color))
+      ;; Hint text
+      (when-let [hint (:hint element)]
+        (draw-string! graphics (str hint) (+ (:x element) 10) (:y element)
+                      (if activated? 0xCCCCCC 0xFF888888))))
     :content-slot (render-content-slot! graphics element)
     :content-crosshair (render-crosshair-marker! graphics element)
     :selection-indicator (render-selection-indicator! graphics element)

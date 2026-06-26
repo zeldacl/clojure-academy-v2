@@ -854,6 +854,29 @@
       (build-notif screen-width screen-height now-ms))
     (catch Throwable _ [])))
 
+(defn- active-skill-cp-cost
+  "Compute consumption-hint CP cost for the first active skill with a computable cost.
+   Iterates over active (non-terminated) contexts, trying common cost paths
+   (tick, down, up, release) in order. Returns nil if no active skill has a cost.
+
+   Replaces the railgun-specific coin-QTE logic with a general approach that
+   works for all skills matching original AcademyCraft CPBar consumption-hint behavior."
+  [player-uuid]
+  (let [contexts (player-contexts player-uuid)
+        active-ctxs (filter ctx/active-context? contexts)]
+    (some
+      (fn [ctx-data]
+        (let [skill-id (:skill-id ctx-data)
+              exp (double (or (:exp ctx-data) 0.0))]
+          (some
+            (fn [cost-path]
+              (try
+                (let [cost (skill-config/lerp-double skill-id cost-path exp)]
+                  (when (pos? cost) (double cost)))
+                (catch Throwable _ nil)))
+            [:cost.tick.cp :cost.down.cp :cost.up.cp :cost.release.cp :cost.attack.cp])))
+      active-ctxs)))
+
 (defn build-client-overlay-plan [player-uuid screen-width screen-height overlay-state]
   (let [player-state (get-client-player-state player-uuid)
         resource-data (:resource-data player-state)
@@ -882,10 +905,8 @@
         hud-model (build-hud-model-from-state player-state activated-override)
         now-ms (long (or (:now-ms overlay-state) (System/currentTimeMillis)))
         charge-state (charge-coin-visual-state player-uuid now-ms)
-        hud-model (if (and (:active? charge-state) (:coin-active? charge-state))
-                    (let [exp (double (or (skill-effects/skill-exp player-uuid :railgun) 0.0))
-                          cost (skill-config/lerp-double :railgun :cost.down.cp exp)]
-                      (assoc hud-model :consumption-hint (double cost)))
+        hud-model (if-let [active-cost (active-skill-cp-cost player-uuid)]
+                    (assoc hud-model :consumption-hint active-cost)
                     hud-model)
         cooldown-data (:cooldown-data player-state)
         activate-hint (client-keybinds/get-activate-hint player-uuid)
