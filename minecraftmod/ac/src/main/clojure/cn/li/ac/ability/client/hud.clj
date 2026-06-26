@@ -1,6 +1,7 @@
 (ns cn.li.ac.ability.client.hud
   "HUD render data builder (AC layer - no Minecraft imports)."
-  (:require [cn.li.ac.ability.registry.skill :as skill-registry]
+  (:require [cn.li.ac.ability.registry.category :as category]
+            [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.registry.skill-query :as skill-query]
             [cn.li.ac.ability.client.combat-notice :as combat-notice]
             [cn.li.ac.ability.client.read-model :as read-model]
@@ -31,7 +32,11 @@
      ;; Reserve a small right-side icon region to mimic the old cpbar_cp mask.
      :icon-cutout {:x-offset 84 :w 16}
      :bg-texture "my_mod:textures/guis/cpbar/back_normal.png"
-     :fg-texture "my_mod:textures/guis/cpbar/cp.png"}))
+     :fg-texture "my_mod:textures/guis/cpbar/cp.png"
+     :color-stops [{:pct 0.0  :r 1.0 :g 0.16 :b 0.16}   ;; red
+                   {:pct 0.35 :r 1.0 :g 0.85 :b 0.1}    ;; yellow
+                   {:pct 1.0  :r 1.0 :g 1.0  :b 1.0}]    ;; white
+     :category-icon (:category-icon model)}))
 
 (defn build-overload-bar-render-data
   "Build overload bar render data."
@@ -48,7 +53,10 @@
      :bg-texture (if fine
                    "my_mod:textures/guis/cpbar/back_normal.png"
                    "my_mod:textures/guis/cpbar/back_overload.png")
-     :fg-texture "my_mod:textures/guis/cpbar/front_overload.png"}))
+     :fg-texture "my_mod:textures/guis/cpbar/front_overload.png"
+     :color-stops [{:pct 0.0  :r 0.04 :g 0.87 :b 0.87}   ;; cyan
+                   {:pct 0.55 :r 0.14 :g 0.94 :b 0.62}   ;; greenish
+                   {:pct 1.0  :r 0.31 :g 0.96 :b 0.39}]}))  ;; pinkish-red
 
 (defn build-skill-slot-render-data
   "Build skill slot render data with cooldown info and delegate visual state."
@@ -112,24 +120,56 @@
 (defn build-hud-render-data
   "Main function to build complete HUD render data. Called by forge layer."
   [hud-model screen-width screen-height cooldown-data
-   & {:keys [player-uuid activate-hint preset-state now-ms combat-notice-component]}]
-  (let [combat-notice (build-combat-notice-data combat-notice-component now-ms)
-        preset-indicator (when preset-state
-                           (let [now (System/currentTimeMillis)]
-                             (when (> (:show-until-ms preset-state 0) now)
-                               {:type    :preset-indicator
-                                :current (:current-preset preset-state 0)
-                                :total   4
-                                :fade    (/ (double (- (:show-until-ms preset-state) now)) 2000.0)})))]
-    (when (and hud-model (or (:activated hud-model) combat-notice preset-indicator))
+   & {:keys [player-uuid activate-hint preset-state now-ms combat-notice-component
+             showing-numbers? last-show-value-change-ms]}]
+  (let [now (or now-ms (System/currentTimeMillis))
+        combat-notice (build-combat-notice-data combat-notice-component now)
+        preset-indicators (when preset-state
+                            (let [now* (System/currentTimeMillis)
+                                  remaining (- (:show-until-ms preset-state 0) now*)]
+                              (when (pos? remaining)
+                                (let [current-idx (:current-preset preset-state 0)
+                                      previous-idx (:previous-preset preset-state 0)
+                                      elapsed (- 2000.0 remaining)
+                                      ;; Previous fades out over full 2s
+                                      prev-fade (max 0.0 (- 1.0 (/ elapsed 2000.0)))
+                                      ;; Current fades in over first 500ms
+                                      curr-fade (min 1.0 (/ elapsed 500.0))]
+                                  (vec
+                                   (keep identity
+                                    (when (and (not= previous-idx current-idx) (pos? prev-fade))
+                                      {:type :preset-indicator
+                                       :current previous-idx :total 4 :fade prev-fade})
+                                    [{:type :preset-indicator
+                                      :current current-idx :total 4 :fade curr-fade}]))))))
+        ;; Flatten preset indicators for backward compat: first element in list is used as :preset-indicator
+        preset-indicator (first preset-indicators)
+        ;; Numbers display (hold V to see CP/OL values, fades in/out)
+        numbers-texts (when (and showing-numbers? hud-model)
+                        (let [dt (- (long now) (long (or last-show-value-change-ms 0)))
+                              alpha (cond (zero? (or last-show-value-change-ms 0)) 0.0
+                                          (< dt 200) 0.0
+                                          (< dt 600) (/ (double (- dt 200)) 400.0)
+                                          :else 1.0)
+                              a (int (* 255.0 alpha))]
+                          (when (pos? alpha)
+                            [{:kind :text
+                              :text (str "CP " (int (get-in hud-model [:cp :cur])) "/" (int (get-in hud-model [:cp :max])))
+                              :x 115 :y 14 :color {:r 255 :g 255 :b 255 :a a}}
+                             {:kind :text
+                              :text (str "OL " (int (get-in hud-model [:overload :cur])) "/" (int (get-in hud-model [:overload :max])))
+                              :x 115 :y 29 :color {:r 255 :g 255 :b 255 :a a}}])))]
+    (when (and hud-model (or (:activated hud-model) combat-notice preset-indicator showing-numbers?))
       {:cp-bar (when (:activated hud-model)
                  (build-cp-bar-render-data hud-model))
        :overload-bar (when (:activated hud-model)
-                       (build-overload-bar-render-data hud-model now-ms))
+                       (build-overload-bar-render-data hud-model now))
        :skill-slots (when (:activated hud-model)
                       (build-skill-slot-render-data hud-model screen-width screen-height
                                                     cooldown-data player-uuid))
        :activation-indicator (when (:activated hud-model)
                                (build-activation-indicator-data hud-model activate-hint))
        :combat-notice combat-notice
-       :preset-indicator preset-indicator})))
+       :preset-indicator preset-indicator
+       :preset-indicators preset-indicators
+       :numbers-texts numbers-texts})))

@@ -264,6 +264,7 @@
 
 (def ^:private default-preset-switch-state
   {:current-preset 0
+   :previous-preset 0
    :show-until-ms  0})
 
 (defn- preset-switch-states-atom
@@ -477,6 +478,7 @@
            switch-cmd    (cmd-builder/preset-switch-command
                            (:current-preset current-state) PRESET-COUNT)]
        (swap-preset-switch-state! owner assoc
+                                  :previous-preset (:current-preset current-state)
                                   :current-preset (:preset-idx switch-cmd)
                                   :show-until-ms (+ (System/currentTimeMillis)
                                                     PRESET-INDICATOR-DURATION-MS))

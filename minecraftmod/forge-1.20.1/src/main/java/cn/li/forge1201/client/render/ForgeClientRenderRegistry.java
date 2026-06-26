@@ -43,6 +43,7 @@ public final class ForgeClientRenderRegistry {
     private static ShaderInstance plasmaBodyShader;
     private static ShaderInstance skillProgbarShader;
     private static ShaderInstance monoShader;
+    private static ShaderInstance cpbarOverloadShader;
 
     private ForgeClientRenderRegistry() {
     }
@@ -168,6 +169,15 @@ public final class ForgeClientRenderRegistry {
                     monoShader = shader;
                 }
             );
+            // CPBar overload shader (scroll + highlight pulse effect)
+            event.registerShader(
+                new ShaderInstance(event.getResourceProvider(),
+                    new ResourceLocation(MyMod1201.MODID, "cpbar_overload"),
+                    com.mojang.blaze3d.vertex.DefaultVertexFormat.POSITION_TEX),
+                shader -> {
+                    cpbarOverloadShader = shader;
+                }
+            );
         } catch (IOException e) {
             LOGGER.error("Failed to register skill tree shaders", e);
         }
@@ -183,5 +193,9 @@ public final class ForgeClientRenderRegistry {
 
     public static ShaderInstance getMonoShader() {
         return monoShader;
+    }
+
+    public static ShaderInstance getCpbarOverloadShader() {
+        return cpbarOverloadShader;
     }
 }

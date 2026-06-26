@@ -22,6 +22,7 @@
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-manager :as ctx-mgr]
             [cn.li.ac.ability.model.preset :as preset-data]
+            [cn.li.ac.ability.registry.category :as category]
             [cn.li.ac.ability.registry.skill-query :as skill-query]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.util.resource-check :as resource-check]
@@ -794,17 +795,24 @@
 (defn- build-hud-model-from-state [player-state activated-override]
   (when player-state
     (let [resource-data (:resource-data player-state)
+          ability-data (:ability-data player-state)
           preset-data-map (:preset-data player-state)
           activated (if (contains? activated-override :value)
                       (:value activated-override)
-                      (boolean (:activated resource-data)))]
+                      (boolean (:activated resource-data)))
+          category-id (:category-id ability-data)
+          cat (when category-id (category/get-category category-id))]
       {:cp {:cur (double (or (:cur-cp resource-data) 0.0))
             :max (double (or (:max-cp resource-data) 1.0))}
        :overload {:cur (double (or (:cur-overload resource-data) 0.0))
                   :max (double (or (:max-overload resource-data) 1.0))
                   :fine (boolean (get resource-data :overload-fine true))}
        :active-slots (vec (preset-data/get-active-slots preset-data-map))
-       :activated activated})))
+       :activated activated
+       :category-id category-id
+       :category-color (:color cat)
+       :category-icon (:icon cat)
+       :interfered? (boolean (seq (:interferences resource-data)))})))
 
 (defn- hud-render-data->overlay-elements [hud-render-data screen-width screen-height]
   (let [cp-bar (some-> (:cp-bar hud-render-data) (assoc :kind :bar) (dissoc :type))
@@ -824,18 +832,21 @@
                     :status-seconds (:cooldown-seconds slot))
                   (dissoc :type :skill-icon :skill-name :in-cooldown :cooldown-seconds)))
                           (or (:skill-slots hud-render-data) []))
-        preset-indicator (some-> (:preset-indicator hud-render-data)
-                   (assoc :kind :selection-indicator
-                                        :x (int (/ screen-width 2))
-                                        :y (- screen-height 60))
-                                 (dissoc :type))
+        preset-indicators (mapv (fn [p]
+                        (-> p
+                            (assoc :kind :selection-indicator
+                                   :x (int (/ screen-width 2))
+                                   :y (- screen-height 60))
+                            (dissoc :type)))
+                      (or (:preset-indicators hud-render-data) []))
         overload-pulse (when-let [ol-bar (:overload-bar hud-render-data)]
                          (let [pct (double (or (:percent ol-bar) 0.0))]
                            (when (> pct 0.8)
                              {:kind :overload-pulse
-                              :intensity (* (- pct 0.8) 5.0)})))]
-                (vec (concat (keep identity [cp-bar overload-bar activation-indicator combat-notice preset-indicator overload-pulse])
-                 skill-slots))))
+                              :intensity (* (- pct 0.8) 5.0)})))
+        numbers-texts (or (:numbers-texts hud-render-data) [])]
+                (vec (concat (keep identity [cp-bar overload-bar activation-indicator combat-notice overload-pulse])
+                 preset-indicators skill-slots numbers-texts))))
 
 (defn- tutorial-notification-elements [screen-width screen-height now-ms]
   (try
@@ -845,9 +856,29 @@
 
 (defn build-client-overlay-plan [player-uuid screen-width screen-height overlay-state]
   (let [player-state (get-client-player-state player-uuid)
+        resource-data (:resource-data player-state)
+        ability-data (:ability-data player-state)
         activated-override {:value (if (some? (:activated-override overlay-state))
                                      (boolean (:activated-override overlay-state))
-                                     (boolean (get-in player-state [:resource-data :activated] false)))}
+                                     (boolean (get resource-data :activated false)))}
+        ;; BackgroundMask: compute target color from category / overload state
+        category-id (:category-id ability-data)
+        cat (when category-id (category/get-category category-id))
+        cat-color (:color cat)
+        overloaded? (not (get resource-data :overload-fine true))
+        activated? (boolean (get resource-data :activated false))
+        bg-mask (cond
+                  overloaded? {:r 0.82 :g 0.08 :b 0.08 :a 0.67}   ;; red, original CRL_OVERRIDE
+                  (and activated? cat-color) {:r (double (nth cat-color 0))
+                                              :g (double (nth cat-color 1))
+                                              :b (double (nth cat-color 2))
+                                              :a 0.4}
+                  :else {:r 0.0 :g 0.0 :b 0.0 :a 0.0})            ;; invisible
+        ;; Interference detection
+        interfered? (boolean (seq (:interferences resource-data)))
+        ;; Numbers display state (was previously dropped)
+        showing-numbers? (boolean (:showing-numbers? overlay-state false))
+        last-show-value-change-ms (long (or (:last-show-value-change-ms overlay-state) 0))
         hud-model (build-hud-model-from-state player-state activated-override)
         now-ms (long (or (:now-ms overlay-state) (System/currentTimeMillis)))
         charge-state (charge-coin-visual-state player-uuid now-ms)
@@ -864,6 +895,8 @@
                          :player-uuid player-uuid
                          :activate-hint activate-hint
                          :preset-state preset-state
+                         :showing-numbers? showing-numbers?
+                         :last-show-value-change-ms last-show-value-change-ms
                          :now-ms (long (or (:now-ms overlay-state) (System/currentTimeMillis))))
         base-elements (hud-render-data->overlay-elements hud-render-data screen-width screen-height)
         current-charging-elements (current-charging-overlay-elements player-uuid screen-width screen-height)
@@ -882,7 +915,9 @@
     {:elements (vec (concat base-elements current-charging-elements vm-wave (keep identity [crosshair])
                             (toast/build-toast-elements screen-width screen-height now-ms)
                             (tutorial-notification-elements screen-width screen-height now-ms)
-                            (debug-overlay/build-debug-overlay-elements player-state)))}))
+                            (debug-overlay/build-debug-overlay-elements player-state)))
+     :background-mask bg-mask
+     :interfered? interfered?}))
 
 (defn- on-context-channel-push! [{:keys [ctx-id channel payload]}]
   (fx-registry/dispatch-fx-channel! ctx-id channel payload)
