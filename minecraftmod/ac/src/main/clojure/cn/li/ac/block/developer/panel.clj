@@ -19,6 +19,7 @@
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.i18n :as i18n]
+            [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.ac.config.modid :as modid]
             [cn.li.ac.gui.tech-ui-common :as tech-ui]
             [cn.li.ac.ability.registry.category :as acat]
@@ -528,7 +529,10 @@
 ;; ============================================================================
 
 (def ^:private skill-tree-creation-time (atom nil))
-(def ^:private skill-tree-hover (atom {:idx nil :start 0}))
+(def ^:private skill-tree-hover (atom {:hover-idx nil :prev-idx nil :start 0}))
+
+(defn- clamp01 [x] (max 0.0 (min 1.0 (double x))))
+(defn- lerp [a b t] (+ a (* (- b a) (clamp01 t))))
 
 ;; Upstream constants
 (def ^:private widget-size 16)
@@ -539,7 +543,6 @@
 (def ^:private prog-align (/ (- total-size prog-sz) 2))
 (def ^:private icon-align (/ (- total-size icon-sz) 2))
 
-(defn- clamp01 [x] (max 0.0 (min 1.0 (double x))))
 
 (defn- back-alpha [anim-time idx m-alpha]
   (* m-alpha (clamp01 (* (- anim-time (* idx 0.08) 0.1) 10.0))))
@@ -570,7 +573,7 @@
         norm (Math/sqrt (+ (* dx dx) (* dy dy)))]
     (when (pos? norm)
       (let [ndx (/ dx norm) ndy (/ dy norm)
-            line-alpha (* lb (or m-alpha 0.7) (if child-learned? 1.0 0.4))
+            line-alpha (* (or m-alpha 0.7) (if child-learned? 1.0 0.4))  ;; upstream: no lineBlend in alpha, only in geometry
             alpha-byte (int (* 255.0 line-alpha))
             color (bit-or (bit-shift-left alpha-byte 24) 0xFFFFFF)
             x0 (+ from-x (* ndx 12.2)) y0 (+ from-y (* ndy 12.2))
@@ -656,11 +659,13 @@
             (cgui-core/add-widget! area-widget click-w)))))))
 
 (defn- render-skill-tree-area!
-  "Render skill tree nodes in parent_right/area."
+  "Render skill tree nodes in parent_right/area.
+  Upstream: SkillTree.scala Common.initialize → area FrameEvent + per-skill widgets."
   [root area-widget container player]
   (cgui-core/clear-widgets! area-widget)
   (try
-    (let [uuid-str (when player (uuid/player-uuid player))
+    (let [now (client-bridge/game-time-ms)                 ;; game-time — pauses with ESC
+          uuid-str (when player (uuid/player-uuid player))
           session-id (runtime-hooks/require-player-state-session-id "developer.panel")
           pstate (when uuid-str (store/get-player-state* session-id uuid-str))
           dev-type (current-developer-type container)
@@ -668,13 +673,16 @@
           nodes (:skill-nodes render-data)
           connections (:connections render-data)
           _ (when (nil? @skill-tree-creation-time)
-              (reset! skill-tree-creation-time (System/currentTimeMillis)))
-          anim-time (/ (- (System/currentTimeMillis) @skill-tree-creation-time) 1000.0)
+              (reset! skill-tree-creation-time now))
+          anim-time (/ (- now @skill-tree-creation-time) 1000.0)
           [mx my] (cn.li.mcmod.client.platform-bridge/get-mouse-pos)
           area-w 257 area-h 139
-          parallax-x (* (- (/ mx (max 1.0 (double area-w))) 0.5) 10.0)
-          parallax-y (* (- (/ my (max 1.0 (double area-h))) 0.5) 10.0)]
+          ;; Parallax offsets (upstream: clampf(0,1,mouseX/width) - 0.5) * max_du_skills
+          parallax-x (* (- (clamp01 (/ mx (max 1.0 (double area-w)))) 0.5) 10.0)
+          parallax-y (* (- (clamp01 (/ my (max 1.0 (double area-h)))) 0.5) 10.0)]
       (draw-background! area-widget)
+      ;; Connection lines (rendered per-node with depth context in the full-screen
+      ;; skill tree; in the panel we draw them before nodes for correct layering)
       (doseq [conn connections]
         (draw-connection-line! area-widget
           (assoc conn
@@ -683,8 +691,10 @@
             :to-x   (- (:to-x conn) parallax-x)
             :to-y   (- (:to-y conn) parallax-y))
           anim-time))
-      ;; Hover detection: node center = (x + WidgetSize/2 - parallax, y + WidgetSize/2 - parallax)
-      ;; Original: widget at (sx,sy) size 16×16, center = (sx+8, sy+8) with parallax applied
+      ;; Hover detection — matching upstream per-widget StateIdle/StateHover FSM
+      ;; Each node independently computes its scale based on whether it's the
+      ;; currently hovered node (:hover-idx) or the previously hovered (:prev-idx).
+      ;; TransitTime = 0.1s (upstream constant).
       (let [closest-node (when (seq nodes)
                            (apply min-key
                              (fn [n]
@@ -697,24 +707,26 @@
                                cy (+ (:y closest-node) (/ widget-size 2) (- parallax-y))]
                            (Math/sqrt (+ (* (- mx cx) (- mx cx)) (* (- my cy) (- my cy))))))
             hover-idx (:idx closest-node)
-            hover-now? (and closest-node (< (or hover-dist 999) 20))]
-        ;; Update hover atom for scale animation (upstream: transit 0.1s)
+            hover-now? (and closest-node (< (or hover-dist 999) 20))
+            prev-idx (:hover-idx @skill-tree-hover)]
+        ;; Update hover atom with direction-aware transition (upstream: StateIdle↔StateHover)
         (if hover-now?
-          (when (not= hover-idx (:idx @skill-tree-hover))
-            (reset! skill-tree-hover {:idx hover-idx :start (System/currentTimeMillis)}))
-          (when (:idx @skill-tree-hover)
-            (reset! skill-tree-hover {:idx nil :start 0})))
-        (let [hover-idx (:idx @skill-tree-hover)
+          (when (not= hover-idx prev-idx)
+            (reset! skill-tree-hover {:hover-idx hover-idx :prev-idx prev-idx :start now}))
+          (when prev-idx
+            (reset! skill-tree-hover {:hover-idx nil :prev-idx prev-idx :start now})))
+        (let [hover-idx (:hover-idx @skill-tree-hover)
+              unhover-idx (:prev-idx @skill-tree-hover)
               hover-start (:start @skill-tree-hover)
-              hover-transit (clamp01 (/ (- (System/currentTimeMillis) hover-start) 100.0))]
+              hover-transit (clamp01 (/ (- now hover-start) 100.0))]   ;; 100ms = 0.1s TransitTime
           (doseq [node nodes]
             (when (and (:skill-id node) (:x node) (:y node))
               (let [node-hovered? (= (:idx node) hover-idx)
-                    node-scale (if node-hovered?
-                                 (+ 1.0 (* 0.2 hover-transit))    ;; 1.0 → 1.2
-                                 (if (= (:idx node) (:idx @skill-tree-hover))
-                                   (- 1.2 (* 0.2 hover-transit))  ;; 1.2 → 1.0
-                                   1.0))]
+                    node-unhovering? (and (nil? hover-idx) (= (:idx node) unhover-idx))
+                    node-scale (cond
+                                 node-hovered?     (lerp 1.0 1.2 hover-transit)   ;; StateHover: 1.0→1.2
+                                 node-unhovering?  (lerp 1.2 1.0 hover-transit)   ;; StateIdle:  1.2→1.0
+                                 :else             1.0)]
                 (draw-skill-node! root area-widget container node anim-time parallax-x parallax-y dev-type node-scale)))))))
     (catch Exception e
       (log/error "Skill tree render failed:" (ex-message e))
