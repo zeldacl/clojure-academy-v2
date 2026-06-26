@@ -155,12 +155,20 @@
         ;; since the vector is built as [previous current] during transitions).
         preset-indicator (last preset-indicators)
         ;; Numbers display (hold V to see CP/OL values, fades in/out)
-        numbers-texts (when (and showing-numbers? hud-model)
-                        (let [dt (- (long now) (long (or last-show-value-change-ms 0)))
-                              alpha (cond (zero? (or last-show-value-change-ms 0)) 0.0
-                                          (< dt 200) 0.0
-                                          (< dt 600) (/ (double (- dt 200)) 400.0)
-                                          :else 1.0)
+        ;; Original AcademyCraft: fade in over ~400ms on press, fade out over ~600ms on release.
+        numbers-texts (when hud-model
+                        (let [last-change (long (or last-show-value-change-ms 0))
+                              dt (- (long now) last-change)
+                              alpha (if showing-numbers?
+                                      ;; Fade in: 200ms delay, then 400ms ramp to full
+                                      (cond (zero? last-change) 0.0
+                                            (< dt 200) 0.0
+                                            (< dt 600) (/ (double (- dt 200)) 400.0)
+                                            :else 1.0)
+                                      ;; Fade out: 600ms linear decay from full to transparent
+                                      (cond (zero? last-change) 0.0
+                                            (< dt 600) (- 1.0 (/ (double dt) 600.0))
+                                            :else 0.0))
                               a (int (* 255.0 alpha))]
                           (when (pos? alpha)
                             [{:kind :text
@@ -169,7 +177,11 @@
                              {:kind :text
                               :text (str "OL " (int (get-in hud-model [:overload :cur])) "/" (int (get-in hud-model [:overload :max])))
                               :x 115 :y 29 :color {:r 255 :g 255 :b 255 :a a}}])))]
-    (when (and hud-model (or (:activated hud-model) combat-notice preset-indicator showing-numbers?))
+    (when (and hud-model (or (:activated hud-model) combat-notice preset-indicator
+                             showing-numbers?
+                             ;; During fade-out: showing-numbers? is false but numbers
+                             ;; still need to render with decaying alpha.
+                             (pos? (long (or last-show-value-change-ms 0)))))
       {:cp-bar (when (:activated hud-model)
                  (build-cp-bar-render-data hud-model))
        :overload-bar (when (:activated hud-model)
