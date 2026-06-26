@@ -35,7 +35,7 @@
   [widget-name]
   (let [parse! (fn []
                  (try
-                   (let [xml-ns (or (requiring-resolve 'cn.li.mcmod.gui.xml-parser)
+                   (let [xml-ns (or (requiring-resolve 'cn.li.mcmod.gui.xml-parser/read-xml)
                                     (do (log/warn "xml-parser namespace not found, trying require...")
                                         (try (require 'cn.li.mcmod.gui.xml-parser)
                                              (requiring-resolve 'cn.li.mcmod.gui.xml-parser/read-xml)
