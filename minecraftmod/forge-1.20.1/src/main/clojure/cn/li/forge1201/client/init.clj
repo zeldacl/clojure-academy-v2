@@ -19,6 +19,7 @@
             [cn.li.mc1201.client.render.buffer :as buffer-impl]
             [cn.li.mc1201.client.screen.host :as screen-host]
             [cn.li.mc1201.client.request.bridge :as request-bridge]
+            [cn.li.mc1201.gui.cgui.draw-ops-host :as draw-ops-host]
             [cn.li.forge1201.client.runtime-bridge :as runtime-bridge]
             [cn.li.forge1201.client.key-input :as key-input]
             [cn.li.forge1201.client.overlay-renderer :as overlay-renderer]
@@ -211,7 +212,7 @@
                          (let [^net.minecraft.client.Minecraft mc (Minecraft/getInstance)]
                            [(.getGuiScaledWidth mc) (.getGuiScaledHeight mc)]))
        :draw-ops-host! (fn [parent ops-fn]
-                         (cn.li.mc1201.gui.cgui.draw-ops-host/draw-ops-host! parent ops-fn))}))
+                         (draw-ops-host/draw-ops-host! parent ops-fn))}))
 
 (defn register-key-mappings!
   "Register all runtime KeyMapping instances to Forge input system."
