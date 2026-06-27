@@ -149,6 +149,14 @@
    :texture-1 texture-1
    :progress (float progress)})
 
+(defn draw-ops
+  "Host component for draw-ops rendering.
+   Stores an ops-fn (fn [] ops-vector) called each render frame.
+   Rendered by the :draw-ops dispatch in renderer.clj."
+  [{:keys [ops-fn]}]
+  {:kind :draw-ops
+   :state (atom {:ops-fn ops-fn})})
+
 (defn mono-blend
   "Replicates LambdaLib2 Colors.monoBlend.
    Returns an ARGB int from a grayscale value and an alpha.

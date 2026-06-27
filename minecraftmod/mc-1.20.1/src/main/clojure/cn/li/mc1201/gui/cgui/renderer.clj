@@ -9,6 +9,7 @@
             [cn.li.mc1201.gui.cgui.traversal :as traversal]
             [cn.li.mcmod.gui.components :as gui-comp]
             [cn.li.mcmod.client.platform-bridge :as platform-bridge]
+            [cn.li.mc1201.gui.cgui.draw-ops-host :as draw-ops-host]
             [cn.li.mcmod.util.log :as log])
   (:import (net.minecraft.client Minecraft)
            (net.minecraft.client.gui GuiGraphics Font)
@@ -505,6 +506,13 @@
                   (blit-scaled-region! gg tex-0 x y w-int h-int 0 0 w-int h-int 0.0 w-int h-int)
                   (catch Exception _))
                 (.fill gg x y (+ x w-int) (+ y h-int) 0xFF2A2A2A))))
+
+          (kind-matches? kind :draw-ops)
+          (when-let [ops-fn (:ops-fn state)]
+            (try
+              (draw-ops-host/render-ops! gg (ops-fn))
+              (catch Exception e
+                (log/debug "CGUI draw-ops render error:" (.getMessage e)))))
 
           :else nil)))))
 
