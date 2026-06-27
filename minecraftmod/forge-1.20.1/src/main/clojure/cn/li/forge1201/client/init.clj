@@ -192,12 +192,21 @@
        :game-time-ms (fn []
                        (if-let [^net.minecraft.client.Minecraft mc (Minecraft/getInstance)]
                          (if-let [level (.level mc)]
-                           (* (.getGameTime level) 50)
+                           ;; Include partial tick for sub-tick smoothness
+                           ;; (upstream GameTimer.getTime = worldTime + partialTick)
+                           (long (+ (* (.getGameTime level) 50)
+                                    (* (double (.getFrameTime mc)) 50.0)))
                            (System/currentTimeMillis))
                          (System/currentTimeMillis)))
        :font-width (fn [^String text]
                      (let [^net.minecraft.client.Minecraft mc (Minecraft/getInstance)]
-                       (.width (.-font mc) text)))}))
+                       (.width (.-font mc) text)))
+       :resolve-shader (fn [shader-name]
+                         (case shader-name
+                           :skill-progbar (cn.li.forge1201.client.render.ModShaders/getSkillProgbarShader)
+                           :mono (cn.li.forge1201.client.render.ModShaders/getMonoShader)
+                           :alpha-discard (cn.li.forge1201.client.render.ModShaders/getAlphaDiscardShader)
+                           nil))}))
 
 (defn register-key-mappings!
   "Register all runtime KeyMapping instances to Forge input system."

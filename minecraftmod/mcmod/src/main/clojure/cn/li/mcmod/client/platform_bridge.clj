@@ -19,7 +19,7 @@
            movement-key-down movement-key-tick movement-key-up
            open-screen open-simple-gui run-client-effect
            get-client-player screen-active? close-screen!
-           send-system-message! get-mouse-pos game-time-ms font-width]}]
+           send-system-message! get-mouse-pos game-time-ms font-width resolve-shader]}]
   (prt/install-impl! #'*client-bridge-ops*
                      {:slot-key-down slot-key-down
                       :slot-key-tick slot-key-tick
@@ -37,7 +37,8 @@
                       :send-system-message! send-system-message!
                       :get-mouse-pos get-mouse-pos
                       :game-time-ms game-time-ms
-                      :font-width font-width}
+                      :font-width font-width
+                      :resolve-shader resolve-shader}
                      "client-bridge")
   nil)
 
@@ -165,3 +166,10 @@
   [^String text]
   (or (bridge-op :font-width text)
       (* 6 (count text))))
+
+(defn resolve-shader
+  "Resolve a ShaderInstance by keyword name.
+   Returns a ShaderInstance or nil if the shader is not loaded.
+   Falls back to nil if the bridge is not installed."
+  [shader-name]
+  (bridge-op :resolve-shader shader-name))

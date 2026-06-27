@@ -422,7 +422,11 @@
 ;; ============================================================================
 ;; Main draw ops builder
 ;; ============================================================================
-(defn build-draw-ops [owner _mx _my]
+(defn build-draw-ops [owner mx my screen-w screen-h]
+  "Build draw ops for the skill tree screen.
+   mx, my are the CURRENT mouse position passed by the host every frame
+   (matching upstream: gui.getMouseX/gui.getMouseY read in FrameEvent).
+   screen-w, screen-h are the actual screen dimensions from the host Screen."
   (if-let [rd (build-screen-render-data owner)]
     (let [st (screen-state-snapshot owner)
           ct (:creation-time st)
@@ -430,10 +434,14 @@
           ab (:ability-info rd)
 
           ;; Parallax background — matching upstream: scale(dx*max_du), scale(dy*max_du)
-          mx (clamp01 (/ (:mouse-x st 0) (max 1.0 (double 420))))
-          my (clamp01 (/ (:mouse-y st 0) (max 1.0 (double 260))))
-          bg-dx (* (- mx 0.5) 0.01)
-          bg-dy (* (- my 0.5) 0.01)
+          ;; Use mx,my from host (live frame-current position), NOT stored state.
+          ;; Use actual screen dimensions (like upstream gui.getWidth/getHeight).
+          sw (max 1.0 (double (or screen-w 420)))
+          sh (max 1.0 (double (or screen-h 260)))
+          mx01 (clamp01 (/ (double mx) sw))
+          my01 (clamp01 (/ (double my) sh))
+          bg-dx (* (- mx01 0.5) 0.01)
+          bg-dy (* (- my01 0.5) 0.01)
           bg-scale-fn (fn [x] (+ (* (- x 0.5) back-scale-inv) 0.5))
           bg-u (bg-scale-fn bg-dx)
           bg-v (bg-scale-fn bg-dy)
@@ -452,8 +460,8 @@
                       {:kind :text :x 18 :y 206 :text "Level Up" :font :ac-normal :font-size 9 :align :center :color 0xFFFFFFFF}])
 
           ;; Parallax offsets for skill nodes (upstream: clampf(0,1,mouseX/width) - 0.5) * max_du_skills
-          node-dx (* (- (clamp01 (/ (:mouse-x st 0) (max 1.0 (double 420)))) 0.5) 10.0)
-          node-dy (* (- (clamp01 (/ (:mouse-y st 0) (max 1.0 (double 260)))) 0.5) 10.0)
+          node-dx (* (- mx01 0.5) 10.0)
+          node-dy (* (- my01 0.5) 10.0)
 
           ;; Animated connection lines — grouped by child node's index.
           ;; Rendered inside each node's depth context with glDepthFunc(GL_NOTEQUAL),

@@ -1313,11 +1313,11 @@
               nil))))
 
      :client-build-managed-screen-draw-ops
-     (fn [screen-key mouse-x mouse-y]
+     (fn [screen-key mouse-x mouse-y screen-w screen-h]
        (call-with-managed-screen-runtime
          #(if-let [owner (active-managed-screen-owner screen-key)]
             (condp = screen-key
-              :ac/skill-tree (skill-tree-screen/build-draw-ops owner mouse-x mouse-y)
+              :ac/skill-tree (skill-tree-screen/build-draw-ops owner mouse-x mouse-y screen-w screen-h)
               :ac/preset-editor (build-preset-editor-draw-ops owner)
               []))))
 

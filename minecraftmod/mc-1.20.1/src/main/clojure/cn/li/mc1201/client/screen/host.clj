@@ -4,7 +4,7 @@
             [cn.li.mcmod.config :as mcmod-config]
             [cn.li.mcmod.hooks.core :as client-ui]
             [cn.li.mcmod.util.log :as log]
-            [cn.li.mc1201.client.render.shader-utils :as shader-utils]
+            [cn.li.mcmod.client.platform-bridge :as platform-bridge]
             [clojure.string :as str])
   (:import [net.minecraft.client.gui.screens Screen]
            [net.minecraft.client.gui GuiGraphics Font]
@@ -238,7 +238,7 @@
     ;; --- Shader-based progress ring (skill-progbar shader) ---
     ;; Uses BufferBuilder to avoid blit() which overrides custom shaders.
     :shader-progress-ring
-    (let [^ShaderInstance si (shader-utils/resolve-shader (:shader-id op))
+    (let [^ShaderInstance si (platform-bridge/resolve-shader (:shader-id op))
           tex-0-key (:texture-0 op)
           tex-1-key (:texture-1 op)
           loc-0 (if (keyword? tex-0-key) (get-skill-tree-texture tex-0-key)
@@ -266,7 +266,7 @@
     (let [tex-key (:texture op)
           loc (if (keyword? tex-key) (get-skill-tree-texture tex-key)
                   (path->resource-location tex-key))
-          ^ShaderInstance si (shader-utils/resolve-shader :mono)]
+          ^ShaderInstance si (platform-bridge/resolve-shader :mono)]
       (if (and si loc)
         (do
           (.setSampler si "TexSampler0" loc)
@@ -284,7 +284,7 @@
     (let [tex-key (:texture op)
           loc (if (keyword? tex-key) (get-skill-tree-texture tex-key)
                   (path->resource-location tex-key))
-          ^ShaderInstance si (shader-utils/resolve-shader :alpha-discard)
+          ^ShaderInstance si (platform-bridge/resolve-shader :alpha-discard)
           threshold (float (or (:alpha-threshold op) 0.3))]
       (when (and si loc)
         (.setSampler si "TexSampler0" loc)
@@ -299,7 +299,7 @@
         (RenderSystem/setShader (reify java.util.function.Supplier (get [_] nil)))
         (GL11/glColorMask true true true true)))
     ;; --- Set/clear custom shader (for multi-step shader operations) ---
-    :set-shader (let [^ShaderInstance si (shader-utils/resolve-shader (:shader-id op))]
+    :set-shader (let [^ShaderInstance si (platform-bridge/resolve-shader (:shader-id op))]
                   (when si
                     (.setSampler si "TexSampler0" (if (keyword? (:texture-0 op))
                                                     (get-skill-tree-texture (:texture-0 op))
@@ -391,8 +391,11 @@
                     (create-host-screen
                       title
                       (fn [mouse-x mouse-y]
-                        (with-client-session captured-session-id
-                          #(client-ui/client-build-managed-screen-draw-ops screen-key mouse-x mouse-y)))
+                        (let [^Minecraft mc (Minecraft/getInstance)
+                              w (.getGuiScaledWidth mc)
+                              h (.getGuiScaledHeight mc)]
+                          (with-client-session captured-session-id
+                            #(client-ui/client-build-managed-screen-draw-ops screen-key mouse-x mouse-y (int w) (int h)))))
                       (fn [mouse-x mouse-y]
                         (with-client-session captured-session-id
                           #(client-ui/client-handle-managed-screen-click! screen-key mouse-x mouse-y)))

@@ -8,7 +8,7 @@
             [cn.li.mc1201.gui.cgui.assets :as assets]
             [cn.li.mc1201.gui.cgui.traversal :as traversal]
             [cn.li.mcmod.gui.components :as gui-comp]
-            [cn.li.mc1201.client.render.shader-utils :as shader-utils]
+            [cn.li.mcmod.client.platform-bridge :as platform-bridge]
             [cn.li.mcmod.util.log :as log])
   (:import (net.minecraft.client Minecraft)
            (net.minecraft.client.gui GuiGraphics Font)
@@ -296,7 +296,7 @@
           (let [t0 (:texture-0 state) t1 (:texture-1 state)
                 tex-loc-0 (ensure-resource-location t0)
                 tex-loc-1 (ensure-resource-location t1)
-                ^ShaderInstance si (shader-utils/resolve-shader :skill-progbar)
+                ^ShaderInstance si (platform-bridge/resolve-shader :skill-progbar)
                 progress (float (or (:progress state) 0.0))]
             (when (and si tex-loc-0 tex-loc-1)
               (try
@@ -454,7 +454,7 @@
           nil
 
           (kind-matches? kind :shader-quad)
-          (let [shader (shader-utils/resolve-shader (or (:shader-id state) :skill-progbar))
+          (let [shader (platform-bridge/resolve-shader (or (:shader-id state) :skill-progbar))
                 tex-0 (ensure-resource-location (:texture-0 state))
                 tex-1 (ensure-resource-location (:texture-1 state))
                 progress (float (or (:progress state) 0.0))]

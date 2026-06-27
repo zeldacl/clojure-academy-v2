@@ -102,7 +102,7 @@
                   i18n/*translate-fn* (fn [k] (get translate-map (str k) (str k)))]
             (screen/open-screen! "player-1")
             (screen/on-mouse-move "player-1" 30 110)
-      (let [texts (->> (screen/build-draw-ops "player-1" 0 0)
+      (let [texts (->> (screen/build-draw-ops "player-1" 0 0 420 260)
                        (filter #(= :text (:kind %)))
                        (map :text)
                        set)]
