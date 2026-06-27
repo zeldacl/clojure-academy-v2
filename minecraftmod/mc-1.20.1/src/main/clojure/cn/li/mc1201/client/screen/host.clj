@@ -13,7 +13,7 @@
            [net.minecraft.client.renderer ShaderInstance]
            [net.minecraft.resources ResourceLocation]
            [com.mojang.blaze3d.systems RenderSystem]
-           [com.mojang.blaze3d.vertex DefaultVertexFormat VertexFormat
+           [com.mojang.blaze3d.vertex DefaultVertexFormat VertexFormat VertexFormat$Mode
             Tesselator BufferBuilder BufferUploader PoseStack$Pose]
            [org.joml Matrix4f]
            [org.lwjgl.opengl GL11]))
@@ -79,7 +79,7 @@
   and restore it afterwards. Texture must be bound via .setSampler on the shader instance.
 
   Uses BufferBuilder + BufferUploader (the MC 1.20.1 recommended path for custom shaders)."
-  [^GuiGraphics graphics poseStack ^ShaderInstance si loc-0 loc-1 ^double x ^double y ^double w ^double h]
+  [^GuiGraphics graphics poseStack ^ShaderInstance si loc-0 loc-1 x y w h]
   (let [^PoseStack$Pose entry (.last poseStack)
         ^Matrix4f pose-matrix (.pose entry)
         ^Tesselator tess (Tesselator/getInstance)
