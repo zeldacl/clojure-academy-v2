@@ -174,6 +174,47 @@
 - 目标：禁止在命名空间顶层触发 Minecraft registry/bootstrap 相关访问，避免 `IllegalArgumentException: Not bootstrapped`。
 - 静态门禁：`verifyAotBootstrapSafety`（`tools/aot-linter/aot_safety.clj` + `docs/dev/aot-linter-allowlist.edn`）。
 
+### AOT 跨 namespace 引用规则（强制）
+
+当 `clojurephant` 执行 AOT 编译时，会将多个源目录（如 `forge-1.20.1/src/main/clojure` 与 `mc-1.20.1/src/main/clojure`）的所有 namespace 合并为一个批次传给 `clojure.lang.Compile`。批次内的编译顺序由 clojurephant 决定，**不保证** namespace 按依赖拓扑排序。
+
+**关键差异**：AOT 编译器对两种引用使用不同的解析机制：
+
+| 引用方式 | 解析路径 | 能找 `.clj` 源文件？ |
+|---------|---------|-------------------|
+| `:require`（ns 表单） | `require` → `RT.load()` | ✅ 是（从 classpath 源目录查找） |
+| 内联全限定调用 `some.ns/fn` | `Class.forName()` | ❌ 否（只查找 `.class` 文件） |
+
+**后果**：若 namespace A 使用内联全限定调用引用 namespace B（如 `cn.li.mc1201.gui.cgui.draw-ops-host/draw-ops-host!`），而 B 在编译批次中排在 A 之后，A 编译时 B 的 `.class` 尚未生成，则抛出 `ClassNotFoundException`。
+
+**强制规则**：
+
+- **所有被引用的 namespace 必须显式 `:require`**，即使仅通过全限定名间接调用也须如此。
+- 禁止依赖编译批次顺序使内联引用"恰好"编译通过——不同环境/版本下顺序可能变化。
+- 反例（禁止）：
+  ```clojure
+  ;; init.clj — 未 require draw-ops-host 直接内联调用
+  (ns cn.li.forge1201.client.init
+    (:require ...))  ;; 缺少 [cn.li.mc1201.gui.cgui.draw-ops-host :as draw-ops-host]
+  
+  (defn register-bridge [...]
+    {:draw-ops-host! (fn [parent ops-fn]
+                       (cn.li.mc1201.gui.cgui.draw-ops-host/draw-ops-host! parent ops-fn))})
+  ```
+- 正例（必须）：
+  ```clojure
+  (ns cn.li.forge1201.client.init
+    (:require ...
+              [cn.li.mc1201.gui.cgui.draw-ops-host :as draw-ops-host]  ;; 显式 require
+              ...))
+  
+  (defn register-bridge [...]
+    {:draw-ops-host! (fn [parent ops-fn]
+                       (draw-ops-host/draw-ops-host! parent ops-fn))})  ;; 使用别名
+  ```
+
+**排查方法**：遇到 `Syntax error (ClassNotFoundException) compiling at (…:N:N). some.namespace.name` 时，检查报错位置是否有未 `:require` 的内联全限定引用。
+
 ### Clojure 设计与实现原则（强制）
 
 编写或修改 `mcmod` / `ac` / 平台 Clojure 代码时遵守：
