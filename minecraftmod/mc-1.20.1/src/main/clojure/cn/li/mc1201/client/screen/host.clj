@@ -76,7 +76,8 @@
   which forcibly sets GameRenderer/positionTexShader, overriding any custom shader.
 
   The caller must set the desired shader via RenderSystem/setShader BEFORE calling this,
-  and restore it afterwards. Texture must be bound via .setSampler on the shader instance.
+  and restore it afterwards. Samplers must be set via .setSampler on the shader instance
+  BEFORE calling setShader (MC 1.20.1 requires setSampler before setShader).
 
   Uses BufferBuilder + BufferUploader (the MC 1.20.1 recommended path for custom shaders)."
   [^GuiGraphics graphics poseStack ^ShaderInstance si loc-0 loc-1 x y w h]
@@ -89,6 +90,8 @@
         z (float 0)
         u0 (float 0.0) v0 (float 0.0) u1 (float 1.0) v1 (float 1.0)]
     (RenderSystem/setShaderTexture 0 loc-0)
+    (when loc-1
+      (RenderSystem/setShaderTexture 1 loc-1))
     (.begin bb VertexFormat$Mode/QUADS DefaultVertexFormat/POSITION_TEX)
     (.vertex bb pose-matrix x1 y2 z) (.uv u0 v1) (.endVertex bb)
     (.vertex bb pose-matrix x2 y2 z) (.uv u1 v1) (.endVertex bb)
@@ -197,29 +200,41 @@
                                    (float (or (:max-u op) (+ (or (:u op) 0.0) (or (:tex-w op) 1.0))))
                                    (float (or (:min-v op) (:v op) 0.0))
                                    (float (or (:max-v op) (+ (or (:v op) 0.0) (or (:tex-h op) 1.0)))))))
-    ;; --- Connection line (textured quad rotated along line direction) ---
-    :rotated-quad (let [^ResourceLocation tex (get-skill-tree-texture :tex-line)
-                        x0 (double (:x0 op)) y0 (double (:y0 op))
-                        x1 (double (:x1 op)) y1 (double (:y1 op))
-                        line-w (double (:line-width op 5.5))
-                        color (int (or (:color op) 0xFFFFFFFF))]
-                    (when (and tex (pos? color))
-                      (let [dx (- x1 x0) dy (- y1 y0)
-                            norm (Math/sqrt (+ (* dx dx) (* dy dy)))
-                            half-w (/ line-w 2.0)
-                            angle (Math/atan2 dy dx)]
-                        (.pushPose poseStack)
-                        (.translate poseStack x0 y0 0.0)
-                        (.mulPose poseStack (org.joml.Quaternionf. (org.joml.AxisAngle4f. (float angle) 0.0 0.0 1.0)))
-                        (RenderSystem/setShaderColor (float (/ (bit-and (bit-shift-right color 16) 0xFF) 255.0))
-                                                     (float (/ (bit-and (bit-shift-right color 8) 0xFF) 255.0))
-                                                     (float (/ (bit-and color 0xFF) 255.0))
-                                                     (float (/ (bit-and (bit-shift-right color 24) 0xFF) 255.0)))
-                        (RenderSystem/enableBlend)
-                        (RenderSystem/defaultBlendFunc)
-                        (.blit graphics tex 0 (int (- half-w)) 0 0 (int norm) (int line-w) (int norm) (int line-w))
-                        (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0)
-                        (.popPose poseStack))))
+    ;; --- Connection line (textured quad, matching upstream drawLine) ---
+    ;; Upstream uses glVertex2d with double precision and texture (0,0)→(1,1) stretched.
+    ;; Previous rotated-quad approach used blit() which truncates to int and
+    ;; maps texture 1:1, causing visible stepping/segmentation at rotation angles.
+    ;; BufferBuilder with float vertices and normalized UVs fixes this.
+    :line-quad (let [^ResourceLocation tex (get-skill-tree-texture :tex-line)
+                     x0 (double (:x0 op)) y0 (double (:y0 op))
+                     x1 (double (:x1 op)) y1 (double (:y1 op))
+                     line-w (double (:line-width op 5.5))
+                     color (int (or (:color op) 0xFFFFFFFF))
+                     alpha (double (/ (bit-and (bit-shift-right color 24) 0xFF) 255.0))]
+                 (when (and tex (pos? alpha) (pos? color))
+                   (let [dx (- x1 x0) dy (- y1 y0)
+                         norm (Math/sqrt (+ (* dx dx) (* dy dy)))]
+                     (when (pos? norm)
+                       (let [half-w (/ line-w 2.0)
+                             ;; Perpendicular normal (matching upstream drawLine)
+                             nx (* (/ (- dy) norm) half-w)
+                             ny (* (/ dx norm) half-w)
+                             ^PoseStack$Pose entry (.last poseStack)
+                             ^Matrix4f pose-matrix (.pose entry)
+                             ^Tesselator tess (Tesselator/getInstance)
+                             ^BufferBuilder bb (.getBuilder tess)]
+                         (RenderSystem/setShaderColor 1.0 1.0 1.0 (float alpha))
+                         (RenderSystem/enableBlend)
+                         (RenderSystem/defaultBlendFunc)
+                         (RenderSystem/setShaderTexture 0 tex)
+                         (.begin bb VertexFormat$Mode/QUADS DefaultVertexFormat/POSITION_TEX)
+                         ;; Vertices matching upstream drawLine: 0,0→1,1 UV stretched
+                         (.vertex bb pose-matrix (float (- x0 nx)) (float (- y0 ny)) 0.0) (.uv 0.0 0.0) (.endVertex bb)
+                         (.vertex bb pose-matrix (float (+ x0 nx)) (float (+ y0 ny)) 0.0) (.uv 0.0 1.0) (.endVertex bb)
+                         (.vertex bb pose-matrix (float (+ x1 nx)) (float (+ y1 ny)) 0.0) (.uv 1.0 1.0) (.endVertex bb)
+                         (.vertex bb pose-matrix (float (- x1 nx)) (float (- y1 ny)) 0.0) (.uv 1.0 0.0) (.endVertex bb)
+                         (BufferUploader/drawWithShader (.end bb))
+                         (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0))))))
     ;; --- Shader-based progress ring (skill-progbar shader) ---
     ;; Uses BufferBuilder to avoid blit() which overrides custom shaders.
     :shader-progress-ring

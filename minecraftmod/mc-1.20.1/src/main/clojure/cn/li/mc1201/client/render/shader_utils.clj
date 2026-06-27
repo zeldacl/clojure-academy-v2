@@ -22,6 +22,8 @@
                                (.invoke nil (into-array Object [])))
         :mono (some-> (.getDeclaredMethod mod-shaders-class "getMonoShader" (into-array Class []))
                       (.invoke nil (into-array Object [])))
+        :alpha-discard (some-> (.getDeclaredMethod mod-shaders-class "getAlphaDiscardShader" (into-array Class []))
+                               (.invoke nil (into-array Object [])))
         nil))
     (catch Exception _
       nil)))

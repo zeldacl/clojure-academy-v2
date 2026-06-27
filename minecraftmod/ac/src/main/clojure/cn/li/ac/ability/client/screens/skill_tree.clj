@@ -279,7 +279,7 @@
                 (let [ndx (/ dx norm) ndy (/ dy norm)
                       x0 (+ from-x (* ndx 12.2)) y0 (+ from-y (* ndy 12.2))
                       x1 (- to-x (* ndx 12.2)) y1 (- to-y (* ndy 12.2))]
-                  [{:kind :rotated-quad :x0 x0 :y0 y0 :x1 x1 :y1 y1
+                  [{:kind :line-quad :x0 x0 :y0 y0 :x1 x1 :y1 y1
                     :line-width 5.5 :color color}]))))
           connections))
 
