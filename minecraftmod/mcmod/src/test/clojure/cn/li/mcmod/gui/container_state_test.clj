@@ -27,97 +27,46 @@
   (inventory-get-player [_] nil)
   (menu-get-container-id [_] container-id))
 
-(use-fixtures
-  :each
-  (fn [f]
-    (state/call-with-container-state-runtime
-      (state/create-container-state-runtime)
-      (fn []
-        (try
-          (f)
-          (finally
-            (state/clear-all!)))))))
+(deftest non-cmenu-bridge-returns-nil-test
+  (testing "get-container-for-menu returns nil for objects without cljContainer field"
+    (let [plain-obj (Object.)
+          container {:gui-type :node :id 1}]
+      ;; register/unregister silently succeed (field absent → catch + no-op)
+      (is (nil? (state/register-menu-container! plain-obj container)))
+      (is (nil? (state/get-container-for-menu plain-obj)))
+      (is (nil? (state/resolve-container-for-menu plain-obj)))
+      (is (nil? (state/unregister-menu-container! plain-obj))))))
 
-(deftest active-player-menu-and-id-lifecycle-test
-  (testing "runtime state registers and unregisters the full menu lifecycle"
-    (let [owner {:logical-side :client :client-session-id :session-a :player-uuid "player-1"}
-          container {:gui-type :node :id 1}
-          menu (FakePlatformObject. nil 17)]
-  (state/register-active-container! owner container)
-  (state/register-player-container! owner container)
-      (state/register-menu-container! menu container)
-      (state/register-container-by-id! owner 17 container)
+(deftest get-menu-container-id-uses-platform-protocol-test
+  (testing "get-menu-container-id reads via platform protocol, not from atom"
+    (let [menu (FakePlatformObject. nil 42)]
+      (is (= 42 (state/get-menu-container-id menu)))
+      (is (nil? (state/get-menu-container-id nil))))))
 
-  (is (= #{container} (set (state/list-active-containers))))
-  (is (= [container] (vec (state/list-active-containers owner))))
-  (is (identical? container (state/get-player-container owner)))
-      (is (identical? container (state/get-container-for-menu menu)))
-      (is (identical? container (state/get-container-by-id owner 17)))
-      (is (= 17 (state/get-menu-container-id menu)))
-      (is (identical? container (state/resolve-container-for-menu menu)))
-
-      (state/unregister-menu-container! menu)
-      (state/unregister-container-by-id! owner 17)
-  (state/unregister-player-container! owner)
-  (state/unregister-active-container! owner container)
-
-      (is (empty? (state/list-active-containers)))
-  (is (nil? (state/get-player-container owner)))
-      (is (nil? (state/get-container-for-menu menu)))
-      (is (nil? (state/get-container-by-id owner 17))))))
-
-(deftest same-container-id-is-isolated-by-player-owner-test
-  (testing "two players may have the same Minecraft window id without overwriting each other"
-    (let [p1 (FakePlatformObject. "player-1" nil)
-          p2 (FakePlatformObject. "player-2" nil)
-        owner-1 {:logical-side :client :client-session-id :session-a :player p1}
-        owner-2 {:logical-side :client :client-session-id :session-a :player p2}
-          c1 {:gui-type :node :id :p1}
-          c2 {:gui-type :node :id :p2}]
-      (state/register-container-by-id! owner-1 7 c1)
-      (state/register-container-by-id! owner-2 7 c2)
-
-      (is (identical? c1 (state/get-container-by-id owner-1 7)))
-      (is (identical? c2 (state/get-container-by-id owner-2 7)))
-
-      (state/unregister-container-by-id! owner-1 7)
-      (is (nil? (state/get-container-by-id owner-1 7)))
-      (is (identical? c2 (state/get-container-by-id owner-2 7))))))
-
-(deftest player-container-stack-removes-only-closed-container-test
-  (testing "closing one container does not wipe another active container for the same player"
-    (let [owner {:logical-side :client :client-session-id :session-stack :player-uuid "player-stack"}
-          c1 {:gui-type :first}
-          c2 {:gui-type :second}]
-      (state/register-player-container! owner c1)
-      (state/register-player-container! owner c2)
-
-      (is (identical? c2 (state/get-player-container owner)))
-      (is (= [c1 c2] (state/get-player-containers owner)))
-
-      (state/unregister-player-container! owner c2)
-      (is (identical? c1 (state/get-player-container owner)))
-      (is (= [c1] (state/get-player-containers owner))))))
-
-(deftest clear-session-containers-removes-only-matching-session-test
-  (let [owner-a {:server-session-id :server-a :player-uuid "player-1"}
-        owner-b {:server-session-id :server-b :player-uuid "player-1"}
-        c1 {:gui-type :node :id :a}
-        c2 {:gui-type :node :id :b}]
-    (state/register-active-container! owner-a c1)
-    (state/register-active-container! owner-b c2)
-    (state/register-player-container! owner-a c1)
-    (state/register-player-container! owner-b c2)
-    (state/register-container-by-id! owner-a 7 c1)
-    (state/register-container-by-id! owner-b 7 c2)
-
-    (state/clear-session-containers! :server-a)
-
-    (is (nil? (state/get-player-container owner-a)))
-    (is (identical? c2 (state/get-player-container owner-b)))
-    (is (nil? (state/get-container-by-id owner-a 7)))
-    (is (identical? c2 (state/get-container-by-id owner-b 7)))
-    (is (= [c2] (vec (state/list-active-containers owner-b))))))
+(deftest no-op-stubs-are-callable-and-return-nil-test
+  (testing "legacy register/unregister/query stubs work without atom"
+    (let [owner {:client-session-id :s :player-uuid "p"}
+          container {:id 1}]
+      (is (nil? (state/register-active-container! owner container)))
+      (is (nil? (state/unregister-active-container! owner container)))
+      (is (nil? (state/register-player-container! owner container)))
+      (is (nil? (state/unregister-player-container! owner)))
+      (is (nil? (state/register-container-by-id! owner 7 container)))
+      (is (nil? (state/unregister-container-by-id! owner 7)))
+      (is (= [] (state/list-active-containers)))
+      (is (= [] (state/list-active-containers owner)))
+      (is (nil? (state/get-player-container owner)))
+      (is (= [] (state/get-player-containers owner)))
+      (is (nil? (state/get-player-container-from-active owner)))
+      (is (nil? (state/get-container-by-id owner 7)))
+      (is (nil? (state/clear-all!)))
+      (is (nil? (state/clear-owner-containers! owner)))
+      (is (nil? (state/clear-session-containers! :session-a)))
+      (let [snap (state/container-state-snapshot)]
+        (is (= {} (:active-containers snap)))
+        (is (= {} (:player-containers snap)))
+        (is (= {} (:menu-containers snap)))
+        (is (= {} (:containers-by-id snap)))))))
 
 (deftest client-container-side-channel-stays-absent-test
   (testing "the legacy global client-container API does not return"

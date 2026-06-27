@@ -40,4 +40,12 @@ public abstract class CMenuBridge extends AbstractContainerMenu {
     public boolean callSuperMoveItemStackTo(ItemStack stack, int startIndex, int endIndex, boolean reverseDirection) {
         return super.moveItemStackTo(stack, startIndex, endIndex, reverseDirection);
     }
+
+    /**
+     * The Clojure container backing this menu. Set by {@code menu/proxy.clj}
+     * at creation time. Replaces the global container-state atom lookup
+     * ({@code get-container-for-menu}), which was a memory leak: the atom
+     * accumulated entries that were never garbage-collected.
+     */
+    public Object cljContainer;
 }

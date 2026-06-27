@@ -67,22 +67,13 @@
     (:player owner) (assoc :player (:player owner))))
 
 (defn- remove-menu!
-  [this clj-container player {:keys [on-container-id
-                                     call-super-removed?
+  [this clj-container player {:keys [call-super-removed?
                                      log-message]
                               :or {call-super-removed? false
                                    log-message "Menu closed for player"}}]
-  (let [owner (or (:owner clj-container) (owner-for-player player))
-        cid (cs/get-menu-container-id this)]
-    (when cid
-      (when on-container-id
-        (on-container-id owner cid))
-      (cs/unregister-container-by-id! owner cid)))
-  (cs/unregister-menu-container! this)
+  ;; Clear the field so the container can be GC'd
+  (set! (.cljContainer ^CMenuBridge this) nil)
   (platform/safe-close! clj-container)
-  (let [owner (or (:owner clj-container) (owner-for-player player))]
-    (cs/unregister-active-container! owner clj-container)
-    (cs/unregister-player-container! owner clj-container))
   (when call-super-removed?
     (let [^CMenuBridge s this]
       (.callSuperRemoved s player)))
@@ -143,11 +134,10 @@
       ItemStack/EMPTY)))
 
 (defn- finalize-menu-registration!
-  [menu window-id clj-container owner]
-  (cs/register-active-container! owner clj-container)
-  (cs/register-player-container! owner clj-container)
-  (cs/register-menu-container! menu clj-container)
-  (cs/register-container-by-id! owner window-id clj-container)
+  "Store clj-container directly on the CMenuBridge instance so lookups
+   don't need the global container-state atom (which was a memory leak)."
+  [menu _window-id clj-container _owner]
+  (set! (.cljContainer ^cn.li.mc1201.gui.CMenuBridge menu) clj-container)
   menu)
 
 (defn platform-menu-proxy-opts

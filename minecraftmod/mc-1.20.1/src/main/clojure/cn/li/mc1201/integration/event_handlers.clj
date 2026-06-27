@@ -92,7 +92,9 @@
           (do
             (log/info (str log-prefix " Block has registered handler (or is part block), dispatching..."))
             (let [ret (dispatcher-fn (assoc event-data :block-id block-id))]
-              (log/info (str log-prefix " Dispatcher returned:" ret))
+              (log/info (str log-prefix " Dispatcher returned gui-id=" (:gui-id ret)
+                             " player=" (some-> (:player ret) (str))
+                             " pos=" (:pos ret)))
               (event-feedback/emit-feedback! event-data ret)
 
               ;; Handle GUI opening if result indicates it
