@@ -5,14 +5,14 @@
    <modid>:energy (see datagen item_model_provider)."
   (:require [cn.li.mcmod.config :as modid]
             [cn.li.mcmod.protocol.metadata :as registry-metadata]
-            [cn.li.mcmod.util.log :as log])
+            [cn.li.mcmod.util.log :as log]
+            [cn.li.forge1201.registry.state :as registry-state])
   (:import [net.minecraft.resources ResourceLocation]
            [net.minecraft.client.renderer.item ItemProperties]
            [cn.li.forge1201.client EnergyItemPropertyFunction]))
 
 (defn- get-registered-item [item-id]
-  (when-let [f (requiring-resolve 'cn.li.forge1201.registry.state/get-registered-item)]
-    (f item-id)))
+  (registry-state/get-registered-item item-id))
 
 (defn register!
   "Call from client setup after items are registered."

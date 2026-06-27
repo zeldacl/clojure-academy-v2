@@ -1,7 +1,8 @@
 (ns cn.li.forge1201.runtime.owner
   "Canonical runtime owner helpers for Forge event boundaries."
   (:require [cn.li.mcmod.hooks.core :as runtime-hooks]
-            [cn.li.mcmod.runtime.owner :as owner-contract])
+            [cn.li.mcmod.runtime.owner :as owner-contract]
+            [cn.li.mc1201.client.session :as mc-session])
   (:import [net.minecraft.server.level ServerPlayer]
            [net.minecraft.world.entity.player Player]))
 
@@ -33,9 +34,7 @@
 
 (defn client-owner
   [^Player player]
-  (let [client-session-id-fn (requiring-resolve 'cn.li.mc1201.client.session/client-session-id)
-        session-id (when client-session-id-fn
-                     (client-session-id-fn))
+  (let [session-id (mc-session/client-session-id)
         uuid (player-uuid player)]
     (when-not session-id
       (throw (ex-info "Forge client player owner requires client session"
@@ -63,10 +62,6 @@
   [^Player player side f]
   (let [owner (owner-for-player player side)]
     (if (= :client (:logical-side owner))
-      (let [with-bound-client-owner-fn (requiring-resolve 'cn.li.mc1201.client.session/with-bound-client-owner)]
-        (when-not with-bound-client-owner-fn
-          (throw (ex-info "Forge client owner binding unavailable"
-                          {:owner owner})))
-        (with-bound-client-owner-fn owner f))
+      (mc-session/with-bound-client-owner owner f)
       (runtime-hooks/with-player-state-owner owner
         (f)))))

@@ -2,12 +2,8 @@
   "Platform-neutral Capability declaration registry.
 
   Content code calls declare-capability! to register a capability type and its
-  handler factory. Forge exposes capabilities via tile-logic/get-capability.")
-
-(defn- log-info
-  [& xs]
-  (when-let [f (requiring-resolve 'cn.li.mcmod.util.log/info)]
-    (apply f xs)))
+  handler factory. Forge exposes capabilities via tile-logic/get-capability."
+  (:require [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
 ;; Registry
@@ -57,7 +53,7 @@
         (throw (ex-info "Duplicate capability registration with different entry"
                         {:key key :previous prev :incoming entry}))))
     (update-capability-type-registry! assoc key entry))
-  (log-info "Declared capability" key "->" (.getName ^Class java-type))
+  (log/info "Declared capability" key "->" (.getName ^Class java-type))
   nil)
 
 ;; ============================================================================

@@ -5,7 +5,8 @@
 	(:require [cn.li.mcmod.platform.position :as pos]
 					[cn.li.mcmod.platform.be :as pbe]
 					[cn.li.mcmod.protocol.metadata :as registry-metadata]
-					[cn.li.mcmod.util.log :as log])
+					[cn.li.mcmod.util.log :as log]
+					[cn.li.forge1201.registry.state :as registry-state])
 	(:import [net.minecraft.core BlockPos]
 				 [net.minecraft.world.level Level]
 				 [net.minecraft.world.level.block Block]
@@ -96,8 +97,7 @@
 (defn- lookup-registered-block
 	[block-id]
 	(try
-		(when-let [f (requiring-resolve 'cn.li.forge1201.registry.state/get-registered-block)]
-			(f block-id))
+		(registry-state/get-registered-block block-id)
 		(catch Exception e
 			(log/debug "Failed to resolve registered block for" block-id ":" (.getMessage e))
 			nil)))

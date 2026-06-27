@@ -14,7 +14,7 @@
            [net.minecraft.core.registries BuiltInRegistries]
            [net.minecraft.resources ResourceLocation]))
 
-(defn- item-id->stack
+(defn item-id->stack
   "Resolve an ItemStack from a runtime item-id string."
   [^String item-id]
   (try

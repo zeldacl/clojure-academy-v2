@@ -3,26 +3,29 @@
   (:require [cn.li.mc1201.gui.init.orchestrator :as gui-orchestrator]
             [cn.li.mc1201.gui.init.checks :as init-checks]
             [cn.li.mcmod.gui.registry :as gui]
-            [cn.li.mcmod.util.log :as log]))
+            [cn.li.mcmod.util.log :as log]
+            [cn.li.forge1201.gui.network :as gui-network]
+            [cn.li.forge1201.gui.screen-impl :as gui-screen-impl]
+            [cn.li.forge1201.adapter.gui-registry :as gui-registry]))
 
 (def ^:private platform-label "Forge 1.20.1")
 
 (defn- optional-init!
-  [sym missing-message]
-  (if-let [init! (requiring-resolve sym)]
-    (init!)
+  [init-fn missing-message]
+  (if init-fn
+    (init-fn)
     (log/warn missing-message)))
 
 (def ^:private common-phase
   {:platform-label platform-label
    :phase-label "Common"
-   :steps [{:run #(optional-init! 'cn.li.forge1201.gui.network/init!
+   :steps [{:run #(optional-init! gui-network/init!
                                   "Forge GUI network init fn not available")}]})
 
 (def ^:private client-phase
   {:platform-label platform-label
    :phase-label "Client"
-   :steps [{:run #(optional-init! 'cn.li.forge1201.gui.screen-impl/init-client!
+   :steps [{:run #(optional-init! gui-screen-impl/init-client!
                                   "Forge GUI screen impl not available on current side")}]})
 
 (def ^:private server-phase
@@ -70,12 +73,11 @@
   
   Returns: boolean (true if all checks pass)"
   []
-  (let [get-menu-type (requiring-resolve 'cn.li.forge1201.adapter.gui-registry/get-menu-type)
-        checks (init-checks/build-gui-checks
+  (let [checks (init-checks/build-gui-checks
                  (gui/get-all-gui-ids)
                  "gui-"
                  (fn [gui-id]
-                   (let [menu-type (when get-menu-type (get-menu-type gui-id))]
+                   (let [menu-type (gui-registry/get-menu-type gui-id)]
                      (some? menu-type))))]
     (gui-orchestrator/verify-checks! "Verifying GUI system initialization..." checks)))
 

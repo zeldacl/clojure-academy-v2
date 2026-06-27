@@ -8,7 +8,8 @@
   Single entrypoint for registering all core renderers. Platform client init
   should call `register-all-renderers!` once; individual renderer namespaces
   keep their own `register!` implementations."
-  (:require [cn.li.mcmod.util.log :as log]))
+  (:require [cn.li.mcmod.lifecycle :as lifecycle]
+            [cn.li.mcmod.util.log :as log]))
 
 (defn create-render-init-runtime
   []
@@ -40,8 +41,7 @@
   This function is called by platform layer during client setup.
   Content modules register their callbacks via lifecycle/register-client-init!."
   []
-  (when-let [run-client-init! (requiring-resolve 'cn.li.mcmod.lifecycle/run-client-init!)]
-    (run-client-init!))
+  (lifecycle/run-client-init!)
   nil)
 
 (defn register-all-renderers!

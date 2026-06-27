@@ -4,7 +4,8 @@
             [cn.li.mc1201.gui.network.packet :as packet-base]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.network.client :as net-client]
-            [cn.li.mcmod.util.log :as log])
+            [cn.li.mcmod.util.log :as log]
+            [cn.li.mc1201.client.session :as mc-session])
   (:import [net.minecraft.client Minecraft]
            [net.minecraft.network FriendlyByteBuf]
            [net.fabricmc.fabric.api.client.networking.v1 ClientPlayNetworking ClientPlayNetworking$PlayChannelHandler]
@@ -29,10 +30,8 @@
 (defn- with-client-response-owner
   [payload f]
   (let [session-id (client-session-id)
-        local-player-uuid-fn (requiring-resolve 'cn.li.mc1201.client.session/local-player-uuid)
         player-uuid (or (payload-player-uuid payload)
-                        (when local-player-uuid-fn
-                          (try (local-player-uuid-fn) (catch Exception _ nil))))]
+                        (try (mc-session/local-player-uuid) (catch Exception _ nil)))]
     (binding [runtime-hooks/*client-session-id* session-id
               runtime-hooks/*player-state-owner* (cond-> {:client-session-id session-id}
                                                    player-uuid (assoc :player-uuid player-uuid))]

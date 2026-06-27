@@ -7,7 +7,8 @@
             [cn.li.mcmod.block.tile-logic :as tile-logic]
             [cn.li.mcmod.entity.dsl :as edsl]
             [cn.li.mcmod.protocol.metadata :as registry-metadata]
-            [cn.li.mcmod.util.log :as log])
+            [cn.li.mcmod.util.log :as log]
+            [cn.li.mc1201.block.blockstate-properties :as blockstate-props])
   (:import [cn.li.forge1201.entity ModEntities]
            [cn.li.mc1201.effect ScriptedMobEffect]
            [net.minecraft.core.particles SimpleParticleType]
@@ -148,8 +149,7 @@
           registered-obj (.register ^DeferredRegister blocks-register registry-name
                                     (reify java.util.function.Supplier
                                       (get [_]
-                                        (let [get-props (requiring-resolve 'cn.li.mc1201.block.blockstate-properties/get-all-properties)]
-                                          (cond
+                                        (cond
                                             (and fluid-id has-be?)
                                             (when-let [fluid-source-ro (get (registry-source-snapshot registered-fluids-source) fluid-id)]
                                               (bootstrap/create-scripted-liquid-block
@@ -165,15 +165,15 @@
                                                   (get [_]
                                                     (.get ^RegistryObject fluid-source-ro)))))
                                             (and needs-dynamic-properties? has-be?)
-                                            (let [props (get-props block-id)]
+                                            (let [props (blockstate-props/get-all-properties block-id)]
                                               (bootstrap/create-carrier-scripted-dynamic-block block-id tile-id props base-properties))
                                             needs-dynamic-properties?
-                                            (let [props (get-props block-id)]
+                                            (let [props (blockstate-props/get-all-properties block-id)]
                                               (bootstrap/create-dynamic-state-block block-id props base-properties))
                                             has-be?
                                             (bootstrap/create-carrier-scripted-block block-id tile-id carrier-properties)
                                             :else
-                                            (bootstrap/create-plain-block base-properties))))))]
+                                            (bootstrap/create-plain-block base-properties)))))]
       (registry-state/register-block! block-id registered-obj))))
 
 (defn register-all-fluids!

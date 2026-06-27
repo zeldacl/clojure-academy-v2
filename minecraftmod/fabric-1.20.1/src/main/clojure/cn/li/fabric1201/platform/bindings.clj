@@ -3,7 +3,8 @@
   (:require [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.be :as pbe]
             [cn.li.mcmod.protocol.metadata :as registry-metadata]
-            [cn.li.mcmod.util.log :as log])
+            [cn.li.mcmod.util.log :as log]
+            [cn.li.fabric1201.mod :as fabric-mod])
   (:import [cn.li.fabric1201.block.entity ScriptedBlockEntity]
            [net.minecraft.core BlockPos]
            [net.minecraft.world.level Level]
@@ -91,12 +92,7 @@
 
 (defn- lookup-registered-block
   [block-id]
-  (try
-    (when-let [f (requiring-resolve 'cn.li.fabric1201.mod/get-registered-block)]
-      (f block-id))
-    (catch Exception e
-      (log/debug "Failed to resolve registered block for" block-id ":" (.getMessage e))
-      nil)))
+  (fabric-mod/get-registered-block block-id))
 
 (defn world-place-block-by-id
   [^Level level block-id ^BlockPos pos flags]

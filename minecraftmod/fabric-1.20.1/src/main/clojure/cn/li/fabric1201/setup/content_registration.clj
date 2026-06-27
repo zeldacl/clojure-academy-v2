@@ -4,7 +4,8 @@
             [cn.li.mcmod.block.tile-logic :as tile-logic]
             [cn.li.mcmod.entity.dsl :as edsl]
             [cn.li.mcmod.protocol.core :as registry-core]
-            [cn.li.mcmod.util.log :as log])
+            [cn.li.mcmod.util.log :as log]
+            [cn.li.mc1201.block.blockstate-properties :as bsp])
   (:import [cn.li.fabric1201.entity FabricScriptedEntityAccess]
            [cn.li.fabric1201.shim FabricBootstrapHelper]
            [cn.li.mc1201.entity.spec ScriptedProjectileSpec ScriptedEffectSpec ScriptedRaySpec ScriptedMarkerSpec ScriptedBlockBodySpec]
@@ -45,38 +46,37 @@
 
 (defn register-all-blocks!
   [{:keys [registered-blocks base-properties carrier-properties]}]
-  (let [get-props (requiring-resolve 'cn.li.mc1201.block.blockstate-properties/get-all-properties)]
-    (doseq [block-id (or (metadata-call 'cn.li.mcmod.protocol.metadata/get-all-block-ids) [])]
-      (let [registry-name (metadata-call 'cn.li.mcmod.protocol.metadata/get-block-registry-name block-id)
-            fluid-id (metadata-call 'cn.li.mcmod.protocol.metadata/get-fluid-id-for-block block-id)
-            needs-dynamic-properties? (has-block-state-properties? block-id)
-            has-be? (boolean (metadata-call 'cn.li.mcmod.protocol.metadata/has-block-entity? block-id))
-            tile-id (when has-be?
-                      (metadata-call 'cn.li.mcmod.protocol.metadata/get-block-tile-id block-id))
-            block-inst (cond
-                         (and fluid-id (not (metadata-call 'cn.li.mcmod.protocol.metadata/fluid-block? block-id)))
-                         (FabricBootstrapHelper/createPlainBlock base-properties)
+  (doseq [block-id (or (metadata-call 'cn.li.mcmod.protocol.metadata/get-all-block-ids) [])]
+    (let [registry-name (metadata-call 'cn.li.mcmod.protocol.metadata/get-block-registry-name block-id)
+          fluid-id (metadata-call 'cn.li.mcmod.protocol.metadata/get-fluid-id-for-block block-id)
+          needs-dynamic-properties? (has-block-state-properties? block-id)
+          has-be? (boolean (metadata-call 'cn.li.mcmod.protocol.metadata/has-block-entity? block-id))
+          tile-id (when has-be?
+                    (metadata-call 'cn.li.mcmod.protocol.metadata/get-block-tile-id block-id))
+          block-inst (cond
+                       (and fluid-id (not (metadata-call 'cn.li.mcmod.protocol.metadata/fluid-block? block-id)))
+                       (FabricBootstrapHelper/createPlainBlock base-properties)
 
-                         fluid-id
-                         (throw (ex-info "Fabric fluid-backed block registration not wired"
-                                         {:block-id block-id
-                                          :fluid-id fluid-id}))
+                       fluid-id
+                       (throw (ex-info "Fabric fluid-backed block registration not wired"
+                                       {:block-id block-id
+                                        :fluid-id fluid-id}))
 
-                         (and needs-dynamic-properties? has-be?)
-                         (let [props (get-props block-id)]
-                           (FabricBootstrapHelper/createCarrierScriptedDynamicBlock block-id tile-id props carrier-properties))
+                       (and needs-dynamic-properties? has-be?)
+                       (let [props (bsp/get-all-properties block-id)]
+                         (FabricBootstrapHelper/createCarrierScriptedDynamicBlock block-id tile-id props carrier-properties))
 
-                         needs-dynamic-properties?
-                         (let [props (get-props block-id)]
-                           (FabricBootstrapHelper/createDynamicStateBlock block-id props base-properties))
+                       needs-dynamic-properties?
+                       (let [props (bsp/get-all-properties block-id)]
+                         (FabricBootstrapHelper/createDynamicStateBlock block-id props base-properties))
 
-                         has-be?
-                         (FabricBootstrapHelper/createCarrierScriptedBlock block-id tile-id carrier-properties)
+                       has-be?
+                       (FabricBootstrapHelper/createCarrierScriptedBlock block-id tile-id carrier-properties)
 
-                         :else
-                         (FabricBootstrapHelper/createPlainBlock base-properties))
-            registered (fabric-dispatch/register-block registry-name block-inst)]
-        (registry-core/swap-state! registered-blocks #(assoc % block-id registered))))))
+                       :else
+                       (FabricBootstrapHelper/createPlainBlock base-properties))
+          registered (fabric-dispatch/register-block registry-name block-inst)]
+      (registry-core/swap-state! registered-blocks #(assoc % block-id registered)))))
 
 (defn register-block-entities!
   [{:keys [mod-id registered-blocks registered-block-entities]}]

@@ -3,7 +3,8 @@
   (:require [clojure.string :as str]
             [cn.li.mc1201.gui.cgui.runtime :as cgui-rt]
             [cn.li.mcmod.gui.cgui-core :as cgui-core]
-            [cn.li.mcmod.util.log :as log])
+            [cn.li.mcmod.util.log :as log]
+            [cn.li.forge1201.integration.recipe-query :as recipe-query])
   (:import [net.minecraft.client.gui.screens Screen]
            [net.minecraft.client.gui GuiGraphics]
            [net.minecraft.network.chat Component]
@@ -89,11 +90,9 @@
       (when-let [area (cgui-core/find-widget root "preview-area")]
         (let [{:keys [recipe-kind item-id]} recipe-data
               [ax ay] (cgui-core/get-pos area)
-              find-recipe (requiring-resolve 'cn.li.forge1201.integration.recipe-query/first-recipe-for)
-              resolve-stack (requiring-resolve 'cn.li.forge1201.integration.recipe-query/item-id->stack)
               rkind (str recipe-kind)
               rkw (resolve-recipe-kw rkind)
-              recipe (when find-recipe (find-recipe item-id rkw))]
+              recipe (recipe-query/first-recipe-for item-id rkw)]
           (when recipe
             (let [{:keys [scale in-x in-y out-x out-y]} (slot-positions rkind)
                   slot-size (* 32.0 scale)
@@ -104,9 +103,9 @@
                   item-scale (/ slot-size 16.0)
                   ps (.pose graphics)
                   input-stack (when-let [input-id (first (:input recipe))]
-                                (when resolve-stack (resolve-stack input-id)))
+                                (recipe-query/item-id->stack input-id))
                   output-stack (when-let [output-id (:output recipe)]
-                                (when resolve-stack (resolve-stack output-id)))]
+                                (recipe-query/item-id->stack output-id))]
               (when input-stack
                 (.pushPose ps) (.translate ps (double slot-in-cx) (double slot-in-cy) 110.0)
                 (.scale ps (double item-scale) (double item-scale) (double item-scale))
@@ -126,9 +125,7 @@
     (try
       (when-let [area (cgui-core/find-widget root "preview-area")]
         (let [{:keys [item-id]} recipe-data
-              find-recipe (requiring-resolve 'cn.li.forge1201.integration.recipe-query/first-recipe-for)
-              resolve-stack (requiring-resolve 'cn.li.forge1201.integration.recipe-query/item-id->stack)
-              recipe (when find-recipe (find-recipe item-id :crafting))]
+              recipe (recipe-query/first-recipe-for item-id :crafting)]
           (when recipe
             (let [[ax ay] (cgui-core/get-pos area)
                   grid-offset-x 11.0 grid-offset-y 6.0
@@ -136,11 +133,11 @@
                   output-offset-x 94.0 output-offset-y 42.0 output-size 24.0
                   inputs (:input recipe)
                   output-stack (when-let [output-id (:output recipe)]
-                                 (when resolve-stack (resolve-stack output-id)))
+                                 (recipe-query/item-id->stack output-id))
                   ps (.pose graphics)]
               (doseq [[idx input-id] (map-indexed vector (take 9 inputs))]
-                (when (and input-id resolve-stack)
-                  (when-let [stack (resolve-stack input-id)]
+                (when input-id
+                  (when-let [stack (recipe-query/item-id->stack input-id)]
                     (let [row (quot idx 3) col (rem idx 3)
                           cx (+ left-pos ax grid-offset-x (* col (+ slot-size slot-gap)) (/ slot-size 2))
                           cy (+ top-pos ay grid-offset-y (* row (+ slot-size slot-gap)) (/ slot-size 2))

@@ -4,7 +4,8 @@
             [cn.li.mc1201.datagen.gson-util :as gson-util]
             [cn.li.mc1201.datagen.advancement-provider-core :as adv-core]
             [cn.li.mc1201.datagen.item-registry :as item-registry]
-            [cn.li.mcmod.datagen.metadata :as datagen-metadata])
+            [cn.li.mcmod.datagen.metadata :as datagen-metadata]
+            [cn.li.mcmod.protocol.metadata :as protocol-metadata])
   (:import [com.google.gson Gson JsonElement]
            [java.nio.file Path]
            [java.util.concurrent CompletableFuture]
@@ -17,10 +18,10 @@
   "Build known items set using shared helper"
   []
   (item-registry/known-item-ids
-    (requiring-resolve 'cn.li.mcmod.protocol.metadata/get-all-item-ids)
-    (requiring-resolve 'cn.li.mcmod.protocol.metadata/get-item-registry-name)
-    (requiring-resolve 'cn.li.mcmod.protocol.metadata/get-all-block-ids)
-    (requiring-resolve 'cn.li.mcmod.protocol.metadata/get-block-registry-name)
+    protocol-metadata/get-all-item-ids
+    protocol-metadata/get-item-registry-name
+    protocol-metadata/get-all-block-ids
+    protocol-metadata/get-block-registry-name
     "my_mod"))
 
 (defn create

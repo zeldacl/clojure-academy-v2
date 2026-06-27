@@ -8,7 +8,8 @@
   Usage:
     (draw-ops-host! parent-area ops-fn)
   where ops-fn is a (fn [] ops-vector) that produces draw ops each frame."
-  (:require [cn.li.mcmod.gui.cgui-core :as cgui-core]
+  (:require [cn.li.mcmod.config :as modid-config]
+            [cn.li.mcmod.gui.cgui-core :as cgui-core]
             [cn.li.mcmod.gui.events :as events]
             [cn.li.mcmod.client.platform-bridge :as platform-bridge]
             [cn.li.mcmod.util.log :as log])
@@ -25,9 +26,7 @@
 ;; Texture resolution
 ;; ============================================================================
 
-(let [mod-id (try (requiring-resolve 'cn.li.mcmod.config/*mod-id*)
-                  (catch Exception _ nil))
-      mod-id-str (or (when mod-id (deref mod-id)) "my_mod")]
+(let [mod-id-str (or modid-config/*mod-id* "my_mod")]
   (def ^:private skill-tree-textures
     {:skill-back           (ResourceLocation. mod-id-str "textures/guis/developer/skill_back.png")
      :skill-outline        (ResourceLocation. mod-id-str "textures/guis/developer/skill_outline.png")

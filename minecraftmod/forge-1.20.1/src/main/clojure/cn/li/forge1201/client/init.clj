@@ -29,7 +29,8 @@
             [cn.li.forge1201.client.render.tesr-impl :as tesr-impl]
             [cn.li.forge1201.client.energy-item-model-properties :as energy-item-model-properties]
             [cn.li.mcmod.client.render.pose :as pose]
-            [cn.li.mcmod.client.render.buffer :as buffer])
+            [cn.li.mcmod.client.render.buffer :as buffer]
+            [cn.li.forge1201.registry.state :as registry-state])
   (:import [cn.li.forge1201.shim ForgeClientHelper]
            [net.minecraft.client Minecraft]
            [net.minecraft.client.player LocalPlayer]
@@ -78,15 +79,13 @@
 
 (defn- register-fluid-render-layers!
   []
-  (when-let [get-fluid-source (requiring-resolve 'cn.li.forge1201.registry.state/get-registered-fluid-source)]
-    (when-let [get-fluid-flowing (requiring-resolve 'cn.li.forge1201.registry.state/get-registered-fluid-flowing)]
-      (doseq [fluid-id (registry-metadata/get-all-fluid-ids)]
-        (let [fluid-spec (registry-metadata/get-fluid-spec fluid-id)
-              translucent? (true? (get-in fluid-spec [:rendering :is-translucent]))]
-          (when translucent?
-            (when-let [source (get-fluid-source fluid-id)]
-              (when-let [flowing (get-fluid-flowing fluid-id)]
-                (ForgeClientHelper/setFluidRenderLayerTranslucent source flowing)))))))))
+  (doseq [fluid-id (registry-metadata/get-all-fluid-ids)]
+    (let [fluid-spec (registry-metadata/get-fluid-spec fluid-id)
+          translucent? (true? (get-in fluid-spec [:rendering :is-translucent]))]
+      (when translucent?
+        (when-let [source (registry-state/get-registered-fluid-source fluid-id)]
+          (when-let [flowing (registry-state/get-registered-fluid-flowing fluid-id)]
+            (ForgeClientHelper/setFluidRenderLayerTranslucent source flowing)))))))
 
 (defn- init-render-bindings!
   "Bind client-side rendering functions to mcmod's dynamic vars.
@@ -142,15 +141,14 @@
   (doseq [tile-id (registry-metadata/get-all-tile-ids)]
     (let [block-ids (or (seq (registry-metadata/get-tile-block-ids tile-id)) [tile-id])]
       (when (some tesr-api/get-scripted-tile-renderer block-ids)
-        (when-let [get-be-type (requiring-resolve 'cn.li.forge1201.registry.state/get-registered-block-entity-type)]
-          (when-let [be-type (get-be-type tile-id)]
-            (.registerBlockEntityRenderer
-              evt
-              be-type
-              (reify BlockEntityRendererProvider
-                (create [_ _ctx]
-                  (tesr-impl/new-renderer))))
-            (log/info (str "  BER registered for tile-id " tile-id))))))))
+        (when-let [be-type (registry-state/get-registered-block-entity-type tile-id)]
+          (.registerBlockEntityRenderer
+            evt
+            be-type
+            (reify BlockEntityRendererProvider
+              (create [_ _ctx]
+                (tesr-impl/new-renderer))))
+          (log/info (str "  BER registered for tile-id " tile-id)))))))
 
 (defn- init-content-client-bridge!
   []

@@ -19,7 +19,8 @@
             [cn.li.mc1201.lifecycle.platform-manifest :as platform-manifest]
             [cn.li.mcmod.aot :as aot]
             [cn.li.mcmod.lifecycle :as lifecycle]
-            [cn.li.mcmod.util.log :as log])
+            [cn.li.mcmod.util.log :as log]
+            [cn.li.mc1201.block.blockstate-properties :as blockstate-props])
   (:import [cn.li.mcmod.platform.spi PlatformBootstraps]
            [cn.li.forge1201.bootstrap ForgeBootstrapGuard]))
 
@@ -62,8 +63,7 @@
   Must happen before content registration so Property objects are ready."
   []
   (log/info "[LIFECYCLE] Phase 3: Resource definition initialization")
-  (when-let [init-props! (requiring-resolve 'cn.li.mc1201.block.blockstate-properties/init-all-properties!)]
-    (init-props!))
+  (blockstate-props/init-all-properties!)
   (log/info "[LIFECYCLE] Phase 3: Resource definition initialization complete"))
 
 ;; =============================================================================

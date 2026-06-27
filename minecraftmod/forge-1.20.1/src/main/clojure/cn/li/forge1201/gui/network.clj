@@ -15,7 +15,8 @@
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.network.server :as net-server]
             [cn.li.mcmod.util.log :as log]
-            [cn.li.mc1201.gui.network.packet :as packet-base])
+            [cn.li.mc1201.gui.network.packet :as packet-base]
+            [cn.li.mc1201.client.session :as mc-session])
   (:import [cn.li.forge1201.network ClojureNetwork]
            [net.minecraft.server.level ServerPlayer]
            [clojure.lang IFn]))
@@ -30,23 +31,15 @@
 
 (defn- with-client-response-owner
   [payload f]
-  (let [client-session-id-fn (requiring-resolve 'cn.li.mc1201.client.session/client-session-id)
-        local-player-uuid-fn (requiring-resolve 'cn.li.mc1201.client.session/local-player-uuid)
-        with-bound-client-owner-fn (requiring-resolve 'cn.li.mc1201.client.session/with-bound-client-owner)
-        session-id (when client-session-id-fn
-                     (client-session-id-fn))
+  (let [session-id (mc-session/client-session-id)
         ;; Response payloads rarely carry :player-uuid; fall back to the local
         ;; Minecraft player so require-client-owner validation passes during dispatch.
         player-uuid (or (payload-player-uuid payload)
-                        (when local-player-uuid-fn
-                          (try (local-player-uuid-fn) (catch Exception _ nil))))]
-    (when-not with-bound-client-owner-fn
-      (throw (ex-info "Client GUI network response owner binding unavailable"
-                      {:payload payload})))
+                        (try (mc-session/local-player-uuid) (catch Exception _ nil)))]
     (when-not session-id
       (throw (ex-info "Client GUI network response requires bound client session"
                       {:payload payload})))
-    (with-bound-client-owner-fn
+    (mc-session/with-bound-client-owner
      (cond-> {:logical-side :client :client-session-id session-id}
        player-uuid (assoc :player-uuid player-uuid))
      f)))

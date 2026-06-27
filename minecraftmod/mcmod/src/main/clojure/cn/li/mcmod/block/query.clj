@@ -4,6 +4,7 @@
   Accepts either block ids or already-resolved block specs for most helpers so
   callers can progressively migrate away from registry wrapper layers."
   (:require [clojure.string :as str]
+            [cn.li.mcmod.block.dsl-core :as dsl-core]
             [cn.li.mcmod.block.dsl-multiblock :as mb]
             [cn.li.mcmod.block.tile-dsl :as tdsl]
             [cn.li.mcmod.protocol.core :as registry-core]))
@@ -37,13 +38,9 @@
 ;; the query interface that other modules should use. This allows the registry
 ;; to be extended with different storage mechanisms in the future.
 
-(def ^:private get-block-registry*
-  "Cached requiring-resolve — Var is resolved once, reused for every subsequent query."
-  (delay (requiring-resolve 'cn.li.mcmod.block.dsl-core/get-block-registry)))
-
 (defn- block-registry-state
   []
-  (registry-core/snapshot (@get-block-registry*)))
+  (registry-core/snapshot (dsl-core/get-block-registry)))
 
 (defn get-block-spec
   "Get a block specification by block-id from the registry

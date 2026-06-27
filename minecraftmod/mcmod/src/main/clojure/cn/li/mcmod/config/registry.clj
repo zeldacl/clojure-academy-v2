@@ -1,10 +1,6 @@
 (ns cn.li.mcmod.config.registry
-	"Platform-neutral config descriptor and runtime value registry.")
-
-(defn- log-info
-  [& xs]
-  (when-let [f (requiring-resolve 'cn.li.mcmod.util.log/info)]
-    (apply f xs)))
+  "Platform-neutral config descriptor and runtime value registry."
+  (:require [cn.li.mcmod.util.log :as log]))
 
 (defn- default-config-registry-runtime-state []
   {:descriptor-registry {}
@@ -69,7 +65,7 @@
 		(throw (ex-info "Config domain must be a keyword" {:domain domain})))
 	(let [descriptors' (normalize-descriptors descriptors)]
 		(swap! (config-registry-state-atom) assoc-in [:descriptor-registry domain] descriptors')
-		(log-info "Registered config descriptors for" domain "count=" (count descriptors')))
+		(log/info "Registered config descriptors for" domain "count=" (count descriptors')))
 	nil)
 
 (defn get-config-descriptors
