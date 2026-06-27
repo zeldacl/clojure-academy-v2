@@ -159,13 +159,8 @@
   Tries platform-level session resolution first, falls back to dynamic bindings,
   returns nil when no session can be resolved."
   []
-  (let [;; Try the platform-level session (available on client render thread).
-        platform-owner (when-let [f (requiring-resolve 'cn.li.mc1201.client.session/current-local-player-owner)]
-                         (try (f) (catch Exception _ nil)))
-        session-id (or (:client-session-id platform-owner)
-                       runtime-hooks/*client-session-id*)
-        player-uuid (or (:player-uuid platform-owner)
-                        (some-> runtime-hooks/*player-state-owner* :player-uuid))]
+  (let [session-id runtime-hooks/*client-session-id*
+        player-uuid (some-> runtime-hooks/*player-state-owner* :player-uuid)]
     (when session-id
       (cond-> {:logical-side :client :client-session-id session-id}
         player-uuid (assoc :player-uuid player-uuid)))))

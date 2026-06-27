@@ -192,3 +192,31 @@
   (if-let [f (bridge-op :draw-ops-host!)]
     (f parent ops-fn)
     (throw (ex-info "platform-bridge/draw-ops-host!: bridge not installed" {}))))
+
+(defn register-font!
+  "Register a CGUI font keyword with the given spec map.
+  spec may contain :bold? and/or :italic? keys."
+  [name spec]
+  (or (bridge-op :register-font! name spec)
+      (log/debug "Client bridge register-font! not available")))
+
+(defn get-player-owner
+  "Resolve the current client local player owner, or nil."
+  []
+  (or (bridge-op :get-player-owner)
+      (do (log/debug "Client bridge get-player-owner not available")
+          nil)))
+
+(defn font-text-width
+  "Return the pixel width of text rendered with the given font-desc and font-size.
+  Falls back to an estimate if the bridge is not installed."
+  [font-desc text font-size]
+  (or (bridge-op :font-text-width font-desc text font-size)
+      (do (log/debug "Client bridge font-text-width not available, using estimate")
+          (* (count text) font-size 0.6))))
+
+(defn stop-all-media!
+  "Stop all currently playing media sounds for the given player-uuid."
+  [player-uuid]
+  (or (bridge-op :stop-all-media! player-uuid)
+      (log/debug "Client bridge stop-all-media! not available")))

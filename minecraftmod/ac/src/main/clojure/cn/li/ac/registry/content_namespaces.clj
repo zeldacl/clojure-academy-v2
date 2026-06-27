@@ -102,7 +102,7 @@
     (doseq [init-sym init-fns]
       (try
         (log/warn (str "[CONTENT_TRACE] " tag " begin") init-sym)
-        (when-let [init-fn (requiring-resolve init-sym)]
+        (when-let [init-fn (find-var init-sym)]
           (init-fn)
           (log/warn (str "[CONTENT_TRACE] " tag " ok") init-sym))
         (catch Throwable t

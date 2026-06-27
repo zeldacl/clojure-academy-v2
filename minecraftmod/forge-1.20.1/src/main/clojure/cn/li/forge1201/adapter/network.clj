@@ -12,7 +12,7 @@
   (:import [cn.li.forge1201.network ClojureNetwork]
            [net.minecraft.server.level ServerPlayer]))
 
-(defn- send-push-to-client!
+(defn send-push-to-client!
   [^ServerPlayer player msg-id payload]
   (ClojureNetwork/sendToClient player -1 (network-payload/serialize-message msg-id payload)))
 

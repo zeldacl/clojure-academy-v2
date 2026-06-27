@@ -5,6 +5,7 @@
             [cn.li.ac.block.machine.container :as machine-container]
             [cn.li.ac.block.machine.runtime :as machine-runtime]
             [cn.li.ac.block.wireless-matrix.schema :as matrix-schema]
+            [cn.li.ac.block.wireless-matrix.stats :as stats]
             [cn.li.ac.item.constraint-plate :as plate]
             [cn.li.ac.item.mat-core :as core]
             [cn.li.ac.wireless.config :as matrix-config]
@@ -15,29 +16,29 @@
             [cn.li.mcmod.platform.item :as pitem]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.world :as world]
-            [cn.li.mcmod.util.log :as log])
-  (:import [cn.li.acapi.wireless IWirelessMatrix]))
+            [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
-;; State lifecycle (from state.clj)
+;; State lifecycle (delegates to cn.li.ac.block.wireless-matrix.stats)
 ;; ============================================================================
 
-(def ^:private matrix-rt
-  (machine-runtime/schema-runtime matrix-schema/unified-matrix-schema))
+;; Forwarding defs for backward compatibility -- callers throughout the codebase
+;; reference matrix-logic/ for these symbols. The canonical implementations live
+;; in cn.li.ac.block.wireless-matrix.stats to break the circular dependency.
 
-(def matrix-default-state (:default-state matrix-rt))
-(def matrix-scripted-load-fn (:load-fn matrix-rt))
-(def matrix-scripted-save-fn (:save-fn matrix-rt))
+(def matrix-default-state stats/matrix-default-state)
+(def matrix-scripted-load-fn stats/matrix-scripted-load-fn)
+(def matrix-scripted-save-fn stats/matrix-scripted-save-fn)
 
 (defn safe-state
   [be]
-  (machine-runtime/state-or-default be matrix-default-state))
+  (stats/safe-state be))
 
 (defn resolve-controller-be
   [be]
   (if-not be
     nil
-    (let [state (safe-state be)]
+    (let [state (stats/safe-state be)]
       (if (zero? (long (:sub-id state 0)))
         be
         (let [world-obj (platform-be/be-get-world-safe be)
@@ -88,8 +89,9 @@
   (slot-schema/tile-slot-count matrix-slot-schema-id))
 
 (defn required-plate-count
+  "Delegates to stats/required-plate-count for backward compatibility."
   []
-  (count (plate-slot-indexes)))
+  (stats/required-plate-count))
 
 (defn- slot-has-stack?
   [stk]
@@ -112,30 +114,7 @@
   (and (> (:core-level state 0) 0)
        (= (:plate-count state 0) (required-plate-count))))
 
-;; ============================================================================
-;; Stats formulas (from stats.clj)
-;; ============================================================================
-
-(defn stats-for-counts
-  "Return Matrix capacity/bandwidth/range for a core and plate count.
-
-  `required-plate-count` is passed in by the block logic because the plate slot
-  layout is structural, not a player config value."
-  [required-plate-count core-level plate-count]
-  (let [core-lv (int core-level)
-        plates (int plate-count)
-        required (int required-plate-count)]
-    (if (and (> core-lv 0)
-             (> required 0)
-             (= plates required))
-      {:capacity (int (* (matrix-config/capacity-per-core-level) core-lv))
-       :bandwidth (double (* core-lv core-lv (matrix-config/bandwidth-factor)))
-       :range (double (* (matrix-config/range-base) (Math/sqrt core-lv)))}
-      {:capacity 0 :bandwidth 0.0 :range 0.0})))
-
-(defn matrix-stats-for-counts
-  [core-level plate-count]
-  (stats-for-counts (required-plate-count) core-level plate-count))
+;; (stats formulas moved to cn.li.ac.block.wireless-matrix.stats)
 
 ;; ============================================================================
 ;; Convenience accessors
@@ -144,13 +123,13 @@
 (defn get-plate-count
   [be]
   (if-let [ctrl (resolve-controller-be be)]
-    (get (safe-state ctrl) :plate-count 0)
+    (get (stats/safe-state ctrl) :plate-count 0)
     0))
 
 (defn get-core-level
   [be]
   (if-let [ctrl (resolve-controller-be be)]
-    (get (safe-state ctrl) :core-level 0)
+    (get (stats/safe-state ctrl) :core-level 0)
     0))
 
 ;; ============================================================================
@@ -196,22 +175,22 @@
 ;; ============================================================================
 
 (defn- matrix-sync-payload
-  [state pos be]
-  (let [^IWirelessMatrix impl ((requiring-resolve 'cn.li.ac.block.wireless-matrix.capability/->WirelessMatrixImpl) be)]
+  [state pos]
+  (let [stats' (stats/matrix-stats-for-counts (:core-level state) (:plate-count state))]
     (-> (schema/schema->sync-payload matrix-schema/unified-matrix-schema state pos)
         (assoc :is-working (is-working? state)
-               :capacity (.getMatrixCapacity impl)
-               :bandwidth (.getMatrixBandwidth impl)
-               :range (.getMatrixRange impl)))))
+               :capacity (:capacity stats')
+               :bandwidth (:bandwidth stats')
+               :range (:range stats')))))
 
 (defn matrix-tick-state
-  [state {:keys [pos be]}]
+  [state {:keys [pos]}]
   (let [ticker (inc (int (get state :update-ticker 0)))
         state1 (assoc state :update-ticker ticker)]
     (if (and (zero? (:sub-id state1 0))
              (zero? (mod ticker (matrix-config/gui-sync-interval))))
       (try
-        (matrix-sync-payload state1 pos be)
+        (matrix-sync-payload state1 pos)
         state1
         (catch Exception e
           (log/debug "Matrix sync skipped:" (ex-message e))
@@ -220,7 +199,7 @@
 
 (def matrix-scripted-tick-fn
   (machine-runtime/make-tick-fn
-    {:default-state matrix-default-state
+    {:default-state stats/matrix-default-state
      :tick-state matrix-tick-state}))
 
 ;; ============================================================================
@@ -229,7 +208,7 @@
 
 (def matrix-container-fns
   (machine-container/make-inventory-container-fns
-    {:default-state matrix-default-state
+    {:default-state stats/matrix-default-state
      :slot-count slot-count
      :transform-state recalculate-counts
      :slots-for-face (fn [_be _face] (int-array (all-slot-indexes)))
@@ -256,7 +235,7 @@
       (let [player-uuid (uuid/player-uuid player)
             player-name (try (str (or (entity/player-get-name player) ""))
                              (catch Exception _ ""))
-            state (safe-state be)
+            state (stats/safe-state be)
             state' (-> state
                        (assoc :placer-uuid player-uuid)
                        (assoc :placer-name player-name))]

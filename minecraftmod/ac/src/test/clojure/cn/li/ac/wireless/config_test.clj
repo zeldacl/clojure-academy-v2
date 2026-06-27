@@ -2,7 +2,7 @@
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.ac.config.common :as config-common]
             [cn.li.ac.item.mat-core :as mat-core]
-            [cn.li.ac.block.wireless-matrix.logic :as matrix-logic]
+            [cn.li.ac.block.wireless-matrix.stats :as matrix-stats]
             [cn.li.ac.wireless.config :as wireless-config]
             [cn.li.mcmod.config.registry :as config-reg]))
 
@@ -51,7 +51,7 @@
 
 (deftest matrix-stats-formula-uses-wireless-config-test
   (testing "shared Matrix formula honors wireless config overrides"
-    (with-redefs [matrix-logic/required-plate-count (constantly 3)
+    (with-redefs [matrix-stats/required-plate-count (constantly 3)
                   config-reg/get-config-values
                   (fn [domain]
                     (is (= config-common/wireless-domain domain))
@@ -61,9 +61,9 @@
       (is (= {:capacity 40
               :bandwidth 320.0
               :range 60.0}
-             (matrix-logic/matrix-stats-for-counts 4 3)))
+             (matrix-stats/matrix-stats-for-counts 4 3)))
       (is (= {:capacity 0 :bandwidth 0.0 :range 0.0}
-             (matrix-logic/matrix-stats-for-counts 4 0))))))
+             (matrix-stats/matrix-stats-for-counts 4 0))))))
 
 (deftest matrix-core-tooltip-uses-wireless-config-test
   (testing "Matrix Core tooltip is derived from the shared config-backed Matrix formula"

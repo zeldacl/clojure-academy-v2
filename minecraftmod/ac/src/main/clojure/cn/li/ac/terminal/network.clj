@@ -7,7 +7,8 @@
             [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.ac.achievement.dispatcher :as achievement-dispatcher]
             [cn.li.mcmod.network.server :as net-server]
-            [cn.li.mcmod.util.log :as log]))
+            [cn.li.mcmod.util.log :as log]
+            [cn.li.mcmod.server.platform-bridge :as server-bridge]))
 
 (defn handle-install-terminal
   [_payload player]
@@ -20,8 +21,7 @@
           (achievement-dispatcher/trigger-custom-event! uid "terminal_installed")
           (catch Throwable _ nil))
         (try
-          (when-let [send-push (requiring-resolve 'cn.li.mc1201.runtime.network-core/send-to-client!)]
-            (send-push uid (terminal-messages/msg-id :terminal-install-effect) {}))
+          (server-bridge/send-to-client! uid (terminal-messages/msg-id :terminal-install-effect) {})
           (catch Throwable _ nil)))
       {:success true}
       (catch Exception e

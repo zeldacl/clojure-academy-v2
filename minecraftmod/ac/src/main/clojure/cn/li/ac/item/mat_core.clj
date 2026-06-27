@@ -1,4 +1,4 @@
- (ns cn.li.ac.item.mat-core
+(ns cn.li.ac.item.mat-core
   "Matrix Core - main component for Wireless Matrix
 
   Different damage values represent different tiers:
@@ -6,7 +6,8 @@
   - Damage 1: Tier 2 (Improved)
   - Damage 2: Tier 3 (Advanced)
   - Damage 3: Tier 4 (Ultimate)"
-  (:require [cn.li.mcmod.item.dsl :as idsl]
+  (:require [cn.li.ac.block.wireless-matrix.stats :as matrix-stats]
+            [cn.li.mcmod.item.dsl :as idsl]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.platform.item :as item]
@@ -41,11 +42,8 @@
 (defn matrix-core-tooltip
   "Build config-backed tooltip text for a full Wireless Matrix using `level` core."
   [level]
-  ;; Circular dependency: wireless-matrix.logic requires mat-core. Use
-  ;; requiring-resolve at runtime to avoid AOT compile-time cycle.
   (let [{:keys [capacity bandwidth range]}
-        (let [stats-fn (requiring-resolve 'cn.li.ac.block.wireless-matrix.logic/stats-for-counts)]
-            (stats-fn full-matrix-plate-count level full-matrix-plate-count))]
+        (matrix-stats/stats-for-counts full-matrix-plate-count level full-matrix-plate-count)]
     [(str "等级: " (int level))
      (str "容量倍率: " (format-stat capacity))
      (str "带宽倍率: " (format-stat bandwidth))

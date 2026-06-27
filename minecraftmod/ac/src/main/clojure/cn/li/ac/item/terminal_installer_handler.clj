@@ -6,7 +6,8 @@
             [cn.li.ac.achievement.dispatcher :as achievement-dispatcher]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.player-feedback :as player-feedback]
-            [cn.li.mcmod.util.log :as log]))
+            [cn.li.mcmod.util.log :as log]
+            [cn.li.mcmod.server.platform-bridge :as server-bridge]))
 
 (defn handle-right-click
   "Server-side handler for terminal_installer right-click.
@@ -29,8 +30,7 @@
             (achievement-dispatcher/trigger-custom-event! uuid-str "terminal_installed")
             (catch Throwable _ nil))
           (try
-            (when-let [send-push (requiring-resolve 'cn.li.mc1201.runtime.network-core/send-to-client!)]
-              (send-push uuid-str 1004 {}))
+            (server-bridge/send-to-client! uuid-str 1004 {})
             (catch Throwable _ nil))
         ;; Consume item unless creative mode
         ;; (matching original: if(!player.capabilities.isCreativeMode) stack.setCount(...))

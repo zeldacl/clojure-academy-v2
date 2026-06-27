@@ -11,7 +11,8 @@
     - Word-wrapping: long lines split at word boundaries to fit max-content-width
 
   Returns a vector of pure data specs.  Caller creates CGUI widgets from them."
-  (:require [clojure.string :as str]))
+  (:require [clojure.string :as str]
+            [cn.li.mcmod.client.platform-bridge :as platform-bridge]))
 
 ;; --- Constants ---
 
@@ -23,18 +24,6 @@
 
 ;; Match original AcademyCraft GLMarkdownRenderer widthLimit of 150px
 (def max-content-width 150)
-
-;; --- Keybinding lookup ---
-
-(defn- resolve-key-name
-  "Dynamically resolve a keybinding id to its display name.
-  Falls back to the bracketed id when the lookup is unavailable."
-  [key-id]
-  (try
-    (when-let [f (requiring-resolve 'cn.li.ac.client.keybinding/get-key-display-name)]
-      (or (f key-id) (str "[" key-id "]")))
-    (catch Throwable _
-      (str "[" key-id "]"))))
 
 ;; --- Tag resolution ---
 
@@ -52,7 +41,7 @@
   (-> line
       (str/replace key-tag-re
                    (fn [[_ key-id]]
-                     (resolve-key-name key-id)))
+                     (str "[" key-id "]")))
       (str/replace misaka-tag-re
                    (if misaka-id
                      (str "__Misaka No." misaka-id "__")
@@ -155,7 +144,7 @@
   ([raw-content misaka-id max-width-px] (render-segments raw-content misaka-id max-width-px nil))
   ([raw-content misaka-id max-width-px text-width-fn]
    (let [text-width-fn (or text-width-fn
-                           (requiring-resolve 'cn.li.mc1201.gui.cgui.font/text-width)
+                           (fn [font-desc text font-size] (platform-bridge/font-text-width font-desc text font-size))
                            (fn [_font-desc text font-size]
                              (* (count text) font-size 0.6)))
          lines (str/split-lines (or raw-content ""))

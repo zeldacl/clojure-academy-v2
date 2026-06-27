@@ -58,19 +58,17 @@
   (runtime/dispatch-event! owner event payload))
 
 (defn- stop-media!
-  "Stop all currently playing media sounds via dynamic resolution of the
-  mc-1.20.1 sound bridge (not a compile-time dependency of ac module)."
-  []
+  "Stop all currently playing media sounds via the mcmod platform bridge."
+  [owner]
   (try
-    (when-let [stop-fn (requiring-resolve 'cn.li.mc1201.client.effects.sound/stop-all-media!)]
-      (stop-fn))
+    (client-bridge/stop-all-media! (:player-uuid owner))
     (catch Throwable _ nil)))
 
 (defn- play-current!
   "Play the currently selected track. Stops any previous media first."
   [owner]
   (let [{:keys [track volume]} (playback-snapshot owner)]
-    (stop-media!)
+    (stop-media! owner)
     (client-sounds/queue-sound-effect! owner
       {:type :sound
        :sound-id (:sound-id track)
@@ -117,7 +115,7 @@
           (let [{:keys [playing? paused?]} (playback-snapshot owner)]
             (if (or playing? paused?)
               (do
-                (stop-media!)
+                (stop-media! owner)
                 (dispatch-playback! owner :playback/paused {}))
               (play-current! owner))))))
 
@@ -125,7 +123,7 @@
     (when-let [stop-btn (cgui-core/find-widget root "stop")]
       (events/on-left-click stop-btn
         (fn [_]
-          (stop-media!)
+          (stop-media! owner)
           (dispatch-playback! owner :playback/stop {}))))
 
     ;; --- Volume bar (dragbar) ---

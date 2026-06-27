@@ -28,7 +28,8 @@
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.block-manipulation :as block-manip]
             [cn.li.mcmod.platform.potion-effects :as potion-effects]
-            [cn.li.mcmod.util.log :as log]))
+            [cn.li.mcmod.util.log :as log]
+            [cn.li.mcmod.server.platform-bridge :as server-bridge]))
 
 (def ^:private arc-gen-skill-id :arc-gen)
 (def ^:private fish-item-id "minecraft:cooked_cod")
@@ -74,11 +75,10 @@
       (when-let [fish-stack (pitem/create-item-stack-by-id fish-item-id 1)]
         ;; Spawn item entity in world at hit position (matching original EntityItem spawn).
         ;; Uses requiring-resolve to keep ac layer free of MC imports.
-        (let [spawn! (requiring-resolve 'cn.li.mc1201.runtime.world-effects-core/spawn-item-stack-at!)]
-          (if spawn!
-            (spawn! player world-id x y z fish-stack)
-            ;; Fallback: give directly to player if world spawn unavailable
-            (entity/player-give-item-stack! player fish-stack)))
+        (if (server-bridge/server-bridge-available?)
+          (server-bridge/spawn-item-stack-at! player world-id x y z fish-stack)
+          ;; Fallback: give directly to player if world spawn unavailable
+          (entity/player-give-item-stack! player fish-stack))
         (log/debug "Arc Gen: fishing reward spawned at" x y z)))))
 
 (defn- normal-block?

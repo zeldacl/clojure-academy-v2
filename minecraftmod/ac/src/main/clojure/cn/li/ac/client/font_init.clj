@@ -4,16 +4,16 @@
 	This namespace intentionally avoids static compile-time dependencies on
 	mc1201/Minecraft classes. Runtime registration is delegated through
 	`cn.li.mc1201.gui.cgui.font/register-font!` when available."
-	(:require [cn.li.mcmod.util.log :as log]))
+	(:require [cn.li.mcmod.util.log :as log]
+            [cn.li.mcmod.client.platform-bridge :as platform-bridge]))
 
 (defonce ^:private fonts-initialized? (atom false))
 
 (defn- register-ac-fonts!
 	[]
-	(when-let [register-font! (requiring-resolve 'cn.li.mc1201.gui.cgui.font/register-font!)]
-		(register-font! :ac-normal {})
-		(register-font! :ac-bold {:bold? true})
-		(register-font! :ac-italic {:italic? true})))
+	(platform-bridge/register-font! :ac-normal {})
+	(platform-bridge/register-font! :ac-bold {:bold? true})
+	(platform-bridge/register-font! :ac-italic {:italic? true}))
 
 (defn init-fonts!
 	"Register :ac-normal / :ac-bold / :ac-italic for CGui."

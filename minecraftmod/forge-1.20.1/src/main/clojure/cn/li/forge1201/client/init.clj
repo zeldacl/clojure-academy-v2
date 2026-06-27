@@ -21,6 +21,8 @@
             [cn.li.mc1201.client.request.bridge :as request-bridge]
             [cn.li.mc1201.client.font.msdf-setup :as msdf-setup]
             [cn.li.mc1201.gui.cgui.draw-ops-host :as draw-ops-host]
+            [cn.li.mc1201.gui.cgui.font :as cgui-font]
+            [cn.li.mc1201.client.session :as mc-session]
             [cn.li.forge1201.client.runtime-bridge :as runtime-bridge]
             [cn.li.forge1201.client.key-input :as key-input]
             [cn.li.forge1201.client.overlay-renderer :as overlay-renderer]
@@ -211,7 +213,14 @@
                          (let [^net.minecraft.client.Minecraft mc (Minecraft/getInstance)]
                            [(.getGuiScaledWidth mc) (.getGuiScaledHeight mc)]))
        :draw-ops-host! (fn [parent ops-fn]
-                         (draw-ops-host/draw-ops-host! parent ops-fn))}))
+                         (draw-ops-host/draw-ops-host! parent ops-fn))
+       :register-font! (fn [name spec]
+                         (cgui-font/register-font! name spec))
+       :get-player-owner #(mc-session/current-local-player-owner)
+       :font-text-width (fn [font-desc text font-size]
+                          (cgui-font/text-width font-desc text font-size))
+       :stop-all-media! (fn [player-uuid]
+                          (sound/stop-all-media! player-uuid))}))
 
 (defn register-key-mappings!
   "Register all runtime KeyMapping instances to Forge input system."

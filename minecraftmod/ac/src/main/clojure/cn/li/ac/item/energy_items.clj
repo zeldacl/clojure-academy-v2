@@ -4,7 +4,8 @@
             [cn.li.ac.item.developer-portable :as developer-portable]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.ac.item.item-energy-base :as energy-base]
-            [cn.li.mcmod.util.log :as log]))
+            [cn.li.mcmod.util.log :as log]
+            [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 
 (defonce-guard energy-items-installed?)
 
@@ -18,9 +19,7 @@
     ;; Build the CGUI screen data (platform-agnostic)
     (let [screen-map (developer-portable/create-screen player)]
       ;; Open via platform CGUI screen host
-      (when-let [open-fn (requiring-resolve 'cn.li.mc1201.gui.screen.cgui-screen-host/open-cgui-screen!)]
-        (open-fn (:cgui screen-map) (:session-id screen-map)
-                 {:title "Portable Developer"}))))
+      (client-bridge/open-simple-gui! (:cgui screen-map) "Portable Developer" {:session-id (:session-id screen-map)})))
   {:consume? true})
 
 (defn init-energy-items!

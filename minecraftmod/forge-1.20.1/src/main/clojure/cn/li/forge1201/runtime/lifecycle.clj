@@ -3,12 +3,16 @@
   (:require [cn.li.mc1201.runtime.nbt-core :as runtime-nbt]
             [cn.li.mc1201.runtime.lifecycle-core :as lifecycle-core]
             [cn.li.mc1201.runtime.sync-core :as runtime-sync]
+            [cn.li.mc1201.runtime.world-effects-core :as world-effects]
+            [cn.li.mc1201.runtime.network-core :as network-core]
+            [cn.li.mc1201.runtime.spi.network-transport :as transport-spi]
             [cn.li.forge1201.runtime.adapters.registry :as runtime-adapters-registry]
             [cn.li.mc1201.runtime.adapter-registry :as adapter-registry]
             [cn.li.forge1201.runtime.lifecycle-event-binding :as lifecycle-event-binding]
             [cn.li.forge1201.adapter.network :as runtime-network]
             [cn.li.mcmod.gui.container-state :as container-state]
             [cn.li.mcmod.hooks.core :as power-runtime]
+            [cn.li.mcmod.server.platform-bridge :as server-bridge]
             [cn.li.mcmod.util.log :as log]
             [cn.li.ac.tutorial.auto-give :as auto-give])
   (:import [net.minecraftforge.event.entity.player PlayerEvent$PlayerLoggedInEvent
@@ -98,6 +102,11 @@
   []
   (adapter-registry/run-install-steps! "forge-1.20.1" runtime-adapters-registry/runtime-install-steps)
   (runtime-network/init!)
+  (server-bridge/install-server-bridge!
+   {:send-to-client! (fn [player-uuid msg-id payload]
+                       (when-let [player (transport-spi/find-player-by-uuid player-uuid)]
+                         (transport-spi/send-push-to-client! player msg-id payload)))
+    :spawn-item-stack-at! world-effects/spawn-item-stack-at!})
   (lifecycle-core/install-server-stop-cleanup!
     {:cleanup-session! (fn [session-id]
                          (runtime-sync/clear-session-scheduler-state! session-id)
