@@ -10,7 +10,8 @@
 (defn- resolve-entry-fn
 	[entry]
 	(cond
-		(symbol? entry) (find-var entry)
+		(symbol? entry) (do (require (symbol (namespace entry)))
+		                    (find-var entry))
 		(ifn? entry) entry
 		:else nil))
 
