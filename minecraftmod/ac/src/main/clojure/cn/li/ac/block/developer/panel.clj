@@ -630,119 +630,42 @@
 (def ^:private icon-align (/ (- total-size icon-sz) 2))
 
 
-(defn- back-alpha [anim-time idx m-alpha]
-  (* m-alpha (clamp01 (* (- anim-time (* idx 0.08) 0.1) 10.0))))
+;; Hover transition helpers — convert panel's hover atom to build-tree-ops format
+(def ^:private skill-tree-hover-transitions (atom {}))
 
-(defn- icon-alpha [anim-time idx m-alpha]
-  (* m-alpha (clamp01 (* (- anim-time (* idx 0.08) 0.18) 10.0))))
+(defn- update-hover-transitions!
+  [nodes mx my parallax-x parallax-y]
+  (let [now (client-bridge/game-time-ms)
+        closest-node (when (seq nodes)
+                       (apply min-key
+                         (fn [n]
+                           (let [cx (+ (:x n) (/ widget-size 2) (- parallax-x))
+                                 cy (+ (:y n) (/ widget-size 2) (- parallax-y))]
+                             (+ (* (- mx cx) (- mx cx)) (* (- my cy) (- my cy)))))
+                         nodes))
+        hover-dist (when closest-node
+                     (let [cx (+ (:x closest-node) (/ widget-size 2) (- parallax-x))
+                           cy (+ (:y closest-node) (/ widget-size 2) (- parallax-y))]
+                       (Math/sqrt (+ (* (- mx cx) (- mx cx)) (* (- my cy) (- my cy))))))
+        hover-idx (:idx closest-node)
+        hover-now? (and closest-node (< (or hover-dist 999) 20))
+        prev-idx (:hover-idx @skill-tree-hover)
+        prev-trans (get @skill-tree-hover-transitions prev-idx)
+        ;; Transition gate: only switch when previous animation completed
+        gate-open? (or (nil? prev-trans)
+                      (>= (/ (- now (:start prev-trans)) 100.0) 1.0))]
+    (swap! skill-tree-hover assoc :hover-idx hover-idx)
+    (when (and gate-open? (not= hover-idx prev-idx))
+      (swap! skill-tree-hover-transitions
+        (fn [m]
+          (-> m
+              (cond-> prev-idx (assoc prev-idx {:start now :dir :out}))
+              (cond-> (and hover-now? hover-idx) (assoc hover-idx {:start now :dir :in}))))))))
 
-(defn- line-blend [anim-time child-idx]
-  (clamp01 (* (- anim-time (* (or child-idx 0) 0.08) 0.1) 5.0)))
-
-(defn- progress-blend [anim-time idx]
-  (clamp01 (* (- anim-time (* idx 0.08) 0.22) 2.0)))
-
-(defn- skill-tree-textures []
-  {:skill-back (modid/asset-path "textures" "guis/developer/skill_back.png")
-   :skill-outline (modid/asset-path "textures" "guis/developer/skill_outline.png")
-   :bg-area (modid/asset-path "textures" "guis/effect/effect_developer_background.png")})
-
-(defn- draw-background! [area-widget]
-  (let [bg-w (cgui-core/create-widget :pos [0 0] :size [(int 257) (int 139)])
-        {:keys [bg-area]} (skill-tree-textures)]
-    (comp/add-component! bg-w (comp/draw-texture bg-area 0xFFFFFFFF))
-    (cgui-core/add-widget! area-widget bg-w)))
-
-(defn- draw-connection-line! [area-widget {:keys [from-x from-y to-x to-y child-learned? m-alpha child-idx]} anim-time]
-  (let [lb (line-blend anim-time child-idx)
-        dx (- to-x from-x) dy (- to-y from-y)
-        norm (Math/sqrt (+ (* dx dx) (* dy dy)))]
-    (when (pos? norm)
-      (let [ndx (/ dx norm) ndy (/ dy norm)
-            line-alpha (* (or m-alpha 0.7) (if child-learned? 1.0 0.4))  ;; upstream: no lineBlend in alpha, only in geometry
-            alpha-byte (int (* 255.0 line-alpha))
-            color (bit-or (bit-shift-left alpha-byte 24) 0xFFFFFF)
-            x0 (+ from-x (* ndx 12.2)) y0 (+ from-y (* ndy 12.2))
-            x1 (- to-x (* ndx 12.2)) y1 (- to-y (* ndy 12.2))
-            edx (* (- x1 x0) lb)
-            edy (* (- y1 y0) lb)
-            tex (modid/asset-path "textures" "guis/developer/line.png")
-            line-w (cgui-core/create-widget :pos [(int x0) (int y0)] :size [1 1])]
-        (comp/add-component! line-w (comp/rotated-line {:tex tex :dx edx :dy edy :line-w 5.5 :color color}))
-        (cgui-core/add-widget! area-widget line-w)))))
-
-(defn- draw-skill-node!
-  "Render one skill node matching original SkillTree.scala layering.
-  Layer order (bottom→top): skill_back → dark outline → icon → shader ring → click-catcher."
-  [root area-widget container node anim-time parallax-x parallax-y dev-type node-scale]
-  (let [{:keys [x y idx learned can-learn locked? skill-id skill-icon m-alpha]} node
-        {:keys [skill-back skill-outline]} (skill-tree-textures)
-        ba (back-alpha anim-time idx (or m-alpha 0.7))
-        ia (icon-alpha anim-time idx (or m-alpha 0.7))]
-    (when (>= ba 0.001)
-      (let [;; Scale around TotalSize center (original: glTranslate to TotalSize/2, glScale, translate back)
-            ;; screen top-left of the scaled TotalSize block:
-            ;;   x + DrawAlign + TotalSize*(1-s)/2 - parallax
-            center-x (+ x draw-align (/ (* total-size (- 1.0 node-scale)) 2.0) (- parallax-x))
-            center-y (+ y draw-align (/ (* total-size (- 1.0 node-scale)) 2.0) (- parallax-y))
-            ;; All positions derived from center-x/y, offsets scaled by node-scale
-            back-px (int center-x) back-py (int center-y) back-sz (int (* total-size node-scale))
-            ol-px   (int (+ center-x (* prog-align node-scale)))
-            ol-py   (int (+ center-y (* prog-align node-scale))) ol-sz (int (* prog-sz node-scale))
-            ic-px   (int (+ center-x (* icon-align node-scale)))
-            ic-py   (int (+ center-y (* icon-align node-scale))) ic-sz (int (* icon-sz node-scale))
-            ;; Colors
-            ba-byte (int (* 255.0 ba))
-            back-color (bit-or (bit-shift-left ba-byte 24) 0xFFFFFF)
-            ol-byte (int (* 255.0 (* ba 0.6)))
-            g-byte  (int (* 255.0 0.2))
-            ol-color (bit-or (bit-shift-left ol-byte 24)
-                             (bit-or (bit-shift-left g-byte 16)
-                                     (bit-or (bit-shift-left g-byte 8) g-byte)))]
-
-        ;; 1. skill_back (TotalSize=23, bottom) — white × backAlpha
-        (let [bk-w (cgui-core/create-widget :pos [back-px back-py] :size [back-sz back-sz])]
-          (comp/add-component! bk-w (comp/draw-texture skill-back back-color))
-          (cgui-core/add-widget! area-widget bk-w))
-
-        ;; 2. Dark outline (all nodes) — original draws this for both learned and unlearned
-        (let [ol-w (cgui-core/create-widget :pos [ol-px ol-py] :size [ol-sz ol-sz])]
-          (comp/add-component! ol-w (comp/draw-texture skill-outline ol-color))
-          (cgui-core/add-widget! area-widget ol-w))
-
-        ;; 3. Skill icon — white for learned, gray tint for unlearned (matching original mono shader)
-        (when (and skill-icon (>= ia 0.001))
-          (let [icon-path (modid/asset-path "textures" (subs skill-icon (count "textures/")))
-                ia-byte  (int (* 255.0 ia))
-                icon-color (bit-or (bit-shift-left ia-byte 24) (if learned 0xFFFFFF 0x888888))
-                ic-w (cgui-core/create-widget :pos [ic-px ic-py] :size [ic-sz ic-sz])]
-            (comp/add-component! ic-w (comp/draw-texture icon-path icon-color))
-            (cgui-core/add-widget! area-widget ic-w)))
-
-        ;; 4. Shader progress ring (learned only, on top of icon)
-        (when learned
-          (let [pb (progress-blend anim-time idx)
-                mask-path (modid/asset-path "textures" "guis/developer/skill_radial_mask.png")
-                ring-path (modid/asset-path "textures"
-                            (if (>= (or (:exp node) 0.0) 0.999)
-                              "guis/developer/skill_view_outline_glow.png"
-                              "guis/developer/skill_view_outline.png"))
-                ring-w (cgui-core/create-widget :pos [ol-px ol-py] :size [ol-sz ol-sz])]
-            (comp/add-component! ring-w (comp/shader-ring {:texture-0 ring-path
-                                                            :texture-1 mask-path
-                                                            :progress (float (* pb (or (:exp node) 0.0)))}))
-            (cgui-core/add-widget! area-widget ring-w)))
-
-        ;; 5. Transparent click-catcher (topmost) at original WidgetSize position (x,y without DrawAlign)
-        ;;    matching original: widget.pos(sx, sy).size(WidgetSize, WidgetSize) → click area = 16×16
-        (when (and (or can-learn learned) (not locked?))
-          (let [click-px (int (- x parallax-x))
-                click-py (int (- y parallax-y))
-                click-sz (int (* widget-size node-scale))
-                click-w  (cgui-core/create-widget :pos [click-px click-py] :size [click-sz click-sz])]
-            (events/on-left-click click-w
-              (fn [_] (create-skill-detail-overlay! root container skill-id dev-type)))
-            (cgui-core/add-widget! area-widget click-w)))))))
+(defn- build-panel-hover-args [dev-type]
+  (let [hidx (:hover-idx @skill-tree-hover)]
+    {:hid hidx
+     :htrans @skill-tree-hover-transitions}))
 
 (defn- render-skill-tree-area!
   "Render skill tree nodes in parent_right/area.
@@ -760,65 +683,33 @@
           connections (:connections render-data)
           _ (when (nil? @skill-tree-creation-time)
               (reset! skill-tree-creation-time now))
-          anim-time (/ (- now @skill-tree-creation-time) 1000.0)
+          anim (/ (- now @skill-tree-creation-time) 1000.0)
           [mx my] (cn.li.mcmod.client.platform-bridge/get-mouse-pos)
-          area-w 257 area-h 139
-          ;; Parallax offsets (upstream: clampf(0,1,mouseX/width) - 0.5) * max_du_skills
-          parallax-x (* (- (clamp01 (/ mx (max 1.0 (double area-w)))) 0.5) 10.0)
-          parallax-y (* (- (clamp01 (/ my (max 1.0 (double area-h)))) 0.5) 10.0)]
-      (draw-background! area-widget)
-      ;; Connection lines (rendered per-node with depth context in the full-screen
-      ;; skill tree; in the panel we draw them before nodes for correct layering)
-      (doseq [conn connections]
-        (draw-connection-line! area-widget
-          (assoc conn
-            :from-x (- (:from-x conn) parallax-x)
-            :from-y (- (:from-y conn) parallax-y)
-            :to-x   (- (:to-x conn) parallax-x)
-            :to-y   (- (:to-y conn) parallax-y))
-          anim-time))
-      ;; Hover detection — matching upstream per-widget StateIdle/StateHover FSM
-      ;; Each node independently computes its scale based on whether it's the
-      ;; currently hovered node (:hover-idx) or the previously hovered (:prev-idx).
-      ;; TransitTime = 0.1s (upstream constant).
-      (let [closest-node (when (seq nodes)
-                           (apply min-key
-                             (fn [n]
-                               (let [cx (+ (:x n) (/ widget-size 2) (- parallax-x))
-                                     cy (+ (:y n) (/ widget-size 2) (- parallax-y))]
-                                 (+ (* (- mx cx) (- mx cx)) (* (- my cy) (- my cy)))))
-                             nodes))
-            hover-dist (when closest-node
-                         (let [cx (+ (:x closest-node) (/ widget-size 2) (- parallax-x))
-                               cy (+ (:y closest-node) (/ widget-size 2) (- parallax-y))]
-                           (Math/sqrt (+ (* (- mx cx) (- mx cx)) (* (- my cy) (- my cy))))))
-            hover-idx (:idx closest-node)
-            hover-now? (and closest-node (< (or hover-dist 999) 20))
-            prev-idx (:hover-idx @skill-tree-hover)]
-        ;; Update hover atom with transition gate (upstream: transitProgress == 1 guard)
-        ;; Only switch state when the current animation has completed, preventing jitter
-        ;; during rapid mouse sweeps across nodes.
-        (let [current-transit (clamp01 (/ (- now (:start @skill-tree-hover)) 100.0))
-              gate-open? (>= current-transit 1.0)]
-          (when gate-open?
-            (if hover-now?
-              (when (not= hover-idx prev-idx)
-                (reset! skill-tree-hover {:hover-idx hover-idx :prev-idx prev-idx :start now}))
-              (when prev-idx
-                (reset! skill-tree-hover {:hover-idx nil :prev-idx prev-idx :start now})))))
-        (let [hover-idx (:hover-idx @skill-tree-hover)
-              unhover-idx (:prev-idx @skill-tree-hover)
-              hover-start (:start @skill-tree-hover)
-              hover-transit (clamp01 (/ (- now hover-start) 100.0))]   ;; 100ms = 0.1s TransitTime
-          (doseq [node nodes]
-            (when (and (:skill-id node) (:x node) (:y node))
-              (let [node-hovered? (= (:idx node) hover-idx)
-                    node-unhovering? (and (nil? hover-idx) (= (:idx node) unhover-idx))
-                    node-scale (cond
-                                 node-hovered?     (lerp 1.0 1.2 hover-transit)   ;; StateHover: 1.0→1.2
-                                 node-unhovering?  (lerp 1.2 1.0 hover-transit)   ;; StateIdle:  1.2→1.0
-                                 :else             1.0)]
-                (draw-skill-node! root area-widget container node anim-time parallax-x parallax-y dev-type node-scale)))))))
+          [window-w window-h] (cn.li.mcmod.client.platform-bridge/get-window-size)
+          mx01 (clamp01 (/ mx (max 1.0 (double window-w))))
+          my01 (clamp01 (/ my (max 1.0 (double window-h))))
+          parallax-x (* (- mx01 0.5) 10.0)
+          parallax-y (* (- my01 0.5) 10.0)]
+      ;; Shared draw-ops host — renders ALL nodes + connection lines via build-tree-ops
+      (client-bridge/draw-ops-host! area-widget
+        (fn []
+          (let [{:keys [hid htrans]} (build-panel-hover-args dev-type)]
+            (skill-tree/build-tree-ops render-data anim mx01 my01 hid htrans nil))))
+      ;; Hover frame handler — updates per-node hover transitions each frame
+      (let [hover-w (cgui-core/create-widget :pos [0 0] :size [257 139])]
+        (events/on-frame hover-w
+          (fn [_] (update-hover-transitions! nodes mx my parallax-x parallax-y)))
+        (cgui-core/add-widget! area-widget hover-w))
+      ;; Click catchers — transparent widgets on top for node clicks
+      (doseq [node nodes]
+        (when (and (or (:can-learn node) (:learned node)) (not (:locked? node)))
+          (let [click-x (int (- (:x node) parallax-x))
+                click-y (int (- (:y node) parallax-y))
+                click-sz (int widget-size)
+                click-w (cgui-core/create-widget :pos [click-x click-y] :size [click-sz click-sz])]
+            (events/on-left-click click-w
+              (fn [_] (create-skill-detail-overlay! root container (:skill-id node) dev-type)))
+            (cgui-core/add-widget! area-widget click-w)))))
     (catch Exception e
       (log/error "Skill tree render failed:" (ex-message e))
       (log/stacktrace "Skill tree render failed" e))))

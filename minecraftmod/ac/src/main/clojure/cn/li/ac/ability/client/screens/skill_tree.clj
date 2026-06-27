@@ -422,85 +422,75 @@
 ;; ============================================================================
 ;; Main draw ops builder
 ;; ============================================================================
+(defn build-tree-ops
+  "Shared skill tree draw ops: nodes + connections + hover tooltip + detail popup.
+   Used by BOTH full-screen path (host.clj) and developer panel (panel.clj).
+   rd = render data, anim = seconds since tree opened,
+   mx01/my01 = normalized mouse [0,1], hid = hovered skill id,
+   htrans = hover-node-transitions map, sel-id = selected skill id (or nil)."
+  [rd anim mx01 my01 hid htrans sel-id]
+  (let [;; Parallax offsets for skill nodes (upstream: clampf(0,1,mouseX/width) - 0.5) * max_du_skills
+        node-dx (* (- mx01 0.5) 10.0)
+        node-dy (* (- my01 0.5) 10.0)
+        ;; Animated connection lines — grouped by child node's index
+        raw-conns (or (:connections rd) [])
+        anim-conns (mapv (fn [c]
+                           (let [child-idx (or (:child-idx c) 0)
+                                 dt (max 0.0 (- anim (* child-idx 0.08) 0.1))
+                                 lb (clamp01 (* dt 5.0))]
+                             (assoc c
+                               :from-x (- (:from-x c) node-dx)
+                               :from-y (- (:from-y c) node-dy)
+                               :to-x   (- (lerp (:from-x c) (:to-x c) lb) node-dx)
+                               :to-y   (- (lerp (:from-y c) (:to-y c) lb) node-dy))))
+                         raw-conns)
+        conns-by-idx (group-by :child-idx anim-conns)
+        raw-nodes (or (:skill-nodes rd) [])
+        shifted-nodes (mapv #(assoc % :x (- (:x %) node-dx) :y (- (:y %) node-dy)) raw-nodes)
+        nodes (mapcat (fn [idx n]
+                        (node-ops n anim hid htrans (build-line-ops (get conns-by-idx idx) anim)))
+                      (range) shifted-nodes)
+        ;; Hover tooltip
+        hover-id (:hover-skill rd)
+        hover-node (when hover-id (first (filter #(= (:skill-id %) hover-id) (:skill-nodes rd))))
+        tooltip (when hover-node
+                  [{:kind :fill :x 230 :y 8 :w 180 :h 68 :color 0xC0202020}
+                   {:kind :text :x 236 :y 14 :text (str (:skill-name hover-node)) :font :ac-bold :font-size 12 :align :left :color 0xFFFFFFFF}
+                   {:kind :text :x 236 :y 28 :text (str (:skill-description hover-node)) :font :ac-normal :font-size 9 :align :left :color 0xFFDDDDDD}
+                   {:kind :text :x 236 :y 42 :text (format "Progress: %d%%" (int (* 100.0 (:exp hover-node)))) :font :ac-normal :font-size 8 :align :left :color 0xFFDDDDDD}
+                   {:kind :text :x 236 :y 56 :text (if (:learned hover-node) "Learned" "Not learned") :font :ac-normal :font-size 8 :align :left
+                    :color (if (:learned hover-node) 0xFF88FF88 0xFFFF8888)}])
+        ;; Detail popup
+        sel-node (when sel-id (first (filter #(= (:skill-id %) sel-id) (:skill-nodes rd))))
+        detail-ops (when sel-node (detail-popup-ops sel-node anim))]
+    (vec (concat nodes tooltip detail-ops))))
+
 (defn build-draw-ops [owner mx my screen-w screen-h]
-  "Build draw ops for the skill tree screen.
-   mx, my are the CURRENT mouse position passed by the host every frame
-   (matching upstream: gui.getMouseX/gui.getMouseY read in FrameEvent).
-   screen-w, screen-h are the actual screen dimensions from the host Screen."
+  "Full-screen skill tree draw ops. Thin wrapper that adds background + header + level-up."
   (if-let [rd (build-screen-render-data owner)]
     (let [st (screen-state-snapshot owner)
           ct (:creation-time st)
           anim (if ct (/ (- (now-ms) ct) 1000.0) 5.0)
           ab (:ability-info rd)
-
-          ;; Parallax background — matching upstream: scale(dx*max_du), scale(dy*max_du)
-          ;; Use mx,my from host (live frame-current position), NOT stored state.
-          ;; Use actual screen dimensions (like upstream gui.getWidth/getHeight).
-          sw (max 1.0 (double (or screen-w 420)))
-          sh (max 1.0 (double (or screen-h 260)))
-          mx01 (clamp01 (/ (double mx) sw))
-          my01 (clamp01 (/ (double my) sh))
+          mx01 (clamp01 (/ (double mx) (max 1.0 (double (or screen-w 420)))))
+          my01 (clamp01 (/ (double my) (max 1.0 (double (or screen-h 260)))))
           bg-dx (* (- mx01 0.5) 0.01)
           bg-dy (* (- my01 0.5) 0.01)
           bg-scale-fn (fn [x] (+ (* (- x 0.5) back-scale-inv) 0.5))
-          bg-u (bg-scale-fn bg-dx)
-          bg-v (bg-scale-fn bg-dy)
+          bg-u (bg-scale-fn bg-dx) bg-v (bg-scale-fn bg-dy)
           bg-ops [{:kind :raw-rect-uv :texture :bg-area :x 0 :y 0 :w (int 420) :h (int 260)
                    :min-u (float bg-u) :max-u (float (+ bg-u back-scale-inv))
                    :min-v (float bg-v) :max-v (float (+ bg-v back-scale-inv))}]
-
           header [{:kind :fill :x 0 :y 0 :w 420 :h 260 :color 0xA0101010}
                   {:kind :text :x 12 :y 8  :text (str "Category: " (:category-name ab)) :font :ac-normal :font-size 9 :align :left :color 0xFFFFFFFF}
                   {:kind :text :x 12 :y 22 :text (format "Level: %d" (int (or (:level ab) 0))) :font :ac-normal :font-size 9 :align :left :color 0xFFE8E8E8}
                   {:kind :text :x 12 :y 36 :text (format "CP: %.0f / %.0f" (double (get-in ab [:cp :cur] 0.0)) (double (get-in ab [:cp :max] 0.0))) :font :ac-normal :font-size 9 :align :left :color 0xFFAED7FF}
                   {:kind :text :x 12 :y 50 :text (format "Overload: %.0f / %.0f" (double (get-in ab [:overload :cur] 0.0)) (double (get-in ab [:overload :max] 0.0))) :font :ac-normal :font-size 9 :align :left :color 0xFFFFB8A6}]
-
           level-up (when (:can-level-up ab)
                      [{:kind :fill :x 10 :y 200 :w 80 :h 20 :color 0xAA22AA22}
                       {:kind :text :x 18 :y 206 :text "Level Up" :font :ac-normal :font-size 9 :align :center :color 0xFFFFFFFF}])
-
-          ;; Parallax offsets for skill nodes (upstream: clampf(0,1,mouseX/width) - 0.5) * max_du_skills
-          node-dx (* (- mx01 0.5) 10.0)
-          node-dy (* (- my01 0.5) 10.0)
-
-          ;; Animated connection lines — grouped by child node's index.
-          ;; Rendered inside each node's depth context with glDepthFunc(GL_NOTEQUAL),
-          ;; matching upstream SkillTree.scala where lineDrawer is invoked per-node
-          ;; after the node's glPopMatrix() at z=11.
-          raw-conns (or (:connections rd) [])
-          anim-conns (mapv (fn [c]
-                             (let [child-idx (or (:child-idx c) 0)
-                                   dt (max 0.0 (- anim (* child-idx 0.08) 0.1))
-                                   lb (clamp01 (* dt 5.0))]
-                               (assoc c
-                                 :from-x (- (:from-x c) node-dx)
-                                 :from-y (- (:from-y c) node-dy)
-                                 :to-x   (- (lerp (:from-x c) (:to-x c) lb) node-dx)
-                                 :to-y   (- (lerp (:from-y c) (:to-y c) lb) node-dy))))
-                           raw-conns)
-          ;; Group connections by child-idx so each node picks up its parent-connecting line
-          conns-by-idx (group-by :child-idx anim-conns)
-          hid (:hovered-skill-id st)
-          htrans (:hover-node-transitions st {})
-          raw-nodes (or (:skill-nodes rd) [])
-          shifted-nodes (mapv #(assoc % :x (- (:x %) node-dx) :y (- (:y %) node-dy)) raw-nodes)
-          nodes (mapcat (fn [idx n]
-                          (node-ops n anim hid htrans (build-line-ops (get conns-by-idx idx) anim)))
-                        (range) shifted-nodes)
-
-          hover-id (:hover-skill rd)
-          hover-node (when hover-id (first (filter #(= (:skill-id %) hover-id) (:skill-nodes rd))))
-          tooltip (when hover-node
-                    [{:kind :fill :x 230 :y 8 :w 180 :h 68 :color 0xC0202020}
-                     {:kind :text :x 236 :y 14 :text (str (:skill-name hover-node)) :font :ac-bold :font-size 12 :align :left :color 0xFFFFFFFF}
-                     {:kind :text :x 236 :y 28 :text (str (:skill-description hover-node)) :font :ac-normal :font-size 9 :align :left :color 0xFFDDDDDD}
-                     {:kind :text :x 236 :y 42 :text (format "Progress: %d%%" (int (* 100.0 (:exp hover-node)))) :font :ac-normal :font-size 8 :align :left :color 0xFFDDDDDD}
-                     {:kind :text :x 236 :y 56 :text (if (:learned hover-node) "Learned" "Not learned") :font :ac-normal :font-size 8 :align :left
-                      :color (if (:learned hover-node) 0xFF88FF88 0xFFFF8888)}])
-
-          sel-id (:selected-skill st)
-          sel-node (when sel-id (first (filter #(= (:skill-id %) sel-id) (:skill-nodes rd))))
-          detail-ops (when sel-node (detail-popup-ops sel-node anim))]
-
-      (vec (concat bg-ops header level-up nodes tooltip detail-ops)))
+          tree (build-tree-ops rd anim mx01 my01
+                 (:hovered-skill-id st) (:hover-node-transitions st {})
+                 (:selected-skill st))]
+      (vec (concat bg-ops header level-up tree)))
     []))

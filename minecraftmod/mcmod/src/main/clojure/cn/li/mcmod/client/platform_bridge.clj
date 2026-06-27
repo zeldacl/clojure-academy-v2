@@ -19,7 +19,7 @@
            movement-key-down movement-key-tick movement-key-up
            open-screen open-simple-gui run-client-effect
            get-client-player screen-active? close-screen!
-           send-system-message! get-mouse-pos game-time-ms font-width resolve-shader]}]
+           send-system-message! get-mouse-pos game-time-ms font-width resolve-shader get-window-size draw-ops-host!]}]
   (prt/install-impl! #'*client-bridge-ops*
                      {:slot-key-down slot-key-down
                       :slot-key-tick slot-key-tick
@@ -38,7 +38,9 @@
                       :get-mouse-pos get-mouse-pos
                       :game-time-ms game-time-ms
                       :font-width font-width
-                      :resolve-shader resolve-shader}
+                      :resolve-shader resolve-shader
+                      :get-window-size get-window-size
+                      :draw-ops-host! draw-ops-host!}
                      "client-bridge")
   nil)
 
@@ -153,6 +155,14 @@
   (or (bridge-op :get-mouse-pos)
       [0 0]))
 
+(defn get-window-size
+  "Return [width height] of the Minecraft window in GUI-scaled pixels.
+   Throws if the bridge is not installed — callers must ensure the bridge is active."
+  []
+  (if-let [result (bridge-op :get-window-size)]
+    result
+    (throw (ex-info "platform-bridge/get-window-size: bridge not installed — cannot determine window size" {}))))
+
 (defn game-time-ms
   "Return the current game time in milliseconds (pauses when game pauses).
    Falls back to System/currentTimeMillis if the bridge is not installed."
@@ -169,7 +179,16 @@
 
 (defn resolve-shader
   "Resolve a ShaderInstance by keyword name.
-   Returns a ShaderInstance or nil if the shader is not loaded.
-   Falls back to nil if the bridge is not installed."
+   Returns a ShaderInstance or nil if the shader is not loaded."
   [shader-name]
   (bridge-op :resolve-shader shader-name))
+
+(defn draw-ops-host!
+  "Create a CGUI widget inside `parent` that renders draw ops each frame.
+   ops-fn is (fn [] ops-vector) called each frame.
+   Returns the host widget.
+   Throws if the bridge is not installed."
+  [parent ops-fn]
+  (if-let [f (bridge-op :draw-ops-host!)]
+    (f parent ops-fn)
+    (throw (ex-info "platform-bridge/draw-ops-host!: bridge not installed" {}))))

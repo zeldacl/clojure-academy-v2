@@ -206,7 +206,12 @@
                            :skill-progbar (cn.li.forge1201.client.render.ModShaders/getSkillProgbarShader)
                            :mono (cn.li.forge1201.client.render.ModShaders/getMonoShader)
                            :alpha-discard (cn.li.forge1201.client.render.ModShaders/getAlphaDiscardShader)
-                           nil))}))
+                           nil))
+       :get-window-size (fn []
+                         (let [^net.minecraft.client.Minecraft mc (Minecraft/getInstance)]
+                           [(.getGuiScaledWidth mc) (.getGuiScaledHeight mc)]))
+       :draw-ops-host! (fn [parent ops-fn]
+                         (cn.li.mc1201.gui.cgui.draw-ops-host/draw-ops-host! parent ops-fn))}))
 
 (defn register-key-mappings!
   "Register all runtime KeyMapping instances to Forge input system."
