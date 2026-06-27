@@ -16,8 +16,10 @@
     ability_developer: 3 groups (recipes ×3)
     others:          0 groups"
   (:require [cn.li.ac.config.modid :as modid]
+            [cn.li.ac.terminal.catalog :as terminal-catalog]
             [cn.li.mcmod.gui.cgui-core :as cgui-core]
             [cn.li.mcmod.gui.components :as comp]
+            [cn.li.mcmod.gui.xml-parser :as xml-parser]
             [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
@@ -35,31 +37,21 @@
   [widget-name]
   (let [parse! (fn []
                  (try
-                   (let [xml-ns (or (requiring-resolve 'cn.li.mcmod.gui.xml-parser/read-xml)
-                                    (do (log/warn "xml-parser namespace not found, trying require...")
-                                        (try (require 'cn.li.mcmod.gui.xml-parser)
-                                             (requiring-resolve 'cn.li.mcmod.gui.xml-parser/read-xml)
-                                             (catch Throwable e2
-                                               (log/stacktrace "Failed to require xml-parser" e2)
-                                               nil))))]
-                     (if-let [read-xml (or (when (var? xml-ns) (var-get xml-ns))
-                                           (requiring-resolve 'cn.li.mcmod.gui.xml-parser/read-xml))]
-                       (let [path (modid/asset-path "guis" "tutorial_windows.xml")
-                             root (read-xml path)]
-                         (when root
-                           ;; Use cgui-core/get-widgets for reliable child access
-                           (let [widgets (cgui-core/get-widgets root)
-                                 found (some (fn [w]
-                                               (when (= widget-name (cgui-core/get-name w))
-                                                 w))
-                                             widgets)]
-                             (or found
-                                 ;; Fallback: search by recursive name match
-                                 (some (fn [w]
-                                         (when (= widget-name (cgui-core/get-name w))
-                                           w))
-                                       (mapcat #(cons % (cgui-core/get-widgets %)) widgets))))))
-                       (log/warn "xml-parser/read-xml unavailable; recipe widgets cannot be loaded")))
+                   (let [path (modid/asset-path "guis" "tutorial_windows.xml")
+                         root (xml-parser/read-xml path)]
+                     (when root
+                       ;; Use cgui-core/get-widgets for reliable child access
+                       (let [widgets (cgui-core/get-widgets root)
+                             found (some (fn [w]
+                                           (when (= widget-name (cgui-core/get-name w))
+                                             w))
+                                         widgets)]
+                         (or found
+                             ;; Fallback: search by recursive name match
+                             (some (fn [w]
+                                     (when (= widget-name (cgui-core/get-name w))
+                                       w))
+                                   (mapcat #(cons % (cgui-core/get-widgets %)) widgets))))))
                    (catch Throwable e
                      (log/stacktrace (str "Failed to load recipe widget " widget-name) e)
                      nil)))
@@ -246,8 +238,7 @@
     (let [base [{:tag :craft :display-text "Crafting: Terminal Installer"
                  :sub-views [{:type :recipe :recipe-kind "Smelting"
                              :item-id "my_mod:terminal_installer"}]}]
-          apps (try (when-let [catalog (requiring-resolve 'cn.li.ac.terminal.catalog/ordered-apps)]
-                      (catalog))
+          apps (try (terminal-catalog/ordered-apps)
                     (catch Throwable e
                       (log/warn "Failed to load terminal catalog; app tutorial entries may be missing:" (ex-message e))
                       nil))

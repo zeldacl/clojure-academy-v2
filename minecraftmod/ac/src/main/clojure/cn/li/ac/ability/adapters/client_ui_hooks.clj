@@ -31,6 +31,7 @@
             [cn.li.ac.ability.messages :as catalog]
             [cn.li.ac.client.toast :as toast]
             [cn.li.ac.ability.client.debug-overlay :as debug-overlay]
+            [cn.li.ac.tutorial.client.notification :as tutorial-notification]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.i18n :as i18n]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
@@ -932,8 +933,7 @@
 
 (defn- tutorial-notification-elements [screen-width screen-height now-ms]
   (try
-    (when-let [build-notif (requiring-resolve 'cn.li.ac.tutorial.client.notification/build-notification-elements!)]
-      (build-notif screen-width screen-height now-ms))
+    (tutorial-notification/build-notification-elements! screen-width screen-height now-ms)
     (catch Throwable _ [])))
 
 (defn- active-skill-cp-cost

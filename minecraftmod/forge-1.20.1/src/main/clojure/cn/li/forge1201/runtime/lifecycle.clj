@@ -9,7 +9,8 @@
             [cn.li.forge1201.adapter.network :as runtime-network]
             [cn.li.mcmod.gui.container-state :as container-state]
             [cn.li.mcmod.hooks.core :as power-runtime]
-            [cn.li.mcmod.util.log :as log])
+            [cn.li.mcmod.util.log :as log]
+            [cn.li.ac.tutorial.auto-give :as auto-give])
   (:import [net.minecraftforge.event.entity.player PlayerEvent$PlayerLoggedInEvent
                                                   PlayerEvent$PlayerLoggedOutEvent
                                    PlayerEvent$Clone
@@ -47,9 +48,7 @@
     ;; Tutorial auto-give: mirrors upstream TutorialData @SerializeIncluded boolean.
     ;; Uses player persistent NBT directly (not runtime-store) for reliable persistence.
     (try
-      (when-let [auto-give-fn (requiring-resolve
-                               'cn.li.ac.tutorial.auto-give/auto-give-on-login!)]
-        (auto-give-fn p))
+      (auto-give/auto-give-on-login! p)
       (catch Throwable _
         nil))))
 

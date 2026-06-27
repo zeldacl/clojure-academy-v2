@@ -17,6 +17,7 @@
             [cn.li.fabric1201.client.level-effect-renderer :as level-effect-renderer]
             [cn.li.fabric1201.client.runtime-bridge :as runtime-bridge]
             [cn.li.mc1201.client.gl-ops :as gl-ops]
+            [cn.li.mc1201.client.font.msdf-setup :as msdf-setup]
             [cn.li.fabric1201.mod :as mod])
   (:import [cn.li.fabric1201.client FabricClientRenderSetup]
            [net.minecraft.client Minecraft]
@@ -121,6 +122,5 @@
   (level-effect-renderer/init!)
   (screen-host/init!)
   (runtime-bridge/init!)
-  (when-let [msdf-init (requiring-resolve 'cn.li.mc1201.client.font.msdf-setup/init!)]
-    (msdf-init))
+  (msdf-setup/init!)
   (log/info "Fabric client initialization complete"))

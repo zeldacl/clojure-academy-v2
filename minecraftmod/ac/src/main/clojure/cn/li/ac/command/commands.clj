@@ -1,9 +1,10 @@
 (ns cn.li.ac.command.commands
   (:require [cn.li.ac.command.dsl :as cmd]
+            [cn.li.ac.command.handlers :as handlers]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]))
 
 (defn- resolve-handler [handler-name]
-  (or (requiring-resolve (symbol (str "cn.li.ac.command.handlers/" handler-name)))
+  (or (ns-resolve 'cn.li.ac.command.handlers (symbol handler-name))
       (throw (ex-info "Command handler not found" {:handler handler-name}))))
 
 (defn- build-common-aim-subcommands []

@@ -250,12 +250,14 @@
   Handles :xf transform function (can be symbol or fn).
   Replaces old schema->block-state-updater (flat format)."
   [blockstate-fields]
-  (let [;; Pre-resolve symbol xf-fns at closure-creation time so requiring-resolve
-        ;; runs only once, not on every block state change.
+  (let [;; Pre-resolve symbol xf-fns at closure-creation time.
         bs-specs (mapv (fn [spec]
                          (if-let [xf (:xf (:block-state spec))]
                            (if (symbol? xf)
-                             (assoc-in spec [:block-state :xf] (requiring-resolve xf))
+                             (let [ns-sym (symbol (namespace xf))]
+                               (require ns-sym)
+                               (assoc-in spec [:block-state :xf]
+                                         (ns-resolve ns-sym (symbol (name xf)))))
                              spec)
                            spec))
                        (filterv :block-state blockstate-fields))]

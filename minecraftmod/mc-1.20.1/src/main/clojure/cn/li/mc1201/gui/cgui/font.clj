@@ -3,7 +3,8 @@
 
   Font-size contract: :font-size N draws at N screen pixels.
   STB em height = DESIGN_PIXEL_HEIGHT (32 px); scale = N / 32."
-  (:require [clojure.string :as str])
+  (:require [clojure.string :as str]
+            [cn.li.mc1201.client.font.msdf-setup :as msdf-setup])
   (:import [net.minecraft.network.chat Component Style MutableComponent]
            [net.minecraft.client.gui Font GuiGraphics]
            [com.mojang.blaze3d.vertex PoseStack]
@@ -38,8 +39,7 @@
 ;; ---- helpers ----
 
 (defn- ensure-msdf-ready! []
-  (when-let [ensure! (requiring-resolve 'cn.li.mc1201.client.font.msdf-setup/ensure-ready!)]
-    (ensure!)))
+  (msdf-setup/ensure-ready!))
 
 (defn- msdf-active? []
   (ensure-msdf-ready!)

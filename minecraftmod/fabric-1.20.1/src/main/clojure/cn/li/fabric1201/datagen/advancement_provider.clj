@@ -7,7 +7,8 @@
             [cn.li.mc1201.datagen.resource-location :as rl]
             [cn.li.mc1201.datagen.gson-util :as gson-util]
             [cn.li.mc1201.datagen.item-registry :as item-registry]
-            [cn.li.mcmod.datagen.metadata :as datagen-metadata])
+            [cn.li.mcmod.datagen.metadata :as datagen-metadata]
+            [cn.li.mcmod.protocol.metadata :as metadata])
   (:import [com.google.gson Gson JsonElement]
            [java.util.concurrent CompletableFuture]
            [net.minecraft.data CachedOutput DataProvider PackOutput PackOutput$PathProvider PackOutput$Target]
@@ -32,27 +33,19 @@
   (str modid/*mod-id* ":achievements/" (normalize-id id)))
 
 (defn- metadata-fn
-  [sym]
-  (let [v (requiring-resolve sym)]
-    (cond
-      (and v (bound? v))
-      (fn [& args] (apply v args))
-
-      :else
-      (do
-        (require 'cn.li.mcmod.protocol.metadata :reload)
-        (let [v2 (requiring-resolve sym)]
-          (if (and v2 (bound? v2))
-            (fn [& args] (apply v2 args))
-            (fn [& _] nil)))))))
+  "Wrap a metadata lookup function so it returns nil on missing input."
+  [f]
+  (fn [& args]
+    (when f
+      (apply f args))))
 
 (defn- make-known-item-ids
   []
   (item-registry/known-item-ids
-    (metadata-fn 'cn.li.mcmod.protocol.metadata/get-all-item-ids)
-    (metadata-fn 'cn.li.mcmod.protocol.metadata/get-item-registry-name)
-    (metadata-fn 'cn.li.mcmod.protocol.metadata/get-all-block-ids)
-    (metadata-fn 'cn.li.mcmod.protocol.metadata/get-block-registry-name)
+    (metadata-fn metadata/get-all-item-ids)
+    (metadata-fn metadata/get-item-registry-name)
+    (metadata-fn metadata/get-all-block-ids)
+    (metadata-fn metadata/get-block-registry-name)
     "my_mod"))
 
 (defn- item-predicate

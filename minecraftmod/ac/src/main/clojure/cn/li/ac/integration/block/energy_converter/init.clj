@@ -16,6 +16,7 @@
 	          [cn.li.ac.integration.block.energy-converter.rf-input :as rf-input]
 	          [cn.li.ac.integration.block.energy-converter.rf-output :as rf-output]
 		          [cn.li.ac.block.energy-converter.wireless-impl :as ec-wireless]
+	          [cn.li.ac.gui.open :as gui-open]
 	          [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
 						[cn.li.ac.integration.block.energy-converter.platform-bridge :as ec-bridge]
 						[cn.li.mcmod.util.log :as log])
@@ -43,9 +44,7 @@
 	[{:keys [player world pos sneaking] :as _ctx}]
 	(when-not sneaking
 		(try
-			(if-let [open-gui-by-type (requiring-resolve 'cn.li.ac.gui.open/open-gui-by-type)]
-				(open-gui-by-type player :energy-converter world pos)
-				(do (log/error "Energy Converter GUI open fn not found: cn.li.ac.gui.open/open-gui-by-type") nil))
+			(gui-open/open-gui-by-type player :energy-converter world pos)
 			(catch Exception e
 				(log/error "Failed to open Energy Converter GUI:" (ex-message e))
 				nil))))

@@ -21,7 +21,7 @@
   (try
     (add-listener! mod-bus RegisterKeyMappingsEvent
                    (fn [event]
-                     (when-let [register-keys! (side/resolve-client-fn 'cn.li.forge1201.client.init 'register-key-mappings!)]
+                     (when-let [register-keys! (side/resolve-client-fn 'cn.li.forge1201.client.init/register-key-mappings!)]
                        (register-keys! event))))
     true
     (catch Exception e

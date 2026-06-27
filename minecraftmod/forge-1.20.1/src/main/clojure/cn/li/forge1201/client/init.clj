@@ -19,6 +19,7 @@
             [cn.li.mc1201.client.render.buffer :as buffer-impl]
             [cn.li.mc1201.client.screen.host :as screen-host]
             [cn.li.mc1201.client.request.bridge :as request-bridge]
+            [cn.li.mc1201.client.font.msdf-setup :as msdf-setup]
             [cn.li.mc1201.gui.cgui.draw-ops-host :as draw-ops-host]
             [cn.li.forge1201.client.runtime-bridge :as runtime-bridge]
             [cn.li.forge1201.client.key-input :as key-input]
@@ -244,8 +245,7 @@
   (overlay-renderer/init!)
   (screen-host/init!)
   (cgui-screen-bridge/init!)
-  (when-let [msdf-init (requiring-resolve 'cn.li.mc1201.client.font.msdf-setup/init!)]
-    (msdf-init))
+  (msdf-setup/init!)
   (particle/init!)
   (sound/init!)
   (hand-effect-renderer/init!)

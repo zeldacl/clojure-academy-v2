@@ -6,7 +6,6 @@
 
   Init is retried until both the font face and msdf_text shader are ready."
   (:require [cn.li.mc1201.client.font.system-font-detector :as detector]
-            [cn.li.mc1201.gui.cgui.font :as cgui-font]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.mc1201.client.font.msdf MsdfFontManager]))
 
@@ -14,7 +13,6 @@
   "Load MSDF face when possible. Safe to call every frame until `isAvailable`."
   []
   (try
-    (cgui-font/set-msdf-base-height! (float MsdfFontManager/CGUI_BASE_HEIGHT))
     (when-not (MsdfFontManager/hasFontFace)
       (when-let [{:keys [path]} (detector/detect-system-font)]
         (when-not (MsdfFontManager/init path)

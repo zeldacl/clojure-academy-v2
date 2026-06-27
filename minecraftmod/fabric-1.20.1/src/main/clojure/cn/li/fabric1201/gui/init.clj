@@ -11,10 +11,15 @@
 (def ^:private platform-label "Fabric 1.20.1")
 
 (defn- optional-init!
-  [sym missing-message]
-  (if-let [init! (requiring-resolve sym)]
-    (init!)
-    (log/warn missing-message)))
+  [var-sym missing-message]
+  (try
+    (require (symbol (namespace var-sym)))
+    (if-let [init! (when-let [v (find-var var-sym)]
+                     (when (bound? v) @v))]
+      (init!)
+      (log/warn missing-message))
+    (catch Exception _
+      (log/warn missing-message))))
 
 (def ^:private common-phase
   {:platform-label platform-label

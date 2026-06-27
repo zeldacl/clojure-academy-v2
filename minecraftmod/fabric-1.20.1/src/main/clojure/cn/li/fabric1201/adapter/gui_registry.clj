@@ -8,7 +8,8 @@
             [cn.li.mc1201.gui.registry.common :as registry-common]
             [cn.li.mc1201.gui.registry.open :as open-core]
             [cn.li.mcmod.config :as modid]
-            [cn.li.mcmod.util.log :as log])
+            [cn.li.mcmod.util.log :as log]
+            [cn.li.mc1201.client.session :as client-session])
   (:import [net.minecraft.resources ResourceLocation]
            [net.fabricmc.fabric.api.screenhandler.v1 ScreenHandlerRegistry]))
 
@@ -58,7 +59,8 @@
                                        (menu-proxy/create-menu-proxy window-id menu-type clj-container opts))
                :resolve-menu-type-fn get-handler-type
                :bridge-opts (menu-proxy/platform-menu-proxy-opts :fabric-1.20.1)
-               :error-prefix "Failed to create container for GUI"})))))))
+               :error-prefix "Failed to create container for GUI"
+               :with-owner! #(client-session/with-current-client-owner %)})))))))
 
 (defn register-screen-handler-types! []
   (log/info "Registering GUI screen handler types for Fabric 1.20.1")

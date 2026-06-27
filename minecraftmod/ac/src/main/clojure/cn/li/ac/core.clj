@@ -1,5 +1,10 @@
 (ns cn.li.ac.core
   (:require [cn.li.mcmod.lifecycle :as lifecycle]
+            [cn.li.ac.core.init :as core-init]
+            [cn.li.ac.core.content-loader :as content-loader]
+            [cn.li.ac.terminal.client.actions :as terminal-actions]
+            [cn.li.ac.client.platform-hooks :as platform-hooks]
+            [cn.li.ac.client.font-init :as font-init]
             [cn.li.ac.datagen.bootstrap :as datagen-bootstrap]
             [cn.li.ac.registry.hooks :as hooks]
             [cn.li.ac.testing.smoke-manifest :as smoke-manifest]))
@@ -59,19 +64,13 @@
    (reset! (lifecycle-hooks-registered-atom) (boolean registered?))
    nil))
 
-(defn- resolve-required
-  [var-sym]
-  (or (requiring-resolve var-sym)
-      (throw (ex-info (str "Missing required var: " var-sym)
-                      {:var var-sym}))))
-
 (defn init
   []
-  ((resolve-required 'cn.li.ac.core.init/init)))
+  (core-init/init))
 
 (defn activate-runtime-content!
   []
-  ((resolve-required 'cn.li.ac.core.content-loader/activate-runtime-content!)))
+  (content-loader/activate-runtime-content!))
 
 (defn register-datagen-metadata!
   []
@@ -82,15 +81,9 @@
   "Run content-owned client renderer initialization.
   Called by mcmod during client initialization."
   []
-  (when-let [install-terminal-hooks!
-             (requiring-resolve 'cn.li.ac.terminal.client.actions/install-ui-hooks!)]
-    (install-terminal-hooks!))
-  (when-let [install-client-actions!
-             (requiring-resolve 'cn.li.ac.client.platform-hooks/install-client-content-actions!)]
-    (install-client-actions!))
-  (when-let [init-ac-fonts!
-             (requiring-resolve 'cn.li.ac.client.font-init/init-fonts!)]
-    (init-ac-fonts!))
+  (terminal-actions/install-ui-hooks!)
+  (platform-hooks/install-client-content-actions!)
+  (font-init/init-fonts!)
   (hooks/load-all-client-renderers!))
 
 (defn register-lifecycle-hooks!
@@ -105,6 +98,5 @@
     (lifecycle/register-content-init! #'init)
     (lifecycle/register-runtime-content-activation! #'activate-runtime-content!)
     (lifecycle/register-datagen-metadata-init! #'register-datagen-metadata!)
-    (when-let [register-fn (requiring-resolve 'cn.li.mcmod.lifecycle/register-client-init!)]
-      (register-fn init-client-renderers)))
+    (lifecycle/register-client-init! init-client-renderers))
   nil)

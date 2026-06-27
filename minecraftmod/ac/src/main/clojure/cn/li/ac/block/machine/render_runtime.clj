@@ -1,6 +1,7 @@
 (ns cn.li.ac.block.machine.render-runtime
   "Shared client render runtime: dynamic binding, cache atoms, renderer init registration."
-  (:require [cn.li.mcmod.util.log :as log]))
+  (:require [cn.li.mcmod.client.render.init :as render-init]
+            [cn.li.mcmod.util.log :as log]))
 
 (defn create-render-runtime
   "Create a render runtime map from cache key -> initial value pairs."
@@ -66,21 +67,19 @@
 
 (defn register-client-renderer-init!
   [init-ref]
-  (when-let [register-fn (try (requiring-resolve 'cn.li.mcmod.client.render.init/register-renderer-init-fn!)
-                              (catch Exception _ nil))]
-    (let [init-fn (cond
-                    (fn? init-ref) init-ref
-                    (var? init-ref) init-ref
-                    (symbol? init-ref)
-                    (or (try (requiring-resolve init-ref)
-                             (catch Exception _ nil))
-                        (fn []
-                          (throw (ex-info "Failed to resolve renderer init symbol"
-                                          {:symbol init-ref}))))
-                    :else
-                    (fn []
-                      (throw (ex-info "Unsupported renderer init ref"
-                                      {:value init-ref
-                                       :type (type init-ref)}))))]
-      (register-fn init-fn)
-      (log/info "Registered client renderer init" init-ref))))
+  (let [init-fn (cond
+                  (fn? init-ref) init-ref
+                  (var? init-ref) init-ref
+                  (symbol? init-ref)
+                  (or (try (requiring-resolve init-ref)
+                           (catch Exception _ nil))
+                      (fn []
+                        (throw (ex-info "Failed to resolve renderer init symbol"
+                                        {:symbol init-ref}))))
+                  :else
+                  (fn []
+                    (throw (ex-info "Unsupported renderer init ref"
+                                    {:value init-ref
+                                     :type (type init-ref)}))))]
+    (render-init/register-renderer-init-fn! init-fn)
+    (log/info "Registered client renderer init" init-ref)))

@@ -1,6 +1,7 @@
 (ns cn.li.ac.item.energy-items
   "Energy-backed item declarations migrated from original AcademyCraft."
   (:require [cn.li.mcmod.item.dsl :as idsl]
+            [cn.li.ac.item.developer-portable :as developer-portable]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.ac.item.item-energy-base :as energy-base]
             [cn.li.mcmod.util.log :as log]))
@@ -15,12 +16,11 @@
   [{:keys [player side]}]
   (when (= side :client)
     ;; Build the CGUI screen data (platform-agnostic)
-    (when-let [screen-data (requiring-resolve 'cn.li.ac.item.developer-portable/create-screen)]
-      (let [screen-map (screen-data player)]
-        ;; Open via platform CGUI screen host
-        (when-let [open-fn (requiring-resolve 'cn.li.mc1201.gui.screen.cgui-screen-host/open-cgui-screen!)]
-          (open-fn (:cgui screen-map) (:session-id screen-map)
-                   {:title "Portable Developer"})))))
+    (let [screen-map (developer-portable/create-screen player)]
+      ;; Open via platform CGUI screen host
+      (when-let [open-fn (requiring-resolve 'cn.li.mc1201.gui.screen.cgui-screen-host/open-cgui-screen!)]
+        (open-fn (:cgui screen-map) (:session-id screen-map)
+                 {:title "Portable Developer"}))))
   {:consume? true})
 
 (defn init-energy-items!

@@ -9,15 +9,9 @@
 	(:import [net.minecraftforge.common MinecraftForge]
 					 [net.minecraftforge.eventbus.api IEventBus]))
 
-(defn- resolve-handler
-	[handler]
-	(if (symbol? handler)
-		(requiring-resolve handler)
-		handler))
-
 (defn- bind-listener-spec!
 	[event-bus {:keys [listener-class handler]}]
-	(consumer-support/add-normal-listener! event-bus listener-class (resolve-handler handler))
+	(consumer-support/add-normal-listener! event-bus listener-class handler)
 	nil)
 
 (defn register-lifecycle-phase!

@@ -6,6 +6,8 @@
   (:require [cn.li.mcmod.item.dsl :as idsl]
             [cn.li.mcmod.util.log :as log]
             [cn.li.ac.ability.util.uuid :as uuid]
+            [cn.li.ac.achievement.dispatcher :as achievement-dispatcher]
+            [cn.li.ac.terminal.client.actions :as terminal-actions]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]))
 
 (defonce-guard tutorial-item-installed?)
@@ -24,16 +26,12 @@
       ;; set to DENY and RightClickItem never fires.  The tutorial GUI only
       ;; opens when the block interaction is PASS (dirt, air, etc.).
       (when (= side :client)
-        (when-let [open-fn (requiring-resolve
-                            'cn.li.ac.terminal.client.actions/open-tutorial!)]
-          (open-fn player)))
+        (terminal-actions/open-tutorial! player))
       ;; Server side: trigger open_misaka_cloud achievement
       ;; (original AC MSG_TRIGGER → ACAdvancements.trigger)
       (when (= side :server)
         (try
-          (when-let [trigger-fn (requiring-resolve
-                                 'cn.li.ac.achievement.dispatcher/trigger-custom-event!)]
-            (trigger-fn (uuid/player-uuid player) "open_misaka_cloud"))
+          (achievement-dispatcher/trigger-custom-event! (uuid/player-uuid player) "open_misaka_cloud")
           (catch Throwable e
             (log/warn "Failed to trigger open_misaka_cloud achievement:" (ex-message e))
             (log/stacktrace "Failed to trigger open_misaka_cloud achievement:" e)

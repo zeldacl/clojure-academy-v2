@@ -6,7 +6,8 @@
 
   Uses player.getPersistentData() for storage — Minecraft handles save/load
   automatically with the player entity."
-  (:require [cn.li.ac.tutorial.model :as model]
+  (:require [cn.li.ac.tutorial.conditions :as conditions]
+            [cn.li.ac.tutorial.model :as model]
             [cn.li.mcmod.platform.player-persistent-data :as player-pd]
             [cn.li.mcmod.platform.nbt :as nbt]
             [cn.li.mcmod.util.log :as log]))
@@ -96,11 +97,8 @@
   [player cond-map]
   (let [s (state player)]
     (when (model/dirty? s)
-      (let [new-acts (resolve 'cn.li.ac.tutorial.conditions/check-new-activations)
-            check-fn (requiring-resolve 'cn.li.ac.tutorial.conditions/check-new-activations)]
-        (when check-fn
-          (let [acts (check-fn s cond-map)
-                _ (doseq [tut-id acts]
-                    (activate-tutorial! player tut-id))]
-            (update-state! player model/clear-dirty!)
-            acts))))))
+      (let [acts (conditions/check-new-activations s cond-map)
+            _ (doseq [tut-id acts]
+                (activate-tutorial! player tut-id))]
+        (update-state! player model/clear-dirty!)
+        acts))))

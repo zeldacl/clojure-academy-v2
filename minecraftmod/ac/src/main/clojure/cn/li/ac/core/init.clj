@@ -9,6 +9,7 @@
             [cn.li.ac.config.registry :as config-registry]
             [cn.li.ac.entity.hook-catalog :as entity-hook-catalog]
             [cn.li.ac.tutorial.events :as tutorial-events]
+            [cn.li.ac.wireless.data.world :as wireless-world]
             [cn.li.mcmod.util.log :as log]))
 
 (defn init
@@ -20,8 +21,7 @@
   (entity-hook-catalog/install-resolvers!)
   (block-bridge/install-blockstate-hooks!)
   (command-bridge/install-command-hooks!)
-  (when-let [init-wireless-world-data! (requiring-resolve 'cn.li.ac.wireless.data.world/init-world-data!)]
-    (init-wireless-world-data!))
+  (wireless-world/init-world-data!)
   (config-registry/init-configs!)
   (tutorial-events/register-platform-handlers!)
   (ability-runtime/install-runtime-hooks!

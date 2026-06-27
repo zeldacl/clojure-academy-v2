@@ -8,7 +8,8 @@
             [cn.li.mc1201.client.overlay.state :as overlay-state]
             [cn.li.mcmod.hooks.core :as power-runtime]
              [cn.li.mcmod.util.log :as log]
-             [cn.li.mc1201.client.player-state-core :as player-state])
+             [cn.li.mc1201.client.player-state-core :as player-state]
+             [cn.li.mc1201.client.font.msdf-tick :as msdf-tick])
   (:import [cn.li.mc1201.client.effect ScriptedEffectSpawner]
             [net.minecraftforge.common MinecraftForge]
            [net.minecraftforge.event TickEvent$ClientTickEvent TickEvent$Phase]
@@ -78,8 +79,7 @@
   (key-input/tick-input!)
   (particle/tick-particles!)
   (sound/tick-sounds!)
-  (when-let [msdf-tick (requiring-resolve 'cn.li.mc1201.client.font.msdf-tick/client-tick!)]
-    (msdf-tick))
+  (msdf-tick/client-tick!)
   (client-session/with-current-client-session #(power-runtime/client-tick!)))
 
 (defn- on-client-tick [^TickEvent$ClientTickEvent evt]

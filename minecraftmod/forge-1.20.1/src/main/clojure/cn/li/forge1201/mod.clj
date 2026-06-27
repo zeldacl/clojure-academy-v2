@@ -153,9 +153,9 @@
       (reify Runnable
         (run [_]
           (gui-init/init-client!)
-          (when-let [install-i18n! (side/resolve-client-fn 'cn.li.mc1201.client.i18n 'install-client-i18n!)]
+          (when-let [install-i18n! (side/resolve-client-fn 'cn.li.mc1201.client.i18n/install-client-i18n!)]
             (install-i18n!))
-          (if-let [init-client! (side/resolve-client-fn 'cn.li.forge1201.client.init 'init-client)]
+          (if-let [init-client! (side/resolve-client-fn 'cn.li.forge1201.client.init/init-client)]
             (init-client!)
             (log/error "Client-side detected but client init failed to load")))))))
 

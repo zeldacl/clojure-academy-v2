@@ -37,22 +37,23 @@
         nil))))
 
 (defn resolve-client-fn
-  "Safely resolve a client-only function. Returns the var or nil if on server.
+  "Safely resolve a client-only function. Returns the fn or nil if on server.
 
   Args:
-    ns-sym: Symbol - Namespace containing the function
-    fn-name: Symbol or String - Function name
+    var-sym: Symbol - Fully-qualified var symbol (e.g. 'cn.li.forge1201.client.init/init-client)
 
   Returns:
-    The resolved var if on client, nil if on server or if resolution fails.
+    The resolved fn if on client, nil if on server or if resolution fails.
 
   Example:
-    (when-let [init! (resolve-client-fn 'cn.li.forge1201.client.init 'init-client)]
+    (when-let [init! (resolve-client-fn 'cn.li.forge1201.client.init/init-client)]
       (init!))"
-  [ns-sym fn-name]
+  [var-sym]
   (when (client-side?)
     (try
-      (requiring-resolve (symbol (str ns-sym) (str fn-name)))
+      (require (symbol (namespace var-sym)))
+      (when-let [v (find-var var-sym)]
+        (when (bound? v) @v))
       (catch Exception e
-        (log/error "Failed to resolve client function" ns-sym fn-name e)
+        (log/error "Failed to resolve client function" var-sym e)
         nil))))

@@ -8,7 +8,8 @@
             [cn.li.fabric1201.client.overlay-renderer :as overlay-renderer]
             [cn.li.mc1201.client.overlay.state :as overlay-state]
             [cn.li.mcmod.hooks.core :as power-runtime]
-            [cn.li.mcmod.util.log :as log])
+            [cn.li.mcmod.util.log :as log]
+            [cn.li.mc1201.client.font.msdf-tick :as msdf-tick])
   (:import [net.fabricmc.fabric.api.client.event.lifecycle.v1 ClientTickEvents ClientTickEvents$EndTick]
            [net.minecraft.client Minecraft]
            [org.lwjgl.glfw GLFW]))
@@ -247,8 +248,7 @@
   (tick-content-keys!)
   (particle/tick-particles!)
   (sound/tick-sounds!)
-  (when-let [msdf-tick (requiring-resolve 'cn.li.mc1201.client.font.msdf-tick/client-tick!)]
-    (msdf-tick))
+  (msdf-tick/client-tick!)
   (client-session/with-current-client-session #(power-runtime/client-tick!)))
 
 (defn init!

@@ -6,6 +6,7 @@
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.world :as world]
             [cn.li.mcmod.platform.world-effects :as world-effects]
+            [cn.li.ac.item.terminal-installer-handler :as terminal-installer-handler]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.util.log :as log]))
 
@@ -64,7 +65,7 @@
          :on-right-click (fn [event-data]
                            (let [{:keys [player side]} event-data]
                              (or (when (= side :server)
-                                   ((requiring-resolve 'cn.li.ac.item.terminal-installer-handler/handle-right-click) player))
+                                   (terminal-installer-handler/handle-right-click player))
                                  {:consume? true})))}))
     (idsl/register-item!
       (idsl/create-item-spec

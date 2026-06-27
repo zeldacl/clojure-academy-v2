@@ -1,5 +1,10 @@
 (ns cn.li.forge1201.setup.event-registration-manifest
-  "Declarative event registration manifest for Forge lifecycle/common events.")
+  "Declarative event registration manifest for Forge lifecycle/common events."
+  (:require [cn.li.forge1201.integration.events.interact :as interact-events]
+            [cn.li.forge1201.integration.events.block :as block-events]
+            [cn.li.forge1201.integration.events.loot :as loot-events]
+            [cn.li.forge1201.integration.events.world :as world-events]
+            [cn.li.forge1201.registry.creative-tab-event :as creative-tab-event]))
 
 (defn lifecycle-listener-specs
   [{:keys [on-common-setup on-client-setup]}]
@@ -9,25 +14,25 @@
     :handler on-client-setup}
    ;; 1.20+ data-driven creative tab population (ModEventBus)
    {:listener-class net.minecraftforge.event.BuildCreativeModeTabContentsEvent
-    :handler 'cn.li.forge1201.registry.creative-tab-event/handle-build-contents}])
+    :handler creative-tab-event/handle-build-contents}])
 
 (defn common-event-listener-specs
   []
   [{:listener-class net.minecraftforge.event.entity.player.PlayerInteractEvent$RightClickBlock
-    :handler 'cn.li.forge1201.integration.events.interact/handle-right-click-event}
+    :handler interact-events/handle-right-click-event}
    {:listener-class net.minecraftforge.event.entity.player.PlayerInteractEvent$LeftClickBlock
-    :handler 'cn.li.forge1201.integration.events.interact/handle-left-click-block-event}
+    :handler interact-events/handle-left-click-block-event}
    {:listener-class net.minecraftforge.event.level.BlockEvent$EntityPlaceEvent
-    :handler 'cn.li.forge1201.integration.events.block/handle-block-place-event}
+    :handler block-events/handle-block-place-event}
    {:listener-class net.minecraftforge.event.level.BlockEvent$BreakEvent
-    :handler 'cn.li.forge1201.integration.events.block/handle-block-break-event}
+    :handler block-events/handle-block-break-event}
    {:listener-class net.minecraftforge.event.LootTableLoadEvent
-    :handler 'cn.li.forge1201.integration.events.loot/handle-loot-table-load}
+    :handler loot-events/handle-loot-table-load}
      {:listener-class net.minecraftforge.event.level.LevelEvent$Load
-    :handler 'cn.li.forge1201.integration.events.world/handle-world-load}
+    :handler world-events/handle-world-load}
      {:listener-class net.minecraftforge.event.level.LevelEvent$Save
-    :handler 'cn.li.forge1201.integration.events.world/handle-world-save}
+    :handler world-events/handle-world-save}
      {:listener-class net.minecraftforge.event.level.LevelEvent$Unload
-    :handler 'cn.li.forge1201.integration.events.world/handle-world-unload}
+    :handler world-events/handle-world-unload}
      {:listener-class net.minecraftforge.event.TickEvent$LevelTickEvent
-    :handler 'cn.li.forge1201.integration.events.world/handle-world-tick}])
+    :handler world-events/handle-world-tick}])

@@ -5,6 +5,7 @@
             [cn.li.ac.terminal.player :as player]
             [cn.li.ac.terminal.catalog :as catalog]
             [cn.li.ac.ability.util.uuid :as uuid]
+            [cn.li.ac.achievement.dispatcher :as achievement-dispatcher]
             [cn.li.mcmod.network.server :as net-server]
             [cn.li.mcmod.util.log :as log]))
 
@@ -16,8 +17,7 @@
       (player/install-terminal! player)
       (let [uid (uuid/player-uuid player)]
         (try
-          (when-let [trigger-fn (requiring-resolve 'cn.li.ac.achievement.dispatcher/trigger-custom-event!)]
-            (trigger-fn uid "terminal_installed"))
+          (achievement-dispatcher/trigger-custom-event! uid "terminal_installed")
           (catch Throwable _ nil))
         (try
           (when-let [send-push (requiring-resolve 'cn.li.mc1201.runtime.network-core/send-to-client!)]

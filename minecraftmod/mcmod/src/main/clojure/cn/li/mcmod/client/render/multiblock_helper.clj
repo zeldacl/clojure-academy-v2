@@ -24,8 +24,9 @@
     (pbe/get-block-id tile)))
 
 (defn- metadata-call
-  [var-sym & args]
-  (when-let [f (requiring-resolve var-sym)]
+  "Call metadata function `f` with `args`. Returns nil if `f` is nil."
+  [f & args]
+  (when f
     (apply f args)))
 
 (defn- normalize-direction [direction]
@@ -224,12 +225,12 @@
     (and (map? state)
          (zero? (long (:sub-id state 0)))
          (some? block-id)
-         (if-let [block-spec (metadata-call 'cn.li.mcmod.protocol.metadata/get-block-spec block-id)]
-           (and (or (not (metadata-call 'cn.li.mcmod.protocol.metadata/controller-parts-block? block-id))
-                    (metadata-call 'cn.li.mcmod.protocol.metadata/is-controller-block? block-id))
+         (if-let [block-spec (metadata-call registry-metadata/get-block-spec block-id)]
+           (and (or (not (metadata-call registry-metadata/controller-parts-block? block-id))
+                    (metadata-call registry-metadata/is-controller-block? block-id))
                 (if-let [canonical (canonical-origin-pos tile state block-spec)]
                   (= canonical (current-pos-xyz tile))
-                  (not (metadata-call 'cn.li.mcmod.protocol.metadata/controller-parts-block? block-id))))
+                  (not (metadata-call registry-metadata/controller-parts-block? block-id))))
            false))))
 
 ;; ============================================================================
@@ -255,7 +256,7 @@
             block-id (or (get-tile-block-id tile)
              (:block-id state))
             block-spec (when block-id
-             (metadata-call 'cn.li.mcmod.protocol.metadata/get-block-spec block-id))
+             (metadata-call registry-metadata/get-block-spec block-id))
             direction (normalize-direction (:direction state :north))
             [pivot-x pivot-z]
             (if-let [o (:pivot-xz-override (:multi-block block-spec))]

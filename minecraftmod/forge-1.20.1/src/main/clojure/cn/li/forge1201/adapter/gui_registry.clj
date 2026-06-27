@@ -10,7 +10,8 @@
             [cn.li.mc1201.gui.registry.common :as registry-common]
             [cn.li.mc1201.gui.registry.open :as open-core]
             [cn.li.mcmod.config :as modid]
-            [cn.li.mcmod.util.log :as log])
+            [cn.li.mcmod.util.log :as log]
+            [cn.li.mc1201.client.session :as client-session])
   (:import [cn.li.forge1201.shim ForgeBootstrapHelper]
            [net.minecraftforge.network NetworkHooks IContainerFactory]
            [net.minecraftforge.common.extensions IForgeMenuType]
@@ -106,7 +107,8 @@
                                      (menu-proxy/create-menu-proxy wid menu-type clj-container opts))
              :resolve-menu-type-fn get-menu-type
              :bridge-opts (menu-proxy/platform-menu-proxy-opts :forge-1.20.1)
-             :error-prefix "Failed to create container for GUI"}))))))
+             :error-prefix "Failed to create container for GUI"
+             :with-owner! #(client-session/with-current-client-owner %)}))))))
 
 (defn register-menu-types!
   "Populate menu-register DeferredRegister with all GUI menu types.

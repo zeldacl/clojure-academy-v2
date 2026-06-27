@@ -4,11 +4,6 @@
   (:import [net.minecraft.network FriendlyByteBuf]
            [net.minecraft.world.entity.player Inventory Player]))
 
-(defn- with-current-client-owner*
-  [f]
-  (if-let [with-owner (requiring-resolve 'cn.li.mc1201.client.session/with-current-client-owner)]
-    (with-owner f)
-    (f)))
 
 (defn create-wrapped-container
   [create-container-fn wrap-container-fn resolve-handler-type-fn gui-id sync-or-window-id error-prefix]
@@ -55,7 +50,8 @@
   and the platform-specific clj-container creator. This keeps the common
   player/world/pos/container/menu wrapping flow in mc-1.20.1."
   [{:keys [gui-id window-id player-inventory pos handler create-container-fn
-           create-menu-proxy-fn resolve-menu-type-fn bridge-opts error-prefix]}]
+           create-menu-proxy-fn resolve-menu-type-fn bridge-opts error-prefix
+           with-owner!]}]
     (let [^Inventory player-inventory player-inventory
       ^Player player (.player player-inventory)
         world (.level player)]
@@ -63,7 +59,7 @@
       (fn []
         (create-container-fn handler gui-id player world pos))
       (fn [wid menu-type clj-container]
-        (with-current-client-owner*
+        (with-owner!
           #(create-menu-proxy-fn wid
                                  menu-type
                                  clj-container

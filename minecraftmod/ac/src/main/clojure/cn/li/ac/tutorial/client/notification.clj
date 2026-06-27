@@ -11,6 +11,7 @@
   Rendered via overlay element builder (same pipeline as toast.clj).
   Called from client-state/apply-sync! when new tutorial activations arrive."
   (:require [cn.li.ac.config.modid :as modid]
+            [cn.li.ac.tutorial.content :as tutorial-content]
             [cn.li.mcmod.i18n :as i18n]
             [cn.li.mcmod.util.log :as log]))
 
@@ -67,16 +68,14 @@
   [new-tut-ids]
   (when (seq new-tut-ids)
     (try
-      (let [load-content (requiring-resolve 'cn.li.ac.tutorial.content/load-tutorial-content)]
-        (when load-content
-          (doseq [tut-id new-tut-ids]
-            (let [title (try
-                          (:title (load-content (name tut-id)))
-                          (catch Throwable _ (name tut-id)))]
-              (swap! notifications* conj
-                     {:title title
-                      :tut-id tut-id
-                      :start-sec nil})))))
+      (doseq [tut-id new-tut-ids]
+        (let [title (try
+                      (:title (tutorial-content/load-tutorial-content (name tut-id)))
+                      (catch Throwable _ (name tut-id)))]
+          (swap! notifications* conj
+                 {:title title
+                  :tut-id tut-id
+                  :start-sec nil})))
       (catch Throwable t
         (log/warn :tutorial-notification "Failed to queue activation toast:" (ex-message t))))))
 
