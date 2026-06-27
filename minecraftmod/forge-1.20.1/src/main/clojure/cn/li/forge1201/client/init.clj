@@ -220,7 +220,9 @@
        :font-text-width (fn [font-desc text font-size]
                           (cgui-font/text-width font-desc text font-size))
        :stop-all-media! (fn [player-uuid]
-                          (sound/stop-all-media! player-uuid))}))
+                          (sound/stop-all-media! player-uuid))
+       :has-recipes? (fn [item-id]
+                       (cn.li.forge1201.integration.recipe-query/has-recipes? item-id))}))
 
 (defn register-key-mappings!
   "Register all runtime KeyMapping instances to Forge input system."

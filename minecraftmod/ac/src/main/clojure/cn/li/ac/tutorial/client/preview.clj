@@ -20,6 +20,7 @@
             [cn.li.mcmod.gui.cgui-core :as cgui-core]
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.mcmod.gui.xml-parser :as xml-parser]
+            [cn.li.mcmod.client.platform-bridge :as platform-bridge]
             [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
@@ -161,11 +162,7 @@
   "Check if the forge recipe query is available and has recipes for item-id."
   [item-id]
   (try
-    (if-let [has-fn (requiring-resolve
-                     'cn.li.forge1201.integration.recipe-query/has-recipes?)]
-      (has-fn item-id)
-      (do (log/warn "Recipe query function (has-recipes?) unavailable; recipe previews may not show")
-          false))
+    (platform-bridge/has-recipes? item-id)
     (catch Throwable e
       (log/warn "Recipe query failed for" item-id (ex-message e))
       false)))

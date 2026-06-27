@@ -19,7 +19,9 @@
            movement-key-down movement-key-tick movement-key-up
            open-screen open-simple-gui run-client-effect
            get-client-player screen-active? close-screen!
-           send-system-message! get-mouse-pos game-time-ms font-width resolve-shader get-window-size draw-ops-host!]}]
+           send-system-message! get-mouse-pos game-time-ms font-width resolve-shader get-window-size draw-ops-host!
+           register-font! get-player-owner font-text-width stop-all-media! has-recipes?
+           send-to-client! spawn-item-stack-at!]}]
   (prt/install-impl! #'*client-bridge-ops*
                      {:slot-key-down slot-key-down
                       :slot-key-tick slot-key-tick
@@ -40,7 +42,14 @@
                       :font-width font-width
                       :resolve-shader resolve-shader
                       :get-window-size get-window-size
-                      :draw-ops-host! draw-ops-host!}
+                      :draw-ops-host! draw-ops-host!
+                      :register-font! register-font!
+                      :get-player-owner get-player-owner
+                      :font-text-width font-text-width
+                      :stop-all-media! stop-all-media!
+                      :has-recipes? has-recipes?
+                      :send-to-client! send-to-client!
+                      :spawn-item-stack-at! spawn-item-stack-at!}
                      "client-bridge")
   nil)
 
@@ -220,3 +229,11 @@
   [player-uuid]
   (or (bridge-op :stop-all-media! player-uuid)
       (log/debug "Client bridge stop-all-media! not available")))
+
+(defn has-recipes?
+  "Check if any recipes exist that craft the given item-id.
+   Returns true/false, or false if the bridge is not installed."
+  [item-id]
+  (or (bridge-op :has-recipes? item-id)
+      (do (log/debug "Client bridge has-recipes? not available, returning false")
+          false)))
