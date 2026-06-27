@@ -3,6 +3,12 @@
             [cn.li.mcmod.gui.container-state :as state]
             [cn.li.mcmod.platform.entity :as entity]))
 
+(defn- test-fixture [f]
+  (state/clear-all!)
+  (f))
+
+(use-fixtures :each test-fixture)
+
 (deftype FakePlatformObject [uuid container-id]
   entity/IEntityOps
   (entity-distance-to-sqr [_ _x _y _z] 0.0)
@@ -27,15 +33,27 @@
   (inventory-get-player [_] nil)
   (menu-get-container-id [_] container-id))
 
-(deftest non-cmenu-bridge-returns-nil-test
-  (testing "get-container-for-menu returns nil for objects without cljContainer field"
-    (let [plain-obj (Object.)
-          container {:gui-type :node :id 1}]
-      ;; register/unregister silently succeed (field absent → catch + no-op)
-      (is (nil? (state/register-menu-container! plain-obj container)))
-      (is (nil? (state/get-container-for-menu plain-obj)))
-      (is (nil? (state/resolve-container-for-menu plain-obj)))
-      (is (nil? (state/unregister-menu-container! plain-obj))))))
+(deftest register-and-resolve-menu-container-test
+  (testing "register-menu-container! stores container and get-container-for-menu retrieves it"
+    (let [menu (Object.)
+          container {:gui-type :developer :id 13}]
+      (is (nil? (state/get-container-for-menu menu)))
+      (is (nil? (state/resolve-container-for-menu menu)))
+      (state/register-menu-container! menu container)
+      (is (= container (state/get-container-for-menu menu)))
+      (is (= container (state/resolve-container-for-menu menu)))
+      (state/unregister-menu-container! menu)
+      (is (nil? (state/get-container-for-menu menu)))
+      (is (nil? (state/resolve-container-for-menu menu))))))
+
+(deftest clear-all-clears-menu-containers-test
+  (testing "clear-all! removes all menu→container mappings"
+    (let [menu (Object.)
+          container {:gui-type :developer :id 13}]
+      (state/register-menu-container! menu container)
+      (is (= container (state/get-container-for-menu menu)))
+      (state/clear-all!)
+      (is (nil? (state/get-container-for-menu menu))))))
 
 (deftest get-menu-container-id-uses-platform-protocol-test
   (testing "get-menu-container-id reads via platform protocol, not from atom"
@@ -59,17 +77,16 @@
       (is (= [] (state/get-player-containers owner)))
       (is (nil? (state/get-player-container-from-active owner)))
       (is (nil? (state/get-container-by-id owner 7)))
-      (is (nil? (state/clear-all!)))
       (is (nil? (state/clear-owner-containers! owner)))
       (is (nil? (state/clear-session-containers! :session-a)))
       (let [snap (state/container-state-snapshot)]
         (is (= {} (:active-containers snap)))
         (is (= {} (:player-containers snap)))
-        (is (= {} (:menu-containers snap)))
+        (is (map? (:menu-containers snap)))
         (is (= {} (:containers-by-id snap)))))))
 
 (deftest client-container-side-channel-stays-absent-test
-  (testing "the legacy global client-container API does not return"
+  (testing "the legacy global client-container API does not exist"
     (is (nil? (ns-resolve 'cn.li.mcmod.gui.container-state 'client-container)))
     (is (nil? (ns-resolve 'cn.li.mcmod.gui.container-state 'set-client-container!)))
     (is (nil? (ns-resolve 'cn.li.mcmod.gui.container-state 'get-client-container)))

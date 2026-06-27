@@ -71,7 +71,8 @@
                                      log-message]
                               :or {call-super-removed? false
                                    log-message "Menu closed for player"}}]
-  ;; Clear the field so the container can be GC'd
+  ;; Unregister from atom-based lookup, clear field, close container
+  (cs/unregister-menu-container! this)
   (set! (.cljContainer ^CMenuBridge this) nil)
   (platform/safe-close! clj-container)
   (when call-super-removed?
@@ -134,9 +135,10 @@
       ItemStack/EMPTY)))
 
 (defn- finalize-menu-registration!
-  "Store clj-container directly on the CMenuBridge instance so lookups
-   don't need the global container-state atom (which was a memory leak)."
+  "Register clj-container in the container-state atom for lookups.
+   Also stores on the CMenuBridge field for direct access where available."
   [menu _window-id clj-container _owner]
+  (cs/register-menu-container! menu clj-container)
   (set! (.cljContainer ^cn.li.mc1201.gui.CMenuBridge menu) clj-container)
   menu)
 

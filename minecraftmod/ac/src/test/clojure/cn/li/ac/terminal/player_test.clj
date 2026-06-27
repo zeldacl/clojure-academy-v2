@@ -36,7 +36,8 @@
     (is (false? (player/terminal-installed? sid "p1")))
     (is (= #{} (player/installed-apps sid "p1")))))
 
-(deftest ensure-state-test
+;; ensure-state! was removed from player.clj — this test is no longer applicable
+#_(deftest ensure-state-test
   (let [sid ps-fix/test-session-id]
     (store/set-player-state!* sid "p2" (-> (store/fresh-player-state)
                                            (dissoc model/state-key)))

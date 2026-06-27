@@ -1,76 +1,44 @@
 (ns cn.li.mcmod.gui.container-state
   "Platform-neutral container lifecycle state for GUI infrastructure.
 
-  The original design stored 4 accumulating maps in a global atom
-  (active-containers, player-containers, menu-containers, containers-by-id).
-  Only `menu → clj-container` was ever read in production; the other three
-  were write-only.  Since each menu is a CMenuBridge proxy—created in the same
-  scope as its clj-container—the container is now stored directly on the menu
-  object via the `cljContainer` field.  The atom and its maps are removed.
+  Stores a single `menu → clj-container` map in an atom.
+  Registration happens at menu creation (proxy.clj finalize-menu-registration!)
+  and cleanup happens at menu removal (proxy.clj remove-menu!), so the atom
+  never accumulates stale entries — no memory leak.
 
-  Reflection is used to access the field so mcmod does not need a
-  compile-time dependency on mc-1.20.1 (where CMenuBridge lives).
-
-  Remaining functionality:
-  - get-menu-container-id  (platform protocol call, not stateful)
-  - owner-from-container   (used by panel.clj / wireless GUIs)
-  - clear-all!             (test teardown — no-op, kept for API compat)
-  - Runtime binding infra  (kept so call-with-container-state-runtime still
-    works for test isolation without breaking callers.)"
+  No reflection, no Java field access — pure Clojure."
   (:require [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
-;; Runtime (kept for test binding compat — no longer holds state)
+;; Atom-based menu → container map
 ;; ============================================================================
 
-(defn create-container-state-runtime
-  []
-  {::runtime ::container-state-runtime})
-
-(def ^:dynamic *container-state-runtime* nil)
-
-(defonce ^:private installed-container-state-runtime
-  (create-container-state-runtime))
-
-(defn installed-runtime
-  "Return the production container-state runtime (now just a marker)."
-  []
-  installed-container-state-runtime)
-
-(defn call-with-container-state-runtime
-  [runtime f]
-  (binding [*container-state-runtime* (or runtime (create-container-state-runtime))]
-    (f)))
-
-;; ============================================================================
-;; Menu → container lookup (reflection-based field access — no global atom)
-;; ============================================================================
-
-(def ^:private clj-container-field
-  "Lazily-resolved Field for CMenuBridge.cljContainer.  Reflection avoids a
-   compile-time dependency on mc-1.20.1 (where CMenuBridge lives)."
-  (delay
-    (try
-      (let [cls (Class/forName "cn.li.mc1201.gui.CMenuBridge")]
-        (.setAccessible (.getField cls "cljContainer") true))
-      (catch Exception _
-        nil))))
+(defonce ^:private menu-containers (atom {}))
 
 (defn get-container-for-menu
-  "Return the Clojure container backing a Minecraft menu instance.
-   Reads the `cljContainer` field via reflection — no global map, no memory leak."
+  "Return the Clojure container backing a Minecraft menu instance."
   [menu]
-  (when-let [field @clj-container-field]
-    (try
-      (.get field menu)
-      (catch Exception _ nil))))
+  (get @menu-containers menu))
 
 (defn resolve-container-for-menu
-  "Resolve a Clojure container for a menu.
-   (Fallback path removed since containers-by-id was write-only.)"
+  "Resolve a Clojure container for a menu."
   [menu]
   (get-container-for-menu menu))
+
+(defn register-menu-container!
+  "Register the Clojure container backing a Minecraft menu instance."
+  [menu container]
+  (swap! menu-containers assoc menu container)
+  (log/debug "Registered GUI container for menu" (type menu))
+  nil)
+
+(defn unregister-menu-container!
+  "Remove menu → Clojure container mapping."
+  [menu]
+  (swap! menu-containers dissoc menu)
+  (log/debug "Unregistered GUI container for menu" (type menu))
+  nil)
 
 ;; ============================================================================
 ;; Menu → container-id (platform protocol — not stateful)
@@ -107,6 +75,29 @@
       player-id (assoc :player-uuid player-id))))
 
 ;; ============================================================================
+;; Runtime (kept for test binding compat — no longer used in production)
+;; ============================================================================
+
+(defn create-container-state-runtime
+  []
+  {::runtime ::container-state-runtime})
+
+(def ^:dynamic *container-state-runtime* nil)
+
+(defonce ^:private installed-container-state-runtime
+  (create-container-state-runtime))
+
+(defn installed-runtime
+  "Return the production container-state runtime (now just a marker)."
+  []
+  installed-container-state-runtime)
+
+(defn call-with-container-state-runtime
+  [runtime f]
+  (binding [*container-state-runtime* (or runtime (create-container-state-runtime))]
+    (f)))
+
+;; ============================================================================
 ;; No-op stubs (kept for API compatibility with existing callers)
 ;; ============================================================================
 
@@ -118,21 +109,11 @@
   ([_owner] nil)
   ([_owner _container] nil))
 
-(defn register-menu-container! [menu container]
-  (when-let [field @clj-container-field]
-    (try (.set field menu container) (catch Exception _ nil)))
-  nil)
-
-(defn unregister-menu-container! [menu]
-  (when-let [field @clj-container-field]
-    (try (.set field menu nil) (catch Exception _ nil)))
-  nil)
-
 (defn register-container-by-id! [_owner _container-id _container] nil)
 (defn unregister-container-by-id! [_owner _container-id] nil)
 
 ;; ============================================================================
-;; Query stubs (no longer backed by atom — return empty/nil)
+;; Query stubs (no longer backed by state — return empty/nil)
 ;; ============================================================================
 
 (defn list-active-containers
@@ -147,18 +128,22 @@
 (defn get-container-by-id [_owner _container-id] nil)
 
 (defn container-state-snapshot
-  "Return empty snapshot for tests/diagnostics.
-   Production state was a memory leak; removed."
+  "Return snapshot for tests/diagnostics."
   []
   {:active-containers {}
    :player-containers {}
-   :menu-containers {}
+   :menu-containers @menu-containers
    :containers-by-id {}})
 
 ;; ============================================================================
-;; Cleanup (test teardown — no state to clear)
+;; Cleanup (test teardown)
 ;; ============================================================================
 
-(defn clear-all! "No-op — state was removed. Kept for API compat." [] nil)
+(defn clear-all!
+  "Clear all GUI runtime state. Intended for tests/reloads."
+  []
+  (reset! menu-containers {})
+  nil)
+
 (defn clear-owner-containers! [_owner] nil)
 (defn clear-session-containers! [_session-id] nil)
