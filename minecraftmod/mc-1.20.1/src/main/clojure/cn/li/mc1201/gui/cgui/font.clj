@@ -70,14 +70,14 @@
   (MsdfFontManager/hasGlyph (int cp)))
 
 (defn- segment-runs [^String text]
-  (let [cps (codepoints text)]
+  (let [^ints cps (codepoints text)]
     (cond
       (or (not (MsdfFontManager/hasFontFace)) (zero? (alength cps)))
       [{:msdf? false :text (or text "")}]
       :else
       (let [runs (reduce
                   (fn [acc cp]
-                    (let [ch (Character/toString cp)
+                    (let [ch (Character/toString (int cp))
                           msdf? (msdf-glyph? cp)]
                       (if (empty? acc)
                         [{:msdf? msdf? :text ch}]

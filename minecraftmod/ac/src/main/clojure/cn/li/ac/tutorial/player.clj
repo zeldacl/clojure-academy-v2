@@ -6,7 +6,8 @@
 
   Uses player.getPersistentData() for storage — Minecraft handles save/load
   automatically with the player entity."
-  (:require [cn.li.ac.tutorial.conditions :as conditions]
+  (:require [cn.li.ac.ability.util.uuid :as uuid]
+            [cn.li.ac.tutorial.conditions :as conditions]
             [cn.li.ac.tutorial.model :as model]
             [cn.li.mcmod.platform.player-persistent-data :as player-pd]
             [cn.li.mcmod.platform.nbt :as nbt]
@@ -54,7 +55,7 @@
 (defn activate-tutorial!
   "Mark a tutorial as activated. Idempotent."
   [player tut-id]
-  (log/info "Activating tutorial" (name tut-id) "for" (str (.getUUID player)))
+  (log/info "Activating tutorial" (name tut-id) "for" (uuid/player-uuid player))
   (update-state! player model/activate-tutorial (keyword tut-id)))
 
 ;; --- Misaka ID ---

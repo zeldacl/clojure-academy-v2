@@ -21,7 +21,8 @@
            [com.mojang.blaze3d.vertex DefaultVertexFormat VertexFormat$Mode PoseStack
             Tesselator BufferBuilder BufferUploader PoseStack$Pose]
            [org.joml Matrix4f]
-           [org.lwjgl.opengl GL11]))
+           [org.lwjgl.opengl GL11]
+           [cn.li.mc1201.client GuiGraphicsHelper]))
 
 ;; ============================================================================
 ;; Texture resolution
@@ -53,7 +54,7 @@
 ;; ============================================================================
 
 (defn- render-custom-shader-quad!
-  [^GuiGraphics graphics ^PoseStack poseStack ^ShaderInstance si loc-0 loc-1 x y w h]
+  [^GuiGraphics graphics ^PoseStack poseStack ^ShaderInstance si ^ResourceLocation loc-0 ^ResourceLocation loc-1 x y w h]
   (let [^PoseStack$Pose entry (.last poseStack)
         ^Matrix4f pose-matrix (.pose entry)
         ^Tesselator tess (Tesselator/getInstance)
@@ -62,14 +63,14 @@
         x2 (float (+ x w)) y2 (float (+ y h))
         z (float 0)
         u0 (float 0.0) v0 (float 0.0) u1 (float 1.0) v1 (float 1.0)]
-    (RenderSystem/setShaderTexture 0 loc-0)
+    (RenderSystem/setShaderTexture (int 0) loc-0)
     (when loc-1
-      (RenderSystem/setShaderTexture 1 loc-1))
+      (RenderSystem/setShaderTexture (int 1) loc-1))
     (.begin bb VertexFormat$Mode/QUADS DefaultVertexFormat/POSITION_TEX)
-    (.vertex bb pose-matrix x1 y2 z) (.uv u0 v1) (.endVertex bb)
-    (.vertex bb pose-matrix x2 y2 z) (.uv u1 v1) (.endVertex bb)
-    (.vertex bb pose-matrix x2 y1 z) (.uv u1 v0) (.endVertex bb)
-    (.vertex bb pose-matrix x1 y1 z) (.uv u0 v0) (.endVertex bb)
+    (.vertex bb pose-matrix x1 y2 z) (.uv bb u0 v1) (.endVertex bb)
+    (.vertex bb pose-matrix x2 y2 z) (.uv bb u1 v1) (.endVertex bb)
+    (.vertex bb pose-matrix x2 y1 z) (.uv bb u1 v0) (.endVertex bb)
+    (.vertex bb pose-matrix x1 y1 z) (.uv bb u0 v0) (.endVertex bb)
     (BufferUploader/drawWithShader (.end bb))))
 
 ;; ============================================================================
@@ -143,14 +144,14 @@
                             (.fill graphics (int (:x op)) (int (:y op))
                               (+ (int (:x op)) (int (:w op))) (+ (int (:y op)) (int (:h op)))
                               (int (or (:fallback-color op) 0xFF2A2A2A)))))
-          :raw-rect-uv (let [loc (if (keyword? (:texture op)) (get-skill-tree-texture (:texture op))
-                                    (path->resource-location (:texture op)))]
+          :raw-rect-uv (let [^ResourceLocation loc (if (keyword? (:texture op)) (get-skill-tree-texture (:texture op))
+                                                 (path->resource-location (:texture op)))]
                          (when loc
-                           (.innerBlit graphics loc (int (:x op)) (+ (int (:x op)) (int (:w op)))
-                             (int (:y op)) (+ (int (:y op)) (int (:h op))) 0
+                           (GuiGraphicsHelper/innerBlit10 graphics loc (int (:x op)) (int (+ (int (:x op)) (int (:w op))))
+                             (int (:y op)) (int (+ (int (:y op)) (int (:h op)))) (int 0)
                              (float (or (:min-u op) 0.0)) (float (or (:max-u op) 1.0))
                              (float (or (:min-v op) 0.0)) (float (or (:max-v op) 1.0)))))
-          :line-quad (let [tex (get-skill-tree-texture :tex-line)
+          :line-quad (let [^ResourceLocation tex (get-skill-tree-texture :tex-line)
                            x0 (double (:x0 op)) y0 (double (:y0 op))
                            x1 (double (:x1 op)) y1 (double (:y1 op))
                            line-w (double (:line-width op 5.5))
@@ -167,12 +168,12 @@
                                    ^BufferBuilder bb (.getBuilder tess)]
                                (RenderSystem/setShaderColor 1.0 1.0 1.0 (float alpha))
                                (RenderSystem/enableBlend) (RenderSystem/defaultBlendFunc)
-                               (RenderSystem/setShaderTexture 0 tex)
+                               (RenderSystem/setShaderTexture (int 0) tex)
                                (.begin bb VertexFormat$Mode/QUADS DefaultVertexFormat/POSITION_TEX)
-                               (.vertex bb pose-matrix (float (- x0 nx)) (float (- y0 ny)) 0.0) (.uv 0.0 0.0) (.endVertex bb)
-                               (.vertex bb pose-matrix (float (+ x0 nx)) (float (+ y0 ny)) 0.0) (.uv 0.0 1.0) (.endVertex bb)
-                               (.vertex bb pose-matrix (float (+ x1 nx)) (float (+ y1 ny)) 0.0) (.uv 1.0 1.0) (.endVertex bb)
-                               (.vertex bb pose-matrix (float (- x1 nx)) (float (- y1 ny)) 0.0) (.uv 1.0 0.0) (.endVertex bb)
+                               (.vertex bb pose-matrix (float (- x0 nx)) (float (- y0 ny)) 0.0) (.uv bb (float 0.0) (float 0.0)) (.endVertex bb)
+                               (.vertex bb pose-matrix (float (+ x0 nx)) (float (+ y0 ny)) 0.0) (.uv bb (float 0.0) (float 1.0)) (.endVertex bb)
+                               (.vertex bb pose-matrix (float (+ x1 nx)) (float (+ y1 ny)) 0.0) (.uv bb (float 1.0) (float 1.0)) (.endVertex bb)
+                               (.vertex bb pose-matrix (float (- x1 nx)) (float (- y1 ny)) 0.0) (.uv bb (float 1.0) (float 0.0)) (.endVertex bb)
                                (BufferUploader/drawWithShader (.end bb))
                                (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0))))))
           :shader-progress-ring (let [^ShaderInstance si (platform-bridge/resolve-shader (:shader-id op))

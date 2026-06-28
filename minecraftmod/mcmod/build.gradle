@@ -7,8 +7,31 @@ clojure {
     builds {
         main {
             aotAll()
+            reflection = 'fail'
         }
     }
+}
+
+// 反射拦截器
+tasks.matching { it.name == 'compileClojure' || it.name == 'compileTestClojure' }.configureEach {
+    forkOptions.jvmArgs += ['-Dclojure.compile.warn-on-reflection=true']
+
+    logging.addStandardOutputListener(new StandardOutputListener() {
+        @Override
+        void onOutput(CharSequence output) {
+            String log = output.toString()
+            if (log.contains("Reflection warning")) {
+                throw new GradleException(
+                    "\n[Reflection Guard] 检测到 Clojure AOT 隐式反射调用！\n" +
+                    "反射会导致 Loom remap 失效，使最终 Jar 在运行时崩溃。\n" +
+                    "请添加 ^TypeHint 元数据或使用 Java 桥接类修复：\n" +
+                    "--------------------------------------------------\n" +
+                    log.trim() + "\n" +
+                    "--------------------------------------------------"
+                )
+            }
+        }
+    })
 }
 
 // Exclude Clojure sources from JAR — AOT classes are the only runtime representation.

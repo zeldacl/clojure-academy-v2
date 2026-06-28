@@ -43,7 +43,8 @@
            [net.minecraftforge.client.event RegisterKeyMappingsEvent]
            [net.minecraftforge.event TickEvent$ClientTickEvent TickEvent$Phase]
            [net.minecraft.client KeyMapping]
-           [net.minecraft.client.renderer.blockentity BlockEntityRendererProvider]))
+           [net.minecraft.client.renderer.blockentity BlockEntityRendererProvider]
+           [com.mojang.blaze3d.platform Window]))
 
 ;; ============================================================================
 ;; Client Registration
@@ -210,8 +211,9 @@
                            :alpha-discard (cn.li.forge1201.client.render.ModShaders/getAlphaDiscardShader)
                            nil))
        :get-window-size (fn []
-                         (let [^net.minecraft.client.Minecraft mc (Minecraft/getInstance)]
-                           [(.getGuiScaledWidth mc) (.getGuiScaledHeight mc)]))
+                         (let [^Minecraft mc (Minecraft/getInstance)
+                               ^Window win (.getWindow mc)]
+                           [(.getGuiScaledWidth win) (.getGuiScaledHeight win)]))
        :draw-ops-host! (fn [parent ops-fn]
                          (draw-ops-host/draw-ops-host! parent ops-fn))
        :register-font! (fn [name spec]

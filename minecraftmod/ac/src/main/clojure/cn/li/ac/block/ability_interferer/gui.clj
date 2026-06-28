@@ -284,11 +284,11 @@
   [inv-window container]
   (when-let [range-text (cgui-core/find-widget inv-window "panel_config/element_range/element_text_range")]
     (when-let [tb (comp/get-textbox-component range-text)]
-      (comp/set-text! tb (.toString (double (effective-range container)))))
+      (comp/set-text! tb (str (effective-range container))))
     (events/on-frame range-text
       (fn [_]
         (when-let [tb (comp/get-textbox-component range-text)]
-          (comp/set-text! tb (.toString (double (effective-range container))))))))
+          (comp/set-text! tb (str (effective-range container)))))))
 
   (when-let [switch-btn (cgui-core/find-widget inv-window "panel_config/element_switch/element_btn_switch")]
     (update-switch-texture! switch-btn (effective-enabled container))
@@ -383,7 +383,7 @@
                                          0)
                y1 (tech-ui/add-sepline info-area "Interferer" y0)
                y2 (tech-ui/add-property info-area "enabled" (fn [] (if (effective-enabled container) "ON" "OFF")) y1)
-                 y3 (tech-ui/add-property info-area "range" (fn [] (.toString (double (effective-range container)))) y2)
+                 y3 (tech-ui/add-property info-area "range" (fn [] (str (effective-range container))) y2)
                y4 (tech-ui/add-property info-area "affected" (fn [] (str @(:affected-player-count container))) y3)
                y5 (tech-ui/add-property info-area "owner" (fn [] @(:placer-name container)) y4)]
                (tech-ui/add-property info-area "whitelist" wl-text y5)))})))

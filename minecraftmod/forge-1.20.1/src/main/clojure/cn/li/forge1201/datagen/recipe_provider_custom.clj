@@ -28,11 +28,11 @@
         (.add arr ^JsonElement (clj-map->json-object v)))
       arr)
     (string? data)  (JsonPrimitive. ^String data)
-    (integer? data)  (JsonPrimitive. (Number/.intValue ^Number data))
-    (float? data)    (JsonPrimitive. (Number/.floatValue ^Number data))
-    (double? data)   (JsonPrimitive. (Number/.doubleValue ^Number data))
+    (integer? data)  (JsonPrimitive. ^Number data)
+    (float? data)    (JsonPrimitive. ^Number data)
+    (double? data)   (JsonPrimitive. ^Number data)
     (boolean? data)  (JsonPrimitive. ^Boolean data)
-    (number? data)   (JsonPrimitive. (Number/.intValue ^Number data))
+    (number? data)   (JsonPrimitive. ^Number data)
     :else (JsonPrimitive. (str data))))
 
 (defn- emit-custom-recipe!

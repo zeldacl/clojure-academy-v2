@@ -5,7 +5,8 @@
   whether any tutorial conditions are now met and activates those tutorials.
   Receives ServerPlayer from the platform layer, passes directly to player.clj
   for NBT-based persistence."
-  (:require [cn.li.ac.tutorial.player :as tut-player]
+  (:require [cn.li.ac.ability.util.uuid :as uuid]
+            [cn.li.ac.tutorial.player :as tut-player]
             [cn.li.ac.tutorial.registry :as tut-registry]
             [cn.li.ac.tutorial.model :as model]
             [cn.li.ac.tutorial.conditions :as conds]
@@ -45,7 +46,7 @@
   [player]
   (when-let [acts (tut-player/process-pending! player (ensure-tutorial-cond-map!))]
     (when (seq acts)
-      (let [uuid-str (str (.getUUID player))]
+      (let [uuid-str (uuid/player-uuid player)]
         (doseq [tut-id acts]
           (log/info "Tutorial activated by condition (batched)"
                     {:player uuid-str :tutorial (name tut-id)})

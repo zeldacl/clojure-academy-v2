@@ -4,7 +4,8 @@
   Mirrors upstream AcademyCraft TerminalData: independent NBT key per domain,
   no runtime-store dependency.  Uses player.getPersistentData() — Minecraft
   handles save/load automatically."
-  (:require [cn.li.ac.terminal.model :as model]
+  (:require [cn.li.ac.ability.util.uuid :as uuid]
+            [cn.li.ac.terminal.model :as model]
             [cn.li.mcmod.platform.player-persistent-data :as player-pd]
             [cn.li.mcmod.platform.nbt :as nbt]
             [cn.li.mcmod.util.log :as log]))
@@ -56,25 +57,25 @@
 
 (defn install-terminal!
   [player]
-  (log/info "Installing terminal for player:" (str (.getUUID player)))
+  (log/info "Installing terminal for player:" (str (uuid/player-uuid player)))
   (update-state! player model/install-terminal))
 
 (defn uninstall-terminal!
   [player]
-  (log/info "Uninstalling terminal for player:" (str (.getUUID player)))
+  (log/info "Uninstalling terminal for player:" (str (uuid/player-uuid player)))
   (update-state! player model/uninstall-terminal))
 
 (defn install-app!
   [player app-id]
-  (log/info "Installing app" app-id "for player:" (str (.getUUID player)))
+  (log/info "Installing app" app-id "for player:" (str (uuid/player-uuid player)))
   (update-state! player model/install-app app-id))
 
 (defn uninstall-app!
   [player app-id]
-  (log/info "Uninstalling app" app-id "for player:" (str (.getUUID player)))
+  (log/info "Uninstalling app" app-id "for player:" (str (uuid/player-uuid player)))
   (update-state! player model/uninstall-app app-id))
 
 (defn install-apps!
   [player app-ids]
-  (log/info "Installing apps" app-ids "for player:" (str (.getUUID player)))
+  (log/info "Installing apps" app-ids "for player:" (str (uuid/player-uuid player)))
   (update-state! player model/install-apps app-ids))

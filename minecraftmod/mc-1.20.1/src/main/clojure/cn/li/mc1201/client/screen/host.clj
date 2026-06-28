@@ -13,10 +13,12 @@
            [net.minecraft.client.renderer ShaderInstance]
            [net.minecraft.resources ResourceLocation]
            [com.mojang.blaze3d.systems RenderSystem]
-           [com.mojang.blaze3d.vertex DefaultVertexFormat VertexFormat VertexFormat$Mode
+           [com.mojang.blaze3d.vertex DefaultVertexFormat VertexFormat VertexFormat$Mode PoseStack
             Tesselator BufferBuilder BufferUploader PoseStack$Pose]
+           [com.mojang.blaze3d.platform Window]
            [org.joml Matrix4f]
-           [org.lwjgl.opengl GL11]))
+           [org.lwjgl.opengl GL11]
+           [cn.li.mc1201.client GuiGraphicsHelper]))
 
 ;; ============================================================================
 ;; Texture preloads (developer skill tree)
@@ -45,7 +47,7 @@
         ^Font font (.-font mc)]
     (.drawString graphics font text (int x) (int y) (int color))))
 
-(defn- draw-string-with-opts! [^GuiGraphics graphics op poseStack]
+(defn- draw-string-with-opts! [^GuiGraphics graphics op ^PoseStack poseStack]
   (let [^String text (str (:text op))
         x (int (or (:x op) 0))
         y (int (or (:y op) 0))
@@ -80,7 +82,7 @@
   BEFORE calling setShader (MC 1.20.1 requires setSampler before setShader).
 
   Uses BufferBuilder + BufferUploader (the MC 1.20.1 recommended path for custom shaders)."
-  [^GuiGraphics graphics poseStack ^ShaderInstance si loc-0 loc-1 x y w h]
+  [^GuiGraphics graphics ^PoseStack poseStack ^ShaderInstance si ^ResourceLocation loc-0 ^ResourceLocation loc-1 x y w h]
   (let [^PoseStack$Pose entry (.last poseStack)
         ^Matrix4f pose-matrix (.pose entry)
         ^Tesselator tess (Tesselator/getInstance)
@@ -89,14 +91,14 @@
         x2 (float (+ x w)) y2 (float (+ y h))
         z (float 0)
         u0 (float 0.0) v0 (float 0.0) u1 (float 1.0) v1 (float 1.0)]
-    (RenderSystem/setShaderTexture 0 loc-0)
+    (RenderSystem/setShaderTexture (int 0) loc-0)
     (when loc-1
-      (RenderSystem/setShaderTexture 1 loc-1))
+      (RenderSystem/setShaderTexture (int 1) loc-1))
     (.begin bb VertexFormat$Mode/QUADS DefaultVertexFormat/POSITION_TEX)
-    (.vertex bb pose-matrix x1 y2 z) (.uv u0 v1) (.endVertex bb)
-    (.vertex bb pose-matrix x2 y2 z) (.uv u1 v1) (.endVertex bb)
-    (.vertex bb pose-matrix x2 y1 z) (.uv u1 v0) (.endVertex bb)
-    (.vertex bb pose-matrix x1 y1 z) (.uv u0 v0) (.endVertex bb)
+    (.vertex bb pose-matrix x1 y2 z) (.uv bb u0 v1) (.endVertex bb)
+    (.vertex bb pose-matrix x2 y2 z) (.uv bb u1 v1) (.endVertex bb)
+    (.vertex bb pose-matrix x2 y1 z) (.uv bb u1 v0) (.endVertex bb)
+    (.vertex bb pose-matrix x1 y1 z) (.uv bb u0 v0) (.endVertex bb)
     (BufferUploader/drawWithShader (.end bb))))
 
 (defn- with-client-session
@@ -135,7 +137,7 @@
           (ResourceLocation. mod-id path)
           (ResourceLocation. mod-id (str "textures/" path)))))))
 
-(defn- render-op! [^GuiGraphics graphics op poseStack]
+(defn- render-op! [^GuiGraphics graphics op ^PoseStack poseStack]
   (case (:kind op)
     ;; --- Matrix operations ---
     :push-pose (.pushPose poseStack)
@@ -189,17 +191,17 @@
                      (when loc
                        (.blit graphics loc (:x op) (:y op) 0 0 (:w op) (:h op) (:w op) (:h op))))
     :raw-rect-uv   (let [tex-key (:texture op)
-                         loc (if (keyword? tex-key) (get-skill-tree-texture tex-key)
-                                 (path->resource-location tex-key))]
+                         ^ResourceLocation loc (if (keyword? tex-key) (get-skill-tree-texture tex-key)
+                                               (path->resource-location tex-key))]
                      (when loc
-                       (.innerBlit graphics loc
-                                   (int (:x op)) (int (+ (:x op) (:w op)))
-                                   (int (:y op)) (int (+ (:y op) (:h op)))
-                                   0
-                                   (float (or (:min-u op) (:u op) 0.0))
-                                   (float (or (:max-u op) (+ (or (:u op) 0.0) (or (:tex-w op) 1.0))))
-                                   (float (or (:min-v op) (:v op) 0.0))
-                                   (float (or (:max-v op) (+ (or (:v op) 0.0) (or (:tex-h op) 1.0)))))))
+                       (GuiGraphicsHelper/innerBlit10 graphics loc
+                                                      (int (:x op)) (int (+ (:x op) (:w op)))
+                                                      (int (:y op)) (int (+ (:y op) (:h op)))
+                                                      (int 0)
+                                                      (float (or (:min-u op) (:u op) 0.0))
+                                                      (float (or (:max-u op) (+ (or (:u op) 0.0) (or (:tex-w op) 1.0))))
+                                                      (float (or (:min-v op) (:v op) 0.0))
+                                                      (float (or (:max-v op) (+ (or (:v op) 0.0) (or (:tex-h op) 1.0)))))))
     ;; --- Connection line (textured quad, matching upstream drawLine) ---
     ;; Upstream uses glVertex2d with double precision and texture (0,0)→(1,1) stretched.
     ;; Previous rotated-quad approach used blit() which truncates to int and
@@ -226,13 +228,13 @@
                          (RenderSystem/setShaderColor 1.0 1.0 1.0 (float alpha))
                          (RenderSystem/enableBlend)
                          (RenderSystem/defaultBlendFunc)
-                         (RenderSystem/setShaderTexture 0 tex)
+                         (RenderSystem/setShaderTexture (int 0) tex)
                          (.begin bb VertexFormat$Mode/QUADS DefaultVertexFormat/POSITION_TEX)
                          ;; Vertices matching upstream drawLine: 0,0→1,1 UV stretched
-                         (.vertex bb pose-matrix (float (- x0 nx)) (float (- y0 ny)) 0.0) (.uv 0.0 0.0) (.endVertex bb)
-                         (.vertex bb pose-matrix (float (+ x0 nx)) (float (+ y0 ny)) 0.0) (.uv 0.0 1.0) (.endVertex bb)
-                         (.vertex bb pose-matrix (float (+ x1 nx)) (float (+ y1 ny)) 0.0) (.uv 1.0 1.0) (.endVertex bb)
-                         (.vertex bb pose-matrix (float (- x1 nx)) (float (- y1 ny)) 0.0) (.uv 1.0 0.0) (.endVertex bb)
+                         (.vertex bb pose-matrix (float (- x0 nx)) (float (- y0 ny)) 0.0) (.uv bb (float 0.0) (float 0.0)) (.endVertex bb)
+                         (.vertex bb pose-matrix (float (+ x0 nx)) (float (+ y0 ny)) 0.0) (.uv bb (float 0.0) (float 1.0)) (.endVertex bb)
+                         (.vertex bb pose-matrix (float (+ x1 nx)) (float (+ y1 ny)) 0.0) (.uv bb (float 1.0) (float 1.0)) (.endVertex bb)
+                         (.vertex bb pose-matrix (float (- x1 nx)) (float (- y1 ny)) 0.0) (.uv bb (float 1.0) (float 0.0)) (.endVertex bb)
                          (BufferUploader/drawWithShader (.end bb))
                          (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0))))))
     ;; --- Shader-based progress ring (skill-progbar shader) ---
@@ -392,8 +394,9 @@
                       title
                       (fn [mouse-x mouse-y]
                         (let [^Minecraft mc (Minecraft/getInstance)
-                              w (.getGuiScaledWidth mc)
-                              h (.getGuiScaledHeight mc)]
+                              ^Window win (.getWindow mc)
+                              w (.getGuiScaledWidth win)
+                              h (.getGuiScaledHeight win)]
                           (with-client-session captured-session-id
                             #(client-ui/client-build-managed-screen-draw-ops screen-key mouse-x mouse-y (int w) (int h)))))
                       (fn [mouse-x mouse-y]

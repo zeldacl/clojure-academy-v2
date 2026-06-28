@@ -44,7 +44,7 @@
         sin-theta (Math/sin theta)
         cos-theta (Math/cos theta)
         ;; Find two orthogonal basis vectors
-        candidate (if (< (Math/abs (:x dir)) 0.9)
+        candidate (if (< (Math/abs (double (:x dir))) 0.9)
                    {:x 1.0 :y 0.0 :z 0.0}
                    {:x 0.0 :y 1.0 :z 0.0})
         u (v-normalize (v-cross dir candidate))

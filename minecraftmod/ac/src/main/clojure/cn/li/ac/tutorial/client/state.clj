@@ -76,7 +76,7 @@
   even before the first server sync completes."
   [player-uuid]
   (or (:misaka-id @client-state)
-      (let [h (mod (Math/abs (hash (str player-uuid))) 18001)]
+      (let [h (mod (Math/abs (long (hash (str player-uuid)))) 18001)]
         (+ 1000 h))))
 
 (defn first-open?

@@ -5,7 +5,8 @@
    with a shadow effect through the existing overlay :text element pipeline."
   (:require [cn.li.ac.ability.registry.category :as category-registry]
             [cn.li.ac.ability.queries.ability-queries :as ability-queries]
-            [cn.li.mcmod.i18n :as i18n]))
+            [cn.li.mcmod.i18n :as i18n])
+  (:import [java.util List]))
 
 ;; ============================================================================
 ;; State
@@ -18,7 +19,7 @@
 (defn toggle-debug-state!
   "Advance debug overlay state through the cycle: none -> normal -> show-exp -> none."
   []
-  (let [cur (.indexOf debug-states @debug-state*)
+  (let [cur (.indexOf ^List debug-states @debug-state*)
         nxt (rem (inc cur) (count debug-states))]
     (reset! debug-state* (nth debug-states nxt))
     nil))

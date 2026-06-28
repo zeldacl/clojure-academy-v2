@@ -74,7 +74,7 @@
                     (io/file user-dir "minecraftmod" "ac" "src" "main" "clojure" "cn" "li" "ac" "content" "ability")
                     (io/file user-dir ".." "ac" "src" "main" "clojure" "cn" "li" "ac" "content" "ability")]]
     (mapcat
-     (fn [ac-root]
+     (fn [^File ac-root]
        (when (.exists ac-root)
          (let [prefix (str/replace (.getPath ac-root) #"\\\\" "/")]
            (->> (file-clj-paths ac-root)

@@ -144,7 +144,7 @@
      :skill-description (translate-field skill :description-key "")
      :skill-icon (skill/get-skill-icon-path sid)
      :skill-level (:level skill) :exp prog :m-alpha m-alpha
-     :progress-segments (int (Math/round (* prog max-progress-segments)))}))
+     :progress-segments (int (Math/round (double (* prog max-progress-segments))))}))
 
 (defn- resolve-category [ad] (when-let [cid (:category-id ad)] (category/get-category cid)))
 
