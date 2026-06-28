@@ -132,7 +132,7 @@
                                        (str "KEY_" (:keyCode evt)))]
                       (comp/set-text! (comp/get-textbox-component box-w) key-name)
                       (reset! current-key key-name)
-                      (events/unlisten! box-w :key-press key-capture))))))))
+                      (events/unlisten! box-w :key-press))))))))
         (comp/list-add!
           (comp/get-widget-component list-w :element-list)
           key-row)))

@@ -33,5 +33,5 @@ forge*changelog.txt
 importcode/*
 run-data
 minecraftmod/forge-1.20.1/src/generated
-.clj-kondo
+.clj-kondo/.cache
 .lsp

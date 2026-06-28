@@ -4629,3 +4629,56 @@ tasks.register('verifyForgeTesting') {
 //     // Fabric模块使用Gradle 9.2，单独指定兼容配置
 //     gradleVersion = "9.2"
 // }
+
+// ============================================================================
+// clj-kondo 原生静态检查
+// ============================================================================
+import org.gradle.internal.os.OperatingSystem
+
+def cljKondoVersion = "2025.06.05"
+def kondoDir = file("${buildDir}/clj-kondo-bin")
+def kondoExt = OperatingSystem.current().isWindows() ? '.exe' : ''
+def kondoExe = file("${kondoDir}/clj-kondo${kondoExt}")
+
+tasks.register('downloadCljKondo') {
+    group = 'verification'; description = '自动下载 clj-kondo 原生二进制'
+    outputs.file(kondoExe)
+    doLast {
+        if (!kondoExe.exists()) {
+            kondoDir.mkdirs()
+            def os = OperatingSystem.current(); def ae = '.zip'
+            def arch = System.getProperty('os.arch').toLowerCase()
+            def arm = arch.contains('aarch64') || arch.contains('arm64')
+            def pf = os.windows ? 'windows-amd64' : os.macOsX ? (arm ? 'macos-aarch64' : 'macos-amd64') : (arm ? 'linux-aarch64' : 'linux-amd64')
+            if (!os.windows && !os.macOsX) ae = '.tar.gz'
+            def url = "https://github.com/clj-kondo/clj-kondo/releases/download/v${cljKondoVersion}/clj-kondo-${cljKondoVersion}-${pf}${ae}"
+            logger.lifecycle('[clj-kondo] 下载 {}', url)
+            def af = file("${kondoDir}/download${ae}")
+            new URL(url).withInputStream { i -> af.withOutputStream { it << i } }
+            if (ae == '.zip') copy { from zipTree(af); into kondoDir } else copy { from tarTree(resources.gzip(af)); into kondoDir }
+            af.delete()
+            if (!OperatingSystem.current().isWindows()) exec { commandLine 'chmod', '+x', kondoExe.absolutePath }
+            logger.lifecycle('[clj-kondo] 就绪')
+        }
+    }
+}
+
+tasks.register('lintClojureNative') {
+    group = 'verification'; description = 'clj-kondo 极速检查 Clojure 错误'
+    dependsOn tasks.named('downloadCljKondo')
+    doLast {
+        def dirs = []
+        subprojects { sp -> sp.plugins.withId('dev.clojurephant.clojure') { sp.sourceSets.main.clojure.srcDirs.each { if (it.directory) dirs << it.absolutePath } } }
+        if (dirs.isEmpty()) { logger.lifecycle('[clj-kondo] 无源码'); return }
+        def out = new ByteArrayOutputStream()
+        def r = exec { executable = kondoExe.absolutePath; args = ['--lint'] + dirs + ['--fail-level', 'error']; standardOutput = out; errorOutput = out; ignoreExitValue = true }
+        def log = out.toString('UTF-8')
+        def logFile = file("${buildDir}/reports/clj-kondo-lint.log"); logFile.parentFile.mkdirs(); logFile.text = log
+        if (r.exitValue != 0) { logger.error('[clj-kondo] 发现错误，详见 {}', logFile); throw new GradleException('clj-kondo 检查未通过') }
+        logger.lifecycle('[clj-kondo] 通过')
+    }
+}
+
+gradle.projectsEvaluated {
+    subprojects { sp -> sp.plugins.withId('dev.clojurephant.clojure') { sp.tasks.matching { it.name == 'compileClojure' }.configureEach { dependsOn rootProject.tasks.named('lintClojureNative') } } }
+}

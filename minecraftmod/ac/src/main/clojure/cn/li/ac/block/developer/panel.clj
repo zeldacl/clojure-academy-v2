@@ -413,8 +413,8 @@
                 (reset! message-atom (i18n/translate "skill_tree.my_mod.condition_fail"))
                 :else
                 (do (req-start-development! container :learn-skill {:skill-id (name skill-id)})
-                    (reset! can-close? false)))))
-        (cgui-core/add-widget! cover btn))
+                    (reset! can-close? false))))))
+        (cgui-core/add-widget! cover btn)
 
         ;; Dev progress monitor — updates ring + message each frame (upstream: FrameEvent on ret)
         (let [prev-dev (atom false)]

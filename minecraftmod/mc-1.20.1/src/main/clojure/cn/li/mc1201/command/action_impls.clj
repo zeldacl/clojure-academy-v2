@@ -15,7 +15,7 @@
   [^CommandSourceStack source message translate? args _error?]
   (try
     (let [text (if translate?
-                 (i18n/translate message args)
+                 (i18n/translate message)
                  message)
           component (Component/literal text)]
       (.sendSuccess source component false))

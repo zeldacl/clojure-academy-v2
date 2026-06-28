@@ -124,7 +124,7 @@
     (doseq [[preset-idx slots] (:pending-changes state)]
       (doseq [[slot-idx skill-id] slots]
         (when-let [skill-info (first (filter #(= (:skill-id %) skill-id) available-skills))]
-          (api/req-set-preset-slot! preset-idx slot-idx
+          (api/req-set-preset-slot! owner preset-idx slot-idx
                                    (:cat-id skill-info)
                                    (:ctrl-id skill-info)
                                    nil)))))
@@ -133,7 +133,7 @@
 (defn on-set-active-click
   "Handle set active button click."
   [owner]
-  (api/req-switch-preset! (:selected-preset (editor-state-snapshot owner)) nil))
+  (api/req-switch-preset! owner (:selected-preset (editor-state-snapshot owner)) nil))
 
 (defn handle-screen-click!
   "Handle clicks inside the preset editor screen using current render data."

@@ -1,0 +1,7 @@
+{:lint-as {cn.li.ac.util.init-guard/defonce-guard clojure.core/def
+           cn.li.ac.util.init-guard/with-init-guard clojure.core/when
+           cn.li.ac.ability.dsl/defcategory clojure.core/def}
+ :hooks {:analyze-call {cn.li.ac.ability.dsl/defskill hooks.defskill/defskill}}
+ :linters
+ {:unresolved-symbol {:level :warning}
+  :unused-private-var {:level :warning}}}

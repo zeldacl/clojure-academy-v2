@@ -41,10 +41,8 @@
   [owner]
   (fn [action _extra callback]
     (case action
-      :learn-skill (do (api/req-learn-skill! owner (-> _extra :skill-id keyword))
-                       (when callback (callback {:success true})))
-      :level-up    (do (api/req-level-up! owner)
-                       (when callback (callback {:success true})))
+      :learn-skill (api/req-learn-skill! owner (-> _extra :skill-id keyword) callback)
+      :level-up    (api/req-level-up! owner callback)
       ;; reset not supported on portable
       (when callback (callback {:success false :reason "not-available-on-portable"})))))
 

@@ -99,8 +99,7 @@
 
 (defn- make-text [x y w h text font-size color & {:keys [align] :or {align :left}}]
   (doto (cgui-core/create-widget :pos [x y] :size [w h])
-    (-> (comp/text-box :text text :font :ac-normal :font-size font-size :align align :color color)
-        (comp/add-component!))))
+    (comp/add-component! (comp/text-box :text text :font :ac-normal :font-size font-size :align align :color color))))
 
 ;; ============================================================================
 ;; Location entry row

@@ -194,7 +194,7 @@
                    (select-keys ctx [:pos-x :pos-y :pos-z]))]
           (when (:pass? cs) (api/req-learn-skill! sid pe nil)))))))
 
-(defn on-level-up-click [owner] (api/req-level-up! owner))
+(defn on-level-up-click [owner] (api/req-level-up! owner nil))
 
 (defn handle-screen-click! [owner mx my]
   (let [st (screen-state-snapshot owner) sel (:selected-skill st)]

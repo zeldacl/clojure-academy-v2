@@ -145,10 +145,10 @@
                                       curr-fade (min 1.0 (/ elapsed 500.0))]
                                   (vec
                                    (keep identity
-                                    (when (and (not= previous-idx current-idx) (pos? prev-fade))
-                                      {:type :preset-indicator
-                                       :current previous-idx :total 4 :fade prev-fade})
-                                    [{:type :preset-indicator
+                                    [(when (and (not= previous-idx current-idx) (pos? prev-fade))
+                                       {:type :preset-indicator
+                                        :current previous-idx :total 4 :fade prev-fade})
+                                     {:type :preset-indicator
                                       :current current-idx :total 4 :fade curr-fade}]))))))
         ;; Flatten for backward compat: always pick the CURRENT preset (last element,
         ;; since the vector is built as [previous current] during transitions).
