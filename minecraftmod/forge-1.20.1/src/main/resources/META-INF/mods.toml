@@ -20,8 +20,8 @@ license="All rights reserved"
 # The modid of the mod
 modId="my_mod" #mandatory
 # The version number of the mod
-tmixinConfig="mixins.my_mod.json"
 version="1.0.0" #mandatory
+mixinConfig="mixins.my_mod.json"
 # A display name for the mod
 displayName="my_mod" #mandatory
 # A URL to query for updates for this mod. See the JSON update specification https://docs.minecraftforge.net/en/latest/misc/updatechecker/

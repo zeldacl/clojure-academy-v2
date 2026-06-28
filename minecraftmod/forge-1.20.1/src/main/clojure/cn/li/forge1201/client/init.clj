@@ -35,6 +35,7 @@
             [cn.li.mcmod.client.render.buffer :as buffer]
             [cn.li.forge1201.registry.state :as registry-state])
   (:import [cn.li.forge1201.shim ForgeClientHelper]
+           [cn.li.forge1201.mixin GuiGraphicsInvoker]
            [net.minecraft.client Minecraft]
            [net.minecraft.client.player LocalPlayer]
            [net.minecraft.network.chat Component]
@@ -224,7 +225,11 @@
        :stop-all-media! (fn [player-uuid]
                           (sound/stop-all-media!))
        :has-recipes? (fn [item-id]
-                       (cn.li.forge1201.integration.recipe-query/has-recipes? item-id))}))
+                       (cn.li.forge1201.integration.recipe-query/has-recipes? item-id))
+       :blit-textured-quad! (fn [graphics texture x1 y1 x2 y2 z u0 u1 v0 v1]
+                              (.invokeInnerBlit ^GuiGraphicsInvoker graphics
+                                texture (int x1) (int x2) (int y1) (int y2) (int z)
+                                (float u0) (float u1) (float v0) (float v1)))}))
 
 (defn register-key-mappings!
   "Register all runtime KeyMapping instances to Forge input system."

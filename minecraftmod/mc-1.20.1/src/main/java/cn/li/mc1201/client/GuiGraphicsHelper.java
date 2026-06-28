@@ -1,5 +1,11 @@
 package cn.li.mc1201.client;
 
+import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.vertex.BufferBuilder;
+import com.mojang.blaze3d.vertex.BufferUploader;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+import com.mojang.blaze3d.vertex.Tesselator;
+import com.mojang.blaze3d.vertex.VertexFormat;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.resources.ResourceLocation;
 
@@ -21,18 +27,28 @@ public final class GuiGraphicsHelper {
     }
 
     /**
-     * Wrapper for GuiGraphics.innerBlit() with normalized UV coordinates.
-     * Uses Mixin @Invoker to access the package-private method without reflection.
+     * Render a textured quad with custom normalized UV coordinates.
+     * Uses only public Minecraft rendering APIs (Tesselator / BufferBuilder).
+     * No reflection, no Mixin, no Access Transformer required.
      */
-    public static void innerBlit10(
-            GuiGraphics graphics,
+    public static void blitTexturedQuad(
             ResourceLocation texture,
-            int x1, int x2,
-            int y1, int y2,
-            int z,
+            float x1, float y1,
+            float x2, float y2,
+            float z,
             float u0, float u1,
             float v0, float v1) {
-        ((cn.li.forge1201.mixin.GuiGraphicsInvoker) graphics).invokeInnerBlit(
-                texture, x1, x2, y1, y2, z, u0, u1, v0, v1);
+        RenderSystem.setShaderTexture(0, texture);
+        RenderSystem.enableBlend();
+        RenderSystem.defaultBlendFunc();
+
+        Tesselator tess = Tesselator.getInstance();
+        BufferBuilder bb = tess.getBuilder();
+        bb.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
+        bb.vertex(x1, y2, z).uv(u0, v1).endVertex();
+        bb.vertex(x2, y2, z).uv(u1, v1).endVertex();
+        bb.vertex(x2, y1, z).uv(u1, v0).endVertex();
+        bb.vertex(x1, y1, z).uv(u0, v0).endVertex();
+        BufferUploader.drawWithShader(bb.end());
     }
 }

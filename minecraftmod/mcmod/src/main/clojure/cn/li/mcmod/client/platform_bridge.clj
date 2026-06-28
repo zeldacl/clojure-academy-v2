@@ -21,6 +21,7 @@
            get-client-player screen-active? close-screen!
            send-system-message! get-mouse-pos game-time-ms font-width resolve-shader get-window-size draw-ops-host!
            register-font! get-player-owner font-text-width stop-all-media! has-recipes?
+           blit-textured-quad!
            send-to-client! spawn-item-stack-at!]}]
   (prt/install-impl! #'*client-bridge-ops*
                      {:slot-key-down slot-key-down
@@ -48,6 +49,7 @@
                       :font-text-width font-text-width
                       :stop-all-media! stop-all-media!
                       :has-recipes? has-recipes?
+                      :blit-textured-quad! blit-textured-quad!
                       :send-to-client! send-to-client!
                       :spawn-item-stack-at! spawn-item-stack-at!}
                      "client-bridge")
@@ -237,3 +239,13 @@
   (or (bridge-op :has-recipes? item-id)
       (do (log/debug "Client bridge has-recipes? not available, returning false")
           false)))
+
+(defn blit-textured-quad!
+  "Render a textured quad with custom UV coordinates.
+   graphics — opaque GuiGraphics from the rendering context,
+   texture — ResourceLocation, x1 y1 — top-left screen coords,
+   x2 y2 — bottom-right screen coords, z — depth,
+   u0-v1 — normalized texture UV bounds."
+  [graphics texture x1 y1 x2 y2 z u0 u1 v0 v1]
+  (or (bridge-op :blit-textured-quad! graphics texture x1 y1 x2 y2 z u0 u1 v0 v1)
+      (log/debug "Client bridge blit-textured-quad! not available")))

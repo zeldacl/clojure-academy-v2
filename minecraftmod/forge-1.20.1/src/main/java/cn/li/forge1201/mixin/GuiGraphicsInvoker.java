@@ -5,11 +5,6 @@ import net.minecraft.resources.ResourceLocation;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Invoker;
 
-/**
- * Mixin @Invoker for GuiGraphics.innerBlit (package-private).
- * Provides public access to the innerBlit method without reflection,
- * as recommended by the Fabric/Forge community.
- */
 @Mixin(GuiGraphics.class)
 public interface GuiGraphicsInvoker {
 

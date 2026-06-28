@@ -17,8 +17,7 @@
             Tesselator BufferBuilder BufferUploader PoseStack$Pose]
            [com.mojang.blaze3d.platform Window]
            [org.joml Matrix4f]
-           [org.lwjgl.opengl GL11]
-           [cn.li.mc1201.client GuiGraphicsHelper]))
+           [org.lwjgl.opengl GL11]))
 
 ;; ============================================================================
 ;; Texture preloads (developer skill tree)
@@ -194,10 +193,10 @@
                          ^ResourceLocation loc (if (keyword? tex-key) (get-skill-tree-texture tex-key)
                                                (path->resource-location tex-key))]
                      (when loc
-                       (GuiGraphicsHelper/innerBlit10 graphics loc
-                                                      (int (:x op)) (int (+ (:x op) (:w op)))
-                                                      (int (:y op)) (int (+ (:y op) (:h op)))
-                                                      (int 0)
+                       (platform-bridge/blit-textured-quad! graphics loc
+                                                      (float (:x op)) (float (:y op))
+                                                      (float (+ (:x op) (:w op))) (float (+ (:y op) (:h op)))
+                                                      0.0
                                                       (float (or (:min-u op) (:u op) 0.0))
                                                       (float (or (:max-u op) (+ (or (:u op) 0.0) (or (:tex-w op) 1.0))))
                                                       (float (or (:min-v op) (:v op) 0.0))

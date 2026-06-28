@@ -21,8 +21,7 @@
            [com.mojang.blaze3d.vertex DefaultVertexFormat VertexFormat$Mode PoseStack
             Tesselator BufferBuilder BufferUploader PoseStack$Pose]
            [org.joml Matrix4f]
-           [org.lwjgl.opengl GL11]
-           [cn.li.mc1201.client GuiGraphicsHelper]))
+           [org.lwjgl.opengl GL11]))
 
 ;; ============================================================================
 ;; Texture resolution
@@ -147,8 +146,10 @@
           :raw-rect-uv (let [^ResourceLocation loc (if (keyword? (:texture op)) (get-skill-tree-texture (:texture op))
                                                  (path->resource-location (:texture op)))]
                          (when loc
-                           (GuiGraphicsHelper/innerBlit10 graphics loc (int (:x op)) (int (+ (int (:x op)) (int (:w op))))
-                             (int (:y op)) (int (+ (int (:y op)) (int (:h op)))) (int 0)
+                           (platform-bridge/blit-textured-quad! graphics loc
+                             (float (:x op)) (float (:y op))
+                             (float (+ (:x op) (:w op))) (float (+ (:y op) (:h op)))
+                             0.0
                              (float (or (:min-u op) 0.0)) (float (or (:max-u op) 1.0))
                              (float (or (:min-v op) 0.0)) (float (or (:max-v op) 1.0)))))
           :line-quad (let [^ResourceLocation tex (get-skill-tree-texture :tex-line)
