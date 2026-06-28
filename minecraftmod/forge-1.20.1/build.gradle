@@ -21,11 +21,6 @@ configureMcmodContentRuntime()
 loom {
     // 现代 Loom 1.7+ 的 Forge 专用配置块
     forge {
-        // 如果你有 access transformer 文件，在这里指定路径
-        // accessTransformer = file("src/main/resources/META-INF/accesstransformer.cfg")
-        
-        // 注意：Loom 1.7 会自动处理 AT 转换，不需要显式设置 convertAccessTransformers
-        // convertAccessTransformers = true
     }
 
     runs {

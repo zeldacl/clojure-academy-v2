@@ -9,7 +9,6 @@ public final class GuiGraphicsHelper {
 
     /**
      * Wrapper for GuiGraphics.blit() 9-parameter overload.
-     * Provides explicit method signature for Clojure interop.
      */
     public static void blit9(
             GuiGraphics graphics,
@@ -23,8 +22,7 @@ public final class GuiGraphicsHelper {
 
     /**
      * Wrapper for GuiGraphics.innerBlit() with normalized UV coordinates.
-     * Uses reflection to access the package-private method in GuiGraphics.
-     * Provides explicit method signature for Clojure interop (avoids reflection).
+     * Uses Mixin @Invoker to access the package-private method without reflection.
      */
     public static void innerBlit10(
             GuiGraphics graphics,
@@ -34,20 +32,7 @@ public final class GuiGraphicsHelper {
             int z,
             float u0, float u1,
             float v0, float v1) {
-        try {
-            java.lang.reflect.Method method = GuiGraphics.class.getDeclaredMethod(
-                "innerBlit",
-                ResourceLocation.class,
-                int.class, int.class,
-                int.class, int.class,
-                int.class,
-                float.class, float.class,
-                float.class, float.class
-            );
-            method.setAccessible(true);
-            method.invoke(graphics, texture, x1, x2, y1, y2, z, u0, u1, v0, v1);
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to invoke GuiGraphics.innerBlit", e);
-        }
+        ((cn.li.forge1201.mixin.GuiGraphicsInvoker) graphics).invokeInnerBlit(
+                texture, x1, x2, y1, y2, z, u0, u1, v0, v1);
     }
 }

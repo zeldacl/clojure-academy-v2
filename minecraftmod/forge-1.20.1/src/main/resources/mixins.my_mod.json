@@ -1,0 +1,10 @@
+{
+    "required": true,
+    "package": "cn.li.forge1201.mixin",
+    "compatibilityLevel": "JAVA_17",
+    "mixins": [],
+    "client": [
+        "GuiGraphicsInvoker"
+    ],
+    "server": []
+}
