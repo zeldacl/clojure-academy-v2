@@ -133,12 +133,12 @@
       :slow-print
       (let [text (:text task)
             char-idx (or (:char-idx task) 0)
+            ;; chars-needed is total chars that should be printed by now (monotonically increasing).
+            ;; Upstream: last += n * PerCharTime (carry over residual time, don't reset to 0).
             chars-needed (int (/ timer per-char-delay))
             next-idx (min (count text) chars-needed)]
         (if (< char-idx (count text))
           (let [chunk (subs text char-idx next-idx)
-                ;; Process chunk character-by-character for \\n handling
-                ;; \\n → conj \"\" (start new line), other chars → append to last line
                 state' (reduce
                          (fn [st ch]
                            (if (= ch \newline)
@@ -150,7 +150,7 @@
                          state
                          chunk)]
             (-> state'
-                (assoc :task-timer 0.0)
+                (assoc :task-timer timer)     ; keep accumulating — upstream: last += n*PerCharTime
                 (assoc-in [:current-task :char-idx] next-idx)))
           (-> state
               (assoc :current-task nil :task-timer 0.0))))
