@@ -246,13 +246,11 @@
 ;; ============================================================================
 
 (defn- create-skill-detail-overlay!
-  "Create overlay matching original skillViewArea: skill_back+icon+ring centered on
-  the fading cover, text area at center+25px below, learned/unlearned mode split."
+  "Skill detail overlay — delegates visual rendering to skill-tree/detail-popup-ops.
+  CGUI layer handles only: fading cover, click-to-close, LEARN click dispatch."
   [root container skill-id _developer-type]
   (let [{:keys [cover end-cover!]} (create-fading-cover root root)
-        close-fn (fn []
-                   (unregister-overlay! root end-cover!)
-                   (end-cover!))
+        close-fn (fn [] (unregister-overlay! root end-cover!) (end-cover!))
         _ (register-overlay! root end-cover!)
         dev-type (or _developer-type :normal)
         dev-spec (developer/developer-spec dev-type)
@@ -263,189 +261,84 @@
                                  (+ 3 (* skill-level skill-level 0.5))))
         session-id (runtime-hooks/require-player-state-session-id "developer.panel")
         uuid-str (when (:player container) (uuid/player-uuid (:player container)))
-        pstate (when uuid-str (store/get-player-state* session-id uuid-str))
-        ad (:ability-data pstate)
-        learned? (adata/is-learned? ad skill-id)
-        skill-exp (double (if learned? (or (adata/get-skill-exp ad skill-id) 0.0) 0.0))
-        player-level (int (or (:level ad) 1))
-        ;; Layout — cover is 400×187, cy=93
-        ;; Upstream: skillWid.centered().size(50,50)
-        ;; textArea: centered, pos(0,25) → textBase = cy + 20
-        ;; Text lines: (0,3) title, (0,15) not-learned/EXP, (0,25) cond icons, (0,40) message, (0,55) button
+        get-ad #(-> (when uuid-str (store/get-player-state* session-id uuid-str)) :ability-data)
+        ad0 (get-ad)
+        skill-icon (skill-query/get-skill-icon-path skill-id)
+        skill-description (when-let [dk (:description-key skill-spec)] (i18n/translate dk))
+        prerequisites (mapv (fn [{:keys [skill-id min-exp]}]
+                              {:icon-path (skill-query/get-skill-icon-path skill-id)
+                               :accepted? (>= (double (or (adata/get-skill-exp ad0 skill-id) 0.0))
+                                              (double min-exp))})
+                            (or (:prerequisites skill-spec) []))
+        open-time-ms (client-bridge/game-time-ms)
+        ;; Developer page layout (page_developer.xml 400×187), center = 200, 93
         cx 200 cy 93
-        back-sz 50 icon-sz 27
-        icon-ofs (/ (- back-sz icon-sz) 2)
-        back-x (- cx 25) back-y (- cy 25)
-        icon-x (+ back-x icon-ofs) icon-y (+ back-y icon-ofs)
-        text-base (+ cy 20)
-        title-y   (+ text-base 3)
-        info-y    (+ text-base 15)
-        cond-y    (+ text-base 25)
-        msg-y     (+ text-base 40)
-        btn-y     (+ text-base 55)
-        btn-x     (- cx 16)
-        ;; Textures
-        outline-base (modid/asset-path "textures" "guis/developer/skill_view_outline.png")
-        outline-glow (modid/asset-path "textures" "guis/developer/skill_view_outline_glow.png")
-        mask-path    (modid/asset-path "textures" "guis/developer/skill_radial_mask.png")
-        skill-back-path (modid/asset-path "textures" "guis/developer/skill_back.png")
-        button-tex-path (modid/asset-path "textures" "guis/developer/button.png")
-        skill-icon-path (when-let [ip (skill-query/get-skill-icon-path skill-id)]
-                          (modid/asset-path "textures" (subs ip (count "textures/"))))
-        ;; i18n
-        skill-not-learned-text (i18n/translate "skill_tree.my_mod.skill_not_learned")
-        req-text   (i18n/translate "skill_tree.my_mod.req")
-        learn-q-text (format (i18n/translate "skill_tree.my_mod.learn_question") (format "%.0f" (double est-consumption)))
-        message-atom (atom learn-q-text)
-        progress-atom (atom 0.0)
-        ring-comp (comp/shader-ring {:texture-0 outline-base
-                                     :texture-1 mask-path
-                                     :progress 0.0})
-        can-close? (atom true)
-        msg-tb-ref (atom nil)
-        ;; Prerequisites as condition icons
-        prerequisites (or (:prerequisites skill-spec) [])
-        cond-icon-sz 14
-        cond-step 16
-        cond-len (* cond-step (count prerequisites))
-        cond-start-x (- (/ cond-len 2))]
+        ta-y (+ cy 20)
+        btn-x (- cx 16) btn-y (+ ta-y 52)
+        ;; Per-overlay dev-state atom updated from container each frame
+        state-a (atom {:is-developing? false :progress 0.0 :result nil :error nil})
+        prev-dev-a (atom false)]
 
-    ;; Close on cover click — guard button area so button click doesn't also close
+    ;; Sync dev-state from container atoms each frame
+    (events/on-frame cover
+      (fn [_]
+        (let [is-dev (boolean @(:is-developing container))
+              dev-prog (double (or @(:development-progress container) 0.0))
+              dev-complete (boolean @(:development-complete? container))
+              prev @prev-dev-a]
+          (cond
+            is-dev (swap! state-a assoc :is-developing? true :progress dev-prog :error nil)
+            (and (not is-dev) prev dev-complete)
+            (swap! state-a assoc :is-developing? false :progress 1.0 :result :success)
+            (and (not is-dev) prev (not dev-complete))
+            (swap! state-a assoc :is-developing? false :result :failed)
+            :else nil)
+          (reset! prev-dev-a is-dev))))
+
+    ;; Cover click: detect LEARN button area or close
     (events/on-left-click cover
       (fn [evt]
-        (let [mx (int (:x evt 0)) my (int (:y evt 0))
-              on-btn? (and (>= mx btn-x) (<= mx (+ btn-x 32))
+        (let [s @state-a
+              mx (int (:x evt 0)) my (int (:y evt 0))
+              ad (get-ad)
+              learned? (adata/is-learned? ad skill-id)
+              developing? (:is-developing? s)
+              has-result? (some? (:result s))
+              on-btn? (and (not learned?) (not developing?) (not has-result?)
+                           (>= mx btn-x) (<= mx (+ btn-x 32))
                            (>= my btn-y) (<= my (+ btn-y 16)))]
-          (when (and @can-close? (not (and (not learned?) on-btn?)))
-            (close-fn)))))
-
-    ;; skill_back (50×50, centered) — matching texSkillBack in drawActionIcon
-    (let [sb-w (cgui-core/create-widget :pos [back-x back-y] :size [back-sz back-sz])]
-      (comp/add-component! sb-w (comp/draw-texture skill-back-path 0xFFFFFFFF))
-      (cgui-core/add-widget! cover sb-w))
-
-    ;; Skill icon (27×27 at offset 11 inside skill_back)
-    (when skill-icon-path
-      (let [ic-w (cgui-core/create-widget :pos [icon-x icon-y] :size [icon-sz icon-sz])
-            icon-color (if learned? 0xFFFFFFFF 0xFF888888)]
-        (comp/add-component! ic-w (comp/draw-texture skill-icon-path icon-color))
-        (cgui-core/add-widget! cover ic-w)))
-
-    ;; Shader ring (50×50 overlaid) — progress=0 for learned in popup (original behavior)
-    (let [ring-w (cgui-core/create-widget :pos [back-x back-y] :size [back-sz back-sz])]
-      (comp/add-component! ring-w ring-comp)
-      (cgui-core/add-widget! cover ring-w))
-
-    ;; Title — upstream: learned = just name, unlearned = "Name (LV X)"
-    (let [title-text (if learned? skill-name (str skill-name " (LV " skill-level ")"))
-          title-w (cgui-core/create-widget :pos [0 title-y] :size [400 14])
-          title-tb (comp/text-box :text title-text :font :ac-bold :font-size 12 :align :center :color 0xFFFFFFFF)]
-      (comp/add-component! title-w title-tb)
-      (cgui-core/add-widget! cover title-w))
-
-    (if learned?
-      ;; ── Learned mode: EXP + description ──────────────────────────────────
-      (do
-        ;; EXP line (foSkillProg: 8, CENTER, 0xFFa1e1ff)
-        (let [exp-text (str (i18n/translate "skill_tree.my_mod.skill_exp") " " (int (* 100.0 skill-exp)) "%")
-              exp-w (cgui-core/create-widget :pos [0 info-y] :size [400 12])
-              exp-tb (comp/text-box :text exp-text :font :ac-normal :font-size 8 :align :center :color 0xFFa1e1ff)]
-          (comp/add-component! exp-w exp-tb)
-          (cgui-core/add-widget! cover exp-w))
-        ;; Description (foSkillDesc: 9, CENTER)
-        (when (and skill-spec (:description-key skill-spec))
-          (let [desc-w (cgui-core/create-widget :pos [0 cond-y] :size [400 12])
-                desc-tb (comp/text-box :text (i18n/translate (:description-key skill-spec))
-                                       :font :ac-normal :font-size 9 :align :center :color 0xFFDDDDDD)]
-            (comp/add-component! desc-w desc-tb)
-            (cgui-core/add-widget! cover desc-w))))
-
-      ;; ── Unlearned mode ───────────────────────────────────────────────────
-      (let [btn (cgui-core/create-widget :pos [btn-x btn-y] :size [32 16])
-            btn-tex (comp/draw-texture button-tex-path 0xFFFFFFFF)
-            btn-tb (comp/text-box :text "LEARN" :font :ac-bold :font-size 9 :align :center :color 0xFF101010)]
-
-        ;; "Not learned" — foSkillUnlearned (10, CENTER, red)
-        (let [nl-w (cgui-core/create-widget :pos [0 info-y] :size [400 12])
-              nl-tb (comp/text-box :text skill-not-learned-text :font :ac-normal :font-size 10 :align :center :color 0xFFff5555)]
-          (comp/add-component! nl-w nl-tb)
-          (cgui-core/add-widget! cover nl-w))
-
-        ;; Req label (foSkillReq: 9, RIGHT)
-        (let [req-w (cgui-core/create-widget :pos [0 cond-y] :size [400 12])
-              req-tb (comp/text-box :text (str req-text " " (format "%.0f" (double est-consumption)))
-                                    :font :ac-normal :font-size 9 :align :center :color 0xAAFFFFFF)]
-          (comp/add-component! req-w req-tb)
-          (cgui-core/add-widget! cover req-w))
-
-        ;; Condition icons (upstream: skill.getDevConditions → 14×14 icons row)
-        (when (seq prerequisites)
-          (doseq [[idx {:keys [skill-id min-exp]}] (map-indexed vector prerequisites)]
-            (let [icon-path (when-let [ip (skill-query/get-skill-icon-path skill-id)]
-                             (modid/asset-path "textures" (subs ip (count "textures/"))))
-                  accepted? (>= (double (or (adata/get-skill-exp ad skill-id) 0.0)) (double min-exp))
-                  cx-cond (+ cx cond-start-x (* idx cond-step))
-                  cond-w (cgui-core/create-widget :pos [cx-cond cond-y] :size [cond-icon-sz cond-icon-sz])
-                  cond-color (if accepted? 0xFFFFFFFF 0xFF888888)]
-              (when icon-path
-                (comp/add-component! cond-w (comp/draw-texture icon-path cond-color))
-                (cgui-core/add-widget! cover cond-w)))))
-
-        ;; learn_question / message — foSkillUnlearned2 (10, CENTER), dynamic
-        (let [msg-w (cgui-core/create-widget :pos [0 msg-y] :size [400 12])
-              msg-tb (comp/text-box :text @message-atom :font :ac-normal :font-size 10 :align :center :color 0xAAFFFFFF)]
-          (reset! msg-tb-ref msg-tb)
-          (comp/add-component! msg-w msg-tb)
-          (cgui-core/add-widget! cover msg-w))
-
-        ;; LEARN button: button.png 32×16
-        (comp/add-component! btn btn-tex)
-        (comp/add-component! btn btn-tb)
-        (events/on-left-click btn
-          (fn [_]
-            (let [energy (double (or @(:energy container) 0.0))]
+          (cond
+            on-btn?
+            (let [energy (double (or @(:energy container) 0.0))
+                  player-level (int (or (:level ad) 1))]
               (cond
                 (< energy est-consumption)
-                (reset! message-atom (i18n/translate "skill_tree.my_mod.noenergy"))
+                (swap! state-a assoc :error :low-energy)
                 (> skill-level player-level)
-                (reset! message-atom (format (i18n/translate "skill_tree.my_mod.level_fail") skill-level))
+                (swap! state-a assoc :error :low-level)
                 (not (learning-rules/can-learn? skill-spec ad player-level dev-type))
-                (reset! message-atom (i18n/translate "skill_tree.my_mod.condition_fail"))
+                (swap! state-a assoc :error :cond-fail)
                 :else
                 (do (req-start-development! container :learn-skill {:skill-id (name skill-id)})
-                    (reset! can-close? false))))))
-        (cgui-core/add-widget! cover btn)
+                    (swap! state-a assoc :error nil))))
+            (and (not developing?) (not on-btn?))
+            (close-fn)))))
 
-        ;; Dev progress monitor — updates ring + message each frame (upstream: FrameEvent on ret)
-        (let [prev-dev (atom false)]
-          (events/on-frame cover
-            (fn [_]
-              (let [is-dev (boolean @(:is-developing container))
-                    dev-prog (double (or @(:development-progress container) 0.0))
-                    dev-complete (boolean @(:development-complete? container))
-                    prog01 (float (if is-dev (min 1.0 dev-prog) (float @progress-atom)))
-                    glow? (>= (double prog01) 0.999)]
-                ;; Ring tracks dev progress + glow texture (upstream: drawActionIcon glow)
-                (swap! (:state ring-comp) assoc
-                       :progress prog01
-                       :texture-0 (if glow? outline-glow outline-base))
-                ;; Message replaces learn_question (upstream: message var)
-                (cond
-                  is-dev
-                  (let [pct (int (* 100.0 (min 1.0 dev-prog)))]
-                    (reset! message-atom (str (i18n/translate "skill_tree.my_mod.progress") " " pct "%")))
-                  (and (not is-dev) @prev-dev dev-complete)
-                  (do (reset! message-atom (i18n/translate "skill_tree.my_mod.dev_successful"))
-                      (reset! progress-atom 1.0)
-                      (reset! can-close? true))
-                  (and (not is-dev) @prev-dev (not dev-complete))
-                  (do (reset! message-atom (i18n/translate "skill_tree.my_mod.dev_failed"))
-                      (reset! can-close? true))
-                  :else nil)
-                ;; Push updated message to textbox
-                (when-let [tb @msg-tb-ref]
-                  (comp/set-text! tb @message-atom))
-                (reset! prev-dev is-dev)))))))
+    ;; Draw-ops host — delegates ALL visual rendering to skill-tree/detail-popup-ops
+    (client-bridge/draw-ops-host! cover
+      (fn []
+        (let [anim-time (/ (- (client-bridge/game-time-ms) open-time-ms) 1000.0)
+              ad (get-ad)
+              learned? (adata/is-learned? ad skill-id)
+              skill-exp (double (if learned? (or (adata/get-skill-exp ad skill-id) 0.0) 0.0))]
+          (skill-tree/detail-popup-ops
+            {:skill-id skill-id :skill-name skill-name :skill-level skill-level
+             :skill-icon skill-icon :skill-description skill-description
+             :learned learned? :exp skill-exp}
+            anim-time
+            {:dev-state @state-a :est-consumption est-consumption
+             :cx cx :cy cy :screen-w 400 :screen-h 187
+             :prerequisites prerequisites}))))
 
     (cgui-core/add-widget! root cover)))
 
@@ -454,16 +347,11 @@
 ;; ============================================================================
 
 (defn- create-level-up-overlay!
-  "Create overlay for ability level-up matching upstream levelUpArea.
-  Layout: cover → skill_back(50×50 centered) + icon(27×27) + shader ring
-         → textArea(centered, +25px) → button(32×16, centered, +40px)
-  i18n keys: skill_tree.my_mod.uplevel / req / level_question / noenergy / dev_*"
+  "Level-up overlay — delegates visual rendering to skill-tree/level-up-popup-ops.
+  CGUI layer handles only: fading cover, click-to-close, LEARN click dispatch."
   [root container developer-type]
   (let [{:keys [cover end-cover!]} (create-fading-cover root root)
-        should-rebuild (atom false) can-close? (atom true)
-        close-fn (fn []
-                   (unregister-overlay! root end-cover!)
-                   (end-cover!))
+        close-fn (fn [] (unregister-overlay! root end-cover!) (end-cover!))
         _ (register-overlay! root end-cover!)
         dev-type (or (normalize-tier developer-type) :normal)
         dev-spec (developer/developer-spec dev-type)
@@ -474,116 +362,61 @@
         current-level (int (or (:level ad) 1))
         target-level (inc current-level)
         est-consumption (long (* (:cps dev-spec 700.0) (+ 3 (* target-level target-level 0.5))))
-        ;; Cover dimensions (fills root)
-        cw (nth (cgui-core/get-size root) 0)
-        ch (nth (cgui-core/get-size root) 1)
-        ;; Centered icon widget 50×50 — matching upstream wid.centered().size(50,50)
-        icon-back-sz 50
-        icon-inner-sz 27
-        icon-ofs (/ (- icon-back-sz icon-inner-sz) 2)
-        icon-cx (int (/ cw 2))
-        icon-cy (int (/ ch 2))
-        icon-x (- icon-cx 25)
-        icon-y (- icon-cy 25)
-        icon-inner-x (+ icon-x icon-ofs)
-        icon-inner-y (+ icon-y icon-ofs)
-        ;; Text area: centered, pos(0, 25) → textY = cy + 25
-        text-base-y (+ icon-cy 25)
-        ;; Button: centered, pos(0, 40) → btnY = textArea center + 40 ≈ cy + 25 + 40
-        btn-sz 32
-        btn-x (- icon-cx (/ btn-sz 2))
-        btn-y (+ text-base-y 40)
-        ;; Textures
-        skill-back-path (modid/asset-path "textures" "guis/developer/skill_back.png")
-        outline-path (modid/asset-path "textures" "guis/developer/skill_view_outline.png")
-        mask-path (modid/asset-path "textures" "guis/developer/skill_radial_mask.png")
-        button-tex-path (modid/asset-path "textures" "guis/developer/button.png")
-        ;; Condition icon — upstream: Resources.getTexture("abilities/condition/any" + (level+1))
-        condition-icon-key (str "abilities/condition/any" target-level)
-        condition-icon-path (modid/asset-path "textures" (str condition-icon-key ".png"))
-        ;; i18n
-        lvltext (format (i18n/translate "skill_tree.my_mod.uplevel") (str "Lv." target-level))
-        reqtext (str (i18n/translate "skill_tree.my_mod.req") " " (format "%.0f" (double est-consumption)))
-        hint-atom (atom (i18n/translate "skill_tree.my_mod.level_question"))
-        progress-atom (atom 0.0)
-        ;; Shader ring component (shared, updated on-frame)
-        ring-comp (comp/shader-ring {:texture-0 outline-path
-                                     :texture-1 mask-path
-                                     :progress 0.0})
-        prev-dev (atom false)
-        hint-tb-ref (atom nil)    ;; holds the dynamic hint textbox for on-frame updates
-        ;; Helper: build the overlay widgets (closes over let bindings)
-        build-overlay-widgets! (fn []
-                                 ;; ── Close on cover click (outside icon area) ──
-                                 (events/on-left-click cover
-                                   (fn [evt]
-                                     (let [mx (int (:x evt 0)) my (int (:y evt 0))
-                                           on-btn? (and (>= mx btn-x) (<= mx (+ btn-x btn-sz))
-                                                        (>= my btn-y) (<= my (+ btn-y 16)))]
-                                       (when (and @can-close? (not on-btn?))
-                                         (close-fn)))))
-                                 ;; ── skill_back 50×50 centered ──
-                                 (let [sb-w (cgui-core/create-widget :pos [icon-x icon-y] :size [icon-back-sz icon-back-sz])]
-                                   (comp/add-component! sb-w (comp/draw-texture skill-back-path 0xFFFFFFFF))
-                                   (cgui-core/add-widget! cover sb-w))
-                                 ;; ── Condition icon 27×27 at offset IconAlign ──
-                                 (let [ic-w (cgui-core/create-widget :pos [icon-inner-x icon-inner-y] :size [icon-inner-sz icon-inner-sz])]
-                                   (comp/add-component! ic-w (comp/draw-texture condition-icon-path 0xFFFFFFFF))
-                                   (cgui-core/add-widget! cover ic-w))
-                                 ;; ── Shader ring 50×50 (overlaid on icon, progress driven by dev state) ──
-                                 (let [ring-w (cgui-core/create-widget :pos [icon-x icon-y] :size [icon-back-sz icon-back-sz])]
-                                   (comp/add-component! ring-w ring-comp)
-                                   (cgui-core/add-widget! cover ring-w))
-                                 ;; ── Text area: three lines matching upstream ──
-                                 (let [w (cgui-core/create-widget :pos [0 (+ text-base-y 3)] :size [cw 14])
-                                       tb (comp/text-box :text lvltext :font :ac-bold :font-size 12 :align :center :color 0xFFFFFFFF)]
-                                   (comp/add-component! w tb) (cgui-core/add-widget! cover w))
-                                 (let [w (cgui-core/create-widget :pos [0 (+ text-base-y 16)] :size [cw 12])
-                                       tb (comp/text-box :text reqtext :font :ac-normal :font-size 9 :align :center :color 0xAAFFFFFF)]
-                                   (comp/add-component! w tb) (cgui-core/add-widget! cover w))
-                                 (let [w (cgui-core/create-widget :pos [0 (+ text-base-y 26)] :size [cw 12])
-                                       hint-tb (comp/text-box :text @hint-atom :font :ac-normal :font-size 9 :align :center :color 0xAAFFFFFF)]
-                                   (reset! hint-tb-ref hint-tb)
-                                   (comp/add-component! w hint-tb) (cgui-core/add-widget! cover w))
-                                 ;; ── Button: newButton() — 32×16 texButton + text ──
-                                 (let [btn-w (cgui-core/create-widget :pos [btn-x btn-y] :size [btn-sz 16])
-                                       btn-tex (comp/draw-texture button-tex-path 0xFFFFFFFF)
-                                       btn-tb (comp/text-box :text "LEARN" :font :ac-bold :font-size 9 :align :center :color 0xFF101010)]
-                                   (comp/add-component! btn-w btn-tex)
-                                   (comp/add-component! btn-w btn-tb)
-                                   (events/on-left-click btn-w
-                                     (fn [_]
-                                       (let [energy (double (or @(:energy container) 0.0))]
-                                         (if (< energy est-consumption)
-                                           (reset! hint-atom (i18n/translate "skill_tree.my_mod.noenergy"))
-                                           (do (req-start-development! container :level-up)
-                                               (reset! can-close? false))))))
-                                   (cgui-core/add-widget! cover btn-w))
-                                 ;; ── Dev state monitor (FrameEvent on cover) ──
-                                 (events/on-frame cover
-                                   (fn [_]
-                                     (let [is-dev (boolean @(:is-developing container))
-                                           dev-prog (double (or @(:development-progress container) 0.0))
-                                           dev-complete (boolean @(:development-complete? container))]
-                                       (swap! (:state ring-comp) assoc :progress (if is-dev (float dev-prog) (float @progress-atom)))
-                                       (cond
-                                         is-dev
-                                         (do (reset! hint-atom (i18n/translate "skill_tree.my_mod.dev_developing"))
-                                             (reset! progress-atom dev-prog))
-                                         (and (not is-dev) @prev-dev dev-complete)
-                                         (do (reset! hint-atom (i18n/translate "skill_tree.my_mod.dev_successful"))
-                                             (reset! progress-atom 1.0)
-                                             (reset! can-close? true)
-                                             (reset! should-rebuild true))
-                                         (and (not is-dev) @prev-dev (not dev-complete))
-                                         (do (reset! hint-atom (i18n/translate "skill_tree.my_mod.dev_failed"))
-                                             (reset! can-close? true))
-                                         :else nil)
-                                       (when-let [tb @hint-tb-ref]
-                                         (comp/set-text! tb @hint-atom))
-                                       (reset! prev-dev is-dev)))))]
+        condition-icon-path (modid/asset-path "textures" (str "abilities/condition/any" target-level ".png"))
+        open-time-ms (client-bridge/game-time-ms)
+        ;; Developer page layout (page_developer.xml 400×187), center = 200, 93
+        cx 200 cy 93
+        text-base-y (+ cy 25)
+        btn-x (- cx 16) btn-y (+ text-base-y 40)
+        ;; Per-overlay dev-state atom updated from container each frame
+        state-a (atom {:is-developing? false :progress 0.0 :result nil :error nil})
+        prev-dev-a (atom false)]
 
-    (build-overlay-widgets!)
+    ;; Sync dev-state from container atoms each frame
+    (events/on-frame cover
+      (fn [_]
+        (let [is-dev (boolean @(:is-developing container))
+              dev-prog (double (or @(:development-progress container) 0.0))
+              dev-complete (boolean @(:development-complete? container))
+              prev @prev-dev-a]
+          (cond
+            is-dev (swap! state-a assoc :is-developing? true :progress dev-prog :error nil)
+            (and (not is-dev) prev dev-complete)
+            (swap! state-a assoc :is-developing? false :progress 1.0 :result :success)
+            (and (not is-dev) prev (not dev-complete))
+            (swap! state-a assoc :is-developing? false :result :failed)
+            :else nil)
+          (reset! prev-dev-a is-dev))))
+
+    ;; Cover click: detect LEARN button area or close
+    (events/on-left-click cover
+      (fn [evt]
+        (let [s @state-a
+              mx (int (:x evt 0)) my (int (:y evt 0))
+              developing? (:is-developing? s)
+              has-result? (some? (:result s))
+              on-btn? (and (not developing?) (not has-result?)
+                           (>= mx btn-x) (<= mx (+ btn-x 32))
+                           (>= my btn-y) (<= my (+ btn-y 16)))]
+          (cond
+            on-btn?
+            (let [energy (double (or @(:energy container) 0.0))]
+              (if (< energy est-consumption)
+                (swap! state-a assoc :error :low-energy)
+                (do (req-start-development! container :level-up)
+                    (swap! state-a assoc :error nil))))
+            (and (not developing?) (not on-btn?))
+            (close-fn)))))
+
+    ;; Draw-ops host — delegates ALL visual rendering to skill-tree/level-up-popup-ops
+    (client-bridge/draw-ops-host! cover
+      (fn []
+        (let [anim-time (/ (- (client-bridge/game-time-ms) open-time-ms) 1000.0)]
+          (skill-tree/level-up-popup-ops
+            target-level condition-icon-path anim-time
+            {:dev-state @state-a :est-consumption est-consumption
+             :cx cx :cy cy :screen-w 400 :screen-h 187}))))
+
     (cgui-core/add-widget! root cover)))
 
 ;; ============================================================================
@@ -613,99 +446,84 @@
 ;; ============================================================================
 ;; Skill tree rendering — upstream SkillTree.scala matching
 ;; ============================================================================
+;; Shared node-size constants live in skill-tree namespace (skill-tree/widget-size etc.).
 
-(def ^:private skill-tree-creation-time (atom nil))
-(def ^:private skill-tree-hover (atom {:hover-idx nil :prev-idx nil :start 0}))
-
-(defn- clamp01 [x] (max 0.0 (min 1.0 (double x))))
-(defn- lerp [a b t] (+ a (* (- b a) (clamp01 t))))
-
-;; Upstream constants
-(def ^:private widget-size 16)
-(def ^:private total-size 23)
-(def ^:private icon-sz 14)
-(def ^:private prog-sz 31)
-(def ^:private draw-align (/ (- widget-size total-size) 2))
-(def ^:private prog-align (/ (- total-size prog-sz) 2))
-(def ^:private icon-align (/ (- total-size icon-sz) 2))
-
-
-;; Hover transition helpers — convert panel's hover atom to build-tree-ops format
-(def ^:private skill-tree-hover-transitions (atom {}))
+(defn- make-tree-state []
+  (atom {:creation-time nil
+         :hover {:hover-idx nil}
+         :hover-transitions {}}))
 
 (defn- update-hover-transitions!
-  [nodes mx my parallax-x parallax-y]
+  "Update per-node hover transitions in tree-state atom.
+  Per-session atom (not global) to avoid state bleed between concurrent GUIs."
+  [tree-state nodes mx my parallax-x parallax-y]
   (let [now (client-bridge/game-time-ms)
+        hw2 (/ skill-tree/widget-size 2)
         closest-node (when (seq nodes)
                        (apply min-key
                          (fn [n]
-                           (let [cx (+ (:x n) (/ widget-size 2) (- parallax-x))
-                                 cy (+ (:y n) (/ widget-size 2) (- parallax-y))]
+                           (let [cx (+ (:x n) hw2 (- parallax-x))
+                                 cy (+ (:y n) hw2 (- parallax-y))]
                              (+ (* (- mx cx) (- mx cx)) (* (- my cy) (- my cy)))))
                          nodes))
         hover-dist (when closest-node
-                     (let [cx (+ (:x closest-node) (/ widget-size 2) (- parallax-x))
-                           cy (+ (:y closest-node) (/ widget-size 2) (- parallax-y))]
+                     (let [cx (+ (:x closest-node) hw2 (- parallax-x))
+                           cy (+ (:y closest-node) hw2 (- parallax-y))]
                        (Math/sqrt (+ (* (- mx cx) (- mx cx)) (* (- my cy) (- my cy))))))
         hover-idx (:idx closest-node)
         hover-now? (and closest-node (< (or hover-dist 999) 20))
-        prev-idx (:hover-idx @skill-tree-hover)
-        prev-trans (get @skill-tree-hover-transitions prev-idx)
-        ;; Transition gate: only switch when previous animation completed
+        prev-idx (get-in @tree-state [:hover :hover-idx])
+        prev-trans (get-in @tree-state [:hover-transitions prev-idx])
         gate-open? (or (nil? prev-trans)
                       (>= (/ (- now (:start prev-trans)) 100.0) 1.0))]
-    (swap! skill-tree-hover assoc :hover-idx hover-idx)
+    (swap! tree-state assoc-in [:hover :hover-idx] hover-idx)
     (when (and gate-open? (not= hover-idx prev-idx))
-      (swap! skill-tree-hover-transitions
+      (swap! tree-state update :hover-transitions
         (fn [m]
           (-> m
               (cond-> prev-idx (assoc prev-idx {:start now :dir :out}))
               (cond-> (and hover-now? hover-idx) (assoc hover-idx {:start now :dir :in}))))))))
 
-(defn- build-panel-hover-args [dev-type]
-  (let [hidx (:hover-idx @skill-tree-hover)]
-    {:hid hidx
-     :htrans @skill-tree-hover-transitions}))
+(defn- build-panel-hover-args [tree-state]
+  {:hid    (get-in @tree-state [:hover :hover-idx])
+   :htrans (:hover-transitions @tree-state)})
 
 (defn- render-skill-tree-area!
   "Render skill tree nodes in parent_right/area.
-  Upstream: SkillTree.scala Common.initialize → area FrameEvent + per-skill widgets."
-  [root area-widget container player]
+  Upstream: SkillTree.scala Common.initialize → area FrameEvent + per-skill widgets.
+  tree-state: per-session atom holding creation-time and hover-transition state."
+  [root area-widget container player tree-state]
   (cgui-core/clear-widgets! area-widget)
   (try
-    (let [now (client-bridge/game-time-ms)                 ;; game-time — pauses with ESC
+    (let [now (client-bridge/game-time-ms)
           uuid-str (when player (uuid/player-uuid player))
           session-id (runtime-hooks/require-player-state-session-id "developer.panel")
           pstate (when uuid-str (store/get-player-state* session-id uuid-str))
           dev-type (current-developer-type container)
           render-data (skill-tree/build-render-data-for-player-state pstate dev-type)
           nodes (:skill-nodes render-data)
-          connections (:connections render-data)
-          _ (when (nil? @skill-tree-creation-time)
-              (reset! skill-tree-creation-time now))
-          anim (/ (- now @skill-tree-creation-time) 1000.0)
+          _ (when (nil? (:creation-time @tree-state))
+              (swap! tree-state assoc :creation-time now))
+          anim (/ (- now (long (:creation-time @tree-state now))) 1000.0)
           [mx my] (cn.li.mcmod.client.platform-bridge/get-mouse-pos)
           [window-w window-h] (cn.li.mcmod.client.platform-bridge/get-window-size)
-          mx01 (clamp01 (/ mx (max 1.0 (double window-w))))
-          my01 (clamp01 (/ my (max 1.0 (double window-h))))
+          mx01 (bal/clamp01 (/ mx (max 1.0 (double window-w))))
+          my01 (bal/clamp01 (/ my (max 1.0 (double window-h))))
           parallax-x (* (- mx01 0.5) 10.0)
           parallax-y (* (- my01 0.5) 10.0)]
-      ;; Shared draw-ops host — renders ALL nodes + connection lines via build-tree-ops
       (client-bridge/draw-ops-host! area-widget
         (fn []
-          (let [{:keys [hid htrans]} (build-panel-hover-args dev-type)]
+          (let [{:keys [hid htrans]} (build-panel-hover-args tree-state)]
             (skill-tree/build-tree-ops render-data anim mx01 my01 hid htrans nil))))
-      ;; Hover frame handler — updates per-node hover transitions each frame
       (let [hover-w (cgui-core/create-widget :pos [0 0] :size [257 139])]
         (events/on-frame hover-w
-          (fn [_] (update-hover-transitions! nodes mx my parallax-x parallax-y)))
+          (fn [_] (update-hover-transitions! tree-state nodes mx my parallax-x parallax-y)))
         (cgui-core/add-widget! area-widget hover-w))
-      ;; Click catchers — transparent widgets on top for node clicks
       (doseq [node nodes]
         (when (and (or (:can-learn node) (:learned node)) (not (:locked? node)))
           (let [click-x (int (- (:x node) parallax-x))
                 click-y (int (- (:y node) parallax-y))
-                click-sz (int widget-size)
+                click-sz (int skill-tree/widget-size)
                 click-w (cgui-core/create-widget :pos [click-x click-y] :size [click-sz click-sz])]
             (events/on-left-click click-w
               (fn [_] (create-skill-detail-overlay! root container (:skill-id node) dev-type)))
@@ -821,14 +639,13 @@
     ;; + periodic wireless label refresh (every 5s for multiplayer correctness)
     (let [right-area (cgui-core/find-widget root "parent_right/area")
           last-mode (atom nil)
-          refresh-tick (atom 0)]
+          refresh-tick (atom 0)
+          tree-state (make-tree-state)]
       (events/on-frame root
         (fn [_]
-          ;; Periodic wireless node label refresh (multiplayer safety)
           (swap! refresh-tick inc)
-          (when (zero? (mod @refresh-tick 100))  ;; ~5s at 20tps
+          (when (zero? (mod @refresh-tick 100))
             (refresh-linked-node-label! root container))
-          ;; Left panel updates
           (let [{:keys [ability-name icon-path exp-label level-label
                         cat-prog01 power01 sync-rate can-upgrade?]}
                 (current-ui-model container pl)]
@@ -838,18 +655,15 @@
             (set-text-path! root "parent_left/panel_ability/text_level" level-label)
             (set-progress-path! root "parent_left/panel_ability/logo_progress" cat-prog01)
             (set-progress-path! root "parent_left/panel_machine/progress_power" power01)
-            ;; Sync rate uses fixed device property (not computed wireless ratio)
             (set-progress-path! root "parent_left/panel_machine/progress_syncrate"
               (double (or sync-rate 0.7)))
             (set-visible-path! root "parent_left/panel_ability/btn_upgrade" can-upgrade?)
             (set-visible-path! root "parent_left/panel_ability/text_level" (not can-upgrade?)))
-
-          ;; Right panel mode dispatch
           (when right-area
             (let [mode (right-panel-mode nil container pl)]
               (when (not= mode @last-mode)
                 (reset! last-mode mode)
-                (reset! skill-tree-creation-time nil)
+                (swap! tree-state assoc :creation-time nil)
                 (when (not= mode :skill-tree) (cgui-core/clear-widgets! right-area))
                 (case mode
                   :console (render-console-area! root right-area container pl :learn)
@@ -857,7 +671,7 @@
                   :skill-tree nil
                   nil))
               (when (= mode :skill-tree)
-                (render-skill-tree-area! root right-area container pl)))))))
+                (render-skill-tree-area! root right-area container pl tree-state)))))))
 
     root))
 
