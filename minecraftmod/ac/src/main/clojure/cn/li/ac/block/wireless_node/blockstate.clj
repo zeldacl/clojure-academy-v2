@@ -71,21 +71,29 @@
                 :let [node-type-name (name node-type)
                       block-key (keyword (str "wireless-node-" node-type-name))
                       registry-name (str "node_" node-type-name)
-                      base-model (str (mod-id) ":block/" registry-name "_base")
-                      energy-models (vec (for [level (range energy-min (inc energy-max))]
-                                           {:condition {:energy (str level)}
-                                            :models [(str (mod-id) ":block/" registry-name "_energy_" level)]}))
-                      connected-model {:condition {:connected "true"}
-                                       :models [(str (mod-id) ":block/" registry-name "_connected")]}]]
+            ;; IMPORTANT:
+            ;; Keep node parts mutually-exclusive. Using an unconditional base part
+            ;; plus conditional full-cube parts causes model stacking/z-fighting,
+            ;; which makes runtime appearance look "stuck" to one shape.
+            ;;
+            ;; We instead generate one model per (energy, connected) tuple.
+            state-models (vec
+              (for [level (range energy-min (inc energy-max))
+                connected? [false true]]
+                {:condition {:energy (str level)
+                     :connected (str connected?)}
+                 :models [(str (mod-id)
+                       ":block/"
+                       registry-name
+                       "_energy_"
+                       level
+                       (when connected? "_connected"))]}))]]
             [block-key
              (BlockStateDefinition.
               registry-name
               {:energy {:min energy-min :max energy-max}
                :connected {:type connected-type}}
-              (vec (concat
-                    [{:condition nil :models [base-model]}]
-                    energy-models
-                    [connected-model])))]))))
+        state-models)]))))
 
 (defn get-node-blockstate-definition
   "Get BlockState definition for a specific node block.
@@ -109,7 +117,7 @@
     regex pattern matching node model names like 'node_basic_base'"
   []
   (let [node-type-str (str "(" (str/join "|" (map name (sort (keys (node-types*)))) )")")
-        variant-str   "(base|energy_\\d+|connected)"]
+      variant-str   "(base|connected|energy_\\d+(?:_connected)?)"]
     (re-pattern (str "node_" node-type-str "_" variant-str))))
 
 (defn- parse-node-model-name
@@ -135,7 +143,11 @@
   [variant]
   (let [raw (cond
               (#{"base" "connected"} variant) 0
-              (str/starts-with? variant "energy_") (Integer/parseInt (subs variant 7))
+        (str/starts-with? variant "energy_")
+        (let [n (subs variant 7)
+          suffix-idx (str/index-of n "_connected")
+          digits (if suffix-idx (subs n 0 suffix-idx) n)]
+          (Integer/parseInt digits))
               :else 0)
         ;; Extract min/max from schema
         {:keys [min max]} (get (extract-blockstate-props) :energy)
@@ -162,7 +174,9 @@
   [model-name]
   (when-let [[node-type variant] (parse-node-model-name model-name)]
     (let [energy-level (variant->energy-level variant)
-          top-texture  (if (= variant "connected")
+          connected?   (or (= variant "connected")
+                           (str/ends-with? variant "_connected"))
+          top-texture  (if connected?
                         (str (mod-id) ":block/node_top_1")
                         (str (mod-id) ":block/node_top_0"))
           side-texture (str (mod-id) ":block/node_" node-type "_side_" energy-level)]
