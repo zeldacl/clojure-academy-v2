@@ -293,7 +293,8 @@
                         (cgui-core/set-size! gl (- len cl) glow-h)
                         (cgui-core/set-visible! gl true))))
                   (let [ldt (min (- dt b1) b2)
-                        len2 (+ (* (- ln cl cl) (- 1.0 (/ ldt b2))) cl)]
+                        ;; lerp(ln-2*cl, ln2, ldt/b2) = lerp(400, 300, ldt/200)
+                        len2 (+ (- ln cl cl) (* (- ln2 (- ln cl cl)) (/ ldt b2)))]
                     (when-let [gr (find-widget-recursive root "glow-right")]
                       (cgui-core/set-pos! gr (+ logo1-half-w (- ln len2)) glow-y)
                       (cgui-core/set-size! gr len2 glow-h))
@@ -595,26 +596,42 @@
   ;; lineglow(ln-ln2, ln, ht) → right line from x=200 to x=500 in logo1-local.
   ;; lineglow(-ln, -(ln-ln2), ht) → left line from x=-500 to x=-200.
   ;;
-  ;; Uses gradient-fill component (banded fill() calls) matching upstream
-  ;; ACRenderingHelper.drawGlow gradient effect.  The upstream lineSegment
-  ;; solid line is rendered by the center-band opacity. Zero texture assets.
+  ;; Gradient-fill (banded fill() calls) matching upstream
+  ;; ACRenderingHelper.drawGlow gradient effect, PLUS a solid center-line child
+  ;; widget matching the upstream lineSegment(x0, 0, x1, 0, ht) at full opacity.
   (let [ls 0.25               ;; logo1 scale
         glow-h (/ 3.0 ls)     ;; 3px visual → 12px in logo1-local
         glow-center-local (/ (- glow-center-y logo1-abs-y) ls)  ;; ≈ 133.0
         glow-y (- glow-center-local (/ glow-h 2))
-        ;; Center-opaque white → edge-transparent, matching upstream
-        ;; drawGlow(..., GLOW_COLOR=Colors.white()) + lineSegment
-        glow-center-color 0xCCFFFFFF
+        ;; Gradient: full-white center → fully-transparent edge (matching original drawGlow)
+        glow-center-color 0xFFFFFFFF
         glow-edge-color   0x00FFFFFF
+        ;; Solid center line: thin strip at full opacity matching original lineSegment
+        ;; height = ht in original (5px visual / 0.25 = 20px logo1-local), but we use
+        ;; a narrow strip (~40% of glow-h) for a sharp line effect over the gradient.
+        line-h (/ glow-h 3.0)
+        line-y (+ glow-y (/ (- glow-h line-h) 2.0))
         logo1-w (find-widget-recursive root "logo1")]
     (when logo1-w
+      ;; Right glow line
       (let [gr (cgui-core/create-widget :pos [0 glow-y] :size [0 glow-h])]
         (comp/add-component! gr (comp/gradient-fill glow-center-color glow-edge-color))
         (cgui-core/set-name! gr "glow-right")
+        ;; Solid center line child — width matches glow parent, updated in animation
+        (let [line-r (cgui-core/create-widget :pos [0 line-y] :size [0 line-h])]
+          (comp/add-component! line-r (comp/draw-texture nil 0xFFFFFFFF))
+          (cgui-core/set-name! line-r "glow-right-line")
+          (cgui-core/add-widget! gr line-r))
         (cgui-core/add-widget! logo1-w gr))
+      ;; Left glow line
       (let [gl (cgui-core/create-widget :pos [0 glow-y] :size [0 glow-h])]
         (comp/add-component! gl (comp/gradient-fill glow-center-color glow-edge-color))
         (cgui-core/set-name! gl "glow-left")
+        ;; Solid center line child
+        (let [line-l (cgui-core/create-widget :pos [0 line-y] :size [0 line-h])]
+          (comp/add-component! line-l (comp/draw-texture nil 0xFFFFFFFF))
+          (cgui-core/set-name! line-l "glow-left-line")
+          (cgui-core/add-widget! gl line-l))
         (cgui-core/add-widget! logo1-w gl)))))
 
 (defn- setup-static-glow! [root]
