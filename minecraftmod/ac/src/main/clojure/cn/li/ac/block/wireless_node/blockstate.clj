@@ -8,7 +8,6 @@
   to colocate it with the node block implementation."
   (:require [clojure.string :as str]
             [cn.li.ac.block.wireless-node.schema :as node-schema]
-            [cn.li.ac.wireless.config :as wireless-config]
             [cn.li.mcmod.config :as mcmod-config]))
 
 ;; ============================================================================
@@ -27,8 +26,16 @@
 ;; Node BlockState Generation
 ;; ============================================================================
 
+(def ^:private node-tiers
+  "Static tier list for datagen/blockstate metadata.
+
+  Keep this namespace pure: do not read runtime wireless config here.
+  Runtime capacities/energy behavior belong to logic/config namespaces;
+  blockstate/model shape metadata only needs tier identifiers."
+  [:basic :standard :advanced])
+
 (defn- node-types* []
-  (wireless-config/node-types))
+  node-tiers)
 
 (defn- blockstate-property-fields* []
   node-schema/blockstate-property-fields)
@@ -67,7 +74,7 @@
         energy-max (get-in props [:energy :max])
         connected-type (get-in props [:connected :type])]
     (into {}
-      (for [node-type (sort (keys (node-types*)))
+      (for [node-type (node-types*)
                 :let [node-type-name (name node-type)
                       block-key (keyword (str "wireless-node-" node-type-name))
                       registry-name (str "node_" node-type-name)
@@ -116,7 +123,7 @@
   Returns:
     regex pattern matching node model names like 'node_basic_base'"
   []
-  (let [node-type-str (str "(" (str/join "|" (map name (sort (keys (node-types*)))) )")")
+  (let [node-type-str (str "(" (str/join "|" (map name (node-types*))) ")")
       variant-str   "(base|connected|energy_\\d+(?:_connected)?)"]
     (re-pattern (str "node_" node-type-str "_" variant-str))))
 
