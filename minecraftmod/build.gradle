@@ -4635,7 +4635,7 @@ tasks.register('verifyForgeTesting') {
 // ============================================================================
 import org.gradle.internal.os.OperatingSystem
 
-def cljKondoVersion = "2025.06.05"
+def cljKondoVersion = "2025.10.15"
 def kondoDir = file("${buildDir}/clj-kondo-bin")
 def kondoExt = OperatingSystem.current().isWindows() ? '.exe' : ''
 def kondoExe = file("${kondoDir}/clj-kondo${kondoExt}")
