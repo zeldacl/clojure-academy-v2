@@ -359,6 +359,9 @@
         ;; Upstream: entries are children of listArea, not leftPart directly.
         ;; Hiding listArea hides entries too (listArea.doesDraw = dt > 2.0).
         list-w (cgui-core/find-widget lp "list")
+        ;; Clear previous content to prevent event handler accumulation
+        ;; (matching rebuildList() which removes old ElementList before adding new one)
+        _ (cgui-core/clear-widgets! list-w)
         ;; Clip overflowing entries; scroll via mousewheel (matches upstream ElementList)
         _ (swap! (:metadata list-w) assoc :clip-children? true)
         ;; Scrollable content container for entry widgets
@@ -381,9 +384,16 @@
         ;; Hover state for entry tint (matching upstream Colors.whiteBlend(0.3f))
         entry-widgets (atom [])
         hovered-idx (atom -1)
+        ;; Scale factor: :last-mouse-x/y are in screen pixels (post-scale),
+        ;; but widget layout constants are in logical coords. Multiply by scale
+        ;; to convert logical→screen-pixel for hover hit-testing.
+        ui-scale (double (or @(:scale root) 1.0))
         ;; list-ctr root-local offsets: leftPanel.x + list.x, leftPanel.y + list.y
-        ctr-root-x (+ lx lix)
-        ctr-root-y (+ rp-abs-y liy)]
+        ctr-root-x (* ui-scale (+ lx lix))
+        ctr-root-y (* ui-scale (+ rp-abs-y liy))
+        liw-px   (* ui-scale liw)
+        eh-px    (* ui-scale eh)
+        total-h-px (* ui-scale total-h)]
     (doseq [[idx tut] (map-indexed vector grouped)]
       (let [y (* idx eh)   ;; relative to list-ctr (which scrolls inside list)
             active? (is-active? tut)
@@ -412,13 +422,14 @@
       (events/on-mouse-scroll list-w on-scroll))
     ;; Hover detection: on-frame on list-ctr checks mouse position against
     ;; entry bounds and toggles tint (matching upstream ElementList Tint hover).
+    ;; All values are in screen-pixel space (multiplied by ui-scale).
     (events/on-frame list-ctr
       (fn [_]
         (let [mx (- (get @(:metadata root) :last-mouse-x -1) ctr-root-x)
-              my (- (+ (get @(:metadata root) :last-mouse-y -1) @list-scroll-y) ctr-root-y)
-              new-idx (if (and (>= mx 0) (< mx liw)
-                              (>= my 0) (< my total-h))
-                        (int (/ my eh))
+              my (- (+ (get @(:metadata root) :last-mouse-y -1) (* ui-scale @list-scroll-y)) ctr-root-y)
+              new-idx (if (and (>= mx 0) (< mx liw-px)
+                              (>= my 0) (< my total-h-px))
+                        (int (/ my eh-px))
                         -1)]
           (when (not= new-idx @hovered-idx)
             ;; Deactivate old hover
@@ -429,7 +440,45 @@
             (when (>= new-idx 0)
               (when-let [t (comp/get-tint-component (nth @entry-widgets new-idx))]
                 (swap! (:state t) assoc :color 0x4CFFFFFF)))
-            (reset! hovered-idx new-idx)))))))
+            (reset! hovered-idx new-idx)))))
+    ;; Scroll bar: track + draggable thumb (matching upstream ElementList built-in
+    ;; scroll bar). Only visible when content exceeds list area height.
+    ;; For the default 13 entries (156px total) in a 207px list area, this stays
+    ;; hidden. If entries are added later, the scroll bar appears automatically.
+    (when (pos? max-scroll)
+      (let [sbw 4.0                                          ;; scroll bar width (logical)
+            sb-x (- liw sbw)                                 ;; right-aligned in list area
+            sb-h lih                                         ;; track height = list height
+            track (cgui-core/create-widget :pos [sb-x 0.0] :size [sbw sb-h])
+            ;; Thumb height proportional to visible/total ratio (min 12px)
+            thumb-h (max 12.0 (* sb-h (/ lih total-h)))
+            thumb-travel (- sb-h thumb-h)
+            thumb (cgui-core/create-widget :pos [0.0 0.0] :size [sbw thumb-h])
+            ;; Sync thumb Y to current scroll-y
+            update-thumb! (fn []
+                            (let [progress (/ @list-scroll-y max-scroll)
+                                  thumb-y (* progress thumb-travel)]
+                              (cgui-core/set-pos! thumb 0.0 thumb-y)))]
+        ;; Track: faint semi-transparent background; Thumb: brighter handle
+        (comp/add-component! track (comp/draw-texture nil 0x30FFFFFF))
+        (comp/add-component! thumb (comp/draw-texture nil 0x80FFFFFF))
+        (cgui-core/add-widget! track thumb)
+        (cgui-core/add-widget! list-w track)
+        ;; Initial thumb position
+        (update-thumb!)
+        ;; Keep thumb synced when scrolling via mouse wheel
+        (events/on-frame list-w (fn [_] (update-thumb!)))
+        ;; Drag thumb to scroll (dy in screen pixels → convert to logical)
+        (events/on-drag thumb
+          (fn [evt]
+            (let [dy-logical (/ (double (:dy evt 0.0)) ui-scale)
+                  [_ cy] (cgui-core/get-pos thumb)
+                  new-cy (max 0.0 (min thumb-travel (+ cy dy-logical)))
+                  progress (/ new-cy thumb-travel)
+                  new-scroll-y (* progress max-scroll)]
+              (cgui-core/set-pos! thumb 0.0 new-cy)
+              (reset! list-scroll-y new-scroll-y)
+              (cgui-core/set-pos! list-ctr 0.0 (- new-scroll-y)))))))))
 
 (defn- make-entry-click-handler
   [root tut player-uuid lang content-ctr ui]
@@ -441,13 +490,11 @@
                           (try (client-state/is-activated? player-uuid (:id tut))
                                (catch Throwable _ false)))]
           (when (nil? @current-tut-id)
-            ;; Upstream: blend(logos) fades+disposes logos.
+            ;; Upstream: blend(logos) fades+disposes logos over 0.3s.
+            ;; Show panels immediately; logos fade out asynchronously.
             ;; Glow widgets are children of logo1 → hidden automatically when logo1 is hidden.
-            (doseq [nm ["logo0" "logo1" "logo2" "logo3"]]
-              (when-let [w (find-widget-recursive root nm)]
-                (when (comp/get-drawtexture-component w)
-                  (apply-logo-alpha! root nm 0))
-                (cgui-core/set-visible! w false)))
+            (let [fade-start (atom (System/currentTimeMillis))]
+              (setup-logo-fade-out! root fade-start ["logo0" "logo1" "logo2" "logo3"] 300))
             ;; Show children individually (not rightPart — logos inside need visibility)
             (let [cp (find-widget-recursive root "center-panel")
                   sw (find-widget-recursive root "showWindow")
@@ -664,12 +711,13 @@
       (do (reset! (:anim-start ui) (System/currentTimeMillis))
           (setup-first-open-animation! root (:anim-start ui)))
       (setup-static-glow! root))
-    ;; Hover detection
+    ;; Hover detection for tag area (shows display-text on hover)
     (let [hover-last-tag-idx (atom -1)
-          tag-base-x (+ rx 12.0)
-          tag-base-y 120.75
-          tag-size 18.0
-          tag-step 17.0]
+          ui-scale (double (or @(:scale root) 1.0))
+          tag-base-x (* ui-scale (+ rx 12.0))
+          tag-base-y (* ui-scale 120.75)
+          tag-size   (* ui-scale 18.0)
+          tag-step   (* ui-scale 17.0)]
       (events/on-frame root
         (fn [_]
           (let [mx (get @(:metadata root) :last-mouse-x -1)
