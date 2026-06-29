@@ -16,8 +16,14 @@
             [cn.li.fabric1201.client.hand-effect-renderer :as hand-effect-renderer]
             [cn.li.fabric1201.client.level-effect-renderer :as level-effect-renderer]
             [cn.li.fabric1201.client.runtime-bridge :as runtime-bridge]
+            [cn.li.fabric1201.client.keyboard-init :as kb-init]
             [cn.li.mc1201.client.gl-ops :as gl-ops]
             [cn.li.mc1201.client.font.msdf-setup :as msdf-setup]
+            [cn.li.mc1201.key-scheme-provider-core :as key-scheme-core]
+            [cn.li.mc1201.vanilla-input-control-core :as vanilla-control]
+            [cn.li.mcmod.spi.key-scheme-provider :as key-scheme-spi]
+            [cn.li.mcmod.spi.vanilla-input-control :as vanilla-spi]
+            [cn.li.ac.bootstrap :as ac-bootstrap]
             [cn.li.fabric1201.mod :as mod])
   (:import [cn.li.fabric1201.client FabricClientRenderSetup]
            [net.minecraft.client Minecraft]
@@ -111,6 +117,30 @@
   "Initialize client-side systems for Fabric 1.20.1."
   []
   (log/info "Initializing Fabric 1.20.1 client-side systems")
+  
+  ;; ===== Platform SPI Installation (before AC bootstrap) =====
+  ;; Install Fabric-specific SPI implementations that AC will use
+  (try
+    (key-scheme-spi/install-provider! (key-scheme-core/get-spi-implementation))
+    (vanilla-spi/install-suppressor! (vanilla-control/get-spi-implementation))
+    (catch Exception e
+      (log/warn e "Failed to install keyboard input SPI providers")))
+  
+  ;; ===== AC Keybinding Initialization =====
+  ;; Initialize all AC keybindings (alternative + original schemes)
+  (try
+    (ac-bootstrap/initialize-keybindings!)
+    (catch Exception e
+      (log/error e "Failed to initialize AC keybindings")))
+  
+  ;; ===== Fabric Keyboard Handler Installation =====
+  ;; Install GLFW polling for keyboard inputs (Fabric has no native keyboard events)
+  (try
+    (kb-init/install-keyboard-handler!)
+    (catch Exception e
+      (log/error e "Failed to install Fabric keyboard handler")))
+  
+  ;; ===== Standard Client Initialization =====
   (init-render-bindings!)
   (init-content-client-bridge!)
   (i18n/install-client-i18n!)
