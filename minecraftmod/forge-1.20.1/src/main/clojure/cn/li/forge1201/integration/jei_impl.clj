@@ -13,7 +13,8 @@
             [cn.li.mcmod.platform.integration-runtime :as integration-runtime]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.config :as mod-config])
-  (:import [mezz.jei.api IModPlugin]
+  (:import [cn.li.mc1201.runtime RuntimeAccessShared]
+           [mezz.jei.api IModPlugin]
            [mezz.jei.api.registration IRecipeCategoryRegistration
                                        IRecipeRegistration
                                        IRecipeCatalystRegistration
@@ -26,7 +27,7 @@
            [mezz.jei.api.recipe RecipeType]
            [mezz.jei.api.gui.builder IRecipeSlotBuilder]
            [net.minecraft.resources ResourceLocation]
-           [net.minecraft.world.item ItemStack Item]
+           [net.minecraft.world.item ItemStack]
            [java.util ArrayList]))
 
 ;; ============================================================================
@@ -161,7 +162,9 @@
                      (remove nil?)
                      vec)]
       (when (seq items)
-        (.useNbtForSubtypes registration (into-array Item items))
+        (let [item-class (RuntimeAccessShared/getItemClass)
+              item-array (into-array item-class items)]
+          (.useNbtForSubtypes registration item-array))
         (log/info "Registered JEI NBT subtypes for" (count items) "creative-tab variant items.")))
     (catch Exception e
       (log/error "Failed to register JEI item subtypes:" (ex-message e)))))
