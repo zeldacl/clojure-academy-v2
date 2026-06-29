@@ -20,11 +20,11 @@
         "constrained-ore"
         {:registry-name "constrained_ore"
          :physical {:material :stone
-                    :hardness 3.0
+                    :hardness 4.0
                     :resistance 3.0
                     :requires-tool true
                     :harvest-tool :pickaxe
-                    :harvest-level 2
+                    :harvest-level 1
                     :sounds :stone}
          :rendering {:model-parent "minecraft:block/cube_all"
                      :textures {:all (modid/asset-path "block" "constraint_metal")}
@@ -34,7 +34,7 @@
         "imaginary-ore"
         {:registry-name "imaginary_ore"
          :physical {:material :stone
-                    :hardness 3.0
+                    :hardness 3.75
                     :resistance 3.0
                     :requires-tool true
                     :harvest-tool :pickaxe
@@ -52,7 +52,7 @@
                     :resistance 3.0
                     :requires-tool true
                     :harvest-tool :pickaxe
-                    :harvest-level 1
+                    :harvest-level 2
                     :sounds :stone}
          :rendering {:model-parent "minecraft:block/cube_all"
                      :textures {:all (modid/asset-path "block" "reso_ore")}

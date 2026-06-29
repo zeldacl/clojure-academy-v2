@@ -123,16 +123,26 @@ public class ConfigurablePoolFeature extends Feature<NoneFeatureConfiguration> {
                     if (buffer[(bx * 16 + bz) * 8 + by] &&
                         belowState.is(Blocks.DIRT) &&
                         level.getBrightness(net.minecraft.world.level.LightLayer.BLOCK, abovePos) > 0) {
-                        level.setBlock(checkPos, Blocks.GRASS_BLOCK.defaultBlockState(), 2);
+                        // Original AcademyCraft: grass or mycelium depending on biome.topBlock.
+                        // In 1.20, we detect mushroom biomes by the biome registry key.
+                        boolean isMushroom = level.getBiome(checkPos).unwrapKey()
+                            .map(k -> k.location().getPath().contains("mushroom"))
+                            .orElse(false);
+                        level.setBlock(checkPos,
+                            isMushroom ? Blocks.MYCELIUM.defaultBlockState() : Blocks.GRASS_BLOCK.defaultBlockState(), 2);
                     }
                 }
             }
         }
 
+        // Freeze the top liquid surface in cold biomes (original: canBlockFreezeWater at y+4).
+        // The pool fills layers 0-3 with liquid and layers 4-7 with air, so the top
+        // liquid surface is at y+3. Original checked y+4 (air) which never matched;
+        // we fix this to check y+3 and match the original intent.
         for (int bx = 0; bx < 16; ++bx) {
             for (int bz = 0; bz < 16; ++bz) {
-                BlockPos surfacePos = new BlockPos(x + bx, y + 4, z + bz);
-                if (level.getBiome(surfacePos).value().coldEnoughToSnow(surfacePos)) {
+                BlockPos surfacePos = new BlockPos(x + bx, y + 3, z + bz);
+                if (buffer[(bx * 16 + bz) * 8 + 3]) {
                     BlockState surfaceState = level.getBlockState(surfacePos);
                     if (surfaceState.is(fillBlock.getBlock())) {
                         level.setBlock(surfacePos, Blocks.ICE.defaultBlockState(), 2);

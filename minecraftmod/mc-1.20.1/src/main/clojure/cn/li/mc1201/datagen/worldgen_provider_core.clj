@@ -1,20 +1,13 @@
 (ns cn.li.mc1201.datagen.worldgen-provider-core
-  "Shared worldgen DataGen provider logic. Generates configured_feature,
-  placed_feature, and platform-specific biome_modifier JSONs.
+  "Shared worldgen DataGen provider logic. Builds configured_feature,
+  placed_feature, and platform-specific biome_modifier data maps.
 
-  Uses com.google.gson (bundled with Minecraft) for JSON serialization."
-  (:require [clojure.java.io :as io]
-            [cn.li.mcmod.util.log :as log])
-  (:import [com.google.gson GsonBuilder Gson]
-           [java.io FileWriter]
-           [java.util.concurrent CompletableFuture]))
+  Does NOT do file I/O — returns data so platform providers can write
+  via DataProvider/saveStable (Forge) or the Fabric equivalent.")
 
 ;; ============================================================================
 ;; Ore definitions (matching original AcademyCraft worldgen)
 ;; ============================================================================
-
-(def ^:private gson
-  (.. (GsonBuilder.) (setPrettyPrinting) (disableHtmlEscaping) (create)))
 
 (def ^:private ore-defs
   [{:id "constrained_ore" :name "Constrained Ore" :size 12 :count 8}
@@ -29,12 +22,13 @@
 (def ^:private phase-liquid-def
   {:id "phase_liquid"
    :name "Phase Liquid Pool"
-   :rarity 3   ;; ~30% chance per chunk
+   :rarity 3   ;; 1-in-3 (~33%) — original AcademyCraft used 30% per chunk;
+               ;; rarity_filter uses integer 1/N probability, so 3 is the closest.
    :min-y 5
-   :max-y 35})
+   :max-y 34}) ;; original: 5 + random.nextInt(30) = [5, 34]
 
 ;; ============================================================================
-;; JSON data builders (plain Clojure maps → Gson)
+;; JSON data builders (plain Clojure maps)
 ;; ============================================================================
 
 (defn- ore-configured-feature-data
@@ -84,64 +78,45 @@
    "step" step})
 
 ;; ============================================================================
-;; File writing
+;; File-def builder — returns a seq of {:path [segments...] :data map}
+;; Platform providers write these via DataProvider/saveStable.
 ;; ============================================================================
 
-(defn- write-json!
-  [output-dir file-name data]
-  (let [f (io/file (str output-dir) file-name)]
-    (.mkdirs (.getParentFile f))
-    (with-open [writer (FileWriter. f)]
-      (.toJson ^Gson gson data writer))))
+(defn build-worldgen-file-defs
+  "Returns a vector of file definitions for worldgen DataGen.
+  Each def is {:path [\"dir\" \"subdir\" \"file.json\"] :data {clojure-map}}.
+  The path segments are relative to data/<modid>/ (e.g. [\"worldgen\" \"configured_feature\" \"reso_ore.json\"]).
 
-(defn- dir-for-path
-  [output-dir & segments]
-  (apply io/file output-dir "data" "my_mod" segments))
-
-(defn generate-forge-worldgen!
-  "Generate all worldgen JSON files for Forge platform."
-  [output-dir config]
-  (let [gen-ores? (boolean (:gen-ores? config true))
-        gen-phase? (boolean (:gen-phase-liquid? config true))
-        cf-dir (dir-for-path output-dir "worldgen" "configured_feature")
-        pf-dir (dir-for-path output-dir "worldgen" "placed_feature")
-        bm-dir (dir-for-path output-dir "forge" "biome_modifier")]
+  Options:
+    :gen-ores?          — generate ore features (default true)
+    :gen-phase-liquid?  — generate phase liquid pool (default true)
+    :platform           — :forge (includes biome_modifier) or :fabric (no biome_modifier)"
+  [& {:keys [gen-ores? gen-phase-liquid? platform]
+      :or {gen-ores? true gen-phase-liquid? true}}]
+  (let [is-forge? (= platform :forge)
+        file-defs (atom [])]
     (when gen-ores?
       (doseq [ore ore-defs]
         (let [id (:id ore)]
-          (write-json! cf-dir (str id ".json") (ore-configured-feature-data ore))
-          (write-json! pf-dir (str id ".json") (ore-placed-feature-data ore))
-          (write-json! bm-dir (str "add_" id ".json")
-                       (forge-biome-modifier-data id "underground_ores")))))
-    (when gen-phase?
+          (swap! file-defs conj
+                 {:path ["worldgen" "configured_feature" (str id ".json")]
+                  :data (ore-configured-feature-data ore)}
+                 {:path ["worldgen" "placed_feature" (str id ".json")]
+                  :data (ore-placed-feature-data ore)})
+          (when is-forge?
+            (swap! file-defs conj
+                   {:path ["forge" "biome_modifier" (str "add_" id ".json")]
+                    :data (forge-biome-modifier-data id "underground_ores")})))))
+    (when gen-phase-liquid?
       (let [pl phase-liquid-def
             id (:id pl)]
-        (write-json! cf-dir (str id ".json") (pool-configured-feature-data pl))
-        (write-json! pf-dir (str id ".json") (pool-placed-feature-data pl))
-        (write-json! bm-dir (str "add_" id ".json")
-                     (forge-biome-modifier-data id "underground_decoration"))))
-    (log/info "Generated Forge worldgen DataGen files"
-              {:ores gen-ores? :phase-liquid gen-phase?
-               :ore-count (if gen-ores? (count ore-defs) 0)})))
-
-(defn generate-fabric-worldgen!
-  "Generate worldgen JSON files for Fabric platform.
-  Fabric uses different biome modification (via Fabric API datagen)
-  but the configured_feature and placed_feature JSONs are the same."
-  [output-dir config]
-  (let [gen-ores? (boolean (:gen-ores? config true))
-        gen-phase? (boolean (:gen-phase-liquid? config true))
-        cf-dir (dir-for-path output-dir "worldgen" "configured_feature")
-        pf-dir (dir-for-path output-dir "worldgen" "placed_feature")]
-    (when gen-ores?
-      (doseq [ore ore-defs]
-        (let [id (:id ore)]
-          (write-json! cf-dir (str id ".json") (ore-configured-feature-data ore))
-          (write-json! pf-dir (str id ".json") (ore-placed-feature-data ore)))))
-    (when gen-phase?
-      (let [pl phase-liquid-def]
-        (write-json! cf-dir (str (:id pl) ".json") (pool-configured-feature-data pl))
-        (write-json! pf-dir (str (:id pl) ".json") (pool-placed-feature-data pl))))
-    (log/info "Generated Fabric worldgen DataGen files"
-              {:ores gen-ores? :phase-liquid gen-phase?
-               :ore-count (if gen-ores? (count ore-defs) 0)})))
+        (swap! file-defs conj
+               {:path ["worldgen" "configured_feature" (str id ".json")]
+                :data (pool-configured-feature-data pl)}
+               {:path ["worldgen" "placed_feature" (str id ".json")]
+                :data (pool-placed-feature-data pl)})
+        (when is-forge?
+          (swap! file-defs conj
+                 {:path ["forge" "biome_modifier" (str "add_" id ".json")]
+                  :data (forge-biome-modifier-data id "underground_decoration")}))))
+    @file-defs))
