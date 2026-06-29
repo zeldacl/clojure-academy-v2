@@ -233,22 +233,16 @@
         prev-id (:hovered-skill-id st)
         transitions (:hover-node-transitions st {})
         now (now-ms)]
-    ;; Always update mouse position (for parallax background)
     (if (not= new-id prev-id)
-      ;; Transition gate — only switch state when previous animation completed
-      ;; (upstream: if transitProgress == 1, then check evt.hovering)
-      (let [prev-trans (get transitions prev-id)
-            prev-done? (or (nil? prev-trans)
-                          (>= (/ (- now (:start prev-trans)) 100.0) 1.0))]
-        (when prev-done?
-          (let [new-transitions (-> transitions
-                                   (cond-> prev-id (assoc prev-id {:start now :dir :out}))
-                                   (cond-> new-id (assoc new-id {:start now :dir :in})))]
-            (swap-screen-state! owner
-              (fn [st] (-> st
-                          (assoc :mouse-x mx :mouse-y my
-                                 :hover-skill new-id :hovered-skill-id new-id
-                                 :hover-node-transitions new-transitions)))))))
+      ;; Hover changed — update immediately (upstream: per-widget FrameEvent, no global gate)
+      (let [new-transitions (-> transitions
+                               (cond-> prev-id (assoc prev-id {:start now :dir :out}))
+                               (cond-> new-id (assoc new-id {:start now :dir :in})))]
+        (swap-screen-state! owner
+          (fn [st] (-> st
+                      (assoc :mouse-x mx :mouse-y my
+                             :hover-skill new-id :hovered-skill-id new-id
+                             :hover-node-transitions new-transitions)))))
       ;; Same node — just update mouse position
       (swap-screen-state! owner assoc :mouse-x mx :mouse-y my))))
 
@@ -269,7 +263,7 @@
 ;; Draw Ops — Line connections (rotated-quad)
 ;; ============================================================================
 (defn- build-line-ops [connections anim-time]
-  (mapcat (fn [{:keys [from-x from-y to-x to-y child-learned? m-alpha child-idx]}]
+  (mapcat (fn [{:keys [from-x from-y to-x to-y lb child-learned? m-alpha child-idx]}]
             (let [line-alpha (* (or m-alpha 0.7) (if child-learned? 1.0 0.4))
                   alpha-byte (int (* 255.0 (clamp01 line-alpha)))
                   color (bit-or (bit-shift-left alpha-byte 24) 0xFFFFFF)
@@ -277,10 +271,16 @@
                   norm (Math/sqrt (+ (* dx dx) (* dy dy)))]
               (when (pos? norm)
                 (let [ndx (/ dx norm) ndy (/ dy norm)
+                      ;; Fixed start/end points (inset from node centers by 12.2px)
                       x0 (+ from-x (* ndx 12.2)) y0 (+ from-y (* ndy 12.2))
-                      x1 (- to-x (* ndx 12.2)) y1 (- to-y (* ndy 12.2))]
-                  [{:kind :line-quad :x0 x0 :y0 y0 :x1 x1 :y1 y1
-                    :line-width 5.5 :color color}]))))
+                      x1-full (- to-x (* ndx 12.2)) y1-full (- to-y (* ndy 12.2))
+                      ;; Animate endpoint from x0 outward — matches upstream drawLine(progress)
+                      blend (or lb 1.0)
+                      x1 (lerp x0 x1-full blend)
+                      y1 (lerp y0 y1-full blend)]
+                  (when (> blend 0)
+                    [{:kind :line-quad :x0 x0 :y0 y0 :x1 x1 :y1 y1
+                      :line-width 5.5 :color color}])))))
           connections))
 
 ;; ============================================================================
@@ -334,12 +334,14 @@
            {:kind :pop-pose}
            ;; 5. Disable depth writes (color already re-enabled by alpha-discard op)
            {:kind :depth-mask :write? false}
-           ;; 6. Draw skill icon — depth-func EQUAL clips to mask area written above
+           ;; 6. Draw skill icon with icon-alpha fade-in (upstream: glColor4d(1,1,1,iconAlpha))
+           {:kind :alpha-color :r 1.0 :g 1.0 :b 1.0 :a icon-alpha}
            {:kind :depth-func :func :equal}
            (if learned
              {:kind :icon-or-fill :texture skill-icon :x (int align) :y (int align) :w (int icon-size) :h (int icon-size) :fallback-color 0xFF2A2A2A}
              {:kind :shader-mono-blit :texture skill-icon :x (int align) :y (int align) :w (int icon-size) :h (int icon-size)})
            {:kind :depth-func :func :lequal}
+           {:kind :alpha-color :r 1.0 :g 1.0 :b 1.0 :a 1.0}
            ;; 7. Shader progress ring (learned only) — disables depth test during ring rendering
            (when learned
              {:kind :disable-depth})
@@ -441,8 +443,10 @@
                              (assoc c
                                :from-x (- (:from-x c) node-dx)
                                :from-y (- (:from-y c) node-dy)
-                               :to-x   (- (lerp (:from-x c) (:to-x c) lb) node-dx)
-                               :to-y   (- (lerp (:from-y c) (:to-y c) lb) node-dy))))
+                               ;; Keep original destination (parallax-shifted) — lb drives animation
+                               :to-x   (- (:to-x c) node-dx)
+                               :to-y   (- (:to-y c) node-dy)
+                               :lb     lb)))
                          raw-conns)
         conns-by-idx (group-by :child-idx anim-conns)
         raw-nodes (or (:skill-nodes rd) [])

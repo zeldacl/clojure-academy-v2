@@ -397,7 +397,7 @@
                               w (.getGuiScaledWidth win)
                               h (.getGuiScaledHeight win)]
                           (with-client-session captured-session-id
-                            #(client-ui/client-build-managed-screen-draw-ops screen-key mouse-x mouse-y))))
+                            #(client-ui/client-build-managed-screen-draw-ops screen-key mouse-x mouse-y w h))))
                       (fn [mouse-x mouse-y]
                         (with-client-session captured-session-id
                           #(client-ui/client-handle-managed-screen-click! screen-key mouse-x mouse-y)))

@@ -60,7 +60,7 @@
    :client-build-hud-render-data (fn [_ _ _ _] nil)
    :set-client-overlay-activated! (fn [_ _] nil)
    :client-open-managed-screen! (fn [_ _] nil)
-   :client-build-managed-screen-draw-ops (fn [_ _ _] [])
+   :client-build-managed-screen-draw-ops (fn [_ _ _ _ _] [])
    :client-build-managed-screen-render-data (fn [_] nil)
    :client-handle-managed-screen-hover! noop
    :client-handle-managed-screen-click! (fn [_ _ _] false)
@@ -454,8 +454,8 @@
   ((:client-open-managed-screen! (hooks-core-state-snapshot)) screen-key payload))
 
 (defn client-build-managed-screen-draw-ops
-  [screen-key mouse-x mouse-y]
-  ((:client-build-managed-screen-draw-ops (hooks-core-state-snapshot)) screen-key mouse-x mouse-y))
+  [screen-key mouse-x mouse-y screen-w screen-h]
+  ((:client-build-managed-screen-draw-ops (hooks-core-state-snapshot)) screen-key mouse-x mouse-y screen-w screen-h))
 
 (defn client-build-managed-screen-render-data
   [screen-key]
