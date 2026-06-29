@@ -117,7 +117,11 @@
           (let [seg (first sg)
                 image? (= (:type seg) :image)
                 h (if image? (or (:img-h seg) 100.0) mr/line-height)
-                w (cgui-core/create-widget :pos [0.0 y] :size [cow h])]
+                ;; Images capped at markdown width-limit (150) so they don't
+                ;; overlap the scroll bar. Text widgets use full cow width
+                ;; (text wraps at max-content-width anyway, matching original).
+                seg-w (if image? mr/max-content-width cow)
+                w (cgui-core/create-widget :pos [0.0 y] :size [seg-w h])]
             (if image?
               (comp/add-component! w (comp/draw-texture (:texture-path seg) 0xFFFFFFFF))
               (let [{:keys [text font-size color bold?]} seg]
@@ -131,28 +135,6 @@
       total-h)))
 
 ;; --- Content helpers ---
-
-(defn- clear-content! [content-ctr]
-  (cgui-core/clear-widgets! content-ctr))
-
-(defn- render-content! [content-ctr content-str misaka-id]
-  (clear-content! content-ctr)
-  (let [segs (mr/render-segments content-str misaka-id)]
-    (loop [sg segs y 0.0 n 0]
-      (if (seq sg)
-        (let [seg (first sg)
-              image? (= (:type seg) :image)
-              h (if image? (or (:img-h seg) 100.0) mr/line-height)
-              w (cgui-core/create-widget :pos [0.0 y] :size [cow h])]
-          (if image?
-            (comp/add-component! w (comp/draw-texture (:texture-path seg)))
-            (let [{:keys [text font-size color bold?]} seg]
-              (comp/add-component! w (comp/text-box :text text :font-size font-size
-                                                    :color color :font (when bold? :ac-bold)))))
-          (cgui-core/set-name! w (str "ct-" n))
-          (cgui-core/add-widget! content-ctr w)
-          (recur (rest sg) (+ y h) (inc n)))
-        y))))
 
 (defn- reposition-content! [content-ctr scroll-y]
   (cgui-core/set-pos! content-ctr cox (- coy @scroll-y)))
@@ -537,7 +519,9 @@
     (cgui-core/add-widget! cp content-ctr)
     (let [on-drag-fn (fn [evt]
                        (when (pos? @max-scroll)
-                         (let [scroll-delta (* (/ (double (:dy evt)) thumb-travel) @max-scroll)]
+                         (let [ui-scale (double (or @(:scale root) 1.0))
+                               dy-logical (/ (double (:dy evt 0.0)) ui-scale)
+                               scroll-delta (* (/ dy-logical thumb-travel) @max-scroll)]
                            (swap! scroll-y + scroll-delta)
                            (clamp-scroll! scroll-y @max-scroll)
                            (let [progress (/ @scroll-y @max-scroll)
