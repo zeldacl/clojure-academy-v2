@@ -32,7 +32,7 @@
                (when-not (cn.li.mcmod.platform.capability/get-capability-entry :wireless-generator)
                  (cn.li.mcmod.platform.capability/declare-capability!
                    :wireless-generator IWirelessGenerator
-                   (fn [be _side] (impls/->WirelessGeneratorImpl be))))
+                   impls/wireless-generator-factory))
                ;; :fluid-handler capability is declared by the Forge shim
                ;; (cn.li.forge1201.capability.fluid-handler) during platform init.
                ;; Here we just associate the phase-gen tile with it.

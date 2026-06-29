@@ -44,16 +44,20 @@
 (def ^:private owner-schema
   [:or client-owner-schema server-owner-schema])
 
-(def ^:private valid-client-owner* (schema/validator client-owner-schema))
-(def ^:private valid-server-owner* (schema/validator server-owner-schema))
-(def ^:private valid-owner* (schema/validator owner-schema))
-
 (defn- normalize-player-uuid
   [owner]
   (when (map? owner)
     (let [uuid (some-> (:player-uuid owner) str)]
       (when (not (str/blank? uuid))
         (assoc owner :player-uuid uuid)))))
+
+(let [validator-for (memoize schema/validator)]
+  (defn valid-client-owner? [x]
+    (schema/valid? (validator-for client-owner-schema) (normalize-player-uuid x)))
+  (defn valid-server-owner? [x]
+    (schema/valid? (validator-for server-owner-schema) (normalize-player-uuid x)))
+  (defn valid-owner? [x]
+    (schema/valid? (validator-for owner-schema) (normalize-player-uuid x))))
 
 (defn- contract-ex-info
   [contract value explain]
@@ -63,9 +67,9 @@
             :explain explain}))
 
 (defn- require*
-  [schema* validator* contract value]
+  [schema* valid? contract value]
   (let [value* (or (normalize-player-uuid value) value)]
-    (if (schema/valid? validator* value*)
+    (if (valid? value*)
       value*
       (throw (contract-ex-info contract value* (schema/explain schema* value*))))))
 
@@ -78,14 +82,7 @@
                      :required :player-uuid})))
   owner)
 
-(defn valid-client-owner? [owner]
-  (schema/valid? valid-client-owner* (normalize-player-uuid owner)))
-
-(defn valid-server-owner? [owner]
-  (schema/valid? valid-server-owner* (normalize-player-uuid owner)))
-
-(defn valid-owner? [owner]
-  (schema/valid? valid-owner* (normalize-player-uuid owner)))
+;; valid-client-owner? valid-server-owner? valid-owner? — lazy-memoized above
 
 (defn explain-owner [owner]
   (schema/explain owner-schema (normalize-player-uuid owner)))
@@ -93,15 +90,15 @@
 (defn require-client-owner
   [owner]
   (require-player-uuid! :client-owner
-                        (require* client-owner-schema valid-client-owner* :client-owner owner)))
+                        (require* client-owner-schema valid-client-owner? :client-owner owner)))
 
 (defn require-server-owner
   [owner]
-  (require* server-owner-schema valid-server-owner* :server-owner owner))
+  (require* server-owner-schema valid-server-owner? :server-owner owner))
 
 (defn require-owner
   [owner]
-  (require* owner-schema valid-owner* :owner owner))
+  (require* owner-schema valid-owner? :owner owner))
 
 (defn logical-side
   [owner]

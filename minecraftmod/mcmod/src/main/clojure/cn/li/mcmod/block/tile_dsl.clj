@@ -61,17 +61,21 @@ Structure:
    [:vector string?]
    [:fn seq]])
 
-(def ^:private valid-tile-id* (schema/validator tile-id-schema))
-(def ^:private valid-tile-impl* (schema/validator tile-impl-schema))
-(def ^:private valid-tile-blocks* (schema/validator tile-blocks-schema))
+(let [validator-for (memoize schema/validator)]
+  (defn- valid-tile-id? [x]
+    (schema/valid? (validator-for tile-id-schema) x))
+  (defn- valid-tile-impl? [x]
+    (schema/valid? (validator-for tile-impl-schema) x))
+  (defn- valid-tile-blocks? [x]
+    (schema/valid? (validator-for tile-blocks-schema) x)))
 
 (defn validate-tile-spec
   [{:keys [id impl blocks] :as spec}]
-  (when-not (schema/valid? valid-tile-id* id)
+  (when-not (valid-tile-id? id)
     (throw (ex-info "TileSpec must have non-empty string :id" {:spec spec})))
-  (when-not (schema/valid? valid-tile-impl* impl)
+  (when-not (valid-tile-impl? impl)
     (throw (ex-info "TileSpec :impl must be a keyword" {:id id :impl impl})))
-  (when-not (schema/valid? valid-tile-blocks* blocks)
+  (when-not (valid-tile-blocks? blocks)
     (throw (ex-info "TileSpec :blocks must be a non-empty vector of block-id strings"
                     {:id id :blocks blocks})))
   true)

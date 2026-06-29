@@ -10,13 +10,14 @@
 
 (def ^:private ^:dynamic *tile-logic-registry-state* {})
 (def ^:private ^:dynamic *tile-kind-registry-state* {})
+(def ^:private ^:dynamic *capability-registry-state* {})
 
 (defonce tile-logic-registry (registry-core/var-root-registry #'*tile-logic-registry-state*))
 (defonce tile-kind-registry (registry-core/var-root-registry #'*tile-kind-registry-state*))
 
 ;; capability-registry: tile-id → {cap-key → handler-factory-fn}
 ;; handler-factory-fn is (fn [be side] handler-or-nil)
-(def ^:private ^:dynamic *capability-registry-state* {})
+
 (defonce capability-registry (registry-core/var-root-registry #'*capability-registry-state*))
 
 ;; Resolve capability factory lazily (without top-level delay state)

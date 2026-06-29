@@ -48,6 +48,12 @@
   (toString [_]
     (str "WirelessGeneratorImpl@" (pos/position-get-block-pos be))))
 
+(defn wireless-generator-factory
+  "Named capability factory — avoids anonymous fn literal in init options,
+  preventing local-var leakage into AOT compilation scopes."
+  [be _side]
+  (->WirelessGeneratorImpl be))
+
 ;; ============================================================================
 ;; WirelessReceiverImpl
 ;; Implements IWirelessReceiver for ScriptedBlockEntity whose customState stores :energy.
@@ -90,3 +96,10 @@
   Object
   (toString [_]
     (str "WirelessReceiverImpl@" (pos/position-get-block-pos be))))
+
+(defn wireless-receiver-factory
+  "Named capability factory — avoids anonymous fn literal in init options.
+  Returns (fn [be _side] -> IWirelessReceiver) compatible with capability factory contract."
+  [max-energy-fn bandwidth-fn]
+  (fn [be _side]
+    (->WirelessReceiverImpl be max-energy-fn bandwidth-fn)))

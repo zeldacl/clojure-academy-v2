@@ -92,7 +92,7 @@
               (when-not (cn.li.mcmod.platform.capability/get-capability-entry :wireless-generator)
                 (cn.li.mcmod.platform.capability/declare-capability!
                   :wireless-generator IWirelessGenerator
-                  (fn [be _side] (impls/->WirelessGeneratorImpl be))))
+                  impls/wireless-generator-factory))
               (doseq [tile-id ["wind-gen-base"]]
                 (tile-logic/register-tile-capability! tile-id :wireless-generator)))
      :blocks [(bdsl/create-block-spec

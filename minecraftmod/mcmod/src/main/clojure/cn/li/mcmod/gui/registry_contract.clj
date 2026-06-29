@@ -23,8 +23,11 @@
   [:map
    [:owner-spec owner-spec-schema]])
 
-(def ^:private valid-handler-contract* (schema/validator handler-contract-schema))
-(def ^:private valid-screen-contract* (schema/validator screen-contract-schema))
+(let [validator-for (memoize schema/validator)]
+  (defn- valid-handler-contract? [x]
+    (schema/valid? (validator-for handler-contract-schema) x))
+  (defn- valid-screen-contract? [x]
+    (schema/valid? (validator-for screen-contract-schema) x)))
 
 (defn default-server-gui-handler-contract
   []
@@ -43,8 +46,8 @@
             :explain explain}))
 
 (defn- require-contract*
-  [schema* validator* contract-type value]
-  (if (schema/valid? validator* value)
+  [schema* valid? contract-type value]
+  (if (valid? value)
     value
     (throw (contract-ex-info contract-type value (schema/explain schema* value)))))
 
@@ -61,7 +64,7 @@
    (validate-handler-contract! (default-server-gui-handler-contract)))
   ([contract]
    (let [normalized (normalize-handler-contract contract)]
-     (require-contract* handler-contract-schema valid-handler-contract* :handler-contract normalized)
+     (require-contract* handler-contract-schema valid-handler-contract? :handler-contract normalized)
      (when-not (= :server (:owner-spec normalized))
        (throw (ex-info "Server GUI handler contract requires :owner-spec :server"
                        {:contract normalized})))
@@ -73,7 +76,7 @@
      (when-not (= :client (:owner-spec normalized))
        (throw (ex-info "Block CGUI screen contract requires :owner-spec :client"
                        {:contract normalized})))
-     (require-contract* screen-contract-schema valid-screen-contract* :screen-contract normalized))))
+     (require-contract* screen-contract-schema valid-screen-contract? :screen-contract normalized))))
 
 (defn validate-handler-fn!
   "Fail fast when handler is not a function."

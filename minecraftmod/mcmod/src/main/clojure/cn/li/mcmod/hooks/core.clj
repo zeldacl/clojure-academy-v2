@@ -13,7 +13,9 @@
 (def ^:private hooks-map-schema
   [:map-of keyword? fn?])
 
-(def ^:private valid-hooks-map* (schema/validator hooks-map-schema))
+(let [validator-for (memoize schema/validator)]
+  (defn- valid-hooks-map? [x]
+    (schema/valid? (validator-for hooks-map-schema) x)))
 
 (defn- default-runtime-hooks-state []
   {:on-player-login! noop
@@ -132,7 +134,7 @@
 
 (defn- validate-hooks!
   [hooks]
-  (when-not (schema/valid? valid-hooks-map* hooks)
+  (when-not (valid-hooks-map? hooks)
     (throw (schema/contract-ex-info :runtime-hooks
                                     hooks
                                     (schema/explain hooks-map-schema hooks))))
@@ -216,11 +218,18 @@
                         {:context context
                          :player-state-owner (current-player-state-owner)})))))
 
+(defn with-player-state-owner-fn
+  "使用高阶函数代替宏，执行带有一致词法作用域的绑定。
+   100% 免疫编译期符号逃逸 Bug。"
+  [owner thunk]
+  (binding [*player-state-owner* owner]
+    (thunk)))
+
+;; 为了保持原有代码的兼容性，你可以保留宏名，但让它直接调用这个函数（推荐）：
 (defmacro with-player-state-owner
-  "Execute body with *player-state-owner* bound to owner."
   [owner & body]
-  `(binding [*player-state-owner* ~owner]
-     ~@body))
+  `(with-player-state-owner-fn ~owner (fn [] ~@body)))
+
 
 (defn register-power-runtime-hooks!
   "Register/replace power runtime hook fns."

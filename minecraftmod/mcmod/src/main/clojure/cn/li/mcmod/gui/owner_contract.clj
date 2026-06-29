@@ -13,8 +13,11 @@
   [:map
    [:container-id int?]])
 
-(def ^:private valid-message-envelope* (schema/validator message-envelope-schema))
-(def ^:private valid-sync-routing* (schema/validator sync-routing-schema))
+(let [validator-for (memoize schema/validator)]
+  (defn- valid-message-envelope? [x]
+    (schema/valid? (validator-for message-envelope-schema) x))
+  (defn- valid-sync-routing? [x]
+    (schema/valid? (validator-for sync-routing-schema) x)))
 
 (defn valid-client-owner? [owner]
   (runtime-owner/valid-client-owner? owner))
@@ -39,7 +42,7 @@
 
 (defn require-message-envelope
   [envelope]
-  (if (schema/valid? valid-message-envelope* envelope)
+  (if (valid-message-envelope? envelope)
     envelope
     (throw (ex-info "message-envelope contract violation"
                     {:contract :message-envelope
@@ -48,7 +51,7 @@
 
 (defn require-sync-routing
   [routing]
-  (if (schema/valid? valid-sync-routing* routing)
+  (if (valid-sync-routing? routing)
     routing
     (throw (ex-info "sync-routing contract violation"
                     {:contract :sync-routing

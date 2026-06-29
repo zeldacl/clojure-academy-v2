@@ -10,6 +10,9 @@
 
 (defonce-guard ability-interferer-installed?)
 
+(defn- interferer-receiver-cap-factory [be _side]
+  (interferer-logic/create-interferer-wireless-receiver be))
+
 (defn init-ability-interferer!
   []
   (machine-reg/init-machine!
@@ -43,5 +46,5 @@
      :network-handler interferer-handlers/register-network-handlers!
      :capabilities [{:key :wireless-receiver
                      :interface IWirelessReceiver
-                     :factory (fn [be _side] (interferer-logic/create-interferer-wireless-receiver be))}]})
+                     :factory interferer-receiver-cap-factory}]})
    (interferer-logic/ensure-world-tick-cleanup!))

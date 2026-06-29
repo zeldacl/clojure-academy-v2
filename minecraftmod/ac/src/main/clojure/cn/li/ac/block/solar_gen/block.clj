@@ -26,7 +26,7 @@
      :containers {"solar-gen" solar-logic/solar-container-fns}
      :capabilities [{:key :wireless-generator
                      :interface IWirelessGenerator
-                     :factory (fn [be _side] (impls/->WirelessGeneratorImpl be))}]
+                     :factory impls/wireless-generator-factory}]
      :blocks [(bdsl/create-block-spec
                 "solar-gen"
                 {:registry-name "solar_gen"

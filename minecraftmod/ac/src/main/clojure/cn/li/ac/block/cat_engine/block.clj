@@ -24,7 +24,7 @@
      :tile-ids ["cat-engine"]
      :capabilities [{:key :wireless-generator
                      :interface IWirelessGenerator
-                     :factory (fn [be _side] (impls/->WirelessGeneratorImpl be))}]
+                     :factory impls/wireless-generator-factory}]
      :blocks [(bdsl/create-block-spec
                 "cat-engine"
                 {:registry-name "cat_engine"

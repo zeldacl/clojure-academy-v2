@@ -14,6 +14,15 @@
 
 (defonce-guard imag-fusor-installed?)
 
+(defn- fusor-max-energy [state]
+  (or (:max-energy state) fusor-config/max-energy))
+
+(defn- fusor-receiver-bandwidth [_state]
+  fusor-config/receiver-bandwidth)
+
+(defn- fusor-receiver-cap-factory [be _side]
+  (impls/->WirelessReceiverImpl be fusor-max-energy fusor-receiver-bandwidth))
+
 (defn init-imag-fusor!
   []
   (machine-reg/init-machine!
@@ -33,10 +42,7 @@
                (when-not (cn.li.mcmod.platform.capability/get-capability-entry :wireless-receiver)
                  (cn.li.mcmod.platform.capability/declare-capability!
                    :wireless-receiver IWirelessReceiver
-                   (fn [be _side] (impls/->WirelessReceiverImpl
-                                    be
-                                    (fn [state] (or (:max-energy state) fusor-config/max-energy))
-                                    (fn [_state] fusor-config/receiver-bandwidth)))))
+                   fusor-receiver-cap-factory))
                (doseq [tile-id ["imag-fusor"]]
                  (tile-logic/register-tile-capability! tile-id :wireless-receiver)))
      :blocks [(bdsl/create-block-spec

@@ -63,5 +63,5 @@
   (let [owner (owner-for-player player side)]
     (if (= :client (:logical-side owner))
       (mc-session/with-bound-client-owner owner f)
-      (runtime-hooks/with-player-state-owner owner
-        (f)))))
+      ;; 完美契合：直接把 f 作为一个完整的函数对象传递进去
+      (runtime-hooks/with-player-state-owner-fn owner f))))

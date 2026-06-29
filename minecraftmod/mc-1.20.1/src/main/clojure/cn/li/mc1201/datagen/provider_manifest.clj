@@ -66,21 +66,25 @@
 (def ^:private platform-provider-keys-schema
   [:map-of keyword? keyword?])
 
-(def ^:private valid-provider-groups* (schema/validator provider-groups-schema))
-(def ^:private valid-platform-orders* (schema/validator platform-orders-schema))
-(def ^:private valid-platform-provider-keys* (schema/validator platform-provider-keys-schema))
+(let [validator-for (memoize schema/validator)]
+  (defn- valid-provider-groups? [x]
+    (schema/valid? (validator-for provider-groups-schema) x))
+  (defn- valid-platform-orders? [x]
+    (schema/valid? (validator-for platform-orders-schema) x))
+  (defn- valid-platform-provider-keys? [x]
+    (schema/valid? (validator-for platform-provider-keys-schema) x)))
 
 (defn- validate-manifest!
   []
-  (when-not (schema/valid? valid-provider-groups* provider-groups)
+  (when-not (valid-provider-groups? provider-groups)
     (throw (schema/contract-ex-info :datagen-provider-groups
                                     provider-groups
                                     (schema/explain provider-groups-schema provider-groups))))
-  (when-not (schema/valid? valid-platform-orders* platform-orders)
+  (when-not (valid-platform-orders? platform-orders)
     (throw (schema/contract-ex-info :datagen-platform-orders
                                     platform-orders
                                     (schema/explain platform-orders-schema platform-orders))))
-  (when-not (schema/valid? valid-platform-provider-keys* platform-provider-keys)
+  (when-not (valid-platform-provider-keys? platform-provider-keys)
     (throw (schema/contract-ex-info :datagen-platform-provider-keys
                                     platform-provider-keys
                                     (schema/explain platform-provider-keys-schema platform-provider-keys))))

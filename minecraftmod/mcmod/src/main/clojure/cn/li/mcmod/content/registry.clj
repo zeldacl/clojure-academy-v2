@@ -73,12 +73,22 @@
 (def ^:private descriptor-field-set-schema
   [:set field-key-schema])
 
-(def ^:private valid-category-input* (schema/validator category-input-schema))
-(def ^:private valid-category* (schema/validator category-schema))
-(def ^:private valid-descriptor-id* (schema/validator descriptor-id-schema))
-(def ^:private valid-descriptor* (schema/validator descriptor-schema))
-(def ^:private valid-descriptor-field-keyword-set* (schema/validator descriptor-field-keyword-set-schema))
-(def ^:private valid-descriptor-field-set* (schema/validator descriptor-field-set-schema))
+;; Lazy validator compilation via memoize — avoids executing Malliʼs
+;; schema/validator during AOT classloading/bootstrap.  Each validator is
+;; compiled once on first use and cached thereafter.
+(let [validator-for (memoize schema/validator)]
+  (defn- valid-category-input? [x]
+    (schema/valid? (validator-for category-input-schema) x))
+  (defn- valid-category? [x]
+    (schema/valid? (validator-for category-schema) x))
+  (defn- valid-descriptor-id? [x]
+    (schema/valid? (validator-for descriptor-id-schema) x))
+  (defn- valid-descriptor? [x]
+    (schema/valid? (validator-for descriptor-schema) x))
+  (defn- valid-descriptor-field-keyword-set? [x]
+    (schema/valid? (validator-for descriptor-field-keyword-set-schema) x))
+  (defn- valid-descriptor-field-set? [x]
+    (schema/valid? (validator-for descriptor-field-set-schema) x)))
 
 ;; ============================================================================
 ;; Runtime Container
@@ -106,13 +116,13 @@
 
 (defn- normalize-category
   [category]
-  (when-not (schema/valid? valid-category-input* category)
+  (when-not (valid-category-input? category)
     (throw (ex-info "Descriptor category must be a keyword or string"
                     {:category category})))
   (let [category-key (if (keyword? category)
                        category
                        (keyword category))]
-    (when-not (schema/valid? valid-category* category-key)
+    (when-not (valid-category? category-key)
       (throw (ex-info "Descriptor category is not registered as a neutral host category"
                       {:category category-key
                        :allowed-categories allowed-categories})))
@@ -120,18 +130,18 @@
 
 (defn- validate-descriptor-id!
   [descriptor-id]
-  (when-not (schema/valid? valid-descriptor-id* descriptor-id)
+  (when-not (valid-descriptor-id? descriptor-id)
     (throw (ex-info "Descriptor id must be a keyword or non-empty string"
                     {:descriptor-id descriptor-id}))))
 
 (defn- validate-field-keys!
   [descriptor]
   (let [field-keys (set (keys descriptor))]
-    (when-not (schema/valid? valid-descriptor-field-keyword-set* field-keys)
+    (when-not (valid-descriptor-field-keyword-set? field-keys)
       (let [non-keyword-fields (->> field-keys (remove keyword?) vec)]
         (throw (ex-info "Descriptor field names must be keywords"
                         {:fields non-keyword-fields}))))
-    (when-not (schema/valid? valid-descriptor-field-set* field-keys)
+    (when-not (valid-descriptor-field-set? field-keys)
       (let [unknown-fields (vec (set/difference field-keys allowed-field-keys))]
         (throw (ex-info "Descriptor field names must use the neutral host envelope"
                         {:fields unknown-fields
@@ -139,7 +149,7 @@
 
 (defn- normalize-descriptor
   [descriptor-id descriptor]
-  (when-not (schema/valid? valid-descriptor* descriptor)
+  (when-not (valid-descriptor? descriptor)
     (throw (ex-info "Descriptor must be a map"
                     {:descriptor descriptor})))
   (validate-descriptor-id! descriptor-id)
