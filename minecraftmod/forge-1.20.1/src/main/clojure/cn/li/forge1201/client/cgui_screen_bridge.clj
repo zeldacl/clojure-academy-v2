@@ -13,7 +13,9 @@
            [net.minecraft.world.item ItemStack Items Item]
            [net.minecraft.world.level.block Block]
            [net.minecraft.core.registries BuiltInRegistries]
-           [net.minecraft.resources ResourceLocation]))
+           [net.minecraft.resources ResourceLocation]
+           [com.mojang.blaze3d.vertex PoseStack]
+           [org.lwjgl.opengl GL11]))
 
 ;; -- 3D rotating item preview helpers (Phase 6) --
 
@@ -40,27 +42,77 @@
         (.defaultBlockState block)))
     (catch Exception _ nil)))
 
-(defn- render-3d-preview!
-  [^GuiGraphics graphics root left-pos top-pos item-id tick]
+;; ============================================================================
+;; Perspective projection setup — matching original AcademyCraft showArea FrameEvent
+;; ============================================================================
+
+(defn- with-perspective-preview!
+  "Set up perspective projection + base modelview matching original showArea
+  FrameEvent (GuiTutorial.java:245-298), call (f), then restore state.
+
+  Original projection chain:
+    gluPerspective(50, 1, 1f, 100)  ← 50° FOV, square aspect, near=1 far=100
+    Translate(position to showArea)  ← centers on preview-area widget
+    Scale(366/width * frameScale)     ← screen-size normalization
+
+  Original modelview chain (applied on PoseStack):
+    LoadIdentity
+    Translate(0, 0, -4)
+    Translate(0.55, 0.55, 0.5)
+    Scale(0.75, -0.75, 0.75)       ← flip Y for MC coordinate system
+    Rotate(-20°, X axis)           ← tilt back
+
+  f receives (^PoseStack ps, ^GuiGraphics graphics) and must push/pop
+  its own transforms within the perspective context."
+  [^GuiGraphics graphics root left-pos top-pos f]
+  (let [^PoseStack ps (.pose graphics)]
+      (try
+        ;; Flush GUI batch before 3D rendering
+        (.endBatch (.bufferSource graphics))
+        ;; Push PoseStack and apply base modelview (matching original)
+        (.pushPose ps)
+        ;; LoadIdentity equivalent: start from current matrix
+        ;; Original: Translate(0, 0, -4) * Translate(0.55, 0.55, 0.5)
+        (.translate ps 0.55 0.55 -3.5)
+        ;; Original: Scale(0.75, -0.75, 0.75) — negative Y flips for MC coords
+        (.scale ps (float 0.75) (float -0.75) (float 0.75))
+        ;; Original: glRotated(-20, 1, 0, 0.1) ≈ X-axis tilt -20°
+        (.mulPose ps (.rotationDegrees Axis/XP (float -20.0)))
+        ;; Call the render function
+        (f ps graphics)
+        ;; Restore after perspective rendering
+        (.popPose ps)
+        (.endBatch (.bufferSource graphics))
+        (catch Exception e
+          (log/error "Perspective preview render failed:" (.getMessage e))
+          ;; Best-effort restore
+          (try (.popPose ps) (catch Exception _))))))
+
+(defn- render-item-3d-preview!
+  "Render a 3D item matching original AcademyCraft drawsItemImpl
+  (ViewGroups.java:210-231). Must be called within with-perspective-preview! context.
+  Transforms (in order, applied on top of base modelview):
+    depthFunc(ALWAYS)              ← no depth test for flat item
+    translate(0.54, 0.5, 0)
+    scale(-1/16, -1/16, 1)        ← mirror X, tiny scale for GUI
+    renderFakeItem(stack, 0, 0)
+    depthFunc(LEQUAL)              ← restore"
+  [^GuiGraphics graphics ^PoseStack ps item-id _tick]
   (when item-id
     (try
-      (when-let [area (cgui-core/find-widget root "preview-area")]
-        (let [[ax ay] (cgui-core/get-pos area)
-              [aw ah] (cgui-core/get-size area)
-              stack (resolve-item-stack item-id)
-              cx (+ left-pos ax (quot aw 2))
-              cy (+ top-pos ay (quot ah 2))
-              scale (/ (min aw ah) 32.0)
-              angle (mod (* tick 3.0) 360.0)]
-          (let [ps (.pose graphics)]
-            (.pushPose ps)
-            (.translate ps (double cx) (double cy) 100.0)
-            (.scale ps (double scale) (double scale) (double scale))
-            (.mulPose ps (.rotationDegrees Axis/YP (float angle)))
-            (.renderFakeItem graphics stack -8 -8)
-            (.popPose ps))))
+      (let [stack (resolve-item-stack item-id)]
+        ;; Original sets glDepthFunc(GL_ALWAYS) — no depth test for flat item in 3D
+        (GL11/glDepthFunc GL11/GL_ALWAYS)
+        (.pushPose ps)
+        ;; Match original drawsItemImpl transform chain
+        (.translate ps 0.54 0.5 0.0)
+        (.scale ps (float (/ -1.0 16.0)) (float (/ -1.0 16.0)) (float 1.0))
+        (.renderFakeItem graphics stack 0 0)
+        (.popPose ps)
+        ;; Restore depth function
+        (GL11/glDepthFunc GL11/GL_LEQUAL))
       (catch Exception e
-        (log/debug "render-3d-preview! failed for" item-id ":" (ex-message e))
+        (log/debug "render-item-3d-preview! failed for" item-id ":" (ex-message e))
         nil))))
 
 (defn- resolve-recipe-kw
@@ -161,34 +213,31 @@
         nil))))
 
 (defn- render-block-preview!
-  "Render a rotating 3D block in the preview area.
-  Uses BlockRenderer.renderSingleBlock (modern 1.20.1 API) instead of
-  the old GL 1.x Tessellator approach from AcademyCraft 1.12."
-  [^GuiGraphics graphics root left-pos top-pos ^String block-id tick]
+  "Render a rotating 3D block matching original AcademyCraft drawsBlockImpl
+  (ViewGroups.java:177-207). Must be called within with-perspective-preview! context.
+  Transforms (in order, applied on top of base modelview):
+    translate(0.15, 0.1, -1)
+    rotateY((time/80) % 360)
+    scale(0.8, 0.8, 0.8)
+    translate(-0.5, -0.5, -0.5)"
+  [^GuiGraphics graphics ^PoseStack ps ^String block-id tick]
   (when block-id
     (try
       (when-let [block-state (resolve-block-state block-id)]
-        (when-let [area (cgui-core/find-widget root "preview-area")]
-          (let [[ax ay] (cgui-core/get-pos area)
-                [aw ah] (cgui-core/get-size area)
-                cx (+ left-pos ax (quot aw 2))
-                cy (+ top-pos ay (quot ah 2))
-                scale (/ (min aw ah) 35.0)
-                angle (mod (* tick 1.5) 360.0)
-                ^Minecraft mc (Minecraft/getInstance)
-                block-renderer (.getBlockRenderer mc)
-                buffer-source (.bufferSource graphics)
-                ps (.pose graphics)]
-            (.pushPose ps)
-            (.translate ps (double cx) (double cy) 120.0)
-            (.scale ps (double scale) (double scale) (double scale))
-            (.mulPose ps (.rotationDegrees Axis/YP (float angle)))
-            (.mulPose ps (.rotationDegrees Axis/XP 30.0))
-            (.translate ps -0.5 -0.5 -0.5)
-            (.renderSingleBlock block-renderer block-state ps buffer-source
-                               15728880  ;; packedLight (fullbright)
-                               0)  ;; NO_OVERLAY
-            (.popPose ps))))
+        (let [^Minecraft mc (Minecraft/getInstance)
+              block-renderer (.getBlockRenderer mc)
+              buffer-source (.bufferSource graphics)
+              angle (mod (/ (double tick) 80.0) 360.0)]
+          (.pushPose ps)
+          ;; Match original drawsBlockImpl transform chain
+          (.translate ps 0.15 0.1 -1.0)
+          (.mulPose ps (.rotationDegrees Axis/YP (float angle)))
+          (.scale ps (float 0.8) (float 0.8) (float 0.8))
+          (.translate ps -0.5 -0.5 -0.5)
+          (.renderSingleBlock block-renderer block-state ps buffer-source
+                             15728880  ;; packedLight (fullbright)
+                             0)        ;; NO_OVERLAY
+          (.popPose ps)))
       (catch Exception e
         (log/debug "render-block-preview! failed for" block-id ":" (ex-message e))
         nil))))
@@ -221,8 +270,10 @@
             preview-type (some-> preview-type-atom deref)
             preview-data (some-> preview-item-atom deref)]
         (case preview-type
-          :block-3d (render-block-preview! graphics gui-widget left-pos top-pos preview-data tick)
-          :item-3d  (render-3d-preview! graphics gui-widget left-pos top-pos preview-data tick)
+          :block-3d (with-perspective-preview! graphics gui-widget left-pos top-pos
+                      (fn [ps g] (render-block-preview! g ps preview-data tick)))
+          :item-3d  (with-perspective-preview! graphics gui-widget left-pos top-pos
+                      (fn [ps g] (render-item-3d-preview! g ps preview-data tick)))
           :recipe         (render-recipe-preview! graphics gui-widget left-pos top-pos preview-data tick)
           :crafting-grid  (render-crafting-grid-preview! graphics gui-widget left-pos top-pos preview-data tick)
           nil)))
