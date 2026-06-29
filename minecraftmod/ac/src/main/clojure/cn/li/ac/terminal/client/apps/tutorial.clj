@@ -172,21 +172,37 @@
                 "tag-5" "tag-6" "tag-7" "tag-8" "tag-9"]]
       (when-let [w (cgui-core/find-widget ta nm)]
         (cgui-core/remove-widget! ta w)))
+    ;; Remove old tooltip if present
+    (when-let [old-tt (cgui-core/find-widget ta "tag-tooltip")]
+      (cgui-core/remove-widget! ta old-tt))
     (let [{:keys [view-groups group-index]} @pvs
-          sz 18.0
-          step (- sz 1.0)]
+          [_ ta-h] (cgui-core/get-size ta)           ;; dynamic, matching original tagArea.transform.height
+          sz (double ta-h)
+          step (- sz 1.0)
+          tag-widgets (atom [])]                      ;; tracked for hover tint transitions
+      ;; Floating tooltip widget (matching original font.draw(0, -8) in tagArea FrameEvent)
+      (let [tt (cgui-core/create-widget :pos [0 (- (+ sz 4.0))] :size [120 14])]
+        (comp/add-component! tt (comp/text-box :text "" :font-size 10.0 :color 0xFFFFFFFF :align :left))
+        (cgui-core/set-visible! tt false)
+        (cgui-core/set-name! tt "tag-tooltip")
+        (cgui-core/add-widget! ta tt)
+        (swap! (:metadata root) assoc :tag-tooltip tt))
       (doseq [[idx vg] (map-indexed vector (or view-groups []))]
-        (let [tag-w (cgui-core/create-widget :pos [(* idx step) 0] :size [sz sz])]
+        (let [tag-w (cgui-core/create-widget :pos [(* idx step) 0] :size [sz sz])
+              active? (= idx group-index)]
           (comp/add-component! tag-w
             (comp/draw-texture (preview/tag-textures (:tag vg) (preview/tag-textures :view))))
-          (comp/add-component! tag-w
-            (comp/tint (if (= idx group-index) 0xFFFFFFFF 0xB3FFFFFF)))
+          ;; Idle tint 70% white (0xB3); hover→100% via frame handler.
+          ;; Matching original Tint(Colors.monoBlend(1,.7f), Colors.monoBlend(1,1)).setAffectTexture()
+          (comp/add-component! tag-w (comp/tint (if active? 0xFFFFFFFF 0xB3FFFFFF)))
           (events/on-left-click tag-w
             (fn [_]
               (preview/switch-view-group! pvs idx)
               (refresh-preview! root pvs)))
           (cgui-core/set-name! tag-w (str "tag-" idx))
-          (cgui-core/add-widget! ta tag-w)))))
+          (cgui-core/add-widget! ta tag-w)
+          (swap! tag-widgets conj tag-w)))
+      (swap! (:metadata root) assoc :tag-widgets @tag-widgets)))
   (let [vg (preview/current-view-group @pvs)
         cnt (count (or (:sub-views vg) []))]
     (doseq [nm ["btn-left" "btn-right"]]
@@ -695,13 +711,17 @@
       (do (reset! (:anim-start ui) (System/currentTimeMillis))
           (setup-first-open-animation! root (:anim-start ui)))
       (setup-static-glow! root))
-    ;; Hover detection for tag area (shows display-text on hover)
+    ;; Hover detection for tag area — floating tooltip + tint transition
+    ;; (matching original tagArea FrameEvent: font.draw(group.getDisplayText(), 0, -8))
     (let [hover-last-tag-idx (atom -1)
           ui-scale (double (or @(:scale root) 1.0))
+          ;; Dynamic tag size from widget (matching original tagArea.transform.height)
+          ta-widget (find-widget-recursive root "tag-area")
+          [_ ta-h] (cgui-core/get-size ta-widget)
+          tag-size   (* ui-scale (double ta-h))
+          tag-step   (* ui-scale (- (double ta-h) 1.0))
           tag-base-x (* ui-scale (+ rx 12.0))
-          tag-base-y (* ui-scale 120.75)
-          tag-size   (* ui-scale 18.0)
-          tag-step   (* ui-scale 17.0)]
+          tag-base-y (* ui-scale 120.75)]
       (events/on-frame root
         (fn [_]
           (let [mx (get @(:metadata root) :last-mouse-x -1)
@@ -716,15 +736,32 @@
                                 (let [tx (+ tag-base-x (* i tag-step))]
                                   (if (and (>= mx tx) (< mx (+ tx tag-size)))
                                     i
-                                    (recur (inc i)))))))]
+                                    (recur (inc i)))))))
+                tag-widgets (get @(:metadata root) :tag-widgets)
+                tooltip-w (get @(:metadata root) :tag-tooltip)]
             (when (not= @hover-last-tag-idx hover-idx)
-              (reset! hover-last-tag-idx hover-idx)
-              (when-let [bw (find-widget-recursive root "brief-text")]
-                (when-let [tb (comp/get-textbox-component bw)]
-                  (comp/set-text! tb
-                    (if (and hover-idx (>= hover-idx 0) (< hover-idx tag-count))
-                      (or (:display-text (nth view-groups hover-idx)) "")
-                      (preview/display-text pvs))))))))))
+              ;; Restore previous tag tint to idle (70% white = 0xB3FFFFFF)
+              (when (and (>= @hover-last-tag-idx 0)
+                         (< @hover-last-tag-idx (count tag-widgets)))
+                (when-let [t (comp/get-tint-component (nth tag-widgets @hover-last-tag-idx))]
+                  (swap! (:state t) assoc :color 0xB3FFFFFF)))
+              ;; Activate new hover tag tint to 100% white
+              (when (and hover-idx (>= hover-idx 0) (< hover-idx (count tag-widgets)))
+                (when-let [t (comp/get-tint-component (nth tag-widgets hover-idx))]
+                  (swap! (:state t) assoc :color 0xFFFFFFFF)))
+              ;; Show/hide floating tooltip above the hovered tag
+              (if (and hover-idx (>= hover-idx 0) (< hover-idx tag-count) tooltip-w)
+                (let [display-text (or (:display-text (nth view-groups hover-idx)) "")
+                      ;; Tooltip position in tag-area-local logical coords
+                      ;; (handled by widget tree — tooltip is a child of tag-area)
+                      tt-x (* hover-idx (/ tag-step ui-scale))]
+                  (when-let [tt-tb (comp/get-textbox-component tooltip-w)]
+                    (comp/set-text! tt-tb display-text))
+                  (cgui-core/set-pos! tooltip-w tt-x (- (+ (/ tag-size ui-scale) 4.0)))
+                  (cgui-core/set-visible! tooltip-w true))
+                (when tooltip-w
+                  (cgui-core/set-visible! tooltip-w false)))
+              (reset! hover-last-tag-idx hover-idx))))))
     (client-bridge/open-simple-gui! root "MisakaCloud Terminal"
       {:interactive? true
        :ref-width 480.0   ;; match original AcademyCraft REF_WIDTH = 480
