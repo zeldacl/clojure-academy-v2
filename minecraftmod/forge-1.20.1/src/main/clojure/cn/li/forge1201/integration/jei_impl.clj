@@ -9,13 +9,15 @@
   JEI integration is optional - if JEI is not present, this module
   will not be loaded."
   (:require [cn.li.mc1201.integration.jei-core :as jei-core]
+            [cn.li.forge1201.registry.state :as registry-state]
             [cn.li.mcmod.platform.integration-runtime :as integration-runtime]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.config :as mod-config])
   (:import [mezz.jei.api IModPlugin]
            [mezz.jei.api.registration IRecipeCategoryRegistration
                                        IRecipeRegistration
-                                       IRecipeCatalystRegistration]
+                                       IRecipeCatalystRegistration
+                                       ISubtypeRegistration]
            [mezz.jei.api.recipe.category IRecipeCategory]
            [mezz.jei.api.recipe IFocusGroup]
            [mezz.jei.api.gui.builder IRecipeLayoutBuilder]
@@ -24,7 +26,7 @@
            [mezz.jei.api.recipe RecipeType]
            [mezz.jei.api.gui.builder IRecipeSlotBuilder]
            [net.minecraft.resources ResourceLocation]
-           [net.minecraft.world.item ItemStack]
+           [net.minecraft.world.item ItemStack Item]
            [java.util ArrayList]))
 
 ;; ============================================================================
@@ -143,6 +145,27 @@
     (catch Exception e
       (log/error "Failed to register JEI catalysts:" (ex-message e)))))
 
+(defn- register-item-subtypes
+  "Register subtype handling for items that use NBT/stateful variants in creative tab.
+
+  These items intentionally expose multiple ItemStack states in one creative tab
+  entry stream (empty/full, unfilled/filled). Tell JEI to use NBT as subtype key
+  so variants are not treated as duplicates."
+  [^ISubtypeRegistration registration]
+  (try
+    (let [modid mod-config/*mod-id*
+          item-ids ["energy_unit" "developer_portable" "matter_unit"]
+          items (->> item-ids
+        (map (fn [id]
+          (registry-state/get-registered-item (str modid ":" id))))
+                     (remove nil?)
+                     vec)]
+      (when (seq items)
+        (.useNbtForSubtypes registration (into-array Item items))
+        (log/info "Registered JEI NBT subtypes for" (count items) "creative-tab variant items.")))
+    (catch Exception e
+      (log/error "Failed to register JEI item subtypes:" (ex-message e)))))
+
 ;; ============================================================================
 ;; JEI Plugin Interface (Forge-Specific)
 ;; ============================================================================
@@ -164,6 +187,9 @@
     (registerRecipes [_ registration]
       (log/info "Registering JEI recipes for content descriptors...")
       (register-recipes registration))
+
+    (registerItemSubtypes [_ registration]
+      (register-item-subtypes registration))
 
     (registerRecipeCatalysts [_ registration]
       (log/info "Registering JEI catalysts for content descriptors...")
