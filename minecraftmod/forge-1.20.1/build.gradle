@@ -686,3 +686,14 @@ tasks.register('bisectCheckClojure') {
     }
 }
 
+// Clojure 1.12.4 AOT 编译期隔离：关闭 direct-linking 与 spec 宏深度验证，
+// 防止第三方库（Malli 等）内部闭包符号在 runData / datagen 类加载时逃逸。
+afterEvaluate {
+    if (project.extensions.findByName('loom')) {
+        loom.runs.configureEach {
+            vmArg "-Dclojure.spec.compile-asserts=false"
+            vmArg "-Dclojure.spec.skip-macros=true"
+            vmArg "-Dclojure.compiler.direct-linking=false"
+        }
+    }
+}

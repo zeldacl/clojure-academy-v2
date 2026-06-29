@@ -72,10 +72,21 @@
   "Merge kind-cfg with normalized. Nil values in normalized do not override
   kind-cfg (so tile-kind defaults are used when tile spec omits hooks)."
   [kind-cfg normalized]
-  (if (empty? kind-cfg)
-    normalized
-    (merge kind-cfg
-           (into {} (remove (fn [[_ v]] (nil? v)) normalized)))))
+  ;; 筑起安全防线：强制在入口核对类型，万一前面写错了，立刻精准报错拦截，绝不隐藏！
+  {:pre [(map? kind-cfg)
+         (or (map? normalized) (nil? normalized))]}
+
+  (cond
+    (empty? kind-cfg) normalized
+    (nil? normalized) kind-cfg
+
+    :else
+    ;; 确认类型百分之百正确后，再使用高性能的 reduce-kv 运转
+    (reduce-kv (fn [m k v]
+                 (if (nil? v) m (assoc m k v)))
+               kind-cfg
+               normalized)))
+
 
 (defn register-tile-logic!
   "Register tile lifecycle logic for a tile-id.
