@@ -15,6 +15,13 @@
 (def ^:private logical-side-schema
   [:enum :client :server])
 
+(defn- ^:private valid-client-owner-extra?
+  "Named predicate for Malli schema — avoids anon-fn AOT symbol leak."
+  [m]
+  (and (nil? (:server-session-id m))
+       (or (nil? (:logical-side m))
+           (= :client (:logical-side m)))))
+
 (def ^:private client-owner-schema
   [:and
    [:map
@@ -25,10 +32,14 @@
     [:channel-id {:optional true} any?]
     [:timeout-ms {:optional true} any?]
     [:client-network-session {:optional true} any?]]
-   [:fn (fn [m]
-          (and (nil? (:server-session-id m))
-               (or (nil? (:logical-side m))
-                   (= :client (:logical-side m)))))]])
+   [:fn valid-client-owner-extra?]])
+
+(defn- ^:private valid-server-owner-extra?
+  "Named predicate for Malli schema — avoids anon-fn AOT symbol leak."
+  [m]
+  (and (nil? (:client-session-id m))
+       (or (nil? (:logical-side m))
+           (= :server (:logical-side m)))))
 
 (def ^:private server-owner-schema
   [:and
@@ -36,10 +47,7 @@
     [:server-session-id session-token-schema]
     [:player-uuid string?]
     [:logical-side {:optional true} logical-side-schema]]
-   [:fn (fn [m]
-          (and (nil? (:client-session-id m))
-               (or (nil? (:logical-side m))
-                   (= :server (:logical-side m)))))]])
+   [:fn valid-server-owner-extra?]])
 
 (def ^:private owner-schema
   [:or client-owner-schema server-owner-schema])

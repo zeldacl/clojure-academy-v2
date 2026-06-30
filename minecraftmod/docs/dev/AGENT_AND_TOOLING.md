@@ -239,6 +239,47 @@
 9. **目录与文件须合规**：新建或移动源码前对照 [PROJECT_LAYOUT.md](../01-overview/PROJECT_LAYOUT.md) 与模块既有子域划分；命名空间路径与目录一一对应，禁止在根目录或随意子包下堆放“临时”文件。
 10. **慎用顶层全局变量**：非必要不得新增命名空间级 `def` / `defonce` / `^:private def`（含可变 atom 与“方便缓存”的单例）；优先参数传递、显式 owner（world/player/session 等）或不可变注册表。若确须保留，须在代码旁注明**无法编译**或**无法实现功能**的具体原因；可变顶层状态见 [TOP_LEVEL_STATE_GOVERNANCE.md](TOP_LEVEL_STATE_GOVERNANCE.md)，新增须跑 `auditTopLevelMutableState` 并更新白名单（如适用）。
 
+### AOT 编译安全准则 — `into` 与 Transducer（强制）
+
+**核心问题**：`(into {} (map (fn ...)) coll)` 的 **3 参数** transducer 形式在 Minecraft 全量 AOT 编译时会触发 Clojure 编译器激进的内联宏展开与融合优化（Inlining & Macro Expansion），导致匿名函数内引用的外部符号在编译期无法解析，产生 `Unable to resolve symbol` 的运行时崩溃。
+
+**安全/不安全判定**：
+
+| 形式 | 安全性 | 说明 |
+|------|--------|------|
+| `(into {} (map (fn ...) coll))` | ✅ 安全 | 2 参数 `into`，不触发 transducer 编译期优化 |
+| `(into {} (map (fn ...)) coll)` | ❌ 危险 | 3 参数 `into`，AOT 必爆 |
+| `(reduce-kv (fn [m k v] ...) {} coll)` | ✅ 安全 | 无 transducer，无中间 vector 分配 |
+
+**两条黄金铁律**：
+
+1. **Map → Map 字典转换（方块、物品、NBT、实体数据）**：**100% 强制使用 `reduce-kv`**，绝对禁止 `into`。
+   - 理由：AOT 免疫 + 零 GC 压力（避免 `[k v]` 中间 vector 分配）。
+   ```clojure
+   ;; ❌ 禁止（3 参数 into + map）
+   (into {} (map (fn [[k v]] [(name k) v])) some-map)
+   
+   ;; ✅ 正确（reduce-kv）
+   (reduce-kv (fn [m k v] (assoc m (name k) v)) {} some-map)
+   ```
+
+2. **List/Seq → 集合转换**：可安全使用 **2 参数** `(into #{...} (filter ... coll))`。
+   - 理由：不涉及 Transducer 宏展开，编译器只生成普通字节码。
+   ```clojure
+   ;; ✅ 安全（2 参数 into）
+   (into #{} (map :id handlers))
+   ;; ✅ 安全
+   (into {} (filter some-pred entries))
+   ```
+
+3. **若必须使用 3 参数 transducer 形式（如 `comp` 管道）**：匿名函数内只能包含本地变量。引用外部命名空间函数必须用 `#'`（Var 引用）。
+   ```clojure
+   ;; ✅ 安全（Var 引用隔开外部符号）
+   (into {} (map (fn [spec] (#'tile-kind/merge-tile-kind-defaults spec))) coll)
+   ```
+
+**最佳实践**：优先 `reduce-kv`（处理 map 数据），其次 2 参数 `into`（处理 seq 数据），禁止 3 参数 `into` + 匿名函数。
+
 ### Malli 终极判定法则（强制）
 
 面向未来所有新概念（如气压系统、药水效果、自定义维度），不再先查“静态矩阵”，而是统一执行以下三问流程；**顺序不可交换**：

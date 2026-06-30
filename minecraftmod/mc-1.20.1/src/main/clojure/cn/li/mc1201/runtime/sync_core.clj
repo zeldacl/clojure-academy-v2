@@ -107,8 +107,8 @@
                   (set (power-runtime/list-player-uuids)))]
 		(update-scheduler-states! assoc-in [session-key :dirty-players]
            (into {}
-                 (map (fn [uuid] [uuid {:last-dirty-tick tick}]))
-                 players))))
+                 (map (fn [uuid] [uuid {:last-dirty-tick tick}])
+                 players)))))
 
 (defn- build-sync-payload [uuid]
   (power-runtime/build-sync-payload uuid))

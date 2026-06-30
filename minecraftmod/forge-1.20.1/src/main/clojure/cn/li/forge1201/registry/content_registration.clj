@@ -41,14 +41,15 @@
   [registry-name entity-spec]
   (let [effect (get-in entity-spec [:properties :effect])]
     (letfn [(normalize-hook-params [params]
-              (into {}
-                    (map (fn [[k v]]
-                           [(cond
+              (reduce-kv (fn [m k v]
+                          (assoc m
+                            (cond
                               (keyword? k) (name k)
                               (string? k) k
                               :else (str k))
-                            v]))
-                    (or params {})))]
+                            v))
+                        {}
+                        (or params {})))]
       (ModEntities/registerScriptedEffectSpec
         (str registry-name)
         (int (or (:life-ticks effect) 15))
@@ -62,14 +63,15 @@
   [registry-name entity-spec]
   (let [ray (get-in entity-spec [:properties :ray])]
     (letfn [(normalize-hook-params [params]
-              (into {}
-                    (map (fn [[k v]]
-                           [(cond
+              (reduce-kv (fn [m k v]
+                          (assoc m
+                            (cond
                               (keyword? k) (name k)
                               (string? k) k
                               :else (str k))
-                            v]))
-                    (or params {})))]
+                            v))
+                        {}
+                        (or params {})))]
       (ModEntities/registerScriptedRaySpec
         (str registry-name)
         (int (or (:life-ticks ray) 30))

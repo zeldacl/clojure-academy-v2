@@ -94,13 +94,13 @@
                             (assoc :pending-requests
                                    (into {}
                                          (remove (fn [[[entry-owner _request-id] _entry]]
-                                                   (= owner-key entry-owner)))
-                                         pending-requests))
+                                                   (= owner-key entry-owner))
+                                                 pending-requests)))
                             (assoc :push-handlers
                                    (into {}
                                          (remove (fn [[[handler-owner _msg-id] _handler]]
-                                                   (= owner-key handler-owner)))
-                                         push-handlers))
+                                                   (= owner-key handler-owner))
+                                                 push-handlers)))
                             (update :request-counter dissoc owner-key))))
                nil)
              (expire-pending! [current-ms]
@@ -113,8 +113,8 @@
                                                              (long timeout-ms))]
                                             (when expired?
                                               (swap! expired conj key))
-                                            expired?)))
-                                entries)))
+                                            expired?))
+                                        entries))))
                  @expired))
              (handle-response! [owner-key request-id response]
                (if-let [[pending-key {:keys [callback]}] (find-pending-request-entry owner-key request-id)]

@@ -50,8 +50,8 @@
       :contract contract
       :messages (into {}
                       (map (fn [action]
-                             [action (message-id prefix domain action)]))
-                      actions)
+                             [action (message-id prefix domain action)])
+                           actions))
       :specs (mapv (fn [action]
                      {:prefix prefix
                       :domain domain
@@ -81,13 +81,13 @@
                       {:invalid-msg-ids invalid-ids})))
     {:domains (into {}
                     (map (fn [domain-spec]
-                           [(:domain domain-spec) (:messages domain-spec)]))
-                    domain-specs)
+                           [(:domain domain-spec) (:messages domain-spec)])
+                         domain-specs))
      :specs all-specs
      :by-msg-id (into {}
                       (map (fn [spec]
-                             [(:msg-id spec) (select-keys spec [:domain :action])]))
-                      all-specs)}))
+                             [(:msg-id spec) (select-keys spec [:domain :action])])
+                           all-specs))}))
 
 (defn msg-id
   [catalog domain action]

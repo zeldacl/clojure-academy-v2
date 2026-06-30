@@ -55,5 +55,5 @@
                       arg-type (:type arg-spec)
                       value (extract-argument-value brigadier-ctx arg-name arg-type)]
                   (when value
-                    [(keyword arg-name) value]))))
-        arg-specs))
+                    [(keyword arg-name) value])))
+        arg-specs)))

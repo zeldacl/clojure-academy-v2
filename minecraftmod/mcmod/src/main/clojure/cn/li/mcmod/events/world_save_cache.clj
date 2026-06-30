@@ -83,8 +83,8 @@
       (fn [pending]
         (into {}
               (remove (fn [[[entry-session-id _world-id] _saved-data]]
-                        (= session-id entry-session-id)))
-              pending)))
+                        (= session-id entry-session-id))
+                      pending))))
     nil))
 
 (defn world-save-cache-snapshot

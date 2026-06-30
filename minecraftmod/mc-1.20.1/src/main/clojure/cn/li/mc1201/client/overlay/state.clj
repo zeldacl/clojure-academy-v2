@@ -58,8 +58,8 @@
 				 (fn [states]
 					 (into {}
 								 (remove (fn [[[entry-session-id _player-uuid] _value]]
-													 (= client-session-id entry-session-id)))
-								 states)))
+													 (= client-session-id entry-session-id))
+								 states))))
 	nil)
 
 (defn overlay-state-snapshot

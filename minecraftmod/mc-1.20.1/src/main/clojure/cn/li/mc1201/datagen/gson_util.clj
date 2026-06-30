@@ -31,8 +31,8 @@
                     (keyword? k) (name k)
                     (string? k) k
                     :else (str k))
-                  (normalize-json v)]))
-          x)
+                  (normalize-json v)])
+          x))
 
     (vector? x) (mapv normalize-json x)
     (sequential? x) (mapv normalize-json x)

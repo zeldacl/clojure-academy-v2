@@ -41,8 +41,8 @@
           ^CompoundTag handlers (.getHandlers sd)
           m (into {}
                   (map (fn [^String k]
-                         [(key->id k) (.getCompound handlers k)]))
-                  (.getAllKeys handlers))]
+                         [(key->id k) (.getCompound handlers k)])
+                       (.getAllKeys handlers)))]
       (when (seq m) m))
     (catch Throwable t
       (log/error "Failed to load world lifecycle SavedData:" (.getMessage t))

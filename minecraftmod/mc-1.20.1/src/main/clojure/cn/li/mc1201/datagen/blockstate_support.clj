@@ -27,9 +27,10 @@
    (mapv (fn [{:keys [condition models]}]
            (let [entry {:apply {:model (str (first models))}}]
              (if (map? condition)
-               (assoc entry :when (into {}
-                                        (map (fn [[k v]] [(name k) (normalize-condition-value v)]))
-                                        condition))
+               (assoc entry :when (reduce-kv (fn [m k v]
+                                                (assoc m (name k) (normalize-condition-value v)))
+                                              {}
+                                              condition))
                entry)))
          parts)})
 
@@ -53,9 +54,9 @@
    {:parent (str parent)})
   ([parent textures]
    (cond-> {:parent (str parent)}
-     (seq textures) (assoc :textures (into {}
-                                           (map (fn [[k v]] [(name k) (normalize-texture-id v)]))
-                                           textures)))))
+     (seq textures) (assoc :textures (reduce-kv (fn [m k v]
+                                           (assoc m (name k) (normalize-texture-id v)))
+                                           {} textures)))))
 
 (defn flat-item-model-json
   [layer0]

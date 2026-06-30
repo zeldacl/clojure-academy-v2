@@ -13,8 +13,8 @@
         (keep (fn [entity-id]
                 (let [spec (edsl/get-entity entity-id)]
                   (when (= :scripted-mob (:entity-kind spec))
-                    [entity-id (mob-compile/compile-mob-logic (get-in spec [:properties :mob]))]))))
-        (edsl/list-entities)))
+                    [entity-id (mob-compile/compile-mob-logic (get-in spec [:properties :mob]))])))
+              (edsl/list-entities))))
 
 (defn install-mob-bundle!
   "Install a compiled mob bundle on a registered EntityType instance."

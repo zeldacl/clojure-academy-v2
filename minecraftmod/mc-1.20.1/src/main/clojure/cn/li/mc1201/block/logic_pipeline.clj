@@ -9,11 +9,12 @@
 (defn compile-all-bundles
   "Pure: tile-id → TileLogicBundle for every registered tile spec."
   []
-  (into {}
-        (map (fn [[tile-id spec]]
-               [tile-id (logic-compile/compile-tile-logic
-                          (tile-kind/merge-tile-kind-defaults spec))]))
-        (tdsl/snapshot-tiles-by-id)))
+  (reduce-kv (fn [m tile-id spec]
+               (assoc m tile-id (logic-compile/compile-tile-logic
+                                  (tile-kind/merge-tile-kind-defaults spec))))
+             {}
+             (tdsl/snapshot-tiles-by-id)))
+
 
 (defn install-bundle-to-block!
   "Install a compiled bundle on a single IScriptedBlock instance."

@@ -18,6 +18,12 @@
             [cn.li.mcmod.schema.core :as schema]
             [cn.li.mcmod.util.log :as log]))
 
+(defn- ^:private valid-network-editable-field?
+  "Named predicate for Malli schema — avoids anon-fn AOT symbol leak."
+  [field]
+  (or (not (:network-editable? field))
+      (:network-msg field)))
+
 (def ^:private field-spec-schema
   [:and
    [:map
@@ -46,9 +52,7 @@
     [:network-editable? {:optional true} boolean?]
     [:network-msg {:optional true} keyword?]
     [:doc {:optional true} string?]]
-   [:fn (fn [field]
-          (or (not (:network-editable? field))
-              (:network-msg field)))]] )
+   [:fn valid-network-editable-field?]])
 
 (def ^:private field-schema
   [:vector field-spec-schema])
@@ -106,8 +110,8 @@
   (into {}
         (keep (fn [spec]
                 (when (contains? spec :default)
-                  [(:key spec) (:default spec)])))
-        schema))
+                  [(:key spec) (:default spec)]))
+              schema)))
 
 (defn get-field
   "Return the value of key from state, falling back to the schema default.

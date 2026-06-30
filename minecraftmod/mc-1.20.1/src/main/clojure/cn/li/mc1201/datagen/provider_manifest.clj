@@ -41,21 +41,24 @@
   {:forge-1.20.1 :forge
    :fabric-1.20.1 :fabric})
 
+(defn- ^:private valid-provider-group-entry?
+  "Named predicate for Malli schema — avoids anon-fn AOT symbol leak."
+  [m]
+  (and (string? (:label m))
+       (string? (:summary-label m))
+       (map? (:forge m))
+       (keyword? (get-in m [:forge :factory]))
+       (map? (:fabric m))
+       (keyword? (get-in m [:fabric :factory]))
+       (if-let [langs (:languages m)]
+         (and (vector? langs)
+              (every? string? langs))
+         true)))
+
 (def ^:private provider-group-entry-schema
   [:and
    map?
-   [:fn
-    (fn [m]
-   (and (string? (:label m))
-     (string? (:summary-label m))
-     (map? (:forge m))
-     (keyword? (get-in m [:forge :factory]))
-     (map? (:fabric m))
-     (keyword? (get-in m [:fabric :factory]))
-     (if-let [langs (:languages m)]
-       (and (vector? langs)
-         (every? string? langs))
-       true)))]])
+   [:fn valid-provider-group-entry?]])
 
 (def ^:private provider-groups-schema
   [:map-of keyword? provider-group-entry-schema])

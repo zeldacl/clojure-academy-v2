@@ -79,8 +79,7 @@
   [block-spec]
   (let [mb (:multi-block block-spec)]
     (if (= :controller-parts (:multiblock-mode mb))
-      (into #{} (comp (map norm-id-str) (remove str/blank?))
-            [(:controller-block-id mb) (:part-block-id mb)])
+      (into #{} (remove str/blank? (map norm-id-str [(:controller-block-id mb) (:part-block-id mb)])))
       (when-let [bid (norm-id-str (:id block-spec))]
         #{bid}))))
 

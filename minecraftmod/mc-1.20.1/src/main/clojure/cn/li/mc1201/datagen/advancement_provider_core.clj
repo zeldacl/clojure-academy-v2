@@ -62,8 +62,8 @@
         criteria-map (into {}
                            (map-indexed
                              (fn [idx c]
-                               [(str "c" idx) (criterion-json c)]))
-                           criteria)
+                               [(str "c" idx) (criterion-json c)])
+                             criteria))
         criteria-keys (vec (keys criteria-map))
         parent-rl (if-let [parent (:parent ach)]
                     (ach-id parent)

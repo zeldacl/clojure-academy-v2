@@ -109,10 +109,10 @@
 
 (defn- load-domain-values!
   [{:keys [domain file-name entries]}]
-  (let [values (into {}
-                     (map (fn [[config-key entry]]
-                            [config-key (.get ^ForgeConfigSpec$ConfigValue entry)]))
-                     entries)]
+  (let [values (reduce-kv (fn [m config-key entry]
+                           (assoc m config-key (.get ^ForgeConfigSpec$ConfigValue entry)))
+                         {}
+                         entries)]
     (config-reg/set-config-values! domain values)
     (log/info "Loaded Forge config domain" domain "from" file-name)))
 

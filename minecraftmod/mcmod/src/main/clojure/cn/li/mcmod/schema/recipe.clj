@@ -6,8 +6,18 @@
 (def ^:private resource-id-regex
 	#"^[a-z0-9._-]+:[a-z0-9._/-]+$")
 
+(defn- ^:private non-blank-str?
+  "Named predicate for Malli schema — avoids anon-fn AOT symbol leak."
+  [v]
+  (not (str/blank? v)))
+
+(defn- ^:private non-empty-str?
+  "Named predicate for Malli schema — avoids anon-fn AOT symbol leak."
+  [s]
+  (pos? (count s)))
+
 (def ^:private non-blank-string-schema
-	[:and string? [:fn (fn [v] (not (str/blank? v)))]] )
+	[:and string? [:fn non-blank-str?]])
 
 (def ingredient-schema
 	[:or
@@ -23,7 +33,7 @@
 	[:map
 	 [:id non-blank-string-schema]
 	 [:type [:= :shaped]]
-	 [:pattern [:sequential [:and string? [:fn (fn [s] (pos? (count s)))]]]]
+	 [:pattern [:sequential [:and string? [:fn non-empty-str?]]]]
 	 [:key [:map-of char? ingredient-schema]]
 	 [:result result-schema]])
 
@@ -106,30 +116,33 @@
 	 [:ko_kr [:map-of string? string?]]
 	 [:ru_ru [:map-of string? string?]]])
 
+;; Validators are wrapped in delay to avoid calling schema/validator
+;; (and therefore Malli) during namespace loading / AOT compilation.
+
 (def ^:private recipes-validator
-	(schema-core/validator recipes-schema))
+	(delay (schema-core/validator recipes-schema)))
 
 (def ^:private achievement-tabs-validator
-	(schema-core/validator achievement-tabs-schema))
+	(delay (schema-core/validator achievement-tabs-schema)))
 
 (def ^:private achievements-validator
-	(schema-core/validator achievements-schema))
+	(delay (schema-core/validator achievements-schema)))
 
 (def ^:private translations-validator
-	(schema-core/validator translations-schema))
+	(delay (schema-core/validator translations-schema)))
 
 (defn require-recipes!
 	[contract value]
-	(schema-core/require-valid recipes-schema recipes-validator contract value))
+	(schema-core/require-valid recipes-schema @recipes-validator contract value))
 
 (defn require-achievement-tabs!
 	[contract value]
-	(schema-core/require-valid achievement-tabs-schema achievement-tabs-validator contract value))
+	(schema-core/require-valid achievement-tabs-schema @achievement-tabs-validator contract value))
 
 (defn require-achievements!
 	[contract value]
-	(schema-core/require-valid achievements-schema achievements-validator contract value))
+	(schema-core/require-valid achievements-schema @achievements-validator contract value))
 
 (defn require-translations!
 	[contract value]
-	(schema-core/require-valid translations-schema translations-validator contract value))
+	(schema-core/require-valid translations-schema @translations-validator contract value))

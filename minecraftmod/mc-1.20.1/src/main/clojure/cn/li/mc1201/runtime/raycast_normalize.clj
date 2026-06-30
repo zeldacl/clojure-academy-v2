@@ -8,9 +8,10 @@
   - Return nil when input result is nil."
   [result]
   (when result
-    (let [normalized (into {}
-                           (map (fn [[key value]] [(keyword key) value]))
-                           result)]
+    (let [normalized (reduce-kv (fn [m k v]
+                                    (assoc m (keyword k) v))
+                                  {}
+                                  result)]
       (cond-> normalized
         (string? (:face normalized)) (update :face keyword)
         (string? (:hit-type normalized)) (update :hit-type keyword)))))

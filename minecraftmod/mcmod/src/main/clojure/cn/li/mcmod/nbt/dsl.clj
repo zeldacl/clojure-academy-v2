@@ -452,10 +452,15 @@
 ;; Validation
 ;; ============================================================================
 
+(defn- ^:private nbt-non-empty-str?
+  "Named predicate for Malli schema — avoids anon-fn AOT symbol leak."
+  [s]
+  (pos? (count s)))
+
 (def ^:private nbt-field-spec-schema
   [:map
    [:field-key keyword?]
-   [:nbt-key [:and string? [:fn (fn [s] (pos? (count s)))]]]
+   [:nbt-key [:and string? [:fn nbt-non-empty-str?]]]
    [:type keyword?]
    [:atom? {:optional true} boolean?]
    [:default {:optional true} any?]
@@ -467,12 +472,15 @@
    [:transform-write {:optional true} fn?]
    [:transform-read {:optional true} fn?]])
 
+;; Validators are wrapped in delay to avoid calling schema/validator
+;; (and therefore Malli) during namespace loading / AOT compilation.
+
 (def ^:private valid-nbt-field-spec*
-  (schema-core/validator nbt-field-spec-schema))
+  (delay (schema-core/validator nbt-field-spec-schema)))
 
 (def ^:private world-list-spec-schema
   [:map
-   [:tag [:and string? [:fn (fn [s] (pos? (count s)))]]]
+   [:tag [:and string? [:fn nbt-non-empty-str?]]]
    [:atom keyword?]
    [:to-nbt fn?]
    [:from-nbt fn?]
@@ -484,12 +492,12 @@
      [:collection-keys {:optional true} [:sequential keyword?]]]]])
 
 (def ^:private valid-world-list-spec*
-  (schema-core/validator world-list-spec-schema))
+  (delay (schema-core/validator world-list-spec-schema)))
 
 (defn validate-nbt-field-spec
   "Validate NBT field specification"
   [spec]
-  (schema-core/require-valid nbt-field-spec-schema valid-nbt-field-spec* :nbt-field-spec spec)
+  (schema-core/require-valid nbt-field-spec-schema @valid-nbt-field-spec* :nbt-field-spec spec)
   (when-not (get type-converters (:type spec))
     (when-not (or (:custom-write spec) (:custom-read spec))
       (throw (ex-info "Unknown NBT type and no custom converters"
@@ -500,6 +508,6 @@
 (defn validate-world-list-spec
   "Validate a defworldnbt list spec at macro/load-time."
   [spec]
-  (schema-core/require-valid world-list-spec-schema valid-world-list-spec* :world-nbt-list-spec spec)
+  (schema-core/require-valid world-list-spec-schema @valid-world-list-spec* :world-nbt-list-spec spec)
   true)
 
