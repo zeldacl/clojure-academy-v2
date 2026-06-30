@@ -6,10 +6,12 @@
   Receives ServerPlayer from the platform layer, passes directly to player.clj
   for NBT-based persistence."
   (:require [cn.li.ac.ability.util.uuid :as uuid]
+            [cn.li.ac.tutorial.auto-give :as auto-give]
             [cn.li.ac.tutorial.player :as tut-player]
             [cn.li.ac.tutorial.registry :as tut-registry]
             [cn.li.ac.tutorial.model :as model]
             [cn.li.ac.tutorial.conditions :as conds]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.platform.tutorial-events :as tutorial-platform]
             [cn.li.mcmod.util.log :as log]))
 
@@ -59,4 +61,5 @@
   (tutorial-platform/register-tutorial-handlers!
    {:on-item-event! on-item-event!
     :process-pending-activations! process-pending-activations!})
+  (runtime-hooks/register-server-player-login-hook! auto-give/auto-give-on-login!)
   nil)

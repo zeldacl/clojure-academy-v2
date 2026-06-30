@@ -310,7 +310,7 @@
           (let [t0 (:texture-0 state) t1 (:texture-1 state)
                 ^ResourceLocation tex-loc-0 (ensure-resource-location t0)
                 ^ResourceLocation tex-loc-1 (ensure-resource-location t1)
-                ^ShaderInstance si (platform-bridge/resolve-shader :skill-progbar)
+                ^ShaderInstance si (platform-bridge/resolve-shader (:shader-id state))
                 progress (float (or (:progress state) 0.0))]
             (when (and si tex-loc-0 tex-loc-1)
               (try
@@ -483,7 +483,7 @@
           nil
 
           (kind-matches? kind :shader-quad)
-          (let [shader (platform-bridge/resolve-shader (or (:shader-id state) :skill-progbar))
+          (let [shader (platform-bridge/resolve-shader (:shader-id state))
                 tex-0 (ensure-resource-location (:texture-0 state))
                 tex-1 (ensure-resource-location (:texture-1 state))
                 progress (float (or (:progress state) 0.0))]

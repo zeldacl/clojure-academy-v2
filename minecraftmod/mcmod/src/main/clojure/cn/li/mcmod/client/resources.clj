@@ -6,7 +6,7 @@
 ;; ============================================================================
 ;; ResourceLocation Helpers
 ;; ============================================================================
-;; Uses res/invoke-resource-location so ac/loader can inject *resource-location-fn*
+;; Uses res/invoke-resource-location so the content loader can inject *resource-location-fn*
 ;; (e.g. bound to modid/resource-location) without mcmod depending on config.modid.
 
 (defn resource-location

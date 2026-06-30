@@ -83,7 +83,7 @@
   "Generate a forge:obj model JSON for a 3D item via datagen.
 
   Uses ItemModelBuilder.customLoader to emit a forge:obj loader model with
-  perspective display transforms matching the original AcademyCraft
+  perspective display transforms matching the upstream
   BakedModelForTEISR transform matrices.
 
   In Forge 1.20.1 (47.1.0), customLoader takes a single BiFunction argument,

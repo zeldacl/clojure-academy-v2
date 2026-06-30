@@ -13,8 +13,7 @@
             [cn.li.mcmod.gui.container-state :as container-state]
             [cn.li.mcmod.hooks.core :as power-runtime]
             [cn.li.mcmod.server.platform-bridge :as server-bridge]
-            [cn.li.mcmod.util.log :as log]
-            [cn.li.ac.tutorial.auto-give :as auto-give])
+            [cn.li.mcmod.util.log :as log])
   (:import [net.minecraftforge.event.entity.player PlayerEvent$PlayerLoggedInEvent
                                                   PlayerEvent$PlayerLoggedOutEvent
                                    PlayerEvent$Clone
@@ -49,12 +48,7 @@
                                                :mark-player-dirty! runtime-sync/mark-player-dirty!
                                                :send-sync-now! runtime-network/send-sync-to-client!
                                                :clear-player-dirty! runtime-sync/clear-player-dirty!}))
-    ;; Tutorial auto-give: mirrors upstream TutorialData @SerializeIncluded boolean.
-    ;; Uses player persistent NBT directly (not runtime-store) for reliable persistence.
-    (try
-      (auto-give/auto-give-on-login! p)
-      (catch Throwable _
-        nil))))
+    (power-runtime/run-server-player-login-hooks! p)))
 
 (defn- on-player-logout [^PlayerEvent$PlayerLoggedOutEvent evt]
   (when-let [^ServerPlayer p (server-player (.getEntity evt))]

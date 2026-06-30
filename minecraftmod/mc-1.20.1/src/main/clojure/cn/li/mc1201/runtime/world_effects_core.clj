@@ -139,7 +139,7 @@
 (defn spawn-item-stack-at!
   "Spawn an ItemEntity in the world at the given position.
   item-stack is a platform item map with :id (registry name string) and :count (int).
-  Matching original AcademyCraft: world.spawnEntity(new EntityItem(world, x, y, z, itemStack))
+  Matching upstream implementation: world.spawnEntity(new EntityItem(world, x, y, z, itemStack))
   Returns true on success, false on failure."
   [^Entity player world-id x y z item-stack]
   (try

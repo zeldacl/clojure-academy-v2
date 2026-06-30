@@ -371,7 +371,7 @@
            (when learned
              {:kind :disable-depth})
            (when learned
-             {:kind :shader-progress-ring :shader-id :skill-progbar
+             {:kind :shader-progress-ring :shader-id :ring-progbar
               :texture-0 :skill-outline :texture-1 :skill-mask
               :progress (float (* progress-blend (or exp 0.0)))
               :x (int prog-align) :y (int prog-align) :w (int prog-size) :h (int prog-size)})
@@ -450,7 +450,7 @@
             [{:kind :textured-quad :texture :skill-back :x back-x :y back-y :w back-sz :h back-sz}
              {:kind :icon-or-fill :texture skill-icon
               :x icon-x :y icon-y :w icon-sz :h icon-sz :fallback-color 0xFF2A2A2A}
-             {:kind :shader-progress-ring :shader-id :skill-progbar
+             {:kind :shader-progress-ring :shader-id :ring-progbar
               :texture-0 (if progress-at-1? :skill-view-outline-glow :skill-view-outline)
               :texture-1 :skill-mask :progress (float ring-progress)
               :x back-x :y back-y :w back-sz :h back-sz}
@@ -538,7 +538,7 @@
              {:kind :icon-or-fill :texture condition-icon-path
               :x (int icon-inner-x) :y (int icon-inner-y) :w icon-inner-sz :h icon-inner-sz
               :fallback-color 0xFF2A2A2A}
-             {:kind :shader-progress-ring :shader-id :skill-progbar
+             {:kind :shader-progress-ring :shader-id :ring-progbar
               :texture-0 (if progress-at-1? :skill-view-outline-glow :skill-view-outline)
               :texture-1 :skill-mask :progress (float ring-progress)
               :x icon-x :y icon-y :w icon-back-sz :h icon-back-sz}

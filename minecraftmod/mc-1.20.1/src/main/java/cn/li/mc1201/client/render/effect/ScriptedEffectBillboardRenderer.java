@@ -1,6 +1,5 @@
 package cn.li.mc1201.client.render.effect;
 
-import cn.li.mc1201.entity.ScriptedEffectEntity;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
@@ -14,8 +13,6 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import org.joml.Matrix4f;
-
-import java.util.List;
 
 public final class ScriptedEffectBillboardRenderer<T extends Entity> extends EntityRenderer<T> {
     private static final String SCRIPT_RENDER_RUNTIME_NS = "cn.li.mc1201.client.render.script-render-runtime";
@@ -48,6 +45,15 @@ public final class ScriptedEffectBillboardRenderer<T extends Entity> extends Ent
         return kindObj == null ? "" : kindObj.toString();
     }
 
+    private static String drawPlanRendererKey(String rendererId) {
+        Object keyObj = ClojureInterop.invoke(
+                SCRIPT_RENDER_RUNTIME_NS,
+                "draw-plan-renderer-key",
+                rendererId
+        );
+        return keyObj == null ? "" : keyObj.toString();
+    }
+
     private static float drawPlanParamFloat(String rendererId, String paramKey, float defaultValue) {
         Object value = ClojureInterop.invoke(
                 SCRIPT_RENDER_RUNTIME_NS,
@@ -77,15 +83,15 @@ public final class ScriptedEffectBillboardRenderer<T extends Entity> extends Ent
 
         ScriptedEffectSpec spec = ScriptedRenderAccess.getEffectSpec(entity);
         String rendererId = spec == null || spec.getRendererId() == null ? "" : spec.getRendererId();
-        String kind = drawPlanKind(rendererId);
+        String rendererKey = drawPlanRendererKey(rendererId);
 
-        switch (kind) {
+        switch (rendererKey) {
             case "ring-lines" -> renderRingLines(entity, partialTick, poseStack, bufferSource);
             case "polyline-arc" -> renderPolylineArc(entity, spec, rendererId, partialTick, poseStack, bufferSource);
             case "billboard-cross" -> renderBillboardCross(entity, spec, partialTick, poseStack, bufferSource);
-            case "intensify-arcs" -> renderIntensifyArcs(entity, spec, partialTick, poseStack, bufferSource);
-            default -> throw new IllegalArgumentException("Unsupported draw-plan kind for effect rendererId="
-                    + rendererId + ": " + kind);
+            case "tiered-zigzag" -> TieredZigzagArcRenderer.render(entity, spec, rendererId, partialTick, poseStack, bufferSource);
+            default -> throw new IllegalArgumentException("Unsupported renderer key for effect rendererId="
+                    + rendererId + ": " + rendererKey);
         }
     }
 
@@ -210,77 +216,6 @@ public final class ScriptedEffectBillboardRenderer<T extends Entity> extends Ent
             prevX = x;
             prevY = y;
             prevZ = z;
-        }
-
-        poseStack.popPose();
-    }
-
-    private void renderIntensifyArcs(T entity,
-                                      ScriptedEffectSpec spec,
-                                      float partialTick,
-                                      PoseStack poseStack,
-                                      MultiBufferSource bufferSource) {
-        if (!(entity instanceof ScriptedEffectEntity effectEntity)) {
-            return;
-        }
-        List<ScriptedEffectEntity.ArcData> arcs = effectEntity.getActiveArcs();
-        if (arcs.isEmpty()) {
-            return;
-        }
-
-        float life = Math.max(1.0F, spec == null ? 15.0F : spec.getLifeTicks());
-        float age = ScriptedRenderAccess.getAgeTicks(entity) + partialTick;
-        float globalAlpha = Math.max(0.0F, 1.0F - (age / life));
-        if (globalAlpha <= 0.01F) {
-            return;
-        }
-
-        poseStack.pushPose();
-        Matrix4f mat = poseStack.last().pose();
-        VertexConsumer vc = bufferSource.getBuffer(RenderType.lines());
-
-        for (ScriptedEffectEntity.ArcData arc : arcs) {
-            float arcLifeRatio = arc.lifeTicks <= 0 ? 0.0F
-                : Mth.clamp((float) arc.lifeTicks / 3.0F, 0.0F, 1.0F);
-            float alpha = globalAlpha * arcLifeRatio;
-            if (alpha <= 0.01F) {
-                continue;
-            }
-            int a = (int) (255.0F * alpha);
-
-            // Render main strand as zigzag lines
-            float[][] main = arc.strands[0];
-            for (int i = 1; i < main.length; i++) {
-                float[] p0 = main[i - 1];
-                float[] p1 = main[i];
-                // Gradient: brighter at start, dimmer toward end
-                float gradient = 1.0F - ((float) i / (float) main.length);
-                int r = (int) (110 + 90 * gradient);
-                int g = (int) (190 + 50 * gradient);
-                int b = (int) (255);
-                vc.vertex(mat, p0[0], p0[1], p0[2]).color(r, g, b, a).normal(0.0F, 1.0F, 0.0F).endVertex();
-                vc.vertex(mat, p1[0], p1[1], p1[2]).color(r, g, b, a).normal(0.0F, 1.0F, 0.0F).endVertex();
-            }
-
-            // Render branch strands as dimmer lines
-            for (int bIdx = 1; bIdx < arc.strands.length; bIdx++) {
-                float[][] branch = arc.strands[bIdx];
-                float branchAlpha = alpha * 0.6F;
-                int ba = (int) (255.0F * branchAlpha);
-                if (ba <= 0 || branch.length < 2) {
-                    continue;
-                }
-                for (int i = 1; i < branch.length; i++) {
-                    float[] p0 = branch[i - 1];
-                    float[] p1 = branch[i];
-                    float gradient = 1.0F - ((float) i / (float) branch.length);
-                    int r = (int) (80 + 50 * gradient);
-                    int g = (int) (140 + 40 * gradient);
-                    int b2 = (int) (220 + 35 * gradient);
-                    vc.vertex(mat, p0[0], p0[1], p0[2]).color(r, g, b2, ba).normal(0.0F, 1.0F, 0.0F).endVertex();
-                    vc.vertex(mat, p1[0], p1[1], p1[2]).color(r, g, b2, ba).normal(0.0F, 1.0F, 0.0F).endVertex();
-                }
-            }
         }
 
         poseStack.popPose();

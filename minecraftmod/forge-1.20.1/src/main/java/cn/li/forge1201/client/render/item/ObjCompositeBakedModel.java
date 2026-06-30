@@ -19,7 +19,7 @@ import java.util.List;
  * (world/hand) rendering.  The 2D flat model is used for GUI/ground/fixed
  * display contexts and the 3D OBJ model for first/third-person handheld.
  *
- * This mirrors the original AcademyCraft pattern where BakedModelForTEISR
+ * This mirrors the upstream pattern where BakedModelForTEISR
  * maps TransformType.GUI to the original 2D model and delegates 3D rendering
  * to a TEISRModel for all other contexts.
  *

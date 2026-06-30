@@ -2,7 +2,7 @@
   "BlockState datagen business logic (platform independent).
 
    This module provides basic blockstate definitions from metadata.
-   The ac layer overrides these with specialized multipart definitions.
+   The content layer overrides these with specialized multipart definitions.
 
    It derives all needed information from `cn.li.mcmod.protocol.metadata`,
    which is populated by the DSL namespaces at runtime."
@@ -31,7 +31,7 @@
 (defn- basic-get-all-definitions
   "Return map: block-id(keyword) -> BlockStateDefinition.
    Generates simple single-model definitions for all blocks from metadata.
-   The ac layer will override these with specialized multipart definitions."
+   The content layer will override these with specialized multipart definitions."
   []
   (into {}
         (for [block-id (registry-metadata/get-all-block-ids)

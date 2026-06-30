@@ -4,6 +4,7 @@
   This namespace is queried by Java dispatchers to decide whether a renderer-id
   should use the scripted rendering path." 
   (:require [cn.li.mc1201.client.render.script-render-compiler :as compiler]
+            [cn.li.mcmod.client.render.script-render-abi :as script-abi]
             [cn.li.mcmod.config.script-render :as render-config]
             [cn.li.mcmod.client.render.script-render-registry :as registry]
             [cn.li.mcmod.util.log :as log]))
@@ -83,8 +84,9 @@
               (throw t)))))))
   nil)
 
-(def ^:private scripted-effect-kinds
-  #{:billboard-cross :ring-lines :polyline-arc :intensify-arcs})
+;; Scripted-effect kind membership is now delegated to script-abi/supported-kinds
+;; so content modules only need to call script-abi/register-scripted-effect-kind!.
+;; This atom is kept for runtime caching of the check; it is refreshed lazily.
 
 (def ^:private scripted-marker-kinds
   #{:billboard-cross})
@@ -164,6 +166,16 @@
     (when-let [kind (:kind plan)]
       (name kind))))
 
+(defn draw-plan-renderer-key
+  "Return the platform-neutral renderer key for the draw-plan's kind.
+   Resolves through script-abi/kind-renderer-key mapping so the Java dispatcher
+   can switch on neutral keys instead of content-owned kind strings."
+  [renderer-id]
+  (when-let [plan (get-draw-plan renderer-id)]
+    (when-let [kind (:kind plan)]
+      (when-let [rk (script-abi/resolve-kind-renderer-key kind)]
+        (name rk)))))
+
 (defn draw-plan-param-double
   [renderer-id param-key default-value]
   (let [k (cond
@@ -197,7 +209,7 @@
          (:enabled? plan)
          override-allowed?
          (case kind
-           :effect (contains? scripted-effect-kinds (:kind plan))
+           :effect (contains? (script-abi/supported-kinds) (:kind plan))
            :marker (contains? scripted-marker-kinds (:kind plan))
            :ray (contains? scripted-ray-kinds (:kind plan))
            false))))

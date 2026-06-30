@@ -3,6 +3,7 @@
 
   Keeps renderer semantics in AC while execution stays in mc1201 runtime."
   (:require [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
+	    [cn.li.mcmod.client.render.script-render-abi :as script-abi]
 	    [cn.li.mcmod.client.render.script-render-registry :as script-registry]))
 
 (defonce-guard render-profiles-installed?)
@@ -124,7 +125,15 @@
          :start-color 0xD8F8D8
          :end-color 0x6AF26A}}])
 
+(def ^:private ac-effect-kinds
+  #{:intensify-arcs})
+
 (defn init-render-profiles!
   []
   (with-init-guard render-profiles-installed?
+    (doseq [k ac-effect-kinds]
+      (script-abi/register-scripted-effect-kind! k))
+    ;; Map content-owned kind keywords to platform-neutral renderer keys
+    ;; so mc-1.20.1 can dispatch without hardcoding content-specific strings.
+    (script-abi/register-kind-renderer-key! :intensify-arcs :tiered-zigzag)
     (script-registry/register-profiles! v1-effect-profiles)))

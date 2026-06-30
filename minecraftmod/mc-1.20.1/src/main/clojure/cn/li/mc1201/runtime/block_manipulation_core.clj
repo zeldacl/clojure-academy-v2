@@ -53,7 +53,7 @@
                    (Block/dropResources state level pos (.getBlockEntity level pos) player
                                         (fortune-tool-stack fortune-level))
                    (Block/dropResources state level pos)))
-               ;; Play vanilla block break sound + particles (matches original AcademyCraft)
+               ;; Play vanilla block break sound + particles (matches upstream implementation)
                (.levelEvent level 2001 pos (Block/getId state)))
              (.removeBlock level pos false)
              true))))

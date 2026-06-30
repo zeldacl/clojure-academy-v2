@@ -75,7 +75,7 @@
     (f)))
 
 (defn register-client-init!
-  "Register client-side init function. Called by content modules (ac).
+  "Register client-side init function. Called by content modules.
 
   The function will be executed by platform adapters during client setup."
   [init-fn]

@@ -150,8 +150,8 @@
 
 (defn set-config-value!
   "Set a single config value via Forge's ConfigValue.set() and persist to TOML file.
-  domain — e.g. :cn.li.ac/ability
-  key    — e.g. :attack-player
+  domain — e.g. :cn.li.example/config-domain
+  key    — e.g. :some-setting
   value  — the new value (boolean/int/double/string)"
   [domain key value]
   (locking config-registry-lock

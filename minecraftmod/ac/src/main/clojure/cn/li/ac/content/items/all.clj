@@ -10,7 +10,8 @@
             [cn.li.ac.item.media :as media]
             [cn.li.ac.item.special-items :as special-items]
             [cn.li.ac.item.windgen-fan :as windgen-fan]
-            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]))
+            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
+            [cn.li.mcmod.platform.integration-runtime :as integration-runtime]))
 
 (defonce-guard items-installed?)
 
@@ -26,4 +27,6 @@
     (mat-core/init-mat-cores!)
     (media/init-media!)
     (special-items/init-special-items!)
-    (windgen-fan/init-windgen-fan!)))
+    (windgen-fan/init-windgen-fan!)
+    (integration-runtime/register-jei-nbt-subtype-item-ids!
+      ["energy_unit" "developer_portable" "matter_unit"])))

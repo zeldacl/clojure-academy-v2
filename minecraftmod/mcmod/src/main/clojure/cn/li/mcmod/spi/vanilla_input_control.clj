@@ -11,15 +11,15 @@
   "Abstraction for suppressing Vanilla input (LMB/RMB)"
   (suppress-vanilla-attack-use! [this minecraft-client]
     "Suppress Vanilla attack (LMB) and use (RMB) key presses.
-     Called when AC ability is active.
-     
+     Called when managed input suppression is active.
+
      Args:
      - minecraft-client: net.minecraft.client.Minecraft instance (or nil to get current)")
-  
+
   (restore-vanilla-input! [this minecraft-client]
     "Restore Vanilla input handling.
-     Called when AC ability deactivates.
-     
+     Called when input suppression is released.
+
      Args:
      - minecraft-client: net.minecraft.client.Minecraft instance (or nil to get current)"))
 

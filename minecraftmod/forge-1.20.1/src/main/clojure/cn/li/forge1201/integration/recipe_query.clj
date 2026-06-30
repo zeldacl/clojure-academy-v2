@@ -1,6 +1,6 @@
 (ns cn.li.forge1201.integration.recipe-query
   "CLIENT-ONLY: Dynamic recipe query for tutorial preview system.
-  Replaces original AcademyCraft RecipeHandler.
+  Replaces upstream RecipeHandler.
 
   Queries Minecraft's RecipeManager for crafting/furnace recipes matching
   a given output item.  Returns data structures usable by

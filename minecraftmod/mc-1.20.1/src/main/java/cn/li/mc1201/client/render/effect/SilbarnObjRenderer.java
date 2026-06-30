@@ -10,7 +10,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.Entity;
 
 /**
- * Custom OBJ-model renderer for entity_silbarn, matching original AcademyCraft's
+ * Custom OBJ-model renderer for entity_silbarn, matching the upstream
  * EntitySilbarn$RenderSibarn (spinning shard, hidden once hit).
  */
 public final class SilbarnObjRenderer<T extends Entity> extends EntityRenderer<T> {

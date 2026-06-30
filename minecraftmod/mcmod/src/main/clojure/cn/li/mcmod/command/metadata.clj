@@ -204,7 +204,6 @@
   Called during mod initialization to ensure command DSL is ready.
   Platform code should call this before attempting registration."
   []
-  ;; Command DSL is initialized when ac.command.commands namespace loads
-  ;; This function exists for future initialization needs
+  ;; Command DSL is initialized when the content command namespace loads
   (log/info "Command metadata system initialized")
   nil)

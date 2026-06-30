@@ -15,8 +15,8 @@
    :showing-numbers? {}
    :last-show-value-change-ms {}
    :background-mask-color {}       ;; per-owner: {:r :g :b :a :last-ms}
-   :smoothed-cp-percent {}         ;; per-owner: float
-   :smoothed-overload-percent {}   ;; per-owner: float
+   :smoothed-primary-percent {}         ;; per-owner: float
+   :smoothed-secondary-percent {}   ;; per-owner: float
    :smoothed-last-update-ms-cp {}
    :smoothed-last-update-ms-ol {}})
 
@@ -94,8 +94,8 @@
             (update :showing-numbers? dissoc owner-key)
             (update :last-show-value-change-ms dissoc owner-key)
             (update :background-mask-color dissoc owner-key)
-            (update :smoothed-cp-percent dissoc owner-key)
-            (update :smoothed-overload-percent dissoc owner-key)
+            (update :smoothed-primary-percent dissoc owner-key)
+            (update :smoothed-secondary-percent dissoc owner-key)
             (update :smoothed-last-update-ms-cp dissoc owner-key)
             (update :smoothed-last-update-ms-ol dissoc owner-key))))
   nil))
@@ -115,8 +115,8 @@
             (update :showing-numbers? clear-session-state)
             (update :last-show-value-change-ms clear-session-state)
             (update :background-mask-color clear-session-state)
-            (update :smoothed-cp-percent clear-session-state)
-            (update :smoothed-overload-percent clear-session-state)
+            (update :smoothed-primary-percent clear-session-state)
+            (update :smoothed-secondary-percent clear-session-state)
             (update :smoothed-last-update-ms-cp clear-session-state)
             (update :smoothed-last-update-ms-ol clear-session-state)))))
   nil)
@@ -132,16 +132,16 @@
        showing-numbers
        last-show-value-change
        background-mask-color
-       smoothed-cp-percent
-       smoothed-overload-percent
+       smoothed-primary-percent
+       smoothed-secondary-percent
        smoothed-last-update-ms-cp
        smoothed-last-update-ms-ol]
      :or {mode-switch-key-down {}
           showing-numbers {}
           last-show-value-change {}
           background-mask-color {}
-          smoothed-cp-percent {}
-          smoothed-overload-percent {}
+          smoothed-primary-percent {}
+          smoothed-secondary-percent {}
           smoothed-last-update-ms-cp {}
           smoothed-last-update-ms-ol {}}}]
    (reset! (overlay-render-runtime-state-atom)
@@ -149,8 +149,8 @@
             :showing-numbers? showing-numbers
             :last-show-value-change-ms last-show-value-change
             :background-mask-color background-mask-color
-            :smoothed-cp-percent smoothed-cp-percent
-            :smoothed-overload-percent smoothed-overload-percent
+            :smoothed-primary-percent smoothed-primary-percent
+            :smoothed-secondary-percent smoothed-secondary-percent
             :smoothed-last-update-ms-cp smoothed-last-update-ms-cp
             :smoothed-last-update-ms-ol smoothed-last-update-ms-ol})
    nil))
@@ -226,7 +226,7 @@
 
 (defn- flicker-alpha [^long now-ms]
   "Screen alpha flicker: oscillates between 0.45 and 1.0 over ~2s.
-   The floor at 0.45 (matching original AcademyCraft) keeps the HUD
+   The floor at 0.45 (matching upstream implementation) keeps the HUD
    always partially visible during interference instead of going fully
    transparent at the sine trough."
   (+ 0.725 (* 0.275 (Math/sin (* (double now-ms) 0.003)))))
@@ -345,7 +345,7 @@
               cy (+ (int y) (quot (- (int height) 16) 2))]
           (.blit graphics icon-loc cx cy 0 0 16 16 16 16))))
     ;; Full-CP glow: pulsing white overlay when CP reaches 100%,
-    ;; matching original AcademyCraft max-CP visual feedback.
+    ;; matching upstream implementation max-CP visual feedback.
     (when full-glow?
       (let [pulse (float (+ 0.2 (* 0.15 (Math/sin (* (System/currentTimeMillis) 0.004)))))
             a (int (* 255.0 pulse))]
@@ -362,15 +362,15 @@
                                       (int 25))))))))
 
 (defn- render-content-slot!
-  "Render a skill slot matching original AcademyCraft layout:
+  "Render a content slot matching upstream implementation layout:
    - 20x20 background square for key label at left
-   - 16x16 skill icon to the right of key label (2px gap)
-   - Skill name text to the right of icon
-   - Cooldown overlay covers icon from top (shrinks upward as cooldown expires)
+   - 16x16 content icon to the right of key label (2px gap)
+   - Content label text to the right of icon
+   - Timer overlay covers icon from top (shrinks upward as timer expires)
    - Glow borders on active/charge delegate states around key label square"
   [^GuiGraphics graphics {:keys [x y key-label content-icon content-label disabled? status-seconds
                                  visual-state alpha glow-color sin-effect?
-                                 cooldown-total cooldown-remaining]}]
+                                 timer-total timer-remaining]}]
   (let [effective-alpha (double (or alpha 1.0))
         ;; Background for key label square
         bg-color (case visual-state
@@ -393,22 +393,22 @@
         (.fill graphics (+ x 20) y (+ x 21) (+ y 20) (unchecked-int border-color))))
     ;; Key label text centered in the 20x20 square
     (draw-string! graphics (str key-label) (+ x 6) (+ y 6) 0xFFFFFF)
-    ;; Skill icon (16x16 to the right of key label)
+    ;; Content icon (16x16 to the right of key label)
     (when content-icon
       (when-let [icon-loc (ResourceLocation/tryParse (normalize-texture-path content-icon))]
         (.blit graphics icon-loc icon-x icon-y 0 0 16 16 16 16))
-      ;; Cooldown overlay: gray bar covers icon from top,
-      ;; shrinking upward as cooldown expires (matching original AC)
-      (when (and disabled? (pos? (long (or cooldown-total 0))))
-        (let [remaining (double (or cooldown-remaining 0))
-              total (double cooldown-total)
+      ;; Timer overlay: gray bar covers icon from top,
+      ;; shrinking upward as timer expires (matching upstream implementation)
+      (when (and disabled? (pos? (long (or timer-total 0))))
+        (let [remaining (double (or timer-remaining 0))
+              total (double timer-total)
               progress (/ remaining total)
               overlay-h (int (* 16.0 progress))]
           (when (pos? overlay-h)
             (.fill graphics icon-x icon-y
                    (+ icon-x 16) (+ icon-y overlay-h)
                    (int 0x7F888888))))))  ;; 50% alpha gray
-    ;; Skill name text to the right of icon
+    ;; Content label text to the right of icon
     (draw-string! graphics (str content-label) (+ x 42) (+ y 6) 0xCCCCCC)
     ;; Disabled: full gray overlay on key label square
     (when disabled?
@@ -557,8 +557,8 @@
                                      (number? (:percent elem)))
                               (let [is-overload-bar (contains? elem :scroll-offset)
                                     smoothed-key (if is-overload-bar
-                                                   :smoothed-overload-percent
-                                                   :smoothed-cp-percent)
+                                                   :smoothed-secondary-percent
+                                                   :smoothed-primary-percent)
                                     last-ms-key (if is-overload-bar
                                                   :smoothed-last-update-ms-ol
                                                   :smoothed-last-update-ms-cp)

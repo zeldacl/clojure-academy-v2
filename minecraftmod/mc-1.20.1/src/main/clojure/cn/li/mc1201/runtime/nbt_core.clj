@@ -21,13 +21,8 @@
   ^CompoundTag [^ServerPlayer player]
   (player-pd/get-persistent-data! player))
 
-;; Per-domain NBT keys matching upstream AcademyCraft DataPart pattern.
-;; Each domain persists independently to its own NBT key.
-;; tutorial/terminal persist via their own player.clj, not here.
-(def ^:private domain-nbt-keys
-  {:ability-data  "ac_ability"
-   :resource-data "ac_resource"
-   :preset-data   "ac_preset"})
+;; Per-domain NBT key mapping is registered by content modules during init
+;; via power-runtime/register-player-state-domain!. Read lazily at runtime.
 
 (defn load-player-state!
   "Load each domain independently from per-domain NBT keys into in-memory atom."
@@ -47,7 +42,7 @@
                                   m))
                               m))
                           {}
-                          domain-nbt-keys)]
+                          (power-runtime/list-player-state-domains))]
     (power-runtime/sync-player-state! uuid (merge (power-runtime/fresh-player-state) loaded {:dirty? false}))
     (or (power-runtime/get-player-state uuid)
         (power-runtime/fresh-player-state))))
@@ -58,7 +53,7 @@
   (let [uuid  (str (.getUUID player))
         state (power-runtime/ensure-player-state! uuid)
         tag   (player-tag player)]
-    (doseq [[domain-key nbt-key] domain-nbt-keys]
+    (doseq [[domain-key nbt-key] (power-runtime/list-player-state-domains)]
       (when-let [domain-state (get state domain-key)]
         (try
           (.putString tag nbt-key (es/encode-edn domain-state))

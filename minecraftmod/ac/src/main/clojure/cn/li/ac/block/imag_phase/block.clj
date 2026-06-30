@@ -2,7 +2,7 @@
   "Imaginary phase fluid block port for 1.20.
 
   Registers a fluid + block with an animated overlay TESR that mirrors
-  the original AcademyCraft RenderImagPhaseLiquid (3 scrolling layers)."
+  the upstream RenderImagPhaseLiquid (3 scrolling layers)."
   (:require [cn.li.ac.config.modid :as modid]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.ac.block.imag-phase.handlers :as imag-phase-handlers]
@@ -10,6 +10,7 @@
             [cn.li.mcmod.block.dsl :as bdsl]
             [cn.li.mcmod.block.tile-dsl :as tdsl]
             [cn.li.mcmod.fluid.dsl :as fdsl]
+            [cn.li.mcmod.worldgen :as mcmod-worldgen]
             [cn.li.mcmod.util.log :as log]))
 
 (defonce-guard imag-phase-installed?)
@@ -64,6 +65,9 @@
                      :textures {:all (modid/asset-path "block" "phase_liquid")}
                      :has-item-form? true}
          :events {:on-right-click imag-phase-handlers/handle-imag-phase-click}}))
+    ;; Register as the configurable-pool fill block so worldgen providers
+    ;; can resolve the fill block without hardcoding content-specific IDs.
+    (mcmod-worldgen/register-pool-fill-block-id! (str modid/MOD-ID ":imag_phase"))
     ;; Attach the animated TESR overlay (3 scrolling layers)
     (hooks/register-client-renderer! 'cn.li.ac.block.imag-phase.render/init!)
     (log/info "Initialized Imag Phase fluid block with TESR")))

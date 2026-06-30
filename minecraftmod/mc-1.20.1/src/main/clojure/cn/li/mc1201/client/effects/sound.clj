@@ -56,7 +56,7 @@
 
 (defn stop-all-media!
   "Stop all sounds in the PLAYERS category (covers media playback).
-  Matches original AcademyCraft MediaBackend stop behavior."
+  Matches upstream implementation MediaBackend stop behavior."
   []
   (when-let [^SoundManager sm (get-sound-manager)]
     (.stop sm SoundSource/PLAYERS)))

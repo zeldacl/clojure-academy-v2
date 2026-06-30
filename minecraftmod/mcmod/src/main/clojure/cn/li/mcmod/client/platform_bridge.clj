@@ -126,7 +126,7 @@
        (log/debug "Client bridge effect host not available" {:effect-key effect-key}))))
 
 ;; ============================================================================
-;; Minecraft client access ops — avoids Class/forName reflection in ac layer
+;; Minecraft client access ops — avoids Class/forName reflection in content layer
 ;; ============================================================================
 
 (defn get-client-player
@@ -157,7 +157,7 @@
       (log/debug "Client bridge send-system-message! not available")))
 
 ;; ============================================================================
-;; Mouse position access — avoids net.minecraft imports in ac layer
+;; Mouse position access — avoids net.minecraft imports in content layer
 ;; ============================================================================
 
 (defn get-mouse-pos

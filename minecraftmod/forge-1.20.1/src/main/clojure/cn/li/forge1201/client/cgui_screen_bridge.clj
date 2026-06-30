@@ -43,7 +43,7 @@
     (catch Exception _ nil)))
 
 ;; ============================================================================
-;; Perspective projection setup — matching original AcademyCraft showArea FrameEvent
+;; Perspective projection setup — matching upstream showArea FrameEvent
 ;; ============================================================================
 
 (defn- with-perspective-preview!
@@ -89,7 +89,7 @@
           (try (.popPose ps) (catch Exception _))))))
 
 (defn- render-item-3d-preview!
-  "Render a 3D item matching original AcademyCraft drawsItemImpl
+  "Render a 3D item matching upstream drawsItemImpl
   (ViewGroups.java:210-231). Must be called within with-perspective-preview! context.
   Transforms (in order, applied on top of base modelview):
     depthFunc(ALWAYS)              ← no depth test for flat item
@@ -213,7 +213,7 @@
         nil))))
 
 (defn- render-block-preview!
-  "Render a rotating 3D block matching original AcademyCraft drawsBlockImpl
+  "Render a rotating 3D block matching upstream drawsBlockImpl
   (ViewGroups.java:177-207). Must be called within with-perspective-preview! context.
   Transforms (in order, applied on top of base modelview):
     translate(0.15, 0.1, -1)
@@ -364,7 +364,7 @@
         nil)
       (keyPressed [key-code scan-code modifiers]
         ;; ESC key (256) always closes the screen — matches Minecraft GuiScreen
-        ;; default behavior and original AcademyCraft CGuiScreen handling.
+        ;; default behavior and upstream CGuiScreen handling.
         (if (= key-code 256)
           (do (.setScreen (Minecraft/getInstance) nil) true)
           (if interactive?

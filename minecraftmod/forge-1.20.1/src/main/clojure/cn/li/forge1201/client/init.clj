@@ -207,7 +207,7 @@
                        (.width (.-font mc) text)))
        :resolve-shader (fn [shader-name]
                          (case shader-name
-                           :skill-progbar (cn.li.forge1201.client.render.ModShaders/getSkillProgbarShader)
+                           :ring-progbar (cn.li.forge1201.client.render.ModShaders/getSkillProgbarShader)
                            :mono (cn.li.forge1201.client.render.ModShaders/getMonoShader)
                            :alpha-discard (cn.li.forge1201.client.render.ModShaders/getAlphaDiscardShader)
                            nil))
@@ -277,10 +277,7 @@
    (fn [player-uuid tut-id]
      (log/info "Tutorial activated:" (name tut-id) "for player" player-uuid)))
 
-  ;; Register client tick handler for periodic tutorial state sync.
-  ;; Keeps client state current so activation notifications appear
-  ;; without requiring the tutorial GUI to be open (matching upstream
-  ;; AcademyCraft NotifyUI real-time behavior).
+  ;; Run registered client tick hooks (e.g. tutorial background sync).
   (try
     (.addListener (MinecraftForge/EVENT_BUS)
                   net.minecraftforge.eventbus.api.EventPriority/NORMAL
@@ -290,8 +287,8 @@
                     (accept [_ evt]
                       (let [^TickEvent$ClientTickEvent evt evt]
                         (when (= (.phase evt) TickEvent$Phase/END)
-                          (content-actions/tick-tutorial-background-sync!))))))
+                          (content-actions/run-client-tick-hooks!))))))
     (catch Throwable _
-      (log/warn "Failed to register tutorial background sync")))
+      (log/warn "Failed to register client tick hooks")))
 
   (log/info "Forge 1.20.1 client-side systems initialized"))

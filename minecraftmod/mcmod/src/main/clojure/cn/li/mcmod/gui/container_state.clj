@@ -53,7 +53,7 @@
       (catch Exception _ nil))))
 
 ;; ============================================================================
-;; owner-from-container (used by panel.clj and wireless GUIs)
+;; owner-from-container (used by panel.clj and content GUIs)
 ;; ============================================================================
 
 (defn- player-key

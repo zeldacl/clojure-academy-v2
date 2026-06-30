@@ -1,6 +1,7 @@
 (ns cn.li.mc1201.client.screen.host
-  "CLIENT-ONLY generic screen host. AC provides draw ops and interaction handlers."
-  (:require [cn.li.mc1201.client.session :as client-session]
+  "CLIENT-ONLY generic screen host. Content provides draw ops and interaction handlers."
+  (:require [cn.li.mc1201.client.texture-registry :as tex-registry]
+            [cn.li.mc1201.client.session :as client-session]
             [cn.li.mcmod.config :as mcmod-config]
             [cn.li.mcmod.hooks.core :as client-ui]
             [cn.li.mcmod.util.log :as log]
@@ -19,23 +20,6 @@
            [org.joml Matrix4f]
            [org.lwjgl.opengl GL11]))
 
-;; ============================================================================
-;; Texture preloads (developer skill tree)
-;; ============================================================================
-
-(let [mod-id (or mcmod-config/*mod-id* "my_mod")]
-  (def ^:private skill-tree-textures
-    {:skill-back           (ResourceLocation. mod-id "textures/guis/developer/skill_back.png")
-     :skill-outline        (ResourceLocation. mod-id "textures/guis/developer/skill_outline.png")
-     :skill-mask           (ResourceLocation. mod-id "textures/guis/developer/skill_radial_mask.png")
-     :skill-view-outline   (ResourceLocation. mod-id "textures/guis/developer/skill_view_outline.png")
-     :skill-view-outline-glow (ResourceLocation. mod-id "textures/guis/developer/skill_view_outline_glow.png")
-     :tex-line             (ResourceLocation. mod-id "textures/guis/developer/line.png")
-     :tex-button           (ResourceLocation. mod-id "textures/guis/developer/button.png")
-     :bg-area              (ResourceLocation. mod-id "textures/guis/effect/effect_developer_background.png")}))
-
-(defn- get-skill-tree-texture [key]
-  (get skill-tree-textures key))
 
 ;; ============================================================================
 ;; Drawing helpers
@@ -178,19 +162,19 @@
     :icon-or-fill (let [raw-tex (:texture op)
                         loc (path->resource-location raw-tex)]
                     (when (nil? loc)
-                      (log/error "[skill-tree-debug] icon-or-fill FAILED to resolve texture:" (pr-str raw-tex) "normalized:" (pr-str (path->resource-location raw-tex))))
+                      (log/error "[draw-ops-debug] icon-or-fill FAILED to resolve texture:" (pr-str raw-tex) "normalized:" (pr-str (path->resource-location raw-tex))))
                     (if loc
                       (.blit graphics loc (:x op) (:y op) 0 0 (:w op) (:h op) (:w op) (:h op))
                       (.fill graphics (:x op) (:y op) (+ (:x op) (:w op)) (+ (:y op) (:h op)) (:fallback-color op))))
     :textured-quad (let [tex-key (:texture op)
-                         loc (if (keyword? tex-key) (get-skill-tree-texture tex-key)
+                         loc (if (keyword? tex-key) (tex-registry/resolve-texture tex-key)
                                  (path->resource-location tex-key))]
                      (when (and (not (keyword? tex-key)) (nil? (path->resource-location tex-key)))
-                       (log/error "[skill-tree-debug] textured-quad FAILED to resolve:" (pr-str tex-key)))
+                       (log/error "[draw-ops-debug] textured-quad FAILED to resolve:" (pr-str tex-key)))
                      (when loc
                        (.blit graphics loc (:x op) (:y op) 0 0 (:w op) (:h op) (:w op) (:h op))))
     :raw-rect-uv   (let [tex-key (:texture op)
-                         ^ResourceLocation loc (if (keyword? tex-key) (get-skill-tree-texture tex-key)
+                         ^ResourceLocation loc (if (keyword? tex-key) (tex-registry/resolve-texture tex-key)
                                                (path->resource-location tex-key))]
                      (when loc
                        (platform-bridge/blit-textured-quad! graphics loc
@@ -206,7 +190,7 @@
     ;; Previous rotated-quad approach used blit() which truncates to int and
     ;; maps texture 1:1, causing visible stepping/segmentation at rotation angles.
     ;; BufferBuilder with float vertices and normalized UVs fixes this.
-    :line-quad (let [^ResourceLocation tex (get-skill-tree-texture :tex-line)
+    :line-quad (let [^ResourceLocation tex (tex-registry/resolve-texture :tex-line)
                      x0 (double (:x0 op)) y0 (double (:y0 op))
                      x1 (double (:x1 op)) y1 (double (:y1 op))
                      line-w (double (:line-width op 5.5))
@@ -236,16 +220,16 @@
                          (.vertex bb pose-matrix (float (- x1 nx)) (float (- y1 ny)) 0.0) (.uv bb (float 1.0) (float 0.0)) (.endVertex bb)
                          (BufferUploader/drawWithShader (.end bb))
                          (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0))))))
-    ;; --- Shader-based progress ring (skill-progbar shader) ---
+    ;; --- Shader-based progress ring ---
     ;; Uses BufferBuilder to avoid blit() which overrides custom shaders.
     :shader-progress-ring
     (let [^ShaderInstance si (platform-bridge/resolve-shader (:shader-id op))
           tex-0-key (:texture-0 op)
           tex-1-key (:texture-1 op)
-          loc-0 (if (keyword? tex-0-key) (get-skill-tree-texture tex-0-key)
+          loc-0 (if (keyword? tex-0-key) (tex-registry/resolve-texture tex-0-key)
                     (path->resource-location tex-0-key))
           loc-1 (when tex-1-key
-                  (if (keyword? tex-1-key) (get-skill-tree-texture tex-1-key)
+                  (if (keyword? tex-1-key) (tex-registry/resolve-texture tex-1-key)
                       (path->resource-location tex-1-key)))
           progress (float (or (:progress op) 0.0))]
       (if (and si loc-0)
@@ -262,10 +246,10 @@
         (if loc-0
           (.blit graphics loc-0 (:x op) (:y op) 0 0 (:w op) (:h op) (:w op) (:h op))
           (.fill graphics (:x op) (:y op) (+ (:x op) (:w op)) (+ (:y op) (:h op)) 0xFF2A2A2A))))
-    ;; --- Mono shader blit (grayscale for unlearned skill icons) ---
+    ;; --- Mono shader blit (grayscale for unlearned content icons) ---
     :shader-mono-blit
     (let [tex-key (:texture op)
-          loc (if (keyword? tex-key) (get-skill-tree-texture tex-key)
+          loc (if (keyword? tex-key) (tex-registry/resolve-texture tex-key)
                   (path->resource-location tex-key))
           ^ShaderInstance si (platform-bridge/resolve-shader :mono)]
       (if (and si loc)
@@ -283,7 +267,7 @@
     ;; --- Alpha-discard depth mask (writes depth from texture alpha, GL 3.2 core replacement for glAlphaFunc) ---
     :alpha-discard-depth-mask
     (let [tex-key (:texture op)
-          loc (if (keyword? tex-key) (get-skill-tree-texture tex-key)
+          loc (if (keyword? tex-key) (tex-registry/resolve-texture tex-key)
                   (path->resource-location tex-key))
           ^ShaderInstance si (platform-bridge/resolve-shader :alpha-discard)
           threshold (float (or (:alpha-threshold op) 0.3))]
@@ -303,7 +287,7 @@
     :set-shader (let [^ShaderInstance si (platform-bridge/resolve-shader (:shader-id op))]
                   (when si
                     (.setSampler si "TexSampler0" (if (keyword? (:texture-0 op))
-                                                    (get-skill-tree-texture (:texture-0 op))
+                                                    (tex-registry/resolve-texture (:texture-0 op))
                                                     (path->resource-location (:texture-0 op))))
                     (RenderSystem/setShader (reify java.util.function.Supplier (get [_] si)))))
     :clear-shader (RenderSystem/setShader (reify java.util.function.Supplier (get [_] nil)))

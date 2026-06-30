@@ -2,7 +2,7 @@
   "Non-container CGUI screen host — hosts a CGUI widget tree on a plain Screen
   (no Minecraft ContainerMenu needed).
 
-  This mirrors the original AcademyCraft TreeScreen extends CGuiScreen pattern.
+  This mirrors the upstream TreeScreen extends CGuiScreen pattern.
   Used by the portable developer and other standalone CGUI screens."
   (:require [cn.li.mc1201.gui.cgui.runtime :as cgui-rt]
             [cn.li.mcmod.gui.cgui-core :as cgui-core]
@@ -16,7 +16,7 @@
 (defn- ^:private cgui-screen-key-pressed
   "Handle key input for a CGUI screen root."
   [root key-code scan-code modifiers cgui-screen-opts]
-  ;; Per-screen key hook — matches original AcademyCraft TreeScreen.keyTyped
+  ;; Per-screen key hook — matches upstream TreeScreen.keyTyped
   (or (when-let [hook (:key-hook cgui-screen-opts)]
         (hook key-code scan-code modifiers))
       (let [owns-key? (and root (cgui-rt/focused-widget-owns-key? root))]
@@ -59,8 +59,8 @@
             (when root
               (binding [client-ui/*client-session-id* (or session-id "")]
                 (cgui-rt/resize-root! root w h)
-                ;; Apply root CENTER/CENTER alignment — matching original
-                ;; AcademyCraft CGuiScreen (full-screen overlay) behavior
+                ;; Apply root CENTER/CENTER alignment — matching upstream
+                ;; CGuiScreen (full-screen overlay) behavior
                 ;; where LambdaLib2 centered the root widget on screen.
                 (let [tm (get @(:metadata root) :transform-meta {})
                       align-w (:align-width tm)

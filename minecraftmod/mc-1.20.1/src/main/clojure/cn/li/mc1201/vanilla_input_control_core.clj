@@ -52,19 +52,19 @@
        false))))
 
 (defn suppress-vanilla-attack-use!
-  "Suppress Vanilla LMB/RMB input handling when AC ability is active.
-   
+  "Suppress Vanilla LMB/RMB input handling when input suppression is active.
+
    Implementation:
    - Set attack KeyBinding to 'not pressed'
    - Set use KeyBinding to 'not pressed'
    - Prevents Minecraft from processing these inputs in world
    - Player still holds physical LMB/RMB but MC doesn't see it
-   
+
    Args:
    - minecraft: Minecraft client (or nil to get current)
-   
-   Timing: Called when AC ability becomes active
-   
+
+   Timing: Called when input suppression becomes active
+
    Note: This is not a true input block. We're just setting KeyBinding state
    to neutral. The physical keys can still be queried via GLFW polling."
   ([] (suppress-vanilla-attack-use! (get-minecraft)))
@@ -83,16 +83,16 @@
        (log/warn e "Failed to suppress Vanilla input")))))
 
 (defn restore-vanilla-input!
-  "Restore normal Vanilla input handling when AC ability deactivates.
-   
+  "Restore normal Vanilla input handling when input suppression is released.
+
    Implementation:
    - Reset attack and use KeyBindings to their natural state
    - Minecraft will resume processing LMB/RMB normally
-   
+
    Args:
    - minecraft: Minecraft client (or nil to get current)
-   
-   Timing: Called when AC ability deactivates
+
+   Timing: Called when input suppression is released
    
    Note: KeyBindings don't have a 'restore' mechanism. We rely on the fact that
    Minecraft's normal key polling in the tick will naturally reset these to

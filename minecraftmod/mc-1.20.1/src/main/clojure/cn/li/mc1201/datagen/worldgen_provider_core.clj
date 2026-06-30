@@ -3,29 +3,32 @@
   placed_feature, and platform-specific biome_modifier data maps.
 
   Does NOT do file I/O — returns data so platform providers can write
-  via DataProvider/saveStable (Forge) or the Fabric equivalent.")
+  via DataProvider/saveStable (Forge) or the Fabric equivalent.
+
+  Delegates ore/liquid descriptor storage to the platform-neutral
+  cn.li.mcmod.worldgen registry. Content modules call mcmod.worldgen
+  functions directly; this namespace reads them at datagen time."
+  (:require [cn.li.mcmod.worldgen :as mcmod-worldgen]))
 
 ;; ============================================================================
-;; Ore definitions (matching original AcademyCraft worldgen)
+;; Content-owned worldgen registries (delegated to mcmod)
 ;; ============================================================================
 
-(def ^:private ore-defs
-  [{:id "constrained_ore" :name "Constrained Ore" :size 12 :count 8}
-   {:id "reso_ore" :name "Resonance Ore" :size 9 :count 8}
-   {:id "crystal_ore" :name "Crystal Ore" :size 12 :count 12}
-   {:id "imaginary_ore" :name "Imaginary Silicon Ore" :size 11 :count 8}])
+(defn register-worldgen-ore!
+  "Register a worldgen ore descriptor. Delegates to mcmod platform-neutral registry."
+  [descriptor]
+  (mcmod-worldgen/register-worldgen-ore! descriptor))
 
-;; ============================================================================
-;; Phase liquid pool
-;; ============================================================================
+(defn register-worldgen-liquid!
+  "Register a worldgen liquid pool descriptor. Delegates to mcmod platform-neutral registry."
+  [descriptor]
+  (mcmod-worldgen/register-worldgen-liquid! descriptor))
 
-(def ^:private phase-liquid-def
-  {:id "phase_liquid"
-   :name "Phase Liquid Pool"
-   :rarity 3   ;; 1-in-3 (~33%) — original AcademyCraft used 30% per chunk;
-               ;; rarity_filter uses integer 1/N probability, so 3 is the closest.
-   :min-y 5
-   :max-y 34}) ;; original: 5 + random.nextInt(30) = [5, 34]
+(defn reset-worldgen-registries-for-test!
+  "Reset worldgen registries. For test use only."
+  []
+  (mcmod-worldgen/reset-worldgen-ores-for-test!)
+  (mcmod-worldgen/reset-worldgen-liquids-for-test!))
 
 ;; ============================================================================
 ;; JSON data builders (plain Clojure maps)
@@ -85,36 +88,34 @@
 (defn build-worldgen-file-defs
   "Returns a vector of file definitions for worldgen DataGen.
   Each def is {:path [\"dir\" \"subdir\" \"file.json\"] :data {clojure-map}}.
-  The path segments are relative to data/<modid>/ (e.g. [\"worldgen\" \"configured_feature\" \"reso_ore.json\"]).
+  Path segments are relative to data/<modid>/.
+
+  Reads ores and liquids from the mcmod platform-neutral registry (populated
+  by content during datagen init). Descriptors with :enabled? false are skipped.
 
   Options:
-    :gen-ores?          — generate ore features (default true)
-    :gen-phase-liquid?  — generate phase liquid pool (default true)
-    :platform           — :forge (includes biome_modifier) or :fabric (no biome_modifier)"
-  [& {:keys [gen-ores? gen-phase-liquid? platform]
-      :or {gen-ores? true gen-phase-liquid? true}}]
+    :platform — :forge (includes biome_modifier) or :fabric (no biome_modifier)"
+  [& {:keys [platform]}]
   (let [is-forge? (= platform :forge)
         file-defs (atom [])]
-    (when gen-ores?
-      (doseq [ore ore-defs]
-        (let [id (:id ore)]
-          (swap! file-defs conj
-                 {:path ["worldgen" "configured_feature" (str id ".json")]
-                  :data (ore-configured-feature-data ore)}
-                 {:path ["worldgen" "placed_feature" (str id ".json")]
-                  :data (ore-placed-feature-data ore)})
-          (when is-forge?
-            (swap! file-defs conj
-                   {:path ["forge" "biome_modifier" (str "add_" id ".json")]
-                    :data (forge-biome-modifier-data id "underground_ores")})))))
-    (when gen-phase-liquid?
-      (let [pl phase-liquid-def
-            id (:id pl)]
+    (doseq [ore (filter :enabled? (mcmod-worldgen/list-worldgen-ores))]
+      (let [id (:id ore)]
         (swap! file-defs conj
                {:path ["worldgen" "configured_feature" (str id ".json")]
-                :data (pool-configured-feature-data pl)}
+                :data (ore-configured-feature-data ore)}
                {:path ["worldgen" "placed_feature" (str id ".json")]
-                :data (pool-placed-feature-data pl)})
+                :data (ore-placed-feature-data ore)})
+        (when is-forge?
+          (swap! file-defs conj
+                 {:path ["forge" "biome_modifier" (str "add_" id ".json")]
+                  :data (forge-biome-modifier-data id "underground_ores")}))))
+    (doseq [liq (filter :enabled? (mcmod-worldgen/list-worldgen-liquids))]
+      (let [id (:id liq)]
+        (swap! file-defs conj
+               {:path ["worldgen" "configured_feature" (str id ".json")]
+                :data (pool-configured-feature-data liq)}
+               {:path ["worldgen" "placed_feature" (str id ".json")]
+                :data (pool-placed-feature-data liq)})
         (when is-forge?
           (swap! file-defs conj
                  {:path ["forge" "biome_modifier" (str "add_" id ".json")]

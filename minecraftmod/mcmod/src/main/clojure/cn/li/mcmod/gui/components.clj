@@ -127,24 +127,27 @@
                  :color (unchecked-int (or color 0xFFFFFFFF))})})
 
 (defn shader-ring
-  "Radial progress ring via :skill-progbar shader. Uses :kind (non-namespaced) to bypass
+  "Radial progress ring component. Uses :kind (non-namespaced) to bypass
   create-native-component; handled by the :shader-quad case in renderer.clj.
+  shader-id: keyword identifying the shader (required).
   texture-0: outline ring texture, texture-1: radial mask texture, progress: 0.0–1.0."
   [{:keys [shader-id texture-0 texture-1 progress]}]
   {:kind :shader-quad
-   :state (atom {:shader-id (or shader-id :skill-progbar)
+   :state (atom {:shader-id shader-id
                  :texture-0 texture-0
                  :texture-1 texture-1
                  :progress (double (or progress 0.0))})})
 
 (defn shader-progress
   "Shader-based radial progress ring component (matching host.clj :shader-progress-ring op).
+  shader-id: keyword identifying the shader (required).
   texture-0: outline ring texture (e.g., skill_outline.png)
   texture-1: radial mask texture (e.g., skill_radial_mask.png)
   progress: float 0.0-1.0"
-  [{:keys [texture-0 texture-1 progress]
+  [{:keys [shader-id texture-0 texture-1 progress]
     :or {progress 0.0}}]
   {::kind :shader-progress
+   :shader-id shader-id
    :texture-0 texture-0
    :texture-1 texture-1
    :progress (float progress)})
@@ -382,12 +385,12 @@
 (defn shader-quad
   "Create a shader-quad component for CGUI widgets.
    Renders a textured quad with a custom GLSL shader.
-   :shader-id — keyword identifying the shader (:skill-progbar, :mono)
+   :shader-id — keyword identifying the shader (e.g., :mono)
    :texture-0 — primary texture path
    :texture-1 — optional secondary texture path
-   :progress  — float uniform value (for skill-progbar shader)"
+   :progress  — float uniform value passed to the shader"
   [& {:keys [shader-id texture-0 texture-1 progress]
-      :or {shader-id :skill-progbar progress 0.0}}]
+      :or {progress 0.0}}]
   {::kind :shader-quad
    :state (atom {:shader-id shader-id
                  :texture-0 texture-0
@@ -514,7 +517,7 @@
   "Horizontal gradient fill component — renders a smooth left-to-right gradient
   using Minecraft's built-in fillGradient (zero texture assets).
 
-  Matches upstream AcademyCraft ACRenderingHelper.drawGlow effect.
+  Matches upstream ACRenderingHelper.drawGlow effect.
   Gradient is split into two halves to achieve center-opaque → edges-transparent.
 
   Args:

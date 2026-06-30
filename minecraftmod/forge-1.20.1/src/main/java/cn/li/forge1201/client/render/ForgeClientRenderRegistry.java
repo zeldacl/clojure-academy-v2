@@ -161,7 +161,7 @@ public final class ForgeClientRenderRegistry {
                     skillProgbarShader = shader;
                 }
             );
-            // Grayscale shader (for unlearned skill icons)
+            // Grayscale shader (for unlearned content icons)
             event.registerShader(
                 new ShaderInstance(event.getResourceProvider(),
                     new ResourceLocation(MyMod1201.MODID, "mono"),
@@ -179,7 +179,7 @@ public final class ForgeClientRenderRegistry {
                     cpbarOverloadShader = shader;
                 }
             );
-            // Alpha discard shader (for depth masking in skill tree nodes)
+            // Alpha discard shader (for depth masking in content tree nodes)
             event.registerShader(
                 new ShaderInstance(event.getResourceProvider(),
                     new ResourceLocation(MyMod1201.MODID, "alpha_discard"),
@@ -189,7 +189,7 @@ public final class ForgeClientRenderRegistry {
                 }
             );
         } catch (IOException e) {
-            LOGGER.error("Failed to register skill tree shaders", e);
+            LOGGER.error("Failed to register content shaders", e);
         }
     }
 

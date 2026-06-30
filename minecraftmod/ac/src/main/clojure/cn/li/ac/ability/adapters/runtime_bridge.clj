@@ -80,6 +80,9 @@
   []
   (doseq [descriptor player-persistence-descriptors]
     (runtime-hooks/register-player-persistence-descriptor! descriptor))
+  (runtime-hooks/register-player-state-domain! {:domain-key :ability-data :nbt-key "ac_ability"})
+  (runtime-hooks/register-player-state-domain! {:domain-key :resource-data :nbt-key "ac_resource"})
+  (runtime-hooks/register-player-state-domain! {:domain-key :preset-data :nbt-key "ac_preset"})
   nil)
 
 (defn- install-runtime-components!

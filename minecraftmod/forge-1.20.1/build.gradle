@@ -51,10 +51,10 @@ loom {
             data() // 直接调用 data() 方法，Loom 会自动配置其为 server 模式并挂载数据处理器
             configName = "Forge Data 1.20.1"
             runDir = "run-data"
-            
+
             // 传递 DataGen 参数
-            programArgs "--mod", mod_id, "--all", 
-                        "--output", file('src/generated/resources/').getAbsolutePath(), 
+            programArgs "--mod", mod_id, "--all",
+                        "--output", file('src/generated/resources/').getAbsolutePath(),
                         "--existing", file('src/main/resources/').getAbsolutePath(),
                         "--existing", project(':ac').file('src/main/resources/').getAbsolutePath()
                         // "--existing", project(':mcmod').file('src/main/resources/').getAbsolutePath()
@@ -65,10 +65,10 @@ loom {
 // 确保生成的资源文件夹被包含
 // sourceSets.main.resources { srcDir 'src/generated/resources' }
 def generatedResources = file ( "src/generated/resources" )
-sourceSets { 
-    main { 
+sourceSets {
+    main {
         resources. srcDir generatedResources
-     } 
+     }
 }
 
 def cleanForgeProcessResourcesOutput = tasks.register('cleanForgeProcessResourcesOutput') {
@@ -686,14 +686,14 @@ tasks.register('bisectCheckClojure') {
     }
 }
 
-// Clojure 1.12.4 AOT 编译期隔离：关闭 direct-linking 与 spec 宏深度验证，
-// 防止第三方库（Malli 等）内部闭包符号在 runData / datagen 类加载时逃逸。
-afterEvaluate {
-    if (project.extensions.findByName('loom')) {
-        loom.runs.configureEach {
-            vmArg "-Dclojure.spec.compile-asserts=false"
-            vmArg "-Dclojure.spec.skip-macros=true"
-            vmArg "-Dclojure.compiler.direct-linking=false"
-        }
-    }
-}
+//// Clojure 1.12.4 AOT 编译期隔离：关闭 direct-linking 与 spec 宏深度验证，
+//// 防止第三方库（Malli 等）内部闭包符号在 runData / datagen 类加载时逃逸。
+//afterEvaluate {
+//    if (project.extensions.findByName('loom')) {
+//        loom.runs.configureEach {
+//            vmArg "-Dclojure.spec.compile-asserts=false"
+//            vmArg "-Dclojure.spec.skip-macros=true"
+//            vmArg "-Dclojure.compiler.direct-linking=false"
+//        }
+//    }
+//}

@@ -6,14 +6,47 @@
 	in hot render loops."
 	(:require [clojure.set :as set]))
 
-(def supported-kinds
-	#{:billboard-cross
-		:ring-lines
-		:polyline-arc
-		:wire-box
-		:ray-composite
-		:ray-composite-lite
-		:intensify-arcs})
+(defonce ^:private registered-kinds*
+	(atom #{:billboard-cross
+			:ring-lines
+			:polyline-arc
+			:wire-box
+			:ray-composite
+			:ray-composite-lite}))
+
+(defn register-scripted-effect-kind!
+	"Register an additional scripted-effect kind. Content modules call this during init."
+	[kind]
+	(swap! registered-kinds* conj kind)
+	nil)
+
+(defn supported-kinds
+	"Return the set of currently registered scripted-effect kinds."
+	[]
+	@registered-kinds*)
+
+;; --- kind → native renderer key mapping ---
+;; Content modules map their kind keywords to platform-neutral renderer keys.
+;; The mc-1.20.1 renderer dispatcher uses these keys (not raw kind names) in
+;; switch statements, keeping content-owned kind strings out of the platform layer.
+
+(defonce ^:private kind-renderer-keys*
+	(atom {}))
+
+(defn register-kind-renderer-key!
+	"Map a scripted-effect kind to a platform-neutral renderer key.
+	 kind is a keyword (e.g. :custom-kind), renderer-key is a keyword
+	 (e.g. :tiered-zigzag). Called by content during init."
+	[kind renderer-key]
+	(swap! kind-renderer-keys* assoc kind renderer-key)
+	nil)
+
+(defn resolve-kind-renderer-key
+	"Return the renderer key for a given kind, or the kind itself if no mapping exists.
+	 kind can be a keyword or string."
+	[kind]
+	(let [k (if (keyword? kind) kind (keyword kind))]
+	(get @kind-renderer-keys* k k)))
 
 (def ^:private allowed-top-level-keys
 	#{:id :kind :version :enabled? :state :anim :params :budget})
@@ -164,10 +197,10 @@
 	(assert! (keyword? (:kind profile))
 					 "ScriptRender profile :kind must be a keyword"
 					 {:kind (:kind profile)})
-	(assert! (contains? supported-kinds (:kind profile))
+	(assert! (contains? (supported-kinds) (:kind profile))
 					 "ScriptRender profile :kind is not supported"
 					 {:kind (:kind profile)
-						:supported supported-kinds})
+						:supported (supported-kinds)})
 
 	(let [unknown-top (set/difference (set (keys profile)) allowed-top-level-keys)]
 		(assert! (empty? unknown-top)

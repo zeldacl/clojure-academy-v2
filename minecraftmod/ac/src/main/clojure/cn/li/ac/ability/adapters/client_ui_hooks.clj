@@ -912,8 +912,11 @@
                     :content-icon (:skill-icon slot)
                     :content-label (:skill-name slot)
                     :disabled? (:in-cooldown slot)
-                    :status-seconds (:cooldown-seconds slot))
-                  (dissoc :type :skill-icon :skill-name :in-cooldown :cooldown-seconds)))
+                    :status-seconds (:cooldown-seconds slot)
+                    :timer-total (:cooldown-total slot)
+                    :timer-remaining (:cooldown-remaining slot))
+                  (dissoc :type :skill-icon :skill-name :in-cooldown :cooldown-seconds
+                          :cooldown-total :cooldown-remaining)))
                           (or (:skill-slots hud-render-data) []))
         preset-indicators (mapv (fn [p]
                         (-> p

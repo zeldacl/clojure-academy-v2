@@ -123,7 +123,7 @@ public class ConfigurablePoolFeature extends Feature<NoneFeatureConfiguration> {
                     if (buffer[(bx * 16 + bz) * 8 + by] &&
                         belowState.is(Blocks.DIRT) &&
                         level.getBrightness(net.minecraft.world.level.LightLayer.BLOCK, abovePos) > 0) {
-                        // Original AcademyCraft: grass or mycelium depending on biome.topBlock.
+                        // Upstream: grass or mycelium depending on biome.topBlock.
                         // In 1.20, we detect mushroom biomes by the biome registry key.
                         boolean isMushroom = level.getBiome(checkPos).unwrapKey()
                             .map(k -> k.location().getPath().contains("mushroom"))

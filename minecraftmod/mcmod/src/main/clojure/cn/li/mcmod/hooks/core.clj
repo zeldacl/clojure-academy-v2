@@ -272,6 +272,46 @@
   []
   (content-registry/list-player-persistence-descriptors))
 
+;; ============================================================================
+;; Player state domain registry
+;; Maps domain-key (keyword) → nbt-key (string) for per-domain state persistence.
+;; Registered by content modules during init; read by nbt_core at load/save time.
+;; ============================================================================
+
+(defonce ^:private player-state-domain-registry* (atom {}))
+
+(defn register-player-state-domain!
+  "Register a player state domain mapping: {:domain-key kw :nbt-key str}.
+  Called by content modules during init. Platform nbt layer reads this at runtime."
+  [{:keys [domain-key nbt-key]}]
+  (swap! player-state-domain-registry* assoc domain-key nbt-key))
+
+(defn list-player-state-domains
+  "Return map of {domain-key nbt-key} for all registered player state domains."
+  []
+  @player-state-domain-registry*)
+
+;; ============================================================================
+;; Server-side player login side-effect hooks
+;; Content modules register callbacks here to run on server player login.
+;; The player argument is passed as-is (opaque to this layer).
+;; ============================================================================
+
+(defonce ^:private server-player-login-hooks* (atom []))
+
+(defn register-server-player-login-hook!
+  "Register a content-owned server player login hook fn.
+  fn receives the raw ServerPlayer object. Called by content modules during init."
+  [f]
+  (swap! server-player-login-hooks* conj f))
+
+(defn run-server-player-login-hooks!
+  "Run all registered server player login hooks with the given player.
+  Called by platform lifecycle adapters on player login, after core login handling."
+  [player]
+  (doseq [f @server-player-login-hooks*]
+    (try (f player) (catch Throwable _ nil))))
+
 (defn register-client-input-descriptor!
   "Register a content-owned client input descriptor through the neutral registry."
   [descriptor]
@@ -453,7 +493,7 @@
 
 (defn set-client-overlay-activated!
   "Notify the overlay layer that activation state has changed for a player.
-  Called by the AC layer after the activate handler stack resolves.
+  Called by the content layer after the activate handler stack resolves.
   player-uuid is a string, activated is a boolean."
   [player-uuid activated]
   ((:set-client-overlay-activated! (hooks-core-state-snapshot)) player-uuid activated))

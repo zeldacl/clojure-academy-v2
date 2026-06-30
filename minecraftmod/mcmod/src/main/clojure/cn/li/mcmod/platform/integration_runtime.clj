@@ -54,3 +54,27 @@
 (defn describe-recipe
   [recipe]
   ((:describe-recipe (integration-hooks-snapshot)) recipe))
+
+;; ============================================================================
+;; JEI NBT Subtype Item ID Registry
+;; Content registers item path-parts; JEI plugin reads at init time.
+;; ============================================================================
+
+(defonce ^:private jei-nbt-subtype-ids* (atom []))
+
+(defn register-jei-nbt-subtype-item-ids!
+  "Register item path-part IDs (without mod-id prefix) for JEI NBT subtype handling.
+  JEI uses this to avoid collapsing NBT-stateful item variants (e.g. empty/full)."
+  [ids]
+  (swap! jei-nbt-subtype-ids* into ids)
+  nil)
+
+(defn get-jei-nbt-subtype-item-ids
+  "Return all registered item path-part IDs for JEI NBT subtype handling."
+  []
+  @jei-nbt-subtype-ids*)
+
+(defn reset-jei-nbt-subtype-ids-for-test!
+  []
+  (reset! jei-nbt-subtype-ids* [])
+  nil)

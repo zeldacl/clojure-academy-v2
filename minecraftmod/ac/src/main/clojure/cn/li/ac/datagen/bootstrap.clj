@@ -6,6 +6,7 @@
   (:require [cn.li.ac.ability.datagen.registry :as ability-datagen]
             [cn.li.ac.block.datagen.registry :as block-datagen]
             [cn.li.ac.block.platform-bridge :as block-bridge]
+            [cn.li.ac.datagen.worldgen :as worldgen-datagen]
             [cn.li.ac.wireless.datagen.registry :as wireless-datagen]
             [cn.li.ac.energy.datagen.registry :as energy-datagen]))
 
@@ -24,4 +25,5 @@
   (block-datagen/register-datagen-metadata!)
   (wireless-datagen/register-datagen-metadata!)
   (energy-datagen/register-datagen-metadata!)
+  (worldgen-datagen/register-datagen-metadata!)
   nil)

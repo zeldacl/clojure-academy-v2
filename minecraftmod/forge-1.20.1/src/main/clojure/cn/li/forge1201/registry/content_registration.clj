@@ -386,7 +386,7 @@
     (when (and (registry-metadata/should-create-block-item? block-id)
                (or (not (registry-metadata/fluid-block? block-id))
                    ;; Allow BlockItem for fluid blocks that have a block entity
-                   ;; (e.g. imag_phase needs item form for animated inventory icon)
+                   ;; (fluid blocks may need item form for animated inventory icon)
                    (registry-metadata/has-block-entity? block-id)))
       (let [registry-name (registry-metadata/get-block-registry-name block-id)
             block-registered (registry-state/get-registered-block-ro block-id)

@@ -5,7 +5,7 @@ import net.minecraftforge.eventbus.api.Event;
 
 /**
  * Fired on both CLIENT and SERVER when a tutorial is newly activated for a player.
- * Mirrors cn.academy.event.TutorialActivatedEvent from upstream AcademyCraft.
+ * Mirrors the upstream TutorialActivatedEvent pattern.
  *
  * Posted to {@code MinecraftForge.EVENT_BUS} so other mods and the notification
  * system can react to tutorial unlocks.

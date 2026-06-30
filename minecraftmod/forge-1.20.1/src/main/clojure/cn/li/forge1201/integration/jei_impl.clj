@@ -155,7 +155,7 @@
   [^ISubtypeRegistration registration]
   (try
     (let [modid mod-config/*mod-id*
-          item-ids ["energy_unit" "developer_portable" "matter_unit"]
+          item-ids (integration-runtime/get-jei-nbt-subtype-item-ids)
           items (->> item-ids
         (map (fn [id]
           (registry-state/get-registered-item (str modid ":" id))))

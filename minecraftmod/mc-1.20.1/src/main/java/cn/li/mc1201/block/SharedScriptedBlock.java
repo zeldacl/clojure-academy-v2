@@ -132,7 +132,7 @@ public class SharedScriptedBlock extends ScriptedCarrierBlockBase {
     /**
      * Dynamic light emission for working machines.
      * If the block has an integer "frame" property and the machine is working (frame &gt; 0),
-     * emit light level 6 (matching original AcademyCraft getLightValue for ImagFusor).
+     * emit light level 6 (matching upstream getLightValue for working machines).
      */
     public int getLightEmission(BlockState state, BlockGetter level, BlockPos pos) {
         for (Property<?> prop : state.getProperties()) {

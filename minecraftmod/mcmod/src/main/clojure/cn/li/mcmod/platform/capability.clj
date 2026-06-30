@@ -57,6 +57,31 @@
   nil)
 
 ;; ============================================================================
+;; Tile Fluid Spec Registry
+;; Maps tile-id (string) → {:mod-id string :path string} for fluid capability.
+;; Content registers which fluid a tile holds; platform reads at capability setup.
+;; ============================================================================
+
+(defonce ^:private tile-fluid-specs* (atom {}))
+
+(defn register-tile-fluid-spec!
+  "Register the fluid a tile holds for IFluidHandler capability binding.
+  tile-id is the DSL tile id string; mod-id and fluid-path form the ResourceLocation."
+  [tile-id fluid-mod-id fluid-path]
+  (swap! tile-fluid-specs* assoc tile-id {:mod-id fluid-mod-id :path fluid-path})
+  nil)
+
+(defn get-tile-fluid-spec
+  "Return {:mod-id ... :path ...} for tile-id, or nil if not registered."
+  [tile-id]
+  (get @tile-fluid-specs* tile-id))
+
+(defn reset-tile-fluid-specs-for-test!
+  []
+  (reset! tile-fluid-specs* {})
+  nil)
+
+;; ============================================================================
 ;; Capability Access Protocol
 ;; ============================================================================
 

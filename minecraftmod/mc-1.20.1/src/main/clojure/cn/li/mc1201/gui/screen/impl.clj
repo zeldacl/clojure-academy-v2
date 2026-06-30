@@ -68,7 +68,7 @@
 
 (defn- apply-root-alignment!
   "When root widget has CENTER/CENTER alignment from XML, override left/top
-  to center it on the full screen.  This matches original AcademyCraft
+  to center it on the full screen.  This matches upstream implementation
   CGuiScreen (full-screen overlay) where LambdaLib2 handled alignment.
   For roots without CENTER alignment (programmatic TechUI containers),
   left/top stay at the vanilla guiLeft/guiTop."
@@ -130,8 +130,8 @@
             (do
               (.callSuperRenderBackground s gg)
               (sync-root-bounds! s left top)
-              ;; Apply root CENTER/CENTER alignment (matching original
-              ;; AcademyCraft CGuiScreen full-screen overlay behavior).
+              ;; Apply root CENTER/CENTER alignment (matching upstream
+              ;; CGuiScreen full-screen overlay behavior).
               (when root
                 (apply-root-alignment! root left top (.-width s) (.-height s)))
               (when root

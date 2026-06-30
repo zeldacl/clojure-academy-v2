@@ -8,7 +8,7 @@
   Usage:
     (draw-ops-host! parent-area ops-fn)
   where ops-fn is a (fn [] ops-vector) that produces draw ops each frame."
-  (:require [cn.li.mcmod.config :as modid-config]
+  (:require [cn.li.mc1201.client.texture-registry :as tex-registry]
             [cn.li.mcmod.gui.cgui-core :as cgui-core]
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.mcmod.gui.events :as events]
@@ -22,24 +22,6 @@
             Tesselator BufferBuilder BufferUploader PoseStack$Pose]
            [org.joml Matrix4f]
            [org.lwjgl.opengl GL11]))
-
-;; ============================================================================
-;; Texture resolution
-;; ============================================================================
-
-(let [mod-id-str (or modid-config/*mod-id* "my_mod")]
-  (def ^:private skill-tree-textures
-    {:skill-back           (ResourceLocation. mod-id-str "textures/guis/developer/skill_back.png")
-     :skill-outline        (ResourceLocation. mod-id-str "textures/guis/developer/skill_outline.png")
-     :skill-mask           (ResourceLocation. mod-id-str "textures/guis/developer/skill_radial_mask.png")
-     :skill-view-outline   (ResourceLocation. mod-id-str "textures/guis/developer/skill_view_outline.png")
-     :skill-view-outline-glow (ResourceLocation. mod-id-str "textures/guis/developer/skill_view_outline_glow.png")
-     :tex-line             (ResourceLocation. mod-id-str "textures/guis/developer/line.png")
-     :tex-button           (ResourceLocation. mod-id-str "textures/guis/developer/button.png")
-     :bg-area              (ResourceLocation. mod-id-str "textures/guis/effect/effect_developer_background.png")}))
-
-(defn- get-skill-tree-texture [key]
-  (get skill-tree-textures key))
 
 (defn- path->resource-location [path]
   (when path
@@ -130,12 +112,12 @@
           :alpha-color (RenderSystem/setShaderColor
                          (float (or (:r op) 1.0)) (float (or (:g op) 1.0))
                          (float (or (:b op) 1.0)) (float (or (:a op) 1.0)))
-          :textured-quad (let [loc (if (keyword? (:texture op)) (get-skill-tree-texture (:texture op))
+          :textured-quad (let [loc (if (keyword? (:texture op)) (tex-registry/resolve-texture (:texture op))
                                       (path->resource-location (:texture op)))]
                            (when loc
                              (.blit graphics loc (int (:x op)) (int (:y op)) 0 0
                                (int (:w op)) (int (:h op)) (int (:w op)) (int (:h op)))))
-          :icon-or-fill (let [loc (if (keyword? (:texture op)) (get-skill-tree-texture (:texture op))
+          :icon-or-fill (let [loc (if (keyword? (:texture op)) (tex-registry/resolve-texture (:texture op))
                                      (path->resource-location (:texture op)))]
                           (if loc
                             (.blit graphics loc (int (:x op)) (int (:y op)) 0 0
@@ -143,7 +125,7 @@
                             (.fill graphics (int (:x op)) (int (:y op))
                               (+ (int (:x op)) (int (:w op))) (+ (int (:y op)) (int (:h op)))
                               (int (or (:fallback-color op) 0xFF2A2A2A)))))
-          :raw-rect-uv (let [^ResourceLocation loc (if (keyword? (:texture op)) (get-skill-tree-texture (:texture op))
+          :raw-rect-uv (let [^ResourceLocation loc (if (keyword? (:texture op)) (tex-registry/resolve-texture (:texture op))
                                                  (path->resource-location (:texture op)))]
                          (when loc
                            (platform-bridge/blit-textured-quad! graphics loc
@@ -152,7 +134,7 @@
                              0.0
                              (float (or (:min-u op) 0.0)) (float (or (:max-u op) 1.0))
                              (float (or (:min-v op) 0.0)) (float (or (:max-v op) 1.0)))))
-          :line-quad (let [^ResourceLocation tex (get-skill-tree-texture :tex-line)
+          :line-quad (let [^ResourceLocation tex (tex-registry/resolve-texture :tex-line)
                            x0 (double (:x0 op)) y0 (double (:y0 op))
                            x1 (double (:x1 op)) y1 (double (:y1 op))
                            line-w (double (:line-width op 5.5))
@@ -179,9 +161,9 @@
                                (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0))))))
           :shader-progress-ring (let [^ShaderInstance si (platform-bridge/resolve-shader (:shader-id op))
                                       tex-0-key (:texture-0 op) tex-1-key (:texture-1 op)
-                                      loc-0 (if (keyword? tex-0-key) (get-skill-tree-texture tex-0-key)
+                                      loc-0 (if (keyword? tex-0-key) (tex-registry/resolve-texture tex-0-key)
                                                 (path->resource-location tex-0-key))
-                                      loc-1 (when tex-1-key (if (keyword? tex-1-key) (get-skill-tree-texture tex-1-key)
+                                      loc-1 (when tex-1-key (if (keyword? tex-1-key) (tex-registry/resolve-texture tex-1-key)
                                                               (path->resource-location tex-1-key)))
                                       progress (float (or (:progress op) 0.0))]
                                   (if (and si loc-0)
@@ -194,7 +176,7 @@
                                                                     (double (:w op)) (double (:h op)))
                                         (RenderSystem/setShader (reify java.util.function.Supplier (get [_] nil))))
                                     (when loc-0 (.blit graphics loc-0 (int (:x op)) (int (:y op)) 0 0 (int (:w op)) (int (:h op)) (int (:w op)) (int (:h op))))))
-          :shader-mono-blit (let [loc (if (keyword? (:texture op)) (get-skill-tree-texture (:texture op))
+          :shader-mono-blit (let [loc (if (keyword? (:texture op)) (tex-registry/resolve-texture (:texture op))
                                          (path->resource-location (:texture op)))
                                   ^ShaderInstance si (platform-bridge/resolve-shader :mono)]
                               (if (and si loc)
@@ -205,7 +187,7 @@
                                                                 (double (:w op)) (double (:h op)))
                                     (RenderSystem/setShader (reify java.util.function.Supplier (get [_] nil))))
                                 (when loc (.blit graphics loc (int (:x op)) (int (:y op)) 0 0 (int (:w op)) (int (:h op)) (int (:w op)) (int (:h op))))))
-          :alpha-discard-depth-mask (let [loc (if (keyword? (:texture op)) (get-skill-tree-texture (:texture op))
+          :alpha-discard-depth-mask (let [loc (if (keyword? (:texture op)) (tex-registry/resolve-texture (:texture op))
                                                   (path->resource-location (:texture op)))
                                           ^ShaderInstance si (platform-bridge/resolve-shader :alpha-discard)
                                           threshold (float (or (:alpha-threshold op) 0.3))]

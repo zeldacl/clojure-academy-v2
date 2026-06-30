@@ -1,5 +1,5 @@
 (ns cn.li.mcmod.client.content-actions
-  "Platform-neutral client content action hooks (terminal, tutorial sync, etc.)."
+  "Platform-neutral client content action hooks."
   (:require [cn.li.mcmod.platform.runtime :as prt]))
 
 (def ^:private ^:dynamic *content-actions* nil)
@@ -17,15 +17,26 @@
     (when-let [f (get ops k)]
       (apply f args))))
 
-(defn toggle-terminal!
-  [player]
-  (action-op :toggle-terminal! player))
+;; ============================================================================
+;; Client tick hooks — content modules register callbacks here; platform
+;; adapters call run-client-tick-hooks! on each client tick.
+;; ============================================================================
 
-(defn tick-tutorial-background-sync!
+(defonce ^:private client-tick-hooks* (atom []))
+
+(defn register-client-tick-hook!
+  "Register a zero-arg fn to run on every client tick. Called during content init."
+  [f]
+  (swap! client-tick-hooks* conj f))
+
+(defn run-client-tick-hooks!
+  "Run all registered client tick hooks. Called by platform client tick handler."
   []
-  (action-op :tick-tutorial-background-sync!))
+  (doseq [f @client-tick-hooks*]
+    (try (f) (catch Throwable _ nil))))
 
 (defn reset-client-content-actions-for-test!
   []
   (alter-var-root #'*content-actions* (constantly nil))
+  (reset! client-tick-hooks* [])
   nil)

@@ -90,15 +90,13 @@
 
 (defn datagen-run?
   "Detect if running in data generation mode (runData task).
-  
+
   Returns true if any datagen system property is set:
-  - ac.datagen
   - forge.datagen
   - fabric.datagen
-  
+
   Datagen is technically a runtime operation (not AOT), but it may skip
   some bootstrap-sensitive initialization."
   []
-  (or (= "true" (System/getProperty "ac.datagen"))
-      (= "true" (System/getProperty "forge.datagen"))
+  (or (= "true" (System/getProperty "forge.datagen"))
       (= "true" (System/getProperty "fabric.datagen"))))

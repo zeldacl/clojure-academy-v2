@@ -28,9 +28,11 @@
   (or *phase-fluid*
       (locking phase-fluid-lock
         (or *phase-fluid*
-            (let [rl (ResourceLocation. "my_mod" "imag_phase")
-                  fluid (try (.getValue ForgeRegistries/FLUIDS rl)
-                             (catch Exception e (log/debug "Fluid registry lookup failed:" (ex-message e)) nil))]
+            (let [{:keys [mod-id path]} (platform-cap/get-tile-fluid-spec "phase-gen")
+                  rl (when (and mod-id path) (ResourceLocation. ^String mod-id ^String path))
+                  fluid (when rl
+                          (try (.getValue ForgeRegistries/FLUIDS rl)
+                               (catch Exception e (log/debug "Fluid registry lookup failed:" (ex-message e)) nil)))]
               (alter-var-root #'*phase-fluid* (constantly fluid))
               fluid)))))
 
@@ -41,8 +43,8 @@
 (defn- create-phase-gen-fluid-handler
   "Return an IFluidHandler backed by the phase-gen BE's custom state.
   Reads/writes `:liquid-amount` and `:tank-size` from the schema state map.
-  Only accepts `my_mod:imag_phase` fluid (parity: original TilePhaseGen only
-  accepted ACFluids.fluidImagProj)."
+  Only accepts the fluid registered via `platform-cap/register-tile-fluid-spec!`
+  for tile-id \"phase-gen\" (parity: upstream TilePhaseGen only accepted ACFluids.fluidImagProj)."
   [be]
   (let [^Fluid fluid (resolve-phase-fluid)]
     (reify IFluidHandler

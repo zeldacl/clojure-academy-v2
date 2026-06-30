@@ -29,10 +29,13 @@
      ;; :wireless-generator capability is declared by the first generator that loads.
      ;; We declare here only if not already present, then register this tile.
      :after #(do
-               (when-not (cn.li.mcmod.platform.capability/get-capability-entry :wireless-generator)
-                 (cn.li.mcmod.platform.capability/declare-capability!
+               (when-not (platform-cap/get-capability-entry :wireless-generator)
+                 (platform-cap/declare-capability!
                    :wireless-generator IWirelessGenerator
                    impls/wireless-generator-factory))
+               ;; Register fluid spec so the forge IFluidHandler shim can resolve
+               ;; the correct fluid without hardcoding content-specific IDs.
+               (platform-cap/register-tile-fluid-spec! "phase-gen" modid/MOD-ID "imag_phase")
                ;; :fluid-handler capability is declared by the Forge shim
                ;; (cn.li.forge1201.capability.fluid-handler) during platform init.
                ;; Here we just associate the phase-gen tile with it.
