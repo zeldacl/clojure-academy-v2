@@ -63,13 +63,15 @@ Structure:
    [:vector string?]
    [:fn seq]])
 
-(let [validator-for (memoize schema/validator)]
-  (defn- valid-tile-id? [x]
-    (schema/valid? (validator-for tile-id-schema) x))
-  (defn- valid-tile-impl? [x]
-    (schema/valid? (validator-for tile-impl-schema) x))
-  (defn- valid-tile-blocks? [x]
-    (schema/valid? (validator-for tile-blocks-schema) x)))
+(def ^:private tile-id-validator (delay (schema/validator tile-id-schema)))
+(defn- valid-tile-id? [x]
+  (schema/valid? @tile-id-validator x))
+(def ^:private tile-impl-validator (delay (schema/validator tile-impl-schema)))
+(defn- valid-tile-impl? [x]
+  (schema/valid? @tile-impl-validator x))
+(def ^:private tile-blocks-validator (delay (schema/validator tile-blocks-schema)))
+(defn- valid-tile-blocks? [x]
+  (schema/valid? @tile-blocks-validator x))
 
 (defn validate-tile-spec
   [{:keys [id impl blocks] :as spec}]

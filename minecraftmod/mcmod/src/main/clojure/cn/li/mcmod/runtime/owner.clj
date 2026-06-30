@@ -59,13 +59,15 @@
       (when (not (str/blank? uuid))
         (assoc owner :player-uuid uuid)))))
 
-(let [validator-for (memoize schema/validator)]
-  (defn valid-client-owner? [x]
-    (schema/valid? (validator-for client-owner-schema) (normalize-player-uuid x)))
-  (defn valid-server-owner? [x]
-    (schema/valid? (validator-for server-owner-schema) (normalize-player-uuid x)))
-  (defn valid-owner? [x]
-    (schema/valid? (validator-for owner-schema) (normalize-player-uuid x))))
+(def ^:private client-owner-validator (delay (schema/validator client-owner-schema)))
+(defn valid-client-owner? [x]
+  (schema/valid? @client-owner-validator (normalize-player-uuid x)))
+(def ^:private server-owner-validator (delay (schema/validator server-owner-schema)))
+(defn valid-server-owner? [x]
+  (schema/valid? @server-owner-validator (normalize-player-uuid x)))
+(def ^:private owner-validator (delay (schema/validator owner-schema)))
+(defn valid-owner? [x]
+  (schema/valid? @owner-validator (normalize-player-uuid x)))
 
 (defn- contract-ex-info
   [contract value explain]

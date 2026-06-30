@@ -430,6 +430,56 @@
 
 ---
 
+#### 铁律九：禁止顶层 memoize 缓存 Malli Validator（强制）
+
+**根源**：`clojure.core/memoize` 在顶层被调用时产生两个叠加风险：
+
+1. **AOT 编译期泄露**：`memoize` 在顶层被执行时，立即创建一个持有私有 `HashMap` 的匿名闭包对象。AOT 编译器将该闭包类硬编码进 `.class` 字节码，导致闭包内部捕获的 `schema/validator` 引用在 Minecraft 多 ClassLoader 环境下无法对齐——与 3 参数 `into` 同根因的符号丢失。
+
+2. **运行期内存泄露（OOM）**：`memoize` 内部是一个**无界、无淘汰、强引用**的全局 Map。即使仅有少数动态生成的 Schema，该 Map 永不释放条目，随着服务器运行时间增长 → `OutOfMemoryError`。
+
+**禁止模式**：
+```clojure
+;; ❌ 高危：顶层 memoize
+(def ^:private validator-for (memoize schema/validator))
+;; 或
+(let [validator-for (memoize schema/validator)]
+  (defn valid-foo? [x] (schema/valid? (validator-for foo-schema) x)))
+```
+
+**安全替代方案**（按 Schema 数量决定）：
+
+**方案 A — Schema 数量固定、编译期已知（本项目采用）**：每个 Schema 独立 `delay`。
+```clojure
+;; ✅ AOT 安全：编译期只生成空壳，运行时第一次 deref 才编译
+(def ^:private foo-validator (delay (schema/validator foo-schema)))
+(defn- valid-foo? [x] (schema/valid? @foo-validator x))
+```
+优点：零依赖、AOT 免疫、无缓存膨胀风险。本项目全部 21 个 validator 均采用此模式。
+
+**方案 B — Schema 在运行时动态生成（如基于玩家输入/NBT 标签动态构造）**：使用 Guava Cache（Minecraft 原生自带）。
+```clojure
+(:import [com.google.common.cache CacheBuilder CacheLoader])
+
+(def ^:private validator-cache
+  (delay
+    (-> (CacheBuilder/newBuilder)
+        (.maximumSize 500)  ;; LRU 淘汰，免疫 OOM
+        (.build (proxy [CacheLoader] []
+                  (load [schema] (schema/validator schema)))))))
+
+(defn validator-for [schema]
+  (.get @validator-cache schema))
+```
+判定：仅当 Schema 确实在运行时动态生成时才引入 Guava Cache。本项目 Schema 全为静态，采用方案 A。
+
+**判定**：
+- Schema 静态已知 → `delay` per-validator（铁律一 + 铁律二组合）
+- Schema 运行时动态生成 → Guava Cache with `maximumSize`
+- 禁止 → 顶层 `memoize`（双重重灾区：AOT + OOM）
+
+---
+
 ### Malli 终极判定法则（强制）
 
 面向未来所有新概念（如气压系统、药水效果、自定义维度），不再先查“静态矩阵”，而是统一执行以下三问流程；**顺序不可交换**：

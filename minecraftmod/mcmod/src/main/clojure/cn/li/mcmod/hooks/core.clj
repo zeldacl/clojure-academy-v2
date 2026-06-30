@@ -13,9 +13,9 @@
 (def ^:private hooks-map-schema
   [:map-of keyword? fn?])
 
-(let [validator-for (memoize schema/validator)]
-  (defn- valid-hooks-map? [x]
-    (schema/valid? (validator-for hooks-map-schema) x)))
+(def ^:private hooks-map-validator (delay (schema/validator hooks-map-schema)))
+(defn- valid-hooks-map? [x]
+  (schema/valid? @hooks-map-validator x))
 
 (defn- default-runtime-hooks-state []
   {:on-player-login! noop

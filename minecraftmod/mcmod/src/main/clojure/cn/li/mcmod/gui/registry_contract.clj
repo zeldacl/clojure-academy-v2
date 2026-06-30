@@ -23,11 +23,12 @@
   [:map
    [:owner-spec owner-spec-schema]])
 
-(let [validator-for (memoize schema/validator)]
-  (defn- valid-handler-contract? [x]
-    (schema/valid? (validator-for handler-contract-schema) x))
-  (defn- valid-screen-contract? [x]
-    (schema/valid? (validator-for screen-contract-schema) x)))
+(def ^:private handler-contract-validator (delay (schema/validator handler-contract-schema)))
+(defn- valid-handler-contract? [x]
+  (schema/valid? @handler-contract-validator x))
+(def ^:private screen-contract-validator (delay (schema/validator screen-contract-schema)))
+(defn- valid-screen-contract? [x]
+  (schema/valid? @screen-contract-validator x))
 
 (defn default-server-gui-handler-contract
   []

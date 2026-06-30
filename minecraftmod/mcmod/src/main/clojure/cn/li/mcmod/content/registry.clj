@@ -76,19 +76,24 @@
 ;; Lazy validator compilation via memoize — avoids executing Malliʼs
 ;; schema/validator during AOT classloading/bootstrap.  Each validator is
 ;; compiled once on first use and cached thereafter.
-(let [validator-for (memoize schema/validator)]
-  (defn- valid-category-input? [x]
-    (schema/valid? (validator-for category-input-schema) x))
-  (defn- valid-category? [x]
-    (schema/valid? (validator-for category-schema) x))
-  (defn- valid-descriptor-id? [x]
-    (schema/valid? (validator-for descriptor-id-schema) x))
-  (defn- valid-descriptor? [x]
-    (schema/valid? (validator-for descriptor-schema) x))
-  (defn- valid-descriptor-field-keyword-set? [x]
-    (schema/valid? (validator-for descriptor-field-keyword-set-schema) x))
-  (defn- valid-descriptor-field-set? [x]
-    (schema/valid? (validator-for descriptor-field-set-schema) x)))
+(def ^:private category-input-validator (delay (schema/validator category-input-schema)))
+(defn- valid-category-input? [x]
+  (schema/valid? @category-input-validator x))
+(def ^:private category-validator (delay (schema/validator category-schema)))
+(defn- valid-category? [x]
+  (schema/valid? @category-validator x))
+(def ^:private descriptor-id-validator (delay (schema/validator descriptor-id-schema)))
+(defn- valid-descriptor-id? [x]
+  (schema/valid? @descriptor-id-validator x))
+(def ^:private descriptor-validator (delay (schema/validator descriptor-schema)))
+(defn- valid-descriptor? [x]
+  (schema/valid? @descriptor-validator x))
+(def ^:private descriptor-field-keyword-set-validator (delay (schema/validator descriptor-field-keyword-set-schema)))
+(defn- valid-descriptor-field-keyword-set? [x]
+  (schema/valid? @descriptor-field-keyword-set-validator x))
+(def ^:private descriptor-field-set-validator (delay (schema/validator descriptor-field-set-schema)))
+(defn- valid-descriptor-field-set? [x]
+  (schema/valid? @descriptor-field-set-validator x))
 
 ;; ============================================================================
 ;; Runtime Container
