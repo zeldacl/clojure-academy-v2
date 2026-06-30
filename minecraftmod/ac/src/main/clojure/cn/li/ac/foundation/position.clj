@@ -108,10 +108,10 @@
         cx (quot (long x) 16)
         cy (quot (long y) 16)
         cz (quot (long z) 16)]
-    (for [dx (range (- chunk-range) (inc chunk-range))
-          dy (range (- chunk-range) (inc chunk-range))
-          dz (range (- chunk-range) (inc chunk-range))]
-      [(+ cx dx) (+ cy dy) (+ cz dz)])))
+    (vec (for [dx (range (- chunk-range) (inc chunk-range))
+              dy (range (- chunk-range) (inc chunk-range))
+              dz (range (- chunk-range) (inc chunk-range))]
+          [(+ cx dx) (+ cy dy) (+ cz dz)]))))
 
 (defn chunk-range
   "Calculate chunk range from center position and search radius.

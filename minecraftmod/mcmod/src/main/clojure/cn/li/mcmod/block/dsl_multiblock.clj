@@ -21,7 +21,7 @@
   (if (and (map? positions-or-spec) (contains? positions-or-spec :width))
     ;; Regular shape with :width :height :depth
     (let [{:keys [width height depth]} positions-or-spec]
-      (for [x (range width)
+      (vec (for [x (range width)
             y (range height)
             z (range depth)]
         {:x (+ (:x origin) x)
@@ -30,7 +30,7 @@
          :relative-x x
          :relative-y y
          :relative-z z
-         :is-origin? (and (= x 0) (= y 0) (= z 0))}))
+         :is-origin? (and (= x 0) (= y 0) (= z 0))})))
     ;; Irregular multi-blocks with custom positions
     (mapv (fn [pos]
           (let [[px py pz] (if (vector? pos)
@@ -57,9 +57,9 @@
                                :z (nth pos 2 0)}
                               pos))
                           positions)
-          min-x (apply min (map :x positions))
-          min-y (apply min (map :y positions))
-          min-z (apply min (map :z positions))]
+          min-x (apply min (map #(get % :x) positions))
+          min-y (apply min (map #(get % :y) positions))
+          min-z (apply min (map #(get % :z) positions))]
       (mapv (fn [pos]
               {:x (- (:x pos) min-x)
                :y (- (:y pos) min-y)
@@ -145,7 +145,7 @@
         mx (pos/pos-x master-pos)
         my (pos/pos-y master-pos)
         mz (pos/pos-z master-pos)]
-    (map (fn [rel-pos]
+    (mapv (fn [rel-pos]
            (pos/create-block-pos (+ mx (or (:relative-x rel-pos) (:x rel-pos) 0))
                                  (+ my (or (:relative-y rel-pos) (:y rel-pos) 0))
                                  (+ mz (or (:relative-z rel-pos) (:z rel-pos) 0))))

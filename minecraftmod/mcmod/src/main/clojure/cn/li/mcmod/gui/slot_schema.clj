@@ -61,13 +61,13 @@
 
 (defn- validate-slots!
   [schema-id slots]
-  (let [ids (map :id slots)
+  (let [ids (map #(get % :id) slots)
         duplicate-ids (->> ids frequencies (filter (fn [[_id n]] (> n 1))) (map first) seq)]
     (when duplicate-ids
       (throw (ex-info "Slot schema has duplicate slot ids"
                       {:schema-id schema-id
                        :duplicate-ids duplicate-ids}))))
-  (let [coords (map (juxt :x :y) slots)
+  (let [coords (map #(vector (get % :x) (get % :y)) slots)
         duplicate-coords (->> coords frequencies (filter (fn [[_xy n]] (> n 1))) (map first) seq)]
     (when duplicate-coords
       (throw (ex-info "Slot schema has duplicate slot coordinates"
@@ -95,11 +95,11 @@
                   :slots slots
                   :slot-layout slot-layout
                   :tile-slot-count tile-slot-count
-                  :slot-id->index (into {} (map (juxt :id :index) slots))
-                  :slot-index->slot (into {} (map (juxt :index identity) slots))
+                  :slot-id->index (into {} (map #(vector (get % :id) (get % :index)) slots))
+                  :slot-index->slot (into {} (map #(vector (get % :index) %) slots))
                   :slot-type->indexes (into {}
-                                            (for [[slot-type grouped] (group-by :type slots)]
-                                              [slot-type (mapv :index grouped)]))}]
+                                            (for [[slot-type grouped] (group-by #(get % :type) slots)]
+                                              [slot-type (mapv #(get % :index) grouped)]))}]
       (swap! (slot-schema-state-atom) assoc-in [:slot-schema-registry schema-id] schema)
       (log/info "Registered slot schema:" schema-id)
       schema)))
@@ -153,7 +153,7 @@
   [schema-id]
   (->> (get-slot-schema schema-id)
        :slots
-       (mapv :index)))
+       (mapv #(get % :index))))
 
 (defn slot-indexes
   [schema-id slot-ids]

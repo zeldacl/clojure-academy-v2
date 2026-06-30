@@ -16,7 +16,7 @@
 ;; Conversion Rate Configuration
 ;; ============================================================================
 
-(def ^:const default-fe-to-content-rate
+(def default-fe-to-content-rate
   "Default Forge Energy to content energy conversion rate.
   
   1 FE (Forge Energy) = X content energy units.
@@ -26,7 +26,7 @@
   Default: 4.0 (1 content energy unit = 4 FE)."
   4.0)
 
-(def ^:const default-eu-to-content-rate
+(def default-eu-to-content-rate
   "Default IC2 Energy Unit to content energy conversion rate.
   
   1 EU (Energy Unit) = X content energy units.

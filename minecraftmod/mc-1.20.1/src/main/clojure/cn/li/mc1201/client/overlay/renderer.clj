@@ -261,7 +261,7 @@
   "Interpolate between nearest stops in color-stops list for a given percent [0,1].
   Each stop is a map with :pct (float 0-1) and :r :g :b color channels."
   [color-stops pct]
-  (let [stops (sort-by :pct color-stops)
+  (let [stops (sort-by #(get % :pct) color-stops)
         pct (max 0.0 (min 1.0 (double pct)))
         first-stop (first stops)]
     (if (nil? first-stop)

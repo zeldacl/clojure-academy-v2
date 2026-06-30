@@ -32,11 +32,11 @@
 (defn- file-clj-paths
   [^File root]
   (when (and root (.exists root))
-    (->> (file-seq root)
-         (filter #(.isFile ^File %))
-         (map #(.getPath ^File %))
-         (map #(str/replace % #"\\\\" "/"))
-         (filter #(str/ends-with? % ".clj")))))
+    (vec (->> (file-seq root)
+              (filter #(.isFile ^File %))
+              (map #(.getPath ^File %))
+              (map #(str/replace % #"\\\\" "/"))
+              (filter #(str/ends-with? % ".clj"))))))
 
 (defn- classpath-file-paths
   []

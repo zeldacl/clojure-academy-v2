@@ -216,7 +216,7 @@
          :block-state {:prop \"energy\" :type :integer}}]"
   [field-groups]
   (let [all-fields (apply concat field-groups)
-        by-key (group-by :key all-fields)]
+        by-key (group-by #(get % :key) all-fields)]
     (validate-field-schema!
      (vec
       (for [[_k fields] by-key]
@@ -264,7 +264,7 @@
                                          (ns-resolve ns-sym (symbol (name xf)))))
                              spec)
                            spec))
-                       (filterv :block-state blockstate-fields))]
+                       (filterv #(get % :block-state) blockstate-fields))]
     (fn [state level pos]
       (try
         (when-let [blk-state (platform-world/world-get-block-state* level pos)]

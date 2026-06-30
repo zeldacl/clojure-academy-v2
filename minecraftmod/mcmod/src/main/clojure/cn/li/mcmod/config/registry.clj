@@ -46,7 +46,7 @@
 (defn- normalize-descriptors
 	[descriptors]
 	(let [descriptors (vec descriptors)
-				keys (mapv :key descriptors)]
+				keys (mapv #(get % :key) descriptors)]
 		(when-not (every? keyword? keys)
 			(throw (ex-info "Config descriptor keys must be keywords"
 											{:descriptor-keys keys})))
@@ -79,7 +79,7 @@
 (defn descriptor-default-values
 	[domain]
 	(into {}
-				(map (juxt :key :default) (get-config-descriptors domain))))
+				(map #(vector (get % :key) (get % :default)) (get-config-descriptors domain))))
 
 (defn ensure-default-values!
 	"Seed runtime values with defaults when a domain has not been populated yet."

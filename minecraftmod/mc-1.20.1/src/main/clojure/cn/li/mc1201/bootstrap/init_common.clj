@@ -19,7 +19,7 @@
                 {:k :position :ok (platform-position/factory-initialized?)}
                 {:k :nbt :ok (platform-nbt/factory-initialized?)}
                 {:k :item :ok (platform-item/factory-initialized?)}]
-        missing (->> checks (remove :ok) (map :k) vec)]
+        missing (->> checks (remove #(get % :ok)) (map #(get % :k)) vec)]
     (when (seq missing)
       (throw (ex-info "Platform bootstrap incomplete - init-platform! must run before init-from-java"
                       {:platform platform-key

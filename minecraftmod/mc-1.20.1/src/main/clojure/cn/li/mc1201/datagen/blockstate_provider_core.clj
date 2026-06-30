@@ -123,7 +123,7 @@
                                (bs-support/multipart-blockstate-json (:parts definition))
                                (bs-support/simple-blockstate-json first-model))
              model-ids (->> (:parts definition)
-                            (mapcat :models)
+                            (mapcat #(get % :models))
                             distinct)
              block-model-entries (for [model-id model-ids
                                        :let [model-name (model-id->model-name model-id)

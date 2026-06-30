@@ -204,7 +204,7 @@
 (defn list-descriptors
   [category]
   (->> (vals (get (content-registry-state-snapshot) (normalize-category category) {}))
-       (sort-by (comp str :id))
+       (sort-by #(str (get % :id)))
        vec))
 
 (defn registry-snapshot

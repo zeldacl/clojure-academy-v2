@@ -2,7 +2,7 @@
   "Registration-time DataSlot field specs and budget validation."
   (:require [cn.li.mcmod.gui.container.data-slot-codec :as codec]))
 
-(def ^:const default-max-data-slots 16)
+(def default-max-data-slots 16)
 
 (defn- field-container-key
   [field]
@@ -59,4 +59,4 @@
 
 (defn spec-container-keys
   [specs]
-  (mapv :container-key specs))
+  (mapv #(get % :container-key) specs))

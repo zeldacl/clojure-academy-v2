@@ -420,8 +420,8 @@
             (recur (unchecked-inc ei))))))))
 
 (defn- fan-triplet-indices [n]
-  (for [j (range 1 (dec n))]
-    [0 j (inc j)]))
+  (vec (for [j (range 1 (dec n))]
+         [0 j (inc j)])))
 
 (defn- try-ear-clip-indices [pts2d]
   (let [n (count pts2d)]
@@ -524,9 +524,9 @@
       (str/replace #"\\\\\r?\n" "")))
 
 (defn- obj-text->logical-lines [text]
-  (->> (str/split-lines (preprocess-obj-text text))
-       (map str/trim)
-       (remove str/blank?)))
+  (vec (->> (str/split-lines (preprocess-obj-text text))
+            (map str/trim)
+            (remove str/blank?))))
 
 (defn- parse-long-safe [s]
   (when (and s (not (str/blank? (str s))))

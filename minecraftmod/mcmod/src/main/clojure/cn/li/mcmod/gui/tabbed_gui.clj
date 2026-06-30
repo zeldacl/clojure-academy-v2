@@ -119,7 +119,7 @@
 ;; Set-tab C2S handler (server)
 ;; ============================================================================
 
-(def ^:const set-tab-msg-id "set-tab")
+(def set-tab-msg-id "set-tab")
 
 (defn- get-player-menu
   "Get player's current open container menu. Tries field 'containerMenu' then method 'getContainerMenu' (Mojang 1.20.1)."

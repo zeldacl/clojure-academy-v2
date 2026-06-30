@@ -55,7 +55,7 @@
     (when-let [^IWirelessMatrix matrix (resolve-matrix network)]
     (let [entries (collect-active-nodes! network)
           entries (shuffle (filter #(pos? (:max-energy %)) entries))
-          max-sum (reduce + 0.0 (map :max-energy entries))]
+          max-sum (reduce + 0.0 (map #(get % :max-energy) entries))]
       (when (and (seq entries) (pos? max-sum))
         (let [matrix-bandwidth (double (.getMatrixBandwidth matrix))
               buffer-max (double (network-config/buffer-max))

@@ -49,9 +49,9 @@
 (defn resolve-hook-conflicts
   [label hook-entries]
   (->> hook-entries
-       (group-by :hook-id)
+       (group-by #(get % :hook-id))
        (keep (fn [[hook-id entries]]
-               (let [classes (distinct (map :hook-class entries))]
+               (let [classes (distinct (map #(get % :hook-class) entries))]
                  (if (> (count classes) 1)
                    (do
                      (log/warn (str label " hook-id has conflicting hook-class definitions; skipping registration")
@@ -152,7 +152,7 @@
   (case conflict-mode
     :by-hook-id (resolve-hook-conflicts label hook-entries)
     :allow-duplicates (->> hook-entries
-                           (map (juxt :hook-id :hook-class)))
+                           (map #(vector (get % :hook-id) (get % :hook-class))))
     (throw (ex-info "Unknown scripted hook conflict mode"
                     {:label label :conflict-mode conflict-mode}))))
 

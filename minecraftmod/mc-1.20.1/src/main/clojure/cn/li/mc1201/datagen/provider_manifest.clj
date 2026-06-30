@@ -151,7 +151,7 @@
 (defn summary-message
   [mod-id platform-key]
   (let [summary-labels (->> (providers-for platform-key)
-                            (map :summary-label)
+                            (map #(get % :summary-label))
                             distinct
                             (str/join "+"))]
     (str "[" mod-id "] " (name platform-key)

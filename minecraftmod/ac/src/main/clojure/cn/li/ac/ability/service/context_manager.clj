@@ -74,7 +74,7 @@
                         (= (str player-uuid) (:player-uuid ctx-map))
                         (= ctx/STATUS-ALIVE (:status ctx-map))
                         (= ctx-state/INPUT-ACTIVE (:input-state ctx-map)))))
-         (sort-by (juxt :id :server-id)))))
+         (sort-by #(vector (get % :id) (get % :server-id))))))
 
 (defn activate-context!
   "Called on the CLIENT when player triggers a skill (e.g., key press).

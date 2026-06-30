@@ -6,7 +6,7 @@
 	- wireless transfer applies a default 10% loss model
 	- callers can override loss-rate when needed")
 
-(def ^:const default-wireless-loss-rate 0.10)
+(def default-wireless-loss-rate 0.10)
 
 (defn clamp-loss-rate
 	"Clamp an arbitrary loss rate into [0.0, 1.0]."

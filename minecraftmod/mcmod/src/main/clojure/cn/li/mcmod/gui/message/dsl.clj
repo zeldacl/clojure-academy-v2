@@ -63,8 +63,8 @@
 (defn build-catalog
   "Merge domain specs and validate global message-id uniqueness and format."
   [domain-specs]
-  (let [all-specs (vec (mapcat :specs domain-specs))
-        by-id (group-by :msg-id all-specs)
+  (let [all-specs (vec (mapcat #(get % :specs) domain-specs))
+        by-id (group-by #(get % :msg-id) all-specs)
         dup-ids (->> by-id
                      (keep (fn [[msg-id entries]]
                              (when (> (count entries) 1)
@@ -72,7 +72,7 @@
         invalid-ids (->> all-specs
                          (remove (fn [{:keys [msg-id]}]
                                    (boolean (re-matches message-id-pattern msg-id))))
-                         (mapv :msg-id))]
+                         (mapv #(get % :msg-id)))]
     (when (seq dup-ids)
       (throw (ex-info "Duplicate message ids"
                       {:duplicate-msg-ids (vec dup-ids)})))

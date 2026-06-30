@@ -22,11 +22,11 @@
   (let [active (->> entries
                     (filter #(pos? (double (:max-energy %))))
                     vec)
-        max-sum (reduce + 0.0 (map (comp double :max-energy) active))
+        max-sum (reduce + 0.0 (map #(double (get % :max-energy)) active))
         buffer0 (clamp (double buffer0) 0.0 (double buffer-max))]
     (if (or (empty? active) (not (pos? max-sum)))
       {:energies {} :buffer buffer0}
-      (let [sum (+ (reduce + 0.0 (map (comp double :energy) active)) buffer0)
+      (let [sum (+ (reduce + 0.0 (map #(double (get % :energy)) active)) buffer0)
             percent (clamp (/ sum max-sum) 0.0 1.0)]
         (loop [xs active
                transfer-left (double matrix-bandwidth)

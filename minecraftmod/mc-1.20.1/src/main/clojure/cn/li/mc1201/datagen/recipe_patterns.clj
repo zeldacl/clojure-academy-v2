@@ -21,8 +21,8 @@
   
   Returns: first found item ID string or nil"
   [recipe]
-  (or (some :item (vals (:key recipe)))
-      (some :item (:ingredients recipe))
+  (or (some #(get % :item) (vals (:key recipe)))
+      (some #(get % :item) (:ingredients recipe))
       (get-in recipe [:ingredient :item])
       (get-in recipe [:result :item])))
 

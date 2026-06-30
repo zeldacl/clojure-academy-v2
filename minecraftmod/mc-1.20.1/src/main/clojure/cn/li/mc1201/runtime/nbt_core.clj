@@ -15,7 +15,7 @@
 (defn- persistence-descriptors
   []
   (->> (power-runtime/list-player-persistence-descriptors)
-       (sort-by (juxt #(long (or (:order %) 0)) (comp str :id)))))
+       (sort-by (fn [x] [(long (or (:order x) 0)) (str (:id x))]))))
 
 (defn- player-tag
   ^CompoundTag [^ServerPlayer player]

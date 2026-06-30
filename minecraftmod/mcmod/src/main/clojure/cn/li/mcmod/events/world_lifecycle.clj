@@ -161,7 +161,7 @@
   Called by platform code (forge/fabric) when world loads."
   [world saved-data]
   (let [handlers (:load (world-lifecycle-state-snapshot))
-        handler-ids (into #{} (map :id handlers))
+        handler-ids (into #{} (map #(get % :id) handlers))
         by-id? (and (map? saved-data)
                     (some #(contains? saved-data %) handler-ids))]
     (doseq [{:keys [id] handler-fn :fn} handlers]

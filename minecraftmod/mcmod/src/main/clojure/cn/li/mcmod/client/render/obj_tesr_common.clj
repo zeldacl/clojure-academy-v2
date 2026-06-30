@@ -6,7 +6,7 @@
             [cn.li.mcmod.client.render.buffer :as rb]
             [cn.li.mcmod.client.render.pose :as pose]))
 
-(def ^:const ^double default-obj-y-lift
+(def default-obj-y-lift
   "Lift in block space; matches matrix TESR (reduces z-fight with support cells)."
   0.02)
 

@@ -280,6 +280,156 @@
 
 **最佳实践**：优先 `reduce-kv`（处理 map 数据），其次 2 参数 `into`（处理 seq 数据），禁止 3 参数 `into` + 匿名函数。
 
+### AOT 八大铁律（完整版）
+
+在 Minecraft 全量 AOT 编译 + 游戏主线程卡顿极度敏感的双重约束下，以下八条铁律与 `into` Transducer 规则同源——均因 Clojure 编译器在 AOT 阶段的激进内联/宏展开优化而引发运行时崩溃或性能雪崩。
+
+---
+
+#### 铁律一：禁止关键字作为隐式函数（强制）
+
+**根源**：`(map :key coll)` 中关键字 `:key` 作为 `IFn` 调用时，Clojure 1.10+ 编译器在 AOT 阶段会尝试生成特化常数类以优化查找性能。在 Minecraft 多 ClassLoader 环境下，该常数类可能在运行时无法被正确加载，导致 `Unable to resolve symbol`（与 3 参数 `into` 同根因）。
+
+| 禁止模式 | 安全替代 |
+|----------|---------|
+| `(map :key coll)` | `(map #(get % :key) coll)` |
+| `(mapv :key coll)` | `(mapv #(get % :key) coll)` |
+| `(filter :key coll)` | `(filter #(get % :key) coll)` |
+| `(group-by :key coll)` | `(group-by #(get % :key) coll)` |
+| `(sort-by :key coll)` | `(sort-by #(get % :key) coll)` |
+| `(map (juxt :k1 :k2) coll)` | `(map #(vector (get % :k1) (get % :k2)) coll)` |
+| `(map (comp f :key) coll)` | `(map #(f (get % :key)) coll)` |
+| `(some :key coll)` | `(some #(get % :key) coll)` |
+| `(keep :key coll)` | `(keep #(get % :key) coll)` |
+
+**心法**：老老实实用 `get` 函数。`get` 是行为绝对确定的标准底层函数，100% 免疫 AOT 宏污染。
+
+---
+
+#### 铁律二：delay 必须在主线程预热（强制）
+
+**根源**：`delay` 底层用 Java `synchronized` 实现互斥锁。Minecraft 1.20+ 的世界生成、区块异步加载、Netty 网络线程是并行的。若 Schema 很大且恰好在异步线程和主线程同时首次 `deref`，主线程被锁死 → 服务器零帧 → Watchdog 崩溃。
+
+**安全实践**：
+```clojure
+;; ① 定义时用 delay 包裹
+(def my-validator (delay (m/validator my-schema)))
+
+;; ② Mod 主入口生命周期（FMLCommonSetupEvent / onInitialize）中强制预热
+@my-validator  ;; 在主线程完成编译，消灭运行期锁竞争
+```
+
+**判定**：所有 `delay` 包装的 validator 必须在平台初始化阶段（`init-platform!` 或等效入口）完成 `deref` 预热。
+
+---
+
+#### 铁律三：:gen-class 必须带 :load-ns false（强制）
+
+**根源**：不带 `:load-ns false` 时，Clojure AOT 会在生成的 `.class` 静态初始化块中植入 `clojure.main/load` 调用。在 Forge ModClassLoader 加载该类时，Clojure 运行时环境可能尚未初始化完毕，直接抛 `ClassNotFoundException: clojure.main`。
+
+**安全模式**：
+```clojure
+(ns cn.li.mcmod.block.MyTileEntity
+  (:gen-class
+   :extends net.minecraft.world.level.block.entity.BlockEntity
+   :load-ns false))  ;; ← 极其关键
+```
+
+> 当前项目未使用 `:gen-class`，此铁律作为未来参考。
+
+---
+
+#### 铁律四：公开 API 禁止返回惰性序列（强制）
+
+**根源**：`map`/`filter`/`for` 默认返回 `LazySeq`，求值时机推迟到"被消费时"。若惰性序列挂在全局或跨帧边界，未求值的延迟计算会在某一帧突然集中爆发 → Tick Timeout → 服务器踢出所有玩家。
+
+**安全实践**：
+```clojure
+;; ❌ 危险：返回惰性序列
+(defn get-positions [schema]
+  (for [x (range (:w schema)) y (range (:h schema))]
+    [x y]))
+
+;; ✅ 安全：用 vec 在当前帧结清所有计算
+(defn get-positions [schema]
+  (vec (for [x (range (:w schema)) y (range (:h schema))]
+         [x y])))
+```
+
+**判定**：
+- 公共 API 函数 -> **必须**用 `vec`/`mapv`/`filterv`/`doall` 收拢
+- Tick/事件回调内部 -> **必须**强制求值，禁止返回 lazy seq 到全局
+- 内部辅助函数、纯计算管道 -> 惰性序列可接受（调用方会 force）
+
+---
+
+#### 铁律五：defprotocol 在静态类加载下安全（参考）
+
+**评估结论**：当前项目全部 62 个 `defprotocol` 构成平台 SPI 抽象层。在 Minecraft 静态类加载环境（类路径在运行时不变，命名空间不重载）下，Clojure 编译器将协议编译为静态 Java Interface `.class` 文件，不存在接口断裂风险。
+
+**边界条件**：如果未来引入热重载机制（如某些服务端插件的类隔离），则需评估协议在旧类加载器与新类加载器之间的兼容性。
+
+**判定**：当前架构下 `defprotocol` 无需迁移到 `definterface`。
+
+---
+
+#### 铁律六：binding 不得跨越异步边界（强制）
+
+**根源**：`binding` 底层依赖 `ThreadLocal`。Minecraft 的 `ForkJoinPool` / `WorkStealingPool` 会在工作线程上执行异步任务，此时 `binding` 绑定的动态变量会丢失。
+
+**安全实践**：
+```clojure
+;; ❌ 危险：binding 作用域内触发了异步任务
+(binding [*current-tile-context* ctx]
+  ;; 若 execute-logic 内部触发了 Forge 事件或 CompletableFuture，
+  ;; 异步工作线程上的 *current-tile-context* 将直接变成 nil
+  (execute-logic))
+
+;; ✅ 安全：显式传参，拒绝隐式绑定
+(execute-logic ctx)
+```
+
+**判定**：当前项目所有 `binding` 调用在同步执行路径内（`(binding [...] (f))` 同步返回），无跨线程异步闭包传播。新增代码必须遵守此边界。
+
+---
+
+#### 铁律七：reify 适用标准 Minecraft 接口（参考）
+
+**评估结论**：当前项目 `reify` 大量用于实现 Forge/Fabric 标准 API 接口（`Consumer`、`Supplier`、`DataProvider`、`Command`、`MenuProvider` 等），这些接口字节码稳定，Mixin 修改几率低。
+
+**边界条件**：若某 Minecraft 内部接口被第三方优化模组（如 Lithium、Phosphor）Mixin 织入修改，`reify` 生成的匿名类可能因字节码签名不匹配而抛出 `VerifyError`。
+
+**判定**：
+- 标准 Minecraft/Forge/Fabric API 接口 → `reify` 安全
+- 深度继承 Minecraft 核心类或可能被 Mixin 修改的接口 → 写独立 Java 骨架类
+
+---
+
+#### 铁律八：非数学常数禁止 ^:const（强制）
+
+**根源**：`^:const` 使 Clojure 编译器在 AOT 时将值内联硬编码到所有调用方的 `.class` 字节码中。若后续修改该值但未全量重编译，旧值残留 → 数据不一致，排查极度困难。
+
+**安全实践**：
+```clojure
+;; ❌ 危险：能量转换率可能通过配置调整，但被硬编码到字节码
+(def ^:const default-fe-to-content-rate 4.0)
+
+;; ✅ 安全：保持为普通 Var，可通过动态寻址或配置覆盖
+(def default-fe-to-content-rate 4.0)
+
+;; ✅ 例外：真正常数可以保留 ^:const
+(def ^:const int-min -2147483648)   ;; Int32 最小值
+(def ^:const PI 3.141592653589793)  ;; 数学常数
+```
+
+**判定**：仅以下情形可保留 `^:const`：
+1. 数学常数（PI、epsilon）
+2. 整型范围限值（Int32 min/max）
+3. 命名空间限定的哨兵值（`::missing-op`）
+4. 编译期确定的模组元数据（MOD-ID）
+
+---
+
 ### Malli 终极判定法则（强制）
 
 面向未来所有新概念（如气压系统、药水效果、自定义维度），不再先查“静态矩阵”，而是统一执行以下三问流程；**顺序不可交换**：

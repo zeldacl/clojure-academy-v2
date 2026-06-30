@@ -98,7 +98,7 @@
   [& {:keys [platform]}]
   (let [is-forge? (= platform :forge)
         file-defs (atom [])]
-    (doseq [ore (filter :enabled? (mcmod-worldgen/list-worldgen-ores))]
+    (doseq [ore (filter #(get % :enabled?) (mcmod-worldgen/list-worldgen-ores))]
       (let [id (:id ore)]
         (swap! file-defs conj
                {:path ["worldgen" "configured_feature" (str id ".json")]
@@ -109,7 +109,7 @@
           (swap! file-defs conj
                  {:path ["forge" "biome_modifier" (str "add_" id ".json")]
                   :data (forge-biome-modifier-data id "underground_ores")}))))
-    (doseq [liq (filter :enabled? (mcmod-worldgen/list-worldgen-liquids))]
+    (doseq [liq (filter #(get % :enabled?) (mcmod-worldgen/list-worldgen-liquids))]
       (let [id (:id liq)]
         (swap! file-defs conj
                {:path ["worldgen" "configured_feature" (str id ".json")]

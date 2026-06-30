@@ -246,7 +246,7 @@
             (let [^VertexConsumer line-vc (.getBuffer buffer-source (RenderType/lines))]
               (doseq [op line-ops]
                 (emit-line! line-vc mat op))))
-          (doseq [[texture ops] (group-by :texture quad-ops)]
+          (doseq [[texture ops] (group-by #(get % :texture) quad-ops)]
             (when-let [loc (ResourceLocation/tryParse texture)]
               (let [^VertexConsumer quad-vc (.getBuffer buffer-source (RenderType/entityTranslucent loc))]
                 (doseq [op ops]
