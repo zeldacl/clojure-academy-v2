@@ -25,7 +25,8 @@
   (:active-preset d))
 
 (defn set-active-preset [d idx]
-  {:pre [(>= idx 0) (<= idx 3)]}
+  (when-not (and (>= idx 0) (<= idx 3))
+    (throw (IllegalArgumentException. "set-active-preset: idx must be 0-3")))
   (assoc d :active-preset idx))
 
 ;; ============================================================================

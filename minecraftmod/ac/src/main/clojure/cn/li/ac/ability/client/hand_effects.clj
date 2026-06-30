@@ -211,11 +211,12 @@
     :transform-fn (fn []) �?{:translate [x y z] :rotate [x y z] :scale [x y z]} or nil
                    (optional)"
   [effect-id handler-map]
-  {:pre [(keyword? effect-id) (map? handler-map)
-         (or (fn? (:enqueue-fn handler-map))
-             (fn? (:enqueue-state-fn handler-map)))
-         (or (fn? (:tick-fn handler-map))
-             (fn? (:tick-state-fn handler-map)))]}
+  (when-not (and (keyword? effect-id) (map? handler-map)
+                 (or (fn? (:enqueue-fn handler-map))
+                     (fn? (:enqueue-state-fn handler-map)))
+                 (or (fn? (:tick-fn handler-map))
+                     (fn? (:tick-state-fn handler-map))))
+    (throw (IllegalArgumentException. "register-hand-effect!: invalid effect-id or handler-map")))
   (assert-registry-open!)
   (update-hand-effect-state!
     (fn [state]

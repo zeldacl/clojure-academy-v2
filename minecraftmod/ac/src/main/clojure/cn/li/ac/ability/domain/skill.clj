@@ -5,9 +5,8 @@
 (defn ability-skill
   "Create a normalized skill map."
   [{:keys [id category-id level] :as spec}]
-  {:pre [(keyword? id)
-         (keyword? category-id)
-         (integer? level)]}
+  (when-not (and (keyword? id) (keyword? category-id) (integer? level))
+    (throw (IllegalArgumentException. "normalize-skill-spec: id & category-id must be keywords, level must be integer")))
   (merge {:controllable? true
           :enabled true
           :prerequisites []

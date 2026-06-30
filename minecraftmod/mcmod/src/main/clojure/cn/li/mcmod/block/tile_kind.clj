@@ -21,8 +21,9 @@
 (defn merge-with-kind
   "Merge kind-cfg with normalized. Nil values in normalized do not override kind defaults."
   [kind-cfg normalized]
-  {:pre [(map? kind-cfg)
-         (or (map? normalized) (nil? normalized))]}
+  (when-not (and (map? kind-cfg)
+                 (or (map? normalized) (nil? normalized)))
+    (throw (IllegalArgumentException. "merge-with-kind: kind-cfg must be map?, normalized must be map? or nil")))
   (cond
     (empty? kind-cfg) normalized
     (nil? normalized) kind-cfg

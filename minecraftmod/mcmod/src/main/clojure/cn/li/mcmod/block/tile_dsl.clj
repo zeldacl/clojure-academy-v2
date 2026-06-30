@@ -52,8 +52,11 @@ Structure:
        (remove str/blank?)
        vec))
 
+(defn- ^:private non-blank-tile-id? [s]
+  (not (str/blank? s)))
+
 (def ^:private tile-id-schema
-  [:and string? [:fn (complement str/blank?)]])
+  [:and string? [:fn non-blank-tile-id?]])
 
 (def ^:private tile-impl-schema
   keyword?)
@@ -63,15 +66,15 @@ Structure:
    [:vector string?]
    [:fn seq]])
 
-(def ^:private tile-id-validator (delay (schema/validator tile-id-schema)))
+(def ^:private tile-id-validator (schema/lazy-validator tile-id-schema))
 (defn- valid-tile-id? [x]
-  (schema/valid? @tile-id-validator x))
-(def ^:private tile-impl-validator (delay (schema/validator tile-impl-schema)))
+  (schema/valid? (tile-id-validator) x))
+(def ^:private tile-impl-validator (schema/lazy-validator tile-impl-schema))
 (defn- valid-tile-impl? [x]
-  (schema/valid? @tile-impl-validator x))
-(def ^:private tile-blocks-validator (delay (schema/validator tile-blocks-schema)))
+  (schema/valid? (tile-impl-validator) x))
+(def ^:private tile-blocks-validator (schema/lazy-validator tile-blocks-schema))
 (defn- valid-tile-blocks? [x]
-  (schema/valid? @tile-blocks-validator x))
+  (schema/valid? (tile-blocks-validator) x))
 
 (defn validate-tile-spec
   [{:keys [id impl blocks] :as spec}]

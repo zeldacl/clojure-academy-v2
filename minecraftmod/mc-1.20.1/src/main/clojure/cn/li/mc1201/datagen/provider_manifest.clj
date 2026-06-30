@@ -69,15 +69,15 @@
 (def ^:private platform-provider-keys-schema
   [:map-of keyword? keyword?])
 
-(def ^:private provider-groups-validator (delay (schema/validator provider-groups-schema)))
+(def ^:private provider-groups-validator (schema/lazy-validator provider-groups-schema))
 (defn- valid-provider-groups? [x]
-  (schema/valid? @provider-groups-validator x))
-(def ^:private platform-orders-validator (delay (schema/validator platform-orders-schema)))
+  (schema/valid? (provider-groups-validator) x))
+(def ^:private platform-orders-validator (schema/lazy-validator platform-orders-schema))
 (defn- valid-platform-orders? [x]
-  (schema/valid? @platform-orders-validator x))
-(def ^:private platform-provider-keys-validator (delay (schema/validator platform-provider-keys-schema)))
+  (schema/valid? (platform-orders-validator) x))
+(def ^:private platform-provider-keys-validator (schema/lazy-validator platform-provider-keys-schema))
 (defn- valid-platform-provider-keys? [x]
-  (schema/valid? @platform-provider-keys-validator x))
+  (schema/valid? (platform-provider-keys-validator) x))
 
 (defn- validate-manifest!
   []

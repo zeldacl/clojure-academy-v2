@@ -70,7 +70,8 @@
   `handler-fn`  is `(fn [ctx-id channel payload])`.
   Multiple channels may share the same handler-fn."
   [channel-key handler-fn]
-  {:pre [(keyword? channel-key) (fn? handler-fn)]}
+  (when-not (and (keyword? channel-key) (fn? handler-fn))
+    (throw (IllegalArgumentException. "register-fx-channel!: channel-key must be keyword, handler-fn must be fn")))
   (assert-registry-open!)
   (update-fx-registry-state!
     update :handlers
@@ -83,7 +84,8 @@
 (defn register-fx-channels!
   "Convenience — register the same handler for multiple channel keys."
   [channel-keys handler-fn]
-  {:pre [(every? keyword? channel-keys) (fn? handler-fn)]}
+  (when-not (and (every? keyword? channel-keys) (fn? handler-fn))
+    (throw (IllegalArgumentException. "register-fx-channels!: channel-keys must be keywords, handler-fn must be fn")))
   (doseq [channel-key channel-keys]
     (register-fx-channel! channel-key handler-fn))
   nil)

@@ -97,13 +97,14 @@
              鈫?{:ops [...]} or nil
     :walk-speed-fn (fn []) 鈫?float or nil  (optional)"
   [effect-id handler-map]
-  {:pre [(keyword? effect-id) (map? handler-map)
-         (or (fn? (:enqueue-fn handler-map))
-             (fn? (:enqueue-event-fn handler-map))
-             (fn? (:enqueue-state-fn handler-map)))
-         (or (fn? (:tick-fn handler-map))
-             (fn? (:tick-state-fn handler-map)))
-         (fn? (:build-plan-fn handler-map))]}
+  (when-not (and (keyword? effect-id) (map? handler-map)
+                 (or (fn? (:enqueue-fn handler-map))
+                     (fn? (:enqueue-event-fn handler-map))
+                     (fn? (:enqueue-state-fn handler-map)))
+                 (or (fn? (:tick-fn handler-map))
+                     (fn? (:tick-state-fn handler-map)))
+                 (fn? (:build-plan-fn handler-map)))
+    (throw (IllegalArgumentException. "register-level-effect!: invalid effect-id or handler-map")))
   (assert-registry-open!)
   (update-level-effect-state!
     (fn [state]

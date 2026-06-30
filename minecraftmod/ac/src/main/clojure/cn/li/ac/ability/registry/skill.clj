@@ -104,7 +104,8 @@
 (defn register-skill!
 	"Validate, normalize, and register a skill spec."
 	[{:keys [id category-id level] :as spec}]
-	{:pre [(keyword? id) (keyword? category-id) (integer? level)]}
+	(when-not (and (keyword? id) (keyword? category-id) (integer? level))
+  (throw (IllegalArgumentException. "register-skill!: id & category-id must be keywords, level must be integer")))
 	(let [full (skill-spec/normalize-skill-spec spec)]
 		(if-let [existing (get (:registry (skill-registry-state-snapshot)) id)]
 			(if (= (stable-skill-identity existing) (stable-skill-identity full))

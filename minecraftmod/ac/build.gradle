@@ -136,7 +136,7 @@ configurations {
 
 dependencies {
     implementation "org.clojure:clojure:1.12.4"
-    implementation "metosin:malli:0.16.4"
+
     api project(':api') // 使用 api 关键字确保依赖向下传递
     implementation project(':mcmod')
     compileOnly 'net.minecraftforge:eventbus:6.0.5'

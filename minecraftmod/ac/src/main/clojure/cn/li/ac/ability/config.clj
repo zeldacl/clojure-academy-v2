@@ -464,14 +464,16 @@
 (defn max-cp-for-level
   "Compute max CP for a given ability level."
   [level]
-  {:pre [(>= level 1) (<= level (max-level))]}
+  (when-not (and (>= level 1) (<= level (max-level)))
+    (throw (IllegalArgumentException. "get-max-cp: level must be 1 to max-level")))
   (+ (get-init-cp level)
      (get-add-cp level)))
 
 (defn max-overload-for-level
   "Compute max overload for a given ability level."
   [level]
-  {:pre [(>= level 1) (<= level (max-level))]}
+  (when-not (and (>= level 1) (<= level (max-level)))
+    (throw (IllegalArgumentException. "get-max-overload: level must be 1 to max-level")))
   (+ (get-init-overload level)
      (get-add-overload level)))
 

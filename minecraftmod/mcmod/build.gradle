@@ -140,7 +140,7 @@ configurations {
 
 dependencies {
     implementation "org.clojure:clojure:1.12.4"
-    implementation "metosin:malli:0.16.4"
+
     api("org.slf4j:slf4j-api:1.7.25")
     testImplementation "org.clojure:test.check:1.1.1"
     cloverageRuntime "cloverage:cloverage:1.2.4"

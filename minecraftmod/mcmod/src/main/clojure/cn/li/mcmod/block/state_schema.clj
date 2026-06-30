@@ -57,12 +57,12 @@
 (def ^:private field-schema
   [:vector field-spec-schema])
 
-(def ^:private field-schema-validator (delay (schema/validator field-schema)))
+(def ^:private field-schema-validator (schema/lazy-validator field-schema))
 
 (defn validate-field-schema!
   "Validate a block state FieldSpec vector at namespace load/compile time."
   [schema*]
-  (schema/require-valid field-schema @field-schema-validator :block-state-field-schema schema*))
+  (schema/require-valid field-schema (field-schema-validator) :block-state-field-schema schema*))
 
 (def ^:private ^:dynamic *network-get-world-fn*
   (fn [_] nil))

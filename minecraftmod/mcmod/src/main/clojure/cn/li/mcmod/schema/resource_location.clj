@@ -24,29 +24,30 @@
 	 string?
 	 [:re #"^[a-z0-9._-]+:[a-z0-9._/-]+$"]])
 
-;; Validators are wrapped in delay to avoid calling schema/validator
+;; Validators use schema-core/lazy-validator to avoid calling schema/validator
 ;; (and therefore Malli) during namespace loading / AOT compilation.
+;; NOTE: `delay` is deliberately NOT used — see `schema/lazy-validator`.
 
 (def ^:private namespace-validator
-	(delay (schema-core/validator namespace-schema)))
+	(schema-core/lazy-validator namespace-schema))
 
 (def ^:private path-validator
-	(delay (schema-core/validator path-schema)))
+	(schema-core/lazy-validator path-schema))
 
 (def ^:private resource-location-validator
-	(delay (schema-core/validator resource-location-schema)))
+	(schema-core/lazy-validator resource-location-schema))
 
 (defn valid-namespace?
 	[value]
-	(schema-core/valid? @namespace-validator value))
+	(schema-core/valid? (namespace-validator) value))
 
 (defn valid-path?
 	[value]
-	(schema-core/valid? @path-validator value))
+	(schema-core/valid? (path-validator) value))
 
 (defn valid-resource-location?
 	[value]
-	(schema-core/valid? @resource-location-validator value))
+	(schema-core/valid? (resource-location-validator) value))
 
 (defn- invalid-resource-location!
 	[value default-namespace]

@@ -101,7 +101,8 @@
     :hand     optional hand runtime map
     :channels map of channel-key -> {:topic kw :mode kw :targets [...] ...}"
   [{:keys [id level hand channels]}]
-  {:pre [(keyword? id) (map? channels)]}
+  (when-not (and (keyword? id) (map? channels))
+    (throw (IllegalArgumentException. "register-fx-spec!: id must be keyword, channels must be map")))
   (register-runtime! id {:level level :hand hand})
   (doseq [[_channel-key channel-spec] channels]
     (when-let [topic (:topic channel-spec)]

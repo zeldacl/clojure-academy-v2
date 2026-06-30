@@ -23,12 +23,12 @@
   [:map
    [:owner-spec owner-spec-schema]])
 
-(def ^:private handler-contract-validator (delay (schema/validator handler-contract-schema)))
+(def ^:private handler-contract-validator (schema/lazy-validator handler-contract-schema))
 (defn- valid-handler-contract? [x]
-  (schema/valid? @handler-contract-validator x))
-(def ^:private screen-contract-validator (delay (schema/validator screen-contract-schema)))
+  (schema/valid? (handler-contract-validator) x))
+(def ^:private screen-contract-validator (schema/lazy-validator screen-contract-schema))
 (defn- valid-screen-contract? [x]
-  (schema/valid? @screen-contract-validator x))
+  (schema/valid? (screen-contract-validator) x))
 
 (defn default-server-gui-handler-contract
   []

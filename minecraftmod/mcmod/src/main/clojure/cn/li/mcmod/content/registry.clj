@@ -58,8 +58,11 @@
 (def ^:private category-schema
   (into [:enum] (sort allowed-categories)))
 
+(defn- ^:private non-empty-descriptor-id? [s]
+  (not (empty? s)))
+
 (def ^:private descriptor-id-schema
-  [:or keyword? [:and string? [:fn (complement empty?)]]])
+  [:or keyword? [:and string? [:fn non-empty-descriptor-id?]]])
 
 (def ^:private descriptor-schema
   map?)
@@ -73,27 +76,28 @@
 (def ^:private descriptor-field-set-schema
   [:set field-key-schema])
 
-;; Lazy validator compilation via memoize — avoids executing Malliʼs
-;; schema/validator during AOT classloading/bootstrap.  Each validator is
-;; compiled once on first use and cached thereafter.
-(def ^:private category-input-validator (delay (schema/validator category-input-schema)))
+;; Lazy validator compilation via schema/lazy-validator — avoids executing
+;; Malli's schema/validator during AOT classloading/bootstrap.  Each validator
+;; is compiled once on first call and cached thereafter.
+;; NOTE: `delay` is deliberately NOT used here — see `schema/lazy-validator`.
+(def ^:private category-input-validator (schema/lazy-validator category-input-schema))
 (defn- valid-category-input? [x]
-  (schema/valid? @category-input-validator x))
-(def ^:private category-validator (delay (schema/validator category-schema)))
+  (schema/valid? (category-input-validator) x))
+(def ^:private category-validator (schema/lazy-validator category-schema))
 (defn- valid-category? [x]
-  (schema/valid? @category-validator x))
-(def ^:private descriptor-id-validator (delay (schema/validator descriptor-id-schema)))
+  (schema/valid? (category-validator) x))
+(def ^:private descriptor-id-validator (schema/lazy-validator descriptor-id-schema))
 (defn- valid-descriptor-id? [x]
-  (schema/valid? @descriptor-id-validator x))
-(def ^:private descriptor-validator (delay (schema/validator descriptor-schema)))
+  (schema/valid? (descriptor-id-validator) x))
+(def ^:private descriptor-validator (schema/lazy-validator descriptor-schema))
 (defn- valid-descriptor? [x]
-  (schema/valid? @descriptor-validator x))
-(def ^:private descriptor-field-keyword-set-validator (delay (schema/validator descriptor-field-keyword-set-schema)))
+  (schema/valid? (descriptor-validator) x))
+(def ^:private descriptor-field-keyword-set-validator (schema/lazy-validator descriptor-field-keyword-set-schema))
 (defn- valid-descriptor-field-keyword-set? [x]
-  (schema/valid? @descriptor-field-keyword-set-validator x))
-(def ^:private descriptor-field-set-validator (delay (schema/validator descriptor-field-set-schema)))
+  (schema/valid? (descriptor-field-keyword-set-validator) x))
+(def ^:private descriptor-field-set-validator (schema/lazy-validator descriptor-field-set-schema))
 (defn- valid-descriptor-field-set? [x]
-  (schema/valid? @descriptor-field-set-validator x))
+  (schema/valid? (descriptor-field-set-validator) x))
 
 ;; ============================================================================
 ;; Runtime Container

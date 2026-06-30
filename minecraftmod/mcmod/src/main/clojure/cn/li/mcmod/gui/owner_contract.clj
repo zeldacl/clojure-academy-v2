@@ -13,12 +13,12 @@
   [:map
    [:container-id int?]])
 
-(def ^:private message-envelope-validator (delay (schema/validator message-envelope-schema)))
+(def ^:private message-envelope-validator (schema/lazy-validator message-envelope-schema))
 (defn- valid-message-envelope? [x]
-  (schema/valid? @message-envelope-validator x))
-(def ^:private sync-routing-validator (delay (schema/validator sync-routing-schema)))
+  (schema/valid? (message-envelope-validator) x))
+(def ^:private sync-routing-validator (schema/lazy-validator sync-routing-schema))
 (defn- valid-sync-routing? [x]
-  (schema/valid? @sync-routing-validator x))
+  (schema/valid? (sync-routing-validator) x))
 
 (defn valid-client-owner? [owner]
   (runtime-owner/valid-client-owner? owner))

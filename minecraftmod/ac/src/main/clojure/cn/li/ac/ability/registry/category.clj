@@ -115,7 +115,8 @@
 (defn register-category!
   "Register a category spec with idempotent duplicate handling."
   [{:keys [id] :as spec}]
-  {:pre [(keyword? id) (string? (:name-key spec))]}
+  (when-not (and (keyword? id) (string? (:name-key spec)))
+    (throw (IllegalArgumentException. "register-category!: id must be keyword, :name-key must be string")))
   (if-let [existing (get (:registry (category-registry-state-snapshot)) id)]
     (if (= existing spec)
       existing

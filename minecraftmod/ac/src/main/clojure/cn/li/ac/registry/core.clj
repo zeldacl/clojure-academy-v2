@@ -18,7 +18,8 @@
 (defn content-provider
   "Create a content provider record from plain data."
   [{:keys [id phases priority] :or {priority 100}}]
-  {:pre [(some? id) (sequential? phases)]}
+  (when-not (and (some? id) (sequential? phases))
+    (throw (IllegalArgumentException. "content-provider: id must be some?, phases must be sequential?")))
   (->ContentProvider id priority phases))
 
 (defn content-provider?

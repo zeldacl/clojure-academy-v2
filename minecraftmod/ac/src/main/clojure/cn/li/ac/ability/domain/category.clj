@@ -8,8 +8,8 @@
 (defn ability-category
   "Create a normalized ability category map."
   [{:keys [id name-key enabled prog-incr-rate level-matcher] :as spec}]
-  {:pre [(keyword? id)
-         (string? name-key)]}
+  (when-not (and (keyword? id) (string? name-key))
+    (throw (IllegalArgumentException. "normalize-category-spec: id must be keyword, name-key must be string")))
   (merge {:enabled true
           :prog-incr-rate 1.0
           :level-matcher (fn [_] :normal)}

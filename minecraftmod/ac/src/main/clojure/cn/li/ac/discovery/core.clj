@@ -5,7 +5,8 @@
 (defn normalize-provider
   [{:keys [id priority skill-namespaces fx-namespaces]
     :or {priority 100}}]
-  {:pre [(keyword? id)]}
+  (when-not (keyword? id)
+    (throw (IllegalArgumentException. "content-provider id must be keyword")))
   {:id id
    :priority (long priority)
    :skill-namespaces (->> (or skill-namespaces []) distinct vec)

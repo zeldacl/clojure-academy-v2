@@ -94,5 +94,6 @@
   (assoc d :level-progress (max 0.0 (double amount))))
 
 (defn set-level [d level]
-  {:pre [(>= level 1) (<= level 5)]}
+  (when-not (and (>= level 1) (<= level 5))
+    (throw (IllegalArgumentException. "set-level: level must be 1-5")))
   (assoc d :level level :level-progress 0.0))

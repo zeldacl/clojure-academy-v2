@@ -34,12 +34,13 @@
   ([max-capacity current transfer-rate]
    (energy-container max-capacity current transfer-rate 1.0))
   ([max-capacity current transfer-rate efficiency]
-   {:pre [(pos? max-capacity)
-          (>= current 0.0)
-          (<= current max-capacity)
-          (pos? transfer-rate)
-          (> efficiency 0.0)
-          (<= efficiency 1.0)]}
+   (when-not (and (pos? max-capacity)
+                  (>= current 0.0)
+                  (<= current max-capacity)
+                  (pos? transfer-rate)
+                  (> efficiency 0.0)
+                  (<= efficiency 1.0))
+     (throw (IllegalArgumentException. "energy-container: invalid max-capacity/current/transfer-rate/efficiency")))
    (->EnergyContainer
      (double current)
      (double max-capacity)
@@ -175,7 +176,8 @@
     ; => [updated-container 95.0]  ; If some was lost
   "
   [^EnergyContainer container ^double amount]
-  {:pre [(pos? amount)]}
+  (when-not (pos? amount)
+    (throw (IllegalArgumentException. "amount must be positive")))
   (let [current (:current container)
         max-cap (:max-capacity container)
         available-space (- max-cap current)
@@ -199,7 +201,8 @@
     ; => [updated-container 75.0]  ; If only 75 available
   "
   [^EnergyContainer container ^double amount]
-  {:pre [(pos? amount)]}
+  (when-not (pos? amount)
+    (throw (IllegalArgumentException. "amount must be positive")))
   (let [current (:current container)
         extracted (min amount current)]
     [(assoc container :current (- current extracted)
@@ -290,7 +293,8 @@
   ([^EnergyContainer source ^EnergyContainer dest]
    (transfer-energy source dest (:transfer-rate source)))
   ([^EnergyContainer source ^EnergyContainer dest ^double amount]
-   {:pre [(pos? amount)]}
+   (when-not (pos? amount)
+    (throw (IllegalArgumentException. "amount must be positive")))
    (let [;; Amount that can be extracted from source
          extractable (min amount (:current source))
          ;; Amount that can be received by dest

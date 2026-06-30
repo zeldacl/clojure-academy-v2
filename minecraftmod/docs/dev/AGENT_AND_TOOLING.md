@@ -447,22 +447,43 @@
   (defn valid-foo? [x] (schema/valid? (validator-for foo-schema) x)))
 ```
 
+**同样禁止：用 `delay` 包装 validator 编译**：
+```clojure
+;; ❌ 禁止：delay 是宏，AOT 展开为匿名函数类 → Malli eval 上下文符号污染
+(def ^:private foo-validator (delay (schema/validator foo-schema)))
+;; 运行时触发：Can't take value of a macro: #'clojure.core/delay
+```
+`delay` 宏在 AOT 下展开为 `(new clojure.lang.Delay (fn [] ...))`，内部匿名函数类会被 `malli.core` 的 `eval` 上下文捕获，导致 `delay` 宏的 Var 被错误解析为运行时的值引用。参见铁律一（宏在 AOT 下不可作为值传递）的同源机制。
+
 **安全替代方案**（按 Schema 数量决定）：
 
-**方案 A — Schema 数量固定、编译期已知（本项目采用）**：每个 Schema 独立 `delay`。
+**方案 A — Schema 数量固定、编译期已知（本项目采用）**：`schema/lazy-validator`（纯函数式惰性缓存，零宏依赖）。
 ```clojure
-;; ✅ AOT 安全：编译期只生成空壳，运行时第一次 deref 才编译
-(def ^:private foo-validator (delay (schema/validator foo-schema)))
-(defn- valid-foo? [x] (schema/valid? @foo-validator x))
+;; in schema/core.clj:
+(defn lazy-validator
+  "Returns a 0-arg fn that compiles `schema` on first call and caches the result.
+  Uses `atom` for AOT-safe lazy caching — never the `delay` macro."
+  [schema]
+  (let [cache (atom nil)]
+    (fn []
+      (if-let [c @cache]
+        c
+        (let [v (validator schema)]
+          (reset! cache v)
+          v)))))
+
+;; usage site:
+(def ^:private foo-validator (schema/lazy-validator foo-schema))
+(defn- valid-foo? [x] (schema/valid? (foo-validator) x))
 ```
-优点：零依赖、AOT 免疫、无缓存膨胀风险。本项目全部 21 个 validator 均采用此模式。
+优点：零宏依赖、AOT 免疫、无缓存膨胀风险。与 `delay` 的区别：`lazy-validator` 是普通函数，返回的 thunk 也是普通 `fn`——AOT 生成的匿名函数类不携带宏符号，Malli eval 上下文安全。本项目全部 30 个 validator 均采用此模式。
 
 **方案 B — Schema 在运行时动态生成（如基于玩家输入/NBT 标签动态构造）**：使用 Guava Cache（Minecraft 原生自带）。
 ```clojure
 (:import [com.google.common.cache CacheBuilder CacheLoader])
 
 (def ^:private validator-cache
-  (delay
+  (delay  ;; Guava Cache 自身初始化用 delay 保护是安全的——它不进入 Malli eval 上下文
     (-> (CacheBuilder/newBuilder)
         (.maximumSize 500)  ;; LRU 淘汰，免疫 OOM
         (.build (proxy [CacheLoader] []
@@ -474,23 +495,94 @@
 判定：仅当 Schema 确实在运行时动态生成时才引入 Guava Cache。本项目 Schema 全为静态，采用方案 A。
 
 **判定**：
-- Schema 静态已知 → `delay` per-validator（铁律一 + 铁律二组合）
+- Schema 静态已知 → `schema/lazy-validator`（纯函数，零宏，AOT 安全）
 - Schema 运行时动态生成 → Guava Cache with `maximumSize`
 - 禁止 → 顶层 `memoize`（双重重灾区：AOT + OOM）
+- 禁止 → `delay` 直接包裹 `schema/validator`（宏泄漏至 Malli eval 上下文）
 
 ---
 
-### Malli 终极判定法则（强制）
+#### 铁律十：禁止 `{:pre}` / `{:post}` 断言宏（强制）
 
-面向未来所有新概念（如气压系统、药水效果、自定义维度），不再先查“静态矩阵”，而是统一执行以下三问流程；**顺序不可交换**：
+**根源**：Clojure 的 `{:pre [...]}` 和 `{:post [...]}` 是**宏**。AOT 编译器编译包含断言的函数时，会将断言表达式提取为独立的匿名函数类进行内联优化。在命名空间半编译状态下，该匿名函数类引用的符号可能尚未在 Var 映射表中完成注册，导致 `Unable to resolve symbol` 运行时闪退（与 3 参数 `into` 同根因的匿名函数类 AOT 符号逃逸）。
+
+此外，Minecraft 主线程高频 Tick 路径中，`:pre`/`:post` 会在**每一次调用**时强制执行类型检查，带来额外性能损耗。
+
+**禁止模式**：
+```clojure
+;; ❌ 高危：:pre 断言在 AOT 下半编译状态触发符号逃逸
+(defn merge-with-kind [kind-cfg normalized]
+  {:pre [(map? kind-cfg) (or (map? normalized) (nil? normalized))]}
+  ...)
+
+;; ❌ 同样危险：:post 断言
+(defn create-energy [max-capacity]
+  {:post [(pos? %)]}
+  ...)
+```
+
+**安全替代**：显式 `when-not` + `throw`。
+```clojure
+;; ✅ AOT 安全：标准运行时流程控制，零宏依赖
+(defn merge-with-kind [kind-cfg normalized]
+  (when-not (and (map? kind-cfg) (or (map? normalized) (nil? normalized)))
+    (throw (IllegalArgumentException. "merge-with-kind: invalid arguments")))
+  ...)
+```
+
+**判定**：
+- 生产代码 → 一律使用显式 `when-not` + `throw`
+- 开发调试期 → 可通过全局 `*assert*` 动态变量控制，但打包时必须设为 `false`
+- 测试代码 → 可保留，测试不在 AOT 路径中
+
+---
+
+### Schema 验证层：纯 Clojure Spec v1（已移除 Malli）
+
+Malli 已被完全移除，替换为 `cn.li.mcmod.schema.core` 中的纯 Clojure 实现（Spec v1）。动机：
+
+1. **dynaload AOT 死结**：Malli 的传递依赖 `borkdude/dynaload`（通过 `fipp`）使用宏级别的动态类载入，在 Minecraft 全量 AOT + Jar 着色/瘦身构建环境中，`dynaload` 源文件未被正确包含进最终 Jar 包，触发 `No such var: dynaload/dynaload` 运行时崩溃。
+2. **零依赖 + AOT 免疫**：纯 Clojure 实现不需任何第三方库，所有 schema 编译为普通函数调用，100% 兼容 Minecraft 全量 AOT。
+
+**支持的全部 Schema 类型**：
+
+| 类型 | 语法 | 说明 |
+|------|------|------|
+| 谓词函数 | `keyword?`, `string?`, `fn?`, `map?` ... | 直接用作 validator |
+| `:or` | `[:or schema1 schema2 ...]` | 任一子 schema 通过即通过 |
+| `:and` | `[:and schema1 schema2 ...]` | 全部子 schema 通过才通过 |
+| `:enum` | `[:enum :a :b :c]` | 值必须在枚举集合中 |
+| `:=` | `[:= :exact-value]` | 值必须精确匹配 |
+| `:map` | `[:map [:k1 schema1] [:k2 {:optional true} schema2]]` | 验证 map 的每个键 |
+| `:map-of` | `[:map-of key-schema val-schema]` | 验证 map 的每个键值对 |
+| `:set` | `[:set item-schema]` | 验证 set 的每个元素 |
+| `:vector` | `[:vector item-schema]` | 验证 vector 的每个元素 |
+| `:sequential` | `[:sequential item-schema]` | 验证 sequential 的每个元素 |
+| `:re` | `[:re #"regex"]` | 字符串正则匹配 |
+| `:fn` | `[:fn named-fn]` | 具名函数谓词（Iron Rule 2 要求） |
+| 符号引用 | `my-other-schema` | 解析为同命名空间的其他 schema |
+| Var 引用 | `#'my-other-schema` | 跨命名空间 schema 引用 |
+
+**API**（与 Malli 时期完全相同，业务代码无需改动）：
+
+```clojure
+(schema/validator my-schema)           ;; 编译 schema → 验证函数
+(schema/valid? compiled-validator v)   ;; 返回 boolean
+(schema/explain my-schema v)           ;; 返回失败说明
+(schema/lazy-validator my-schema)      ;; 惰性编译（替代 delay）
+(schema/require-valid schema compiled-v contract value)  ;; 失败时抛异常
+```
+
+### Schema 验证三问判定法则（强制）
+
+面向未来所有新概念（如气压系统、药水效果、自定义维度），统一执行以下三问流程；**顺序不可交换**。底层使用纯 Clojure Spec v1（`cn.li.mcmod.schema.core`），不依赖任何第三方库。
 
 1. **频率判定（第一优先级）**：该数据/约束是否处于每秒高频执行路径（Tick、移动、渲染、WorldGen、AI、内层数学、NBT 字段读写循环）？
-  - 若是：**禁止 Malli**（含 `m/validate`、`m/explain`、生产期 instrumentation）。
-  - 做法：使用 Java interop + type hint + 已验证数据输入，确保热路径只做业务计算。
+  - 若是：**禁止 schema 验证**。做法：使用 Java interop + type hint + 已验证数据输入，确保热路径只做业务计算。
 2. **边界判定**：该数据是否由玩家行为、系统事件或时间边界触发（发包、存盘、配置加载、资源重载、开界面、达成成就、命令、注册期）？
-  - 若是：**全面使用 Malli**，并优先用 compiled validator；只在失败分支生成 explain。
-  - 注：若某“边界”实际由 tick 高频触发（如每 tick 群发包），回退到第 1 条按高频禁用处理。
-3. **前移判定**：该约束能否在打包 Jar、AOT、宏展开或 REPL 保存时定死？
+  - 若是：**使用 Spec v1**（`schema/lazy-validator` + compiled validator）；只在失败分支生成 explain。
+  - 注：若某”边界”实际由 tick 高频触发（如每 tick 群发包），回退到第 1 条按高频禁用处理。
+3. **前移判定**：该约束能否在打包 Jar、AOT、宏展开时定死？
   - 若能：必须前移到 macro/load-time/registration/datagen 阶段，在开发机与 CI 提前失败。
   - 目标：玩家运行时不承担 schema 成本，AOT 后热路径保持 0 额外开销。
 
@@ -502,12 +594,12 @@
 
 #### PR 必填自证项
 
-凡新增 Malli 校验的 PR，必须说明：
+凡新增 schema 校验的 PR，必须说明：
 
 1. 校验触发位置（macro/load-time/registration/runtime-boundary/test-only）。
 2. 为什么不属于高频热路径。
 3. 是否可进一步前移；若不能，给出原因。
-4. 生产环境剩余开销预期（应为“低频可接受”或“0 热路径开销”）。
+4. 生产环境剩余开销预期（应为”低频可接受”或”0 热路径开销”）。
 
 #### FP 通用原则 — P.I.C.A.S.O.（毕加索原则）
 
