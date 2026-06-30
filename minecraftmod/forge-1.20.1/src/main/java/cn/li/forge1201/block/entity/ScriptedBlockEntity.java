@@ -1,16 +1,17 @@
 package cn.li.forge1201.block.entity;
 
-import clojure.lang.RT;
-import clojure.lang.Var;
 import cn.li.forge1201.capability.ForgeCapabilityHandler;
+import cn.li.mc1201.block.IScriptedBlock;
 import cn.li.mc1201.block.entity.AbstractScriptedBlockEntity;
 import cn.li.mc1201.block.entity.BlockEntityRegistry;
+import cn.li.mc1201.block.logic.ITileContainerLogic;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.WorldlyContainer;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraftforge.common.capabilities.Capability;
@@ -26,6 +27,8 @@ import javax.annotation.Nullable;
  * {@link AbstractScriptedBlockEntity}.</p>
  */
 public class ScriptedBlockEntity extends AbstractScriptedBlockEntity implements WorldlyContainer {
+
+    private static final int[] EMPTY_INT_ARRAY = new int[0];
 
     /**
      * Register this entity type via the shared registry.
@@ -56,6 +59,15 @@ public class ScriptedBlockEntity extends AbstractScriptedBlockEntity implements 
         invokeServerTick(level, pos, state, blockEntity);
     }
 
+    @Nullable
+    private ITileContainerLogic containerLogic() {
+        Block block = getBlockState().getBlock();
+        if (block instanceof IScriptedBlock scripted) {
+            return scripted.getTileLogic().container;
+        }
+        return null;
+    }
+
     // -------------------------------------------------------------------------
     // Forge Capability
     // -------------------------------------------------------------------------
@@ -63,7 +75,7 @@ public class ScriptedBlockEntity extends AbstractScriptedBlockEntity implements 
     @Nonnull
     @Override
     public <T> LazyOptional<T> getCapability(@Nonnull Capability<T> cap, @Nullable Direction side) {
-        LazyOptional<T> resolved = capabilityHandler.getCapability(cap, side, getTileId(), this);
+        LazyOptional<T> resolved = capabilityHandler.getCapability(cap, side, this);
         if (resolved.isPresent()) {
             return resolved;
         }
@@ -83,28 +95,13 @@ public class ScriptedBlockEntity extends AbstractScriptedBlockEntity implements 
     }
 
     // -------------------------------------------------------------------------
-    // Container / WorldlyContainer implementation
-    // Delegates to tile-logic/container-* functions when a container is registered.
+    // Container / WorldlyContainer — dispatches through compiled ITileContainerLogic.
     // -------------------------------------------------------------------------
-
-    private static final int[] EMPTY_INT_ARRAY = new int[0];
-
-    private @Nullable Object containerOp(String fn, Object... extraArgs) {
-        try {
-            Var v = RT.var("cn.li.mcmod.block.tile-logic", fn);
-            Object[] args = new Object[1 + extraArgs.length];
-            args[0] = getTileId();
-            System.arraycopy(extraArgs, 0, args, 1, extraArgs.length);
-            return v.applyTo(clojure.lang.RT.seq(args));
-        } catch (Exception ex) {
-            return null;
-        }
-    }
 
     @Override
     public int getContainerSize() {
-        Object r = containerOp("container-size", this);
-        return (r instanceof Number n) ? n.intValue() : 0;
+        ITileContainerLogic container = containerLogic();
+        return container == null ? 0 : container.getSize(this);
     }
 
     @Override
@@ -121,61 +118,67 @@ public class ScriptedBlockEntity extends AbstractScriptedBlockEntity implements 
     @Nonnull
     @Override
     public ItemStack getItem(int slot) {
-        Object r = containerOp("container-get-item", this, slot);
-        return (r instanceof ItemStack s) ? s : ItemStack.EMPTY;
+        ITileContainerLogic container = containerLogic();
+        return container == null ? ItemStack.EMPTY : container.getItem(this, slot);
     }
 
     @Nonnull
     @Override
     public ItemStack removeItem(int slot, int amount) {
-        Object r = containerOp("container-remove-item", this, slot, amount);
-        return (r instanceof ItemStack s) ? s : ItemStack.EMPTY;
+        ITileContainerLogic container = containerLogic();
+        return container == null ? ItemStack.EMPTY : container.removeItem(this, slot, amount);
     }
 
     @Nonnull
     @Override
     public ItemStack removeItemNoUpdate(int slot) {
-        Object r = containerOp("container-remove-item-no-update", this, slot);
-        return (r instanceof ItemStack s) ? s : ItemStack.EMPTY;
+        ITileContainerLogic container = containerLogic();
+        return container == null ? ItemStack.EMPTY : container.removeItemNoUpdate(this, slot);
     }
 
     @Override
     public void setItem(int slot, @Nonnull ItemStack stack) {
-        containerOp("container-set-item", this, slot, stack);
-        setChanged();
+        ITileContainerLogic container = containerLogic();
+        if (container != null) {
+            container.setItem(this, slot, stack);
+            setChanged();
+        }
     }
 
     @Override
     public boolean stillValid(@Nonnull Player player) {
-        Object r = containerOp("container-still-valid", this, player);
-        return !(Boolean.FALSE.equals(r));
+        ITileContainerLogic container = containerLogic();
+        return container == null || container.stillValid(this, player);
     }
 
     @Override
     public void clearContent() {
-        containerOp("container-clear", this);
-        setChanged();
+        ITileContainerLogic container = containerLogic();
+        if (container != null) {
+            container.clearContent(this);
+            setChanged();
+        }
     }
 
     @Nonnull
     @Override
     public int[] getSlotsForFace(@Nonnull Direction side) {
-        Object r = containerOp("container-slots-for-face", this, side);
-        if (r instanceof int[] arr) {
-            return arr;
+        ITileContainerLogic container = containerLogic();
+        if (container == null) {
+            return EMPTY_INT_ARRAY;
         }
-        return EMPTY_INT_ARRAY;
+        return container.getSlotsForFace(this, side);
     }
 
     @Override
     public boolean canPlaceItemThroughFace(int slot, @Nonnull ItemStack item, @Nullable Direction dir) {
-        Object r = containerOp("container-can-place-through-face", this, slot, item, dir);
-        return Boolean.TRUE.equals(r);
+        ITileContainerLogic container = containerLogic();
+        return container != null && container.canPlaceItemThroughFace(this, slot, item, dir);
     }
 
     @Override
     public boolean canTakeItemThroughFace(int slot, @Nonnull ItemStack item, @Nonnull Direction dir) {
-        Object r = containerOp("container-can-take-through-face", this, slot, item, dir);
-        return Boolean.TRUE.equals(r);
+        ITileContainerLogic container = containerLogic();
+        return container == null || container.canTakeItemThroughFace(this, slot, item, dir);
     }
 }

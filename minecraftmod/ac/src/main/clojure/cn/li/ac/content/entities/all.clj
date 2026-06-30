@@ -514,4 +514,19 @@
                                    :damage 0.0
                                    :place-when-collide? false
                                    :renderer-id "block-body"
-                                   :hook :silbarn}}}))))
+                                   :hook :silbarn}}}))
+
+    ;; Minimal scripted-mob for bundle pipeline /summon smoke (dev only).
+    (edsl/register-entity!
+      (edsl/create-entity-spec
+        "scripted-test-mob"
+        {:entity-kind :scripted-mob
+         :category :monster
+         :width 0.6
+         :height 1.8
+         :client-tracking-range 64
+         :update-interval 3
+         :properties {:mob {:mob-tick-fn (fn [_mob] nil)
+                            :mob-hurt-fn (fn [_mob _src amt] amt)
+                            :mob-death-fn (fn [_mob _src] nil)
+                            :mob-loot-fn (fn [_mob _src _recent?] false)}}}))))

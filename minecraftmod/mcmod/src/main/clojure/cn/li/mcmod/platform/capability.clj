@@ -1,8 +1,9 @@
 (ns cn.li.mcmod.platform.capability
-  "Platform-neutral Capability declaration registry.
+  "Platform-neutral capability declaration and lookup.
 
   Content code calls declare-capability! to register a capability type and its
-  handler factory. Forge exposes capabilities via tile-logic/get-capability."
+  handler factory. Handler factories are resolved at bundle compile time via
+  get-handler-factory."
   (:require [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================

@@ -1,6 +1,11 @@
 package cn.li.forge1201.capability;
 
+import cn.li.mc1201.block.IScriptedBlock;
+import cn.li.mc1201.block.entity.AbstractScriptedBlockEntity;
+import cn.li.mc1201.block.logic.ITileCapabilityLogic;
 import net.minecraft.core.Direction;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.common.util.LazyOptional;
 
@@ -16,8 +21,7 @@ public final class ForgeCapabilityHandler {
     @Nonnull
     public <T> LazyOptional<T> getCapability(@Nonnull Capability<T> cap,
                                              @Nullable Direction side,
-                                             String tileId,
-                                             Object owner) {
+                                             AbstractScriptedBlockEntity be) {
         String key = ForgeCapabilityQuery.getKey(cap);
         if (key == null) {
             return LazyOptional.empty();
@@ -28,7 +32,7 @@ public final class ForgeCapabilityHandler {
             return cached.cast();
         }
 
-        Object handler = ForgeCapabilityResolver.resolve(tileId, key, owner, side);
+        Object handler = ForgeCapabilityResolver.resolve(be, key, side);
         if (handler != null) {
             LazyOptional<Object> lazyOptional = LazyOptional.of(() -> handler);
             cache.put(key, lazyOptional);

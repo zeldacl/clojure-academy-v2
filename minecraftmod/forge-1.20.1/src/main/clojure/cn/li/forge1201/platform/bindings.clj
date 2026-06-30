@@ -24,6 +24,7 @@
 	(be-get-custom-state [this] (.getCustomState this))
 	(be-set-custom-state! [this state] (.setCustomState this state))
 	(be-get-block-id [this] (.getBlockId this))
+	(be-get-tile-id [this] (.getTileId this))
 	(be-set-changed! [this] (.setChanged this)))
 
 (defn world-is-client-side
@@ -131,6 +132,10 @@
 (defn be-get-block-id
 	[^ScriptedBlockEntity be]
 	(.getBlockId be))
+
+(defn be-get-tile-id
+	[^ScriptedBlockEntity be]
+	(.getTileId be))
 
 (defn be-set-changed!
 	[^ScriptedBlockEntity be]

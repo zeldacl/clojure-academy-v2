@@ -17,6 +17,7 @@
   (be-get-custom-state [this])
   (be-set-custom-state! [this state])
   (be-get-block-id [this])
+  (be-get-tile-id [this])
   (be-set-changed! [this]))
 
 (def ^:private ^:dynamic *be-ops* nil)
@@ -79,6 +80,15 @@
           (be-get-block-id be))
       (catch Exception e
         (call-log :warn "get-block-id failed:" (ex-message e))
+        nil))))
+
+(defn get-tile-id [be]
+  (when be
+    (try
+      (or (be-op :be-get-tile-id be)
+          (be-get-tile-id be))
+      (catch Exception e
+        (call-log :warn "get-tile-id failed:" (ex-message e))
         nil))))
 
 (defn set-changed! [be]

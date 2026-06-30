@@ -89,6 +89,8 @@
     - `gui/menu/*`、`gui/provider/*`、`gui/screen/*`、`gui/slots/*`、`gui/cgui/*`：按职责拆分的菜单桥接、provider、screen、slot 与 CGui 运行时实现；旧的顶层 `*_core` / `*_common` / `*_bridge` GUI 文件不得回流。
     - `datagen/*_common.clj`：共享 datagen provider 实现
     - `datagen/provider_manifest.clj`：共享 datagen provider 顺序与逻辑 provider 集合；平台 datagen setup 只适配具体 Factory/API。
+    - `block/logic/*`、`entity/logic/*`：BlockEntity / Mob 热路径 Java 接口与 bundle 类型
+    - `block/logic_compile.clj`、`block/logic_pipeline.clj`、`entity/mob_logic_compile.clj`、`entity/mob_logic_pipeline.clj`：loader-neutral reify 编译与安装（Forge/Fabric 共用）
 - **`forge-1.20.1`**：Forge 事件绑定与 Loader 入口层（Phase C 后仅包含）；仅保留直接引用 Forge 的代码和事件注册胶水。
   - **结构规范**：
     - `mod/` 与 `mod.clj`：Loader 入口与初始化（Wave A：调用 `setup/forge_lifecycle_coordinator.clj` 编排生命周期）
@@ -125,6 +127,13 @@
   - Fabric 与 Forge 一样：对已解析 Minecraft 对象的操作逻辑在 `mc-1.20.1`；平台层只做 Loader 事件绑定与注入 op。可选第三方 mod（如 IC2 `ic2.api.*`）可在单一标注边界内保留反射，由 `verifyNoPlatformReflection` allowlist 守护。
   - Forge `ServerLifecycleHooks` 按需取 server 与 Fabric `server-context` 捕获 server 目前视为平台差异，不在本轮强行统一；shared core 应接收显式 server 或回调，不直接耦合 Loader 生命周期源。
   - 所有跨层调用都应通过清晰入口函数与文档记录，避免隐式耦合蔓延。
+
+### Scripted 逻辑分发（强制，2026-06）
+
+- BlockEntity tick / NBT / container / capability 与 Mob `aiStep` / hurt / death / loot **运行期**必须走 `IScriptedBlock` / `ScriptedEntityLogicRegistry` + Java 接口 bundle（`mc-1.20.1` 编译期 reify），**禁止**重新引入 `tile-logic-registry`、`container-registry`、`capability-registry`、`invoke-tick`、`RT.var` 查表或任何 `^:dynamic` 运行期 hook 注册表。
+- 声明期元数据仍用 `mcmod.block.tile-dsl`、`mcmod.block.tile-kind`、`mcmod.entity.dsl`；`:container` 与 `:capability-keys` 写入 tile spec 后由 `logic-pipeline` 一次性编译安装。
+- 平台层（Forge/Fabric）只负责 `compile-all-bundles` → `install-bundle-to-block!` / `install-mob-bundle!`，不得复制 bundle 编译逻辑。
+- 设计文档：[SCRIPTED_LOGIC_DISPATCH.md](../04-systems/SCRIPTED_LOGIC_DISPATCH.md)。
 
 ## 开发工具实践
 

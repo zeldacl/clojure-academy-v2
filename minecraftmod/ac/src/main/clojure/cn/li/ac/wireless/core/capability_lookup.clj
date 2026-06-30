@@ -1,26 +1,26 @@
 (ns cn.li.ac.wireless.core.capability-lookup
-  "Single source of truth for resolving wireless capabilities from tiles.
-  Extracted from capability_resolver and vblock_resolver to break the
-  vblock → capability_resolver → vblock_resolver → vblock cycle.
-
-  All capabilities must be registered via tile-logic/register-tile-capability!;
-  there is no instance? fallback — a nil result means the capability is NOT present."
-  (:require [cn.li.mcmod.block.tile-logic :as tile-logic]
+  "Single source of truth for resolving wireless capabilities from tiles."
+  (:require [cn.li.mcmod.block.tile-dsl :as tdsl]
             [cn.li.mcmod.platform.be :as platform-be]
+            [cn.li.mcmod.platform.capability :as platform-cap]
             [cn.li.mcmod.util.log :as log]))
 
+(defn- tile-id-for [tile]
+  (or (try (platform-be/get-tile-id tile) (catch Exception _ nil))
+      (when-let [block-id (try (platform-be/be-get-block-id tile) (catch Exception _ nil))]
+        (tdsl/get-tile-id-for-block block-id))))
+
 (defn tile-capability
-  "Resolve a capability from a tile via the unified tile-logic system.
-  Returns the capability object, or nil if not registered."
+  "Resolve a capability from a tile via tile spec metadata and platform factories."
   [tile cap-key _fallback-class]
   (when tile
-    (when-let [tile-id (try (platform-be/get-block-id tile)
-                            (catch Exception e
-                              (log/error "[wireless] tile-capability: get-block-id threw for" cap-key
-                                         ":" (ex-message e))
-                              nil))]
-      (try (tile-logic/get-capability tile-id cap-key tile nil)
-           (catch Exception e
-             (log/error "[wireless] tile-capability: tile-logic threw for" cap-key
-                        "on" tile-id ":" (ex-message e))
-             nil)))))
+    (when-let [tile-id (tile-id-for tile)]
+      (when-let [spec (tdsl/get-tile tile-id)]
+        (when (contains? (:capability-keys spec #{}) cap-key)
+          (try
+            (when-let [factory (platform-cap/get-handler-factory cap-key)]
+              (factory tile nil))
+            (catch Exception e
+              (log/error "[wireless] tile-capability: factory threw for" cap-key
+                         "on" tile-id ":" (ex-message e))
+              nil)))))))

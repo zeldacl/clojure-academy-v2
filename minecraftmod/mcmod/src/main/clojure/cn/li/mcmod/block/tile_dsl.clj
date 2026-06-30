@@ -5,7 +5,7 @@
   - Allow defining a single tile type bound to multiple blocks.
   - Keep core platform-neutral: stores metadata only; platforms query via registry metadata."
   (:require [clojure.string :as str]
-            [cn.li.mcmod.block.tile-logic :as tile-logic]
+            [cn.li.mcmod.block.tile-kind :as tile-kind]
             [cn.li.mcmod.schema.core :as schema]
             [cn.li.mcmod.protocol.core :as registry-core]
             [cn.li.mcmod.util.log :as log]))
@@ -30,6 +30,8 @@ Structure:
    tick-fn
    read-nbt-fn
    write-nbt-fn
+   container
+   capability-keys
    ;; Optional custom BlockEntity supplier. Shape:
    ;; (fn [be-type pos state block-id] -> BlockEntity)
    be-supplier])
@@ -91,9 +93,13 @@ Structure:
   - :registry-name string override (snake_case) used by platform registration
   - :tile-kind keyword
   - :tick-fn/:read-nbt-fn/:write-nbt-fn
+  - :container map of WorldlyContainer hook fns (compiled at registration)
+  - :capability-keys set of capability keywords for this tile
   - :be-supplier custom BlockEntity supplier (advanced)"
   [tile-id options]
   (let [blocks (normalize-block-ids (:blocks options))
+        cap-keys (when-let [ck (:capability-keys options)]
+                   (set (map #(if (keyword? %) % (keyword %)) ck)))
         spec (map->TileSpec
               {:id tile-id
                :registry-name (:registry-name options)
@@ -103,6 +109,8 @@ Structure:
                :tick-fn (:tick-fn options)
                :read-nbt-fn (:read-nbt-fn options)
                :write-nbt-fn (:write-nbt-fn options)
+               :container (:container options)
+               :capability-keys cap-keys
                :be-supplier (:be-supplier options)})]
     (validate-tile-spec spec)
     spec))
@@ -154,6 +162,25 @@ Enforces:
   [block-id]
   (registry-core/lookup-in tile-registry [:block->tile-id (normalize-id block-id)]))
 
+(defn snapshot-tiles-by-id
+  "Read-only snapshot of {:tile-id TileSpec} for bundle compilation."
+  []
+  (:by-id (registry-core/snapshot tile-registry)))
+
+(def snapshot-tile-registry
+  "Alias for plan/docs compatibility."
+  snapshot-tiles-by-id)
+
+(defn register-tile-capability-keys!
+  "Associate capability keywords with a tile spec (declaration phase only)."
+  [tile-id & cap-keys]
+  (let [normalized (map #(if (keyword? %) % (keyword %)) cap-keys)]
+    (registry-core/swap-state! tile-registry
+                               #(update-in % [:by-id tile-id :capability-keys]
+                                             (fn [existing]
+                                               (into (or existing #{}) normalized))))
+    nil))
+
 (defmacro deftile
   "Define and register a tile spec.
 
@@ -175,8 +202,8 @@ Enforces:
          (create-tile-spec ~tile-id ~options-map)))))
 
 (defmacro deftile-kind
-  "Register reusable tile-kind defaults in `cn.li.mcmod.block.tile-logic`."
+  "Register reusable tile-kind defaults in `cn.li.mcmod.block.tile-kind`."
   [tile-kind & options]
   (let [options-map (apply hash-map options)]
-    `(tile-logic/register-tile-kind! ~tile-kind ~options-map)))
+    `(tile-kind/register-tile-kind! ~tile-kind ~options-map)))
 

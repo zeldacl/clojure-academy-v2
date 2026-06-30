@@ -1,7 +1,8 @@
 (ns cn.li.fabric1201.setup.content-registration
   "Fabric content registration extracted from mod entry namespace."
   (:require [cn.li.fabric1201.registry.fabric-dispatch :as fabric-dispatch]
-            [cn.li.mcmod.block.tile-logic :as tile-logic]
+            [cn.li.mc1201.block.logic-pipeline :as logic-pipeline]
+            [cn.li.mc1201.entity.mob-logic-pipeline :as mob-pipeline]
             [cn.li.mcmod.entity.dsl :as edsl]
             [cn.li.mcmod.protocol.core :as registry-core]
             [cn.li.mcmod.protocol.metadata :as metadata]
@@ -9,6 +10,7 @@
             [cn.li.mc1201.block.blockstate-properties :as bsp])
   (:import [cn.li.fabric1201.entity FabricScriptedEntityAccess]
            [cn.li.fabric1201.shim FabricBootstrapHelper]
+           [cn.li.mc1201.block IScriptedBlock]
            [cn.li.mc1201.entity.spec ScriptedProjectileSpec ScriptedEffectSpec ScriptedRaySpec ScriptedMarkerSpec ScriptedBlockBodySpec]
            [net.minecraft.world.item Item Item$Properties]))
 
@@ -22,54 +24,56 @@
   [block-id]
   (boolean (metadata-call metadata/has-block-state-properties? block-id)))
 
-(defn register-scripted-tile-hooks!
-  []
-  (doseq [tile-id (or (metadata-call metadata/get-all-tile-ids) [])]
-    (when-let [spec (metadata-call metadata/get-tile-spec tile-id)]
-      (let [tick-fn (:tick-fn spec)
-            read-nbt-fn (:read-nbt-fn spec)
-            write-nbt-fn (:write-nbt-fn spec)
-            tile-kind (:tile-kind spec)]
-        (when (or tick-fn read-nbt-fn write-nbt-fn tile-kind)
-          (tile-logic/register-tile-logic! tile-id
-                                           {:tile-kind tile-kind
-                                            :tick-fn tick-fn
-                                            :read-nbt-fn read-nbt-fn
-                                            :write-nbt-fn write-nbt-fn}))))))
+(defn- install-bundle-on-block!
+  [block tile-id bundles]
+  (when (and block tile-id bundles)
+    (when-let [bundle (get bundles tile-id)]
+      (when (instance? IScriptedBlock block)
+        (logic-pipeline/install-bundle-to-block! block bundle)))))
 
 (defn register-all-blocks!
   [{:keys [registered-blocks base-properties carrier-properties]}]
-  (doseq [block-id (or (metadata-call metadata/get-all-block-ids) [])]
-    (let [registry-name (metadata-call metadata/get-block-registry-name block-id)
-          fluid-id (metadata-call metadata/get-fluid-id-for-block block-id)
-          needs-dynamic-properties? (has-block-state-properties? block-id)
-          has-be? (boolean (metadata-call metadata/has-block-entity? block-id))
-          tile-id (when has-be?
-                    (metadata-call metadata/get-block-tile-id block-id))
-          block-inst (cond
-                       (and fluid-id (not (metadata-call metadata/fluid-block? block-id)))
-                       (FabricBootstrapHelper/createPlainBlock base-properties)
+  (let [bundles (logic-pipeline/compile-all-bundles)]
+    (doseq [block-id (or (metadata-call metadata/get-all-block-ids) [])]
+      (let [registry-name (metadata-call metadata/get-block-registry-name block-id)
+            fluid-id (metadata-call metadata/get-fluid-id-for-block block-id)
+            needs-dynamic-properties? (has-block-state-properties? block-id)
+            has-be? (boolean (metadata-call metadata/has-block-entity? block-id))
+            tile-id (when has-be?
+                      (metadata-call metadata/get-block-tile-id block-id))
+            block-inst (cond
+                         (and fluid-id (not (metadata-call metadata/fluid-block? block-id)))
+                         (FabricBootstrapHelper/createPlainBlock base-properties)
 
-                       fluid-id
-                       (throw (ex-info "Fabric fluid-backed block registration not wired"
-                                       {:block-id block-id
-                                        :fluid-id fluid-id}))
+                         fluid-id
+                         (throw (ex-info "Fabric fluid-backed block registration not wired"
+                                         {:block-id block-id
+                                          :fluid-id fluid-id}))
 
-                       (and needs-dynamic-properties? has-be?)
-                       (let [props (bsp/get-all-properties block-id)]
-                         (FabricBootstrapHelper/createCarrierScriptedDynamicBlock block-id tile-id props carrier-properties))
+                         (and needs-dynamic-properties? has-be?)
+                         (let [props (bsp/get-all-properties block-id)]
+                           (FabricBootstrapHelper/createCarrierScriptedDynamicBlock block-id tile-id props carrier-properties))
 
-                       needs-dynamic-properties?
-                       (let [props (bsp/get-all-properties block-id)]
-                         (FabricBootstrapHelper/createDynamicStateBlock block-id props base-properties))
+                         needs-dynamic-properties?
+                         (let [props (bsp/get-all-properties block-id)]
+                           (FabricBootstrapHelper/createDynamicStateBlock block-id props base-properties))
 
-                       has-be?
-                       (FabricBootstrapHelper/createCarrierScriptedBlock block-id tile-id carrier-properties)
+                         has-be?
+                         (FabricBootstrapHelper/createCarrierScriptedBlock block-id tile-id carrier-properties)
 
-                       :else
-                       (FabricBootstrapHelper/createPlainBlock base-properties))
-          registered (fabric-dispatch/register-block registry-name block-inst)]
-      (registry-core/swap-state! registered-blocks #(assoc % block-id registered)))))
+                         :else
+                         (FabricBootstrapHelper/createPlainBlock base-properties))
+            _ (install-bundle-on-block! block-inst tile-id bundles)
+            registered (fabric-dispatch/register-block registry-name block-inst)]
+        (registry-core/swap-state! registered-blocks #(assoc % block-id registered))))))
+
+(defn assert-scripted-blocks-bundled!
+  [{:keys [registered-blocks]}]
+  (let [block-ids (or (metadata-call metadata/get-all-block-ids) [])
+        blocks (keep #(registry-core/lookup registered-blocks %) block-ids)
+        scripted (filter #(instance? IScriptedBlock %) blocks)]
+    (logic-pipeline/assert-all-blocks-have-bundle! scripted #{}))
+  nil)
 
 (defn register-block-entities!
   [{:keys [mod-id registered-blocks registered-block-entities]}]
@@ -218,6 +222,7 @@
           :scripted-ray (register-scripted-ray-spec! registry-name entity-spec)
           :scripted-marker (register-scripted-marker-spec! registry-name entity-spec)
           :scripted-block-body (register-scripted-block-body-spec! registry-name entity-spec)
+          :scripted-mob (do (mob-pipeline/compile-all-mob-bundles) nil)
           nil)))))
 
 (defn register-all-particles!
@@ -230,8 +235,8 @@
 
 (defn register-content!
   [{:keys [mod-id] :as ctx}]
-  (register-scripted-tile-hooks!)
   (register-all-blocks! ctx)
+  (assert-scripted-blocks-bundled! ctx)
   (register-block-entities! (assoc ctx :mod-id mod-id))
   (register-all-items! ctx)
   (register-all-entities!)

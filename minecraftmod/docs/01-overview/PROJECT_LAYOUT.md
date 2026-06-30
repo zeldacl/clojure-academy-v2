@@ -104,6 +104,19 @@
 
 **平台初始化**：Forge / Fabric `client/init` 调用 `msdf-setup/init!`；`runtime_bridge` 每 tick 调用 `msdf-tick/client-tick!`。
 
+## Scripted 逻辑分发（`mc-1.20.1` + 平台注册）
+
+BlockEntity 与 Mob 热路径经 Java 接口 + reify bundle，无运行期 `^:dynamic` 查表。详见 [SCRIPTED_LOGIC_DISPATCH.md](../04-systems/SCRIPTED_LOGIC_DISPATCH.md)。
+
+| 路径 | 说明 |
+|------|------|
+| `mc-1.20.1/.../block/logic/*.java` | `ITile*Logic`、`TileLogicBundle`、`IScriptedBlock` |
+| `mc-1.20.1/.../block/logic_compile.clj`、`logic_pipeline.clj` | tile bundle 编译与安装 |
+| `mc-1.20.1/.../entity/ScriptedMobEntity.java`、`entity/logic/*` | Mob bundle 与 `ScriptedEntityLogicRegistry` |
+| `mc-1.20.1/.../entity/mob_logic_compile.clj`、`mob_logic_pipeline.clj` | mob bundle 编译与安装 |
+| `mcmod/.../block/tile_kind.clj` | 声明期 tile-kind 默认（合并于 compile） |
+| `forge-1.20.1/.../registry/content_registration.clj` | 注册期调用 pipeline |
+
 ## 新增内容应落在何处
 
 1. 在 **`mcmod`** 扩展 DSL / 元数据 / 协议（若涉及新抽象）。

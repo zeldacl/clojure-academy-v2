@@ -3,7 +3,7 @@
   (:require [cn.li.mcmod.platform.capability :as platform-cap]
             [cn.li.mcmod.platform.energy-integration :as energy-integration]
             [cn.li.mcmod.content.registry :as content-registry]
-            [cn.li.mcmod.block.tile-logic :as tile-logic]
+            [cn.li.mcmod.block.tile-dsl :as tdsl]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.forge1201.capability CapabilityRegistry ForgeEnergyAdapter]
            [cn.li.mcmod.energy IEnergyCapable]
@@ -61,7 +61,7 @@
       (platform-cap/declare-capability! capability-key IEnergyStorage get-forge-energy-capability))
     (doseq [descriptor descriptors
             tile-id (target-tile-ids descriptor)]
-      (tile-logic/register-tile-capability! tile-id (target-capability-key descriptor)))
+      (tdsl/register-tile-capability-keys! tile-id (target-capability-key descriptor)))
     (log/info "Forge Energy descriptor bridge enabled" {:descriptor-count (count descriptors)}))
   true)
 

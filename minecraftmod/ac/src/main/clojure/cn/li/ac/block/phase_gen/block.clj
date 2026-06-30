@@ -7,7 +7,7 @@
             [cn.li.ac.config.modid :as modid]
             [cn.li.ac.util.init-guard :refer [defonce-guard]]
             [cn.li.mcmod.block.dsl :as bdsl]
-            [cn.li.mcmod.block.tile-logic :as tile-logic]
+            [cn.li.mcmod.block.tile-dsl :as tdsl]
             [cn.li.mcmod.platform.capability :as platform-cap])
   (:import [cn.li.acapi.wireless IWirelessGenerator]))
 
@@ -26,22 +26,12 @@
               :write-nbt-fn phase-logic/phase-scripted-save-fn}]
      :tile-ids ["phase-gen"]
      :containers {"phase-gen" phase-logic/phase-container-fns}
-     ;; :wireless-generator capability is declared by the first generator that loads.
-     ;; We declare here only if not already present, then register this tile.
+     :capabilities [{:key :wireless-generator
+                     :interface IWirelessGenerator
+                     :factory impls/wireless-generator-factory}]
      :after #(do
-               (when-not (platform-cap/get-capability-entry :wireless-generator)
-                 (platform-cap/declare-capability!
-                   :wireless-generator IWirelessGenerator
-                   impls/wireless-generator-factory))
-               ;; Register fluid spec so the forge IFluidHandler shim can resolve
-               ;; the correct fluid without hardcoding content-specific IDs.
-               (platform-cap/register-tile-fluid-spec! "phase-gen" modid/MOD-ID "imag_phase")
-               ;; :fluid-handler capability is declared by the Forge shim
-               ;; (cn.li.forge1201.capability.fluid-handler) during platform init.
-               ;; Here we just associate the phase-gen tile with it.
-               (doseq [tile-id ["phase-gen"]]
-                 (tile-logic/register-tile-capability! tile-id :wireless-generator)
-                 (tile-logic/register-tile-capability! tile-id :fluid-handler)))
+              (platform-cap/register-tile-fluid-spec! "phase-gen" modid/MOD-ID "imag_phase")
+              (tdsl/register-tile-capability-keys! "phase-gen" :fluid-handler))
      :blocks [(bdsl/create-block-spec
                 "phase-gen"
                 {:registry-name "phase_gen"

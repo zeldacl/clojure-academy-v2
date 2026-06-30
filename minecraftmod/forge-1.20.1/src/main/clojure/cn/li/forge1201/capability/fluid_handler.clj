@@ -120,7 +120,7 @@
   2. Declares the Clojure-side capability factory.
   Must be called before any content init that calls register-tile-capability!."
   []
-  ;; 1. Map the Forge Capability token to the string key used by tile-logic.
+  ;; 1. Map the Forge Capability token to the string key used by tile bundles.
   (CapabilityRegistry/register "fluid-handler" ForgeCapabilities/FLUID_HANDLER)
   ;; 2. Declare the Clojure-side handler factory.
   (when-not (platform-cap/get-capability-entry :fluid-handler)

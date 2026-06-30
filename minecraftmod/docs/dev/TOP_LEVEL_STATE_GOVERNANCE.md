@@ -77,6 +77,8 @@ Rules:
 4. Notes should state the migration phase or retained duplicate/freeze policy.
 5. Do not whitelist by namespace prefix, glob, or vague symbol names.
 
+**Removed (2026-06 scripted logic refactor):** runtime `*tile-logic-registry-state*`, `*container-registry-state*`, `*capability-registry-state*`, and entity `*hook-registry-state*` / `*hook-metadata-state*` are deleted — no whitelist entries should remain for them. Bundle maps `{tile-id → TileLogicBundle}` are registration-phase `let` locals, not top-level state.
+
 ## `mcmod.platform` SPI globals (S1)
 
 Platform adapter namespaces under `mcmod/src/main/clojure/cn/li/mcmod/platform/`

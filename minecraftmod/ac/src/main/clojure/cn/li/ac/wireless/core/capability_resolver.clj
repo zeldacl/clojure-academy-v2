@@ -2,7 +2,6 @@
   "Resolve wireless capabilities from tiles or VBlocks."
   (:require [cn.li.ac.wireless.core.vblock :as vb]
             [cn.li.ac.wireless.core.capability-lookup :as cap-lookup]
-            [cn.li.mcmod.block.tile-logic :as tile-logic]
             [cn.li.mcmod.platform.be :as platform-be])
   (:import [cn.li.acapi.wireless
             IWirelessGenerator

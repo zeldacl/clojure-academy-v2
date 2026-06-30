@@ -8,7 +8,6 @@
             [cn.li.mcmod.platform.resource :as resource]
             [cn.li.mcmod.platform.world :as world]
             [cn.li.mcmod.platform.be :as be]
-            [cn.li.mcmod.block.tile-logic :as tile-logic]
             [cn.li.mcmod.platform.capability :as platform-capability]
             [cn.li.mc1201.platform.class-access :as class-access]
             [cn.li.mc1201.platform.item-ops :as item-ops]
@@ -159,9 +158,7 @@
                                :create-list #(ListTag.)}
                               "mc1201")
     (nbt/install-nbt-has-key-fn! (fn [^CompoundTag this key] (.contains this (str key)))
-                                 "mc1201")
-    (tile-logic/install-capability-get-factory! platform-capability/get-handler-factory
-                                                "mc1201")))
+                                 "mc1201")))
 
 (defn- install-position! [_adapter]
   (install-when! pos-installed?

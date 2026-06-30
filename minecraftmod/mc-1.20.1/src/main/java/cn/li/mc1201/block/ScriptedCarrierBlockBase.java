@@ -1,5 +1,6 @@
 package cn.li.mc1201.block;
 
+import cn.li.mc1201.block.logic.TileLogicBundle;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BaseEntityBlock;
@@ -15,10 +16,11 @@ import net.minecraft.world.level.block.state.BlockState;
  * server ticker wiring while leaving platform-specific block-entity creation
  * and cast logic to subclasses.</p>
  */
-public abstract class ScriptedCarrierBlockBase extends BaseEntityBlock {
+public abstract class ScriptedCarrierBlockBase extends BaseEntityBlock implements IScriptedBlock {
 
     protected final String blockId;
     protected final String tileId;
+    private volatile TileLogicBundle tileLogic = TileLogicBundle.EMPTY;
 
     protected ScriptedCarrierBlockBase(String blockId, String tileId, Properties props) {
         super(props);
@@ -26,12 +28,24 @@ public abstract class ScriptedCarrierBlockBase extends BaseEntityBlock {
         this.tileId = tileId;
     }
 
+    @Override
     public String getBlockId() {
         return blockId;
     }
 
+    @Override
     public String getTileId() {
         return tileId;
+    }
+
+    @Override
+    public TileLogicBundle getTileLogic() {
+        return tileLogic;
+    }
+
+    @Override
+    public void installTileLogic(TileLogicBundle bundle) {
+        this.tileLogic = bundle != null ? bundle : TileLogicBundle.EMPTY;
     }
 
     protected abstract BlockEntity createScriptedBlockEntity(BlockPos pos, BlockState state);

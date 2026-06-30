@@ -80,3 +80,41 @@ Forge/Fabric 适配层会通过 `cn.li.mcmod.protocol.metadata` 查询：
 
 因此新增 tile 内容通常只需要在内容层新增 `deftile`（以及可选的 `deftile-kind`），平台侧注册循环无需修改。
 
+---
+
+## 5. 容器与 capability（写入 tile spec）
+
+运行期不再使用 `tile-logic-registry` / `container-registry` / `capability-registry`。容器与 capability **只在声明期**写入 `tile-registry`：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `:container` | map | 标准键：`:get-size` `:get-item` `:set-item!` `:remove-item` `:remove-item-no-update` `:still-valid` `:slots-for-face` `:can-place` `:can-take`（兼容旧键 `:still-valid?` 等，编译期归一） |
+| `:capability-keys` | set of keyword | 如 `#{:wireless-receiver :fluid-handler}`；handler 工厂由 `platform.capability/declare-capability!` 注册，编译进 `ITileCapabilityLogic` |
+
+`ac` 侧推荐通过 `cn.li.ac.block.machine.registration/init-machine!`：
+
+```clojure
+(machine-reg/init-machine!
+  {:tiles [{:id "my-machine" :registry-name "my_machine" :blocks ["my-machine"]
+            :tick-fn my-tick :read-nbt-fn my-read :write-nbt-fn my-write}]
+   :containers {"my-machine" {:get-size (fn [be] 9) :get-item ...}}
+   :capabilities [{:key :wireless-receiver :interface IWirelessReceiver :factory my-factory}]
+   :blocks [...]})
+```
+
+`:containers` / `:capabilities` 语法保留，内部合并进 tile spec 后 `register-tile!`，**不再**调用已删除的 `register-container!` / `register-capability!`。
+
+---
+
+## 6. 编译与安装（`mc-1.20.1`）
+
+注册期平台调用共享流水线（Forge/Fabric 相同）：
+
+1. `cn.li.mc1201.block.logic-pipeline/compile-all-bundles` — 遍历 `tile-dsl`，合并 `tile-kind` 默认，产出 `TileLogicBundle`。
+2. 每个 `IScriptedBlock` 实例创建后立即 `install-bundle-to-block!`。
+3. Forge 在 common setup 调用 `assert-all-blocks-have-bundle!`（未安装则启动失败）。
+
+热路径：`AbstractScriptedBlockEntity` 通过 `getBlockState().getBlock()` 读取 bundle，无 `RT.var`。
+
+详见 [SCRIPTED_LOGIC_DISPATCH.md](../04-systems/SCRIPTED_LOGIC_DISPATCH.md)。
+

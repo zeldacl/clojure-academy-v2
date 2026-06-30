@@ -4,12 +4,14 @@
   (:require [cn.li.forge1201.integration.bootstrap :as bootstrap]
             [cn.li.forge1201.registry.item-properties :as item-properties]
             [cn.li.forge1201.registry.state :as registry-state]
-            [cn.li.mcmod.block.tile-logic :as tile-logic]
+            [cn.li.mc1201.block.logic-pipeline :as logic-pipeline]
+            [cn.li.mc1201.entity.mob-logic-pipeline :as mob-pipeline]
             [cn.li.mcmod.entity.dsl :as edsl]
             [cn.li.mcmod.protocol.metadata :as registry-metadata]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mc1201.block.blockstate-properties :as blockstate-props])
   (:import [cn.li.forge1201.entity ModEntities]
+           [cn.li.mc1201.block IScriptedBlock]
            [cn.li.mc1201.effect ScriptedMobEffect]
            [net.minecraft.core.particles SimpleParticleType]
            [net.minecraft.resources ResourceLocation]
@@ -122,59 +124,54 @@
     (instance? clojure.lang.IDeref source) (or @source {})
     :else {}))
 
-(defn register-scripted-tile-hooks!
-  []
-  (doseq [tile-id (registry-metadata/get-all-tile-ids)]
-    (when-let [spec (registry-metadata/get-tile-spec tile-id)]
-      (let [tick-fn (:tick-fn spec)
-            read-nbt-fn (:read-nbt-fn spec)
-            write-nbt-fn (:write-nbt-fn spec)
-            tile-kind (:tile-kind spec)]
-        (when (or tick-fn read-nbt-fn write-nbt-fn tile-kind)
-          (tile-logic/register-tile-logic! tile-id
-                                           {:tile-kind tile-kind
-                                            :tick-fn tick-fn
-                                            :read-nbt-fn read-nbt-fn
-                                            :write-nbt-fn write-nbt-fn}))))))
+(defn- install-bundle-on-block!
+  [block tile-id bundles]
+  (when (and block tile-id bundles)
+    (when-let [bundle (get bundles tile-id)]
+      (when (instance? IScriptedBlock block)
+        (logic-pipeline/install-bundle-to-block! block bundle)))))
 
 (defn register-all-blocks!
   [{:keys [blocks-register registered-fluids-source base-properties carrier-properties]}]
-  (doseq [block-id (registry-metadata/get-all-block-ids)]
-    (let [registry-name (registry-metadata/get-block-registry-name block-id)
-          fluid-id (registry-metadata/get-fluid-id-for-block block-id)
-          needs-dynamic-properties? (has-block-state-properties? block-id)
-          has-be? (registry-metadata/has-block-entity? block-id)
-          tile-id (when has-be?
-                    (registry-metadata/get-block-tile-id block-id))
-          registered-obj (.register ^DeferredRegister blocks-register registry-name
-                                    (reify java.util.function.Supplier
-                                      (get [_]
-                                        (cond
-                                            (and fluid-id has-be?)
-                                            (when-let [fluid-source-ro (get (registry-source-snapshot registered-fluids-source) fluid-id)]
-                                              (bootstrap/create-scripted-liquid-block
-                                                (reify java.util.function.Supplier
-                                                  (get [_]
-                                                    (.get ^RegistryObject fluid-source-ro)))
-                                                block-id
-                                                tile-id))
-                                            fluid-id
-                                            (when-let [fluid-source-ro (get (registry-source-snapshot registered-fluids-source) fluid-id)]
-                                              (bootstrap/create-liquid-block
-                                                (reify java.util.function.Supplier
-                                                  (get [_]
-                                                    (.get ^RegistryObject fluid-source-ro)))))
-                                            (and needs-dynamic-properties? has-be?)
-                                            (let [props (blockstate-props/get-all-properties block-id)]
-                                              (bootstrap/create-carrier-scripted-dynamic-block block-id tile-id props base-properties))
-                                            needs-dynamic-properties?
-                                            (let [props (blockstate-props/get-all-properties block-id)]
-                                              (bootstrap/create-dynamic-state-block block-id props base-properties))
-                                            has-be?
-                                            (bootstrap/create-carrier-scripted-block block-id tile-id carrier-properties)
-                                            :else
-                                            (bootstrap/create-plain-block base-properties)))))]
-      (registry-state/register-block! block-id registered-obj))))
+  (let [bundles (logic-pipeline/compile-all-bundles)]
+    (doseq [block-id (registry-metadata/get-all-block-ids)]
+      (let [registry-name (registry-metadata/get-block-registry-name block-id)
+            fluid-id (registry-metadata/get-fluid-id-for-block block-id)
+            needs-dynamic-properties? (has-block-state-properties? block-id)
+            has-be? (registry-metadata/has-block-entity? block-id)
+            tile-id (when has-be?
+                      (registry-metadata/get-block-tile-id block-id))
+            registered-obj (.register ^DeferredRegister blocks-register registry-name
+                                      (reify java.util.function.Supplier
+                                        (get [_]
+                                          (let [block (cond
+                                                        (and fluid-id has-be?)
+                                                        (when-let [fluid-source-ro (get (registry-source-snapshot registered-fluids-source) fluid-id)]
+                                                          (bootstrap/create-scripted-liquid-block
+                                                            (reify java.util.function.Supplier
+                                                              (get [_]
+                                                                (.get ^RegistryObject fluid-source-ro)))
+                                                            block-id
+                                                            tile-id))
+                                                        fluid-id
+                                                        (when-let [fluid-source-ro (get (registry-source-snapshot registered-fluids-source) fluid-id)]
+                                                          (bootstrap/create-liquid-block
+                                                            (reify java.util.function.Supplier
+                                                              (get [_]
+                                                                (.get ^RegistryObject fluid-source-ro)))))
+                                                        (and needs-dynamic-properties? has-be?)
+                                                        (let [props (blockstate-props/get-all-properties block-id)]
+                                                          (bootstrap/create-carrier-scripted-dynamic-block block-id tile-id props base-properties))
+                                                        needs-dynamic-properties?
+                                                        (let [props (blockstate-props/get-all-properties block-id)]
+                                                          (bootstrap/create-dynamic-state-block block-id props base-properties))
+                                                        has-be?
+                                                        (bootstrap/create-carrier-scripted-block block-id tile-id carrier-properties)
+                                                        :else
+                                                        (bootstrap/create-plain-block base-properties))]
+                                            (install-bundle-on-block! block tile-id bundles)
+                                            block))))]
+        (registry-state/register-block! block-id registered-obj)))))
 
 (defn register-all-fluids!
   [{:keys [fluid-types-register fluids-register items-register]}]
@@ -298,33 +295,42 @@
 
 (defn register-all-entities!
   [mod-id]
-  (doseq [entity-id (edsl/list-entities)]
-    (let [entity-spec (edsl/get-entity entity-id)
-          registry-name (edsl/get-entity-registry-name entity-id)
-          entity-kind (:entity-kind entity-spec)]
-      (if (nil? entity-kind)
-        (log/error "Skipping entity registration: missing :entity-kind" {:entity-id entity-id})
-        (let [_ (case entity-kind
-                  :scripted-projectile (register-scripted-projectile-spec! registry-name entity-spec)
-                  :scripted-effect (register-scripted-effect-spec! registry-name entity-spec)
-                  :scripted-ray (register-scripted-ray-spec! registry-name entity-spec)
-                  :scripted-marker (register-scripted-marker-spec! registry-name entity-spec)
-                  :scripted-block-body (register-scripted-block-body-spec! registry-name entity-spec)
-                  nil)
-              registered-obj (ModEntities/register
-                               registry-name
-                               (reify java.util.function.Supplier
-                                 (get [_]
-                                   (bootstrap/create-entity-type-by-kind
-                                     (str mod-id ":" registry-name)
-                                     (name entity-kind)
-                                     (name (or (:category entity-spec) :misc))
-                                     (:width entity-spec)
-                                     (:height entity-spec)
-                                     (:client-tracking-range entity-spec)
-                                     (:update-interval entity-spec)
-                                     (:fire-immune? entity-spec)))))]
-          (registry-state/register-entity! entity-id registered-obj))))))
+  (let [mob-bundles (mob-pipeline/compile-all-mob-bundles)]
+    (doseq [entity-id (edsl/list-entities)]
+      (let [entity-spec (edsl/get-entity entity-id)
+            registry-name (edsl/get-entity-registry-name entity-id)
+            entity-kind (:entity-kind entity-spec)]
+        (if (nil? entity-kind)
+          (log/error "Skipping entity registration: missing :entity-kind" {:entity-id entity-id})
+          (let [_ (case entity-kind
+                    :scripted-projectile (register-scripted-projectile-spec! registry-name entity-spec)
+                    :scripted-effect (register-scripted-effect-spec! registry-name entity-spec)
+                    :scripted-ray (register-scripted-ray-spec! registry-name entity-spec)
+                    :scripted-marker (register-scripted-marker-spec! registry-name entity-spec)
+                    :scripted-block-body (register-scripted-block-body-spec! registry-name entity-spec)
+                    :scripted-mob nil
+                    nil)
+                registered-obj (ModEntities/register
+                                 registry-name
+                                 (reify java.util.function.Supplier
+                                   (get [_]
+                                     (bootstrap/create-entity-type-by-kind
+                                       (str mod-id ":" registry-name)
+                                       (name entity-kind)
+                                       (name (or (:category entity-spec) :misc))
+                                       (:width entity-spec)
+                                       (:height entity-spec)
+                                       (:client-tracking-range entity-spec)
+                                       (:update-interval entity-spec)
+                                       (:fire-immune? entity-spec)))))]
+            (when (and (= :scripted-mob entity-kind)
+                       (some? registered-obj)
+                       (.isPresent ^RegistryObject registered-obj)
+                       (get mob-bundles entity-id))
+              (mob-pipeline/install-mob-bundle!
+                (.get ^RegistryObject registered-obj)
+                (get mob-bundles entity-id)))
+            (registry-state/register-entity! entity-id registered-obj)))))))
 
 (defn- effect-category->forge
   ^MobEffectCategory
@@ -399,9 +405,14 @@
 
         (registry-state/register-item! (str block-id "-item") registered-obj)))))
 
+(defn assert-scripted-blocks-bundled!
+  []
+  (let [blocks (keep registry-state/get-registered-block (registry-metadata/get-all-block-ids))]
+    (logic-pipeline/assert-all-blocks-have-bundle! blocks #{}))
+  nil)
+
 (defn register-core-content!
   [{:keys [mod-id] :as ctx}]
-  (register-scripted-tile-hooks!)
   (register-all-fluids! ctx)
   (register-all-blocks! ctx)
   (register-all-entities! mod-id)

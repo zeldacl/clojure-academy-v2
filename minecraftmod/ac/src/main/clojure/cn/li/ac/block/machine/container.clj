@@ -59,7 +59,7 @@
                         (apply-transform
                           (assoc (machine-runtime/state-or-default be default-state)
                                  inventory-key (vec (repeat (slot-count-fn) nil))))))
-     :still-valid? (fn [_be _player] true)
+     :still-valid (fn [_be _player] true)
      :slots-for-face (or slots-for-face (fn [_be _face] (int-array (range (slot-count-fn)))))
-     :can-place-through-face? (or can-place? (fn [_be _slot _item _face] false))
-     :can-take-through-face? (or can-take? (fn [_be _slot _item _face] false))}))
+     :can-place (or can-place? (fn [_be _slot _item _face] false))
+     :can-take (or can-take? (fn [_be _slot _item _face] false))}))

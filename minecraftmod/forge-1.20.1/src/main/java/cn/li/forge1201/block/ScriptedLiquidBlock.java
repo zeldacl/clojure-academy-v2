@@ -1,6 +1,8 @@
 package cn.li.forge1201.block;
 
 import cn.li.forge1201.block.entity.ScriptedBlockEntity;
+import cn.li.mc1201.block.IScriptedBlock;
+import cn.li.mc1201.block.logic.TileLogicBundle;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.EntityBlock;
@@ -24,10 +26,11 @@ import java.util.function.Supplier;
  * level change, bucket pickup). Delegates block entity creation to the
  * existing {@link ScriptedBlockEntity} infrastructure.</p>
  */
-public class ScriptedLiquidBlock extends LiquidBlock implements EntityBlock {
+public class ScriptedLiquidBlock extends LiquidBlock implements EntityBlock, IScriptedBlock {
 
     private final String blockId;
     private final String tileId;
+    private volatile TileLogicBundle tileLogic = TileLogicBundle.EMPTY;
 
     public ScriptedLiquidBlock(Supplier<? extends FlowingFluid> fluidSupplier,
                                String blockId,
@@ -36,6 +39,26 @@ public class ScriptedLiquidBlock extends LiquidBlock implements EntityBlock {
         super(fluidSupplier, props);
         this.blockId = blockId;
         this.tileId = tileId;
+    }
+
+    @Override
+    public String getBlockId() {
+        return blockId;
+    }
+
+    @Override
+    public String getTileId() {
+        return tileId;
+    }
+
+    @Override
+    public TileLogicBundle getTileLogic() {
+        return tileLogic;
+    }
+
+    @Override
+    public void installTileLogic(TileLogicBundle bundle) {
+        this.tileLogic = bundle != null ? bundle : TileLogicBundle.EMPTY;
     }
 
     @Override

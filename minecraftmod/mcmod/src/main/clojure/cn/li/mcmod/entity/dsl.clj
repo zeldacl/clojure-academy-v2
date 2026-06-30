@@ -32,7 +32,8 @@
     :scripted-effect
     :scripted-ray
     :scripted-marker
-    :scripted-block-body})
+    :scripted-block-body
+    :scripted-mob})
 
 (defn create-entity-spec
   [entity-id options]
@@ -74,6 +75,7 @@
                        :scripted-ray :ray
                        :scripted-marker :marker
                        :scripted-block-body :block-body
+                       :scripted-mob :mob
                        nil)]
     (when (and required-key (not (map? (get properties required-key))))
       (throw (ex-info "Entity :properties is missing required kind payload"

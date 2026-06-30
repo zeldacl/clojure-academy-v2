@@ -5,7 +5,6 @@
 	(:require [cn.li.mcmod.block.dsl :as bdsl]
 	          [cn.li.mcmod.block.tile-dsl :as tdsl]
 	          [cn.li.ac.config.modid :as modid]
-	          [cn.li.mcmod.block.tile-logic :as tile-logic]
 		          [cn.li.mcmod.platform.be :as platform-be]
 		          [cn.li.mcmod.platform.capability :as platform-cap]
 		          [cn.li.ac.integration.block.energy-converter.base :as ec-base]
@@ -101,8 +100,8 @@
 		;; throws Duplicate capability registration).
 		;; receivers: rf-input, eu-input   |  generators: rf-output, eu-output
 		(doseq [tile-id ["rf-input" "eu-input"]]
-			(tile-logic/register-tile-capability! tile-id :wireless-receiver))
+			(tdsl/register-tile-capability-keys! tile-id :wireless-receiver))
 		(doseq [tile-id ["rf-output" "eu-output"]]
-			(tile-logic/register-tile-capability! tile-id :wireless-generator))
+			(tdsl/register-tile-capability-keys! tile-id :wireless-generator))
 		(log/info "Energy converters initialized"
 							{:count (count ec-config/supported-blocks)})))

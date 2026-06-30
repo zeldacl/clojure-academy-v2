@@ -139,6 +139,7 @@
            :be-get-custom-state (resolve-binding! 'be-get-custom-state)
            :be-set-custom-state! (resolve-binding! 'be-set-custom-state!)
            :be-get-block-id (resolve-binding! 'be-get-block-id)
+           :be-get-tile-id (resolve-binding! 'be-get-tile-id)
            :be-set-changed! (resolve-binding! 'be-set-changed!)
            :be-get-fluid-height (resolve-binding! 'be-get-fluid-height)})
         (alter-var-root #'*initialized?* (constantly true))

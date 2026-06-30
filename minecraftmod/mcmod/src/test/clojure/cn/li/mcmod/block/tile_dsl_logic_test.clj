@@ -1,24 +1,21 @@
 (ns cn.li.mcmod.block.tile-dsl-logic-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.mcmod.block.tile-dsl :as tdsl]
-            [cn.li.mcmod.block.tile-logic :as tlog]
+            [cn.li.mcmod.block.tile-kind :as tile-kind]
             [cn.li.mcmod.protocol.core :as registry-core]))
 
 (defn- reset-tile-dsl! []
   (registry-core/reset-state! tdsl/tile-registry {:by-id {} :block->tile-id {}}))
 
-(defn- reset-tile-logic! []
-  (registry-core/reset-state! tlog/tile-logic-registry {})
-  (registry-core/reset-state! tlog/tile-kind-registry {})
-  (registry-core/reset-state! tlog/capability-registry {})
-  (registry-core/reset-state! tlog/container-registry {}))
+(defn- reset-tile-kind! []
+  (registry-core/reset-state! tile-kind/tile-kind-registry {}))
 
 (defn- reset-all! [f]
   (reset-tile-dsl!)
-  (reset-tile-logic!)
+  (reset-tile-kind!)
   (f)
   (reset-tile-dsl!)
-  (reset-tile-logic!))
+  (reset-tile-kind!))
 
 (use-fixtures :each reset-all!)
 
@@ -40,25 +37,22 @@
     (is (= "my-tile" (tdsl/get-tile-id-for-block "a")))
     (is (= #{"my-tile"} (set (tdsl/list-tiles))))))
 
-(deftest register-tile-logic-with-kind-merge-test
-  (tlog/register-tile-kind! :k {:tick-fn (fn [_ _ _ _] :kind-tick)
-                                :read-nbt-fn (fn [_] {:from :kind})
-                                :write-nbt-fn (fn [_ _] nil)})
-  (tlog/register-tile-logic! "tile-a" {:tile-kind :k :tick-fn (fn [_ _ _ _] :override)})
-  (is (= :override (tlog/invoke-tick "tile-a" nil nil nil nil)))
-  (tlog/register-tile-logic! "tile-b" {:tile-kind :k})
-  (is (= :kind-tick (tlog/invoke-tick "tile-b" nil nil nil nil)))
-  (is (= {:from :kind} (tlog/read-nbt "tile-b" :tag))))
+(deftest merge-tile-kind-defaults-test
+  (tile-kind/register-tile-kind!
+    :k
+    {:tick-fn (fn [_ _ _ _] :kind-tick)
+     :read-nbt-fn (fn [_] {:from :kind})
+     :write-nbt-fn (fn [_ _] nil)})
+  (let [merged-a (tile-kind/merge-tile-kind-defaults
+                   {:tile-kind :k
+                    :tick-fn (fn [_ _ _ _] :override)})
+        merged-b (tile-kind/merge-tile-kind-defaults {:tile-kind :k})]
+    (is (= :override ((:tick-fn merged-a) nil nil nil nil)))
+    (is (= :kind-tick ((:tick-fn merged-b) nil nil nil nil)))
+    (is (= {:from :kind} ((:read-nbt-fn merged-b) :tag)))))
 
-(deftest register-tile-logic-no-hooks-skipped-test
-  (is (nil? (tlog/register-tile-logic! "lonely" {:tile-kind nil}))))
-
-(deftest tile-nbt-and-container-dispatch-test
-  (tlog/register-tile-logic! "nbt-tile" {:read-nbt-fn (fn [t] {:tag t})
-                                     :write-nbt-fn (fn [_be _t] :written)})
-  (is (= {:tag :x} (tlog/read-nbt "nbt-tile" :x)))
-  (tlog/register-container! "c-tile" {:get-size (fn [_] 3)
-                                        :get-item (fn [_ slot] {:slot slot})})
-  (is (= 3 (tlog/container-size "c-tile" :be)))
-  (is (= {:slot 1} (tlog/container-get-item "c-tile" :be 1)))
-  (is (true? (tlog/container-still-valid "c-tile" :be :player))))
+(deftest register-tile-capability-keys-test
+  (tdsl/register-tile!
+    (tdsl/create-tile-spec "cap-tile" {:impl :scripted :blocks ["cap-block"]}))
+  (tdsl/register-tile-capability-keys! "cap-tile" :wireless-receiver)
+  (is (= #{:wireless-receiver} (:capability-keys (tdsl/get-tile "cap-tile")))))

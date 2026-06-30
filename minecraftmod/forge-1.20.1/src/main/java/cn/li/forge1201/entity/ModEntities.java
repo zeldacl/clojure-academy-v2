@@ -4,6 +4,7 @@ import cn.li.forge1201.MyMod1201;
 import cn.li.mc1201.entity.ScriptedBlockBodyEntity;
 import cn.li.mc1201.entity.ScriptedEffectEntity;
 import cn.li.mc1201.entity.ScriptedMarkerEntity;
+import cn.li.mc1201.entity.ScriptedMobEntity;
 import cn.li.mc1201.entity.ScriptedProjectileEntity;
 import cn.li.mc1201.entity.ScriptedRayEntity;
 import cn.li.mc1201.entity.hook.effect.ScriptedEffectHooks;
@@ -131,6 +132,7 @@ public final class ModEntities {
             case "scripted-ray" -> ScriptedRayEntity.class;
             case "scripted-marker" -> ScriptedMarkerEntity.class;
             case "scripted-block-body" -> ScriptedBlockBodyEntity.class;
+            case "scripted-mob" -> ScriptedMobEntity.class;
             default -> null;
         };
     }

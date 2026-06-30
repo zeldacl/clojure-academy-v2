@@ -4,12 +4,13 @@
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.block.dsl :as bdsl]
             [cn.li.mcmod.block.tile-dsl :as tdsl]
-            [cn.li.mcmod.block.tile-logic :as tile-logic]
+            [cn.li.mcmod.block.tile-kind :as tile-kind]
             [cn.li.mcmod.platform.capability :as platform-cap]
             [cn.li.mcmod.util.log :as log]))
 
 (defn register-tile-spec!
-  [{:keys [id registry-name blocks impl tile-kind tick-fn read-nbt-fn write-nbt-fn]}]
+  [{:keys [id registry-name blocks impl tile-kind tick-fn read-nbt-fn write-nbt-fn
+           container capability-keys]}]
   (tdsl/register-tile!
     (tdsl/create-tile-spec
       id
@@ -19,11 +20,13 @@
         tile-kind (assoc :tile-kind tile-kind)
         tick-fn (assoc :tick-fn tick-fn)
         read-nbt-fn (assoc :read-nbt-fn read-nbt-fn)
-        write-nbt-fn (assoc :write-nbt-fn write-nbt-fn)))))
+        write-nbt-fn (assoc :write-nbt-fn write-nbt-fn)
+        container (assoc :container container)
+        capability-keys (assoc :capability-keys capability-keys)))))
 
 (defn register-tile-kind!
   [{:keys [tile-kind tick-fn read-nbt-fn write-nbt-fn]}]
-  (tile-logic/register-tile-kind!
+  (tile-kind/register-tile-kind!
     tile-kind
     (cond-> {}
       tick-fn (assoc :tick-fn tick-fn)
@@ -32,18 +35,14 @@
 
 (defn declare-and-register-capabilities!
   "capabilities: [{:key :phase-generator :interface IWirelessGenerator :factory fn} ...]
-  tile-ids: vector of tile id strings"
+  tile-ids: vector of tile id strings — returns capability key set for tile specs."
   [capabilities tile-ids]
   (doseq [{:keys [key interface factory]} capabilities]
     (when-not (platform-cap/get-capability-entry key)
       (platform-cap/declare-capability! key interface factory))
     (doseq [tile-id tile-ids]
-      (tile-logic/register-tile-capability! tile-id key))))
-
-(defn register-containers!
-  [tile-id->container-fns]
-  (doseq [[tile-id fns] tile-id->container-fns]
-    (tile-logic/register-container! tile-id fns)))
+      (tdsl/register-tile-capability-keys! tile-id key)))
+  (set (map :key capabilities)))
 
 (defn register-blocks!
   [block-specs]
@@ -75,11 +74,14 @@
   (with-init-guard guard
     (when before (before))
     (when tile-kind (register-tile-kind! tile-kind))
-    (doseq [tile tiles] (register-tile-spec! tile))
-    (let [ids (or tile-ids (mapv :id tiles))]
-      (when (seq capabilities)
-        (declare-and-register-capabilities! capabilities ids))
-      (when containers (register-containers! containers)))
+    (let [ids (or tile-ids (mapv :id tiles))
+          cap-keys (when (seq capabilities)
+                     (declare-and-register-capabilities! capabilities ids))]
+      (doseq [tile tiles]
+        (register-tile-spec!
+          (assoc tile
+                 :container (get containers (:id tile))
+                 :capability-keys (or (:capability-keys tile) cap-keys)))))
     (when blocks (register-blocks! blocks))
     (when after (after))
     (register-machine-hooks! {:network-handler network-handler
