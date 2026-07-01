@@ -27,9 +27,7 @@
 
 (def ^:dynamic *overlay-render-runtime* nil)
 
-(let [_instance (volatile! nil)]
-  (defn- overlay-render-instance []
-    (or @_instance (vreset! _instance (create-overlay-render-runtime)) @_instance)))
+(def ^:private _overlay-render-runtime (delay (create-overlay-render-runtime)))
 
 (defn- overlay-render-runtime?
   [runtime]
@@ -52,7 +50,7 @@
 (defn- current-overlay-render-runtime
   []
   (or *overlay-render-runtime*
-      (overlay-render-instance)))
+      @_overlay-render-runtime))
 
 (defn- overlay-render-runtime-state-atom
   []

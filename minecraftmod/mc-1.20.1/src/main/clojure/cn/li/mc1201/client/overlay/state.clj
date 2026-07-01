@@ -8,9 +8,7 @@
 
 (def ^:dynamic *overlay-state-runtime* nil)
 
-(let [_instance (volatile! nil)]
-  (defn- overlay-state-instance []
-    (or @_instance (vreset! _instance (create-overlay-state-runtime)) @_instance)))
+(def ^:private _overlay-state-runtime (delay (create-overlay-state-runtime)))
 
 (defn- overlay-state-runtime?
 	[runtime]
@@ -33,7 +31,7 @@
 (defn- current-overlay-state-runtime
 	[]
 	(or *overlay-state-runtime*
-			(overlay-state-instance)))
+			@_overlay-state-runtime))
 
 (defn- client-activated-overlay-atom
 	[]

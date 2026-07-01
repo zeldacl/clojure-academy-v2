@@ -18,9 +18,7 @@
 
 (def ^:dynamic *camera-pitch-runtime* nil)
 
-(let [_instance (volatile! nil)]
-  (defn- camera-pitch-instance []
-    (or @_instance (vreset! _instance (create-camera-pitch-runtime)) @_instance)))
+(def ^:private _camera-pitch-runtime (delay (create-camera-pitch-runtime)))
 
 (defn- camera-pitch-runtime?
   [runtime]
@@ -43,7 +41,7 @@
 (defn- current-camera-pitch-runtime
   []
   (or *camera-pitch-runtime*
-      (camera-pitch-instance)))
+      @_camera-pitch-runtime))
 
 (defn- camera-pitch-deltas-atom
   []
@@ -144,9 +142,7 @@
 
 (def ^:dynamic *hand-effect-runtime* nil)
 
-(let [_instance (volatile! nil)]
-  (defn- hand-effect-instance []
-    (or @_instance (vreset! _instance (create-hand-effect-runtime)) @_instance)))
+(def ^:private _hand-effect-runtime (delay (create-hand-effect-runtime)))
 
 (defn- hand-effect-runtime?
   [runtime]
@@ -169,7 +165,7 @@
 (defn- current-hand-effect-runtime
   []
   (or *hand-effect-runtime*
-      (hand-effect-instance)))
+      @_hand-effect-runtime))
 
 (defn- hand-effect-state-atom
   []

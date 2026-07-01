@@ -33,9 +33,7 @@
 
 (def ^:dynamic *passive-handler-runtime* nil)
 
-(let [_instance (volatile! nil)]
-  (defn- passive-handler-instance []
-    (or @_instance (vreset! _instance (create-passive-handler-runtime)) @_instance)))
+(def ^:private _passive-handler-runtime (delay (create-passive-handler-runtime)))
 
 (declare learned-skill-in-session?
          register-passive-calc-handler!)
@@ -61,7 +59,7 @@
 (defn- current-passive-handler-runtime
   []
   (or *passive-handler-runtime*
-      (passive-handler-instance)))
+      @_passive-handler-runtime))
 
 (defn- passive-handler-state-atom
   []

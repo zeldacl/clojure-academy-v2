@@ -23,16 +23,14 @@
    {:state (atom (merge (default-script-render-runtime-state)
                         initial-state))}))
 
-(let [_instance (volatile! nil)]
-  (defn- script-render-instance []
-    (or @_instance (vreset! _instance (create-script-render-runtime)) @_instance)))
+(def ^:private _script-render-runtime (delay (create-script-render-runtime)))
 
 (def ^:dynamic *script-render-runtime* nil)
 
 (defn current-script-render-runtime
   []
   (or *script-render-runtime*
-      (script-render-instance)))
+      @_script-render-runtime))
 
 (defmacro with-script-render-runtime
   [runtime & body]

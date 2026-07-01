@@ -20,15 +20,13 @@
                          :raw-n-state {}}
                         initial-state))}))
 
-(let [_instance (volatile! nil)]
-  (defn- input-instance []
-    (or @_instance (vreset! _instance (create-input-runtime)) @_instance)))
+(def ^:private _input-runtime (delay (create-input-runtime)))
 
 (def ^:dynamic *input-runtime* nil)
 
 (defn current-input-runtime []
   (or *input-runtime*
-      (input-instance)))
+      @_input-runtime))
 
 (defmacro with-input-runtime [runtime & body]
   `(binding [*input-runtime* ~runtime]

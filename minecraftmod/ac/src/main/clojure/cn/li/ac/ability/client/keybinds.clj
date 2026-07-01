@@ -44,9 +44,7 @@
    {::runtime ::keybind-registry-runtime
     :state* state*}))
 
-(let [_instance (volatile! nil)]
-  (defn- keybind-registry-instance []
-    (or @_instance (vreset! _instance (create-keybind-registry-runtime)) @_instance)))
+(def ^:private _keybind-registry-runtime (delay (create-keybind-registry-runtime)))
 
 (def ^:dynamic *keybind-registry-runtime* nil)
 
@@ -71,7 +69,7 @@
 (defn- current-keybind-registry-runtime
   []
   (or *keybind-registry-runtime*
-      (keybind-registry-instance)))
+      @_keybind-registry-runtime))
 
 (defn- keybind-registry-state-atom
   []
@@ -230,9 +228,7 @@
    :key-states* (atom {})
    :preset-switch-states* (atom {})})
 
-(let [_instance (volatile! nil)]
-  (defn- client-keybind-instance []
-    (or @_instance (vreset! _instance (create-client-keybind-runtime)) @_instance)))
+(def ^:private _client-keybind-runtime (delay (create-client-keybind-runtime)))
 
 (def ^:dynamic *client-keybind-runtime* nil)
 
@@ -258,7 +254,7 @@
 (defn- current-client-keybind-runtime
   []
   (or *client-keybind-runtime*
-      (client-keybind-instance)))
+      @_client-keybind-runtime))
 
 (defn- key-states-atom
   []

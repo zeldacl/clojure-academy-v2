@@ -13,16 +13,14 @@
   ([initial-server]
    {:current-server (atom initial-server)}))
 
-(let [_instance (volatile! nil)]
-  (defn- server-context-instance []
-    (or @_instance (vreset! _instance (create-server-context-runtime)) @_instance)))
+(def ^:private _server-context-runtime (delay (create-server-context-runtime)))
 
 (def ^:dynamic *server-context-runtime* nil)
 
 (defn current-server-context-runtime
   []
   (or *server-context-runtime*
-      (server-context-instance)))
+      @_server-context-runtime))
 
 (defmacro with-server-context-runtime
   [runtime & body]

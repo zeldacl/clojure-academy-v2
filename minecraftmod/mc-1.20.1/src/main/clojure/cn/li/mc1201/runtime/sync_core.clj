@@ -19,9 +19,7 @@
 
 (def ^:dynamic *sync-scheduler-runtime* nil)
 
-(let [_instance (volatile! nil)]
-  (defn- sync-scheduler-instance []
-    (or @_instance (vreset! _instance (create-sync-scheduler-runtime)) @_instance)))
+(def ^:private _sync-scheduler-runtime (delay (create-sync-scheduler-runtime)))
 
 (defn- sync-scheduler-runtime?
   [runtime]
@@ -44,7 +42,7 @@
 (defn- current-sync-scheduler-runtime
   []
   (or *sync-scheduler-runtime*
-      (sync-scheduler-instance)))
+      @_sync-scheduler-runtime))
 
 (defn- scheduler-states-atom
   []

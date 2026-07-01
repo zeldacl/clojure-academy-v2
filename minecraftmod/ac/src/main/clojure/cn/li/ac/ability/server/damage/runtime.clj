@@ -19,9 +19,7 @@
 
 (def ^:dynamic *damage-handler-registry-runtime* nil)
 
-(let [_instance (volatile! nil)]
-  (defn- damage-handler-registry-instance []
-    (or @_instance (vreset! _instance (create-damage-handler-registry-runtime)) @_instance)))
+(def ^:private _damage-handler-registry-runtime (delay (create-damage-handler-registry-runtime)))
 
 (defn call-with-damage-handler-registry-runtime
   [runtime f]
@@ -35,7 +33,7 @@
 (defn- current-damage-handler-registry-runtime
   []
   (or *damage-handler-registry-runtime*
-      (damage-handler-registry-instance)))
+      @_damage-handler-registry-runtime))
 
 (defn- damage-handler-registry-state-atom
   []

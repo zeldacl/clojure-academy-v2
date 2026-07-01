@@ -12,14 +12,13 @@
    {:cn.li.mcmod.fluid.dsl/runtime ::fluid-registry-runtime
     :registry (or registry (registry-core/atom-registry {}))}))
 
-(defonce ^:private installed-fluid-registry-runtime
-  (create-fluid-registry-runtime))
+(def ^:private _fluid-registry (delay (create-fluid-registry-runtime)))
 
-(def ^:dynamic *fluid-registry-runtime*
-  installed-fluid-registry-runtime)
+(def ^:dynamic *fluid-registry-runtime* nil)
 
 (defn- fluid-registry-state []
-  (:registry *fluid-registry-runtime*))
+  (:registry (or *fluid-registry-runtime*
+                  @_fluid-registry)))
 
 (defrecord FluidPhysicalProperties
   [luminosity density viscosity temperature can-convert-to-source supports-boat])

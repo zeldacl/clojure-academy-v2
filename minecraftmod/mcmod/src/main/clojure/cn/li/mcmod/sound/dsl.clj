@@ -10,11 +10,10 @@
 	 {:cn.li.mcmod.sound.dsl/runtime ::sound-registry-runtime
 	  :registry (or registry (registry-core/atom-registry {}))}))
 
-(defonce ^:private installed-sound-registry-runtime
-	(create-sound-registry-runtime))
+(def ^:private _sound-registry (delay (create-sound-registry-runtime)))
 
 (defn- sound-registry-state []
-	(:registry installed-sound-registry-runtime))
+	(:registry @_sound-registry))
 
 (defrecord SoundSpec [id registry-name subtitle-key properties])
 

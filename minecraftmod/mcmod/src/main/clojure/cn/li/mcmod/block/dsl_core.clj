@@ -38,14 +38,13 @@
    {:cn.li.mcmod.block.dsl-core/runtime ::block-registry-runtime
     :registry (or registry (registry-core/atom-registry {}))}))
 
-(defonce ^:private installed-block-registry-runtime
-  (create-block-registry-runtime))
+(def ^:private _block-registry (delay (create-block-registry-runtime)))
 
-(def ^:dynamic *block-registry-runtime*
-  installed-block-registry-runtime)
+(def ^:dynamic *block-registry-runtime* nil)
 
 (defn- block-registry-state []
-  (:registry *block-registry-runtime*))
+  (:registry (or *block-registry-runtime*
+                  @_block-registry)))
 
 (defn get-block-registry
   "Return the active block registry instance for the current runtime binding."

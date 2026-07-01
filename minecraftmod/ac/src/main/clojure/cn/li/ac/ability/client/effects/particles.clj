@@ -82,13 +82,7 @@
 
 (def ^:dynamic *particle-queue-runtime* nil)
 
-(let [_instance (volatile! nil)]
-  (defn- particle-queue-instance
-    "Lazy-init the particle queue runtime singleton."
-    []
-    (or @_instance
-        (vreset! _instance (create-particle-queue-runtime))
-        @_instance)))
+(def ^:private _particle-queue-runtime (delay (create-particle-queue-runtime)))
 
 (defn- particle-queue-runtime?
   [runtime]
@@ -111,7 +105,7 @@
 (defn- current-runtime
   []
   (or *particle-queue-runtime*
-      (particle-queue-instance)))
+      @_particle-queue-runtime))
 
 (defn- queue-atom
   []

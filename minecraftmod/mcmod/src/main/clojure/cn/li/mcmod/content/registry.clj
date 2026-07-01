@@ -111,11 +111,10 @@
    {:cn.li.mcmod.content.registry/runtime ::content-registry-runtime
     :state* (or state* (atom (default-content-registry-runtime-state)))}))
 
-(defonce ^:private installed-content-registry-runtime
-  (create-content-registry-runtime))
+(def ^:private _content-registry (delay (create-content-registry-runtime)))
 
 (defn- content-registry-state-atom []
-  (:state* installed-content-registry-runtime))
+  (:state* @_content-registry))
 
 (defn- content-registry-state-snapshot []
   @(content-registry-state-atom))

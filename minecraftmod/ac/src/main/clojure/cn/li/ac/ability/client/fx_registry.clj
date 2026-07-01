@@ -21,9 +21,7 @@
 
 (def ^:dynamic *fx-registry-runtime* nil)
 
-(let [_instance (volatile! nil)]
-  (defn- fx-registry-instance []
-    (or @_instance (vreset! _instance (create-fx-registry-runtime)) @_instance)))
+(def ^:private _fx-registry-runtime (delay (create-fx-registry-runtime)))
 
 (defn- fx-registry-runtime?
   [runtime]
@@ -46,7 +44,7 @@
 (defn- current-fx-registry-runtime
   []
   (or *fx-registry-runtime*
-      (fx-registry-instance)))
+      @_fx-registry-runtime))
 
 (defn- fx-registry-state-atom
   []
