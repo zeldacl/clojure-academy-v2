@@ -1,107 +1,89 @@
 (ns cn.li.mcmod.config.registry
-  "Platform-neutral config descriptor and runtime value registry."
-  (:require [cn.li.mcmod.util.log :as log]))
+  "Platform-neutral config descriptor and runtime value registry.
 
-(defn- default-config-registry-runtime-state []
-  {:descriptor-registry {}
-   :value-registry {}})
+  State stored in Framework [:registry :configs]."
+  (:require [cn.li.mcmod.util.log :as log]
+            [cn.li.mcmod.framework :as fw]))
 
-(defn create-config-registry-runtime
-  ([] (create-config-registry-runtime {}))
-  ([{:keys [state*]}]
-   {:cn.li.mcmod.config.registry/runtime ::config-registry-runtime
-    :state* (or state* (atom (default-config-registry-runtime-state)))}))
+(def ^:private config-path [:registry :configs])
 
-(def ^:private _config-registry-runtime (delay (create-config-registry-runtime)))
+(defn- config-snapshot []
+  (if-let [fw-atom fw/*framework*]
+    (get-in @fw-atom config-path)
+    {:descriptor-registry {} :value-registry {}}))
 
-(defn- config-registry-state-atom []
-	(:state* @_config-registry-runtime))
+(defn- update-config! [f & args]
+  (when-let [fw-atom fw/*framework*]
+    (swap! fw-atom update-in config-path
+           (fn [current] (apply f (or current {:descriptor-registry {} :value-registry {}}) args))))
+  nil)
 
-(defn- config-registry-state-snapshot []
-	@(config-registry-state-atom))
+(defn get-descriptor-registry []
+  (:descriptor-registry (config-snapshot)))
 
-(defn get-descriptor-registry
-	"Return the full descriptor registry map."
-	[]
-	(:descriptor-registry (config-registry-state-snapshot)))
+(defn get-value-registry []
+  (:value-registry (config-snapshot)))
 
-(defn get-value-registry
-	"Return the full runtime config value registry map."
-	[]
-	(:value-registry (config-registry-state-snapshot)))
+(defn set-descriptor-registry! [registry]
+  (update-config! assoc :descriptor-registry (or registry {})))
 
-(defn set-descriptor-registry!
-	"Replace the full descriptor registry map. Primarily for tests."
-	[registry]
-	(swap! (config-registry-state-atom) assoc :descriptor-registry (or registry {}))
-	nil)
+(defn set-value-registry! [registry]
+  (update-config! assoc :value-registry (or registry {})))
 
-(defn set-value-registry!
-	"Replace the full value registry map. Primarily for tests."
-	[registry]
-	(swap! (config-registry-state-atom) assoc :value-registry (or registry {}))
-	nil)
+(defn- normalize-descriptors [descriptors]
+  (let [descriptors (vec descriptors)
+        keys (mapv #(get % :key) descriptors)]
+    (when-not (every? keyword? keys)
+      (throw (ex-info "Config descriptor keys must be keywords" {:descriptor-keys keys})))
+    (when-not (= (count keys) (count (distinct keys)))
+      (throw (ex-info "Duplicate config descriptor keys" {:descriptor-keys keys})))
+    descriptors))
 
-(defn- normalize-descriptors
-	[descriptors]
-	(let [descriptors (vec descriptors)
-				keys (mapv #(get % :key) descriptors)]
-		(when-not (every? keyword? keys)
-			(throw (ex-info "Config descriptor keys must be keywords"
-											{:descriptor-keys keys})))
-		(when-not (= (count keys) (count (distinct keys)))
-			(throw (ex-info "Duplicate config descriptor keys"
-											{:descriptor-keys keys})))
-		descriptors))
+(defn get-config-descriptors [domain]
+  (get-in (config-snapshot) [:descriptor-registry domain] []))
+
+(defn get-all-config-domains []
+  (keys (:descriptor-registry (config-snapshot))))
 
 (defn register-config-descriptors!
-	"Register all descriptors for a config domain.
+  "Register config descriptors for a domain, replacing any existing.
+   Each descriptor must have :key, :default, and optionally :validate."
+  [domain descriptors]
+  (let [descriptors (normalize-descriptors descriptors)]
+    (update-config! assoc-in [:descriptor-registry domain] descriptors)
+    (log/info "Registered config descriptors for domain" domain
+              "count" (count descriptors))
+    nil))
 
-	`domain` is a keyword such as `:gameplay/topology`.
-	`descriptors` is a seq of pure maps describing config entries."
-	[domain descriptors]
-	(when-not (keyword? domain)
-		(throw (ex-info "Config domain must be a keyword" {:domain domain})))
-	(let [descriptors' (normalize-descriptors descriptors)]
-		(swap! (config-registry-state-atom) assoc-in [:descriptor-registry domain] descriptors')
-		(log/info "Registered config descriptors for" domain "count=" (count descriptors')))
-	nil)
+(defn descriptor-default-values [domain]
+  (into {} (map #(vector (get % :key) (get % :default))
+                (get-config-descriptors domain))))
 
-(defn get-config-descriptors
-	[domain]
-	(get-in (config-registry-state-snapshot) [:descriptor-registry domain] []))
+(defn ensure-default-values! [domain defaults]
+  (update-config! update-in [:value-registry domain]
+                  (fn [current] (merge (or defaults (descriptor-default-values domain))
+                                      (or current {}))))
+  nil)
 
-(defn get-all-config-domains
-	[]
-	(keys (:descriptor-registry (config-registry-state-snapshot))))
-
-(defn descriptor-default-values
-	[domain]
-	(into {}
-				(map #(vector (get % :key) (get % :default)) (get-config-descriptors domain))))
-
-(defn ensure-default-values!
-	"Seed runtime values with defaults when a domain has not been populated yet."
-	[domain defaults]
-	(swap! (config-registry-state-atom) update-in [:value-registry domain]
-				 (fn [existing]
-					 (merge defaults existing)))
-	nil)
-
-(defn set-config-values!
-	"Replace runtime values for a domain, preserving descriptor defaults for missing keys."
-	[domain values]
-	(let [defaults (descriptor-default-values domain)]
-		(swap! (config-registry-state-atom) assoc-in [:value-registry domain] (merge defaults values)))
-	nil)
-
-(defn get-config-values
-	[domain]
-	(merge (descriptor-default-values domain)
-				 (get-in (config-registry-state-snapshot) [:value-registry domain] {})))
+(defn get-config-values [domain]
+  (merge (descriptor-default-values domain)
+         (get-in (config-snapshot) [:value-registry domain] {})))
 
 (defn get-config-value
-	([domain key]
-	 (get (get-config-values domain) key))
-	([domain key default]
-	 (get (get-config-values domain) key default)))
+  ([domain key]
+   (get (get-config-values domain) key))
+  ([domain key default]
+   (get (get-config-values domain) key default)))
+
+(defn set-config-value! [domain key value]
+  (update-config! assoc-in [:value-registry domain key] value))
+
+(defn set-config-values! [domain value-map]
+  (update-config! update-in [:value-registry domain]
+                  (fn [current] (merge (or current {}) value-map)))
+  nil)
+
+(defn reset-config-for-test! []
+  (when-let [fw-atom fw/*framework*]
+    (swap! fw-atom assoc-in config-path {:descriptor-registry {} :value-registry {}}))
+  nil)

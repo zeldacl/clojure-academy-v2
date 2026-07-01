@@ -2,6 +2,7 @@
   "Entity DSL - declarative registry metadata for platform adapters."
   (:require [clojure.string :as str]
             [cn.li.mcmod.protocol.core :as registry-core]
+            [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.util.log :as log]))
 
 (defn create-entity-registry-runtime
@@ -87,16 +88,16 @@
   [entity-spec]
   (validate-entity-spec entity-spec)
   (log/info "Registering entity:" (:id entity-spec))
-  (registry-core/swap-state! (entity-registry-state) #(assoc % (:id entity-spec) entity-spec))
+  (when-let [fw-atom fw/*framework*] (swap! fw-atom assoc-in [:registry :entities (:id entity-spec)] entity-spec))
   entity-spec)
 
 (defn get-entity
   [entity-id]
-  (registry-core/lookup (entity-registry-state) entity-id))
+  (get-in @fw/*framework* [:registry :entities entity-id]))
 
 (defn list-entities
   []
-  (keys (registry-core/snapshot (entity-registry-state))))
+  (keys (get-in @fw/*framework* [:registry :entities])))
 
 (defn get-entity-registry-name
   [entity-id]

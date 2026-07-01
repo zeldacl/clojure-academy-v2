@@ -4,7 +4,8 @@
   Fluids are declared as pure data in mcmod; platform adapters (Forge/Fabric)
   translate this metadata into concrete runtime objects."
   (:require [clojure.string :as str]
-            [cn.li.mcmod.protocol.core :as registry-core]))
+            [cn.li.mcmod.protocol.core :as registry-core]
+            [cn.li.mcmod.framework :as fw]))
 
 (defn create-fluid-registry-runtime
   ([] (create-fluid-registry-runtime {}))
@@ -102,14 +103,14 @@
 
 (defn register-fluid!
   [fluid-spec]
-  (registry-core/swap-state! (fluid-registry-state) #(assoc % (:id fluid-spec) fluid-spec))
+  (when-let [fw-atom fw/*framework*] (swap! fw-atom assoc-in [:registry :fluids (:id fluid-spec)] fluid-spec))
   fluid-spec)
 
 (defn get-fluid
   [fluid-id]
-  (registry-core/lookup (fluid-registry-state) (str fluid-id)))
+  (get-in @fw/*framework* [:registry :fluids (str fluid-id)]))
 
 (defn list-fluids
   []
-  (keys (registry-core/snapshot (fluid-registry-state))))
+  (keys (get-in @fw/*framework* [:registry :fluids])))
 

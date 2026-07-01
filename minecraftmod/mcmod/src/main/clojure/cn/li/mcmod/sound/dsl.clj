@@ -2,6 +2,7 @@
 	"Sound DSL - declarative sound event definitions"
 	(:require [clojure.string :as str]
 						[cn.li.mcmod.protocol.core :as registry-core]
+            [cn.li.mcmod.framework :as fw]
 						[cn.li.mcmod.util.log :as log]))
 
 (defn create-sound-registry-runtime
@@ -43,16 +44,16 @@
 	[sound-spec]
 	(validate-sound-spec sound-spec)
 	(log/info "Registering sound:" (:id sound-spec) "->" (:registry-name sound-spec))
-	(registry-core/swap-state! (sound-registry-state) #(assoc % (:id sound-spec) sound-spec))
+	(when-let [fw-atom fw/*framework*] (swap! fw-atom assoc-in [:registry :sounds (:id sound-spec)] sound-spec))
 	sound-spec)
 
 (defn get-sound
 	[sound-id]
-	(registry-core/lookup (sound-registry-state) sound-id))
+	(get-in @fw/*framework* [:registry :sounds sound-id]))
 
 (defn list-sounds
 	[]
-	(keys (registry-core/snapshot (sound-registry-state))))
+	(keys (get-in @fw/*framework* [:registry :sounds])))
 
 (defmacro defsound
 	"Define a sound event.

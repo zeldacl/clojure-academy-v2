@@ -4,7 +4,8 @@
   This namespace stores only host-readable descriptor envelopes. Content-owned
   values remain opaque payload/metadata/handler data behind neutral field names."
   (:require [clojure.set :as set]
-            [cn.li.mcmod.schema.core :as schema]))
+            [cn.li.mcmod.schema.core :as schema]
+            [cn.li.mcmod.framework :as fw]))
 
 (def ^:private allowed-categories
   #{:content-action
@@ -103,24 +104,20 @@
 ;; Runtime Container
 ;; ============================================================================
 
-(defn- default-content-registry-runtime-state [] {})
+;; Content registry — stored in Framework [:registry :content]
 
-(defn create-content-registry-runtime
-  ([] (create-content-registry-runtime {}))
-  ([{:keys [state*]}]
-   {:cn.li.mcmod.content.registry/runtime ::content-registry-runtime
-    :state* (or state* (atom (default-content-registry-runtime-state)))}))
-
-(def ^:private _content-registry (delay (create-content-registry-runtime)))
-
-(defn- content-registry-state-atom []
-  (:state* @_content-registry))
+(def ^:private content-path [:registry :content])
 
 (defn- content-registry-state-snapshot []
-  @(content-registry-state-atom))
+  (if-let [fw-atom fw/*framework*]
+    (get-in @fw-atom content-path {})
+    {}))
 
 (defn- update-content-registry-state! [f & args]
-  (apply swap! (content-registry-state-atom) f args))
+  (when-let [fw-atom fw/*framework*]
+    (swap! fw-atom update-in content-path
+           (fn [current] (apply f (or current {}) args))))
+  nil)
 
 (defn- normalize-category
   [category]
@@ -226,7 +223,8 @@
 
 (defn clear-registry!
   []
-  (reset! (content-registry-state-atom) (default-content-registry-runtime-state))
+  (when-let [fw-atom fw/*framework*]
+    (swap! fw-atom assoc-in content-path {}))
   nil)
 
 (defn- invoke-descriptor-handler!

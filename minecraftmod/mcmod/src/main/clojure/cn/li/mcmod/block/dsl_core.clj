@@ -4,7 +4,8 @@
   (:require [cn.li.mcmod.protocol.core :as registry-core]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.block.dsl-properties :as props]
-            [cn.li.mcmod.block.dsl-validators :as validators]))
+            [cn.li.mcmod.block.dsl-validators :as validators]
+            [cn.li.mcmod.framework :as fw]))
 
 ;; ============================================================================
 ;; Block Specification Record
@@ -32,22 +33,15 @@
 ;; Block Registry
 ;; ============================================================================
 
-(defn create-block-registry-runtime
-  ([] (create-block-registry-runtime {}))
-  ([{:keys [registry]}]
-   {:cn.li.mcmod.block.dsl-core/runtime ::block-registry-runtime
-    :registry (or registry (registry-core/atom-registry {}))}))
-
-(def ^:private _block-registry (delay (create-block-registry-runtime)))
-
-(def ^:dynamic *block-registry-runtime* nil)
+;; Block Registry — stored in Framework [:registry :blocks]
 
 (defn- block-registry-state []
-  (:registry (or *block-registry-runtime*
-                  @_block-registry)))
+  (if-let [fw-atom fw/*framework*]
+    (get-in @fw-atom [:registry :blocks])
+    {}))
 
 (defn get-block-registry
-  "Return the active block registry instance for the current runtime binding."
+  "Return the active block registry map."
   []
   (block-registry-state))
 
@@ -156,24 +150,26 @@
 ;; ============================================================================
 
 (defn register-block!
-  "Register a block specification in the global registry.
-   Validates the spec before registration."
+  "Register a block specification. No-op during AOT compilation."
   [block-spec]
   (validators/validate-block-spec block-spec)
   (log/info "Registering block:" (:id block-spec))
-  (registry-core/swap-state! (block-registry-state) #(assoc % (:id block-spec) block-spec))
+  (when-let [fw-atom fw/*framework*]
+    (swap! fw-atom assoc-in [:registry :blocks (:id block-spec)] block-spec))
   block-spec)
 
 (defn get-block
   "Get a block specification from the registry by ID."
   [block-id]
   (let [id-str (if (keyword? block-id) (name block-id) block-id)]
-    (registry-core/lookup (block-registry-state) id-str)))
+    (get-in @fw/*framework* [:registry :blocks id-str])))
 
 (defn list-blocks
   "Get all registered block IDs."
   []
-  (keys (registry-core/snapshot (block-registry-state))))
+  (if-let [fw-atom fw/*framework*]
+    (keys (get-in @fw-atom [:registry :blocks]))
+    ()))
 
 ;; ============================================================================
 ;; Main Macro: defblock

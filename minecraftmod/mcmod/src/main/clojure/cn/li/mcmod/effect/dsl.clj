@@ -2,6 +2,7 @@
 	"Effect DSL - declarative MobEffect definitions"
 	(:require [clojure.string :as str]
 						[cn.li.mcmod.protocol.core :as registry-core]
+            [cn.li.mcmod.framework :as fw]
 						[cn.li.mcmod.util.log :as log]))
 
 (defn create-effect-registry-runtime
@@ -39,16 +40,16 @@
 	(when-not (string? (:registry-name effect-spec))
 		(throw (ex-info "Effect :registry-name must be string" {:effect-spec effect-spec})))
 	(log/info "Registering effect:" (:id effect-spec) "->" (:registry-name effect-spec))
-	(registry-core/swap-state! (effect-registry-state) #(assoc % (:id effect-spec) effect-spec))
+	(when-let [fw-atom fw/*framework*] (swap! fw-atom assoc-in [:registry :effects (:id effect-spec)] effect-spec))
 	effect-spec)
 
 (defn get-effect
 	[effect-id]
-	(registry-core/lookup (effect-registry-state) effect-id))
+	(get-in @fw/*framework* [:registry :effects effect-id]))
 
 (defn list-effects
 	[]
-	(keys (registry-core/snapshot (effect-registry-state))))
+	(keys (get-in @fw/*framework* [:registry :effects])))
 
 (defmacro defeffect
 	[effect-name & options]

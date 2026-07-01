@@ -1,6 +1,7 @@
 (ns cn.li.mcmod.loot.dsl
   "Loot injection DSL for declarative loot table augmentation."
   (:require [cn.li.mcmod.protocol.core :as registry-core]
+            [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.util.log :as log]))
 
 (defn create-loot-injection-registry-runtime
@@ -40,15 +41,15 @@
   (when-not (string? (:item-id spec))
     (throw (ex-info "Loot injection :item-id must be string" {:spec spec})))
   (log/info "Registering loot injection:" (:id spec) "table:" (:target-table spec) "item:" (:item-id spec))
-  (registry-core/swap-state! (loot-injection-registry-state) #(assoc % (:id spec) spec))
+  (when-let [fw-atom fw/*framework*] (swap! fw-atom assoc-in [:registry :loot (:id spec)] spec))
   spec)
 
-(defn list-loot-injections [] (keys (registry-core/snapshot (loot-injection-registry-state))))
-(defn get-loot-injection [injection-id] (registry-core/lookup (loot-injection-registry-state) injection-id))
+(defn list-loot-injections [] (keys (get-in @fw/*framework* [:registry :loot])))
+(defn get-loot-injection [injection-id] (get-in @fw/*framework* [:registry :loot injection-id]))
 
 (defn get-loot-injections-for-table
   [target-table]
-  (->> (registry-core/snapshot (loot-injection-registry-state))
+  (->> (get-in @fw/*framework* [:registry :loot])
        vals
        (filter (fn [spec] (= (:target-table spec) target-table)))))
 

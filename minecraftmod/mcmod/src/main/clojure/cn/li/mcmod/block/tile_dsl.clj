@@ -8,18 +8,18 @@
             [cn.li.mcmod.block.tile-kind :as tile-kind]
             [cn.li.mcmod.schema.core :as schema]
             [cn.li.mcmod.protocol.core :as registry-core]
+            [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.util.log :as log]))
 
-(def ^:private ^:dynamic *tile-registry-state*
-  {:by-id {} :block->tile-id {}})
+;; Tile Registry — stored in Framework [:registry :tiles]
+;; Structure: {:by-id {tile-id -> TileSpec} :block->tile-id {block-id -> tile-id}}
 
-(defonce ^{:doc "Registry of tile specs.
+(def ^:private tile-path [:registry :tiles])
 
-Structure:
-- :by-id {tile-id -> TileSpec}
-- :block->tile-id {block-id -> tile-id}"}
-  tile-registry
-  (registry-core/var-root-registry #'*tile-registry-state*))
+(defn- tile-state []
+  (if-let [fw-atom fw/*framework*]
+    (get-in @fw-atom tile-path)
+    {:by-id {} :block->tile-id {}}))
 
 (defrecord TileSpec
   [id
@@ -129,48 +129,48 @@ Enforces:
   [tile-spec]
   (validate-tile-spec tile-spec)
   (let [{:keys [id blocks]} tile-spec]
-    (registry-core/swap-state!
-     tile-registry
-     (fn [{:keys [by-id block->tile-id] :as reg}]
-       (when (contains? by-id id)
-         ;; `checkClojure`/AOT 会重复加载同一份 DSL，导致 tile-spec 里函数对象不再“相等”。
-         ;; 这里将重复 tile-id 视为幂等；真正的约束由下面的 block->tile-id 冲突检查保证。
-         nil)
-
-       (doseq [block-id blocks
-               :let [existing (get block->tile-id block-id)]
-               :when existing]
-         (when-not (= existing id)
-           (when-not *compile-files*
-             (throw (ex-info "Block is already bound to a tile-id"
-                             {:block-id block-id
-                              :existing-tile-id existing
-                              :new-tile-id id})))))
-
-       (-> reg
-           (assoc-in [:by-id id] tile-spec)
-           (update :block->tile-id
-                   into
-                   (map (fn [b] [b id]) blocks)))))
+    (when-let [fw-atom fw/*framework*]
+      (swap! fw-atom update-in tile-path
+             (fn [{:keys [by-id block->tile-id] :as reg}]
+               (when (contains? by-id id)
+                 nil)
+               (doseq [block-id blocks
+                       :let [existing (get block->tile-id block-id)]
+                       :when existing]
+                 (when-not (= existing id)
+                   (when-not *compile-files*
+                     (throw (ex-info "Block is already bound to a tile-id"
+                                     {:block-id block-id
+                                      :existing-tile-id existing
+                                      :new-tile-id id})))))
+               (-> (or reg {:by-id {} :block->tile-id {}})
+                   (assoc-in [:by-id id] tile-spec)
+                   (update :block->tile-id
+                           into
+                           (map (fn [b] [b id]) blocks))))))
     (log/info "Registered tile" id "for blocks" blocks)
     tile-spec))
 
 (defn get-tile
   [tile-id]
-  (registry-core/lookup-in tile-registry [:by-id (normalize-id tile-id)]))
+  (if-let [fw-atom fw/*framework*]
+    (get-in @fw-atom (conj tile-path :by-id (normalize-id tile-id)))
+    nil))
 
 (defn list-tiles
   []
-  (keys (:by-id (registry-core/snapshot tile-registry))))
+  (keys (:by-id (tile-state))))
 
 (defn get-tile-id-for-block
   [block-id]
-  (registry-core/lookup-in tile-registry [:block->tile-id (normalize-id block-id)]))
+  (if-let [fw-atom fw/*framework*]
+    (get-in @fw-atom (conj tile-path :block->tile-id (normalize-id block-id)))
+    nil))
 
 (defn snapshot-tiles-by-id
   "Read-only snapshot of {:tile-id TileSpec} for bundle compilation."
   []
-  (:by-id (registry-core/snapshot tile-registry)))
+  (:by-id (tile-state)))
 
 (def snapshot-tile-registry
   "Alias for plan/docs compatibility."
@@ -180,10 +180,12 @@ Enforces:
   "Associate capability keywords with a tile spec (declaration phase only)."
   [tile-id & cap-keys]
   (let [normalized (map #(if (keyword? %) % (keyword %)) cap-keys)]
-    (registry-core/swap-state! tile-registry
-                               #(update-in % [:by-id tile-id :capability-keys]
-                                             (fn [existing]
-                                               (into (or existing #{}) normalized))))
+    (when-let [fw-atom fw/*framework*]
+      (swap! fw-atom update-in tile-path
+             #(update-in (or % {:by-id {} :block->tile-id {}})
+                         [:by-id tile-id :capability-keys]
+                         (fn [existing]
+                           (into (or existing #{}) normalized)))))
     nil))
 
 (defmacro deftile

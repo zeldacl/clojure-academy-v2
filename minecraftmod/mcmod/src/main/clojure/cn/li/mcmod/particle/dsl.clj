@@ -1,22 +1,10 @@
 (ns cn.li.mcmod.particle.dsl
-	"Particle DSL - declarative particle type definitions"
+	"Particle DSL - declarative particle type definitions.
+
+  Registry stored in Framework [:registry :particles]."
 	(:require [clojure.string :as str]
-						[cn.li.mcmod.protocol.core :as registry-core]
+						[cn.li.mcmod.framework :as fw]
 						[cn.li.mcmod.util.log :as log]))
-
-(defn create-particle-registry-runtime
-	([] (create-particle-registry-runtime {}))
-	([{:keys [registry]}]
-	 {:cn.li.mcmod.particle.dsl/runtime ::particle-registry-runtime
-	  :registry (or registry (registry-core/atom-registry {}))}))
-
-(def ^:private _particle-registry (delay (create-particle-registry-runtime)))
-
-(def ^:dynamic *particle-registry-runtime* nil)
-
-(defn- particle-registry-state []
-	(:registry (or *particle-registry-runtime*
-	               @_particle-registry)))
 
 (defrecord ParticleSpec [id registry-name always-show? properties])
 
@@ -30,15 +18,28 @@
 		 :properties (or (:properties options) {})}))
 
 (defn register-particle!
+	"Register a particle spec. No-op during AOT compilation."
 	[particle-spec]
 	(when-not (string? (:id particle-spec))
 		(throw (ex-info "Particle :id must be string" {:particle-spec particle-spec})))
 	(log/info "Registering particle:" (:id particle-spec) "->" (:registry-name particle-spec))
-	(registry-core/swap-state! (particle-registry-state) #(assoc % (:id particle-spec) particle-spec))
+	(when-let [fw-atom fw/*framework*]
+		(swap! fw-atom assoc-in [:registry :particles (:id particle-spec)] particle-spec))
 	particle-spec)
 
-(defn get-particle [particle-id] (registry-core/lookup (particle-registry-state) particle-id))
-(defn list-particles [] (keys (registry-core/snapshot (particle-registry-state))))
+(defn get-particle
+	"Look up a particle spec by id."
+	[particle-id]
+	(if-let [fw-atom fw/*framework*]
+		(get-in @fw-atom [:registry :particles particle-id])
+		nil))
+
+(defn list-particles
+	"List all registered particle ids."
+	[]
+	(if-let [fw-atom fw/*framework*]
+		(keys (get @fw-atom :particles))
+		()))
 
 (defmacro defparticle
 	[particle-name & options]
