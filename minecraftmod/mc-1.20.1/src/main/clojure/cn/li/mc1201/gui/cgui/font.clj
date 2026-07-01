@@ -13,13 +13,17 @@
            [cn.li.mc1201.client.font.msdf MsdfFontManager]))
 
 (defonce ^:private registry (atom {}))
-(defonce ^:private msdf-base-height (atom (double MsdfFontManager/CGUI_BASE_HEIGHT)))
+(defonce ^:private msdf-base-height (atom nil))
+
+(defn- msdf-default-base-height []
+  (double MsdfFontManager/CGUI_BASE_HEIGHT))
 
 (defn set-msdf-base-height! [v]
   (reset! msdf-base-height (double v)))
 
 (defn get-msdf-base-height []
-  @msdf-base-height)
+  (or @msdf-base-height
+      (reset! msdf-base-height (msdf-default-base-height))))
 
 (defn register-font!
   "Register a CGui font keyword.

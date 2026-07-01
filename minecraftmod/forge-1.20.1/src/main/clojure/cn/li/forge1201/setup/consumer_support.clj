@@ -2,7 +2,7 @@
   "Shared Java Consumer helpers for Forge event/listener registration."
   (:import [net.minecraftforge.eventbus.api EventPriority IEventBus]))
 
-(def ^:private event-priority EventPriority/NORMAL)
+(def ^:private event-priority (delay EventPriority/NORMAL))
 
 (defn consumer
   [f]
@@ -12,4 +12,4 @@
 
 (defn add-normal-listener!
   [^IEventBus event-bus ^Class listener-class f]
-  (.addListener event-bus event-priority false listener-class (consumer f)))
+  (.addListener event-bus @event-priority false listener-class (consumer f)))

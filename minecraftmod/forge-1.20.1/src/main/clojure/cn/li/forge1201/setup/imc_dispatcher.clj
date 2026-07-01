@@ -7,7 +7,7 @@
 					 [net.minecraftforge.fml.event.lifecycle InterModProcessEvent]
 					 [net.minecraftforge.fml InterModComms$IMCMessage]))
 
-(def ^:private event-priority EventPriority/NORMAL)
+(def ^:private event-priority (delay EventPriority/NORMAL))
 
 (defn- safe-invoke
 	[thunk]
@@ -61,7 +61,7 @@
 (defn register-imc-listener!
 	[^IEventBus mod-bus]
 	(.addListener mod-bus
-								event-priority
+								@event-priority
 								false
 								InterModProcessEvent
 								(reify Consumer

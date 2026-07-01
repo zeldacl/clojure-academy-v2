@@ -73,6 +73,9 @@
 (defn- skill-specs-from-value
   [value]
   (cond
+    (delay? value)
+    (skill-specs-from-value @value)
+
     (skill-spec? value)
     [(dissoc value :ac/content-type)]
 
