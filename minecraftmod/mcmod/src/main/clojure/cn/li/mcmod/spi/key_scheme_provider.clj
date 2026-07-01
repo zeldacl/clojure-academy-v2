@@ -1,42 +1,34 @@
 (ns cn.li.mcmod.spi.key-scheme-provider
-  "Key scheme SPI - abstracts keyboard state detection across platforms.
-   
-   Shields platform differences (Forge: event-driven via InputEvent$Key,
-   Fabric: polling via GLFW). All platforms implement the same protocol."
+  "Key scheme SPI — abstracts keyboard state detection across platforms.
+
+  Uses a plain function map instead of `defprotocol` or `definterface`:
+  - `defprotocol` fails under AOT cross-module ClassLoader isolation
+    (satisfies? returns false)
+  - `definterface` + `reify`/`proxy` fails AOT compilation entirely
+    (anonymous class generation in separate module)
+
+  Contract: {:is-key-down? (fn [scheme-name key-idx] -> boolean)}"
   (:require [cn.li.mcmod.util.log :as log]))
 
 (def ^:private provider (atom nil))
 
-(defprotocol KeySchemeProvider
-  "Abstraction for checking key state across different platforms"
-  (is-key-down? [this scheme-name key-idx]
-    "Check if a key is currently pressed.
-     
-     Args:
-     - scheme-name: keyword (:original or :alternative)
-     - key-idx: integer or keyword identifying the key
-     
-     Returns: boolean (true if key is pressed, false otherwise)"))
+(defn- valid-provider?
+  [provider-impl]
+  (and (map? provider-impl)
+       (fn? (:is-key-down? provider-impl))))
 
 (defn install-provider!
   "Install the SPI implementation (called by Forge/Fabric platform).
-   
-   Args:
-   - provider-impl: object implementing KeySchemeProvider protocol
-   
-   Called during platform initialization before keybindings are used."
+  provider-impl must be a map with :is-key-down? fn of 2 args returning boolean."
   [provider-impl]
-  (assert (satisfies? KeySchemeProvider provider-impl)
-          "provider must implement KeySchemeProvider protocol")
+  (assert (valid-provider? provider-impl)
+          "provider must be a map with :is-key-down? fn")
   (reset! provider provider-impl)
   (log/info "KeySchemeProvider installed")
   nil)
 
 (defn require-provider
-  "Get the installed provider, fail if not available.
-   
-   Returns: the installed KeySchemeProvider
-   Throws: ex-info if provider not installed (indicates init order bug)"
+  "Get the installed provider, fail if not available."
   []
   (or @provider
       (throw (ex-info "KeySchemeProvider not installed. Did you forget to install it from platform layer?"
@@ -44,14 +36,7 @@
 
 (defn query-key-down?
   "Query key state using the installed provider (facade function).
-   
-   Args:
-   - scheme-name: keyword (:original or :alternative)
-   - key-idx: integer or keyword
-   
-   Returns: boolean
-   
-   This is the primary API used by key polling code."
+  Args: scheme-name keyword, key-idx int or keyword. Returns boolean."
   [scheme-name key-idx]
-  (let [provider (require-provider)]
-    (is-key-down? provider scheme-name key-idx)))
+  (let [p (require-provider)]
+    ((:is-key-down? p) scheme-name key-idx)))

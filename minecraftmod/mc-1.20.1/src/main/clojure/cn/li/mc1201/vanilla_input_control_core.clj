@@ -119,21 +119,17 @@
 
 ;; ===== SPI Implementation =====
 
-(defrecord VanillaInputControlImpl []
-  cn.li.mcmod.spi.vanilla-input-control/VanillaInputSuppressor
-  (suppress-vanilla-attack-use! [_this minecraft-client]
-    (suppress-vanilla-attack-use! minecraft-client))
-  (restore-vanilla-input! [_this minecraft-client]
-    (restore-vanilla-input! minecraft-client)))
-
-(def ^:private impl (VanillaInputControlImpl.))
+(def ^:private impl
+  {:suppress!
+   (fn [minecraft-client]
+     (suppress-vanilla-attack-use! minecraft-client))
+   :restore!
+   (fn [minecraft-client]
+     (restore-vanilla-input! minecraft-client))})
 
 (defn get-spi-implementation
-  "Get the VanillaInputSuppressor SPI implementation.
-   
-   Returns: object implementing VanillaInputSuppressor protocol
-   
-   Called by Forge/Fabric to install the SPI:
-   (install-suppressor! (get-spi-implementation))"
+  "Returns the VanillaInputSuppressor SPI implementation map.
+  Called by Forge/Fabric to install the SPI:
+  (install-suppressor! (get-spi-implementation))"
   []
   impl)

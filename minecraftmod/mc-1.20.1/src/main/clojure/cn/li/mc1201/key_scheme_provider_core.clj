@@ -4,7 +4,7 @@
    Implements mcmod KeySchemeProvider SPI by querying keyboard state through
    Minecraft window + GLFW. This keeps polling logic in shared mc-1.20.1 layer."
   (:require [cn.li.mcmod.util.log :as log]
-            [cn.li.mcmod.spi.key-scheme-provider])
+            )
   (:import [net.minecraft.client Minecraft]))
 
 (defn ^:private get-window-handle
@@ -26,22 +26,21 @@
       (log/debug e "Failed to query GLFW key state" {:key-code key-code})
       false)))
 
-(defrecord KeySchemeProviderImpl []
-  cn.li.mcmod.spi.key-scheme-provider/KeySchemeProvider
-  (is-key-down? [_this scheme-name key-idx]
-    (cond
-      ;; Shared core currently polls by GLFW key code for :original scheme.
-      (and (= :original scheme-name) (integer? key-idx))
-      (key-down? key-idx)
+(def ^:private impl
+  {:is-key-down?
+   (fn [scheme-name key-idx]
+     (cond
+       (and (= :original scheme-name) (integer? key-idx))
+       (key-down? key-idx)
+       (integer? key-idx)
+       (key-down? key-idx)
+       :else
+       false))})
 
-      ;; Allow integer key polling for other schemes if needed by future flows.
-      (integer? key-idx)
-      (key-down? key-idx)
-
-      :else
-      false)))
-
-(def ^:private impl (KeySchemeProviderImpl.))
+(defn get-spi-implementation
+  "Returns the SPI implementation map for platform installation."
+  []
+  impl)
 
 (defn get-spi-implementation
   "Get KeySchemeProvider SPI implementation object for platform installation."
