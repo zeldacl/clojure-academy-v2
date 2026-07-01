@@ -13,14 +13,13 @@
    {:cn.li.mcmod.gui.registry/runtime ::gui-registry-runtime
     :state* (or state* (atom (default-gui-registry-runtime-state)))}))
 
-(defonce ^:private installed-gui-registry-runtime
-  (create-gui-registry-runtime))
+(def ^:private _gui-registry-runtime (delay (create-gui-registry-runtime)))
 
-(def ^:dynamic *gui-registry-runtime*
-  installed-gui-registry-runtime)
+(def ^:dynamic *gui-registry-runtime* nil)
 
 (defn- gui-registry-atom []
-  (:state* *gui-registry-runtime*))
+  (:state* (or *gui-registry-runtime*
+                  @_gui-registry-runtime)))
 
 (defn- gui-registry-snapshot []
   @(gui-registry-atom))

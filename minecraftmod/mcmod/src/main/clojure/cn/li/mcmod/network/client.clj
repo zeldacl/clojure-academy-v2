@@ -211,11 +211,9 @@
         :ensure-installed-client-network-session! ensure-installed-client-network-session!
         :clear-client-session-state! clear-client-session-state!}))))
 
-(defonce ^:private installed-client-runtime
-  (create-client-runtime))
+(def ^:private _client-runtime (delay (create-client-runtime)))
 
-(def ^:dynamic *client-runtime*
-  installed-client-runtime)
+(def ^:dynamic *client-runtime* nil)
 
 (defn client-runtime?
   [value]
@@ -223,7 +221,8 @@
 
 (defn current-client-runtime
   []
-  *client-runtime*)
+  (or *client-runtime*
+      @_client-runtime))
 
 (defmacro with-client-runtime
   [runtime & body]

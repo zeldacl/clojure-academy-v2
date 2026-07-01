@@ -17,11 +17,9 @@
    {::runtime ::network-server-runtime
     :state* state*}))
 
-(defonce ^:private installed-network-server-runtime
-  (create-network-server-runtime))
+(def ^:private _network-server-runtime (delay (create-network-server-runtime)))
 
-(def ^:dynamic *network-server-runtime*
-  installed-network-server-runtime)
+(def ^:dynamic *network-server-runtime* nil)
 
 (defn- network-server-runtime?
   [runtime]
@@ -43,7 +41,8 @@
 
 (defn- current-network-server-runtime
   []
-  *network-server-runtime*)
+  (or *network-server-runtime*
+     @_network-server-runtime))
 
 (defn- network-server-state-atom
   []

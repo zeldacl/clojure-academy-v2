@@ -107,14 +107,13 @@
    {:cn.li.mcmod.hooks.core/runtime ::hooks-core-runtime
     :state* (or state* (atom (default-runtime-hooks-state)))}))
 
-(defonce ^:private installed-hooks-core-runtime
-  (create-hooks-core-runtime))
+(def ^:private _hooks-core-runtime (delay (create-hooks-core-runtime)))
 
 (defonce ^:private allowed-runtime-hook-keys*
   (atom (set (keys (default-runtime-hooks-state)))))
 
 (defn- hooks-core-state-atom []
-  (:state* installed-hooks-core-runtime))
+  (:state* @_hooks-core-runtime))
 
 (defn- hooks-core-state-snapshot []
   @(hooks-core-state-atom))

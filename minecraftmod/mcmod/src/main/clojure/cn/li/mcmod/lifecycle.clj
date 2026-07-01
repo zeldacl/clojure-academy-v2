@@ -16,11 +16,10 @@
 
 (def ^:dynamic *lifecycle-runtime* nil)
 
-(defonce ^:private installed-lifecycle-runtime
-  (create-lifecycle-runtime))
+(def ^:private _lifecycle-runtime (delay (create-lifecycle-runtime)))
 
 (defn- lifecycle-state-atom []
-  (:state* (or *lifecycle-runtime* installed-lifecycle-runtime)))
+  (:state* (or *lifecycle-runtime* @_lifecycle-runtime)))
 
 (defn- lifecycle-state-snapshot []
   @(lifecycle-state-atom))

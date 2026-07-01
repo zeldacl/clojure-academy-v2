@@ -20,14 +20,13 @@
    {:cn.li.mcmod.command.metadata/runtime ::command-metadata-runtime
     :state* (or state* (atom (default-command-metadata-runtime-state)))}))
 
-(defonce ^:private installed-command-metadata-runtime
-  (create-command-metadata-runtime))
+(def ^:private _command-metadata-runtime (delay (create-command-metadata-runtime)))
 
-(def ^:dynamic *command-metadata-runtime*
-  installed-command-metadata-runtime)
+(def ^:dynamic *command-metadata-runtime* nil)
 
 (defn- command-registry-atom []
-  (:state* *command-metadata-runtime*))
+  (:state* (or *command-metadata-runtime*
+                  @_command-metadata-runtime)))
 
 (defn- command-registry-snapshot []
   @(command-registry-atom))

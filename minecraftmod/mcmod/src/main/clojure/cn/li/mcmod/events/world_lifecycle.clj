@@ -39,8 +39,7 @@
 
 (def ^:dynamic *world-lifecycle-runtime* nil)
 
-(defonce ^:private installed-world-lifecycle-runtime
-  (create-world-lifecycle-runtime))
+(def ^:private _world-lifecycle-runtime (delay (create-world-lifecycle-runtime)))
 
 (defn- world-lifecycle-runtime?
   [runtime]
@@ -63,7 +62,7 @@
 (defn- current-world-lifecycle-runtime
   []
   (or *world-lifecycle-runtime*
-      installed-world-lifecycle-runtime))
+      @_world-lifecycle-runtime))
 
 (defn- world-lifecycle-state-atom
   []

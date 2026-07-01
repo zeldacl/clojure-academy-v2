@@ -12,11 +12,10 @@
    {:cn.li.mcmod.config.registry/runtime ::config-registry-runtime
     :state* (or state* (atom (default-config-registry-runtime-state)))}))
 
-(defonce ^:private installed-config-registry-runtime
-	(create-config-registry-runtime))
+(def ^:private _config-registry-runtime (delay (create-config-registry-runtime)))
 
 (defn- config-registry-state-atom []
-	(:state* installed-config-registry-runtime))
+	(:state* @_config-registry-runtime))
 
 (defn- config-registry-state-snapshot []
 	@(config-registry-state-atom))

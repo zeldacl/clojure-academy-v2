@@ -22,11 +22,9 @@
    {::runtime ::lifecycle-hooks-runtime
     :state* state*}))
 
-(defonce ^:private installed-lifecycle-hooks-runtime
-  (create-lifecycle-hooks-runtime))
+(def ^:private _lifecycle-hooks-runtime (delay (create-lifecycle-hooks-runtime)))
 
-(def ^:dynamic *lifecycle-hooks-runtime*
-  installed-lifecycle-hooks-runtime)
+(def ^:dynamic *lifecycle-hooks-runtime* nil)
 
 (defn- lifecycle-hooks-runtime?
   [runtime]
@@ -48,7 +46,8 @@
 
 (defn- current-lifecycle-hooks-runtime
   []
-  *lifecycle-hooks-runtime*)
+  (or *lifecycle-hooks-runtime*
+      @_lifecycle-hooks-runtime))
 
 (defn- lifecycle-hooks-registered-atom
   []
