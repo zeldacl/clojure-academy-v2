@@ -19,6 +19,7 @@
     [cn.li.mcmod.aot :as aot]
     [cn.li.mcmod.config :as modid]
     [cn.li.mcmod.runtime.deferred :as deferred]
+    [cn.li.mcmod.framework :as fw]
     [cn.li.mcmod.util.log :as log])
   (:import [net.minecraftforge.fml.event.lifecycle FMLClientSetupEvent
                                                    FMLCommonSetupEvent]))
@@ -202,22 +203,24 @@
 
 ;; Runtime bootstrap entrypoint for Java @Mod bridge.
 (defn start-forge-mod! []
-  (let [compiling? (aot/compiling?)]
-    (log/info "[BOOTSTRAP_TRACE] start-forge-mod! enter"
-              {:compile-context (aot/compile-context)})
-    (lifecycle-init/init-lifecycle-with-error-handling!
-      {:datagen-run? (datagen-run?)
-       :on-common-setup on-common-setup
-       :on-client-setup on-client-setup
-      :sounds-register (sounds-register)
-      :effects-register (effects-register)
-      :particle-types-register (particle-types-register)
-      :fluid-types-register (fluid-types-register)
-      :fluids-register (fluids-register)
-      :blocks-register (blocks-register)
-      :items-register (items-register)
-      :block-entities-register (block-entities-register)
-      :creative-tabs-register (creative-tabs-register)
-      :gui-menu-register (gui-registry-impl/menu-register)}
-      (registration-steps)
-      compiling?)))
+  (log/info "[BOOTSTRAP_TRACE] start-forge-mod! enter"
+            {:compile-context (aot/compile-context)})
+  (if-let [fw-inst (fw/create-framework)]
+    (binding [fw/*framework* fw-inst]
+      (lifecycle-init/init-lifecycle-with-error-handling!
+        {:datagen-run? (datagen-run?)
+         :on-common-setup on-common-setup
+         :on-client-setup on-client-setup
+        :sounds-register (sounds-register)
+        :effects-register (effects-register)
+        :particle-types-register (particle-types-register)
+        :fluid-types-register (fluid-types-register)
+        :fluids-register (fluids-register)
+        :blocks-register (blocks-register)
+        :items-register (items-register)
+        :block-entities-register (block-entities-register)
+        :creative-tabs-register (creative-tabs-register)
+        :gui-menu-register (gui-registry-impl/menu-register)}
+        (registration-steps)
+        false))
+    (log/info "[BOOTSTRAP_TRACE] start-forge-mod! skip — AOT, framework not created")))

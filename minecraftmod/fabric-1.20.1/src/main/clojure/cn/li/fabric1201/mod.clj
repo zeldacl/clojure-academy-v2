@@ -15,6 +15,7 @@
             [cn.li.mcmod.lifecycle :as lifecycle]
             [cn.li.mcmod.protocol.core :as registry-core]
             [cn.li.mcmod.runtime.deferred :as deferred]
+	            [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.protocol.metadata :as registry-metadata]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mc1201.entity.hooks :as entity-hooks])
@@ -73,18 +74,21 @@
   "Main Fabric mod initialization called from the Java ModInitializer."
   []
   (log/info "Initializing MyMod (Fabric 1.20.1) from Clojure...")
-  (lifecycle-init/init-lifecycle!
-    {:init-platform! platform-bootstrap/init-platform!
-     :init-from-java! init/init-from-java
-     :load-config! config-bridge/load-all!
-     :activate-runtime-content! lifecycle/run-runtime-content-activation!
-     :init-blockstate-properties! bsp/init-all-properties!
-     :register-content! #(do
-                           (content-registration/register-content! (registration-context))
-                           (entity-hooks/register-all-hooks!))
-     :install-runtime! runtime-setup/install-runtime!
-     :register-events! event-wiring/register-events!})
-  (log/info "Fabric mod initialization complete"))
+  (if-let [fw-inst (fw/create-framework)]
+    (binding [fw/*framework* fw-inst]
+      (lifecycle-init/init-lifecycle!
+        {:init-platform! platform-bootstrap/init-platform!
+         :init-from-java! init/init-from-java
+         :load-config! config-bridge/load-all!
+         :activate-runtime-content! lifecycle/run-runtime-content-activation!
+         :init-blockstate-properties! bsp/init-all-properties!
+         :register-content! #(do
+                               (content-registration/register-content! (registration-context))
+                               (entity-hooks/register-all-hooks!))
+         :install-runtime! runtime-setup/install-runtime!
+         :register-events! event-wiring/register-events!})
+      (log/info "Fabric mod initialization complete"))
+    (log/info "Fabric mod initialization skipped — AOT, framework not created")))
 
 (defn get-registered-block
   "Get a registered block by its DSL ID."
