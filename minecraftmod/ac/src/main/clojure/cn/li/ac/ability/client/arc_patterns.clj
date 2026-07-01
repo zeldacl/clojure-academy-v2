@@ -185,24 +185,23 @@
 ;; Wiggle animation state
 ;; ============================================================================
 
-(defonce ^:private wiggle-phase-atom (atom 0.0))
-
 (defn- current-wiggle-time []
   (/ (double (System/currentTimeMillis)) 1000.0))
 
 (defn tick-wiggle-phase!
-  "Advance global wiggle phase each frame.
-  Matching original: wigglePhase += 0.15 * (1 + sin(time*3)*0.5)"
+  "No-op — phase is now computed from wall-clock time.
+  Kept for backward compatibility with existing FX call sites."
   []
-  (let [t (current-wiggle-time)
-        delta (* 0.15 (+ 1.0 (* 0.5 (Math/sin (* t 3.0)))))]
-    (swap! wiggle-phase-atom + delta))
   nil)
 
 (defn wiggle-phase
-  "Current global wiggle phase value."
+  "Current global wiggle phase value, computed from wall-clock time.
+  Integral of: 0.15 * (1 + 0.5*sin(3t))
+  P(t) = 0.15*t + 0.025*(1 - cos(3t))"
   []
-  @wiggle-phase-atom)
+  (let [t (current-wiggle-time)]
+    (+ (* 0.15 t)
+       (* 0.025 (- 1.0 (Math/cos (* 3.0 t)))))))
 
 (defn- lerp [a b t]
   (+ a (* t (- b a))))

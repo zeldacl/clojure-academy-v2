@@ -27,8 +27,9 @@
 
 (def ^:dynamic *level-effect-runtime* nil)
 
-(defonce ^:private installed-level-effect-runtime
-  (create-level-effect-runtime))
+(let [_instance (volatile! nil)]
+  (defn- level-effect-instance []
+    (or @_instance (vreset! _instance (create-level-effect-runtime)) @_instance)))
 
 (defn- level-effect-runtime?
   [runtime]
@@ -51,7 +52,7 @@
 (defn- current-level-effect-runtime
   []
   (or *level-effect-runtime*
-      installed-level-effect-runtime))
+      (level-effect-instance)))
 
 (defn- level-effect-state-atom
   []

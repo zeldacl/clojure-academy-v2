@@ -46,9 +46,8 @@
 ;; State
 ;; ============================================================================
 
-(defonce ^:private notifications* (atom []))
-
-(defn- lerp [a b t]
+(let [notifications* (volatile! [])]
+  (defn- lerp [a b t]
   (+ a (* t (- b a))))
 
 (defn- sine-ease [t]
@@ -72,10 +71,10 @@
         (let [title (try
                       (:title (tutorial-content/load-tutorial-content (name tut-id)))
                       (catch Throwable _ (name tut-id)))]
-          (swap! notifications* conj
+          (vreset! notifications* (conj @notifications*
                  {:title title
                   :tut-id tut-id
-                  :start-sec nil})))
+                  :start-sec nil}))))
       (catch Throwable t
         (log/warn :tutorial-notification "Failed to queue activation toast:" (ex-message t))))))
 
@@ -92,14 +91,16 @@
   (let [now-sec (/ (double now-ms) 1000.0)
         ;; Single atomic swap! — init start-sec for new notifications and
         ;; remove expired ones. Avoids read-then-reset! race with enqueue.
-        active (swap! notifications*
-                (fn [notifs]
-                  (let [needs-init? (some #(nil? (:start-sec %)) notifs)
-                        initialized (if needs-init?
-                                      (mapv (fn [n] (if (:start-sec n) n (assoc n :start-sec now-sec)))
-                                            notifs)
-                                      notifs)]
-                    (filterv #(<= (- now-sec (:start-sec %)) total-keep-time) initialized))))]
+        active (let [new-val ((fn [notifs]
+                                 (let [needs-init? (some #(nil? (:start-sec %)) notifs)
+                                       initialized (if needs-init?
+                                                     (mapv (fn [n] (if (:start-sec n) n (assoc n :start-sec now-sec)))
+                                                           notifs)
+                                                     notifs)]
+                                   (filterv #(<= (- now-sec (:start-sec %)) total-keep-time) initialized)))
+                               @notifications*)]
+                 (vreset! notifications* new-val)
+                 new-val)]
     (if-let [notif (last active)]
       (let [dt (- now-sec (:start-sec notif))
             ;; Compute per-element alpha based on animation phase
@@ -156,4 +157,4 @@
           :x content-x :y content-y
           :text content
           :color {:r 255 :g 255 :b 255 :a (int (* 255 text-alpha))}}])
-      [])))
+      []))))

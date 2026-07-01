@@ -23,11 +23,15 @@
 	 :registry-state* (atom {:world-data-registry {}
 											 :world-states {}})})
 
-(defonce ^:private installed-world-registry-runtime
-	(create-world-registry-runtime))
+(let [_runtime (volatile! nil)]
+  (defn- world-registry-instance
+    "Lazily create the world registry runtime singleton on first use."
+    []
+    (or @_runtime
+        (vreset! _runtime (create-world-registry-runtime))
+        @_runtime)))
 
-(def ^:dynamic *world-registry-runtime*
-	installed-world-registry-runtime)
+(def ^:dynamic *world-registry-runtime* nil)
 
 (def ^:dynamic *world-transaction* nil)
 
@@ -61,7 +65,8 @@
 
 (defn- current-world-registry-runtime
 	[]
-	*world-registry-runtime*)
+	(or *world-registry-runtime*
+	    (world-registry-instance)))
 
 (defn- current-world-transaction
 	[]

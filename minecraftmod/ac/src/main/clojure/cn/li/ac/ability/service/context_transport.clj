@@ -19,8 +19,9 @@
 
 (def ^:dynamic *context-transport-runtime* nil)
 
-(defonce ^:private installed-context-transport-runtime
-	(create-context-transport-runtime))
+(let [_instance (volatile! nil)]
+  (defn- context-transport-instance []
+    (or @_instance (vreset! _instance (create-context-transport-runtime)) @_instance)))
 
 (defn call-with-context-transport-runtime
 	[runtime f]
@@ -34,7 +35,7 @@
 (defn- current-context-transport-runtime
 	[]
 	(or *context-transport-runtime*
-			installed-context-transport-runtime))
+			(context-transport-instance)))
 
 (defn- context-transport-state-atom
 	[]

@@ -74,21 +74,20 @@
 ;; Tick-based activation batching
 ;; ============================================================================
 
-(def ^:private tick-counter (atom 0))
-
-(defn- on-player-tick
-  "Called on PlayerTickEvent (SERVER, END phase).
-  Every 3 ticks, calls process-pending-activations! for the player
-  to batch-check newly-satisfied tutorial conditions."
-  [^TickEvent$PlayerTickEvent event]
-  (when (and (= TickEvent$Phase/END (.phase event))
-             (instance? ServerPlayer (.player event)))
-    (let [c (swap! tick-counter inc)]
-      (when (zero? (mod c 3))
-        (let [^ServerPlayer player (.player event)]
-          (try
-            (tutorial-platform/process-pending-activations! player)
-            (catch Throwable _)))))))
+(let [tick-counter (volatile! 0)]
+  (defn- on-player-tick
+    "Called on PlayerTickEvent (SERVER, END phase).
+    Every 3 ticks, calls process-pending-activations! for the player
+    to batch-check newly-satisfied tutorial conditions."
+    [^TickEvent$PlayerTickEvent event]
+    (when (and (= TickEvent$Phase/END (.phase event))
+               (instance? ServerPlayer (.player event)))
+      (let [c (vreset! tick-counter (inc @tick-counter))]
+        (when (zero? (mod c 3))
+          (let [^ServerPlayer player (.player event)]
+            (try
+              (tutorial-platform/process-pending-activations! player)
+              (catch Throwable _))))))))
 
 (defn- install-forge-tutorial-activated-bridge!
   []
@@ -112,16 +111,15 @@
 ;; Registration
 ;; ============================================================================
 
-(def ^:private listener-registered? (atom false))
-
-(defn init!
-  "Register Forge item event listeners for tutorial condition tracking
-  and tick-based activation batching.
-  Called from Forge client/server setup.  Idempotent."
-  []
-  (when-not @listener-registered?
-    (locking listener-registered?
-      (when-not @listener-registered?
+(let [registered? (volatile! false)]
+  (defn init!
+    "Register Forge item event listeners for tutorial condition tracking
+    and tick-based activation batching.
+    Called from Forge client/server setup.  Idempotent."
+    []
+    (when-not @registered?
+      (locking registered?
+        (when-not @registered?
         (.addListener (MinecraftForge/EVENT_BUS)
                       EventPriority/NORMAL false
                       PlayerEvent$ItemCraftedEvent
@@ -145,6 +143,6 @@
         (try
           (install-forge-tutorial-activated-bridge!)
           (catch Throwable _))
-        (reset! listener-registered? true)
+        (vreset! registered? true)
         (log/info "Tutorial item event listeners registered"))))
-  nil)
+    nil))

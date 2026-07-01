@@ -97,8 +97,9 @@
 
 (def ^:dynamic *attack-check-registries-runtime* nil)
 
-(defonce ^:private installed-attack-check-registries-runtime
-  (create-attack-check-registries-runtime))
+(let [_instance (volatile! nil)]
+  (defn- attack-check-registries-instance []
+    (or @_instance (vreset! _instance (create-attack-check-registries-runtime)) @_instance)))
 
 (defn call-with-attack-check-registries-runtime
   [runtime f]
@@ -112,7 +113,7 @@
 (defn- current-attack-check-registries-runtime
   []
   (or *attack-check-registries-runtime*
-      installed-attack-check-registries-runtime))
+      (attack-check-registries-instance)))
 
 (defn- attack-check-registries-state-atom
   []

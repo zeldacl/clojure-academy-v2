@@ -16,9 +16,6 @@
 (def GLFW_KEY_X 88)
 (def GLFW_KEY_R 82)
 
-;; Polling state (prevents duplicate rapid-fire)
-(def ^:private last-poll-time (atom {}))
-
 (defn ^:private is-key-pressed?
   "Query key state through installed KeySchemeProvider SPI."
   [scheme-name key-code]
@@ -26,55 +23,56 @@
 
 (defn ^:private should-trigger?
   "Debounce logic: only trigger once per actual key press.
-   
+
    Prevents rapid-fire by tracking transition from :released to :pressed."
   [_input-id was-pressed now-pressed]
   (and now-pressed (not was-pressed)))
 
-(defn poll-all-inputs!
-  "Poll all :original scheme inputs and emit keyboard events.
-   
-   Called once per tick by Forge/Fabric platform layer.
-   
-   Polling targets:
-   - :content/cycle-selection (R key)
-   - Other :original scheme inputs added later
-   
-   Flow:
-   1. Poll GLFW state for each :original input
-   2. Detect press transition (released → pressed)
-   3. Emit keyboard-input event via protocol
-   
-   Context provided to handlers:
-   {:player-uuid 'current-player-uuid'
-    :client-session-id 'session-id'
-    :logical-side :client}
-   
-   Note: All :alternative scheme inputs are handled by Forge/Fabric KeyMapping
-   events. This polling is ONLY for :original scheme (which includes
-   hardcoded platform keys like LMB/RMB that have no event source)."
-  [_minecraft-client player-uuid client-session-id]
-  (try
-    ;; Cycle selection (R key, :original scheme)
-        (let [key-code GLFW_KEY_R
-          is-pressed (is-key-pressed? :original key-code)
-          was-pressed (get @last-poll-time :cycle-selection false)]
-      (when (should-trigger? :cycle-selection was-pressed is-pressed)
-        (kb-proto/emit-keyboard-input!
-          :content/cycle-selection
-          {:player-uuid player-uuid
-           :client-session-id client-session-id
-           :logical-side :client}))
-      (swap! last-poll-time assoc :cycle-selection is-pressed))
-    
-    ;; Additional :original inputs can be polled here following same pattern
-    
-    nil
-    (catch Exception e
-      (log/warn e "Error polling GLFW inputs"))))
+(let [last-poll-time (volatile! {})]
+  (defn poll-all-inputs!
+    "Poll all :original scheme inputs and emit keyboard events.
 
-(defn reset-polling-state!
-  "Reset debounce state (for testing or platform restart)"
-  []
-  (reset! last-poll-time {})
-  nil)
+     Called once per tick by Forge/Fabric platform layer.
+
+     Polling targets:
+     - :content/cycle-selection (R key)
+     - Other :original scheme inputs added later
+
+     Flow:
+     1. Poll GLFW state for each :original input
+     2. Detect press transition (released → pressed)
+     3. Emit keyboard-input event via protocol
+
+     Context provided to handlers:
+     {:player-uuid 'current-player-uuid'
+      :client-session-id 'session-id'
+      :logical-side :client}
+
+     Note: All :alternative scheme inputs are handled by Forge/Fabric KeyMapping
+     events. This polling is ONLY for :original scheme (which includes
+     hardcoded platform keys like LMB/RMB that have no event source)."
+    [_minecraft-client player-uuid client-session-id]
+    (try
+      ;; Cycle selection (R key, :original scheme)
+      (let [key-code GLFW_KEY_R
+            is-pressed (is-key-pressed? :original key-code)
+            was-pressed (get @last-poll-time :cycle-selection false)]
+        (when (should-trigger? :cycle-selection was-pressed is-pressed)
+          (kb-proto/emit-keyboard-input!
+            :content/cycle-selection
+            {:player-uuid player-uuid
+             :client-session-id client-session-id
+             :logical-side :client}))
+        (vreset! last-poll-time (assoc @last-poll-time :cycle-selection is-pressed)))
+
+      ;; Additional :original inputs can be polled here following same pattern
+
+      nil
+      (catch Exception e
+        (log/warn e "Error polling GLFW inputs"))))
+
+  (defn reset-polling-state!
+    "Reset debounce state (for testing or platform restart)"
+    []
+    (vreset! last-poll-time {})
+    nil))

@@ -134,7 +134,6 @@
 ;; Arc template cache (generated once, reused each frame)
 ;; ---------------------------------------------------------------------------
 
-(defonce ^:private arc-template-cache (atom nil))
 (def ^:private default-num-templates 15)
 (def ^:private default-arc-length 1.5)
 (def ^:private default-arc-width 0.3)
@@ -143,25 +142,26 @@
 (def ^:private default-branch-factor 0.7)
 (def ^:private default-width-shrink 0.9)
 
-(defn- ensure-templates
-  "Generate arc templates on first call, cache and return."
-  []
-  (or @arc-template-cache
-      (let [templates
-            (vec
-             (for [_ (range default-num-templates)
-                   :let [length (+ 1.0 (* (rand) 1.0))]] ;; spacing 1-2
-               (generate-arc-segments length
-                 default-arc-width default-max-offset
-                 default-passes default-branch-factor default-width-shrink)))]
-        (reset! arc-template-cache templates)
-        templates)))
+(let [template-cache (volatile! nil)]
+  (defn- ensure-templates
+    "Generate arc templates on first call, cache and return."
+    []
+    (or @template-cache
+        (let [templates
+              (vec
+               (for [_ (range default-num-templates)
+                     :let [length (+ 1.0 (* (rand) 1.0))]] ;; spacing 1-2
+                 (generate-arc-segments length
+                   default-arc-width default-max-offset
+                   default-passes default-branch-factor default-width-shrink)))]
+          (vreset! template-cache templates)
+          templates)))
 
-(defn reset-arc-templates-for-test!
-  "Clear cached templates (for testing)."
-  []
-  (reset! arc-template-cache nil)
-  nil)
+  (defn reset-arc-templates-for-test!
+    "Clear cached templates (for testing)."
+    []
+    (vreset! template-cache nil)
+    nil))
 
 ;; ---------------------------------------------------------------------------
 ;; Arc rendering: convert segments to quads

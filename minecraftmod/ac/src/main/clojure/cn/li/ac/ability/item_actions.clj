@@ -26,11 +26,11 @@
    {::runtime ::item-action-registries-runtime
     :state* state*}))
 
-(defonce ^:private installed-item-action-registries-runtime
-  (create-item-action-registries-runtime))
+(let [_instance (volatile! nil)]
+  (defn- item-action-registries-instance []
+    (or @_instance (vreset! _instance (create-item-action-registries-runtime)) @_instance)))
 
-(def ^:dynamic *item-action-registries-runtime*
-  installed-item-action-registries-runtime)
+(def ^:dynamic *item-action-registries-runtime* nil)
 
 (defn call-with-item-action-registries-runtime
   [runtime f]
@@ -43,7 +43,8 @@
 
 (defn- current-item-action-registries-runtime
   []
-  *item-action-registries-runtime*)
+  (or *item-action-registries-runtime*
+      (item-action-registries-instance)))
 
 (defn- item-action-registries-state-atom
   []

@@ -21,8 +21,9 @@
 
 (def ^:dynamic *session-cleanup-runtime* nil)
 
-(defonce ^:private installed-session-cleanup-runtime
-  (create-session-cleanup-runtime))
+(let [_instance (volatile! nil)]
+  (defn- session-cleanup-instance []
+    (or @_instance (vreset! _instance (create-session-cleanup-runtime)) @_instance)))
 
 (defn- session-cleanup-runtime?
   [runtime]
@@ -45,7 +46,7 @@
 (defn- current-session-cleanup-runtime
   []
   (or *session-cleanup-runtime*
-      installed-session-cleanup-runtime))
+      (session-cleanup-instance)))
 
 (defn- lifecycle-state-atom
   []

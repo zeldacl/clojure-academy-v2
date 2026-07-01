@@ -14,11 +14,11 @@
 	{::runtime ::managed-screen-runtime
 	 :state* (atom default-managed-screen-runtime-state)})
 
-(defonce ^:private installed-managed-screen-runtime
-	(create-managed-screen-runtime))
+(let [_instance (volatile! nil)]
+  (defn- managed-screen-instance []
+    (or @_instance (vreset! _instance (create-managed-screen-runtime)) @_instance)))
 
-(def ^:dynamic *managed-screen-runtime*
-	installed-managed-screen-runtime)
+(def ^:dynamic *managed-screen-runtime* nil)
 
 (defn- managed-screen-runtime?
 	[runtime]
@@ -40,7 +40,8 @@
 
 (defn- current-managed-screen-runtime
 	[]
-	*managed-screen-runtime*)
+	(or *managed-screen-runtime*
+	    (managed-screen-instance)))
 
 (defn- require-managed-screen-runtime
 	[]

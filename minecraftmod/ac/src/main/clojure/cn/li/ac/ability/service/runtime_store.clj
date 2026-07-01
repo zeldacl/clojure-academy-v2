@@ -173,68 +173,74 @@
     @store-atom))
 
 ;; ============================================================================
-;; Global Store Singleton
+;; Store access — lazy-init factory, no top-level defonce singleton
 ;; ============================================================================
 
-(defonce ^:private global-store-data
-  (atom {:sessions {}}))
+(let [store-data (volatile! nil)
+      store-instance (volatile! nil)]
+  (defn- ensure-store
+    "Create the ability store on first access."
+    []
+    (or @store-instance
+        (let [data (atom {:sessions {}})]
+          (vreset! store-data data)
+          (vreset! store-instance (AtomAbilityStore. data))
+          @store-instance)))
 
-(defonce ^:private global-store
-  (AtomAbilityStore. global-store-data))
+  (defn get-store
+    "Return the ability store instance. Created lazily on first call."
+    []
+    (ensure-store))
 
-(defn get-store
-  "Return the global ability store singleton."
-  []
-  global-store)
+  (defn reset-store!
+    "Clear all store data. Primarily for testing."
+    []
+    (when-let [data @store-data]
+      (reset! data {:sessions {}}))
+    nil)
 
-(defn reset-store!
-  "Clear all store data. Primarily for testing."
-  []
-  (reset! global-store-data {:sessions {}})
-  nil)
+  ;; ============================================================================
+  ;; Convenience functions (delegate to store)
+  ;; ============================================================================
 
-;; ============================================================================
-;; Convenience functions (delegate to global store)
-;; ============================================================================
+  (defn get-player-state*
+    "Get player state from the store."
+    [session-id player-uuid]
+    (get-player-state (ensure-store) session-id player-uuid))
 
-(defn get-player-state*
-  "Get player state from the global store."
-  [session-id player-uuid]
-  (get-player-state global-store session-id player-uuid))
+  (defn set-player-state!*
+    "Set player state in the store."
+    [session-id player-uuid state]
+    (set-player-state! (ensure-store) session-id player-uuid state))
 
-(defn set-player-state!*
-  "Set player state in the global store."
-  [session-id player-uuid state]
-  (set-player-state! global-store session-id player-uuid state))
+  (defn update-player-state!*
+    "Update player state in the store."
+    [session-id player-uuid f & args]
+    (if (seq args)
+      (update-player-state! (ensure-store)
+                            session-id
+                            player-uuid
+                            (fn [state]
+                              (apply f state args)))
+      (update-player-state! (ensure-store) session-id player-uuid f))))
 
-(defn update-player-state!*
-  "Update player state in the global store."
-  [session-id player-uuid f & args]
-  (if (seq args)
-    (update-player-state! global-store
-                          session-id
-                          player-uuid
-                          (fn [state]
-                            (apply f state args)))
-    (update-player-state! global-store session-id player-uuid f)))
+  (defn mark-player-dirty!
+    "Mark player dirty in the store."
+    [session-id player-uuid]
+    (mark-dirty! (ensure-store) session-id player-uuid))
 
-(defn mark-player-dirty!
-  "Mark player dirty in the global store."
-  [session-id player-uuid]
-  (mark-dirty! global-store session-id player-uuid))
+  (defn get-or-create-player-state!
+    "Get player state or create it with fresh defaults if missing."
+    [session-id player-uuid]
+    (or (get-player-state* session-id player-uuid)
+        (let [fresh (fresh-player-state)]
+          (set-player-state!* session-id player-uuid fresh)
+          fresh)))
 
-(defn get-or-create-player-state!
-  "Get player state or create it with fresh defaults if missing."
-  [session-id player-uuid]
-  (or (get-player-state* session-id player-uuid)
-      (let [fresh (fresh-player-state)]
-        (set-player-state!* session-id player-uuid fresh)
-        fresh)))
-
-(defn remove-player-state!*
-  "Remove one player state in the global store."
-  [session-id player-uuid]
-  (remove-player-state! global-store session-id player-uuid))
+  (defn remove-player-state!*
+    "Remove one player state in the store."
+    [session-id player-uuid]
+    (remove-player-state! (ensure-store) session-id player-uuid))
 
 (defn with-player-state
   "Apply f to player state and return f's result without mutating store.

@@ -18,15 +18,16 @@
   ([initial-executors]
    {:executors (atom initial-executors)}))
 
-(defonce ^:private installed-script-render-executor-runtime
-  (create-script-render-executor-runtime))
+(let [_instance (volatile! nil)]
+  (defn- script-render-executor-instance []
+    (or @_instance (vreset! _instance (create-script-render-executor-runtime)) @_instance)))
 
-(def ^:dynamic *script-render-executor-runtime*
-  installed-script-render-executor-runtime)
+(def ^:dynamic *script-render-executor-runtime* nil)
 
 (defn current-script-render-executor-runtime
   []
-  *script-render-executor-runtime*)
+  (or *script-render-executor-runtime*
+      (script-render-executor-instance)))
 
 (defmacro with-script-render-executor-runtime
   [runtime & body]

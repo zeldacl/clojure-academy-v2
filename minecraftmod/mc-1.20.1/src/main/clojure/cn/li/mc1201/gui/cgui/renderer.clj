@@ -32,15 +32,16 @@
 
 ;; STB em 8px; :font-size N → N px on screen (typographic bounds, no bake padding in layout).
 
-(defonce ^:private installed-cgui-renderer-runtime
-  (create-cgui-renderer-runtime))
+(let [_instance (volatile! nil)]
+  (defn- cgui-renderer-instance []
+    (or @_instance (vreset! _instance (create-cgui-renderer-runtime)) @_instance)))
 
-(def ^:dynamic *cgui-renderer-runtime*
-  installed-cgui-renderer-runtime)
+(def ^:dynamic *cgui-renderer-runtime* nil)
 
 (defn current-cgui-renderer-runtime
   []
-  *cgui-renderer-runtime*)
+  (or *cgui-renderer-runtime*
+      (cgui-renderer-instance)))
 
 (defmacro with-cgui-renderer-runtime
   [runtime & body]

@@ -26,8 +26,9 @@
 
 (def ^:dynamic *level-renderer-runtime* nil)
 
-(defonce ^:private installed-level-renderer-runtime
-  (create-level-renderer-runtime))
+(let [_instance (volatile! nil)]
+  (defn- level-renderer-instance []
+    (or @_instance (vreset! _instance (create-level-renderer-runtime)) @_instance)))
 
 (defn- level-renderer-runtime?
   [runtime]
@@ -50,7 +51,7 @@
 (defn- current-level-renderer-runtime
   []
   (or *level-renderer-runtime*
-      installed-level-renderer-runtime))
+      (level-renderer-instance)))
 
 (defn- last-applied-walk-speed-atom
   []

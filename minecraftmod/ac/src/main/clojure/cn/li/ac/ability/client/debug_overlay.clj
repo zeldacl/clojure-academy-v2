@@ -14,15 +14,14 @@
 
 (def debug-states [:none :normal :show-exp])
 
-(defonce debug-state* (atom :none))
-
-(defn toggle-debug-state!
-  "Advance debug overlay state through the cycle: none -> normal -> show-exp -> none."
-  []
-  (let [cur (.indexOf ^List debug-states @debug-state*)
-        nxt (rem (inc cur) (count debug-states))]
-    (reset! debug-state* (nth debug-states nxt))
-    nil))
+(let [state* (volatile! :none)]
+  (defn toggle-debug-state!
+    "Advance debug overlay state through the cycle: none -> normal -> show-exp -> none."
+    []
+    (let [cur (.indexOf ^List debug-states @state*)
+          nxt (rem (inc cur) (count debug-states))]
+      (vreset! state* (nth debug-states nxt))
+      nil))
 
 ;; ============================================================================
 ;; Helpers
@@ -140,18 +139,18 @@
 ;; Public API
 ;; ============================================================================
 
-(defn build-debug-overlay-elements
-  "Returns a vector of overlay :text element maps for the current debug state.
+  (defn build-debug-overlay-elements
+    "Returns a vector of overlay :text element maps for the current debug state.
 
-   player-state: the resolved player-state map (from get-client-player-state).
-   Returns [] when debug state is :none or player-state is nil."
-  [player-state]
-  (when player-state
-    (let [state @debug-state*
-          ability-data (:ability-data player-state)
-          resource-data (:resource-data player-state)]
-      (case state
-        :none []
-        :normal (text-lines->elements (build-normal-lines ability-data resource-data))
-        :show-exp (text-lines->elements (build-show-exp-lines ability-data))
-        []))))
+     player-state: the resolved player-state map (from get-client-player-state).
+     Returns [] when debug state is :none or player-state is nil."
+    [player-state]
+    (when player-state
+      (let [state @state*
+            ability-data (:ability-data player-state)
+            resource-data (:resource-data player-state)]
+        (case state
+          :none []
+          :normal (text-lines->elements (build-normal-lines ability-data resource-data))
+          :show-exp (text-lines->elements (build-show-exp-lines ability-data))
+          [])))))

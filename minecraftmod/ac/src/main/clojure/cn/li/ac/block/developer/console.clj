@@ -238,39 +238,38 @@
 ;; Command registry — extensible, matching original Console += Command(...)
 ;; ============================================================================
 
-;; Atom: {command-name-str → (fn [state] [new-state action-kw])}.
+;; Command registry: {command-name-str → (fn [state] [new-state action-kw])}.
 ;; Register commands via register-command! to add custom console commands.
-(defonce ^:private command-registry (atom {}))
+(let [command-registry (volatile! {})]
+  ;; Register a console command. callback receives the current state atom
+  ;; and the create-console options map, returns [new-state action-kw].
+  ;; Matching original SkillTree.scala: console += Command(name, callback)
+  (defn register-command! [name callback]
+    (vreset! command-registry (assoc @command-registry name callback))
+    nil)
 
-;; Register a console command. callback receives the current state atom
-;; and the create-console options map, returns [new-state action-kw].
-;; Matching original SkillTree.scala: console += Command(name, callback)
-(defn register-command! [name callback]
-  (swap! command-registry assoc name callback)
-  nil)
+  (defn- cmd-help [mode]
+    (let [cmds (keys @command-registry)
+          names (sort (concat (case mode :reset ["reset"] ["learn"])
+                              ["help" "clear"]))]
+      (str "Commands: " (str/join ", " (take 4 (distinct names))))))
 
-(defn- cmd-help [mode]
-  (let [cmds (keys @command-registry)
-        names (sort (concat (case mode :reset ["reset"] ["learn"])
-                            ["help" "clear"]))]
-    (str "Commands: " (str/join ", " (take 4 (distinct names))))))
-
-(defn- exec-cmd
-  "Execute a pending command via registered handlers.
-  Returns [new-state action-kw]."
-  [state]
-  (let [cmd (:exec-cmd state)
-        base (fn [phase]
-               (-> state
-                   (update :lines conj (str prompt-str))
-                   (update :lines clamp-lines)
-                   (assoc :phase phase :exec-cmd nil)))]
-    (if-let [handler (get @command-registry cmd)]
-      (handler state)
-      [(-> (base :idle)
-           (update :lines conj (msg :invalid-cmd))
-           (update :lines clamp-lines))
-       nil])))
+  (defn- exec-cmd
+    "Execute a pending command via registered handlers.
+    Returns [new-state action-kw]."
+    [state]
+    (let [cmd (:exec-cmd state)
+          base (fn [phase]
+                 (-> state
+                     (update :lines conj (str prompt-str))
+                     (update :lines clamp-lines)
+                     (assoc :phase phase :exec-cmd nil)))]
+      (if-let [handler (get @command-registry cmd)]
+        (handler state)
+        [(-> (base :idle)
+             (update :lines conj (msg :invalid-cmd))
+             (update :lines clamp-lines))
+         nil]))))
 
 ;; ============================================================================
 ;; Built-in command registrations

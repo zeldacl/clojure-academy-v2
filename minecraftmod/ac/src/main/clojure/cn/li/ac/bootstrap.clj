@@ -53,15 +53,15 @@
 ;; Self-registration into neutral mcmod lifecycle
 ;; ============================================================================
 
-(def ^:private post-spi-init-registered? (atom false))
-
-(defn- register-post-spi-init!
-  "Register AC keybinding init as a post-SPI client callback.
-  Idempotent — only registers once."
-  []
-  (when (compare-and-set! post-spi-init-registered? false true)
-    (lifecycle/register-post-spi-client-init! initialize-keybindings!)
-    (log/info "AC keybinding init registered into mcmod lifecycle (post-spi-client-init)")))
+(let [registered? (volatile! false)]
+  (defn- register-post-spi-init!
+    "Register AC keybinding init as a post-SPI client callback.
+    Idempotent — only registers once."
+    []
+    (when-not @registered?
+      (vreset! registered? true)
+      (lifecycle/register-post-spi-client-init! initialize-keybindings!)
+      (log/info "AC keybinding init registered into mcmod lifecycle (post-spi-client-init)"))))
 
 ;; Auto-register when this namespace is loaded (during content-init via ServiceLoader).
 (register-post-spi-init!)

@@ -24,14 +24,15 @@
                          :override-active? {}}
                         initial-state))}))
 
-(defonce ^:private installed-key-input-runtime
-  (create-key-input-runtime))
+(let [_instance (volatile! nil)]
+  (defn- key-input-instance []
+    (or @_instance (vreset! _instance (create-key-input-runtime)) @_instance)))
 
-(def ^:dynamic *key-input-runtime*
-  installed-key-input-runtime)
+(def ^:dynamic *key-input-runtime* nil)
 
 (defn current-key-input-runtime []
-  *key-input-runtime*)
+  (or *key-input-runtime*
+      (key-input-instance)))
 
 (defmacro with-key-input-runtime [runtime & body]
   `(binding [*key-input-runtime* ~runtime]

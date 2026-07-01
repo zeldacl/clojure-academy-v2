@@ -93,9 +93,8 @@
 
 ;; --- Content cache ---
 
-(def ^:private content-cache (atom {}))
-
-(defn- cached-render-content! [content-ctr tut-id lang content-str misaka-id]
+(let [content-cache (volatile! {})]
+  (defn- cached-render-content! [content-ctr tut-id lang content-str misaka-id]
   (let [cache-key [tut-id lang (str misaka-id)]
         cached (get @content-cache cache-key)]
     (let [segs (if cached
@@ -131,8 +130,8 @@
             (cgui-core/add-widget! content-ctr w)
             (recur (rest sg) (+ y h) (inc n)))))
       (when-not cached
-        (swap! content-cache assoc cache-key {:segs segs :total-h total-h}))
-      total-h)))
+        (vreset! content-cache (assoc @content-cache cache-key {:segs segs :total-h total-h})))
+      total-h))))  ;; close defn then close let
 
 ;; --- Content helpers ---
 

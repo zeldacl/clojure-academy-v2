@@ -64,8 +64,13 @@
 
 (def ^:dynamic *sound-queue-runtime* nil)
 
-(defonce ^:private installed-sound-queue-runtime
-  (create-sound-queue-runtime))
+(let [_instance (volatile! nil)]
+  (defn- sound-queue-instance
+    "Lazy-init the sound queue runtime singleton."
+    []
+    (or @_instance
+        (vreset! _instance (create-sound-queue-runtime))
+        @_instance)))
 
 (defn- sound-queue-runtime?
   [runtime]
@@ -88,7 +93,7 @@
 (defn- current-runtime
   []
   (or *sound-queue-runtime*
-      installed-sound-queue-runtime))
+      (sound-queue-instance)))
 
 (defn- queue-atom
   []
