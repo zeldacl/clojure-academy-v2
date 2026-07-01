@@ -1,35 +1,38 @@
 (ns cn.li.mcmod.platform.tutorial-events
-  "Platform-neutral tutorial item-event and activation hooks."
-  (:require [cn.li.mcmod.platform.runtime :as prt]))
+  "Platform-neutral tutorial item-event and activation hooks.
 
-(defn- default-tutorial-events-state []
+  State stored in Framework [:service :tutorial-events]."
+  (:require [cn.li.mcmod.framework :as fw]))
+
+(defn- default-state []
   {:on-item-event! (fn [_ _ _] nil)
    :process-pending-activations! (fn [_] nil)
    :tutorial-activated-hook (fn [_ _] nil)})
 
-(defn create-tutorial-events-runtime
-  ([] (create-tutorial-events-runtime {}))
-  ([{:keys [state*]}]
-   {:cn.li.mcmod.platform.tutorial-events/runtime ::tutorial-events-runtime
-    :state* (or state* (atom (default-tutorial-events-state)))}))
+;; ============================================================================
+;; State access — Framework [:service :tutorial-events]
+;; ============================================================================
 
-(def ^:private _tutorial-events-runtime (delay (create-tutorial-events-runtime)))
+(def ^:private hooks-path [:service :tutorial-events])
 
-(def ^:dynamic *tutorial-events-runtime* nil)
-
-(defn- tutorial-events-atom []
-  (:state* (or *tutorial-events-runtime*
-                  @_tutorial-events-runtime)))
-
-(defn- tutorial-events-snapshot []
-  @(tutorial-events-atom))
+(defn- hooks-snapshot []
+  (if-let [fw-atom fw/*framework*]
+    (or (get-in @fw-atom hooks-path) (default-state))
+    (default-state)))
 
 (defn register-tutorial-handlers!
+  "Register tutorial event handler functions. Duplicate keys must have same value."
   [handlers]
-  (doseq [[k v] handlers]
-    (prt/register-hook! (tutorial-events-atom) k v
-                        :duplicate-policy :same-value-idempotent
-                        :label "tutorial-events"))
+  (when-let [fw-atom fw/*framework*]
+    (swap! fw-atom update-in hooks-path
+           (fn [current]
+             (let [base (or current (default-state))]
+               (reduce-kv (fn [m k v]
+                            (if (and (contains? m k) (not= (get m k) v))
+                              (throw (ex-info "Conflicting tutorial handler"
+                                              {:key k :existing (get m k) :new v}))
+                              (assoc m k v)))
+                          base handlers)))))
   nil)
 
 (defn register-tutorial-activated-hook!
@@ -38,17 +41,18 @@
 
 (defn reset-tutorial-events-for-test!
   []
-  (reset! (tutorial-events-atom) (default-tutorial-events-state))
+  (when-let [fw-atom fw/*framework*]
+    (swap! fw-atom assoc-in hooks-path (default-state)))
   nil)
 
 (defn on-item-event!
   [player item-id event-type]
-  ((:on-item-event! (tutorial-events-snapshot)) player item-id event-type))
+  ((:on-item-event! (hooks-snapshot)) player item-id event-type))
 
 (defn process-pending-activations!
   [player]
-  ((:process-pending-activations! (tutorial-events-snapshot)) player))
+  ((:process-pending-activations! (hooks-snapshot)) player))
 
 (defn notify-tutorial-activated!
   [player-uuid tut-id]
-  ((:tutorial-activated-hook (tutorial-events-snapshot)) player-uuid tut-id))
+  ((:tutorial-activated-hook (hooks-snapshot)) player-uuid tut-id))

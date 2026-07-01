@@ -1,6 +1,8 @@
 (ns cn.li.mcmod.platform.integration-runtime
-  "Platform-neutral bridge for optional content integrations such as JEI and CraftTweaker."
-  (:require [cn.li.mcmod.platform.runtime :as prt]))
+  "Platform-neutral bridge for optional content integrations such as JEI and CraftTweaker.
+
+  State stored in Framework [:registry :integrations]."
+  (:require [cn.li.mcmod.framework :as fw]))
 
 (defn- default-integration-runtime-state []
   {:jei-get-all-categories (fn [] [])
@@ -8,72 +10,75 @@
    :jei-format-recipe identity
    :describe-recipe (fn [_recipe] "")})
 
-(defn create-integration-runtime
-  ([] (create-integration-runtime {}))
-  ([{:keys [state*]}]
-   {:cn.li.mcmod.platform.integration-runtime/runtime ::integration-runtime
-    :state* (or state* (atom (default-integration-runtime-state)))}))
+;; ============================================================================
+;; Integration hooks — Framework [:registry :integrations :hooks]
+;; ============================================================================
 
-(def ^:private _integration-runtime (delay (create-integration-runtime)))
-
-(def ^:dynamic *integration-runtime* nil)
-
-(defn- integration-hooks-atom []
-  (:state* (or *integration-runtime*
-                  @_integration-runtime)))
+(def ^:private hooks-path [:registry :integrations :hooks])
 
 (defn- integration-hooks-snapshot []
-  @(integration-hooks-atom))
+  (if-let [fw-atom fw/*framework*]
+    (or (get-in @fw-atom hooks-path) (default-integration-runtime-state))
+    (default-integration-runtime-state)))
 
 (defn register-integration-hooks!
+  "Register integration hook functions. Duplicate keys must have same value."
   [hooks]
-  (doseq [[k v] hooks]
-    (prt/register-hook! (integration-hooks-atom) k v
-                        :duplicate-policy :same-value-idempotent
-                        :label "integration-runtime"))
+  (when-let [fw-atom fw/*framework*]
+    (swap! fw-atom update-in hooks-path
+           (fn [current]
+             (let [base (or current (default-integration-runtime-state))]
+               (reduce-kv (fn [m k v]
+                            (if (and (contains? m k) (not= (get m k) v))
+                              (throw (ex-info "Conflicting integration hook"
+                                              {:key k :existing (get m k) :new v}))
+                              (assoc m k v)))
+                          base hooks)))))
   nil)
 
 (defn reset-integration-hooks-for-test!
   []
-  (reset! (integration-hooks-atom) (default-integration-runtime-state))
+  (when-let [fw-atom fw/*framework*]
+    (swap! fw-atom assoc-in hooks-path (default-integration-runtime-state)))
   nil)
 
-(defn jei-get-all-categories
-  []
+(defn jei-get-all-categories []
   ((:jei-get-all-categories (integration-hooks-snapshot))))
 
-(defn jei-get-recipes
-  [category]
+(defn jei-get-recipes [category]
   ((:jei-get-recipes (integration-hooks-snapshot)) category))
 
-(defn jei-format-recipe
-  [recipe]
+(defn jei-format-recipe [recipe]
   ((:jei-format-recipe (integration-hooks-snapshot)) recipe))
 
-(defn describe-recipe
-  [recipe]
+(defn describe-recipe [recipe]
   ((:describe-recipe (integration-hooks-snapshot)) recipe))
 
 ;; ============================================================================
-;; JEI NBT Subtype Item ID Registry
+;; JEI NBT Subtype Item ID Registry — Framework [:registry :integrations :jei-nbt-subtype-ids]
 ;; Content registers item path-parts; JEI plugin reads at init time.
 ;; ============================================================================
 
-(defonce ^:private jei-nbt-subtype-ids* (atom []))
+(def ^:private nbt-subtype-path [:registry :integrations :jei-nbt-subtype-ids])
 
 (defn register-jei-nbt-subtype-item-ids!
   "Register item path-part IDs (without mod-id prefix) for JEI NBT subtype handling.
   JEI uses this to avoid collapsing NBT-stateful item variants (e.g. empty/full)."
   [ids]
-  (swap! jei-nbt-subtype-ids* into ids)
+  (when-let [fw-atom fw/*framework*]
+    (swap! fw-atom update-in nbt-subtype-path
+           (fn [current] (into (or current []) ids))))
   nil)
 
 (defn get-jei-nbt-subtype-item-ids
   "Return all registered item path-part IDs for JEI NBT subtype handling."
   []
-  @jei-nbt-subtype-ids*)
+  (if-let [fw-atom fw/*framework*]
+    (get-in @fw-atom nbt-subtype-path [])
+    []))
 
 (defn reset-jei-nbt-subtype-ids-for-test!
   []
-  (reset! jei-nbt-subtype-ids* [])
+  (when-let [fw-atom fw/*framework*]
+    (swap! fw-atom assoc-in nbt-subtype-path []))
   nil)

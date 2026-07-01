@@ -5,7 +5,8 @@
   content modules register concrete handlers during core initialization."
   (:require [cn.li.mcmod.content.registry :as content-registry]
             [cn.li.mcmod.schema.core :as schema]
-            [cn.li.mcmod.runtime.owner :as runtime-owner]))
+            [cn.li.mcmod.runtime.owner :as runtime-owner]
+            [cn.li.mcmod.framework :as fw]))
 
 (def ^:private noop
   (fn [& _] nil))
@@ -98,37 +99,50 @@
    :toggle-debug-overlay-state! noop})
 
 ;; ============================================================================
-;; Runtime Container
+;; Runtime Container — stored in Framework [:registry :hooks]
 ;; ============================================================================
 
-(defn create-hooks-core-runtime
-  ([] (create-hooks-core-runtime {}))
-  ([{:keys [state*]}]
-   {:cn.li.mcmod.hooks.core/runtime ::hooks-core-runtime
-    :state* (or state* (atom (default-runtime-hooks-state)))}))
-
-(def ^:private _hooks-core-runtime (delay (create-hooks-core-runtime)))
-
-(def ^:private allowed-runtime-hook-keys*
-  (atom (set (keys (default-runtime-hooks-state)))))
-
-(defn- hooks-core-state-atom []
-  (:state* @_hooks-core-runtime))
+(def ^:private hooks-path [:registry :hooks :runtime-hooks])
 
 (defn- hooks-core-state-snapshot []
-  @(hooks-core-state-atom))
+  (if-let [fw-atom fw/*framework*]
+    (or (get-in @fw-atom hooks-path)
+        (default-runtime-hooks-state))
+    (default-runtime-hooks-state)))
 
 (defn- update-hooks-core-state! [f & args]
-  (apply swap! (hooks-core-state-atom) f args))
+  (when-let [fw-atom fw/*framework*]
+    (swap! fw-atom
+           (fn [state]
+             (update-in state hooks-path
+                        (fn [current]
+                          (apply f (or current (default-runtime-hooks-state)) args))))))
+  nil)
+
+(def ^:private allowed-hooks-keys-path [:registry :hooks :allowed-keys])
+
+(defn- allowed-hook-keys
+  []
+  (if-let [fw-atom fw/*framework*]
+    (or (get-in @fw-atom allowed-hooks-keys-path)
+        (set (keys (default-runtime-hooks-state))))
+    (set (keys (default-runtime-hooks-state)))))
 
 
 (defn register-runtime-hook-keys!
   "Extend the set of allowed runtime hook keys before registration.
 
   This is used by content modules to opt into content-owned hook/request
-  entrypoints while keeping the neutral contract validation fail-fast."
+  entrypoints while keeping the neutral contract validation fail-fast.
+  No-op during AOT compilation when *framework* is nil."
   [hook-keys]
-  (swap! allowed-runtime-hook-keys* into (set hook-keys))
+  (when-let [fw-atom fw/*framework*]
+    (swap! fw-atom
+           (fn [state]
+             (update-in state allowed-hooks-keys-path
+                        (fn [current]
+                          (into (or current (set (keys (default-runtime-hooks-state))))
+                                (set hook-keys)))))))
   nil)
 
 (defn- validate-hooks!
@@ -137,12 +151,13 @@
     (throw (schema/contract-ex-info :runtime-hooks
                                     hooks
                                     (schema/explain hooks-map-schema hooks))))
-  (let [unknown-keys (seq (remove @allowed-runtime-hook-keys* (keys hooks)))]
+  (let [allowed (allowed-hook-keys)
+        unknown-keys (seq (remove allowed (keys hooks)))]
     (when unknown-keys
       (throw (ex-info "Unknown runtime hook keys"
                       {:contract :runtime-hooks
                        :unknown-hook-keys (vec unknown-keys)
-                       :allowed-hook-keys @allowed-runtime-hook-keys*}))))
+                       :allowed-hook-keys allowed}))))
   hooks)
 
 (def ^:dynamic *client-session-id*
@@ -275,40 +290,52 @@
 ;; Player state domain registry
 ;; Maps domain-key (keyword) → nbt-key (string) for per-domain state persistence.
 ;; Registered by content modules during init; read by nbt_core at load/save time.
+;; Stored in Framework [:registry :hooks :player-state-domains].
 ;; ============================================================================
 
-(defonce ^:private player-state-domain-registry* (atom {}))
+(def ^:private player-state-domains-path [:registry :hooks :player-state-domains])
 
 (defn register-player-state-domain!
   "Register a player state domain mapping: {:domain-key kw :nbt-key str}.
-  Called by content modules during init. Platform nbt layer reads this at runtime."
+  Called by content modules during init. Platform nbt layer reads this at runtime.
+  No-op during AOT compilation when *framework* is nil."
   [{:keys [domain-key nbt-key]}]
-  (swap! player-state-domain-registry* assoc domain-key nbt-key))
+  (when-let [fw-atom fw/*framework*]
+    (swap! fw-atom update-in player-state-domains-path
+           (fn [current] (assoc (or current {}) domain-key nbt-key)))))
 
 (defn list-player-state-domains
   "Return map of {domain-key nbt-key} for all registered player state domains."
   []
-  @player-state-domain-registry*)
+  (if-let [fw-atom fw/*framework*]
+    (get-in @fw-atom player-state-domains-path {})
+    {}))
 
 ;; ============================================================================
 ;; Server-side player login side-effect hooks
 ;; Content modules register callbacks here to run on server player login.
 ;; The player argument is passed as-is (opaque to this layer).
+;; Stored in Framework [:registry :hooks :server-player-login-hooks].
 ;; ============================================================================
 
-(defonce ^:private server-player-login-hooks* (atom []))
+(def ^:private server-player-login-hooks-path [:registry :hooks :server-player-login-hooks])
 
 (defn register-server-player-login-hook!
   "Register a content-owned server player login hook fn.
-  fn receives the raw ServerPlayer object. Called by content modules during init."
+  fn receives the raw ServerPlayer object. Called by content modules during init.
+  No-op during AOT compilation when *framework* is nil."
   [f]
-  (swap! server-player-login-hooks* conj f))
+  (when-let [fw-atom fw/*framework*]
+    (swap! fw-atom update-in server-player-login-hooks-path
+           (fn [current] (conj (or current []) f)))))
 
 (defn run-server-player-login-hooks!
   "Run all registered server player login hooks with the given player.
   Called by platform lifecycle adapters on player login, after core login handling."
   [player]
-  (doseq [f @server-player-login-hooks*]
+  (doseq [f (if-let [fw-atom fw/*framework*]
+              (get-in @fw-atom server-player-login-hooks-path [])
+              [])]
     (try (f player) (catch Throwable _ nil))))
 
 (defn register-client-input-descriptor!

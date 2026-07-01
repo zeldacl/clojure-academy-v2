@@ -5,7 +5,10 @@
   forge/fabric code knowing about specific business logic.
 
   Platform code (forge/fabric) calls dispatch-world-load/unload.
-  Content code registers handlers via register-world-lifecycle-handler!")
+  Content code registers handlers via register-world-lifecycle-handler!
+
+  State stored in Framework [:service :world-lifecycle]."
+  (:require [cn.li.mcmod.framework :as fw]))
 
 (defn- report-handler-error!
   "Log a handler failure to `*err*` (wraps a bare `Writer` in `PrintWriter` for tests)."
@@ -18,67 +21,33 @@
     (.printStackTrace t pw)))
 
 ;; ============================================================================
-;; Handler Registry
+;; Handler Registry — stored in Framework [:service :world-lifecycle]
 ;; ============================================================================
 
-(defn default-world-lifecycle-runtime-state
-  []
+(defn- default-state []
   {:load []
    :unload []
    :save []
    :tick []
    :frozen? false})
 
-(defn create-world-lifecycle-runtime
-  ([]
-   (create-world-lifecycle-runtime {}))
-  ([{:keys [state*]
-     :or {state* (atom (default-world-lifecycle-runtime-state))}}]
-   {::runtime ::world-lifecycle-runtime
-    :state* state*}))
+(def ^:private lifecycle-path [:service :world-lifecycle])
 
-(def ^:dynamic *world-lifecycle-runtime* nil)
+(defn- state-snapshot []
+  (if-let [fw-atom fw/*framework*]
+    (or (get-in @fw-atom lifecycle-path) (default-state))
+    (default-state)))
 
-(def ^:private _world-lifecycle-runtime (delay (create-world-lifecycle-runtime)))
-
-(defn- world-lifecycle-runtime?
-  [runtime]
-  (and (map? runtime)
-       (= ::world-lifecycle-runtime (::runtime runtime))
-       (some? (:state* runtime))))
-
-(defn call-with-world-lifecycle-runtime
-  [runtime f]
-  (when-not (world-lifecycle-runtime? runtime)
-    (throw (ex-info "Expected world lifecycle runtime"
-                    {:runtime runtime})))
-  (binding [*world-lifecycle-runtime* runtime]
-    (f)))
-
-(defmacro with-world-lifecycle-runtime
-  [runtime & body]
-  `(call-with-world-lifecycle-runtime ~runtime (fn [] ~@body)))
-
-(defn- current-world-lifecycle-runtime
-  []
-  (or *world-lifecycle-runtime*
-      @_world-lifecycle-runtime))
-
-(defn- world-lifecycle-state-atom
-  []
-  (:state* (current-world-lifecycle-runtime)))
-
-(defn- world-lifecycle-state-snapshot
-  []
-  @(world-lifecycle-state-atom))
-
-(defn- update-world-lifecycle-state!
-  [f & args]
-  (apply swap! (world-lifecycle-state-atom) f args))
+(defn- update-state! [f & args]
+  (when-let [fw-atom fw/*framework*]
+    (swap! fw-atom update-in lifecycle-path
+           (fn [current]
+             (apply f (or current (default-state)) args))))
+  nil)
 
 (defn- assert-not-frozen!
   []
-  (when (:frozen? (world-lifecycle-state-snapshot))
+  (when (:frozen? (state-snapshot))
     (throw (ex-info "World lifecycle handlers are frozen" {}))))
 
 (defn- handler-id
@@ -87,7 +56,7 @@
 
 (defn- register-handler-entry!
   [phase id handler-fn]
-  (update-world-lifecycle-state!
+  (update-state!
     update phase
     (fn [entries]
       (if-let [existing (first (filter #(= id (:id %)) entries))]
@@ -95,8 +64,7 @@
           entries
           (throw (ex-info "Conflicting world lifecycle handler id"
                           {:id id})))
-        (conj entries {:id id :fn handler-fn}))))
-  nil)
+        (conj entries {:id id :fn handler-fn})))))
 
 ;; ============================================================================
 ;; Registration API (called by content code)
@@ -133,18 +101,19 @@
 (defn freeze-world-lifecycle-handlers!
   "Freeze static lifecycle handler registration after bootstrap."
   []
-  (update-world-lifecycle-state! assoc :frozen? true)
+  (update-state! assoc :frozen? true)
   nil)
 
 (defn reset-world-lifecycle-handlers-for-test!
   "Reset lifecycle handler registry. Intended for tests/reloads only."
   []
-  (reset! (world-lifecycle-state-atom) (default-world-lifecycle-runtime-state))
+  (when-let [fw-atom fw/*framework*]
+    (swap! fw-atom assoc-in lifecycle-path (default-state)))
   nil)
 
 (defn lifecycle-handlers-snapshot
   []
-  (world-lifecycle-state-snapshot))
+  (state-snapshot))
 
 ;; ============================================================================
 ;; Dispatch API (called by platform code)
@@ -159,7 +128,7 @@
 
   Called by platform code (forge/fabric) when world loads."
   [world saved-data]
-  (let [handlers (:load (world-lifecycle-state-snapshot))
+  (let [handlers (:load (state-snapshot))
         handler-ids (into #{} (map #(get % :id) handlers))
         by-id? (and (map? saved-data)
                     (some #(contains? saved-data %) handler-ids))]
@@ -177,7 +146,7 @@
 
   Called by platform code (forge/fabric) when world unloads."
   [world]
-  (doseq [{handler :fn} (:unload (world-lifecycle-state-snapshot))]
+  (doseq [{handler :fn} (:unload (state-snapshot))]
     (try
       (handler world)
       (catch Throwable t
@@ -203,7 +172,7 @@
           (report-handler-error! :save t)
           acc)))
     {}
-            (:save (world-lifecycle-state-snapshot))))
+            (:save (state-snapshot))))
 
 (defn dispatch-world-tick
   "Dispatch world tick event to all registered handlers.
@@ -213,7 +182,7 @@
 
   Called by platform code (forge/fabric) each server world tick."
   [world]
-  (doseq [{handler :fn} (:tick (world-lifecycle-state-snapshot))]
+  (doseq [{handler :fn} (:tick (state-snapshot))]
     (try
       (handler world)
       (catch Throwable t
