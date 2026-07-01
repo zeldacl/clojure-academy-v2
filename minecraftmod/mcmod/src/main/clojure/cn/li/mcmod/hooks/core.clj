@@ -109,7 +109,7 @@
 
 (def ^:private _hooks-core-runtime (delay (create-hooks-core-runtime)))
 
-(defonce ^:private allowed-runtime-hook-keys*
+(def ^:private allowed-runtime-hook-keys*
   (atom (set (keys (default-runtime-hooks-state)))))
 
 (defn- hooks-core-state-atom []

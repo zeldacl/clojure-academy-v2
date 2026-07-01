@@ -123,7 +123,7 @@
 ;; Global registry of active interferers (for tile invalidation detection)
 ;; ============================================================================
 
-(defonce ^:private active-interferers (atom {}))
+(def ^:private active-interferers (atom {}))
 ;; {source-id {:level world :pos block-pos :affected-uuids #{...}}}
 
 (def ^:private active-interferers-tick-counter (atom 0))

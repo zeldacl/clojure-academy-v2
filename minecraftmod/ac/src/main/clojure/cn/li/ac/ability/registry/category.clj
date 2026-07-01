@@ -29,7 +29,7 @@
     :state* state*}))
 
 (def ^:dynamic *category-registry-runtime* nil)
-(defonce ^:private category-registry-runtime-ref* (atom nil))
+(def ^:private category-registry-runtime-ref* (atom nil))
 
 (defn- category-registry-runtime?
   [runtime]

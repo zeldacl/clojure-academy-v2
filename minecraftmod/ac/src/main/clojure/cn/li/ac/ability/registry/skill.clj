@@ -18,7 +18,7 @@
 	  :state* state*}))
 
 (def ^:dynamic *skill-registry-runtime* nil)
-(defonce ^:private skill-registry-runtime-ref* (atom nil))
+(def ^:private skill-registry-runtime-ref* (atom nil))
 
 (defn- skill-registry-runtime?
 	[runtime]

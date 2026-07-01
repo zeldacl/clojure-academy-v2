@@ -38,7 +38,7 @@
 	 :dispatcher-state* (atom default-dispatcher-state)})
 
 (def ^:dynamic *dispatcher-runtime* nil)
-(defonce ^:private dispatcher-runtime-ref*
+(def ^:private dispatcher-runtime-ref*
 	(atom (create-dispatcher-runtime)))
 
 (defn- dispatcher-runtime?

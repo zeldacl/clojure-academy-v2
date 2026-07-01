@@ -31,7 +31,7 @@
     :state* state*}))
 
 (def ^:dynamic *event-subscriber-runtime* nil)
-(defonce ^:private event-subscriber-runtime-ref* (atom nil))
+(def ^:private event-subscriber-runtime-ref* (atom nil))
 
 (declare event-subscriber-runtime?)
 

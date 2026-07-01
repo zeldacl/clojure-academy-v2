@@ -3,7 +3,7 @@
    Replaces requiring-resolve anti-pattern by maintaining a registry
    of platform-specific functions registered at bootstrap time.")
 
-(defonce ^:private platform-fn-registry (atom {}))
+(def ^:private platform-fn-registry (atom {}))
 
 (defn register-platform-fn!
   "Register a platform function implementation."

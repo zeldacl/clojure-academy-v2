@@ -11,7 +11,7 @@
 
 (def ^:private rad-mark-fx-channel :rad-intensify/fx-mark)
 
-(defonce ^:private last-radiation-tick-id* (atom nil))
+(def ^:private last-radiation-tick-id* (atom nil))
 
 (defn- normalize-id
   [id]

@@ -35,7 +35,7 @@
 	  :state* state*}))
 
 (def ^:dynamic *lifecycle-registry-runtime* nil)
-(defonce ^:private lifecycle-registry-runtime-ref* (atom nil))
+(def ^:private lifecycle-registry-runtime-ref* (atom nil))
 
 (defn call-with-lifecycle-registry-runtime
 	[runtime f]

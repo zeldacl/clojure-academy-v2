@@ -17,7 +17,7 @@
 (def ^:private default-command-trace-ttl-ms 60000)
 (def ^:private default-max-command-traces 2048)
 
-(defonce ^:private recent-command-traces* (atom {}))
+(def ^:private recent-command-traces* (atom {}))
 
 (defn- now-ms
   []
