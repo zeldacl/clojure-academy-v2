@@ -11,14 +11,13 @@
    {:cn.li.mcmod.entity.hook-resolver/runtime ::hook-resolver-registry-runtime
     :state* (or state* (atom {}))}))
 
-(defonce ^:private installed-hook-resolver-registry-runtime
-  (create-hook-resolver-registry-runtime))
+(def ^:private _hook-resolver-registry-runtime (delay (create-hook-resolver-registry-runtime)))
 
-(def ^:dynamic *hook-resolver-registry-runtime*
-  installed-hook-resolver-registry-runtime)
+(def ^:dynamic *hook-resolver-registry-runtime* nil)
 
 (defn- resolvers-atom []
-  (:state* *hook-resolver-registry-runtime*))
+  (:state* (or *hook-resolver-registry-runtime*
+                  @_hook-resolver-registry-runtime)))
 
 (defn- resolvers-snapshot []
   @(resolvers-atom))

@@ -55,8 +55,7 @@
 
 (def ^:dynamic *client-ui-runtime* nil)
 
-(defonce ^:private installed-client-ui-runtime
-  (create-client-ui-runtime))
+(def ^:private _client-ui-runtime (delay (create-client-ui-runtime)))
 
 (defn- client-ui-runtime?
   [runtime]
@@ -79,7 +78,7 @@
 (defn- current-client-ui-runtime
   []
   (or *client-ui-runtime*
-      installed-client-ui-runtime))
+      @_client-ui-runtime))
 
 (defn- client-ui-runtime-state-atom
   []

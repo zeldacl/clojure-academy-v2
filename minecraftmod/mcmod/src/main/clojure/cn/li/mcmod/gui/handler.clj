@@ -63,17 +63,17 @@
     :state* (or state* (atom nil))
     :container-runtime (or container-runtime (container-state/installed-runtime))}))
 
-(defonce ^:private installed-gui-handler-runtime
-  (create-gui-handler-runtime))
+(def ^:private _gui-handler-runtime (delay (create-gui-handler-runtime)))
 
-(def ^:dynamic *gui-handler-runtime*
-  installed-gui-handler-runtime)
+(def ^:dynamic *gui-handler-runtime* nil)
 
 (defn- gui-handler-atom []
-  (:state* *gui-handler-runtime*))
+  (:state* (or *gui-handler-runtime*
+       @_gui-handler-runtime)))
 
 (defn- container-runtime-for-handler []
-  (:container-runtime *gui-handler-runtime*))
+  (:container-runtime (or *gui-handler-runtime*
+                          @_gui-handler-runtime)))
 
 (defmulti register-gui-handler
   (fn [platform-type] platform-type))

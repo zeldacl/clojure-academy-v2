@@ -13,11 +13,10 @@
 
 (def ^:dynamic *widget-factory-runtime* nil)
 
-(defonce ^:private installed-widget-factory-runtime
-	(create-widget-factory-runtime))
+(def ^:private _widget-factory-runtime (delay (create-widget-factory-runtime)))
 
 (defn- widget-factories-atom []
-	(:state* (or *widget-factory-runtime* installed-widget-factory-runtime)))
+	(:state* (or *widget-factory-runtime* @_widget-factory-runtime)))
 
 (defn- widget-factories-snapshot []
 	@(widget-factories-atom))

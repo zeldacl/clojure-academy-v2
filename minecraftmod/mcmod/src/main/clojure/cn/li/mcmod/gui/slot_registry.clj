@@ -14,14 +14,13 @@
    {:cn.li.mcmod.gui.slot-registry/runtime ::slot-registry-runtime
     :state* (or state* (atom (default-slot-registry-runtime-state)))}))
 
-(defonce ^:private installed-slot-registry-runtime
-  (create-slot-registry-runtime))
+(def ^:private _slot-registry-runtime (delay (create-slot-registry-runtime)))
 
-(def ^:dynamic *slot-registry-runtime*
-  installed-slot-registry-runtime)
+(def ^:dynamic *slot-registry-runtime* nil)
 
 (defn- slot-registry-state-atom []
-  (:state* *slot-registry-runtime*))
+  (:state* (or *slot-registry-runtime*
+                  @_slot-registry-runtime)))
 
 (defn- slot-registry-state-snapshot []
   @(slot-registry-state-atom))

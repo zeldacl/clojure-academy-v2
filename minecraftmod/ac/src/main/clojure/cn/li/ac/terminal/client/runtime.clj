@@ -18,11 +18,9 @@
   {::runtime ::terminal-client-runtime
    :runtime-state* (atom default-runtime-state)})
 
-(defonce ^:private installed-runtime
-  (create-runtime))
+(def ^:private _terminal-runtime (delay (create-runtime)))
 
-(def ^:dynamic *runtime*
-  installed-runtime)
+(def ^:dynamic *runtime* nil)
 
 (def ^:dynamic *owner* nil)
 
@@ -69,7 +67,8 @@
 
 (defn- state-atom
   []
-  (:runtime-state* *runtime*))
+  (:runtime-state* (or *runtime*
+                       @_terminal-runtime)))
 
 (defn- runtime-snapshot
   []

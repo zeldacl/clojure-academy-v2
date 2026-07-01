@@ -19,11 +19,9 @@
    {::runtime ::hook-registry-runtime
     :state* state*}))
 
-(defonce ^:private installed-hook-registry-runtime
-  (create-hook-registry-runtime))
+(def ^:private _hook-registry-runtime (delay (create-hook-registry-runtime)))
 
-(def ^:dynamic *hook-registry-runtime*
-  installed-hook-registry-runtime)
+(def ^:dynamic *hook-registry-runtime* nil)
 
 (defn call-with-hook-registry-runtime
   [runtime f]
@@ -36,7 +34,8 @@
 
 (defn- current-hook-registry-runtime
   []
-  *hook-registry-runtime*)
+  (or *hook-registry-runtime*
+      @_hook-registry-runtime))
 
 (defn- hook-registry-state-atom
   []

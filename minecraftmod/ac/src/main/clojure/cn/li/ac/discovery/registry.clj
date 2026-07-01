@@ -15,11 +15,9 @@
    {::runtime ::provider-registry-runtime
     :state* state*}))
 
-(defonce ^:private installed-provider-registry-runtime
-  (create-provider-registry-runtime))
+(def ^:private _provider-registry-runtime (delay (create-provider-registry-runtime)))
 
-(def ^:dynamic *provider-registry-runtime*
-  installed-provider-registry-runtime)
+(def ^:dynamic *provider-registry-runtime* nil)
 
 (defn call-with-provider-registry-runtime
   [runtime f]
@@ -32,7 +30,8 @@
 
 (defn- current-provider-registry-runtime
   []
-  *provider-registry-runtime*)
+  (or *provider-registry-runtime*
+      @_provider-registry-runtime))
 
 (defn- provider-registry-state-atom
   []

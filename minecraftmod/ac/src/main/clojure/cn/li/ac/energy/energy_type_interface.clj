@@ -29,11 +29,9 @@
 	 {::runtime ::energy-type-runtime
 	  :state* state*}))
 
-(defonce ^:private installed-energy-type-runtime
-	(create-energy-type-runtime))
+(def ^:private _energy-type-runtime (delay (create-energy-type-runtime)))
 
-(def ^:dynamic *energy-type-runtime*
-	installed-energy-type-runtime)
+(def ^:dynamic *energy-type-runtime* nil)
 
 (defn- energy-type-runtime?
 	[runtime]
@@ -55,7 +53,8 @@
 
 (defn- current-energy-type-runtime
 	[]
-	*energy-type-runtime*)
+	(or *energy-type-runtime*
+      @_energy-type-runtime))
 
 (defn- energy-type-state-atom
 	[]

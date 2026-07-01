@@ -84,13 +84,12 @@
 
 (def ^:dynamic *container-state-runtime* nil)
 
-(defonce ^:private installed-container-state-runtime
-  (create-container-state-runtime))
+(def ^:private _container-state-runtime (delay (create-container-state-runtime)))
 
 (defn installed-runtime
   "Return the production container-state runtime (now just a marker)."
   []
-  installed-container-state-runtime)
+  @_container-state-runtime)
 
 (defn call-with-container-state-runtime
   [runtime f]

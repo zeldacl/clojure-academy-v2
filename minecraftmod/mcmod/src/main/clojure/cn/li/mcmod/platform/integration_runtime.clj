@@ -14,14 +14,13 @@
    {:cn.li.mcmod.platform.integration-runtime/runtime ::integration-runtime
     :state* (or state* (atom (default-integration-runtime-state)))}))
 
-(defonce ^:private installed-integration-runtime
-  (create-integration-runtime))
+(def ^:private _integration-runtime (delay (create-integration-runtime)))
 
-(def ^:dynamic *integration-runtime*
-  installed-integration-runtime)
+(def ^:dynamic *integration-runtime* nil)
 
 (defn- integration-hooks-atom []
-  (:state* *integration-runtime*))
+  (:state* (or *integration-runtime*
+                  @_integration-runtime)))
 
 (defn- integration-hooks-snapshot []
   @(integration-hooks-atom))

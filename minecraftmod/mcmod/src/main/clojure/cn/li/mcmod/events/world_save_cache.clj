@@ -12,11 +12,9 @@
   {::runtime ::world-save-cache-runtime
    :pending-save-data* (atom {})})
 
-(defonce ^:private installed-world-save-cache-runtime
-  (create-world-save-cache-runtime))
+(def ^:private _world-save-cache-runtime (delay (create-world-save-cache-runtime)))
 
-(def ^:dynamic *world-save-cache-runtime*
-  installed-world-save-cache-runtime)
+(def ^:dynamic *world-save-cache-runtime* nil)
 
 (defn- world-save-cache-runtime?
   [runtime]
@@ -38,7 +36,8 @@
 
 (defn- current-runtime
   []
-  *world-save-cache-runtime*)
+  (or *world-save-cache-runtime*
+     @_world-save-cache-runtime))
 
 (defn- pending-save-data-atom
   []

@@ -13,14 +13,13 @@
    {:cn.li.mcmod.util.render/runtime ::render-runtime
     :state* (or state* (atom (default-render-runtime-state)))}))
 
-(defonce ^:private installed-render-runtime
-  (create-render-runtime))
+(def ^:private _render-runtime (delay (create-render-runtime)))
 
-(def ^:dynamic *render-runtime*
-  installed-render-runtime)
+(def ^:dynamic *render-runtime* nil)
 
 (defn- render-state-atom []
-  (:state* *render-runtime*))
+  (:state* (or *render-runtime*
+                  @_render-runtime)))
 
 (defn- render-state-snapshot []
   @(render-state-atom))

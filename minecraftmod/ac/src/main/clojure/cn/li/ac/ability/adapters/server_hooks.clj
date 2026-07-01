@@ -41,11 +41,9 @@
    {::runtime ::lifecycle-subscriptions-runtime
     :state* state*}))
 
-(defonce ^:private installed-lifecycle-subscriptions-runtime
-  (create-lifecycle-subscriptions-runtime))
+(def ^:private _lifecycle-subscriptions-runtime (delay (create-lifecycle-subscriptions-runtime)))
 
-(def ^:dynamic *lifecycle-subscriptions-runtime*
-  installed-lifecycle-subscriptions-runtime)
+(def ^:dynamic *lifecycle-subscriptions-runtime* nil)
 
 (defn- lifecycle-subscriptions-runtime?
   [runtime]
@@ -67,7 +65,8 @@
 
 (defn- current-lifecycle-subscriptions-runtime
   []
-  *lifecycle-subscriptions-runtime*)
+  (or *lifecycle-subscriptions-runtime*
+      @_lifecycle-subscriptions-runtime))
 
 (defn- lifecycle-subscriptions-registered-atom
   []

@@ -14,11 +14,9 @@
    {::runtime ::wireless-message-registry-runtime
     :state* state*}))
 
-(defonce ^:private installed-wireless-message-registry-runtime
-  (create-wireless-message-registry-runtime))
+(def ^:private _wireless-message-registry-runtime (delay (create-wireless-message-registry-runtime)))
 
-(def ^:dynamic *wireless-message-registry-runtime*
-  installed-wireless-message-registry-runtime)
+(def ^:dynamic *wireless-message-registry-runtime* nil)
 
 (defn call-with-wireless-message-registry-runtime
   [runtime f]
@@ -31,7 +29,8 @@
 
 (defn- current-wireless-message-registry-runtime
   []
-  *wireless-message-registry-runtime*)
+  (or *wireless-message-registry-runtime*
+      @_wireless-message-registry-runtime))
 
 (defn- wireless-message-registry-state-atom
   []

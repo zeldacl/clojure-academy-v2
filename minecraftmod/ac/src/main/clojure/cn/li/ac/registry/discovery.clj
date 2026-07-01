@@ -19,11 +19,9 @@
    {::runtime ::content-provider-registry-runtime
     :state* state*}))
 
-(defonce ^:private installed-content-provider-registry-runtime
-  (create-content-provider-registry-runtime))
+(def ^:private _content-provider-registry-runtime (delay (create-content-provider-registry-runtime)))
 
-(def ^:dynamic *content-provider-registry-runtime*
-  installed-content-provider-registry-runtime)
+(def ^:dynamic *content-provider-registry-runtime* nil)
 
 (defn call-with-content-provider-registry-runtime
   [runtime f]
@@ -36,7 +34,8 @@
 
 (defn- current-content-provider-registry-runtime
   []
-  *content-provider-registry-runtime*)
+  (or *content-provider-registry-runtime*
+      @_content-provider-registry-runtime))
 
 (defn- content-provider-registry-state-atom
   []

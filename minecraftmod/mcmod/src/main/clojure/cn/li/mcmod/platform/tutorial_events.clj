@@ -13,14 +13,13 @@
    {:cn.li.mcmod.platform.tutorial-events/runtime ::tutorial-events-runtime
     :state* (or state* (atom (default-tutorial-events-state)))}))
 
-(defonce ^:private installed-tutorial-events-runtime
-  (create-tutorial-events-runtime))
+(def ^:private _tutorial-events-runtime (delay (create-tutorial-events-runtime)))
 
-(def ^:dynamic *tutorial-events-runtime*
-  installed-tutorial-events-runtime)
+(def ^:dynamic *tutorial-events-runtime* nil)
 
 (defn- tutorial-events-atom []
-  (:state* *tutorial-events-runtime*))
+  (:state* (or *tutorial-events-runtime*
+                  @_tutorial-events-runtime)))
 
 (defn- tutorial-events-snapshot []
   @(tutorial-events-atom))

@@ -164,11 +164,9 @@
   {::runtime ::energy-system-runtime
    :systems* (atom {})})
 
-(defonce ^:private installed-energy-system-runtime
-  (create-energy-system-runtime))
+(def ^:private _energy-system-runtime (delay (create-energy-system-runtime)))
 
-(def ^:dynamic *energy-system-runtime*
-  installed-energy-system-runtime)
+(def ^:dynamic *energy-system-runtime* nil)
 
 (defn- energy-system-runtime?
   [runtime]
@@ -190,7 +188,8 @@
 
 (defn- current-energy-system-runtime
   []
-  *energy-system-runtime*)
+  (or *energy-system-runtime*
+      @_energy-system-runtime))
 
 (defn- systems-atom
   []

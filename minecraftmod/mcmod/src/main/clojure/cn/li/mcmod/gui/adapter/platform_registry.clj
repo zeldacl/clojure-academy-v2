@@ -7,14 +7,13 @@
    {:cn.li.mcmod.gui.adapter.platform-registry/runtime ::gui-platform-registry-runtime
     :state* (or state* (atom nil))}))
 
-(defonce ^:private installed-gui-platform-registry-runtime
-  (create-gui-platform-registry-runtime))
+(def ^:private _gui-platform-registry-runtime (delay (create-gui-platform-registry-runtime)))
 
-(def ^:dynamic *gui-platform-registry-runtime*
-  installed-gui-platform-registry-runtime)
+(def ^:dynamic *gui-platform-registry-runtime* nil)
 
 (defn- platform-impl-atom []
-  (:state* *gui-platform-registry-runtime*))
+  (:state* (or *gui-platform-registry-runtime*
+                  @_gui-platform-registry-runtime)))
 
 (defn register-gui-platform-impl!
   [impl-map]

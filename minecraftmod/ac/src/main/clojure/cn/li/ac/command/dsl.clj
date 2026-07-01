@@ -15,11 +15,9 @@
    {::runtime ::command-registry-runtime
     :state* state*}))
 
-(defonce ^:private installed-command-registry-runtime
-  (create-command-registry-runtime))
+(def ^:private _command-registry-runtime (delay (create-command-registry-runtime)))
 
-(def ^:dynamic *command-registry-runtime*
-  installed-command-registry-runtime)
+(def ^:dynamic *command-registry-runtime* nil)
 
 (defn call-with-command-registry-runtime
   [runtime f]
@@ -32,7 +30,8 @@
 
 (defn- current-command-registry-runtime
   []
-  *command-registry-runtime*)
+  (or *command-registry-runtime*
+      @_command-registry-runtime))
 
 (defn- command-registry-state-atom
   []

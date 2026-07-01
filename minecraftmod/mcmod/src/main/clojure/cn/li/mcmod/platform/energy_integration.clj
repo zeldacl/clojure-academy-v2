@@ -12,14 +12,13 @@
 	 {:cn.li.mcmod.platform.energy-integration/runtime ::energy-integration-runtime
 	  :state* (or state* (atom (default-energy-integration-state)))}))
 
-(defonce ^:private installed-energy-integration-runtime
-	(create-energy-integration-runtime))
+(def ^:private _energy-integration-runtime (delay (create-energy-integration-runtime)))
 
-(def ^:dynamic *energy-integration-runtime*
-	installed-energy-integration-runtime)
+(def ^:dynamic *energy-integration-runtime* nil)
 
 (defn- energy-hooks-atom []
-	(:state* *energy-integration-runtime*))
+	(:state* (or *energy-integration-runtime*
+	               @_energy-integration-runtime)))
 
 (defn- energy-hooks-snapshot []
 	@(energy-hooks-atom))
