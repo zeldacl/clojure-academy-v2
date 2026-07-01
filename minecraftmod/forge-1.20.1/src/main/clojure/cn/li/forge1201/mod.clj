@@ -15,7 +15,7 @@
     [cn.li.mc1201.vanilla-input-control-core :as vanilla-control]
     [cn.li.mcmod.spi.key-scheme-provider :as key-scheme-spi]
     [cn.li.mcmod.spi.vanilla-input-control :as vanilla-spi]
-    [cn.li.ac.bootstrap :as ac-bootstrap]
+    [cn.li.mcmod.lifecycle :as lifecycle]
     [cn.li.mcmod.aot :as aot]
     [cn.li.mcmod.config :as modid]
     [cn.li.mcmod.runtime.deferred :as deferred]
@@ -167,12 +167,12 @@
             (catch Exception e
               (log/warn e "Failed to install keyboard input SPI providers")))
           
-          ;; ===== AC Keybinding Initialization =====
-          ;; Initialize all AC keybindings (alternative + original schemes)
+          ;; ===== Content Keybinding Initialization (post-SPI) =====
+          ;; Run content-registered post-SPI init callbacks (e.g. AC keybindings)
           (try
-            (ac-bootstrap/initialize-keybindings!)
+            (lifecycle/run-post-spi-client-init!)
             (catch Exception e
-              (log/error e "Failed to initialize AC keybindings")))
+              (log/error e "Failed to run post-SPI content keybinding init")))
           
           ;; ===== Forge KeyMapping Registration =====
           ;; Register all :alternative scheme inputs as Forge KeyMappings

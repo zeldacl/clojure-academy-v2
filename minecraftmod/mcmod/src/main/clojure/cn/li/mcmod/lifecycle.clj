@@ -5,7 +5,8 @@
   {:content-init-fn nil
    :runtime-content-activation-fn nil
    :datagen-metadata-init-fns []
-   :client-init-fns []})
+   :client-init-fns []
+   :post-spi-client-init-fns []})
 
 (defn create-lifecycle-runtime
   ([] (create-lifecycle-runtime {}))
@@ -86,5 +87,23 @@
   "Run all registered client init functions."
   []
   (doseq [f (:client-init-fns (lifecycle-state-snapshot))]
+    (f)))
+
+(defn register-post-spi-client-init!
+  "Register a post-SPI client init function (fn [] ...).
+
+  These callbacks run after platform SPI implementations are installed
+  but before KeyMapping/input registration. Content modules that need
+  SPI providers ready should use this slot instead of :client-init-fns.
+
+  Called by platform adapters via `run-post-spi-client-init!`."
+  [init-fn]
+  (swap! (lifecycle-state-atom) update :post-spi-client-init-fns conj init-fn)
+  nil)
+
+(defn run-post-spi-client-init!
+  "Run all registered post-SPI client init functions."
+  []
+  (doseq [f (:post-spi-client-init-fns (lifecycle-state-snapshot))]
     (f)))
 

@@ -4,7 +4,7 @@
    Purpose: Create and register Minecraft KeyMappings from AC's configuration.
    Platform-specific code that Forge requires for key remapping UI."
   (:require [cn.li.mcmod.util.log :as log]
-            [cn.li.ac.input-ids :as ac-input-ids])
+            [cn.li.mcmod.spi.keybinding-registry :as kb-registry])
   (:import [net.minecraft.client KeyMapping]))
 
 ;; ===== KeyMapping Registry =====
@@ -60,18 +60,19 @@
   @registered-key-mappings)
 
 (defn register-all-keybindings-from-ac!
-  "Bootstrap function: Register all :alternative scheme keybindings from AC.
-   
+  "Bootstrap function: Register all :alternative scheme keybindings from content modules.
+
    Prerequisites:
-   - AC must have provided configuration via cn.li.ac.input-ids
-   
+   - Content modules must have registered keybinding configs via
+     mcmod.spi.keybinding-registry (triggered by lifecycle/run-post-spi-client-init!)
+
    This function:
-   1. Requires AC input_ids namespace
+   1. Reads all registered keybinding configs from the neutral registry
    2. Extracts all :alternative scheme entries
    3. Registers each as a Forge KeyMapping"
   []
   (try
-    (let [all-configs (ac-input-ids/get-input-ids)]
+    (let [all-configs (kb-registry/get-all-keybinding-configs)]
       (doseq [[_key config] all-configs]
         (when (= :alternative (:scheme config))
           (let [{:keys [input-id key-mapping]} config

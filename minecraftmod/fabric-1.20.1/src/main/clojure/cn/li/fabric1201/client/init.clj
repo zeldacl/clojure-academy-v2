@@ -23,7 +23,7 @@
             [cn.li.mc1201.vanilla-input-control-core :as vanilla-control]
             [cn.li.mcmod.spi.key-scheme-provider :as key-scheme-spi]
             [cn.li.mcmod.spi.vanilla-input-control :as vanilla-spi]
-            [cn.li.ac.bootstrap :as ac-bootstrap]
+            [cn.li.mcmod.lifecycle :as lifecycle]
             [cn.li.fabric1201.mod :as mod])
   (:import [cn.li.fabric1201.client FabricClientRenderSetup]
            [net.minecraft.client Minecraft]
@@ -126,12 +126,12 @@
     (catch Exception e
       (log/warn e "Failed to install keyboard input SPI providers")))
   
-  ;; ===== AC Keybinding Initialization =====
-  ;; Initialize all AC keybindings (alternative + original schemes)
+  ;; ===== Content Keybinding Initialization (post-SPI) =====
+  ;; Run content-registered post-SPI init callbacks (e.g. AC keybindings)
   (try
-    (ac-bootstrap/initialize-keybindings!)
+    (lifecycle/run-post-spi-client-init!)
     (catch Exception e
-      (log/error e "Failed to initialize AC keybindings")))
+      (log/error e "Failed to run post-SPI content keybinding init")))
   
   ;; ===== Fabric Keyboard Handler Installation =====
   ;; Install GLFW polling for keyboard inputs (Fabric has no native keyboard events)

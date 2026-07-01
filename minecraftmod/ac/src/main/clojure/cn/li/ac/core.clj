@@ -1,5 +1,6 @@
 (ns cn.li.ac.core
   (:require [cn.li.mcmod.lifecycle :as lifecycle]
+            [cn.li.mcmod.spi.entity-render-registry :as entity-render-registry]
             [cn.li.ac.core.init :as core-init]
             [cn.li.ac.core.content-loader :as content-loader]
             [cn.li.ac.terminal.client.actions :as terminal-actions]
@@ -81,6 +82,11 @@
   "Run content-owned client renderer initialization.
   Called by mcmod during client initialization."
   []
+  ;; Register entity render namespaces into the neutral mcmod registry
+  ;; so that mc-1.20.1 Java renderer classes can resolve them without
+  ;; hardcoding AC namespace strings.
+  (entity-render-registry/register-entity-render-ns!
+    "silbarn" "cn.li.ac.content.entities.silbarn-render")
   (terminal-actions/install-ui-hooks!)
   (platform-hooks/install-client-content-actions!)
   (font-init/init-fonts!)

@@ -13,6 +13,7 @@
             [cn.li.mcmod.gui.cgui-core :as cgui-core]
             [cn.li.mcmod.gui.events :as events]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
+            [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.util.log :as log]))
 
@@ -51,7 +52,7 @@
   :on-dev-start overrides timed development with instant API calls.
   All other atoms (energy, tier, progress) match the block developer schema."
   [player owner]
-  (let [player-uuid-str (or (entity/player-get-uuid player) "")
+  (let [player-uuid-str (or (uuid/player-uuid player) "")
         player-name-str (or (entity/player-get-name player) "")]
     {:energy                (atom (current-energy-from-held-item player))
      :max-energy            (atom portable-max-energy)
@@ -82,7 +83,7 @@
     (let [session-id (runtime-hooks/require-player-state-session-id session-ns-prefix)
           owner (read-model/canonical-client-owner
                   {:client-session-id session-id
-                   :player-uuid (entity/player-get-uuid player)}
+                   :player-uuid (uuid/player-uuid player)}
                   :skill-tree)
           container (make-portable-container player owner)
           root (dev-panel/load-classic-developer-page)
