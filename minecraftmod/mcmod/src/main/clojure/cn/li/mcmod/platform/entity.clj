@@ -5,7 +5,8 @@
   platform adapters (forge/fabric) must implement. Avoid importing any
   `net.minecraft.*` classes here so this namespace can be compiled without
   Minecraft on the classpath."
-  (:require [cn.li.mcmod.platform.runtime :as prt]))
+  (:require [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.platform.runtime :as prt]))
 
 (defprotocol IEntityOps
   (entity-distance-to-sqr [entity x y z]

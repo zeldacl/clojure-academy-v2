@@ -1,6 +1,7 @@
 (ns cn.li.mcmod.platform.teleportation
   "Protocol for teleportation mechanics."
-  (:require [cn.li.mcmod.platform.runtime :as prt]))
+  (:require [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.platform.runtime :as prt]))
 
 (defprotocol ITeleportation
   (teleport-player! [this player-uuid world-id x y z])
@@ -9,19 +10,26 @@
   (get-player-position [this player-uuid])
   (get-player-dimension [this player-uuid]))
 
-(def ^:private ^:dynamic *runtime* nil)
-
 (defn install-teleportation!
   [impl label]
-  (prt/install-impl! #'*runtime* impl (or label "teleportation")))
+  (when-let [fw-atom fw/*framework*] (swap! fw-atom assoc-in [:platform :teleportation] impl)) nil)
 
-(defn available? [] (prt/impl-available? #'*runtime*))
-(defn current [] (prt/impl-current #'*runtime*))
-(defn call-with-runtime [rt f] (binding [*runtime* rt] (f)))
+(defn available? [] (boolean (get-in @fw/*framework* [:platform :teleportation])))
+(defn current [] (get-in @fw/*framework* [:platform :teleportation]))
+(defn call-with-runtime [rt f] (f rt))
 
-(prt/def-impl-wrappers '*runtime* ITeleportation
-  [teleport-player!* teleport-player! player-uuid world-id x y z]
-  [teleport-with-entities!* teleport-with-entities! player-uuid world-id x y z radius]
-  [reset-fall-damage!* reset-fall-damage! player-uuid]
-  [get-player-position* get-player-position player-uuid]
-  [get-player-dimension* get-player-dimension player-uuid])
+(defn teleport-player!* [player-uuid world-id x y z]
+  (when-let [rt (get-in @fw/*framework* [:platform :teleportation])]
+    (teleport-player! rt player-uuid world-id x y z)))
+(defn teleport-with-entities!* [player-uuid world-id x y z radius]
+  (when-let [rt (get-in @fw/*framework* [:platform :teleportation])]
+    (teleport-with-entities! rt player-uuid world-id x y z radius)))
+(defn reset-fall-damage!* [player-uuid]
+  (when-let [rt (get-in @fw/*framework* [:platform :teleportation])]
+    (reset-fall-damage! rt player-uuid)))
+(defn get-player-position* [player-uuid]
+  (when-let [rt (get-in @fw/*framework* [:platform :teleportation])]
+    (get-player-position rt player-uuid)))
+(defn get-player-dimension* [player-uuid]
+  (when-let [rt (get-in @fw/*framework* [:platform :teleportation])]
+    (get-player-dimension rt player-uuid)))

@@ -5,107 +5,73 @@
   Schema per category:
     {:id            keyword        ; unique identifier, e.g. :esper
      :name-key      string         ; i18n key
-      :icon          string         ; resource path to icon texture
-      :color         [r g b a]      ; RGBA floats for UI tinting
-      :prog-incr-rate float         ; experience gain rate for this category
-      :enabled       bool}"
-  (:require [cn.li.mcmod.util.log :as log]))
+     :icon          string         ; resource path to icon texture
+     :color         [r g b a]      ; RGBA floats for UI tinting
+     :prog-incr-rate float         ; experience gain rate for this category
+     :enabled       bool}
+
+  Registry stored in Framework [:registry :categories]."
+  (:require [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
-;; Registry
+;; Registry — Framework [:registry :categories]
 ;; ============================================================================
 
-(defn default-category-registry-runtime-state
-  []
-  {:registry {}
-   :frozen? false})
+(def ^:private cat-path [:registry :categories])
 
-(defn create-category-registry-runtime
-  ([]
-   (create-category-registry-runtime {}))
-  ([{:keys [state*]
-     :or {state* (atom (default-category-registry-runtime-state))}}]
-   {::runtime ::category-registry-runtime
-    :state* state*}))
+(defn- category-registry-state-snapshot []
+  (if-let [fw-atom fw/*framework*]
+    (get-in @fw-atom cat-path {:registry {} :frozen? false})
+    {:registry {} :frozen? false}))
 
-(def ^:dynamic *category-registry-runtime* nil)
-(def ^:private category-registry-runtime-ref* (atom nil))
+(defn- update-category-registry-state! [f & args]
+  (when-let [fw-atom fw/*framework*]
+    (swap! fw-atom update-in cat-path
+           (fn [current] (apply f (or current {:registry {} :frozen? false}) args))))
+  nil)
 
-(defn- category-registry-runtime?
-  [runtime]
-  (and (map? runtime)
-       (= ::category-registry-runtime (::runtime runtime))
-       (some? (:state* runtime))))
-
-(defn call-with-category-registry-runtime
-  [runtime f]
-  (when-not (category-registry-runtime? runtime)
-    (throw (ex-info "Expected category registry runtime"
-                    {:runtime runtime})))
-  (binding [*category-registry-runtime* runtime]
-    (f)))
-
-(defmacro with-category-registry-runtime
-  [runtime & body]
-  `(call-with-category-registry-runtime ~runtime (fn [] ~@body)))
-
-(defn- current-category-registry-runtime
-  []
-  (or *category-registry-runtime*
-      @category-registry-runtime-ref*
-      (throw (ex-info "Category registry runtime is not installed"
-                      {:hint "Install via runtime_bridge/install-runtime-hooks! or category/install-category-registry-runtime!"}))))
-
-(defn install-category-registry-runtime!
-  "Install an explicit category registry runtime instance.
-  This enables composition-root wiring instead of implicit singleton fallback."
-  [runtime]
-  (when-not (category-registry-runtime? runtime)
-    (throw (ex-info "Expected category registry runtime"
-                    {:runtime runtime})))
-  (reset! category-registry-runtime-ref* runtime)
-  runtime)
-
-(defn use-fresh-category-registry-runtime!
-  "Reset category registry runtime binding to a fresh runtime instance."
-  []
-  (let [runtime (create-category-registry-runtime)]
-    (reset! category-registry-runtime-ref* runtime)
-    runtime))
-
-(defn- category-registry-state-atom
-  []
-  (:state* (current-category-registry-runtime)))
-
-(defn- category-registry-state-snapshot
-  []
-  @(category-registry-state-atom))
-
-(defn- update-category-registry-state!
-  [f & args]
-  (apply swap! (category-registry-state-atom) f args))
-
-(defn- assert-registry-open!
-  []
+(defn- assert-registry-open! []
   (when (:frozen? (category-registry-state-snapshot))
     (throw (ex-info "Category registry is frozen" {}))))
 
-(defn category-registry-snapshot
-  []
+;; ============================================================================
+;; Backward-compatible install (writes to Framework)
+;; Backward-compatible factory
+(defn create-category-registry-runtime
+  ([]
+   {::category-registry-runtime true
+    :state* (atom {:registry {} :frozen? false})})
+  ([{:keys [state*] :or {state* (atom {:registry {} :frozen? false})}}]
+   {::category-registry-runtime true :state* state*}))
+
+;; ============================================================================
+
+(defn install-category-registry-runtime!
+  "Backward-compatible install. Writes to Framework [:registry :categories]."
+  [runtime]
+  (when-let [fw-atom fw/*framework*]
+    (when-let [state* (:state* runtime)]
+      (swap! fw-atom assoc-in cat-path @state*)))
+  runtime)
+
+;; ============================================================================
+;; Query API
+;; ============================================================================
+
+(defn category-registry-snapshot []
   (:registry (category-registry-state-snapshot)))
 
 (defn reset-category-registry-for-test!
   ([]
    (reset-category-registry-for-test! {}))
   ([snapshot]
-    (reset! (category-registry-state-atom)
-          {:registry (or snapshot {})
-          :frozen? false})
+   (when-let [fw-atom fw/*framework*]
+     (swap! fw-atom assoc-in cat-path {:registry (or snapshot {}) :frozen? false}))
    nil))
 
-(defn freeze-category-registry!
-  []
-    (update-category-registry-state! assoc :frozen? true)
+(defn freeze-category-registry! []
+  (update-category-registry-state! assoc :frozen? true)
   nil)
 
 ;; ============================================================================

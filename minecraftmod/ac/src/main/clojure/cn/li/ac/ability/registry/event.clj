@@ -4,169 +4,88 @@
   Events are plain maps dispatched through the platform event bus.
   Listeners subscribe in game content namespaces (no Minecraft imports here).
 
-  Convention:
-    {:event/type   :ability/<name>
-     :event/side   :server | :client | :both
-     ... payload fields}
+  Subscriber registry stored in Framework [:service :ability-events]."
+  (:require [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.util.log :as log]))
 
-  To fire an event call `fire-ability-event!`.
-  To listen register a subscriber via `subscribe-ability-event!`."
-  (:require [cn.li.mcmod.util.log :as log]))
+;; Event Subscriber Registry — Framework [:service :ability-events]
 
-;; ============================================================================
-;; Subscriber Registry (lightweight, no Forge EventBus dependency)
-;; ============================================================================
+(def ^:private event-path [:service :ability-events])
 
-(defn default-event-subscriber-runtime-state
-  []
-  {:subscribers {}
-   :frozen? false})
+(defn- event-subscriber-state-snapshot []
+  (if-let [fw-atom fw/*framework*]
+    (get-in @fw-atom event-path {:subscribers {} :frozen? false})
+    {:subscribers {} :frozen? false}))
 
-(defn create-event-subscriber-runtime
-  ([]
-   (create-event-subscriber-runtime {}))
-  ([{:keys [state*]
-     :or {state* (atom (default-event-subscriber-runtime-state))}}]
-   {::runtime ::event-subscriber-runtime
-    :state* state*}))
+(defn- update-event-subscriber-state! [f & args]
+  (when-let [fw-atom fw/*framework*]
+    (swap! fw-atom update-in event-path
+           (fn [current] (apply f (or current {:subscribers {} :frozen? false}) args))))
+  nil)
 
-(def ^:dynamic *event-subscriber-runtime* nil)
-(def ^:private event-subscriber-runtime-ref* (atom nil))
-
-(declare event-subscriber-runtime?)
-
-(defn install-event-subscriber-runtime!
-  "Install an explicit event subscriber runtime instance.
-  This enables composition-root wiring instead of implicit singleton fallback."
-  [runtime]
-  (when-not (event-subscriber-runtime? runtime)
-    (throw (ex-info "Expected event subscriber runtime"
-                    {:runtime runtime})))
-  (reset! event-subscriber-runtime-ref* runtime)
-  runtime)
-
-(defn use-fresh-event-subscriber-runtime!
-  "Reset event subscriber runtime binding to a fresh runtime instance."
-  []
-  (let [runtime (create-event-subscriber-runtime)]
-    (reset! event-subscriber-runtime-ref* runtime)
-    runtime))
-
-(defn- event-subscriber-runtime?
-  [runtime]
-  (and (map? runtime)
-       (= ::event-subscriber-runtime (::runtime runtime))
-       (some? (:state* runtime))))
-
-(defn call-with-event-subscriber-runtime
-  [runtime f]
-  (when-not (event-subscriber-runtime? runtime)
-    (throw (ex-info "Expected event subscriber runtime"
-                    {:runtime runtime})))
-  (binding [*event-subscriber-runtime* runtime]
-    (f)))
-
-(defmacro with-event-subscriber-runtime
-  [runtime & body]
-  `(call-with-event-subscriber-runtime ~runtime (fn [] ~@body)))
-
-(defn- current-event-subscriber-runtime
-  []
-  (or *event-subscriber-runtime*
-  @event-subscriber-runtime-ref*
-      (throw (ex-info "Ability event subscriber runtime is not installed"
-                      {:hint "Install via runtime_bridge/install-runtime-hooks! or event/install-event-subscriber-runtime!"}))))
-
-(defn- event-subscriber-state-atom
-  []
-  (:state* (current-event-subscriber-runtime)))
-
-(defn- event-subscriber-state-snapshot
-  []
-  @(event-subscriber-state-atom))
-
-(defn- update-event-subscriber-state!
-  [f & args]
-  (apply swap! (event-subscriber-state-atom) f args))
-
-(defn- assert-subscribers-open!
-  []
+(defn- assert-subscribers-open! []
   (when (:frozen? (event-subscriber-state-snapshot))
     (throw (ex-info "Ability event subscriber registry is frozen" {}))))
 
-(defn subscriber-registry-snapshot
-  []
+;; Backward-compatible install
+;; Backward-compatible factory
+(defn create-event-subscriber-runtime
+  ([]
+   {::event-subscriber-runtime true
+    :state* (atom {:subscribers {} :frozen? false})})
+  ([{:keys [state*] :or {state* (atom {:subscribers {} :frozen? false})}}]
+   {::event-subscriber-runtime true :state* state*}))
+
+(defn install-event-subscriber-runtime! [runtime]
+  (when-let [fw-atom fw/*framework*]
+    (when-let [state* (:state* runtime)]
+      (swap! fw-atom assoc-in event-path @state*)))
+  runtime)
+
+(defn subscriber-registry-snapshot []
   (:subscribers (event-subscriber-state-snapshot)))
 
 (defn reset-ability-event-subscribers-for-test!
   ([]
    (reset-ability-event-subscribers-for-test! {}))
   ([snapshot]
-   (reset! (event-subscriber-state-atom)
-           {:subscribers (or snapshot {})
-            :frozen? false})
+   (when-let [fw-atom fw/*framework*]
+     (swap! fw-atom assoc-in event-path {:subscribers (or snapshot {}) :frozen? false}))
    nil))
 
-(defn freeze-ability-event-subscribers!
-  []
+(defn freeze-ability-event-subscribers! []
   (update-event-subscriber-state! assoc :frozen? true)
   nil)
 
 (defn subscribe-ability-event!
-  "Register a subscriber fn for event-type keyword.
-  Multiple subscribers per event-type are supported.
-
-  Args:
-    event-type: keyword  e.g. :ability/skill-learn
-    handler-fn: (fn [event-map]) → any"
   [event-type handler-fn]
   (assert-subscribers-open!)
   (update-event-subscriber-state! update-in [:subscribers event-type] (fnil conj []) handler-fn)
   nil)
 
 (defn fire-ability-event!
-  "Dispatch an ability event map to all registered subscribers.
-  Always returns the original event map (useful for pipeline patterns)."
   [event]
   (let [event-type (:event/type event)]
     (doseq [h (get (:subscribers (event-subscriber-state-snapshot)) event-type [])]
-      (try
-        (h event)
-        (catch Exception e
-          (log/warn "Ability event subscriber threw" event-type (ex-message e)))))
+      (try (h event)
+           (catch Exception e
+             (log/warn "Ability event subscriber threw" event-type (ex-message e)))))
     event))
 
 (defn fire-calc-event!
-  "Dispatch a mutable calc event. Subscribers may update fields via returned atom.
-  Returns final computed value.
-
-  Args:
-    event-type: keyword  e.g. :calc/skill-attack
-    base-value: number
-    extra:      map of extra context fields
-
-  Returns:
-    Final number after all subscribers have adjusted it."
   [event-type base-value extra]
   (let [state (atom (merge extra {:event/type event-type :value base-value}))]
     (doseq [h (get (:subscribers (event-subscriber-state-snapshot)) event-type [])]
-      (try
-        (let [result (h @state)]
-          (when (number? result)
-            (swap! state assoc :value result)))
-        (catch Exception e
-          (log/warn "Calc event subscriber threw" event-type (ex-message e)))))
+      (try (let [result (h @state)]
+             (when (number? result)
+               (swap! state assoc :value result)))
+           (catch Exception e
+             (log/warn "Calc event subscriber threw" event-type (ex-message e)))))
     (:value @state)))
 
-;; ============================================================================
 ;; Event Type Constants
-;; ============================================================================
-
-;; -- Lifecycle --
 (def EVT-ABILITY-ACTIVATE    :ability/activate)
 (def EVT-ABILITY-DEACTIVATE  :ability/deactivate)
-
-;; -- Learning --
 (def EVT-SKILL-LEARN         :ability/skill-learn)
 (def EVT-SKILL-PERFORM       :ability/skill-perform)
 (def EVT-SKILL-EXP-ADDED     :ability/skill-exp-added)
@@ -174,11 +93,7 @@
 (def EVT-LEVEL-CHANGE        :ability/level-change)
 (def EVT-CATEGORY-CHANGE     :ability/category-change)
 (def EVT-ACHIEVEMENT-TRIGGER :ability/achievement-trigger)
-
-;; -- Resource --
 (def EVT-OVERLOAD            :ability/overload)
-
-;; -- Input --
 (def EVT-PRESET-UPDATE       :ability/preset-update)
 (def EVT-PRESET-SWITCH       :ability/preset-switch)
 (def EVT-CONTEXT-KEY-DOWN    :ability/context-key-down)
@@ -188,8 +103,6 @@
 (def EVT-CONTEXT-REGISTERED  :ability/context-registered)
 (def EVT-CONTEXT-STATUS-CHANGED :ability/context-status-changed)
 (def EVT-CONTEXT-PURGED      :ability/context-purged)
-
-;; -- Calc (modifiable) --
 (def CALC-SKILL-ATTACK       :calc/skill-attack)
 (def CALC-SKILL-PERFORM      :calc/skill-perform)
 (def CALC-MAX-CP             :calc/max-cp)
@@ -197,70 +110,30 @@
 (def CALC-CP-RECOVER-SPEED   :calc/cp-recover-speed)
 (def CALC-OVERLOAD-RECOVER-SPEED :calc/overload-recover-speed)
 
-;; ============================================================================
 ;; Helper Constructors
-;; ============================================================================
-
 (defn make-skill-learn-event [uuid skill-id]
   {:event/type EVT-SKILL-LEARN :event/side :both :uuid uuid :skill-id skill-id})
-
 (defn make-level-change-event [uuid old-level new-level]
-  {:event/type EVT-LEVEL-CHANGE :event/side :server
-   :uuid uuid :old-level old-level :new-level new-level})
-
+  {:event/type EVT-LEVEL-CHANGE :event/side :server :uuid uuid :old-level old-level :new-level new-level})
 (defn make-category-change-event [uuid old-cat new-cat]
-  {:event/type EVT-CATEGORY-CHANGE :event/side :both
-   :uuid uuid :old-cat old-cat :new-cat new-cat})
-
+  {:event/type EVT-CATEGORY-CHANGE :event/side :both :uuid uuid :old-cat old-cat :new-cat new-cat})
 (defn make-overload-event [uuid]
   {:event/type EVT-OVERLOAD :event/side :server :uuid uuid})
-
 (defn make-activate-event [uuid]
   {:event/type EVT-ABILITY-ACTIVATE :event/side :server :uuid uuid})
-
 (defn make-deactivate-event [uuid]
   {:event/type EVT-ABILITY-DEACTIVATE :event/side :server :uuid uuid})
-
 (defn make-preset-switch-event [uuid old-idx new-idx]
-  {:event/type EVT-PRESET-SWITCH :event/side :both
-   :uuid uuid :old-preset old-idx :new-preset new-idx})
-
+  {:event/type EVT-PRESET-SWITCH :event/side :both :uuid uuid :old-preset old-idx :new-preset new-idx})
 (defn make-preset-update-event [uuid preset-idx key-idx slot]
-  {:event/type EVT-PRESET-UPDATE :event/side :both
-   :uuid uuid :preset-idx preset-idx :key-idx key-idx :slot slot})
-
-(defn make-skill-perform-event
-  [uuid skill-id]
-  {:event/type EVT-SKILL-PERFORM :event/side :server
-   :uuid uuid :skill-id skill-id})
-
-(defn make-context-registered-event
-  [uuid ctx-id skill-id status]
-  {:event/type EVT-CONTEXT-REGISTERED
-   :event/side :server
-   :uuid uuid
-   :ctx-id ctx-id
-   :skill-id skill-id
-   :status status})
-
-(defn make-context-status-changed-event
-  [uuid ctx-id old-status new-status reason]
-  {:event/type EVT-CONTEXT-STATUS-CHANGED
-   :event/side :server
-   :uuid uuid
-   :ctx-id ctx-id
-   :old-status old-status
-   :new-status new-status
-   :reason reason})
-
-(defn make-context-purged-event
-  [uuid removed-count]
-  {:event/type EVT-CONTEXT-PURGED
-   :event/side :server
-   :uuid uuid
-   :removed-count removed-count})
-
-(defn make-achievement-trigger-event
-  [uuid achievement-id]
-  {:event/type EVT-ACHIEVEMENT-TRIGGER :event/side :server
-   :uuid uuid :achievement-id achievement-id})
+  {:event/type EVT-PRESET-UPDATE :event/side :both :uuid uuid :preset-idx preset-idx :key-idx key-idx :slot slot})
+(defn make-skill-perform-event [uuid skill-id]
+  {:event/type EVT-SKILL-PERFORM :event/side :server :uuid uuid :skill-id skill-id})
+(defn make-context-registered-event [uuid ctx-id skill-id status]
+  {:event/type EVT-CONTEXT-REGISTERED :event/side :server :uuid uuid :ctx-id ctx-id :skill-id skill-id :status status})
+(defn make-context-status-changed-event [uuid ctx-id old-status new-status reason]
+  {:event/type EVT-CONTEXT-STATUS-CHANGED :event/side :server :uuid uuid :ctx-id ctx-id :old-status old-status :new-status new-status :reason reason})
+(defn make-context-purged-event [uuid removed-count]
+  {:event/type EVT-CONTEXT-PURGED :event/side :server :uuid uuid :removed-count removed-count})
+(defn make-achievement-trigger-event [uuid achievement-id]
+  {:event/type EVT-ACHIEVEMENT-TRIGGER :event/side :server :uuid uuid :achievement-id achievement-id})

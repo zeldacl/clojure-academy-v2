@@ -1,6 +1,7 @@
 (ns cn.li.mcmod.platform.world
   "Platform-agnostic world access abstraction layer."
-  (:require [cn.li.mcmod.platform.runtime :as prt]))
+  (:require [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.platform.runtime :as prt]))
 
 (defprotocol IWorldAccess
   (world-get-tile-entity [this pos])

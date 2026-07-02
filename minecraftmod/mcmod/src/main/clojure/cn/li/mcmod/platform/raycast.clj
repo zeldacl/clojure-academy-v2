@@ -3,7 +3,8 @@
 
   Platform (forge/fabric) installs an IRaycast implementation via install-raycast!.
   Game logic (ac) calls *-suffixed wrappers without accessing the runtime var."
-  (:require [cn.li.mcmod.platform.runtime :as prt]))
+  (:require [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.platform.runtime :as prt]))
 
 (defprotocol IRaycast
   "Raycasting utilities for line-of-sight queries."
@@ -24,19 +25,26 @@
   (raycast-from-player [this player-uuid max-distance living-only?]
     "Raycast from player's eye position in look direction."))
 
-(def ^:private ^:dynamic *runtime* nil)
-
 (defn install-raycast!
   [impl label]
-  (prt/install-impl! #'*runtime* impl (or label "raycast")))
+  (when-let [fw-atom fw/*framework*] (swap! fw-atom assoc-in [:platform :raycast] impl)) nil)
 
-(defn available? [] (prt/impl-available? #'*runtime*))
-(defn current [] (prt/impl-current #'*runtime*))
-(defn call-with-runtime [rt f] (binding [*runtime* rt] (f)))
+(defn available? [] (boolean (get-in @fw/*framework* [:platform :raycast])))
+(defn current [] (get-in @fw/*framework* [:platform :raycast]))
+(defn call-with-runtime [rt f] (f rt))
 
-(prt/def-impl-wrappers '*runtime* IRaycast
-  [raycast-blocks* raycast-blocks world-id start-x start-y start-z dir-x dir-y dir-z max-distance]
-  [raycast-entities* raycast-entities world-id start-x start-y start-z dir-x dir-y dir-z max-distance]
-  [raycast-combined* raycast-combined world-id start-x start-y start-z dir-x dir-y dir-z max-distance]
-  [get-player-look-vector* get-player-look-vector player-uuid]
-  [raycast-from-player* raycast-from-player player-uuid max-distance living-only?])
+(defn raycast-blocks* [world-id start-x start-y start-z dir-x dir-y dir-z max-distance]
+  (when-let [rt (get-in @fw/*framework* [:platform :raycast])]
+    (raycast-blocks rt world-id start-x start-y start-z dir-x dir-y dir-z max-distance)))
+(defn raycast-entities* [world-id start-x start-y start-z dir-x dir-y dir-z max-distance]
+  (when-let [rt (get-in @fw/*framework* [:platform :raycast])]
+    (raycast-entities rt world-id start-x start-y start-z dir-x dir-y dir-z max-distance)))
+(defn raycast-combined* [world-id start-x start-y start-z dir-x dir-y dir-z max-distance]
+  (when-let [rt (get-in @fw/*framework* [:platform :raycast])]
+    (raycast-combined rt world-id start-x start-y start-z dir-x dir-y dir-z max-distance)))
+(defn get-player-look-vector* [player-uuid]
+  (when-let [rt (get-in @fw/*framework* [:platform :raycast])]
+    (get-player-look-vector rt player-uuid)))
+(defn raycast-from-player* [player-uuid max-distance living-only?]
+  (when-let [rt (get-in @fw/*framework* [:platform :raycast])]
+    (raycast-from-player rt player-uuid max-distance living-only?)))

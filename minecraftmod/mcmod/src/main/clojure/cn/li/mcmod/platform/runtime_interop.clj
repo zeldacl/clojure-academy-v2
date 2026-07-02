@@ -1,23 +1,27 @@
 (ns cn.li.mcmod.platform.runtime-interop
   "Canonical runtime-side platform interop for world/player queries."
-  (:require [cn.li.mcmod.platform.runtime :as prt]))
+  (:require [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.platform.runtime :as prt]))
 
 (defprotocol IRuntimeInterop
   (get-player-view [this player-uuid])
   (get-player-main-hand-item [this player-uuid])
   (get-block-entity-at [this world-id x y z]))
 
-(def ^:private ^:dynamic *runtime* nil)
-
 (defn install-runtime-interop!
   [impl label]
-  (prt/install-impl! #'*runtime* impl (or label "runtime-interop")))
+  (when-let [fw-atom fw/*framework*] (swap! fw-atom assoc-in [:platform :runtime-interop] impl)) nil)
 
-(defn available? [] (prt/impl-available? #'*runtime*))
-(defn current [] (prt/impl-current #'*runtime*))
-(defn call-with-runtime [rt f] (binding [*runtime* rt] (f)))
+(defn available? [] (boolean (get-in @fw/*framework* [:platform :runtime-interop])))
+(defn current [] (get-in @fw/*framework* [:platform :runtime-interop]))
+(defn call-with-runtime [rt f] (f rt))
 
-(prt/def-impl-wrappers '*runtime* IRuntimeInterop
-  [get-player-view* get-player-view player-uuid]
-  [get-player-main-hand-item* get-player-main-hand-item player-uuid]
-  [get-block-entity-at* get-block-entity-at world-id x y z])
+(defn get-player-view* [player-uuid]
+  (when-let [rt (get-in @fw/*framework* [:platform :runtime-interop])]
+    (get-player-view rt player-uuid)))
+(defn get-player-main-hand-item* [player-uuid]
+  (when-let [rt (get-in @fw/*framework* [:platform :runtime-interop])]
+    (get-player-main-hand-item rt player-uuid)))
+(defn get-block-entity-at* [world-id x y z]
+  (when-let [rt (get-in @fw/*framework* [:platform :runtime-interop])]
+    (get-block-entity-at rt world-id x y z)))
