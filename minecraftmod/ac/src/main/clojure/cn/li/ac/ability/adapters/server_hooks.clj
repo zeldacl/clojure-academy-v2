@@ -23,54 +23,23 @@
             [cn.li.ac.wireless.data.world-registry :as world-registry]
             [cn.li.ac.util.init-guard :refer [with-init-guard]]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
+            [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.util.log :as log]))
 
 (def ^:private fn-reset-server-runtimes :ability/reset-server-runtimes!)
 (def ^:private fn-register-network-handlers :ability/register-network-handlers!)
 (def ^:private fn-try-pull-developer-energy :ability/try-pull-developer-energy!)
 
-(defn default-lifecycle-subscriptions-runtime-state
-  []
-  false)
+;; Lifecycle subscriptions guard — Framework [:service :lifecycle-subscriptions]
 
-(defn create-lifecycle-subscriptions-runtime
-  ([]
-   (create-lifecycle-subscriptions-runtime {}))
-  ([{:keys [state*]
-     :or {state* (atom (default-lifecycle-subscriptions-runtime-state))}}]
-   {::runtime ::lifecycle-subscriptions-runtime
-    :state* state*}))
+(def ^:private lsub-path [:service :lifecycle-subscriptions])
 
-(def ^:private _lifecycle-subscriptions-runtime (delay (create-lifecycle-subscriptions-runtime)))
-
-(def ^:dynamic *lifecycle-subscriptions-runtime* nil)
-
-(defn- lifecycle-subscriptions-runtime?
-  [runtime]
-  (and (map? runtime)
-       (= ::lifecycle-subscriptions-runtime (::runtime runtime))
-       (some? (:state* runtime))))
-
-(defn call-with-lifecycle-subscriptions-runtime
-  [runtime f]
-  (when-not (lifecycle-subscriptions-runtime? runtime)
-    (throw (ex-info "Expected lifecycle subscriptions runtime"
-                    {:runtime runtime})))
-  (binding [*lifecycle-subscriptions-runtime* runtime]
-    (f)))
-
-(defmacro with-lifecycle-subscriptions-runtime
-  [runtime & body]
-  `(call-with-lifecycle-subscriptions-runtime ~runtime (fn [] ~@body)))
-
-(defn- current-lifecycle-subscriptions-runtime
-  []
-  (or *lifecycle-subscriptions-runtime*
-      @_lifecycle-subscriptions-runtime))
-
-(defn- lifecycle-subscriptions-registered-atom
-  []
-  (:state* (current-lifecycle-subscriptions-runtime)))
+(defn- lifecycle-subscriptions-registered-atom []
+  (if-let [fw-atom fw/*framework*]
+    (or (get-in @fw-atom lsub-path)
+        (let [a (atom false)]
+          (swap! fw-atom assoc-in lsub-path a) a))
+    (atom false)))
 
 (defn- unique-context-by-id
   [ctx-id]

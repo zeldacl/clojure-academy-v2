@@ -37,6 +37,7 @@
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.runtime.owner :as owner]
             [cn.li.mcmod.network.client :as net-client]
+            [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.util.log :as log]))
 
 (def ^:private default-client-ui-runtime-state
@@ -47,50 +48,21 @@
   :charge-coin-state {}
   :push-handlers-registered? false})
 
-(defn create-client-ui-runtime
-  []
-  {::runtime ::client-ui-runtime
-  :runtime-state* (atom default-client-ui-runtime-state)
-  :managed-screen-runtime (managed-screens/create-managed-screen-runtime)})
+;; Client UI runtime — Framework [:service :client-ui]
 
-(def ^:dynamic *client-ui-runtime* nil)
+(def ^:private cui-path [:service :client-ui])
 
-(def ^:private _client-ui-runtime (delay (create-client-ui-runtime)))
+(defn- client-ui-runtime-state-atom []
+  (if-let [fw-atom fw/*framework*]
+    (or (get-in @fw-atom cui-path)
+        (let [a (atom default-client-ui-runtime-state)]
+          (swap! fw-atom assoc-in cui-path a) a))
+    (atom default-client-ui-runtime-state)))
 
-(defn- client-ui-runtime?
-  [runtime]
-  (and (map? runtime)
-       (= ::client-ui-runtime (::runtime runtime))
-       (some? (:runtime-state* runtime))))
+(defn- managed-screen-runtime []
+  (managed-screens/create-managed-screen-runtime))
 
-(defn call-with-client-ui-runtime
-  [runtime f]
-  (when-not (client-ui-runtime? runtime)
-    (throw (ex-info "Expected client UI runtime"
-                    {:runtime runtime})))
-  (binding [*client-ui-runtime* runtime]
-    (f)))
-
-(defmacro with-client-ui-runtime
-  [runtime & body]
-  `(call-with-client-ui-runtime ~runtime (fn [] ~@body)))
-
-(defn- current-client-ui-runtime
-  []
-  (or *client-ui-runtime*
-      @_client-ui-runtime))
-
-(defn- client-ui-runtime-state-atom
-  []
-  (:runtime-state* (current-client-ui-runtime)))
-
-(defn- managed-screen-runtime
-  []
-  (:managed-screen-runtime (current-client-ui-runtime)))
-
-(defn- call-with-managed-screen-runtime
-  [f]
-  (managed-screens/call-with-managed-screen-runtime (managed-screen-runtime) f))
+(defn- call-with-managed-screen-runtime [f] (f))
 
 (defn- active-managed-screen-owner
   [screen-key]

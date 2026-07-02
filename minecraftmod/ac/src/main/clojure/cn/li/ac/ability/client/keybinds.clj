@@ -17,6 +17,7 @@
             [cn.li.ac.ability.registry.skill-query :as skill]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
+            [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.util.log :as log]))
 
 ;; Dynamic var for getting player UUID (set by forge layer)
@@ -36,44 +37,16 @@
    :key-groups {}
    :frozen? false})
 
-(defn create-keybind-registry-runtime
-  ([]
-   (create-keybind-registry-runtime {}))
-  ([{:keys [state*]
-     :or {state* (atom (default-keybind-registry-runtime-state))}}]
-   {::runtime ::keybind-registry-runtime
-    :state* state*}))
+;; Keybind registry — Framework [:service :keybind-registry]
 
-(def ^:private _keybind-registry-runtime (delay (create-keybind-registry-runtime)))
+(def ^:private kbr-path [:service :keybind-registry])
 
-(def ^:dynamic *keybind-registry-runtime* nil)
-
-(defn- keybind-registry-runtime?
-  [runtime]
-  (and (map? runtime)
-       (= ::keybind-registry-runtime (::runtime runtime))
-       (some? (:state* runtime))))
-
-(defn call-with-keybind-registry-runtime
-  [runtime f]
-  (when-not (keybind-registry-runtime? runtime)
-    (throw (ex-info "Expected keybind registry runtime"
-                    {:runtime runtime})))
-  (binding [*keybind-registry-runtime* runtime]
-    (f)))
-
-(defmacro with-keybind-registry-runtime
-  [runtime & body]
-  `(call-with-keybind-registry-runtime ~runtime (fn [] ~@body)))
-
-(defn- current-keybind-registry-runtime
-  []
-  (or *keybind-registry-runtime*
-      @_keybind-registry-runtime))
-
-(defn- keybind-registry-state-atom
-  []
-  (:state* (current-keybind-registry-runtime)))
+(defn- keybind-registry-state-atom []
+  (if-let [fw-atom fw/*framework*]
+    (or (get-in @fw-atom kbr-path)
+        (let [a (atom (default-keybind-registry-runtime-state))]
+          (swap! fw-atom assoc-in kbr-path a) a))
+    (atom (default-keybind-registry-runtime-state))))
 
 (defn- keybind-registry-state-snapshot
   []
@@ -222,52 +195,30 @@
    :gui-keys {:skill-tree false
               :preset-editor false}})
 
-(defn create-client-keybind-runtime
-  []
-  {::runtime ::client-keybind-runtime
-   :key-states* (atom {})
-   :preset-switch-states* (atom {})})
+;; Client keybind runtime — Framework [:service :client-keybinds]
 
-(def ^:private _client-keybind-runtime (delay (create-client-keybind-runtime)))
+(def ^:private cb-path [:service :client-keybinds])
 
-(def ^:dynamic *client-keybind-runtime* nil)
+(defn- client-keybind-atoms []
+  (if-let [fw-atom fw/*framework*]
+    (or (get-in @fw-atom cb-path)
+        (let [m {:key-states* (atom {}) :preset-switch-states* (atom {})}]
+          (swap! fw-atom assoc-in cb-path m) m))
+    {:key-states* (atom {}) :preset-switch-states* (atom {})}))
 
-(defn- client-keybind-runtime?
-  [runtime]
-  (and (map? runtime)
-       (= ::client-keybind-runtime (::runtime runtime))
-       (some? (:key-states* runtime))
-       (some? (:preset-switch-states* runtime))))
+(defn create-client-keybind-runtime []
+  (let [atoms (client-keybind-atoms)]
+    {::runtime ::client-keybind-runtime
+     :key-states* (:key-states* atoms)
+     :preset-switch-states* (:preset-switch-states* atoms)}))
 
-(defn call-with-client-keybind-runtime
-  [runtime f]
-  (when-not (client-keybind-runtime? runtime)
-    (throw (ex-info "Expected client keybind runtime"
-                    {:runtime runtime})))
-  (binding [*client-keybind-runtime* runtime]
-    (f)))
 
-(defmacro with-client-keybind-runtime
-  [runtime & body]
-  `(call-with-client-keybind-runtime ~runtime (fn [] ~@body)))
-
-(defn- current-client-keybind-runtime
-  []
-  (or *client-keybind-runtime*
-      @_client-keybind-runtime))
-
-(defn- key-states-atom
-  []
-  (:key-states* (current-client-keybind-runtime)))
+(defn- key-states-atom [] (:key-states* (client-keybind-atoms)))
 
 (def ^:private default-preset-switch-state
-  {:current-preset 0
-   :previous-preset 0
-   :show-until-ms  0})
+  {:current-preset 0 :previous-preset 0 :show-until-ms 0})
 
-(defn- preset-switch-states-atom
-  []
-  (:preset-switch-states* (current-client-keybind-runtime)))
+(defn- preset-switch-states-atom [] (:preset-switch-states* (client-keybind-atoms)))
 
 (def ^:private PRESET-COUNT 4)
 (def ^:private PRESET-INDICATOR-DURATION-MS 2000)

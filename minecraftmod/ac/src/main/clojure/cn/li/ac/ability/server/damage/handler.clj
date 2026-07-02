@@ -11,6 +11,7 @@
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.mcmod.platform.damage-interception :as damage-interception]
             [cn.li.mcmod.util.log :as log]
+            [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (defn- runtime-player-state
@@ -88,34 +89,17 @@
    :precheck-side-effects {}
    :frozen? false})
 
-(defn create-attack-check-registries-runtime
-  ([] (create-attack-check-registries-runtime {}))
-  ([{:keys [state*]
-     :or {state* (atom (default-attack-check-registries-runtime-state))}}]
-   {::runtime ::attack-check-registries-runtime
-    :state* state*}))
+;; Attack check registries — Framework [:service :attack-check-registries]
 
-(def ^:dynamic *attack-check-registries-runtime* nil)
+(def ^:private ac-path [:service :attack-check-registries])
 
-(def ^:private _attack-check-registries-runtime (delay (create-attack-check-registries-runtime)))
+(defn- attack-check-registries-state-atom []
+  (if-let [fw-atom fw/*framework*]
+    (or (get-in @fw-atom ac-path)
+        (let [a (atom (default-attack-check-registries-runtime-state))]
+          (swap! fw-atom assoc-in ac-path a) a))
+    (atom (default-attack-check-registries-runtime-state))))
 
-(defn call-with-attack-check-registries-runtime
-  [runtime f]
-  (when-not (and (map? runtime)
-                 (= ::attack-check-registries-runtime (::runtime runtime))
-                 (some? (:state* runtime)))
-    (throw (ex-info "Expected attack check registries runtime" {:runtime runtime})))
-  (binding [*attack-check-registries-runtime* runtime]
-    (f)))
-
-(defn- current-attack-check-registries-runtime
-  []
-  (or *attack-check-registries-runtime*
-      @_attack-check-registries-runtime))
-
-(defn- attack-check-registries-state-atom
-  []
-  (:state* (current-attack-check-registries-runtime)))
 
 (defn- attack-check-registries-state-snapshot
   []

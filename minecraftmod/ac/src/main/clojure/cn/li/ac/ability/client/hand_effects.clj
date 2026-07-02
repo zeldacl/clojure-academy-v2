@@ -5,47 +5,22 @@
   load time.  The infrastructure dispatches enqueue / tick / transform calls
   without any skill-specific knowledge."
   (:require [cn.li.ac.ability.client.effects.queue-infra :as queue-infra]
+            [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.util.log :as log]))
 
 ;; ---------------------------------------------------------------------------
 ;; Camera pitch delta accumulator (shared across all hand effects)
 ;; ---------------------------------------------------------------------------
 
-(defn create-camera-pitch-runtime
-  []
-  {::runtime ::camera-pitch-runtime
-   :camera-pitch-deltas* (atom {})})
+;; Camera pitch runtime — Framework [:service :camera-pitch]
 
-(def ^:dynamic *camera-pitch-runtime* nil)
+(def ^:private cp-path [:service :camera-pitch])
 
-(def ^:private _camera-pitch-runtime (delay (create-camera-pitch-runtime)))
-
-(defn- camera-pitch-runtime?
-  [runtime]
-  (and (map? runtime)
-       (= ::camera-pitch-runtime (::runtime runtime))
-       (some? (:camera-pitch-deltas* runtime))))
-
-(defn call-with-camera-pitch-runtime
-  [runtime f]
-  (when-not (camera-pitch-runtime? runtime)
-    (throw (ex-info "Expected camera pitch runtime"
-                    {:runtime runtime})))
-  (binding [*camera-pitch-runtime* runtime]
-    (f)))
-
-(defmacro with-camera-pitch-runtime
-  [runtime & body]
-  `(call-with-camera-pitch-runtime ~runtime (fn [] ~@body)))
-
-(defn- current-camera-pitch-runtime
-  []
-  (or *camera-pitch-runtime*
-      @_camera-pitch-runtime))
-
-(defn- camera-pitch-deltas-atom
-  []
-  (:camera-pitch-deltas* (current-camera-pitch-runtime)))
+(defn- camera-pitch-deltas-atom []
+  (if-let [fw-atom fw/*framework*]
+    (or (get-in @fw-atom cp-path)
+        (let [a (atom {})] (swap! fw-atom assoc-in cp-path a) a))
+    (atom {})))
 
 (defn- camera-pitch-deltas-snapshot
   []
@@ -132,44 +107,16 @@
   :effect-states {}
    :frozen? false})
 
-(defn create-hand-effect-runtime
-  ([]
-   (create-hand-effect-runtime {}))
-  ([{:keys [state*]
-     :or {state* (atom (default-hand-effect-runtime-state))}}]
-   {::runtime ::hand-effect-runtime
-    :state* state*}))
+;; Hand effect registry — Framework [:service :hand-effects]
 
-(def ^:dynamic *hand-effect-runtime* nil)
+(def ^:private he-path [:service :hand-effects])
 
-(def ^:private _hand-effect-runtime (delay (create-hand-effect-runtime)))
-
-(defn- hand-effect-runtime?
-  [runtime]
-  (and (map? runtime)
-       (= ::hand-effect-runtime (::runtime runtime))
-       (some? (:state* runtime))))
-
-(defn call-with-hand-effect-runtime
-  [runtime f]
-  (when-not (hand-effect-runtime? runtime)
-    (throw (ex-info "Expected hand-effect runtime"
-                    {:runtime runtime})))
-  (binding [*hand-effect-runtime* runtime]
-    (f)))
-
-(defmacro with-hand-effect-runtime
-  [runtime & body]
-  `(call-with-hand-effect-runtime ~runtime (fn [] ~@body)))
-
-(defn- current-hand-effect-runtime
-  []
-  (or *hand-effect-runtime*
-      @_hand-effect-runtime))
-
-(defn- hand-effect-state-atom
-  []
-  (:state* (current-hand-effect-runtime)))
+(defn- hand-effect-state-atom []
+  (if-let [fw-atom fw/*framework*]
+    (or (get-in @fw-atom he-path)
+        (let [a (atom (default-hand-effect-runtime-state))]
+          (swap! fw-atom assoc-in he-path a) a))
+    (atom (default-hand-effect-runtime-state))))
 
 (defn- hand-effect-state-snapshot
   []

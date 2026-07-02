@@ -1,7 +1,8 @@
 (ns cn.li.ac.ability.client.effects.sounds
   "Sound effect commands for ability system (AC layer - no Minecraft imports)."
   (:require [cn.li.ac.ability.registry.event :as evt]
-            [cn.li.ac.ability.client.effects.queue-infra :as queue-infra]))
+            [cn.li.ac.ability.client.effects.queue-infra :as queue-infra]
+            [cn.li.mcmod.framework :as fw]))
 
 ;; Sound effect command structure
 ;; {:type :sound
@@ -56,50 +57,22 @@
    :volume 0.8
    :pitch 1.2})
 
-;; Sound queue (session-scoped)
-(defn create-sound-queue-runtime
-  []
-  {::runtime ::sound-queue-runtime
-   :queue* (atom {})})
+;; Sound queue — Framework [:service :sound-queue]
 
-(def ^:dynamic *sound-queue-runtime* nil)
+(def ^:private sq-path [:service :sound-queue])
 
-(def ^:private _sound-queue-runtime (delay (create-sound-queue-runtime)))
+(defn- queue-atom []
+  (if-let [fw-atom fw/*framework*]
+    (or (get-in @fw-atom sq-path)
+        (let [a (atom {})] (swap! fw-atom assoc-in sq-path a) a))
+    (atom {})))
 
-(defn- sound-queue-runtime?
-  [runtime]
-  (and (map? runtime)
-       (= ::sound-queue-runtime (::runtime runtime))
-       (some? (:queue* runtime))))
+(defn- queue-snapshot [] @(queue-atom))
+(defn- update-queue! [f & args] (apply swap! (queue-atom) f args))
 
-(defn call-with-sound-queue-runtime
-  [runtime f]
-  (when-not (sound-queue-runtime? runtime)
-    (throw (ex-info "Expected sound queue runtime"
-                    {:runtime runtime})))
-  (binding [*sound-queue-runtime* runtime]
-    (f)))
-
-(defmacro with-sound-queue-runtime
-  [runtime & body]
-  `(call-with-sound-queue-runtime ~runtime (fn [] ~@body)))
-
-(defn- current-runtime
-  []
-  (or *sound-queue-runtime*
-      @_sound-queue-runtime))
-
-(defn- queue-atom
-  []
-  (:queue* (current-runtime)))
-
-(defn- queue-snapshot
-  []
-  @(queue-atom))
-
-(defn- update-queue!
-  [f & args]
-  (apply swap! (queue-atom) f args))
+;; Backward-compatible factory
+(defn create-sound-queue-runtime []
+  {::runtime ::sound-queue-runtime :queue* (queue-atom)})
 
 (defn- normalize-session-id
   [owner-or-session]
