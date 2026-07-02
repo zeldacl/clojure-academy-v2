@@ -1,6 +1,7 @@
 (ns cn.li.mcmod.platform.config-persist
   "Platform-injected single-value config persistence (Forge TOML / Fabric JSON)."
-  (:require [cn.li.mcmod.config.registry :as config-reg]
+  (:require [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.config.registry :as config-reg]
             [cn.li.mcmod.platform.runtime :as prt]))
 
 (def ^:private ^:dynamic *persist-config-value-fn* nil)

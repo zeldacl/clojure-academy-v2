@@ -1,24 +1,52 @@
 (ns cn.li.mcmod.platform.player-feedback
-  "Platform-neutral player feedback bridge for runtime gameplay messages."
-  (:require [cn.li.mcmod.platform.runtime :as prt]
+  "Platform-neutral player feedback bridge for runtime gameplay messages.
+
+  Protocol kept as pure interface contract (AOT-safe).
+  Implementation stored in Framework [:platform :player-feedback]
+  instead of ^:dynamic *runtime* (eliminates ThreadLocal risk)."
+  (:require [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.util.log :as log]))
+
+;; ============================================================================
+;; Protocol (pure interface — AOT-safe, kept for contract definition)
+;; ============================================================================
 
 (defprotocol IPlayerFeedback
   (send-player-feedback! [this player-uuid payload]))
 
-(def ^:private ^:dynamic *runtime* nil)
+;; ============================================================================
+;; Installation — writes to Framework [:platform :player-feedback]
+;; ============================================================================
 
 (defn install-player-feedback!
-  [impl label]
-  (prt/install-impl! #'*runtime* impl (or label "player-feedback")))
+  "Install player feedback implementation. Backward compatible with
+   old (impl label) signature; stores in Framework atom."
+  ([impl]
+   (when-let [fw-atom fw/*framework*]
+     (swap! fw-atom assoc-in [:platform :player-feedback] impl))
+   nil)
+  ([impl label]
+   (log/info (or label "player-feedback") "installed")
+   (install-player-feedback! impl)))
 
-(defn available? [] (prt/impl-available? #'*runtime*))
-(defn current [] (prt/impl-current #'*runtime*))
-(defn call-with-runtime [rt f] (binding [*runtime* rt] (f)))
+;; ============================================================================
+;; Queries
+;; ============================================================================
+
+(defn available? []
+  (boolean (get-in @fw/*framework* [:platform :player-feedback])))
+
+(defn current []
+  (get-in @fw/*framework* [:platform :player-feedback]))
+
+;; ============================================================================
+;; Operations — read impl from Framework atom (no ThreadLocal dependency)
+;; ============================================================================
 
 (defn send-feedback!*
+  "Send feedback to a player. Returns false if adapter not installed."
   [player-uuid payload]
-  (if-let [rt *runtime*]
+  (if-let [rt (get-in @fw/*framework* [:platform :player-feedback])]
     (boolean (send-player-feedback! rt player-uuid payload))
     (do
       (log/debug "Player feedback unavailable; dropping payload" payload)

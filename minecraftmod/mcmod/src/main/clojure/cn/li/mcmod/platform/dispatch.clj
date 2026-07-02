@@ -3,7 +3,8 @@
   "Dynamic platform/version selector shared by platform adapters.
   Loader-specific entrypoints set this var during mod bootstrap so mcmod multimethods
    can dispatch without depending on any specific loader namespace."
-  (:require [cn.li.mcmod.platform.runtime :as prt]))
+  (:require [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.platform.runtime :as prt]))
 
 (def ^:private ^:dynamic *platform-version*
   "Current platform version keyword (e.g. :forge-1.20.1)."

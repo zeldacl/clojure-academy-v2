@@ -1,6 +1,7 @@
 (ns cn.li.mcmod.platform.events
   "Platform-neutral event bridge."
-  (:require [cn.li.mcmod.platform.runtime :as prt]
+  (:require [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.platform.runtime :as prt]
             [cn.li.mcmod.util.log :as log]))
 
 (def ^:private ^:dynamic *fire-event-fn* nil)

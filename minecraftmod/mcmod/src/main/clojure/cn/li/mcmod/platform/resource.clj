@@ -1,6 +1,7 @@
 (ns cn.li.mcmod.platform.resource
   "Platform-agnostic resource identifier abstraction."
-  (:require [cn.li.mcmod.platform.runtime :as prt]))
+  (:require [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.platform.runtime :as prt]))
 
 (def ^:private ^:dynamic *resource-factory* nil)
 

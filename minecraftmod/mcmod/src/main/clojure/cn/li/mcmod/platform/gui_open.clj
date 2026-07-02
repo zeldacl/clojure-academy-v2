@@ -1,18 +1,23 @@
 (ns cn.li.mcmod.platform.gui-open
-  "Platform-injected player menu open (Forge openMenu / Fabric openHandledScreen)."
-  (:require [cn.li.mcmod.platform.runtime :as prt]))
+  "Platform-injected player menu open (Forge openMenu / Fabric openHandledScreen).
 
-(def ^:private ^:dynamic *open-menu-fn* nil)
+  Function stored in Framework [:platform :gui-open] instead of ^:dynamic var."
+  (:require [cn.li.mcmod.framework :as fw]))
 
 (defn install-open-menu!
-  [open-menu-fn label]
-  (prt/install-impl! #'*open-menu-fn* open-menu-fn (or label "open-menu")))
+  "Install the open-menu function. Backward compatible with old (fn label) signature."
+  ([open-menu-fn]
+   (when-let [fw-atom fw/*framework*]
+     (swap! fw-atom assoc-in [:platform :gui-open] open-menu-fn))
+   nil)
+  ([open-menu-fn label]
+   (install-open-menu! open-menu-fn)))
 
 (defn open-player-menu!
   [player factory]
-  (when-let [f (prt/impl-current #'*open-menu-fn*)]
+  (when-let [f (get-in @fw/*framework* [:platform :gui-open])]
     (f player factory)))
 
 (defn open-menu-available?
   []
-  (prt/impl-available? #'*open-menu-fn*))
+  (boolean (get-in @fw/*framework* [:platform :gui-open])))

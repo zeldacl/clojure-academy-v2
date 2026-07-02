@@ -1,6 +1,7 @@
 (ns cn.li.mcmod.platform.player-persistent-data
   "Platform-injected per-player persistent NBT (Forge getPersistentData / Fabric mixin)."
-  (:require [cn.li.mcmod.platform.runtime :as prt]))
+  (:require [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.platform.runtime :as prt]))
 
 (def ^:private ^:dynamic *player-persistent-data-fn* nil)
 
