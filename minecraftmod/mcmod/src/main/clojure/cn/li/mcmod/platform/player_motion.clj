@@ -15,25 +15,25 @@
   [impl label]
   (when-let [fw-atom fw/*framework*] (swap! fw-atom assoc-in [:platform :player-motion] impl)) nil)
 
-(defn available? [] (boolean (get-in @fw/*framework* [:platform :player-motion])))
-(defn current [] (get-in @fw/*framework* [:platform :player-motion]))
+(defn available? [] (boolean (get-in @(fw/fw-atom) [:platform :player-motion])))
+(defn current [] (get-in @(fw/fw-atom) [:platform :player-motion]))
 (defn call-with-runtime [rt f] (f rt))
 
 (defn set-velocity!* [player-id x y z]
-  (when-let [rt (get-in @fw/*framework* [:platform :player-motion])]
+  (when-let [rt (get-in @(fw/fw-atom) [:platform :player-motion])]
     (set-velocity! rt player-id x y z)))
 (defn add-velocity!* [player-id x y z]
-  (when-let [rt (get-in @fw/*framework* [:platform :player-motion])]
+  (when-let [rt (get-in @(fw/fw-atom) [:platform :player-motion])]
     (add-velocity! rt player-id x y z)))
 (defn get-velocity* [player-id]
-  (when-let [rt (get-in @fw/*framework* [:platform :player-motion])]
+  (when-let [rt (get-in @(fw/fw-atom) [:platform :player-motion])]
     (get-velocity rt player-id)))
 (defn set-on-ground!* [player-id on-ground?]
-  (when-let [rt (get-in @fw/*framework* [:platform :player-motion])]
+  (when-let [rt (get-in @(fw/fw-atom) [:platform :player-motion])]
     (set-on-ground! rt player-id on-ground?)))
 (defn is-on-ground?* [player-id]
-  (when-let [rt (get-in @fw/*framework* [:platform :player-motion])]
+  (when-let [rt (get-in @(fw/fw-atom) [:platform :player-motion])]
     (is-on-ground? rt player-id)))
 (defn dismount-riding!* [player-id]
-  (when-let [rt (get-in @fw/*framework* [:platform :player-motion])]
+  (when-let [rt (get-in @(fw/fw-atom) [:platform :player-motion])]
     (dismount-riding! rt player-id)))

@@ -12,16 +12,16 @@
   [impl label]
   (when-let [fw-atom fw/*framework*] (swap! fw-atom assoc-in [:platform :runtime-interop] impl)) nil)
 
-(defn available? [] (boolean (get-in @fw/*framework* [:platform :runtime-interop])))
-(defn current [] (get-in @fw/*framework* [:platform :runtime-interop]))
+(defn available? [] (boolean (get-in @(fw/fw-atom) [:platform :runtime-interop])))
+(defn current [] (get-in @(fw/fw-atom) [:platform :runtime-interop]))
 (defn call-with-runtime [rt f] (f rt))
 
 (defn get-player-view* [player-uuid]
-  (when-let [rt (get-in @fw/*framework* [:platform :runtime-interop])]
+  (when-let [rt (get-in @(fw/fw-atom) [:platform :runtime-interop])]
     (get-player-view rt player-uuid)))
 (defn get-player-main-hand-item* [player-uuid]
-  (when-let [rt (get-in @fw/*framework* [:platform :runtime-interop])]
+  (when-let [rt (get-in @(fw/fw-atom) [:platform :runtime-interop])]
     (get-player-main-hand-item rt player-uuid)))
 (defn get-block-entity-at* [world-id x y z]
-  (when-let [rt (get-in @fw/*framework* [:platform :runtime-interop])]
+  (when-let [rt (get-in @(fw/fw-atom) [:platform :runtime-interop])]
     (get-block-entity-at rt world-id x y z)))

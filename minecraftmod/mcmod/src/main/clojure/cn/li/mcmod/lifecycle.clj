@@ -8,7 +8,7 @@
 
    Replaced pattern:
      BEFORE: private delay singleton + ^:dynamic *lifecycle-runtime* fallback
-     AFTER:  reads/writes (get-in @fw/*framework* [:service :lifecycle])"
+     AFTER:  reads/writes (get-in @(fw/fw-atom) [:service :lifecycle])"
   (:require [cn.li.mcmod.framework :as fw]))
 
 ;; ============================================================================
@@ -55,7 +55,7 @@
 (defn reset-lifecycle-state-for-test!
   "Reset lifecycle state for tests."
   []
-  (swap! fw/*framework* assoc-in [:service :lifecycle] (default-lifecycle-state))
+  (swap! (fw/fw-atom) assoc-in [:service :lifecycle] (default-lifecycle-state))
   nil)
 
 ;; ============================================================================

@@ -15,9 +15,9 @@
 
 (defn open-player-menu!
   [player factory]
-  (when-let [f (get-in @fw/*framework* [:platform :gui-open])]
+  (when-let [f (get-in @(fw/fw-atom) [:platform :gui-open])]
     (f player factory)))
 
 (defn open-menu-available?
   []
-  (boolean (get-in @fw/*framework* [:platform :gui-open])))
+  (boolean (get-in @(fw/fw-atom) [:platform :gui-open])))

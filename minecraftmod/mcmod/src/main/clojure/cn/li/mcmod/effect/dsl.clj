@@ -35,11 +35,11 @@
 
 (defn get-effect
 	[effect-id]
-	(get-in @fw/*framework* [:registry :effects effect-id]))
+	(get-in @(fw/fw-atom) [:registry :effects effect-id]))
 
 (defn list-effects
 	[]
-	(keys (get-in @fw/*framework* [:registry :effects])))
+	(keys (get-in @(fw/fw-atom) [:registry :effects])))
 
 (defmacro defeffect
 	[effect-name & options]

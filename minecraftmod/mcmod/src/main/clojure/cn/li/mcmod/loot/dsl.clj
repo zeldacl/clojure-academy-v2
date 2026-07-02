@@ -34,12 +34,12 @@
   (when-let [fw-atom fw/*framework*] (swap! fw-atom assoc-in [:registry :loot (:id spec)] spec))
   spec)
 
-(defn list-loot-injections [] (keys (get-in @fw/*framework* [:registry :loot])))
-(defn get-loot-injection [injection-id] (get-in @fw/*framework* [:registry :loot injection-id]))
+(defn list-loot-injections [] (keys (get-in @(fw/fw-atom) [:registry :loot])))
+(defn get-loot-injection [injection-id] (get-in @(fw/fw-atom) [:registry :loot injection-id]))
 
 (defn get-loot-injections-for-table
   [target-table]
-  (->> (get-in @fw/*framework* [:registry :loot])
+  (->> (get-in @(fw/fw-atom) [:registry :loot])
        vals
        (filter (fn [spec] (= (:target-table spec) target-table)))))
 

@@ -74,21 +74,20 @@
   "Main Fabric mod initialization called from the Java ModInitializer."
   []
   (log/info "Initializing MyMod (Fabric 1.20.1) from Clojure...")
-  (if-let [fw-inst (fw/create-framework)]
-    (binding [fw/*framework* fw-inst]
-      (lifecycle-init/init-lifecycle!
-        {:init-platform! platform-bootstrap/init-platform!
-         :init-from-java! init/init-from-java
-         :load-config! config-bridge/load-all!
-         :activate-runtime-content! lifecycle/run-runtime-content-activation!
-         :init-blockstate-properties! bsp/init-all-properties!
-         :register-content! #(do
-                               (content-registration/register-content! (registration-context))
-                               (entity-hooks/register-all-hooks!))
-         :install-runtime! runtime-setup/install-runtime!
-         :register-events! event-wiring/register-events!})
-      (log/info "Fabric mod initialization complete"))
-    (log/info "Fabric mod initialization skipped — AOT, framework not created")))
+  (when-let [fw-inst (fw/create-framework)]
+    (alter-var-root #'fw/*framework* (constantly fw-inst)))
+  (lifecycle-init/init-lifecycle!
+    {:init-platform! platform-bootstrap/init-platform!
+     :init-from-java! init/init-from-java
+     :load-config! config-bridge/load-all!
+     :activate-runtime-content! lifecycle/run-runtime-content-activation!
+     :init-blockstate-properties! bsp/init-all-properties!
+     :register-content! #(do
+                           (content-registration/register-content! (registration-context))
+                           (entity-hooks/register-all-hooks!))
+     :install-runtime! runtime-setup/install-runtime!
+     :register-events! event-wiring/register-events!})
+  (log/info "Fabric mod initialization complete"))
 
 (defn get-registered-block
   "Get a registered block by its DSL ID."

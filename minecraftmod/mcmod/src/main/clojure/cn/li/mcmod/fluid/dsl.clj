@@ -98,9 +98,9 @@
 
 (defn get-fluid
   [fluid-id]
-  (get-in @fw/*framework* [:registry :fluids (str fluid-id)]))
+  (get-in @(fw/fw-atom) [:registry :fluids (str fluid-id)]))
 
 (defn list-fluids
   []
-  (keys (get-in @fw/*framework* [:registry :fluids])))
+  (keys (get-in @(fw/fw-atom) [:registry :fluids])))
 

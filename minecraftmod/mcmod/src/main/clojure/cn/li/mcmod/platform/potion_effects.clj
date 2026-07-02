@@ -13,19 +13,19 @@
   [impl label]
   (when-let [fw-atom fw/*framework*] (swap! fw-atom assoc-in [:platform :potion-effects] impl)) nil)
 
-(defn available? [] (boolean (get-in @fw/*framework* [:platform :potion-effects])))
-(defn current [] (get-in @fw/*framework* [:platform :potion-effects]))
+(defn available? [] (boolean (get-in @(fw/fw-atom) [:platform :potion-effects])))
+(defn current [] (get-in @(fw/fw-atom) [:platform :potion-effects]))
 (defn call-with-runtime [rt f] (f rt))
 
 (defn apply-potion-effect!* [player-uuid effect-type duration amplifier]
-  (when-let [rt (get-in @fw/*framework* [:platform :potion-effects])]
+  (when-let [rt (get-in @(fw/fw-atom) [:platform :potion-effects])]
     (apply-potion-effect! rt player-uuid effect-type duration amplifier)))
 (defn remove-potion-effect!* [player-uuid effect-type]
-  (when-let [rt (get-in @fw/*framework* [:platform :potion-effects])]
+  (when-let [rt (get-in @(fw/fw-atom) [:platform :potion-effects])]
     (remove-potion-effect! rt player-uuid effect-type)))
 (defn has-potion-effect?* [player-uuid effect-type]
-  (when-let [rt (get-in @fw/*framework* [:platform :potion-effects])]
+  (when-let [rt (get-in @(fw/fw-atom) [:platform :potion-effects])]
     (has-potion-effect? rt player-uuid effect-type)))
 (defn clear-all-effects!* [player-uuid]
-  (when-let [rt (get-in @fw/*framework* [:platform :potion-effects])]
+  (when-let [rt (get-in @(fw/fw-atom) [:platform :potion-effects])]
     (clear-all-effects! rt player-uuid)))

@@ -205,22 +205,21 @@
 (defn start-forge-mod! []
   (log/info "[BOOTSTRAP_TRACE] start-forge-mod! enter"
             {:compile-context (aot/compile-context)})
-  (if-let [fw-inst (fw/create-framework)]
-    (binding [fw/*framework* fw-inst]
-      (lifecycle-init/init-lifecycle-with-error-handling!
-        {:datagen-run? (datagen-run?)
-         :on-common-setup on-common-setup
-         :on-client-setup on-client-setup
-        :sounds-register (sounds-register)
-        :effects-register (effects-register)
-        :particle-types-register (particle-types-register)
-        :fluid-types-register (fluid-types-register)
-        :fluids-register (fluids-register)
-        :blocks-register (blocks-register)
-        :items-register (items-register)
-        :block-entities-register (block-entities-register)
-        :creative-tabs-register (creative-tabs-register)
-        :gui-menu-register (gui-registry-impl/menu-register)}
-        (registration-steps)
-        false))
-    (log/info "[BOOTSTRAP_TRACE] start-forge-mod! skip — AOT, framework not created")))
+  (when-let [fw-inst (fw/create-framework)]
+    (alter-var-root #'fw/*framework* (constantly fw-inst)))
+  (lifecycle-init/init-lifecycle-with-error-handling!
+    {:datagen-run? (datagen-run?)
+     :on-common-setup on-common-setup
+     :on-client-setup on-client-setup
+    :sounds-register (sounds-register)
+    :effects-register (effects-register)
+    :particle-types-register (particle-types-register)
+    :fluid-types-register (fluid-types-register)
+    :fluids-register (fluids-register)
+    :blocks-register (blocks-register)
+    :items-register (items-register)
+    :block-entities-register (block-entities-register)
+    :creative-tabs-register (creative-tabs-register)
+    :gui-menu-register (gui-registry-impl/menu-register)}
+    (registration-steps)
+    false))

@@ -97,11 +97,15 @@
 
 ;; Get item from registry
 (defn get-item [item-id]
-  (get-in @fw/*framework* [:registry :items item-id]))
+  (if-let [fw-atom fw/*framework*]
+    (get-in @fw-atom [:registry :items item-id])
+    nil))
 
 ;; List all registered items
 (defn list-items []
-  (keys (get-in @fw/*framework* [:registry :items])))
+  (if-let [fw-atom fw/*framework*]
+    (keys (get-in @fw-atom [:registry :items]))
+    ()))
 
 ;; Main macro: defitem
 (defmacro defitem

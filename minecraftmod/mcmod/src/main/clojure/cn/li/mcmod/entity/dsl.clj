@@ -85,11 +85,11 @@
 
 (defn get-entity
   [entity-id]
-  (get-in @fw/*framework* [:registry :entities entity-id]))
+  (get-in @(fw/fw-atom) [:registry :entities entity-id]))
 
 (defn list-entities
   []
-  (keys (get-in @fw/*framework* [:registry :entities])))
+  (keys (get-in @(fw/fw-atom) [:registry :entities])))
 
 (defn get-entity-registry-name
   [entity-id]

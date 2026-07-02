@@ -23,15 +23,15 @@
   nil)
 
 (defn available? []
-  (boolean (get-in @fw/*framework* [:platform :world-effects])))
+  (boolean (get-in @(fw/fw-atom) [:platform :world-effects])))
 
 (defn current []
-  (get-in @fw/*framework* [:platform :world-effects]))
+  (get-in @(fw/fw-atom) [:platform :world-effects]))
 
 (defn call-with-runtime [rt f] (f rt))
 
 (defn- rt []
-  (get-in @fw/*framework* [:platform :world-effects]))
+  (get-in @(fw/fw-atom) [:platform :world-effects]))
 
 (defn spawn-lightning!* [world-id x y z]
   (when-let [r (rt)] (spawn-lightning! r world-id x y z)))

@@ -162,7 +162,7 @@
   "Get a block specification from the registry by ID."
   [block-id]
   (let [id-str (if (keyword? block-id) (name block-id) block-id)]
-    (get-in @fw/*framework* [:registry :blocks id-str])))
+    (get-in @(fw/fw-atom) [:registry :blocks id-str])))
 
 (defn list-blocks
   "Get all registered block IDs."

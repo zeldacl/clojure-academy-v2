@@ -29,22 +29,22 @@
   [impl label]
   (when-let [fw-atom fw/*framework*] (swap! fw-atom assoc-in [:platform :raycast] impl)) nil)
 
-(defn available? [] (boolean (get-in @fw/*framework* [:platform :raycast])))
-(defn current [] (get-in @fw/*framework* [:platform :raycast]))
+(defn available? [] (boolean (get-in @(fw/fw-atom) [:platform :raycast])))
+(defn current [] (get-in @(fw/fw-atom) [:platform :raycast]))
 (defn call-with-runtime [rt f] (f rt))
 
 (defn raycast-blocks* [world-id start-x start-y start-z dir-x dir-y dir-z max-distance]
-  (when-let [rt (get-in @fw/*framework* [:platform :raycast])]
+  (when-let [rt (get-in @(fw/fw-atom) [:platform :raycast])]
     (raycast-blocks rt world-id start-x start-y start-z dir-x dir-y dir-z max-distance)))
 (defn raycast-entities* [world-id start-x start-y start-z dir-x dir-y dir-z max-distance]
-  (when-let [rt (get-in @fw/*framework* [:platform :raycast])]
+  (when-let [rt (get-in @(fw/fw-atom) [:platform :raycast])]
     (raycast-entities rt world-id start-x start-y start-z dir-x dir-y dir-z max-distance)))
 (defn raycast-combined* [world-id start-x start-y start-z dir-x dir-y dir-z max-distance]
-  (when-let [rt (get-in @fw/*framework* [:platform :raycast])]
+  (when-let [rt (get-in @(fw/fw-atom) [:platform :raycast])]
     (raycast-combined rt world-id start-x start-y start-z dir-x dir-y dir-z max-distance)))
 (defn get-player-look-vector* [player-uuid]
-  (when-let [rt (get-in @fw/*framework* [:platform :raycast])]
+  (when-let [rt (get-in @(fw/fw-atom) [:platform :raycast])]
     (get-player-look-vector rt player-uuid)))
 (defn raycast-from-player* [player-uuid max-distance living-only?]
-  (when-let [rt (get-in @fw/*framework* [:platform :raycast])]
+  (when-let [rt (get-in @(fw/fw-atom) [:platform :raycast])]
     (raycast-from-player rt player-uuid max-distance living-only?)))

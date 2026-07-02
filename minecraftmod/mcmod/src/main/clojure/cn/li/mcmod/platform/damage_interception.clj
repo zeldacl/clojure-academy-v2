@@ -12,13 +12,13 @@
   [impl label]
   (when-let [fw-atom fw/*framework*] (swap! fw-atom assoc-in [:platform :damage-interception] impl)) nil)
 
-(defn available? [] (boolean (get-in @fw/*framework* [:platform :damage-interception])))
-(defn current [] (get-in @fw/*framework* [:platform :damage-interception]))
+(defn available? [] (boolean (get-in @(fw/fw-atom) [:platform :damage-interception])))
+(defn current [] (get-in @(fw/fw-atom) [:platform :damage-interception]))
 (defn call-with-runtime [rt f] (f rt))
 
 (defn register-damage-handler!* [handler-id handler-fn priority]
-  (when-let [rt (get-in @fw/*framework* [:platform :damage-interception])]
+  (when-let [rt (get-in @(fw/fw-atom) [:platform :damage-interception])]
     (register-damage-handler! rt handler-id handler-fn priority)))
 (defn unregister-damage-handler!* [handler-id]
-  (when-let [rt (get-in @fw/*framework* [:platform :damage-interception])]
+  (when-let [rt (get-in @(fw/fw-atom) [:platform :damage-interception])]
     (unregister-damage-handler! rt handler-id)))

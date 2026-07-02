@@ -17,58 +17,61 @@
      B) Freeze :registry after content init: (registry/freeze-all! fw)"
   (:require [cn.li.mcmod.aot :as aot]))
 
+(def *framework*
+  "Single var for lifecycle-wide Framework access.
+
+   INITIALIZED TO nil — the real atom is injected at runtime via alter-var-root.
+   Keeping nil during AOT compilation prevents any compile-time atom instantiation,
+   macro expansion, or classloader pollution.
+
+   At startup, the platform entry point calls:
+     (alter-var-root #'*framework* (constantly (atom full-state)))
+
+   No ^:dynamic — every thread sees the same atom via direct var deref.
+   Zero ThreadLocal overhead, zero async NPE on ForkJoinPool.
+
+   Tests inject mock instances via alter-var-root in setup."
+  nil)
+
 (defn create-framework
-  "Create a fresh Framework atom. Returns nil during AOT compilation.
-
-   The returned atom is the single source of truth for all system-level state.
-   Created once at mod entry, bound to *framework* for the entire lifecycle.
-
-   Sub-namespaces:
-     :registry/* — static content registries (blocks, items, entities, particles, etc.)
-                   Populated during content init, frozen afterwards.
-     :service/* — runtime dynamic services (lifecycle callbacks, ability-runtime)
-                  Read/write during gameplay via service API.
-     :platform/* — platform adapter function maps (world ops, nbt ops, etc.)
-                   Installed at bootstrap, read-only thereafter."
+  "Create a fresh Framework atom with the full initial state.
+   Returns nil during AOT compilation — the real atom is created
+   at runtime and injected into *framework* via alter-var-root."
   []
   (when-not (aot/compiling?)
-    (atom {:registry {:blocks      {}
-                      :items       {}
-                      :entities    {}
-                      :fluids      {}
-                      :effects     {}
-                      :sounds      {}
-                      :particles   {}
-                      :loot        {}
-                      :configs     {}
-                      :guis        {}
-                      :slots       {}
-                      :tiles       {}
-                      :tile-kinds  {}
-                      :hooks       {}
-                      :handlers    {}
-                      :commands    {}
-                      :energy      {}
-                      :providers   {}
-                      :keybinds    {}
-                      :messages    {}
-                      :integrations {}}
-           :service {:lifecycle {:content-init-fn nil
-                                 :runtime-content-activation-fn nil
-                                 :datagen-metadata-init-fns []
-                                 :client-init-fns []
-                                 :post-spi-client-init-fns []}}
-           :platform {}})))
+    (atom
+      {:registry {:blocks      {}
+                  :items       {}
+                  :entities    {}
+                  :fluids      {}
+                  :effects     {}
+                  :sounds      {}
+                  :particles   {}
+                  :loot        {}
+                  :configs     {}
+                  :guis        {}
+                  :slots       {}
+                  :tiles       {}
+                  :tile-kinds  {}
+                  :hooks       {}
+                  :handlers    {}
+                  :commands    {}
+                  :energy      {}
+                  :providers   {}
+                  :keybinds    {}
+                  :messages    {}
+                  :integrations {}}
+       :service {:lifecycle {:content-init-fn nil
+                             :runtime-content-activation-fn nil
+                             :datagen-metadata-init-fns []
+                             :client-init-fns []
+                             :post-spi-client-init-fns []}}
+       :platform {}})))
 
-(def ^:dynamic *framework*
-  "Single dynamic var for lifecycle-wide Framework access.
-
-   Replaces ~45 individual *-runtime* dynamic vars + ~32 platform SPI dynamic vars.
-
-   Thread safety: this var is based on JVM ThreadLocal. Before crossing async
-   boundaries (future, Netty callbacks, enqueueWork), capture the atom instance:
-     (let [fw *framework*]
-       (future (get-in @fw [:registry :blocks id])))
-
-   Never deref *framework* directly on async threads — it will be nil."
-  nil)
+(defn fw-atom
+  "Return the current Framework atom.
+   Always returns a valid atom — the empty initial atom before startup,
+   or the fully-populated atom after create-framework completes."
+  ^clojure.lang.IAtom
+  []
+  *framework*)

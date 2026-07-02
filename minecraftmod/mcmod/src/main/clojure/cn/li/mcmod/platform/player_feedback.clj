@@ -34,10 +34,10 @@
 ;; ============================================================================
 
 (defn available? []
-  (boolean (get-in @fw/*framework* [:platform :player-feedback])))
+  (boolean (get-in @(fw/fw-atom) [:platform :player-feedback])))
 
 (defn current []
-  (get-in @fw/*framework* [:platform :player-feedback]))
+  (get-in @(fw/fw-atom) [:platform :player-feedback]))
 
 ;; ============================================================================
 ;; Operations — read impl from Framework atom (no ThreadLocal dependency)
@@ -46,7 +46,7 @@
 (defn send-feedback!*
   "Send feedback to a player. Returns false if adapter not installed."
   [player-uuid payload]
-  (if-let [rt (get-in @fw/*framework* [:platform :player-feedback])]
+  (if-let [rt (get-in @(fw/fw-atom) [:platform :player-feedback])]
     (boolean (send-player-feedback! rt player-uuid payload))
     (do
       (log/debug "Player feedback unavailable; dropping payload" payload)

@@ -41,11 +41,11 @@
 
 (defn get-sound
 	[sound-id]
-	(get-in @fw/*framework* [:registry :sounds sound-id]))
+	(get-in @(fw/fw-atom) [:registry :sounds sound-id]))
 
 (defn list-sounds
 	[]
-	(keys (get-in @fw/*framework* [:registry :sounds])))
+	(keys (get-in @(fw/fw-atom) [:registry :sounds])))
 
 (defmacro defsound
 	"Define a sound event.

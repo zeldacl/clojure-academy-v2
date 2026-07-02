@@ -40,7 +40,7 @@
 
 (defn- block-registry-state
   []
-  (registry-core/snapshot (dsl-core/get-block-registry)))
+  (dsl-core/get-block-registry))
 
 (defn get-block-spec
   "Get a block specification by block-id from the registry
