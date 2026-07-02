@@ -1,66 +1,35 @@
 (ns cn.li.ac.command.dsl
   "Command DSL - Declarative command definition using Clojure macros"
-  (:require [cn.li.mcmod.util.log :as log]))
+  (:require [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.util.log :as log]))
 
-;; Command Registry - stores all defined commands
-(defn default-command-registry-runtime-state
-  []
-  {:commands {}
-   :frozen? false})
+;; Command Registry — Framework [:registry :commands :dsl]
 
-(defn create-command-registry-runtime
-  ([] (create-command-registry-runtime {}))
-  ([{:keys [state*]
-     :or {state* (atom (default-command-registry-runtime-state))}}]
-   {::runtime ::command-registry-runtime
-    :state* state*}))
+(def ^:private cmd-path [:registry :commands :dsl])
 
-(def ^:private _command-registry-runtime (delay (create-command-registry-runtime)))
+(defn- command-registry-state-snapshot []
+  (if-let [fw-atom fw/*framework*]
+    (get-in @fw-atom cmd-path {:commands {} :frozen? false})
+    {:commands {} :frozen? false}))
 
-(def ^:dynamic *command-registry-runtime* nil)
+(defn- update-command-registry-state! [f & args]
+  (when-let [fw-atom fw/*framework*]
+    (swap! fw-atom update-in cmd-path
+           (fn [current] (apply f (or current {:commands {} :frozen? false}) args))))
+  nil)
 
-(defn call-with-command-registry-runtime
-  [runtime f]
-  (when-not (and (map? runtime)
-                 (= ::command-registry-runtime (::runtime runtime))
-                 (some? (:state* runtime)))
-    (throw (ex-info "Expected command registry runtime" {:runtime runtime})))
-  (binding [*command-registry-runtime* runtime]
-    (f)))
-
-(defn- current-command-registry-runtime
-  []
-  (or *command-registry-runtime*
-      @_command-registry-runtime))
-
-(defn- command-registry-state-atom
-  []
-  (:state* (current-command-registry-runtime)))
-
-(defn- command-registry-state-snapshot
-  []
-  @(command-registry-state-atom))
-
-(defn- update-command-registry-state!
-  [f & args]
-  (apply swap! (command-registry-state-atom) f args))
-
-(defn- assert-command-registry-open!
-  []
+(defn- assert-command-registry-open! []
   (when (:frozen? (command-registry-state-snapshot))
     (throw (ex-info "Command registry is frozen" {}))))
 
-(defn command-registry-snapshot
-  []
+(defn command-registry-snapshot []
   (command-registry-state-snapshot))
 
 (defn reset-command-registry-for-test!
   ([] (reset-command-registry-for-test! {}))
-  ([{:keys [commands frozen?]
-     :or {commands {} frozen? false}}]
-   (reset! (command-registry-state-atom)
-           {:commands commands
-            :frozen? frozen?})
+  ([{:keys [commands frozen?] :or {commands {} frozen? false}}]
+   (when-let [fw-atom fw/*framework*]
+     (swap! fw-atom assoc-in cmd-path {:commands commands :frozen? frozen?}))
    nil))
 
 (defn freeze-command-registry!

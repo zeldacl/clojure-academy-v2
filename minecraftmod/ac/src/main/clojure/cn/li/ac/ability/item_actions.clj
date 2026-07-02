@@ -5,84 +5,52 @@
   Platform code queries this registry to resolve and execute item actions.
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.runtime-registry :as runtime-registry]
+  (:require [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
 ;; Item → action resolution
 ;; ============================================================================
 
-(defn default-item-action-registries-runtime-state
-  []
-  {:item-actions {}
-   :action-handlers {}
-   :item-entity-spawns {}
-   :frozen? false})
+;; Registry — Framework [:registry :handlers :item-actions]
 
-(defn create-item-action-registries-runtime
-  ([] (create-item-action-registries-runtime {}))
-  ([{:keys [state*]
-     :or {state* (atom (default-item-action-registries-runtime-state))}}]
-   {::runtime ::item-action-registries-runtime
-    :state* state*}))
+(def ^:private ia-path [:registry :handlers :item-actions])
 
-(def ^:private _item-action-registries-runtime (delay (create-item-action-registries-runtime)))
+(defn- default-state []
+  {:item-actions {} :action-handlers {} :item-entity-spawns {} :frozen? false})
 
-(def ^:dynamic *item-action-registries-runtime* nil)
+(defn- item-action-registries-state-snapshot []
+  (if-let [fw-atom fw/*framework*]
+    (get-in @fw-atom ia-path (default-state))
+    (default-state)))
 
-(defn call-with-item-action-registries-runtime
-  [runtime f]
-  (runtime-registry/assert-runtime!
-    runtime
-    ::item-action-registries-runtime
-    "Expected item action registries runtime")
-  (binding [*item-action-registries-runtime* runtime]
-    (f)))
+(defn- update-item-action-registries-state! [f & args]
+  (when-let [fw-atom fw/*framework*]
+    (swap! fw-atom update-in ia-path
+           (fn [current] (apply f (or current (default-state)) args))))
+  nil)
 
-(defn- current-item-action-registries-runtime
-  []
-  (or *item-action-registries-runtime*
-      @_item-action-registries-runtime))
+(defn- assert-registries-open! []
+  (when (:frozen? (item-action-registries-state-snapshot))
+    (throw (ex-info "Item action registries are frozen" {}))))
 
-(defn- item-action-registries-state-atom
-  []
-  (runtime-registry/state-atom (current-item-action-registries-runtime)))
-
-(defn- item-action-registries-state-snapshot
-  []
-  (runtime-registry/snapshot (current-item-action-registries-runtime)))
-
-(defn- update-item-action-registries-state!
-  [f & args]
-  (apply runtime-registry/update-state! (current-item-action-registries-runtime) f args))
-
-(defn- assert-registries-open!
-  []
-  (runtime-registry/assert-open!
-    (current-item-action-registries-runtime)
-    :frozen?
-    "Item action registries are frozen"))
-
-(defn item-action-registries-snapshot
-  []
+(defn item-action-registries-snapshot []
   (item-action-registries-state-snapshot))
 
 (defn reset-item-action-registries-for-test!
-  ([]  
+  ([]
    (reset-item-action-registries-for-test! {}))
   ([{:keys [item-actions action-handlers item-entity-spawns frozen?]
      :or {item-actions {} action-handlers {} item-entity-spawns {} frozen? false}}]
-   (runtime-registry/reset-state!
-     (current-item-action-registries-runtime)
-     {:item-actions item-actions
-      :action-handlers action-handlers
-      :item-entity-spawns item-entity-spawns
-      :frozen? frozen?})
+   (when-let [fw-atom fw/*framework*]
+     (swap! fw-atom assoc-in ia-path {:item-actions item-actions
+                                      :action-handlers action-handlers
+                                      :item-entity-spawns item-entity-spawns
+                                      :frozen? frozen?}))
    nil))
 
-(defn freeze-item-action-registries!
-  []
-  (runtime-registry/freeze! (current-item-action-registries-runtime) :frozen?))
+(defn freeze-item-action-registries! []
+  (update-item-action-registries-state! assoc :frozen? true))
 
 (defn register-item-action!
   "Map an item id (e.g. \"ac:coin\") to an action keyword (e.g. :railgun-coin-throw)."

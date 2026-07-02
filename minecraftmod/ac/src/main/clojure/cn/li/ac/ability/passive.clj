@@ -1,116 +1,68 @@
 (ns cn.li.ac.ability.passive
-  "Helpers for passive skill calc-event wiring."
-  (:require 
-            [cn.li.ac.ability.service.runtime-store :as store]
+  "Helpers for passive skill calc-event wiring.
+
+  Registry stored in Framework [:registry :handlers :passive]."
+  (:require [cn.li.ac.ability.service.runtime-store :as store]
             [cn.li.ac.ability.registry.event :as evt]
             [cn.li.ac.ability.model.ability :as adata]
-            [cn.li.mcmod.hooks.core :as runtime-hooks]))
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
+            [cn.li.mcmod.framework :as fw]))
 
-(defn- resolve-session-id
-  []
+(defn- resolve-session-id []
   (runtime-hooks/require-player-state-session-id "passive"))
 
-(defn- runtime-player-state
-  [uuid]
+(defn- runtime-player-state [uuid]
   (store/get-player-state* (resolve-session-id) uuid))
 
-(defn- runtime-player-state-in-session
-  [session-id uuid]
+(defn- runtime-player-state-in-session [session-id uuid]
   (store/get-player-state* session-id uuid))
 
-(defn default-passive-handler-runtime-state
-  []
-  {:registered-handlers #{}
-   :frozen? false})
+;; Registry — Framework [:registry :handlers :passive]
 
-(defn create-passive-handler-runtime
-  ([]
-   (create-passive-handler-runtime {}))
-  ([{:keys [state*]
-     :or {state* (atom (default-passive-handler-runtime-state))}}]
-   {::runtime ::passive-handler-runtime
-    :state* state*}))
+(def ^:private passive-path [:registry :handlers :passive])
 
-(def ^:dynamic *passive-handler-runtime* nil)
+(defn- passive-handler-state-snapshot []
+  (if-let [fw-atom fw/*framework*]
+    (get-in @fw-atom passive-path {:registered-handlers #{} :frozen? false})
+    {:registered-handlers #{} :frozen? false}))
 
-(def ^:private _passive-handler-runtime (delay (create-passive-handler-runtime)))
+(defn- update-passive-handler-state! [f & args]
+  (when-let [fw-atom fw/*framework*]
+    (swap! fw-atom update-in passive-path
+           (fn [current] (apply f (or current {:registered-handlers #{} :frozen? false}) args))))
+  nil)
 
-(declare learned-skill-in-session?
-         register-passive-calc-handler!)
-
-(defn- passive-handler-runtime?
-  [runtime]
-  (and (map? runtime)
-       (= ::passive-handler-runtime (::runtime runtime))
-       (some? (:state* runtime))))
-
-(defn call-with-passive-handler-runtime
-  [runtime f]
-  (when-not (passive-handler-runtime? runtime)
-    (throw (ex-info "Expected passive handler runtime"
-                    {:runtime runtime})))
-  (binding [*passive-handler-runtime* runtime]
-    (f)))
-
-(defmacro with-passive-handler-runtime
-  [runtime & body]
-  `(call-with-passive-handler-runtime ~runtime (fn [] ~@body)))
-
-(defn- current-passive-handler-runtime
-  []
-  (or *passive-handler-runtime*
-      @_passive-handler-runtime))
-
-(defn- passive-handler-state-atom
-  []
-  (:state* (current-passive-handler-runtime)))
-
-(defn- passive-handler-state-snapshot
-  []
-  @(passive-handler-state-atom))
-
-(defn- update-passive-handler-state!
-  [f & args]
-  (apply swap! (passive-handler-state-atom) f args))
-
-(defn- assert-registry-open!
-  []
+(defn- assert-registry-open! []
   (when (:frozen? (passive-handler-state-snapshot))
     (throw (ex-info "Passive handler registry is frozen" {}))))
 
-(defn passive-handler-registry-snapshot
-  []
+(defn passive-handler-registry-snapshot []
   (:registered-handlers (passive-handler-state-snapshot)))
 
 (defn reset-passive-handler-registry-for-test!
   ([]
    (reset-passive-handler-registry-for-test! #{}))
   ([snapshot]
-   (reset! (passive-handler-state-atom)
-           {:registered-handlers (or snapshot #{})
-            :frozen? false})
+   (when-let [fw-atom fw/*framework*]
+     (swap! fw-atom assoc-in passive-path {:registered-handlers (or snapshot #{}) :frozen? false}))
    nil))
 
-(defn freeze-passive-handler-registry!
-  []
+(defn freeze-passive-handler-registry! []
   (update-passive-handler-state! assoc :frozen? true)
   nil)
 
-(defn learned-skill?
-  [uuid skill-id]
-  (learned-skill-in-session? (resolve-session-id)
-                             uuid
-                             skill-id))
+(declare learned-skill-in-session?)
 
-(defn learned-skill-in-session?
-  [session-id uuid skill-id]
+(defn learned-skill? [uuid skill-id]
+  (learned-skill-in-session? (resolve-session-id) uuid skill-id))
+
+(defn learned-skill-in-session? [session-id uuid skill-id]
   (boolean
     (when-let [state (runtime-player-state-in-session session-id uuid)]
       (adata/is-learned? (:ability-data state) skill-id))))
 
 (defn register-passive-calc-handler!
-  "Register a calc-event transform for one passive skill.
-  transform-fn receives (current-value event-map) and must return a number."
+  "Register a calc-event transform for one passive skill."
   [handler-id event-type skill-id transform-fn]
   (when (keyword? handler-id)
     (if (contains? (:registered-handlers (passive-handler-state-snapshot)) handler-id)
@@ -127,4 +79,3 @@
                 (double (transform-fn value event))
                 value))))
         true))))
-
