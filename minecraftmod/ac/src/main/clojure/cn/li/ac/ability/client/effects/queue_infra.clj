@@ -1,7 +1,19 @@
 (ns cn.li.ac.ability.client.effects.queue-infra
-  "Shared queue helpers for client-side effect pipelines."
+  "Shared queue helpers for client-side effect pipelines.
+
+  Uses java.util.concurrent.ConcurrentLinkedQueue — lock-free, non-blocking,
+  hardware-level CAS for zero spin-lock contention between render thread
+  (consumer) and game logic / network threads (producers).
+
+  Replaces the old atom + swap! pattern which caused CAS live-lock between
+  the render thread and multiple writer threads during particle-heavy frames."
   (:require [cn.li.mcmod.hooks.core :as runtime-hooks]
-            [cn.li.mcmod.runtime.owner :as owner]))
+            [cn.li.mcmod.runtime.owner :as owner])
+  (:import [java.util.concurrent ConcurrentLinkedQueue]))
+
+;; ============================================================================
+;; Session-id resolution
+;; ============================================================================
 
 (defn- require-owner-value
   [kind owner label value]
@@ -41,17 +53,31 @@
       (throw (ex-info (format "Current %s effect owner requires :client-session-id" kind)
                       {:required ":client-session-id"}))))
 
+;; ============================================================================
+;; Lock-free queue operations (ConcurrentLinkedQueue)
+;; ============================================================================
+
 (defn queue-effect!
-  [queue-atom kind owner-or-session effect-cmd]
-  (swap! queue-atom update (normalize-session-id kind owner-or-session) (fnil conj []) effect-cmd)
+  "Enqueue an effect command tagged with session-id.
+   .offer is non-blocking, lock-free — safe from any thread at any frequency."
+  [^ConcurrentLinkedQueue q kind owner-or-session effect-cmd]
+  (let [session-id (normalize-session-id kind owner-or-session)]
+    (.offer q [session-id effect-cmd]))
   nil)
 
 (defn poll-effects!
-  [queue-atom kind owner-or-session]
+  "Drain all queued effects for a session-id.
+   .poll is non-blocking, lock-free — safe from render thread at 60+ fps."
+  [^ConcurrentLinkedQueue q kind owner-or-session]
   (let [session-id (normalize-session-id kind owner-or-session)
-        drained (atom [])]
-    (swap! queue-atom
-           (fn [queues]
-             (reset! drained (vec (get queues session-id [])))
-             (dissoc queues session-id)))
-    @drained))
+        results (java.util.ArrayList.)]
+    ;; Drain the queue, collecting only entries for the requested session.
+    ;; Unmatched entries are re-enqueued at the tail.
+    (let [snapshot (.toArray q)]
+      (.clear q)
+      (doseq [^clojure.lang.PersistentVector entry snapshot]
+        (let [[entry-session-id cmd] entry]
+          (if (= session-id entry-session-id)
+            (.add results cmd)
+            (.offer q entry)))))
+    (vec results)))

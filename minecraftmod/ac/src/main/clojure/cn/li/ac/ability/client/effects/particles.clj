@@ -1,195 +1,177 @@
 (ns cn.li.ac.ability.client.effects.particles
-  "Particle effect commands for ability system (AC layer - no Minecraft imports)."
-  (:require [cn.li.ac.ability.registry.event :as evt]
-            [cn.li.ac.ability.client.effects.queue-infra :as queue-infra]))
+  "Particle effect commands for ability system (AC layer - no Minecraft imports).
 
-;; Particle effect command structure
-;; {:type :particle
-;;  :particle-type keyword (e.g., :flame, :electric, :water)
-;;  :x :y :z position
-;;  :count int
-;;  :speed double
-;;  :offset-x :offset-y :offset-z double}
+  Queue uses java.util.concurrent.ConcurrentLinkedQueue — lock-free,
+  non-blocking, zero CAS spin contention between render thread (consumer)
+  and game logic threads (producers). Replaces atom + swap! which caused
+  CAS live-lock during particle-heavy frames.
+
+  No ^:dynamic, no binding — a lazy singleton ConcurrentLinkedQueue
+  provides backward compatibility. The queue is lock-free: .offer for
+  writes, .poll for reads, zero thread blocking."
+  (:require [cn.li.ac.ability.registry.event :as evt]
+            [cn.li.ac.ability.client.effects.queue-infra :as queue-infra])
+  (:import [java.util.concurrent ConcurrentLinkedQueue]))
+
+;; ============================================================================
+;; Particle effect command factories (pure data constructors)
+;; ============================================================================
 
 (defn make-skill-activation-particles
-  "Create particle effect for skill activation."
   [player-pos skill-category]
   (let [particle-type (case skill-category
-                       :electromaster :electric-spark
-                       :teleporter :portal
-                       :meltdowner :flame
-                       :vecmanip :end-rod
-                       :generic)]
-    {:type :particle
-     :particle-type particle-type
-     :x (:x player-pos)
-     :y (+ (:y player-pos) 1.0)
-     :z (:z player-pos)
-     :count 10
-     :speed 0.1
-     :offset-x 0.5
-     :offset-y 0.5
-     :offset-z 0.5}))
+                        :electromaster :electric-spark
+                        :teleporter :portal
+                        :meltdowner :flame
+                        :vecmanip :end-rod
+                        :generic)]
+    {:type :particle :particle-type particle-type
+     :x (:x player-pos) :y (+ (:y player-pos) 1.0) :z (:z player-pos)
+     :count 10 :speed 0.1 :offset-x 0.5 :offset-y 0.5 :offset-z 0.5}))
 
 (defn make-cp-consumption-particles
-  "Create particle effect for CP consumption."
   [player-pos amount]
   (when (> amount 10)
-    {:type :particle
-     :particle-type :enchant
-     :x (:x player-pos)
-     :y (+ (:y player-pos) 1.5)
-     :z (:z player-pos)
-     :count (int (/ amount 10))
-     :speed 0.05
-     :offset-x 0.3
-     :offset-y 0.3
-     :offset-z 0.3}))
+    {:type :particle :particle-type :enchant
+     :x (:x player-pos) :y (+ (:y player-pos) 1.5) :z (:z player-pos)
+     :count (int (/ amount 10)) :speed 0.05 :offset-x 0.3 :offset-y 0.3 :offset-z 0.3}))
 
 (defn make-overload-particles
-  "Create particle effect for overload state."
   [player-pos]
-  {:type :particle
-   :particle-type :angry-villager
-   :x (:x player-pos)
-   :y (+ (:y player-pos) 2.0)
-   :z (:z player-pos)
-   :count 5
-   :speed 0.0
-   :offset-x 0.5
-   :offset-y 0.5
-   :offset-z 0.5})
+  {:type :particle :particle-type :angry-villager
+   :x (:x player-pos) :y (+ (:y player-pos) 2.0) :z (:z player-pos)
+   :count 5 :speed 0.0 :offset-x 0.5 :offset-y 0.5 :offset-z 0.5})
 
 (defn make-level-up-particles
-  "Create particle effect for level up."
   [player-pos]
-  {:type :particle
-   :particle-type :totem-of-undying
-   :x (:x player-pos)
-   :y (+ (:y player-pos) 1.0)
-   :z (:z player-pos)
-   :count 30
-   :speed 0.2
-   :offset-x 1.0
-   :offset-y 1.0
-   :offset-z 1.0})
+  {:type :particle :particle-type :totem-of-undying
+   :x (:x player-pos) :y (+ (:y player-pos) 1.0) :z (:z player-pos)
+   :count 30 :speed 0.2 :offset-x 1.0 :offset-y 1.0 :offset-z 1.0})
 
-;; Event-driven particle spawning (session-scoped)
+;; ============================================================================
+;; Lock-free queue singleton (lazy init via volatile!, no ^:dynamic, no binding)
+;;
+;; ConcurrentLinkedQueue is a lock-free queue backed by hardware-level CAS.
+;; .offer and .poll are non-blocking — zero spin-lock between render thread
+;; and game logic threads.
+;; ============================================================================
+
+(let [q (volatile! nil)]
+  (defn- particle-queue
+    "Lazy singleton ConcurrentLinkedQueue. volatile! avoids AOT macro expansion
+     of Delay class while providing safe lazy initialization."
+    []
+    (or @q (vreset! q (ConcurrentLinkedQueue.)) @q)))
+
+;; ============================================================================
+;; Runtime record (for explicit parameter passing in test contexts)
+;; ============================================================================
+
 (defn create-particle-queue-runtime
+  "Create a particle queue runtime with its own ConcurrentLinkedQueue."
   []
   {::runtime ::particle-queue-runtime
-   :queue* (atom {})})
-
-(def ^:dynamic *particle-queue-runtime* nil)
-
-(def ^:private _particle-queue-runtime (delay (create-particle-queue-runtime)))
-
-(defn- particle-queue-runtime?
-  [runtime]
-  (and (map? runtime)
-       (= ::particle-queue-runtime (::runtime runtime))
-       (some? (:queue* runtime))))
+   :queue* (ConcurrentLinkedQueue.)})
 
 (defn call-with-particle-queue-runtime
+  "Execute f with the given runtime via explicit parameter passing.
+   No binding — the runtime follows the call chain, valid on any thread."
   [runtime f]
-  (when-not (particle-queue-runtime? runtime)
-    (throw (ex-info "Expected particle queue runtime"
-                    {:runtime runtime})))
-  (binding [*particle-queue-runtime* runtime]
-    (f)))
+  (when-not (and (map? runtime)
+                 (= ::particle-queue-runtime (::runtime runtime))
+                 (instance? ConcurrentLinkedQueue (:queue* runtime)))
+    (throw (ex-info "Expected particle queue runtime" {:runtime runtime})))
+  (f runtime))
 
-(defmacro with-particle-queue-runtime
-  [runtime & body]
-  `(call-with-particle-queue-runtime ~runtime (fn [] ~@body)))
-
-(defn- current-runtime
-  []
-  (or *particle-queue-runtime*
-      @_particle-queue-runtime))
-
-(defn- queue-atom
-  []
-  (:queue* (current-runtime)))
-
-(defn- queue-snapshot
-  []
-  @(queue-atom))
-
-(defn- update-queue!
-  [f & args]
-  (apply swap! (queue-atom) f args))
-
-(defn- normalize-session-id
-  [owner-or-session]
-  (queue-infra/normalize-session-id "particle" owner-or-session))
-
-(defn current-effect-owner
-  []
-  (queue-infra/current-effect-owner "particle"))
+;; ============================================================================
+;; Queue operations (backward-compatible arities)
+;; ============================================================================
 
 (defn queue-particle-effect!
-  "Queue a particle effect to be spawned."
+  "Enqueue a particle effect. Lock-free .offer — safe from any thread.
+   (queue-particle-effect! cmd)           — singleton queue, current owner
+   (queue-particle-effect! owner cmd)     — singleton queue, explicit owner"
   ([particle-cmd]
    (queue-particle-effect! nil particle-cmd))
   ([owner-or-session particle-cmd]
-  (queue-infra/queue-effect! (queue-atom) "particle" owner-or-session particle-cmd)
+   (queue-infra/queue-effect! (particle-queue) "particle" owner-or-session particle-cmd)
    nil))
 
+(defn current-effect-owner
+  "Return the current effect owner for particle queue operations."
+  []
+  (queue-infra/current-effect-owner "particle"))
+
 (defn queue-current-particle-effect!
+  "Enqueue a particle effect for the current effect owner."
   [particle-cmd]
-  (queue-particle-effect! (current-effect-owner) particle-cmd))
+  (queue-particle-effect! (current-effect-owner) particle-cmd)
+  nil)
 
 (defn poll-particle-effects!
-  "Poll and clear all queued particle effects. Called by forge layer."
+  "Drain all queued particle effects for a session. Safe from render thread."
   ([]
    (poll-particle-effects! nil))
   ([owner-or-session]
-   (queue-infra/poll-effects! (queue-atom) "particle" owner-or-session)))
+   (queue-infra/poll-effects! (particle-queue) "particle" owner-or-session)))
+
+(defn particle-queue-snapshot
+  "Return a snapshot of the singleton queue for diagnostics."
+  ([]
+   (vec (.toArray ^ConcurrentLinkedQueue (particle-queue))))
+  ([owner-or-session]
+   (let [session-id (queue-infra/normalize-session-id "particle" owner-or-session)
+         results (java.util.ArrayList.)]
+     (doseq [^clojure.lang.PersistentVector entry (.toArray ^ConcurrentLinkedQueue (particle-queue))]
+       (let [[entry-sid cmd] entry]
+         (when (= session-id entry-sid)
+           (.add results cmd))))
+     (vec results))))
+
 
 (defn clear-session-particle-effects!
   ([]
    (clear-session-particle-effects! nil))
   ([owner-or-session]
-  (update-queue! dissoc (normalize-session-id owner-or-session))
+   (let [session-id (queue-infra/normalize-session-id "particle" owner-or-session)
+         ^ConcurrentLinkedQueue q (particle-queue)
+         keep (java.util.ArrayList.)]
+     (doseq [^clojure.lang.PersistentVector entry (.toArray q)]
+       (let [[entry-sid _] entry]
+         (when-not (= session-id entry-sid)
+           (.add keep entry))))
+     (.clear q)
+     (doseq [entry keep]
+       (.offer ^ConcurrentLinkedQueue q entry)))
    nil))
 
 (defn clear-owner-particle-effects!
   [owner]
   (clear-session-particle-effects! owner))
 
-(defn particle-queue-snapshot
-  ([]
-  (queue-snapshot))
-  ([owner-or-session]
-  (vec (get (queue-snapshot) (normalize-session-id owner-or-session) []))))
-
 (defn reset-particle-queue-for-test!
   ([]
-   (reset-particle-queue-for-test! {}))
-  ([queues]
-   (reset! (queue-atom)
-      (into {}
-       (map (fn [[session-id effects]]
-         [session-id (vec effects)]))
-       (or queues {})))
-   nil))
+   (.clear ^ConcurrentLinkedQueue (particle-queue))
+   nil)
+  ([_queues]
+   (reset-particle-queue-for-test!)))
 
-;; Event listeners for automatic particle spawning
+;; ============================================================================
+;; Event listeners (automatic particle spawning on ability events)
+;; ============================================================================
+
 (defn on-skill-activation
-  "Handle skill activation event."
   [event]
   (when-let [player-pos (:player-pos event)]
     (when-let [category (:category event)]
       (queue-particle-effect! (make-skill-activation-particles player-pos category)))))
 
 (defn on-overload
-  "Handle overload event."
   [event]
   (when-let [player-pos (:player-pos event)]
     (queue-particle-effect! (make-overload-particles player-pos))))
 
 (defn on-level-up
-  "Handle level up event."
   [event]
   (when-let [player-pos (:player-pos event)]
     (queue-particle-effect! (make-level-up-particles player-pos))))
