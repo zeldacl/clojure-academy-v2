@@ -11,7 +11,7 @@
 (def ^:private messages-path [:registry :messages])
 
 (defn- message-ids-snapshot []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (get-in @fw-atom messages-path {})
     {}))
 
@@ -24,7 +24,7 @@
   (when-not (and (string? message-id) (not (empty? message-id)))
     (throw (ex-info "Message id must be a non-empty string"
                     {:message-key message-key :message-id message-id})))
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom assoc-in (conj messages-path message-key) message-id))
   nil)
 
@@ -49,6 +49,6 @@
 (defn clear-messages!
   "Clear registered message ids. Intended for tests."
   []
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom assoc-in messages-path {}))
   nil)

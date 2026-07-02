@@ -13,7 +13,7 @@
 (def ^:private ct-path [:service :context-transport])
 
 (defn- context-transport-state-atom []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (or (get-in @fw-atom ct-path)
         (let [a (atom (default-context-transport-runtime-state))]
           (swap! fw-atom assoc-in ct-path a) a))

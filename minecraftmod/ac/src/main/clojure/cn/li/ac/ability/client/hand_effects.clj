@@ -17,7 +17,7 @@
 (def ^:private cp-path [:service :camera-pitch])
 
 (defn- camera-pitch-deltas-atom []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (or (get-in @fw-atom cp-path)
         (let [a (atom {})] (swap! fw-atom assoc-in cp-path a) a))
     (atom {})))
@@ -112,7 +112,7 @@
 (def ^:private he-path [:service :hand-effects])
 
 (defn- hand-effect-state-atom []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (or (get-in @fw-atom he-path)
         (let [a (atom (default-hand-effect-runtime-state))]
           (swap! fw-atom assoc-in he-path a) a))

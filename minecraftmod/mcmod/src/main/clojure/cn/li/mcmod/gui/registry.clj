@@ -13,12 +13,12 @@
    :screen-factories {}})
 
 (defn- gui-registry-snapshot []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (get-in @fw-atom gui-path (default-gui-state))
     (default-gui-state)))
 
 (defn- update-gui-registry! [f & args]
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom update-in gui-path
            (fn [current] (apply f (or current (default-gui-state)) args))))
   nil)

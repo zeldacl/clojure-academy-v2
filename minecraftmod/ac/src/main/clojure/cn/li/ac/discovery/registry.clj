@@ -9,12 +9,12 @@
 (def ^:private prov-path [:registry :providers :discovery])
 
 (defn- provider-registry-state-snapshot []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (get-in @fw-atom prov-path {:providers {} :frozen? false})
     {:providers {} :frozen? false}))
 
 (defn- update-provider-registry-state! [f & args]
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom update-in prov-path
            (fn [current] (apply f (or current {:providers {} :frozen? false}) args))))
   nil)
@@ -29,7 +29,7 @@
 (defn reset-provider-registry-for-test!
   ([] (reset-provider-registry-for-test! {}))
   ([{:keys [providers frozen?] :or {providers {} frozen? false}}]
-   (when-let [fw-atom fw/*framework*]
+   (when-let [fw-atom (fw/fw-atom)]
      (swap! fw-atom assoc-in prov-path {:providers providers :frozen? frozen?}))
    nil))
 

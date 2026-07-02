@@ -35,7 +35,7 @@
 (def ^:private lsub-path [:service :lifecycle-subscriptions])
 
 (defn- lifecycle-subscriptions-registered-atom []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (or (get-in @fw-atom lsub-path)
         (let [a (atom false)]
           (swap! fw-atom assoc-in lsub-path a) a))

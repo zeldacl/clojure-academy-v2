@@ -13,12 +13,12 @@
 (def ^:private disc-path [:registry :providers :content])
 
 (defn- content-provider-registry-state-snapshot []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (get-in @fw-atom disc-path {:providers {} :frozen? false})
     {:providers {} :frozen? false}))
 
 (defn- update-content-provider-registry-state! [f & args]
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom update-in disc-path
            (fn [current] (apply f (or current {:providers {} :frozen? false}) args))))
   nil)
@@ -36,7 +36,7 @@
   ([] (reset-provider-registry-for-test! {}))
   ([{:keys [providers frozen?]
      :or {providers {} frozen? false}}]
-   (when-let [fw-atom fw/*framework*]
+   (when-let [fw-atom (fw/fw-atom)]
      (swap! fw-atom assoc-in disc-path {:providers providers :frozen? frozen?}))
    nil))
 

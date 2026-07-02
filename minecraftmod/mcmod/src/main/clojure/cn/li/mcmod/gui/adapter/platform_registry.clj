@@ -7,7 +7,7 @@
 (def ^:private platform-path [:registry :guis :platform-impl])
 
 (defn- platform-impl-snapshot []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (get-in @fw-atom platform-path)
     nil))
 
@@ -16,7 +16,7 @@
   (when-not (map? impl-map)
     (throw (ex-info "Expected map for register-gui-platform-impl!"
                     {:impl-map-type (type impl-map)})))
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom assoc-in platform-path impl-map))
   nil)
 

@@ -11,21 +11,21 @@
 (def ^:private slot-path [:registry :slots])
 
 (defn- slot-snapshot []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (get-in @fw-atom slot-path {:slot-validators {}})
     {:slot-validators {}}))
 
 (defn set-slot-validators!
   "Replace all registered slot validators. Intended for tests."
   [validators]
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom assoc-in (conj slot-path :slot-validators) validators))
   nil)
 
 (defn register-slot-validator!
   "Register a slot validator function for a slot category/type keyword."
   [slot-type validator-fn]
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom update-in slot-path
            (fn [current]
              (let [base (or current {:slot-validators {}})]

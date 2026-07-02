@@ -13,12 +13,12 @@
 (def ^:private event-path [:service :ability-events])
 
 (defn- event-subscriber-state-snapshot []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (get-in @fw-atom event-path {:subscribers {} :frozen? false})
     {:subscribers {} :frozen? false}))
 
 (defn- update-event-subscriber-state! [f & args]
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom update-in event-path
            (fn [current] (apply f (or current {:subscribers {} :frozen? false}) args))))
   nil)
@@ -37,7 +37,7 @@
    {::event-subscriber-runtime true :state* state*}))
 
 (defn install-event-subscriber-runtime! [runtime]
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (when-let [state* (:state* runtime)]
       (swap! fw-atom assoc-in event-path @state*)))
   runtime)
@@ -49,7 +49,7 @@
   ([]
    (reset-ability-event-subscribers-for-test! {}))
   ([snapshot]
-   (when-let [fw-atom fw/*framework*]
+   (when-let [fw-atom (fw/fw-atom)]
      (swap! fw-atom assoc-in event-path {:subscribers (or snapshot {}) :frozen? false}))
    nil))
 

@@ -24,12 +24,12 @@
 (def ^:private et-path [:registry :energy])
 
 (defn- energy-type-state-snapshot []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (get-in @fw-atom et-path {:types {} :frozen? false})
     {:types {} :frozen? false}))
 
 (defn- update-energy-type-state! [f & args]
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom update-in et-path
            (fn [current] (apply f (or current {:types {} :frozen? false}) args))))
   nil)
@@ -61,7 +61,7 @@
 (defn energy-types-snapshot [] (energy-type-state-snapshot))
 
 (defn reset-energy-types-for-test! []
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom assoc-in et-path {:types {} :frozen? false}))
   nil)
 

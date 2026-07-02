@@ -17,12 +17,12 @@
 (def ^:private cache-path [:service :world-save-cache])
 
 (defn- pending-save-data-snapshot []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (get-in @fw-atom cache-path {})
     {}))
 
 (defn- update-pending-save-data! [f & args]
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom update-in cache-path
            (fn [current]
              (apply f (or current {}) args))))
@@ -75,6 +75,6 @@
   ([]
    (reset-world-save-cache-for-test! {}))
   ([pending-save-data]
-   (when-let [fw-atom fw/*framework*]
+   (when-let [fw-atom (fw/fw-atom)]
      (swap! fw-atom assoc-in cache-path (or pending-save-data {})))
    nil))

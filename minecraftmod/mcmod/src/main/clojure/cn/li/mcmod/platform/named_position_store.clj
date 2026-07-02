@@ -13,7 +13,7 @@
 
 (defn install-named-position-store!
   [impl label]
-  (when-let [fw-atom fw/*framework*] (swap! fw-atom assoc-in [:platform :named-position-store] impl)) nil)
+  (when-let [fw-atom (fw/fw-atom)] (swap! fw-atom assoc-in [:platform :named-position-store] impl)) nil)
 
 (defn available? [] (boolean (get-in @(fw/fw-atom) [:platform :named-position-store])))
 (defn current [] (get-in @(fw/fw-atom) [:platform :named-position-store]))

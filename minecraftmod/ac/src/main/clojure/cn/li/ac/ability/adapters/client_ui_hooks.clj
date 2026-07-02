@@ -53,7 +53,7 @@
 (def ^:private cui-path [:service :client-ui])
 
 (defn- client-ui-runtime-state-atom []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (or (get-in @fw-atom cui-path)
         (let [a (atom default-client-ui-runtime-state)]
           (swap! fw-atom assoc-in cui-path a) a))

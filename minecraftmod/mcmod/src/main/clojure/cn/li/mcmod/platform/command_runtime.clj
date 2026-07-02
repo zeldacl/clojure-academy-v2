@@ -11,13 +11,13 @@
 (def ^:private cmd-hooks-path [:registry :commands :hooks])
 
 (defn- command-hooks-snapshot []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (get-in @fw-atom cmd-hooks-path (default-state))
     (default-state)))
 
 (defn register-command-hooks!
   [hooks]
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom update-in cmd-hooks-path
            (fn [current]
              (let [base (or current (default-state))]
@@ -30,7 +30,7 @@
 
 (defn reset-command-hooks-for-test!
   []
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom assoc-in cmd-hooks-path (default-state)))
   nil)
 

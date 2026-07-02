@@ -23,21 +23,21 @@
 	(when-not (string? (:id particle-spec))
 		(throw (ex-info "Particle :id must be string" {:particle-spec particle-spec})))
 	(log/info "Registering particle:" (:id particle-spec) "->" (:registry-name particle-spec))
-	(when-let [fw-atom fw/*framework*]
+	(when-let [fw-atom (fw/fw-atom)]
 		(swap! fw-atom assoc-in [:registry :particles (:id particle-spec)] particle-spec))
 	particle-spec)
 
 (defn get-particle
 	"Look up a particle spec by id."
 	[particle-id]
-	(if-let [fw-atom fw/*framework*]
+	(if-let [fw-atom (fw/fw-atom)]
 		(get-in @fw-atom [:registry :particles particle-id])
 		nil))
 
 (defn list-particles
 	"List all registered particle ids."
 	[]
-	(if-let [fw-atom fw/*framework*]
+	(if-let [fw-atom (fw/fw-atom)]
 		(keys (get @fw-atom :particles))
 		()))
 

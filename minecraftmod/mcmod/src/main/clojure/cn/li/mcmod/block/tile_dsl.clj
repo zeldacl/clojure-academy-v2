@@ -17,7 +17,7 @@
 (def ^:private tile-path [:registry :tiles])
 
 (defn- tile-state []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (get-in @fw-atom tile-path)
     {:by-id {} :block->tile-id {}}))
 
@@ -129,7 +129,7 @@ Enforces:
   [tile-spec]
   (validate-tile-spec tile-spec)
   (let [{:keys [id blocks]} tile-spec]
-    (when-let [fw-atom fw/*framework*]
+    (when-let [fw-atom (fw/fw-atom)]
       (swap! fw-atom update-in tile-path
              (fn [{:keys [by-id block->tile-id] :as reg}]
                (when (contains? by-id id)
@@ -153,7 +153,7 @@ Enforces:
 
 (defn get-tile
   [tile-id]
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (get-in @fw-atom (conj tile-path :by-id (normalize-id tile-id)))
     nil))
 
@@ -163,7 +163,7 @@ Enforces:
 
 (defn get-tile-id-for-block
   [block-id]
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (get-in @fw-atom (conj tile-path :block->tile-id (normalize-id block-id)))
     nil))
 
@@ -180,7 +180,7 @@ Enforces:
   "Associate capability keywords with a tile spec (declaration phase only)."
   [tile-id & cap-keys]
   (let [normalized (map #(if (keyword? %) % (keyword %)) cap-keys)]
-    (when-let [fw-atom fw/*framework*]
+    (when-let [fw-atom (fw/fw-atom)]
       (swap! fw-atom update-in tile-path
              #(update-in (or % {:by-id {} :block->tile-id {}})
                          [:by-id tile-id :capability-keys]

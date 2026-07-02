@@ -18,7 +18,7 @@
 
 (defn install-world-effects!
   [impl label]
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom assoc-in [:platform :world-effects] impl))
   nil)
 

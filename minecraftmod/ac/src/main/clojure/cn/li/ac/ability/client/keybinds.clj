@@ -42,7 +42,7 @@
 (def ^:private kbr-path [:service :keybind-registry])
 
 (defn- keybind-registry-state-atom []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (or (get-in @fw-atom kbr-path)
         (let [a (atom (default-keybind-registry-runtime-state))]
           (swap! fw-atom assoc-in kbr-path a) a))
@@ -200,7 +200,7 @@
 (def ^:private cb-path [:service :client-keybinds])
 
 (defn- client-keybind-atoms []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (or (get-in @fw-atom cb-path)
         (let [m {:key-states* (atom {}) :preset-switch-states* (atom {})}]
           (swap! fw-atom assoc-in cb-path m) m))

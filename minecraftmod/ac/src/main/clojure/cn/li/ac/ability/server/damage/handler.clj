@@ -94,7 +94,7 @@
 (def ^:private ac-path [:service :attack-check-registries])
 
 (defn- attack-check-registries-state-atom []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (or (get-in @fw-atom ac-path)
         (let [a (atom (default-attack-check-registries-runtime-state))]
           (swap! fw-atom assoc-in ac-path a) a))

@@ -22,12 +22,12 @@
 (def ^:private passive-path [:registry :handlers :passive])
 
 (defn- passive-handler-state-snapshot []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (get-in @fw-atom passive-path {:registered-handlers #{} :frozen? false})
     {:registered-handlers #{} :frozen? false}))
 
 (defn- update-passive-handler-state! [f & args]
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom update-in passive-path
            (fn [current] (apply f (or current {:registered-handlers #{} :frozen? false}) args))))
   nil)
@@ -43,7 +43,7 @@
   ([]
    (reset-passive-handler-registry-for-test! #{}))
   ([snapshot]
-   (when-let [fw-atom fw/*framework*]
+   (when-let [fw-atom (fw/fw-atom)]
      (swap! fw-atom assoc-in passive-path {:registered-handlers (or snapshot #{}) :frozen? false}))
    nil))
 

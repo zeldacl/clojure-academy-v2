@@ -11,7 +11,7 @@
 (def ^:private resolvers-path [:registry :hooks :hook-resolver])
 
 (defn- resolvers-snapshot []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (get-in @fw-atom resolvers-path {})
     {}))
 
@@ -22,7 +22,7 @@
     (throw (ex-info "Hook resolver key must be a keyword" {:resolver-key resolver-key})))
   (when-not (fn? resolver-fn)
     (throw (ex-info "Hook resolver must be a function" {:resolver-key resolver-key})))
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom assoc-in (conj resolvers-path resolver-key) resolver-fn))
   nil)
 
@@ -38,6 +38,6 @@
 (defn clear-resolvers!
   "Clear registered resolvers. Intended for tests."
   []
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom assoc-in resolvers-path {}))
   nil)

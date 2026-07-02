@@ -11,19 +11,19 @@
 (def ^:private render-path [:service :render-runtime])
 
 (defn- render-state-snapshot []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (get-in @fw-atom render-path (default-state))
     (default-state)))
 
 (defn- update-render-state! [f & args]
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom update-in render-path
            (fn [current] (apply f (or current (default-state)) args))))
   nil)
 
 (defn reset-render-runtime-state-for-test!
   []
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom assoc-in render-path (default-state)))
   nil)
 

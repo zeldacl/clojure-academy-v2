@@ -92,18 +92,18 @@
 (defn register-item! [item-spec]
   (validate-item-spec item-spec)
   (log/info "Registering item:" (:id item-spec))
-  (when-let [fw-atom fw/*framework*] (swap! fw-atom assoc-in [:registry :items (:id item-spec)] item-spec))
+  (when-let [fw-atom (fw/fw-atom)] (swap! fw-atom assoc-in [:registry :items (:id item-spec)] item-spec))
   item-spec)
 
 ;; Get item from registry
 (defn get-item [item-id]
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (get-in @fw-atom [:registry :items item-id])
     nil))
 
 ;; List all registered items
 (defn list-items []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (keys (get-in @fw-atom [:registry :items]))
     ()))
 

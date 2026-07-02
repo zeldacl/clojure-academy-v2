@@ -19,7 +19,7 @@
 (def ^:private term-path [:service :terminal-runtime])
 
 (defn- runtime-state-atom []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (or (get-in @fw-atom term-path)
         (let [a (atom default-runtime-state)]
           (swap! fw-atom assoc-in term-path a)

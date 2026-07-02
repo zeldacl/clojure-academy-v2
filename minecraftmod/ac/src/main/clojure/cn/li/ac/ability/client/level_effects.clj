@@ -19,7 +19,7 @@
 (def ^:private le-path [:service :level-effects])
 
 (defn- level-effect-state-atom []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (or (get-in @fw-atom le-path)
         (let [a (atom (default-level-effect-runtime-state))]
           (swap! fw-atom assoc-in le-path a) a))

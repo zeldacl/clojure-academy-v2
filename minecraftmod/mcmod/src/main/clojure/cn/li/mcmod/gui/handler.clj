@@ -62,7 +62,7 @@
 (def ^:private handler-path [:service :gui-handler])
 
 (defn- get-gui-handler-instance []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (or (get-in @fw-atom handler-path)
         (let [h (->RegistryGuiHandler (container-state/installed-runtime))]
           (swap! fw-atom assoc-in handler-path h)

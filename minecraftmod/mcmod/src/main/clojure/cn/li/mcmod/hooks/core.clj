@@ -105,13 +105,13 @@
 (def ^:private hooks-path [:registry :hooks :runtime-hooks])
 
 (defn- hooks-core-state-snapshot []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (or (get-in @fw-atom hooks-path)
         (default-runtime-hooks-state))
     (default-runtime-hooks-state)))
 
 (defn- update-hooks-core-state! [f & args]
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom
            (fn [state]
              (update-in state hooks-path
@@ -123,7 +123,7 @@
 
 (defn- allowed-hook-keys
   []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (or (get-in @fw-atom allowed-hooks-keys-path)
         (set (keys (default-runtime-hooks-state))))
     (set (keys (default-runtime-hooks-state)))))
@@ -136,7 +136,7 @@
   entrypoints while keeping the neutral contract validation fail-fast.
   No-op during AOT compilation when *framework* is nil."
   [hook-keys]
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom
            (fn [state]
              (update-in state allowed-hooks-keys-path
@@ -300,14 +300,14 @@
   Called by content modules during init. Platform nbt layer reads this at runtime.
   No-op during AOT compilation when *framework* is nil."
   [{:keys [domain-key nbt-key]}]
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom update-in player-state-domains-path
            (fn [current] (assoc (or current {}) domain-key nbt-key)))))
 
 (defn list-player-state-domains
   "Return map of {domain-key nbt-key} for all registered player state domains."
   []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (get-in @fw-atom player-state-domains-path {})
     {}))
 
@@ -325,7 +325,7 @@
   fn receives the raw ServerPlayer object. Called by content modules during init.
   No-op during AOT compilation when *framework* is nil."
   [f]
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom update-in server-player-login-hooks-path
            (fn [current] (conj (or current []) f)))))
 
@@ -333,7 +333,7 @@
   "Run all registered server player login hooks with the given player.
   Called by platform lifecycle adapters on player login, after core login handling."
   [player]
-  (doseq [f (if-let [fw-atom fw/*framework*]
+  (doseq [f (if-let [fw-atom (fw/fw-atom)]
               (get-in @fw-atom server-player-login-hooks-path [])
               [])]
     (try (f player) (catch Throwable _ nil))))

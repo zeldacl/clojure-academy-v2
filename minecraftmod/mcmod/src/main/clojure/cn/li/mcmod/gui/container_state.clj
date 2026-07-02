@@ -20,7 +20,7 @@
 (def ^:private menu-path [:service :container-state :menu-containers])
 
 (defn- menu-containers-snapshot []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (get-in @fw-atom menu-path {})
     {}))
 
@@ -37,7 +37,7 @@
 (defn register-menu-container!
   "Register the Clojure container backing a Minecraft menu instance."
   [menu container]
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom update-in menu-path
            (fn [current] (assoc (or current {}) menu container))))
   (log/debug "Registered GUI container for menu" (type menu))
@@ -46,7 +46,7 @@
 (defn unregister-menu-container!
   "Remove menu → Clojure container mapping."
   [menu]
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom update-in menu-path
            (fn [current] (dissoc (or current {}) menu))))
   (log/debug "Unregistered GUI container for menu" (type menu))
@@ -140,7 +140,7 @@
 (defn clear-all!
   "Clear all GUI runtime state. Intended for tests/reloads."
   []
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom assoc-in menu-path {}))
   nil)
 

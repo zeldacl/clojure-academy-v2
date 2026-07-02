@@ -36,7 +36,7 @@
 	[sound-spec]
 	(validate-sound-spec sound-spec)
 	(log/info "Registering sound:" (:id sound-spec) "->" (:registry-name sound-spec))
-	(when-let [fw-atom fw/*framework*] (swap! fw-atom assoc-in [:registry :sounds (:id sound-spec)] sound-spec))
+	(when-let [fw-atom (fw/fw-atom)] (swap! fw-atom assoc-in [:registry :sounds (:id sound-spec)] sound-spec))
 	sound-spec)
 
 (defn get-sound

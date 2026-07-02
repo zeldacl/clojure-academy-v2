@@ -16,14 +16,14 @@
 (def ^:private hooks-path [:service :tutorial-events])
 
 (defn- hooks-snapshot []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (or (get-in @fw-atom hooks-path) (default-state))
     (default-state)))
 
 (defn register-tutorial-handlers!
   "Register tutorial event handler functions. Duplicate keys must have same value."
   [handlers]
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom update-in hooks-path
            (fn [current]
              (let [base (or current (default-state))]
@@ -41,7 +41,7 @@
 
 (defn reset-tutorial-events-for-test!
   []
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom assoc-in hooks-path (default-state)))
   nil)
 

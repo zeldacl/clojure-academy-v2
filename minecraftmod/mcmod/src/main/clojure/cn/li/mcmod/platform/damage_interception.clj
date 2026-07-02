@@ -10,7 +10,7 @@
 
 (defn install-damage-interception!
   [impl label]
-  (when-let [fw-atom fw/*framework*] (swap! fw-atom assoc-in [:platform :damage-interception] impl)) nil)
+  (when-let [fw-atom (fw/fw-atom)] (swap! fw-atom assoc-in [:platform :damage-interception] impl)) nil)
 
 (defn available? [] (boolean (get-in @(fw/fw-atom) [:platform :damage-interception])))
 (defn current [] (get-in @(fw/fw-atom) [:platform :damage-interception]))

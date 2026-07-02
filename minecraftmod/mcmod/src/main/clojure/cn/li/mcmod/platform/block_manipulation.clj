@@ -16,7 +16,7 @@
 
 (defn install-block-manipulation!
   [impl label]
-  (when-let [fw-atom fw/*framework*] (swap! fw-atom assoc-in [:platform :block-manipulation] impl)) nil)
+  (when-let [fw-atom (fw/fw-atom)] (swap! fw-atom assoc-in [:platform :block-manipulation] impl)) nil)
 
 (defn available? [] (boolean (get-in @(fw/fw-atom) [:platform :block-manipulation])))
 (defn current [] (get-in @(fw/fw-atom) [:platform :block-manipulation]))

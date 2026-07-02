@@ -11,7 +11,7 @@
 (def ^:private widgets-path [:registry :widget-factories])
 
 (defn- widget-factories-snapshot []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (get-in @fw-atom widgets-path {})
     {}))
 
@@ -25,14 +25,14 @@
     (when (and (some? prev) (not= prev factory-fn))
       (throw (ex-info "Duplicate UI widget factory registration"
                       {:widget-key widget-key :previous prev :incoming factory-fn}))))
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom assoc-in (conj widgets-path widget-key) factory-fn))
   nil)
 
 (defn reset-widget-factory-registry!
   "Test-only reset of widget factory registry."
   []
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom assoc-in widgets-path {}))
   nil)
 

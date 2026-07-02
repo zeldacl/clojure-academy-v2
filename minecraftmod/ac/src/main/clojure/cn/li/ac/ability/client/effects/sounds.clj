@@ -62,7 +62,7 @@
 (def ^:private sq-path [:service :sound-queue])
 
 (defn- queue-atom []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (or (get-in @fw-atom sq-path)
         (let [a (atom {})] (swap! fw-atom assoc-in sq-path a) a))
     (atom {})))

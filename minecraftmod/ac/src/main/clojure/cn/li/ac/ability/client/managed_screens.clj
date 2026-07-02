@@ -14,7 +14,7 @@
 (def ^:private ms-path [:service :managed-screens])
 
 (defn- managed-screen-state-atom []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (or (get-in @fw-atom ms-path)
         (let [a (atom default-managed-screen-runtime-state)]
           (swap! fw-atom assoc-in ms-path a) a))

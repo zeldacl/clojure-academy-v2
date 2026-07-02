@@ -7,7 +7,7 @@
 (defn install-open-menu!
   "Install the open-menu function. Backward compatible with old (fn label) signature."
   ([open-menu-fn]
-   (when-let [fw-atom fw/*framework*]
+   (when-let [fw-atom (fw/fw-atom)]
      (swap! fw-atom assoc-in [:platform :gui-open] open-menu-fn))
    nil)
   ([open-menu-fn label]

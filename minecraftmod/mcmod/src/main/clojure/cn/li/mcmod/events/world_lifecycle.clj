@@ -34,12 +34,12 @@
 (def ^:private lifecycle-path [:service :world-lifecycle])
 
 (defn- state-snapshot []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (or (get-in @fw-atom lifecycle-path) (default-state))
     (default-state)))
 
 (defn- update-state! [f & args]
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom update-in lifecycle-path
            (fn [current]
              (apply f (or current (default-state)) args))))
@@ -107,7 +107,7 @@
 (defn reset-world-lifecycle-handlers-for-test!
   "Reset lifecycle handler registry. Intended for tests/reloads only."
   []
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom assoc-in lifecycle-path (default-state)))
   nil)
 

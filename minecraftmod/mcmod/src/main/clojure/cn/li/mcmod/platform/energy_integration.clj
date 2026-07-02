@@ -11,13 +11,13 @@
 (def ^:private energy-path [:registry :integrations :energy])
 
 (defn- energy-hooks-snapshot []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (get-in @fw-atom energy-path (default-state))
     (default-state)))
 
 (defn register-energy-integration-hooks!
   [hooks]
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom update-in energy-path
            (fn [current]
              (let [base (or current (default-state))]
@@ -30,7 +30,7 @@
 
 (defn reset-energy-integration-hooks-for-test!
   []
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom assoc-in energy-path (default-state)))
   nil)
 

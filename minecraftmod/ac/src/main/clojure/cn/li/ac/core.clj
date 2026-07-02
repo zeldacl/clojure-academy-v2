@@ -16,7 +16,7 @@
 (def ^:private guard-path [:service :ac-lifecycle-hooks])
 
 (defn lifecycle-hooks-guard-snapshot []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (boolean (get-in @fw-atom guard-path))
     false))
 
@@ -24,7 +24,7 @@
   ([]
    (reset-lifecycle-hooks-guard-for-test! false))
   ([registered?]
-   (when-let [fw-atom fw/*framework*]
+   (when-let [fw-atom (fw/fw-atom)]
      (swap! fw-atom assoc-in guard-path (boolean registered?)))
    nil))
 
@@ -55,6 +55,14 @@
   (font-init/init-fonts!)
   (hooks/load-all-client-renderers!))
 
+(defn- register-lifecycle-hooks-body!
+  []
+  (smoke-manifest/register!)
+  (lifecycle/register-content-init! #'init)
+  (lifecycle/register-runtime-content-activation! #'activate-runtime-content!)
+  (lifecycle/register-datagen-metadata-init! #'register-datagen-metadata!)
+  (lifecycle/register-client-init! init-client-renderers))
+
 (defn register-lifecycle-hooks!
   "Register AC lifecycle hooks with mcmod.
 
@@ -62,13 +70,13 @@
   content discovery. Requiring this namespace alone must not mutate lifecycle
   state."
   []
-  (when (if-let [fw-atom fw/*framework*]
+  (let [should-register?
+        (if-let [fw-atom (fw/fw-atom)]
           (let [k guard-path]
-            (nil? (get-in (swap! fw-atom update-in k #(if (nil? %) true %)) k)))
-          true)
-    (smoke-manifest/register!)
-    (lifecycle/register-content-init! #'init)
-    (lifecycle/register-runtime-content-activation! #'activate-runtime-content!)
-    (lifecycle/register-datagen-metadata-init! #'register-datagen-metadata!)
-    (lifecycle/register-client-init! init-client-renderers))
+            (when (nil? (get-in @fw-atom k))
+              (swap! fw-atom assoc-in k true)
+              true))
+          true)]
+    (when should-register?
+      (register-lifecycle-hooks-body!)))
   nil)

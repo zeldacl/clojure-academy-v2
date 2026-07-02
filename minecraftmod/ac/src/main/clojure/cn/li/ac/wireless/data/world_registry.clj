@@ -60,7 +60,7 @@
 (defn- ensure-world-entry!
   "Ensure the world-key entry exists in the registry. Returns nil."
   [world-key]
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom update-in (registry-path world-key)
            (fn [current]
              (if current
@@ -72,20 +72,20 @@
 (defn- get-world-state
   "Read world-state for a world-key. Returns nil if not found."
   [world-key]
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (get-in @fw-atom (world-state-path world-key))))
 
 (defn- get-world-data-record
   "Read WiWorldData for a world-key. Returns nil if not found."
   [world-key]
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (get-in @fw-atom (world-data-path world-key))))
 
 (defn- update-world-state!
   "Atomically update world-state via Framework swap!."
   [world-key f & args]
   (let [result* (volatile! nil)]
-    (when-let [fw-atom fw/*framework*]
+    (when-let [fw-atom (fw/fw-atom)]
       (swap! fw-atom update-in (world-state-path world-key)
              (fn [current]
                (let [base (or current (initial-world-state))
@@ -122,7 +122,7 @@
   [world wi-data]
   (let [wk (world-key world)
         state (initial-world-state)]
-    (when-let [fw-atom fw/*framework*]
+    (when-let [fw-atom (fw/fw-atom)]
       (swap! fw-atom assoc-in (registry-path wk)
              {:world-data (assoc wi-data :world-key wk)
               :world-state state}))
@@ -132,7 +132,7 @@
   "Remove world data (called on world unload)."
   [world]
   (let [wk (world-key world)]
-    (when-let [fw-atom fw/*framework*]
+    (when-let [fw-atom (fw/fw-atom)]
       (swap! fw-atom update-in worlds-path dissoc wk)))
   (log/info (format "Removed WiWorldData for world: %s" (world-key world))))
 
@@ -142,7 +142,7 @@
   (let [session-id (if (map? owner-or-session-id)
                      (first (world-owner-key/world-key owner-or-session-id))
                      owner-or-session-id)]
-    (when-let [fw-atom fw/*framework*]
+    (when-let [fw-atom (fw/fw-atom)]
       (swap! fw-atom update-in worlds-path
              (fn [worlds]
                (if worlds
@@ -202,7 +202,7 @@
   [world-data mutation-fn]
   (let [wk (:world-key world-data)
         result* (volatile! nil)]
-    (when-let [fw-atom fw/*framework*]
+    (when-let [fw-atom (fw/fw-atom)]
       (swap! fw-atom update-in (world-state-path wk)
              (fn [current]
                (let [base (or current (initial-world-state))
@@ -220,12 +220,12 @@
 (defn registry-snapshot
   "Return current in-memory registry snapshot. Intended for tests/diagnostics."
   []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (get-in @fw-atom worlds-path)
     {}))
 
 (defn reset-registry!
   "Reset in-memory world registry. Intended for tests only."
   []
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom assoc-in worlds-path {})))

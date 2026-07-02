@@ -11,7 +11,7 @@
 (def ^:private tile-kind-path [:registry :tile-kinds])
 
 (defn- tile-kind-state []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (get-in @fw-atom tile-kind-path {})
     {}))
 
@@ -21,7 +21,7 @@
   (when-not (keyword? tile-kind)
     (throw (ex-info "register-tile-kind!: tile-kind must be keyword"
                     {:tile-kind tile-kind})))
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom update-in tile-kind-path
            (fn [current] (assoc (or current {}) tile-kind cfg))))
   (log/info "Registered tile-kind logic" tile-kind)
@@ -73,6 +73,6 @@
 (defn reset-tile-kinds-for-test!
   "Clear tile-kind registry for tests."
   []
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom assoc-in tile-kind-path {}))
   nil)

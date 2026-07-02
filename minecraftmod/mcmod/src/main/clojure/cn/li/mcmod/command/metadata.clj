@@ -12,7 +12,7 @@
 (def ^:private cmd-path [:registry :commands :metadata])
 
 (defn- command-registry-snapshot []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (get-in @fw-atom cmd-path {})
     {}))
 
@@ -22,7 +22,7 @@
 (defn register-command-registry!
   "Register/replace the full command registry map provided by game content."
   [registry]
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom assoc-in cmd-path (or registry {})))
   nil)
 
@@ -73,6 +73,6 @@
 (defn clear-command-registry!
   "Clear command registry. Intended for tests."
   []
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom assoc-in cmd-path {}))
   nil)

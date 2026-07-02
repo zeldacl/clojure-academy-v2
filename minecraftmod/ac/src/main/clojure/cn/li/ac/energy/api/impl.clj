@@ -165,7 +165,7 @@
 (def ^:private es-path [:service :energy-system])
 
 (defn- systems-atom []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (or (get-in @fw-atom es-path)
         (let [a (atom {})]
           (swap! fw-atom assoc-in es-path a)

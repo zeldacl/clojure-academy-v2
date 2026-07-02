@@ -36,7 +36,7 @@
 ;; Block Registry — stored in Framework [:registry :blocks]
 
 (defn- block-registry-state []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (get-in @fw-atom [:registry :blocks])
     {}))
 
@@ -154,7 +154,7 @@
   [block-spec]
   (validators/validate-block-spec block-spec)
   (log/info "Registering block:" (:id block-spec))
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom assoc-in [:registry :blocks (:id block-spec)] block-spec))
   block-spec)
 
@@ -167,7 +167,7 @@
 (defn list-blocks
   "Get all registered block IDs."
   []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (keys (get-in @fw-atom [:registry :blocks]))
     ()))
 

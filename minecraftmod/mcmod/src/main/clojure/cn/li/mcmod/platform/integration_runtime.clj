@@ -17,14 +17,14 @@
 (def ^:private hooks-path [:registry :integrations :hooks])
 
 (defn- integration-hooks-snapshot []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (or (get-in @fw-atom hooks-path) (default-integration-runtime-state))
     (default-integration-runtime-state)))
 
 (defn register-integration-hooks!
   "Register integration hook functions. Duplicate keys must have same value."
   [hooks]
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom update-in hooks-path
            (fn [current]
              (let [base (or current (default-integration-runtime-state))]
@@ -38,7 +38,7 @@
 
 (defn reset-integration-hooks-for-test!
   []
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom assoc-in hooks-path (default-integration-runtime-state)))
   nil)
 
@@ -65,7 +65,7 @@
   "Register item path-part IDs (without mod-id prefix) for JEI NBT subtype handling.
   JEI uses this to avoid collapsing NBT-stateful item variants (e.g. empty/full)."
   [ids]
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom update-in nbt-subtype-path
            (fn [current] (into (or current []) ids))))
   nil)
@@ -73,12 +73,12 @@
 (defn get-jei-nbt-subtype-item-ids
   "Return all registered item path-part IDs for JEI NBT subtype handling."
   []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (get-in @fw-atom nbt-subtype-path [])
     []))
 
 (defn reset-jei-nbt-subtype-ids-for-test!
   []
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom assoc-in nbt-subtype-path []))
   nil)

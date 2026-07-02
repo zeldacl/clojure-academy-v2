@@ -10,68 +10,60 @@
    Thread safety:
      - :registry/* — write-once (init phase), then freeze → lock-free HAMT reads
      - :service/* — runtime read/write via Facade API guard functions
-     - :platform/* — write-once (bootstrap), then read-only function map lookups
-
-   Multi-thread iron rules:
-     A) Before crossing async boundary, capture atom: (let [fw *framework*] (future ...))
-     B) Freeze :registry after content init: (registry/freeze-all! fw)"
+     - :platform/* — write-once (bootstrap), then read-only function map lookups"
   (:require [cn.li.mcmod.aot :as aot]))
 
 (def *framework*
   "Single var for lifecycle-wide Framework access.
 
-   INITIALIZED TO nil — the real atom is injected at runtime via alter-var-root.
-   Keeping nil during AOT compilation prevents any compile-time atom instantiation,
-   macro expansion, or classloader pollution.
+   INITIALIZED TO nil — the real atom is injected at runtime via alter-var-root
+   during platform startup. Keeping nil at compile time prevents AOT atom
+   instantiation, macro expansion, and classloader pollution.
 
-   At startup, the platform entry point calls:
-     (alter-var-root #'*framework* (constantly (atom full-state)))
+   Entry points inject the atom:
+     (alter-var-root #'*framework* (constantly (create-framework)))
 
-   No ^:dynamic — every thread sees the same atom via direct var deref.
-   Zero ThreadLocal overhead, zero async NPE on ForkJoinPool.
-
-   Tests inject mock instances via alter-var-root in setup."
+   No ^:dynamic — alter-var-root sets the ROOT binding visible to ALL threads.
+   Zero ThreadLocal overhead, zero async NPE on ForkJoinPool."
   nil)
 
 (defn create-framework
   "Create a fresh Framework atom with the full initial state.
-   Returns nil during AOT compilation — the real atom is created
-   at runtime and injected into *framework* via alter-var-root."
+   Returns nil during AOT compilation."
   []
   (when-not (aot/compiling?)
-    (atom
-      {:registry {:blocks      {}
-                  :items       {}
-                  :entities    {}
-                  :fluids      {}
-                  :effects     {}
-                  :sounds      {}
-                  :particles   {}
-                  :loot        {}
-                  :configs     {}
-                  :guis        {}
-                  :slots       {}
-                  :tiles       {}
-                  :tile-kinds  {}
-                  :hooks       {}
-                  :handlers    {}
-                  :commands    {}
-                  :energy      {}
-                  :providers   {}
-                  :keybinds    {}
-                  :messages    {}
-                  :integrations {}}
-       :service {:lifecycle {:content-init-fn nil
-                             :runtime-content-activation-fn nil
-                             :datagen-metadata-init-fns []
-                             :client-init-fns []
-                             :post-spi-client-init-fns []}}
-       :platform {}})))
+    (atom {:registry {:blocks      {}
+                      :items       {}
+                      :entities    {}
+                      :fluids      {}
+                      :effects     {}
+                      :sounds      {}
+                      :particles   {}
+                      :loot        {}
+                      :configs     {}
+                      :guis        {}
+                      :slots       {}
+                      :tiles       {}
+                      :tile-kinds  {}
+                      :hooks       {}
+                      :handlers    {}
+                      :commands    {}
+                      :energy      {}
+                      :providers   {}
+                      :keybinds    {}
+                      :messages    {}
+                      :integrations {}}
+           :service {:lifecycle {:content-init-fn nil
+                                 :runtime-content-activation-fn nil
+                                 :datagen-metadata-init-fns []
+                                 :client-init-fns []
+                                 :post-spi-client-init-fns []}}
+           :platform {}})))
 
 (defn fw-atom
   "Return the current Framework atom.
-   Always returns a valid atom — the empty initial atom before startup,
-   or the fully-populated atom after create-framework completes."
+   Derefs *framework* — the root binding is set via alter-var-root at startup.
+   Returns nil before startup completes."
   ^clojure.lang.IAtom
   []
   *framework*)

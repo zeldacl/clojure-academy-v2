@@ -8,12 +8,12 @@
 (def ^:private cmd-path [:registry :commands :dsl])
 
 (defn- command-registry-state-snapshot []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (get-in @fw-atom cmd-path {:commands {} :frozen? false})
     {:commands {} :frozen? false}))
 
 (defn- update-command-registry-state! [f & args]
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom update-in cmd-path
            (fn [current] (apply f (or current {:commands {} :frozen? false}) args))))
   nil)
@@ -28,7 +28,7 @@
 (defn reset-command-registry-for-test!
   ([] (reset-command-registry-for-test! {}))
   ([{:keys [commands frozen?] :or {commands {} frozen? false}}]
-   (when-let [fw-atom fw/*framework*]
+   (when-let [fw-atom (fw/fw-atom)]
      (swap! fw-atom assoc-in cmd-path {:commands commands :frozen? frozen?}))
    nil))
 

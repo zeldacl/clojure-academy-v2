@@ -11,7 +11,7 @@
 
 (defn install-entity-motion!
   [impl label]
-  (when-let [fw-atom fw/*framework*] (swap! fw-atom assoc-in [:platform :entity-motion] impl)) nil)
+  (when-let [fw-atom (fw/fw-atom)] (swap! fw-atom assoc-in [:platform :entity-motion] impl)) nil)
 
 (defn available? [] (boolean (get-in @(fw/fw-atom) [:platform :entity-motion])))
 (defn current [] (get-in @(fw/fw-atom) [:platform :entity-motion]))

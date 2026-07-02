@@ -20,12 +20,12 @@
   {:item-actions {} :action-handlers {} :item-entity-spawns {} :frozen? false})
 
 (defn- item-action-registries-state-snapshot []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (get-in @fw-atom ia-path (default-state))
     (default-state)))
 
 (defn- update-item-action-registries-state! [f & args]
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom update-in ia-path
            (fn [current] (apply f (or current (default-state)) args))))
   nil)
@@ -42,7 +42,7 @@
    (reset-item-action-registries-for-test! {}))
   ([{:keys [item-actions action-handlers item-entity-spawns frozen?]
      :or {item-actions {} action-handlers {} item-entity-spawns {} frozen? false}}]
-   (when-let [fw-atom fw/*framework*]
+   (when-let [fw-atom (fw/fw-atom)]
      (swap! fw-atom assoc-in ia-path {:item-actions item-actions
                                       :action-handlers action-handlers
                                       :item-entity-spawns item-entity-spawns

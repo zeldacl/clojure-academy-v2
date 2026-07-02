@@ -35,7 +35,7 @@
 (def ^:private executors-path [:registry :handlers :action-executors])
 
 (defn- action-executors-snapshot []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (get-in @fw-atom executors-path {})
     {}))
 
@@ -53,7 +53,7 @@
   [action-type]
   (when-not (keyword? action-type)
     (throw (ex-info "Action type must be a keyword" {:action-type action-type})))
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom update-in (conj executors-path action-type) #(or % nil)))
   nil)
 
@@ -74,7 +74,7 @@
   (when-not (fn? executor-fn)
     (throw (ex-info "Action executor must be a function" {:action-type action-type
                                                            :executor executor-fn})))
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom assoc-in (conj executors-path action-type) executor-fn))
   nil)
 

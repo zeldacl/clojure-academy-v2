@@ -14,7 +14,7 @@
 (def ^:private dmg-path [:service :damage-handler-registry])
 
 (defn- damage-handler-registry-state-atom []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (or (get-in @fw-atom dmg-path)
         (let [a (atom (default-damage-handler-registry-runtime-state))]
           (swap! fw-atom assoc-in dmg-path a) a))

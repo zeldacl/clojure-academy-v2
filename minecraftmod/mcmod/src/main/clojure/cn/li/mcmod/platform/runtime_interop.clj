@@ -10,7 +10,7 @@
 
 (defn install-runtime-interop!
   [impl label]
-  (when-let [fw-atom fw/*framework*] (swap! fw-atom assoc-in [:platform :runtime-interop] impl)) nil)
+  (when-let [fw-atom (fw/fw-atom)] (swap! fw-atom assoc-in [:platform :runtime-interop] impl)) nil)
 
 (defn available? [] (boolean (get-in @(fw/fw-atom) [:platform :runtime-interop])))
 (defn current [] (get-in @(fw/fw-atom) [:platform :runtime-interop]))

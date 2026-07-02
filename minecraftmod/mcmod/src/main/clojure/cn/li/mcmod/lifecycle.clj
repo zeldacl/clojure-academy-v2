@@ -30,9 +30,9 @@
 
 (defn- lifecycle-state
   "Read current lifecycle state from Framework.
-   Returns nil during AOT compilation when *framework* is nil."
+   Returns nil during AOT compilation when holder is nil."
   []
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (get-in @fw-atom [:service :lifecycle])))
 
 (defn- update-lifecycle!
@@ -40,13 +40,14 @@
    Initializes state if not yet present.
    No-op during AOT compilation when *framework* is nil."
   [f & args]
-  (when-let [fw-atom fw/*framework*]
-    (swap! fw-atom
+  (let [fw-atom (fw/fw-atom)]
+    (when fw-atom
+      (swap! fw-atom
            (fn [fw-state]
              (update-in fw-state [:service :lifecycle]
                         (fn [current]
                           (apply f (or current (default-lifecycle-state)) args))))))
-  nil)
+  nil))
 
 ;; ============================================================================
 ;; Test support

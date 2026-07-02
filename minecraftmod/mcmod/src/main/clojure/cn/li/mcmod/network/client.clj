@@ -219,7 +219,7 @@
 (defn- ensure-client-runtime
   "Lazy-init the client runtime in Framework on first access."
   []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (or (get-in @fw-atom client-path)
         (let [rt (create-client-runtime)]
           (swap! fw-atom assoc-in client-path rt)

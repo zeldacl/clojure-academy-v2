@@ -93,7 +93,7 @@
 
 (defn register-fluid!
   [fluid-spec]
-  (when-let [fw-atom fw/*framework*] (swap! fw-atom assoc-in [:registry :fluids (:id fluid-spec)] fluid-spec))
+  (when-let [fw-atom (fw/fw-atom)] (swap! fw-atom assoc-in [:registry :fluids (:id fluid-spec)] fluid-spec))
   fluid-spec)
 
 (defn get-fluid

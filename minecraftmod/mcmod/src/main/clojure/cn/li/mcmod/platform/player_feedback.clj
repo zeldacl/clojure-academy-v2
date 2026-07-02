@@ -22,7 +22,7 @@
   "Install player feedback implementation. Backward compatible with
    old (impl label) signature; stores in Framework atom."
   ([impl]
-   (when-let [fw-atom fw/*framework*]
+   (when-let [fw-atom (fw/fw-atom)]
      (swap! fw-atom assoc-in [:platform :player-feedback] impl))
    nil)
   ([impl label]

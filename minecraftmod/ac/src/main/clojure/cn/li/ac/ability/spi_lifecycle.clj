@@ -21,12 +21,12 @@
 (def ^:private lifecycle-path [:service :ability-lifecycle])
 
 (defn- lifecycle-registry-state-snapshot []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (get-in @fw-atom lifecycle-path {:lifecycles {} :frozen? false})
     {:lifecycles {} :frozen? false}))
 
 (defn- update-lifecycle-registry-state! [f & args]
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom update-in lifecycle-path
            (fn [current] (apply f (or current {:lifecycles {} :frozen? false}) args))))
   nil)
@@ -45,7 +45,7 @@
    {::lifecycle-registry-runtime true :state* state*}))
 
 (defn install-lifecycle-registry-runtime! [runtime]
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (when-let [state* (:state* runtime)]
       (swap! fw-atom assoc-in lifecycle-path @state*)))
   runtime)
@@ -55,11 +55,11 @@
 
 (defn reset-lifecycle-registry-for-test!
   ([]
-   (when-let [fw-atom fw/*framework*]
+   (when-let [fw-atom (fw/fw-atom)]
      (swap! fw-atom assoc-in lifecycle-path {:lifecycles {} :frozen? false}))
    nil)
   ([{:keys [lifecycles frozen?] :or {lifecycles {} frozen? false}}]
-   (when-let [fw-atom fw/*framework*]
+   (when-let [fw-atom (fw/fw-atom)]
      (swap! fw-atom assoc-in lifecycle-path {:lifecycles lifecycles :frozen? frozen?}))
    nil))
 

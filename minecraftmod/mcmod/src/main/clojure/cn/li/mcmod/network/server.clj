@@ -10,12 +10,12 @@
 (def ^:private server-path [:service :network-server])
 
 (defn- network-server-state-snapshot []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (get-in @fw-atom server-path {:handlers {} :frozen? false})
     {:handlers {} :frozen? false}))
 
 (defn- update-network-server-state! [f & args]
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom update-in server-path
            (fn [current] (apply f (or current {:handlers {} :frozen? false}) args))))
   nil)
@@ -64,7 +64,7 @@
 
 (defn reset-handlers-for-test!
   []
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom assoc-in server-path {:handlers {} :frozen? false}))
   nil)
 

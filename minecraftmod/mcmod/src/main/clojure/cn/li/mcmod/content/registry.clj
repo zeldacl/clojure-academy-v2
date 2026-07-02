@@ -109,12 +109,12 @@
 (def ^:private content-path [:registry :content])
 
 (defn- content-registry-state-snapshot []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (get-in @fw-atom content-path {})
     {}))
 
 (defn- update-content-registry-state! [f & args]
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom update-in content-path
            (fn [current] (apply f (or current {}) args))))
   nil)
@@ -223,7 +223,7 @@
 
 (defn clear-registry!
   []
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom assoc-in content-path {}))
   nil)
 

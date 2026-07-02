@@ -15,7 +15,7 @@
 (def ^:private fxr-path [:service :fx-registry])
 
 (defn- fx-registry-state-atom []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (or (get-in @fw-atom fxr-path)
         (let [a (atom (default-fx-registry-runtime-state))]
           (swap! fw-atom assoc-in fxr-path a) a))

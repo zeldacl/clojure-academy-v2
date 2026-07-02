@@ -6,7 +6,8 @@
             [cn.li.mcmod.content :as mc-content]
             [cn.li.mcmod.lifecycle :as lifecycle]
             [cn.li.mcmod.protocol.metadata :as registry-metadata]
-            [cn.li.mcmod.datagen.metadata :as datagen-metadata]))
+            [cn.li.mcmod.datagen.metadata :as datagen-metadata]
+            [cn.li.mcmod.framework :as fw]))
 
 (defn- snapshot-counts
   []
@@ -43,6 +44,12 @@
    must be set up before calling this function."
   []
   (try
+    ;; Ensure Framework is initialized.
+    ;; Normal mod init (start-forge-mod!) already injects via alter-var-root.
+    ;; Only inject here if datagen runs standalone (e.g. via --existing).
+    (when (nil? fw/*framework*)
+      (when-let [fw-inst (fw/create-framework)]
+        (alter-var-root #'fw/*framework* (constantly fw-inst))))
     (mc-content/register-all-content!)
     (run-init-pipeline!)
     (let [initial (snapshot-counts)]

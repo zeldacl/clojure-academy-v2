@@ -8,12 +8,12 @@
 (def ^:private config-path [:registry :configs])
 
 (defn- config-snapshot []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (get-in @fw-atom config-path)
     {:descriptor-registry {} :value-registry {}}))
 
 (defn- update-config! [f & args]
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom update-in config-path
            (fn [current] (apply f (or current {:descriptor-registry {} :value-registry {}}) args))))
   nil)
@@ -84,6 +84,6 @@
   nil)
 
 (defn reset-config-for-test! []
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom assoc-in config-path {:descriptor-registry {} :value-registry {}}))
   nil)

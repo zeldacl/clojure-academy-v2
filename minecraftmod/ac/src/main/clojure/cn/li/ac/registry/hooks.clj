@@ -11,12 +11,12 @@
 (def ^:private hooks-path [:registry :hooks :ac])
 
 (defn- hook-registry-state-snapshot []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (get-in @fw-atom hooks-path {:network-handlers [] :client-renderers [] :frozen? false})
     {:network-handlers [] :client-renderers [] :frozen? false}))
 
 (defn- update-hook-registry-state! [f & args]
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom update-in hooks-path
            (fn [current] (apply f (or current {:network-handlers [] :client-renderers [] :frozen? false}) args))))
   nil)
@@ -31,7 +31,7 @@
   ([] (reset-hook-registry-for-test! {}))
   ([{:keys [network-handlers client-renderers frozen?]
      :or {network-handlers [] client-renderers [] frozen? false}}]
-   (when-let [fw-atom fw/*framework*]
+   (when-let [fw-atom (fw/fw-atom)]
      (swap! fw-atom assoc-in hooks-path {:network-handlers (vec network-handlers)
                                           :client-renderers (vec client-renderers)
                                           :frozen? frozen?}))

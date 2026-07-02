@@ -37,7 +37,7 @@
 (def ^:private disp-path [:service :context-dispatcher])
 
 (defn- dispatcher-state-atom []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (or (get-in @fw-atom disp-path)
         (let [a (atom default-dispatcher-state)]
           (swap! fw-atom assoc-in disp-path a) a))

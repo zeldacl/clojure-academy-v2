@@ -8,12 +8,12 @@
 (def ^:private wmsg-path [:registry :messages :wireless])
 
 (defn- wireless-message-registry-state-snapshot []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (get-in @fw-atom wmsg-path {:domains {} :frozen? false})
     {:domains {} :frozen? false}))
 
 (defn- update-wireless-message-registry-state! [f & args]
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom update-in wmsg-path
            (fn [current] (apply f (or current {:domains {} :frozen? false}) args))))
   nil)
@@ -32,7 +32,7 @@
   ([] (reset-registry-for-test! {}))
   ([{:keys [domains frozen?]
      :or {domains {} frozen? false}}]
-   (when-let [fw-atom fw/*framework*]
+   (when-let [fw-atom (fw/fw-atom)]
      (swap! fw-atom assoc-in wmsg-path {:domains domains :frozen? frozen?}))
    nil))
 

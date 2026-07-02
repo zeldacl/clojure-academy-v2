@@ -12,12 +12,12 @@
 (def ^:private skill-path [:registry :skills])
 
 (defn- skill-registry-state-snapshot []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (get-in @fw-atom skill-path {:registry {} :frozen? false})
     {:registry {} :frozen? false}))
 
 (defn- update-skill-registry-state! [f & args]
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom update-in skill-path
            (fn [current] (apply f (or current {:registry {} :frozen? false}) args))))
   nil)
@@ -39,7 +39,7 @@
 
 ;; Backward-compatible install
 (defn install-skill-registry-runtime! [runtime]
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (when-let [state* (:state* runtime)]
       (swap! fw-atom assoc-in skill-path @state*)))
   runtime)
@@ -52,7 +52,7 @@
   ([]
    (reset-skill-registry-for-test! {}))
   ([snapshot]
-   (when-let [fw-atom fw/*framework*]
+   (when-let [fw-atom (fw/fw-atom)]
      (swap! fw-atom assoc-in skill-path {:registry (or snapshot {}) :frozen? false}))
    nil))
 

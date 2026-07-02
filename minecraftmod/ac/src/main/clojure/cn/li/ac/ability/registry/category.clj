@@ -21,12 +21,12 @@
 (def ^:private cat-path [:registry :categories])
 
 (defn- category-registry-state-snapshot []
-  (if-let [fw-atom fw/*framework*]
+  (if-let [fw-atom (fw/fw-atom)]
     (get-in @fw-atom cat-path {:registry {} :frozen? false})
     {:registry {} :frozen? false}))
 
 (defn- update-category-registry-state! [f & args]
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom update-in cat-path
            (fn [current] (apply f (or current {:registry {} :frozen? false}) args))))
   nil)
@@ -50,7 +50,7 @@
 (defn install-category-registry-runtime!
   "Backward-compatible install. Writes to Framework [:registry :categories]."
   [runtime]
-  (when-let [fw-atom fw/*framework*]
+  (when-let [fw-atom (fw/fw-atom)]
     (when-let [state* (:state* runtime)]
       (swap! fw-atom assoc-in cat-path @state*)))
   runtime)
@@ -66,7 +66,7 @@
   ([]
    (reset-category-registry-for-test! {}))
   ([snapshot]
-   (when-let [fw-atom fw/*framework*]
+   (when-let [fw-atom (fw/fw-atom)]
      (swap! fw-atom assoc-in cat-path {:registry (or snapshot {}) :frozen? false}))
    nil))
 
