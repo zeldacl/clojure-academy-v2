@@ -1,33 +1,31 @@
 (ns cn.li.mcmod.gui.registry
   "GUI registry, metadata queries, and screen factory registration."
-  (:require [cn.li.mcmod.util.log :as log]))
+  (:require [cn.li.mcmod.util.log :as log]
+            [cn.li.mcmod.framework :as fw]))
 
-(defn- default-gui-registry-runtime-state []
+;; GUI Registry — stored in Framework [:registry :guis]
+
+(def ^:private gui-path [:registry :guis])
+
+(defn- default-gui-state []
   {:by-id {}
    :by-gui-id {}
    :screen-factories {}})
 
-(defn create-gui-registry-runtime
-  ([] (create-gui-registry-runtime {}))
-  ([{:keys [state*]}]
-   {:cn.li.mcmod.gui.registry/runtime ::gui-registry-runtime
-    :state* (or state* (atom (default-gui-registry-runtime-state)))}))
-
-(def ^:private _gui-registry-runtime (delay (create-gui-registry-runtime)))
-
-(def ^:dynamic *gui-registry-runtime* nil)
-
-(defn- gui-registry-atom []
-  (:state* (or *gui-registry-runtime*
-                  @_gui-registry-runtime)))
-
 (defn- gui-registry-snapshot []
-  @(gui-registry-atom))
+  (if-let [fw-atom fw/*framework*]
+    (get-in @fw-atom gui-path (default-gui-state))
+    (default-gui-state)))
+
+(defn- update-gui-registry! [f & args]
+  (when-let [fw-atom fw/*framework*]
+    (swap! fw-atom update-in gui-path
+           (fn [current] (apply f (or current (default-gui-state)) args))))
+  nil)
 
 (defn register-gui! [gui-spec]
   (log/info "Registering GUI:" (:id gui-spec))
-  (swap! (gui-registry-atom)
-         (fn [reg]
+  (update-gui-registry! (fn [reg]
            (let [id (:id gui-spec)
                  gui-id (:gui-id gui-spec)
                  existing-by-id (get-in reg [:by-id id])
@@ -50,7 +48,7 @@
 
 (defn register-screen-factory!
   [screen-fn-kw screen-fn]
-  (swap! (gui-registry-atom) assoc-in [:screen-factories (keyword screen-fn-kw)] screen-fn)
+  (update-gui-registry! assoc-in [:screen-factories (keyword screen-fn-kw)] screen-fn)
   nil)
 
 (defn get-screen-factory-fn

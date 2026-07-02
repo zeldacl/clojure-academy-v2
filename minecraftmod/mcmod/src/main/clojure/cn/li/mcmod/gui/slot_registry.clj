@@ -3,43 +3,41 @@
 
    Game/content modules register predicate functions (stack -> boolean)
    for each slot category/type. Platform adapters then use those validators
-  to implement vanilla Slot.mayPlace/mayPickup logic.")
+   to implement vanilla Slot.mayPlace/mayPickup logic.
 
-(defn- default-slot-registry-runtime-state []
-  {:slot-validators {}})
+   State stored in Framework [:registry :slots]."
+  (:require [cn.li.mcmod.framework :as fw]))
 
-(defn create-slot-registry-runtime
-  ([] (create-slot-registry-runtime {}))
-  ([{:keys [state*]}]
-   {:cn.li.mcmod.gui.slot-registry/runtime ::slot-registry-runtime
-    :state* (or state* (atom (default-slot-registry-runtime-state)))}))
+(def ^:private slot-path [:registry :slots])
 
-(def ^:private _slot-registry-runtime (delay (create-slot-registry-runtime)))
-
-(def ^:dynamic *slot-registry-runtime* nil)
-
-(defn- slot-registry-state-atom []
-  (:state* (or *slot-registry-runtime*
-                  @_slot-registry-runtime)))
-
-(defn- slot-registry-state-snapshot []
-  @(slot-registry-state-atom))
+(defn- slot-snapshot []
+  (if-let [fw-atom fw/*framework*]
+    (get-in @fw-atom slot-path {:slot-validators {}})
+    {:slot-validators {}}))
 
 (defn set-slot-validators!
   "Replace all registered slot validators. Intended for tests."
   [validators]
-  (swap! (slot-registry-state-atom) assoc :slot-validators (or validators {}))
+  (when-let [fw-atom fw/*framework*]
+    (swap! fw-atom assoc-in (conj slot-path :slot-validators) validators))
   nil)
 
 (defn register-slot-validator!
-  "Register a validator predicate for a slot type.
-
-   slot-type examples: :energy, :plate, :core, :output"
+  "Register a slot validator function for a slot category/type keyword."
   [slot-type validator-fn]
-  (swap! (slot-registry-state-atom) assoc-in [:slot-validators (keyword slot-type)] validator-fn)
+  (when-let [fw-atom fw/*framework*]
+    (swap! fw-atom update-in slot-path
+           (fn [current]
+             (let [base (or current {:slot-validators {}})]
+               (assoc-in base [:slot-validators slot-type] validator-fn)))))
   nil)
 
 (defn get-slot-validator
-  "Get the validator predicate fn for a slot type."
+  "Get the registered slot validator for a slot category/type keyword."
   [slot-type]
-  (get-in (slot-registry-state-snapshot) [:slot-validators (keyword slot-type)]))
+  (get-in (slot-snapshot) [:slot-validators slot-type]))
+
+(defn get-all-slot-validators
+  "Return the full slot validators map."
+  []
+  (:slot-validators (slot-snapshot)))

@@ -8,18 +8,26 @@
 
   No reflection, no Java field access — pure Clojure."
   (:require [cn.li.mcmod.platform.entity :as entity]
+            [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
 ;; Atom-based menu → container map
 ;; ============================================================================
 
-(defonce ^:private menu-containers (atom {}))
+;; Menu containers stored in Framework [:service :container-state :menu-containers]
+
+(def ^:private menu-path [:service :container-state :menu-containers])
+
+(defn- menu-containers-snapshot []
+  (if-let [fw-atom fw/*framework*]
+    (get-in @fw-atom menu-path {})
+    {}))
 
 (defn get-container-for-menu
   "Return the Clojure container backing a Minecraft menu instance."
   [menu]
-  (get @menu-containers menu))
+  (get (menu-containers-snapshot) menu))
 
 (defn resolve-container-for-menu
   "Resolve a Clojure container for a menu."
@@ -29,14 +37,18 @@
 (defn register-menu-container!
   "Register the Clojure container backing a Minecraft menu instance."
   [menu container]
-  (swap! menu-containers assoc menu container)
+  (when-let [fw-atom fw/*framework*]
+    (swap! fw-atom update-in menu-path
+           (fn [current] (assoc (or current {}) menu container))))
   (log/debug "Registered GUI container for menu" (type menu))
   nil)
 
 (defn unregister-menu-container!
   "Remove menu → Clojure container mapping."
   [menu]
-  (swap! menu-containers dissoc menu)
+  (when-let [fw-atom fw/*framework*]
+    (swap! fw-atom update-in menu-path
+           (fn [current] (dissoc (or current {}) menu))))
   (log/debug "Unregistered GUI container for menu" (type menu))
   nil)
 
@@ -78,23 +90,10 @@
 ;; Runtime (kept for test binding compat — no longer used in production)
 ;; ============================================================================
 
-(defn create-container-state-runtime
+(defn installed-runtime
+  "Return a marker runtime map (state now lives in Framework)."
   []
   {::runtime ::container-state-runtime})
-
-(def ^:dynamic *container-state-runtime* nil)
-
-(def ^:private _container-state-runtime (delay (create-container-state-runtime)))
-
-(defn installed-runtime
-  "Return the production container-state runtime (now just a marker)."
-  []
-  @_container-state-runtime)
-
-(defn call-with-container-state-runtime
-  [runtime f]
-  (binding [*container-state-runtime* (or runtime (create-container-state-runtime))]
-    (f)))
 
 ;; ============================================================================
 ;; No-op stubs (kept for API compatibility with existing callers)
@@ -131,7 +130,7 @@
   []
   {:active-containers {}
    :player-containers {}
-   :menu-containers @menu-containers
+   :menu-containers (menu-containers-snapshot)
    :containers-by-id {}})
 
 ;; ============================================================================
@@ -141,7 +140,8 @@
 (defn clear-all!
   "Clear all GUI runtime state. Intended for tests/reloads."
   []
-  (reset! menu-containers {})
+  (when-let [fw-atom fw/*framework*]
+    (swap! fw-atom assoc-in menu-path {}))
   nil)
 
 (defn clear-owner-containers! [_owner] nil)

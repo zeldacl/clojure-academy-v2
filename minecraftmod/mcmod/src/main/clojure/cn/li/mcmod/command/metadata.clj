@@ -9,7 +9,8 @@
   - Platform code queries this module for what to register
   - Game content registers command registry into this module
   - Platform code stays generic"
-  (:require [cn.li.mcmod.util.log :as log]))
+  (:require [cn.li.mcmod.util.log :as log]
+            [cn.li.mcmod.framework :as fw]))
 
 (defn- default-command-metadata-runtime-state []
   {})

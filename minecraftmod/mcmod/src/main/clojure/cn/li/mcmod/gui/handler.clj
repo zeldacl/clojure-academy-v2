@@ -4,6 +4,7 @@
             [cn.li.mcmod.gui.registry :as gui-registry]
             [cn.li.mcmod.platform.world :as pworld]
             [cn.li.mcmod.platform.entity :as entity]
+            [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.util.log :as log]))
 
 (defprotocol IGuiHandler
@@ -56,24 +57,17 @@
             (log/warn "Missing :screen-fn for GUI ID:" gui-id))
           nil)))))
 
-(defn create-gui-handler-runtime
-  ([] (create-gui-handler-runtime {}))
-  ([{:keys [state* container-runtime]}]
-   {:cn.li.mcmod.gui.handler/runtime ::gui-handler-runtime
-    :state* (or state* (atom nil))
-    :container-runtime (or container-runtime (container-state/installed-runtime))}))
+;; GUI Handler — stored in Framework [:service :gui-handler]
 
-(def ^:private _gui-handler-runtime (delay (create-gui-handler-runtime)))
+(def ^:private handler-path [:service :gui-handler])
 
-(def ^:dynamic *gui-handler-runtime* nil)
-
-(defn- gui-handler-atom []
-  (:state* (or *gui-handler-runtime*
-       @_gui-handler-runtime)))
-
-(defn- container-runtime-for-handler []
-  (:container-runtime (or *gui-handler-runtime*
-                          @_gui-handler-runtime)))
+(defn- get-gui-handler-instance []
+  (if-let [fw-atom fw/*framework*]
+    (or (get-in @fw-atom handler-path)
+        (let [h (->RegistryGuiHandler (container-state/installed-runtime))]
+          (swap! fw-atom assoc-in handler-path h)
+          h))
+    (->RegistryGuiHandler (container-state/installed-runtime))))
 
 (defmulti register-gui-handler
   (fn [platform-type] platform-type))
@@ -83,9 +77,7 @@
 
 (defn get-gui-handler
   []
-  (or @(gui-handler-atom)
-      (reset! (gui-handler-atom)
-              (->RegistryGuiHandler (container-runtime-for-handler)))))
+  (get-gui-handler-instance))
 
 (defn init-gui-handler!
   [platform-type]

@@ -3,32 +3,22 @@
 
   A slot schema is the single source of truth for a GUI's tile slots.
   Slot indexes, ranges, and layout metadata are derived from declaration order."
-  (:require [cn.li.mcmod.util.log :as log]))
+  (:require [cn.li.mcmod.util.log :as log]
+            [cn.li.mcmod.framework :as fw]))
 
-(defn- default-slot-schema-runtime-state []
-  {:slot-schema-registry {}})
+;; Slot Schema — Framework [:registry :slots :schemas]
 
-(defn create-slot-schema-runtime
-  ([] (create-slot-schema-runtime {}))
-  ([{:keys [state*]}]
-   {:cn.li.mcmod.gui.slot-schema/runtime ::slot-schema-runtime
-    :state* (or state* (atom (default-slot-schema-runtime-state)))}))
-
-(def ^:private _slot-schema-runtime (delay (create-slot-schema-runtime)))
-
-(def ^:dynamic *slot-schema-runtime* nil)
-
-(defn- slot-schema-state-atom []
-  (:state* (or *slot-schema-runtime*
-                  @_slot-schema-runtime)))
+(def ^:private schema-path [:registry :slots :schemas])
 
 (defn- slot-schema-state-snapshot []
-  @(slot-schema-state-atom))
+  (if-let [fw-atom fw/*framework*]
+    (get-in @fw-atom schema-path {:slot-schema-registry {}})
+    {:slot-schema-registry {}}))
 
 (defn set-slot-schema-registry!
   "Replace all slot schemas. Intended for tests."
   [registry]
-  (swap! (slot-schema-state-atom) assoc :slot-schema-registry (or registry {}))
+  (when-let [fw-atom fw/*framework*] (swap! fw-atom assoc-in (conj schema-path :slot-schema-registry) (or registry {})))
   nil)
 
 (defn- ensure-keyword
@@ -99,7 +89,7 @@
                   :slot-type->indexes (into {}
                                             (for [[slot-type grouped] (group-by #(get % :type) slots)]
                                               [slot-type (mapv #(get % :index) grouped)]))}]
-      (swap! (slot-schema-state-atom) assoc-in [:slot-schema-registry schema-id] schema)
+      (when-let [fw-atom fw/*framework*] (swap! fw-atom assoc-in (conj schema-path :slot-schema-registry schema-id) schema))
       (log/info "Registered slot schema:" schema-id)
       schema)))
 

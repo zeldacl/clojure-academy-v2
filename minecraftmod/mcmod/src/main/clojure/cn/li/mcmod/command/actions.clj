@@ -4,8 +4,8 @@
   Actions are platform-agnostic descriptions of what should happen when
   a command executes. This namespace owns the generic registry/execution seam;
   content-specific action ids and executors are registered by content modules."
-  (:require [cn.li.mcmod.util.log :as log]))
-
+  (:require [cn.li.mcmod.util.log :as log]
+            [cn.li.mcmod.framework :as fw]))
 ;; ============================================================================
 ;; Action Protocol
 ;; ============================================================================

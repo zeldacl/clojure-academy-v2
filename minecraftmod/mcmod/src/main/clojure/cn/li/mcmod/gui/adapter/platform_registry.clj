@@ -1,31 +1,28 @@
 (ns cn.li.mcmod.gui.adapter.platform-registry
-  "Platform callback registry for GUI container operations.")
+  "Platform callback registry for GUI container operations.
 
-(defn create-gui-platform-registry-runtime
-  ([] (create-gui-platform-registry-runtime {}))
-  ([{:keys [state*]}]
-   {:cn.li.mcmod.gui.adapter.platform-registry/runtime ::gui-platform-registry-runtime
-    :state* (or state* (atom nil))}))
+  State stored in Framework [:registry :guis :platform-impl]."
+  (:require [cn.li.mcmod.framework :as fw]))
 
-(def ^:private _gui-platform-registry-runtime (delay (create-gui-platform-registry-runtime)))
+(def ^:private platform-path [:registry :guis :platform-impl])
 
-(def ^:dynamic *gui-platform-registry-runtime* nil)
-
-(defn- platform-impl-atom []
-  (:state* (or *gui-platform-registry-runtime*
-                  @_gui-platform-registry-runtime)))
+(defn- platform-impl-snapshot []
+  (if-let [fw-atom fw/*framework*]
+    (get-in @fw-atom platform-path)
+    nil))
 
 (defn register-gui-platform-impl!
   [impl-map]
   (when-not (map? impl-map)
     (throw (ex-info "Expected map for register-gui-platform-impl!"
                     {:impl-map-type (type impl-map)})))
-  (reset! (platform-impl-atom) impl-map)
+  (when-let [fw-atom fw/*framework*]
+    (swap! fw-atom assoc-in platform-path impl-map))
   nil)
 
 (defn platform-impl-fn!
   [k]
-  (let [m @(platform-impl-atom)]
+  (let [m (platform-impl-snapshot)]
     (when-not m
       (throw (ex-info "GUI platform implementation not registered"
                       {:missing-key k
