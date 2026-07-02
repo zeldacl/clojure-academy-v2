@@ -4,4 +4,8 @@
  :hooks {:analyze-call {cn.li.ac.ability.dsl/defskill hooks.defskill/defskill}}
  :linters
  {:unresolved-symbol {:level :warning}
-  :unused-private-var {:level :warning}}}
+  :unused-private-var {:level :warning}
+  ;; *framework* is initialized to nil and injected via alter-var-root at runtime.
+  ;; clj-kondo cannot track the runtime injection, so suppress false-positive
+  ;; nil-deref warnings on @*framework* across all namespaces.
+  :deref {:level :off}}}
