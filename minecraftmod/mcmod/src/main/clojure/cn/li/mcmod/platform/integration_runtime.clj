@@ -4,11 +4,10 @@
   State stored in Framework [:registry :integrations]."
   (:require [cn.li.mcmod.framework :as fw]))
 
-(defn- default-integration-runtime-state []
-  {:jei-get-all-categories (fn [] [])
-   :jei-get-recipes (fn [_category] [])
-   :jei-format-recipe identity
-   :describe-recipe (fn [_recipe] "")})
+(def ^:private default-jei-get-all-categories (fn [] []))
+(def ^:private default-jei-get-recipes (fn [_category] []))
+(def ^:private default-jei-format-recipe identity)
+(def ^:private default-describe-recipe (fn [_recipe] ""))
 
 ;; ============================================================================
 ;; Integration hooks — Framework [:registry :integrations :hooks]
@@ -16,18 +15,21 @@
 
 (def ^:private hooks-path [:registry :integrations :hooks])
 
-(defn- integration-hooks-snapshot []
+(defn- registered-hooks
+  []
   (if-let [fw-atom (fw/fw-atom)]
-    (or (get-in @fw-atom hooks-path) (default-integration-runtime-state))
-    (default-integration-runtime-state)))
+    (get-in @fw-atom hooks-path {})
+    {}))
 
 (defn register-integration-hooks!
-  "Register integration hook functions. Duplicate keys must have same value."
+  "Register integration hook functions.
+
+  Throws only when a slot was already claimed by content with a different fn."
   [hooks]
   (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom update-in hooks-path
            (fn [current]
-             (let [base (or current (default-integration-runtime-state))]
+             (let [base (or current {})]
                (reduce-kv (fn [m k v]
                             (if (and (contains? m k) (not= (get m k) v))
                               (throw (ex-info "Conflicting integration hook"
@@ -39,20 +41,24 @@
 (defn reset-integration-hooks-for-test!
   []
   (when-let [fw-atom (fw/fw-atom)]
-    (swap! fw-atom assoc-in hooks-path (default-integration-runtime-state)))
+    (swap! fw-atom assoc-in hooks-path {}))
   nil)
 
 (defn jei-get-all-categories []
-  ((:jei-get-all-categories (integration-hooks-snapshot))))
+  ((or (:jei-get-all-categories (registered-hooks))
+       default-jei-get-all-categories)))
 
 (defn jei-get-recipes [category]
-  ((:jei-get-recipes (integration-hooks-snapshot)) category))
+  ((or (:jei-get-recipes (registered-hooks))
+       default-jei-get-recipes) category))
 
 (defn jei-format-recipe [recipe]
-  ((:jei-format-recipe (integration-hooks-snapshot)) recipe))
+  ((or (:jei-format-recipe (registered-hooks))
+       default-jei-format-recipe) recipe))
 
 (defn describe-recipe [recipe]
-  ((:describe-recipe (integration-hooks-snapshot)) recipe))
+  ((or (:describe-recipe (registered-hooks))
+       default-describe-recipe) recipe))
 
 ;; ============================================================================
 ;; JEI NBT Subtype Item ID Registry — Framework [:registry :integrations :jei-nbt-subtype-ids]

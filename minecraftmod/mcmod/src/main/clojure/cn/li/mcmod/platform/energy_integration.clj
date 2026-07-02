@@ -1,26 +1,29 @@
 (ns cn.li.mcmod.platform.energy-integration
   "Platform-neutral bridge for energy integration settings.
 
-  State stored in Framework [:registry :integrations :energy]."
+  State stored in Framework [:registry :integrations :energy].
+
+  Registered hooks start empty; readers apply built-in defaults when content has
+  not claimed a slot yet."
   (:require [cn.li.mcmod.framework :as fw]))
 
-(defn- default-state []
-  {:forge-energy-conversion-rate (fn [] 1.0)
-   :ic2-energy-conversion-rate (fn [] 1.0)})
+(def ^:private default-forge-energy-conversion-rate (fn [] 1.0))
+(def ^:private default-ic2-energy-conversion-rate (fn [] 1.0))
 
 (def ^:private energy-path [:registry :integrations :energy])
 
-(defn- energy-hooks-snapshot []
+(defn- registered-hooks
+  []
   (if-let [fw-atom (fw/fw-atom)]
-    (get-in @fw-atom energy-path (default-state))
-    (default-state)))
+    (get-in @fw-atom energy-path {})
+    {}))
 
 (defn register-energy-integration-hooks!
   [hooks]
   (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom update-in energy-path
            (fn [current]
-             (let [base (or current (default-state))]
+             (let [base (or current {})]
                (reduce-kv (fn [m k v]
                             (if (and (contains? m k) (not= (get m k) v))
                               (throw (ex-info "Conflicting energy integration hook" {:key k}))
@@ -31,11 +34,13 @@
 (defn reset-energy-integration-hooks-for-test!
   []
   (when-let [fw-atom (fw/fw-atom)]
-    (swap! fw-atom assoc-in energy-path (default-state)))
+    (swap! fw-atom assoc-in energy-path {}))
   nil)
 
 (defn forge-energy-conversion-rate []
-  ((:forge-energy-conversion-rate (energy-hooks-snapshot))))
+  ((or (:forge-energy-conversion-rate (registered-hooks))
+       default-forge-energy-conversion-rate)))
 
 (defn ic2-energy-conversion-rate []
-  ((:ic2-energy-conversion-rate (energy-hooks-snapshot))))
+  ((or (:ic2-energy-conversion-rate (registered-hooks))
+       default-ic2-energy-conversion-rate)))
