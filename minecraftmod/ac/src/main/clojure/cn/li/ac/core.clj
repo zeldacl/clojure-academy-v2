@@ -1,5 +1,6 @@
 (ns cn.li.ac.core
-  (:require [cn.li.mcmod.lifecycle :as lifecycle]
+  (:require [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.lifecycle :as lifecycle]
             [cn.li.mcmod.spi.entity-render-registry :as entity-render-registry]
             [cn.li.ac.core.init :as core-init]
             [cn.li.ac.core.content-loader :as content-loader]
@@ -10,58 +11,21 @@
             [cn.li.ac.registry.hooks :as hooks]
             [cn.li.ac.testing.smoke-manifest :as smoke-manifest]))
 
-(defn default-lifecycle-hooks-runtime-state
-  []
-  false)
+;; Lifecycle hooks guard — Framework [:service :ac-lifecycle-hooks]
 
-(defn create-lifecycle-hooks-runtime
-  ([]
-   (create-lifecycle-hooks-runtime {}))
-  ([{:keys [state*]
-     :or {state* (atom (default-lifecycle-hooks-runtime-state))}}]
-   {::runtime ::lifecycle-hooks-runtime
-    :state* state*}))
+(def ^:private guard-path [:service :ac-lifecycle-hooks])
 
-(def ^:private _lifecycle-hooks-runtime (delay (create-lifecycle-hooks-runtime)))
-
-(def ^:dynamic *lifecycle-hooks-runtime* nil)
-
-(defn- lifecycle-hooks-runtime?
-  [runtime]
-  (and (map? runtime)
-       (= ::lifecycle-hooks-runtime (::runtime runtime))
-       (some? (:state* runtime))))
-
-(defn call-with-lifecycle-hooks-runtime
-  [runtime f]
-  (when-not (lifecycle-hooks-runtime? runtime)
-    (throw (ex-info "Expected lifecycle hooks runtime"
-                    {:runtime runtime})))
-  (binding [*lifecycle-hooks-runtime* runtime]
-    (f)))
-
-(defmacro with-lifecycle-hooks-runtime
-  [runtime & body]
-  `(call-with-lifecycle-hooks-runtime ~runtime (fn [] ~@body)))
-
-(defn- current-lifecycle-hooks-runtime
-  []
-  (or *lifecycle-hooks-runtime*
-      @_lifecycle-hooks-runtime))
-
-(defn- lifecycle-hooks-registered-atom
-  []
-  (:state* (current-lifecycle-hooks-runtime)))
-
-(defn lifecycle-hooks-guard-snapshot
-  []
-  @(lifecycle-hooks-registered-atom))
+(defn lifecycle-hooks-guard-snapshot []
+  (if-let [fw-atom fw/*framework*]
+    (boolean (get-in @fw-atom guard-path))
+    false))
 
 (defn reset-lifecycle-hooks-guard-for-test!
   ([]
    (reset-lifecycle-hooks-guard-for-test! false))
   ([registered?]
-   (reset! (lifecycle-hooks-registered-atom) (boolean registered?))
+   (when-let [fw-atom fw/*framework*]
+     (swap! fw-atom assoc-in guard-path (boolean registered?)))
    nil))
 
 (defn init
@@ -98,7 +62,10 @@
   content discovery. Requiring this namespace alone must not mutate lifecycle
   state."
   []
-  (when (compare-and-set! (lifecycle-hooks-registered-atom) false true)
+  (when (if-let [fw-atom fw/*framework*]
+          (let [k guard-path]
+            (nil? (get-in (swap! fw-atom update-in k #(if (nil? %) true %)) k)))
+          true)
     (smoke-manifest/register!)
     (lifecycle/register-content-init! #'init)
     (lifecycle/register-runtime-content-activation! #'activate-runtime-content!)

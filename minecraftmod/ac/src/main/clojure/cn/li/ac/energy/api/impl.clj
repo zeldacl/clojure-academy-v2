@@ -10,6 +10,7 @@
             [cn.li.ac.energy.service.item-manager :as item-manager]
             [cn.li.ac.energy.service.node-manager :as node-manager]
             [cn.li.ac.energy.domain.container :as container]
+            [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.util.log :as log]))
 
 (def ^:private WORLD-PROVIDER-OWNER :world)
@@ -159,44 +160,19 @@
 (defn- new-energy-system []
   (->EnergySystemImpl (atom {}) (atom {}) (atom {})))
 
-(defn create-energy-system-runtime
-  []
-  {::runtime ::energy-system-runtime
-   :systems* (atom {})})
+;; Energy system runtime — Framework [:service :energy-system]
 
-(def ^:private _energy-system-runtime (delay (create-energy-system-runtime)))
+(def ^:private es-path [:service :energy-system])
 
-(def ^:dynamic *energy-system-runtime* nil)
+(defn- systems-atom []
+  (if-let [fw-atom fw/*framework*]
+    (or (get-in @fw-atom es-path)
+        (let [a (atom {})]
+          (swap! fw-atom assoc-in es-path a)
+          a))
+    (atom {})))
 
-(defn- energy-system-runtime?
-  [runtime]
-  (and (map? runtime)
-       (= ::energy-system-runtime (::runtime runtime))
-       (some? (:systems* runtime))))
-
-(defn call-with-energy-system-runtime
-  [runtime f]
-  (when-not (energy-system-runtime? runtime)
-    (throw (ex-info "Expected energy system runtime"
-                    {:runtime runtime})))
-  (binding [*energy-system-runtime* runtime]
-    (f)))
-
-(defmacro with-energy-system-runtime
-  [runtime & body]
-  `(call-with-energy-system-runtime ~runtime (fn [] ~@body)))
-
-(defn- current-energy-system-runtime
-  []
-  (or *energy-system-runtime*
-      @_energy-system-runtime))
-
-(defn- systems-atom
-  []
-  (:systems* (current-energy-system-runtime)))
-
-(defn- systems-snapshot
-  []
+(defn- systems-snapshot []
   @(systems-atom))
 
 (defn energy-system

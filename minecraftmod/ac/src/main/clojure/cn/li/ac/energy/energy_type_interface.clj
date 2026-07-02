@@ -1,132 +1,79 @@
 (ns cn.li.ac.energy.energy-type-interface
-	"Energy type abstraction and registry.
+  "Energy type abstraction and registry.
 
-	This introduces a small, platform-neutral registry so different item energy
-	semantics can coexist without hard-coding all callers to one implementation."
-	(:require [cn.li.mcmod.framework :as fw] [cn.li.mcmod.util.log :as log]))
+  This introduces a small, platform-neutral registry so different item energy
+  semantics can coexist without hard-coding all callers to one implementation.
+
+  Registry stored in Framework [:registry :energy]."
+  (:require [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.util.log :as log]))
 
 (defprotocol EnergyType
-	(energy-type-id [this] "Stable keyword identifier for the type")
-	(energy-type-name [this] "Display name for debug/UI use")
-	(supports-item? [this item-stack] "Return true when this type can operate on the item")
-	(get-energy* [this item-stack] "Read current energy")
-	(get-capacity* [this item-stack] "Read capacity")
-	(get-bandwidth* [this item-stack] "Read transfer rate")
-	(set-energy*! [this item-stack amount] "Set exact energy")
-	(charge-item*! [this item-stack amount ignore-bandwidth] "Return leftover energy")
-	(discharge-item*! [this item-stack amount ignore-bandwidth] "Return extracted energy"))
+  (energy-type-id [this] "Stable keyword identifier for the type")
+  (energy-type-name [this] "Display name for debug/UI use")
+  (supports-item? [this item-stack] "Return true when this type can operate on the item")
+  (get-energy* [this item-stack] "Read current energy")
+  (get-capacity* [this item-stack] "Read capacity")
+  (get-bandwidth* [this item-stack] "Read transfer rate")
+  (set-energy*! [this item-stack amount] "Set exact energy")
+  (charge-item*! [this item-stack amount ignore-bandwidth] "Return leftover energy")
+  (discharge-item*! [this item-stack amount ignore-bandwidth] "Return extracted energy"))
 
-(defn default-energy-type-runtime-state
-	[]
-	{:types {}
-	 :frozen? false})
+;; Registry — Framework [:registry :energy]
 
-(defn create-energy-type-runtime
-	([]
-	 (create-energy-type-runtime {}))
-	([{:keys [state*]
-		 :or {state* (atom (default-energy-type-runtime-state))}}]
-	 {::runtime ::energy-type-runtime
-	  :state* state*}))
+(def ^:private et-path [:registry :energy])
 
-(def ^:private _energy-type-runtime (delay (create-energy-type-runtime)))
+(defn- energy-type-state-snapshot []
+  (if-let [fw-atom fw/*framework*]
+    (get-in @fw-atom et-path {:types {} :frozen? false})
+    {:types {} :frozen? false}))
 
-(def ^:dynamic *energy-type-runtime* nil)
+(defn- update-energy-type-state! [f & args]
+  (when-let [fw-atom fw/*framework*]
+    (swap! fw-atom update-in et-path
+           (fn [current] (apply f (or current {:types {} :frozen? false}) args))))
+  nil)
 
-(defn- energy-type-runtime?
-	[runtime]
-	(and (map? runtime)
-		 (= ::energy-type-runtime (::runtime runtime))
-		 (some? (:state* runtime))))
+(defn- assert-not-frozen! []
+  (when (:frozen? (energy-type-state-snapshot))
+    (throw (ex-info "Energy type registry is frozen" {}))))
 
-(defn call-with-energy-type-runtime
-	[runtime f]
-	(when-not (energy-type-runtime? runtime)
-		(throw (ex-info "Expected energy-type runtime"
-						{:runtime runtime})))
-	(binding [*energy-type-runtime* runtime]
-	  (f)))
+(defn register-energy-type! [energy-type]
+  (assert-not-frozen!)
+  (let [type-id (energy-type-id energy-type)]
+    (when-not (keyword? type-id)
+      (throw (ex-info "Energy type id must be a keyword" {:type-id type-id})))
+    (update-energy-type-state! update :types
+      (fn [registry]
+        (if-let [existing (get registry type-id)]
+          (if (= existing energy-type) registry
+            (throw (ex-info "Conflicting energy type id" {:type-id type-id})))
+          (assoc registry type-id energy-type))))
+    (log/debug "Registered energy type" type-id) energy-type))
 
-(defmacro with-energy-type-runtime
-	[runtime & body]
-	`(call-with-energy-type-runtime ~runtime (fn [] ~@body)))
+(defn unregister-energy-type! [type-id]
+  (assert-not-frozen!)
+  (update-energy-type-state! update :types dissoc type-id) nil)
 
-(defn- current-energy-type-runtime
-	[]
-	(or *energy-type-runtime*
-      @_energy-type-runtime))
+(defn freeze-energy-types! []
+  (update-energy-type-state! assoc :frozen? true) nil)
 
-(defn- energy-type-state-atom
-	[]
-	(:state* (current-energy-type-runtime)))
+(defn energy-types-snapshot [] (energy-type-state-snapshot))
 
-(defn- energy-type-state-snapshot
-	[]
-	@(energy-type-state-atom))
+(defn reset-energy-types-for-test! []
+  (when-let [fw-atom fw/*framework*]
+    (swap! fw-atom assoc-in et-path {:types {} :frozen? false}))
+  nil)
 
-(defn- update-energy-type-state!
-	[f & args]
-	(apply swap! (energy-type-state-atom) f args))
+(defn get-energy-type [type-id]
+  (get (:types (energy-type-state-snapshot)) type-id))
 
-(defn- assert-not-frozen!
-	[]
-	(when (:frozen? (energy-type-state-snapshot))
-		(throw (ex-info "Energy type registry is frozen" {}))))
+(defn list-energy-types []
+  (->> (:types (energy-type-state-snapshot)) vals (sort-by energy-type-id) vec))
 
-(defn register-energy-type!
-	[energy-type]
-	(assert-not-frozen!)
-	(let [type-id (energy-type-id energy-type)]
-		(when-not (keyword? type-id)
-			(throw (ex-info "Energy type id must be a keyword" {:type-id type-id})))
-		(update-energy-type-state!
-				 update :types
-					 (fn [registry]
-						 (if-let [existing (get registry type-id)]
-							 (if (= existing energy-type)
-								 registry
-								 (throw (ex-info "Conflicting energy type id" {:type-id type-id})))
-							 (assoc registry type-id energy-type))))
-		(log/debug "Registered energy type" type-id)
-		energy-type))
-
-(defn unregister-energy-type!
-	[type-id]
-	(assert-not-frozen!)
-	(update-energy-type-state! update :types dissoc type-id)
-	nil)
-
-(defn freeze-energy-types!
-	[]
-	(update-energy-type-state! assoc :frozen? true)
-	nil)
-
-(defn energy-types-snapshot
-	[]
-	(energy-type-state-snapshot))
-
-(defn reset-energy-types-for-test!
-	[]
-	(reset! (energy-type-state-atom) (default-energy-type-runtime-state))
-	nil)
-
-(defn get-energy-type
-	[type-id]
-	(get (:types (energy-type-state-snapshot)) type-id))
-
-(defn list-energy-types
-	[]
-	(->> (:types (energy-type-state-snapshot)) vals (sort-by energy-type-id) vec))
-
-(defn resolve-energy-type
-	"Resolve an energy type either by keyword or by probing a candidate item."
-	[type-or-item]
-	(cond
-		(keyword? type-or-item)
-		(get-energy-type type-or-item)
-
-		:else
-		(some (fn [energy-type]
-						(when (supports-item? energy-type type-or-item)
-							energy-type))
-					(vals (:types (energy-type-state-snapshot))))))
+(defn resolve-energy-type [type-or-item]
+  (cond
+    (keyword? type-or-item) (get-energy-type type-or-item)
+    :else (some (fn [energy-type]
+                  (when (supports-item? energy-type type-or-item) energy-type))
+                (vals (:types (energy-type-state-snapshot))))))

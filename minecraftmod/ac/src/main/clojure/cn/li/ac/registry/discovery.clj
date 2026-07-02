@@ -5,49 +5,23 @@
   existing phase-plugin registration flow. Providers register phase specs,
   and consumers materialize a merged load plan from those providers."
   (:require [cn.li.ac.registry.core :as core]
+            [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.util.log :as log]))
 
-(defn default-content-provider-registry-runtime-state
-  []
-  {:providers {}
-   :frozen? false})
+;; Registry — Framework [:registry :providers :content]
 
-(defn create-content-provider-registry-runtime
-  ([] (create-content-provider-registry-runtime {}))
-  ([{:keys [state*]
-     :or {state* (atom (default-content-provider-registry-runtime-state))}}]
-   {::runtime ::content-provider-registry-runtime
-    :state* state*}))
+(def ^:private disc-path [:registry :providers :content])
 
-(def ^:private _content-provider-registry-runtime (delay (create-content-provider-registry-runtime)))
+(defn- content-provider-registry-state-snapshot []
+  (if-let [fw-atom fw/*framework*]
+    (get-in @fw-atom disc-path {:providers {} :frozen? false})
+    {:providers {} :frozen? false}))
 
-(def ^:dynamic *content-provider-registry-runtime* nil)
-
-(defn call-with-content-provider-registry-runtime
-  [runtime f]
-  (when-not (and (map? runtime)
-                 (= ::content-provider-registry-runtime (::runtime runtime))
-                 (some? (:state* runtime)))
-    (throw (ex-info "Expected content provider registry runtime" {:runtime runtime})))
-  (binding [*content-provider-registry-runtime* runtime]
-    (f)))
-
-(defn- current-content-provider-registry-runtime
-  []
-  (or *content-provider-registry-runtime*
-      @_content-provider-registry-runtime))
-
-(defn- content-provider-registry-state-atom
-  []
-  (:state* (current-content-provider-registry-runtime)))
-
-(defn- content-provider-registry-state-snapshot
-  []
-  @(content-provider-registry-state-atom))
-
-(defn- update-content-provider-registry-state!
-  [f & args]
-  (apply swap! (content-provider-registry-state-atom) f args))
+(defn- update-content-provider-registry-state! [f & args]
+  (when-let [fw-atom fw/*framework*]
+    (swap! fw-atom update-in disc-path
+           (fn [current] (apply f (or current {:providers {} :frozen? false}) args))))
+  nil)
 
 (defn- assert-registry-open!
   []
@@ -62,9 +36,8 @@
   ([] (reset-provider-registry-for-test! {}))
   ([{:keys [providers frozen?]
      :or {providers {} frozen? false}}]
-   (reset! (content-provider-registry-state-atom)
-           {:providers providers
-            :frozen? frozen?})
+   (when-let [fw-atom fw/*framework*]
+     (swap! fw-atom assoc-in disc-path {:providers providers :frozen? frozen?}))
    nil))
 
 (defn freeze-provider-registry!

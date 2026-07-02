@@ -1,6 +1,7 @@
 (ns cn.li.ac.terminal.client.runtime
   "CLIENT-ONLY: shared owner-key state runtime for terminal UI."
-  (:require [cn.li.mcmod.hooks.core :as runtime-hooks]))
+  (:require [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (def ^:private default-owner-state
   {:terminal-installed? false
@@ -13,14 +14,17 @@
   {:next-generation 1
    :owners {}})
 
-(defn create-runtime
-  []
-  {::runtime ::terminal-client-runtime
-   :runtime-state* (atom default-runtime-state)})
+;; Terminal runtime — Framework [:service :terminal-runtime]
 
-(def ^:private _terminal-runtime (delay (create-runtime)))
+(def ^:private term-path [:service :terminal-runtime])
 
-(def ^:dynamic *runtime* nil)
+(defn- runtime-state-atom []
+  (if-let [fw-atom fw/*framework*]
+    (or (get-in @fw-atom term-path)
+        (let [a (atom default-runtime-state)]
+          (swap! fw-atom assoc-in term-path a)
+          a))
+    (atom default-runtime-state)))
 
 (def ^:dynamic *owner* nil)
 
@@ -54,21 +58,13 @@
        (= ::terminal-client-runtime (::runtime runtime))
        (some? (:runtime-state* runtime))))
 
-(defn call-with-runtime
-  [runtime f]
-  (when-not (runtime? runtime)
-    (throw (ex-info "Expected terminal client runtime" {:runtime runtime})))
-  (binding [*runtime* runtime]
-    (f)))
+(defn call-with-runtime [runtime f] (f runtime))
 
-(defmacro with-runtime
-  [runtime & body]
+(defmacro with-runtime [runtime & body]
   `(call-with-runtime ~runtime (fn [] ~@body)))
 
-(defn- state-atom
-  []
-  (:runtime-state* (or *runtime*
-                       @_terminal-runtime)))
+(defn- state-atom []
+  (runtime-state-atom))
 
 (defn- runtime-snapshot
   []

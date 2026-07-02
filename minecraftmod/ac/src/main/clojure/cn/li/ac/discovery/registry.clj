@@ -1,72 +1,40 @@
 (ns cn.li.ac.discovery.registry
-  "Generic provider registry used by discovery-based bootstrap flows."
+  "Generic provider registry used by discovery-based bootstrap flows.
+
+  Registry stored in Framework [:registry :providers :discovery]."
   (:require [cn.li.ac.discovery.core :as core]
+            [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.util.log :as log]))
 
-(defn default-provider-registry-runtime-state
-  []
-  {:providers {}
-   :frozen? false})
+(def ^:private prov-path [:registry :providers :discovery])
 
-(defn create-provider-registry-runtime
-  ([] (create-provider-registry-runtime {}))
-  ([{:keys [state*]
-     :or {state* (atom (default-provider-registry-runtime-state))}}]
-   {::runtime ::provider-registry-runtime
-    :state* state*}))
+(defn- provider-registry-state-snapshot []
+  (if-let [fw-atom fw/*framework*]
+    (get-in @fw-atom prov-path {:providers {} :frozen? false})
+    {:providers {} :frozen? false}))
 
-(def ^:private _provider-registry-runtime (delay (create-provider-registry-runtime)))
+(defn- update-provider-registry-state! [f & args]
+  (when-let [fw-atom fw/*framework*]
+    (swap! fw-atom update-in prov-path
+           (fn [current] (apply f (or current {:providers {} :frozen? false}) args))))
+  nil)
 
-(def ^:dynamic *provider-registry-runtime* nil)
-
-(defn call-with-provider-registry-runtime
-  [runtime f]
-  (when-not (and (map? runtime)
-                 (= ::provider-registry-runtime (::runtime runtime))
-                 (some? (:state* runtime)))
-    (throw (ex-info "Expected provider registry runtime" {:runtime runtime})))
-  (binding [*provider-registry-runtime* runtime]
-    (f)))
-
-(defn- current-provider-registry-runtime
-  []
-  (or *provider-registry-runtime*
-      @_provider-registry-runtime))
-
-(defn- provider-registry-state-atom
-  []
-  (:state* (current-provider-registry-runtime)))
-
-(defn- provider-registry-state-snapshot
-  []
-  @(provider-registry-state-atom))
-
-(defn- update-provider-registry-state!
-  [f & args]
-  (apply swap! (provider-registry-state-atom) f args))
-
-(defn- assert-registry-open!
-  []
+(defn- assert-registry-open! []
   (when (:frozen? (provider-registry-state-snapshot))
     (throw (ex-info "Discovery provider registry is frozen" {}))))
 
-(defn provider-registry-snapshot
-  []
+(defn provider-registry-snapshot []
   (provider-registry-state-snapshot))
 
 (defn reset-provider-registry-for-test!
   ([] (reset-provider-registry-for-test! {}))
-  ([{:keys [providers frozen?]
-     :or {providers {} frozen? false}}]
-   (reset! (provider-registry-state-atom)
-           {:providers providers
-            :frozen? frozen?})
+  ([{:keys [providers frozen?] :or {providers {} frozen? false}}]
+   (when-let [fw-atom fw/*framework*]
+     (swap! fw-atom assoc-in prov-path {:providers providers :frozen? frozen?}))
    nil))
 
-(defn freeze-provider-registry!
-  []
-  (update-provider-registry-state! assoc :frozen? true)
-  nil)
+(defn freeze-provider-registry! []
+  (update-provider-registry-state! assoc :frozen? true) nil)
 
 (defn register-provider!
   [provider]
@@ -82,12 +50,10 @@
   (update-provider-registry-state! update :providers dissoc provider-id)
   nil)
 
-(defn clear-providers!
-  []
+(defn clear-providers! []
   (reset-provider-registry-for-test!))
 
-(defn registered-providers
-  []
+(defn registered-providers []
   (->> (:providers (provider-registry-state-snapshot))
        vals
        (sort-by core/provider-sort-key)
