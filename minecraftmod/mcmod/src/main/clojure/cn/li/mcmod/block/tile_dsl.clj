@@ -128,8 +128,9 @@ Enforces:
 - a block-id can only belong to one tile-id"
   [tile-spec]
   (validate-tile-spec tile-spec)
-  (let [{:keys [id blocks]} tile-spec]
-    (when-let [fw-atom (fw/fw-atom)]
+  (let [{:keys [id blocks]} tile-spec
+        fw (fw/fw-atom)]
+    (when-let [fw-atom fw]
       (swap! fw-atom update-in tile-path
              (fn [{:keys [by-id block->tile-id] :as reg}]
                (when (contains? by-id id)
@@ -143,12 +144,16 @@ Enforces:
                                      {:block-id block-id
                                       :existing-tile-id existing
                                       :new-tile-id id})))))
-               (-> (or reg {:by-id {} :block->tile-id {}})
-                   (assoc-in [:by-id id] tile-spec)
-                   (update :block->tile-id
-                           into
-                           (map (fn [b] [b id]) blocks))))))
-    (log/info "Registered tile" id "for blocks" blocks)
+               ;; Merge defaults to ensure :by-id and :block->tile-id are maps
+               ;; even when reg is {} (empty map from framework init).
+               ;; (or reg defaults) fails because {} is truthy in Clojure.
+               (let [reg (merge {:by-id {} :block->tile-id {}} reg)]
+                 (-> reg
+                     (assoc-in [:by-id id] tile-spec)
+                     (update :block->tile-id
+                             into
+                             (map (fn [b] [b id]) blocks))))))
+      (log/info "Registered tile" id "for blocks" blocks))
     tile-spec))
 
 (defn get-tile
