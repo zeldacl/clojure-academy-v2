@@ -49,10 +49,11 @@
   (let [inv-page (tech-ui/create-inventory-page "windmain")
         pages [inv-page]
         info (fn [info-area]
-               (let [y0 (tech-ui/add-sepline info-area "Info" 0)
-                     y1 (tech-ui/add-property info-area "altitude" (fn [] (str @(:altitude container))) y0)
-                     y2 (tech-ui/add-property info-area "fan" (fn [] (if @(:fan-installed container) "YES" "NO")) y1)]
-                 (tech-ui/add-property info-area "obstacle" (fn [] (if @(:no-obstacle container) "CLEAR" "BLOCKED")) y2)))]
+               (let [safe-val #(some-> % deref)
+                     y0 (tech-ui/add-sepline info-area "Info" 0)
+                     y1 (tech-ui/add-property info-area "altitude" (fn [] (str (or (safe-val (:altitude container)) "..."))) y0)
+                     y2 (tech-ui/add-property info-area "fan" (fn [] (if (safe-val (:fan-installed container)) "YES" "NO")) y1)]
+                 (tech-ui/add-property info-area "obstacle" (fn [] (if (safe-val (:no-obstacle container)) "CLEAR" "BLOCKED")) y2)))]
     (tech-ui/create-tech-screen-container
       {:pages pages
        :container container
@@ -78,18 +79,19 @@
 (def ^:private base-server-menu-sync! (:server-menu-sync! base-sync-fns))
 
 (defn- create-base-screen [container minecraft-container _player]
-  (let [inv-page (tech-ui/create-rework-page "guis/rework/page_windbase.xml")
+  (let [safe-val #(some-> % deref)
+        inv-page (tech-ui/create-rework-page "guis/rework/page_windbase.xml")
         wireless-window (wireless-tab/create-wireless-panel {:role :generator
                                                              :container container
                                                              :menu minecraft-container})
         pages [inv-page {:id "wireless" :window wireless-window}]
-        max-e (fn [] (max 1.0 (double @(:max-energy container))))
+        max-e (fn [] (max 1.0 (double (or (safe-val (:max-energy container)) 0.0))))
         info (fn [info-area]
-               (let [y0 (tech-ui/add-histogram info-area [(tech-ui/hist-buffer (fn [] (double @(:energy container))) (max-e))] 0)
+               (let [y0 (tech-ui/add-histogram info-area [(tech-ui/hist-buffer (fn [] (double (or (safe-val (:energy container)) 0.0))) (max-e))] 0)
                      y1 (tech-ui/add-sepline info-area "Info" y0)
-                     y2 (tech-ui/add-property info-area "altitude" (fn [] (str @(:altitude container))) y1)
-                     y3 (tech-ui/add-property info-area "gen_speed" (fn [] (format "%.2fIF/T" (double @(:gen-speed container)))) y2)]
-                 (tech-ui/add-property info-area "status" (fn [] @(:status container)) y3)))
+                     y2 (tech-ui/add-property info-area "altitude" (fn [] (str (or (safe-val (:altitude container)) "..."))) y1)
+                     y3 (tech-ui/add-property info-area "gen_speed" (fn [] (format "%.2fIF/T" (double (or (safe-val (:gen-speed container)) 0.0)))) y2)]
+                 (tech-ui/add-property info-area "status" (fn [] (or (safe-val (:status container)) "IDLE")) y3)))
         ;; Structure completeness display — icon opacity changes matching AcademyCraft
         page-widget (:window inv-page)
         ui-block (some-> page-widget (cgui-core/find-widget "ui_block"))]
@@ -102,9 +104,9 @@
             dt-middle (when icon-middle (comp/get-drawtexture-component icon-middle))
             dt-base (when icon-base (comp/get-drawtexture-component icon-base))
             ;; Preserve the base RGB from initial texture color
-            base-rgb-main (when dt-main (bit-and @(:state dt-main) :color 0x00FFFFFF))
-            base-rgb-middle (when dt-middle (bit-and @(:state dt-middle) :color 0x00FFFFFF))
-            base-rgb-base (when dt-base (bit-and @(:state dt-base) :color 0x00FFFFFF))
+            base-rgb-main (when dt-main (bit-and (:color @(:state dt-main)) 0x00FFFFFF))
+            base-rgb-middle (when dt-middle (bit-and (:color @(:state dt-middle)) 0x00FFFFFF))
+            base-rgb-base (when dt-base (bit-and (:color @(:state dt-base)) 0x00FFFFFF))
             set-dt-alpha! (fn [dt base-rgb alpha-float]
                             (when (and dt base-rgb)
                               (let [a (int (* (double alpha-float) 255.0))
@@ -112,8 +114,8 @@
                                 (swap! (:state dt) assoc :color c))))]
         (events/on-frame ui-block
           (fn [_]
-            (let [completeness @(:completeness container)
-                  status @(:status container)]
+            (let [completeness (or (safe-val (:completeness container)) "")
+                  status (or (safe-val (:status container)) "")]
               (case completeness
                 "complete"
                 (if (= status "COMPLETE")
