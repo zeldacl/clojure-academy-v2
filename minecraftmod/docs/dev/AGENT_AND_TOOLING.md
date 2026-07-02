@@ -537,6 +537,52 @@
 
 ---
 
+#### 铁律十一：所有系统级状态通过 Framework 访问（强制）
+
+**根源**：项目中的内容注册表（block/item/particle 等 DSL）和运行时服务（lifecycle、ability-runtime 等）已从散落的 `defonce`/`delay`/`^:dynamic` 单例迁移到统一的 Framework atom（`cn.li.mcmod.framework/*framework*`）。新代码不得创建顶层可变状态。
+
+**禁止模式**：
+```clojure
+;; ❌ 禁止：创建新的顶层 delay / atom / defonce
+(def ^:private _my-registry (delay (create-my-registry-runtime)))
+(defonce ^:private my-state* (atom {}))
+(def ^:dynamic *my-runtime* nil)
+```
+
+**正确模式**：从 Framework 读写。
+```clojure
+;; ✅ 读取：Framework [:registry :domain]
+(get-in @fw/*framework* [:registry :blocks id])
+
+;; ✅ 写入（仅限 init 阶段，通过保安函数）：
+(fw.registry/register! fw/*framework* :blocks id spec)
+```
+
+**唯一例外**：
+- `^:dynamic *framework*` — 框架唯一的全局动态变量
+- 平台 SPI 适配器 `^:dynamic *runtime*` — 仅在 `mcmod/platform/*.clj` 中，且正逐步迁移至 Framework `[:platform :adapter-key]`
+- 渲染资源（texture registry、shader）— OpenGL 绑定，不入 Framework
+- 客户端 session 状态 — 闭包工厂管理，不入 Framework
+
+---
+
+#### 铁律十二：Per-player 可变状态不入 Framework（强制）
+
+**根源**：玩家实时数据（技能冷却 CD、蓝量 CP、充能层数 charge-ticks、连击 Buffer）必须在物理上隔离存储。将 per-player 可变状态存入 Framework 的单一 atom 会导致多人联机时 CAS 自旋风暴——50 人同时释放技能 = 50 条线程并发 `swap!` 竞争同一 atom → TPS 雪崩。
+
+**正确归属**：
+| 数据类别 | 存储位置 |
+|---------|---------|
+| 玩家 CD/CP/充能/context-registry | Player NBT / 私有 atom（`AtomAbilityStore` per-player） |
+| 无线网络拓扑 | Minecraft World SavedData（per-world） |
+| 方块实体实例数据（电量/物品槽） | Minecraft BlockEntity NBT |
+| 技能配置/VTable/粒子类型 | Framework `:registry/*`（只读，frozen） |
+| 平台适配器函数 | Framework `:platform/*`（只读） |
+
+**实现**：`ac/ability/service/runtime_store.clj` 的 `AtomAbilityStore` 使用 `ConcurrentHashMap<String, Atom>` —— 每个 player 独立 atom，`swap!` 只影响该 player，零跨玩家竞争。
+
+---
+
 ### Schema 验证层：纯 Clojure Spec v1（已移除 Malli）
 
 Malli 已被完全移除，替换为 `cn.li.mcmod.schema.core` 中的纯 Clojure 实现（Spec v1）。动机：
