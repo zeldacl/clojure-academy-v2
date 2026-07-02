@@ -6,29 +6,27 @@
   without any skill-specific knowledge."
   (:require [cn.li.ac.ability.client.effects.queue-infra :as queue-infra]
             [cn.li.mcmod.framework :as fw]
-            [cn.li.mcmod.util.log :as log]))
+            [cn.li.mcmod.util.log :as log])
+  (:import [java.util.concurrent ConcurrentLinkedQueue]))
 
 ;; ---------------------------------------------------------------------------
 ;; Camera pitch delta accumulator (shared across all hand effects)
 ;; ---------------------------------------------------------------------------
 
 ;; Camera pitch runtime — Framework [:service :camera-pitch]
+;; Uses ConcurrentLinkedQueue (not Atom) for lock-free, non-blocking
+;; queue between render thread and game logic / network threads.
 
 (def ^:private cp-path [:service :camera-pitch])
 
-(defn- camera-pitch-deltas-atom []
+(defn- camera-pitch-deltas-queue ^ConcurrentLinkedQueue
+  []
   (if-let [fw-atom (fw/fw-atom)]
     (or (get-in @fw-atom cp-path)
-        (let [a (atom {})] (swap! fw-atom assoc-in cp-path a) a))
-    (atom {})))
-
-(defn- camera-pitch-deltas-snapshot
-  []
-  @(camera-pitch-deltas-atom))
-
-(defn- update-camera-pitch-deltas!
-  [f & args]
-  (apply swap! (camera-pitch-deltas-atom) f args))
+        (let [q (ConcurrentLinkedQueue.)]
+          (swap! fw-atom assoc-in cp-path q)
+          q))
+    (ConcurrentLinkedQueue.)))
 
 (defn- normalize-session-id
   [owner-or-session]
@@ -44,7 +42,7 @@
   ([delta]
    (add-camera-pitch-delta! nil delta))
   ([owner-or-session delta]
-  (queue-infra/queue-effect! (camera-pitch-deltas-atom) "hand" owner-or-session (float delta))
+  (queue-infra/queue-effect! (camera-pitch-deltas-queue) "hand" owner-or-session (float delta))
    nil))
 
 (defn add-current-camera-pitch-delta!
@@ -56,13 +54,19 @@
   ([]
    (drain-camera-pitch-deltas! nil))
   ([owner-or-session]
-   (queue-infra/poll-effects! (camera-pitch-deltas-atom) "hand" owner-or-session)))
+   (queue-infra/poll-effects! (camera-pitch-deltas-queue) "hand" owner-or-session)))
 
 (defn clear-session-camera-pitch-deltas!
+  "Remove all queued camera pitch deltas for a specific session from the
+  lock-free queue."
   ([]
    (clear-session-camera-pitch-deltas! nil))
   ([owner-or-session]
-  (update-camera-pitch-deltas! dissoc (normalize-session-id owner-or-session))
+   (let [session-id (normalize-session-id owner-or-session)
+         ^ConcurrentLinkedQueue q (camera-pitch-deltas-queue)]
+     (.removeIf q (reify java.util.function.Predicate
+                    (test [_ entry]
+                      (= session-id (first entry))))))
    nil))
 
 (defn clear-owner-camera-pitch-deltas!
@@ -182,8 +186,8 @@
 (defn hand-effect-registry-snapshot
   []
   (assoc (hand-effect-state-snapshot)
-   :camera-pitch-deltas (camera-pitch-deltas-snapshot)
-   ))
+         ;; Drain queue to array for snapshot — non-mutating peek
+         :camera-pitch-deltas (vec (.toArray (camera-pitch-deltas-queue)))))
 
 (defn effect-state-snapshot
   [effect-id]
@@ -205,7 +209,7 @@
 
 (defn reset-hand-effect-registry-for-test!
   []
-  (reset! (camera-pitch-deltas-atom) {})
+  (.clear (camera-pitch-deltas-queue))
   (reset! (hand-effect-state-atom) (default-hand-effect-runtime-state))
   nil)
 

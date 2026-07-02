@@ -154,11 +154,9 @@
   so variants are not treated as duplicates."
   [^ISubtypeRegistration registration]
   (try
-    (let [modid mod-config/*mod-id*
-          item-ids (integration-runtime/get-jei-nbt-subtype-item-ids)
+    (let [item-ids (integration-runtime/get-jei-nbt-subtype-item-ids)
           items (->> item-ids
-        (map (fn [id]
-          (registry-state/get-registered-item (str modid ":" id))))
+                     (map registry-state/get-registered-item)
                      (remove nil?)
                      vec)]
       (when (seq items)
