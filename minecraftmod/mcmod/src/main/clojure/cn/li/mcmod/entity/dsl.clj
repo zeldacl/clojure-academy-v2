@@ -5,16 +5,8 @@
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.util.log :as log]))
 
-(defn create-entity-registry-runtime
-  ([] (create-entity-registry-runtime {}))
-  ([{:keys [registry]}]
-   {:cn.li.mcmod.entity.dsl/runtime ::entity-registry-runtime
-    :registry (or registry (registry-core/atom-registry {}))}))
 
-(def ^:private _entity-registry (delay (create-entity-registry-runtime)))
 
-(defn- entity-registry-state []
-  (:registry @_entity-registry))
 
 (defrecord EntitySpec [id registry-name entity-kind category
                        width height

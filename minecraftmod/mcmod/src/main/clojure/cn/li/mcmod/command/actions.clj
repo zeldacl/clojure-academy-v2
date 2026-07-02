@@ -30,22 +30,14 @@
   #{:send-message
     :grant-advancement})
 
-(defn create-action-executor-registry-runtime
-  ([] (create-action-executor-registry-runtime {}))
-  ([{:keys [state*]}]
-   {:cn.li.mcmod.command.actions/runtime ::action-executor-registry-runtime
-    :state* (or state* (atom {}))}))
+;; Action executors stored in Framework [:registry :handlers :action-executors]
 
-(def ^:private _action-executor-registry-runtime (delay (create-action-executor-registry-runtime)))
-
-(def ^:dynamic *action-executor-registry-runtime* nil)
-
-(defn- action-executors-atom []
-  (:state* (or *action-executor-registry-runtime*
-                  @_action-executor-registry-runtime)))
+(def ^:private executors-path [:registry :handlers :action-executors])
 
 (defn- action-executors-snapshot []
-  @(action-executors-atom))
+  (if-let [fw-atom fw/*framework*]
+    (get-in @fw-atom executors-path {})
+    {}))
 
 (defn valid-action-types
   "Return the currently registered command action ids."
@@ -61,7 +53,8 @@
   [action-type]
   (when-not (keyword? action-type)
     (throw (ex-info "Action type must be a keyword" {:action-type action-type})))
-  (swap! (action-executors-atom) update action-type #(or % nil))
+  (when-let [fw-atom fw/*framework*]
+    (swap! fw-atom update-in (conj executors-path action-type) #(or % nil)))
   nil)
 
 (defn register-action-types!
@@ -81,7 +74,8 @@
   (when-not (fn? executor-fn)
     (throw (ex-info "Action executor must be a function" {:action-type action-type
                                                            :executor executor-fn})))
-  (swap! (action-executors-atom) assoc action-type executor-fn)
+  (when-let [fw-atom fw/*framework*]
+    (swap! fw-atom assoc-in (conj executors-path action-type) executor-fn))
   nil)
 
 (defn register-action-executors!

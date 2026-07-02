@@ -5,205 +5,74 @@
   code does not contain hardcoded command names. All registration information
   is dynamically retrieved from the command DSL system.
 
-  Architecture:
-  - Platform code queries this module for what to register
-  - Game content registers command registry into this module
-  - Platform code stays generic"
+  State stored in Framework [:registry :commands :metadata]."
   (:require [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.framework :as fw]))
 
-(defn- default-command-metadata-runtime-state []
-  {})
-
-(defn create-command-metadata-runtime
-  ([] (create-command-metadata-runtime {}))
-  ([{:keys [state*]}]
-   {:cn.li.mcmod.command.metadata/runtime ::command-metadata-runtime
-    :state* (or state* (atom (default-command-metadata-runtime-state)))}))
-
-(def ^:private _command-metadata-runtime (delay (create-command-metadata-runtime)))
-
-(def ^:dynamic *command-metadata-runtime* nil)
-
-(defn- command-registry-atom []
-  (:state* (or *command-metadata-runtime*
-                  @_command-metadata-runtime)))
+(def ^:private cmd-path [:registry :commands :metadata])
 
 (defn- command-registry-snapshot []
-  @(command-registry-atom))
+  (if-let [fw-atom fw/*framework*]
+    (get-in @fw-atom cmd-path {})
+    {}))
+
+(defn- resolve-command-registry []
+  (command-registry-snapshot))
 
 (defn register-command-registry!
   "Register/replace the full command registry map provided by game content."
   [registry]
-  (reset! (command-registry-atom) (or registry {}))
+  (when-let [fw-atom fw/*framework*]
+    (swap! fw-atom assoc-in cmd-path (or registry {})))
   nil)
 
-(defn- resolve-command-registry
-  []
-  (command-registry-snapshot))
-
 ;; ============================================================================
-;; Command Registration Metadata
+;; Command Metadata Queries
 ;; ============================================================================
 
-(defn get-all-command-ids
-  "Returns a sequence of all registered command IDs from the command DSL.
+(defn get-all-command-ids []
+  (keys (resolve-command-registry)))
 
-  Platform code should iterate over this list to register all commands,
-  without knowing specific command names.
+(defn get-command-spec [command-id]
+  (get (resolve-command-registry) command-id))
 
-  Returns:
-     Sequence of command ID strings (e.g., [\"content-command\" \"admin-action\"])"
-  []
-  (when-let [registry (resolve-command-registry)]
-    (keys registry)))
+(defn get-command-name [command-id]
+  (when-let [spec (get-command-spec command-id)]
+    (:name spec)))
 
-(defn get-command-spec
-  "Retrieves the full command specification from the DSL.
-
-  Args:
-    command-id: String - Command identifier
-
-  Returns:
-    CommandSpec record with all properties"
-  [command-id]
-  (when-let [registry (resolve-command-registry)]
-    (get registry command-id)))
-
-(defn get-command-permission-level
-  "Returns the permission level for a command.
-
-  Args:
-    command-id: String - Command identifier
-
-  Returns:
-    Integer - Permission level (0=all, 2=op, 4=console)"
-  [command-id]
+(defn get-command-permission-level [command-id]
   (when-let [spec (get-command-spec command-id)]
     (:permission-level spec)))
 
-(defn get-command-arguments
-  "Returns the arguments for a command.
-
-  Args:
-    command-id: String - Command identifier
-
-  Returns:
-    Vector of ArgumentSpec records"
-  [command-id]
+(defn get-command-arguments [command-id]
   (when-let [spec (get-command-spec command-id)]
     (:arguments spec)))
 
-(defn get-command-executor
-  "Returns the executor function for a command.
-
-  Args:
-    command-id: String - Command identifier
-
-  Returns:
-    Function or nil"
-  [command-id]
+(defn get-command-executor [command-id]
   (when-let [spec (get-command-spec command-id)]
     (:executor-fn spec)))
 
-(defn get-command-description
-  "Returns the description for a command.
-
-  Args:
-    command-id: String - Command identifier
-
-  Returns:
-    String - Human-readable description"
-  [command-id]
+(defn get-command-description [command-id]
   (when-let [spec (get-command-spec command-id)]
     (:description spec)))
 
-(defn get-subcommands
-  "Returns the subcommands map for a command tree.
-
-  Args:
-    command-id: String - Command identifier
-
-  Returns:
-    Map of subcommand-name -> SubcommandSpec, or nil"
-  [command-id]
+(defn get-subcommands [command-id]
   (when-let [spec (get-command-spec command-id)]
     (:subcommands spec)))
 
-(defn has-subcommands?
-  "Check if a command has subcommands (is a command tree).
+(defn has-subcommands? [command-id]
+  (boolean (get-subcommands command-id)))
 
-  Args:
-    command-id: String - Command identifier
+(defn get-all-subcommand-ids [command-id]
+  (keys (or (get-subcommands command-id) {})))
 
-  Returns:
-    Boolean"
-  [command-id]
-  (boolean (seq (get-subcommands command-id))))
-
-(defn get-subcommand-spec
-  "Get a specific subcommand spec from a command tree.
-
-  Args:
-    command-id: String - Command identifier
-    subcommand-name: String or keyword - Subcommand name
-
-  Returns:
-    SubcommandSpec record or nil"
-  [command-id subcommand-name]
+(defn get-subcommand-spec [command-id subcommand-name]
   (when-let [subcommands (get-subcommands command-id)]
-    (get subcommands (keyword subcommand-name))))
+    (get subcommands subcommand-name)))
 
-(defn get-subcommand-executor
-  "Get the executor function for a subcommand.
-
-  Args:
-    command-id: String - Command identifier
-    subcommand-name: String or keyword - Subcommand name
-
-  Returns:
-    Function or nil"
-  [command-id subcommand-name]
-  (when-let [subcommand-spec (get-subcommand-spec command-id subcommand-name)]
-    (:executor-fn subcommand-spec)))
-
-(defn get-subcommand-arguments
-  "Get the arguments for a subcommand.
-
-  Args:
-    command-id: String - Command identifier
-    subcommand-name: String or keyword - Subcommand name
-
-  Returns:
-    Vector of ArgumentSpec records"
-  [command-id subcommand-name]
-  (when-let [subcommand-spec (get-subcommand-spec command-id subcommand-name)]
-    (:arguments subcommand-spec)))
-
-(defn get-subcommand-permission-level
-  "Get the permission level for a subcommand (inherits from parent if not set).
-
-  Args:
-    command-id: String - Command identifier
-    subcommand-name: String or keyword - Subcommand name
-
-  Returns:
-    Integer - Permission level"
-  [command-id subcommand-name]
-  (when-let [subcommand-spec (get-subcommand-spec command-id subcommand-name)]
-    (or (:permission-level subcommand-spec)
-        (get-command-permission-level command-id))))
-
-;; ============================================================================
-;; Initialization
-;; ============================================================================
-
-(defn init-command-metadata!
-  "Initialize command metadata system.
-
-  Called during mod initialization to ensure command DSL is ready.
-  Platform code should call this before attempting registration."
+(defn clear-command-registry!
+  "Clear command registry. Intended for tests."
   []
-  ;; Command DSL is initialized when the content command namespace loads
-  (log/info "Command metadata system initialized")
+  (when-let [fw-atom fw/*framework*]
+    (swap! fw-atom assoc-in cmd-path {}))
   nil)

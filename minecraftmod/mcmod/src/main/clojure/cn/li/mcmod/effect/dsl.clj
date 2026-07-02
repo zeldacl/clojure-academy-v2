@@ -5,19 +5,9 @@
             [cn.li.mcmod.framework :as fw]
 						[cn.li.mcmod.util.log :as log]))
 
-(defn create-effect-registry-runtime
-	([] (create-effect-registry-runtime {}))
-	([{:keys [registry]}]
-	 {:cn.li.mcmod.effect.dsl/runtime ::effect-registry-runtime
-	  :registry (or registry (registry-core/atom-registry {}))}))
 
-(def ^:private _effect-registry (delay (create-effect-registry-runtime)))
 
-(def ^:dynamic *effect-registry-runtime* nil)
 
-(defn- effect-registry-state []
-	(:registry (or *effect-registry-runtime*
-	               @_effect-registry)))
 
 (defrecord EffectSpec [id registry-name category color tick-interval damage-per-tick properties])
 

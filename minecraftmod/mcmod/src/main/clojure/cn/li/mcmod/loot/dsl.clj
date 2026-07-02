@@ -4,19 +4,9 @@
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.util.log :as log]))
 
-(defn create-loot-injection-registry-runtime
-  ([] (create-loot-injection-registry-runtime {}))
-  ([{:keys [registry]}]
-   {:cn.li.mcmod.loot.dsl/runtime ::loot-injection-registry-runtime
-    :registry (or registry (registry-core/atom-registry {}))}))
 
-(def ^:private _loot-injection-registry (delay (create-loot-injection-registry-runtime)))
 
-(def ^:dynamic *loot-injection-registry-runtime* nil)
 
-(defn- loot-injection-registry-state []
-  (:registry (or *loot-injection-registry-runtime*
-                  @_loot-injection-registry)))
 
 (defrecord LootInjectionSpec
   [id target-table item-id weight quality min-count max-count])

@@ -3,6 +3,7 @@
   (:require [cn.li.mcmod.gui.owner-contract :as owner-contract]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.platform.dispatch :as platform-dispatch]
+            [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.util.log :as log]))
 
 (def ^:private CLIENT-RPC-CHANNEL :client-rpc)
@@ -211,9 +212,19 @@
         :ensure-installed-client-network-session! ensure-installed-client-network-session!
         :clear-client-session-state! clear-client-session-state!}))))
 
-(def ^:private _client-runtime (delay (create-client-runtime)))
+;; Client runtime stored in Framework [:service :network-client]
 
-(def ^:dynamic *client-runtime* nil)
+(def ^:private client-path [:service :network-client])
+
+(defn- ensure-client-runtime
+  "Lazy-init the client runtime in Framework on first access."
+  []
+  (if-let [fw-atom fw/*framework*]
+    (or (get-in @fw-atom client-path)
+        (let [rt (create-client-runtime)]
+          (swap! fw-atom assoc-in client-path rt)
+          rt))
+    (create-client-runtime)))
 
 (defn client-runtime?
   [value]
@@ -221,20 +232,7 @@
 
 (defn current-client-runtime
   []
-  (or *client-runtime*
-      @_client-runtime))
-
-(defmacro with-client-runtime
-  [runtime & body]
-  `(call-with-client-runtime ~runtime (fn [] ~@body)))
-
-(defn call-with-client-runtime
-  [runtime f]
-  (when-not (client-runtime? runtime)
-    (throw (ex-info "Expected client runtime"
-                    {:runtime runtime})))
-  (binding [*client-runtime* runtime]
-    (f)))
+  (ensure-client-runtime))
 
 (defn client-runtime-state-atom
   []

@@ -2,59 +2,23 @@
   "Server-side RPC handler registry for GUI/network logic"
   (:require [cn.li.mcmod.gui.registry-contract :as registry-contract]
             [cn.li.mcmod.gui.owner-contract :as owner-contract]
+            [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.util.log :as log]))
 
-(defn default-network-server-runtime-state
-  []
-  {:handlers {}
-   :frozen? false})
+;; Network server handlers stored in Framework [:service :network-server]
 
-(defn create-network-server-runtime
-  ([]
-   (create-network-server-runtime {}))
-  ([{:keys [state*]
-     :or {state* (atom (default-network-server-runtime-state))}}]
-   {::runtime ::network-server-runtime
-    :state* state*}))
+(def ^:private server-path [:service :network-server])
 
-(def ^:private _network-server-runtime (delay (create-network-server-runtime)))
+(defn- network-server-state-snapshot []
+  (if-let [fw-atom fw/*framework*]
+    (get-in @fw-atom server-path {:handlers {} :frozen? false})
+    {:handlers {} :frozen? false}))
 
-(def ^:dynamic *network-server-runtime* nil)
-
-(defn- network-server-runtime?
-  [runtime]
-  (and (map? runtime)
-       (= ::network-server-runtime (::runtime runtime))
-       (some? (:state* runtime))))
-
-(defn call-with-network-server-runtime
-  [runtime f]
-  (when-not (network-server-runtime? runtime)
-    (throw (ex-info "Expected network server runtime"
-                    {:runtime runtime})))
-  (binding [*network-server-runtime* runtime]
-    (f)))
-
-(defmacro with-network-server-runtime
-  [runtime & body]
-  `(call-with-network-server-runtime ~runtime (fn [] ~@body)))
-
-(defn- current-network-server-runtime
-  []
-  (or *network-server-runtime*
-     @_network-server-runtime))
-
-(defn- network-server-state-atom
-  []
-  (:state* (current-network-server-runtime)))
-
-(defn- network-server-state-snapshot
-  []
-  @(network-server-state-atom))
-
-(defn- update-network-server-state!
-  [f & args]
-  (apply swap! (network-server-state-atom) f args))
+(defn- update-network-server-state! [f & args]
+  (when-let [fw-atom fw/*framework*]
+    (swap! fw-atom update-in server-path
+           (fn [current] (apply f (or current {:handlers {} :frozen? false}) args))))
+  nil)
 
 (defn- assert-not-frozen!
   []
@@ -100,7 +64,8 @@
 
 (defn reset-handlers-for-test!
   []
-  (reset! (network-server-state-atom) (default-network-server-runtime-state))
+  (when-let [fw-atom fw/*framework*]
+    (swap! fw-atom assoc-in server-path {:handlers {} :frozen? false}))
   nil)
 
 (defn handlers-snapshot

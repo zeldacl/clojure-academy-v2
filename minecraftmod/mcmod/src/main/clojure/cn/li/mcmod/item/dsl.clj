@@ -5,16 +5,8 @@
             [cn.li.mcmod.util.log :as log]))
 
 ;; Item Registry - stores all defined items
-(defn create-item-registry-runtime
-  ([] (create-item-registry-runtime {}))
-  ([{:keys [registry]}]
-   {:cn.li.mcmod.item.dsl/runtime ::item-registry-runtime
-    :registry (or registry (registry-core/atom-registry {}))}))
 
-(def ^:private _item-registry (delay (create-item-registry-runtime)))
 
-(defn- item-registry-state []
-  (:registry @_item-registry))
 
 ;; Item specifications
 (defrecord ItemSpec [id max-stack-size durability creative-tab rarity
