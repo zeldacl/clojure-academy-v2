@@ -6,7 +6,6 @@
   renderer registration and texture binding."
   (:require [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.client.content-actions :as content-actions]
-            [cn.li.mcmod.platform.tutorial-events :as tutorial-platform]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.util.render :as render]
             [cn.li.mcmod.protocol.metadata :as registry-metadata]
@@ -271,11 +270,6 @@
   (request-bridge/init!)
 
   (energy-item-model-properties/register!)
-
-  ;; Register tutorial activation hook (server-side only, for logging)
-  (tutorial-platform/register-tutorial-activated-hook!
-   (fn [player-uuid tut-id]
-     (log/info "Tutorial activated:" (name tut-id) "for player" player-uuid)))
 
   ;; Run registered client tick hooks (e.g. tutorial background sync).
   (try

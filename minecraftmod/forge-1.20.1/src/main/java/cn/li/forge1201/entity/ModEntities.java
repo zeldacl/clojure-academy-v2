@@ -20,6 +20,8 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.PathfinderMob;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.registries.DeferredRegister;
 import net.minecraftforge.registries.ForgeRegistries;
@@ -352,5 +354,21 @@ public final class ModEntities {
 
     public static void register(IEventBus modBus) {
         ENTITY_TYPES.register(modBus);
+    }
+
+    /**
+     * Register PathfinderMob default attributes for a scripted-mob entity type.
+     * Called from Clojure entity-attributes event handler to avoid clj-kondo
+     * import resolution issues with Minecraft internal classes.
+     *
+     * <p>The unchecked cast is safe: only :scripted-mob entities (which extend
+     * PathfinderMob → LivingEntity) reach this call site.</p>
+     */
+    @SuppressWarnings("unchecked")
+    public static void registerMobDefaultAttributes(
+            net.minecraftforge.event.entity.EntityAttributeCreationEvent event,
+            EntityType<?> entityType) {
+        event.put((EntityType<? extends LivingEntity>) entityType,
+                  PathfinderMob.createMobAttributes().build());
     }
 }

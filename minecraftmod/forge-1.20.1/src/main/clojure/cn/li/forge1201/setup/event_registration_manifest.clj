@@ -4,6 +4,7 @@
             [cn.li.forge1201.integration.events.block :as block-events]
             [cn.li.forge1201.integration.events.loot :as loot-events]
             [cn.li.forge1201.integration.events.world :as world-events]
+            [cn.li.forge1201.integration.events.entity-attributes :as entity-attr-events]
             [cn.li.forge1201.registry.creative-tab-event :as creative-tab-event]))
 
 (defn lifecycle-listener-specs
@@ -14,7 +15,10 @@
     :handler on-client-setup}
    ;; 1.20+ data-driven creative tab population (ModEventBus)
    {:listener-class net.minecraftforge.event.BuildCreativeModeTabContentsEvent
-    :handler creative-tab-event/handle-build-contents}])
+    :handler creative-tab-event/handle-build-contents}
+   ;; Register PathfinderMob default attributes for every :scripted-mob entity type
+   {:listener-class net.minecraftforge.event.entity.EntityAttributeCreationEvent
+    :handler entity-attr-events/handle-entity-attribute-creation}])
 
 (defn common-event-listener-specs
   []
