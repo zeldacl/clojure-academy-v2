@@ -2,7 +2,8 @@
   "Sound effect commands for ability system (AC layer - no Minecraft imports)."
   (:require [cn.li.ac.ability.registry.event :as evt]
             [cn.li.ac.ability.client.effects.queue-infra :as queue-infra]
-            [cn.li.mcmod.framework :as fw]))
+            [cn.li.mcmod.framework :as fw])
+  (:import [java.util.concurrent ConcurrentLinkedQueue]))
 
 ;; Sound effect command structure
 ;; {:type :sound
@@ -58,21 +59,23 @@
    :pitch 1.2})
 
 ;; Sound queue — Framework [:service :sound-queue]
+;; Uses ConcurrentLinkedQueue (not Atom) for lock-free, non-blocking
+;; queue between render thread and game logic / network threads.
 
 (def ^:private sq-path [:service :sound-queue])
 
-(defn- queue-atom []
+(defn- sound-queue ^ConcurrentLinkedQueue
+  []
   (if-let [fw-atom (fw/fw-atom)]
     (or (get-in @fw-atom sq-path)
-        (let [a (atom {})] (swap! fw-atom assoc-in sq-path a) a))
-    (atom {})))
-
-(defn- queue-snapshot [] @(queue-atom))
-(defn- update-queue! [f & args] (apply swap! (queue-atom) f args))
+        (let [q (ConcurrentLinkedQueue.)]
+          (swap! fw-atom assoc-in sq-path q)
+          q))
+    (ConcurrentLinkedQueue.)))
 
 ;; Backward-compatible factory
 (defn create-sound-queue-runtime []
-  {::runtime ::sound-queue-runtime :queue* (queue-atom)})
+  {::runtime ::sound-queue-runtime :queue* (sound-queue)})
 
 (defn- normalize-session-id
   [owner-or-session]
@@ -87,7 +90,7 @@
   ([sound-cmd]
    (queue-sound-effect! nil sound-cmd))
   ([owner-or-session sound-cmd]
-  (queue-infra/queue-effect! (queue-atom) "sound" owner-or-session sound-cmd)
+  (queue-infra/queue-effect! (sound-queue) "sound" owner-or-session sound-cmd)
    nil))
 
 (defn queue-current-sound-effect!
@@ -99,13 +102,19 @@
   ([]
    (poll-sound-effects! nil))
   ([owner-or-session]
-   (queue-infra/poll-effects! (queue-atom) "sound" owner-or-session)))
+   (queue-infra/poll-effects! (sound-queue) "sound" owner-or-session)))
 
 (defn clear-session-sound-effects!
+  "Remove all queued sound effects for a specific session from the
+  lock-free queue."
   ([]
    (clear-session-sound-effects! nil))
   ([owner-or-session]
-  (update-queue! dissoc (normalize-session-id owner-or-session))
+   (let [session-id (normalize-session-id owner-or-session)
+         ^ConcurrentLinkedQueue q (sound-queue)]
+     (.removeIf q (reify java.util.function.Predicate
+                    (test [_ entry]
+                      (= session-id (first entry))))))
    nil))
 
 (defn clear-owner-sound-effects!
@@ -113,20 +122,25 @@
   (clear-session-sound-effects! owner))
 
 (defn sound-queue-snapshot
+  "Snapshot all queued sounds (for debug/introspection)."
   ([]
-  (queue-snapshot))
+   (vec (.toArray (sound-queue))))
   ([owner-or-session]
-  (vec (get (queue-snapshot) (normalize-session-id owner-or-session) []))))
+   (let [session-id (normalize-session-id owner-or-session)]
+     (->> (.toArray (sound-queue))
+          (filter #(= session-id (first %)))
+          (mapv second)))))
 
 (defn reset-sound-queue-for-test!
+  "Reset sound queue for testing. Clears the ConcurrentLinkedQueue."
   ([]
    (reset-sound-queue-for-test! {}))
   ([queues]
-   (reset! (queue-atom)
-      (into {}
-       (map (fn [[session-id sounds]]
-         [session-id (vec sounds)]))
-       (or queues {})))
+   (.clear (sound-queue))
+   ;; Re-populate from test data: queues = {session-id [sound-cmd ...]}
+   (doseq [[session-id sounds] (or queues {})]
+     (doseq [sound-cmd sounds]
+       (queue-infra/queue-effect! (sound-queue) "sound" session-id sound-cmd)))
    nil))
 
 ;; Event listeners for automatic sound playing
