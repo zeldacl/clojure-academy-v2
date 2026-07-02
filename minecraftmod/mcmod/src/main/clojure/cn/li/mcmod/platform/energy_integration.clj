@@ -1,45 +1,41 @@
 (ns cn.li.mcmod.platform.energy-integration
-	"Platform-neutral bridge for energy integration settings."
-	(:require [cn.li.mcmod.platform.runtime :as prt]))
+  "Platform-neutral bridge for energy integration settings.
 
-(defn- default-energy-integration-state []
-	{:forge-energy-conversion-rate (fn [] 1.0)
-	 :ic2-energy-conversion-rate (fn [] 1.0)})
+  State stored in Framework [:registry :integrations :energy]."
+  (:require [cn.li.mcmod.framework :as fw]))
 
-(defn create-energy-integration-runtime
-	([] (create-energy-integration-runtime {}))
-	([{:keys [state*]}]
-	 {:cn.li.mcmod.platform.energy-integration/runtime ::energy-integration-runtime
-	  :state* (or state* (atom (default-energy-integration-state)))}))
+(defn- default-state []
+  {:forge-energy-conversion-rate (fn [] 1.0)
+   :ic2-energy-conversion-rate (fn [] 1.0)})
 
-(def ^:private _energy-integration-runtime (delay (create-energy-integration-runtime)))
-
-(def ^:dynamic *energy-integration-runtime* nil)
-
-(defn- energy-hooks-atom []
-	(:state* (or *energy-integration-runtime*
-	               @_energy-integration-runtime)))
+(def ^:private energy-path [:registry :integrations :energy])
 
 (defn- energy-hooks-snapshot []
-	@(energy-hooks-atom))
+  (if-let [fw-atom fw/*framework*]
+    (get-in @fw-atom energy-path (default-state))
+    (default-state)))
 
 (defn register-energy-integration-hooks!
-	[hooks]
-	(doseq [[k v] hooks]
-		(prt/register-hook! (energy-hooks-atom) k v
-		                    :duplicate-policy :same-value-idempotent
-		                    :label "energy-integration"))
-	nil)
+  [hooks]
+  (when-let [fw-atom fw/*framework*]
+    (swap! fw-atom update-in energy-path
+           (fn [current]
+             (let [base (or current (default-state))]
+               (reduce-kv (fn [m k v]
+                            (if (and (contains? m k) (not= (get m k) v))
+                              (throw (ex-info "Conflicting energy integration hook" {:key k}))
+                              (assoc m k v)))
+                          base hooks)))))
+  nil)
 
 (defn reset-energy-integration-hooks-for-test!
-	[]
-	(reset! (energy-hooks-atom) (default-energy-integration-state))
-	nil)
+  []
+  (when-let [fw-atom fw/*framework*]
+    (swap! fw-atom assoc-in energy-path (default-state)))
+  nil)
 
-(defn forge-energy-conversion-rate
-	[]
-	((:forge-energy-conversion-rate (energy-hooks-snapshot))))
+(defn forge-energy-conversion-rate []
+  ((:forge-energy-conversion-rate (energy-hooks-snapshot))))
 
-(defn ic2-energy-conversion-rate
-	[]
-	((:ic2-energy-conversion-rate (energy-hooks-snapshot))))
+(defn ic2-energy-conversion-rate []
+  ((:ic2-energy-conversion-rate (energy-hooks-snapshot))))

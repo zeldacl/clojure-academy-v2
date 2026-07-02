@@ -1,43 +1,39 @@
 (ns cn.li.mcmod.platform.command-runtime
-	"Platform-neutral bridge for content-owned command initialization."
-	(:require [cn.li.mcmod.platform.runtime :as prt]))
+  "Platform-neutral bridge for content-owned command initialization.
 
-(def ^:private noop
-	(fn [] nil))
+  State stored in Framework [:registry :commands :hooks]."
+  (:require [cn.li.mcmod.framework :as fw]))
 
-(defn- default-command-runtime-state []
-	{:init-commands! noop})
+(def ^:private noop (fn [] nil))
 
-(defn create-command-runtime
-	([] (create-command-runtime {}))
-	([{:keys [state*]}]
-	 {:cn.li.mcmod.platform.command-runtime/runtime ::command-runtime
-	  :state* (or state* (atom (default-command-runtime-state)))}))
+(defn- default-state [] {:init-commands! noop})
 
-(def ^:private _command-runtime (delay (create-command-runtime)))
-
-(def ^:dynamic *command-runtime* nil)
-
-(defn- command-hooks-atom []
-	(:state* (or *command-runtime*
-	               @_command-runtime)))
+(def ^:private cmd-hooks-path [:registry :commands :hooks])
 
 (defn- command-hooks-snapshot []
-	@(command-hooks-atom))
+  (if-let [fw-atom fw/*framework*]
+    (get-in @fw-atom cmd-hooks-path (default-state))
+    (default-state)))
 
 (defn register-command-hooks!
-	[hooks]
-	(doseq [[k v] hooks]
-		(prt/register-hook! (command-hooks-atom) k v
-		                    :duplicate-policy :same-value-idempotent
-		                    :label "command-runtime"))
-	nil)
+  [hooks]
+  (when-let [fw-atom fw/*framework*]
+    (swap! fw-atom update-in cmd-hooks-path
+           (fn [current]
+             (let [base (or current (default-state))]
+               (reduce-kv (fn [m k v]
+                            (if (and (contains? m k) (not= (get m k) v))
+                              (throw (ex-info "Conflicting command hook" {:key k}))
+                              (assoc m k v)))
+                          base hooks)))))
+  nil)
 
 (defn reset-command-hooks-for-test!
-	[]
-	(reset! (command-hooks-atom) (default-command-runtime-state))
-	nil)
+  []
+  (when-let [fw-atom fw/*framework*]
+    (swap! fw-atom assoc-in cmd-hooks-path (default-state)))
+  nil)
 
 (defn init-commands!
-	[]
-	((:init-commands! (command-hooks-snapshot))))
+  []
+  ((:init-commands! (command-hooks-snapshot))))
