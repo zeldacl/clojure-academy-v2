@@ -194,7 +194,7 @@
 (defn current-player-state-owner
   "Return the currently bound runtime player-state owner map (or nil)."
   []
-  *player-state-owner*)
+  (*player-state-owner*))
 
 (defn player-state-session-id
   "Resolve store session-id from a canonical owner map (server > client)."

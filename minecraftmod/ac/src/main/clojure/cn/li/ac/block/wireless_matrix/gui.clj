@@ -159,8 +159,8 @@
   Tries platform-level session resolution first, falls back to dynamic bindings,
   returns nil when no session can be resolved."
   []
-  (let [session-id runtime-hooks/*client-session-id*
-        player-uuid (some-> runtime-hooks/*player-state-owner* :player-uuid)]
+  (let [session-id (runtime-hooks/*client-session-id*)
+        player-uuid (some-> (runtime-hooks/*player-state-owner*) :player-uuid)]
     (when session-id
       (cond-> {:logical-side :client :client-session-id session-id}
         player-uuid (assoc :player-uuid player-uuid)))))

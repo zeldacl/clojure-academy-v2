@@ -82,7 +82,7 @@
 (defn get-player-contexts-for-player
   "Read contexts for one player from projected player-state only."
   ([player-uuid]
-   (if-let [session-id runtime-hooks/*client-session-id*]
+   (if-let [session-id (runtime-hooks/*client-session-id*)]
      (get-player-contexts-for-player player-uuid session-id nil)
      []))
   ([player-uuid session-id screen-id]

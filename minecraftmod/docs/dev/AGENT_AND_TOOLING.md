@@ -580,7 +580,64 @@ Java 骨架类：`mc-1.20.1/src/main/java/cn/li/mc1201/shim/`
 - `^:dynamic *framework*` — 框架唯一的全局动态变量
 - 平台 SPI 适配器 `^:dynamic *runtime*` — 仅在 `mcmod/platform/*.clj` 中，且正逐步迁移至 Framework `[:platform :adapter-key]`
 - 渲染资源（texture registry、shader）— OpenGL 绑定，不入 Framework
-- 客户端 session 状态 — 闭包工厂管理，不入 Framework
+- 客户端 session 状态 — 闭包工厂管理，不入 Framework（详见下方 ThreadLocal 模式）
+
+#### ThreadLocal + 高阶函数：客户端/服务端 session 上下文（强制）
+
+**背景**：`*client-session-id*` 与 `*player-state-owner*` 原为 `^:dynamic` Var，通过 `binding` 提供每线程隔离。铁律十一禁止新增 `^:dynamic` 后，改为基于 `java.lang.ThreadLocal` 的高阶函数模式。
+
+**核心实现**（`cn.li.mcmod.hooks.core`）：
+
+```clojure
+(def ^:private client-ctx-thread-local (java.lang.ThreadLocal.))
+
+(defn with-client-ctx-fn
+  "ThreadLocal-based client context HOF。在当前线程的 ThreadLocal 中设置 ctx-map，
+   执行 thunk，finally 恢复。"
+  [ctx-map thunk]
+  (let [old (.get client-ctx-thread-local)]
+    (.set client-ctx-thread-local (merge (or old {}) ctx-map))
+    (try
+      (let [result (thunk)]
+        (if (instance? clojure.lang.LazySeq result)
+          (doall result)  ;; 铁律四：返回值不能是 LazySeq
+          result))
+      (finally
+        (if (nil? old)
+          (.remove client-ctx-thread-local)
+          (.set client-ctx-thread-local old))))))
+```
+
+**调用约定**：
+
+```clojure
+;; 设置 session-id：
+(with-client-ctx-fn {:session-id sid} #(do-work))
+
+;; 设置 player-owner：
+(with-client-ctx-fn {:player-owner owner} #(do-work))
+
+;; 同时设置两者：
+(with-client-ctx-fn {:session-id sid :player-owner owner} #(do-work))
+```
+
+**读取约定**（仅用于 `cn.li.mcmod.hooks.core` 内部或经过其 reader 函数）：
+
+```clojure
+(defn *client-session-id* [] (:session-id (.get client-ctx-thread-local)))
+(defn *player-state-owner* [] (:player-owner (.get client-ctx-thread-local)))
+```
+
+**设计决策**：
+
+| 决策 | 理由 |
+|------|------|
+| ThreadLocal 而非 Framework atom | 每线程隔离。Server 线程和 Render 线程共享一个 Framework atom 会产生读写竞态，丢失上下文 |
+| 高阶函数（HOF）而非宏 | 宏展开在 AOT 下不增加安全性；HOF 可以在 finally 中 `doall` 截断 LazySeq，防止上下文逃逸 |
+| `^:dynamic` 不适用 | 铁律十一禁止新增 `^:dynamic`；且 Minecraft `enqueueWork` 模式下 ThreadLocal 的"跨线程丢失"恰好满足铁律六（不跨越异步边界） |
+| 顶层 LazySeq 检查而非 `postwalk` | `postwalk` 会误入 Minecraft 原生对象（Level、BlockEntity），仅检查顶层 `instance? LazySeq` 足够——内部嵌套的懒序列在后续访问时仍在当前线程求值 |
+
+**clj-kondo 适配**：`*client-session-id*` 和 `*player-state-owner*` 使用 earmuffs 命名但是 `defn` 函数（非 `^:dynamic`），clj-kondo 会报警告。需在 `.clj-kondo/config.edn` 中配置 `:linters {:earmuffed-var-not-dynamic {:exclude [cn.li.mcmod.hooks.core/*client-session-id* cn.li.mcmod.hooks.core/*player-state-owner*]}}`。
 
 ---
 

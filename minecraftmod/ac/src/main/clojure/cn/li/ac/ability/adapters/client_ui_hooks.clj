@@ -100,7 +100,7 @@
 
 (defn- current-client-session-id
   []
-  (or client-keybinds/*client-session-id* runtime-hooks/*client-session-id*))
+  (or client-keybinds/*client-session-id* (runtime-hooks/*client-session-id*)))
 
 (defn- require-client-owner-value
   [owner label value]
