@@ -1,49 +1,36 @@
 (ns cn.li.mcmod.platform.be
-  "Platform-neutral utilities for interacting with ScriptedBlockEntity."
-  (:require [cn.li.mcmod.util.log :as log]
-            [cn.li.mcmod.platform.runtime :as prt]
+  "Block entity operations via Framework function map.
+
+   BE ops stored at [:platform :be-ops] as {:be-get-level fn, :be-get-world fn, ...}."
+  (:require [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.platform.world :as world]))
+
+(def be-ops-keys
+  #{:be-get-level :be-get-world :be-get-custom-state :be-set-custom-state!
+    :be-get-block-id :be-get-tile-id :be-set-changed! :be-get-fluid-height})
+
+(defn install-be-ops!
+  [ops-map _label]
+  (when-let [fw-atom (fw/fw-atom)] (swap! fw-atom assoc-in [:platform :be-ops] ops-map)) nil)
+
+(defn be-ops-available? [] (boolean (get-in @(fw/fw-atom) [:platform :be-ops])))
+(defn call-with-be-ops [ops f] (f ops))
 
 (defn- call-log [level & xs]
   (case level
     :error (apply log/error xs)
-    :warn (apply log/warn xs)
-    :info (apply log/info xs)
+    :warn  (apply log/warn xs)
+    :info  (apply log/info xs)
     nil))
 
-(defprotocol IBlockEntity
-  (be-get-level [this])
-  (be-get-world [this])
-  (be-get-custom-state [this])
-  (be-set-custom-state! [this state])
-  (be-get-block-id [this])
-  (be-get-tile-id [this])
-  (be-set-changed! [this]))
-
-(def ^:private ^:dynamic *be-ops* nil)
-
-(defn install-be-ops!
-  "Install block-entity operation fns map. Keys match install-be-fns-only! in mc1201."
-  [ops-map label]
-  (prt/install-impl! #'*be-ops* ops-map (or label "be-ops")))
-
-(defn be-ops-available? [] (prt/impl-available? #'*be-ops*))
-(defn call-with-be-ops [ops f] (binding [*be-ops* ops] (f)))
-
 (defn- be-op [k & args]
-  (when-let [ops *be-ops*]
-    (when-let [f (get ops k)]
-      (apply f args))))
+  (when-let [f (get-in @(fw/fw-atom) [:platform :be-ops k])]
+    (apply f args)))
 
 (defn be-get-world-safe [be]
-  (or (try (if-let [f (get *be-ops* :be-get-level)]
-            (f be)
-            (be-get-level be))
-           (catch Exception _ nil))
-      (try (if-let [f (get *be-ops* :be-get-world)]
-             (f be)
-             (be-get-world be))
-           (catch Exception _ nil))))
+  (or (try (be-op :be-get-level be) (catch Exception _ nil))
+      (try (be-op :be-get-world be) (catch Exception _ nil))))
 
 (defn get-block-entity [w block-pos]
   (try
@@ -54,62 +41,43 @@
 
 (defn get-custom-state [be]
   (when be
-    (try
-      (or (be-op :be-get-custom-state be)
-          (be-get-custom-state be))
-      (catch Exception e
-        (call-log :warn "get-custom-state failed:" (ex-message e))
-        nil))))
+    (try (be-op :be-get-custom-state be)
+         (catch Exception e
+           (call-log :warn "get-custom-state failed:" (ex-message e)) nil))))
 
 (defn set-custom-state! [be state]
   (when be
     (try
-      (if-let [f (get *be-ops* :be-set-custom-state!)]
-        (f be state)
-        (be-set-custom-state! be state))
-      (if-let [f (get *be-ops* :be-set-changed!)]
-        (f be)
-        (be-set-changed! be))
+      (be-op :be-set-custom-state! be state)
+      (be-op :be-set-changed! be)
       (catch Exception e
         (call-log :error "set-custom-state! failed:" (ex-message e))))))
 
+(defn be-get-block-id [be]
+  (when be
+    (try (be-op :be-get-block-id be)
+         (catch Exception e
+           (call-log :warn "be-get-block-id failed:" (ex-message e)) nil))))
+
 (defn get-block-id [be]
   (when be
-    (try
-      (or (be-op :be-get-block-id be)
-          (be-get-block-id be))
-      (catch Exception e
-        (call-log :warn "get-block-id failed:" (ex-message e))
-        nil))))
+    (try (be-op :be-get-block-id be)
+         (catch Exception e
+           (call-log :warn "get-block-id failed:" (ex-message e)) nil))))
 
 (defn get-tile-id [be]
   (when be
-    (try
-      (or (be-op :be-get-tile-id be)
-          (be-get-tile-id be))
-      (catch Exception e
-        (call-log :warn "get-tile-id failed:" (ex-message e))
-        nil))))
+    (try (be-op :be-get-tile-id be)
+         (catch Exception e
+           (call-log :warn "get-tile-id failed:" (ex-message e)) nil))))
 
 (defn set-changed! [be]
   (when be
-    (try
-      (or (be-op :be-set-changed! be)
-          (be-set-changed! be))
-      (catch Exception e
-        (call-log :warn "set-changed! failed:" (ex-message e))
-        nil))))
+    (try (be-op :be-set-changed! be)
+         (catch Exception e
+           (call-log :warn "set-changed! failed:" (ex-message e)) nil))))
 
-(defn get-fluid-height
-  "Get the fluid surface height (0.0-1.0) for the block at this BE's position.
-
-  Returns 0.0 if there is no fluid, the BE has no level, or the platform
-  binding is not installed."
-  [be]
+(defn get-fluid-height [be]
   (when be
-    (try
-      (if-let [f (get *be-ops* :be-get-fluid-height)]
-        (f be)
-        0.0)
-      (catch Exception _
-        0.0))))
+    (try (or (be-op :be-get-fluid-height be) 0.0)
+         (catch Exception _ 0.0))))

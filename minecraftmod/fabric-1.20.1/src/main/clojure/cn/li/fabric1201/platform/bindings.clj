@@ -10,17 +10,8 @@
            [net.minecraft.world.level Level]
            [net.minecraft.world.level.block Block]))
 
-(extend-type ScriptedBlockEntity
-  pos/IHasPosition
-  (position-get-block-pos [this] (.getBlockPos this))
-  (position-get-pos [this] (.getBlockPos this))
-  pbe/IBlockEntity
-  (be-get-level [this] (.getLevel this))
-  (be-get-world [this] (.getLevel this))
-  (be-get-custom-state [this] (.getCustomState this))
-  (be-set-custom-state! [this state] (.setCustomState this state))
-  (be-get-block-id [this] (.getBlockId this))
-  (be-set-changed! [this] (.setChanged this)))
+;; extend-type on ScriptedBlockEntity for IBlockEntity removed (defprotocol deleted — Phase 1.2)
+;; BE ops now installed as plain function maps via installer_core.clj
 
 (defn world-is-client-side
   [^Level level]

@@ -100,7 +100,7 @@
   This guards against incomplete sub-id initialization where every part defaults
   to sub-id 0 and all parts try to render the full model."
   [tile state block-spec]
-  (let [world-obj (pbe/be-get-level tile)
+  (let [world-obj (pbe/be-get-world-safe tile)
         block-id (or (get-tile-block-id tile) (:block-id state))
         direction (normalize-direction (:direction state :north))
         cur (current-pos-xyz tile)]

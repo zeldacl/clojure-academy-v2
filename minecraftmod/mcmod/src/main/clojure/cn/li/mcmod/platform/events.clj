@@ -1,23 +1,22 @@
 (ns cn.li.mcmod.platform.events
-  "Platform-neutral event bridge."
+  "Platform-neutral event bridge via Framework function map.
+
+   Fire fn stored at [:platform :event-bus :fire!]."
   (:require [cn.li.mcmod.framework :as fw]
-            [cn.li.mcmod.platform.runtime :as prt]
             [cn.li.mcmod.util.log :as log]))
 
-(def ^:private ^:dynamic *fire-event-fn* nil)
-
 (defn install-fire-event-fn!
-  [fire-fn label]
-  (prt/install-impl! #'*fire-event-fn* fire-fn (or label "platform-events")))
+  [fire-fn _label]
+  (when-let [fw-atom (fw/fw-atom)] (swap! fw-atom assoc-in [:platform :event-bus :fire!] fire-fn)) nil)
 
-(defn available? [] (prt/impl-available? #'*fire-event-fn*))
-(defn current [] (prt/impl-current #'*fire-event-fn*))
-(defn call-with-runtime [fire-fn f] (binding [*fire-event-fn* fire-fn] (f)))
+(defn available? [] (boolean (get-in @(fw/fw-atom) [:platform :event-bus :fire!])))
+(defn current   [] (get-in @(fw/fw-atom) [:platform :event-bus :fire!]))
+(defn call-with-runtime [fire-fn f] (f fire-fn))
 
 (defn fire-event!
   "Post an event object to the platform event bus. No-op when not installed."
   [event]
-  (when-let [fire *fire-event-fn*]
+  (when-let [fire (get-in @(fw/fw-atom) [:platform :event-bus :fire!])]
     (when event
       (try
         (fire event)

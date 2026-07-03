@@ -1,108 +1,73 @@
 (ns cn.li.mcmod.client.render.pose
-  "Platform-neutral pose/rotation API for TESR rendering.
+  "Pose/rotation API for TESR rendering via Framework function map.
 
-  Platform adapters call `install-pose-ops!` once at client bootstrap.
-  mcmod code calls the public pose helpers below."
-  (:require [cn.li.mcmod.platform.runtime :as prt]
+   Pose ops stored at [:platform :pose-ops]."
+  (:require [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.util.log :as log]))
 
-(def ^:private ^:dynamic *pose-ops* nil)
-
 (defn- pose-op [k]
-  (when *pose-ops* (get *pose-ops* k)))
+  (get-in @(fw/fw-atom) [:platform :pose-ops k]))
 
 (defn install-pose-ops!
-  "Install pose stack operations. Keys: :y-rotation :x-rotation :z-rotation
-  :axis-rotation :push-pose :pop-pose :translate :scale :get-matrix — each a fn."
-  [ops-map label]
-  (prt/install-impl! #'*pose-ops* ops-map (or label "pose-ops"))
-  nil)
+  [ops-map _label]
+  (when-let [fw-atom (fw/fw-atom)] (swap! fw-atom assoc-in [:platform :pose-ops] ops-map)) nil)
 
 (defn pose-ops-available? []
-  (prt/impl-available? #'*pose-ops*))
+  (boolean (get-in @(fw/fw-atom) [:platform :pose-ops])))
 
-(defn call-with-pose-ops [ops f]
-  (binding [*pose-ops* ops] (f)))
+(defn call-with-pose-ops [ops f] (f ops))
 
-(defn apply-y-rotation
-  [pose-stack angle-degrees]
+(defn apply-y-rotation [pose-stack angle-degrees]
   (if-let [f (pose-op :y-rotation)]
-    (try
-      (f pose-stack angle-degrees)
-      (catch Exception e
-        (log/error "Error applying Y-rotation:" (ex-message e))))
+    (try (f pose-stack angle-degrees)
+         (catch Exception e (log/error "Error applying Y-rotation:" (ex-message e))))
     (log/warn "No platform Y-rotation function bound; skipping rotation")))
 
-(defn apply-x-rotation
-  [pose-stack angle-degrees]
+(defn apply-x-rotation [pose-stack angle-degrees]
   (if-let [f (pose-op :x-rotation)]
-    (try
-      (f pose-stack angle-degrees)
-      (catch Exception e
-        (log/error "Error applying X-rotation:" (ex-message e))))
+    (try (f pose-stack angle-degrees)
+         (catch Exception e (log/error "Error applying X-rotation:" (ex-message e))))
     (log/warn "No platform X-rotation function bound; skipping rotation")))
 
-(defn apply-z-rotation
-  [pose-stack angle-degrees]
+(defn apply-z-rotation [pose-stack angle-degrees]
   (if-let [f (pose-op :z-rotation)]
-    (try
-      (f pose-stack angle-degrees)
-      (catch Exception e
-        (log/error "Error applying Z-rotation:" (ex-message e))))
+    (try (f pose-stack angle-degrees)
+         (catch Exception e (log/error "Error applying Z-rotation:" (ex-message e))))
     (log/warn "No platform Z-rotation function bound; skipping rotation")))
 
-(defn apply-axis-rotation
-  [pose-stack angle-degrees ax ay az]
+(defn apply-axis-rotation [pose-stack angle-degrees ax ay az]
   (if-let [f (pose-op :axis-rotation)]
-    (try
-      (f pose-stack angle-degrees ax ay az)
-      (catch Exception e
-        (log/error "Error applying axis-rotation:" (ex-message e))))
+    (try (f pose-stack angle-degrees ax ay az)
+         (catch Exception e (log/error "Error applying axis-rotation:" (ex-message e))))
     (log/warn "No platform axis-rotation function bound; skipping rotation")))
 
-(defn push-pose
-  [pose-stack]
+(defn push-pose [pose-stack]
   (if-let [f (pose-op :push-pose)]
-    (try
-      (f pose-stack)
-      (catch Exception e
-        (log/error "Error pushing pose:" (ex-message e))))
+    (try (f pose-stack) (catch Exception e (log/error "Error pushing pose:" (ex-message e))))
     (log/warn "No platform push-pose function bound; skipping push")))
 
-(defn pop-pose
-  [pose-stack]
+(defn pop-pose [pose-stack]
   (if-let [f (pose-op :pop-pose)]
-    (try
-      (f pose-stack)
-      (catch Exception e
-        (log/error "Error popping pose:" (ex-message e))))
+    (try (f pose-stack) (catch Exception e (log/error "Error popping pose:" (ex-message e))))
     (log/warn "No platform pop-pose function bound; skipping pop")))
 
-(defn translate
-  [pose-stack x y z]
+(defn translate [pose-stack x y z]
   (if-let [f (pose-op :translate)]
-    (try
-      (f pose-stack x y z)
-      (catch Exception e
-        (log/error "Error translating pose-stack:" (ex-message e))))
+    (try (f pose-stack x y z)
+         (catch Exception e (log/error "Error translating pose-stack:" (ex-message e))))
     (log/warn "No platform translate function bound; skipping translate")))
 
-(defn scale
-  [pose-stack x y z]
+(defn scale [pose-stack x y z]
   (if-let [f (pose-op :scale)]
-    (try
-      (f pose-stack x y z)
-      (catch Exception e
-        (log/error "Error scaling pose-stack:" (ex-message e))))
+    (try (f pose-stack x y z)
+         (catch Exception e (log/error "Error scaling pose-stack:" (ex-message e))))
     (log/warn "No platform scale function bound; skipping scale")))
 
-(defn get-matrix
-  [pose-stack]
+(defn get-matrix [pose-stack]
   (if-let [f (pose-op :get-matrix)]
-    (try
-      (f pose-stack)
-      (catch Exception e
-        (log/error "Error getting pose-stack matrix:" (ex-message e))
-        (throw e)))
+    (try (f pose-stack)
+         (catch Exception e
+           (log/error "Error getting pose-stack matrix:" (ex-message e))
+           (throw e)))
     (throw (ex-info "No platform matrix accessor bound for pose-stack"
                     {:hint "Call install-pose-ops! during client platform init"}))))

@@ -1,60 +1,52 @@
 (ns cn.li.mcmod.platform.resource
-  "Platform-agnostic resource identifier abstraction."
-  (:require [cn.li.mcmod.framework :as fw]
-            [cn.li.mcmod.platform.runtime :as prt]))
+  "Platform-agnostic resource identifier abstraction via Framework function map.
 
-(def ^:private ^:dynamic *resource-factory* nil)
+   Resource factory stored at [:platform :resource :factory].
+   Resource location fn stored at [:platform :resource :location-fn]."
+  (:require [cn.li.mcmod.framework :as fw]))
+
+;; ============================================================================
+;; Resource factory — creates platform-specific resource identifiers
+;; ============================================================================
 
 (defn install-resource-factory!
-  [factory-fn label]
-  (prt/install-impl! #'*resource-factory* factory-fn (or label "resource-factory")))
+  [factory-fn _label]
+  (when-let [fw-atom (fw/fw-atom)] (swap! fw-atom assoc-in [:platform :resource :factory] factory-fn)) nil)
 
-(defn call-with-resource-factory [factory-fn f]
-  (binding [*resource-factory* factory-fn] (f)))
+(defn call-with-resource-factory [factory-fn f] (f factory-fn))
 
 (defn create-resource-location
-  "Create a platform-specific resource identifier.
-
-  Args:
-  - namespace: resource namespace (e.g. 'my_mod')
-  - path: resource path (e.g. 'textures/gui/node.png')"
+  "Create a platform-specific resource identifier."
   [namespace path]
-  (if-let [factory *resource-factory*]
+  (if-let [factory (get-in @(fw/fw-atom) [:platform :resource :factory])]
     (factory namespace path)
-    (throw (ex-info "Resource factory not initialized - platform must call init-platform! first"
-                    {:hint "Check platform initialization for cn.li.mcmod.platform.resource/*resource-factory*"}))))
+    (throw (ex-info "Resource factory not initialized"
+                    {:hint "Platform must call install-resource-factory! first"}))))
 
 (defn factory-initialized?
-  "Check if resource factory has been initialized by platform code."
   []
-  (some? *resource-factory*))
+  (some? (get-in @(fw/fw-atom) [:platform :resource :factory])))
 
-;; Optional high-level injection for mcmod code that does not depend on config.modid.
-;; Ac/loader sets this to (fn [namespace path] resource) so gui.components and client.resources
-;; can resolve paths without requiring config.modid. namespace may be nil (use default mod id).
-(def ^:private ^:dynamic *resource-location-fn* nil)
+;; ============================================================================
+;; High-level resource location fn (optional, set by ac/loader)
+;; ============================================================================
 
 (defn install-resource-location-fn!
-  [location-fn label]
-  (prt/install-impl! #'*resource-location-fn* location-fn (or label "resource-location-fn"))
-  nil)
+  [location-fn _label]
+  (when-let [fw-atom (fw/fw-atom)] (swap! fw-atom assoc-in [:platform :resource :location-fn] location-fn)) nil)
 
-(defn call-with-resource-location-fn [location-fn f]
-  (binding [*resource-location-fn* location-fn] (f)))
+(defn call-with-resource-location-fn [location-fn f] (f location-fn))
 
 (def ^:private default-resource-namespace
   (or (System/getenv "MOD_ID") "my_mod"))
 
 (defn invoke-resource-location
-  "Call the injected resource-location function.
-   [path] -> use default namespace (path is the path part).
-   [namespace path] -> use given namespace and path.
-   Falls back to the platform resource factory when no higher-level helper is installed."
+  "Call the injected resource-location function."
   ([path]
-   (if *resource-location-fn*
-     (*resource-location-fn* nil path)
+   (if-let [f (get-in @(fw/fw-atom) [:platform :resource :location-fn])]
+     (f nil path)
      (create-resource-location default-resource-namespace path)))
   ([namespace path]
-   (if *resource-location-fn*
-     (*resource-location-fn* namespace path)
+   (if-let [f (get-in @(fw/fw-atom) [:platform :resource :location-fn])]
+     (f namespace path)
      (create-resource-location (or namespace default-resource-namespace) path))))
