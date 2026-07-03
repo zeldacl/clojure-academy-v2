@@ -132,13 +132,12 @@
   []
   (tesr-api/register-scripted-tile-renderer!
     "imag-phase"
-    (reify tesr-api/ITileEntityRenderer
-      (render-tile [_ tile-entity _partial-ticks pose-stack buffer-source packed-light packed-overlay]
-        (try
-          (render-imag-phase! tile-entity pose-stack buffer-source
-                              packed-light packed-overlay)
-          (catch Exception e
-            (log/error "Error in imag-phase renderer:" (ex-message e))))))))
+    {:render-tile (fn [_ tile-entity _partial-ticks pose-stack buffer-source packed-light packed-overlay]
+                     (try
+                       (render-imag-phase! tile-entity pose-stack buffer-source
+                                           packed-light packed-overlay)
+                       (catch Exception e
+                         (log/error "Error in imag-phase renderer:" (ex-message e)))))}))
 
 (defn init!
   "Client-side renderer init hook. Called by the AC hook registry during

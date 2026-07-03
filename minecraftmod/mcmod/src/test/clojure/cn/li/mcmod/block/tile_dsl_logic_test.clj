@@ -5,10 +5,10 @@
             [cn.li.mcmod.protocol.core :as registry-core]))
 
 (defn- reset-tile-dsl! []
-  (registry-core/reset-state! tdsl/tile-registry {:by-id {} :block->tile-id {}}))
+  ((:reset-state! tdsl/tile-registry) {:by-id {} :block->tile-id {}}))
 
 (defn- reset-tile-kind! []
-  (registry-core/reset-state! tile-kind/tile-kind-registry {}))
+  ((:reset-state! tile-kind/tile-kind-registry) {}))
 
 (defn- reset-all! [f]
   (reset-tile-dsl!)

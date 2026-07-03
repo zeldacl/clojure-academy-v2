@@ -102,7 +102,7 @@
 (defn get-registered-block-entity-type
   "Get a registered BlockEntityType by tile-id or block-id."
   [tile-or-block-id]
-  (let [be-snapshot (registry-core/snapshot (registered-block-entities))
+  (let [be-snapshot ((:snapshot (registered-block-entities)))
         tile-id (or (when (contains? be-snapshot tile-or-block-id)
                       tile-or-block-id)
                     (registry-metadata/get-block-tile-id tile-or-block-id))]

@@ -106,12 +106,11 @@
   []
   (tesr-api/register-scripted-tile-renderer!
     "cat-engine"
-    (reify tesr-api/ITileEntityRenderer
-      (render-tile [_ tile-entity _partial-ticks pose-stack buffer-source packed-light packed-overlay]
-        (try
-          (render-at-origin tile-entity pose-stack buffer-source packed-light packed-overlay)
-          (catch Exception e
-            (log/error "Error in cat-engine renderer:" (ex-message e))))))))
+    {:render-tile (fn [_ tile-entity _partial-ticks pose-stack buffer-source packed-light packed-overlay]
+                     (try
+                       (render-at-origin tile-entity pose-stack buffer-source packed-light packed-overlay)
+                       (catch Exception e
+                         (log/error "Error in cat-engine renderer:" (ex-message e)))))}))
 
 (defn init!
   []

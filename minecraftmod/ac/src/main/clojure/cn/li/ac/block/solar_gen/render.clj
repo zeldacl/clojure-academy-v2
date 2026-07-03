@@ -38,13 +38,12 @@
   []
   (tesr-api/register-scripted-tile-renderer!
     "solar-gen"
-    (reify tesr-api/ITileEntityRenderer
-      (render-tile [_ _tile-entity _partial-ticks pose-stack buffer-source packed-light packed-overlay]
-        (try
-          (render-at-origin nil pose-stack buffer-source packed-light packed-overlay)
-          (catch Exception e
-            (log/error "Error in solar renderer:" (ex-message e))
-            (.printStackTrace e)))))))
+    {:render-tile (fn [_ _tile-entity _partial-ticks pose-stack buffer-source packed-light packed-overlay]
+                     (try
+                       (render-at-origin nil pose-stack buffer-source packed-light packed-overlay)
+                       (catch Exception e
+                         (log/error "Error in solar renderer:" (ex-message e))
+                         (.printStackTrace e))))}))
 
 (defn init!
   []

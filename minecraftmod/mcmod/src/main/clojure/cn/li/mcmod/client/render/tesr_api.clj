@@ -1,34 +1,13 @@
 (ns cn.li.mcmod.client.render.tesr-api
   "Universal TileEntity Special Renderer API
-  
+
   Provides a platform-agnostic interface for block entity rendering.
-  Platform-specific TESR implementations dispatch to these methods."
+  Platform-specific TESR implementations dispatch to these methods.
+
+  Renderer objects are plain maps with:
+  - :render-tile (fn [tile-entity partial-ticks pose-stack buffer-source packed-light packed-overlay] -> nil)"
   (:require [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.platform.be :as platform-be]))
-
-;; ============================================================================
-;; TileEntity Rendering Protocol
-;; ============================================================================
-
-(defprotocol ITileEntityRenderer
-  "Protocol for rendering BlockEntities (tile entities).
-
-  This protocol is implemented by *renderer objects* stored in the
-  `renderer-registry`, not by the tile entities themselves."
-
-  (render-tile [renderer tile-entity partial-ticks pose-stack buffer-source packed-light packed-overlay]
-    "Render the tile entity.
-
-    Args:
-      renderer: ITileEntityRenderer implementation
-      tile-entity: BlockEntity instance being rendered
-      partial-ticks: interpolation float
-      pose-stack: PoseStack for transformations
-      buffer-source: MultiBufferSource / VertexConsumerProvider
-      packed-light: int lighting
-      packed-overlay: int overlay
-
-    Returns: nil"))
 
 ;; ============================================================================
 ;; Renderer Registry & Dispatcher
@@ -88,7 +67,7 @@
   [block-id tile-entity partial-ticks pose-stack buffer-source packed-light packed-overlay]
   (when-let [renderer (get-scripted-tile-renderer block-id)]
     (try
-      (render-tile renderer tile-entity partial-ticks pose-stack buffer-source packed-light packed-overlay)
+      ((:render-tile renderer) tile-entity partial-ticks pose-stack buffer-source packed-light packed-overlay)
       (catch Exception e
         (log/error "Error rendering scripted tile entity" block-id(ex-message e))
         (log/stacktrace "Error rendering scripted tile entity" e)))))
@@ -110,7 +89,7 @@
 
 (defn render-tile-entity
   "Universal dispatcher for rendering any TileEntity
-  
+
   Args:
     tile-entity: The TileEntity to render
     partial-ticks: interpolation float
@@ -118,14 +97,14 @@
     buffer-source: VertexConsumer provider
     packed-light: lighting
     packed-overlay: overlay
-  
+
   Returns: nil
-  
+
   Dispatches to appropriate renderer based on TileEntity type."
   [tile-entity partial-ticks pose-stack buffer-source packed-light packed-overlay]
 (when-let [renderer (get-tile-renderer tile-entity)]
     (try
-      (render-tile renderer tile-entity partial-ticks pose-stack buffer-source packed-light packed-overlay)
+      ((:render-tile renderer) tile-entity partial-ticks pose-stack buffer-source packed-light packed-overlay)
       (catch Exception e
         (log/error "Error rendering tile entity:"(ex-message e))
         (log/stacktrace "Error rendering tile entity" e)))))

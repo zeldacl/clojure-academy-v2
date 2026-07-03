@@ -62,13 +62,12 @@
   []
   (tesr-api/register-scripted-tile-renderer!
     "phase-gen"
-    (reify tesr-api/ITileEntityRenderer
-      (render-tile [_ tile-entity _partial-ticks pose-stack buffer-source packed-light packed-overlay]
-        (try
-          (render-at-origin! tile-entity pose-stack buffer-source packed-light packed-overlay)
-          (catch Exception e
-            (log/error "Error in phase generator renderer:" (ex-message e))
-            (.printStackTrace e)))))))
+    {:render-tile (fn [_ tile-entity _partial-ticks pose-stack buffer-source packed-light packed-overlay]
+                     (try
+                       (render-at-origin! tile-entity pose-stack buffer-source packed-light packed-overlay)
+                       (catch Exception e
+                         (log/error "Error in phase generator renderer:" (ex-message e))
+                         (.printStackTrace e))))}))
 
 (defn init!
   []

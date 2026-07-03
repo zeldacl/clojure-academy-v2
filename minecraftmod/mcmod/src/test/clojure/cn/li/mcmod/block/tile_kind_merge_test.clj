@@ -4,7 +4,7 @@
             [cn.li.mcmod.protocol.core :as registry-core]))
 
 (defn- reset-kind! []
-  (registry-core/reset-state! tile-kind/tile-kind-registry {}))
+  ((:reset-state! tile-kind/tile-kind-registry) {}))
 
 (defn- around [f]
   (reset-kind!)

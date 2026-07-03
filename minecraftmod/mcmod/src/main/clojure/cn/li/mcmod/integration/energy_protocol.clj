@@ -2,29 +2,43 @@
   "Platform-neutral energy protocols for external mod integration.
 
   These protocols abstract external energy systems (Forge Energy, IC2 EU, etc.)
-  so that content code can work with them without importing platform-specific classes.")
+  so that content code can work with them without importing platform-specific classes.
 
-(defprotocol IExternalEnergyProvider
-  "Protocol for blocks that can provide energy to external systems."
-  (can-provide-energy? [this]
-    "Returns true if this block can provide energy to external systems.")
-  (extract-external-energy [this amount simulate?]
-    "Extract energy from this block for external systems.
-    Returns the amount actually extracted."))
+  Expected map keys:
+  - IExternalEnergyProvider: :can-provide-energy? (fn [] -> bool), :extract-external-energy (fn [amount simulate?] -> extracted)
+  - IExternalEnergyReceiver: :can-receive-energy? (fn [] -> bool), :receive-external-energy (fn [amount simulate?] -> received)
+  - IExternalEnergyStorage: :get-external-energy-stored (fn [] -> stored), :get-external-max-energy (fn [] -> max), :get-conversion-rate (fn [] -> rate)")
 
-(defprotocol IExternalEnergyReceiver
-  "Protocol for blocks that can receive energy from external systems."
-  (can-receive-energy? [this]
-    "Returns true if this block can receive energy from external systems.")
-  (receive-external-energy [this amount simulate?]
-    "Receive energy from external systems into this block.
-    Returns the amount actually received."))
+;; Wrapper functions for IExternalEnergyProvider
 
-(defprotocol IExternalEnergyStorage
-  "Protocol for blocks that expose energy storage to external systems."
-  (get-external-energy-stored [this]
-    "Get the amount of energy stored, in external system units.")
-  (get-external-max-energy [this]
-    "Get the maximum energy capacity, in external system units.")
-  (get-conversion-rate [this]
-    "Get the conversion rate from IF to external energy units (1 IF = X external)."))
+(defn can-provide-energy?
+  [provider]
+  ((:can-provide-energy? provider)))
+
+(defn extract-external-energy
+  [provider amount simulate?]
+  ((:extract-external-energy provider) amount simulate?))
+
+;; Wrapper functions for IExternalEnergyReceiver
+
+(defn can-receive-energy?
+  [receiver]
+  ((:can-receive-energy? receiver)))
+
+(defn receive-external-energy
+  [receiver amount simulate?]
+  ((:receive-external-energy receiver) amount simulate?))
+
+;; Wrapper functions for IExternalEnergyStorage
+
+(defn get-external-energy-stored
+  [storage]
+  ((:get-external-energy-stored storage)))
+
+(defn get-external-max-energy
+  [storage]
+  ((:get-external-max-energy storage)))
+
+(defn get-conversion-rate
+  [storage]
+  ((:get-conversion-rate storage)))

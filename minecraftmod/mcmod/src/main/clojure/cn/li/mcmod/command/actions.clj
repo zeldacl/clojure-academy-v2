@@ -7,20 +7,26 @@
   (:require [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.framework :as fw]))
 ;; ============================================================================
-;; Action Protocol
+;; Action Protocol — Map-based
 ;; ============================================================================
 
-(defprotocol IActionExecutor
-  "Protocol for executing command actions"
-  (execute-action [this action-map context]
-    "Execute an action and return result.
+;; Expected map keys for IActionExecutor:
+;; - :execute-action (fn [action-map context] -> result-map)
 
-    Args:
-      action-map: Map describing the action to execute
-      context: CommandContext
+;; Wrapper function
 
-    Returns:
-      Result map with :success? boolean and optional :message"))
+(defn execute-action
+  "Execute an action and return result.
+
+  Args:
+    executor: Map with :execute-action key
+    action-map: Map describing the action to execute
+    context: CommandContext
+
+  Returns:
+    Result map with :success? boolean and optional :message"
+  [executor action-map context]
+  ((:execute-action executor) action-map context))
 
 ;; ============================================================================
 ;; Action Validation

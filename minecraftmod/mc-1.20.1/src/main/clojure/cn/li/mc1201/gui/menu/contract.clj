@@ -1,15 +1,29 @@
 (ns cn.li.mc1201.gui.menu.contract
   "Shared GUI menu contract for platform adapters.
 
-  Platform modules should implement this protocol for concrete menu/container
-  objects, while shared/business code can operate on abstract slots/state.")
+  Expected map keys:
+  - :menu-id - Unique menu identifier
+  - :menu-title - Localized or raw menu title
+  - :menu-slot-count - Number of slots
+  - :menu-player-inventory-start - Player inventory start slot index
+  - :menu-player-inventory-end - Player inventory end slot index")
 
-(defprotocol IMenuContract
-  (menu-id [this] "Unique menu identifier")
-  (menu-title [this] "Localized or raw menu title")
-  (menu-slot-count [this] "Number of slots")
-  (menu-player-inventory-start [this] "Player inventory start slot index")
-  (menu-player-inventory-end [this] "Player inventory end slot index"))
+;; Wrapper functions for map-based menu contracts
+
+(defn menu-id [menu]
+  (:menu-id menu))
+
+(defn menu-title [menu]
+  (:menu-title menu))
+
+(defn menu-slot-count [menu]
+  (:menu-slot-count menu))
+
+(defn menu-player-inventory-start [menu]
+  (:menu-player-inventory-start menu))
+
+(defn menu-player-inventory-end [menu]
+  (:menu-player-inventory-end menu))
 
 (defn menu-layout
   "Return normalized layout map for a menu contract implementation."

@@ -83,20 +83,31 @@
   nil)
 
 ;; ============================================================================
-;; Capability Access Protocol
+;; Capability Access — Map-based API
 ;; ============================================================================
 
-(defprotocol ICapabilityProvider
-  "Protocol for objects that can provide capabilities (like BlockEntity)."
+;; Expected map keys for ICapabilityProvider:
+;; - :get-capability (fn [cap side] -> capability or nil)
 
-  (get-capability [this cap side]
-    "Get a capability from this provider. Returns LazyOptional or equivalent."))
+;; Expected map keys for ILazyOptional:
+;; - :is-present? (fn [] -> boolean)
+;; - :or-else (fn [default] -> value)
 
-(defprotocol ILazyOptional
-  "Protocol for LazyOptional-like capability wrappers."
+;; Wrapper functions for capability providers
 
-  (is-present? [this]
-    "Check if the capability is present. Returns boolean.")
+(defn get-capability
+  "Get a capability from a provider. Returns LazyOptional or equivalent."
+  [provider cap side]
+  ((:get-capability provider) cap side))
 
-  (or-else [this default]
-    "Return contained value or `default` if not present."))
+;; Wrapper functions for lazy optionals
+
+(defn is-present?
+  "Check if the capability is present. Returns boolean."
+  [lazy-opt]
+  ((:is-present? lazy-opt)))
+
+(defn or-else
+  "Return contained value or `default` if not present."
+  [lazy-opt default]
+  ((:or-else lazy-opt) default))

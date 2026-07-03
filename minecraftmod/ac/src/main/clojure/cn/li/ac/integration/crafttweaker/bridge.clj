@@ -7,17 +7,21 @@
   (:require [cn.li.mcmod.util.log :as log]
             [clojure.string :as str]))
 
-;; Type conversion protocols
+;; Type conversion protocols — map-based
+;;
+;; Expected map keys:
+;; - ICraftTweakerItemStack: :to-item-spec (fn [] -> {:item 'id' :count N})
+;; - IACItemSpec: :to-minecraft-stack (fn [] -> ItemStack)
 
-(defprotocol ICraftTweakerItemStack
-  "Protocol for converting CraftTweaker IItemStack to AC item specs."
-  (to-item-spec [this]
-    "Convert CraftTweaker IItemStack to AC item spec {:item 'id' :count N}"))
+(defn to-item-spec
+  "Convert CraftTweaker IItemStack to AC item spec {:item 'id' :count N}."
+  [crafttweaker-stack]
+  ((:to-item-spec crafttweaker-stack)))
 
-(defprotocol IACItemSpec
-  "Protocol for converting AC item specs to platform-specific types."
-  (to-minecraft-stack [this]
-    "Convert AC item spec to Minecraft ItemStack"))
+(defn to-minecraft-stack
+  "Convert AC item spec to Minecraft ItemStack."
+  [ac-item-spec]
+  ((:to-minecraft-stack ac-item-spec)))
 
 ;; Item spec conversion
 

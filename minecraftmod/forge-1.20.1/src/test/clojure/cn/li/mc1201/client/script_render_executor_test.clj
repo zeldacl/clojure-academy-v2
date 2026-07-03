@@ -2,11 +2,11 @@
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.mc1201.client.render.script-render-executor :as executor]))
 
-(defrecord RecordingExecutor [calls]
-  executor/IPrimitiveExecutor
-  (draw! [_ render-ctx draw-plan entity partial-tick]
-    (swap! calls conj [render-ctx draw-plan entity partial-tick])
-    nil))
+(defn recording-executor
+  [calls]
+  {:draw! (fn [_ render-ctx draw-plan entity partial-tick]
+            (swap! calls conj [render-ctx draw-plan entity partial-tick])
+            nil)})
 
 (use-fixtures :each
   (fn [f]
@@ -17,7 +17,7 @@
 
 (deftest execute-draw-plan-uses-registered-executor-test
   (let [calls (atom [])]
-    (executor/register-executor! :billboard-cross (->RecordingExecutor calls))
+    (executor/register-executor! :billboard-cross (recording-executor calls))
     (executor/execute-draw-plan! :ctx {:kind :billboard-cross} :entity 0.25)
     (is (= [[:ctx {:kind :billboard-cross} :entity 0.25]]
            @calls))
@@ -28,11 +28,11 @@
   (let [runtime-b (executor/create-script-render-executor-runtime)
         calls-a (atom [])
         calls-b (atom [])]
-    (executor/register-executor! :billboard-cross (->RecordingExecutor calls-a))
+    (executor/register-executor! :billboard-cross (recording-executor calls-a))
     (executor/call-with-script-render-executor-runtime
       runtime-b
       (fn []
-        (executor/register-executor! :billboard-cross (->RecordingExecutor calls-b))
+        (executor/register-executor! :billboard-cross (recording-executor calls-b))
         (executor/execute-draw-plan! :ctx-b {:kind :billboard-cross} :entity-b 0.5)
         (is (= [[:ctx-b {:kind :billboard-cross} :entity-b 0.5]]
                @calls-b))

@@ -2,15 +2,19 @@
   "Primitive executor protocol for ScriptRender draw plans.
 
   Phase 2 provides a shell contract; concrete primitive implementations are
-  added incrementally in later phases." )
+  added incrementally in later phases.
 
-(defprotocol IPrimitiveExecutor
-  (draw! [this render-ctx draw-plan entity partial-tick]))
+  Expected map keys:
+  - :draw! (fn [render-ctx draw-plan entity partial-tick] -> nil)" )
 
-(defrecord NoopPrimitiveExecutor []
-  IPrimitiveExecutor
-  (draw! [_ _ _ _ _]
-    nil))
+;; Wrapper function
+
+(defn draw!
+  [executor render-ctx draw-plan entity partial-tick]
+  ((:draw! executor) render-ctx draw-plan entity partial-tick))
+
+(def noop-executor
+  {:draw! (fn [_ _ _ _ _] nil)})
 
 (defn create-script-render-executor-runtime
   ([]
@@ -56,8 +60,6 @@
   ([executors]
    (reset! (executors-atom) executors)
    nil))
-
-(defonce ^:private noop-executor (->NoopPrimitiveExecutor))
 
 (defn register-executor!
   [kind executor]

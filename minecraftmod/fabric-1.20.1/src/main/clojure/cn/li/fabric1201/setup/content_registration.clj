@@ -65,7 +65,7 @@
                          (FabricBootstrapHelper/createPlainBlock base-properties))
             _ (install-bundle-on-block! block-inst tile-id bundles)
             registered (fabric-dispatch/register-block registry-name block-inst)]
-        (registry-core/swap-state! registered-blocks #(assoc % block-id registered))))))
+        ((:swap-state! registered-blocks) #(assoc % block-id registered))))))
 
 (defn assert-scripted-blocks-bundled!
   [{:keys [registered-blocks]}]
@@ -93,7 +93,7 @@
                             (apply [_ block-inst]
                               (.get block-id-map block-inst))))
                 registered (FabricBootstrapHelper/registerBlockEntityType mod-id registry-name be-type)]
-            (registry-core/swap-state! registered-block-entities #(assoc % tile-id registered))))))))
+            ((:swap-state! registered-block-entities) #(assoc % tile-id registered))))))))
 
 (defn- create-standalone-item
   [_item-spec]
@@ -106,7 +106,7 @@
           item-spec (metadata-call metadata/get-item-spec item-id)
           item-inst (create-standalone-item item-spec)
           registered (fabric-dispatch/register-item registry-name item-inst)]
-      (registry-core/swap-state! registered-items #(assoc % item-id registered))))
+      ((:swap-state! registered-items) #(assoc % item-id registered))))
 
   (doseq [block-id (or (metadata-call metadata/get-all-block-ids) [])]
     (when (and (metadata-call metadata/should-create-block-item? block-id)
@@ -115,7 +115,7 @@
         (let [registry-name (metadata-call metadata/get-block-registry-name block-id)
               block-item (FabricBootstrapHelper/createBlockItem block-inst)
               registered (fabric-dispatch/register-item registry-name block-item)]
-          (registry-core/swap-state! registered-items #(assoc % (str block-id "-item") registered)))))))
+          ((:swap-state! registered-items) #(assoc % (str block-id "-item") registered)))))))
 
 (defn- register-scripted-projectile-spec!
   [registry-name entity-spec]

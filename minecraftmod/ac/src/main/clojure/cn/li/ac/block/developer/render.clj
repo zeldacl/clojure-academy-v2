@@ -84,13 +84,12 @@
       (pose/pop-pose pose-stack))))
 
 (defn- make-multiblock-renderer [model-fn tex-fn]
-  (reify tesr-api/ITileEntityRenderer
-    (render-tile [_ tile-entity partial-ticks pose-stack buffer-source packed-light packed-overlay]
-      (mb-helper/render-multiblock-tesr
-       tile-entity
-       (fn [tile pt ps bs pl po]
-         (render-obj-at-origin! model-fn tex-fn tile pt ps bs pl po))
-       partial-ticks pose-stack buffer-source packed-light packed-overlay))))
+  {:render-tile (fn [_ tile-entity partial-ticks pose-stack buffer-source packed-light packed-overlay]
+                  (mb-helper/render-multiblock-tesr
+                   tile-entity
+                   (fn [tile pt ps bs pl po]
+                     (render-obj-at-origin! model-fn tex-fn tile pt ps bs pl po))
+                   partial-ticks pose-stack buffer-source packed-light packed-overlay))})
 
 (defn register!
   "Register BER dispatch for developer controller + part block-ids."

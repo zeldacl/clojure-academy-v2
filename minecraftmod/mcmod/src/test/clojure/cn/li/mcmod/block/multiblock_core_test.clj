@@ -33,9 +33,9 @@
   (bdsl/register-block! (bdsl/create-block-spec "part-test" (controller-parts-opts))))
 
 (defn- reset-blocks! [f]
-  (registry-core/reset-state! (bdsl/block-registry) {})
+  ((:reset-state! (bdsl/block-registry)) {})
   (f)
-  (registry-core/reset-state! (bdsl/block-registry) {}))
+  ((:reset-state! (bdsl/block-registry)) {}))
 
 (use-fixtures :each reset-blocks!)
 
