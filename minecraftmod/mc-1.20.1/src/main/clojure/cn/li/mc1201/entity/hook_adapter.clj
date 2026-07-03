@@ -1,179 +1,77 @@
 (ns cn.li.mc1201.entity.hook-adapter
-  "Adapter implementations converting Minecraft entities to abstract IEntity protocol.
-   
+  "Adapter factory functions converting Minecraft entities to plain map adapters.
+
    This module bridges between platform-specific Minecraft code and the abstract
-   entity protocols, allowing hooks to work with platform-agnostic interfaces.
-   
-   Each platform (Forge, Fabric) will provide concrete implementations of these adapters
-   for their respective Minecraft entity types."
-  (:require [cn.li.mc1201.entity.hook-abstraction :as hooks]
-            [cn.li.mcmod.util.log :as log]))
+   entity operation maps, allowing hooks to work with platform-agnostic interfaces.
 
-(defrecord MinecraftEntityAdapter
+   Each platform (Forge, Fabric) provides concrete platform-context maps whose keys
+   are operation names (e.g. :get-pos) and values are functions that take the
+   Minecraft entity as the first argument.
+
+   Usage:
+     (let [adapter (adapt-entity mc-entity ctx)]
+       ((:get-pos adapter) (:minecraft-entity adapter)))")
+
+;; ============================================================================
+;; Factory Functions
+;; ============================================================================
+
+(defn create-entity-adapter
+  "Create an entity adapter map from a Minecraft entity and platform context.
+
+   The platform-context should contain IEntity operation functions keyed by
+   name (e.g. :get-pos, :set-pos!). Each function takes the Minecraft entity
+   as its first argument.
+
+   Returns a plain map merging platform-context with :minecraft-entity."
   [minecraft-entity platform-context]
-  hooks/IEntity
-  (get-pos [_]
-    ((:get-pos platform-context) minecraft-entity))
-  (get-eye-pos [_]
-    ((:get-eye-pos platform-context) minecraft-entity))
-  (get-feet-pos [_]
-    ((:get-feet-pos platform-context) minecraft-entity))
-  (set-pos! [_ x y z]
-    ((:set-pos platform-context) minecraft-entity x y z))
-  (move-relative! [_ dx dy dz]
-    ((:move-relative platform-context) minecraft-entity dx dy dz))
-  (get-velocity [_]
-    ((:get-velocity platform-context) minecraft-entity))
-  (set-velocity! [_ vx vy vz]
-    ((:set-velocity platform-context) minecraft-entity vx vy vz))
-  (apply-velocity-impulse! [_ vx vy vz]
-    ((:apply-velocity-impulse platform-context) minecraft-entity vx vy vz))
-  (get-rotation [_]
-    ((:get-rotation platform-context) minecraft-entity))
-  (set-rotation! [_ yaw pitch]
-    ((:set-rotation platform-context) minecraft-entity yaw pitch))
-  (get-level [_]
-    ((:get-level platform-context) minecraft-entity))
-  (is-in-water? [_]
-    ((:is-in-water? platform-context) minecraft-entity))
-  (is-on-ground? [_]
-    ((:is-on-ground? platform-context) minecraft-entity))
-  (is-wet? [_]
-    ((:is-wet? platform-context) minecraft-entity))
-  (get-entity-type [_]
-    ((:get-entity-type platform-context) minecraft-entity))
-  (is-player? [_]
-    ((:is-player? platform-context) minecraft-entity))
-  (is-living? [_]
-    ((:is-living? platform-context) minecraft-entity))
-  (get-name [_]
-    ((:get-name platform-context) minecraft-entity))
-  (get-uuid [_]
-    ((:get-uuid platform-context) minecraft-entity))
-  (get-tag [_]
-    ((:get-tag platform-context) minecraft-entity))
-  (set-tag! [_ name]
-    ((:set-tag! platform-context) minecraft-entity name)))
+  (merge platform-context {:minecraft-entity minecraft-entity}))
 
-(defrecord MinecraftLivingEntityAdapter
+(defn create-living-entity-adapter
+  "Create a living entity adapter map from a Minecraft living entity and
+   platform context.
+
+   The platform-context should contain both IEntity and ILivingEntity operation
+   functions (e.g. :get-pos, :get-health). Each function takes the Minecraft
+   entity as its first argument.
+
+   Returns a plain map merging platform-context with :minecraft-entity."
   [minecraft-entity platform-context]
-  hooks/IEntity
-  (get-pos [_] ((:get-pos platform-context) minecraft-entity))
-  (get-eye-pos [_] ((:get-eye-pos platform-context) minecraft-entity))
-  (get-feet-pos [_] ((:get-feet-pos platform-context) minecraft-entity))
-  (set-pos! [_ x y z] ((:set-pos platform-context) minecraft-entity x y z))
-  (move-relative! [_ dx dy dz] ((:move-relative platform-context) minecraft-entity dx dy dz))
-  (get-velocity [_] ((:get-velocity platform-context) minecraft-entity))
-  (set-velocity! [_ vx vy vz] ((:set-velocity platform-context) minecraft-entity vx vy vz))
-  (apply-velocity-impulse! [_ vx vy vz] ((:apply-velocity-impulse platform-context) minecraft-entity vx vy vz))
-  (get-rotation [_] ((:get-rotation platform-context) minecraft-entity))
-  (set-rotation! [_ yaw pitch] ((:set-rotation platform-context) minecraft-entity yaw pitch))
-  (get-level [_] ((:get-level platform-context) minecraft-entity))
-  (is-in-water? [_] ((:is-in-water? platform-context) minecraft-entity))
-  (is-on-ground? [_] ((:is-on-ground? platform-context) minecraft-entity))
-  (is-wet? [_] ((:is-wet? platform-context) minecraft-entity))
-  (get-entity-type [_] ((:get-entity-type platform-context) minecraft-entity))
-  (is-player? [_] ((:is-player? platform-context) minecraft-entity))
-  (is-living? [_] ((:is-living? platform-context) minecraft-entity))
-  (get-name [_] ((:get-name platform-context) minecraft-entity))
-  (get-uuid [_] ((:get-uuid platform-context) minecraft-entity))
-  (get-tag [_] ((:get-tag platform-context) minecraft-entity))
-  (set-tag! [_ name] ((:set-tag! platform-context) minecraft-entity name))
+  (merge platform-context {:minecraft-entity minecraft-entity}))
 
-  hooks/ILivingEntity
-  (get-health [_] ((:get-health platform-context) minecraft-entity))
-  (set-health! [_ health] ((:set-health! platform-context) minecraft-entity health))
-  (get-max-health [_] ((:get-max-health platform-context) minecraft-entity))
-  (hurt! [_ damage source-keyword] ((:hurt! platform-context) minecraft-entity damage source-keyword))
-  (add-effect! [_ effect-type duration amplifier] ((:add-effect! platform-context) minecraft-entity effect-type duration amplifier))
-  (remove-effect! [_ effect-type] ((:remove-effect! platform-context) minecraft-entity effect-type))
-  (has-effect? [_ effect-type] ((:has-effect? platform-context) minecraft-entity effect-type))
-  (get-effects [_] ((:get-effects platform-context) minecraft-entity))
-  (can-breathe-underwater? [_] ((:can-breathe-underwater? platform-context) minecraft-entity))
-  (is-sprinting? [_] ((:is-sprinting? platform-context) minecraft-entity))
-  (set-sprinting! [_ sprinting?] ((:set-sprinting! platform-context) minecraft-entity sprinting?)))
+(defn create-player-adapter
+  "Create a player adapter map from a Minecraft player entity and
+   platform context.
 
-(defrecord MinecraftPlayerAdapter
+   The platform-context should contain IEntity, ILivingEntity, and IPlayer
+   operation functions. Each function takes the Minecraft entity as its
+   first argument.
+
+   Returns a plain map merging platform-context with :minecraft-player,
+   and overriding :is-player? to always return true."
   [minecraft-player platform-context]
-  hooks/IEntity
-  (get-pos [_] ((:get-pos platform-context) minecraft-player))
-  (get-eye-pos [_] ((:get-eye-pos platform-context) minecraft-player))
-  (get-feet-pos [_] ((:get-feet-pos platform-context) minecraft-player))
-  (set-pos! [_ x y z] ((:set-pos platform-context) minecraft-player x y z))
-  (move-relative! [_ dx dy dz] ((:move-relative platform-context) minecraft-player dx dy dz))
-  (get-velocity [_] ((:get-velocity platform-context) minecraft-player))
-  (set-velocity! [_ vx vy vz] ((:set-velocity platform-context) minecraft-player vx vy vz))
-  (apply-velocity-impulse! [_ vx vy vz] ((:apply-velocity-impulse platform-context) minecraft-player vx vy vz))
-  (get-rotation [_] ((:get-rotation platform-context) minecraft-player))
-  (set-rotation! [_ yaw pitch] ((:set-rotation platform-context) minecraft-player yaw pitch))
-  (get-level [_] ((:get-level platform-context) minecraft-player))
-  (is-in-water? [_] ((:is-in-water? platform-context) minecraft-player))
-  (is-on-ground? [_] ((:is-on-ground? platform-context) minecraft-player))
-  (is-wet? [_] ((:is-wet? platform-context) minecraft-player))
-  (get-entity-type [_] ((:get-entity-type platform-context) minecraft-player))
-  (is-player? [_] true)
-  (is-living? [_] ((:is-living? platform-context) minecraft-player))
-  (get-name [_] ((:get-name platform-context) minecraft-player))
-  (get-uuid [_] ((:get-uuid platform-context) minecraft-player))
-  (get-tag [_] ((:get-tag platform-context) minecraft-player))
-  (set-tag! [_ name] ((:set-tag! platform-context) minecraft-player name))
+  (merge platform-context
+         {:minecraft-player minecraft-player
+          :is-player? (constantly true)}))
 
-  hooks/ILivingEntity
-  (get-health [_] ((:get-health platform-context) minecraft-player))
-  (set-health! [_ health] ((:set-health! platform-context) minecraft-player health))
-  (get-max-health [_] ((:get-max-health platform-context) minecraft-player))
-  (hurt! [_ damage source-keyword] ((:hurt! platform-context) minecraft-player damage source-keyword))
-  (add-effect! [_ effect-type duration amplifier] ((:add-effect! platform-context) minecraft-player effect-type duration amplifier))
-  (remove-effect! [_ effect-type] ((:remove-effect platform-context) minecraft-player effect-type))
-  (has-effect? [_ effect-type] ((:has-effect? platform-context) minecraft-player effect-type))
-  (get-effects [_] ((:get-effects platform-context) minecraft-player))
-  (can-breathe-underwater? [_] ((:can-breathe-underwater? platform-context) minecraft-player))
-  (is-sprinting? [_] ((:is-sprinting? platform-context) minecraft-player))
-  (set-sprinting! [_ sprinting?] ((:set-sprinting! platform-context) minecraft-player sprinting?))
-
-  hooks/IPlayer
-  (get-player-name [_]
-    ((:get-player-name platform-context) minecraft-player))
-  (get-player-uuid [_]
-    ((:get-player-uuid platform-context) minecraft-player))
-  (get-gamemode [_]
-    ((:get-gamemode platform-context) minecraft-player))
-  (set-gamemode! [_ gamemode]
-    ((:set-gamemode! platform-context) minecraft-player gamemode))
-  (is-creative? [_]
-    ((:is-creative? platform-context) minecraft-player))
-  (is-survival? [_]
-    ((:is-survival? platform-context) minecraft-player))
-  (can-fly? [_]
-    ((:can-fly? platform-context) minecraft-player))
-  (is-flying? [_]
-    ((:is-flying? platform-context) minecraft-player))
-  (set-flying! [_ flying?]
-    ((:set-flying! platform-context) minecraft-player flying?))
-  (get-experience [_]
-    ((:get-experience platform-context) minecraft-player))
-  (get-experience-level [_]
-    ((:get-experience-level platform-context) minecraft-player))
-  (add-experience! [_ amount]
-    ((:add-experience! platform-context) minecraft-player amount))
-  (get-inventory [_]
-    ((:get-inventory platform-context) minecraft-player))
-  (get-spawn-dimension [_]
-    ((:get-spawn-dimension platform-context) minecraft-player))
-  (get-spawn-pos [_]
-    ((:get-spawn-pos platform-context) minecraft-player)))
+;; ============================================================================
+;; Public API — stable entry points
+;; ============================================================================
 
 (defn adapt-entity
-  "Convert Minecraft entity to IEntity adapter."
+  "Convert Minecraft entity to an entity adapter map.
+   Deprecated: prefer create-entity-adapter directly."
   [minecraft-entity platform-context]
-  (->MinecraftEntityAdapter minecraft-entity platform-context))
+  (create-entity-adapter minecraft-entity platform-context))
 
 (defn adapt-living-entity
-  "Convert Minecraft living entity to ILivingEntity adapter."
+  "Convert Minecraft living entity to a living entity adapter map.
+   Deprecated: prefer create-living-entity-adapter directly."
   [minecraft-entity platform-context]
-  (->MinecraftLivingEntityAdapter minecraft-entity platform-context))
+  (create-living-entity-adapter minecraft-entity platform-context))
 
 (defn adapt-player
-  "Convert Minecraft ServerPlayer to IPlayer adapter."
+  "Convert Minecraft ServerPlayer to a player adapter map.
+   Deprecated: prefer create-player-adapter directly."
   [minecraft-player platform-context]
-  (->MinecraftPlayerAdapter minecraft-player platform-context))
+  (create-player-adapter minecraft-player platform-context))
