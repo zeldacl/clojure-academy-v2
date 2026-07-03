@@ -1,9 +1,7 @@
 (ns cn.li.mc1201.entity.mob-logic-compile
   "Compile declarative mob hook maps into loader-neutral MobLogicBundle instances."
-  (:import [cn.li.mc1201.entity ScriptedMobEntity]
-           [cn.li.mc1201.entity.logic
-            IMobTickLogic IMobHurtLogic IMobDeathLogic IMobLootLogic MobLogicBundle]
-           [net.minecraft.world.damagesource DamageSource]))
+  (:import [cn.li.mc1201.entity.logic MobLogicBundle]
+           [cn.li.mc1201.shim FnMobTickLogic FnMobHurtLogic FnMobDeathLogic FnMobLootLogic]))
 
 (defn ^MobLogicBundle compile-mob-logic
   "Compile :properties.mob map (or merged cfg) into a MobLogicBundle singleton."
@@ -13,20 +11,8 @@
         hurt-fn  (:mob-hurt-fn props)
         death-fn (:mob-death-fn props)
         loot-fn  (:mob-loot-fn props)
-        tick (when tick-fn
-               (proxy [IMobTickLogic] []
-                 (aiStep [mob]
-                   (tick-fn mob))))
-        hurt (when hurt-fn
-               (proxy [IMobHurtLogic] []
-                 (onIncomingDamage [mob src amt]
-                   (float (hurt-fn mob src amt)))))
-        death (when death-fn
-                (proxy [IMobDeathLogic] []
-                  (onDie [mob src]
-                    (death-fn mob src))))
-        loot (when loot-fn
-               (proxy [IMobLootLogic] []
-                 (dropLoot [mob src recent?]
-                   (boolean (loot-fn mob src recent?)))))]
+        tick  (when tick-fn  (FnMobTickLogic. tick-fn))
+        hurt  (when hurt-fn  (FnMobHurtLogic. (fn [mob src amt] (float (hurt-fn mob src amt)))))
+        death (when death-fn (FnMobDeathLogic. death-fn))
+        loot  (when loot-fn  (FnMobLootLogic. (fn [mob src recent?] (boolean (loot-fn mob src recent?)))))]
     (MobLogicBundle. tick hurt death loot)))

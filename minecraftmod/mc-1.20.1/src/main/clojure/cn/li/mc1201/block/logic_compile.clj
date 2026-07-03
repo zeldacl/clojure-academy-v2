@@ -5,6 +5,7 @@
            [cn.li.mc1201.block.logic
             ITileTickLogic ITileNbtLogic ITileContainerLogic
             ITileCapabilityLogic TileLogicBundle]
+           [cn.li.mc1201.shim FnTileTickLogic FnTileNbtLogic]
            [net.minecraft.core Direction]
            [net.minecraft.nbt CompoundTag]
            [net.minecraft.world.entity.player Player]
@@ -72,18 +73,14 @@
   (let [tick-fn      (:tick-fn cfg)
         read-nbt-fn  (:read-nbt-fn cfg)
         write-nbt-fn (:write-nbt-fn cfg)
-        tick (when tick-fn
-               (proxy [ITileTickLogic] []
-                 (serverTick [lvl pos st be]
-                   (tick-fn lvl pos st be))))
+        tick (when tick-fn (FnTileTickLogic. tick-fn))
         nbt (when (or read-nbt-fn write-nbt-fn)
-              (proxy [ITileNbtLogic] []
-                (readNbt [^AbstractScriptedBlockEntity be ^CompoundTag tag]
-                  (when read-nbt-fn
+              (FnTileNbtLogic.
+                (when read-nbt-fn
+                  (fn [^AbstractScriptedBlockEntity be ^CompoundTag tag]
                     (when-let [data (read-nbt-fn tag)]
                       (.setCustomState be data))))
-                (writeNbt [be ^CompoundTag tag]
-                  (when write-nbt-fn (write-nbt-fn be tag)))))
+                write-nbt-fn))
         container (compile-container (:container cfg))
         capability (compile-capability (:capability-keys cfg))]
     (TileLogicBundle. tick nbt container capability)))
