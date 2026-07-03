@@ -174,7 +174,7 @@
           (nbt/nbt-append! connections (nbt/create-nbt-compound))
           (nbt/nbt-set-tag! payload "networks" networks)
           (nbt/nbt-set-tag! payload "connections" connections)
-          (let [restored (world/on-world-load world-id (world/->WiSavedDataWrapper nil payload))]
+          (let [restored (world/on-world-load world-id (world/create-wi-saved-data nil payload))]
             (is (identical? restored (world/get-world-data-non-create world-id)))
             (is (empty? (world-registry/networks restored)))
             (is (empty? (world-registry/connections restored)))))))))

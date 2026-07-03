@@ -12,9 +12,18 @@
             [cn.li.mcmod.events.world-lifecycle :as world-lifecycle]
             [cn.li.mcmod.util.log :as log]))
 
-(defprotocol IWiSavedData
-  (get-wi-data [this] "Get the in-memory WiWorldData from the wrapper")
-  (get-wi-nbt [this] "Get the persisted wireless NBT payload from the wrapper"))
+;; ============================================================================
+;; Saved-data wrapper (plain map)
+;; ============================================================================
+
+(defn create-wi-saved-data
+  "Create a saved data wrapper map containing WiWorldData and optional NBT payload."
+  [wi-data wi-nbt]
+  {:wi-data wi-data :wi-nbt wi-nbt})
+
+;; ============================================================================
+;; World data lifecycle
+;; ============================================================================
 
 (defn create-world-data
   "Create new world data for a world."
@@ -41,24 +50,10 @@
   [world]
   (world-registry/remove-world-data! world))
 
-(deftype WiSavedDataWrapper
-  [^:volatile-mutable wi-data
-   ^:volatile-mutable wi-nbt]
-  IWiSavedData
-  (get-wi-data [_]
-    wi-data)
-  (get-wi-nbt [_]
-    wi-nbt)
-  Object
-  (toString [_]
-    (str "WiSavedDataWrapper["
-         (if wi-data (str (count (world-registry/networks wi-data)) " networks") "serialized")
-         "]")))
-
 (defn create-saved-data
   "Create a saved data wrapper for a world."
   [world]
-  (WiSavedDataWrapper. (create-world-data world) nil))
+  (create-wi-saved-data (create-world-data world) nil))
 
 (defn get-saved-data-world-data
   "Extract WiWorldData from SavedData wrapper."
@@ -70,11 +65,11 @@
        (and world saved-data)
        (persistence/world-data-from-nbt world saved-data)
 
-       (satisfies? IWiSavedData saved-data)
-       (let [payload (try (get-wi-nbt saved-data) (catch Exception _ nil))]
+       (map? saved-data)
+       (let [payload (:wi-nbt saved-data)]
          (if payload
            (when world (persistence/world-data-from-nbt world payload))
-           (try (get-wi-data saved-data) (catch Exception _ nil))))
+           (:wi-data saved-data)))
 
        :else
        nil))))
