@@ -20,12 +20,15 @@
 
 (def ^:private STATIC-ROUTE-OWNER [::static-routes ::process])
 
-(def ^:dynamic *context-owner*
-  "Explicit runtime owner for resolving otherwise opaque ctx-id values within
-  a request/callback stack. Server handlers bind this to a player-owned session
-  so identical client-generated context ids from different players do not
-  collide in multiplayer."
-  nil)
+;; Context owner stored in Framework [:service :client-ctx :context-owner]
+;; instead of ^:dynamic ThreadLocal. Replaced pattern: read via (*context-owner*).
+(defn *context-owner*
+  "Read context owner from Framework client context (or use provided owner, or nil)."
+  ([]
+   (get-in @(fw/fw-atom) [:service :client-ctx :context-owner]))
+  ([owner]
+   (or owner
+       (get-in @(fw/fw-atom) [:service :client-ctx :context-owner]))))
 
 (def ^:private default-dispatcher-state
   {:transport-contexts {}
@@ -154,7 +157,7 @@
 
 (defn- resolve-context-owner
   [owner ctx-id _preferred-side]
-  (let [resolved-owner (or owner *context-owner*)]
+  (let [resolved-owner (or owner (*context-owner*))]
     (when-not resolved-owner
       (throw (ex-info "Opaque ctx-id resolution requires *context-owner* or an explicit owner"
                       {:ctx-id ctx-id})))
@@ -194,7 +197,7 @@
 
 (defn new-context
   ([player-uuid skill-id]
-   (new-context player-uuid skill-id *context-owner*))
+   (new-context player-uuid skill-id (*context-owner*)))
   ([player-uuid skill-id owner]
    (let [owner* (resolve-context-owner owner nil :client)
          counter-owner (context-owner-counter-key owner* :client)
@@ -206,7 +209,7 @@
 
 (defn new-server-context
   ([player-uuid skill-id client-id]
-   (new-server-context player-uuid skill-id client-id *context-owner*))
+   (new-server-context player-uuid skill-id client-id (*context-owner*)))
   ([player-uuid skill-id client-id owner]
    (let [owner* (resolve-context-owner owner nil :server)
          counter-owner (context-owner-counter-key owner* :server)
@@ -218,13 +221,13 @@
 
 (defn start-context!
   [player-uuid skill-id]
-  (let [ctx (new-context player-uuid skill-id *context-owner*)]
+  (let [ctx (new-context player-uuid skill-id (*context-owner*))]
     (register-context! ctx)
     ctx))
 
 (defn start-server-context!
   [player-uuid skill-id client-id]
-  (let [ctx (new-server-context player-uuid skill-id client-id *context-owner*)]
+  (let [ctx (new-server-context player-uuid skill-id client-id (*context-owner*))]
     (register-context! ctx)
     ctx))
 
@@ -379,7 +382,7 @@
   ([ctx-id send-terminated-fn]
    (terminate-context! nil ctx-id send-terminated-fn))
   ([owner ctx-id send-terminated-fn]
-   (let [resolved-owner (or owner *context-owner*)
+   (let [resolved-owner (or owner (*context-owner*))
          entry (preferred-context-entry resolved-owner ctx-id nil)]
      (when-let [[_key transport] entry]
        (let [merged (ctx-proj/merge-store-projection transport)]

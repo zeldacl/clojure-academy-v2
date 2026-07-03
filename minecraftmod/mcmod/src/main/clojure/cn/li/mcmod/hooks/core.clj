@@ -160,17 +160,34 @@
                        :allowed-hook-keys allowed}))))
   hooks)
 
-(def ^:dynamic *client-session-id*
-  "Client runtime session id bound by platform client adapters while invoking
-  client-side hooks. Content code must fail fast when this is not available
-  instead of falling back to a process-global default owner."
+;; Client context stored in Framework [:service :client-ctx] instead of ^:dynamic ThreadLocal.
+;; Replaces *client-session-id* and *player-state-owner* dynamic vars.
+
+(def ^:private client-ctx-path [:service :client-ctx])
+
+(defn- get-client-ctx
+  "Read current client context from Framework. Returns nil if not set."
+  []
+  (get-in @(fw/fw-atom) client-ctx-path))
+
+(defn- set-client-ctx!
+  "Write client context to Framework."
+  [ctx]
+  (when-let [fw-atom (fw/fw-atom)]
+    (swap! fw-atom assoc-in client-ctx-path ctx))
   nil)
 
-(def ^:dynamic *player-state-owner*
-  "Runtime owner bound by platform server/client entry points while accessing
-  content-owned player state. Expected server shape: {:server-session-id ...}.
-  Content storage combines this owner with the requested player UUID."
-  nil)
+(defn *client-session-id*
+  "Read client session id from Framework client context."
+  []
+  (:session-id (get-client-ctx)))
+
+(defn *player-state-owner*
+  "Read player state owner from Framework client context."
+  []
+  (or (:player-owner (get-client-ctx))
+      ;; Fallback: try context-owner (AC ability system)
+      (:context-owner (get-client-ctx))))
 
 (defn current-player-state-owner
   "Return the currently bound runtime player-state owner map (or nil)."
