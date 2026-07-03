@@ -1,8 +1,8 @@
 (ns cn.li.ac.item.item-energy-base
   "Energy item base definitions — aligns with original AcademyCraft's ItemEnergyBase.
 
-  Defines the ItemEnergyBase record (implementing ImagEnergyItem protocol),
-  energy item configurations, and type-detection helpers.
+  Defines energy item configurations and type-detection helpers.
+  Energy item configs are plain function maps (not protocol records).
 
   Energy operations (charge, pull, set, get) live in
   cn.li.ac.energy.service.item-manager, aligning with the original's IFItemManager."
@@ -13,13 +13,14 @@
             [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
-;; ItemEnergyBase Record — aligns with original ItemEnergyBase Java class
+;; Energy Item Factory — plain function map
 ;; ============================================================================
 
-(defrecord ItemEnergyBase [max-energy bandwidth]
-  energy-item/ImagEnergyItem
-  (get-max-energy [_this] max-energy)
-  (get-bandwidth [_this] bandwidth))
+(defn- make-energy-item
+  "Create an energy item function map."
+  [max-energy bandwidth]
+  {:get-max-energy (fn [] max-energy)
+   :get-bandwidth (fn [] bandwidth)})
 
 ;; ============================================================================
 ;; Energy Item Configurations
@@ -34,7 +35,7 @@
   "Create an energy item spec with specified configuration."
   [config-key]
   (if-let [[max-energy bandwidth] (get energy-item-configs config-key)]
-    (->ItemEnergyBase max-energy bandwidth)
+    (make-energy-item max-energy bandwidth)
     (throw (IllegalArgumentException.
              (str "Unknown energy item config: " config-key)))))
 
@@ -60,7 +61,7 @@
             :else nil)))))
 
 (defn get-energy-item-config
-  "Get the ItemEnergyBase config for an ItemStack.
+  "Get the energy item config for an ItemStack.
   Returns nil if the item is not a recognized energy item."
   [item-stack]
   (when-let [item-type (get-energy-item-type item-stack)]

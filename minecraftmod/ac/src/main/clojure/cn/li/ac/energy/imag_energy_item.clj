@@ -1,36 +1,50 @@
- (ns cn.li.ac.energy.imag-energy-item
-  "ImagEnergyItem protocol - Clojure version of Java interface
-  
+(ns cn.li.ac.energy.imag-energy-item
+  "ImagEnergyItem contract — Clojure version of the original Java interface.
+
   Defines the contract for items that can store and transfer energy.
-  Used by IFItemManager for energy operations."
+  Energy item configs are plain function maps with:
+    :get-max-energy  — (fn [] -> double)
+    :get-bandwidth   — (fn [] -> double)"
   (:require [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
-;; ImagEnergyItem Protocol
+;; Key set documentation
 ;; ============================================================================
 
-(defprotocol ImagEnergyItem
-  "Interface for items that can store Imaginary Energy (IF).
-  
-  Items implementing this protocol can:
-  - Store energy up to a maximum capacity
-  - Transfer energy with bandwidth limitations"
-  
-  (get-max-energy [this]
-    "Get the maximum energy capacity of this item.
-    Returns: double - maximum energy in IF")
-  
-  (get-bandwidth [this]
-    "Get the energy transfer bandwidth (max per operation).
-    Returns: double - bandwidth in IF per operation"))
+(def ^:const imag-energy-item-keys
+  "Keys required by an ImagEnergyItem function map."
+  [:get-max-energy :get-bandwidth])
+
+;; ============================================================================
+;; Wrapper functions
+;; ============================================================================
+
+(defn get-max-energy
+  "Get the maximum energy capacity of this item.
+  Returns: double - maximum energy in IF"
+  [item]
+  ((:get-max-energy item)))
+
+(defn get-bandwidth
+  "Get the energy transfer bandwidth (max per operation).
+  Returns: double - bandwidth in IF per operation"
+  [item]
+  ((:get-bandwidth item)))
+
+;; ============================================================================
+;; Type check
+;; ============================================================================
+
+(defn imag-energy-item? [obj]
+  "Check if object satisfies ImagEnergyItem contract
+  (has the required keys with callable values)."
+  (and (map? obj)
+       (fn? (:get-max-energy obj))
+       (fn? (:get-bandwidth obj))))
 
 ;; ============================================================================
 ;; Helper Functions
 ;; ============================================================================
-
-(defn imag-energy-item? [obj]
-  "Check if object satisfies ImagEnergyItem protocol"
-  (satisfies? ImagEnergyItem obj))
 
 (defn validate-item-energy
   "Validate energy item parameters"

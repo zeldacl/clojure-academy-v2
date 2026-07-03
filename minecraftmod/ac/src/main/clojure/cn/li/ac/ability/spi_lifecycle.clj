@@ -1,22 +1,55 @@
 (ns cn.li.ac.ability.spi-lifecycle
   "Ability lifecycle SPI.
 
-  This namespace introduces a protocol-based lifecycle layer so ability
-  definitions can declare activate/tick/deactivate hooks without coupling
-  execution logic to the registry or player-state implementation.
+  This namespace provides a lifecycle layer so ability definitions can declare
+  activate/tick/deactivate hooks without coupling execution logic to the registry
+  or player-state implementation.
+
+  Lifecycle objects are plain function maps with keys:
+    :on-activate   (fn [player context])
+    :on-tick       (fn [player context])
+    :on-deactivate (fn [player context])
+    :can-execute?  (fn [player context])
 
   Registry stored in Framework [:service :ability-lifecycle]."
   (:require [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.util.log :as log]))
 
-(defprotocol AbilityLifecycle
-  "Lifecycle hooks for AC abilities and categories."
-  (on-activate [this player context])
-  (on-tick [this player context])
-  (on-deactivate [this player context])
-  (can-execute? [this player context]))
+;; ============================================================================
+;; Key set documentation
+;; ============================================================================
 
+(def ^:const ability-lifecycle-keys
+  "Keys required by an ability lifecycle function map."
+  [:on-activate :on-tick :on-deactivate :can-execute?])
+
+;; ============================================================================
+;; Wrapper functions — dispatch via map key lookup
+;; ============================================================================
+
+(defn on-activate
+  "Call the on-activate hook."
+  [lifecycle player context]
+  ((:on-activate lifecycle) player context))
+
+(defn on-tick
+  "Call the on-tick hook."
+  [lifecycle player context]
+  ((:on-tick lifecycle) player context))
+
+(defn on-deactivate
+  "Call the on-deactivate hook."
+  [lifecycle player context]
+  ((:on-deactivate lifecycle) player context))
+
+(defn can-execute?
+  "Check if the ability can execute."
+  [lifecycle player context]
+  ((:can-execute? lifecycle) player context))
+
+;; ============================================================================
 ;; Lifecycle Registry — Framework [:service :ability-lifecycle]
+;; ============================================================================
 
 (def ^:private lifecycle-path [:service :ability-lifecycle])
 
@@ -83,3 +116,17 @@
 
 (defn lifecycle-registered? [ability-id]
   (contains? (:lifecycles (lifecycle-registry-state-snapshot)) ability-id))
+
+(defn call-with-lifecycle-registry-runtime
+  "Temporarily replace the lifecycle registry state with the runtime's state
+  for the duration of `f`."
+  [runtime f]
+  (let [fw-atom (fw/fw-atom)]
+    (if fw-atom
+      (let [prev (get-in @fw-atom lifecycle-path)]
+        (try
+          (swap! fw-atom assoc-in lifecycle-path @(:state* runtime))
+          (f)
+          (finally
+            (swap! fw-atom assoc-in lifecycle-path prev))))
+      (f))))

@@ -5,6 +5,7 @@
             [cn.li.ac.energy.domain.container :as container]))
 
 (defn- reset-default-system-fixture [f]
+  (energy-api/install-default-impls!)
   (energy-api/call-with-energy-system-runtime
     (energy-api/create-energy-system-runtime)
     f))

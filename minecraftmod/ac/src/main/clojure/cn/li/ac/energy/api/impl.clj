@@ -1,8 +1,11 @@
 (ns cn.li.ac.energy.api.impl
   "Default Phase C energy API implementation.
 
-  This namespace bridges the protocol layer to the concrete item/node service
-  implementations. Runtime stores require an explicit server/world owner."
+  This namespace bridges the API layer to the concrete item/node service
+  implementations. Runtime stores require an explicit server/world owner.
+
+  Implements the contracts defined in cn.li.ac.energy.api.protocol as
+  plain function maps installed into Framework."
   (:require [cn.li.ac.energy.api.protocol :as proto]
             [cn.li.ac.energy.service.provider-registry :as provider-registry]
             [cn.li.ac.energy.service.subscription :as subscription]
@@ -31,136 +34,206 @@
      (require-owner-value owner ":world-id" world-id)
      (or (:provider-owner owner) (:owner-id owner) WORLD-PROVIDER-OWNER)]))
 
-(defrecord EnergySystemImpl [providers subscriptions scheduled-transfers]
-  proto/IEnergyManager
-  (get-energy [_this id]
-    (some-> (provider-registry/resolve-provider providers id) provider-registry/provider-energy))
+;; ============================================================================
+;; System state factory — per-owner state map
+;; ============================================================================
 
-  (get-capacity [_this id]
-    (some-> (provider-registry/resolve-provider providers id) provider-registry/provider-capacity))
+(defn- new-energy-system
+  "Create a fresh per-owner energy system state map."
+  []
+  {:providers (atom {})
+   :subscriptions (atom {})
+   :scheduled-transfers (atom {})})
 
-  (set-energy [_this id amount]
-    (if-let [{:keys [kind value] :as provider} (provider-registry/resolve-provider providers id)]
-      (let [old-value (provider-registry/provider-energy provider)]
-        (case kind
-          :item (do
-                  (item-manager/set-item-energy! value amount)
-                  (subscription/notify! subscriptions id old-value (item-manager/get-item-energy value))
-                  {:success true :reason "ok"})
-          :node (do
-                  (node-manager/set-node-energy! value amount)
-                  (subscription/notify! subscriptions id old-value (node-manager/get-node-energy value))
-                  {:success true :reason "ok"})
-          :container (if-let [[before after] (provider-registry/update-container-ref! provider container/set-energy amount)]
-                       (do
-                         (subscription/notify! subscriptions id (container/get-current before) (container/get-current after))
-                         {:success true :reason "ok"})
-                       {:success false :reason "container is immutable unless registered with an atom ref"})
-          {:success false :reason "unsupported provider"}))
-      {:success false :reason "provider not found"}))
+;; ============================================================================
+;; Implementation function maps — installed into Framework via proto/install-*
+;; ============================================================================
 
-  (transfer-energy [this source dest amount]
-    (proto/transfer-energy this source dest amount nil))
+(defn- create-manager-impl
+  "Create the IEnergyManager implementation function map.
+  Methods access state via (:providers system), (:subscriptions system), etc."
+  []
+  {:get-energy (fn [system id]
+                 (some-> (provider-registry/resolve-provider (:providers system) id)
+                         provider-registry/provider-energy))
 
-  (transfer-energy [_this source dest amount callback]
-    (transfer-executor/transfer!
-      (provider-registry/resolve-provider providers source)
-      (provider-registry/resolve-provider providers dest)
-      amount
-      callback))
+   :get-capacity (fn [system id]
+                   (some-> (provider-registry/resolve-provider (:providers system) id)
+                           provider-registry/provider-capacity))
 
-  (drain-energy [_this id amount]
-    (let [provider (provider-registry/resolve-provider providers id)
-          old-value (some-> provider provider-registry/provider-energy)
-          [success extracted] (transfer-executor/drain! provider amount)
-          new-value (some-> provider provider-registry/provider-energy)]
-      (when provider
-        (subscription/notify! subscriptions id old-value new-value))
-      [success extracted]))
+   :set-energy (fn [system id amount]
+                 (if-let [{:keys [kind value] :as provider}
+                          (provider-registry/resolve-provider (:providers system) id)]
+                   (let [old-value (provider-registry/provider-energy provider)]
+                     (case kind
+                       :item (do
+                               (item-manager/set-item-energy! value amount)
+                               (subscription/notify! (:subscriptions system) id
+                                                    old-value (item-manager/get-item-energy value))
+                               {:success true :reason "ok"})
+                       :node (do
+                               (node-manager/set-node-energy! value amount)
+                               (subscription/notify! (:subscriptions system) id
+                                                    old-value (node-manager/get-node-energy value))
+                               {:success true :reason "ok"})
+                       :container (if-let [[before after]
+                                          (provider-registry/update-container-ref!
+                                            provider container/set-energy amount)]
+                                    (do
+                                      (subscription/notify! (:subscriptions system) id
+                                                           (container/get-current before)
+                                                           (container/get-current after))
+                                      {:success true :reason "ok"})
+                                    {:success false
+                                     :reason "container is immutable unless registered with an atom ref"})
+                       {:success false :reason "unsupported provider"}))
+                   {:success false :reason "provider not found"}))
 
-  (subscribe-to-changes [_this id callback]
-    (subscription/subscribe! subscriptions id callback))
+   :transfer-energy (fn [system source dest amount callback]
+                      (transfer-executor/transfer!
+                        (provider-registry/resolve-provider (:providers system) source)
+                        (provider-registry/resolve-provider (:providers system) dest)
+                        amount
+                        callback))
 
-  (unsubscribe-from-changes [_this sid]
-    (subscription/unsubscribe! subscriptions sid))
+   :drain-energy (fn [system id amount]
+                   (let [provider (provider-registry/resolve-provider (:providers system) id)
+                         old-value (some-> provider provider-registry/provider-energy)
+                         [success extracted] (transfer-executor/drain! provider amount)
+                         new-value (some-> provider provider-registry/provider-energy)]
+                     (when provider
+                       (subscription/notify! (:subscriptions system) id old-value new-value))
+                     [success extracted]))
 
-  (list-energy-providers [_this]
-    (provider-registry/provider-ids providers))
+   :subscribe-to-changes (fn [system id callback]
+                           (subscription/subscribe! (:subscriptions system) id callback))
 
-  proto/IEnergyItem
-  (get-item-energy [_this item-stack]
-    (item-manager/get-item-energy item-stack))
-  (set-item-energy [_this item-stack amount]
-    (item-manager/set-item-energy! item-stack amount)
-    nil)
-  (get-item-capacity [_this item-stack]
-    (item-manager/get-item-capacity item-stack))
-  (get-item-bandwidth [_this item-stack]
-    (item-manager/get-item-bandwidth item-stack))
-  (is-energy-item? [_this item-stack]
-    (item-manager/is-energy-item-supported? item-stack))
-  (charge-item [_this item-stack amount]
-    (item-manager/charge-item item-stack amount))
-  (discharge-item [_this item-stack amount]
-    (item-manager/discharge-item item-stack amount))
+   :unsubscribe-from-changes (fn [system sid]
+                               (subscription/unsubscribe! (:subscriptions system) sid))
 
-  proto/IEnergyNode
-  (get-node-energy [_this node-vblock]
-    (node-manager/get-node-energy node-vblock))
-  (set-node-energy [_this node-vblock amount]
-    (node-manager/set-node-energy! node-vblock amount)
-    nil)
-  (get-node-capacity [_this node-vblock]
-    (node-manager/get-node-capacity node-vblock))
-  (inject-energy [_this node-vblock amount]
-    (node-manager/inject-energy node-vblock amount))
-  (extract-node-energy [_this node-vblock amount]
-    (node-manager/extract-node-energy node-vblock amount))
+   :list-energy-providers (fn [system]
+                            (provider-registry/provider-ids (:providers system)))})
 
-  proto/IEnergyValidator
-  (validate-energy-amount [_this amount]
-    {:valid (and (number? amount) (Double/isFinite (double amount)) (>= (double amount) 0.0))
-     :errors (cond-> []
-               (not (number? amount))
-               (conj "amount must be numeric")
-               (and (number? amount) (not (Double/isFinite (double amount))))
-               (conj "amount must be finite")
-               (and (number? amount) (< (double amount) 0.0))
-               (conj "amount must be non-negative"))})
-  (validate-transfer [this source dest amount]
-    (let [amount-validation (proto/validate-energy-amount this amount)]
-      {:valid (and (:valid amount-validation)
-                   (some? (provider-registry/resolve-provider providers source))
-                   (some? (provider-registry/resolve-provider providers dest)))
-       :reason (cond
-                 (not (:valid amount-validation)) (first (:errors amount-validation))
-                 (nil? (provider-registry/resolve-provider providers source)) "source not found"
-                 (nil? (provider-registry/resolve-provider providers dest)) "destination not found"
-                 :else "ok")}))
-  (validate-network-consistency [_this _network-id]
-    {:consistent true :errors []})
-  (repair-inconsistency [_this _network-id]
-    {:repaired false :changes []})
+(defn- create-item-impl
+  "Create the IEnergyItem implementation function map."
+  []
+  {:get-item-energy (fn [_system item-stack]
+                      (item-manager/get-item-energy item-stack))
 
-  proto/IEnergyAdmin
-  (admin-dump-state [_this]
-    (provider-registry/dump-state providers))
-  (admin-set-energy-unsafe [this id amount reason]
-    (log/warn (str "Unsafe energy set for " id ": " amount " because " reason))
-    (proto/set-energy this id amount))
-  (admin-reset-energy-system [_this]
-    (provider-registry/clear! providers)
-    (subscription/clear! subscriptions)
-    (reset! scheduled-transfers {})
-    nil)
-  (admin-simulate-loss [_this _network-id amount-lost reason]
-    (log/warn (str "Simulated energy loss: " amount-lost " because " reason))
-    {:lost amount-lost}))
+   :set-item-energy (fn [_system item-stack amount]
+                      (item-manager/set-item-energy! item-stack amount)
+                      nil)
 
-(defn- new-energy-system []
-  (->EnergySystemImpl (atom {}) (atom {}) (atom {})))
+   :get-item-capacity (fn [_system item-stack]
+                        (item-manager/get-item-capacity item-stack))
 
+   :get-item-bandwidth (fn [_system item-stack]
+                         (item-manager/get-item-bandwidth item-stack))
+
+   :is-energy-item? (fn [_system item-stack]
+                      (item-manager/is-energy-item-supported? item-stack))
+
+   :charge-item (fn [_system item-stack amount]
+                  (item-manager/charge-item item-stack amount))
+
+   :discharge-item (fn [_system item-stack amount]
+                     (item-manager/discharge-item item-stack amount))})
+
+(defn- create-node-impl
+  "Create the IEnergyNode implementation function map."
+  []
+  {:get-node-energy (fn [_system node-vblock]
+                      (node-manager/get-node-energy node-vblock))
+
+   :set-node-energy (fn [_system node-vblock amount]
+                      (node-manager/set-node-energy! node-vblock amount)
+                      nil)
+
+   :get-node-capacity (fn [_system node-vblock]
+                        (node-manager/get-node-capacity node-vblock))
+
+   :inject-energy (fn [_system node-vblock amount]
+                    (node-manager/inject-energy node-vblock amount))
+
+   :extract-node-energy (fn [_system node-vblock amount]
+                          (node-manager/extract-node-energy node-vblock amount))})
+
+(defn- create-admin-impl
+  "Create the combined IEnergyValidator + IEnergyAdmin implementation map."
+  []
+  {:validate-energy-amount (fn [_system amount]
+                             {:valid (and (number? amount)
+                                         (Double/isFinite (double amount))
+                                         (>= (double amount) 0.0))
+                              :errors (cond-> []
+                                        (not (number? amount))
+                                        (conj "amount must be numeric")
+                                        (and (number? amount)
+                                             (not (Double/isFinite (double amount))))
+                                        (conj "amount must be finite")
+                                        (and (number? amount) (< (double amount) 0.0))
+                                        (conj "amount must be non-negative"))})
+
+   :validate-transfer (fn [system source dest amount]
+                        (let [amount-validation (proto/validate-energy-amount system amount)]
+                          {:valid (and (:valid amount-validation)
+                                       (some? (provider-registry/resolve-provider
+                                                (:providers system) source))
+                                       (some? (provider-registry/resolve-provider
+                                                (:providers system) dest)))
+                           :reason (cond
+                                     (not (:valid amount-validation))
+                                     (first (:errors amount-validation))
+                                     (nil? (provider-registry/resolve-provider
+                                             (:providers system) source))
+                                     "source not found"
+                                     (nil? (provider-registry/resolve-provider
+                                             (:providers system) dest))
+                                     "destination not found"
+                                     :else "ok")}))
+
+   :validate-network-consistency (fn [_system _network-id]
+                                   {:consistent true :errors []})
+
+   :repair-inconsistency (fn [_system _network-id]
+                           {:repaired false :changes []})
+
+   :admin-dump-state (fn [system]
+                       (provider-registry/dump-state (:providers system)))
+
+   :admin-set-energy-unsafe (fn [system id amount reason]
+                              (log/warn (str "Unsafe energy set for " id ": "
+                                             amount " because " reason))
+                              (proto/set-energy system id amount))
+
+   :admin-reset-energy-system (fn [system]
+                                (provider-registry/clear! (:providers system))
+                                (subscription/clear! (:subscriptions system))
+                                (reset! (:scheduled-transfers system) {})
+                                nil)
+
+   :admin-simulate-loss (fn [_system _network-id amount-lost reason]
+                          (log/warn (str "Simulated energy loss: " amount-lost
+                                         " because " reason))
+                          {:lost amount-lost})})
+
+;; ============================================================================
+;; Bootstrap — install all default implementations
+;; ============================================================================
+
+(defn install-default-impls!
+  "Install all default energy implementation function maps into Framework.
+  Should be called during system initialization."
+  []
+  (proto/install-energy-manager! (create-manager-impl))
+  (proto/install-energy-storage! (create-item-impl))
+  (proto/install-energy-network! (create-node-impl))
+  (proto/install-energy-admin! (create-admin-impl))
+  nil)
+
+;; ============================================================================
 ;; Energy system runtime — Framework [:service :energy-system]
+;; ============================================================================
 
 (def ^:private es-path [:service :energy-system])
 
@@ -176,7 +249,7 @@
   @(systems-atom))
 
 (defn energy-system
-  "Return the default energy system implementation."
+  "Return the default energy system state map for the given owner."
   [owner]
   (let [key (energy-owner-key owner)
         systems* (systems-atom)
@@ -202,6 +275,34 @@
   []
   (reset! (systems-atom) {})
   nil)
+
+;; ============================================================================
+;; Runtime helpers for test isolation
+;; ============================================================================
+
+(defn create-energy-system-runtime
+  "Create an isolated energy system runtime for testing.
+  Returns a fresh atom that can be used with call-with-energy-system-runtime."
+  []
+  (atom {}))
+
+(defn call-with-energy-system-runtime
+  "Temporarily replace the systems atom at [:service :energy-system]
+  with `runtime` for the duration of `f`."
+  [runtime f]
+  (let [fw-atom (fw/fw-atom)]
+    (if fw-atom
+      (let [prev (get-in @fw-atom es-path)]
+        (try
+          (swap! fw-atom assoc-in es-path runtime)
+          (f)
+          (finally
+            (swap! fw-atom assoc-in es-path prev))))
+      (f))))
+
+;; ============================================================================
+;; Public API — registration
+;; ============================================================================
 
 (defn register-provider!
   "Register a provider under a stable id.

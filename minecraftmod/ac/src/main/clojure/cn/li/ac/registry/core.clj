@@ -1,30 +1,77 @@
 (ns cn.li.ac.registry.core
-  "Core contracts for AC content discovery.")
+  "Core contracts for AC content discovery.
 
-(defprotocol IContentProvider
-  (provider-id [this]
-    "Stable unique id for the provider.")
-  (priority [this]
-    "Sort priority; lower values load first.")
-  (content-phases [this]
-    "Return a vector of content phase specs contributed by this provider."))
+  Content providers are plain function maps with keys:
+    :provider-id    (fn [] -> stable unique id)
+    :priority       (fn [] -> sort priority, lower loads first)
+    :content-phases (fn [] -> vector of content phase specs)")
 
-(defrecord ContentProvider [id priority-value phases]
-  IContentProvider
-  (provider-id [_this] id)
-  (priority [_this] priority-value)
-  (content-phases [_this] (vec phases)))
+;; ============================================================================
+;; Key set documentation
+;; ============================================================================
+
+(def ^:const content-provider-keys
+  "Keys required by a content provider function map."
+  [:provider-id :priority :content-phases])
+
+;; ============================================================================
+;; Wrapper functions
+;; ============================================================================
+
+(defn provider-id
+  "Get the stable unique id from a provider."
+  [provider]
+  (if-let [f (:provider-id provider)]
+    (f)
+    (:id provider)))
+
+(defn priority
+  "Get the sort priority from a provider."
+  [provider]
+  (if-let [f (:priority provider)]
+    (f)
+    (or (:priority-value provider) (:priority provider) 100)))
+
+(defn content-phases
+  "Get the content phases from a provider."
+  [provider]
+  (if-let [f (:content-phases provider)]
+    (vec (f))
+    (vec (:phases provider []))))
+
+;; ============================================================================
+;; Content Provider Factory
+;; ============================================================================
+
+(defn- make-content-provider
+  "Create a content provider function map from plain data."
+  [id priority-value phases]
+  {:provider-id (fn [] id)
+   :priority (fn [] priority-value)
+   :content-phases (fn [] (vec phases))})
 
 (defn content-provider
-  "Create a content provider record from plain data."
+  "Create a content provider from plain data."
   [{:keys [id phases priority] :or {priority 100}}]
   (when-not (and (some? id) (sequential? phases))
     (throw (IllegalArgumentException. "content-provider: id must be some?, phases must be sequential?")))
-  (->ContentProvider id priority phases))
+  (make-content-provider id priority phases))
+
+;; ============================================================================
+;; Type Check
+;; ============================================================================
 
 (defn content-provider?
+  "Check if value satisfies the content provider contract."
   [value]
-  (satisfies? IContentProvider value))
+  (and (map? value)
+       (fn? (:provider-id value))
+       (fn? (:priority value))
+       (fn? (:content-phases value))))
+
+;; ============================================================================
+;; Normalization
+;; ============================================================================
 
 (defn normalize-provider
   [value]
@@ -33,11 +80,13 @@
     (map? value) (content-provider value)
     :else (throw (ex-info "Unsupported content provider" {:value value}))))
 
+;; ============================================================================
+;; Safe Accessors — fallback for mixed compilation/classloader states
+;; ============================================================================
+
 (defn provider-id*
   "Safe provider id accessor.
-
-  Prefers protocol dispatch, but falls back to map fields for resilience
-  under mixed incremental compilation/classloader states."
+  Prefers function map dispatch, but falls back to map fields."
   [provider]
   (or (try
         (provider-id provider)

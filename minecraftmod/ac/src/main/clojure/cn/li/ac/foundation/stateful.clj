@@ -1,81 +1,110 @@
 (ns cn.li.ac.foundation.stateful
   "Stateful object pattern utilities.
-  
+
   Provides infrastructure for building state machines and stateful objects
   with consistent:
   - State transitions
   - Lifecycle management
   - Disposal/cleanup
-  - Validity checking"
+  - Validity checking
+
+  Stateful objects are plain function maps with keys:
+    :get-state    (fn [] -> current state)
+    :set-state!   (fn [new-state] -> boolean)
+    :valid?       (fn [] -> boolean)
+    :dispose!     (fn [])
+    :is-disposed? (fn [] -> boolean)"
   (:require [cn.li.ac.foundation.concurrency :as conc]
             [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
-;; State Machine Protocol
+;; Key set documentation
 ;; ============================================================================
 
-(defprotocol IStateful
-  "Protocol for stateful objects with lifecycle."
-  (get-state [this] "Get current state")
-  (set-state! [this state] "Set state to value")
-  (valid? [this] "Check if object is still valid")
-  (dispose! [this] "Cleanup and invalidate object")
-  (is-disposed? [this] "Check if object has been disposed"))
+(def ^:const stateful-keys
+  "Keys required by a stateful object function map."
+  [:get-state :set-state! :valid? :dispose! :is-disposed?])
 
 ;; ============================================================================
-;; Stateful Record Factory
+;; Wrapper functions
+;; ============================================================================
+
+(defn get-state
+  "Get current state from a stateful object."
+  [stateful]
+  ((:get-state stateful)))
+
+(defn set-state!
+  "Set state to value on a stateful object.
+  Returns boolean indicating success."
+  [stateful state]
+  ((:set-state! stateful) state))
+
+(defn valid?
+  "Check if a stateful object is still valid."
+  [stateful]
+  ((:valid? stateful)))
+
+(defn dispose!
+  "Cleanup and invalidate a stateful object."
+  [stateful]
+  ((:dispose! stateful)))
+
+(defn is-disposed?
+  "Check if a stateful object has been disposed."
+  [stateful]
+  ((:is-disposed? stateful)))
+
+;; ============================================================================
+;; Stateful Factory
 ;; ============================================================================
 
 (defn create-stateful
   "Create a stateful object with automatic lifecycle management.
-  
+
   Args:
     initial-state: Initial state value
     opts: {:valid-states [s1 s2 ...]
            :on-state-change (fn [old-state new-state])
            :on-dispose (fn [])}
-    
+
   Returns:
-    Stateful object satisfying IStateful protocol"
+    Stateful function map"
   [initial-state {:keys [valid-states on-state-change on-dispose]}]
   (let [state-atom (atom initial-state)
         disposed-atom (atom false)]
-    (reify IStateful
-      (get-state [this]
-        @state-atom)
-      
-      (set-state! [this new-state]
-        (when @disposed-atom
-          (throw (ex-info "Cannot set state on disposed object" {})))
-        (let [old-state @state-atom]
-          (if valid-states
-            (if (and (contains? valid-states old-state)
-                     (contains? valid-states new-state))
-              (do
-                (reset! state-atom new-state)
-                (when on-state-change
-                  (on-state-change old-state new-state))
-                true)
-              (do
-                (log/warn (str "Invalid state transition: " old-state " -> " new-state))
-                false))
-            (do
-              (reset! state-atom new-state)
-              (when on-state-change
-                (on-state-change old-state new-state))
-              true))))
-      
-      (valid? [this]
-        (not @disposed-atom))
-      
-      (dispose! [this]
-        (when-not @disposed-atom
-          (reset! disposed-atom true)
-          (when on-dispose
-            (on-dispose))))
-      
-      (is-disposed? [this]
-        @disposed-atom))))
+    {:get-state (fn [] @state-atom)
+
+     :set-state! (fn [new-state]
+                   (when @disposed-atom
+                     (throw (ex-info "Cannot set state on disposed object" {})))
+                   (let [old-state @state-atom]
+                     (if valid-states
+                       (if (and (contains? valid-states old-state)
+                                (contains? valid-states new-state))
+                         (do
+                           (reset! state-atom new-state)
+                           (when on-state-change
+                             (on-state-change old-state new-state))
+                           true)
+                         (do
+                           (log/warn (str "Invalid state transition: " old-state " -> " new-state))
+                           false))
+                       (do
+                         (reset! state-atom new-state)
+                         (when on-state-change
+                           (on-state-change old-state new-state))
+                         true))))
+
+     :valid? (fn [] (not @disposed-atom))
+
+     :dispose! (fn []
+                 (when-not @disposed-atom
+                   (reset! disposed-atom true)
+                   (when on-dispose
+                     (on-dispose))))
+
+     :is-disposed? (fn [] @disposed-atom)}))
 
 ;; ============================================================================
 ;; Def Macro for Stateful Record Types
@@ -83,7 +112,7 @@
 
 (defmacro defstateful
   "Define a stateful record type with lifecycle.
-  
+
   Syntax:
     (defstateful MyStatefulThing
       [:field1 :field2]
@@ -91,17 +120,16 @@
        :valid-states #{:created :running :disposed}
        :on-state-change (fn [old new] ...)
        :on-dispose (fn [...] ...)})
-  
+
   Generates:
     - MyStatefulThing record
-    - create-MyStatefulThing factory
-    - IStateful protocol implementation"
+    - create-MyStatefulThing factory"
   [name fields opts]
   (let [factory-name (symbol (str "create-" name))
         fields-with-state (into fields [:state :disposed?])]
     `(do
        (defrecord ~name ~fields-with-state)
-       
+
        (defn ~factory-name
          [~@(remove #(or (= % :state) (= % :disposed?)) fields) & opts#]
          (let [opts# (if (seq opts#) (first opts#) ~opts)]
@@ -116,11 +144,11 @@
 
 (defn transition!
   "Transition state machine safely with validation.
-  
+
   Args:
-    stateful: IStateful object
+    stateful: Stateful object
     to-state: Target state
-    
+
   Returns:
     boolean: true if transition succeeded"
   [stateful to-state]
@@ -130,14 +158,14 @@
 
 (defn ensure-valid!
   "Check that object is valid, throw if disposed.
-  
+
   Args:
-    stateful: IStateful object
+    stateful: Stateful object
     message (optional): Error message
-    
+
   Returns:
     stateful: The same object
-    
+
   Throws:
     ex-info if object is disposed"
   ([stateful]
@@ -149,14 +177,14 @@
 
 (defn with-state-lock
   "Execute function with guaranteed state validity.
-  
+
   Args:
-    stateful: IStateful object
+    stateful: Stateful object
     f: Function to execute
-    
+
   Returns:
     Result of function
-    
+
   Throws:
     ex-info if object is disposed"
   [stateful f]
@@ -169,11 +197,11 @@
 
 (defn auto-dispose-on-error
   "Wrap a function to dispose stateful object on error.
-  
+
   Args:
-    stateful: IStateful object
+    stateful: Stateful object
     f: Function that may throw
-    
+
   Returns:
     Result of function or throws ex-info"
   [stateful f]
@@ -181,17 +209,17 @@
     (f stateful)
     (catch Exception ex
       (dispose! stateful)
-      (throw (ex-info "Error in stateful operation" 
-                      {:error (.getMessage ex) :disposed true} 
+      (throw (ex-info "Error in stateful operation"
+                      {:error (.getMessage ex) :disposed true}
                       ex)))))
 
 (defn run-with-lifecycle
   "Execute function with automatic setup/teardown.
-  
+
   Args:
-    setup-fn: () -> IStateful
+    setup-fn: () -> stateful
     f: (stateful) -> result
-    
+
   Returns:
     Result of function"
   [setup-fn f]
@@ -207,13 +235,13 @@
 
 (defn batch-state-update!
   "Update multiple stateful objects atomically.
-  
+
   If any update fails, rollback is attempted.
-  
+
   Args:
     statefuls: [obj1 obj2 ...]
     update-fn: (obj) -> new-state
-    
+
   Returns:
     {:success boolean :count int :failed [obj]}"
   [statefuls update-fn]
@@ -236,10 +264,10 @@
 
 (defn all-valid?
   "Check if all stateful objects are valid.
-  
+
   Args:
     statefuls: [obj1 obj2 ...] or variadic
-    
+
   Returns:
     boolean"
   [& statefuls]
@@ -247,10 +275,10 @@
 
 (defn filter-disposed
   "Filter out disposed objects from collection.
-  
+
   Args:
     statefuls: [obj1 obj2 ...]
-    
+
   Returns:
     Vector of valid objects"
   [statefuls]
@@ -258,10 +286,10 @@
 
 (defn cleanup-all!
   "Dispose all stateful objects in collection.
-  
+
   Args:
     statefuls: [obj1 obj2 ...]
-    
+
   Returns:
     Count of disposed objects"
   [statefuls]

@@ -25,75 +25,63 @@
 
 
 ;; ============================================================================
-;; Container Operation Protocol
+;; Container Operation Functions
 ;; ============================================================================
 
-(defprotocol IContainerOperations
-  "Protocol for container lifecycle operations"
-  
-  (tick-container! [container]
-    "Tick the container (called every frame on server)")
-  
-  (validate-container [container player]
-    "Check if player can still use this container")
-  
-  (sync-container! [container]
-    "Synchronize container data to client")
-  
-  (handle-button-click! [container button-id player]
-    "Handle button click from client")
-  
-  (handle-text-input! [container field-id text player]
-    "Handle text input from client")
-  
-  (close-container! [container]
-    "Close container and perform cleanup"))
+(defn tick-container!
+  "Tick the container (called every frame on server)."
+  [container]
+  (if-let [f (:server-menu-sync! container)]
+    (f container)
+    (when-let [cfg (gui-registry/get-config-by-container container)]
+      (when-let [f (lifecycle-value cfg :server-menu-sync-fn)]
+        (f container)))))
 
-;; ============================================================================
-;; Protocol Implementations
-;; ============================================================================
+(defn validate-container
+  "Check if player can still use this container."
+  [container player]
+  (if-let [cfg (gui-registry/get-config-by-container container)]
+    (if-let [f (operation-value cfg :validate-fn)]
+      (boolean (f container player))
+      true)
+    false))
 
-(extend-protocol IContainerOperations
-  Object
-  (tick-container! [container]
-    (if-let [f (:server-menu-sync! container)]
-      (f container)
-      (when-let [cfg (gui-registry/get-config-by-container container)]
-        (when-let [f (lifecycle-value cfg :server-menu-sync-fn)]
-          (f container)))))
+(defn sync-container!
+  "Synchronize container data to client."
+  [container]
+  (cond
+    (fn? (:server-menu-sync! container))
+    ((:server-menu-sync! container) container)
 
-  (validate-container [container player]
-    (if-let [cfg (gui-registry/get-config-by-container container)]
-      (if-let [f (operation-value cfg :validate-fn)]
-        (boolean (f container player))
-        true)
-      false))
+    :else
+    (when-let [cfg (gui-registry/get-config-by-container container)]
+      (when-let [f (or (lifecycle-value cfg :server-menu-sync-fn)
+                       (sync-value cfg :server-menu-sync!))]
+        (f container)))))
 
-  (sync-container! [container]
-    (cond
-      (fn? (:server-menu-sync! container))
-      ((:server-menu-sync! container) container)
+(defn handle-button-click!
+  "Handle button click from client."
+  [container button-id player]
+  (if-let [cfg (gui-registry/get-config-by-container container)]
+    (when-let [f (operation-value cfg :button-click-fn)]
+      (f container button-id player))
+    (log/warn "Unknown container type for button click")))
 
-      :else
-      (when-let [cfg (gui-registry/get-config-by-container container)]
-        (when-let [f (or (lifecycle-value cfg :server-menu-sync-fn)
-                         (sync-value cfg :server-menu-sync!))]
-          (f container)))))
+(defn handle-text-input!
+  "Handle text input from client."
+  [container field-id text player]
+  (if-let [cfg (gui-registry/get-config-by-container container)]
+    (when-let [f (operation-value cfg :text-input-fn)]
+      (f container field-id text player))
+    (log/warn "Unknown container type for text input")))
 
-  (handle-button-click! [container button-id player]
-    (if-let [cfg (gui-registry/get-config-by-container container)]
-      (when-let [f (operation-value cfg :button-click-fn)] (f container button-id player))
-      (log/warn "Unknown container type for button click")))
-
-  (handle-text-input! [container field-id text player]
-    (if-let [cfg (gui-registry/get-config-by-container container)]
-      (when-let [f (operation-value cfg :text-input-fn)] (f container field-id text player))
-      (log/warn "Unknown container type for text input")))
-
-  (close-container! [container]
-    (if-let [cfg (gui-registry/get-config-by-container container)]
-      (when-let [f (operation-value cfg :close-fn)] (f container))
-      (log/warn "Unknown container type for close"))))
+(defn close-container!
+  "Close container and perform cleanup."
+  [container]
+  (if-let [cfg (gui-registry/get-config-by-container container)]
+    (when-let [f (operation-value cfg :close-fn)]
+      (f container))
+    (log/warn "Unknown container type for close")))
 
 ;; ============================================================================
 ;; Container Type Queries
@@ -119,11 +107,11 @@
 
 (defn safe-validate
   "Safely validate container with error handling
-  
+
   Args:
   - container: Any container
   - player: Player entity
-  
+
   Returns: boolean (default false on error). Never returns nil."
   [container player]
   (try
@@ -144,12 +132,12 @@
 
 (defn safe-handle-button-click!
   "Safely handle button click with error handling
-  
+
   Args:
   - container: Any container
   - button-id: int
   - player: Player entity
-  
+
   Returns: true if successful, false if error"
   [container button-id player]
   (try
@@ -161,13 +149,13 @@
 
 (defn safe-handle-text-input!
   "Safely handle text input with error handling
-  
+
   Args:
   - container: Any container
   - field-id: int
   - text: string
   - player: Player entity
-  
+
   Returns: true if successful, false if error"
   [container field-id text player]
   (try
@@ -179,10 +167,10 @@
 
 (defn safe-close!
   "Safely close container with error handling
-  
+
   Args:
   - container: Any container implementing IContainerOperations
-  
+
   Returns: true if successful, false if error"
   [container]
   (try
@@ -269,7 +257,7 @@
       nil)))
 
 (defn safe-execute-quick-move
-  "Safe wrapper for execute-quick-move." 
+  "Safe wrapper for execute-quick-move."
   [container slot-index player-inventory-start]
   (try
     (execute-quick-move container slot-index player-inventory-start)

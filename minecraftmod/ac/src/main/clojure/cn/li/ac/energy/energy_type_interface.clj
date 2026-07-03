@@ -4,22 +4,88 @@
   This introduces a small, platform-neutral registry so different item energy
   semantics can coexist without hard-coding all callers to one implementation.
 
+  Energy types are plain function maps with keys:
+    :energy-type-id        — stable keyword identifier
+    :energy-type-name      — display name
+    :supports-item?        — (fn [item-stack])  -> boolean
+    :get-energy*           — (fn [item-stack])  -> double
+    :get-capacity*         — (fn [item-stack])  -> double
+    :get-bandwidth*        — (fn [item-stack])  -> double
+    :set-energy*!          — (fn [item-stack amount])  -> nil
+    :charge-item*!         — (fn [item-stack amount ignore-bandwidth]) -> leftover
+    :discharge-item*!      — (fn [item-stack amount ignore-bandwidth]) -> extracted
+
   Registry stored in Framework [:registry :energy]."
   (:require [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.util.log :as log]))
 
-(defprotocol EnergyType
-  (energy-type-id [this] "Stable keyword identifier for the type")
-  (energy-type-name [this] "Display name for debug/UI use")
-  (supports-item? [this item-stack] "Return true when this type can operate on the item")
-  (get-energy* [this item-stack] "Read current energy")
-  (get-capacity* [this item-stack] "Read capacity")
-  (get-bandwidth* [this item-stack] "Read transfer rate")
-  (set-energy*! [this item-stack amount] "Set exact energy")
-  (charge-item*! [this item-stack amount ignore-bandwidth] "Return leftover energy")
-  (discharge-item*! [this item-stack amount ignore-bandwidth] "Return extracted energy"))
+;; ============================================================================
+;; Energy type key set documentation
+;; ============================================================================
 
+(def ^:const energy-type-keys
+  "Keys required by an energy type function map."
+  [:energy-type-id :energy-type-name :supports-item?
+   :get-energy* :get-capacity* :get-bandwidth*
+   :set-energy*! :charge-item*! :discharge-item*!])
+
+;; ============================================================================
+;; Wrapper functions — keep calling convention for existing callers
+;; ============================================================================
+
+(defn energy-type-id
+  "Get the stable keyword identifier from an energy type."
+  [etype]
+  (:energy-type-id etype))
+
+(defn energy-type-name
+  "Get the display name from an energy type."
+  [etype]
+  (:energy-type-name etype))
+
+(defn supports-item?
+  "Return true when this type can operate on the item."
+  [etype item-stack]
+  ((:supports-item? etype) item-stack))
+
+(defn get-energy*
+  "Read current energy from item-stack via energy type.
+  Returns double."
+  [etype item-stack]
+  ((:get-energy* etype) item-stack))
+
+(defn get-capacity*
+  "Read capacity from item-stack via energy type.
+  Returns double."
+  [etype item-stack]
+  ((:get-capacity* etype) item-stack))
+
+(defn get-bandwidth*
+  "Read transfer rate from item-stack via energy type.
+  Returns double."
+  [etype item-stack]
+  ((:get-bandwidth* etype) item-stack))
+
+(defn set-energy*!
+  "Set exact energy on item-stack via energy type."
+  [etype item-stack amount]
+  ((:set-energy*! etype) item-stack amount))
+
+(defn charge-item*!
+  "Charge item and return leftover energy.
+  ignore-bandwidth: if true, bypass bandwidth limit."
+  [etype item-stack amount ignore-bandwidth]
+  ((:charge-item*! etype) item-stack amount ignore-bandwidth))
+
+(defn discharge-item*!
+  "Discharge item and return extracted energy.
+  ignore-bandwidth: if true, bypass bandwidth limit."
+  [etype item-stack amount ignore-bandwidth]
+  ((:discharge-item*! etype) item-stack amount ignore-bandwidth))
+
+;; ============================================================================
 ;; Registry — Framework [:registry :energy]
+;; ============================================================================
 
 (def ^:private et-path [:registry :energy])
 
@@ -40,7 +106,7 @@
 
 (defn register-energy-type! [energy-type]
   (assert-not-frozen!)
-  (let [type-id (energy-type-id energy-type)]
+  (let [type-id (:energy-type-id energy-type)]
     (when-not (keyword? type-id)
       (throw (ex-info "Energy type id must be a keyword" {:type-id type-id})))
     (update-energy-type-state! update :types
@@ -69,11 +135,33 @@
   (get (:types (energy-type-state-snapshot)) type-id))
 
 (defn list-energy-types []
-  (->> (:types (energy-type-state-snapshot)) vals (sort-by energy-type-id) vec))
+  (->> (:types (energy-type-state-snapshot)) vals (sort-by :energy-type-id) vec))
 
 (defn resolve-energy-type [type-or-item]
   (cond
     (keyword? type-or-item) (get-energy-type type-or-item)
     :else (some (fn [energy-type]
-                  (when (supports-item? energy-type type-or-item) energy-type))
+                  ((:supports-item? energy-type) type-or-item))
                 (vals (:types (energy-type-state-snapshot))))))
+
+;; ============================================================================
+;; Runtime helpers for test isolation
+;; ============================================================================
+
+(defn create-energy-type-runtime
+  "Create an isolated energy type runtime for testing."
+  []
+  (atom {:types {} :frozen? false}))
+
+(defn call-with-energy-type-runtime
+  "Temporarily replace the energy type state for the duration of `f`."
+  [runtime f]
+  (let [fw-atom (fw/fw-atom)]
+    (if fw-atom
+      (let [prev (get-in @fw-atom et-path)]
+        (try
+          (swap! fw-atom assoc-in et-path @runtime)
+          (f)
+          (finally
+            (swap! fw-atom assoc-in et-path prev))))
+      (f))))

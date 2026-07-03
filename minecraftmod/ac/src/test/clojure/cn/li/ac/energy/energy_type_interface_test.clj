@@ -13,16 +13,15 @@
 
 (defn- test-energy-type
   [type-id label]
-  (reify energy-type/EnergyType
-    (energy-type-id [_] type-id)
-    (energy-type-name [_] label)
-    (supports-item? [_ item-stack] (= (:energy-type item-stack) type-id))
-    (get-energy* [_ item-stack] (double (or (:energy item-stack) 0.0)))
-    (get-capacity* [_ item-stack] (double (or (:capacity item-stack) 0.0)))
-    (get-bandwidth* [_ item-stack] (double (or (:bandwidth item-stack) 0.0)))
-    (set-energy*! [_ item-stack amount] (assoc item-stack :energy amount))
-    (charge-item*! [_ _item-stack _amount _ignore-bandwidth] 0.0)
-    (discharge-item*! [_ _item-stack amount _ignore-bandwidth] amount)))
+  {:energy-type-id type-id
+   :energy-type-name label
+   :supports-item? (fn [item-stack] (= (:energy-type item-stack) type-id))
+   :get-energy* (fn [item-stack] (double (or (:energy item-stack) 0.0)))
+   :get-capacity* (fn [item-stack] (double (or (:capacity item-stack) 0.0)))
+   :get-bandwidth* (fn [item-stack] (double (or (:bandwidth item-stack) 0.0)))
+   :set-energy*! (fn [item-stack amount] (assoc item-stack :energy amount))
+   :charge-item*! (fn [_item-stack _amount _ignore-bandwidth] 0.0)
+   :discharge-item*! (fn [_item-stack amount _ignore-bandwidth] amount)})
 
 (deftest register-energy-type-is-idempotent-for-same-instance-test
   (let [imag (test-energy-type :imaginary "Imaginary")]

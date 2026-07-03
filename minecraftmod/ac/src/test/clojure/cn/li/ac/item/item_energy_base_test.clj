@@ -12,7 +12,7 @@
 
 (deftest create-energy-item-test
   (let [b (base/create-energy-item :energy-unit)]
-    (is (satisfies? ie/ImagEnergyItem b))
+    (is (ie/imag-energy-item? b))
     (is (= 10000.0 (ie/get-max-energy b)))
     (is (= 20.0 (ie/get-bandwidth b))))
   (is (thrown? IllegalArgumentException (base/create-energy-item :nope))))
