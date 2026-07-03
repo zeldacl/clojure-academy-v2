@@ -1,4 +1,3 @@
-
 (ns cn.li.forge1201.platform.spi-bootstrap
   "Bridge-invoked platform initializer.
 
@@ -54,61 +53,61 @@
        :block-id (BlockRegistryShared/getBlockKey (.getBlock hit-state))})))
 
 (def ^:private forge-adapter
-  (reify class-access/ClassAccess
-    (entity-class [_] (RuntimeAccessShared/getEntityClass))
-    (player-class [_] (RuntimeAccessShared/getPlayerClass))
-    (server-player-class [_] (RuntimeAccessShared/getServerPlayerClass))
-    (local-player-class [_] (resolve-local-player-class))
-    (inventory-class [_] (RuntimeAccessShared/getInventoryClass))
-    (menu-class [_] (RuntimeAccessShared/getAbstractContainerMenuClass))
-    (item-stack-class [_] (RuntimeAccessShared/getItemStackClass))
-    (item-class [_] (RuntimeAccessShared/getItemClass))
-    (block-state-class [_] (RuntimeAccessShared/getBlockStateClass))
-    (level-class [_] (RuntimeAccessShared/getLevelClass))
-    (scripted-be-class [_] nil)
+  {:class-access
+   {:entity-class (fn [] (RuntimeAccessShared/getEntityClass))
+    :player-class (fn [] (RuntimeAccessShared/getPlayerClass))
+    :server-player-class (fn [] (RuntimeAccessShared/getServerPlayerClass))
+    :local-player-class (fn [] (resolve-local-player-class))
+    :inventory-class (fn [] (RuntimeAccessShared/getInventoryClass))
+    :menu-class (fn [] (RuntimeAccessShared/getAbstractContainerMenuClass))
+    :item-stack-class (fn [] (RuntimeAccessShared/getItemStackClass))
+    :item-class (fn [] (RuntimeAccessShared/getItemClass))
+    :block-state-class (fn [] (RuntimeAccessShared/getBlockStateClass))
+    :level-class (fn [] (RuntimeAccessShared/getLevelClass))
+    :scripted-be-class (fn [] nil)}
 
-    item-ops/ItemOps
-    (item-registry-name [_ item] (ItemInventoryShared/getItemKeyString item))
-    (block-registry-name [_ block] (BlockRegistryShared/getBlockKey block))
-    (item-stack-of [_ nbt] (RuntimeAccessShared/itemStackOf nbt))
-    (create-item-stack-by-id [_ item-id count] (ItemRegistryShared/createItemStackById (str item-id) (int count)))
-    (item-stack-empty? [_ stack] (ItemInventoryShared/isItemStackEmpty stack))
+   :item-ops-platform
+   {:item-registry-name (fn [_adapter item] (ItemInventoryShared/getItemKeyString item))
+    :block-registry-name (fn [_adapter block] (BlockRegistryShared/getBlockKey block))
+    :item-stack-of (fn [_adapter nbt] (RuntimeAccessShared/itemStackOf nbt))
+    :create-item-stack-by-id (fn [_adapter item-id count] (ItemRegistryShared/createItemStackById (str item-id) (int count)))
+    :item-stack-empty? (fn [_adapter stack] (ItemInventoryShared/isItemStackEmpty stack))}
 
-    player-ops/PlayerOps
-    (player-level [_ player] (RuntimeAccessShared/getEntityLevel player))
-    (player-container-menu [_ player] (RuntimeAccessShared/getPlayerContainerMenu player))
-    (count-player-item-by-id [_ player item-id] (ItemPlayerOpsShared/countPlayerItemById player (str item-id)))
-    (consume-player-item-by-id! [_ player item-id amount] (ItemPlayerOpsShared/consumePlayerItemById player (str item-id) (int (or amount 0))))
-    (drop-player-main-hand-item-at! [_ player amount x y z]
-      (let [n (int (max 0 (or amount 0)))]
-        (cond
-          (nil? player) false
-          (zero? n) true
-          (boolean (.isCreative ^Player player)) true
-          :else
-          (let [^ItemStack stack (.getMainHandItem ^Player player)]
-            (if (or (nil? stack)
-                    (.isEmpty stack)
-                    (< (int (.getCount stack)) n))
-              false
-              (let [^ItemStack drop-stack (.copy stack)
-                    level ^Level (RuntimeAccessShared/getEntityLevel player)]
-                (.setCount drop-stack n)
-                (.shrink stack n)
-                (if (or (nil? level) (.isClientSide level))
-                  true
-                  (boolean (.addFreshEntity level (ItemEntity. level (double x) (double y) (double z) drop-stack))))))))))
-    (give-player-item-stack! [_ player stack] (ItemPlayerOpsShared/givePlayerItemStack player stack))
-    (spawn-entity-by-id! [_ player entity-id speed] (ParticleEntityShared/spawnEntityByIdFromPlayer player (str entity-id) (float (or speed 1.0))))
-    (raytrace-block [_ player reach fluid-source-only?] (raytrace-block-map player reach fluid-source-only?))
+   :player-ops-platform
+   {:player-level (fn [_adapter player] (RuntimeAccessShared/getEntityLevel player))
+    :player-container-menu (fn [_adapter player] (RuntimeAccessShared/getPlayerContainerMenu player))
+    :count-player-item-by-id (fn [_adapter player item-id] (ItemPlayerOpsShared/countPlayerItemById player (str item-id)))
+    :consume-player-item-by-id! (fn [_adapter player item-id amount] (ItemPlayerOpsShared/consumePlayerItemById player (str item-id) (int (or amount 0))))
+    :drop-player-main-hand-item-at! (fn [_adapter player amount x y z]
+                                      (let [n (int (max 0 (or amount 0)))]
+                                        (cond
+                                          (nil? player) false
+                                          (zero? n) true
+                                          (boolean (.isCreative ^Player player)) true
+                                          :else
+                                          (let [^ItemStack stack (.getMainHandItem ^Player player)]
+                                            (if (or (nil? stack)
+                                                    (.isEmpty stack)
+                                                    (< (int (.getCount stack)) n))
+                                              false
+                                              (let [^ItemStack drop-stack (.copy stack)
+                                                    level ^Level (RuntimeAccessShared/getEntityLevel player)]
+                                                (.setCount drop-stack n)
+                                                (.shrink stack n)
+                                                (if (or (nil? level) (.isClientSide level))
+                                                  true
+                                                  (boolean (.addFreshEntity level (ItemEntity. level (double x) (double y) (double z) drop-stack))))))))))
+    :give-player-item-stack! (fn [_adapter player stack] (ItemPlayerOpsShared/givePlayerItemStack player stack))
+    :spawn-entity-by-id! (fn [_adapter player entity-id speed] (ParticleEntityShared/spawnEntityByIdFromPlayer player (str entity-id) (float (or speed 1.0))))
+    :raytrace-block (fn [_adapter player reach fluid-source-only?] (raytrace-block-map player reach fluid-source-only?))}
 
-    menu-inventory-ops/MenuInventoryOps
-    (inventory-owner [_ inventory] (RuntimeAccessShared/getInventoryPlayer inventory))
-    (menu-container-id [_ menu] (RuntimeAccessShared/getMenuContainerId menu))
+   :menu-inventory-ops
+   {:inventory-owner (fn [_adapter inventory] (RuntimeAccessShared/getInventoryPlayer inventory))
+    :menu-container-id (fn [_adapter menu] (RuntimeAccessShared/getMenuContainerId menu))}
 
-    world-block-ops/WorldBlockOps
-    (world-place-block-by-id [_ level block-id pos flags]
-      ((resolve-binding! 'world-place-block-by-id) level block-id pos flags))))
+   :world-block-ops
+   {:world-place-block-by-id (fn [_adapter level block-id pos flags]
+                               ((resolve-binding! 'world-place-block-by-id) level block-id pos flags))}})
 
 (defn init-platform!
   "Initialize Forge 1.20.1 platform implementations.
@@ -118,6 +117,11 @@
   (when-not (var-get #'*initialized?*)
     (locking platform-init-guard-lock
       (when-not (var-get #'*initialized?*)
+        (class-access/install-class-access! (:class-access forge-adapter) "forge")
+        (item-ops/install-item-platform-ops! (:item-ops-platform forge-adapter) "forge")
+        (player-ops/install-player-ops-platform! (:player-ops-platform forge-adapter) "forge")
+        (menu-inventory-ops/install-menu-inventory-ops! (:menu-inventory-ops forge-adapter) "forge")
+        (world-block-ops/install-world-block-ops! (:world-block-ops forge-adapter) "forge")
         (platform-init/install-platform-foundation+hooks!
           forge-adapter
           {:world-get-tile-entity (resolve-binding! 'world-get-tile-entity)
