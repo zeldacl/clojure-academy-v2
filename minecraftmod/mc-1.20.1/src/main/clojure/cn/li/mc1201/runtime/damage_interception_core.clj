@@ -8,13 +8,12 @@
 
 (defn make-damage-interception
   []
-  (reify pdi/IDamageInterception
-    (register-damage-handler! [_ handler-id handler-fn priority]
-      (damage-hooks/register-damage-handler! handler-id handler-fn priority))
-    (unregister-damage-handler! [_ handler-id]
-      (damage-hooks/unregister-damage-handler! handler-id))
-    (get-active-handlers [_]
-      (damage-hooks/get-active-damage-handlers))))
+  {:register-damage-handler! (fn [handler-id handler-fn priority]
+                               (damage-hooks/register-damage-handler! handler-id handler-fn priority))
+   :unregister-damage-handler! (fn [handler-id]
+                                 (damage-hooks/unregister-damage-handler! handler-id))
+   :get-active-handlers (fn []
+                          (damage-hooks/get-active-damage-handlers))})
 
 (defn install-damage-interception!
   []

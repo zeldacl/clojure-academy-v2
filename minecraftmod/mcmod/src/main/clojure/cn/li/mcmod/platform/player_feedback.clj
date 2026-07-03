@@ -1,26 +1,15 @@
 (ns cn.li.mcmod.platform.player-feedback
-  "Platform-neutral player feedback bridge for runtime gameplay messages.
+  "Player feedback (chat messages, action bar, sounds) via Framework function map.
 
-  Protocol kept as pure interface contract (AOT-safe).
-  Implementation stored in Framework [:platform :player-feedback]
-  instead of ^:dynamic *runtime* (eliminates ThreadLocal risk)."
+   Impl stored at [:platform :player-feedback]."
   (:require [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.util.log :as log]))
 
-;; ============================================================================
-;; Protocol (pure interface — AOT-safe, kept for contract definition)
-;; ============================================================================
-
-(defprotocol IPlayerFeedback
-  (send-player-feedback! [this player-uuid payload]))
-
-;; ============================================================================
-;; Installation — writes to Framework [:platform :player-feedback]
-;; ============================================================================
+(def player-feedback-keys
+  #{:send-player-feedback!})
 
 (defn install-player-feedback!
-  "Install player feedback implementation. Backward compatible with
-   old (impl label) signature; stores in Framework atom."
+  "Install player feedback implementation as a function map."
   ([impl]
    (when-let [fw-atom (fw/fw-atom)]
      (swap! fw-atom assoc-in [:platform :player-feedback] impl))
@@ -28,10 +17,6 @@
   ([impl label]
    (log/info (or label "player-feedback") "installed")
    (install-player-feedback! impl)))
-
-;; ============================================================================
-;; Queries
-;; ============================================================================
 
 (defn available? []
   (boolean (get-in @(fw/fw-atom) [:platform :player-feedback])))
@@ -46,8 +31,8 @@
 (defn send-feedback!*
   "Send feedback to a player. Returns false if adapter not installed."
   [player-uuid payload]
-  (if-let [rt (get-in @(fw/fw-atom) [:platform :player-feedback])]
-    (boolean (send-player-feedback! rt player-uuid payload))
+  (if-let [f (get-in @(fw/fw-atom) [:platform :player-feedback :send-player-feedback!])]
+    (boolean (f player-uuid payload))
     (do
       (log/debug "Player feedback unavailable; dropping payload" payload)
       false)))

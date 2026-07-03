@@ -30,72 +30,71 @@
                                 (core/spawn-projectile-in-level!
                                   level projectile-spec resolve-entity-id-fn get-entity-by-uuid-fn)))
         get-entities-in-aabb (or get-entities-in-aabb-fn (fn [_level _aabb] []))]
-    (reify pwe/IWorldEffects
-      (spawn-lightning! [_ world-id x y z]
-        (try
-          (when-let [^MinecraftServer server (server-fn)]
-            (when-let [^ServerLevel level (resolve-level server resolve-level-fn world-id)]
-              (spawn-lightning! level x y z)))
-          (catch Exception e
-            (log/warn "Failed to spawn lightning:" (ex-message e))
-            false)))
-      (create-explosion! [_ world-id x y z radius fire?]
-        (try
-          (when-let [^MinecraftServer server (server-fn)]
-            (when-let [^ServerLevel level (resolve-level server resolve-level-fn world-id)]
-              (boolean (create-explosion! level x y z radius fire?))))
-          (catch Exception e
-            (log/warn "Failed to create explosion:" (ex-message e))
-            false)))
-      (spawn-projectile! [_ world-id projectile-spec]
-        (try
-          (when-let [^MinecraftServer server (server-fn)]
-            (when-let [^ServerLevel level (resolve-level server resolve-level-fn world-id)]
-              (spawn-projectile! level projectile-spec)))
-          (catch Exception e
-            (log/warn "Failed to spawn projectile:" (ex-message e))
-            {:success? false})))
-      (find-entities-in-radius [_ world-id x y z radius]
-        (try
-          (when-let [^MinecraftServer server (server-fn)]
-            (when-let [^ServerLevel level (resolve-level server resolve-level-fn world-id)]
-              (core/entities-in-radius
-                level
-                x y z radius
-                get-entities-in-aabb
-                resolve-entity-id-fn)))
-          (catch Exception e
-            (log/warn "Failed to find entities:" (ex-message e))
-            [])))
-      (find-entities-in-aabb [_ world-id min-x min-y min-z max-x max-y max-z]
-        (try
-          (when-let [^MinecraftServer server (server-fn)]
-            (when-let [^ServerLevel level (resolve-level server resolve-level-fn world-id)]
-              (core/entities-in-aabb
-                level
-                min-x min-y min-z max-x max-y max-z
-                get-entities-in-aabb
-                resolve-entity-id-fn)))
-          (catch Exception e
-            (log/warn "Failed to find entities in AABB:" (ex-message e))
-            [])))
-      (find-blocks-in-radius [_ world-id x y z radius block-predicate]
-        (try
-          (when-let [^MinecraftServer server (server-fn)]
-            (when-let [^ServerLevel level (resolve-level server resolve-level-fn world-id)]
-              (core/find-blocks-in-radius-in-level
-                level x y z radius block-predicate block-id-fn)))
-          (catch Exception e
-            (log/warn "Failed to find blocks:" (ex-message e))
-            [])))
-      (play-sound! [_ world-id x y z sound-id source volume pitch]
-        (try
-          (when-let [^MinecraftServer server (server-fn)]
-            (when-let [^ServerLevel level (resolve-level server resolve-level-fn world-id)]
-              (boolean (core/play-sound-in-level! level x y z sound-id source volume pitch))))
-          (catch Exception e
-            (log/warn "Failed to play world sound:" (ex-message e))
-            false))))))
+    {:spawn-lightning! (fn [world-id x y z]
+                         (try
+                           (when-let [^MinecraftServer server (server-fn)]
+                             (when-let [^ServerLevel level (resolve-level server resolve-level-fn world-id)]
+                               (spawn-lightning! level x y z)))
+                           (catch Exception e
+                             (log/warn "Failed to spawn lightning:" (ex-message e))
+                             false)))
+     :create-explosion! (fn [world-id x y z radius fire?]
+                          (try
+                            (when-let [^MinecraftServer server (server-fn)]
+                              (when-let [^ServerLevel level (resolve-level server resolve-level-fn world-id)]
+                                (boolean (create-explosion! level x y z radius fire?))))
+                            (catch Exception e
+                              (log/warn "Failed to create explosion:" (ex-message e))
+                              false)))
+     :spawn-projectile! (fn [world-id projectile-spec]
+                          (try
+                            (when-let [^MinecraftServer server (server-fn)]
+                              (when-let [^ServerLevel level (resolve-level server resolve-level-fn world-id)]
+                                (spawn-projectile! level projectile-spec)))
+                            (catch Exception e
+                              (log/warn "Failed to spawn projectile:" (ex-message e))
+                              {:success? false})))
+     :find-entities-in-radius (fn [world-id x y z radius]
+                                (try
+                                  (when-let [^MinecraftServer server (server-fn)]
+                                    (when-let [^ServerLevel level (resolve-level server resolve-level-fn world-id)]
+                                      (core/entities-in-radius
+                                        level
+                                        x y z radius
+                                        get-entities-in-aabb
+                                        resolve-entity-id-fn)))
+                                  (catch Exception e
+                                    (log/warn "Failed to find entities:" (ex-message e))
+                                    [])))
+     :find-entities-in-aabb (fn [world-id min-x min-y min-z max-x max-y max-z]
+                              (try
+                                (when-let [^MinecraftServer server (server-fn)]
+                                  (when-let [^ServerLevel level (resolve-level server resolve-level-fn world-id)]
+                                    (core/entities-in-aabb
+                                      level
+                                      min-x min-y min-z max-x max-y max-z
+                                      get-entities-in-aabb
+                                      resolve-entity-id-fn)))
+                                (catch Exception e
+                                  (log/warn "Failed to find entities in AABB:" (ex-message e))
+                                  [])))
+     :find-blocks-in-radius (fn [world-id x y z radius block-predicate]
+                              (try
+                                (when-let [^MinecraftServer server (server-fn)]
+                                  (when-let [^ServerLevel level (resolve-level server resolve-level-fn world-id)]
+                                    (core/find-blocks-in-radius-in-level
+                                      level x y z radius block-predicate block-id-fn)))
+                                (catch Exception e
+                                  (log/warn "Failed to find blocks:" (ex-message e))
+                                  [])))
+     :play-sound! (fn [world-id x y z sound-id source volume pitch]
+                    (try
+                      (when-let [^MinecraftServer server (server-fn)]
+                        (when-let [^ServerLevel level (resolve-level server resolve-level-fn world-id)]
+                          (boolean (core/play-sound-in-level! level x y z sound-id source volume pitch))))
+                      (catch Exception e
+                        (log/warn "Failed to play world sound:" (ex-message e))
+                        false)))}))  ;; close fn, map, let, defn
 
 (defn install-world-effects!
   [world-effects label]

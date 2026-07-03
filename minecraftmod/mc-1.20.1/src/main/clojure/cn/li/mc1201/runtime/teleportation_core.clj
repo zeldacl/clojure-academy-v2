@@ -4,7 +4,6 @@
   All functions take a MinecraftServer instance (passed by the platform adapter)
   rather than using loader-specific lifecycle hooks."
   (:require [cn.li.mc1201.runtime.entity-query-core :as query-core]
-            [cn.li.mcmod.platform.teleportation :as ptp]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.server MinecraftServer]
            [net.minecraft.server.level ServerLevel ServerPlayer]
@@ -129,14 +128,13 @@
 (defn create-teleportation
   "Create an ITeleportation adapter using a platform-provided server supplier."
   [get-server]
-  (reify ptp/ITeleportation
-    (teleport-player! [_ player-uuid world-id x y z]
-      (teleport-player! (get-server) player-uuid world-id x y z))
-    (teleport-with-entities! [_ player-uuid world-id x y z radius]
-      (teleport-with-entities! (get-server) player-uuid world-id x y z radius))
-    (reset-fall-damage! [_ player-uuid]
-      (reset-fall-damage! (get-server) player-uuid))
-    (get-player-position [_ player-uuid]
-      (get-player-position (get-server) player-uuid))
-    (get-player-dimension [_ player-uuid]
-      (get-player-dimension (get-server) player-uuid))))
+  {:teleport-player! (fn [player-uuid world-id x y z]
+                       (teleport-player! (get-server) player-uuid world-id x y z))
+   :teleport-with-entities! (fn [player-uuid world-id x y z radius]
+                              (teleport-with-entities! (get-server) player-uuid world-id x y z radius))
+   :reset-fall-damage! (fn [player-uuid]
+                         (reset-fall-damage! (get-server) player-uuid))
+   :get-player-position (fn [player-uuid]
+                          (get-player-position (get-server) player-uuid))
+   :get-player-dimension (fn [player-uuid]
+                           (get-player-dimension (get-server) player-uuid))})

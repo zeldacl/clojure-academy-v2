@@ -58,13 +58,12 @@
 (defn runtime-interop-impl
   "Create an IRuntimeInterop implementation backed by a server supplier."
   [server-fn]
-  (reify runtime-interop/IRuntimeInterop
-    (get-player-view [_ player-uuid]
-      (get-player-view (server-fn) player-uuid))
-    (get-player-main-hand-item [_ player-uuid]
-      (get-player-main-hand-item (server-fn) player-uuid))
-    (get-block-entity-at [_ world-id x y z]
-      (get-block-entity-at (server-fn) world-id x y z))))
+  {:get-player-view (fn [player-uuid]
+                      (get-player-view (server-fn) player-uuid))
+   :get-player-main-hand-item (fn [player-uuid]
+                                (get-player-main-hand-item (server-fn) player-uuid))
+   :get-block-entity-at (fn [world-id x y z]
+                          (get-block-entity-at (server-fn) world-id x y z))})
 
 (defn install-runtime-interop!
   "Install canonical runtime interop using a shared implementation."

@@ -9,25 +9,25 @@
 
 (defn create-block-manipulation
   [server-fn break-guard-fn]
-  (reify bm/IBlockManipulation
-    (break-block! [_ player-id world-id x y z drop?]
-      (core/break-block! (server-fn) player-id world-id x y z drop? break-guard-fn))
-    (break-block! [_ player-id world-id x y z drop? fortune-level]
-      (core/break-block! (server-fn) player-id world-id x y z drop? fortune-level break-guard-fn))
-    (set-block! [_ world-id x y z block-id]
-      (core/set-block! (server-fn) world-id x y z block-id))
-    (get-block [_ world-id x y z]
-      (core/get-block (server-fn) world-id x y z))
-    (get-block-hardness [_ world-id x y z]
-      (core/get-block-hardness (server-fn) world-id x y z))
-    (can-break-block? [_ player-id world-id x y z]
-      (boolean (core/can-break-block? (server-fn) player-id world-id x y z break-guard-fn)))
-    (find-blocks-in-line [_ world-id x1 y1 z1 dx dy dz max-distance]
-      (core/find-blocks-in-line (server-fn) world-id x1 y1 z1 dx dy dz max-distance))
-    (liquid-block? [_ world-id x y z]
-      (boolean (core/liquid-block? (server-fn) world-id x y z)))
-    (farmland-block? [_ world-id x y z]
-      (boolean (core/farmland-block? (server-fn) world-id x y z)))))
+  {:break-block! (fn
+                   ([player-id world-id x y z drop?]
+                    (core/break-block! (server-fn) player-id world-id x y z drop? break-guard-fn))
+                   ([player-id world-id x y z drop? fortune-level]
+                    (core/break-block! (server-fn) player-id world-id x y z drop? fortune-level break-guard-fn)))
+   :set-block! (fn [world-id x y z block-id]
+                 (core/set-block! (server-fn) world-id x y z block-id))
+   :get-block (fn [world-id x y z]
+                (core/get-block (server-fn) world-id x y z))
+   :get-block-hardness (fn [world-id x y z]
+                         (core/get-block-hardness (server-fn) world-id x y z))
+   :can-break-block? (fn [player-id world-id x y z]
+                       (boolean (core/can-break-block? (server-fn) player-id world-id x y z break-guard-fn)))
+   :find-blocks-in-line (fn [world-id x1 y1 z1 dx dy dz max-distance]
+                          (core/find-blocks-in-line (server-fn) world-id x1 y1 z1 dx dy dz max-distance))
+   :liquid-block? (fn [world-id x y z]
+                    (boolean (core/liquid-block? (server-fn) world-id x y z)))
+   :farmland-block? (fn [world-id x y z]
+                      (boolean (core/farmland-block? (server-fn) world-id x y z)))})
 
 (defn install-block-manipulation!
   [block-manipulation label]

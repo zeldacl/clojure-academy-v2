@@ -1,39 +1,28 @@
 (ns cn.li.mcmod.platform.player-motion
-  "Protocol for manipulating player motion and physics."
-  (:require [cn.li.mcmod.framework :as fw]
-            [cn.li.mcmod.platform.runtime :as prt]))
+  "Player motion and physics operations via Framework function map.
 
-(defprotocol IPlayerMotion
-  (set-velocity! [this player-id x y z])
-  (add-velocity! [this player-id x y z])
-  (get-velocity [this player-id])
-  (set-on-ground! [this player-id on-ground?])
-  (is-on-ground? [this player-id])
-  (dismount-riding! [this player-id]))
+   Impl stored at [:platform :player-motion]."
+  (:require [cn.li.mcmod.framework :as fw]))
+
+(def player-motion-keys
+  #{:set-velocity! :add-velocity! :get-velocity
+    :set-on-ground! :is-on-ground? :dismount-riding!})
 
 (defn install-player-motion!
-  [impl label]
+  [impl _label]
   (when-let [fw-atom (fw/fw-atom)] (swap! fw-atom assoc-in [:platform :player-motion] impl)) nil)
 
 (defn available? [] (boolean (get-in @(fw/fw-atom) [:platform :player-motion])))
-(defn current [] (get-in @(fw/fw-atom) [:platform :player-motion]))
+(defn current   [] (get-in @(fw/fw-atom) [:platform :player-motion]))
 (defn call-with-runtime [rt f] (f rt))
 
-(defn set-velocity!* [player-id x y z]
-  (when-let [rt (get-in @(fw/fw-atom) [:platform :player-motion])]
-    (set-velocity! rt player-id x y z)))
-(defn add-velocity!* [player-id x y z]
-  (when-let [rt (get-in @(fw/fw-atom) [:platform :player-motion])]
-    (add-velocity! rt player-id x y z)))
-(defn get-velocity* [player-id]
-  (when-let [rt (get-in @(fw/fw-atom) [:platform :player-motion])]
-    (get-velocity rt player-id)))
-(defn set-on-ground!* [player-id on-ground?]
-  (when-let [rt (get-in @(fw/fw-atom) [:platform :player-motion])]
-    (set-on-ground! rt player-id on-ground?)))
-(defn is-on-ground?* [player-id]
-  (when-let [rt (get-in @(fw/fw-atom) [:platform :player-motion])]
-    (is-on-ground? rt player-id)))
-(defn dismount-riding!* [player-id]
-  (when-let [rt (get-in @(fw/fw-atom) [:platform :player-motion])]
-    (dismount-riding! rt player-id)))
+(defn- call [k & args]
+  (when-let [f (get (current) k)]
+    (apply f args)))
+
+(defn set-velocity!*    [player-id x y z]         (call :set-velocity! player-id x y z))
+(defn add-velocity!*    [player-id x y z]         (call :add-velocity! player-id x y z))
+(defn get-velocity*     [player-id]               (call :get-velocity player-id))
+(defn set-on-ground!*   [player-id on-ground?]    (call :set-on-ground! player-id on-ground?))
+(defn is-on-ground?*    [player-id]               (call :is-on-ground? player-id))
+(defn dismount-riding!* [player-id]               (call :dismount-riding! player-id))

@@ -1,7 +1,6 @@
 (ns cn.li.mc1201.runtime.entity-motion-core
   "Shared Minecraft-side entity motion helpers (no loader API imports)."
   (:require [cn.li.mc1201.runtime.entity-query-core :as query-core]
-            [cn.li.mcmod.platform.entity-motion :as pem]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.server MinecraftServer]
            [net.minecraft.world.entity Entity]
@@ -52,12 +51,11 @@
 (defn create-entity-motion
   "Create an IEntityMotion adapter using a platform-provided server supplier."
   [get-server]
-  (reify pem/IEntityMotion
-    (set-velocity! [_ world-id entity-uuid x y z]
-      (boolean (set-velocity-for-entity! (resolve-entity (get-server) world-id entity-uuid) x y z)))
-    (add-velocity! [_ world-id entity-uuid x y z]
-      (boolean (add-velocity-for-entity! (resolve-entity (get-server) world-id entity-uuid) x y z)))
-    (discard-entity! [_ world-id entity-uuid]
-      (boolean (discard-entity! (resolve-entity (get-server) world-id entity-uuid))))
-    (get-velocity [_ world-id entity-uuid]
-      (get-velocity-for-entity (resolve-entity (get-server) world-id entity-uuid)))))
+  {:set-velocity! (fn [world-id entity-uuid x y z]
+                    (boolean (set-velocity-for-entity! (resolve-entity (get-server) world-id entity-uuid) x y z)))
+   :add-velocity! (fn [world-id entity-uuid x y z]
+                    (boolean (add-velocity-for-entity! (resolve-entity (get-server) world-id entity-uuid) x y z)))
+   :discard-entity! (fn [world-id entity-uuid]
+                      (boolean (discard-entity! (resolve-entity (get-server) world-id entity-uuid))))
+   :get-velocity (fn [world-id entity-uuid]
+                   (get-velocity-for-entity (resolve-entity (get-server) world-id entity-uuid)))})

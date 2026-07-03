@@ -1,31 +1,25 @@
 (ns cn.li.mcmod.platform.potion-effects
-  "Protocol for potion effect application."
-  (:require [cn.li.mcmod.framework :as fw]
-            [cn.li.mcmod.platform.runtime :as prt]))
+  "Potion effect operations via Framework function map.
 
-(defprotocol IPotionEffects
-  (apply-potion-effect! [this player-uuid effect-type duration amplifier])
-  (remove-potion-effect! [this player-uuid effect-type])
-  (has-potion-effect? [this player-uuid effect-type])
-  (clear-all-effects! [this player-uuid]))
+   Impl stored at [:platform :potion-effects]."
+  (:require [cn.li.mcmod.framework :as fw]))
+
+(def potion-effects-keys
+  #{:apply-potion-effect! :remove-potion-effect! :has-potion-effect? :clear-all-effects!})
 
 (defn install-potion-effects!
-  [impl label]
+  [impl _label]
   (when-let [fw-atom (fw/fw-atom)] (swap! fw-atom assoc-in [:platform :potion-effects] impl)) nil)
 
 (defn available? [] (boolean (get-in @(fw/fw-atom) [:platform :potion-effects])))
-(defn current [] (get-in @(fw/fw-atom) [:platform :potion-effects]))
+(defn current   [] (get-in @(fw/fw-atom) [:platform :potion-effects]))
 (defn call-with-runtime [rt f] (f rt))
 
-(defn apply-potion-effect!* [player-uuid effect-type duration amplifier]
-  (when-let [rt (get-in @(fw/fw-atom) [:platform :potion-effects])]
-    (apply-potion-effect! rt player-uuid effect-type duration amplifier)))
-(defn remove-potion-effect!* [player-uuid effect-type]
-  (when-let [rt (get-in @(fw/fw-atom) [:platform :potion-effects])]
-    (remove-potion-effect! rt player-uuid effect-type)))
-(defn has-potion-effect?* [player-uuid effect-type]
-  (when-let [rt (get-in @(fw/fw-atom) [:platform :potion-effects])]
-    (has-potion-effect? rt player-uuid effect-type)))
-(defn clear-all-effects!* [player-uuid]
-  (when-let [rt (get-in @(fw/fw-atom) [:platform :potion-effects])]
-    (clear-all-effects! rt player-uuid)))
+(defn- call [k & args]
+  (when-let [f (get (current) k)]
+    (apply f args)))
+
+(defn apply-potion-effect!*  [player-uuid effect-type duration amplifier] (call :apply-potion-effect! player-uuid effect-type duration amplifier))
+(defn remove-potion-effect!* [player-uuid effect-type]                  (call :remove-potion-effect! player-uuid effect-type))
+(defn has-potion-effect?*    [player-uuid effect-type]                  (call :has-potion-effect? player-uuid effect-type))
+(defn clear-all-effects!*    [player-uuid]                              (call :clear-all-effects! player-uuid))

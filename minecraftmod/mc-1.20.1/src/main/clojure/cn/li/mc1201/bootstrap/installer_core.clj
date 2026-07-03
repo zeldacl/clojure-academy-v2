@@ -86,21 +86,20 @@
 (defn- install-player-feedback! []
   (install-when! player-feedback-installed?
     (player-feedback/install-player-feedback!
-      (reify player-feedback/IPlayerFeedback
-        (send-player-feedback! [_ player-uuid {:keys [message args translate?]}]
-          (try
-            (when-let [^ServerPlayer player (network-transport-spi/find-player-by-uuid player-uuid)]
-              (let [argv (object-array (mapv str (or args [])))
-                    component (if translate?
-                                (Component/translatable (str message) argv)
-                                (Component/literal (if (seq args)
-                                                     (apply format (str message) args)
-                                                     (str message))))]
-                (.sendSystemMessage player component)
-                true))
-            (catch Throwable t
-              (log/warn "Failed to send player feedback" player-uuid (ex-message t))
-              false))))
+      {:send-player-feedback! (fn [player-uuid {:keys [message args translate?]}]
+                                (try
+                                  (when-let [^ServerPlayer player (network-transport-spi/find-player-by-uuid player-uuid)]
+                                    (let [argv (object-array (mapv str (or args [])))
+                                          component (if translate?
+                                                      (Component/translatable (str message) argv)
+                                                      (Component/literal (if (seq args)
+                                                                           (apply format (str message) args)
+                                                                           (str message))))]
+                                      (.sendSystemMessage player component)
+                                      true))
+                                  (catch Throwable t
+                                    (log/warn "Failed to send player feedback" player-uuid (ex-message t))
+                                    false)))}
       "mc1201 player feedback")))
 
 (defn install-block-state-protocol-only!

@@ -6,7 +6,6 @@
   selected by content-owned persistence descriptors."
   (:require [cn.li.mc1201.runtime.entity-query-core :as query-core]
             [cn.li.mcmod.hooks.core :as power-runtime]
-            [cn.li.mcmod.platform.named-position-store :as position-store]
             [cn.li.mcmod.platform.player-persistent-data :as player-pd]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.server MinecraftServer]
@@ -122,16 +121,15 @@
 (defn create-named-position-store
   "Create an INamedPositionStore adapter using a platform-provided server supplier."
   [get-server]
-  (reify position-store/INamedPositionStore
-    (save-location! [_ player-uuid location-name world-id x y z]
-      (save-location! (get-server) player-uuid location-name world-id x y z))
-    (delete-location! [_ player-uuid location-name]
-      (delete-location! (get-server) player-uuid location-name))
-    (get-location [_ player-uuid location-name]
-      (get-location (get-server) player-uuid location-name))
-    (list-locations [_ player-uuid]
-      (list-locations (get-server) player-uuid))
-    (get-location-count [_ player-uuid]
-      (get-location-count (get-server) player-uuid))
-    (has-location? [_ player-uuid location-name]
-      (has-location? (get-server) player-uuid location-name))))
+  {:save-location! (fn [player-uuid location-name world-id x y z]
+                     (save-location! (get-server) player-uuid location-name world-id x y z))
+   :delete-location! (fn [player-uuid location-name]
+                       (delete-location! (get-server) player-uuid location-name))
+   :get-location (fn [player-uuid location-name]
+                   (get-location (get-server) player-uuid location-name))
+   :list-locations (fn [player-uuid]
+                     (list-locations (get-server) player-uuid))
+   :get-location-count (fn [player-uuid]
+                         (get-location-count (get-server) player-uuid))
+   :has-location? (fn [player-uuid location-name]
+                    (has-location? (get-server) player-uuid location-name))})

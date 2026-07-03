@@ -1,7 +1,6 @@
 (ns cn.li.mc1201.runtime.player-motion-core
   "Shared Minecraft-side player motion helpers (no loader API imports)."
   (:require [cn.li.mc1201.runtime.entity-query-core :as query-core]
-            [cn.li.mcmod.platform.player-motion :as pm]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.server MinecraftServer]
            [net.minecraft.world.entity Entity]
@@ -53,16 +52,15 @@
 (defn create-player-motion
   "Create an IPlayerMotion adapter using a platform-provided server supplier."
   [get-server]
-  (reify pm/IPlayerMotion
-    (set-velocity! [_ player-id x y z]
-      (boolean (set-velocity-for-player! (query-core/get-player-by-uuid (get-server) player-id) x y z)))
-    (add-velocity! [_ player-id x y z]
-      (boolean (add-velocity-for-player! (query-core/get-player-by-uuid (get-server) player-id) x y z)))
-    (get-velocity [_ player-id]
-      (get-velocity-for-player (query-core/get-player-by-uuid (get-server) player-id)))
-    (set-on-ground! [_ player-id on-ground?]
-      (boolean (set-on-ground-for-player! (query-core/get-player-by-uuid (get-server) player-id) on-ground?)))
-    (is-on-ground? [_ player-id]
-      (is-on-ground-for-player? (query-core/get-player-by-uuid (get-server) player-id)))
-    (dismount-riding! [_ player-id]
-      (boolean (dismount-riding-for-player! (query-core/get-player-by-uuid (get-server) player-id))))))
+  {:set-velocity! (fn [player-id x y z]
+                    (boolean (set-velocity-for-player! (query-core/get-player-by-uuid (get-server) player-id) x y z)))
+   :add-velocity! (fn [player-id x y z]
+                    (boolean (add-velocity-for-player! (query-core/get-player-by-uuid (get-server) player-id) x y z)))
+   :get-velocity (fn [player-id]
+                   (get-velocity-for-player (query-core/get-player-by-uuid (get-server) player-id)))
+   :set-on-ground! (fn [player-id on-ground?]
+                     (boolean (set-on-ground-for-player! (query-core/get-player-by-uuid (get-server) player-id) on-ground?)))
+   :is-on-ground? (fn [player-id]
+                    (is-on-ground-for-player? (query-core/get-player-by-uuid (get-server) player-id)))
+   :dismount-riding! (fn [player-id]
+                       (boolean (dismount-riding-for-player! (query-core/get-player-by-uuid (get-server) player-id))))})
