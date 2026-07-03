@@ -363,13 +363,15 @@
 
 ---
 
-#### 铁律五：defprotocol 在静态类加载下安全（参考）
+#### 铁律五：defprotocol / extend-type / extend-protocol / extend 彻底禁用（强制）
 
-**评估结论**：当前项目全部 62 个 `defprotocol` 构成平台 SPI 抽象层。在 Minecraft 静态类加载环境（类路径在运行时不变，命名空间不重载）下，Clojure 编译器将协议编译为静态 Java Interface `.class` 文件，不存在接口断裂风险。
+**根源**：Minecraft 全量 AOT + 静态混淆环境下，`defprotocol` 生成静态接口 `.class` 文件，混淆器（SpecialSource/ProGuard）无法正确重映射其方法签名中的原版类参数，导致运行时 `AbstractMethodError` 或 `NoSuchMethodError`。`extend-type` 将未混淆类名硬编码进 Clojure 协议注册图，混淆后 `ClassNotFoundException` 闪退。底层全局同步锁在高并发下引发 TPS 雪崩。
 
-**边界条件**：如果未来引入热重载机制（如某些服务端插件的类隔离），则需评估协议在旧类加载器与新类加载器之间的兼容性。
+**平替方案**：
+- **平台 SPI**：Framework `[:platform :key]` 下的数据驱动函数 Map（VTable）
+- **MC 类行为扩展**：普通 `defn`（带类型提示，仅 mc-1.20.1 层）+ Framework 函数 Map
 
-**判定**：当前架构下 `defprotocol` 无需迁移到 `definterface`。
+**判定**：七大禁区之一。全项目已消除 58/60 defprotocol（剩余 2 个在注释中）。
 
 ---
 
@@ -393,15 +395,31 @@
 
 ---
 
-#### 铁律七：reify 适用标准 Minecraft 接口（参考）
+#### 铁律七：reify / proxy 分水岭（强制）
 
-**评估结论**：当前项目 `reify` 大量用于实现 Forge/Fabric 标准 API 接口（`Consumer`、`Supplier`、`DataProvider`、`Command`、`MenuProvider` 等），这些接口字节码稳定，Mixin 修改几率低。
+**根源**：全量 AOT 下 `reify` 生成匿名类，当实现 **Minecraft 混淆接口**（`net.minecraft.*`、`net.minecraftforge.*` 等）时，方法签名硬编码未混淆类名 → 混淆后 `NoClassDefFoundError` / `AbstractMethodError`。`proxy` 同理。
 
-**边界条件**：若某 Minecraft 内部接口被第三方优化模组（如 Lithium、Phosphor）Mixin 织入修改，`reify` 生成的匿名类可能因字节码签名不匹配而抛出 `VerifyError`。
+**分水岭判定**：
 
-**判定**：
-- 标准 Minecraft/Forge/Fabric API 接口 → `reify` 安全
-- 深度继承 Minecraft 核心类或可能被 Mixin 修改的接口 → 写独立 Java 骨架类
+| 接口来源 | reify | proxy | 平替 |
+|---------|-------|-------|------|
+| `net.minecraft.*` / `net.minecraftforge.*` / Fabric API | 🔴 禁区 | 🔴 禁区 | Java 骨架类（`mc-1.20.1/shim/`） |
+| `java.lang.*` / `java.util.function.*`（JDK 核心） | 🟢 安全 | 🟢 安全 | 可选：`FnConsumer`/`FnSupplier`/`FnPredicate` |
+
+**JDK 安全原理**：Mojang 混淆器绝对不碰 JDK 核心类（`Runnable`、`Consumer`、`Supplier` 等），方法签名（`run()`、`accept()`、`get()`）永久固化。且启动期 one-shot 执行无高并发风险。
+
+**平替方案（MC 接口 → 三层 IoC 架构）**：
+1. **ac 层**：纯逻辑函数 → Framework `[:registry :tiles block-id]`
+2. **mc-1.20.1 层**：Java 骨架（`UniversalEnergyStorage`、`UniversalItemHandler`）+ 桥接代码注入
+3. **Forge/Fabric**：使用 Java 骨架实例注册 Capability
+
+Java 骨架类：`mc-1.20.1/src/main/java/cn/li/mc1201/shim/`
+- `FnConsumer`/`FnSupplier`/`FnPredicate` — JDK 函数式接口适配器（可选）
+- `DynamicSlot` — 通用 Slot 子类
+- `UniversalEnergyStorage` — IEnergyStorage 通用骨架
+- `UniversalItemHandler` — IItemHandler 通用骨架
+
+**判定**：MC 接口 → 必须 Java 骨架。JDK 接口 → `reify` 安全可用。
 
 ---
 
@@ -580,6 +598,101 @@
 | 平台适配器函数 | Framework `:platform/*`（只读） |
 
 **实现**：`ac/ability/service/runtime_store.clj` 的 `AtomAbilityStore` 使用 `ConcurrentHashMap<String, Atom>` —— 每个 player 独立 atom，`swap!` 只影响该 player，零跨玩家竞争。
+
+---
+
+### ac → mcmod → mc-1.20.1 三层 IoC 架构（强制）
+
+ac（内容层）、mcmod（框架中转层）、mc-1.20.1（游戏适配层）形成严格的单向依赖链。**每层有且仅有一个职责**，禁止跨层感知。
+
+```
+ac ──→ mcmod ──→ mc-1.20.1 ──→ forge-1.20.1 / fabric-1.20.1
+ │         │            │                │
+ │ 纯逻辑   │ 纯中转     │ Java骨架+桥接   │ 平台注册
+ │ 零MC感知 │ 零MC感知   │ MC感知         │ MC感知
+```
+
+#### 第一层：ac（内容层 / Addons）——"纯逻辑函数提供者"
+
+**职责**：提供纯 Clojure 计算函数，存储于 Framework `[:registry :tiles block-id]` 的 VTable Map 中。**对 Minecraft 完全不可见，对 mc-1.20.1 完全不可见**。
+
+```clojure
+;; ✅ ac 层：纯逻辑，零 MC 依赖
+(defn diamond-receive-energy [current max-capacity max-receive simulate?]
+  (let [space (- max-capacity current)]
+    (min space max-receive)))
+
+;; ac 层唯一的出口：通过纯 Clojure Map（VTable）宣告能力
+(defn get-addon-manifest []
+  {:addon-id "diamond_furnace"
+   :tiles {"furnace" {:energy-logic {:receive-fn diamond-receive-energy
+                                      :extract-fn (fn [& _] 0)
+                                      :get-max-fn (fn [] 100000)}}}})
+```
+
+**红线**：
+- ❌ 禁止 import `net.minecraft.*`
+- ❌ 禁止 import `cn.li.mc1201.*`（连 mc-1.20.1 都不可见）
+- ✅ 只能依赖 mcmod 的纯中转 API（`platform/be`、`platform/nbt` 等）
+- ✅ 升级 MC 版本时，ac 层代码**零改动**即可复用
+
+#### 第二层：mcmod（框架中转层）——"纯数据契约定义者"
+
+**职责**：定义 Framework 路径、install 函数、wrapper 函数。**零 MC 类导入，零类型提示，零直接 .method 调用**。
+
+```clojure
+;; ✅ mcmod 层：纯中转，从 Framework 查找函数并调用
+(defn nbt-set-int! [compound key value]
+  (when-let [f (get-in @(fw/fw-atom) [:platform :nbt-ops :nbt-set-int!])]
+    (f compound key value)))
+```
+
+**红线**：
+- ❌ 禁止 `(:import net.minecraft.*)`
+- ❌ 禁止类型提示 `^BlockPos`、`^CompoundTag` 等
+- ❌ 禁止直接 `.putInt`、`.getX`、`.isEmpty` 等 MC 互操作
+- ✅ 所有 MC 互操作通过 `installer_core.clj`（在 mc-1.20.1 层）安装进 Framework
+
+#### 第三层：mc-1.20.1（游戏适配层）——"海关 / 织入官"
+
+**职责**：唯一可与 Minecraft 类交互的共享层。
+1. **实现 MC 互操作**：`installer_core.clj` 将所有 `.putInt`、`.getX` 等 MC 直接调用封装为函数 Map，安装进 Framework
+2. **Java 骨架实例化**：从 Framework 取出 ac 的纯函数，注入到 Java 骨架类，交给 Forge/Fabric Capability 系统
+
+```clojure
+;; ✅ mc-1.20.1 层：桥接代码，唯一的"织入官"
+(defn create-energy-storage [block-id]
+  (when-let [energy-logic (get-in @(fw/fw-atom) [:registry :tiles block-id :energy-logic])]
+    (UniversalEnergyStorage.
+      (:receive-fn energy-logic)
+      (:extract-fn energy-logic)
+      (:get-stored-fn energy-logic)
+      (:get-max-fn energy-logic)
+      (:can-extract-fn energy-logic)
+      (:can-receive-fn energy-logic))))
+```
+
+**Java 骨架类位置**：`mc-1.20.1/src/main/java/cn/li/mc1201/shim/`（Forge/Fabric 共用）
+- `FnConsumer.java` / `FnSupplier.java` / `FnPredicate.java` — Java 函数式接口适配器
+- `DynamicSlot.java` — 通用 Slot 子类（替代 9 个 proxy 模式）
+- `UniversalEnergyStorage.java` — IEnergyStorage 通用骨架
+- `UniversalItemHandler.java` — IItemHandler 通用骨架
+
+**红线**：
+- ✅ 可 import `net.minecraft.*`
+- ✅ 可 import `cn.li.mc1201.shim.*`（本层的 Java 骨架）
+- ❌ 禁止在业务代码中使用 `reify` / `proxy` / `deftype`（用 Java 骨架替代）
+- ❌ 禁止跨层感知（不引入 ac 业务命名空间）
+
+#### ac 层调用 Java 骨架的标准姿势（IoC 反转）
+
+ac 不调用 Java 骨架——Java 骨架被"注入"ac 的函数：
+
+```
+ac 函数 → Framework [:registry :tiles block-id] → mc-1.20.1 桥接读取 → new Java骨架(ac函数)
+```
+
+ac 升级 MC 版本时：ac 代码零改动，只需在 mc-1.20.1 更新骨架类适配新版本 API。
 
 ---
 

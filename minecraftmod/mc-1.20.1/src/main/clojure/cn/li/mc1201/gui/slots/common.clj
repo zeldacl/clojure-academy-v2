@@ -1,43 +1,54 @@
 (ns cn.li.mc1201.gui.slots.common
-  "Shared slot construction/layout helpers for platform menu bridges."
+  "Shared slot construction/layout helpers for platform menu bridges.
+
+   Uses DynamicSlot (universal Java skeleton) instead of per-feature proxy [Slot].
+   reify Predicate/Supplier is safe — JDK core interfaces, never obfuscated."
   (:require [cn.li.mcmod.gui.slot-registry :as slot-registry]
             [cn.li.mcmod.util.log :as log])
-  (:import [net.minecraft.world.inventory Slot AbstractContainerMenu]
+  (:import [cn.li.mc1201.shim DynamicSlot]
+           [cn.li.mc1201.shim FnPredicate FnSupplier]
+           [net.minecraft.world.inventory Slot AbstractContainerMenu]
            [net.minecraft.world.entity.player Inventory]
            [net.minecraft.world.item ItemStack]))
 
 (defn create-energy-slot
   [inventory slot-index x y]
-  (proxy [Slot] [inventory (int slot-index) (int x) (int y)]
-    (mayPlace [^ItemStack stack]
-      (boolean
-       (let [pred (slot-registry/get-slot-validator :energy)]
-         (and pred (pred stack)))))
-    (getMaxStackSize [& _] 1)))
+  (-> (DynamicSlot. inventory (int slot-index) (int x) (int y))
+      (.withMayPlace
+        (FnPredicate/of
+            (fn [^ItemStack stack]
+            (boolean
+              (let [pred (slot-registry/get-slot-validator :energy)]
+                (and pred (pred stack)))))))
+      (.withMaxStackSize 1)))
 
 (defn create-plate-slot
   [inventory slot-index x y]
-  (proxy [Slot] [inventory (int slot-index) (int x) (int y)]
-    (mayPlace [^ItemStack stack]
-      (boolean
-       (let [pred (slot-registry/get-slot-validator :plate)]
-         (and pred (pred stack)))))
-    (getMaxStackSize [& _] 1)))
+  (-> (DynamicSlot. inventory (int slot-index) (int x) (int y))
+      (.withMayPlace
+        (FnPredicate/of
+            (fn [^ItemStack stack]
+            (boolean
+              (let [pred (slot-registry/get-slot-validator :plate)]
+                (and pred (pred stack)))))))
+      (.withMaxStackSize 1)))
 
 (defn create-core-slot
   [inventory slot-index x y]
-  (proxy [Slot] [inventory (int slot-index) (int x) (int y)]
-    (mayPlace [^ItemStack stack]
-      (boolean
-       (let [pred (slot-registry/get-slot-validator :core)]
-         (and pred (pred stack)))))
-    (getMaxStackSize [& _] 1)))
+  (-> (DynamicSlot. inventory (int slot-index) (int x) (int y))
+      (.withMayPlace
+        (FnPredicate/of
+            (fn [^ItemStack stack]
+            (boolean
+              (let [pred (slot-registry/get-slot-validator :core)]
+                (and pred (pred stack)))))))
+      (.withMaxStackSize 1)))
 
 (defn create-output-slot
   [inventory slot-index x y]
-  (proxy [Slot] [inventory (int slot-index) (int x) (int y)]
-    (mayPlace [_stack] false)
-    (mayPickup [_player] true)))
+  (-> (DynamicSlot. inventory (int slot-index) (int x) (int y))
+      (.withMayPlace (FnPredicate/of (fn [_ ^ItemStack _stack] false)))
+      (.withMayPickup (FnSupplier/of (fn [] true)))))
 
 (defn create-standard-slot
   [inventory slot-index x y]
@@ -45,47 +56,51 @@
 
 (defn create-conditional-slot
   [inventory slot-index x y active?-fn]
-  (proxy [Slot] [inventory (int slot-index) (int x) (int y)]
-    (mayPlace [_stack]
-      (boolean (active?-fn)))
-    (mayPickup [_player]
-      (boolean (active?-fn)))))
+  (-> (DynamicSlot. inventory (int slot-index) (int x) (int y))
+      (.withMayPlace (FnPredicate/of (fn [_ ^ItemStack _stack] (boolean (active?-fn)))))
+      (.withMayPickup (FnSupplier/of (fn [] (boolean (active?-fn)))))))
 
 (defn create-conditional-energy-slot
   [inventory slot-index x y active?-fn]
-  (proxy [Slot] [inventory (int slot-index) (int x) (int y)]
-    (mayPlace [stack]
-      (boolean
-       (let [pred (slot-registry/get-slot-validator :energy)]
-         (and (active?-fn) pred (pred stack)))))
-    (mayPickup [_player] (boolean (active?-fn)))
-    (getMaxStackSize [& _] 1)))
+  (-> (DynamicSlot. inventory (int slot-index) (int x) (int y))
+      (.withMayPlace
+        (FnPredicate/of
+            (fn [^ItemStack stack]
+            (boolean
+              (let [pred (slot-registry/get-slot-validator :energy)]
+                (and (active?-fn) pred (pred stack)))))))
+      (.withMayPickup (FnSupplier/of (fn [] (boolean (active?-fn)))))
+      (.withMaxStackSize 1)))
 
 (defn create-conditional-plate-slot
   [inventory slot-index x y active?-fn]
-  (proxy [Slot] [inventory (int slot-index) (int x) (int y)]
-    (mayPlace [stack]
-      (boolean
-       (let [pred (slot-registry/get-slot-validator :plate)]
-         (and (active?-fn) pred (pred stack)))))
-    (mayPickup [_player] (boolean (active?-fn)))
-    (getMaxStackSize [& _] 1)))
+  (-> (DynamicSlot. inventory (int slot-index) (int x) (int y))
+      (.withMayPlace
+        (FnPredicate/of
+            (fn [^ItemStack stack]
+            (boolean
+              (let [pred (slot-registry/get-slot-validator :plate)]
+                (and (active?-fn) pred (pred stack)))))))
+      (.withMayPickup (FnSupplier/of (fn [] (boolean (active?-fn)))))
+      (.withMaxStackSize 1)))
 
 (defn create-conditional-core-slot
   [inventory slot-index x y active?-fn]
-  (proxy [Slot] [inventory (int slot-index) (int x) (int y)]
-    (mayPlace [stack]
-      (boolean
-       (let [pred (slot-registry/get-slot-validator :core)]
-         (and (active?-fn) pred (pred stack)))))
-    (mayPickup [_player] (boolean (active?-fn)))
-    (getMaxStackSize [& _] 1)))
+  (-> (DynamicSlot. inventory (int slot-index) (int x) (int y))
+      (.withMayPlace
+        (FnPredicate/of
+            (fn [^ItemStack stack]
+            (boolean
+              (let [pred (slot-registry/get-slot-validator :core)]
+                (and (active?-fn) pred (pred stack)))))))
+      (.withMayPickup (FnSupplier/of (fn [] (boolean (active?-fn)))))
+      (.withMaxStackSize 1)))
 
 (defn create-conditional-output-slot
   [inventory slot-index x y active?-fn]
-  (proxy [Slot] [inventory (int slot-index) (int x) (int y)]
-    (mayPlace [_stack] (and (active?-fn) false))
-    (mayPickup [_player] (boolean (active?-fn)))))
+  (-> (DynamicSlot. inventory (int slot-index) (int x) (int y))
+      (.withMayPlace (FnPredicate/of (fn [_ ^ItemStack _stack] (and (active?-fn) false))))
+      (.withMayPickup (FnSupplier/of (fn [] (boolean (active?-fn)))))))
 
 (defn- slot-by-type-conditional
   [type inventory index abs-x abs-y active?-fn]
