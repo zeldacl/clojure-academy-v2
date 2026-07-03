@@ -90,20 +90,20 @@
       ;; Progress bar animation: progress = timeActive / ANIM_LENGTH (clamped to 1.0)
       (when-let [progbar-widget (cgui-core/find-widget main "progbar")]
         (when-let [pb (comp/get-widget-component progbar-widget :progressbar)]
-          (let [start (volatile! (now-seconds))]
+          (let [start (atom (now-seconds))]
             (events/on-frame progbar-widget
               (fn [_]
                 (let [dt (- (now-seconds) @start)
                       prog (min 1.0 (/ (double dt) anim-length))]
                   (swap! (:state pb) assoc :progress prog)))))))
       ;; Completion handler: after ANIM_LENGTH + WAIT, show key_hint, open terminal
-      (let [start (volatile! (now-seconds))
-            done? (volatile! false)]
+      (let [start (atom (now-seconds))
+            done? (atom false)]
         (events/on-frame main
           (fn [_]
             (when (and (not @done?)
                        (>= (- (now-seconds) @start) (+ anim-length wait-time)))
-              (vreset! done? true)
+              (reset! done? true)
               ;; Show key_hint message (matching original PlayerUtils.sendChat)
               (when-let [p (client-bridge/get-client-player)]
                 (client-bridge/send-system-message! p "terminal.my_mod.key_hint" "Left Alt"))

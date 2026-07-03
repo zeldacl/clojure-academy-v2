@@ -74,7 +74,7 @@
 ;; Tick-based activation batching
 ;; ============================================================================
 
-(let [tick-counter (volatile! 0)]
+(let [tick-counter (atom 0)]
   (defn- on-player-tick
     "Called on PlayerTickEvent (SERVER, END phase).
     Every 3 ticks, calls process-pending-activations! for the player
@@ -82,7 +82,7 @@
     [^TickEvent$PlayerTickEvent event]
     (when (and (= TickEvent$Phase/END (.phase event))
                (instance? ServerPlayer (.player event)))
-      (let [c (vreset! tick-counter (inc @tick-counter))]
+      (let [c (swap! tick-counter inc)]
         (when (zero? (mod c 3))
           (let [^ServerPlayer player (.player event)]
             (try
@@ -111,7 +111,7 @@
 ;; Registration
 ;; ============================================================================
 
-(let [registered? (volatile! false)]
+(let [registered? (atom false)]
   (defn init!
     "Register Forge item event listeners for tutorial condition tracking
     and tick-based activation batching.
@@ -143,6 +143,6 @@
         (try
           (install-forge-tutorial-activated-bridge!)
           (catch Throwable _))
-        (vreset! registered? true)
+        (reset! registered? true)
         (log/info "Tutorial item event listeners registered"))))
     nil))

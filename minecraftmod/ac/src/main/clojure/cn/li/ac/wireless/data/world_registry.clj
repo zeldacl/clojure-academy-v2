@@ -84,15 +84,12 @@
 (defn- update-world-state!
   "Atomically update world-state via Framework swap!."
   [world-key f & args]
-  (let [result* (volatile! nil)]
-    (when-let [fw-atom (fw/fw-atom)]
-      (swap! fw-atom update-in (world-state-path world-key)
-             (fn [current]
-               (let [base (or current (initial-world-state))
-                     result (apply f base args)]
-                 (vreset! result* result)
-                 result))))
-    @result*))
+  (when-let [fw-atom (fw/fw-atom)]
+    (let [new-fw-state (swap! fw-atom update-in (world-state-path world-key)
+                         (fn [current]
+                           (let [base (or current (initial-world-state))]
+                             (apply f base args))))]
+      (get-in new-fw-state (world-state-path world-key)))))
 
 ;; ============================================================================
 ;; World data lifecycle
@@ -200,18 +197,15 @@
    No longer uses ^:dynamic *world-transaction* — re-entrant calls are
    naturally serialized by the single Framework atom swap!."
   [world-data mutation-fn]
-  (let [wk (:world-key world-data)
-        result* (volatile! nil)]
+  (let [wk (:world-key world-data)]
     (when-let [fw-atom (fw/fw-atom)]
-      (swap! fw-atom update-in (world-state-path wk)
-             (fn [current]
-               (let [base (or current (initial-world-state))
-                     tx-state (atom base)
-                     ;; Run mutation with a transaction wrapper
-                     _ (vreset! result* (mutation-fn (assoc world-data :_tx-state tx-state)))
-                     final-state @tx-state]
-                 final-state))))
-    @result*))
+      (let [current (get-in @fw-atom (world-state-path wk))
+            base (or current (initial-world-state))
+            tx-state (atom base)
+            result (mutation-fn (assoc world-data :_tx-state tx-state))
+            final-state @tx-state]
+        (swap! fw-atom assoc-in (world-state-path wk) final-state)
+        result))))
 
 ;; ============================================================================
 ;; Diagnostics & testing

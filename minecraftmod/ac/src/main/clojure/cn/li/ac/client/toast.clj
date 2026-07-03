@@ -24,7 +24,7 @@
   ;; consistent with the overlay renderer that reads `now-ms` as game time.
   (client-bridge/game-time-ms))
 
-(let [toasts* (volatile! [])]
+(let [toasts* (atom [])]
   ;; ============================================================================
   ;; Public API
   ;; ============================================================================
@@ -41,7 +41,7 @@
                     :args (vec (or args []))
                     :start-ms (now-ms)
                     :end-ms (+ (now-ms) (long (or duration-ms default-duration-ms)))}]
-         (vreset! toasts* (conj @toasts* entry))))))
+         (swap! toasts* conj entry)))))
 
   ;; ============================================================================
   ;; Rendering helpers
@@ -66,7 +66,7 @@
     [now]
     (let [active (remove #(expired? % now) @toasts*)]
       (when-not (= (count active) (count @toasts*))
-        (vreset! toasts* active))
+        (reset! toasts* (vec active)))
       active))
 
 
@@ -138,7 +138,7 @@
 
 (defn reset-toasts-for-test!
   []
-  (vreset! toasts* [])
+  (reset! toasts* [])
   nil)
 
 (defn toasts-snapshot

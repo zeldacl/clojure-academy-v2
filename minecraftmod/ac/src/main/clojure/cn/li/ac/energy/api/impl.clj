@@ -253,17 +253,17 @@
   [owner]
   (let [key (energy-owner-key owner)
         systems* (systems-atom)
-        created* (volatile! nil)]
+        created* (atom nil)]
     (or (get (systems-snapshot) key)
         (do
           (swap! systems*
                  (fn [systems]
                    (if-let [existing (get systems key)]
                      (do
-                       (vreset! created* existing)
+                       (reset! created* existing)
                        systems)
                      (let [created (new-energy-system)]
-                       (vreset! created* created)
+                       (reset! created* created)
                        (assoc systems key created)))))
           @created*))))
 

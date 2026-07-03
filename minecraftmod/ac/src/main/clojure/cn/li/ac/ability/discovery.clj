@@ -10,7 +10,7 @@
 
 (declare register-provider! registered-providers merge-provider!)
 
-(let [attempts* (volatile! 0)]
+(let [attempts* (atom 0)]
   (defn bootstrap-attempts-snapshot
     "Return current bootstrap attempt count. For test diagnostics."
     []
@@ -21,7 +21,7 @@
     ([]
      (reset-bootstrap-attempts-for-test! 0))
     ([attempts]
-     (vreset! attempts* (long (or attempts 0)))
+     (reset! attempts* (long (or attempts 0)))
      nil))
 
   (defn bootstrap-default-providers!
@@ -32,7 +32,7 @@
     []
     (when (or (zero? (count (registered-providers)))
               (< @attempts* 1))
-      (vreset! attempts* (inc @attempts*))
+      (swap! attempts* inc)
       (let [scanned-providers (scanner/discover-ability-providers)
             descriptor-providers (discovery-descriptor/bundled-provider-descriptors)]
         (when (and (empty? scanned-providers) (empty? descriptor-providers))

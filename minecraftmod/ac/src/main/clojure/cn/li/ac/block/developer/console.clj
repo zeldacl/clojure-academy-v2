@@ -240,12 +240,12 @@
 
 ;; Command registry: {command-name-str → (fn [state] [new-state action-kw])}.
 ;; Register commands via register-command! to add custom console commands.
-(let [command-registry (volatile! {})]
+(let [command-registry (atom {})]
   ;; Register a console command. callback receives the current state atom
   ;; and the create-console options map, returns [new-state action-kw].
   ;; Matching original SkillTree.scala: console += Command(name, callback)
   (defn register-command! [name callback]
-    (vreset! command-registry (assoc @command-registry name callback))
+    (swap! command-registry assoc name callback)
     nil)
 
   (defn- cmd-help [mode]

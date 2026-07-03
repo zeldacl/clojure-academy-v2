@@ -79,18 +79,17 @@
 (defn ensure-owner!
   [owner]
   (let [key (owner-key owner)
-        generation* (volatile! nil)]
-    (swap! (state-atom)
-           (fn [{:keys [next-generation] :as rs}]
-             (if-let [entry (get-in rs [:owners key])]
-               (do (vreset! generation* (:generation entry)) rs)
-               (let [generation next-generation]
-                 (vreset! generation* generation)
-                 (-> rs
-                     (assoc :next-generation (inc next-generation))
-                     (assoc-in [:owners key]
-                               (assoc default-owner-state :generation generation)))))))
-    @generation*))
+        new-rs (swap! (state-atom)
+                (fn [{:keys [next-generation] :as rs}]
+                  (if-let [entry (get-in rs [:owners key])]
+                    rs
+                    (let [generation next-generation]
+                      (-> rs
+                          (assoc :next-generation (inc next-generation))
+                          (assoc-in [:owners key]
+                                    (assoc default-owner-state :generation generation)))))))
+        entry (get-in new-rs [:owners key])]
+    (:generation entry)))
 
 (defn player-owner
   [player-uuid]

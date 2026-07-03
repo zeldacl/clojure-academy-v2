@@ -53,13 +53,13 @@
 ;; Self-registration into neutral mcmod lifecycle
 ;; ============================================================================
 
-(let [registered? (volatile! false)]
+(let [registered? (atom false)]
   (defn- register-post-spi-init!
     "Register AC keybinding init as a post-SPI client callback.
     Idempotent — only registers once."
     []
     (when-not @registered?
-      (vreset! registered? true)
+      (reset! registered? true)
       (lifecycle/register-post-spi-client-init! initialize-keybindings!)
       (log/info "AC keybinding init registered into mcmod lifecycle (post-spi-client-init)"))))
 

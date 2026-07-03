@@ -49,19 +49,20 @@
    :count 30 :speed 0.2 :offset-x 1.0 :offset-y 1.0 :offset-z 1.0})
 
 ;; ============================================================================
-;; Lock-free queue singleton (lazy init via volatile!, no ^:dynamic, no binding)
+;; Lock-free queue singleton (lazy init via delay)
 ;;
 ;; ConcurrentLinkedQueue is a lock-free queue backed by hardware-level CAS.
 ;; .offer and .poll are non-blocking — zero spin-lock between render thread
 ;; and game logic threads.
 ;; ============================================================================
 
-(let [q (volatile! nil)]
-  (defn- particle-queue
-    "Lazy singleton ConcurrentLinkedQueue. volatile! avoids AOT macro expansion
-     of Delay class while providing safe lazy initialization."
-    []
-    (or @q (vreset! q (ConcurrentLinkedQueue.)) @q)))
+(def ^:private particle-queue-delay
+  (delay (ConcurrentLinkedQueue.)))
+
+(defn- particle-queue
+  "Lazy singleton ConcurrentLinkedQueue."
+  []
+  @particle-queue-delay)
 
 ;; ============================================================================
 ;; Runtime record (for explicit parameter passing in test contexts)

@@ -34,13 +34,12 @@
 
 (defn consume-saved-data!
   [world]
-  (let [wid (world-key world)
-        saved* (volatile! nil)]
-    (update-pending-save-data!
-      (fn [pending]
-        (vreset! saved* (get pending wid))
-        (dissoc pending wid)))
-    @saved*))
+  (let [wid (world-key world)]
+    (when-let [fw-atom (fw/fw-atom)]
+      (let [pending (get-in @fw-atom cache-path {})
+            saved (get pending wid)]
+        (swap! fw-atom update-in cache-path dissoc wid)
+        saved))))
 
 (defn remember-saved-data!
   [world saved-data]

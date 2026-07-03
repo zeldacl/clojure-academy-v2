@@ -46,7 +46,7 @@
 ;; State
 ;; ============================================================================
 
-(let [notifications* (volatile! [])]
+(let [notifications* (atom [])]
   (defn- lerp [a b t]
   (+ a (* t (- b a))))
 
@@ -71,7 +71,7 @@
         (let [title (try
                       (:title (tutorial-content/load-tutorial-content (name tut-id)))
                       (catch Throwable _ (name tut-id)))]
-          (vreset! notifications* (conj @notifications*
+          (reset! notifications* (conj @notifications*
                  {:title title
                   :tut-id tut-id
                   :start-sec nil}))))
@@ -99,7 +99,7 @@
                                                      notifs)]
                                    (filterv #(<= (- now-sec (:start-sec %)) total-keep-time) initialized)))
                                @notifications*)]
-                 (vreset! notifications* new-val)
+                 (reset! notifications* new-val)
                  new-val)]
     (if-let [notif (last active)]
       (let [dt (- now-sec (:start-sec notif))

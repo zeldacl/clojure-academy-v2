@@ -337,13 +337,13 @@
 
 (defn- mark-client-push-handlers-registered!
   []
-  (let [installed? (volatile! false)]
+  (let [installed? (atom false)]
     (update-client-ui-runtime!
       (fn [runtime-state]
         (if (:push-handlers-registered? runtime-state)
           runtime-state
           (do
-            (vreset! installed? true)
+            (reset! installed? true)
             (assoc runtime-state :push-handlers-registered? true)))))
     @installed?))
 

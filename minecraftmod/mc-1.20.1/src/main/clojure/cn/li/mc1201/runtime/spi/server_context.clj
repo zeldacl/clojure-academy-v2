@@ -35,20 +35,21 @@
 
 (defn- register-callback!
   [callback-key callback-id callback]
-  (let [added? (volatile! false)]
-    (update-lifecycle-callbacks!
-      (fn [callbacks-by-key]
-        (update callbacks-by-key
-                callback-key
-                (fn [callbacks]
-                  (let [callbacks (vec callbacks)]
-                    (if (some #(= (:id %) callback-id) callbacks)
-                      callbacks
-                      (do
-                        (vreset! added? true)
-                        (conj callbacks {:id callback-id
-                                         :callback callback}))))))))
-    @added?))
+  (locking server-context-state-lock
+    (let [callbacks (lifecycle-callbacks)
+          existing (get callbacks callback-key [])
+          exists? (some #(= (:id %) callback-id) existing)]
+      (if exists?
+        false
+        (do
+          (alter-var-root #'*lifecycle-callbacks*
+            (constantly
+              (update callbacks callback-key
+                      (fn [cbs]
+                        (conj (vec cbs)
+                              {:id callback-id
+                               :callback callback})))))
+          true)))))
 
 (defn- run-callbacks!
   [callback-key value]

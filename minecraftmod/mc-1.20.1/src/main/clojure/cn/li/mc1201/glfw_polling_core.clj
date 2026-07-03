@@ -28,7 +28,7 @@
   [_input-id was-pressed now-pressed]
   (and now-pressed (not was-pressed)))
 
-(let [last-poll-time (volatile! {})]
+(let [last-poll-time (atom {})]
   (defn poll-all-inputs!
     "Poll all :original scheme inputs and emit keyboard events.
 
@@ -63,7 +63,7 @@
             {:player-uuid player-uuid
              :client-session-id client-session-id
              :logical-side :client}))
-        (vreset! last-poll-time (assoc @last-poll-time :cycle-selection is-pressed)))
+        (swap! last-poll-time assoc :cycle-selection is-pressed))
 
       ;; Additional :original inputs can be polled here following same pattern
 
@@ -74,5 +74,5 @@
   (defn reset-polling-state!
     "Reset debounce state (for testing or platform restart)"
     []
-    (vreset! last-poll-time {})
+    (reset! last-poll-time {})
     nil))

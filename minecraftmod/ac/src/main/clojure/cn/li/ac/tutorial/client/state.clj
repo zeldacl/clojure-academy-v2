@@ -95,7 +95,7 @@
 
 (def ^:private sync-interval-ms 5000)
 
-(let [last-sync-ms (volatile! 0)]
+(let [last-sync-ms (atom 0)]
   (defn tick-background-sync!
     "Call this from the client tick handler.  Sends a nil-owner request-sync
     every sync-interval-ms (default 5s) to keep tutorial state current.
@@ -105,7 +105,7 @@
     (try
       (let [now (System/currentTimeMillis)]
         (when (>= (- now @last-sync-ms) sync-interval-ms)
-          (vreset! last-sync-ms now)
+          (reset! last-sync-ms now)
           (net-client/send-to-server
             (tut-msg/msg-id :tutorial/request-sync)
             {}

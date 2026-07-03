@@ -14,13 +14,13 @@
 
 (def debug-states [:none :normal :show-exp])
 
-(let [state* (volatile! :none)]
+(let [state* (atom :none)]
   (defn toggle-debug-state!
     "Advance debug overlay state through the cycle: none -> normal -> show-exp -> none."
     []
     (let [cur (.indexOf ^List debug-states @state*)
           nxt (rem (inc cur) (count debug-states))]
-      (vreset! state* (nth debug-states nxt))
+      (reset! state* (nth debug-states nxt))
       nil))
 
 ;; ============================================================================

@@ -142,7 +142,7 @@
 (def ^:private default-branch-factor 0.7)
 (def ^:private default-width-shrink 0.9)
 
-(let [template-cache (volatile! nil)]
+(let [template-cache (atom nil)]
   (defn- ensure-templates
     "Generate arc templates on first call, cache and return."
     []
@@ -154,13 +154,13 @@
                  (generate-arc-segments length
                    default-arc-width default-max-offset
                    default-passes default-branch-factor default-width-shrink)))]
-          (vreset! template-cache templates)
+          (reset! template-cache templates)
           templates)))
 
   (defn reset-arc-templates-for-test!
     "Clear cached templates (for testing)."
     []
-    (vreset! template-cache nil)
+    (reset! template-cache nil)
     nil))
 
 ;; ---------------------------------------------------------------------------

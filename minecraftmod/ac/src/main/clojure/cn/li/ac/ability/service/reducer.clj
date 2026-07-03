@@ -678,12 +678,12 @@
   [player-state {:keys [player-uuid]}]
   (let [path (pending-tasks-path player-uuid)
         tasks (get-in player-state path [])
-        due (volatile! [])
-        remaining (volatile! [])]
+        due (atom [])
+        remaining (atom [])]
     (doseq [task tasks]
       (if (<= (long (or (:ticks-left task) 0)) 1)
-        (vswap! due conj task)
-        (vswap! remaining conj (update task :ticks-left dec))))
+        (swap! due conj task)
+        (swap! remaining conj (update task :ticks-left dec))))
     (let [next-state (if (seq @remaining)
                        (assoc-in player-state path @remaining)
                        (update-in player-state [:runtime :delayed-projectiles :pending-tasks]

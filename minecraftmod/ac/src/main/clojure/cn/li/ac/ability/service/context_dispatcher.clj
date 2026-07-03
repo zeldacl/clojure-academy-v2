@@ -145,13 +145,12 @@
 
 (defn- next-context-id!
   [counter-key owner prefix]
-  (let [counter* (volatile! nil)]
-    (update-dispatcher-state!
-      (fn [state]
-        (let [next-counter (inc (get-in state [counter-key owner] 0))]
-          (vreset! counter* next-counter)
-          (assoc-in state [counter-key owner] next-counter))))
-    (str prefix "-" @counter*)))
+  (let [new-state (update-dispatcher-state!
+                    (fn [state]
+                      (let [next-counter (inc (get-in state [counter-key owner] 0))]
+                        (assoc-in state [counter-key owner] next-counter))))
+        next-counter (get-in new-state [counter-key owner])]
+    (str prefix "-" next-counter)))
 
 (defn- resolve-context-owner
   [owner ctx-id _preferred-side]
