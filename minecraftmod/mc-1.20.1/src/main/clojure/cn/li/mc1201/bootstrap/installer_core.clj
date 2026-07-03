@@ -36,7 +36,7 @@
 (def ^:private ^:dynamic world-installed? false)
 (def ^:private ^:dynamic entity-installed? false)
 (def ^:private ^:dynamic resource-installed? false)
-(def ^:private ^:dynamic item-factories-installed? false)
+
 (def ^:private ^:dynamic be-fns-installed? false)
 (def ^:private ^:dynamic world-fns-installed? false)
 (def ^:private ^:dynamic block-state-protocols-installed? false)
@@ -58,7 +58,6 @@
   `(install-once! (var ~guard) (fn [] ~@body)))
 
 (declare install-item-protocols-only!)
-(declare install-item-factories-only!)
 
 (defn- world-server-session-id-value
   [^Level level]
@@ -103,131 +102,131 @@
       "mc1201 player feedback")))
 
 (defn install-block-state-protocol-only!
-  "Install only BlockState protocol extensions (no Level extensions)."
+  "Install BlockState interop functions into the world-ops Framework map.
+   (BlockState ops live in [:platform :world-ops] alongside world ops.)"
   [_adapter]
   (install-when! block-state-protocols-installed?
-    (extend-type BlockState
-      world/IBlockStateOps
-      (block-state-is-air [this] (.isAir this))
-      (block-state-get-block [this] (.getBlock this))
-      (block-state-get-state-definition [this]
-        (.getStateDefinition (.getBlock this)))
-      (block-state-get-property [_this ^StateDefinition state-def prop-name]
-        (.getProperty state-def (str prop-name)))
-      (block-state-set-property [this ^Property prop value]
-        (.setValue this prop value)))
-    (log/info "mc1201 shared block-state protocols initialized")))
+    (let [current (world/current-ops)
+          bs-ops {:block-state-is-air               (fn [^BlockState this] (.isAir this))
+                  :block-state-get-block            (fn [^BlockState this] (.getBlock this))
+                  :block-state-get-state-definition (fn [^BlockState this] (.getStateDefinition (.getBlock this)))
+                  :block-state-get-property         (fn [_this ^StateDefinition state-def prop-name]
+                                                      (.getProperty state-def (str prop-name)))
+                  :block-state-set-property         (fn [^BlockState this ^Property prop value]
+                                                      (.setValue this prop value))}]
+      (world/install-world-ops! (merge current bs-ops) "mc1201 block-state"))
+    (log/info "mc1201 block-state ops initialized")))
 
 (defn- install-nbt! []
   (install-when! nbt-installed?
-    (extend-type CompoundTag
-      nbt/INBTCompound
-      (nbt-set-int! [this key value] (.putInt this (str key) (int value)) this)
-      (nbt-get-int [this key] (.getInt this (str key)))
-      (nbt-set-string! [this key value] (.putString this (str key) (str value)) this)
-      (nbt-get-string [this key] (.getString this (str key)))
-      (nbt-set-boolean! [this key value] (.putBoolean this (str key) (boolean value)) this)
-      (nbt-get-boolean [this key] (.getBoolean this (str key)))
-      (nbt-set-double! [this key value] (.putDouble this (str key) (double value)) this)
-      (nbt-get-double [this key] (.getDouble this (str key)))
-      (nbt-set-tag! [this key tag] (.put this (str key) tag) this)
-      (nbt-get-tag [this key] (.get this (str key)))
-      (nbt-get-compound [this key] (.getCompound this (str key)))
-      (nbt-get-list [this key] (.getList this (str key) 10))
-      (nbt-has-key? [this key] (.contains this (str key)))
-      (nbt-set-float! [this key value] (.putFloat this (str key) (float value)) this)
-      (nbt-get-float [this key] (.getFloat this (str key)))
-      (nbt-set-long! [this key value] (.putLong this (str key) (long value)) this)
-      (nbt-get-long [this key] (.getLong this (str key))))
-    (extend-type ListTag
-      nbt/INBTList
-      (nbt-append! [this element] (.add this element) this)
-      (nbt-list-size [this] (.size this))
-      (nbt-list-get [this index]
-        (let [idx (int index)
-              n (int (.size this))]
-          (when (and (>= idx 0) (< idx n))
-            (.get this idx))))
-      (nbt-list-get-compound [this index]
-        (let [idx (int index)
-              n (int (.size this))]
-          (when (and (>= idx 0) (< idx n))
-            (.getCompound this idx)))))
-    (nbt/install-nbt-factory! {:create-compound #(CompoundTag.)
-                               :create-list #(ListTag.)}
-                              "mc1201")
-    (nbt/install-nbt-has-key-fn! (fn [^CompoundTag this key] (.contains this (str key)))
-                                 "mc1201")))
+    (nbt/install-nbt-ops!
+      {:nbt-set-int!      (fn [^CompoundTag this key value] (.putInt this (str key) (int value)) this)
+       :nbt-get-int       (fn [^CompoundTag this key] (.getInt this (str key)))
+       :nbt-set-string!   (fn [^CompoundTag this key value] (.putString this (str key) (str value)) this)
+       :nbt-get-string    (fn [^CompoundTag this key] (.getString this (str key)))
+       :nbt-set-boolean!  (fn [^CompoundTag this key value] (.putBoolean this (str key) (boolean value)) this)
+       :nbt-get-boolean   (fn [^CompoundTag this key] (.getBoolean this (str key)))
+       :nbt-set-double!   (fn [^CompoundTag this key value] (.putDouble this (str key) (double value)) this)
+       :nbt-get-double    (fn [^CompoundTag this key] (.getDouble this (str key)))
+       :nbt-set-tag!      (fn [^CompoundTag this key tag] (.put this (str key) tag) this)
+       :nbt-get-tag       (fn [^CompoundTag this key] (.get this (str key)))
+       :nbt-get-compound  (fn [^CompoundTag this key] (.getCompound this (str key)))
+       :nbt-get-list      (fn [^CompoundTag this key] (.getList this (str key) 10))
+       :nbt-has-key?      (fn [^CompoundTag this key] (.contains this (str key)))
+       :nbt-set-float!    (fn [^CompoundTag this key value] (.putFloat this (str key) (float value)) this)
+       :nbt-get-float     (fn [^CompoundTag this key] (.getFloat this (str key)))
+       :nbt-set-long!     (fn [^CompoundTag this key value] (.putLong this (str key) (long value)) this)
+       :nbt-get-long      (fn [^CompoundTag this key] (.getLong this (str key)))
+       :nbt-append!       (fn [^ListTag this el] (.add this el) this)
+       :nbt-list-size     (fn [^ListTag this] (.size this))
+       :nbt-list-get      (fn [^ListTag this idx]
+                            (let [i (int idx) n (int (.size this))]
+                              (when (and (>= i 0) (< i n)) (.get this i))))
+       :nbt-list-get-compound (fn [^ListTag this idx]
+                                 (let [i (int idx) n (int (.size this))]
+                                   (when (and (>= i 0) (< i n)) (.getCompound this i))))
+       :create-compound   #(CompoundTag.)
+       :create-list       #(ListTag.)}
+      "mc1201")))
 
 (defn- install-position! [_adapter]
   (install-when! pos-installed?
-    (extend-type BlockPos
-      pos/IBlockPos
-      (pos-x [this] (.getX this))
-      (pos-y [this] (.getY this))
-      (pos-z [this] (.getZ this)))
-    (pos/install-position-factory! (fn [x y z] (BlockPos. (int x) (int y) (int z)))
-                                   "mc1201")
-    (pos/install-pos-above-fn! (fn [^BlockPos p] (.above p)) "mc1201")))
+    (pos/install-position-ops!
+      {:pos-x (fn [^BlockPos this] (.getX this))
+       :pos-y (fn [^BlockPos this] (.getY this))
+       :pos-z (fn [^BlockPos this] (.getZ this))
+       :create-block-pos (fn [x y z] (BlockPos. (int x) (int y) (int z)))
+       :pos-above (fn [^BlockPos p] (.above p))}
+      "mc1201")))
 
 (defn- install-item! [adapter]
-  (install-item-protocols-only! adapter)
-  (install-item-factories-only!
-    (fn [nbt-tag] (item-ops/item-stack-of adapter nbt-tag))
-    (fn [item-id count] (item-ops/create-item-stack-by-id adapter (str item-id) (int count)))
-    (fn [stack] (item-ops/item-stack-empty? adapter stack))))
+  (install-item-protocols-only! adapter))
+
+(defn install-item-factories-only!
+  "Backward-compatible no-op. Item factories are now installed by install-item-protocols-only!."
+  [_item-stack-of-fn _create-item-stack-by-id-fn _item-stack-empty?-fn]
+  ;; Factories are already installed via install-item-protocols-only!
+  ;; which is called before this by install-platform-core! and platform-init.
+  nil)
 
 (defn install-item-protocols-only!
-  "Install only item protocols for ItemStack/Item classes."
+  "Install ItemStack/Item interop functions into Framework [:platform :item-ops]."
   [adapter]
   (install-when! item-protocols-installed?
-    (extend-type ItemStack
-      item/IItemStack
-      (item-is-empty? [this] (.isEmpty this))
-      (item-get-count [this] (.getCount this))
-      (item-get-max-stack-size [this] (.getMaxStackSize this))
-      (item-is-equal? [this other] (ItemStack/matches this other))
-      (item-save-to-nbt [this n] (.save this n))
-      (item-get-or-create-tag [this] (.getOrCreateTag this))
-      (item-get-max-damage [this] (.getMaxDamage this))
-      (item-set-damage! [this dmg] (.setDamageValue this (int dmg)))
-      (item-get-damage [this] (.getDamageValue this))
-      (item-get-item [this] (.getItem this))
-      (item-get-tag-compound [this] (.getTag this))
-      (item-split [this amount] (.split this (int amount))))
-    (extend-type Item
-      item/IItem
-      (item-get-description-id [this] (.getDescriptionId this))
-      (item-get-registry-name [this] (item-ops/item-registry-name adapter this)))
-    (log/info "mc1201 shared item protocols initialized")))
+    (item/install-item-ops!
+     {:item-is-empty?          (fn [^ItemStack this] (.isEmpty this))
+      :item-get-count          (fn [^ItemStack this] (.getCount this))
+      :item-get-max-stack-size (fn [^ItemStack this] (.getMaxStackSize this))
+      :item-is-equal?          (fn [^ItemStack this other] (.matches this other))
+      :item-save-to-nbt        (fn [^ItemStack this nbt] (.save this nbt))
+      :item-get-or-create-tag  (fn [^ItemStack this] (.getOrCreateTag this))
+      :item-get-max-damage     (fn [^ItemStack this] (.getMaxDamage this))
+      :item-set-damage!        (fn [^ItemStack this dmg] (.setDamageValue this (int dmg)))
+      :item-get-damage         (fn [^ItemStack this] (.getDamageValue this))
+      :item-get-item           (fn [^ItemStack this] (.getItem this))
+      :item-get-tag-compound   (fn [^ItemStack this] (.getTag this))
+      :item-split              (fn [^ItemStack this amount] (.split this (int amount)))
+      :item-get-description-id (fn [^Item this] (.getDescriptionId this))
+      :item-get-registry-name  (fn [^Item this] (item-ops/item-registry-name adapter this))
+      :create-item-from-nbt    (fn [nbt-tag] (item-ops/item-stack-of adapter nbt-tag))
+      :create-item-stack-by-id (fn [item-id count] (item-ops/create-item-stack-by-id adapter (str item-id) (int count)))
+      :item-stack-empty?       (fn [stack] (item-ops/item-stack-empty? adapter stack))
+      :item-tag-checker        (fn [^ItemStack stack tag-str]
+                                 (try
+                                   (let [tag-str (str tag-str)
+                                         colon (.indexOf tag-str ":")
+                                         ns (if (pos? colon) (.substring tag-str 0 (int colon)) "minecraft")
+                                         path (if (pos? colon) (.substring tag-str (inc (int colon))) tag-str)
+                                         rl (ResourceLocation. ns path)
+                                         tag-key (net.minecraft.tags.TagKey/create
+                                                  net.minecraft.core.registries.Registries/ITEM rl)]
+                                     (boolean (.is stack tag-key)))
+                                   (catch Throwable _ false)))
+      :tag-item-resolver       (fn [tag-str count]
+                                 (try
+                                   (let [tag-str (str tag-str)
+                                         colon (.indexOf tag-str ":")
+                                         ns (if (pos? colon) (.substring tag-str 0 (int colon)) "minecraft")
+                                         path (if (pos? colon) (.substring tag-str (inc (int colon))) tag-str)
+                                         rl (ResourceLocation. ns path)
+                                         tag-key (net.minecraft.tags.TagKey/create
+                                                  net.minecraft.core.registries.Registries/ITEM rl)
+                                         items (.iterator (.getTagOrEmpty net.minecraft.core.registries.BuiltInRegistries/ITEM tag-key))]
+                                     (when (.hasNext items)
+                                       (let [^Item item (.value ^net.minecraft.core.Holder (.next items))
+                                             stack (ItemStack. item (int count))]
+                                         stack)))
+                                   (catch Throwable _ nil)))}
+     "mc1201")
+    (log/info "mc1201 shared item ops initialized")))
 
 (defn- install-world! [adapter]
   (install-when! world-installed?
-    (install-block-state-protocol-only! adapter)
-  (try
-    (extend-type Level
-      world/IWorldAccess
-      (world-get-tile-entity [this p] (.getBlockEntity this p))
-      (world-get-block-state [this p] (.getBlockState this p))
-      (world-set-block [this p s flags] (.setBlock this p s (int flags)))
-      (world-remove-block [this p] (.destroyBlock this p false))
-      (world-break-block [this p drop?] (.destroyBlock this p (boolean drop?)))
-      (world-place-block-by-id [this block-id p flags]
-        (world-block-ops/world-place-block-by-id adapter this block-id p flags))
-      (world-is-chunk-loaded? [this cx cz] (.hasChunk this (int cx) (int cz)))
-      (world-get-day-time [this] (.getDayTime this))
-      (world-get-dimension-id [this] (str (.location (.dimension this))))
-      (world-server-session-id [this] (world-server-session-id-value this))
-      (world-get-players [this] (seq (.players this)))
-      (world-is-raining [this] (.isRaining this))
-      (world-is-client-side [this] (.isClientSide this))
-      (world-can-see-sky [this p] (.canSeeSky this p)))
-    (catch Throwable t
-      (log/warn "Skipping IWorldAccess extension for Level during bootstrap-sensitive init:" (.getMessage t))))
     (world/install-world-ops! (world-ops-map adapter) "mc1201")))
 
 (defn install-entity-protocols-only!
-  "Install only entity/player/inventory/menu protocol extensions."
+  "Install entity/player/inventory/menu operation fns into Framework [:platform :entity-ops].
+  Simple interop methods (entity-get-x, player-creative?, etc.) are now plain defn in entity.clj."
   [adapter]
   (install-when! entity-installed?
     (let [block-item-info (fn [^Player this]
@@ -241,37 +240,34 @@
                                      :item-id item-id})))
                               (catch Throwable _
                                 nil)))
-          player-impl {:entity-distance-to-sqr (fn [^Entity this x y z]
-                                                 (.distanceToSqr this (double x) (double y) (double z)))
-                       :entity-get-x (fn [^Entity this]
-                                       (let [^Vec3 pos (.position this)]
-                                         (double (.x pos))))
-                       :entity-get-y (fn [^Entity this]
-                                       (let [^Vec3 pos (.position this)]
-                                         (double (.y pos))))
-                       :entity-get-z (fn [^Entity this]
-                                       (let [^Vec3 pos (.position this)]
-                                         (double (.z pos))))
+          player-impl {:entity-distance-to-sqr (fn [^Entity this x y z] (.distanceToSqr this (double x) (double y) (double z)))
+                       :entity-get-x           (fn [^Entity this] (let [^Vec3 pos (.position this)] (double (.x pos))))
+                       :entity-get-y           (fn [^Entity this] (let [^Vec3 pos (.position this)] (double (.y pos))))
+                       :entity-get-z           (fn [^Entity this] (let [^Vec3 pos (.position this)] (double (.z pos))))
+                       :player-creative?       (fn [^Player this] (.isCreative this))
+                       :player-spectator?      (fn [^Player this] (.isSpectator this))
+                       :player-get-name        (fn [^Player this] (let [^Component nc (.getName this)] (.getString nc)))
+                       :player-get-uuid        (fn [^Entity this] (.getUUID this))
+                       :player-get-main-hand-item-count (fn [^Player this]
+                                                          (let [^ItemStack stack (.getMainHandItem this)]
+                                                            (if (.isEmpty stack) 0 (int (.getCount stack)))))
+                       :player-get-main-hand-item-stack (fn [^Player this]
+                                                          (let [^ItemStack stack (.getMainHandItem this)]
+                                                            (when-not (.isEmpty stack) stack)))
+                       :player-consume-main-hand-item! (fn [^Player this amount]
+                                                         (let [n (int (max 0 (or amount 0)))]
+                                                           (cond (zero? n) true
+                                                                 (.isCreative this) true
+                                                                 :else
+                                                                 (let [^ItemStack stack (.getMainHandItem this)]
+                                                                   (if (or (.isEmpty stack) (< (int (.getCount stack)) n))
+                                                                     false
+                                                                     (do (.shrink stack n) true))))))
                        :player-get-level (fn [this] (player-ops/player-level adapter this))
-                       :player-creative? (fn [^Player this] (.isCreative this))
-                       :player-spectator? (fn [^Player this] (.isSpectator this))
-                       :player-get-name (fn [^Player this]
-                                          (let [^Component name-component (.getName this)]
-                                            (.getString name-component)))
-                       :player-get-uuid (fn [^Entity this] (.getUUID this))
                        :player-get-main-hand-item-id (fn [^Player this]
                                                        (let [^ItemStack stack (.getMainHandItem this)]
                                                          (when-not (.isEmpty stack)
                                                            (item-ops/item-registry-name adapter (.getItem stack)))))
-                       :player-get-main-hand-item-count (fn [^Player this]
-                                                          (let [^ItemStack stack (.getMainHandItem this)]
-                                                            (if (.isEmpty stack)
-                                                              0
-                                                              (int (.getCount stack)))))
-                       :player-get-main-hand-item-stack (fn [^Player this]
-                                                          (let [^ItemStack stack (.getMainHandItem this)]
-                                                            (when-not (.isEmpty stack)
-                                                              stack)))
                        :player-main-hand-placeable-block? (fn [this]
                                                            (boolean (:placeable? (block-item-info this))))
                        :player-place-main-hand-block-at-hit! (fn [^Player this _world-id x y z face]
@@ -295,19 +291,6 @@
                                                                     base-result)
                                                                   (catch Throwable _
                                                                     base-result))))
-                       :player-consume-main-hand-item! (fn [^Player this amount]
-                                                         (let [n (int (max 0 (or amount 0)))]
-                                                           (cond
-                                                             (zero? n) true
-                                                             (.isCreative this) true
-                                                             :else
-                                                             (let [^ItemStack stack (.getMainHandItem this)]
-                                                               (if (or (.isEmpty stack)
-                                                                       (< (int (.getCount stack)) n))
-                                                                 false
-                                                                 (do
-                                                                   (.shrink stack n)
-                                                                   true))))))
                        :player-drop-main-hand-item-at! (fn [this amount x y z]
                                                          (player-ops/drop-player-main-hand-item-at! adapter this amount x y z))
                        :player-count-item-by-id (fn [this item-id] (player-ops/count-player-item-by-id adapter this item-id))
@@ -315,28 +298,10 @@
                        :player-give-item-stack! (fn [this stack] (player-ops/give-player-item-stack! adapter this stack))
                        :player-spawn-entity-by-id! (fn [this entity-id speed] (player-ops/spawn-entity-by-id! adapter this entity-id speed))
                        :player-raytrace-block (fn [this reach fluid-source-only?] (player-ops/raytrace-block adapter this reach fluid-source-only?))
-                       :player-get-container-menu (fn [this] (player-ops/player-container-menu adapter this))}]
-      (extend-type Entity
-        entity/IEntityOps
-        (entity-distance-to-sqr [this x y z]
-          (.distanceToSqr ^Entity this (double x) (double y) (double z)))
-        (entity-get-x [this]
-          (let [^Vec3 pos (.position ^Entity this)]
-            (double (.x pos))))
-        (entity-get-y [this]
-          (let [^Vec3 pos (.position ^Entity this)]
-            (double (.y pos))))
-        (entity-get-z [this]
-          (let [^Vec3 pos (.position ^Entity this)]
-            (double (.z pos)))))
-      (extend Player entity/IEntityOps player-impl)
-      (extend ServerPlayer entity/IEntityOps player-impl)
-      (when-let [local-player-cls (class-access/local-player-class adapter)]
-        (extend local-player-cls entity/IEntityOps player-impl))
-      (extend Inventory entity/IEntityOps
-        {:inventory-get-player (fn [this] (menu-inventory-ops/inventory-owner adapter this))})
-      (extend AbstractContainerMenu entity/IEntityOps
-        {:menu-get-container-id (fn [this] (menu-inventory-ops/menu-container-id adapter this))})
+                       :player-get-container-menu (fn [this] (player-ops/player-container-menu adapter this))
+                       :inventory-get-player (fn [this] (menu-inventory-ops/inventory-owner adapter this))
+                       :menu-get-container-id (fn [this] (menu-inventory-ops/menu-container-id adapter this))}]
+      (entity/install-entity-ops! player-impl "mc1201")
       (log/info "mc1201 shared entity protocols initialized"))))
 
 (defn- install-resource-factory! []
@@ -355,47 +320,6 @@
   []
   (install-resource-factory!)
   (log/info "mc1201 shared resource factory initialized"))
-
-(defn install-item-factories-only!
-  "Install only item var-root factories, without protocol extensions.
-
-  This is bootstrap-safe and useful for incremental migration on sensitive loaders."
-  [item-stack-of-fn create-item-stack-by-id-fn item-stack-empty?-fn]
-  (install-when! item-factories-installed?
-    (item/install-item-factories!
-      {:item-factory (fn [nbt-tag] (item-stack-of-fn nbt-tag))
-       :item-stack-resolver (fn [item-id count]
-                              (let [stack (create-item-stack-by-id-fn (str item-id) (int count))]
-                                (when (and stack (not (item-stack-empty?-fn stack)))
-                                  stack)))
-       :item-tag-checker (fn [stack tag-str]
-                           (try
-                             (let [tag-str (str tag-str)
-                                   colon (.indexOf tag-str ":")
-                                   ns (if (pos? colon) (.substring tag-str 0 (int colon)) "minecraft")
-                                   path (if (pos? colon) (.substring tag-str (inc (int colon))) tag-str)
-                                   rl (ResourceLocation. ns path)
-                                   tag-key (net.minecraft.tags.TagKey/create
-                                            net.minecraft.core.registries.Registries/ITEM rl)]
-                               (boolean (.is ^ItemStack stack tag-key)))
-                             (catch Throwable _ false)))
-       :tag-item-resolver (fn [tag-str count]
-                           (try
-                             (let [tag-str (str tag-str)
-                                   colon (.indexOf tag-str ":")
-                                   ns (if (pos? colon) (.substring tag-str 0 (int colon)) "minecraft")
-                                   path (if (pos? colon) (.substring tag-str (inc (int colon))) tag-str)
-                                   rl (ResourceLocation. ns path)
-                                   tag-key (net.minecraft.tags.TagKey/create
-                                            net.minecraft.core.registries.Registries/ITEM rl)
-                                   items (.iterator (.getTagOrEmpty net.minecraft.core.registries.BuiltInRegistries/ITEM tag-key))]
-                               (when (.hasNext items)
-                                 (let [^Item item (.value ^net.minecraft.core.Holder (.next items))
-                                       stack (ItemStack. item (int count))]
-                                   stack)))
-                             (catch Throwable _ nil)))}
-      "mc1201")
-    (log/info "mc1201 shared item factories initialized")))
 
 (defn install-be-fns-only!
   "Install only block-entity related var-root function hooks.

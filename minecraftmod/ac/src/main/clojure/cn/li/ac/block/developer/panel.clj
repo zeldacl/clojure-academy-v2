@@ -425,7 +425,7 @@
 
 (defn- player-holding-magnetic-coil? [player]
   (and player
-       (satisfies? entity/IEntityOps player)
+       (entity/entity-ops-available?)
        (= special-items/magnetic-coil-item-id (entity/player-get-main-hand-item-id player))))
 
 (defn- right-panel-mode

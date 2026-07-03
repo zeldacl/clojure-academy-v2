@@ -1,103 +1,61 @@
 (ns cn.li.mcmod.platform.entity
-  "Platform-neutral entity utilities.
+  "Entity/Player operations via Framework function map — pure relay layer, no MC dependencies."
+  (:require [cn.li.mcmod.framework :as fw]))
 
-  This namespace defines a protocol for entity/player/menu operations that
-  platform adapters (forge/fabric) must implement. Avoid importing any
-  `net.minecraft.*` classes here so this namespace can be compiled without
-  Minecraft on the classpath."
-  (:require [cn.li.mcmod.framework :as fw]
-            [cn.li.mcmod.platform.runtime :as prt]))
+(def entity-ops-keys
+  #{:entity-distance-to-sqr :entity-get-x :entity-get-y :entity-get-z
+    :player-get-level :player-creative? :player-spectator? :player-get-name :player-get-uuid
+    :player-get-main-hand-item-id :player-get-main-hand-item-count
+    :player-get-main-hand-item-stack :player-main-hand-placeable-block?
+    :player-place-main-hand-block-at-hit! :player-consume-main-hand-item!
+    :player-drop-main-hand-item-at! :player-count-item-by-id :player-consume-item-by-id!
+    :player-give-item-stack! :player-spawn-entity-by-id!
+    :player-raytrace-block :player-get-container-menu
+    :entity-get-type-id-fn})
 
-(defprotocol IEntityOps
-  (entity-distance-to-sqr [entity x y z]
-    "Calculate squared distance from entity to coordinates: returns double")
+(defn install-entity-ops!
+  [ops-map _label]
+  (when-let [fw-atom (fw/fw-atom)] (swap! fw-atom assoc-in [:platform :entity-ops] ops-map)) nil)
 
-  (entity-get-x [entity]
-    "Return entity X coordinate as double")
+(defn entity-ops-available? [] (boolean (get-in @(fw/fw-atom) [:platform :entity-ops])))
+(defn current-ops           [] (get-in @(fw/fw-atom) [:platform :entity-ops]))
 
-  (entity-get-y [entity]
-    "Return entity Y coordinate as double")
+(defn- call [k & args] (when-let [f (get (current-ops) k)] (apply f args)))
 
-  (entity-get-z [entity]
-    "Return entity Z coordinate as double")
+(defn entity-distance-to-sqr [e x y z] (call :entity-distance-to-sqr e x y z))
+(defn entity-get-x           [e]       (call :entity-get-x e))
+(defn entity-get-y           [e]       (call :entity-get-y e))
+(defn entity-get-z           [e]       (call :entity-get-z e))
+(defn player-get-level               [p]       (call :player-get-level p))
+(defn player-creative?               [p]       (call :player-creative? p))
+(defn player-spectator?              [p]       (call :player-spectator? p))
+(defn player-get-name                [p]       (call :player-get-name p))
+(defn player-get-uuid                [p]       (call :player-get-uuid p))
+(defn player-get-main-hand-item-id   [p]       (call :player-get-main-hand-item-id p))
+(defn player-get-main-hand-item-count [p]      (call :player-get-main-hand-item-count p))
+(defn player-get-main-hand-item-stack [p]      (call :player-get-main-hand-item-stack p))
+(defn player-main-hand-placeable-block? [p]   (call :player-main-hand-placeable-block? p))
+(defn player-place-main-hand-block-at-hit! [p world-id x y z face] (call :player-place-main-hand-block-at-hit! p world-id x y z face))
+(defn player-consume-main-hand-item! [p n]   (call :player-consume-main-hand-item! p n))
+(defn player-drop-main-hand-item-at! [p n x y z] (call :player-drop-main-hand-item-at! p n x y z))
+(defn player-count-item-by-id        [p id]  (call :player-count-item-by-id p id))
+(defn player-consume-item-by-id!     [p id n](call :player-consume-item-by-id! p id n))
+(defn player-give-item-stack!        [p s]   (call :player-give-item-stack! p s))
+(defn player-spawn-entity-by-id!     [p eid sp] (call :player-spawn-entity-by-id! p eid sp))
+(defn player-raytrace-block          [p r f?](call :player-raytrace-block p r f?))
+(defn player-get-container-menu      [p]     (call :player-get-container-menu p))
 
-  (player-get-level [player]
-    "Return the Level/World for a player")
+;; Backward-compatible aliases (used by mcmod/ac callers expecting old protocol names)
+(defn inventory-get-player  [inv] (call :inventory-get-player inv))
+(defn menu-get-container-id [menu] (call :menu-get-container-id menu))
 
-  (player-creative? [player]
-    "Return true when the player is in a creative-like mode")
+;; Entity type ID lookup (was protocol method with [world-id entity-uuid] arity)
+(defn entity-get-type-id* [world-id entity-uuid]
+  (when-let [f (get (current-ops) :entity-get-type-id-fn)]
+    (f world-id entity-uuid)))
 
-  (player-spectator? [player]
-    "Return true when the player is a spectator")
-
-  (player-get-name [player]
-    "Return the player's name as a string")
-
-  (player-get-uuid [player]
-    "Return the player's UUID")
-
-  (player-get-main-hand-item-id [player]
-    "Return registry ID of main-hand item as string (namespace:path), or nil when empty")
-
-  (player-get-main-hand-item-count [player]
-    "Return stack count of player's main-hand item. Returns 0 when empty")
-
-  (player-get-main-hand-item-stack [player]
-    "Return the raw ItemStack from the player's main hand, or nil when empty.
-    Callers must use cn.li.mcmod.platform.item functions to inspect the stack.")
-
-  (player-main-hand-placeable-block? [player]
-    "Return true when player's main-hand item is a placeable block item.")
-
-  (player-place-main-hand-block-at-hit! [player world-id x y z face]
-    "Try place one block from main hand at resolved target position.
-    Returns {:placed? boolean :fallback-drop? boolean :pos {:x int :y int :z int} :face keyword}.")
-
-  (player-consume-main-hand-item! [player amount]
-    "Consume amount from main-hand item unless creative. Returns true when consumed/allowed")
-
-  (player-drop-main-hand-item-at! [player amount x y z]
-    "Consume amount from main-hand item and spawn dropped item at world coordinates.
-    Returns true when operation succeeds or is bypassed in creative mode")
-
-  (player-count-item-by-id [player item-id]
-    "Count all items with registry id `item-id` in player's inventory. Returns int.")
-
-  (player-consume-item-by-id! [player item-id amount]
-    "Consume `amount` items with registry id `item-id` from player's inventory. Returns boolean.")
-
-  (player-give-item-stack! [player item-stack]
-    "Insert `item-stack` into player's inventory, dropping overflow in world. Returns boolean.")
-
-  (player-spawn-entity-by-id! [player entity-id speed]
-    "Spawn an entity by registry id (`namespace:path`) from player's viewpoint. Returns boolean.")
-
-  (player-raytrace-block [player reach fluid-source-only?]
-    "Raytrace block hit from player view.
-    Returns nil or map {:hit-pos {:x :y :z} :place-pos {:x :y :z} :block-id string}.")
-
-  (player-get-container-menu [player]
-    "Return the player's open container/menu")
-
-  (inventory-get-player [inventory]
-    "Return the Player owning the Inventory")
-
-  (menu-get-container-id [menu]
-    "Return the containerId (window id) from an AbstractContainerMenu"))
-
-(def ^:private ^:dynamic *entity-get-type-id-fn* nil)
-
-(defn install-entity-type-id-fn!
-  [f label]
-  (prt/install-impl! #'*entity-get-type-id-fn* f (or label "entity-type-id")))
-
-(defn entity-type-id-available? []
-  (prt/impl-available? #'*entity-get-type-id-fn*))
-
-(defn call-with-entity-type-id-fn [f thunk]
-  (binding [*entity-get-type-id-fn* f] (thunk)))
-
-(defn entity-get-type-id*
-  [world-id entity-uuid]
-  (when-let [f *entity-get-type-id-fn*]
-    (some-> (f world-id entity-uuid) str)))
+;; Entity type ID — separate path
+(defn install-entity-type-id-fn! [f _label]
+  (when-let [fw-atom (fw/fw-atom)] (swap! fw-atom assoc-in [:platform :entity-ops :entity-get-type-id-fn] f)) nil)
+(defn entity-type-id-fn-available? []
+  (boolean (get-in @(fw/fw-atom) [:platform :entity-ops :entity-get-type-id-fn])))

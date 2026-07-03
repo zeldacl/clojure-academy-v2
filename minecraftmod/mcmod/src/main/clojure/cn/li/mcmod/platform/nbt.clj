@@ -1,183 +1,84 @@
 (ns cn.li.mcmod.platform.nbt
-  "Platform-agnostic NBT (Named Binary Tag) abstraction layer."
-  (:require [cn.li.mcmod.platform.runtime :as prt]))
+  "NBT operations via Framework function map — pure relay layer, no MC dependencies.
 
-;; ============================================================================
-;; NBT Compound Protocol
-;; ============================================================================
+   All MC interop (CompoundTag/ListTag) is installed by mc-1.20.1/installer_core.clj.
+   Content code calls wrapper functions; they lookup from [:platform :nbt-ops]."
+  (:require [cn.li.mcmod.framework :as fw]))
 
-(defprotocol INBTCompound
-  "Protocol for NBT compound tag operations (key-value storage)"
-  
-  (nbt-set-int! [this key value]
-    "Set an integer value. Returns the compound for chaining.")
-  
-  (nbt-get-int [this key]
-    "Get an integer value. Returns 0 if key doesn't exist.")
-  
-  (nbt-set-string! [this key value]
-    "Set a string value. Returns the compound for chaining.")
-  
-  (nbt-get-string [this key]
-    "Get a string value. Returns empty string if key doesn't exist.")
-  
-  (nbt-set-boolean! [this key value]
-    "Set a boolean value. Returns the compound for chaining.")
-  
-  (nbt-get-boolean [this key]
-    "Get a boolean value. Returns false if key doesn't exist.")
-  
-  (nbt-set-double! [this key value]
-    "Set a double value. Returns the compound for chaining.")
-  
-  (nbt-get-double [this key]
-    "Get a double value. Returns 0.0 if key doesn't exist.")
-  
-  (nbt-set-tag! [this key tag]
-    "Set a nested NBT tag (compound or list). Returns the compound for chaining.")
-  
-  (nbt-get-tag [this key]
-    "Get a nested NBT tag. Returns nil if key doesn't exist.")
-  
-    (nbt-get-compound [this key]
-      "Get a nested compound tag. Returns compound or nil if key doesn't exist.")
-  
-  (nbt-get-list [this key]
-    "Get a nested list tag. Returns list or nil if key doesn't exist.")
-  
-  (nbt-has-key? [this key]
-    "Check if a key exists in the compound.")
+;; Contract keys
+(def nbt-compound-keys #{:nbt-set-int! :nbt-get-int :nbt-set-string! :nbt-get-string
+                          :nbt-set-boolean! :nbt-get-boolean :nbt-set-double! :nbt-get-double
+                          :nbt-set-tag! :nbt-get-tag :nbt-get-compound :nbt-get-list
+                          :nbt-has-key? :nbt-set-float! :nbt-get-float
+                          :nbt-set-long! :nbt-get-long})
+(def nbt-list-keys #{:nbt-append! :nbt-list-size :nbt-list-get :nbt-list-get-compound})
+(def nbt-factory-keys #{:create-compound :create-list})
 
-  (nbt-set-float! [this key value]
-    "Set a float value. Returns the compound for chaining.")
-
-  (nbt-get-float [this key]
-    "Get a float value. Returns 0.0f if key doesn't exist.")
-
-  (nbt-set-long! [this key value]
-    "Set a long value. Returns the compound for chaining.")
-
-  (nbt-get-long [this key]
-    "Get a long value. Returns 0L if key doesn't exist."))
-
-;; ============================================================================
-;; NBT List Protocol
-;; ============================================================================
-
-(defprotocol INBTList
-  "Protocol for NBT list tag operations (ordered collection)"
-  
-  (nbt-append! [this element]
-    "Append an element to the list. Returns the list for chaining.")
-  
-  (nbt-list-size [this]
-    "Get the number of elements in the list.")
-  
-  (nbt-list-get [this index]
-    "Get element at index. Returns nil if out of bounds.")
-  
-  (nbt-list-get-compound [this index]
-    "Get compound tag at index. Returns compound or nil if out of bounds."))
-
-;; ============================================================================
-;; Platform Factory Registration
-;; ============================================================================
-
-(def ^:private ^:dynamic *nbt-factory* nil)
-(def ^:private ^:dynamic *nbt-has-key-fn* nil)
-
-(defn install-nbt-factory!
-  [factory-map label]
-  (prt/install-impl! #'*nbt-factory* factory-map (or label "nbt-factory")))
+;; Installation
+(defn install-nbt-ops!
+  "Install NBT operations map. Keys match nbt-compound-keys + nbt-list-keys + nbt-factory-keys."
+  [ops-map _label]
+  (when-let [fw-atom (fw/fw-atom)] (swap! fw-atom assoc-in [:platform :nbt-ops] ops-map)) nil)
 
 (defn install-nbt-has-key-fn!
-  [f label]
-  (prt/install-impl! #'*nbt-has-key-fn* f (or label "nbt-has-key")))
+  "Install a single has-key? override function at [:platform :nbt-ops :nbt-has-key?]."
+  [f _label]
+  (when-let [fw-atom (fw/fw-atom)] (swap! fw-atom assoc-in [:platform :nbt-ops :nbt-has-key?] f)) nil)
 
-(defn call-with-nbt-factory [factory-map f]
-  (binding [*nbt-factory* factory-map] (f)))
+;; Queries
+(defn nbt-ops-available? [] (boolean (get-in @(fw/fw-atom) [:platform :nbt-ops])))
+(defn current-ops [] (get-in @(fw/fw-atom) [:platform :nbt-ops]))
 
-(defn call-with-nbt-runtime
-  "Test/install helper binding factory map and optional has-key fn."
-  [{:keys [factory has-key-fn]} f]
-  (binding [*nbt-factory* factory
-            *nbt-has-key-fn* has-key-fn]
-    (f)))
+;; Helper
+(defn- call [k & args]
+  (when-let [f (get (current-ops) k)]
+    (apply f args)))
 
-;; ============================================================================
-;; Factory Functions
-;; ============================================================================
+;; CompoundTag wrappers
+(defn nbt-set-int!      [c k v] (call :nbt-set-int! c k v))
+(defn nbt-get-int       [c k]   (call :nbt-get-int c k))
+(defn nbt-set-string!   [c k v] (call :nbt-set-string! c k v))
+(defn nbt-get-string    [c k]   (call :nbt-get-string c k))
+(defn nbt-set-boolean!  [c k v] (call :nbt-set-boolean! c k v))
+(defn nbt-get-boolean   [c k]   (call :nbt-get-boolean c k))
+(defn nbt-set-double!   [c k v] (call :nbt-set-double! c k v))
+(defn nbt-get-double    [c k]   (call :nbt-get-double c k))
+(defn nbt-set-tag!      [c k tag] (call :nbt-set-tag! c k tag))
+(defn nbt-get-tag       [c k]   (call :nbt-get-tag c k))
+(defn nbt-get-compound  [c k]   (call :nbt-get-compound c k))
+(defn nbt-get-list      [c k]   (call :nbt-get-list c k))
+(defn nbt-has-key?      [c k]   (call :nbt-has-key? c k))
+(defn nbt-set-float!    [c k v] (call :nbt-set-float! c k v))
+(defn nbt-get-float     [c k]   (call :nbt-get-float c k))
+(defn nbt-set-long!     [c k v] (call :nbt-set-long! c k v))
+(defn nbt-get-long      [c k]   (call :nbt-get-long c k))
 
-(defn create-nbt-compound
-  "Create a new empty NBT compound tag.
-  
-  Requires platform to be initialized (*nbt-factory* must be set).
-  
-  Returns: INBTCompound implementation from current platform
-  Throws: ex-info if platform not initialized"
-  []
-  (if-let [factory *nbt-factory*]
-    (if-let [create-fn (:create-compound factory)]
-      (create-fn)
-      (throw (ex-info "NBT factory missing :create-compound function"
-                      {:factory factory})))
-    (throw (ex-info "NBT factory not initialized - platform must call init-platform! first"
-                    {:hint "Check that platform mod initialization calls platform-impl/init-platform!"}))))
+;; ListTag wrappers
+(defn nbt-append!          [lst el] (call :nbt-append! lst el))
+(defn nbt-list-size        [lst]    (call :nbt-list-size lst))
+(defn nbt-list-get         [lst i]  (call :nbt-list-get lst i))
+(defn nbt-list-get-compound [lst i] (call :nbt-list-get-compound lst i))
 
-(defn create-nbt-list
-  "Create a new empty NBT list tag.
-  
-  Requires platform to be initialized (*nbt-factory* must be set).
-  
-  Returns: INBTList implementation from current platform
-  Throws: ex-info if platform not initialized"
-  []
-  (if-let [factory *nbt-factory*]
-    (if-let [create-fn (:create-list factory)]
-      (create-fn)
-      (throw (ex-info "NBT factory missing :create-list function"
-                      {:factory factory})))
-    (throw (ex-info "NBT factory not initialized - platform must call init-platform! first"
-                    {:hint "Check that platform mod initialization calls platform-impl/init-platform!"}))))
+;; Factory wrappers
+(defn create-nbt-compound []
+  (if-let [f (get (current-ops) :create-compound)]
+    (f)
+    (throw (ex-info "NBT ops not installed" {:key :create-compound}))))
+(defn create-nbt-list []
+  (if-let [f (get (current-ops) :create-list)]
+    (f)
+    (throw (ex-info "NBT ops not installed" {:key :create-list}))))
 
-(defn nbt-has-key-safe?
-  "Check whether key exists in NBT compound.
-
-Uses platform override when installed; otherwise falls back to protocol dispatch."
-  [this key]
-  (if-let [f *nbt-has-key-fn*]
-    (boolean (f this key))
-    (nbt-has-key? this key)))
-
-;; ============================================================================
-;; Utility Functions
-;; ============================================================================
-
-(defn nbt-compound-to-map
-  "Convert an NBT compound to a Clojure map (shallow conversion).
-  
-  Only converts primitive types directly stored in the compound.
-  Nested compounds/lists remain as NBT objects."
-  [compound keys]
-  (into {}
-        (for [k keys]
-          [k (cond
-               (nbt-has-key-safe? compound (str k "-int"))
-               (nbt-get-int compound (str k "-int"))
-               
-               (nbt-has-key-safe? compound (str k "-str"))
-               (nbt-get-string compound (str k "-str"))
-               
-               (nbt-has-key-safe? compound (str k "-bool"))
-               (nbt-get-boolean compound (str k "-bool"))
-               
-               (nbt-has-key-safe? compound (str k "-double"))
-               (nbt-get-double compound (str k "-double"))
-               
-               :else
-               (nbt-get-tag compound (name k)))])))
-
-(defn factory-initialized?
-  "Check if the NBT factory has been initialized by platform code."
-  []
-  (some? *nbt-factory*))
+;; Convenience
+(defn nbt-has-key-safe? [compound key]
+  (try (boolean (nbt-has-key? compound key)) (catch Throwable _ false)))
+(defn nbt-compound-to-map [compound]
+  (let [result (java.util.HashMap.)]
+    (if-let [f (get (current-ops) :nbt-get-all-keys)]
+      (doseq [k (f compound)] (.put result k (nbt-get-tag compound k)))
+      ;; Without :nbt-get-all-keys installed, can't enumerate keys from pure relay layer
+      ;; (MC class .keySet would require import not available in mcmod)
+      )
+    (into {} result)))
+(defn factory-initialized? []
+  (boolean (and (get (current-ops) :create-compound) (get (current-ops) :create-list))))

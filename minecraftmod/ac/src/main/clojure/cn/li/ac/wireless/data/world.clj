@@ -67,7 +67,7 @@
   ([world saved-data]
    (when saved-data
      (cond
-       (and world (satisfies? nbt/INBTCompound saved-data))
+       (and world saved-data)
        (persistence/world-data-from-nbt world saved-data)
 
        (satisfies? IWiSavedData saved-data)

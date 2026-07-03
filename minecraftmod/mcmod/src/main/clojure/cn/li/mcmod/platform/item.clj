@@ -1,152 +1,62 @@
 (ns cn.li.mcmod.platform.item
-  "Platform-agnostic ItemStack abstraction layer."
-  (:require [cn.li.mcmod.platform.runtime :as prt]))
+  "Item operations via Framework function map — pure relay layer, no MC dependencies."
+  (:require [cn.li.mcmod.framework :as fw]))
 
-;; ============================================================================
-;; ItemStack Protocol
-;; ============================================================================
+(def item-ops-keys
+  #{:item-is-empty? :item-get-count :item-get-max-stack-size :item-is-equal?
+    :item-save-to-nbt :item-get-or-create-tag :item-get-max-damage
+    :item-set-damage! :item-get-damage :item-get-item :item-get-tag-compound :item-split
+    :item-get-description-id :item-get-registry-name
+    :create-item-from-nbt :create-item-stack-by-id :item-stack-empty? :item-registry-name})
 
-(defprotocol IItemStack
-  "Protocol for ItemStack operations.
-  
-  Platform implementations extend this to their ItemStack classes."
-  
-  (item-is-empty? [this]
-    "Check if ItemStack is empty (air/null)")
-  
-  (item-get-count [this]
-    "Get item count in stack. Returns int.")
-  
-  (item-get-max-stack-size [this]
-    "Get maximum stack size for this item. Returns int.")
-  
-  (item-is-equal? [this other]
-    "Check if two ItemStacks are same item (ignoring count). Returns boolean.")
-  
-  (item-save-to-nbt [this nbt]
-    "Write ItemStack to NBT compound. Returns nbt for chaining.")
-  
-  (item-get-or-create-tag [this]
-    "Get NBT tag compound from ItemStack, creating if necessary. Returns INBTCompound.")
-  
-  (item-get-max-damage [this]
-    "Get maximum damage value for this item. Returns int.")
-  
-  (item-set-damage! [this damage]
-    "Set item damage value for durability bar display. Returns nil.")
+(defn install-item-ops!
+  [ops-map _label]
+  (when-let [fw-atom (fw/fw-atom)] (swap! fw-atom assoc-in [:platform :item-ops] ops-map)) nil)
 
-  (item-get-damage [this]
-    "Get current damage value for this item. Returns int.")
+(defn item-ops-available? [] (boolean (get-in @(fw/fw-atom) [:platform :item-ops])))
+(defn factory-initialized? [] (item-ops-available?))  ;; backward-compatible alias
+(defn current-ops         [] (get-in @(fw/fw-atom) [:platform :item-ops]))
 
-  (item-get-item [this]
-    "Get the Item type from this ItemStack. Returns Item object.")
+(defn- call [k & args] (when-let [f (get (current-ops) k)] (apply f args)))
 
-  (item-get-tag-compound [this]
-    "Get NBT tag compound from ItemStack (may be null). Returns NBT or nil.")
+;; ItemStack wrappers
+(defn item-is-empty?          [stack]        (call :item-is-empty? stack))
+(defn item-get-count          [stack]        (call :item-get-count stack))
+(defn item-get-max-stack-size [stack]        (call :item-get-max-stack-size stack))
+(defn item-is-equal?          [stack other]  (call :item-is-equal? stack other))
+(defn item-save-to-nbt        [stack nbt]    (call :item-save-to-nbt stack nbt))
+(defn item-get-or-create-tag  [stack]        (call :item-get-or-create-tag stack))
+(defn item-get-max-damage     [stack]        (call :item-get-max-damage stack))
+(defn item-set-damage!        [stack dmg]    (call :item-set-damage! stack dmg))
+(defn item-get-damage         [stack]        (call :item-get-damage stack))
+(defn item-get-item           [stack]        (call :item-get-item stack))
+(defn item-get-tag-compound   [stack]        (call :item-get-tag-compound stack))
+(defn item-split              [stack amount] (call :item-split stack amount))
 
-  (item-split [this amount]
-    "Split this stack by `amount`, returning the taken stack (platform object)."))
+;; Item wrappers
+(defn item-get-description-id [item] (call :item-get-description-id item))
+(defn item-get-registry-name  [item] (call :item-get-registry-name item))
 
-;; ============================================================================
-;; Item Protocol (for Item objects, not ItemStack)
-;; ============================================================================
+;; Factory wrappers
+(defn create-item-from-nbt [nbt-tag]
+  (if-let [f (get (current-ops) :create-item-from-nbt)]
+    (f nbt-tag)
+    (throw (ex-info "Item ops not installed" {:key :create-item-from-nbt}))))
+(defn create-item-stack-by-id [item-id count]
+  (if-let [f (get (current-ops) :create-item-stack-by-id)]
+    (f item-id count)
+    (throw (ex-info "Item ops not installed" {:key :create-item-stack-by-id}))))
+;; Backward-compatible aliases
+(defn item-is-in-tag? [stack tag-str]
+  (if-let [f (get (current-ops) :item-tag-checker)]
+    (f stack tag-str)
+    false))
+(defn create-item-stack-from-tag [tag-str count]
+  (if-let [f (get (current-ops) :tag-item-resolver)]
+    (f tag-str count)
+    nil))
 
-(defprotocol IItem
-  "Protocol for Item operations (the item type, not the stack)."
-
-  (item-get-description-id [this]
-    "Get the translation key/description ID for this item. Returns String.")
-
-  (item-get-registry-name [this]
-    "Get the Minecraft registry path/name for this item. Returns String or nil."))
-
-;; ============================================================================
-;; Platform Factory Registration
-;; ============================================================================
-
-(def ^:private ^:dynamic *item-factory* nil)
-(def ^:private ^:dynamic *item-stack-resolver* nil)
-(def ^:private ^:dynamic *item-tag-checker* nil)
-(def ^:private ^:dynamic *tag-item-resolver* nil)
-
-(defn install-item-factories!
-  [{:keys [item-factory item-stack-resolver item-tag-checker tag-item-resolver] :as factories} label]
-  (when item-factory
-    (prt/install-impl! #'*item-factory* item-factory (str (or label "item") "-factory")))
-  (when item-stack-resolver
-    (prt/install-impl! #'*item-stack-resolver* item-stack-resolver (str (or label "item") "-resolver")))
-  (when item-tag-checker
-    (prt/install-impl! #'*item-tag-checker* item-tag-checker (str (or label "item") "-tag-checker")))
-  (when tag-item-resolver
-    (prt/install-impl! #'*tag-item-resolver* tag-item-resolver (str (or label "tag") "-item-resolver")))
-  nil)
-
-(defn call-with-item-factories [factories f]
-  (binding [*item-factory* (or (:item-factory factories) *item-factory*)
-            *item-stack-resolver* (or (:item-stack-resolver factories) *item-stack-resolver*)]
-    (f)))
-
-;; ============================================================================
-;; Factory Functions
-;; ============================================================================
-
-(defn create-item-from-nbt
-  "Create ItemStack from NBT compound.
-  
-  Args:
-  - nbt: INBTCompound containing ItemStack data
-  
-  Returns: IItemStack implementation from current platform
-  Throws: ex-info if platform not initialized"
-  [nbt]
-  (if-let [factory *item-factory*]
-    (factory nbt)
-    (throw (ex-info "ItemStack factory not initialized - platform must call init-platform! first"
-                    {:hint "Check that platform mod initialization calls platform-impl/init-platform!"}))))
-
-(defn create-item-stack-by-id
-  "Create ItemStack from registry id and count using platform resolver.
-
-  Returns nil if resolver is unavailable or item cannot be resolved."
-  [item-id count]
-  (let [n (int (or count 1))]
-    (when (and (string? item-id) (pos? n) *item-stack-resolver*)
-      (*item-stack-resolver* item-id n))))
-
-;; ============================================================================
-;; Utility Functions
-;; ============================================================================
-
-(defn factory-initialized?
-  "Check if the ItemStack factory has been initialized by platform code."
-  []
-  (some? *item-factory*))
-
-(defn resolver-initialized?
-  "Check if item-id resolver has been initialized by platform code."
-  []
-  (some? *item-stack-resolver*))
-
-;; ============================================================================
-;; Tag Query Functions (1.20.1 recommended approach)
-;; ============================================================================
-
-(defn item-is-in-tag?
-  "Check if an ItemStack's item belongs to a tag.
-  tag-str: e.g. \"minecraft:copper_ores\" or \"forge:ores/tin\""
-  [stack tag-str]
-  (when (and stack *item-tag-checker* (string? tag-str))
-    (try (boolean (*item-tag-checker* stack tag-str))
-         (catch Exception _ false))))
-
-(defn create-item-stack-from-tag
-  "Create an ItemStack from the first item in a tag.
-  tag-str: e.g. \"forge:ingots/copper\"
-  count: stack size (default 1)
-  Returns nil if tag is empty or resolver not installed."
-  [tag-str count]
-  (when (and *tag-item-resolver* (string? tag-str))
-    (try (*tag-item-resolver* tag-str (int (or count 1)))
-         (catch Exception _ nil))))
-
-;; `item-split` is implemented per-platform via the IItemStack protocol
+(defn item-stack-empty? [stack]
+  (if-let [f (get (current-ops) :item-stack-empty?)]
+    (f stack)
+    (throw (ex-info "Item ops not installed" {:key :item-stack-empty?}))))
