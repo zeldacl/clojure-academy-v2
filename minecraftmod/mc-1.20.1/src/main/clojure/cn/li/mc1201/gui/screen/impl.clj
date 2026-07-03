@@ -10,7 +10,8 @@
             [cn.li.mcmod.gui.owner-contract :as owner-contract]
             [cn.li.mcmod.gui.registry :as gui-reg]
             [cn.li.mcmod.util.log :as log])
-  (:import [net.minecraft.client.gui GuiGraphics]
+  (:import [cn.li.mc1201.shim DelegatingCGuiContainerScreen]
+           [net.minecraft.client.gui GuiGraphics]
            [cn.li.mc1201.gui CGuiContainerScreen]))
 
 (def ^:private inv-tab-id "inv")
@@ -116,70 +117,64 @@
         left (atom 0)
         top (atom 0)
         target-size (resolve-image-size cgui-screen)
-        ^CGuiContainerScreen screen (proxy [CGuiContainerScreen] [menu player-inventory title]
+        ^DelegatingCGuiContainerScreen screen (doto (DelegatingCGuiContainerScreen. menu player-inventory title)
+      (.withRender (fn [^DelegatingCGuiContainerScreen s ^GuiGraphics gg mouse-x mouse-y partial-ticks]
+        (when root
+          (with-screen-cgui menu "CGUI frame-tick error"
+            #(do
+               (cgui-rt/resize-root! root (.getXSize s) (.getYSize s))
+               (cgui-rt/frame-tick! root {:partial-ticks partial-ticks}))))
+        (if (slots-visible? cgui-screen)
+          (.callSuperRender s gg (int mouse-x) (int mouse-y) (float partial-ticks))
+          (do
+            (.callSuperRenderBackground s gg)
+            (sync-root-bounds! s left top)
+            ;; Apply root CENTER/CENTER alignment (matching upstream
+            ;; CGuiScreen full-screen overlay behavior).
+            (when root
+              (apply-root-alignment! root left top (.-width s) (.-height s)))
+            (when root
+              (with-screen-cgui menu "CGUI non-slot tab render error"
+                #(cgui-rt/render-tree! gg root @left @top)))
+            (.callSuperRenderTooltip s gg (int mouse-x) (int mouse-y))))
+        (when on-render-tail!
+          (with-screen-client-owner menu
+            #(on-render-tail! s gg mouse-x mouse-y partial-ticks)))))
 
-      (render [^GuiGraphics gg mouse-x mouse-y partial-ticks]
-        (let [^CGuiContainerScreen s this]
-          (when root
-            (with-screen-cgui menu "CGUI frame-tick error"
-              #(do
-                 (cgui-rt/resize-root! root (.getXSize s) (.getYSize s))
-                 (cgui-rt/frame-tick! root {:partial-ticks partial-ticks}))))
-          (if (slots-visible? cgui-screen)
-            (.callSuperRender s gg (int mouse-x) (int mouse-y) (float partial-ticks))
-            (do
-              (.callSuperRenderBackground s gg)
-              (sync-root-bounds! s left top)
-              ;; Apply root CENTER/CENTER alignment (matching upstream
-              ;; CGuiScreen full-screen overlay behavior).
-              (when root
-                (apply-root-alignment! root left top (.-width s) (.-height s)))
-              (when root
-                (with-screen-cgui menu "CGUI non-slot tab render error"
-                  #(cgui-rt/render-tree! gg root @left @top)))
-              (.callSuperRenderTooltip s gg (int mouse-x) (int mouse-y))))
-          (when on-render-tail!
-            (with-screen-client-owner menu
-              #(on-render-tail! s gg mouse-x mouse-y partial-ticks)))))
+      (.withRenderLabels (fn [^DelegatingCGuiContainerScreen _s ^GuiGraphics _gg _mouse-x _mouse-y]
+        (comment "skip labels")))
 
-      (renderLabels [^GuiGraphics _gg _mouse-x _mouse-y]
-        (comment "skip labels"))
-
-      (renderBg [^GuiGraphics gg _partial-ticks _mouse-x _mouse-y]
-        (let [^CGuiContainerScreen s this]
-          (sync-root-bounds! s left top)
-          ;; Apply root CENTER/CENTER alignment.
-          (when root
-            (apply-root-alignment! root left top (.-width s) (.-height s))))
+      (.withRenderBg (fn [^DelegatingCGuiContainerScreen s ^GuiGraphics gg _partial-ticks _mouse-x _mouse-y]
+        (sync-root-bounds! s left top)
+        ;; Apply root CENTER/CENTER alignment.
+        (when root
+          (apply-root-alignment! root left top (.-width s) (.-height s)))
         (when root
           (with-screen-cgui menu "CGUI renderBg error"
-            #(cgui-rt/render-tree! gg root @left @top))))
+            #(cgui-rt/render-tree! gg root @left @top)))))
 
-      (mouseClicked [mouse-x mouse-y button]
+      (.withMouseClicked (fn [^DelegatingCGuiContainerScreen s mouse-x mouse-y button]
         (when root
           (with-screen-cgui menu "CGUI mouse-click error"
             #(cgui-rt/mouse-click! root (int mouse-x) (int mouse-y) @left @top button)))
-        (let [^CGuiContainerScreen s this]
-          (if (slots-enabled-for-click? cgui-screen)
-            (.callSuperMouseClicked s mouse-x mouse-y button)
-            true)))
+        (if (slots-enabled-for-click? cgui-screen)
+          (.callSuperMouseClicked s mouse-x mouse-y button)
+          true)))
 
-      (mouseReleased [mouse-x mouse-y button]
-        (let [^CGuiContainerScreen s this]
-          (if (slots-enabled-for-click? cgui-screen)
-            (.callSuperMouseReleased s mouse-x mouse-y button)
-            true)))
+      (.withMouseReleased (fn [^DelegatingCGuiContainerScreen s mouse-x mouse-y button]
+        (if (slots-enabled-for-click? cgui-screen)
+          (.callSuperMouseReleased s mouse-x mouse-y button)
+          true)))
 
-      (mouseDragged [mouse-x mouse-y button drag-x drag-y]
+      (.withMouseDragged (fn [^DelegatingCGuiContainerScreen s mouse-x mouse-y button drag-x drag-y]
         (when root
           (with-screen-cgui menu "CGUI mouse-drag error"
-            #(cgui-rt/mouse-drag! root (int mouse-x) (int mouse-y) @left @top)))
-        (let [^CGuiContainerScreen s this]
-          (if (slots-enabled-for-click? cgui-screen)
-            (.callSuperMouseDragged s mouse-x mouse-y button drag-x drag-y)
-            true)))
+            #(cgui-rt/mouse-drag! root (int mouse-x) (int mouse-y) (int drag-x) (int drag-y) @left @top)))
+        (if (slots-enabled-for-click? cgui-screen)
+          (.callSuperMouseDragged s mouse-x mouse-y button drag-x drag-y)
+          true)))
 
-      (keyPressed [key-code scan-code modifiers]
+      (.withKeyPressed (fn [^DelegatingCGuiContainerScreen s key-code scan-code modifiers]
         ;; Per-screen key hook — matches original LambdaLib2 TreeScreen.keyTyped:
         ;;   if (key == KEY_ESCAPE) Option(gui.getWidget("link_page")).map(_.component[Cover].end())
         ;;   else super.keyTyped(ch, key)
@@ -193,23 +188,21 @@
                   #(cgui-rt/key-input! root key-code scan-code (char 0))))
               (if owns-key?
                 true
-                (let [^CGuiContainerScreen s this]
-                  (.callSuperKeyPressed s key-code scan-code modifiers))))))
+                (.callSuperKeyPressed s key-code scan-code modifiers))))))
 
-      (charTyped [code-point modifiers]
+      (.withCharTyped (fn [^DelegatingCGuiContainerScreen s code-point modifiers]
         (let [owns-key? (and root (cgui-rt/focused-widget-owns-key? root))]
           (when root
             (with-screen-cgui menu "CGUI char-input error"
               #(cgui-rt/key-input! root 0 0 (char code-point))))
           (if owns-key?
             true
-            (let [^CGuiContainerScreen s this]
-              (.callSuperCharTyped s code-point modifiers)))))
+            (.callSuperCharTyped s code-point modifiers)))))
 
-      (removed []
+      (.withRemoved (fn [^DelegatingCGuiContainerScreen _s]
         (when root
           (with-screen-cgui menu "CGUI dispose error"
-            #(cgui-rt/dispose! root)))))]
+            #(cgui-rt/dispose! root))))))]
     (when target-size
       (let [[w h] target-size]
         (.setImageSize screen w h)))
@@ -217,15 +210,14 @@
 
 (defn fallback-container-screen
   [menu player-inventory title]
-  (proxy [CGuiContainerScreen] [menu player-inventory title]
-    (renderBg [^GuiGraphics gg _partial _mx _my]
-      (let [^CGuiContainerScreen s this
-            left (.getGuiLeft s)
+  (doto (DelegatingCGuiContainerScreen. menu player-inventory title)
+    (.withRenderBg (fn [^DelegatingCGuiContainerScreen s ^GuiGraphics gg _partial _mx _my]
+      (let [left (.getGuiLeft s)
             top (.getGuiTop s)
             right (+ left (.getXSize s))
             bottom (+ top (.getYSize s))]
         (.fill gg left top right bottom (unchecked-int 0xC0101010))
-        (.fill gg left top right bottom (unchecked-int 0xD0101010))))))
+        (.fill gg left top right bottom (unchecked-int 0xD0101010)))))))
 
 (defn create-screen-or-fallback
   [gui-id menu player-inventory title factory-fn-kw {:keys [on-render-tail!]}]

@@ -7,6 +7,7 @@
   (:require [cn.li.mc1201.datagen.recipe-core :as recipe-core]
             [cn.li.mcmod.config :as modid])
   (:import [cn.li.forge1201.recipe ModRecipeTypes]
+           [cn.li.mc1201.shim DelegatingFinishedRecipe]
            [com.google.gson JsonObject JsonPrimitive JsonArray JsonElement]
            [java.util.function Consumer]
            [net.minecraft.data.recipes FinishedRecipe]
@@ -44,12 +45,12 @@
         ^String mod-id modid/*mod-id*
         ^String recipe-id (recipe-core/normalize-recipe-id (:id recipe))
         ^ResourceLocation id (ResourceLocation. mod-id recipe-id)
-        finished (proxy [Object FinishedRecipe] []
-                   (getId [] id)
-                   (getType [] serializer)
-                   (serializeRecipe [] json-obj)
-                   (serializeAdvancement [] nil)
-                   (getAdvancementId [] nil))]
+        finished (DelegatingFinishedRecipe.
+                   (fn [] id)
+                   (fn [] serializer)
+                   (fn [] json-obj)
+                   (fn [] nil)
+                   (fn [] nil))]
     (.accept writer finished)))
 
 (defn custom-emitters

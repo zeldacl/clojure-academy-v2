@@ -5,7 +5,8 @@
             [cn.li.mcmod.gui.cgui-core :as cgui-core]
             [cn.li.mcmod.util.log :as log]
             [cn.li.forge1201.integration.recipe-query :as recipe-query])
-  (:import [net.minecraft.client.gui.screens Screen]
+  (:import [cn.li.mc1201.shim DelegatingScreen]
+           [net.minecraft.client.gui.screens Screen]
            [net.minecraft.client.gui GuiGraphics]
            [net.minecraft.network.chat Component]
            [net.minecraft.client Minecraft]
@@ -344,47 +345,56 @@
         top (atom 0)
         tick-counter (atom 0)
         resolved-log-label (or log-label title)]
-    (proxy [Screen] [(Component/literal title)]
-      (render [^GuiGraphics graphics mouse-x mouse-y partial-tick]
-        (render-cgui-screen! this graphics gui-widget left top partial-tick
-                             resolved-log-label tick-counter preview-item-atom preview-type-atom ref-width))
-      (mouseClicked [mouse-x mouse-y button]
-        (mouse-click-cgui! gui-widget left top mouse-x mouse-y button resolved-log-label))
-      (mouseDragged [mouse-x mouse-y button drag-x drag-y]
-        (if interactive?
-          (mouse-drag-cgui! gui-widget left top mouse-x mouse-y drag-x drag-y resolved-log-label)
-          false))
-      (mouseMoved [mouse-x mouse-y]
-        ;; Track mouse position relative to CGUI root for hover detection.
-        ;; Subtract left/top offsets so frame handlers can compare against
-        ;; widget-local coordinates (0,0 = top-left of root widget).
-        (swap! (:metadata gui-widget) assoc
-               :last-mouse-x (int (- mouse-x @left))
-               :last-mouse-y (int (- mouse-y @top)))
-        nil)
-      (keyPressed [key-code scan-code modifiers]
-        ;; ESC key (256) always closes the screen — matches Minecraft GuiScreen
-        ;; default behavior and upstream CGuiScreen handling.
-        (if (= key-code 256)
-          (do (.setScreen (Minecraft/getInstance) nil) true)
+    (doto (DelegatingScreen.
+            (Component/literal title)
+            ;; render
+            (fn [^DelegatingScreen this ^GuiGraphics graphics mouse-x mouse-y partial-tick]
+              (render-cgui-screen! this graphics gui-widget left top partial-tick
+                                   resolved-log-label tick-counter preview-item-atom preview-type-atom ref-width))
+            ;; keyPressed
+            (fn [_this key-code scan-code modifiers]
+              ;; ESC key (256) always closes the screen — matches Minecraft GuiScreen
+              ;; default behavior and upstream CGuiScreen handling.
+              (if (= key-code 256)
+                (do (.setScreen (Minecraft/getInstance) nil) true)
+                (if interactive?
+                  ;; key-press-cgui! only returns true when a focused editable widget
+                  ;; or a widget with :key handlers actually consumed the key.  All
+                  ;; other keys (chat, inventory, F-keys, movement, etc.) pass through
+                  ;; to vanilla Minecraft.
+                  (key-press-cgui! gui-widget key-code scan-code resolved-log-label)
+                  false)))
+            ;; charTyped
+            (fn [_this code-point modifiers]
+              (if interactive?
+                (char-typed-cgui! gui-widget code-point resolved-log-label)
+                false))
+            ;; mouseClicked
+            (fn [_this mouse-x mouse-y button]
+              (mouse-click-cgui! gui-widget left top mouse-x mouse-y button resolved-log-label))
+            ;; removed
+            (fn [_this]
+              (dispose-cgui-screen! gui-widget resolved-log-label)))
+      ;; Extra optional Screen methods via with* setters
+      (.withMouseDragged
+        (fn [_this mouse-x mouse-y button drag-x drag-y]
           (if interactive?
-            ;; key-press-cgui! only returns true when a focused editable widget
-            ;; or a widget with :key handlers actually consumed the key.  All
-            ;; other keys (chat, inventory, F-keys, movement, etc.) pass through
-            ;; to vanilla Minecraft.
-            (key-press-cgui! gui-widget key-code scan-code resolved-log-label)
+            (mouse-drag-cgui! gui-widget left top mouse-x mouse-y drag-x drag-y resolved-log-label)
             false)))
-      (mouseScrolled [mouse-x mouse-y scroll-delta]
-        (try (cgui-rt/mouse-scroll! gui-widget (int mouse-x) (int mouse-y) @left @top
-                                    0.0 (double scroll-delta))
-             true
-             (catch Exception _ false)))
-      (charTyped [code-point modifiers]
-        (if interactive?
-          (char-typed-cgui! gui-widget code-point resolved-log-label)
-          false))
-      (removed []
-        (dispose-cgui-screen! gui-widget resolved-log-label)))))
+      (.withMouseMoved
+        (fn [_this mouse-x mouse-y]
+          ;; Track mouse position relative to CGUI root for hover detection.
+          ;; Subtract left/top offsets so frame handlers can compare against
+          ;; widget-local coordinates (0,0 = top-left of root widget).
+          (swap! (:metadata gui-widget) assoc
+                 :last-mouse-x (int (- mouse-x @left))
+                 :last-mouse-y (int (- mouse-y @top)))))
+      (.withMouseScrolled
+        (fn [_this mouse-x mouse-y scroll-delta]
+          (try (cgui-rt/mouse-scroll! gui-widget (int mouse-x) (int mouse-y) @left @top
+                                      0.0 (double scroll-delta))
+               true
+               (catch Exception _ false)))))))
 
 ;; -- Public API --
 

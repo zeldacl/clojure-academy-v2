@@ -12,7 +12,8 @@
             [cn.li.mc1201.gui.slots.sync :as slots-sync]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.util.log :as log])
-  (:import [cn.li.mc1201.gui CMenuBridge]
+  (:import [cn.li.mc1201.shim DelegatingCMenuBridge]
+           [cn.li.mc1201.gui CMenuBridge]
            [net.minecraft.server.level ServerPlayer]
            [net.minecraft.world.entity.player Player]
            [net.minecraft.world.inventory AbstractContainerMenu Slot]
@@ -190,34 +191,31 @@
                                            quick-move-error-prefix "Error in quickMoveStack:"}}]
   (let [owner (owner-for-player player)
         clj-container (enrich-container-owner clj-container owner)
-        menu (proxy [CMenuBridge] [menu-type (int window-id)]
-               (stillValid [player]
-                 (boolean (platform/safe-validate clj-container player)))
+        menu (doto (DelegatingCMenuBridge. menu-type (int window-id))
+               (.withStillValid (fn [_this player]
+                 (boolean (platform/safe-validate clj-container player))))
 
-               (removed [player]
+               (.withRemoved (fn [this player]
                  (remove-menu!
                   this
                   clj-container
                   player
                   {:call-super-removed? call-super-removed?
-                   :log-message remove-log-message}))
+                   :log-message remove-log-message})))
 
-               (broadcastChanges []
-                 (broadcast-menu-changes! this clj-container))
+               (.withBroadcastChanges (fn [this]
+                 (broadcast-menu-changes! this clj-container)))
 
-               (clicked [slot-index button click-type player]
+               (.withClicked (fn [this slot-index button click-type player]
                  (when (or (not (tabbed/tabbed-container? clj-container))
                            (tabbed/slots-active-for-menu? this clj-container))
                    (let [^CMenuBridge s this]
-                     (.callSuperClicked s slot-index button click-type player))))
+                     (.callSuperClicked s slot-index button click-type player)))))
 
-               (quickMoveStack [player slot-index]
+               (.withQuickMoveStack (fn [this player slot-index]
                  (if-not (quick-move-allowed? this clj-container)
                    ItemStack/EMPTY
-                   (quick-move-stack this clj-container player slot-index quick-move-error-prefix)))
-
-               (canTakeItemForPickAll [_stack _slot] true)
-               (canDragTo [_slot] true))]
+                   (quick-move-stack this clj-container player slot-index quick-move-error-prefix)))))]
     (slots-sync/setup-menu-slots! menu clj-container nil {:get-slot-layout get-slot-layout
                                                         :default-player-inventory-mode default-player-inventory-mode})
     (finalize-menu-registration! menu window-id clj-container owner)))

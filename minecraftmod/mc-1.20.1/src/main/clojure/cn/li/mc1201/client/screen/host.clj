@@ -7,7 +7,8 @@
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.client.platform-bridge :as platform-bridge]
             [clojure.string :as str])
-  (:import [net.minecraft.client.gui.screens Screen]
+  (:import [cn.li.mc1201.shim DelegatingScreen]
+           [net.minecraft.client.gui.screens Screen]
            [net.minecraft.client.gui GuiGraphics Font]
            [net.minecraft.network.chat Component]
            [net.minecraft.client Minecraft]
@@ -317,46 +318,44 @@
   ([title draw-ops-fn click-fn hover-fn close-fn]
    (create-host-screen title draw-ops-fn click-fn hover-fn close-fn nil))
   ([title draw-ops-fn click-fn hover-fn close-fn char-typed-fn]
-   (proxy [Screen] [(Component/literal title)]
-    (render [^GuiGraphics graphics mouse-x mouse-y _partial-tick]
-      (try
-        (let [^Screen screen this
-              poseStack (.pose graphics)]
-          (.renderBackground screen graphics)
-          (when hover-fn
-            (hover-fn mouse-x mouse-y))
-          (doseq [op (draw-ops-fn mouse-x mouse-y)]
-            (render-op! graphics op poseStack)))
-        (catch Exception e
-          (log/error (str "Error rendering hosted screen " title) e))))
-
-    (keyPressed [^long key ^long _scancode ^long _modifiers]
-      (cond
-        (= key 256)
-        (let [^Minecraft mc (Minecraft/getInstance)]
-          (.setScreen mc nil)
-          true)
-        (and char-typed-fn (= key 259))
-        (do (char-typed-fn \backspace) true)
-        (and char-typed-fn (= key 257))
-        (do (char-typed-fn \newline) true)
-        :else false))
-
-    (charTyped [ch _modifiers]
-      (if char-typed-fn
-        (do (char-typed-fn ch) true)
-        false))
-
-    (mouseClicked [mouse-x mouse-y _button]
-      (try
-        (boolean (click-fn mouse-x mouse-y))
-        (catch Exception e
-          (log/error (str "Error handling hosted screen click " title) e)
-          false)))
-
-    (removed []
-      (when close-fn
-        (close-fn))))))
+   (DelegatingScreen.
+     (Component/literal title)
+     ;; render  (this passed as first arg; ignored here since we don't need renderBackground)
+     (fn [_this ^GuiGraphics graphics mouse-x mouse-y _partial-tick]
+       (try
+         (let [poseStack (.pose graphics)]
+           (when hover-fn (hover-fn mouse-x mouse-y))
+           (doseq [op (draw-ops-fn mouse-x mouse-y)]
+             (render-op! graphics op poseStack)))
+         (catch Exception e
+           (log/error (str "Error rendering hosted screen " title) e))))
+     ;; keyPressed
+     (fn [_this key scancode modifiers]
+       (cond
+         (= key 256)
+         (let [^Minecraft mc (Minecraft/getInstance)]
+           (.setScreen mc nil)
+           true)
+         (and char-typed-fn (= key 259))
+         (do (char-typed-fn \backspace) true)
+         (and char-typed-fn (= key 257))
+         (do (char-typed-fn \newline) true)
+         :else false))
+     ;; charTyped
+     (fn [_this ch modifiers]
+       (if char-typed-fn
+         (do (char-typed-fn ch) true)
+         false))
+     ;; mouseClicked
+     (fn [_this mouse-x mouse-y button]
+       (try
+         (boolean (click-fn mouse-x mouse-y))
+         (catch Exception e
+           (log/error (str "Error handling hosted screen click " title) e)
+           false)))
+     ;; removed
+     (fn [_this]
+       (when close-fn (close-fn))))))
 
 (defn open-managed-screen!
   "Open a content-owned hosted screen by opaque screen key and payload."

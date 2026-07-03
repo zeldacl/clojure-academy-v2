@@ -3,15 +3,17 @@
   (:require [cn.li.mc1201.datagen.recipe-core :as recipe-core]
             [cn.li.mc1201.datagen.recipe-provider-core :as recipe-provider-core]
             [cn.li.forge1201.datagen.recipe-provider-custom :as recipe-provider-custom])
-  (:import [java.util.function Consumer]
+  (:import [cn.li.forge1201.shim DelegatingRecipeProvider]
+           [java.util.function Consumer]
            [net.minecraft.data PackOutput]
            [net.minecraft.data.recipes RecipeProvider]
            [net.minecraftforge.common.data ExistingFileHelper]))
 
 (defn create
   [^PackOutput pack-output ^ExistingFileHelper _exfile-helper]
-  (proxy [RecipeProvider] [pack-output]
-    (buildRecipes [^Consumer writer]
+  (DelegatingRecipeProvider.
+    pack-output
+    (fn [_this ^Consumer writer]
       (let [vanilla-emitted (recipe-provider-core/build-recipes! writer)
             recipes (recipe-core/load-recipes)
             custom-emitters (recipe-provider-custom/custom-emitters writer)

@@ -15,7 +15,8 @@
   (:require [cn.li.mcmod.config :as modid]
             [cn.li.mc1201.datagen.resource-location :as rl]
             [cn.li.mc1201.datagen.item-model-provider-core :as item-model-core])
-  (:import [net.minecraft.data PackOutput]
+  (:import [cn.li.forge1201.shim DelegatingItemModelProvider DelegatingCustomLoaderBuilder]
+           [net.minecraft.data PackOutput]
            [net.minecraft.resources ResourceLocation]
            [net.minecraftforge.common.data ExistingFileHelper]
            [net.minecraftforge.client.model.generators ItemModelProvider ItemModelBuilder ModelFile$ExistingModelFile]))
@@ -97,18 +98,18 @@
     (.customLoader builder
                    (reify java.util.function.BiFunction
                      (apply [_ parent-builder helper]
-                       (proxy [net.minecraftforge.client.model.generators.CustomLoaderBuilder] [loader-rl parent-builder helper]
-                         (toJson [_]
-                           (obj-model-json mod-id spec))))))
+                       (DelegatingCustomLoaderBuilder.
+                         loader-rl parent-builder helper
+                         (fn [] (obj-model-json mod-id spec))))))
     builder))
 
 (defn create
   "Create Item Model DataProvider instance (factory signature: PackOutput -> DataProvider)"
   [^PackOutput pack-output ^ExistingFileHelper exfile-helper]
-  (proxy [ItemModelProvider] [pack-output modid/*mod-id* exfile-helper]
-    (registerModels []
-      (let [this-provider ^ItemModelProvider this
-            {:keys [all-item-count energy-tier-count obj-3d-count simple-count bucket-count models]}
+  (DelegatingItemModelProvider.
+    pack-output modid/*mod-id* exfile-helper
+    (fn [^DelegatingItemModelProvider this-provider]
+      (let [{:keys [all-item-count energy-tier-count obj-3d-count simple-count bucket-count models]}
             (item-model-core/gather-model-specs)]
         ;; Standard models: item/generated, energy-tier, fluid buckets
         ;; OBJ 3D models: forge:obj loader

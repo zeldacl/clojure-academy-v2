@@ -8,7 +8,8 @@
             [cn.li.mcmod.gui.cgui-core :as cgui-core]
             [cn.li.mcmod.hooks.core :as client-ui]
             [cn.li.mcmod.util.log :as log])
-  (:import [net.minecraft.client.gui.screens Screen]
+  (:import [cn.li.mc1201.shim DelegatingScreen]
+           [net.minecraft.client.gui.screens Screen]
            [net.minecraft.client.gui GuiGraphics]
            [net.minecraft.network.chat Component]
            [net.minecraft.client Minecraft]))
@@ -48,65 +49,65 @@
                           :as opts}]
   (let [left (atom 0)
         top (atom 0)]
-    (proxy [Screen] [(Component/literal title)]
-      (render [^GuiGraphics graphics mouse-x mouse-y partial-ticks]
-        (try
-          (let [^Screen s this
-                ^Minecraft mc (Minecraft/getInstance)
-                w (.-width s)
-                h (.-height s)]
-            (.renderBackground s graphics)
-            (when root
-              (binding [client-ui/*client-session-id* (or session-id "")]
-                (cgui-rt/resize-root! root w h)
-                ;; Apply root CENTER/CENTER alignment — matching upstream
-                ;; CGuiScreen (full-screen overlay) behavior
-                ;; where LambdaLib2 centered the root widget on screen.
-                (let [tm (get @(:metadata root) :transform-meta {})
-                      align-w (:align-width tm)
-                      align-h (:align-height tm)
-                      [rw rh] (cgui-core/get-size root)]
-                  (when (= align-w :center)
-                    (reset! left (long (/ (- (double w) (double rw)) 2.0))))
-                  (when (= align-h :center)
-                    (reset! top (long (/ (- (double h) (double rh)) 2.0)))))
-                (cgui-rt/frame-tick! root {:partial-ticks partial-ticks})
-                (cgui-rt/render-tree! graphics root @left @top))))
-          (catch Exception e
-            (log/error "Error rendering CGUI screen " title e))))
-
-      (keyPressed [^long key-code ^long scan-code ^long modifiers]
-        (boolean (cgui-screen-key-pressed root key-code scan-code modifiers opts)))
-
-      (charTyped [code-point modifiers]
-        (boolean (cgui-screen-char-typed root code-point modifiers)))
-
-      (mouseClicked [mouse-x mouse-y button]
-        (when root
-          (binding [client-ui/*client-session-id* (or session-id "")]
-            (cgui-rt/mouse-click! root (int mouse-x) (int mouse-y) @left @top button)))
-        true)
-
-      (mouseReleased [mouse-x mouse-y button]
-        (when root
-          (binding [client-ui/*client-session-id* (or session-id "")]
-            (cgui-rt/mouse-click! root (int mouse-x) (int mouse-y) @left @top button)))
-        true)
-
-      (mouseDragged [mouse-x mouse-y button drag-x drag-y]
-        (when root
-          (binding [client-ui/*client-session-id* (or session-id "")]
-            (cgui-rt/mouse-drag! root (int mouse-x) (int mouse-y) @left @top)))
-        true)
-
-      (removed []
-        (when root
-          (binding [client-ui/*client-session-id* (or session-id "")]
-            (cgui-rt/dispose! root)))
-        (when on-close (on-close)))
-
-      (isPauseScreen []
-        false))))
+    (doto (DelegatingScreen.
+            (Component/literal title)
+            ;; render
+            (fn [^DelegatingScreen this ^GuiGraphics graphics mouse-x mouse-y partial-ticks]
+              (try
+                (let [w (.-width this)
+                      h (.-height this)]
+                  (.renderBackground this graphics)
+                  (when root
+                    (binding [client-ui/*client-session-id* (or session-id "")]
+                      (cgui-rt/resize-root! root w h)
+                      ;; Apply root CENTER/CENTER alignment — matching upstream
+                      ;; CGuiScreen (full-screen overlay) behavior
+                      ;; where LambdaLib2 centered the root widget on screen.
+                      (let [tm (get @(:metadata root) :transform-meta {})
+                            align-w (:align-width tm)
+                            align-h (:align-height tm)
+                            [rw rh] (cgui-core/get-size root)]
+                        (when (= align-w :center)
+                          (reset! left (long (/ (- (double w) (double rw)) 2.0))))
+                        (when (= align-h :center)
+                          (reset! top (long (/ (- (double h) (double rh)) 2.0)))))
+                      (cgui-rt/frame-tick! root {:partial-ticks partial-ticks})
+                      (cgui-rt/render-tree! graphics root @left @top))))
+                (catch Exception e
+                  (log/error "Error rendering CGUI screen " title e))))
+            ;; keyPressed
+            (fn [_this ^long key-code ^long scan-code ^long modifiers]
+              (boolean (cgui-screen-key-pressed root key-code scan-code modifiers opts)))
+            ;; charTyped
+            (fn [_this code-point modifiers]
+              (boolean (cgui-screen-char-typed root code-point modifiers)))
+            ;; mouseClicked
+            (fn [_this mouse-x mouse-y button]
+              (when root
+                (binding [client-ui/*client-session-id* (or session-id "")]
+                  (cgui-rt/mouse-click! root (int mouse-x) (int mouse-y) @left @top button)))
+              true)
+            ;; removed
+            (fn [_this]
+              (when root
+                (binding [client-ui/*client-session-id* (or session-id "")]
+                  (cgui-rt/dispose! root)))
+              (when on-close (on-close))))
+      ;; Extra Screen methods via with* setters
+      (.withMouseReleased
+        (fn [_this mouse-x mouse-y button]
+          (when root
+            (binding [client-ui/*client-session-id* (or session-id "")]
+              (cgui-rt/mouse-click! root (int mouse-x) (int mouse-y) @left @top button)))
+          true))
+      (.withMouseDragged
+        (fn [_this mouse-x mouse-y button drag-x drag-y]
+          (when root
+            (binding [client-ui/*client-session-id* (or session-id "")]
+              (cgui-rt/mouse-drag! root (int mouse-x) (int mouse-y) (int drag-x) (int drag-y) @left @top)))
+          true))
+      (.withIsPauseScreen
+        (fn [_this] false)))))
 
 (defn open-cgui-screen!
   "Open a CGUI screen on the Minecraft display.
