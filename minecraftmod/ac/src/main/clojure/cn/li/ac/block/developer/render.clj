@@ -84,7 +84,7 @@
       (pose/pop-pose pose-stack))))
 
 (defn- make-multiblock-renderer [model-fn tex-fn]
-  {:render-tile (fn [_ tile-entity partial-ticks pose-stack buffer-source packed-light packed-overlay]
+  {:render-tile (fn [tile-entity partial-ticks pose-stack buffer-source packed-light packed-overlay]
                   (mb-helper/render-multiblock-tesr
                    tile-entity
                    (fn [tile pt ps bs pl po]

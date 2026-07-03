@@ -132,7 +132,7 @@
   []
   (tesr-api/register-scripted-tile-renderer!
     "imag-phase"
-    {:render-tile (fn [_ tile-entity _partial-ticks pose-stack buffer-source packed-light packed-overlay]
+    {:render-tile (fn [tile-entity _partial-ticks pose-stack buffer-source packed-light packed-overlay]
                      (try
                        (render-imag-phase! tile-entity pose-stack buffer-source
                                            packed-light packed-overlay)

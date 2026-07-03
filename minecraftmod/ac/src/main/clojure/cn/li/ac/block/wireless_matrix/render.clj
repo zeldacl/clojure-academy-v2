@@ -78,7 +78,7 @@
 (defn register!
   []
   (let [renderer
-        {:render-tile (fn [_ tile-entity partial-ticks pose-stack buffer-source packed-light packed-overlay]
+        {:render-tile (fn [tile-entity partial-ticks pose-stack buffer-source packed-light packed-overlay]
                       (mb-helper/render-multiblock-tesr
                        tile-entity render-at-origin partial-ticks pose-stack buffer-source packed-light packed-overlay))}]
     (tesr-api/register-scripted-tile-renderer! "wireless-matrix" renderer)

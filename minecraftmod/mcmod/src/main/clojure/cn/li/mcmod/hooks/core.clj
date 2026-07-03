@@ -160,41 +160,29 @@
                        :allowed-hook-keys allowed}))))
   hooks)
 
-;; Client context stored in Framework [:service :client-ctx] instead of ^:dynamic ThreadLocal.
-;; Replaces *client-session-id* and *player-state-owner* dynamic vars.
-;; get-client-ctx / set-client-ctx! are public — session.clj uses them to manage
-;; client session bindings without ThreadLocal-based binding.
+;; ============================================================================
+;; Client session / player-state-owner — per-thread via ThreadLocal.
+;; NOT ^:dynamic (铁律十一) and NOT in Framework (governance exception:
+;; "客户端 session 状态 — 闭包工厂管理，不入 Framework").
+;; ThreadLocal provides per-thread isolation without the ^:dynamic prohibition.
+;; ============================================================================
 
-(def ^:private client-ctx-path [:service :client-ctx])
+(def ^:private ^ThreadLocal client-ctx-thread-local (ThreadLocal.))
 
-(defn get-client-ctx
-  "Read current client context from Framework. Returns nil if not set."
-  []
-  (get-in @(fw/fw-atom) client-ctx-path))
-
-(defn set-client-ctx!
-  "Write client context to Framework. Returns nil."
-  [ctx]
-  (when-let [fw-atom (fw/fw-atom)]
-    (swap! fw-atom assoc-in client-ctx-path ctx))
-  nil)
+(defn- get-client-ctx [] (.get ^ThreadLocal client-ctx-thread-local))
+(defn- set-client-ctx! [ctx] (.set ^ThreadLocal client-ctx-thread-local ctx))
 
 (defn *client-session-id*
-  "Read client session id from Framework client context."
-  []
-  (:session-id (get-client-ctx)))
+  "Read client session id from ThreadLocal."
+  [] (:session-id (get-client-ctx)))
 
 (defn *player-state-owner*
-  "Read player state owner from Framework client context."
-  []
-  (or (:player-owner (get-client-ctx))
-      ;; Fallback: try context-owner (AC ability system)
-      (:context-owner (get-client-ctx))))
+  "Read player state owner from ThreadLocal."
+  [] (or (:player-owner (get-client-ctx)) (:context-owner (get-client-ctx))))
 
 (defn current-player-state-owner
   "Return the currently bound runtime player-state owner map (or nil)."
-  []
-  (*player-state-owner*))
+  [] (*player-state-owner*))
 
 (defn player-state-session-id
   "Resolve store session-id from a canonical owner map (server > client)."
@@ -251,35 +239,35 @@
                         {:context context
                          :player-state-owner (current-player-state-owner)})))))
 
-(defn with-player-state-owner-fn
-  "使用高阶函数代替宏，执行带有一致词法作用域的绑定。
-   100% 免疫编译期符号逃逸 Bug。
-   通过 Framework [:service :client-ctx] 管理 owner，不使用 ThreadLocal binding。"
-  [owner thunk]
-  (let [old-ctx (get-client-ctx)
-        new-ctx (assoc (or old-ctx {}) :player-owner owner)]
-    (set-client-ctx! new-ctx)
-    (try (thunk)
-         (finally
-           (set-client-ctx! old-ctx)))))
+(defn with-client-ctx-fn
+  "ThreadLocal-based client context HOF. Sets ctx-map in current thread's ThreadLocal
+  for duration of thunk, restores on exit. LazySeq-safe: auto-doall on return value.
 
-;; 为了保持原有代码的兼容性，你可以保留宏名，但让它直接调用这个函数（推荐）：
+  ⚠️ 铁律六：上下文不跨越异步边界。Minecraft 的 enqueueWork / future 启动新调用链时，
+  必须在新线程上重新调用 with-client-ctx-fn 建立上下文。
+
+  ⚠️ 铁律四：返回值如果是 LazySeq，会在 finally 恢复上下文后才求值 → 读到 nil。
+  本函数自动对顶层 LazySeq 执行 doall 截断。"
+  [ctx-map thunk]
+  (let [old (.get ^ThreadLocal client-ctx-thread-local)]
+    (.set ^ThreadLocal client-ctx-thread-local (merge (or old {}) ctx-map))
+    (try
+      (let [result (thunk)]
+        (if (instance? clojure.lang.LazySeq result) (doall result) result))
+      (finally
+        (if (nil? old)
+          (.remove ^ThreadLocal client-ctx-thread-local)
+          (.set ^ThreadLocal client-ctx-thread-local old))))))
+
+(defn with-player-state-owner-fn
+  "使用 with-client-ctx-fn 设置 player-owner，保持原有调用签名兼容。"
+  [owner thunk]
+  (with-client-ctx-fn {:player-owner owner} thunk))
+
+;; 保留宏以兼容现有 (with-player-state-owner owner body...) 调用方
 (defmacro with-player-state-owner
   [owner & body]
   `(with-player-state-owner-fn ~owner (fn [] ~@body)))
-
-(defn with-client-ctx-fn
-  "Set client context keys in Framework [:service :client-ctx] for duration of thunk.
-  ctx-map is merged into the current client context. Restores previous context on exit.
-  Replaces (binding [*client-session-id* / *player-state-owner*] ...) patterns
-  after the defn migration to Framework-based readers."
-  [ctx-map thunk]
-  (let [old-ctx (get-client-ctx)
-        new-ctx (merge (or old-ctx {}) ctx-map)]
-    (set-client-ctx! new-ctx)
-    (try (thunk)
-         (finally
-           (set-client-ctx! old-ctx)))))
 
 (defmacro with-client-ctx
   "Macro wrapper: set client context keys in Framework for duration of body.

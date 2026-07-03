@@ -145,21 +145,21 @@
 (defn register!
 	[]
 	(let [base-renderer
-					{:render-tile (fn [_ tile-entity partial-ticks pose-stack buffer-source packed-light packed-overlay]
+					{:render-tile (fn [tile-entity partial-ticks pose-stack buffer-source packed-light packed-overlay]
 					                (mb-helper/render-multiblock-tesr
 					                 tile-entity
 					                 render-base-at-origin
 					                 partial-ticks pose-stack buffer-source packed-light packed-overlay))}
 
 					main-renderer
-					{:render-tile (fn [_ tile-entity partial-ticks pose-stack buffer-source packed-light packed-overlay]
+					{:render-tile (fn [tile-entity partial-ticks pose-stack buffer-source packed-light packed-overlay]
 					                (mb-helper/render-multiblock-tesr
 					                 tile-entity
 					                 render-main-at-origin
 					                 partial-ticks pose-stack buffer-source packed-light packed-overlay))}
 
 					pillar-renderer
-					{:render-tile (fn [_ tile-entity partial-ticks pose-stack buffer-source packed-light packed-overlay]
+					{:render-tile (fn [tile-entity partial-ticks pose-stack buffer-source packed-light packed-overlay]
 					                (render-pillar-at-origin
 					                 tile-entity
 					                 partial-ticks pose-stack buffer-source packed-light packed-overlay))}]
