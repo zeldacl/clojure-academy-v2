@@ -48,8 +48,8 @@
 
 (defn- with-server-player-owner
   [player-uuid f]
-  (binding [runtime-hooks/*player-state-owner* {:server-session-id test-server-session-id
-                                                :player-uuid player-uuid}]
+  (runtime-hooks/with-client-ctx {:player-owner {:server-session-id test-server-session-id
+                                                 :player-uuid player-uuid}}
     (f)))
 
 (defn- seed-player! [uuid skill-kw]
@@ -72,10 +72,10 @@
     (cm/register-send-fns! {:to-server (fn [msg-id payload]
                                           (swap! out conj [msg-id payload]))
                             :to-client nil})
-    (let [c (binding [ctx/*context-owner* client-owner
-                      runtime-hooks/*player-state-owner* {:client-session-id :test-session
-                                                          :player-uuid "player-1"}]
-          (cm/activate-context! "player-1" :arc-gen))]
+    (let [c (runtime-hooks/with-client-ctx {:player-owner {:client-session-id :test-session
+                                                             :player-uuid "player-1"}}
+              (binding [ctx/*context-owner* client-owner]
+                (cm/activate-context! "player-1" :arc-gen)))]
       (is (= 1 (count @out)))
       (is (= catalog/MSG-CTX-BEGIN-LINK (first (first @out))))
       (is (= :arc-gen (:skill-id (second (first @out)))))
@@ -230,8 +230,8 @@
     (cm/register-send-fns! {:to-client (fn [uuid msg-id payload]
                                          (swap! out conj [uuid msg-id payload]))
                             :to-server nil})
-    (binding [runtime-hooks/*player-state-owner* {:server-session-id alt-session
-                                                  :player-uuid player-id}]
+    (runtime-hooks/with-client-ctx {:player-owner {:server-session-id alt-session
+                                                   :player-uuid player-id}}
       (let [res (cm/establish-context! player-id "cid-alt" skill-id)]
         (is (some? res))
         (is (= alt-session (owner/transport-store-session-id res)))
@@ -239,7 +239,7 @@
         (is (= 1 (count (filter #(= catalog/MSG-CTX-ESTABLISH (second %)) @out))))))))
 
 (deftest context-manager-session-resolution-still-fail-fast-test
-  (binding [runtime-hooks/*player-state-owner* nil]
+  (runtime-hooks/with-client-ctx {:player-owner nil}
     (is (thrown-with-msg? clojure.lang.ExceptionInfo
                           #"requires bound"
                           (cm/abort-player-contexts! "p-fail")))))

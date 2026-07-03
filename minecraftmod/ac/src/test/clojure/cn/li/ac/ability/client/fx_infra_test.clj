@@ -93,11 +93,11 @@
            @events*))))
 
 (deftest client-effect-queues-are-session-scoped-and-resettable-test
-  (binding [runtime-hooks/*client-session-id* :session-a]
+  (runtime-hooks/with-client-ctx {:session-id :session-a}
     (particles/queue-particle-effect! {:type :particle :particle-type :spark-a})
     (sounds/queue-sound-effect! {:type :sound :sound-id "minecraft:test-a"})
     (hand-effects/add-camera-pitch-delta! 1.25))
-  (binding [runtime-hooks/*client-session-id* :session-b]
+  (runtime-hooks/with-client-ctx {:session-id :session-b}
     (particles/queue-particle-effect! {:type :particle :particle-type :spark-b})
     (sounds/queue-sound-effect! {:type :sound :sound-id "minecraft:test-b"})
     (hand-effects/add-camera-pitch-delta! 2.5))
@@ -126,8 +126,7 @@
   (is (empty? (:camera-pitch-deltas (hand-effects/hand-effect-registry-snapshot)))))
 
 (deftest client-effect-queues-require-client-session-test
-  (binding [runtime-hooks/*client-session-id* nil
-       runtime-hooks/*player-state-owner* nil]
+  (runtime-hooks/with-client-ctx {:session-id nil :player-owner nil}
     (is (thrown-with-msg? clojure.lang.ExceptionInfo
            #":client-session-id"
            (particles/queue-particle-effect! {:type :particle :particle-type :spark})))

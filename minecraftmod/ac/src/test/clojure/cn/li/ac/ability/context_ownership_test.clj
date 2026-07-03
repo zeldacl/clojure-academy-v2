@@ -19,8 +19,8 @@
 
 (defn- with-server-player-owner
   [player-uuid f]
-  (binding [runtime-hooks/*player-state-owner* {:server-session-id test-server-session-id
-                                                :player-uuid player-uuid}]
+  (runtime-hooks/with-client-ctx {:player-owner {:server-session-id test-server-session-id
+                                                 :player-uuid player-uuid}}
     (f)))
 
 (defn- get-owned-context [player-uuid ctx-id]

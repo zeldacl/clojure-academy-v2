@@ -6,7 +6,7 @@
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (defn- reset-fixture [f]
-  (binding [runtime-hooks/*client-session-id* :test-session]
+  (runtime-hooks/with-client-ctx {:session-id :test-session}
     (level-effects/call-with-level-effect-runtime
       (level-effects/create-level-effect-runtime)
       (fn []

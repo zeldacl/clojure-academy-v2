@@ -48,13 +48,13 @@
 
 (deftest perform-resource-uses-bound-owner-session-test
   (store/set-player-state!* :skill-effects-session "p1" (store/fresh-player-state))
-  (binding [runtime-hooks/*player-state-owner* {:server-session-id :skill-effects-session
-                                                :player-uuid "p-effects"}]
+  (runtime-hooks/with-client-ctx {:player-owner {:server-session-id :skill-effects-session
+                                                 :player-uuid "p-effects"}}
     (is (map? (skill-effects/perform-resource! "p1" 1.0 1.0 false)))
     ))
 
 (deftest skill-effects-session-resolution-still-fail-fast-test
-  (binding [runtime-hooks/*player-state-owner* nil]
+  (runtime-hooks/with-client-ctx {:player-owner nil}
     (is (thrown-with-msg? clojure.lang.ExceptionInfo
                           #"requires bound session-id"
                           (skill-effects/current-cp "p1")))))

@@ -72,11 +72,11 @@
 
 (defn- with-client-player-state-owner
   [player-uuid f]
-  (binding [client-keybinds/*client-session-id* :test-session
-            runtime-hooks/*client-session-id* :test-session
-            runtime-hooks/*player-state-owner* {:client-session-id :test-session
-                                                :player-uuid player-uuid}]
-    (f)))
+  (runtime-hooks/with-client-ctx {:session-id :test-session
+                                  :player-owner {:client-session-id :test-session
+                                                  :player-uuid player-uuid}}
+    (binding [client-keybinds/*client-session-id* :test-session]
+      (f))))
 
 (deftest client-slot-key-hooks-create-context-once-and-send-input-messages-test
   (let [sent (atom [])
@@ -188,11 +188,11 @@
                     :player-uuid "p1"})))))))
 
 (deftest client-ui-owner-requires-explicit-session-and-player-test
-  (binding [client-keybinds/*client-session-id* nil
-            runtime-hooks/*client-session-id* nil]
-    (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                          #"Client UI owner requires :client-session-id"
-                          (client-ui-hooks/client-ui-state-snapshot "p1"))))
+  (runtime-hooks/with-client-ctx {:session-id nil}
+    (binding [client-keybinds/*client-session-id* nil]
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                            #"Client UI owner requires :client-session-id"
+                            (client-ui-hooks/client-ui-state-snapshot "p1")))))
   (is (thrown-with-msg? clojure.lang.ExceptionInfo
                         #"Client UI owner requires :player-uuid"
                         (client-ui-hooks/client-ui-state-snapshot {:client-session-id :session-a}))))
@@ -268,7 +268,7 @@
     (is (empty? (particles/particle-queue-snapshot (:client-session-id owner))))
     (is (empty? (sounds/sound-queue-snapshot (:client-session-id owner))))
     (is (empty? (hand-effects/drain-camera-pitch-deltas! owner)))
-    (binding [runtime-hooks/*player-state-owner* owner]
+    (runtime-hooks/with-client-ctx {:player-owner owner}
       (is (nil? (store/get-player-state* :session-a "p1"))))
     (binding [ctx/*context-owner* context-owner]
       (is (nil? (ctx/get-context "ctx-cleanup"))))))

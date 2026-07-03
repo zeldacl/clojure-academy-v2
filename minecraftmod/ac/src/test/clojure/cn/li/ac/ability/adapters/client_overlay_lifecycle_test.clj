@@ -23,7 +23,7 @@
 (deftest movement-keys-ignore-terminated-flashing-context-test
   (let [sent (atom [])
         hooks (client-ui-hooks/runtime-client-ui-hooks)]
-    (binding [runtime-hooks/*client-session-id* test-client-session]
+    (runtime-hooks/with-client-ctx {:session-id test-client-session}
       (client-ui-hooks/set-slot-context-for-test! "p1" 0 "ctx-flashing-dead"))
     (with-redefs [ctx/get-context (fn [_owner _ctx-id]
                                     {:id "ctx-flashing-dead"
@@ -35,7 +35,7 @@
                                                                        [(nth args 1) (nth args 2)]
                                                                        [(first args) (second args)])]
                                                 (swap! sent conj [msg-id payload])))]
-      (binding [runtime-hooks/*client-session-id* test-client-session]
+      (runtime-hooks/with-client-ctx {:session-id test-client-session}
         ((:client-on-movement-key-down! hooks) "p1" :forward)
         ((:client-on-movement-key-tick! hooks) "p1" :forward)
         ((:client-on-movement-key-up! hooks) "p1" :forward))
@@ -88,7 +88,7 @@
                                                 (case [skill-id field-id]
                                                   [:railgun :qte.coin-active-threshold] 0.6
                                                   0.0))]
-        (binding [runtime-hooks/*client-session-id* test-client-session]
+        (runtime-hooks/with-client-ctx {:session-id test-client-session}
         (is (false? (:active? ((:client-visual-state hooks) :ac/charge-coin {:player-uuid "p1"}))))
         (is (false? (:active? ((:client-visual-state hooks) :ac/body-intensify-charge {:player-uuid "p1"}))))
         (let [plan (client-ui-hooks/build-client-overlay-plan "p1" 320 180 {:now-ms 1000})

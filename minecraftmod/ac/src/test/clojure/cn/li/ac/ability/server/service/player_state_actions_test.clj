@@ -144,13 +144,13 @@
   (store/set-player-state!* :actions-session "p2"
                         (-> (store/fresh-player-state)
                             (assoc-in [:ability-data :level] 1)))
-  (binding [runtime-hooks/*player-state-owner* {:server-session-id :actions-session}]
+  (runtime-hooks/with-client-ctx {:player-owner {:server-session-id :actions-session}}
     (command-rt/run-command-in-session! nil "p2"
                                         {:command :set-level :level 4})
     (is (= 4 (get-in (store/get-player-state* :actions-session "p2") [:ability-data :level])))))
 
 (deftest state-actions-session-resolution-still-fail-fast-test
-  (binding [runtime-hooks/*player-state-owner* nil]
+  (runtime-hooks/with-client-ctx {:player-owner nil}
     (is (thrown-with-msg? clojure.lang.ExceptionInfo
                           #"session-id"
                           (command-rt/run-command-in-session! nil "p3"

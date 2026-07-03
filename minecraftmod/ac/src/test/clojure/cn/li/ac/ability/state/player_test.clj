@@ -23,7 +23,7 @@
               (evt/create-event-subscriber-runtime))))))))
 
 (deftest player-state-access-requires-explicit-owner-test
-  (binding [runtime-hooks/*player-state-owner* nil]
+  (runtime-hooks/with-client-ctx {:player-owner nil}
     (is (thrown-with-msg? clojure.lang.ExceptionInfo
                           #"session-id"
                           (command-rt/run-command-in-session! nil
@@ -65,7 +65,7 @@
 
 (deftest update-ability-data-uses-bound-owner-session-test
   (store/get-or-create-player-state! :accessor-session "u2")
-  (binding [runtime-hooks/*player-state-owner* {:server-session-id :accessor-session}]
+  (runtime-hooks/with-client-ctx {:player-owner {:server-session-id :accessor-session}}
     (command-rt/run-command-in-session! nil
                                         "u2"
                                         {:command :change-category
@@ -81,7 +81,7 @@
 
 (deftest server-tick-player-uses-bound-owner-session-test
   (store/get-or-create-player-state! :tick-session "u3")
-  (binding [runtime-hooks/*player-state-owner* {:server-session-id :tick-session}]
+  (runtime-hooks/with-client-ctx {:player-owner {:server-session-id :tick-session}}
     (let [r (ps-tick/server-tick-player! "u3" nil)]
       (is (map? r))
       (is (vector? (:events r))))))

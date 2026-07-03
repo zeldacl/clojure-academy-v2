@@ -7,7 +7,7 @@
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (defn- reset-fixture [f]
-  (binding [runtime-hooks/*client-session-id* :test-session]
+  (runtime-hooks/with-client-ctx {:session-id :test-session}
     (hand-effects/call-with-hand-effect-runtime
       (hand-effects/create-hand-effect-runtime)
       (fn []
@@ -124,7 +124,7 @@
       (is (empty? (:hand-state (gfx/groundshock-fx-snapshot)))))))
 
 (deftest groundshock-fx-runtime-isolation-test
-  (binding [runtime-hooks/*client-session-id* :test-session]
+  (runtime-hooks/with-client-ctx {:session-id :test-session}
     (let [runtime-a (hand-effects/create-hand-effect-runtime)
           runtime-b (hand-effects/create-hand-effect-runtime)
           hand-enqueue-state! @#'cn.li.ac.content.ability.vecmanip.groundshock-fx/hand-enqueue-state!]

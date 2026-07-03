@@ -72,7 +72,7 @@
     (f)))
 (use-fixtures :each
   (fn [f]
-    (binding [runtime-hooks/*player-state-owner* {:server-session-id :test-session}]
+    (runtime-hooks/with-client-ctx {:player-owner {:server-session-id :test-session}}
       (f))))
 
 (deftest build-item-use-plan-order-test

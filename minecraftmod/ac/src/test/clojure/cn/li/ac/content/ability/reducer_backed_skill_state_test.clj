@@ -28,13 +28,13 @@
         player-id
         {:context-registry {ctx-id {:id ctx-id :skill-id :mag-movement :status :constructed}}})
       (ctx/register-context! c)
-      (binding [runtime-hooks/*player-state-owner* test-player/test-player-state-owner
-                ctx/*context-owner* (runtime-owner player-id)]
-        (state/execute-assoc-state! {:ctx-id ctx-id :player-id player-id}
-                                    {:k [:charge-ticks] :v 3})
-        (is (= 3 (get-in (ctx/get-context ctx-id) [:skill-state :charge-ticks])))
-        (let [store-val (store/get-player-state* test-player/test-session-id player-id)]
-          (is (= 3 (get-in store-val [:context-registry ctx-id :skill-state :charge-ticks]))))))))
+      (runtime-hooks/with-client-ctx {:player-owner test-player/test-player-state-owner}
+        (binding [ctx/*context-owner* (runtime-owner player-id)]
+          (state/execute-assoc-state! {:ctx-id ctx-id :player-id player-id}
+                                      {:k [:charge-ticks] :v 3})
+          (is (= 3 (get-in (ctx/get-context ctx-id) [:skill-state :charge-ticks])))
+          (let [store-val (store/get-player-state* test-player/test-session-id player-id)]
+            (is (= 3 (get-in store-val [:context-registry ctx-id :skill-state :charge-ticks])))))))))
 
 (deftest command-runtime-context-assoc-skill-state-test
   (testing "executing reducer command updates context-registry skill-state slice"
@@ -45,10 +45,10 @@
         player-id
         {:context-registry {ctx-id {:id ctx-id :skill-id :directed-blastwave :status :constructed}}})
       (ctx/register-context! c)
-      (binding [runtime-hooks/*player-state-owner* test-player/test-player-state-owner
-                ctx/*context-owner* (runtime-owner player-id)]
-        (state/execute-assoc-state! {:ctx-id ctx-id :player-id player-id}
-                                    {:k [:launched?] :v true})
-        (is (true? (get-in (ctx/get-context ctx-id) [:skill-state :launched?])))
-        (is (true? (get-in (store/get-player-state* test-player/test-session-id player-id)
-                           [:context-registry ctx-id :skill-state :launched?])))))))
+      (runtime-hooks/with-client-ctx {:player-owner test-player/test-player-state-owner}
+        (binding [ctx/*context-owner* (runtime-owner player-id)]
+          (state/execute-assoc-state! {:ctx-id ctx-id :player-id player-id}
+                                      {:k [:launched?] :v true})
+          (is (true? (get-in (ctx/get-context ctx-id) [:skill-state :launched?])))
+          (is (true? (get-in (store/get-player-state* test-player/test-session-id player-id)
+                             [:context-registry ctx-id :skill-state :launched?]))))))))

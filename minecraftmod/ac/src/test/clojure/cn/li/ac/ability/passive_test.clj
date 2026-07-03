@@ -98,13 +98,13 @@
                             "u3"
                             (assoc (store/fresh-player-state)
                                    :ability-data (ad/learn-skill (ad/new-ability-data) :passive-skill)))
-  (binding [runtime-hooks/*player-state-owner* {:server-session-id :passive-session
-                                                :player-uuid "p-passive"}]
+  (runtime-hooks/with-client-ctx {:player-owner {:server-session-id :passive-session
+                                                 :player-uuid "p-passive"}}
     (is (true? (passive/learned-skill? "u3" :passive-skill)))
     ))
 
 (deftest passive-session-resolution-still-fail-fast-test
-  (binding [runtime-hooks/*player-state-owner* nil]
+  (runtime-hooks/with-client-ctx {:player-owner nil}
     (is (thrown-with-msg? clojure.lang.ExceptionInfo
                           #"requires bound session-id"
                           (passive/learned-skill? "u3" :passive-skill)))))
