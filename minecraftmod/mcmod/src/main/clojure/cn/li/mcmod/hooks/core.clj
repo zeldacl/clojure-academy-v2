@@ -240,8 +240,14 @@
                          :player-state-owner (current-player-state-owner)})))))
 
 (defn with-client-ctx-fn
-  "ThreadLocal-based client context HOF. Sets ctx-map in current thread's ThreadLocal
+  "ThreadLocal-based context HOF. Sets ctx-map in current thread's ThreadLocal
   for duration of thunk, restores on exit. LazySeq-safe: auto-doall on return value.
+
+  === 调用规范（强制）===
+  1. 唯一入口：设置/恢复必须通过本函数或 with-player-state-owner-fn，禁止直接操作 ThreadLocal
+  2. 网络重建：Packet Handler 必须在分派前重建上下文（见 forge/fabric gui/network）
+  3. 异步边界：传给 enqueueWork / future / CompletableFuture 的闭包必须在内部重新建立上下文
+  4. 读取规范：*client-session-id* 和 *player-state-owner* 是函数，必须加括号调用
 
   ⚠️ 铁律六：上下文不跨越异步边界。Minecraft 的 enqueueWork / future 启动新调用链时，
   必须在新线程上重新调用 with-client-ctx-fn 建立上下文。

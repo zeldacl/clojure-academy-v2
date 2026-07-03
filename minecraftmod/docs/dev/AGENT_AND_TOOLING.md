@@ -637,7 +637,15 @@ Java 骨架类：`mc-1.20.1/src/main/java/cn/li/mc1201/shim/`
 | `^:dynamic` 不适用 | 铁律十一禁止新增 `^:dynamic`；且 Minecraft `enqueueWork` 模式下 ThreadLocal 的"跨线程丢失"恰好满足铁律六（不跨越异步边界） |
 | 顶层 LazySeq 检查而非 `postwalk` | `postwalk` 会误入 Minecraft 原生对象（Level、BlockEntity），仅检查顶层 `instance? LazySeq` 足够——内部嵌套的懒序列在后续访问时仍在当前线程求值 |
 
-**clj-kondo 适配**：`*client-session-id*` 和 `*player-state-owner*` 使用 earmuffs 命名但是 `defn` 函数（非 `^:dynamic`），clj-kondo 会报警告。需在 `.clj-kondo/config.edn` 中配置 `:linters {:earmuffed-var-not-dynamic {:exclude [cn.li.mcmod.hooks.core/*client-session-id* cn.li.mcmod.hooks.core/*player-state-owner*]}}`。
+**clj-kondo 适配**：`*client-session-id*` 和 `*player-state-owner*` 使用 earmuffs 命名但是 `defn` 函数（非 `^:dynamic`），clj-kondo 会报警告。需在 `.clj-kondo/config.edn` 中配置 `:linters {:earmuffed-var-not-dynamic {:exclude [cn.li.mcmod.hooks.core/*client-session-id* cn.li.mcmod.hooks.core/*player-state-owner*]}}`。同时配置 `:discouraged-var` 禁止在 `hooks.core` 外部直接构造 `ThreadLocal`。
+
+**ThreadLocal 上下文调用规范（强制）**：
+
+1. **唯一入口**：设置/恢复上下文必须通过 `with-client-ctx-fn` 或 `with-player-state-owner-fn`，禁止直接调用 `.get`/`.set`/`.remove`
+2. **网络重建**：所有 Packet Handler 必须在分派前用 `with-client-ctx-fn` 重建上下文。Forge/Fabric 各端 4 个 handler 已合规，新增 handler 必须遵守
+3. **异步边界**：传递给 `enqueueWork` / `future` / `CompletableFuture` 的闭包必须在内部重新建立上下文（铁律六要求，ThreadLocal 天然阻断跨线程泄漏）
+4. **读取规范**：`*client-session-id*` 和 `*player-state-owner*` 是函数，必须加括号调用：`(hooks/*player-state-owner*)` 而非 `hooks/*player-state-owner*`
+5. **新增 hook handler**：新增 `:on-player-tick!` 等生命周期 handler 如需要读上下文，必须在调用链入口确保已设置
 
 ---
 

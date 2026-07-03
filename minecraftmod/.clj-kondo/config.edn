@@ -1,11 +1,22 @@
 {:lint-as {cn.li.ac.util.init-guard/defonce-guard clojure.core/def
            cn.li.ac.util.init-guard/with-init-guard clojure.core/when
            cn.li.ac.ability.dsl/defcategory clojure.core/def}
- :hooks {:analyze-call {cn.li.ac.ability.dsl/defskill hooks.defskill/defskill}}
+ :hooks {:analyze-call {cn.li.ac.ability.dsl/defskill hooks.defskill/defskill
+                      java.lang.ThreadLocal/. hooks.thread-local/thread-local-ctor}}
  :linters
  {:unresolved-symbol {:level :warning}
   :unused-private-var {:level :warning}
   ;; *framework* is initialized to nil and injected via alter-var-root at runtime.
   ;; clj-kondo cannot track the runtime injection, so suppress false-positive
   ;; nil-deref warnings on @*framework* across all namespaces.
-  :deref {:level :off}}}
+  :deref {:level :off}
+  ;; *client-session-id* and *player-state-owner* are defn functions (not ^:dynamic)
+  ;; that read from ThreadLocal. Earmuffs naming is intentional for API compatibility
+  ;; (function signature unchanged from the original ^:dynamic vars).
+  ;; See AGENT_AND_TOOLING.md § ThreadLocal + 高阶函数.
+  :earmuffed-var-not-dynamic {:exclude [cn.li.mcmod.hooks.core/*client-session-id*
+                                        cn.li.mcmod.hooks.core/*player-state-owner*]}
+  ;; ThreadLocal constructor calls outside hooks.core → warning.
+  ;; See AGENT_AND_TOOLING.md § ThreadLocal 上下文调用规范.
+  :discouraged-var {java.lang.ThreadLocal. {:level :warning
+                                             :message "ThreadLocal must only be used in cn.li.mcmod.hooks.core via with-client-ctx-fn"}}}}
