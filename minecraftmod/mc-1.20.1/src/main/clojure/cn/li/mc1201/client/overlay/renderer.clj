@@ -515,7 +515,7 @@
             screen-height (.getGuiScaledHeight window)
             owner-key (render-owner-key owner)
             now (now-ms)
-            overlay-plan (binding [client-ui/*client-session-id* (:client-session-id owner)]
+            overlay-plan (client-ui/with-client-ctx {:session-id (:client-session-id owner)}
                            (client-ui/client-build-overlay-plan
                              player-uuid
                              screen-width

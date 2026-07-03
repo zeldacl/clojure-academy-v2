@@ -37,8 +37,7 @@
 
 (defn- with-player-state-owner
   [owner f]
-  (binding [player-hooks/*player-state-owner* owner]
-    (f)))
+  (player-hooks/with-client-ctx-fn {:player-owner owner} f))
 
 (defn on-player-login!
   [player {:keys [load-player-state! mark-player-dirty! send-sync-now! clear-player-dirty!] :as opts}]

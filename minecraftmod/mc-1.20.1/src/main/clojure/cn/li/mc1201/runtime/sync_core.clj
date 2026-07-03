@@ -102,7 +102,7 @@
   [owner]
   (let [session-key (session-id owner)
         tick (current-session-tick session-key)
-        players (binding [power-runtime/*player-state-owner* owner]
+        players (power-runtime/with-client-ctx {:player-owner owner}
                   (set (power-runtime/list-player-uuids)))]
 		(update-scheduler-states! assoc-in [session-key :dirty-players]
            (into {}
@@ -173,7 +173,7 @@
   (let [{:keys [due? tick session-key dirty-uuids]} (advance-scheduler! owner)]
     (when due?
       (doseq [uuid dirty-uuids]
-        (binding [power-runtime/*player-state-owner* owner]
+        (power-runtime/with-client-ctx {:player-owner owner}
           (when-let [payload (build-sync-payload uuid)]
             (try
               (when send-fn

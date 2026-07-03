@@ -130,7 +130,7 @@
 (defn- with-client-owner-bindings
   [owner f]
   (let [[session-id player-uuid] (client-ui-owner-key owner)]
-    (binding [runtime-hooks/*client-session-id* session-id]
+    (runtime-hooks/with-client-ctx {:session-id session-id}
       (runtime-hooks/with-player-state-owner {:client-session-id session-id
                                               :player-uuid player-uuid}
         (f)))))
@@ -1252,7 +1252,7 @@
      :client-open-managed-screen!
      (fn [screen-key payload]
        (let [{:keys [player-uuid client-session-id payload]} (validate-managed-screen-payload screen-key payload)]
-         (binding [runtime-hooks/*client-session-id* client-session-id]
+         (runtime-hooks/with-client-ctx {:session-id client-session-id}
            (call-with-managed-screen-runtime
              #(let [owner {:client-session-id client-session-id
                            :player-uuid player-uuid}]

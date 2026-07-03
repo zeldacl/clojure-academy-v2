@@ -53,8 +53,7 @@
 
 (defn- with-server-player-owner
   [^ServerPlayer player f]
-  (binding [runtime-hooks/*player-state-owner* (server-player-owner player)]
-    (f)))
+  (runtime-hooks/with-client-ctx-fn {:player-owner (server-player-owner player)} f))
 
 ;; ---------------------------------------------------------------------------
 ;; Platform multimethod implementation

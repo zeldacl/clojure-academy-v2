@@ -87,8 +87,7 @@
 
 (defn- with-client-session
   [session-id f]
-  (binding [client-ui/*client-session-id* session-id]
-    (f)))
+  (client-ui/with-client-ctx-fn {:session-id session-id} f))
 
 (defn- augment-payload-owner
   [payload]

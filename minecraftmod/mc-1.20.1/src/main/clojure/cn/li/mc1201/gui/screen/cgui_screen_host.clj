@@ -58,7 +58,7 @@
                       h (.-height this)]
                   (.renderBackground this graphics)
                   (when root
-                    (binding [client-ui/*client-session-id* (or session-id "")]
+                    (client-ui/with-client-ctx {:session-id (or session-id "")}
                       (cgui-rt/resize-root! root w h)
                       ;; Apply root CENTER/CENTER alignment — matching upstream
                       ;; CGuiScreen (full-screen overlay) behavior
@@ -84,26 +84,26 @@
             ;; mouseClicked
             (fn [_this mouse-x mouse-y button]
               (when root
-                (binding [client-ui/*client-session-id* (or session-id "")]
+                (client-ui/with-client-ctx {:session-id (or session-id "")}
                   (cgui-rt/mouse-click! root (int mouse-x) (int mouse-y) @left @top button)))
               true)
             ;; removed
             (fn [_this]
               (when root
-                (binding [client-ui/*client-session-id* (or session-id "")]
+                (client-ui/with-client-ctx {:session-id (or session-id "")}
                   (cgui-rt/dispose! root)))
               (when on-close (on-close))))
       ;; Extra Screen methods via with* setters
       (.withMouseReleased
         (fn [_this mouse-x mouse-y button]
           (when root
-            (binding [client-ui/*client-session-id* (or session-id "")]
+            (client-ui/with-client-ctx {:session-id (or session-id "")}
               (cgui-rt/mouse-click! root (int mouse-x) (int mouse-y) @left @top button)))
           true))
       (.withMouseDragged
         (fn [_this mouse-x mouse-y button drag-x drag-y]
           (when root
-            (binding [client-ui/*client-session-id* (or session-id "")]
+            (client-ui/with-client-ctx {:session-id (or session-id "")}
               (cgui-rt/mouse-drag! root (int mouse-x) (int mouse-y) (int drag-x) (int drag-y) @left @top)))
           true))
       (.withIsPauseScreen

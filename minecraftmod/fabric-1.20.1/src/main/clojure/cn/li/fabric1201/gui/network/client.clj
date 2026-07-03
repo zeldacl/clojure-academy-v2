@@ -32,10 +32,11 @@
   (let [session-id (client-session-id)
         player-uuid (or (payload-player-uuid payload)
                         (try (mc-session/local-player-uuid) (catch Exception _ nil)))]
-    (binding [runtime-hooks/*client-session-id* session-id
-              runtime-hooks/*player-state-owner* (cond-> {:client-session-id session-id}
-                                                   player-uuid (assoc :player-uuid player-uuid))]
-      (f))))
+    (runtime-hooks/with-client-ctx-fn
+      {:session-id session-id
+       :player-owner (cond-> {:client-session-id session-id}
+                       player-uuid (assoc :player-uuid player-uuid))}
+      f)))
 
 (def ^:private client-init-guard-lock
   (Object.))

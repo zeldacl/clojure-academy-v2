@@ -162,16 +162,18 @@
 
 ;; Client context stored in Framework [:service :client-ctx] instead of ^:dynamic ThreadLocal.
 ;; Replaces *client-session-id* and *player-state-owner* dynamic vars.
+;; get-client-ctx / set-client-ctx! are public — session.clj uses them to manage
+;; client session bindings without ThreadLocal-based binding.
 
 (def ^:private client-ctx-path [:service :client-ctx])
 
-(defn- get-client-ctx
+(defn get-client-ctx
   "Read current client context from Framework. Returns nil if not set."
   []
   (get-in @(fw/fw-atom) client-ctx-path))
 
-(defn- set-client-ctx!
-  "Write client context to Framework."
+(defn set-client-ctx!
+  "Write client context to Framework. Returns nil."
   [ctx]
   (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom assoc-in client-ctx-path ctx))
@@ -251,15 +253,39 @@
 
 (defn with-player-state-owner-fn
   "使用高阶函数代替宏，执行带有一致词法作用域的绑定。
-   100% 免疫编译期符号逃逸 Bug。"
+   100% 免疫编译期符号逃逸 Bug。
+   通过 Framework [:service :client-ctx] 管理 owner，不使用 ThreadLocal binding。"
   [owner thunk]
-  (binding [*player-state-owner* owner]
-    (thunk)))
+  (let [old-ctx (get-client-ctx)
+        new-ctx (assoc (or old-ctx {}) :player-owner owner)]
+    (set-client-ctx! new-ctx)
+    (try (thunk)
+         (finally
+           (set-client-ctx! old-ctx)))))
 
 ;; 为了保持原有代码的兼容性，你可以保留宏名，但让它直接调用这个函数（推荐）：
 (defmacro with-player-state-owner
   [owner & body]
   `(with-player-state-owner-fn ~owner (fn [] ~@body)))
+
+(defn with-client-ctx-fn
+  "Set client context keys in Framework [:service :client-ctx] for duration of thunk.
+  ctx-map is merged into the current client context. Restores previous context on exit.
+  Replaces (binding [*client-session-id* / *player-state-owner*] ...) patterns
+  after the defn migration to Framework-based readers."
+  [ctx-map thunk]
+  (let [old-ctx (get-client-ctx)
+        new-ctx (merge (or old-ctx {}) ctx-map)]
+    (set-client-ctx! new-ctx)
+    (try (thunk)
+         (finally
+           (set-client-ctx! old-ctx)))))
+
+(defmacro with-client-ctx
+  "Macro wrapper: set client context keys in Framework for duration of body.
+  Usage: (with-client-ctx {:session-id sid :player-owner owner} ...body...)"
+  [ctx-map & body]
+  `(with-client-ctx-fn ~ctx-map (fn [] ~@body)))
 
 
 (defn register-power-runtime-hooks!

@@ -48,7 +48,7 @@
         client-owner {:logical-side :client
                       :client-session-id session-id
                       :player-uuid player-uuid}]
-    (binding [runtime-hooks/*client-session-id* session-id]
+    (runtime-hooks/with-client-ctx {:session-id session-id}
       (runtime-hooks/with-player-state-owner client-owner
         (f session-id player-uuid)))))
 
