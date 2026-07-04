@@ -43,12 +43,14 @@
                                     (constantly true))]
       (reify ITileContainerLogic
         (getSize [_ be] (int (get-size be)))
-        (getItem [_ be slot] (get-item be slot))
+        ;; nil→ItemStack/EMPTY guards: Clojure fns conventionally return nil
+        ;; for empty slots, but ITileContainerLogic requires @Nonnull ItemStack.
+        (getItem [_ be slot] (or (get-item be slot) ItemStack/EMPTY))
         (setItem [_ be slot stack]
           (set-item! be slot stack)
           nil)
-        (removeItem [_ be slot amt] (remove-item be slot amt))
-        (removeItemNoUpdate [_ be slot] (remove-item-no-update be slot))
+        (removeItem [_ be slot amt] (or (remove-item be slot amt) ItemStack/EMPTY))
+        (removeItemNoUpdate [_ be slot] (or (remove-item-no-update be slot) ItemStack/EMPTY))
         (clearContent [_ be]
           (clear! be)
           nil)

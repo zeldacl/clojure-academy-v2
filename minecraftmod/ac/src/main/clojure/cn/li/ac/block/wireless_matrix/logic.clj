@@ -247,4 +247,4 @@
     ;; Inventory items are dropped automatically by SharedScriptedBlock.onRemove
     ;; via Containers.dropContents. This handler exists for future cleanup hooks.
     (when (world/world-get-tile-entity* world pos)
-      :break-handled)))
+      {:break-handled true})))

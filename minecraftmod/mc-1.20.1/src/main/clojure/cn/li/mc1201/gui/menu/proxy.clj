@@ -52,7 +52,7 @@
                               [:server (System/identityHashCode server)])
                             (catch Throwable _ nil))
         client-session-id (when (nil? server-session-id)
-                            runtime-hooks/*client-session-id*)]
+                            (runtime-hooks/*client-session-id*))]
     (owner-map-for-player-context
      {:player player
       :player-uuid player-uuid

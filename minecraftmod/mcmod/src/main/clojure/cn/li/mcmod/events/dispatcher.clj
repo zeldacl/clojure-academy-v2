@@ -39,8 +39,12 @@
   [ctx]
   (let [routed-ctx (mb-core/route-to-controller-context ctx)
         routed-block-id (:block-id routed-ctx)
-      handler-ret (when-let [handler (bquery/get-block-event-handler routed-block-id :on-break)]
+        handler-ret (when-let [handler (bquery/get-block-event-handler routed-block-id :on-break)]
                       (handler routed-ctx))
-        core-ret (mb-core/apply-structure-break! ctx routed-ctx)]
-    (merge (or handler-ret {}) (or core-ret {}))))
+        core-ret (mb-core/apply-structure-break! ctx routed-ctx)
+        ;; Guard: handlers may return non-map values (e.g. bare keywords);
+        ;; merge requires maps, so coerce to {} when not a map.
+        handler-map (if (map? handler-ret) handler-ret {})
+        core-map (if (map? core-ret) core-ret {})]
+    (merge handler-map core-map)))
 

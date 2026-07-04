@@ -197,7 +197,7 @@
               #(cgui-rt/key-input! root 0 0 (char code-point))))
           (if owns-key?
             true
-            (.callSuperCharTyped s code-point modifiers)))))
+            (.callSuperCharTyped s (char code-point) modifiers)))))
 
       (.withRemoved (fn [^DelegatingCGuiContainerScreen _s]
         (when root
