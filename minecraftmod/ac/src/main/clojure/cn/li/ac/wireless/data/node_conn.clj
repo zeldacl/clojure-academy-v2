@@ -143,59 +143,54 @@
 
 (defn- attach-device!
   [conn device-vb device-key device-name]
-  (world-registry/transact!
-    (:world-data conn)
-    (fn [_]
-      (let [world-data (:world-data conn)
-            conn (entity-commit/resolve-connection world-data conn)
-            ;; Clear :disposed flag — a previously empty connection may have been
-            ;; disposed by validate!, but adding a device revives it.
-            conn* (update-state conn #(-> %
-                                          (update device-key conj device-vb)
-                                          (assoc :disposed false)))]
+  ;; replace-connection-in-state! and update-state! are each already atomic via swap!.
+  (let [world-data (:world-data conn)
+        conn (entity-commit/resolve-connection world-data conn)
+        ;; Clear :disposed flag — a previously empty connection may have been
+        ;; disposed by validate!, but adding a device revives it.
+        conn* (update-state conn #(-> %
+                                      (update device-key conj device-vb)
+                                      (assoc :disposed false)))]
+    (entity-commit/replace-connection-in-state! world-data conn conn*)
+    (world-registry/update-state!
+      world-data
+      (fn [state]
+        (-> state
+            (topology/link-connection-device conn* device-vb)
+            (assoc-in [:node-lookup (:node conn*)] conn*))))
+    (log/info (format "Added %s %s to node %s"
+                      device-name
+                      (vb/vblock-to-string device-vb)
+                      (vb/vblock-to-string (:node conn*))))
+    true))
+
+(defn- remove-device!
+  [conn device-vb device-key device-name]
+  ;; replace-connection-in-state! and update-state! are each already atomic via swap!.
+  (let [world-data (:world-data conn)
+        conn (entity-commit/resolve-connection world-data conn)
+        devices (state-value conn device-key)
+        removed? (boolean (some #(vb/vblock-equals? % device-vb) devices))]
+    (when removed?
+      (let [conn* (update-state
+                    conn
+                    (fn [state]
+                      (update state device-key
+                              (fn [items]
+                                (filterv #(not (vb/vblock-equals? % device-vb)) items)))))]
         (entity-commit/replace-connection-in-state! world-data conn conn*)
         (world-registry/update-state!
           world-data
           (fn [state]
             (-> state
-                (topology/link-connection-device conn* device-vb)
+                (topology/unlink-connection-device device-vb)
                 (assoc-in [:node-lookup (:node conn*)] conn*))))
-        (log/info (format "Added %s %s to node %s"
+        (log/info (format "Removed %s %s from node %s"
                           device-name
                           (vb/vblock-to-string device-vb)
-                          (vb/vblock-to-string (:node conn*))))
-        true))))
-
-(defn- remove-device!
-  [conn device-vb device-key device-name]
-  (let [world-data (:world-data conn)
-        conn (entity-commit/resolve-connection world-data conn)]
-    (world-registry/transact!
-      world-data
-      (fn [_]
-        (let [conn (entity-commit/resolve-connection world-data conn)
-              devices (state-value conn device-key)
-            removed? (boolean (some #(vb/vblock-equals? % device-vb) devices))]
-        (when removed?
-          (let [conn* (update-state
-                        conn
-                        (fn [state]
-                          (update state device-key
-                                  (fn [items]
-                                    (filterv #(not (vb/vblock-equals? % device-vb)) items)))))]
-            (entity-commit/replace-connection-in-state! world-data conn conn*)
-            (world-registry/update-state!
-              world-data
-              (fn [state]
-                (-> state
-                    (topology/unlink-connection-device device-vb)
-                    (assoc-in [:node-lookup (:node conn*)] conn*))))
-            (log/info (format "Removed %s %s from node %s"
-                              device-name
-                              (vb/vblock-to-string device-vb)
-                              (vb/vblock-to-string (:node conn))))
-            true))
-        removed?)))))
+                          (vb/vblock-to-string (:node conn))))
+        true))
+        removed?))
 
 (defn- add-device!
   "Generic function to add a device (receiver or generator) to node connection
@@ -297,14 +292,11 @@
             active-keys (into #{} (map vb/vblock-to-string (concat (get-receivers conn) (get-generators conn))))
             counters   (reduce-kv (fn [c k _] (if (active-keys k) c (dissoc c k)))
                                  counters counters)
-            ;; --- commit updated counters (wrapped in transact! for atomicity) ---
-            conn (world-registry/transact!
-                   (:world-data conn)
-                   (fn [_]
-                     (let [updated (update-state conn #(assoc % :stale-counters counters))]
-                       (entity-commit/replace-connection-in-state!
-                         (:world-data conn) conn updated)
-                       updated)))]
+            ;; --- commit updated counters (replace-connection-in-state! is already atomic via swap!) ---
+            conn (let [updated (update-state conn #(assoc % :stale-counters counters))]
+                   (entity-commit/replace-connection-in-state!
+                     (:world-data conn) conn updated)
+                   updated)]
         ;; --- remove devices that exceeded cooldown ---
         (doseq [r stale-recs
                 :let [k (vb/vblock-to-string r)]

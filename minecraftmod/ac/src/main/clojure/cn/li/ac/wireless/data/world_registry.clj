@@ -186,28 +186,6 @@
 (defn connections [world-data] (state-value world-data :connections))
 
 ;; ============================================================================
-;; Transaction (STM-style, simplified — no dynamic var)
-;; ============================================================================
-
-(defn transact!
-  "Run a world-state mutation with serialized access via Framework swap!.
-   The mutation-fn receives world-data and should return nil (side-effecting
-   via set-state-value! etc. is not needed — mutate and return the new state).
-
-   No longer uses ^:dynamic *world-transaction* — re-entrant calls are
-   naturally serialized by the single Framework atom swap!."
-  [world-data mutation-fn]
-  (let [wk (:world-key world-data)]
-    (when-let [fw-atom (fw/fw-atom)]
-      (let [current (get-in @fw-atom (world-state-path wk))
-            base (or current (initial-world-state))
-            tx-state (atom base)
-            result (mutation-fn (assoc world-data :_tx-state tx-state))
-            final-state @tx-state]
-        (swap! fw-atom assoc-in (world-state-path wk) final-state)
-        result))))
-
-;; ============================================================================
 ;; Diagnostics & testing
 ;; ============================================================================
 

@@ -2,7 +2,7 @@
   "Application-level wireless topology commands.
 
   Orchestrates pure `wireless.domain.topology` transitions, commits through
-  `wireless.data.world-registry/transact!` and `entity-commit`, and owns logging."
+  `entity-commit` and `world-registry/update-state!` (each already atomic via swap!), and owns logging."
   (:require [cn.li.ac.wireless.core.vblock :as vb]
             [cn.li.ac.wireless.data.entity-commit :as entity-commit]
             [cn.li.ac.wireless.data.network-lookup :as lookup]
@@ -37,36 +37,30 @@
 
 (defn destroy-network!
   [world-data item]
-  (let [item (entity-commit/resolve-network world-data item)]
-    (world-registry/transact!
-      world-data
-      (fn [_]
-        (let [disposed (network-state/mark-disposed! item)]
-          (world-registry/update-state! world-data topology/unregister-network disposed)
-          (log/info (format "Destroyed network: SSID='%s'" (network-state/get-ssid disposed)))
-          {:success true})))))
+  (let [item (entity-commit/resolve-network world-data item)
+        disposed (network-state/mark-disposed! item)]
+    ;; update-state! is already atomic via its own swap! — no transact! needed.
+    (world-registry/update-state! world-data topology/unregister-network disposed)
+    (log/info (format "Destroyed network: SSID='%s'" (network-state/get-ssid disposed)))
+    {:success true}))
 
 (defn create-node-connection!
   [world-data node-vblock]
   (if (lookup/get-node-connection world-data node-vblock)
     {:success false :reason :already-exists}
     (let [conn (node-conn/create-node-conn world-data node-vblock)]
-      (world-registry/transact!
-        world-data
-        (fn [_]
-          (world-registry/update-state! world-data topology/register-connection conn)
-          {:success true :connection conn})))))
+      ;; update-state! is already atomic via its own swap!.
+      (world-registry/update-state! world-data topology/register-connection conn)
+      {:success true :connection conn})))
 
 (defn destroy-node-connection!
   [world-data item]
-  (world-registry/transact!
-    world-data
-    (fn [_]
-      (let [disposed (node-conn/set-disposed! item true)]
-        (world-registry/update-state! world-data topology/unregister-connection disposed)
-        (log/info (format "Destroyed node connection: %s"
-                          (vb/vblock-to-string (:node item))))
-        {:success true}))))
+  (let [disposed (node-conn/set-disposed! item true)]
+    ;; update-state! is already atomic via its own swap!.
+    (world-registry/update-state! world-data topology/unregister-connection disposed)
+    (log/info (format "Destroyed node connection: %s"
+                      (vb/vblock-to-string (:node item))))
+    {:success true}))
 
 (defn ensure-node-connection!
   [world-data node-vblock]
@@ -89,38 +83,36 @@
 
 (defn unlink-node-from-network!
   [network-item node-vb]
-  (world-registry/transact!
-    (:world-data network-item)
-    (fn [_]
-      (if (remove-node-in-transaction! (:world-data network-item) network-item node-vb)
-        {:success true}
-        {:success false}))))
+  ;; remove-node-in-transaction! uses update-state! which is already atomic.
+  (if (remove-node-in-transaction! (:world-data network-item) network-item node-vb)
+    {:success true}
+    {:success false}))
 
 (defn link-node-to-network!
   [world-data net node-vblock password-attempt]
-  (world-registry/transact!
-    world-data
-    (fn [_]
-      (let [net (entity-commit/resolve-network world-data net)]
-        (when-let [old-net (lookup/get-network-by-node world-data node-vblock)]
-          (when-not (identical? old-net net)
-            (remove-node-in-transaction! world-data old-net node-vblock)))
-        (let [validation (topology/validate-add-node net node-vblock password-attempt)]
-          (if-not (:ok validation)
-            (do
-              (log/info (format "Node add failed: reason=%s for '%s'"
-                                (:reason validation)
-                                (network-state/get-ssid net)))
-              {:success false :reason (:reason validation)})
-            (let [net* (topology/add-node-to-network net node-vblock)]
-              (entity-commit/replace-network-in-state! world-data net net*)
-              (world-registry/update-state!
-                world-data
-                #(topology/link-network-node % net* node-vblock))
-              (log/info (format "Added node %s to network '%s'"
-                                (vb/vblock-to-string node-vblock)
-                                (network-state/get-ssid net*)))
-              {:success true})))))))
+  ;; Each sub-operation (replace-network-in-state!, update-state!) is already
+  ;; atomic via its own swap!. The transact! wrapper was harmful because its
+  ;; outer swap! would overwrite the inner updates with the original snapshot.
+  (let [net (entity-commit/resolve-network world-data net)]
+    (when-let [old-net (lookup/get-network-by-node world-data node-vblock)]
+      (when-not (identical? old-net net)
+        (remove-node-in-transaction! world-data old-net node-vblock)))
+    (let [validation (topology/validate-add-node net node-vblock password-attempt)]
+      (if-not (:ok validation)
+        (do
+          (log/info (format "Node add failed: reason=%s for '%s'"
+                            (:reason validation)
+                            (network-state/get-ssid net)))
+          {:success false :reason (:reason validation)})
+        (let [net* (topology/add-node-to-network net node-vblock)]
+          (entity-commit/replace-network-in-state! world-data net net*)
+          (world-registry/update-state!
+            world-data
+            #(topology/link-network-node % net* node-vblock))
+          (log/info (format "Added node %s to network '%s'"
+                            (vb/vblock-to-string node-vblock)
+                            (network-state/get-ssid net*)))
+          {:success true})))))
 
 (defn link-generator-to-connection!
   [world-data conn generator-vblock]
@@ -157,14 +149,12 @@
         {:success false :reason :ssid-taken})
 
       :else
-      (world-registry/transact!
-        world-data
-        (fn [_]
-          (let [network* (network-mutation/reset-ssid! network-item new-ssid)]
-            (world-registry/update-state!
-              world-data
-              #(topology/refresh-ssid-lookup % old-ssid new-ssid network*))
-            {:success true}))))))
+      ;; update-state! is already atomic via its own swap!.
+      (let [network* (network-mutation/reset-ssid! network-item new-ssid)]
+        (world-registry/update-state!
+          world-data
+          #(topology/refresh-ssid-lookup % old-ssid new-ssid network*))
+        {:success true}))))
 
 (defn reset-network-password!
   [network-item new-password]
@@ -173,18 +163,12 @@
 
 (defn rebuild-network-indexes!
   [world-data net]
-  (world-registry/transact!
-    world-data
-    (fn [_]
-      (world-registry/update-state! world-data topology/rebuild-network-indexes net)
-      net))
+  ;; update-state! is already atomic via its own swap!.
+  (world-registry/update-state! world-data topology/rebuild-network-indexes net)
   {:success true})
 
 (defn rebuild-connection-indexes!
   [world-data conn]
-  (world-registry/transact!
-    world-data
-    (fn [_]
-      (world-registry/update-state! world-data topology/rebuild-connection-indexes conn)
-      conn))
+  ;; update-state! is already atomic via its own swap!.
+  (world-registry/update-state! world-data topology/rebuild-connection-indexes conn)
   {:success true})
