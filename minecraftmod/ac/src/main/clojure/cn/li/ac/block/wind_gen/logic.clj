@@ -360,7 +360,7 @@
                        (catch Exception e
                          (log/debug "[wind-gen get-linked-node] exception:" (ex-message e))
                          nil))]
-      (if-let [node (try (node-conn/get-node conn)
+      (if-let [node (try (node-conn/get-node conn (platform-be/be-get-world-safe tile))
                        (catch Exception e
                          (log/debug "[wind-gen get-linked-node] get-node exception:" (ex-message e))
                          nil))]

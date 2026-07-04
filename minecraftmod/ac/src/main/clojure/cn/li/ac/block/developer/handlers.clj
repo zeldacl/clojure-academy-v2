@@ -58,7 +58,7 @@
 
 (defn- get-linked-node-for-receiver [tile]
   (when-let [conn (try (wireless-api/get-node-conn-by-receiver tile) (catch Exception _ nil))]
-    (try (node-conn/get-node conn) (catch Exception _ nil))))
+    (try (node-conn/get-node conn (platform-be/be-get-world-safe tile)) (catch Exception _ nil))))
 
 (defn handle-start-development [payload player]
   (log/info "[handle-start-development] received payload=" (pr-str payload)

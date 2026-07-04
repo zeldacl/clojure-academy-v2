@@ -27,7 +27,7 @@
 
 (defn get-linked-node ^IWirelessNode [be]
 	(when-let [conn (try (wireless-api/get-node-conn-by-generator be) (catch Exception _ nil))]
-		(try (node-conn/get-node conn) (catch Exception _ nil))))
+		(try (node-conn/get-node conn (platform-be/be-get-world-safe be)) (catch Exception _ nil))))
 
 (defn sync-link-state [be state]
 	(if-let [^IWirelessNode node (get-linked-node be)]

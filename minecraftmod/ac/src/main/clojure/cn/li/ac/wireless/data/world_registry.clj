@@ -134,14 +134,17 @@
   (get-world-data-record (world-key world)))
 
 (defn register-world-data!
-  "Register a world -> WiWorldData mapping in the registry."
+  "Register a world → WiWorldData mapping in the registry.
+  Preserves any existing world-state already populated by deserialization
+  (e.g. world-data-from-nbt via rebuild-network-indexes!)."
   [world wi-data]
-  (let [wk (world-key world)
-        state (initial-world-state)]
+  (let [wk (world-key world)]
     (when-let [fw-atom (fw/fw-atom)]
-      (swap! fw-atom assoc-in (registry-path wk)
-             {:world-data (assoc wi-data :world-key wk)
-              :world-state state}))
+      (swap! fw-atom update-in (registry-path wk)
+             (fn [existing]
+               (let [existing-state (or (:world-state existing) (initial-world-state))]
+                 {:world-data (assoc wi-data :world-key wk)
+                  :world-state existing-state}))))
     wi-data))
 
 (defn remove-world-data!

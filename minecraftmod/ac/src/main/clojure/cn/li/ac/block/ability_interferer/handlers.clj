@@ -89,7 +89,7 @@
 
 (defn- get-linked-node-for-interferer [tile]
   (when-let [conn (try (wireless-api/get-node-conn-by-receiver tile) (catch Exception _ nil))]
-    (try (node-conn/get-node conn) (catch Exception _ nil))))
+    (try (node-conn/get-node conn (platform-be/be-get-world-safe tile)) (catch Exception _ nil))))
 
 (defn register-network-handlers! []
   (net-server/register-handler (msg :change-range) handle-change-range)

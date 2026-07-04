@@ -98,7 +98,7 @@
                     vb/create-vnode-conn (fn [_] :node-conn-vb)
                     commands/ensure-node-connection! (fn [_ _] :conn)
                     vb/create-vgenerator (fn [_] :gen-vb)
-                    commands/link-generator-to-connection! (fn [_ _ _] {:success true})
+                    commands/link-generator-to-connection! (fn [_ _ _ _] {:success true})
                     resolver/node-capability (fn [tile]
                                                  (when (= tile :node-tile) node))
                     resolver/generator-capability (fn [tile]
@@ -133,7 +133,7 @@
                     vb/create-vnode-conn (fn [_] :node-conn-vb)
                     commands/ensure-node-connection! (fn [_ _] :conn)
                     vb/create-vreceiver (fn [_] :rec-vb)
-                    commands/link-receiver-to-connection! (fn [_ _ _] {:success true})
+                    commands/link-receiver-to-connection! (fn [_ _ _ _] {:success true})
                     resolver/node-capability (fn [tile]
                                                  (when (= tile :node-tile) node))
                     resolver/receiver-capability (fn [tile]

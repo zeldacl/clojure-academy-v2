@@ -118,7 +118,7 @@
       (runtime/node-connection-impl-validator wi-data world)
       (let [net-count (count (world-registry/networks wi-data))
             post-conn-count (count (world-registry/connections wi-data))
-            nbt-data (persistence/world-data-to-nbt wi-data)]
+            nbt-data (persistence/world-data-to-nbt wi-data world)]
         (log/info "[on-world-save] Saving" net-count "networks," post-conn-count "connections")
         nbt-data))
     nil))

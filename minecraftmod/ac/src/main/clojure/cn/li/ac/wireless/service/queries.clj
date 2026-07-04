@@ -92,7 +92,7 @@
                         (if (model/connection-has-capacity?
                               {:receivers (node-conn/get-receivers conn)
                                :generators (node-conn/get-generators conn)}
-                              (node-conn/get-capacity conn))
+                              (node-conn/get-capacity conn world))
                           (conj acc node)
                           acc)
                         (conj acc node))

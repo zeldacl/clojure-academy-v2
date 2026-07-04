@@ -194,7 +194,7 @@
                 node-vb    (vb/create-vnode-conn node-tile)
                 conn       (commands/ensure-node-connection! world-data node-vb)
                 dev-vb     (create-vb device-tile)
-                result     (link-cmd world-data conn dev-vb)]
+                result     (link-cmd world-data conn dev-vb world)]
             (when (:success result)
               (platform-events/fire-event!
                 {:kind :topology/node :action link-action

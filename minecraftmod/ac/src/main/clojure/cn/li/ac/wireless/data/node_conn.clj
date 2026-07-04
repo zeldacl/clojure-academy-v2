@@ -68,8 +68,8 @@
 
 (defn get-node
   "Get the node TileEntity"
-  [conn]
-  (resolver/resolve-node-cap (:world (:world-data conn)) (:node conn)))
+  [conn world]
+  (resolver/resolve-node-cap world (:node conn)))
 
 (defn get-receivers [conn]
   (vec (or (state-value conn :receivers) [])))
@@ -93,8 +93,8 @@
 
 (defn get-capacity
   "Get node capacity"
-  [conn]
-  (if-let [node (get-node conn)]
+  [conn world]
+  (if-let [node (get-node conn world)]
     (.getCapacity ^IWirelessNode node)
     Integer/MAX_VALUE))
 
@@ -111,8 +111,8 @@
 
 (defn- check-range
   "Check if vblock is within node range"
-  [conn vblock]
-  (if-let [node (get-node conn)]
+  [conn vblock world]
+  (if-let [node (get-node conn world)]
     (let [range (.getRange ^IWirelessNode node)
           dist-sq (vb/dist-sq vblock (:node conn))]
       (<= dist-sq (* range range)))
@@ -122,8 +122,8 @@
 ;; Device Management (Unified)
 ;; ============================================================================
 
-(defn- capacity-available? [conn]
-  (< (get-load conn) (get-capacity conn)))
+(defn- capacity-available? [conn world]
+  (< (get-load conn) (get-capacity conn world)))
 
 (defn- resolve-device-context
   [_conn device-type]
@@ -195,16 +195,16 @@
 (defn- add-device!
   "Generic function to add a device (receiver or generator) to node connection
   Returns true if successful"
-  [conn device-vb device-type]
+  [conn device-vb device-type world]
   (let [conn (entity-commit/resolve-connection (:world-data conn) conn)
         {:keys [device-key remove-fn device-name]} (resolve-device-context conn device-type)]
     (cond
-      (not (capacity-available? conn))
+      (not (capacity-available? conn world))
       (do
         (log/info (format "%s add failed: node at capacity" (str/capitalize device-name)))
         false)
 
-      (not (check-range conn device-vb))
+      (not (check-range conn device-vb world))
       (do
         (log/info (format "%s add failed: out of range" (str/capitalize device-name)))
         false)
@@ -221,8 +221,8 @@
 (defn add-receiver!
   "Add a receiver to this node connection
   Returns true if successful"
-  [conn receiver-vb]
-  (add-device! conn receiver-vb :receiver))
+  [conn receiver-vb world]
+  (add-device! conn receiver-vb :receiver world))
 
 (defn remove-receiver!
   "Remove receiver from this node connection immediately."
@@ -236,8 +236,8 @@
 (defn add-generator!
   "Add a generator to this node connection
   Returns true if successful"
-  [conn generator-vb]
-  (add-device! conn generator-vb :generator))
+  [conn generator-vb world]
+  (add-device! conn generator-vb :generator world))
 
 (defn remove-generator!
   "Remove generator from this node connection immediately."
@@ -252,9 +252,8 @@
   "Validate connection integrity — count stale devices and remove only after
   cooldown. Dispose empty or orphaned connections.
   Returns true if valid, false if should be disposed."
-  [conn]
-  (let [conn (entity-commit/resolve-connection (:world-data conn) conn)
-        world (:world (:world-data conn))]
+  [conn world]
+  (let [conn (entity-commit/resolve-connection (:world-data conn) conn)]
     (if-not world
       (do (log/warn "[wireless] Validate: world is nil for connection, skipping validation")
           (not (is-disposed? conn)))
@@ -327,12 +326,11 @@
             (not (is-disposed? conn))))))))
 (defn- transfer-from-generators!
   "Collect energy from generators to node"
-  [conn node bandwidth]
+  [conn node bandwidth world]
   (when (> bandwidth 0)
     (let [generators (get-generators conn)]
       (when (seq generators)
-        (let [world (:world (:world-data conn))
-              generators-shuffled (shuffle generators)]
+        (let [generators-shuffled (shuffle generators)]
           (loop [gens-remaining generators-shuffled
                  transfer-left (double bandwidth)]
             (when (and (seq gens-remaining) (pos? transfer-left))
@@ -366,12 +364,11 @@
 
 (defn- transfer-to-receivers!
   "Distribute energy from node to receivers"
-  [conn node bandwidth]
+  [conn node bandwidth world]
   (when (> bandwidth 0)
     (let [receivers (get-receivers conn)]
       (when (seq receivers)
-        (let [world (:world (:world-data conn))
-              receivers-shuffled (shuffle receivers)]
+        (let [receivers-shuffled (shuffle receivers)]
           (loop [recs-remaining receivers-shuffled
                  transfer-left (double bandwidth)]
             (when (and (seq recs-remaining) (pos? transfer-left))
@@ -408,18 +405,17 @@
 
 (defn tick-node-conn!
   "Tick the node connection"
-  [conn]
+  [conn world]
   (let [conn (entity-commit/resolve-connection (:world-data conn) conn)]
     (when-not (is-disposed? conn)
-      (when (validate! conn)
+      (when (validate! conn world)
         (let [conn (entity-commit/resolve-connection (:world-data conn) conn)
-              world (:world (:world-data conn))
               node-vb (:node conn)]
           (when (vb/is-chunk-loaded? node-vb world)
             (when-let [node (resolver/resolve-node-cap world node-vb)]
               (let [bandwidth (.getBandwidth ^IWirelessNode node)]
-                (transfer-from-generators! conn node bandwidth)
-                (transfer-to-receivers! conn node bandwidth)))))))))
+                (transfer-from-generators! conn node bandwidth world)
+                (transfer-to-receivers! conn node bandwidth world)))))))))
 
 ;; ============================================================================
 ;; Disposal
@@ -438,11 +434,10 @@
 
 (defn node-connection-to-nbt
   "Serialize node connection to NBT."
-  [conn]
+  [conn world]
   (let [nbt-compound (nbt/create-nbt-compound)
         receivers-list (nbt/create-nbt-list)
-        generators-list (nbt/create-nbt-list)
-        world (:world (:world-data conn))]
+        generators-list (nbt/create-nbt-list)]
     (nbt/nbt-set-tag! nbt-compound "node" (vblock-codec/vblock-to-nbt (:node conn)))
     (doseq [receiver-vb (get-receivers conn)]
       (let [chunk-loaded? (vb/is-chunk-loaded? receiver-vb world)]
@@ -486,10 +481,11 @@
 
 (defn print-conn-info
   "Print connection information"
-  [conn]
-  (log/info (format "=== NodeConn: %s ===" (vb/vblock-to-string (:node conn))))
-  (log/info (format "  Load: %d/%d" (get-load conn) (get-capacity conn)))
-  (log/info (format "  Generators: %d" (count (get-generators conn))))
-  (log/info (format "  Receivers: %d" (count (get-receivers conn))))
-  (log/info (format "  Disposed: %s" (is-disposed? conn))))
+  ([conn] (print-conn-info conn nil))
+  ([conn world]
+   (log/info (format "=== NodeConn: %s ===" (vb/vblock-to-string (:node conn))))
+   (log/info (format "  Load: %d/%d" (get-load conn) (if world (get-capacity conn world) -1)))
+   (log/info (format "  Generators: %d" (count (get-generators conn))))
+   (log/info (format "  Receivers: %d" (count (get-receivers conn))))
+   (log/info (format "  Disposed: %s" (is-disposed? conn)))))
 

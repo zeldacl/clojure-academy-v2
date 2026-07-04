@@ -6,6 +6,7 @@
             [cn.li.ac.energy.operations :as energy]
             [cn.li.ac.wireless.api :as wireless-api]
             [cn.li.ac.wireless.data.node-conn :as node-conn]
+            [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.world :as world]
             [cn.li.mcmod.util.log :as log])
@@ -83,7 +84,7 @@
                        (catch Exception e
                          (log/debug "[get-linked-node] exception:" (ex-message e))
                          nil))]
-      (if-let [node (try (node-conn/get-node conn)
+      (if-let [node (try (node-conn/get-node conn (platform-be/be-get-world-safe tile))
                        (catch Exception e
                          (log/debug "[get-linked-node] get-node exception:" (ex-message e))
                          nil))]

@@ -115,20 +115,20 @@
           {:success true})))))
 
 (defn link-generator-to-connection!
-  [world-data conn generator-vblock]
+  [world-data conn generator-vblock world]
   (when-let [old-conn (lookup/get-node-connection world-data generator-vblock)]
     (node-conn/remove-generator! old-conn generator-vblock))
-  {:success (boolean (node-conn/add-generator! conn generator-vblock))})
+  {:success (boolean (node-conn/add-generator! conn generator-vblock world))})
 
 (defn unlink-generator-from-connection!
   [conn gen-vb]
   {:success (boolean (node-conn/remove-generator! conn gen-vb))})
 
 (defn link-receiver-to-connection!
-  [world-data conn receiver-vblock]
+  [world-data conn receiver-vblock world]
   (when-let [old-conn (lookup/get-node-connection world-data receiver-vblock)]
     (node-conn/remove-receiver! old-conn receiver-vblock))
-  {:success (boolean (node-conn/add-receiver! conn receiver-vblock))})
+  {:success (boolean (node-conn/add-receiver! conn receiver-vblock world))})
 
 (defn unlink-receiver-from-connection!
   [conn rec-vb]

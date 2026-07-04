@@ -146,7 +146,7 @@
           (is (:success (commands/create-network! wd matrix-vb "persist" "pw")))
           (is (:success (commands/link-node-to-network! wd (lookup/get-network-by-ssid wd "persist") node-vb "pw")))
           (let [conn (commands/ensure-node-connection! wd node-conn-vb)]
-            (is (true? (node-conn/add-generator! conn gen-vb))))
+            (is (true? (node-conn/add-generator! conn gen-vb world-id))))
           (world/register-world-data! world-id wd)
           (let [saved (world/on-world-save world-id)]
             (world/remove-world-data! world-id)

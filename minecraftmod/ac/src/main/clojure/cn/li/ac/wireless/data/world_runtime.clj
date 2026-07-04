@@ -31,7 +31,7 @@
 			(network-runtime/tick-wireless-net! item world)))
 	(doseq [item (world-registry/connections world-data)]
 		(when-not (node-conn/is-disposed? item)
-			(node-conn/tick-node-conn! item))))
+			(node-conn/tick-node-conn! item world))))
 
 (defn get-statistics
 	"Get statistics about this world's wireless system."

@@ -69,21 +69,33 @@
 ;; without reflection or MinecraftServer lookup.
 (def ^:private level-saved-data-by-key (atom {}))
 
+(def ^:private ^:const GLOBAL-KEY :global)
+
+(defn- overworld? [^ServerLevel level]
+  (= "minecraft:overworld" (str (.location (.dimension level)))))
+
 (defn- register-level-for-state-change-hook! [^ServerLevel level]
   (let [sd (wl-saved/get-or-create-saved-data level)
         wk (wok/world-key level)]
-    ;; Defensive: if the previous unload did not fire (crash, other mod
-    ;; interference), the old SavedData reference would be a zombie — still
-    ;; held by this atom but no longer managed by the current save cycle.
-    ;; Overwrite unconditionally and warn so the zombie is visible in logs.
     (when (contains? @level-saved-data-by-key wk)
       (log/warn "[forge] Stale SavedData mapping detected for" wk
                 "— previous world unload may not have fired cleanly, overwriting"))
-    (swap! level-saved-data-by-key assoc wk sd)))
+    (swap! level-saved-data-by-key assoc wk sd)
+    ;; Global shared data is physically anchored to the overworld — the only
+    ;; dimension that is never dynamically unloaded and the last one saved on
+    ;; shutdown. Business code writes with world-key = :global; the hook routes
+    ;; the dirty signal to the overworld's SavedData.
+    (when (overworld? level)
+      (swap! level-saved-data-by-key assoc GLOBAL-KEY sd))))
 
 (defn- unregister-level-for-state-change-hook! [^ServerLevel level]
   (let [wk (wok/world-key level)]
-    (swap! level-saved-data-by-key dissoc wk)))
+    (swap! level-saved-data-by-key dissoc wk)
+    ;; Global data is physically bound to the overworld. When the overworld
+    ;; unloads (server shutdown), drop the :global alias so stale references
+    ;; don't survive into a new server session.
+    (when (overworld? level)
+      (swap! level-saved-data-by-key dissoc GLOBAL-KEY))))
 
 (defn register-on-world-state-changed!
   "Generic hook: subscribes to all world-state mutations (wireless networks,
