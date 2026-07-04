@@ -707,3 +707,27 @@
 
 (defn toggle-debug-overlay-state! []
   ((:toggle-debug-overlay-state! (hooks-core-state-snapshot))))
+
+;; ============================================================================
+;; Default Client Owner Hook
+;; Platform layer (mc-1.20.1) registers a function that returns a complete client
+;; owner map. This allows platform-agnostic modules (ac) to resolve a client owner
+;; without importing Minecraft classes directly.
+;; ============================================================================
+
+(def ^:private default-client-owner-fn (atom nil))
+
+(defn set-default-client-owner-fn!
+  "Register a zero-arg function that returns a canonical client owner map
+  {:logical-side :client :client-session-id ... :player-uuid ...}.
+  Called by the platform layer during client initialization."
+  [f]
+  (reset! default-client-owner-fn f)
+  nil)
+
+(defn default-client-owner
+  "Return the current client owner map via the platform-registered hook.
+  Returns nil if the platform layer hasn't registered a hook yet."
+  []
+  (when-let [f @default-client-owner-fn]
+    (f)))

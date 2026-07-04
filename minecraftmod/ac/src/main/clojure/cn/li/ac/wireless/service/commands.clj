@@ -27,12 +27,13 @@
   (if-not (topology/can-create-network? world-data ssid matrix-vblock)
     {:success false :reason :ssid-exists}
     (let [net (network-state/create-wireless-net world-data matrix-vblock ssid password)]
-      (world-registry/transact!
-        world-data
-        (fn [_]
-          (world-registry/update-state! world-data topology/register-network net)
-          (log/info (format "Created network: SSID='%s'" ssid))
-          {:success true})))))
+      ;; Direct atomic update via update-state! (already uses swap! internally).
+      ;; WRAPPING with transact! here causes a double-swap! overwrite:
+      ;;   transact! reads base → mutation-fn swap! writes new state
+      ;;   → transact! swap! writes base back, undoing the mutation.
+      (world-registry/update-state! world-data topology/register-network net)
+      (log/info (format "Created network: SSID='%s'" ssid))
+      {:success true})))
 
 (defn destroy-network!
   [world-data item]
