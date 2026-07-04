@@ -21,4 +21,4 @@
 	          (let [network (entity-commit/resolve-network
 	                         world-data
 	                         (network-state/set-update-counter! network 0))]
-	            (energy-balance/balance-energy! network))))))))
+	            (energy-balance/balance-energy! network world))))))))

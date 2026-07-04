@@ -116,7 +116,7 @@
 			(let [world (platform-be/be-get-world-safe matrix-tile)
 						world-data (world-registry/get-world-data world)
 						node-vb (vb/create-vnode node-tile)
-						result (commands/link-node-to-network! world-data network-item node-vb password)]
+						result (commands/link-node-to-network! world-data network-item node-vb password world)]
 				(when (:success result)
 					(when-let [matrix-cap (resolver/matrix-capability matrix-tile)]
 						(when-let [node-cap (resolver/node-capability node-tile)]

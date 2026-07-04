@@ -97,29 +97,29 @@
   (= password-attempt (net-state/get-password network)))
 
 (defn network-has-node-capacity?
-  [network]
+  [network world]
   (model/network-has-capacity?
     {:nodes (net-state/get-nodes network)}
-    (net-state/get-capacity network)))
+    (net-state/get-capacity network world)))
 
 (defn matrix-in-range?
-  [network node-vblock]
-  (if-let [matrix (net-state/get-matrix network)]
+  [network node-vblock world]
+  (if-let [matrix (net-state/get-matrix network world)]
     (let [range (.getMatrixRange ^IWirelessMatrix matrix)
           dist-sq (vb/dist-sq node-vblock (:matrix network))]
       (<= dist-sq (* range range)))
     false))
 
 (defn validate-add-node
-  [network node-vblock password-attempt]
+  [network node-vblock password-attempt world]
   (cond
     (not (password-valid? network password-attempt))
     {:ok false :reason :password}
 
-    (not (network-has-node-capacity? network))
+    (not (network-has-node-capacity? network world))
     {:ok false :reason :capacity}
 
-    (not (matrix-in-range? network node-vblock))
+    (not (matrix-in-range? network node-vblock world))
     {:ok false :reason :range}
 
     :else

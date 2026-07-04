@@ -11,9 +11,8 @@
 	(:import [cn.li.acapi.wireless IWirelessMatrix IWirelessNode]))
 
 (defn- resolve-matrix
-  [network]
-  (let [world (:world (:world-data network))]
-    (resolver/resolve-matrix-cap world (:matrix network))))
+  [network world]
+  (resolver/resolve-matrix-cap world (:matrix network)))
 
 (defn- node-entry
   [world node-vb]
@@ -27,9 +26,8 @@
 
 (defn- collect-active-nodes!
   "Return active node entries and cleanup destroyed nodes that are in loaded chunks."
-  [network]
-  (let [world (:world (:world-data network))
-        node-vbs (network-state/get-nodes network)]
+  [network world]
+  (let [node-vbs (network-state/get-nodes network)]
     (reduce
       (fn [acc node-vb]
         (if (vb/is-chunk-loaded? node-vb world)
@@ -50,10 +48,10 @@
   - Total transfer is limited by matrix bandwidth per balance tick.
   - Per-node adjustment is limited by node bandwidth.
   - Buffer is clamped to [0, buffer-max]."
-  [network]
+  [network world]
   (let [network (entity-commit/resolve-network (:world-data network) network)]
-    (when-let [^IWirelessMatrix matrix (resolve-matrix network)]
-    (let [entries (collect-active-nodes! network)
+    (when-let [^IWirelessMatrix matrix (resolve-matrix network world)]
+    (let [entries (collect-active-nodes! network world)
           entries (shuffle (filter #(pos? (:max-energy %)) entries))
           max-sum (reduce + 0.0 (map #(get % :max-energy) entries))]
       (when (and (seq entries) (pos? max-sum))

@@ -114,7 +114,7 @@
       (fn []
         (is (:success (commands/create-network! wd matrix-vb "dnet" "p")))
         (let [net (lookup/get-network-by-ssid wd "dnet")]
-          (is (:success (commands/link-node-to-network! wd net node-vb "p")))
+          (is (:success (commands/link-node-to-network! wd net node-vb "p" nil))))
           (is (some? (get (world-registry/net-lookup wd) node-vb)))
           (commands/destroy-network! wd net)
           (is (nil? (get (world-registry/net-lookup wd) node-vb)))
@@ -144,7 +144,7 @@
       (fn []
         (let [wd (world/create-world-data world-id)]
           (is (:success (commands/create-network! wd matrix-vb "persist" "pw")))
-          (is (:success (commands/link-node-to-network! wd (lookup/get-network-by-ssid wd "persist") node-vb "pw")))
+          (is (:success (commands/link-node-to-network! wd (lookup/get-network-by-ssid wd "persist") node-vb "pw" nil)))
           (let [conn (commands/ensure-node-connection! wd node-conn-vb)]
             (is (true? (node-conn/add-generator! conn gen-vb world-id))))
           (world/register-world-data! world-id wd)

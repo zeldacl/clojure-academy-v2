@@ -89,7 +89,7 @@
     {:success false}))
 
 (defn link-node-to-network!
-  [world-data net node-vblock password-attempt]
+  [world-data net node-vblock password-attempt world]
   ;; Each sub-operation (replace-network-in-state!, update-state!) is already
   ;; atomic via its own swap!. The transact! wrapper was harmful because its
   ;; outer swap! would overwrite the inner updates with the original snapshot.
@@ -97,7 +97,7 @@
     (when-let [old-net (lookup/get-network-by-node world-data node-vblock)]
       (when-not (identical? old-net net)
         (remove-node-in-transaction! world-data old-net node-vblock)))
-    (let [validation (topology/validate-add-node net node-vblock password-attempt)]
+    (let [validation (topology/validate-add-node net node-vblock password-attempt world)]
       (if-not (:ok validation)
         (do
           (log/info (format "Node add failed: reason=%s for '%s'"

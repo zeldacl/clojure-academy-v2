@@ -74,7 +74,7 @@
                     platform-be/be-get-world-safe (fn [_] :world)
                     world-registry/get-world-data (fn [_] :world-data)
                     vb/create-vnode (fn [_] :node-vb)
-                    commands/link-node-to-network! (fn [_ _ _ _] {:success true})
+                    commands/link-node-to-network! (fn [_ _ _ _ _] {:success true})
                     resolver/matrix-capability (fn [tile]
                                                    (when (= tile :matrix-tile) matrix))
                     resolver/node-capability (fn [tile]

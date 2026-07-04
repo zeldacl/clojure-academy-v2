@@ -27,8 +27,8 @@
 
 (defn get-matrix
   "Get the matrix TileEntity."
-  [network]
-  (resolver/resolve-matrix-cap (:world (:world-data network)) (:matrix network)))
+  [network world]
+  (resolver/resolve-matrix-cap world (:matrix network)))
 
 (defn state-value
   [network key]
@@ -112,7 +112,7 @@
 
 (defn get-capacity
   "Get network capacity from matrix."
-  [network]
-  (if-let [matrix (get-matrix network)]
+  [network world]
+  (if-let [matrix (get-matrix network world)]
     (.getMatrixCapacity ^cn.li.acapi.wireless.IWirelessMatrix matrix)
     0))

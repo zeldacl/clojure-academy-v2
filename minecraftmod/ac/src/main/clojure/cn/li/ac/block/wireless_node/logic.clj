@@ -202,7 +202,7 @@
           conn-load (if-let [conn (network-lookup/get-node-connection world-data node-conn-vb)]
                       (node-conn/get-load conn)
                       0)
-          max-cap (if network (network-state/get-capacity network) 0)]
+          max-cap (if network (network-state/get-capacity network level) 0)]
       (assoc state :enabled connected? :capacity conn-load :max-capacity max-cap))
     (catch Exception _
       (assoc state :enabled false :capacity 0 :max-capacity 0))))

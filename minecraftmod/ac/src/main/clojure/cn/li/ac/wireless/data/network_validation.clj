@@ -25,8 +25,8 @@
 
 (defn is-in-range?
   "Check if coordinates are in network range."
-  [network x y z]
-  (if-let [matrix (net-state/get-matrix network)]
+  [network x y z world]
+  (if-let [matrix (net-state/get-matrix network world)]
     (let [range (.getMatrixRange ^cn.li.acapi.wireless.IWirelessMatrix matrix)
           dist-sq (vb/dist-sq-pos (:matrix network) x y z)]
       (<= dist-sq (* range range)))
