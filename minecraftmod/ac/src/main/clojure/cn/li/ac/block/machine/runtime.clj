@@ -13,7 +13,7 @@
   (let [server-schema (if server-only?
                         schema
                         (state-schema/filter-server-fields schema))
-        blockstate-fields (filterv :block-state server-schema)]
+        blockstate-fields (filterv #(get % :block-state) server-schema)]
     {:schema schema
      :server-schema server-schema
      :default-state (state-schema/schema->default-state server-schema)

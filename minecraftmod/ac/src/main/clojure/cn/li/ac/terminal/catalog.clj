@@ -40,7 +40,7 @@
     :pre-installed? true}])
 
 (def ^:private apps-by-id-index
-  (into {} (map (juxt :id identity) apps)))
+  (into {} (map #(vector (get % :id) %) apps)))
 
 (defn- apps-by-id
   []
@@ -48,7 +48,7 @@
 
 (defn app-ids
   []
-  (mapv :id apps))
+  (mapv #(get % :id) apps))
 
 (defn app-by-id
   [app-id]

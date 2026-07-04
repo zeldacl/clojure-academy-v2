@@ -294,7 +294,7 @@
                                    (dissoc c k)))
                                counters (filterv (complement stale-generator?) (get-generators conn)))
             ;; --- prune orphaned counters for devices no longer in the lists ---
-            active-keys (into #{} (map vb/vblock-to-string) (concat (get-receivers conn) (get-generators conn)))
+            active-keys (into #{} (map vb/vblock-to-string (concat (get-receivers conn) (get-generators conn))))
             counters   (reduce-kv (fn [c k _] (if (active-keys k) c (dissoc c k)))
                                  counters counters)
             ;; --- commit updated counters (wrapped in transact! for atomicity) ---

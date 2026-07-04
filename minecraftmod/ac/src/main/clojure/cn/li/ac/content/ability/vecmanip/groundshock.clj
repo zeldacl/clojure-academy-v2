@@ -373,7 +373,7 @@
                       result (propagate-shockwave! player-id world-id
                                                    start-x start-y start-z
                                                    flat-dir exp)
-                      broken-blocks* (atom (into #{} (map (juxt :x :y :z) (:broken-blocks result))))
+                      broken-blocks* (atom (into #{} (map #(vector (get % :x) (get % :y) (get % :z)) (:broken-blocks result))))
                       affected-count (+ (count (:affected-blocks result))
                                         (count (:affected-entities result)))]
                   (break-mastery-ring! player-id world-id pos exp broken-blocks*)

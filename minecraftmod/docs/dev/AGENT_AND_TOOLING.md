@@ -397,14 +397,17 @@
 
 #### 铁律七：reify / proxy 分水岭（强制）
 
-**根源**：全量 AOT 下 `reify` 生成匿名类，当实现 **Minecraft 混淆接口**（`net.minecraft.*`、`net.minecraftforge.*` 等）时，方法签名硬编码未混淆类名 → 混淆后 `NoClassDefFoundError` / `AbstractMethodError`。`proxy` 同理。
+**根源**：全量 AOT 下 `reify`/`proxy` 生成匿名类，当实现 **Minecraft 混淆接口**（`net.minecraft.*`、`net.minecraftforge.*` 等）时，编译器将开发期（Mojmap）类名与方法签名**固化**进 `.class` 字节码。编译阶段往往仍能通过；混淆/remap 后运行时类名已变 → `NoClassDefFoundError` / `AbstractMethodError`。`proxy` 同理。
+
+**`definterface` 与项目自有接口**：`definterface` + `deftype`/`reify` 实现 **项目自有**接口（`cn.li.*`、`api` 模块 Java 接口）时，AOT 固化的符号名稳定、与 MC 混淆链无关，**安全**。示例：`ac/.../wireless_matrix/capability.clj` 的 `IMatrixJavaProxy` + `MatrixJavaProxy`（`deftype` 实现项目 `definterface`，非 MC 接口）。
 
 **分水岭判定**：
 
-| 接口来源 | reify | proxy | 平替 |
-|---------|-------|-------|------|
-| `net.minecraft.*` / `net.minecraftforge.*` / Fabric API | 🔴 禁区 | 🔴 禁区 | Java 骨架类（`mc-1.20.1/shim/`） |
-| `java.lang.*` / `java.util.function.*`（JDK 核心） | 🟢 安全 | 🟢 安全 | 可选：`FnConsumer`/`FnSupplier`/`FnPredicate` |
+| 接口来源 | reify | proxy | deftype / definterface | 平替 |
+|---------|-------|-------|------------------------|------|
+| `net.minecraft.*` / `net.minecraftforge.*` / Fabric API | 🔴 禁区 | 🔴 禁区 | 🔴 禁止对 MC 接口 | Java 骨架类（`mc-1.20.1/shim/`） |
+| 项目自有（`cn.li.*`、`api`） | 🟢 安全 | 🟢 安全 | 🟢 `definterface` + `deftype` 安全 | — |
+| `java.lang.*` / `java.util.function.*`（JDK 核心） | 🟢 安全 | 🟢 安全 | 🟢 安全 | 可选：`FnConsumer`/`FnSupplier`/`FnPredicate` |
 
 **JDK 安全原理**：Mojang 混淆器绝对不碰 JDK 核心类（`Runnable`、`Consumer`、`Supplier` 等），方法签名（`run()`、`accept()`、`get()`）永久固化。且启动期 one-shot 执行无高并发风险。
 
@@ -419,7 +422,7 @@ Java 骨架类：`mc-1.20.1/src/main/java/cn/li/mc1201/shim/`
 - `UniversalEnergyStorage` — IEnergyStorage 通用骨架
 - `UniversalItemHandler` — IItemHandler 通用骨架
 
-**判定**：MC 接口 → 必须 Java 骨架。JDK 接口 → `reify` 安全可用。
+**判定**：MC 接口 → 必须 Java 骨架（勿以「能编过」为准，看运行时 remap 后是否 AbstractMethodError）。项目自有接口 → `definterface` + `deftype`/`reify` 安全。JDK 接口 → `reify` 安全可用。
 
 ---
 

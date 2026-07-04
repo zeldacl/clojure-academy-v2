@@ -45,4 +45,4 @@
 
 (defn prerequisite-ids
   [skill]
-  (mapv :skill-id (:prerequisites skill [])))
+  (mapv #(get % :skill-id) (:prerequisites skill [])))

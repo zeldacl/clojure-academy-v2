@@ -24,7 +24,7 @@
   mesh extent."
   [model]
   (when-let [verts (seq (:vertices model))]
-    (let [pos (map :pos verts)
+    (let [pos (map #(get % :pos) verts)
           xs (map #(double (:x %)) pos)
           ys (map #(double (:y %)) pos)
           zs (map #(double (:z %)) pos)

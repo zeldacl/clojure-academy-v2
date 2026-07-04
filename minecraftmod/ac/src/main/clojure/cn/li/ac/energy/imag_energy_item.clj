@@ -11,7 +11,7 @@
 ;; Key set documentation
 ;; ============================================================================
 
-(def ^:const imag-energy-item-keys
+(def imag-energy-item-keys
   "Keys required by an ImagEnergyItem function map."
   [:get-max-energy :get-bandwidth])
 

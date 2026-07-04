@@ -134,7 +134,7 @@
 (defn- build-plan
 	[camera-pos _hand-center-pos _tick]
 	(let [ops (mapcat #(trajectory-ops camera-pos %)
-										(filter :active? (vals (:effect-state (vec-accel-fx-snapshot)))))]
+										(filter #(get % :active?) (vals (:effect-state (vec-accel-fx-snapshot)))))]
 		(when (seq ops)
 			{:ops (vec ops)})))
 

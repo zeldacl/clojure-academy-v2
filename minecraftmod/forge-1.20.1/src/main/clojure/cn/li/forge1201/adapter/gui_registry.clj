@@ -12,8 +12,8 @@
             [cn.li.mcmod.config :as modid]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mc1201.client.session :as client-session])
-  (:import [cn.li.forge1201.shim ForgeBootstrapHelper]
-           [net.minecraftforge.network NetworkHooks IContainerFactory]
+  (:import [cn.li.forge1201.shim ForgeBootstrapHelper ForgeContainerFactory]
+           [net.minecraftforge.network NetworkHooks]
            [net.minecraftforge.common.extensions IForgeMenuType]
            [net.minecraftforge.registries DeferredRegister RegistryObject]
            [net.minecraft.server.level ServerPlayer]
@@ -79,6 +79,38 @@
       (.get ^RegistryObject registered)
       registered)))
 
+(defn- create-client-menu-from-packet!
+  "Client-side menu factory invoked by Forge when recreating menu from open-screen packet."
+  [gui-id window-id player-inventory buf]
+  (log/info "[CLIENT-MENU-FACTORY] IContainerFactory.create called! window-id=" window-id)
+  (try
+    (let [handler (gui-handler/get-gui-handler)
+          {:keys [gui-id buf-gui-id pos]} (registry-common/read-extended-open-payload buf)
+          resolved-gui-id (or buf-gui-id gui-id)]
+      (log/info "[CLIENT-MENU-FACTORY] gui-id from buf=" gui-id "resolved=" resolved-gui-id "pos=" pos)
+      (let [result (registry-common/create-client-menu!
+                     {:gui-id resolved-gui-id
+                      :window-id window-id
+                      :player-inventory player-inventory
+                      :pos pos
+                      :handler handler
+                      :create-container-fn (fn [h gid p world block-pos]
+                                             (log/info "[CLIENT-MENU-FACTORY] Creating clj-container for gui-id=" gid)
+                                             (gui-handler/get-server-container h gid p world block-pos))
+                      :create-menu-proxy-fn (fn [wid menu-type clj-container opts]
+                                              (log/info "[CLIENT-MENU-FACTORY] Creating menu proxy wid=" wid "menu-type=" menu-type)
+                                              (menu-proxy/create-menu-proxy wid menu-type clj-container opts))
+                      :resolve-menu-type-fn get-menu-type
+                      :bridge-opts (menu-proxy/platform-menu-proxy-opts :forge-1.20.1)
+                      :error-prefix "Failed to create container for GUI"
+                      :with-owner! #(client-session/with-current-client-owner %)})]
+        (log/info "[CLIENT-MENU-FACTORY] Menu created successfully, returning to Forge. menu=" (type result))
+        result))
+    (catch Throwable e
+      (log/error "[CLIENT-MENU-FACTORY] Failed to create client menu:" (ex-message e))
+      (log/error "[CLIENT-MENU-FACTORY] Stack trace:" (with-out-str (.printStackTrace e)))
+      (throw e))))
+
 (defn create-menu-type
   "Create a MenuType for a GUI
   
@@ -88,38 +120,9 @@
   Returns: MenuType instance"
   [gui-id]
   (IForgeMenuType/create
-    (reify IContainerFactory
-      (create [_ window-id player-inventory buf]
-        ;; This factory is invoked on the CLIENT when Forge recreates the menu
-        ;; after receiving the open-screen packet.
-        (log/info "[CLIENT-MENU-FACTORY] IContainerFactory.create called! window-id=" window-id)
-        (try
-          (let [handler (gui-handler/get-gui-handler)
-                {:keys [gui-id buf-gui-id pos]} (registry-common/read-extended-open-payload buf)
-                resolved-gui-id (or buf-gui-id gui-id)]
-            (log/info "[CLIENT-MENU-FACTORY] gui-id from buf=" gui-id "resolved=" resolved-gui-id "pos=" pos)
-            (let [result (registry-common/create-client-menu!
-                           {:gui-id resolved-gui-id
-                            :window-id window-id
-                            :player-inventory player-inventory
-                            :pos pos
-                            :handler handler
-                            :create-container-fn (fn [h gid p world block-pos]
-                                                   (log/info "[CLIENT-MENU-FACTORY] Creating clj-container for gui-id=" gid)
-                                                   (gui-handler/get-server-container h gid p world block-pos))
-                            :create-menu-proxy-fn (fn [wid menu-type clj-container opts]
-                                                    (log/info "[CLIENT-MENU-FACTORY] Creating menu proxy wid=" wid "menu-type=" menu-type)
-                                                    (menu-proxy/create-menu-proxy wid menu-type clj-container opts))
-                            :resolve-menu-type-fn get-menu-type
-                            :bridge-opts (menu-proxy/platform-menu-proxy-opts :forge-1.20.1)
-                            :error-prefix "Failed to create container for GUI"
-                            :with-owner! #(client-session/with-current-client-owner %)})]
-              (log/info "[CLIENT-MENU-FACTORY] Menu created successfully, returning to Forge. menu=" (type result))
-              result))
-          (catch Throwable e
-            (log/error "[CLIENT-MENU-FACTORY] Failed to create client menu:" (ex-message e))
-            (log/error "[CLIENT-MENU-FACTORY] Stack trace:" e)
-            (throw e)))))))
+    (ForgeContainerFactory.
+      (fn [window-id player-inventory buf]
+        (create-client-menu-from-packet! gui-id window-id player-inventory buf)))))
 
 (defn register-menu-types!
   "Populate menu-register DeferredRegister with all GUI menu types.

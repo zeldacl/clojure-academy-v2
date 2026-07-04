@@ -139,8 +139,8 @@
    (let [{:keys [order registry]} (level-effect-state-snapshot)
          results (keep (fn [eid] (when-let [{:keys [build-plan-fn]} (get registry eid)]
                                    (invoke-build-plan-fn build-plan-fn camera-pos hand-center-pos tick frame-context))) order)
-         all-ops (into [] (mapcat :ops) results)
-         walk-speeds (keep :local-walk-speed results)
+         all-ops (vec (mapcat #(get % :ops) results))
+         walk-speeds (keep #(get % :local-walk-speed) results)
          local-walk-speed (when (seq walk-speeds) (float (apply min walk-speeds)))]
      (when (or (seq all-ops) local-walk-speed) {:ops all-ops :local-walk-speed local-walk-speed}))))
 

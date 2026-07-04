@@ -182,7 +182,7 @@
     :comment "Ticks before a stale wireless device (capability gone) is removed from a connection."}])
 
 (def default-values
-  (into {} (map (juxt :key :default) descriptors)))
+  (into {} (map #(vector (get % :key) (get % :default)) descriptors)))
 
 (defn- cfg []
   (merge default-values

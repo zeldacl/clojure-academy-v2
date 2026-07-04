@@ -98,7 +98,7 @@
     ;; Add ElementList component for vertical scrolling
     (comp/add-component! list-w (comp/element-list :spacing 10))
     ;; Build rows grouped by category
-    (doseq [[cat cat-props] (group-by :category props)]
+    (doseq [[cat cat-props] (group-by #(get % :category) props)]
       ;; Category header — copy t_cathead template
       (let [hdr (cgui-core/copy-widget (xml-parser/get-widget doc "t_cathead"))]
         (when-let [txt (cgui-core/find-widget hdr "text")]

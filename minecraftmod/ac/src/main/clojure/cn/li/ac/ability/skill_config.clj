@@ -24,7 +24,7 @@
   common/all-skill-ids)
 
 (def skill-definitions-by-id
-  (into {} (map (juxt :id identity) skill-definitions)))
+  (into {} (map #(vector (get % :id) %) skill-definitions)))
 
 (def skills-by-category
   (into {}
@@ -48,10 +48,10 @@
                vecmanip/internal-tunable-definitions)))
 
 (def field-definitions-by-id
-  (into {} (map (juxt :id identity) field-definitions)))
+  (into {} (map #(vector (get % :id) %) field-definitions)))
 
 (def skill-tunable-definitions-by-skill
-  (group-by :skill-id skill-tunable-definitions))
+  (group-by #(get % :skill-id) skill-tunable-definitions))
 
 (def skill-tunable-definitions-by-category
   (into {}
@@ -65,14 +65,14 @@
 (def ^:private skill-tunable-definitions-by-skill-field
   (into {}
         (map (fn [[skill-id definitions]]
-               [skill-id (into {} (map (juxt :id identity) definitions))])
+               [skill-id (into {} (map #(vector (get % :id) %) definitions))])
              skill-tunable-definitions-by-skill)))
 
 (def ^:private internal-tunable-definitions-by-skill-field
   (into {}
         (map (fn [[skill-id definitions]]
-               [skill-id (into {} (map (juxt :id identity) definitions))])
-             (group-by :skill-id internal-tunable-definitions))))
+               [skill-id (into {} (map #(vector (get % :id) %) definitions))])
+             (group-by #(get % :skill-id) internal-tunable-definitions))))
 
 (defn config-key
   [skill-id field-id]
@@ -120,7 +120,7 @@
   (into {} (map (fn [category-id]
                   [category-id
                    (into {}
-                         (map (juxt :key :default)
+                         (map #(vector (get % :key) (get % :default))
                               (get descriptors-by-category category-id)))])
                 category-ids)))
 

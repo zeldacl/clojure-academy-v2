@@ -48,7 +48,7 @@
    {:id :vec-reflection :category-id :vecmanip :level 4 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}])
 
 (def all-skill-ids
-  (mapv :id skill-definitions))
+  (mapv #(get % :id) skill-definitions))
 
 (def field-definitions
   [{:id :enabled

@@ -44,7 +44,7 @@
     :comment "Energy Converter EU conversion ratio: 1 IF equals this many EU."}])
 
 (def default-values
-  (into {} (map (juxt :key :default) descriptors)))
+  (into {} (map #(vector (get % :key) (get % :default)) descriptors)))
 
 (defn- cfg []
   (merge default-values

@@ -43,7 +43,7 @@
            [net.minecraftforge.client.event RegisterKeyMappingsEvent]
            [net.minecraftforge.event TickEvent$ClientTickEvent TickEvent$Phase]
            [net.minecraft.client KeyMapping]
-           [net.minecraft.client.renderer.blockentity BlockEntityRendererProvider]
+           [cn.li.forge1201.client.render ScriptedBlockEntityBerProvider]
            [com.mojang.blaze3d.platform Window]))
 
 ;; ============================================================================
@@ -149,9 +149,7 @@
           (.registerBlockEntityRenderer
             evt
             be-type
-            (reify BlockEntityRendererProvider
-              (create [_ _ctx]
-                (tesr-impl/new-renderer))))
+            (ScriptedBlockEntityBerProvider.))
           (log/info (str "  BER registered for tile-id " tile-id)))))))
 
 (defn- init-content-client-bridge!

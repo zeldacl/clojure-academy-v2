@@ -15,7 +15,7 @@
 ;; Key set documentation
 ;; ============================================================================
 
-(def ^:const manager-keys
+(def manager-keys
   "Keys required by [:service :energy :manager] function maps.
   IEnergyManager: get-energy get-capacity set-energy transfer-energy
                    drain-energy subscribe-to-changes unsubscribe-from-changes
@@ -24,49 +24,49 @@
    :drain-energy :subscribe-to-changes :unsubscribe-from-changes
    :list-energy-providers])
 
-(def ^:const item-keys
+(def item-keys
   "Keys required by [:service :energy :storage] function maps — item operations.
   IEnergyItem: get-item-energy set-item-energy get-item-capacity get-item-bandwidth
                 is-energy-item? charge-item discharge-item"
   [:get-item-energy :set-item-energy :get-item-capacity :get-item-bandwidth
    :is-energy-item? :charge-item :discharge-item])
 
-(def ^:const node-keys
+(def node-keys
   "Keys required by [:service :energy :network] function maps — node operations.
   IEnergyNode: get-node-energy set-node-energy get-node-capacity inject-energy
                 extract-node-energy"
   [:get-node-energy :set-node-energy :get-node-capacity :inject-energy
    :extract-node-energy])
 
-(def ^:const network-keys
+(def network-keys
   "Keys required by [:service :energy :network] function maps — network operations.
   IEnergyNetwork: get-network-energy get-network-capacity set-network-energy
                    distribute-energy balance-network-energy"
   [:get-network-energy :get-network-capacity :set-network-energy
    :distribute-energy :balance-network-energy])
 
-(def ^:const transfer-keys
+(def transfer-keys
   "Keys required by [:service :energy :network] function maps — transfer operations.
   IEnergyTransfer: transfer-wireless batch-transfer schedule-transfer
                     cancel-scheduled-transfer"
   [:transfer-wireless :batch-transfer :schedule-transfer
    :cancel-scheduled-transfer])
 
-(def ^:const storage-keys
+(def storage-keys
   "Keys required by [:service :energy :storage] function maps — persistence.
   IEnergyStorage: save-energy-to-nbt load-energy-from-nbt backup-energy-state
                    restore-energy-from-backup"
   [:save-energy-to-nbt :load-energy-from-nbt :backup-energy-state
    :restore-energy-from-backup])
 
-(def ^:const validator-keys
+(def validator-keys
   "Keys required by [:service :energy :admin] function maps — validation.
   IEnergyValidator: validate-energy-amount validate-transfer
                      validate-network-consistency repair-inconsistency"
   [:validate-energy-amount :validate-transfer
    :validate-network-consistency :repair-inconsistency])
 
-(def ^:const admin-keys
+(def admin-keys
   "Keys required by [:service :energy :admin] function maps — admin.
   IEnergyAdmin: admin-dump-state admin-set-energy-unsafe
                  admin-reset-energy-system admin-simulate-loss"

@@ -100,7 +100,7 @@
 	[category-id]
 	(when category-id
 		(->> (skill-query/get-skills-for-category category-id)
-				 (map :id)
+				 (map #(get % :id))
 				 (filter identity)
 				 sort
 				 vec)))

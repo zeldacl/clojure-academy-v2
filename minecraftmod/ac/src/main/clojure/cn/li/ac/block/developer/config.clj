@@ -65,7 +65,7 @@
         [:normal :advanced]))))
 
 (def default-values
-  (into {} (map (juxt :key :default) descriptors)))
+  (into {} (map #(vector (get % :key) (get % :default)) descriptors)))
 
 (defn- cfg []
   (merge default-values

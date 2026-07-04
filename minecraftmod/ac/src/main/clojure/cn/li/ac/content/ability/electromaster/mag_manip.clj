@@ -296,7 +296,7 @@
                 (when (and (world-effects/available?) (entity-damage/available?))
                   (let [mid (geom/v* (geom/v+ start end) 0.5)
                         radius (+ (* 0.5 (geom/vlen (geom/v- end start))) 2.0)
-                        entities (sort-by :uuid
+                        entities (sort-by #(get % :uuid)
                                           (remove #(= (:uuid %) player-id)
                                                   (world-effects/find-entities-in-radius*
                                                    world-id

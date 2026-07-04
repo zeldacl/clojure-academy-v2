@@ -167,10 +167,17 @@
       :container-id (int container-id)}
      nil)))
 
+(defn detach-tab-sync!
+  "Remove tab-sync watch from tech-ui. Call when closing a screen if the tech-ui atom may outlive the session."
+  [tech-ui]
+  (when-let [current-atom (:current tech-ui)]
+    (remove-watch current-atom :tab-sync)))
+
 (defn attach-tab-sync!
   "Attach generic tab-change sync between a TechUI instance and a container.
 
-   container-id: required integer from `container-state/get-menu-container-id`."
+   container-id: required integer from `container-state/get-menu-container-id`.
+   tech-ui is per-screen; watch is reclaimed with the atom unless cached — use `detach-tab-sync!` on close if reused."
   [pages tech-ui container container-id]
   (when-not (integer? container-id)
     (throw (ex-info "attach-tab-sync! requires container-id" {:container-id container-id})))

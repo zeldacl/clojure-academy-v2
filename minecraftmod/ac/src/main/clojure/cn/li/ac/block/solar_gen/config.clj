@@ -36,7 +36,7 @@
     :comment "Last daytime tick at which solar generators may produce energy."}])
 
 (def default-values
-  (into {} (map (juxt :key :default) descriptors)))
+  (into {} (map #(vector (get % :key) (get % :default)) descriptors)))
 
 (defn- cfg []
   (merge default-values

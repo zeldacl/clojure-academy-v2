@@ -51,4 +51,4 @@
            :properties {:display-name display-name
                         :tooltip tooltip
                         :model-texture id}})))
-    (log/info "Material items initialized:" (mapv :id material-specs))))
+    (log/info "Material items initialized:" (mapv #(get % :id) material-specs))))

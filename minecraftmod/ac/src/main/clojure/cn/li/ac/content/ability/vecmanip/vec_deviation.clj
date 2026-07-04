@@ -232,7 +232,7 @@
                               (update-skill-state-root! ctx-id #(update % :vec-deviation-marked (fnil conj #{}) entity-uuid)))
                             (send-fx-stop-entity! ctx-id entity generic-mark?))
                           (log/debug "VecDeviation: Deflected entity" entity-uuid "difficulty" difficulty))))))
-                (let [visited-ids (into #{} (keep :uuid entities))]
+                (let [visited-ids (into #{} (keep #(get % :uuid) entities))]
                   (update-skill-state-root! ctx-id #(update % :vec-deviation-visited (fnil into #{}) visited-ids)))))))))
     (catch Exception e
       (log/warn "VecDeviation tick! failed:" (ex-message e)))))
