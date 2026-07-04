@@ -82,7 +82,7 @@
       (let [registered (register-world-data! world wi-data)
             net-count (count (world-registry/networks registered))
             conn-count (count (world-registry/connections registered))]
-        (log/info "Restored WiWorldData for world from save:"
+        (log/info "[on-world-load] Restored WiWorldData from save:"
                   net-count "networks," conn-count "connections")
         (doseq [conn (world-registry/connections registered)]
           (let [gens (node-conn/get-generators conn)
@@ -116,12 +116,10 @@
                        "generator=" (vb/vblock-to-string g)))))
       (runtime/network-impl-validator wi-data world)
       (runtime/node-connection-impl-validator wi-data world)
-      (let [post-conn-count (count (world-registry/connections wi-data))
+      (let [net-count (count (world-registry/networks wi-data))
+            post-conn-count (count (world-registry/connections wi-data))
             nbt-data (persistence/world-data-to-nbt wi-data)]
-        (log/info "Prepared WiWorldData for save: connections"
-                  pre-conn-count "->" post-conn-count
-                  "(after validation), networks"
-                  (count (world-registry/networks wi-data)))
+        (log/info "[on-world-save] Saving" net-count "networks," post-conn-count "connections")
         nbt-data))
     nil))
 

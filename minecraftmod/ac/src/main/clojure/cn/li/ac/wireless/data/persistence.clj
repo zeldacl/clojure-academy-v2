@@ -78,6 +78,9 @@
         connections-list (nbt/nbt-get-list compound "connections")
         networks-size (if networks-list (nbt/nbt-list-size networks-list) 0)
         connections-size (if connections-list (nbt/nbt-list-size connections-list) 0)]
+    (log/info "[world-data-from-nbt] compound present:" (some? compound)
+              "networks-list:" (some? networks-list) "size:" networks-size
+              "connections-list:" (some? connections-list) "size:" connections-size)
     (doseq [index (range networks-size)]
       (when-let [network-compound (nbt/nbt-list-get-compound networks-list index)]
         (try

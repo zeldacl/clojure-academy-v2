@@ -81,6 +81,23 @@
   (when-let [fw-atom (fw/fw-atom)]
     (get-in @fw-atom (world-data-path world-key))))
 
+;; ============================================================================
+;; World-state change hook — called by update-world-state! after every mutation.
+;; Generic mechanism: any platform layer (forge/fabric) registers a
+;; (fn [world-key]) callback to react to state changes (e.g. marking SavedData
+;; dirty). Not wireless-specific — works for any data stored in world-state.
+;; ============================================================================
+
+(def ^:private on-world-state-changed-fn (atom nil))
+
+(defn set-on-world-state-changed-fn!
+  "Register a (fn [world-key]) callback invoked after every world-state mutation.
+  Platform layers use this to mark persistent SavedData dirty, so Forge's save
+  cycle picks up changes made by ANY module that writes via update-world-state!."
+  [f]
+  (reset! on-world-state-changed-fn f)
+  nil)
+
 (defn- update-world-state!
   "Atomically update world-state via Framework swap!."
   [world-key f & args]
@@ -89,6 +106,8 @@
                          (fn [current]
                            (let [base (or current (initial-world-state))]
                              (apply f base args))))]
+      (when-let [on-change @on-world-state-changed-fn]
+        (on-change world-key))
       (get-in new-fw-state (world-state-path world-key)))))
 
 ;; ============================================================================
