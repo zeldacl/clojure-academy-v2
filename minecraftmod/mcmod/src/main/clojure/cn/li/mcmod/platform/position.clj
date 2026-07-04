@@ -1,12 +1,21 @@
 (ns cn.li.mcmod.platform.position
   "Position operations via Framework function map — pure relay layer, no MC dependencies."
-  (:require [cn.li.mcmod.framework :as fw]))
+  (:require [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.util.log :as log]))
 
-(def position-keys #{:pos-x :pos-y :pos-z :create-block-pos :pos-above})
+(def position-keys #{:pos-x :pos-y :pos-z :create-block-pos :pos-above
+                      :position-get-block-pos :position-get-pos})
 
 (defn install-position-ops!
   [ops-map _label]
-  (when-let [fw-atom (fw/fw-atom)] (swap! fw-atom assoc-in [:platform :position-ops] ops-map)) nil)
+  (if-let [fw-atom (fw/fw-atom)]
+    (let [missing (seq (remove (set (keys ops-map)) position-keys))]
+      (swap! fw-atom assoc-in [:platform :position-ops] ops-map)
+      (log/info "Position ops installed:" (pr-str (keys ops-map)))
+      (when missing
+        (log/error "Position ops MISSING required keys:" (pr-str missing)
+                   "- position ops will fail silently!")))
+    (log/error "Position ops install FAILED: Framework atom nil")))
 
 (defn position-ops-available? [] (boolean (get-in @(fw/fw-atom) [:platform :position-ops])))
 (defn current-ops            [] (get-in @(fw/fw-atom) [:platform :position-ops]))

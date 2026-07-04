@@ -5,12 +5,21 @@
   (:require [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.util.log :as log]))
 
+(def pose-ops-keys #{:push-pose :pop-pose :translate :scale
+                      :y-rotation :x-rotation :z-rotation :axis-rotation :get-matrix})
+
 (defn- pose-op [k]
   (get-in @(fw/fw-atom) [:platform :pose-ops k]))
 
 (defn install-pose-ops!
   [ops-map _label]
-  (when-let [fw-atom (fw/fw-atom)] (swap! fw-atom assoc-in [:platform :pose-ops] ops-map)) nil)
+  (if-let [fw-atom (fw/fw-atom)]
+    (let [missing (seq (remove (set (keys ops-map)) pose-ops-keys))]
+      (swap! fw-atom assoc-in [:platform :pose-ops] ops-map)
+      (log/info "Pose ops installed:" (pr-str (keys ops-map)))
+      (when missing
+        (log/error "Pose ops MISSING required keys:" (pr-str missing))))
+    (log/error "Pose ops install FAILED: Framework atom nil")))
 
 (defn pose-ops-available? []
   (boolean (get-in @(fw/fw-atom) [:platform :pose-ops])))
