@@ -8,8 +8,8 @@
 (defn validate!
 	"Validate network integrity.
 	Returns true if valid, false if should be disposed."
-	[network]
-	(let [world (:world (:world-data network))
+	[network world]
+	(let [world world
 	      matrix-vb (:matrix network)
 	      network (if (and (vb/is-chunk-loaded? matrix-vb world)
 	                       (not (resolver/resolve-matrix-cap world matrix-vb)))
@@ -31,6 +31,6 @@
 
 (defn dispose!
 	"Dispose the network and unlink all nodes."
-	[network]
+	[network world]
 	(net-state/mark-disposed! network)
 	(log/info (format "Network '%s' disposed" (net-state/get-ssid network))))

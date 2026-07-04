@@ -8,11 +8,11 @@
 
 (defn tick-wireless-net!
 	"Tick the wireless network"
-	[network]
+	[network world]
 	(let [world-data (:world-data network)
 	      network (entity-commit/resolve-network world-data network)]
 	  (when (network-state/active? network)
-	    (when (validation/validate! network)
+	    (when (validation/validate! network world)
 	      (let [network (entity-commit/resolve-network
 	                     world-data
 	                     (network-state/increment-update-counter! network))]

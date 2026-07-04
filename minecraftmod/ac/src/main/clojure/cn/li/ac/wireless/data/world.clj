@@ -114,8 +114,8 @@
           (doseq [g gens]
             (log/debug "[on-world-save] connection node=" (vb/vblock-to-string (:node conn))
                        "generator=" (vb/vblock-to-string g)))))
-      (runtime/network-impl-validator wi-data)
-      (runtime/node-connection-impl-validator wi-data)
+      (runtime/network-impl-validator wi-data world)
+      (runtime/node-connection-impl-validator wi-data world)
       (let [post-conn-count (count (world-registry/connections wi-data))
             nbt-data (persistence/world-data-to-nbt wi-data)]
         (log/info "Prepared WiWorldData for save: connections"
@@ -129,7 +129,7 @@
   "Called each server world tick - advance wireless runtime state."
   [world]
   (when-let [wi-data (get-world-data-non-create world)]
-    (runtime/tick-world-data! wi-data)
+    (runtime/tick-world-data! wi-data world)
     nil))
 
 (defn on-world-unload
