@@ -13,6 +13,11 @@
 
 (def ^:private last-radiation-tick-id* (atom nil))
 
+;; Singleton command constant — reused across all players every tick.
+;; Eliminates O(N) per-player map allocations in tick-marks!.
+(def ^:private tick-radiation-command
+  {:command :tick-radiation-marks})
+
 (defn- normalize-id
   [id]
   (when id (str id)))
@@ -91,6 +96,9 @@
   nil)
 
 (defn tick-marks!
+  "Drive radiation markers globally once per unique server tick.
+   Optimized: singleton command constant eliminates O(N) per-player map
+   allocations — N players × 20 tick/s map creation reduced to zero."
   []
   (let [tick-id (current-server-tick-id)]
     (when (or (nil? tick-id) (not= tick-id @last-radiation-tick-id*))
@@ -101,7 +109,7 @@
         (doseq [player-uuid (store/list-players store-ref session-id)]
           (prt-cmd/run-for-player!
            player-uuid
-           {:command :tick-radiation-marks})))))
+           tick-radiation-command)))))
   nil)
 
 (defn- learned-rad-intensify?

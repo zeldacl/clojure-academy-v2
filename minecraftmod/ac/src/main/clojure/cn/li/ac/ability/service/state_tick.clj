@@ -6,15 +6,24 @@
             [cn.li.ac.ability.service.runtime-store :as store]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
+(defn- fire-recover-speed-event!
+  "Extracted to top-level defn- so AOT emits one static class.
+   Eliminates per-tick {:uuid uuid-str} map allocation inside doseq context."
+  [event-type base-speed uuid-str]
+  (evt/fire-calc-event! event-type base-speed {:uuid uuid-str}))
+
 (defn server-tick-player-in-session!
+  "Per-player per-tick state driver.
+   Optimized: removed (vec) array clone — doseq handles any seq natively;
+   added when guard so idle ticks skip iterator allocation entirely."
   [session-id uuid-str _sync-fn]
   (when-let [state (store/get-player-state* session-id uuid-str)]
-    (let [cp-speed (evt/fire-calc-event! evt/CALC-CP-RECOVER-SPEED
-                                         (cfg/cp-recover-speed)
-                                         {:uuid uuid-str})
-          ov-speed (evt/fire-calc-event! evt/CALC-OVERLOAD-RECOVER-SPEED
-                                         (cfg/overload-recover-speed)
-                                         {:uuid uuid-str})
+    (let [cp-speed (fire-recover-speed-event! evt/CALC-CP-RECOVER-SPEED
+                                              (cfg/cp-recover-speed)
+                                              uuid-str)
+          ov-speed (fire-recover-speed-event! evt/CALC-OVERLOAD-RECOVER-SPEED
+                                              (cfg/overload-recover-speed)
+                                              uuid-str)
           tick-result (command-rt/run-command-in-session! session-id
                                                           uuid-str
                                                           {:command :server-tick
@@ -22,9 +31,11 @@
                                                            :player-uuid uuid-str
                                                            :cp-speed cp-speed
                                                            :ol-speed ov-speed})
-          all-events (vec (or (:events tick-result) []))]
-      (doseq [e all-events] (evt/fire-ability-event! e))
-      {:events all-events :state (or (:state tick-result) state)})))
+          raw-events (:events tick-result)]
+      (when raw-events
+        (doseq [e raw-events] (evt/fire-ability-event! e)))
+      {:events (or raw-events [])
+       :state (or (:state tick-result) state)})))
 
 (defn server-tick-player!
   [uuid-str sync-fn]

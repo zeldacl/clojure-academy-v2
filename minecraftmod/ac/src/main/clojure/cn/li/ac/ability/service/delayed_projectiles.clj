@@ -172,10 +172,15 @@
     nil))
 
 (defn tick-player!
+  "Drive delayed projectile tasks for one player once per server tick.
+   Optimized: when guard skips doseq iterator allocation when no events pending
+   (the common idle case)."
   [player-uuid]
   (let [result (prt-cmd/run-for-player!
                 player-uuid
-                {:command :tick-delayed-projectile-tasks})]
-    (doseq [{:keys [task]} (:events result)]
-      (run-task! task))
+                {:command :tick-delayed-projectile-tasks})
+        events (:events result)]
+    (when (not-empty events)
+      (doseq [{:keys [task]} events]
+        (run-task! task)))
     nil))

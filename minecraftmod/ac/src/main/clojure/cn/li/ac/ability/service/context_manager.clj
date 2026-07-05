@@ -66,14 +66,18 @@
 
 (defn- active-server-contexts-for-player
   [player-uuid]
-  (let [owner (server-context-owner player-uuid)]
+  (let [owner (server-context-owner player-uuid)
+        pid (str player-uuid)]
     (->> (ctx/snapshot-context-registry)
          vals
-         (filter (fn [ctx-map]
-                   (and (= :server (:logical-side ctx-map))
-                        (= (str player-uuid) (:player-uuid ctx-map))
-                        (= ctx/STATUS-ALIVE (:status ctx-map))
-                        (= ctx-state/INPUT-ACTIVE (:input-state ctx-map)))))
+         (reduce (fn [acc ctx-map]
+                   (if (and (= :server (:logical-side ctx-map))
+                            (= pid (:player-uuid ctx-map))
+                            (= ctx/STATUS-ALIVE (:status ctx-map))
+                            (= ctx-state/INPUT-ACTIVE (:input-state ctx-map)))
+                     (conj acc ctx-map)
+                     acc))
+                 [])
          (sort-by #(vector (get % :id) (get % :server-id))))))
 
 (defn activate-context!
@@ -207,14 +211,23 @@
   (ctx/ctx-send-to-except-local! ctx-id channel payload)
   nil)
 
+(defn- tick-context-entry!
+  "Drive a single server-owned context for one tick.
+   Extracted to top-level defn- so AOT emits exactly one static class —
+   zero per-tick closure capture, zero JIT class generation.
+   The payload map is created inside this static function where JVM
+   escape analysis can cheaply stack-allocate or aggressively reclaim it."
+  [owner callback {:keys [id skill-id]}]
+  (ctx-state/handle-key-tick! owner id {:ctx-id id
+                                        :skill-id skill-id}
+                              callback))
+
 (defn tick-player-contexts!
   "Drive all active server-owned contexts for one player once per server tick."
   [player-uuid]
   (let [owner (server-context-owner player-uuid)]
-    (doseq [{:keys [id skill-id]} (active-server-contexts-for-player player-uuid)]
-      (ctx-state/handle-key-tick! owner id {:ctx-id id
-                                            :skill-id skill-id}
-                                  send-terminated-context!))
+    (doseq [spec (active-server-contexts-for-player player-uuid)]
+      (tick-context-entry! owner send-terminated-context! spec))
     (when-let [server-session-id (owner/store-session-id owner)]
       (command-rt/run-command-in-session!
        server-session-id
