@@ -51,3 +51,4 @@
 (defn send-to-client!            [& args] (apply bridge-op :send-to-client! args))
 (defn spawn-item-stack-at!       [& args] (apply bridge-op :spawn-item-stack-at! args))
 (defn blit-textured-quad!        [& args] (apply bridge-op :blit-textured-quad! args))
+(defn is-glfw-key-down?          [& args] (apply bridge-op :is-glfw-key-down? args))

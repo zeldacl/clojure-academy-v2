@@ -5,6 +5,7 @@
             [cn.li.ac.core.init :as core-init]
             [cn.li.ac.core.content-loader :as content-loader]
             [cn.li.ac.terminal.client.actions :as terminal-actions]
+            [cn.li.ac.terminal.client.install-effect :as install-effect]
             [cn.li.ac.client.platform-hooks :as platform-hooks]
             [cn.li.ac.client.font-init :as font-init]
             [cn.li.ac.datagen.bootstrap :as datagen-bootstrap]
@@ -52,6 +53,8 @@
     "silbarn" "cn.li.ac.content.entities.silbarn-render")
   ;; cn.li.ac.terminal.client.actions/install-ui-hooks!
   (terminal-actions/install-ui-hooks!)
+  ;; Push handler for terminal install-effect (moved out of shell to break circular dep)
+  (install-effect/install-push-handler!)
   (platform-hooks/install-client-content-actions!)
   (font-init/init-fonts!)
   (hooks/load-all-client-renderers!))

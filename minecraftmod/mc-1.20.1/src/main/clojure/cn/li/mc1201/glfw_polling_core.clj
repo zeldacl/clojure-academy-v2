@@ -65,8 +65,6 @@
              :logical-side :client}))
         (swap! last-poll-time assoc :cycle-selection is-pressed))
 
-      ;; Additional :original inputs can be polled here following same pattern
-
       nil
       (catch Exception e
         (log/warn e "Error polling GLFW inputs"))))

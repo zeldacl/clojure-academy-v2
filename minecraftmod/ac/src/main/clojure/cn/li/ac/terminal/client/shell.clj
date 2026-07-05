@@ -11,10 +11,10 @@
             [cn.li.ac.config.modid :as modid]
             [cn.li.ac.terminal.catalog :as catalog]
             [cn.li.ac.terminal.client.apps :as client-apps]
-            [cn.li.ac.terminal.client.install-effect :as install-effect]
             [cn.li.ac.terminal.client.runtime :as runtime]
             [cn.li.ac.terminal.messages :as terminal-messages]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
+            [cn.li.mcmod.client.content-actions :as content-actions]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.gui.cgui-core :as cgui-core]
             [cn.li.mcmod.gui.components :as comp]
@@ -447,20 +447,45 @@
     (catch Exception e
       (log/error "Error opening terminal:" (ex-message e)))))
 
+;; ============================================================================
+;; Terminal key polling — checks GLFW key state via platform bridge each tick.
+;; Bypasses the Forge KeyMapping event system which is unreliable for modifier
+;; keys (Alt/Shift/Ctrl).  Matching original AcademyCraft KEY_LMENU behavior.
+;; ============================================================================
+
+(def ^:private glfw-key-left-alt 342)
+(def ^:private terminal-key-was-pressed (atom false))
+
+(defn toggle-terminal! [player]
+  (log/info "[AC-Terminal] toggle-terminal! called")
+  (if (client-bridge/screen-active?)
+    (do
+      (log/info "[AC-Terminal] closing screen")
+      (client-bridge/close-screen!))
+    (do
+      (log/info "[AC-Terminal] opening terminal")
+      (open-terminal player))))
+
+(defn- poll-terminal-toggle-key!
+  "Called every client tick. Queries GLFW via platform bridge for Left Alt.
+  Debounced: only triggers on release→press transition."
+  []
+  (try
+    (let [now-pressed (boolean (client-bridge/is-glfw-key-down? glfw-key-left-alt))]
+      (when (and now-pressed (not @terminal-key-was-pressed))
+        (log/info "[AC-Terminal] Left Alt pressed via GLFW polling")
+        (when-let [player (client-bridge/get-client-player)]
+          (toggle-terminal! player)))
+      (reset! terminal-key-was-pressed now-pressed))
+    (catch Exception e
+      (log/warn "[AC-Terminal] GLFW polling error:" (ex-message e)))))
+
 (defn install-ui-hooks! []
   (with-init-guard terminal-ui-hooks-installed?
     (platform-ui/register-widget-factory!
       :ac/terminal-gui
       (fn [{:keys [player]}] (create-terminal-gui player)))
-    (net-client/register-push-handler!
-      (terminal-messages/msg-id :terminal-install-effect)
-      (fn [_payload]
-        (when-let [player (client-bridge/get-client-player)]
-          (install-effect/show! player))))
-    (log/info "AC terminal UI hooks installed"))
+    ;; Register terminal key polling via verified client tick hook system
+    (content-actions/register-client-tick-hook! poll-terminal-toggle-key!)
+    (log/info "AC terminal UI hooks installed (with GLFW key polling)"))
   nil)
-
-(defn toggle-terminal! [player]
-  (if (client-bridge/screen-active?)
-    (client-bridge/close-screen!)
-    (open-terminal player)))

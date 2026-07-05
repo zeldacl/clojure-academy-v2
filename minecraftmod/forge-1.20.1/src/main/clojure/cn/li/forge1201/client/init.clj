@@ -226,7 +226,13 @@
        :blit-textured-quad! (fn [graphics texture x1 y1 x2 y2 z u0 u1 v0 v1]
                               (.invokeInnerBlit ^GuiGraphicsInvoker graphics
                                 texture (int x1) (int x2) (int y1) (int y2) (int z)
-                                (float u0) (float u1) (float v0) (float v1)))}))
+                                (float u0) (float u1) (float v0) (float v1)))
+       :is-glfw-key-down? (fn [key-code]
+                            (try
+                              (let [^Minecraft mc (Minecraft/getInstance)
+                                    handle (.. mc getWindow getHandle)]
+                                (= 1 (org.lwjgl.glfw.GLFW/glfwGetKey handle (int key-code))))
+                              (catch Throwable _ false)))}))
 
 (defn register-key-mappings!
   "Register all runtime KeyMapping instances to Forge input system."
