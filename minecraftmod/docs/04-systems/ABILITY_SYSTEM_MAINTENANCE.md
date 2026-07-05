@@ -143,6 +143,19 @@ Context 生命周期清理仅使用 `ctx/clear-store-session-contexts!` 与 `ctx
 | `adapters.client-ui-hooks` | 客户端 sync 推送、HUD、context 消息 |
 | `adapters.client-effect-hooks` | 客户端 FX hooks |
 
+### 客户端 FX handler 签名（扁平）
+
+Level 与 Hand 效果统一使用 `:enqueue-state-fn` / `:tick-state-fn`（已删除 `:enqueue-fn`、`:tick-fn`、`:enqueue-event-fn` 与 per-event map 路由）：
+
+| 键 | 签名 |
+|----|------|
+| `:enqueue-state-fn` | `(fn [state ctx-id channel owner-key payload] → state')` |
+| `:tick-state-fn` | `(fn [state] → state')` |
+| `:build-plan-fn` | `(fn [camera-pos hand-center-pos tick] → plan)`；`mine_detect` 等为 4 参 `(fn [... tick query-nearby-blocks-fn] → plan)` |
+| `:transform-fn` | `(fn [] → transform-map\|nil)` |
+
+公共 API：`enqueue-level-effect!` / `enqueue-hand-effect!` 为 `(effect-id ctx-id channel payload & {:keys [owner-key]})`；`owner-key` 仅在 infra 内计算一次。`fx-spec/register!` channel handler 直接传扁平参数，不再 `build-event` / `enqueue-event`。
+
 ### 其他基线
 
 - **Server tick**：develop tick/completion 在 reducer `:server-tick` 内结算；`state-tick` 只编排命令与事件发射。

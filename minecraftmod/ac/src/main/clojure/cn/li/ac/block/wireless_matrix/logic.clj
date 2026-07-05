@@ -184,7 +184,7 @@
                :range (:range stats')))))
 
 (defn matrix-tick-state
-  [state {:keys [pos]}]
+  [state _level pos _block-state _be]
   (let [ticker (inc (int (get state :update-ticker 0)))
         state1 (assoc state :update-ticker ticker)]
     (if (and (zero? (:sub-id state1 0))
@@ -230,7 +230,7 @@
 
 (defn handle-matrix-place
   []
-  (fn [{:keys [player world pos]}]
+  (fn [player world pos _block-id]
     (when-let [be (world/world-get-tile-entity* world pos)]
       (let [player-uuid (uuid/player-uuid player)
             player-name (try (str (or (entity/player-get-name player) ""))
@@ -243,7 +243,7 @@
 
 (defn handle-matrix-break
   []
-  (fn [{:keys [world pos]}]
+  (fn [world pos _block-id]
     ;; Inventory items are dropped automatically by SharedScriptedBlock.onRemove
     ;; via Containers.dropContents. This handler exists for future cleanup hooks.
     (when (world/world-get-tile-entity* world pos)

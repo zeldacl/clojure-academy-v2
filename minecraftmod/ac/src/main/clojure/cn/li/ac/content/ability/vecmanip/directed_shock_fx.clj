@@ -62,9 +62,9 @@
 ;; Enqueue
 ;; ---------------------------------------------------------------------------
 
-(defn- enqueue-state! [state payload]
+(defn- enqueue-state! [state ctx-id channel owner-key payload]
   (let [state* (or state (default-directed-shock-fx-state))
-        {:keys [mode performed? owner-key ctx-id channel source-player-id world-id]} payload
+        {:keys [mode performed? source-player-id world-id]} payload
         owner-key* (or owner-key [:ctx ctx-id])
         base-meta {:owner-key owner-key*
                    :ctx-id ctx-id

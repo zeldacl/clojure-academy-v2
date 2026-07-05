@@ -121,39 +121,6 @@
       (keybinds/trigger-mode-switch! "p1"))
     (is (= [:abort-hook] @aborted))))
 
-(deftest keybind-registry-runtime-isolation-test
-  (let [runtime-a (keybinds/create-keybind-registry-runtime)
-        runtime-b (keybinds/create-keybind-registry-runtime)
-        handler-a {:id :iso/a
-                   :priority 10
-                   :handles-fn (fn [_] true)
-                   :on-key-down-fn (fn [_] nil)}
-        handler-b {:id :iso/b
-                   :priority 10
-                   :handles-fn (fn [_] true)
-                   :on-key-down-fn (fn [_] nil)}]
-    (keybinds/call-with-keybind-registry-runtime
-      runtime-a
-      (fn []
-        (keybinds/add-activate-handler! handler-a)
-        (keybinds/register-key-delegate! :default 0 {:skill-id :railgun})
-        (is (= 1 (count (:activate-handlers (keybinds/keybind-registries-snapshot)))))
-        (is (= :railgun
-               (:skill-id (keybinds/get-delegate-for-key 0))))))
-    (keybinds/call-with-keybind-registry-runtime
-      runtime-b
-      (fn []
-        (is (empty? (:activate-handlers (keybinds/keybind-registries-snapshot))))
-        (is (nil? (keybinds/get-delegate-for-key 0)))
-        (keybinds/add-activate-handler! handler-b)
-        (keybinds/register-key-delegate! :default 0 {:skill-id :meltdowner})
-        (is (= :meltdowner
-               (:skill-id (keybinds/get-delegate-for-key 0))))))
-    (keybinds/call-with-keybind-registry-runtime
-      runtime-a
-      (fn []
-        (is (= 1 (count (:activate-handlers (keybinds/keybind-registries-snapshot)))))
-        (is (= :railgun
-               (:skill-id (keybinds/get-delegate-for-key 0))))))))
+
 
 

@@ -29,8 +29,8 @@
                   fx-registry/register-fx-channel! (fn [topic handler]
                                                       (swap! handlers* assoc topic handler)
                                                       nil)
-                  level-effects/enqueue-level-effect! (fn [effect-id payload fx-context]
-                                                        (swap! enqueued* conj [effect-id payload fx-context])
+                  level-effects/enqueue-level-effect! (fn [effect-id ctx-id channel payload & opts]
+                                                        (swap! enqueued* conj [effect-id ctx-id channel payload opts])
                                                         nil)]
       (crit-fx/init!)
       ((get @handlers* :teleporter/fx-crit-hit) "ctx-1" :teleporter/fx-crit-hit {:x 1.0 :y 2.0 :z 3.0 :crit-level 2 :crit-rate 2.6 :message-key "ability.teleporter.critical_hit" :message-args ["x2.6"] :target-uuid "t" :skill-id :flesh-ripping})

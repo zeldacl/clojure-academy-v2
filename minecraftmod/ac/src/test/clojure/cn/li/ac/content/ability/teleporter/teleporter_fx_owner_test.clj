@@ -10,10 +10,7 @@
             [cn.li.ac.content.ability.teleporter.shift-teleport-fx :as shift-teleport-fx]))
 
 (defn- reset-fixture [f]
-  (level-effects/call-with-level-effect-runtime
-    (level-effects/create-level-effect-runtime)
-    (fn []
-      (level-effects/reset-level-effect-registry-for-test!)
+  (level-effects/reset-level-effect-registry-for-test!)
       (flashing-fx/reset-flashing-fx-for-test!)
       (flesh-ripping-fx/reset-flesh-ripping-fx-for-test!)
       (mark-teleport-fx/reset-mark-teleport-fx-for-test!)
@@ -27,7 +24,7 @@
           (mark-teleport-fx/reset-mark-teleport-fx-for-test!)
           (penetrate-teleport-fx/reset-penetrate-teleport-fx-for-test!)
           (shift-teleport-fx/reset-shift-teleport-fx-for-test!)
-          (level-effects/reset-level-effect-registry-for-test!))))))
+          (level-effects/reset-level-effect-registry-for-test!))))
 
 (use-fixtures :each reset-fixture)
 
@@ -38,7 +35,7 @@
    :owner-key [:ctx ctx-id]})
 
 (defn- enqueue! [effect-id {:keys [payload ctx-id channel owner-key]}]
-  (level-effects/enqueue-level-effect! effect-id payload {:ctx-id ctx-id :channel channel :owner-key owner-key}))
+  (level-effects/enqueue-level-effect! effect-id ctx-id channel payload :owner-key owner-key))
 
 (deftest teleporter-stateful-fx-keep-state-per-owner-test
   (with-redefs [client-particles/queue-particle-effect! (fn [& _] nil)

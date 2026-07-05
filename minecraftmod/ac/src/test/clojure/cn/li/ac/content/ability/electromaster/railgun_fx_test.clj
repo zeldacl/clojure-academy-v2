@@ -5,16 +5,13 @@
             [cn.li.ac.content.ability.electromaster.railgun-fx :as railgun-fx]))
 
 (defn- reset-fixture [f]
-  (level-effects/call-with-level-effect-runtime
-    (level-effects/create-level-effect-runtime)
-    (fn []
-      (try
+  (try
         (level-effects/reset-level-effect-registry-for-test!)
         (railgun-fx/reset-railgun-fx-for-test!)
         (f)
         (finally
           (railgun-fx/reset-railgun-fx-for-test!)
-          (level-effects/reset-level-effect-registry-for-test!))))))
+          (level-effects/reset-level-effect-registry-for-test!))))
 
 (use-fixtures :each reset-fixture)
 
@@ -46,8 +43,8 @@
                   fx-registry/register-fx-channel! (fn [topic handler]
                                                       (swap! handlers* assoc topic handler)
                                                       nil)
-                  level-effects/enqueue-level-effect! (fn [effect-id payload fx-context]
-                                                        (swap! enqueued* conj [effect-id payload fx-context])
+                  level-effects/enqueue-level-effect! (fn [effect-id ctx-id channel payload & opts]
+                                                        (swap! enqueued* conj [effect-id ctx-id channel payload opts])
                                                         nil)]
       (railgun-fx/init!)
       ((get @handlers* :railgun/fx-shot) "ctx-rail" :railgun/fx-shot {:mode :block-hit

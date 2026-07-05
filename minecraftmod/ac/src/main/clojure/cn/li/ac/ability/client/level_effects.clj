@@ -18,20 +18,15 @@
 
 (def ^:private le-path [:service :level-effects])
 
+(defonce ^:private fallback-level-effect-state
+  (atom (default-level-effect-runtime-state)))
+
 (defn- level-effect-state-atom []
   (if-let [fw-atom (fw/fw-atom)]
     (or (get-in @fw-atom le-path)
         (let [a (atom (default-level-effect-runtime-state))]
           (swap! fw-atom assoc-in le-path a) a))
-    (atom (default-level-effect-runtime-state))))
-
-;; Backward-compatible factory
-(defn create-level-effect-runtime
-  ([]
-   (create-level-effect-runtime {}))
-  ([{:keys [state*]
-     :or {state* (level-effect-state-atom)}}]
-   {::runtime ::level-effect-runtime :state* state*}))
+    fallback-level-effect-state))
 
 (defn- level-effect-state-snapshot [] @(level-effect-state-atom))
 
@@ -49,11 +44,8 @@
 
 (defn register-level-effect! [effect-id handler-map]
   (when-not (and (keyword? effect-id) (map? handler-map)
-                 (or (fn? (:enqueue-fn handler-map))
-                     (fn? (:enqueue-event-fn handler-map))
-                     (fn? (:enqueue-state-fn handler-map)))
-                 (or (fn? (:tick-fn handler-map))
-                     (fn? (:tick-state-fn handler-map)))
+                 (fn? (:enqueue-state-fn handler-map))
+                 (fn? (:tick-state-fn handler-map))
                  (fn? (:build-plan-fn handler-map)))
     (throw (IllegalArgumentException. "register-level-effect!: invalid effect-id or handler-map")))
   (assert-registry-open!)
@@ -89,56 +81,48 @@
 ;; Dispatch
 ;; ---------------------------------------------------------------------------
 
-(defn- default-owner-key [effect-id payload ctx-id channel]
+(defn- default-owner-key [effect-id payload ctx-id _channel]
   (cond (and (map? payload) (:effect-instance-id payload)) [:effect-instance (:effect-instance-id payload)]
         ctx-id [:ctx ctx-id]
         (and (map? payload) (:source-player-id payload)) [:source-player (:source-player-id payload)]
         (and (map? payload) (:player-id payload)) [:player (:player-id payload)]
-        channel [:channel channel]
         :else [:effect effect-id :global]))
 
-(defn- enqueue-event [effect-id payload fx-context]
-  (let [{:keys [ctx-id channel owner-key]} fx-context]
-    (assoc (or fx-context {}) :effect-id effect-id :payload payload
-           :ctx-id ctx-id :channel channel
-           :owner-key (or owner-key (default-owner-key effect-id payload ctx-id channel)))))
-
 (defn enqueue-level-effect!
-  ([effect-id payload] (enqueue-level-effect! effect-id payload nil))
-  ([effect-id payload fx-context]
-   (if-let [{:keys [enqueue-fn enqueue-event-fn enqueue-state-fn]}
-            (get-in (level-effect-state-snapshot) [:registry effect-id])]
-     (cond enqueue-state-fn
-           (let [event (enqueue-event effect-id payload fx-context)]
-             (update-level-effect-state!
-               (fn [state] (let [current-state (get-in state [:effect-states effect-id])
-                                 next-state (enqueue-state-fn current-state event)]
-                             (assoc-effect-state state effect-id next-state)))))
-           enqueue-event-fn (enqueue-event-fn (enqueue-event effect-id payload fx-context))
-           :else (enqueue-fn payload))
-     (log/warn "No level effect registered for" effect-id))))
+  "Enqueue FX payload for a registered level effect.
+
+  `owner-key` may be supplied explicitly; otherwise computed internally."
+  [effect-id ctx-id channel payload & {:keys [owner-key]}]
+  (if-let [{:keys [enqueue-state-fn]} (get-in (level-effect-state-snapshot) [:registry effect-id])]
+    (let [owner-key* (or owner-key (default-owner-key effect-id payload ctx-id channel))]
+      (update-level-effect-state!
+        (fn [state]
+          (let [current-state (get-in state [:effect-states effect-id])
+                next-state (enqueue-state-fn current-state ctx-id channel owner-key* payload)]
+            (assoc-effect-state state effect-id next-state))))))
+    (log/warn "No level effect registered for" effect-id))
 
 (defn tick-level-effects! []
   (let [{:keys [order registry]} (level-effect-state-snapshot)]
     (doseq [eid order]
-      (when-let [{:keys [tick-fn tick-state-fn]} (get registry eid)]
-        (if tick-state-fn
-          (update-level-effect-state!
-            (fn [state] (let [current-state (get-in state [:effect-states eid])
-                              next-state (tick-state-fn current-state)]
-                          (assoc-effect-state state eid next-state))))
-          (tick-fn))))))
-
-(defn- invoke-build-plan-fn [build-plan-fn camera-pos hand-center-pos tick frame-context]
-  (try (build-plan-fn camera-pos hand-center-pos tick frame-context)
-       (catch clojure.lang.ArityException _ (build-plan-fn camera-pos hand-center-pos tick))))
+      (when-let [{:keys [tick-state-fn]} (get registry eid)]
+        (update-level-effect-state!
+          (fn [state]
+            (let [current-state (get-in state [:effect-states eid])
+                  next-state (tick-state-fn current-state)]
+              (assoc-effect-state state eid next-state))))))))
 
 (defn build-level-effect-plan
-  ([camera-pos hand-center-pos tick] (build-level-effect-plan camera-pos hand-center-pos tick nil))
-  ([camera-pos hand-center-pos tick frame-context]
+  ([camera-pos hand-center-pos tick]
+   (build-level-effect-plan camera-pos hand-center-pos tick nil))
+  ([camera-pos hand-center-pos tick query-nearby-blocks-fn]
    (let [{:keys [order registry]} (level-effect-state-snapshot)
-         results (keep (fn [eid] (when-let [{:keys [build-plan-fn]} (get registry eid)]
-                                   (invoke-build-plan-fn build-plan-fn camera-pos hand-center-pos tick frame-context))) order)
+         results (keep (fn [eid]
+                         (when-let [{:keys [build-plan-fn]} (get registry eid)]
+                           (if query-nearby-blocks-fn
+                             (build-plan-fn camera-pos hand-center-pos tick query-nearby-blocks-fn)
+                             (build-plan-fn camera-pos hand-center-pos tick))))
+                       order)
          all-ops (vec (mapcat #(get % :ops) results))
          walk-speeds (keep #(get % :local-walk-speed) results)
          local-walk-speed (when (seq walk-speeds) (float (apply min walk-speeds)))]

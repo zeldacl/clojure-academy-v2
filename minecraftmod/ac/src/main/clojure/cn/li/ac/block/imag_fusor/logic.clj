@@ -210,7 +210,7 @@
     (catch Exception _ nil)))
 
 (defn fusor-tick-state
-  [state {:keys [level pos]}]
+  [state level pos _block-state _be]
   (let [state (assoc state
                      :update-ticker (inc (long (get state :update-ticker 0)))
                      :tank-size (int (:tank-size state fusor-config/tank-size))
@@ -244,7 +244,7 @@
   "1.20-idiomatic BlockState update: cheap in-memory comparison of :frame and
    :facing values; only touch world BlockState when visual properties differ.
    :frame cycles 1-4 during crafting (every ~8 ticks); :facing is static."
-  [_be level pos old-state new-state _ctx]
+  [_be level pos old-state new-state]
   (when (and level pos)
     (when (or (not= (:frame old-state 0) (:frame new-state 0))
               (not= (:facing old-state "north") (:facing new-state "north")))

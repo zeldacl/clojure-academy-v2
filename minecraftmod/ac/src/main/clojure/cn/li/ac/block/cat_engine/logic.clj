@@ -53,7 +53,7 @@
 	{:consume? true
 	 :messages [{:type :translatable :key message-key :args (vec args)}]})
 
-(defn cat-tick-state [state {:keys [be]}]
+(defn cat-tick-state [state _level _pos _block-state be]
 	(let [ticker (inc (long (get state :update-ticker 0)))
 				energy (double (get state :energy 0.0))
 				max-energy (double (cat-config/max-energy))
@@ -72,7 +72,7 @@
 		{:default-state cat-default-state
 		 :tick-state cat-tick-state}))
 
-(defn cat-right-click! [{:keys [world pos] :as _ctx}]
+(defn cat-right-click! [_player world pos _block-id]
 	(let [be (and world pos (world/world-get-tile-entity* world pos))]
 		(cond
 			(nil? be) {:consume? true}

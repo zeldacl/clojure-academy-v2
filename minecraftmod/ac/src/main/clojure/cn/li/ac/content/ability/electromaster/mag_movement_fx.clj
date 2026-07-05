@@ -57,11 +57,10 @@
      :line-alpha (int (+ 90 (* 110 flicker)))}))
 
 (defn- enqueue-state!
-  [store event]
+  [store ctx-id channel owner-key payload]
   (let [store* (if (contains? (or store {}) :effect-state)
                  (or store (default-mag-movement-fx-runtime-state))
                  (default-mag-movement-fx-runtime-state))
-        {:keys [payload ctx-id channel owner-key]} event
         owner-key* (or owner-key [:ctx ctx-id])
         {:keys [mode target source-player-id world-id]} (or payload {})
         base-meta {:owner-key owner-key*

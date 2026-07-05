@@ -175,7 +175,7 @@
 
 (defn interferer-tick-state
   "Pure state step; ability I/O runs in interferer-after-commit!."
-  [base-state {:keys [level pos]}]
+  [base-state level pos _block-state _be]
   (let [ticker (inc (long (get base-state :update-ticker 0)))
         state0 (assoc base-state
                       :update-ticker ticker
@@ -216,7 +216,7 @@
   "1.20-idiomatic: cheap in-memory :enabled comparison first; only touch world
    BlockState when the visual property actually changes. Ability interference
    effects (player registration) are handled after the BlockState check."
-  [_be level pos old-state new-state _ctx]
+  [_be level pos old-state new-state]
   (when (and level pos (not= old-state new-state))
     ;; BlockState update (1.20 pattern: cheap comparison before world access)
     (when (not= (:enabled old-state) (:enabled new-state))
@@ -286,7 +286,7 @@
 ;; Block lifecycle: place, break
 ;; ============================================================================
 
-(defn on-interferer-placed! [{:keys [player world pos] :as _ctx}]
+(defn on-interferer-placed! [player world pos _block-id]
 	(when (and player world pos)
 		(let [tile (world/world-get-tile-entity* world pos)]
 			(when tile
@@ -307,7 +307,7 @@
           (machine-runtime/commit-state! tile world pos state state'
                                          :blockstate-updater interferer-blockstate-updater))))))
 
-(defn on-interferer-break! [{:keys [world pos] :as _ctx}]
+(defn on-interferer-break! [world pos _block-id]
 	(when (and world pos)
 		(let [tile (world/world-get-tile-entity* world pos)]
 			(when tile

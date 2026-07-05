@@ -33,7 +33,7 @@
 	nil)
 
 (defn- enqueue-state!
-	[store {:keys [payload ctx-id channel owner-key]}]
+	[store ctx-id channel owner-key payload]
 	(let [store* (or store (default-vec-accel-fx-runtime-state))
 				owner-key* (or owner-key [:ctx ctx-id])
 				{:keys [mode charge-ticks can-perform? look-dir init-vel source-player-id world-id]} (or payload {})

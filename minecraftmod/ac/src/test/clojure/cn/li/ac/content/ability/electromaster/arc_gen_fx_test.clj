@@ -6,16 +6,13 @@
             [cn.li.ac.content.ability.electromaster.arc-gen-fx :as arc-fx]))
 
 (defn- with-fresh-arc-gen-fx-runtime [f]
-  (level-effects/call-with-level-effect-runtime
-    (level-effects/create-level-effect-runtime)
-    (fn []
-      (try
+  (try
         (level-effects/reset-level-effect-registry-for-test!)
         (arc-fx/reset-arc-gen-fx-for-test!)
         (f)
         (finally
           (arc-fx/reset-arc-gen-fx-for-test!)
-          (level-effects/reset-level-effect-registry-for-test!))))))
+          (level-effects/reset-level-effect-registry-for-test!))))
 
 (defn- event [ctx-id payload]
   {:payload payload
@@ -45,8 +42,8 @@
                   fx-registry/register-fx-channel! (fn [topic handler]
                                                      (swap! handlers* assoc topic handler)
                                                      nil)
-                  level-effects/enqueue-level-effect! (fn [effect-id payload fx-context]
-                                                        (swap! enqueued* conj [effect-id payload fx-context])
+                  level-effects/enqueue-level-effect! (fn [effect-id ctx-id channel payload & opts]
+                                                        (swap! enqueued* conj [effect-id ctx-id channel payload opts])
                                                         nil)]
       (arc-fx/init!)
       ((get @handlers* :arc-gen/fx-perform) "ctx-arc" :arc-gen/fx-perform {:start {:x 1.0 :y 2.0 :z 3.0}

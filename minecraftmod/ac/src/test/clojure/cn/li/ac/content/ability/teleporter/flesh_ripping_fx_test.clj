@@ -7,16 +7,13 @@
             [cn.li.ac.content.ability.teleporter.flesh-ripping-fx :as frfx]))
 
 (defn- with-fresh-flesh-ripping-fx-runtime [f]
-  (level-effects/call-with-level-effect-runtime
-    (level-effects/create-level-effect-runtime)
-    (fn []
-      (level-effects/reset-level-effect-registry-for-test!)
-      (frfx/reset-flesh-ripping-fx-for-test!)
+  (level-effects/reset-level-effect-registry-for-test!)
+  (frfx/reset-flesh-ripping-fx-for-test!)
       (try
         (f)
         (finally
           (frfx/reset-flesh-ripping-fx-for-test!)
-          (level-effects/reset-level-effect-registry-for-test!))))))
+          (level-effects/reset-level-effect-registry-for-test!))))
 
 (use-fixtures :each with-fresh-flesh-ripping-fx-runtime)
 
@@ -44,8 +41,8 @@
                   fx-registry/register-fx-channel! (fn [topic handler]
                                                       (swap! handlers* assoc topic handler)
                                                       nil)
-                  level-effects/enqueue-level-effect! (fn [effect-id payload fx-context]
-                                                        (swap! enqueued* conj [effect-id payload fx-context])
+                  level-effects/enqueue-level-effect! (fn [effect-id ctx-id channel payload & opts]
+                                                        (swap! enqueued* conj [effect-id ctx-id channel payload opts])
                                                         nil)]
       (frfx/init!)
       ((get @handlers* :flesh-ripping/fx-start) "ctx-1" :flesh-ripping/fx-start nil)
@@ -104,15 +101,8 @@
                                                       (swap! sounds* conj args)
                                                       nil)]
       (frfx/init!)
-      (level-effects/enqueue-level-effect!
-        :flesh-ripping
-        {:mode :perform
-         :target-x 1.0 :target-y 2.0 :target-z 3.0
-         :hit? true
-         :target-uuid "target-1"}
-        {:ctx-id "ctx-1"
-         :channel :flesh-ripping/fx-perform
-         :owner-key [:ctx "ctx-1"]})
+      (level-effects/enqueue-level-effect! :flesh-ripping "ctx-1" :flesh-ripping/fx-perform {:mode :perform :target-x 1.0 :target-y 2.0 :target-z 3.0 :hit? true :target-uuid "target-1"}
+                                         :owner-key [:ctx "ctx-1"])
       (is (= 2 (count @particles*)))
       (is (= 1 (count @sounds*)))
       (is (= "my_mod:tp.flesh_ripping" (:sound-id (second (first @sounds*))))))))
@@ -120,55 +110,16 @@
 (deftest enqueue-end-clears-state-test
   (with-redefs [client-particles/current-effect-owner (fn [] {:client-session-id "flesh-ripping-test"})]
     (frfx/init!)
-    (level-effects/enqueue-level-effect! :flesh-ripping {:mode :start}
-                                         {:ctx-id "ctx-1"
-                                          :channel :flesh-ripping/fx-start
-                                          :owner-key [:ctx "ctx-1"]})
-    (level-effects/enqueue-level-effect! :flesh-ripping {:mode :update
-                                                          :target-x 1.0 :target-y 2.0 :target-z 3.0 :hit? false}
-                                         {:ctx-id "ctx-1"
-                                          :channel :flesh-ripping/fx-update
-                                          :owner-key [:ctx "ctx-1"]})
+    (level-effects/enqueue-level-effect! :flesh-ripping "ctx-1" :flesh-ripping/fx-start {:mode :start}
+                                         :owner-key [:ctx "ctx-1"])
+    (level-effects/enqueue-level-effect! :flesh-ripping "ctx-1" :flesh-ripping/fx-update {:mode :update :target-x 1.0 :target-y 2.0 :target-z 3.0 :hit? false}
+                                         :owner-key [:ctx "ctx-1"])
       (is (some? (get (:fx-state (frfx/flesh-ripping-fx-snapshot)) [:ctx "ctx-1"])))
-    (level-effects/enqueue-level-effect! :flesh-ripping {:mode :end}
-                                         {:ctx-id "ctx-1"
-                                          :channel :flesh-ripping/fx-end
-                                          :owner-key [:ctx "ctx-1"]})
+    (level-effects/enqueue-level-effect! :flesh-ripping "ctx-1" :flesh-ripping/fx-end {:mode :end}
+                                         :owner-key [:ctx "ctx-1"])
     (is (nil? (get (:fx-state (frfx/flesh-ripping-fx-snapshot)) [:ctx "ctx-1"])))))
 
-(deftest flesh-ripping-fx-runtime-isolation-test
-  (let [runtime-a (level-effects/create-level-effect-runtime)
-        runtime-b (level-effects/create-level-effect-runtime)]
-    (with-redefs [client-particles/current-effect-owner (fn [] {:client-session-id "flesh-ripping-test"})
-                  client-particles/queue-particle-effect! (fn [& _] nil)
-                  client-sounds/queue-sound-effect! (fn [& _] nil)]
-      (level-effects/call-with-level-effect-runtime
-        runtime-a
-        (fn []
-          (frfx/init!)
-          (level-effects/enqueue-level-effect! :flesh-ripping {:mode :start}
-                                               {:ctx-id "ctx-a"
-                                                :channel :flesh-ripping/fx-start
-                                                :owner-key [:ctx "ctx-a"]})
-          (is (= #{[:ctx "ctx-a"]}
-                 (set (keys (:fx-state (frfx/flesh-ripping-fx-snapshot))))))))
-      (level-effects/call-with-level-effect-runtime
-        runtime-b
-        (fn []
-          (frfx/init!)
-          (is (= {:fx-state {}}
-                 (frfx/flesh-ripping-fx-snapshot)))
-          (level-effects/enqueue-level-effect! :flesh-ripping {:mode :start}
-                                               {:ctx-id "ctx-b"
-                                                :channel :flesh-ripping/fx-start
-                                                :owner-key [:ctx "ctx-b"]})
-          (is (= #{[:ctx "ctx-b"]}
-                 (set (keys (:fx-state (frfx/flesh-ripping-fx-snapshot))))))))
-      (level-effects/call-with-level-effect-runtime
-        runtime-a
-        (fn []
-          (is (= #{[:ctx "ctx-a"]}
-                 (set (keys (:fx-state (frfx/flesh-ripping-fx-snapshot)))))))))))
+
 
 (deftest flesh-ripping-fx-snapshot-default-without-registered-state-test
   (is (= {:fx-state {}}

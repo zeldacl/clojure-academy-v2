@@ -126,9 +126,8 @@
           (long (max 1 (or rescan-interval default-rescan-interval))))))
 
 (defn- rescan-ores
-  [{:keys [range]} hand-center-pos frame-context]
-  (let [query-fn (:query-nearby-blocks frame-context)]
-    (if (and (fn? query-fn) (map? hand-center-pos))
+  [{:keys [range]} hand-center-pos query-fn]
+  (if (and (fn? query-fn) (map? hand-center-pos))
       (let [origin-x (double (or (:x hand-center-pos) 0.0))
             origin-y (double (or (:y hand-center-pos) 64.0))
             origin-z (double (or (:z hand-center-pos) 0.0))
@@ -142,7 +141,7 @@
                      :harvest-level (:harvest-level block)}))
              distinct
              vec))
-      [])))
+      []))
 
 (defn- apply-perform!
   [owner-key ctx-id channel {:keys [range advanced? life-ticks rescan-interval source-player-id world-id]}]
@@ -166,11 +165,10 @@
    :ores []})
 
 (defn- enqueue-state!
-  [store event]
+  [store ctx-id channel owner-key payload]
   (let [store* (if (contains? (or store {}) :effect-state)
                  (or store (default-mine-detect-fx-runtime-state))
                  (default-mine-detect-fx-runtime-state))
-        {:keys [payload ctx-id channel owner-key]} event
         owner-key* (or owner-key [:ctx ctx-id])]
     (case (:mode payload)
       :perform
@@ -201,7 +199,7 @@
                    states)))))
 
 (defn- maybe-refresh-ores!
-  [owner-key hand-center-pos frame-context]
+  [owner-key hand-center-pos query-fn]
   (level-effects/update-effect-state!
     mine-detect-effect-id
     (fn [store]
@@ -212,17 +210,17 @@
                    (fn [st]
                      (if (and st (should-rescan? st))
                        (assoc st
-                              :ores (rescan-ores st hand-center-pos frame-context)
+                              :ores (rescan-ores st hand-center-pos query-fn)
                               :last-rescan-tick (:ticks st))
                        st)))))))
 
 (defn- build-plan
-  [_camera-pos hand-center-pos _tick frame-context]
+  [_camera-pos hand-center-pos _tick query-fn]
   (when-let [[owner-key _] (some (fn [[owner-key st]]
                                    (when (:active? st)
                                      [owner-key st]))
                                  (:effect-state (mine-detect-fx-snapshot)))]
-    (maybe-refresh-ores! owner-key hand-center-pos frame-context)
+    (maybe-refresh-ores! owner-key hand-center-pos query-fn)
     (let [{:keys [ores advanced? range]} (get (:effect-state (mine-detect-fx-snapshot)) owner-key)
           ops (into []
                     (mapcat (fn [{:keys [x y z] :as ore}]

@@ -2,10 +2,25 @@
   "Platform-agnostic block event dispatchers.
 
    Forge/Fabric adapters should forward Forge events into these handlers.
-   Actual per-block behavior is resolved from block specs in the DSL."
+   Actual per-block behavior is resolved from block specs in the DSL.
+
+   Business handlers receive flat positional args; routing still uses ctx maps."
   (:require [cn.li.mcmod.block.query :as bquery]
             [cn.li.mcmod.block.multiblock-core :as mb-core]
             [cn.li.mcmod.util.log :as log]))
+
+(defn- invoke-right-click-handler
+  [handler ctx]
+  (handler (:player ctx) (:world ctx) (:pos ctx) (:block-id ctx)
+           {:sneaking (:sneaking ctx) :item-stack (:item-stack ctx)}))
+
+(defn- invoke-place-handler
+  [handler ctx]
+  (handler (:player ctx) (:world ctx) (:pos ctx) (:block-id ctx)))
+
+(defn- invoke-break-handler
+  [handler ctx]
+  (handler (:world ctx) (:pos ctx) (:block-id ctx)))
 
 (defn on-block-right-click
   "Generic block right-click event handler.
@@ -19,7 +34,7 @@
       (log/debug "  handler found?" (some? handler))
       (when handler
         (log/debug "  calling handler...")
-        (handler routed-ctx)))))
+        (invoke-right-click-handler handler routed-ctx)))))
 
 (defn on-block-place
   "Generic block place event handler.
@@ -28,7 +43,7 @@
   (if-let [precheck-ret (mb-core/precheck-controller-place ctx)]
     precheck-ret
     (let [handler-ret (when-let [handler (bquery/get-block-event-handler (:block-id ctx) :on-place)]
-                        (handler ctx))
+                        (invoke-place-handler handler ctx))
           core-ret (mb-core/post-place-controller! ctx)]
       (or core-ret handler-ret))))
 
@@ -40,11 +55,8 @@
   (let [routed-ctx (mb-core/route-to-controller-context ctx)
         routed-block-id (:block-id routed-ctx)
         handler-ret (when-let [handler (bquery/get-block-event-handler routed-block-id :on-break)]
-                      (handler routed-ctx))
+                      (invoke-break-handler handler routed-ctx))
         core-ret (mb-core/apply-structure-break! ctx routed-ctx)
-        ;; Guard: handlers may return non-map values (e.g. bare keywords);
-        ;; merge requires maps, so coerce to {} when not a map.
         handler-map (if (map? handler-ret) handler-ret {})
         core-map (if (map? core-ret) core-ret {})]
     (merge handler-map core-map)))
-

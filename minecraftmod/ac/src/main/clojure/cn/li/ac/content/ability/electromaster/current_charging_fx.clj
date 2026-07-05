@@ -94,24 +94,25 @@
         ratio (/ (double ticks) (double (visual-max-ticks)))]
     (max 0.0 (min 1.0 ratio))))
 
-(defn- owner-key [ctx-id payload]
-  (or (:owner-key payload)
+(defn- owner-key [ctx-id channel owner-key payload]
+  (or owner-key
       (when-let [source-player-id (:source-player-id payload)]
         [:source-player source-player-id])
       [:ctx ctx-id]))
 
-(defn- base-meta [owner-key ctx-id payload]
+(defn- base-meta [owner-key ctx-id channel payload]
   {:owner-key owner-key
    :ctx-id ctx-id
+   :channel channel
    :source-player-id (:source-player-id payload)
    :world-id (:world-id payload)})
 
-(defn- enqueue-state! [store payload]
+(defn- enqueue-state! [store ctx-id channel owner-key payload]
   (let [store* (if (contains? (or store {}) :states)
                  (or store (default-current-charging-fx-runtime-state))
                  (default-current-charging-fx-runtime-state))
-        {:keys [mode ctx-id] :as payload*} (or payload {})
-        owner-key* (owner-key ctx-id payload*)]
+        {:keys [mode] :as payload*} (or payload {})
+        owner-key* (owner-key ctx-id channel owner-key payload*)]
     (case mode
       :start
       (do
@@ -122,7 +123,7 @@
            :pitch 1.0})
         (assoc-in store* [:states owner-key*]
                   (merge default-state
-                         (base-meta owner-key* ctx-id payload*)
+                         (base-meta owner-key* ctx-id channel payload*)
                          {:active? true
                           :blending? false
                           :is-item (boolean (:is-item payload*))
@@ -138,7 +139,7 @@
       :update
       (update-in store* [:states owner-key*]
                  (fn [state]
-                   (-> (merge default-state state (base-meta owner-key* ctx-id payload*))
+                   (-> (merge default-state state (base-meta owner-key* ctx-id channel payload*))
                        (merge {:active? true
                                :blending? false})
                        (cond-> (contains? payload* :is-item)
@@ -158,7 +159,7 @@
       :end
       (update-in store* [:states owner-key*]
                  (fn [state]
-                   (-> (merge default-state state (base-meta owner-key* ctx-id payload*))
+                   (-> (merge default-state state (base-meta owner-key* ctx-id channel payload*))
                        (merge {:active? false
                                :blending? true
                                :is-item (boolean (:is-item payload*))

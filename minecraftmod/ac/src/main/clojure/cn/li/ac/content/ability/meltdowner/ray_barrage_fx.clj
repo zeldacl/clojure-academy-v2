@@ -37,7 +37,7 @@
   (mapcat val (:beam-queue (ray-barrage-fx-snapshot))))
 
 (defn- enqueue-state!
-  [store {:keys [payload ctx-id channel owner-key]}]
+  [store ctx-id channel owner-key payload]
   (let [store* (or store (default-ray-barrage-fx-runtime-state))
         owner-key* (or owner-key [:ctx ctx-id])
         {:keys [source-player-id world-id]} (or payload {})
@@ -114,9 +114,8 @@
                                   (let [origin (or (:start payload) (:origin payload))
                                         beam-end (or (:end payload) (:beam-end payload))]
                                     (when (and (map? origin) (map? beam-end))
-                                      (level-effects/enqueue-level-effect! ray-barrage-effect-id
+                                      (level-effects/enqueue-level-effect! ray-barrage-effect-id ctx-id channel
                                         (merge (fx-spec/select-meta payload)
                                                {:from-x (:x origin) :from-y (:y origin) :from-z (:z origin)
-                                                :to-x (:x beam-end) :to-y (:y beam-end) :to-z (:z beam-end)})
-                                        {:ctx-id ctx-id :channel channel}))))}}})
+                                                :to-x (:x beam-end) :to-y (:y beam-end) :to-z (:z beam-end)})))))}}})
   nil)

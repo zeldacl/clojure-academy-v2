@@ -7,16 +7,13 @@
 
 (defn- reset-fixture [f]
   (runtime-hooks/with-client-ctx {:session-id :test-session}
-    (level-effects/call-with-level-effect-runtime
-      (level-effects/create-level-effect-runtime)
-      (fn []
-        (try
+    (try
           (level-effects/reset-level-effect-registry-for-test!)
           (rad-fx/reset-rad-intensify-fx-for-test!)
           (f)
           (finally
             (rad-fx/reset-rad-intensify-fx-for-test!)
-            (level-effects/reset-level-effect-registry-for-test!)))))))
+            (level-effects/reset-level-effect-registry-for-test!)))))
 
 (use-fixtures :each reset-fixture)
 
@@ -42,8 +39,8 @@
                   fx-registry/register-fx-channel! (fn [topic handler]
                                                       (swap! handlers* assoc topic handler)
                                                       nil)
-                  level-effects/enqueue-level-effect! (fn [effect-id payload fx-context]
-                                                        (swap! enqueued* conj [effect-id payload fx-context])
+                  level-effects/enqueue-level-effect! (fn [effect-id ctx-id channel payload & opts]
+                                                        (swap! enqueued* conj [effect-id ctx-id channel payload opts])
                                                         nil)]
       (rad-fx/init!)
       ((get @handlers* :rad-intensify/fx-mark) "ctx-rad" :rad-intensify/fx-mark {:target-id "t-1" :ticks-left 60 :x 1.0 :y 64.0 :z 2.0})

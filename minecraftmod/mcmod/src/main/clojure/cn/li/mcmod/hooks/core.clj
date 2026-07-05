@@ -626,14 +626,15 @@
   ((:client-show-combat-notice! (hooks-core-state-snapshot)) notice-id payload))
 
 (defn client-enqueue-level-effect!
-  [effect-id payload]
-  ((:client-enqueue-level-effect! (hooks-core-state-snapshot)) effect-id payload))
+  [effect-id ctx-id channel payload & opts]
+  (apply (:client-enqueue-level-effect! (hooks-core-state-snapshot)) effect-id ctx-id channel payload opts))
 
 (defn client-build-level-effect-plan
   ([camera-pos hand-center-pos tick]
    ((:client-build-level-effect-plan (hooks-core-state-snapshot)) camera-pos hand-center-pos tick))
-  ([camera-pos hand-center-pos tick frame-context]
-   ((:client-build-level-effect-plan (hooks-core-state-snapshot)) camera-pos hand-center-pos tick frame-context)))
+  ([camera-pos hand-center-pos tick query-nearby-blocks-fn]
+   ((:client-build-level-effect-plan (hooks-core-state-snapshot))
+    camera-pos hand-center-pos tick query-nearby-blocks-fn)))
 
 (defn client-tick-level-effects!
   []

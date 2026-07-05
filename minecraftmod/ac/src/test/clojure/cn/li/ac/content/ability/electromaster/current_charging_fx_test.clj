@@ -6,15 +6,12 @@
             [cn.li.ac.content.ability.electromaster.current-charging-fx :as current-charging-fx]))
 
 (defn- with-fresh-current-charging-fx-runtime [f]
-  (hand-effects/call-with-hand-effect-runtime
-    (hand-effects/create-hand-effect-runtime)
-    (fn []
-      (try
+  (try
         (hand-effects/reset-hand-effect-registry-for-test!)
         (f)
         (finally
           (hand-effects/reset-hand-effect-registry-for-test!)
-          (current-charging-fx/reset-current-charging-fx-for-test!))))))
+          (current-charging-fx/reset-current-charging-fx-for-test!))))
 
 (use-fixtures :each with-fresh-current-charging-fx-runtime)
 
@@ -43,7 +40,7 @@
                   fx-registry/register-fx-channel! (fn [topic handler]
                                                       (swap! handlers* assoc topic handler)
                                                       nil)
-                  hand-effects/enqueue-hand-effect! (fn [effect-id payload]
+                  hand-effects/enqueue-hand-effect! (fn [effect-id ctx-id channel payload & opts]
                                                       (swap! hand-enqueued* conj [effect-id payload])
                                                       nil)]
       (current-charging-fx/init!)
@@ -126,30 +123,7 @@
         (is (= 30 (:charge-ticks (get (:states snapshot) [:ctx "ctx-b"]))))))
     (is (= 2 (count @queued*)))))
 
-(deftest current-charging-fx-runtime-isolation-test
-  (let [runtime-a (hand-effects/create-hand-effect-runtime)
-        runtime-b (hand-effects/create-hand-effect-runtime)
-        enqueue-state! (var-get #'cn.li.ac.content.ability.electromaster.current-charging-fx/enqueue-state!)]
-    (with-redefs [client-sounds/queue-current-sound-effect! (fn [& _] nil)]
-      (hand-effects/call-with-hand-effect-runtime
-        runtime-a
-        (fn []
-          (hand-effects/update-effect-state! :current-charging enqueue-state! {:ctx-id "ctx-a" :mode :start :is-item true})
-          (is (= #{[:ctx "ctx-a"]}
-                 (set (keys (:states (current-charging-fx/current-charging-fx-snapshot))))))))
-      (hand-effects/call-with-hand-effect-runtime
-        runtime-b
-        (fn []
-          (is (= {:states {}}
-                 (current-charging-fx/current-charging-fx-snapshot)))
-          (hand-effects/update-effect-state! :current-charging enqueue-state! {:ctx-id "ctx-b" :mode :start :is-item false})
-          (is (= #{[:ctx "ctx-b"]}
-                 (set (keys (:states (current-charging-fx/current-charging-fx-snapshot))))))))
-      (hand-effects/call-with-hand-effect-runtime
-        runtime-a
-        (fn []
-          (is (= #{[:ctx "ctx-a"]}
-                 (set (keys (:states (current-charging-fx/current-charging-fx-snapshot)))))))))))
+
 
 (deftest current-charging-fx-snapshot-default-without-registered-state-test
   (is (= {:states {}}

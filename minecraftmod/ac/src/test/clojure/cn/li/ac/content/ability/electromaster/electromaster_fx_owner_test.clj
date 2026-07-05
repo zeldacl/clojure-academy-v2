@@ -6,10 +6,7 @@
             [cn.li.ac.content.ability.electromaster.mag-manip-fx :as mag-manip-fx]))
 
 (defn- reset-fixture [f]
-  (hand-effects/call-with-hand-effect-runtime
-    (hand-effects/create-hand-effect-runtime)
-    (fn []
-      (try
+  (try
         (hand-effects/reset-hand-effect-registry-for-test!)
         (mag-manip-fx/reset-mag-manip-fx-for-test!)
         (current-charging-fx/reset-current-charging-fx-for-test!)
@@ -17,7 +14,7 @@
         (finally
           (mag-manip-fx/reset-mag-manip-fx-for-test!)
           (current-charging-fx/reset-current-charging-fx-for-test!)
-          (hand-effects/reset-hand-effect-registry-for-test!))))))
+          (hand-effects/reset-hand-effect-registry-for-test!))))
 
 (use-fixtures :each reset-fixture)
 
@@ -60,37 +57,4 @@
         (is (nil? (get-in charging-snapshot [:states [:ctx "ctx-a"]])))
         (is (some? (get-in charging-snapshot [:states [:ctx "ctx-b"]])))))))
 
-(deftest electromaster-fx-runtime-isolation-test
-  (let [runtime-a (hand-effects/create-hand-effect-runtime)
-        runtime-b (hand-effects/create-hand-effect-runtime)
-        mag-enqueue-state! (var-get #'cn.li.ac.content.ability.electromaster.mag-manip-fx/enqueue-state!)
-        charging-enqueue-state! (var-get #'cn.li.ac.content.ability.electromaster.current-charging-fx/enqueue-state!)]
-    (with-redefs [client-sounds/current-effect-owner (fn [] {:client-session-id "electromaster-owner-test"})
-                  client-sounds/queue-current-sound-effect! (fn [& _] nil)
-                  client-sounds/queue-sound-effect! (fn [& _] nil)]
-      (hand-effects/call-with-hand-effect-runtime
-        runtime-a
-        (fn []
-          (hand-effects/update-effect-state! :mag-manip mag-enqueue-state!
-            {:owner-key [:ctx "ctx-a"] :ctx-id "ctx-a" :mode :hold-start :block-id "minecraft:iron_block"})
-          (hand-effects/update-effect-state! :current-charging charging-enqueue-state!
-            {:ctx-id "ctx-a" :mode :start :is-item true})
-          (is (= #{[:ctx "ctx-a"]}
-                 (set (keys (:states (mag-manip-fx/mag-manip-fx-snapshot))))))
-          (is (= #{[:ctx "ctx-a"]}
-                 (set (keys (:states (current-charging-fx/current-charging-fx-snapshot))))))))
-      (hand-effects/call-with-hand-effect-runtime
-        runtime-b
-        (fn []
-          (is (= {:states {}}
-                 (mag-manip-fx/mag-manip-fx-snapshot)))
-          (is (= {:states {}}
-                 (current-charging-fx/current-charging-fx-snapshot)))
-          (hand-effects/update-effect-state! :mag-manip mag-enqueue-state!
-            {:owner-key [:ctx "ctx-b"] :ctx-id "ctx-b" :mode :hold-start :block-id "minecraft:gold_block"})
-          (hand-effects/update-effect-state! :current-charging charging-enqueue-state!
-            {:ctx-id "ctx-b" :mode :start :is-item false})
-          (is (= #{[:ctx "ctx-b"]}
-                 (set (keys (:states (mag-manip-fx/mag-manip-fx-snapshot))))))
-             (is (= #{[:ctx "ctx-b"]}
-               (set (keys (:states (current-charging-fx/current-charging-fx-snapshot)))))))))))
+

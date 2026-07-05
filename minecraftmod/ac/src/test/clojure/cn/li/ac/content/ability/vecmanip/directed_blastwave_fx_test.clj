@@ -6,16 +6,13 @@
             [cn.li.ac.content.ability.vecmanip.directed-blastwave-fx :as blastwave-fx]))
 
 (defn- reset-fixture [f]
-  (level-effects/call-with-level-effect-runtime
-    (level-effects/create-level-effect-runtime)
-    (fn []
-      (try
+  (try
         (level-effects/reset-level-effect-registry-for-test!)
         (blastwave-fx/reset-directed-blastwave-fx-for-test!)
         (f)
         (finally
           (blastwave-fx/reset-directed-blastwave-fx-for-test!)
-          (level-effects/reset-level-effect-registry-for-test!))))))
+          (level-effects/reset-level-effect-registry-for-test!))))
 
 (use-fixtures :each reset-fixture)
 
@@ -149,44 +146,4 @@
           (is (nil? (get (:waves after-clear) [:ctx "ctx-a"])))
           (is (= 1 (count (get (:waves after-clear) [:ctx "ctx-b"])))))))))
 
-(deftest directed-blastwave-fx-runtime-isolation-test
-  (let [runtime-a (level-effects/create-level-effect-runtime)
-        runtime-b (level-effects/create-level-effect-runtime)
-        enqueue-state! (var-get #'cn.li.ac.content.ability.vecmanip.directed-blastwave-fx/enqueue-state!)]
-    (with-redefs [client-sounds/queue-current-sound-effect! (fn [& _] nil)
-                  rand-int (fn [_] 0)
-                  rand (fn [] 0.5)]
-      (level-effects/call-with-level-effect-runtime
-        runtime-a
-        (fn []
-          (level-effects/update-effect-state! :directed-blastwave
-            enqueue-state!
-            (event "ctx-a" {:mode :start :source-player-id "player-a"}))
-          (level-effects/update-effect-state! :directed-blastwave
-            enqueue-state!
-            (event "ctx-a" {:mode :update :charge-ticks 9 :punched? true :source-player-id "player-a"}))
-          (level-effects/update-effect-state! :directed-blastwave
-            enqueue-state!
-            (event "ctx-a"
-                   {:mode :perform
-                    :pos {:x 1.0 :y 2.0 :z 3.0}
-                    :look-dir {:x 0.0 :y 0.0 :z 1.0}
-                    :source-player-id "player-a"}))
-          (is (= 9 (get-in (blastwave-fx/directed-blastwave-fx-snapshot)
-                           [:effect-state [:ctx "ctx-a"] :charge-ticks])))
-          (is (= 1 (count (get (:waves (blastwave-fx/directed-blastwave-fx-snapshot)) [:ctx "ctx-a"]))))))
-      (level-effects/call-with-level-effect-runtime
-        runtime-b
-        (fn []
-          (is (= (blastwave-fx/default-directed-blastwave-fx-runtime-state)
-                 (blastwave-fx/directed-blastwave-fx-snapshot)))
-          (level-effects/update-effect-state! :directed-blastwave
-            enqueue-state!
-            (event "ctx-b" {:mode :start :source-player-id "player-b"}))
-          (is (= #{[:ctx "ctx-b"]}
-                 (set (keys (:effect-state (blastwave-fx/directed-blastwave-fx-snapshot))))))))
-      (level-effects/call-with-level-effect-runtime
-        runtime-a
-        (fn []
-          (is (= 9 (get-in (blastwave-fx/directed-blastwave-fx-snapshot)
-                           [:effect-state [:ctx "ctx-a"] :charge-ticks]))))))))
+

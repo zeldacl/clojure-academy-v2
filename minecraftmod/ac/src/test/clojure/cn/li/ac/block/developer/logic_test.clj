@@ -14,7 +14,7 @@
                :structure-valid true
                :update-ticker 0}
         be :be
-        next (dev-logic/developer-tick-state state {:level :lvl :pos :pos :be be})]
+        next (dev-logic/developer-tick-state state :lvl :pos nil be)]
     (is (< (:energy next) (:energy state)))
     (is (>= (:development-progress next) 0.0))
     (is (<= (:development-progress next) 1.0))))

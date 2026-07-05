@@ -18,7 +18,7 @@
   {})
 
 (defn- enqueue!
-  [store {:keys [payload]}]
+  [store ctx-id channel owner-key payload]
   (case (:mode payload)
     :crit-hit
     (let [{:keys [primary-count secondary-count speed pitch volume]}

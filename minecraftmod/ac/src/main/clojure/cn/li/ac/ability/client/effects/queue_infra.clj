@@ -33,7 +33,7 @@
                              ":client-session-id"
                              (or (:client-session-id owner-or-session)
                                  (runtime-hooks/player-state-client-session-id)
-                                 runtime-hooks/*client-session-id*)))
+                                 (runtime-hooks/*client-session-id*))))
 
     (some? owner-or-session)
     owner-or-session
@@ -42,7 +42,7 @@
     (require-owner-value kind nil
                          ":client-session-id"
                          (or (runtime-hooks/player-state-client-session-id)
-                             runtime-hooks/*client-session-id*))))
+                             (runtime-hooks/*client-session-id*)))))
 
 (defn current-effect-owner
   [kind]

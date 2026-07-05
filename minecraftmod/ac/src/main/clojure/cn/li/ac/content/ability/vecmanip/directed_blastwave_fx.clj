@@ -37,7 +37,7 @@
   nil)
 
 (defn- enqueue-state!
-  [store {:keys [payload ctx-id channel owner-key]}]
+  [store ctx-id channel owner-key payload]
   (let [store* (or store (default-directed-blastwave-fx-runtime-state))
         owner-key* (or owner-key [:ctx ctx-id])
         {:keys [mode charge-ticks punched? pos look-dir performed? source-player-id world-id]} (or payload {})

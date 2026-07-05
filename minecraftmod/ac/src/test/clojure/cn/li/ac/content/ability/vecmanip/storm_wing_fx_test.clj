@@ -7,16 +7,13 @@
             [cn.li.ac.content.ability.vecmanip.storm-wing-fx :as swfx]))
 
 (defn- reset-fixture [f]
-  (level-effects/call-with-level-effect-runtime
-    (level-effects/create-level-effect-runtime)
-    (fn []
-      (try
+  (try
         (level-effects/reset-level-effect-registry-for-test!)
         (swfx/reset-storm-wing-fx-for-test!)
         (f)
         (finally
           (swfx/reset-storm-wing-fx-for-test!)
-          (level-effects/reset-level-effect-registry-for-test!))))))
+          (level-effects/reset-level-effect-registry-for-test!))))
 
 (use-fixtures :each reset-fixture)
 
@@ -76,33 +73,4 @@
         (is (= 10 (get-in (swfx/storm-wing-fx-snapshot)
                           [:effect-state [:ctx "ctx-main"] :ticks])))))))
 
-(deftest storm-wing-fx-runtime-isolation-test
-  (let [runtime-a (level-effects/create-level-effect-runtime)
-        runtime-b (level-effects/create-level-effect-runtime)
-        enqueue-state! (var-get #'cn.li.ac.content.ability.vecmanip.storm-wing-fx/enqueue-state!)]
-    (with-redefs [client-particles/current-effect-owner (fn [] {:client-session-id "storm-wing-test"})
-                  client-sounds/queue-sound-effect! (fn [& _] nil)
-                  client-particles/queue-particle-effect! (fn [& _] nil)]
-      (level-effects/call-with-level-effect-runtime
-        runtime-a
-        (fn []
-          (level-effects/update-effect-state! :storm-wing
-            enqueue-state!
-            (event "ctx-a" {:mode :start :source-player-id "player-a"}))
-          (is (= :charging (get-in (swfx/storm-wing-fx-snapshot)
-                                   [:effect-state [:ctx "ctx-a"] :phase])))))
-      (level-effects/call-with-level-effect-runtime
-        runtime-b
-        (fn []
-          (is (= {:effect-state {}}
-                 (swfx/storm-wing-fx-snapshot)))
-          (level-effects/update-effect-state! :storm-wing
-            enqueue-state!
-            (event "ctx-b" {:mode :start :source-player-id "player-b"}))
-          (is (= #{[:ctx "ctx-b"]}
-                 (set (keys (:effect-state (swfx/storm-wing-fx-snapshot))))))))
-      (level-effects/call-with-level-effect-runtime
-        runtime-a
-        (fn []
-          (is (= :charging (get-in (swfx/storm-wing-fx-snapshot)
-                                   [:effect-state [:ctx "ctx-a"] :phase]))))))))
+

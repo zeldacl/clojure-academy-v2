@@ -52,34 +52,4 @@
                           #"Category registry is frozen"
                           (cat/register-category! (assoc spec :id :new-cat))))))
 
-(deftest category-registry-runtime-isolation-test
-  (let [runtime-a (cat/create-category-registry-runtime)
-        runtime-b (cat/create-category-registry-runtime)]
-    (cat/call-with-category-registry-runtime
-      runtime-a
-      (fn []
-        (cat/register-category! {:id :a
-                                 :name-key "cat.a"
-                                 :icon "i"
-                                 :color [1 1 1 1]
-                                 :prog-incr-rate 1.0
-                                 :enabled true})
-        (is (= #{:a}
-               (set (keys (cat/category-registry-snapshot)))))))
-    (cat/call-with-category-registry-runtime
-      runtime-b
-      (fn []
-        (is (empty? (cat/category-registry-snapshot)))
-        (cat/register-category! {:id :b
-                                 :name-key "cat.b"
-                                 :icon "i"
-                                 :color [1 1 1 1]
-                                 :prog-incr-rate 1.0
-                                 :enabled true})
-        (is (= #{:b}
-               (set (keys (cat/category-registry-snapshot)))))))
-    (cat/call-with-category-registry-runtime
-      runtime-a
-      (fn []
-        (is (= #{:a}
-               (set (keys (cat/category-registry-snapshot)))))))))
+

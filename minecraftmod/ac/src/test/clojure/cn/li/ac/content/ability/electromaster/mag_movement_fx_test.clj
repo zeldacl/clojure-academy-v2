@@ -8,10 +8,7 @@
 
 (defn- reset-fixture [f]
   (runtime-hooks/with-client-ctx {:session-id :test-session}
-    (level-effects/call-with-level-effect-runtime
-      (level-effects/create-level-effect-runtime)
-      (fn []
-        (try
+    (try
           (level-effects/reset-level-effect-registry-for-test!)
           (mag-movement-fx/reset-mag-movement-fx-for-test!)
           (client-sounds/poll-sound-effects!)
@@ -19,7 +16,7 @@
           (finally
             (mag-movement-fx/reset-mag-movement-fx-for-test!)
             (client-sounds/poll-sound-effects!)
-            (level-effects/reset-level-effect-registry-for-test!)))))))
+            (level-effects/reset-level-effect-registry-for-test!)))))
 
 (use-fixtures :each reset-fixture)
 
@@ -50,26 +47,23 @@
                   fx-registry/register-fx-channel! (fn [topic handler]
                                                       (swap! handlers* assoc topic handler)
                                                       nil)
-                  level-effects/enqueue-level-effect! (fn [effect-id payload fx-context]
-                                                        (swap! enqueued* conj [effect-id payload fx-context])
+                  level-effects/enqueue-level-effect! (fn [effect-id ctx-id channel payload & opts]
+                                                        (swap! enqueued* conj [effect-id ctx-id channel payload opts])
                                                         nil)]
       (mag-movement-fx/init!)
       ((get @handlers* :mag-movement/fx-start) "ctx" :mag-movement/fx-start {:target {:x 1.0 :y 2.0 :z 3.0}})
       ((get @handlers* :mag-movement/fx-update) "ctx" :mag-movement/fx-update {:target {:x 2.0 :y 3.0 :z 4.0}})
       ((get @handlers* :mag-movement/fx-end) "ctx" :mag-movement/fx-end {})
       (is (= 3 (count @enqueued*)))
-      (let [[_effect-id payload fx-context] (first @enqueued*)]
+      (let [[_effect-id ctx-id channel payload opts] (first @enqueued*)]
         (is (= :mag-movement _effect-id))
         (is (= :start (:mode payload)))
-        (is (= [:ctx "ctx"] (:owner-key payload)))
-        (is (= "ctx" (:ctx-id payload)))
-        (is (= :mag-movement/fx-start (:channel payload)))
         (is (= {:x 1.0 :y 2.0 :z 3.0} (:target payload)))
-        (is (= "ctx" (:ctx-id fx-context)))
-        (is (= :mag-movement/fx-start (:channel fx-context)))
-        (is (= [:ctx "ctx"] (:owner-key fx-context))))
-      (is (= :update (:mode (nth (second @enqueued*) 1))))
-      (is (= :end (:mode (nth (nth @enqueued* 2) 1)))))))
+        (is (= "ctx" ctx-id))
+        (is (= :mag-movement/fx-start channel))
+        (is (= {:owner-key [:ctx "ctx"]} opts)))
+      (is (= :update (:mode (nth (second @enqueued*) 3))))
+      (is (= :end (:mode (nth (nth @enqueued* 2) 3)))))))
 
 (deftest enqueue-and-end-are-idempotent-test
   (let [enqueue-state! (var-get #'cn.li.ac.content.ability.electromaster.mag-movement-fx/enqueue-state!)]

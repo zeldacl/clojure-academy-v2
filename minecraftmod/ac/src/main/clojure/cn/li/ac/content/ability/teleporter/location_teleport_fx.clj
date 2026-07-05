@@ -8,7 +8,7 @@
   {})
 
 (defn- enqueue!
-  [store {:keys [payload]}]
+  [store ctx-id channel owner-key payload]
   (let [{:keys [mode]} payload]
     (when (= mode :perform-success)
       (client-sounds/queue-current-sound-effect!

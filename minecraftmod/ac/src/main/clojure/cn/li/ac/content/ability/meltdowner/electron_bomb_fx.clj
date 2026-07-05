@@ -36,7 +36,7 @@
 	nil)
 
 (defn- enqueue-state!
-	[store {:keys [payload ctx-id channel owner-key]}]
+	[store ctx-id channel owner-key payload]
 	(let [store* (or store (default-electron-bomb-fx-runtime-state))
 				owner-key* (or owner-key [:ctx ctx-id])
 				{:keys [mode x y z dx dy dz start end source-player-id world-id]} (or payload {})

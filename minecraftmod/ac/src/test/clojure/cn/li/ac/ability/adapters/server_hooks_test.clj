@@ -239,23 +239,7 @@
       (is (true? ((platform-hooks/get-platform-fn :ability/try-pull-developer-energy!) :tile 12.5)))
       (is (= [[:tile 12.5]] @energy-calls)))))
 
-(deftest lifecycle-subscriptions-runtime-isolation-test
-  (let [runtime-a (server-hooks/create-lifecycle-subscriptions-runtime)
-        runtime-b (server-hooks/create-lifecycle-subscriptions-runtime)]
-    (server-hooks/call-with-lifecycle-subscriptions-runtime
-      runtime-a
-      (fn []
-        (is (false? (server-hooks/lifecycle-subscriptions-registered-snapshot)))
-        (server-hooks/reset-lifecycle-subscriptions-registered-for-test! true)
-        (is (true? (server-hooks/lifecycle-subscriptions-registered-snapshot)))))
-    (server-hooks/call-with-lifecycle-subscriptions-runtime
-      runtime-b
-      (fn []
-        (is (false? (server-hooks/lifecycle-subscriptions-registered-snapshot)))))
-    (server-hooks/call-with-lifecycle-subscriptions-runtime
-      runtime-a
-      (fn []
-        (is (true? (server-hooks/lifecycle-subscriptions-registered-snapshot)))))))
+
 
       (deftest category-change-event-aborts-deactivates-and-recalculates-test
         (let [aborted (atom [])

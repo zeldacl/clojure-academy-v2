@@ -18,7 +18,7 @@
   {})
 
 (defn- level-enqueue!
-  [store {:keys [payload]}]
+  [store ctx-id channel owner-key payload]
   (let [{:keys [mode affected-blocks]} payload]
     (case mode
       :perform
@@ -80,9 +80,9 @@
       (update (or state (default-groundshock-fx-runtime-state)) :hand-state dissoc owner-key)))
   nil)
 
-(defn- hand-enqueue-state! [state payload]
+(defn- hand-enqueue-state! [state ctx-id channel owner-key payload]
   (let [state* (or state (default-groundshock-fx-runtime-state))
-        {:keys [mode charge-ticks performed? owner-key ctx-id channel source-player-id world-id]} payload
+        {:keys [mode charge-ticks performed? source-player-id world-id]} payload
         owner-key* (or owner-key [:ctx ctx-id])
         base-meta {:owner-key owner-key*
                    :queue-owner (client-sounds/current-effect-owner)

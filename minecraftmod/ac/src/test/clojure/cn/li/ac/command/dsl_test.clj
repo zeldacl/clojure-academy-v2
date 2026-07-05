@@ -91,17 +91,4 @@
                           #"Command registry is frozen"
                           (dsl/unregister-command! "dup")))))
 
-(deftest command-registry-runtime-isolation-test
-  (let [rt-a (dsl/create-command-registry-runtime)
-        rt-b (dsl/create-command-registry-runtime)
-        cmd (dsl/create-command-spec "test-isolated" {:executor-fn (fn [_] nil)})]
-    (dsl/call-with-command-registry-runtime rt-a
-      (fn []
-        (dsl/register-command! cmd)))
-    (dsl/call-with-command-registry-runtime rt-b
-      (fn []
-        (is (nil? (dsl/get-command "test-isolated")))
-        (is (empty? (dsl/list-commands)))))
-    (dsl/call-with-command-registry-runtime rt-a
-      (fn []
-        (is (some? (dsl/get-command "test-isolated")))))))
+

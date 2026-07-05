@@ -35,9 +35,8 @@
   nil)
 
 (defn- enqueue-state!
-  [store event]
+  [store ctx-id channel owner-key payload]
   (let [store* (or store (default-thunder-clap-fx-runtime-state))
-        {:keys [payload ctx-id channel owner-key]} event
         {:keys [mode ticks charge-ratio target performed? source-player-id world-id]} (or payload {})
         owner-key* (or owner-key [:ctx ctx-id])
         base-meta {:owner-key owner-key*

@@ -73,11 +73,10 @@
   (mapcat val (:beam-effects (railgun-fx-snapshot))))
 
 (defn- enqueue-state!
-  [store event]
+  [store ctx-id channel owner-key payload]
   (let [store* (if (contains? (or store {}) :beam-effects)
                  (or store (default-railgun-fx-runtime-state))
                  (default-railgun-fx-runtime-state))
-        {:keys [payload ctx-id channel owner-key]} event
         owner-key* (or owner-key [:ctx ctx-id])
         {:keys [mode start end hit-distance source-player-id world-id]} (or payload {})
         base-meta {:owner-key owner-key*

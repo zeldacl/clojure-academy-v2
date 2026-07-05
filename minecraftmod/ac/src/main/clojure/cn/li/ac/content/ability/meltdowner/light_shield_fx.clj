@@ -33,7 +33,7 @@
   nil)
 
 (defn- enqueue-state!
-  [store {:keys [payload ctx-id channel owner-key]}]
+  [store ctx-id channel owner-key payload]
   (let [store* (or store (default-light-shield-fx-runtime-state))
         owner-key* (or owner-key [:ctx ctx-id])
         {:keys [mode source-player-id world-id]} (or payload {})

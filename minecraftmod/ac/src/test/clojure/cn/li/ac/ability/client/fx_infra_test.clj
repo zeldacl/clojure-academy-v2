@@ -8,38 +8,30 @@
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (defn- reset-fixture [f]
-  (particles/call-with-particle-queue-runtime
-    (particles/create-particle-queue-runtime)
-    (fn []
-      (sounds/call-with-sound-queue-runtime
-        (sounds/create-sound-queue-runtime)
-        (fn []
-          (hand-effects/with-camera-pitch-runtime
-            (hand-effects/create-camera-pitch-runtime)
-            (fx-registry/reset-fx-registry-for-test!)
-            (level-effects/reset-level-effect-registry-for-test!)
-            (hand-effects/reset-hand-effect-registry-for-test!)
-            (particles/reset-particle-queue-for-test!)
-            (sounds/reset-sound-queue-for-test!)
-            (try
-              (f)
-              (finally
-                (fx-registry/reset-fx-registry-for-test!)
-                (level-effects/reset-level-effect-registry-for-test!)
-                (hand-effects/reset-hand-effect-registry-for-test!)
-                (particles/reset-particle-queue-for-test!)
-                (sounds/reset-sound-queue-for-test!)))))))))
+  (fx-registry/reset-fx-registry-for-test!)
+  (level-effects/reset-level-effect-registry-for-test!)
+  (hand-effects/reset-hand-effect-registry-for-test!)
+  (particles/reset-particle-queue-for-test!)
+  (sounds/reset-sound-queue-for-test!)
+  (try
+    (f)
+    (finally
+      (fx-registry/reset-fx-registry-for-test!)
+      (level-effects/reset-level-effect-registry-for-test!)
+      (hand-effects/reset-hand-effect-registry-for-test!)
+      (particles/reset-particle-queue-for-test!)
+      (sounds/reset-sound-queue-for-test!))))
 
 (use-fixtures :each reset-fixture)
 
 (defn- level-handler []
-  {:enqueue-fn (fn [_] nil)
-   :tick-fn (fn [] nil)
+  {:enqueue-state-fn (fn [state _ _ _ _] state)
+   :tick-state-fn (fn [state] state)
    :build-plan-fn (fn [_ _ _] nil)})
 
 (defn- hand-handler []
-  {:enqueue-fn (fn [_] nil)
-   :tick-fn (fn [] nil)
+  {:enqueue-state-fn (fn [state _ _ _ _] state)
+   :tick-state-fn (fn [state] state)
    :transform-fn (fn [] nil)})
 
 (deftest fx-channel-registry-freezes-after-idempotent-registration-test
@@ -72,19 +64,20 @@
                         #"Hand effect registry is frozen"
                         (hand-effects/register-hand-effect! :test/hand-2 (hand-handler)))))
 
-(deftest level-effect-enqueue-event-carries-owner-metadata-test
+(deftest level-effect-enqueue-carries-owner-metadata-test
   (let [events* (atom [])]
     (level-effects/register-level-effect!
       :test/level-event
-      {:enqueue-event-fn (fn [event]
-                           (swap! events* conj event)
-                           nil)
-       :tick-fn (fn [] nil)
+      {:enqueue-state-fn (fn [state ctx-id channel owner-key payload]
+                           (swap! events* conj {:effect-id :test/level-event
+                                                :payload payload
+                                                :ctx-id ctx-id
+                                                :channel channel
+                                                :owner-key owner-key})
+                           state)
+       :tick-state-fn (fn [state] state)
        :build-plan-fn (fn [_ _ _] nil)})
-    (level-effects/enqueue-level-effect! :test/level-event
-                                         {:v 1}
-                                         {:ctx-id "ctx-1"
-                                          :channel :test/fx})
+    (level-effects/enqueue-level-effect! :test/level-event "ctx-1" :test/fx {:v 1})
     (is (= [{:effect-id :test/level-event
              :payload {:v 1}
              :ctx-id "ctx-1"
@@ -102,22 +95,21 @@
     (sounds/queue-sound-effect! {:type :sound :sound-id "minecraft:test-b"})
     (hand-effects/add-camera-pitch-delta! 2.5))
   (is (= [{:type :particle :particle-type :spark-a}]
-    (particles/particle-queue-snapshot :session-a)))
+         (particles/particle-queue-snapshot :session-a)))
   (is (= [{:type :sound :sound-id "minecraft:test-a"}]
-    (sounds/sound-queue-snapshot :session-a)))
-  (is (= {:session-a [1.25]
-     :session-b [2.5]}
-    (:camera-pitch-deltas (hand-effects/hand-effect-registry-snapshot))))
+         (sounds/sound-queue-snapshot :session-a)))
+  (is (= [[:session-a 1.25] [:session-b 2.5]]
+         (sort-by first (:camera-pitch-deltas (hand-effects/hand-effect-registry-snapshot)))))
   (is (= [{:type :particle :particle-type :spark-b}]
-    (particles/poll-particle-effects! {:client-session-id :session-b})))
+         (particles/poll-particle-effects! {:client-session-id :session-b})))
   (is (= [{:type :sound :sound-id "minecraft:test-b"}]
-    (sounds/poll-sound-effects! {:client-session-id :session-b})))
+         (sounds/poll-sound-effects! {:client-session-id :session-b})))
   (is (= [2.5]
-    (hand-effects/drain-camera-pitch-deltas! {:client-session-id :session-b})))
+         (hand-effects/drain-camera-pitch-deltas! {:client-session-id :session-b})))
   (is (= [{:type :particle :particle-type :spark-a}]
-    (particles/particle-queue-snapshot :session-a)))
+         (particles/particle-queue-snapshot :session-a)))
   (is (= [{:type :sound :sound-id "minecraft:test-a"}]
-    (sounds/sound-queue-snapshot :session-a)))
+         (sounds/sound-queue-snapshot :session-a)))
   (particles/reset-particle-queue-for-test!)
   (sounds/reset-sound-queue-for-test!)
   (hand-effects/reset-hand-effect-registry-for-test!)
@@ -128,11 +120,11 @@
 (deftest client-effect-queues-require-client-session-test
   (runtime-hooks/with-client-ctx {:session-id nil :player-owner nil}
     (is (thrown-with-msg? clojure.lang.ExceptionInfo
-           #":client-session-id"
-           (particles/queue-particle-effect! {:type :particle :particle-type :spark})))
+                          #":client-session-id"
+                          (particles/queue-particle-effect! {:type :particle :particle-type :spark})))
     (is (thrown-with-msg? clojure.lang.ExceptionInfo
-           #":client-session-id"
-           (sounds/queue-sound-effect! {:type :sound :sound-id "minecraft:test"})))
+                          #":client-session-id"
+                          (sounds/queue-sound-effect! {:type :sound :sound-id "minecraft:test"})))
     (is (thrown-with-msg? clojure.lang.ExceptionInfo
-           #":client-session-id"
-           (hand-effects/add-camera-pitch-delta! 1.0)))))
+                          #":client-session-id"
+                          (hand-effects/add-camera-pitch-delta! 1.0)))))

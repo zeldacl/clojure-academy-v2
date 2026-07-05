@@ -166,7 +166,7 @@
                                       {:entity-uuid entity-uuid})))
 
 (defn- enqueue-state!
-  [store {:keys [payload ctx-id owner-key]}]
+  [store ctx-id channel owner-key payload]
   (let [store* (or store (default-jet-engine-fx-runtime-state))
         owner-key* (or owner-key [:ctx ctx-id])
         {:keys [mode start target pos hold-ticks trigger-ticks shield-entity-uuid]} (or payload {})]

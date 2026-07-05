@@ -63,35 +63,7 @@
                          :s
                          (fn [v _] v)))))
 
-(deftest passive-handler-runtime-isolation-test
-  (let [runtime-a (passive/create-passive-handler-runtime)
-        runtime-b (passive/create-passive-handler-runtime)]
-    (passive/call-with-passive-handler-runtime
-      runtime-a
-      (fn []
-        (is (true? (passive/register-passive-calc-handler!
-                    :iso-a
-                    evt/CALC-MAX-CP
-                    :s
-                    (fn [v _] v))))
-        (is (= #{:iso-a}
-               (passive/passive-handler-registry-snapshot)))))
-    (passive/call-with-passive-handler-runtime
-      runtime-b
-      (fn []
-        (is (empty? (passive/passive-handler-registry-snapshot)))
-        (is (true? (passive/register-passive-calc-handler!
-                    :iso-b
-                    evt/CALC-MAX-CP
-                    :s
-                    (fn [v _] v))))
-        (is (= #{:iso-b}
-               (passive/passive-handler-registry-snapshot)))))
-    (passive/call-with-passive-handler-runtime
-      runtime-a
-      (fn []
-        (is (= #{:iso-a}
-               (passive/passive-handler-registry-snapshot)))))))
+
 
 (deftest learned-skill-uses-bound-owner-session-test
   (store/set-player-state!* :passive-session

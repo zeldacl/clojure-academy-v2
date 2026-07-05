@@ -46,7 +46,7 @@
   (mapcat val (:beams (electron-missile-fx-snapshot))))
 
 (defn- enqueue-state!
-  [store {:keys [payload ctx-id channel owner-key]}]
+  [store ctx-id channel owner-key payload]
     (let [store* (or store (default-electron-missile-fx-runtime-state))
         owner-key* (or owner-key [:ctx ctx-id])
       {:keys [mode source-player-id world-id target-x target-y target-z ticks balls start end]} (or payload {})

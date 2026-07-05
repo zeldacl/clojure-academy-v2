@@ -23,7 +23,7 @@
 (defn- remove-entity-marker! []
   (client-bridge/run-client-effect! :mcmod/remove-local-scripted-effect {:effect-id "entity_marker"}))
 
-(defn- enqueue-state! [state {:keys [payload ctx-id channel owner-key]}]
+(defn- enqueue-state! [state ctx-id channel owner-key payload]
   (let [state* (or state (default-shift-teleport-fx-runtime-state))
         owner-key* (or owner-key [:ctx ctx-id])
         {:keys [source-player-id world-id]} payload

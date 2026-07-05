@@ -38,10 +38,9 @@
 	(mapcat val (:arcs (thunder-bolt-fx-snapshot))))
 
 (defn- enqueue-state!
-	[store event]
+	[store ctx-id channel owner-key payload]
 	(let [store* (or store (default-thunder-bolt-fx-runtime-state))
-				{:keys [payload ctx-id channel owner-key]} event
-				{:keys [start end aoe-points source-player-id world-id]} (or payload {})
+						{:keys [start end aoe-points source-player-id world-id]} (or payload {})
 				owner-key* (or owner-key [:ctx ctx-id])]
 		(when (and start end)
 			(let [base-meta {:owner-key owner-key*

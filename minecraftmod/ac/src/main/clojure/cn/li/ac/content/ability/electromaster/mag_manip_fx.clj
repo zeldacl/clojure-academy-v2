@@ -45,11 +45,11 @@
 		(or (get states selector)
 				default-state)))
 
-(defn- enqueue-state! [store payload]
+(defn- enqueue-state! [store ctx-id channel owner-key payload]
 	(let [store* (if (contains? (or store {}) :states)
 								 (or store (default-mag-manip-fx-runtime-state))
 								 (default-mag-manip-fx-runtime-state))
-				{:keys [mode focus block-id owner-key ctx-id channel source-player-id world-id]} payload
+				{:keys [mode focus block-id source-player-id world-id]} payload
 				owner-key* (or owner-key [:ctx ctx-id])
 				base-meta {:owner-key owner-key*
 									 :queue-owner (client-sounds/current-effect-owner)
@@ -120,11 +120,8 @@
 
 (defn- on-fx-hold [ctx-id channel payload]
 	(when-let [mode (:mode payload)]
-		(hand-effects/enqueue-hand-effect! mag-manip-effect-id
-			(merge {:owner-key [:ctx ctx-id]
-							:ctx-id ctx-id
-							:channel channel}
-						 (assoc (or payload {}) :mode mode)))))
+		(hand-effects/enqueue-hand-effect! mag-manip-effect-id ctx-id channel
+			(assoc (or payload {}) :mode mode))))
 
 (defn init! []
 	(fx-spec/register!

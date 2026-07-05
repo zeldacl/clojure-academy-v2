@@ -61,7 +61,7 @@
 ;; Enqueue
 ;; ---------------------------------------------------------------------------
 
-(defn- enqueue! [store {:keys [payload ctx-id channel owner-key]}]
+(defn- enqueue! [store ctx-id channel owner-key payload]
   (let [store* (or store (default-meltdowner-fx-runtime-state))
         owner-key* (or owner-key [:ctx ctx-id])
         {:keys [mode ticks charge-ratio performed? start end charge-ticks beam-length source-player-id world-id]} (or payload {})

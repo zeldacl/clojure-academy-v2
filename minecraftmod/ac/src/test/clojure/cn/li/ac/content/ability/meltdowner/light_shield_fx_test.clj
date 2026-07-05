@@ -9,16 +9,13 @@
 
 (defn- reset-fixture [f]
   (runtime-hooks/with-client-ctx {:session-id :test-session}
-    (level-effects/call-with-level-effect-runtime
-      (level-effects/create-level-effect-runtime)
-      (fn []
-        (try
+    (try
           (level-effects/reset-level-effect-registry-for-test!)
           (ls-fx/reset-light-shield-fx-for-test!)
           (f)
           (finally
             (ls-fx/reset-light-shield-fx-for-test!)
-            (level-effects/reset-level-effect-registry-for-test!)))))))
+            (level-effects/reset-level-effect-registry-for-test!)))))
 
 (use-fixtures :each reset-fixture)
 
@@ -103,33 +100,4 @@
         (event "ctx-cadence" :light-shield/fx-end {:mode :end :source-player-id "player-a"}))
       (is (nil? (get-in (ls-fx/light-shield-fx-snapshot) [:effect-state [:ctx "ctx-cadence"]]))))))
 
-(deftest light-shield-fx-runtime-isolation-test
-  (let [runtime-a (level-effects/create-level-effect-runtime)
-        runtime-b (level-effects/create-level-effect-runtime)
-        enqueue-state! (var-get #'cn.li.ac.content.ability.meltdowner.light-shield-fx/enqueue-state!)]
-    (with-redefs [client-particles/current-effect-owner (fn [] {:client-session-id "light-shield-fx-test"})
-                  client-particles/queue-particle-effect! (fn [& _] nil)
-                  client-sounds/queue-sound-effect! (fn [& _] nil)]
-      (level-effects/call-with-level-effect-runtime
-        runtime-a
-        (fn []
-          (level-effects/update-effect-state! :light-shield
-            enqueue-state!
-            (event "ctx-a" :light-shield/fx-start {:mode :start :source-player-id "player-a"}))
-          (is (= #{[:ctx "ctx-a"]}
-                 (set (keys (:effect-state (ls-fx/light-shield-fx-snapshot))))))))
-      (level-effects/call-with-level-effect-runtime
-        runtime-b
-        (fn []
-          (is (= {:effect-state {}}
-                 (ls-fx/light-shield-fx-snapshot)))
-          (level-effects/update-effect-state! :light-shield
-            enqueue-state!
-            (event "ctx-b" :light-shield/fx-start {:mode :start :source-player-id "player-b"}))
-          (is (= #{[:ctx "ctx-b"]}
-                 (set (keys (:effect-state (ls-fx/light-shield-fx-snapshot))))))))
-      (level-effects/call-with-level-effect-runtime
-        runtime-a
-        (fn []
-          (is (= #{[:ctx "ctx-a"]}
-                 (set (keys (:effect-state (ls-fx/light-shield-fx-snapshot)))))))))))
+

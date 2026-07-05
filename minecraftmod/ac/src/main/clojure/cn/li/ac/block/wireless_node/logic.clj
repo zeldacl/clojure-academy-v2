@@ -223,14 +223,14 @@
    BE state persists from NBT.
 
    Called via :after-commit! in make-tick-fn every tick the state changes."
-  [_be level pos _old-state new-state _ctx]
+  [_be level pos _old-state new-state]
   (when (and level pos)
     ;; Always call update-block-state! — it reads the current BlockState
     ;; internally and only writes when the values actually differ.
     (update-block-state! new-state level pos)))
 
 (defn node-tick-state
-  [state {:keys [level pos be]}]
+  [state level pos _block-state be]
   (let [ticker (inc (long (get state :update-ticker 0)))
         state1 (-> state
                    (assoc :update-ticker ticker)
@@ -250,7 +250,7 @@
    BlockState every tick when the visual level hasn't changed."
   (machine-runtime/make-tick-fn
     {:default-state node-default-state
-     :initial-state (fn [be _ctx]
+     :initial-state (fn [be _level _pos _block-state]
                       (node-safe-state be (platform-be/get-block-id be)))
      :tick-state node-tick-state
      :after-commit! sync-blockstate-if-changed!}))
@@ -265,7 +265,7 @@
 
 (defn handle-node-place
   [node-type]
-  (fn [{:keys [player world pos]}]
+  (fn [player world pos _block-id]
     (log/info "Placing Wireless Node (" (name node-type) ")")
     (let [player-name (player-name player)
           node-vb (vb/create-vnode (ppos/pos-x pos) (ppos/pos-y pos) (ppos/pos-z pos))
@@ -281,7 +281,7 @@
 
 (defn handle-node-break
   [_node-type]
-  (fn [{:keys [world pos]}]
+  (fn [world pos _block-id]
     (log/info "Breaking Wireless Node")
     (let [node-vb (vb/create-vnode (ppos/pos-x pos) (ppos/pos-y pos) (ppos/pos-z pos))
           be (platform-world/world-get-tile-entity* world pos)]

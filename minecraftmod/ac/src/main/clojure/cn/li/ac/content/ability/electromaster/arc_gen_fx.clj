@@ -41,11 +41,10 @@
   (mapcat val (:arcs (arc-gen-fx-snapshot))))
 
 (defn- enqueue-state!
-  [store event]
+  [store ctx-id channel owner-key payload]
   (let [store* (if (contains? (or store {}) :arcs)
                  (or store (default-arc-gen-fx-runtime-state))
                  (default-arc-gen-fx-runtime-state))
-        {:keys [payload ctx-id channel owner-key]} event
         owner-key* (or owner-key [:ctx ctx-id])
         {:keys [mode start end hit-type source-player-id world-id]} (or payload {})
         base-meta {:owner-key owner-key*

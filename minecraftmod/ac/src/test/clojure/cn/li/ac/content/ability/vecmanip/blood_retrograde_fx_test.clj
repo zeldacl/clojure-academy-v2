@@ -6,16 +6,13 @@
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]))
 
 (defn- reset-fixture [f]
-  (level-effects/call-with-level-effect-runtime
-    (level-effects/create-level-effect-runtime)
-    (fn []
-      (try
+  (try
         (level-effects/reset-level-effect-registry-for-test!)
         (brfx/reset-blood-retrograde-fx-for-test!)
         (f)
         (finally
           (brfx/reset-blood-retrograde-fx-for-test!)
-          (level-effects/reset-level-effect-registry-for-test!))))))
+          (level-effects/reset-level-effect-registry-for-test!))))
 
 (use-fixtures :each reset-fixture)
 
@@ -61,14 +58,14 @@
                   fx-registry/register-fx-channel! (fn [topic handler]
                                                       (swap! handlers* assoc topic handler)
                                                       nil)
-                  level-effects/enqueue-level-effect! (fn [effect-id payload fx-context]
-                                                        (swap! enqueued-effects* conj [effect-id payload fx-context])
+                  level-effects/enqueue-level-effect! (fn [effect-id ctx-id channel payload & opts]
+                                                        (swap! enqueued-effects* conj [effect-id ctx-id channel payload opts])
                                                         (level-effects/update-effect-state! effect-id
                                                           @enqueue-fn*
                                                           {:payload payload
-                                                           :ctx-id (:ctx-id fx-context)
-                                                           :channel (:channel fx-context)
-                                                           :owner-key [:ctx (:ctx-id fx-context)]})
+                                                           :ctx-id ctx-id
+                                                           :channel channel
+                                                           :owner-key [:ctx ctx-id]})
                                                         nil)
                   client-sounds/queue-current-sound-effect! (fn [payload]
                                                               (swap! sound-calls* conj payload)
@@ -186,33 +183,4 @@
         (is (nil? (get (:splashes after-clear) [:ctx "ctx-a"])))
         (is (= 1 (count (get (:sprays after-clear) [:ctx "ctx-b"]))))))))
 
-(deftest blood-retrograde-fx-runtime-isolation-test
-  (let [runtime-a (level-effects/create-level-effect-runtime)
-        runtime-b (level-effects/create-level-effect-runtime)
-        enqueue-state! @#'cn.li.ac.content.ability.vecmanip.blood-retrograde-fx/enqueue-state!]
-    (with-redefs [client-sounds/queue-current-sound-effect! (fn [_] nil)]
-      (level-effects/call-with-level-effect-runtime
-        runtime-a
-        (fn []
-          (level-effects/update-effect-state! :blood-retrograde enqueue-state!
-            (event "ctx-a" {:mode :start}))
-          (level-effects/update-effect-state! :blood-retrograde enqueue-state!
-            (event "ctx-a"
-                   {:mode :perform
-                    :sound-pos {:x 1.0 :y 2.0 :z 3.0}
-                    :splashes [{:x 1.0 :y 2.0 :z 3.0 :size 1.0}]
-                    :sprays [{:x 4.0 :y 5.0 :z 6.0 :face :up :size 1.0}]}))
-          (is (= 1 (count (get (:splashes (brfx/blood-retrograde-fx-snapshot)) [:ctx "ctx-a"]))))))
-      (level-effects/call-with-level-effect-runtime
-        runtime-b
-        (fn []
-          (is (= (brfx/default-blood-retrograde-fx-runtime-state)
-                 (brfx/blood-retrograde-fx-snapshot)))
-          (level-effects/update-effect-state! :blood-retrograde enqueue-state!
-            (event "ctx-b" {:mode :start}))
-          (is (= #{[:ctx "ctx-b"]}
-                 (set (keys (:effect-state (brfx/blood-retrograde-fx-snapshot))))))))
-      (level-effects/call-with-level-effect-runtime
-        runtime-a
-        (fn []
-          (is (= 1 (count (get (:splashes (brfx/blood-retrograde-fx-snapshot)) [:ctx "ctx-a"])))))))))
+

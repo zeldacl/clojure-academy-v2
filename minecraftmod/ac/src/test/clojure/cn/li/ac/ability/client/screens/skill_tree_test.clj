@@ -120,15 +120,5 @@
         (is (nil? (:player-uuid (screen/screen-state-snapshot "player-1"))))
         (is (= "player-2" (:player-uuid (screen/screen-state-snapshot "player-2")))))
 
-(deftest screen-runtime-isolation-test
-  (let [runtime-b (managed-screens/create-managed-screen-runtime)]
-    (screen/open-screen! "player-1" {:developer-type :portable})
-    (managed-screens/call-with-managed-screen-runtime
-      runtime-b
-      (fn []
-        (screen/open-screen! "player-1" {:developer-type :normal})
-        (is (= {:developer-type :normal}
-               (:learn-context (screen/screen-state-snapshot "player-1"))))))
-    (is (= {:developer-type :portable}
-           (:learn-context (screen/screen-state-snapshot "player-1"))))))
+
 

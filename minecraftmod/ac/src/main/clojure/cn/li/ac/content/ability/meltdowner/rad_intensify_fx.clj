@@ -27,7 +27,7 @@
   [owner-key (str target-id)])
 
 (defn- enqueue-state!
-  [store {:keys [payload ctx-id owner-key]}]
+  [store ctx-id channel owner-key payload]
   (let [store* (or store (default-rad-intensify-fx-runtime-state))
         owner-key* (or owner-key [:ctx ctx-id])
         target-id (or (:target-id payload) "")

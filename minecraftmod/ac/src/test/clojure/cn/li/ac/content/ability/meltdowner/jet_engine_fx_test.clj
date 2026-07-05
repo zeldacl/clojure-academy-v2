@@ -9,16 +9,13 @@
 
 (defn- reset-fixture [f]
   (runtime-hooks/with-client-ctx {:session-id :test-session}
-    (level-effects/call-with-level-effect-runtime
-      (level-effects/create-level-effect-runtime)
-      (fn []
-        (try
+    (try
           (level-effects/reset-level-effect-registry-for-test!)
           (je-fx/reset-jet-engine-fx-for-test!)
           (f)
           (finally
             (je-fx/reset-jet-engine-fx-for-test!)
-            (level-effects/reset-level-effect-registry-for-test!)))))))
+            (level-effects/reset-level-effect-registry-for-test!)))))
 
 (use-fixtures :each reset-fixture)
 

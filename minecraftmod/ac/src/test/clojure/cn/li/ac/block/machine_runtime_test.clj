@@ -18,7 +18,8 @@
           be {}
           tick-fn (runtime/make-tick-fn
                     {:default-state {:energy 0.0}
-                     :tick-state (fn [state _] (assoc state :energy 1.0))})]
+                     :tick-state (fn [state _level _pos _block-state _be]
+                                   (assoc state :energy 1.0))})]
       (with-redefs [world/world-is-client-side* (fn [_] false)
                     runtime/state-or-default (fn [_ _] {:energy 0.0})
                     runtime/commit-state!
@@ -34,9 +35,10 @@
           be {}
           tick-fn (runtime/make-tick-fn
                     {:default-state {:energy 0.0}
-                     :initial-state (fn [_ _] {:energy 0.5})
-                     :tick-state (fn [state _] (assoc state :energy 1.0))
-                     :after-commit! (fn [_ _ _ old new _]
+                     :initial-state (fn [_be _level _pos _block-state] {:energy 0.5})
+                     :tick-state (fn [state _level _pos _block-state _be]
+                                   (assoc state :energy 1.0))
+                     :after-commit! (fn [_be _level _pos old new]
                                       (reset! after {:old old :new new}))})]
       (with-redefs [world/world-is-client-side* (fn [_] false)
                     runtime/commit-state!
@@ -63,18 +65,18 @@
           opened (atom false)]
       (with-redefs [world/world-is-client-side* (fn [_] true)
                     cn.li.ac.gui.open/open-gui-by-type (fn [& _] (reset! opened true))]
-        (handler {:player :p :world :w :pos :pos :sneaking true})
+        (handler :p :w :pos :solar :sneaking true)
         (is (false? @opened))
-        (handler {:player :p :world :w :pos :pos})
+        (handler :p :w :pos :solar)
         (is (true? @opened))))))
 
 (deftest make-open-gui-handler-predicate-test
   (testing "make-open-gui-handler* respects can-open? predicate"
-    (let [handler (runtime/make-open-gui-handler* :wind-gen-main (fn [_] false))
+    (let [handler (runtime/make-open-gui-handler* :wind-gen-main (fn [_ _ _ _ _] false))
           opened (atom false)]
       (with-redefs [world/world-is-client-side* (fn [_] true)
                     cn.li.ac.gui.open/open-gui-by-type (fn [& _] (reset! opened true))]
-        (handler {:player :p :world :w :pos :pos})
+        (handler :p :w :pos :wind-gen-main)
         (is (false? @opened))))))
 
 (deftest make-open-gui-handler-multiblock-options-test
@@ -83,12 +85,12 @@
           handler (runtime/make-open-gui-handler*
                     :developer
                     (constantly true)
-                    :resolve-open-pos (fn [_] :controller-pos)
-                    :server-before-open! (fn [_ _] true))]
+                    :resolve-open-pos (fn [_ _ _] :controller-pos)
+                    :server-before-open! (fn [_ _ _] true))]
       (with-redefs [world/world-is-client-side* (fn [_] false)
                     cn.li.ac.gui.open/open-gui-by-type
                     (fn [player gui-type world pos]
                       (reset! opened {:player player :gui-type gui-type :world world :pos pos}))]
-        (handler {:player :p :world :w :pos :part-pos})
+        (handler :p :w :part-pos :developer)
         (is (= {:player :p :gui-type :developer :world :w :pos :controller-pos}
                @opened))))))

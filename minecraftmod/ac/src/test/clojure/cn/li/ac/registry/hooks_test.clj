@@ -2,21 +2,7 @@
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.registry.hooks :as hooks]))
 
-(deftest hook-registry-runtime-isolation-test
-  (let [rt-a (hooks/create-hook-registry-runtime)
-        rt-b (hooks/create-hook-registry-runtime)]
-    (hooks/call-with-hook-registry-runtime rt-a
-      (fn []
-        (hooks/register-network-handler! (fn [] :ok))
-        (hooks/register-client-renderer! 'foo.renderer/init!)))
-    (hooks/call-with-hook-registry-runtime rt-b
-      (fn []
-        (is (empty? (hooks/get-network-handlers)))
-        (is (empty? (hooks/get-client-renderers)))))
-    (hooks/call-with-hook-registry-runtime rt-a
-      (fn []
-        (is (= 1 (count (hooks/get-network-handlers))))
-        (is (= '[foo.renderer/init!] (hooks/get-client-renderers)))))))
+
 
 (defn- clean-hooks-fixture
   [f]

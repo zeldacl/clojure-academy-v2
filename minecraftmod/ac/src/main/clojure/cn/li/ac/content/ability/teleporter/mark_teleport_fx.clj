@@ -36,7 +36,7 @@
 (defn- remove-tp-marking! []
   (client-bridge/run-client-effect! :mcmod/remove-local-scripted-effect {:effect-id "entity_tp_marking"}))
 
-(defn- enqueue-state! [state {:keys [payload ctx-id channel owner-key]}]
+(defn- enqueue-state! [state ctx-id channel owner-key payload]
   (let [state* (or state (default-mark-teleport-fx-runtime-state))
         owner-key* (or owner-key [:ctx ctx-id])
         {:keys [mode target distance source-player-id world-id]} payload

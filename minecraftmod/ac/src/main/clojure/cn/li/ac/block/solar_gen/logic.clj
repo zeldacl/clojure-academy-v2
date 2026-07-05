@@ -28,7 +28,7 @@
              (pos/create-block-pos (pos/pos-x pos) (inc (pos/pos-y pos)) (pos/pos-z pos)))))))
 
 (defn solar-tick-state
-  [state {:keys [level pos]}]
+  [state level pos _block-state _be]
   (let [generating? (can-generate? level pos)
         raining? (world/world-is-raining* level)
         status (cond (not generating?) "STOPPED"

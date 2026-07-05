@@ -225,10 +225,8 @@
            render-plasma-op!]}]
   (let [owner (client-session/current-local-player-owner)
         hand-pos (hand-center-pos player)
-      frame-context {:local-player-uuid (:player-uuid hand-pos)
-             :query-nearby-blocks (make-nearby-block-query-fn player)
-             :world-id (some-> (.dimension (.level player)) (.location) str)}
-      plan (power-runtime/client-build-level-effect-plan camera-pos hand-pos tick frame-context)]
+        query-fn (make-nearby-block-query-fn player)
+        plan (power-runtime/client-build-level-effect-plan camera-pos hand-pos tick query-fn)]
     (when owner
       (apply-local-walk-speed-from-plan! owner player plan))
     (when (seq (:ops plan))

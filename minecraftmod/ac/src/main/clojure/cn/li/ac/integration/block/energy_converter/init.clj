@@ -40,7 +40,7 @@
 	  :texture eu-output/texture}])
 
 (defn- open-converter-gui!
-	[{:keys [player world pos sneaking] :as _ctx}]
+	[player world pos _block-id & {:keys [sneaking]}]
 	(when-not sneaking
 		(try
 			(gui-open/open-gui-by-type player :energy-converter world pos)
