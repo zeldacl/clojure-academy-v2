@@ -1,5 +1,6 @@
 (ns cn.li.ac.content.ability.vecmanip.groundshock-fx-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
+            [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.content.ability.vecmanip.groundshock-fx :as gfx]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.hand-effects :as hand-effects]
@@ -7,9 +8,7 @@
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (defn- invoke-hand-enqueue! [ctx-id channel payload]
-  (let [hand-enqueue-state! (var-get #'cn.li.ac.content.ability.vecmanip.groundshock-fx/hand-enqueue-state!)]
-    (hand-effects/update-effect-state! :groundshock
-      (fn [store] (hand-enqueue-state! store ctx-id channel [:ctx ctx-id] payload)))))
+  (arc-beam/enqueue-for-test! :groundshock ctx-id channel payload))
 
 (defn- reset-fixture [f]
   (runtime-hooks/with-client-ctx {:session-id :test-session}
@@ -81,8 +80,7 @@
              @level-enqueued*)))))
 
 (deftest two-owners-keep-groundshock-hand-state-independent-test
-  (let [hand-tick-state! (var-get #'cn.li.ac.content.ability.vecmanip.groundshock-fx/hand-tick-state!)
-        pitch-deltas* (atom [])]
+  (let [pitch-deltas* (atom [])]
     (with-redefs [hand-effects/add-camera-pitch-delta! (fn
                                                          ([delta]
                                                           (swap! pitch-deltas* conj delta)
@@ -100,7 +98,8 @@
         (is (= 6 (count @pitch-deltas*))))
       (invoke-hand-enqueue! "ctx-a" :groundshock/fx-perform {:mode :perform})
       (invoke-hand-enqueue! "ctx-b" :groundshock/fx-end {:mode :end :performed? false})
-      (hand-effects/update-effect-state! :groundshock hand-tick-state!)
+      (hand-effects/update-effect-state! :groundshock
+        (fn [store] (arc-beam/effect-tick-state! :hand :groundshock store)))
       (let [snapshot (gfx/groundshock-fx-snapshot)]
         (is (= 3 (:perform-ticks (get (:hand-state snapshot) [:ctx "ctx-a"]))))
         (is (nil? (get (:hand-state snapshot) [:ctx "ctx-b"]))))

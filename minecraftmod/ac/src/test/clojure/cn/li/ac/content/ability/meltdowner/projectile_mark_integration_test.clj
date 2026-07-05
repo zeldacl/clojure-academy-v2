@@ -25,20 +25,17 @@
             [cn.li.ac.ability.service.context-manager :as ctx-mgr]))
 
 (defn- with-fresh-meltdowner-runtimes [f]
-  (let [damage-registry-rt (rt/create-damage-handler-registry-runtime)]
-    (ps-fix/with-test-player-state-owner
-      (fn []
-        (rt/call-with-damage-handler-registry-runtime damage-registry-rt
-          (fn []
-            (store/reset-store!)
-            (rt/reset-damage-handler-registry-for-test!)
-            (try
-              (f)
-              (finally
-                (dp/reset-pending-tasks-for-test!)
-                (dh/reset-marks-for-test!)
-                (rt/reset-damage-handler-registry-for-test!)
-                (store/reset-store!)))))))))
+  (ps-fix/with-test-player-state-owner
+    (fn []
+      (store/reset-store!)
+      (rt/reset-damage-handler-registry-for-test!)
+      (try
+        (f)
+        (finally
+          (dp/reset-pending-tasks-for-test!)
+          (dh/reset-marks-for-test!)
+          (rt/reset-damage-handler-registry-for-test!)
+          (store/reset-store!))))))
 
 (use-fixtures :each with-fresh-meltdowner-runtimes)
 
@@ -51,7 +48,9 @@
 (defn- missile-context-mocks [initial]
   (let [ctx* (atom initial)]
     {:ctx* ctx*
-     :get-context (fn [_] @ctx*)
+     :get-context (fn
+                    ([_ctx-id] @ctx*)
+                    ([_owner _ctx-id] @ctx*))
      :update-skill-state-root! (fn [_ f & args]
                         (swap! ctx* update :skill-state (fn [ss] (apply f (or ss {}) args))))}))
 
@@ -111,7 +110,9 @@
 (defn- jet-context-mocks [initial]
   (let [ctx* (atom initial)]
     {:ctx* ctx*
-     :get-context (fn [_] @ctx*)
+     :get-context (fn
+                    ([_ctx-id] @ctx*)
+                    ([_owner _ctx-id] @ctx*))
      :update-skill-state-root! (fn [_ f & args]
                         (swap! ctx* update :skill-state (fn [ss] (apply f (or ss {}) args))))
      :terminate-context! (fn [& _] nil)
@@ -165,6 +166,7 @@
                   skill-effects/perform-resource! (fn [& _] {:success? true})
                   skill-effects/add-skill-exp! (fn [& _] nil)
                   ctx/get-context get-context
+                  ctx-skill/get-context get-context
                   ctx-skill/update-skill-state-root! update-skill-state-root!
                   fx/send! (fn [& _] nil)
                   geom/world-id-of (fn [_] "w")
@@ -256,6 +258,7 @@
                   rad/mark-duration-ticks (fn [] 100000)
                   skill-effects/skill-exp (fn [& _] 0.0)
                   ctx/get-context get-context
+                  ctx-skill/get-context get-context
                   ctx-skill/update-skill-state-root! update-skill-state-root!
                   ctx/terminate-context! terminate-context!
                   fx/send! send!

@@ -1,5 +1,6 @@
 (ns cn.li.ac.content.ability.meltdowner.light-shield-fx-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
+            [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
@@ -43,9 +44,7 @@
              @registered-topics*)))))
 
 (deftest start-end-update-state-and-build-plan-test
-  (let [enqueue-state! (var-get #'cn.li.ac.content.ability.meltdowner.light-shield-fx/enqueue-state!)
-  build-plan (var-get #'cn.li.ac.content.ability.meltdowner.light-shield-fx/build-plan)
-        tick-state! (var-get #'cn.li.ac.content.ability.meltdowner.light-shield-fx/tick-state!)
+  (let [
         particles* (atom [])
         sounds* (atom [])]
     (with-redefs [client-particles/current-effect-owner (fn [] {:client-session-id "light-shield-fx-test"})
@@ -55,49 +54,38 @@
                   client-sounds/queue-sound-effect! (fn [& args]
                                                         (swap! sounds* conj args)
                                                         nil)]
-      (level-effects/update-effect-state! :light-shield
-        enqueue-state!
-        (event "ctx-ls" :light-shield/fx-start {:mode :start :source-player-id "player-a"}))
+      (arc-beam/enqueue-for-test! :light-shield "ctx-ls" :light-shield/fx-start {:mode :start :source-player-id "player-a"})
       (is (some? (get-in (ls-fx/light-shield-fx-snapshot) [:effect-state [:ctx "ctx-ls"]])))
       (dotimes [_ 5]
         (level-effects/update-effect-state! :light-shield
-          (fn [store _]
-            (tick-state! store))
+          (fn [store] (arc-beam/effect-tick-state! :level :light-shield store))
           nil))
       (is (seq @particles*))
-      (is (map? (build-plan {:x 0.0 :y 64.0 :z 0.0} {:player-uuid "player-a" :x 0.0 :y 64.0 :z 0.0} 12)))
-      (level-effects/update-effect-state! :light-shield
-        enqueue-state!
-        (event "ctx-ls" :light-shield/fx-end {:mode :end :source-player-id "player-a"}))
+      (is (map? (arc-beam/effect-build-plan :light-shield {:x 0.0 :y 64.0 :z 0.0} {:player-uuid "player-a" :x 0.0 :y 64.0 :z 0.0} 12)))
+      (arc-beam/enqueue-for-test! :light-shield "ctx-ls" :light-shield/fx-end {:mode :end :source-player-id "player-a"})
       (is (nil? (get-in (ls-fx/light-shield-fx-snapshot) [:effect-state [:ctx "ctx-ls"]])))
       (is (seq @sounds*)))))
 
 (deftest light-shield-particle-cadence-test
-  (let [enqueue-state! (var-get #'cn.li.ac.content.ability.meltdowner.light-shield-fx/enqueue-state!)
-        tick-state! (var-get #'cn.li.ac.content.ability.meltdowner.light-shield-fx/tick-state!)
+  (let [
         particles* (atom [])]
     (with-redefs [client-particles/current-effect-owner (fn [] {:client-session-id "light-shield-fx-test"})
                   client-particles/queue-particle-effect! (fn [& args]
                                                             (swap! particles* conj args)
                                                             nil)
                   client-sounds/queue-sound-effect! (fn [& _] nil)]
-      (level-effects/update-effect-state! :light-shield
-        enqueue-state!
-        (event "ctx-cadence" :light-shield/fx-start {:mode :start :source-player-id "player-a"}))
+      (arc-beam/enqueue-for-test! :light-shield "ctx-cadence" :light-shield/fx-start {:mode :start :source-player-id "player-a"})
 
       (dotimes [_ 10]
         (level-effects/update-effect-state! :light-shield
-          (fn [store _]
-            (tick-state! store))
+          (fn [store] (arc-beam/effect-tick-state! :level :light-shield store))
           nil))
 
       (is (= 10 (get-in (ls-fx/light-shield-fx-snapshot) [:effect-state [:ctx "ctx-cadence"] :ticks])))
       (is (= 2 (count @particles*))
           "light-shield should emit particles every 5 ticks")
 
-      (level-effects/update-effect-state! :light-shield
-        enqueue-state!
-        (event "ctx-cadence" :light-shield/fx-end {:mode :end :source-player-id "player-a"}))
+      (arc-beam/enqueue-for-test! :light-shield "ctx-cadence" :light-shield/fx-end {:mode :end :source-player-id "player-a"})
       (is (nil? (get-in (ls-fx/light-shield-fx-snapshot) [:effect-state [:ctx "ctx-cadence"]]))))))
 
 

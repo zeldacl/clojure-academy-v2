@@ -15,7 +15,7 @@
   Exp: +0.001 per entity hit
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.dsl :refer [defskill]]
+  (:require [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
             [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
@@ -28,23 +28,9 @@
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.util.log :as log]))
 
+(def-skill-config-ops :electron-missile)
 (def ^:private mdball-entity-id "my_mod:entity_md_ball")
 (def ^:private electron-missile-skill-id :electron-missile)
-
-(defn- cfg-double [field-id]
-  (skill-config/tunable-double electron-missile-skill-id field-id))
-
-(defn- cfg-int [field-id]
-  (skill-config/tunable-int electron-missile-skill-id field-id))
-
-(defn- cfg-lerp [field-id exp]
-  (skill-config/lerp-double electron-missile-skill-id field-id exp))
-
-(defn- cfg-lerp-int [field-id exp]
-  (skill-config/lerp-int electron-missile-skill-id field-id exp))
-
-(defn- skill-exp [player-id]
-  (skill-effects/skill-exp player-id electron-missile-skill-id))
 
 (defn- missile-filter-self
   "Remove the shooter from candidate list."
@@ -108,16 +94,12 @@
 (defn- send-end-fx! [ctx-id]
   (fx/send-local-and-nearby! ctx-id {:topic :electron-missile/fx-end} nil {}))
 
-(defn- set-skill-state-root!
-  [ctx-id state-map]
-  (ctx-skill/update-skill-state-root! ctx-id identity state-map))
-
 (defn electron-missile-down!
   [{:keys [player-id ctx-id cost-ok?]}]
   (when cost-ok?
     (let [overload-floor (max (cfg-double :cost.down.overload)
                               (current-overload player-id))]
-      (set-skill-state-root! ctx-id
+      (ctx-skill/replace-skill-state! ctx-id
                              {:ticks 0
                               :active-balls 0
                               :active? true
@@ -178,7 +160,7 @@
                                        (dec balls-after-spawn))
                                      balls-after-spawn)))]
           (send-update-fx! ctx-id ticks balls-after-fire)
-          (set-skill-state-root! ctx-id
+          (ctx-skill/replace-skill-state! ctx-id
                                  {:ticks (inc ticks)
                                   :active-balls balls-after-fire
                                   :active? true
@@ -192,20 +174,14 @@
         cd (cfg-lerp-int :cooldown.ticks exp)]
     (skill-effects/set-main-cooldown! player-id electron-missile-skill-id cd)
     (send-end-fx! ctx-id)
-    (set-skill-state-root! ctx-id
+    (ctx-skill/replace-skill-state! ctx-id
                  {:ticks 0 :active-balls 0 :active? false})))
 
 (defn electron-missile-abort!
   [{:keys [ctx-id]}]
   (send-end-fx! ctx-id)
-  (set-skill-state-root! ctx-id
+  (ctx-skill/replace-skill-state! ctx-id
                          {:ticks 0 :active-balls 0 :active? false}))
-
-(defn init!
-  "Explicit runtime installer for Meltdowner shared damage helper hooks."
-  []
-  (md-damage/init!)
-  nil)
 
 (defskill electron-missile
   :id             :electron-missile
@@ -228,7 +204,7 @@
                     (skill-config/lerp-int electron-missile-skill-id
                                            :cooldown.ticks
                                            (double (or exp 0.0))))
-  ;; matching original: clampi(700, 400, exp) â€?cooldown âˆ?[400, 700] ticks
+  ;; matching original: clampi(700, 400, exp) ï¿½?cooldown ï¿½?[400, 700] ticks
   :actions        {:down!  electron-missile-down!
                    :tick!  electron-missile-tick!
                    :up!    electron-missile-up!

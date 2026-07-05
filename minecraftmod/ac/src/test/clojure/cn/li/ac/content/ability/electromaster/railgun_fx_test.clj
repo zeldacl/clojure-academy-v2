@@ -1,5 +1,6 @@
 (ns cn.li.ac.content.ability.electromaster.railgun-fx-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
+            [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.content.ability.electromaster.railgun-fx :as railgun-fx]))
@@ -64,28 +65,21 @@
              @enqueued*)))))
 
 (deftest enqueue-perform-adds-beam-and-builds-plan-test
-  (let [enqueue-state! (var-get #'cn.li.ac.content.ability.electromaster.railgun-fx/enqueue-state!)
-        build-plan (var-get #'cn.li.ac.content.ability.electromaster.railgun-fx/build-plan)]
-    (level-effects/update-effect-state! :railgun-shot
-      enqueue-state!
-      (event "ctx-main" :railgun/fx-shot {:start {:x 0.0 :y 64.0 :z 0.0}
+  (do
+    (arc-beam/enqueue-for-test! :railgun-shot "ctx-main" :railgun/fx-shot {:start {:x 0.0 :y 64.0 :z 0.0}
                                            :end {:x 3.0 :y 64.0 :z 3.0}
-                                           :hit-distance 18.0}))
-    (let [plan (build-plan {:x 0.0 :y 65.0 :z 0.0} nil 0)]
+                                           :hit-distance 18.0})
+    (let [plan (arc-beam/effect-build-plan :railgun-shot {:x 0.0 :y 65.0 :z 0.0} nil 0)]
       (is (some? plan))
       (is (seq (:ops plan))))
     (is (= 1 (count (get (:beam-effects (railgun-fx/railgun-fx-snapshot)) [:ctx "ctx-main"]))))))
 
 (deftest two-owners-keep-railgun-beams-independent-test
-  (let [enqueue-state! (var-get #'cn.li.ac.content.ability.electromaster.railgun-fx/enqueue-state!)]
-    (level-effects/update-effect-state! :railgun-shot
-      enqueue-state!
-      (event "ctx-a" :railgun/fx-shot {:start {:x 0.0 :y 64.0 :z 0.0}
-                                         :end {:x 6.0 :y 64.0 :z 0.0}}))
-    (level-effects/update-effect-state! :railgun-shot
-      enqueue-state!
-      (event "ctx-b" :railgun/fx-reflect {:start {:x 0.0 :y 65.0 :z 0.0}
-                                           :end {:x 6.0 :y 65.0 :z 0.0}}))
+  (do
+    (arc-beam/enqueue-for-test! :railgun-shot "ctx-a" :railgun/fx-shot {:start {:x 0.0 :y 64.0 :z 0.0}
+                                         :end {:x 6.0 :y 64.0 :z 0.0}})
+    (arc-beam/enqueue-for-test! :railgun-shot "ctx-b" :railgun/fx-reflect {:start {:x 0.0 :y 65.0 :z 0.0}
+                                           :end {:x 6.0 :y 65.0 :z 0.0}})
     (let [snapshot (railgun-fx/railgun-fx-snapshot)]
       (is (= 1 (count (get (:beam-effects snapshot) [:ctx "ctx-a"]))))
       (is (= 1 (count (get (:beam-effects snapshot) [:ctx "ctx-b"]))))

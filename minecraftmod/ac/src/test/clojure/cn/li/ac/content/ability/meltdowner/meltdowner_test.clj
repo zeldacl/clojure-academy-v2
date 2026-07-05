@@ -5,6 +5,7 @@
             [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.test.support.fx-mocks :as fx-mocks]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.effects.beam :as beam]
@@ -95,9 +96,9 @@
         overload-calls* (atom [])]
     (with-redefs [fx/send! fx-send!
                   ctx/terminate-context! terminate!
-                  ctx/get-context (fn [_] {:skill-state {:overload-floor 123.0}})
-                  skill-effects/enforce-overload-floor!
-                  (fn [player-id floor] (swap! overload-calls* conj [player-id floor]))
+                  ctx-skill/get-context (fn [& _] {:skill-state {:overload-floor 123.0}})
+                  skill-effects/enforce-overload-floor! (fn [player-id floor]
+                                                          (swap! overload-calls* conj [player-id floor]))
                   skill-config/tunable-int (fn [_ field-id]
                                              (case field-id
                                                :charge.min-ticks 20

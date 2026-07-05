@@ -8,9 +8,8 @@
   AOE radius: lerp(15,30,exp) with distance falloff
   Cooldown: ticks * lerp(10,6,exp)
   Exp: 0.003 per use"
-  (:require [cn.li.ac.ability.dsl :refer [defskill]]
+  (:require [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
             [cn.li.ac.ability.fx :as fx]
-            [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.util.balance :as bal]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
@@ -21,17 +20,7 @@
                         [cn.li.mcmod.platform.raycast :as raycast]
 	            [cn.li.mcmod.platform.entity :as entity]))
 
-(def ^:private thunder-clap-skill-id :thunder-clap)
-
-(defn- cfg-double [field-id]
-  (skill-config/tunable-double thunder-clap-skill-id field-id))
-
-(defn- cfg-int [field-id]
-  (skill-config/tunable-int thunder-clap-skill-id field-id))
-
-(defn- cfg-lerp [field-id exp]
-  (skill-config/lerp-double thunder-clap-skill-id field-id exp))
-
+(def-skill-config-ops :thunder-clap)
 (defn- min-ticks [] (cfg-int :charge.min-ticks))
 (defn- max-ticks [] (cfg-int :charge.max-ticks))
 (defn- targeting-range [] (cfg-double :targeting.range))

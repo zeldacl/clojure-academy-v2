@@ -1,5 +1,6 @@
 (ns cn.li.ac.content.ability.vecmanip.directed-blastwave-fx-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
+            [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.level-effects :as level-effects]
@@ -42,100 +43,73 @@
              @registered-topics*)))))
 
 (deftest enqueue-perform-spawns-wave-and-queues-sound-test
-  (let [enqueue-state! (var-get #'cn.li.ac.content.ability.vecmanip.directed-blastwave-fx/enqueue-state!)
+  (let [
         sound-calls* (atom [])]
     (with-redefs [client-sounds/queue-current-sound-effect! (fn [payload]
                                                               (swap! sound-calls* conj payload)
                                                               nil)
                   rand-int (fn [_] 0)
                   rand (fn [] 0.5)]
-      (level-effects/update-effect-state! :directed-blastwave
-        enqueue-state!
-        (event "ctx-wave"
+      (arc-beam/enqueue-for-test! :directed-blastwave "ctx-wave" :directed-blastwave/fx-perform
                {:mode :perform
                 :pos {:x 1.0 :y 2.0 :z 3.0}
                 :look-dir {:x 0.0 :y 0.0 :z 1.0}
-                :charge-ticks 20}))
+                :charge-ticks 20})
       (is (= 1 (count (get (:waves (blastwave-fx/directed-blastwave-fx-snapshot)) [:ctx "ctx-wave"]))))
       (is (= 1 (count @sound-calls*)))
       (is (= "my_mod:vecmanip.directed_blast"
              (:sound-id (first @sound-calls*)))))))
 
 (deftest tick-clears-finished-state-and-expires-wave-test
-  (let [enqueue-state! (var-get #'cn.li.ac.content.ability.vecmanip.directed-blastwave-fx/enqueue-state!)
-        tick-state! (var-get #'cn.li.ac.content.ability.vecmanip.directed-blastwave-fx/tick-state!)]
+  (do
     (with-redefs [client-sounds/queue-current-sound-effect! (fn [& _] nil)
                   rand-int (fn [_] 0)
                   rand (fn [] 0.5)]
+      (arc-beam/enqueue-for-test! :directed-blastwave "ctx-tick" :directed-blastwave/fx-perform {:mode :start :source-player-id "player-a"})
+      (arc-beam/enqueue-for-test! :directed-blastwave "ctx-tick" :directed-blastwave/fx-perform {:mode :end :performed? false})
       (level-effects/update-effect-state! :directed-blastwave
-        enqueue-state!
-        (event "ctx-tick" {:mode :start :source-player-id "player-a"}))
-      (level-effects/update-effect-state! :directed-blastwave
-        enqueue-state!
-        (event "ctx-tick" {:mode :end :performed? false}))
-      (level-effects/update-effect-state! :directed-blastwave
-        (fn [store _]
-          (tick-state! store))
+        (fn [store] (arc-beam/effect-tick-state! :level :directed-blastwave store))
         nil)
       (is (empty? (:effect-state (blastwave-fx/directed-blastwave-fx-snapshot))))
-      (level-effects/update-effect-state! :directed-blastwave
-        enqueue-state!
-        (event "ctx-tick"
+      (arc-beam/enqueue-for-test! :directed-blastwave "ctx-tick" :directed-blastwave/fx-perform
                {:mode :perform
                 :pos {:x 1.0 :y 2.0 :z 3.0}
-                :look-dir {:x 0.0 :y 0.0 :z 1.0}}))
+                :look-dir {:x 0.0 :y 0.0 :z 1.0}})
       (dotimes [_ 15]
         (level-effects/update-effect-state! :directed-blastwave
-          (fn [store _]
-            (tick-state! store))
+          (fn [store] (arc-beam/effect-tick-state! :level :directed-blastwave store))
           nil))
       (is (empty? (:waves (blastwave-fx/directed-blastwave-fx-snapshot)))))))
 
 (deftest two-owners-keep-blastwave-state-and-waves-independent-test
-  (let [enqueue-state! (var-get #'cn.li.ac.content.ability.vecmanip.directed-blastwave-fx/enqueue-state!)
-        tick-state! (var-get #'cn.li.ac.content.ability.vecmanip.directed-blastwave-fx/tick-state!)]
+  (do
     (with-redefs [client-sounds/queue-current-sound-effect! (fn [& _] nil)
                   rand-int (fn [_] 0)
                   rand (fn [] 0.5)]
-      (level-effects/update-effect-state! :directed-blastwave
-        enqueue-state!
-        (event "ctx-a" {:mode :start :source-player-id "player-a"}))
-      (level-effects/update-effect-state! :directed-blastwave
-        enqueue-state!
-        (event "ctx-b" {:mode :start :source-player-id "player-b"}))
-      (level-effects/update-effect-state! :directed-blastwave
-        enqueue-state!
-        (event "ctx-a" {:mode :update :charge-ticks 7 :punched? true :source-player-id "player-a"}))
-      (level-effects/update-effect-state! :directed-blastwave
-        enqueue-state!
-        (event "ctx-b" {:mode :update :charge-ticks 11 :punched? false :source-player-id "player-b"}))
+      (arc-beam/enqueue-for-test! :directed-blastwave "ctx-a" :directed-blastwave/fx-perform {:mode :start :source-player-id "player-a"})
+      (arc-beam/enqueue-for-test! :directed-blastwave "ctx-b" :directed-blastwave/fx-perform {:mode :start :source-player-id "player-b"})
+      (arc-beam/enqueue-for-test! :directed-blastwave "ctx-a" :directed-blastwave/fx-perform {:mode :update :charge-ticks 7 :punched? true :source-player-id "player-a"})
+      (arc-beam/enqueue-for-test! :directed-blastwave "ctx-b" :directed-blastwave/fx-perform {:mode :update :charge-ticks 11 :punched? false :source-player-id "player-b"})
       (let [snapshot (blastwave-fx/directed-blastwave-fx-snapshot)]
         (is (= 7 (get-in (get (:effect-state snapshot) [:ctx "ctx-a"]) [:charge-ticks])))
         (is (= 11 (get-in (get (:effect-state snapshot) [:ctx "ctx-b"]) [:charge-ticks]))))
+      (arc-beam/enqueue-for-test! :directed-blastwave "ctx-a" :directed-blastwave/fx-perform {:mode :end :performed? false :source-player-id "player-a"})
       (level-effects/update-effect-state! :directed-blastwave
-        enqueue-state!
-        (event "ctx-a" {:mode :end :performed? false :source-player-id "player-a"}))
-      (level-effects/update-effect-state! :directed-blastwave
-        (fn [store _]
-          (tick-state! store))
+        (fn [store] (arc-beam/effect-tick-state! :level :directed-blastwave store))
         nil)
       (let [snapshot (blastwave-fx/directed-blastwave-fx-snapshot)]
         (is (nil? (get (:effect-state snapshot) [:ctx "ctx-a"])))
         (is (= 11 (get-in (get (:effect-state snapshot) [:ctx "ctx-b"]) [:charge-ticks]))))
-      (level-effects/update-effect-state! :directed-blastwave
-        enqueue-state!
-        (event "ctx-a"
+      (arc-beam/enqueue-for-test! :directed-blastwave "ctx-a" :directed-blastwave/fx-perform
                {:mode :perform
                 :pos {:x 1.0 :y 2.0 :z 3.0}
                 :look-dir {:x 0.0 :y 0.0 :z 1.0}
-                :source-player-id "player-a"}))
-      (level-effects/update-effect-state! :directed-blastwave
-        enqueue-state!
-        (event "ctx-b"
+                :source-player-id "player-a"})
+      (arc-beam/enqueue-for-test! :directed-blastwave "ctx-b" :directed-blastwave/fx-perform
                {:mode :perform
                 :pos {:x 10.0 :y 2.0 :z 3.0}
                 :look-dir {:x 1.0 :y 0.0 :z 0.0}
-                :source-player-id "player-b"}))
+                :source-player-id "player-b"})
       (let [snapshot (blastwave-fx/directed-blastwave-fx-snapshot)]
         (is (= #{[:ctx "ctx-a"] [:ctx "ctx-b"]}
                (set (keys (:waves snapshot)))))

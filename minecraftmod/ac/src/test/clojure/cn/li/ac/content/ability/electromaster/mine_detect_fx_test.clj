@@ -1,5 +1,6 @@
 (ns cn.li.ac.content.ability.electromaster.mine-detect-fx-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
+            [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.level-effects :as level-effects]
@@ -30,14 +31,13 @@
 
 (defn- invoke-enqueue!
   [ctx-id channel payload]
-  (let [enqueue-state! (var-get #'cn.li.ac.content.ability.electromaster.mine-detect-fx/enqueue-state!)]
+  (do
     (level-effects/update-effect-state! :mine-detect
-      (fn [store] (enqueue-state! store ctx-id channel [:ctx ctx-id] payload)))))
+      (fn [store] (arc-beam/enqueue-for-test! :mine-detect ctx-id channel payload)))))
 
-(defn- invoke-tick!
-  []
-  (let [tick-state! (var-get #'cn.li.ac.content.ability.electromaster.mine-detect-fx/tick-state!)]
-    (level-effects/update-effect-state! :mine-detect tick-state!)))
+(defn- invoke-tick! []
+  (level-effects/update-effect-state! :mine-detect
+    (fn [store] (arc-beam/effect-tick-state! :level :mine-detect store))))
 
 (use-fixtures :each reset-fixture)
 
@@ -102,7 +102,7 @@
   (is (nil? (owner-state "ctx-main"))))
 
 (deftest build-plan-rescans-every-5-ticks-and-applies-advanced-colors-test
-  (let [build-plan (var-get #'cn.li.ac.content.ability.electromaster.mine-detect-fx/build-plan)
+  (let [
         query-count* (atom 0)
         query-fn (fn [_x _y _z _radius _predicate]
                    (swap! query-count* inc)
@@ -111,28 +111,28 @@
         hand-center {:x 0.0 :y 64.0 :z 0.0}]
     (invoke-enqueue! "ctx-main" :mine-detect/fx-perform
       {:mode :perform :range 24.0 :advanced? true :life-ticks 100 :rescan-interval 5})
-    (let [plan0 (build-plan nil hand-center 0 query-fn)
+    (let [plan0 (arc-beam/effect-build-plan :mine-detect nil hand-center 0 query-fn)
           colors (set (map :color (:ops plan0)))]
       (is (seq (:ops plan0)))
       (is (= 1 @query-count*))
       (is (>= (count colors) 2)))
 
     (dotimes [_ 4] (invoke-tick!))
-    (build-plan nil hand-center 1 query-fn)
+    (arc-beam/effect-build-plan :mine-detect nil hand-center 1 query-fn)
     (is (= 1 @query-count*))
 
     (invoke-tick!)
-    (build-plan nil hand-center 2 query-fn)
+    (arc-beam/effect-build-plan :mine-detect nil hand-center 2 query-fn)
     (is (= 2 @query-count*))))
 
 (deftest build-plan-non-advanced-uses-single-color-test
-  (let [build-plan (var-get #'cn.li.ac.content.ability.electromaster.mine-detect-fx/build-plan)
+  (let [
         query-fn (fn [_x _y _z _radius _predicate]
                    [{:x 1 :y 60 :z 1 :block-id "minecraft:coal_ore"}])
         hand-center {:x 0.0 :y 64.0 :z 0.0}]
     (invoke-enqueue! "ctx-main" :mine-detect/fx-perform
       {:mode :perform :range 24.0 :advanced? false :life-ticks 100 :rescan-interval 5})
-    (let [plan (build-plan nil hand-center 0 query-fn)
+    (let [plan (arc-beam/effect-build-plan :mine-detect nil hand-center 0 query-fn)
           colors (set (map :color (:ops plan)))]
       (is (seq (:ops plan)))
       (is (= 1 (count colors))))))

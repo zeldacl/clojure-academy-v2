@@ -1,5 +1,6 @@
 (ns cn.li.ac.content.ability.meltdowner.meltdowner-fx-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
+            [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.level-effects :as level-effects]
@@ -110,102 +111,82 @@
              @enqueued*)))))
 
 (deftest start-update-perform-end-manage-state-test
-  (let [enqueue! (var-get #'cn.li.ac.content.ability.meltdowner.meltdowner-fx/enqueue!)]
-    (level-effects/update-effect-state! :meltdowner
-      enqueue!
-      (event "ctx-a" :meltdowner/fx-start {:mode :start :source-player-id "player-a"}))
-    (level-effects/update-effect-state! :meltdowner
-      enqueue!
-      (event "ctx-a" :meltdowner/fx-update {:mode :update
+  (do
+    (arc-beam/enqueue-for-test! :meltdowner "ctx-a" :meltdowner/fx-start {:mode :start :source-player-id "player-a"})
+    (arc-beam/enqueue-for-test! :meltdowner "ctx-a" :meltdowner/fx-update {:mode :update
                                              :ticks 10
                                              :charge-ratio 0.5
-                                             :source-player-id "player-a"}))
+                                             :source-player-id "player-a"})
     (is (some? (get-in (md-fx/meltdowner-fx-snapshot) [:effect-state [:ctx "ctx-a"]])))
-    (level-effects/update-effect-state! :meltdowner
-      enqueue!
-      (event "ctx-a" :meltdowner/fx-perform {:mode :perform
+    (arc-beam/enqueue-for-test! :meltdowner "ctx-a" :meltdowner/fx-perform {:mode :perform
                                               :start {:x 1.0 :y 64.0 :z 0.0}
                                               :end {:x 2.0 :y 64.0 :z 1.0}
                                               :charge-ticks 20
                                               :beam-length 30.0
-                                              :source-player-id "player-a"}))
+                                              :source-player-id "player-a"})
     (is (some? (get-in (md-fx/meltdowner-fx-snapshot) [:rays [:ctx "ctx-a"]])))
-    (level-effects/update-effect-state! :meltdowner
-      enqueue!
-      (event "ctx-a" :meltdowner/fx-end {:mode :end
+    (arc-beam/enqueue-for-test! :meltdowner "ctx-a" :meltdowner/fx-end {:mode :end
                                           :performed? true
-                                          :source-player-id "player-a"}))
+                                          :source-player-id "player-a"})
     (let [snapshot (md-fx/meltdowner-fx-snapshot)]
       (is (false? (get-in snapshot [:effect-state [:ctx "ctx-a"] :active?])))
       (is (some? (get-in snapshot [:rays [:ctx "ctx-a"]]))))))
 
 (deftest build-plan-and-tick-state-test
-  (let [enqueue! (var-get #'cn.li.ac.content.ability.meltdowner.meltdowner-fx/enqueue!)
-        tick! (var-get #'cn.li.ac.content.ability.meltdowner.meltdowner-fx/tick!)
-        build-plan (var-get #'cn.li.ac.content.ability.meltdowner.meltdowner-fx/build-plan)
+  (let [
         sounds* (atom [])]
     (with-redefs [client-sounds/queue-sound-effect! (fn [& args]
                                                        (swap! sounds* conj args)
                                                        nil)
                   client-sounds/current-effect-owner (fn [] :test-owner)
                   rand-int (fn [_] 0)]
-      (level-effects/update-effect-state! :meltdowner
-        enqueue!
-        (event "ctx-main" :meltdowner/fx-start {:mode :start :source-player-id "player-a"}))
-      (level-effects/update-effect-state! :meltdowner
-        enqueue!
-        (event "ctx-main" :meltdowner/fx-update {:mode :update
+      (arc-beam/enqueue-for-test! :meltdowner "ctx-main" :meltdowner/fx-start {:mode :start :source-player-id "player-a"})
+      (arc-beam/enqueue-for-test! :meltdowner "ctx-main" :meltdowner/fx-update {:mode :update
                                                   :ticks 8
                                                   :charge-ratio 0.8
-                                                  :source-player-id "player-a"}))
-      (level-effects/update-effect-state! :meltdowner
-        enqueue!
-        (event "ctx-main" :meltdowner/fx-perform {:mode :perform
+                                                  :source-player-id "player-a"})
+      (arc-beam/enqueue-for-test! :meltdowner "ctx-main" :meltdowner/fx-perform {:mode :perform
                                                    :start {:x 0.0 :y 64.0 :z 0.0}
                                                    :end {:x 2.0 :y 64.0 :z 2.0}
-                                                   :source-player-id "player-a"}))
-      (is (some? (build-plan {:x 0.0 :y 65.0 :z 0.0}
+                                                   :source-player-id "player-a"})
+      (is (some? (arc-beam/effect-build-plan :meltdowner {:x 0.0 :y 65.0 :z 0.0}
                              {:player-uuid "player-a" :x 0.0 :y 64.0 :z 0.0}
                              0)))
-      (tick!)
+      (level-effects/update-effect-state! :meltdowner
+        (fn [store] (arc-beam/effect-tick-state! :level :meltdowner store)))
       (is (seq @sounds*))
-      (is (some? (build-plan {:x 0.0 :y 65.0 :z 0.0}
+      (is (some? (arc-beam/effect-build-plan :meltdowner {:x 0.0 :y 65.0 :z 0.0}
                              {:player-uuid "player-a" :x 0.0 :y 64.0 :z 0.0}
                              1))))))
 
 (deftest charge-loop-cadence-and-ray-expiry-test
-  (let [enqueue! (var-get #'cn.li.ac.content.ability.meltdowner.meltdowner-fx/enqueue!)
-        tick! (var-get #'cn.li.ac.content.ability.meltdowner.meltdowner-fx/tick!)
-        build-plan (var-get #'cn.li.ac.content.ability.meltdowner.meltdowner-fx/build-plan)
+  (let [
         sounds* (atom [])]
     (with-redefs [client-sounds/queue-sound-effect! (fn [& args]
                                                        (swap! sounds* conj args)
                                                        nil)
                   client-sounds/current-effect-owner (fn [] :test-owner)
                   rand-int (fn [_] 0)]
-      (level-effects/update-effect-state! :meltdowner
-        enqueue!
-        (event "ctx-cadence" :meltdowner/fx-start {:mode :start :source-player-id "player-a"}))
-      (level-effects/update-effect-state! :meltdowner
-        enqueue!
-        (event "ctx-cadence" :meltdowner/fx-perform {:mode :perform
+      (arc-beam/enqueue-for-test! :meltdowner "ctx-cadence" :meltdowner/fx-start {:mode :start :source-player-id "player-a"})
+      (arc-beam/enqueue-for-test! :meltdowner "ctx-cadence" :meltdowner/fx-perform {:mode :perform
                                                       :start {:x 0.0 :y 64.0 :z 0.0}
                                                       :end {:x 2.0 :y 64.0 :z 2.0}
-                                                      :source-player-id "player-a"}))
+                                                      :source-player-id "player-a"})
 
       ;; one immediate charge sound from :start, then one loop sound every 10 ticks while active
       (dotimes [_ 20]
-        (tick!))
-
-        (is (= 4 (count @sounds*))
+        (level-effects/update-effect-state! :meltdowner
+          (fn [store] (arc-beam/effect-tick-state! :level :meltdowner store))))
+      (is (= 4 (count @sounds*))
           "start + perform fire + loop sounds at tick 10 and tick 20")
 
       ;; perform ray gets deterministic ttl 16 when rand-int is stubbed to 0
-      (is (some? (build-plan {:x 0.0 :y 65.0 :z 0.0}
+      (is (some? (arc-beam/effect-build-plan :meltdowner {:x 0.0 :y 65.0 :z 0.0}
                              {:player-uuid "player-a" :x 0.0 :y 64.0 :z 0.0}
                              20)))
       (dotimes [_ 16]
-        (tick!))
+        (level-effects/update-effect-state! :meltdowner
+          (fn [store] (arc-beam/effect-tick-state! :level :meltdowner store))))
       (is (nil? (get-in (md-fx/meltdowner-fx-snapshot) [:rays [:ctx "ctx-cadence"]]))))))
 
 

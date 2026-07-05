@@ -9,7 +9,7 @@
   Exp: +0.008 per cast
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.dsl :refer [defskill]]
+  (:require [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
             [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
@@ -21,19 +21,8 @@
 ;; Helpers
 ;; ---------------------------------------------------------------------------
 
+(def-skill-config-ops :mine-detect)
 (def ^:private mine-detect-skill-id :mine-detect)
-
-(defn- cfg-double [field-id]
-  (skill-config/tunable-double mine-detect-skill-id field-id))
-
-(defn- cfg-int [field-id]
-  (skill-config/tunable-int mine-detect-skill-id field-id))
-
-(defn- cfg-lerp [field-id exp]
-  (skill-config/lerp-double mine-detect-skill-id field-id exp))
-
-(defn- skill-exp [player-id]
-  (skill-effects/skill-exp player-id mine-detect-skill-id))
 
 (defn- scan-range [exp]
   (cfg-lerp :targeting.range exp))

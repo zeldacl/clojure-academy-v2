@@ -13,7 +13,7 @@
 
 (defn- resolve-store-session-id
   []
-  (or (some-> ctx/*context-owner* owner/store-session-id)
+  (or (some-> (ctx/*context-owner*) owner/store-session-id)
       (runtime-hooks/player-state-session-id)
       (runtime-hooks/require-player-state-session-id "toggle")))
 
@@ -89,3 +89,12 @@
                         :ctx-id ctx-id
                         :skill-id skill-id
                         :toggle-state (init-toggle-state skill-id)}))
+
+(defn toggle-active-for-player?
+  "Return true when player-uuid has an active toggle context for skill-id."
+  [player-uuid skill-id]
+  (boolean
+    (some (fn [[_ctx-key ctx-data]]
+            (and (= (:player-uuid ctx-data) player-uuid)
+                 (is-toggle-active? ctx-data skill-id)))
+          (ctx/get-all-contexts))))

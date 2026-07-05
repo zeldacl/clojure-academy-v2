@@ -1,19 +1,16 @@
 (ns cn.li.ac.content.ability.electromaster.electromaster-fx-owner-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
+            [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.hand-effects :as hand-effects]
             [cn.li.ac.content.ability.electromaster.current-charging-fx :as current-charging-fx]
             [cn.li.ac.content.ability.electromaster.mag-manip-fx :as mag-manip-fx]))
 
 (defn- invoke-mag-enqueue! [ctx-id channel payload]
-  (let [enqueue-state! (var-get #'cn.li.ac.content.ability.electromaster.mag-manip-fx/enqueue-state!)]
-    (hand-effects/update-effect-state! :mag-manip
-      (fn [store] (enqueue-state! store ctx-id channel [:ctx ctx-id] payload)))))
+  (arc-beam/enqueue-for-test! :mag-manip ctx-id channel payload {:runtime :hand}))
 
 (defn- invoke-charging-enqueue! [ctx-id channel payload]
-  (let [enqueue-state! (var-get #'cn.li.ac.content.ability.electromaster.current-charging-fx/enqueue-state!)]
-    (hand-effects/update-effect-state! :current-charging
-      (fn [store] (enqueue-state! store ctx-id channel [:ctx ctx-id] payload)))))
+  (arc-beam/enqueue-for-test! :current-charging ctx-id channel payload {:runtime :hand}))
 
 (defn- reset-fixture [f]
   (try
@@ -31,8 +28,7 @@
 (use-fixtures :each reset-fixture)
 
 (deftest electromaster-fx-keep-state-per-owner-test
-  (with-redefs [cn.li.ac.content.ability.electromaster.current-charging-fx/now-ms (fn [] 1000)
-                client-sounds/current-effect-owner (fn [] {:client-session-id "electromaster-owner-test"})
+  (with-redefs [client-sounds/current-effect-owner (fn [] {:client-session-id "electromaster-owner-test"})
                 client-sounds/queue-current-sound-effect! (fn [& _] nil)
                 client-sounds/queue-sound-effect! (fn [& _] nil)]
     (invoke-mag-enqueue! "ctx-a" :mag-manip/fx-hold {:mode :hold-start :block-id "minecraft:iron_block"})

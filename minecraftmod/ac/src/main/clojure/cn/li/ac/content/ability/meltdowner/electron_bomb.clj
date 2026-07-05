@@ -11,9 +11,8 @@
   settlement and the client FX receives a single-ray visual event.
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.dsl :refer [defskill]]
+  (:require [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
             [cn.li.ac.ability.fx :as fx]
-            [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.delayed-projectiles :as delayed-projectiles]
@@ -22,24 +21,11 @@
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.util.log :as log]))
 
+(def-skill-config-ops :electron-bomb)
 (def ^:private mdball-entity-id "my_mod:entity_md_ball")
-(def ^:private electron-bomb-skill-id :electron-bomb)
-
 ;; ---------------------------------------------------------------------------
 ;; Helpers
 ;; ---------------------------------------------------------------------------
-
-(defn- skill-exp [player-id]
-  (skill-effects/skill-exp player-id electron-bomb-skill-id))
-
-(defn- cfg-double [field-id]
-  (skill-config/tunable-double electron-bomb-skill-id field-id))
-
-(defn- cfg-lerp [field-id exp]
-  (skill-config/lerp-double electron-bomb-skill-id field-id exp))
-
-(defn- cfg-lerp-int [field-id exp]
-  (skill-config/lerp-int electron-bomb-skill-id field-id exp))
 
 ;; ---------------------------------------------------------------------------
 ;; Action

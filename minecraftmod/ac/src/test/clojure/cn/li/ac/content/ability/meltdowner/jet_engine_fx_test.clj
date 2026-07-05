@@ -1,5 +1,6 @@
 (ns cn.li.ac.content.ability.meltdowner.jet-engine-fx-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
+            [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.level-effects :as level-effects]
@@ -43,7 +44,7 @@
              @registered-topics*)))))
 
 (deftest mark-and-trigger-state-flow-with-snapshot-test
-  (let [build-plan (var-get #'cn.li.ac.content.ability.meltdowner.jet-engine-fx/build-plan)
+  (let [
         sounds* (atom [])
         local-effects* (atom [])]
     (with-redefs [client-sounds/queue-current-sound-effect! (fn [& args]
@@ -56,7 +57,7 @@
       (je-fx/init!)
       (dispatch! "ctx-je" :jet-engine/fx-start {:mode :mark-start :target {:x 1.0 :y 64.0 :z 1.0} :hold-ticks 0})
       (is (= :marking (get-in (je-fx/jet-engine-fx-snapshot) [:fx-state [:ctx "ctx-je"] :phase])))
-      (is (seq (:ops (build-plan {:x 0.0 :y 65.0 :z 0.0} nil 0))))
+      (is (seq (:ops (arc-beam/effect-build-plan :jet-engine {:x 0.0 :y 65.0 :z 0.0} nil 0))))
 
       (dispatch! "ctx-je" :jet-engine/fx-trigger-start
                  {:mode :trigger-start
@@ -65,14 +66,14 @@
                   :pos {:x 1.0 :y 64.0 :z 0.0}
                   :trigger-ticks 0})
       (is (= :triggering (get-in (je-fx/jet-engine-fx-snapshot) [:fx-state [:ctx "ctx-je"] :phase])))
-      (let [ops (:ops (build-plan {:x 0.0 :y 65.0 :z 0.0} nil 1))]
+      (let [ops (:ops (arc-beam/effect-build-plan :jet-engine {:x 0.0 :y 65.0 :z 0.0} nil 1))]
         (is (seq ops))
         (is (some #(= :line (:kind %)) ops))
         (is (some #(= :quad (:kind %)) ops)))
 
       (dotimes [_ 20]
         (level-effects/tick-level-effects!))
-      (is (nil? (build-plan {:x 0.0 :y 65.0 :z 0.0} nil 2)))
+      (is (nil? (arc-beam/effect-build-plan :jet-engine {:x 0.0 :y 65.0 :z 0.0} nil 2)))
       (is (seq @sounds*))
             (is (= [[:mcmod/spawn-local-scripted-effect {:effect-id "entity_diamond_shield"}]
               [:mcmod/remove-local-scripted-effect {:entity-uuid "shield-uuid-1"}]]
@@ -123,7 +124,7 @@
              @local-effects*)))))
 
 (deftest trigger-flash-fades-with-ttl-test
-  (let [build-plan (var-get #'cn.li.ac.content.ability.meltdowner.jet-engine-fx/build-plan)]
+  (do
     (with-redefs [client-sounds/queue-current-sound-effect! (fn [& _] nil)
                   client-bridge/run-client-effect! (fn [effect-key _payload]
                                                      (when (= :mcmod/spawn-local-scripted-effect effect-key)
@@ -136,15 +137,15 @@
                   :pos {:x 1.0 :y 64.0 :z 0.0}
                   :trigger-ticks 0})
 
-      (let [a0 (:a (last (:ops (build-plan {:x 0.0 :y 65.0 :z 0.0} nil 0))))]
+      (let [a0 (:a (last (:ops (arc-beam/effect-build-plan :jet-engine {:x 0.0 :y 65.0 :z 0.0} nil 0))))]
         (dotimes [_ 13]
           (level-effects/tick-level-effects!))
-        (let [a1 (:a (last (:ops (build-plan {:x 0.0 :y 65.0 :z 0.0} nil 13))))]
+        (let [a1 (:a (last (:ops (arc-beam/effect-build-plan :jet-engine {:x 0.0 :y 65.0 :z 0.0} nil 13))))]
           (is (> a0 a1)
               "screen flash alpha should fade as trigger ttl decreases")))
 
       (dotimes [_ 7]
         (level-effects/tick-level-effects!))
 
-      (is (nil? (build-plan {:x 0.0 :y 65.0 :z 0.0} nil 20)))
+      (is (nil? (arc-beam/effect-build-plan :jet-engine {:x 0.0 :y 65.0 :z 0.0} nil 20)))
       (is (empty? (:fx-state (je-fx/jet-engine-fx-snapshot)))))))

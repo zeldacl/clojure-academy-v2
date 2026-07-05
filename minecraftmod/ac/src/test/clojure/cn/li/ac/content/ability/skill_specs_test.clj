@@ -1,9 +1,32 @@
 (ns cn.li.ac.content.ability.skill-specs-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.test :refer [deftest is testing use-fixtures]]
+            [cn.li.ac.ability.discovery :as discovery]
+            [cn.li.ac.ability.runtime-container :as runtime-container]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.registry.skill :as skill]
             [cn.li.ac.ability.registry.skill-query :as skill-query]
-            [cn.li.ac.content.ability :as ability-content]))
+            [cn.li.ac.content.ability :as ability-content]
+            [cn.li.ac.discovery.registry :as discovery-registry]
+            [cn.li.mcmod.framework :as fw]))
+
+(defn- reset-ability-init-fixture [f]
+  (let [prev-fw fw/*framework*
+        guard* (var-get #'ability-content/ability-content-installed?)
+        before @guard*]
+    (try
+      (when-let [fw-inst (fw/create-framework)]
+        (alter-var-root #'fw/*framework* (constantly fw-inst)))
+      (runtime-container/install-ability-runtime-container!
+        (runtime-container/create-ability-runtime-container))
+      (discovery/reset-bootstrap-attempts-for-test!)
+      (discovery-registry/reset-provider-registry-for-test!)
+      (reset! guard* false)
+      (f)
+      (finally
+        (reset! guard* before)
+        (alter-var-root #'fw/*framework* (constantly prev-fw))))))
+
+(use-fixtures :each reset-ability-init-fixture)
 
 (def ^:private configured-skill-ids
   skill-config/all-skill-ids)

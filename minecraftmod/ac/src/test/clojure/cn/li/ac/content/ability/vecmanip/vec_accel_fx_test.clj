@@ -1,5 +1,6 @@
 (ns cn.li.ac.content.ability.vecmanip.vec-accel-fx-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
+            [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.level-effects :as level-effects]
@@ -42,29 +43,21 @@
              @registered-topics*)))))
 
 (deftest update-keeps-preview-state-per-owner-test
-  (let [enqueue-state! (var-get #'cn.li.ac.content.ability.vecmanip.vec-accel-fx/enqueue-state!)]
-    (level-effects/update-effect-state! :vec-accel
-      enqueue-state!
-      (event "ctx-a" {:mode :start :source-player-id "player-a"}))
-    (level-effects/update-effect-state! :vec-accel
-      enqueue-state!
-      (event "ctx-b" {:mode :start :source-player-id "player-b"}))
-    (level-effects/update-effect-state! :vec-accel
-      enqueue-state!
-      (event "ctx-a" {:mode :update
+  (do
+    (arc-beam/enqueue-for-test! :vec-accel "ctx-a" :vec-accel/fx-update {:mode :start :source-player-id "player-a"})
+    (arc-beam/enqueue-for-test! :vec-accel "ctx-b" :vec-accel/fx-update {:mode :start :source-player-id "player-b"})
+    (arc-beam/enqueue-for-test! :vec-accel "ctx-a" :vec-accel/fx-update {:mode :update
                        :charge-ticks 12
                        :can-perform? true
                        :look-dir {:x 1.0 :y 0.0 :z 0.0}
                        :init-vel {:x 1.0 :y 0.5 :z 0.0}
-                       :source-player-id "player-a"}))
-    (level-effects/update-effect-state! :vec-accel
-      enqueue-state!
-      (event "ctx-b" {:mode :update
+                       :source-player-id "player-a"})
+    (arc-beam/enqueue-for-test! :vec-accel "ctx-b" :vec-accel/fx-update {:mode :update
                        :charge-ticks 3
                        :can-perform? false
                        :look-dir {:x 0.0 :y 0.0 :z 1.0}
                        :init-vel {:x 0.0 :y 0.5 :z 1.0}
-                       :source-player-id "player-b"}))
+                       :source-player-id "player-b"})
     (let [snapshot (vafx/vec-accel-fx-snapshot)]
       (is (= 12 (:charge-ticks (get (:effect-state snapshot) [:ctx "ctx-a"]))))
       (is (= 3 (:charge-ticks (get (:effect-state snapshot) [:ctx "ctx-b"]))))

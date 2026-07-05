@@ -1,5 +1,6 @@
 (ns cn.li.ac.content.ability.vecmanip.storm-wing-fx-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
+            [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
@@ -55,12 +56,8 @@
                                                             (swap! particle-calls* conj args)
                                                             nil)
                   rand (fn [] 0.5)]
-      (level-effects/update-effect-state! :storm-wing
-        enqueue-state!
-        (event "ctx-main" {:mode :start :source-player-id "player-a"}))
-      (level-effects/update-effect-state! :storm-wing
-        enqueue-state!
-        (event "ctx-main" {:mode :update :phase :flying :charge-ticks 40 :charge-ratio 1.0 :source-player-id "player-a"}))
+      (arc-beam/enqueue-for-test! :storm-wing "ctx-main" :storm-wing/fx-update {:mode :start :source-player-id "player-a"})
+      (arc-beam/enqueue-for-test! :storm-wing "ctx-main" :storm-wing/fx-update {:mode :update :phase :flying :charge-ticks 40 :charge-ratio 1.0 :source-player-id "player-a"})
       (dotimes [_ 10]
         (level-effects/update-effect-state! :storm-wing
           (fn [store _]

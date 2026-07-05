@@ -6,9 +6,8 @@
   scattered beams around silbarn's nearby targets.
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.dsl :refer [defskill]]
+  (:require [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
             [cn.li.ac.ability.fx :as fx]
-            [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.effects.beam :as beam]
@@ -23,22 +22,8 @@
 ;; Helpers
 ;; ---------------------------------------------------------------------------
 
+(def-skill-config-ops :ray-barrage)
 (def ^:private ray-barrage-skill-id :ray-barrage)
-
-(defn- cfg-double [field-id]
-  (skill-config/tunable-double ray-barrage-skill-id field-id))
-
-(defn- cfg-int [field-id]
-  (skill-config/tunable-int ray-barrage-skill-id field-id))
-
-(defn- cfg-lerp [field-id exp]
-  (skill-config/lerp-double ray-barrage-skill-id field-id exp))
-
-(defn- cfg-lerp-int [field-id exp]
-  (skill-config/lerp-int ray-barrage-skill-id field-id exp))
-
-(defn- skill-exp [player-id]
-  (skill-effects/skill-exp player-id ray-barrage-skill-id))
 
 (defn reset-ray-barrage-state-for-test!
   []

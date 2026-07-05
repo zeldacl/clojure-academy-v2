@@ -6,22 +6,14 @@
   Cooldown: lerp(900,600) ticks (manual, applied on successful up �?0 ticks)
   Exp: +0.01 on successful release"
   (:require [clojure.string :as str]
-            [cn.li.ac.ability.dsl :refer [defskill]]
+            [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.mcmod.platform.potion-effects :as potion-effects]))
 
+(def-skill-config-ops :body-intensify)
 (def ^:private body-intensify-skill-id :body-intensify)
-
-(defn- cfg-double [field-id]
-  (skill-config/tunable-double body-intensify-skill-id field-id))
-
-(defn- cfg-int [field-id]
-  (skill-config/tunable-int body-intensify-skill-id field-id))
-
-(defn- cfg-lerp [field-id exp]
-  (skill-config/lerp-double body-intensify-skill-id field-id exp))
 
 (defn- min-time [] (cfg-int :charge.min-ticks))
 (defn- max-time [] (cfg-int :charge.max-ticks))

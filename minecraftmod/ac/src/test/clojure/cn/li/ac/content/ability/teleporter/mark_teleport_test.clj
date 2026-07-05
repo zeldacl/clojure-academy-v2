@@ -62,30 +62,17 @@
                                                :cost.up.overload 20.0
                                                :progression.exp-per-distance 0.00018
                                                0.0))
-                  skill-config/lerp-int (fn [_ _ _] 0)
+                  skill-config/lerp-int (fn [_ field-id _]
+                                          (case field-id
+                                            :cooldown.ticks 600
+                                            0))
                   skill-config/tunable-double (fn [_ field-id]
                                                 (case field-id
-                                                  :targeting.range-per-hold-tick 4.0
                                                   :targeting.min-distance 3.0
+                                                  :targeting.range-per-hold-tick 4.0
                                                   :targeting.eye-height 0.0
+                                                  :progression.exp-per-distance 0.00018
                                                   0.0))
-                  helper/cfg-double (fn [_ field-id]
-                                      (case field-id
-                                        :targeting.min-distance 3.0
-                                        :targeting.range-per-hold-tick 4.0
-                                        :targeting.eye-height 0.0
-                                        :progression.exp-per-distance 0.00018
-                                        0.0))
-                  helper/cfg-lerp (fn [_ field-id _]
-                                    (case field-id
-                                      :targeting.range 60.0
-                                      :cost.up.cp-per-block 4.0
-                                      :cost.up.overload 20.0
-                                      0.0))
-                  helper/cfg-lerp-int (fn [_ field-id _]
-                                        (case field-id
-                                          :cooldown.ticks 600
-                                          0))
                   entity/player-creative? (fn [_] false)
                   teleportation/available? (constantly true)
                   teleportation/get-player-position* (fn [_]
@@ -133,7 +120,6 @@
                   ctx-skill/assoc-skill-state! assoc-skill-state!
                   ctx-skill/clear-skill-state! clear-skill-state!
                   skill-config/tunable-double (fn [_ _] 3.0)
-                  helper/cfg-double (fn [_ _] 3.0)
                   raycast/available? (constantly false)
                   fx/send! (fn [& _] (swap! fx-calls* inc) nil)
                   skill-effects/add-skill-exp! (fn [& _] (swap! exp-calls* inc) nil)
@@ -169,10 +155,6 @@
                                                 (case field-id
                                                   :targeting.min-distance 3.0
                                                   0.0))
-                  helper/cfg-double (fn [_ field-id]
-                                      (case field-id
-                                        :targeting.min-distance 3.0
-                                        0.0))
                   raycast/available? (constantly false)
                   fx/send! (fn [& _] (swap! fx-calls* inc) nil)
                   teleportation/available? (constantly true)
@@ -203,7 +185,6 @@
                   ctx-skill/assoc-skill-state! assoc-skill-state!
                   ctx-skill/clear-skill-state! clear-skill-state!
                   skill-config/tunable-double (fn [_ _] 3.0)
-                  helper/cfg-double (fn [_ _] 3.0)
                   raycast/available? (constantly false)
                   fx/send! (fn [& _] (swap! fx-calls* inc) nil)
                   teleportation/available? (constantly true)

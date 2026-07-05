@@ -14,7 +14,7 @@
   - No overload cost
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.dsl :refer [defskill]]
+  (:require [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
             [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.content.ability.vecmanip.arbitration :as arbitration]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
@@ -28,19 +28,8 @@
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.util.log :as log]))
 
+(def-skill-config-ops :vec-deviation)
 (def ^:private vec-deviation-skill-id :vec-deviation)
-
-(defn- exp01 [exp]
-  (max 0.0 (min 1.0 (double (or exp 0.0)))))
-
-(defn- cfg-double [field-id]
-  (skill-config/tunable-double vec-deviation-skill-id field-id))
-
-(defn- cfg-lerp [field-id exp]
-  (skill-config/lerp-double vec-deviation-skill-id field-id (exp01 exp)))
-
-(defn- cfg-string-set [field-id]
-  (set (skill-config/tunable-string-list vec-deviation-skill-id field-id)))
 
 (defn- parse-difficulty-entry [entry]
   (try
@@ -65,9 +54,6 @@
 
 (defn- small-fireball-ids []
   (cfg-string-set :targeting.small-fireball-ids))
-
-(defn- skill-exp [player-id]
-  (fx-common/skill-exp player-id vec-deviation-skill-id))
 
 (defn- current-cp
   [player-id]
@@ -112,7 +98,6 @@
                       (toggle/is-toggle-active? ctx-data :vec-deviation))))
        first
        first))
-
 
 (defn- set-skill-state-key!
   [ctx-id k v]

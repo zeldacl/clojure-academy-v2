@@ -54,7 +54,9 @@
       (if (get-in state [:registry effect-id]) state
         (-> state (update :order conj effect-id)
             (assoc-in [:registry effect-id] handler-map)
-            (assoc-effect-state effect-id (:initial-state handler-map))))))
+            (assoc-effect-state effect-id
+                               (let [init (:initial-state handler-map)]
+                                 (if (fn? init) (init) init)))))))
   (log/debug "Registered level effect:" effect-id) nil)
 
 (defn freeze-level-effect-registry! []

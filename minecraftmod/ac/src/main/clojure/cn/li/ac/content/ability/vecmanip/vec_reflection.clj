@@ -2,7 +2,7 @@
   "VecReflection skill - advanced reflection (toggle).
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.dsl :refer [defskill]]
+  (:require [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
             [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.content.ability.vecmanip.arbitration :as arbitration]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
@@ -19,6 +19,7 @@
             [cn.li.mcmod.platform.teleportation :as teleportation]
             [cn.li.mcmod.util.log :as log]))
 
+(def-skill-config-ops :vec-reflection)
 (def ^:private vec-reflection-skill-id :vec-reflection)
 
 (def ^:dynamic *reflection-chain-id* nil)
@@ -26,21 +27,6 @@
 (defn- current-reflection-chain-id
   []
   *reflection-chain-id*)
-
-(defn- exp01 [exp]
-  (max 0.0 (min 1.0 (double (or exp 0.0)))))
-
-(defn- cfg-double [field-id]
-  (skill-config/tunable-double vec-reflection-skill-id field-id))
-
-(defn- cfg-lerp [field-id exp]
-  (skill-config/lerp-double vec-reflection-skill-id field-id (exp01 exp)))
-
-(defn- cfg-string-set [field-id]
-  (set (skill-config/tunable-string-list vec-reflection-skill-id field-id)))
-
-(defn- cfg-int [field-id]
-  (skill-config/tunable-int vec-reflection-skill-id field-id))
 
 (defn- parse-difficulty-entry [entry]
   (try
@@ -70,9 +56,6 @@
   [entity-id]
   (or (contains? (large-fireball-ids) entity-id)
       (contains? (small-fireball-ids) entity-id)))
-
-(defn- skill-exp [player-id]
-  (fx-common/skill-exp player-id vec-reflection-skill-id))
 
 (defn- current-cp
   [player-id]
@@ -222,7 +205,6 @@
                       (toggle/is-toggle-active? ctx-data :vec-reflection))))
        first
        first))
-
 
 (defn- set-skill-state-key!
   [ctx-id k v]

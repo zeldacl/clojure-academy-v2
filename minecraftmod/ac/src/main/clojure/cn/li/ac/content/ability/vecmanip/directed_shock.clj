@@ -5,35 +5,19 @@
   Cost on perform: CP lerp(50,100), overload lerp(18,12) by exp
   Cooldown: lerp(60,20) ticks by exp (hit-only)
   Exp: +0.0035 on hit / +0.001 on miss"
-  (:require [cn.li.ac.ability.dsl :refer [defskill]]
+  (:require [cn.li.ac.ability.util.scaling :as scaling]
+            [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
-                        [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.fx :as fx]
                         [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.entity-motion :as entity-motion]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.util.log :as log]))
 
-(def ^:private directed-shock-skill-id :directed-shock)
-
-(defn- exp01 [exp]
-  (max 0.0 (min 1.0 (double (or exp 0.0)))))
-
-(defn- cfg-double [field-id]
-  (skill-config/tunable-double directed-shock-skill-id field-id))
-
-(defn- cfg-int [field-id]
-  (skill-config/tunable-int directed-shock-skill-id field-id))
-
-(defn- cfg-lerp [field-id exp]
-  (skill-config/lerp-double directed-shock-skill-id field-id (exp01 exp)))
-
-(defn- cfg-lerp-int [field-id exp]
-  (skill-config/lerp-int directed-shock-skill-id field-id (exp01 exp)))
-
+(def-skill-config-ops :directed-shock)
 (defn- entity-trace
   [player-id]
   (when (raycast/available?)
@@ -42,20 +26,12 @@
                                  (cfg-double :targeting.raycast-distance)
                                  true)))
 
-(defn- set-skill-state-root!
-  [ctx-id state-map]
-  (ctx-skill/update-skill-state-root! ctx-id identity state-map))
-
-(defn- clear-skill-state!
-  [ctx-id]
-  (ctx-skill/clear-skill-state! ctx-id))
-
 (defn- terminate-with-end!
   [ctx-id performed?]
   (fx/send! ctx-id {:topic :directed-shock/fx-end :mode :end} nil {:performed? performed?})
   (when-let [ctx-data (ctx-skill/get-context ctx-id)]
-    (set-skill-state-root! ctx-id (assoc (:skill-state ctx-data) :performed? performed?)))
-  (clear-skill-state! ctx-id)
+    (ctx-skill/replace-skill-state! ctx-id (assoc (:skill-state ctx-data) :performed? performed?)))
+  (ctx-skill/clear-skill-state! ctx-id)
   (ctx/terminate-context! ctx-id nil))
 
 (defn- hit-impulse [caster-pos hit-pos]
@@ -95,7 +71,7 @@
               :overload (fn [{:keys [exp]}] (cfg-lerp :cost.up.overload exp))}}
   :actions
   {:down! (fn [{:keys [ctx-id]}]
-            (set-skill-state-root! ctx-id
+            (ctx-skill/replace-skill-state! ctx-id
                                    {:charge-ticks 0
                                     :performed? false
                                     :punched? false
@@ -105,17 +81,17 @@
             (when-let [ctx-data (ctx-skill/get-context ctx-id)]
               (if (true? (get-in ctx-data [:skill-state :punched?]))
                 (let [next-punch (inc (long (or (get-in ctx-data [:skill-state :punch-ticks]) 0)))]
-                  (set-skill-state-root! ctx-id (assoc (:skill-state ctx-data) :punch-ticks next-punch))
+                  (ctx-skill/replace-skill-state! ctx-id (assoc (:skill-state ctx-data) :punch-ticks next-punch))
                   (when (> next-punch (cfg-int :charge.punch-anim-ticks))
                     (terminate-with-end! ctx-id true)))
                 (let [next-charge (inc (long (or (get-in ctx-data [:skill-state :charge-ticks]) 0)))]
-                  (set-skill-state-root! ctx-id (assoc (:skill-state ctx-data) :charge-ticks next-charge))
+                  (ctx-skill/replace-skill-state! ctx-id (assoc (:skill-state ctx-data) :charge-ticks next-charge))
                   (when (>= next-charge (cfg-int :charge.max-tolerant-ticks))
                     (terminate-with-end! ctx-id false))))))
    :up! (fn [{:keys [player-id ctx-id exp cost-ok?]}]
           (when-let [ctx-data (ctx-skill/get-context ctx-id)]
             (let [charge-ticks (long (or (get-in ctx-data [:skill-state :charge-ticks]) 0))
-                  exp* (exp01 exp)]
+                  exp* (scaling/clamp-exp exp)]
               (if (and (> charge-ticks (cfg-int :charge.min-ticks))
                        (< charge-ticks (cfg-int :charge.max-accepted-ticks)))
                 (if-not cost-ok?
@@ -145,7 +121,7 @@
                                            :world-id world-id
                                            :impulse impulse
                                            :knockback knockback})
-                           (set-skill-state-root! ctx-id
+                           (ctx-skill/replace-skill-state! ctx-id
                                    (merge (:skill-state ctx-data)
                                      {:performed? true
                                       :punched? true

@@ -33,7 +33,7 @@
                     ctx-skill/update-skill-state-root! update-skill-state-root!
                     ctx-skill/assoc-skill-state! assoc-skill-state!
                     ctx-skill/clear-skill-state! clear-skill-state!
-                    helper/skill-exp (fn [_ _] 0.5)
+                    skill-effects/skill-exp (fn [_ _] 0.5)
                     skill-config/lerp-int (fn [_ field-id _]
                                             (case field-id
                                               :timing.max-active-ticks 90
@@ -69,7 +69,7 @@
                     fx/send! (fn [_ctx-id entry _evt payload]
                                (swap! fx* conj [(:topic entry) payload])
                                nil)
-                    helper/skill-exp (fn [_ _] 0.5)
+                    skill-effects/skill-exp (fn [_ _] 0.5)
                     skill-config/lerp-double (fn [_ field-id _]
                                              (case field-id
                                                :movement.blink-distance 4.0
@@ -84,7 +84,7 @@
                                               :timing.post-blink-fall-protect-ticks 40
                                               :cooldown.deactivate-ticks 500
                                               0))
-                    helper/cfg-double (fn [_ _] 0.001)
+                    skill-config/tunable-double (fn [_ _] 0.001)
                     skill-effects/current-cp (fn [_] 100.0)
                     skill-effects/player-path (fn [_ _ _] 33.0)
                     skill-effects/enforce-overload-floor! (fn [& _] true)
@@ -129,7 +129,7 @@
                     ctx-skill/update-skill-state-root! update-skill-state-root!
                     ctx-skill/assoc-skill-state! assoc-skill-state!
                     ctx-skill/clear-skill-state! clear-skill-state!
-                    helper/skill-exp (fn [_ _] 0.5)
+                    skill-effects/skill-exp (fn [_ _] 0.5)
                     skill-config/lerp-int (fn [_ field-id _]
                                             (case field-id
                                               :timing.max-active-ticks 80
@@ -158,7 +158,7 @@
                     fx/send! (fn [_ctx-id entry _evt payload]
                                (swap! fx* conj [(:topic entry) payload])
                                nil)
-                    helper/skill-exp (fn [_ _] 0.5)
+                    skill-effects/skill-exp (fn [_ _] 0.5)
                     skill-config/lerp-double (fn [_ field-id _]
                                              (case field-id
                                                :movement.blink-distance 12.0

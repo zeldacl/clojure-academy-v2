@@ -11,12 +11,11 @@
   Exp: +0.0004 per damage absorbed
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.dsl :refer [defskill]]
+  (:require [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
                         [cn.li.ac.ability.util.toggle :as toggle]
-            [cn.li.ac.ability.util.scaling :as scaling]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.server.damage.handler :as damage-handler]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
@@ -32,23 +31,9 @@
 ;; Helpers
 ;; ---------------------------------------------------------------------------
 
+(def-skill-config-ops :light-shield)
 (def ^:private light-shield-skill-id :light-shield)
 (def ^:private light-shield-state-key :light-shield)
-
-(defn- cfg-double [field-id]
-  (skill-config/tunable-double light-shield-skill-id field-id))
-
-(defn- cfg-int [field-id]
-  (skill-config/tunable-int light-shield-skill-id field-id))
-
-(defn- cfg-lerp [field-id exp]
-  (skill-config/lerp-double light-shield-skill-id field-id exp))
-
-(defn- cfg-lerp-int [field-id exp]
-  (skill-config/lerp-int light-shield-skill-id field-id exp))
-
-(defn- skill-exp [player-id]
-  (skill-effects/skill-exp player-id light-shield-skill-id))
 
 (defn- state-path
   [& ks]
@@ -92,7 +77,6 @@
   [player-id ctx-data]
   (when-let [floor (get-in ctx-data (state-path :overload-floor))]
     (skill-effects/enforce-overload-floor! player-id floor)))
-
 
 (defn- set-shield-state-path!
   [ctx-id ks v]
@@ -263,7 +247,6 @@
 
 (defn init!
   []
-  (md-damage/init!)
   (damage-handler/register-toggle-damage-handler!
     :light-shield-damage
     :light-shield

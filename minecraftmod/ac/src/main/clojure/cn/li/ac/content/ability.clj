@@ -13,6 +13,8 @@
             [cn.li.ac.ability.server.damage.runtime :as damage-runtime]
             [cn.li.ac.ability.item-actions :as item-actions]
             [cn.li.ac.ability.spi-lifecycle :as lifecycle]
+            [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
+            [cn.li.ac.content.ability.teleporter.passive-hooks :as tp-passive]
             [cn.li.ac.util.init-guard :refer [defonce-guard]]
             [cn.li.mcmod.util.log :as log]))
 
@@ -126,6 +128,8 @@
         (register-declared-skills! skill-namespaces)
         (doseq [ns-sym skill-namespaces]
           (run-namespace-init! ns-sym)))
+      (md-damage/init!)
+      (tp-passive/register-passive-hooks!)
       ;; Register generic item actions (not skill-specific)
       (item-actions/register-item-action! "ac:app_skill_tree" :open-skill-tree)
       (discovery/freeze-provider-discovery!)

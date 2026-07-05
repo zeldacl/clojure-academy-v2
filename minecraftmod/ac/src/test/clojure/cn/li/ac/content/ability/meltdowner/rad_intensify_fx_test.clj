@@ -1,5 +1,6 @@
 (ns cn.li.ac.content.ability.meltdowner.rad-intensify-fx-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
+            [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.content.ability.meltdowner.rad-intensify-fx :as rad-fx]
@@ -59,43 +60,25 @@
              @enqueued*)))))
 
 (deftest mark-ttl-decays-and-expires-test
-  (let [enqueue-state! (var-get #'cn.li.ac.content.ability.meltdowner.rad-intensify-fx/enqueue-state!)
-        tick-state! (var-get #'cn.li.ac.content.ability.meltdowner.rad-intensify-fx/tick-state!)
-        build-plan (var-get #'cn.li.ac.content.ability.meltdowner.rad-intensify-fx/build-plan)]
-    (with-redefs [rand-int (fn [_] 2)]
-      (level-effects/update-effect-state! :rad-intensify-mark
-        enqueue-state!
-        {:payload {:target-id "target-1" :ticks-left 3 :x 3.0 :y 65.0 :z 7.0}
-         :ctx-id "ctx-a"
-         :owner-key [:ctx "ctx-a"]})
+  (with-redefs [rand-int (fn [_] 2)]
+    (arc-beam/enqueue-for-test! :rad-intensify-mark "ctx-a" :rad-intensify/fx-mark
+      {:target-id "target-1" :ticks-left 3 :x 3.0 :y 65.0 :z 7.0})
       (is (= 3 (get-in (rad-fx/rad-intensify-fx-snapshot)
                        [:marks [[:ctx "ctx-a"] "target-1"] :ticks-left])))
-      (is (seq (:ops (build-plan {:x 0.0 :y 65.0 :z 0.0} nil 0))))
+      (is (seq (:ops (arc-beam/effect-build-plan :rad-intensify-mark {:x 0.0 :y 65.0 :z 0.0} nil 0))))
       (dotimes [_ 3]
         (level-effects/update-effect-state! :rad-intensify-mark
-          (fn [store _]
-            (tick-state! store))
-          nil))
+          (fn [store] (arc-beam/effect-tick-state! :level :rad-intensify-mark store))))
       (is (empty? (:marks (rad-fx/rad-intensify-fx-snapshot))))
-      (is (nil? (build-plan {:x 0.0 :y 65.0 :z 0.0} nil 0))))))
+      (is (nil? (arc-beam/effect-build-plan :rad-intensify-mark {:x 0.0 :y 65.0 :z 0.0} nil 0)))))
 
 (deftest multi-target-state-isolated-test
-  (let [enqueue-state! (var-get #'cn.li.ac.content.ability.meltdowner.rad-intensify-fx/enqueue-state!)
-        tick-state! (var-get #'cn.li.ac.content.ability.meltdowner.rad-intensify-fx/tick-state!)]
-    (level-effects/update-effect-state! :rad-intensify-mark
-      enqueue-state!
-      {:payload {:target-id "target-a" :ticks-left 5 :x 1.0 :y 64.0 :z 1.0}
-       :ctx-id "ctx-a"
-       :owner-key [:ctx "ctx-a"]})
-    (level-effects/update-effect-state! :rad-intensify-mark
-      enqueue-state!
-      {:payload {:target-id "target-b" :ticks-left 1 :x 2.0 :y 64.0 :z 2.0}
-       :ctx-id "ctx-b"
-       :owner-key [:ctx "ctx-b"]})
-    (level-effects/update-effect-state! :rad-intensify-mark
-      (fn [store _]
-        (tick-state! store))
-      nil)
+  (arc-beam/enqueue-for-test! :rad-intensify-mark "ctx-a" :rad-intensify/fx-mark
+    {:target-id "target-a" :ticks-left 5 :x 1.0 :y 64.0 :z 1.0})
+  (arc-beam/enqueue-for-test! :rad-intensify-mark "ctx-b" :rad-intensify/fx-mark
+    {:target-id "target-b" :ticks-left 1 :x 2.0 :y 64.0 :z 2.0})
+  (level-effects/update-effect-state! :rad-intensify-mark
+    (fn [store] (arc-beam/effect-tick-state! :level :rad-intensify-mark store)))
     (let [snapshot (rad-fx/rad-intensify-fx-snapshot)]
       (is (contains? (:marks snapshot) [[:ctx "ctx-a"] "target-a"]))
-      (is (not (contains? (:marks snapshot) [[:ctx "ctx-b"] "target-b"]))))))
+      (is (not (contains? (:marks snapshot) [[:ctx "ctx-b"] "target-b"])))))

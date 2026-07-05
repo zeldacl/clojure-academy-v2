@@ -1,5 +1,7 @@
 (ns cn.li.ac.content.ability.teleporter.space-fluct
-  "Teleporter passive placeholder. Crit logic is implemented in tp-skill-helper."
+  "Teleporter passive: Space Fluctuation.
+
+  Contributes crit probability at all levels via passive-hooks."
   (:require [cn.li.ac.ability.dsl :refer [defskill]]))
 
 (defskill space-fluct

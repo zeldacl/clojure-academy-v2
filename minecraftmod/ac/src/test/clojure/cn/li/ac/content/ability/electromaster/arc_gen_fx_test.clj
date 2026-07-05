@@ -2,13 +2,12 @@
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
+            [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.content.ability.electromaster.arc-gen-fx :as arc-fx]))
 
 (defn- invoke-level-enqueue! [ctx-id channel payload]
-  (let [enqueue-state! (var-get #'cn.li.ac.content.ability.electromaster.arc-gen-fx/enqueue-state!)]
-    (level-effects/update-effect-state! :arc-gen
-      (fn [store] (enqueue-state! store ctx-id channel [:ctx ctx-id] payload)))))
+  (arc-beam/enqueue-for-test! :arc-gen ctx-id channel payload))
 
 (defn- with-fresh-arc-gen-fx-runtime [f]
   (try
@@ -58,7 +57,13 @@
              @enqueued*)))))
 
 (deftest enqueue-perform-adds-arc-and-plays-sound-test
-  (let [build-plan (var-get #'cn.li.ac.content.ability.electromaster.arc-gen-fx/build-plan)
+  (let [spec (arc-beam/build-spec
+               {:effect-id :arc-gen
+                :sound-id "my_mod:em.arc_weak"
+                :arc-life 10
+                :arc-pattern :weak
+                :channels []})
+        build-plan (:build-plan-fn (:level spec))
         sounds* (atom [])]
     (with-redefs [client-sounds/queue-current-sound-effect! (fn [payload]
                                                                (swap! sounds* conj payload)
@@ -94,5 +99,6 @@
         (is (= 1 (count (get (:arcs after-clear) [:ctx "ctx-b"]))))))))
 
 (deftest arc-gen-fx-snapshot-default-without-registered-state-test
+  (arc-fx/reset-arc-gen-fx-for-test!)
   (is (= {:arcs {}}
          (arc-fx/arc-gen-fx-snapshot))))

@@ -1,5 +1,6 @@
 (ns cn.li.ac.content.ability.vecmanip.vec-deviation-fx-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
+            [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.level-effects :as level-effects]
@@ -42,16 +43,12 @@
              @registered-topics*)))))
 
 (deftest enqueue-stop-entity-requires-marked-flag-test
-  (let [enqueue-state! (var-get #'cn.li.ac.content.ability.vecmanip.vec-deviation-fx/enqueue-state!)]
-    (is (= (vdfx/default-vec-deviation-fx-runtime-state)
+  (do
+    (is (= {:effect-state {} :wave-effects {}}
            (vdfx/vec-deviation-fx-snapshot)))
-    (level-effects/update-effect-state! :vec-deviation
-      enqueue-state!
-      (event "ctx-main" {:mode :stop-entity :x 1.0 :y 2.0 :z 3.0 :marked? false}))
+    (arc-beam/enqueue-for-test! :vec-deviation "ctx-main" :vec-deviation/fx-stop-entity {:mode :stop-entity :x 1.0 :y 2.0 :z 3.0 :marked? false})
     (is (empty? (:wave-effects (vdfx/vec-deviation-fx-snapshot))))
-    (level-effects/update-effect-state! :vec-deviation
-      enqueue-state!
-      (event "ctx-main" {:mode :stop-entity :x 1.0 :y 2.0 :z 3.0 :marked? true}))
+    (arc-beam/enqueue-for-test! :vec-deviation "ctx-main" :vec-deviation/fx-stop-entity {:mode :stop-entity :x 1.0 :y 2.0 :z 3.0 :marked? true})
     (let [waves (get (:wave-effects (vdfx/vec-deviation-fx-snapshot)) [:ctx "ctx-main"])]
       (is (= 1 (count waves)))
       (is (= 3.0 (:z (first waves)))))))
@@ -97,19 +94,11 @@
              @enqueued*)))))
 
 (deftest two-owners-keep-vec-deviation-state-and-waves-independent-test
-  (let [enqueue-state! (var-get #'cn.li.ac.content.ability.vecmanip.vec-deviation-fx/enqueue-state!)]
-    (level-effects/update-effect-state! :vec-deviation
-      enqueue-state!
-      (event "ctx-a" {:mode :start :source-player-id "player-a"}))
-    (level-effects/update-effect-state! :vec-deviation
-      enqueue-state!
-      (event "ctx-b" {:mode :start :source-player-id "player-b"}))
-    (level-effects/update-effect-state! :vec-deviation
-      enqueue-state!
-      (event "ctx-a" {:mode :stop-entity :x 1.0 :y 64.0 :z 1.0 :marked? true :source-player-id "player-a"}))
-    (level-effects/update-effect-state! :vec-deviation
-      enqueue-state!
-      (event "ctx-b" {:mode :stop-entity :x 2.0 :y 64.0 :z 2.0 :marked? true :source-player-id "player-b"}))
+  (do
+    (arc-beam/enqueue-for-test! :vec-deviation "ctx-a" :vec-deviation/fx-stop-entity {:mode :start :source-player-id "player-a"})
+    (arc-beam/enqueue-for-test! :vec-deviation "ctx-b" :vec-deviation/fx-stop-entity {:mode :start :source-player-id "player-b"})
+    (arc-beam/enqueue-for-test! :vec-deviation "ctx-a" :vec-deviation/fx-stop-entity {:mode :stop-entity :x 1.0 :y 64.0 :z 1.0 :marked? true :source-player-id "player-a"})
+    (arc-beam/enqueue-for-test! :vec-deviation "ctx-b" :vec-deviation/fx-stop-entity {:mode :stop-entity :x 2.0 :y 64.0 :z 2.0 :marked? true :source-player-id "player-b"})
     (let [snapshot (vdfx/vec-deviation-fx-snapshot)]
       (is (:active? (get (:effect-state snapshot) [:ctx "ctx-a"])))
       (is (:active? (get (:effect-state snapshot) [:ctx "ctx-b"])))

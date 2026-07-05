@@ -5,9 +5,9 @@
   Cost on perform: CP lerp(160,200), overload lerp(50,30) by exp
   Cooldown: lerp(80,50) ticks by exp
   Exp: +0.0025 on hit / +0.0012 on miss"
-  (:require            [cn.li.ac.ability.dsl :refer [defskill]]
+  (:require            [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
+            [cn.li.ac.ability.util.scaling :as scaling]
             [cn.li.ac.ability.fx :as fx]
-            [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
                         [cn.li.ac.ability.effects.geom :as geom]
@@ -19,43 +19,16 @@
             [cn.li.mcmod.platform.block-manipulation :as block-manip]
             [cn.li.mcmod.util.log :as log]))
 
-(def ^:private directed-blastwave-skill-id :directed-blastwave)
-
-(defn- exp01 [exp]
-  (max 0.0 (min 1.0 (double (or exp 0.0)))))
-
-(defn- cfg-double [field-id]
-  (skill-config/tunable-double directed-blastwave-skill-id field-id))
-
-(defn- cfg-int [field-id]
-  (skill-config/tunable-int directed-blastwave-skill-id field-id))
-
-(defn- cfg-double-list [field-id]
-  (skill-config/tunable-double-list directed-blastwave-skill-id field-id))
-
-(defn- cfg-lerp [field-id exp]
-  (skill-config/lerp-double directed-blastwave-skill-id field-id (exp01 exp)))
-
-(defn- cfg-lerp-int [field-id exp]
-  (skill-config/lerp-int directed-blastwave-skill-id field-id (exp01 exp)))
-
+(def-skill-config-ops :directed-blastwave)
 (defn- player-body-pos [player-id]
   (geom/body-pos player-id))
-
-(defn- set-skill-state-root!
-  [ctx-id state-map]
-  (ctx-skill/update-skill-state-root! ctx-id identity state-map))
-
-(defn- clear-skill-state!
-  [ctx-id]
-  (ctx-skill/clear-skill-state! ctx-id))
 
 (defn- terminate-with-end!
   [ctx-id performed?]
   (fx/send! ctx-id {:topic :directed-blastwave/fx-end :mode :end} nil {:performed? performed?})
   (when-let [ctx-data (ctx-skill/get-context ctx-id)]
-    (set-skill-state-root! ctx-id (assoc (:skill-state ctx-data) :performed? performed?)))
-  (clear-skill-state! ctx-id)
+    (ctx-skill/replace-skill-state! ctx-id (assoc (:skill-state ctx-data) :performed? performed?)))
+  (ctx-skill/clear-skill-state! ctx-id)
   (ctx/terminate-context! ctx-id nil))
 
 (defn- hit-pos-from-trace [player-id trace]
@@ -110,7 +83,7 @@
           hard-cap  (break-hardness exp)
           p-break   (cfg-lerp :breaking.break-probability exp)
           p-drop    (cfg-lerp :breaking.drop-probability exp)
-          full-exp? (= 1.0 (double (exp01 exp)))]
+          full-exp? (= 1.0 (double (scaling/clamp-exp exp)))]
       (doseq [x (range (- x0 3) (+ x0 3))
               y (range (- y0 3) (+ y0 3))
               z (range (- z0 3) (+ z0 3))]
@@ -146,7 +119,7 @@
                      :overload (fn [{:keys [exp]}] (cfg-lerp :cost.up.overload exp))}}
   :actions
   {:down!  (fn [{:keys [ctx-id]}]
-             (set-skill-state-root! ctx-id
+             (ctx-skill/replace-skill-state! ctx-id
                                     {:charge-ticks 0 :punched? false
                                      :punch-ticks 0 :performed? false})
              (fx/send! ctx-id {:topic :directed-blastwave/fx-start :mode :start})
@@ -157,7 +130,7 @@
                      next-charge (inc (long (or (:charge-ticks ss) 0)))
                      punched?    (boolean (:punched? ss))
                      next-punch  (if punched? (inc (long (or (:punch-ticks ss) 0))) 0)]
-                 (set-skill-state-root! ctx-id (assoc ss :charge-ticks next-charge :punch-ticks next-punch))
+                 (ctx-skill/replace-skill-state! ctx-id (assoc ss :charge-ticks next-charge :punch-ticks next-punch))
                  (fx/send! ctx-id {:topic :directed-blastwave/fx-update :mode :update} nil
                            {:charge-ticks (long (max 0 next-charge))
                             :punched? punched?})
@@ -169,7 +142,7 @@
    :up!    (fn [{:keys [player-id ctx-id exp cost-ok?]}]
              (when-let [ctx-data (ctx-skill/get-context ctx-id)]
                (let [charge-ticks (long (or (get-in ctx-data [:skill-state :charge-ticks]) 0))
-                     exp*         (exp01 exp)]
+                     exp*         (scaling/clamp-exp exp)]
                  (if (and (> charge-ticks (cfg-int :charge.min-ticks))
                           (< charge-ticks (cfg-int :charge.max-accepted-ticks)))
                    (if-not cost-ok?
@@ -206,7 +179,7 @@
                        (fx/send! ctx-id {:topic :directed-blastwave/fx-perform :mode :perform} nil {:pos hit-pos
                                           :look-dir (or look {:x 0.0 :y 0.0 :z 1.0})
                                           :charge-ticks (long (max 0 charge-ticks))})
-                        (set-skill-state-root! ctx-id
+                        (ctx-skill/replace-skill-state! ctx-id
                                 (assoc (:skill-state ctx-data)
                                   :punched? true :punch-ticks 0 :performed? true))
                        (skill-effects/set-main-cooldown!
@@ -221,5 +194,4 @@
    :abort! (fn [{:keys [ctx-id]}]
              (terminate-with-end! ctx-id false))}
   :prerequisites [{:skill-id :groundshock :min-exp 0.0}])
-
 

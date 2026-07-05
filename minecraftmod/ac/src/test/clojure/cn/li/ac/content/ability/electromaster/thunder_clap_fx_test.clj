@@ -1,5 +1,6 @@
 (ns cn.li.ac.content.ability.electromaster.thunder-clap-fx-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
+            [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.content.ability.electromaster.thunder-clap-fx :as thunder-clap-fx]))
@@ -114,54 +115,41 @@
              @enqueued*)))))
 
 (deftest start-update-perform-end-manage-state-test
-  (let [enqueue-state! (var-get #'cn.li.ac.content.ability.electromaster.thunder-clap-fx/enqueue-state!)]
-    (level-effects/update-effect-state! :thunder-clap
-      enqueue-state!
-      (event "ctx-a" :thunder-clap/fx-start {:mode :start :source-player-id "player-a"}))
-    (level-effects/update-effect-state! :thunder-clap
-      enqueue-state!
-      (event "ctx-a" :thunder-clap/fx-update {:mode :update
+  (do
+    (arc-beam/enqueue-for-test! :thunder-clap "ctx-a" :thunder-clap/fx-start {:mode :start :source-player-id "player-a"})
+    (arc-beam/enqueue-for-test! :thunder-clap "ctx-a" :thunder-clap/fx-update {:mode :update
                                                 :ticks 10
                                                 :charge-ratio 0.5
                                                 :target {:x 1.0 :y 64.0 :z 0.0}
-                                                :source-player-id "player-a"}))
+                                                :source-player-id "player-a"})
     (is (some? (get-in (thunder-clap-fx/thunder-clap-fx-snapshot) [:effect-state [:ctx "ctx-a"]])))
-    (level-effects/update-effect-state! :thunder-clap
-      enqueue-state!
-      (event "ctx-a" :thunder-clap/fx-perform {:mode :perform
+    (arc-beam/enqueue-for-test! :thunder-clap "ctx-a" :thunder-clap/fx-perform {:mode :perform
                                                 :performed? true
                                                 :ticks 12
                                                 :charge-ratio 0.6
                                                 :target {:x 1.0 :y 64.0 :z 0.0}
-                                                :source-player-id "player-a"}))
+                                                :source-player-id "player-a"})
     (is (some? (get-in (thunder-clap-fx/thunder-clap-fx-snapshot) [:impacts [:ctx "ctx-a"]])))
-    (level-effects/update-effect-state! :thunder-clap
-      enqueue-state!
-      (event "ctx-a" :thunder-clap/fx-end {:mode :end
+    (arc-beam/enqueue-for-test! :thunder-clap "ctx-a" :thunder-clap/fx-end {:mode :end
                                             :performed? true
-                                            :source-player-id "player-a"}))
+                                            :source-player-id "player-a"})
     (let [snapshot (thunder-clap-fx/thunder-clap-fx-snapshot)]
       (is (nil? (get-in snapshot [:effect-state [:ctx "ctx-a"]])))
       (is (some? (get-in snapshot [:impacts [:ctx "ctx-a"]]))))))
 
 (deftest perform-spawns-short-impact-ops-test
-  (let [enqueue-state! (var-get #'cn.li.ac.content.ability.electromaster.thunder-clap-fx/enqueue-state!)
-        build-plan (var-get #'cn.li.ac.content.ability.electromaster.thunder-clap-fx/build-plan)
-        tick-state! (var-get #'cn.li.ac.content.ability.electromaster.thunder-clap-fx/tick-state!)]
-    (level-effects/update-effect-state! :thunder-clap
-      enqueue-state!
-      (event "ctx-p" :thunder-clap/fx-perform {:mode :perform
+  (do
+    (arc-beam/enqueue-for-test! :thunder-clap "ctx-p" :thunder-clap/fx-perform {:mode :perform
                                                 :performed? true
                                                 :ticks 40
                                                 :charge-ratio 0.8
                                                 :target {:x 2.0 :y 70.0 :z 3.0}
-                                                :source-player-id "player-a"}))
-    (let [plan (build-plan {:x 0.0 :y 65.0 :z 0.0} nil 0)]
+                                                :source-player-id "player-a"})
+    (let [plan (arc-beam/effect-build-plan :thunder-clap {:x 0.0 :y 65.0 :z 0.0} nil 0)]
       (is (seq (:ops plan))))
     (level-effects/update-effect-state! :thunder-clap
-      (fn [store _]
-        (tick-state! store))
+      (fn [store] (arc-beam/effect-tick-state! :level :thunder-clap store))
       nil)
-    (is (seq (:ops (build-plan {:x 0.0 :y 65.0 :z 0.0} nil 0))))))
+    (is (seq (:ops (arc-beam/effect-build-plan :thunder-clap {:x 0.0 :y 65.0 :z 0.0} nil 0))))))
 
 

@@ -1,5 +1,6 @@
 (ns cn.li.ac.content.ability.electromaster.mag-movement-fx-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
+            [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.level-effects :as level-effects]
@@ -7,14 +8,11 @@
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (defn- invoke-level-enqueue! [ctx-id channel payload]
-  (let [enqueue-state! (var-get #'cn.li.ac.content.ability.electromaster.mag-movement-fx/enqueue-state!)]
-    (level-effects/update-effect-state! :mag-movement
-      (fn [store] (enqueue-state! store ctx-id channel [:ctx ctx-id] payload)))))
+  (arc-beam/enqueue-for-test! :mag-movement ctx-id channel payload))
 
-(defn- invoke-tick!
-  []
-  (let [tick-state! (var-get #'cn.li.ac.content.ability.electromaster.mag-movement-fx/tick-state!)]
-    (level-effects/update-effect-state! :mag-movement tick-state!)))
+(defn- invoke-tick! []
+  (level-effects/update-effect-state! :mag-movement
+    (fn [store] (arc-beam/effect-tick-state! :level :mag-movement store))))
 
 (defn- reset-fixture [f]
   (runtime-hooks/with-client-ctx {:session-id :test-session}

@@ -37,7 +37,7 @@
                                              :entity-y 2.0
                                              :entity-z 3.0})
                     geom/world-id-of (fn [_] "minecraft:overworld")
-                    helper/skill-exp (fn [_ _] 0.5)]
+                    skill-effects/skill-exp (fn [_ _] 0.5)]
          (flesh/flesh-ripping-tick! {:player-id "p1" :ctx-id "ctx-0" :hold-ticks 7})))
     (is (= 7 (get-in @ctx* [:skill-state :hold-ticks])))
     (is (= {:world-id "minecraft:overworld"
@@ -75,18 +75,18 @@
                     ctx-skill/update-skill-state-root! update-skill-state-root!
                     ctx-skill/assoc-skill-state! assoc-skill-state!
                     ctx-skill/clear-skill-state! clear-skill-state!
-                    helper/skill-exp (fn [_ _] 0.5)
+                    skill-effects/skill-exp (fn [_ _] 0.5)
                     skill-config/lerp-double (fn [_ field-id _]
                                              (case field-id
                                                :combat.damage 8.0
                                                :cooldown.ticks 20.0
                                                0.0))
                     skill-config/lerp-int (fn [_ _ _] 20)
-                    helper/cfg-double (fn [_ field-id]
-                                        (case field-id
-                                          :progression.exp-hit 0.003
-                                          0.0))
-                    helper/cfg-lerp-int (fn [& _] 20)
+                    skill-config/tunable-double (fn [_ field-id]
+                                                (case field-id
+                                                  :progression.exp-hit 0.003
+                                                  0.0))
+                    skill-config/lerp-int (fn [& _] 20)
                     skill-config/probability (fn [_ _] 0.0)
                     skill-config/tunable-int (fn [_ field-id]
                                                (case field-id
@@ -153,7 +153,7 @@
                     ctx-skill/assoc-skill-state! assoc-skill-state!
                     ctx-skill/update-skill-state-root! update-skill-state-root!
                     ctx-skill/clear-skill-state! clear-skill-state!
-                    helper/skill-exp (fn [_ _] 0.5)
+                    skill-effects/skill-exp (fn [_ _] 0.5)
                     skill-config/lerp-double (fn [_ _ _] 0.0)
                     skill-config/lerp-int (fn [_ _ _] 20)
                     skill-config/tunable-double (fn [_ _] 0.003)
@@ -194,8 +194,8 @@
         fx-calls* (atom 0)]
     (with-flesh-env
       #(with-redefs [ctx/get-context get-context
-                    helper/skill-exp (fn [_ _] 0.5)
-                    helper/cfg-lerp (fn [_ _ _] 0.0)
+                    skill-effects/skill-exp (fn [_ _] 0.5)
+                    skill-config/lerp-double (fn [_ _ _] 0.0)
                     helper/deal-magic-damage! (fn [& _] (swap! damage-calls* inc))
                     skill-effects/add-skill-exp! (fn [& _] (swap! exp-calls* inc))
                     skill-effects/set-main-cooldown! (fn [& _] (swap! cooldown-calls* inc))
@@ -214,8 +214,8 @@
     (with-flesh-env
       #(with-redefs [ctx/get-context (fn ([_ctx-id] {:skill-state {:trace nil}})
                                        ([_ _ctx-id] {:skill-state {:trace nil}}))
-                    helper/skill-exp (fn [_ _] 0.5)
-                    helper/cfg-lerp (fn [_ _ _] 0.0)
+                    skill-effects/skill-exp (fn [_ _] 0.5)
+                    skill-config/lerp-double (fn [_ _ _] 0.0)
                     helper/raycast-entity (fn [_ _] nil)
                     helper/deal-magic-damage! (fn [& _] (swap! damage-calls* inc))
                     skill-effects/add-skill-exp! (fn [& _] (swap! exp-calls* inc))

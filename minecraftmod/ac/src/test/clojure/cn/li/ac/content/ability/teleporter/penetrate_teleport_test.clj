@@ -7,13 +7,16 @@
             [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
             [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.test.support.fx-mocks :as fx-mocks]
+            [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.ac.test.support.skill-context :as skill-ctx]
             [cn.li.ac.content.ability.teleporter.penetrate-teleport :as pt]
             [cn.li.ac.content.ability.teleporter.tp-skill-helper :as helper]
             [cn.li.ac.ability.effects.geom :as geom]))
 
 (defn- with-pt-env [f]
-  (skill-ctx/with-server-skill-context f))
+  (ps-fix/with-test-player-state-owner
+    (fn []
+      (skill-ctx/with-server-skill-context f))))
 
 (defn- make-context-mocks [initial]
   (let [base (skill-ctx/content-ctx-mocks initial)
@@ -34,15 +37,11 @@
                     ctx-skill/update-skill-state-root! update-skill-state-root!
                     ctx-skill/assoc-skill-state! assoc-skill-state!
                     ctx-skill/clear-skill-state! clear-skill-state!
-                    helper/skill-exp (fn [_ _] 0.2)
+                    skill-effects/skill-exp (fn [_ _] 0.2)
                     skill-config/lerp-double (fn [_ field-id _]
                                                (case field-id
                                                  :targeting.max-distance 20.0
                                                  0.0))
-                    helper/cfg-lerp (fn [_ field-id _]
-                                      (case field-id
-                                        :targeting.max-distance 20.0
-                                        0.0))
                     pt/resolve-preview (fn [_player-id desired]
                                          {:distance desired
                                           :cp-per-block 10.0
@@ -60,6 +59,7 @@
                                            :up-resolve {:distance 3.0}}})]
     (with-pt-env
       #(with-redefs [ctx/get-context get-context
+                    ctx-skill/get-context get-context
                     ctx-skill/update-skill-state-root! update-skill-state-root!
                     ctx-skill/assoc-skill-state! assoc-skill-state!
                     ctx-skill/clear-skill-state! clear-skill-state!

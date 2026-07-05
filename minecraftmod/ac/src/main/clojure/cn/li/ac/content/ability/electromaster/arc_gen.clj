@@ -16,7 +16,7 @@
   - Miss: none
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.dsl :refer [defskill]]
+  (:require [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
             [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
@@ -31,25 +31,13 @@
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.server.platform-bridge :as server-bridge]))
 
+(def-skill-config-ops :arc-gen)
 (def ^:private arc-gen-skill-id :arc-gen)
 (def ^:private fish-item-id "minecraft:cooked_cod")
 
 ;; ---------------------------------------------------------------------------
 ;; Helpers
 ;; ---------------------------------------------------------------------------
-
-(defn- skill-exp [player-id]
-  (skill-effects/skill-exp player-id arc-gen-skill-id))
-
-(defn- cfg-double [field-id]
-  (skill-config/tunable-double arc-gen-skill-id field-id))
-
-(defn- cfg-lerp [field-id exp]
-  (skill-config/lerp-double arc-gen-skill-id field-id exp))
-
-(defn- cfg-progression [field-id exp]
-  (let [[base scale] (skill-config/tunable-double-list arc-gen-skill-id field-id)]
-    (+ (double base) (* (double scale) (double exp)))))
 
 (defn- try-ignite-block!
   "Attempt to ignite block at position with given probability."

@@ -1,14 +1,13 @@
 (ns cn.li.ac.content.ability.electromaster.current-charging-fx-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
+            [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.hand-effects :as hand-effects]
             [cn.li.ac.content.ability.electromaster.current-charging-fx :as current-charging-fx]))
 
 (defn- invoke-hand-enqueue! [ctx-id channel payload]
-  (let [enqueue-state! (var-get #'cn.li.ac.content.ability.electromaster.current-charging-fx/enqueue-state!)]
-    (hand-effects/update-effect-state! :current-charging
-      (fn [store] (enqueue-state! store ctx-id channel [:ctx ctx-id] payload)))))
+  (arc-beam/enqueue-for-test! :current-charging ctx-id channel payload {:runtime :hand}))
 
 (defn- with-fresh-current-charging-fx-runtime [f]
   (try
@@ -62,8 +61,7 @@
 (deftest fx-state-updates-and-queues-loop-sound-test
   (let [queued* (atom [])]
     (current-charging-fx/reset-current-charging-fx-for-test!)
-    (with-redefs [cn.li.ac.content.ability.electromaster.current-charging-fx/now-ms (fn [] 1000)
-                  client-sounds/queue-current-sound-effect! (fn [payload]
+    (with-redefs [client-sounds/queue-current-sound-effect! (fn [payload]
                                                               (swap! queued* conj payload)
                                                               nil)]
       (invoke-hand-enqueue! "ctx-1" :current-charging/fx-start {:mode :start :is-item true})
@@ -89,8 +87,7 @@
 (deftest two-owners-keep-current-charging-state-independent-test
   (let [queued* (atom [])]
     (current-charging-fx/reset-current-charging-fx-for-test!)
-    (with-redefs [cn.li.ac.content.ability.electromaster.current-charging-fx/now-ms (fn [] 1000)
-                  client-sounds/queue-current-sound-effect! (fn [payload]
+    (with-redefs [client-sounds/queue-current-sound-effect! (fn [payload]
                                                               (swap! queued* conj payload)
                                                               nil)]
       (invoke-hand-enqueue! "ctx-a" :current-charging/fx-start {:mode :start :is-item false})

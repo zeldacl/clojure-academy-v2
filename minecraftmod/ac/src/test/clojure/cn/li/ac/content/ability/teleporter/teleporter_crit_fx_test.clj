@@ -1,5 +1,6 @@
 (ns cn.li.ac.content.ability.teleporter.teleporter-crit-fx-test
   (:require [clojure.test :refer [deftest is]]
+            [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.effects.particles :as client-particles]
@@ -52,37 +53,37 @@
                  :owner-key [:ctx "ctx-1"]}]]
              @enqueued*)))))
 
-    (deftest enqueue-crit-hit-emits-level-scaled-effects-and-notice-test
-      (let [particles* (atom [])
-            sounds* (atom [])
-            notices* (atom [])
-            enqueue! (var-get #'cn.li.ac.content.ability.teleporter.teleporter-crit-fx/enqueue!)]
+(deftest enqueue-crit-hit-emits-level-scaled-effects-and-notice-test
+  (let [particles* (atom [])
+        sounds* (atom [])
+        notices* (atom [])]
     (with-redefs [client-particles/queue-current-particle-effect! (fn [payload]
-                                    (swap! particles* conj payload)
-                                    nil)
-            client-sounds/queue-current-sound-effect! (fn [payload]
-                                  (swap! sounds* conj payload)
-                                  nil)
-                      runtime-hooks/client-show-combat-notice! (fn [notice-id payload]
-                                                                 (swap! notices* conj [notice-id payload])
-                                                                 nil)
+                                                                     (swap! particles* conj payload)
+                                                                     nil)
+                  client-sounds/queue-current-sound-effect! (fn [payload]
+                                                               (swap! sounds* conj payload)
+                                                               nil)
+                  runtime-hooks/client-show-combat-notice! (fn [notice-id payload]
+                                                             (swap! notices* conj [notice-id payload])
+                                                             nil)
                   cn.li.mcmod.i18n/*translate-fn* (fn [k]
                                                     (case k
                                                       "ability.teleporter.critical_hit" "Critical Hit %s"
                                                       (str k)))]
-      (enqueue! nil {:payload {:mode :crit-hit
-               :x 1.0 :y 2.0 :z 3.0
-               :crit-level 2
-               :crit-rate 2.6
-               :message-key "ability.teleporter.critical_hit"
-               :message-args ["x2.6"]}})
+      (arc-beam/enqueue-for-test! :teleporter-crit "ctx-test" :teleporter/fx-crit-hit
+        {:mode :crit-hit
+         :x 1.0 :y 2.0 :z 3.0
+         :crit-level 2
+         :crit-rate 2.6
+         :message-key "ability.teleporter.critical_hit"
+         :message-args ["x2.6"]})
       (is (= 2 (count @particles*)))
       (is (= 1 (count @sounds*)))
       (is (= :portal (:particle-type (first @particles*))))
       (is (= :electric_spark (:particle-type (second @particles*))))
       (is (= "my_mod:tp.tp" (:sound-id (first @sounds*))))
       (is (= [[:teleporter-crit {:message-key "ability.teleporter.critical_hit"
-                 :args ["x2.6"]
-                 :duration-ms 1500
-                 :color [255 226 120]}]]
-         @notices*)))))
+                                 :args ["x2.6"]
+                                 :duration-ms 1500
+                                 :color [255 226 120]}]]
+             @notices*)))))

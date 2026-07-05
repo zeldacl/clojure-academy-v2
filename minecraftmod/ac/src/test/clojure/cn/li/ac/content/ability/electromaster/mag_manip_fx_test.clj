@@ -1,14 +1,13 @@
 (ns cn.li.ac.content.ability.electromaster.mag-manip-fx-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
+            [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.hand-effects :as hand-effects]
             [cn.li.ac.content.ability.electromaster.mag-manip-fx :as mag-manip-fx]))
 
 (defn- invoke-hand-enqueue! [ctx-id channel payload]
-  (let [enqueue-state! (var-get #'cn.li.ac.content.ability.electromaster.mag-manip-fx/enqueue-state!)]
-    (hand-effects/update-effect-state! :mag-manip
-      (fn [store] (enqueue-state! store ctx-id channel [:ctx ctx-id] payload)))))
+  (arc-beam/enqueue-for-test! :mag-manip ctx-id channel payload {:runtime :hand}))
 
 (defn- with-fresh-mag-manip-fx-runtime [f]
   (try

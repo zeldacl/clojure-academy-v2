@@ -1,5 +1,6 @@
 (ns cn.li.ac.content.ability.teleporter.threatening-teleport-test
   (:require [clojure.test :refer [deftest is]]
+            [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
@@ -52,8 +53,8 @@
     (with-redefs [ctx/get-context get-context
                   ctx-skill/update-skill-state-root! update-skill-state-root!
                   fx/send! send!
-                  helper/skill-exp (fn [_ _] 0.5)
-                  helper/cfg-lerp (fn [_ _ _] 12.0)
+                  skill-effects/skill-exp (fn [_ _] 0.5)
+                  skill-config/lerp-double (fn [_ _ _] 12.0)
                   helper/player-position (fn [_] {:x 1.0 :y 2.0 :z 3.0})
                   helper/player-look-vec (fn [_] {:x 0.0 :y 0.0 :z 1.0})
                   geom/world-id-of (fn [_] "minecraft:overworld")
@@ -90,22 +91,22 @@
         consume-calls* (atom 0)
         drop-calls* (atom [])]
     (with-redefs [ctx/get-context get-context
-                  helper/skill-exp (fn [_ _] 0.5)
-                  helper/cfg-lerp (fn [_ field _]
+                  skill-effects/skill-exp (fn [_ _] 0.5)
+                  skill-config/lerp-double (fn [_ field _]
                                     (case field
                                       :combat.damage 4.0
                                       :targeting.range 10.0
                                       :cost.up.cp 60.0
                                       :cost.up.overload 12.0
                                       0.0))
-                  helper/cfg-lerp-int (fn [_ _ _] 22)
-                  helper/cfg-double (fn [_ field]
+                  skill-config/lerp-int (fn [_ _ _] 22)
+                  skill-config/tunable-double (fn [_ field]
                                       (case field
                                         :progression.exp-base 0.003
                                         :progression.exp-hit-factor 1.0
                                         :progression.exp-miss-factor 0.2
                                         0.0))
-                  helper/cfg-probability (fn [_ field]
+                  skill-config/probability (fn [_ field]
                                            (case field
                                              :interaction.drop-prob.hit 0.3
                                              :interaction.drop-prob.miss 1.0
@@ -172,20 +173,20 @@
         fx-calls* (atom [])
         crit-fx-calls* (atom [])]
     (with-redefs [ctx/get-context get-context
-                  helper/skill-exp (fn [_ _] 0.5)
-                  helper/cfg-lerp (fn [_ field _]
+                  skill-effects/skill-exp (fn [_ _] 0.5)
+                  skill-config/lerp-double (fn [_ field _]
                                     (case field
                                       :combat.damage 4.0
                                       :targeting.range 10.0
                                       0.0))
-                  helper/cfg-lerp-int (fn [_ _ _] 22)
-                  helper/cfg-double (fn [_ field]
+                  skill-config/lerp-int (fn [_ _ _] 22)
+                  skill-config/tunable-double (fn [_ field]
                                       (case field
                                         :progression.exp-base 0.003
                                         :progression.exp-hit-factor 1.0
                                         :progression.exp-miss-factor 0.2
                                         0.0))
-                  helper/cfg-probability (fn [_ field]
+                  skill-config/probability (fn [_ field]
                                            (case field
                                              :interaction.drop-prob.hit 0.3
                                              :interaction.drop-prob.miss 1.0

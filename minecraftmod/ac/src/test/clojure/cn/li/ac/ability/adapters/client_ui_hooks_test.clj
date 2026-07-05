@@ -60,7 +60,7 @@
                   (sounds/reset-sound-queue-for-test!)
                   (hand-effects/reset-hand-effect-registry-for-test!)
                   (ctx/reset-contexts-for-test!)
-                  (store/reset-store!)))))))))
+                  (store/reset-store!))))))))))
 
 (use-fixtures :each reset-ui-state!)
 

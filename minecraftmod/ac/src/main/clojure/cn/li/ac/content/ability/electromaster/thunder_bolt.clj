@@ -5,7 +5,7 @@
   Cost: CP lerp(280,420), overload lerp(50,27) by exp
   Cooldown: lerp(120,50) ticks by exp
   Exp: +0.005 effective / +0.003 ineffective"
-  (:require [cn.li.ac.ability.dsl :refer [defskill]]
+  (:require [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
             [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.effects.geom :as geom]
@@ -17,16 +17,8 @@
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.potion-effects :as potion-effects]))
 
+(def-skill-config-ops :thunder-bolt)
 (def ^:private thunder-bolt-skill-id :thunder-bolt)
-
-(defn- cfg-double [field-id]
-  (skill-config/tunable-double thunder-bolt-skill-id field-id))
-
-(defn- cfg-int [field-id]
-  (skill-config/tunable-int thunder-bolt-skill-id field-id))
-
-(defn- cfg-lerp [field-id exp]
-  (skill-config/lerp-double thunder-bolt-skill-id field-id exp))
 
 (defn- evt-lerp [field-id]
   (fn [{:keys [exp]}]

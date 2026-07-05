@@ -1,5 +1,6 @@
 (ns cn.li.ac.content.ability.meltdowner.mine-ray-fx-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
+            [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
@@ -56,15 +57,11 @@
                   client-sounds/queue-sound-effect! (fn [& args]
                                                         (swap! sounds* conj args)
                                                         nil)]
-      (level-effects/update-effect-state! :mine-ray
-        enqueue-state!
-        (event "ctx-mr" :mine-ray/fx-start {:mode :start :variant :expert :source-player-id "player-a"}))
-      (level-effects/update-effect-state! :mine-ray
-        enqueue-state!
-        (event "ctx-mr" :mine-ray/fx-progress {:mode :progress
+      (arc-beam/enqueue-for-test! :mine-ray "ctx-mr" :mine-ray/fx-start {:mode :start :variant :expert :source-player-id "player-a"})
+      (arc-beam/enqueue-for-test! :mine-ray "ctx-mr" :mine-ray/fx-progress {:mode :progress
                                                  :x 2 :y 64 :z 5
                                                  :progress 0.5
-                                                 :source-player-id "player-a"}))
+                                                 :source-player-id "player-a"})
       (is (= {:x 2 :y 64 :z 5}
              (get-in (mr-fx/mine-ray-fx-snapshot) [:effect-state [:ctx "ctx-mr"] :target])))
       (is (seq (:ops (build-plan {:x 0.0 :y 65.0 :z 0.0} nil 0))))
@@ -74,9 +71,7 @@
             (tick-state! store))
           nil))
       (is (seq @particles*))
-      (level-effects/update-effect-state! :mine-ray
-        enqueue-state!
-        (event "ctx-mr" :mine-ray/fx-end {:mode :end :source-player-id "player-a"}))
+      (arc-beam/enqueue-for-test! :mine-ray "ctx-mr" :mine-ray/fx-end {:mode :end :source-player-id "player-a"})
       (is (nil? (get-in (mr-fx/mine-ray-fx-snapshot) [:effect-state [:ctx "ctx-mr"]])))
       (is (seq @sounds*)))))
 
@@ -92,9 +87,7 @@
               [["ctx-basic" :basic "my_mod:md.mine_basic_startup"]
                ["ctx-expert" :expert "my_mod:md.mine_expert_startup"]
                ["ctx-luck" :luck "my_mod:md.mine_luck_startup"]]]
-        (level-effects/update-effect-state! :mine-ray
-          enqueue-state!
-          (event ctx-id :mine-ray/fx-start {:mode :start :variant variant :source-player-id "player-a"}))
+        (arc-beam/enqueue-for-test! :mine-ray ctx-id :mine-ray/fx-start {:mode :start :variant variant :source-player-id "player-a"})
         (is (= expected-sound-id
                (:sound-id (second (last @sounds*)))))))))
 
@@ -107,15 +100,11 @@
                                                             (swap! particles* conj args)
                                                             nil)
                   client-sounds/queue-sound-effect! (fn [& _] nil)]
-      (level-effects/update-effect-state! :mine-ray
-        enqueue-state!
-        (event "ctx-cadence" :mine-ray/fx-start {:mode :start :variant :basic :source-player-id "player-a"}))
-      (level-effects/update-effect-state! :mine-ray
-        enqueue-state!
-        (event "ctx-cadence" :mine-ray/fx-progress {:mode :progress
+      (arc-beam/enqueue-for-test! :mine-ray "ctx-cadence" :mine-ray/fx-start {:mode :start :variant :basic :source-player-id "player-a"})
+      (arc-beam/enqueue-for-test! :mine-ray "ctx-cadence" :mine-ray/fx-progress {:mode :progress
                                                      :x 2 :y 64 :z 5
                                                      :progress 0.2
-                                                     :source-player-id "player-a"}))
+                                                     :source-player-id "player-a"})
 
       (dotimes [_ 16]
         (level-effects/update-effect-state! :mine-ray
@@ -127,9 +116,7 @@
       (is (= 2 (count @particles*))
           "mine-ray should emit target particles every 8 ticks while active")
 
-      (level-effects/update-effect-state! :mine-ray
-        enqueue-state!
-        (event "ctx-cadence" :mine-ray/fx-end {:mode :end :source-player-id "player-a"}))
+      (arc-beam/enqueue-for-test! :mine-ray "ctx-cadence" :mine-ray/fx-end {:mode :end :source-player-id "player-a"})
       (is (nil? (get-in (mr-fx/mine-ray-fx-snapshot) [:effect-state [:ctx "ctx-cadence"]]))))))
 
 

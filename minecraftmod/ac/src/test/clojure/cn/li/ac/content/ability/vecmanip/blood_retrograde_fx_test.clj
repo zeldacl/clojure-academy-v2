@@ -1,5 +1,6 @@
 (ns cn.li.ac.content.ability.vecmanip.blood-retrograde-fx-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
+            [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.content.ability.vecmanip.blood-retrograde-fx :as brfx]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.level-effects :as level-effects]
@@ -25,10 +26,13 @@
 
 (defn- apply-event!
   [ctx-id payload]
-  (let [enqueue-state! @#'cn.li.ac.content.ability.vecmanip.blood-retrograde-fx/enqueue-state!]
-    (level-effects/update-effect-state! :blood-retrograde
-      enqueue-state!
-      (event ctx-id payload))))
+  (let [channel (case (:mode payload)
+                  :start :blood-retrograde/fx-start
+                  :update :blood-retrograde/fx-update
+                  :perform :blood-retrograde/fx-perform
+                  :end :blood-retrograde/fx-end
+                  :blood-retrograde/fx-update)]
+    (arc-beam/enqueue-for-test! :blood-retrograde ctx-id channel payload)))
 
 (deftest init-registers-blood-retrograde-fx-channels-test
   (let [registered-effect (atom nil)
@@ -121,19 +125,17 @@
   (< (Math/abs (- (double expected) (double actual))) 1.0e-6))
 
 (deftest walk-speed-curve-and-tick-cleanup-test
-  (let [build-plan @#'cn.li.ac.content.ability.vecmanip.blood-retrograde-fx/build-plan
-        tick-state! @#'cn.li.ac.content.ability.vecmanip.blood-retrograde-fx/tick-state!]
-    (with-redefs [client-sounds/queue-current-sound-effect! (fn [_] nil)]
+  (with-redefs [client-sounds/queue-current-sound-effect! (fn [_] nil)]
       (apply-event! "ctx-main" {:mode :start})
-      (is (approx= 0.1 (:local-walk-speed (build-plan {:x 0.0 :y 0.0 :z 0.0}
+      (is (approx= 0.1 (:local-walk-speed (arc-beam/effect-build-plan :blood-retrograde {:x 0.0 :y 0.0 :z 0.0}
                                                       {:x 0.0 :y 0.0 :z 0.0}
                                                       0))))
       (apply-event! "ctx-main" {:mode :update :ticks 10 :charge-ratio 0.5})
-      (is (approx= 0.0535 (:local-walk-speed (build-plan {:x 0.0 :y 0.0 :z 0.0}
+      (is (approx= 0.0535 (:local-walk-speed (arc-beam/effect-build-plan :blood-retrograde {:x 0.0 :y 0.0 :z 0.0}
                                                          {:x 0.0 :y 0.0 :z 0.0}
                                                          10))))
       (apply-event! "ctx-main" {:mode :update :ticks 20 :charge-ratio 1.0})
-      (is (approx= 0.007 (:local-walk-speed (build-plan {:x 0.0 :y 0.0 :z 0.0}
+      (is (approx= 0.007 (:local-walk-speed (arc-beam/effect-build-plan :blood-retrograde {:x 0.0 :y 0.0 :z 0.0}
                                                         {:x 0.0 :y 0.0 :z 0.0}
                                                         20))))
       (apply-event! "ctx-main"
@@ -143,18 +145,14 @@
                      :sprays [{:x 4.0 :y 5.0 :z 6.0 :face :up :size 1.0 :rotation 0.0
                                :offset-u 0.0 :offset-v 0.0 :texture-id 1}]})
       (level-effects/update-effect-state! :blood-retrograde
-        (fn [store _]
-          (tick-state! store))
-        nil)
+        (fn [store] (arc-beam/effect-tick-state! :level :blood-retrograde store)))
       (is (= 21 (:ticks (get (:effect-state (brfx/blood-retrograde-fx-snapshot)) [:ctx "ctx-main"]))))
       (dotimes [_ 9]
         (level-effects/update-effect-state! :blood-retrograde
-          (fn [store _]
-            (tick-state! store))
-          nil))
+          (fn [store] (arc-beam/effect-tick-state! :level :blood-retrograde store))))
       (let [snapshot (brfx/blood-retrograde-fx-snapshot)]
         (is (nil? (get (:splashes snapshot) [:ctx "ctx-main"])))
-        (is (= 1 (count (get (:sprays snapshot) [:ctx "ctx-main"]))))))))
+        (is (= 1 (count (get (:sprays snapshot) [:ctx "ctx-main"])))))))
 
 (deftest two-owners-keep-blood-retrograde-state-and-queues-independent-test
   (with-redefs [client-sounds/queue-current-sound-effect! (fn [_] nil)]

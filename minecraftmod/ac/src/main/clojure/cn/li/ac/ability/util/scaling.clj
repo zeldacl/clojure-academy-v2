@@ -4,6 +4,11 @@
   All scaling functions use linear interpolation (lerp) between min and max values
   based on skill experience (0.0-1.0). No Minecraft imports.")
 
+(defn clamp-exp
+  "Clamp skill experience to [0.0, 1.0]."
+  [exp]
+  (max 0.0 (min 1.0 (double (or exp 0.0)))))
+
 (defn lerp
   "Linear interpolation between min-val and max-val based on t (0.0-1.0).
 

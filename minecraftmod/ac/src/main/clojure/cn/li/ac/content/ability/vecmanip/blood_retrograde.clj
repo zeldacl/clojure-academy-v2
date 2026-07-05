@@ -10,9 +10,9 @@
   - Successful hit plays blood splash / blood spray visuals and sound
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.dsl :refer [defskill]]
+  (:require [cn.li.ac.ability.util.scaling :as scaling]
+            [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
             [cn.li.ac.ability.fx :as fx]
-            [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
                         [cn.li.ac.ability.effects.geom :as geom]
@@ -22,28 +22,8 @@
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.util.log :as log]))
 
+(def-skill-config-ops :blood-retrograde)
 (def ^:private blood-retrograde-skill-id :blood-retrograde)
-
-(defn- exp01 [exp]
-  (max 0.0 (min 1.0 (double (or exp 0.0)))))
-
-(defn- cfg-double [field-id]
-  (skill-config/tunable-double blood-retrograde-skill-id field-id))
-
-(defn- cfg-int [field-id]
-  (skill-config/tunable-int blood-retrograde-skill-id field-id))
-
-(defn- cfg-double-list [field-id]
-  (skill-config/tunable-double-list blood-retrograde-skill-id field-id))
-
-(defn- cfg-lerp [field-id exp]
-  (skill-config/lerp-double blood-retrograde-skill-id field-id (exp01 exp)))
-
-(defn- cfg-lerp-int [field-id exp]
-  (skill-config/lerp-int blood-retrograde-skill-id field-id (exp01 exp)))
-
-(defn- skill-exp [player-id]
-  (skill-effects/skill-exp player-id blood-retrograde-skill-id))
 
 (def ^:private world-up {:x 0.0 :y 1.0 :z 0.0})
 
@@ -88,14 +68,6 @@
 (defn- update-skill-state-root!
   [ctx-id f & args]
   (apply ctx-skill/update-skill-state-root! ctx-id f args))
-
-(defn- set-skill-state-root!
-  [ctx-id state-map]
-  (ctx-skill/update-skill-state-root! ctx-id identity state-map))
-
-(defn- clear-skill-state!
-  [ctx-id]
-  (ctx-skill/clear-skill-state! ctx-id))
 
 (defn- release-hit
   [player-id ctx-id stage]
@@ -225,7 +197,7 @@
 (defn blood-retrograde-on-key-down
   "Initialize charge state and local charge slowdown."
   [{:keys [ctx-id]}]
-  (set-skill-state-root! ctx-id
+  (ctx-skill/replace-skill-state! ctx-id
                          {:ticks 0
                           :executed? false
                           :ended? false})
@@ -244,7 +216,7 @@
           (update-skill-state-root! ctx-id #(assoc % :ticks ticks))
           (fx/send! ctx-id {:topic :blood-retrograde/fx-update :mode :update} nil
                     {:ticks (long ticks)
-                     :charge-ratio (exp01 (/ (double ticks) (cfg-double :charge.fx-ratio-ticks)))})
+                     :charge-ratio (scaling/clamp-exp (/ (double ticks) (cfg-double :charge.fx-ratio-ticks)))})
           (when (>= ticks (cfg-int :charge.max-ticks))
             (let [hit (when (raycast/available?)
                         (raycast/raycast-from-player* player-id (cfg-double :targeting.distance) true))
@@ -271,7 +243,7 @@
   (when-let [ctx-data (ctx-skill/get-context ctx-id)]
     (when-not (get-in ctx-data [:skill-state :ended?])
       (fx/send! ctx-id {:topic :blood-retrograde/fx-end :mode :end} nil {:performed? false})))
-  (clear-skill-state! ctx-id)
+  (ctx-skill/clear-skill-state! ctx-id)
   (log/debug "BloodRetrograde aborted"))
 
 (defskill blood-retrograde
