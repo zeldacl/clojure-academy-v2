@@ -9,6 +9,7 @@
     (draw-ops-host! parent-area ops-fn)
   where ops-fn is a (fn [] ops-vector) that produces draw ops each frame."
   (:require [cn.li.mc1201.client.texture-registry :as tex-registry]
+            [cn.li.mc1201.gui.cgui.assets :as assets]
             [cn.li.mcmod.gui.cgui-core :as cgui-core]
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.mcmod.gui.events :as events]
@@ -23,12 +24,14 @@
            [org.joml Matrix4f]
            [org.lwjgl.opengl GL11]))
 
-(defn- path->resource-location [path]
-  (when path
-    (let [s (str path)]
-      (if (.contains s ":")
-        (ResourceLocation. (subs s 0 (.indexOf s ":")) (subs s (inc (.indexOf s ":"))))
-        (ResourceLocation. "my_mod" (if (.startsWith s "textures/") (subs s 9) s))))))
+(defn- path->resource-location
+  "Normalize a content texture path to a ResourceLocation for TextureManager.
+
+  SimpleTexture (1.20.1) loads the location as-is — path must include the
+  `textures/` prefix (e.g. textures/abilities/.../dir_shock.png), not a bare
+  abilities/... path."
+  [path]
+  (assets/ensure-resource-location path))
 
 ;; ============================================================================
 ;; Custom shader quad (bypasses blit which overrides custom shaders)
