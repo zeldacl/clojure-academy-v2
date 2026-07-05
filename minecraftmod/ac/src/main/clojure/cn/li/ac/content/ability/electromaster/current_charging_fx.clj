@@ -94,8 +94,8 @@
         ratio (/ (double ticks) (double (visual-max-ticks)))]
     (max 0.0 (min 1.0 ratio))))
 
-(defn- owner-key [ctx-id channel owner-key payload]
-  (or owner-key
+(defn- resolve-owner-key [ctx-id _channel explicit-owner-key payload]
+  (or explicit-owner-key
       (when-let [source-player-id (:source-player-id payload)]
         [:source-player source-player-id])
       [:ctx ctx-id]))
@@ -112,7 +112,7 @@
                  (or store (default-current-charging-fx-runtime-state))
                  (default-current-charging-fx-runtime-state))
         {:keys [mode] :as payload*} (or payload {})
-        owner-key* (owner-key ctx-id channel owner-key payload*)]
+        owner-key* (resolve-owner-key ctx-id channel owner-key payload*)]
     (case mode
       :start
       (do

@@ -5,13 +5,20 @@
             [cn.li.ac.ability.client.hand-effects :as hand-effects]
             [cn.li.ac.content.ability.electromaster.current-charging-fx :as current-charging-fx]))
 
+(defn- invoke-hand-enqueue! [ctx-id channel payload]
+  (let [enqueue-state! (var-get #'cn.li.ac.content.ability.electromaster.current-charging-fx/enqueue-state!)]
+    (hand-effects/update-effect-state! :current-charging
+      (fn [store] (enqueue-state! store ctx-id channel [:ctx ctx-id] payload)))))
+
 (defn- with-fresh-current-charging-fx-runtime [f]
   (try
-        (hand-effects/reset-hand-effect-registry-for-test!)
-        (f)
-        (finally
-          (hand-effects/reset-hand-effect-registry-for-test!)
-          (current-charging-fx/reset-current-charging-fx-for-test!))))
+    (hand-effects/reset-hand-effect-registry-for-test!)
+    (current-charging-fx/reset-current-charging-fx-for-test!)
+    (current-charging-fx/init!)
+    (f)
+    (finally
+      (hand-effects/reset-hand-effect-registry-for-test!)
+      (current-charging-fx/reset-current-charging-fx-for-test!))))
 
 (use-fixtures :each with-fresh-current-charging-fx-runtime)
 
@@ -41,44 +48,30 @@
                                                       (swap! handlers* assoc topic handler)
                                                       nil)
                   hand-effects/enqueue-hand-effect! (fn [effect-id ctx-id channel payload & opts]
-                                                      (swap! hand-enqueued* conj [effect-id payload])
+                                                      (swap! hand-enqueued* conj (into [effect-id ctx-id channel payload] opts))
                                                       nil)]
       (current-charging-fx/init!)
       ((get @handlers* :current-charging/fx-start) "ctx-1" :current-charging/fx-start {:is-item true})
       ((get @handlers* :current-charging/fx-update) "ctx-1" :current-charging/fx-update {:good? true :charge-ticks 20})
       ((get @handlers* :current-charging/fx-end) "ctx-1" :current-charging/fx-end {:is-item true})
-      (is (= [[:current-charging {:mode :start
-                                   :owner-key [:ctx "ctx-1"]
-                                   :ctx-id "ctx-1"
-                                   :channel :current-charging/fx-start
-                                   :is-item true}]
-              [:current-charging {:mode :update
-                                   :owner-key [:ctx "ctx-1"]
-                                   :ctx-id "ctx-1"
-                                   :channel :current-charging/fx-update
-                                   :good? true
-                                   :charge-ticks 20}]
-              [:current-charging {:mode :end
-                                   :owner-key [:ctx "ctx-1"]
-                                   :ctx-id "ctx-1"
-                                   :channel :current-charging/fx-end
-                                   :is-item true}]]
+      (is (= [[:current-charging "ctx-1" :current-charging/fx-start {:mode :start :is-item true} :owner-key [:ctx "ctx-1"]]
+              [:current-charging "ctx-1" :current-charging/fx-update {:mode :update :good? true :charge-ticks 20} :owner-key [:ctx "ctx-1"]]
+              [:current-charging "ctx-1" :current-charging/fx-end {:mode :end :is-item true} :owner-key [:ctx "ctx-1"]]]
              @hand-enqueued*)))))
 
 (deftest fx-state-updates-and-queues-loop-sound-test
-  (let [queued* (atom [])
-        enqueue-state! (var-get #'cn.li.ac.content.ability.electromaster.current-charging-fx/enqueue-state!)]
+  (let [queued* (atom [])]
     (current-charging-fx/reset-current-charging-fx-for-test!)
-    (with-redefs [client-sounds/queue-current-sound-effect! (fn [payload]
+    (with-redefs [cn.li.ac.content.ability.electromaster.current-charging-fx/now-ms (fn [] 1000)
+                  client-sounds/queue-current-sound-effect! (fn [payload]
                                                               (swap! queued* conj payload)
                                                               nil)]
-      (hand-effects/update-effect-state! :current-charging enqueue-state! {:ctx-id "ctx-1" :mode :start :is-item true})
+      (invoke-hand-enqueue! "ctx-1" :current-charging/fx-start {:mode :start :is-item true})
       (is (true? (:active? (current-charging-fx/current-state [:ctx "ctx-1"]))))
       (is (true? (:is-item (current-charging-fx/current-state [:ctx "ctx-1"]))))
       (is (= 1 (count @queued*)))
-      (hand-effects/update-effect-state! :current-charging enqueue-state!
-        {:ctx-id "ctx-1"
-         :mode :update
+      (invoke-hand-enqueue! "ctx-1" :current-charging/fx-update
+        {:mode :update
          :is-item true
          :good? true
          :charge-ticks 20
@@ -89,21 +82,21 @@
       (is (= 0.5 (:charge-ratio (current-charging-fx/current-state [:ctx "ctx-1"]))))
       (is (= {:x 1.0 :y 2.0 :z 3.0} (:target (current-charging-fx/current-state [:ctx "ctx-1"]))))
       (is (= [1 2 3] (:block-pos (current-charging-fx/current-state [:ctx "ctx-1"]))))
-      (hand-effects/update-effect-state! :current-charging enqueue-state! {:ctx-id "ctx-1" :mode :end :is-item true})
+      (invoke-hand-enqueue! "ctx-1" :current-charging/fx-end {:mode :end :is-item true})
       (is (false? (:active? (current-charging-fx/current-state [:ctx "ctx-1"]))))
       (is (true? (:blending? (current-charging-fx/current-state [:ctx "ctx-1"])))))))
 
 (deftest two-owners-keep-current-charging-state-independent-test
-  (let [queued* (atom [])
-        enqueue-state! (var-get #'cn.li.ac.content.ability.electromaster.current-charging-fx/enqueue-state!)]
+  (let [queued* (atom [])]
     (current-charging-fx/reset-current-charging-fx-for-test!)
-    (with-redefs [client-sounds/queue-current-sound-effect! (fn [payload]
+    (with-redefs [cn.li.ac.content.ability.electromaster.current-charging-fx/now-ms (fn [] 1000)
+                  client-sounds/queue-current-sound-effect! (fn [payload]
                                                               (swap! queued* conj payload)
                                                               nil)]
-      (hand-effects/update-effect-state! :current-charging enqueue-state! {:ctx-id "ctx-a" :mode :start :is-item false})
-      (hand-effects/update-effect-state! :current-charging enqueue-state! {:ctx-id "ctx-b" :mode :start :is-item true})
-      (hand-effects/update-effect-state! :current-charging enqueue-state! {:ctx-id "ctx-a" :mode :update :good? true :charge-ticks 10})
-      (hand-effects/update-effect-state! :current-charging enqueue-state! {:ctx-id "ctx-b" :mode :update :good? false :charge-ticks 30})
+      (invoke-hand-enqueue! "ctx-a" :current-charging/fx-start {:mode :start :is-item false})
+      (invoke-hand-enqueue! "ctx-b" :current-charging/fx-start {:mode :start :is-item true})
+      (invoke-hand-enqueue! "ctx-a" :current-charging/fx-update {:mode :update :good? true :charge-ticks 10})
+      (invoke-hand-enqueue! "ctx-b" :current-charging/fx-update {:mode :update :good? false :charge-ticks 30})
       (let [snapshot (current-charging-fx/current-charging-fx-snapshot)
             state-a (get (:states snapshot) [:ctx "ctx-a"])
             state-b (get (:states snapshot) [:ctx "ctx-b"])]
@@ -113,7 +106,7 @@
         (is (= 0.25 (:charge-ratio state-a)))
         (is (= 30 (:charge-ticks state-b)))
         (is (= 0.75 (:charge-ratio state-b))))
-      (hand-effects/update-effect-state! :current-charging enqueue-state! {:ctx-id "ctx-a" :mode :end :is-item false})
+      (invoke-hand-enqueue! "ctx-a" :current-charging/fx-end {:mode :end :is-item false})
       (is (false? (:active? (current-charging-fx/current-state [:ctx "ctx-a"]))))
       (is (true? (:blending? (current-charging-fx/current-state [:ctx "ctx-a"]))))
       (is (true? (:active? (current-charging-fx/current-state [:ctx "ctx-b"]))))
@@ -122,8 +115,6 @@
         (is (nil? (get (:states snapshot) [:ctx "ctx-a"])))
         (is (= 30 (:charge-ticks (get (:states snapshot) [:ctx "ctx-b"]))))))
     (is (= 2 (count @queued*)))))
-
-
 
 (deftest current-charging-fx-snapshot-default-without-registered-state-test
   (is (= {:states {}}

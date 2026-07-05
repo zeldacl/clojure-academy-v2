@@ -10,10 +10,12 @@
             [cn.li.ac.content.ability.meltdowner.meltdowner-fx :as meltdowner-fx]
             [cn.li.ac.content.ability.meltdowner.mine-ray-fx :as mine-ray-fx]
             [cn.li.ac.content.ability.meltdowner.ray-barrage-fx :as ray-barrage-fx]
-            [cn.li.ac.content.ability.meltdowner.scatter-bomb-fx :as scatter-bomb-fx]))
+            [cn.li.ac.content.ability.meltdowner.scatter-bomb-fx :as scatter-bomb-fx]
+            [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 
 (defn- reset-fixture [f]
-  (electron-bomb-fx/init!)
+  (level-effects/reset-level-effect-registry-for-test!)
+      (electron-bomb-fx/init!)
       (electron-missile-fx/init!)
       (jet-engine-fx/init!)
       (light-shield-fx/init!)
@@ -39,7 +41,8 @@
           (meltdowner-fx/reset-meltdowner-fx-for-test!)
           (mine-ray-fx/reset-mine-ray-fx-for-test!)
           (ray-barrage-fx/reset-ray-barrage-fx-for-test!)
-          (scatter-bomb-fx/reset-scatter-bomb-fx-for-test!))))
+          (scatter-bomb-fx/reset-scatter-bomb-fx-for-test!)
+          (level-effects/reset-level-effect-registry-for-test!))))
 
 (use-fixtures :each reset-fixture)
 
@@ -57,7 +60,8 @@
 (def ^:private p2 {:x 2.0 :y 64.0 :z 0.0})
 
 (deftest meltdowner-stateful-fx-keep-state-per-owner-test
-  (with-redefs [client-particles/queue-particle-effect! (fn [& _] nil)
+  (with-redefs [client-bridge/run-client-effect! (fn [& _] nil)
+                client-particles/queue-particle-effect! (fn [& _] nil)
                 client-particles/queue-current-particle-effect! (fn [& _] nil)
                 client-particles/current-effect-owner (fn [] {:client-session-id "meltdowner-fx-owner"})
                 client-sounds/queue-sound-effect! (fn [& _] nil)

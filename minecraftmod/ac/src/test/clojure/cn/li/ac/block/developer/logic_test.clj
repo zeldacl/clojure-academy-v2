@@ -28,6 +28,6 @@
                :user-uuid "player-1"}]
     (with-redefs [session/apply-completion! (fn [_] (swap! completed inc))
                   machine-runtime/commit-transform! (fn [& _] (swap! cleared inc))]
-      (#'dev-logic/developer-after-commit! :tile nil nil {} state {})
+      (#'dev-logic/developer-after-commit! :tile nil nil {} state)
       (is (= 1 @completed))
       (is (= 1 @cleared)))))

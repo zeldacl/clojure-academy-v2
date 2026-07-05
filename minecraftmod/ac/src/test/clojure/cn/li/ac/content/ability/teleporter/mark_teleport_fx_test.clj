@@ -4,7 +4,8 @@
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
-            [cn.li.ac.content.ability.teleporter.mark-teleport-fx :as mfx]))
+            [cn.li.ac.content.ability.teleporter.mark-teleport-fx :as mfx]
+            [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 
 (defn- with-fresh-mark-teleport-fx-runtime [f]
   (level-effects/reset-level-effect-registry-for-test!)
@@ -37,7 +38,8 @@
 (deftest enqueue-perform-with-target-emits-particles-and-sound-test
   (let [particles* (atom [])
         sounds* (atom [])]
-    (with-redefs [client-particles/current-effect-owner (fn [] {:client-session-id "mark-teleport-test"})
+    (with-redefs [client-bridge/run-client-effect! (fn [& _] nil)
+                  client-particles/current-effect-owner (fn [] {:client-session-id "mark-teleport-test"})
                   client-particles/queue-particle-effect! (fn [& args]
                                                             (swap! particles* conj args)
                                                             nil)
@@ -52,7 +54,8 @@
       (is (= "my_mod:tp.tp" (:sound-id (second (first @sounds*))))))))
 
 (deftest enqueue-end-clears-state-test
-  (with-redefs [client-particles/current-effect-owner (fn [] {:client-session-id "mark-teleport-test"})]
+  (with-redefs [client-bridge/run-client-effect! (fn [& _] nil)
+                client-particles/current-effect-owner (fn [] {:client-session-id "mark-teleport-test"})]
     (mfx/init!)
     (level-effects/enqueue-level-effect! :mark-teleport "ctx-1" :mark-teleport/fx-start {:mode :start}
                                          :owner-key [:ctx "ctx-1"])

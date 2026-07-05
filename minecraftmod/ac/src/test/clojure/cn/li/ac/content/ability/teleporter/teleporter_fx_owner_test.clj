@@ -7,7 +7,8 @@
             [cn.li.ac.content.ability.teleporter.flesh-ripping-fx :as flesh-ripping-fx]
             [cn.li.ac.content.ability.teleporter.mark-teleport-fx :as mark-teleport-fx]
             [cn.li.ac.content.ability.teleporter.penetrate-teleport-fx :as penetrate-teleport-fx]
-            [cn.li.ac.content.ability.teleporter.shift-teleport-fx :as shift-teleport-fx]))
+            [cn.li.ac.content.ability.teleporter.shift-teleport-fx :as shift-teleport-fx]
+            [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 
 (defn- reset-fixture [f]
   (level-effects/reset-level-effect-registry-for-test!)
@@ -38,7 +39,8 @@
   (level-effects/enqueue-level-effect! effect-id ctx-id channel payload :owner-key owner-key))
 
 (deftest teleporter-stateful-fx-keep-state-per-owner-test
-  (with-redefs [client-particles/queue-particle-effect! (fn [& _] nil)
+  (with-redefs [client-bridge/run-client-effect! (fn [& _] nil)
+                client-particles/queue-particle-effect! (fn [& _] nil)
                 client-particles/current-effect-owner (fn [] {:client-session-id "teleporter-owner-test"})
                 client-sounds/queue-sound-effect! (fn [& _] nil)]
     (flashing-fx/init!)

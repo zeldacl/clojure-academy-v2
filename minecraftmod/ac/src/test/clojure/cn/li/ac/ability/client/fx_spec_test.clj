@@ -52,9 +52,9 @@
     (with-redefs [level-effects/register-level-effect! (fn [& _] nil)
                   hand-effects/register-hand-effect! (fn [& _] nil)
                   level-effects/enqueue-level-effect! (fn [effect-id ctx-id channel payload & opts]
-                                                        (swap! enqueued-level* conj [effect-id ctx-id channel payload opts]))
+                                                        (swap! enqueued-level* conj (into [effect-id ctx-id channel payload] opts)))
                   hand-effects/enqueue-hand-effect! (fn [effect-id ctx-id channel payload & opts]
-                                                      (swap! enqueued-hand* conj [effect-id ctx-id channel payload opts]))]
+                                                      (swap! enqueued-hand* conj (into [effect-id ctx-id channel payload] opts)))]
       (fx-spec/register!
         {:id :test-effect
          :channels {:start {:topic :test/fx-start :mode :start :targets [:level :hand]}
@@ -63,5 +63,5 @@
       (fx-registry/dispatch-fx-channel! "ctx-a" :test/fx-end {:performed? true})
       (is (= 1 (count @enqueued-level*)))
       (is (= 2 (count @enqueued-hand*)))
-      (is (= [:test-effect "ctx-a" :test/fx-start {:mode :start :ticks 3} {:owner-key [:ctx "ctx-a"]}]
+      (is (= [:test-effect "ctx-a" :test/fx-start {:mode :start :ticks 3} :owner-key [:ctx "ctx-a"]]
              (first @enqueued-hand*))))))

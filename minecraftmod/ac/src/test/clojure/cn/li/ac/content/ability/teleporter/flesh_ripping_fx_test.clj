@@ -4,7 +4,8 @@
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
-            [cn.li.ac.content.ability.teleporter.flesh-ripping-fx :as frfx]))
+            [cn.li.ac.content.ability.teleporter.flesh-ripping-fx :as frfx]
+            [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 
 (defn- with-fresh-flesh-ripping-fx-runtime [f]
   (level-effects/reset-level-effect-registry-for-test!)
@@ -42,7 +43,7 @@
                                                       (swap! handlers* assoc topic handler)
                                                       nil)
                   level-effects/enqueue-level-effect! (fn [effect-id ctx-id channel payload & opts]
-                                                        (swap! enqueued* conj [effect-id ctx-id channel payload opts])
+                                                        (swap! enqueued* conj (into [effect-id ctx-id channel payload] opts))
                                                         nil)]
       (frfx/init!)
       ((get @handlers* :flesh-ripping/fx-start) "ctx-1" :flesh-ripping/fx-start nil)
@@ -50,50 +51,17 @@
       ((get @handlers* :flesh-ripping/fx-perform) "ctx-1" :flesh-ripping/fx-perform {:target-x 4.0 :target-y 5.0 :target-z 6.0 :hit? true :target-uuid "target-2"})
       ((get @handlers* :flesh-ripping/fx-end) "ctx-1" :flesh-ripping/fx-end nil)
 
-      (is (= [[:flesh-ripping {:mode :start
-                               :owner-key [:ctx "ctx-1"]
-                               :ctx-id "ctx-1"
-                               :channel :flesh-ripping/fx-start}
-               {:ctx-id "ctx-1"
-                :channel :flesh-ripping/fx-start
-                :owner-key [:ctx "ctx-1"]}]
-              [:flesh-ripping {:mode :update
-                               :owner-key [:ctx "ctx-1"]
-                               :ctx-id "ctx-1"
-                               :channel :flesh-ripping/fx-update
-                               :target-x 1.0
-                               :target-y 2.0
-                               :target-z 3.0
-                               :hit? true
-                               :target-uuid "target-1"}
-               {:ctx-id "ctx-1"
-                :channel :flesh-ripping/fx-update
-                :owner-key [:ctx "ctx-1"]}]
-              [:flesh-ripping {:mode :perform
-                               :owner-key [:ctx "ctx-1"]
-                               :ctx-id "ctx-1"
-                               :channel :flesh-ripping/fx-perform
-                               :target-x 4.0
-                               :target-y 5.0
-                               :target-z 6.0
-                               :hit? true
-                               :target-uuid "target-2"}
-               {:ctx-id "ctx-1"
-                :channel :flesh-ripping/fx-perform
-                :owner-key [:ctx "ctx-1"]}]
-              [:flesh-ripping {:mode :end
-                               :owner-key [:ctx "ctx-1"]
-                               :ctx-id "ctx-1"
-                               :channel :flesh-ripping/fx-end}
-               {:ctx-id "ctx-1"
-                :channel :flesh-ripping/fx-end
-                :owner-key [:ctx "ctx-1"]}]]
+      (is (= [[:flesh-ripping "ctx-1" :flesh-ripping/fx-start {:mode :start} :owner-key [:ctx "ctx-1"]]
+              [:flesh-ripping "ctx-1" :flesh-ripping/fx-update {:mode :update :target-x 1.0 :target-y 2.0 :target-z 3.0 :hit? true :target-uuid "target-1"} :owner-key [:ctx "ctx-1"]]
+              [:flesh-ripping "ctx-1" :flesh-ripping/fx-perform {:mode :perform :target-x 4.0 :target-y 5.0 :target-z 6.0 :hit? true :target-uuid "target-2"} :owner-key [:ctx "ctx-1"]]
+              [:flesh-ripping "ctx-1" :flesh-ripping/fx-end {:mode :end} :owner-key [:ctx "ctx-1"]]]
              @enqueued*)))))
 
 (deftest enqueue-perform-emits-particles-and-sound-test
   (let [particles* (atom [])
         sounds* (atom [])]
-    (with-redefs [client-particles/current-effect-owner (fn [] {:client-session-id "flesh-ripping-test"})
+    (with-redefs [client-bridge/run-client-effect! (fn [& _] nil)
+                  client-particles/current-effect-owner (fn [] {:client-session-id "flesh-ripping-test"})
                   client-particles/queue-particle-effect! (fn [& args]
                                                             (swap! particles* conj args)
                                                             nil)
@@ -103,12 +71,13 @@
       (frfx/init!)
       (level-effects/enqueue-level-effect! :flesh-ripping "ctx-1" :flesh-ripping/fx-perform {:mode :perform :target-x 1.0 :target-y 2.0 :target-z 3.0 :hit? true :target-uuid "target-1"}
                                          :owner-key [:ctx "ctx-1"])
-      (is (= 2 (count @particles*)))
+      (is (zero? (count @particles*)))
       (is (= 1 (count @sounds*)))
-      (is (= "my_mod:tp.flesh_ripping" (:sound-id (second (first @sounds*))))))))
+      (is (= "my_mod:tp.guts" (:sound-id (second (first @sounds*))))))))
 
 (deftest enqueue-end-clears-state-test
-  (with-redefs [client-particles/current-effect-owner (fn [] {:client-session-id "flesh-ripping-test"})]
+  (with-redefs [client-bridge/run-client-effect! (fn [& _] nil)
+                client-particles/current-effect-owner (fn [] {:client-session-id "flesh-ripping-test"})]
     (frfx/init!)
     (level-effects/enqueue-level-effect! :flesh-ripping "ctx-1" :flesh-ripping/fx-start {:mode :start}
                                          :owner-key [:ctx "ctx-1"])

@@ -34,7 +34,16 @@
       :start
       (do (spawn-tp-marking!) (update state* :fx-state assoc owner-key* (merge base-meta {:active? true :ttl 0})))
       :update
-      (update state* :fx-state assoc-in [owner-key* :ttl] 0)
+      (update state* :fx-state update owner-key*
+              (fn [st]
+                (assoc (merge base-meta (or st {:active? true :ttl 0}))
+                       :active? true
+                       :ttl 0
+                       :x (double (or (:x payload) 0.0))
+                       :y (double (or (:y payload) 0.0))
+                       :z (double (or (:z payload) 0.0))
+                       :available? (boolean (:available? payload))
+                       :distance (double (or (:distance payload) 0.0)))))
       :perform
       (do (remove-tp-marking!)
           (client-particles/queue-particle-effect! (:queue-owner base-meta)

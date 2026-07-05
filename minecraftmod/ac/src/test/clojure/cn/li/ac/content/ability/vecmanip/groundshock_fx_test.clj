@@ -6,15 +6,21 @@
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
+(defn- invoke-hand-enqueue! [ctx-id channel payload]
+  (let [hand-enqueue-state! (var-get #'cn.li.ac.content.ability.vecmanip.groundshock-fx/hand-enqueue-state!)]
+    (hand-effects/update-effect-state! :groundshock
+      (fn [store] (hand-enqueue-state! store ctx-id channel [:ctx ctx-id] payload)))))
+
 (defn- reset-fixture [f]
   (runtime-hooks/with-client-ctx {:session-id :test-session}
     (hand-effects/reset-hand-effect-registry-for-test!)
-        (gfx/reset-groundshock-fx-for-test!)
-        (try
-          (f)
-          (finally
-            (hand-effects/reset-hand-effect-registry-for-test!)
-            (gfx/reset-groundshock-fx-for-test!)))))
+    (gfx/reset-groundshock-fx-for-test!)
+    (gfx/init!)
+    (try
+      (f)
+      (finally
+        (hand-effects/reset-hand-effect-registry-for-test!)
+        (gfx/reset-groundshock-fx-for-test!)))))
 
 (use-fixtures :each reset-fixture)
 
@@ -50,10 +56,10 @@
                                                       (swap! handlers* assoc topic handler)
                                                       nil)
                   hand-effects/enqueue-hand-effect! (fn [effect-id ctx-id channel payload & opts]
-                                                      (swap! hand-enqueued* conj [effect-id payload])
+                                                      (swap! hand-enqueued* conj (into [effect-id ctx-id channel payload] opts))
                                                       nil)
                   level-effects/enqueue-level-effect! (fn [effect-id ctx-id channel payload & opts]
-                                                        (swap! level-enqueued* conj [effect-id ctx-id channel payload opts])
+                                                        (swap! level-enqueued* conj (into [effect-id ctx-id channel payload] opts))
                                                         nil)]
       (gfx/init!)
       ((get @handlers* :groundshock/fx-start) "ctx-1" :groundshock/fx-start nil)
@@ -62,39 +68,20 @@
                                                    :broken-blocks [{:x 1 :y 2 :z 3}]})
       ((get @handlers* :groundshock/fx-end) "ctx-1" :groundshock/fx-end {:performed? false})
 
-      (is (= [[:groundshock {:owner-key [:ctx "ctx-1"]
-                             :ctx-id "ctx-1"
-                             :channel :groundshock/fx-start
-                             :mode :start}]
-              [:groundshock {:owner-key [:ctx "ctx-1"]
-                             :ctx-id "ctx-1"
-                             :channel :groundshock/fx-update
-                             :mode :update
-                             :charge-ticks 7}]
-              [:groundshock {:owner-key [:ctx "ctx-1"]
-                             :ctx-id "ctx-1"
-                             :channel :groundshock/fx-perform
-                             :mode :perform}]
-              [:groundshock {:owner-key [:ctx "ctx-1"]
-                             :ctx-id "ctx-1"
-                             :channel :groundshock/fx-end
-                             :mode :end
-                             :performed? false}]]
+      (is (= [[:groundshock "ctx-1" :groundshock/fx-start {:mode :start} :owner-key [:ctx "ctx-1"]]
+              [:groundshock "ctx-1" :groundshock/fx-update {:mode :update :charge-ticks 7} :owner-key [:ctx "ctx-1"]]
+              [:groundshock "ctx-1" :groundshock/fx-perform {:mode :perform} :owner-key [:ctx "ctx-1"]]
+              [:groundshock "ctx-1" :groundshock/fx-end {:mode :end :performed? false} :owner-key [:ctx "ctx-1"]]]
              @hand-enqueued*))
-      (is (= [[:groundshock {:mode :perform
-                             :owner-key [:ctx "ctx-1"]
-                             :ctx-id "ctx-1"
-                             :channel :groundshock/fx-perform
-                             :affected-blocks [{:x 1 :y 2 :z 3 :block-id "minecraft:stone"}]
-                             :broken-blocks [{:x 1 :y 2 :z 3}]}
-               {:ctx-id "ctx-1"
-                :channel :groundshock/fx-perform
-                :owner-key [:ctx "ctx-1"]}]]
+      (is (= [[:groundshock "ctx-1" :groundshock/fx-perform
+               {:mode :perform
+                :affected-blocks [{:x 1 :y 2 :z 3 :block-id "minecraft:stone"}]
+                :broken-blocks [{:x 1 :y 2 :z 3}]}
+               :owner-key [:ctx "ctx-1"]]]
              @level-enqueued*)))))
 
 (deftest two-owners-keep-groundshock-hand-state-independent-test
-  (let [hand-enqueue-state! @#'cn.li.ac.content.ability.vecmanip.groundshock-fx/hand-enqueue-state!
-        hand-tick-state! @#'cn.li.ac.content.ability.vecmanip.groundshock-fx/hand-tick-state!
+  (let [hand-tick-state! (var-get #'cn.li.ac.content.ability.vecmanip.groundshock-fx/hand-tick-state!)
         pitch-deltas* (atom [])]
     (with-redefs [hand-effects/add-camera-pitch-delta! (fn
                                                          ([delta]
@@ -103,24 +90,22 @@
                                                          ([_owner delta]
                                                           (swap! pitch-deltas* conj delta)
                                                           nil))]
-      (hand-effects/update-effect-state! :groundshock hand-enqueue-state! {:owner-key [:ctx "ctx-a"] :ctx-id "ctx-a" :mode :start})
-      (hand-effects/update-effect-state! :groundshock hand-enqueue-state! {:owner-key [:ctx "ctx-b"] :ctx-id "ctx-b" :mode :start})
-      (hand-effects/update-effect-state! :groundshock hand-enqueue-state! {:owner-key [:ctx "ctx-a"] :ctx-id "ctx-a" :mode :update :charge-ticks 2})
-      (hand-effects/update-effect-state! :groundshock hand-enqueue-state! {:owner-key [:ctx "ctx-b"] :ctx-id "ctx-b" :mode :update :charge-ticks 4})
+      (invoke-hand-enqueue! "ctx-a" :groundshock/fx-start {:mode :start})
+      (invoke-hand-enqueue! "ctx-b" :groundshock/fx-start {:mode :start})
+      (invoke-hand-enqueue! "ctx-a" :groundshock/fx-update {:mode :update :charge-ticks 2})
+      (invoke-hand-enqueue! "ctx-b" :groundshock/fx-update {:mode :update :charge-ticks 4})
       (let [snapshot (gfx/groundshock-fx-snapshot)]
         (is (= 2 (:charge-ticks (get (:hand-state snapshot) [:ctx "ctx-a"]))))
         (is (= 4 (:charge-ticks (get (:hand-state snapshot) [:ctx "ctx-b"]))))
         (is (= 6 (count @pitch-deltas*))))
-      (hand-effects/update-effect-state! :groundshock hand-enqueue-state! {:owner-key [:ctx "ctx-a"] :ctx-id "ctx-a" :mode :perform})
-      (hand-effects/update-effect-state! :groundshock hand-enqueue-state! {:owner-key [:ctx "ctx-b"] :ctx-id "ctx-b" :mode :end :performed? false})
+      (invoke-hand-enqueue! "ctx-a" :groundshock/fx-perform {:mode :perform})
+      (invoke-hand-enqueue! "ctx-b" :groundshock/fx-end {:mode :end :performed? false})
       (hand-effects/update-effect-state! :groundshock hand-tick-state!)
       (let [snapshot (gfx/groundshock-fx-snapshot)]
         (is (= 3 (:perform-ticks (get (:hand-state snapshot) [:ctx "ctx-a"]))))
         (is (nil? (get (:hand-state snapshot) [:ctx "ctx-b"]))))
       (gfx/clear-groundshock-owner! [:ctx "ctx-a"])
       (is (empty? (:hand-state (gfx/groundshock-fx-snapshot)))))))
-
-
 
 (deftest groundshock-fx-snapshot-default-without-registered-state-test
   (is (= {:hand-state {}}
