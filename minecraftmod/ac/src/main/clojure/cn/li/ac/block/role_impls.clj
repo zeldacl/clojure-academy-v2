@@ -21,8 +21,8 @@
 ;; ============================================================================
 
 (defn- assoc-energy
-  "Return state with :energy set. Top-level for partial in capability hot paths."
-  [state energy]
+  "Return state with :energy set. Arity [energy state] for `(partial assoc-energy v)` in commit-transform! hot paths."
+  [energy state]
   (assoc state :energy (double energy)))
 
 (deftype WirelessGeneratorImpl [be]

@@ -172,7 +172,8 @@
      :power01 (bal/clamp01 (/ energy max-energy))}))
 
 (declare current-ui-model-in-session)
-(declare render-skill-tree-area!)
+(declare init-skill-tree-area!)
+(declare refresh-skill-tree-click-targets!)
 
 (defn- current-ui-model [container player]
   (current-ui-model-in-session
@@ -504,9 +505,30 @@
      (bal/clamp01 (/ my (max 1.0 skill-tree-area-h)))]))
 
 (defn- make-tree-state []
-  (atom {:creation-time nil
-         :hover {:hover-idx nil}
+  (atom {:hover {:hover-skill-id nil}
          :hover-transitions {}}))
+
+(defn- skill-tree-open-anim
+  "Seconds since skill-tree area opened.
+  Uses wall clock + area metadata so expand animation advances while GUI is open (game may be paused)."
+  [area-widget]
+  (if-let [open-ms (get-in @(:metadata area-widget) [:skill-tree-open-ms])]
+    (/ (- (System/currentTimeMillis) (long open-ms)) 1000.0)
+    0.0))
+
+(defn- skill-tree-render-context
+  [session-id player container]
+  (let [uuid-str (when player (uuid/player-uuid player))
+        pstate (when uuid-str (store/get-player-state* session-id uuid-str))
+        dev-type (current-developer-type container)]
+    {:pstate pstate
+     :dev-type dev-type
+     :render-data (skill-tree/build-render-data-for-player-state pstate dev-type)}))
+
+(defn- remove-skill-tree-click-widgets! [area-widget]
+  (doseq [w (vec (cgui-core/get-widgets area-widget))
+          :when (get-in @(:metadata w) [:skill-tree-click?])]
+    (cgui-core/remove-widget! area-widget w)))
 
 (defn- update-hover-transitions!
   "Update per-node hover transitions in tree-state atom.
@@ -525,66 +547,85 @@
                      (let [cx (+ (:x closest-node) hw2 (- parallax-x))
                            cy (+ (:y closest-node) hw2 (- parallax-y))]
                        (Math/sqrt (+ (* (- mx cx) (- mx cx)) (* (- my cy) (- my cy))))))
-        hover-idx (:idx closest-node)
+        hover-sid (:skill-id closest-node)
         hover-now? (and closest-node (< (or hover-dist 999) 20))
-        prev-idx (get-in @tree-state [:hover :hover-idx])
-        prev-trans (get-in @tree-state [:hover-transitions prev-idx])
+        prev-sid (get-in @tree-state [:hover :hover-skill-id])
+        prev-trans (get-in @tree-state [:hover-transitions prev-sid])
         gate-open? (or (nil? prev-trans)
                       (>= (/ (- now (:start prev-trans)) 100.0) 1.0))]
-    (swap! tree-state assoc-in [:hover :hover-idx] hover-idx)
-    (when (and gate-open? (not= hover-idx prev-idx))
+    (swap! tree-state assoc-in [:hover :hover-skill-id] (when hover-now? hover-sid))
+    (when (and gate-open? (not= (when hover-now? hover-sid) prev-sid))
       (swap! tree-state update :hover-transitions
         (fn [m]
           (-> m
-              (cond-> prev-idx (assoc prev-idx {:start now :dir :out}))
-              (cond-> (and hover-now? hover-idx) (assoc hover-idx {:start now :dir :in}))))))))
+              (cond-> prev-sid (assoc prev-sid {:start now :dir :out}))
+              (cond-> (and hover-now? hover-sid) (assoc hover-sid {:start now :dir :in}))))))))
 
 (defn- build-panel-hover-args [tree-state]
-  {:hid    (get-in @tree-state [:hover :hover-idx])
+  {:hid    (get-in @tree-state [:hover :hover-skill-id])
    :htrans (:hover-transitions @tree-state)})
 
-(defn- render-skill-tree-area!
-  "Render skill tree nodes in parent_right/area.
-  Upstream: SkillTree.scala Common.initialize → area FrameEvent + per-skill widgets.
-  tree-state: per-session atom holding creation-time and hover-transition state."
+(defn- refresh-skill-tree-click-targets!
+  "Update parallax-shifted click targets each frame without rebuilding draw-ops host."
   [root area-widget container player tree-state]
-  (cgui-core/clear-widgets! area-widget)
   (try
-    (let [now (client-bridge/game-time-ms)
-          uuid-str (when player (uuid/player-uuid player))
-          session-id (runtime-hooks/require-player-state-session-id "developer.panel")
-          pstate (when uuid-str (store/get-player-state* session-id uuid-str))
-          dev-type (current-developer-type container)
-          render-data (skill-tree/build-render-data-for-player-state pstate dev-type)
+    (remove-skill-tree-click-widgets! area-widget)
+    (let [session-id (runtime-hooks/require-player-state-session-id "developer.panel")
+          {:keys [render-data dev-type]} (skill-tree-render-context session-id player container)
           nodes (:skill-nodes render-data)
-          _ (when (nil? (:creation-time @tree-state))
-              (swap! tree-state assoc :creation-time now))
-          anim (/ (- now (long (:creation-time @tree-state now))) 1000.0)
-          [mx my] (area-local-mouse root area-widget)
           [mx01 my01] (area-parallax-mouse01 root area-widget)
           parallax-x (* (- mx01 0.5) 10.0)
           parallax-y (* (- my01 0.5) 10.0)]
-      (client-bridge/draw-ops-host! area-widget
-        (fn []
-          (let [{:keys [hid htrans]} (build-panel-hover-args tree-state)]
-            (skill-tree/build-tree-ops render-data anim mx01 my01 hid htrans nil))))
-      (let [hover-w (cgui-core/create-widget :pos [0 0]
-                           :size [(int skill-tree-area-w) (int skill-tree-area-h)])]
-        (events/on-frame hover-w
-          (fn [_] (update-hover-transitions! tree-state nodes mx my parallax-x parallax-y)))
-        (cgui-core/add-widget! area-widget hover-w))
       (doseq [node nodes]
         (when (and (or (:can-learn node) (:learned node)) (not (:locked? node)))
           (let [click-x (int (- (:x node) parallax-x))
                 click-y (int (- (:y node) parallax-y))
                 click-sz (int skill-tree/widget-size)
                 click-w (cgui-core/create-widget :pos [click-x click-y] :size [click-sz click-sz])]
+            (swap! (:metadata click-w) assoc :skill-tree-click? true)
             (events/on-left-click click-w
               (fn [_] (create-skill-detail-overlay! root container (:skill-id node) dev-type)))
             (cgui-core/add-widget! area-widget click-w)))))
     (catch Exception e
-      (log/error "Skill tree render failed:" (ex-message e))
-      (log/stacktrace "Skill tree render failed" e))))
+      (log/error "Skill tree click-target refresh failed:" (ex-message e))
+      (log/stacktrace "Skill tree click-target refresh failed" e))))
+
+(defn- init-skill-tree-area!
+  "Initialize skill-tree draw-ops host + hover layer once when entering :skill-tree mode.
+  draw-ops ops-fn reads anim at render time so node/line expand animation can progress."
+  [root area-widget container player tree-state]
+  (swap! tree-state assoc :hover {:hover-skill-id nil} :hover-transitions {})
+  (cgui-core/clear-widgets! area-widget)
+  (try
+    (let [session-id (runtime-hooks/require-player-state-session-id "developer.panel")]
+      (let [host-w (client-bridge/draw-ops-host! area-widget
+                   (fn []
+                     (let [anim (skill-tree-open-anim area-widget)
+                           {:keys [render-data]} (skill-tree-render-context session-id player container)
+                           [mx01 my01] (area-parallax-mouse01 root area-widget)
+                           {:keys [hid htrans]} (build-panel-hover-args tree-state)]
+                       (skill-tree/build-tree-ops render-data anim mx01 my01 hid htrans nil))))]
+        (swap! (:metadata host-w) assoc :skill-tree-draw-host? true))
+      (let [hover-w (cgui-core/create-widget :pos [0 0]
+                           :size [(int skill-tree-area-w) (int skill-tree-area-h)])]
+        (swap! (:metadata hover-w) assoc :skill-tree-hover? true)
+        (events/on-frame hover-w
+          (fn [_]
+            (let [{:keys [render-data]} (skill-tree-render-context session-id player container)
+                  nodes (:skill-nodes render-data)
+                  [mx my] (area-local-mouse root area-widget)
+                  [mx01 my01] (area-parallax-mouse01 root area-widget)
+                  parallax-x (* (- mx01 0.5) 10.0)
+                  parallax-y (* (- my01 0.5) 10.0)]
+              (update-hover-transitions! tree-state nodes mx my parallax-x parallax-y))))
+        (cgui-core/add-widget! area-widget hover-w))
+      (refresh-skill-tree-click-targets! root area-widget container player tree-state)
+      (swap! (:metadata area-widget)
+        assoc :skill-tree-inited? true
+             :skill-tree-open-ms (System/currentTimeMillis)))
+    (catch Exception e
+      (log/error "Skill tree init failed:" (ex-message e))
+      (log/stacktrace "Skill tree init failed" e))))
 
 (defn- make-dev-start-callback
   "Build a callback that writes server rejection reason to console state."
@@ -719,7 +760,7 @@
             (let [mode (right-panel-mode nil container pl)]
               (when (not= mode @last-mode)
                 (reset! last-mode mode)
-                (swap! tree-state assoc :creation-time nil)
+                (swap! (:metadata right-area) dissoc :skill-tree-inited? :skill-tree-open-ms)
                 (when (not= mode :skill-tree) (cgui-core/clear-widgets! right-area))
                 (case mode
                   :console (render-console-area! root right-area container pl :learn)
@@ -727,7 +768,9 @@
                   :skill-tree nil
                   nil))
               (when (= mode :skill-tree)
-                (render-skill-tree-area! root right-area container pl tree-state)))))))
+                (when-not (get-in @(:metadata right-area) [:skill-tree-inited?])
+                  (init-skill-tree-area! root right-area container pl tree-state))
+                (refresh-skill-tree-click-targets! root right-area container pl tree-state)))))))
 
     root))
 

@@ -300,10 +300,11 @@
                       x0 (+ from-x (* ndx 12.2)) y0 (+ from-y (* ndy 12.2))
                       x1-full (- to-x (* ndx 12.2)) y1-full (- to-y (* ndy 12.2))
                       ;; Animate endpoint from x0 outward — matches upstream drawLine(progress)
-                      blend (or lb 1.0)
+                      ;; Do not use (or lb 1.0): lb=0 is valid and must not fall through to full length.
+                      blend (double (if (some? lb) lb 1.0))
                       x1 (lerp x0 x1-full blend)
                       y1 (lerp y0 y1-full blend)]
-                  (when (> blend 0)
+                  (when (pos? blend)
                     [{:kind :line-quad :x0 x0 :y0 y0 :x1 x1 :y1 y1
                       :line-width 5.5 :color color}])))))
           connections))
