@@ -35,13 +35,11 @@
 (def block-state-properties
   (state-schema/extract-block-state-properties node-schema/blockstate-property-fields))
 
-(def update-block-state!
-  (state-schema/build-block-state-updater node-schema/blockstate-property-fields))
-
-(defn node-types
-  "Single source of truth for per-tier capability values."
-  []
-  (node-config/node-types))
+;; ── energy->blockstate-level and its dependencies MUST be defined ──
+;; BEFORE update-block-state! below.  build-block-state-updater calls
+;; ns-resolve on the :xf symbol at closure-creation time; if the var
+;; doesn't exist yet, ns-resolve returns nil and the raw double energy
+;; value is passed to IntegerProperty, which rejects it.
 
 (defn node-tier
   [state]
@@ -53,10 +51,20 @@
   (node-config/max-energy (node-tier state)))
 
 (defn energy->blockstate-level
-  "Transform energy value to BlockState level (0-4) for visual display."
+  "Transform energy value to BlockState level (0-4) for visual display.
+   Must return int (not Long) — IntegerProperty.setValue requires Integer.
+   Clojure's min promotes to Long, so wrap with (int …)."
   [e s]
   (let [max-e (double (node-max-energy s))]
-    (min 4 (int (Math/round (* 4.0 (/ (double e) (max 1.0 max-e))))))))
+    (int (min 4 (Math/round (* 4.0 (/ (double e) (max 1.0 max-e))))))))
+
+(def update-block-state!
+  (state-schema/build-block-state-updater node-schema/blockstate-property-fields))
+
+(defn node-types
+  "Single source of truth for per-tier capability values."
+  []
+  (node-config/node-types))
 
 (defn parse-node-type
   [block-id-or-kw]
@@ -204,24 +212,22 @@
                       0)
           max-cap (if network (network-state/get-capacity network level) 0)]
       (assoc state :enabled connected? :capacity conn-load :max-capacity max-cap))
-    (catch Exception _
+    (catch Exception e
+      (log/stacktrace (str "[wireless-node] tick-check-network failed at " block-pos) e)
       (assoc state :enabled false :capacity 0 :max-capacity 0))))
 
 (defn- sync-blockstate-if-changed!
-  "1.20-idiomatic BlockState update: cheap in-memory comparison first, then
-   only touch the world BlockState when the visual level actually differs.
-   Mirrors the vanilla pattern used by Furnace (lit), Respawn Anchor (charges), etc.
+  "Sync BlockState properties from BE state to world BlockState.
+   Compares against the CURRENT world BlockState (not old BE state)
+   to handle world reload where BlockState resets to defaults while
+   BE state persists from NBT.
 
-   Called via :after-commit! in make-tick-fn every tick the state changes,
-   and also usable as a safety net for direct state commits."
-  [_be level pos old-state new-state _ctx]
+   Called via :after-commit! in make-tick-fn every tick the state changes."
+  [_be level pos _old-state new-state _ctx]
   (when (and level pos)
-    (let [old-level (energy->blockstate-level (:energy old-state 0) new-state)
-          new-level (energy->blockstate-level (:energy new-state 0) new-state)
-          old-enabled (:enabled old-state false)
-          new-enabled (:enabled new-state false)]
-      (when (or (not= new-level old-level) (not= new-enabled old-enabled))
-        (update-block-state! new-state level pos)))))
+    ;; Always call update-block-state! — it reads the current BlockState
+    ;; internally and only writes when the values actually differ.
+    (update-block-state! new-state level pos)))
 
 (defn node-tick-state
   [state {:keys [level pos be]}]

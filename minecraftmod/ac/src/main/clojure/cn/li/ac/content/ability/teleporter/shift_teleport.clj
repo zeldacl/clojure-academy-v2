@@ -145,6 +145,20 @@
         dz (- (double pz) qz)]
     (+ (* dx dx) (* dy dy) (* dz dz))))
 
+(defn- line-target-filter?
+  "True when entity intersects the line segment and is not the player."
+  [player-id eye-pos dest-pos entity]
+  (let [uuid (str (:uuid entity))]
+    (and (seq uuid)
+         (not= uuid (str player-id))
+         (segment-intersects-aabb? eye-pos dest-pos (entity-aabb entity)))))
+
+(defn- line-target-dist-sq
+  "Squared distance from entity to the line segment, for nearest-first sort."
+  [eye-pos dest-pos entity]
+  (point-line-distance-sq eye-pos dest-pos
+                          {:x (:x entity) :y (:y entity) :z (:z entity)}))
+
 (defn- line-targets
   "Return entities intersecting segment eye->destination in stable near-to-far order."
   [player-id world-id eye-pos dest-pos]
@@ -161,14 +175,8 @@
                        min-x min-y min-z
                        max-x max-y max-z)]
       (->> candidates
-           (filter (fn [entity]
-                     (let [uuid (str (:uuid entity))]
-                       (and (seq uuid)
-                            (not= uuid (str player-id))
-                            (segment-intersects-aabb? eye-pos dest-pos (entity-aabb entity))))))
-           (sort-by (fn [entity]
-                      (point-line-distance-sq eye-pos dest-pos
-                                              {:x (:x entity) :y (:y entity) :z (:z entity)})))
+           (filter (partial line-target-filter? player-id eye-pos dest-pos))
+           (sort-by (partial line-target-dist-sq eye-pos dest-pos))
            (reduce (fn [acc entity]
                      (let [uuid (str (:uuid entity))]
                        (if (contains? (:seen acc) uuid)

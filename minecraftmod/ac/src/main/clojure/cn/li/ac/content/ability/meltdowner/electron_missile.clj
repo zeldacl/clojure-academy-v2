@@ -46,6 +46,19 @@
 (defn- skill-exp [player-id]
   (skill-effects/skill-exp player-id electron-missile-skill-id))
 
+(defn- missile-filter-self
+  "Remove the shooter from candidate list."
+  [player-id e]
+  (not= (str (:uuid e)) (str player-id)))
+
+(defn- missile-dist-sq-from-eye
+  "Squared distance from eye position to entity, for nearest-first sort."
+  [eye e]
+  (let [dx (- (double (:x e)) (double (:x eye)))
+        dy (- (double (:y e)) (double (:y eye)))
+        dz (- (double (:z e)) (double (:z eye)))]
+    (+ (* dx dx) (* dy dy) (* dz dz))))
+
 (defn- find-nearest-entity [player-id world-id exp]
   (when (world-effects/available?)
     (let [seek-range (cfg-lerp :targeting.seek-range exp)
@@ -57,13 +70,9 @@
                        (double (:z eye))
                        (double seek-range))]
       (->> candidates
-           (filter (fn [e] (not= (str (:uuid e)) (str player-id))))
+           (filter (partial missile-filter-self player-id))
            (filter (fn [e] (:living? e false)))
-           (sort-by (fn [e]
-                      (let [dx (- (double (:x e)) (double (:x eye)))
-                            dy (- (double (:y e)) (double (:y eye)))
-                            dz (- (double (:z e)) (double (:z eye)))]
-                        (+ (* dx dx) (* dy dy) (* dz dz)))))
+           (sort-by (partial missile-dist-sq-from-eye eye))
            first))))
 
 (defn- current-overload [player-id]

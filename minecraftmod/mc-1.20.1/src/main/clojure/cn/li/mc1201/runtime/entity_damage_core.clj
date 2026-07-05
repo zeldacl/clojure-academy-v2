@@ -34,20 +34,25 @@
   [origin-pos target-pos radius damage falloff?]
   (power-runtime/compute-aoe-damage origin-pos target-pos radius damage falloff?))
 
+(defn- aoe-hit-step
+  "Single AOE hit step: compute damage and apply if > 0.  All context passed
+  explicitly so this fn stays statically compilable."
+  [origin-pos radius damage falloff? apply-damage! hit-uuids ^LivingEntity entity]
+  (let [target-pos (entity-pos-map entity)
+        actual-damage (compute-aoe-damage origin-pos target-pos radius damage falloff?)]
+    (if (> actual-damage 0.0)
+      (do
+        (apply-damage! entity actual-damage)
+        (conj hit-uuids (str (.getUUID entity))))
+      hit-uuids)))
+
 (defn apply-aoe-damage-flow!
   "Apply AOE damage over an entity sequence and return hit entity UUID strings.
 
   `apply-damage!` receives `[entity actual-damage]` and should perform concrete
   platform-side hurt calls."
   [entities origin-pos radius damage falloff? apply-damage!]
-  (reduce (fn [hit-uuids ^LivingEntity entity]
-            (let [target-pos (entity-pos-map entity)
-                  actual-damage (compute-aoe-damage origin-pos target-pos radius damage falloff?)]
-              (if (> actual-damage 0.0)
-                (do
-                  (apply-damage! entity actual-damage)
-                  (conj hit-uuids (str (.getUUID entity))))
-                hit-uuids)))
+  (reduce (partial aoe-hit-step origin-pos radius damage falloff? apply-damage!)
           []
           entities))
 

@@ -125,6 +125,20 @@
                               (double (:dx look-dir)) (double (:dy look-dir)) (double (:dz look-dir))
                               (double (cfg-double :targeting.range)))))
 
+(defn- scatter-remove-self-and-silbarn
+  "Remove the player and the silbarn projectile from scatter target candidates."
+  [player-id silbarn-uuid {:keys [uuid]}]
+  (or (= (str uuid) (str player-id))
+      (= (str uuid) silbarn-uuid)))
+
+(defn- scatter-dist-sq-from-hit
+  "Squared distance from hit point to entity, for nearest-first sort."
+  [sx sy sz {:keys [x y z]}]
+  (let [dx (- (double x) sx)
+        dy (- (double y) sy)
+        dz (- (double z) sz)]
+    (+ (* dx dx) (* dy dy) (* dz dz))))
+
 (defn- select-scatter-targets
   [world-id silbarn-hit player-id]
   (if-not (world-effects/available?)
@@ -136,14 +150,8 @@
           targets (->> (world-effects/find-entities-in-radius*
                          world-id sx sy sz
                          (double (cfg-double :scatter.target-radius)))
-                       (remove (fn [{:keys [uuid]}]
-                                 (or (= (str uuid) (str player-id))
-                                     (= (str uuid) silbarn-uuid))))
-                       (sort-by (fn [{:keys [x y z]}]
-                                  (let [dx (- (double x) sx)
-                                        dy (- (double y) sy)
-                                        dz (- (double z) sz)]
-                                    (+ (* dx dx) (* dy dy) (* dz dz)))))
+                       (remove (partial scatter-remove-self-and-silbarn player-id silbarn-uuid))
+                       (sort-by (partial scatter-dist-sq-from-hit sx sy sz))
                        vec)
           max-count (max 0 (int (cfg-int :scatter.count)))]
       (if (<= max-count 0)

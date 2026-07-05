@@ -669,6 +669,70 @@ Java 骨架类：`mc-1.20.1/src/main/java/cn/li/mc1201/shim/`
 
 ---
 
+#### 铁律十三：禁止循环/高频路径内的闭包捕获外层变量（强制）
+
+**根源**：Minecraft 1.20.1 全量 AOT 编译 + Forge ModLauncher 环境下，若匿名函数 `(fn [...] ...)` 嵌套在 `reduce`/`map`/`doseq`/`filter` 等循环构造内，且该匿名函数**捕获了外层函数参数或 let 绑定中的变量**（非自身参数），Clojure AOT 编译器无法将此匿名函数固化为单一静态类。运行时每次调用外层函数时，JVM 都会在 Metaspace 中**动态生成全新的闭包类**。
+
+后果：
+- **Metaspace 内存泄漏**：每个新类约占用 1-2KB Metaspace，高频 Tick 路径（每秒 20 tick × N 个方块）在数分钟内产生数万个临时类，最终 `OutOfMemoryError: Metaspace`。
+- **Full GC 卡顿**：JVM 回收这些类需要 Full GC（Stop-The-World），导致游戏间歇性冻结。
+- **`re:classloading` 堆栈污染**：Forge ModLauncher 对每个动态生成类标记 `re:classloading`，异常栈中出现数百次重复标记。
+
+**危险模式 vs 安全模式**：
+
+```clojure
+;; ❌ 危险：reduce 内的 fn 捕获了外层 state、state-def、pos
+(defn build-updater [fields]
+  (let [specs (precompile fields)]
+    (fn [state level pos]
+      (let [bs (get-block-state level pos)
+            sd (get-state-def bs)]
+        (reduce (fn [acc spec]              ;; ← 此 fn 捕获 state, sd, pos, bs
+                  (let [prop (get-property sd (:prop spec))]
+                    (set-property acc prop (get state (:key spec)))))
+                bs
+                specs)))))
+
+;; ✅ 安全：提取为顶层 defn-，通过 partial 显式传参
+(defn- step-property [state bs-state state-def pos acc spec]
+  (let [prop (get-property state-def (:prop spec))]
+    (set-property acc prop (get state (:key spec)))))
+
+(defn build-updater [fields]
+  (let [specs (precompile fields)]
+    (fn [state level pos]
+      (let [bs (get-block-state level pos)
+            sd (get-state-def bs)]
+        (reduce (partial step-property state bs sd pos)  ;; partial 零运行时开销
+                bs
+                specs)))))
+```
+
+**判定标准**：
+
+| 场景 | 安全性 | 说明 |
+|------|--------|------|
+| `(map (fn [x] ...) coll)` — fn 只使用自身参数 `x` | ✅ 安全 | AOT 固化为静态类 |
+| `(reduce (fn [acc x] ...) init coll)` — fn 只使用自身参数 | ✅ 安全 | AOT 固化为静态类 |
+| 上述任一模式 + fn 引用外层 let/param 变量 | ❌ 危险 | 运行时每次调用生成新类 |
+| 顶层 `def` 中的 `(into {} (map (fn ...) coll))` | ✅ 安全 | 只执行一次，不反复生成 |
+| 仅为启动/数据生成路径（非 Tick/帧循环） | 🟡 低风险 | 生成次数有限，但建议修复 |
+
+**修复口诀**：
+1. 将闭包提取为顶层 `defn-`（命名函数）。
+2. 原外层变量通过 `partial` 或显式参数传入。
+3. **结构静态化，数据动态化** — 函数逻辑编译期固定，只有数据在运行期变化。
+
+**已知高风险文件**（待修复）：
+- `ac/ability/effects/beam.clj:28-38` — 4 个 fn 捕获外层变量（beam-candidates 热路径）
+- `mc-1.20.1/runtime/entity_damage_core.clj:43` — reduce 捕获 5 个外层变量（AOE damage tick）
+- `ac/ability/server/damage/entity.clj:25-29` — 3 个 fn 捕获外层变量（reflection chain）
+- `ac/content/ability/teleporter/shift_teleport.clj:164-178` — filter + sort-by 捕获外层（tick channeling）
+- `ac/content/ability/meltdowner/electron_missile.clj:60-62` — filter + sort-by 捕获外层（missile targeting）
+- `ac/content/ability/meltdowner/ray_barrage.clj:139-146` — remove + sort-by 捕获外层（scatter targeting）
+
+---
+
 ### ac → mcmod → mc-1.20.1 三层 IoC 架构（强制）
 
 ac（内容层）、mcmod（框架中转层）、mc-1.20.1（游戏适配层）形成严格的单向依赖链。**每层有且仅有一个职责**，禁止跨层感知。

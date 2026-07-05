@@ -246,6 +246,30 @@
         :max (:max bs)
         :default (:default bs)}])))
 
+;; ── BlockState reduce step (top-level to prevent runtime class-gen explosion) ──
+;; Extracted from build-block-state-updater so AOT compiles it to a single static
+;; class.  Using partial at the call site passes the captured context explicitly,
+;; avoiding the inner fn capturing outer closure vars which would force runtime JIT
+;; class generation on every tick.
+
+(defn- step-block-state-property
+  "Apply a single BlockState property update.  All context is passed explicitly
+  so this fn stays statically compilable (zero runtime class generation)."
+  [state bs-state state-def pos bs spec]
+  (let [prop-name (:prop (:block-state spec))
+        raw-val   (get state (:key spec) (:default spec))
+        xf-fn     (:xf (:block-state spec))
+        val       (if xf-fn
+                    (xf-fn raw-val state)
+                    raw-val)
+        prop      (when state-def
+                    (platform-world/block-state-get-property bs-state state-def prop-name))]
+    (when-not prop
+      (log/warn "[blockstate-updater] property not found:" prop-name "for block at" pos))
+    (if prop
+      (platform-world/block-state-set-property bs prop val)
+      bs)))
+
 (defn build-block-state-updater
   "Generate BlockState updater function from nested :block-state format.
 
@@ -267,27 +291,19 @@
                        (filterv #(get % :block-state) blockstate-fields))]
     (fn [state level pos]
       (try
-        (when-let [blk-state (platform-world/world-get-block-state* level pos)]
+        (if-let [blk-state (platform-world/world-get-block-state* level pos)]
           (let [state-def (platform-world/block-state-get-state-definition blk-state)
-                new-bs    (reduce
-                           (fn [bs spec]
-                             (let [prop-name (:prop (:block-state spec))
-                                   raw-val   (get state (:key spec) (:default spec))
-                                   xf-fn     (:xf (:block-state spec))
-                                   val       (if xf-fn
-                                               (xf-fn raw-val state)
-                                               raw-val)
-                                   prop      (when state-def
-                                               (platform-world/block-state-get-property blk-state state-def prop-name))]
-                               (if prop
-                                 (platform-world/block-state-set-property bs prop val)
-                                 bs)))
-                           blk-state
-                           bs-specs)]
+                _ (when-not state-def
+                    (log/warn "[blockstate-updater] state-def is nil for block at" pos))
+                new-bs (reduce
+                        (partial step-block-state-property state blk-state state-def pos)
+                        blk-state
+                        bs-specs)]
             (when (not= new-bs blk-state)
-              (platform-world/world-set-block* level pos new-bs 3))))
+              (platform-world/world-set-block* level pos new-bs 3)))
+          (log/warn "[blockstate-updater] world-get-block-state* returned nil for" pos))
         (catch Exception e
-          (log/warn "Failed to update block state for" pos ":" (ex-message e)))))))
+          (log/stacktrace (str "Failed to update block state for " pos) e))))))
 
 ;; ============================================================================
 ;; Network Handler Generation
