@@ -526,3 +526,14 @@
      {:skill-id     skill-id
       :callback-key callback-key
       :event        event})))
+
+(defn create-dispatcher-runtime
+  "Test/runtime factory for the context dispatcher store."
+  []
+  {::runtime ::context-dispatcher
+   :state* (dispatcher-state-atom)})
+
+(defn call-with-dispatcher-runtime
+  "Run `f` with dispatcher runtime installed (identity wrapper for test isolation)."
+  [_runtime f]
+  (f))

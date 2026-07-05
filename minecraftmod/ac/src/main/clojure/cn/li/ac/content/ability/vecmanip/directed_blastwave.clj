@@ -53,7 +53,7 @@
 (defn- terminate-with-end!
   [ctx-id performed?]
   (fx/send! ctx-id {:topic :directed-blastwave/fx-end :mode :end} nil {:performed? performed?})
-  (when-let [ctx-data (ctx/get-context ctx-id)]
+  (when-let [ctx-data (ctx-skill/get-context ctx-id)]
     (set-skill-state-root! ctx-id (assoc (:skill-state ctx-data) :performed? performed?)))
   (clear-skill-state! ctx-id)
   (ctx/terminate-context! ctx-id nil))
@@ -152,7 +152,7 @@
              (fx/send! ctx-id {:topic :directed-blastwave/fx-start :mode :start})
              (fx/send! ctx-id {:topic :directed-blastwave/fx-update :mode :update} nil {:charge-ticks 0 :punched? false}))
    :tick!  (fn [{:keys [ctx-id]}]
-             (when-let [ctx-data (ctx/get-context ctx-id)]
+             (when-let [ctx-data (ctx-skill/get-context ctx-id)]
                (let [ss          (:skill-state ctx-data)
                      next-charge (inc (long (or (:charge-ticks ss) 0)))
                      punched?    (boolean (:punched? ss))
@@ -167,7 +167,7 @@
                    (and punched? (> next-punch (cfg-int :charge.punch-anim-ticks)))
                    (terminate-with-end! ctx-id true)))))
    :up!    (fn [{:keys [player-id ctx-id exp cost-ok?]}]
-             (when-let [ctx-data (ctx/get-context ctx-id)]
+             (when-let [ctx-data (ctx-skill/get-context ctx-id)]
                (let [charge-ticks (long (or (get-in ctx-data [:skill-state :charge-ticks]) 0))
                      exp*         (exp01 exp)]
                  (if (and (> charge-ticks (cfg-int :charge.min-ticks))

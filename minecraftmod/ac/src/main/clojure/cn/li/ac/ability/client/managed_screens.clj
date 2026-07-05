@@ -25,6 +25,10 @@
   {::runtime ::managed-screen-runtime
    :state* (managed-screen-state-atom)})
 
+(defn call-with-managed-screen-runtime
+  [_runtime f]
+  (f))
+
 (defn managed-screen-state-snapshot [] @(managed-screen-state-atom))
 
 (defn reset-managed-screen-state-for-test! []

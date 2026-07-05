@@ -99,7 +99,7 @@
 
 (defn- release-hit
   [player-id ctx-id stage]
-  (let [ticks (long (or (get-in (ctx/get-context ctx-id) [:skill-state :ticks]) 0))
+  (let [ticks (long (or (get-in (ctx-skill/get-context ctx-id) [:skill-state :ticks]) 0))
         should-release? (case stage
                           :tick (>= (inc ticks) (cfg-int :charge.max-ticks))
                           :up true
@@ -236,7 +236,7 @@
 (defn blood-retrograde-on-key-tick
   "Update charge progress and auto-release at max charge."
   [{:keys [player-id ctx-id cost-ok?]}]
-  (when-let [ctx-data (ctx/get-context ctx-id)]
+  (when-let [ctx-data (ctx-skill/get-context ctx-id)]
     (let [skill-state (:skill-state ctx-data)
           executed? (boolean (:executed? skill-state false))]
       (when-not executed?
@@ -255,7 +255,7 @@
 (defn blood-retrograde-on-key-up
   "Execute the skill on release if a valid target is found."
   [{:keys [player-id ctx-id cost-ok?]}]
-  (when-let [ctx-data (ctx/get-context ctx-id)]
+  (when-let [ctx-data (ctx-skill/get-context ctx-id)]
     (let [skill-state (:skill-state ctx-data)
           executed? (boolean (:executed? skill-state false))]
       (when-not executed?
@@ -268,7 +268,7 @@
 (defn blood-retrograde-on-key-abort
   "Clean up charge state on abort."
   [{:keys [ctx-id]}]
-  (when-let [ctx-data (ctx/get-context ctx-id)]
+  (when-let [ctx-data (ctx-skill/get-context ctx-id)]
     (when-not (get-in ctx-data [:skill-state :ended?])
       (fx/send! ctx-id {:topic :blood-retrograde/fx-end :mode :end} nil {:performed? false})))
   (clear-skill-state! ctx-id)

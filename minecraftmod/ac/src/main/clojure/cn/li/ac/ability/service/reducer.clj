@@ -25,7 +25,6 @@
             [cn.li.ac.ability.registry.category :as category]
             [cn.li.ac.ability.registry.event :as evt]
             [cn.li.ac.ability.config :as cfg]
-            [cn.li.ac.terminal.model :as terminal-model]
             [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
@@ -582,9 +581,6 @@
             (contains? cmd :cooldown-data) (assoc :cooldown-data (:cooldown-data cmd))
             (contains? cmd :preset-data) (assoc :preset-data (:preset-data cmd))
             (contains? cmd :develop-data) (assoc :develop-data (:develop-data cmd))
-            (contains? cmd :terminal-data)
-            (assoc terminal-model/state-key
-                   (terminal-model/normalize-state (:terminal-data cmd)))
             (contains? cmd :context-registry) (assoc :context-registry (:context-registry cmd))
             (contains? cmd :runtime-data) (assoc :runtime (:runtime-data cmd))
             (contains? cmd :dirty?) (assoc :dirty? (boolean (:dirty? cmd)))))))
@@ -592,6 +588,10 @@
   (defn- cmd-set-dirty-flag
     [player-state {:keys [dirty?] :or {dirty? false}}]
     (ok (assoc player-state :dirty? (boolean dirty?))))
+
+  (defn- cmd-set-cheats-enabled
+    [player-state {:keys [enabled?]}]
+    (ok (assoc player-state :cheats-enabled? (boolean enabled?))))
 
   (defn- cmd-context-assoc-skill-state
     [player-state {:keys [ctx-id k v]}]
@@ -879,6 +879,7 @@
 (defmethod apply-command :enforce-overload-floor [ps cmd] (cmd-enforce-overload-floor ps cmd))
 (defmethod apply-command :hydrate-player-state [ps cmd] (cmd-hydrate-player-state ps cmd))
 (defmethod apply-command :set-dirty-flag [ps cmd] (cmd-set-dirty-flag ps cmd))
+(defmethod apply-command :set-cheats-enabled [ps cmd] (cmd-set-cheats-enabled ps cmd))
 (defmethod apply-command :context-assoc-skill-state [ps cmd] (cmd-context-assoc-skill-state ps cmd))
 (defmethod apply-command :context-increment-skill-state [ps cmd] (cmd-context-increment-skill-state ps cmd))
 (defmethod apply-command :context-set-toggle-state [ps cmd] (cmd-context-set-toggle-state ps cmd))

@@ -62,7 +62,15 @@
 (defn- managed-screen-runtime []
   (managed-screens/create-managed-screen-runtime))
 
-(defn- call-with-managed-screen-runtime [f] (f))
+(defn call-with-managed-screen-runtime [f] (f))
+
+(defn create-client-ui-runtime []
+  {::runtime ::client-ui
+   :state* (client-ui-runtime-state-atom)})
+
+(defn call-with-client-ui-runtime
+  [_runtime f]
+  (f))
 
 (defn- active-managed-screen-owner
   [screen-key]

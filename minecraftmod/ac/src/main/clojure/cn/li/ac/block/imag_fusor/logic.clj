@@ -199,9 +199,9 @@
   (try
     (when (world-effects/available?)
       (let [world-id (world/world-get-dimension-id* level)
-            x (pos/position-get-x pos)
-            y (pos/position-get-y pos)
-            z (pos/position-get-z pos)]
+            x (pos/pos-x pos)
+            y (pos/pos-y pos)
+            z (pos/pos-z pos)]
         (world-effects/play-sound!* world-id
                                      (double x) (double y) (double z)
                                      fusor-sound-id

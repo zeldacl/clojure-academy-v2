@@ -23,7 +23,7 @@
             [cn.li.mc1201.gui.cgui.font :as cgui-font]
             [cn.li.mc1201.client.session :as mc-session]
             [cn.li.forge1201.client.runtime-bridge :as runtime-bridge]
-            [cn.li.forge1201.client.key-input :as key-input]
+            [cn.li.forge1201.client.key-mapping-adapter :as key-mapping-adapter]
             [cn.li.forge1201.client.overlay-renderer :as overlay-renderer]
             [cn.li.forge1201.client.cgui-screen-bridge :as cgui-screen-bridge]
             [cn.li.forge1201.client.hand-effect-renderer :as hand-effect-renderer]
@@ -231,10 +231,7 @@
 (defn register-key-mappings!
   "Register all runtime KeyMapping instances to Forge input system."
   [^RegisterKeyMappingsEvent event]
-  ;; Ensure mappings are created even if this event fires before client setup enqueueWork.
-  (key-input/register-keybinds!)
-  (let [all-keys (concat (key-input/get-slot-keys)
-                         (key-input/get-screen-keys))]
+  (let [all-keys (key-mapping-adapter/get-all-key-mappings)]
     (doseq [^KeyMapping key all-keys]
       (.register event key))
     (log/info "Registered runtime key mappings:" (count all-keys))))
@@ -255,7 +252,6 @@
   (register-fluid-render-layers!)
 
   ;; Runtime client systems
-  (key-input/init!)
   (runtime-bridge/init!)
   (overlay-renderer/init!)
   (screen-host/init!)

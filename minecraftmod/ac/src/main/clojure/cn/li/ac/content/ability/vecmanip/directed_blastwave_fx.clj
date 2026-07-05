@@ -1,6 +1,6 @@
 (ns cn.li.ac.content.ability.vecmanip.directed-blastwave-fx
   "Client FX for Directed Blastwave: charge ring + expanding wave rings."
-  (:require [cn.li.ac.ability.client.effects.sounds :as client-sounds]
+  (:require [cn.li.ac.util.math.vec3 :as vec3] [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-spec :as fx-spec]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.render-util :as ru]))
@@ -138,12 +138,12 @@
 
 (defn- basis
   [dir]
-  (let [n-dir (ru/vnormalize dir)
+  (let [n-dir (vec3/vnorm dir)
         up-axis (if (> (Math/abs (double (:y n-dir))) 0.95)
                   {:x 1.0 :y 0.0 :z 0.0}
                   {:x 0.0 :y 1.0 :z 0.0})
-        right (ru/vnormalize (ru/vcross n-dir up-axis))
-        up (ru/vnormalize (ru/vcross right n-dir))]
+        right (vec3/vnorm (vec3/vcross n-dir up-axis))
+        up (vec3/vnorm (vec3/vcross right n-dir))]
     [right up n-dir]))
 
 (defn- wave-ops
@@ -161,14 +161,14 @@
                 real-alpha (min max-alpha alpha)]
             (if (<= real-alpha 0.0)
               []
-              (let [center (ru/v+ pos (ru/v* forward (+ (double offset) z-offset)))
+              (let [center (vec3/v+ pos (vec3/v* forward (+ (double offset) z-offset)))
                     ring-size (* (double size) ss)
-                    side (ru/v* right (* ring-size 0.5))
-                    vertical (ru/v* up (* ring-size 0.5))
-                    p0 (ru/v+ (ru/v- center side) vertical)
-                    p1 (ru/v+ (ru/v+ center side) vertical)
-                    p2 (ru/v- (ru/v+ center side) vertical)
-                    p3 (ru/v- (ru/v- center side) vertical)
+                    side (vec3/v* right (* ring-size 0.5))
+                    vertical (vec3/v* up (* ring-size 0.5))
+                    p0 (vec3/v+ (vec3/v- center side) vertical)
+                    p1 (vec3/v+ (vec3/v+ center side) vertical)
+                    p2 (vec3/v- (vec3/v+ center side) vertical)
+                    p3 (vec3/v- (vec3/v- center side) vertical)
                     alpha-i (int (max 0 (min 255 (* 255.0 real-alpha 0.7))))]
                 [(ru/quad-op "my_mod:textures/effects/glow_circle.png"
                              p0 p1 p2 p3

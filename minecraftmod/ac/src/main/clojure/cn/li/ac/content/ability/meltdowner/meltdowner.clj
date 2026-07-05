@@ -1,5 +1,5 @@
 (ns cn.li.ac.content.ability.meltdowner.meltdowner
-  "Meltdowner skill é”Ÿ?charge-window beam with block-breaking and reflection.
+  "Meltdowner skill é”?charge-window beam with block-breaking and reflection.
 
   Uses the escape-hatch pattern: fn hooks for overload-floor enforcement and
   min/max charge-window gating; :beam op (effect.beam) for the actual shot.
@@ -181,7 +181,7 @@
 (defn- meltdowner-on-tick!
   [{:keys [player-id ctx-id hold-ticks]}]
   (let [ticks (long (or hold-ticks 0))]
-    (when-let [floor (get-in (ctx/get-context ctx-id) [:skill-state :overload-floor])]
+    (when-let [floor (get-in (ctx-skill/get-context ctx-id) [:skill-state :overload-floor])]
       (enforce-overload-floor! player-id floor))
     (when (> ticks (ticks-tolerant))
       (fx/send! ctx-id {:topic :meltdowner/fx-end} nil {:performed? false})

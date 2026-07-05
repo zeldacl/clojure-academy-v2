@@ -93,7 +93,6 @@
                       :life-ratio (/ (double ttl) (double (max 1 max-ttl)))}))
 
 (defn- build-plan [camera-pos _hand-center-pos _tick]
-  (arc/tick-wiggle-phase!)
   (let [items (all-arcs)
         ops (mapcat #(arc-ops camera-pos %) items)]
     (when (seq ops)

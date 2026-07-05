@@ -3,7 +3,7 @@
   (:require [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.events.world-lifecycle :as world-lifecycle]
             [cn.li.mcmod.events.world-save-cache :as world-save-cache]
-            [cn.li.ac.wireless.data.world-registry :as world-registry]
+            [cn.li.mcmod.events.world-state-notify :as world-state-notify]
             [cn.li.mcmod.platform.world-owner-key :as wok]
             [cn.li.forge1201.integration.saveddata.world-lifecycle :as wl-saved])
 	  (:import [net.minecraft.server.level ServerLevel]
@@ -98,12 +98,12 @@
       (swap! level-saved-data-by-key dissoc GLOBAL-KEY))))
 
 (defn register-on-world-state-changed!
-  "Generic hook: subscribes to all world-state mutations (wireless networks,
-  connections, or any future module storing data via world-registry).
+  "Generic hook: subscribes to all world-state mutations (world-registry modules
+  and connections, or any future module storing data via world-registry).
   When state changes, calls setDirty() on the Forge WorldLifecycleSavedData
   so the next save cycle picks it up — no LevelEvent$Save timing dependency."
   []
-  (world-registry/set-on-world-state-changed-fn!
+  (world-state-notify/set-on-world-state-changed-fn!
     (fn [world-key]
       (when-let [sd (get @level-saved-data-by-key world-key)]
         (.setDirty ^cn.li.forge1201.integration.saveddata.WorldLifecycleSavedData sd))))

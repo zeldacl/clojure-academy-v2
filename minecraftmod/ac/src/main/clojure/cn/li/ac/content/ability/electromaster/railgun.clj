@@ -1,5 +1,5 @@
 (ns cn.li.ac.content.ability.electromaster.railgun
-  "Railgun skill é”Ÿ?coin-QTE + iron-item charge mechanic.
+  "Railgun skill é”?coin-QTE + iron-item charge mechanic.
 
   Complex skill using the escape-hatch pattern: fn hooks for the custom
   coin-QTE / item-charge logic; :beam op (effect.beam) for the actual shot.
@@ -50,7 +50,7 @@
 (defn- reflection-distance [] (cfg-double :reflection.distance))
 (defn- reflection-damage [] (cfg-double :reflection.damage))
 (defn- railgun-exp-gain [_hit? reflection-hit?]
-  ;; Original: hitEntity only set on reflection hit â†’ 0.01; otherwise 0.005
+  ;; Original: hitEntity only set on reflection hit â†?0.01; otherwise 0.005
   (if reflection-hit?
     (cfg-double :progression.exp-reflection-hit)   ;; 0.01 reflection hit only
     (cfg-double :progression.exp-hit)))             ;; 0.005 normal hit or miss
@@ -92,7 +92,7 @@
   "Register a railgun coin throw state.
   Called from the platform item-action hook when a coin is used in ability mode.
   If the player is currently in item-charge mode, that charge is aborted first
-  (mirrors original informThrowCoin é”Ÿ?onKeyAbort() behavior)."
+  (mirrors original informThrowCoin é”?onKeyAbort() behavior)."
   [player-id payload]
   (let [_now-ms (long (or (:timestamp-ms payload) (System/currentTimeMillis)))]
     ;; Abort any in-progress item charge so the coin QTE takes priority.
@@ -276,7 +276,7 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- item-charge-ready? [ctx-id player]
-  (when-let [ctx-data (ctx/get-context ctx-id)]
+  (when-let [ctx-data (ctx-skill/get-context ctx-id)]
     (let [skill-state (:skill-state ctx-data)]
       (and (= (:mode skill-state) :item-charge)
            (<= (max 0 (int (or (:charge-ticks skill-state) 0))) 1)
@@ -354,7 +354,7 @@
   "Item-charge path: countdown; auto-fires when charge-ticks reaches zero."
   [{:keys [player-id ctx-id player cost-ok?]}]
   (try
-    (when-let [ctx-data (ctx/get-context ctx-id)]
+    (when-let [ctx-data (ctx-skill/get-context ctx-id)]
       (let [skill-state (:skill-state ctx-data)]
         (when (= (:mode skill-state) :item-charge)
           (let [ticks-left (max 0 (int (or (:charge-ticks skill-state) 0)))]
@@ -387,7 +387,7 @@
 (defn- railgun-on-key-up
   "Cancels an unfinished item charge. Cooldown is only applied on successful perform."
   [{:keys [ctx-id]}]
-  (when-let [ctx (ctx/get-context ctx-id)]
+  (when-let [ctx (ctx-skill/get-context ctx-id)]
     (let [skill-state (:skill-state ctx)
           mode        (:mode skill-state)]
       (when (and (= mode :item-charge) (not (:fired skill-state)))

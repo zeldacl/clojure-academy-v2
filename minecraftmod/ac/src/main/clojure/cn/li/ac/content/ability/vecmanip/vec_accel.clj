@@ -104,7 +104,7 @@
                                             :init-vel     init-vel
                                             :performed?   false})))
    :perform! (fn [{:keys [player-id ctx-id exp]}]
-               (when-let [ctx-data (ctx/get-context ctx-id)]
+               (when-let [ctx-data (ctx-skill/get-context ctx-id)]
                  (let [ss           (:skill-state ctx-data)
                        can-perform? (boolean (:can-perform? ss))
                        init-vel     (:init-vel ss)]
@@ -126,7 +126,7 @@
   :fx {:start   {:topic :vec-accel/fx-start   :payload (fn [_] {})}
        :update  {:topic :vec-accel/fx-update
                  :payload (fn [{:keys [ctx-id charge-ticks]}]
-                            (let [st (:skill-state (ctx/get-context ctx-id))]
+                            (let [st (:skill-state (ctx-skill/get-context ctx-id))]
                               {:charge-ticks (long (max 0 (or charge-ticks 0)))
                                :can-perform? (boolean (:can-perform? st))
                                :look-dir     (or (:look-dir st) {:x 0.0 :y 0.0 :z 1.0})
@@ -134,5 +134,5 @@
        :perform {:topic :vec-accel/fx-perform  :payload (fn [_] {})}
        :end     {:topic :vec-accel/fx-end
                  :payload (fn [{:keys [ctx-id]}]
-                            {:performed? (boolean (get-in (ctx/get-context ctx-id) [:skill-state :performed?]))})}}
+                            {:performed? (boolean (get-in (ctx-skill/get-context ctx-id) [:skill-state :performed?]))})}}
   :prerequisites [{:skill-id :directed-shock :min-exp 0.0}])

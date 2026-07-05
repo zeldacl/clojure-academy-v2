@@ -64,7 +64,6 @@
                       (contains? state* :cooldown-data) (assoc :cooldown-data (:cooldown-data state*))
                       (contains? state* :preset-data) (assoc :preset-data (:preset-data state*))
                       (contains? state* :develop-data) (assoc :develop-data (:develop-data state*))
-                      (contains? state* :terminal-data) (assoc :terminal-data (:terminal-data state*))
                       (contains? state* :context-registry) (assoc :context-registry (:context-registry state*))
                       (contains? state* :runtime) (assoc :runtime-data (:runtime state*))
                       (contains? state* :dirty?) (assoc :dirty? (:dirty? state*)))]
@@ -263,8 +262,7 @@
         :resource-data (:resource-data state)
         :cooldown-data (:cooldown-data state)
         :preset-data (:preset-data state)
-        :develop-data (:develop-data state)
-        :terminal-data (:terminal-data state)}))
+        :develop-data (:develop-data state)}))
 
    :mark-player-clean!
    (fn [player-uuid]

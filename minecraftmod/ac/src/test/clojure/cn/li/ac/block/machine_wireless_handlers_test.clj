@@ -50,7 +50,9 @@
                         {:tile-entity :node}
                         {:tile-entity :recv}))
                     net-helpers/get-world (fn [_] :world)
-                    net-helpers/get-tile-at (fn [_ _] :recv)]
+                    net-helpers/get-tile-at (fn [_ _] :recv)
+                    pos/position-get-block-pos identity
+                    wireless-api/get-nodes-in-range (fn [_ _] [])]
         (let [result ((:connect handlers)
                       (merge base-payload
                              {:node-x 9 :node-y 8 :node-z 7
@@ -77,6 +79,8 @@
                       :get-linked-node (fn [_] nil)
                       :link! (fn [& _] true)
                       :unlink! (fn [_] (swap! unlink-calls inc))})]
-      (with-redefs [sync-routing/require-open-container! (network-support/require-open-container-mock :recv)]
+      (with-redefs [sync-routing/require-open-container! (network-support/require-open-container-mock :recv)
+                    net-helpers/get-world (fn [_] nil)
+                    pos/position-get-block-pos identity]
         (is (true? (:success ((:disconnect handlers) base-payload :player))))
         (is (= 1 @unlink-calls))))))

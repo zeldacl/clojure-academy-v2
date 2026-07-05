@@ -141,7 +141,7 @@
   (try
     (let [exp (helper/skill-exp player-id threatening-teleport-skill-id)
           damage (helper/cfg-lerp threatening-teleport-skill-id :combat.damage exp)
-          ctx-data (ctx/get-context ctx-id)
+          ctx-data (ctx-skill/get-context ctx-id)
           range (helper/cfg-lerp threatening-teleport-skill-id :targeting.range exp)
           trace (or (get-in ctx-data [:skill-state :trace])
                     (trace-result player-id range))]

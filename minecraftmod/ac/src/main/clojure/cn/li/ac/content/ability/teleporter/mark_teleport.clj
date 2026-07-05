@@ -142,7 +142,7 @@
 
 (defn- cached-or-resolved-target
   [player-id ctx-id player]
-  (when-let [ctx-data (ctx/get-context ctx-id)]
+  (when-let [ctx-data (ctx-skill/get-context ctx-id)]
     (let [hold-ticks (long (or (get-in ctx-data [:skill-state :hold-ticks]) 0))]
       (or (resolve-destination player-id player hold-ticks)
           (when (get-in ctx-data [:skill-state :has-target])
@@ -151,7 +151,7 @@
 
 (defn mark-teleport-fx-update-payload
   [{:keys [ctx-id]}]
-  (when-let [ctx-data (ctx/get-context ctx-id)]
+  (when-let [ctx-data (ctx-skill/get-context ctx-id)]
     (build-target-fx-payload (:skill-state ctx-data))))
 
 (defn mark-teleport-fx-perform-payload
@@ -196,7 +196,7 @@
 (defn mark-teleport-on-key-tick
   "Update destination marker while key is held."
   [{:keys [player-id ctx-id player]}]
-  (when-let [ctx (ctx/get-context ctx-id)]
+  (when-let [ctx (ctx-skill/get-context ctx-id)]
     (let [next-ticks (inc (long (or (get-in ctx [:skill-state :hold-ticks]) 0)))]
       (if-let [target (resolve-destination player-id player next-ticks)]
         (set-skill-state-root! ctx-id
@@ -209,7 +209,7 @@
 (defn mark-teleport-on-key-up
   "Execute teleport when key released."
   [{:keys [player-id ctx-id player cost-ok?]}]
-  (when-let [ctx (ctx/get-context ctx-id)]
+  (when-let [ctx (ctx-skill/get-context ctx-id)]
     (let [hold-ticks (long (or (get-in ctx [:skill-state :hold-ticks]) 0))
           target (or (resolve-destination player-id player hold-ticks)
                      (when (get-in ctx [:skill-state :has-target])

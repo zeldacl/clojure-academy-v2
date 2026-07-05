@@ -150,7 +150,7 @@
       (doseq [[src-id {:keys [level pos affected-uuids]}] @active-interferers]
         (when (and level pos)
           (try
-            (when-not (world/world-is-chunk-loaded?* level (world/block-to-chunk-coord (pos/position-get-x pos)) (world/block-to-chunk-coord (pos/position-get-z pos)))
+            (when-not (world/world-is-chunk-loaded?* level (world/block-to-chunk-coord (pos/pos-x pos)) (world/block-to-chunk-coord (pos/pos-z pos)))
               (swap! stale conj src-id)
               (log/warn "[Interferer] Chunk unloaded for" src-id "- cleaning up" (count affected-uuids) "players")
               (doseq [u affected-uuids]

@@ -10,7 +10,6 @@
             [cn.li.mc1201.runtime.adapter-registry :as adapter-registry]
             [cn.li.forge1201.runtime.lifecycle-event-binding :as lifecycle-event-binding]
             [cn.li.forge1201.adapter.network :as runtime-network]
-            [cn.li.mcmod.gui.container-state :as container-state]
             [cn.li.mcmod.hooks.core :as power-runtime]
             [cn.li.mcmod.server.platform-bridge :as server-bridge]
             [cn.li.mcmod.util.log :as log])
@@ -103,8 +102,7 @@
     :spawn-item-stack-at! world-effects/spawn-item-stack-at!})
   (lifecycle-core/install-server-stop-cleanup!
     {:cleanup-session! (fn [session-id]
-                         (runtime-sync/clear-session-scheduler-state! session-id)
-                         (container-state/clear-session-containers! session-id))})
+                         (runtime-sync/clear-session-scheduler-state! session-id))})
   (lifecycle-event-binding/register-lifecycle-listeners!
     {:on-player-login on-player-login
      :on-player-logout on-player-logout

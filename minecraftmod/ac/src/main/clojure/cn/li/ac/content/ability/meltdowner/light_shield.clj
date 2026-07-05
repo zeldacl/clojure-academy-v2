@@ -178,7 +178,7 @@
 
 (defn light-shield-tick!
   [{:keys [player-id ctx-id cost-ok?]}]
-  (when-let [ctx-data (ctx/get-context ctx-id)]
+  (when-let [ctx-data (ctx-skill/get-context ctx-id)]
     (when (and cost-ok? (toggle/is-toggle-active? ctx-data :light-shield))
       (let [exp (skill-exp player-id)
             next-ticks (inc (shield-ticks ctx-data))
@@ -289,7 +289,7 @@
   :overload-consume-speed 0.0
   :cooldown-ticks (fn [{:keys [player-id ctx-id]}]
                     (let [exp (skill-exp player-id)
-                          ticks (long (or (some-> ctx-id ctx/get-context :skill-state :ticks) 0))]
+                          ticks (long (or (some-> ctx-id ctx-skill/get-context :skill-state :ticks) 0))]
                       (skill-config/lerp-int light-shield-skill-id
                                              :cooldown.ticks
                                              (double (or exp 0.0)))))

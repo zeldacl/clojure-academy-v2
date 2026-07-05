@@ -8,8 +8,8 @@
   On release: each ball fires a beam in random cone direction
   Anti-AFK: at tick 200, apply 6 self-damage
   Overload floor: enforced during hold
-  Cooldown: lerp(30, 15, exp) ËÑ≥ ball-count ticks
-  Exp: +0.002 ËÑ≥ ball-count
+  Cooldown: lerp(30, 15, exp) ËÑ?ball-count ticks
+  Exp: +0.002 ËÑ?ball-count
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill]]
@@ -53,7 +53,7 @@
 
 (defn- current-hold-ticks
   [ctx-id]
-  (long (or (get-in (ctx/get-context ctx-id) [:skill-state :hold-ticks]) 0)))
+  (long (or (get-in (ctx-skill/get-context ctx-id) [:skill-state :hold-ticks]) 0)))
 
 (defn- set-skill-state!
   [ctx-id k v]
@@ -75,7 +75,7 @@
   (skill-effects/enforce-overload-floor! player-id floor-value))
 
 (defn- random-cone-dir
-  "Random direction within Âç§45Êé≥ cone of look direction."
+  "Random direction within Âç?5Êé?cone of look direction."
   [look-vec]
   (let [[spread-min spread-max] (skill-config/tunable-double-list scatter-bomb-skill-id
                                                                   :projectile.cone-spread)
@@ -111,7 +111,7 @@
 
 (defn scatter-bomb-tick!
   [{:keys [player-id ctx-id player]}]
-  (let [ctx-data (ctx/get-context ctx-id)]
+  (let [ctx-data (ctx-skill/get-context ctx-id)]
     (when ctx-data
       (let [ticks (inc (long (or (get-in ctx-data [:skill-state :hold-ticks]) 0)))
             _ (set-skill-state! ctx-id [:hold-ticks] ticks)
@@ -146,7 +146,7 @@
 
 (defn scatter-bomb-up!
   [{:keys [player-id ctx-id]}]
-  (let [ctx-data (ctx/get-context ctx-id)
+  (let [ctx-data (ctx-skill/get-context ctx-id)
         balls (int (or (get-in ctx-data [:skill-state :balls]) 0))
         exp (skill-exp player-id)]
     (when (pos? balls)
@@ -181,7 +181,7 @@
 (defn scatter-bomb-cost-fail!
   [{:keys [ctx-id cost-stage]}]
   (when (= cost-stage :tick)
-    (let [balls (int (or (get-in (ctx/get-context ctx-id) [:skill-state :balls]) 0))]
+    (let [balls (int (or (get-in (ctx-skill/get-context ctx-id) [:skill-state :balls]) 0))]
       (fx/send! ctx-id {:topic :scatter-bomb/fx-end} nil {:balls balls}))))
 
 (defn scatter-bomb-abort!

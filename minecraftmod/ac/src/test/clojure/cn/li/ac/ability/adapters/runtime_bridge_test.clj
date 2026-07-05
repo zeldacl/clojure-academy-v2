@@ -24,8 +24,7 @@
                   (assoc-in [:ability-data :category-id] :electromaster)
                   (assoc-in [:resource-data :activated] true)
                   (assoc-in [:preset-data :active-preset] 1)
-                  (assoc-in [:develop-data :level-progress] 42.0)
-                  (assoc-in [:terminal-data :installed-apps] #{:tutorial :settings}))]
+                  (assoc-in [:develop-data :level-progress] 42.0))]
     (runtime-hooks/sync-player-state! uuid state)
     (is (= state (runtime-hooks/get-player-state uuid)))
     (is (true? (runtime-hooks/runtime-activated? uuid)))
@@ -34,8 +33,7 @@
             :resource-data (:resource-data state)
             :cooldown-data (:cooldown-data state)
             :preset-data (:preset-data state)
-            :develop-data (:develop-data state)
-            :terminal-data (:terminal-data state)}
+            :develop-data (:develop-data state)}
            (runtime-hooks/build-sync-payload uuid)))
     (is (nil? (runtime-hooks/mark-player-clean! uuid)))))
 

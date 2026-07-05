@@ -54,7 +54,7 @@
 
 (defn- next-charge-ticks!
   [ctx-id]
-  (let [current (long (or (get-in (ctx/get-context ctx-id) [:skill-state :charge-ticks]) 0))
+  (let [current (long (or (get-in (ctx-skill/get-context ctx-id) [:skill-state :charge-ticks]) 0))
         next (inc current)]
     (set-skill-state! ctx-id [:charge-ticks] next)
     next))
@@ -163,7 +163,7 @@
   :cost        {:down {:overload (fn [{:keys [exp]}]
                                   (cfg-lerp :cost.down.overload (double (or exp 0.0))))}
                 :tick {:cp (fn [{:keys [player-id ctx-id exp]}]
-                             (let [state (:skill-state (ctx/get-context ctx-id))]
+                             (let [state (:skill-state (ctx-skill/get-context ctx-id))]
                                (if (and (:is-item state) (nil? (main-hand-item player-id)))
                                  0.0
                                  (cfg-lerp :cost.tick.cp (double (or (:exp state) exp 0.0))))))}}
@@ -187,9 +187,9 @@
          "Удерживайте для направления тока, заряжая целевые энергоблоки или удерживаемые энергопредметы."}}
   :actions
   {:cost-fail! (fn [{:keys [ctx-id]}]
-                 (let [skill-state (:skill-state (or (ctx/get-context ctx-id) {}))
+                 (let [skill-state (:skill-state (or (ctx-skill/get-context ctx-id) {}))
                is-item (boolean (:is-item skill-state))
-               player-id (:player-id (or (ctx/get-context ctx-id) {}))]
+               player-id (:player-id (or (ctx-skill/get-context ctx-id) {}))]
              (end-and-terminate! ctx-id is-item player-id)))
    :down!  (fn [{:keys [player-id ctx-id exp player]}]
              (let [is-item (boolean (main-hand-item player-id))
@@ -215,7 +215,7 @@
                (fx/send! ctx-id {:topic :current-charging/fx-start :mode :start} nil
                          (fx-payload player-id {:is-item is-item}))))
    :tick!  (fn [{:keys [player-id ctx-id player]}]
-             (when-let [skill-state (:skill-state (ctx/get-context ctx-id))]
+             (when-let [skill-state (:skill-state (ctx-skill/get-context ctx-id))]
                (let [is-item (boolean (:is-item skill-state))
                      exp (double (or (:exp skill-state) 0.0))
                      charge (Math/floor (cfg-lerp :effect.charge-amount exp))
@@ -236,13 +236,13 @@
                                         :charge charge
                                         :charge-ticks charge-ticks})))))
    :up!    (fn [{:keys [ctx-id]}]
-             (when-let [{:keys [skill-state player-id]} (ctx/get-context ctx-id)]
+             (when-let [{:keys [skill-state player-id]} (ctx-skill/get-context ctx-id)]
                (fx/send! ctx-id {:topic :current-charging/fx-end :mode :end} nil
                          (fx-payload player-id
                                      {:is-item (boolean (:is-item skill-state))}))
                (clear-skill-state! ctx-id)))
    :abort! (fn [{:keys [ctx-id]}]
-             (when-let [{:keys [skill-state player-id]} (ctx/get-context ctx-id)]
+             (when-let [{:keys [skill-state player-id]} (ctx-skill/get-context ctx-id)]
                (fx/send! ctx-id {:topic :current-charging/fx-end :mode :end} nil
                          (fx-payload player-id
                                      {:is-item (boolean (:is-item skill-state))})))

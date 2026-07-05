@@ -53,7 +53,7 @@
 (defn- terminate-with-end!
   [ctx-id performed?]
   (fx/send! ctx-id {:topic :directed-shock/fx-end :mode :end} nil {:performed? performed?})
-  (when-let [ctx-data (ctx/get-context ctx-id)]
+  (when-let [ctx-data (ctx-skill/get-context ctx-id)]
     (set-skill-state-root! ctx-id (assoc (:skill-state ctx-data) :performed? performed?)))
   (clear-skill-state! ctx-id)
   (ctx/terminate-context! ctx-id nil))
@@ -102,7 +102,7 @@
                                     :punch-ticks 0})
             (fx/send! ctx-id {:topic :directed-shock/fx-start :mode :start}))
    :tick! (fn [{:keys [ctx-id]}]
-            (when-let [ctx-data (ctx/get-context ctx-id)]
+            (when-let [ctx-data (ctx-skill/get-context ctx-id)]
               (if (true? (get-in ctx-data [:skill-state :punched?]))
                 (let [next-punch (inc (long (or (get-in ctx-data [:skill-state :punch-ticks]) 0)))]
                   (set-skill-state-root! ctx-id (assoc (:skill-state ctx-data) :punch-ticks next-punch))
@@ -113,7 +113,7 @@
                   (when (>= next-charge (cfg-int :charge.max-tolerant-ticks))
                     (terminate-with-end! ctx-id false))))))
    :up! (fn [{:keys [player-id ctx-id exp cost-ok?]}]
-          (when-let [ctx-data (ctx/get-context ctx-id)]
+          (when-let [ctx-data (ctx-skill/get-context ctx-id)]
             (let [charge-ticks (long (or (get-in ctx-data [:skill-state :charge-ticks]) 0))
                   exp* (exp01 exp)]
               (if (and (> charge-ticks (cfg-int :charge.min-ticks))

@@ -35,9 +35,5 @@
 (defn factory-initialized? []
   (boolean (get (current-ops) :create-block-pos)))
 
-;; Backward-compatible aliases (used by mcmod/ac layers that expect old protocol names)
-(defn position-get-x [this] (pos-x this))
-(defn position-get-y [this] (pos-y this))
-(defn position-get-z [this] (pos-z this))
 (defn position-get-block-pos [this] (call :position-get-block-pos this))
 (defn position-get-pos [this] (call :position-get-pos this))

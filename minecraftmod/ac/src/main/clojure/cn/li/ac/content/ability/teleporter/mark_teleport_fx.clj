@@ -1,7 +1,7 @@
 (ns cn.li.ac.content.ability.teleporter.mark-teleport-fx
   "Client FX for Mark Teleport: EntityTPMarking + ground ring + billboard marker.
   Matching original AcademyCraft: EntityTPMarking follows target position."
-  (:require [cn.li.ac.ability.client.effects.particles :as client-particles]
+  (:require [cn.li.ac.util.math.vec3 :as vec3] [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-spec :as fx-spec]
             [cn.li.ac.ability.client.level-effects :as level-effects]
@@ -109,18 +109,18 @@
         half-width (+ 0.34 (* 0.04 (Math/sin (* 0.22 (double ticks)))))
         half-height 0.9
         up {:x 0.0 :y half-height :z 0.0}
-        side (ru/v* right half-width)
-        p0 (ru/v+ (ru/v- center side) up)
-        p1 (ru/v+ (ru/v+ center side) up)
-        p2 (ru/v- (ru/v+ center side) up)
-        p3 (ru/v- (ru/v- center side) up)
+        side (vec3/v* right half-width)
+        p0 (vec3/v+ (vec3/v- center side) up)
+        p1 (vec3/v+ (vec3/v+ center side) up)
+        p2 (vec3/v- (vec3/v+ center side) up)
+        p3 (vec3/v- (vec3/v- center side) up)
         halo-width (* half-width 1.35) halo-height 1.12
-        halo-side (ru/v* right halo-width)
+        halo-side (vec3/v* right halo-width)
         halo-up {:x 0.0 :y halo-height :z 0.0}
-        h0 (ru/v+ (ru/v- center halo-side) halo-up)
-        h1 (ru/v+ (ru/v+ center halo-side) halo-up)
-        h2 (ru/v- (ru/v+ center halo-side) halo-up)
-        h3 (ru/v- (ru/v- center halo-side) halo-up)
+        h0 (vec3/v+ (vec3/v- center halo-side) halo-up)
+        h1 (vec3/v+ (vec3/v+ center halo-side) halo-up)
+        h2 (vec3/v- (vec3/v+ center halo-side) halo-up)
+        h3 (vec3/v- (vec3/v- center halo-side) halo-up)
         alpha (+ 85 (* 35 (+ 1.0 (Math/sin (* 0.25 (double ticks))))))]
     [(ru/quad-op "my_mod:textures/effects/glow_circle.png" h0 h1 h2 h3 {:r 160 :g 196 :b 255 :a (int alpha)})
      (ru/quad-op "my_mod:textures/effects/glow_circle.png" p0 p1 p2 p3 {:r 245 :g 250 :b 255 :a 180})]))

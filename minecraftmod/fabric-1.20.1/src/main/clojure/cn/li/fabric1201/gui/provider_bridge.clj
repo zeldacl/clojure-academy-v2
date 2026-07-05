@@ -14,52 +14,39 @@
 
 (defn- create-menu-proxy
   ([window-id menu-type clj-container]
-  (create-menu-proxy window-id menu-type clj-container nil))
+   (create-menu-proxy window-id menu-type clj-container nil))
   ([window-id menu-type clj-container opts]
-  (menu-proxy/create-platform-menu-proxy
-    :fabric-1.20.1
-    window-id
-    menu-type
-    clj-container
-    opts)))
+   (menu-proxy/create-platform-menu-proxy
+     :fabric-1.20.1
+     window-id
+     menu-type
+     clj-container
+     opts)))
 
-(defn create-menu-provider [gui-id tile-entity]
-  (reify MenuProvider
-    (getDisplayName [_]
-      (Component/literal (gui/get-display-name gui-id)))
-    (createMenu [_ sync-id _player-inventory player]
-      (provider-dispatcher/create-menu-from-provider!
-       {:gui-id gui-id
-        :tile-entity tile-entity
-        :window-id sync-id
-        :player player
-        :platform-key :fabric-1.20.1
-        :create-container-fn (fn [handler gid p world pos]
-                               (gui-handler/get-server-container handler gid p world pos))
-        :create-menu-proxy-fn create-menu-proxy
-        :log-prefix "[FABRIC-MENU-PROVIDER]"}))))
+(defn- create-menu-from-provider!
+  [gui-id tile-entity sync-id player]
+  (provider-dispatcher/create-menu-from-provider!
+    {:gui-id gui-id
+     :tile-entity tile-entity
+     :window-id sync-id
+     :player player
+     :platform-key :fabric-1.20.1
+     :create-container-fn (fn [handler gid p world pos]
+                            (gui-handler/get-server-container handler gid p world pos))
+     :create-menu-proxy-fn create-menu-proxy
+     :log-prefix "[FABRIC-MENU-PROVIDER]"}))
 
-(defn create-extended-menu-provider [gui-id tile-entity]
+(defn create-menu-provider
+  "Create an ExtendedScreenHandlerFactory for opening Fabric GUIs with payload sync."
+  [gui-id tile-entity]
   (reify ExtendedScreenHandlerFactory
     (getDisplayName [_]
       (Component/literal (gui/get-display-name gui-id)))
     (createMenu [_ sync-id _player-inventory player]
-      (provider-dispatcher/create-menu-from-provider!
-       {:gui-id gui-id
-        :tile-entity tile-entity
-        :window-id sync-id
-        :player player
-        :platform-key :fabric-1.20.1
-        :create-container-fn (fn [handler gid p world pos]
-                               (gui-handler/get-server-container handler gid p world pos))
-        :create-menu-proxy-fn create-menu-proxy
-        :log-prefix "[FABRIC-MENU-PROVIDER]"}))
+      (create-menu-from-provider! gui-id tile-entity sync-id player))
     (writeScreenOpeningData [_ player buf]
       (registry-common/write-extended-open-payload!
         buf
         gui-id
         (when tile-entity
           (provider-common/tile->pos tile-entity player))))))
-
-(defn create-extended-screen-handler-factory [gui-id tile-entity]
-  (create-extended-menu-provider gui-id tile-entity))

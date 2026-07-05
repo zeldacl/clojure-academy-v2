@@ -1,6 +1,6 @@
 (ns cn.li.ac.content.ability.vecmanip.vec-reflection-fx
   "Client FX for VecReflection: double ring + reflection wave billboards."
-  (:require [cn.li.ac.ability.client.effects.sounds :as client-sounds]
+  (:require [cn.li.ac.util.math.vec3 :as vec3] [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-spec :as fx-spec]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.render-util :as ru]))
@@ -139,12 +139,12 @@
         right (ru/camera-facing-right-axis center cam-pos)
         up (ru/billboard-up-axis center cam-pos right)
         half-size (+ 0.4 (* 0.6 (- 1.0 life)))
-        side (ru/v* right half-size)
-        lift (ru/v* up half-size)
-        p0 (ru/v+ (ru/v- center side) lift)
-        p1 (ru/v+ (ru/v+ center side) lift)
-        p2 (ru/v- (ru/v+ center side) lift)
-        p3 (ru/v- (ru/v- center side) lift)]
+        side (vec3/v* right half-size)
+        lift (vec3/v* up half-size)
+        p0 (vec3/v+ (vec3/v- center side) lift)
+        p1 (vec3/v+ (vec3/v+ center side) lift)
+        p2 (vec3/v- (vec3/v+ center side) lift)
+        p3 (vec3/v- (vec3/v- center side) lift)]
     [(ru/quad-op "my_mod:textures/effects/glow_circle.png"
                  p0 p1 p2 p3
                  {:r 255 :g 200 :b 160 :a alpha})]))

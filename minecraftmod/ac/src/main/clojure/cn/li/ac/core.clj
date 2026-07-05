@@ -50,6 +50,7 @@
   ;; hardcoding AC namespace strings.
   (entity-render-registry/register-entity-render-ns!
     "silbarn" "cn.li.ac.content.entities.silbarn-render")
+  ;; cn.li.ac.terminal.client.actions/install-ui-hooks!
   (terminal-actions/install-ui-hooks!)
   (platform-hooks/install-client-content-actions!)
   (font-init/init-fonts!)

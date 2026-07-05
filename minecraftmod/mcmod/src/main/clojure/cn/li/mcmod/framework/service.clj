@@ -5,7 +5,7 @@
    and written during gameplay. All write operations go through these guard
    functions to ensure consistent access patterns.
 
-   For high-frequency shared mutable state (multiplayer skill effects, global
+   For high-frequency shared mutable state (multiplayer effect counters, global
    buff counters), prefer java.util.concurrent.ConcurrentHashMap over Clojure
    atom swap! to avoid CAS spin-lock contention."
   )
@@ -17,7 +17,7 @@
 
    Args:
      fw — framework atom instance
-     k  — service key, e.g. :lifecycle, :ability-runtime"
+     k  — service key, e.g. :lifecycle, :runtime-service"
   [fw k]
   (get @fw k))
 
@@ -25,7 +25,7 @@
   "Atomically update a service value.
 
    Uses swap! under the hood — safe for low-frequency writes.
-   For high-frequency writes (multiplayer skill ticks), use per-player
+   For high-frequency writes (multiplayer per-tick updates), use per-player
    atoms or ConcurrentHashMap to avoid CAS contention.
 
    Args:

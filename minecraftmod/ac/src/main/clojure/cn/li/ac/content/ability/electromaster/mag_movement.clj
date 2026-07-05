@@ -146,7 +146,7 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- tick-cp-cost [{:keys [ctx-id exp]}]
-  (if-let [ctx (ctx/get-context ctx-id)]
+  (if-let [ctx (ctx-skill/get-context ctx-id)]
     (if (get-in ctx [:skill-state :has-target])
       (cfg-lerp :cost.tick.cp (double (or exp 0.0)))
       0.0)
@@ -158,7 +158,7 @@
 
 (defn- finalize-and-terminate!
   [{:keys [player-id ctx-id] :as evt} {:keys [grant-exp?] :or {grant-exp? true}}]
-  (when-let [ctx-data (ctx/get-context ctx-id)]
+  (when-let [ctx-data (ctx-skill/get-context ctx-id)]
     (let [skill-state (:skill-state ctx-data)
           finalized? (boolean (get-in ctx-data [:skill-state :finalized?]))
           should-finalize? (and skill-state (not finalized?))]
@@ -213,7 +213,7 @@
         (finalize-and-terminate! evt {:grant-exp? false})))))
 
 (defn- on-tick! [{:keys [player-id ctx-id cost-ok?] :as evt}]
-  (when-let [ctx (ctx/get-context ctx-id)]
+  (when-let [ctx (ctx-skill/get-context ctx-id)]
     (let [skill-state (:skill-state ctx)
           has-target  (:has-target skill-state)]
       (when has-target
@@ -271,7 +271,7 @@
                     (log/debug "MagMovement: moving for" (/ movement-ticks 20.0) "seconds")))))))))))
 
 (defn- on-up! [{:keys [ctx-id] :as evt}]
-  (when-let [ctx (ctx/get-context ctx-id)]
+  (when-let [ctx (ctx-skill/get-context ctx-id)]
     (let [skill-state (:skill-state ctx)
           has-target  (:has-target skill-state)]
       (when has-target

@@ -520,6 +520,11 @@
                (not (:last-start-time m)) (assoc :last-start-time (atom 0))))))
   root)
 
+(defn gain-widget-focus!
+  "Set CGUI focus on a widget under the given root."
+  [root widget]
+  (cgui-screen/gain-focus! root widget))
+
 (defn create-info-area
   "Create InfoArea container with BlendQuad background
   

@@ -127,7 +127,7 @@
 (defn electron-missile-tick!
   [{:keys [player-id ctx-id player]}]
   (try
-    (let [ctx-data (ctx/get-context ctx-id)
+    (let [ctx-data (ctx-skill/get-context ctx-id)
           state (get ctx-data :skill-state {})
           ticks (long (or (:ticks state) 0))
           active-balls (long (or (:active-balls state) 0))
@@ -228,7 +228,7 @@
                     (skill-config/lerp-int electron-missile-skill-id
                                            :cooldown.ticks
                                            (double (or exp 0.0))))
-  ;; matching original: clampi(700, 400, exp) â€” cooldown âˆˆ [400, 700] ticks
+  ;; matching original: clampi(700, 400, exp) â€?cooldown âˆ?[400, 700] ticks
   :actions        {:down!  electron-missile-down!
                    :tick!  electron-missile-tick!
                    :up!    electron-missile-up!

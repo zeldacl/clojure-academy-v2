@@ -74,7 +74,7 @@
 (defn open-gui-for-player [player gui-id tile-entity]
   (open-core/log-open-start! "[FABRIC-OPEN-GUI]" player gui-id tile-entity)
   (try
-    (let [factory (provider-bridge/create-extended-menu-provider gui-id tile-entity)]
+    (let [factory (provider-bridge/create-menu-provider gui-id tile-entity)]
       (open-core/open-player-menu-with-fallback! player factory)
       (open-core/log-open-success! "[FABRIC-OPEN-GUI]"))
     (catch Exception e

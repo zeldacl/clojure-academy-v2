@@ -215,22 +215,22 @@
 
 (defn- register-movement-listeners!
   [ctx-id]
-  (when-not (get-in (ctx/get-context ctx-id) [:skill-state :listeners-installed?])
+  (when-not (get-in (ctx-skill/get-context ctx-id) [:skill-state :listeners-installed?])
     (ctx/ctx-on! ctx-id move-down-channel
                  (fn [{:keys [key]}]
-                   (when-let [ctx-data (ctx/get-context ctx-id)]
+                   (when-let [ctx-data (ctx-skill/get-context ctx-id)]
                      (when-let [active-ctx (maintain-active-state! ctx-id ctx-data)]
                        (when-let [direction (movement-key->direction key)]
                          (update-preview! ctx-id (:player-uuid active-ctx) direction :flashing/fx-preview-start))))))
     (ctx/ctx-on! ctx-id move-tick-channel
                  (fn [{:keys [key]}]
-                   (when-let [ctx-data (ctx/get-context ctx-id)]
+                   (when-let [ctx-data (ctx-skill/get-context ctx-id)]
                      (when-let [active-ctx (maintain-active-state! ctx-id ctx-data)]
                        (when-let [direction (movement-key->direction key)]
                          (update-preview! ctx-id (:player-uuid active-ctx) direction :flashing/fx-preview-update))))))
     (ctx/ctx-on! ctx-id move-up-channel
                  (fn [{:keys [key]}]
-                   (when-let [ctx-data (ctx/get-context ctx-id)]
+                   (when-let [ctx-data (ctx-skill/get-context ctx-id)]
                      (when-let [active-ctx (maintain-active-state! ctx-id ctx-data)]
                        (when-let [direction (movement-key->direction key)]
                          (perform-flash! (:player-uuid active-ctx) ctx-id direction)
@@ -259,7 +259,7 @@
 
 (defn flashing-tick!
   [{:keys [ctx-id]}]
-  (when-let [ctx-data (ctx/get-context ctx-id)]
+  (when-let [ctx-data (ctx-skill/get-context ctx-id)]
     (maintain-active-state! ctx-id ctx-data)))
 
 (defn flashing-deactivate!

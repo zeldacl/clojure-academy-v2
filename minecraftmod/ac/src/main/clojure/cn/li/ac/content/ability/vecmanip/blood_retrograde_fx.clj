@@ -1,6 +1,6 @@
 (ns cn.li.ac.content.ability.vecmanip.blood-retrograde-fx
 	"Client FX for Blood Retrograde: splashes, sprays, walk speed."
-	(:require [cn.li.ac.ability.client.effects.sounds :as client-sounds]
+	(:require [cn.li.ac.util.math.vec3 :as vec3] [cn.li.ac.ability.client.effects.sounds :as client-sounds]
 						[cn.li.ac.ability.client.fx-spec :as fx-spec]
 						[cn.li.ac.ability.client.level-effects :as level-effects]
 						[cn.li.ac.ability.client.render-util :as ru]))
@@ -142,12 +142,12 @@
 				half-size (* 0.5 (double (or size 1.0)))
 				right (ru/camera-facing-right-axis center cam-pos)
 				up (ru/billboard-up-axis center cam-pos right)
-				side (ru/v* right half-size)
-				lift (ru/v* up half-size)
-				p0 (ru/v+ (ru/v- center side) lift)
-				p1 (ru/v+ (ru/v+ center side) lift)
-				p2 (ru/v- (ru/v+ center side) lift)
-				p3 (ru/v- (ru/v- center side) lift)
+				side (vec3/v* right half-size)
+				lift (vec3/v* up half-size)
+				p0 (vec3/v+ (vec3/v- center side) lift)
+				p1 (vec3/v+ (vec3/v+ center side) lift)
+				p2 (vec3/v- (vec3/v+ center side) lift)
+				p3 (vec3/v- (vec3/v- center side) lift)
 				age (long (- (long (or max-ttl splash-life)) (long (or ttl splash-life))))
 				frame (max 0 (min 9 age))]
 		[(ru/quad-op (str "my_mod:textures/effects/blood_splash/" frame ".png")
@@ -166,23 +166,23 @@
 
 (defn- spray-ops [{:keys [x y z face size rotation offset-u offset-v texture-id ttl]}]
 	(let [[normal tangent bitangent] (spray-face-basis face)
-				center (ru/v+
+				center (vec3/v+
 								 {:x (+ (double x) 0.5)
 									:y (+ (double y) 0.5)
 									:z (+ (double z) 0.5)}
-								 (ru/v* normal 0.51))
-				tangent' (ru/rotate-around-axis tangent normal (double (or rotation 0.0)))
-				bitangent' (ru/rotate-around-axis bitangent normal (double (or rotation 0.0)))
-				shifted (ru/v+ center
-											 (ru/v+ (ru/v* tangent' (double (or offset-u 0.0)))
-															(ru/v* bitangent' (double (or offset-v 0.0)))))
+								 (vec3/v* normal 0.51))
+				tangent' (vec3/rotate-around-axis tangent normal (double (or rotation 0.0)))
+				bitangent' (vec3/rotate-around-axis bitangent normal (double (or rotation 0.0)))
+				shifted (vec3/v+ center
+											 (vec3/v+ (vec3/v* tangent' (double (or offset-u 0.0)))
+															(vec3/v* bitangent' (double (or offset-v 0.0)))))
 				half-size (* 0.5 (double (or size 1.0)))
-				side (ru/v* tangent' half-size)
-				lift (ru/v* bitangent' half-size)
-				p0 (ru/v+ (ru/v- shifted side) lift)
-				p1 (ru/v+ (ru/v+ shifted side) lift)
-				p2 (ru/v- (ru/v+ shifted side) lift)
-				p3 (ru/v- (ru/v- shifted side) lift)
+				side (vec3/v* tangent' half-size)
+				lift (vec3/v* bitangent' half-size)
+				p0 (vec3/v+ (vec3/v- shifted side) lift)
+				p1 (vec3/v+ (vec3/v+ shifted side) lift)
+				p2 (vec3/v- (vec3/v+ shifted side) lift)
+				p3 (vec3/v- (vec3/v- shifted side) lift)
 				life (if (and ttl (< ttl 60)) (/ (double ttl) 60.0) 1.0)
 				tex-folder (if (contains? #{:up :down} face) "wall" "grnd")
 				tex-index (max 0 (min 2 (long (or texture-id 0))))]

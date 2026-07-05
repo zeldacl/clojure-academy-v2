@@ -2,7 +2,6 @@
   "CLIENT-ONLY: Ability Interferer GUI"
   (:require [clojure.string :as str]
             [cn.li.mcmod.gui.cgui-core :as cgui-core]
-            [cn.li.mcmod.gui.cgui-screen :as cgui-screen]
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.mcmod.gui.events :as events]
             [cn.li.mcmod.gui.spec :as gui-reg]
@@ -276,7 +275,7 @@
     (cgui-core/add-widget! panel box)
     ;; Gain focus so keyboard input reaches the textbox (matching original box.gainFocus())
     (when-let [root (get @(:metadata container) :focus-root)]
-      (cgui-screen/gain-focus! root box))
+      (tech-ui/gain-widget-focus! root box))
     (when-let [input-widget* (:add-input-widget container)]
       (reset! input-widget* box))))
 

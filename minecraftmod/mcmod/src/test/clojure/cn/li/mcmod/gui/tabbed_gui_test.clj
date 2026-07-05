@@ -7,13 +7,10 @@
 (use-fixtures
   :each
   (fn [f]
-    (container-state/call-with-container-state-runtime
-      (container-state/create-container-state-runtime)
-      (fn []
-        (try
-          (f)
-          (finally
-            (container-state/clear-all!)))))))
+    (try
+      (f)
+      (finally
+        (container-state/clear-all!)))))
 
 (deftest slots-active-uses-container-tab-index-test
   (let [container {:tab-index (atom 0)}]

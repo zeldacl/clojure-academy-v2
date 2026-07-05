@@ -8,10 +8,8 @@
             [cn.li.ac.wireless.api :as wireless-api]
             [cn.li.ac.wireless.config :as node-config]
             [cn.li.ac.wireless.core.vblock :as vb]
-            [cn.li.ac.wireless.data.network-lookup :as network-lookup]
             [cn.li.ac.wireless.data.network-state :as network-state]
             [cn.li.ac.wireless.data.node-conn :as node-conn]
-            [cn.li.ac.wireless.data.world-registry :as world-registry]
             [cn.li.mcmod.block.state-schema :as state-schema]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.mcmod.platform.be :as platform-be]
@@ -202,12 +200,7 @@
           _ (wireless-api/register-node-spatial! level vblock)
           network (wireless-api/get-wireless-net-by-node node-tile)
           connected? (network-state/active? network)
-          world-data (or (:world-data network)
-                         (world-registry/get-world-data level))
-          ;; NodeConn stores node as :node-conn type (via create-vnode-conn).
-          ;; Must use matching VBlock for the node-lookup key.
-          node-conn-vb (vb/create-vnode-conn node-tile)
-          conn-load (if-let [conn (network-lookup/get-node-connection world-data node-conn-vb)]
+          conn-load (if-let [conn (wireless-api/get-node-conn-by-node node-tile)]
                       (node-conn/get-load conn)
                       0)
           max-cap (if network (network-state/get-capacity network level) 0)]

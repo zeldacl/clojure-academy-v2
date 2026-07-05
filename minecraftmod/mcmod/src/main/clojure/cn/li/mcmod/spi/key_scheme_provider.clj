@@ -5,7 +5,7 @@
   - `defprotocol` fails under AOT cross-module ClassLoader isolation
     (`satisfies?` returns false).
   - `definterface` + `deftype`/`reify` on **project-owned** interfaces (`cn.li.*`, `api`)
-    is safe — AOT emits stable project symbols (e.g. `ac/.../wireless_matrix/capability.clj`
+    is safe — AOT emits stable project symbols (e.g. `ac/.../example_tile/capability.clj`
     `IMatrixJavaProxy` + `MatrixJavaProxy`).
   - `reify`/`proxy` on **net.minecraft.*** / Forge / Fabric interfaces is forbidden:
     AOT **solidifies** dev-time (Mojmap) type/method names into bytecode; compilation may

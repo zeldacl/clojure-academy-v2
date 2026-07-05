@@ -73,6 +73,7 @@ foundation → domain/model → data/repository/persistence → service/applicat
 | `cn.li.ac.block.machine.render-runtime` | 客户端 TESR init、资源懒加载、动画 cache |
 | `cn.li.ac.block.gui.sync` | schema GUI 容器与 `schema-sync-fns` |
 | `cn.li.ac.block.machine.wireless-handlers` | 发电机/开发者无线链路 handler 共享 |
+| `cn.li.ac.wireless.link-helpers` | 发电机/接收器 ↔ 节点链路 GUI 纯函数 DTO（handler 注册留在 wireless-handlers） |
 
 目录约定：`<machine>/block.clj`（仅 init）、`schema.clj`、`logic.clj`、`gui.clj`（CLIENT）、`handlers.clj`、`render.clj`（CLIENT）。多方块结构在 `ac/block` 内统一用 `bdsl/defmultiblock`。
 

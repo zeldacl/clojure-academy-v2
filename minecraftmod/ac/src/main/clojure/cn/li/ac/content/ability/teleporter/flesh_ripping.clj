@@ -71,7 +71,7 @@
   (try
     (let [exp (helper/skill-exp player-id flesh-ripping-skill-id)
           damage (helper/cfg-lerp flesh-ripping-skill-id :combat.damage exp)
-          trace (or (get-in (ctx/get-context ctx-id) [:skill-state :trace])
+          trace (or (get-in (ctx-skill/get-context ctx-id) [:skill-state :trace])
                     (build-trace player-id exp))]
       (if (and cost-ok? trace)
         (let [world-id (:world-id trace)

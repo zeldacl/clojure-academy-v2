@@ -164,7 +164,7 @@
   "Tick handler - consume resources and deflect projectiles. Assumes toggle is active."
   [{:keys [player-id ctx-id cost-ok?]}]
   (try
-    (when-let [ctx-data (ctx/get-context ctx-id)]
+    (when-let [ctx-data (ctx-skill/get-context ctx-id)]
       (let [exp (skill-exp player-id)
             active? (toggle/is-toggle-active? ctx-data :vec-deviation)]
         (when (and active? (not cost-ok?))
@@ -199,7 +199,7 @@
                                (not= entity-uuid player-id)
                                (not marked?)
                                difficulty
-                               (toggle/is-toggle-active? (or (ctx/get-context ctx-id) ctx-data) :vec-deviation))
+                               (toggle/is-toggle-active? (or (ctx-skill/get-context ctx-id) ctx-data) :vec-deviation))
                       ;; Edit E: fix Bug1 (no * difficulty), Bug2 (force-consume), Bug3 (consume after claim)
                       (let [base-cost   (cfg-lerp :cost.deflect.cp exp)
                             avail-cp    (current-cp player-id)

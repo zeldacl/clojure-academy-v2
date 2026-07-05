@@ -33,6 +33,10 @@
   "Config registry domain for AcademyCraft tutorial settings."
   :cn.li.ac/tutorial)
 
+(def worldgen-domain
+  "Config registry domain for AcademyCraft world generation toggles."
+  :cn.li.ac/worldgen)
+
 (defn ability-skill-category-domain
   "Return the config domain for a skill category."
   [category-id]
@@ -74,3 +78,8 @@
   "Return current tutorial domain config map from mcmod registry."
   []
   (config-reg/get-config-values tutorial-domain))
+
+(defn worldgen-config
+  "Return current worldgen domain config map from mcmod registry."
+  []
+  (config-reg/get-config-values worldgen-domain))

@@ -95,43 +95,10 @@
   []
   {::runtime ::container-state-runtime})
 
-;; ============================================================================
-;; No-op stubs (kept for API compatibility with existing callers)
-;; ============================================================================
-
-(defn register-active-container! [_owner _container] nil)
-(defn unregister-active-container! [_owner _container] nil)
-
-(defn register-player-container! [_owner _container] nil)
-(defn unregister-player-container!
-  ([_owner] nil)
-  ([_owner _container] nil))
-
-(defn register-container-by-id! [_owner _container-id _container] nil)
-(defn unregister-container-by-id! [_owner _container-id] nil)
-
-;; ============================================================================
-;; Query stubs (no longer backed by state — return empty/nil)
-;; ============================================================================
-
-(defn list-active-containers
-  ([]
-   [])
-  ([_owner]
-   []))
-
-(defn get-player-container [_owner] nil)
-(defn get-player-containers [_owner] [])
-(defn get-player-container-from-active [_owner] nil)
-(defn get-container-by-id [_owner _container-id] nil)
-
 (defn container-state-snapshot
   "Return snapshot for tests/diagnostics."
   []
-  {:active-containers {}
-   :player-containers {}
-   :menu-containers (menu-containers-snapshot)
-   :containers-by-id {}})
+  {:menu-containers (menu-containers-snapshot)})
 
 ;; ============================================================================
 ;; Cleanup (test teardown)
@@ -143,6 +110,3 @@
   (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom assoc-in menu-path {}))
   nil)
-
-(defn clear-owner-containers! [_owner] nil)
-(defn clear-session-containers! [_session-id] nil)

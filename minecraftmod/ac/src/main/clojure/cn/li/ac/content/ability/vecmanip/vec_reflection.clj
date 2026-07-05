@@ -268,7 +268,7 @@
   "Activate or deactivate toggle skill."
   [{:keys [player-id ctx-id]}]
   (try
-    (when-let [ctx-data (ctx/get-context ctx-id)]
+    (when-let [ctx-data (ctx-skill/get-context ctx-id)]
       (let [is-active? (toggle/is-toggle-active? ctx-data :vec-reflection)
             exp (skill-exp player-id)]
         (if is-active?
@@ -290,7 +290,7 @@
 
 (defn- vec-reflection-on-key-tick-body
   [player-id ctx-id cost-ok?]
-  (when-let [ctx-data (ctx/get-context ctx-id)]
+  (when-let [ctx-data (ctx-skill/get-context ctx-id)]
     (when (toggle/is-toggle-active? ctx-data :vec-reflection)
       (let [exp (skill-exp player-id)
             overload-keep (get-in ctx-data [:skill-state :vec-reflection-overload-keep] 0.0)]
@@ -303,7 +303,7 @@
           (log/info "VecReflection: Deactivated (insufficient CP)"))
 
         (when (and cost-ok?
-                   (toggle/is-toggle-active? (or (ctx/get-context ctx-id) ctx-data) :vec-reflection))
+                   (toggle/is-toggle-active? (or (ctx-skill/get-context ctx-id) ctx-data) :vec-reflection))
           (when-let [pos (get-player-position player-id)]
             (when (world-effects/available?)
               (let [world-id (:world-id pos)

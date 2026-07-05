@@ -106,7 +106,6 @@
           states)))))
 
 (defn- build-plan [camera-pos hand-center-pos tick]
-  (arc/tick-wiggle-phase!)
   (let [mag-move (some (fn [st]
                          (when (and (:active? st)
                                     (or (nil? (:source-player-id st))

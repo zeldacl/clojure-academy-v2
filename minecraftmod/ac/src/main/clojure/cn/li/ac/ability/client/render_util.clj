@@ -8,19 +8,6 @@
             [cn.li.ac.ability.client.arc-patterns :as arc]))
 
 ;; ---------------------------------------------------------------------------
-;; Vector math
-;; ---------------------------------------------------------------------------
-
-(def v+ vec3/v+)
-(def v- vec3/v-)
-(def v* vec3/v*)
-(def vlen vec3/vlen)
-(def vnormalize vec3/vnorm)
-(def vcross vec3/vcross)
-(def vdot vec3/vdot)
-(def rotate-around-axis vec3/rotate-around-axis)
-
-;; ---------------------------------------------------------------------------
 ;; Color helpers
 ;; ---------------------------------------------------------------------------
 
@@ -71,10 +58,10 @@
     - Life-ratio based fade and wiggle transitions (showWiggle/hideWiggle)
 
   Params:
-    :arc-pattern  — keyword from arc-patterns/arc-patterns (:weak, :strong, etc.)
-    :life-ratio   — 0.0 (just spawned) to 1.0 (about to die)
-    :texture      — override texture path (default: effects/arc.png)
-    :wiggle-offset — optional per-call wiggle phase override"
+    :arc-pattern  ??keyword from arc-patterns/arc-patterns (:weak, :strong, etc.)
+    :life-ratio   ??0.0 (just spawned) to 1.0 (about to die)
+    :texture      ??override texture path (default: effects/arc.png)
+    :wiggle-offset ??optional per-call wiggle phase override"
   [cam-pos start end {:keys [arc-pattern life-ratio texture
                              wiggle-offset]
                       :or {arc-pattern :weak life-ratio 0.5}}]
@@ -98,12 +85,12 @@
     (if (< segment-count 1)
       ;; Single quad fallback for degenerate paths
       (let [right (beam-right-axis start end cam-pos)
-            outer-o (v* right width)
-            core-o  (v* right core-width)]
-        [(quad-op texture (v+ start outer-o) (v- start outer-o)
-                  (v- end outer-o) (v+ end outer-o) outer-color)
-         (quad-op texture (v+ start core-o) (v- start core-o)
-                  (v- end core-o) (v+ end core-o) inner-color)
+            outer-o (vec3/v* right width)
+            core-o  (vec3/v* right core-width)]
+        [(quad-op texture (vec3/v+ start outer-o) (vec3/v- start outer-o)
+                  (vec3/v- end outer-o) (vec3/v+ end outer-o) outer-color)
+         (quad-op texture (vec3/v+ start core-o) (vec3/v- start core-o)
+                  (vec3/v- end core-o) (vec3/v+ end core-o) inner-color)
          (line-op start end line-color)])
       ;; Multi-segment zigzag
       (let [seg-quads
@@ -115,16 +102,16 @@
                             seg-t     (:u v0 0.0)
                             right (beam-right-axis seg-start seg-end cam-pos)
                             wiggle (arc/segment-wiggle-offset seg-t pattern lr)
-                            outer-o (v* right width)
-                            core-o  (v* right core-width)
-                            p0 (v+ seg-start outer-o)
-                            p1 (v- seg-start outer-o)
-                            p2 (v- seg-end outer-o)
-                            p3 (v+ seg-end outer-o)
-                            c0 (v+ seg-start core-o)
-                            c1 (v- seg-start core-o)
-                            c2 (v- seg-end core-o)
-                            c3 (v+ seg-end core-o)
+                            outer-o (vec3/v* right width)
+                            core-o  (vec3/v* right core-width)
+                            p0 (vec3/v+ seg-start outer-o)
+                            p1 (vec3/v- seg-start outer-o)
+                            p2 (vec3/v- seg-end outer-o)
+                            p3 (vec3/v+ seg-end outer-o)
+                            c0 (vec3/v+ seg-start core-o)
+                            c1 (vec3/v- seg-start core-o)
+                            c2 (vec3/v- seg-end core-o)
+                            c3 (vec3/v+ seg-end core-o)
                             u0-seg (+ (:u v0 0.0) wiggle)
                             u1-seg (+ (:u v1 0.0) wiggle)]
                         [(assoc (quad-op texture p0 p1 p2 p3 outer-color)
@@ -143,25 +130,25 @@
               (let [n (inc (rand-int fork-count))]
                 (mapcat (fn [_]
                           (let [t (rand)
-                                mid (v+ start (v* (v- end start) t))
-                                dir (vec3/vnorm (v- end start))
+                                mid (vec3/v+ start (vec3/v* (vec3/v- end start) t))
+                                dir (vec3/vnorm (vec3/v- end start))
                                 perp1 (beam-right-axis start end cam-pos)
-                                perp2 (if (> (vlen perp1) 0.01)
-                                        (vec3/vnorm (vcross dir perp1))
+                                perp2 (if (> (vec3/vlen perp1) 0.01)
+                                        (vec3/vnorm (vec3/vcross dir perp1))
                                         {:x 1.0 :y 0.0 :z 0.0})
                                 angle (* fork-angle (- (* 2.0 (rand)) 1.0))
-                                rot-dir (v+ (v* perp1 (Math/cos angle))
-                                            (v* perp2 (Math/sin angle)))
-                                fork-end (v+ mid (v* rot-dir (* (vlen (v- end start)) fork-length)))
+                                rot-dir (vec3/v+ (vec3/v* perp1 (Math/cos angle))
+                                            (vec3/v* perp2 (Math/sin angle)))
+                                fork-end (vec3/v+ mid (vec3/v* rot-dir (* (vec3/vlen (vec3/v- end start)) fork-length)))
                                 fork-w (* width 0.5)
                                 fork-c (* fork-w 0.4)
                                 fr (beam-right-axis mid fork-end cam-pos)
-                                fo (v* fr fork-w)
-                                fc (v* fr fork-c)
+                                fo (vec3/v* fr fork-w)
+                                fc (vec3/v* fr fork-c)
                                 fork-alpha (int (* outer-alpha 0.6))]
                             [(quad-op texture
-                               (v+ mid fo) (v- mid fo)
-                               (v- fork-end fo) (v+ fork-end fo)
+                               (vec3/v+ mid fo) (vec3/v- mid fo)
+                               (vec3/v- fork-end fo) (vec3/v+ fork-end fo)
                                (arc/pattern-color pattern :color-outer fork-alpha))
                              (line-op mid fork-end
                                (arc/pattern-color pattern :color-line (int (* line-alpha 0.5))))]))
@@ -176,12 +163,12 @@
   - Optional forked side branches for branched lightning look
 
   New params:
-    :jitter-amount     — world-space random endpoint offset (default 0, no jitter)
-    :flicker-threshold — 0-1 probability arc is visible this frame (default nil, always visible)
-    :fork-count        — max number of side branches to generate (default 0)
-    :fork-length       — fraction [0-1] of main beam length for fork reach (default 0.5)
-    :fork-angle        — radians, max deviation from beam axis for forks (default 0.5)
-    :fork-width-frac   — fraction of main width for fork beams (default 0.5)"
+    :jitter-amount     ??world-space random endpoint offset (default 0, no jitter)
+    :flicker-threshold ??0-1 probability arc is visible this frame (default nil, always visible)
+    :fork-count        ??max number of side branches to generate (default 0)
+    :fork-length       ??fraction [0-1] of main beam length for fork reach (default 0.5)
+    :fork-angle        ??radians, max deviation from beam axis for forks (default 0.5)
+    :fork-width-frac   ??fraction of main width for fork beams (default 0.5)"
   [cam-pos start end {:keys [texture width core-width core-ratio
                               outer-color inner-color line-color
                               jitter-amount flicker-threshold
@@ -193,26 +180,26 @@
         end-jitter (rand-offset jitter-amount)
         start-jitter (rand-offset (* jitter-amount 0.3)) ;; less jitter at origin
         start' (if (pos? jitter-amount)
-                 (v+ start start-jitter)
+                 (vec3/v+ start start-jitter)
                  start)
         end' (if (pos? jitter-amount)
-               (v+ end end-jitter)
+               (vec3/v+ end end-jitter)
                end)
         ;; Flicker: randomly skip rendering this frame
         flicker (or flicker-threshold 1.0)
         _visible? (or (>= flicker 1.0) (< (rand) flicker))
         core-width (double (or core-width (* width (double (or core-ratio 0.45)))))
         right (beam-right-axis start' end' cam-pos)
-        outer-offset (v* right width)
-        core-offset (v* right core-width)
-        p0 (v+ start' outer-offset)
-        p1 (v- start' outer-offset)
-        p2 (v- end' outer-offset)
-        p3 (v+ end' outer-offset)
-        c0 (v+ start' core-offset)
-        c1 (v- start' core-offset)
-        c2 (v- end' core-offset)
-        c3 (v+ end' core-offset)
+        outer-offset (vec3/v* right width)
+        core-offset (vec3/v* right core-width)
+        p0 (vec3/v+ start' outer-offset)
+        p1 (vec3/v- start' outer-offset)
+        p2 (vec3/v- end' outer-offset)
+        p3 (vec3/v+ end' outer-offset)
+        c0 (vec3/v+ start' core-offset)
+        c1 (vec3/v- start' core-offset)
+        c2 (vec3/v- end' core-offset)
+        c3 (vec3/v+ end' core-offset)
         ;; Main beam quads (only if not flickered out)
         base-quads (if _visible?
                      [(quad-op texture p0 p1 p2 p3 outer-color)
@@ -227,30 +214,30 @@
                      (let [fork-n (inc (rand-int fork-count))]
                        (mapcat (fn [i]
                                  (let [t (rand)
-                                       mid-point (v+ start' (v* (v- end' start') t))
-                                       dir (vec3/vnorm (v- end' start'))
+                                       mid-point (vec3/v+ start' (vec3/v* (vec3/v- end' start') t))
+                                       dir (vec3/vnorm (vec3/v- end' start'))
                                        perp1 (beam-right-axis start' end' cam-pos)
-                                       perp2 (if (> (vlen perp1) 0.01)
-                                               (vec3/vnorm (vcross dir perp1))
+                                       perp2 (if (> (vec3/vlen perp1) 0.01)
+                                               (vec3/vnorm (vec3/vcross dir perp1))
                                                {:x 1.0 :y 0.0 :z 0.0})
                                        angle (* fork-angle (- (* 2.0 (rand)) 1.0))
-                                       rot-dir (v+ (v* perp1 (Math/cos angle))
-                                                   (v* perp2 (Math/sin angle)))
-                                       fork-end (v+ mid-point (v* rot-dir (* (vlen (v- end' start')) fork-length)))
+                                       rot-dir (vec3/v+ (vec3/v* perp1 (Math/cos angle))
+                                                   (vec3/v* perp2 (Math/sin angle)))
+                                       fork-end (vec3/v+ mid-point (vec3/v* rot-dir (* (vec3/vlen (vec3/v- end' start')) fork-length)))
                                        fork-w (* width fork-width-frac)
                                        fork-core (* fork-w 0.4)
                                        fr (beam-right-axis mid-point fork-end cam-pos)
-                                       fo (v* fr fork-w)
-                                       fc (v* fr fork-core)
+                                       fo (vec3/v* fr fork-w)
+                                       fc (vec3/v* fr fork-core)
                                        fork-alpha (with-alpha outer-color
                                                    (int (* (or (:a outer-color) 128) 0.6)))]
                                    [(quad-op texture
-                                      (v+ mid-point fo) (v- mid-point fo)
-                                      (v- fork-end fo) (v+ fork-end fo)
+                                      (vec3/v+ mid-point fo) (vec3/v- mid-point fo)
+                                      (vec3/v- fork-end fo) (vec3/v+ fork-end fo)
                                       fork-alpha)
                                     (quad-op texture
-                                      (v+ mid-point fc) (v- mid-point fc)
-                                      (v- fork-end fc) (v+ fork-end fc)
+                                      (vec3/v+ mid-point fc) (vec3/v- mid-point fc)
+                                      (vec3/v- fork-end fc) (vec3/v+ fork-end fc)
                                       (with-alpha inner-color
                                         (int (* (or (:a inner-color) 255) 0.4))))]))
                                (range fork-n))))]
@@ -265,29 +252,29 @@
   "Compute the right axis for a billboard beam between `start` and `end`,
   perpendicular to both the beam direction and the camera view direction."
   [start end cam-pos]
-  (let [dir (vec3/vnorm (v- end start))
-        mid (v* (v+ start end) 0.5)
-        to-cam (vec3/vnorm (v- cam-pos mid))
-        raw (vcross dir to-cam)]
-    (if (> (vlen raw) 1.0e-5)
+  (let [dir (vec3/vnorm (vec3/v- end start))
+        mid (vec3/v* (vec3/v+ start end) 0.5)
+        to-cam (vec3/vnorm (vec3/v- cam-pos mid))
+        raw (vec3/vcross dir to-cam)]
+    (if (> (vec3/vlen raw) 1.0e-5)
       (vec3/vnorm raw)
       {:x 1.0 :y 0.0 :z 0.0})))
 
 (defn camera-facing-right-axis
   "Right axis for a camera-facing billboard at `center`."
   [center cam-pos]
-  (let [to-cam (vec3/vnorm (v- cam-pos center))
+  (let [to-cam (vec3/vnorm (vec3/v- cam-pos center))
         up {:x 0.0 :y 1.0 :z 0.0}
-        raw (vcross up to-cam)]
-    (if (> (vlen raw) 1.0e-5)
+        raw (vec3/vcross up to-cam)]
+    (if (> (vec3/vlen raw) 1.0e-5)
       (vec3/vnorm raw)
       {:x 1.0 :y 0.0 :z 0.0})))
 
 (defn billboard-up-axis
   "Up axis for a billboard given `center`, `cam-pos`, and already-computed `right`."
   [center cam-pos right]
-  (let [to-cam (vec3/vnorm (v- cam-pos center))
-        raw (vcross to-cam right)]
-    (if (> (vlen raw) 1.0e-5)
+  (let [to-cam (vec3/vnorm (vec3/v- cam-pos center))
+        raw (vec3/vcross to-cam right)]
+    (if (> (vec3/vlen raw) 1.0e-5)
       (vec3/vnorm raw)
       {:x 0.0 :y 1.0 :z 0.0})))

@@ -2,14 +2,14 @@
   "AC worldgen content registration for datagen.
   Registers ore and liquid pool descriptors into the neutral worldgen registry."
   (:require [cn.li.mcmod.worldgen :as mcmod-worldgen]
-            [cn.li.ac.config.gameplay :as gameplay-cfg]))
+            [cn.li.ac.config.worldgen :as worldgen-cfg]))
 
 (defn register-datagen-metadata!
   "Register AC worldgen content (ores and phase liquid) into the shared worldgen registry.
   Called during datagen initialization. Generation flags are read from AC config at this point."
   []
-  (let [gen-ores? (boolean (try (gameplay-cfg/gen-ores-enabled?) (catch Exception _ true)))
-        gen-phase? (boolean (try (gameplay-cfg/gen-phase-liquid-enabled?) (catch Exception _ true)))]
+  (let [gen-ores? (boolean (try (worldgen-cfg/gen-ores-enabled?) (catch Exception _ true)))
+        gen-phase? (boolean (try (worldgen-cfg/gen-phase-liquid-enabled?) (catch Exception _ true)))]
     (mcmod-worldgen/register-worldgen-ore! {:id "constrained_ore" :name "Constrained Ore" :size 12 :count 8 :enabled? gen-ores?})
     (mcmod-worldgen/register-worldgen-ore! {:id "reso_ore" :name "Resonance Ore" :size 9 :count 8 :enabled? gen-ores?})
     (mcmod-worldgen/register-worldgen-ore! {:id "crystal_ore" :name "Crystal Ore" :size 12 :count 12 :enabled? gen-ores?})

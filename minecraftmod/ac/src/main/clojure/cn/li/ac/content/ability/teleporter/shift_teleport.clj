@@ -263,7 +263,7 @@
 (defn shift-tp-up!
   [{:keys [player-id player ctx-id cost-ok?]}]
   (try
-    (let [ctx-data (ctx/get-context ctx-id)
+    (let [ctx-data (ctx-skill/get-context ctx-id)
           hand-valid? (hand-placeable-block? player)
           trace (or (get-in ctx-data [:skill-state :trace])
                     (when hand-valid? (build-trace player-id)))]

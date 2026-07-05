@@ -4,7 +4,7 @@
   Stages:
   - mark-start / mark-update / mark-end
   - trigger-start / trigger-update / trigger-end"
-  (:require [cn.li.ac.ability.client.effects.sounds :as client-sounds]
+  (:require [cn.li.ac.util.math.vec3 :as vec3] [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.effects.beam-ops :as fx-beam]
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.fx-spec :as fx-spec]
@@ -26,23 +26,23 @@
 
 (defn- lerp-pos [a b t]
   (let [k (clamp01 t)]
-    (ru/v+ a (ru/v* (ru/v- b a) k))))
+    (vec3/v+ a (vec3/v* (vec3/v- b a) k))))
 
 (defn- safe-trail-right-axis [dir]
   (let [up-axis (if (> (Math/abs (double (:y dir))) 0.95)
                   {:x 1.0 :y 0.0 :z 0.0}
                   {:x 0.0 :y 1.0 :z 0.0})
-        right (ru/vcross dir up-axis)]
-    (if (> (ru/vlen right) min-segment-length)
-      (ru/vnormalize right)
+        right (vec3/vcross dir up-axis)]
+    (if (> (vec3/vlen right) min-segment-length)
+      (vec3/vnorm right)
       {:x 1.0 :y 0.0 :z 0.0})))
 
 (defn- trail-layer-ops [start pos ttl trigger-ticks]
-  (let [travel (ru/v- pos start)
-        distance (ru/vlen travel)]
+  (let [travel (vec3/v- pos start)
+        distance (vec3/vlen travel)]
     (if (< distance min-segment-length)
       []
-      (let [dir (ru/vnormalize travel)
+      (let [dir (vec3/vnorm travel)
             right (safe-trail-right-axis dir)
             ttl-k (clamp01 (/ (double ttl) (double trigger-ttl)))
             base-half (+ 0.08 (* 0.05 ttl-k))]
@@ -54,11 +54,11 @@
                           head (lerp-pos start pos head-t)
                           tail (lerp-pos start pos tail-t)
                           half-width (* base-half (+ 1.0 (* 0.18 layer)))
-                          side (ru/v* right half-width)
-                          p0 (ru/v+ tail side)
-                          p1 (ru/v+ head side)
-                          p2 (ru/v- head side)
-                          p3 (ru/v- tail side)
+                          side (vec3/v* right half-width)
+                          p0 (vec3/v+ tail side)
+                          p1 (vec3/v+ head side)
+                          p2 (vec3/v- head side)
+                          p3 (vec3/v- tail side)
                           alpha (int (max 0 (min 255 (* 210.0 ttl-k (- 1.0 (* 0.17 layer))))))
                           color (fx-beam/rgba {:r 172 :g 240 :b 255} alpha)]
                       (when (> alpha 0)
@@ -77,18 +77,18 @@
           outer-v (* 0.62 (+ 1.0 (* 0.15 ttl-k)))
           inner-half (* outer-half 0.62)
           inner-v (* outer-v 0.62)
-          outer-side (ru/v* right outer-half)
-          outer-up (ru/v* up outer-v)
-          inner-side (ru/v* right inner-half)
-          inner-up (ru/v* up inner-v)
-          o0 (ru/v+ (ru/v- center outer-side) outer-up)
-          o1 (ru/v+ (ru/v+ center outer-side) outer-up)
-          o2 (ru/v- (ru/v+ center outer-side) outer-up)
-          o3 (ru/v- (ru/v- center outer-side) outer-up)
-          i0 (ru/v+ (ru/v- center inner-side) inner-up)
-          i1 (ru/v+ (ru/v+ center inner-side) inner-up)
-          i2 (ru/v- (ru/v+ center inner-side) inner-up)
-          i3 (ru/v- (ru/v- center inner-side) inner-up)
+          outer-side (vec3/v* right outer-half)
+          outer-up (vec3/v* up outer-v)
+          inner-side (vec3/v* right inner-half)
+          inner-up (vec3/v* up inner-v)
+          o0 (vec3/v+ (vec3/v- center outer-side) outer-up)
+          o1 (vec3/v+ (vec3/v+ center outer-side) outer-up)
+          o2 (vec3/v- (vec3/v+ center outer-side) outer-up)
+          o3 (vec3/v- (vec3/v- center outer-side) outer-up)
+          i0 (vec3/v+ (vec3/v- center inner-side) inner-up)
+          i1 (vec3/v+ (vec3/v+ center inner-side) inner-up)
+          i2 (vec3/v- (vec3/v+ center inner-side) inner-up)
+          i3 (vec3/v- (vec3/v- center inner-side) inner-up)
           outer-a (int (max 0 (min 255 (* 165.0 ttl-k))))
           inner-a (int (max 0 (min 255 (* 210.0 ttl-k))))]
       [(ru/quad-op "my_mod:textures/effects/glow_circle.png" o0 o1 o2 o3 {:r 145 :g 220 :b 255 :a outer-a})

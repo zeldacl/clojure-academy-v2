@@ -1,5 +1,6 @@
 (ns cn.li.ac.config.registry
 	(:require [cn.li.ac.config.gameplay :as gameplay-config]
+						[cn.li.ac.config.worldgen :as worldgen-config]
 						[cn.li.ac.ability.config :as ability-config]
 						[cn.li.ac.ability.skill-config :as ability-skill-config]
 						[cn.li.ac.wireless.config :as wireless-config]
@@ -61,6 +62,12 @@
 	(config-reg/ensure-default-values!
 		config-common/gameplay-domain
 		gameplay-config/default-values)
+	(config-reg/register-config-descriptors!
+		config-common/worldgen-domain
+		worldgen-config/descriptors)
+	(config-reg/ensure-default-values!
+		config-common/worldgen-domain
+		worldgen-config/default-values)
 	(config-reg/register-config-descriptors!
 		config-common/ability-domain
 		ability-config/descriptors)

@@ -155,7 +155,7 @@
 ;; --- Cost helpers ---
 
 (defn- holding-nearby? [player-id ctx-id]
-  (when-let [ctx-data (ctx/get-context ctx-id)]
+  (when-let [ctx-data (ctx-skill/get-context ctx-id)]
     (let [ss (:skill-state ctx-data)]
       (when (and (= :holding (:mode ss)) (:held-block ss))
         (let [focus (or (:focus ss) (hold-focus player-id))
@@ -188,7 +188,7 @@
                             :held-block held-block
                             :focus focus})
     ;; Spawn visible block entity (matching original MagManipEntityBlock)
-    (when-let [player-id (get-in (ctx/get-context ctx-id) [:player-uuid])]
+    (when-let [player-id (get-in (ctx-skill/get-context ctx-id) [:player-uuid])]
       (entity/player-spawn-entity-by-id! player-id "my_mod:entity_magmanip_block_body" 0.0))
     (fx/send! ctx-id {:topic :mag-manip/fx-hold :mode :hold-start} nil
               {:focus focus
@@ -233,7 +233,7 @@
 
 ;; Original s_tick: update hold position, send FX every 2 ticks.
 (defn- on-tick [{:keys [player-id ctx-id]}]
-  (when-let [ctx-data (ctx/get-context ctx-id)]
+  (when-let [ctx-data (ctx-skill/get-context ctx-id)]
     (let [ss (:skill-state ctx-data)]
       (when (= :holding (:mode ss))
         (let [ticks (inc (int (or (:hold-ticks ss) 0)))
@@ -248,7 +248,7 @@
 ;; Original s_perform: check dist < 5 blocks, throw, damage always 10.
 ;; Cooldown and exp applied manually - only on successful throw.
 (defn- on-up [{:keys [player-id ctx-id cost-ok? player]}]
-  (when-let [ctx-data (ctx/get-context ctx-id)]
+  (when-let [ctx-data (ctx-skill/get-context ctx-id)]
     (let [ss (:skill-state ctx-data)
           held-block (get ss :held-block)
           exp (skill-exp player-id)]
@@ -334,7 +334,7 @@
                                       :held-block nil}))))))))
 
 (defn- on-abort [{:keys [ctx-id player]}]
-  (when-let [ctx-data (ctx/get-context ctx-id)]
+  (when-let [ctx-data (ctx-skill/get-context ctx-id)]
     (when-let [held (get-in ctx-data [:skill-state :held-block])]
       (release-or-rollback! player held)
       (fx/send! ctx-id {:topic :mag-manip/fx-end :mode :end} nil {:reason :abort}))

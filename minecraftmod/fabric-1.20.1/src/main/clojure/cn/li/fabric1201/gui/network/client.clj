@@ -1,5 +1,6 @@
 (ns cn.li.fabric1201.gui.network.client
-  "Fabric 1.20.1 GUI/RPC client transport."
+  "Fabric 1.20.1 GUI/RPC client transport via
+  net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking."
   (:require [cn.li.fabric1201.gui.network.shared :as shared]
             [cn.li.mc1201.gui.network.packet :as packet-base]
             [cn.li.mcmod.hooks.core :as runtime-hooks]

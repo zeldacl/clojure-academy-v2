@@ -151,7 +151,7 @@
 
 (defn- tick-triggering!
   [{:keys [player-id ctx-id]}]
-  (let [ctx-data (ctx/get-context ctx-id)
+  (let [ctx-data (ctx-skill/get-context ctx-id)
         st (:skill-state ctx-data)
         trigger-ticks (long (or (:trigger-ticks st) 0))
         start-pos (:start-pos st)
@@ -213,7 +213,7 @@
 
 (defn jet-engine-tick!
   [{:keys [ctx-id player-id hold-ticks]}]
-  (let [st (get-in (ctx/get-context ctx-id) [:skill-state])
+  (let [st (get-in (ctx-skill/get-context ctx-id) [:skill-state])
         phase (:phase st)]
     (case phase
       :triggering
@@ -235,7 +235,7 @@
 (defn jet-engine-up!
   [{:keys [player-id ctx-id]}]
   (try
-    (let [st (get-in (ctx/get-context ctx-id) [:skill-state])
+    (let [st (get-in (ctx-skill/get-context ctx-id) [:skill-state])
           phase (:phase st)
           target-pos (or (:target-pos st) (get-target-pos player-id))]
       (if (not= phase :marking)
@@ -275,7 +275,7 @@
 
 (defn jet-engine-abort!
   [{:keys [ctx-id]}]
-  (let [st (get-in (ctx/get-context ctx-id) [:skill-state])]
+  (let [st (get-in (ctx-skill/get-context ctx-id) [:skill-state])]
     (send-trigger-end! ctx-id)
     (send-mark-end! ctx-id (:target-pos st))))
 

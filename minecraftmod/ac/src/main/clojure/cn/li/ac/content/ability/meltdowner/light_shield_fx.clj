@@ -1,6 +1,6 @@
 (ns cn.li.ac.content.ability.meltdowner.light-shield-fx
   "Client FX for LightShield: glowing barrier + EntityMdShield equivalent."
-  (:require [cn.li.ac.ability.client.effects.particles :as client-particles]
+  (:require [cn.li.ac.util.math.vec3 :as vec3] [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-spec :as fx-spec]
             [cn.li.ac.ability.client.level-effects :as level-effects]
@@ -106,12 +106,12 @@
           right (ru/camera-facing-right-axis center camera-pos)
           up (ru/billboard-up-axis center camera-pos right)
           half-size (+ 0.44 (* 0.07 (Math/sin (* 0.23 (double (or tick 0))))))
-          side (ru/v* right half-size)
-          lift (ru/v* up half-size)
-          p0 (ru/v+ (ru/v- center side) lift)
-          p1 (ru/v+ (ru/v+ center side) lift)
-          p2 (ru/v- (ru/v+ center side) lift)
-          p3 (ru/v- (ru/v- center side) lift)
+          side (vec3/v* right half-size)
+          lift (vec3/v* up half-size)
+          p0 (vec3/v+ (vec3/v- center side) lift)
+          p1 (vec3/v+ (vec3/v+ center side) lift)
+          p2 (vec3/v- (vec3/v+ center side) lift)
+          p3 (vec3/v- (vec3/v- center side) lift)
           glow-op (ru/quad-op "my_mod:textures/effects/glow_circle.png"
                               p0 p1 p2 p3
                               (ru/with-alpha {:r 165 :g 245 :b 255} 90))]

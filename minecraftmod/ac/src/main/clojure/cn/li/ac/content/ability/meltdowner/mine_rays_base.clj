@@ -45,7 +45,7 @@
   [cfg {:keys [player-id ctx-id]}]
   (try
     (let [{:keys [range break-speed skill-id fortune-level exp-block]} cfg
-          ctx-data  (ctx/get-context ctx-id)
+          ctx-data  (ctx-skill/get-context ctx-id)
           world-id  (geom/world-id-of player-id)
           eye       (geom/eye-pos player-id)
           look-vec  (when (raycast/available?)

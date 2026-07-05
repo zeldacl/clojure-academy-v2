@@ -9,6 +9,7 @@
   WiWorldData no longer stores :world (ServerLevel) or :runtime references.
   Callers that need world access must pass it explicitly."
   (:require [cn.li.ac.wireless.core.spatial-index :as si]
+            [cn.li.mcmod.events.world-state-notify :as world-state-notify]
             [cn.li.mcmod.platform.world-owner-key :as world-owner-key]
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.util.log :as log]))
@@ -88,15 +89,11 @@
 ;; dirty). Not wireless-specific — works for any data stored in world-state.
 ;; ============================================================================
 
-(def ^:private on-world-state-changed-fn (atom nil))
-
 (defn set-on-world-state-changed-fn!
   "Register a (fn [world-key]) callback invoked after every world-state mutation.
-  Platform layers use this to mark persistent SavedData dirty, so Forge's save
-  cycle picks up changes made by ANY module that writes via update-world-state!."
+  Delegates to the mcmod platform-neutral notify seam."
   [f]
-  (reset! on-world-state-changed-fn f)
-  nil)
+  (world-state-notify/set-on-world-state-changed-fn! f))
 
 (defn- update-world-state!
   "Atomically update world-state via Framework swap!."
@@ -106,8 +103,7 @@
                          (fn [current]
                            (let [base (or current (initial-world-state))]
                              (apply f base args))))]
-      (when-let [on-change @on-world-state-changed-fn]
-        (on-change world-key))
+      (world-state-notify/notify-world-state-changed! world-key)
       (get-in new-fw-state (world-state-path world-key)))))
 
 ;; ============================================================================
@@ -223,3 +219,13 @@
   []
   (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom assoc-in worlds-path {})))
+
+(defn create-world-registry-runtime
+  "Test/runtime factory for the wireless world registry store."
+  []
+  {::runtime ::world-registry})
+
+(defn call-with-world-registry-runtime
+  "Run `f` with world registry runtime installed (identity wrapper for test isolation)."
+  [_runtime f]
+  (f))

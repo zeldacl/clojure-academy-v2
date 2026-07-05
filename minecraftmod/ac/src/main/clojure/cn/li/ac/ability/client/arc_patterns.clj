@@ -188,12 +188,6 @@
 (defn- current-wiggle-time []
   (/ (double (System/currentTimeMillis)) 1000.0))
 
-(defn tick-wiggle-phase!
-  "No-op — phase is now computed from wall-clock time.
-  Kept for backward compatibility with existing FX call sites."
-  []
-  nil)
-
 (defn wiggle-phase
   "Current global wiggle phase value, computed from wall-clock time.
   Integral of: 0.15 * (1 + 0.5*sin(3t))

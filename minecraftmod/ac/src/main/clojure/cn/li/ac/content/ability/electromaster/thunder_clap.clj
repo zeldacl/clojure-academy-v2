@@ -100,7 +100,7 @@
 
 (defn- current-target
   [ctx-id player-id]
-  (or (get-in (ctx/get-context ctx-id) [:skill-state :hit-pos])
+  (or (get-in (ctx-skill/get-context ctx-id) [:skill-state :hit-pos])
       (resolve-fallback-target player-id)))
 
 (defn- update-skill-state-root!
@@ -132,7 +132,7 @@
 (defn- end-payload
   [{:keys [ctx-id player-id hold-ticks]}]
   (let [ticks (long (or hold-ticks 0))]
-    {:performed?   (boolean (get-in (ctx/get-context ctx-id) [:skill-state :performed?]))
+    {:performed?   (boolean (get-in (ctx-skill/get-context ctx-id) [:skill-state :performed?]))
      :charge-ticks ticks
      :ticks        ticks
      :charge-ratio (compute-overcharge-ratio ticks)
@@ -151,7 +151,7 @@
   :pattern         :charge-window
   :input-policy    {:settle-perform-on-key-up?
                     (fn [{:keys [ctx-id]}]
-                      (boolean (get-in (ctx/get-context ctx-id) [:skill-state :performed?])))}
+                      (boolean (get-in (ctx-skill/get-context ctx-id) [:skill-state :performed?])))}
   :cooldown        {:mode :manual}
   :cost            {:down {:overload (fn [{:keys [exp]}]
                                       (cfg-lerp :cost.down.overload (double (or exp 0.0))))}

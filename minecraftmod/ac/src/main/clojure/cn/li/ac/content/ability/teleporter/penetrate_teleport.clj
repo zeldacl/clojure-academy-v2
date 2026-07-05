@@ -168,7 +168,7 @@
 
 (defn- preview-payload
   [ctx-id]
-  (let [ctx-data (ctx/get-context ctx-id)
+  (let [ctx-data (ctx-skill/get-context ctx-id)
         preview (get-in ctx-data [:skill-state :preview])
         dest (:dest preview)]
     {:distance (double (or (:distance preview) 0.0))
@@ -191,7 +191,7 @@
 
 (defn- ensure-up-resolve!
   [ctx-id player-id]
-  (let [ctx-data (ctx/get-context ctx-id)
+  (let [ctx-data (ctx-skill/get-context ctx-id)
         existing (get-in ctx-data [:skill-state :up-resolve])
         desired-distance (double (or (get-in ctx-data [:skill-state :desired-distance])
                                      (default-desired-distance player-id)))]
@@ -240,7 +240,7 @@
 
 (defn penetrate-tp-tick!
   [{:keys [player-id ctx-id hold-ticks]}]
-  (let [ctx-data (ctx/get-context ctx-id)
+  (let [ctx-data (ctx-skill/get-context ctx-id)
         desired (double (or (get-in ctx-data [:skill-state :desired-distance])
                             (default-desired-distance player-id)))
         preview (resolve-preview player-id desired)]

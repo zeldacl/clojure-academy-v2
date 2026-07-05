@@ -212,6 +212,10 @@
      :key-states* (:key-states* atoms)
      :preset-switch-states* (:preset-switch-states* atoms)}))
 
+(defn call-with-client-keybind-runtime
+  [_runtime f]
+  (f))
+
 
 (defn- key-states-atom [] (:key-states* (client-keybind-atoms)))
 

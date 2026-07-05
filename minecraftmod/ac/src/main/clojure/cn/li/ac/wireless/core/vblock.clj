@@ -49,9 +49,9 @@
                       (try (pos/position-get-pos tile-entity) (catch Exception _ nil)))]
     (from-foundation
       (foundation-vb/vblock
-        (pos/position-get-x block-pos)
-        (pos/position-get-y block-pos)
-        (pos/position-get-z block-pos)
+        (pos/pos-x block-pos)
+        (pos/pos-y block-pos)
+        (pos/pos-z block-pos)
         block-type
         ignore-chunk))))
 

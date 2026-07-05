@@ -13,8 +13,7 @@
   "Server-side handler for terminal_installer right-click.
    Returns {:consume? true/false} matching original behavior:
    - Already installed → message, don't consume
-   - Not installed → install + achievement + push effect, consume unless creative
-   Uses requiring-resolve for cross-layer dynamic dispatch."
+   - Not installed → install + achievement + push effect, consume unless creative"
   [player]
     (let [uuid-str (uuid/player-uuid player)
         installed? (boolean (terminal-player/terminal-installed? player))]
