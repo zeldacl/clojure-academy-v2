@@ -20,8 +20,8 @@
 (def-skill-config-ops :thunder-bolt)
 (def ^:private thunder-bolt-skill-id :thunder-bolt)
 
-(defn- evt-lerp [field-id]
-  (fn [{:keys [exp]}]
+(defn- cost-lerp [field-id]
+  (fn [_player-id _skill-id exp]
     (cfg-lerp field-id (double (or exp 0.0)))))
 
 (defn- fallback-end-point [eye look range]
@@ -83,6 +83,11 @@
                                         :lightning)
     true))
 
+(defn- entity-in-excluded-set?
+  "True when entity uuid is in the excluded set (Iron Rule 13 safe for remove)."
+  [excluded entity]
+  (contains? excluded (:uuid entity)))
+
 (defn- aoe-victims [world-id center radius excluded]
   (if-not (world-effects/available?)
     []
@@ -92,7 +97,7 @@
                                                  (double (:y center))
                                                  (double (:z center))
                                                  (double radius))
-         (remove (fn [{:keys [uuid]}] (contains? excluded uuid)))
+         (remove (partial entity-in-excluded-set? excluded))
          vec)))
 
 (defn- apply-aoe-damage! [world-id center radius amount victims]
@@ -119,7 +124,8 @@
                                            (cfg-int :effect.slowness-amplifier))
       true)))
 
-(defn thunder-bolt-perform! [{:keys [player-id ctx-id exp]}]
+(defn thunder-bolt-perform!
+  [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (let [exp* (double (or exp 0.0))
         range (cfg-double :targeting.range)
         direct-damage (cfg-lerp :combat.direct-damage exp*)
@@ -178,8 +184,8 @@
   :ctrl-id     :thunder-bolt
   :pattern     :instant
   :cooldown    {:mode :manual}
-  :cost        {:down {:cp       (evt-lerp :cost.down.cp)
-                       :overload (evt-lerp :cost.down.overload)}}
+  :cost        {:down {:cp       (cost-lerp :cost.down.cp)
+                       :overload (cost-lerp :cost.down.overload)}}
   :cooldown-ticks (fn [{:keys [exp]}]
                     (skill-config/lerp-int thunder-bolt-skill-id
                                            :cooldown.ticks

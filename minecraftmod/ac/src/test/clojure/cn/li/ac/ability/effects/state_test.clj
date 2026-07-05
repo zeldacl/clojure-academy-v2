@@ -18,22 +18,20 @@
   (let [c (ctx/new-server-context "p" :sk "ctx-st" test-context-owner)]
     (ctx/register-context! c)
     (binding [ctx/*context-owner* test-context-owner]
-      (state/execute-assoc-state! {:ctx-id "ctx-st" :player-id "p"}
-                                  {:k :foo :v 42})
+      (state/execute-assoc-state! "ctx-st" "p" {:k :foo :v 42})
       (is (= 42 (get-in (ctx/get-context "ctx-st") [:skill-state :foo]))))))
 
 (deftest charge-tick-op-test
   (let [c (ctx/new-server-context "p" :sk "ctx-ch" test-context-owner)]
     (ctx/register-context! c)
     (binding [ctx/*context-owner* test-context-owner]
-      (let [out (state/execute-charge-tick! {:ctx-id "ctx-ch" :player-id "p"}
-                                            {:k :ticks :max 5})]
-        (is (= 1 (:ticks out)))
+      (let [out (state/execute-charge-tick! "ctx-ch" "p" {:k :ticks :max 5})]
+        (is (= 1 out))
         (is (= 1 (get-in (ctx/get-context "ctx-ch") [:skill-state :ticks])))))))
 
 (deftest overload-floor-op-test
   (store/get-or-create-player-state! ps-fix/test-session-id "of-p")
-  (state/execute-overload-floor! {:player-id "of-p"}
-                                 {:floor 10.0})
+  (binding [ctx/*context-owner* test-context-owner]
+    (state/execute-overload-floor! "ctx-of" "of-p" :sk 0.0 {:floor 10.0}))
   (is (<= 10.0 (get-in (store/get-player-state* ps-fix/test-session-id "of-p")
                        [:resource-data :cur-overload]))))

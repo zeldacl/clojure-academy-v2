@@ -108,28 +108,27 @@
 ;; ---------------------------------------------------------------------------
 
 (defn light-shield-activate!
-  [{:keys [ctx-id player-id player]}]
+  [ctx-id player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage player-ref]
   (let [overload-floor (double (or (skill-effects/player-path player-id [:resource-data :cur-overload] 0.0) 0.0))]
     (set-shield-state-path! ctx-id [:ticks] 0)
     (set-shield-state-path! ctx-id [:last-absorb-tick] (- (cfg-int :combat.absorb-interval-ticks)))
     (set-shield-state-path! ctx-id [:last-touch-tick] (- (cfg-int :combat.touch-interval-ticks)))
     (set-shield-state-path! ctx-id [:overload-floor] overload-floor)
     ;; Spawn EntityMdShield visual (matching original c_spawn: new EntityMdShield(player))
-    (when player
-      (entity/player-spawn-entity-by-id! player "my_mod:entity_md_shield" 0.0)))
+    (when player-ref
+      (entity/player-spawn-entity-by-id! player-ref "my_mod:entity_md_shield" 0.0)))
   (log/info "LightShield: Activated"))
 
 (defn light-shield-deactivate!
-  [{:keys [player-id ctx-id]}]
+  [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (when (potion-effects/available?)
     (potion-effects/apply-potion-effect!*
       player-id :slowness
       (cfg-int :effect.deactivate-slowness-duration-ticks)
       (cfg-int :effect.slowness-amplifier)))
-  (let [exp (skill-exp player-id)]
-    (skill-effects/set-main-cooldown!
-      player-id light-shield-skill-id
-      (cfg-lerp-int :cooldown.ticks exp)))
+  (skill-effects/set-main-cooldown!
+    player-id light-shield-skill-id
+    (cfg-lerp-int :cooldown.ticks exp))
   (update-skill-state-root! ctx-id #(dissoc % light-shield-state-key))
   (log/info "LightShield: Deactivated"))
 
@@ -161,11 +160,10 @@
           (set-shield-state-path! ctx-id [:last-touch-tick] ticks))))
 
 (defn light-shield-tick!
-  [{:keys [player-id ctx-id cost-ok?]}]
+  [ctx-id player-id _skill-id exp cost-ok? _hold-ticks _cost-stage _player-ref]
   (when-let [ctx-data (ctx-skill/get-context ctx-id)]
     (when (and cost-ok? (toggle/is-toggle-active? ctx-data :light-shield))
-      (let [exp (skill-exp player-id)
-            next-ticks (inc (shield-ticks ctx-data))
+      (let [next-ticks (inc (shield-ticks ctx-data))
             max-active (cfg-lerp-int :timing.max-active-ticks exp)
             pos (get-player-position player-id)
             world-id (or (:world-id pos)
@@ -179,7 +177,7 @@
         (if (> next-ticks max-active)
           (do
             (toggle/remove-toggle! ctx-id :light-shield)
-            (light-shield-deactivate! {:player-id player-id :ctx-id ctx-id}))
+            (light-shield-deactivate! ctx-id player-id nil exp cost-ok? 0 nil nil))
           (when (>= (- next-ticks last-touch) touch-interval)
             (maybe-touch-damage!
              {:ctx-id ctx-id
@@ -191,7 +189,7 @@
               :look-vec look-vec})))))))
 
 (defn light-shield-abort!
-  [{:keys [ctx-id player-id]}]
+  [ctx-id player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (when (potion-effects/available?)
     (potion-effects/apply-potion-effect!*
       player-id :slowness

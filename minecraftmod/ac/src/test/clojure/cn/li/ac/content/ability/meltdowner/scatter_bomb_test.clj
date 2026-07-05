@@ -1,5 +1,6 @@
 (ns cn.li.ac.content.ability.meltdowner.scatter-bomb-test
   (:require [clojure.test :refer [deftest is]]
+            [cn.li.ac.ability.test.skill-callback-test-helpers :as cb]
             [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.test.support.fx-mocks :as fx-mocks]
             [cn.li.ac.test.support.skill-context :as skill-ctx]
@@ -83,7 +84,7 @@
                       ctx-skill/update-skill-state-root! update-skill-state-root!
                       ctx-skill/assoc-skill-state! assoc-skill-state!
                       fx/send! send!]
-         (scatter/scatter-bomb-down! {:player-id "p1" :ctx-id "ctx-1" :cost-ok? true})))
+         (cb/apply-invoke scatter/scatter-bomb-down! :player-id "p1" :ctx-id "ctx-1" :cost-ok? true)))
     (is (= {:balls 0 :hold-ticks 0 :overload-floor 120.0}
            (:skill-state @ctx*)))
     (is (= [["ctx-1" :scatter-bomb/fx-start nil {}]] @messages*))))
@@ -113,9 +114,7 @@
                   entity-damage/apply-direct-damage!* (fn [world-id entity-uuid damage source-type]
                                                        (swap! damage-calls* conj [world-id entity-uuid damage source-type])
                                                        true)]
-         (scatter/scatter-bomb-tick! {:player-id "p1"
-                                      :ctx-id "ctx-2"
-                                      :player {:id "player-obj"}})))
+         (cb/apply-invoke scatter/scatter-bomb-tick! :player-id "p1" :ctx-id "ctx-2" :player-ref {:id "player-obj"})))
     (is (= [["p1" 120.0]] @floor-calls*))
     (is (empty? @damage-calls*))
     (is (= [[{:id "player-obj"} "my_mod:entity_md_ball" 0.0]] @spawn-calls*))
@@ -146,9 +145,7 @@
                   entity-damage/apply-direct-damage!* (fn [world-id entity-uuid damage source-type]
                                                        (swap! damage-calls* conj [world-id entity-uuid damage source-type])
                                                        true)]
-         (scatter/scatter-bomb-tick! {:player-id "p1"
-                                      :ctx-id "ctx-afk"
-                                      :player {:id "player-obj"}})))
+         (cb/apply-invoke scatter/scatter-bomb-tick! :player-id "p1" :ctx-id "ctx-afk" :player-ref {:id "player-obj"})))
     (is (= [["w" "p1" 6.0 :magic]] @damage-calls*))
     (is (= [["ctx-afk" nil]] @terminate-calls*))
     (is (= ["ctx-afk" :scatter-bomb/fx-end nil {:balls 2}] (last @messages*)))))
@@ -172,9 +169,7 @@
                   geom/eye-pos (fn [_] {:x 1.0 :y 64.0 :z 2.0})
                   entity-damage/available? (constantly true)
                   entity-damage/apply-direct-damage!* (fn [_ _ _ _ _] true)]
-         (scatter/scatter-bomb-tick! {:player-id "p1"
-                                      :ctx-id "ctx-window"
-                                      :player {:id "player-obj"}})))
+         (cb/apply-invoke scatter/scatter-bomb-tick! :player-id "p1" :ctx-id "ctx-window" :player-ref {:id "player-obj"})))
     (is (= 81 (get-in @ctx* [:skill-state :hold-ticks])))
     (is (= 4 (get-in @ctx* [:skill-state :balls])))
     (is (empty? @spawn-calls*))
@@ -210,7 +205,7 @@
                   geom/eye-pos (fn [_] {:x 1.0 :y 64.0 :z 2.0})
                   raycast/available? (constantly true)
                   raycast/get-player-look-vector* (fn [_] {:x 0.0 :y 0.0 :z 1.0})]
-         (scatter/scatter-bomb-up! {:player-id "p1" :ctx-id "ctx-3"})))
+         (cb/apply-invoke scatter/scatter-bomb-up! :player-id "p1" :ctx-id "ctx-3")))
 
     (is (= [15 16 17] (mapv :delay-ticks @scheduled*)))
     (is (= [{:x 1.0 :y 0.0 :z 0.0}
@@ -227,7 +222,6 @@
     (with-scatter-env
       #(with-redefs [ctx/get-context get-context
                   fx/send! send!]
-         (scatter/scatter-bomb-cost-fail! {:ctx-id "ctx-fail"
-                                           :cost-stage :tick})))
+         (cb/apply-invoke scatter/scatter-bomb-cost-fail! :ctx-id "ctx-fail" :cost-stage :tick)))
     (is (= [["ctx-fail" :scatter-bomb/fx-end nil {:balls 4}]] @messages*))))
 

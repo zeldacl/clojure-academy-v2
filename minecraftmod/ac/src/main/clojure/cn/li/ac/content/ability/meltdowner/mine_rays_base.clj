@@ -13,7 +13,6 @@
 
   No Minecraft imports."
   (:require            [cn.li.ac.ability.fx :as fx]
-            [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
                         [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.effects.geom :as geom]
@@ -31,14 +30,14 @@
 
 (defn mining-ray-down!
   "Initialize mining ray context state."
-  [skill-id {:keys [ctx-id cost-ok?]}]
+  [_skill-id ctx-id _player-id _callback-skill-id _exp cost-ok? _hold-ticks _cost-stage _player-ref]
   (when cost-ok?
     (ctx-skill/replace-skill-state! ctx-id (empty-skill-state))))
 
 (defn mining-ray-tick!
   "Tick handler for mining ray.
   cfg: {:range double :break-speed double :skill-id keyword :fortune-level int :exp-block double}"
-  [cfg {:keys [player-id ctx-id]}]
+  [cfg ctx-id player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (try
     (let [{:keys [range break-speed skill-id fortune-level exp-block]} cfg
           ctx-data  (ctx-skill/get-context ctx-id)
@@ -88,10 +87,10 @@
 
 (defn mining-ray-up!
   "Key-up: reset mining state."
-  [_cfg {:keys [ctx-id]}]
+  [_cfg ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (ctx-skill/replace-skill-state! ctx-id (empty-skill-state)))
 
 (defn mining-ray-abort!
   "Abort: reset mining state."
-  [_cfg {:keys [ctx-id]}]
+  [_cfg ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (ctx-skill/replace-skill-state! ctx-id (empty-skill-state)))

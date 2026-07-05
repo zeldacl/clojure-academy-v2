@@ -71,6 +71,9 @@
                           (reset! left (long (/ (- (double w) (double rw)) 2.0))))
                         (when (= align-h :center)
                           (reset! top (long (/ (- (double h) (double rh)) 2.0)))))
+                      (swap! (:metadata root) assoc
+                             :last-mouse-x (int (- mouse-x @left))
+                             :last-mouse-y (int (- mouse-y @top)))
                       (cgui-rt/frame-tick! root {:partial-ticks partial-ticks})
                       (cgui-rt/render-tree! graphics root @left @top))))
                 (catch Exception e
@@ -106,6 +109,13 @@
             (client-ui/with-client-ctx {:session-id (or session-id "")}
               (cgui-rt/mouse-drag! root (int mouse-x) (int mouse-y) (int drag-x) (int drag-y) @left @top)))
           true))
+      (.withMouseMoved
+        (fn [_this mouse-x mouse-y]
+          (when root
+            (swap! (:metadata root) assoc
+                   :last-mouse-x (int (- mouse-x @left))
+                   :last-mouse-y (int (- mouse-y @top))))
+          false))
       (.withIsPauseScreen
         (fn [_this] false)))))
 

@@ -127,6 +127,30 @@ Context 生命周期清理仅使用 `ctx/clear-store-session-contexts!` 与 `ctx
 | `context-skill-state` | `service/context_skill_state.clj` | **技能实现首选**：`get-context`、经 reducer 的 `assoc-skill-state!` 等 |
 | `skill-state-commands` | `service/skill_state_commands.clj` | reducer 命令封装（供 `context-skill-state` 调用） |
 
+### 技能回调 7 参 positional 契约
+
+所有 `:actions` 回调（`:down!` / `:tick!` / `:up!` / `:abort!` / `:perform!` / `:activate!` / `:deactivate!` / `:cost-fail!`）使用统一 arity，**禁止 evt Map**：
+
+```
+[ctx-id player-id skill-id exp cost-ok? hold-ticks cost-stage player-ref]
+```
+
+| 参数 | 含义 |
+|------|------|
+| `ctx-id` | context id 字符串 |
+| `player-id` | 玩家 UUID 字符串 |
+| `skill-id` | 技能 keyword |
+| `exp` | double，来自 ability-data |
+| `cost-ok?` | boolean，`apply-cost!` 结果 |
+| `hold-ticks` | long，payload 中的 hold/charge；否则 0 |
+| `cost-stage` | `:down` / `:tick` / `:up` / nil |
+| `player-ref` | payload 中的平台 player 对象，可为 nil |
+
+- 契约与 pattern→action 映射：`ac/ability/service/skill_callback.clj`
+- dispatch 入口：`context_state/dispatch-skill-callback!`（`:instant` key-down → `:perform!`；`:toggle` → `:activate!`/`:deactivate!`）
+- `:cost` / `:cooldown-ticks` 动态 fn：`(fn [player-id skill-id exp] ...)`
+- FX payload fn 仍可使用 map（低频）；技能逻辑回调不得重建 evt Map
+
 **调用约定（`ac` / `content/ability`）**
 
 - `require` 传输与 lifecycle：`[cn.li.ac.ability.service.context-dispatcher :as ctx]`。

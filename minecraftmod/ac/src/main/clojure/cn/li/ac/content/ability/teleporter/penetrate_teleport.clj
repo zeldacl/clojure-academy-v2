@@ -391,29 +391,38 @@
 
 
 
+(defn- active-ctx-id [player-id skill-id]
+  (some->> (ctx/active-contexts player-id)
+           (filter #(= skill-id (:skill-id %)))
+           first
+           :id))
+
 (defn- up-cost-cp
 
-  [{:keys [ctx-id player-id]}]
+  [player-id skill-id _exp]
 
-  (let [resolved (ensure-up-resolve! ctx-id player-id)]
-
-    (* (double (:distance resolved)) (double (:cp-per-block resolved)))))
+  (if-let [ctx-id (active-ctx-id player-id skill-id)]
+    (let [resolved (ensure-up-resolve! ctx-id player-id)]
+      (* (double (:distance resolved)) (double (:cp-per-block resolved))))
+    0.0))
 
 
 
 (defn- up-cost-overload
 
-  [{:keys [ctx-id player-id]}]
+  [player-id skill-id _exp]
 
-  (double (overload-cost (:exp (ensure-up-resolve! ctx-id player-id)))))
+  (if-let [ctx-id (active-ctx-id player-id skill-id)]
+    (double (overload-cost (:exp (ensure-up-resolve! ctx-id player-id))))
+    0.0))
 
 
 
 (defn- up-cost-creative?
 
-  [{:keys [player]}]
+  [_player-id _skill-id _exp]
 
-  (boolean (and player false)))
+  false)
 
 
 
@@ -427,7 +436,7 @@
 
 (defn- penetrate-tp-down-impl!
 
-  [{:keys [player-id ctx-id cost-ok?]}]
+  [ctx-id player-id _skill-id _exp cost-ok? _hold-ticks _cost-stage _player-ref]
 
   (when cost-ok?
 
@@ -465,7 +474,7 @@
 
 (defn- penetrate-tp-tick-impl!
 
-  [{:keys [player-id ctx-id hold-ticks]}]
+  [ctx-id player-id _skill-id _exp _cost-ok? hold-ticks _cost-stage _player-ref]
 
   (let [ctx-data (ctx-skill/get-context ctx-id)
 
@@ -493,7 +502,7 @@
 
 (defn- penetrate-tp-up-impl!
 
-  [{:keys [player-id ctx-id cost-ok?]}]
+  [ctx-id player-id _skill-id _exp cost-ok? _hold-ticks _cost-stage _player-ref]
 
   (try
 
@@ -558,10 +567,10 @@
      :tick! penetrate-tp-tick-impl!
      :up! penetrate-tp-up-impl!}))
 
-(defn penetrate-tp-down! [evt] (release-cast/down! release-cast-ops evt))
-(defn penetrate-tp-tick! [evt] (release-cast/tick! release-cast-ops evt))
-(defn penetrate-tp-up! [evt] (release-cast/up! release-cast-ops evt))
-(defn penetrate-tp-abort! [evt] (release-cast/abort! release-cast-ops evt))
+(defn penetrate-tp-down! [& args] (apply release-cast/down! release-cast-ops args))
+(defn penetrate-tp-tick! [& args] (apply release-cast/tick! release-cast-ops args))
+(defn penetrate-tp-up! [& args] (apply release-cast/up! release-cast-ops args))
+(defn penetrate-tp-abort! [& args] (apply release-cast/abort! release-cast-ops args))
 
 (defskill penetrate-teleport-skill
 

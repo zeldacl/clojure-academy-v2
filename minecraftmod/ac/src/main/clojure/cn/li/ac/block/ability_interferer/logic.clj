@@ -59,6 +59,20 @@
 (defn- raw-level-players [level]
 	(or (try (world/world-get-players* level) (catch Exception _ nil)) []))
 
+(defn- player-in-aabb?
+  "True when player is non-creative, non-spectator, and inside the AABB bounds.
+  Top-level to avoid runtime class generation in tick-adjacent filter (Iron Rule 13)."
+  [min-x max-x min-y max-y min-z max-z p]
+  (and p
+       (not (player-creative? p))
+       (not (player-spectator? p))
+       (let [x (entity/entity-get-x p)
+             y (entity/entity-get-y p)
+             z (entity/entity-get-z p)]
+         (and (<= min-x x max-x)
+              (<= min-y y max-y)
+              (<= min-z z max-z)))))
+
 (defn- find-players-in-range [level pos range]
   "Find players within a cubic AABB centered on the block (matching original AcademyCraft behavior)."
   (let [cx (+ 0.5 (double (pos/pos-x pos)))
@@ -69,16 +83,7 @@
         min-y (- cy r) max-y (+ cy r)
         min-z (- cz r) max-z (+ cz r)]
     (->> (raw-level-players level)
-         (filter (fn [p]
-                   (and p
-                        (not (player-creative? p))
-                        (not (player-spectator? p))
-                            (let [x (entity/entity-get-x p)
-                            y (entity/entity-get-y p)
-                            z (entity/entity-get-z p)]
-                           (and (<= min-x x max-x)
-                             (<= min-y y max-y)
-                             (<= min-z z max-z))))))
+         (filter (partial player-in-aabb? min-x max-x min-y max-y min-z max-z))
          vec)))
 
 (defn- apply-interference-effect! [player src-id]

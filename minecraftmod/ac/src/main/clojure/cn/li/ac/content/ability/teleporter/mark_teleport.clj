@@ -313,11 +313,18 @@
 
 
 
+(defn- active-ctx-id [player-id skill-id]
+  (some->> (ctx/active-contexts player-id)
+           (filter #(= skill-id (:skill-id %)))
+           first
+           :id))
+
 (defn mark-teleport-cost-up-cp
 
-  [{:keys [player-id ctx-id player]}]
+  [player-id skill-id _exp]
 
-  (if-let [target (cached-or-resolved-target player-id ctx-id player)]
+  (if-let [target (when-let [ctx-id (active-ctx-id player-id skill-id)]
+                     (cached-or-resolved-target player-id ctx-id nil))]
 
     (let [distance (double (:distance target))]
 
@@ -333,9 +340,10 @@
 
 (defn mark-teleport-cost-up-overload
 
-  [{:keys [player-id ctx-id player]}]
+  [player-id skill-id _exp]
 
-  (if-let [target (cached-or-resolved-target player-id ctx-id player)]
+  (if-let [target (when-let [ctx-id (active-ctx-id player-id skill-id)]
+                     (cached-or-resolved-target player-id ctx-id nil))]
 
     (let [distance (double (:distance target))]
 
@@ -351,9 +359,9 @@
 
 (defn mark-teleport-cost-creative?
 
-  [{:keys [player]}]
+  [_player-id _skill-id _exp]
 
-  (boolean (and player (entity/player-creative? player))))
+  false)
 
 
 
@@ -363,13 +371,13 @@
 
   "Update destination marker while key is held."
 
-  [{:keys [player-id ctx-id player]}]
+  [ctx-id player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage player-ref]
 
   (when-let [ctx (ctx-skill/get-context ctx-id)]
 
     (let [next-ticks (inc (long (or (get-in ctx [:skill-state :hold-ticks]) 0)))]
 
-      (if-let [target (resolve-destination player-id player next-ticks)]
+      (if-let [target (resolve-destination player-id player-ref next-ticks)]
 
         (ctx-skill/replace-skill-state! ctx-id
 
@@ -389,13 +397,13 @@
 
   "Execute teleport when key released."
 
-  [{:keys [player-id ctx-id player cost-ok?]}]
+  [ctx-id player-id _skill-id _exp cost-ok? _hold-ticks _cost-stage player-ref]
 
   (when-let [ctx (ctx-skill/get-context ctx-id)]
 
     (let [hold-ticks (long (or (get-in ctx [:skill-state :hold-ticks]) 0))
 
-          target (or (resolve-destination player-id player hold-ticks)
+          target (or (resolve-destination player-id player-ref hold-ticks)
 
                      (when (get-in ctx [:skill-state :has-target])
 
@@ -466,10 +474,10 @@
      :tick! mark-teleport-on-key-tick-impl!
      :up! mark-teleport-on-key-up-impl!}))
 
-(defn mark-teleport-on-key-down [evt] (release-cast/down! release-cast-ops evt))
-(defn mark-teleport-on-key-tick [evt] (release-cast/tick! release-cast-ops evt))
-(defn mark-teleport-on-key-up [evt] (release-cast/up! release-cast-ops evt))
-(defn mark-teleport-on-key-abort [evt] (release-cast/abort! release-cast-ops evt))
+(defn mark-teleport-on-key-down [& args] (apply release-cast/down! release-cast-ops args))
+(defn mark-teleport-on-key-tick [& args] (apply release-cast/tick! release-cast-ops args))
+(defn mark-teleport-on-key-up [& args] (apply release-cast/up! release-cast-ops args))
+(defn mark-teleport-on-key-abort [& args] (apply release-cast/abort! release-cast-ops args))
 
 (defskill mark-teleport-skill
 
@@ -495,7 +503,7 @@
 
   :overload-consume-speed 0.0
 
-  :cooldown-ticks (fn [{:keys [player-id]}]
+  :cooldown-ticks (fn [player-id _skill-id _exp]
 
                     (cooldown-ticks (skill-exp player-id)))
 

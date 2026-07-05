@@ -89,12 +89,12 @@
   (skill-effects/add-skill-exp! player-id :groundshock amount))
 
 (defn groundshock-cost-up-cp
-  [{:keys [player-id]}]
-  (cp-cost (scaling/clamp-exp (skill-exp player-id))))
+  [_player-id _skill-id exp]
+  (cp-cost (scaling/clamp-exp (double (or exp 0.0)))))
 
 (defn groundshock-cost-up-overload
-  [{:keys [player-id]}]
-  (overload-cost (scaling/clamp-exp (skill-exp player-id))))
+  [_player-id _skill-id exp]
+  (overload-cost (scaling/clamp-exp (double (or exp 0.0)))))
 
 (defn- apply-cooldown! [player-id exp]
   (skill-effects/set-main-cooldown! player-id :groundshock (cooldown-ticks exp)))
@@ -154,7 +154,7 @@
 
 (defn groundshock-on-key-down
   "Initialize charge state."
-  [{:keys [ctx-id]}]
+  [ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (try
     (ctx-skill/replace-skill-state! ctx-id
                            {:charge-ticks 0
@@ -166,7 +166,7 @@
 
 (defn groundshock-on-key-tick
   "Update charge progress."
-  [{:keys [ctx-id]}]
+  [ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (try
     (when-let [ctx-data (ctx-skill/get-context ctx-id)]
       (let [skill-state (:skill-state ctx-data)
@@ -320,12 +320,12 @@
 
 (defn groundshock-on-key-up
   "Perform the ground slam."
-  [{:keys [player-id ctx-id cost-ok?]}]
+  [ctx-id player-id _skill-id exp cost-ok? _hold-ticks _cost-stage _player-ref]
   (try
     (when-let [ctx-data (ctx-skill/get-context ctx-id)]
       (let [skill-state (:skill-state ctx-data)
             charge-ticks (long (or (:charge-ticks skill-state) 0))
-            exp (scaling/clamp-exp (skill-exp player-id))]
+            exp (scaling/clamp-exp (double (or exp 0.0)))]
 
         ;; Check if charge is valid (5+ ticks) and player is on ground
           (if (and (>= charge-ticks (cfg-int :charge.min-ticks))
@@ -370,7 +370,7 @@
 
 (defn groundshock-on-key-abort
   "Clean up state on abort."
-  [{:keys [ctx-id]}]
+  [ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (try
     (fx/send! ctx-id {:topic :groundshock/fx-end :mode :end} nil {:performed? false})
     (ctx-skill/clear-skill-state! ctx-id)
@@ -390,8 +390,8 @@
   :ctrl-id :groundshock
   :cp-consume-speed 0.0
   :overload-consume-speed 0.0
-  :cooldown-ticks (fn [{:keys [exp]}]
-                    (cfg-lerp-int :cooldown.ticks (double (or exp 0.0))))  ;; matching original lerp(80, 40, exp)
+  :cooldown-ticks (fn [_player-id _skill-id exp]
+                    (cfg-lerp-int :cooldown.ticks (double (or exp 0.0))))
   :pattern :release-cast
   :cooldown {:mode :manual}
   :cost {:up {:cp groundshock-cost-up-cp

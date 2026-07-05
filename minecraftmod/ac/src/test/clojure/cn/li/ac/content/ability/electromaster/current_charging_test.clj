@@ -1,5 +1,6 @@
 (ns cn.li.ac.content.ability.electromaster.current-charging-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
+            [cn.li.ac.ability.test.skill-callback-test-helpers :as cb]
             [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
@@ -88,7 +89,7 @@
                   fx/send! (fn [id entry _evt payload]
                              (swap! fx* conj [id (:topic entry) payload])
                              nil)]
-      (down! {:player-id "p1" :ctx-id ctx-id :exp 0.4}))
+      (cb/apply-invoke down! :player-id "p1" :ctx-id ctx-id :exp 0.4))
     (is (= {:mode :item
             :is-item true
             :good? false
@@ -141,7 +142,7 @@
                   fx/send! (fn [id entry _evt payload]
                              (swap! fx* conj [id (:topic entry) payload])
                              nil)]
-      (tick! {:player-id "p1" :ctx-id ctx-id}))
+      (cb/apply-invoke tick! :player-id "p1" :ctx-id ctx-id))
     (is (= 1 (get-in @contexts* [ctx-id :skill-state :charge-ticks])))
     (is (true? (get-in @contexts* [ctx-id :skill-state :good?])))
     (is (= [["p1" :current-charging 1.0E-4]] @exp*))
@@ -194,7 +195,7 @@
                   fx/send! (fn [id entry _evt payload]
                              (swap! fx* conj [id (:topic entry) payload])
                              nil)]
-      (tick! {:player-id "p1" :ctx-id ctx-id :player {:uuid "p1"}}))
+      (cb/apply-invoke tick! :player-id "p1" :ctx-id ctx-id :player-ref {:uuid "p1"}))
     (is (= [[{:uuid "p1"} "my_mod:entity_arc" 0.0]] @spawned*))
     (is (= [[ctx-id :current-charging/fx-update
              {:is-item false
@@ -223,7 +224,7 @@
                   fx/send! (fn [id entry _evt payload]
                              (swap! fx* conj [id (:topic entry) payload])
                              nil)]
-      (cost-fail! {:ctx-id ctx-id}))
+      (cb/apply-invoke cost-fail! :ctx-id ctx-id))
     (is (= [[ctx-id :current-charging/fx-end {:is-item false}]] @fx*))
     (is (= [ctx-id] @terminated*))
     (is (nil? (get-in @contexts* [ctx-id :skill-state])))))

@@ -109,9 +109,8 @@
 
 (defn- perform-meltdowner!
   "Fires the meltdowner beam. Returns :beam-result map (or {:performed? false})."
-  [{:keys [player-id ctx-id hold-ticks]}]
-  (let [exp      (skill-exp player-id)
-        ct       (to-charge-ticks hold-ticks)
+  [ctx-id player-id _skill-id exp hold-ticks]
+  (let [ct       (to-charge-ticks hold-ticks)
         damage   (* (time-rate ct) (cfg-lerp :combat.damage exp))
         world-id (geom/world-id-of player-id)
         eye      (geom/eye-pos player-id)
@@ -149,13 +148,13 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- meltdowner-on-down!
-  [{:keys [player-id ctx-id cost-ok?]}]
+  [ctx-id _player-id _skill-id exp cost-ok? _hold-ticks _cost-stage _player-ref]
   (when cost-ok?
-    (let [overload-floor (cfg-lerp :cost.down.overload (skill-exp player-id))]
+    (let [overload-floor (cfg-lerp :cost.down.overload exp)]
       (set-skill-state! ctx-id [:overload-floor] overload-floor))))
 
 (defn- meltdowner-on-tick!
-  [{:keys [player-id ctx-id hold-ticks]}]
+  [ctx-id player-id _skill-id _exp _cost-ok? hold-ticks _cost-stage _player-ref]
   (let [ticks (long (or hold-ticks 0))]
     (when-let [floor (get-in (ctx-skill/get-context ctx-id) [:skill-state :overload-floor])]
       (enforce-overload-floor! player-id floor))
@@ -165,18 +164,15 @@
       (log/debug "Meltdowner aborted: over tolerant ticks" ticks))))
 
 (defn- meltdowner-on-up!
-  [{:keys [player-id ctx-id hold-ticks]}]
-  (let [ticks (long (or hold-ticks 0))
-        exp   (skill-exp player-id)]
+  [ctx-id player-id _skill-id exp _cost-ok? hold-ticks _cost-stage _player-ref]
+  (let [ticks (long (or hold-ticks 0))]
     (if (< ticks (ticks-min))
       (do
         (fx/send! ctx-id {:topic :meltdowner/fx-end} nil {:performed? false})
         (ctx/terminate-context! ctx-id nil)
         (log/debug "Meltdowner: insufficient charge ticks" ticks))
       (let [{:keys [performed? reflection-hit?]}
-            (perform-meltdowner! {:player-id  player-id
-                                  :ctx-id     ctx-id
-                                  :hold-ticks ticks})]
+            (perform-meltdowner! ctx-id player-id _skill-id exp ticks)]
         (if performed?
           (let [ct (to-charge-ticks ticks)]
             (skill-effects/add-skill-exp! player-id meltdowner-skill-id
@@ -192,6 +188,17 @@
             (fx/send! ctx-id {:topic :meltdowner/fx-end} nil {:performed? false})
             (ctx/terminate-context! ctx-id nil)
             (log/debug "Meltdowner: beam failed")))))))
+
+(defn- meltdowner-abort!
+  [ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
+  (fx/send! ctx-id {:topic :meltdowner/fx-end} nil {:performed? false})
+  (ctx/terminate-context! ctx-id nil))
+
+(defn- meltdowner-cost-fail!
+  [ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks cost-stage _player-ref]
+  (when (= cost-stage :tick)
+    (fx/send! ctx-id {:topic :meltdowner/fx-end} nil {:performed? false}))
+  (ctx/terminate-context! ctx-id nil))
 
 ;; ---------------------------------------------------------------------------
 ;; Skill registration
@@ -235,13 +242,8 @@
   :actions         {:down!      meltdowner-on-down!
                     :tick!      meltdowner-on-tick!
                     :up!        meltdowner-on-up!
-                    :abort!     (fn [{:keys [ctx-id]}]
-                                  (fx/send! ctx-id {:topic :meltdowner/fx-end} nil {:performed? false})
-                                  (ctx/terminate-context! ctx-id nil))
-                    :cost-fail! (fn [{:keys [ctx-id cost-stage]}]
-                                  (when (= cost-stage :tick)
-                                    (fx/send! ctx-id {:topic :meltdowner/fx-end} nil {:performed? false}))
-                                  (ctx/terminate-context! ctx-id nil))}
+                    :abort!     meltdowner-abort!
+                    :cost-fail! meltdowner-cost-fail!}
   :prerequisites   [{:skill-id :scatter-bomb :min-exp 0.8}
                     {:skill-id :light-shield :min-exp 0.8}])
 

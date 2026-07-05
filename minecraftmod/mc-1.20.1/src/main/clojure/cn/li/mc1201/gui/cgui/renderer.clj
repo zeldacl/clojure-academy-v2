@@ -510,7 +510,11 @@
           (kind-matches? kind :draw-ops)
           (when-let [ops-fn (:ops-fn state)]
             (try
-              (draw-ops-host/render-ops! gg (ops-fn))
+              (let [^PoseStack ps (.pose gg)]
+                (.pushPose ps)
+                (.translate ps (double x) (double y) 0.0)
+                (draw-ops-host/render-ops! gg (ops-fn))
+                (.popPose ps))
               (catch Exception e
                 (log/debug "CGUI draw-ops render error:" (.getMessage e)))))
 

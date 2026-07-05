@@ -1,13 +1,14 @@
 (ns cn.li.ac.ability.server.service.context-mgr-test
   (:require 
             [cn.li.ac.ability.service.runtime-store :as store]
-[clojure.test :refer [deftest is use-fixtures]]
+            [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.test.support.contexts :as test-contexts]
             [cn.li.ac.test.support.player-state :as test-player]
             [cn.li.ac.test.support.owner :as owner-support]
             [cn.li.ac.ability.service.context-manager :as cm]
             [cn.li.ac.ability.service.context-state :as ctx-rt]
-            [cn.li.ac.ability.service.context-dispatcher :as ctx]            [cn.li.ac.ability.registry.skill :as skill-registry]
+            [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.registry.event :as evt]
             [cn.li.ac.ability.model.ability :as ad]
             [cn.li.ac.ability.model.resource :as rd]

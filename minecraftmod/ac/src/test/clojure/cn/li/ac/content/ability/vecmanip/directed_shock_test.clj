@@ -1,5 +1,6 @@
 (ns cn.li.ac.content.ability.vecmanip.directed-shock-test
   (:require [clojure.test :refer [deftest is]]
+            [cn.li.ac.ability.test.skill-callback-test-helpers :as cb]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
@@ -94,7 +95,7 @@
                                                             nil)
                              fx/send! (fn [ctx-id entry _evt payload]
                                         (swap! end-calls* conj [ctx-id (:topic entry) (:mode entry) payload]))]
-                 (up-fn {:player-id "p1" :ctx-id "ctx-1" :exp 0.5 :cost-ok? true})))))
+                 (cb/apply-invoke up-fn :player-id "p1" :ctx-id "ctx-1" :exp 0.5 :cost-ok? true)))))
         (is (= [["ctx-1" :directed-shock/fx-end :end {:performed? false}]] @end-calls*))
         (is (= ["ctx-1"] @terminate-calls*))
         (is (= 0 @trace-calls*))))))
@@ -143,7 +144,7 @@
                                                             (swap! cooldown-calls* conj [player-id skill-id ticks]))
                          skill-effects/add-skill-exp! (fn [player-id skill-id amount]
                                                         (swap! exp-calls* conj [player-id skill-id amount]))]
-             (up-fn {:player-id "p1" :ctx-id "ctx-hit" :exp 0.3 :cost-ok? true})))))
+             (cb/apply-invoke up-fn :player-id "p1" :ctx-id "ctx-hit" :exp 0.3 :cost-ok? true)))))
     (is (= [["w" "e1" 12.0 :generic]] @damage-calls*))
     (is (= 1 (count @set-velocity-calls*)))
     (is (= 1 (count @add-velocity-calls*)))
@@ -179,7 +180,7 @@
                                                             (swap! cooldown-calls* conj [player-id skill-id ticks]))
                          skill-effects/add-skill-exp! (fn [player-id skill-id amount]
                                                         (swap! exp-calls* conj [player-id skill-id amount]))]
-             (up-fn {:player-id "p1" :ctx-id "ctx-miss" :exp 0.3 :cost-ok? true})))))
+             (cb/apply-invoke up-fn :player-id "p1" :ctx-id "ctx-miss" :exp 0.3 :cost-ok? true)))))
 
     (is (= [["ctx-miss" :directed-shock/fx-end :end {:performed? false}]] @end-calls*))
     (is (= ["ctx-miss"] @terminate-calls*))
@@ -201,7 +202,7 @@
                          ctx/terminate-context! terminate-context!
                          fx/send! (fn [ctx-id entry _evt payload]
                                     (swap! end-calls* conj [ctx-id (:topic entry) (:mode entry) payload]))]
-             (tick-fn {:ctx-id "ctx-punch"})))))
+             (cb/apply-invoke tick-fn :ctx-id "ctx-punch")))))
 
     (is (= [["ctx-punch" :directed-shock/fx-end :end {:performed? true}]]
            (filter #(= :directed-shock/fx-end (nth % 1)) @end-calls*)))
@@ -220,7 +221,7 @@
                     ctx/terminate-context! terminate-context!
                     fx/send! (fn [ctx-id entry _evt payload]
                                (swap! end-calls* conj [ctx-id (:topic entry) (:mode entry) payload]))]
-         (abort-fn {:ctx-id "ctx-abort"})))
+         (cb/apply-invoke abort-fn :ctx-id "ctx-abort")))
 
     (is (= [["ctx-abort" :directed-shock/fx-end :end {:performed? false}]] @end-calls*))
     (is (= ["ctx-abort"] @terminate-calls*))

@@ -1,5 +1,6 @@
 (ns cn.li.ac.content.ability.vecmanip.blood-retrograde-test
   (:require [clojure.test :refer [deftest is testing]]
+            [cn.li.ac.ability.test.skill-callback-test-helpers :as cb]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
@@ -113,9 +114,7 @@
                                                      (swap! cooldown-calls* conj [player-id skill-id ticks]))
                   skill-effects/add-skill-exp! (fn [player-id skill-id amount]
                                                  (swap! exp-calls* conj [player-id skill-id amount]))]
-      (br/blood-retrograde-on-key-tick {:player-id "p1"
-                                        :ctx-id "ctx-1"
-                                        :cost-ok? true}))
+      (cb/apply-invoke br/blood-retrograde-on-key-tick :player-id "p1" :ctx-id "ctx-1" :cost-ok? true))
     (is (= [["w" "target-1" 30.0 :generic]] @damage-calls*))
     (is (= [["p1" :blood-retrograde 90]] @cooldown-calls*))
     (is (= [["p1" :blood-retrograde 0.002]] @exp-calls*))
@@ -151,9 +150,7 @@
                             nil)
                   entity-damage/apply-direct-damage!* (fn [& _]
                                                       (swap! damage-calls* conj :damage))]
-        (br/blood-retrograde-on-key-up {:player-id "p1"
-                                       :ctx-id "ctx-2"
-                                       :cost-ok? true}))
+        (cb/apply-invoke br/blood-retrograde-on-key-up :player-id "p1" :ctx-id "ctx-2" :cost-ok? true))
     (is (empty? @damage-calls*))
     (is (= [["ctx-2" :blood-retrograde/fx-end :end {:performed? false}]] @end-calls*))
     (is (= ["ctx-2"] @terminate-calls))

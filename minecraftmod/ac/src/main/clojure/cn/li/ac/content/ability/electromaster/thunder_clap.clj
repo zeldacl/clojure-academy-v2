@@ -96,27 +96,38 @@
   [ctx-id f & args]
   (apply ctx-skill/update-skill-state-root! ctx-id f args))
 
-(defn- refresh-hit-pos!
-  [{:keys [ctx-id player-id]}]
-  (update-skill-state-root! ctx-id assoc :hit-pos (resolve-raycast-target player-id))
-  nil)
+(defn- active-skill-ctx-data [player-id skill-id]
+  (some (fn [[_ctx-id ctx-data]]
+          (when (and (= (:player-uuid ctx-data) player-id)
+                     (= skill-id (:skill-id ctx-data)))
+            ctx-data))
+        (ctx/get-all-contexts)))
 
-(defn- spawn-surround-and-mark!
-  "Spawn surround arc + ripple mark entities matching original ThunderClapContextC
-  c_spawnEffect: EntitySurroundArc(BOLD) + EntityRippleMark."
-  [{:keys [player-id ctx-id player]}]
-  (when player
-    ;; Surround arc around player (matching EntitySurroundArc BOLD)
-    (entity/player-spawn-entity-by-id! player "my_mod:entity_surround_arc" 0.0)
-    ;; Ripple mark at target position (matching EntityRippleMark)
-    (when-let [hit-pos (resolve-raycast-target player-id)]
-      (entity/player-spawn-entity-by-id! player "my_mod:entity_ripple_mark" 0.0))))
+(defn- stored-hold-ticks [player-id skill-id]
+  (long (or (get-in (active-skill-ctx-data player-id skill-id) [:skill-state :hold-ticks]) 0)))
+
+(defn- tick-cp-cost [player-id _skill-id exp]
+  (if (<= (stored-hold-ticks player-id :thunder-clap) (min-ticks))
+    (cfg-lerp :cost.tick.cp (bal/clamp01 (double (or exp 0.0))))
+    0.0))
+
+(defn- down-overload-cost [_player-id _skill-id exp]
+  (cfg-lerp :cost.down.overload (double (or exp 0.0))))
 
 (defn- mark-performed!
   [ctx-id performed? & {:as extra-state}]
   (update-skill-state-root! ctx-id merge
                             (merge {:performed? (boolean performed?)} extra-state))
   (boolean performed?))
+
+(defn- spawn-surround-and-mark!
+  "Spawn surround arc + ripple mark entities matching original ThunderClapContextC
+  c_spawnEffect: EntitySurroundArc(BOLD) + EntityRippleMark."
+  [_ctx-id player-id player]
+  (when player
+    (entity/player-spawn-entity-by-id! player "my_mod:entity_surround_arc" 0.0)
+    (when-let [hit-pos (resolve-raycast-target player-id)]
+      (entity/player-spawn-entity-by-id! player "my_mod:entity_ripple_mark" 0.0))))
 
 (defn- end-payload
   [{:keys [ctx-id player-id hold-ticks]}]
@@ -126,6 +137,60 @@
      :ticks        ticks
      :charge-ratio (compute-overcharge-ratio ticks)
      :target       (current-target ctx-id player-id)}))
+
+(defn- refresh-hit-pos!
+  [ctx-id player-id]
+  (update-skill-state-root! ctx-id assoc :hit-pos (resolve-raycast-target player-id))
+  nil)
+
+(defn- thunder-clap-down!
+  [ctx-id player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage player-ref]
+  (refresh-hit-pos! ctx-id player-id)
+  (spawn-surround-and-mark! ctx-id player-id player-ref))
+
+(defn- thunder-clap-tick!
+  [ctx-id player-id _skill-id _exp _cost-ok? hold-ticks _cost-stage _player-ref]
+  (update-skill-state-root! ctx-id assoc :hold-ticks (long hold-ticks))
+  (refresh-hit-pos! ctx-id player-id))
+
+(defn- thunder-clap-abort!
+  [ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
+  (mark-performed! ctx-id false))
+
+(defn- thunder-clap-up!
+  [ctx-id player-id _skill-id exp _cost-ok? hold-ticks _cost-stage _player-ref]
+  (let [ticks (long (or hold-ticks 0))]
+    (if (< ticks (min-ticks))
+      (mark-performed! ctx-id false :final-target (current-target ctx-id player-id))
+      (let [hit-pos  (current-target ctx-id player-id)
+            world-id (geom/world-id-of player-id)
+            exp*     (bal/clamp01 (double (or exp 0.0)))
+            mult     (cfg-lerp :combat.overcharge-multiplier
+                               (compute-overcharge-ratio ticks))
+            dmg      (* (cfg-lerp :combat.damage exp*) mult)
+            radius   (cfg-lerp :combat.aoe-radius exp*)
+            cooldown (max 1 (int (* (double ticks)
+                                     (cfg-lerp :cooldown.ticks-per-hold exp*))))]
+        (let [evt {:player-id player-id :ctx-id ctx-id :world-id world-id
+                   :hit-pos hit-pos :exp exp*}]
+          (world-op/execute-spawn-lightning! evt {:at :hit-pos})
+          (damage-op/execute-damage-aoe! evt {:center      :hit-pos
+                                              :radius      radius
+                                              :amount      dmg
+                                              :damage-type :lightning}))
+        (skill-effects/set-main-cooldown! player-id :thunder-clap cooldown)
+        (skill-effects/add-skill-exp! player-id :thunder-clap
+                                      (cfg-double :progression.exp-use))
+        (mark-performed! ctx-id true :final-target hit-pos)))))
+
+(defn- thunder-clap-cost-fail!
+  [ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks cost-stage _player-ref]
+  (mark-performed! ctx-id false)
+  (when (= cost-stage :tick)
+    (fx/send! ctx-id {:topic :thunder-clap/fx-end :mode :end} nil
+              (merge {:ctx-id ctx-id}
+                     (end-payload {:ctx-id ctx-id}))))
+  (ctx/terminate-context! ctx-id nil))
 
 (defskill thunder-clap
   :id              :thunder-clap
@@ -142,12 +207,8 @@
                     (fn [{:keys [ctx-id]}]
                       (boolean (get-in (ctx-skill/get-context ctx-id) [:skill-state :performed?])))}
   :cooldown        {:mode :manual}
-  :cost            {:down {:overload (fn [{:keys [exp]}]
-                                      (cfg-lerp :cost.down.overload (double (or exp 0.0))))}
-                    :tick {:cp (fn [{:keys [hold-ticks exp]}]
-                                 (if (<= (long (or hold-ticks 0)) (min-ticks))
-                                   (cfg-lerp :cost.tick.cp (bal/clamp01 (double (or exp 0.0))))
-                                   0.0))}}
+  :cost            {:down {:overload down-overload-cost}
+                    :tick {:cp tick-cp-cost}}
   :fx              {:start  {:topic   :thunder-clap/fx-start
                              :payload (fn [{:keys [ctx-id player-id]}]
                                         {:charge-ticks 0
@@ -172,40 +233,10 @@
                     :end    {:topic   :thunder-clap/fx-end
                              :payload end-payload}}
   :actions
-  {:down!      (fn [evt] (refresh-hit-pos! evt) (spawn-surround-and-mark! evt))
-   :tick!      refresh-hit-pos!
-   :up!        (fn [{:keys [player-id ctx-id hold-ticks exp]}]
-                 (let [ticks (long (or hold-ticks 0))]
-                   (if (< ticks (min-ticks))
-                     (mark-performed! ctx-id false :final-target (current-target ctx-id player-id))
-                     (let [hit-pos  (current-target ctx-id player-id)
-                           world-id (geom/world-id-of player-id)
-                           exp*     (bal/clamp01 (double (or exp 0.0)))
-                           mult     (cfg-lerp :combat.overcharge-multiplier
-                                              (compute-overcharge-ratio ticks))
-                           dmg      (* (cfg-lerp :combat.damage exp*) mult)
-                           radius   (cfg-lerp :combat.aoe-radius exp*)
-                           cooldown (max 1 (int (* (double ticks)
-                                                    (cfg-lerp :cooldown.ticks-per-hold exp*))))]
-                       (let [evt {:player-id player-id :ctx-id ctx-id :world-id world-id
-                                  :hit-pos   hit-pos   :exp    exp*}]
-                         (world-op/execute-spawn-lightning! evt {:at :hit-pos})
-                         (damage-op/execute-damage-aoe! evt {:center      :hit-pos
-                                                              :radius      radius
-                                                              :amount      dmg
-                                                              :damage-type :lightning}))
-                       (skill-effects/set-main-cooldown! player-id :thunder-clap cooldown)
-                       (skill-effects/add-skill-exp! player-id :thunder-clap
-                                                     (cfg-double :progression.exp-use))
-                       (mark-performed! ctx-id true :final-target hit-pos)))))
-   :cost-fail! (fn [{:keys [ctx-id cost-stage]}]
-                 (mark-performed! ctx-id false)
-                 (when (= cost-stage :tick)
-                   (fx/send! ctx-id {:topic :thunder-clap/fx-end :mode :end} nil
-                             (merge {:ctx-id ctx-id}
-                                    (end-payload {:ctx-id ctx-id}))))
-                 (ctx/terminate-context! ctx-id nil))
-   :abort!     (fn [{:keys [ctx-id]}]
-                 (mark-performed! ctx-id false))}
+  {:down!      thunder-clap-down!
+   :tick!      thunder-clap-tick!
+   :up!        thunder-clap-up!
+   :cost-fail! thunder-clap-cost-fail!
+   :abort!     thunder-clap-abort!}
   :prerequisites [{:skill-id :thunder-bolt :min-exp 1.0}])
 

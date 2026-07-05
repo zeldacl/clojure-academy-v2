@@ -7,6 +7,7 @@
     - perform! action (launches player, skips when can-perform?=false)
     - :fx :end payload (reads [:skill-state :performed?], not root context)"
   (:require [clojure.test :refer [deftest is testing]]
+            [cn.li.ac.ability.test.skill-callback-test-helpers :as cb]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
@@ -167,7 +168,7 @@
                       (fn [_pid] nil)
                       skill-effects/set-main-cooldown! (fn [& _] nil)
                       skill-effects/add-skill-exp!     (fn [& _] nil)]
-          (perform-fn {:player-id "p1" :ctx-id "ctx-1" :exp 0.5})))
+          (cb/apply-invoke perform-fn :player-id "p1" :ctx-id "ctx-1" :exp 0.5)))
       (is (= 1 (count @vel-calls))
           "set-velocity! called exactly once")
       (is (= 1.0 (double (:x (first @vel-calls)))) "x velocity matches init-vel")
@@ -195,7 +196,7 @@
                       (fn [& _] (swap! vel-calls conj :called))
                       skill-effects/set-main-cooldown! (fn [& _] nil)
                       skill-effects/add-skill-exp!     (fn [& _] nil)]
-          (perform-fn {:player-id "p1" :ctx-id "ctx-1" :exp 0.0})))
+          (cb/apply-invoke perform-fn :player-id "p1" :ctx-id "ctx-1" :exp 0.0)))
       (is (empty? @vel-calls)
           "set-velocity! must NOT be called when can-perform?=false"))))
 

@@ -148,10 +148,9 @@
 ;; ---------------------------------------------------------------------------
 
 (defn ray-barrage-perform!
-  [{:keys [player-id ctx-id]}]
+  [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (try
-    (let [exp            (skill-exp player-id)
-          plain-damage   (cfg-lerp :combat.damage.plain exp)
+    (let [plain-damage   (cfg-lerp :combat.damage.plain exp)
           scatter-damage (cfg-lerp :combat.damage.scattered exp)
           world-id       (geom/world-id-of player-id)
           eye            (geom/eye-pos player-id)

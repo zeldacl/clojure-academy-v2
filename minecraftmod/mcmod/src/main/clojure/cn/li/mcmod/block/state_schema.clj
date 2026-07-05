@@ -113,12 +113,26 @@
                   [(:key spec) (:default spec)]))
               schema)))
 
+(def ^:private field-index-cache
+  "Schema vector -> {field-key spec} index; avoids capturing filter in get-field hot path."
+  ^java.util.concurrent.ConcurrentHashMap (java.util.concurrent.ConcurrentHashMap.))
+
+(defn schema->field-index
+  "Build O(1) key->FieldSpec index for a validated schema vector."
+  [schema]
+  (validate-field-schema! schema)
+  (let [^java.util.concurrent.ConcurrentHashMap cache field-index-cache]
+    (or (.get cache schema)
+        (let [index (into {} (map (fn [spec] [(:key spec) spec]) schema))]
+          (.putIfAbsent cache schema index)
+          (or (.get cache schema) index)))))
+
 (defn get-field
   "Return the value of key from state, falling back to the schema default.
   Returns nil when the key is absent from both state and schema."
   [schema state key]
   (validate-field-schema! schema)
-  (if-let [spec (first (filter #(= (:key %) key) schema))]
+  (if-let [spec (get (schema->field-index schema) key)]
     (get state key (:default spec))
     (get state key)))
 

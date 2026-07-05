@@ -90,10 +90,10 @@
 ;; Action
 ;; ---------------------------------------------------------------------------
 
-(defn- perform-arc-gen! [{:keys [player-id ctx-id player]}]
+(defn- perform-arc-gen!
+  [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage player]
   (try
-    (let [exp           (skill-exp player-id)
-          damage        (cfg-lerp :combat.damage exp)
+    (let [damage        (cfg-lerp :combat.damage exp)
           range         (cfg-lerp :targeting.range exp)
           ignite-prob   (cfg-lerp :effect.ignite-probability exp)
           fish-prob     (if (> exp (cfg-double :effect.fishing-exp-threshold))
@@ -156,8 +156,8 @@
       (log/warn "Arc Gen perform! failed:" (ex-message e)))))
 
 (defn arc-gen-perform!
-  [evt]
-  (perform-arc-gen! evt))
+  [& args]
+  (apply perform-arc-gen! args))
 
 ;; ---------------------------------------------------------------------------
 ;; Skill registration
@@ -174,12 +174,12 @@
   :controllable?  true
   :ctrl-id        :arc-gen
   :pattern        :instant
-  :cost           {:down {:cp       (fn [{:keys [player-id]}]
-                                      (cfg-lerp :cost.down.cp (skill-exp player-id)))
-                          :overload (fn [{:keys [player-id]}]
-                                      (cfg-lerp :cost.down.overload (skill-exp player-id)))}}
-  :cooldown-ticks (fn [{:keys [player-id]}]
-                    (skill-config/lerp-int arc-gen-skill-id :cooldown.ticks (skill-exp player-id)))
+  :cost           {:down {:cp       (fn [player-id _skill-id exp]
+                                      (cfg-lerp :cost.down.cp exp))
+                          :overload (fn [player-id _skill-id exp]
+                                      (cfg-lerp :cost.down.overload exp))}}
+  :cooldown-ticks (fn [player-id _skill-id exp]
+                    (skill-config/lerp-int arc-gen-skill-id :cooldown.ticks exp))
   :actions        {:perform! arc-gen-perform!}
   :prerequisites  [])
 

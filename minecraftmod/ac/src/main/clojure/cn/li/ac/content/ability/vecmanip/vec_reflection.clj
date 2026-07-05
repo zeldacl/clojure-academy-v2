@@ -70,8 +70,8 @@
   (fx-common/enforce-overload-floor! player-id floor-value))
 
 (defn vec-reflection-cost-tick-cp
-  [{:keys [player-id]}]
-  (cfg-lerp :cost.tick.cp (skill-exp player-id)))
+  [_player-id _skill-id exp]
+  (cfg-lerp :cost.tick.cp (double (or exp 0.0))))
 
 (defn- get-player-position [player-id]
   (teleportation/get-player-position* player-id))
@@ -197,6 +197,11 @@
            (take max-size)
            (into {})))))
 
+(defn- entity-uuid-str-not-in-set?
+  "True when entity uuid string is absent from visited map (Iron Rule 13 safe for remove)."
+  [visited entity]
+  (not (contains? visited (str (:uuid entity)))))
+
 (defn- active-vec-reflection-ctx-id
   [player-id]
   (->> (ctx/get-all-contexts)
@@ -248,11 +253,11 @@
 
 (defn vec-reflection-on-key-down
   "Activate or deactivate toggle skill."
-  [{:keys [player-id ctx-id]}]
+  [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (try
     (when-let [ctx-data (ctx-skill/get-context ctx-id)]
       (let [is-active? (toggle/is-toggle-active? ctx-data :vec-reflection)
-            exp (skill-exp player-id)]
+            exp (double (or exp 0.0))]
         (if is-active?
           (do
             (toggle/remove-toggle! ctx-id :vec-reflection)
@@ -271,10 +276,10 @@
       (log/warn "VecReflection key-down failed:" (ex-message e)))))
 
 (defn- vec-reflection-on-key-tick-body
-  [player-id ctx-id cost-ok?]
+  [player-id ctx-id exp cost-ok?]
   (when-let [ctx-data (ctx-skill/get-context ctx-id)]
     (when (toggle/is-toggle-active? ctx-data :vec-reflection)
-      (let [exp (skill-exp player-id)
+      (let [exp (double (or exp 0.0))
             overload-keep (get-in ctx-data [:skill-state :vec-reflection-overload-keep] 0.0)]
         (toggle/update-toggle-tick! ctx-id :vec-reflection)
         (enforce-overload-floor! player-id overload-keep)
@@ -306,8 +311,7 @@
                              (or (get-in ctx-data [:skill-state :vec-reflection-visited-map])
                                  (get-in ctx-data [:skill-state :vec-reflection-visited]))
                              now)
-                    fresh-entities (remove (fn [entity]
-                                             (contains? visited (str (:uuid entity))))
+                    fresh-entities (remove (partial entity-uuid-str-not-in-set? visited)
                                            entities)]
                 (doseq [entity fresh-entities]
                   (let [entity-id (:uuid entity)
@@ -374,20 +378,20 @@
 
 (defn vec-reflection-on-key-tick
   "Tick handler - consume resources and reflect nearby projectiles."
-  [{:keys [player-id ctx-id cost-ok?]}]
+  [ctx-id player-id _skill-id exp cost-ok? _hold-ticks _cost-stage _player-ref]
   (try
-    (vec-reflection-on-key-tick-body player-id ctx-id cost-ok?)
+    (vec-reflection-on-key-tick-body player-id ctx-id exp cost-ok?)
     (catch Exception e
       (log/warn "VecReflection key-tick failed:" (ex-message e)))))
 
 (defn vec-reflection-on-key-up
   "No-op for toggle skills."
-  [{:keys [_player-id _ctx-id]}]
+  [_ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   nil)
 
 (defn vec-reflection-on-key-abort
   "Deactivate on abort."
-  [{:keys [ctx-id]}]
+  [ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (try
     (toggle/remove-toggle! ctx-id :vec-reflection)
     (update-skill-state-root! ctx-id #(dissoc % :vec-reflection-visited :vec-reflection-visited-map :vec-reflection-overload-keep))

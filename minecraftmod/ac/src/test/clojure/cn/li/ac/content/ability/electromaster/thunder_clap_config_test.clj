@@ -1,5 +1,6 @@
 (ns cn.li.ac.content.ability.electromaster.thunder-clap-config-test
   (:require [clojure.test :refer [deftest is testing]]
+            [cn.li.ac.ability.test.skill-callback-test-helpers :as cb]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
             [cn.li.ac.test.support.skill-context :as skill-ctx]
@@ -35,5 +36,5 @@
            (is (= 200.0 (down-overload {:exp 0.5})))
            (is (= 20.0 (tick-cp {:hold-ticks 50 :exp 0.5})))
            (is (= 0.0 (tick-cp {:hold-ticks 51 :exp 0.5})))
-           (is (nil? (down-action {:ctx-id "ctx-1" :player-id "p1"})))
-           (is (nil? (tick-action {:ctx-id "ctx-1" :player-id "p1"}))))))))
+           (is (nil? (cb/apply-invoke down-action :ctx-id "ctx-1" :player-id "p1")))
+           (is (nil? (cb/apply-invoke tick-action :ctx-id "ctx-1" :player-id "p1"))))))))

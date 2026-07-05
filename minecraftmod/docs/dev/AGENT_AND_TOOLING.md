@@ -727,9 +727,25 @@ Java 骨架类：`mc-1.20.1/src/main/java/cn/li/mc1201/shim/`
 - `ac/ability/effects/beam.clj:28-38` — 4 个 fn 捕获外层变量（beam-candidates 热路径）
 - `mc-1.20.1/runtime/entity_damage_core.clj:43` — reduce 捕获 5 个外层变量（AOE damage tick）
 - `ac/ability/server/damage/entity.clj:25-29` — 3 个 fn 捕获外层变量（reflection chain）
-- `ac/content/ability/teleporter/shift_teleport.clj:164-178` — filter + sort-by 捕获外层（tick channeling）
 - `ac/content/ability/meltdowner/electron_missile.clj:60-62` — filter + sort-by 捕获外层（missile targeting）
 - `ac/content/ability/meltdowner/ray_barrage.clj:139-146` — remove + sort-by 捕获外层（scatter targeting）
+
+**已修复（2026-07）**：
+- `ac/block/ability_interferer/logic.clj` — `player-in-aabb?` + `partial`
+- `mcmod/block/state_schema.clj` — `schema->field-index` + `ConcurrentHashMap` 缓存
+- `ac/block/role_impls.clj` — `assoc-energy` + `partial`
+- `ac/content/ability/vecmanip/vec_deviation.clj` / `vec_reflection.clj` — uuid filter + `partial`
+- `ac/content/ability/electromaster/mag_manip.clj` / `thunder_bolt.clj` — segment/exclusion filter + `partial`
+- `ac/content/ability/teleporter/shift_teleport.clj:164-178` — 已确认仅用 acc/entity 参数，安全
+
+**技能回调 positional 契约（禁止 evt Map）**：
+
+所有 `:actions` 回调统一 arity：
+`[ctx-id player-id skill-id exp cost-ok? hold-ticks cost-stage player-ref]`
+
+- 实现：`ac/ability/service/skill_callback.clj` + `context_state.clj` dispatch
+- `:cost` / `:cooldown-ticks` 动态 fn 签名为 `(fn [player-id skill-id exp] ...)`
+- **禁止关闭 AOT**；修复闭包热点用 `defn-` + `partial`，不用运行时编译
 
 ---
 

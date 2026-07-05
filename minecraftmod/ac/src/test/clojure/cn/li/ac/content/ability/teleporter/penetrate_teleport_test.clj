@@ -1,5 +1,6 @@
 (ns cn.li.ac.content.ability.teleporter.penetrate-teleport-test
   (:require [clojure.test :refer [deftest is]]
+            [cn.li.ac.ability.test.skill-callback-test-helpers :as cb]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
@@ -47,7 +48,7 @@
                                           :cp-per-block 10.0
                                           :available? true
                                           :dest {:x desired :y 64.0 :z 0.0}})]
-         (pt/penetrate-tp-down! {:player-id "p1" :ctx-id "ctx-1" :cost-ok? true})
+         (cb/apply-invoke pt/penetrate-tp-down! :player-id "p1" :ctx-id "ctx-1" :cost-ok? true)
          ((get @listeners* :penetrate-tp/set-distance) {:delta -50.0})))
     (is (= 0 (get-in @ctx* [:skill-state :hold-ticks])))
     (is (= 0.5 (get-in @ctx* [:skill-state :desired-distance])))
@@ -68,7 +69,7 @@
                                           :cp-per-block 9.0
                                           :available? true
                                           :dest {:x 1.0 :y 2.0 :z 3.0}})]
-         (pt/penetrate-tp-tick! {:player-id "p1" :ctx-id "ctx-2" :hold-ticks 7})))
+         (cb/apply-invoke pt/penetrate-tp-tick! :player-id "p1" :ctx-id "ctx-2" :hold-ticks 7)))
     (is (= 7 (get-in @ctx* [:skill-state :hold-ticks])))
     (is (= 6.0 (get-in @ctx* [:skill-state :preview :distance])))
     (is (nil? (get-in @ctx* [:skill-state :up-resolve])))))
@@ -98,8 +99,8 @@
                     fx/send! send!
                     ach-dispatcher/trigger-custom-event! (fn [player-id event-id]
                                                             (swap! ach-calls* conj [player-id event-id]))]
-         (pt/penetrate-tp-up! {:player-id "p1" :ctx-id "ctx-ok" :cost-ok? true})
-         (pt/penetrate-tp-up! {:player-id "p2" :ctx-id "ctx-fail" :cost-ok? false})))
+         (cb/apply-invoke pt/penetrate-tp-up! :player-id "p1" :ctx-id "ctx-ok" :cost-ok? true)
+         (cb/apply-invoke pt/penetrate-tp-up! :player-id "p2" :ctx-id "ctx-fail" :cost-ok? false)))
     (is (= [["p1" "minecraft:overworld" 10.0 64.0 12.0]] @teleport-calls*))
     (is (= [["p1" :penetrate-teleport 0.008]] @exp-calls*))
     (is (= [["p1" :penetrate-teleport 40]] @cooldown-calls*))

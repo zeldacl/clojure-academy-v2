@@ -20,6 +20,11 @@
 ;; Implements IWirelessGenerator for ScriptedBlockEntity whose customState stores :energy.
 ;; ============================================================================
 
+(defn- assoc-energy
+  "Return state with :energy set. Top-level for partial in capability hot paths."
+  [state energy]
+  (assoc state :energy (double energy)))
+
 (deftype WirelessGeneratorImpl [be]
   IWirelessGenerator
 
@@ -28,7 +33,7 @@
       (double (get state :energy 0.0))))
 
   (setEnergy [_ energy]
-    (machine-runtime/commit-transform! be {} #(assoc % :energy (double energy))))
+    (machine-runtime/commit-transform! be {} (partial assoc-energy energy)))
 
   (getProvidedEnergy [_ req]
     (let [state (or (platform-be/get-custom-state be) {})
@@ -37,7 +42,7 @@
           max-out (if (pos? bw) bw req)
           actual (min (double req) cur max-out)]
       (when (pos? actual)
-        (machine-runtime/commit-transform! be {} #(assoc % :energy (- cur actual))))
+        (machine-runtime/commit-transform! be {} (partial assoc-energy (- cur actual))))
       (double actual)))
 
   (getGeneratorBandwidth [_]
@@ -77,7 +82,7 @@
           space (- max-e cur)
           give (min req space)]
       (when (pos? give)
-        (machine-runtime/commit-transform! be {} #(assoc % :energy (+ cur give))))
+        (machine-runtime/commit-transform! be {} (partial assoc-energy (+ cur give))))
       (- req give)))
 
   (pullEnergy [_ amt]
@@ -86,7 +91,7 @@
           req (max 0.0 (double amt))
           give (min req cur)]
       (when (pos? give)
-        (machine-runtime/commit-transform! be {} #(assoc % :energy (- cur give))))
+        (machine-runtime/commit-transform! be {} (partial assoc-energy (- cur give))))
       (double give)))
 
   (getReceiverBandwidth [_]

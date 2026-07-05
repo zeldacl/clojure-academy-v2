@@ -64,8 +64,8 @@
   (boolean (:success? (fx-common/perform-resource! player-id 0.0 (double cp) false))))
 
 (defn vec-deviation-cost-tick-cp
-  [{:keys [player-id]}]
-  (cfg-lerp :cost.tick.cp (skill-exp player-id)))
+  [_player-id _skill-id exp]
+  (cfg-lerp :cost.tick.cp (double (or exp 0.0))))
 
 (defn- get-player-position
   "Get player position from teleportation protocol."
@@ -124,13 +124,18 @@
              :y (double (or (:y pos) 0.0))
              :z (double (or (:z pos) 0.0))}))
 
+(defn- entity-uuid-not-in-set?
+  "True when entity :uuid is absent from visited set (Iron Rule 13 safe for remove)."
+  [visited entity]
+  (not (contains? visited (:uuid entity))))
+
 ;; ============================================================================
 ;; DSL actions (used by :pattern :toggle)
 ;; ============================================================================
 
 (defn vec-deviation-activate!
-  [{:keys [player-id ctx-id]}]
-  (let [exp             (skill-exp player-id)
+  [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage _player-ref]
+  (let [exp             (double (or exp 0.0))
         activ-overload  (cfg-lerp :cost.activation.overload exp)
         cur-overload    (fx-common/player-path player-id [:resource-data :cur-overload] 0.0)
         overload-floor  (+ (double cur-overload) activ-overload)]
@@ -141,16 +146,16 @@
     (log/info "VecDeviation: Activated")))
 
 (defn vec-deviation-deactivate!
-  [{:keys [ctx-id]}]
+  [ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (update-skill-state-root! ctx-id #(dissoc % :vec-deviation-visited :vec-deviation-marked :vec-deviation-overload-floor))
   (log/info "VecDeviation: Deactivated"))
 
 (defn vec-deviation-tick!
   "Tick handler - consume resources and deflect projectiles. Assumes toggle is active."
-  [{:keys [player-id ctx-id cost-ok?]}]
+  [ctx-id player-id _skill-id exp cost-ok? _hold-ticks _cost-stage _player-ref]
   (try
     (when-let [ctx-data (ctx-skill/get-context ctx-id)]
-      (let [exp (skill-exp player-id)
+      (let [exp (double (or exp 0.0))
             active? (toggle/is-toggle-active? ctx-data :vec-deviation)]
         (when (and active? (not cost-ok?))
           (toggle/deactivate-toggle! ctx-id :vec-deviation)
@@ -172,8 +177,7 @@
                     dual-active? (arbitration/dual-active? player-id)
                     arbitration-allowed? (or (not dual-active?)
                                              (arbitration/skill-allowed-in-dual-active? :vec-deviation))
-                    fresh-entities (remove (fn [entity]
-                                             (contains? visited (:uuid entity)))
+                    fresh-entities (remove (partial entity-uuid-not-in-set? visited)
                                            entities)]
                 (doseq [entity fresh-entities]
                   (let [entity-uuid (:uuid entity)
@@ -223,7 +227,7 @@
       (log/warn "VecDeviation tick! failed:" (ex-message e)))))
 
 (defn vec-deviation-abort!
-  [{:keys [ctx-id]}]
+  [ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (toggle/remove-toggle! ctx-id :vec-deviation)
   (update-skill-state-root! ctx-id #(dissoc % :vec-deviation-visited :vec-deviation-marked :vec-deviation-overload-floor)))
 

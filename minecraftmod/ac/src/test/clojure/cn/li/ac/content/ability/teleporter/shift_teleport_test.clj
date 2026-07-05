@@ -1,5 +1,6 @@
 (ns cn.li.ac.content.ability.teleporter.shift-teleport-test
   (:require [clojure.test :refer [deftest is]]
+            [cn.li.ac.ability.test.skill-callback-test-helpers :as cb]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
@@ -114,7 +115,7 @@
                   fx/send! (fn [_ctx-id entry _evt payload]
                              (swap! fx-calls* conj [(:topic entry) payload])
                              nil)]
-      (shift/shift-tp-up! {:player-id "p1" :ctx-id "ctx-1" :player :player :cost-ok? true}))
+      (cb/apply-invoke shift/shift-tp-up! :player-id "p1" :ctx-id "ctx-1" :player-ref :player :cost-ok? true))
     (is (= [["minecraft:overworld" "enemy-1" 20.0]
             ["minecraft:overworld" "enemy-2" 20.0]]
            @damage-calls*))
@@ -179,7 +180,7 @@
                   fx/send! (fn [_ctx-id entry _evt payload]
                              (swap! fx-calls* conj [(:topic entry) payload])
                              nil)]
-      (shift/shift-tp-up! {:player-id "p1" :ctx-id "ctx-1b" :player :player :cost-ok? true}))
+      (cb/apply-invoke shift/shift-tp-up! :player-id "p1" :ctx-id "ctx-1b" :player-ref :player :cost-ok? true))
     (is (= [[:shift-teleport/fx-perform {:from-x 1.0
                                          :from-y 65.6
                                          :from-z 3.0
@@ -220,7 +221,7 @@
                           fx/send! (fn [& _] (swap! fx-calls* inc) nil)]
                  (shift-tp-platform-redefs {:x 4 :y 5 :z 6 :face :up} []))
       (binding [ctx/*context-owner* (test-context-owner "p1")]
-        (shift/shift-tp-up! {:player-id "p1" :ctx-id "ctx-2" :player :player :cost-ok? false})))
+        (cb/apply-invoke shift/shift-tp-up! :player-id "p1" :ctx-id "ctx-2" :player-ref :player :cost-ok? false)))
 
     (is (= 0 @place-calls*))
     (is (= 0 @teleport-calls*))
@@ -269,7 +270,7 @@
                   skill-effects/add-skill-exp! (fn [& _] nil)
                   skill-effects/set-main-cooldown! (fn [& _] nil)
                   fx/send! (fn [& _] nil)]
-      (shift/shift-tp-up! {:player-id "p1" :ctx-id "ctx-3" :player :player :cost-ok? true}))
+      (cb/apply-invoke shift/shift-tp-up! :player-id "p1" :ctx-id "ctx-3" :player-ref :player :cost-ok? true))
     (is (= 1 @teleport-calls*))
     (is (= [[1 8.5 10.0 10.5]] @drop-calls*))
     (is (= 0 @consume-calls*))))
@@ -287,7 +288,7 @@
                           fx/send! (fn [& _] nil)]
                  (shift-tp-platform-redefs {:x 8 :y 9 :z 10 :face :up} []))
       (binding [ctx/*context-owner* (test-context-owner "p1")]
-        (shift/shift-tp-up! {:player-id "p1" :ctx-id "ctx-4" :player :player :cost-ok? true})))
+        (cb/apply-invoke shift/shift-tp-up! :player-id "p1" :ctx-id "ctx-4" :player-ref :player :cost-ok? true)))
 
     (is (= 0 @teleport-calls*))))
 
@@ -296,8 +297,8 @@
     (with-redefs [ctx-skill/update-skill-state-root! (fn [ctx-id f & args]
                                                        (swap! updates* conj [ctx-id f args])
                                                        nil)]
-      (shift/shift-tp-down! {:ctx-id "ctx-cost-fail" :cost-ok? false})
-      (shift/shift-tp-down! {:ctx-id "ctx-cost-ok" :cost-ok? true}))
+      (cb/apply-invoke shift/shift-tp-down! :ctx-id "ctx-cost-fail" :cost-ok? false)
+      (cb/apply-invoke shift/shift-tp-down! :ctx-id "ctx-cost-ok" :cost-ok? true))
 
     (is (= 1 (count @updates*)))
     (is (= "ctx-cost-ok" (ffirst @updates*)))
@@ -311,7 +312,7 @@
                                                        (swap! updates* conj [ctx-id f args])
                                                        nil)
                   fx/send! (fn [& _] (swap! fx-calls* inc) nil)]
-      (shift/shift-tp-tick! {:player-id "p1" :player :player :ctx-id "ctx-tick" :hold-ticks 9}))
+      (cb/apply-invoke shift/shift-tp-tick! :player-id "p1" :player-ref :player :ctx-id "ctx-tick" :hold-ticks 9))
 
     (is (= 1 (count @updates*)))
     (is (= 0 @fx-calls*))
@@ -361,6 +362,6 @@
                   skill-effects/add-skill-exp! (fn [& _] nil)
                   skill-effects/set-main-cooldown! (fn [& _] nil)
                   fx/send! (fn [& _] nil)]
-      (shift/shift-tp-up! {:player-id "p1" :ctx-id "ctx-creative" :player :player :cost-ok? true}))
+      (cb/apply-invoke shift/shift-tp-up! :player-id "p1" :ctx-id "ctx-creative" :player-ref :player :cost-ok? true))
     (is (= 1 @teleport-calls*))
     (is (= 0 @consume-calls*))))

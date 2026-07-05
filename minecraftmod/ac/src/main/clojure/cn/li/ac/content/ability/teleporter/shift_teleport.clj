@@ -471,9 +471,9 @@
 
 (defn- shift-tp-tick-impl!
 
-  [{:keys [player-id player ctx-id hold-ticks]}]
+  [ctx-id player-id _skill-id _exp _cost-ok? hold-ticks _cost-stage player-ref]
 
-  (let [hand-valid? (hand-placeable-block? player)
+  (let [hand-valid? (hand-placeable-block? player-ref)
 
         trace (when hand-valid? (build-trace player-id))]
 
@@ -503,13 +503,13 @@
 
 (defn- shift-tp-up-impl!
 
-  [{:keys [player-id player ctx-id cost-ok?]}]
+  [ctx-id player-id _skill-id _exp cost-ok? _hold-ticks _cost-stage player-ref]
 
   (try
 
     (let [ctx-data (ctx-skill/get-context ctx-id)
 
-          hand-valid? (hand-placeable-block? player)
+          hand-valid? (hand-placeable-block? player-ref)
 
           trace (or (get-in ctx-data [:skill-state :trace])
 
@@ -517,7 +517,7 @@
 
       (when (and cost-ok? hand-valid? trace)
 
-        (let [place-drop-result (try-place-or-drop! player trace)
+        (let [place-drop-result (try-place-or-drop! player-ref trace)
 
               damage (cfg-lerp :combat.damage (:exp trace))]
 
@@ -631,13 +631,13 @@
 
 
 
-(defn shift-tp-down! [evt] (release-cast/down! release-cast-ops evt))
+(defn shift-tp-down! [& args] (apply release-cast/down! release-cast-ops args))
 
-(defn shift-tp-tick! [evt] (release-cast/tick! release-cast-ops evt))
+(defn shift-tp-tick! [& args] (apply release-cast/tick! release-cast-ops args))
 
-(defn shift-tp-up! [evt] (release-cast/up! release-cast-ops evt))
+(defn shift-tp-up! [& args] (apply release-cast/up! release-cast-ops args))
 
-(defn shift-tp-abort! [evt] (release-cast/abort! release-cast-ops evt))
+(defn shift-tp-abort! [& args] (apply release-cast/abort! release-cast-ops args))
 
 
 
@@ -675,13 +675,13 @@
 
   :pattern        :release-cast
 
-  :cost           {:up {:cp       (fn [{:keys [player-id]}]
+  :cost           {:up {:cp       (fn [player-id _skill-id _exp]
 
                                     (cfg-lerp :cost.up.cp
 
                                                      (skill-exp player-id)))
 
-                        :overload (fn [{:keys [player-id]}]
+                        :overload (fn [player-id _skill-id _exp]
 
                                     (cfg-lerp :cost.up.overload
 

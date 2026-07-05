@@ -125,3 +125,13 @@
        #'world/world-set-block*                (fn [_ _ _ _] nil)]
       :body ((dotimes [i 10000]
                (updater {:energy (double i) :enabled (even? i)} :level :pos))))))
+
+(deftest get-field-no-runtime-class-gen-test
+  (let [fields [{:key :energy :default 0.0}
+                {:key :mode :default :a}]]
+    (class-gen-guard/assert-zero-class-gen
+      "get-field"
+      (fn []
+        (schema/get-field fields {:energy 5.0 :mode :b} :energy)
+        (schema/get-field fields {:energy 5.0} :missing))
+      10000)))

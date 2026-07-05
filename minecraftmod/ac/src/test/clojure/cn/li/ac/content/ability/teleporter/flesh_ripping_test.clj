@@ -1,5 +1,6 @@
 (ns cn.li.ac.content.ability.teleporter.flesh-ripping-test
   (:require [clojure.test :refer [deftest is]]
+            [cn.li.ac.ability.test.skill-callback-test-helpers :as cb]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
@@ -38,7 +39,7 @@
                                              :entity-z 3.0})
                     geom/world-id-of (fn [_] "minecraft:overworld")
                     skill-effects/skill-exp (fn [_ _] 0.5)]
-         (flesh/flesh-ripping-tick! {:player-id "p1" :ctx-id "ctx-0" :hold-ticks 7})))
+         (cb/apply-invoke flesh/flesh-ripping-tick! :player-id "p1" :ctx-id "ctx-0" :hold-ticks 7)))
     (is (= 7 (get-in @ctx* [:skill-state :hold-ticks])))
     (is (= {:world-id "minecraft:overworld"
             :hit? true
@@ -116,7 +117,7 @@
                                (swap! fx-calls* conj [(:topic entry) payload])
                                nil)
                     clojure.core/rand (fn [] 0.0)]
-         (flesh/flesh-ripping-up! {:player-id "p1" :ctx-id "ctx-1" :cost-ok? true})))
+         (cb/apply-invoke flesh/flesh-ripping-up! :player-id "p1" :ctx-id "ctx-1" :cost-ok? true)))
     (is (= [["minecraft:overworld" "target-1" 8.0]] @damage-calls*))
     (is (empty? @potion-calls*))
     (is (= [["p1" :flesh-ripping 0.003]] @exp-calls*))
@@ -171,7 +172,7 @@
                                (swap! fx-calls* conj [(:topic entry) payload])
                                nil)
                     clojure.core/rand (fn [] 0.0)]
-         (flesh/flesh-ripping-up! {:player-id "p1" :ctx-id "ctx-1b" :cost-ok? true})))
+         (cb/apply-invoke flesh/flesh-ripping-up! :player-id "p1" :ctx-id "ctx-1b" :cost-ok? true)))
     (is (= [[:flesh-ripping/fx-perform {:target-x 1.0
                                         :target-y 2.0
                                         :target-z 3.0
@@ -200,7 +201,7 @@
                     skill-effects/add-skill-exp! (fn [& _] (swap! exp-calls* inc))
                     skill-effects/set-main-cooldown! (fn [& _] (swap! cooldown-calls* inc))
                     fx/send! (fn [& _] (swap! fx-calls* inc) nil)]
-         (flesh/flesh-ripping-up! {:player-id "p1" :ctx-id "ctx-2" :cost-ok? false})))
+         (cb/apply-invoke flesh/flesh-ripping-up! :player-id "p1" :ctx-id "ctx-2" :cost-ok? false)))
     (is (= 0 @damage-calls*))
     (is (= 0 @exp-calls*))
     (is (= 0 @cooldown-calls*))
@@ -221,7 +222,7 @@
                     skill-effects/add-skill-exp! (fn [& _] (swap! exp-calls* inc))
                     skill-effects/set-main-cooldown! (fn [& _] (swap! cooldown-calls* inc))
                     fx/send! (fn [& _] (swap! fx-calls* inc) nil)]
-         (flesh/flesh-ripping-up! {:player-id "p1" :ctx-id "ctx-3" :cost-ok? true})))
+         (cb/apply-invoke flesh/flesh-ripping-up! :player-id "p1" :ctx-id "ctx-3" :cost-ok? true)))
     (is (= 0 @damage-calls*))
     (is (= 0 @exp-calls*))
     (is (= 0 @cooldown-calls*))
@@ -232,5 +233,5 @@
         {:keys [ctx* clear-skill-state!]} mocks]
     (with-flesh-env
       #(with-redefs [ctx-skill/clear-skill-state! clear-skill-state!]
-         (flesh/flesh-ripping-abort! {:ctx-id "ctx-4"})))
+         (cb/apply-invoke flesh/flesh-ripping-abort! :ctx-id "ctx-4")))
     (is (nil? (:skill-state @ctx*)))))

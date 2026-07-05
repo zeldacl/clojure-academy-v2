@@ -1,5 +1,6 @@
 (ns cn.li.ac.content.ability.teleporter.threatening-teleport-test
   (:require [clojure.test :refer [deftest is]]
+            [cn.li.ac.ability.test.skill-callback-test-helpers :as cb]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
@@ -39,7 +40,7 @@
                   skill-effects/set-main-cooldown! (fn [& _] (swap! cooldown-calls* inc))
                   fx/send! (fn [& _] (swap! fx-calls* inc))
                   ach-dispatcher/trigger-custom-event! (fn [& _] (swap! ach-calls* inc))]
-      (tt/threatening-tp-up! {:player-id "p1" :ctx-id "ctx-1" :player :player :cost-ok? false}))
+      (cb/apply-invoke tt/threatening-tp-up! :player-id "p1" :ctx-id "ctx-1" :player-ref :player :cost-ok? false))
 
     (is (= 0 @damage-calls*))
     (is (= 0 @exp-calls*))
@@ -64,7 +65,7 @@
                                                :entity-uuid "enemy"
                                                :hit-x 4.0 :hit-y 5.0 :hit-z 6.0
                                                :distance 7.0})]
-      (tt/threatening-tp-tick! {:player-id "p1" :ctx-id "ctx-2" :hold-ticks 9}))
+      (cb/apply-invoke tt/threatening-tp-tick! :player-id "p1" :ctx-id "ctx-2" :hold-ticks 9))
 
     (is (= 9 (get-in @ctx* [:skill-state :hold-ticks])))
     (is (= true (get-in @ctx* [:skill-state :trace :attacked?])))
@@ -139,7 +140,7 @@
                   ach-dispatcher/trigger-custom-event! (fn [player-id event-id]
                                                          (swap! ach-calls* conj [player-id event-id]))
                   rand (fn [] 0.0)]
-      (tt/threatening-tp-up! {:player-id "p1" :ctx-id "ctx-3" :player :player :cost-ok? true}))
+      (cb/apply-invoke tt/threatening-tp-up! :player-id "p1" :ctx-id "ctx-3" :player-ref :player :cost-ok? true))
 
     (is (= [["minecraft:overworld" "enemy" 4.0]] @damage-calls*))
     (is (= 0 @consume-calls*))
@@ -206,7 +207,7 @@
                                (swap! crit-fx-calls* conj payload))
                              nil)
                   rand (fn [] 0.0)]
-      (tt/threatening-tp-up! {:player-id "p1" :ctx-id "ctx-4" :player :player :cost-ok? true}))
+      (cb/apply-invoke tt/threatening-tp-up! :player-id "p1" :ctx-id "ctx-4" :player-ref :player :cost-ok? true))
 
     (is (empty? @crit-fx-calls*))
     (is (some (fn [[topic _]] (= topic :threatening-teleport/fx-perform)) @fx-calls*))))

@@ -95,7 +95,7 @@
   (fx/send-local-and-nearby! ctx-id {:topic :electron-missile/fx-end} nil {}))
 
 (defn electron-missile-down!
-  [{:keys [player-id ctx-id cost-ok?]}]
+  [ctx-id player-id _skill-id _exp cost-ok? _hold-ticks _cost-stage _player-ref]
   (when cost-ok?
     (let [overload-floor (max (cfg-double :cost.down.overload)
                               (current-overload player-id))]
@@ -107,14 +107,13 @@
       (send-start-fx! ctx-id))))
 
 (defn electron-missile-tick!
-  [{:keys [player-id ctx-id player]}]
+  [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage player-ref]
   (try
     (let [ctx-data (ctx-skill/get-context ctx-id)
           state (get ctx-data :skill-state {})
           ticks (long (or (:ticks state) 0))
           active-balls (long (or (:active-balls state) 0))
           overload-floor (double (or (:overload-floor state) (cfg-double :cost.down.overload)))
-          exp (skill-exp player-id)
           max-hold (cfg-lerp-int :charge.max-hold-ticks exp)
           max-balls (cfg-int :projectile.max-hold-balls)
           spawn-interval (cfg-int :timing.spawn-interval-ticks)
@@ -129,8 +128,8 @@
         (let [balls-after-spawn (if (and (zero? (mod ticks spawn-interval))
                                          (< active-balls max-balls))
                                   (do
-                                    (when player
-                                      (entity/player-spawn-entity-by-id! player mdball-entity-id 0.0))
+                                    (when player-ref
+                                      (entity/player-spawn-entity-by-id! player-ref mdball-entity-id 0.0))
                                     (inc active-balls))
                                   active-balls)
               should-fire? (and (pos? ticks)
@@ -169,16 +168,15 @@
       (log/warn "ElectronMissile tick! failed:" (ex-message e)))))
 
 (defn electron-missile-up!
-  [{:keys [player-id ctx-id]}]
-  (let [exp (skill-exp player-id)
-        cd (cfg-lerp-int :cooldown.ticks exp)]
+  [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage _player-ref]
+  (let [cd (cfg-lerp-int :cooldown.ticks exp)]
     (skill-effects/set-main-cooldown! player-id electron-missile-skill-id cd)
     (send-end-fx! ctx-id)
     (ctx-skill/replace-skill-state! ctx-id
                  {:ticks 0 :active-balls 0 :active? false})))
 
 (defn electron-missile-abort!
-  [{:keys [ctx-id]}]
+  [ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (send-end-fx! ctx-id)
   (ctx-skill/replace-skill-state! ctx-id
                          {:ticks 0 :active-balls 0 :active? false}))

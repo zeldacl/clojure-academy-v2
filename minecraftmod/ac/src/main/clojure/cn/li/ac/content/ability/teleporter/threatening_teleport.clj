@@ -219,7 +219,7 @@
 
 (defn- threatening-tp-tick-impl!
 
-  [{:keys [player-id ctx-id hold-ticks]}]
+  [ctx-id player-id _skill-id _exp _cost-ok? hold-ticks _cost-stage _player-ref]
 
   (let [exp (skill-exp player-id)
 
@@ -255,7 +255,7 @@
 
 (defn- threatening-tp-up-impl!
 
-  [{:keys [player-id ctx-id player cost-ok?]}]
+  [ctx-id player-id _skill-id _exp cost-ok? _hold-ticks _cost-stage player-ref]
 
   (try
 
@@ -271,7 +271,7 @@
 
                     (trace-result player-id range))]
 
-      (when (and cost-ok? trace (has-main-hand-item? player))
+      (when (and cost-ok? trace (has-main-hand-item? player-ref))
 
         (let [world-id (:world-id trace)
 
@@ -281,7 +281,7 @@
 
               drop? (should-drop? attacked?)
 
-              consumed? (consume-or-drop-main-hand-item! player trace drop?)]
+              consumed? (consume-or-drop-main-hand-item! player-ref trace drop?)]
 
           (when consumed?
 
@@ -355,13 +355,13 @@
 
 
 
-(defn threatening-tp-down! [evt] (release-cast/down! release-cast-ops evt))
+(defn threatening-tp-down! [& args] (apply release-cast/down! release-cast-ops args))
 
-(defn threatening-tp-tick! [evt] (release-cast/tick! release-cast-ops evt))
+(defn threatening-tp-tick! [& args] (apply release-cast/tick! release-cast-ops args))
 
-(defn threatening-tp-up! [evt] (release-cast/up! release-cast-ops evt))
+(defn threatening-tp-up! [& args] (apply release-cast/up! release-cast-ops args))
 
-(defn threatening-tp-abort! [evt] (release-cast/abort! release-cast-ops evt))
+(defn threatening-tp-abort! [& args] (apply release-cast/abort! release-cast-ops args))
 
 
 
@@ -399,21 +399,21 @@
 
   :pattern        :release-cast
 
-  :cost           {:up {:cp       (fn [{:keys [player-id]}]
+  :cost           {:up {:cp       (fn [player-id _skill-id _exp]
 
                                     (cfg-lerp :cost.up.cp
 
                                                      (skill-exp player-id)))
 
-                        :overload (fn [{:keys [player-id]}]
+                        :overload (fn [player-id _skill-id _exp]
 
                                     (cfg-lerp :cost.up.overload
 
                                                      (skill-exp player-id)))
 
-                        :creative (fn [{:keys [player]}]
+                        :creative (fn [_player-id _skill-id _exp]
 
-                                    (boolean (and player (entity/player-creative? player))))}}
+                                    false)}}
 
   :cooldown       {:mode :manual}
 

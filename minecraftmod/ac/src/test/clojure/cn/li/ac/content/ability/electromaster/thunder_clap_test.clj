@@ -1,5 +1,6 @@
 (ns cn.li.ac.content.ability.electromaster.thunder-clap-test
   (:require [clojure.test :refer [deftest is testing]]
+            [cn.li.ac.ability.test.skill-callback-test-helpers :as cb]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
             [cn.li.ac.ability.effects.damage :as damage-op]
@@ -46,7 +47,7 @@
                                                         (swap! run-ops* conj [:spawn-lightning]))
                     damage-op/execute-damage-aoe! (fn [_evt params]
                                                     (swap! run-ops* conj [:damage-aoe params]))]
-        (up-fn {:player-id "p1" :ctx-id "ctx-short" :hold-ticks 20 :exp 0.5})
+        (cb/apply-invoke up-fn :player-id "p1" :ctx-id "ctx-short" :hold-ticks 20 :exp 0.5)
         (is (false? (get-in @ctx* [:skill-state :performed?])))
         (is (= {:x 1.0 :y 2.0 :z 3.0}
                (get-in @ctx* [:skill-state :final-target])))
@@ -96,7 +97,7 @@
                                                         (swap! run-ops* conj [:spawn-lightning evt params]))
                     damage-op/execute-damage-aoe! (fn [evt params]
                                                     (swap! run-ops* conj [:damage-aoe evt params]))]
-        (up-fn {:player-id "p1" :ctx-id "ctx-hit" :hold-ticks 50 :exp 0.5})
+        (cb/apply-invoke up-fn :player-id "p1" :ctx-id "ctx-hit" :hold-ticks 50 :exp 0.5)
         (is (true? (get-in @ctx* [:skill-state :performed?])))
         (is (= {:x 8.0 :y 64.0 :z 8.0}
                (get-in @ctx* [:skill-state :final-target])))

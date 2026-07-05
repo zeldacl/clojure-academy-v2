@@ -352,8 +352,12 @@
   [value scale]
   (cond
     (fn? value)
-    (fn [evt]
-      (* (double scale) (double (or (value evt) 0.0))))
+    (fn [player-id skill-id exp]
+      (* (double scale) (double (or (try
+                                     (value player-id skill-id exp)
+                                     (catch clojure.lang.ArityException _
+                                       (value {:player-id player-id :skill-id skill-id :exp exp})))
+                                    0.0))))
 
     (number? value)
     (* (double scale) (double value))

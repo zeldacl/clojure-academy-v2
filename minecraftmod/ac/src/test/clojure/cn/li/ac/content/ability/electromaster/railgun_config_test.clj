@@ -1,7 +1,8 @@
 (ns cn.li.ac.content.ability.electromaster.railgun-config-test
   (:require 
             [cn.li.ac.ability.service.runtime-store :as store]
-[clojure.test :refer [deftest is testing]]            [cn.li.ac.ability.registry.skill :as skill-registry]
+            [clojure.test :refer [deftest is testing]]
+            [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.content.ability :as ability-content]
             [cn.li.ac.content.ability.electromaster.railgun :as railgun]

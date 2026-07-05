@@ -31,18 +31,17 @@
 ;; Action
 ;; ---------------------------------------------------------------------------
 
-(defn- perform-electron-bomb! [{:keys [player-id ctx-id player]}]
+(defn- perform-electron-bomb! [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage player-ref]
   (try
-    (let [exp      (skill-exp player-id)
-          damage   (cfg-lerp :combat.damage exp)
+    (let [damage   (cfg-lerp :combat.damage exp)
           world-id (geom/world-id-of player-id)
           eye      (geom/eye-pos player-id)
           look-vec (when (raycast/available?)
                      (raycast/get-player-look-vector* player-id))]
       (when look-vec
-        (when player
+        (when player-ref
           (entity/player-spawn-entity-by-id!
-            player
+            player-ref
             mdball-entity-id
             0.0))
         ;; Send spawn FX first; the delayed task owns the actual hit settlement.
@@ -65,8 +64,8 @@
       (log/warn "ElectronBomb perform! failed:" (ex-message e)))))
 
 (defn electron-bomb-perform!
-  [evt]
-  (perform-electron-bomb! evt))
+  [& args]
+  (apply perform-electron-bomb! args))
 
 ;; ---------------------------------------------------------------------------
 ;; Skill registration

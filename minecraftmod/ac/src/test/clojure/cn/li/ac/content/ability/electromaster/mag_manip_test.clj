@@ -1,5 +1,6 @@
 (ns cn.li.ac.content.ability.electromaster.mag-manip-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
+            [cn.li.ac.ability.test.skill-callback-test-helpers :as cb]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
@@ -43,7 +44,7 @@
                                                                         (apply f (or (:skill-state ctx) {}) args)))))
                                                       nil)
                   fx/send! (fn [& _] nil)]
-      (down! {:player-id "p1" :ctx-id ctx-id :player {:id "p"}}))
+      (cb/apply-invoke down! :player-id "p1" :ctx-id ctx-id :player-ref {:id "p"}))
     (is (= :capture-failed (get-in @contexts* [ctx-id :skill-state :mode])))))
 
 (deftest up-too-far-rolls-back-hand-item-test
@@ -76,7 +77,7 @@
                                                                           (apply f (or (:skill-state ctx) {}) args)))))
                                                         nil)
                   fx/send! send!]
-      (up! {:player-id "p1" :ctx-id ctx-id :player {:id "p"} :cost-ok? true}))
+      (cb/apply-invoke up! :player-id "p1" :ctx-id ctx-id :player-ref {:id "p"} :cost-ok? true))
     (is (= 1 (count @give-calls*)))
     (is (= :too-far (get-in @contexts* [ctx-id :skill-state :mode])))
     (is (= [[ctx-id :mag-manip/fx-end :end {:reason :too-far}]]
@@ -115,7 +116,7 @@
                                                                           (apply f (or (:skill-state ctx) {}) args)))))
                                                         nil)
                   fx/send! (fn [& _] nil)]
-      (up! {:player-id "p1" :ctx-id ctx-id :player {:id "p"} :cost-ok? true}))
+      (cb/apply-invoke up! :player-id "p1" :ctx-id ctx-id :player-ref {:id "p"} :cost-ok? true))
     (is (= :thrown (get-in @contexts* [ctx-id :skill-state :mode])))
     (is (= 1 (count @cooldown*)))
     (is (= 1 (count @exp*)))))

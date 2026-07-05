@@ -1,5 +1,6 @@
 (ns cn.li.ac.content.ability.meltdowner.projectile-mark-integration-test
   (:require [cn.li.ac.ability.service.runtime-store :as store]
+            [cn.li.ac.ability.test.skill-callback-test-helpers :as cb]
             [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.model.ability :as ad]
@@ -137,14 +138,14 @@
                   entity-damage/apply-aoe-damage!* (fn [& _] [])
                   entity-damage/apply-reflection-damage!* (fn [& _] [])]
       (dp/schedule-electron-bomb-beam!
-         {:player-id attacker
-          :ctx-id "ctx-eb"
-          :world-id "w"
-          :eye {:x 0.0 :y 64.0 :z 0.0}
-          :look-dir {:x 0.0 :y 0.0 :z 1.0}
-          :damage 12.0
-          :exp-gain 0.003
-          :delay-ticks 1})
+       {:player-id attacker
+        :ctx-id "ctx-eb"
+        :world-id "w"
+        :eye {:x 0.0 :y 64.0 :z 0.0}
+        :look-dir {:x 0.0 :y 0.0 :z 1.0}
+        :damage 12.0
+        :exp-gain 0.003
+        :delay-ticks 1})
       (dp/tick-player! attacker)
       (is (= 1.75 (:rate (get (dh/marks-snapshot) victim))))
       (is (= 17.5 (double (rt/process-damage! victim attacker 10.0 :magic))))))
@@ -181,9 +182,7 @@
                   entity-damage/apply-direct-damage!* (fn [& _] true)
                   entity-damage/apply-aoe-damage!* (fn [& _] [])
                   entity-damage/apply-reflection-damage!* (fn [& _] [])]
-      (missile/electron-missile-tick! {:player-id attacker
-                                         :ctx-id "ctx-em"
-                                         :player {:id "player-obj"}}))
+      (cb/apply-invoke missile/electron-missile-tick! :player-id attacker :ctx-id "ctx-em" :player-ref {:id "player-obj"}))
       (is (= 1.6 (:rate (get (dh/marks-snapshot) victim))))
       (is (= 16.0 (double (rt/process-damage! victim attacker 10.0 :magic))))))
 
@@ -211,7 +210,7 @@
                                               {:hit-type :block :x 0.0 :y 64.0 :z 5.0})
                   ctx-mgr/push-channel-to-player! (fn [& _] nil)
                   ctx-mgr/push-channel-to-nearby-players! (fn [& _] nil)]
-      (ray-barrage/ray-barrage-perform! {:player-id attacker :ctx-id "ctx-rb"}))
+      (cb/apply-invoke ray-barrage/ray-barrage-perform! :player-id attacker :ctx-id "ctx-rb"))
       (is (= 1.4 (:rate (get (dh/marks-snapshot) victim))))
       (is (= 14.0 (double (rt/process-damage! victim attacker 10.0 :magic)))))))
 
@@ -276,7 +275,7 @@
                   entity-damage/apply-reflection-damage!* (fn [& _] [])
                   ctx-mgr/push-channel-to-player! (fn [& _] nil)
                   ctx-mgr/push-channel-to-nearby-players! (fn [& _] nil)]
-      (jet-engine/jet-engine-tick! {:player-id attacker :ctx-id "ctx-jet" :hold-ticks 1}))
+      (cb/apply-invoke jet-engine/jet-engine-tick! :player-id attacker :ctx-id "ctx-jet" :hold-ticks 1))
       (is (= 1.5 (:rate (get (dh/marks-snapshot) victim))))
       (is (= 15.0 (double (rt/process-damage! victim attacker 10.0 :magic))))))
 

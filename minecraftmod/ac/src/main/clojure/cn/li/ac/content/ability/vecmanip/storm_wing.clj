@@ -55,18 +55,16 @@
     (skill-effects/set-main-cooldown! player-id :storm-wing cd-ticks)))
 
 (defn storm-wing-cost-tick-cp
-  [{:keys [player-id]}]
-  (cfg-lerp :cost.tick.cp (skill-exp player-id)))
+  [_player-id _skill-id exp]
+  (cfg-lerp :cost.tick.cp (double (or exp 0.0))))
 
 (defn storm-wing-cost-tick-overload
-  [{:keys [player-id]}]
-  (cfg-lerp :cost.tick.overload (skill-exp player-id)))
+  [_player-id _skill-id exp]
+  (cfg-lerp :cost.tick.overload (double (or exp 0.0))))
 
 (defn storm-wing-cost-creative?
-  [{:keys [player]}]
-  (boolean (when player
-             (try ((resolve 'cn.li.mcmod.platform.entity/player-creative?) player)
-                  (catch Exception _ false)))))
+  [_player-id _skill-id _exp]
+  false)
 
 (defn- add-exp! [player-id]
   (skill-effects/add-skill-exp! player-id storm-wing-skill-id (cfg-double :progression.exp-tick)))
@@ -153,9 +151,9 @@
 ;; ============================================================================
 
 (defn storm-wing-on-key-down
-  [{:keys [ctx-id player-id]}]
+  [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (try
-    (let [exp (skill-exp player-id)
+    (let [exp (double (or exp 0.0))
           charge-needed (cfg-lerp-int :charge.time exp)]
       (ctx-skill/replace-skill-state! ctx-id
                              {:phase :charging
@@ -169,13 +167,13 @@
       (ctx-skill/clear-skill-state! ctx-id))))
 
 (defn storm-wing-on-key-tick
-  [{:keys [player-id ctx-id cost-ok?]}]
+  [ctx-id player-id _skill-id exp cost-ok? _hold-ticks _cost-stage _player-ref]
   (try
     (when-let [ctx-data (ctx-skill/get-context ctx-id)]
       (let [skill-state (:skill-state ctx-data)]
         (when skill-state
           (let [phase (:phase skill-state)
-                exp   (skill-exp player-id)]
+                exp   (double (or exp 0.0))]
             (case phase
               :charging
               (let [ct     (long (:charge-ticks skill-state 0))
@@ -286,9 +284,9 @@
       (update-skill-state-root! ctx-id #(assoc % :phase :terminated)))))
 
 (defn storm-wing-on-key-up
-  [{:keys [player-id ctx-id]}]
+  [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (try
-    (let [exp (skill-exp player-id)]
+    (let [exp (double (or exp 0.0))]
       (apply-cooldown! player-id exp)
       (fx/send! ctx-id {:topic :storm-wing/fx-end :mode :end})
       (ctx-skill/clear-skill-state! ctx-id))
@@ -297,9 +295,9 @@
       (ctx-skill/clear-skill-state! ctx-id))))
 
 (defn storm-wing-on-key-abort
-  [{:keys [player-id ctx-id]}]
+  [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (try
-    (let [exp (skill-exp player-id)]
+    (let [exp (double (or exp 0.0))]
       (apply-cooldown! player-id exp)
       (fx/send! ctx-id {:topic :storm-wing/fx-end :mode :end})
       (ctx-skill/clear-skill-state! ctx-id))

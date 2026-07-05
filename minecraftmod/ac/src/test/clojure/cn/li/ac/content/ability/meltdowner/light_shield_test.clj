@@ -1,5 +1,6 @@
 (ns cn.li.ac.content.ability.meltdowner.light-shield-test
   (:require [clojure.test :refer [deftest is testing]]
+            [cn.li.ac.ability.test.skill-callback-test-helpers :as cb]
             [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
@@ -29,7 +30,7 @@
                                (throw (ex-info "manual fx send should not happen" {})))
                     skill-effects/player-path (fn [& _] 12.0)
                     skill-config/tunable-int (fn [& _] 1)]
-         (is (nil? (ls/light-shield-activate! {:ctx-id "ctx-1" :player-id "p-1"})))))))
+         (is (nil? (cb/apply-invoke ls/light-shield-activate! :ctx-id "ctx-1" :player-id "p-1")))))))
 
 (deftest reduce-damage-respects-absorb-interval-window-test
   (testing "damage is unchanged when absorb interval has not elapsed"
@@ -186,7 +187,7 @@
                         potion-effects/apply-potion-effect!* (fn [& _]
                                                                (swap! potion-calls* inc)
                                                                nil)]
-            (ls/light-shield-tick! {:player-id "p-3" :ctx-id "ctx-3" :cost-ok? true})
+            (cb/apply-invoke ls/light-shield-tick! :player-id "p-3" :ctx-id "ctx-3" :cost-ok? true)
             (is (= 1 @remove-calls*))
             (is (= 1 @potion-calls*))
             (is (= 1 (count @cooldown-calls*))))))))
@@ -211,7 +212,7 @@
                         potion-effects/apply-potion-effect!* (fn [& args]
                                                                (swap! potion-calls* conj args)
                                                                nil)]
-            (ls/light-shield-abort! {:player-id "p-4" :ctx-id "ctx-4"})
+            (cb/apply-invoke ls/light-shield-abort! :player-id "p-4" :ctx-id "ctx-4")
             (is (= 1 @remove-calls*))
             (is (= 1 (count @potion-calls*)))
             (is (seq @update-calls*)))))))))

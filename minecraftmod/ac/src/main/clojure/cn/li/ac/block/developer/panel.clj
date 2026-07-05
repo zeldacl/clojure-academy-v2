@@ -448,6 +448,61 @@
 ;; ============================================================================
 ;; Shared node-size constants live in skill-tree namespace (skill-tree/widget-size etc.).
 
+(def ^:private skill-tree-area-w 257.0)
+(def ^:private skill-tree-area-h 139.0)
+
+(defn- align-keyword [v]
+  (when v (-> v name str/lower-case keyword)))
+
+(defn- widget-gui-pos
+  "Absolute position of `target` under `root` in GUI-root coords (excludes screen centering)."
+  [root target]
+  (letfn [(walk [widget abs-pos parent-size parent-scale]
+            (let [[px py] abs-pos
+                  [wx wy] (cgui-core/get-pos widget)
+                  [pw ph] (or parent-size [0 0])
+                  [w h] (cgui-core/get-size widget)
+                  tm (get @(:metadata widget) :transform-meta {})
+                  pivot-x (or (:pivot-x tm) 0.0)
+                  pivot-y (or (:pivot-y tm) 0.0)
+                  align-w (align-keyword (:align-width tm))
+                  align-h (align-keyword (:align-height tm))
+                  own-scale (double (or @(:scale widget) 1.0))
+                  cum-scale (* parent-scale own-scale)
+                  sw (* w own-scale)
+                  sh (* h own-scale)
+                  align-offset-x (case align-w :center (/ (- pw sw) 2.0) :right (- pw sw) 0.0)
+                  align-offset-y (case align-h :center (/ (- ph sh) 2.0)
+                                    :middle (/ (- ph sh) 2.0) :bottom (- ph sh) 0.0)
+                  pivot-shift-x (* pivot-x w)
+                  pivot-shift-y (* pivot-y h)
+                  child-x (+ align-offset-x wx (- pivot-shift-x))
+                  child-y (+ align-offset-y wy (- pivot-shift-y))
+                  abs-x (+ px (* child-x parent-scale))
+                  abs-y (+ py (* child-y parent-scale))]
+              (cond
+                (identical? widget target) [abs-x abs-y]
+                :else (some #(walk % [abs-x abs-y] [w h] cum-scale)
+                            (cgui-core/get-widgets widget)))))]
+    (walk root [0 0] (cgui-core/get-size root) 1.0)))
+
+(defn- area-local-mouse
+  "Mouse position relative to `area-widget`.
+  Uses GUI-root coords from root :last-mouse-* (updated each frame by CGUI screen host),
+  NOT window size / get-mouse-pos (which drove parallax from full-screen coords)."
+  [root area-widget]
+  (let [[ax ay] (widget-gui-pos root area-widget)
+        mx (double (get-in @(:metadata root) [:last-mouse-x] 0))
+        my (double (get-in @(:metadata root) [:last-mouse-y] 0))]
+    [(- mx ax) (- my ay)]))
+
+(defn- area-parallax-mouse01
+  "Normalized mouse [0,1] within skill-tree area — input for build-tree-ops parallax."
+  [root area-widget]
+  (let [[mx my] (area-local-mouse root area-widget)]
+    [(bal/clamp01 (/ mx (max 1.0 skill-tree-area-w)))
+     (bal/clamp01 (/ my (max 1.0 skill-tree-area-h)))]))
+
 (defn- make-tree-state []
   (atom {:creation-time nil
          :hover {:hover-idx nil}
@@ -505,17 +560,16 @@
           _ (when (nil? (:creation-time @tree-state))
               (swap! tree-state assoc :creation-time now))
           anim (/ (- now (long (:creation-time @tree-state now))) 1000.0)
-          [mx my] (cn.li.mcmod.client.platform-bridge/get-mouse-pos)
-          [window-w window-h] (cn.li.mcmod.client.platform-bridge/get-window-size)
-          mx01 (bal/clamp01 (/ mx (max 1.0 (double window-w))))
-          my01 (bal/clamp01 (/ my (max 1.0 (double window-h))))
+          [mx my] (area-local-mouse root area-widget)
+          [mx01 my01] (area-parallax-mouse01 root area-widget)
           parallax-x (* (- mx01 0.5) 10.0)
           parallax-y (* (- my01 0.5) 10.0)]
       (client-bridge/draw-ops-host! area-widget
         (fn []
           (let [{:keys [hid htrans]} (build-panel-hover-args tree-state)]
             (skill-tree/build-tree-ops render-data anim mx01 my01 hid htrans nil))))
-      (let [hover-w (cgui-core/create-widget :pos [0 0] :size [257 139])]
+      (let [hover-w (cgui-core/create-widget :pos [0 0]
+                           :size [(int skill-tree-area-w) (int skill-tree-area-h)])]
         (events/on-frame hover-w
           (fn [_] (update-hover-transitions! tree-state nodes mx my parallax-x parallax-y)))
         (cgui-core/add-widget! area-widget hover-w))
@@ -638,6 +692,8 @@
     ;; Frame handler — updates left panel + right panel mode dispatch
     ;; + periodic wireless label refresh (every 5s for multiplayer correctness)
     (let [right-area (cgui-core/find-widget root "parent_right/area")
+          _ (when right-area
+              (swap! (:metadata right-area) assoc :clip-children? true))
           last-mode (atom nil)
           refresh-tick (atom 0)
           tree-state (make-tree-state)]

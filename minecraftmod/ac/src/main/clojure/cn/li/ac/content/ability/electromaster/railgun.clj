@@ -228,32 +228,46 @@
 ;; Cost hooks (private, passed as fns in defskill)
 ;; ---------------------------------------------------------------------------
 
-(defn- item-charge-ready? [ctx-id player]
+(defn- active-railgun-ctx-id [player-id]
+  (some (fn [[ctx-id ctx-data]]
+          (when (and (= (:player-uuid ctx-data) player-id)
+                     (= :railgun (:skill-id ctx-data)))
+            ctx-id))
+        (ctx/get-all-contexts)))
+
+(defn- item-charge-at-fire-point? [ctx-id]
   (when-let [ctx-data (ctx-skill/get-context ctx-id)]
     (let [skill-state (:skill-state ctx-data)]
       (and (= (:mode skill-state) :item-charge)
-           (<= (max 0 (int (or (:charge-ticks skill-state) 0))) 1)
-           (accepted-item-in-hand? player)))))
+           (<= (max 0 (int (or (:charge-ticks skill-state) 0))) 1)))))
 
-(defn- cost-creative?      [{:keys [player]}]
-  (boolean (and player (entity/player-creative? player))))
+(defn- item-charge-ready? [ctx-id player]
+  (and (item-charge-at-fire-point? ctx-id)
+       (accepted-item-in-hand? player)))
 
-(defn- down-cost-cp        [{:keys [player-id]}]
+(defn- cost-creative? [_player-id _skill-id _exp]
+  false)
+
+(defn- down-cost-cp [player-id _skill-id exp]
   (let [qte (read-coin-qte-status player-id)]
-    (if (:perform? qte) (cfg-lerp :cost.down.cp (skill-exp player-id)) 0.0)))
+    (if (:perform? qte) (cfg-lerp :cost.down.cp exp) 0.0)))
 
-(defn- down-cost-overload  [{:keys [player-id]}]
+(defn- down-cost-overload [player-id _skill-id exp]
   (let [qte (read-coin-qte-status player-id)]
-    (if (:perform? qte) (cfg-lerp :cost.down.overload (skill-exp player-id)) 0.0)))
+    (if (:perform? qte) (cfg-lerp :cost.down.overload exp) 0.0)))
 
-(defn- tick-cost-cp        [{:keys [player-id ctx-id player]}]
-  (if (item-charge-ready? ctx-id player)
-    (cfg-lerp :cost.tick.cp (skill-exp player-id))
+(defn- tick-cost-cp [player-id _skill-id exp]
+  (if-let [ctx-id (active-railgun-ctx-id player-id)]
+    (if (item-charge-at-fire-point? ctx-id)
+      (cfg-lerp :cost.tick.cp exp)
+      0.0)
     0.0))
 
-(defn- tick-cost-overload  [{:keys [player-id ctx-id player]}]
-  (if (item-charge-ready? ctx-id player)
-    (cfg-lerp :cost.tick.overload (skill-exp player-id))
+(defn- tick-cost-overload [player-id _skill-id exp]
+  (if-let [ctx-id (active-railgun-ctx-id player-id)]
+    (if (item-charge-at-fire-point? ctx-id)
+      (cfg-lerp :cost.tick.overload exp)
+      0.0)
     0.0))
 
 ;; ---------------------------------------------------------------------------
@@ -262,9 +276,8 @@
 
 (defn- railgun-on-key-down
   "Coin-QTE path fires immediately; otherwise starts 20-tick iron-item charge."
-  [{:keys [player-id ctx-id player cost-ok?]}]
-  (let [exp    (skill-exp player-id)
-        qte    (read-coin-qte-status player-id)]
+  [ctx-id player-id _skill-id exp cost-ok? _hold-ticks _cost-stage player]
+  (let [qte (read-coin-qte-status player-id)]
     (cond
       (:perform? qte)
       (do
@@ -305,7 +318,7 @@
 
 (defn- railgun-on-key-tick
   "Item-charge path: countdown; auto-fires when charge-ticks reaches zero."
-  [{:keys [player-id ctx-id player cost-ok?]}]
+  [ctx-id player-id _skill-id exp cost-ok? _hold-ticks _cost-stage player]
   (try
     (when-let [ctx-data (ctx-skill/get-context ctx-id)]
       (let [skill-state (:skill-state ctx-data)]
@@ -316,8 +329,7 @@
                 (if (and (accepted-item-in-hand? player)
                          (consume-item-for-shot! player)
                          cost-ok?)
-                  (let [exp (skill-exp player-id)
-                        {:keys [performed? reflection-hit? normal-hit-count hit-uuids]}
+                  (let [{:keys [performed? reflection-hit? normal-hit-count hit-uuids]}
                         (perform-main-shot! player-id ctx-id exp)]
                     (when performed?
                       (skill-effects/add-skill-exp! player-id :railgun (railgun-exp-gain (pos? (long (or normal-hit-count 0))) reflection-hit?))
@@ -339,7 +351,7 @@
 
 (defn- railgun-on-key-up
   "Cancels an unfinished item charge. Cooldown is only applied on successful perform."
-  [{:keys [ctx-id]}]
+  [ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (when-let [ctx (ctx-skill/get-context ctx-id)]
     (let [skill-state (:skill-state ctx)
           mode        (:mode skill-state)]
@@ -350,7 +362,7 @@
         (log/debug "Railgun completed")))))
 
 (defn- railgun-on-key-abort
-  [{:keys [ctx-id]}]
+  [ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (ctx-skill/clear-skill-state! ctx-id)
   (log/debug "Railgun aborted"))
 

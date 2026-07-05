@@ -1,5 +1,6 @@
 (ns cn.li.ac.content.ability.teleporter.mark-teleport-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
+            [cn.li.ac.ability.test.skill-callback-test-helpers :as cb]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
@@ -29,7 +30,7 @@
                   ctx-skill/update-skill-state-root! update-skill-state-root!
                   ctx-skill/assoc-skill-state! assoc-skill-state!
                   ctx-skill/clear-skill-state! clear-skill-state!]
-      (mark/mark-teleport-on-key-down {:ctx-id "ctx-1"}))
+      (cb/apply-invoke mark/mark-teleport-on-key-down :ctx-id "ctx-1"))
     (is (= {:hold-ticks 0 :has-target false}
            (:skill-state @ctx*)))))
 
@@ -90,10 +91,7 @@
                                               {:hit-type :entity
                                                :hit-x 1.0 :hit-y 62.4 :hit-z 6.5
                                                :eye-height 1.6})]
-      (mark/mark-teleport-on-key-up {:player-id "p1"
-                                     :ctx-id "ctx-2"
-                                     :player :player
-                                     :cost-ok? true}))
+      (cb/apply-invoke mark/mark-teleport-on-key-up :player-id "p1" :ctx-id "ctx-2" :player-ref :player :cost-ok? true))
     (is (= 1 (count @teleport-calls*)))
     (is (= ["p1"] @reset-calls*))
     (is (= 1 (count @exp-calls*)))
@@ -127,10 +125,7 @@
                   teleportation/available? (constantly true)
                   teleportation/get-player-position* (fn [& _] nil)
                   teleportation/teleport-player!* (fn [& _] (swap! teleport-calls* inc) true)]
-      (mark/mark-teleport-on-key-up {:player-id "p1"
-                                     :ctx-id "ctx-3"
-                                     :player :player
-                                     :cost-ok? false}))
+      (cb/apply-invoke mark/mark-teleport-on-key-up :player-id "p1" :ctx-id "ctx-3" :player-ref :player :cost-ok? false))
     (is (= 0 @teleport-calls*))
     (is (= 0 @fx-calls*))
     (is (= 0 @exp-calls*))
@@ -162,10 +157,7 @@
                   teleportation/teleport-player!* (fn [& _] (swap! teleport-calls* inc) true)
                   skill-effects/add-skill-exp! (fn [& _] nil)
                   skill-effects/set-main-cooldown! (fn [& _] nil)]
-      (mark/mark-teleport-on-key-up {:player-id "p1"
-                                     :ctx-id "ctx-4"
-                                     :player :player
-                                     :cost-ok? true}))
+      (cb/apply-invoke mark/mark-teleport-on-key-up :player-id "p1" :ctx-id "ctx-4" :player-ref :player :cost-ok? true))
     (is (= 0 @teleport-calls*))
     (is (= 0 @fx-calls*))))
 
@@ -193,10 +185,7 @@
                   teleportation/reset-fall-damage!* (fn [& _] true)
                   skill-effects/add-skill-exp! (fn [& _] (swap! exp-calls* inc) nil)
                   skill-effects/set-main-cooldown! (fn [& _] (swap! cooldown-calls* inc) nil)]
-      (mark/mark-teleport-on-key-up {:player-id "p1"
-                                     :ctx-id "ctx-5"
-                                     :player :player
-                                     :cost-ok? true}))
+      (cb/apply-invoke mark/mark-teleport-on-key-up :player-id "p1" :ctx-id "ctx-5" :player-ref :player :cost-ok? true))
     (is (= 0 @fx-calls*))
     (is (= 0 @exp-calls*))
     (is (= 0 @cooldown-calls*))))

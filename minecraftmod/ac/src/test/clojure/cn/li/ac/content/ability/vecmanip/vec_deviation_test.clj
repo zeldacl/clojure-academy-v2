@@ -1,5 +1,6 @@
 (ns cn.li.ac.content.ability.vecmanip.vec-deviation-test
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
+            [cn.li.ac.ability.test.skill-callback-test-helpers :as cb]
             [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
@@ -125,7 +126,7 @@
           ;; entity has difficulty=2.0 in original bug would produce cost 30.0
           ]
       (with-tick-mocks {:consume-atom consume-calls :difficulty 2.0 :current-cp 100.0}
-        (vd/vec-deviation-tick! {:player-id "p1" :ctx-id "ctx-1" :cost-ok? true}))
+        (cb/apply-invoke vd/vec-deviation-tick! :player-id "p1" :ctx-id "ctx-1" :cost-ok? true))
       ;; After fix: cost should be 15.0, not 30.0
       (is (= 1 (count @consume-calls)) "perform-resource! called once")
       (is (= 15.0 (first @consume-calls)) "CP consumed = base cost 15.0, not difficulty-scaled 30.0"))))
@@ -139,7 +140,7 @@
     (let [set-vel-calls (atom [])
           consume-calls (atom [])]
       (with-tick-mocks {:set-vel-atom set-vel-calls :consume-atom consume-calls :current-cp 3.0}
-        (vd/vec-deviation-tick! {:player-id "p1" :ctx-id "ctx-1" :cost-ok? true}))
+        (cb/apply-invoke vd/vec-deviation-tick! :player-id "p1" :ctx-id "ctx-1" :cost-ok? true))
       (is (= 1 (count @set-vel-calls)) "set-velocity! called �?deflection happened")
       (is (= 1 (count @consume-calls)) "perform-resource! called once")
       (is (= 3.0 (first @consume-calls)) "CP consumed capped to available 3.0, not full 15.0"))))
@@ -155,7 +156,7 @@
       (with-tick-mocks {:set-vel-atom set-vel-calls :current-cp 0.0}
         (with-redefs [toggle/deactivate-toggle!
                       (fn [_ _] (swap! deactivations inc))]
-          (vd/vec-deviation-tick! {:player-id "p1" :ctx-id "ctx-1" :cost-ok? true})))
+          (cb/apply-invoke vd/vec-deviation-tick! :player-id "p1" :ctx-id "ctx-1" :cost-ok? true)))
       (is (= 0 @deactivations) "deactivate-toggle! never called from deflect path")
       (is (= 1 (count @set-vel-calls)) "deflection still executes with 0 CP"))))
 
@@ -172,7 +173,7 @@
                         :dual-active?  true
                         :claim?        false}
         (with-redefs [arbitration/skill-allowed-in-dual-active? (fn [_] false)]
-          (vd/vec-deviation-tick! {:player-id "p1" :ctx-id "ctx-1" :cost-ok? true})))
+          (cb/apply-invoke vd/vec-deviation-tick! :player-id "p1" :ctx-id "ctx-1" :cost-ok? true)))
       (is (empty? @consume-calls)  "perform-resource! not called when arbitration denies")
       (is (empty? @set-vel-calls)  "set-velocity! not called when arbitration denies"))))
 
@@ -276,7 +277,7 @@
         (with-redefs [skill-effects/enforce-overload-floor!
                       (fn [player-id floor]
                         (swap! floor-calls conj {:player-id player-id :floor floor}))]
-          (vd/vec-deviation-tick! {:player-id "p1" :ctx-id "ctx-1" :cost-ok? true})))
+          (cb/apply-invoke vd/vec-deviation-tick! :player-id "p1" :ctx-id "ctx-1" :cost-ok? true)))
       (is (= 1 (count @floor-calls)) "enforce-overload-floor! called once")
       (is (= "p1" (:player-id (first @floor-calls))))
       (is (= 130.0 (:floor (first @floor-calls))) "floor value matches stored skill-state value"))))

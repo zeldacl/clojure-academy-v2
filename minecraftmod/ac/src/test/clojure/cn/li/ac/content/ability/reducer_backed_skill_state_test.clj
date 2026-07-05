@@ -30,8 +30,7 @@
       (ctx/register-context! c)
       (skill-ctx/with-context-owner (runtime-owner player-id)
         (fn []
-          (state/execute-assoc-state! {:ctx-id ctx-id :player-id player-id}
-                                      {:k [:charge-ticks] :v 3})
+          (state/execute-assoc-state! ctx-id player-id {:k [:charge-ticks] :v 3})
           (is (= 3 (get-in (ctx/get-context (runtime-owner player-id) ctx-id)
                            [:skill-state :charge-ticks])))
           (let [store-val (store/get-player-state* test-player/test-session-id player-id)]
@@ -48,8 +47,7 @@
       (ctx/register-context! c)
       (skill-ctx/with-context-owner (runtime-owner player-id)
         (fn []
-          (state/execute-assoc-state! {:ctx-id ctx-id :player-id player-id}
-                                      {:k [:launched?] :v true})
+          (state/execute-assoc-state! ctx-id player-id {:k [:launched?] :v true})
           (is (true? (get-in (ctx/get-context (runtime-owner player-id) ctx-id)
                              [:skill-state :launched?])))
           (is (true? (get-in (store/get-player-state* test-player/test-session-id player-id)

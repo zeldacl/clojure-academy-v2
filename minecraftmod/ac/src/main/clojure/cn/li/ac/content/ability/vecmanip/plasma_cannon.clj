@@ -51,6 +51,9 @@
 (defn get-skill-exp [player-id]
   (scaling/clamp-exp (skill-effects/skill-exp player-id plasma-cannon-skill-id)))
 
+(defn- get-skill-exp-from [exp]
+  (scaling/clamp-exp (double (or exp 0.0))))
+
 (defn- get-player-position [player-id]
   (or (teleportation/get-player-position* player-id)
       (skill-effects/player-path player-id :position {:world-id "minecraft:overworld" :x 0.0 :y 64.0 :z 0.0})))
@@ -71,12 +74,12 @@
   (apply ctx-skill/update-skill-state-root! ctx-id f args))
 
 (defn plasma-cannon-cost-down-overload
-  [{:keys [player-id]}]
-  (overload-keep (get-skill-exp player-id)))
+  [_player-id _skill-id exp]
+  (overload-keep (get-skill-exp-from exp)))
 
 (defn plasma-cannon-cost-tick-cp
-  [{:keys [player-id]}]
-  (cp-per-tick (get-skill-exp player-id)))
+  [_player-id _skill-id exp]
+  (cp-per-tick (get-skill-exp-from exp)))
 
 ;; Maintain overload floor each tick (prevent recovery below overload-keep)
 (defn- maintain-overload! [player-id min-overload]
@@ -192,11 +195,11 @@
 ;; ============================================================
 
 (defn plasma-cannon-on-key-down
-  "Server-side: initialize charge. Consume initial overload (500�?00 by exp).
+  "Server-side: initialize charge. Consume initial overload (500–300 by exp).
   Equivalent to s_madeAlive() in original."
-  [{:keys [ctx-id player-id cost-ok?]}]
+  [ctx-id player-id _skill-id exp cost-ok? _hold-ticks _cost-stage _player-ref]
   (try
-    (let [exp (get-skill-exp player-id)
+    (let [exp (get-skill-exp-from exp)
           ct  (int (charge-time exp))]
       (if-not cost-ok?
         (do
@@ -224,12 +227,13 @@
 
 (defn plasma-cannon-on-key-tick
   "Server-side tick. Handles both :charging and :go states."
-  [{:keys [player-id ctx-id cost-ok?]}]
+  [ctx-id player-id _skill-id exp cost-ok? _hold-ticks _cost-stage _player-ref]
   (try
     (when-let [ctx-data (ctx-skill/get-context ctx-id)]
       (let [skill-state (:skill-state ctx-data)
             state       (or (:state skill-state) :charging)
-        ov-keep     (double (or (:overload-keep skill-state) (overload-keep 1.0)))]
+            exp*        (get-skill-exp-from exp)
+            ov-keep     (double (or (:overload-keep skill-state) (overload-keep exp*)))]
 
         ;; Always maintain overload floor (prevent recovery below overload-keep)
         (maintain-overload! player-id ov-keep)
@@ -237,10 +241,9 @@
         (case state
           :charging
           (let [charge-ticks (long (or (:charge-ticks skill-state) 0))
-                charge-time  (long (or (:charge-time skill-state) (charge-time (get-skill-exp player-id))))
+                charge-time  (long (or (:charge-time skill-state) (charge-time exp*)))
                 next-ticks   (inc charge-ticks)
-                exp          (get-skill-exp player-id)
-                cp-amount    (cp-per-tick exp)
+                cp-amount    (cp-per-tick exp*)
                 {:keys [success?]} (skill-effects/perform-resource! player-id 0.0 cp-amount)]
             (if-not success?
               ;; Out of CP: abort (original: terminate())
@@ -272,7 +275,7 @@
                                           (>= next-flight (cfg-int :projectile.max-flight-ticks)))]
                 (if should-explode?
                   ;; Explode at destination
-                  (let [exp (get-skill-exp player-id)]
+                  (let [exp (get-skill-exp-from exp)]
                     (do-explode! player-id world-id destination exp)
                     (fx/send! ctx-id {:topic :plasma-cannon/fx-perform :mode :perform} nil {:pos destination})
                     (fx/send! ctx-id {:topic :plasma-cannon/fx-end :mode :end} nil {:performed? true})
@@ -297,14 +300,14 @@
 (defn plasma-cannon-on-key-up
   "Server-side: key released. Fire if fully charged, else abort.
   Equivalent to l_keyUp() / s_perform() in original."
-  [{:keys [player-id ctx-id]}]
+  [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (try
     (when-let [ctx-data (ctx-skill/get-context ctx-id)]
       (let [skill-state  (:skill-state ctx-data)
             state        (or (:state skill-state) :charging)
             charge-ticks (long (or (:charge-ticks skill-state) 0))
             charge-time  (long (or (:charge-time skill-state) 60))
-            exp          (get-skill-exp player-id)]
+            exp          (get-skill-exp-from exp)]
 
         (if (or (= state :go)
                 (< charge-ticks charge-time))
@@ -345,7 +348,7 @@
 
 (defn plasma-cannon-on-key-abort
   "Clean up on abort."
-  [{:keys [ctx-id]}]
+  [ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (try
     (fx/send! ctx-id {:topic :plasma-cannon/fx-end :mode :end} nil {:performed? false})
     (ctx-skill/clear-skill-state! ctx-id)
@@ -365,8 +368,8 @@
   :ctrl-id :plasma-cannon
   :cp-consume-speed 0.0
   :overload-consume-speed 0.0
-  :cooldown-ticks (fn [{:keys [exp]}]
-                    (cfg-lerp-int :cooldown.ticks (double (or exp 0.0))))  ;; matching original lerp(1000, 600, exp)
+  :cooldown-ticks (fn [_player-id _skill-id exp]
+                    (cfg-lerp-int :cooldown.ticks (double (or exp 0.0))))
   :pattern :charge-window
   :cooldown {:mode :manual}
   :cost {:down {:overload plasma-cannon-cost-down-overload}}

@@ -1,5 +1,5 @@
 (ns cn.li.ac.ability.registry.category-test
-  (:require [clojure.test :refer [deftest is use-fixtures]]
+  (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [cn.li.ac.ability.registry.category :as cat]))
 
 (defn- reset-cats! [f]

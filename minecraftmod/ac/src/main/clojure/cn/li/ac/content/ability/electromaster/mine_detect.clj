@@ -38,10 +38,9 @@
 ;; ---------------------------------------------------------------------------
 
 (defn mine-detect-perform!
-  [{:keys [player-id ctx-id]}]
+  [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (try
-    (let [exp       (skill-exp player-id)
-          range     (scan-range exp)
+    (let [range     (scan-range exp)
           advanced? (advanced-mode? player-id exp)]
       (when (potion-effects/available?)
         (potion-effects/apply-potion-effect!*
@@ -78,13 +77,13 @@
   :controllable?  false
   :ctrl-id        :mine-detect
   :pattern        :instant
-  :cost           {:down {:cp       (fn [{:keys [player-id]}]
-                                      (cfg-lerp :cost.down.cp (skill-exp player-id)))
-                          :overload (fn [{:keys [player-id]}]
-                                      (cfg-lerp :cost.down.overload (skill-exp player-id)))}}
-  :cooldown-ticks (fn [{:keys [player-id]}]
+  :cost           {:down {:cp       (fn [player-id _skill-id exp]
+                                      (cfg-lerp :cost.down.cp exp))
+                          :overload (fn [player-id _skill-id exp]
+                                      (cfg-lerp :cost.down.overload exp))}}
+  :cooldown-ticks (fn [player-id _skill-id exp]
                     (skill-config/lerp-int mine-detect-skill-id
                                            :cooldown.ticks
-                                           (skill-exp player-id)))
+                                           exp))
   :actions        {:perform! mine-detect-perform!}
   :prerequisites  [{:skill-id :mag-manip :min-exp 1.0}])
