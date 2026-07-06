@@ -19,7 +19,7 @@
            (com.mojang.blaze3d.vertex PoseStack)
            (com.mojang.blaze3d.systems RenderSystem)
            (cn.li.mc1201.client MinecraftClientAccess GuiGraphicsHelper TextureSizeAccess)
-           (cn.li.mc1201.gui.cgui.draw_ops_host StaticShaderSupplier)
+           (cn.li.mc1201.gui.draw_ops StaticShaderSupplier)
            (com.mojang.blaze3d.vertex Tesselator BufferBuilder BufferUploader PoseStack$Pose DefaultVertexFormat VertexFormat$Mode)
            (org.joml Matrix4f)
            (org.lwjgl.opengl GL11)
