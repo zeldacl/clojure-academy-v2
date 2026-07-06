@@ -7,6 +7,7 @@
   (:require [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.client.content-actions :as content-actions]
             [cn.li.mcmod.util.log :as log]
+            [cn.li.mcmod.platform.ui :as platform-ui]
             [cn.li.mcmod.util.render :as render]
             [cn.li.mcmod.protocol.metadata :as registry-metadata]
             [cn.li.mcmod.client.render.init :as render-init]
@@ -153,10 +154,16 @@
           (log/info (str "  BER registered for tile-id " tile-id)))))))
 
 (defn- open-screen-dispatcher
-  "Dispatch open-screen to managed screen (keyword) or CGUI screen (map)."
+  "Dispatch open-screen to widget factory (keyword) or CGUI screen (map),
+  falling back to managed screen for keywords without a registered factory."
   [arg payload]
   (if (keyword? arg)
-    (screen-host/open-managed-screen! arg payload)
+    (if-let [widget (platform-ui/create-widget arg payload)]
+      (let [session-id (:client-session-id payload "")]
+        (cgui-screen-host/open-cgui-screen!
+          widget session-id {:title (name arg)}))
+      ;; Fall back to managed screen for legacy screen-keys
+      (screen-host/open-managed-screen! arg payload))
     (when (map? arg)
       (let [{:keys [cgui-root title session-id]} arg]
         (cgui-screen-host/open-cgui-screen!

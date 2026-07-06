@@ -7,6 +7,7 @@
             [cn.li.mc1201.gui.screen.cgui-screen-host :as cgui-screen-host]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.util.log :as log]
+            [cn.li.mcmod.platform.ui :as platform-ui]
             [cn.li.mcmod.util.render :as render]
             [cn.li.mcmod.client.render.pose :as pose]
             [cn.li.mcmod.client.render.buffer :as buffer]
@@ -96,10 +97,15 @@
       (log/info (str "Fabric BER registered for tile-id " tile-id)))))
 
 (defn- open-screen-dispatcher
-  "Dispatch open-screen to managed screen (keyword) or CGUI screen (map)."
+  "Dispatch open-screen to widget factory (keyword) or CGUI screen (map),
+  falling back to managed screen for keywords without a registered factory."
   [arg payload]
   (if (keyword? arg)
-    (screen-host/open-managed-screen! arg payload)
+    (if-let [widget (platform-ui/create-widget arg payload)]
+      (let [session-id (:client-session-id payload "")]
+        (cgui-screen-host/open-cgui-screen!
+          widget session-id {:title (name arg)}))
+      (screen-host/open-managed-screen! arg payload))
     (when (map? arg)
       (let [{:keys [cgui-root title session-id]} arg]
         (cgui-screen-host/open-cgui-screen!

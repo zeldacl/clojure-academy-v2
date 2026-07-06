@@ -146,4 +146,3 @@
           (show! player))))
     (log/info "AC terminal install-effect push handler installed"))
   nil)
->>>>>>> dd74201aa66dda1c2c8861eed3a184ff9778c597
