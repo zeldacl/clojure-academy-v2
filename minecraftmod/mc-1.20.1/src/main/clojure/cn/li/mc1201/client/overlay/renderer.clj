@@ -25,9 +25,7 @@
   {::runtime ::overlay-render-runtime
    :runtime-state* (atom default-overlay-render-runtime-state)})
 
-(def ^:dynamic *overlay-render-runtime* nil)
-
-(def ^:private _overlay-render-runtime (delay (create-overlay-render-runtime)))
+(def ^:private overlay-render-runtime-atom (atom (create-overlay-render-runtime)))
 
 (defn- overlay-render-runtime?
   [runtime]
@@ -36,12 +34,17 @@
        (some? (:runtime-state* runtime))))
 
 (defn call-with-overlay-render-runtime
+  "Set the overlay render runtime for the current context (primarily for testing)."
   [runtime f]
   (when-not (overlay-render-runtime? runtime)
     (throw (ex-info "Expected overlay render runtime"
                     {:runtime runtime})))
-  (binding [*overlay-render-runtime* runtime]
-    (f)))
+  (let [saved @overlay-render-runtime-atom]
+    (try
+      (reset! overlay-render-runtime-atom runtime)
+      (f)
+      (finally
+        (reset! overlay-render-runtime-atom saved)))))
 
 (defmacro with-overlay-render-runtime
   [runtime & body]
@@ -49,8 +52,7 @@
 
 (defn- current-overlay-render-runtime
   []
-  (or *overlay-render-runtime*
-      @_overlay-render-runtime))
+  @overlay-render-runtime-atom)
 
 (defn- overlay-render-runtime-state-atom
   []
@@ -523,7 +525,8 @@
                              {:activated-override (overlay-state/get-client-activated owner)
                               :showing-numbers? (owner-state :showing-numbers? owner false)
                               :last-show-value-change-ms (owner-state :last-show-value-change-ms owner 0)
-                              :now-ms now}))
+                              :now-ms now
+                              :active-overlay-app (overlay-state/get-active-overlay-app owner)}))
             ;; --- BackgroundMask: compute smoothed color (side effect) ---
             bg-mask-target (:background-mask overlay-plan)
             smoothed-mask (when bg-mask-target

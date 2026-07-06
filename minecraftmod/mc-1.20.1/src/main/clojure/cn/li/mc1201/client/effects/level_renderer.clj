@@ -24,9 +24,7 @@
   {::runtime ::level-renderer-runtime
    :last-applied-walk-speed* (atom {})})
 
-(def ^:dynamic *level-renderer-runtime* nil)
-
-(def ^:private _level-renderer-runtime (delay (create-level-renderer-runtime)))
+(def ^:private level-renderer-runtime-atom (atom (create-level-renderer-runtime)))
 
 (defn- level-renderer-runtime?
   [runtime]
@@ -35,12 +33,17 @@
        (some? (:last-applied-walk-speed* runtime))))
 
 (defn call-with-level-renderer-runtime
+  "Set the level renderer runtime for the current context (primarily for testing)."
   [runtime f]
   (when-not (level-renderer-runtime? runtime)
     (throw (ex-info "Expected level renderer runtime"
                     {:runtime runtime})))
-  (binding [*level-renderer-runtime* runtime]
-    (f)))
+  (let [saved @level-renderer-runtime-atom]
+    (try
+      (reset! level-renderer-runtime-atom runtime)
+      (f)
+      (finally
+        (reset! level-renderer-runtime-atom saved)))))
 
 (defmacro with-level-renderer-runtime
   [runtime & body]
@@ -48,8 +51,7 @@
 
 (defn- current-level-renderer-runtime
   []
-  (or *level-renderer-runtime*
-      @_level-renderer-runtime))
+  @level-renderer-runtime-atom)
 
 (defn- last-applied-walk-speed-atom
   []

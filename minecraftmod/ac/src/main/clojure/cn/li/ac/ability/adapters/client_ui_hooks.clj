@@ -942,7 +942,15 @@
       active-ctxs)))
 
 (defn build-client-overlay-plan [player-uuid screen-width screen-height overlay-state]
-  (let [player-state (get-client-player-state player-uuid)
+  ;; When an overlay app is active, skip normal HUD and let renderer handle it.
+  (if-let [app-kw (:active-overlay-app overlay-state)]
+    {:elements [{:kind :fill :x 0 :y 0 :w (int screen-width) :h (int screen-height) :color 0xC0101010}
+                {:kind :text :text (str "Overlay App: " (name app-kw)) :x 20 :y 20 :color 0xFFFFFFFF}
+                {:kind :text :text "Press ESC to close" :x 20 :y 40 :color 0xFF888888}]
+     :background-mask {:r 0.0 :g 0.0 :b 0.0 :a 0.0}
+     :interfered? false}
+    ;; Normal HUD rendering
+    (let [player-state (get-client-player-state player-uuid)
         resource-data (:resource-data player-state)
         ability-data (:ability-data player-state)
         activated-override {:value (if (some? (:activated-override overlay-state))
@@ -1010,7 +1018,7 @@
                             (tutorial-notification-elements screen-width screen-height now-ms)
                             (debug-overlay/build-debug-overlay-elements player-state)))
      :background-mask bg-mask
-     :interfered? interfered?}))
+     :interfered? interfered?})))
 
 (defn- on-context-channel-push! [{:keys [ctx-id channel payload]}]
   (fx-registry/dispatch-fx-channel! ctx-id channel payload)
