@@ -343,8 +343,8 @@
                          :hover-node-transitions (:hover-node-transitions st)}
               state-changed? (not= state-key @last-state-key)
               ;; Mouse moved >2px from last rendered position
-              mouse-moved? (or (> (Math/abs (- mx (first @last-mouse-pos))) 2.0)
-                               (> (Math/abs (- my (second @last-mouse-pos))) 2.0))]
+              mouse-moved? (or (> (Math/abs (double (- mx (first @last-mouse-pos)))) 2.0)
+                               (> (Math/abs (double (- my (second @last-mouse-pos)))) 2.0))]
           (when (or state-changed? mouse-moved?)
             (reset! last-state-key state-key)
             (reset! last-mouse-pos [mx my])

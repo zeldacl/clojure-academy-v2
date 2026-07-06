@@ -37,6 +37,8 @@
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.i18n :as i18n]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
+            [cn.li.mcmod.client.content-actions :as content-actions]
+            [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.mcmod.runtime.owner :as owner]
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.framework :as fw]
@@ -752,39 +754,25 @@
                               :channel channel
                               :payload {:key movement-key}})))
 
-(defn- vec-reflection-active?
+(defn- scan-vm-contexts
+  "Single-pass context walk: returns reflection-active?, deviation-active?, and
+   crosshair-intensity in one traversal. Replaces three separate get-all-contexts calls."
   [player-uuid]
-  (boolean
-    (some (fn [[_ctx-id ctx-data]]
-              (and (= (:player-uuid ctx-data) player-uuid)
-                    (ctx/active-context? ctx-data)
-                 (toggle/is-toggle-active? ctx-data :vec-reflection)))
-                  (ctx/get-all-contexts))))
-
-(defn- vec-reflection-crosshair-intensity
-  "Compute dynamic crosshair marker intensity for VecReflection.
-   Fades in over ~1s (20 ticks) when first activated, sustained at 1.0 thereafter.
-   Matching original AcademyCraft's pulsing reflection indicator."
-  [player-uuid]
-  (some (fn [[_ctx-id ctx-data]]
-          (when (and (= (:player-uuid ctx-data) player-uuid)
-                     (ctx/active-context? ctx-data)
-                     (toggle/is-toggle-active? ctx-data :vec-reflection))
-            (let [toggle-state (get-in ctx-data [:skill-state :toggle :vec-reflection])
-                  ticks (long (or (:total-ticks toggle-state) 0))
-                  ;; Fade in over first 20 ticks (1 second), then full intensity
-                  fade-in (min 1.0 (/ (double ticks) 20.0))]
-              (double fade-in))))
-        (ctx/get-all-contexts)))
-
-(defn- vec-deviation-active?
-  [player-uuid]
-  (boolean
-    (some (fn [[_ctx-id ctx-data]]
-              (and (= (:player-uuid ctx-data) player-uuid)
-                    (ctx/active-context? ctx-data)
-                 (toggle/is-toggle-active? ctx-data :vec-deviation)))
-                  (ctx/get-all-contexts))))
+  (reduce
+    (fn [acc [_ctx-id ctx-data :as _entry]]
+      (if (and (= (:player-uuid ctx-data) player-uuid)
+               (ctx/active-context? ctx-data))
+        (cond-> acc
+          (toggle/is-toggle-active? ctx-data :vec-reflection)
+          (-> (assoc :reflection-active? true)
+              (assoc :reflection-intensity
+                     (let [ticks (long (or (get-in ctx-data [:skill-state :toggle :vec-reflection :total-ticks]) 0))]
+                       (double (min 1.0 (/ ticks 20.0))))))
+          (toggle/is-toggle-active? ctx-data :vec-deviation)
+          (assoc :deviation-active? true))
+        acc))
+    {:reflection-active? false :deviation-active? false :reflection-intensity 0.0}
+    (ctx/get-all-contexts)))
 
 (defn- ease-in-out [t]
   (if (< t 0.5)
@@ -912,8 +900,14 @@
                              {:kind :overload-pulse
                               :intensity (* (- pct 0.8) 5.0)})))
         numbers-texts (or (:numbers-texts hud-render-data) [])]
-                (vec (concat (keep identity [cp-bar overload-bar activation-indicator combat-notice overload-pulse])
-                 preset-indicators skill-slots numbers-texts))))
+                (persistent!
+                  (let [out (transient [])]
+                    (doseq [x (keep identity [cp-bar overload-bar activation-indicator combat-notice overload-pulse])]
+                      (conj! out x))
+                    (doseq [x preset-indicators] (conj! out x))
+                    (doseq [x skill-slots] (conj! out x))
+                    (doseq [x numbers-texts] (conj! out x))
+                    out))))
 
 (defn- tutorial-notification-elements [screen-width screen-height now-ms]
   (try
@@ -1001,29 +995,36 @@
         base-elements (hud-render-data->overlay-elements hud-render-data screen-width screen-height)
         current-charging-elements (current-charging-overlay-elements player-uuid screen-width screen-height)
         coin-qte-elements (coin-qte-overlay-elements player-uuid screen-width screen-height now-ms)
-        reflection-active? (vec-reflection-active? player-uuid)
-        deviation-active? (vec-deviation-active? player-uuid)
+        vm (scan-vm-contexts player-uuid)
+        reflection-active? (:reflection-active? vm)
+        deviation-active? (:deviation-active? vm)
+        vec-reflection-intensity (:reflection-intensity vm)
         vm-wave-active? (or reflection-active? deviation-active?)
         phase (double (/ (mod now-ms 1200) 1200.0))
-        _ (update-vm-wave-circles! player-uuid vm-wave-active? screen-width screen-height now-ms)
         vm-wave-tint (cond
                        (and reflection-active? deviation-active?) [0.4 0.7 1.0]  ;; both: cyan-blue blend
                        reflection-active? [0.3 0.6 1.0]                           ;; VecReflection: blue
                        deviation-active? [0.3 1.0 0.6]                            ;; VecDeviation: green
                        :else [1.0 1.0 1.0])                                       ;; fallback: white
         vm-wave (vm-wave-elements player-uuid now-ms vm-wave-tint)
-        vec-reflection-intensity (when reflection-active?
-                                   (vec-reflection-crosshair-intensity player-uuid))
         crosshair (when reflection-active?
               {:kind :content-crosshair
                      :x (int (/ screen-width 2))
                      :y (int (/ screen-height 2))
                      :phase phase
                      :intensity (double (or vec-reflection-intensity 1.0))})]
-    {:elements (vec (concat base-elements current-charging-elements coin-qte-elements vm-wave (keep identity [crosshair])
-                            (toast/build-toast-elements screen-width screen-height now-ms)
-                            (tutorial-notification-elements screen-width screen-height now-ms)
-                            (debug-overlay/build-debug-overlay-elements player-state)))
+    {:elements (persistent!
+                 (let [out (transient [])]
+                   (doseq [coll [base-elements current-charging-elements coin-qte-elements vm-wave]]
+                     (doseq [x coll] (conj! out x)))
+                   (when crosshair (conj! out crosshair))
+                   (doseq [x (toast/build-toast-elements screen-width screen-height now-ms)]
+                     (conj! out x))
+                   (doseq [x (tutorial-notification-elements screen-width screen-height now-ms)]
+                     (conj! out x))
+                   (doseq [x (debug-overlay/build-debug-overlay-elements player-state)]
+                     (conj! out x))
+                   out))
      :background-mask bg-mask
      :interfered? interfered?})))
 
@@ -1090,6 +1091,16 @@
         (remove-slot-context! ctx-id)
         (ctx/terminate-context! ctx-id nil)))
     (net-client/register-push-handler! catalog/MSG-CTX-CHANNEL on-context-channel-push!)
+    ;; VM wave circle spawn/cull moved out of render path into tick hook
+    (content-actions/register-client-tick-hook!
+      (fn tick-vm-wave-circles []
+        (when-let [player (client-bridge/get-client-player)]
+          (let [player-uuid (uuid/player-uuid player)
+                now-ms (client-bridge/game-time-ms)
+                [screen-w screen-h] (client-bridge/get-window-size)
+                {:keys [reflection-active? deviation-active?]} (scan-vm-contexts player-uuid)]
+            (update-vm-wave-circles! player-uuid (or reflection-active? deviation-active?)
+                                     (int screen-w) (int screen-h) now-ms)))))
     (log/info "Ability client push handlers registered")))
 
     (defn- build-preset-editor-draw-ops

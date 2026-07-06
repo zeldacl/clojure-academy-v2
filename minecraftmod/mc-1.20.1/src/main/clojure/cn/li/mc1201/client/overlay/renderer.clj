@@ -517,20 +517,22 @@
             screen-height (.getGuiScaledHeight window)
             owner-key (render-owner-key owner)
             now (now-ms)
+            ;; Single snapshot: coalesces 5 separate atom derefs into 1
+            rt-snapshot (overlay-render-runtime-state-snapshot)
             overlay-plan (client-ui/with-client-ctx {:session-id (:client-session-id owner)}
                            (client-ui/client-build-overlay-plan
                              player-uuid
                              screen-width
                              screen-height
                              {:activated-override (overlay-state/get-client-activated owner)
-                              :showing-numbers? (owner-state :showing-numbers? owner false)
-                              :last-show-value-change-ms (owner-state :last-show-value-change-ms owner 0)
+                              :showing-numbers? (get-in rt-snapshot [:showing-numbers? owner-key] false)
+                              :last-show-value-change-ms (get-in rt-snapshot [:last-show-value-change-ms owner-key] 0)
                               :now-ms now
                               :active-overlay-app (overlay-state/get-active-overlay-app owner)}))
             ;; --- BackgroundMask: compute smoothed color (side effect) ---
             bg-mask-target (:background-mask overlay-plan)
             smoothed-mask (when bg-mask-target
-                            (let [cur (get-in @(overlay-render-runtime-state-atom) [:background-mask-color owner-key]
+                            (let [cur (get-in rt-snapshot [:background-mask-color owner-key]
                                               {:r 0.0 :g 0.0 :b 0.0 :a 0.0 :last-ms now})
                                   smoothed (smooth-mask-color cur bg-mask-target now)]
                               (update-overlay-render-runtime! assoc-in [:background-mask-color owner-key] smoothed)
@@ -564,8 +566,8 @@
                                     last-ms-key (if is-overload-bar
                                                   :smoothed-last-update-ms-ol
                                                   :smoothed-last-update-ms-cp)
-                                    last-ms (get-in @(overlay-render-runtime-state-atom) [last-ms-key owner-key] now)
-                                    current (get-in @(overlay-render-runtime-state-atom) [smoothed-key owner-key]
+                                    last-ms (get-in rt-snapshot [last-ms-key owner-key] now)
+                                    current (get-in rt-snapshot [smoothed-key owner-key]
                                                     (double (or (:percent elem) 0.0)))
                                     target (double (or (:percent elem) 0.0))
                                     smoothed (smooth-percent current target last-ms now)]
