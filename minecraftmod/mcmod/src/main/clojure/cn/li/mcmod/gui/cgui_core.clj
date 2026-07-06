@@ -99,7 +99,7 @@
 (defn get-widgets 
   "Get all child widgets from a container as a vector."
   [container]
-  (vec @(:children container)))
+  @(:children container))
 
 (defn get-draw-list 
   "Get rendering order of child widgets (currently same as child order)."

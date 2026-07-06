@@ -17,8 +17,8 @@
           tm (get @(:metadata root) :transform-meta {})
           pivot-x (or (:pivot-x tm) 0.0)
           pivot-y (or (:pivot-y tm) 0.0)
-          align-w (when-let [a (:align-width tm)] (-> a name str/lower-case keyword))
-          align-h (when-let [a (:align-height tm)] (-> a name str/lower-case keyword))
+          align-w (:align-width tm)
+          align-h (:align-height tm)
           ;; LambdaLib2 uses SCALED widget dimensions for alignment offset.
           ;; e.g. logo1 raw 899×236, scale 0.25 → effective 224.75×59 centered in rightPart.
           sw (* w own-scale)

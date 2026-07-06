@@ -40,6 +40,10 @@
 (defonce ^:private quad-xs-buffer (double-array 4))
 (defonce ^:private quad-ys-buffer (double-array 4))
 
+;; Shared singletons for zero-allocation tree traversal
+(defonce ^:private shared-quaternion (org.joml.Quaternionf.))
+(defonce ^:private child-pos-shuttle (double-array 3))  ;; [abs-x, abs-y, cum-scale]
+
 (def ^:dynamic *cgui-renderer-runtime* nil)
 
 (defn current-cgui-renderer-runtime
@@ -161,13 +165,13 @@
     (.popPose ps)))
 
 (defn render-widget!
-  [^GuiGraphics gg root [abs-x abs-y] scale left top]
+  [^GuiGraphics gg root ^doubles abs-pos scale left top]
   (when-not (cgui-core/visible? root)
     (throw (ex-info "render-widget! called on invisible widget" {})))
   (let [size (cgui-core/get-size root)
         [w h] size
-        x (int (+ left abs-x))
-        y (int (+ top abs-y))
+        x (int (+ left (aget abs-pos 0)))
+        y (int (+ top (aget abs-pos 1)))
         w-int (round-int (* (double w) scale))
         h-int (round-int (* (double h) scale))
         components @(:components root)]
@@ -534,34 +538,34 @@
 
           :else nil)))))
 
-(defn- compute-child-abs-pos
-  "Compute a child widget's absolute position given parent position/size/scale.
-  Mirrors the alignment + pivot logic in traversal/collect-widgets-z-ordered."
-  [parent-abs-pos parent-size parent-scale child]
+(defn- compute-child-abs-pos!
+  "Write child absolute position into child-pos-shuttle: [0]=abs-x, [1]=abs-y, [2]=cum-scale.
+   Returns nil. Zero-allocation — no PersistentVector return value."
+  [^doubles parent-abs-pos parent-size ^double parent-scale child]
   (let [own-scale (double (or @(:scale child) 1.0))
-        cum-scale (* (double parent-scale) own-scale)
-        [px py] parent-abs-pos
+        cum-scale (* parent-scale own-scale)
+        px (double (aget parent-abs-pos 0))
+        py (double (aget parent-abs-pos 1))
         [wx wy] (cgui-core/get-pos child)
         [pw ph] (or parent-size [0 0])
         [w h] (cgui-core/get-size child)
         tm (get @(:metadata child) :transform-meta {})
-        pivot-x (or (:pivot-x tm) 0.0)
-        pivot-y (or (:pivot-y tm) 0.0)
-        align-w (when-let [a (:align-width tm)] (-> a name str/lower-case keyword))
-        align-h (when-let [a (:align-height tm)] (-> a name str/lower-case keyword))
-        ;; LambdaLib2 uses SCALED widget dimensions; must match traversal.clj
+        pivot-x (double (or (:pivot-x tm) 0.0))
+        pivot-y (double (or (:pivot-y tm) 0.0))
+        align-w (:align-width tm)
+        align-h (:align-height tm)
         sw (* (double w) own-scale)
         sh (* (double h) own-scale)
-        align-offset-x (case align-w :center (/ (- pw sw) 2.0) :right (- pw sw) 0.0)
-        align-offset-y (case align-h :center (/ (- ph sh) 2.0) :middle (/ (- ph sh) 2.0) :bottom (- ph sh) 0.0)
-        pivot-shift-x (* (double pivot-x) (double w))
-        pivot-shift-y (* (double pivot-y) (double h))]
-    ;; LambdaLib2: child screen pos = parent.abs + child.transform * parent_scale
-    (let [child-x (+ (double align-offset-x) (double wx) (double (- pivot-shift-x)))
-          child-y (+ (double align-offset-y) (double wy) (double (- pivot-shift-y)))]
-      [(+ px (int (Math/round (* child-x (double parent-scale)))))
-       (+ py (int (Math/round (* child-y (double parent-scale)))))
-       cum-scale])))
+        align-offset-x (double (case align-w :center (/ (- (double pw) sw) 2.0) :right (- (double pw) sw) 0.0))
+        align-offset-y (double (case align-h :center (/ (- (double ph) sh) 2.0) :middle (/ (- (double ph) sh) 2.0) :bottom (- (double ph) sh) 0.0))
+        pivot-shift-x (* pivot-x (double w))
+        pivot-shift-y (* pivot-y (double h))
+        child-x (+ align-offset-x (double wx) (- pivot-shift-x))
+        child-y (+ align-offset-y (double wy) (- pivot-shift-y))]
+    (aset child-pos-shuttle 0 (+ px (double (Math/round (* child-x parent-scale)))))
+    (aset child-pos-shuttle 1 (+ py (double (Math/round (* child-y parent-scale)))))
+    (aset child-pos-shuttle 2 cum-scale)
+    nil))
 
 (defn- render-widget-tree!
   "Recursively render a widget and its children.
@@ -569,13 +573,13 @@
   scissor to clip child content to the widget's visual bounds.
   When the widget has a :transform component, applies GL transform
   to the widget and all its children (push/pop per widget)."
-  [^GuiGraphics gg widget abs-pos scale left top]
-  ;; Check for transform component — if present, apply before own+children rendering
+  [^GuiGraphics gg widget ^doubles abs-pos scale left top]
   (let [components @(:components widget)
         transform-comp (first (filter #(= (or (:kind %) (::kind %)) :transform) components))
         has-transform? (boolean transform-comp)
         ^PoseStack ps (.pose gg)
-        [abs-x abs-y] abs-pos
+        abs-x (aget abs-pos 0)
+        abs-y (aget abs-pos 1)
         [w h] (cgui-core/get-size widget)
         w-int (round-int (* (double w) scale))
         h-int (round-int (* (double h) scale))]
@@ -587,13 +591,16 @@
             sx (double (or (:scale-x state) 1.0))
             sy (double (or (:scale-y state) 1.0))
             rot (double (or (:rotation state) 0.0))
-            cx (+ (double abs-x) (/ w-int 2))
-            cy (+ (double abs-y) (/ h-int 2))]
+            cx (+ (double abs-x) (/ (double w-int) 2.0))
+            cy (+ (double abs-y) (/ (double h-int) 2.0))]
         (.pushPose ps)
         (.translate ps cx cy 0.0)
         (when (not= 0.0 rot)
-          ;; Rotate around Z-axis (clockwise angle in radians)
-          (.mulPose ps (doto (org.joml.Quaternionf.) (.rotationZ (float rot)))))
+          ;; Rotate around Z-axis (clockwise angle in radians) — AOT-safe shared singleton
+          (let [^org.joml.Quaternionf q shared-quaternion]
+            (.identity q)
+            (.rotationZ q (float rot))
+            (.mulPose ps q)))
         (.scale ps (float sx) (float sy) 1.0)
         (.translate ps (- cx) (- cy) 0.0)))
     ;; Render own components
@@ -601,15 +608,20 @@
     ;; Render children (with optional scissor clipping)
     (let [children (cgui-core/get-widgets widget)
           clip? (get @(:metadata widget) :clip-children? false)
-          wx (int (+ left abs-x))
-          wy (int (+ top abs-y))]
+          wx (int (+ left (int abs-x)))
+          wy (int (+ top (int abs-y)))]
       (when (and clip? (seq children))
         (.enableScissor gg wx wy (+ wx w-int) (+ wy h-int)))
       (doseq [c children]
         (when (cgui-core/visible? c)
           (try
-            (let [[c-abs-x c-abs-y c-scale] (compute-child-abs-pos abs-pos [w h] scale c)]
-              (render-widget-tree! gg c [c-abs-x c-abs-y] c-scale left top))
+            ;; In-place write to child-pos-shuttle
+            (compute-child-abs-pos! abs-pos [w h] scale c)
+            ;; Snapshot before recursing: child's subtree will overwrite shuttle
+            (let [c-scale (aget child-pos-shuttle 2)
+                  local-frame (double-array 2 [(aget child-pos-shuttle 0)
+                                               (aget child-pos-shuttle 1)])]
+              (render-widget-tree! gg c local-frame c-scale left top))
             (catch Exception e
               (log/error "[RENDER-CHILD] " (.getMessage e) " child=" (pr-str (try (cgui-core/get-pos c) (catch Exception _ "?"))))))))
       (when (and clip? (seq children))
@@ -628,14 +640,18 @@
           (log/info "CGUI render-tree! root visible:" visible "size:" size
                     "widget count:" (count widgets)))
         (swap! (:metadata root) assoc :cgui-render-debug-logged true))
-      ;; Render root's own components
-      (render-widget! gg root [0 0] 1.0 left top)
+      ;; Render root's own components (root at origin)
+      (let [root-abs-pos (double-array 2 [0.0 0.0])]
+        (render-widget! gg root root-abs-pos 1.0 left top))
       ;; Render root's direct children recursively
       (let [[w h] size]
         (doseq [c (cgui-core/get-widgets root)]
           (when (cgui-core/visible? c)
             (try
-              (let [[c-abs-x c-abs-y c-scale] (compute-child-abs-pos [0 0] [w h] 1.0 c)]
-                (render-widget-tree! gg c [c-abs-x c-abs-y] c-scale left top))
+              (compute-child-abs-pos! (double-array 2 [0.0 0.0]) [w h] 1.0 c)
+              (let [c-scale (aget child-pos-shuttle 2)
+                    local-frame (double-array 2 [(aget child-pos-shuttle 0)
+                                                 (aget child-pos-shuttle 1)])]
+                (render-widget-tree! gg c local-frame c-scale left top))
               (catch Exception e
                 (log/error "[RENDER-ROOT-CHILD] " (.getMessage e))))))))))
