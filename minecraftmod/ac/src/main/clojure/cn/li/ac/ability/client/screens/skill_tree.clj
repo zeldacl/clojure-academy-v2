@@ -335,8 +335,12 @@
     ;; frame → hybrid: static cache rebuild on state change, lightweight assembly always
     (events/on-frame root
       (fn [_]
-        (let [[rw rh] (cgui-core/get-size root)
-              [mx my] (skill-tree-mouse-pos root)
+        (let [size-vec (cgui-core/get-size root)
+              mouse-vec (skill-tree-mouse-pos root)
+              rw (long (nth size-vec 0))
+              rh (long (nth size-vec 1))
+              mx (long (nth mouse-vec 0))
+              my (long (nth mouse-vec 1))
               st (screen-state-snapshot owner)
               ;; Extract 5 rendering-relevant fields — inline identical? (pointer compare)
               hid (:hovered-skill-id st)
@@ -397,24 +401,27 @@
                 (reset! static-pre-tree-ops pre-tree))
               (do (reset! static-tree-ops [])
                   (reset! static-pre-tree-ops []))))
-          ;; === Branch 2: always — assemble final ops (lightweight) ===
-          (let [safe-w (max 1 rw) safe-h (max 1 rh)
-                mx01 (clamp01 (/ (double mx) (max 1.0 (double safe-w))))
-                my01 (clamp01 (/ (double my) (max 1.0 (double safe-h))))
-                bg-dx (* (- mx01 0.5) 0.01) bg-dy (* (- my01 0.5) 0.01)
+          ;; === Branch 2: always — zero-allocation parallax bundle ===
+          (let [safe-w (long (max 1 rw))
+                safe-h (long (max 1 rh))
+                safe-w-d (double safe-w)
+                safe-h-d (double safe-h)
+                mx01 (clamp01 (/ (double mx) (max 1.0 safe-w-d)))
+                my01 (clamp01 (/ (double my) (max 1.0 safe-h-d)))
+                node-dx (* (- mx01 0.5) 10.0)
+                node-dy (* (- my01 0.5) 10.0)
+                bg-dx (* (- mx01 0.5) 0.01)
+                bg-dy (* (- my01 0.5) 0.01)
                 bg-u (+ (* (- bg-dx 0.5) back-scale-inv) 0.5)
                 bg-v (+ (* (- bg-dy 0.5) back-scale-inv) 0.5)
-                node-dx (* (- mx01 0.5) 10.0) node-dy (* (- my01 0.5) 10.0)
-                final-ops (persistent!
-                            (let [out (transient [{:kind :raw-rect-uv :texture :bg-area :x 0 :y 0 :w (int 420) :h (int 260)
-                                                  :min-u (float bg-u) :max-u (float (+ bg-u back-scale-inv))
-                                                  :min-v (float bg-v) :max-v (float (+ bg-v back-scale-inv))}])]
-                              (doseq [op @static-pre-tree-ops] (conj! out op))
-                              (conj! out {:kind :translate :x node-dx :y node-dy :z 0.0})
-                              (doseq [op @static-tree-ops] (conj! out op))
-                              out))]
+                final-ops {:kind :parallax-bundle
+                           :bg-u (float bg-u) :bg-v (float bg-v)
+                           :bg-scale-inv back-scale-inv
+                           :node-dx node-dx :node-dy node-dy
+                           :pre-ops @static-pre-tree-ops
+                           :tree-ops @static-tree-ops}]
             (reset! last-mouse-pos [mx my])
-            (skill-tree-draw-ops! root final-ops)))))
+            (skill-tree-draw-ops! root [final-ops])))))
     ;; frame → update hover (runs every frame — lightweight state-only check)
     (events/on-frame root
       (fn [_]

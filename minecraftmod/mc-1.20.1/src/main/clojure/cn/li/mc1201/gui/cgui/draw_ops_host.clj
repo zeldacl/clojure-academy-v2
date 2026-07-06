@@ -205,6 +205,27 @@
                                                                     (double (:w op)) (double (:h op)))
                                         (RenderSystem/setShader (reify java.util.function.Supplier (get [_] nil)))
                                         (GL11/glColorMask true true true true)))
+          :parallax-bundle (let [bg-u (float (or (:bg-u op) 0.5))
+                                 bg-v (float (or (:bg-v op) 0.5))
+                                 bg-scale-inv (double (or (:bg-scale-inv op) 0.99))
+                                 node-dx (double (or (:node-dx op) 0.0))
+                                 node-dy (double (or (:node-dy op) 0.0))
+                                 pre-ops (:pre-ops op)
+                                 tree-ops (:tree-ops op)]
+                             ;; BG layer: parallax-UV background quad
+                             (when-let [loc (tex-registry/resolve-texture :bg-area)]
+                               (platform-bridge/blit-textured-quad! graphics loc
+                                 0.0 0.0 420.0 260.0 0.0
+                                 bg-u (float (+ bg-u bg-scale-inv))
+                                 bg-v (float (+ bg-v bg-scale-inv))))
+                             ;; Layer 1: pre-tree (static, no parallax)
+                             (when (seq pre-ops) (render-ops! graphics pre-ops))
+                             ;; Layer 2: tree (with parallax translate)
+                             (when (seq tree-ops)
+                               (.pushPose poseStack)
+                               (.translate poseStack node-dx node-dy 0.0)
+                               (render-ops! graphics tree-ops)
+                               (.popPose poseStack)))
           nil)
         (catch Exception e
           (log/debug "Draw-ops render-op error:" (.getMessage e)))))))
