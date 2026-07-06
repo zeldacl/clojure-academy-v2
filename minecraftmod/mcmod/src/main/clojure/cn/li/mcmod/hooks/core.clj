@@ -281,6 +281,38 @@
   [ctx-map & body]
   `(with-client-ctx-fn ~ctx-map (fn [] ~@body)))
 
+;; ============================================================================
+;; Session context push/pop/clear — 零分配 ThreadLocal 管理
+;; 供 DelegatingScreen.java 调用，替代 per-frame with-client-ctx
+;; ============================================================================
+
+(defn push-session-context!
+  "Push :session-id onto client context ThreadLocal.
+   Optimized: when (:session-id old) == session-id, no allocation & no ThreadLocal write.
+   Returns previous context (nil if none) — must be passed to pop-session-context!."
+  [^String session-id]
+  (let [old (get-client-ctx)]
+    (when (not= (:session-id old) session-id)
+      ;; first frame or session changed: allocate new map + write ThreadLocal
+      (set-client-ctx! (assoc (or old {}) :session-id session-id)))
+    old))
+
+(defn pop-session-context!
+  "Restore ThreadLocal context to old value.
+   No-op when old and current are value-equal (steady state)."
+  [old]
+  (let [current (get-client-ctx)]
+    (when (not= current old)
+      (if old
+        (set-client-ctx! old)
+        (.remove ^ThreadLocal client-ctx-thread-local)))))
+
+(defn clear-session-context!
+  "Explicitly remove client context from ThreadLocal.
+   Called by DelegatingScreen.removed() for final cleanup."
+  []
+  (.remove ^ThreadLocal client-ctx-thread-local))
+
 
 (defn register-power-runtime-hooks!
   "Register/replace power runtime hook fns."
