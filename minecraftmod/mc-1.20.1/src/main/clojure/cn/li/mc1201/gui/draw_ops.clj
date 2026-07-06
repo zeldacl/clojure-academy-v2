@@ -62,27 +62,49 @@
     (BufferUploader/drawWithShader (.end bb))))
 
 (defn- draw-string-with-opts!
-  "Render text with optional font-size scaling and alignment."
+  "Render text with optional font-size scaling and alignment.
+   .pushPose is outside try (never throws). All primitives bound inside try
+   to prevent AOT autoboxing. finally guarantees .popPose."
   [^GuiGraphics graphics op ^PoseStack poseStack]
-  (let [^String text (str (:text op))
-        x (int (or (:x op) 0)) y (int (or (:y op) 0))
-        font-size (:font-size op 9)
-        color (int (or (:color op) 0xFFFFFFFF))]
-    (try
-      (let [mc (net.minecraft.client.Minecraft/getInstance)
-            ^Font font (.-font mc)]
-        (.pushPose poseStack)
-        (.translate poseStack (double x) (double y) 0.0)
-        (when (not= font-size 9)
-          (let [scale (/ (double font-size) 9.0)]
-            (.scale poseStack (float scale) (float scale) 1.0)))
-        (case (:align op)
-          :center (.translate poseStack (double (/ (.width font text) -2)) 0.0 0.0)
-          :right  (.translate poseStack (double (- (.width font text))) 0.0 0.0)
-          nil)
-        (.drawString graphics font text 0 0 color)
-        (.popPose poseStack))
-      (catch Exception _ nil))))
+  (.pushPose poseStack)
+  (try
+    (let [^String text (str (:text op))
+          x (int (or (:x op) 0)) y (int (or (:y op) 0))
+          font-size (:font-size op 9)
+          color (int (or (:color op) 0xFFFFFFFF))
+          mc (net.minecraft.client.Minecraft/getInstance)
+          ^Font font (.-font mc)]
+      (.translate poseStack (double x) (double y) 0.0)
+      (when (not= font-size 9)
+        (let [scale (/ (double font-size) 9.0)]
+          (.scale poseStack (float scale) (float scale) 1.0)))
+      (case (:align op)
+        :center (.translate poseStack (double (/ (.width font text) -2)) 0.0 0.0)
+        :right  (.translate poseStack (double (- (.width font text))) 0.0 0.0)
+        nil)
+      (.drawString graphics font text 0 0 color))
+    (catch Exception _ nil)
+    (finally
+      (.popPose poseStack))))
+
+;; ============================================================================
+;; Primitive-guarded helpers — isolate try-finally from outer scope to prevent
+;; Clojure AOT autoboxing of local primitives across try boundaries
+;; ============================================================================
+
+(declare render-ops!)  ;; forward decl for safe-parallax-render! and parallax-bundle self-call
+
+(defn- ^:private safe-parallax-render!
+  "Render tree-ops within a pushPose/popPose guard, with no local primitives
+   crossing the try boundary. ^double dx/dy typed params keep them in CPU
+   registers — zero autoboxing even under AOT."
+  [^GuiGraphics graphics ^PoseStack poseStack ^double dx ^double dy tree-ops]
+  (try
+    (.pushPose poseStack)
+    (.translate poseStack (float dx) (float dy) (float 0.0))
+    (render-ops! graphics tree-ops)
+    (finally
+      (.popPose poseStack))))
 
 ;; ============================================================================
 ;; Single op renderer — the core dispatch
@@ -206,19 +228,21 @@
               loc-1 (when tex-1-key
                       (if (keyword? tex-1-key)
                         (tex-registry/resolve-texture tex-1-key)
-                        (path->resource-location tex-1-key)))
-              progress (float (or (:progress op) 0.0))]
+                        (path->resource-location tex-1-key)))]
           (if (and si loc-0)
-            (do
+            (try
               (.setSampler si "TexSampler0" loc-0)
               (when loc-1 (.setSampler si "TexSampler1" loc-1))
               (RenderSystem/setShader (StaticShaderSupplier. si))
-              (when-let [u (.safeGetUniform si "Progress")]
-                (.set u progress))
+              ;; progress bound inside try — no autoboxing across try boundary
+              (let [progress (float (or (:progress op) 0.0))]
+                (when-let [u (.safeGetUniform si "Progress")]
+                  (.set u progress)))
               (render-custom-shader-quad! graphics poseStack si loc-0 loc-1
                                           (double (:x op)) (double (:y op))
                                           (double (:w op)) (double (:h op)))
-              (RenderSystem/setShader (StaticShaderSupplier. nil)))
+              (finally
+                (RenderSystem/setShader (StaticShaderSupplier. nil))))
             (when loc-0
               (.blit graphics loc-0 (int (:x op)) (int (:y op)) 0 0
                 (int (:w op)) (int (:h op)) (int (:w op)) (int (:h op))))))
@@ -230,13 +254,14 @@
                     (path->resource-location tex-key))
               ^ShaderInstance si (platform-bridge/resolve-shader :mono)]
           (if (and si loc)
-            (do
+            (try
               (.setSampler si "TexSampler0" loc)
               (RenderSystem/setShader (StaticShaderSupplier. si))
               (render-custom-shader-quad! graphics poseStack si loc nil
                                           (double (:x op)) (double (:y op))
                                           (double (:w op)) (double (:h op)))
-              (RenderSystem/setShader (StaticShaderSupplier. nil)))
+              (finally
+                (RenderSystem/setShader (StaticShaderSupplier. nil))))
             (do
               (RenderSystem/setShaderColor 0.53 0.53 0.53 1.0)
               (.blit graphics loc (int (:x op)) (int (:y op)) 0 0
@@ -256,12 +281,14 @@
               (.set u threshold))
             (RenderSystem/depthMask true)
             (GL11/glColorMask false false false false)
-            (RenderSystem/setShader (StaticShaderSupplier. si))
-            (render-custom-shader-quad! graphics poseStack si loc nil
-                                        (double (:x op)) (double (:y op))
-                                        (double (:w op)) (double (:h op)))
-            (RenderSystem/setShader (StaticShaderSupplier. nil))
-            (GL11/glColorMask true true true true)))
+            (try
+              (RenderSystem/setShader (StaticShaderSupplier. si))
+              (render-custom-shader-quad! graphics poseStack si loc nil
+                                          (double (:x op)) (double (:y op))
+                                          (double (:w op)) (double (:h op)))
+              (finally
+                (RenderSystem/setShader (StaticShaderSupplier. nil))
+                (GL11/glColorMask true true true true)))))
         ;; --- Set/clear custom shader (for multi-step shader operations) ---
         :set-shader (let [^ShaderInstance si (platform-bridge/resolve-shader (:shader-id op))]
                       (when si
@@ -306,14 +333,12 @@
               0.0 0.0 420.0 260.0 0.0
               bg-u (float (+ bg-u bg-scale-inv))
               bg-v (float (+ bg-v bg-scale-inv))))
-          ;; Layer 1: pre-tree (static, no parallax)
-          (when (seq pre-ops) (render-ops! graphics pre-ops))
-          ;; Layer 2: tree (with parallax translate)
-          (when (seq tree-ops)
-            (.pushPose poseStack)
-            (.translate poseStack node-dx node-dy 0.0)
-            (render-ops! graphics tree-ops)
-            (.popPose poseStack)))
+          ;; Layer 1: pre-tree (static, no parallax) — render-ops! safely no-ops on nil/empty
+          (render-ops! graphics pre-ops)
+          ;; Layer 2: tree (with parallax translate) — extracted to prevent
+          ;; node-dx/dy autoboxing across the try-finally boundary
+          (when tree-ops
+            (safe-parallax-render! graphics poseStack node-dx node-dy tree-ops)))
         ;; --- Unknown op: no-op ---
         nil)
       (catch Exception e
