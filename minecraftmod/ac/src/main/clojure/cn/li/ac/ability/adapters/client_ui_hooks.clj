@@ -1024,7 +1024,9 @@
 (defn register-client-push-handlers!
   []
   (when (mark-client-push-handlers-registered!)
-    ;; Register CGUI screens
+    ;; Register CGUI screen widget factories (replaces managed-screen dispatch)
+    (skill-tree-screen/install-widget-factory!)
+    (preset-editor-screen/install-widget-factory!)
     (location-teleport-screen/init!)
     (net-client/register-push-handler! catalog/MSG-SYNC-RUNTIME
       (fn [{:keys [uuid ability-data]}]

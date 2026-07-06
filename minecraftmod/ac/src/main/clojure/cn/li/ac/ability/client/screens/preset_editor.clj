@@ -6,7 +6,15 @@
             [cn.li.ac.ability.client.managed-screens :as managed-screens]
             [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.registry.skill-query :as skill-query]
-            [cn.li.ac.ability.model.ability :as adata]))
+            [cn.li.ac.ability.model.ability :as adata]
+            [cn.li.mcmod.platform.ui :as platform-ui]
+            [cn.li.mcmod.gui.cgui-core :as cgui-core]
+            [cn.li.mcmod.gui.components :as comp]
+            [cn.li.mcmod.gui.events :as events]
+            [cn.li.mcmod.util.log :as log]))
+
+;; Forward declares for functions called by widget factory (defined later)
+(declare build-preset-editor-render-data handle-screen-click!)
 
 ;; Editor state
 (def ^:private default-editor-state
@@ -194,3 +202,67 @@
   ([owner]
    (managed-screens/clear-screen-state! screen-id (editor-owner-key owner))))
 
+;; ============================================================================
+;; CGui Widget Factory — replaces managed-screen dispatch for :ac/preset-editor
+;; ============================================================================
+
+(defn create-preset-editor-widget
+  "Create CGui widget hosting preset-editor draw-ops. Factory for :ac/preset-editor."
+  [{:keys [player-uuid client-session-id]}]
+  (let [owner {:client-session-id (or client-session-id "") :player-uuid player-uuid}
+        ok    (editor-owner-key owner)
+        root  (cgui-core/create-container :name "preset-editor-root" :pos [0 0] :size [340 250])]
+    (managed-screens/set-active-owner! screen-id ok)
+    (swap-editor-state! owner merge default-editor-state {:player-uuid player-uuid})
+    (events/on-frame root
+      (fn [_]
+        (when-let [rd (build-preset-editor-render-data owner)]
+          (let [draw-ops
+                (vec
+                  (concat
+                    [{:kind :text :text "Preset Editor" :x 10 :y 2 :color 0xFFFFFF}]
+                    (mapcat (fn [pidx]
+                              (let [x (+ 10 (* pidx 45))
+                                    sel? (= pidx (:selected-preset rd))
+                                    act? (= pidx (:active-preset rd))]
+                                [{:kind :fill :x x :y 10 :w 40 :h 20
+                                  :color (if sel? 0xFF4C6FFF 0xFF333333)}
+                                 {:kind :text :text (str "P" (inc pidx) (when act? "*"))
+                                  :x (+ x 10) :y 16 :color 0xFFFFFF}]))
+                            (:presets rd))
+                    (mapcat (fn [idx]
+                              (let [slot (nth (:slots rd) idx nil)
+                                    y (+ 40 (* idx 25))]
+                                [{:kind :fill :x 10 :y y :w 100 :h 20 :color 0xFF252525}
+                                 {:kind :text :text (str "Slot " (inc idx) ": " (or (:skill-name slot) "<empty>"))
+                                  :x 14 :y (+ y 6) :color 0xFFFFFF}]))
+                            (range 4))
+                    (mapcat (fn [[idx skill-info]]
+                              (let [y (+ 60 (* idx 22))
+                                    chosen? (= (:skill-id skill-info) (:selected-skill rd))]
+                                [{:kind :fill :x 170 :y y :w 150 :h 20
+                                  :color (if chosen? 0xFF2E6B2E 0xFF202020)}
+                                 {:kind :text :text (:skill-name skill-info)
+                                  :x 174 :y (+ y 6) :color 0xFFFFFF}]))
+                            (map-indexed vector (:available-skills rd)))
+                    [{:kind :fill :x 10 :y 200 :w 80 :h 20 :color 0xFF4A8F4A}
+                     {:kind :text :text "Save" :x 35 :y 206 :color 0xFFFFFF}
+                     {:kind :fill :x 100 :y 200 :w 80 :h 20 :color 0xFF444488}
+                     {:kind :text :text "Set Active" :x 108 :y 206 :color 0xFFFFFF}]))]
+            (swap! (:metadata root) assoc :preset-draw-ops draw-ops)))))
+    (events/on-left-click root
+      (fn [evt]
+        (handle-screen-click! owner (:mouse-x evt) (:mouse-y evt))))
+    (let [[rw rh] (cgui-core/get-size root)
+          host (cgui-core/create-widget :pos [0 0] :size [rw rh])]
+      (comp/add-component! host (comp/draw-ops {:ops-fn #(get @(:metadata root) :preset-draw-ops [])}))
+      (cgui-core/add-widget! root host))
+    root))
+
+(let [registered? (atom false)]
+  (defn install-widget-factory!
+    "Register preset-editor CGui widget factory. Idempotent."
+    []
+    (when (compare-and-set! registered? false true)
+      (platform-ui/register-widget-factory! :ac/preset-editor create-preset-editor-widget)
+      (log/info "Preset-editor widget factory registered"))))

@@ -13,8 +13,14 @@
    [cn.li.ac.config.modid :as modid]
    [cn.li.mcmod.i18n :as i18n]
    [cn.li.mcmod.client.platform-bridge :as client-bridge]
+   [cn.li.mcmod.platform.ui :as platform-ui]
+   [cn.li.mcmod.gui.cgui-core :as cgui-core]
+   [cn.li.mcmod.gui.components :as comp]
+   [cn.li.mcmod.gui.events :as events]
    [cn.li.mcmod.util.log :as log]))
 
+;; Forward declares for functions used by widget factory (defined later in file)
+(declare build-draw-ops ensure-screen-player-state! swap-screen-state! on-mouse-move handle-screen-click!)
 (defn- now-ms [] (client-bridge/game-time-ms))
 (defn- clamp01 [v] (max 0.0 (min 1.0 (double v))))
 (defn- lerp [a b t] (+ a (* (- b a) (clamp01 t))))
@@ -283,6 +289,79 @@
 
 (defn close-screen! [owner]
   (managed-screens/clear-screen-state! screen-id (screen-owner-key owner)))
+
+;; ============================================================================
+;; CGui Widget Factory — replaces managed-screen dispatch for :ac/skill-tree
+;; ============================================================================
+
+(defn- resolve-owner [payload]
+  (let [sid (:client-session-id payload "")
+        pu  (:player-uuid payload)]
+    {:client-session-id sid :player-uuid pu}))
+
+(defn- skill-tree-mouse-pos [root]
+  (let [m (get @(:metadata root) :mouse-pos)]
+    (or m [210 130])))
+
+(defn- skill-tree-mouse-pos! [root pos]
+  (swap! (:metadata root) assoc :mouse-pos pos))
+
+(defn- skill-tree-draw-ops [root]
+  (let [d (get @(:metadata root) :draw-ops)]
+    (or d [])))
+
+(defn- skill-tree-draw-ops! [root ops]
+  (swap! (:metadata root) assoc :draw-ops ops))
+
+(defn create-skill-tree-widget
+  "Create CGui widget hosting skill-tree draw-ops. Factory for :ac/skill-tree."
+  [{:keys [player-uuid client-session-id learn-context] :as payload}]
+  (let [owner (resolve-owner payload)
+        ok    (screen-owner-key owner)
+        pu    (or player-uuid (nth ok 2))
+        root  (cgui-core/create-container :name "skill-tree-root" :pos [0 0] :size [420 260])]
+    ;; initialize managed-screen state (shared with existing code)
+    (ensure-screen-player-state! owner)
+    (managed-screens/set-active-owner! screen-id ok)
+    (swap-screen-state! owner merge default-screen-state
+                        {:player-uuid pu :learn-context learn-context :creation-time (now-ms)})
+    ;; frame → rebuild draw-ops
+    (events/on-frame root
+      (fn [_]
+        (let [[rw rh] (cgui-core/get-size root)
+              [mx my] (skill-tree-mouse-pos root)]
+          (skill-tree-draw-ops! root (build-draw-ops owner mx my (max 1 rw) (max 1 rh))))))
+    ;; frame → update hover
+    (events/on-frame root
+      (fn [_]
+        (let [[mx my] (skill-tree-mouse-pos root)]
+          (on-mouse-move owner mx my))))
+    ;; click handler
+    (events/on-left-click root
+      (fn [evt]
+        (let [mx (:mouse-x evt) my (:mouse-y evt)]
+          (skill-tree-mouse-pos! root [mx my])
+          (handle-screen-click! owner mx my))))
+    ;; drag → track mouse
+    (events/on-drag root
+      (fn [evt]
+        (let [[ox oy] (skill-tree-mouse-pos root)
+              dx (double (:dx evt 0)) dy (double (:dy evt 0))]
+          (skill-tree-mouse-pos! root [(+ ox dx) (+ oy dy)]))))
+    ;; draw-ops component host
+    (let [[rw rh] (cgui-core/get-size root)
+          host (cgui-core/create-widget :pos [0 0] :size [rw rh])]
+      (comp/add-component! host (comp/draw-ops {:ops-fn #(skill-tree-draw-ops root)}))
+      (cgui-core/add-widget! root host))
+    root))
+
+(let [registered? (atom false)]
+  (defn install-widget-factory!
+    "Register skill-tree CGui widget factory. Idempotent."
+    []
+    (when (compare-and-set! registered? false true)
+      (platform-ui/register-widget-factory! :ac/skill-tree create-skill-tree-widget)
+      (log/info "Skill-tree widget factory registered"))))
 
 ;; ============================================================================
 ;; Draw Ops — Line connections (rotated-quad)
