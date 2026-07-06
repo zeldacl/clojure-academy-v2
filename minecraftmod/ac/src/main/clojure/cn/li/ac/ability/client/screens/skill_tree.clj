@@ -20,7 +20,7 @@
    [cn.li.mcmod.util.log :as log]))
 
 ;; Forward declares for functions used by widget factory (defined later in file)
-(declare build-draw-ops ensure-screen-player-state! swap-screen-state! on-mouse-move handle-screen-click!)
+(declare build-draw-ops build-tree-ops ensure-screen-player-state! swap-screen-state! on-mouse-move handle-screen-click! level-up-popup-ops)
 (defn- now-ms [] (client-bridge/game-time-ms))
 (defn- clamp01 [v] (max 0.0 (min 1.0 (double v))))
 (defn- lerp [a b t] (+ a (* (- b a) (clamp01 t))))
@@ -315,40 +315,95 @@
 
 (defn create-skill-tree-widget
   "Create CGui widget hosting skill-tree draw-ops. Factory for :ac/skill-tree.
-  Dirty-check: only rebuilds draw-ops when screen state or mouse position changes."
+  Static/dynamic separation: node/connection draw-ops cached without parallax;
+  only bg-UV and global translate recomputed on mouse move."
   [{:keys [player-uuid client-session-id learn-context] :as payload}]
   (let [owner (resolve-owner payload)
         ok    (screen-owner-key owner)
         pu    (or player-uuid (nth ok 2))
         root  (cgui-core/create-container :name "skill-tree-root" :pos [0 0] :size [420 260])
-        ;; Dirty-check state: key of last-rendered screen state
+        ;; Dirty-check + static caches
         last-state-key (atom nil)
-        last-mouse-pos (atom [210 130])]
+        last-mouse-pos (atom [210 130])
+        static-tree-ops (atom [])       ;; nodes + connections + popups, no parallax
+        static-pre-tree-ops (atom [])]  ;; header + level-up button
     ;; initialize managed-screen state (shared with existing code)
     (ensure-screen-player-state! owner)
     (managed-screens/set-active-owner! screen-id ok)
     (swap-screen-state! owner merge default-screen-state
                         {:player-uuid pu :learn-context learn-context :creation-time (now-ms)})
-    ;; frame → rebuild draw-ops (with dirty-check)
+    ;; frame → hybrid: static cache rebuild on state change, lightweight assembly always
     (events/on-frame root
       (fn [_]
         (let [[rw rh] (cgui-core/get-size root)
               [mx my] (skill-tree-mouse-pos root)
               st (screen-state-snapshot owner)
-              ;; State fingerprint — only keys that affect rendering
               state-key {:hovered-skill-id (:hovered-skill-id st)
                          :selected-skill (:selected-skill st)
                          :showing-level-up-popup? (:showing-level-up-popup? st)
                          :level-up-dev-state (:level-up-dev-state st)
                          :hover-node-transitions (:hover-node-transitions st)}
-              state-changed? (not= state-key @last-state-key)
-              ;; Mouse moved >2px from last rendered position
-              mouse-moved? (or (> (Math/abs (double (- mx (first @last-mouse-pos)))) 2.0)
-                               (> (Math/abs (double (- my (second @last-mouse-pos)))) 2.0))]
-          (when (or state-changed? mouse-moved?)
+              state-changed? (not= state-key @last-state-key)]
+          ;; === Branch 1: state changed → rebuild static caches (rare, <1Hz) ===
+          (when state-changed?
             (reset! last-state-key state-key)
+            (if-let [rd (build-screen-render-data owner)]
+              (let [ab (:ability-info rd)
+                    anim (if-let [ct (:creation-time st)]
+                           (/ (- (now-ms) ct) 1000.0) 5.0)
+                    ;; Static tree: nodes + connections + tooltip + popups, no parallax
+                    tree (build-tree-ops rd anim 0.5 0.5
+                           (:hovered-skill-id st) (:hover-node-transitions st {})
+                           (:selected-skill st) :static? true)
+                    ;; Pre-tree: header overlay + texts + level-up button
+                    pre-tree (persistent!
+                               (let [out (transient [{:kind :fill :x 0 :y 0 :w 420 :h 260 :color 0xA0101010}
+                                                     {:kind :text :x 12 :y 8  :text (str "Category: " (:category-name ab)) :font :ac-normal :font-size 9 :align :left :color 0xFFFFFFFF}
+                                                     {:kind :text :x 12 :y 22 :text (format "Level: %d" (int (or (:level ab) 0))) :font :ac-normal :font-size 9 :align :left :color 0xFFE8E8E8}
+                                                     {:kind :text :x 12 :y 36 :text (format "CP: %.0f / %.0f" (double (get-in ab [:cp :cur] 0.0)) (double (get-in ab [:cp :max] 0.0))) :font :ac-normal :font-size 9 :align :left :color 0xFFAED7FF}
+                                                     {:kind :text :x 12 :y 50 :text (format "Overload: %.0f / %.0f" (double (get-in ab [:overload :cur] 0.0)) (double (get-in ab [:overload :max] 0.0))) :font :ac-normal :font-size 9 :align :left :color 0xFFFFB8A6}])]
+                                 (when (and (:can-level-up ab) (not (:showing-level-up-popup? st)))
+                                   (conj! out {:kind :fill :x 10 :y 200 :w 80 :h 20 :color 0xAA22AA22})
+                                   (conj! out {:kind :text :x 18 :y 206 :text "Level Up" :font :ac-normal :font-size 9 :align :center :color 0xFFFFFFFF}))
+                                 out))
+                    ;; Post-tree: level-up popup (if showing)
+                    post-tree (when (:showing-level-up-popup? st)
+                                (let [open-ms (:level-up-popup-open-ms st 0)
+                                      popup-anim (/ (- (now-ms) open-ms) 1000.0)
+                                      current-level (int (or (:level ab) 1))
+                                      target-level (inc current-level)
+                                      cond-icon (modid/asset-path "textures"
+                                                  (str "abilities/condition/any" target-level ".png"))]
+                                  (level-up-popup-ops target-level cond-icon popup-anim
+                                    {:dev-state (:level-up-dev-state st)
+                                     :screen-w 420 :screen-h 260})))]
+                (reset! static-tree-ops
+                  (if (seq post-tree)
+                    (persistent! (let [out (transient tree)]
+                                  (doseq [op post-tree] (conj! out op))
+                                  out))
+                    tree))
+                (reset! static-pre-tree-ops pre-tree))
+              (do (reset! static-tree-ops [])
+                  (reset! static-pre-tree-ops []))))
+          ;; === Branch 2: always — assemble final ops (lightweight) ===
+          (let [safe-w (max 1 rw) safe-h (max 1 rh)
+                mx01 (clamp01 (/ (double mx) (max 1.0 (double safe-w))))
+                my01 (clamp01 (/ (double my) (max 1.0 (double safe-h))))
+                bg-dx (* (- mx01 0.5) 0.01) bg-dy (* (- my01 0.5) 0.01)
+                bg-u (+ (* (- bg-dx 0.5) back-scale-inv) 0.5)
+                bg-v (+ (* (- bg-dy 0.5) back-scale-inv) 0.5)
+                node-dx (* (- mx01 0.5) 10.0) node-dy (* (- my01 0.5) 10.0)
+                final-ops (persistent!
+                            (let [out (transient [{:kind :raw-rect-uv :texture :bg-area :x 0 :y 0 :w (int 420) :h (int 260)
+                                                  :min-u (float bg-u) :max-u (float (+ bg-u back-scale-inv))
+                                                  :min-v (float bg-v) :max-v (float (+ bg-v back-scale-inv))}])]
+                              (doseq [op @static-pre-tree-ops] (conj! out op))
+                              (conj! out {:kind :translate :x node-dx :y node-dy :z 0.0})
+                              (doseq [op @static-tree-ops] (conj! out op))
+                              out))]
             (reset! last-mouse-pos [mx my])
-            (skill-tree-draw-ops! root (build-draw-ops owner mx my (max 1 rw) (max 1 rh)))))))
+            (skill-tree-draw-ops! root final-ops)))))
     ;; frame → update hover (runs every frame — lightweight state-only check)
     (events/on-frame root
       (fn [_]
@@ -654,11 +709,12 @@
 (defn build-tree-ops
   "Shared skill tree draw ops: nodes + connections + hover tooltip + detail popup.
    Used by BOTH full-screen path (host.clj) and developer panel (panel.clj).
-   Transient building — no mapcat/concat overhead."
-  [rd anim mx01 my01 hid htrans sel-id]
+   Transient building — no mapcat/concat overhead.
+   When :static? is true, skips parallax offset (for cached static layer)."
+  [rd anim mx01 my01 hid htrans sel-id & {:keys [static?]}]
   (let [;; Parallax offsets for skill nodes (upstream: clampf(0,1,mouseX/width) - 0.5) * max_du_skills
-        node-dx (* (- mx01 0.5) 10.0)
-        node-dy (* (- my01 0.5) 10.0)
+        node-dx (if static? 0.0 (* (- mx01 0.5) 10.0))
+        node-dy (if static? 0.0 (* (- my01 0.5) 10.0))
         ;; Animated connection lines — grouped by child node's index
         raw-conns (or (:connections rd) [])
         anim-conns (mapv (fn [c]
@@ -700,9 +756,12 @@
             (doseq [op ops] (conj! out op))))
         out))))
 
-(defn build-draw-ops [owner mx my screen-w screen-h]
+(defn build-draw-ops
   "Full-screen skill tree draw ops. Thin wrapper that adds background + header + level-up.
-  Transient building — no concat/vec overhead."
+  Transient building — no concat/vec overhead.
+  When :static? is true, skips mouse-driven parallax (for cached layer)."
+  ([owner mx my screen-w screen-h] (build-draw-ops owner mx my screen-w screen-h nil))
+  ([owner mx my screen-w screen-h {:keys [static?]}]
   (if-let [rd (build-screen-render-data owner)]
     (let [st (screen-state-snapshot owner)
           ct (:creation-time st)
@@ -733,7 +792,7 @@
           ;; Skill tree nodes
           (let [tree (build-tree-ops rd anim mx01 my01
                        (:hovered-skill-id st) (:hover-node-transitions st {})
-                       (:selected-skill st))]
+                       (:selected-skill st) :static? static?)]
             (doseq [op tree] (conj! out op)))
           ;; Level-up popup
           (when (:showing-level-up-popup? st)
@@ -748,4 +807,4 @@
                                :screen-w 420 :screen-h 260})]
               (doseq [op popup-ops] (conj! out op))))
           out)))
-    []))
+    [])))
