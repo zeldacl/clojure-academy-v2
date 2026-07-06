@@ -22,7 +22,16 @@
            [com.mojang.blaze3d.vertex DefaultVertexFormat VertexFormat$Mode PoseStack
             Tesselator BufferBuilder BufferUploader PoseStack$Pose]
            [org.joml Matrix4f]
-           [org.lwjgl.opengl GL11]))
+           [org.lwjgl.opengl GL11]
+           [java.util.function Supplier]))
+
+;; ============================================================================
+;; AOT-safe static Shader Supplier (replaces reify to survive ProGuard remapping)
+;; ============================================================================
+
+(deftype StaticShaderSupplier [^ShaderInstance shader]
+  Supplier
+  (get [_] shader))
 
 (defn- path->resource-location
   "Normalize a content texture path to a ResourceLocation for TextureManager.
@@ -172,23 +181,23 @@
                                   (if (and si loc-0)
                                     (do (.setSampler si "TexSampler0" loc-0)
                                         (when loc-1 (.setSampler si "TexSampler1" loc-1))
-                                        (RenderSystem/setShader (reify java.util.function.Supplier (get [_] si)))
+                                        (RenderSystem/setShader (StaticShaderSupplier. si))
                                         (when-let [u (.safeGetUniform si "Progress")] (.set u progress))
                                         (render-custom-shader-quad! graphics poseStack si loc-0 loc-1
                                                                     (double (:x op)) (double (:y op))
                                                                     (double (:w op)) (double (:h op)))
-                                        (RenderSystem/setShader (reify java.util.function.Supplier (get [_] nil))))
+                                        (RenderSystem/setShader (StaticShaderSupplier. nil)))
                                     (when loc-0 (.blit graphics loc-0 (int (:x op)) (int (:y op)) 0 0 (int (:w op)) (int (:h op)) (int (:w op)) (int (:h op))))))
           :shader-mono-blit (let [loc (if (keyword? (:texture op)) (tex-registry/resolve-texture (:texture op))
                                          (path->resource-location (:texture op)))
                                   ^ShaderInstance si (platform-bridge/resolve-shader :mono)]
                               (if (and si loc)
                                 (do (.setSampler si "TexSampler0" loc)
-                                    (RenderSystem/setShader (reify java.util.function.Supplier (get [_] si)))
+                                    (RenderSystem/setShader (StaticShaderSupplier. si))
                                     (render-custom-shader-quad! graphics poseStack si loc nil
                                                                 (double (:x op)) (double (:y op))
                                                                 (double (:w op)) (double (:h op)))
-                                    (RenderSystem/setShader (reify java.util.function.Supplier (get [_] nil))))
+                                    (RenderSystem/setShader (StaticShaderSupplier. nil)))
                                 (when loc (.blit graphics loc (int (:x op)) (int (:y op)) 0 0 (int (:w op)) (int (:h op)) (int (:w op)) (int (:h op))))))
           :alpha-discard-depth-mask (let [loc (if (keyword? (:texture op)) (tex-registry/resolve-texture (:texture op))
                                                   (path->resource-location (:texture op)))
@@ -199,11 +208,11 @@
                                         (when-let [u (.safeGetUniform si "AlphaThreshold")] (.set u threshold))
                                         (RenderSystem/depthMask true)
                                         (GL11/glColorMask false false false false)
-                                        (RenderSystem/setShader (reify java.util.function.Supplier (get [_] si)))
+                                        (RenderSystem/setShader (StaticShaderSupplier. si))
                                         (render-custom-shader-quad! graphics poseStack si loc nil
                                                                     (double (:x op)) (double (:y op))
                                                                     (double (:w op)) (double (:h op)))
-                                        (RenderSystem/setShader (reify java.util.function.Supplier (get [_] nil)))
+                                        (RenderSystem/setShader (StaticShaderSupplier. nil))
                                         (GL11/glColorMask true true true true)))
           :parallax-bundle (let [bg-u (float (or (:bg-u op) 0.5))
                                  bg-v (float (or (:bg-v op) 0.5))

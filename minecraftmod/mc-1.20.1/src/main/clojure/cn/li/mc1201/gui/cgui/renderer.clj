@@ -19,6 +19,7 @@
            (com.mojang.blaze3d.vertex PoseStack)
            (com.mojang.blaze3d.systems RenderSystem)
            (cn.li.mc1201.client MinecraftClientAccess GuiGraphicsHelper TextureSizeAccess)
+           (cn.li.mc1201.gui.cgui.draw_ops_host StaticShaderSupplier)
            (com.mojang.blaze3d.vertex Tesselator BufferBuilder BufferUploader PoseStack$Pose DefaultVertexFormat VertexFormat$Mode)
            (org.joml Matrix4f)
            (org.lwjgl.opengl GL11)
@@ -33,6 +34,11 @@
 ;; STB em 8px; :font-size N → N px on screen (typographic bounds, no bake padding in layout).
 
 (def ^:private _cgui-renderer-runtime (delay (create-cgui-renderer-runtime)))
+
+;; Pre-allocated double buffers for blendquad 9-slice vertex coordinates,
+;; eliminating per-frame xs/ys vector allocations.
+(defonce ^:private quad-xs-buffer (double-array 4))
+(defonce ^:private quad-ys-buffer (double-array 4))
 
 (def ^:dynamic *cgui-renderer-runtime* nil)
 
@@ -179,9 +185,16 @@
                 b (/ (double (bit-and color-int 0xFF)) 255.0)
                 a (if (pos? (bit-and color-int 0xFF000000))
                     (/ (double (bit-and (bit-shift-right color-int 24) 0xFF)) 255.0)
-                    1.0)
-                xs [(double (- x margin)) (double x) (double (+ x w-int)) (double (+ x w-int margin))]
-                ys [(double (- y margin)) (double y) (double (+ y h-int)) (double (+ y h-int margin))]]
+                    1.0)]
+            ;; In-place write to static double buffers — zero allocation
+            (aset quad-xs-buffer 0 (double (- x margin)))
+            (aset quad-xs-buffer 1 (double x))
+            (aset quad-xs-buffer 2 (double (+ x w-int)))
+            (aset quad-xs-buffer 3 (double (+ x w-int margin)))
+            (aset quad-ys-buffer 0 (double (- y margin)))
+            (aset quad-ys-buffer 1 (double y))
+            (aset quad-ys-buffer 2 (double (+ y h-int)))
+            (aset quad-ys-buffer 3 (double (+ y h-int margin)))
             (when blend-tex
               (try
                 (RenderSystem/enableBlend)
@@ -193,17 +206,17 @@
                       tex-h (max 1 (int (or (second tex-size) 48)))
                       cell-w (max 1 (int (Math/floor (/ tex-w 3.0))))
                       cell-h (max 1 (int (Math/floor (/ tex-h 3.0))))]
-                  (doseq [i (range 3)
-                          j (range 3)]
-                    (let [x0 (round-int (nth xs i))
-                          y0 (round-int (nth ys j))
-                          x1 (round-int (nth xs (inc i)))
-                          y1 (round-int (nth ys (inc j)))
+                  (dotimes [i 3]
+                    (dotimes [j 3]
+                      (let [x0 (round-int (aget quad-xs-buffer i))
+                            y0 (round-int (aget quad-ys-buffer j))
+                            x1 (round-int (aget quad-xs-buffer (inc i)))
+                            y1 (round-int (aget quad-ys-buffer (inc j)))
                           tw (max 1 (- x1 x0))
                           th (max 1 (- y1 y0))
                           u (* i cell-w)
                           v (* j cell-h)]
-                      (blit-scaled-region! gg blend-tex x0 y0 tw th u v cell-w cell-h 0.0 tex-w tex-h))))
+                      (blit-scaled-region! gg blend-tex x0 y0 tw th u v cell-w cell-h 0.0 tex-w tex-h)))))
                 (when line-tex
                   (let [mrg 3.2
                         top-x (round-int (- x mrg))
@@ -315,7 +328,7 @@
               (try
                 (.setSampler si "TexSampler0" tex-loc-0)
                 (.setSampler si "TexSampler1" tex-loc-1)
-                (RenderSystem/setShader (reify java.util.function.Supplier (get [_] si)))
+                (RenderSystem/setShader (StaticShaderSupplier. si))
                 (when-let [u (.safeGetUniform si "Progress")] (.set u progress))
                 ;; Use BufferBuilder to bypass blit() which overrides custom shaders
                 (let [^PoseStack ps (.pose gg)
@@ -333,7 +346,7 @@
                   (.vertex bb pose-matrix x2 y1 0.0) (.uv bb (float 1.0) (float 0.0)) (.endVertex bb)
                   (.vertex bb pose-matrix x1 y1 0.0) (.uv bb (float 0.0) (float 0.0)) (.endVertex bb)
                   (BufferUploader/drawWithShader (.end bb)))
-                (RenderSystem/setShader (reify java.util.function.Supplier (get [_] nil)))
+                (RenderSystem/setShader (StaticShaderSupplier. nil))
                 (catch Exception e
                   (log/debug "CGUI shader-progress render error:" (.getMessage e))))))
 
@@ -348,35 +361,36 @@
                 color-edge   (unchecked-int (or (:color-edge state) 0x00FFFFFF))
                 bands 5
                 half-w (double (/ w-int 2))
-                band-w (/ half-w bands)
-                ;; Extract ARGB components from edge and center colors
-                cc (fn [color]
-                     {:a (bit-and (bit-shift-right color 24) 0xFF)
-                      :r (bit-and (bit-shift-right color 16) 0xFF)
-                      :g (bit-and (bit-shift-right color 8) 0xFF)
-                      :b (bit-and color 0xFF)})
-                ec (cc color-edge)
-                mc (cc color-center)]
+                band-w (double (/ half-w bands))
+                ;; Zero-allocation primitive ARGB extraction — no closure, no Map
+                cc-a (long (bit-and (bit-shift-right color-center 24) 0xFF))
+                cc-r (long (bit-and (bit-shift-right color-center 16) 0xFF))
+                cc-g (long (bit-and (bit-shift-right color-center 8) 0xFF))
+                cc-b (long (bit-and color-center 0xFF))
+                ec-a (long (bit-and (bit-shift-right color-edge 24) 0xFF))
+                ec-r (long (bit-and (bit-shift-right color-edge 16) 0xFF))
+                ec-g (long (bit-and (bit-shift-right color-edge 8) 0xFF))
+                ec-b (long (bit-and color-edge 0xFF))]
             ;; Left half: edge (transparent) → center (opaque)
             (dotimes [i bands]
-              (let [frac (/ (double i) bands)
-                    a (+ (:a ec) (long (* (- (:a mc) (:a ec)) frac)))
-                    r (+ (:r ec) (long (* (- (:r mc) (:r ec)) frac)))
-                    g (+ (:g ec) (long (* (- (:g mc) (:g ec)) frac)))
-                    b (+ (:b ec) (long (* (- (:b mc) (:b ec)) frac)))
+              (let [frac (double (/ (double i) bands))
+                    a (long (+ ec-a (long (* (- cc-a ec-a) frac))))
+                    r (long (+ ec-r (long (* (- cc-r ec-r) frac))))
+                    g (long (+ ec-g (long (* (- cc-g ec-g) frac))))
+                    b (long (+ ec-b (long (* (- cc-b ec-b) frac))))
                     argb (unchecked-int (bit-or (bit-shift-left a 24) (bit-shift-left r 16) (bit-shift-left g 8) b))
-                    bx (int (+ x (* i band-w)))]
-                (.fill gg bx y (int (+ bx band-w)) (+ y h-int) argb)))
+                    bx (int (Math/round (+ (double x) (* (double i) band-w))))]
+                (.fill gg bx (int y) (int (Math/round (+ (double bx) band-w))) (int (+ y h-int)) argb)))
             ;; Right half: center (opaque) → edge (transparent)
             (dotimes [i bands]
-              (let [frac (/ (double i) bands)
-                    a (+ (:a mc) (long (* (- (:a ec) (:a mc)) frac)))
-                    r (+ (:r mc) (long (* (- (:r ec) (:r mc)) frac)))
-                    g (+ (:g mc) (long (* (- (:g ec) (:g mc)) frac)))
-                    b (+ (:b mc) (long (* (- (:b ec) (:b mc)) frac)))
+              (let [frac (double (/ (double i) bands))
+                    a (long (+ cc-a (long (* (- ec-a cc-a) frac))))
+                    r (long (+ cc-r (long (* (- ec-r cc-r) frac))))
+                    g (long (+ cc-g (long (* (- ec-g cc-g) frac))))
+                    b (long (+ cc-b (long (* (- ec-b cc-b) frac))))
                     argb (unchecked-int (bit-or (bit-shift-left a 24) (bit-shift-left r 16) (bit-shift-left g 8) b))
-                    bx (int (+ x half-w (* i band-w)))]
-                (.fill gg bx y (int (+ bx band-w)) (+ y h-int) argb))))
+                    bx (int (Math/round (+ (double x) half-w (* (double i) band-w))))]
+                (.fill gg bx (int y) (int (Math/round (+ (double bx) band-w))) (int (+ y h-int)) argb))))
 
           (kind-matches? kind :textbox)
           (let [raw-text (str (or (:text state) ""))
@@ -414,16 +428,16 @@
                 text-sy (+ (double y) aligned-dy y-offset)
                 ^PoseStack ps (.pose gg)]
             (when (seq text)
-              (let [pushed? (atom false)
-                    scissor-enabled? (atom false)]
+              (let [pushed-flag (boolean-array 1 [false])
+                    scissor-flag (boolean-array 1 [false])]
                 (try
                   (.pushPose ps)
-                  (reset! pushed? true)
+                  (aset pushed-flag 0 true)
                   (when (not= 0.0 z-level)
                     (.translate ps 0.0 0.0 z-level))
                   (when emit?
                     (.enableScissor gg x y (+ x w-int) (+ y h-int))
-                    (reset! scissor-enabled? true))
+                    (aset scissor-flag 0 true))
                   (.translate ps text-sx text-sy 0.0)
                   (.scale ps (float scale) (float scale) 1.0)
                   (font-api/draw-text! gg font-desc text 0 0 font-size color :left
@@ -431,20 +445,20 @@
                   (catch Exception e
                     (log/warn "CGUI textbox render error:" (.getMessage e)))
                   (finally
-                    (when @scissor-enabled?
+                    (when (aget scissor-flag 0)
                       (try (.disableScissor gg) (catch Exception _ nil)))
-                    (when @pushed?
+                    (when (aget pushed-flag 0)
                       (try (.popPose ps) (catch Exception _ nil)))))))
             (when (and (:editable? state)
                        (some-> @(:metadata root) :focused?))
-              (let [pushed? (atom false)]
+              (let [pushed-flag (boolean-array 1 [false])]
                 (try
-                  (let [caret-visible? (< (mod (System/currentTimeMillis) 1000) 500)
+                  (let [caret-visible? (< (rem (System/currentTimeMillis) 1000) 500)
                         caret-local-x text-w
-                        ^Font mc-font (MinecraftClientAccess/getFont)]
+                        ^net.minecraft.client.gui.Font mc-font (MinecraftClientAccess/getFont)]
                     (when caret-visible?
                       (.pushPose ps)
-                      (reset! pushed? true)
+                      (aset pushed-flag 0 true)
                       (when (not= 0.0 z-level)
                         (.translate ps 0.0 0.0 z-level))
                       (.translate ps (+ text-sx caret-local-x) text-sy 0.0)
@@ -453,7 +467,7 @@
                                    color (boolean (:shadow? state)))))
                   (catch Exception _ nil)
                   (finally
-                    (when @pushed?
+                    (when (aget pushed-flag 0)
                       (try (.popPose ps) (catch Exception _ nil))))))))
 
           (kind-matches? kind :progressbar)
@@ -490,11 +504,11 @@
               (try
                 (.setSampler ^ShaderInstance shader "TexSampler0" tex-0)
                 (when tex-1 (.setSampler ^ShaderInstance shader "TexSampler1" tex-1))
-                (RenderSystem/setShader (reify java.util.function.Supplier (get [_] shader)))
+                (RenderSystem/setShader (StaticShaderSupplier. shader))
                 (when-let [u (.safeGetUniform ^ShaderInstance shader "Progress")]
                   (.set u progress))
                 (.blit gg tex-0 x y 0 0 w-int h-int w-int h-int)
-                (RenderSystem/setShader (reify java.util.function.Supplier (get [_] nil)))
+                (RenderSystem/setShader (StaticShaderSupplier. nil))
                 (catch Exception e
                   (log/debug "CGUI shader-quad render error:" (.getMessage e))))
               ;; Fallback: render without shader
