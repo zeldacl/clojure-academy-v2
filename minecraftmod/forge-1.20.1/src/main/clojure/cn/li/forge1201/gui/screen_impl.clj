@@ -1,12 +1,11 @@
 (ns cn.li.forge1201.gui.screen-impl
   "Forge 1.20.1 Client-side Screen Implementation.
 
-  The proxy remains Forge-specific, but the rendering/input plumbing is split
-  into smaller helpers so the lifecycle is easier to follow and test."
+  Uses MenuScreens/register directly (matching Fabric approach) to avoid
+  the extra ForgeClientHelper$ScreenFactory wrapper."
   (:require [cn.li.mc1201.gui.screen.registry :as screen-registry]
             [cn.li.mcmod.util.log :as log])
-  (:import [net.minecraft.client.gui.screens Screen]
-           [cn.li.forge1201.shim ForgeClientHelper ForgeClientHelper$ScreenFactory]
+  (:import [net.minecraft.client.gui.screens Screen MenuScreens MenuScreens$ScreenConstructor]
            [net.minecraftforge.client.event ScreenEvent$BackgroundRendered]
            [net.minecraftforge.common MinecraftForge]))
 
@@ -14,9 +13,9 @@
   [gui-id menu-type screen-creator factory-fn-kw]
   (log/info "[SCREEN-INIT] Registering GUI ID:" gui-id "menu-type:" menu-type "factory-fn-kw:" factory-fn-kw)
   (when menu-type
-    (ForgeClientHelper/registerMenuScreen
+    (MenuScreens/register
      menu-type
-     (reify ForgeClientHelper$ScreenFactory
+     (reify MenuScreens$ScreenConstructor
        (create [_ menu player-inventory title]
          (log/info "[SCREEN-FACTORY] Creating screen for GUI ID" gui-id "factory-fn-kw:" factory-fn-kw)
          (screen-creator menu player-inventory title)))))

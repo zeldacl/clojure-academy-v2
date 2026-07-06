@@ -277,7 +277,6 @@
   (runtime-bridge/init!)
   (overlay-renderer/init!)
   (screen-host/init!)
-  (log/info "cgui-screen-bridge init skipped — using cgui-screen-host instead"))
   (msdf-setup/init!)
   (particle/init!)
   (sound/init!)
