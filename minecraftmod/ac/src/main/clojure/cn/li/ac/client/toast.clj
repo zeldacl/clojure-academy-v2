@@ -66,13 +66,23 @@
       0.0)))
 
 (defn- renderable-toasts
-  "Return active toast entries and cleanup expired ones."
+  "Return active toast entries (pure read, no side effects)."
   [now]
-  (let [ta (toasts-atom)
-        active (remove #(expired? % now) @ta)]
-    (when-not (= (count active) (count @ta))
-      (reset! ta (vec active)))
-    active))
+  (remove #(expired? % now) @(toasts-atom)))
+
+(defn cleanup-expired!
+  "Remove expired toasts. Called from client tick hook, not render path."
+  []
+  (let [now (now-ms)
+        ta (toasts-atom)
+        current @ta]
+    (when (some #(expired? % now) current)
+      (reset! ta (vec (remove #(expired? % now) current))))))
+
+(defn active-toasts-snapshot
+  "Return current toast entries for lazy-check in overlay plan builder."
+  []
+  @(toasts-atom))
 
 
 ;; ============================================================================
@@ -101,39 +111,31 @@
             max-text-w (long (apply max 0 (map #(client-bridge/font-width %) messages)))
             box-w (+ max-text-w (* 2 pad-x))  ;; dynamic width: text + padding
             x (int (- (/ screen-width 2) (/ box-w 2)))]
-        (mapcat (fn [toast idx]
-                  (let [a (alpha toast now)
-                        msg (nth messages idx)
-                        ;; Stack toasts upward from the bottom
-                        y (- (int (- screen-height (* screen-height 0.35)))
-                             (* idx (+ box-h gap)))
-                        bg-alpha (int (* 119 a))   ;; 0x77 = 119
-                        glow-alpha (int (* 170 a)) ;; 0xaa = 170
-                        text-alpha (int (* 255 a))
-                        ;; Center text within box
-                        text-w (long (client-bridge/font-width msg))
-                        text-x (+ x (quot (- box-w text-w) 2))]
-                    [{:kind :fill
-                      :x x :y y :w box-w :h box-h
-                      :color {:r 39 :g 39 :b 39 :a bg-alpha}}
-                     {:kind :fill  ;; glow border top
-                      :x (dec x) :y (dec y) :w (+ box-w 2) :h 1
-                      :color {:r 255 :g 255 :b 255 :a glow-alpha}}
-                     {:kind :fill  ;; glow border bottom
-                      :x (dec x) :y (+ y box-h) :w (+ box-w 2) :h 1
-                      :color {:r 255 :g 255 :b 255 :a glow-alpha}}
-                     {:kind :fill  ;; glow border left
-                      :x (dec x) :y y :w 1 :h box-h
-                      :color {:r 255 :g 255 :b 255 :a glow-alpha}}
-                     {:kind :fill  ;; glow border right
-                      :x (+ x box-w) :y y :w 1 :h box-h
-                      :color {:r 255 :g 255 :b 255 :a glow-alpha}}
-                     {:kind :text
-                      :x text-x :y (+ y 9)
-                      :text msg
-                      :color {:r 255 :g 255 :b 255 :a text-alpha}}]))
-                active
-                (range (count active))))
+        (persistent!
+          (let [out (transient [])]
+            (doseq [[toast idx] (map vector active (range (count active)))]
+              (let [a (alpha toast now)
+                    msg (nth messages idx)
+                    y (- (int (- screen-height (* screen-height 0.35)))
+                         (* idx (+ box-h gap)))
+                    bg-alpha (int (* 119 a))
+                    glow-alpha (int (* 170 a))
+                    text-alpha (int (* 255 a))
+                    text-w (long (client-bridge/font-width msg))
+                    text-x (+ x (quot (- box-w text-w) 2))]
+                (conj! out {:kind :fill :x x :y y :w box-w :h box-h
+                            :color {:r 39 :g 39 :b 39 :a bg-alpha}})
+                (conj! out {:kind :fill :x (dec x) :y (dec y) :w (+ box-w 2) :h 1
+                            :color {:r 255 :g 255 :b 255 :a glow-alpha}})
+                (conj! out {:kind :fill :x (dec x) :y (+ y box-h) :w (+ box-w 2) :h 1
+                            :color {:r 255 :g 255 :b 255 :a glow-alpha}})
+                (conj! out {:kind :fill :x (dec x) :y y :w 1 :h box-h
+                            :color {:r 255 :g 255 :b 255 :a glow-alpha}})
+                (conj! out {:kind :fill :x (+ x box-w) :y y :w 1 :h box-h
+                            :color {:r 255 :g 255 :b 255 :a glow-alpha}})
+                (conj! out {:kind :text :x text-x :y (+ y 9) :text msg
+                            :color {:r 255 :g 255 :b 255 :a text-alpha}})))
+            out)))
       [])))
 
 

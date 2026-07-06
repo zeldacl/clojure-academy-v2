@@ -88,6 +88,30 @@
         (log/warn :tutorial-notification "Failed to queue activation toast:" (ex-message t))))))
 
 ;; ============================================================================
+;; Cleanup (called from client tick hook, not render path)
+;; ============================================================================
+
+(defn cleanup-expired!
+  "Initialize start-sec for new notifications and remove expired ones.
+   Separated from rendering so the render path is pure-read."
+  []
+  (let [now-sec (/ (double (System/currentTimeMillis)) 1000.0)
+        notifs @(notifications-atom)]
+    (when (seq notifs)
+      (let [needs-init? (some #(nil? (:start-sec %)) notifs)
+            initialized (if needs-init?
+                          (mapv (fn [n] (if (:start-sec n) n (assoc n :start-sec now-sec))) notifs)
+                          notifs)
+            active (filterv #(<= (- now-sec (:start-sec %)) total-keep-time) initialized)]
+        (when (or needs-init? (not= (count active) (count notifs)))
+          (reset! (notifications-atom) active))))))
+
+(defn active-snapshot
+  "Return current notifications for lazy-check in overlay plan builder."
+  []
+  @(notifications-atom))
+
+;; ============================================================================
 ;; Overlay element builder
 ;; ============================================================================
 

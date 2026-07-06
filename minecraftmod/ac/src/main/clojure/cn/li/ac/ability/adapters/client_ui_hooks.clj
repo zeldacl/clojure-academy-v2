@@ -1018,12 +1018,18 @@
                    (doseq [coll [base-elements current-charging-elements coin-qte-elements vm-wave]]
                      (doseq [x coll] (conj! out x)))
                    (when crosshair (conj! out crosshair))
-                   (doseq [x (toast/build-toast-elements screen-width screen-height now-ms)]
-                     (conj! out x))
-                   (doseq [x (tutorial-notification-elements screen-width screen-height now-ms)]
-                     (conj! out x))
-                   (doseq [x (debug-overlay/build-debug-overlay-elements player-state)]
-                     (conj! out x))
+                   ;; Lazy: only build toast elements when toasts are active
+                   (when (seq (toast/active-toasts-snapshot))
+                     (doseq [x (toast/build-toast-elements screen-width screen-height now-ms)]
+                       (conj! out x)))
+                   ;; Lazy: only build notification elements when notifications are active
+                   (when (seq (tutorial-notification/active-snapshot))
+                     (doseq [x (tutorial-notification-elements screen-width screen-height now-ms)]
+                       (conj! out x)))
+                   ;; Lazy: only build debug elements when debug state is active
+                   (when (not= :none (debug-overlay/current-state))
+                     (doseq [x (debug-overlay/build-debug-overlay-elements player-state)]
+                       (conj! out x)))
                    out))
      :background-mask bg-mask
      :interfered? interfered?})))
@@ -1091,7 +1097,7 @@
         (remove-slot-context! ctx-id)
         (ctx/terminate-context! ctx-id nil)))
     (net-client/register-push-handler! catalog/MSG-CTX-CHANNEL on-context-channel-push!)
-    ;; VM wave circle spawn/cull moved out of render path into tick hook
+    ;; Side-effect cleanup moved out of render path into tick hooks
     (content-actions/register-client-tick-hook!
       (fn tick-vm-wave-circles []
         (when-let [player (client-bridge/get-client-player)]
@@ -1101,6 +1107,10 @@
                 {:keys [reflection-active? deviation-active?]} (scan-vm-contexts player-uuid)]
             (update-vm-wave-circles! player-uuid (or reflection-active? deviation-active?)
                                      (int screen-w) (int screen-h) now-ms)))))
+    (content-actions/register-client-tick-hook!
+      (fn tick-cleanup-overlay []
+        (toast/cleanup-expired!)
+        (tutorial-notification/cleanup-expired!)))
     (log/info "Ability client push handlers registered")))
 
     (defn- build-preset-editor-draw-ops

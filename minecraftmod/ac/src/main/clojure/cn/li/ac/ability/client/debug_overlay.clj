@@ -52,12 +52,17 @@
      {:kind :text :text text :x base-x :y y :color color}]))
 
 (defn- text-lines->elements
-  "Convert a sequence of [text color] pairs into interleaved shadow+foreground elements."
+  "Convert a sequence of [text color] pairs into interleaved shadow+foreground elements.
+   Transient building — no mapcat overhead."
   [lines]
-  (mapcat (fn [idx [text color]]
-            (->text-element text idx (or color foreground-color)))
-          (range)
-          lines))
+  (persistent!
+    (let [out (transient [])]
+      (doseq [[idx [text color]] (map-indexed vector lines)]
+        (let [y (+ base-y (* idx line-height))
+              c (or color foreground-color)]
+          (conj! out {:kind :text :text text :x (+ base-x 0.5) :y (+ y 0.5) :color shadow-color})
+          (conj! out {:kind :text :text text :x base-x :y y :color c})))
+      out)))
 
 (defn- resolve-category-name
   "Resolve human-readable category name from category-id keyword."
@@ -148,6 +153,12 @@
 ;; ============================================================================
 ;; Public API
 ;; ============================================================================
+
+  (defn current-state
+    "Return current debug overlay state (:none, :normal, :show-exp).
+     For lazy-check in overlay plan builder."
+    []
+    @(debug-state-atom))
 
   (defn build-debug-overlay-elements
     "Returns a vector of overlay :text element maps for the current debug state.
