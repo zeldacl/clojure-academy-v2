@@ -58,21 +58,27 @@
         text-alpha (if text-comp (argb-alpha (:color @(:state text-comp))) 255)
         bar-alpha (if bar-comp (argb-alpha (:color-full @(:state bar-comp))) 255)
         start-time (now-seconds)]
-    (events/on-frame widget
-      (fn [_]
-        (let [dt (- (now-seconds) start-time)
-              alpha (blend-alpha dt)]
-          (when tex-comp
-            (swap! (:state tex-comp)
-                   update :color argb-set-alpha (int (* (double tex-alpha) alpha))))
-          (when text-comp
-            (let [base (+ (* 255.0 0.1) (* 0.9 (double text-alpha) alpha))]
-              (swap! (:state text-comp)
-                     update :color argb-set-alpha (int base))))
-          (when bar-comp
-            (let [new-alpha (int (* (double bar-alpha) alpha))]
-              (swap! (:state bar-comp)
-                     update :color-full argb-set-alpha new-alpha))))))
+    (let [done? (atom false)]
+      (events/on-frame widget
+        (fn [_]
+          (when-not @done?
+            (let [dt (- (now-seconds) start-time)
+                  alpha (blend-alpha dt)]
+              (when tex-comp
+                (swap! (:state tex-comp)
+                       update :color argb-set-alpha (int (* (double tex-alpha) alpha))))
+              (when text-comp
+                (let [base (+ (* 255.0 0.1) (* 0.9 (double text-alpha) alpha))]
+                  (swap! (:state text-comp)
+                         update :color argb-set-alpha (int base))))
+              (when bar-comp
+                (let [new-alpha (int (* (double bar-alpha) alpha))]
+                  (swap! (:state bar-comp)
+                         update :color-full argb-set-alpha new-alpha)))
+              ;; Stop frame listener after animation completes
+              (when (>= dt (+ anim-length blend-out))
+                (reset! done? true)
+                (events/unlisten! widget :frame)))))))
     [tex-alpha text-alpha bar-alpha start-time]))
 
 ;; ============================================================================
@@ -95,12 +101,17 @@
       ;; Progress bar animation: progress = timeActive / ANIM_LENGTH (clamped to 1.0)
       (when-let [progbar-widget (cgui-core/find-widget main "progbar")]
         (when-let [pb (comp/get-widget-component progbar-widget :progressbar)]
-          (let [start (atom (now-seconds))]
+          (let [start (atom (now-seconds))
+                done? (atom false)]
             (events/on-frame progbar-widget
               (fn [_]
-                (let [dt (- (now-seconds) @start)
-                      prog (min 1.0 (/ (double dt) anim-length))]
-                  (swap! (:state pb) assoc :progress prog)))))))
+                (when-not @done?
+                  (let [dt (- (now-seconds) @start)
+                        prog (min 1.0 (/ (double dt) anim-length))]
+                    (swap! (:state pb) assoc :progress prog)
+                    (when (>= prog 1.0)
+                      (reset! done? true)
+                      (events/unlisten! progbar-widget :frame)))))))))
       ;; Completion handler: after ANIM_LENGTH + WAIT, show key_hint, open terminal
       (let [start (atom (now-seconds))
             done? (atom false)]

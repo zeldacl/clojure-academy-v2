@@ -1334,7 +1334,7 @@
          #(if-let [owner (active-managed-screen-owner screen-key)]
             (condp = screen-key
               :ac/skill-tree (skill-tree-screen/handle-screen-click! owner mouse-x mouse-y)
-              :ac/preset-editor (preset-editor-screen/handle-screen-click! owner mouse-x mouse-y)
+              :ac/preset-editor (preset-editor-screen/handle-screen-click! owner nil mouse-x mouse-y)
               false)
             false)))
 

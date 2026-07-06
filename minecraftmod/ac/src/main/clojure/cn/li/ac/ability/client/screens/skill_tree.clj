@@ -314,24 +314,42 @@
   (swap! (:metadata root) assoc :draw-ops ops))
 
 (defn create-skill-tree-widget
-  "Create CGui widget hosting skill-tree draw-ops. Factory for :ac/skill-tree."
+  "Create CGui widget hosting skill-tree draw-ops. Factory for :ac/skill-tree.
+  Dirty-check: only rebuilds draw-ops when screen state or mouse position changes."
   [{:keys [player-uuid client-session-id learn-context] :as payload}]
   (let [owner (resolve-owner payload)
         ok    (screen-owner-key owner)
         pu    (or player-uuid (nth ok 2))
-        root  (cgui-core/create-container :name "skill-tree-root" :pos [0 0] :size [420 260])]
+        root  (cgui-core/create-container :name "skill-tree-root" :pos [0 0] :size [420 260])
+        ;; Dirty-check state: key of last-rendered screen state
+        last-state-key (atom nil)
+        last-mouse-pos (atom [210 130])]
     ;; initialize managed-screen state (shared with existing code)
     (ensure-screen-player-state! owner)
     (managed-screens/set-active-owner! screen-id ok)
     (swap-screen-state! owner merge default-screen-state
                         {:player-uuid pu :learn-context learn-context :creation-time (now-ms)})
-    ;; frame → rebuild draw-ops
+    ;; frame → rebuild draw-ops (with dirty-check)
     (events/on-frame root
       (fn [_]
         (let [[rw rh] (cgui-core/get-size root)
-              [mx my] (skill-tree-mouse-pos root)]
-          (skill-tree-draw-ops! root (build-draw-ops owner mx my (max 1 rw) (max 1 rh))))))
-    ;; frame → update hover
+              [mx my] (skill-tree-mouse-pos root)
+              st (screen-state-snapshot owner)
+              ;; State fingerprint — only keys that affect rendering
+              state-key {:hovered-skill-id (:hovered-skill-id st)
+                         :selected-skill (:selected-skill st)
+                         :showing-level-up-popup? (:showing-level-up-popup? st)
+                         :level-up-dev-state (:level-up-dev-state st)
+                         :hover-node-transitions (:hover-node-transitions st)}
+              state-changed? (not= state-key @last-state-key)
+              ;; Mouse moved >2px from last rendered position
+              mouse-moved? (or (> (Math/abs (- mx (first @last-mouse-pos))) 2.0)
+                               (> (Math/abs (- my (second @last-mouse-pos))) 2.0))]
+          (when (or state-changed? mouse-moved?)
+            (reset! last-state-key state-key)
+            (reset! last-mouse-pos [mx my])
+            (skill-tree-draw-ops! root (build-draw-ops owner mx my (max 1 rw) (max 1 rh)))))))
+    ;; frame → update hover (runs every frame — lightweight state-only check)
     (events/on-frame root
       (fn [_]
         (let [[mx my] (skill-tree-mouse-pos root)]
@@ -367,33 +385,36 @@
 ;; Draw Ops — Line connections (rotated-quad)
 ;; ============================================================================
 (defn- build-line-ops [connections anim-time]
-  (mapcat (fn [{:keys [from-x from-y to-x to-y lb child-learned? m-alpha child-idx]}]
-            (let [line-alpha (* (or m-alpha 0.7) (if child-learned? 1.0 0.4))
-                  alpha-byte (int (* 255.0 (clamp01 line-alpha)))
-                  color (bit-or (bit-shift-left alpha-byte 24) 0xFFFFFF)
-                  dx (- to-x from-x) dy (- to-y from-y)
-                  norm (Math/sqrt (+ (* dx dx) (* dy dy)))]
-              (when (pos? norm)
-                (let [ndx (/ dx norm) ndy (/ dy norm)
-                      ;; Fixed start/end points (inset from node centers by 12.2px)
-                      x0 (+ from-x (* ndx 12.2)) y0 (+ from-y (* ndy 12.2))
-                      x1-full (- to-x (* ndx 12.2)) y1-full (- to-y (* ndy 12.2))
-                      ;; Animate endpoint from x0 outward — matches upstream drawLine(progress)
-                      ;; Do not use (or lb 1.0): lb=0 is valid and must not fall through to full length.
-                      blend (double (if (some? lb) lb 1.0))
-                      x1 (lerp x0 x1-full blend)
-                      y1 (lerp y0 y1-full blend)]
-                  (when (pos? blend)
-                    [{:kind :line-quad :x0 x0 :y0 y0 :x1 x1 :y1 y1
-                      :line-width 5.5 :color color}])))))
-          connections))
+  (persistent!
+    (reduce
+      (fn [out {:keys [from-x from-y to-x to-y lb child-learned? m-alpha child-idx]}]
+        (let [line-alpha (* (or m-alpha 0.7) (if child-learned? 1.0 0.4))
+              alpha-byte (int (* 255.0 (clamp01 line-alpha)))
+              color (bit-or (bit-shift-left alpha-byte 24) 0xFFFFFF)
+              dx (- to-x from-x) dy (- to-y from-y)
+              norm (Math/sqrt (+ (* dx dx) (* dy dy)))]
+          (if (pos? norm)
+            (let [ndx (/ dx norm) ndy (/ dy norm)
+                  x0 (+ from-x (* ndx 12.2)) y0 (+ from-y (* ndy 12.2))
+                  x1-full (- to-x (* ndx 12.2)) y1-full (- to-y (* ndy 12.2))
+                  blend (double (if (some? lb) lb 1.0))
+                  x1 (lerp x0 x1-full blend)
+                  y1 (lerp y0 y1-full blend)]
+              (if (pos? blend)
+                (conj! out {:kind :line-quad :x0 x0 :y0 y0 :x1 x1 :y1 y1
+                            :line-width 5.5 :color color})
+                out))
+            out)))
+      (transient [])
+      connections)))
 
 ;; ============================================================================
 ;; Draw Ops — Skill nodes (textured, depth-layered, animated)
 ;; ============================================================================
 (defn- node-ops [node anim-time hovered-id hover-transitions line-ops]
   "Build draw ops for a single skill node, matching upstream SkillTree.scala FrameEvent.
-  Uses per-node hover transitions with transit gate (upstream: StateIdle↔StateHover FSM)."
+  Uses per-node hover transitions with transit gate (upstream: StateIdle↔StateHover FSM).
+  Transient building — no concat/filterv overhead."
   (let [{:keys [x y idx learned skill-icon exp m-alpha skill-id]} node
         effective-m-alpha (or m-alpha 0.7)
         dt (max 0.0 (- anim-time (* idx 0.08) 0.1))
@@ -410,67 +431,61 @@
                      :in  (lerp 1.0 1.2 transit)
                      :out (lerp 1.2 1.0 transit)
                      1.0)]
-    (if (<= back-alpha 0.001) []
-      (filterv some?
-        (concat
-          ;; === Node core rendering (depth writes at z=10, scale animation) ===
-          [{:kind :enable-depth}
-           {:kind :push-pose}
-           ;; Scale animation from center of TotalSize (matches upstream glTranslated→glScaled→glTranslated)
-           {:kind :translate :x (+ x draw-align) :y (+ y draw-align) :z 10.0}
-           {:kind :scale :cx (/ total-size 2) :cy (/ total-size 2) :s node-scale}
-           ;; 1. Draw skill_back without depth writes (background visible through transparency)
-           {:kind :enable-blend}
-           {:kind :depth-mask :write? false}
-           {:kind :alpha-color :r 1.0 :g 1.0 :b 1.0 :a back-alpha}
-           {:kind :textured-quad :texture :skill-back :x 0 :y 0 :w (int total-size) :h (int total-size)}
-           ;; 2. Dark gray outline back (for ALL nodes — learned and unlearned)
-           {:kind :alpha-color :r 0.2 :g 0.2 :b 0.2 :a (* back-alpha 0.6)}
-           {:kind :textured-quad :texture :skill-outline :x (int prog-align) :y (int prog-align) :w (int prog-size) :h (int prog-size)}
-           {:kind :alpha-color :r 1.0 :g 1.0 :b 1.0 :a 1.0}
-           ;; 3. Depth mask: write depth buffer from skill_back texture shape
-           {:kind :alpha-discard-depth-mask :texture :skill-back :alpha-threshold 0.3
-            :x 0 :y 0 :w (int total-size) :h (int total-size)}
-           ;; 4. Depth mask from outline too (z+1 layer, higher alpha threshold)
-           {:kind :push-pose}
-           {:kind :translate :x 0 :y 0 :z 1}
-           {:kind :alpha-discard-depth-mask :texture :skill-outline :alpha-threshold 0.5
-            :x (int prog-align) :y (int prog-align) :w (int prog-size) :h (int prog-size)}
-           {:kind :pop-pose}
-           ;; 5. Disable depth writes (color already re-enabled by alpha-discard op)
-           {:kind :depth-mask :write? false}
-           ;; 6. Draw skill icon with icon-alpha fade-in (upstream: glColor4d(1,1,1,iconAlpha))
-           {:kind :alpha-color :r 1.0 :g 1.0 :b 1.0 :a icon-alpha}
-           {:kind :depth-func :func :equal}
-           (if learned
-             {:kind :icon-or-fill :texture skill-icon :x (int align) :y (int align) :w (int icon-size) :h (int icon-size) :fallback-color 0xFF2A2A2A}
-             {:kind :shader-mono-blit :texture skill-icon :x (int align) :y (int align) :w (int icon-size) :h (int icon-size)})
-           {:kind :depth-func :func :lequal}
-           {:kind :alpha-color :r 1.0 :g 1.0 :b 1.0 :a 1.0}
-           ;; 7. Shader progress ring (learned only) — disables depth test during ring rendering
-           (when learned
-             {:kind :disable-depth})
-           (when learned
-             {:kind :shader-progress-ring :shader-id :ring-progbar
-              :texture-0 :skill-outline :texture-1 :skill-mask
-              :progress (float (* progress-blend (or exp 0.0)))
-              :x (int prog-align) :y (int prog-align) :w (int prog-size) :h (int prog-size)})
-           (when learned
-             {:kind :enable-depth})
-           {:kind :pop-pose}]
-          ;; === Connection line (upstream: glDepthFunc GL_NOTEQUAL, glTranslated 0,0,11) ===
-          ;; Rendered after exiting the node's matrix, matching upstream z=11 depth block.
-          ;; NOTEQUAL means the line passes where depth differs from the outline mask (z=11).
-          (if (seq line-ops)
-            (concat
-              [{:kind :depth-func :func :notequal}
-               {:kind :push-pose}
-               {:kind :translate :x 0 :y 0 :z 11}]
-              line-ops
-              [{:kind :pop-pose}
-               {:kind :depth-func :func :lequal}])
-            [])
-          [{:kind :disable-depth}])))))
+    (if (<= back-alpha 0.001)
+      []
+      (persistent!
+        (let [out (transient [])]
+          ;; Node core rendering (depth writes at z=10, scale animation)
+          (conj! out {:kind :enable-depth})
+          (conj! out {:kind :push-pose})
+          (conj! out {:kind :translate :x (+ x draw-align) :y (+ y draw-align) :z 10.0})
+          (conj! out {:kind :scale :cx (/ total-size 2) :cy (/ total-size 2) :s node-scale})
+          ;; 1. Draw skill_back without depth writes
+          (conj! out {:kind :enable-blend})
+          (conj! out {:kind :depth-mask :write? false})
+          (conj! out {:kind :alpha-color :r 1.0 :g 1.0 :b 1.0 :a back-alpha})
+          (conj! out {:kind :textured-quad :texture :skill-back :x 0 :y 0 :w (int total-size) :h (int total-size)})
+          ;; 2. Dark gray outline back (for ALL nodes)
+          (conj! out {:kind :alpha-color :r 0.2 :g 0.2 :b 0.2 :a (* back-alpha 0.6)})
+          (conj! out {:kind :textured-quad :texture :skill-outline :x (int prog-align) :y (int prog-align) :w (int prog-size) :h (int prog-size)})
+          (conj! out {:kind :alpha-color :r 1.0 :g 1.0 :b 1.0 :a 1.0})
+          ;; 3. Depth mask from skill_back texture
+          (conj! out {:kind :alpha-discard-depth-mask :texture :skill-back :alpha-threshold 0.3
+                      :x 0 :y 0 :w (int total-size) :h (int total-size)})
+          ;; 4. Depth mask from outline too (z+1 layer)
+          (conj! out {:kind :push-pose})
+          (conj! out {:kind :translate :x 0 :y 0 :z 1})
+          (conj! out {:kind :alpha-discard-depth-mask :texture :skill-outline :alpha-threshold 0.5
+                      :x (int prog-align) :y (int prog-align) :w (int prog-size) :h (int prog-size)})
+          (conj! out {:kind :pop-pose})
+          ;; 5. Disable depth writes
+          (conj! out {:kind :depth-mask :write? false})
+          ;; 6. Draw skill icon with alpha fade-in
+          (conj! out {:kind :alpha-color :r 1.0 :g 1.0 :b 1.0 :a icon-alpha})
+          (conj! out {:kind :depth-func :func :equal})
+          (conj! out (if learned
+                       {:kind :icon-or-fill :texture skill-icon :x (int align) :y (int align) :w (int icon-size) :h (int icon-size) :fallback-color 0xFF2A2A2A}
+                       {:kind :shader-mono-blit :texture skill-icon :x (int align) :y (int align) :w (int icon-size) :h (int icon-size)}))
+          (conj! out {:kind :depth-func :func :lequal})
+          (conj! out {:kind :alpha-color :r 1.0 :g 1.0 :b 1.0 :a 1.0})
+          ;; 7. Shader progress ring (learned only)
+          (when learned (conj! out {:kind :disable-depth}))
+          (when learned (conj! out {:kind :shader-progress-ring :shader-id :ring-progbar
+                                    :texture-0 :skill-outline :texture-1 :skill-mask
+                                    :progress (float (* progress-blend (or exp 0.0)))
+                                    :x (int prog-align) :y (int prog-align) :w (int prog-size) :h (int prog-size)}))
+          (when learned (conj! out {:kind :enable-depth}))
+          (conj! out {:kind :pop-pose})
+          ;; Connection lines (upstream: glDepthFunc GL_NOTEQUAL, glTranslated 0,0,11)
+          (when (seq line-ops)
+            (conj! out {:kind :depth-func :func :notequal})
+            (conj! out {:kind :push-pose})
+            (conj! out {:kind :translate :x 0 :y 0 :z 11})
+            (doseq [op line-ops] (conj! out op))
+            (conj! out {:kind :pop-pose})
+            (conj! out {:kind :depth-func :func :lequal}))
+          (conj! out {:kind :disable-depth})
+          out)))))
 
 ;; ============================================================================
 ;; Detail popup — Common.initialize() equivalent for skill detail view
@@ -521,52 +536,52 @@
         cond-step 16
         cond-len (* cond-step (count prerequisites))
         cond-start-x (- (/ cond-len 2))]
-    (filterv some?
-      (concat
-        [{:kind :fill :x 0 :y 0 :w screen-w :h screen-h
-          :color (bit-or (bit-shift-left (int (* 255.0 cover-alpha)) 24) 0x000000)}]
+    (persistent!
+      (let [out (transient [{:kind :fill :x 0 :y 0 :w screen-w :h screen-h
+                              :color (bit-or (bit-shift-left (int (* 255.0 cover-alpha)) 24) 0x000000)}])]
         (when (>= panel-alpha 0.01)
-          (concat
-            [{:kind :textured-quad :texture :skill-back :x back-x :y back-y :w back-sz :h back-sz}
-             {:kind :icon-or-fill :texture skill-icon
-              :x icon-x :y icon-y :w icon-sz :h icon-sz :fallback-color 0xFF2A2A2A}
-             {:kind :shader-progress-ring :shader-id :ring-progbar
-              :texture-0 (if progress-at-1? :skill-view-outline-glow :skill-view-outline)
-              :texture-1 :skill-mask :progress (float ring-progress)
-              :x back-x :y back-y :w back-sz :h back-sz}
-             {:kind :text :x cx :y title-y :text (str skill-name " (LV " skill-level ")")
-              :font :ac-bold :font-size 12 :align :center :color 0xFFFFFFFF}]
-            (if learned
-              [{:kind :text :x cx :y info-y
-                :text (str (i18n/translate "skill_tree.my_mod.skill_exp") " "
-                           (int (* 100.0 (or exp 0.0))) "%")
-                :font :ac-normal :font-size 8 :align :center :color 0xFFa1e1ff}
-               {:kind :text :x cx :y (+ ta-y 25) :text (str skill-description)
-                :font :ac-normal :font-size 9 :align :center :color 0xFFDDDDDD}]
-              (concat
-                [{:kind :text :x cx :y info-y
-                  :text (i18n/translate "skill_tree.my_mod.skill_not_learned")
-                  :font :ac-normal :font-size 10 :align :center :color 0xFFff5555}]
-                (when (and dev-state show-learn-btn? (seq prerequisites))
-                  (map-indexed (fn [idx {:keys [icon-path accepted?]}]
-                                 (when icon-path
-                                   {:kind :icon-or-fill :texture icon-path
-                                    :x (int (+ cx cond-start-x (* idx cond-step)))
-                                    :y cond-y :w cond-icon-sz :h cond-icon-sz
-                                    :fallback-color (if accepted? 0xFFFFFFFF 0xFF888888)}))
-                               prerequisites))
-                (when dev-state
-                  [{:kind :text :x cx :y (if (seq prerequisites) (+ cond-y cond-icon-sz 2) cond-y)
-                    :text (str (i18n/translate "skill_tree.my_mod.req") " "
-                               (format "%.0f" (double (or est-consumption 0))))
-                    :font :ac-normal :font-size 9 :align :center :color 0xAAFFFFFF}])
-                (when message
-                  [{:kind :text :x cx :y msg-y :text message
-                    :font :ac-normal :font-size 10 :align :center :color 0xAAFFFFFF}])
-                (when show-learn-btn?
-                  [{:kind :textured-quad :texture :tex-button :x btn-x :y btn-y :w 32 :h 16}
-                   {:kind :text :x cx :y (+ btn-y 4) :text "LEARN"
-                    :font :ac-bold :font-size 9 :align :center :color 0xFF101010}])))))))))
+          (conj! out {:kind :textured-quad :texture :skill-back :x back-x :y back-y :w back-sz :h back-sz})
+          (conj! out {:kind :icon-or-fill :texture skill-icon
+                       :x icon-x :y icon-y :w icon-sz :h icon-sz :fallback-color 0xFF2A2A2A})
+          (conj! out {:kind :shader-progress-ring :shader-id :ring-progbar
+                       :texture-0 (if progress-at-1? :skill-view-outline-glow :skill-view-outline)
+                       :texture-1 :skill-mask :progress (float ring-progress)
+                       :x back-x :y back-y :w back-sz :h back-sz})
+          (conj! out {:kind :text :x cx :y title-y :text (str skill-name " (LV " skill-level ")")
+                       :font :ac-bold :font-size 12 :align :center :color 0xFFFFFFFF})
+          (if learned
+            (do
+              (conj! out {:kind :text :x cx :y info-y
+                           :text (str (i18n/translate "skill_tree.my_mod.skill_exp") " "
+                                      (int (* 100.0 (or exp 0.0))) "%")
+                           :font :ac-normal :font-size 8 :align :center :color 0xFFa1e1ff})
+              (conj! out {:kind :text :x cx :y (+ ta-y 25) :text (str skill-description)
+                           :font :ac-normal :font-size 9 :align :center :color 0xFFDDDDDD}))
+            (do
+              (conj! out {:kind :text :x cx :y info-y
+                           :text (i18n/translate "skill_tree.my_mod.skill_not_learned")
+                           :font :ac-normal :font-size 10 :align :center :color 0xFFff5555})
+              (when (and dev-state show-learn-btn? (seq prerequisites))
+                (doseq [idx (range (count prerequisites))]
+                  (when-let [{:keys [icon-path accepted?]} (nth prerequisites idx nil)]
+                    (when icon-path
+                      (conj! out {:kind :icon-or-fill :texture icon-path
+                                   :x (int (+ cx cond-start-x (* idx cond-step)))
+                                   :y cond-y :w cond-icon-sz :h cond-icon-sz
+                                   :fallback-color (if accepted? 0xFFFFFFFF 0xFF888888)})))))
+              (when dev-state
+                (conj! out {:kind :text :x cx :y (if (seq prerequisites) (+ cond-y cond-icon-sz 2) cond-y)
+                             :text (str (i18n/translate "skill_tree.my_mod.req") " "
+                                        (format "%.0f" (double (or est-consumption 0))))
+                             :font :ac-normal :font-size 9 :align :center :color 0xAAFFFFFF}))
+              (when message
+                (conj! out {:kind :text :x cx :y msg-y :text message
+                             :font :ac-normal :font-size 10 :align :center :color 0xAAFFFFFF}))
+              (when show-learn-btn?
+                (conj! out {:kind :textured-quad :texture :tex-button :x btn-x :y btn-y :w 32 :h 16})
+                (conj! out {:kind :text :x cx :y (+ btn-y 4) :text "LEARN"
+                             :font :ac-bold :font-size 9 :align :center :color 0xFF101010})))))
+        out))))
 
 ;; ============================================================================
 ;; Level-up popup — Common.initialize() equivalent for level-up view
@@ -608,31 +623,30 @@
                (= (:error dev-state) :low-energy) (i18n/translate "skill_tree.my_mod.noenergy")
                dev-state                  (i18n/translate "skill_tree.my_mod.level_question")
                :else                      nil)]
-    (filterv some?
-      (concat
-        [{:kind :fill :x 0 :y 0 :w screen-w :h screen-h
-          :color (bit-or (bit-shift-left (int (* 255.0 cover-alpha)) 24) 0x000000)}]
+    (persistent!
+      (let [out (transient [{:kind :fill :x 0 :y 0 :w screen-w :h screen-h
+                              :color (bit-or (bit-shift-left (int (* 255.0 cover-alpha)) 24) 0x000000)}])]
         (when (>= panel-alpha 0.01)
-          (concat
-            [{:kind :textured-quad :texture :skill-back :x icon-x :y icon-y :w icon-back-sz :h icon-back-sz}
-             {:kind :icon-or-fill :texture condition-icon-path
-              :x (int icon-inner-x) :y (int icon-inner-y) :w icon-inner-sz :h icon-inner-sz
-              :fallback-color 0xFF2A2A2A}
-             {:kind :shader-progress-ring :shader-id :ring-progbar
-              :texture-0 (if progress-at-1? :skill-view-outline-glow :skill-view-outline)
-              :texture-1 :skill-mask :progress (float ring-progress)
-              :x icon-x :y icon-y :w icon-back-sz :h icon-back-sz}
-             {:kind :text :x cx :y (+ text-base-y 3) :text lvltext
-              :font :ac-bold :font-size 12 :align :center :color 0xFFFFFFFF}
-             {:kind :text :x cx :y (+ text-base-y 16) :text reqtext
-              :font :ac-normal :font-size 9 :align :center :color 0xAAFFFFFF}]
-            (when hint
-              [{:kind :text :x cx :y (+ text-base-y 26) :text hint
-                :font :ac-normal :font-size 9 :align :center :color 0xAAFFFFFF}])
-            (when show-learn-btn?
-              [{:kind :textured-quad :texture :tex-button :x btn-x :y btn-y :w btn-sz :h 16}
-               {:kind :text :x cx :y (+ btn-y 4) :text "LEARN"
-                :font :ac-bold :font-size 9 :align :center :color 0xFF101010}])))))))
+          (conj! out {:kind :textured-quad :texture :skill-back :x icon-x :y icon-y :w icon-back-sz :h icon-back-sz})
+          (conj! out {:kind :icon-or-fill :texture condition-icon-path
+                       :x (int icon-inner-x) :y (int icon-inner-y) :w icon-inner-sz :h icon-inner-sz
+                       :fallback-color 0xFF2A2A2A})
+          (conj! out {:kind :shader-progress-ring :shader-id :ring-progbar
+                       :texture-0 (if progress-at-1? :skill-view-outline-glow :skill-view-outline)
+                       :texture-1 :skill-mask :progress (float ring-progress)
+                       :x icon-x :y icon-y :w icon-back-sz :h icon-back-sz})
+          (conj! out {:kind :text :x cx :y (+ text-base-y 3) :text lvltext
+                       :font :ac-bold :font-size 12 :align :center :color 0xFFFFFFFF})
+          (conj! out {:kind :text :x cx :y (+ text-base-y 16) :text reqtext
+                       :font :ac-normal :font-size 9 :align :center :color 0xAAFFFFFF})
+          (when hint
+            (conj! out {:kind :text :x cx :y (+ text-base-y 26) :text hint
+                         :font :ac-normal :font-size 9 :align :center :color 0xAAFFFFFF}))
+          (when show-learn-btn?
+            (conj! out {:kind :textured-quad :texture :tex-button :x btn-x :y btn-y :w btn-sz :h 16})
+            (conj! out {:kind :text :x cx :y (+ btn-y 4) :text "LEARN"
+                         :font :ac-bold :font-size 9 :align :center :color 0xFF101010})))
+        out))))
 
 ;; ============================================================================
 ;; Main draw ops builder
@@ -640,9 +654,7 @@
 (defn build-tree-ops
   "Shared skill tree draw ops: nodes + connections + hover tooltip + detail popup.
    Used by BOTH full-screen path (host.clj) and developer panel (panel.clj).
-   rd = render data, anim = seconds since tree opened,
-   mx01/my01 = normalized mouse [0,1], hid = hovered skill id,
-   htrans = hover-node-transitions map, sel-id = selected skill id (or nil)."
+   Transient building — no mapcat/concat overhead."
   [rd anim mx01 my01 hid htrans sel-id]
   (let [;; Parallax offsets for skill nodes (upstream: clampf(0,1,mouseX/width) - 0.5) * max_du_skills
         node-dx (* (- mx01 0.5) 10.0)
@@ -656,7 +668,6 @@
                              (assoc c
                                :from-x (- (:from-x c) node-dx)
                                :from-y (- (:from-y c) node-dy)
-                               ;; Keep original destination (parallax-shifted) — lb drives animation
                                :to-x   (- (:to-x c) node-dx)
                                :to-y   (- (:to-y c) node-dy)
                                :lb     lb)))
@@ -664,26 +675,34 @@
         conns-by-idx (group-by #(get % :child-idx) anim-conns)
         raw-nodes (or (:skill-nodes rd) [])
         shifted-nodes (mapv #(assoc % :x (- (:x %) node-dx) :y (- (:y %) node-dy)) raw-nodes)
-        nodes (mapcat (fn [idx n]
-                        (node-ops n anim hid htrans (build-line-ops (get conns-by-idx idx) anim)))
-                      (range) shifted-nodes)
         ;; Hover tooltip
         hover-id (:hover-skill rd)
         hover-node (when hover-id (first (filter #(= (:skill-id %) hover-id) (:skill-nodes rd))))
-        tooltip (when hover-node
-                  [{:kind :fill :x 230 :y 8 :w 180 :h 68 :color 0xC0202020}
-                   {:kind :text :x 236 :y 14 :text (str (:skill-name hover-node)) :font :ac-bold :font-size 12 :align :left :color 0xFFFFFFFF}
-                   {:kind :text :x 236 :y 28 :text (str (:skill-description hover-node)) :font :ac-normal :font-size 9 :align :left :color 0xFFDDDDDD}
-                   {:kind :text :x 236 :y 42 :text (format "Progress: %d%%" (int (* 100.0 (:exp hover-node)))) :font :ac-normal :font-size 8 :align :left :color 0xFFDDDDDD}
-                   {:kind :text :x 236 :y 56 :text (if (:learned hover-node) "Learned" "Not learned") :font :ac-normal :font-size 8 :align :left
-                    :color (if (:learned hover-node) 0xFF88FF88 0xFFFF8888)}])
         ;; Detail popup
-        sel-node (when sel-id (first (filter #(= (:skill-id %) sel-id) (:skill-nodes rd))))
-        detail-ops (when sel-node (detail-popup-ops sel-node anim))]
-    (vec (concat nodes tooltip detail-ops))))
+        sel-node (when sel-id (first (filter #(= (:skill-id %) sel-id) (:skill-nodes rd))))]
+    (persistent!
+      (let [out (transient [])]
+        ;; Skill nodes + connections
+        (doseq [[idx n] (map-indexed vector shifted-nodes)]
+          (let [ops (node-ops n anim hid htrans (build-line-ops (get conns-by-idx idx) anim))]
+            (doseq [op ops] (conj! out op))))
+        ;; Hover tooltip
+        (when hover-node
+          (conj! out {:kind :fill :x 230 :y 8 :w 180 :h 68 :color 0xC0202020})
+          (conj! out {:kind :text :x 236 :y 14 :text (str (:skill-name hover-node)) :font :ac-bold :font-size 12 :align :left :color 0xFFFFFFFF})
+          (conj! out {:kind :text :x 236 :y 28 :text (str (:skill-description hover-node)) :font :ac-normal :font-size 9 :align :left :color 0xFFDDDDDD})
+          (conj! out {:kind :text :x 236 :y 42 :text (format "Progress: %d%%" (int (* 100.0 (:exp hover-node)))) :font :ac-normal :font-size 8 :align :left :color 0xFFDDDDDD})
+          (conj! out {:kind :text :x 236 :y 56 :text (if (:learned hover-node) "Learned" "Not learned") :font :ac-normal :font-size 8 :align :left
+                      :color (if (:learned hover-node) 0xFF88FF88 0xFFFF8888)}))
+        ;; Detail popup
+        (when sel-node
+          (let [ops (detail-popup-ops sel-node anim)]
+            (doseq [op ops] (conj! out op))))
+        out))))
 
 (defn build-draw-ops [owner mx my screen-w screen-h]
-  "Full-screen skill tree draw ops. Thin wrapper that adds background + header + level-up."
+  "Full-screen skill tree draw ops. Thin wrapper that adds background + header + level-up.
+  Transient building — no concat/vec overhead."
   (if-let [rd (build-screen-render-data owner)]
     (let [st (screen-state-snapshot owner)
           ct (:creation-time st)
@@ -694,30 +713,39 @@
           bg-dx (* (- mx01 0.5) 0.01)
           bg-dy (* (- my01 0.5) 0.01)
           bg-scale-fn (fn [x] (+ (* (- x 0.5) back-scale-inv) 0.5))
-          bg-u (bg-scale-fn bg-dx) bg-v (bg-scale-fn bg-dy)
-          bg-ops [{:kind :raw-rect-uv :texture :bg-area :x 0 :y 0 :w (int 420) :h (int 260)
-                   :min-u (float bg-u) :max-u (float (+ bg-u back-scale-inv))
-                   :min-v (float bg-v) :max-v (float (+ bg-v back-scale-inv))}]
-          header [{:kind :fill :x 0 :y 0 :w 420 :h 260 :color 0xA0101010}
-                  {:kind :text :x 12 :y 8  :text (str "Category: " (:category-name ab)) :font :ac-normal :font-size 9 :align :left :color 0xFFFFFFFF}
-                  {:kind :text :x 12 :y 22 :text (format "Level: %d" (int (or (:level ab) 0))) :font :ac-normal :font-size 9 :align :left :color 0xFFE8E8E8}
-                  {:kind :text :x 12 :y 36 :text (format "CP: %.0f / %.0f" (double (get-in ab [:cp :cur] 0.0)) (double (get-in ab [:cp :max] 0.0))) :font :ac-normal :font-size 9 :align :left :color 0xFFAED7FF}
-                  {:kind :text :x 12 :y 50 :text (format "Overload: %.0f / %.0f" (double (get-in ab [:overload :cur] 0.0)) (double (get-in ab [:overload :max] 0.0))) :font :ac-normal :font-size 9 :align :left :color 0xFFFFB8A6}]
-          level-up (when (and (:can-level-up ab) (not (:showing-level-up-popup? st)))
-                     [{:kind :fill :x 10 :y 200 :w 80 :h 20 :color 0xAA22AA22}
-                      {:kind :text :x 18 :y 206 :text "Level Up" :font :ac-normal :font-size 9 :align :center :color 0xFFFFFFFF}])
-          level-up-popup (when (:showing-level-up-popup? st)
-                           (let [open-ms (:level-up-popup-open-ms st 0)
-                                 anim (/ (- (now-ms) open-ms) 1000.0)
-                                 current-level (int (or (:level ab) 1))
-                                 target-level (inc current-level)
-                                 cond-icon (modid/asset-path "textures"
-                                             (str "abilities/condition/any" target-level ".png"))]
-                             (level-up-popup-ops target-level cond-icon anim
-                               {:dev-state (:level-up-dev-state st)
-                                :screen-w 420 :screen-h 260})))
-          tree (build-tree-ops rd anim mx01 my01
-                 (:hovered-skill-id st) (:hover-node-transitions st {})
-                 (:selected-skill st))]
-      (vec (concat bg-ops header level-up tree level-up-popup)))
+          bg-u (bg-scale-fn bg-dx) bg-v (bg-scale-fn bg-dy)]
+      (persistent!
+        (let [out (transient [])]
+          ;; Background UV
+          (conj! out {:kind :raw-rect-uv :texture :bg-area :x 0 :y 0 :w (int 420) :h (int 260)
+                      :min-u (float bg-u) :max-u (float (+ bg-u back-scale-inv))
+                      :min-v (float bg-v) :max-v (float (+ bg-v back-scale-inv))})
+          ;; Header overlay + text
+          (conj! out {:kind :fill :x 0 :y 0 :w 420 :h 260 :color 0xA0101010})
+          (conj! out {:kind :text :x 12 :y 8  :text (str "Category: " (:category-name ab)) :font :ac-normal :font-size 9 :align :left :color 0xFFFFFFFF})
+          (conj! out {:kind :text :x 12 :y 22 :text (format "Level: %d" (int (or (:level ab) 0))) :font :ac-normal :font-size 9 :align :left :color 0xFFE8E8E8})
+          (conj! out {:kind :text :x 12 :y 36 :text (format "CP: %.0f / %.0f" (double (get-in ab [:cp :cur] 0.0)) (double (get-in ab [:cp :max] 0.0))) :font :ac-normal :font-size 9 :align :left :color 0xFFAED7FF})
+          (conj! out {:kind :text :x 12 :y 50 :text (format "Overload: %.0f / %.0f" (double (get-in ab [:overload :cur] 0.0)) (double (get-in ab [:overload :max] 0.0))) :font :ac-normal :font-size 9 :align :left :color 0xFFFFB8A6})
+          ;; Level-up button
+          (when (and (:can-level-up ab) (not (:showing-level-up-popup? st)))
+            (conj! out {:kind :fill :x 10 :y 200 :w 80 :h 20 :color 0xAA22AA22})
+            (conj! out {:kind :text :x 18 :y 206 :text "Level Up" :font :ac-normal :font-size 9 :align :center :color 0xFFFFFFFF}))
+          ;; Skill tree nodes
+          (let [tree (build-tree-ops rd anim mx01 my01
+                       (:hovered-skill-id st) (:hover-node-transitions st {})
+                       (:selected-skill st))]
+            (doseq [op tree] (conj! out op)))
+          ;; Level-up popup
+          (when (:showing-level-up-popup? st)
+            (let [open-ms (:level-up-popup-open-ms st 0)
+                  popup-anim (/ (- (now-ms) open-ms) 1000.0)
+                  current-level (int (or (:level ab) 1))
+                  target-level (inc current-level)
+                  cond-icon (modid/asset-path "textures"
+                              (str "abilities/condition/any" target-level ".png"))
+                  popup-ops (level-up-popup-ops target-level cond-icon popup-anim
+                              {:dev-state (:level-up-dev-state st)
+                               :screen-w 420 :screen-h 260})]
+              (doseq [op popup-ops] (conj! out op))))
+          out)))
     []))

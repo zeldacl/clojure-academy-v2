@@ -102,6 +102,59 @@
          :has-changes (not (empty? (:pending-changes state)))})))))
 
 ;; ============================================================================
+;; Draw-Ops Builder (reactive — called from event handlers, not on-frame)
+;; ============================================================================
+
+(defn- compute-draw-ops
+  "Pure function: render-data → draw-ops vector using transient building.
+  Eliminates per-frame vec+concat+mapcat GC pressure."
+  [rd]
+  (if-not rd
+    []
+    (let [selected-preset (:selected-preset rd)
+          active-preset (:active-preset rd)
+          selected-skill (:selected-skill rd)]
+      (persistent!
+        (let [out (transient [{:kind :text :text "Preset Editor" :x 10 :y 2 :color 0xFFFFFF}])]
+          ;; Preset tabs
+          (doseq [pidx (:presets rd)]
+            (let [x (+ 10 (* pidx 45))
+                  sel? (= pidx selected-preset)
+                  act? (= pidx active-preset)]
+              (conj! out {:kind :fill :x x :y 10 :w 40 :h 20
+                          :color (if sel? 0xFF4C6FFF 0xFF333333)})
+              (conj! out {:kind :text :text (str "P" (inc pidx) (when act? "*"))
+                          :x (+ x 10) :y 16 :color 0xFFFFFF})))
+          ;; Slots
+          (doseq [idx (range 4)]
+            (let [slot (nth (:slots rd) idx nil)
+                  y (+ 40 (* idx 25))]
+              (conj! out {:kind :fill :x 10 :y y :w 100 :h 20 :color 0xFF252525})
+              (conj! out {:kind :text :text (str "Slot " (inc idx) ": " (or (:skill-name slot) "<empty>"))
+                          :x 14 :y (+ y 6) :color 0xFFFFFF})))
+          ;; Available skills
+          (doseq [[idx skill-info] (map-indexed vector (:available-skills rd))]
+            (let [y (+ 60 (* idx 22))
+                  chosen? (= (:skill-id skill-info) selected-skill)]
+              (conj! out {:kind :fill :x 170 :y y :w 150 :h 20
+                          :color (if chosen? 0xFF2E6B2E 0xFF202020)})
+              (conj! out {:kind :text :text (:skill-name skill-info)
+                          :x 174 :y (+ y 6) :color 0xFFFFFF})))
+          ;; Action buttons
+          (conj! out {:kind :fill :x 10 :y 200 :w 80 :h 20 :color 0xFF4A8F4A})
+          (conj! out {:kind :text :text "Save" :x 35 :y 206 :color 0xFFFFFF})
+          (conj! out {:kind :fill :x 100 :y 200 :w 80 :h 20 :color 0xFF444488})
+          (conj! out {:kind :text :text "Set Active" :x 108 :y 206 :color 0xFFFFFF})
+          out)))))
+
+(defn- redraw!
+  "Rebuild draw-ops from current editor state and cache in widget metadata.
+  Called from event handlers — zero on-frame cost."
+  [root owner]
+  (when-let [rd (build-preset-editor-render-data owner)]
+    (swap! (:metadata root) assoc :preset-draw-ops (compute-draw-ops rd))))
+
+;; ============================================================================
 ;; Event Handlers
 ;; ============================================================================
 
@@ -144,8 +197,9 @@
   (api/req-switch-preset! owner (:selected-preset (editor-state-snapshot owner)) nil))
 
 (defn handle-screen-click!
-  "Handle clicks inside the preset editor screen using current render data."
-  [owner mouse-x mouse-y]
+  "Handle clicks inside the preset editor screen using current render data.
+  Triggers reactive redraw after any click that modifies state."
+  [owner root mouse-x mouse-y]
   (if-let [render-data (build-preset-editor-render-data owner)]
     (let [clicked? (atom false)]
       (doseq [preset-idx (:presets render-data)]
@@ -184,6 +238,10 @@
               (on-set-active-click owner)
         (reset! clicked? true))
 
+      ;; Reactive redraw after any state-modifying click
+      (when @clicked?
+        (redraw! root owner))
+
       (boolean @clicked?))
     false))
 
@@ -207,56 +265,25 @@
 ;; ============================================================================
 
 (defn create-preset-editor-widget
-  "Create CGui widget hosting preset-editor draw-ops. Factory for :ac/preset-editor."
+  "Create CGui widget hosting preset-editor draw-ops. Factory for :ac/preset-editor.
+  Reactive: draw-ops rebuilt only on click events, not every frame."
   [{:keys [player-uuid client-session-id]}]
   (let [owner {:client-session-id (or client-session-id "") :player-uuid player-uuid}
         ok    (editor-owner-key owner)
         root  (cgui-core/create-container :name "preset-editor-root" :pos [0 0] :size [340 250])]
     (managed-screens/set-active-owner! screen-id ok)
     (swap-editor-state! owner merge default-editor-state {:player-uuid player-uuid})
-    (events/on-frame root
-      (fn [_]
-        (when-let [rd (build-preset-editor-render-data owner)]
-          (let [draw-ops
-                (vec
-                  (concat
-                    [{:kind :text :text "Preset Editor" :x 10 :y 2 :color 0xFFFFFF}]
-                    (mapcat (fn [pidx]
-                              (let [x (+ 10 (* pidx 45))
-                                    sel? (= pidx (:selected-preset rd))
-                                    act? (= pidx (:active-preset rd))]
-                                [{:kind :fill :x x :y 10 :w 40 :h 20
-                                  :color (if sel? 0xFF4C6FFF 0xFF333333)}
-                                 {:kind :text :text (str "P" (inc pidx) (when act? "*"))
-                                  :x (+ x 10) :y 16 :color 0xFFFFFF}]))
-                            (:presets rd))
-                    (mapcat (fn [idx]
-                              (let [slot (nth (:slots rd) idx nil)
-                                    y (+ 40 (* idx 25))]
-                                [{:kind :fill :x 10 :y y :w 100 :h 20 :color 0xFF252525}
-                                 {:kind :text :text (str "Slot " (inc idx) ": " (or (:skill-name slot) "<empty>"))
-                                  :x 14 :y (+ y 6) :color 0xFFFFFF}]))
-                            (range 4))
-                    (mapcat (fn [[idx skill-info]]
-                              (let [y (+ 60 (* idx 22))
-                                    chosen? (= (:skill-id skill-info) (:selected-skill rd))]
-                                [{:kind :fill :x 170 :y y :w 150 :h 20
-                                  :color (if chosen? 0xFF2E6B2E 0xFF202020)}
-                                 {:kind :text :text (:skill-name skill-info)
-                                  :x 174 :y (+ y 6) :color 0xFFFFFF}]))
-                            (map-indexed vector (:available-skills rd)))
-                    [{:kind :fill :x 10 :y 200 :w 80 :h 20 :color 0xFF4A8F4A}
-                     {:kind :text :text "Save" :x 35 :y 206 :color 0xFFFFFF}
-                     {:kind :fill :x 100 :y 200 :w 80 :h 20 :color 0xFF444488}
-                     {:kind :text :text "Set Active" :x 108 :y 206 :color 0xFFFFFF}]))]
-            (swap! (:metadata root) assoc :preset-draw-ops draw-ops)))))
+    ;; Click handler triggers reactive redraw
     (events/on-left-click root
       (fn [evt]
-        (handle-screen-click! owner (:mouse-x evt) (:mouse-y evt))))
+        (handle-screen-click! owner root (:mouse-x evt) (:mouse-y evt))))
+    ;; Draw-ops host component (reads cached draw-ops, no on-frame rebuild)
     (let [[rw rh] (cgui-core/get-size root)
           host (cgui-core/create-widget :pos [0 0] :size [rw rh])]
       (comp/add-component! host (comp/draw-ops {:ops-fn #(get @(:metadata root) :preset-draw-ops [])}))
       (cgui-core/add-widget! root host))
+    ;; Initial render — subsequent updates via redraw! in event handlers
+    (redraw! root owner)
     root))
 
 (let [registered? (atom false)]

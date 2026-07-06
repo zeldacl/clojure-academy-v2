@@ -151,11 +151,16 @@
     (cgui-core/add-widget! widget text)
     ;; Staggered fade-in + selection highlight
     (let [delay-sec (* (inc index) 0.1) duration-sec 0.4
-          base-alpha (if installed? 1.0 0.6)]
+          base-alpha (if installed? 1.0 0.6)
+          fade-done? (atom false)]
       (events/on-frame widget
         (fn [_]
           (let [lifetime (/ (- (System/currentTimeMillis) creation-time) 1000.0)
-                entry-alpha (max 0.0 (min 1.0 (/ (- lifetime delay-sec) duration-sec)))
+                entry-alpha (if @fade-done?
+                              1.0
+                              (let [ea (max 0.0 (min 1.0 (/ (- lifetime delay-sec) duration-sec)))]
+                                (when (>= ea 1.0) (reset! fade-done? true))
+                                ea))
                 m-alpha (* base-alpha entry-alpha)
                 ;; Selection boost matching original: selected→1.3x icon, highlight bg
                 sel-mult @sel-alpha
@@ -217,23 +222,26 @@
 (defn- setup-continuous-scroll!
   "Add mouseY-based continuous scrolling matching original TerminalUI.draw():
   mouseY==0 → scroll--, mouseY==MAX_MY → scroll++.
-  Scrolls at ~3 px/frame at edges, matching original boundary behavior."
+  Scrolls at ~3 px/frame at edges, matching original boundary behavior.
+  Dirty-check: skips boundary check when mouse hasn't moved."
   [root-widget _player scroll-ref max-scroll-ref]
-  (events/on-frame root-widget
-    (fn [_]
-      (let [my (double (or (get @(:metadata root-widget) :last-mouse-y) 0))
-            screen-h (double (or (get @(:metadata root-widget) :screen-height) 480))
-            scroll (int @scroll-ref)
-            max-s (int @max-scroll-ref)]
-        (when (pos? max-s)
-          (when (< my scroll-boundary)
-            (let [new-scroll (max 0 (- scroll 1))]
-              (when (not= scroll new-scroll)
-                (reset! scroll-ref new-scroll))))
-          (when (> my (- screen-h scroll-boundary))
-            (let [new-scroll (min max-s (+ scroll 1))]
-              (when (not= scroll new-scroll)
-                (reset! scroll-ref new-scroll)))))))))
+  (let [last-my (atom -1.0)]
+    (events/on-frame root-widget
+      (fn [_]
+        (let [my (double (or (get @(:metadata root-widget) :last-mouse-y) 0))
+              screen-h (double (or (get @(:metadata root-widget) :screen-height) 480))
+              scroll (int @scroll-ref)
+              max-s (int @max-scroll-ref)]
+          (when (and (pos? max-s) (not= my @last-my))
+            (reset! last-my my)
+            (when (< my scroll-boundary)
+              (let [new-scroll (max 0 (- scroll 1))]
+                (when (not= scroll new-scroll)
+                  (reset! scroll-ref new-scroll))))
+            (when (> my (- screen-h scroll-boundary))
+              (let [new-scroll (min max-s (+ scroll 1))]
+                (when (not= scroll new-scroll)
+                  (reset! scroll-ref new-scroll))))))))))
 
 ;; ============================================================================
 ;; Selection cursor + highlight
@@ -242,10 +250,13 @@
 (defn- setup-selection-cursor!
   "Add cursor overlay widget + selection highlight matching original
   TerminalUI cursor rendering (HudUtils.rect with CURSOR texture).
-  Tracks which grid cell the cursor is over and updates selection state."
+  Tracks which grid cell the cursor is over and updates selection state.
+  Dirty-check: skips hit-testing when mouse hasn't moved."
   [root-widget app-widgets-ref]
   (let [sel-idx (atom -1)
         last-selected (atom -1)
+        last-hit-mx (atom -1.0)
+        last-hit-my (atom -1.0)
         cursor-w (cgui-core/create-widget :pos [0 0] :size [40 40])
         cursor-dt (comp/draw-texture tex-cursor 0x66444444)]
     (comp/add-component! cursor-w cursor-dt)
@@ -256,27 +267,33 @@
               my (double (or (get @(:metadata root-widget) :last-mouse-y) 0))
               csize (* 20 (+ 1 (Math/sin (/ (System/currentTimeMillis) 300.0)) 0.2))
               csize-select (if (>= @sel-idx 0) (* csize 1.3) csize)
-              apps @app-widgets-ref
-              new-selected (some (fn [[idx w]]
-                                   (let [[wx wy] (cgui-core/get-pos w)
-                                         [ww wh] (cgui-core/get-size w)]
-                                     (when (and (>= mx wx) (< mx (+ wx ww))
-                                                (>= my wy) (< my (+ wy wh)))
-                                       idx)))
-                                 (map-indexed vector apps))]
+              ;; Hit-test only when mouse moved (avoids iterating all app widgets every frame)
+              mouse-moved? (or (not= mx @last-hit-mx) (not= my @last-hit-my))]
+          (when mouse-moved?
+            (reset! last-hit-mx mx)
+            (reset! last-hit-my my)
+            (let [apps @app-widgets-ref
+                  new-selected (some (fn [[idx w]]
+                                       (let [[wx wy] (cgui-core/get-pos w)
+                                             [ww wh] (cgui-core/get-size w)]
+                                         (when (and (>= mx wx) (< mx (+ wx ww))
+                                                    (>= my wy) (< my (+ wy wh)))
+                                           idx)))
+                                     (map-indexed vector apps))]
+              (when (not= new-selected @sel-idx)
+                (when (and (>= @sel-idx 0) (< @sel-idx (count apps)))
+                  (when-let [old-sel (get @(:metadata (nth apps @sel-idx)) :sel-alpha)]
+                    (reset! old-sel 1.0)))
+                (reset! sel-idx (or new-selected -1))
+                (when (>= @sel-idx 0)
+                  (when-let [new-sel (get @(:metadata (nth apps @sel-idx)) :sel-alpha)]
+                    (reset! new-sel 1.3))))))
+          ;; Cursor animation + position (always runs — lightweight math)
           (cgui-core/set-pos! cursor-w (- mx (/ csize-select 2)) (- my (/ csize-select 2) 120))
           (cgui-core/set-size! cursor-w (int csize-select) (int csize-select))
           (let [a (int (* 255 0.4 (if (>= @sel-idx 0) 1.5 1.0)))]
             (swap! (:state cursor-dt) assoc :color
-                   (unchecked-int (bit-or (bit-shift-left a 24) 0x00FFFFFF))))
-          (when (not= new-selected @sel-idx)
-            (when (and (>= @sel-idx 0) (< @sel-idx (count apps)))
-              (when-let [old-sel (get @(:metadata (nth apps @sel-idx)) :sel-alpha)]
-                (reset! old-sel 1.0)))
-            (reset! sel-idx (or new-selected -1))
-            (when (>= @sel-idx 0)
-              (when-let [new-sel (get @(:metadata (nth apps @sel-idx)) :sel-alpha)]
-                (reset! new-sel 1.3)))))))
+                   (unchecked-int (bit-or (bit-shift-left a 24) 0x00FFFFFF)))))))
     sel-idx))
 
 ;; ============================================================================

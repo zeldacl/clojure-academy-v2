@@ -60,6 +60,179 @@
                :message (str "Failed: " (or (:error response) "Unknown error"))
                :state-start-time (System/currentTimeMillis))))))
 
+;; ==========================================================================
+;; Phase widget builders (namespace-level defn-, called only on phase transitions)
+;; ==========================================================================
+
+(defn- build-freq-scan-phase!
+  "Build scan phase widgets: hint text, scan button, optional message."
+  [cw state player-uuid]
+  (let [hint (cgui-core/create-widget :pos [0 5] :size [360 40])]
+    (comp/add-component! hint
+      (comp/text-box
+        :text "Look at a matrix or node block and click Scan.\nRange: 4 blocks (matching original)."
+        :font-size 9.0 :color 0xFFAAAAAA))
+    (cgui-core/set-name! hint "scan-hint")
+    (cgui-core/add-widget! cw hint)
+    (let [btn (cgui-core/create-widget :pos [120 60] :size [120 30])]
+      (comp/add-component! btn
+        (comp/tint (if (:scanning? @state) 0xFF555555 0xFF334455)))
+      (cgui-core/set-name! btn "scan-btn")
+      (let [lbl (cgui-core/create-widget :pos [0 0] :size [120 30])]
+        (comp/add-component! lbl
+          (comp/text-box
+            :text (if (:scanning? @state) "Scanning..." "Scan Target")
+            :font-size 10.0 :color 0xFFFFFFFF
+            :align :center :height-align :center))
+        (cgui-core/set-name! lbl "scan-btn-label")
+        (cgui-core/add-widget! btn lbl))
+      (when-not (:scanning? @state)
+        (events/on-left-click btn
+          (fn [_] (do-scan! state player-uuid))))
+      (cgui-core/add-widget! cw btn))
+    (when (and (:message @state) (not (:scanning? @state)))
+      (let [mw (cgui-core/create-widget :pos [0 110] :size [360 30])]
+        (comp/add-component! mw
+          (comp/text-box :text (:message @state) :font-size 8.0
+                        :color 0xFFFFAAAA))
+        (cgui-core/set-name! mw "scan-message")
+        (cgui-core/add-widget! cw mw)))))
+
+(defn- build-freq-configure-phase!
+  "Build configure phase widgets: device info, SSID/password fields, buttons."
+  [cw state player-uuid]
+  (let [dev (:device @state)]
+    (when dev
+      (let [info-str (str (name (:type dev))
+                         (when (:ssid dev) (str " [" (:ssid dev) "]"))
+                         (when (contains? dev :has-network)
+                           (if (:has-network dev) " (active)" " (no network)"))
+                         (when (contains? dev :linked?)
+                           (if (:linked? dev) " (linked)" " (unlinked)")))]
+        (let [iw (cgui-core/create-widget :pos [0 5] :size [360 24])]
+          (comp/add-component! iw
+            (comp/text-box :text info-str :font-size 9.0 :color 0xFFAADDFF))
+          (cgui-core/add-widget! cw iw)))
+      ;; SSID field
+      (let [ssid-active? (= (:editing-field @state) :ssid)
+            ssid-color (if ssid-active? 0xFFFFD700 0xFFFFFF88)
+            cursor (if ssid-active? "_" "")
+            ssid-text (str "SSID: " (:ssid @state) cursor)
+            ssid-w (cgui-core/create-widget :pos [0 40] :size [360 24])]
+        (comp/add-component! ssid-w
+          (comp/text-box :text ssid-text :font-size 9.0 :color ssid-color))
+        (cgui-core/set-name! ssid-w "ssid-field")
+        (events/on-left-click ssid-w
+          (fn [_] (swap! state assoc :editing-field :ssid)))
+        (cgui-core/add-widget! cw ssid-w))
+      ;; Password field
+      (let [pw-active? (= (:editing-field @state) :password)
+            pw-color (if pw-active? 0xFFFFD700 0xFFFFFF88)
+            masked (apply str (repeat (count (:password @state)) "*"))
+            cursor (if pw-active? "_" "")
+            pw-text (str "Password: " masked cursor)
+            pw-w (cgui-core/create-widget :pos [0 72] :size [360 24])]
+        (comp/add-component! pw-w
+          (comp/text-box :text pw-text :font-size 9.0 :color pw-color))
+        (cgui-core/set-name! pw-w "password-field")
+        (events/on-left-click pw-w
+          (fn [_] (swap! state assoc :editing-field :password)))
+        (cgui-core/add-widget! cw pw-w))
+      ;; Editing hint
+      (when (:editing-field @state)
+        (let [hint (cgui-core/create-widget :pos [0 100] :size [360 16])]
+          (comp/add-component! hint
+            (comp/text-box :text "Type to edit, Enter to confirm"
+                          :font-size 7.0 :color 0xFF888888))
+          (cgui-core/add-widget! cw hint)))
+      ;; Apply button
+      (let [btn (cgui-core/create-widget :pos [120 120] :size [120 28])]
+        (comp/add-component! btn (comp/tint 0xFF336633))
+        (let [lbl (cgui-core/create-widget :pos [0 0] :size [120 28])]
+          (comp/add-component! lbl
+            (comp/text-box :text "Apply" :font-size 10.0 :color 0xFFFFFFFF
+                          :align :center :height-align :center))
+          (cgui-core/add-widget! btn lbl))
+        (events/on-left-click btn
+          (fn [_] (swap! state assoc :editing-field nil)
+            (do-configure! state player-uuid)))
+        (cgui-core/add-widget! cw btn))
+      ;; Rescan button
+      (let [btn (cgui-core/create-widget :pos [120 156] :size [120 24])]
+        (comp/add-component! btn (comp/tint 0xFF443333))
+        (let [lbl (cgui-core/create-widget :pos [0 0] :size [120 24])]
+          (comp/add-component! lbl
+            (comp/text-box :text "Rescan" :font-size 8.0 :color 0xFFFFAAAA
+                          :align :center :height-align :center))
+          (cgui-core/add-widget! btn lbl))
+        (events/on-left-click btn
+          (fn [_] (swap! state assoc :phase :scan :device nil :message ""
+                   :editing-field nil
+                   :state-start-time (System/currentTimeMillis))))
+        (cgui-core/add-widget! cw btn)))))
+
+(defn- build-freq-result-phase!
+  "Build result phase widgets: message and Done button."
+  [cw state]
+  (let [mw (cgui-core/create-widget :pos [0 20] :size [360 60])]
+    (comp/add-component! mw
+      (comp/text-box :text (:message @state) :font-size 10.0
+                    :color (if (str/starts-with? (or (:message @state) "") "Failed")
+                            0xFFFF8888 0xFF88FF88)))
+    (cgui-core/set-name! mw "result-message")
+    (cgui-core/add-widget! cw mw)
+    (let [btn (cgui-core/create-widget :pos [120 100] :size [120 28])]
+      (comp/add-component! btn (comp/tint 0xFF334455))
+      (let [lbl (cgui-core/create-widget :pos [0 0] :size [120 28])]
+        (comp/add-component! lbl
+          (comp/text-box :text "Done" :font-size 10.0 :color 0xFFFFFFFF
+                        :align :center :height-align :center))
+        (cgui-core/add-widget! btn lbl))
+      (events/on-left-click btn
+        (fn [_] (swap! state assoc :phase :scan :device nil :message ""
+                 :editing-field nil
+                 :state-start-time (System/currentTimeMillis))))
+      (cgui-core/add-widget! cw btn))))
+
+(defn- update-freq-dynamic-texts!
+  "Incremental text update for dynamic fields within same phase. Lightweight."
+  [cw state]
+  (let [{:keys [phase ssid password message scanning? editing-field]} @state]
+    (case phase
+      :scan
+      (do
+        (when-let [btn (cgui-core/find-widget cw "scan-btn-label")]
+          (when-let [tb (comp/get-textbox-component btn)]
+            (comp/set-text! tb (if scanning? "Scanning..." "Scan Target"))))
+        (when-let [btn (cgui-core/find-widget cw "scan-btn")]
+          (when-let [t (comp/get-tint-component btn)]
+            (swap! (:state t) assoc :color (if scanning? 0xFF555555 0xFF334455))))
+        (when (and message (not scanning?))
+          (when-let [mw (cgui-core/find-widget cw "scan-message")]
+            (when-let [tb (comp/get-textbox-component mw)]
+              (comp/set-text! tb message)))))
+      :configure
+      (do
+        (when-let [ssid-w (cgui-core/find-widget cw "ssid-field")]
+          (when-let [tb (comp/get-textbox-component ssid-w)]
+            (let [cursor (if (= editing-field :ssid) "_" "")]
+              (comp/set-text! tb (str "SSID: " ssid cursor)))
+            (comp/set-text-color! tb (if (= editing-field :ssid) 0xFFFFD700 0xFFFFFF88))))
+        (when-let [pw-w (cgui-core/find-widget cw "password-field")]
+          (when-let [tb (comp/get-textbox-component pw-w)]
+            (let [masked (apply str (repeat (count password) "*"))
+                  cursor (if (= editing-field :password) "_" "")]
+              (comp/set-text! tb (str "Password: " masked cursor)))
+            (comp/set-text-color! tb (if (= editing-field :password) 0xFFFFD700 0xFFFFFF88)))))
+      :result
+      (do
+        (when-let [mw (cgui-core/find-widget cw "result-message")]
+          (when-let [tb (comp/get-textbox-component mw)]
+            (comp/set-text! tb (or (:message @state) ""))
+            (comp/set-text-color! tb (if (str/starts-with? (or (:message @state) "") "Failed")
+                                       0xFFFF8888 0xFF88FF88)))))
+    nil)))
+
 (defn- build-freq-gui [player]
   (let [player-uuid (uuid/player-uuid player)
         state (atom {:phase :scan
@@ -72,7 +245,10 @@
                      :editing-field nil})  ;; :ssid or :password or nil
         root (cgui-core/create-widget :size [380 300])
         enter-keys #{28 156 257}    ;; Enter, NumpadEnter, GLFW_ENTER
-        backspace-key 259]           ;; GLFW_BACKSPACE
+        backspace-key 259           ;; GLFW_BACKSPACE
+        ;; Phase-cache: triggers widget rebuild only on phase transitions
+        last-phase (atom nil)
+        last-dyn-state (atom nil)]
 
     ;; Semi-transparent background (matching original AuxGui overlay over game world)
     (let [bg (cgui-core/create-widget :pos [0 0] :size [380 300])]
@@ -103,7 +279,9 @@
       (cgui-core/set-name! content "content")
       (cgui-core/add-widget! root content))
 
-    ;; Global keyboard handling for editable fields
+    ;; ========================================================================
+    ;; Keyboard handling (unchanged — updates state atom, on-frame picks up)
+    ;; ========================================================================
     (events/on-key-press root
       (fn [evt]
         (let [{:keys [phase editing-field ssid password]} @state]
@@ -128,144 +306,36 @@
                   (swap! state update :ssid str typed-char)
                   (swap! state update :password str typed-char))))))))
 
-    ;; Per-frame UI rebuild based on phase
+    ;; ========================================================================
+    ;; Per-frame: timeout check + phase-switch detection + dynamic text updates
+    ;; Widget tree only rebuilt on phase transitions (scan→configure→result).
+    ;; ========================================================================
     (events/on-frame root
       (fn [_]
-        (let [{:keys [phase device ssid password message scanning?
-                     state-start-time editing-field]} @state
+        (let [{:keys [phase state-start-time] :as full-state} @state
               cw (cgui-core/find-widget root "content")
-              ;; Timeout auto-return (matching original 20s per state)
               elapsed (/ (- (System/currentTimeMillis) state-start-time) 1000.0)]
+          ;; Timeout auto-return
           (when (and (> elapsed timeout-sec) (not= phase :result))
             (swap! state assoc :phase :scan :device nil :message "Timed out" :editing-field nil))
-          (when cw
+          ;; Phase transition → full widget rebuild (rare, <1Hz)
+          (when (not= phase @last-phase)
+            (reset! last-phase phase)
             (cgui-core/clear-widgets! cw)
             (case phase
-
-              :scan
-              (let [hint (cgui-core/create-widget :pos [0 5] :size [360 40])]
-                (comp/add-component! hint
-                  (comp/text-box
-                    :text "Look at a matrix or node block and click Scan.\nRange: 4 blocks (matching original)."
-                    :font-size 9.0 :color 0xFFAAAAAA))
-                (cgui-core/add-widget! cw hint)
-                (let [btn (cgui-core/create-widget :pos [120 60] :size [120 30])]
-                  (comp/add-component! btn
-                    (comp/tint (if scanning? 0xFF555555 0xFF334455)))
-                  (let [lbl (cgui-core/create-widget :pos [0 0] :size [120 30])]
-                    (comp/add-component! lbl
-                      (comp/text-box
-                        :text (if scanning? "Scanning..." "Scan Target")
-                        :font-size 10.0 :color 0xFFFFFFFF
-                        :align :center :height-align :center))
-                    (cgui-core/add-widget! btn lbl))
-                  (when-not scanning?
-                    (events/on-left-click btn
-                      (fn [_] (do-scan! state player-uuid))))
-                  (cgui-core/add-widget! cw btn))
-                (when (and message (not scanning?))
-                  (let [mw (cgui-core/create-widget :pos [0 110] :size [360 30])]
-                    (comp/add-component! mw
-                      (comp/text-box :text message :font-size 8.0
-                                    :color 0xFFFFAAAA))
-                    (cgui-core/add-widget! cw mw))))
-
-              :configure
-              (when device
-                ;; Device info header
-                (let [info-str (str (name (:type device))
-                                   (when (:ssid device) (str " [" (:ssid device) "]"))
-                                   (when (contains? device :has-network)
-                                     (if (:has-network device) " (active)" " (no network)"))
-                                   (when (contains? device :linked?)
-                                     (if (:linked? device) " (linked)" " (unlinked)")))]
-                  (let [iw (cgui-core/create-widget :pos [0 5] :size [360 24])]
-                    (comp/add-component! iw
-                      (comp/text-box :text info-str :font-size 9.0
-                                    :color 0xFFAADDFF))
-                    (cgui-core/add-widget! cw iw)))
-                ;; SSID field (editable — click to activate, backspace/Enter supported)
-                (let [ssid-active? (= editing-field :ssid)
-                      ssid-w (cgui-core/create-widget :pos [0 40] :size [360 24])
-                      ssid-color (if ssid-active? 0xFFFFD700 0xFFFFFF88)
-                      cursor (if ssid-active? "_" "")
-                      ssid-text (str "SSID: " ssid cursor)]
-                  (comp/add-component! ssid-w
-                    (comp/text-box :text ssid-text :font-size 9.0 :color ssid-color))
-                  (events/on-left-click ssid-w
-                    (fn [_] (swap! state assoc :editing-field :ssid)))
-                  (cgui-core/add-widget! cw ssid-w))
-                ;; Password field (editable + masked)
-                (let [pw-active? (= editing-field :password)
-                      pw-w (cgui-core/create-widget :pos [0 72] :size [360 24])
-                      pw-color (if pw-active? 0xFFFFD700 0xFFFFFF88)
-                      masked (apply str (repeat (count password) "*"))
-                      cursor (if pw-active? "_" "")
-                      pw-text (str "Password: " masked cursor)]
-                  (comp/add-component! pw-w
-                    (comp/text-box :text pw-text :font-size 9.0 :color pw-color))
-                  (events/on-left-click pw-w
-                    (fn [_] (swap! state assoc :editing-field :password)))
-                  (cgui-core/add-widget! cw pw-w))
-                ;; Editing hint
-                (when editing-field
-                  (let [hint (cgui-core/create-widget :pos [0 100] :size [360 16])]
-                    (comp/add-component! hint
-                      (comp/text-box :text "Type to edit, Enter to confirm"
-                                    :font-size 7.0 :color 0xFF888888))
-                    (cgui-core/add-widget! cw hint)))
-                ;; Apply button
-                (let [btn (cgui-core/create-widget :pos [120 120] :size [120 28])]
-                  (comp/add-component! btn (comp/tint 0xFF336633))
-                  (let [lbl (cgui-core/create-widget :pos [0 0] :size [120 28])]
-                    (comp/add-component! lbl
-                      (comp/text-box :text "Apply" :font-size 10.0
-                                    :color 0xFFFFFFFF
-                                    :align :center :height-align :center))
-                    (cgui-core/add-widget! btn lbl))
-                  (events/on-left-click btn
-                    (fn [_]
-                      (swap! state assoc :editing-field nil)
-                      (do-configure! state player-uuid)))
-                  (cgui-core/add-widget! cw btn))
-                ;; Rescan button
-                (let [btn (cgui-core/create-widget :pos [120 156] :size [120 24])]
-                  (comp/add-component! btn (comp/tint 0xFF443333))
-                  (let [lbl (cgui-core/create-widget :pos [0 0] :size [120 24])]
-                    (comp/add-component! lbl
-                      (comp/text-box :text "Rescan" :font-size 8.0
-                                    :color 0xFFFFAAAA
-                                    :align :center :height-align :center))
-                    (cgui-core/add-widget! btn lbl))
-                  (events/on-left-click btn
-                    (fn [_]
-                      (swap! state assoc :phase :scan :device nil :message ""
-                             :editing-field nil
-                             :state-start-time (System/currentTimeMillis))))
-                  (cgui-core/add-widget! cw btn)))
-
-              :result
-              (let [mw (cgui-core/create-widget :pos [0 20] :size [360 60])]
-                (comp/add-component! mw
-                  (comp/text-box :text message :font-size 10.0
-                                :color (if (str/starts-with? (or message "") "Failed")
-                                        0xFFFF8888 0xFF88FF88)))
-                (cgui-core/add-widget! cw mw)
-                (let [btn (cgui-core/create-widget :pos [120 100] :size [120 28])]
-                  (comp/add-component! btn (comp/tint 0xFF334455))
-                  (let [lbl (cgui-core/create-widget :pos [0 0] :size [120 28])]
-                    (comp/add-component! lbl
-                      (comp/text-box :text "Done" :font-size 10.0
-                                    :color 0xFFFFFFFF
-                                    :align :center :height-align :center))
-                    (cgui-core/add-widget! btn lbl))
-                  (events/on-left-click btn
-                    (fn [_]
-                      (swap! state assoc :phase :scan :device nil :message ""
-                             :editing-field nil
-                             :state-start-time (System/currentTimeMillis))))
-                  (cgui-core/add-widget! cw btn)))
-              nil)))))
+              :scan       (build-freq-scan-phase! cw state player-uuid)
+              :configure  (build-freq-configure-phase! cw state player-uuid)
+              :result     (build-freq-result-phase! cw state)
+              nil))
+          ;; Same-phase dynamic text update (lightweight, only when text differs)
+          (let [dyn-keys {:phase phase :ssid (:ssid full-state)
+                          :password (:password full-state)
+                          :message (:message full-state)
+                          :scanning? (:scanning? full-state)
+                          :editing-field (:editing-field full-state)}]
+            (when (not= dyn-keys @last-dyn-state)
+              (reset! last-dyn-state dyn-keys)
+              (update-freq-dynamic-texts! cw state))))))
 
     root))
 
