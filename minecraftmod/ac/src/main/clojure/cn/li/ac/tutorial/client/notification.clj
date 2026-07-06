@@ -13,6 +13,7 @@
   (:require [cn.li.ac.config.modid :as modid]
             [cn.li.ac.tutorial.content :as tutorial-content]
             [cn.li.mcmod.i18n :as i18n]
+            [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
@@ -46,8 +47,16 @@
 ;; State
 ;; ============================================================================
 
-(let [notifications* (atom [])]
-  (defn- lerp [a b t]
+(defn- notifications-atom
+  []
+  (if-let [fw-atom (fw/fw-atom)]
+    (or (get-in @fw-atom [:service :client-ui :tutorial-notifications])
+        (let [a (atom [])]
+          (swap! fw-atom assoc-in [:service :client-ui :tutorial-notifications] a)
+          a))
+    (atom [])))
+
+(defn- lerp [a b t]
   (+ a (* t (- b a))))
 
 (defn- sine-ease [t]
@@ -71,7 +80,7 @@
         (let [title (try
                       (:title (tutorial-content/load-tutorial-content (name tut-id)))
                       (catch Throwable _ (name tut-id)))]
-          (reset! notifications* (conj @notifications*
+          (reset! (notifications-atom) (conj @(notifications-atom)
                  {:title title
                   :tut-id tut-id
                   :start-sec nil}))))
@@ -98,8 +107,8 @@
                                                            notifs)
                                                      notifs)]
                                    (filterv #(<= (- now-sec (:start-sec %)) total-keep-time) initialized)))
-                               @notifications*)]
-                 (reset! notifications* new-val)
+                               @(notifications-atom))]
+                 (reset! (notifications-atom) new-val)
                  new-val)]
     (if-let [notif (last active)]
       (let [dt (- now-sec (:start-sec notif))
@@ -157,4 +166,4 @@
           :x content-x :y content-y
           :text content
           :color {:r 255 :g 255 :b 255 :a (int (* 255 text-alpha))}}])
-      []))))
+      [])))

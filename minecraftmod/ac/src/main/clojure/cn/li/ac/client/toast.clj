@@ -9,65 +9,70 @@
   Usage from any client-side code:
     (toast/show-toast! {:message-key \"app.my_mod.freq_transmitter.e1\"})"
   (:require [cn.li.mcmod.i18n :as i18n]
-            [cn.li.mcmod.client.platform-bridge :as client-bridge]))
+            [cn.li.mcmod.client.platform-bridge :as client-bridge]
+            [cn.li.mcmod.framework :as fw]))
 
 
 ;; ============================================================================
-;; State
+;; State — stored in Framework [:service :client-ui :toasts]
 ;; ============================================================================
 
 (def ^:private default-duration-ms 2000)
 (def ^:private fade-duration-ms 400)
+(def ^:private toasts-path [:service :client-ui :toasts])
+
+(defn- toasts-atom
+  []
+  (if-let [fw-atom (fw/fw-atom)]
+    (or (get-in @fw-atom toasts-path)
+        (let [a (atom [])]
+          (swap! fw-atom assoc-in toasts-path a)
+          a))
+    (atom [])))
 
 (defn- now-ms []
-  ;; Use game-time so toast animations pause when the game pauses,
-  ;; consistent with the overlay renderer that reads `now-ms` as game time.
   (client-bridge/game-time-ms))
 
-(let [toasts* (atom [])]
-  ;; ============================================================================
-  ;; Public API
-  ;; ============================================================================
+;; ============================================================================
+;; Public API
+;; ============================================================================
 
-  (defn show-toast!
-    "Queue a toast notification for rendering.
+(defn show-toast!
+  "Queue a toast notification for rendering."
+  ([{:keys [message-key args duration-ms]}]
+   (when message-key
+     (let [entry {:message-key message-key
+                  :args (vec (or args []))
+                  :start-ms (now-ms)
+                  :end-ms (+ (now-ms) (long (or duration-ms default-duration-ms)))}]
+       (swap! (toasts-atom) conj entry)))))
 
-    Required: :message-key — i18n translation key
-    Optional: :args — vector of format args
-              :duration-ms — override default TTL (ms)"
-    ([{:keys [message-key args duration-ms]}]
-     (when message-key
-       (let [entry {:message-key message-key
-                    :args (vec (or args []))
-                    :start-ms (now-ms)
-                    :end-ms (+ (now-ms) (long (or duration-ms default-duration-ms)))}]
-         (swap! toasts* conj entry)))))
+;; ============================================================================
+;; Rendering helpers
+;; ============================================================================
 
-  ;; ============================================================================
-  ;; Rendering helpers
-  ;; ============================================================================
+(defn- expired?
+  [entry now]
+  (>= now (:end-ms entry)))
 
-  (defn- expired?
-    [entry now]
-    (>= now (:end-ms entry)))
+(defn- alpha
+  [entry now]
+  (let [remaining (- (:end-ms entry) now)
+        fade (long fade-duration-ms)]
+    (if (pos? remaining)
+      (if (< remaining fade)
+        (max 0.0 (/ (double remaining) (double fade)))
+        1.0)
+      0.0)))
 
-  (defn- alpha
-    [entry now]
-    (let [remaining (- (:end-ms entry) now)
-          fade (long fade-duration-ms)]
-      (if (pos? remaining)
-        (if (< remaining fade)
-          (max 0.0 (/ (double remaining) (double fade)))
-          1.0)
-        0.0)))
-
-  (defn- renderable-toasts
-    "Return active toast entries and cleanup expired ones."
-    [now]
-    (let [active (remove #(expired? % now) @toasts*)]
-      (when-not (= (count active) (count @toasts*))
-        (reset! toasts* (vec active)))
-      active))
+(defn- renderable-toasts
+  "Return active toast entries and cleanup expired ones."
+  [now]
+  (let [ta (toasts-atom)
+        active (remove #(expired? % now) @ta)]
+    (when-not (= (count active) (count @ta))
+      (reset! ta (vec active)))
+    active))
 
 
 ;; ============================================================================
@@ -138,9 +143,9 @@
 
 (defn reset-toasts-for-test!
   []
-  (reset! toasts* [])
+  (reset! (toasts-atom) [])
   nil)
 
 (defn toasts-snapshot
   []
-  @toasts*))
+  @(toasts-atom))

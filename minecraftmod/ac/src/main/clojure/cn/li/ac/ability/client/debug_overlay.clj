@@ -5,7 +5,8 @@
    with a shadow effect through the existing overlay :text element pipeline."
   (:require [cn.li.ac.ability.registry.category :as category-registry]
             [cn.li.ac.ability.queries.ability-queries :as ability-queries]
-            [cn.li.mcmod.i18n :as i18n])
+            [cn.li.mcmod.i18n :as i18n]
+            [cn.li.mcmod.framework :as fw])
   (:import [java.util List]))
 
 ;; ============================================================================
@@ -14,14 +15,23 @@
 
 (def debug-states [:none :normal :show-exp])
 
-(let [state* (atom :none)]
-  (defn toggle-debug-state!
-    "Advance debug overlay state through the cycle: none -> normal -> show-exp -> none."
-    []
-    (let [cur (.indexOf ^List debug-states @state*)
-          nxt (rem (inc cur) (count debug-states))]
-      (reset! state* (nth debug-states nxt))
-      nil))
+(defn- debug-state-atom
+  []
+  (if-let [fw-atom (fw/fw-atom)]
+    (or (get-in @fw-atom [:service :client-ui :debug-overlay-state])
+        (let [a (atom :none)]
+          (swap! fw-atom assoc-in [:service :client-ui :debug-overlay-state] a)
+          a))
+    (atom :none)))
+
+(defn toggle-debug-state!
+  "Advance debug overlay state through the cycle: none -> normal -> show-exp -> none."
+  []
+  (let [state* (debug-state-atom)
+        cur (.indexOf ^List debug-states @state*)
+        nxt (rem (inc cur) (count debug-states))]
+    (reset! state* (nth debug-states nxt))
+    nil))
 
 ;; ============================================================================
 ;; Helpers
@@ -146,11 +156,11 @@
      Returns [] when debug state is :none or player-state is nil."
     [player-state]
     (when player-state
-      (let [state @state*
+      (let [state @(debug-state-atom)
             ability-data (:ability-data player-state)
             resource-data (:resource-data player-state)]
         (case state
           :none []
           :normal (text-lines->elements (build-normal-lines ability-data resource-data))
           :show-exp (text-lines->elements (build-show-exp-lines ability-data))
-          [])))))
+          []))))
