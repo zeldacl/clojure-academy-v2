@@ -1,5 +1,6 @@
 (ns cn.li.ac.content.ability.electromaster.arc-gen-test
   (:require [clojure.test :refer [deftest is]]
+            [cn.li.ac.ability.test.skill-callback-test-helpers :as cb]
             [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.content.ability.electromaster.arc-gen :as arc]
             [cn.li.ac.ability.skill-config :as skill-config]
@@ -53,7 +54,7 @@
                   fx/send! (fn [ctx-id entry _evt payload]
                              (swap! fx-calls* conj [ctx-id (:topic entry) payload])
                              nil)]
-      (arc/arc-gen-perform! {:player-id "p1" :ctx-id "ctx-1" :player {:id "player-obj"}})
+      (cb/apply-invoke arc/arc-gen-perform! :player-id "p1" :ctx-id "ctx-1" :player-ref {:id "player-obj"})
       (is (empty? @exp-calls*))
       (is (= 1 (count @fx-calls*)))
       (is (= :arc-gen/fx-perform (second (first @fx-calls*)))))))
@@ -86,7 +87,7 @@
                   skill-config/tunable-double-list stub-double-list
                   skill-config/probability (fn [& _] 1.0)
                   fx/send! (fn [& _] nil)]
-      (arc/arc-gen-perform! {:player-id "p2" :ctx-id "ctx-2" :player {:id "player-obj"}})
+      (cb/apply-invoke arc/arc-gen-perform! :player-id "p2" :ctx-id "ctx-2" :player-ref {:id "player-obj"})
       (is (= 1 (count @fish-give*)))
       (is (empty? @ignite-calls*))
       (is (= 1 (count @exp-calls*))))))
@@ -115,7 +116,7 @@
                   skill-config/tunable-double-list stub-double-list
                   skill-config/probability (fn [& _] 0.0)
                   fx/send! (fn [& _] nil)]
-      (arc/arc-gen-perform! {:player-id "p3" :ctx-id "ctx-3" :player {:id "player-obj"}})
+      (cb/apply-invoke arc/arc-gen-perform! :player-id "p3" :ctx-id "ctx-3" :player-ref {:id "player-obj"})
       (is (= 2 (count @potion-calls*)))
       (is (= #{:slowness :weakness}
               (set (map #(nth % 1) @potion-calls*)))))))
@@ -143,7 +144,7 @@
                   fx/send! (fn [ctx-id entry _evt payload]
                              (swap! fx-calls* conj [ctx-id (:topic entry) payload])
                              nil)]
-      (arc/arc-gen-perform! {:player-id "p4" :ctx-id "ctx-4" :player {:id "player-obj"}})
+      (cb/apply-invoke arc/arc-gen-perform! :player-id "p4" :ctx-id "ctx-4" :player-ref {:id "player-obj"})
       (is (empty? @spawn-calls*))
       (is (= 1 (count @fx-calls*)))
       (let [[_ _ payload] (first @fx-calls*)]

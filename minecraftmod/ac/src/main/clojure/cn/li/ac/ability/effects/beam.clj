@@ -12,6 +12,31 @@
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.block-manipulation :as block-manip]))
 
+(defn- beam-remove-self
+  "Remove the shooter from candidate list."
+  [player-id {:keys [uuid]}]
+  (= uuid player-id))
+
+(defn- beam-annotate-candidate
+  "Annotate a candidate with :forward-dist and :radial-dist relative to the beam."
+  [start-pos dir {:keys [x y z] :as target}]
+  (let [to-target    (geom/v- {:x x :y y :z z} start-pos)
+        forward-dist (geom/vdot to-target dir)
+        closest      (geom/v+ start-pos (geom/v* dir forward-dist))
+        radial-dist  (geom/vdist {:x x :y y :z z} closest)]
+    (assoc target :forward-dist forward-dist :radial-dist radial-dist)))
+
+(defn- beam-within-cylinder?
+  "True when the candidate lies within the beam cylinder."
+  [max-distance radius {:keys [forward-dist radial-dist]}]
+  (and (<= 0.0 (double forward-dist) (double max-distance))
+       (<= (double radial-dist) (* (double radius) 1.2))))
+
+(defn- beam-dist-sq
+  "Squared distance from start-pos to candidate, for nearest-first sort."
+  [start-pos {:keys [x y z]}]
+  (geom/vdist-sq start-pos {:x x :y y :z z}))
+
 ;; ---------------------------------------------------------------------------
 ;; Internal helpers
 ;; ---------------------------------------------------------------------------
@@ -25,18 +50,10 @@
                                                    world-id
                                                    (:x start-pos) (:y start-pos) (:z start-pos)
                                                    (double query-radius))
-           (remove (fn [{:keys [uuid]}] (= uuid player-id)))
-           (map (fn [{:keys [x y z] :as target}]
-                  (let [to-target    (geom/v- {:x x :y y :z z} start-pos)
-                        forward-dist (geom/vdot to-target dir)
-                        closest      (geom/v+ start-pos (geom/v* dir forward-dist))
-                        radial-dist  (geom/vdist {:x x :y y :z z} closest)]
-                    (assoc target :forward-dist forward-dist :radial-dist radial-dist))))
-           (filter (fn [{:keys [forward-dist radial-dist]}]
-                     (and (<= 0.0 (double forward-dist) (double max-distance))
-                          (<= (double radial-dist) (* (double radius) 1.2)))))
-           (sort-by (fn [{:keys [x y z]}]
-                      (geom/vdist-sq start-pos {:x x :y y :z z})))
+           (remove (partial beam-remove-self player-id))
+           (map (partial beam-annotate-candidate start-pos dir))
+           (filter (partial beam-within-cylinder? max-distance radius))
+           (sort-by (partial beam-dist-sq start-pos))
             vec)))
 
 (defn- break-blocks!

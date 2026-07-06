@@ -2,14 +2,23 @@
   "Render buffer API for model rendering via Framework function map.
 
    Buffer ops stored at [:platform :render-buffer-ops]."
-  (:require [cn.li.mcmod.framework :as fw]))
+  (:require [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.util.log :as log]))
+
+(def buffer-ops-keys #{:solid :translucent :cutout-no-cull :submit-vertex :triangle-vertex-order})
 
 (defn- buffer-op [k]
   (get-in @(fw/fw-atom) [:platform :render-buffer-ops k]))
 
 (defn install-render-buffer-ops!
   [ops-map _label]
-  (when-let [fw-atom (fw/fw-atom)] (swap! fw-atom assoc-in [:platform :render-buffer-ops] ops-map)) nil)
+  (if-let [fw-atom (fw/fw-atom)]
+    (let [missing (seq (remove (set (keys ops-map)) buffer-ops-keys))]
+      (swap! fw-atom assoc-in [:platform :render-buffer-ops] ops-map)
+      (log/info "Buffer ops installed:" (pr-str (keys ops-map)))
+      (when missing
+        (log/error "Buffer ops MISSING required keys:" (pr-str missing))))
+    (log/error "Buffer ops install FAILED: Framework atom nil")))
 
 (defn render-buffer-ops-available? []
   (boolean (get-in @(fw/fw-atom) [:platform :render-buffer-ops])))

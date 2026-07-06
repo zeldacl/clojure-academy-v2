@@ -350,14 +350,3 @@
   "Get the display/hover text for the current ViewGroup."
   [state*]
   (or (:display-text (current-view-group state*)) ""))
-
-;; For backward compat during migration — returns flat specs list
-(defn current-preview-spec
-  "Get the currently-selected sub-view. Legacy alias for current-sub-view."
-  [state*]
-  (current-sub-view state*))
-
-(defn cycle-preview!
-  "Legacy alias for cycle-sub-view!."
-  [state* direction]
-  (cycle-sub-view! state* direction))

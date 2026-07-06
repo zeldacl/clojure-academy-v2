@@ -23,7 +23,7 @@
 ;; Energy type key set documentation
 ;; ============================================================================
 
-(def ^:const energy-type-keys
+(def energy-type-keys
   "Keys required by an energy type function map."
   [:energy-type-id :energy-type-name :supports-item?
    :get-energy* :get-capacity* :get-bandwidth*
@@ -135,7 +135,7 @@
   (get (:types (energy-type-state-snapshot)) type-id))
 
 (defn list-energy-types []
-  (->> (:types (energy-type-state-snapshot)) vals (sort-by :energy-type-id) vec))
+  (->> (:types (energy-type-state-snapshot)) vals (sort-by #(get % :energy-type-id)) vec))
 
 (defn resolve-energy-type [type-or-item]
   (cond

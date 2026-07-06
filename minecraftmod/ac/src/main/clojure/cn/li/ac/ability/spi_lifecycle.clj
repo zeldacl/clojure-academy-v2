@@ -19,7 +19,7 @@
 ;; Key set documentation
 ;; ============================================================================
 
-(def ^:const ability-lifecycle-keys
+(def ability-lifecycle-keys
   "Keys required by an ability lifecycle function map."
   [:on-activate :on-tick :on-deactivate :can-execute?])
 

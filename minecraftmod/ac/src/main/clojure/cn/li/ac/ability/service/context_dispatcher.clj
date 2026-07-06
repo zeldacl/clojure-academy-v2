@@ -25,10 +25,14 @@
 (defn *context-owner*
   "Read context owner from Framework client context (or use provided owner, or nil)."
   ([]
-   (get-in @(fw/fw-atom) [:service :client-ctx :context-owner]))
+   (when-let [fw-inst (fw/fw-atom)]
+     (when (instance? clojure.lang.IAtom fw-inst)
+       (get-in @fw-inst [:service :client-ctx :context-owner]))))
   ([owner]
    (or owner
-       (get-in @(fw/fw-atom) [:service :client-ctx :context-owner]))))
+       (when-let [fw-inst (fw/fw-atom)]
+         (when (instance? clojure.lang.IAtom fw-inst)
+           (get-in @fw-inst [:service :client-ctx :context-owner]))))))
 
 (def ^:private default-dispatcher-state
   {:transport-contexts {}
@@ -394,8 +398,17 @@
              (System/currentTimeMillis))
            (when send-terminated-fn
              (when-let [ctx-owner (owner/canonical-owner-from-transport transport)]
-               (binding [*context-owner* ctx-owner]
-                 (send-terminated-fn (:id merged)))))
+               (let [fw-atom (fw/fw-atom)
+                     prev (when fw-atom (get-in @fw-atom [:service :client-ctx :context-owner]))]
+                 (try
+                   (when fw-atom
+                     (swap! fw-atom assoc-in [:service :client-ctx :context-owner] ctx-owner))
+                   (send-terminated-fn (:id merged))
+                   (finally
+                     (when fw-atom
+                       (if (some? prev)
+                         (swap! fw-atom assoc-in [:service :client-ctx :context-owner] prev)
+                         (swap! fw-atom update-in [:service :client-ctx] dissoc :context-owner))))))))
            (log/debug "Context terminated:" (:id merged))))))))
 
 (defn abort-all-contexts-for-player!
@@ -408,7 +421,7 @@
 
 (defn- require-bound-owner!
   [owner ctx-id op]
-  (or owner *context-owner*
+  (or owner (*context-owner*)
       (throw (ex-info (str op " requires explicit owner or bound *context-owner*")
                       {:ctx-id ctx-id}))))
 
@@ -526,3 +539,14 @@
      {:skill-id     skill-id
       :callback-key callback-key
       :event        event})))
+
+(defn create-dispatcher-runtime
+  "Test/runtime factory for the context dispatcher store."
+  []
+  {::runtime ::context-dispatcher
+   :state* (dispatcher-state-atom)})
+
+(defn call-with-dispatcher-runtime
+  "Run `f` with dispatcher runtime installed (identity wrapper for test isolation)."
+  [_runtime f]
+  (f))

@@ -2,26 +2,22 @@
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
+            [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.content.ability.electromaster.arc-gen-fx :as arc-fx]))
 
-(defn- with-fresh-arc-gen-fx-runtime [f]
-  (level-effects/call-with-level-effect-runtime
-    (level-effects/create-level-effect-runtime)
-    (fn []
-      (try
-        (level-effects/reset-level-effect-registry-for-test!)
-        (arc-fx/reset-arc-gen-fx-for-test!)
-        (f)
-        (finally
-          (arc-fx/reset-arc-gen-fx-for-test!)
-          (level-effects/reset-level-effect-registry-for-test!))))))
+(defn- invoke-level-enqueue! [ctx-id channel payload]
+  (arc-beam/enqueue-for-test! :arc-gen ctx-id channel payload))
 
-(defn- event [ctx-id payload]
-  {:payload payload
-   :ctx-id ctx-id
-   :channel :arc-gen/fx-perform
-   :owner-key [:ctx ctx-id]})
+(defn- with-fresh-arc-gen-fx-runtime [f]
+  (try
+    (level-effects/reset-level-effect-registry-for-test!)
+    (arc-fx/reset-arc-gen-fx-for-test!)
+    (arc-fx/init!)
+    (f)
+    (finally
+      (arc-fx/reset-arc-gen-fx-for-test!)
+      (level-effects/reset-level-effect-registry-for-test!))))
 
 (use-fixtures :each with-fresh-arc-gen-fx-runtime)
 
@@ -45,38 +41,38 @@
                   fx-registry/register-fx-channel! (fn [topic handler]
                                                      (swap! handlers* assoc topic handler)
                                                      nil)
-                  level-effects/enqueue-level-effect! (fn [effect-id payload fx-context]
-                                                        (swap! enqueued* conj [effect-id payload fx-context])
+                  level-effects/enqueue-level-effect! (fn [effect-id ctx-id channel payload & opts]
+                                                        (swap! enqueued* conj (into [effect-id ctx-id channel payload] opts))
                                                         nil)]
       (arc-fx/init!)
       ((get @handlers* :arc-gen/fx-perform) "ctx-arc" :arc-gen/fx-perform {:start {:x 1.0 :y 2.0 :z 3.0}
                                                  :end {:x 4.0 :y 5.0 :z 6.0}
                                                  :hit-type :entity})
-      (is (= [[:arc-gen {:mode :perform
-                         :owner-key [:ctx "ctx-arc"]
-                         :ctx-id "ctx-arc"
-                         :channel :arc-gen/fx-perform
-                         :start {:x 1.0 :y 2.0 :z 3.0}
-                         :end {:x 4.0 :y 5.0 :z 6.0}
-                         :hit-type :entity}
-               {:ctx-id "ctx-arc"
-                :channel :arc-gen/fx-perform
-                :owner-key [:ctx "ctx-arc"]}]]
+      (is (= [[:arc-gen "ctx-arc" :arc-gen/fx-perform
+               {:mode :perform
+                :start {:x 1.0 :y 2.0 :z 3.0}
+                :end {:x 4.0 :y 5.0 :z 6.0}
+                :hit-type :entity}
+               :owner-key [:ctx "ctx-arc"]]]
              @enqueued*)))))
 
 (deftest enqueue-perform-adds-arc-and-plays-sound-test
-  (let [enqueue-state! (var-get #'cn.li.ac.content.ability.electromaster.arc-gen-fx/enqueue-state!)
-        build-plan (var-get #'cn.li.ac.content.ability.electromaster.arc-gen-fx/build-plan)
+  (let [spec (arc-beam/build-spec
+               {:effect-id :arc-gen
+                :sound-id "my_mod:em.arc_weak"
+                :arc-life 10
+                :arc-pattern :weak
+                :channels []})
+        build-plan (:build-plan-fn (:level spec))
         sounds* (atom [])]
     (with-redefs [client-sounds/queue-current-sound-effect! (fn [payload]
                                                                (swap! sounds* conj payload)
                                                                nil)]
-      (level-effects/update-effect-state! :arc-gen enqueue-state!
-        (event "ctx-main"
-               {:mode :perform
-                :start {:x 0.0 :y 64.0 :z 0.0}
-                :end {:x 3.0 :y 64.0 :z 3.0}
-                :hit-type :block}))
+      (invoke-level-enqueue! "ctx-main" :arc-gen/fx-perform
+        {:mode :perform
+         :start {:x 0.0 :y 64.0 :z 0.0}
+         :end {:x 3.0 :y 64.0 :z 3.0}
+         :hit-type :block})
       (let [plan (build-plan {:x 0.0 :y 65.0 :z 0.0} nil 0)]
         (is (some? plan))
         (is (seq (:ops plan))))
@@ -85,24 +81,24 @@
       (is (= "my_mod:em.arc_weak" (:sound-id (first @sounds*)))))))
 
 (deftest two-owners-keep-arc-gen-queues-independent-test
-  (let [enqueue-state! (var-get #'cn.li.ac.content.ability.electromaster.arc-gen-fx/enqueue-state!)]
-    (with-redefs [client-sounds/queue-current-sound-effect! (fn [_] nil)]
-      (level-effects/update-effect-state! :arc-gen enqueue-state!
-        (event "ctx-a" {:mode :perform
-                         :start {:x 0.0 :y 0.0 :z 0.0}
-                         :end {:x 1.0 :y 0.0 :z 0.0}}))
-      (level-effects/update-effect-state! :arc-gen enqueue-state!
-        (event "ctx-b" {:mode :perform
-                         :start {:x 0.0 :y 1.0 :z 0.0}
-                         :end {:x 1.0 :y 1.0 :z 0.0}}))
-      (let [snapshot (arc-fx/arc-gen-fx-snapshot)]
-        (is (= 1 (count (get (:arcs snapshot) [:ctx "ctx-a"]))))
-        (is (= 1 (count (get (:arcs snapshot) [:ctx "ctx-b"]))))
-        (arc-fx/clear-arc-gen-owner! [:ctx "ctx-a"])
-        (let [after-clear (arc-fx/arc-gen-fx-snapshot)]
-          (is (nil? (get (:arcs after-clear) [:ctx "ctx-a"])))
-          (is (= 1 (count (get (:arcs after-clear) [:ctx "ctx-b"])))))))))
+  (with-redefs [client-sounds/queue-current-sound-effect! (fn [_] nil)]
+    (invoke-level-enqueue! "ctx-a" :arc-gen/fx-perform
+      {:mode :perform
+       :start {:x 0.0 :y 0.0 :z 0.0}
+       :end {:x 1.0 :y 0.0 :z 0.0}})
+    (invoke-level-enqueue! "ctx-b" :arc-gen/fx-perform
+      {:mode :perform
+       :start {:x 0.0 :y 1.0 :z 0.0}
+       :end {:x 1.0 :y 1.0 :z 0.0}})
+    (let [snapshot (arc-fx/arc-gen-fx-snapshot)]
+      (is (= 1 (count (get (:arcs snapshot) [:ctx "ctx-a"]))))
+      (is (= 1 (count (get (:arcs snapshot) [:ctx "ctx-b"]))))
+      (arc-fx/clear-arc-gen-owner! [:ctx "ctx-a"])
+      (let [after-clear (arc-fx/arc-gen-fx-snapshot)]
+        (is (nil? (get (:arcs after-clear) [:ctx "ctx-a"])))
+        (is (= 1 (count (get (:arcs after-clear) [:ctx "ctx-b"]))))))))
 
 (deftest arc-gen-fx-snapshot-default-without-registered-state-test
+  (arc-fx/reset-arc-gen-fx-for-test!)
   (is (= {:arcs {}}
          (arc-fx/arc-gen-fx-snapshot))))

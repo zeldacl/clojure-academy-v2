@@ -1,5 +1,5 @@
 (ns cn.li.ac.content.ability.meltdowner.meltdowner
-  "Meltdowner skill é”Ÿ?charge-window beam with block-breaking and reflection.
+  "Meltdowner skill ?charge-window beam with block-breaking and reflection.
 
   Uses the escape-hatch pattern: fn hooks for overload-floor enforcement and
   min/max charge-window gating; :beam op (effect.beam) for the actual shot.
@@ -15,16 +15,15 @@
   - EXP gain: timeRate(ct) * 0.002
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.dsl :refer [defskill]]
+  (:require [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
             [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.util.balance :as bal]
-            [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
                         [cn.li.ac.ability.effects.beam :as beam]
             [cn.li.ac.ability.effects.geom :as geom]
-            [cn.li.ac.ability.util.toggle :as toggle]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
+            [cn.li.ac.content.ability.shared.vec-reflection-interaction :as vec-reflect]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
                         [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
@@ -34,19 +33,8 @@
 ;; Config helpers
 ;; ---------------------------------------------------------------------------
 
+(def-skill-config-ops :meltdowner)
 (def ^:private meltdowner-skill-id :meltdowner)
-
-(defn- cfg-double [field-id]
-  (skill-config/tunable-double meltdowner-skill-id field-id))
-
-(defn- cfg-int [field-id]
-  (skill-config/tunable-int meltdowner-skill-id field-id))
-
-(defn- cfg-lerp [field-id exp]
-  (skill-config/lerp-double meltdowner-skill-id field-id exp))
-
-(defn- cfg-lerp-int [field-id exp]
-  (skill-config/lerp-int meltdowner-skill-id field-id exp))
 
 (defn- ticks-min [] (cfg-int :charge.min-ticks))
 (defn- ticks-max [] (cfg-int :charge.max-ticks))
@@ -55,9 +43,6 @@
 ;; ---------------------------------------------------------------------------
 ;; Helpers
 ;; ---------------------------------------------------------------------------
-
-(defn- skill-exp [player-id]
-  (skill-effects/skill-exp player-id meltdowner-skill-id))
 
 (defn- time-rate [ct]
   (let [charge-window (max 1.0 (- (double (ticks-max)) (double (ticks-min))))]
@@ -84,20 +69,6 @@
 ;; Vec-reflection interaction
 ;; ---------------------------------------------------------------------------
 
-(defn- toggle-active? [player-id skill-id]
-  (some (fn [[_ ctx-data]]
-          (and (= (:player-id ctx-data) player-id)
-               (toggle/is-toggle-active? ctx-data skill-id)))
-        (ctx/get-all-contexts)))
-
-(defn- vec-reflection-can-reflect? [target-player-id incoming-damage]
-  (when (toggle-active? target-player-id :vec-reflection)
-    (when-let [state (skill-effects/get-player-state target-player-id)]
-      (let [exp        (skill-effects/skill-exp target-player-id :vec-reflection)
-            consumption (* (double incoming-damage) (cfg-lerp :reflection.cp-per-damage exp))
-            current-cp (get-in state [:resource-data :cur-cp] 0.0)]
-        (>= (double current-cp) (double consumption))))))
-
 (defn- perform-reflection-shot!
   "Fire a reflected shot from the reflector player's perspective.
   Returns truthy if an entity was hit."
@@ -119,7 +90,7 @@
                   (:x look-dir) (:y look-dir) (:z look-dir)
                   (cfg-double :reflection.shot-distance)))]
           (when (and (= (:hit-type hit) :entity) (entity-damage/available?))
-    (md-damage/mark-target! reflector-player-id (:uuid hit)
+            (md-damage/mark-target! reflector-player-id (:uuid hit)
             {:ctx-id ctx-id
              :target-pos {:x (:x hit)
                   :y (:y hit)
@@ -138,9 +109,8 @@
 
 (defn- perform-meltdowner!
   "Fires the meltdowner beam. Returns :beam-result map (or {:performed? false})."
-  [{:keys [player-id ctx-id hold-ticks]}]
-  (let [exp      (skill-exp player-id)
-        ct       (to-charge-ticks hold-ticks)
+  [ctx-id player-id _skill-id exp hold-ticks]
+  (let [ct       (to-charge-ticks hold-ticks)
         damage   (* (time-rate ct) (cfg-lerp :combat.damage exp))
         world-id (geom/world-id-of player-id)
         eye      (geom/eye-pos player-id)
@@ -148,14 +118,19 @@
                    (raycast/get-player-look-vector* player-id))]
     (if-not look-vec
       {:performed? false}
-      (let [result (beam/execute-beam!
-                    {:player-id       player-id
-                     :ctx-id          ctx-id
-                     :world-id        world-id
-                     :eye-pos         eye
-                     :look-dir        look-vec
-                     :reflect-can-fn  (fn [uuid] (vec-reflection-can-reflect? uuid damage))
-                     :reflect-shot-fn (fn [uuid] (perform-reflection-shot! ctx-id uuid exp))}
+      (let [reflection (vec-reflect/build-reflection-callbacks
+                         {:ctx-id ctx-id
+                          :caster-skill-id :meltdowner
+                          :cp-field-id :reflection.cp-per-damage
+                          :reflect-shot-fn (fn [ctx-id* reflector-uuid]
+                                             (perform-reflection-shot! ctx-id* reflector-uuid exp))})
+            result (beam/execute-beam!
+                    (merge {:player-id       player-id
+                            :ctx-id          ctx-id
+                            :world-id        world-id
+                            :eye-pos         eye
+                            :look-dir        look-vec}
+                           reflection)
                     {:radius          (cfg-lerp :beam.radius exp)
                      :query-radius    (cfg-double :beam.query-radius)
                      :step            (cfg-double :beam.step)
@@ -173,15 +148,15 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- meltdowner-on-down!
-  [{:keys [player-id ctx-id cost-ok?]}]
+  [ctx-id _player-id _skill-id exp cost-ok? _hold-ticks _cost-stage _player-ref]
   (when cost-ok?
-    (let [overload-floor (cfg-lerp :cost.down.overload (skill-exp player-id))]
+    (let [overload-floor (cfg-lerp :cost.down.overload exp)]
       (set-skill-state! ctx-id [:overload-floor] overload-floor))))
 
 (defn- meltdowner-on-tick!
-  [{:keys [player-id ctx-id hold-ticks]}]
+  [ctx-id player-id _skill-id _exp _cost-ok? hold-ticks _cost-stage _player-ref]
   (let [ticks (long (or hold-ticks 0))]
-    (when-let [floor (get-in (ctx/get-context ctx-id) [:skill-state :overload-floor])]
+    (when-let [floor (get-in (ctx-skill/get-context ctx-id) [:skill-state :overload-floor])]
       (enforce-overload-floor! player-id floor))
     (when (> ticks (ticks-tolerant))
       (fx/send! ctx-id {:topic :meltdowner/fx-end} nil {:performed? false})
@@ -189,18 +164,15 @@
       (log/debug "Meltdowner aborted: over tolerant ticks" ticks))))
 
 (defn- meltdowner-on-up!
-  [{:keys [player-id ctx-id hold-ticks]}]
-  (let [ticks (long (or hold-ticks 0))
-        exp   (skill-exp player-id)]
+  [ctx-id player-id _skill-id exp _cost-ok? hold-ticks _cost-stage _player-ref]
+  (let [ticks (long (or hold-ticks 0))]
     (if (< ticks (ticks-min))
       (do
         (fx/send! ctx-id {:topic :meltdowner/fx-end} nil {:performed? false})
         (ctx/terminate-context! ctx-id nil)
         (log/debug "Meltdowner: insufficient charge ticks" ticks))
       (let [{:keys [performed? reflection-hit?]}
-            (perform-meltdowner! {:player-id  player-id
-                                  :ctx-id     ctx-id
-                                  :hold-ticks ticks})]
+            (perform-meltdowner! ctx-id player-id _skill-id exp ticks)]
         (if performed?
           (let [ct (to-charge-ticks ticks)]
             (skill-effects/add-skill-exp! player-id meltdowner-skill-id
@@ -217,11 +189,16 @@
             (ctx/terminate-context! ctx-id nil)
             (log/debug "Meltdowner: beam failed")))))))
 
-(defn init!
-  "Explicit runtime installer for Meltdowner shared damage helper hooks."
-  []
-  (md-damage/init!)
-  nil)
+(defn- meltdowner-abort!
+  [ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
+  (fx/send! ctx-id {:topic :meltdowner/fx-end} nil {:performed? false})
+  (ctx/terminate-context! ctx-id nil))
+
+(defn- meltdowner-cost-fail!
+  [ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks cost-stage _player-ref]
+  (when (= cost-stage :tick)
+    (fx/send! ctx-id {:topic :meltdowner/fx-end} nil {:performed? false}))
+  (ctx/terminate-context! ctx-id nil))
 
 ;; ---------------------------------------------------------------------------
 ;; Skill registration
@@ -265,13 +242,8 @@
   :actions         {:down!      meltdowner-on-down!
                     :tick!      meltdowner-on-tick!
                     :up!        meltdowner-on-up!
-                    :abort!     (fn [{:keys [ctx-id]}]
-                                  (fx/send! ctx-id {:topic :meltdowner/fx-end} nil {:performed? false})
-                                  (ctx/terminate-context! ctx-id nil))
-                    :cost-fail! (fn [{:keys [ctx-id cost-stage]}]
-                                  (when (= cost-stage :tick)
-                                    (fx/send! ctx-id {:topic :meltdowner/fx-end} nil {:performed? false}))
-                                  (ctx/terminate-context! ctx-id nil))}
+                    :abort!     meltdowner-abort!
+                    :cost-fail! meltdowner-cost-fail!}
   :prerequisites   [{:skill-id :scatter-bomb :min-exp 0.8}
                     {:skill-id :light-shield :min-exp 0.8}])
 

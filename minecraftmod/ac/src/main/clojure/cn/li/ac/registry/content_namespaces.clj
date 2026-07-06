@@ -113,7 +113,7 @@
   "Load all content namespaces and execute their declared init functions."
   []
   (let [plan (current-content-load-plan)]
-    (log/warn "[CONTENT_TRACE] load-all begin" {:phases (mapv :phase plan)})
+    (log/warn "[CONTENT_TRACE] load-all begin" {:phases (mapv #(get % :phase) plan)})
     (doseq [phase-spec plan]
       (require-namespaces! (:namespaces phase-spec)))
     (doseq [phase-spec plan]

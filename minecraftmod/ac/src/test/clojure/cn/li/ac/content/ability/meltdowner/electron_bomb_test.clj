@@ -1,5 +1,6 @@
 (ns cn.li.ac.content.ability.meltdowner.electron-bomb-test
   (:require [clojure.test :refer [deftest is]]
+            [cn.li.ac.ability.test.skill-callback-test-helpers :as cb]
             [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.content.ability.meltdowner.electron-bomb :as electron-bomb]
             [cn.li.ac.ability.skill-config :as skill-config]
@@ -42,8 +43,7 @@
                   delayed-projectiles/schedule-electron-bomb-beam! (fn [task]
                                                                      (swap! scheduled* conj task)
                                                                      nil)]
-      (electron-bomb/electron-bomb-perform!
-        {:player-id "p1" :ctx-id "ctx-1" :player {:id "player-obj"}})
+      (cb/apply-invoke electron-bomb/electron-bomb-perform! :player-id "p1" :ctx-id "ctx-1" :player-ref {:id "player-obj"})
       (is (= [[{:id "player-obj"} "my_mod:entity_md_ball" 0.0]]
              @spawn-calls*))
       (is (= [["ctx-1"
@@ -82,8 +82,7 @@
                   delayed-projectiles/schedule-electron-bomb-beam! (fn [task]
                                                                      (swap! scheduled* conj task)
                                                                      nil)]
-      (electron-bomb/electron-bomb-perform!
-        {:player-id "p1" :ctx-id "ctx-1" :player {:id "player-obj"}})
+      (cb/apply-invoke electron-bomb/electron-bomb-perform! :player-id "p1" :ctx-id "ctx-1" :player-ref {:id "player-obj"})
       (is (empty? @spawn-calls*))
       (is (empty? @fx-calls*))
       (is (empty? @scheduled*)))))

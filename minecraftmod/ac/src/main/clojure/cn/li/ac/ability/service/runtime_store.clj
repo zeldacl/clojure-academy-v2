@@ -85,11 +85,13 @@
   [session-id player-uuid state]
   (when-let [store (ensure-store)]
     (let [k (player-key session-id player-uuid)
-          player-atoms (:player-atoms store)]
+          player-atoms (:player-atoms store)
+          sessions (:sessions store)]
+      (.putIfAbsent ^ConcurrentHashMap sessions session-id (ConcurrentHashMap.))
       (if-let [a (.get ^ConcurrentHashMap player-atoms k)]
         (reset! a state)
         (.put ^ConcurrentHashMap player-atoms k (atom state)))
-      (when-let [^ConcurrentHashMap s (.get ^ConcurrentHashMap (:sessions store) session-id)]
+      (when-let [^ConcurrentHashMap s (.get ^ConcurrentHashMap sessions session-id)]
         (.put ^ConcurrentHashMap s player-uuid true))))
   nil)
 
@@ -146,18 +148,22 @@
 
 (defn clear-dirty!
   "Clear the dirty flag. Returns nil."
-  [session-id player-uuid]
-  (when-let [store (ensure-store)]
-    (when-let [a (.get ^ConcurrentHashMap (:player-atoms store) (player-key session-id player-uuid))]
-      (swap! a assoc :dirty? false)))
-  nil)
+  ([session-id player-uuid]
+   (when-let [store (ensure-store)]
+     (when-let [a (.get ^ConcurrentHashMap (:player-atoms store) (player-key session-id player-uuid))]
+       (swap! a assoc :dirty? false)))
+   nil)
+  ([_store session-id player-uuid]
+   (clear-dirty! session-id player-uuid)))
 
 (defn create-session!
   "Initialize a session. Returns nil."
-  [session-id]
-  (when-let [store (ensure-store)]
-    (.putIfAbsent ^ConcurrentHashMap (:sessions store) session-id (ConcurrentHashMap.)))
-  nil)
+  ([session-id]
+   (when-let [store (ensure-store)]
+     (.putIfAbsent ^ConcurrentHashMap (:sessions store) session-id (ConcurrentHashMap.)))
+   nil)
+  ([_store session-id]
+   (create-session! session-id)))
 
 (defn remove-session!
   "Remove all state for a session. Returns nil."

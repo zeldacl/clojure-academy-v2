@@ -62,7 +62,15 @@
 (defn- managed-screen-runtime []
   (managed-screens/create-managed-screen-runtime))
 
-(defn- call-with-managed-screen-runtime [f] (f))
+(defn call-with-managed-screen-runtime [f] (f))
+
+(defn create-client-ui-runtime []
+  {::runtime ::client-ui
+   :state* (client-ui-runtime-state-atom)})
+
+(defn call-with-client-ui-runtime
+  [_runtime f]
+  (f))
 
 (defn- active-managed-screen-owner
   [screen-key]
@@ -100,7 +108,7 @@
 
 (defn- current-client-session-id
   []
-  (or client-keybinds/*client-session-id* runtime-hooks/*client-session-id*))
+  (or client-keybinds/*client-session-id* (runtime-hooks/*client-session-id*)))
 
 (defn- require-client-owner-value
   [owner label value]
@@ -130,7 +138,7 @@
 (defn- with-client-owner-bindings
   [owner f]
   (let [[session-id player-uuid] (client-ui-owner-key owner)]
-    (binding [runtime-hooks/*client-session-id* session-id]
+    (runtime-hooks/with-client-ctx {:session-id session-id}
       (runtime-hooks/with-player-state-owner {:client-session-id session-id
                                               :player-uuid player-uuid}
         (f)))))
@@ -1252,7 +1260,7 @@
      :client-open-managed-screen!
      (fn [screen-key payload]
        (let [{:keys [player-uuid client-session-id payload]} (validate-managed-screen-payload screen-key payload)]
-         (binding [runtime-hooks/*client-session-id* client-session-id]
+         (runtime-hooks/with-client-ctx {:session-id client-session-id}
            (call-with-managed-screen-runtime
              #(let [owner {:client-session-id client-session-id
                            :player-uuid player-uuid}]

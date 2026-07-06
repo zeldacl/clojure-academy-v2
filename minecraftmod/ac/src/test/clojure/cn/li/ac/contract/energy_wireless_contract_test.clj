@@ -51,9 +51,9 @@
           (let [net (lookup/get-network-by-ssid wd "contract-net")
                 node-a (get @tiles [3 0 0])
                 node-b (get @tiles [5 0 0])]
-            (is (not (:success (commands/link-node-to-network! wd net node-a-vb "wrong"))))
-            (is (:success (commands/link-node-to-network! wd net node-a-vb "pw")))
-            (is (:success (commands/link-node-to-network! wd net node-b-vb "pw")))
+            (is (not (:success (commands/link-node-to-network! wd net node-a-vb "wrong" nil)))))
+            (is (:success (commands/link-node-to-network! wd net node-a-vb "pw" nil))))
+            (is (:success (commands/link-node-to-network! wd net node-b-vb "pw" nil))))
             (with-redefs [network-config/update-interval-ticks (constantly 1)
                           network-config/buffer-max (constantly 1.0e6)
                           shuffle identity]
@@ -94,8 +94,8 @@
         (fn []
           (is (:success (commands/create-network! wd matrix-vb "cap-net" "pw")))
           (let [net (lookup/get-network-by-ssid wd "cap-net")]
-            (is (:success (commands/link-node-to-network! wd net near-a "pw")))
-            (is (not (:success (commands/link-node-to-network! wd net near-b "pw"))))
+            (is (:success (commands/link-node-to-network! wd net near-a "pw" nil))))
+            (is (not (:success (commands/link-node-to-network! wd net near-b "pw" nil)))))
             (commands/unlink-node-from-network! net near-a)
-            (is (not (:success (commands/link-node-to-network! wd net far-node "pw"))))
-            (is (:success (commands/link-node-to-network! wd net near-b "pw")))))))))
+            (is (not (:success (commands/link-node-to-network! wd net far-node "pw" nil)))))
+            (is (:success (commands/link-node-to-network! wd net near-b "pw" nil))))))))))

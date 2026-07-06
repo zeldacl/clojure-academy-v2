@@ -145,7 +145,9 @@ tasks.register('quickUnitTestsFast') {
 tasks.register('verifyLocalPrGate') {
     group = 'verification'
     description = 'Run the recommended local PR gate: current platforms plus platform-neutral unit tests.'
-    dependsOn 'verifyCurrentPlatforms', 'quickUnitTests'
+    dependsOn 'verifyCurrentPlatforms', 'quickUnitTests',
+              'verifyAotIronRules', 'verifyNoRogueThreads', 'verifyNoClientMcInShared',
+              'verifyPacketHandlerContext'
 }
 
 tasks.register('verifyForgeClojureUnitTests') {
@@ -3855,6 +3857,258 @@ tasks.register('verifyNoPlatformReflection') {
         marker.parentFile.mkdirs()
         marker.setText("passed at ${new Date()}\n", 'UTF-8')
         logger.lifecycle('[verifyNoPlatformReflection] passed. Scanned main Clojure sources with IC2 allowlist.')
+    }
+}
+
+tasks.register('verifyAotIronRules') {
+    group = 'verification'
+    description = 'Fail on AOT iron-rule violations: keyword-as-IFn, 3-arg into+transducer, ^:const collections.'
+
+    def clojureMainSources = fileTree(project.rootDir) {
+        include 'ac/src/main/**/*.clj'
+        include 'mcmod/src/main/**/*.clj'
+        include 'mc-1.20.1/src/main/**/*.clj'
+        include 'forge-1.20.1/src/main/**/*.clj'
+        include 'fabric-1.20.1/src/main/**/*.clj'
+        exclude '**/build/**', '**/.gradle/**', '**/bin/**', '**/test/**'
+    }
+
+    def keywordIFnPattern = ~/(?<!\#)\((?:map|mapv|filter|filterv|remove|keep|group-by|sort-by|some|mapcat|keep-indexed)\s+:[a-zA-Z]/
+    def juxtKeywordPattern = ~/\(juxt\s+:[a-zA-Z]/
+    def intoTransducerPattern = ~/\(into\s+\S+\s+\((?:map|mapcat|filter|remove|keep)\s+([a-zA-Z][\w.\$\/-]*|:[\w.-]+)\s*\)\s+\S/
+    def constCollectionPattern = ~/\(def\s+\^:const\s+\S+[\s\n]*\[/
+
+    inputs.files(clojureMainSources).withPropertyName('aotIronRulesSources')
+    outputs.dir(layout.buildDirectory.dir('verification/verifyAotIronRules'))
+
+    doLast {
+        def violations = []
+        clojureMainSources.files.findAll { it.isFile() }.sort { it.path }.each { File sourceFile ->
+            def rel = project.rootDir.toPath().relativize(sourceFile.toPath()).toString().replace('\\', '/')
+            def text = sourceFile.getText('UTF-8')
+            text.readLines().eachWithIndex { String line, int idx ->
+                if (keywordIFnPattern.matcher(line).find()) {
+                    violations << [file: rel, line: idx + 1, rule: 'keyword-as-IFn', text: line.trim()]
+                }
+                if (juxtKeywordPattern.matcher(line).find()) {
+                    violations << [file: rel, line: idx + 1, rule: 'juxt-keyword', text: line.trim()]
+                }
+                if (intoTransducerPattern.matcher(line).find()) {
+                    violations << [file: rel, line: idx + 1, rule: 'into-3arg-transducer', text: line.trim()]
+                }
+                if (constCollectionPattern.matcher(line).find()) {
+                    violations << [file: rel, line: idx + 1, rule: 'const-collection', text: line.trim()]
+                }
+            }
+        }
+        if (!violations.isEmpty()) {
+            logger.error('[verifyAotIronRules] {} violation(s):', violations.size())
+            violations.each { v -> logger.error('  {}:{} [{}] {}', v.file, v.line, v.rule, v.text) }
+            throw new GradleException('verifyAotIronRules failed.')
+        }
+        def marker = layout.buildDirectory.file('verification/verifyAotIronRules/passed.txt').get().asFile
+        marker.parentFile.mkdirs()
+        marker.setText("passed at ${new Date()}\n", 'UTF-8')
+        logger.lifecycle('[verifyAotIronRules] passed.')
+    }
+}
+
+tasks.register('verifyNoRogueThreads') {
+    group = 'verification'
+    description = 'Fail if main Clojure sources use future/pmap/agent/send-off or bare Thread. (use enqueueWork + context rebuild).'
+
+    def clojureMainSources = fileTree(project.rootDir) {
+        include 'ac/src/main/**/*.clj'
+        include 'mcmod/src/main/**/*.clj'
+        include 'mc-1.20.1/src/main/**/*.clj'
+        include 'forge-1.20.1/src/main/**/*.clj'
+        include 'fabric-1.20.1/src/main/**/*.clj'
+        exclude '**/build/**', '**/.gradle/**', '**/bin/**', '**/test/**'
+    }
+
+    def forbiddenPatterns = [
+        [name: 'future', pattern: ~/\(future[\s)]/],
+        [name: 'pmap', pattern: ~/\(pmap[\s)]/],
+        [name: 'send-off', pattern: ~/\(send-off[\s)]/],
+        [name: 'agent', pattern: ~/\(agent[\s)]/],
+        [name: 'Thread.', pattern: ~/\(Thread\./]
+    ]
+
+    inputs.files(clojureMainSources).withPropertyName('noRogueThreadsSources')
+    outputs.dir(layout.buildDirectory.dir('verification/verifyNoRogueThreads'))
+
+    doLast {
+        def violations = []
+        clojureMainSources.files.findAll { it.isFile() }.sort { it.path }.each { File sourceFile ->
+            def rel = project.rootDir.toPath().relativize(sourceFile.toPath()).toString().replace('\\', '/')
+            sourceFile.readLines('UTF-8').eachWithIndex { String line, int idx ->
+                if (line.trim().startsWith(';')) return
+                forbiddenPatterns.each { spec ->
+                    if (spec.pattern.matcher(line).find()) {
+                        violations << [file: rel, line: idx + 1, rule: spec.name, text: line.trim()]
+                    }
+                }
+            }
+        }
+        if (!violations.isEmpty()) {
+            logger.error('[verifyNoRogueThreads] {} violation(s):', violations.size())
+            violations.each { v -> logger.error('  {}:{} [{}] {}', v.file, v.line, v.rule, v.text) }
+            throw new GradleException('verifyNoRogueThreads failed.')
+        }
+        def marker = layout.buildDirectory.file('verification/verifyNoRogueThreads/passed.txt').get().asFile
+        marker.parentFile.mkdirs()
+        marker.setText("passed at ${new Date()}\n", 'UTF-8')
+        logger.lifecycle('[verifyNoRogueThreads] passed.')
+    }
+}
+
+tasks.register('verifyNoClientMcInShared') {
+    group = 'verification'
+    description = 'Fail if ac/mcmod main sources import net.minecraft.client or com.mojang.blaze3d (dedicated-server safety).'
+
+    def sharedSources = fileTree(project.rootDir) {
+        include 'ac/src/main/**/*.clj'
+        include 'mcmod/src/main/**/*.clj'
+        exclude '**/build/**', '**/.gradle/**', '**/bin/**'
+    }
+
+    def forbiddenPatterns = [
+        [name: 'net.minecraft.client', pattern: ~/net\.minecraft\.client/],
+        [name: 'com.mojang.blaze3d', pattern: ~/com\.mojang\.blaze3d/]
+    ]
+
+    inputs.files(sharedSources).withPropertyName('noClientMcSharedSources')
+    outputs.dir(layout.buildDirectory.dir('verification/verifyNoClientMcInShared'))
+
+    doLast {
+        def violations = []
+        sharedSources.files.findAll { it.isFile() }.sort { it.path }.each { File sourceFile ->
+            def rel = project.rootDir.toPath().relativize(sourceFile.toPath()).toString().replace('\\', '/')
+            sourceFile.readLines('UTF-8').eachWithIndex { String line, int idx ->
+                forbiddenPatterns.each { spec ->
+                    if (spec.pattern.matcher(line).find()) {
+                        violations << [file: rel, line: idx + 1, rule: spec.name, text: line.trim()]
+                    }
+                }
+            }
+        }
+        if (!violations.isEmpty()) {
+            logger.error('[verifyNoClientMcInShared] {} violation(s):', violations.size())
+            violations.each { v -> logger.error('  {}:{} [{}] {}', v.file, v.line, v.rule, v.text) }
+            throw new GradleException('verifyNoClientMcInShared failed.')
+        }
+        def marker = layout.buildDirectory.file('verification/verifyNoClientMcInShared/passed.txt').get().asFile
+        marker.parentFile.mkdirs()
+        marker.setText("passed at ${new Date()}\n", 'UTF-8')
+        logger.lifecycle('[verifyNoClientMcInShared] passed.')
+    }
+}
+
+tasks.register('verifyPacketHandlerContext') {
+    group = 'verification'
+    description = 'Ensure platform packet handler entry points rebuild ThreadLocal context and enqueue to main thread.'
+
+    def transportSources = fileTree(project.rootDir) {
+        include 'forge-1.20.1/src/main/**/*.clj'
+        include 'fabric-1.20.1/src/main/**/*.clj'
+        include 'forge-1.20.1/src/main/**/*.java'
+        exclude '**/build/**', '**/.gradle/**', '**/bin/**'
+    }
+
+    def contextWrapperPattern = ~/(?:with-client-ctx-fn|with-player-state-owner-fn|with-bound-client-owner|with-server-player-owner|with-client-response-owner)/
+    def serverDispatchPattern = ~/net-server\/handle-request/
+    def clientDispatchPattern = ~/packet-base\/dispatch-client-response!/
+    def enqueueWorkPattern = ~/enqueueWork/
+
+    def requiredChecklist = [
+        [file: 'forge-1.20.1/src/main/clojure/cn/li/forge1201/gui/network.clj',
+         mustContain: ['with-server-player-owner', 'with-client-response-owner', 'net-server/handle-request', 'packet-base/dispatch-client-response!']],
+        [file: 'fabric-1.20.1/src/main/clojure/cn/li/fabric1201/gui/network/server.clj',
+         mustContain: ['with-server-player-owner', '.execute server', 'net-server/handle-request']],
+        [file: 'fabric-1.20.1/src/main/clojure/cn/li/fabric1201/gui/network/client.clj',
+         mustContain: ['with-client-response-owner', '.execute client', 'packet-base/dispatch-client-response!']],
+        [file: 'forge-1.20.1/src/main/java/cn/li/forge1201/network/ClojureNetworkPackets.java',
+         mustContain: ['enqueueWork']]
+    ]
+
+    inputs.files(transportSources).withPropertyName('packetHandlerContextSources')
+    outputs.dir(layout.buildDirectory.dir('verification/verifyPacketHandlerContext'))
+
+    doLast {
+        def violations = []
+
+        requiredChecklist.each { spec ->
+            def sourceFile = file(spec.file)
+            if (!sourceFile.exists()) {
+                violations << [file: spec.file, line: 0, rule: 'missing-checklist-file', text: 'required packet handler file not found']
+                return
+            }
+            def text = sourceFile.getText('UTF-8')
+            spec.mustContain.each { fragment ->
+                if (!text.contains(fragment)) {
+                    violations << [file: spec.file, line: 0, rule: 'checklist', text: "missing required fragment: ${fragment}"]
+                }
+            }
+        }
+
+        transportSources.files.findAll { it.isFile() && it.name.endsWith('.clj') }.sort { it.path }.each { File sourceFile ->
+            def rel = project.rootDir.toPath().relativize(sourceFile.toPath()).toString().replace('\\', '/')
+            def text = sourceFile.getText('UTF-8')
+            def dispatchesServer = serverDispatchPattern.matcher(text).find()
+            def dispatchesClient = clientDispatchPattern.matcher(text).find()
+            if ((dispatchesServer || dispatchesClient) && !contextWrapperPattern.matcher(text).find()) {
+                violations << [file: rel, line: 0, rule: 'missing-context-wrapper',
+                               text: 'packet dispatch without with-client-ctx-fn / owner wrapper']
+            }
+        }
+
+        def forgePackets = file('forge-1.20.1/src/main/java/cn/li/forge1201/network/ClojureNetworkPackets.java')
+        if (forgePackets.exists()) {
+            def packetsText = forgePackets.getText('UTF-8')
+            def enqueueMatcher = enqueueWorkPattern.matcher(packetsText)
+            def enqueueCount = 0
+            while (enqueueMatcher.find()) {
+                enqueueCount++
+            }
+            if (enqueueCount < 2) {
+                violations << [file: 'forge-1.20.1/src/main/java/cn/li/forge1201/network/ClojureNetworkPackets.java',
+                               line: 0, rule: 'enqueueWork', text: "expected >=2 enqueueWork calls, found ${enqueueCount}"]
+            }
+        }
+
+        if (!violations.isEmpty()) {
+            logger.error('[verifyPacketHandlerContext] {} violation(s):', violations.size())
+            violations.each { v -> logger.error('  {}:{} [{}] {}', v.file, v.line, v.rule, v.text) }
+            throw new GradleException('verifyPacketHandlerContext failed.')
+        }
+        def marker = layout.buildDirectory.file('verification/verifyPacketHandlerContext/passed.txt').get().asFile
+        marker.parentFile.mkdirs()
+        marker.setText("passed at ${new Date()}\n", 'UTF-8')
+        logger.lifecycle('[verifyPacketHandlerContext] passed.')
+    }
+}
+
+tasks.register('verifyAotIronRulesNegativeFixture') {
+    group = 'verification'
+    description = 'Verify verifyAotIronRules patterns detect an intentional keyword-as-IFn fixture.'
+
+    def fixtureFile = file('tools/verification/fixtures/bad_iron_rule_keyword.clj')
+    def keywordIFnPattern = ~/(?<!\#)\((?:map|mapv|filter|filterv|remove|keep|group-by|sort-by|some|mapcat|keep-indexed)\s+:[a-zA-Z]/
+
+    inputs.file(fixtureFile)
+        .withPropertyName('aotIronRulesNegativeFixture')
+        .withPathSensitivity(org.gradle.api.tasks.PathSensitivity.RELATIVE)
+
+    doLast {
+        if (!fixtureFile.exists()) {
+            throw new GradleException('Missing tools/verification/fixtures/bad_iron_rule_keyword.clj')
+        }
+        def text = fixtureFile.getText('UTF-8')
+        def matched = text.readLines().any { String line -> keywordIFnPattern.matcher(line).find() }
+        if (!matched) {
+            throw new GradleException('Negative iron-rule fixture no longer contains a keyword-as-IFn violation.')
+        }
+        logger.lifecycle('[verifyAotIronRulesNegativeFixture] passed. intentional keyword-as-IFn fixture is detectable.')
     }
 }
 

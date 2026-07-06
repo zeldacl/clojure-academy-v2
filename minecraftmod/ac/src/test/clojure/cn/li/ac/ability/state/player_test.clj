@@ -23,7 +23,7 @@
               (evt/create-event-subscriber-runtime))))))))
 
 (deftest player-state-access-requires-explicit-owner-test
-  (binding [runtime-hooks/*player-state-owner* nil]
+  (runtime-hooks/with-client-ctx {:player-owner nil}
     (is (thrown-with-msg? clojure.lang.ExceptionInfo
                           #"session-id"
                           (command-rt/run-command-in-session! nil
@@ -41,11 +41,10 @@
   (let [s (store/fresh-player-state)]
     (is (map? (:ability-data s)))
     (is (map? (:resource-data s)))
-    (is (map? (:cooldown-data s)))
     (is (map? (:preset-data s)))
-    (is (map? (:develop-data s)))
-    (is (map? (:terminal-data s)))
-    (is (false? (:dirty? s)))))
+    (is (map? (:context-registry s)))
+    (is (false? (:dirty? s)))
+    (is (false? (contains? s :terminal-data)))))
 
 (deftest get-or-create-player-state-test
   (let [a (store/get-or-create-player-state! ps-fix/test-session-id "u1")
@@ -65,7 +64,7 @@
 
 (deftest update-ability-data-uses-bound-owner-session-test
   (store/get-or-create-player-state! :accessor-session "u2")
-  (binding [runtime-hooks/*player-state-owner* {:server-session-id :accessor-session}]
+  (runtime-hooks/with-client-ctx {:player-owner {:server-session-id :accessor-session}}
     (command-rt/run-command-in-session! nil
                                         "u2"
                                         {:command :change-category
@@ -81,7 +80,7 @@
 
 (deftest server-tick-player-uses-bound-owner-session-test
   (store/get-or-create-player-state! :tick-session "u3")
-  (binding [runtime-hooks/*player-state-owner* {:server-session-id :tick-session}]
+  (runtime-hooks/with-client-ctx {:player-owner {:server-session-id :tick-session}}
     (let [r (ps-tick/server-tick-player! "u3" nil)]
       (is (map? r))
       (is (vector? (:events r))))))
@@ -117,19 +116,15 @@
                   (assoc-in [:cooldown-data [:railgun :main]] 20)
                   (assoc-in [:preset-data :slots [0 0]] [:electromaster :railgun])
                   (assoc-in [:develop-data :state] :developing)
-                  (assoc-in [:terminal-data :terminal-installed?] true)
-                  (update-in [:terminal-data :installed-apps] conj :skill-tree)
                   (assoc :dirty? true))
         persisted (dissoc state :dirty?)
         decoded (edn/read-string (pr-str persisted))]
     (is (= persisted decoded))
     (is (false? (contains? decoded :dirty?)))
-    (is (= #{:ability-data :resource-data :cooldown-data :preset-data :develop-data :terminal-data :context-registry}
+    (is (= #{:ability-data :resource-data :cooldown-data :preset-data :develop-data :context-registry}
            (set (keys decoded))))
     (is (= [:electromaster :railgun]
-           (get-in decoded [:preset-data :slots [0 0]])))
-    (is (= #{:skill-tree}
-           (get-in decoded [:terminal-data :installed-apps])))))
+           (get-in decoded [:preset-data :slots [0 0]])))))
 
 
 

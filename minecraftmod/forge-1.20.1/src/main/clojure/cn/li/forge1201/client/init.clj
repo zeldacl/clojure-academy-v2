@@ -23,7 +23,7 @@
             [cn.li.mc1201.gui.cgui.font :as cgui-font]
             [cn.li.mc1201.client.session :as mc-session]
             [cn.li.forge1201.client.runtime-bridge :as runtime-bridge]
-            [cn.li.forge1201.client.key-input :as key-input]
+            [cn.li.forge1201.client.key-mapping-adapter :as key-mapping-adapter]
             [cn.li.forge1201.client.overlay-renderer :as overlay-renderer]
             [cn.li.mc1201.gui.screen.cgui-screen-host :as cgui-screen-host]
             [cn.li.forge1201.client.hand-effect-renderer :as hand-effect-renderer]
@@ -43,7 +43,7 @@
            [net.minecraftforge.client.event RegisterKeyMappingsEvent]
            [net.minecraftforge.event TickEvent$ClientTickEvent TickEvent$Phase]
            [net.minecraft.client KeyMapping]
-           [net.minecraft.client.renderer.blockentity BlockEntityRendererProvider]
+           [cn.li.forge1201.client.render ScriptedBlockEntityBerProvider]
            [com.mojang.blaze3d.platform Window]))
 
 ;; ============================================================================
@@ -149,9 +149,7 @@
           (.registerBlockEntityRenderer
             evt
             be-type
-            (reify BlockEntityRendererProvider
-              (create [_ _ctx]
-                (tesr-impl/new-renderer))))
+            (ScriptedBlockEntityBerProvider.))
           (log/info (str "  BER registered for tile-id " tile-id)))))))
 
 (defn- open-screen-dispatcher
@@ -237,15 +235,18 @@
        :blit-textured-quad! (fn [graphics texture x1 y1 x2 y2 z u0 u1 v0 v1]
                               (.invokeInnerBlit ^GuiGraphicsInvoker graphics
                                 texture (int x1) (int x2) (int y1) (int y2) (int z)
-                                (float u0) (float u1) (float v0) (float v1)))}))
+                                (float u0) (float u1) (float v0) (float v1)))
+       :is-glfw-key-down? (fn [key-code]
+                            (try
+                              (let [^Minecraft mc (Minecraft/getInstance)
+                                    handle (.. mc getWindow getHandle)]
+                                (= 1 (org.lwjgl.glfw.GLFW/glfwGetKey handle (int key-code))))
+                              (catch Throwable _ false)))}))
 
 (defn register-key-mappings!
   "Register all runtime KeyMapping instances to Forge input system."
   [^RegisterKeyMappingsEvent event]
-  ;; Ensure mappings are created even if this event fires before client setup enqueueWork.
-  (key-input/register-keybinds!)
-  (let [all-keys (concat (key-input/get-slot-keys)
-                         (key-input/get-screen-keys))]
+  (let [all-keys (key-mapping-adapter/get-all-key-mappings)]
     (doseq [^KeyMapping key all-keys]
       (.register event key))
     (log/info "Registered runtime key mappings:" (count all-keys))))
@@ -266,7 +267,6 @@
   (register-fluid-render-layers!)
 
   ;; Runtime client systems
-  (key-input/init!)
   (runtime-bridge/init!)
   (overlay-renderer/init!)
   (screen-host/init!)

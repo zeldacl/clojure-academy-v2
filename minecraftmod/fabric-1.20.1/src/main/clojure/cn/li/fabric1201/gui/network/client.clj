@@ -1,5 +1,6 @@
 (ns cn.li.fabric1201.gui.network.client
-  "Fabric 1.20.1 GUI/RPC client transport."
+  "Fabric 1.20.1 GUI/RPC client transport via
+  net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking."
   (:require [cn.li.fabric1201.gui.network.shared :as shared]
             [cn.li.mc1201.gui.network.packet :as packet-base]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
@@ -32,10 +33,11 @@
   (let [session-id (client-session-id)
         player-uuid (or (payload-player-uuid payload)
                         (try (mc-session/local-player-uuid) (catch Exception _ nil)))]
-    (binding [runtime-hooks/*client-session-id* session-id
-              runtime-hooks/*player-state-owner* (cond-> {:client-session-id session-id}
-                                                   player-uuid (assoc :player-uuid player-uuid))]
-      (f))))
+    (runtime-hooks/with-client-ctx-fn
+      {:session-id session-id
+       :player-owner (cond-> {:client-session-id session-id}
+                       player-uuid (assoc :player-uuid player-uuid))}
+      f)))
 
 (def ^:private client-init-guard-lock
   (Object.))

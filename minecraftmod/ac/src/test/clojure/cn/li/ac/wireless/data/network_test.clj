@@ -52,10 +52,10 @@
       (fn []
         (is (:success (commands/create-network! wd matrix-vb "myssid" "secret")))
         (let [net (lookup/get-network-by-ssid wd "myssid")]
-          (is (not (:success (commands/link-node-to-network! wd net near-node "wrong"))))
-          (is (:success (commands/link-node-to-network! wd net near-node "secret")))
-          (is (not (:success (commands/link-node-to-network! wd net (vb/create-vnode 6 0 0) "secret"))))
-          (is (not (:success (commands/link-node-to-network! wd net far-node "secret"))))
+          (is (not (:success (commands/link-node-to-network! wd net near-node "wrong" nil)))))
+          (is (:success (commands/link-node-to-network! wd net near-node "secret" nil))))
+          (is (not (:success (commands/link-node-to-network! wd net (vb/create-vnode 6 0 0) "secret" nil))))
+          (is (not (:success (commands/link-node-to-network! wd net far-node "secret" nil)))))
           (is (identical? (lookup/get-network-by-ssid wd "myssid")
                           (get (world-registry/net-lookup wd) near-node))))))))
 
@@ -70,7 +70,7 @@
       (fn []
         (is (:success (commands/create-network! wd matrix-vb "n2" "p")))
         (let [net (lookup/get-network-by-ssid wd "n2")]
-          (is (:success (commands/link-node-to-network! wd net node-vb "p")))
+          (is (:success (commands/link-node-to-network! wd net node-vb "p" nil))))
           (is (some? (get (world-registry/net-lookup wd) node-vb)))
           (commands/unlink-node-from-network! net node-vb)
           (is (empty? (network-state/get-nodes (lookup/get-network-by-ssid wd "n2"))))
@@ -97,7 +97,7 @@
         net (network-state/create-wireless-net wd (vb/create-vmatrix 0 0 0) "s" "p")]
     (stubs/with-tile-world tiles
       (fn []
-        (is (false? (network-validation/is-in-range? net 0 0 0)))))))
+        (is (false? (network-validation/is-in-range? net 0 0 0 nil)))))))
 
 (deftest balance-energy-moves-toward-average-test
   (let [w (test-world :w-bal)
@@ -114,8 +114,8 @@
       (fn []
         (is (:success (commands/create-network! wd matrix-vb "bal" "p")))
         (let [net (lookup/get-network-by-ssid wd "bal")]
-          (is (:success (commands/link-node-to-network! wd net vb1 "p")))
-          (is (:success (commands/link-node-to-network! wd net vb2 "p")))
+          (is (:success (commands/link-node-to-network! wd net vb1 "p" nil))))
+          (is (:success (commands/link-node-to-network! wd net vb2 "p" nil))))
           (with-redefs [ncfg/update-interval-ticks (constantly 1)
                         ncfg/buffer-max (constantly 1.0e6)
                         shuffle identity]
@@ -144,8 +144,8 @@
       (fn []
         (is (:success (commands/create-network! wd matrix-vb "bal-cap" "p")))
         (let [net (lookup/get-network-by-ssid wd "bal-cap")]
-          (is (:success (commands/link-node-to-network! wd net small-vb "p")))
-          (is (:success (commands/link-node-to-network! wd net large-vb "p")))
+          (is (:success (commands/link-node-to-network! wd net small-vb "p" nil))))
+          (is (:success (commands/link-node-to-network! wd net large-vb "p" nil))))
           (with-redefs [ncfg/update-interval-ticks (constantly 1)
                         ncfg/buffer-max (constantly 1.0e6)
                         shuffle identity]

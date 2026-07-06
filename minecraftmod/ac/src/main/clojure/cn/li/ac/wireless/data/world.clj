@@ -82,7 +82,7 @@
       (let [registered (register-world-data! world wi-data)
             net-count (count (world-registry/networks registered))
             conn-count (count (world-registry/connections registered))]
-        (log/info "Restored WiWorldData for world from save:"
+        (log/info "[on-world-load] Restored WiWorldData from save:"
                   net-count "networks," conn-count "connections")
         (doseq [conn (world-registry/connections registered)]
           (let [gens (node-conn/get-generators conn)
@@ -114,14 +114,12 @@
           (doseq [g gens]
             (log/debug "[on-world-save] connection node=" (vb/vblock-to-string (:node conn))
                        "generator=" (vb/vblock-to-string g)))))
-      (runtime/network-impl-validator wi-data)
-      (runtime/node-connection-impl-validator wi-data)
-      (let [post-conn-count (count (world-registry/connections wi-data))
-            nbt-data (persistence/world-data-to-nbt wi-data)]
-        (log/info "Prepared WiWorldData for save: connections"
-                  pre-conn-count "->" post-conn-count
-                  "(after validation), networks"
-                  (count (world-registry/networks wi-data)))
+      (runtime/network-impl-validator wi-data world)
+      (runtime/node-connection-impl-validator wi-data world)
+      (let [net-count (count (world-registry/networks wi-data))
+            post-conn-count (count (world-registry/connections wi-data))
+            nbt-data (persistence/world-data-to-nbt wi-data world)]
+        (log/info "[on-world-save] Saving" net-count "networks," post-conn-count "connections")
         nbt-data))
     nil))
 
@@ -129,7 +127,7 @@
   "Called each server world tick - advance wireless runtime state."
   [world]
   (when-let [wi-data (get-world-data-non-create world)]
-    (runtime/tick-world-data! wi-data)
+    (runtime/tick-world-data! wi-data world)
     nil))
 
 (defn on-world-unload

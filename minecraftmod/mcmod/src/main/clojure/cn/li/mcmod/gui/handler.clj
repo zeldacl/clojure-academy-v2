@@ -29,7 +29,7 @@
 (defn make-registry-gui-handler
   [container-runtime]
   {:container-runtime container-runtime
-   :get-server-container (fn [_ gui-id player world pos]
+   :get-server-container (fn [gui-id player world pos]
                            (let [tile-entity (pworld/world-get-tile-entity* world pos)
                                  cfg? (get-gui-config gui-id)
                                  container-fn (gui-registry/get-container-fn gui-id)]
@@ -45,7 +45,7 @@
                                  (when (and cfg? (nil? container-fn))
                                    (log/warn "Missing :container-fn for GUI ID:" gui-id))
                                  nil))))
-   :get-client-gui (fn [_ gui-id player world pos]
+   :get-client-gui (fn [gui-id player world pos]
                      (let [tile-entity (pworld/world-get-tile-entity* world pos)
                            cfg? (get-gui-config gui-id)
                            container-fn (gui-registry/get-container-fn gui-id)

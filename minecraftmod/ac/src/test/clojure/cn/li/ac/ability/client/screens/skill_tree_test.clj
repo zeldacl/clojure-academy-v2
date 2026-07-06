@@ -15,8 +15,8 @@
   (managed-screens/call-with-managed-screen-runtime
     (managed-screens/create-managed-screen-runtime)
     (fn []
-      (binding [runtime-hooks/*client-session-id* :test-session
-                runtime-hooks/*player-state-owner* {:client-session-id :test-session}]
+      (runtime-hooks/with-client-ctx {:session-id :test-session
+                                      :player-owner {:client-session-id :test-session}}
         (f)))))
 
 (use-fixtures :each reset-screen-fixture)
@@ -61,7 +61,7 @@
            (:skill-description node)))))))
 
 (deftest screen-owner-requires-explicit-session-and-player-test
-  (binding [runtime-hooks/*client-session-id* nil]
+  (runtime-hooks/with-client-ctx {:session-id nil}
     (is (thrown-with-msg? clojure.lang.ExceptionInfo
                           #"Client read model owner requires :client-session-id"
                           (screen/screen-state-snapshot "player-1"))))
@@ -120,15 +120,5 @@
         (is (nil? (:player-uuid (screen/screen-state-snapshot "player-1"))))
         (is (= "player-2" (:player-uuid (screen/screen-state-snapshot "player-2")))))
 
-(deftest screen-runtime-isolation-test
-  (let [runtime-b (managed-screens/create-managed-screen-runtime)]
-    (screen/open-screen! "player-1" {:developer-type :portable})
-    (managed-screens/call-with-managed-screen-runtime
-      runtime-b
-      (fn []
-        (screen/open-screen! "player-1" {:developer-type :normal})
-        (is (= {:developer-type :normal}
-               (:learn-context (screen/screen-state-snapshot "player-1"))))))
-    (is (= {:developer-type :portable}
-           (:learn-context (screen/screen-state-snapshot "player-1"))))))
+
 

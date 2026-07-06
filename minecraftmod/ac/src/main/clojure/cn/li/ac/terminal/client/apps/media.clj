@@ -3,8 +3,7 @@
   MediaApp / MediaGui.  Loads media_player.xml layout, builds track list from
   t_one template, wires play/pause/stop/volume controls.
 
-  Sound stop uses requiring-resolve because cn.li.mc1201 is not a direct
-  compile-time dependency of the ac module."
+  Sound stop uses the generic client-bridge hook registered by mc1201 sound effects."
   (:require [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.util.uuid :as player-uuid]
             [cn.li.ac.config.modid :as modid]

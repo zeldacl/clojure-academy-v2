@@ -7,6 +7,7 @@
   (:require [cn.li.ac.ability.config :as ability-config]
             [cn.li.ac.config.common :as config-common]
             [cn.li.ac.config.gameplay :as gameplay-config]
+            [cn.li.ac.tutorial.config :as tutorial-config]
             [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.config.registry :as config-reg]
@@ -43,8 +44,8 @@
     :sp-only? true}
    {:key :heads-or-tails
     :category "generic"
-    :get #(boolean (config-reg/get-config-value config-common/gameplay-domain :heads-or-tails false))
-    :domain config-common/gameplay-domain
+    :get tutorial-config/heads-or-tails-enabled?
+    :domain config-common/tutorial-domain
     :sp-only? false}
    {:key :use-mouse-wheel
     :category "generic"
@@ -98,7 +99,7 @@
     ;; Add ElementList component for vertical scrolling
     (comp/add-component! list-w (comp/element-list :spacing 10))
     ;; Build rows grouped by category
-    (doseq [[cat cat-props] (group-by :category props)]
+    (doseq [[cat cat-props] (group-by #(get % :category) props)]
       ;; Category header — copy t_cathead template
       (let [hdr (cgui-core/copy-widget (xml-parser/get-widget doc "t_cathead"))]
         (when-let [txt (cgui-core/find-widget hdr "text")]

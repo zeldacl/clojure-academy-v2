@@ -66,11 +66,14 @@ foundation → domain/model → data/repository/persistence → service/applicat
 |------|------|
 | `cn.li.ac.block.machine.registration` | `init-machine!`：tile、capability、container、block、hooks |
 | `cn.li.ac.block.machine.runtime` | `schema-runtime`、`make-tick-fn`、`commit-state!`、GUI 打开 |
+
+**`machine.runtime` 回调（扁平）**：`:tick-state [state level pos block-state be]`、`:initial-state [be level pos block-state]`、`:after-commit! [be level pos old new]`；`make-open-gui-handler*` 的 `can-open?` 等为 `[player world pos sneaking item-stack]`。内部 `resolve-tile-level-pos` 返回 `[level pos]`（已删除 `resolve-tile-context` map）。
 | `cn.li.ac.block.machine.container` | 声明式 hopper 容器（经 commit 写 inventory） |
 | `cn.li.ac.block.machine.sync` | 服务端 world broadcast（node/matrix 等） |
 | `cn.li.ac.block.machine.render-runtime` | 客户端 TESR init、资源懒加载、动画 cache |
 | `cn.li.ac.block.gui.sync` | schema GUI 容器与 `schema-sync-fns` |
 | `cn.li.ac.block.machine.wireless-handlers` | 发电机/开发者无线链路 handler 共享 |
+| `cn.li.ac.wireless.link-helpers` | 发电机/接收器 ↔ 节点链路 GUI 纯函数 DTO（handler 注册留在 wireless-handlers） |
 
 目录约定：`<machine>/block.clj`（仅 init）、`schema.clj`、`logic.clj`、`gui.clj`（CLIENT）、`handlers.clj`、`render.clj`（CLIENT）。多方块结构在 `ac/block` 内统一用 `bdsl/defmultiblock`。
 

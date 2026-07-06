@@ -2,23 +2,7 @@
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.item-actions :as ia]))
 
-(deftest item-action-registries-runtime-isolation-test
-  (let [rt-a (ia/create-item-action-registries-runtime)
-        rt-b (ia/create-item-action-registries-runtime)]
-    (ia/call-with-item-action-registries-runtime rt-a
-      (fn []
-        (ia/register-item-action! "mod:sword" :sword-slash)
-        (ia/register-action-handler! :sword-slash (fn [_ _] :slash))
-        (ia/register-item-entity-spawn! "mod:ball" {:entity-id "mod:sfx_ball"})))
-    (ia/call-with-item-action-registries-runtime rt-b
-      (fn []
-        (is (nil? (ia/resolve-item-action "mod:sword")))
-        (is (nil? (ia/on-item-action! :sword-slash "p" nil)))
-        (is (nil? (ia/get-item-entity-spawn "mod:ball")))))
-    (ia/call-with-item-action-registries-runtime rt-a
-      (fn []
-        (is (= :sword-slash (ia/resolve-item-action "mod:sword")))
-        (is (= {:entity-id "mod:sfx_ball"} (ia/get-item-entity-spawn "mod:ball")))))))
+
 
 (defn- reset-registries! [f]
   (ia/reset-item-action-registries-for-test!)

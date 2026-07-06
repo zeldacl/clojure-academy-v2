@@ -34,12 +34,12 @@
      "p"
      {:context-registry {"ctx-nested" {:id "ctx-nested" :skill-id :skill :status :constructed}}})
     (ctx/register-context! c)
-    (binding [runtime-hooks/*player-state-owner* test-player/test-player-state-owner
-              ctx/*context-owner* (server-context-owner "p")]
-      (state/execute-assoc-state! {:ctx-id "ctx-nested" :player-id "p"} {:k [:a :b] :v 1})
-      (is (= 1 (get-in (ctx/get-context "ctx-nested") [:skill-state :a :b])))
-      (state/execute-assoc-state! {:ctx-id "ctx-nested" :player-id "p"} {:k [] :v {:a {}}})
-      (is (nil? (get-in (ctx/get-context "ctx-nested") [:skill-state :a :b]))))))
+    (runtime-hooks/with-client-ctx {:player-owner test-player/test-player-state-owner}
+      (binding [ctx/*context-owner* (server-context-owner "p")]
+        (state/execute-assoc-state! "ctx-nested" "p" {:k [:a :b] :v 1})
+        (is (= 1 (get-in (ctx/get-context "ctx-nested") [:skill-state :a :b])))
+        (state/execute-assoc-state! "ctx-nested" "p" {:k [] :v {:a {}}})
+        (is (nil? (get-in (ctx/get-context "ctx-nested") [:skill-state :a :b])))))))
 
 (deftest buffer-message-while-constructed-test
   (let [c (ctx/new-context "p" :sk test-client-context-owner)]
@@ -90,8 +90,7 @@
 
 (deftest update-missing-context-does-not-create-phantom-test
   (binding [ctx/*context-owner* (server-context-owner "p")]
-    (state/execute-assoc-state! {:ctx-id "missing-context" :player-id "p"}
-                                {:k :last-keepalive-ms :v 1})
+    (state/execute-assoc-state! "missing-context" "p" {:k :last-keepalive-ms :v 1})
     (is (nil? (ctx/get-context "missing-context"))))
   (is (empty? (ctx/get-all-contexts))))
 

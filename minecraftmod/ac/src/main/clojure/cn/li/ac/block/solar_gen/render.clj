@@ -38,7 +38,7 @@
   []
   (tesr-api/register-scripted-tile-renderer!
     "solar-gen"
-    {:render-tile (fn [_ _tile-entity _partial-ticks pose-stack buffer-source packed-light packed-overlay]
+    {:render-tile (fn [_tile-entity _partial-ticks pose-stack buffer-source packed-light packed-overlay]
                      (try
                        (render-at-origin nil pose-stack buffer-source packed-light packed-overlay)
                        (catch Exception e

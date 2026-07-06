@@ -22,16 +22,16 @@
 
 (defn- with-player-state-owner
   [player-uuid f]
-  (binding [runtime-hooks/*player-state-owner* {:server-session-id :test-session
-                                                 :player-uuid player-uuid}]
+  (runtime-hooks/with-client-ctx {:player-owner {:server-session-id :test-session
+                                                  :player-uuid player-uuid}}
     (f)))
 
 (defn- with-client-player-state-owner
   [player-uuid f]
-  (binding [runtime-hooks/*client-session-id* :test-client-session
-            runtime-hooks/*player-state-owner* {:logical-side :client
-                                                 :client-session-id :test-client-session
-                                                 :player-uuid player-uuid}]
+  (runtime-hooks/with-client-ctx {:session-id :test-client-session
+                                  :player-owner {:logical-side :client
+                                                  :client-session-id :test-client-session
+                                                  :player-uuid player-uuid}}
     (f)))
 
 (defn- widget-tree []
@@ -199,8 +199,7 @@
                   msg-registry/msg (fn [domain action] [domain action])
                   net-client/send-to-server (fn [& _] nil)]
       (developer-panel/attach-classic-developer-bindings! root container {:on-wireless-click nil})
-      (binding [runtime-hooks/*player-state-owner* nil
-                runtime-hooks/*client-session-id* nil]
+      (runtime-hooks/with-client-ctx {:session-id nil :player-owner nil}
         (is (fn? @frame-handler))
         (is (thrown-with-msg? clojure.lang.ExceptionInfo
                               #"developer.panel requires bound session-id"

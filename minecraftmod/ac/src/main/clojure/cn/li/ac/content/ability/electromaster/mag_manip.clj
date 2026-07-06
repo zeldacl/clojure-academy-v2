@@ -7,7 +7,7 @@
   Exp:      +0.005 on successful throw"
   (:require [clojure.string :as str]
             [cn.li.ac.ability.fx :as fx]
-            [cn.li.ac.ability.dsl :refer [defskill]]
+            [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
@@ -23,13 +23,8 @@
 
 ;; --- Constants ---
 
+(def-skill-config-ops :mag-manip)
 (def ^:private mag-manip-skill-id :mag-manip)
-
-(defn- cfg-double [field-id]
-  (skill-config/tunable-double mag-manip-skill-id field-id))
-
-(defn- cfg-lerp [field-id exp]
-  (skill-config/lerp-double mag-manip-skill-id field-id exp))
 
 (defn- strong-metal-blocks []
   (set (map str/lower-case
@@ -46,17 +41,6 @@
     (* distance distance)))
 
 ;; --- Domain helpers ---
-
-(defn- skill-exp [player-id]
-  (skill-effects/skill-exp player-id mag-manip-skill-id))
-
-(defn- set-skill-state-root!
-  [ctx-id state-map]
-  (ctx-skill/update-skill-state-root! ctx-id identity state-map))
-
-(defn- clear-skill-state!
-  [ctx-id]
-  (ctx-skill/clear-skill-state! ctx-id))
 
 (defn- metal-block-id? [block-id exp]
   (let [id (some-> block-id str/lower-case)]
@@ -142,6 +126,13 @@
     {:distance (geom/vlen (geom/v- point closest))
      :t t}))
 
+(defn- segment-hit?
+  "True when entity position is within hit-radius of the throw segment."
+  [seg-start seg-end hit-radius {:keys [x y z]}]
+  (let [{:keys [distance t]} (distance-to-segment {:x x :y y :z z} seg-start seg-end)]
+    (and (<= distance (double hit-radius))
+         (<= 0.0 t 1.0))))
+
 (defn- try-place-thrown-block! [world-id end-pos held-block-id]
   (when (and (block-manip/available?) world-id held-block-id)
     (let [bx (geom/floor-int (:x end-pos))
@@ -155,25 +146,36 @@
 ;; --- Cost helpers ---
 
 (defn- holding-nearby? [player-id ctx-id]
-  (when-let [ctx-data (ctx/get-context ctx-id)]
+  (when-let [ctx-data (ctx-skill/get-context ctx-id)]
     (let [ss (:skill-state ctx-data)]
       (when (and (= :holding (:mode ss)) (:held-block ss))
         (let [focus (or (:focus ss) (hold-focus player-id))
                 pos (skill-effects/player-path player-id :position {:x 0.0 :y 0.0 :z 0.0})]
                   (< (geom/vdist-sq pos focus) (max-hold-distance-sq)))))))
 
-(defn- cost-up-cp [{:keys [player-id ctx-id]}]
-  (if (holding-nearby? player-id ctx-id)
-    (cfg-lerp :cost.up.cp (skill-exp player-id))
+(defn- active-ctx-id [player-id skill-id]
+  (some (fn [[ctx-id ctx-data]]
+          (when (and (= (:player-uuid ctx-data) player-id)
+                     (= skill-id (:skill-id ctx-data)))
+            ctx-id))
+        (ctx/get-all-contexts)))
+
+(defn- cost-up-cp [player-id _skill-id exp]
+  (if-let [ctx-id (active-ctx-id player-id mag-manip-skill-id)]
+    (if (holding-nearby? player-id ctx-id)
+      (cfg-lerp :cost.up.cp exp)
+      0.0)
     0.0))
 
-(defn- cost-up-overload [{:keys [player-id ctx-id]}]
-  (if (holding-nearby? player-id ctx-id)
-    (cfg-lerp :cost.up.overload (skill-exp player-id))
+(defn- cost-up-overload [player-id _skill-id exp]
+  (if-let [ctx-id (active-ctx-id player-id mag-manip-skill-id)]
+    (if (holding-nearby? player-id ctx-id)
+      (cfg-lerp :cost.up.overload exp)
+      0.0)
     0.0))
 
-(defn- cost-creative? [{:keys [player]}]
-  (boolean (and player (entity/player-creative? player))))
+(defn- cost-creative? [_player-id _skill-id _exp]
+  false)
 
 ;; --- Action hooks ---
 
@@ -181,22 +183,22 @@
 ;; if neither found store :no-target mode.
 (defn- start-holding! [ctx-id player-id held-block]
   (let [focus (hold-focus player-id)]
-    (set-skill-state-root! ctx-id
+    (ctx-skill/replace-skill-state! ctx-id
                            {:fired false
                             :mode :holding
                             :hold-ticks 0
                             :held-block held-block
                             :focus focus})
     ;; Spawn visible block entity (matching original MagManipEntityBlock)
-    (when-let [player-id (get-in (ctx/get-context ctx-id) [:player-uuid])]
+    (when-let [player-id (get-in (ctx-skill/get-context ctx-id) [:player-uuid])]
       (entity/player-spawn-entity-by-id! player-id "my_mod:entity_magmanip_block_body" 0.0))
     (fx/send! ctx-id {:topic :mag-manip/fx-hold :mode :hold-start} nil
               {:focus focus
                :block-id (:block-id held-block)})))
 
-(defn- on-down [{:keys [player-id ctx-id player]}]
-  (let [exp (skill-exp player-id)
-        world-id (geom/world-id-of player-id)
+(defn- on-down
+  [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage player]
+  (let [world-id (geom/world-id-of player-id)
         hand-item-id (when player (entity/player-get-main-hand-item-id player))
         held-metal? (and (string? hand-item-id) (metal-block-id? hand-item-id exp))]
     (if held-metal?
@@ -208,7 +210,7 @@
                                             :from-world? false
                                             :from-hand? true
                                             :world-id world-id})
-          (set-skill-state-root! ctx-id
+          (ctx-skill/replace-skill-state! ctx-id
                                  {:fired false
                                   :mode :capture-failed})))
       (if-let [{:keys [world-id x y z block-id]} (pick-up-target-block player-id exp)]
@@ -224,21 +226,22 @@
                                               :source-z z})
             (do
               (log/debug "MagManip capture failed" {:world-id world-id :x x :y y :z z :block-id block-id})
-              (set-skill-state-root! ctx-id
+              (ctx-skill/replace-skill-state! ctx-id
                                      {:fired false
                                       :mode :capture-failed}))))
-        (set-skill-state-root! ctx-id
+        (ctx-skill/replace-skill-state! ctx-id
                                {:fired false
                                 :mode :no-target})))))
 
 ;; Original s_tick: update hold position, send FX every 2 ticks.
-(defn- on-tick [{:keys [player-id ctx-id]}]
-  (when-let [ctx-data (ctx/get-context ctx-id)]
+(defn- on-tick
+  [ctx-id player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
+  (when-let [ctx-data (ctx-skill/get-context ctx-id)]
     (let [ss (:skill-state ctx-data)]
       (when (= :holding (:mode ss))
         (let [ticks (inc (int (or (:hold-ticks ss) 0)))
               focus (hold-focus player-id)]
-          (set-skill-state-root! ctx-id
+          (ctx-skill/replace-skill-state! ctx-id
                                  (assoc ss :hold-ticks ticks :focus focus))
           (when (zero? (mod ticks 2))
             (fx/send! ctx-id {:topic :mag-manip/fx-hold :mode :hold-loop} nil
@@ -247,13 +250,13 @@
 
 ;; Original s_perform: check dist < 5 blocks, throw, damage always 10.
 ;; Cooldown and exp applied manually - only on successful throw.
-(defn- on-up [{:keys [player-id ctx-id cost-ok? player]}]
-  (when-let [ctx-data (ctx/get-context ctx-id)]
+(defn- on-up
+  [ctx-id player-id _skill-id exp cost-ok? _hold-ticks _cost-stage player]
+  (when-let [ctx-data (ctx-skill/get-context ctx-id)]
     (let [ss (:skill-state ctx-data)
-          held-block (get ss :held-block)
-          exp (skill-exp player-id)]
+          held-block (get ss :held-block)]
       (if-not (and (= :holding (:mode ss)) held-block)
-        (set-skill-state-root! ctx-id
+        (ctx-skill/replace-skill-state! ctx-id
                                (assoc ss :fired false :mode :idle))
         (let [focus (or (:focus ss) (hold-focus player-id))
               pos (skill-effects/player-path player-id :position {:x 0.0 :y 0.0 :z 0.0})
@@ -263,14 +266,14 @@
             (do
               (release-or-rollback! player held-block)
               (fx/send! ctx-id {:topic :mag-manip/fx-end :mode :end} nil {:reason :too-far})
-              (set-skill-state-root! ctx-id
+              (ctx-skill/replace-skill-state! ctx-id
                                      (assoc ss :fired false :mode :too-far)))
 
             (not cost-ok?)
             (do
               (release-or-rollback! player held-block)
               (fx/send! ctx-id {:topic :mag-manip/fx-end :mode :end} nil {:reason :no-resource})
-              (set-skill-state-root! ctx-id
+              (ctx-skill/replace-skill-state! ctx-id
                                      (assoc ss :fired false :mode :no-resource)))
 
             :else
@@ -296,17 +299,15 @@
                 (when (and (world-effects/available?) (entity-damage/available?))
                   (let [mid (geom/v* (geom/v+ start end) 0.5)
                         radius (+ (* 0.5 (geom/vlen (geom/v- end start))) 2.0)
-                        entities (sort-by :uuid
+                        entities (sort-by #(get % :uuid)
                                           (remove #(= (:uuid %) player-id)
                                                   (world-effects/find-entities-in-radius*
                                                    world-id
                                                    (:x mid) (:y mid) (:z mid)
                                                    radius)))]
                     (when-let [target (first
-                                       (filter (fn [{:keys [x y z]}]
-                                                 (let [{:keys [distance t]} (distance-to-segment {:x x :y y :z z} start end)]
-                                                   (and (<= distance (cfg-double :targeting.throw-hit-radius))
-                                                        (<= 0.0 t 1.0))))
+                                       (filter (partial segment-hit? start end
+                                                       (cfg-double :targeting.throw-hit-radius))
                                                entities))]
                       (entity-damage/apply-direct-damage!*
                                                           world-id (:uuid target) damage :magic)))))
@@ -328,17 +329,18 @@
                                                                        exp))
               (skill-effects/add-skill-exp! player-id mag-manip-skill-id
                                             (cfg-double :progression.exp-throw))
-              (set-skill-state-root! ctx-id
+              (ctx-skill/replace-skill-state! ctx-id
                                      {:fired true
                                       :mode :thrown
                                       :held-block nil}))))))))
 
-(defn- on-abort [{:keys [ctx-id player]}]
-  (when-let [ctx-data (ctx/get-context ctx-id)]
+(defn- on-abort
+  [ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage player]
+  (when-let [ctx-data (ctx-skill/get-context ctx-id)]
     (when-let [held (get-in ctx-data [:skill-state :held-block])]
       (release-or-rollback! player held)
       (fx/send! ctx-id {:topic :mag-manip/fx-end :mode :end} nil {:reason :abort}))
-    (clear-skill-state! ctx-id)))
+    (ctx-skill/clear-skill-state! ctx-id)))
 
 ;; --- Skill definition ---
 

@@ -18,14 +18,24 @@ final class NetworkHandlerRegistry {
     static void dispatchRequest(String msgId, int requestId, byte[] payload, ServerPlayer sender) {
         IFn requestHandler = requestHandlerFn;
         if (requestHandler != null) {
-            requestHandler.invoke(msgId, requestId, payload, sender);
+            try {
+                requestHandler.invoke(msgId, requestId, payload, sender);
+            } catch (Throwable t) {
+                System.err.println("[GUI-NETWORK-JAVA] dispatchRequest UNCAUGHT: " + t.getMessage());
+                t.printStackTrace(System.err);
+            }
         }
     }
 
     static void dispatchResponse(int requestId, byte[] response) {
         IFn responseHandler = responseHandlerFn;
         if (responseHandler != null) {
-            responseHandler.invoke(requestId, response);
+            try {
+                responseHandler.invoke(requestId, response);
+            } catch (Throwable t) {
+                System.err.println("[GUI-NETWORK-JAVA] dispatchResponse UNCAUGHT requestId=" + requestId + ": " + t.getMessage());
+                t.printStackTrace(System.err);
+            }
         }
     }
 }

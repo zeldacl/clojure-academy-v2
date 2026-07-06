@@ -1,6 +1,6 @@
 (ns cn.li.forge1201.client.key-input-state-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
-            [cn.li.forge1201.client.key-input :as key-input]))
+            [cn.li.forge1201.client.key-input-fixtures :as key-input]))
 
 (def ^:private owner-a {:client-session-id [:client :session-a]
                         :player-uuid "player-a"})

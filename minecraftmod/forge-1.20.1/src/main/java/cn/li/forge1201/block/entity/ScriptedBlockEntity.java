@@ -119,21 +119,27 @@ public class ScriptedBlockEntity extends AbstractScriptedBlockEntity implements 
     @Override
     public ItemStack getItem(int slot) {
         ITileContainerLogic container = containerLogic();
-        return container == null ? ItemStack.EMPTY : container.getItem(this, slot);
+        if (container == null) return ItemStack.EMPTY;
+        ItemStack result = container.getItem(this, slot);
+        return result != null ? result : ItemStack.EMPTY;
     }
 
     @Nonnull
     @Override
     public ItemStack removeItem(int slot, int amount) {
         ITileContainerLogic container = containerLogic();
-        return container == null ? ItemStack.EMPTY : container.removeItem(this, slot, amount);
+        if (container == null) return ItemStack.EMPTY;
+        ItemStack result = container.removeItem(this, slot, amount);
+        return result != null ? result : ItemStack.EMPTY;
     }
 
     @Nonnull
     @Override
     public ItemStack removeItemNoUpdate(int slot) {
         ITileContainerLogic container = containerLogic();
-        return container == null ? ItemStack.EMPTY : container.removeItemNoUpdate(this, slot);
+        if (container == null) return ItemStack.EMPTY;
+        ItemStack result = container.removeItemNoUpdate(this, slot);
+        return result != null ? result : ItemStack.EMPTY;
     }
 
     @Override

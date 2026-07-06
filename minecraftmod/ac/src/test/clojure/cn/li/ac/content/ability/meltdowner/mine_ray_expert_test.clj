@@ -1,5 +1,6 @@
 (ns cn.li.ac.content.ability.meltdowner.mine-ray-expert-test
   (:require [clojure.test :refer [deftest is]]
+            [cn.li.ac.ability.test.skill-callback-test-helpers :as cb]
             [cn.li.ac.content.ability.meltdowner.mine-ray-expert :as expert]
             [cn.li.ac.content.ability.meltdowner.mine-rays-base :as base]
             [cn.li.ac.ability.skill-config :as skill-config]
@@ -20,7 +21,7 @@
                   base/mining-ray-tick! (fn [cfg evt]
                                           (swap! calls* conj [cfg evt])
                                           nil)]
-      (expert/mine-ray-expert-tick! {:player-id "p1" :ctx-id "ctx-1"}))
+      (cb/apply-invoke expert/mine-ray-expert-tick! :player-id "p1" :ctx-id "ctx-1"))
     (is (= 1 (count @calls*)))
     (is (= {:range 16.0 :break-speed 0.4 :skill-id :mine-ray-expert :exp-block 0.001 :lucky? false}
           (ffirst @calls*)))))

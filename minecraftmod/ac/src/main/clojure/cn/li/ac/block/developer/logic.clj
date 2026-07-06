@@ -103,12 +103,12 @@
 				ensure-inventory-shape)))
 
 (defn- developer-after-commit!
-	[be _level _pos _old-state new-state _ctx]
+	[be _level _pos _old-state new-state]
 	(when (:development-complete? new-state)
 		(dev-session/apply-completion! new-state)
 		(machine-runtime/commit-transform! be dev-default-state dev-session/clear-session)))
 
-(defn developer-tick-state [state {:keys [level pos be]}]
+(defn developer-tick-state [state level pos _block-state be]
 	(let [ticker (inc (long (get state :update-ticker 0)))
 				state1 (-> state (assoc :update-ticker ticker) (ensure-tier-defaults be))
 				state2 (if (zero? (mod ticker (dev-config/validate-interval)))
@@ -135,13 +135,13 @@
 		 :after-commit! developer-after-commit!}))
 
 (defn- resolve-developer-open-pos [controller-block-id]
-	(fn [{:keys [world pos]}]
+	(fn [_player world pos]
 		(let [block-spec (bdsl/get-block-spec controller-block-id)]
 			(or (when block-spec (bdsl/resolve-multi-block-master-pos world pos block-spec))
 			    pos))))
 
 (defn- developer-server-before-open!
-	[{:keys [player world]} open-pos]
+	[player world open-pos]
 	(when-let [be (world/world-get-tile-entity* world open-pos)]
 		(let [state (machine-runtime/state-or-default be dev-default-state)
 					pid (uuid/player-uuid player)

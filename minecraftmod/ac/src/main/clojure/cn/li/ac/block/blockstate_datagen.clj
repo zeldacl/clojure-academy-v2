@@ -17,7 +17,7 @@
 
 (defn- blockstate-fields
   [schema]
-  (filterv :block-state schema))
+  (filterv #(get % :block-state) schema))
 
 (defn- properties-from-schema
   [schema]
@@ -132,7 +132,7 @@
 
 (defn complex-block-keys
   []
-  (set (map :block-key complex-block-specs)))
+  (set (map #(get % :block-key) complex-block-specs)))
 
 (defn complex-definitions-map
   "Map of block-key -> plain definition map (registry-name, properties, parts)."

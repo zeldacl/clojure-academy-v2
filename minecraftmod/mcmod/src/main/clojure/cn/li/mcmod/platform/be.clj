@@ -12,7 +12,13 @@
 
 (defn install-be-ops!
   [ops-map _label]
-  (when-let [fw-atom (fw/fw-atom)] (swap! fw-atom assoc-in [:platform :be-ops] ops-map)) nil)
+  (if-let [fw-atom (fw/fw-atom)]
+    (let [missing (seq (remove (set (keys ops-map)) be-ops-keys))]
+      (swap! fw-atom assoc-in [:platform :be-ops] ops-map)
+      (log/info "BeOps installed:" (pr-str (keys ops-map)))
+      (when missing
+        (log/error "BeOps MISSING required keys:" (pr-str missing))))
+    (log/error "BeOps install FAILED: Framework atom nil")))
 
 (defn be-ops-available? [] (boolean (get-in @(fw/fw-atom) [:platform :be-ops])))
 (defn call-with-be-ops [ops f] (f ops))
@@ -28,9 +34,15 @@
   (when-let [f (get-in @(fw/fw-atom) [:platform :be-ops k])]
     (apply f args)))
 
+(defn be-get-level [be] (be-op :be-get-level be))
+
 (defn be-get-world-safe [be]
-  (or (try (be-op :be-get-level be) (catch Exception _ nil))
-      (try (be-op :be-get-world be) (catch Exception _ nil))))
+  (let [level (try (be-op :be-get-level be) (catch Exception _ nil))
+        world (try (be-op :be-get-world be) (catch Exception _ nil))
+        result (or level world)]
+    (when (and be (nil? result))
+      (log/warn "be-get-world-safe returned nil — be-op :be-get-level =" (some? level) ":be-get-world =" (some? world)))
+    result))
 
 (defn get-block-entity [w block-pos]
   (try

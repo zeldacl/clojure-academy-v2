@@ -14,7 +14,7 @@
                :structure-valid true
                :update-ticker 0}
         be :be
-        next (dev-logic/developer-tick-state state {:level :lvl :pos :pos :be be})]
+        next (dev-logic/developer-tick-state state :lvl :pos nil be)]
     (is (< (:energy next) (:energy state)))
     (is (>= (:development-progress next) 0.0))
     (is (<= (:development-progress next) 1.0))))
@@ -28,6 +28,6 @@
                :user-uuid "player-1"}]
     (with-redefs [session/apply-completion! (fn [_] (swap! completed inc))
                   machine-runtime/commit-transform! (fn [& _] (swap! cleared inc))]
-      (#'dev-logic/developer-after-commit! :tile nil nil {} state {})
+      (#'dev-logic/developer-after-commit! :tile nil nil {} state)
       (is (= 1 @completed))
       (is (= 1 @cleared)))))

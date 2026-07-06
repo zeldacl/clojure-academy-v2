@@ -41,7 +41,7 @@
     :comment "Cat Engine wireless generator bandwidth in IF/t."}])
 
 (def default-values
-  (into {} (map (juxt :key :default) descriptors)))
+  (into {} (map #(vector (get % :key) (get % :default)) descriptors)))
 
 (defn- cfg []
   (merge default-values

@@ -21,7 +21,7 @@
 ;; Key set documentation
 ;; ============================================================================
 
-(def ^:const stateful-keys
+(def stateful-keys
   "Keys required by a stateful object function map."
   [:get-state :set-state! :valid? :dispose! :is-disposed?])
 

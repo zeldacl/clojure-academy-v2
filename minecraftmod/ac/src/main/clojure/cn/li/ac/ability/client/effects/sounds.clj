@@ -64,6 +64,8 @@
 
 (def ^:private sq-path [:service :sound-queue])
 
+(defonce ^:private fallback-sound-queue (ConcurrentLinkedQueue.))
+
 (defn- sound-queue ^ConcurrentLinkedQueue
   []
   (if-let [fw-atom (fw/fw-atom)]
@@ -71,7 +73,7 @@
         (let [q (ConcurrentLinkedQueue.)]
           (swap! fw-atom assoc-in sq-path q)
           q))
-    (ConcurrentLinkedQueue.)))
+    fallback-sound-queue))
 
 ;; Backward-compatible factory
 (defn create-sound-queue-runtime []

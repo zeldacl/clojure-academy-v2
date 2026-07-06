@@ -33,12 +33,12 @@
   (if (some? owner)
     (:client-session-id (owner-contract/require-client-owner owner))
     (require-owner-value owner ":client-session-id"
-                         runtime-hooks/*client-session-id*)))
+                         (runtime-hooks/*client-session-id*))))
 
 (defn- maybe-client-session-id
   [owner]
   (or (some-> owner :client-session-id)
-      runtime-hooks/*client-session-id*))
+      (runtime-hooks/*client-session-id*)))
 
 (defn- client-channel-id
   [owner]

@@ -30,8 +30,8 @@
 
 (deftest execute-reducer-result-translates-events-before-effects-test
   (let [calls (atom [])]
-    (binding [runtime-hooks/*player-state-owner* {:server-session-id "session-A"
-                                                  :player-uuid "p1"}]
+    (runtime-hooks/with-client-ctx {:player-owner {:server-session-id "session-A"
+                                                   :player-uuid "p1"}}
       (with-redefs [interpreter/execute-effects! (fn [_session-id effects]
                                                    (swap! calls conj [:effects effects])
                                                    nil)]
@@ -56,8 +56,8 @@
 
 (deftest execute-reducer-result-uses-bound-owner-session-test
   (let [captured-effects (atom nil)]
-    (binding [runtime-hooks/*player-state-owner* {:server-session-id "effect-session"
-                                                  :player-uuid "player-a"}]
+    (runtime-hooks/with-client-ctx {:player-owner {:server-session-id "effect-session"
+                                                   :player-uuid "player-a"}}
       (with-redefs [interpreter/execute-effects! (fn [session-id effects]
                                                    (reset! captured-effects [session-id effects])
                                                    nil)]

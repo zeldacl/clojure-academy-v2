@@ -1,162 +1,13 @@
 (ns cn.li.ac.content.ability.vecmanip.groundshock-fx
-  "Client FX for Groundshock: level-effect particles + hand-effect animation."
-  (:require [cn.li.ac.ability.client.level-effects :as level-effects]
-            [cn.li.ac.ability.client.hand-effects :as hand-effects]
-            [cn.li.ac.ability.client.fx-spec :as fx-spec]
-            [cn.li.ac.ability.client.effects.particles :as client-particles]
-            [cn.li.ac.ability.client.effects.sounds :as client-sounds]))
+  (:require [cn.li.ac.ability.client.fx-spec :as fx-spec]
+            [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]))
 
-(def ^:private sound-id "my_mod:vecmanip.groundshock")
-(def ^:private groundshock-hand-effect-id :groundshock)
-
-;; ---------------------------------------------------------------------------
-;; Level effect: particle burst on perform
-;; ---------------------------------------------------------------------------
-
-(defn- default-groundshock-level-runtime-state
-  []
-  {})
-
-(defn- level-enqueue!
-  [store {:keys [payload]}]
-  (let [{:keys [mode affected-blocks]} payload]
-    (case mode
-      :perform
-      (do
-        (client-sounds/queue-current-sound-effect!
-          {:type :sound :sound-id sound-id :volume 2.0 :pitch 1.0})
-        (doseq [{:keys [x y z block-id]} affected-blocks]
-          (client-particles/queue-current-particle-effect!
-            {:type :particle :particle-type :block-crack
-             :block-id (or block-id "minecraft:stone")
-             :x (+ (double x) 0.5) :y (+ (double y) 1.0) :z (+ (double z) 0.5)
-             :count (+ 4 (rand-int 4)) :speed 0.2
-             :offset-x 1.0 :offset-y 0.6 :offset-z 1.0})
-          (when (< (rand) 0.5)
-            (client-particles/queue-current-particle-effect!
-              {:type :particle :particle-type :smoke
-               :x (+ (double x) 0.5 (- (* (rand) 0.6) 0.3))
-               :y (+ (double y) 1.0 (* (rand) 0.2))
-               :z (+ (double z) 0.5 (- (* (rand) 0.6) 0.3))
-               :count 1 :speed 0.04
-               :offset-x 0.04 :offset-y 0.05 :offset-z 0.04})))
-        (or store (default-groundshock-level-runtime-state)))
-      (or store (default-groundshock-level-runtime-state)))))
-
-(defn- level-tick!
-  [store]
-  (or store (default-groundshock-level-runtime-state)))
-
-(defn- level-build-plan [_camera-pos _hand-center-pos _tick] nil)
-
-;; ---------------------------------------------------------------------------
-;; Hand effect: first-person camera shake + punch animation
-;; ---------------------------------------------------------------------------
-
-(defn default-groundshock-fx-runtime-state
-  []
-  {:hand-state {}})
-
-(def ^:private perform-step 3.4)
-(def ^:private perform-ticks-count 4)
-
-(defn groundshock-fx-snapshot
-  []
-  (or (hand-effects/effect-state-snapshot groundshock-hand-effect-id)
-      (default-groundshock-fx-runtime-state)))
-
-(defn reset-groundshock-fx-for-test!
-  []
-  (hand-effects/reset-hand-effect-state-for-test!
-    groundshock-hand-effect-id
-    (default-groundshock-fx-runtime-state))
-  nil)
-
-(defn clear-groundshock-owner!
-  [owner-key]
-  (hand-effects/update-effect-state!
-    groundshock-hand-effect-id
-    (fn [state]
-      (update (or state (default-groundshock-fx-runtime-state)) :hand-state dissoc owner-key)))
-  nil)
-
-(defn- hand-enqueue-state! [state payload]
-  (let [state* (or state (default-groundshock-fx-runtime-state))
-        {:keys [mode charge-ticks performed? owner-key ctx-id channel source-player-id world-id]} payload
-        owner-key* (or owner-key [:ctx ctx-id])
-        base-meta {:owner-key owner-key*
-                   :queue-owner (client-sounds/current-effect-owner)
-                   :ctx-id ctx-id
-                   :channel channel
-                   :source-player-id source-player-id
-                   :world-id world-id}]
-    (case mode
-      :start
-      (update state* :hand-state assoc owner-key*
-              (merge base-meta {:charge-ticks 0 :perform-ticks 0 :active? true}))
-
-      :update
-      (update state* :hand-state update owner-key*
-              (fn [owner-state]
-            (let [prev (long (or (:charge-ticks owner-state) 0))
-                next-val (long (max 0 (or charge-ticks 0))) ]
-              (doseq [tick (range (inc prev) (inc next-val))]
-              (let [pitch-factor (cond
-                         (< tick 4) (/ tick 4.0)
-                         (<= tick 20) 1.0
-                         (<= tick 25) (- 1.0 (/ (- tick 20) 5.0))
-                         :else 0.0)]
-                (hand-effects/add-camera-pitch-delta! (:queue-owner base-meta) (* -0.2 pitch-factor))))
-              (merge base-meta
-                 {:charge-ticks next-val
-                  :perform-ticks (long (or (:perform-ticks owner-state) 0))
-                  :active? true}))))
-
-      :perform
-      (update state* :hand-state update owner-key*
-              (fn [owner-state]
-            (merge base-meta
-                 {:charge-ticks (long (or (:charge-ticks owner-state) 0))
-                :perform-ticks perform-ticks-count
-                :active? false})))
-
-      :end
-      (when-not performed?
-        (update state* :hand-state dissoc owner-key*))
-
-      state*)))
-
-(defn- hand-tick-state! [state]
-  (let [state* (or state (default-groundshock-fx-runtime-state))]
-    (update state* :hand-state
-            (fn [states]
-              (into {}
-                    (keep (fn [[owner-key owner-state]]
-                            (let [remaining (long (or (:perform-ticks owner-state) 0))]
-                      (when (pos? remaining)
-                        (hand-effects/add-camera-pitch-delta! (:queue-owner owner-state) perform-step))
-                      (let [next-state (if (> remaining 1)
-                                         (assoc owner-state :perform-ticks (dec remaining))
-                                         (when (or (:active? owner-state) (pos? remaining))
-                                           (assoc owner-state :perform-ticks 0)))]
-                        (when next-state
-                          [owner-key next-state])))))
-                    states)))))
-
-;; ---------------------------------------------------------------------------
-;; FX channel registration
-;; ---------------------------------------------------------------------------
-
-(defn init! []
-  (fx-spec/register!
-    {:id :groundshock
-     :level {:initial-state (default-groundshock-level-runtime-state)
-             :enqueue-state-fn level-enqueue!
-             :tick-state-fn level-tick!
-             :build-plan-fn level-build-plan}
-     :hand {:initial-state (default-groundshock-fx-runtime-state)
-            :enqueue-state-fn hand-enqueue-state!
-            :tick-state-fn hand-tick-state!}
+(def ^:private spec
+  (arc-beam/build-spec
+    {:effect-id :groundshock
+     :runtime :both
+     :level-initial-state (fn [] {})
+     :hand-initial-state (fn [] {:hand-state {}})
      :channels {:start {:topic :groundshock/fx-start :mode :start :targets [:hand]}
                 :update {:topic :groundshock/fx-update :mode :update :targets [:hand]
                          :hand-payload (fn [_ _ p]
@@ -167,5 +18,12 @@
                                             :broken-blocks (:broken-blocks p)})}
                 :end {:topic :groundshock/fx-end :mode :end :targets [:hand]
                       :hand-payload (fn [_ _ p]
-                                      {:performed? (boolean (:performed? p))})}}})
-  nil)
+                                      {:performed? (boolean (:performed? p))})}}}))
+
+(defn init! [] (fx-spec/register! spec) nil)
+
+(defn groundshock-fx-snapshot [] (arc-beam/snapshot :groundshock))
+
+(defn reset-groundshock-fx-for-test! [] (arc-beam/reset-for-test! :groundshock) nil)
+
+(defn clear-groundshock-owner! [owner-key] (arc-beam/clear-owner! :groundshock owner-key) nil)

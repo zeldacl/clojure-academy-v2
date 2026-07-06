@@ -80,7 +80,7 @@
 	[]
 	(bootstrap-default-providers!)
 	(->> (registered-providers)
-			 (mapcat :skill-namespaces)
+			 (mapcat #(get % :skill-namespaces))
 			 distinct
 			 vec))
 
@@ -89,6 +89,6 @@
 	[]
 	(bootstrap-default-providers!)
 	(->> (registered-providers)
-			 (mapcat :fx-namespaces)
+			 (mapcat #(get % :fx-namespaces))
 			 distinct
 			 vec))

@@ -9,7 +9,7 @@
     or hover when no direction (float up 0.078/tick, or 0.1 near ground)
   - Speed: (if exp<0.45 0.7 1.2) * lerp(2,3,exp)
   - Acceleration: 0.16 per tick toward target velocity
-  - Low exp (<15%): tries to break 40 random soft blocks (hardness 0-0.3) in range�?0 each tick
+  - Low exp (<15%): tries to break 40 random soft blocks (hardness 0-0.3) in range�?0 each tick
   - Max exp (=1.0): on transition to flight, knockback nearby entities (range 3, strength 2.0)
   - On terminate: set cooldown lerp(30,10,exp) ticks
 
@@ -21,7 +21,7 @@
   - 0.00005 per tick during flight
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.dsl :refer [defskill]]
+  (:require [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
             [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
@@ -39,29 +39,12 @@
 ;; Constants
 ;; ============================================================================
 
+(def-skill-config-ops :storm-wing)
 (def ^:private storm-wing-skill-id :storm-wing)
-
-(defn- exp01 [exp]
-  (max 0.0 (min 1.0 (double (or exp 0.0)))))
-
-(defn- cfg-double [field-id]
-  (skill-config/tunable-double storm-wing-skill-id field-id))
-
-(defn- cfg-int [field-id]
-  (skill-config/tunable-int storm-wing-skill-id field-id))
-
-(defn- cfg-lerp [field-id exp]
-  (skill-config/lerp-double storm-wing-skill-id field-id (exp01 exp)))
-
-(defn- cfg-lerp-int [field-id exp]
-  (skill-config/lerp-int storm-wing-skill-id field-id (exp01 exp)))
 
 ;; ============================================================================
 ;; Helpers
 ;; ============================================================================
-
-(defn- skill-exp [player-id]
-  (skill-effects/skill-exp player-id storm-wing-skill-id))
 
 (defn- get-player-pos [player-id]
   (when (teleportation/available?)
@@ -72,18 +55,16 @@
     (skill-effects/set-main-cooldown! player-id :storm-wing cd-ticks)))
 
 (defn storm-wing-cost-tick-cp
-  [{:keys [player-id]}]
-  (cfg-lerp :cost.tick.cp (skill-exp player-id)))
+  [_player-id _skill-id exp]
+  (cfg-lerp :cost.tick.cp (double (or exp 0.0))))
 
 (defn storm-wing-cost-tick-overload
-  [{:keys [player-id]}]
-  (cfg-lerp :cost.tick.overload (skill-exp player-id)))
+  [_player-id _skill-id exp]
+  (cfg-lerp :cost.tick.overload (double (or exp 0.0))))
 
 (defn storm-wing-cost-creative?
-  [{:keys [player]}]
-  (boolean (when player
-             (try ((resolve 'cn.li.mcmod.platform.entity/player-creative?) player)
-                  (catch Exception _ false)))))
+  [_player-id _skill-id _exp]
+  false)
 
 (defn- add-exp! [player-id]
   (skill-effects/add-skill-exp! player-id storm-wing-skill-id (cfg-double :progression.exp-tick)))
@@ -91,14 +72,6 @@
 (defn- update-skill-state-root!
   [ctx-id f & args]
   (apply ctx-skill/update-skill-state-root! ctx-id f args))
-
-(defn- set-skill-state-root!
-  [ctx-id state-map]
-  (ctx-skill/update-skill-state-root! ctx-id identity state-map))
-
-(defn- clear-skill-state!
-  [ctx-id]
-  (ctx-skill/clear-skill-state! ctx-id))
 
 (defn- break-soft-blocks! [player-id world-id px py pz]
   (when (block-manip/available?)
@@ -178,11 +151,11 @@
 ;; ============================================================================
 
 (defn storm-wing-on-key-down
-  [{:keys [ctx-id player-id]}]
+  [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (try
-    (let [exp (skill-exp player-id)
+    (let [exp (double (or exp 0.0))
           charge-needed (cfg-lerp-int :charge.time exp)]
-      (set-skill-state-root! ctx-id
+      (ctx-skill/replace-skill-state! ctx-id
                              {:phase :charging
                               :charge-ticks 0
                               :charge-ticks-needed charge-needed
@@ -191,16 +164,16 @@
                 {:charge-ticks (long charge-needed)}))
     (catch Exception e
       (log/error "StormWing key-down failed:" e)
-      (clear-skill-state! ctx-id))))
+      (ctx-skill/clear-skill-state! ctx-id))))
 
 (defn storm-wing-on-key-tick
-  [{:keys [player-id ctx-id cost-ok?]}]
+  [ctx-id player-id _skill-id exp cost-ok? _hold-ticks _cost-stage _player-ref]
   (try
-    (when-let [ctx-data (ctx/get-context ctx-id)]
+    (when-let [ctx-data (ctx-skill/get-context ctx-id)]
       (let [skill-state (:skill-state ctx-data)]
         (when skill-state
           (let [phase (:phase skill-state)
-                exp   (skill-exp player-id)]
+                exp   (double (or exp 0.0))]
             (case phase
               :charging
               (let [ct     (long (:charge-ticks skill-state 0))
@@ -290,7 +263,7 @@
                         (fx/send! ctx-id {:topic :storm-wing/fx-update :mode :update} nil {:phase :flying
                                          :charge-ticks 0
                                          :charge-ratio 1.0})))
-                    ;; pos为nil，无法继续飞行，立即终止
+                    ;; pos?nil????????????
                     (do
                       (log/warn "StormWing: Player position unavailable, terminating")
                       (apply-cooldown! player-id exp)
@@ -304,33 +277,33 @@
                   (update-skill-state-root! ctx-id #(assoc % :phase :terminated))))))))))
     (catch Exception e
       (log/error "StormWing key-tick failed:" e)
-      ;; 主动终止技能状态，防止无限飞行
+      ;; ???????????????
       (when-let [exp (try (skill-exp player-id) (catch Exception _ 0.0))]
         (apply-cooldown! player-id exp))
       (fx/send! ctx-id {:topic :storm-wing/fx-end :mode :end})
       (update-skill-state-root! ctx-id #(assoc % :phase :terminated)))))
 
 (defn storm-wing-on-key-up
-  [{:keys [player-id ctx-id]}]
+  [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (try
-    (let [exp (skill-exp player-id)]
+    (let [exp (double (or exp 0.0))]
       (apply-cooldown! player-id exp)
       (fx/send! ctx-id {:topic :storm-wing/fx-end :mode :end})
-      (clear-skill-state! ctx-id))
+      (ctx-skill/clear-skill-state! ctx-id))
     (catch Exception e
       (log/error "StormWing key-up failed:" e)
-      (clear-skill-state! ctx-id))))
+      (ctx-skill/clear-skill-state! ctx-id))))
 
 (defn storm-wing-on-key-abort
-  [{:keys [player-id ctx-id]}]
+  [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (try
-    (let [exp (skill-exp player-id)]
+    (let [exp (double (or exp 0.0))]
       (apply-cooldown! player-id exp)
       (fx/send! ctx-id {:topic :storm-wing/fx-end :mode :end})
-      (clear-skill-state! ctx-id))
+      (ctx-skill/clear-skill-state! ctx-id))
     (catch Exception e
       (log/error "StormWing key-abort failed:" e)
-      (clear-skill-state! ctx-id))))
+      (ctx-skill/clear-skill-state! ctx-id))))
 
 (defn storm-wing-on-move-dir
   "Called when client sends updated movement direction via context channel.

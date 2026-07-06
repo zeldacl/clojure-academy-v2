@@ -79,10 +79,8 @@
     new-net
 
     (network-in-world? world-data old-net)
-    (world-registry/transact!
-      world-data
-      (fn [_]
-        (replace-network-in-state! world-data old-net new-net)))
+    ;; replace-network-in-state! uses update-state-value! which is already atomic via swap!.
+    (replace-network-in-state! world-data old-net new-net)
 
     :else
     (do
@@ -97,10 +95,8 @@
     new-conn
 
     (connection-in-world? world-data old-conn)
-    (world-registry/transact!
-      world-data
-      (fn [_]
-        (replace-connection-in-state! world-data old-conn new-conn)))
+    ;; replace-connection-in-state! uses update-state-value! which is already atomic via swap!.
+    (replace-connection-in-state! world-data old-conn new-conn)
 
     :else
     (do

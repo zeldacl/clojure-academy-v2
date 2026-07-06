@@ -10,7 +10,7 @@
   Exp: +0.001 per block broken
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.dsl :refer [defskill]]
+  (:require [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
@@ -21,19 +21,9 @@
 ;; Helpers
 ;; ---------------------------------------------------------------------------
 
+
+(def-skill-config-ops :mine-ray-expert)
 (def ^:private mine-ray-expert-skill-id :mine-ray-expert)
-
-(defn- cfg-double [field-id]
-  (skill-config/tunable-double mine-ray-expert-skill-id field-id))
-
-(defn- cfg-int [field-id]
-  (skill-config/tunable-int mine-ray-expert-skill-id field-id))
-
-(defn- cfg-lerp [field-id exp]
-  (skill-config/lerp-double mine-ray-expert-skill-id field-id exp))
-
-(defn- skill-exp [player-id]
-  (skill-effects/skill-exp player-id mine-ray-expert-skill-id))
 
 (defn- make-cfg [player-id]
   (let [exp (skill-exp player-id)]
@@ -47,10 +37,10 @@
 ;; Actions
 ;; ---------------------------------------------------------------------------
 
-(defn mine-ray-expert-down!  [evt] (base/mining-ray-down!  mine-ray-expert-skill-id evt))
-(defn mine-ray-expert-tick!  [evt] (base/mining-ray-tick!  (make-cfg (:player-id evt)) evt))
-(defn mine-ray-expert-up!    [evt] (base/mining-ray-up!    {} evt))
-(defn mine-ray-expert-abort! [evt] (base/mining-ray-abort! {} evt))
+(defn mine-ray-expert-down!  [& args] (apply base/mining-ray-down!  mine-ray-expert-skill-id args))
+(defn mine-ray-expert-tick!  [& args] (apply base/mining-ray-tick!  (make-cfg (nth args 1)) args))
+(defn mine-ray-expert-up!    [& args] (apply base/mining-ray-up!    {} args))
+(defn mine-ray-expert-abort! [& args] (apply base/mining-ray-abort! {} args))
 
 ;; ---------------------------------------------------------------------------
 ;; Skill registration

@@ -44,8 +44,8 @@
         (network-state/set-state-value! :disposed (nbt/nbt-get-boolean compound "disposed")))))
 
 (defn connection-to-nbt
-  [conn]
-  (let [compound (node-conn/node-connection-to-nbt conn)]
+  [conn world]
+  (let [compound (node-conn/node-connection-to-nbt conn world)]
     (nbt/nbt-set-boolean! compound "disposed" (node-conn/is-disposed? conn))
     compound))
 
@@ -56,7 +56,7 @@
     conn))
 
 (defn world-data-to-nbt
-  [world-data]
+  [world-data world]
   (let [compound (nbt/create-nbt-compound)
         networks-list (nbt/create-nbt-list)
         connections-list (nbt/create-nbt-list)]
@@ -66,7 +66,7 @@
         (nbt/nbt-append! networks-list (network-to-nbt network))))
     (doseq [conn (world-registry/connections world-data)]
       (when-not (node-conn/is-disposed? conn)
-        (nbt/nbt-append! connections-list (connection-to-nbt conn))))
+        (nbt/nbt-append! connections-list (connection-to-nbt conn world))))
     (nbt/nbt-set-tag! compound "networks" networks-list)
     (nbt/nbt-set-tag! compound "connections" connections-list)
     compound))
@@ -78,6 +78,9 @@
         connections-list (nbt/nbt-get-list compound "connections")
         networks-size (if networks-list (nbt/nbt-list-size networks-list) 0)
         connections-size (if connections-list (nbt/nbt-list-size connections-list) 0)]
+    (log/info "[world-data-from-nbt] compound present:" (some? compound)
+              "networks-list:" (some? networks-list) "size:" networks-size
+              "connections-list:" (some? connections-list) "size:" connections-size)
     (doseq [index (range networks-size)]
       (when-let [network-compound (nbt/nbt-list-get-compound networks-list index)]
         (try

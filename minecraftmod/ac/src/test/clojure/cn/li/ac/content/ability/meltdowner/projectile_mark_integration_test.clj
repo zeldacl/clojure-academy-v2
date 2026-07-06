@@ -1,5 +1,6 @@
 (ns cn.li.ac.content.ability.meltdowner.projectile-mark-integration-test
   (:require [cn.li.ac.ability.service.runtime-store :as store]
+            [cn.li.ac.ability.test.skill-callback-test-helpers :as cb]
             [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.model.ability :as ad]
@@ -25,20 +26,17 @@
             [cn.li.ac.ability.service.context-manager :as ctx-mgr]))
 
 (defn- with-fresh-meltdowner-runtimes [f]
-  (let [damage-registry-rt (rt/create-damage-handler-registry-runtime)]
-    (ps-fix/with-test-player-state-owner
-      (fn []
-        (rt/call-with-damage-handler-registry-runtime damage-registry-rt
-          (fn []
-            (store/reset-store!)
-            (rt/reset-damage-handler-registry-for-test!)
-            (try
-              (f)
-              (finally
-                (dp/reset-pending-tasks-for-test!)
-                (dh/reset-marks-for-test!)
-                (rt/reset-damage-handler-registry-for-test!)
-                (store/reset-store!)))))))))
+  (ps-fix/with-test-player-state-owner
+    (fn []
+      (store/reset-store!)
+      (rt/reset-damage-handler-registry-for-test!)
+      (try
+        (f)
+        (finally
+          (dp/reset-pending-tasks-for-test!)
+          (dh/reset-marks-for-test!)
+          (rt/reset-damage-handler-registry-for-test!)
+          (store/reset-store!))))))
 
 (use-fixtures :each with-fresh-meltdowner-runtimes)
 
@@ -51,7 +49,9 @@
 (defn- missile-context-mocks [initial]
   (let [ctx* (atom initial)]
     {:ctx* ctx*
-     :get-context (fn [_] @ctx*)
+     :get-context (fn
+                    ([_ctx-id] @ctx*)
+                    ([_owner _ctx-id] @ctx*))
      :update-skill-state-root! (fn [_ f & args]
                         (swap! ctx* update :skill-state (fn [ss] (apply f (or ss {}) args))))}))
 
@@ -111,7 +111,9 @@
 (defn- jet-context-mocks [initial]
   (let [ctx* (atom initial)]
     {:ctx* ctx*
-     :get-context (fn [_] @ctx*)
+     :get-context (fn
+                    ([_ctx-id] @ctx*)
+                    ([_owner _ctx-id] @ctx*))
      :update-skill-state-root! (fn [_ f & args]
                         (swap! ctx* update :skill-state (fn [ss] (apply f (or ss {}) args))))
      :terminate-context! (fn [& _] nil)
@@ -136,14 +138,14 @@
                   entity-damage/apply-aoe-damage!* (fn [& _] [])
                   entity-damage/apply-reflection-damage!* (fn [& _] [])]
       (dp/schedule-electron-bomb-beam!
-         {:player-id attacker
-          :ctx-id "ctx-eb"
-          :world-id "w"
-          :eye {:x 0.0 :y 64.0 :z 0.0}
-          :look-dir {:x 0.0 :y 0.0 :z 1.0}
-          :damage 12.0
-          :exp-gain 0.003
-          :delay-ticks 1})
+       {:player-id attacker
+        :ctx-id "ctx-eb"
+        :world-id "w"
+        :eye {:x 0.0 :y 64.0 :z 0.0}
+        :look-dir {:x 0.0 :y 0.0 :z 1.0}
+        :damage 12.0
+        :exp-gain 0.003
+        :delay-ticks 1})
       (dp/tick-player! attacker)
       (is (= 1.75 (:rate (get (dh/marks-snapshot) victim))))
       (is (= 17.5 (double (rt/process-damage! victim attacker 10.0 :magic))))))
@@ -165,6 +167,7 @@
                   skill-effects/perform-resource! (fn [& _] {:success? true})
                   skill-effects/add-skill-exp! (fn [& _] nil)
                   ctx/get-context get-context
+                  ctx-skill/get-context get-context
                   ctx-skill/update-skill-state-root! update-skill-state-root!
                   fx/send! (fn [& _] nil)
                   geom/world-id-of (fn [_] "w")
@@ -179,9 +182,7 @@
                   entity-damage/apply-direct-damage!* (fn [& _] true)
                   entity-damage/apply-aoe-damage!* (fn [& _] [])
                   entity-damage/apply-reflection-damage!* (fn [& _] [])]
-      (missile/electron-missile-tick! {:player-id attacker
-                                         :ctx-id "ctx-em"
-                                         :player {:id "player-obj"}}))
+      (cb/apply-invoke missile/electron-missile-tick! :player-id attacker :ctx-id "ctx-em" :player-ref {:id "player-obj"}))
       (is (= 1.6 (:rate (get (dh/marks-snapshot) victim))))
       (is (= 16.0 (double (rt/process-damage! victim attacker 10.0 :magic))))))
 
@@ -209,7 +210,7 @@
                                               {:hit-type :block :x 0.0 :y 64.0 :z 5.0})
                   ctx-mgr/push-channel-to-player! (fn [& _] nil)
                   ctx-mgr/push-channel-to-nearby-players! (fn [& _] nil)]
-      (ray-barrage/ray-barrage-perform! {:player-id attacker :ctx-id "ctx-rb"}))
+      (cb/apply-invoke ray-barrage/ray-barrage-perform! :player-id attacker :ctx-id "ctx-rb"))
       (is (= 1.4 (:rate (get (dh/marks-snapshot) victim))))
       (is (= 14.0 (double (rt/process-damage! victim attacker 10.0 :magic)))))))
 
@@ -256,6 +257,7 @@
                   rad/mark-duration-ticks (fn [] 100000)
                   skill-effects/skill-exp (fn [& _] 0.0)
                   ctx/get-context get-context
+                  ctx-skill/get-context get-context
                   ctx-skill/update-skill-state-root! update-skill-state-root!
                   ctx/terminate-context! terminate-context!
                   fx/send! send!
@@ -273,7 +275,7 @@
                   entity-damage/apply-reflection-damage!* (fn [& _] [])
                   ctx-mgr/push-channel-to-player! (fn [& _] nil)
                   ctx-mgr/push-channel-to-nearby-players! (fn [& _] nil)]
-      (jet-engine/jet-engine-tick! {:player-id attacker :ctx-id "ctx-jet" :hold-ticks 1}))
+      (cb/apply-invoke jet-engine/jet-engine-tick! :player-id attacker :ctx-id "ctx-jet" :hold-ticks 1))
       (is (= 1.5 (:rate (get (dh/marks-snapshot) victim))))
       (is (= 15.0 (double (rt/process-damage! victim attacker 10.0 :magic))))))
 

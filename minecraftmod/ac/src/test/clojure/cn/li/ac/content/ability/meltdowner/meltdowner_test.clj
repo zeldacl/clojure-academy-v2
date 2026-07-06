@@ -1,10 +1,12 @@
 (ns cn.li.ac.content.ability.meltdowner.meltdowner-test
   (:require [clojure.test :refer [deftest is]]
+            [cn.li.ac.ability.test.skill-callback-test-helpers :as cb]
             [cn.li.ac.content.ability.meltdowner.meltdowner :as meltdowner]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as damage-helper]
             [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.test.support.fx-mocks :as fx-mocks]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.effects.beam :as beam]
@@ -37,8 +39,7 @@
                                                :charge.max-ticks 40
                                                :charge.max-tolerant-ticks 100
                                                0))]
-      (#'cn.li.ac.content.ability.meltdowner.meltdowner/meltdowner-on-up!
-       {:player-id "p1" :ctx-id "ctx-1" :hold-ticks 10})
+      (cb/apply-invoke #'cn.li.ac.content.ability.meltdowner.meltdowner/meltdowner-on-up! :player-id "p1" :ctx-id "ctx-1" :hold-ticks 10)
       (is (= [{:ctx-id "ctx-1" :topic :meltdowner/fx-end :payload {:performed? false}}]
              @messages*))
       (is (= [["ctx-1" nil]] @terminated*))
@@ -82,8 +83,7 @@
                   beam/execute-beam! (fn [_ _] {:beam-result {:performed? true :reflection-hit? false}})
                   geom/world-id-of (fn [_] "w")
                   geom/eye-pos (fn [_] {:x 0.0 :y 64.0 :z 0.0})]
-      (#'cn.li.ac.content.ability.meltdowner.meltdowner/meltdowner-on-up!
-       {:player-id "p1" :ctx-id "ctx-2" :hold-ticks 30})
+      (cb/apply-invoke #'cn.li.ac.content.ability.meltdowner.meltdowner/meltdowner-on-up! :player-id "p1" :ctx-id "ctx-2" :hold-ticks 30)
       (is (= [["p1" :meltdowner 0.0022]] @exp-calls*))
       (is (= [["p1" :meltdowner 264]] @cooldown-calls*))
       (is (= [{:ctx-id "ctx-2" :topic :meltdowner/fx-end :payload {:performed? true}}]
@@ -95,17 +95,16 @@
         overload-calls* (atom [])]
     (with-redefs [fx/send! fx-send!
                   ctx/terminate-context! terminate!
-                  ctx/get-context (fn [_] {:skill-state {:overload-floor 123.0}})
-                  skill-effects/enforce-overload-floor!
-                  (fn [player-id floor] (swap! overload-calls* conj [player-id floor]))
+                  ctx-skill/get-context (fn [& _] {:skill-state {:overload-floor 123.0}})
+                  skill-effects/enforce-overload-floor! (fn [player-id floor]
+                                                          (swap! overload-calls* conj [player-id floor]))
                   skill-config/tunable-int (fn [_ field-id]
                                              (case field-id
                                                :charge.min-ticks 20
                                                :charge.max-ticks 40
                                                :charge.max-tolerant-ticks 100
                                                0))]
-      (#'cn.li.ac.content.ability.meltdowner.meltdowner/meltdowner-on-tick!
-       {:player-id "p1" :ctx-id "ctx-3" :hold-ticks 101})
+      (cb/apply-invoke #'cn.li.ac.content.ability.meltdowner.meltdowner/meltdowner-on-tick! :player-id "p1" :ctx-id "ctx-3" :hold-ticks 101)
       (is (= [["p1" 123.0]] @overload-calls*))
       (is (= [{:ctx-id "ctx-3" :topic :meltdowner/fx-end :payload {:performed? false}}]
              @messages*))

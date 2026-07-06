@@ -12,7 +12,7 @@
   - UI opened from key-down; actual add/remove/perform via RPC requests
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.dsl :refer [defskill]]
+  (:require [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
             [cn.li.ac.ability.config :as ability-config]
             [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
@@ -28,42 +28,34 @@
             [cn.li.mcmod.util.log :as log]
             [cn.li.ac.content.ability.teleporter.tp-skill-helper :as helper]))
 
+(def-skill-config-ops :location-teleport)
 (def ^:private location-teleport-skill-id :location-teleport)
 
-(defn- skill-exp [player-id]
-  (skill-effects/skill-exp player-id location-teleport-skill-id))
-
 (defn- can-cross-dimension? [exp]
-  (> (double exp) (helper/cfg-double location-teleport-skill-id
-                                     :targeting.cross-dimension-exp-threshold)))
+  (> (double exp) (cfg-double :targeting.cross-dimension-exp-threshold)))
 
 (defn- norm-name [s]
   (let [trimmed (-> (or s "") str str/trim)]
-    (subs trimmed 0 (min (helper/cfg-int location-teleport-skill-id
-                                         :ui.max-location-name-length)
+    (subs trimmed 0 (min (cfg-int :ui.max-location-name-length)
                          (count trimmed)))))
 
 (defn- compute-cp-cost [exp distance cross-dimension?]
-  (let [base (helper/cfg-lerp location-teleport-skill-id :cost.perform.cp-base exp)
+  (let [base (cfg-lerp :cost.perform.cp-base exp)
         dim-penalty (if cross-dimension?
-                      (helper/cfg-double location-teleport-skill-id
-                                         :cost.perform.cross-dimension-multiplier)
+                      (cfg-double :cost.perform.cross-dimension-multiplier)
                       1.0)
-        dist-mult (max (helper/cfg-double location-teleport-skill-id
-                                          :cost.perform.min-distance-multiplier)
-                       (Math/sqrt (min (helper/cfg-double location-teleport-skill-id
-                                                          :cost.perform.distance-cap)
+        dist-mult (max (cfg-double :cost.perform.min-distance-multiplier)
+                       (Math/sqrt (min (cfg-double :cost.perform.distance-cap)
                                        (double distance))))]
     (* base dim-penalty dist-mult)))
 
 (defn- compute-cooldown [exp]
-  (helper/cfg-lerp-int location-teleport-skill-id :cooldown.ticks exp))
+  (cfg-lerp-int :cooldown.ticks exp))
 
 (defn- compute-exp-gain [distance]
-  (if (>= (double distance) (helper/cfg-double location-teleport-skill-id
-                                               :progression.long-distance-threshold))
-    (helper/cfg-double location-teleport-skill-id :progression.exp-long)
-    (helper/cfg-double location-teleport-skill-id :progression.exp-short)))
+  (if (>= (double distance) (cfg-double :progression.long-distance-threshold))
+    (cfg-double :progression.exp-long)
+    (cfg-double :progression.exp-short)))
 
 (defn- add-exp! [player-id amount]
   (skill-effects/add-skill-exp! player-id :location-teleport (double amount)))
@@ -101,11 +93,9 @@
 
 (defn- location-limits []
   {:cross-dimension-exp-threshold
-   (helper/cfg-double location-teleport-skill-id
-                      :targeting.cross-dimension-exp-threshold)
+   (cfg-double :targeting.cross-dimension-exp-threshold)
    :max-location-name-length
-   (helper/cfg-int location-teleport-skill-id
-                   :ui.max-location-name-length)
+   (cfg-int :ui.max-location-name-length)
    :max-saved-locations
    (max-saved-location-count)})
 
@@ -114,8 +104,7 @@
         dist (vec3/euclidean-distance (:x cur-pos) (:y cur-pos) (:z cur-pos)
                     (:x loc) (:y loc) (:z loc))
         cp (compute-cp-cost exp dist cross-dim?)
-  overload (helper/cfg-double location-teleport-skill-id
-            :cost.perform.overload)
+  overload (cfg-double :cost.perform.overload)
         no-exp? (and cross-dim? (not (can-cross-dimension? exp)))
   no-cp? (not (can-consume-resource? player-id overload cp))]
     (assoc loc
@@ -248,13 +237,11 @@
             (cond
               (not can-cross?)
               {:success? false :error :err-exp
-               :require-exp (helper/cfg-double location-teleport-skill-id
-                                               :targeting.cross-dimension-exp-threshold)
+               :require-exp (cfg-double :targeting.cross-dimension-exp-threshold)
                :current-exp exp}
 
               (not (consume-resource! player-id
-                                      (helper/cfg-double location-teleport-skill-id
-                                                         :cost.perform.overload)
+                                      (cfg-double :cost.perform.overload)
                                       cp))
               {:success? false :error :err-cp :cp-cost cp}
 
@@ -265,8 +252,7 @@
                              (:x dest)
                              (:y dest)
                              (:z dest)
-                             (helper/cfg-double location-teleport-skill-id
-                                                :targeting.teleport-radius))]
+                             (cfg-double :targeting.teleport-radius))]
                 (if-not (:success result)
                   {:success? false :error :teleport-failed}
                   (do
@@ -288,7 +274,7 @@
 
 (defn location-teleport-on-key-down
   "Open LocationTeleport UI with current locations and perform stats."
-  [{:keys [player-id ctx-id]}]
+  [ctx-id player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (try
     (let [payload (query-location-teleport player-id)]
       (ctx/ctx-send-to-client! ctx-id :location-teleport/ui-open payload))
@@ -297,17 +283,17 @@
 
 (defn location-teleport-on-key-tick
   "No-op: interaction is handled by dedicated location teleport GUI RPC actions."
-  [_]
+  [_ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   nil)
 
 (defn location-teleport-on-key-up
   "No-op: perform is handled by GUI perform request for original behavior alignment."
-  [_]
+  [_ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   nil)
 
 (defn location-teleport-on-key-abort
   "No-op: UI lifecycle is client-managed and independent from key abort."
-  [_]
+  [_ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   nil)
 
 (defskill location-teleport
@@ -322,7 +308,7 @@
   :ctrl-id :location-teleport
   :cp-consume-speed 0.0
   :overload-consume-speed 0.0
-  :cooldown-ticks (fn [{:keys [player-id]}]
+  :cooldown-ticks (fn [player-id _skill-id _exp]
                     (compute-cooldown (skill-exp player-id)))
   :pattern :release-cast
   :cooldown {:mode :manual}

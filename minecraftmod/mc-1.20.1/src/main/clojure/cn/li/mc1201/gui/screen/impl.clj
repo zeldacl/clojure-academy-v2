@@ -83,6 +83,14 @@
     (when (= align-h :center)
       (reset! top-atom (long (/ (- (double screen-h) (double rh)) 2.0))))))
 
+(defn- sync-root-mouse!
+  "Store GUI-root mouse coords on root metadata for frame handlers (e.g. skill-tree parallax)."
+  [root mouse-x mouse-y left-atom top-atom]
+  (when root
+    (swap! (:metadata root) assoc
+           :last-mouse-x (int (- mouse-x @left-atom))
+           :last-mouse-y (int (- mouse-y @top-atom)))))
+
 (defn owner-for-screen-menu
   "Resolve canonical client owner for a Minecraft menu's Clojure container."
   [menu]
@@ -120,6 +128,10 @@
         ^DelegatingCGuiContainerScreen screen (doto (DelegatingCGuiContainerScreen. menu player-inventory title)
       (.withRender (fn [^DelegatingCGuiContainerScreen s ^GuiGraphics gg mouse-x mouse-y partial-ticks]
         (when root
+          (sync-root-bounds! s left top)
+          (apply-root-alignment! root left top (.-width s) (.-height s))
+          (sync-root-mouse! root mouse-x mouse-y left top))
+        (when root
           (with-screen-cgui menu "CGUI frame-tick error"
             #(do
                (cgui-rt/resize-root! root (.getXSize s) (.getYSize s))
@@ -128,11 +140,6 @@
           (.callSuperRender s gg (int mouse-x) (int mouse-y) (float partial-ticks))
           (do
             (.callSuperRenderBackground s gg)
-            (sync-root-bounds! s left top)
-            ;; Apply root CENTER/CENTER alignment (matching upstream
-            ;; CGuiScreen full-screen overlay behavior).
-            (when root
-              (apply-root-alignment! root left top (.-width s) (.-height s)))
             (when root
               (with-screen-cgui menu "CGUI non-slot tab render error"
                 #(cgui-rt/render-tree! gg root @left @top)))
@@ -197,7 +204,7 @@
               #(cgui-rt/key-input! root 0 0 (char code-point))))
           (if owns-key?
             true
-            (.callSuperCharTyped s code-point modifiers)))))
+            (.callSuperCharTyped s (char code-point) modifiers)))))
 
       (.withRemoved (fn [^DelegatingCGuiContainerScreen _s]
         (when root

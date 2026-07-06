@@ -1,20 +1,56 @@
 # relative-path	symbol	classification	owner	notes
 # Report-only seed list for auditTopLevelMutableState. Keep exact path+symbol entries only.
 ac/src/main/clojure/cn/li/ac/ability/service/platform_hooks.clj	platform-fn-registry	S2_RUNTIME_COMPONENT	ability/runtime-bridge	Process-local platform function registry installed during runtime hook bootstrap.
-ac/src/main/clojure/cn/li/ac/ability/service/runtime_store.clj	global-store-data	S2_RUNTIME_COMPONENT	ability/runtime-store	Server/session scoped reducer store backing ability state; accessed via IAbilityStore boundary.
-ac/src/main/clojure/cn/li/ac/ability/registry/category.clj	category-registry-runtime-ref*	S2_RUNTIME_COMPONENT	ability/runtime-container	Installable category registry runtime pointer for composition-root wiring.
-ac/src/main/clojure/cn/li/ac/ability/registry/event.clj	event-subscriber-runtime-ref*	S2_RUNTIME_COMPONENT	ability/runtime-container	Installable event subscriber runtime pointer for composition-root wiring.
-ac/src/main/clojure/cn/li/ac/ability/registry/skill.clj	skill-registry-runtime-ref*	S2_RUNTIME_COMPONENT	ability/runtime-container	Installable skill registry runtime pointer for composition-root wiring.
 ac/src/main/clojure/cn/li/ac/ability/service/command_runtime.clj	recent-command-traces*	S2_RUNTIME_COMPONENT	ability/command-runtime	In-memory idempotency trace cache for duplicate command replay suppression.
-ac/src/main/clojure/cn/li/ac/ability/service/context_dispatcher.clj	dispatcher-runtime-ref*	S2_RUNTIME_COMPONENT	ability/runtime-container	Installable dispatcher runtime holder replacing singleton install vars.
 ac/src/main/clojure/cn/li/ac/content/ability/meltdowner/damage_helper.clj	last-radiation-tick-id*	S2_RUNTIME_COMPONENT	ability/player-runtime	Server-tick dedup guard when tick-marks! runs more than once per server tick.
-ac/src/main/clojure/cn/li/ac/ability/spi_lifecycle.clj	lifecycle-registry-runtime-ref*	S2_RUNTIME_COMPONENT	ability/runtime-container	Installable lifecycle registry runtime pointer for composition-root wiring.
-ac/src/main/clojure/cn/li/ac/ability/discovery.clj	bootstrap-attempts*	S2_RUNTIME_COMPONENT	ability/discovery	Process-local bootstrap attempt counter for classpath provider discovery idempotency and tests.
 ac/src/main/clojure/cn/li/ac/block/wireless_matrix/logic.clj	matrix-slot-schema-registration	S2_RUNTIME_COMPONENT	ac/wireless-matrix	Lazy, process-local registration guard for wireless-matrix slot schema bootstrap.
 ac/src/main/clojure/cn/li/ac/block/wireless_node/logic.clj	node-slot-schema-registration	S2_RUNTIME_COMPONENT	ac/wireless-node	Lazy, process-local registration guard for wireless-node slot schema bootstrap.
-ac/src/main/clojure/cn/li/ac/client/toast.clj	toasts*	S2_RUNTIME_COMPONENT	ac/client-toast	Client-local transient toast queue used by overlay rendering.
-ac/src/main/clojure/cn/li/ac/client/font_init.clj	fonts-initialized?	S2_RUNTIME_COMPONENT	ac/client-font-init	Client-local one-time bootstrap guard for AC font registration.
-mc-1.20.1/src/main/clojure/cn/li/mc1201/client/font/msdf_setup.clj	setup-called?	S2_RUNTIME_COMPONENT	mc1201/msdf-setup	Client-local one-time bootstrap guard for MSDF shadow font initialization.
+ac/src/main/clojure/cn/li/ac/ability/client/effects/particles.clj	particle-queue-delay	S1_STATIC_REGISTRY	ability/client-fx	Lazy client particle queue holder installed before runtime bridge wiring.
+ac/src/main/clojure/cn/li/ac/ability/client/fx_registry.clj	fallback-fx-registry-state	S1_STATIC_REGISTRY	ability/client-fx	Process-local fallback FX registry before installable runtime is bound.
+ac/src/main/clojure/cn/li/ac/ability/client/hand_effects.clj	fallback-hand-effect-state	S1_STATIC_REGISTRY	ability/client-fx	Process-local fallback hand-effect state before installable runtime is bound.
+ac/src/main/clojure/cn/li/ac/ability/client/level_effects.clj	fallback-level-effect-state	S1_STATIC_REGISTRY	ability/client-fx	Process-local fallback level-effect state before installable runtime is bound.
+ac/src/main/clojure/cn/li/ac/block/ability_interferer/logic.clj	active-interferers	S2_RUNTIME_COMPONENT	ac/ability-interferer	Server-world interferer registry keyed by source tile; cleared on unload/tick cleanup.
+ac/src/main/clojure/cn/li/ac/block/ability_interferer/logic.clj	active-interferers-tick-counter	S2_RUNTIME_COMPONENT	ac/ability-interferer	Server tick counter for periodic stale interferer cleanup.
+ac/src/main/clojure/cn/li/ac/block/ability_interferer/logic.clj	world-tick-cleanup-registered?	S1_STATIC_REGISTRY	ac/ability-interferer	Process-local one-time guard for world-tick cleanup hook registration.
+ac/src/main/clojure/cn/li/ac/block/metal_former/gui.clj	quick-move-config	S1_STATIC_REGISTRY	ac/metal-former-gui	Lazy GUI quick-move config derived from static metadata.
+ac/src/main/clojure/cn/li/ac/content/ability/generic/brain_course.clj	skill-specs	S1_STATIC_REGISTRY	ac/ability-content	Lazy static skill spec table for brain course content.
+ac/src/main/clojure/cn/li/ac/content/ability/generic/brain_course_advanced.clj	skill-specs	S1_STATIC_REGISTRY	ac/ability-content	Lazy static skill spec table for advanced brain course content.
+ac/src/main/clojure/cn/li/ac/content/ability/generic/mind_course.clj	skill-specs	S1_STATIC_REGISTRY	ac/ability-content	Lazy static skill spec table for mind course content.
+ac/src/main/clojure/cn/li/ac/tutorial/client/preview.clj	recipe-widget-cache	S1_STATIC_REGISTRY	ac/tutorial-client	Client-local recipe widget cache for tutorial preview rendering.
+ac/src/main/clojure/cn/li/ac/tutorial/client/state.clj	client-state	S2_RUNTIME_COMPONENT	ac/tutorial-client	Client-local tutorial UI/session state for integrated client.
+ac/src/main/clojure/cn/li/ac/tutorial/conditions.clj	condition-index-cache	S1_STATIC_REGISTRY	ac/tutorial	Process-local condition index cache rebuilt from static definitions.
+ac/src/main/clojure/cn/li/ac/tutorial/events.clj	tutorial-cond-map*	S1_STATIC_REGISTRY	ac/tutorial	Process-local tutorial condition map populated during event bootstrap.
+fabric-1.20.1/src/main/clojure/cn/li/fabric1201/adapter/server_context.clj	_server-context-runtime	S1_STATIC_REGISTRY	fabric/server-context	Installable server-context runtime delay holder for Fabric adapter bootstrap.
+fabric-1.20.1/src/main/clojure/cn/li/fabric1201/client/runtime_bridge.clj	_input-runtime	S1_STATIC_REGISTRY	fabric/client-runtime	Installable input runtime delay holder for Fabric client bridge.
+fabric-1.20.1/src/main/clojure/cn/li/fabric1201/mod.clj	registered-blocks-holder	S1_STATIC_REGISTRY	fabric/registry	Fabric block registration accumulator during mod init.
+fabric-1.20.1/src/main/clojure/cn/li/fabric1201/mod.clj	registered-items-holder	S1_STATIC_REGISTRY	fabric/registry	Fabric item registration accumulator during mod init.
+fabric-1.20.1/src/main/clojure/cn/li/fabric1201/mod.clj	registered-block-entities-holder	S1_STATIC_REGISTRY	fabric/registry	Fabric block-entity registration accumulator during mod init.
+forge-1.20.1/src/main/clojure/cn/li/forge1201/client/key_mapping_adapter.clj	registered-key-mappings	S1_STATIC_REGISTRY	forge/key-mapping	Process-local Forge key-mapping registration table.
+forge-1.20.1/src/main/clojure/cn/li/forge1201/integration/events/world.clj	level-saved-data-by-key	S2_RUNTIME_COMPONENT	forge/world-lifecycle	Per-world-key SavedData mapping populated on load and cleared on unload.
+forge-1.20.1/src/main/clojure/cn/li/forge1201/setup/consumer_support.clj	event-priority	S1_STATIC_REGISTRY	forge/setup	Lazy Forge event-priority constant for consumer support wiring.
+forge-1.20.1/src/main/clojure/cn/li/forge1201/setup/imc_dispatcher.clj	event-priority	S1_STATIC_REGISTRY	forge/setup	Lazy Forge event-priority constant for IMC dispatcher wiring.
+mc-1.20.1/src/main/clojure/cn/li/mc1201/client/effects/level_renderer.clj	_level-renderer-runtime	S1_STATIC_REGISTRY	mc1201/client-effects	Installable level-renderer runtime delay holder.
+mc-1.20.1/src/main/clojure/cn/li/mc1201/client/overlay/renderer.clj	_overlay-render-runtime	S1_STATIC_REGISTRY	mc1201/client-overlay	Installable overlay render runtime delay holder.
+mc-1.20.1/src/main/clojure/cn/li/mc1201/client/overlay/state.clj	_overlay-state-runtime	S1_STATIC_REGISTRY	mc1201/client-overlay	Installable overlay state runtime delay holder.
+mc-1.20.1/src/main/clojure/cn/li/mc1201/client/render/script_render_executor.clj	_script-render-executor-runtime	S1_STATIC_REGISTRY	mc1201/script-render	Installable script-render executor runtime delay holder.
+mc-1.20.1/src/main/clojure/cn/li/mc1201/client/render/script_render_runtime.clj	_script-render-runtime	S1_STATIC_REGISTRY	mc1201/script-render	Installable script-render runtime delay holder.
+mc-1.20.1/src/main/clojure/cn/li/mc1201/client/session_cleanup.clj	_session-cleanup-runtime	S1_STATIC_REGISTRY	mc1201/client-session	Installable session-cleanup runtime delay holder.
 mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/cgui/font.clj	msdf-base-height	S2_RUNTIME_COMPONENT	mc1201/cgui-font	STB em height (8px) divisor for CGUI font-size scaling.
 mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/cgui/font.clj	registry	S2_RUNTIME_COMPONENT	mc1201/cgui-font	Client-local CGui font descriptor registry populated during startup.
-mcmod/src/main/clojure/cn/li/mcmod/hooks/core.clj	allowed-runtime-hook-keys*	S2_RUNTIME_COMPONENT	mcmod/hooks-core	Process-local allowlist for neutral runtime-hook validation extended by AC during startup.
+mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/cgui/font.clj	msdf-shader	S1_STATIC_REGISTRY	mc1201/cgui-font	Client-local MSDF shader holder initialized once during font setup.
+mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/cgui/renderer.clj	_cgui-renderer-runtime	S1_STATIC_REGISTRY	mc1201/cgui-render	Installable CGUI renderer runtime delay holder.
+mc-1.20.1/src/main/clojure/cn/li/mc1201/runtime/accessor_registry_core.clj	registries*	S1_STATIC_REGISTRY	mc1201/runtime-accessor	Process-local accessor registry table for mc1201 runtime adapters.
+mc-1.20.1/src/main/clojure/cn/li/mc1201/runtime/sync_core.clj	_sync-scheduler-runtime	S1_STATIC_REGISTRY	mc1201/sync-scheduler	Installable sync-scheduler runtime delay holder.
+mcmod/src/main/clojure/cn/li/mcmod/client/render/script_render_abi.clj	registered-kinds*	S1_STATIC_REGISTRY	mcmod/script-render	SPI registry of script-render kind handlers.
+mcmod/src/main/clojure/cn/li/mcmod/client/render/script_render_abi.clj	kind-renderer-keys*	S1_STATIC_REGISTRY	mcmod/script-render	SPI registry mapping render kinds to renderer keys.
+mcmod/src/main/clojure/cn/li/mcmod/client/texture_registry.clj	registry*	S1_STATIC_REGISTRY	mcmod/texture-registry	Process-local client texture registry populated during startup.
+mcmod/src/main/clojure/cn/li/mcmod/hooks/core.clj	default-client-owner-fn	S1_STATIC_REGISTRY	mcmod/hooks-core	Process-local default client owner factory installed by platform bootstrap.
+mcmod/src/main/clojure/cn/li/mcmod/platform/capability.clj	tile-fluid-specs*	S1_STATIC_REGISTRY	mcmod/capability	Process-local tile fluid capability spec registry.
+mcmod/src/main/clojure/cn/li/mcmod/protocol/keyboard_input.clj	registered-handlers	S1_STATIC_REGISTRY	mcmod/keyboard-input	SPI registry of keyboard input handlers.
+mcmod/src/main/clojure/cn/li/mcmod/spi/entity_render_registry.clj	render-ns-map	S1_STATIC_REGISTRY	mcmod/entity-render	SPI registry mapping entity render namespaces.
+mcmod/src/main/clojure/cn/li/mcmod/spi/key_scheme_provider.clj	provider	S1_STATIC_REGISTRY	mcmod/key-scheme	SPI holder for installable key-scheme provider.
+mcmod/src/main/clojure/cn/li/mcmod/spi/keybinding_registry.clj	keybinding-configs	S1_STATIC_REGISTRY	mcmod/keybinding	SPI registry of keybinding configuration entries.
+mcmod/src/main/clojure/cn/li/mcmod/spi/vanilla_input_control.clj	suppressor	S1_STATIC_REGISTRY	mcmod/vanilla-input	SPI holder for vanilla input suppressor installed by platform.
+mcmod/src/main/clojure/cn/li/mcmod/worldgen.clj	pool-fill-block-id*	S1_STATIC_REGISTRY	mcmod/worldgen	Process-local worldgen pool fill block id registry.
+mcmod/src/main/clojure/cn/li/mcmod/worldgen.clj	worldgen-ore-registry*	S1_STATIC_REGISTRY	mcmod/worldgen	Process-local worldgen ore registration table.
+mcmod/src/main/clojure/cn/li/mcmod/worldgen.clj	worldgen-liquid-registry*	S1_STATIC_REGISTRY	mcmod/worldgen	Process-local worldgen liquid registration table.

@@ -10,9 +10,7 @@
 (def default-generic-config
   {:use-mouse-wheel false
    :give-cloud-terminal true
-   :font "Microsoft YaHei"
-   :gen-ores true
-   :gen-phase-liquid true})
+   :font "Microsoft YaHei"})
 
 (def default-values
   default-generic-config)
@@ -35,25 +33,7 @@
     :section :generic
     :type :string
     :default (:font default-values)
-    :comment "Reserved label for a bundled UI font; Minecraft loads fonts from assets/<modid>/font/*.json + TTF in the jar, not from OS font names."}
-   {:key :heads-or-tails
-    :path "generic.heads-or-tails"
-    :section :generic
-    :type :boolean
-    :default false
-    :comment "Whether the Heads or Tails coin flip game is enabled."}
-   {:key :gen-ores
-    :path "generic.gen-ores"
-    :section :generic
-    :type :boolean
-    :default (:gen-ores default-values)
-    :comment "Whether AcademyCraft ores (reso, constraint, crystal, imaginary) generate in the world."}
-   {:key :gen-phase-liquid
-    :path "generic.gen-phase-liquid"
-    :section :generic
-    :type :boolean
-    :default (:gen-phase-liquid default-values)
-    :comment "Whether Imaginary Phase Liquid lakes generate underground."}])
+    :comment "Reserved label for a bundled UI font; Minecraft loads fonts from assets/<modid>/font/*.json + TTF in the jar, not from OS font names."}])
 
 (defn- value
   [k]
@@ -87,14 +67,6 @@
 
 (defn get-font []
   (str (value :font)))
-
-(defn gen-ores-enabled? []
-  "Returns true if AC ores should generate in the world (default true)."
-  (boolean (value :gen-ores)))
-
-(defn gen-phase-liquid-enabled? []
-  "Returns true if phase liquid lakes should generate underground (default true)."
-  (boolean (value :gen-phase-liquid)))
 
 (defn validate-config!
   "Validate currently effective gameplay configuration values."

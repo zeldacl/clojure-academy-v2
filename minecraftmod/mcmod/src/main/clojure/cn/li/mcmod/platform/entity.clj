@@ -1,6 +1,7 @@
 (ns cn.li.mcmod.platform.entity
   "Entity/Player operations via Framework function map — pure relay layer, no MC dependencies."
-  (:require [cn.li.mcmod.framework :as fw]))
+  (:require [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.util.log :as log]))
 
 (def entity-ops-keys
   #{:entity-distance-to-sqr :entity-get-x :entity-get-y :entity-get-z
@@ -10,12 +11,16 @@
     :player-place-main-hand-block-at-hit! :player-consume-main-hand-item!
     :player-drop-main-hand-item-at! :player-count-item-by-id :player-consume-item-by-id!
     :player-give-item-stack! :player-spawn-entity-by-id!
-    :player-raytrace-block :player-get-container-menu
-    :entity-get-type-id-fn})
+    :player-raytrace-block :player-get-container-menu})
 
 (defn install-entity-ops!
   [ops-map _label]
-  (when-let [fw-atom (fw/fw-atom)] (swap! fw-atom assoc-in [:platform :entity-ops] ops-map)) nil)
+  (if-let [fw-atom (fw/fw-atom)]
+    (let [missing (seq (remove (set (keys ops-map)) entity-ops-keys))]
+      (swap! fw-atom assoc-in [:platform :entity-ops] ops-map)
+      (when missing
+        (log/error "Entity ops MISSING required keys:" (pr-str missing))))
+    (log/error "Entity ops install FAILED: Framework atom nil")))
 
 (defn entity-ops-available? [] (boolean (get-in @(fw/fw-atom) [:platform :entity-ops])))
 (defn current-ops           [] (get-in @(fw/fw-atom) [:platform :entity-ops]))

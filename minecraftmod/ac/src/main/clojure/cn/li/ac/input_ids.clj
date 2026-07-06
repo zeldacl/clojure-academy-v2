@@ -1,28 +1,30 @@
 (ns cn.li.ac.input-ids
   "Keybinding configuration registry - AC is the single source of truth.
    Contains: input IDs, shortcut keys, handlers, and metadata.
-   
+
    Schema for each input ID:
    {:input-id      keyword          ; :content/slot-0, :content/toggle-primary-state
     :scheme        keyword          ; :alternative (configurable) / :original (platform-fixed)
     :description   string           ; for UI/documentation
     :event-type    keyword          ; :short-press / :press / :release
-    
+
     ;; Only when :scheme :alternative
     :key-mapping   {:key int                  ; GLFW_KEY_Z etc.
                     :translation-key string  ; i18n key
                     :category string}        ; keybind category
-    
+
     ;; Only when :scheme :original
     :fixed-key     keyword          ; :lmb / :rmb / :r / :f (documentation only)
-    
+
     :handler       fn or symbol     ; handler function when key is pressed
                                     ; signature: (fn [context] ...)
                                     ; context := {:player-uuid uuid-string
                                     ;             :client-session-id session-id
                                     ;             :logical-side :client}
    }"
-  (:require [cn.li.mcmod.util.log :as log]))
+  (:require [cn.li.ac.terminal.client.actions :as terminal-actions]
+            [cn.li.mcmod.client.platform-bridge :as client-bridge]
+            [cn.li.mcmod.util.log :as log]))
 
 ;; ===== Handler Function Implementations (defined before registry) =====
 ;; These will be called when corresponding keys are pressed.
@@ -52,6 +54,17 @@
   [context]
   (log/debug "Toggle primary state" {:context context})
   nil)
+
+(defn- on-toggle-terminal
+  "Handle terminal toggle (Left Alt / GLFW_KEY_LEFT_ALT).
+   Matching original AcademyCraft TerminalUI.keyHandler (KEY_LMENU)."
+  [_context]
+  (log/info "[AC-Terminal] toggle key pressed")
+  (if-let [player (client-bridge/get-client-player)]
+    (do
+      (log/info "[AC-Terminal] got player, toggling terminal")
+      (terminal-actions/toggle-terminal! player))
+    (log/warn "[AC-Terminal] get-client-player returned nil — bridge not installed?")))
 
 ;; ==== Input ID Configuration Registry ====
 
@@ -102,6 +115,17 @@
      :event-type :short-press
      :fixed-key :lmb  ; documentation only, not used at runtime
      :handler #'on-toggle-primary-state}
+
+    ;; Terminal toggle — matching original AcademyCraft KEY_LMENU (Left Alt)
+    :content/toggle-terminal
+    {:input-id :content/toggle-terminal
+     :scheme :alternative
+     :description "Toggle MisakaCloud Terminal"
+     :event-type :short-press
+     :key-mapping {:key 342  ; GLFW_KEY_LEFT_ALT = 342
+                   :translation-key "key.content.toggle.terminal"
+                   :category "keybind.category.content"}
+     :handler #'on-toggle-terminal}
   })
 
 ;; ==== Public API ====

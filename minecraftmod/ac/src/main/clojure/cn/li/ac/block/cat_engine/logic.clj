@@ -27,7 +27,7 @@
 
 (defn get-linked-node ^IWirelessNode [be]
 	(when-let [conn (try (wireless-api/get-node-conn-by-generator be) (catch Exception _ nil))]
-		(try (node-conn/get-node conn) (catch Exception _ nil))))
+		(try (node-conn/get-node conn (platform-be/be-get-world-safe be)) (catch Exception _ nil))))
 
 (defn sync-link-state [be state]
 	(if-let [^IWirelessNode node (get-linked-node be)]
@@ -53,7 +53,7 @@
 	{:consume? true
 	 :messages [{:type :translatable :key message-key :args (vec args)}]})
 
-(defn cat-tick-state [state {:keys [be]}]
+(defn cat-tick-state [state _level _pos _block-state be]
 	(let [ticker (inc (long (get state :update-ticker 0)))
 				energy (double (get state :energy 0.0))
 				max-energy (double (cat-config/max-energy))
@@ -72,7 +72,7 @@
 		{:default-state cat-default-state
 		 :tick-state cat-tick-state}))
 
-(defn cat-right-click! [{:keys [world pos] :as _ctx}]
+(defn cat-right-click! [_player world pos _block-id]
 	(let [be (and world pos (world/world-get-tile-entity* world pos))]
 		(cond
 			(nil? be) {:consume? true}

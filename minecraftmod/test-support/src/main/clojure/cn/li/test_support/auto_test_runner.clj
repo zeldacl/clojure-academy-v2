@@ -113,7 +113,7 @@
                         selected)
           result (reduce merge-test-result
                          {:test 0 :pass 0 :fail 0 :error 0}
-                         (map :result timings))
+                         (map #(get % :result) timings))
           code (exit-code result)]
       (print-summary! result)
       (print-slowest-namespaces! timings)

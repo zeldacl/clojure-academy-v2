@@ -1,5 +1,6 @@
 (ns cn.li.ac.content.ability.meltdowner.jet-engine-test
   (:require [clojure.test :refer [deftest is]]
+            [cn.li.ac.ability.test.skill-callback-test-helpers :as cb]
             [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.test.support.fx-mocks :as fx-mocks]
             [cn.li.ac.ability.skill-config :as skill-config]
@@ -42,7 +43,7 @@
                   geom/world-id-of (fn [_] "w")
                   geom/eye-pos (fn [_] {:x 0.0 :y 64.0 :z 0.0})
                   raycast/available? (constantly false)]
-      (jet/jet-engine-down! {:ctx-id "ctx-1" :player-id "p1" :cost-ok? true})
+      (cb/apply-invoke jet/jet-engine-down! :ctx-id "ctx-1" :player-id "p1" :cost-ok? true)
       (is (= :marking (get-in @ctx* [:skill-state :phase])))
       (is (= 0 (get-in @ctx* [:skill-state :hold-ticks]))))))
 
@@ -68,7 +69,7 @@
                   teleportation/teleport-player!* (fn [& _] true)
                   teleportation/reset-fall-damage!* (fn [& _] true)
                   teleportation/get-player-position* (fn [_] {:world-id "w" :x 1.0 :y 64.0 :z 1.0})]
-      (jet/jet-engine-up! {:player-id "p1" :ctx-id "ctx-1"})
+      (cb/apply-invoke jet/jet-engine-up! :player-id "p1" :ctx-id "ctx-1")
       (is (= :triggering (get-in @ctx* [:skill-state :phase])))
       (is (seq @exp-calls*))
       (is (seq @cooldown-calls*))
@@ -90,7 +91,7 @@
                   skill-effects/set-main-cooldown! (fn [& args] (swap! cooldown-calls* conj args))
                   geom/world-id-of (fn [_] "w")
                   geom/eye-pos (fn [_] {:x 1.0 :y 64.0 :z 1.0})]
-      (jet/jet-engine-up! {:player-id "p1" :ctx-id "ctx-1"})
+      (cb/apply-invoke jet/jet-engine-up! :player-id "p1" :ctx-id "ctx-1")
       (is (seq @terminated*))
       (is (empty? @cooldown-calls*))
       (is (= :marking (get-in @ctx* [:skill-state :phase]))))))
@@ -131,8 +132,8 @@
                   entity-damage/apply-direct-damage!* (fn [& args]
                                                         (swap! damage-calls* conj (nth args 1))
                                                         true)]
-      (jet/jet-engine-tick! {:player-id "p1" :ctx-id "ctx-1" :hold-ticks 1})
-      (jet/jet-engine-tick! {:player-id "p1" :ctx-id "ctx-1" :hold-ticks 2})
+      (cb/apply-invoke jet/jet-engine-tick! :player-id "p1" :ctx-id "ctx-1" :hold-ticks 1)
+      (cb/apply-invoke jet/jet-engine-tick! :player-id "p1" :ctx-id "ctx-1" :hold-ticks 2)
       (is (= ["target-1"] @damage-calls*))
       (is (= #{"target-1"} (get-in @ctx* [:skill-state :hit-uuids])))
       (is (= 2 (count @teleport-calls*)))

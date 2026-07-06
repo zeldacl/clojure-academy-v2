@@ -1,11 +1,16 @@
 (ns cn.li.mcmod.spi.key-scheme-provider
   "Key scheme SPI — abstracts keyboard state detection across platforms.
 
-  Uses a plain function map instead of `defprotocol` or `definterface`:
+  Uses a plain function map instead of `defprotocol`:
   - `defprotocol` fails under AOT cross-module ClassLoader isolation
-    (satisfies? returns false)
-  - `definterface` + `reify`/`proxy` fails AOT compilation entirely
-    (anonymous class generation in separate module)
+    (`satisfies?` returns false).
+  - `definterface` + `deftype`/`reify` on **project-owned** interfaces (`cn.li.*`, `api`)
+    is safe — AOT emits stable project symbols (e.g. `ac/.../example_tile/capability.clj`
+    `IMatrixJavaProxy` + `MatrixJavaProxy`).
+  - `reify`/`proxy` on **net.minecraft.*** / Forge / Fabric interfaces is forbidden:
+    AOT **solidifies** dev-time (Mojmap) type/method names into bytecode; compilation may
+    still succeed, but **runtime** fails after remapping/obfuscation
+    (`AbstractMethodError` / `NoClassDefFoundError`). Use Java skeletons (`mc-1.20.1/shim/`).
 
   Contract: {:is-key-down? (fn [scheme-name key-idx] -> boolean)}"
   (:require [cn.li.mcmod.util.log :as log]))

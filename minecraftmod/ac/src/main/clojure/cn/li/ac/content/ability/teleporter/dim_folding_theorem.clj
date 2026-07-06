@@ -1,5 +1,7 @@
 (ns cn.li.ac.content.ability.teleporter.dim-folding-theorem
-  "Teleporter passive placeholder. Crit logic is implemented in tp-skill-helper."
+  "Teleporter passive: Dimension Folding Theorem.
+
+  Contributes level-0 crit probability and damage multipliers via passive-hooks."
   (:require [cn.li.ac.ability.dsl :refer [defskill]]))
 
 (defskill dim-folding-theorem

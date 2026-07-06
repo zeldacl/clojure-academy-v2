@@ -19,7 +19,7 @@
      {:text "Critical Hit x1.6"
       :duration-ms 2000
       :color [255 226 120]})
-    (binding [runtime-hooks/*client-session-id* session-id]
+    (runtime-hooks/with-client-ctx {:session-id session-id}
       (let [render-data (hud/build-hud-render-data {:activated false
                                                     :cp {:cur 0.0 :max 1.0}
                                                     :overload {:cur 0.0 :max 1.0 :fine true}

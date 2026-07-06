@@ -58,7 +58,7 @@
                       h (.-height this)]
                   (.renderBackground this graphics)
                   (when root
-                    (binding [client-ui/*client-session-id* (or session-id "")]
+                    (client-ui/with-client-ctx {:session-id (or session-id "")}
                       (cgui-rt/resize-root! root w h)
                       ;; Apply root CENTER/CENTER alignment — matching upstream
                       ;; CGuiScreen (full-screen overlay) behavior
@@ -71,6 +71,9 @@
                           (reset! left (long (/ (- (double w) (double rw)) 2.0))))
                         (when (= align-h :center)
                           (reset! top (long (/ (- (double h) (double rh)) 2.0)))))
+                      (swap! (:metadata root) assoc
+                             :last-mouse-x (int (- mouse-x @left))
+                             :last-mouse-y (int (- mouse-y @top)))
                       (cgui-rt/frame-tick! root {:partial-ticks partial-ticks})
                       (cgui-rt/render-tree! graphics root @left @top))))
                 (catch Exception e
@@ -84,28 +87,35 @@
             ;; mouseClicked
             (fn [_this mouse-x mouse-y button]
               (when root
-                (binding [client-ui/*client-session-id* (or session-id "")]
+                (client-ui/with-client-ctx {:session-id (or session-id "")}
                   (cgui-rt/mouse-click! root (int mouse-x) (int mouse-y) @left @top button)))
               true)
             ;; removed
             (fn [_this]
               (when root
-                (binding [client-ui/*client-session-id* (or session-id "")]
+                (client-ui/with-client-ctx {:session-id (or session-id "")}
                   (cgui-rt/dispose! root)))
               (when on-close (on-close))))
       ;; Extra Screen methods via with* setters
       (.withMouseReleased
         (fn [_this mouse-x mouse-y button]
           (when root
-            (binding [client-ui/*client-session-id* (or session-id "")]
+            (client-ui/with-client-ctx {:session-id (or session-id "")}
               (cgui-rt/mouse-click! root (int mouse-x) (int mouse-y) @left @top button)))
           true))
       (.withMouseDragged
         (fn [_this mouse-x mouse-y button drag-x drag-y]
           (when root
-            (binding [client-ui/*client-session-id* (or session-id "")]
+            (client-ui/with-client-ctx {:session-id (or session-id "")}
               (cgui-rt/mouse-drag! root (int mouse-x) (int mouse-y) (int drag-x) (int drag-y) @left @top)))
           true))
+      (.withMouseMoved
+        (fn [_this mouse-x mouse-y]
+          (when root
+            (swap! (:metadata root) assoc
+                   :last-mouse-x (int (- mouse-x @left))
+                   :last-mouse-y (int (- mouse-y @top))))
+          false))
       (.withIsPauseScreen
         (fn [_this] false)))))
 

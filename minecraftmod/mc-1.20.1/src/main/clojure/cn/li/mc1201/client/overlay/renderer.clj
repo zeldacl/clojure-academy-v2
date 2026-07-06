@@ -515,7 +515,7 @@
             screen-height (.getGuiScaledHeight window)
             owner-key (render-owner-key owner)
             now (now-ms)
-            overlay-plan (binding [client-ui/*client-session-id* (:client-session-id owner)]
+            overlay-plan (client-ui/with-client-ctx {:session-id (:client-session-id owner)}
                            (client-ui/client-build-overlay-plan
                              player-uuid
                              screen-width
@@ -582,5 +582,7 @@
     (catch Exception e
       (log/error "Error rendering overlay" e)
       ;; Best-effort cleanup: if interference pose was pushed, try to restore.
+      ;; The root cause of overlay exceptions (Framework atom race condition)
+      ;; is fixed by the ThreadLocal-based with-client-ctx-fn migration.
       (try (.popPose (.pose graphics)) (catch Exception _))
       (try (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0) (catch Exception _)))))

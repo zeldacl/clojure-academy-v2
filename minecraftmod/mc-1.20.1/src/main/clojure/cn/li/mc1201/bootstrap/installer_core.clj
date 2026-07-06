@@ -113,7 +113,7 @@
                                                       (.getProperty state-def (str prop-name)))
                   :block-state-set-property         (fn [^BlockState this ^Property prop value]
                                                       (.setValue this prop value))}]
-      (world/install-world-ops! (merge current bs-ops) "mc1201 block-state"))
+      (world/install-block-state-ops! bs-ops "mc1201 block-state"))
     (log/info "mc1201 block-state ops initialized")))
 
 (defn- install-nbt! []
@@ -155,7 +155,9 @@
        :pos-y (fn [^BlockPos this] (.getY this))
        :pos-z (fn [^BlockPos this] (.getZ this))
        :create-block-pos (fn [x y z] (BlockPos. (int x) (int y) (int z)))
-       :pos-above (fn [^BlockPos p] (.above p))}
+       :pos-above (fn [^BlockPos p] (.above p))
+       :position-get-block-pos (fn [be] (.getBlockPos be))
+       :position-get-pos (fn [be] (.getBlockPos be))}
       "mc1201")))
 
 (defn- install-item! [adapter]

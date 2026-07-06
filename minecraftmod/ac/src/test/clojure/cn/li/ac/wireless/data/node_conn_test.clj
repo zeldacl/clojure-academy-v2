@@ -30,9 +30,9 @@
         conn (node-conn/create-node-conn wd node-vb)]
     (stubs/with-tile-world tiles
       (fn []
-        (is (true? (node-conn/add-generator! conn (vb/->VBlock 1 0 0 :generator true))))
-        (is (false? (node-conn/add-generator! conn (vb/->VBlock 2 0 0 :generator true))))
-        (is (false? (node-conn/add-generator! conn (vb/->VBlock 100 0 0 :generator true))))))))
+        (is (true? (node-conn/add-generator! conn (vb/->VBlock 1 0 0 :generator true) nil)))
+        (is (false? (node-conn/add-generator! conn (vb/->VBlock 2 0 0 :generator true) nil)))
+        (is (false? (node-conn/add-generator! conn (vb/->VBlock 100 0 0 :generator true) nil)))))))
 
 (deftest tick-pulls-from-generator-test
   (let [wd (wdata/create-world-data (test-world :wc-gen))
@@ -44,9 +44,9 @@
         conn (node-conn/create-node-conn wd node-vb)]
     (stubs/with-tile-world tiles
       (fn []
-        (is (true? (node-conn/add-generator! conn gen-vb)))
+        (is (true? (node-conn/add-generator! conn gen-vb nil)))
         (let [conn (get (world-registry/node-lookup wd) gen-vb)]
-          (node-conn/tick-node-conn! conn)
+          (node-conn/tick-node-conn! conn nil)
           (is (pos? (.getEnergy node-t))))))))
 
 (deftest tick-pushes-to-receiver-test
@@ -59,9 +59,9 @@
         conn (node-conn/create-node-conn wd node-vb)]
     (stubs/with-tile-world tiles
       (fn []
-        (is (true? (node-conn/add-receiver! conn rec-vb)))
+        (is (true? (node-conn/add-receiver! conn rec-vb nil)))
         (let [conn (get (world-registry/node-lookup wd) rec-vb)]
-          (node-conn/tick-node-conn! conn)
+          (node-conn/tick-node-conn! conn nil)
           (is (< (.getEnergy node-t) 800.0)))))))
 
 (deftest generator-overflow-uses-required-cap-test
@@ -74,9 +74,9 @@
         conn (node-conn/create-node-conn wd node-vb)]
     (stubs/with-tile-world tiles
       (fn []
-        (is (true? (node-conn/add-generator! conn gen-vb)))
+        (is (true? (node-conn/add-generator! conn gen-vb nil)))
         (let [conn (get (world-registry/node-lookup wd) gen-vb)]
-          (node-conn/tick-node-conn! conn)
+          (node-conn/tick-node-conn! conn nil)
           (is (<= (.getEnergy node-t) 500.0)))))))
 
 (deftest remove-and-transfer-device-cleans-lookup-immediately-test
@@ -94,15 +94,15 @@
         conn-b (node-conn/create-node-conn wd node-b-vb)]
     (stubs/with-tile-world tiles
       (fn []
-        (is (true? (node-conn/add-generator! conn-a gen-vb)))
-        (is (true? (node-conn/add-receiver! conn-a rec-vb)))
+        (is (true? (node-conn/add-generator! conn-a gen-vb nil)))
+        (is (true? (node-conn/add-receiver! conn-a rec-vb nil)))
         (let [conn-a (get (world-registry/node-lookup wd) rec-vb)]
             (is (some? conn-a))
             (is (true? (node-conn/remove-receiver! conn-a rec-vb)))
             (let [conn-a (get (world-registry/node-lookup wd) node-a-vb)]
               (is (empty? (node-conn/get-receivers conn-a)))
               (is (nil? (get (world-registry/node-lookup wd) rec-vb)))
-              (is (true? (node-conn/add-generator! conn-b gen-vb)))
+              (is (true? (node-conn/add-generator! conn-b gen-vb nil)))
               (is (empty? (node-conn/get-generators
                             (get (world-registry/node-lookup wd) node-a-vb))))
               (let [conn-b (get (world-registry/node-lookup wd) gen-vb)]
@@ -119,9 +119,9 @@
         conn (node-conn/create-node-conn wd node-vb)]
     (stubs/with-tile-world tiles
       (fn []
-        (is (true? (node-conn/add-generator! conn gen-vb)))
+        (is (true? (node-conn/add-generator! conn gen-vb nil)))
         (let [conn (get (world-registry/node-lookup wd) gen-vb)
-              nbt (node-conn/node-connection-to-nbt conn)
+              nbt (node-conn/node-connection-to-nbt conn nil)
               conn2 (node-conn/node-connection-from-nbt wd nbt)]
           (is (= 1 (count (node-conn/get-generators conn2))))
           (is (= 0 (count (node-conn/get-receivers conn2)))))))))
@@ -136,7 +136,7 @@
       (fn []
         ;; Functional parity expectation: empty connections should not linger.
         (is (false? (node-conn/is-disposed? conn)))
-        (is (false? (node-conn/validate! conn)) "empty connection should be marked disposed")))))
+        (is (false? (node-conn/validate! conn nil)) "empty connection should be marked disposed")))))
 
 (deftest validate-disposes-when-node-is-destroyed-even-if-devices-remain-test
   (let [wd (wdata/create-world-data (test-world :wc-node-destroy-dispose))
@@ -148,7 +148,7 @@
         conn (node-conn/create-node-conn wd node-vb)]
     (stubs/with-tile-world tiles
       (fn []
-        (is (true? (node-conn/add-generator! conn gen-vb)))
+        (is (true? (node-conn/add-generator! conn gen-vb nil)))
         ;; Node disappears while chunk is loaded.
         (swap! tiles dissoc [0 0 0])
-        (is (false? (node-conn/validate! conn)))))))
+        (is (false? (node-conn/validate! conn nil)))))))

@@ -11,7 +11,7 @@
   Exp: +0.002 per block broken
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.dsl :refer [defskill]]
+  (:require [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.content.ability.meltdowner.mine-rays-base :as base]))
@@ -20,17 +20,10 @@
 ;; Helpers
 ;; ---------------------------------------------------------------------------
 
+
+(def-skill-config-ops :mine-ray-luck)
 (def ^:private mine-ray-luck-skill-id :mine-ray-luck)
 (def ^:private mine-ray-luck-fortune-level 3)
-
-(defn- cfg-int [field-id]
-  (skill-config/tunable-int mine-ray-luck-skill-id field-id))
-
-(defn- cfg-lerp [field-id exp]
-  (skill-config/lerp-double mine-ray-luck-skill-id field-id exp))
-
-(defn- skill-exp [player-id]
-  (skill-effects/skill-exp player-id mine-ray-luck-skill-id))
 
 (defn- make-cfg [player-id]
   (let [exp (skill-exp player-id)]
@@ -44,10 +37,10 @@
 ;; Actions
 ;; ---------------------------------------------------------------------------
 
-(defn mine-ray-luck-down!  [evt] (base/mining-ray-down!  mine-ray-luck-skill-id evt))
-(defn mine-ray-luck-tick!  [evt] (base/mining-ray-tick!  (make-cfg (:player-id evt)) evt))
-(defn mine-ray-luck-up!    [evt] (base/mining-ray-up!    {} evt))
-(defn mine-ray-luck-abort! [evt] (base/mining-ray-abort! {} evt))
+(defn mine-ray-luck-down!  [& args] (apply base/mining-ray-down!  mine-ray-luck-skill-id args))
+(defn mine-ray-luck-tick!  [& args] (apply base/mining-ray-tick!  (make-cfg (nth args 1)) args))
+(defn mine-ray-luck-up!    [& args] (apply base/mining-ray-up!    {} args))
+(defn mine-ray-luck-abort! [& args] (apply base/mining-ray-abort! {} args))
 
 ;; ---------------------------------------------------------------------------
 ;; Skill registration

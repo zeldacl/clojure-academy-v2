@@ -42,7 +42,7 @@
   (with-redefs [uuid/player-uuid identity]
     (let [ctx-id "ctx-order-handler"]
       (seed-owned-alive-context! "p1" ctx-id)
-      (binding [runtime-hooks/*player-state-owner* (server-owner "p1")]
+      (runtime-hooks/with-client-ctx {:player-owner (server-owner "p1")}
         (is (nil? (input-handler/handle-key-tick-skill {:ctx-id ctx-id :skill-id :arc-gen} "p1")))
         (is (nil? (input-handler/handle-key-up-skill {:ctx-id ctx-id :skill-id :arc-gen} "p1"))))
       (is (= ctx/STATUS-ALIVE (:status (get-owned-context "p1" ctx-id))))
@@ -53,7 +53,7 @@
     (let [ctx-id "ctx-order-2"
           sends (atom 0)]
       (seed-owned-alive-context! "p1" ctx-id)
-      (binding [runtime-hooks/*player-state-owner* (server-owner "p1")]
+      (runtime-hooks/with-client-ctx {:player-owner (server-owner "p1")}
         (with-redefs [ctx-mgr/send-terminated-context! (fn [_] (swap! sends inc))]
           (context-handler/handle-terminate-context {:ctx-id ctx-id} "p1")
           (context-handler/handle-terminate-context {:ctx-id ctx-id} "p1")))
@@ -64,7 +64,7 @@
   (with-redefs [uuid/player-uuid identity]
     (let [ctx-id "ctx-order-3"]
       (seed-owned-alive-context! "p1" ctx-id)
-      (binding [runtime-hooks/*player-state-owner* (server-owner "p1")]
+      (runtime-hooks/with-client-ctx {:player-owner (server-owner "p1")}
         (context-handler/handle-terminate-context {:ctx-id ctx-id} "p1")
         (is (nil? (context-handler/handle-keepalive-context {:ctx-id ctx-id} "p1"))))
       (let [ctx-map (get-owned-context "p1" ctx-id)]

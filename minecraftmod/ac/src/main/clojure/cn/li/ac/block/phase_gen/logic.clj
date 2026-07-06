@@ -46,7 +46,7 @@
     {:drain drain :gen gen}))
 
 (defn phase-tick-state
-  [state _ctx]
+  [state _level _pos _block-state _be]
   ;; Original AcademyCraft order (TileGeneratorBase.update → TilePhaseGen.update):
   ;; 1) Drain liquid → generate energy (this tick uses liquid from previous round)
   ;; 2) Consume matter unit → add liquid (available for NEXT tick)

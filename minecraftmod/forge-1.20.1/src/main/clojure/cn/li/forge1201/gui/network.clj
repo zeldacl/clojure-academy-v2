@@ -53,8 +53,7 @@
 
 (defn- with-server-player-owner
   [^ServerPlayer player f]
-  (binding [runtime-hooks/*player-state-owner* (server-player-owner player)]
-    (f)))
+  (runtime-hooks/with-client-ctx-fn {:player-owner (server-player-owner player)} f))
 
 ;; ---------------------------------------------------------------------------
 ;; Platform multimethod implementation
@@ -92,33 +91,41 @@
   []
   (let [req-handler
         (fn [msg-id request-id payload-bytes player]
-          (let [payload (packet-base/decode-payload-bytes
-                          payload-bytes
-                          #(log/error "Failed to deserialize Forge request payload:" (ex-message %)))
-                respond-fn (fn [req-id response]
-                             (invoke-network-static "sendToClient"
-                               player
-                               (int req-id)
-                               (packet-base/encode-payload-bytes response)))]
-            (with-server-player-owner
-              player
-              #(net-server/handle-request
-                 msg-id
-                 (int request-id)
-                 payload
-                 player
-                 respond-fn))))
+          (try
+            (let [payload (packet-base/decode-payload-bytes
+                            payload-bytes
+                            #(log/error "Failed to deserialize Forge request payload:" (ex-message %)))
+                  respond-fn (fn [req-id response]
+                               (invoke-network-static "sendToClient"
+                                 player
+                                 (int req-id)
+                                 (packet-base/encode-payload-bytes response)))]
+              (with-server-player-owner
+                player
+                #(net-server/handle-request
+                   msg-id
+                   (int request-id)
+                   payload
+                   player
+                   respond-fn)))
+            (catch Throwable t
+              (log/error "[GUI-NETWORK] req-handler UNCAUGHT:" (ex-message t) (.printStackTrace t)))))
 
         resp-handler
         (fn [request-id response-bytes]
-          (let [payload (packet-base/decode-payload-bytes
-                          response-bytes
-                          #(log/error "Failed to deserialize Forge response payload:" (ex-message %)))]
-            (with-client-response-owner payload
-              #(packet-base/dispatch-client-response!
-                 runtime-hooks/*player-state-owner*
-                 request-id
-                 payload))))]
+          (try
+            (let [payload (packet-base/decode-payload-bytes
+                            response-bytes
+                            #(log/error "Failed to deserialize Forge response payload:" (ex-message %)))]
+              (with-client-response-owner payload
+                #(packet-base/dispatch-client-response!
+                   (runtime-hooks/*player-state-owner*)
+                   request-id
+                   payload)))
+            (catch Throwable t
+              (log/error "[GUI-NETWORK] resp-handler UNCAUGHT request-id=" request-id ":" (ex-message t) (.printStackTrace t)))))
+
+        ] ;; <-- explicit vector close for let bindings
 
     (invoke-network-static "init" req-handler resp-handler))
   (log/info "Forge 1.20.1 GUI network system initialized"))

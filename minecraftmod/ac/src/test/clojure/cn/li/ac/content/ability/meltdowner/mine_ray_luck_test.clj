@@ -1,5 +1,6 @@
 (ns cn.li.ac.content.ability.meltdowner.mine-ray-luck-test
   (:require [clojure.test :refer [deftest is]]
+            [cn.li.ac.ability.test.skill-callback-test-helpers :as cb]
             [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.content.ability.meltdowner.mine-ray-luck :as luck]
             [cn.li.ac.content.ability.meltdowner.mine-rays-base :as base]
@@ -39,7 +40,7 @@
                   base/mining-ray-tick! (fn [cfg evt]
                                           (swap! calls* conj [cfg evt])
                                           nil)]
-      (luck/mine-ray-luck-tick! {:player-id "p1" :ctx-id "ctx-1"}))
+      (cb/apply-invoke luck/mine-ray-luck-tick! :player-id "p1" :ctx-id "ctx-1"))
     (is (= 1 (count @calls*)))
     (is (= {:range 16.0
             :break-speed 1.0

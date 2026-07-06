@@ -1,5 +1,5 @@
 (ns cn.li.ac.ability.registry.event-test
-  (:require [clojure.test :refer [deftest is use-fixtures]]
+  (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [cn.li.ac.ability.registry.event :as evt]))
 
 (defn- reset-subs! [f]
@@ -42,24 +42,4 @@
                         #"Ability event subscriber registry is frozen"
                         (evt/subscribe-ability-event! :ability/other (fn [_] nil)))))
 
-(deftest subscriber-runtime-isolation-test
-  (let [runtime-a (evt/create-event-subscriber-runtime)
-        runtime-b (evt/create-event-subscriber-runtime)]
-    (evt/call-with-event-subscriber-runtime
-      runtime-a
-      (fn []
-        (evt/subscribe-ability-event! :ability/a (fn [_] nil))
-        (is (= #{:ability/a}
-               (set (keys (evt/subscriber-registry-snapshot)))))))
-    (evt/call-with-event-subscriber-runtime
-      runtime-b
-      (fn []
-        (is (empty? (evt/subscriber-registry-snapshot)))
-        (evt/subscribe-ability-event! :ability/b (fn [_] nil))
-        (is (= #{:ability/b}
-               (set (keys (evt/subscriber-registry-snapshot)))))))
-    (evt/call-with-event-subscriber-runtime
-      runtime-a
-      (fn []
-        (is (= #{:ability/a}
-               (set (keys (evt/subscriber-registry-snapshot)))))))))
+

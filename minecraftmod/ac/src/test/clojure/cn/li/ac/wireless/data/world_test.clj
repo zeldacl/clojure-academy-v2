@@ -52,18 +52,7 @@
     (is (nil? (world/get-world-data-non-create world-a-nether)))
     (is (some? (world/get-world-data-non-create world-b)))))
 
-(deftest world-registry-runtime-isolation-test
-  (let [world-id (test-world :isolated)
-        runtime-b (world-registry/create-world-registry-runtime)]
-    (world/get-world-data world-id)
-    (is (= 1 (count (world-registry/registry-snapshot))))
-    (world-registry/call-with-world-registry-runtime
-      runtime-b
-      (fn []
-        (is (nil? (world/get-world-data-non-create world-id)))
-        (world/get-world-data world-id)
-        (is (= 1 (count (world-registry/registry-snapshot))))))
-    (is (= 1 (count (world-registry/registry-snapshot))))))
+
 
 (deftest world-key-isolates-session-and-dimension-test
   (let [world-a {:server-session-id :session-a :dimension-id :overworld :ref 1}
@@ -114,7 +103,7 @@
       (fn []
         (is (:success (commands/create-network! wd matrix-vb "dnet" "p")))
         (let [net (lookup/get-network-by-ssid wd "dnet")]
-          (is (:success (commands/link-node-to-network! wd net node-vb "p")))
+          (is (:success (commands/link-node-to-network! wd net node-vb "p" nil))))
           (is (some? (get (world-registry/net-lookup wd) node-vb)))
           (commands/destroy-network! wd net)
           (is (nil? (get (world-registry/net-lookup wd) node-vb)))
@@ -144,9 +133,9 @@
       (fn []
         (let [wd (world/create-world-data world-id)]
           (is (:success (commands/create-network! wd matrix-vb "persist" "pw")))
-          (is (:success (commands/link-node-to-network! wd (lookup/get-network-by-ssid wd "persist") node-vb "pw")))
+          (is (:success (commands/link-node-to-network! wd (lookup/get-network-by-ssid wd "persist") node-vb "pw" nil)))
           (let [conn (commands/ensure-node-connection! wd node-conn-vb)]
-            (is (true? (node-conn/add-generator! conn gen-vb))))
+            (is (true? (node-conn/add-generator! conn gen-vb world-id))))
           (world/register-world-data! world-id wd)
           (let [saved (world/on-world-save world-id)]
             (world/remove-world-data! world-id)

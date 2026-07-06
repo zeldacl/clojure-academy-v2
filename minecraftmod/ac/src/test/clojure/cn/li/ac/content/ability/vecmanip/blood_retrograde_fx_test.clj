@@ -1,21 +1,19 @@
 (ns cn.li.ac.content.ability.vecmanip.blood-retrograde-fx-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
+            [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.content.ability.vecmanip.blood-retrograde-fx :as brfx]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]))
 
 (defn- reset-fixture [f]
-  (level-effects/call-with-level-effect-runtime
-    (level-effects/create-level-effect-runtime)
-    (fn []
-      (try
+  (try
         (level-effects/reset-level-effect-registry-for-test!)
         (brfx/reset-blood-retrograde-fx-for-test!)
         (f)
         (finally
           (brfx/reset-blood-retrograde-fx-for-test!)
-          (level-effects/reset-level-effect-registry-for-test!))))))
+          (level-effects/reset-level-effect-registry-for-test!))))
 
 (use-fixtures :each reset-fixture)
 
@@ -28,10 +26,13 @@
 
 (defn- apply-event!
   [ctx-id payload]
-  (let [enqueue-state! @#'cn.li.ac.content.ability.vecmanip.blood-retrograde-fx/enqueue-state!]
-    (level-effects/update-effect-state! :blood-retrograde
-      enqueue-state!
-      (event ctx-id payload))))
+  (let [channel (case (:mode payload)
+                  :start :blood-retrograde/fx-start
+                  :update :blood-retrograde/fx-update
+                  :perform :blood-retrograde/fx-perform
+                  :end :blood-retrograde/fx-end
+                  :blood-retrograde/fx-update)]
+    (arc-beam/enqueue-for-test! :blood-retrograde ctx-id channel payload)))
 
 (deftest init-registers-blood-retrograde-fx-channels-test
   (let [registered-effect (atom nil)
@@ -61,14 +62,14 @@
                   fx-registry/register-fx-channel! (fn [topic handler]
                                                       (swap! handlers* assoc topic handler)
                                                       nil)
-                  level-effects/enqueue-level-effect! (fn [effect-id payload fx-context]
-                                                        (swap! enqueued-effects* conj [effect-id payload fx-context])
+                  level-effects/enqueue-level-effect! (fn [effect-id ctx-id channel payload & opts]
+                                                        (swap! enqueued-effects* conj [effect-id ctx-id channel payload opts])
                                                         (level-effects/update-effect-state! effect-id
                                                           @enqueue-fn*
                                                           {:payload payload
-                                                           :ctx-id (:ctx-id fx-context)
-                                                           :channel (:channel fx-context)
-                                                           :owner-key [:ctx (:ctx-id fx-context)]})
+                                                           :ctx-id ctx-id
+                                                           :channel channel
+                                                           :owner-key [:ctx ctx-id]})
                                                         nil)
                   client-sounds/queue-current-sound-effect! (fn [payload]
                                                               (swap! sound-calls* conj payload)
@@ -124,19 +125,17 @@
   (< (Math/abs (- (double expected) (double actual))) 1.0e-6))
 
 (deftest walk-speed-curve-and-tick-cleanup-test
-  (let [build-plan @#'cn.li.ac.content.ability.vecmanip.blood-retrograde-fx/build-plan
-        tick-state! @#'cn.li.ac.content.ability.vecmanip.blood-retrograde-fx/tick-state!]
-    (with-redefs [client-sounds/queue-current-sound-effect! (fn [_] nil)]
+  (with-redefs [client-sounds/queue-current-sound-effect! (fn [_] nil)]
       (apply-event! "ctx-main" {:mode :start})
-      (is (approx= 0.1 (:local-walk-speed (build-plan {:x 0.0 :y 0.0 :z 0.0}
+      (is (approx= 0.1 (:local-walk-speed (arc-beam/effect-build-plan :blood-retrograde {:x 0.0 :y 0.0 :z 0.0}
                                                       {:x 0.0 :y 0.0 :z 0.0}
                                                       0))))
       (apply-event! "ctx-main" {:mode :update :ticks 10 :charge-ratio 0.5})
-      (is (approx= 0.0535 (:local-walk-speed (build-plan {:x 0.0 :y 0.0 :z 0.0}
+      (is (approx= 0.0535 (:local-walk-speed (arc-beam/effect-build-plan :blood-retrograde {:x 0.0 :y 0.0 :z 0.0}
                                                          {:x 0.0 :y 0.0 :z 0.0}
                                                          10))))
       (apply-event! "ctx-main" {:mode :update :ticks 20 :charge-ratio 1.0})
-      (is (approx= 0.007 (:local-walk-speed (build-plan {:x 0.0 :y 0.0 :z 0.0}
+      (is (approx= 0.007 (:local-walk-speed (arc-beam/effect-build-plan :blood-retrograde {:x 0.0 :y 0.0 :z 0.0}
                                                         {:x 0.0 :y 0.0 :z 0.0}
                                                         20))))
       (apply-event! "ctx-main"
@@ -146,18 +145,14 @@
                      :sprays [{:x 4.0 :y 5.0 :z 6.0 :face :up :size 1.0 :rotation 0.0
                                :offset-u 0.0 :offset-v 0.0 :texture-id 1}]})
       (level-effects/update-effect-state! :blood-retrograde
-        (fn [store _]
-          (tick-state! store))
-        nil)
+        (fn [store] (arc-beam/effect-tick-state! :level :blood-retrograde store)))
       (is (= 21 (:ticks (get (:effect-state (brfx/blood-retrograde-fx-snapshot)) [:ctx "ctx-main"]))))
       (dotimes [_ 9]
         (level-effects/update-effect-state! :blood-retrograde
-          (fn [store _]
-            (tick-state! store))
-          nil))
+          (fn [store] (arc-beam/effect-tick-state! :level :blood-retrograde store))))
       (let [snapshot (brfx/blood-retrograde-fx-snapshot)]
         (is (nil? (get (:splashes snapshot) [:ctx "ctx-main"])))
-        (is (= 1 (count (get (:sprays snapshot) [:ctx "ctx-main"]))))))))
+        (is (= 1 (count (get (:sprays snapshot) [:ctx "ctx-main"])))))))
 
 (deftest two-owners-keep-blood-retrograde-state-and-queues-independent-test
   (with-redefs [client-sounds/queue-current-sound-effect! (fn [_] nil)]
@@ -186,33 +181,4 @@
         (is (nil? (get (:splashes after-clear) [:ctx "ctx-a"])))
         (is (= 1 (count (get (:sprays after-clear) [:ctx "ctx-b"]))))))))
 
-(deftest blood-retrograde-fx-runtime-isolation-test
-  (let [runtime-a (level-effects/create-level-effect-runtime)
-        runtime-b (level-effects/create-level-effect-runtime)
-        enqueue-state! @#'cn.li.ac.content.ability.vecmanip.blood-retrograde-fx/enqueue-state!]
-    (with-redefs [client-sounds/queue-current-sound-effect! (fn [_] nil)]
-      (level-effects/call-with-level-effect-runtime
-        runtime-a
-        (fn []
-          (level-effects/update-effect-state! :blood-retrograde enqueue-state!
-            (event "ctx-a" {:mode :start}))
-          (level-effects/update-effect-state! :blood-retrograde enqueue-state!
-            (event "ctx-a"
-                   {:mode :perform
-                    :sound-pos {:x 1.0 :y 2.0 :z 3.0}
-                    :splashes [{:x 1.0 :y 2.0 :z 3.0 :size 1.0}]
-                    :sprays [{:x 4.0 :y 5.0 :z 6.0 :face :up :size 1.0}]}))
-          (is (= 1 (count (get (:splashes (brfx/blood-retrograde-fx-snapshot)) [:ctx "ctx-a"]))))))
-      (level-effects/call-with-level-effect-runtime
-        runtime-b
-        (fn []
-          (is (= (brfx/default-blood-retrograde-fx-runtime-state)
-                 (brfx/blood-retrograde-fx-snapshot)))
-          (level-effects/update-effect-state! :blood-retrograde enqueue-state!
-            (event "ctx-b" {:mode :start}))
-          (is (= #{[:ctx "ctx-b"]}
-                 (set (keys (:effect-state (brfx/blood-retrograde-fx-snapshot))))))))
-      (level-effects/call-with-level-effect-runtime
-        runtime-a
-        (fn []
-          (is (= 1 (count (get (:splashes (brfx/blood-retrograde-fx-snapshot)) [:ctx "ctx-a"])))))))))
+

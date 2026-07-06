@@ -1,21 +1,19 @@
 (ns cn.li.ac.content.ability.electromaster.thunder-bolt-fx-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
+            [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.content.ability.electromaster.thunder-bolt-fx :as tb-fx]))
 
 (defn- reset-fixture [f]
-  (level-effects/call-with-level-effect-runtime
-    (level-effects/create-level-effect-runtime)
-    (fn []
-      (try
+  (try
         (level-effects/reset-level-effect-registry-for-test!)
         (tb-fx/reset-thunder-bolt-fx-for-test!)
         (f)
         (finally
           (tb-fx/reset-thunder-bolt-fx-for-test!)
-          (level-effects/reset-level-effect-registry-for-test!))))))
+          (level-effects/reset-level-effect-registry-for-test!))))
 
 (use-fixtures :each reset-fixture)
 
@@ -47,8 +45,8 @@
                   fx-registry/register-fx-channel! (fn [topic handler]
                                                      (swap! handlers* assoc topic handler)
                                                      nil)
-                  level-effects/enqueue-level-effect! (fn [effect-id payload fx-context]
-                                                        (swap! enqueued* conj [effect-id payload fx-context])
+                  level-effects/enqueue-level-effect! (fn [effect-id ctx-id channel payload & opts]
+                                                        (swap! enqueued* conj [effect-id ctx-id channel payload opts])
                                                         nil)]
       (tb-fx/init!)
       ((get @handlers* :thunder-bolt/fx-perform) "ctx-1" :thunder-bolt/fx-perform {:start {:x 0.0 :y 64.0 :z 0.0}
@@ -67,51 +65,41 @@
              @enqueued*)))))
 
 (deftest enqueue-main-and-aoe-arcs-tick-and-build-plan-test
-  (let [enqueue-state! (var-get #'cn.li.ac.content.ability.electromaster.thunder-bolt-fx/enqueue-state!)
-        tick-state! (var-get #'cn.li.ac.content.ability.electromaster.thunder-bolt-fx/tick-state!)
-        build-plan (var-get #'cn.li.ac.content.ability.electromaster.thunder-bolt-fx/build-plan)
+  (let [
         sounds* (atom [])]
     (with-redefs [client-sounds/queue-current-sound-effect! (fn [& args]
                                                                (swap! sounds* conj (last args))
                                                                nil)
                   rand-int (fn [_] 0)]
-      (level-effects/update-effect-state! :thunder-bolt-strike
-        enqueue-state!
-        (event "ctx-main"
+      (arc-beam/enqueue-for-test! :thunder-bolt-strike "ctx-main" :thunder-bolt/fx-perform
                {:start {:x 0.0 :y 64.0 :z 0.0}
                 :end {:x 3.0 :y 64.0 :z 3.0}
                 :aoe-points [{:x 4.0 :y 64.0 :z 2.0}
-                             {:x 2.0 :y 64.0 :z 4.0}]}))
+                             {:x 2.0 :y 64.0 :z 4.0}]})
       (is (= 5 (count (get (:arcs (tb-fx/thunder-bolt-fx-snapshot)) [:ctx "ctx-main"]))))
       (is (= 1 (count @sounds*)))
       (is (= "my_mod:em.arc_strong" (:sound-id (first @sounds*))))
-      (is (some? (build-plan {:x 0.0 :y 65.0 :z 0.0} nil 0)))
+      (is (some? (arc-beam/effect-build-plan :thunder-bolt-strike {:x 0.0 :y 65.0 :z 0.0} nil 0)))
       (dotimes [_ 30]
         (level-effects/update-effect-state! :thunder-bolt-strike
-          (fn [store _]
-            (tick-state! store))
-          nil))
+          (fn [store] (arc-beam/effect-tick-state! :level :thunder-bolt-strike store))))
       (is (empty? (:arcs (tb-fx/thunder-bolt-fx-snapshot))))
-      (is (nil? (build-plan {:x 0.0 :y 65.0 :z 0.0} nil 0))))))
+      (is (nil? (arc-beam/effect-build-plan :thunder-bolt-strike {:x 0.0 :y 65.0 :z 0.0} nil 0))))))
 
 (deftest two-owners-keep-independent-arc-queues-test
-  (let [enqueue-state! (var-get #'cn.li.ac.content.ability.electromaster.thunder-bolt-fx/enqueue-state!)
+  (let [
         sounds* (atom [])]
     (with-redefs [client-sounds/queue-current-sound-effect! (fn [& args]
                                                                (swap! sounds* conj (last args))
                                                                nil)]
-      (level-effects/update-effect-state! :thunder-bolt-strike
-        enqueue-state!
-        (event "ctx-a"
+      (arc-beam/enqueue-for-test! :thunder-bolt-strike "ctx-a" :thunder-bolt/fx-perform
                {:start {:x 0.0 :y 64.0 :z 0.0}
                 :end {:x 3.0 :y 64.0 :z 3.0}
-                :aoe-points []}))
-      (level-effects/update-effect-state! :thunder-bolt-strike
-        enqueue-state!
-        (event "ctx-b"
+                :aoe-points []})
+      (arc-beam/enqueue-for-test! :thunder-bolt-strike "ctx-b" :thunder-bolt/fx-perform
                {:start {:x 10.0 :y 64.0 :z 0.0}
                 :end {:x 13.0 :y 64.0 :z 3.0}
-                :aoe-points []}))
+                :aoe-points []})
       (let [snapshot (tb-fx/thunder-bolt-fx-snapshot)]
         (is (= #{[:ctx "ctx-a"] [:ctx "ctx-b"]}
                (set (keys (:arcs snapshot)))))
@@ -124,18 +112,15 @@
       (is (= 2 (count @sounds*))))))
 
 (deftest enqueue-ignores-invalid-payload-test
-  (let [enqueue-state! (var-get #'cn.li.ac.content.ability.electromaster.thunder-bolt-fx/enqueue-state!)
-        build-plan (var-get #'cn.li.ac.content.ability.electromaster.thunder-bolt-fx/build-plan)
+  (let [
         sounds* (atom [])]
     (with-redefs [client-sounds/queue-current-sound-effect! (fn [& args]
                                                                (swap! sounds* conj (last args))
                                                                nil)]
-      (level-effects/update-effect-state! :thunder-bolt-strike
-        enqueue-state!
-        (event "ctx-invalid" {:start {:x 0.0 :y 64.0 :z 0.0}}))
+      (arc-beam/enqueue-for-test! :thunder-bolt-strike "ctx-invalid" :thunder-bolt/fx-perform {:start {:x 0.0 :y 64.0 :z 0.0}})
       (is (empty? (:arcs (tb-fx/thunder-bolt-fx-snapshot))))
       (is (empty? @sounds*))
-      (is (nil? (build-plan {:x 0.0 :y 65.0 :z 0.0} nil 0))))))
+      (is (nil? (arc-beam/effect-build-plan :thunder-bolt-strike {:x 0.0 :y 65.0 :z 0.0} nil 0))))))
 
 (deftest thunder-bolt-fx-snapshot-defaults-without-registered-state-test
   (is (= {:arcs {}}

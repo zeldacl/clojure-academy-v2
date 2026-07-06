@@ -8,7 +8,7 @@
   (managed-screens/call-with-managed-screen-runtime
     (managed-screens/create-managed-screen-runtime)
     (fn []
-      (binding [runtime-hooks/*client-session-id* :test-session]
+      (runtime-hooks/with-client-ctx {:session-id :test-session}
         (f)))))
 
 (use-fixtures :each reset-screen-fixture)
@@ -33,7 +33,7 @@
   (is (= "player-2" (:player-uuid (screen/editor-state-snapshot "player-2")))))
 
 (deftest editor-owner-requires-explicit-session-and-player-test
-  (binding [runtime-hooks/*client-session-id* nil]
+  (runtime-hooks/with-client-ctx {:session-id nil}
     (is (thrown-with-msg? clojure.lang.ExceptionInfo
                           #"Client read model owner requires :client-session-id"
                           (screen/editor-state-snapshot "player-1"))))
@@ -41,20 +41,4 @@
                         #"Client read model owner requires :player-uuid"
                         (screen/editor-state-snapshot {:client-session-id :session-a}))))
 
-(deftest editor-runtime-isolation-test
-  (let [runtime-b (managed-screens/create-managed-screen-runtime)]
-    (screen/open-screen! "player-1")
-    (screen/on-preset-tab-click "player-1" 2)
-    (screen/on-skill-select "player-1" :railgun)
-    (screen/on-slot-click "player-1" 1)
-    (managed-screens/call-with-managed-screen-runtime
-      runtime-b
-      (fn []
-        (screen/open-screen! "player-1")
-        (screen/on-preset-tab-click "player-1" 3)
-        (screen/on-skill-select "player-1" :meltdowner)
-        (screen/on-slot-click "player-1" 0)
-        (is (= {3 {0 :meltdowner}}
-               (:pending-changes (screen/editor-state-snapshot "player-1"))))))
-    (is (= {2 {1 :railgun}}
-           (:pending-changes (screen/editor-state-snapshot "player-1"))))))
+

@@ -397,14 +397,17 @@
 
 #### 铁律七：reify / proxy 分水岭（强制）
 
-**根源**：全量 AOT 下 `reify` 生成匿名类，当实现 **Minecraft 混淆接口**（`net.minecraft.*`、`net.minecraftforge.*` 等）时，方法签名硬编码未混淆类名 → 混淆后 `NoClassDefFoundError` / `AbstractMethodError`。`proxy` 同理。
+**根源**：全量 AOT 下 `reify`/`proxy` 生成匿名类，当实现 **Minecraft 混淆接口**（`net.minecraft.*`、`net.minecraftforge.*` 等）时，编译器将开发期（Mojmap）类名与方法签名**固化**进 `.class` 字节码。编译阶段往往仍能通过；混淆/remap 后运行时类名已变 → `NoClassDefFoundError` / `AbstractMethodError`。`proxy` 同理。
+
+**`definterface` 与项目自有接口**：`definterface` + `deftype`/`reify` 实现 **项目自有**接口（`cn.li.*`、`api` 模块 Java 接口）时，AOT 固化的符号名稳定、与 MC 混淆链无关，**安全**。示例：`ac/.../wireless_matrix/capability.clj` 的 `IMatrixJavaProxy` + `MatrixJavaProxy`（`deftype` 实现项目 `definterface`，非 MC 接口）。
 
 **分水岭判定**：
 
-| 接口来源 | reify | proxy | 平替 |
-|---------|-------|-------|------|
-| `net.minecraft.*` / `net.minecraftforge.*` / Fabric API | 🔴 禁区 | 🔴 禁区 | Java 骨架类（`mc-1.20.1/shim/`） |
-| `java.lang.*` / `java.util.function.*`（JDK 核心） | 🟢 安全 | 🟢 安全 | 可选：`FnConsumer`/`FnSupplier`/`FnPredicate` |
+| 接口来源 | reify | proxy | deftype / definterface | 平替 |
+|---------|-------|-------|------------------------|------|
+| `net.minecraft.*` / `net.minecraftforge.*` / Fabric API | 🔴 禁区 | 🔴 禁区 | 🔴 禁止对 MC 接口 | Java 骨架类（`mc-1.20.1/shim/`） |
+| 项目自有（`cn.li.*`、`api`） | 🟢 安全 | 🟢 安全 | 🟢 `definterface` + `deftype` 安全 | — |
+| `java.lang.*` / `java.util.function.*`（JDK 核心） | 🟢 安全 | 🟢 安全 | 🟢 安全 | 可选：`FnConsumer`/`FnSupplier`/`FnPredicate` |
 
 **JDK 安全原理**：Mojang 混淆器绝对不碰 JDK 核心类（`Runnable`、`Consumer`、`Supplier` 等），方法签名（`run()`、`accept()`、`get()`）永久固化。且启动期 one-shot 执行无高并发风险。
 
@@ -419,7 +422,7 @@ Java 骨架类：`mc-1.20.1/src/main/java/cn/li/mc1201/shim/`
 - `UniversalEnergyStorage` — IEnergyStorage 通用骨架
 - `UniversalItemHandler` — IItemHandler 通用骨架
 
-**判定**：MC 接口 → 必须 Java 骨架。JDK 接口 → `reify` 安全可用。
+**判定**：MC 接口 → 必须 Java 骨架（勿以「能编过」为准，看运行时 remap 后是否 AbstractMethodError）。项目自有接口 → `definterface` + `deftype`/`reify` 安全。JDK 接口 → `reify` 安全可用。
 
 ---
 
@@ -580,7 +583,72 @@ Java 骨架类：`mc-1.20.1/src/main/java/cn/li/mc1201/shim/`
 - `^:dynamic *framework*` — 框架唯一的全局动态变量
 - 平台 SPI 适配器 `^:dynamic *runtime*` — 仅在 `mcmod/platform/*.clj` 中，且正逐步迁移至 Framework `[:platform :adapter-key]`
 - 渲染资源（texture registry、shader）— OpenGL 绑定，不入 Framework
-- 客户端 session 状态 — 闭包工厂管理，不入 Framework
+- 客户端 session 状态 — 闭包工厂管理，不入 Framework（详见下方 ThreadLocal 模式）
+
+#### ThreadLocal + 高阶函数：客户端/服务端 session 上下文（强制）
+
+**背景**：`*client-session-id*` 与 `*player-state-owner*` 原为 `^:dynamic` Var，通过 `binding` 提供每线程隔离。铁律十一禁止新增 `^:dynamic` 后，改为基于 `java.lang.ThreadLocal` 的高阶函数模式。
+
+**核心实现**（`cn.li.mcmod.hooks.core`）：
+
+```clojure
+(def ^:private client-ctx-thread-local (java.lang.ThreadLocal.))
+
+(defn with-client-ctx-fn
+  "ThreadLocal-based client context HOF。在当前线程的 ThreadLocal 中设置 ctx-map，
+   执行 thunk，finally 恢复。"
+  [ctx-map thunk]
+  (let [old (.get client-ctx-thread-local)]
+    (.set client-ctx-thread-local (merge (or old {}) ctx-map))
+    (try
+      (let [result (thunk)]
+        (if (instance? clojure.lang.LazySeq result)
+          (doall result)  ;; 铁律四：返回值不能是 LazySeq
+          result))
+      (finally
+        (if (nil? old)
+          (.remove client-ctx-thread-local)
+          (.set client-ctx-thread-local old))))))
+```
+
+**调用约定**：
+
+```clojure
+;; 设置 session-id：
+(with-client-ctx-fn {:session-id sid} #(do-work))
+
+;; 设置 player-owner：
+(with-client-ctx-fn {:player-owner owner} #(do-work))
+
+;; 同时设置两者：
+(with-client-ctx-fn {:session-id sid :player-owner owner} #(do-work))
+```
+
+**读取约定**（仅用于 `cn.li.mcmod.hooks.core` 内部或经过其 reader 函数）：
+
+```clojure
+(defn *client-session-id* [] (:session-id (.get client-ctx-thread-local)))
+(defn *player-state-owner* [] (:player-owner (.get client-ctx-thread-local)))
+```
+
+**设计决策**：
+
+| 决策 | 理由 |
+|------|------|
+| ThreadLocal 而非 Framework atom | 每线程隔离。Server 线程和 Render 线程共享一个 Framework atom 会产生读写竞态，丢失上下文 |
+| 高阶函数（HOF）而非宏 | 宏展开在 AOT 下不增加安全性；HOF 可以在 finally 中 `doall` 截断 LazySeq，防止上下文逃逸 |
+| `^:dynamic` 不适用 | 铁律十一禁止新增 `^:dynamic`；且 Minecraft `enqueueWork` 模式下 ThreadLocal 的"跨线程丢失"恰好满足铁律六（不跨越异步边界） |
+| 顶层 LazySeq 检查而非 `postwalk` | `postwalk` 会误入 Minecraft 原生对象（Level、BlockEntity），仅检查顶层 `instance? LazySeq` 足够——内部嵌套的懒序列在后续访问时仍在当前线程求值 |
+
+**clj-kondo 适配**：`*client-session-id*` 和 `*player-state-owner*` 使用 earmuffs 命名但是 `defn` 函数（非 `^:dynamic`），clj-kondo 会报警告。需在 `.clj-kondo/config.edn` 中配置 `:linters {:earmuffed-var-not-dynamic {:exclude [cn.li.mcmod.hooks.core/*client-session-id* cn.li.mcmod.hooks.core/*player-state-owner*]}}`。同时配置 `:discouraged-var` 禁止在 `hooks.core` 外部直接构造 `ThreadLocal`。
+
+**ThreadLocal 上下文调用规范（强制）**：
+
+1. **唯一入口**：设置/恢复上下文必须通过 `with-client-ctx-fn` 或 `with-player-state-owner-fn`，禁止直接调用 `.get`/`.set`/`.remove`
+2. **网络重建**：所有 Packet Handler 必须在分派前用 `with-client-ctx-fn` 重建上下文。Forge/Fabric 各端 4 个 handler 已合规，新增 handler 必须遵守
+3. **异步边界**：传递给 `enqueueWork` / `future` / `CompletableFuture` 的闭包必须在内部重新建立上下文（铁律六要求，ThreadLocal 天然阻断跨线程泄漏）
+4. **读取规范**：`*client-session-id*` 和 `*player-state-owner*` 是函数，必须加括号调用：`(hooks/*player-state-owner*)` 而非 `hooks/*player-state-owner*`
+5. **新增 hook handler**：新增 `:on-player-tick!` 等生命周期 handler 如需要读上下文，必须在调用链入口确保已设置
 
 ---
 
@@ -598,6 +666,86 @@ Java 骨架类：`mc-1.20.1/src/main/java/cn/li/mc1201/shim/`
 | 平台适配器函数 | Framework `:platform/*`（只读） |
 
 **实现**：`ac/ability/service/runtime_store.clj` 的 `AtomAbilityStore` 使用 `ConcurrentHashMap<String, Atom>` —— 每个 player 独立 atom，`swap!` 只影响该 player，零跨玩家竞争。
+
+---
+
+#### 铁律十三：禁止循环/高频路径内的闭包捕获外层变量（强制）
+
+**根源**：Minecraft 1.20.1 全量 AOT 编译 + Forge ModLauncher 环境下，若匿名函数 `(fn [...] ...)` 嵌套在 `reduce`/`map`/`doseq`/`filter` 等循环构造内，且该匿名函数**捕获了外层函数参数或 let 绑定中的变量**（非自身参数），Clojure AOT 编译器无法将此匿名函数固化为单一静态类。运行时每次调用外层函数时，JVM 都会在 Metaspace 中**动态生成全新的闭包类**。
+
+后果：
+- **Metaspace 内存泄漏**：每个新类约占用 1-2KB Metaspace，高频 Tick 路径（每秒 20 tick × N 个方块）在数分钟内产生数万个临时类，最终 `OutOfMemoryError: Metaspace`。
+- **Full GC 卡顿**：JVM 回收这些类需要 Full GC（Stop-The-World），导致游戏间歇性冻结。
+- **`re:classloading` 堆栈污染**：Forge ModLauncher 对每个动态生成类标记 `re:classloading`，异常栈中出现数百次重复标记。
+
+**危险模式 vs 安全模式**：
+
+```clojure
+;; ❌ 危险：reduce 内的 fn 捕获了外层 state、state-def、pos
+(defn build-updater [fields]
+  (let [specs (precompile fields)]
+    (fn [state level pos]
+      (let [bs (get-block-state level pos)
+            sd (get-state-def bs)]
+        (reduce (fn [acc spec]              ;; ← 此 fn 捕获 state, sd, pos, bs
+                  (let [prop (get-property sd (:prop spec))]
+                    (set-property acc prop (get state (:key spec)))))
+                bs
+                specs)))))
+
+;; ✅ 安全：提取为顶层 defn-，通过 partial 显式传参
+(defn- step-property [state bs-state state-def pos acc spec]
+  (let [prop (get-property state-def (:prop spec))]
+    (set-property acc prop (get state (:key spec)))))
+
+(defn build-updater [fields]
+  (let [specs (precompile fields)]
+    (fn [state level pos]
+      (let [bs (get-block-state level pos)
+            sd (get-state-def bs)]
+        (reduce (partial step-property state bs sd pos)  ;; partial 零运行时开销
+                bs
+                specs)))))
+```
+
+**判定标准**：
+
+| 场景 | 安全性 | 说明 |
+|------|--------|------|
+| `(map (fn [x] ...) coll)` — fn 只使用自身参数 `x` | ✅ 安全 | AOT 固化为静态类 |
+| `(reduce (fn [acc x] ...) init coll)` — fn 只使用自身参数 | ✅ 安全 | AOT 固化为静态类 |
+| 上述任一模式 + fn 引用外层 let/param 变量 | ❌ 危险 | 运行时每次调用生成新类 |
+| 顶层 `def` 中的 `(into {} (map (fn ...) coll))` | ✅ 安全 | 只执行一次，不反复生成 |
+| 仅为启动/数据生成路径（非 Tick/帧循环） | 🟡 低风险 | 生成次数有限，但建议修复 |
+
+**修复口诀**：
+1. 将闭包提取为顶层 `defn-`（命名函数）。
+2. 原外层变量通过 `partial` 或显式参数传入。
+3. **结构静态化，数据动态化** — 函数逻辑编译期固定，只有数据在运行期变化。
+
+**已知高风险文件**（待修复）：
+- `ac/ability/effects/beam.clj:28-38` — 4 个 fn 捕获外层变量（beam-candidates 热路径）
+- `mc-1.20.1/runtime/entity_damage_core.clj:43` — reduce 捕获 5 个外层变量（AOE damage tick）
+- `ac/ability/server/damage/entity.clj:25-29` — 3 个 fn 捕获外层变量（reflection chain）
+- `ac/content/ability/meltdowner/electron_missile.clj:60-62` — filter + sort-by 捕获外层（missile targeting）
+- `ac/content/ability/meltdowner/ray_barrage.clj:139-146` — remove + sort-by 捕获外层（scatter targeting）
+
+**已修复（2026-07）**：
+- `ac/block/ability_interferer/logic.clj` — `player-in-aabb?` + `partial`
+- `mcmod/block/state_schema.clj` — `schema->field-index` + `ConcurrentHashMap` 缓存
+- `ac/block/role_impls.clj` — `assoc-energy` + `partial`
+- `ac/content/ability/vecmanip/vec_deviation.clj` / `vec_reflection.clj` — uuid filter + `partial`
+- `ac/content/ability/electromaster/mag_manip.clj` / `thunder_bolt.clj` — segment/exclusion filter + `partial`
+- `ac/content/ability/teleporter/shift_teleport.clj:164-178` — 已确认仅用 acc/entity 参数，安全
+
+**技能回调 positional 契约（禁止 evt Map）**：
+
+所有 `:actions` 回调统一 arity：
+`[ctx-id player-id skill-id exp cost-ok? hold-ticks cost-stage player-ref]`
+
+- 实现：`ac/ability/service/skill_callback.clj` + `context_state.clj` dispatch
+- `:cost` / `:cooldown-ticks` 动态 fn 签名为 `(fn [player-id skill-id exp] ...)`
+- **禁止关闭 AOT**；修复闭包热点用 `defn-` + `partial`，不用运行时编译
 
 ---
 

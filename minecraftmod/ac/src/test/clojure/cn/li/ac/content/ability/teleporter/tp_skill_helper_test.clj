@@ -16,14 +16,14 @@
 
 (deftest skill-exp-test
   (testing "missing player state yields 0.0"
-    (is (= 0.0 (h/skill-exp "no-one" :any))))
+    (is (= 0.0 (skill-effects/skill-exp "no-one" :any))))
   (testing "reads exp from ability data"
     (store/reset-store!)
     (let [ad (-> (ad/new-ability-data)
                  (ad/learn-skill :foo)
                  (ad/set-skill-exp :foo 0.42))]
       (store/set-player-state!* ps-fix/test-session-id "p1" {:ability-data ad})
-      (is (= 0.42 (h/skill-exp "p1" :foo)))
+      (is (= 0.42 (skill-effects/skill-exp "p1" :foo)))
       (store/reset-store!))))
 
 (deftest player-look-and-position-nil-without-bindings-test
@@ -102,11 +102,8 @@
                        :progression.exp-critical 0.0001
                        0.0))]
     (with-redefs [skill-config/lerp-double lerp
-                  h/cfg-lerp lerp
                   skill-config/tunable-double-list (fn [_ _] [1.3 1.6 2.6])
-                  h/cfg-double-list (fn [_ _] [1.3 1.6 2.6])
-                  skill-config/tunable-double exp-double
-                  h/cfg-double exp-double]
+                  skill-config/tunable-double exp-double]
       (f))))
 
 (deftest crit-applied-gates-on-both-critical-and-applied-test

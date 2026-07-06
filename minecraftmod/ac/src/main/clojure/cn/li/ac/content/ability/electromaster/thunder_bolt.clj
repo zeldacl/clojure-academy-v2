@@ -5,7 +5,7 @@
   Cost: CP lerp(280,420), overload lerp(50,27) by exp
   Cooldown: lerp(120,50) ticks by exp
   Exp: +0.005 effective / +0.003 ineffective"
-  (:require [cn.li.ac.ability.dsl :refer [defskill]]
+  (:require [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
             [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.effects.geom :as geom]
@@ -17,19 +17,11 @@
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.potion-effects :as potion-effects]))
 
+(def-skill-config-ops :thunder-bolt)
 (def ^:private thunder-bolt-skill-id :thunder-bolt)
 
-(defn- cfg-double [field-id]
-  (skill-config/tunable-double thunder-bolt-skill-id field-id))
-
-(defn- cfg-int [field-id]
-  (skill-config/tunable-int thunder-bolt-skill-id field-id))
-
-(defn- cfg-lerp [field-id exp]
-  (skill-config/lerp-double thunder-bolt-skill-id field-id exp))
-
-(defn- evt-lerp [field-id]
-  (fn [{:keys [exp]}]
+(defn- cost-lerp [field-id]
+  (fn [_player-id _skill-id exp]
     (cfg-lerp field-id (double (or exp 0.0)))))
 
 (defn- fallback-end-point [eye look range]
@@ -91,6 +83,11 @@
                                         :lightning)
     true))
 
+(defn- entity-in-excluded-set?
+  "True when entity uuid is in the excluded set (Iron Rule 13 safe for remove)."
+  [excluded entity]
+  (contains? excluded (:uuid entity)))
+
 (defn- aoe-victims [world-id center radius excluded]
   (if-not (world-effects/available?)
     []
@@ -100,7 +97,7 @@
                                                  (double (:y center))
                                                  (double (:z center))
                                                  (double radius))
-         (remove (fn [{:keys [uuid]}] (contains? excluded uuid)))
+         (remove (partial entity-in-excluded-set? excluded))
          vec)))
 
 (defn- apply-aoe-damage! [world-id center radius amount victims]
@@ -127,7 +124,8 @@
                                            (cfg-int :effect.slowness-amplifier))
       true)))
 
-(defn thunder-bolt-perform! [{:keys [player-id ctx-id exp]}]
+(defn thunder-bolt-perform!
+  [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (let [exp* (double (or exp 0.0))
         range (cfg-double :targeting.range)
         direct-damage (cfg-lerp :combat.direct-damage exp*)
@@ -186,8 +184,8 @@
   :ctrl-id     :thunder-bolt
   :pattern     :instant
   :cooldown    {:mode :manual}
-  :cost        {:down {:cp       (evt-lerp :cost.down.cp)
-                       :overload (evt-lerp :cost.down.overload)}}
+  :cost        {:down {:cp       (cost-lerp :cost.down.cp)
+                       :overload (cost-lerp :cost.down.overload)}}
   :cooldown-ticks (fn [{:keys [exp]}]
                     (skill-config/lerp-int thunder-bolt-skill-id
                                            :cooldown.ticks

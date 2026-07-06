@@ -11,9 +11,8 @@
   - Resets fall damage on completion
   - Grants experience based on distance traveled"
   (:require [clojure.string :as str]
-            [cn.li.ac.ability.dsl :refer [defskill]]
+            [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
             [cn.li.ac.ability.config :as ability-config]
-            [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
                         [cn.li.ac.ability.fx :as fx]
@@ -24,20 +23,11 @@
                         [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.player-motion :as player-motion]
             [cn.li.mcmod.platform.world-effects :as world-effects]
-            [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.util.log :as log]))
 
+(def-skill-config-ops :mag-movement)
 (def ^:private mag-movement-skill-id :mag-movement)
 (def ^:private default-eye-height 1.62)
-
-(defn- cfg-double [field-id]
-  (skill-config/tunable-double mag-movement-skill-id field-id))
-
-(defn- cfg-int [field-id]
-  (skill-config/tunable-int mag-movement-skill-id field-id))
-
-(defn- cfg-lerp [field-id exp]
-  (skill-config/lerp-double mag-movement-skill-id field-id exp))
 
 (defn- normalize-id
   [raw-id]
@@ -72,14 +62,6 @@
 (defn- set-skill-state!
   [ctx-id k v]
   (ctx-skill/assoc-skill-state! ctx-id k v))
-
-(defn- set-skill-state-root!
-  [ctx-id state-map]
-  (ctx-skill/update-skill-state-root! ctx-id identity state-map))
-
-(defn- clear-skill-state!
-  [ctx-id]
-  (ctx-skill/clear-skill-state! ctx-id))
 
 (defn- try-adjust [from to]
   (let [d (- (double to) (double from))
@@ -141,24 +123,37 @@
              :target-z           (double (:z hit))}))
         nil))))
 
+(defn- active-skill-ctx-data [player-id skill-id]
+  (some (fn [[_ctx-id ctx-data]]
+          (when (and (= (:player-uuid ctx-data) player-id)
+                     (= skill-id (:skill-id ctx-data)))
+            ctx-data))
+        (ctx/get-all-contexts)))
+
 ;; ---------------------------------------------------------------------------
 ;; Cost fn (tick CP is conditional on having a target)
 ;; ---------------------------------------------------------------------------
 
-(defn- tick-cp-cost [{:keys [ctx-id exp]}]
-  (if-let [ctx (ctx/get-context ctx-id)]
-    (if (get-in ctx [:skill-state :has-target])
+(defn- tick-cp-cost [player-id _skill-id exp]
+  (if-let [ctx-data (active-skill-ctx-data player-id mag-movement-skill-id)]
+    (if (get-in ctx-data [:skill-state :has-target])
       (cfg-lerp :cost.tick.cp (double (or exp 0.0)))
       0.0)
     0.0))
+
+(defn- down-overload-cost [_player-id _skill-id exp]
+  (cfg-lerp :cost.down.overload (double (or exp 0.0))))
+
+(defn- cost-creative? [_player-id _skill-id _exp]
+  false)
 
 ;; ---------------------------------------------------------------------------
 ;; Actions
 ;; ---------------------------------------------------------------------------
 
 (defn- finalize-and-terminate!
-  [{:keys [player-id ctx-id] :as evt} {:keys [grant-exp?] :or {grant-exp? true}}]
-  (when-let [ctx-data (ctx/get-context ctx-id)]
+  [ctx-id player-id & {:keys [grant-exp?] :or {grant-exp? true}}]
+  (when-let [ctx-data (ctx-skill/get-context ctx-id)]
     (let [skill-state (:skill-state ctx-data)
           finalized? (boolean (get-in ctx-data [:skill-state :finalized?]))
           should-finalize? (and skill-state (not finalized?))]
@@ -177,43 +172,44 @@
             (skill-effects/add-skill-exp! player-id mag-movement-skill-id
                                           (max (cfg-double :progression.exp-min)
                                                (* (cfg-double :progression.exp-distance-scale) traveled)))))
-        (motion-op/execute-reset-fall-damage! evt nil)
-        (fx/send! (:ctx-id evt) {:topic :mag-movement/fx-end :mode :end} evt)
-          (clear-skill-state! ctx-id)
+        (motion-op/execute-reset-fall-damage! {:player-id player-id} nil)
+        (fx/send! ctx-id {:topic :mag-movement/fx-end :mode :end} nil)
+        (ctx-skill/clear-skill-state! ctx-id)
         (ctx/terminate-context! ctx-id nil)))))
 
-(defn- on-down! [{:keys [player-id exp] :as evt}]
-  (let [ctx-id (:ctx-id evt)
-        state-pos (player-pos player-id)]
+(defn- on-down!
+  [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage _player-ref]
+  (let [state-pos (player-pos player-id)]
     (if-let [{:keys [target-x target-y target-z] :as target-state}
              (resolve-target player-id)]
       (let [velocity-now (when (player-motion/available?)
                            (player-motion/get-velocity* player-id))]
-         (set-skill-state-root! ctx-id
-                 (merge target-state
-                   {:has-target true
-                    :finalized? false
-                    :movement-ticks 0
-                    :overload-floor (cfg-lerp :cost.down.overload (double (or exp 0.0)))
-                    :start-x (double (:x state-pos))
-                    :start-y (double (:y state-pos))
-                    :start-z (double (:z state-pos))
-                    :motion-x (double (or (:x velocity-now) 0.0))
-                    :motion-y (double (or (:y velocity-now) 0.0))
-                    :motion-z (double (or (:z velocity-now) 0.0))}))
-        (fx/send! (:ctx-id evt) {:topic :mag-movement/fx-start :mode :start} evt)
-        (fx/send! (:ctx-id evt) {:topic :mag-movement/fx-update :mode :update} evt
+        (ctx-skill/replace-skill-state! ctx-id
+               (merge target-state
+                 {:has-target true
+                  :finalized? false
+                  :movement-ticks 0
+                  :overload-floor (cfg-lerp :cost.down.overload (double (or exp 0.0)))
+                  :start-x (double (:x state-pos))
+                  :start-y (double (:y state-pos))
+                  :start-z (double (:z state-pos))
+                  :motion-x (double (or (:x velocity-now) 0.0))
+                  :motion-y (double (or (:y velocity-now) 0.0))
+                  :motion-z (double (or (:z velocity-now) 0.0))}))
+        (fx/send! ctx-id {:topic :mag-movement/fx-start :mode :start} nil)
+        (fx/send! ctx-id {:topic :mag-movement/fx-update :mode :update} nil
                   {:target {:x (double target-x)
                             :y (double target-y)
                             :z (double target-z)}})
         (log/debug "MagMovement started" (:target-kind target-state)))
       (do
-        (set-skill-state-root! ctx-id {:has-target false :finalized? false})
+        (ctx-skill/replace-skill-state! ctx-id {:has-target false :finalized? false})
         (log/debug "MagMovement: no valid magnetic target")
-        (finalize-and-terminate! evt {:grant-exp? false})))))
+        (finalize-and-terminate! ctx-id player-id {:grant-exp? false})))))
 
-(defn- on-tick! [{:keys [player-id ctx-id cost-ok?] :as evt}]
-  (when-let [ctx (ctx/get-context ctx-id)]
+(defn- on-tick!
+  [ctx-id player-id skill-id exp cost-ok? _hold-ticks _cost-stage _player-ref]
+  (when-let [ctx (ctx-skill/get-context ctx-id)]
     (let [skill-state (:skill-state ctx)
           has-target  (:has-target skill-state)]
       (when has-target
@@ -221,13 +217,14 @@
                               (update-entity-target skill-state)
                               skill-state)]
           (if-not updated-state
-            (finalize-and-terminate! evt {:grant-exp? true})
+            (finalize-and-terminate! ctx-id player-id {:grant-exp? true})
             (let [movement-ticks (inc (int (:movement-ticks updated-state)))]
-              (set-skill-state-root! ctx-id
+              (ctx-skill/replace-skill-state! ctx-id
                                      (assoc updated-state :movement-ticks movement-ticks))
-              (state-op/execute-overload-floor! evt {:floor (:overload-floor updated-state)})
+              (state-op/execute-overload-floor! ctx-id player-id skill-id exp
+                                                {:floor (:overload-floor updated-state)})
               (if-not cost-ok?
-                (finalize-and-terminate! evt {:grant-exp? true})
+                (finalize-and-terminate! ctx-id player-id {:grant-exp? true})
                 (let [p         (player-pos player-id)
                       tx        (double (:target-x updated-state))
                       ty        (double (:target-y updated-state))
@@ -259,28 +256,34 @@
                   (when (player-motion/available?)
                     (player-motion/set-velocity!*
                                                  player-id next-x next-y next-z))
-                  (set-skill-state-root! ctx-id
+                  (ctx-skill/replace-skill-state! ctx-id
                                          (assoc updated-state
                                                 :movement-ticks movement-ticks
                                                 :motion-x next-x
                                                 :motion-y next-y
                                                 :motion-z next-z))
-                  (fx/send! (:ctx-id evt) {:topic :mag-movement/fx-update :mode :update} evt
+                  (fx/send! ctx-id {:topic :mag-movement/fx-update :mode :update} nil
                             {:target {:x tx :y ty :z tz}})
                   (when (zero? (mod movement-ticks 10))
-                    (log/debug "MagMovement: moving for" (/ movement-ticks 20.0) "seconds")))))))))))
+                    (log/debug "MagMovement: moving for" (/ movement-ticks 20.0) "seconds"))))))))))
 
-(defn- on-up! [{:keys [ctx-id] :as evt}]
-  (when-let [ctx (ctx/get-context ctx-id)]
+(defn- on-up!
+  [ctx-id player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
+  (when-let [ctx (ctx-skill/get-context ctx-id)]
     (let [skill-state (:skill-state ctx)
           has-target  (:has-target skill-state)]
       (when has-target
-        (finalize-and-terminate! evt {:grant-exp? true})
-        (log/debug "MagMovement completed: ticks" (:movement-ticks skill-state))))))
+        (finalize-and-terminate! ctx-id player-id {:grant-exp? true})
+        (log/debug "MagMovement completed: ticks" (:movement-ticks skill-state)))))))
 
-(defn- on-abort! [{:keys [_player-id _ctx-id] :as evt}]
-  (finalize-and-terminate! evt {:grant-exp? true})
+(defn- on-abort!
+  [ctx-id player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
+  (finalize-and-terminate! ctx-id player-id {:grant-exp? true})
   (log/debug "MagMovement aborted"))
+
+(defn- on-cost-fail!
+  [ctx-id player-id _skill-id _exp _cost-ok? _hold-ticks cost-stage _player-ref]
+  (finalize-and-terminate! ctx-id player-id {:grant-exp? (not= cost-stage :down)}))
 
 (declare mag-movement-skill)
 
@@ -299,18 +302,14 @@
   :cooldown-ticks  (fn [_] (cfg-int :cooldown.ticks))
   :pattern         :hold-channel
   :cooldown        {:mode :manual}
-  :cost {:down {:overload   (fn [{:keys [exp]}]
-                              (cfg-lerp :cost.down.overload (double (or exp 0.0))))
-                :creative?  (fn [{:keys [player]}]
-                              (boolean (and player (entity/player-creative? player))))}
+  :cost {:down {:overload   down-overload-cost
+                :creative?  cost-creative?}
          :tick {:cp         tick-cp-cost
-                :creative?  (fn [{:keys [player]}]
-                              (boolean (and player (entity/player-creative? player))))}}
+                :creative?  cost-creative?}}
   :actions {:down!  on-down!
             :tick!  on-tick!
             :up!    on-up!
             :abort! on-abort!
-            :cost-fail! (fn [{:keys [cost-stage] :as evt}]
-                          (finalize-and-terminate! evt {:grant-exp? (not= cost-stage :down)}))}
+            :cost-fail! on-cost-fail!}
   :prerequisites [{:skill-id :arc-gen         :min-exp 0.0}
                   {:skill-id :current-charging :min-exp 0.7}])

@@ -12,7 +12,6 @@
 														[cn.li.ac.ability.service.command-runtime :as command-rt]						[cn.li.ac.ability.registry.skill-query :as skill-query]
 						[cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
 						[cn.li.mcmod.command.actions :as command-actions]
-						[cn.li.ac.terminal.model :as terminal-model]
 						[cn.li.mcmod.util.log :as log]))
 
 (def ability-command-action-types
@@ -81,26 +80,13 @@
 				(update :ability-data #(merge (:ability-data defaults) (or % {})))
 				(update :resource-data #(merge (:resource-data defaults) (or % {})))
 				(update :cooldown-data #(or % (:cooldown-data defaults)))
-				(update :preset-data #(merge (:preset-data defaults) (or % {})))
-				(update :develop-data #(merge (:develop-data defaults) (or % {})))
-				(update terminal-model/state-key
-				        #(terminal-model/normalize-state
-				           (merge (:terminal-data defaults) (or % {})))))))
-
-(defn- update-player-runtime-data!
-	[player-uuid context f]
-	(let [session-id (runtime-hooks/require-context-player-state-session-id "Command actions" context)
-				current (normalize-runtime-state (store/get-or-create-player-state! session-id player-uuid))
-				updated (normalize-runtime-state (f current))]
-		(store/set-player-state!* session-id player-uuid updated)
-		(store/mark-player-dirty! session-id player-uuid)
-		(store/get-player-state* session-id player-uuid)))
+				(update :preset-data #(merge (:preset-data defaults) (or % {}))))))
 
 (defn- skills-for-category
 	[category-id]
 	(when category-id
 		(->> (skill-query/get-skills-for-category category-id)
-				 (map :id)
+				 (map #(get % :id))
 				 (filter identity)
 				 sort
 				 vec)))
@@ -280,13 +266,14 @@
 
 (defn- execute-set-cheats!
 	[action-map context enabled?]
-	(let [player-uuid (action-player-uuid action-map context)]
-		(update-player-runtime-data!
-			player-uuid context
-			#(assoc % :cheats-enabled? (boolean enabled?)))
+	(let [session-id (runtime-hooks/require-context-player-state-session-id "Command actions" context)
+	      player-uuid (action-player-uuid action-map context)]
+		(command-rt/run-command-in-session! session-id player-uuid
+		                                    {:command :set-cheats-enabled
+		                                     :enabled? (boolean enabled?)})
 		(send-feedback! context (if enabled?
-															"command.academy.aim.cheats_on.success"
-															"command.academy.aim.cheats_off.success") [] false)
+		                          "command.academy.aim.cheats_on.success"
+		                          "command.academy.aim.cheats_off.success") [] false)
 		{:success? true}))
 
 (defn execute-ability-command-action!

@@ -13,7 +13,6 @@
 
   No Minecraft imports."
   (:require            [cn.li.ac.ability.fx :as fx]
-            [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
                         [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.effects.geom :as geom]
@@ -29,23 +28,19 @@
   []
   {:target-x nil :target-y nil :target-z nil :countdown 0.0})
 
-(defn- set-skill-state-root!
-  [ctx-id state-map]
-  (ctx-skill/update-skill-state-root! ctx-id identity state-map))
-
 (defn mining-ray-down!
   "Initialize mining ray context state."
-  [skill-id {:keys [ctx-id cost-ok?]}]
+  [_skill-id ctx-id _player-id _callback-skill-id _exp cost-ok? _hold-ticks _cost-stage _player-ref]
   (when cost-ok?
-    (set-skill-state-root! ctx-id (empty-skill-state))))
+    (ctx-skill/replace-skill-state! ctx-id (empty-skill-state))))
 
 (defn mining-ray-tick!
   "Tick handler for mining ray.
   cfg: {:range double :break-speed double :skill-id keyword :fortune-level int :exp-block double}"
-  [cfg {:keys [player-id ctx-id]}]
+  [cfg ctx-id player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (try
     (let [{:keys [range break-speed skill-id fortune-level exp-block]} cfg
-          ctx-data  (ctx/get-context ctx-id)
+          ctx-data  (ctx-skill/get-context ctx-id)
           world-id  (geom/world-id-of player-id)
           eye       (geom/eye-pos player-id)
           look-vec  (when (raycast/available?)
@@ -57,7 +52,7 @@
                     (:x look-vec) (:y look-vec) (:z look-vec)
                     (double range))]
           (if (nil? hit)
-            (set-skill-state-root! ctx-id (empty-skill-state))
+            (ctx-skill/replace-skill-state! ctx-id (empty-skill-state))
             (let [hx (int (:x hit)) hy (int (:y hit)) hz (int (:z hit))
                   prev-x (get-in ctx-data [:skill-state :target-x])
                   prev-y (get-in ctx-data [:skill-state :target-y])
@@ -80,24 +75,22 @@
                     (bm/break-block!* player-id world-id hx hy hz true fortune-level)
                     (bm/break-block!* player-id world-id hx hy hz true))
                   (skill-effects/add-skill-exp! player-id skill-id (double (or exp-block 0.001)))
-                  (set-skill-state-root! ctx-id (empty-skill-state)))
-                (set-skill-state-root! ctx-id
+                  (ctx-skill/replace-skill-state! ctx-id (empty-skill-state)))
+                (ctx-skill/replace-skill-state! ctx-id
                                        {:target-x hx
                                         :target-y hy
                                         :target-z hz
                                         :countdown new-countdown})))))
-        (set-skill-state-root! ctx-id (empty-skill-state))))
+        (ctx-skill/replace-skill-state! ctx-id (empty-skill-state))))
     (catch Exception e
       (log/warn "MiningRay tick! failed:" (ex-message e)))))
 
 (defn mining-ray-up!
   "Key-up: reset mining state."
-  [_cfg {:keys [ctx-id]}]
-  (set-skill-state-root! ctx-id (empty-skill-state)))
+  [_cfg ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
+  (ctx-skill/replace-skill-state! ctx-id (empty-skill-state)))
 
 (defn mining-ray-abort!
   "Abort: reset mining state."
-  [_cfg {:keys [ctx-id]}]
-  (set-skill-state-root! ctx-id (empty-skill-state)))
-
-
+  [_cfg ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
+  (ctx-skill/replace-skill-state! ctx-id (empty-skill-state)))

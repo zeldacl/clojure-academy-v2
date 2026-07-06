@@ -8,6 +8,7 @@
             [cn.li.mcmod.platform.capability :as platform-cap]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.forge1201.capability CapabilityRegistry]
+           [cn.li.forge1201.shim UniversalFluidHandler]
            [net.minecraft.resources ResourceLocation]
            [net.minecraft.world.level.material Fluid]
            [net.minecraftforge.common.capabilities ForgeCapabilities]
@@ -47,44 +48,41 @@
   for tile-id \"phase-gen\" (parity: upstream TilePhaseGen only accepted ACFluids.fluidImagProj)."
   [be]
   (let [^Fluid fluid (resolve-phase-fluid)]
-    (reify IFluidHandler
-      (getTanks [_] 1)
-
-      (getFluidInTank [_ _tank]
+    (UniversalFluidHandler.
+      (fn [] 1)
+      (fn [_tank]
         (let [state (platform-be/get-custom-state be)
               amount (int (get state :liquid-amount 0))]
           (if (and fluid (pos? amount))
             (FluidStack. fluid amount)
             FluidStack/EMPTY)))
-
-      (getTankCapacity [_ _tank]
+      (fn [_tank]
         (let [state (platform-be/get-custom-state be)]
           (int (get state :tank-size 8000))))
-
-      (isFluidValid [_ _tank stack]
+      (fn [_tank stack]
         (let [^FluidStack stack stack]
           (boolean (and fluid stack (= (.getFluid stack) fluid)))))
-
-      (fill [_ resource action]
+      (fn [resource action]
         (let [^FluidStack resource resource
               ^IFluidHandler$FluidAction action action]
           (if (and fluid resource (= (.getFluid resource) fluid))
-          (let [state (platform-be/get-custom-state be)
-                amount (.getAmount resource)
-                current (int (get state :liquid-amount 0))
-                capacity (int (get state :tank-size 8000))
-                can-fill (max 0 (min amount (- capacity current)))]
-            (when (and (pos? can-fill) (= action IFluidHandler$FluidAction/EXECUTE))
-              (let [new-state (assoc state :liquid-amount (+ current can-fill))]
-                (platform-be/set-custom-state! be new-state)
-                (try (platform-be/set-changed! be) (catch Exception e (log/debug "set-changed! failed for fluid fill" (ex-message e)) nil))))
-            (int can-fill))
-          0)))
-
-      (^FluidStack drain [_ ^int max-drain ^IFluidHandler$FluidAction action]
-        (let [state (platform-be/get-custom-state be)
+            (let [state (platform-be/get-custom-state be)
+                  amount (.getAmount resource)
+                  current (int (get state :liquid-amount 0))
+                  capacity (int (get state :tank-size 8000))
+                  can-fill (max 0 (min amount (- capacity current)))]
+              (when (and (pos? can-fill) (= action IFluidHandler$FluidAction/EXECUTE))
+                (let [new-state (assoc state :liquid-amount (+ current can-fill))]
+                  (platform-be/set-custom-state! be new-state)
+                  (try (platform-be/set-changed! be) (catch Exception e (log/debug "set-changed! failed for fluid fill" (ex-message e)) nil))))
+              (int can-fill))
+            0)))
+      (fn [max-drain action]
+        (let [^int max-drain max-drain
+              ^IFluidHandler$FluidAction action action
+              state (platform-be/get-custom-state be)
               current (int (get state :liquid-amount 0))
-              can-drain (min current (int max-drain))]
+              can-drain (min current max-drain)]
           (if (and fluid (pos? can-drain))
             (do
               (when (= action IFluidHandler$FluidAction/EXECUTE)
@@ -93,22 +91,23 @@
                   (try (platform-be/set-changed! be) (catch Exception e (log/debug "set-changed! failed for fluid drain" (ex-message e)) nil))))
               (FluidStack. fluid can-drain))
             FluidStack/EMPTY)))
-
-      (^FluidStack drain [_ ^FluidStack resource ^IFluidHandler$FluidAction action]
-        (if (and fluid resource (= (.getFluid resource) fluid))
-          (let [state (platform-be/get-custom-state be)
-                amount (.getAmount resource)
-                current (int (get state :liquid-amount 0))
-                can-drain (min current amount)]
-            (if (pos? can-drain)
-              (do
-                (when (= action IFluidHandler$FluidAction/EXECUTE)
-                  (let [new-state (assoc state :liquid-amount (- current can-drain))]
-                    (platform-be/set-custom-state! be new-state)
-                    (try (platform-be/set-changed! be) (catch Exception e (log/debug "set-changed! failed for fluid energy" (ex-message e)) nil))))
-                (FluidStack. fluid can-drain))
-              FluidStack/EMPTY))
-          FluidStack/EMPTY)))))
+      (fn [resource action]
+        (let [^FluidStack resource resource
+              ^IFluidHandler$FluidAction action action]
+          (if (and fluid resource (= (.getFluid resource) fluid))
+            (let [state (platform-be/get-custom-state be)
+                  amount (.getAmount resource)
+                  current (int (get state :liquid-amount 0))
+                  can-drain (min current amount)]
+              (if (pos? can-drain)
+                (do
+                  (when (= action IFluidHandler$FluidAction/EXECUTE)
+                    (let [new-state (assoc state :liquid-amount (- current can-drain))]
+                      (platform-be/set-custom-state! be new-state)
+                      (try (platform-be/set-changed! be) (catch Exception e (log/debug "set-changed! failed for fluid energy" (ex-message e)) nil))))
+                  (FluidStack. fluid can-drain))
+                FluidStack/EMPTY))
+            FluidStack/EMPTY))))))
 
 ;; ============================================================================
 ;; Registration (called from init.clj before content activation)

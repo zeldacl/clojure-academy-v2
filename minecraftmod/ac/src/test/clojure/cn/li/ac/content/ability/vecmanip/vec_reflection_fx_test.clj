@@ -6,16 +6,13 @@
             [cn.li.ac.content.ability.vecmanip.vec-reflection-fx :as vrfx]))
 
 (defn- reset-fixture [f]
-  (level-effects/call-with-level-effect-runtime
-    (level-effects/create-level-effect-runtime)
-    (fn []
-      (try
+  (try
         (level-effects/reset-level-effect-registry-for-test!)
         (vrfx/reset-vec-reflection-fx-for-test!)
         (f)
         (finally
           (vrfx/reset-vec-reflection-fx-for-test!)
-          (level-effects/reset-level-effect-registry-for-test!))))))
+          (level-effects/reset-level-effect-registry-for-test!))))
 
 (use-fixtures :each reset-fixture)
 
@@ -66,8 +63,8 @@
                   fx-registry/register-fx-channel! (fn [topic handler]
                                                       (swap! handlers* assoc topic handler)
                                                       nil)
-                  level-effects/enqueue-level-effect! (fn [effect-id payload fx-context]
-                                                        (swap! enqueued* conj [effect-id payload fx-context])
+                  level-effects/enqueue-level-effect! (fn [effect-id ctx-id channel payload & opts]
+                                                        (swap! enqueued* conj [effect-id ctx-id channel payload opts])
                                                         nil)
                   client-sounds/queue-current-sound-effect! (fn [& _] nil)]
       (vrfx/init!)
@@ -123,31 +120,4 @@
         (is (nil? (get (:effect-state after-clear) [:ctx "ctx-a"])))
         (is (= 1 (count (get (:wave-effects after-clear) [:ctx "ctx-b"]))))))))
 
-(deftest vec-reflection-fx-runtime-isolation-test
-  (let [runtime-a (level-effects/create-level-effect-runtime)
-        runtime-b (level-effects/create-level-effect-runtime)
-        enqueue-state! (var-get #'cn.li.ac.content.ability.vecmanip.vec-reflection-fx/enqueue-state!)]
-    (level-effects/call-with-level-effect-runtime
-      runtime-a
-      (fn []
-        (level-effects/update-effect-state! :vec-reflection
-          enqueue-state!
-          (event "ctx-a" {:mode :start :source-player-id "player-a"}))
-        (level-effects/update-effect-state! :vec-reflection
-          enqueue-state!
-          (event "ctx-a" {:mode :reflect-entity :x 1.0 :y 2.0 :z 3.0 :reflected? true :source-player-id "player-a"}))
-        (is (= 1 (count (get (:wave-effects (vrfx/vec-reflection-fx-snapshot)) [:ctx "ctx-a"]))))))
-    (level-effects/call-with-level-effect-runtime
-      runtime-b
-      (fn []
-        (is (= (vrfx/default-vec-reflection-fx-runtime-state)
-               (vrfx/vec-reflection-fx-snapshot)))
-        (level-effects/update-effect-state! :vec-reflection
-          enqueue-state!
-          (event "ctx-b" {:mode :start :source-player-id "player-b"}))
-        (is (= #{[:ctx "ctx-b"]}
-               (set (keys (:effect-state (vrfx/vec-reflection-fx-snapshot))))))))
-    (level-effects/call-with-level-effect-runtime
-      runtime-a
-      (fn []
-        (is (= 1 (count (get (:wave-effects (vrfx/vec-reflection-fx-snapshot)) [:ctx "ctx-a"]))))))))
+

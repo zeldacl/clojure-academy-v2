@@ -1,5 +1,6 @@
 (ns cn.li.ac.content.ability.electromaster.thunder-bolt-test
   (:require [clojure.test :refer [deftest is]]
+            [cn.li.ac.ability.test.skill-callback-test-helpers :as cb]
             [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.content.ability.electromaster.thunder-bolt :as thunder-bolt]
             [cn.li.ac.ability.skill-config :as skill-config]
@@ -73,7 +74,7 @@
                   fx/send! (fn [ctx-id entry _evt payload]
                              (swap! fx* conj [ctx-id (:topic entry) payload])
                              nil)]
-      (thunder-bolt/thunder-bolt-perform! {:player-id "p1" :ctx-id "ctx-1" :exp 0.5})
+      (cb/apply-invoke thunder-bolt/thunder-bolt-perform! :player-id "p1" :ctx-id "ctx-1" :exp 0.5)
       (is (empty? @damage*))
       (is (empty? @lightning*))
       (is (= 1 (count @fx*)))
@@ -128,7 +129,7 @@
                              (swap! fx* conj [ctx-id (:topic entry) payload])
                              nil)
                   rand (fn [] 0.0)]
-      (thunder-bolt/thunder-bolt-perform! {:player-id "p2" :ctx-id "ctx-2" :exp 0.6})
+      (cb/apply-invoke thunder-bolt/thunder-bolt-perform! :player-id "p2" :ctx-id "ctx-2" :exp 0.6)
       (is (= 2 (count @damage*)))
       (is (= 1 (count (filter #(= "mob-1" (first %)) @damage*))))
       (is (= 1 (count (filter #(= "mob-2" (first %)) @damage*))))
@@ -177,7 +178,7 @@
                   skill-config/tunable-int stub-int
                   skill-config/probability (fn [& _] 1.0)
                   fx/send! (fn [& _] nil)]
-      (thunder-bolt/thunder-bolt-perform! {:player-id "p3" :ctx-id "ctx-3" :exp 0.4})
+      (cb/apply-invoke thunder-bolt/thunder-bolt-perform! :player-id "p3" :ctx-id "ctx-3" :exp 0.4)
       (is (= 2 (count @damage*)))
       (is (empty? @potion*))
       (is (= ["p3" :thunder-bolt 0.005] (first @exp*)))
@@ -212,5 +213,5 @@
                   skill-config/probability (fn [& _] 1.0)
                   fx/send! (fn [& _] nil)
                   rand (fn [] 0.0)]
-      (thunder-bolt/thunder-bolt-perform! {:player-id "p4" :ctx-id "ctx-4" :exp 0.1})
+      (cb/apply-invoke thunder-bolt/thunder-bolt-perform! :player-id "p4" :ctx-id "ctx-4" :exp 0.1)
       (is (empty? @potion*)))))

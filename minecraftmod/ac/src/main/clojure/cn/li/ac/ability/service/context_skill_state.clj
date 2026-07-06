@@ -8,7 +8,7 @@
 
 (defn current-owner
   []
-  (or ctx/*context-owner*
+  (or (ctx/*context-owner*)
       (runtime-hooks/current-player-state-owner)))
 
 (defn get-context
@@ -35,3 +35,8 @@
 (defn clear-skill-state!
   [ctx-id]
   (ctx-cmd/clear-skill-state! (current-owner) ctx-id))
+
+(defn replace-skill-state!
+  "Replace the entire :skill-state map for ctx-id."
+  [ctx-id state-map]
+  (update-skill-state-root! ctx-id identity state-map))

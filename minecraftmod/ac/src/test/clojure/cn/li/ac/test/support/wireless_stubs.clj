@@ -1,53 +1,29 @@
 (ns cn.li.ac.test.support.wireless-stubs
-  (:require [cn.li.mcmod.platform.position :as pos]
+  (:require [cn.li.ac.test.support.nbt :as test-nbt]
+            [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.nbt :as nbt]
             [cn.li.mcmod.platform.world :as pworld])
   (:import [cn.li.acapi.wireless IWirelessGenerator IWirelessMatrix IWirelessNode IWirelessReceiver]))
 
-(deftype TestPos [^long x ^long y ^long z]
-  pos/IBlockPos
-  (pos-x [_] x)
-  (pos-y [_] y)
-  (pos-z [_] z))
+(deftype TestPos [^long x ^long y ^long z])
 
-(defn- nbt-compound
-  []
-  (let [data (atom {})]
-    (reify
-      nbt/INBTCompound
-      (nbt-set-int! [this k v] (swap! data assoc k (int v)) this)
-      (nbt-get-int [_ k] (int (get @data k 0)))
-      (nbt-set-long! [this k v] (swap! data assoc k (long v)) this)
-      (nbt-get-long [_ k] (long (get @data k 0)))
-      (nbt-set-float! [this k v] (swap! data assoc k (float v)) this)
-      (nbt-get-float [_ k] (float (get @data k 0.0)))
-      (nbt-set-double! [this k v] (swap! data assoc k (double v)) this)
-      (nbt-get-double [_ k] (double (get @data k 0.0)))
-      (nbt-set-string! [this k v] (swap! data assoc k (str v)) this)
-      (nbt-get-string [_ k] (str (get @data k "")))
-      (nbt-set-boolean! [this k v] (swap! data assoc k (boolean v)) this)
-      (nbt-get-boolean [_ k] (boolean (get @data k false)))
-      (nbt-set-tag! [this k tag] (swap! data assoc k tag) this)
-      (nbt-get-tag [_ k] (get @data k))
-      (nbt-get-compound [_ k]
-        (let [v (get @data k)]
-          (when (satisfies? nbt/INBTCompound v) v)))
-      (nbt-get-list [_ k]
-        (let [v (get @data k)]
-          (when (satisfies? nbt/INBTList v) v)))
-      (nbt-has-key? [_ k] (contains? @data k)))))
+(defn- test-pos-x [p]
+  (cond
+    (instance? TestPos p) (.x ^TestPos p)
+    (map? p) (long (:x p 0))
+    :else 0))
 
-(defn- nbt-list
-  []
-  (let [items (atom [])]
-    (reify
-      nbt/INBTList
-      (nbt-append! [this el] (swap! items conj el) this)
-      (nbt-list-size [_] (count @items))
-      (nbt-list-get [_ i] (get @items i))
-      (nbt-list-get-compound [_ i]
-        (let [v (get @items i)]
-          (when (satisfies? nbt/INBTCompound v) v))))))
+(defn- test-pos-y [p]
+  (cond
+    (instance? TestPos p) (.y ^TestPos p)
+    (map? p) (long (:y p 0))
+    :else 0))
+
+(defn- test-pos-z [p]
+  (cond
+    (instance? TestPos p) (.z ^TestPos p)
+    (map? p) (long (:z p 0))
+    :else 0))
 
 (defn fake-matrix
   ([] (fake-matrix {}))
@@ -107,20 +83,24 @@
 (defn with-tile-world
   "Install platform world/position/nbt stubs so tile entities resolve from `tiles-atom` keyed by [x y z] (ints)."
   [tiles-atom f]
-  (pworld/call-with-world-ops
+  (test-nbt/install-test-nbt-ops!)
+  (pos/install-position-ops!
+    {:pos-x test-pos-x
+     :pos-y test-pos-y
+     :pos-z test-pos-z
+     :pos-above (fn [p]
+                  (TestPos. (inc (test-pos-x p)) (test-pos-y p) (test-pos-z p)))
+     :create-block-pos (fn [x y z] (TestPos. (long x) (long y) (long z)))
+     :position-get-block-pos identity
+     :position-get-pos identity}
+    "ac-wireless-test")
+  (pworld/install-world-ops!
     {:world-is-chunk-loaded? (fn [_ _ _] true)
      :world-get-tile-entity
      (fn [_ pos]
-       (let [x (pos/position-get-x pos)
-             y (pos/position-get-y pos)
-             z (pos/position-get-z pos)]
+       (let [x (test-pos-x pos)
+             y (test-pos-y pos)
+             z (test-pos-z pos)]
          (get @tiles-atom [x y z])))}
-    (fn []
-      (pos/call-with-position-factory
-        (fn [x y z] (TestPos. (long x) (long y) (long z)))
-        (fn []
-          (nbt/call-with-nbt-runtime
-            {:factory {:create-compound nbt-compound
-                       :create-list nbt-list}
-             :has-key-fn (fn [compound k] (nbt/nbt-has-key? compound k))}
-            f))))))
+    "ac-wireless-test")
+  (f))

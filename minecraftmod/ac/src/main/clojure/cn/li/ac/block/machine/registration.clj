@@ -42,7 +42,7 @@
       (platform-cap/declare-capability! key interface factory))
     (doseq [tile-id tile-ids]
       (tdsl/register-tile-capability-keys! tile-id key)))
-  (set (map :key capabilities)))
+  (set (map #(get % :key) capabilities)))
 
 (defn register-blocks!
   [block-specs]
@@ -74,7 +74,7 @@
   (with-init-guard guard
     (when before (before))
     (when tile-kind (register-tile-kind! tile-kind))
-    (let [ids (or tile-ids (mapv :id tiles))
+    (let [ids (or tile-ids (mapv #(get % :id) tiles))
           cap-keys (when (seq capabilities)
                      (declare-and-register-capabilities! capabilities ids))]
       (doseq [tile tiles]

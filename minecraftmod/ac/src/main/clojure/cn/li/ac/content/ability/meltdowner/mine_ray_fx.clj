@@ -40,7 +40,7 @@
   nil)
 
 (defn- enqueue-state!
-  [store {:keys [payload ctx-id channel owner-key]}]
+  [store ctx-id channel owner-key payload]
   (let [store* (or store (default-mine-ray-fx-runtime-state))
         owner-key* (or owner-key [:ctx ctx-id])
         {:keys [mode variant x y z progress source-player-id world-id]} (or payload {})

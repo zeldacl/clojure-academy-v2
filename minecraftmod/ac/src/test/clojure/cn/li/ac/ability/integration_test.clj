@@ -1,15 +1,10 @@
 (ns cn.li.ac.ability.integration-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.service.reducer :as reducer]
-            [cn.li.ac.ability.service.runtime-store :as runtime-store]))
+            [cn.li.ac.ability.service.runtime-store :as runtime-store]
+            [cn.li.ac.test.support.player-state :as ps-fix]))
 
-(use-fixtures :each
-  (fn [f]
-    (runtime-store/reset-store!)
-    (try
-      (f)
-      (finally
-        (runtime-store/reset-store!)))))
+(use-fixtures :each ps-fix/clean-player-states-fixture)
 
 (deftest store-plus-reducer-command-flow-test
   (let [session-id :test-session

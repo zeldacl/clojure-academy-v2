@@ -27,6 +27,8 @@
   (getPassword [_] (be-str-field be :password))
   (getPlacerName [_] (be-str-field be :placer-name)))
 
+;; Project-owned definterface + deftype: AOT solidifies stable cn.li.* symbols (safe).
+;; Do not use definterface/reify for net.minecraft.* — that solidifies Mojmap names → runtime remap failure.
 (definterface IMatrixJavaProxy
   (^String getPlacerName [])
   (^long getMatrixCapacity [])

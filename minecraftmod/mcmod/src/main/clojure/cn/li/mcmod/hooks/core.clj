@@ -160,39 +160,29 @@
                        :allowed-hook-keys allowed}))))
   hooks)
 
-;; Client context stored in Framework [:service :client-ctx] instead of ^:dynamic ThreadLocal.
-;; Replaces *client-session-id* and *player-state-owner* dynamic vars.
+;; ============================================================================
+;; Client session / player-state-owner — per-thread via ThreadLocal.
+;; NOT ^:dynamic (铁律十一) and NOT in Framework (governance exception:
+;; "客户端 session 状态 — 闭包工厂管理，不入 Framework").
+;; ThreadLocal provides per-thread isolation without the ^:dynamic prohibition.
+;; ============================================================================
 
-(def ^:private client-ctx-path [:service :client-ctx])
+(def ^:private ^ThreadLocal client-ctx-thread-local (ThreadLocal.))
 
-(defn- get-client-ctx
-  "Read current client context from Framework. Returns nil if not set."
-  []
-  (get-in @(fw/fw-atom) client-ctx-path))
-
-(defn- set-client-ctx!
-  "Write client context to Framework."
-  [ctx]
-  (when-let [fw-atom (fw/fw-atom)]
-    (swap! fw-atom assoc-in client-ctx-path ctx))
-  nil)
+(defn- get-client-ctx [] (.get ^ThreadLocal client-ctx-thread-local))
+(defn- set-client-ctx! [ctx] (.set ^ThreadLocal client-ctx-thread-local ctx))
 
 (defn *client-session-id*
-  "Read client session id from Framework client context."
-  []
-  (:session-id (get-client-ctx)))
+  "Read client session id from ThreadLocal."
+  [] (:session-id (get-client-ctx)))
 
 (defn *player-state-owner*
-  "Read player state owner from Framework client context."
-  []
-  (or (:player-owner (get-client-ctx))
-      ;; Fallback: try context-owner (AC ability system)
-      (:context-owner (get-client-ctx))))
+  "Read player state owner from ThreadLocal."
+  [] (or (:player-owner (get-client-ctx)) (:context-owner (get-client-ctx))))
 
 (defn current-player-state-owner
   "Return the currently bound runtime player-state owner map (or nil)."
-  []
-  *player-state-owner*)
+  [] (*player-state-owner*))
 
 (defn player-state-session-id
   "Resolve store session-id from a canonical owner map (server > client)."
@@ -249,17 +239,47 @@
                         {:context context
                          :player-state-owner (current-player-state-owner)})))))
 
-(defn with-player-state-owner-fn
-  "使用高阶函数代替宏，执行带有一致词法作用域的绑定。
-   100% 免疫编译期符号逃逸 Bug。"
-  [owner thunk]
-  (binding [*player-state-owner* owner]
-    (thunk)))
+(defn with-client-ctx-fn
+  "ThreadLocal-based context HOF. Sets ctx-map in current thread's ThreadLocal
+  for duration of thunk, restores on exit. LazySeq-safe: auto-doall on return value.
 
-;; 为了保持原有代码的兼容性，你可以保留宏名，但让它直接调用这个函数（推荐）：
+  === 调用规范（强制）===
+  1. 唯一入口：设置/恢复必须通过本函数或 with-player-state-owner-fn，禁止直接操作 ThreadLocal
+  2. 网络重建：Packet Handler 必须在分派前重建上下文（见 forge/fabric gui/network）
+  3. 异步边界：传给 enqueueWork / future / CompletableFuture 的闭包必须在内部重新建立上下文
+  4. 读取规范：*client-session-id* 和 *player-state-owner* 是函数，必须加括号调用
+
+  ⚠️ 铁律六：上下文不跨越异步边界。Minecraft 的 enqueueWork / future 启动新调用链时，
+  必须在新线程上重新调用 with-client-ctx-fn 建立上下文。
+
+  ⚠️ 铁律四：返回值如果是 LazySeq，会在 finally 恢复上下文后才求值 → 读到 nil。
+  本函数自动对顶层 LazySeq 执行 doall 截断。"
+  [ctx-map thunk]
+  (let [old (.get ^ThreadLocal client-ctx-thread-local)]
+    (.set ^ThreadLocal client-ctx-thread-local (merge (or old {}) ctx-map))
+    (try
+      (let [result (thunk)]
+        (if (instance? clojure.lang.LazySeq result) (doall result) result))
+      (finally
+        (if (nil? old)
+          (.remove ^ThreadLocal client-ctx-thread-local)
+          (.set ^ThreadLocal client-ctx-thread-local old))))))
+
+(defn with-player-state-owner-fn
+  "使用 with-client-ctx-fn 设置 player-owner，保持原有调用签名兼容。"
+  [owner thunk]
+  (with-client-ctx-fn {:player-owner owner} thunk))
+
+;; 保留宏以兼容现有 (with-player-state-owner owner body...) 调用方
 (defmacro with-player-state-owner
   [owner & body]
   `(with-player-state-owner-fn ~owner (fn [] ~@body)))
+
+(defmacro with-client-ctx
+  "Macro wrapper: set client context keys in Framework for duration of body.
+  Usage: (with-client-ctx {:session-id sid :player-owner owner} ...body...)"
+  [ctx-map & body]
+  `(with-client-ctx-fn ~ctx-map (fn [] ~@body)))
 
 
 (defn register-power-runtime-hooks!
@@ -606,14 +626,15 @@
   ((:client-show-combat-notice! (hooks-core-state-snapshot)) notice-id payload))
 
 (defn client-enqueue-level-effect!
-  [effect-id payload]
-  ((:client-enqueue-level-effect! (hooks-core-state-snapshot)) effect-id payload))
+  [effect-id ctx-id channel payload & opts]
+  (apply (:client-enqueue-level-effect! (hooks-core-state-snapshot)) effect-id ctx-id channel payload opts))
 
 (defn client-build-level-effect-plan
   ([camera-pos hand-center-pos tick]
    ((:client-build-level-effect-plan (hooks-core-state-snapshot)) camera-pos hand-center-pos tick))
-  ([camera-pos hand-center-pos tick frame-context]
-   ((:client-build-level-effect-plan (hooks-core-state-snapshot)) camera-pos hand-center-pos tick frame-context)))
+  ([camera-pos hand-center-pos tick query-nearby-blocks-fn]
+   ((:client-build-level-effect-plan (hooks-core-state-snapshot))
+    camera-pos hand-center-pos tick query-nearby-blocks-fn)))
 
 (defn client-tick-level-effects!
   []
@@ -687,3 +708,27 @@
 
 (defn toggle-debug-overlay-state! []
   ((:toggle-debug-overlay-state! (hooks-core-state-snapshot))))
+
+;; ============================================================================
+;; Default Client Owner Hook
+;; Platform layer (mc-1.20.1) registers a function that returns a complete client
+;; owner map. This allows platform-agnostic modules (ac) to resolve a client owner
+;; without importing Minecraft classes directly.
+;; ============================================================================
+
+(def ^:private default-client-owner-fn (atom nil))
+
+(defn set-default-client-owner-fn!
+  "Register a zero-arg function that returns a canonical client owner map
+  {:logical-side :client :client-session-id ... :player-uuid ...}.
+  Called by the platform layer during client initialization."
+  [f]
+  (reset! default-client-owner-fn f)
+  nil)
+
+(defn default-client-owner
+  "Return the current client owner map via the platform-registered hook.
+  Returns nil if the platform layer hasn't registered a hook yet."
+  []
+  (when-let [f @default-client-owner-fn]
+    (f)))

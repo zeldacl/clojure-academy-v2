@@ -1,20 +1,8 @@
-(ns cn.li.forge1201.client.key-input
-  "DEPRECATED: Minimal shim for legacy code that imports key_input.
-   
-   Previous implementation contained AC business logic mixed with platform code.
-   This has been refactored:
-   - AC keybinding config → ac/input_ids.clj
-   - Platform event handling → keyboard_event_handler.clj + key_mapping_adapter.clj
-   - GLFW polling → mc1201/glfw_polling_core.clj
-   - Vanilla suppression → mc1201/vanilla_input_control_core.clj
-   
-   Kept only for backward compatibility with existing tests."
+(ns cn.li.forge1201.client.key-input-fixtures
+  "Test-only key input runtime fixtures (migrated from deprecated production key-input)."
   (:require [cn.li.mcmod.util.log :as log]))
 
-;; ===== Minimal Legacy Support (for existing tests only) =====
-
 (defn create-key-input-runtime
-  "Legacy test support - creates a runtime container for tests"
   ([] (create-key-input-runtime {}))
   ([initial-state]
    {:state (atom (merge {:slot-keys []
@@ -40,13 +28,13 @@
   (binding [*key-input-runtime* runtime]
     (f)))
 
-(defn key-input-runtime-state-atom []
+(defn- key-input-runtime-state-atom []
   (:state (current-key-input-runtime)))
 
 (defn key-input-runtime-state-snapshot []
   @(key-input-runtime-state-atom))
 
-(defn update-key-input-runtime! [f & args]
+(defn- update-key-input-runtime! [f & args]
   (apply swap! (key-input-runtime-state-atom) f args))
 
 (defn set-key-scheme! [scheme]
@@ -83,28 +71,23 @@
                                :screen-keys screen-keys-map})
    nil))
 
-(defn clear-owner-input-state! [_owner]
-  ;; Legacy test function - does nothing now
-  nil)
+(defn- owner-key [owner]
+  [(:client-session-id owner) (:player-uuid owner)])
 
-(defn clear-client-input-session! [_session-id]
-  ;; Legacy test function - does nothing now
-  nil)
+(defn clear-owner-input-state! [owner]
+  (let [k (owner-key owner)]
+    (update-key-input-runtime!
+     (fn [state]
+       (-> state
+           (update :raw-v-state dissoc k)
+           (update :override-active? dissoc k))))
+    nil))
 
-(defn register-keybinds!
-  "Legacy stub - actual keybind registration now happens via AC + platform adapters"
-  []
-  (log/debug "register-keybinds! called (legacy stub)")
+(defn clear-client-input-session! [session-id]
+  (update-key-input-runtime!
+   (fn [state]
+     (let [match? (fn [[sid _uuid]] (= sid session-id))]
+       (-> state
+           (update :raw-v-state #(into {} (remove (comp match? key) %)))
+           (update :override-active? #(into {} (remove (comp match? key) %))))))
   nil)
-
-(defn tick-input!
-  "Legacy stub - input handling now happens via AC protocol + platform handlers"
-  []
-  (log/debug "tick-input! called (legacy stub)")
-  nil)
-
-(defn init! []
-  ;; DEPRECATED: All keyboard input handling has been refactored to AC + platform adapters.
-  ;; This function is kept for backward compatibility but does nothing.
-  ;; See: cn.li.forge1201.client.keyboard_event_handler for new implementation.
-  (log/info "Client key input initialized (legacy - no-op)"))

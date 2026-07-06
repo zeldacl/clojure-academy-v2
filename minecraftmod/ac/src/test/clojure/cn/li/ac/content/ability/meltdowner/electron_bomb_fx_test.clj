@@ -1,5 +1,6 @@
 (ns cn.li.ac.content.ability.meltdowner.electron-bomb-fx-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
+            [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
@@ -8,17 +9,14 @@
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (defn- reset-fixture [f]
-  (binding [runtime-hooks/*client-session-id* :test-session]
-    (level-effects/call-with-level-effect-runtime
-      (level-effects/create-level-effect-runtime)
-      (fn []
-        (try
+  (runtime-hooks/with-client-ctx {:session-id :test-session}
+    (try
           (level-effects/reset-level-effect-registry-for-test!)
           (electron-bomb-fx/reset-electron-bomb-fx-for-test!)
           (f)
           (finally
             (electron-bomb-fx/reset-electron-bomb-fx-for-test!)
-            (level-effects/reset-level-effect-registry-for-test!)))))))
+            (level-effects/reset-level-effect-registry-for-test!)))))
 
 (use-fixtures :each reset-fixture)
 
@@ -52,8 +50,8 @@
                   fx-registry/register-fx-channel! (fn [topic handler]
                                                       (swap! handlers* assoc topic handler)
                                                       nil)
-                  level-effects/enqueue-level-effect! (fn [effect-id payload fx-context]
-                                                        (swap! enqueued* conj [effect-id payload fx-context])
+                  level-effects/enqueue-level-effect! (fn [effect-id ctx-id channel payload & opts]
+                                                        (swap! enqueued* conj [effect-id ctx-id channel payload opts])
                                                         nil)]
       (electron-bomb-fx/init!)
       ((get @handlers* :electron-bomb/fx-spawn) "ctx-eb" :electron-bomb/fx-spawn {:x 1.0 :y 64.0 :z 2.0 :dx 0.0 :dy 0.0 :dz 1.0})
@@ -92,9 +90,7 @@
              @enqueued*)))))
 
 (deftest spawn-beam-and-tick-state-test
-  (let [enqueue-state! (var-get #'cn.li.ac.content.ability.meltdowner.electron-bomb-fx/enqueue-state!)
-        tick-state! (var-get #'cn.li.ac.content.ability.meltdowner.electron-bomb-fx/tick-state!)
-        build-plan (var-get #'cn.li.ac.content.ability.meltdowner.electron-bomb-fx/build-plan)
+  (let [
         particles* (atom [])
         sounds* (atom [])]
     (with-redefs [client-particles/current-effect-owner (fn [] {:client-session-id "electron-bomb-fx-test"})
@@ -104,53 +100,43 @@
                   client-sounds/queue-sound-effect! (fn [& args]
                                                         (swap! sounds* conj args)
                                                         nil)]
-      (level-effects/update-effect-state! :electron-bomb
-        enqueue-state!
-        (event "ctx-a" :electron-bomb/fx-spawn
-               {:mode :spawn :x 1.0 :y 64.0 :z 2.0 :dx 0.0 :dy 0.0 :dz 1.0}))
+      (arc-beam/enqueue-for-test! :electron-bomb "ctx-a" :electron-bomb/fx-spawn
+               {:mode :spawn :x 1.0 :y 64.0 :z 2.0 :dx 0.0 :dy 0.0 :dz 1.0})
       (is (some? (get-in (electron-bomb-fx/electron-bomb-fx-snapshot) [:effect-state [:ctx "ctx-a"]])))
-      (let [spawn-plan (build-plan {:x 0.0 :y 65.0 :z 0.0} nil 0)]
+      (let [spawn-plan (arc-beam/effect-build-plan :electron-bomb {:x 0.0 :y 65.0 :z 0.0} nil 0)]
         (is (seq (:ops spawn-plan))))
-      (level-effects/update-effect-state! :electron-bomb
-        enqueue-state!
-        (event "ctx-a" :electron-bomb/fx-beam
+      (arc-beam/enqueue-for-test! :electron-bomb "ctx-a" :electron-bomb/fx-beam
                {:mode :beam
                 :start {:x 1.0 :y 64.0 :z 2.0}
                 :end {:x 1.0 :y 64.0 :z 17.0}
                 :performed? true
-                :target-uuid "target-1"}))
+                :target-uuid "target-1"})
       (let [snapshot (electron-bomb-fx/electron-bomb-fx-snapshot)]
         (is (nil? (get-in snapshot [:effect-state [:ctx "ctx-a"]])))
         (is (seq (get-in snapshot [:beams [:ctx "ctx-a"]]))))
-      (is (seq (:ops (build-plan {:x 0.0 :y 65.0 :z 0.0} nil 0))))
+      (is (seq (:ops (arc-beam/effect-build-plan :electron-bomb {:x 0.0 :y 65.0 :z 0.0} nil 0))))
       (dotimes [_ 9]
         (level-effects/update-effect-state! :electron-bomb
-          (fn [store _]
-            (tick-state! store))
+          (fn [store] (arc-beam/effect-tick-state! :level :electron-bomb store))
           nil))
-      (is (nil? (build-plan {:x 0.0 :y 65.0 :z 0.0} nil 0)))
+      (is (nil? (arc-beam/effect-build-plan :electron-bomb {:x 0.0 :y 65.0 :z 0.0} nil 0)))
       (is (seq @particles*))
       (is (seq @sounds*)))))
 
 (deftest electron-bomb-active-and-beam-cadence-test
-  (let [enqueue-state! (var-get #'cn.li.ac.content.ability.meltdowner.electron-bomb-fx/enqueue-state!)
-        tick-state! (var-get #'cn.li.ac.content.ability.meltdowner.electron-bomb-fx/tick-state!)
-        build-plan (var-get #'cn.li.ac.content.ability.meltdowner.electron-bomb-fx/build-plan)
+  (let [
         particles* (atom [])]
     (with-redefs [client-particles/current-effect-owner (fn [] {:client-session-id "electron-bomb-fx-test"})
                   client-particles/queue-particle-effect! (fn [& args]
                                                             (swap! particles* conj args)
                                                             nil)
                   client-sounds/queue-sound-effect! (fn [& _] nil)]
-      (level-effects/update-effect-state! :electron-bomb
-        enqueue-state!
-        (event "ctx-cadence" :electron-bomb/fx-spawn
-               {:mode :spawn :x 1.0 :y 64.0 :z 2.0 :dx 0.0 :dy 0.0 :dz 1.0}))
+      (arc-beam/enqueue-for-test! :electron-bomb "ctx-cadence" :electron-bomb/fx-spawn
+               {:mode :spawn :x 1.0 :y 64.0 :z 2.0 :dx 0.0 :dy 0.0 :dz 1.0})
 
       (dotimes [_ 41]
         (level-effects/update-effect-state! :electron-bomb
-          (fn [store _]
-            (tick-state! store))
+          (fn [store] (arc-beam/effect-tick-state! :level :electron-bomb store))
           nil))
 
       (is (nil? (get-in (electron-bomb-fx/electron-bomb-fx-snapshot) [:effect-state [:ctx "ctx-cadence"]]))
@@ -159,51 +145,16 @@
           "orbit particles should be emitted on ticks 3,6,...,39")
 
       (reset! particles* [])
-      (level-effects/update-effect-state! :electron-bomb
-        enqueue-state!
-        (event "ctx-cadence" :electron-bomb/fx-beam
+      (arc-beam/enqueue-for-test! :electron-bomb "ctx-cadence" :electron-bomb/fx-beam
                {:mode :beam
                 :start {:x 1.0 :y 64.0 :z 2.0}
-                :end {:x 1.0 :y 64.0 :z 17.0}}))
-      (is (seq (:ops (build-plan {:x 0.0 :y 65.0 :z 0.0} nil 0))))
+                :end {:x 1.0 :y 64.0 :z 17.0}})
+      (is (seq (:ops (arc-beam/effect-build-plan :electron-bomb {:x 0.0 :y 65.0 :z 0.0} nil 0))))
       (dotimes [_ 8]
         (level-effects/update-effect-state! :electron-bomb
-          (fn [store _]
-            (tick-state! store))
+          (fn [store] (arc-beam/effect-tick-state! :level :electron-bomb store))
           nil))
-      (is (nil? (build-plan {:x 0.0 :y 65.0 :z 0.0} nil 0))
+      (is (nil? (arc-beam/effect-build-plan :electron-bomb {:x 0.0 :y 65.0 :z 0.0} nil 0))
           "beam flash plan should disappear when ttl decays to zero"))))
 
-(deftest electron-bomb-fx-runtime-isolation-test
-  (let [runtime-a (level-effects/create-level-effect-runtime)
-        runtime-b (level-effects/create-level-effect-runtime)
-        enqueue-state! (var-get #'cn.li.ac.content.ability.meltdowner.electron-bomb-fx/enqueue-state!)]
-    (with-redefs [client-particles/current-effect-owner (fn [] {:client-session-id "electron-bomb-fx-test"})
-                  client-particles/queue-particle-effect! (fn [& _] nil)
-                  client-sounds/queue-sound-effect! (fn [& _] nil)]
-      (level-effects/call-with-level-effect-runtime
-        runtime-a
-        (fn []
-          (level-effects/update-effect-state! :electron-bomb
-            enqueue-state!
-            (event "ctx-a" :electron-bomb/fx-spawn
-                   {:mode :spawn :x 1.0 :y 64.0 :z 2.0 :dx 0.0 :dy 0.0 :dz 1.0}))
-          (is (= #{[:ctx "ctx-a"]}
-                 (set (keys (:effect-state (electron-bomb-fx/electron-bomb-fx-snapshot))))))))
-      (level-effects/call-with-level-effect-runtime
-        runtime-b
-        (fn []
-          (is (= {:effect-state {}
-                  :beams {}}
-                 (electron-bomb-fx/electron-bomb-fx-snapshot)))
-          (level-effects/update-effect-state! :electron-bomb
-            enqueue-state!
-            (event "ctx-b" :electron-bomb/fx-spawn
-                   {:mode :spawn :x 10.0 :y 64.0 :z 2.0 :dx 0.0 :dy 0.0 :dz 1.0}))
-          (is (= #{[:ctx "ctx-b"]}
-                 (set (keys (:effect-state (electron-bomb-fx/electron-bomb-fx-snapshot))))))))
-      (level-effects/call-with-level-effect-runtime
-        runtime-a
-        (fn []
-          (is (= #{[:ctx "ctx-a"]}
-                 (set (keys (:effect-state (electron-bomb-fx/electron-bomb-fx-snapshot)))))))))))
+

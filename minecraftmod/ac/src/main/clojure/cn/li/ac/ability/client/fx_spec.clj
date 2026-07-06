@@ -31,18 +31,14 @@
   [payload]
   (select-keys (or payload {}) meta-keys))
 
-(defn build-event
-  "Build a level/hand enqueue event map."
-  [ctx-id channel payload & {:keys [owner-key mode extra]}]
-  (let [payload* (or payload {})
-        owner-key* (or owner-key (default-owner-key ctx-id payload*))]
-    (merge {:owner-key owner-key*
-            :ctx-id ctx-id
-            :channel channel
-            :payload (merge (select-meta payload*)
-                            (when mode {:mode mode})
-                            (or extra {})
-                            payload*)})))
+(defn- merge-payload
+  [mode payload* custom level-extra hand-extra]
+  (merge (select-meta payload*)
+         (when mode {:mode mode})
+         custom
+         payload*
+         level-extra
+         hand-extra))
 
 (defn- normalize-targets [targets]
   (vec (or targets [:level])))
@@ -70,26 +66,24 @@
         (let [payload* (or payload {})
               mode* (or mode (:mode payload*))
               owner-key (default-owner-key ctx-id payload*)
-              owner-meta {:owner-key owner-key :ctx-id ctx-id :channel channel}
               custom (when (fn? payload) (payload ctx-id channel payload*))
-              base (merge (select-meta payload*)
-                          (when mode* {:mode mode*})
-                          owner-meta
-                          custom
-                          payload*)
               level-extra (when (fn? level-payload) (level-payload ctx-id channel payload*))
-              hand-extra (when (fn? hand-payload) (hand-payload ctx-id channel payload*))]
+              hand-extra (when (fn? hand-payload) (hand-payload ctx-id channel payload*))
+              merged (merge-payload mode* payload* custom level-extra hand-extra)
+              hand-merged (merge (select-meta payload*)
+                                 (when mode* {:mode mode*})
+                                 custom
+                                 payload*
+                                 hand-extra)]
           (doseq [target targets*]
             (case target
               :immediate (when immediate-fn (immediate-fn ctx-id channel payload*))
               :level (level-effects/enqueue-level-effect!
-                       effect-id
-                       (merge base level-extra)
-                       {:ctx-id ctx-id :channel channel :owner-key owner-key})
+                       effect-id ctx-id channel merged :owner-key owner-key)
               :hand (hand-effects/enqueue-hand-effect!
-                      effect-id
-                      (merge (dissoc base :affected-blocks :broken-blocks)
-                             hand-extra))
+                      effect-id ctx-id channel
+                      (dissoc hand-merged :affected-blocks :broken-blocks)
+                      :owner-key owner-key)
               nil)))))))
 
 (defn register!

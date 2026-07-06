@@ -3,13 +3,34 @@
   (:require [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
             [cn.li.ac.test.support.owner :as owner-support]
+            [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
+
+(def ^:private context-owner-path [:service :client-ctx :context-owner])
+
+(defn- with-framework-context-owner
+  [owner f]
+  (if-let [fw-atom (fw/fw-atom)]
+    (let [prev (get-in @fw-atom context-owner-path)]
+      (try
+        (swap! fw-atom assoc-in context-owner-path owner)
+        (f)
+        (finally
+          (if (some? prev)
+            (swap! fw-atom assoc-in context-owner-path prev)
+            (swap! fw-atom update-in [:service :client-ctx] dissoc :context-owner)))))
+    (f)))
 
 (defn default-server-owner
   ([]
    (owner-support/default-server-owner))
   ([player-uuid]
    (owner-support/default-server-owner player-uuid)))
+
+(defn with-context-owner
+  "Set framework context owner for the duration of `f` (test helper)."
+  [owner f]
+  (with-framework-context-owner owner f))
 
 (defn with-server-skill-context
   "Bind dispatcher + player-state owners for server-side skill tests."
@@ -19,9 +40,8 @@
    (let [owner (default-server-owner player-uuid)
          hooks-owner {:server-session-id owner-support/default-server-session-id
                       :player-uuid (str player-uuid)}]
-     (binding [ctx/*context-owner* owner
-               runtime-hooks/*player-state-owner* hooks-owner]
-       (f)))))
+     (with-framework-context-owner owner
+       #(runtime-hooks/with-player-state-owner-fn hooks-owner f)))))
 
 (defn atom-store
   "Create an atom-backed context store keyed by ctx-id."

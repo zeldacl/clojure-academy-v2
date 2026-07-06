@@ -8,10 +8,8 @@
             [cn.li.ac.wireless.api :as wireless-api]
             [cn.li.ac.wireless.config :as node-config]
             [cn.li.ac.wireless.core.vblock :as vb]
-            [cn.li.ac.wireless.data.network-lookup :as network-lookup]
             [cn.li.ac.wireless.data.network-state :as network-state]
             [cn.li.ac.wireless.data.node-conn :as node-conn]
-            [cn.li.ac.wireless.data.world-registry :as world-registry]
             [cn.li.mcmod.block.state-schema :as state-schema]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.mcmod.platform.be :as platform-be]
@@ -35,13 +33,11 @@
 (def block-state-properties
   (state-schema/extract-block-state-properties node-schema/blockstate-property-fields))
 
-(def update-block-state!
-  (state-schema/build-block-state-updater node-schema/blockstate-property-fields))
-
-(defn node-types
-  "Single source of truth for per-tier capability values."
-  []
-  (node-config/node-types))
+;; ── energy->blockstate-level and its dependencies MUST be defined ──
+;; BEFORE update-block-state! below.  build-block-state-updater calls
+;; ns-resolve on the :xf symbol at closure-creation time; if the var
+;; doesn't exist yet, ns-resolve returns nil and the raw double energy
+;; value is passed to IntegerProperty, which rejects it.
 
 (defn node-tier
   [state]
@@ -53,10 +49,20 @@
   (node-config/max-energy (node-tier state)))
 
 (defn energy->blockstate-level
-  "Transform energy value to BlockState level (0-4) for visual display."
+  "Transform energy value to BlockState level (0-4) for visual display.
+   Must return int (not Long) — IntegerProperty.setValue requires Integer.
+   Clojure's min promotes to Long, so wrap with (int …)."
   [e s]
   (let [max-e (double (node-max-energy s))]
-    (min 4 (int (Math/round (* 4.0 (/ (double e) (max 1.0 max-e))))))))
+    (int (min 4 (Math/round (* 4.0 (/ (double e) (max 1.0 max-e))))))))
+
+(def update-block-state!
+  (state-schema/build-block-state-updater node-schema/blockstate-property-fields))
+
+(defn node-types
+  "Single source of truth for per-tier capability values."
+  []
+  (node-config/node-types))
 
 (defn parse-node-type
   [block-id-or-kw]
@@ -194,37 +200,30 @@
           _ (wireless-api/register-node-spatial! level vblock)
           network (wireless-api/get-wireless-net-by-node node-tile)
           connected? (network-state/active? network)
-          world-data (or (:world-data network)
-                         (world-registry/get-world-data level))
-          ;; NodeConn stores node as :node-conn type (via create-vnode-conn).
-          ;; Must use matching VBlock for the node-lookup key.
-          node-conn-vb (vb/create-vnode-conn node-tile)
-          conn-load (if-let [conn (network-lookup/get-node-connection world-data node-conn-vb)]
+          conn-load (if-let [conn (wireless-api/get-node-conn-by-node node-tile)]
                       (node-conn/get-load conn)
                       0)
-          max-cap (if network (network-state/get-capacity network) 0)]
+          max-cap (if network (network-state/get-capacity network level) 0)]
       (assoc state :enabled connected? :capacity conn-load :max-capacity max-cap))
-    (catch Exception _
+    (catch Exception e
+      (log/stacktrace (str "[wireless-node] tick-check-network failed at " block-pos) e)
       (assoc state :enabled false :capacity 0 :max-capacity 0))))
 
 (defn- sync-blockstate-if-changed!
-  "1.20-idiomatic BlockState update: cheap in-memory comparison first, then
-   only touch the world BlockState when the visual level actually differs.
-   Mirrors the vanilla pattern used by Furnace (lit), Respawn Anchor (charges), etc.
+  "Sync BlockState properties from BE state to world BlockState.
+   Compares against the CURRENT world BlockState (not old BE state)
+   to handle world reload where BlockState resets to defaults while
+   BE state persists from NBT.
 
-   Called via :after-commit! in make-tick-fn every tick the state changes,
-   and also usable as a safety net for direct state commits."
-  [_be level pos old-state new-state _ctx]
+   Called via :after-commit! in make-tick-fn every tick the state changes."
+  [_be level pos _old-state new-state]
   (when (and level pos)
-    (let [old-level (energy->blockstate-level (:energy old-state 0) new-state)
-          new-level (energy->blockstate-level (:energy new-state 0) new-state)
-          old-enabled (:enabled old-state false)
-          new-enabled (:enabled new-state false)]
-      (when (or (not= new-level old-level) (not= new-enabled old-enabled))
-        (update-block-state! new-state level pos)))))
+    ;; Always call update-block-state! — it reads the current BlockState
+    ;; internally and only writes when the values actually differ.
+    (update-block-state! new-state level pos)))
 
 (defn node-tick-state
-  [state {:keys [level pos be]}]
+  [state level pos _block-state be]
   (let [ticker (inc (long (get state :update-ticker 0)))
         state1 (-> state
                    (assoc :update-ticker ticker)
@@ -244,7 +243,7 @@
    BlockState every tick when the visual level hasn't changed."
   (machine-runtime/make-tick-fn
     {:default-state node-default-state
-     :initial-state (fn [be _ctx]
+     :initial-state (fn [be _level _pos _block-state]
                       (node-safe-state be (platform-be/get-block-id be)))
      :tick-state node-tick-state
      :after-commit! sync-blockstate-if-changed!}))
@@ -259,7 +258,7 @@
 
 (defn handle-node-place
   [node-type]
-  (fn [{:keys [player world pos]}]
+  (fn [player world pos _block-id]
     (log/info "Placing Wireless Node (" (name node-type) ")")
     (let [player-name (player-name player)
           node-vb (vb/create-vnode (ppos/pos-x pos) (ppos/pos-y pos) (ppos/pos-z pos))
@@ -275,7 +274,7 @@
 
 (defn handle-node-break
   [_node-type]
-  (fn [{:keys [world pos]}]
+  (fn [world pos _block-id]
     (log/info "Breaking Wireless Node")
     (let [node-vb (vb/create-vnode (ppos/pos-x pos) (ppos/pos-y pos) (ppos/pos-z pos))
           be (platform-world/world-get-tile-entity* world pos)]

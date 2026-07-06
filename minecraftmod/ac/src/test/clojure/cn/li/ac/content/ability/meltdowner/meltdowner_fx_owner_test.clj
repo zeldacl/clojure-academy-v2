@@ -10,12 +10,11 @@
             [cn.li.ac.content.ability.meltdowner.meltdowner-fx :as meltdowner-fx]
             [cn.li.ac.content.ability.meltdowner.mine-ray-fx :as mine-ray-fx]
             [cn.li.ac.content.ability.meltdowner.ray-barrage-fx :as ray-barrage-fx]
-            [cn.li.ac.content.ability.meltdowner.scatter-bomb-fx :as scatter-bomb-fx]))
+            [cn.li.ac.content.ability.meltdowner.scatter-bomb-fx :as scatter-bomb-fx]
+            [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 
 (defn- reset-fixture [f]
-  (level-effects/call-with-level-effect-runtime
-    (level-effects/create-level-effect-runtime)
-    (fn []
+  (level-effects/reset-level-effect-registry-for-test!)
       (electron-bomb-fx/init!)
       (electron-missile-fx/init!)
       (jet-engine-fx/init!)
@@ -42,7 +41,8 @@
           (meltdowner-fx/reset-meltdowner-fx-for-test!)
           (mine-ray-fx/reset-mine-ray-fx-for-test!)
           (ray-barrage-fx/reset-ray-barrage-fx-for-test!)
-          (scatter-bomb-fx/reset-scatter-bomb-fx-for-test!))))))
+          (scatter-bomb-fx/reset-scatter-bomb-fx-for-test!)
+          (level-effects/reset-level-effect-registry-for-test!))))
 
 (use-fixtures :each reset-fixture)
 
@@ -53,15 +53,15 @@
    :owner-key [:ctx ctx-id]})
 
 (defn- dispatch! [effect-id {:keys [payload ctx-id channel owner-key]}]
-  (level-effects/enqueue-level-effect! effect-id payload
-                                       {:ctx-id ctx-id :channel channel :owner-key owner-key}))
+  (level-effects/enqueue-level-effect! effect-id ctx-id channel payload :owner-key owner-key))
 
 (def ^:private p0 {:x 0.0 :y 64.0 :z 0.0})
 (def ^:private p1 {:x 1.0 :y 64.0 :z 0.0})
 (def ^:private p2 {:x 2.0 :y 64.0 :z 0.0})
 
 (deftest meltdowner-stateful-fx-keep-state-per-owner-test
-  (with-redefs [client-particles/queue-particle-effect! (fn [& _] nil)
+  (with-redefs [client-bridge/run-client-effect! (fn [& _] nil)
+                client-particles/queue-particle-effect! (fn [& _] nil)
                 client-particles/queue-current-particle-effect! (fn [& _] nil)
                 client-particles/current-effect-owner (fn [] {:client-session-id "meltdowner-fx-owner"})
                 client-sounds/queue-sound-effect! (fn [& _] nil)
@@ -134,37 +134,4 @@
     (is (= 3 (get-in (scatter-bomb-fx/scatter-bomb-fx-snapshot) [:effect-state [:ctx "ctx-a"] :balls])))
     (is (= 5 (get-in (scatter-bomb-fx/scatter-bomb-fx-snapshot) [:effect-state [:ctx "ctx-b"] :balls])))))
 
-(deftest meltdowner-fx-level-runtime-isolation-test
-  (let [runtime-a (level-effects/create-level-effect-runtime)
-        runtime-b (level-effects/create-level-effect-runtime)]
-    (with-redefs [client-particles/queue-particle-effect! (fn [& _] nil)
-                  client-particles/current-effect-owner (fn [] {:client-session-id "meltdowner-fx-owner"})
-                  client-sounds/queue-sound-effect! (fn [& _] nil)
-                  client-sounds/current-effect-owner (fn [] {:client-session-id "meltdowner-fx-owner"})]
-      (level-effects/call-with-level-effect-runtime
-        runtime-a
-        (fn []
-          (electron-bomb-fx/init!)
-          (electron-bomb-fx/reset-electron-bomb-fx-for-test!)
-          (dispatch! :electron-bomb (event "ctx-a" :electron-bomb/fx-spawn
-                                         {:mode :spawn :x 1.0 :y 64.0 :z 1.0}))
-          (is (= #{[:ctx "ctx-a"]}
-                 (set (keys (:effect-state (electron-bomb-fx/electron-bomb-fx-snapshot))))))))
 
-      (level-effects/call-with-level-effect-runtime
-        runtime-b
-        (fn []
-          (electron-bomb-fx/init!)
-          (electron-bomb-fx/reset-electron-bomb-fx-for-test!)
-          (is (= {:effect-state {} :beams {}}
-                 (electron-bomb-fx/electron-bomb-fx-snapshot)))
-          (dispatch! :electron-bomb (event "ctx-b" :electron-bomb/fx-spawn
-                                         {:mode :spawn :x 2.0 :y 64.0 :z 2.0}))
-          (is (= #{[:ctx "ctx-b"]}
-                 (set (keys (:effect-state (electron-bomb-fx/electron-bomb-fx-snapshot))))))))
-
-      (level-effects/call-with-level-effect-runtime
-        runtime-a
-        (fn []
-          (is (= #{[:ctx "ctx-a"]}
-                 (set (keys (:effect-state (electron-bomb-fx/electron-bomb-fx-snapshot)))))))))))

@@ -1,46 +1,53 @@
 (ns cn.li.ac.terminal.player-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
-            [cn.li.ac.ability.service.runtime-store :as store]
+            [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.ac.terminal.model :as model]
             [cn.li.ac.terminal.player :as player]
-            [cn.li.ac.test.support.player-state :as ps-fix]
+            [cn.li.ac.test.support.nbt :as test-nbt]
+            [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.platform.player-persistent-data :as player-pd]
             [cn.li.mcmod.util.log :as log]))
 
-(defn- each-fixture [f]
-  (ps-fix/with-test-player-state-owner
-    (fn []
-      (store/reset-store!)
-      (try
+(defn- mock-player []
+  (let [tag (test-nbt/atom-compound)]
+    {:persistent-data tag}))
+
+(defn- with-framework [f]
+  (let [prev-fw fw/*framework*]
+    (try
+      (when-let [fw-inst (fw/create-framework)]
+        (alter-var-root #'fw/*framework* (constantly fw-inst))
+        (f))
+      (finally
+        (alter-var-root #'fw/*framework* (constantly prev-fw))))))
+
+(use-fixtures :each
+  (fn [f]
+    (with-framework
+      (fn []
+        (test-nbt/install-test-nbt-ops!)
         (with-redefs [log/info (fn [& _])
-                      log/warn (fn [& _])]
-          (f))
-        (finally
-          (store/reset-store!))))))
+                      log/warn (fn [& _])
+                      uuid/player-uuid (fn [_] #uuid "00000000-0000-0000-0000-000000000001")
+                      player-pd/get-persistent-data! (fn [p] (:persistent-data p))]
+          (f))))))
 
-(use-fixtures :each each-fixture)
+(deftest terminal-nbt-persistence-test
+  (let [player (mock-player)]
+    (is (false? (player/terminal-installed? player)))
+    (player/install-terminal! player)
+    (is (true? (player/terminal-installed? player)))
+    (player/install-app! player :media-player)
+    (is (true? (player/app-installed? player :media-player)))
+    (is (= #{:media-player} (player/installed-apps player)))
+    (player/install-apps! player #{:map :notes})
+    (is (= #{:media-player :map :notes} (player/installed-apps player)))
+    (player/uninstall-app! player :map)
+    (is (= #{:media-player :notes} (player/installed-apps player)))
+    (player/uninstall-terminal! player)
+    (is (false? (player/terminal-installed? player)))
+    (is (= #{} (player/installed-apps player)))))
 
-(deftest session-scoped-terminal-ops-test
-  (let [sid ps-fix/test-session-id]
-    (store/set-player-state!* sid "p1" (store/fresh-player-state))
-    (is (false? (player/terminal-installed? sid "p1")))
-    (player/install-terminal! sid "p1")
-    (is (true? (player/terminal-installed? sid "p1")))
-    (player/install-app! sid "p1" :media-player)
-    (is (player/app-installed? sid "p1" :media-player))
-    (is (= #{:media-player} (player/installed-apps sid "p1")))
-    (player/install-apps! sid "p1" #{:map :notes})
-    (is (= #{:media-player :map :notes} (player/installed-apps sid "p1")))
-    (player/uninstall-app! sid "p1" :map)
-    (is (= #{:media-player :notes} (player/installed-apps sid "p1")))
-    (player/uninstall-terminal! sid "p1")
-    (is (false? (player/terminal-installed? sid "p1")))
-    (is (= #{} (player/installed-apps sid "p1")))))
-
-;; ensure-state! was removed from player.clj — this test is no longer applicable
-#_(deftest ensure-state-test
-  (let [sid ps-fix/test-session-id]
-    (store/set-player-state!* sid "p2" (-> (store/fresh-player-state)
-                                           (dissoc model/state-key)))
-    (player/ensure-state! sid "p2")
-    (is (= (model/fresh-state)
-           (player/state sid "p2")))))
+(deftest fresh-state-when-uninitialized-test
+  (let [player (mock-player)]
+    (is (= (model/fresh-state) (player/state player)))))

@@ -145,7 +145,7 @@
       state)))
 
 (defn main-tick-state
-  [state {:keys [level pos]}]
+  [state level pos _block-state _be]
   (let [ticker (inc (int (get state :update-ticker 0)))
         state1 (assoc state :update-ticker ticker)]
     (if (zero? (mod ticker (wind-config/structure-update-interval)))
@@ -161,7 +161,7 @@
       state1)))
 
 (defn base-tick-state
-  [state {:keys [level pos]}]
+  [state level pos _block-state _be]
   (let [ticker (inc (int (get state :update-ticker 0)))
         state1 (assoc state :update-ticker ticker)
         scan-info (when (zero? (mod ticker (wind-config/structure-update-interval)))
@@ -197,7 +197,7 @@
     (maybe-charge-output-item state3)))
 
 (defn pillar-tick-state
-  [state _ctx]
+  [state _level _pos _block-state _be]
   (update state :update-ticker (fnil inc 0)))
 
 (defn- controller-tick-fn
@@ -308,7 +308,7 @@
         false))))
 
 (defn on-wind-pillar-placed!
-  [{:keys [world pos] :as _ctx}]
+  [_player world pos _block-id]
   (when (and world pos (not (world/world-is-client-side* world)))
     (when-not (valid-pillar-support? world pos)
       (let [below-pos (pos/create-block-pos (pos/pos-x pos) (dec (pos/pos-y pos)) (pos/pos-z pos))
@@ -326,7 +326,7 @@
 (defn on-wind-main-placed!
   "Validate that wind-gen-main is placed on top of a wind-gen-pillar (not beside it).
    Returns {:cancel-place? true} if no pillar is found directly below the controller."
-  [{:keys [world pos] :as _ctx}]
+  [_player world pos _block-id]
   (when (and world pos (not (world/world-is-client-side* world)))
     (let [below-pos (pos/create-block-pos (pos/pos-x pos) (dec (pos/pos-y pos)) (pos/pos-z pos))
           below-be (world/world-get-tile-entity* world below-pos)
@@ -344,13 +344,13 @@
 (def open-wind-main-gui!
   (machine-runtime/make-open-gui-handler*
     :wind-gen-main
-    (fn [{:keys [item-stack]}]
+    (fn [_player _world _pos _sneaking item-stack]
       (not (pillar-item-stack? item-stack)))))
 
 (def open-wind-base-gui!
   (machine-runtime/make-open-gui-handler*
     :wind-gen-base
-    (fn [{:keys [item-stack]}]
+    (fn [_player _world _pos _sneaking item-stack]
       (not (pillar-item-stack? item-stack)))))
 
 (defn get-linked-node ^IWirelessNode [tile]
@@ -360,7 +360,7 @@
                        (catch Exception e
                          (log/debug "[wind-gen get-linked-node] exception:" (ex-message e))
                          nil))]
-      (if-let [node (try (node-conn/get-node conn)
+      (if-let [node (try (node-conn/get-node conn (platform-be/be-get-world-safe tile))
                        (catch Exception e
                          (log/debug "[wind-gen get-linked-node] get-node exception:" (ex-message e))
                          nil))]

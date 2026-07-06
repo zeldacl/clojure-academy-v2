@@ -1,5 +1,6 @@
 (ns cn.li.ac.content.ability.teleporter.flashing-test
   (:require [clojure.test :refer [deftest is]]
+            [cn.li.ac.ability.test.skill-callback-test-helpers :as cb]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
@@ -33,7 +34,7 @@
                     ctx-skill/update-skill-state-root! update-skill-state-root!
                     ctx-skill/assoc-skill-state! assoc-skill-state!
                     ctx-skill/clear-skill-state! clear-skill-state!
-                    helper/skill-exp (fn [_ _] 0.5)
+                    skill-effects/skill-exp (fn [_ _] 0.5)
                     skill-config/lerp-int (fn [_ field-id _]
                                             (case field-id
                                               :timing.max-active-ticks 90
@@ -41,7 +42,7 @@
                                               :timing.post-blink-fall-protect-ticks 40
                                               0))
                     skill-effects/player-path (fn [_ _ _] 42.0)]
-         (flashing/flashing-activate! {:ctx-id "ctx-1" :player-id "p1" :cost-ok? true})))
+         (cb/apply-invoke flashing/flashing-activate! :ctx-id "ctx-1" :player-id "p1" :cost-ok? true)))
     (is (true? (get-in @ctx* [:skill-state :active?])))
     (is (true? (get-in @ctx* [:skill-state :listeners-installed?])))
     (is (= 42.0 (get-in @ctx* [:skill-state :overload-floor])))
@@ -69,7 +70,7 @@
                     fx/send! (fn [_ctx-id entry _evt payload]
                                (swap! fx* conj [(:topic entry) payload])
                                nil)
-                    helper/skill-exp (fn [_ _] 0.5)
+                    skill-effects/skill-exp (fn [_ _] 0.5)
                     skill-config/lerp-double (fn [_ field-id _]
                                              (case field-id
                                                :movement.blink-distance 4.0
@@ -84,7 +85,7 @@
                                               :timing.post-blink-fall-protect-ticks 40
                                               :cooldown.deactivate-ticks 500
                                               0))
-                    helper/cfg-double (fn [_ _] 0.001)
+                    skill-config/tunable-double (fn [_ _] 0.001)
                     skill-effects/current-cp (fn [_] 100.0)
                     skill-effects/player-path (fn [_ _ _] 33.0)
                     skill-effects/enforce-overload-floor! (fn [& _] true)
@@ -105,7 +106,7 @@
                                                    (swap! exp* conj [player-id skill-id amount]))
                     ach-dispatcher/trigger-custom-event! (fn [player-id event-id]
                                                            (swap! ach* conj [player-id event-id]))]
-         (flashing/flashing-activate! {:ctx-id "ctx-1" :player-id "p1" :cost-ok? true})
+         (cb/apply-invoke flashing/flashing-activate! :ctx-id "ctx-1" :player-id "p1" :cost-ok? true)
          ((get @listeners* :flashing/move-down) {:key :forward})
          ((get @listeners* :flashing/move-up) {:key :forward})))
     (is (= [["p1" "minecraft:overworld" 10.0 64.0 14.0]] @teleports*))
@@ -129,7 +130,7 @@
                     ctx-skill/update-skill-state-root! update-skill-state-root!
                     ctx-skill/assoc-skill-state! assoc-skill-state!
                     ctx-skill/clear-skill-state! clear-skill-state!
-                    helper/skill-exp (fn [_ _] 0.5)
+                    skill-effects/skill-exp (fn [_ _] 0.5)
                     skill-config/lerp-int (fn [_ field-id _]
                                             (case field-id
                                               :timing.max-active-ticks 80
@@ -138,7 +139,7 @@
                                               0))
                     skill-effects/player-path (fn [_ _ _] 10.0)
                     skill-effects/enforce-overload-floor! (fn [& _] true)]
-         (flashing/flashing-activate! {:ctx-id "ctx-1" :player-id "p1" :cost-ok? true})
+         (cb/apply-invoke flashing/flashing-activate! :ctx-id "ctx-1" :player-id "p1" :cost-ok? true)
          (swap! ctx* assoc-in [:skill-state :expires-at-ms] 1)
          ((get @listeners* :flashing/move-down) {:key :forward})))
     (is (= ["ctx-1"] @terminated*))))
@@ -158,7 +159,7 @@
                     fx/send! (fn [_ctx-id entry _evt payload]
                                (swap! fx* conj [(:topic entry) payload])
                                nil)
-                    helper/skill-exp (fn [_ _] 0.5)
+                    skill-effects/skill-exp (fn [_ _] 0.5)
                     skill-config/lerp-double (fn [_ field-id _]
                                              (case field-id
                                                :movement.blink-distance 12.0
@@ -187,7 +188,7 @@
                                                :z 10.0
                                                :face :north})
                     helper/raycast-blocks (fn [& _] {:x 10 :y 66 :z 9})]
-         (flashing/flashing-activate! {:ctx-id "ctx-1" :player-id "p1" :cost-ok? true})
+         (cb/apply-invoke flashing/flashing-activate! :ctx-id "ctx-1" :player-id "p1" :cost-ok? true)
          ((get @listeners* :flashing/move-down) {:key :forward})))
     (let [[topic payload] (last @fx*)]
       (is (= 10.0 (:to-x payload)))

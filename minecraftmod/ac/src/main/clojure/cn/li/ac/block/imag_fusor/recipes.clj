@@ -85,7 +85,7 @@
 
 (defn- assert-no-conflicting-duplicates!
   [recipe-list]
-  (doseq [[recipe-id entries] (group-by :id recipe-list)
+  (doseq [[recipe-id entries] (group-by #(get % :id) recipe-list)
           :when (> (count entries) 1)]
     (when (> (count (distinct entries)) 1)
       (throw (ex-info "Conflicting Imaginary Fusor recipe id"

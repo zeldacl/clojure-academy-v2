@@ -10,28 +10,28 @@
 
 (defn network-impl-validator
 	"Remove disposed/invalid networks from world-data."
-	[world-data]
+	[world-data world]
 	(doseq [item (world-registry/networks world-data)]
 		(when (or (network-state/is-disposed? item)
-							(and (vb/is-chunk-loaded? (:matrix item) (:world world-data))
-									 (nil? (resolver/resolve-matrix-cap (:world world-data) (:matrix item)))))
+							(and (vb/is-chunk-loaded? (:matrix item) world)
+									 (nil? (resolver/resolve-matrix-cap world (:matrix item)))))
 			(commands/destroy-network! world-data item))))
 
 (defn node-connection-impl-validator
 	"Remove disposed/invalid node connections from world-data."
-	[world-data]
+	[world-data world]
 		(doseq [item (world-registry/connections world-data)]
 			(when (node-conn/is-disposed? item)
 				(commands/destroy-node-connection! world-data item))))
 (defn tick-world-data!
 	"Tick all world wireless items."
-	[world-data]
+	[world-data world]
 	(doseq [item (world-registry/networks world-data)]
 		(when (network-state/active? item)
-			(network-runtime/tick-wireless-net! item)))
+			(network-runtime/tick-wireless-net! item world)))
 	(doseq [item (world-registry/connections world-data)]
 		(when-not (node-conn/is-disposed? item)
-			(node-conn/tick-node-conn! item))))
+			(node-conn/tick-node-conn! item world))))
 
 (defn get-statistics
 	"Get statistics about this world's wireless system."

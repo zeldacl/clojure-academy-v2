@@ -6,11 +6,16 @@
 
   All Minecraft interop goes through cn.li.mcmod.client.platform-bridge ops."
   (:require [cn.li.ac.config.modid :as modid]
+            [cn.li.ac.terminal.client.actions :as terminal-actions]
+            [cn.li.ac.terminal.messages :as terminal-messages]
+            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.gui.cgui-core :as cgui-core]
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.mcmod.gui.events :as events]
-            [cn.li.mcmod.gui.xml-parser :as cgui-doc]))
+            [cn.li.mcmod.gui.xml-parser :as cgui-doc]
+            [cn.li.mcmod.network.client :as net-client]
+            [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
 ;; Original AcademyCraft parameters (TerminalInstallEffect.java:31-33)
@@ -109,7 +114,8 @@
                 (client-bridge/send-system-message! p "terminal.my_mod.key_hint" "Left Alt"))
               ;; Close effect screen → open terminal (matching original onKeyUp)
               (client-bridge/close-screen!)
-              (client-bridge/open-screen! :ac/terminal {:player player})))))
+              ;; Open terminal via shared entry point (matching original onKeyUp)
+              (terminal-actions/open-terminal! player)))))
       main)
     (catch Exception e
       (cgui-core/create-widget :size [640 785]))))
@@ -123,4 +129,21 @@
    Called from push handler when server sends :terminal-install-effect message."
   [player]
   (let [widget (create-install-effect-widget player)]
-    (client-bridge/open-screen! {:cgui-root widget :title "Installing..."})))
+    (client-bridge/open-screen! {:cgui-root widget :title "Installing..." :log-label "terminal-install-effect"})))
+
+;; ============================================================================
+;; Init — push handler registration (moved from shell.clj to break circular dep)
+;; ============================================================================
+
+(defonce-guard install-effect-push-handler-installed?)
+
+(defn install-push-handler! []
+  (with-init-guard install-effect-push-handler-installed?
+    (net-client/register-push-handler!
+      (terminal-messages/msg-id :terminal-install-effect)
+      (fn [_payload]
+        (when-let [player (client-bridge/get-client-player)]
+          (show! player))))
+    (log/info "AC terminal install-effect push handler installed"))
+  nil)
+>>>>>>> dd74201aa66dda1c2c8861eed3a184ff9778c597

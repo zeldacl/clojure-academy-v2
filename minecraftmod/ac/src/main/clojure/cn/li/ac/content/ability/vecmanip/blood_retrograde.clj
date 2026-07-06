@@ -10,9 +10,9 @@
   - Successful hit plays blood splash / blood spray visuals and sound
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.dsl :refer [defskill]]
+  (:require [cn.li.ac.ability.util.scaling :as scaling]
+            [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
             [cn.li.ac.ability.fx :as fx]
-            [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
                         [cn.li.ac.ability.effects.geom :as geom]
@@ -22,28 +22,8 @@
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.util.log :as log]))
 
+(def-skill-config-ops :blood-retrograde)
 (def ^:private blood-retrograde-skill-id :blood-retrograde)
-
-(defn- exp01 [exp]
-  (max 0.0 (min 1.0 (double (or exp 0.0)))))
-
-(defn- cfg-double [field-id]
-  (skill-config/tunable-double blood-retrograde-skill-id field-id))
-
-(defn- cfg-int [field-id]
-  (skill-config/tunable-int blood-retrograde-skill-id field-id))
-
-(defn- cfg-double-list [field-id]
-  (skill-config/tunable-double-list blood-retrograde-skill-id field-id))
-
-(defn- cfg-lerp [field-id exp]
-  (skill-config/lerp-double blood-retrograde-skill-id field-id (exp01 exp)))
-
-(defn- cfg-lerp-int [field-id exp]
-  (skill-config/lerp-int blood-retrograde-skill-id field-id (exp01 exp)))
-
-(defn- skill-exp [player-id]
-  (skill-effects/skill-exp player-id blood-retrograde-skill-id))
 
 (def ^:private world-up {:x 0.0 :y 1.0 :z 0.0})
 
@@ -89,17 +69,9 @@
   [ctx-id f & args]
   (apply ctx-skill/update-skill-state-root! ctx-id f args))
 
-(defn- set-skill-state-root!
-  [ctx-id state-map]
-  (ctx-skill/update-skill-state-root! ctx-id identity state-map))
-
-(defn- clear-skill-state!
-  [ctx-id]
-  (ctx-skill/clear-skill-state! ctx-id))
-
 (defn- release-hit
   [player-id ctx-id stage]
-  (let [ticks (long (or (get-in (ctx/get-context ctx-id) [:skill-state :ticks]) 0))
+  (let [ticks (long (or (get-in (ctx-skill/get-context ctx-id) [:skill-state :ticks]) 0))
         should-release? (case stage
                           :tick (>= (inc ticks) (cfg-int :charge.max-ticks))
                           :up true
@@ -112,19 +84,19 @@
   (boolean (release-hit player-id ctx-id stage)))
 
 (defn blood-retrograde-cost-release-tick
-  [_]
+  [_player-id _skill-id _exp]
   0.0)
 
 (defn blood-retrograde-cost-release-cp
-  [{:keys [player-id ctx-id]}]
-  (if (release-hit? player-id ctx-id :up)
-    (cp-cost (skill-exp player-id))
+  [player-id _skill-id exp]
+  (if (release-hit? player-id nil :up)
+    (cp-cost (double (or exp 0.0)))
     0.0))
 
 (defn blood-retrograde-cost-release-overload
-  [{:keys [player-id ctx-id]}]
-  (if (release-hit? player-id ctx-id :up)
-    (overload-cost (skill-exp player-id))
+  [player-id _skill-id exp]
+  (if (release-hit? player-id nil :up)
+    (overload-cost (double (or exp 0.0)))
     0.0))
 
 (defn- spray-hit-payloads [player-id world-id target-info]
@@ -224,8 +196,8 @@
 
 (defn blood-retrograde-on-key-down
   "Initialize charge state and local charge slowdown."
-  [{:keys [ctx-id]}]
-  (set-skill-state-root! ctx-id
+  [ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
+  (ctx-skill/replace-skill-state! ctx-id
                          {:ticks 0
                           :executed? false
                           :ended? false})
@@ -235,8 +207,8 @@
 
 (defn blood-retrograde-on-key-tick
   "Update charge progress and auto-release at max charge."
-  [{:keys [player-id ctx-id cost-ok?]}]
-  (when-let [ctx-data (ctx/get-context ctx-id)]
+  [ctx-id player-id _skill-id _exp cost-ok? _hold-ticks _cost-stage _player-ref]
+  (when-let [ctx-data (ctx-skill/get-context ctx-id)]
     (let [skill-state (:skill-state ctx-data)
           executed? (boolean (:executed? skill-state false))]
       (when-not executed?
@@ -244,7 +216,7 @@
           (update-skill-state-root! ctx-id #(assoc % :ticks ticks))
           (fx/send! ctx-id {:topic :blood-retrograde/fx-update :mode :update} nil
                     {:ticks (long ticks)
-                     :charge-ratio (exp01 (/ (double ticks) (cfg-double :charge.fx-ratio-ticks)))})
+                     :charge-ratio (scaling/clamp-exp (/ (double ticks) (cfg-double :charge.fx-ratio-ticks)))})
           (when (>= ticks (cfg-int :charge.max-ticks))
             (let [hit (when (raycast/available?)
                         (raycast/raycast-from-player* player-id (cfg-double :targeting.distance) true))
@@ -254,8 +226,8 @@
 
 (defn blood-retrograde-on-key-up
   "Execute the skill on release if a valid target is found."
-  [{:keys [player-id ctx-id cost-ok?]}]
-  (when-let [ctx-data (ctx/get-context ctx-id)]
+  [ctx-id player-id _skill-id _exp cost-ok? _hold-ticks _cost-stage _player-ref]
+  (when-let [ctx-data (ctx-skill/get-context ctx-id)]
     (let [skill-state (:skill-state ctx-data)
           executed? (boolean (:executed? skill-state false))]
       (when-not executed?
@@ -267,11 +239,11 @@
 
 (defn blood-retrograde-on-key-abort
   "Clean up charge state on abort."
-  [{:keys [ctx-id]}]
-  (when-let [ctx-data (ctx/get-context ctx-id)]
+  [ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
+  (when-let [ctx-data (ctx-skill/get-context ctx-id)]
     (when-not (get-in ctx-data [:skill-state :ended?])
       (fx/send! ctx-id {:topic :blood-retrograde/fx-end :mode :end} nil {:performed? false})))
-  (clear-skill-state! ctx-id)
+  (ctx-skill/clear-skill-state! ctx-id)
   (log/debug "BloodRetrograde aborted"))
 
 (defskill blood-retrograde
@@ -286,8 +258,8 @@
   :ctrl-id :blood-retrograde
   :cp-consume-speed 0.0
   :overload-consume-speed 0.0
-  :cooldown-ticks (fn [{:keys [exp]}]
-                    (cfg-lerp-int :cooldown.ticks (double (or exp 0.0))))  ;; matching original lerp(90, 40, exp)
+  :cooldown-ticks (fn [_player-id _skill-id exp]
+                    (cfg-lerp-int :cooldown.ticks (double (or exp 0.0))))
   :pattern :release-cast
   :cooldown {:mode :manual}
   :cost {:tick {:cp blood-retrograde-cost-release-tick

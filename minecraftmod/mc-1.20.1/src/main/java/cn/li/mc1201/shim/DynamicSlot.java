@@ -2,7 +2,7 @@ package cn.li.mc1201.shim;
 
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.Container;
 import net.minecraft.world.entity.player.Player;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -14,8 +14,8 @@ public class DynamicSlot extends Slot {
     private Supplier<Boolean> mayPickupFn = () -> true;
     private int stackLimit = 64;
 
-    public DynamicSlot(Inventory inv, int index, int x, int y) {
-        super(inv, index, x, y);
+    public DynamicSlot(Container container, int index, int x, int y) {
+        super(container, index, x, y);
     }
 
     public DynamicSlot withMayPlace(Predicate<ItemStack> fn) { this.mayPlaceFn = fn; return this; }

@@ -15,9 +15,9 @@
   - Drop rate: 30-100% (based on experience)
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.dsl :refer [defskill]]
+  (:require [cn.li.ac.ability.util.scaling :as scaling]
+            [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
             [cn.li.ac.ability.fx :as fx]
-            [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
                         [cn.li.ac.ability.effects.geom :as geom]
@@ -31,26 +31,7 @@
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.util.log :as log]))
 
-(def ^:private groundshock-skill-id :groundshock)
-
-(defn- exp01 [exp]
-  (max 0.0 (min 1.0 (double (or exp 0.0)))))
-
-(defn- cfg-double [field-id]
-  (skill-config/tunable-double groundshock-skill-id field-id))
-
-(defn- cfg-int [field-id]
-  (skill-config/tunable-int groundshock-skill-id field-id))
-
-(defn- cfg-lerp [field-id exp]
-  (skill-config/lerp-double groundshock-skill-id field-id (exp01 exp)))
-
-(defn- cfg-lerp-int [field-id exp]
-  (skill-config/lerp-int groundshock-skill-id field-id (exp01 exp)))
-
-(defn- cfg-boolean [field-id]
-  (skill-config/tunable-boolean groundshock-skill-id field-id))
-
+(def-skill-config-ops :groundshock)
 (defn- horizontal-look [player-id]
   (when-let [look-vec (and (raycast/available?)
                            (raycast/get-player-look-vector* player-id))]
@@ -104,30 +85,19 @@
         (* (rand) (cfg-double :movement.launch-random-span)))
      (cfg-lerp :movement.launch-scale exp)))
 
-(defn- skill-exp [player-id]
-  (skill-effects/skill-exp player-id :groundshock))
-
 (defn- add-exp! [player-id amount]
   (skill-effects/add-skill-exp! player-id :groundshock amount))
 
 (defn groundshock-cost-up-cp
-  [{:keys [player-id]}]
-  (cp-cost (exp01 (skill-exp player-id))))
+  [_player-id _skill-id exp]
+  (cp-cost (scaling/clamp-exp (double (or exp 0.0)))))
 
 (defn groundshock-cost-up-overload
-  [{:keys [player-id]}]
-  (overload-cost (exp01 (skill-exp player-id))))
+  [_player-id _skill-id exp]
+  (overload-cost (scaling/clamp-exp (double (or exp 0.0)))))
 
 (defn- apply-cooldown! [player-id exp]
   (skill-effects/set-main-cooldown! player-id :groundshock (cooldown-ticks exp)))
-
-(defn- set-skill-state-root!
-  [ctx-id state-map]
-  (ctx-skill/update-skill-state-root! ctx-id identity state-map))
-
-(defn- clear-skill-state!
-  [ctx-id]
-  (ctx-skill/clear-skill-state! ctx-id))
 
 (defn- get-player-position
   "Get player position from teleportation protocol."
@@ -184,9 +154,9 @@
 
 (defn groundshock-on-key-down
   "Initialize charge state."
-  [{:keys [ctx-id]}]
+  [ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (try
-    (set-skill-state-root! ctx-id
+    (ctx-skill/replace-skill-state! ctx-id
                            {:charge-ticks 0
                             :performed? false})
     (fx/send! ctx-id {:topic :groundshock/fx-start :mode :start})
@@ -196,13 +166,13 @@
 
 (defn groundshock-on-key-tick
   "Update charge progress."
-  [{:keys [ctx-id]}]
+  [ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (try
-    (when-let [ctx-data (ctx/get-context ctx-id)]
+    (when-let [ctx-data (ctx-skill/get-context ctx-id)]
       (let [skill-state (:skill-state ctx-data)
             charge-ticks (long (or (:charge-ticks skill-state) 0))
             next-charge (inc charge-ticks)]
-        (set-skill-state-root! ctx-id (assoc skill-state :charge-ticks next-charge))
+        (ctx-skill/replace-skill-state! ctx-id (assoc skill-state :charge-ticks next-charge))
         (fx/send! ctx-id {:topic :groundshock/fx-update :mode :update} nil
                   {:charge-ticks (long (max 0 next-charge))})))
     (catch Exception e
@@ -334,7 +304,7 @@
 
 (defn- break-mastery-ring!
   [player-id world-id player-pos exp broken-blocks*]
-  (when (and (>= (exp01 exp) (cfg-double :breaking.mastery-exp-threshold))
+  (when (and (>= (scaling/clamp-exp exp) (cfg-double :breaking.mastery-exp-threshold))
              (block-manip/available?))
     (let [energy* (atom Double/MAX_VALUE)
           x0 (int (double (:x player-pos)))
@@ -350,12 +320,12 @@
 
 (defn groundshock-on-key-up
   "Perform the ground slam."
-  [{:keys [player-id ctx-id cost-ok?]}]
+  [ctx-id player-id _skill-id exp cost-ok? _hold-ticks _cost-stage _player-ref]
   (try
-    (when-let [ctx-data (ctx/get-context ctx-id)]
+    (when-let [ctx-data (ctx-skill/get-context ctx-id)]
       (let [skill-state (:skill-state ctx-data)
             charge-ticks (long (or (:charge-ticks skill-state) 0))
-            exp (exp01 (skill-exp player-id))]
+            exp (scaling/clamp-exp (double (or exp 0.0)))]
 
         ;; Check if charge is valid (5+ ticks) and player is on ground
           (if (and (>= charge-ticks (cfg-int :charge.min-ticks))
@@ -373,13 +343,13 @@
                       result (propagate-shockwave! player-id world-id
                                                    start-x start-y start-z
                                                    flat-dir exp)
-                      broken-blocks* (atom (into #{} (map (juxt :x :y :z) (:broken-blocks result))))
+                      broken-blocks* (atom (into #{} (map #(vector (get % :x) (get % :y) (get % :z)) (:broken-blocks result))))
                       affected-count (+ (count (:affected-blocks result))
                                         (count (:affected-entities result)))]
                   (break-mastery-ring! player-id world-id pos exp broken-blocks*)
                   (apply-cooldown! player-id exp)
                   (add-exp! player-id (cfg-double :progression.exp-use))
-                  (set-skill-state-root! ctx-id (assoc skill-state :performed? true))
+                  (ctx-skill/replace-skill-state! ctx-id (assoc skill-state :performed? true))
                   (fx/send! ctx-id {:topic :groundshock/fx-perform :mode :perform} nil
                             {:affected-blocks (:affected-blocks result)
                              :broken-blocks (finalize-broken-blocks @broken-blocks*)})
@@ -400,10 +370,10 @@
 
 (defn groundshock-on-key-abort
   "Clean up state on abort."
-  [{:keys [ctx-id]}]
+  [ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (try
     (fx/send! ctx-id {:topic :groundshock/fx-end :mode :end} nil {:performed? false})
-    (clear-skill-state! ctx-id)
+    (ctx-skill/clear-skill-state! ctx-id)
     (log/debug "Groundshock aborted")
     (catch Exception e
       (log/warn "Groundshock key-abort failed:" (ex-message e)))))
@@ -420,8 +390,8 @@
   :ctrl-id :groundshock
   :cp-consume-speed 0.0
   :overload-consume-speed 0.0
-  :cooldown-ticks (fn [{:keys [exp]}]
-                    (cfg-lerp-int :cooldown.ticks (double (or exp 0.0))))  ;; matching original lerp(80, 40, exp)
+  :cooldown-ticks (fn [_player-id _skill-id exp]
+                    (cfg-lerp-int :cooldown.ticks (double (or exp 0.0))))
   :pattern :release-cast
   :cooldown {:mode :manual}
   :cost {:up {:cp groundshock-cost-up-cp

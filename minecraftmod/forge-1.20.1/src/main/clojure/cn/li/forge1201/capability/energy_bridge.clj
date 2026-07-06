@@ -10,7 +10,7 @@
 
 (defn create-energy-storage
   "Create an IEnergyStorage backed by ac-layer pure functions from Framework.
-   block-id: the DSL block id (e.g. 'wireless-node').
+   block-id: the DSL block id (e.g. 'example-block-id').
    Returns nil if no energy-logic registered for this block."
   [block-id]
   (when-let [fw-atom (fw/fw-atom)]

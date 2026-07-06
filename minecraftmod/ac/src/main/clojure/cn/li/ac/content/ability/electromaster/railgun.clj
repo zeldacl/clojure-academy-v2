@@ -1,20 +1,19 @@
 (ns cn.li.ac.content.ability.electromaster.railgun
-  "Railgun skill é”Ÿ?coin-QTE + iron-item charge mechanic.
+  "Railgun skill ?coin-QTE + iron-item charge mechanic.
 
   Complex skill using the escape-hatch pattern: fn hooks for the custom
   coin-QTE / item-charge logic; :beam op (effect.beam) for the actual shot.
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.dsl :refer [defskill]]
+  (:require [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
             [cn.li.ac.ability.fx :as fx]
-            [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
                         [cn.li.ac.ability.effects.beam :as beam]
             [cn.li.ac.ability.effects.geom :as geom]
-            [cn.li.ac.ability.util.toggle :as toggle]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
+            [cn.li.ac.content.ability.shared.vec-reflection-interaction :as vec-reflect]
             [cn.li.ac.ability.item-actions :as item-actions]
                         [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.entity :as entity]
@@ -27,22 +26,9 @@
 ;; Constants
 ;; ---------------------------------------------------------------------------
 
+(def-skill-config-ops :railgun)
 (def ^:private accepted-item-ids
   #{"minecraft:iron_ingot" "minecraft:iron_block"})
-
-(def ^:private railgun-skill-id :railgun)
-
-(defn- cfg-double [field-id]
-  (skill-config/tunable-double railgun-skill-id field-id))
-
-(defn- cfg-int [field-id]
-  (skill-config/tunable-int railgun-skill-id field-id))
-
-(defn- cfg-lerp [field-id exp]
-  (skill-config/lerp-double railgun-skill-id field-id exp))
-
-(defn- cfg-lerp-int [field-id exp]
-  (skill-config/lerp-int railgun-skill-id field-id exp))
 
 (defn- coin-active-threshold [] (cfg-double :qte.coin-active-threshold))
 (defn- coin-perform-threshold [] (cfg-double :qte.coin-perform-threshold))
@@ -50,7 +36,7 @@
 (defn- reflection-distance [] (cfg-double :reflection.distance))
 (defn- reflection-damage [] (cfg-double :reflection.damage))
 (defn- railgun-exp-gain [_hit? reflection-hit?]
-  ;; Original: hitEntity only set on reflection hit â†’ 0.01; otherwise 0.005
+  ;; Original: hitEntity only set on reflection hit ?0.01; otherwise 0.005
   (if reflection-hit?
     (cfg-double :progression.exp-reflection-hit)   ;; 0.01 reflection hit only
     (cfg-double :progression.exp-hit)))             ;; 0.005 normal hit or miss
@@ -60,9 +46,6 @@
 ;; ---------------------------------------------------------------------------
 ;; Player / item helpers
 ;; ---------------------------------------------------------------------------
-
-(defn- skill-exp [player-id]
-  (skill-effects/skill-exp player-id :railgun))
 
 (defn- body-pos [player-id]
   (geom/body-pos player-id))
@@ -80,26 +63,18 @@
   [ctx-id k v]
   (ctx-skill/assoc-skill-state! ctx-id k v))
 
-(defn- set-skill-state-root!
-  [ctx-id state-map]
-  (ctx-skill/update-skill-state-root! ctx-id identity state-map))
-
-(defn- clear-skill-state!
-  [ctx-id]
-  (ctx-skill/clear-skill-state! ctx-id))
-
 (defn register-coin-throw!
   "Register a railgun coin throw state.
   Called from the platform item-action hook when a coin is used in ability mode.
   If the player is currently in item-charge mode, that charge is aborted first
-  (mirrors original informThrowCoin é”Ÿ?onKeyAbort() behavior)."
+  (mirrors original informThrowCoin ?onKeyAbort() behavior)."
   [player-id payload]
   (let [_now-ms (long (or (:timestamp-ms payload) (System/currentTimeMillis)))]
     ;; Abort any in-progress item charge so the coin QTE takes priority.
     (doseq [[_ctx-key ctx-data] (ctx/get-all-contexts)]
       (when (and (= (:player-uuid ctx-data) player-id)
                  (= :item-charge (get-in ctx-data [:skill-state :mode])))
-        (set-skill-state-root! (:id ctx-data) {:fired false
+        (ctx-skill/replace-skill-state! (:id ctx-data) {:fired false
                                        :mode :item-charge-cancelled
                                        :charge-ticks 0})))
     ;; New coin throw resets one-shot judgement lock.
@@ -165,30 +140,7 @@
 ;; Vec-reflection interaction
 ;; ---------------------------------------------------------------------------
 
-(defn- toggle-active? [player-id skill-id]
-  (some (fn [[_ ctx-data]]
-          (and (= (:player-uuid ctx-data) player-id)
-               (toggle/is-toggle-active? ctx-data skill-id)))
-        (ctx/get-all-contexts)))
-
-(defn- vec-reflection-can-reflect? [target-player-id incoming-damage]
-  (when (toggle-active? target-player-id :vec-reflection)
-    (when-let [state (skill-effects/get-player-state target-player-id)]
-      (let [exp        (skill-effects/skill-exp target-player-id :vec-reflection)
-            consumption (* (double incoming-damage)
-                           (cfg-lerp :reflection.cp-consumption-per-damage exp))
-            current-cp (get-in state [:resource-data :cur-cp] 0.0)]
-        (>= (double current-cp) (double consumption))))))
-
-(defn- vec-reflection-consume-cp! [target-player-id incoming-damage]
-  (when-let [state (skill-effects/get-player-state target-player-id)]
-    (let [exp        (skill-effects/skill-exp target-player-id :vec-reflection)
-          consumption (* (double incoming-damage)
-                         (cfg-lerp :reflection.cp-consumption-per-damage exp))]
-      (skill-effects/perform-resource! target-player-id 0.0 (double consumption) false))))
-
-(defn- perform-reflection-shot!
-  "Fire a secondary shot from the reflector player's perspective.
+(defn- perform-reflection-shot!  "Fire a secondary shot from the reflector player's perspective.
   Returns truthy if an entity was hit."
   [ctx-id reflector-player-id]
   (let [start-pos (geom/eye-pos reflector-player-id)
@@ -231,18 +183,19 @@
     (if-not look-vec
       {:performed? false}
       (let [damage   (cfg-lerp :beam.damage exp)
+            reflection (vec-reflect/build-reflection-callbacks
+                         {:ctx-id ctx-id
+                          :caster-skill-id :railgun
+                          :cp-field-id :reflection.cp-consumption-per-damage
+                          :reflect-shot-fn perform-reflection-shot!})
                 result   (beam/execute-beam!
-                    {:player-id       player-id
-                     :ctx-id          ctx-id
-                     :world-id        world-id
-                     :eye-pos         eye
-                     :trace-pos       trace-pos
-                     :look-dir        look-vec
-                     :reflect-can-fn  (fn [uuid] (vec-reflection-can-reflect? uuid damage))
-                     :reflect-shot-fn (fn [uuid]
-                      (vec-reflection-consume-cp! uuid damage)
-                      (perform-reflection-shot! ctx-id uuid))}
-                    {:radius          (cfg-double :beam.radius)
+                    (merge {:player-id       player-id
+                            :ctx-id          ctx-id
+                            :world-id        world-id
+                            :eye-pos         eye
+                            :trace-pos       trace-pos
+                            :look-dir        look-vec}
+                           reflection)                    {:radius          (cfg-double :beam.radius)
                      :query-radius    (cfg-double :beam.query-radius)
                      :step            (cfg-double :beam.step)
                      :max-distance    (cfg-double :beam.max-distance)
@@ -275,32 +228,46 @@
 ;; Cost hooks (private, passed as fns in defskill)
 ;; ---------------------------------------------------------------------------
 
-(defn- item-charge-ready? [ctx-id player]
-  (when-let [ctx-data (ctx/get-context ctx-id)]
+(defn- active-railgun-ctx-id [player-id]
+  (some (fn [[ctx-id ctx-data]]
+          (when (and (= (:player-uuid ctx-data) player-id)
+                     (= :railgun (:skill-id ctx-data)))
+            ctx-id))
+        (ctx/get-all-contexts)))
+
+(defn- item-charge-at-fire-point? [ctx-id]
+  (when-let [ctx-data (ctx-skill/get-context ctx-id)]
     (let [skill-state (:skill-state ctx-data)]
       (and (= (:mode skill-state) :item-charge)
-           (<= (max 0 (int (or (:charge-ticks skill-state) 0))) 1)
-           (accepted-item-in-hand? player)))))
+           (<= (max 0 (int (or (:charge-ticks skill-state) 0))) 1)))))
 
-(defn- cost-creative?      [{:keys [player]}]
-  (boolean (and player (entity/player-creative? player))))
+(defn- item-charge-ready? [ctx-id player]
+  (and (item-charge-at-fire-point? ctx-id)
+       (accepted-item-in-hand? player)))
 
-(defn- down-cost-cp        [{:keys [player-id]}]
+(defn- cost-creative? [_player-id _skill-id _exp]
+  false)
+
+(defn- down-cost-cp [player-id _skill-id exp]
   (let [qte (read-coin-qte-status player-id)]
-    (if (:perform? qte) (cfg-lerp :cost.down.cp (skill-exp player-id)) 0.0)))
+    (if (:perform? qte) (cfg-lerp :cost.down.cp exp) 0.0)))
 
-(defn- down-cost-overload  [{:keys [player-id]}]
+(defn- down-cost-overload [player-id _skill-id exp]
   (let [qte (read-coin-qte-status player-id)]
-    (if (:perform? qte) (cfg-lerp :cost.down.overload (skill-exp player-id)) 0.0)))
+    (if (:perform? qte) (cfg-lerp :cost.down.overload exp) 0.0)))
 
-(defn- tick-cost-cp        [{:keys [player-id ctx-id player]}]
-  (if (item-charge-ready? ctx-id player)
-    (cfg-lerp :cost.tick.cp (skill-exp player-id))
+(defn- tick-cost-cp [player-id _skill-id exp]
+  (if-let [ctx-id (active-railgun-ctx-id player-id)]
+    (if (item-charge-at-fire-point? ctx-id)
+      (cfg-lerp :cost.tick.cp exp)
+      0.0)
     0.0))
 
-(defn- tick-cost-overload  [{:keys [player-id ctx-id player]}]
-  (if (item-charge-ready? ctx-id player)
-    (cfg-lerp :cost.tick.overload (skill-exp player-id))
+(defn- tick-cost-overload [player-id _skill-id exp]
+  (if-let [ctx-id (active-railgun-ctx-id player-id)]
+    (if (item-charge-at-fire-point? ctx-id)
+      (cfg-lerp :cost.tick.overload exp)
+      0.0)
     0.0))
 
 ;; ---------------------------------------------------------------------------
@@ -309,9 +276,8 @@
 
 (defn- railgun-on-key-down
   "Coin-QTE path fires immediately; otherwise starts 20-tick iron-item charge."
-  [{:keys [player-id ctx-id player cost-ok?]}]
-  (let [exp    (skill-exp player-id)
-        qte    (read-coin-qte-status player-id)]
+  [ctx-id player-id _skill-id exp cost-ok? _hold-ticks _cost-stage player]
+  (let [qte (read-coin-qte-status player-id)]
     (cond
       (:perform? qte)
       (do
@@ -327,34 +293,34 @@
                 (ach-dispatcher/trigger-custom-event! player-id "electromaster.attack_creeper"))
               (skill-effects/set-main-cooldown! player-id :railgun
                                                 (railgun-cooldown-ticks exp))
-              (set-skill-state-root! ctx-id
+              (ctx-skill/replace-skill-state! ctx-id
                                      {:fired       true
                                       :mode        :performed
                                       :hit-count   normal-hit-count}))
             (log/debug "Railgun coin-QTE perform" player-id))
-          (set-skill-state-root! ctx-id {:fired false :mode :coin-qte-no-resource})))
+          (ctx-skill/replace-skill-state! ctx-id {:fired false :mode :coin-qte-no-resource})))
 
       (:has-window? qte)
       (do
         (mark-coin-judged! player-id (:coin-uuid qte))
-        (set-skill-state-root! ctx-id {:fired false :mode :coin-qte-miss})
+        (ctx-skill/replace-skill-state! ctx-id {:fired false :mode :coin-qte-miss})
         (log/debug "Railgun coin-QTE miss" player-id (:progress qte)))
 
       (accepted-item-in-hand? player)
-      (set-skill-state-root! ctx-id
+      (ctx-skill/replace-skill-state! ctx-id
                              {:fired        false
                               :mode         :item-charge
                               :charge-ticks (item-charge-ticks)
                               :hit-count    0})
 
       :else
-      (set-skill-state-root! ctx-id {:fired false :mode :idle-no-trigger}))))
+      (ctx-skill/replace-skill-state! ctx-id {:fired false :mode :idle-no-trigger}))))
 
 (defn- railgun-on-key-tick
   "Item-charge path: countdown; auto-fires when charge-ticks reaches zero."
-  [{:keys [player-id ctx-id player cost-ok?]}]
+  [ctx-id player-id _skill-id exp cost-ok? _hold-ticks _cost-stage player]
   (try
-    (when-let [ctx-data (ctx/get-context ctx-id)]
+    (when-let [ctx-data (ctx-skill/get-context ctx-id)]
       (let [skill-state (:skill-state ctx-data)]
         (when (= (:mode skill-state) :item-charge)
           (let [ticks-left (max 0 (int (or (:charge-ticks skill-state) 0)))]
@@ -363,8 +329,7 @@
                 (if (and (accepted-item-in-hand? player)
                          (consume-item-for-shot! player)
                          cost-ok?)
-                  (let [exp (skill-exp player-id)
-                        {:keys [performed? reflection-hit? normal-hit-count hit-uuids]}
+                  (let [{:keys [performed? reflection-hit? normal-hit-count hit-uuids]}
                         (perform-main-shot! player-id ctx-id exp)]
                     (when performed?
                       (skill-effects/add-skill-exp! player-id :railgun (railgun-exp-gain (pos? (long (or normal-hit-count 0))) reflection-hit?))
@@ -373,11 +338,11 @@
                         (ach-dispatcher/trigger-custom-event! player-id "electromaster.attack_creeper"))
                       (skill-effects/set-main-cooldown! player-id :railgun
                                                         (railgun-cooldown-ticks exp))
-                      (set-skill-state-root! ctx-id
+                      (ctx-skill/replace-skill-state! ctx-id
                                              {:fired     true
                                               :mode      :performed
                                               :hit-count normal-hit-count})))
-                  (set-skill-state-root! ctx-id
+                  (ctx-skill/replace-skill-state! ctx-id
                                          (assoc skill-state :fired false :mode :item-charge-failed)))
                 (set-skill-state! ctx-id [:charge-ticks] 0))
               (set-skill-state! ctx-id [:charge-ticks] (dec ticks-left)))))))
@@ -386,19 +351,19 @@
 
 (defn- railgun-on-key-up
   "Cancels an unfinished item charge. Cooldown is only applied on successful perform."
-  [{:keys [ctx-id]}]
-  (when-let [ctx (ctx/get-context ctx-id)]
+  [ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
+  (when-let [ctx (ctx-skill/get-context ctx-id)]
     (let [skill-state (:skill-state ctx)
           mode        (:mode skill-state)]
       (when (and (= mode :item-charge) (not (:fired skill-state)))
-        (set-skill-state-root! ctx-id
+        (ctx-skill/replace-skill-state! ctx-id
                                (assoc skill-state :mode :item-charge-cancelled :charge-ticks 0)))
       (when (:fired skill-state)
         (log/debug "Railgun completed")))))
 
 (defn- railgun-on-key-abort
-  [{:keys [ctx-id]}]
-  (clear-skill-state! ctx-id)
+  [ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
+  (ctx-skill/clear-skill-state! ctx-id)
   (log/debug "Railgun aborted"))
 
 ;; ---------------------------------------------------------------------------
@@ -443,5 +408,4 @@
   (item-actions/register-item-entity-spawn! "ac:coin" {:entity-id "entity_coin_throwing" :speed 0.0})
   (item-actions/register-item-entity-spawn! "my_mod:coin" {:entity-id "entity_coin_throwing" :speed 0.0})
   nil)
-
 

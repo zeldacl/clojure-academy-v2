@@ -9,6 +9,7 @@
   WiWorldData no longer stores :world (ServerLevel) or :runtime references.
   Callers that need world access must pass it explicitly."
   (:require [cn.li.ac.wireless.core.spatial-index :as si]
+            [cn.li.mcmod.events.world-state-notify :as world-state-notify]
             [cn.li.mcmod.platform.world-owner-key :as world-owner-key]
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.util.log :as log]))
@@ -81,6 +82,19 @@
   (when-let [fw-atom (fw/fw-atom)]
     (get-in @fw-atom (world-data-path world-key))))
 
+;; ============================================================================
+;; World-state change hook — called by update-world-state! after every mutation.
+;; Generic mechanism: any platform layer (forge/fabric) registers a
+;; (fn [world-key]) callback to react to state changes (e.g. marking SavedData
+;; dirty). Not wireless-specific — works for any data stored in world-state.
+;; ============================================================================
+
+(defn set-on-world-state-changed-fn!
+  "Register a (fn [world-key]) callback invoked after every world-state mutation.
+  Delegates to the mcmod platform-neutral notify seam."
+  [f]
+  (world-state-notify/set-on-world-state-changed-fn! f))
+
 (defn- update-world-state!
   "Atomically update world-state via Framework swap!."
   [world-key f & args]
@@ -89,6 +103,7 @@
                          (fn [current]
                            (let [base (or current (initial-world-state))]
                              (apply f base args))))]
+      (world-state-notify/notify-world-state-changed! world-key)
       (get-in new-fw-state (world-state-path world-key)))))
 
 ;; ============================================================================
@@ -115,14 +130,17 @@
   (get-world-data-record (world-key world)))
 
 (defn register-world-data!
-  "Register a world -> WiWorldData mapping in the registry."
+  "Register a world → WiWorldData mapping in the registry.
+  Preserves any existing world-state already populated by deserialization
+  (e.g. world-data-from-nbt via rebuild-network-indexes!)."
   [world wi-data]
-  (let [wk (world-key world)
-        state (initial-world-state)]
+  (let [wk (world-key world)]
     (when-let [fw-atom (fw/fw-atom)]
-      (swap! fw-atom assoc-in (registry-path wk)
-             {:world-data (assoc wi-data :world-key wk)
-              :world-state state}))
+      (swap! fw-atom update-in (registry-path wk)
+             (fn [existing]
+               (let [existing-state (or (:world-state existing) (initial-world-state))]
+                 {:world-data (assoc wi-data :world-key wk)
+                  :world-state existing-state}))))
     wi-data))
 
 (defn remove-world-data!
@@ -186,28 +204,6 @@
 (defn connections [world-data] (state-value world-data :connections))
 
 ;; ============================================================================
-;; Transaction (STM-style, simplified — no dynamic var)
-;; ============================================================================
-
-(defn transact!
-  "Run a world-state mutation with serialized access via Framework swap!.
-   The mutation-fn receives world-data and should return nil (side-effecting
-   via set-state-value! etc. is not needed — mutate and return the new state).
-
-   No longer uses ^:dynamic *world-transaction* — re-entrant calls are
-   naturally serialized by the single Framework atom swap!."
-  [world-data mutation-fn]
-  (let [wk (:world-key world-data)]
-    (when-let [fw-atom (fw/fw-atom)]
-      (let [current (get-in @fw-atom (world-state-path wk))
-            base (or current (initial-world-state))
-            tx-state (atom base)
-            result (mutation-fn (assoc world-data :_tx-state tx-state))
-            final-state @tx-state]
-        (swap! fw-atom assoc-in (world-state-path wk) final-state)
-        result))))
-
-;; ============================================================================
 ;; Diagnostics & testing
 ;; ============================================================================
 
@@ -223,3 +219,13 @@
   []
   (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom assoc-in worlds-path {})))
+
+(defn create-world-registry-runtime
+  "Test/runtime factory for the wireless world registry store."
+  []
+  {::runtime ::world-registry})
+
+(defn call-with-world-registry-runtime
+  "Run `f` with world registry runtime installed (identity wrapper for test isolation)."
+  [_runtime f]
+  (f))

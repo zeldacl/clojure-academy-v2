@@ -4,8 +4,7 @@
             [cn.li.mc1201.runtime.nbt-core :as runtime-nbt]
             [cn.li.mc1201.runtime.sync-core :as runtime-sync]
             [cn.li.fabric1201.adapter.network :as runtime-network]
-            [cn.li.mc1201.runtime.lifecycle-core :as lifecycle-core]
-            [cn.li.mcmod.gui.container-state :as container-state])
+            [cn.li.mc1201.runtime.lifecycle-core :as lifecycle-core])
   (:import [net.minecraft.server MinecraftServer]
            [net.minecraft.server.players PlayerList]
            [net.minecraft.server.level ServerLevel ServerPlayer]))
@@ -110,5 +109,4 @@
   []
   (lifecycle-core/install-server-stop-cleanup!
     {:cleanup-session! (fn [session-id]
-                         (runtime-sync/clear-session-scheduler-state! session-id)
-                         (container-state/clear-session-containers! session-id))}))
+                         (runtime-sync/clear-session-scheduler-state! session-id))}))

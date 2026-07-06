@@ -5,50 +5,49 @@
             [cn.li.mcmod.runtime.owner :as owner]))
 
 (defn- resolve-session-id
-  [evt]
+  []
   (or (some-> ctx/*context-owner* owner/store-session-id)
       (runtime-hooks/player-state-session-id)
       (runtime-hooks/require-player-state-session-id "effects-state")))
 
 (defn execute-assoc-state!
-  [evt {:keys [k v]}]
+  [ctx-id player-id {:keys [k v]}]
   (command-rt/run-command-in-session!
-   (resolve-session-id evt)
-   (:player-id evt)
+   (resolve-session-id)
+   player-id
    {:command :context-assoc-skill-state
-    :ctx-id (:ctx-id evt)
+    :ctx-id ctx-id
     :k k
-    :v v})
-  evt)
+    :v v}))
 
 (defn execute-charge-tick!
-  [evt {:keys [k max]}]
-  (let [ctx-id (:ctx-id evt)
-        state-key (or k :charge-ticks)
+  [ctx-id player-id {:keys [k max]}]
+  (let [state-key (or k :charge-ticks)
         result (command-rt/run-command-in-session!
-                (resolve-session-id evt)
-                (:player-id evt)
+                (resolve-session-id)
+                player-id
                 {:command :context-increment-skill-state
                  :ctx-id ctx-id
                  :k state-key
-                 :max max})
-        next-tick (long (or (get-in result [:state :context-registry ctx-id :skill-state state-key]) 0))]
-    (assoc evt state-key next-tick)))
+                 :max max})]
+    (long (or (get-in result [:state :context-registry ctx-id :skill-state state-key]) 0))))
 
 (defn execute-terminate!
-  [evt _params]
-  (ctx/terminate-context! (:ctx-id evt) nil)
-  evt)
+  [ctx-id _player-id _params]
+  (ctx/terminate-context! ctx-id nil))
 
 (defn execute-overload-floor!
   "Enforce a minimum overload value for the player.
-  If the player's current overload is below :floor, it is raised to :floor.
-  :floor may be a number or a fn of evt."
-  [evt {:keys [floor]}]
-  (let [floor-val (double (if (fn? floor) (floor evt) (or floor 0.0)))]
+  :floor may be a number or (fn [player-id skill-id exp] ...)."
+  [ctx-id player-id skill-id exp {:keys [floor]}]
+  (let [floor-val (double (if (fn? floor)
+                            (try
+                              (floor player-id skill-id exp)
+                              (catch clojure.lang.ArityException _
+                                (floor {:player-id player-id :skill-id skill-id :exp exp})))
+                            (or floor 0.0)))]
     (command-rt/run-command-in-session!
-     (resolve-session-id evt)
-     (:player-id evt)
+     (resolve-session-id)
+     player-id
      {:command :enforce-overload-floor
-      :floor-value floor-val})
-    evt))
+      :floor-value floor-val})))

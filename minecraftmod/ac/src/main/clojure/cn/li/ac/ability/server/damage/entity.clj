@@ -19,14 +19,27 @@
                 (* base-damage (max 0.0 (- 1.0 (/ dist radius))))
                 base-damage)))))
 
+(defn- reflection-remove-self
+  "Remove the current entity from candidate list."
+  [current-entity-uuid {:keys [entity-uuid]}]
+  (= entity-uuid current-entity-uuid))
+
+(defn- reflection-annotate-dist
+  "Annotate a candidate with its distance from current-pos."
+  [current-pos {:keys [x y z] :as candidate}]
+  [candidate (distance-3d current-pos {:x x :y y :z z})])
+
+(defn- reflection-within-radius?
+  "True when candidate distance is within max-radius."
+  [max-radius [_candidate dist]]
+  (<= dist max-radius))
+
 (defn select-next-reflection-target
   [current-entity-uuid current-pos candidates max-radius]
   (->> candidates
-       (remove (fn [{:keys [entity-uuid]}]
-                 (= entity-uuid current-entity-uuid)))
-       (map (fn [{:keys [x y z] :as candidate}]
-              [candidate (distance-3d current-pos {:x x :y y :z z})]))
-       (filter (fn [[_candidate dist]] (<= dist max-radius)))
+       (remove (partial reflection-remove-self current-entity-uuid))
+       (map (partial reflection-annotate-dist current-pos))
+       (filter (partial reflection-within-radius? max-radius))
        (sort-by second)
        (ffirst)
        :entity-uuid))

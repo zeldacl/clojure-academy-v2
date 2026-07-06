@@ -52,9 +52,9 @@
   ;; Event handlers for block interactions.
   ;;
   ;; Fields:
-  ;; - on-right-click: Handler for right-click/use (fn [event-data] ...)
-  ;; - on-break: Handler for block break (fn [event-data] ...)
-  ;; - on-place: Handler for block placement (fn [event-data] ...)
+  ;; - on-right-click: (fn [player world pos block-id & {:keys [sneaking item-stack]}] ...)
+  ;; - on-break: (fn [world pos block-id] ...)
+  ;; - on-place: (fn [player world pos block-id] ...)
   ;; - on-multi-block-break: Handler for multi-block structure break (fn [event-data] ...)
   )
 

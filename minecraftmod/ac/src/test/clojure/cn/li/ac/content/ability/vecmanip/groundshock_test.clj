@@ -1,5 +1,6 @@
 (ns cn.li.ac.content.ability.vecmanip.groundshock-test
   (:require [clojure.test :refer [deftest is testing]]
+            [cn.li.ac.ability.test.skill-callback-test-helpers :as cb]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
@@ -75,7 +76,7 @@
                   fx/send! send!
                   player-motion/available? (constantly true)
                   player-motion/is-on-ground?* (constantly true)]
-      (gs/groundshock-on-key-up {:player-id "p1" :ctx-id "ctx-1" :cost-ok? true}))
+      (cb/apply-invoke gs/groundshock-on-key-up :player-id "p1" :ctx-id "ctx-1" :cost-ok? true))
     (is (= [["ctx-1" :groundshock/fx-end :end {:performed? false}]] @calls*))))
 
 (deftest key-up-cost-fail-sends-fx-end-test
@@ -89,7 +90,7 @@
                   fx/send! send!
                   player-motion/available? (constantly true)
                   player-motion/is-on-ground?* (constantly true)]
-      (gs/groundshock-on-key-up {:player-id "p1" :ctx-id "ctx-2" :cost-ok? false}))
+      (cb/apply-invoke gs/groundshock-on-key-up :player-id "p1" :ctx-id "ctx-2" :cost-ok? false))
     (is (= [["ctx-2" :groundshock/fx-end :end {:performed? false}]] @calls*))))
 
 (deftest key-up-missing-direction-sends-fx-end-test
@@ -108,5 +109,5 @@
                   fx/send! send!
                   player-motion/available? (constantly true)
                   player-motion/is-on-ground?* (constantly true)]
-      (gs/groundshock-on-key-up {:player-id "p1" :ctx-id "ctx-3" :cost-ok? true}))
+      (cb/apply-invoke gs/groundshock-on-key-up :player-id "p1" :ctx-id "ctx-3" :cost-ok? true))
     (is (= [["ctx-3" :groundshock/fx-end :end {:performed? false}]] @calls*))))

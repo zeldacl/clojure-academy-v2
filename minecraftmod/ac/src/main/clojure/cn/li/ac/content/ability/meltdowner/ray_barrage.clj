@@ -6,9 +6,8 @@
   scattered beams around silbarn's nearby targets.
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.dsl :refer [defskill]]
+  (:require [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
             [cn.li.ac.ability.fx :as fx]
-            [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.effects.beam :as beam]
@@ -23,22 +22,8 @@
 ;; Helpers
 ;; ---------------------------------------------------------------------------
 
+(def-skill-config-ops :ray-barrage)
 (def ^:private ray-barrage-skill-id :ray-barrage)
-
-(defn- cfg-double [field-id]
-  (skill-config/tunable-double ray-barrage-skill-id field-id))
-
-(defn- cfg-int [field-id]
-  (skill-config/tunable-int ray-barrage-skill-id field-id))
-
-(defn- cfg-lerp [field-id exp]
-  (skill-config/lerp-double ray-barrage-skill-id field-id exp))
-
-(defn- cfg-lerp-int [field-id exp]
-  (skill-config/lerp-int ray-barrage-skill-id field-id exp))
-
-(defn- skill-exp [player-id]
-  (skill-effects/skill-exp player-id ray-barrage-skill-id))
 
 (defn reset-ray-barrage-state-for-test!
   []
@@ -125,6 +110,20 @@
                               (double (:dx look-dir)) (double (:dy look-dir)) (double (:dz look-dir))
                               (double (cfg-double :targeting.range)))))
 
+(defn- scatter-remove-self-and-silbarn
+  "Remove the player and the silbarn projectile from scatter target candidates."
+  [player-id silbarn-uuid {:keys [uuid]}]
+  (or (= (str uuid) (str player-id))
+      (= (str uuid) silbarn-uuid)))
+
+(defn- scatter-dist-sq-from-hit
+  "Squared distance from hit point to entity, for nearest-first sort."
+  [sx sy sz {:keys [x y z]}]
+  (let [dx (- (double x) sx)
+        dy (- (double y) sy)
+        dz (- (double z) sz)]
+    (+ (* dx dx) (* dy dy) (* dz dz))))
+
 (defn- select-scatter-targets
   [world-id silbarn-hit player-id]
   (if-not (world-effects/available?)
@@ -136,14 +135,8 @@
           targets (->> (world-effects/find-entities-in-radius*
                          world-id sx sy sz
                          (double (cfg-double :scatter.target-radius)))
-                       (remove (fn [{:keys [uuid]}]
-                                 (or (= (str uuid) (str player-id))
-                                     (= (str uuid) silbarn-uuid))))
-                       (sort-by (fn [{:keys [x y z]}]
-                                  (let [dx (- (double x) sx)
-                                        dy (- (double y) sy)
-                                        dz (- (double z) sz)]
-                                    (+ (* dx dx) (* dy dy) (* dz dz)))))
+                       (remove (partial scatter-remove-self-and-silbarn player-id silbarn-uuid))
+                       (sort-by (partial scatter-dist-sq-from-hit sx sy sz))
                        vec)
           max-count (max 0 (int (cfg-int :scatter.count)))]
       (if (<= max-count 0)
@@ -155,10 +148,9 @@
 ;; ---------------------------------------------------------------------------
 
 (defn ray-barrage-perform!
-  [{:keys [player-id ctx-id]}]
+  [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (try
-    (let [exp            (skill-exp player-id)
-          plain-damage   (cfg-lerp :combat.damage.plain exp)
+    (let [plain-damage   (cfg-lerp :combat.damage.plain exp)
           scatter-damage (cfg-lerp :combat.damage.scattered exp)
           world-id       (geom/world-id-of player-id)
           eye            (geom/eye-pos player-id)

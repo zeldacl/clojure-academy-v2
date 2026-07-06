@@ -1,5 +1,6 @@
 (ns cn.li.ac.content.ability.vecmanip.plasma-cannon-fx-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
+            [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
@@ -7,16 +8,13 @@
             [cn.li.ac.content.ability.vecmanip.plasma-cannon-fx :as pcfx]))
 
 (defn- reset-fixture [f]
-  (level-effects/call-with-level-effect-runtime
-    (level-effects/create-level-effect-runtime)
-    (fn []
-      (try
+  (try
         (level-effects/reset-level-effect-registry-for-test!)
         (pcfx/reset-plasma-cannon-fx-for-test!)
         (f)
         (finally
           (pcfx/reset-plasma-cannon-fx-for-test!)
-          (level-effects/reset-level-effect-registry-for-test!))))))
+          (level-effects/reset-level-effect-registry-for-test!))))
 
 (use-fixtures :each reset-fixture)
 
@@ -52,8 +50,8 @@
                   fx-registry/register-fx-channel! (fn [topic handler]
                                                       (swap! handlers* assoc topic handler)
                                                       nil)
-                  level-effects/enqueue-level-effect! (fn [effect-id payload fx-context]
-                                                        (swap! enqueued* conj [effect-id payload fx-context])
+                  level-effects/enqueue-level-effect! (fn [effect-id ctx-id channel payload & opts]
+                                                        (swap! enqueued* conj [effect-id ctx-id channel payload opts])
                                                         nil)]
       (pcfx/init!)
       ((get @handlers* :plasma-cannon/fx-start) "ctx-1" :plasma-cannon/fx-start {:charge-pos {:x 1.0 :y 64.0 :z 1.0}})
@@ -105,9 +103,7 @@
              @enqueued*)))))
 
 (deftest tick-build-plan-and-perform-effects-test
-  (let [enqueue-state! (var-get #'cn.li.ac.content.ability.vecmanip.plasma-cannon-fx/enqueue-state!)
-        tick-state! (var-get #'cn.li.ac.content.ability.vecmanip.plasma-cannon-fx/tick-state!)
-        build-plan (var-get #'cn.li.ac.content.ability.vecmanip.plasma-cannon-fx/build-plan)
+  (let [
         sound-calls* (atom [])
         particle-calls* (atom [])]
     (with-redefs [client-particles/current-effect-owner (fn [] {:client-session-id "plasma-cannon-test"})
@@ -118,24 +114,19 @@
                                                             (swap! particle-calls* conj args)
                                                             nil)
                   rand (fn [] 0.5)]
-      (level-effects/update-effect-state! :plasma-cannon
-        enqueue-state!
-        (event "ctx-main" {:mode :start :charge-pos {:x 1.0 :y 64.0 :z 1.0}}))
-      (level-effects/update-effect-state! :plasma-cannon
-        enqueue-state!
-        (event "ctx-main" {:mode :update
+      (arc-beam/enqueue-for-test! :plasma-cannon "ctx-main" :plasma-cannon/fx-update {:mode :start :charge-pos {:x 1.0 :y 64.0 :z 1.0}})
+      (arc-beam/enqueue-for-test! :plasma-cannon "ctx-main" :plasma-cannon/fx-update {:mode :update
                              :charge-ticks 24
                              :fully-charged? true
                              :charge-pos {:x 1.0 :y 64.0 :z 1.0}
                              :flight-ticks 2
                              :state :go
-                             :destination {:x 4.0 :y 64.0 :z 4.0}}))
+                             :destination {:x 4.0 :y 64.0 :z 4.0}})
       (dotimes [_ 10]
         (level-effects/update-effect-state! :plasma-cannon
-          (fn [store _]
-            (tick-state! store))
+          (fn [store] (arc-beam/effect-tick-state! :level :plasma-cannon store))
           nil))
-      (let [plan (build-plan nil nil 0)]
+      (let [plan (arc-beam/effect-build-plan :plasma-cannon nil nil 0)]
         (is (= 3 (count @sound-calls*)))
         (is (= 10 (count @particle-calls*)))
         (is (= 1 (count (:ops plan))))
@@ -143,39 +134,8 @@
                           [:effect-state [:ctx "ctx-main"] :ticks]))))
       (reset! sound-calls* [])
       (reset! particle-calls* [])
-      (level-effects/update-effect-state! :plasma-cannon
-        enqueue-state!
-        (event "ctx-main" {:mode :perform :pos {:x 2.0 :y 65.0 :z 2.0}}))
+      (arc-beam/enqueue-for-test! :plasma-cannon "ctx-main" :plasma-cannon/fx-update {:mode :perform :pos {:x 2.0 :y 65.0 :z 2.0}})
       (is (= 1 (count @sound-calls*)))
       (is (= 13 (count @particle-calls*))))))
 
-(deftest plasma-cannon-fx-runtime-isolation-test
-  (let [runtime-a (level-effects/create-level-effect-runtime)
-        runtime-b (level-effects/create-level-effect-runtime)
-        enqueue-state! (var-get #'cn.li.ac.content.ability.vecmanip.plasma-cannon-fx/enqueue-state!)]
-    (with-redefs [client-particles/current-effect-owner (fn [] {:client-session-id "plasma-cannon-test"})
-                  client-sounds/queue-sound-effect! (fn [& _] nil)
-                  client-particles/queue-particle-effect! (fn [& _] nil)]
-      (level-effects/call-with-level-effect-runtime
-        runtime-a
-        (fn []
-          (level-effects/update-effect-state! :plasma-cannon
-            enqueue-state!
-            (event "ctx-a" {:mode :start :charge-pos {:x 1.0 :y 64.0 :z 1.0}}))
-          (is (= #{[:ctx "ctx-a"]}
-                 (set (keys (:effect-state (pcfx/plasma-cannon-fx-snapshot))))))))
-      (level-effects/call-with-level-effect-runtime
-        runtime-b
-        (fn []
-          (is (= {:effect-state {}}
-                 (pcfx/plasma-cannon-fx-snapshot)))
-          (level-effects/update-effect-state! :plasma-cannon
-            enqueue-state!
-            (event "ctx-b" {:mode :start :charge-pos {:x 2.0 :y 64.0 :z 2.0}}))
-          (is (= #{[:ctx "ctx-b"]}
-                 (set (keys (:effect-state (pcfx/plasma-cannon-fx-snapshot))))))))
-      (level-effects/call-with-level-effect-runtime
-        runtime-a
-        (fn []
-          (is (= #{[:ctx "ctx-a"]}
-                 (set (keys (:effect-state (pcfx/plasma-cannon-fx-snapshot)))))))))))
+

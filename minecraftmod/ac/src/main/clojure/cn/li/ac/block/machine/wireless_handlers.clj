@@ -1,44 +1,28 @@
 (ns cn.li.ac.block.machine.wireless-handlers
   "Shared wireless generator/receiver network handlers for block GUIs."
   (:require [cn.li.ac.wireless.api :as wireless-api]
+            [cn.li.ac.wireless.feedback :as feedback]
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.ac.wireless.gui.sync.handler :as net-helpers]
+            [cn.li.ac.wireless.link-helpers :as link-helpers]
             [cn.li.mcmod.block.dsl :as bdsl]
             [cn.li.mcmod.gui.container.sync-routing :as sync-routing]
             [cn.li.mcmod.network.server :as net-server]
             [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.world :as world]
-            [cn.li.mcmod.util.log :as log]
-            [cn.li.ac.wireless.feedback :as feedback])
-  (:import [cn.li.acapi.wireless IWirelessNode]))
+            [cn.li.mcmod.util.log :as log]))
 
 (defn wireless-node->info
-  [^IWirelessNode node]
-  (when node
-    (let [p (try (.getBlockPos node) (catch Exception _ nil))
-          pw (try (str (.getPassword node)) (catch Exception _ ""))]
-      {:node-name (try (str (.getNodeName node)) (catch Exception _ "Node"))
-       :pos-x (when p (pos/pos-x p))
-       :pos-y (when p (pos/pos-y p))
-       :pos-z (when p (pos/pos-z p))
-       :is-encrypted? (not (empty? pw))})))
-
-(defn- same-block-pos? [p linked-pos]
-  (and p linked-pos
-       (= (pos/pos-x p) (pos/pos-x linked-pos))
-       (= (pos/pos-y p) (pos/pos-y linked-pos))
-       (= (pos/pos-z p) (pos/pos-z linked-pos))))
+  "Re-export for callers that already depend on this namespace."
+  [node]
+  (link-helpers/wireless-node->info node))
 
 (defn available-nodes
+  "Query in-range nodes and return link-panel DTOs excluding the linked node."
   [world tile-pos linked-node]
-  (let [linked-pos (when linked-node (try (.getBlockPos ^IWirelessNode linked-node) (catch Exception _ nil)))
-        nodes (if tile-pos (wireless-api/get-nodes-in-range world tile-pos) [])]
-    (->> nodes
-         (remove (fn [^IWirelessNode n]
-                   (let [p (try (.getBlockPos n) (catch Exception _ nil))]
-                     (same-block-pos? p linked-pos))))
-         (mapv wireless-node->info))))
+  (let [nodes (if tile-pos (wireless-api/get-nodes-in-range world tile-pos) [])]
+    (link-helpers/available-node-infos nodes linked-node)))
 
 (defn- resolve-controller-tile
   "If tile is a multiblock part, find the controller by enumerating the
@@ -57,7 +41,6 @@
                     px (pos/pos-x (pos/position-get-block-pos tile))
                     py (pos/pos-y (pos/position-get-block-pos tile))
                     pz (pos/pos-z (pos/position-get-block-pos tile))]
-                ;; Try each relative position: controller = part - relative
                 (or (some (fn [rel-pos]
                             (let [rx (or (:relative-x rel-pos) (:x rel-pos) 0)
                                   ry (or (:relative-y rel-pos) (:y rel-pos) 0)
@@ -85,6 +68,20 @@
         tile (:tile-entity container)]
     (resolve-controller-tile tile player)))
 
+(defn- nodes-in-range
+  [world tile-pos]
+  (if tile-pos
+    (wireless-api/get-nodes-in-range world tile-pos)
+    []))
+
+(defn- build-link-response
+  [get-linked-node device world]
+  (let [linked-node (get-linked-node device)
+        nodes (if world
+                (nodes-in-range world (pos/position-get-block-pos device))
+                [])]
+    (link-helpers/link-panel-state linked-node nodes)))
+
 (defn register-link-handlers!
   "Register list/connect/disconnect handlers for a wireless-linked machine.
 
@@ -104,51 +101,39 @@
                   world (net-helpers/get-world player)]
               (log/info "[handle-list-nodes]" log-label "tile=" (some? tile))
               (if tile
-                (let [tile-pos (pos/position-get-block-pos tile)
-                      linked-node (get-linked-node tile)
-                      avail (available-nodes world tile-pos linked-node)]
-                  {:success true
-                   :linked (wireless-node->info linked-node)
-                   :avail avail})
-                {:success false :linked nil :avail []}))
+                (let [linked-node (get-linked-node tile)]
+                  (link-helpers/list-nodes-success-response
+                    linked-node
+                    (nodes-in-range world (pos/position-get-block-pos tile))))
+                (link-helpers/list-nodes-empty-response)))
             (catch Exception e
               (log/error "[handle-list-nodes]" (ex-message e))
               (log/stacktrace "[handle-list-nodes]" e)
               {:success false :error (ex-message e)})))
-        build-link-response
-        (fn [device world]
-          (let [tile-pos (when world (pos/position-get-block-pos device))
-                linked-node (get-linked-node device)
-                avail (when world (available-nodes world tile-pos linked-node))]
-            {:linked (wireless-node->info linked-node)
-             :avail (or avail [])}))
         handle-connect
         (fn [payload player]
           (try
             (let [world (net-helpers/get-world player)
                   device (tile-from-payload payload player)
-                  node-pos (select-keys payload [:node-x :node-y :node-z])
+                  node-pos (link-helpers/payload-node-position payload)
                   pass (:password payload "")
                   need-auth? (boolean (:need-auth? payload true))]
               (log/info "[handle-connect] device=" (some? device) "world=" (some? world)
                         "node-pos=" (pr-str node-pos))
-              (let [{:keys [linked avail]} (when device (build-link-response device world))]
-              (if (and world device
-                       (number? (:node-x node-pos))
-                       (number? (:node-y node-pos))
-                       (number? (:node-z node-pos)))
-                (if-let [node (net-helpers/get-tile-at world {:pos-x (:node-x node-pos)
-                                                              :pos-y (:node-y node-pos)
-                                                              :pos-z (:node-z node-pos)})]
-                  (let [result (link! device node pass need-auth?)
-                        {:keys [linked avail]} (build-link-response device world)]
-                    (log/info "[handle-connect] link result:" (pr-str result))
-                    (assoc result :messages (feedback/result->messages message-domain result)
-                                   :linked linked :avail avail))
+              (let [{:keys [linked avail]} (when device (build-link-response get-linked-node device world))]
+                (if (and world device (link-helpers/valid-node-position? node-pos))
+                  (if-let [node (net-helpers/get-tile-at world {:pos-x (:node-x node-pos)
+                                                                :pos-y (:node-y node-pos)
+                                                                :pos-z (:node-z node-pos)})]
+                    (let [result (link! device node pass need-auth?)
+                          {:keys [linked avail]} (build-link-response get-linked-node device world)]
+                      (log/info "[handle-connect] link result:" (pr-str result))
+                      (assoc result :messages (feedback/result->messages message-domain result)
+                                     :linked linked :avail avail))
+                    {:success false :linked linked :avail avail
+                     :messages (feedback/result->messages message-domain {:success false :reason :not-found})})
                   {:success false :linked linked :avail avail
-                   :messages (feedback/result->messages message-domain {:success false :reason :not-found})})
-                {:success false :linked linked :avail avail
-                 :messages (feedback/result->messages message-domain {:success false :reason :aborted})})))
+                   :messages (feedback/result->messages message-domain {:success false :reason :aborted})})))
             (catch Exception e
               (log/error "[handle-connect]" (ex-message e))
               (log/stacktrace "[handle-connect]" e)
@@ -159,11 +144,11 @@
           (try
             (let [device (tile-from-payload payload player)
                   world (net-helpers/get-world player)
-                  {:keys [linked avail]} (when device (build-link-response device world))]
+                  {:keys [linked avail]} (when device (build-link-response get-linked-node device world))]
               (if device
                 (do
                   (unlink! device)
-                  (let [{:keys [linked avail]} (build-link-response device world)]
+                  (let [{:keys [linked avail]} (build-link-response get-linked-node device world)]
                     {:success true :linked linked :avail avail
                      :messages (feedback/result->messages message-domain {:success true})}))
                 {:success false :linked linked :avail avail

@@ -1,5 +1,6 @@
 (ns cn.li.ac.content.ability.meltdowner.electron-missile-test
   (:require [clojure.test :refer [deftest is]]
+            [cn.li.ac.ability.test.skill-callback-test-helpers :as cb]
             [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.content.ability.meltdowner.electron-missile :as missile]
             [cn.li.ac.ability.skill-config :as skill-config]
@@ -70,9 +71,7 @@
                   skill-config/tunable-double stub-tunable-double
                   ctx-skill/update-skill-state-root! update-skill-state-root!
                   fx/send! (capture-local-and-nearby-fx! local-fx* nearby-fx*)]
-      (missile/electron-missile-down! {:player-id "p1"
-                                       :ctx-id "ctx-1"
-                                       :cost-ok? true}))
+      (cb/apply-invoke missile/electron-missile-down! :player-id "p1" :ctx-id "ctx-1" :cost-ok? true))
 
     (is (= {:ticks 0 :active-balls 0 :active? true :overload-floor 350.0}
            (:skill-state @ctx*)))
@@ -101,9 +100,7 @@
                   entity/player-spawn-entity-by-id! (fn [& args]
                                                       (swap! spawn-calls* conj args)
                                                       true)]
-      (missile/electron-missile-tick! {:player-id "p1"
-                                       :ctx-id "ctx-2"
-                                       :player {:id "player-obj"}}))
+      (cb/apply-invoke missile/electron-missile-tick! :player-id "p1" :ctx-id "ctx-2" :player-ref {:id "player-obj"}))
 
     (is (= [[{:id "player-obj"} "my_mod:entity_md_ball" 0.0]] @spawn-calls*))
     (is (= ["p1" 220.0] (first @floor-calls*)))
@@ -149,9 +146,7 @@
                   md-damage/mark-target! (fn [player-id uuid fx-context]
                                            (swap! mark-calls* conj [player-id uuid fx-context])
                                            nil)]
-      (missile/electron-missile-tick! {:player-id "p1"
-                                       :ctx-id "ctx-3"
-                                       :player {:id "player-obj"}}))
+      (cb/apply-invoke missile/electron-missile-tick! :player-id "p1" :ctx-id "ctx-3" :player-ref {:id "player-obj"}))
 
     (is (= 1 (count @damage-calls*)))
     (is (= [["p1" "t-1" {:ctx-id "ctx-3"
@@ -177,8 +172,8 @@
                                                      nil)
                   ctx-skill/update-skill-state-root! update-skill-state-root!
                   fx/send! (capture-local-and-nearby-fx! local-fx* nearby-fx*)]
-      (missile/electron-missile-up! {:player-id "p1" :ctx-id "ctx-4"})
-      (missile/electron-missile-abort! {:ctx-id "ctx-4"}))
+      (cb/apply-invoke missile/electron-missile-up! :player-id "p1" :ctx-id "ctx-4")
+      (cb/apply-invoke missile/electron-missile-abort! :ctx-id "ctx-4"))
 
     (is (= [["p1" :electron-missile 550]] @cooldown-calls*))
     (is (= {:ticks 0 :active-balls 0 :active? false}
@@ -206,9 +201,7 @@
                   fx/send! (capture-local-and-nearby-fx! local-fx* nearby-fx*)
                   geom/world-id-of (fn [_] "w")
                   geom/eye-pos (fn [_] {:x 1.0 :y 65.0 :z 2.0})]
-      (missile/electron-missile-tick! {:player-id "p1"
-                                       :ctx-id "ctx-5"
-                                       :player {:id "player-obj"}}))
+      (cb/apply-invoke missile/electron-missile-tick! :player-id "p1" :ctx-id "ctx-5" :player-ref {:id "player-obj"}))
 
     (is (= 1 (count @terminate-calls*)))
     (is (= [:electron-missile/fx-end] (mapv second @local-fx*)))

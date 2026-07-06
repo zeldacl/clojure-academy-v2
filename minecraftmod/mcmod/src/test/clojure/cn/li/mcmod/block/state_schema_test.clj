@@ -5,7 +5,8 @@
             [cn.li.mcmod.platform.be :as pbe]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.world :as world]
-            [cn.li.mcmod.block.inventory-helpers :as inv]))
+            [cn.li.mcmod.block.inventory-helpers :as inv]
+            [cn.li.mcmod.test.class-gen-guard :as class-gen-guard]))
 
 (deftest load-and-save-core-test
   (let [specs [{:key :energy :default 0 :persist? true :nbt-key "energy" :type :int}
@@ -108,3 +109,29 @@
     (with-redefs [schema/get-network-world (fn [_] :world)
                   schema/get-network-tile-at (fn [_ _] :tile)]
       (is (= {:success false} ((get handlers :set-mode) {} :player))))))
+
+;; ── 铁律十三 红线测试：运行时零动态类生成 ──
+
+(deftest block-state-updater-no-runtime-class-gen-test
+  (let [fields [{:key :energy :default 0 :block-state {:prop "energy" :type :integer}}
+                {:key :enabled :default false :block-state {:prop "connected" :type :boolean}}]
+        updater (schema/build-block-state-updater fields)]
+    (class-gen-guard/with-mocks-zero-class-gen
+      "build-block-state-updater"
+      [#'world/world-get-block-state*           (fn [_ _] {:bs true})
+       #'world/block-state-get-state-definition (fn [_] :def)
+       #'world/block-state-get-property        (fn [_ _ prop] (when (#{"energy" "connected"} prop) prop))
+       #'world/block-state-set-property        (fn [bs prop v] (assoc bs (keyword prop) v))
+       #'world/world-set-block*                (fn [_ _ _ _] nil)]
+      :body ((dotimes [i 10000]
+               (updater {:energy (double i) :enabled (even? i)} :level :pos))))))
+
+(deftest get-field-no-runtime-class-gen-test
+  (let [fields [{:key :energy :default 0.0}
+                {:key :mode :default :a}]]
+    (class-gen-guard/assert-zero-class-gen
+      "get-field"
+      (fn []
+        (schema/get-field fields {:energy 5.0 :mode :b} :energy)
+        (schema/get-field fields {:energy 5.0} :missing))
+      10000)))

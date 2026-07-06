@@ -1,5 +1,6 @@
 (ns cn.li.ac.content.ability.electromaster.mine-detect-test
   (:require [clojure.test :refer [deftest is testing]]
+            [cn.li.ac.ability.test.skill-callback-test-helpers :as cb]
             [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.test.support.fx-mocks :as fx-mocks]
             [cn.li.ac.ability.skill-config :as skill-config]
@@ -41,8 +42,7 @@
                     potion-effects/apply-potion-effect!* (fn [& args]
                                                            (swap! potion* conj args)
                                                            nil)]
-        (mine-detect/mine-detect-perform! {:player-id "mine-detect-player"
-                                          :ctx-id "ctx-1"}))
+        (cb/apply-invoke mine-detect/mine-detect-perform! :player-id "mine-detect-player" :ctx-id "ctx-1"))
       (is (= ["ctx-1" :mine-detect/fx-perform :perform
               {:life-ticks 100
                :rescan-interval 5

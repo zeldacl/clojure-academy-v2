@@ -5,6 +5,12 @@
             [clojure.test.check.properties :as prop]
             [cn.li.ac.ability.util.scaling :as sc]))
 
+(deftest clamp-exp-test
+  (is (= 0.0 (sc/clamp-exp -0.5)))
+  (is (= 1.0 (sc/clamp-exp 1.5)))
+  (is (= 0.4 (sc/clamp-exp 0.4)))
+  (is (= 0.0 (sc/clamp-exp nil))))
+
 (deftest lerp-endpoints-test
   (is (= 10.0 (sc/lerp 10.0 20.0 0.0)))
   (is (= 20.0 (sc/lerp 10.0 20.0 1.0)))

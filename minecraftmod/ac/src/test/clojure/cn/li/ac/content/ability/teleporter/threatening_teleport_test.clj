@@ -1,5 +1,7 @@
 (ns cn.li.ac.content.ability.teleporter.threatening-teleport-test
   (:require [clojure.test :refer [deftest is]]
+            [cn.li.ac.ability.test.skill-callback-test-helpers :as cb]
+            [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
@@ -38,7 +40,7 @@
                   skill-effects/set-main-cooldown! (fn [& _] (swap! cooldown-calls* inc))
                   fx/send! (fn [& _] (swap! fx-calls* inc))
                   ach-dispatcher/trigger-custom-event! (fn [& _] (swap! ach-calls* inc))]
-      (tt/threatening-tp-up! {:player-id "p1" :ctx-id "ctx-1" :player :player :cost-ok? false}))
+      (cb/apply-invoke tt/threatening-tp-up! :player-id "p1" :ctx-id "ctx-1" :player-ref :player :cost-ok? false))
 
     (is (= 0 @damage-calls*))
     (is (= 0 @exp-calls*))
@@ -52,8 +54,8 @@
     (with-redefs [ctx/get-context get-context
                   ctx-skill/update-skill-state-root! update-skill-state-root!
                   fx/send! send!
-                  helper/skill-exp (fn [_ _] 0.5)
-                  helper/cfg-lerp (fn [_ _ _] 12.0)
+                  skill-effects/skill-exp (fn [_ _] 0.5)
+                  skill-config/lerp-double (fn [_ _ _] 12.0)
                   helper/player-position (fn [_] {:x 1.0 :y 2.0 :z 3.0})
                   helper/player-look-vec (fn [_] {:x 0.0 :y 0.0 :z 1.0})
                   geom/world-id-of (fn [_] "minecraft:overworld")
@@ -63,7 +65,7 @@
                                                :entity-uuid "enemy"
                                                :hit-x 4.0 :hit-y 5.0 :hit-z 6.0
                                                :distance 7.0})]
-      (tt/threatening-tp-tick! {:player-id "p1" :ctx-id "ctx-2" :hold-ticks 9}))
+      (cb/apply-invoke tt/threatening-tp-tick! :player-id "p1" :ctx-id "ctx-2" :hold-ticks 9))
 
     (is (= 9 (get-in @ctx* [:skill-state :hold-ticks])))
     (is (= true (get-in @ctx* [:skill-state :trace :attacked?])))
@@ -90,22 +92,22 @@
         consume-calls* (atom 0)
         drop-calls* (atom [])]
     (with-redefs [ctx/get-context get-context
-                  helper/skill-exp (fn [_ _] 0.5)
-                  helper/cfg-lerp (fn [_ field _]
+                  skill-effects/skill-exp (fn [_ _] 0.5)
+                  skill-config/lerp-double (fn [_ field _]
                                     (case field
                                       :combat.damage 4.0
                                       :targeting.range 10.0
                                       :cost.up.cp 60.0
                                       :cost.up.overload 12.0
                                       0.0))
-                  helper/cfg-lerp-int (fn [_ _ _] 22)
-                  helper/cfg-double (fn [_ field]
+                  skill-config/lerp-int (fn [_ _ _] 22)
+                  skill-config/tunable-double (fn [_ field]
                                       (case field
                                         :progression.exp-base 0.003
                                         :progression.exp-hit-factor 1.0
                                         :progression.exp-miss-factor 0.2
                                         0.0))
-                  helper/cfg-probability (fn [_ field]
+                  skill-config/probability (fn [_ field]
                                            (case field
                                              :interaction.drop-prob.hit 0.3
                                              :interaction.drop-prob.miss 1.0
@@ -138,7 +140,7 @@
                   ach-dispatcher/trigger-custom-event! (fn [player-id event-id]
                                                          (swap! ach-calls* conj [player-id event-id]))
                   rand (fn [] 0.0)]
-      (tt/threatening-tp-up! {:player-id "p1" :ctx-id "ctx-3" :player :player :cost-ok? true}))
+      (cb/apply-invoke tt/threatening-tp-up! :player-id "p1" :ctx-id "ctx-3" :player-ref :player :cost-ok? true))
 
     (is (= [["minecraft:overworld" "enemy" 4.0]] @damage-calls*))
     (is (= 0 @consume-calls*))
@@ -172,20 +174,20 @@
         fx-calls* (atom [])
         crit-fx-calls* (atom [])]
     (with-redefs [ctx/get-context get-context
-                  helper/skill-exp (fn [_ _] 0.5)
-                  helper/cfg-lerp (fn [_ field _]
+                  skill-effects/skill-exp (fn [_ _] 0.5)
+                  skill-config/lerp-double (fn [_ field _]
                                     (case field
                                       :combat.damage 4.0
                                       :targeting.range 10.0
                                       0.0))
-                  helper/cfg-lerp-int (fn [_ _ _] 22)
-                  helper/cfg-double (fn [_ field]
+                  skill-config/lerp-int (fn [_ _ _] 22)
+                  skill-config/tunable-double (fn [_ field]
                                       (case field
                                         :progression.exp-base 0.003
                                         :progression.exp-hit-factor 1.0
                                         :progression.exp-miss-factor 0.2
                                         0.0))
-                  helper/cfg-probability (fn [_ field]
+                  skill-config/probability (fn [_ field]
                                            (case field
                                              :interaction.drop-prob.hit 0.3
                                              :interaction.drop-prob.miss 1.0
@@ -205,7 +207,7 @@
                                (swap! crit-fx-calls* conj payload))
                              nil)
                   rand (fn [] 0.0)]
-      (tt/threatening-tp-up! {:player-id "p1" :ctx-id "ctx-4" :player :player :cost-ok? true}))
+      (cb/apply-invoke tt/threatening-tp-up! :player-id "p1" :ctx-id "ctx-4" :player-ref :player :cost-ok? true))
 
     (is (empty? @crit-fx-calls*))
     (is (some (fn [[topic _]] (= topic :threatening-teleport/fx-perform)) @fx-calls*))))

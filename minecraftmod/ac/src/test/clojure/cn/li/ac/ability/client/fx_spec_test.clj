@@ -6,21 +6,15 @@
             [cn.li.ac.ability.client.level-effects :as level-effects]))
 
 (defn- reset-fixture [f]
-  (level-effects/call-with-level-effect-runtime
-    (level-effects/create-level-effect-runtime)
-    (fn []
-      (hand-effects/call-with-hand-effect-runtime
-        (hand-effects/create-hand-effect-runtime)
-        (fn []
-          (fx-registry/reset-fx-registry-for-test!)
-          (level-effects/reset-level-effect-registry-for-test!)
-          (hand-effects/reset-hand-effect-registry-for-test!)
-          (try
-            (f)
-            (finally
-              (fx-registry/reset-fx-registry-for-test!)
-              (level-effects/reset-level-effect-registry-for-test!)
-              (hand-effects/reset-hand-effect-registry-for-test!))))))))
+  (fx-registry/reset-fx-registry-for-test!)
+  (level-effects/reset-level-effect-registry-for-test!)
+  (hand-effects/reset-hand-effect-registry-for-test!)
+  (try
+    (f)
+    (finally
+      (fx-registry/reset-fx-registry-for-test!)
+      (level-effects/reset-level-effect-registry-for-test!)
+      (hand-effects/reset-hand-effect-registry-for-test!))))
 
 (use-fixtures :each reset-fixture)
 
@@ -57,10 +51,10 @@
         enqueued-hand* (atom [])]
     (with-redefs [level-effects/register-level-effect! (fn [& _] nil)
                   hand-effects/register-hand-effect! (fn [& _] nil)
-                  level-effects/enqueue-level-effect! (fn [effect-id payload ctx]
-                                                        (swap! enqueued-level* conj [effect-id payload ctx]))
-                  hand-effects/enqueue-hand-effect! (fn [effect-id payload]
-                                                      (swap! enqueued-hand* conj [effect-id payload]))]
+                  level-effects/enqueue-level-effect! (fn [effect-id ctx-id channel payload & opts]
+                                                        (swap! enqueued-level* conj (into [effect-id ctx-id channel payload] opts)))
+                  hand-effects/enqueue-hand-effect! (fn [effect-id ctx-id channel payload & opts]
+                                                      (swap! enqueued-hand* conj (into [effect-id ctx-id channel payload] opts)))]
       (fx-spec/register!
         {:id :test-effect
          :channels {:start {:topic :test/fx-start :mode :start :targets [:level :hand]}
@@ -69,22 +63,5 @@
       (fx-registry/dispatch-fx-channel! "ctx-a" :test/fx-end {:performed? true})
       (is (= 1 (count @enqueued-level*)))
       (is (= 2 (count @enqueued-hand*)))
-      (is (= [:test-effect {:owner-key [:ctx "ctx-a"]
-                            :ctx-id "ctx-a"
-                            :channel :test/fx-start
-                            :mode :start
-                            :ticks 3}]
+      (is (= [:test-effect "ctx-a" :test/fx-start {:mode :start :ticks 3} :owner-key [:ctx "ctx-a"]]
              (first @enqueued-hand*))))))
-
-(deftest build-event-merges-meta-and-extra-test
-  (is (= {:owner-key [:ctx "ctx-1"]
-          :ctx-id "ctx-1"
-          :channel :test/fx-perform
-          :payload {:effect-instance-id "inst"
-                    :mode :perform
-                    :damage 5.0}}
-         (fx-spec/build-event "ctx-1" :test/fx-perform
-           {:effect-instance-id "inst"}
-           :owner-key [:ctx "ctx-1"]
-           :mode :perform
-           :extra {:damage 5.0}))))

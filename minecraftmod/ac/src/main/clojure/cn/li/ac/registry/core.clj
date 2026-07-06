@@ -10,7 +10,7 @@
 ;; Key set documentation
 ;; ============================================================================
 
-(def ^:const content-provider-keys
+(def content-provider-keys
   "Keys required by a content provider function map."
   [:provider-id :priority :content-phases])
 

@@ -6,7 +6,7 @@
             [cn.li.mcmod.platform.world :as world]))
 
 (deftest node-tick-state-increments-ticker-test
-  (is (= 1 (:update-ticker (node-logic/node-tick-state {} {:level :w :pos :p :be :be})))))
+  (is (= 1 (:update-ticker (node-logic/node-tick-state {} :w :p nil :be)))))
 
 (deftest node-scripted-tick-fn-uses-machine-wrapper-test
   (testing "tick fn commits via machine runtime on server"
@@ -37,5 +37,5 @@
           new (assoc old :energy (node-logic/node-max-energy old))]
       (with-redefs [node-logic/update-block-state!
                     (fn [_ _ _] (swap! blockstate-calls inc))]
-        (#'node-logic/sync-blockstate-if-changed! nil :level :pos old new nil)
+        (#'node-logic/sync-blockstate-if-changed! nil :level :pos old new)
         (is (= 1 @blockstate-calls)))))))

@@ -1,5 +1,6 @@
 (ns cn.li.ac.content.ability.electromaster.mag-movement-test
   (:require [clojure.test :refer [deftest is]]
+            [cn.li.ac.ability.test.skill-callback-test-helpers :as cb]
             [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.test.support.fx-mocks :as fx-mocks]
             [cn.li.ac.test.support.skill-context :as skill-ctx]
@@ -89,7 +90,7 @@
                     skill-effects/add-skill-exp! (fn [player-id skill-id amount]
                                                    (swap! exp* conj [player-id skill-id amount])
                                                    nil)]
-         (cost-fail! {:ctx-id ctx-id :player-id "p1" :cost-stage :down})))
+         (cb/apply-invoke cost-fail! :ctx-id ctx-id :player-id "p1" :cost-stage :down)))
     (is (empty? @exp*))
     (is (= [[ctx-id :mag-movement/fx-end :end nil]] @calls*))
     (is (= [ctx-id] @terminated*))
@@ -117,7 +118,7 @@
                     skill-effects/add-skill-exp! (fn [& args]
                                                    (swap! exp* conj args)
                                                    nil)]
-         (down! {:ctx-id ctx-id :player-id "p1" :exp 0.4})))
+         (cb/apply-invoke down! :ctx-id ctx-id :player-id "p1" :exp 0.4)))
     (is (empty? @exp*))
     (is (= [[ctx-id :mag-movement/fx-end :end nil]] @calls*))
     (is (= [ctx-id] @terminated*))
@@ -166,8 +167,8 @@
                     skill-effects/add-skill-exp! (fn [player-id skill-id amount]
                                                    (swap! exp* conj [player-id skill-id amount])
                                                    nil)]
-         (tick! {:ctx-id ctx-id :player-id "p1" :cost-ok? false})
-         (tick! {:ctx-id ctx-id :player-id "p1" :cost-ok? false})))
+         (cb/apply-invoke tick! :ctx-id ctx-id :player-id "p1" :cost-ok? false)
+         (cb/apply-invoke tick! :ctx-id ctx-id :player-id "p1" :cost-ok? false)))
     (is (= 1 (count @exp*)))
     (is (= 1 (count (filter #(= :mag-movement/fx-end (second %)) @calls*))))
     (is (= [ctx-id] @terminated*))
@@ -218,7 +219,7 @@
                     skill-effects/add-skill-exp! (fn [player-id skill-id amount]
                                                    (swap! exp* conj [player-id skill-id amount])
                                                    nil)]
-         (tick! {:ctx-id ctx-id :player-id "p1" :cost-ok? true})))
+         (cb/apply-invoke tick! :ctx-id ctx-id :player-id "p1" :cost-ok? true)))
     (is (= 1 (count @exp*)))
     (is (= [[ctx-id :mag-movement/fx-end :end nil]] @calls*))
     (is (= [ctx-id] @terminated*))
@@ -308,8 +309,8 @@
                     skill-effects/add-skill-exp! (fn [player-id skill-id amount]
                                                    (swap! exp* conj [player-id skill-id amount])
                                                    nil)]
-         (up! {:ctx-id ctx-id :player-id "p1"})
-         (abort! {:ctx-id ctx-id :player-id "p1"})))
+         (cb/apply-invoke up! :ctx-id ctx-id :player-id "p1")
+         (cb/apply-invoke abort! :ctx-id ctx-id :player-id "p1")))
     (is (= 1 (count @exp*)))
     (is (= 1 (count @calls*)))
     (is (= [ctx-id] @terminated*))))

@@ -54,23 +54,4 @@
          #"Energy type registry is frozen"
          (energy-type/unregister-energy-type! :imaginary)))))
 
-(deftest energy-type-runtime-isolation-test
-  (let [runtime-a (energy-type/create-energy-type-runtime)
-        runtime-b (energy-type/create-energy-type-runtime)
-        type-a (test-energy-type :imaginary "Imaginary")
-        type-b (test-energy-type :vector "Vector")]
-    (energy-type/call-with-energy-type-runtime
-      runtime-a
-      (fn []
-        (energy-type/register-energy-type! type-a)
-        (is (= [type-a] (energy-type/list-energy-types)))))
-    (energy-type/call-with-energy-type-runtime
-      runtime-b
-      (fn []
-        (is (empty? (energy-type/list-energy-types)))
-        (energy-type/register-energy-type! type-b)
-        (is (= [type-b] (energy-type/list-energy-types)))))
-    (energy-type/call-with-energy-type-runtime
-      runtime-a
-      (fn []
-        (is (= [type-a] (energy-type/list-energy-types)))))))
+

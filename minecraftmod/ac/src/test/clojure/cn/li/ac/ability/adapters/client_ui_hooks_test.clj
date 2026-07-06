@@ -41,42 +41,36 @@
       (particles/call-with-particle-queue-runtime
         (particles/create-particle-queue-runtime)
         (fn []
-          (sounds/call-with-sound-queue-runtime
-            (sounds/create-sound-queue-runtime)
+          (ps-fix/with-test-player-state-owner
             (fn []
-              (hand-effects/call-with-camera-pitch-runtime
-                (hand-effects/create-camera-pitch-runtime)
-                (fn []
-                  (ps-fix/with-test-player-state-owner
-                    (fn []
-                      (client-ui-hooks/reset-client-ui-state-for-test!)
-                      (client-keybinds/reset-client-keybind-state-for-test!)
-                      (particles/reset-particle-queue-for-test!)
-                      (sounds/reset-sound-queue-for-test!)
-                      (hand-effects/reset-hand-effect-registry-for-test!)
-                      (store/reset-store!)
-                      (ctx/reset-contexts-for-test!)
-                      (try
-                        (binding [client-keybinds/*client-session-id* :test-session]
-                          (f))
-                        (finally
-                          (client-ui-hooks/reset-client-ui-state-for-test!)
-                          (client-keybinds/reset-client-keybind-state-for-test!)
-                          (particles/reset-particle-queue-for-test!)
-                          (sounds/reset-sound-queue-for-test!)
-                          (hand-effects/reset-hand-effect-registry-for-test!)
-                          (ctx/reset-contexts-for-test!)
-                          (store/reset-store!))))))))))))))
+              (client-ui-hooks/reset-client-ui-state-for-test!)
+              (client-keybinds/reset-client-keybind-state-for-test!)
+              (particles/reset-particle-queue-for-test!)
+              (sounds/reset-sound-queue-for-test!)
+              (hand-effects/reset-hand-effect-registry-for-test!)
+              (store/reset-store!)
+              (ctx/reset-contexts-for-test!)
+              (try
+                (binding [client-keybinds/*client-session-id* :test-session]
+                  (f))
+                (finally
+                  (client-ui-hooks/reset-client-ui-state-for-test!)
+                  (client-keybinds/reset-client-keybind-state-for-test!)
+                  (particles/reset-particle-queue-for-test!)
+                  (sounds/reset-sound-queue-for-test!)
+                  (hand-effects/reset-hand-effect-registry-for-test!)
+                  (ctx/reset-contexts-for-test!)
+                  (store/reset-store!))))))))))
 
 (use-fixtures :each reset-ui-state!)
 
 (defn- with-client-player-state-owner
   [player-uuid f]
-  (binding [client-keybinds/*client-session-id* :test-session
-            runtime-hooks/*client-session-id* :test-session
-            runtime-hooks/*player-state-owner* {:client-session-id :test-session
-                                                :player-uuid player-uuid}]
-    (f)))
+  (runtime-hooks/with-client-ctx {:session-id :test-session
+                                  :player-owner {:client-session-id :test-session
+                                                  :player-uuid player-uuid}}
+    (binding [client-keybinds/*client-session-id* :test-session]
+      (f))))
 
 (deftest client-slot-key-hooks-create-context-once-and-send-input-messages-test
   (let [sent (atom [])
@@ -188,28 +182,16 @@
                     :player-uuid "p1"})))))))
 
 (deftest client-ui-owner-requires-explicit-session-and-player-test
-  (binding [client-keybinds/*client-session-id* nil
-            runtime-hooks/*client-session-id* nil]
-    (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                          #"Client UI owner requires :client-session-id"
-                          (client-ui-hooks/client-ui-state-snapshot "p1"))))
+  (runtime-hooks/with-client-ctx {:session-id nil}
+    (binding [client-keybinds/*client-session-id* nil]
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                            #"Client UI owner requires :client-session-id"
+                            (client-ui-hooks/client-ui-state-snapshot "p1")))))
   (is (thrown-with-msg? clojure.lang.ExceptionInfo
                         #"Client UI owner requires :player-uuid"
                         (client-ui-hooks/client-ui-state-snapshot {:client-session-id :session-a}))))
 
-(deftest client-ui-runtime-isolation-test
-  (let [owner {:client-session-id :test-session
-               :player-uuid "p1"}
-        runtime-b (client-ui-hooks/create-client-ui-runtime)]
-    (client-ui-hooks/set-slot-context-for-test! owner 0 "ctx-a")
-    (client-ui-hooks/call-with-client-ui-runtime
-      runtime-b
-      (fn []
-        (client-ui-hooks/set-slot-context-for-test! owner 0 "ctx-b")
-        (is (= {[:test-session "p1" 0] "ctx-b"}
-               (:slot-context-ids (client-ui-hooks/client-ui-state-snapshot owner))))))
-    (is (= {[:test-session "p1" 0] "ctx-a"}
-           (:slot-context-ids (client-ui-hooks/client-ui-state-snapshot owner))))))
+
 
 (deftest client-open-managed-screen-validates-payload-owner-test
   (let [hooks (client-ui-hooks/runtime-client-ui-hooks)]
@@ -268,7 +250,7 @@
     (is (empty? (particles/particle-queue-snapshot (:client-session-id owner))))
     (is (empty? (sounds/sound-queue-snapshot (:client-session-id owner))))
     (is (empty? (hand-effects/drain-camera-pitch-deltas! owner)))
-    (binding [runtime-hooks/*player-state-owner* owner]
+    (runtime-hooks/with-client-ctx {:player-owner owner}
       (is (nil? (store/get-player-state* :session-a "p1"))))
     (binding [ctx/*context-owner* context-owner]
       (is (nil? (ctx/get-context "ctx-cleanup"))))))

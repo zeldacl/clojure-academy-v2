@@ -74,7 +74,7 @@
                     platform-be/be-get-world-safe (fn [_] :world)
                     world-registry/get-world-data (fn [_] :world-data)
                     vb/create-vnode (fn [_] :node-vb)
-                    commands/link-node-to-network! (fn [_ _ _ _] {:success true})
+                    commands/link-node-to-network! (fn [_ _ _ _ _] {:success true})
                     resolver/matrix-capability (fn [tile]
                                                    (when (= tile :matrix-tile) matrix))
                     resolver/node-capability (fn [tile]
@@ -98,7 +98,7 @@
                     vb/create-vnode-conn (fn [_] :node-conn-vb)
                     commands/ensure-node-connection! (fn [_ _] :conn)
                     vb/create-vgenerator (fn [_] :gen-vb)
-                    commands/link-generator-to-connection! (fn [_ _ _] {:success true})
+                    commands/link-generator-to-connection! (fn [_ _ _ _] {:success true})
                     resolver/node-capability (fn [tile]
                                                  (when (= tile :node-tile) node))
                     resolver/generator-capability (fn [tile]
@@ -133,7 +133,7 @@
                     vb/create-vnode-conn (fn [_] :node-conn-vb)
                     commands/ensure-node-connection! (fn [_ _] :conn)
                     vb/create-vreceiver (fn [_] :rec-vb)
-                    commands/link-receiver-to-connection! (fn [_ _ _] {:success true})
+                    commands/link-receiver-to-connection! (fn [_ _ _ _] {:success true})
                     resolver/node-capability (fn [tile]
                                                  (when (= tile :node-tile) node))
                     resolver/receiver-capability (fn [tile]

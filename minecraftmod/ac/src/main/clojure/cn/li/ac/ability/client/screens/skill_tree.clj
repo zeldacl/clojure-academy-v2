@@ -95,7 +95,7 @@
 ;; Layout Calculations
 ;; ============================================================================
 (defn calculate-skill-positions [skills]
-  (let [ordered (vec (sort-by (juxt :level :id) skills))
+  (let [ordered (vec (sort-by #(vector (get % :level) (get % :id)) skills))
         cx 200 cy 120 radius 80
         n (max 1 (count ordered))]
     (map-indexed (fn [idx s]
@@ -163,7 +163,7 @@
     (let [ad (:ability-data ps) cid (:category-id ad)
           cat (when cid (category/get-category cid))
           skills (when cid
-                   (filter :enabled (skill/get-skills-for-category cid)))
+                   (filter #(get % :enabled) (skill/get-skills-for-category cid)))
           pos (when skills (calculate-skill-positions skills))]
       {:ability-info (build-ability-info-render-data ps) :category-color (:color cat)
        :skill-nodes (when pos (mapv (fn [p] (let [n (build-skill-node-render-data p ps (or dev-type :normal))] (assoc n :locked? (> (:skill-level n) (:level (:ability-data ps)))))) pos))
@@ -300,10 +300,11 @@
                       x0 (+ from-x (* ndx 12.2)) y0 (+ from-y (* ndy 12.2))
                       x1-full (- to-x (* ndx 12.2)) y1-full (- to-y (* ndy 12.2))
                       ;; Animate endpoint from x0 outward — matches upstream drawLine(progress)
-                      blend (or lb 1.0)
+                      ;; Do not use (or lb 1.0): lb=0 is valid and must not fall through to full length.
+                      blend (double (if (some? lb) lb 1.0))
                       x1 (lerp x0 x1-full blend)
                       y1 (lerp y0 y1-full blend)]
-                  (when (> blend 0)
+                  (when (pos? blend)
                     [{:kind :line-quad :x0 x0 :y0 y0 :x1 x1 :y1 y1
                       :line-width 5.5 :color color}])))))
           connections))
@@ -581,7 +582,7 @@
                                :to-y   (- (:to-y c) node-dy)
                                :lb     lb)))
                          raw-conns)
-        conns-by-idx (group-by :child-idx anim-conns)
+        conns-by-idx (group-by #(get % :child-idx) anim-conns)
         raw-nodes (or (:skill-nodes rd) [])
         shifted-nodes (mapv #(assoc % :x (- (:x %) node-dx) :y (- (:y %) node-dy)) raw-nodes)
         nodes (mapcat (fn [idx n]

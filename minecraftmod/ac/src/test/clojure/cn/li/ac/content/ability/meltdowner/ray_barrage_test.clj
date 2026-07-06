@@ -1,5 +1,6 @@
 (ns cn.li.ac.content.ability.meltdowner.ray-barrage-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
+            [cn.li.ac.ability.test.skill-callback-test-helpers :as cb]
             [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.content.ability.meltdowner.ray-barrage :as rb]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
@@ -80,7 +81,7 @@
                   skill-effects/add-skill-exp! (fn [& args]
                                                  (swap! exp-calls* conj args)
                                                  nil)]
-      (rb/ray-barrage-perform! {:player-id "p1" :ctx-id "ctx-1"}))
+      (cb/apply-invoke rb/ray-barrage-perform! :player-id "p1" :ctx-id "ctx-1"))
 
     (is (= 1 @run-calls*))
     (is (= [["p1" :ray-barrage 0.003]] @exp-calls*))
@@ -118,7 +119,7 @@
                                                  (swap! exp-calls* conj args)
                                                  nil)
                   md-damage/mark-target! (fn [& _] true)]
-      (rb/ray-barrage-perform! {:player-id "p1" :ctx-id "ctx-scatter"}))
+      (cb/apply-invoke rb/ray-barrage-perform! :player-id "p1" :ctx-id "ctx-scatter"))
 
     (is (= [10.0 10.0 10.0] @run-calls*))
     (is (= 2 (count (filter #{:ray-barrage/fx-preray} @fx*))))
@@ -159,8 +160,8 @@
                   skill-effects/add-skill-exp! (fn [& args]
                                                  (swap! exp-calls* conj args)
                                                  nil)]
-      (rb/ray-barrage-perform! {:player-id "p1" :ctx-id "ctx-2"})
-      (rb/ray-barrage-perform! {:player-id "p1" :ctx-id "ctx-2"}))
+      (cb/apply-invoke rb/ray-barrage-perform! :player-id "p1" :ctx-id "ctx-2")
+      (cb/apply-invoke rb/ray-barrage-perform! :player-id "p1" :ctx-id "ctx-2"))
 
     (is (= 4 @run-calls*))
     (is (= 4 (count (filter #{:ray-barrage/fx-preray} @fx*))))

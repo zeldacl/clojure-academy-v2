@@ -33,7 +33,7 @@
                              ":client-session-id"
                              (or (:client-session-id owner-or-session)
                                  (runtime-hooks/player-state-client-session-id)
-                                 runtime-hooks/*client-session-id*)))
+                                 (runtime-hooks/*client-session-id*))))
 
     (some? owner-or-session)
     owner-or-session
@@ -42,14 +42,14 @@
     (require-owner-value kind nil
                          ":client-session-id"
                          (or (runtime-hooks/player-state-client-session-id)
-                             runtime-hooks/*client-session-id*))))
+                             (runtime-hooks/*client-session-id*)))))
 
 (defn current-effect-owner
   [kind]
   (or (runtime-hooks/current-player-state-owner)
-      (when runtime-hooks/*client-session-id*
+      (when (runtime-hooks/*client-session-id*)
         {:logical-side :client
-         :client-session-id runtime-hooks/*client-session-id*})
+         :client-session-id (runtime-hooks/*client-session-id*)})
       (throw (ex-info (format "Current %s effect owner requires :client-session-id" kind)
                       {:required ":client-session-id"}))))
 

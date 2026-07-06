@@ -8,11 +8,11 @@
   On release: each ball fires a beam in random cone direction
   Anti-AFK: at tick 200, apply 6 self-damage
   Overload floor: enforced during hold
-  Cooldown: lerp(30, 15, exp) 脳 ball-count ticks
-  Exp: +0.002 脳 ball-count
+  Cooldown: lerp(30, 15, exp) �?ball-count ticks
+  Exp: +0.002 �?ball-count
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.dsl :refer [defskill]]
+  (:require [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
             [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
@@ -25,6 +25,7 @@
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.util.log :as log]))
 
+(def-skill-config-ops :scatter-bomb)
 (def ^:private mdball-entity-id "my_mod:entity_md_ball")
 (def ^:private scatter-bomb-skill-id :scatter-bomb)
 
@@ -36,32 +37,13 @@
 ;; Helpers
 ;; ---------------------------------------------------------------------------
 
-(defn- skill-exp [player-id]
-  (skill-effects/skill-exp player-id scatter-bomb-skill-id))
-
-(defn- cfg-double [field-id]
-  (skill-config/tunable-double scatter-bomb-skill-id field-id))
-
-(defn- cfg-int [field-id]
-  (skill-config/tunable-int scatter-bomb-skill-id field-id))
-
-(defn- cfg-lerp [field-id exp]
-  (skill-config/lerp-double scatter-bomb-skill-id field-id exp))
-
-(defn- cfg-lerp-int [field-id exp]
-  (skill-config/lerp-int scatter-bomb-skill-id field-id exp))
-
 (defn- current-hold-ticks
   [ctx-id]
-  (long (or (get-in (ctx/get-context ctx-id) [:skill-state :hold-ticks]) 0)))
+  (long (or (get-in (ctx-skill/get-context ctx-id) [:skill-state :hold-ticks]) 0)))
 
 (defn- set-skill-state!
   [ctx-id k v]
   (ctx-skill/assoc-skill-state! ctx-id k v))
-
-(defn- set-skill-state-root!
-  [ctx-id state-map]
-  (ctx-skill/update-skill-state-root! ctx-id identity state-map))
 
 (defn- beam-config []
   {:radius          (cfg-double :beam.radius)
@@ -75,7 +57,7 @@
   (skill-effects/enforce-overload-floor! player-id floor-value))
 
 (defn- random-cone-dir
-  "Random direction within 卤45掳 cone of look direction."
+  "Random direction within �?5�?cone of look direction."
   [look-vec]
   (let [[spread-min spread-max] (skill-config/tunable-double-list scatter-bomb-skill-id
                                                                   :projectile.cone-spread)
@@ -98,20 +80,19 @@
 ;; ---------------------------------------------------------------------------
 
 (defn scatter-bomb-down!
-  [{:keys [player-id ctx-id cost-ok?]}]
+  [ctx-id _player-id _skill-id exp cost-ok? _hold-ticks _cost-stage _player-ref]
   (when cost-ok?
-    (let [exp (skill-exp player-id)
-          floor (* (cfg-lerp :cost.down.overload exp)
+    (let [floor (* (cfg-lerp :cost.down.overload exp)
                    (cfg-double :cost.overload-floor-scale))]
-    (set-skill-state-root! ctx-id
+    (ctx-skill/replace-skill-state! ctx-id
                {:balls        0
             :hold-ticks   0
             :overload-floor floor})
       (fx/send! ctx-id {:topic :scatter-bomb/fx-start} nil {}))))
 
 (defn scatter-bomb-tick!
-  [{:keys [player-id ctx-id player]}]
-  (let [ctx-data (ctx/get-context ctx-id)]
+  [ctx-id player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage player-ref]
+  (let [ctx-data (ctx-skill/get-context ctx-id)]
     (when ctx-data
       (let [ticks (inc (long (or (get-in ctx-data [:skill-state :hold-ticks]) 0)))
             _ (set-skill-state! ctx-id [:hold-ticks] ticks)
@@ -137,18 +118,17 @@
                                (cfg-int :projectile.spawn-interval-ticks))))
           (let [new-balls (inc balls)]
             (set-skill-state! ctx-id [:balls] new-balls)
-            (when player
-              (entity/player-spawn-entity-by-id! player mdball-entity-id 0.0))
+            (when player-ref
+              (entity/player-spawn-entity-by-id! player-ref mdball-entity-id 0.0))
             (let [eye (geom/eye-pos player-id)]
               (fx/send! ctx-id {:topic :scatter-bomb/fx-ball} nil
                         {:x (:x eye) :y (:y eye) :z (:z eye)
                          :count new-balls}))))))))
 
 (defn scatter-bomb-up!
-  [{:keys [player-id ctx-id]}]
-  (let [ctx-data (ctx/get-context ctx-id)
-        balls (int (or (get-in ctx-data [:skill-state :balls]) 0))
-        exp (skill-exp player-id)]
+  [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage _player-ref]
+  (let [ctx-data (ctx-skill/get-context ctx-id)
+        balls (int (or (get-in ctx-data [:skill-state :balls]) 0))]
     (when (pos? balls)
       (let [world-id (geom/world-id-of player-id)
             eye      (geom/eye-pos player-id)
@@ -179,13 +159,13 @@
     (fx/send! ctx-id {:topic :scatter-bomb/fx-end} nil {:balls balls})))
 
 (defn scatter-bomb-cost-fail!
-  [{:keys [ctx-id cost-stage]}]
+  [ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks cost-stage _player-ref]
   (when (= cost-stage :tick)
-    (let [balls (int (or (get-in (ctx/get-context ctx-id) [:skill-state :balls]) 0))]
+    (let [balls (int (or (get-in (ctx-skill/get-context ctx-id) [:skill-state :balls]) 0))]
       (fx/send! ctx-id {:topic :scatter-bomb/fx-end} nil {:balls balls}))))
 
 (defn scatter-bomb-abort!
-  [{:keys [ctx-id]}]
+  [ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (fx/send! ctx-id {:topic :scatter-bomb/fx-end} nil {:balls 0}))
 
 ;; ---------------------------------------------------------------------------

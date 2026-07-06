@@ -3,7 +3,8 @@
 
    All MC interop (CompoundTag/ListTag) is installed by mc-1.20.1/installer_core.clj.
    Content code calls wrapper functions; they lookup from [:platform :nbt-ops]."
-  (:require [cn.li.mcmod.framework :as fw]))
+  (:require [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.util.log :as log]))
 
 ;; Contract keys
 (def nbt-compound-keys #{:nbt-set-int! :nbt-get-int :nbt-set-string! :nbt-get-string
@@ -18,7 +19,13 @@
 (defn install-nbt-ops!
   "Install NBT operations map. Keys match nbt-compound-keys + nbt-list-keys + nbt-factory-keys."
   [ops-map _label]
-  (when-let [fw-atom (fw/fw-atom)] (swap! fw-atom assoc-in [:platform :nbt-ops] ops-map)) nil)
+  (if-let [fw-atom (fw/fw-atom)]
+    (let [required (into nbt-compound-keys (into nbt-list-keys nbt-factory-keys))
+          missing (seq (remove (set (keys ops-map)) required))]
+      (swap! fw-atom assoc-in [:platform :nbt-ops] ops-map)
+      (when missing
+        (log/error "NBT ops MISSING required keys:" (pr-str missing))))
+    (log/error "NBT ops install FAILED: Framework atom nil")))
 
 (defn install-nbt-has-key-fn!
   "Install a single has-key? override function at [:platform :nbt-ops :nbt-has-key?]."

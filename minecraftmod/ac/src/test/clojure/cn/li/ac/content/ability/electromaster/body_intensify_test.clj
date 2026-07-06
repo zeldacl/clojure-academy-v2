@@ -1,5 +1,6 @@
 (ns cn.li.ac.content.ability.electromaster.body-intensify-test
   (:require [clojure.test :refer [deftest is]]
+            [cn.li.ac.ability.test.skill-callback-test-helpers :as cb]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
@@ -75,11 +76,11 @@
                                                     (swap! exp-calls* conj [player-id skill-id amount]))
                      skill-effects/set-main-cooldown! (fn [player-id skill-id ticks]
                                                         (swap! cooldown-calls* conj [player-id skill-id ticks]))]
-         (up-fn {:player-id "p1" :ctx-id "ctx-low" :exp 0.5 :hold-ticks 9})
+         (cb/apply-invoke up-fn :player-id "p1" :ctx-id "ctx-low" :exp 0.5 :hold-ticks 9)
          (is (empty? @applied*) "below min charge does not apply buffs")
          (is (empty? @exp-calls*))
          (is (empty? @cooldown-calls*))
-         (up-fn {:player-id "p1" :ctx-id "ctx-ok" :exp 0.5 :hold-ticks 10})
+         (cb/apply-invoke up-fn :player-id "p1" :ctx-id "ctx-ok" :exp 0.5 :hold-ticks 10)
          (is (pos? (count @applied*)) "successful release applies buffs")
          (is (= [["p1" :body-intensify 0.02]] @exp-calls*))
          (is (= [["p1" :body-intensify 25]] @cooldown-calls*))))))

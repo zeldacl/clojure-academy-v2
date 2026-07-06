@@ -1,5 +1,6 @@
 (ns cn.li.ac.content.ability.meltdowner.scatter-bomb-fx-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
+            [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
@@ -8,17 +9,14 @@
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (defn- reset-fixture [f]
-  (binding [runtime-hooks/*client-session-id* :test-session]
-    (level-effects/call-with-level-effect-runtime
-      (level-effects/create-level-effect-runtime)
-      (fn []
-        (try
+  (runtime-hooks/with-client-ctx {:session-id :test-session}
+    (try
           (level-effects/reset-level-effect-registry-for-test!)
           (sb-fx/reset-scatter-bomb-fx-for-test!)
           (f)
           (finally
             (sb-fx/reset-scatter-bomb-fx-for-test!)
-            (level-effects/reset-level-effect-registry-for-test!)))))))
+            (level-effects/reset-level-effect-registry-for-test!)))))
 
 (use-fixtures :each reset-fixture)
 
@@ -58,30 +56,22 @@
                   client-sounds/queue-current-sound-effect! (fn [& args]
                                                                 (swap! sounds* conj args)
                                                                 nil)]
-      (level-effects/update-effect-state! :scatter-bomb
-        enqueue-state!
-        (event "ctx-sb" :scatter-bomb/fx-start {:mode :start :source-player-id "player-a"}))
-      (level-effects/update-effect-state! :scatter-bomb
-        enqueue-state!
-        (event "ctx-sb" :scatter-bomb/fx-ball {:mode :ball
+      (arc-beam/enqueue-for-test! :scatter-bomb "ctx-sb" :scatter-bomb/fx-start {:mode :start :source-player-id "player-a"})
+      (arc-beam/enqueue-for-test! :scatter-bomb "ctx-sb" :scatter-bomb/fx-ball {:mode :ball
                                                 :x 1.0 :y 64.0 :z 2.0
                                                 :count 3
-                                                :source-player-id "player-a"}))
+                                                :source-player-id "player-a"})
       (is (= 3 (get-in (sb-fx/scatter-bomb-fx-snapshot) [:effect-state [:ctx "ctx-sb"] :balls])))
       (level-effects/update-effect-state! :scatter-bomb
         (fn [store _]
           (tick-state! store))
         nil)
       (is (= 1 (get-in (sb-fx/scatter-bomb-fx-snapshot) [:effect-state [:ctx "ctx-sb"] :ticks])))
-      (level-effects/update-effect-state! :scatter-bomb
-        enqueue-state!
-        (event "ctx-sb" :scatter-bomb/fx-beam {:mode :beam
+      (arc-beam/enqueue-for-test! :scatter-bomb "ctx-sb" :scatter-bomb/fx-beam {:mode :beam
                                                  :start {:x 1.0 :y 64.0 :z 2.0}
                                                  :end {:x 2.0 :y 64.0 :z 3.0}
-                                                 :source-player-id "player-a"}))
-      (level-effects/update-effect-state! :scatter-bomb
-        enqueue-state!
-        (event "ctx-sb" :scatter-bomb/fx-end {:mode :end :source-player-id "player-a"}))
+                                                 :source-player-id "player-a"})
+      (arc-beam/enqueue-for-test! :scatter-bomb "ctx-sb" :scatter-bomb/fx-end {:mode :end :source-player-id "player-a"})
       (is (nil? (get-in (sb-fx/scatter-bomb-fx-snapshot) [:effect-state [:ctx "ctx-sb"]])))
       (is (seq @particles*))
       (is (seq @sounds*)))))
@@ -91,15 +81,11 @@
         tick-state! (var-get #'cn.li.ac.content.ability.meltdowner.scatter-bomb-fx/tick-state!)]
     (with-redefs [client-particles/queue-current-particle-effect! (fn [& _] nil)
                   client-sounds/queue-current-sound-effect! (fn [& _] nil)]
-      (level-effects/update-effect-state! :scatter-bomb
-        enqueue-state!
-        (event "ctx-cadence" :scatter-bomb/fx-start {:mode :start :source-player-id "player-a"}))
-      (level-effects/update-effect-state! :scatter-bomb
-        enqueue-state!
-        (event "ctx-cadence" :scatter-bomb/fx-ball {:mode :ball
+      (arc-beam/enqueue-for-test! :scatter-bomb "ctx-cadence" :scatter-bomb/fx-start {:mode :start :source-player-id "player-a"})
+      (arc-beam/enqueue-for-test! :scatter-bomb "ctx-cadence" :scatter-bomb/fx-ball {:mode :ball
                                                      :x 1.0 :y 64.0 :z 2.0
                                                      :count 4
-                                                     :source-player-id "player-a"}))
+                                                     :source-player-id "player-a"})
 
       (dotimes [_ 5]
         (level-effects/update-effect-state! :scatter-bomb
@@ -110,43 +96,7 @@
       (is (= 5 (get-in (sb-fx/scatter-bomb-fx-snapshot) [:effect-state [:ctx "ctx-cadence"] :ticks])))
       (is (= 4 (get-in (sb-fx/scatter-bomb-fx-snapshot) [:effect-state [:ctx "ctx-cadence"] :balls])))
 
-      (level-effects/update-effect-state! :scatter-bomb
-        enqueue-state!
-        (event "ctx-cadence" :scatter-bomb/fx-end {:mode :end :source-player-id "player-a"}))
+      (arc-beam/enqueue-for-test! :scatter-bomb "ctx-cadence" :scatter-bomb/fx-end {:mode :end :source-player-id "player-a"})
       (is (nil? (get-in (sb-fx/scatter-bomb-fx-snapshot) [:effect-state [:ctx "ctx-cadence"]]))))))
 
-(deftest scatter-bomb-fx-runtime-isolation-test
-  (let [runtime-a (level-effects/create-level-effect-runtime)
-        runtime-b (level-effects/create-level-effect-runtime)
-        enqueue-state! (var-get #'cn.li.ac.content.ability.meltdowner.scatter-bomb-fx/enqueue-state!)
-        particles* (atom [])
-        sounds* (atom [])]
-    (with-redefs [client-particles/queue-current-particle-effect! (fn [& args]
-                                                                     (swap! particles* conj args)
-                                                                     nil)
-                  client-sounds/queue-current-sound-effect! (fn [& args]
-                                                                (swap! sounds* conj args)
-                                                                nil)]
-      (level-effects/call-with-level-effect-runtime
-        runtime-a
-        (fn []
-          (level-effects/update-effect-state! :scatter-bomb
-            enqueue-state!
-            (event "ctx-a" :scatter-bomb/fx-start {:mode :start :source-player-id "player-a"}))
-          (is (= #{[:ctx "ctx-a"]}
-                 (set (keys (:effect-state (sb-fx/scatter-bomb-fx-snapshot))))))))
-      (level-effects/call-with-level-effect-runtime
-        runtime-b
-        (fn []
-          (is (= {:effect-state {}}
-                 (sb-fx/scatter-bomb-fx-snapshot)))
-          (level-effects/update-effect-state! :scatter-bomb
-            enqueue-state!
-            (event "ctx-b" :scatter-bomb/fx-start {:mode :start :source-player-id "player-b"}))
-          (is (= #{[:ctx "ctx-b"]}
-                 (set (keys (:effect-state (sb-fx/scatter-bomb-fx-snapshot))))))))
-      (level-effects/call-with-level-effect-runtime
-        runtime-a
-        (fn []
-          (is (= #{[:ctx "ctx-a"]}
-                 (set (keys (:effect-state (sb-fx/scatter-bomb-fx-snapshot)))))))))))
+

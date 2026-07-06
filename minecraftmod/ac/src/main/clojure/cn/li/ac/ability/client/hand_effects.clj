@@ -13,11 +13,9 @@
 ;; Camera pitch delta accumulator (shared across all hand effects)
 ;; ---------------------------------------------------------------------------
 
-;; Camera pitch runtime — Framework [:service :camera-pitch]
-;; Uses ConcurrentLinkedQueue (not Atom) for lock-free, non-blocking
-;; queue between render thread and game logic / network threads.
-
 (def ^:private cp-path [:service :camera-pitch])
+
+(defonce ^:private fallback-camera-pitch-queue (ConcurrentLinkedQueue.))
 
 (defn- camera-pitch-deltas-queue ^ConcurrentLinkedQueue
   []
@@ -26,7 +24,7 @@
         (let [q (ConcurrentLinkedQueue.)]
           (swap! fw-atom assoc-in cp-path q)
           q))
-    (ConcurrentLinkedQueue.)))
+    fallback-camera-pitch-queue))
 
 (defn- normalize-session-id
   [owner-or-session]
@@ -42,7 +40,7 @@
   ([delta]
    (add-camera-pitch-delta! nil delta))
   ([owner-or-session delta]
-  (queue-infra/queue-effect! (camera-pitch-deltas-queue) "hand" owner-or-session (float delta))
+   (queue-infra/queue-effect! (camera-pitch-deltas-queue) "hand" owner-or-session (float delta))
    nil))
 
 (defn add-current-camera-pitch-delta!
@@ -108,19 +106,20 @@
   []
   {:registry {}
    :order []
-  :effect-states {}
+   :effect-states {}
    :frozen? false})
 
-;; Hand effect registry — Framework [:service :hand-effects]
-
 (def ^:private he-path [:service :hand-effects])
+
+(defonce ^:private fallback-hand-effect-state
+  (atom (default-hand-effect-runtime-state)))
 
 (defn- hand-effect-state-atom []
   (if-let [fw-atom (fw/fw-atom)]
     (or (get-in @fw-atom he-path)
         (let [a (atom (default-hand-effect-runtime-state))]
           (swap! fw-atom assoc-in he-path a) a))
-    (atom (default-hand-effect-runtime-state))))
+    fallback-hand-effect-state))
 
 (defn- hand-effect-state-snapshot
   []
@@ -136,13 +135,6 @@
     (update state :effect-states dissoc effect-id)
     (assoc-in state [:effect-states effect-id] effect-state)))
 
-;; effect-id �?{:enqueue-fn        (fn [payload])
-;;              :enqueue-state-fn  (fn [state payload] -> state)
-;;              :tick-fn           (fn [])
-;;              :tick-state-fn     (fn [state] -> state)
-;;              :initial-state     any (optional)
-;;              :transform-fn   (fn []) �?transform-map or nil  (optional)}
-
 (defn- assert-registry-open!
   []
   (when (:frozen? (hand-effect-state-snapshot))
@@ -152,19 +144,14 @@
   "Register a hand effect handler.  `effect-id` is a keyword.
 
   `handler-map` keys:
-    :enqueue-fn   (fn [payload]) �?process incoming FX data
-    :enqueue-state-fn (fn [state payload]) -> state
-    :tick-fn      (fn []) �?advance animation state each game tick
-    :tick-state-fn (fn [state]) -> state
-    :initial-state any initial state for :enqueue-state-fn/:tick-state-fn path
-    :transform-fn (fn []) �?{:translate [x y z] :rotate [x y z] :scale [x y z]} or nil
-                   (optional)"
+    :enqueue-state-fn (fn [state ctx-id channel owner-key payload] -> state)
+    :tick-state-fn    (fn [state] -> state)
+    :initial-state    any (optional)
+    :transform-fn     (fn [] -> transform-map or nil) (optional)"
   [effect-id handler-map]
   (when-not (and (keyword? effect-id) (map? handler-map)
-                 (or (fn? (:enqueue-fn handler-map))
-                     (fn? (:enqueue-state-fn handler-map)))
-                 (or (fn? (:tick-fn handler-map))
-                     (fn? (:tick-state-fn handler-map))))
+                 (fn? (:enqueue-state-fn handler-map))
+                 (fn? (:tick-state-fn handler-map)))
     (throw (IllegalArgumentException. "register-hand-effect!: invalid effect-id or handler-map")))
   (assert-registry-open!)
   (update-hand-effect-state!
@@ -174,7 +161,9 @@
         (-> state
             (update :order conj effect-id)
             (assoc-in [:registry effect-id] handler-map)
-            (assoc-effect-state effect-id (:initial-state handler-map))))))
+            (assoc-effect-state effect-id
+                               (let [init (:initial-state handler-map)]
+                                 (if (fn? init) (init) init)))))))
   (log/debug "Registered hand effect:" effect-id)
   nil)
 
@@ -186,7 +175,6 @@
 (defn hand-effect-registry-snapshot
   []
   (assoc (hand-effect-state-snapshot)
-         ;; Drain queue to array for snapshot — non-mutating peek
          :camera-pitch-deltas (vec (.toArray (camera-pitch-deltas-queue)))))
 
 (defn effect-state-snapshot
@@ -217,32 +205,35 @@
 ;; Dispatch
 ;; ---------------------------------------------------------------------------
 
+(defn- default-owner-key [effect-id payload ctx-id _channel]
+  (cond (and (map? payload) (:effect-instance-id payload)) [:effect-instance (:effect-instance-id payload)]
+        ctx-id [:ctx ctx-id]
+        (and (map? payload) (:source-player-id payload)) [:source-player (:source-player-id payload)]
+        :else [:ctx ctx-id]))
+
 (defn enqueue-hand-effect!
   "Dispatch an incoming FX payload to the registered hand-effect handler."
-  [effect-id payload]
-  (if-let [{:keys [enqueue-fn enqueue-state-fn]} (get-in (hand-effect-state-snapshot) [:registry effect-id])]
-    (if enqueue-state-fn
+  [effect-id ctx-id channel payload & {:keys [owner-key]}]
+  (if-let [{:keys [enqueue-state-fn]} (get-in (hand-effect-state-snapshot) [:registry effect-id])]
+    (let [owner-key* (or owner-key (default-owner-key effect-id payload ctx-id channel))]
       (update-hand-effect-state!
         (fn [state]
           (let [current-state (get-in state [:effect-states effect-id])
-                next-state (enqueue-state-fn current-state payload)]
-            (assoc-effect-state state effect-id next-state))))
-      (enqueue-fn payload))
-    (log/warn "No hand effect registered for" effect-id)))
+                next-state (enqueue-state-fn current-state ctx-id channel owner-key* payload)]
+            (assoc-effect-state state effect-id next-state))))))
+    (log/warn "No hand effect registered for" effect-id))
 
 (defn tick-hand-effects!
   "Tick all registered hand effects."
   []
   (let [{:keys [order registry]} (hand-effect-state-snapshot)]
     (doseq [eid order]
-      (when-let [{:keys [tick-fn tick-state-fn]} (get registry eid)]
-        (if tick-state-fn
-          (update-hand-effect-state!
-            (fn [state]
-              (let [current-state (get-in state [:effect-states eid])
-                    next-state (tick-state-fn current-state)]
-                (assoc-effect-state state eid next-state))))
-          (tick-fn))))))
+      (when-let [{:keys [tick-state-fn]} (get registry eid)]
+        (update-hand-effect-state!
+          (fn [state]
+            (let [current-state (get-in state [:effect-states eid])
+                  next-state (tick-state-fn current-state)]
+              (assoc-effect-state state eid next-state))))))))
 
 (defn current-hand-transform
   "Merge transforms from all registered hand effects.
@@ -254,10 +245,6 @@
               (when transform-fn
                 (transform-fn))))
           order)))
-
-;; ---------------------------------------------------------------------------
-;; Introspection
-;; ---------------------------------------------------------------------------
 
 (defn registered-effects
   "Return the set of currently-registered hand effect ids."

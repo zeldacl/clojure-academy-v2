@@ -156,14 +156,10 @@
 
 (defn- current-client-owner
   "Resolve a client owner for GUI-initiated server requests.
-  Tries platform-level session resolution first, falls back to dynamic bindings,
-  returns nil when no session can be resolved."
+  Uses the platform-registered hook (set by mc-1.20.1) to get the client owner,
+  which matches the source used by with-client-response-owner during response dispatch."
   []
-  (let [session-id runtime-hooks/*client-session-id*
-        player-uuid (some-> runtime-hooks/*player-state-owner* :player-uuid)]
-    (when session-id
-      (cond-> {:logical-side :client :client-session-id session-id}
-        player-uuid (assoc :player-uuid player-uuid)))))
+  (runtime-hooks/default-client-owner))
 
 (defn send-gather-info
   "Query network information from server."
@@ -189,7 +185,7 @@
               (callback data))
             (catch Exception e
               (log/error "Error processing gather-info response:"(ex-message e))))))
-      (log/debug "Skip gather-info: no client session bound"))
+      (log/info "[send-gather-info] Skip: current-client-owner returned nil"))
     (catch Exception e
       (log/error "Error sending gather-info:"(ex-message e)))))
 
@@ -205,7 +201,7 @@
             (callback (get response :success false))
             (catch Exception e
               (log/error "Error processing init response:"(ex-message e))))))
-      (log/debug "Skip init-network: no client session bound"))
+      (log/info "[send-init-network] Skip: current-client-owner returned nil"))
     (catch Exception e
       (log/error "Error sending init:"(ex-message e)))))
 
@@ -410,9 +406,12 @@
                           (log/info "Matrix INIT ssid=" ssid "pass=" pass)
                           (send-init-network container ssid pass
                             (fn [success]
+                              (log/info "[INIT-CALLBACK] success=" success)
                               (when success
+                                (log/info "[INIT-CALLBACK] calling send-gather-info...")
                                 (send-gather-info container
                                   (fn [new-data]
+                                    (log/info "[INIT-CALLBACK] gather-info response, initialized=" (:initialized new-data))
                                     (rebuild-info-area! info-area container player new-data))))))))
                       y)]
               y)

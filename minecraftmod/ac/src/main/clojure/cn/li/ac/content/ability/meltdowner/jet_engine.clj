@@ -9,9 +9,8 @@
   - terminate after trigger lifetime or abort/failure
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.dsl :refer [defskill]]
+  (:require [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
             [cn.li.ac.ability.fx :as fx]
-            [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
@@ -23,6 +22,7 @@
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.util.log :as log]))
 
+(def-skill-config-ops :jet-engine)
 (def ^:private jet-engine-skill-id :jet-engine)
 
 ; Phase timing/range stay as implementation constants; balance-facing values use skill-config below.
@@ -30,18 +30,6 @@
 (def ^:private trigger-time-ticks 8)
 (def ^:private trigger-lifetime-ticks 15)
 (def ^:private min-segment-distance 1.0e-5)
-
-(defn- cfg-double [field-id]
-  (skill-config/tunable-double jet-engine-skill-id field-id))
-
-(defn- cfg-lerp [field-id exp]
-  (skill-config/lerp-double jet-engine-skill-id field-id exp))
-
-(defn- cfg-lerp-int [field-id exp]
-  (skill-config/lerp-int jet-engine-skill-id field-id exp))
-
-(defn- skill-exp [player-id]
-  (skill-effects/skill-exp player-id jet-engine-skill-id))
 
 (defn- release-cp-cost [player-id]
   (cfg-lerp :cost.down.cp (skill-exp player-id)))
@@ -90,10 +78,6 @@
 (defn- update-skill-state-root!
   [ctx-id f & args]
   (apply ctx-skill/update-skill-state-root! ctx-id f args))
-
-(defn- set-skill-state-root!
-  [ctx-id state-map]
-  (ctx-skill/update-skill-state-root! ctx-id identity state-map))
 
 (defn- can-afford-release? [player-id]
   (let [cp-needed (release-cp-cost player-id)
@@ -150,8 +134,8 @@
         (conj hit-uuids target-id)))))
 
 (defn- tick-triggering!
-  [{:keys [player-id ctx-id]}]
-  (let [ctx-data (ctx/get-context ctx-id)
+  [ctx-id player-id]
+  (let [ctx-data (ctx-skill/get-context ctx-id)
         st (:skill-state ctx-data)
         trigger-ticks (long (or (:trigger-ticks st) 0))
         start-pos (:start-pos st)
@@ -201,10 +185,10 @@
           (send-trigger-update! ctx-id next-pos next-tick))))))
 
 (defn jet-engine-down!
-  [{:keys [ctx-id player-id cost-ok?]}]
+  [ctx-id player-id _skill-id _exp cost-ok? _hold-ticks _cost-stage _player-ref]
   (when cost-ok?
     (let [target (get-target-pos player-id)]
-      (set-skill-state-root! ctx-id {:phase :marking
+      (ctx-skill/replace-skill-state! ctx-id {:phase :marking
                                      :hold-ticks 0
                                      :target-pos target
                                      :trigger-ticks 0
@@ -212,12 +196,12 @@
       (send-mark-start! ctx-id target))))
 
 (defn jet-engine-tick!
-  [{:keys [ctx-id player-id hold-ticks]}]
-  (let [st (get-in (ctx/get-context ctx-id) [:skill-state])
+  [ctx-id player-id _skill-id _exp _cost-ok? hold-ticks _cost-stage _player-ref]
+  (let [st (get-in (ctx-skill/get-context ctx-id) [:skill-state])
         phase (:phase st)]
     (case phase
       :triggering
-      (tick-triggering! {:player-id player-id :ctx-id ctx-id})
+      (tick-triggering! ctx-id player-id)
 
       :marking
       (if-not (can-afford-release? player-id)
@@ -233,9 +217,9 @@
       nil)))
 
 (defn jet-engine-up!
-  [{:keys [player-id ctx-id]}]
+  [ctx-id player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (try
-    (let [st (get-in (ctx/get-context ctx-id) [:skill-state])
+    (let [st (get-in (ctx-skill/get-context ctx-id) [:skill-state])
           phase (:phase st)
           target-pos (or (:target-pos st) (get-target-pos player-id))]
       (if (not= phase :marking)
@@ -274,8 +258,8 @@
       (ctx/terminate-context! ctx-id nil))))
 
 (defn jet-engine-abort!
-  [{:keys [ctx-id]}]
-  (let [st (get-in (ctx/get-context ctx-id) [:skill-state])]
+  [ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
+  (let [st (get-in (ctx-skill/get-context ctx-id) [:skill-state])]
     (send-trigger-end! ctx-id)
     (send-mark-end! ctx-id (:target-pos st))))
 

@@ -59,6 +59,20 @@
 (defn- raw-level-players [level]
 	(or (try (world/world-get-players* level) (catch Exception _ nil)) []))
 
+(defn- player-in-aabb?
+  "True when player is non-creative, non-spectator, and inside the AABB bounds.
+  Top-level to avoid runtime class generation in tick-adjacent filter (Iron Rule 13)."
+  [min-x max-x min-y max-y min-z max-z p]
+  (and p
+       (not (player-creative? p))
+       (not (player-spectator? p))
+       (let [x (entity/entity-get-x p)
+             y (entity/entity-get-y p)
+             z (entity/entity-get-z p)]
+         (and (<= min-x x max-x)
+              (<= min-y y max-y)
+              (<= min-z z max-z)))))
+
 (defn- find-players-in-range [level pos range]
   "Find players within a cubic AABB centered on the block (matching original AcademyCraft behavior)."
   (let [cx (+ 0.5 (double (pos/pos-x pos)))
@@ -69,16 +83,7 @@
         min-y (- cy r) max-y (+ cy r)
         min-z (- cz r) max-z (+ cz r)]
     (->> (raw-level-players level)
-         (filter (fn [p]
-                   (and p
-                        (not (player-creative? p))
-                        (not (player-spectator? p))
-                            (let [x (entity/entity-get-x p)
-                            y (entity/entity-get-y p)
-                            z (entity/entity-get-z p)]
-                           (and (<= min-x x max-x)
-                             (<= min-y y max-y)
-                             (<= min-z z max-z))))))
+         (filter (partial player-in-aabb? min-x max-x min-y max-y min-z max-z))
          vec)))
 
 (defn- apply-interference-effect! [player src-id]
@@ -150,7 +155,7 @@
       (doseq [[src-id {:keys [level pos affected-uuids]}] @active-interferers]
         (when (and level pos)
           (try
-            (when-not (world/world-is-chunk-loaded?* level (world/block-to-chunk-coord (pos/position-get-x pos)) (world/block-to-chunk-coord (pos/position-get-z pos)))
+            (when-not (world/world-is-chunk-loaded?* level (world/block-to-chunk-coord (pos/pos-x pos)) (world/block-to-chunk-coord (pos/pos-z pos)))
               (swap! stale conj src-id)
               (log/warn "[Interferer] Chunk unloaded for" src-id "- cleaning up" (count affected-uuids) "players")
               (doseq [u affected-uuids]
@@ -175,7 +180,7 @@
 
 (defn interferer-tick-state
   "Pure state step; ability I/O runs in interferer-after-commit!."
-  [base-state {:keys [level pos]}]
+  [base-state level pos _block-state _be]
   (let [ticker (inc (long (get base-state :update-ticker 0)))
         state0 (assoc base-state
                       :update-ticker ticker
@@ -216,7 +221,7 @@
   "1.20-idiomatic: cheap in-memory :enabled comparison first; only touch world
    BlockState when the visual property actually changes. Ability interference
    effects (player registration) are handled after the BlockState check."
-  [_be level pos old-state new-state _ctx]
+  [_be level pos old-state new-state]
   (when (and level pos (not= old-state new-state))
     ;; BlockState update (1.20 pattern: cheap comparison before world access)
     (when (not= (:enabled old-state) (:enabled new-state))
@@ -286,7 +291,7 @@
 ;; Block lifecycle: place, break
 ;; ============================================================================
 
-(defn on-interferer-placed! [{:keys [player world pos] :as _ctx}]
+(defn on-interferer-placed! [player world pos _block-id]
 	(when (and player world pos)
 		(let [tile (world/world-get-tile-entity* world pos)]
 			(when tile
@@ -307,7 +312,7 @@
           (machine-runtime/commit-state! tile world pos state state'
                                          :blockstate-updater interferer-blockstate-updater))))))
 
-(defn on-interferer-break! [{:keys [world pos] :as _ctx}]
+(defn on-interferer-break! [world pos _block-id]
 	(when (and world pos)
 		(let [tile (world/world-get-tile-entity* world pos)]
 			(when tile

@@ -23,7 +23,7 @@
     (catch Exception _
       k)))
 
-(defn- get-or-create-saved-data
+(defn get-or-create-saved-data
   ^WorldLifecycleSavedData
   [^ServerLevel level]
   (let [^DimensionDataStorage storage (.getDataStorage level)
@@ -49,7 +49,8 @@
       nil)))
 
 (defn save-world-lifecycle-saved-data!
-  "Persist handler-id -> CompoundTag map into SavedData. Returns nil."
+  "Persist handler-id -> CompoundTag map into SavedData.
+  setDirty will be picked up by the next auto-save or normal save cycle."
   [^ServerLevel level saved-map]
   (try
     (let [^WorldLifecycleSavedData sd (get-or-create-saved-data level)

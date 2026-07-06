@@ -11,9 +11,8 @@
   settlement and the client FX receives a single-ray visual event.
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.dsl :refer [defskill]]
+  (:require [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
             [cn.li.ac.ability.fx :as fx]
-            [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.delayed-projectiles :as delayed-projectiles]
@@ -22,41 +21,27 @@
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.util.log :as log]))
 
+(def-skill-config-ops :electron-bomb)
 (def ^:private mdball-entity-id "my_mod:entity_md_ball")
-(def ^:private electron-bomb-skill-id :electron-bomb)
-
 ;; ---------------------------------------------------------------------------
 ;; Helpers
 ;; ---------------------------------------------------------------------------
-
-(defn- skill-exp [player-id]
-  (skill-effects/skill-exp player-id electron-bomb-skill-id))
-
-(defn- cfg-double [field-id]
-  (skill-config/tunable-double electron-bomb-skill-id field-id))
-
-(defn- cfg-lerp [field-id exp]
-  (skill-config/lerp-double electron-bomb-skill-id field-id exp))
-
-(defn- cfg-lerp-int [field-id exp]
-  (skill-config/lerp-int electron-bomb-skill-id field-id exp))
 
 ;; ---------------------------------------------------------------------------
 ;; Action
 ;; ---------------------------------------------------------------------------
 
-(defn- perform-electron-bomb! [{:keys [player-id ctx-id player]}]
+(defn- perform-electron-bomb! [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage player-ref]
   (try
-    (let [exp      (skill-exp player-id)
-          damage   (cfg-lerp :combat.damage exp)
+    (let [damage   (cfg-lerp :combat.damage exp)
           world-id (geom/world-id-of player-id)
           eye      (geom/eye-pos player-id)
           look-vec (when (raycast/available?)
                      (raycast/get-player-look-vector* player-id))]
       (when look-vec
-        (when player
+        (when player-ref
           (entity/player-spawn-entity-by-id!
-            player
+            player-ref
             mdball-entity-id
             0.0))
         ;; Send spawn FX first; the delayed task owns the actual hit settlement.
@@ -79,8 +64,8 @@
       (log/warn "ElectronBomb perform! failed:" (ex-message e)))))
 
 (defn electron-bomb-perform!
-  [evt]
-  (perform-electron-bomb! evt))
+  [& args]
+  (apply perform-electron-bomb! args))
 
 ;; ---------------------------------------------------------------------------
 ;; Skill registration

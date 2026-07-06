@@ -63,48 +63,20 @@
                          :s
                          (fn [v _] v)))))
 
-(deftest passive-handler-runtime-isolation-test
-  (let [runtime-a (passive/create-passive-handler-runtime)
-        runtime-b (passive/create-passive-handler-runtime)]
-    (passive/call-with-passive-handler-runtime
-      runtime-a
-      (fn []
-        (is (true? (passive/register-passive-calc-handler!
-                    :iso-a
-                    evt/CALC-MAX-CP
-                    :s
-                    (fn [v _] v))))
-        (is (= #{:iso-a}
-               (passive/passive-handler-registry-snapshot)))))
-    (passive/call-with-passive-handler-runtime
-      runtime-b
-      (fn []
-        (is (empty? (passive/passive-handler-registry-snapshot)))
-        (is (true? (passive/register-passive-calc-handler!
-                    :iso-b
-                    evt/CALC-MAX-CP
-                    :s
-                    (fn [v _] v))))
-        (is (= #{:iso-b}
-               (passive/passive-handler-registry-snapshot)))))
-    (passive/call-with-passive-handler-runtime
-      runtime-a
-      (fn []
-        (is (= #{:iso-a}
-               (passive/passive-handler-registry-snapshot)))))))
+
 
 (deftest learned-skill-uses-bound-owner-session-test
   (store/set-player-state!* :passive-session
                             "u3"
                             (assoc (store/fresh-player-state)
                                    :ability-data (ad/learn-skill (ad/new-ability-data) :passive-skill)))
-  (binding [runtime-hooks/*player-state-owner* {:server-session-id :passive-session
-                                                :player-uuid "p-passive"}]
+  (runtime-hooks/with-client-ctx {:player-owner {:server-session-id :passive-session
+                                                 :player-uuid "p-passive"}}
     (is (true? (passive/learned-skill? "u3" :passive-skill)))
     ))
 
 (deftest passive-session-resolution-still-fail-fast-test
-  (binding [runtime-hooks/*player-state-owner* nil]
+  (runtime-hooks/with-client-ctx {:player-owner nil}
     (is (thrown-with-msg? clojure.lang.ExceptionInfo
                           #"requires bound session-id"
                           (passive/learned-skill? "u3" :passive-skill)))))

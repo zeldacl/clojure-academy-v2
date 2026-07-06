@@ -11,25 +11,19 @@
   (:require [cn.li.ac.ability.service.runtime-store :as store]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.command-runtime :as command-rt]
-            [cn.li.ac.ability.model.ability :as adata]
             [cn.li.ac.ability.registry.skill :as skill]
             [cn.li.ac.ability.registry.event :as evt]
             [cn.li.ac.ability.rules.cooldown-rules :as cd-rules]
+            [cn.li.ac.ability.service.skill-callback :as skill-cb]
+            [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
-            [cn.li.mcmod.runtime.owner :as owner]
-            [cn.li.ac.ability.service.skill-effects :as skill-effects]))
+            [cn.li.mcmod.runtime.owner :as owner]))
 
 (def INPUT-IDLE :idle)
 (def INPUT-ACTIVE :active)
 (def INPUT-RELEASED :released)
 (def INPUT-ABORTED :aborted)
-
-(def ^:private callback->action-key
-  {:on-key-down  :down!
-   :on-key-tick  :tick!
-   :on-key-up    :up!
-   :on-key-abort :abort!})
 
 (def ^:private supported-patterns
   #{:instant :hold-charge-release :toggle :hold-channel :release-cast :charge-window :passive})
@@ -50,23 +44,6 @@
   ([owner player-id]
    (store/get-player-state* (resolved-session-id owner) player-id)))
 
-(defn- event-payload
-  ([ctx-map payload]
-   (event-payload nil ctx-map payload))
-  ([owner ctx-map payload]
-   (let [player-id (:player-uuid ctx-map)
-         skill-id (:skill-id ctx-map)
-         exp (double (adata/get-skill-exp (get-in (runtime-player-state owner player-id)
-                                                  [:ability-data])
-                                          skill-id))]
-     {:ctx-id (:id ctx-map)
-      :server-id (:server-id ctx-map)
-      :player-id player-id
-      :player (:player payload)
-      :skill-id skill-id
-      :exp exp
-      :payload payload})))
-
 (defn- with-context-owner-binding
   [owner f]
   (let [owner* (or owner ctx/*context-owner*
@@ -84,20 +61,25 @@
    (with-context-owner-binding owner
      (fn []
        (when-let [spec (skill/get-skill (:skill-id ctx-map))]
-         (let [evt* (event-payload owner ctx-map payload)
-               action-key (get callback->action-key cb-key)
-               callback-fn (get-in spec [:actions action-key])
-               stage (case cb-key
-                       :on-key-down :down
-                       :on-key-tick  :tick
-                       nil)
+         (let [pattern (:pattern spec)
+               action-key (skill-cb/resolve-action-key pattern cb-key)
+               callback-fn (when action-key (get-in spec [:actions action-key]))
+               stage (skill-cb/cost-stage-for-cb-key cb-key)
+               player-id (:player-uuid ctx-map)
+               skill-id (:skill-id ctx-map)
+               exp (skill-cb/skill-exp-for owner player-id skill-id)
+               player-ref (:player payload)
                cost-ok? (if stage
-                          (skill-effects/apply-cost! spec stage evt*)
+                          (skill-effects/apply-cost! spec stage player-id skill-id exp)
                           true)
-               evt* (assoc evt* :cost-ok? cost-ok?)]
+               invoke-args (skill-cb/extract-invoke-args
+                            owner ctx-map payload
+                            {:cost-ok? cost-ok? :cost-stage stage})]
            (when (fn? callback-fn)
              (try
-               (callback-fn evt*)
+               (apply skill-cb/invoke-action! callback-fn invoke-args)
+               (when (and stage (not cost-ok?))
+                 (skill-cb/invoke-cost-fail! spec (:id ctx-map) player-id skill-id exp stage player-ref))
                (catch Exception e
                  (log/warn "Skill callback failed" (:id spec) cb-key (ex-message e)))))))
        (evt/fire-ability-event!
@@ -221,22 +203,20 @@
        (when-let [ctx-map (ctx/get-context ctx-id)]
          (when (and (= (:status ctx-map) ctx/STATUS-ALIVE)
                     (= (:input-state ctx-map) INPUT-ACTIVE))
-           (let [released-ctx (set-input-state! owner ctx-id INPUT-RELEASED)]
-             (do
-               (dispatch-skill-callback! owner released-ctx :on-key-up evt/EVT-CONTEXT-KEY-UP payload)
-               (let [latest-ctx (ctx/get-context ctx-id)
-                     spec (skill/get-skill (:skill-id latest-ctx))]
-                 (when-not (boolean (and spec (pattern-owned-spec? spec)))
-                   (evt/fire-ability-event!
-                    (evt/make-skill-perform-event (:player-uuid released-ctx) (:skill-id released-ctx)))
-                   (when (should-apply-main-cooldown? spec)
-                     (apply-main-cooldown! owner released-ctx)))
-                 (if (should-terminate-context-on-key-up? spec)
-                   (ctx/terminate-context! ctx-id terminate-fn)
-                   (if (should-keep-active-on-key-up? spec)
-                     (set-input-state! owner ctx-id INPUT-ACTIVE)
-                     (set-input-state! owner ctx-id INPUT-IDLE)))
-               true)))))))))
+           (let [released-ctx (set-input-state! owner ctx-id INPUT-RELEASED)
+                 spec (skill/get-skill (:skill-id released-ctx))]
+             (dispatch-skill-callback! owner released-ctx :on-key-up evt/EVT-CONTEXT-KEY-UP payload)
+             (when-not (boolean (and spec (pattern-owned-spec? spec)))
+               (evt/fire-ability-event!
+                (evt/make-skill-perform-event (:player-uuid released-ctx) (:skill-id released-ctx)))
+               (when (should-apply-main-cooldown? spec)
+                 (apply-main-cooldown! owner released-ctx)))
+             (if (should-terminate-context-on-key-up? spec)
+               (ctx/terminate-context! ctx-id terminate-fn)
+               (if (should-keep-active-on-key-up? spec)
+                 (set-input-state! owner ctx-id INPUT-ACTIVE)
+                 (set-input-state! owner ctx-id INPUT-IDLE)))
+             true)))))))
 
 (defn handle-key-abort!
   ([ctx-id payload]

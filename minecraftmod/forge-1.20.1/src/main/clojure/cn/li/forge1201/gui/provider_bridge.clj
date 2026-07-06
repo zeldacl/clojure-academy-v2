@@ -50,8 +50,3 @@
           (log/error "[MENU-PROVIDER] Error creating menu:" (.getMessage e))
           (log/error "[MENU-PROVIDER] Stack trace:" e)
           (throw e))))))
-
-(defn create-extended-menu-provider
-  "Forge has no separate extended provider type; keep a unified API."
-  [gui-id tile-entity]
-  (create-menu-provider gui-id tile-entity))

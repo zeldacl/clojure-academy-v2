@@ -9,10 +9,7 @@
             [cn.li.ac.content.ability.vecmanip.vec-deviation-fx :as vec-deviation-fx]))
 
 (defn- reset-fixture [f]
-  (level-effects/call-with-level-effect-runtime
-    (level-effects/create-level-effect-runtime)
-    (fn []
-      (vec-deviation-fx/init!)
+  (vec-deviation-fx/init!)
       (vec-accel-fx/init!)
       (storm-wing-fx/init!)
       (plasma-cannon-fx/init!)
@@ -26,7 +23,7 @@
           (vec-deviation-fx/reset-vec-deviation-fx-for-test!)
           (vec-accel-fx/reset-vec-accel-fx-for-test!)
           (storm-wing-fx/reset-storm-wing-fx-for-test!)
-          (plasma-cannon-fx/reset-plasma-cannon-fx-for-test!))))))
+          (plasma-cannon-fx/reset-plasma-cannon-fx-for-test!))))
 
 (use-fixtures :each reset-fixture)
 
@@ -37,8 +34,7 @@
    :owner-key [:ctx ctx-id]})
 
 (defn- dispatch! [effect-id {:keys [payload ctx-id channel owner-key]}]
-  (level-effects/enqueue-level-effect! effect-id payload
-                                       {:ctx-id ctx-id :channel channel :owner-key owner-key}))
+  (level-effects/enqueue-level-effect! effect-id ctx-id channel payload :owner-key owner-key))
 
 (deftest vec-deviation-keeps-state-and-waves-per-owner-test
   (dispatch! :vec-deviation (event "ctx-a" :vec-deviation/fx-start {:mode :start}))

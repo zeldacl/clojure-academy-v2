@@ -100,7 +100,7 @@
       (assoc state :work-counter counter))))
 
 (defn former-tick-state
-  [state _ctx]
+  [state _level _pos _block-state _be]
   (let [state (assoc state
                      :update-ticker (inc (int (get state :update-ticker 0)))
                      :max-energy (double former-config/max-energy))

@@ -17,15 +17,15 @@
      (client-sounds/poll-sound-effects! owner))
 
    :client-enqueue-level-effect!
-   (fn [effect-id payload]
-     (level-effects/enqueue-level-effect! effect-id payload))
+   (fn [effect-id ctx-id channel payload & opts]
+     (apply level-effects/enqueue-level-effect! effect-id ctx-id channel payload opts))
 
    :client-build-level-effect-plan
    (fn
      ([camera-pos hand-center-pos tick]
       (level-effects/build-level-effect-plan camera-pos hand-center-pos tick))
-     ([camera-pos hand-center-pos tick frame-context]
-      (level-effects/build-level-effect-plan camera-pos hand-center-pos tick frame-context)))
+     ([camera-pos hand-center-pos tick query-nearby-blocks-fn]
+      (level-effects/build-level-effect-plan camera-pos hand-center-pos tick query-nearby-blocks-fn)))
 
    :client-tick-level-effects!
    (fn []

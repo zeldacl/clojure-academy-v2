@@ -7,13 +7,10 @@
 (use-fixtures
   :each
   (fn [f]
-    (container-state/call-with-container-state-runtime
-      (container-state/create-container-state-runtime)
-      (fn []
-        (try
-          (f)
-          (finally
-            (container-state/clear-all!)))))))
+    (try
+      (f)
+      (finally
+        (container-state/clear-all!)))))
 
 (deftest slots-active-uses-container-tab-index-test
   (let [container {:tab-index (atom 0)}]
@@ -26,7 +23,7 @@
         tech-ui {:current (atom "inv")}
         container {:tab-index (atom 0)}
         sent-calls (atom [])]
-    (binding [runtime-hooks/*client-session-id* nil]
+    (runtime-hooks/with-client-ctx {:session-id nil}
       (with-redefs [tabbed/send-set-tab! (fn [& args]
                                            (swap! sent-calls conj args))]
         (tabbed/attach-tab-sync! pages tech-ui container 17)
