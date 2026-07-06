@@ -309,12 +309,15 @@
         (comp/add-component! bar progress-spec)
         ;; IMPORTANT: get the actual component (with state atom) from the widget,
         ;; NOT the initial spec map. set-progress! needs the real component.
-        (let [progress-comp (comp/get-widget-component bar :progressbar)]
+        (let [progress-comp (comp/get-widget-component bar :progressbar)
+              last-val (atom -1.0)]
           (events/on-frame bar
             (fn [_]
               (let [value ((:value-fn elem))
                     clamped (Math/max 0.03 (Math/min 1.0 (double value)))]
-                (comp/set-progress! progress-comp clamped)))))
+                (when (not= clamped @last-val)
+                  (reset! last-val clamped)
+                  (comp/set-progress! progress-comp clamped))))))
         (cgui-core/add-widget! hist-widget bar)))
     
     (info-area-element! info-area hist-widget)
@@ -333,8 +336,14 @@
         (comp/add-component! key-area key-box-spec)
         (comp/add-component! value-area value-box-spec)
         ;; Get the actual textbox component (with state atom), NOT the spec map.
-        (let [value-box (comp/get-widget-component value-area :textbox)]
-          (events/on-frame value-area (fn [_] (comp/set-text! value-box ((:desc-fn elem))))))
+        (let [value-box (comp/get-widget-component value-area :textbox)
+              last-desc (atom nil)]
+          (events/on-frame value-area
+            (fn [_]
+              (let [cur ((:desc-fn elem))]
+                (when (not= cur @last-desc)
+                  (reset! last-desc cur)
+                  (comp/set-text! value-box cur))))))
         (cgui-core/add-widget! row key-area)
         (cgui-core/add-widget! row icon)
         (cgui-core/add-widget! row value-area)
@@ -431,9 +440,13 @@
     
       (when-not editable?
         (when (fn? value)
-          (events/on-frame value-area
-            (fn [_]
-              (comp/set-text! value-box (value)))))))
+          (let [last-property-val (atom nil)]
+            (events/on-frame value-area
+              (fn [_]
+                (let [cur (value)]
+                  (when (not= cur @last-property-val)
+                    (reset! last-property-val cur)
+                    (comp/set-text! value-box cur)))))))))
     
     (info-area-element! info-area prop-widget)
     (double (:elem-y @(info-area-state-atom info-area)))))
@@ -456,14 +469,17 @@
     (events/on-left-click button-widget (events/make-click-handler on-click))
     (log/info "add-button: registered left-click on" text "size:" (cgui-core/get-size button-widget) "pos:" (cgui-core/get-pos button-widget))
     (events/on-frame button-widget
-      (fn [evt]
-        (let [lum (if (:hovering evt) 1.0 0.8)
-              color-val (int (* lum 255))]
-          (comp/set-text-color! text-box
-            (bit-or 0xFF000000
-                   (bit-shift-left color-val 16)
-                   (bit-shift-left color-val 8)
-                   color-val)))))
+      (let [last-btn-color (atom 0)]
+        (fn [evt]
+          (let [lum (if (:hovering evt) 1.0 0.8)
+                color-val (int (* lum 255))
+                color (bit-or 0xFF000000
+                             (bit-shift-left color-val 16)
+                             (bit-shift-left color-val 8)
+                             color-val)]
+            (when (not= color @last-btn-color)
+              (reset! last-btn-color color)
+              (comp/set-text-color! text-box color))))))
     (info-area-element! info-area button-widget)
     (log/info "add-button:" text "added, final pos:" (cgui-core/get-pos button-widget) "info-area children:" (count (cgui-core/get-widgets info-area)))
     (double (:elem-y @(info-area-state-atom info-area)))))
@@ -633,19 +649,22 @@
 
     ;; frame handler: adjust alpha and tint based on hover/current
     (events/on-frame btn
-                     (fn [evt]
-                       (let [hovering (boolean (:hovering evt))
-                             cur @current-atom
-                             a1 (if (or hovering (= cur id)) 1.0 0.8)
-                             a2 (if (= cur id) 1.0 0.8)
-                             alpha-byte (int (* a1 255))
-                             rgb-byte (int (* a2 255))
-                             color (bit-or (bit-shift-left (bit-and alpha-byte 0xFF) 24)
-                                           (bit-shift-left (bit-and rgb-byte 0xFF) 16)
-                                           (bit-shift-left (bit-and rgb-byte 0xFF) 8)
-                                           (bit-and rgb-byte 0xFF))]
-                         (when-let [dt (comp/get-drawtexture-component btn)]
-                           (swap! (:state dt) assoc :color color)))))
+                     (let [last-page-color (atom -1)]
+                       (fn [evt]
+                         (let [hovering (boolean (:hovering evt))
+                               cur @current-atom
+                               a1 (if (or hovering (= cur id)) 1.0 0.8)
+                               a2 (if (= cur id) 1.0 0.8)
+                               alpha-byte (int (* a1 255))
+                               rgb-byte (int (* a2 255))
+                               color (bit-or (bit-shift-left (bit-and alpha-byte 0xFF) 24)
+                                             (bit-shift-left (bit-and rgb-byte 0xFF) 16)
+                                             (bit-shift-left (bit-and rgb-byte 0xFF) 8)
+                                             (bit-and rgb-byte 0xFF))]
+                           (when (not= color @last-page-color)
+                             (reset! last-page-color color)
+                             (when-let [dt (comp/get-drawtexture-component btn)]
+                               (swap! (:state dt) assoc :color color)))))))
     (events/on-left-click btn (events/make-click-handler click-fn))
     (log/debug "Created page button for" id "at y=" (keys @(:metadata btn)) "with widget:" (get @(:metadata btn) :transform-meta :align-height))
     btn))

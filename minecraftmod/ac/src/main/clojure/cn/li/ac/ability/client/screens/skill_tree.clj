@@ -338,15 +338,26 @@
         (let [[rw rh] (cgui-core/get-size root)
               [mx my] (skill-tree-mouse-pos root)
               st (screen-state-snapshot owner)
-              state-key {:hovered-skill-id (:hovered-skill-id st)
-                         :selected-skill (:selected-skill st)
-                         :showing-level-up-popup? (:showing-level-up-popup? st)
-                         :level-up-dev-state (:level-up-dev-state st)
-                         :hover-node-transitions (:hover-node-transitions st)}
-              state-changed? (not= state-key @last-state-key)]
+              ;; Extract 5 rendering-relevant fields — inline identical? (pointer compare)
+              hid (:hovered-skill-id st)
+              sel (:selected-skill st)
+              pop? (:showing-level-up-popup? st)
+              dev-st (:level-up-dev-state st)
+              htr (:hover-node-transitions st)
+              last-sk @last-state-key
+              state-changed? (or (not (identical? hid (:hovered-skill-id last-sk)))
+                                 (not (identical? sel (:selected-skill last-sk)))
+                                 (not (identical? pop? (:showing-level-up-popup? last-sk)))
+                                 (not (identical? dev-st (:level-up-dev-state last-sk)))
+                                 (not (identical? htr (:hover-node-transitions last-sk))))]
           ;; === Branch 1: state changed → rebuild static caches (rare, <1Hz) ===
           (when state-changed?
-            (reset! last-state-key state-key)
+            ;; Only create state-key Map when change detected (<1Hz vs current 60-144Hz)
+            (let [state-key {:hovered-skill-id hid :selected-skill sel
+                             :showing-level-up-popup? pop?
+                             :level-up-dev-state dev-st
+                             :hover-node-transitions htr}]
+              (reset! last-state-key state-key))
             (if-let [rd (build-screen-render-data owner)]
               (let [ab (:ability-info rd)
                     anim (if-let [ct (:creation-time st)]

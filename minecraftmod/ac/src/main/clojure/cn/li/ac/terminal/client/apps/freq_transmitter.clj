@@ -248,7 +248,10 @@
         backspace-key 259           ;; GLFW_BACKSPACE
         ;; Phase-cache: triggers widget rebuild only on phase transitions
         last-phase (atom nil)
-        last-dyn-state (atom nil)]
+        last-dyn-state (atom nil)
+        last-state-snapshot (atom nil)
+        ;; Content container — cached here so on-frame doesn't need find-widget
+        content (cgui-core/create-widget :pos [10 35] :size [360 255])]
 
     ;; Semi-transparent background (matching original AuxGui overlay over game world)
     (let [bg (cgui-core/create-widget :pos [0 0] :size [380 300])]
@@ -274,10 +277,9 @@
                         :color 0xFFFFFFFF))
         (cgui-core/add-widget! root title-w)))
 
-    ;; Content container
-    (let [content (cgui-core/create-widget :pos [10 35] :size [360 255])]
-      (cgui-core/set-name! content "content")
-      (cgui-core/add-widget! root content))
+    ;; Content container (widget ref cached in outer let — no find-widget per frame)
+    (cgui-core/set-name! content "content")
+    (cgui-core/add-widget! root content)
 
     ;; ========================================================================
     ;; Keyboard handling (unchanged — updates state atom, on-frame picks up)
@@ -309,33 +311,48 @@
     ;; ========================================================================
     ;; Per-frame: timeout check + phase-switch detection + dynamic text updates
     ;; Widget tree only rebuilt on phase transitions (scan→configure→result).
+    ;; Layer 1 (wall-clock) always runs. Layer 2 (state-dependent) guarded by identical?.
     ;; ========================================================================
     (events/on-frame root
       (fn [_]
-        (let [{:keys [phase state-start-time] :as full-state} @state
-              cw (cgui-core/find-widget root "content")
-              elapsed (/ (- (System/currentTimeMillis) state-start-time) 1000.0)]
-          ;; Timeout auto-return
-          (when (and (> elapsed timeout-sec) (not= phase :result))
+        ;; ======================================================================
+        ;; Layer 1 (every frame — wall-clock dependent, cannot skip)
+        ;; ======================================================================
+        (let [st-snapshot @state
+              state-start-time (long (:state-start-time st-snapshot))
+              elapsed (double (/ (- (System/currentTimeMillis) state-start-time) 1000.0))
+              timed-out? (and (> elapsed (double timeout-sec))
+                              (not (identical? :result (:phase st-snapshot))))]
+          (when timed-out?
+            ;; timeout modifies state → next frame identical? false → phase switch triggers
             (swap! state assoc :phase :scan :device nil :message "Timed out" :editing-field nil))
-          ;; Phase transition → full widget rebuild (rare, <1Hz)
-          (when (not= phase @last-phase)
-            (reset! last-phase phase)
-            (cgui-core/clear-widgets! cw)
-            (case phase
-              :scan       (build-freq-scan-phase! cw state player-uuid)
-              :configure  (build-freq-configure-phase! cw state player-uuid)
-              :result     (build-freq-result-phase! cw state)
-              nil))
-          ;; Same-phase dynamic text update (lightweight, only when text differs)
-          (let [dyn-keys {:phase phase :ssid (:ssid full-state)
-                          :password (:password full-state)
-                          :message (:message full-state)
-                          :scanning? (:scanning? full-state)
-                          :editing-field (:editing-field full-state)}]
-            (when (not= dyn-keys @last-dyn-state)
-              (reset! last-dyn-state dyn-keys)
-              (update-freq-dynamic-texts! cw state))))))
+
+          ;; ======================================================================
+          ;; Layer 2 (zero-allocation guard — only executes when @state pointer changes)
+          ;; ======================================================================
+          (let [st' (if timed-out? @state st-snapshot)]  ;; re-read after timeout swap
+            (when-not (identical? st' @last-state-snapshot)
+              (reset! last-state-snapshot st')
+              (let [phase (:phase st')]
+                ;; Phase transition → full widget rebuild (rare, <1Hz)
+                (when (not (identical? phase @last-phase))
+                  (reset! last-phase phase)
+                  (cgui-core/clear-widgets! content)
+                  (case phase
+                    :scan       (build-freq-scan-phase! content state player-uuid)
+                    :configure  (build-freq-configure-phase! content state player-uuid)
+                    :result     (build-freq-result-phase! content state)
+                    nil))
+                ;; Dynamic text update — only on user actions (~10Hz keystrokes)
+                (let [dyn-key {:phase phase
+                               :ssid (:ssid st')
+                               :password (:password st')
+                               :message (:message st')
+                               :scanning? (:scanning? st')
+                               :editing-field (:editing-field st')}]
+                  (when (not= dyn-key @last-dyn-state)
+                    (reset! last-dyn-state dyn-key)
+                    (update-freq-dynamic-texts! content state)))))))))
 
     root))
 

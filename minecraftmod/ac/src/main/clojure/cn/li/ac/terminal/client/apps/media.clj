@@ -140,11 +140,17 @@
         (or (:title (first tracks)) "Media Player")))
 
     ;; --- Frame update: sync title with current track ---
-    (events/on-frame root
-      (fn [_]
-        (let [{:keys [track]} (playback-snapshot owner)]
-          (when-let [title-w (cgui-core/find-widget root "title")]
-            (comp/set-text! (comp/get-textbox-component title-w) (:title track))))))
+    ;; Cached widget ref + dirty-check — avoids find-widget tree traversal at 60-144Hz
+    (let [title-w (cgui-core/find-widget root "title")
+          last-title (atom nil)]
+      (events/on-frame root
+        (fn [_]
+          (when-let [track (:track (playback-snapshot owner))]
+            (let [^String cur (:title track)]
+              (when (not= cur @last-title)
+                (reset! last-title cur)
+                (when title-w
+                  (comp/set-text! (comp/get-textbox-component title-w) cur))))))))
 
     root))
 
