@@ -778,8 +778,5 @@
                 (when tooltip-w
                   (cgui-core/set-visible! tooltip-w false)))
               (reset! hover-last-tag-idx hover-idx))))))
-    (client-bridge/open-simple-gui! root "MisakaCloud Terminal"
-      {:interactive? true
-       :ref-width 480.0   ;; match original AcademyCraft REF_WIDTH = 480
-       :preview-item-atom (:preview-item ui)
-       :preview-type-atom  (:preview-type ui)})))
+    (client-bridge/open-screen! {:cgui-root root :title "MisakaCloud Terminal"
+      :session-id nil})))

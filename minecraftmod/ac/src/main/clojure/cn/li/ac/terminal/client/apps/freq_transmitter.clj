@@ -273,4 +273,4 @@
   "Open the interactive frequency transmitter GUI."
   [player]
   (log/info "Opening freq transmitter for" (pr-str player))
-  (client-bridge/open-simple-gui! (build-freq-gui player) "Frequency Transmitter"))
+  (client-bridge/open-screen! {:cgui-root (build-freq-gui player) :title "Frequency Transmitter"}))

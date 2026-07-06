@@ -123,4 +123,4 @@
    Called from push handler when server sends :terminal-install-effect message."
   [player]
   (let [widget (create-install-effect-widget player)]
-    (client-bridge/open-simple-gui! widget "Installing..." {:log-label "terminal-install-effect"})))
+    (client-bridge/open-screen! {:cgui-root widget :title "Installing..."})))

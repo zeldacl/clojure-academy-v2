@@ -25,7 +25,7 @@
             [cn.li.forge1201.client.runtime-bridge :as runtime-bridge]
             [cn.li.forge1201.client.key-input :as key-input]
             [cn.li.forge1201.client.overlay-renderer :as overlay-renderer]
-            [cn.li.forge1201.client.cgui-screen-bridge :as cgui-screen-bridge]
+            [cn.li.mc1201.gui.screen.cgui-screen-host :as cgui-screen-host]
             [cn.li.forge1201.client.hand-effect-renderer :as hand-effect-renderer]
             [cn.li.forge1201.client.level-effect-renderer :as level-effect-renderer]
             [cn.li.forge1201.client.render.tesr-impl :as tesr-impl]
@@ -154,12 +154,21 @@
                 (tesr-impl/new-renderer))))
           (log/info (str "  BER registered for tile-id " tile-id)))))))
 
+(defn- open-screen-dispatcher
+  "Dispatch open-screen to managed screen (keyword) or CGUI screen (map)."
+  [arg payload]
+  (if (keyword? arg)
+    (screen-host/open-managed-screen! arg payload)
+    (when (map? arg)
+      (let [{:keys [cgui-root title session-id]} arg]
+        (cgui-screen-host/open-cgui-screen!
+          cgui-root (or session-id "")
+          {:title (or title "CGUI Screen")})))))
+
 (defn- init-content-client-bridge!
   []
   (client-bridge/install-client-bridge!
-    {:open-screen (fn [screen-key payload]
-                    (screen-host/open-managed-screen! screen-key payload))
-    :open-simple-gui cgui-screen-bridge/open-simple-gui!
+    {:open-screen open-screen-dispatcher
      :slot-key-down runtime-bridge/on-slot-key-down!
      :slot-key-tick runtime-bridge/on-slot-key-tick!
      :slot-key-up runtime-bridge/on-slot-key-up!
@@ -261,7 +270,7 @@
   (runtime-bridge/init!)
   (overlay-renderer/init!)
   (screen-host/init!)
-  (cgui-screen-bridge/init!)
+  (log/info "cgui-screen-bridge init skipped — using cgui-screen-host instead"))
   (msdf-setup/init!)
   (particle/init!)
   (sound/init!)

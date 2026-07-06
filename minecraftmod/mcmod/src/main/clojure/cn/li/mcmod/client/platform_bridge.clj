@@ -31,7 +31,6 @@
 (defn on-movement-key-tick!      [& args] (apply bridge-op :movement-key-tick args))
 (defn on-movement-key-up!        [& args] (apply bridge-op :movement-key-up args))
 (defn open-screen!               [& args] (apply bridge-op :open-screen args))
-(defn open-simple-gui!           [& args] (apply bridge-op :open-simple-gui args))
 (defn run-client-effect!         [& args] (apply bridge-op :run-client-effect args))
 (defn get-client-player          [& args] (apply bridge-op :get-client-player args))
 (defn screen-active?             [& args] (apply bridge-op :screen-active? args))

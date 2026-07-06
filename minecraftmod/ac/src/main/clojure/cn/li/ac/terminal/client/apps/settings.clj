@@ -178,4 +178,4 @@
   "Open the interactive settings GUI."
   [_player]
   (log/info "Opening settings")
-  (client-bridge/open-simple-gui! (build-settings-gui) "Settings"))
+  (client-bridge/open-screen! {:cgui-root (build-settings-gui) :title "Settings"}))

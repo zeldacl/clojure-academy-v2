@@ -4,6 +4,7 @@
             [cn.li.mc1201.client.render.pose :as pose-impl]
             [cn.li.mc1201.client.render.buffer :as buffer-impl]
             [cn.li.mc1201.client.screen.host :as screen-host]
+            [cn.li.mc1201.gui.screen.cgui-screen-host :as cgui-screen-host]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.util.render :as render]
@@ -94,11 +95,21 @@
             (BlockEntityRendererImpl.))))
       (log/info (str "Fabric BER registered for tile-id " tile-id)))))
 
+(defn- open-screen-dispatcher
+  "Dispatch open-screen to managed screen (keyword) or CGUI screen (map)."
+  [arg payload]
+  (if (keyword? arg)
+    (screen-host/open-managed-screen! arg payload)
+    (when (map? arg)
+      (let [{:keys [cgui-root title session-id]} arg]
+        (cgui-screen-host/open-cgui-screen!
+          cgui-root (or session-id "")
+          {:title (or title "CGUI Screen")})))))
+
 (defn- init-content-client-bridge!
   []
   (client-bridge/install-client-bridge!
-    {:open-screen (fn [screen-key payload]
-                    (screen-host/open-managed-screen! screen-key payload))
+    {:open-screen open-screen-dispatcher
      :slot-key-down runtime-bridge/on-slot-key-down!
      :slot-key-tick runtime-bridge/on-slot-key-tick!
      :slot-key-up runtime-bridge/on-slot-key-up!

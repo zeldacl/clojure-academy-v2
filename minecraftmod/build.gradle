@@ -2998,7 +2998,7 @@ tasks.register('verifyTerminalBridgeInitOrchestration') {
         }
         if (forgeInit.exists()) {
             def text = forgeInit.getText('UTF-8')
-            if (!text.contains('client-bridge/install-client-bridge!') || !text.contains(':open-simple-gui cgui-screen-bridge/open-simple-gui!')) {
+            if (!text.contains('client-bridge/install-client-bridge!') || !text.contains(':open-screen open-screen-dispatcher')) {
                 violations << 'forge client init must expose generic CGui opening through the installed client bridge'
             }
             if (text.contains(':ac/terminal')) {

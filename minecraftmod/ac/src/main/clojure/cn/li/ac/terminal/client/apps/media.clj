@@ -158,4 +158,4 @@
   (let [owner (media-owner player)]
     (runtime/ensure-owner! owner)
     (play-current! owner)
-    (client-bridge/open-simple-gui! (create-gui player) "Media Player")))
+    (client-bridge/open-screen! {:cgui-root (create-gui player) :title "Media Player"})))

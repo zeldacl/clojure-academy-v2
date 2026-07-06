@@ -19,7 +19,7 @@
     ;; Build the CGUI screen data (platform-agnostic)
     (let [screen-map (developer-portable/create-screen player)]
       ;; Open via platform CGUI screen host
-      (client-bridge/open-simple-gui! (:cgui screen-map) "Portable Developer" {:session-id (:session-id screen-map)})))
+      (client-bridge/open-screen! {:cgui-root (:cgui screen-map) :title "Portable Developer" :session-id (:session-id screen-map)})))
   {:consume? true})
 
 (defn init-energy-items!

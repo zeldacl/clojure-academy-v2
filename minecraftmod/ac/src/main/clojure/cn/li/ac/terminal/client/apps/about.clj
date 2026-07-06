@@ -282,4 +282,4 @@
   "Open the interactive about page with Credits/Donate tabs."
   [_player]
   (log/info "Opening about page")
-  (client-bridge/open-simple-gui! (build-about-gui) "About"))
+  (client-bridge/open-screen! {:cgui-root (build-about-gui) :title "About"}))
