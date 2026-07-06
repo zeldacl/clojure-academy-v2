@@ -17,6 +17,17 @@
   [session-id f]
   (client-ui/with-client-ctx-fn {:session-id session-id} f))
 
+(defn- ^:private safe-render-host-ops!
+  "Render ops within try-catch. Extracted to prevent primitive autoboxing
+   of mouse-x/mouse-y across the try boundary in the render callback.
+   Same Extraction pattern as safe-parallax-render! in draw_ops.clj."
+  [^GuiGraphics graphics ops ^String title]
+  (try
+    (doseq [op ops]
+      (draw-ops/render-op! graphics op))
+    (catch Exception e
+      (log/error (str "Error rendering hosted screen " title) e))))
+
 (defn- augment-payload-owner
   [payload]
   (let [payload (or payload {})
@@ -41,14 +52,13 @@
   ([title draw-ops-fn click-fn hover-fn close-fn char-typed-fn]
    (DelegatingScreen.
      (Component/literal title)
-     ;; render — each op dispatched through shared draw-ops engine
+     ;; render — hover-fn and draw-ops-fn called OUTSIDE try to prevent
+     ;; mouse-x/mouse-y primitive autoboxing (Clojure AOT boxes primitives
+     ;; that cross try boundaries).   Exception safety delegated to extracted helper.
      (fn [_this ^GuiGraphics graphics mouse-x mouse-y _partial-tick]
-       (try
-         (when hover-fn (hover-fn mouse-x mouse-y))
-         (doseq [op (draw-ops-fn mouse-x mouse-y)]
-           (draw-ops/render-op! graphics op))
-         (catch Exception e
-           (log/error (str "Error rendering hosted screen " title) e))))
+       (when hover-fn (hover-fn mouse-x mouse-y))
+       (let [ops (draw-ops-fn mouse-x mouse-y)]
+         (safe-render-host-ops! graphics ops title)))
      ;; keyPressed
      (fn [_this key scancode modifiers]
        (cond
@@ -92,25 +102,28 @@
                               (with-client-session captured-session-id
                                 #(client-ui/client-handle-managed-screen-char-typed! screen-key ch))))]
         (.setScreen mc
-                    (create-host-screen
-                      title
-                      (fn [mouse-x mouse-y]
-                        (let [^Minecraft mc (Minecraft/getInstance)
-                              ^Window win (.getWindow mc)
-                              w (.getGuiScaledWidth win)
-                              h (.getGuiScaledHeight win)]
-                          (with-client-session captured-session-id
-                            #(client-ui/client-build-managed-screen-draw-ops screen-key mouse-x mouse-y w h))))
-                      (fn [mouse-x mouse-y]
-                        (with-client-session captured-session-id
-                          #(client-ui/client-handle-managed-screen-click! screen-key mouse-x mouse-y)))
-                      (fn [mouse-x mouse-y]
-                        (with-client-session captured-session-id
-                          #(client-ui/client-handle-managed-screen-hover! screen-key mouse-x mouse-y)))
-                      (fn []
-                        (with-client-session captured-session-id
-                          #(client-ui/client-close-managed-screen! screen-key)))
-                      char-typed-fn))))))
+                    (doto (create-host-screen
+                            title
+                            ;; draw-ops-fn — session context auto-managed by DelegatingScreen.render()
+                            (fn [mouse-x mouse-y]
+                              (let [^Minecraft mc (Minecraft/getInstance)
+                                    ^Window win (.getWindow mc)
+                                    w (.getGuiScaledWidth win)
+                                    h (.getGuiScaledHeight win)]
+                                (client-ui/client-build-managed-screen-draw-ops screen-key mouse-x mouse-y w h)))
+                            ;; click-fn — session context auto-managed by DelegatingScreen.mouseClicked()
+                            (fn [mouse-x mouse-y]
+                              (client-ui/client-handle-managed-screen-click! screen-key mouse-x mouse-y))
+                            ;; hover-fn — called inside render(), inherits context from render's pushCtx
+                            (fn [mouse-x mouse-y]
+                              (client-ui/client-handle-managed-screen-hover! screen-key mouse-x mouse-y))
+                            ;; close-fn — session context auto-managed by DelegatingScreen.removed()
+                            (fn []
+                              (client-ui/client-close-managed-screen! screen-key))
+                            ;; char-typed-fn — keeps manual with-client-session (DelegatingScreen.charTyped
+                            ;; doesn't auto-manage context; neither does keyPressed which also calls this)
+                            char-typed-fn)
+                      (.withClientSession captured-session-id)))))))
 
 (defn init! []
   (log/info "Client screen host initialized"))

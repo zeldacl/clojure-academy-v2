@@ -96,9 +96,11 @@
 
 (defn- ^:private safe-parallax-render!
   "Render tree-ops within a pushPose/popPose guard, with no local primitives
-   crossing the try boundary. ^double dx/dy typed params keep them in CPU
-   registers — zero autoboxing even under AOT."
-  [^GuiGraphics graphics ^PoseStack poseStack ^double dx ^double dy tree-ops]
+   crossing the try boundary. Primitives dx/dy are passed from caller where
+   they do NOT cross any try boundary — the try-finally isolation is what
+   prevents autoboxing. (^double hints removed — Clojure limits primitive
+   fns to ≤4 args.)"
+  [^GuiGraphics graphics ^PoseStack poseStack dx dy tree-ops]
   (try
     (.pushPose poseStack)
     (.translate poseStack (float dx) (float dy) (float 0.0))

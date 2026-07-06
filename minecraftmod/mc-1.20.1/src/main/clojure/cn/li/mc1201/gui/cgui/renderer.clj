@@ -182,7 +182,14 @@
           (kind-matches? kind :blendquad)
           (let [blend-tex (ensure-resource-location (:blend-tex state))
                 line-tex (ensure-resource-location (:line-tex state))
-                margin (double (or (:margin state) 4.0))]
+                margin (double (or (:margin state) 4.0))
+                color-int (unchecked-int (or (:color state) gui-comp/blend-quad-default-color))
+                r (/ (double (bit-and (bit-shift-right color-int 16) 0xFF)) 255.0)
+                g (/ (double (bit-and (bit-shift-right color-int 8) 0xFF)) 255.0)
+                b (/ (double (bit-and color-int 0xFF)) 255.0)
+                a (if (pos? (bit-and color-int 0xFF000000))
+                    (/ (double (bit-and (bit-shift-right color-int 24) 0xFF)) 255.0)
+                    1.0)]
             ;; In-place write to static double buffers — zero allocation
             (aset quad-xs-buffer 0 (double (- x margin)))
             (aset quad-xs-buffer 1 (double x))
@@ -194,17 +201,9 @@
             (aset quad-ys-buffer 3 (double (+ y h-int margin)))
             (when blend-tex
               (try
-                ;; color-int + ARGB inside try — zero autoboxing across boundary
-                (let [color-int (unchecked-int (or (:color state) gui-comp/blend-quad-default-color))
-                      r (/ (double (bit-and (bit-shift-right color-int 16) 0xFF)) 255.0)
-                      g (/ (double (bit-and (bit-shift-right color-int 8) 0xFF)) 255.0)
-                      b (/ (double (bit-and color-int 0xFF)) 255.0)
-                      a (if (pos? (bit-and color-int 0xFF000000))
-                          (/ (double (bit-and (bit-shift-right color-int 24) 0xFF)) 255.0)
-                          1.0)]
-                  (RenderSystem/enableBlend)
-                  (RenderSystem/defaultBlendFunc)
-                  (RenderSystem/setShaderColor (float r) (float g) (float b) (float a)))
+                (RenderSystem/enableBlend)
+                (RenderSystem/defaultBlendFunc)
+                (RenderSystem/setShaderColor (float r) (float g) (float b) (float a))
                 (apply-depth-mode! :none false)
                 (let [tex-size (get-texture-size blend-tex)
                       tex-w (max 1 (int (or (first tex-size) 48)))
@@ -236,9 +235,8 @@
                         lw (max 1 (int (or (first line-size) 1)))
                         lh (max 1 (int (or (second line-size) 1)))]
                     (blit-scaled-region! gg line-tex top-x top-y top-w top-h 0 0 lw lh 0.0 lw lh)
-                    (blit-scaled-region! gg line-tex bot-x bot-y bot-w bot-h 0 0 lw lh 0.0 lw lh))))
-                (finally
-                  (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0))
+                    (blit-scaled-region! gg line-tex bot-x bot-y bot-w bot-h 0 0 lw lh 0.0 lw lh)))
+                (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0)
                 (catch Exception e
                   (log/debug "CGUI blendquad render error:" (.getMessage e))))))
 
@@ -262,22 +260,21 @@
                     src-h (if fractional? (round-int (* (double uh) (double basis-h))) (int uh))
                     tex-atlas-w (or tex-w src-w)
                     tex-atlas-h (or tex-h src-h)
+                    color-int (or (:color state) 0xFFFFFF)
                     z-level (or (:z-level state) 0.0)
                     depth-mode (or (:depth-test-mode state) :none)
-                    write-depth (and (boolean (:write-depth state)) (not= depth-mode :none))]
+                    write-depth (and (boolean (:write-depth state)) (not= depth-mode :none))
+                    r (/ (double (bit-and (bit-shift-right color-int 16) 0xFF)) 255.0)
+                    g (/ (double (bit-and (bit-shift-right color-int 8) 0xFF)) 255.0)
+                    b (/ (double (bit-and color-int 0xFF)) 255.0)
+                    a (/ (double (bit-and (bit-shift-right color-int 24) 0xFF)) 255.0)]
                 (when (and (pos? src-w) (pos? src-h))
                   (try
-                    ;; color-int + ARGB inside try — zero autoboxing across boundary
-                    (let [color-int (or (:color state) 0xFFFFFF)
-                          r (/ (double (bit-and (bit-shift-right (long color-int) 16) 0xFF)) 255.0)
-                          g (/ (double (bit-and (bit-shift-right (long color-int) 8) 0xFF)) 255.0)
-                          b (/ (double (bit-and (long color-int) 0xFF)) 255.0)
-                          a (/ (double (bit-and (bit-shift-right (long color-int) 24) 0xFF)) 255.0)]
-                      (RenderSystem/enableBlend)
-                      (RenderSystem/defaultBlendFunc)
-                      (RenderSystem/setShaderColor (float r) (float g) (float b) (float a))
-                      (apply-depth-mode! depth-mode write-depth)
-                      (blit-scaled-region! gg tex-loc x y w-int h-int u-px v-px src-w src-h z-level tex-atlas-w tex-atlas-h)))
+                    (RenderSystem/enableBlend)
+                    (RenderSystem/defaultBlendFunc)
+                    (RenderSystem/setShaderColor (float r) (float g) (float b) (float a))
+                    (apply-depth-mode! depth-mode write-depth)
+                    (blit-scaled-region! gg tex-loc x y w-int h-int u-px v-px src-w src-h z-level tex-atlas-w tex-atlas-h)
                     (catch Exception e
                       (log/debug "CGUI drawtexture render error:" (.getMessage e)))
                     (finally
@@ -294,16 +291,14 @@
                 line-w (double (or (:line-w state) 5.5))
                 half-w (/ line-w 2.0)
                 norm (Math/sqrt (+ (* dx dx) (* dy dy)))
-                color-int (unchecked-int (or (:color state) 0xFFFFFFFF))]
-            (when (and tex-loc (> norm 0.5)
-                       (not= 0 (bit-and 0xFF000000 (long color-int))))  ;; alpha>0 without fp div
+                color-int (unchecked-int (or (:color state) 0xFFFFFFFF))
+                ca (/ (double (bit-and (bit-shift-right color-int 24) 0xFF)) 255.0)
+                cr (/ (double (bit-and (bit-shift-right color-int 16) 0xFF)) 255.0)
+                cg (/ (double (bit-and (bit-shift-right color-int 8) 0xFF)) 255.0)
+                cb (/ (double (bit-and color-int 0xFF)) 255.0)]
+            (when (and tex-loc (> norm 0.5) (> ca 0.0))
               (try
-                ;; ca/cr/cg/cb inside try — zero autoboxing across boundary
-                (let [ca (/ (double (bit-and (bit-shift-right color-int 24) 0xFF)) 255.0)
-                      cr (/ (double (bit-and (bit-shift-right color-int 16) 0xFF)) 255.0)
-                      cg (/ (double (bit-and (bit-shift-right color-int 8) 0xFF)) 255.0)
-                      cb (/ (double (bit-and color-int 0xFF)) 255.0)
-                      ^PoseStack ps (.pose gg)
+                (let [^PoseStack ps (.pose gg)
                       ^PoseStack$Pose entry (.last ps)
                       ^Matrix4f pose-matrix (.pose entry)
                       ;; Perpendicular normal for line width (matching upstream drawLine)
@@ -322,8 +317,7 @@
                   (.vertex bb pose-matrix (float (+ x0 nx)) (float (+ y0 ny)) 0.0) (.uv bb (float 0.0) (float 1.0)) (.endVertex bb)
                   (.vertex bb pose-matrix (float (+ x1 nx)) (float (+ y1 ny)) 0.0) (.uv bb (float 1.0) (float 1.0)) (.endVertex bb)
                   (.vertex bb pose-matrix (float (- x1 nx)) (float (- y1 ny)) 0.0) (.uv bb (float 1.0) (float 0.0)) (.endVertex bb)
-                  (BufferUploader/drawWithShader (.end bb)))
-                (finally
+                  (BufferUploader/drawWithShader (.end bb))
                   (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0))
                 (catch Exception e
                   (log/debug "CGUI rotated-line render error:" (.getMessage e))))))
@@ -332,15 +326,14 @@
           (let [t0 (:texture-0 state) t1 (:texture-1 state)
                 ^ResourceLocation tex-loc-0 (ensure-resource-location t0)
                 ^ResourceLocation tex-loc-1 (ensure-resource-location t1)
-                ^ShaderInstance si (platform-bridge/resolve-shader (:shader-id state))]
+                ^ShaderInstance si (platform-bridge/resolve-shader (:shader-id state))
+                progress (float (or (:progress state) 0.0))]
             (when (and si tex-loc-0 tex-loc-1)
               (try
                 (.setSampler si "TexSampler0" tex-loc-0)
                 (.setSampler si "TexSampler1" tex-loc-1)
                 (RenderSystem/setShader (StaticShaderSupplier. si))
-                ;; progress inside try — zero autoboxing across boundary
-                (let [progress (float (or (:progress state) 0.0))]
-                  (when-let [u (.safeGetUniform si "Progress")] (.set u progress)))
+                (when-let [u (.safeGetUniform si "Progress")] (.set u progress))
                 ;; Use BufferBuilder to bypass blit() which overrides custom shaders
                 (let [^PoseStack ps (.pose gg)
                       ^PoseStack$Pose entry (.last ps)
@@ -357,8 +350,7 @@
                   (.vertex bb pose-matrix x2 y1 0.0) (.uv bb (float 1.0) (float 0.0)) (.endVertex bb)
                   (.vertex bb pose-matrix x1 y1 0.0) (.uv bb (float 0.0) (float 0.0)) (.endVertex bb)
                   (BufferUploader/drawWithShader (.end bb)))
-                (finally
-                  (RenderSystem/setShader (StaticShaderSupplier. nil)))
+                (RenderSystem/setShader (StaticShaderSupplier. nil))
                 (catch Exception e
                   (log/debug "CGUI shader-progress render error:" (.getMessage e))))))
 
@@ -510,19 +502,17 @@
           (kind-matches? kind :shader-quad)
           (let [shader (platform-bridge/resolve-shader (:shader-id state))
                 tex-0 (ensure-resource-location (:texture-0 state))
-                tex-1 (ensure-resource-location (:texture-1 state))]
+                tex-1 (ensure-resource-location (:texture-1 state))
+                progress (float (or (:progress state) 0.0))]
             (if shader
               (try
                 (.setSampler ^ShaderInstance shader "TexSampler0" tex-0)
                 (when tex-1 (.setSampler ^ShaderInstance shader "TexSampler1" tex-1))
                 (RenderSystem/setShader (StaticShaderSupplier. shader))
-                ;; progress inside try — zero autoboxing across boundary
-                (let [progress (float (or (:progress state) 0.0))]
-                  (when-let [u (.safeGetUniform ^ShaderInstance shader "Progress")]
-                    (.set u progress)))
+                (when-let [u (.safeGetUniform ^ShaderInstance shader "Progress")]
+                  (.set u progress))
                 (.blit gg tex-0 x y 0 0 w-int h-int w-int h-int)
-                (finally
-                  (RenderSystem/setShader (StaticShaderSupplier. nil)))
+                (RenderSystem/setShader (StaticShaderSupplier. nil))
                 (catch Exception e
                   (log/debug "CGUI shader-quad render error:" (.getMessage e))))
               ;; Fallback: render without shader
@@ -537,15 +527,14 @@
 
           (kind-matches? kind :draw-ops)
           (when-let [ops-fn (:ops-fn state)]
-            (let [^PoseStack ps (.pose gg)]
-              (.pushPose ps)
-              (try
+            (try
+              (let [^PoseStack ps (.pose gg)]
+                (.pushPose ps)
                 (.translate ps (double x) (double y) 0.0)
                 (draw-ops-host/render-ops! gg (ops-fn))
-                (catch Exception e
-                  (log/debug "CGUI draw-ops render error:" (.getMessage e)))
-                (finally
-                  (.popPose ps)))))
+                (.popPose ps))
+              (catch Exception e
+                (log/debug "CGUI draw-ops render error:" (.getMessage e)))))
 
           :else nil)))))
 
