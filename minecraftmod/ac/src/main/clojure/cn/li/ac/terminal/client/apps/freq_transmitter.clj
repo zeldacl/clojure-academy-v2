@@ -269,8 +269,22 @@
 
     root))
 
+(defn build-overlay-elements
+  "Build overlay elements for frequency transmitter (non-modal passOn mode)."
+  [_player-uuid _screen-width _screen-height]
+  [{:kind :fill :x 0 :y 0 :w 640 :h 480 :color 0xC0202020}
+   {:kind :text :text "Frequency Transmitter (Overlay)" :x 200 :y 10 :color 0xFFFFFFFF}
+   {:kind :text :text "Press ESC to close" :x 200 :y 30 :color 0xFF888888}])
+
 (defn open!
-  "Open the interactive frequency transmitter GUI."
+  "Open the interactive frequency transmitter GUI (screen mode)."
   [player]
   (log/info "Opening freq transmitter for" (pr-str player))
   (client-bridge/open-screen! {:cgui-root (build-freq-gui player) :title "Frequency Transmitter"}))
+
+(defn open-as-overlay!
+  "Open frequency transmitter as non-modal overlay (passOn equivalent)."
+  [player]
+  (log/info "Opening freq transmitter as overlay for" (pr-str player))
+  (client-bridge/set-active-overlay-app! :freq-tx (str player))
+  (client-bridge/close-screen!))

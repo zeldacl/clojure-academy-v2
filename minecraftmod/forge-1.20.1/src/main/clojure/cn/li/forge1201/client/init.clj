@@ -26,6 +26,7 @@
             [cn.li.forge1201.client.runtime-bridge :as runtime-bridge]
             [cn.li.forge1201.client.key-mapping-adapter :as key-mapping-adapter]
             [cn.li.forge1201.client.overlay-renderer :as overlay-renderer]
+            [cn.li.mc1201.client.overlay.state :as overlay-state]
             [cn.li.mc1201.gui.screen.cgui-screen-host :as cgui-screen-host]
             [cn.li.forge1201.client.hand-effect-renderer :as hand-effect-renderer]
             [cn.li.forge1201.client.level-effect-renderer :as level-effect-renderer]
@@ -196,6 +197,10 @@
 
                             (log/debug "Unhandled client effect key" effect-key)))
 	     :get-client-player #(.player (Minecraft/getInstance))
+	     :set-active-overlay-app (fn [app-kw player-uuid]
+	                                (overlay-state/set-active-overlay-app!
+	                                  {:client-session-id "" :player-uuid (str player-uuid)}
+	                                  app-kw))
 	     :screen-active? #(some? (.screen (Minecraft/getInstance)))
 	     :close-screen! #(.setScreen (Minecraft/getInstance) nil)
        :get-mouse-pos (fn []

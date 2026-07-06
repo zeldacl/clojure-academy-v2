@@ -124,12 +124,24 @@
 ;; Public API
 ;; ============================================================================
 
+(defn build-overlay-elements
+  "Build overlay elements for terminal install effect (non-modal mode)."
+  [_player-uuid screen-width screen-height]
+  (let [cx (quot screen-width 2) cy (quot screen-height 2)]
+    [{:kind :fill :x (- cx 150) :y (- cy 20) :w 300 :h 40 :color 0xC0202020}
+     {:kind :text :text "Installing terminal..." :x (- cx 60) :y (- cy 5) :color 0xFFFFFFFF}]))
+
 (defn show!
-  "Show terminal install effect for the given player.
-   Called from push handler when server sends :terminal-install-effect message."
+  "Show terminal install effect for the given player (screen mode)."
   [player]
   (let [widget (create-install-effect-widget player)]
     (client-bridge/open-screen! {:cgui-root widget :title "Installing..." :log-label "terminal-install-effect"})))
+
+(defn show-as-overlay!
+  "Show terminal install effect as non-modal overlay."
+  [player]
+  (log/info "Showing terminal install effect as overlay for" (pr-str player))
+  (client-bridge/set-active-overlay-app! :install-fx (str player)))
 
 ;; ============================================================================
 ;; Init — push handler registration (moved from shell.clj to break circular dep)

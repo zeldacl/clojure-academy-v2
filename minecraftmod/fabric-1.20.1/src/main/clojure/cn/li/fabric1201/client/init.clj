@@ -5,6 +5,7 @@
             [cn.li.mc1201.client.render.buffer :as buffer-impl]
             [cn.li.mc1201.client.screen.host :as screen-host]
             [cn.li.mc1201.gui.screen.cgui-screen-host :as cgui-screen-host]
+            [cn.li.mc1201.client.overlay.state :as overlay-state]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.platform.ui :as platform-ui]
@@ -124,6 +125,10 @@
      :movement-key-tick runtime-bridge/on-movement-key-tick!
      :movement-key-up runtime-bridge/on-movement-key-up!
 	     :get-client-player #(.player (Minecraft/getInstance))
+	     :set-active-overlay-app (fn [app-kw player-uuid]
+	                                (overlay-state/set-active-overlay-app!
+	                                  {:client-session-id "" :player-uuid (str player-uuid)}
+	                                  app-kw))
 	     :screen-active? #(some? (.screen (Minecraft/getInstance)))
 	     :close-screen! #(.setScreen (Minecraft/getInstance) nil)
 	     :send-system-message! (fn [player translatable-key & args]

@@ -34,6 +34,7 @@
 (defn run-client-effect!         [& args] (apply bridge-op :run-client-effect args))
 (defn get-client-player          [& args] (apply bridge-op :get-client-player args))
 (defn screen-active?             [& args] (apply bridge-op :screen-active? args))
+(defn set-active-overlay-app!     [& args] (apply bridge-op :set-active-overlay-app args))
 (defn close-screen!              [& args] (apply bridge-op :close-screen! args))
 (defn send-system-message!       [& args] (apply bridge-op :send-system-message! args))
 (defn game-time-ms               [& args] (apply bridge-op :game-time-ms args))

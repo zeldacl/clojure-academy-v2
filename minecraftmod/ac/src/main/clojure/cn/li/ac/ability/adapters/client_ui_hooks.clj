@@ -32,6 +32,8 @@
             [cn.li.ac.client.toast :as toast]
             [cn.li.ac.ability.client.debug-overlay :as debug-overlay]
             [cn.li.ac.tutorial.client.notification :as tutorial-notification]
+            [cn.li.ac.terminal.client.apps.freq-transmitter :as freq-tx]
+            [cn.li.ac.terminal.client.install-effect :as install-fx]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.i18n :as i18n]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
@@ -942,13 +944,18 @@
       active-ctxs)))
 
 (defn build-client-overlay-plan [player-uuid screen-width screen-height overlay-state]
-  ;; When an overlay app is active, skip normal HUD and let renderer handle it.
+  ;; When an overlay app is active, skip normal HUD and render overlay app elements.
   (if-let [app-kw (:active-overlay-app overlay-state)]
-    {:elements [{:kind :fill :x 0 :y 0 :w (int screen-width) :h (int screen-height) :color 0xC0101010}
-                {:kind :text :text (str "Overlay App: " (name app-kw)) :x 20 :y 20 :color 0xFFFFFFFF}
-                {:kind :text :text "Press ESC to close" :x 20 :y 40 :color 0xFF888888}]
-     :background-mask {:r 0.0 :g 0.0 :b 0.0 :a 0.0}
-     :interfered? false}
+    (case app-kw
+      :freq-tx {:elements (vec (freq-tx/build-overlay-elements player-uuid screen-width screen-height))
+                :background-mask {:r 0.0 :g 0.0 :b 0.0 :a 0.45}
+                :interfered? false}
+      :install-fx {:elements (vec (install-fx/build-overlay-elements player-uuid screen-width screen-height))
+                   :background-mask {:r 0.0 :g 0.0 :b 0.0 :a 0.4}
+                   :interfered? false}
+      {:elements [{:kind :text :text (str "Unknown overlay app: " (name app-kw)) :x 20 :y 20 :color 0xFFFF0000}]
+       :background-mask {:r 0.0 :g 0.0 :b 0.0 :a 0.0}
+       :interfered? false})
     ;; Normal HUD rendering
     (let [player-state (get-client-player-state player-uuid)
         resource-data (:resource-data player-state)
