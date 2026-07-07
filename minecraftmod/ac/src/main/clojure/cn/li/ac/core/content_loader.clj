@@ -8,6 +8,7 @@
             [cn.li.mcmod.block.state-schema :as state-schema]
             [cn.li.mcmod.gui.registry :as gui-registry]
             [cn.li.mcmod.gui.tabbed-gui :as tabbed-gui]
+            [cn.li.ac.gui.reactive.register :as reactive-register]
             [cn.li.mcmod.util.log :as log]))
 
 (defn- register-network-edit-helpers!
@@ -41,6 +42,10 @@
                     "gui-type=" gui-type "declared?" (boolean declared-screen-fn-kw))))))
   (hooks/call-all-network-handlers!)
   (tabbed-gui/register-set-tab-handler!)
+  ;; Register reactive block GUI screen-fns alongside old CGUI ones.
+  ;; Old registrations remain as fallback; reactive ones take priority
+  ;; when the platform layer checks :reactive? flag.
+  (reactive-register/register-all!)
   nil)
 
 (defn activate-runtime-content!
