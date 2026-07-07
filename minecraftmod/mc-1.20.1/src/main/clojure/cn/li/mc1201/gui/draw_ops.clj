@@ -42,7 +42,7 @@
   The caller must set the desired shader via RenderSystem/setShader BEFORE calling this,
   and restore it afterwards. Samplers must be set via .setSampler on the shader instance
   BEFORE calling setShader (MC 1.20.1 requires setSampler before setShader)."
-  [^GuiGraphics graphics ^PoseStack poseStack ^ShaderInstance si ^ResourceLocation loc-0 ^ResourceLocation loc-1 x y w h]
+  [^PoseStack poseStack ^ShaderInstance si ^ResourceLocation loc-0 ^ResourceLocation loc-1 x y w h]
   (let [^PoseStack$Pose entry (.last poseStack)
         ^Matrix4f pose-matrix (.pose entry)
         ^Tesselator tess (Tesselator/getInstance)
@@ -82,7 +82,8 @@
         :center (.translate poseStack (double (/ (.width font text) -2)) 0.0 0.0)
         :right  (.translate poseStack (double (- (.width font text))) 0.0 0.0)
         nil)
-      (.drawString graphics font text 0 0 color))
+      (.drawString graphics font text 0 0 color)
+      (.endBatch (.bufferSource graphics)))
     (catch Exception _ nil)
     (finally
       (.popPose poseStack))))
@@ -240,7 +241,7 @@
               (let [progress (float (or (:progress op) 0.0))]
                 (when-let [u (.safeGetUniform si "Progress")]
                   (.set u progress)))
-              (render-custom-shader-quad! graphics poseStack si loc-0 loc-1
+              (render-custom-shader-quad! poseStack si loc-0 loc-1
                                           (double (:x op)) (double (:y op))
                                           (double (:w op)) (double (:h op)))
               (finally
@@ -259,7 +260,7 @@
             (try
               (.setSampler si "TexSampler0" loc)
               (RenderSystem/setShader (StaticShaderSupplier. si))
-              (render-custom-shader-quad! graphics poseStack si loc nil
+              (render-custom-shader-quad! poseStack si loc nil
                                           (double (:x op)) (double (:y op))
                                           (double (:w op)) (double (:h op)))
               (finally
@@ -285,7 +286,7 @@
             (GL11/glColorMask false false false false)
             (try
               (RenderSystem/setShader (StaticShaderSupplier. si))
-              (render-custom-shader-quad! graphics poseStack si loc nil
+              (render-custom-shader-quad! poseStack si loc nil
                                           (double (:x op)) (double (:y op))
                                           (double (:w op)) (double (:h op)))
               (finally

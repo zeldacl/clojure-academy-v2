@@ -12,7 +12,6 @@
             [cn.li.mcmod.protocol.metadata :as registry-metadata]
             [cn.li.mcmod.client.render.init :as render-init]
             [cn.li.mcmod.client.render.tesr-api :as tesr-api]
-            [cn.li.mc1201.client.gl-ops :as gl-ops]
             [cn.li.mc1201.client.effects.particle :as particle]
             [cn.li.mc1201.client.effects.sound :as sound]
             [cn.li.mc1201.client.render.pose :as pose-impl]
@@ -71,7 +70,6 @@
   (log/info "Registering block renderers for Forge 1.20.1...")
   (try
     (render/register-texture-binder! bind-texture-forge!)
-    (render/register-gl-ops! (gl-ops/ops-map))
 
     ;; Inject core renderer registration callbacks into mcmod.
     (render-init/register-default-renderer-init-fns!)
@@ -128,7 +126,6 @@
   get-solid-buffer."
   []
   (render/register-texture-binder! bind-texture-forge!)
-  (render/register-gl-ops! (gl-ops/ops-map))
   (init-render-bindings!))
 
 (defn register-scripted-block-entity-renderers!

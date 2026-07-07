@@ -176,7 +176,8 @@
       (.scale ps scale scale 1.0)
       (.drawString gg mc-font comp 0 0 (unchecked-int color) (boolean shadow?))
       (finally
-        (.popPose ps)))))
+        (.popPose ps)))
+    (.endBatch (.bufferSource gg))))
 
 (defn- draw-msdf-runs! [^GuiGraphics gg font-desc ^String text x y font-size color shadow?
                        & {:keys [glyph-styles]}]

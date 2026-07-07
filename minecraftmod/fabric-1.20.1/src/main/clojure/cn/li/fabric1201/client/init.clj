@@ -20,8 +20,11 @@
             [cn.li.fabric1201.client.level-effect-renderer :as level-effect-renderer]
             [cn.li.fabric1201.client.runtime-bridge :as runtime-bridge]
             [cn.li.fabric1201.client.keyboard-init :as kb-init]
-            [cn.li.mc1201.client.gl-ops :as gl-ops]
             [cn.li.mc1201.client.font.msdf-setup :as msdf-setup]
+            [cn.li.mc1201.client.session :as mc-session]
+            [cn.li.mc1201.gui.cgui.draw-ops-host :as draw-ops-host]
+            [cn.li.mc1201.gui.cgui.font :as cgui-font]
+            [cn.li.mc1201.client.effects.sound :as sound]
             [cn.li.mc1201.key-scheme-provider-core :as key-scheme-core]
             [cn.li.mc1201.vanilla-input-control-core :as vanilla-control]
             [cn.li.mcmod.spi.key-scheme-provider :as key-scheme-spi]
@@ -34,7 +37,8 @@
            [cn.li.fabric1201.shim FabricClientHelper]
            [cn.li.fabric1201.shim FabricClientHelper$RendererFactory]
            [cn.li.fabric1201.client.render BlockEntityRendererImpl]
-           [net.minecraft.client Minecraft]))
+           [com.mojang.blaze3d.platform Window]
+           [cn.li.mc1201.client GuiGraphicsHelper]))
 
 (defn- bind-texture-fabric!
   "Bind a texture for rendering."
@@ -49,7 +53,6 @@
   (log/info "Registering block renderers for Fabric 1.20.1...")
   (try
     (render/register-texture-binder! bind-texture-fabric!)
-    (render/register-gl-ops! (gl-ops/ops-map))
     (render-init/register-default-renderer-init-fns!)
     (render-init/register-all-renderers!)
     (catch Exception e
@@ -133,7 +136,36 @@
 	     :close-screen! #(.setScreen (Minecraft/getInstance) nil)
 	     :send-system-message! (fn [player translatable-key & args]
 	                              (.sendSystemMessage player
-	                                (Component/translatable translatable-key (into-array Object args))))}))
+	                                (Component/translatable translatable-key (into-array Object args))))
+     ;; === Rendering bridge (parity with Forge init.clj) ===
+     :resolve-shader (fn [_shader-name]
+                       nil)
+     :blit-textured-quad! (fn [graphics texture x1 y1 x2 y2 z u0 u1 v0 v1]
+                            (GuiGraphicsHelper/blitTexturedQuad
+                              texture (float x1) (float y1) (float x2) (float y2) (float z)
+                              (float u0) (float u1) (float v0) (float v1)))
+     :get-window-size (fn []
+                        (let [^Minecraft mc (Minecraft/getInstance)
+                              ^Window win (.getWindow mc)]
+                          [(.getGuiScaledWidth win) (.getGuiScaledHeight win)]))
+     :draw-ops-host! (fn [parent ops-fn]
+                       (draw-ops-host/draw-ops-host! parent ops-fn))
+     :register-font! (fn [name spec]
+                       (cgui-font/register-font! name spec))
+     :get-player-owner #(mc-session/current-local-player-owner)
+     :font-text-width (fn [font-desc text font-size]
+                        (cgui-font/text-width font-desc text font-size))
+     :font-width (fn [^String text]
+                   (let [^Minecraft mc (Minecraft/getInstance)]
+                     (.width (.-font mc) text)))
+     :stop-all-media! (fn [player-uuid]
+                        (sound/stop-all-media!))
+     :is-glfw-key-down? (fn [key-code]
+                          (try
+                            (let [^Minecraft mc (Minecraft/getInstance)
+                                  handle (.. mc getWindow getHandle)]
+                              (= 1 (org.lwjgl.glfw.GLFW/glfwGetKey handle (int key-code))))
+                            (catch Throwable _ false)))}))
 
 (defn init-client
   "Initialize client-side systems for Fabric 1.20.1."

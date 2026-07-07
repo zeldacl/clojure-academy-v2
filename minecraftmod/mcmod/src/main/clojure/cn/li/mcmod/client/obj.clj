@@ -4,7 +4,6 @@
   Replaces cn.lambdalib2.render.obj runtime dependency with data-first API."
   (:require [clojure.string :as str]
             [clojure.java.io :as io]
-            [cn.li.mcmod.util.render :as render]
             [cn.li.mcmod.util.parse :as parse]
             [cn.li.mcmod.client.render.buffer :as buffer]))
 
@@ -1257,21 +1256,6 @@
                           u v (int packed-overlay) packed-light
                           nx ny nz)))))))
 
-(defn render-part!
-  "Render one OBJ group/part from parsed model data." 
-  [model part]
-  (when-let [face-list (get (:faces model) part)]
-    (render/gl-begin-triangles)
-    (doseq [{:keys [i0 i1 i2]} face-list]
-      (doseq [vertex-idx [i0 i1 i2]]
-        (let [{:keys [pos uv normal]} (nth (:vertices model) vertex-idx)
-              pos (map-model-pos pos)
-              normal (map-model-normal normal)]
-          (render/gl-normal (:x normal) (:y normal) (:z normal))
-          (render/gl-tex-coord (:u uv) (- 1.0 (:v uv)))
-          (render/gl-vertex (:x pos) (:y pos) (:z pos)))))
-    (render/gl-end)))
-
 (defn render-part-consumer
   "Render one OBJ group using a VertexConsumer. Uses the provided PoseStack
   for transforms and the provided vertex consumer for buffered submission.
@@ -1326,10 +1310,7 @@
                                        pose-stack vc packed-light packed-overlay)))))))
 
 (defn render-all!
-  "Render all groups in parsed OBJ model." 
-  ([model]
-   (doseq [part (keys (:faces model))]
-     (render-part! model part)))
+  "Render all groups in parsed OBJ model."
   ([model pose-stack vertex-consumer packed-light packed-overlay]
    (doseq [part (keys (:faces model))]
      (render-part-consumer model part pose-stack vertex-consumer packed-light packed-overlay))))
