@@ -554,31 +554,32 @@
                                               (bit-shift-left (int (* 255.0 (double (:r smoothed-mask)))) 16)
                                               (bit-shift-left (int (* 255.0 (double (:g smoothed-mask)))) 8)
                                               (int (* 255.0 (double (:b smoothed-mask))))))))
-            ;; --- Smooth CP/Overload percents (pure transform, no side effects) ---
-            elements (vec (:elements overlay-plan))
-            elements (mapv (fn [elem]
-                            (if (and (= :bar (:kind elem))
-                                     (number? (:percent elem)))
-                              (let [is-overload-bar (contains? elem :scroll-offset)
-                                    smoothed-key (if is-overload-bar
-                                                   :smoothed-secondary-percent
-                                                   :smoothed-primary-percent)
-                                    last-ms-key (if is-overload-bar
-                                                  :smoothed-last-update-ms-ol
-                                                  :smoothed-last-update-ms-cp)
-                                    last-ms (get-in rt-snapshot [last-ms-key owner-key] now)
-                                    current (get-in rt-snapshot [smoothed-key owner-key]
-                                                    (double (or (:percent elem) 0.0)))
-                                    target (double (or (:percent elem) 0.0))
-                                    smoothed (smooth-percent current target last-ms now)]
-                                (update-overlay-render-runtime! assoc-in [smoothed-key owner-key] smoothed)
-                                (update-overlay-render-runtime! assoc-in [last-ms-key owner-key] now)
-                                (assoc elem :percent (double smoothed)))
-                              elem))
-                          elements)
-            ;; --- Render elements ---
-            _ (doseq [element elements]
-                (render-element! graphics element screen-width screen-height))
+            ;; --- Smooth CP/Overload percents inline + render in a single pass
+            ;; (no intermediate transformed vector — smoothed values are consumed
+            ;; immediately by render-element! instead of being collected via mapv) ---
+            _ (doseq [elem (:elements overlay-plan)]
+                (if (and (= :bar (:kind elem))
+                         (number? (:percent elem)))
+                  (let [is-overload-bar (contains? elem :scroll-offset)
+                        smoothed-key (if is-overload-bar
+                                       :smoothed-secondary-percent
+                                       :smoothed-primary-percent)
+                        last-ms-key (if is-overload-bar
+                                      :smoothed-last-update-ms-ol
+                                      :smoothed-last-update-ms-cp)
+                        last-ms (get-in rt-snapshot [last-ms-key owner-key] now)
+                        current (get-in rt-snapshot [smoothed-key owner-key]
+                                        (double (or (:percent elem) 0.0)))
+                        target (double (or (:percent elem) 0.0))
+                        smoothed (smooth-percent current target last-ms now)]
+                    ;; Single swap! updating both paths (was 2 separate swap! calls)
+                    (update-overlay-render-runtime!
+                      (fn [s] (-> s
+                                  (assoc-in [smoothed-key owner-key] smoothed)
+                                  (assoc-in [last-ms-key owner-key] now))))
+                    (render-element! graphics (assoc elem :percent (double smoothed))
+                                     screen-width screen-height))
+                  (render-element! graphics elem screen-width screen-height)))
             ;; --- Cleanup interference (guarded by finally logic via try/catch above) ---
             _ (when interfered?
                 (.popPose pose)
