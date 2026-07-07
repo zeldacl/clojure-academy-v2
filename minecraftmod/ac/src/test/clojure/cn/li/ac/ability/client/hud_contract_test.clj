@@ -1,11 +1,11 @@
 (ns cn.li.ac.ability.client.hud-contract-test
   (:require [clojure.test :refer [deftest is]]
-            [cn.li.ac.ability.client.hud :as hud]
             [cn.li.ac.ability.client.read-model :as read-model]
             [cn.li.ac.ability.model.cooldown :as cd-data]
             [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.registry.skill-query :as skill-query]
-            [cn.li.ac.ability.service.context-dispatcher :as ctx]))
+            [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.test.support.hud-render-data :as hud-rd]))
 
 (deftest slot-visual-uses-active-context-and-authoritative-cooldown-test
   (let [cooldowns (cd-data/set-cooldown (cd-data/new-cooldown-data) :railgun :main 40)]
@@ -18,7 +18,7 @@
                                                                   :skill-id :railgun
                                                                   :status ctx/STATUS-TERMINATED
                                                                   :input-state :active}])]
-        (let [slot (first (hud/build-skill-slot-render-data
+        (let [slot (first (hud-rd/build-skill-slot-render-data
                            {:active-slots [[:electromaster :railgun]]}
                            320 180 cooldowns "p1"))]
           (is (= :idle (:visual-state slot)))
@@ -31,7 +31,7 @@
                                                                   :skill-id :railgun
                                                                   :status ctx/STATUS-ALIVE
                                                                   :input-state :active}])]
-        (let [slot (first (hud/build-skill-slot-render-data
+        (let [slot (first (hud-rd/build-skill-slot-render-data
                            {:active-slots [[:electromaster :railgun]]}
                            320 180 cooldowns "p1"))]
           (is (= :active (:visual-state slot)))

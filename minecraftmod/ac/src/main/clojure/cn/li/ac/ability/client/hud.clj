@@ -4,16 +4,9 @@
             [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.registry.skill-query :as skill-query]
             [cn.li.ac.ability.client.combat-notice :as combat-notice]
-            [cn.li.ac.ability.client.read-model :as read-model]
             [cn.li.ac.ability.model.cooldown :as cd-data]
             [cn.li.ac.ability.client.delegate-state :as dstate]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
-
-(defn- player-contexts
-  [player-uuid]
-  (read-model/get-player-contexts-for-player (str player-uuid)
-                                             runtime-hooks/*client-session-id*
-                                             :hud))
 
 (defn build-cp-bar-render-data
   "Build CP bar render data matching original AcademyCraft CPBar:
@@ -127,15 +120,6 @@
                    :sin-effect? (:sin-effect? visual))))
         slot-shapes))
 
-(defn build-skill-slot-render-data
-  "Build skill slot render data with cooldown info and delegate visual state."
-  [model screen-width screen-height cooldown-data player-uuid]
-  (let [active-contexts (when player-uuid
-                          (player-contexts player-uuid))]
-    (-> (build-skill-slot-shape model screen-width screen-height)
-        (patch-skill-slot-cooldown cooldown-data)
-        (patch-skill-slot-visual active-contexts player-uuid))))
-
 (defn build-activation-indicator-data
   "Build activation indicator render data matching original AcademyCraft:
    - centered status dot (green=activated, gray=inactive)
@@ -209,34 +193,3 @@
          {:kind :text
           :text (str "OL " (int (get-in hud-model [:overload :cur])) "/" (int (get-in hud-model [:overload :max])))
           :x 115 :y 29 :color {:r 255 :g 255 :b 255 :a a}}]))))
-
-(defn build-hud-render-data
-  "Main function to build complete HUD render data. Called by forge layer."
-  [hud-model screen-width screen-height cooldown-data
-   & {:keys [player-uuid activate-hint preset-state now-ms combat-notice-component
-             showing-numbers? last-show-value-change-ms]}]
-  (let [now (or now-ms (System/currentTimeMillis))
-        combat-notice (build-combat-notice-data combat-notice-component now)
-        preset-indicators (build-preset-indicators-data preset-state now)
-        ;; Flatten for backward compat: always pick the CURRENT preset (last element,
-        ;; since the vector is built as [previous current] during transitions).
-        preset-indicator (last preset-indicators)
-        numbers-texts (build-numbers-texts-data hud-model showing-numbers? last-show-value-change-ms now)]
-    (when (and hud-model (or (:activated hud-model) combat-notice preset-indicator
-                             showing-numbers?
-                             ;; During fade-out: showing-numbers? is false but numbers
-                             ;; still need to render with decaying alpha.
-                             (pos? (long (or last-show-value-change-ms 0)))))
-      {:cp-bar (when (:activated hud-model)
-                 (build-cp-bar-render-data hud-model))
-       :overload-bar (when (:activated hud-model)
-                       (build-overload-bar-render-data hud-model now))
-       :skill-slots (when (:activated hud-model)
-                      (build-skill-slot-render-data hud-model screen-width screen-height
-                                                    cooldown-data player-uuid))
-       :activation-indicator (when (:activated hud-model)
-                               (build-activation-indicator-data hud-model activate-hint))
-       :combat-notice combat-notice
-       :preset-indicator preset-indicator
-       :preset-indicators preset-indicators
-       :numbers-texts numbers-texts})))

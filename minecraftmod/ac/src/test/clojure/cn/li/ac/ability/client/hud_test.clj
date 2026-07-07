@@ -7,6 +7,7 @@
             [cn.li.ac.ability.model.cooldown :as cd-data]
             [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.registry.skill-query :as skill-query]
+            [cn.li.ac.test.support.hud-render-data :as hud-rd]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (deftest build-hud-render-data-includes-combat-notice-when-inactive-test
@@ -20,7 +21,7 @@
       :duration-ms 2000
       :color [255 226 120]})
     (runtime-hooks/with-client-ctx {:session-id session-id}
-      (let [render-data (hud/build-hud-render-data {:activated false
+      (let [render-data (hud-rd/build-hud-render-data {:activated false
                                                     :cp {:cur 0.0 :max 1.0}
                                                     :overload {:cur 0.0 :max 1.0 :fine true}
                                                     :active-slots []}
@@ -44,7 +45,7 @@
                 cd-data/in-cooldown? (fn [_ _ _] false)
                 cd-data/get-remaining (fn [_ _ _] 0)
                 dstate/delegate-state-for-slot (fn [_ _ _] {:state :idle :alpha 1.0 :glow-color nil :sin-effect? false})]
-    (let [slots (hud/build-skill-slot-render-data
+    (let [slots (hud-rd/build-skill-slot-render-data
                  {:active-slots [[:electromaster :railgun]]}
                  320
                  180

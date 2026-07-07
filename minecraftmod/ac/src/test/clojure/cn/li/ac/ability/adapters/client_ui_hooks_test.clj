@@ -6,7 +6,7 @@
             [cn.li.ac.ability.client.read-model :as read-model]
             [cn.li.ac.ability.client.effects.particles :as particles]
             [cn.li.ac.ability.client.effects.sounds :as sounds]
-            [cn.li.ac.ability.client.hud :as hud]
+            [cn.li.ac.test.support.hud-render-data :as hud-rd]
             [cn.li.ac.ability.client.hand-effects :as hand-effects]
             [cn.li.ac.ability.client.keybinds :as client-keybinds]
             [cn.li.ac.ability.client.managed-screens :as managed-screens]
@@ -38,29 +38,26 @@
 (defn- reset-ui-state! [f]
   (with-fresh-ui-runtimes
     (fn []
-      (particles/call-with-particle-queue-runtime
-        (particles/create-particle-queue-runtime)
+      (ps-fix/with-test-player-state-owner
         (fn []
-          (ps-fix/with-test-player-state-owner
-            (fn []
+          (client-ui-hooks/reset-client-ui-state-for-test!)
+          (client-keybinds/reset-client-keybind-state-for-test!)
+          (particles/reset-particle-queue-for-test!)
+          (sounds/reset-sound-queue-for-test!)
+          (hand-effects/reset-hand-effect-registry-for-test!)
+          (store/reset-store!)
+          (ctx/reset-contexts-for-test!)
+          (try
+            (binding [client-keybinds/*client-session-id* :test-session]
+              (f))
+            (finally
               (client-ui-hooks/reset-client-ui-state-for-test!)
               (client-keybinds/reset-client-keybind-state-for-test!)
               (particles/reset-particle-queue-for-test!)
               (sounds/reset-sound-queue-for-test!)
               (hand-effects/reset-hand-effect-registry-for-test!)
-              (store/reset-store!)
               (ctx/reset-contexts-for-test!)
-              (try
-                (binding [client-keybinds/*client-session-id* :test-session]
-                  (f))
-                (finally
-                  (client-ui-hooks/reset-client-ui-state-for-test!)
-                  (client-keybinds/reset-client-keybind-state-for-test!)
-                  (particles/reset-particle-queue-for-test!)
-                  (sounds/reset-sound-queue-for-test!)
-                  (hand-effects/reset-hand-effect-registry-for-test!)
-                  (ctx/reset-contexts-for-test!)
-                  (store/reset-store!))))))))))
+              (store/reset-store!))))))))
 
 (use-fixtures :each reset-ui-state!)
 
@@ -260,7 +257,7 @@
                :overload {:cur 10.0 :max 100.0 :fine true}
                :active-slots []
                :activated false}]
-    (is (nil? (hud/build-hud-render-data model 320 180 {})))))
+    (is (nil? (hud-rd/build-hud-render-data model 320 180 {})))))
 
 (deftest client-slot-wheel-sends-ctx-channel-only-for-penetrate-with-active-context-test
   (let [sent (atom [])

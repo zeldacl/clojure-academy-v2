@@ -60,7 +60,6 @@
    :client-transition-to-alive! noop
    :client-send-context-local! noop
    :client-build-overlay-plan (fn [_ _ _ _] nil)
-   :client-build-hud-render-data (fn [_ _ _ _] nil)
    :set-client-overlay-activated! (fn [_ _] nil)
    :client-open-managed-screen! (fn [_ _] nil)
    :client-build-managed-screen-draw-ops (fn [_ _ _ _ _] [])
@@ -581,10 +580,6 @@
 (defn client-build-overlay-plan
   [player-uuid screen-width screen-height overlay-state]
   ((:client-build-overlay-plan (hooks-core-state-snapshot)) player-uuid screen-width screen-height overlay-state))
-
-(defn client-build-hud-render-data
-  [hud-model screen-width screen-height render-state]
-  ((:client-build-hud-render-data (hooks-core-state-snapshot)) hud-model screen-width screen-height render-state))
 
 (defn set-client-overlay-activated!
   "Notify the overlay layer that activation state has changed for a player.

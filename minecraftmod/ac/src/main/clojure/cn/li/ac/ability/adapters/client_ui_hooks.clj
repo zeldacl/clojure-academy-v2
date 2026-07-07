@@ -1322,11 +1322,6 @@
        (ensure-client-player-state! player-uuid)
        (update-client-preset-data! player-uuid preset-data))
 
-     :client-build-hud-render-data
-     (fn [hud-model screen-width screen-height cooldown-data]
-       (hud-renderer/build-hud-render-data hud-model screen-width screen-height cooldown-data
-                                           :combat-notice-component combat-notice-component))
-
      :client-show-combat-notice!
      (fn [notice-id payload]
        (when-let [session-id (current-client-session-id)]

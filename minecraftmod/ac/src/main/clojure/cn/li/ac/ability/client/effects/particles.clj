@@ -65,26 +65,6 @@
   @particle-queue-delay)
 
 ;; ============================================================================
-;; Runtime record (for explicit parameter passing in test contexts)
-;; ============================================================================
-
-(defn create-particle-queue-runtime
-  "Create a particle queue runtime with its own ConcurrentLinkedQueue."
-  []
-  {::runtime ::particle-queue-runtime
-   :queue* (ConcurrentLinkedQueue.)})
-
-(defn call-with-particle-queue-runtime
-  "Execute f with the given runtime via explicit parameter passing.
-   No binding — the runtime follows the call chain, valid on any thread."
-  [runtime f]
-  (when-not (and (map? runtime)
-                 (= ::particle-queue-runtime (::runtime runtime))
-                 (instance? ConcurrentLinkedQueue (:queue* runtime)))
-    (throw (ex-info "Expected particle queue runtime" {:runtime runtime})))
-  (f runtime))
-
-;; ============================================================================
 ;; Queue operations (backward-compatible arities)
 ;; ============================================================================
 
