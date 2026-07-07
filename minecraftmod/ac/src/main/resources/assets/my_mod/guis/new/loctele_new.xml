@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Ui size="0.0,0.0" align="center,center">
+  <group pos="0.0,0.0" size="0.0,0.0" scale="0.24" align="center,center">
+    <image id="menu" pos="20.0,-179.2" size="442.0,530.0" align="left,top">
+      <group id="list" pos="0.0,18.0" size="442.0,509.8" align="left,top">
+        <group id="elem_template" pos="0.0,0.0" size="442.0,80.0" align="left,top">
+          <text id="text" pos="45.3,16.1" size="377.8,55.6" align="left,top" text="blabla" font-size="43.0" color="#FFC1CFD5"/>
+          <image id="btn_teleport" pos="335.0,29.9" size="33.3,33.3" align="left,top" src="my_mod:textures/guis/icons/icon_location_on.png"/>
+          <image id="btn_remove" pos="375.0,29.9" size="33.3,33.3" align="left,top" src="my_mod:textures/guis/icons/icon_clear.png"/>
+        </group>
+        <box id="add_template" pos="0.0,414.3" size="442.0,80.0" align="left,top" fill="#19FFFFFF" hover-tint="0.4">
+          <text id="input_text" pos="45.3,19.7" size="280.6,55.6" align="left,top" text="Add..." font-size="43.0" color="#7FA4D4E9"/>
+          <image id="btn_confirm" pos="375.8,29.9" size="33.3,33.3" align="left,top" src="my_mod:textures/guis/check.png"/>
+        </box>
+      </group>
+    </image>
+    <image id="info" pos="-23.3,-179.4" size="335.8,191.9" align="right,top" tint="#80353535"/>
+  </group>
+</Ui>

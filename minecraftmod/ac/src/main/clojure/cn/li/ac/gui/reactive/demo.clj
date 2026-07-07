@@ -22,7 +22,7 @@
                    :font-size 12 :color 0xFFFFFFFF})))))
 
 (defn- load-xml-spec []
-  (ui-xml/load-spec "my_mod:guis/rework/page_inv_new.xml"))
+  (ui-xml/load-spec "my_mod:guis/rework/new/page_inv.xml"))
 
 (defn create-demo-runtime []
   (let [r (rt/create-runtime)]

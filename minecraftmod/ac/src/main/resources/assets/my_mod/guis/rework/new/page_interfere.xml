@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Ui size="0.0,0.0" align="center,center">
+  <image id="main" pos="0.0,0.0" size="176.0,187.0" align="center,center" src="my_mod:textures/guis/parent/parent_background.png">
+    <image id="ui_block" pos="0.0,0.0" size="176.0,187.0" align="center,center" src="my_mod:textures/guis/ui/ui_interfere.png"/>
+    <group id="panel_whitelist" pos="0.0,28.0" size="160.0,80.0" align="center,center">
+      <image id="btn_up" pos="0.0,13.0" size="16.0,16.0" align="right,top" src="my_mod:textures/guis/button/button_arrowupb.png" tint="#B2FFFFFF"/>
+      <image id="btn_down" pos="0.0,-1.0" size="16.0,16.0" align="right,bottom" src="my_mod:textures/guis/button/button_arrowdownb.png" tint="#B2FFFFFF"/>
+      <image id="btn_remove" pos="24.0,0.0" size="12.0,12.0" align="left,top" src="my_mod:textures/guis/button/button_remove.png" tint="#B2FFFFFF"/>
+      <image id="btn_add" pos="4.0,0.0" size="12.0,12.0" align="left,top" src="my_mod:textures/guis/button/button_add.png" tint="#B2FFFFFF"/>
+      <group id="zone_whitelist" pos="0.0,-3.0" size="140.0,64.0" align="left,bottom">
+        <image id="element" pos="0.0,0.0" size="150.0,16.0" align="center,top" src="my_mod:textures/guis/element/element_background300x32.png">
+          <image id="element_logo" pos="10.0,0.0" size="12.0,12.0" align="left,center" src="my_mod:textures/guis/icons/icon_whitelist_single.png"/>
+          <text id="element_name" pos="-10.0,0.0" size="110.0,12.0" align="right,center" text="FatWolf" font-size="10.0" color="#FFFFFFFF"/>
+        </image>
+      </group>
+    </group>
+    <group id="panel_config" pos="0.0,25.0" size="160.0,32.0" align="center,top">
+      <group id="element_switch" pos="0.0,0.0" size="160.0,16.0" align="center,top">
+        <text id="element_name" pos="0.0,1.0" size="40.0,14.0" align="left,center" text="Swtich:" font-size="10.0" color="#FFFFFFFF"/>
+        <image id="element_btn_switch" pos="40.0,0.0" size="16.0,16.0" align="left,top" src="my_mod:textures/guis/button/button_switch_on.png"/>
+      </group>
+      <group id="element_range" pos="0.0,0.0" size="160.0,16.0" align="center,bottom">
+        <text id="element_name" pos="0.0,1.0" size="40.0,14.0" align="left,center" text="Range:" font-size="10.0" color="#FFFFFFFF"/>
+        <image id="element_btn_left" pos="40.0,0.0" size="16.0,16.0" align="left,top" src="my_mod:textures/guis/button/button_arrowlefta.png" tint="#B2FFFFFF"/>
+        <image id="element_btn_right" pos="100.0,0.0" size="16.0,16.0" align="left,top" src="my_mod:textures/guis/button/button_arrowrighta.png" tint="#B2FFFFFF"/>
+        <text id="element_text_range" pos="56.0,1.0" size="44.0,16.0" align="left,top" text="16" font-size="10.0" color="#FFFFFFFF"/>
+      </group>
+    </group>
+  </image>
+</Ui>

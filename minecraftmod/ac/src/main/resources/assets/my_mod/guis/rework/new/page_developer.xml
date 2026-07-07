@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Ui size="0.0,0.0" align="center,center">
+  <group id="main" pos="0.0,0.0" size="400.0,187.0" align="center,center">
+    <image id="parent_right" pos="-4.0,0.0" size="278.0,187.0" align="right,center" src="my_mod:textures/guis/parent/parent_background_developerright.png">
+      <image id="ui_right" pos="0.0,0.0" size="278.0,187.0" align="right,center" src="my_mod:textures/guis/ui/ui_developerright.png"/>
+      <group id="area" pos="10.0,18.0" size="257.0,139.0" align="left,top"/>
+    </image>
+    <image id="parent_left" pos="4.0,0.0" size="108.5,187.0" align="left,center" src="my_mod:textures/guis/parent/parent_background_developerleft.png">
+      <image id="ui_left" pos="0.0,0.0" size="108.5,187.0" align="right,center" src="my_mod:textures/guis/ui/ui_developerleft.png"/>
+      <group id="panel_ability" pos="2.0,-10.0" size="104.0,32.0" align="left,center">
+        <image id="logo_ability" pos="0.0,0.0" size="32.0,32.0" align="left,center" src="my_mod:textures/guis/icons/icon_electromaster.png"/>
+        <text id="text_abilityname" pos="14.0,-8.0" size="70.0,12.0" align="center,center" text="Electromaster" font-size="13.0" color="#FFFFFFFF"/>
+        <text id="text_exp" pos="30.0,15.5" size="42.0,10.0" align="left,top" text="EXP 30%" font-size="8.0" color="#FFFFFFFF"/>
+        <group id="logo_progress_back" pos="31.0,-2.0" size="70.0,1.5" align="left,center"/>
+        <group id="logo_progress" pos="31.0,-2.0" size="70.0,1.5" align="left,center"/>
+        <text id="text_level" pos="27.8,6.0" size="41.2,12.0" align="center,center" text="Level 5" font-size="9.0" color="#FF1177D6"/>
+        <image id="btn_upgrade" pos="60.0,14.5" size="186.0,59.5" scale="0.26" align="left,top" src="my_mod:textures/guis/button/button_learn.png" tint="#B2FFFFFF"/>
+      </group>
+      <image id="panel_machine" pos="0.0,0.0" size="108.5,187.0" align="left,top" src="my_mod:textures/guis/parent/parent_background_developermachine.png">
+        <text id="text_wireless" pos="0.0,17.0" size="100.0,12.0" align="center,center" text="Current Node:" font-size="12.0" color="#FFFFFFFF"/>
+        <text id="text_power" pos="0.0,43.0" size="100.0,12.0" align="center,center" text="Power:" font-size="12.0" color="#FFFFFFFF"/>
+        <image id="button_wireless" pos="0.0,29.0" size="100.0,16.0" align="center,center" src="my_mod:textures/guis/element/element_background300x32.png">
+          <text id="text_nodename" pos="11.0,0.0" size="70.0,12.0" align="center,center" text="NodeName" font-size="12.0" color="#FFFFFFFF"/>
+          <image id="logo_node" pos="-37.0,0.0" size="12.0,12.0" align="center,center" src="my_mod:textures/guis/icons/icon_node.png"/>
+        </image>
+        <text id="text_syncrate" pos="0.0,66.0" size="100.0,12.0" align="center,center" text="Sync Rate:" font-size="12.0" color="#FFFFFFFF"/>
+        <group id="progress_power" pos="0.0,55.5" size="97.0,8.0" align="center,center"/>
+        <group id="progress_syncrate" pos="0.0,77.5" size="97.0,8.0" align="center,center"/>
+      </image>
+    </image>
+  </group>
+</Ui>

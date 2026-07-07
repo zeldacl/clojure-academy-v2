@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Ui size="0.0,0.0" align="center,center">
+  <image id="main" pos="0.0,0.0" size="742.0,923.0" scale="0.25" align="center,center" src="my_mod:textures/guis/about/bg.png" z="5.0">
+    <group id="area" pos="53.0,266.0" size="630.0,605.0" align="left,top">
+      <image id="btn_credits" pos="0.0,0.0" size="315.0,58.0" align="left,top">
+        <image id="glow" pos="0.0,0.0" size="332.0,80.0" align="center,center" src="my_mod:textures/guis/about/button_glow.png" tint="#FF2984F1"/>
+        <text id="text" pos="0.0,0.0" size="315.0,58.0" align="left,top" text="Credits" font-size="42.0" color="#FFFFFFFF"/>
+      </image>
+      <image id="btn_donate" pos="315.0,0.0" size="315.0,58.0" align="left,top">
+        <image id="glow" pos="0.0,0.0" size="332.0,80.0" align="center,center" src="my_mod:textures/guis/about/button_glow.png" tint="#FFE79CFF"/>
+        <text id="text" pos="0.0,0.0" size="315.0,58.0" align="left,top" text="Donate" font-size="42.0" color="#FFFFFFFF"/>
+      </image>
+      <image id="drag_bar" pos="0.0,58.0" size="10.0,70.0" align="right,top" tint="#85FFFFFF"/>
+      <image id="scroll_area" pos="0.0,58.0" size="620.0,540.0" align="left,top" z="100.0" tint="#15000000"/>
+    </group>
+  </image>
+</Ui>

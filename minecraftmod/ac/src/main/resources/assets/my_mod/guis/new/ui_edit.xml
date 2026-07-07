@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Ui size="0.0,0.0" align="center,center">
+  <image id="main" pos="94.0,104.0" size="144.0,203.0" scale="0.50" align="left,top" src="my_mod:textures/guis/window_ui_resize.png">
+    <text id="header" pos="0.0,8.0" size="128.0,28.0" align="center,top" text="ac.gui.uiedit.elements" font-size="18.0" color="#BBFFFFFF"/>
+    <group id="body" pos="0.0,36.0" size="128.0,160.0" align="center,top">
+      <text id="template" pos="0.0,0.0" size="128.0,24.0" align="center,top" text="CP Indicator" font-size="18.0" color="#FFFFFFFF"/>
+    </group>
+  </image>
+  <image id="editbox" pos="167.0,121.0" size="90.0,16.0" align="left,top">
+    <text id="text_x" pos="2.0,3.0" size="10.0,10.0" align="left,top" text="X" font-size="10.0" color="#FFFFFFFF"/>
+    <image id="edit_x" pos="10.0,3.0" size="34.0,10.0" align="left,top"/>
+    <text id="text_y" pos="46.0,3.0" size="10.0,10.0" align="left,top" text="Y" font-size="10.0" color="#FFFFFFFF"/>
+    <image id="edit_y" pos="53.0,3.0" size="34.0,10.0" align="left,top"/>
+  </image>
+</Ui>

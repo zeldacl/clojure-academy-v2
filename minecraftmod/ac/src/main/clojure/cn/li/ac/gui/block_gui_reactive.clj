@@ -54,7 +54,7 @@
   [{:keys [page-xml texture-name container menu histograms properties wireless? wireless-role]}]
   (let [r (rt/create-runtime)
         ;; Load inventory page from XML
-        spec (ui-xml/load-spec (modid/namespaced-path (or page-xml "guis/rework/page_inv.xml")))
+        spec (ui-xml/load-spec (modid/namespaced-path (or page-xml "guis/rework/new/page_inv.xml")))
         root-idx (rt/build! r spec)
         ;; Set ui_block texture
         tex-path (sig/signal-o

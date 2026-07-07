@@ -24,7 +24,7 @@
   [name]
   (try
     (let [r (rt/create-runtime)
-          spec (ui-xml/load-spec (modid/namespaced-path "guis/rework/page_inv.xml"))
+          spec (ui-xml/load-spec (modid/namespaced-path "guis/rework/new/page_inv.xml"))
           root-idx (rt/build! r spec)
           ;; Set ui_block texture via signal
           tex-path (sig/signal-o (modid/asset-path "textures" (str "guis/ui/ui_" name ".png")))]
