@@ -1,8 +1,6 @@
 (ns cn.li.mcmod.client.platform-bridge
-  "Platform-neutral client bridge via Framework function map.
-
-   Bridge ops stored at [:platform :client-bridge].
-   All wrapper functions delegate to matching keys in the ops map."
+  "Thin public API for client bridge operations.
+   Delegates to framework atom [:platform :client-bridge]."
   (:require [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.util.log :as log]))
 
@@ -11,9 +9,18 @@
     (apply f args)))
 
 (defn install-client-bridge!
-  "Install client bridge callbacks from a map of handler functions."
+  "Install client bridge callbacks from a map of handler functions.
+   REPLACES the entire client-bridge map."
   [ops-map]
   (when-let [fw-atom (fw/fw-atom)] (swap! fw-atom assoc-in [:platform :client-bridge] ops-map)) nil)
+
+(defn merge-client-bridge!
+  "Merge additional handlers into the client bridge without replacing existing ops.
+   Safe for incremental registration from content modules (ac)."
+  [ops-map]
+  (when-let [fw-atom (fw/fw-atom)]
+    (swap! fw-atom update-in [:platform :client-bridge] merge ops-map))
+  nil)
 
 (defn reset-client-bridge-for-test!
   []
@@ -53,3 +60,8 @@
 (defn blit-textured-quad!        [& args] (apply bridge-op :blit-textured-quad! args))
 (defn is-glfw-key-down?          [& args] (apply bridge-op :is-glfw-key-down? args))
 (defn open-reactive-screen!      [& args] (apply bridge-op :open-reactive-screen args))
+
+(defn call-adapter
+  "Look up and call any bridge function by key. Returns nil if not found."
+  [k & args]
+  (apply bridge-op k args))
