@@ -168,10 +168,15 @@
           cgui-root (or session-id "")
           {:title (or title "CGUI Screen")})))))
 
+(defn- open-reactive-screen-handler [rt title]
+  (let [host-ns (requiring-resolve 'cn.li.mc1201.gui.reactive.host/open-reactive-screen!)]
+    (when host-ns (host-ns rt title))))
+
 (defn- init-content-client-bridge!
   []
   (client-bridge/install-client-bridge!
     {:open-screen open-screen-dispatcher
+     :open-reactive-screen open-reactive-screen-handler
      :slot-key-down runtime-bridge/on-slot-key-down!
      :slot-key-tick runtime-bridge/on-slot-key-tick!
      :slot-key-up runtime-bridge/on-slot-key-up!

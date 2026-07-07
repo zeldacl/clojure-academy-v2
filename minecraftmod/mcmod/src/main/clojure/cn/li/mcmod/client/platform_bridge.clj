@@ -52,3 +52,4 @@
 (defn spawn-item-stack-at!       [& args] (apply bridge-op :spawn-item-stack-at! args))
 (defn blit-textured-quad!        [& args] (apply bridge-op :blit-textured-quad! args))
 (defn is-glfw-key-down?          [& args] (apply bridge-op :is-glfw-key-down? args))
+(defn open-reactive-screen!      [& args] (apply bridge-op :open-reactive-screen args))
