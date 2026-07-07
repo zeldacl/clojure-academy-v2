@@ -26,9 +26,9 @@
 
 (defn on-mode-switch-key-state!
   ([is-down]
-   (cn.li.mc1201.client.overlay.renderer/on-mode-switch-key-state! is-down))
+   nil)
   ([owner is-down]
-   (cn.li.mc1201.client.overlay.renderer/on-mode-switch-key-state! owner is-down)))
+   nil))
 
 (defn init! []
   (.addListener (MinecraftForge/EVENT_BUS)

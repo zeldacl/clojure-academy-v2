@@ -1,8 +1,8 @@
 (ns cn.li.mc1201.client.session-cleanup
   "Shared client owner cleanup/orchestration for disconnects and server switches."
   (:require [cn.li.mc1201.client.effects.level-renderer :as level-renderer]
-            [cn.li.mc1201.client.overlay.renderer :as overlay-renderer]
             [cn.li.mc1201.client.overlay.state :as overlay-state]
+            [cn.li.mc1201.gui.reactive.overlay-host :as overlay-host]
             [cn.li.mc1201.client.session :as client-session]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.network.client :as net-client]
@@ -86,7 +86,7 @@
        (clear-owner-input-state! owner*))
      (runtime-hooks/client-clear-owner-state! owner*)
      (overlay-state/clear-client-activated! owner*)
-     (overlay-renderer/clear-overlay-render-state! owner*)
+     (overlay-host/dispose-overlay! (:client-session-id owner*))
      (level-renderer/clear-owner-walk-speed! owner* ^LocalPlayer (local-player))
      (when session-id
        (net-client/clear-client-session-state! session-id))
