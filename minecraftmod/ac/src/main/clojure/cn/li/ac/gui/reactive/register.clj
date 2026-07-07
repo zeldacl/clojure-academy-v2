@@ -1,61 +1,61 @@
 (ns cn.li.ac.gui.reactive.register
-  "Reactive GUI registration — installs reactive screen handlers via client bridge.
-   Uses merge-client-bridge! (IoC pattern, no requiring-resolve / no static dep on mc1201)."
+  "Reactive GUI registration — installs handlers via client bridge merge.
+   All registration happens in init-all! (called from content_loader), NOT at top level."
   (:require [cn.li.mcmod.client.platform-bridge :as bridge]
+            [cn.li.ac.block.solar-gen.gui-reactive :as solar]
+            [cn.li.ac.block.wind-gen.gui-reactive :as wind]
+            [cn.li.ac.block.imag-fusor.gui-reactive :as fusor]
+            [cn.li.ac.block.metal-former.gui-reactive :as mformer]
+            [cn.li.ac.block.wireless-node.gui-reactive :as node]
+            [cn.li.ac.block.wireless-matrix.gui-reactive :as matrix]
+            [cn.li.ac.block.ability-interferer.gui-reactive :as interferer]
             [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
-;; Reactive screen creator registry
+;; Registry atom
 ;; ============================================================================
 
 (def ^:private screen-creators (atom {}))
-;; {:solar-gen {:create (fn [c m p] ...) :title "Solar Generator"} ...}
-
-(def ^:private registered? (atom #{}))
-
-(defn- register-screen! [gui-key create-fn title]
-  (swap! screen-creators assoc gui-key {:create create-fn :title title})
-  (swap! registered? conj gui-key))
 
 ;; ============================================================================
-;; Bridge handler — called by forge init when :open-reactive-screen is invoked
+;; Bridge handler
 ;; ============================================================================
 
 (defn- reactive-screen-handler
-  "Bridge handler for :open-reactive-screen. Receives [gui-key container menu player].
-   Looks up the reactive create-fn and returns a screen config map."
   [gui-key container menu player]
   (if-let [entry (get @screen-creators gui-key)]
-    (let [result ((:create entry) container menu player)]
-      ;; result is {:runtime rt :signals ... :container c :menu m}
-      ;; Platform layer uses this to create DelegatingCGuiContainerScreen via host_container
-      result)
-    (do (log/warn "No reactive screen creator for:" gui-key)
-        nil)))
+    ((:create entry) container menu player)
+    (do (log/warn "No reactive screen creator for:" gui-key) nil)))
 
 ;; ============================================================================
-;; Install — called from content_loader.clj
+;; Registration (called during init-all!, NOT at top level)
+;; ============================================================================
+
+(defn- register-screen! [gui-key create-fn title]
+  (swap! screen-creators assoc gui-key {:create create-fn :title title}))
+
+;; ============================================================================
+;; Public API
 ;; ============================================================================
 
 (defn install-bridge!
   "Install reactive screen handler into client bridge via merge.
-   Called from content_loader.clj after forge init has set up base bridge ops."
+   Called from content_loader.clj AFTER forge init has set up base bridge ops."
   []
   (bridge/merge-client-bridge!
-    {:open-reactive-screen reactive-screen-handler
-     :reactive-screen-registry (fn [] @screen-creators)})
+    {:open-reactive-screen reactive-screen-handler})
   (log/info "Reactive screen bridge handler installed"))
 
-;; ============================================================================
-;; Register all migrated block GUIs
-;; ============================================================================
-
-(defn register-all!
-  "Register screen creators for all migrated block GUIs."
+(defn init-all!
+  "Register all reactive screen creators and install bridge handler.
+   Called from content_loader.clj at runtime content init (NO top-level side effects)."
   []
-  ;; Note: create-fn takes [container menu player], returns {:runtime :signals :container :menu}
-  ;; The actual ns references are resolved via :create metadata at call time.
-  ;; For now, registration is stub — the full screen-fn references require
-  ;; a separate PR to wire ac.block.*.gui-reactive namespaces.
-  (log/info "Reactive block GUI registry: 7 GUIs available for activation")
-  (install-bridge!))
+  (register-screen! :solar-gen solar/create-screen "Solar Generator")
+  (register-screen! :imag-fusor fusor/create-screen "Imag Fusor")
+  (register-screen! :metal-former mformer/create-screen "Metal Former")
+  (register-screen! :wind-gen-base wind/create-screen "Wind Generator")
+  (register-screen! :wireless-node node/create-screen "Wireless Node")
+  (register-screen! :wireless-matrix matrix/create-screen "Wireless Matrix")
+  (register-screen! :ability-interferer interferer/create-screen "Ability Interferer")
+  (install-bridge!)
+  (log/info (str "Reactive GUIs initialized: " (count @screen-creators))))

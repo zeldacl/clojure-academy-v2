@@ -45,7 +45,7 @@
   ;; Register reactive block GUI screen-fns alongside old CGUI ones.
   ;; Old registrations remain as fallback; reactive ones take priority
   ;; when the platform layer checks :reactive? flag.
-  (reactive-register/register-all!)
+  (reactive-register/init-all!)
   nil)
 
 (defn activate-runtime-content!
