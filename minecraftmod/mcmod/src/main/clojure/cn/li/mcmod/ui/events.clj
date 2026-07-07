@@ -61,16 +61,16 @@
   (let [old-idx (rt/focus-idx rt)] (when (>= old-idx 0) (gain-focus! rt -1))))
 
 ;; Drag state accessors (direct field access on UiRt)
-(defn- drag-node-idx [^UiRt rt] (.-drag-node-idx rt))
-(defn- set-drag-node-idx! [^UiRt rt v] (set! (.-drag-node-idx rt) v))
-(defn- dragging? [^UiRt rt] (boolean (.-dragging? rt)))
-(defn- set-dragging?! [^UiRt rt v] (set! (.-dragging? rt) (boolean v)))
-(defn- drag-start-mx [^UiRt rt] (.-drag-start-mx rt))
-(defn- set-drag-start-mx! [^UiRt rt v] (set! (.-drag-start-mx rt) (double v)))
-(defn- drag-start-my [^UiRt rt] (.-drag-start-my rt))
-(defn- set-drag-start-my! [^UiRt rt v] (set! (.-drag-start-my rt) (double v)))
-(defn- drag-start-ms [^UiRt rt] (.-drag-start-ms rt))
-(defn- set-drag-start-ms! [^UiRt rt v] (set! (.-drag-start-ms rt) (long v)))
+(defn- drag-node-idx [^UiRt rt] (.drag_node_idx rt))
+(defn- set-drag-node-idx! [^UiRt rt v] (set! (.drag_node_idx rt) v))
+(defn- dragging? [^UiRt rt] (boolean (.dragging_QMARK_ rt)))
+(defn- set-dragging?! [^UiRt rt v] (set! (.dragging_QMARK_ rt) (boolean v)))
+(defn- drag-start-mx [^UiRt rt] (.drag_start_mx rt))
+(defn- set-drag-start-mx! [^UiRt rt v] (set! (.drag_start_mx rt) (double v)))
+(defn- drag-start-my [^UiRt rt] (.drag_start_my rt))
+(defn- set-drag-start-my! [^UiRt rt v] (set! (.drag_start_my rt) (double v)))
+(defn- drag-start-ms [^UiRt rt] (.drag_start_ms rt))
+(defn- set-drag-start-ms! [^UiRt rt v] (set! (.drag_start_ms rt) (long v)))
 
 (defn dispatch-mouse-press! [^UiRt rt mx my button]
   (let [^INode hit (layout/hit-test rt (double mx) (double my))
@@ -112,7 +112,7 @@
 
 (defn unbind-subtree! [^UiRt rt ^INode node]
   (rt/remove-node-events! rt (.getIdx node))
-  (let [^"[Ljava.lang.Object;" cs (.getChildrenArr node) n (node/child-count node)]
+  (let [^objects cs (.getChildrenArr node) n (node/child-count node)]
     (loop [i 0]
       (when (< i n)
         (when-let [^INode c (aget cs i)] (unbind-subtree! rt c))
