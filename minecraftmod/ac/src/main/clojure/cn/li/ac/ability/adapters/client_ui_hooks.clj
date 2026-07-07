@@ -50,7 +50,14 @@
    :slot-context-ids {}
    :slot-key-tick-ms {}
   :charge-coin-state {}
-  :push-handlers-registered? false})
+  :push-handlers-registered? false
+  ;; Overlay HUD reactive cache (see docs/dev plan "Overlay/HUD 响应式重构"):
+  ;; Cache A — skill-slot shape (icon/name/key-label/position), keyed on preset-data identity.
+  :overlay-skill-shape-cache {}
+  ;; Cache B — context-derived data (delegate-state + consumption-hint), keyed on a
+  ;; context-registry snapshot token, shared between the two consumers so the
+  ;; (allocating) context scan runs at most once per real context change, not per-frame.
+  :overlay-context-cache {}})
 
 ;; Client UI runtime — Framework [:service :client-ui]
 
@@ -109,6 +116,14 @@
 (defn- charge-coin-state-snapshot
   []
   (:charge-coin-state (client-ui-runtime-state-snapshot)))
+
+(defn- overlay-skill-shape-cache-snapshot
+  []
+  (:overlay-skill-shape-cache (client-ui-runtime-state-snapshot)))
+
+(defn- overlay-context-cache-snapshot
+  []
+  (:overlay-context-cache (client-ui-runtime-state-snapshot)))
 
 (defn- current-client-session-id
   []
@@ -308,7 +323,9 @@
                             (remove (fn [[slot-key _last-ms]]
                                       (= owner-key (slot-key-owner slot-key)))
                                     m))))
-            (update :charge-coin-state dissoc owner-key))))
+            (update :charge-coin-state dissoc owner-key)
+            (update :overlay-skill-shape-cache dissoc owner-key)
+            (update :overlay-context-cache dissoc owner-key))))
   nil))
 
 (defn- clear-client-player-state!
@@ -884,7 +901,7 @@
                     :status-seconds (:cooldown-seconds slot)
                     :timer-total (:cooldown-total slot)
                     :timer-remaining (:cooldown-remaining slot))
-                  (dissoc :type :skill-icon :skill-name :in-cooldown :cooldown-seconds
+                  (dissoc :type :skill-id :skill-icon :skill-name :in-cooldown :cooldown-seconds
                           :cooldown-total :cooldown-remaining)))
                           (or (:skill-slots hud-render-data) []))
         preset-indicators (mapv (fn [p]
@@ -914,16 +931,16 @@
     (tutorial-notification/build-notification-elements! screen-width screen-height now-ms)
     (catch Throwable _ [])))
 
-(defn- active-skill-cp-cost
-  "Compute consumption-hint CP cost for the first active skill with a computable cost.
-   Iterates over active (non-terminated) contexts, trying common cost paths
-   (tick, down, up, release) in order. Returns nil if no active skill has a cost.
+(defn- active-skill-cp-cost-from-contexts
+  "Compute consumption-hint CP cost for the first active skill with a computable cost,
+   given an already-fetched contexts collection. Iterates over active (non-terminated)
+   contexts, trying common cost paths (tick, down, up, release) in order. Returns nil
+   if no active skill has a cost.
 
    Replaces the railgun-specific coin-QTE logic with a general approach that
    works for all skills matching original AcademyCraft CPBar consumption-hint behavior."
-  [player-uuid]
-  (let [contexts (player-contexts player-uuid)
-        active-ctxs (filter ctx/active-context? contexts)]
+  [contexts]
+  (let [active-ctxs (filter ctx/active-context? contexts)]
     (some
       (fn [ctx-data]
         (let [skill-id (:skill-id ctx-data)
@@ -936,6 +953,37 @@
                 (catch Throwable _ nil)))
             [:cost.tick.cp :cost.down.cp :cost.up.cp :cost.release.cp :cost.attack.cp])))
       active-ctxs)))
+
+(defn- cached-skill-slot-shapes
+  "Cache A: skill-slot shape (icon/name/key-label/position), keyed on preset-data
+   identity. Returns cached shapes when preset-data is unchanged, else rebuilds
+   via hud-renderer/build-skill-slot-shape and writes the cache."
+  [owner-key hud-model screen-width screen-height preset-data]
+  (let [cache (get (overlay-skill-shape-cache-snapshot) owner-key)]
+    (if (and cache (identical? preset-data (:last-preset-data cache)))
+      (:shapes cache)
+      (let [shapes (hud-renderer/build-skill-slot-shape hud-model screen-width screen-height)]
+        (update-client-ui-runtime! assoc-in [:overlay-skill-shape-cache owner-key]
+                                    {:last-preset-data preset-data :shapes shapes})
+        shapes))))
+
+(defn- cached-context-data
+  "Cache B: active-contexts + consumption-hint, keyed on a context-registry
+   snapshot token. Both the skill-slot delegate-state patch and the
+   consumption-hint computation share this single (allocating) context read
+   instead of each scanning contexts independently every frame."
+  [owner-key player-uuid]
+  (let [token (ctx/contexts-version-token)
+        cache (get (overlay-context-cache-snapshot) owner-key)]
+    (if (and cache (identical? token (:last-contexts-token cache)))
+      cache
+      (let [contexts (player-contexts player-uuid)
+            hint (active-skill-cp-cost-from-contexts contexts)
+            entry {:last-contexts-token token
+                   :active-contexts contexts
+                   :consumption-hint hint}]
+        (update-client-ui-runtime! assoc-in [:overlay-context-cache owner-key] entry)
+        entry))))
 
 (defn build-client-overlay-plan [player-uuid screen-width screen-height overlay-state]
   ;; When an overlay app is active, skip normal HUD and render overlay app elements.
@@ -978,20 +1026,40 @@
         hud-model (build-hud-model-from-state player-state activated-override)
         now-ms (long (or (:now-ms overlay-state) (System/currentTimeMillis)))
         charge-state (charge-coin-visual-state player-uuid now-ms)
-        hud-model (if-let [active-cost (active-skill-cp-cost player-uuid)]
-                    (assoc hud-model :consumption-hint active-cost)
+        owner-key (client-ui-owner-key player-uuid)
+        preset-data (:preset-data player-state)
+        {:keys [active-contexts consumption-hint]} (cached-context-data owner-key player-uuid)
+        hud-model (if consumption-hint
+                    (assoc hud-model :consumption-hint consumption-hint)
                     hud-model)
         cooldown-data (:cooldown-data player-state)
         activate-hint (client-keybinds/get-activate-hint player-uuid)
         preset-state (preset-switch-state-for-overlay player-uuid)
-        hud-render-data (hud-renderer/build-hud-render-data
-                         hud-model screen-width screen-height cooldown-data
-                         :player-uuid player-uuid
-                         :activate-hint activate-hint
-                         :preset-state preset-state
-                         :showing-numbers? showing-numbers?
-                         :last-show-value-change-ms last-show-value-change-ms
-                         :now-ms (long (or (:now-ms overlay-state) (System/currentTimeMillis))))
+        ;; Reactive assembly (Cache A/B, see docs/dev plan "Overlay/HUD 响应式重构"):
+        ;; cp-bar/overload-bar/activation-indicator/preset-indicators/numbers-texts stay
+        ;; unconditional per-frame calls (cheap, no registry/context lookups). Skill-slot
+        ;; shape (registry lookups) is Cache A; delegate-state/consumption-hint share the
+        ;; single Cache B context read above; cooldown fields are patched fresh every frame.
+        preset-indicators (hud-renderer/build-preset-indicators-data preset-state now-ms)
+        preset-indicator (last preset-indicators)
+        numbers-texts (hud-renderer/build-numbers-texts-data hud-model showing-numbers?
+                                                             last-show-value-change-ms now-ms)
+        skill-slots (when (:activated hud-model)
+                      (-> (cached-skill-slot-shapes owner-key hud-model screen-width screen-height preset-data)
+                          (hud-renderer/patch-skill-slot-cooldown cooldown-data)
+                          (hud-renderer/patch-skill-slot-visual active-contexts player-uuid)))
+        hud-render-data (when (or (:activated hud-model) preset-indicator showing-numbers?
+                                  (pos? last-show-value-change-ms))
+                          {:cp-bar (when (:activated hud-model) (hud-renderer/build-cp-bar-render-data hud-model))
+                           :overload-bar (when (:activated hud-model)
+                                           (hud-renderer/build-overload-bar-render-data hud-model now-ms))
+                           :skill-slots skill-slots
+                           :activation-indicator (when (:activated hud-model)
+                                                    (hud-renderer/build-activation-indicator-data hud-model activate-hint))
+                           :combat-notice nil
+                           :preset-indicator preset-indicator
+                           :preset-indicators preset-indicators
+                           :numbers-texts numbers-texts})
         base-elements (hud-render-data->overlay-elements hud-render-data screen-width screen-height)
         current-charging-elements (current-charging-overlay-elements player-uuid screen-width screen-height)
         coin-qte-elements (coin-qte-overlay-elements player-uuid screen-width screen-height now-ms)

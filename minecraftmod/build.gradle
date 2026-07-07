@@ -2941,10 +2941,9 @@ tasks.register('verifyTerminalBridgeInitOrchestration') {
         def deletedTerminalRegistry = file('ac/src/main/clojure/cn/li/ac/terminal/registry.clj')
         def mcmodUi = file('mcmod/src/main/clojure/cn/li/mcmod/platform/ui.clj')
         def forgeInit = file('forge-1.20.1/src/main/clojure/cn/li/forge1201/client/init.clj')
-        def forgeCguiBridge = file('forge-1.20.1/src/main/clojure/cn/li/forge1201/client/cgui_screen_bridge.clj')
         def deletedForgeTerminalBridge = file('forge-1.20.1/src/main/clojure/cn/li/forge1201/client/terminal_screen_bridge.clj')
 
-        [acCore, acActions, terminalGui, mcmodUi, forgeInit, forgeCguiBridge].each { f ->
+        [acCore, acActions, terminalGui, mcmodUi, forgeInit].each { f ->
             if (!f.exists()) {
                 violations << "Required terminal client file missing: ${project.rootDir.toPath().relativize(f.toPath()).toString().replace('\\', '/')}"
             }

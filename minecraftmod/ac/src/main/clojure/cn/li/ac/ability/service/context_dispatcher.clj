@@ -265,6 +265,13 @@
         (map (fn [[k v]] [k (as-public-context v)]))
         (transport-contexts-snapshot)))
 
+(defn contexts-version-token
+  "Cheap identity-stable snapshot of the raw transport-contexts map, suitable
+  for identical?-based dirty-checking. Returns the same object across calls
+  when no context has been added, removed, or updated."
+  []
+  (transport-contexts-snapshot))
+
 (defn remove-context!
   ([ctx-id]
    (remove-context! nil ctx-id))
