@@ -57,6 +57,7 @@
 
 (defn get-tape-arr [^UiRt rt] (.tape rt))
 (defn set-tape-arr! [^UiRt rt arr] (set! (.tape rt) arr))
+(defn get-dirty-bindings-q ^ArrayList [^UiRt rt] (.dirty_bindings rt))
 
 (defn hovered-idx [^UiRt rt] (or (int (.hovered_idx rt)) -1))
 (defn set-hovered-idx! [^UiRt rt idx] (set! (.hovered_idx rt) (Integer/valueOf (int idx))))
