@@ -6,7 +6,7 @@
   and close behavior."
   (:require [cn.li.ac.wireless.gui.container.common :as common]
             [cn.li.ac.wireless.gui.container.schema-runtime :as schema-runtime]
-            [cn.li.mcmod.gui.tabbed-gui :as tabbed]))
+            ))  ;; tabbed-gui removed — was unused
 
 (defn create-schema-container
   "Create the common container map for schema-backed block GUIs.
