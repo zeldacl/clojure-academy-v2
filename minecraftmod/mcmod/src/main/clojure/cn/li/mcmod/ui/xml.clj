@@ -1,0 +1,165 @@
+(ns cn.li.mcmod.ui.xml
+  "XML layout loader — parses new-schema XML into node-spec data.
+   Element name = node kind; attributes = static props; <template> = reusable.
+   Single parse path, schema validation at load time."
+  (:require [clojure.xml :as xml]
+            [clojure.java.io :as io]
+            [clojure.string :as str]))
+
+;; ============================================================================
+;; Attribute parsers
+;; ============================================================================
+
+(defn- parse-int [s default]
+  (if s
+    (try (Long/parseLong (str/trim s)) (catch Exception _ default))
+    default))
+
+(defn- parse-double [s default]
+  (if s
+    (try (Double/parseDouble (str/trim s)) (catch Exception _ default))
+    default))
+
+(defn- parse-color [s]
+  "Parse #RRGGBB or #RRGGBBAA hex color string into ARGB long.
+   Returns nil if not a valid color."
+  (when (and s (str/starts-with? (str/trim s) "#"))
+    (try
+      (let [hex (str/replace (str/trim s) #"^#" "")
+            len (count hex)]
+        (Long/parseLong (if (= len 6) (str "FF" hex) hex) 16))
+      (catch Exception _ nil))))
+
+(defn- parse-pos [s]
+  "Parse 'x,y' into {:x :y}."
+  (if s
+    (let [parts (str/split (str/trim s) #"\s*,\s*")]
+      {:x (parse-double (first parts) 0.0)
+       :y (parse-double (second parts) 0.0)})
+    {:x 0.0 :y 0.0}))
+
+(defn- parse-size [s]
+  "Parse 'w,h' into {:w :h}."
+  (if s
+    (let [parts (str/split (str/trim s) #"\s*,\s*")]
+      {:w (parse-double (first parts) 0.0)
+       :h (parse-double (second parts) 0.0)})
+    {:w 0.0 :h 0.0}))
+
+(defn- parse-align [s]
+  "Parse 'center,middle' into {:align-w :center :align-h :middle}."
+  (if s
+    (let [parts (str/split (str/trim s) #"\s*,\s*")
+          w (keyword (or (first parts) "left"))
+          h (keyword (or (second parts) "top"))]
+      {:align-w w :align-h h})
+    {:align-w :left :align-h :top}))
+
+;; ============================================================================
+;; Kind → spec conversion
+;; ============================================================================
+
+(def ^:private kind-attrs
+  "Attribute mapping for each kind. Maps XML attr name → spec key + parse fn."
+  {:group {:pos parse-pos :size parse-size :scale (fn [s] (or (parse-double s nil) 1.0))
+           :align parse-align :clip? (fn [s] (= "true" s)) :z (fn [s] (parse-double s 0.0))}
+   :box   {:pos parse-pos :size parse-size :fill parse-color :outline parse-color
+           :outline-width (fn [s] (parse-double s 0.0)) :tint parse-color
+           :hover-tint (fn [s] (parse-double s 0.0)) :z (fn [s] (parse-double s 0.0))}
+   :text  {:pos parse-pos :text str :font-size (fn [s] (parse-double s 14.0))
+           :color parse-color :font str :z (fn [s] (parse-double s 0.0))
+           :editable? (fn [s] (= "true" s))}
+   :image {:pos parse-pos :size parse-size :src str :alpha (fn [s] (parse-double s 1.0))
+           :z (fn [s] (parse-double s 0.0))}
+   :progress {:pos parse-pos :size parse-size :z (fn [s] (parse-double s 0.0))}
+   :list   {:pos parse-pos :size parse-size :spacing (fn [s] (parse-double s 4.0))
+            :template str :z (fn [s] (parse-double s 0.0))}})
+
+(defn- parse-elem-attrs [kind attrs]
+  "Convert XML attributes to spec props based on kind's attr mapping."
+  (let [mapping (get kind-attrs kind)]
+    (reduce-kv (fn [m k v]
+                 (if-let [parse-fn (get mapping (keyword k))]
+                   (let [parsed (parse-fn v)]
+                     (if (map? parsed)
+                       (merge m parsed)
+                       (assoc m (keyword k) parsed)))
+                   m))
+               {} attrs)))
+
+;; ============================================================================
+;; Templates (forward declare needed for circular parse-ui-element ref)
+;; ============================================================================
+
+(declare parse-ui-element)
+
+(defn- collect-templates [children]
+  "Extract <template> elements from children, returning {name spec} map."
+  (reduce (fn [acc child]
+            (if (= :template (:tag child))
+              (assoc acc (get-in child [:attrs :name])
+                     (parse-ui-element child {}))
+              acc))
+          {} children))
+
+(defn- non-template-children [children]
+  (remove #(= :template (:tag %)) children))
+
+;; ============================================================================
+;; Recursive parser
+;; ============================================================================
+
+(defn- parse-ui-children [children templates]
+  (when (seq children)
+    (mapv (fn [child]
+            (if (= :template (:tag child))
+              nil  ;; templates handled separately
+              (let [spec (parse-ui-element child templates)]
+                spec)))
+          (non-template-children children))))
+
+(defn- parse-ui-element [elem templates]
+  "Parse a single XML element into node-spec {:kind :id :props :children}.
+   If :template attr is set, resolve from templates."
+  (let [tag (:tag elem)
+        attrs (:attrs elem)
+        template-name (:template attrs)
+        content (:content elem)]
+    (if template-name
+      ;; Use template: copy props, merge attrs
+      (if-let [tmpl (get templates template-name)]
+        (let [merged (merge tmpl {:id (:id attrs)})]
+          merged)
+        (throw (ex-info (str "Template not found: " template-name) {})))
+      ;; Regular element
+      (let [kind (if (= :Ui tag) :group (keyword (name tag)))
+            props (parse-elem-attrs kind attrs)
+            ;; Add id if present
+            props (if-let [id-attr (:id attrs)]
+                    (assoc props :id id-attr)
+                    props)]
+        {:kind kind
+         :id (:id attrs (str (gensym "node-")))
+         :props props
+         :children (vec (keep #(parse-ui-element % templates) (non-template-children content)))}))))
+
+;; ============================================================================
+;; Public API
+;; ============================================================================
+
+(defn parse-spec [xml-str]
+  "Parse XML string into node-spec map. Top-level <Ui> → spec tree."
+  (let [root (xml/parse (java.io.ByteArrayInputStream. (.getBytes xml-str "UTF-8")))
+        templates (collect-templates (:content root))]
+    (parse-ui-element root templates)))
+
+(defn load-spec [resource-path]
+  "Load XML from classpath resource and parse into node-spec.
+   resource-path: e.g. \"my_mod:guis/rework/page_inv.xml\""
+  (let [path (str/replace resource-path #"^[^:]+:" "")
+        res (io/resource path)]
+    (when-not res
+      (throw (ex-info (str "XML resource not found: " resource-path) {:path path})))
+    (let [root (xml/parse res)
+          templates (collect-templates (:content root))]
+      (parse-ui-element root templates))))

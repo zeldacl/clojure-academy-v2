@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Ui size="176,187" scale="1.0" align="center,center">
+  <image id="ui_bg" pos="0,0" size="176,187"
+         src="my_mod:textures/guis/parent/parent_background.png" z="0"/>
+  <image id="ui_inv" pos="0,0" size="176,187"
+         src="my_mod:textures/guis/ui/ui_inventory.png" z="1"/>
+  <image id="ui_block" pos="0,0" size="176,187"
+         src="my_mod:textures/guis/ui/ui_phasegen.png" z="2"/>
+</Ui>
