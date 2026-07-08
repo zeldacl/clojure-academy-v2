@@ -32,6 +32,21 @@
     (lifecycle/run-client-init!)
     (is (= [:a :b] @called))))
 
+(deftest client-init-runs-once-per-session-test
+  (reset-state!)
+  (let [called (atom 0)]
+    (lifecycle/register-client-init! #(swap! called inc))
+    (testing "redundant invocations are no-ops (RegisterRenderers fires from multiple sites)"
+      (lifecycle/run-client-init!)
+      (lifecycle/run-client-init!)
+      (lifecycle/run-client-init!)
+      (is (= 1 @called)))
+    (testing "reset re-arms client init for the next session"
+      (reset-state!)
+      (lifecycle/register-client-init! #(swap! called inc))
+      (lifecycle/run-client-init!)
+      (is (= 2 @called)))))
+
 (deftest latest-registration-wins-test
   (reset-state!)
   (let [called (atom [])]

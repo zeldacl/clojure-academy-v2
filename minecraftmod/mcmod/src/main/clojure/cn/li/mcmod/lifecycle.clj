@@ -22,6 +22,7 @@
    :runtime-content-activation-fn nil
    :datagen-metadata-init-fns []
    :client-init-fns []
+   :client-init-done? false
    :post-spi-client-init-fns []})
 
 ;; ============================================================================
@@ -126,10 +127,31 @@
   nil)
 
 (defn run-client-init!
-  "Run all registered client init functions."
+  "Run all registered client init functions exactly once per session.
+
+   Platform adapters legitimately invoke this from more than one call site
+   because Forge/Fabric can dispatch RegisterRenderers before FMLClientSetup
+   enqueued work (see RenderProfileBootstrap.runContentClientInitHooks and
+   register-scripted-block-entity-renderers!). Client init hooks (UI widget
+   factories, fonts, push handlers) are run-once installations, so a redundant
+   invocation must be a no-op rather than re-register and crash. The done-flag
+   is claimed atomically before running so concurrent dispatch on the render
+   thread can never double-run the hooks."
   []
-  (doseq [f (:client-init-fns (lifecycle-state))]
-    (f)))
+  (let [fw-atom (fw/fw-atom)
+        first-run?
+        (if fw-atom
+          (let [[old _] (swap-vals! fw-atom
+                                    (fn [fw-state]
+                                      (update-in fw-state [:service :lifecycle]
+                                                 (fn [current]
+                                                   (assoc (or current (default-lifecycle-state))
+                                                          :client-init-done? true)))))]
+            (not (get-in old [:service :lifecycle :client-init-done?])))
+          true)]
+    (when first-run?
+      (doseq [f (:client-init-fns (lifecycle-state))]
+        (f)))))
 
 ;; ============================================================================
 ;; Post-SPI Client Init

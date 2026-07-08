@@ -162,7 +162,13 @@
 
 (defn- build-node!
   [^UiRt rt spec parent-node]
-  (let [{:keys [kind id props children]} spec
+  (let [{:keys [kind props children]} spec
+        ;; Specs declare node id either at the top level ({:kind .. :id ..})
+        ;; or inside :props ({:kind .. :props {:id ..}}). Both conventions are
+        ;; used across content screens, so resolve from whichever is present;
+        ;; top level wins. Without this, props-only ids never reach
+        ;; register-node! and every node-by-id lookup returns nil.
+        id (or (:id spec) (:id props))
         kdef (or (get node/kinds kind) (throw (ex-info (str "Unknown kind: " kind) {:kind kind})))
         dslot-cnt (max (count (:dslots kdef)) 1)
         oslot-cnt (+ (long (:oslots-backend-base kdef (count (:oslots kdef)))) 4)

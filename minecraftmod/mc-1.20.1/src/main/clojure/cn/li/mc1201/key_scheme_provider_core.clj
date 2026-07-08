@@ -12,7 +12,7 @@
   []
   (let [mc (Minecraft/getInstance)
         window (.getWindow mc)]
-    (.getHandle window)))
+    (.getWindow window)))
 
 (defn ^:private key-down?
   "Query GLFW key state for a key code.
