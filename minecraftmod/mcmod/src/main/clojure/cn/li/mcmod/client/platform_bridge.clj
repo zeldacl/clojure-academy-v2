@@ -47,7 +47,7 @@
 (defn game-time-ms               [& args] (apply bridge-op :game-time-ms args))
 (defn font-width                 [& args] (apply bridge-op :font-width args))
 (defn font-text-width            [& args] (apply bridge-op :font-text-width args))
-(defn draw-ops-host!             [& args] (apply bridge-op :draw-ops-host! args))
+(defn reactive-embed-host!       [& args] (apply bridge-op :reactive-embed-host! args))
 (defn stop-all-media!            [& args] (apply bridge-op :stop-all-media! args))
 (defn get-mouse-pos              [& args] (apply bridge-op :get-mouse-pos args))
 (defn get-window-size            [& args] (apply bridge-op :get-window-size args))

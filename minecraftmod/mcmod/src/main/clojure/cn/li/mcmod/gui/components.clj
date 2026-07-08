@@ -152,13 +152,11 @@
    :texture-1 texture-1
    :progress (float progress)})
 
-(defn draw-ops
-  "Host component for draw-ops rendering.
-   Stores an ops-fn (fn [] ops-vector) called each render frame.
-   Rendered by the :draw-ops dispatch in renderer.clj."
-  [{:keys [ops-fn]}]
-  {:kind :draw-ops
-   :state (atom {:ops-fn ops-fn})})
+(defn reactive-embed
+  "Host component for embedded UiRt rendering inside CGUI."
+  [{:keys [rt]}]
+  {:kind :reactive-embed
+   :state (atom {:rt rt})})
 
 (defn mono-blend
   "Replicates LambdaLib2 Colors.monoBlend.

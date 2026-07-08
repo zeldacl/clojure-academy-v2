@@ -7,9 +7,9 @@
             [cn.li.mc1201.gui.cgui.font :as font-api]
             [cn.li.mc1201.gui.cgui.assets :as assets]
             [cn.li.mc1201.gui.cgui.traversal :as traversal]
+            [cn.li.mc1201.gui.reactive.render :as reactive-render]
             [cn.li.mcmod.gui.components :as gui-comp]
             [cn.li.mcmod.client.platform-bridge :as platform-bridge]
-            [cn.li.mc1201.gui.cgui.draw-ops-host :as draw-ops-host]
             [cn.li.mcmod.util.log :as log])
   (:import (net.minecraft.client Minecraft)
            (net.minecraft.client.gui GuiGraphics Font)
@@ -19,7 +19,7 @@
            (com.mojang.blaze3d.vertex PoseStack)
            (com.mojang.blaze3d.systems RenderSystem)
            (cn.li.mc1201.client MinecraftClientAccess GuiGraphicsHelper TextureSizeAccess)
-           (cn.li.mc1201.gui.draw_ops StaticShaderSupplier)
+           (cn.li.mc1201.gui.reactive.render StaticShaderSupplier)
            (com.mojang.blaze3d.vertex Tesselator BufferBuilder BufferUploader PoseStack$Pose DefaultVertexFormat VertexFormat$Mode)
            (org.joml Matrix4f)
            (org.lwjgl.opengl GL11)
@@ -525,16 +525,17 @@
                   (catch Exception _))
                 (.fill gg x y (+ x w-int) (+ y h-int) 0xFF2A2A2A))))
 
-          (kind-matches? kind :draw-ops)
-          (when-let [ops-fn (:ops-fn state)]
+          (kind-matches? kind :reactive-embed)
+          (when-let [^cn.li.mcmod.uipojo.runtime.UiRt rt (:rt state)]
             (try
               (let [^PoseStack ps (.pose gg)]
                 (.pushPose ps)
                 (.translate ps (double x) (double y) 0.0)
-                (draw-ops-host/render-ops! gg (ops-fn))
+                (reactive-render/render-embedded-runtime!
+                  gg rt 0.0 0.0 (double w-int) (double h-int) 0.0)
                 (.popPose ps))
               (catch Exception e
-                (log/debug "CGUI draw-ops render error:" (.getMessage e)))))
+                (log/debug "CGUI reactive-embed render error:" (.getMessage e)))))
 
           :else nil)))))
 

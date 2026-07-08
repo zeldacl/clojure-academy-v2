@@ -1,7 +1,9 @@
 (ns cn.li.mc1201.gui.reactive.render
   "Kind renderers (:render!/:bake!) — ported from CGUI renderer.clj zero-alloc techniques.
    All render fns take [^GuiGraphics gg ^INode node]."
-  (:require [cn.li.mc1201.gui.draw-ops :as draw-ops]
+  (:require [cn.li.mc1201.client.texture-registry :as tex-registry]
+            [cn.li.mc1201.gui.reactive.clock :as clock]
+            [cn.li.mcmod.client.platform-bridge :as platform-bridge]
             [cn.li.mcmod.ui.node :as node]
             [cn.li.mcmod.ui.layout :as ui-layout]
             [clojure.string :as str])
@@ -9,10 +11,15 @@
            [cn.li.mcmod.uipojo.runtime UiRt]
            [net.minecraft.client.gui GuiGraphics Font]
            [net.minecraft.client Minecraft]
+           [net.minecraft.client.renderer ShaderInstance]
            [net.minecraft.resources ResourceLocation]
-           [com.mojang.blaze3d.vertex PoseStack]
+           [com.mojang.blaze3d.vertex PoseStack PoseStack$Pose DefaultVertexFormat VertexFormat$Mode
+            Tesselator BufferBuilder BufferUploader]
            [com.mojang.blaze3d.systems RenderSystem]
-           [org.joml Quaternionf]))
+           [org.joml Matrix4f Quaternionf]
+           [org.lwjgl.opengl GL11]))
+
+(declare draw-tape!)
 
 ;; Slot indices matching node.clj kind definitions
 (def ^:private SLOT-BOX-FILL      0)
@@ -30,7 +37,25 @@
 (def ^:private SLOT-PROG-PROGRESS 0)
 (def ^:private SLOT-PROG-BANDS   8)  ;; backend: baked gradient int array
 
+(def ^:private SLOT-LINE-X1 0)
+(def ^:private SLOT-LINE-Y1 1)
+(def ^:private SLOT-LINE-X2 2)
+(def ^:private SLOT-LINE-Y2 3)
+(def ^:private SLOT-LINE-THICK 4)
+(def ^:private SLOT-LINE-ALPHA 5)
 (def ^:private SLOT-SHADER-PROPS 0)
+(def ^:private SLOT-SHADER-PROGRESS 0)
+
+(deftype StaticShaderSupplier [^ShaderInstance shader]
+  java.util.function.Supplier
+  (get [_] shader))
+
+(defn- resolve-tex-loc [tex-key]
+  (cond
+    (instance? ResourceLocation tex-key) tex-key
+    (keyword? tex-key) (tex-registry/resolve-texture tex-key)
+    (string? tex-key) (ResourceLocation/tryParse tex-key)
+    :else nil))
 
 ;; Pre-allocated buffers (zero-alloc render)
 (defonce ^:private quad-xs (double-array 4))
@@ -204,12 +229,46 @@
 ;; :shader-quad / :shader-ring / :shader-progress
 ;; ============================================================================
 
-(defn render-shader-quad! [^GuiGraphics _gg ^INode _node] nil)
+(defn- render-shader-progress-node! [^GuiGraphics gg ^INode node]
+  (let [props (.getOSlot node SLOT-SHADER-PROPS)
+        progress (float (.getDSlot node SLOT-SHADER-PROGRESS))
+        shader-id (or (:shader-id props) :ring-progbar)
+        ^ResourceLocation tex-0 (resolve-tex-loc (or (:texture-0 props) (:tex-0 props)))
+        ^ResourceLocation tex-1 (resolve-tex-loc (or (:texture-1 props) (:tex-1 props)))
+        ^ShaderInstance si (platform-bridge/resolve-shader shader-id)]
+    (when (and si tex-0 tex-1)
+      (try
+        (.setSampler si "TexSampler0" tex-0)
+        (.setSampler si "TexSampler1" tex-1)
+        (RenderSystem/setShader (StaticShaderSupplier. si))
+        (when-let [u (.safeGetUniform si "Progress")] (.set u progress))
+        (let [x (float (node-abs-x node)) y (float (node-abs-y node))
+              x2 (float (+ (node-abs-x node) (scaled-w node)))
+              y2 (float (+ (node-abs-y node) (scaled-h node)))
+              ^PoseStack ps (.pose gg)
+              ^PoseStack$Pose entry (.last ps)
+              ^Matrix4f pose-matrix (.pose entry)
+              ^Tesselator tess (Tesselator/getInstance)
+              ^BufferBuilder bb (.getBuilder tess)]
+          (RenderSystem/setShaderTexture (int 0) tex-0)
+          (RenderSystem/setShaderTexture (int 1) tex-1)
+          (.begin bb VertexFormat$Mode/QUADS DefaultVertexFormat/POSITION_TEX)
+          (.vertex bb pose-matrix x y2 0.0) (.uv bb 0.0 1.0) (.endVertex bb)
+          (.vertex bb pose-matrix x2 y2 0.0) (.uv bb 1.0 1.0) (.endVertex bb)
+          (.vertex bb pose-matrix x2 y 0.0) (.uv bb 1.0 0.0) (.endVertex bb)
+          (.vertex bb pose-matrix x y 0.0) (.uv bb 0.0 0.0) (.endVertex bb)
+          (BufferUploader/drawWithShader (.end bb)))
+        (RenderSystem/setShader (StaticShaderSupplier. nil))
+        (catch Exception _ nil)))))
+
+(defn render-shader-quad! [^GuiGraphics gg ^INode node]
+  (render-shader-progress-node! gg node))
 (defn bake-shader-quad! [^INode _node] nil)
 (def render-shader-ring! render-shader-quad!)
 (def bake-shader-ring! bake-shader-quad!)
-(defn render-shader-progress! [^GuiGraphics _gg ^INode _node] nil)
-(def bake-shader-progress! bake-shader-quad!)
+(defn render-shader-progress! [^GuiGraphics gg ^INode node]
+  (render-shader-progress-node! gg node))
+(defn bake-shader-progress! [^INode _node] nil)
 
 ;; ============================================================================
 ;; :gradient
@@ -227,10 +286,42 @@
 ;; ============================================================================
 
 (defn render-line! [^GuiGraphics gg ^INode node]
-  (let [x1 (.getDSlot node 0) y1 (.getDSlot node 1)
-        x2 (.getDSlot node 2) y2 (.getDSlot node 3)]
-    (.fill gg (unchecked-int x1) (unchecked-int y1) (unchecked-int x2) (unchecked-int (+ y2 1.0))
-           (unchecked-int 0xFFFFFFFF))))
+  (let [x1 (+ (node-abs-x node) (.getDSlot node SLOT-LINE-X1))
+        y1 (+ (node-abs-y node) (.getDSlot node SLOT-LINE-Y1))
+        x2 (+ (node-abs-x node) (.getDSlot node SLOT-LINE-X2))
+        y2 (+ (node-abs-y node) (.getDSlot node SLOT-LINE-Y2))
+        line-w (double (max 1.0 (.getDSlot node SLOT-LINE-THICK)))
+        alpha (double (max 0.0 (min 1.0 (.getDSlot node SLOT-LINE-ALPHA))))
+        color-raw (.getOSlot node 0)
+        color-int (if (number? color-raw) (unchecked-int (long color-raw)) 0xFFFFFFFF)
+        ^ResourceLocation tex (or (resolve-tex-loc :tex-line) (resolve-tex-loc "tex-line"))
+        dx (- x2 x1) dy (- y2 y1)
+        norm (Math/sqrt (+ (* dx dx) (* dy dy)))]
+    (when (and tex (> norm 0.5) (> alpha 0.0))
+      (try
+        (let [half-w (/ line-w 2.0)
+              ndx (/ (- dy) norm) ndy (/ dx norm)
+              nx (* ndx half-w) ny (* ndy half-w)
+              x0 (- x1 (* ndx half-w)) y0 (- y1 (* ndy half-w))
+              x1e (+ x2 (* ndx half-w)) y1e (+ y2 (* ndy half-w))
+              ca (float (* alpha (/ (double (bit-and (bit-shift-right color-int 24) 0xFF)) 255.0)))
+              ^PoseStack ps (.pose gg)
+              ^PoseStack$Pose entry (.last ps)
+              ^Matrix4f pose-matrix (.pose entry)
+              ^Tesselator tess (Tesselator/getInstance)
+              ^BufferBuilder bb (.getBuilder tess)]
+          (RenderSystem/enableBlend)
+          (RenderSystem/defaultBlendFunc)
+          (RenderSystem/setShaderColor 1.0 1.0 1.0 ca)
+          (RenderSystem/setShaderTexture (int 0) tex)
+          (.begin bb VertexFormat$Mode/QUADS DefaultVertexFormat/POSITION_TEX)
+          (.vertex bb pose-matrix (float (- x0 nx)) (float (- y0 ny)) 0.0) (.uv bb 0.0 0.0) (.endVertex bb)
+          (.vertex bb pose-matrix (float (+ x0 nx)) (float (+ y0 ny)) 0.0) (.uv bb 0.0 1.0) (.endVertex bb)
+          (.vertex bb pose-matrix (float (+ x1e nx)) (float (+ y1e ny)) 0.0) (.uv bb 1.0 1.0) (.endVertex bb)
+          (.vertex bb pose-matrix (float (- x1e nx)) (float (- y1e ny)) 0.0) (.uv bb 1.0 0.0) (.endVertex bb)
+          (BufferUploader/drawWithShader (.end bb))
+          (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0))
+        (catch Exception _ nil)))))
 (defn bake-line! [^INode _node] nil)
 
 ;; ============================================================================
@@ -274,20 +365,16 @@
 
 (defn bake-crosshair! [^INode _node] nil)
 
-;; ============================================================================
-;; :draw-ops — delegates to shared draw_ops engine (skill tree etc.)
-;; ============================================================================
-
-(defn render-draw-ops! [^GuiGraphics gg ^INode node]
-  (when-let [ops-fn (.getOSlot node 0)]
-    (when (fn? ops-fn)
-      (let [x (node-abs-x node) y (node-abs-y node)
-            ^PoseStack pose (.pose gg)]
-        (.pushPose pose)
-        (.translate pose (double x) (double y) (double 0.0))
-        (draw-ops/render-ops! gg (ops-fn))
-        (.popPose pose)))))
-(defn bake-draw-ops! [^INode _node] nil)
+(defn render-embedded-runtime!
+  "Render a UiRt embedded at screen offset (CGUI widget host)."
+  [^GuiGraphics gg ^UiRt rt left top w h partial-ticks]
+  (when (and rt (not (cn.li.mcmod.ui.runtime/disposed? rt)))
+    (clock/tick! rt partial-ticks)
+    (cn.li.mcmod.ui.runtime/resize! rt (double w) (double h))
+    (cn.li.mcmod.ui.runtime/flush! rt)
+    (ui-layout/ensure-layout! rt)
+    (ui-layout/ensure-tape! rt)
+    (draw-tape! gg rt (int left) (int top))))
 
 ;; ============================================================================
 ;; Kind fn-map (installed via install-adapter! into [:platform :ui-kinds])
@@ -305,8 +392,7 @@
    :line            {:render! render-line!            :bake! bake-line!}
    :group           {:render! render-group!           :bake! bake-group!}
    :list            {:render! render-list!            :bake! bake-list!}
-   :crosshair       {:render! render-crosshair!       :bake! bake-crosshair!}
-   :draw-ops        {:render! render-draw-ops!        :bake! bake-draw-ops!}})
+   :crosshair       {:render! render-crosshair!       :bake! bake-crosshair!}})
 
 ;; ============================================================================
 ;; draw-tape! — flat tape render loop

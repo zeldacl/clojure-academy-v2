@@ -247,8 +247,7 @@
 ;; ============================================================================
 
 (defn- create-skill-detail-overlay!
-  "Skill detail overlay — delegates visual rendering to skill-tree/detail-popup-ops.
-  CGUI layer handles only: fading cover, click-to-close, LEARN click dispatch."
+  "Skill detail overlay — reactive embed for popup visuals; CGUI handles clicks."
   [root container skill-id _developer-type]
   (let [{:keys [cover end-cover!]} (create-fading-cover root root)
         close-fn (fn [] (unregister-overlay! root end-cover!) (end-cover!))
@@ -266,21 +265,16 @@
         ad0 (get-ad)
         skill-icon (skill-query/get-skill-icon-path skill-id)
         skill-description (when-let [dk (:description-key skill-spec)] (i18n/translate dk))
-        prerequisites (mapv (fn [{:keys [skill-id min-exp]}]
-                              {:icon-path (skill-query/get-skill-icon-path skill-id)
-                               :accepted? (>= (double (or (adata/get-skill-exp ad0 skill-id) 0.0))
-                                              (double min-exp))})
-                            (or (:prerequisites skill-spec) []))
-        open-time-ms (client-bridge/game-time-ms)
-        ;; Developer page layout (page_developer.xml 400×187), center = 200, 93
         cx 200 cy 93
         ta-y (+ cy 20)
         btn-x (- cx 16) btn-y (+ ta-y 52)
-        ;; Per-overlay dev-state atom updated from container each frame
         state-a (atom {:is-developing? false :progress 0.0 :result nil :error nil})
-        prev-dev-a (atom false)]
-
-    ;; Sync dev-state from container atoms each frame
+        prev-dev-a (atom false)
+        node-data {:skill-id skill-id :skill-name skill-name :skill-level skill-level
+                   :skill-icon skill-icon :skill-description skill-description
+                   :learned (adata/is-learned? ad0 skill-id)
+                   :exp (double (or (adata/get-skill-exp ad0 skill-id) 0.0))}
+        rt (cn.li.ac.ability.client.screens.skill-tree-reactive/create-detail-overlay-runtime node-data)]
     (events/on-frame cover
       (fn [_]
         (let [is-dev (boolean @(:is-developing container))
@@ -294,9 +288,14 @@
             (and (not is-dev) prev (not dev-complete))
             (swap! state-a assoc :is-developing? false :result :failed)
             :else nil)
-          (reset! prev-dev-a is-dev))))
-
-    ;; Cover click: detect LEARN button area or close
+          (reset! prev-dev-a is-dev)
+          (let [ad (get-ad)
+                learned? (adata/is-learned? ad skill-id)
+                updated (assoc node-data
+                            :learned learned?
+                            :exp (double (if learned? (or (adata/get-skill-exp ad skill-id) 0.0) 0.0))
+                            :dev-state @state-a)]
+            (cn.li.ac.ability.client.screens.skill-tree-view/refresh-detail-overlay! rt updated)))))
     (events/on-left-click cover
       (fn [evt]
         (let [s @state-a
@@ -324,32 +323,11 @@
                     (swap! state-a assoc :error nil))))
             (and (not developing?) (not on-btn?))
             (close-fn)))))
-
-    ;; Draw-ops host — delegates ALL visual rendering to skill-tree/detail-popup-ops
-    (client-bridge/draw-ops-host! cover
-      (fn []
-        (let [anim-time (/ (- (client-bridge/game-time-ms) open-time-ms) 1000.0)
-              ad (get-ad)
-              learned? (adata/is-learned? ad skill-id)
-              skill-exp (double (if learned? (or (adata/get-skill-exp ad skill-id) 0.0) 0.0))]
-          (skill-tree/detail-popup-ops
-            {:skill-id skill-id :skill-name skill-name :skill-level skill-level
-             :skill-icon skill-icon :skill-description skill-description
-             :learned learned? :exp skill-exp}
-            anim-time
-            {:dev-state @state-a :est-consumption est-consumption
-             :cx cx :cy cy :screen-w 400 :screen-h 187
-             :prerequisites prerequisites}))))
-
+    (client-bridge/reactive-embed-host! cover rt)
     (cgui-core/add-widget! root cover)))
 
-;; ============================================================================
-;; Level-up overlay
-;; ============================================================================
-
 (defn- create-level-up-overlay!
-  "Level-up overlay — delegates visual rendering to skill-tree/level-up-popup-ops.
-  CGUI layer handles only: fading cover, click-to-close, LEARN click dispatch."
+  "Level-up overlay — reactive embed for popup visuals; CGUI handles clicks."
   [root container developer-type]
   (let [{:keys [cover end-cover!]} (create-fading-cover root root)
         close-fn (fn [] (unregister-overlay! root end-cover!) (end-cover!))
@@ -363,17 +341,13 @@
         current-level (int (or (:level ad) 1))
         target-level (inc current-level)
         est-consumption (long (* (:cps dev-spec 700.0) (+ 3 (* target-level target-level 0.5))))
-        condition-icon-path (modid/asset-path "textures" (str "abilities/condition/any" target-level ".png"))
-        open-time-ms (client-bridge/game-time-ms)
-        ;; Developer page layout (page_developer.xml 400×187), center = 200, 93
         cx 200 cy 93
         text-base-y (+ cy 25)
         btn-x (- cx 16) btn-y (+ text-base-y 40)
-        ;; Per-overlay dev-state atom updated from container each frame
         state-a (atom {:is-developing? false :progress 0.0 :result nil :error nil})
-        prev-dev-a (atom false)]
-
-    ;; Sync dev-state from container atoms each frame
+        prev-dev-a (atom false)
+        rt (cn.li.ac.ability.client.screens.skill-tree-reactive/create-levelup-overlay-runtime
+             target-level @state-a)]
     (events/on-frame cover
       (fn [_]
         (let [is-dev (boolean @(:is-developing container))
@@ -387,9 +361,9 @@
             (and (not is-dev) prev (not dev-complete))
             (swap! state-a assoc :is-developing? false :result :failed)
             :else nil)
-          (reset! prev-dev-a is-dev))))
-
-    ;; Cover click: detect LEARN button area or close
+          (reset! prev-dev-a is-dev)
+          (cn.li.ac.ability.client.screens.skill-tree-view/refresh-levelup-overlay!
+            rt target-level @state-a))))
     (events/on-left-click cover
       (fn [evt]
         (let [s @state-a
@@ -408,16 +382,7 @@
                     (swap! state-a assoc :error nil))))
             (and (not developing?) (not on-btn?))
             (close-fn)))))
-
-    ;; Draw-ops host — delegates ALL visual rendering to skill-tree/level-up-popup-ops
-    (client-bridge/draw-ops-host! cover
-      (fn []
-        (let [anim-time (/ (- (client-bridge/game-time-ms) open-time-ms) 1000.0)]
-          (skill-tree/level-up-popup-ops
-            target-level condition-icon-path anim-time
-            {:dev-state @state-a :est-consumption est-consumption
-             :cx cx :cy cy :screen-w 400 :screen-h 187}))))
-
+    (client-bridge/reactive-embed-host! cover rt)
     (cgui-core/add-widget! root cover)))
 
 ;; ============================================================================
@@ -591,21 +556,21 @@
       (log/stacktrace "Skill tree click-target refresh failed" e))))
 
 (defn- init-skill-tree-area!
-  "Initialize skill-tree draw-ops host + hover layer once when entering :skill-tree mode.
-  draw-ops ops-fn reads anim at render time so node/line expand animation can progress."
+  "Initialize skill-tree reactive embed + hover layer once when entering :skill-tree mode."
   [root area-widget container player tree-state]
   (swap! tree-state assoc :hover {:hover-skill-id nil} :hover-transitions {})
   (cgui-core/clear-widgets! area-widget)
   (try
-    (let [session-id (runtime-hooks/require-player-state-session-id "developer.panel")]
-      (let [host-w (client-bridge/draw-ops-host! area-widget
-                   (fn []
-                     (let [anim (skill-tree-open-anim area-widget)
-                           {:keys [render-data]} (skill-tree-render-context session-id player container)
-                           [mx01 my01] (area-parallax-mouse01 root area-widget)
-                           {:keys [hid htrans]} (build-panel-hover-args tree-state)]
-                       (skill-tree/build-tree-ops render-data anim mx01 my01 hid htrans nil))))]
-        (swap! (:metadata host-w) assoc :skill-tree-draw-host? true))
+    (let [session-id (runtime-hooks/require-player-state-session-id "developer.panel")
+          {:keys [render-data]} (skill-tree-render-context session-id player container)
+          [mx01 my01] (area-parallax-mouse01 root area-widget)
+          [mx my] (area-local-mouse root area-widget)
+          {:keys [hid]} (build-panel-hover-args tree-state)
+          rt (cn.li.ac.ability.client.screens.skill-tree-reactive/create-embedded-runtime
+               render-data mx my skill-tree-area-w skill-tree-area-h hid)]
+      (swap! (:metadata area-widget) assoc :skill-tree-rt rt :skill-tree-inited? true
+             :skill-tree-open-ms (System/currentTimeMillis))
+      (client-bridge/reactive-embed-host! area-widget rt)
       (let [hover-w (cgui-core/create-widget :pos [0 0]
                            :size [(int skill-tree-area-w) (int skill-tree-area-h)])]
         (swap! (:metadata hover-w) assoc :skill-tree-hover? true)
@@ -616,13 +581,14 @@
                   [mx my] (area-local-mouse root area-widget)
                   [mx01 my01] (area-parallax-mouse01 root area-widget)
                   parallax-x (* (- mx01 0.5) 10.0)
-                  parallax-y (* (- my01 0.5) 10.0)]
-              (update-hover-transitions! tree-state nodes mx my parallax-x parallax-y))))
+                  parallax-y (* (- my01 0.5) 10.0)
+                  {:keys [hid]} (build-panel-hover-args tree-state)]
+              (update-hover-transitions! tree-state nodes mx my parallax-x parallax-y)
+              (when-let [^cn.li.mcmod.uipojo.runtime.UiRt skill-rt (:skill-tree-rt @(:metadata area-widget))]
+                (cn.li.ac.ability.client.screens.skill-tree-reactive/refresh-embedded-runtime!
+                  skill-rt render-data mx my skill-tree-area-w skill-tree-area-h hid)))))
         (cgui-core/add-widget! area-widget hover-w))
-      (refresh-skill-tree-click-targets! root area-widget container player tree-state)
-      (swap! (:metadata area-widget)
-        assoc :skill-tree-inited? true
-             :skill-tree-open-ms (System/currentTimeMillis)))
+      (refresh-skill-tree-click-targets! root area-widget container player tree-state))
     (catch Exception e
       (log/error "Skill tree init failed:" (ex-message e))
       (log/stacktrace "Skill tree init failed" e))))

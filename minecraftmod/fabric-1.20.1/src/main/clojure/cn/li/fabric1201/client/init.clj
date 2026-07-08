@@ -22,7 +22,7 @@
             [cn.li.fabric1201.client.keyboard-init :as kb-init]
             [cn.li.mc1201.client.font.msdf-setup :as msdf-setup]
             [cn.li.mc1201.client.session :as mc-session]
-            [cn.li.mc1201.gui.cgui.draw-ops-host :as draw-ops-host]
+            [cn.li.mc1201.gui.reactive.embed-host :as reactive-embed-host]
             [cn.li.mc1201.gui.cgui.font :as cgui-font]
             [cn.li.mc1201.client.effects.sound :as sound]
             [cn.li.mc1201.key-scheme-provider-core :as key-scheme-core]
@@ -157,8 +157,8 @@
                         (let [^Minecraft mc (Minecraft/getInstance)
                               ^Window win (.getWindow mc)]
                           [(.getGuiScaledWidth win) (.getGuiScaledHeight win)]))
-     :draw-ops-host! (fn [parent ops-fn]
-                       (draw-ops-host/draw-ops-host! parent ops-fn))
+     :reactive-embed-host! (fn [parent rt]
+                             (reactive-embed-host/reactive-embed-host! parent rt))
      :register-font! (fn [name spec]
                        (cgui-font/register-font! name spec))
      :get-player-owner #(mc-session/current-local-player-owner)

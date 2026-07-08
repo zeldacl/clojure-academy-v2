@@ -337,12 +337,6 @@
       (.setOSlot node 0 v)
       (.setFlag node FLAG-RENDER-DIRTY))))
 
-(defn write-ops-fn! [^INode node source]
-  (let [v (.sGet ^ISigO source)]
-    (when-not (= v (.getOSlot node 0))
-      (.setOSlot node 0 v)
-      (.setFlag node FLAG-RENDER-DIRTY))))
-
 (defn write-scroll-offset-d! [^INode node source]
   (let [v (.dGet ^ISigD source)]
     (when-not (== v (.getDSlot node 3))
@@ -457,11 +451,4 @@
     :oslots {:template 0}
     :oslots-backend-base 0
     :prop-writers {:spacing write-spacing-d! :scroll-offset write-list-scroll-offset-d!}
-    :hit? true}
-
-   :draw-ops
-   {:dslots {}
-    :oslots {:ops-fn 0}
-    :oslots-backend-base 0
-    :prop-writers {:ops-fn write-ops-fn!}
-    :hit? false}})
+    :hit? true}})

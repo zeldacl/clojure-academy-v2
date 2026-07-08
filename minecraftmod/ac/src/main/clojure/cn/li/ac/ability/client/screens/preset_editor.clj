@@ -10,7 +10,7 @@
             [cn.li.mcmod.util.log :as log]))
 
 ;; Forward declares for functions called by widget factory (defined later)
-(declare build-preset-editor-render-data handle-screen-click!)
+(declare build-preset-editor-render-data)
 
 ;; Editor state
 (def ^:private default-editor-state
@@ -98,59 +98,6 @@
          :has-changes (not (empty? (:pending-changes state)))})))))
 
 ;; ============================================================================
-;; Draw-Ops Builder (reactive — called from event handlers, not on-frame)
-;; ============================================================================
-
-(defn- compute-draw-ops
-  "Pure function: render-data → draw-ops vector using transient building.
-  Eliminates per-frame vec+concat+mapcat GC pressure."
-  [rd]
-  (if-not rd
-    []
-    (let [selected-preset (:selected-preset rd)
-          active-preset (:active-preset rd)
-          selected-skill (:selected-skill rd)]
-      (persistent!
-        (let [out (transient [{:kind :text :text "Preset Editor" :x 10 :y 2 :color 0xFFFFFF}])]
-          ;; Preset tabs
-          (doseq [pidx (:presets rd)]
-            (let [x (+ 10 (* pidx 45))
-                  sel? (= pidx selected-preset)
-                  act? (= pidx active-preset)]
-              (conj! out {:kind :fill :x x :y 10 :w 40 :h 20
-                          :color (if sel? 0xFF4C6FFF 0xFF333333)})
-              (conj! out {:kind :text :text (str "P" (inc pidx) (when act? "*"))
-                          :x (+ x 10) :y 16 :color 0xFFFFFF})))
-          ;; Slots
-          (doseq [idx (range 4)]
-            (let [slot (nth (:slots rd) idx nil)
-                  y (+ 40 (* idx 25))]
-              (conj! out {:kind :fill :x 10 :y y :w 100 :h 20 :color 0xFF252525})
-              (conj! out {:kind :text :text (str "Slot " (inc idx) ": " (or (:skill-name slot) "<empty>"))
-                          :x 14 :y (+ y 6) :color 0xFFFFFF})))
-          ;; Available skills
-          (doseq [[idx skill-info] (map-indexed vector (:available-skills rd))]
-            (let [y (+ 60 (* idx 22))
-                  chosen? (= (:skill-id skill-info) selected-skill)]
-              (conj! out {:kind :fill :x 170 :y y :w 150 :h 20
-                          :color (if chosen? 0xFF2E6B2E 0xFF202020)})
-              (conj! out {:kind :text :text (:skill-name skill-info)
-                          :x 174 :y (+ y 6) :color 0xFFFFFF})))
-          ;; Action buttons
-          (conj! out {:kind :fill :x 10 :y 200 :w 80 :h 20 :color 0xFF4A8F4A})
-          (conj! out {:kind :text :text "Save" :x 35 :y 206 :color 0xFFFFFF})
-          (conj! out {:kind :fill :x 100 :y 200 :w 80 :h 20 :color 0xFF444488})
-          (conj! out {:kind :text :text "Set Active" :x 108 :y 206 :color 0xFFFFFF})
-          out)))))
-
-(defn- redraw!
-  "Rebuild draw-ops from current editor state and cache in widget metadata.
-  Called from event handlers — zero on-frame cost."
-  [root owner]
-  (when-let [rd (build-preset-editor-render-data owner)]
-    (swap! (:metadata root) assoc :preset-draw-ops (compute-draw-ops rd))))
-
-;; ============================================================================
 ;; Event Handlers
 ;; ============================================================================
 
@@ -191,55 +138,6 @@
   "Handle set active button click."
   [owner]
   (api/req-switch-preset! owner (:selected-preset (editor-state-snapshot owner)) nil))
-
-(defn handle-screen-click!
-  "Handle clicks inside the preset editor screen using current render data.
-  Triggers reactive redraw after any click that modifies state."
-  [owner root mouse-x mouse-y]
-  (if-let [render-data (build-preset-editor-render-data owner)]
-    (let [clicked? (atom false)]
-      (doseq [preset-idx (:presets render-data)]
-        (when (and (not @clicked?)
-                   (>= mouse-x (+ 10 (* preset-idx 45)))
-                   (<= mouse-x (+ 50 (* preset-idx 45)))
-                   (>= mouse-y 10) (<= mouse-y 30))
-          (on-preset-tab-click owner preset-idx)
-          (reset! clicked? true)))
-
-      (doseq [idx (range 4)]
-        (when (and (not @clicked?)
-                   (>= mouse-x 10) (<= mouse-x 110)
-                   (>= mouse-y (+ 40 (* idx 25)))
-                   (<= mouse-y (+ 60 (* idx 25))))
-                  (on-slot-click owner idx)
-          (reset! clicked? true)))
-
-      (doseq [[idx skill] (map-indexed vector (:available-skills render-data))]
-        (when (and (not @clicked?)
-                   (>= mouse-x 170) (<= mouse-x 320)
-                   (>= mouse-y (+ 60 (* idx 22)))
-                   (<= mouse-y (+ 82 (* idx 22))))
-                  (on-skill-select owner (:skill-id skill))
-          (reset! clicked? true)))
-
-      (when (and (not @clicked?)
-                 (>= mouse-x 10) (<= mouse-x 90)
-                 (>= mouse-y 200) (<= mouse-y 220))
-              (on-save-click owner)
-        (reset! clicked? true))
-
-      (when (and (not @clicked?)
-                 (>= mouse-x 100) (<= mouse-x 180)
-                 (>= mouse-y 200) (<= mouse-y 220))
-              (on-set-active-click owner)
-        (reset! clicked? true))
-
-      ;; Reactive redraw after any state-modifying click
-      (when @clicked?
-        (redraw! root owner))
-
-      (boolean @clicked?))
-    false))
 
 (defn open-screen!
   "Open preset editor screen."

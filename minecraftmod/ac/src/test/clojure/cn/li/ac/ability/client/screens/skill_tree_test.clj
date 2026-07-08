@@ -1,15 +1,19 @@
 (ns cn.li.ac.ability.client.screens.skill-tree-test
-  (:require 
+  (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.service.runtime-store :as store]
-[clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.client.managed-screens :as managed-screens]
             [cn.li.ac.ability.client.screens.skill-tree :as screen]
+            [cn.li.ac.ability.client.screens.skill-tree-view :as view]
             [cn.li.ac.ability.registry.category :as category]
             [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.registry.skill-query :as skill]
             [cn.li.ac.ability.rules.learning-rules :as learning-rules]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
-            [cn.li.mcmod.i18n :as i18n]))
+            [cn.li.mcmod.i18n :as i18n]
+            [cn.li.mcmod.ui.core :as ui]
+            [cn.li.mcmod.ui.node :as node]
+            [cn.li.mcmod.ui.runtime :as rt])
+  (:import [cn.li.mcmod.ui.node INode]))
 
 (defn- reset-screen-fixture [f]
   (managed-screens/call-with-managed-screen-runtime
@@ -20,6 +24,12 @@
         (f)))))
 
 (use-fixtures :each reset-screen-fixture)
+
+(defn- node-text [^INode n]
+  (let [kind-kw (.getKind n)
+        kdef (get node/kinds kind-kw)
+        idx (+ (:oslots-backend-base kdef) (get-in kdef [:oslots :text]))]
+    (.getOSlot n idx)))
 
 (deftest build-screen-render-data-translates-skill-name-and-description-test
   (let [category-spec {:category-id :generic :name-key "ability.category.generic"}
@@ -42,8 +52,8 @@
         translate-map {"ability.category.generic" "Generic"
                        "ability.skill.generic.brain_course" "Brain Course"
                        "ability.skill.generic.brain_course.desc" "Undergo focused neural training to raise your maximum CP by 1000."}]
-      (with-redefs [store/get-player-state* (fn [_ _] player-state)
-              store/get-or-create-player-state! (fn [_ _] player-state)
+    (with-redefs [store/get-player-state* (fn [_ _] player-state)
+                  store/get-or-create-player-state! (fn [_ _] player-state)
                   category/get-category (fn [_] category-spec)
                   category/get-prog-incr-rate (fn [_] 1.0)
                   skill/get-skills-for-category (fn [_] [skill-spec])
@@ -52,13 +62,13 @@
                   skill/get-skill-icon-path (fn [_] "textures/abilities/generic/skills/brain_course.png")
                   learning-rules/check-all-conditions (fn [_ _ _ _] {:pass? true :failures []})
                   i18n/*translate-fn* (fn [k] (get translate-map (str k) (str k)))]
-            (screen/open-screen! "player-1")
+      (screen/open-screen! "player-1")
       (let [render-data (screen/build-screen-render-data "player-1")
             node (first (:skill-nodes render-data))]
         (is (= "Generic" (get-in render-data [:ability-info :category-name])))
         (is (= "Brain Course" (:skill-name node)))
         (is (= "Undergo focused neural training to raise your maximum CP by 1000."
-           (:skill-description node)))))))
+               (:skill-description node)))))))
 
 (deftest screen-owner-requires-explicit-session-and-player-test
   (runtime-hooks/with-client-ctx {:session-id nil}
@@ -69,7 +79,7 @@
                         #"Client read model owner requires :player-uuid"
                         (screen/screen-state-snapshot {:client-session-id :session-a}))))
 
-(deftest build-draw-ops-includes-hover-description-tooltip-test
+(deftest refresh-screen-shows-hover-description-tooltip-test
   (let [category-spec {:category-id :generic :name-key "ability.category.generic"}
         player-state {:ability-data {:category-id :generic
                                      :learned-skills #{:generic/brain-course}
@@ -90,8 +100,8 @@
         translate-map {"ability.category.generic" "Generic"
                        "ability.skill.generic.brain_course" "Brain Course"
                        "ability.skill.generic.brain_course.desc" "Undergo focused neural training to raise your maximum CP by 1000."}]
-      (with-redefs [store/get-player-state* (fn [_ _] player-state)
-              store/get-or-create-player-state! (fn [_ _] player-state)
+    (with-redefs [store/get-player-state* (fn [_ _] player-state)
+                  store/get-or-create-player-state! (fn [_ _] player-state)
                   category/get-category (fn [_] category-spec)
                   category/get-prog-incr-rate (fn [_] 1.0)
                   skill/get-skills-for-category (fn [_] [skill-spec])
@@ -100,25 +110,21 @@
                   skill/get-skill-icon-path (fn [_] "textures/abilities/generic/skills/brain_course.png")
                   learning-rules/check-all-conditions (fn [_ _ _ _] {:pass? true :failures []})
                   i18n/*translate-fn* (fn [k] (get translate-map (str k) (str k)))]
-            (screen/open-screen! "player-1")
-            (screen/on-mouse-move "player-1" 30 110)
-      (let [texts (->> (screen/build-draw-ops "player-1" 0 0 420 260)
-                       (filter #(= :text (:kind %)))
-                       (map :text)
-                       set)]
-        (is (contains? texts "Brain Course"))
-        (is (contains? texts "Undergo focused neural training to raise your maximum CP by 1000."))))))
+      (screen/open-screen! "player-1")
+      (screen/on-mouse-move "player-1" 30 110)
+      (let [r (rt/create-runtime)]
+        (view/refresh-screen! r "player-1" 30.0 110.0)
+        (is (= "Brain Course" (node-text (ui/node r :tip-name))))
+        (is (= "Undergo focused neural training to raise your maximum CP by 1000."
+               (node-text (ui/node r :tip-desc))))))))
 
-      (deftest screen-state-isolated-by-player-owner-test
-        (screen/open-screen! "player-1" {:developer-type :portable})
-        (screen/open-screen! "player-2" {:developer-type :normal})
-        (is (= {:developer-type :portable}
-          (:learn-context (screen/screen-state-snapshot "player-1"))))
-        (is (= {:developer-type :normal}
-          (:learn-context (screen/screen-state-snapshot "player-2"))))
-        (screen/close-screen! "player-1")
-        (is (nil? (:player-uuid (screen/screen-state-snapshot "player-1"))))
-        (is (= "player-2" (:player-uuid (screen/screen-state-snapshot "player-2")))))
-
-
-
+(deftest screen-state-isolated-by-player-owner-test
+  (screen/open-screen! "player-1" {:developer-type :portable})
+  (screen/open-screen! "player-2" {:developer-type :normal})
+  (is (= {:developer-type :portable}
+         (:learn-context (screen/screen-state-snapshot "player-1"))))
+  (is (= {:developer-type :normal}
+         (:learn-context (screen/screen-state-snapshot "player-2"))))
+  (screen/close-screen! "player-1")
+  (is (nil? (:player-uuid (screen/screen-state-snapshot "player-1"))))
+  (is (= "player-2" (:player-uuid (screen/screen-state-snapshot "player-2")))))

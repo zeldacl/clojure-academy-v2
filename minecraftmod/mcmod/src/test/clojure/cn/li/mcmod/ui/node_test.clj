@@ -73,7 +73,7 @@
 (deftest all-kinds-defined
   (doseq [k [:group :box :image :text :progress
              :shader-quad :shader-ring :shader-progress
-             :gradient :line :list :draw-ops]]
+             :gradient :line :list]]
     (testing (str "kind " k " exists")
       (is (contains? node/kinds k) (str "Missing kind: " k))
       (let [kdef (get node/kinds k)]

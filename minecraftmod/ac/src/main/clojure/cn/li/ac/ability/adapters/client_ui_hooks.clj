@@ -1135,42 +1135,6 @@
         (tutorial-notification/cleanup-expired!)))
     (log/info "Ability client push handlers registered")))
 
-    (defn- build-preset-editor-draw-ops
-      [owner]
-      (if-let [render-data (preset-editor-screen/build-preset-editor-render-data owner)]
-        (let [selected-preset (:selected-preset render-data)
-          active-preset (:active-preset render-data)
-          selected-skill (:selected-skill render-data)]
-      (vec
-       (concat
-        [{:kind :text :text "Preset Editor" :x 10 :y 2 :color 0xFFFFFF}]
-        (mapcat (fn [preset-idx]
-          (let [x (+ 10 (* preset-idx 45))
-            selected? (= preset-idx selected-preset)
-            active? (= preset-idx active-preset)]
-            [{:kind :fill :x x :y 10 :w 40 :h 20 :color (if selected? 0xFF4C6FFF 0xFF333333)}
-             {:kind :text :text (str "P" (inc preset-idx) (when active? "*"))
-              :x (+ x 10) :y 16 :color 0xFFFFFF}]))
-            (:presets render-data))
-        (mapcat (fn [idx]
-          (let [slot (nth (:slots render-data) idx nil)
-            y (+ 40 (* idx 25))]
-            [{:kind :fill :x 10 :y y :w 100 :h 20 :color 0xFF252525}
-             {:kind :text :text (str "Slot " (inc idx) ": " (or (:skill-name slot) "<empty>"))
-              :x 14 :y (+ y 6) :color 0xFFFFFF}]))
-            (range 4))
-        (mapcat (fn [[idx skill-info]]
-          (let [y (+ 60 (* idx 22))
-            chosen? (= (:skill-id skill-info) selected-skill)]
-            [{:kind :fill :x 170 :y y :w 150 :h 20 :color (if chosen? 0xFF2E6B2E 0xFF202020)}
-             {:kind :text :text (:skill-name skill-info) :x 174 :y (+ y 6) :color 0xFFFFFF}]))
-            (map-indexed vector (:available-skills render-data)))
-        [{:kind :fill :x 10 :y 200 :w 80 :h 20 :color (if (:has-changes render-data) 0xFF4A8F4A 0xFF444444)}
-          {:kind :text :text "Save" :x 35 :y 206 :color 0xFFFFFF}
-          {:kind :fill :x 100 :y 200 :w 80 :h 20 :color 0xFF444488}
-          {:kind :text :text "Set Active" :x 108 :y 206 :color 0xFFFFFF}])) )
-        []))
-
 (defn runtime-client-ui-hooks
   []
   (let [combat-notice-component (combat-notice/create-combat-notice-component
@@ -1349,15 +1313,6 @@
               :ac/location-teleport nil
               nil))))
 
-     :client-build-managed-screen-draw-ops
-     (fn [screen-key mouse-x mouse-y screen-w screen-h]
-       (call-with-managed-screen-runtime
-         #(if-let [owner (active-managed-screen-owner screen-key)]
-            (condp = screen-key
-              :ac/skill-tree (skill-tree-screen/build-draw-ops owner mouse-x mouse-y screen-w screen-h)
-              :ac/preset-editor (build-preset-editor-draw-ops owner)
-              []))))
-
      :client-handle-managed-screen-hover!
      (fn [screen-key mouse-x mouse-y]
        (call-with-managed-screen-runtime
@@ -1372,7 +1327,6 @@
          #(if-let [owner (active-managed-screen-owner screen-key)]
             (condp = screen-key
               :ac/skill-tree (skill-tree-screen/handle-screen-click! owner mouse-x mouse-y)
-              :ac/preset-editor (preset-editor-screen/handle-screen-click! owner nil mouse-x mouse-y)
               false)
             false)))
 
