@@ -52,14 +52,16 @@
   nil)
 
 (defn attach-tab-ui!
-  "Wire tab buttons, visibility, and server tab-index sync."
-  [^UiRt rt pages ^clojure.lang.Atom current-atom container menu]
+  "Wire tab buttons, visibility, and server tab-index sync.
+   opts: {:on-switch (fn [tab-id] ...)}"
+  [^UiRt rt pages ^clojure.lang.Atom current-atom container menu & [{:keys [on-switch]}]]
   (let [container-id (container-state/get-menu-container-id menu)
         tech-ui {:current current-atom}]
     (doseq [{:keys [id]} pages]
       (events/on! rt (keyword (str "tab-" id)) :left-click
         (fn [_ _ _]
-          (switch-tab! rt pages id current-atom))))
+          (switch-tab! rt pages id current-atom)
+          (when on-switch (on-switch id)))))
     (tabbed-gui/attach-tab-sync! pages tech-ui container container-id)
     tech-ui))
 

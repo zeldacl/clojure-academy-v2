@@ -136,9 +136,14 @@
   (let [baked (.getOSlot node SLOT-TEXT-BAKED)]
     (when baked
       (let [{:keys [text color]} baked
+            editable? (boolean (get (.getStaticProps node) :editable?))
+            focused? (.hasFlag node node/FLAG-FOCUSED)
+            display-text (if (and editable? focused?)
+                           (str "[" text "]")
+                           (str text))
             x (node-abs-x node) y (node-abs-y node)
             ^Font font (.. (Minecraft/getInstance) (getFontManager) (getFont))]
-        (.drawShadow gg font ^String (str text) (unchecked-int x) (unchecked-int y) (unchecked-int color))))))
+        (.drawShadow gg font ^String display-text (unchecked-int x) (unchecked-int y) (unchecked-int color))))))
 
 ;; ============================================================================
 ;; :progress

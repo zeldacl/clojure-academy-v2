@@ -12,6 +12,62 @@
     (throw (ex-info (str "Node not found: " id) {:id id :event-key event-key})))
   nil)
 
+(defn on-confirm-input
+  "Register :confirm-input handler. Event map includes :value (current text)."
+  [^UiRt rt id f]
+  (on! rt id :confirm-input
+       (fn [rt node evt] (f rt node (:value evt)))))
+
+(defn on-change-content
+  "Register :change-content handler. Event map includes :value (current text)."
+  [^UiRt rt id f]
+  (on! rt id :change-content
+       (fn [rt node evt] (f rt node (:value evt)))))
+
+(defn- text-editable? [^INode n]
+  (boolean (get (.getStaticProps n) :editable?)))
+
+(defn- text-value [^INode n]
+  (str (or (.getOSlot n 0) "")))
+
+(defn- set-text-value! [^INode n value]
+  (.setOSlot n 0 (str value))
+  (.setFlag n node/FLAG-RENDER-DIRTY))
+
+(defn- emit-text-event! [^UiRt rt ^INode n event-key]
+  (when-let [handlers (rt/get-event-handlers rt (.getIdx n) event-key)]
+    (let [evt {:value (text-value n) :node-idx (.getIdx n)}]
+      (doseq [f handlers] (f rt n evt)))))
+
+(defn dispatch-editable-key!
+  "Handle backspace / enter / char for focused editable :text nodes.
+   Returns true when the key was consumed."
+  [^UiRt rt key-code typed-char]
+  (let [focus-idx (rt/focus-idx rt)]
+    (when (>= focus-idx 0)
+      (when-let [^INode n (rt/node-by-idx rt focus-idx)]
+        (when (text-editable? n)
+          (let [enter-keys #{257 335 28}
+                backspace-keys #{259 14}
+                has-char? (and typed-char (not= typed-char (char 0)))]
+            (cond
+              (contains? backspace-keys key-code)
+              (let [curr (text-value n)]
+                (when (pos? (count curr))
+                  (set-text-value! n (subs curr 0 (dec (count curr))))
+                  (emit-text-event! rt n :change-content))
+                true)
+
+              (contains? enter-keys key-code)
+              (do (emit-text-event! rt n :confirm-input) true)
+
+              has-char?
+              (do (set-text-value! n (str (text-value n) typed-char))
+                  (emit-text-event! rt n :change-content)
+                  true)
+
+              :else false)))))))
+
 (defn dispatch-click! [^UiRt rt mx my button event-key]
   (let [^INode hit (layout/hit-test rt (double mx) (double my))]
     (when hit
@@ -49,12 +105,18 @@
 (defn gain-focus! [^UiRt rt node-idx]
   (let [old-idx (rt/focus-idx rt)]
     (when (and (>= old-idx 0) (not= old-idx node-idx))
+      (when-let [^INode old-node (rt/node-by-idx rt old-idx)]
+        (.clearFlag old-node node/FLAG-FOCUSED)
+        (.setFlag old-node node/FLAG-RENDER-DIRTY))
       (when-let [handlers (rt/get-event-handlers rt old-idx :lost-focus)]
         (when-let [^INode old-node (rt/node-by-idx rt old-idx)]
           (let [evt {:node-idx old-idx :new-focus-idx node-idx}]
             (doseq [f handlers] (f rt old-node evt))))))
     (rt/set-focus-idx! rt node-idx)
     (when (>= node-idx 0)
+      (when-let [^INode node (rt/node-by-idx rt node-idx)]
+        (.setFlag node node/FLAG-FOCUSED)
+        (.setFlag node node/FLAG-RENDER-DIRTY))
       (when-let [handlers (rt/get-event-handlers rt node-idx :gain-focus)]
         (when-let [^INode node (rt/node-by-idx rt node-idx)]
           (let [evt {:node-idx node-idx}]

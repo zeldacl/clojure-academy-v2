@@ -19,6 +19,7 @@
 (def ^:const FLAG-CLIP 4)
 (def ^:const FLAG-HAS-TRANSFORM 8)
 (def ^:const FLAG-HOVERED 16)
+(def ^:const FLAG-FOCUSED 32)
 
 ;; ============================================================================
 ;; INode definterface
@@ -348,6 +349,18 @@
       (.setDSlot node 3 v)
       (.setFlag node FLAG-RENDER-DIRTY))))
 
+(defn write-list-scroll-offset-d! [^INode node source]
+  (let [v (.dGet ^ISigD source)]
+    (when-not (== v (.getDSlot node 1))
+      (.setDSlot node 1 v)
+      (.setFlag node FLAG-LAYOUT-DIRTY))))
+
+(defn write-spacing-d! [^INode node source]
+  (let [v (.dGet ^ISigD source)]
+    (when-not (== v (.getDSlot node 0))
+      (.setDSlot node 0 v)
+      (.setFlag node FLAG-LAYOUT-DIRTY))))
+
 ;; ============================================================================
 ;; Kind definition table (S0 static def)
 ;; ============================================================================
@@ -440,10 +453,10 @@
     :hit? false}
 
    :list
-   {:dslots {:spacing 0}
+   {:dslots {:spacing 0 :scroll-offset 1}
     :oslots {:template 0}
     :oslots-backend-base 0
-    :prop-writers {}
+    :prop-writers {:spacing write-spacing-d! :scroll-offset write-list-scroll-offset-d!}
     :hit? true}
 
    :draw-ops

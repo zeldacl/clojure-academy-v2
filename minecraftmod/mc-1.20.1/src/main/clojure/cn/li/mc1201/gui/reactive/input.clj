@@ -6,17 +6,23 @@
 
 (defn handle-key-pressed
   "Dispatch key to focus node. Return semantics match old cgui host:
-   - focused node consumes the key → true
+   - focused editable text or focused node consumes the key → true
    - no focus: ESC (256) → true (screen closes), other keys → false"
   [^UiRt rt key-code scan-code modifiers]
-  (events/dispatch-key! rt key-code scan-code modifiers 0)
-  (if (>= (cn.li.mcmod.ui.runtime/focus-idx rt) 0)
+  (if (events/dispatch-editable-key! rt key-code (char 0))
     true
-    (= (long key-code) 256)))
+    (do
+      (events/dispatch-key! rt key-code scan-code modifiers 0)
+      (if (>= (cn.li.mcmod.ui.runtime/focus-idx rt) 0)
+        true
+        (= (long key-code) 256)))))
 
 (defn handle-char-typed [^UiRt rt code-point _modifiers]
-  (events/dispatch-char! rt code-point)
-  true)
+  (if (events/dispatch-editable-key! rt 0 (char code-point))
+    true
+    (do
+      (events/dispatch-char! rt code-point)
+      true)))
 
 (defn handle-mouse-clicked [^UiRt rt left top mouse-x mouse-y button]
   (let [mx (- (double mouse-x) (double left))

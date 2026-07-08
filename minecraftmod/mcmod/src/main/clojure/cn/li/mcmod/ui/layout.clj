@@ -48,7 +48,8 @@
 (defn compute-abs-pos!
   [^INode node
    parent-abs-x parent-abs-y
-   parent-scale parent-w parent-h]
+   parent-scale parent-w parent-h
+   & [{:keys [local-y-offset]}]]
   (let [own-scale (.getScale node)
         cum-scale (* parent-scale own-scale)
         sw (* (.getW node) own-scale)
@@ -57,8 +58,9 @@
         align-off-y (align-offset-y (.getAlignH node) parent-h sh)
         pivot-shift-x (* (.getPivotX node) (.getW node))
         pivot-shift-y (* (.getPivotY node) (.getH node))
+        y-extra (double (or local-y-offset 0.0))
         child-x (+ align-off-x (.getX node) (- pivot-shift-x))
-        child-y (+ align-off-y (.getY node) (- pivot-shift-y))
+        child-y (+ align-off-y (.getY node) y-extra (- pivot-shift-y))
         abs-x (+ parent-abs-x (* child-x parent-scale))
         abs-y (+ parent-abs-y (* child-y parent-scale))]
     (.setAbsX node abs-x)
@@ -91,14 +93,18 @@
   [^INode parent
    parent-abs-x parent-abs-y
    parent-scale parent-w parent-h]
-  (let [^"[Ljava.lang.Object;" cs (.getChildrenArr parent)
+  (let [list-scroll (when (= (.getKind parent) :list)
+                      (.getDSlot parent 1))
+        ^"[Ljava.lang.Object;" cs (.getChildrenArr parent)
         n (node/child-count parent)]
     (loop [i 0]
       (when (< i n)
         (let [^INode child (aget cs i)]
           (when (and child (.isVisible child))
-            (when (.hasFlag child node/FLAG-LAYOUT-DIRTY)
-              (compute-abs-pos! child parent-abs-x parent-abs-y parent-scale parent-w parent-h))
+            (when (or (.hasFlag child node/FLAG-LAYOUT-DIRTY)
+                      (= (.getKind parent) :list))
+              (compute-abs-pos! child parent-abs-x parent-abs-y parent-scale parent-w parent-h
+                                {:local-y-offset (when list-scroll (- list-scroll))}))
             (ensure-children-layout! child
                                      (.getAbsX child) (.getAbsY child)
                                      (.getCumScale child)

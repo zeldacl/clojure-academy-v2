@@ -15,6 +15,7 @@
           :wireless? true
           :wireless-role :generator}))"
   (:require [cn.li.ac.gui.tech-ui-tabs-reactive :as tech-tabs]
+            [cn.li.ac.wireless.gui.tab-reactive :as wireless-tab]
             [cn.li.mcmod.ui.runtime :as rt]
             [cn.li.mcmod.ui.core :as ui]
             [cn.li.mcmod.ui.xml :as ui-xml]
@@ -107,8 +108,18 @@
                  :progress (sig/signal-d 0.0)}
         _ (doseq [[k s] signals] (rt/put-user-signal! r k s))
         current-tab-atom (when wireless? (atom tech-tabs/inv-tab-id))
+        wireless-attached? (when wireless? (atom false))
         tech-ui (when wireless?
-                  (tech-tabs/attach-tab-ui! r pages current-tab-atom container menu))
+                  (tech-tabs/attach-tab-ui! r pages current-tab-atom container menu
+                    {:on-switch
+                     (fn [tab-id]
+                       (when (and (= tab-id "wireless")
+                                  (compare-and-set! wireless-attached? false true))
+                         (wireless-tab/attach-panel!
+                           r {:role wireless-role
+                              :container container
+                              :menu menu
+                              :defer-initial-rebuild? false})))}))
         _ (when custom-bind! (custom-bind! r container signals))
         _ (when wireless? (rt/put-user-signal! r :wireless-role (sig/signal-o (name wireless-role))))]
     (screen-config r signals container menu properties histograms
