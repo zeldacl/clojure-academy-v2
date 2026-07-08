@@ -14,9 +14,6 @@
    [cn.li.mcmod.i18n :as i18n]
    [cn.li.mcmod.client.platform-bridge :as client-bridge]
    [cn.li.mcmod.platform.ui :as platform-ui]
-   [cn.li.mcmod.gui.cgui-core :as cgui-core]
-   [cn.li.mcmod.gui.components :as comp]
-   [cn.li.mcmod.gui.events :as events]
    [cn.li.mcmod.util.log :as log]))
 
 ;; Forward declares for functions used by widget factory (defined later in file)
@@ -218,7 +215,11 @@
           (api/req-level-up! owner
             (fn [resp]
               (swap-screen-state! owner update :level-up-dev-state
-                assoc :result (if (:success resp) :success :failed))))
+                assoc :result (if (:success resp) :success :failed))
+              (when-let [refresh (requiring-resolve
+                                   'cn.li.ac.ability.client.screens.skill-tree-reactive/refresh-active-screen!)]
+                (when-let [pu (:player-uuid (screen-state-snapshot owner))]
+                  (refresh pu)))))
           (swap-screen-state! owner assoc
             :showing-level-up-popup? false :level-up-dev-state nil))
         true)
@@ -291,160 +292,20 @@
   (managed-screens/clear-screen-state! screen-id (screen-owner-key owner)))
 
 ;; ============================================================================
-;; CGui Widget Factory — replaces managed-screen dispatch for :ac/skill-tree
+;; CGui Widget Factory — reactive screen dispatch for :ac/skill-tree
 ;; ============================================================================
 
-(defn- resolve-owner [payload]
-  (let [sid (:client-session-id payload "")
-        pu  (:player-uuid payload)]
-    {:client-session-id sid :player-uuid pu}))
-
-(defn- skill-tree-mouse-pos [root]
-  (let [m (get @(:metadata root) :mouse-pos)]
-    (or m [210 130])))
-
-(defn- skill-tree-mouse-pos! [root pos]
-  (swap! (:metadata root) assoc :mouse-pos pos))
-
-(defn- skill-tree-draw-ops [root]
-  (let [d (get @(:metadata root) :draw-ops)]
-    (or d [])))
-
-(defn- skill-tree-draw-ops! [root ops]
-  (swap! (:metadata root) assoc :draw-ops ops))
-
 (defn create-skill-tree-widget
-  "Create CGui widget hosting skill-tree draw-ops. Factory for :ac/skill-tree.
-  Static/dynamic separation: node/connection draw-ops cached without parallax;
-  only bg-UV and global translate recomputed on mouse move."
+  "Widget factory for :ac/skill-tree — returns reactive screen descriptor."
   [{:keys [player-uuid client-session-id learn-context] :as payload}]
-  (let [owner (resolve-owner payload)
-        ok    (screen-owner-key owner)
-        pu    (or player-uuid (nth ok 2))
-        root  (cgui-core/create-container :name "skill-tree-root" :pos [0 0] :size [420 260])
-        ;; Dirty-check + static caches
-        last-state-key (atom nil)
-        last-mouse-pos (atom [210 130])
-        static-tree-ops (atom [])       ;; nodes + connections + popups, no parallax
-        static-pre-tree-ops (atom [])]  ;; header + level-up button
-    ;; initialize managed-screen state (shared with existing code)
-    (ensure-screen-player-state! owner)
-    (managed-screens/set-active-owner! screen-id ok)
-    (swap-screen-state! owner merge default-screen-state
-                        {:player-uuid pu :learn-context learn-context :creation-time (now-ms)})
-    ;; frame → hybrid: static cache rebuild on state change, lightweight assembly always
-    (events/on-frame root
-      (fn [_]
-        (let [size-vec (cgui-core/get-size root)
-              mouse-vec (skill-tree-mouse-pos root)
-              rw (long (nth size-vec 0))
-              rh (long (nth size-vec 1))
-              mx (long (nth mouse-vec 0))
-              my (long (nth mouse-vec 1))
-              st (screen-state-snapshot owner)
-              ;; Extract 5 rendering-relevant fields — inline identical? (pointer compare)
-              hid (:hovered-skill-id st)
-              sel (:selected-skill st)
-              pop? (:showing-level-up-popup? st)
-              dev-st (:level-up-dev-state st)
-              htr (:hover-node-transitions st)
-              last-sk @last-state-key
-              state-changed? (or (not (identical? hid (:hovered-skill-id last-sk)))
-                                 (not (identical? sel (:selected-skill last-sk)))
-                                 (not (identical? pop? (:showing-level-up-popup? last-sk)))
-                                 (not (identical? dev-st (:level-up-dev-state last-sk)))
-                                 (not (identical? htr (:hover-node-transitions last-sk))))]
-          ;; === Branch 1: state changed → rebuild static caches (rare, <1Hz) ===
-          (when state-changed?
-            ;; Only create state-key Map when change detected (<1Hz vs current 60-144Hz)
-            (let [state-key {:hovered-skill-id hid :selected-skill sel
-                             :showing-level-up-popup? pop?
-                             :level-up-dev-state dev-st
-                             :hover-node-transitions htr}]
-              (reset! last-state-key state-key))
-            (if-let [rd (build-screen-render-data owner)]
-              (let [ab (:ability-info rd)
-                    anim (if-let [ct (:creation-time st)]
-                           (/ (- (now-ms) ct) 1000.0) 5.0)
-                    ;; Static tree: nodes + connections + tooltip + popups, no parallax
-                    tree (build-tree-ops rd anim 0.5 0.5
-                           (:hovered-skill-id st) (:hover-node-transitions st {})
-                           (:selected-skill st) :static? true)
-                    ;; Pre-tree: header overlay + texts + level-up button
-                    pre-tree (persistent!
-                               (let [out (transient [{:kind :fill :x 0 :y 0 :w 420 :h 260 :color 0xA0101010}
-                                                     {:kind :text :x 12 :y 8  :text (str "Category: " (:category-name ab)) :font :ac-normal :font-size 9 :align :left :color 0xFFFFFFFF}
-                                                     {:kind :text :x 12 :y 22 :text (format "Level: %d" (int (or (:level ab) 0))) :font :ac-normal :font-size 9 :align :left :color 0xFFE8E8E8}
-                                                     {:kind :text :x 12 :y 36 :text (format "CP: %.0f / %.0f" (double (get-in ab [:cp :cur] 0.0)) (double (get-in ab [:cp :max] 0.0))) :font :ac-normal :font-size 9 :align :left :color 0xFFAED7FF}
-                                                     {:kind :text :x 12 :y 50 :text (format "Overload: %.0f / %.0f" (double (get-in ab [:overload :cur] 0.0)) (double (get-in ab [:overload :max] 0.0))) :font :ac-normal :font-size 9 :align :left :color 0xFFFFB8A6}])]
-                                 (when (and (:can-level-up ab) (not (:showing-level-up-popup? st)))
-                                   (conj! out {:kind :fill :x 10 :y 200 :w 80 :h 20 :color 0xAA22AA22})
-                                   (conj! out {:kind :text :x 18 :y 206 :text "Level Up" :font :ac-normal :font-size 9 :align :center :color 0xFFFFFFFF}))
-                                 out))
-                    ;; Post-tree: level-up popup (if showing)
-                    post-tree (when (:showing-level-up-popup? st)
-                                (let [open-ms (:level-up-popup-open-ms st 0)
-                                      popup-anim (/ (- (now-ms) open-ms) 1000.0)
-                                      current-level (int (or (:level ab) 1))
-                                      target-level (inc current-level)
-                                      cond-icon (modid/asset-path "textures"
-                                                  (str "abilities/condition/any" target-level ".png"))]
-                                  (level-up-popup-ops target-level cond-icon popup-anim
-                                    {:dev-state (:level-up-dev-state st)
-                                     :screen-w 420 :screen-h 260})))]
-                (reset! static-tree-ops
-                  (if (seq post-tree)
-                    (persistent! (let [out (transient tree)]
-                                  (doseq [op post-tree] (conj! out op))
-                                  out))
-                    tree))
-                (reset! static-pre-tree-ops pre-tree))
-              (do (reset! static-tree-ops [])
-                  (reset! static-pre-tree-ops []))))
-          ;; === Branch 2: always — zero-allocation parallax bundle ===
-          (let [safe-w (long (max 1 rw))
-                safe-h (long (max 1 rh))
-                safe-w-d (double safe-w)
-                safe-h-d (double safe-h)
-                mx01 (clamp01 (/ (double mx) (max 1.0 safe-w-d)))
-                my01 (clamp01 (/ (double my) (max 1.0 safe-h-d)))
-                node-dx (* (- mx01 0.5) 10.0)
-                node-dy (* (- my01 0.5) 10.0)
-                bg-dx (* (- mx01 0.5) 0.01)
-                bg-dy (* (- my01 0.5) 0.01)
-                bg-u (+ (* (- bg-dx 0.5) back-scale-inv) 0.5)
-                bg-v (+ (* (- bg-dy 0.5) back-scale-inv) 0.5)
-                final-ops {:kind :parallax-bundle
-                           :bg-u (float bg-u) :bg-v (float bg-v)
-                           :bg-scale-inv back-scale-inv
-                           :node-dx node-dx :node-dy node-dy
-                           :pre-ops @static-pre-tree-ops
-                           :tree-ops @static-tree-ops}]
-            (reset! last-mouse-pos [mx my])
-            (skill-tree-draw-ops! root [final-ops])))))
-    ;; frame → update hover (runs every frame — lightweight state-only check)
-    (events/on-frame root
-      (fn [_]
-        (let [[mx my] (skill-tree-mouse-pos root)]
-          (on-mouse-move owner mx my))))
-    ;; click handler
-    (events/on-left-click root
-      (fn [evt]
-        (let [mx (:mouse-x evt) my (:mouse-y evt)]
-          (skill-tree-mouse-pos! root [mx my])
-          (handle-screen-click! owner mx my))))
-    ;; drag → track mouse
-    (events/on-drag root
-      (fn [evt]
-        (let [[ox oy] (skill-tree-mouse-pos root)
-              dx (double (:dx evt 0)) dy (double (:dy evt 0))]
-          (skill-tree-mouse-pos! root [(+ ox dx) (+ oy dy)]))))
-    ;; draw-ops component host
-    (let [[rw rh] (cgui-core/get-size root)
-          host (cgui-core/create-widget :pos [0 0] :size [rw rh])]
-      (comp/add-component! host (comp/draw-ops {:ops-fn #(skill-tree-draw-ops root)}))
-      (cgui-core/add-widget! root host))
-    root))
+  (let [owner {:client-session-id (or client-session-id "") :player-uuid player-uuid}
+        create-runtime (requiring-resolve 'cn.li.ac.ability.client.screens.skill-tree-reactive/create-runtime)
+        on-close! (requiring-resolve 'cn.li.ac.ability.client.screens.skill-tree-reactive/on-close!)
+        r (create-runtime owner :learn-context learn-context)]
+    {:type :reactive-screen
+     :runtime r
+     :title "Node Tree"
+     :on-close #(on-close! owner)}))
 
 (let [registered? (atom false)]
   (defn install-widget-factory!

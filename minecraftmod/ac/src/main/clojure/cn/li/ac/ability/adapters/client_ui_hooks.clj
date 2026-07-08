@@ -20,6 +20,7 @@
             [cn.li.ac.ability.client.screens.preset-editor :as preset-editor-screen]
             [cn.li.ac.ability.client.screens.preset-editor-reactive :as preset-editor-reactive]
             [cn.li.ac.ability.client.screens.skill-tree :as skill-tree-screen]
+            [cn.li.ac.ability.client.screens.skill-tree-reactive :as skill-tree-reactive]
             [cn.li.ac.content.ability.electromaster.current-charging-fx :as current-charging-fx]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-manager :as ctx-mgr]
@@ -1074,6 +1075,7 @@
           (let [old-ability-data (get-in (get-client-player-state uuid) [:ability-data])]
             (ensure-client-player-state! uuid)
             (update-client-ability-data! uuid ability-data)
+            (skill-tree-reactive/refresh-active-screen! uuid)
             (when (runtime-sync-resets-input? old-ability-data ability-data)
               (abort-all-slot-contexts-for-owner! uuid)
               (client-keybinds/clear-client-keybind-state! uuid)
@@ -1084,6 +1086,7 @@
           (let [old-resource-data (get-in (get-client-player-state uuid) [:resource-data])]
             (ensure-client-player-state! uuid)
             (update-client-resource-data! uuid resource-data)
+            (skill-tree-reactive/refresh-active-screen! uuid)
             (when (resource-sync-disables-input? old-resource-data resource-data)
               (abort-all-slot-contexts-for-owner! uuid)
               (client-keybinds/clear-client-keybind-state! uuid))))))

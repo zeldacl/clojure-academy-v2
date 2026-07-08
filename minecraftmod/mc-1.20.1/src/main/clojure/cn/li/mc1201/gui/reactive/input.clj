@@ -61,6 +61,8 @@
       (when hit
         (.setFlag hit cn.li.mcmod.ui.node/FLAG-HOVERED))
       (cn.li.mcmod.ui.runtime/set-hovered-idx! rt new-idx))
+    (when-let [on-move (cn.li.mcmod.ui.runtime/user-signal rt :on-pointer-move)]
+      (on-move mx my))
     false))
 
 (defn handle-mouse-scrolled [^UiRt rt left top mouse-x mouse-y scroll-delta]

@@ -1,7 +1,8 @@
 (ns cn.li.mc1201.gui.reactive.render
   "Kind renderers (:render!/:bake!) — ported from CGUI renderer.clj zero-alloc techniques.
    All render fns take [^GuiGraphics gg ^INode node]."
-  (:require [cn.li.mcmod.ui.node :as node]
+  (:require [cn.li.mc1201.gui.draw-ops :as draw-ops]
+            [cn.li.mcmod.ui.node :as node]
             [cn.li.mcmod.ui.layout :as ui-layout]
             [clojure.string :as str])
   (:import [cn.li.mcmod.ui.node INode]
@@ -274,10 +275,18 @@
 (defn bake-crosshair! [^INode _node] nil)
 
 ;; ============================================================================
-;; :draw-ops — escape hatch (CGUI compat; reactive overlay does not use)
+;; :draw-ops — delegates to shared draw_ops engine (skill tree etc.)
 ;; ============================================================================
 
-(defn render-draw-ops! [^GuiGraphics _gg ^INode _node] nil)
+(defn render-draw-ops! [^GuiGraphics gg ^INode node]
+  (when-let [ops-fn (.getOSlot node 0)]
+    (when (fn? ops-fn)
+      (let [x (node-abs-x node) y (node-abs-y node)
+            ^PoseStack pose (.pose gg)]
+        (.pushPose pose)
+        (.translate pose (double x) (double y) (double 0.0))
+        (draw-ops/render-ops! gg (ops-fn))
+        (.popPose pose)))))
 (defn bake-draw-ops! [^INode _node] nil)
 
 ;; ============================================================================
