@@ -5,10 +5,13 @@
 
 (def ^:private crafting-block-spec
   {:label :crafting
+   ;; Reactive UI migration — see generators.clj comment for rationale.
+   :namespaces '[cn.li.ac.block.imag-fusor.gui-reactive
+                 cn.li.ac.block.metal-former.gui-reactive]
    :init-entries '[cn.li.ac.block.imag-fusor.block/init-imag-fusor!
                    cn.li.ac.block.metal-former.block/init-metal-former!
-                   cn.li.ac.block.imag-fusor.gui/init-imag-fusor-gui!
-                   cn.li.ac.block.metal-former.gui/init-metal-former-gui!]})
+                   cn.li.ac.block.imag-fusor.gui-reactive/init-imag-fusor-reactive!
+                   cn.li.ac.block.metal-former.gui-reactive/init-metal-former-reactive!]})
 
 (defonce-guard crafting-blocks-installed?)
 

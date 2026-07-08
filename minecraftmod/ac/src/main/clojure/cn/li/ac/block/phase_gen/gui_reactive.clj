@@ -33,7 +33,7 @@
 (defn create-screen [container menu player]
   (let [safe-val #(some-> % deref)]
     (bgui/create-screen
-      {:page-xml "guis/rework/page_phasegen.xml" :texture-name "phasegen"
+      {:page-xml "guis/rework/new/page_phasegen.xml" :texture-name "phasegen"
        :container container :menu menu
        :histograms [(bgui/hist-buffer (fn [] (double @(:energy container))) (fn [] (max 1.0 (double @(:max-energy container)))))]
        :properties {:status (fn [] (or (safe-val (:status container)) "IDLE"))

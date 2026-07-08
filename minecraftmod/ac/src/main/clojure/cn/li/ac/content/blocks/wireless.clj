@@ -10,14 +10,19 @@
 
 (def ^:private wireless-block-spec
   {:label :wireless
+   ;; Reactive UI migration — see generators.clj comment for rationale.
+   ;; wireless-matrix-reactive delegates container/slot/network logic to the
+   ;; old gui.clj's public defns (capability-proxy + ownership-policy code
+   ;; reused as-is); wireless-node-reactive fully reimplements (simpler domain).
    :namespaces '[cn.li.ac.block.wireless-matrix.block
                 cn.li.ac.block.wireless-matrix.gui
+                cn.li.ac.block.wireless-matrix.gui-reactive
                 cn.li.ac.block.wireless-node.block
-                cn.li.ac.block.wireless-node.gui]
+                cn.li.ac.block.wireless-node.gui-reactive]
    :init-entries '[cn.li.ac.block.wireless-matrix.block/init-wireless-matrix!
-                   cn.li.ac.block.wireless-matrix.gui/init-wireless-matrix-gui!
+                   cn.li.ac.block.wireless-matrix.gui-reactive/init-wireless-matrix-reactive!
                    cn.li.ac.block.wireless-node.block/init-wireless-nodes!
-                   cn.li.ac.block.wireless-node.gui/init-wireless-node-gui!]
+                   cn.li.ac.block.wireless-node.gui-reactive/init-wireless-node-reactive!]
    :post-init-entries [msg-reg/register-all!]})
 
 (defonce-guard wireless-blocks-installed?)

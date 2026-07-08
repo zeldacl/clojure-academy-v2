@@ -97,7 +97,7 @@
 
 (defn create-screen [container menu player]
   (bgui/create-screen
-    {:page-xml "guis/rework/page_wireless.xml" :texture-name "wireless"
+    {:page-xml "guis/rework/new/page_wireless.xml" :texture-name "wireless"
      :container container :menu menu
      :histograms [(bgui/hist-energy 0xFF4488CC)]
      :properties {:range #(str (or @(:range container) "..."))

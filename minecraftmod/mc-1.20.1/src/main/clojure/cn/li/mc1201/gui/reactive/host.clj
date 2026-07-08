@@ -4,7 +4,9 @@
             [cn.li.mcmod.ui.layout :as layout]
             [cn.li.mc1201.gui.reactive.render :as render]
             [cn.li.mc1201.gui.reactive.clock :as clock]
-            [cn.li.mc1201.gui.reactive.input :as input])
+            [cn.li.mc1201.gui.reactive.input :as input]
+            [cn.li.mc1201.gui.reactive.perf :as perf]
+            [cn.li.mcmod.util.log :as log])
   (:import [cn.li.mcmod.ui.runtime UiRt]
            [cn.li.mc1201.shim DelegatingScreen]
            [net.minecraft.client.gui GuiGraphics]
@@ -18,13 +20,16 @@
           (Component/literal ^String title)
           ;; render
           (fn render-cb [^DelegatingScreen this ^GuiGraphics gg _mx _my pt]
+            (perf/frame-start!)
             (.renderBackground this gg)
             (clock/tick! rt pt)
             (rt/resize! rt (double (.-width this)) (double (.-height this)))
             (rt/flush! rt)
             (layout/ensure-layout! rt)
             (layout/ensure-tape! rt)
-            (render/draw-tape! gg rt (.-leftOffset this) (.-topOffset this)))
+            (render/draw-tape! gg rt (.-leftOffset this) (.-topOffset this))
+            (when-let [stats (perf/frame-end!)]
+              (log/info stats)))
           ;; keyPressed
           (fn key-cb [_this key-code scan-code modifiers]
             (input/handle-key-pressed rt key-code scan-code modifiers))

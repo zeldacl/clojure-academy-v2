@@ -28,11 +28,17 @@
     nil))
 
 (defn update-overlay!
-  "Per-frame update: sset clock signals, flush bindings, layout, render.
-   Called from Forge/Fabric render event handlers."
-  [^GuiGraphics gg client-session-id screen-w screen-h partial-ticks update-fn]
-  (when-let [entry (get @overlay-runtimes client-session-id)]
-    (let [^UiRt rt (:runtime entry)]
+  "Per-frame update: lazy get-or-create runtime, sset clock signals,
+   flush bindings, layout, render. Called from Forge/Fabric render events.
+   build-fn: (fn [screen-w screen-h] -> UiRt) — used once when no runtime exists."
+  [^GuiGraphics gg client-session-id screen-w screen-h partial-ticks build-fn update-fn]
+  (let [entry (get @overlay-runtimes client-session-id)
+        ^UiRt rt (or (:runtime entry)
+                     (when build-fn
+                       (when-let [new-rt (build-fn screen-w screen-h)]
+                         (swap! overlay-runtimes assoc client-session-id {:runtime new-rt})
+                         new-rt)))]
+    (when rt
       (clock/tick! rt partial-ticks)
       (rt/resize! rt (double screen-w) (double screen-h))
       ;; Call ac-level update to sset game-state signals

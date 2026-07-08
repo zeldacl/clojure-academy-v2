@@ -4,9 +4,15 @@
             [cn.li.mcmod.ui.layout :as layout])
   (:import [cn.li.mcmod.ui.runtime UiRt]))
 
-(defn handle-key-pressed [^UiRt rt key-code scan-code modifiers]
+(defn handle-key-pressed
+  "Dispatch key to focus node. Return semantics match old cgui host:
+   - focused node consumes the key → true
+   - no focus: ESC (256) → true (screen closes), other keys → false"
+  [^UiRt rt key-code scan-code modifiers]
   (events/dispatch-key! rt key-code scan-code modifiers 0)
-  true)
+  (if (>= (cn.li.mcmod.ui.runtime/focus-idx rt) 0)
+    true
+    (= (long key-code) 256)))
 
 (defn handle-char-typed [^UiRt rt code-point _modifiers]
   (events/dispatch-char! rt code-point)
@@ -30,12 +36,25 @@
     (events/dispatch-mouse-drag! rt mx my button)
     true))
 
-(defn handle-mouse-moved [^UiRt rt left top mouse-x mouse-y]
+(defn handle-mouse-moved
+  "Track hovered node: update hovered-idx + FLAG-HOVERED on nodes so
+   :box hover-tint renders without any per-frame polling."
+  [^UiRt rt left top mouse-x mouse-y]
   (let [mx (- (double mouse-x) (double left))
-        my (- (double mouse-y) (double top))]
-    (cn.li.mcmod.ui.runtime/set-hovered-idx! rt
-      (if-let [^cn.li.mcmod.ui.node.INode hit (layout/hit-test rt mx my)]
-        (.getIdx hit) -1))
+        my (- (double mouse-y) (double top))
+        ^cn.li.mcmod.ui.node.INode hit (layout/hit-test rt mx my)
+        new-idx (if hit (.getIdx hit) -1)
+        old-idx (cn.li.mcmod.ui.runtime/hovered-idx rt)]
+    (when (not= new-idx old-idx)
+      ;; Clear old hover flag
+      (when (>= old-idx 0)
+        (when-let [^cn.li.mcmod.ui.node.INode old-node
+                   (cn.li.mcmod.ui.runtime/node-by-idx rt old-idx)]
+          (.clearFlag old-node cn.li.mcmod.ui.node/FLAG-HOVERED)))
+      ;; Set new hover flag
+      (when hit
+        (.setFlag hit cn.li.mcmod.ui.node/FLAG-HOVERED))
+      (cn.li.mcmod.ui.runtime/set-hovered-idx! rt new-idx))
     false))
 
 (defn handle-mouse-scrolled [^UiRt rt left top mouse-x mouse-y scroll-delta]

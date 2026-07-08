@@ -111,9 +111,4 @@
                   (doseq [f handlers] (f rt node evt)))))))))))
 
 (defn unbind-subtree! [^UiRt rt ^INode node]
-  (rt/remove-node-events! rt (.getIdx node))
-  (let [^objects cs (.getChildrenArr node) n (node/child-count node)]
-    (loop [i 0]
-      (when (< i n)
-        (when-let [^INode c (aget cs i)] (unbind-subtree! rt c))
-        (recur (unchecked-inc-int i))))))
+  (rt/unbind-subtree! rt node))

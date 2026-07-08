@@ -4,6 +4,7 @@
             [cn.li.mcmod.ui.runtime :as rt]
             [cn.li.mcmod.ui.node :as node]
             [cn.li.mcmod.ui.dsl :as dsl]
+            [cn.li.mcmod.ui.core :as ui]
             [cn.li.mcmod.ui.signal :as sig]
             [cn.li.mcmod.ui.layout :as layout])
   (:import [cn.li.mcmod.ui.runtime UiRt]
@@ -124,4 +125,27 @@
     (is (nil? (rt/get-event-handlers r 0 :right-click)))
     (rt/remove-node-events! r 0)
     (is (nil? (rt/get-event-handlers r 0 :left-click)))))
+
+;; ============================================================================
+;; list-set! — binding cleanup on item removal
+;; ============================================================================
+
+(deftest list-set-clears-bindings-on-rebuild
+  (let [r (rt/create-runtime)
+        spec (dsl/group {:id :root}
+               (dsl/list {:id :entries :w 100 :h 40
+                          :template (dsl/box {:id :row :w 100 :h 16})}))
+        _ (rt/build! r spec)
+        s (sig/signal-d 0.5)
+        writer (get-in node/kinds [:box :prop-writers :hover-tint])]
+    (ui/list-set! r :entries [1 2]
+      (fn [_rt item-root _item]
+        (let [b (sig/bind! s item-root writer (rt/get-dirty-bindings-q r))]
+          (rt/register-binding! r (.getIdx item-root) b))))
+    (is (pos? (rt/binding-count r)))
+    (ui/list-set! r :entries [] (fn [_ _ _] nil))
+    (is (zero? (rt/binding-count r)))
+    (sig/sset-d! s 1.0)
+    (rt/flush! r)
+    (is (zero? (.size (rt/get-dirty-bindings-q r))))))
 

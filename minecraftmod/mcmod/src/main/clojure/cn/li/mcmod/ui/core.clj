@@ -26,8 +26,9 @@
           writer (get-in kdef [:prop-writers prop-key])]
       (when-not writer (throw (ex-info (str "bind!: no prop-writer for " kind-kw "/" prop-key)
                                         {:kind kind-kw :prop-key prop-key})))
-      (sig/bind! source n writer (rt/get-dirty-bindings-q rt))
-      nil)))
+      (let [b (sig/bind! source n writer (rt/get-dirty-bindings-q rt))]
+        (rt/register-binding! rt (.getIdx n) b)
+        nil))))
 
 ;; ============================================================================
 ;; on! — high-level event registration
@@ -88,23 +89,66 @@
 ;; list-set! — keyed list reconciliation
 ;; ============================================================================
 
+(defn- find-in-subtree
+  "Find a node by id within a subtree (depth-first). Returns INode or nil."
+  ^cn.li.mcmod.ui.node.INode [^INode subtree-root target-id]
+  (if (= target-id (.getId subtree-root))
+    subtree-root
+    (let [^objects cs (.getChildrenArr subtree-root)
+          n (node/child-count subtree-root)]
+      (loop [i 0]
+        (when (< i n)
+          (if-let [^INode c (aget cs i)]
+            (or (find-in-subtree c target-id)
+                (recur (unchecked-inc-int i)))
+            (recur (unchecked-inc-int i))))))))
+
 (defn list-set!
-  "Single-level keyed reconcile for :list kind nodes.
-   - key-fn: (fn [item] -> key), items with same key reuse node instances
-   - per-item-fn: (fn [rt item-node-map item] ...) called for each item
-   Removed items have their handlers/bindings cleaned up via unbind-subtree!.
-   Usage: (ui/list-set! rt :entries locations :id
-            (fn [rt nodes loc]
-              (ui/set-prop! rt (nodes :label) :text (:name loc))
-              (ui/on! rt (nodes :btn-del) :left-click (partial delete! (:id loc)))))"
-  [^UiRt rt list-id items key-fn per-item-fn]
+  "Rebuild :list node children from items using the list's template spec.
+   - Template spec comes from the list node's :template static prop (or oslot 0)
+   - Old children have their event handlers removed (leak prevention)
+   - per-item-fn: (fn [rt item-root-node item]) — set props / attach handlers;
+     use (ui/item-node item-root sub-id) to find sub-nodes within the item.
+   Usage: (ui/list-set! rt :entries locations
+            (fn [rt item-root loc]
+              (ui/set-node-prop! rt (ui/item-node item-root :label) :text (:name loc))))"
+  [^UiRt rt list-id items per-item-fn]
   (let [^INode list-node (rt/node-by-id rt list-id)]
-    (when-not list-node (throw (ex-info (str "list-set!: node not found: " list-id) {:id list-id})))
-    ;; Mark tree-dirty for tape rebuild
-    (rt/mark-tree-dirty! rt)
-    ;; For now, rebuild all children. Future optimization: keyed reuse.
-    (doseq [item items]
-      (let [item-key (key-fn item)
-            item-nodes {}]  ;; TODO: template instantiation for each item
-        (per-item-fn rt item-nodes item)))
-    nil))
+    (when-not list-node
+      (throw (ex-info (str "list-set!: node not found: " list-id) {:id list-id})))
+    (let [template (or (.getOSlot list-node 0)
+                       (get (.getStaticProps list-node) :template))
+          spacing (let [s (.getDSlot list-node 0)] (if (pos? s) s 4.0))]
+      (when-not template
+        (throw (ex-info (str "list-set!: no template on list node " list-id) {:id list-id})))
+      ;; Clear existing children (removes their event handlers)
+      (rt/clear-children! rt list-node)
+      ;; Instantiate template per item
+      (doseq [[idx item] (map-indexed vector items)]
+        (let [item-h (double (get-in template [:props :h] 24.0))
+              item-spec (assoc-in template [:props :y] (* idx (+ item-h spacing)))
+              item-root (rt/build-child! rt item-spec list-node)]
+          (per-item-fn rt item-root item)))
+      (rt/mark-tree-dirty! rt)
+      nil)))
+
+(defn item-node
+  "Find a sub-node by id within a list item subtree."
+  ^cn.li.mcmod.ui.node.INode [^INode item-root sub-id]
+  (find-in-subtree item-root sub-id))
+
+(defn set-node-prop!
+  "Set a property directly on an INode (used with item-node from list-set!)."
+  [^UiRt _rt ^INode n prop-key value]
+  (when n
+    (let [kind-kw (.getKind n)
+          kdef (get node/kinds kind-kw)
+          dslot-idx (get-in kdef [:dslots prop-key])
+          oslot-idx (get-in kdef [:oslots prop-key])]
+      (cond
+        dslot-idx (.setDSlot n (int dslot-idx) (double value))
+        oslot-idx (.setOSlot n (int oslot-idx) value)
+        :else (throw (ex-info (str "set-node-prop!: unknown property " kind-kw "/" prop-key)
+                              {:kind kind-kw :prop-key prop-key})))
+      (.setFlag n node/FLAG-RENDER-DIRTY)
+      nil)))

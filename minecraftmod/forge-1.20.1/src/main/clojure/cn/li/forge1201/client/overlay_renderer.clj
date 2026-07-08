@@ -1,20 +1,20 @@
 (ns cn.li.forge1201.client.overlay-renderer
-  "CLIENT-ONLY Forge overlay event adapter — renders via reactive overlay-host."
+  "CLIENT-ONLY Forge overlay event adapter — renders via reactive overlay-host.
+   Build/update fns come from the client bridge (installed by ac via merge-client-bridge!,
+   keys :reactive-overlay-build / :reactive-overlay-update). Zero static ac dependency."
   (:require [cn.li.mc1201.gui.reactive.overlay-host :as overlay-host]
+            [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraftforge.client.event RenderGuiOverlayEvent$Post]
            [net.minecraftforge.common MinecraftForge]
            [net.minecraftforge.eventbus.api EventPriority]
            [net.minecraft.client Minecraft]))
 
-(def ^:private active-overlay-build-fn (atom nil))
-(def ^:private active-overlay-update-fn (atom nil))
+(defn- bridge-build-fn [w h]
+  (client-bridge/call-adapter :reactive-overlay-build w h))
 
-(defn register-reactive-overlay!
-  "Register reactive overlay build and update functions from ac layer."
-  [build-fn update-fn]
-  (reset! active-overlay-build-fn build-fn)
-  (reset! active-overlay-update-fn update-fn))
+(defn- bridge-update-fn [rt]
+  (client-bridge/call-adapter :reactive-overlay-update rt))
 
 (defn- on-render-gui-overlay [^RenderGuiOverlayEvent$Post event]
   (let [^Minecraft mc (Minecraft/getInstance)
@@ -22,7 +22,8 @@
         h (.getGuiScaledHeight (.getWindow mc))
         pt (.getFrameTime mc)]
     (overlay-host/update-overlay!
-      (.getGuiGraphics event) "default" w h pt @active-overlay-update-fn)))
+      (.getGuiGraphics event) "default" w h pt
+      bridge-build-fn bridge-update-fn)))
 
 (defn on-mode-switch-key-state!
   ([is-down]

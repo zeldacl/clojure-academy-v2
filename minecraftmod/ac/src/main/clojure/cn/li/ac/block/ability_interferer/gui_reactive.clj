@@ -31,7 +31,7 @@
 (defn create-screen [container menu player]
   (let [safe-val #(some-> % deref)]
     (bgui/create-screen
-      {:page-xml "guis/rework/page_interfere.xml" :texture-name "interferer"
+      {:page-xml "guis/rework/new/page_interfere.xml" :texture-name "interferer"
        :container container :menu menu
        :histograms [(bgui/hist-buffer (fn [] (double @(:energy container))) (fn [] (max 1.0 (double @(:max-energy container)))))]
        :properties {:range (fn [] (str (or (safe-val (:range container)) "...")))

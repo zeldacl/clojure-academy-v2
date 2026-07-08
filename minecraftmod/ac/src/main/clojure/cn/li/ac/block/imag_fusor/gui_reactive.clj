@@ -34,7 +34,7 @@
 (defn create-screen [container menu player]
   (let [safe-val #(some-> % deref)]
     (bgui/create-screen
-      {:page-xml "guis/rework/page_imagfusor.xml" :texture-name "imagfusor"
+      {:page-xml "guis/rework/new/page_imagfusor.xml" :texture-name "imagfusor"
        :container container :menu menu
        :histograms [(bgui/hist-buffer (fn [] (double @(:energy container))) (fn [] (max 1.0 (double @(:max-energy container)))))
                     (bgui/hist-buffer (fn [] (double (or @(:work-progress container) 0.0))) (fn [] 1.0))]

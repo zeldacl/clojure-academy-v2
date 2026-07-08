@@ -6,7 +6,7 @@
      (require '[cn.li.ac.gui.block-gui-reactive :as bgui])
      (defn create-screen [container menu player]
        (bgui/create-screen
-         {:page-xml \"guis/rework/page_solar.xml\"
+         {:page-xml \"guis/rework/new/page_solar.xml\"
           :texture-name \"solar\"
           :container container
           :menu menu
@@ -70,8 +70,14 @@
                  :progress (sig/signal-d 0.0)}
         _ (doseq [[k s] signals] (rt/put-user-signal! r k s))
         _ (when custom-bind! (custom-bind! r container signals))]
-    ;; Return config map (used by update-fn + open-fn)
-    {:runtime r
+    ;; Return config map recognized by mc-1.20.1/gui/screen/impl.clj's
+    ;; reactive-container-screen? predicate, which routes to
+    ;; host-container/create-tech-ui-container-screen to build the real
+    ;; DelegatingCGuiContainerScreen (slots + player inventory + rendering).
+    {:type :reactive-container-screen
+     :runtime r
+     :minecraft-container menu
+     :size-dx 31 :size-dy 20
      :signals signals
      :container container
      :menu menu

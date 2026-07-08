@@ -2,8 +2,6 @@
 <Ui size="0.0,0.0" align="center,center">
   <image id="main" pos="0.0,0.0" size="176.0,187.0" align="center,center" src="my_mod:textures/guis/parent/parent_background.png">
     <image id="ui_inv" pos="0.0,0.0" size="176.0,187.0" align="center,center" src="my_mod:textures/guis/ui/ui_inventory.png"/>
-    <image id="ui_block" pos="0.0,0.0" size="176.0,187.0" align="center,center" src="my_mod:textures/guis/ui/ui_solar.png">
-      <group id="anim_frame" pos="56.0,23.0" size="104.0,70.0" scale="0.60" align="left,top"/>
-    </image>
+    <image id="ui_block" pos="0.0,0.0" size="176.0,187.0" align="center,center" src="my_mod:textures/guis/ui/ui_windmain.png"/>
   </image>
 </Ui>

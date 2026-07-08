@@ -985,6 +985,30 @@
         (update-client-ui-runtime! assoc-in [:overlay-context-cache owner-key] entry)
         entry))))
 
+(defn reactive-overlay-snapshot
+  "Signal-oriented HUD snapshot for reactive overlay updates.
+   Reuses the same state reads as build-client-overlay-plan without building element vectors."
+  [player-uuid overlay-state]
+  (let [player-state (get-client-player-state player-uuid)
+        resource-data (:resource-data player-state)
+        activated-override {:value (if (some? (:activated-override overlay-state))
+                                     (boolean (:activated-override overlay-state))
+                                     (boolean (get resource-data :activated false)))}
+        hud-model (build-hud-model-from-state player-state activated-override)
+        now-ms (long (or (:now-ms overlay-state) (System/currentTimeMillis)))]
+    (when hud-model
+      (let [cp-bar (when (:activated hud-model) (hud-renderer/build-cp-bar-render-data hud-model))
+            overload-bar (when (:activated hud-model)
+                           (hud-renderer/build-overload-bar-render-data hud-model now-ms))]
+        {:activated (:activated hud-model)
+         :cp-percent (double (or (:percent cp-bar) 0.0))
+         :cp-hint-percent (some-> cp-bar :hint-percent double)
+         :cp-full-glow? (boolean (:full-glow? cp-bar))
+         :overload-percent (double (or (:percent overload-bar) 0.0))
+         :overload-scroll (double (or (:scroll-offset overload-bar) 0.0))
+         :overloaded? (boolean (:overloaded overload-bar))
+         :interfered? (:interfered? hud-model)}))))
+
 (defn build-client-overlay-plan [player-uuid screen-width screen-height overlay-state]
   ;; When an overlay app is active, skip normal HUD and render overlay app elements.
   (if-let [app-kw (:active-overlay-app overlay-state)]

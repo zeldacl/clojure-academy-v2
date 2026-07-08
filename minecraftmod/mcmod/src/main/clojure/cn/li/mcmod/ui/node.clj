@@ -17,6 +17,7 @@
 (def ^:const FLAG-RENDER-DIRTY 2)
 (def ^:const FLAG-CLIP 4)
 (def ^:const FLAG-HAS-TRANSFORM 8)
+(def ^:const FLAG-HOVERED 16)
 
 ;; ============================================================================
 ;; INode definterface

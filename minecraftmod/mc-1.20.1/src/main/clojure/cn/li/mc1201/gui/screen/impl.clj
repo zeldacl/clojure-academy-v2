@@ -5,6 +5,7 @@
   callbacks (e.g. Forge event bus hooks)."
   (:require [cn.li.mc1201.gui.cgui.runtime :as cgui-rt]
             [cn.li.mc1201.client.session :as client-session]
+            [cn.li.mc1201.gui.reactive.host-container :as reactive-host]
             [cn.li.mcmod.gui.cgui-core :as cgui-core]
             [cn.li.mcmod.gui.container-state :as container-state]
             [cn.li.mcmod.gui.owner-contract :as owner-contract]
@@ -44,6 +45,14 @@
        (= (:type m) :cgui-screen-container)
        (contains? m :cgui)
        (contains? m :minecraft-container)))
+
+(defn reactive-container-screen?
+  "True for the {:type :reactive-container-screen :runtime rt ...} shape
+   returned by ac.gui.block-gui-reactive/create-screen and friends."
+  [m]
+  (and (map? m)
+       (= (:type m) :reactive-container-screen)
+       (contains? m :runtime)))
 
 (defn- slots-enabled-for-click?
   [cgui-screen]
@@ -238,8 +247,15 @@
       (try
         (let [screen-data (client-session/with-current-client-owner
                             #(factory-fn menu player-inventory title))]
-          (if (cgui-screen-container? screen-data)
+          (cond
+            (reactive-container-screen? screen-data)
+            (reactive-host/create-tech-ui-container-screen
+              (assoc screen-data :minecraft-container menu))
+
+            (cgui-screen-container? screen-data)
             (create-cgui-container-screen menu player-inventory title screen-data {:on-render-tail! on-render-tail!})
+
+            :else
             (fallback-container-screen menu player-inventory title)))
         (catch Throwable e
           (log/error "[SCREEN-FACTORY] Error creating CGui screen for GUI ID" gui-id ":" (.getMessage e))

@@ -2,7 +2,7 @@
   "UI Runtime (UiRt) — one instance per screen/overlay."
   (:require [cn.li.mcmod.ui.signal :as sig]
             [cn.li.mcmod.ui.node :as node])
-  (:import [cn.li.mcmod.ui.signal SigD SigL IApply]
+  (:import [cn.li.mcmod.ui.signal SigD SigL IApply Binding]
            [cn.li.mcmod.ui.node INode]
            [java.util ArrayList]))
 
@@ -73,6 +73,43 @@
 (defn remove-node-events! [^UiRt rt ^long node-idx]
   (set! (.events rt) (dissoc (.events rt) (int node-idx))) nil)
 
+(defonce ^:private bindings-by-rt (atom {}))
+
+(defn- rt-bindings-key [^UiRt rt]
+  (System/identityHashCode rt))
+
+(defn register-binding! [^UiRt rt ^long node-idx ^Binding b]
+  (swap! bindings-by-rt update-in [(rt-bindings-key rt) (int node-idx)] (fnil conj []) b)
+  nil)
+
+(defn unbind-node-bindings! [^UiRt rt ^long node-idx]
+  (let [rt-key (rt-bindings-key rt)
+        node-key (int node-idx)]
+    (when-let [bs (get-in @bindings-by-rt [rt-key node-key])]
+      (doseq [^Binding b bs] (sig/unbind! b))
+      (swap! bindings-by-rt update rt-key dissoc node-key)))
+  nil)
+
+(defn clear-rt-bindings! [^UiRt rt]
+  (swap! bindings-by-rt dissoc (rt-bindings-key rt))
+  nil)
+
+(defn binding-count
+  "Test/diagnostic: total registered bindings for this runtime."
+  ^long [^UiRt rt]
+  (long (reduce + 0 (map count (vals (or (get @bindings-by-rt (rt-bindings-key rt)) {}))))))
+
+(defn unbind-subtree!
+  "Remove all signal bindings and event handlers from node and descendants."
+  [^UiRt rt ^INode node]
+  (unbind-node-bindings! rt (.getIdx node))
+  (remove-node-events! rt (.getIdx node))
+  (let [^objects cs (.getChildrenArr node) n (node/child-count node)]
+    (loop [i 0]
+      (when (< i n)
+        (when-let [^INode c (aget cs i)] (unbind-subtree! rt c))
+        (recur (unchecked-inc-int i))))))
+
 (defn put-user-signal! [^UiRt rt id s] (set! (.user_signals rt) (assoc (.user_signals rt) id s)) nil)
 (defn user-signal [^UiRt rt id] (get (.user_signals rt) id))
 
@@ -80,18 +117,67 @@
   (when-not (boolean (.disposed_QMARK_ rt)) (set! (.disposed_QMARK_ rt) true)
     (.clear ^ArrayList (.nodes rt)) (set! (.id__GT_node rt) {})
     (.clear ^ArrayList (.dirty_bindings rt)) (set! (.tape rt) (object-array 0))
-    (set! (.events rt) {}) (set! (.user_signals rt) {}) nil))
+    (set! (.events rt) {}) (set! (.user_signals rt) {})
+    (clear-rt-bindings! rt) nil))
 (defn disposed? [^UiRt rt] (boolean (.disposed_QMARK_ rt)))
 
+(defn- init-node-props!
+  "Write kind-specific initial prop values from spec props into dslots/oslots.
+   Uses kind table dslot/oslot index mappings. Numbers → dslots, others → oslots."
+  [^INode n kdef props]
+  (doseq [[prop-key slot-idx] (:dslots kdef)]
+    (when-some [v (get props prop-key)]
+      (when (number? v)
+        (.setDSlot n (int slot-idx) (double v)))))
+  (doseq [[prop-key slot-idx] (:oslots kdef)]
+    (when-some [v (get props prop-key)]
+      (.setOSlot n (int slot-idx) v))))
+
 (declare build-node!)
-(defn- build-children! [rt children parent-idx]
-  (when (seq children) (mapv (fn [c] (build-node! rt c parent-idx)) children)))
-(defn- build-node! [^UiRt rt spec _parent-idx]
+
+(defn- build-node!
+  "Recursively build spec into Node tree. Parent registered BEFORE children
+   so idx matches registry position; children linked via add-child!."
+  [^UiRt rt spec parent-node]
   (let [{:keys [kind id props children]} spec
         kdef (or (get node/kinds kind) (throw (ex-info (str "Unknown kind: " kind) {:kind kind})))
-        dslot-cnt (count (:dslots kdef)) oslot-cnt (:oslots-backend-base kdef (count (:oslots kdef)))
-        ^ArrayList ns (.nodes rt) idx (.size ns)
+        dslot-cnt (max (count (:dslots kdef)) 1)
+        oslot-cnt (+ (long (:oslots-backend-base kdef (count (:oslots kdef)))) 4)
+        ^ArrayList ns (.nodes rt)
+        idx (.size ns)
         n (node/create-node idx id kind props dslot-cnt oslot-cnt props)]
-    (build-children! rt children idx) (register-node! rt id n) idx))
+    (register-node! rt id n)
+    (init-node-props! n kdef props)
+    (when parent-node
+      (node/add-child! parent-node n))
+    (doseq [c children]
+      (when c (build-node! rt c n)))
+    n))
+
 (defn build! [^UiRt rt spec]
-  (let [root-idx (build-node! rt spec -1)] (set! (.tree_dirty rt) true) root-idx))
+  (let [root (build-node! rt spec nil)]
+    (set! (.tree_dirty rt) true)
+    (.getIdx ^INode root)))
+
+(defn build-child!
+  "Build a spec subtree and attach it under parent-node.
+   Used by list-set! for template instantiation. Returns the subtree root INode."
+  ^cn.li.mcmod.ui.node.INode [^UiRt rt spec ^INode parent-node]
+  (let [root (build-node! rt spec parent-node)]
+    (set! (.tree_dirty rt) true)
+    root))
+
+(defn clear-children!
+  "Remove all children from a node (list rebuild). Removes each child's event
+   handlers recursively to prevent handler leaks. Marks tree dirty."
+  [^UiRt rt ^INode parent-node]
+  (let [^objects cs (.getChildrenArr parent-node)
+        n (node/child-count parent-node)]
+    (loop [i 0]
+      (when (< i n)
+        (when-let [^INode c (aget cs i)]
+          (unbind-subtree! rt c)
+          (aset cs i nil))
+        (recur (unchecked-inc-int i))))
+    (set! (.tree_dirty rt) true)
+    nil))

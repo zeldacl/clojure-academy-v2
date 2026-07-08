@@ -70,8 +70,12 @@
         (.fill gg ix (unchecked-int (- ih outline-w)) iw ih outline-argb)
         (.fill gg ix iy (unchecked-int (+ ix outline-w)) ih outline-argb)
         (.fill gg (unchecked-int (- iw outline-w)) iy iw ih outline-argb)))
-    ;; Tint overlay
-    (let [tint (.getDSlot node SLOT-BOX-TINT)]
+    ;; Tint overlay (hover uses SLOT-BOX-HOVER when FLAG-HOVERED set)
+    (let [hovered? (.hasFlag node node/FLAG-HOVERED)
+          tint (if hovered?
+                 (let [ht (.getDSlot node SLOT-BOX-HOVER)]
+                   (if (> ht 0.0) ht (.getDSlot node SLOT-BOX-TINT)))
+                 (.getDSlot node SLOT-BOX-TINT))]
       (when (> tint 0.0)
         (let [alpha (unchecked-int (* 255.0 tint))]
           (.fill gg ix iy iw ih (argb alpha 255 255 255)))))))
@@ -105,11 +109,13 @@
 ;; ============================================================================
 
 (defn bake-text! [^INode node]
+  ;; text kind slots (node.clj): dslots {:font-size 0}, oslots {:text 0 :color 1}
   (let [text      (str (or (.getOSlot node SLOT-TEXT-TEXT) ""))
         font-size (.getDSlot node 0)
-        color     (.getDSlot node 1)]
+        color-raw (.getOSlot node 1)
+        color     (if (number? color-raw) (unchecked-int (long color-raw)) (unchecked-int 0xFFFFFFFF))]
     (.setOSlot node SLOT-TEXT-BAKED
-               {:text text :font-size (double font-size) :color (unchecked-int color)})))
+               {:text text :font-size (double font-size) :color color})))
 
 (defn render-text! [^GuiGraphics gg ^INode node]
   (let [baked (.getOSlot node SLOT-TEXT-BAKED)]
@@ -219,7 +225,10 @@
 ;; ============================================================================
 
 (defn draw-tape!
-  "Render the flat tape: iterate Object[], Node → call kind :render!; sentinel → push/pop."
+  "Render the flat tape: iterate Object[].
+   Node with RENDER_DIRTY → run :bake! first (resolve textures / bake text /
+   pre-compute gradient bands into backend slots), clear the flag, then :render!
+   reads only cached fields. Sentinels → PoseStack push/pop."
   [^GuiGraphics gg ^UiRt rt _left _top]
   (let [^objects tape (cn.li.mcmod.ui.runtime/get-tape-arr rt)
         n (alength tape)
@@ -235,6 +244,11 @@
               (if (instance? INode entry)
                 (let [^INode nd entry
                       kdef (get kind-renderers (.getKind nd))]
+                  ;; Bake on dirty: only recompute caches when a binding wrote the node
+                  (when (.hasFlag nd node/FLAG-RENDER-DIRTY)
+                    (when-let [bake-fn (:bake! kdef)]
+                      (bake-fn nd))
+                    (.clearFlag nd node/FLAG-RENDER-DIRTY))
                   (when-let [render-fn (:render! kdef)]
                     (render-fn gg nd)))
                 ;; Sentinel dispatch

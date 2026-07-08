@@ -4,7 +4,8 @@
    Single parse path, schema validation at load time."
   (:require [clojure.xml :as xml]
             [clojure.java.io :as io]
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            [cn.li.mcmod.ui.spec :as ui-spec]))
 
 ;; ============================================================================
 ;; Attribute parsers
@@ -120,23 +121,27 @@
 
 (defn- parse-ui-element [elem templates]
   "Parse a single XML element into node-spec {:kind :id :props :children}.
-   If :template attr is set, resolve from templates."
+   :list elements with a template=\"name\" attr get the resolved template SPEC
+   stored in props :template (consumed by ui.core/list-set! for instantiation)."
   (let [tag (:tag elem)
         attrs (:attrs elem)
-        template-name (:template attrs)
-        content (:content elem)]
-    (if template-name
-      ;; Use template: copy props, merge attrs
-      (if-let [tmpl (get templates template-name)]
-        (let [merged (merge tmpl {:id (:id attrs)})]
-          merged)
-        (throw (ex-info (str "Template not found: " template-name) {})))
-      ;; Regular element
-      (let [kind (if (= :Ui tag) :group (keyword (name tag)))
-            props (parse-elem-attrs kind attrs)
-            ;; Add id if present
+        content (:content elem)
+        kind (if (or (= :Ui tag) (= :template tag)) :group (keyword (name tag)))]
+    (if (and (:template attrs) (not= kind :list))
+      ;; Non-list element referencing a template: clone the template spec
+      (if-let [tmpl (get templates (:template attrs))]
+        (merge tmpl {:id (:id attrs)})
+        (throw (ex-info (str "Template not found: " (:template attrs)) {})))
+      ;; Regular element (or :list — template resolved into props below)
+      (let [props (parse-elem-attrs kind attrs)
             props (if-let [id-attr (:id attrs)]
                     (assoc props :id id-attr)
+                    props)
+            ;; :list — replace template NAME string with the resolved template SPEC
+            props (if (and (= kind :list) (:template attrs))
+                    (if-let [tmpl (get templates (:template attrs))]
+                      (assoc props :template tmpl)
+                      (throw (ex-info (str "List template not found: " (:template attrs)) {})))
                     props)]
         {:kind kind
          :id (:id attrs (str (gensym "node-")))
@@ -153,13 +158,19 @@
         templates (collect-templates (:content root))]
     (parse-ui-element root templates)))
 
-(defn load-spec [resource-path]
+(defn load-spec
   "Load XML from classpath resource and parse into node-spec.
-   resource-path: e.g. \"my_mod:guis/rework/page_inv.xml\""
+   Schema-validated at load time (never on the render path).
+   resource-path: e.g. \"my_mod:guis/rework/page_inv.xml\"
+   Falls back to assets/<modid>/ prefix when the bare path is not on classpath."
+  [resource-path]
   (let [path (str/replace resource-path #"^[^:]+:" "")
-        res (io/resource path)]
+        res (or (io/resource path)
+                (io/resource (str "assets/my_mod/" path)))]
     (when-not res
       (throw (ex-info (str "XML resource not found: " resource-path) {:path path})))
     (let [root (xml/parse res)
-          templates (collect-templates (:content root))]
-      (parse-ui-element root templates))))
+          templates (collect-templates (:content root))
+          spec (parse-ui-element root templates)]
+      (ui-spec/validate! spec)
+      spec)))

@@ -101,7 +101,7 @@
 (defn create-screen [container menu player]
   (let [safe-val #(some-> % deref)]
     (bgui/create-screen
-      {:page-xml "guis/rework/page_metalformer.xml"
+      {:page-xml "guis/rework/new/page_metalformer.xml"
        :texture-name "metalformer"
        :container container :menu menu
        :histograms [(bgui/hist-buffer (fn [] (double @(:energy container)))

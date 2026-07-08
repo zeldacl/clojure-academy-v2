@@ -27,6 +27,7 @@
             [cn.li.forge1201.client.overlay-renderer :as overlay-renderer]
             [cn.li.mc1201.client.overlay.state :as overlay-state]
             [cn.li.mc1201.gui.screen.cgui-screen-host :as cgui-screen-host]
+            [cn.li.mc1201.gui.reactive.host :as reactive-host]
             [cn.li.forge1201.client.hand-effect-renderer :as hand-effect-renderer]
             [cn.li.forge1201.client.level-effect-renderer :as level-effect-renderer]
             [cn.li.forge1201.client.render.tesr-impl :as tesr-impl]
@@ -169,8 +170,7 @@
           {:title (or title "CGUI Screen")})))))
 
 (defn- open-reactive-screen-handler [rt title]
-  (let [host-ns (requiring-resolve 'cn.li.mc1201.gui.reactive.host/open-reactive-screen!)]
-    (when host-ns (host-ns rt title))))
+  (reactive-host/open-reactive-screen! rt title))
 
 (defn- init-content-client-bridge!
   []

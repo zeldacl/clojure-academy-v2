@@ -24,7 +24,7 @@
 (def ^:private main-server-sync! (:server-menu-sync! main-sync))
 (defn- main-container? [c] (= (:container-type c) :wind-gen-main))
 (defn- create-main-screen [container menu player]
-  (bgui/create-screen {:page-xml "guis/rework/page_windmain.xml" :texture-name "windmain"
+  (bgui/create-screen {:page-xml "guis/rework/new/page_windmain.xml" :texture-name "windmain"
                         :container container :menu menu :histograms []
                         :properties {:altitude (fn [] (str (or @(:altitude container) "...")))
                                      :fan (fn [] (if @(:fan-installed container) "YES" "NO"))
@@ -56,7 +56,7 @@
 (defn- create-base-screen [container menu player]
   (let [safe-val #(some-> % deref)]
     (bgui/create-screen
-      {:page-xml "guis/rework/page_windbase.xml" :texture-name "windbase"
+      {:page-xml "guis/rework/new/page_windbase.xml" :texture-name "windbase"
        :container container :menu menu
        :histograms [(bgui/hist-buffer (fn [] (double (or @(:energy container) 0.0))) (fn [] (max 1.0 (double (or @(:max-energy container) 1.0)))))]
        :properties {:gen_speed (fn [] (format "%.2fIF/T" (double (or @(:gen-speed container) 0.0))))

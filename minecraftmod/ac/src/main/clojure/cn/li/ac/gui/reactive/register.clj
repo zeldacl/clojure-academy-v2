@@ -1,7 +1,8 @@
 (ns cn.li.ac.gui.reactive.register
-  "Reactive GUI bridge — installs :open-reactive-screen handler via client bridge merge.
+  "Reactive GUI bridge — installs reactive handlers via client bridge merge.
    Individual block GUIs self-register via their own init-*-reactive! functions."
   (:require [cn.li.mcmod.client.platform-bridge :as bridge]
+            [cn.li.ac.ability.adapters.reactive-overlay :as reactive-overlay]
             [cn.li.mcmod.util.log :as log]))
 
 (def ^:private screen-creators (atom {}))
@@ -18,7 +19,13 @@
   (swap! screen-creators assoc gui-key {:create create-fn :title title}))
 
 (defn install-bridge!
-  "Install reactive screen handler into client bridge via merge."
+  "Install reactive handlers into client bridge via merge:
+   - :open-reactive-screen  — block GUI screen dispatch
+   - :reactive-overlay-build — HUD overlay runtime construction
+   - :reactive-overlay-update — HUD overlay per-frame signal update"
   []
-  (bridge/merge-client-bridge! {:open-reactive-screen reactive-screen-handler})
-  (log/info "Reactive screen bridge installed"))
+  (bridge/merge-client-bridge!
+    {:open-reactive-screen reactive-screen-handler
+     :reactive-overlay-build reactive-overlay/build-overlay-runtime
+     :reactive-overlay-update reactive-overlay/update-overlay-signals!})
+  (log/info "Reactive bridges installed (screen + overlay)"))
