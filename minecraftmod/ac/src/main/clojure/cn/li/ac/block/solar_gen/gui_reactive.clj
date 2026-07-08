@@ -1,18 +1,49 @@
 (ns cn.li.ac.block.solar-gen.gui-reactive
-  "Reactive Solar Generator GUI."
-  (:require [cn.li.ac.gui.block-gui-reactive :as bgui]))
+  "Complete reactive replacement for solar_gen/gui.clj."
+  (:require [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
+            [cn.li.mcmod.gui.spec :as gui-reg] [cn.li.mcmod.gui.slot-schema :as slot-schema]
+            [cn.li.ac.energy.operations :as energy] [cn.li.mcmod.util.log :as log]
+            [cn.li.ac.gui.manifest :as gui-manifest] [cn.li.ac.gui.block-gui-reactive :as bgui]
+            [cn.li.mcmod.ui.runtime :as rt] [cn.li.mcmod.ui.signal :as sig]
+            [cn.li.ac.block.gui.sync :as gui-sync] [cn.li.ac.config.modid :as modid]
+            [cn.li.ac.wireless.gui.container.common :as common]
+            [cn.li.ac.block.solar-gen.schema :as solar-schema]))
+
+(def solar-gen-id :solar-gen)
+(def ^:private solar-sync (gui-sync/schema-sync-fns solar-schema/unified-solar-schema))
+(defn create-container [tile player] (gui-sync/create-schema-container solar-schema/unified-solar-schema tile player :solar {:gui-id (gui-manifest/gui-id :solar-gen)}))
+(defn get-slot-count [_] (slot-schema/tile-slot-count solar-gen-id))
+(defn can-place-item? [_ _ s] (energy/is-energy-item-supported? s))
+(defn get-slot-item [c i] (common/get-slot-item-be c i))
+(defn set-slot-item! [c i s] (common/set-slot-item-be! c i s {:inventory [nil]} identity))
+(defn slot-changed! [_ _] nil) (defn still-valid? [_ _] true)
+(def server-menu-sync! (:server-menu-sync! solar-sync)) (def on-close (:on-close solar-sync))
+(defn handle-button-click! [_ _ _] nil)
+
+(def ^:private effect-solar-texture (modid/asset-path "textures" "guis/effect/effect_solar.png"))
+(defn- solar-status->frame [status] (case status "STRONG" 0.0 "WEAK" (/ 2.0 3.0) (/ 1.0 3.0)))
+
+(defn- attach-anim-bind! [r container _signals]
+  (rt/put-user-signal! r :anim-uv
+    (sig/computed-d [(rt/clock-ms-sig r)]
+      (fn [_] (solar-status->frame (or @(:status container) "STOPPED"))))))
 
 (defn create-screen [container menu player]
-  (let [safe-val #(some-> % deref)
-        max-e (fn [] (max 1.0 (double (or (safe-val (:max-energy container)) 0.0))))
-        speed-fn (fn [] (format "%.2fIF/T" (double (or (safe-val (:gen-speed container)) 0.0))))]
+  (let [safe-val #(some-> % deref)]
     (bgui/create-screen
-      {:page-xml "guis/rework/page_solar.xml"
-       :texture-name "solar"
+      {:page-xml "guis/rework/page_solar.xml" :texture-name "solar"
        :container container :menu menu
-       :histograms [(bgui/hist-buffer (fn [] (double (or (safe-val (:energy container)) 0.0))) max-e)]
-       :properties {:gen_speed speed-fn :status (fn [] (or (safe-val (:status container)) "STOPPED"))}
-       :wireless? true :wireless-role :generator})))
+       :histograms [(bgui/hist-buffer (fn [] (double @(:energy container)))
+                                      (fn [] (max 1.0 (double @(:max-energy container)))))]
+       :properties {:gen_speed (fn [] (format "%.2fIF/T" (double (or @(:gen-speed container) 0.0))))
+                    :status (fn [] (or @(:status container) "STOPPED"))}
+       :wireless? true :wireless-role :generator :custom-bind! attach-anim-bind!})))
 
-(def update! bgui/update-signals!)
-(def open! bgui/open!)
+(def update! bgui/update-signals!) (def open! bgui/open!)
+(defn- solar-container? [c] (and (map? c) (contains? c :tile-entity) (contains? c :energy) (contains? c :status)))
+(defonce-guard solar-gui-reactive-installed?)
+(defn init-solar-reactive! []
+  (with-init-guard solar-gui-reactive-installed?
+    (slot-schema/register-slot-schema! {:schema-id solar-gen-id :slots [{:id :energy :type :energy :x 42 :y 81}]})
+    (gui-reg/register-block-gui! (gui-manifest/gui-name :solar-gen) (merge (gui-manifest/gui-registration :solar-gen) {:container-predicate solar-container? :container-fn create-container :screen-fn create-screen :server-menu-sync-fn server-menu-sync! :validate-fn still-valid? :close-fn on-close :button-click-fn handle-button-click! :slot-count-fn get-slot-count :slot-get-fn get-slot-item :slot-set-fn set-slot-item! :slot-can-place-fn can-place-item? :slot-changed-fn slot-changed!}))
+    (log/info "Solar Generator GUI initialized (reactive)")))

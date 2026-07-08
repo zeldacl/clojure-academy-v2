@@ -51,7 +51,8 @@
    :properties    - {:key value-fn ...}
    :wireless?     - include wireless tab
    :wireless-role - :generator or :machine"
-  [{:keys [page-xml texture-name container menu histograms properties wireless? wireless-role]}]
+  [{:keys [page-xml texture-name container menu histograms properties wireless? wireless-role
+            custom-bind!]}]
   (let [r (rt/create-runtime)
         ;; Load inventory page from XML
         spec (ui-xml/load-spec (modid/namespaced-path (or page-xml "guis/rework/new/page_inv.xml")))
@@ -67,7 +68,8 @@
                  :status (sig/signal-o "IDLE")
                  :gen-speed (sig/signal-o "0IF/T")
                  :progress (sig/signal-d 0.0)}
-        _ (doseq [[k s] signals] (rt/put-user-signal! r k s))]
+        _ (doseq [[k s] signals] (rt/put-user-signal! r k s))
+        _ (when custom-bind! (custom-bind! r container signals))]
     ;; Return config map (used by update-fn + open-fn)
     {:runtime r
      :signals signals
