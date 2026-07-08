@@ -14,8 +14,10 @@
            [net.minecraft.network.chat Component]))
 
 (defn create-reactive-screen
-  "Build a DelegatingScreen hosting a reactive UiRt."
-  [^UiRt rt title]
+  "Build a DelegatingScreen hosting a reactive UiRt.
+   Optional on-close runs before runtime dispose (screen removed / ESC)."
+  ([^UiRt rt title] (create-reactive-screen rt title nil))
+  ([^UiRt rt title on-close]
   (doto (DelegatingScreen.
           (Component/literal ^String title)
           ;; render
@@ -41,6 +43,7 @@
             (input/handle-mouse-clicked rt (.-leftOffset this) (.-topOffset this) mx my button))
           ;; removed
           (fn removed-cb [_this]
+            (when on-close (on-close))
             (input/handle-removed rt)))
     (.withMouseReleased
       (fn release-cb [^DelegatingScreen this mx my button]
@@ -54,12 +57,13 @@
     (.withMouseScrolled
       (fn scroll-cb [^DelegatingScreen this mx my delta]
         (input/handle-mouse-scrolled rt (.-leftOffset this) (.-topOffset this) mx my delta)))
-    (.withIsPauseScreen (fn [_] false))))
+    (.withIsPauseScreen (fn [_] false)))))
 
 (defn open-reactive-screen!
   "Open a reactive screen on the Minecraft display."
-  [^UiRt rt title]
+  ([^UiRt rt title] (open-reactive-screen! rt title nil))
+  ([^UiRt rt title opts]
   (let [^Minecraft mc (Minecraft/getInstance)
-        screen (create-reactive-screen rt title)]
+        screen (create-reactive-screen rt title (:on-close opts))]
     (.setScreen mc screen)
-    screen))
+    screen)))

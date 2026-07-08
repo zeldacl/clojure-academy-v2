@@ -158,9 +158,12 @@
   [arg payload]
   (if (keyword? arg)
     (if-let [widget (platform-ui/create-widget arg payload)]
-      (let [session-id (:client-session-id payload "")]
-        (cgui-screen-host/open-cgui-screen!
-          widget session-id {:title (name arg)}))
+      (if (and (map? widget) (= (:type widget) :reactive-screen))
+        (reactive-host/open-reactive-screen!
+          (:runtime widget) (:title widget "Screen") {:on-close (:on-close widget)})
+        (let [session-id (:client-session-id payload "")]
+          (cgui-screen-host/open-cgui-screen!
+            widget session-id {:title (name arg)})))
       ;; Fall back to managed screen for legacy screen-keys
       (screen-host/open-managed-screen! arg payload))
     (when (map? arg)
@@ -169,8 +172,8 @@
           cgui-root (or session-id "")
           {:title (or title "CGUI Screen")})))))
 
-(defn- open-reactive-screen-handler [rt title]
-  (reactive-host/open-reactive-screen! rt title))
+(defn- open-reactive-screen-handler [& args]
+  (apply reactive-host/open-reactive-screen! args))
 
 (defn- init-content-client-bridge!
   []

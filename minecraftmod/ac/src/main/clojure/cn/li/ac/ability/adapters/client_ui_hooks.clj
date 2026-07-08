@@ -18,6 +18,7 @@
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.content.ability.teleporter.location-teleport-screen :as location-teleport-screen]
             [cn.li.ac.ability.client.screens.preset-editor :as preset-editor-screen]
+            [cn.li.ac.ability.client.screens.preset-editor-reactive :as preset-editor-reactive]
             [cn.li.ac.ability.client.screens.skill-tree :as skill-tree-screen]
             [cn.li.ac.content.ability.electromaster.current-charging-fx :as current-charging-fx]
             [cn.li.ac.ability.skill-config :as skill-config]
@@ -1096,7 +1097,8 @@
         (when (and uuid preset-data)
           (ensure-client-player-state! uuid)
           (update-client-preset-data! uuid preset-data)
-          (client-keybinds/update-default-group! uuid))))
+          (client-keybinds/update-default-group! uuid)
+          (preset-editor-reactive/refresh-active-screen! uuid))))
     (net-client/register-push-handler! catalog/MSG-CTX-ESTABLISH
       (fn [{:keys [ctx-id server-id]}]
         (when-let [owner (runtime-hooks/current-player-state-owner)]

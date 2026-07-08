@@ -1,16 +1,12 @@
 (ns cn.li.ac.ability.client.screens.preset-editor
   "Preset editor screen logic (AC layer - no Minecraft imports)."
-  (:require 
-[cn.li.ac.ability.client.api :as api]
+  (:require [cn.li.ac.ability.client.api :as api]
             [cn.li.ac.ability.client.read-model :as read-model]
             [cn.li.ac.ability.client.managed-screens :as managed-screens]
             [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.registry.skill-query :as skill-query]
             [cn.li.ac.ability.model.ability :as adata]
             [cn.li.mcmod.platform.ui :as platform-ui]
-            [cn.li.mcmod.gui.cgui-core :as cgui-core]
-            [cn.li.mcmod.gui.components :as comp]
-            [cn.li.mcmod.gui.events :as events]
             [cn.li.mcmod.util.log :as log]))
 
 ;; Forward declares for functions called by widget factory (defined later)
@@ -265,26 +261,16 @@
 ;; ============================================================================
 
 (defn create-preset-editor-widget
-  "Create CGui widget hosting preset-editor draw-ops. Factory for :ac/preset-editor.
-  Reactive: draw-ops rebuilt only on click events, not every frame."
+  "Widget factory for :ac/preset-editor — returns reactive screen descriptor."
   [{:keys [player-uuid client-session-id]}]
   (let [owner {:client-session-id (or client-session-id "") :player-uuid player-uuid}
-        ok    (editor-owner-key owner)
-        root  (cgui-core/create-container :name "preset-editor-root" :pos [0 0] :size [340 250])]
-    (managed-screens/set-active-owner! screen-id ok)
-    (swap-editor-state! owner merge default-editor-state {:player-uuid player-uuid})
-    ;; Click handler triggers reactive redraw
-    (events/on-left-click root
-      (fn [evt]
-        (handle-screen-click! owner root (:mouse-x evt) (:mouse-y evt))))
-    ;; Draw-ops host component (reads cached draw-ops, no on-frame rebuild)
-    (let [[rw rh] (cgui-core/get-size root)
-          host (cgui-core/create-widget :pos [0 0] :size [rw rh])]
-      (comp/add-component! host (comp/draw-ops {:ops-fn #(get @(:metadata root) :preset-draw-ops [])}))
-      (cgui-core/add-widget! root host))
-    ;; Initial render — subsequent updates via redraw! in event handlers
-    (redraw! root owner)
-    root))
+        create-runtime (requiring-resolve 'cn.li.ac.ability.client.screens.preset-editor-reactive/create-runtime)
+        on-close! (requiring-resolve 'cn.li.ac.ability.client.screens.preset-editor-reactive/on-close!)
+        r (create-runtime owner)]
+    {:type :reactive-screen
+     :runtime r
+     :title "Preset Editor"
+     :on-close #(on-close! owner)}))
 
 (let [registered? (atom false)]
   (defn install-widget-factory!
