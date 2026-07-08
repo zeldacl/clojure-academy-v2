@@ -73,9 +73,21 @@
                    :time-str time-str :app-count-str app-count-str
                    :perspective-rot-x perspective-rot-x :perspective-rot-y perspective-rot-y}]
       (rt/put-user-signal! r k s))
-    ;; Per-frame clock update
-    (rt/put-user-signal! r :clock-update
+    ;; Clock update: time display
+    (rt/put-user-signal! r :time-display
       (sig/computed-o [clock] (fn [ms] (let [t (int (/ (long ms) 1000))] (format "%02d:%02d" (int (/ t 3600)) (int (rem (/ t 60) 60)))))))
+    ;; 3D perspective: mouse-driven root transform (preserved from old shell.clj balance-speed 3000)
+    (rt/put-user-signal! r :perspective-rot
+      (sig/computed-o [clock]
+        (fn [_] (let [mx (sig/sget-d mouse-x) my (sig/sget-d mouse-y)
+                      norm-x (/ (- mx 302.5) 302.5)
+                      norm-y (/ (- my 370.0) 370.0)]
+                  {:rot-y (* norm-x sensitivity -15.0) :rot-x (* norm-y sensitivity 15.0)}))))
+    ;; Arrow state: dim at page boundaries (preserved from old update-arrow-state!)
+    (rt/put-user-signal! r :arrow-up-alpha
+      (sig/computed-d [clock] (fn [_] (if (> (sig/sget-l current-page) 0) 1.0 0.35))))
+    (rt/put-user-signal! r :arrow-down-alpha
+      (sig/computed-d [clock] (fn [_] (if (< (sig/sget-l current-page) (dec total-pages)) 1.0 0.35))))
     ;; Page navigation
     (events/on! r :arrow-up :left-click   (fn [_ _ _] (sig/sset-l! current-page (max 0 (dec (sig/sget-l current-page))))))
     (events/on! r :arrow-down :left-click (fn [_ _ _] (sig/sset-l! current-page (min (dec total-pages) (inc (sig/sget-l current-page))))))
