@@ -59,6 +59,38 @@
           (bit-shift-left (int g) 8)
           (int b)))
 
+(defn- rgba-map->argb [{:keys [r g b a]}]
+  (bit-or (bit-shift-left (int (or a 255)) 24)
+          (bit-shift-left (int (or r 0)) 16)
+          (bit-shift-left (int (or g 0)) 8)
+          (int (or b 0))))
+
+(defn- set-box-node-at! [_r ^INode n x y w h rgba]
+  (when n
+    (.setX n (double x))
+    (.setY n (double y))
+    (.setW n (double w))
+    (.setH n (double h))
+    (.setDSlot n 0 (unchecked-int (rgba-map->argb rgba)))
+    (.setFlag n node/FLAG-RENDER-DIRTY)))
+
+(defn- set-box-rgba! [r id rgba]
+  (when-let [^INode n (ui/node r id)]
+    (set-box-node-at! r n (.getX n) (.getY n) (.getW n) (.getH n) rgba)))
+
+(defn- set-box-at! [r id x y w h rgba]
+  (when-let [^INode n (ui/node r id)]
+    (set-box-node-at! r n x y w h rgba)))
+
+(defn- toast-template []
+  (dsl/group {:id :toast :w 200 :h 32}
+    (dsl/box {:id :bg :x 0 :y 0 :w 200 :h 32 :fill 0x77272727})
+    (dsl/box {:id :border-t :x 0 :y 0 :w 200 :h 1 :fill 0xAAFFFFFF})
+    (dsl/box {:id :border-b :x 0 :y 31 :w 200 :h 1 :fill 0xAAFFFFFF})
+    (dsl/box {:id :border-l :x 0 :y 0 :w 1 :h 32 :fill 0xAAFFFFFF})
+    (dsl/box {:id :border-r :x 199 :y 0 :w 1 :h 32 :fill 0xAAFFFFFF})
+    (dsl/text {:id :msg :x 8 :y 9 :text "" :color 0xFFFFFFFF})))
+
 (defn- skill-slot-template []
   (dsl/group {:id :slot :h 22 :w 120}
     (dsl/box {:id :key-bg :x 0 :y 0 :w 20 :h 20 :fill 0x80000000})
@@ -68,10 +100,32 @@
     (dsl/box {:id :cd-mask :x 0 :y 0 :w 20 :h 20 :fill 0x80000000 :visible? false})
     (dsl/text {:id :cd-text :x 3 :y 10 :text "" :color 0xFFFFFFFF :visible? false})))
 
+(defn- coin-dot-template []
+  (dsl/box {:id :dot :w 6 :h 6 :fill 0x80FFD700}))
+
+(defn- vm-wave-template []
+  (dsl/image {:id :wave :w 16 :h 16 :src "my_mod:textures/effects/glow_circle.png" :alpha 0.0}))
+
+(defn- debug-line-template []
+  (dsl/text {:id :line :text "" :color 0xFFFFFFFF}))
+
 (defn- build-overlay-spec [sw sh]
   (dsl/group {:id :root :w sw :h sh}
     (dsl/box {:id :bg-mask :x 0 :y 0 :w sw :h sh :fill 0x00000000})
     (dsl/box {:id :overload-pulse :x 0 :y 0 :w sw :h sh :fill 0x00000000 :visible? false})
+    (dsl/list-node {:id :vm-waves :w sw :h sh :template (vm-wave-template)})
+    (dsl/group {:id :charging-layer :w sw :h sh :visible? false}
+      (dsl/box {:id :charging-dim :x 0 :y 0 :w sw :h sh :fill 0x6E081220})
+      (dsl/box {:id :charging-bar-bg :w 140 :h 8 :fill 0x96081230})
+      (dsl/box {:id :charging-bar-fill :w 2 :h 8 :fill 0xC85AD2FF})
+      (dsl/text {:id :charging-label :text "" :color 0xFFFFFFFF})
+      (dsl/box {:id :charging-mark-v :w 4 :h 16 :fill 0xC878DCFF})
+      (dsl/box {:id :charging-mark-h :w 16 :h 4 :fill 0xC878DCFF}))
+    (dsl/group {:id :coin-qte-layer :w sw :h sh :visible? false}
+      (dsl/box {:id :coin-qte-bg :w 48 :h 48 :fill 0x6414120A})
+      (dsl/list-node {:id :coin-qte-dots :w 48 :h 48 :template (coin-dot-template)})
+      (dsl/box {:id :coin-qte-marker :w 4 :h 4 :fill 0xF0FFDC50})
+      (dsl/text {:id :coin-qte-pct :text "" :color 0xFFFFD700}))
     (dsl/progress {:id :cp-bar :x 8 :y 8 :w 100 :h 10
                    :icon-cutout {:x-offset 84 :w 16}
                    :bg-src "my_mod:textures/guis/cpbar/back_normal.png"
@@ -90,7 +144,17 @@
       (dsl/box {:id :preset-prev :x -18 :y 0 :w 8 :h 8 :fill 0x80666666 :visible? false})
       (dsl/box {:id :preset-curr :x -4 :y 0 :w 8 :h 8 :fill 0x80FFAA00 :visible? false}))
     (dsl/crosshair {:id :crosshair :x (int (/ sw 2)) :y (int (/ sh 2)) :visible? false})
-    (dsl/text {:id :overlay-app-label :x 20 :y 20 :text "" :color 0xFFFF0000 :visible? false})))
+    (dsl/list-node {:id :toasts :w sw :h 200 :template (toast-template)})
+    (dsl/group {:id :tutorial-notif :w sw :h 200 :visible? false}
+      (dsl/image {:id :tut-bg :x 0 :y 15 :w 129 :h 43 :src "" :alpha 0.0})
+      (dsl/image {:id :tut-icon :w 83 :h 83 :src "" :alpha 0.0})
+      (dsl/text {:id :tut-title :text "" :color 0xFFFFFFFF})
+      (dsl/text {:id :tut-content :text "" :color 0xFFFFFFFF}))
+    (dsl/list-node {:id :debug-lines :w 300 :h 200 :template (debug-line-template)})
+    (dsl/group {:id :overlay-app-layer :w sw :h sh :visible? false}
+      (dsl/box {:id :overlay-app-panel :fill 0xC0202020})
+      (dsl/text {:id :overlay-app-title :text "" :color 0xFFFFFFFF})
+      (dsl/text {:id :overlay-app-subtitle :text "" :color 0xFF888888 :visible? false}))))
 
 (defn- attach-overlay-bindings! [r]
   (let [clock (rt/clock-ms-sig r)
@@ -114,6 +178,10 @@
     (rt/put-user-signal! r :jitter-x jitter-x)
     (rt/put-user-signal! r :jitter-y jitter-y)
     (rt/put-user-signal! r :last-skill-slot-ids (atom []))
+    (rt/put-user-signal! r :last-vm-wave-count (atom -1))
+    (rt/put-user-signal! r :last-toast-count (atom -1))
+    (rt/put-user-signal! r :last-debug-line-count (atom -1))
+    (rt/put-user-signal! r :last-coin-dot-count (atom -1))
     (let [b (sig/bind! bg-smooth bg-mask write-fill-from-rgba-o! (rt/get-dirty-bindings-q r))]
       (rt/register-binding! r (.getIdx bg-mask) b))
     (ui/bind! r :cp-bar :progress cp-smooth)
@@ -258,15 +326,198 @@
         (ui/set-node-prop! r n :fill (bit-or (bit-shift-left alpha 24) 0x00FF2200))))
     (set-visible! r :overload-pulse false)))
 
-(defn- update-overlay-app! [r snapshot]
-  (if-let [app (:overlay-app snapshot)]
+(defn- update-toast-item! [r item toast]
+  (let [^INode grp item
+        {:keys [x y w h bg borders text]} toast]
+    (.setX grp (double x))
+    (.setY grp (double y))
+    (.setW grp (double w))
+    (.setH grp (double h))
+    (set-box-node-at! r (ui/item-node item :bg) 0 0 w h bg)
+    (doseq [[bid border] [[:border-t (first borders)]
+                         [:border-b (second borders)]
+                         [:border-l (nth borders 2 nil)]
+                         [:border-r (nth borders 3 nil)]]]
+      (when border
+        (set-box-node-at! r (ui/item-node item bid)
+                          (- (:x border) x) (- (:y border) y)
+                          (:w border) (:h border)
+                          {:r 255 :g 255 :b 255 :a (:a border)})))
+    (when-let [^INode msg (ui/item-node item :msg)]
+      (.setX msg (double (- (:x text) x)))
+      (.setY msg (double (- (:y text) y)))
+      (ui/set-node-prop! r msg :text (str (:text text)))
+      (ui/set-node-prop! r msg :color (rgba-map->argb (:color text))))))
+
+(defn- update-toasts! [r snapshot]
+  (let [toasts (:toasts snapshot)
+        count* (rt/user-signal r :last-toast-count)]
+    (when (not= @count* (count toasts))
+      (reset! count* (count toasts))
+      (ui/list-set! r :toasts toasts
+                    (fn [rt item data] (update-toast-item! rt item data))))
+    (when-let [^INode list-node (ui/node r :toasts)]
+      (let [^objects cs (.getChildrenArr list-node)
+            n (.getChildCount list-node)]
+        (dotimes [i n]
+          (when-let [toast (nth toasts i nil)]
+            (when-let [^INode item (aget cs i)]
+              (update-toast-item! r item toast))))))))
+
+(defn- update-vm-wave-item! [r item wave]
+  (let [^INode img (ui/item-node item :wave)]
+    (.setX img (double (:x wave)))
+    (.setY img (double (:y wave)))
+    (.setW img (double (:w wave)))
+    (.setH img (double (:h wave)))
+    (ui/set-node-prop! r img :src (:src wave))
+    (ui/set-node-prop! r img :tint (:tint wave))
+    (.setDSlot img 0 (double (:alpha wave)))
+    (.setFlag img node/FLAG-RENDER-DIRTY)))
+
+(defn- update-vm-waves! [r snapshot]
+  (let [waves (or (:vm-waves snapshot) [])
+        count* (rt/user-signal r :last-vm-wave-count)]
+    (when (not= @count* (count waves))
+      (reset! count* (count waves))
+      (ui/list-set! r :vm-waves waves
+                    (fn [rt item data] (update-vm-wave-item! rt item data))))
+    (when-let [^INode list-node (ui/node r :vm-waves)]
+      (let [^objects cs (.getChildrenArr list-node)
+            n (.getChildCount list-node)]
+        (dotimes [i n]
+          (when-let [wave (nth waves i nil)]
+            (when-let [^INode item (aget cs i)]
+              (update-vm-wave-item! r item wave))))))))
+
+(defn- update-charging-layer! [r snapshot sw sh]
+  (if-let [ch (:charging snapshot)]
+    (let [{:keys [dim-a bar label crosshair]} ch
+          {:keys [x y w h fill-w backdrop accent]} bar
+          {:keys [cx cy active?]} crosshair
+          mark-a (if active? 200 120)]
+      (set-visible! r :charging-layer true)
+      (set-box-rgba! r :charging-dim {:r 8 :g 18 :b 32 :a dim-a})
+      (set-box-at! r :charging-bar-bg x y w h backdrop)
+      (set-box-at! r :charging-bar-fill x y fill-w h accent)
+      (when-let [^INode lbl (ui/node r :charging-label)]
+        (.setX lbl (double (:x label)))
+        (.setY lbl (double (:y label)))
+        (ui/set-node-prop! r lbl :text (str (:text label)))
+        (ui/set-node-prop! r lbl :color (rgba-map->argb (:color label))))
+      (set-box-at! r :charging-mark-v (- cx 2) (- cy 8) 4 16 {:r 120 :g 220 :b 255 :a mark-a})
+      (set-box-at! r :charging-mark-h (- cx 8) (- cy 2) 16 4 {:r 120 :g 220 :b 255 :a mark-a}))
+    (set-visible! r :charging-layer false)))
+
+(defn- update-coin-qte-dot! [r item dot]
+  (set-box-node-at! r (ui/item-node item :dot) (:x dot) (:y dot) (:w dot) (:h dot) (:color dot)))
+
+(defn- update-coin-qte-layer! [r snapshot]
+  (if-let [qte (:coin-qte snapshot)]
     (do
-      (set-visible! r :overlay-app-label true)
-      (ui/set-prop! r :overlay-app-label :text (str "Overlay: " (name app)))
+      (set-visible! r :coin-qte-layer true)
+      (let [{:keys [bg-disc dots marker pct-text]} qte
+            dot-count* (rt/user-signal r :last-coin-dot-count)]
+        (set-box-node-at! r (ui/node r :coin-qte-bg)
+                          (:x bg-disc) (:y bg-disc) (:w bg-disc) (:h bg-disc) (:color bg-disc))
+        (when (not= @dot-count* (count dots))
+          (reset! dot-count* (count dots))
+          (ui/list-set! r :coin-qte-dots dots
+                        (fn [rt item dot] (update-coin-qte-dot! rt item dot))))
+        (when-let [^INode list-node (ui/node r :coin-qte-dots)]
+          (let [^objects cs (.getChildrenArr list-node)
+                n (.getChildCount list-node)]
+            (dotimes [i n]
+              (when-let [dot (nth dots i nil)]
+                (when-let [^INode item (aget cs i)]
+                  (update-coin-qte-dot! r item dot))))))
+        (set-box-node-at! r (ui/node r :coin-qte-marker)
+                          (:x marker) (:y marker) (:w marker) (:h marker) (:color marker))
+        (when-let [^INode pct (ui/node r :coin-qte-pct)]
+          (.setX pct (double (:x pct-text)))
+          (.setY pct (double (:y pct-text)))
+          (ui/set-node-prop! r pct :text (str (:text pct-text)))
+          (ui/set-node-prop! r pct :color (rgba-map->argb (:color pct-text))))))
+    (set-visible! r :coin-qte-layer false)))
+
+(defn- update-tutorial-notif! [r snapshot]
+  (if-let [n (:tutorial-notification snapshot)]
+    (let [{:keys [bg icon title content]} n]
+      (set-visible! r :tutorial-notif true)
+      (when-let [^INode bg-n (ui/node r :tut-bg)]
+        (.setX bg-n (double (:x bg)))
+        (.setY bg-n (double (:y bg)))
+        (.setW bg-n (double (:w bg)))
+        (.setH bg-n (double (:h bg)))
+        (ui/set-node-prop! r bg-n :src (:src bg))
+        (.setDSlot bg-n 0 (double (:alpha bg))))
+      (when-let [^INode icon-n (ui/node r :tut-icon)]
+        (.setX icon-n (double (:x icon)))
+        (.setY icon-n (double (:y icon)))
+        (.setW icon-n (double (:w icon)))
+        (.setH icon-n (double (:h icon)))
+        (ui/set-node-prop! r icon-n :src (:src icon))
+        (.setDSlot icon-n 0 (double (:alpha icon))))
+      (when-let [^INode t (ui/node r :tut-title)]
+        (.setX t (double (:x title)))
+        (.setY t (double (:y title)))
+        (ui/set-node-prop! r t :text (str (:text title)))
+        (ui/set-node-prop! r t :color (rgba-map->argb (:color title))))
+      (when-let [^INode c (ui/node r :tut-content)]
+        (.setX c (double (:x content)))
+        (.setY c (double (:y content)))
+        (ui/set-node-prop! r c :text (str (:text content)))
+        (ui/set-node-prop! r c :color (rgba-map->argb (:color content)))))
+    (set-visible! r :tutorial-notif false)))
+
+(defn- update-debug-lines! [r snapshot]
+  (let [lines (:debug-lines snapshot)
+        count* (rt/user-signal r :last-debug-line-count)]
+    (when (not= @count* (count lines))
+      (reset! count* (count lines))
+      (ui/list-set! r :debug-lines lines
+                    (fn [rt item line]
+                      (let [^INode n (ui/item-node item :line)]
+                        (.setX n (double (:x line)))
+                        (.setY n (double (:y line)))
+                        (ui/set-node-prop! r n :text (str (:text line)))
+                        (ui/set-node-prop! r n :color (long (:color line)))))))
+    (when-let [^INode list-node (ui/node r :debug-lines)]
+      (let [^objects cs (.getChildrenArr list-node)
+            n (.getChildCount list-node)]
+        (dotimes [i n]
+          (when-let [line (nth lines i nil)]
+            (when-let [^INode item (aget cs i)]
+              (let [^INode txt (ui/item-node item :line)]
+                (.setX txt (double (:x line)))
+                (.setY txt (double (:y line)))
+                (ui/set-node-prop! r txt :text (str (:text line)))
+                (ui/set-node-prop! r txt :color (long (:color line)))))))))
+    (set-visible! r :debug-lines (seq lines))))
+
+(defn- update-overlay-app! [r snapshot]
+  (if-let [app-ui (:overlay-app-ui snapshot)]
+    (let [{:keys [panel title subtitle]} app-ui]
+      (set-visible! r :overlay-app-layer true)
+      (set-box-at! r :overlay-app-panel (:x panel) (:y panel) (:w panel) (:h panel) (:color panel))
+      (when-let [^INode t (ui/node r :overlay-app-title)]
+        (.setX t (double (:x title)))
+        (.setY t (double (:y title)))
+        (ui/set-node-prop! r t :text (str (:text title)))
+        (ui/set-node-prop! r t :color (long (:color title))))
+      (if subtitle
+        (do
+          (set-visible! r :overlay-app-subtitle true)
+          (when-let [^INode s (ui/node r :overlay-app-subtitle)]
+            (.setX s (double (:x subtitle)))
+            (.setY s (double (:y subtitle)))
+            (ui/set-node-prop! r s :text (str (:text subtitle)))
+            (ui/set-node-prop! r s :color (long (:color subtitle)))))
+        (set-visible! r :overlay-app-subtitle false))
       (set-visible! r :cp-bar false)
       (set-visible! r :overload-bar false)
       (set-visible! r :skill-slots false))
-    (set-visible! r :overlay-app-label false)))
+    (set-visible! r :overlay-app-layer false)))
 
 (defn- apply-jitter! [r interfered?]
   (when-let [^INode root (ui/node r :root)]
@@ -330,4 +581,10 @@
           (update-skill-slots! r snapshot)
           (update-crosshair! r snapshot)
           (update-overload-pulse! r snapshot)))
+      (update-vm-waves! r snapshot)
+      (update-charging-layer! r snapshot sw sh)
+      (update-coin-qte-layer! r snapshot)
+      (update-toasts! r snapshot)
+      (update-tutorial-notif! r snapshot)
+      (update-debug-lines! r snapshot)
       (apply-jitter! r (:interfered? snapshot)))))

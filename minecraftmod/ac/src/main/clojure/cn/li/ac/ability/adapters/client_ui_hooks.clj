@@ -14,6 +14,7 @@
             [cn.li.ac.ability.client.hand-effects :as hand-effects]
             [cn.li.ac.ability.client.keybinds :as client-keybinds]
             [cn.li.ac.ability.client.managed-screens :as managed-screens]
+            [cn.li.ac.ability.client.reactive-hud :as reactive-hud]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.content.ability.teleporter.location-teleport-screen :as location-teleport-screen]
             [cn.li.ac.ability.client.screens.preset-editor :as preset-editor-screen]
@@ -100,10 +101,6 @@
 (defn- update-client-ui-runtime!
   [f & args]
   (apply swap! (client-ui-runtime-state-atom) f args))
-
-(defn- vm-wave-circles-snapshot
-  []
-  (:vm-wave-circles (client-ui-runtime-state-snapshot)))
 
 (defn- slot-context-ids-snapshot
   []
@@ -309,8 +306,6 @@
     (update-client-ui-runtime!
       (fn [runtime-state]
         (-> runtime-state
-            (update :vm-wave-circles dissoc owner-key)
-            (update :vm-wave-last-spawn-ms dissoc owner-key)
             (update :slot-context-ids
                     (fn [m]
                       (into {}
@@ -326,7 +321,8 @@
             (update :charge-coin-state dissoc owner-key)
             (update :overlay-skill-shape-cache dissoc owner-key)
             (update :overlay-context-cache dissoc owner-key))))
-  nil))
+    (reactive-hud/clear-vm-wave-for-owner! (read-model/owner-key owner nil))
+    nil))
 
 (defn- clear-client-player-state!
   [owner]
@@ -385,13 +381,7 @@
   ([owner circles]
    (seed-vm-wave-state-for-test! owner circles 0))
   ([owner circles last-spawn-ms]
-   (let [owner-key (client-ui-owner-key owner)]
-     (update-client-ui-runtime!
-       (fn [runtime-state]
-         (-> runtime-state
-             (assoc-in [:vm-wave-circles owner-key] (vec circles))
-             (assoc-in [:vm-wave-last-spawn-ms owner-key] (long last-spawn-ms)))))
-     nil)))
+   (reactive-hud/seed-vm-wave-state-for-test! owner circles last-spawn-ms)))
 
 (def ^:private toggle-primary-state-input-id :content/toggle-primary-state)
 (def ^:private cycle-selection-input-id :content/cycle-selection)
@@ -791,73 +781,8 @@
     {:reflection-active? false :deviation-active? false :reflection-intensity 0.0}
     (ctx/get-all-contexts)))
 
-(defn- ease-in-out [t]
-  (if (< t 0.5)
-    (* 2.0 t t)
-    (- 1.0 (* 2.0 (- 1.0 t) (- 1.0 t)))))
-
-(defn- spawn-vm-wave-circle [screen-width screen-height now-ms]
-  (let [cx (/ (double screen-width) 2.0)
-        cy (/ (double screen-height) 2.0)
-        offset-r (+ 8.0 (* (rand) 42.0))
-        angle (* (rand) 2.0 Math/PI)
-        life-ms (+ 520 (rand-int 260))
-        start-size (+ 8.0 (* (rand) 6.0))
-        end-size (+ 36.0 (* (rand) 32.0))]
-    {:x (+ cx (* offset-r (Math/cos angle)))
-     :y (+ cy (* offset-r (Math/sin angle)))
-     :born-ms now-ms
-     :life-ms life-ms
-     :start-size start-size
-     :end-size end-size
-     :seed (rand)}))
-
-(defn- update-vm-wave-circles! [player-uuid active? screen-width screen-height now-ms]
-  (let [owner-key (client-ui-owner-key player-uuid)]
-    (update-client-ui-runtime!
-      (fn [runtime-state]
-        (let [last-spawn-ms (long (get-in runtime-state [:vm-wave-last-spawn-ms owner-key] 0))
-              needs-spawn? (and active? (>= (- now-ms last-spawn-ms) 90))
-              circles (get-in runtime-state [:vm-wave-circles owner-key] [])
-              alive (->> circles
-                         (filter (fn [{:keys [born-ms life-ms]}]
-                                   (< (- now-ms (long born-ms)) (long life-ms))))
-                         vec)
-              spawned (if needs-spawn?
-                        (conj alive (spawn-vm-wave-circle screen-width screen-height now-ms))
-                        alive)
-              next-circles (if active? spawned (if (seq spawned) spawned []))
-              runtime-state (if needs-spawn?
-                              (assoc-in runtime-state [:vm-wave-last-spawn-ms owner-key] now-ms)
-                              runtime-state)]
-          (if (seq next-circles)
-            (assoc-in runtime-state [:vm-wave-circles owner-key] next-circles)
-            (update runtime-state :vm-wave-circles dissoc owner-key)))))))
-
 (defn- vm-wave-elements [player-uuid now-ms tint]
-  "Build VM wave circle overlay elements with optional color tint.
-   tint: [r g b] vector — blue for VecReflection, green for VecDeviation."
-  (->> (get (vm-wave-circles-snapshot) (client-ui-owner-key player-uuid) [])
-       (map (fn [{:keys [x y born-ms life-ms start-size end-size seed]}]
-              (let [elapsed (double (max 0 (- now-ms (long born-ms))))
-                    life (double (max 1 life-ms))
-                    t (min 1.0 (/ elapsed life))
-                    s (+ start-size (* (- end-size start-size) t))
-                    fade-in (min 1.0 (/ t 0.2))
-                    fade-out (if (> t 0.6) (/ (- 1.0 t) 0.4) 1.0)
-                    pulse (+ 0.85 (* 0.15 (Math/sin (+ (* t 12.0) (* seed Math/PI)))))
-                    alpha (* 0.72 (ease-in-out t) fade-in fade-out pulse)
-                    hs (/ s 2.0)]
-                {:kind :blit-texture
-                 :texture "my_mod:textures/effects/glow_circle.png"
-                 :x (int (- x hs))
-                 :y (int (- y hs))
-                 :w (int s)
-                 :h (int s)
-                 :alpha (double (max 0.0 (min 1.0 alpha)))
-                 :tint tint})))
-       (filter #(pos? (:alpha %)))
-       vec))
+  (reactive-hud/build-vm-wave-overlay-elements player-uuid now-ms tint))
 
 (defn- build-hud-model-from-state [player-state activated-override]
   (when player-state
@@ -1197,8 +1122,8 @@
                 now-ms (client-bridge/game-time-ms)
                 [screen-w screen-h] (client-bridge/get-window-size)
                 {:keys [reflection-active? deviation-active?]} (scan-vm-contexts player-uuid)]
-            (update-vm-wave-circles! player-uuid (or reflection-active? deviation-active?)
-                                     (int screen-w) (int screen-h) now-ms)))))
+            (reactive-hud/tick-vm-wave! player-uuid (or reflection-active? deviation-active?)
+                                        (int screen-w) (int screen-h) now-ms)))))
     (content-actions/register-client-tick-hook!
       (fn tick-cleanup-overlay []
         (toast/cleanup-expired!)

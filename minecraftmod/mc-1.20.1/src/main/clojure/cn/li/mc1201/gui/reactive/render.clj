@@ -10,6 +10,7 @@
            [net.minecraft.client Minecraft]
            [net.minecraft.resources ResourceLocation]
            [com.mojang.blaze3d.vertex PoseStack]
+           [com.mojang.blaze3d.systems RenderSystem]
            [org.joml Quaternionf]))
 
 ;; Slot indices matching node.clj kind definitions
@@ -95,14 +96,28 @@
     (when (string? src)
       (.setOSlot node SLOT-IMG-BAKED-RL (resolve-rl src)))))
 
+(defn- image-tint-rgb [^INode node]
+  (let [raw (.getOSlot node 1)]
+    (if (vector? raw)
+      (let [[r g b] raw]
+        [(float (/ (double (or r 255.0)) 255.0))
+         (float (/ (double (or g 255.0)) 255.0))
+         (float (/ (double (or b 255.0)) 255.0))])
+      [1.0 1.0 1.0])))
+
 (defn render-image! [^GuiGraphics gg ^INode node]
   (let [^ResourceLocation rl (.getOSlot node SLOT-IMG-BAKED-RL)]
     (when rl
       (let [x  (node-abs-x node)  y  (node-abs-y node)
             w  (scaled-w node)    h  (scaled-h node)
             ix (unchecked-int x)  iy (unchecked-int y)
-            iw (unchecked-int w)  ih (unchecked-int h)]
-        (.blit gg rl ix iy iw ih 0.0 0.0 iw ih iw ih)))))
+            iw (unchecked-int w)  ih (unchecked-int h)
+            alpha (float (max 0.0 (min 1.0 (.getDSlot node 0))))
+            [tr tg tb] (image-tint-rgb node)]
+        (when (pos? alpha)
+          (RenderSystem/setShaderColor tr tg tb alpha)
+          (.blit gg rl ix iy iw ih 0.0 0.0 iw ih iw ih)
+          (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0))))))
 
 ;; ============================================================================
 ;; :text (MSDF font)

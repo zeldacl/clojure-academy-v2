@@ -89,6 +89,41 @@
 ;; Overlay element builder
 ;; ============================================================================
 
+(defn build-toast-layouts
+  "Reactive-friendly toast layout data (no :kind overlay elements)."
+  [screen-width screen-height now-ms]
+  (let [now (long (or now-ms (now-ms)))
+        active (renderable-toasts now)]
+    (if (seq active)
+      (let [box-h 32
+            pad-x 16
+            gap 4
+            messages (mapv #(i18n/translate (:message-key %)) active)
+            max-text-w (long (apply max 0 (map #(client-bridge/font-width %) messages)))
+            box-w (+ max-text-w (* 2 pad-x))
+            x (int (- (/ screen-width 2) (/ box-w 2)))]
+        (mapv
+          (fn [[toast idx]]
+            (let [a (alpha toast now)
+                  msg (nth messages idx)
+                  y (- (int (- screen-height (* screen-height 0.35)))
+                       (* idx (+ box-h gap)))
+                  bg-alpha (int (* 119 a))
+                  glow-alpha (int (* 170 a))
+                  text-alpha (int (* 255 a))
+                  text-w (long (client-bridge/font-width msg))
+                  text-x (+ x (quot (- box-w text-w) 2))]
+              {:x x :y y :w box-w :h box-h
+               :bg {:r 39 :g 39 :b 39 :a bg-alpha}
+               :borders [{:x (dec x) :y (dec y) :w (+ box-w 2) :h 1 :a glow-alpha}
+                         {:x (dec x) :y (+ y box-h) :w (+ box-w 2) :h 1 :a glow-alpha}
+                         {:x (dec x) :y y :w 1 :h box-h :a glow-alpha}
+                         {:x (+ x box-w) :y y :w 1 :h box-h :a glow-alpha}]
+               :text {:x text-x :y (+ y 9) :text msg
+                      :color {:r 255 :g 255 :b 255 :a text-alpha}}}))
+          (map vector active (range (count active)))))
+      [])))
+
 (defn build-toast-elements
   "Return overlay elements for the currently active toast.
   Called each frame from the overlay plan builder.
@@ -101,42 +136,16 @@
   - glow border: 0xaaffffff (white, ~67% alpha)"
   [screen-width screen-height now-ms]
   (let [now (long (or now-ms (now-ms)))
-        active (renderable-toasts now)]
-    (if (seq active)
-      (let [box-h 32
-            pad-x 16  ;; horizontal text padding inside box
-            gap 4     ;; spacing between stacked toasts
-            ;; Compute max text width across all active toasts for uniform box sizing
-            messages (mapv #(i18n/translate (:message-key %)) active)
-            max-text-w (long (apply max 0 (map #(client-bridge/font-width %) messages)))
-            box-w (+ max-text-w (* 2 pad-x))  ;; dynamic width: text + padding
-            x (int (- (/ screen-width 2) (/ box-w 2)))]
-        (persistent!
-          (let [out (transient [])]
-            (doseq [[toast idx] (map vector active (range (count active)))]
-              (let [a (alpha toast now)
-                    msg (nth messages idx)
-                    y (- (int (- screen-height (* screen-height 0.35)))
-                         (* idx (+ box-h gap)))
-                    bg-alpha (int (* 119 a))
-                    glow-alpha (int (* 170 a))
-                    text-alpha (int (* 255 a))
-                    text-w (long (client-bridge/font-width msg))
-                    text-x (+ x (quot (- box-w text-w) 2))]
-                (conj! out {:kind :fill :x x :y y :w box-w :h box-h
-                            :color {:r 39 :g 39 :b 39 :a bg-alpha}})
-                (conj! out {:kind :fill :x (dec x) :y (dec y) :w (+ box-w 2) :h 1
-                            :color {:r 255 :g 255 :b 255 :a glow-alpha}})
-                (conj! out {:kind :fill :x (dec x) :y (+ y box-h) :w (+ box-w 2) :h 1
-                            :color {:r 255 :g 255 :b 255 :a glow-alpha}})
-                (conj! out {:kind :fill :x (dec x) :y y :w 1 :h box-h
-                            :color {:r 255 :g 255 :b 255 :a glow-alpha}})
-                (conj! out {:kind :fill :x (+ x box-w) :y y :w 1 :h box-h
-                            :color {:r 255 :g 255 :b 255 :a glow-alpha}})
-                (conj! out {:kind :text :x text-x :y (+ y 9) :text msg
-                            :color {:r 255 :g 255 :b 255 :a text-alpha}})))
-            out)))
-      [])))
+        layouts (build-toast-layouts screen-width screen-height now)]
+    (persistent!
+      (let [out (transient [])]
+        (doseq [{:keys [x y w h bg borders text]} layouts]
+          (conj! out {:kind :fill :x x :y y :w w :h h :color bg})
+          (doseq [{:keys [x y w h a]} borders]
+            (conj! out {:kind :fill :x x :y y :w w :h h
+                        :color {:r 255 :g 255 :b 255 :a a}}))
+          (conj! out (assoc text :kind :text)))
+        out))))
 
 
 ;; ============================================================================

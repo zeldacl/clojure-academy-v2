@@ -255,6 +255,15 @@
       (.setDSlot node 0 v)
       (.setFlag node FLAG-RENDER-DIRTY))))
 
+(defn write-tint-rgb! [^INode node source]
+  (let [rgb (cond
+              (vector? source) (mapv #(double %) source)
+              (and (vector? source) (= 3 (count source))) source
+              :else [255.0 255.0 255.0])]
+    (when-not (= rgb (.getOSlot node 1))
+      (.setOSlot node 1 rgb)
+      (.setFlag node FLAG-RENDER-DIRTY))))
+
 (defn write-text! [^INode node source]
   (let [v (.sGet ^ISigO source)]
     (when-not (= v (.getOSlot node 0))
@@ -363,9 +372,9 @@
 
    :image
    {:dslots {:alpha 0 :u 1 :v 2 :tex-w 3 :tex-h 4}
-    :oslots {:src 0}
+    :oslots {:src 0 :tint 1}
     :oslots-backend-base 2
-    :prop-writers {:src write-src! :alpha write-alpha-d!}
+    :prop-writers {:src write-src! :alpha write-alpha-d! :tint write-tint-rgb!}
     :hit? true}
 
    :text

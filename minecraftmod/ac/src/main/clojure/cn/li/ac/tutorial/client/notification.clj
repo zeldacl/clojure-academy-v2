@@ -115,6 +115,51 @@
 ;; Overlay element builder
 ;; ============================================================================
 
+(defn build-notification-layout
+  "Reactive-friendly tutorial notification layout (pure read)."
+  [_screen-width _screen-height now-ms]
+  (let [now-sec (/ (double now-ms) 1000.0)
+        active (filterv #(and (:start-sec %)
+                              (<= (- now-sec (:start-sec %)) total-keep-time))
+                        @(notifications-atom))]
+    (when-let [notif (last active)]
+      (let [dt (- now-sec (:start-sec notif))
+            bg-alpha (cond
+                       (< dt blend-in-time) (min 1.0 (/ dt 0.3))
+                       (> dt (- total-keep-time blend-out-time))
+                       (max 0.0 (/ (- total-keep-time dt) blend-out-time))
+                       :else 1.0)
+            icon-alpha (cond
+                         (< dt 0.2) 0.0
+                         (< dt blend-in-time) (max 0.0 (min 1.0 (/ (- dt 0.2) 0.3)))
+                         (> dt (- total-keep-time blend-out-time))
+                         (max 0.0 (/ (- total-keep-time dt) blend-out-time))
+                         :else 1.0)
+            text-alpha (cond
+                         (< dt blend-in-time) 0.0
+                         (< dt (+ blend-in-time scan-time))
+                         (sine-ease (/ (- dt blend-in-time) scan-time))
+                         (> dt (- total-keep-time blend-out-time))
+                         (max 0.0 (/ (- total-keep-time dt) blend-out-time))
+                         :else 1.0)
+            icon-progress (if (< dt blend-in-time)
+                            0.0
+                            (if (< dt (+ blend-in-time scan-time))
+                              (sine-ease (/ (- dt blend-in-time) scan-time))
+                              1.0))]
+        {:bg {:src bg-tex :x 0 :y 15
+              :w (* bg-w bg-scale) :h (* bg-h bg-scale) :alpha bg-alpha}
+         :icon {:src icon-tex
+                :x (lerp icon-start-x icon-end-x icon-progress)
+                :y (lerp icon-start-y icon-end-y icon-progress)
+                :w icon-size :h icon-size :alpha icon-alpha}
+         :title {:x title-x :y title-y
+                 :text (i18n/translate "tutorial.my_mod.update")
+                 :color {:r 255 :g 255 :b 255 :a (int (* 255 text-alpha))}}
+         :content {:x content-x :y content-y
+                   :text (:title notif)
+                   :color {:r 255 :g 255 :b 255 :a (int (* 255 text-alpha))}}}))))
+
 (defn build-notification-elements!
   "Return overlay elements for the currently active notification.
   Called each frame from the overlay plan builder (client_ui_hooks.clj).
@@ -122,72 +167,16 @@
   Elements: {:kind :blit-texture ...} for textures, {:kind :text ...} for strings."
   [screen-width screen-height now-ms]
   (let [now-sec (/ (double now-ms) 1000.0)
-        ;; Single atomic swap! — init start-sec for new notifications and
-        ;; remove expired ones. Avoids read-then-reset! race with enqueue.
-        active (let [new-val ((fn [notifs]
-                                 (let [needs-init? (some #(nil? (:start-sec %)) notifs)
-                                       initialized (if needs-init?
-                                                     (mapv (fn [n] (if (:start-sec n) n (assoc n :start-sec now-sec)))
-                                                           notifs)
-                                                     notifs)]
-                                   (filterv #(<= (- now-sec (:start-sec %)) total-keep-time) initialized)))
-                               @(notifications-atom))]
-                 (reset! (notifications-atom) new-val)
-                 new-val)]
-    (if-let [notif (last active)]
-      (let [dt (- now-sec (:start-sec notif))
-            ;; Compute per-element alpha based on animation phase
-            bg-alpha (cond
-                       (< dt blend-in-time)     (min 1.0 (/ dt 0.3))          ;; background fade-in over 0.3s
-                       (> dt (- total-keep-time blend-out-time))
-                       (max 0.0 (/ (- total-keep-time dt) blend-out-time))   ;; fade-out
-                       (< dt (+ blend-in-time scan-time)) 1.0               ;; full during slide
-                       :else 1.0)                                            ;; full during hold
-            icon-alpha (cond
-                         (< dt 0.2)             0.0                           ;; icon delayed start
-                         (< dt blend-in-time)   (max 0.0 (min 1.0 (/ (- dt 0.2) 0.3)))
-                         (> dt (- total-keep-time blend-out-time))
-                         (max 0.0 (/ (- total-keep-time dt) blend-out-time))
-                         :else 1.0)
-            text-alpha (cond
-                         (< dt blend-in-time)   0.0                           ;; text appears during slide
-                         (< dt (+ blend-in-time scan-time))
-                         (let [sp (/ (- dt blend-in-time) scan-time)]
-                           (sine-ease sp))
-                         (> dt (- total-keep-time blend-out-time))
-                         (max 0.0 (/ (- total-keep-time dt) blend-out-time))
-                         :else 1.0)
-            ;; Icon slide position (sine ease matching upstream MathHelper.sin)
-            icon-progress (if (< dt blend-in-time)
-                           0.0
-                           (if (< dt (+ blend-in-time scan-time))
-                             (sine-ease (/ (- dt blend-in-time) scan-time))
-                             1.0))
-            icon-x (lerp icon-start-x icon-end-x icon-progress)
-            icon-y (lerp icon-start-y icon-end-y icon-progress)
-            ;; Scaled background position
-            bg-scaled-w (* bg-w bg-scale)
-            bg-scaled-h (* bg-h bg-scale)
-            ;; Title text
-            title (i18n/translate "tutorial.my_mod.update")
-            ;; Content text
-            content (:title notif)]
-        [{:kind :blit-texture
-          :texture bg-tex
-          :x 0 :y 15
-          :w bg-scaled-w :h bg-scaled-h
-          :alpha bg-alpha}
-         {:kind :blit-texture
-          :texture icon-tex
-          :x icon-x :y icon-y
-          :w icon-size :h icon-size
-          :alpha icon-alpha}
-         {:kind :text
-          :x title-x :y title-y
-          :text title
-          :color {:r 255 :g 255 :b 255 :a (int (* 255 text-alpha))}}
-         {:kind :text
-          :x content-x :y content-y
-          :text content
-          :color {:r 255 :g 255 :b 255 :a (int (* 255 text-alpha))}}])
-      [])))
+        _ (when (seq @(notifications-atom))
+            (swap! (notifications-atom)
+                   (fn [notifs]
+                     (let [needs-init? (some #(nil? (:start-sec %)) notifs)
+                           initialized (if needs-init?
+                                         (mapv #(if (:start-sec %) % (assoc % :start-sec now-sec)) notifs)
+                                         notifs)]
+                       (filterv #(<= (- now-sec (:start-sec %)) total-keep-time) initialized)))))]
+    (when-let [layout (build-notification-layout screen-width screen-height now-ms)]
+      [(-> (:bg layout) (assoc :kind :blit-texture :texture (:src (:bg layout))) (dissoc :src))
+       (-> (:icon layout) (assoc :kind :blit-texture :texture (:src (:icon layout))) (dissoc :src))
+       (assoc (:title layout) :kind :text)
+       (assoc (:content layout) :kind :text)])))

@@ -160,6 +160,25 @@
     []
     @(debug-state-atom))
 
+  (defn build-debug-line-items
+    "Reactive-friendly debug text lines (foreground only)."
+    [player-state]
+    (when player-state
+      (let [state @(debug-state-atom)
+            ability-data (:ability-data player-state)
+            resource-data (:resource-data player-state)
+            lines (case state
+                    :none []
+                    :normal (build-normal-lines ability-data resource-data)
+                    :show-exp (build-show-exp-lines ability-data)
+                    [])]
+        (mapv (fn [[idx [text color]]]
+                {:x base-x
+                 :y (+ base-y (* idx line-height))
+                 :text text
+                 :color (or color foreground-color)})
+              (map-indexed vector lines)))))
+
   (defn build-debug-overlay-elements
     "Returns a vector of overlay :text element maps for the current debug state.
 
