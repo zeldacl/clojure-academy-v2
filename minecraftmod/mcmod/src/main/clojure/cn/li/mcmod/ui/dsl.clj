@@ -74,6 +74,11 @@
   [props]
   (spec-map :line props nil))
 
+(defn crosshair
+  "反射准星。props: :phase :intensity。"
+  [props]
+  (spec-map :crosshair props nil))
+
 (defn draw-ops
   "逃生舱：直接生成 draw-ops 向量。props: :ops-fn（(fn [] ops-vector)）。"
   [props]

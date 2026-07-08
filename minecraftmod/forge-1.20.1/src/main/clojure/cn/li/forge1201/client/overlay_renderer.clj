@@ -27,9 +27,9 @@
 
 (defn on-mode-switch-key-state!
   ([is-down]
-   nil)
-  ([owner is-down]
-   nil))
+   (client-bridge/call-adapter :reactive-overlay-mode-switch! is-down))
+  ([_owner is-down]
+   (client-bridge/call-adapter :reactive-overlay-mode-switch! is-down)))
 
 (defn init! []
   (.addListener (MinecraftForge/EVENT_BUS)

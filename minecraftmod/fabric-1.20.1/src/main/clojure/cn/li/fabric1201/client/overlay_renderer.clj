@@ -21,10 +21,10 @@
   (client-bridge/call-adapter :reactive-overlay-update rt))
 
 (defn on-mode-switch-key-state!
-  ([_is-down]
-   nil)
-  ([_owner _is-down]
-   nil))
+  ([is-down]
+   (client-bridge/call-adapter :reactive-overlay-mode-switch! is-down))
+  ([_owner is-down]
+   (client-bridge/call-adapter :reactive-overlay-mode-switch! is-down)))
 
 (defn init!
   []

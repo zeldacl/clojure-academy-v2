@@ -189,6 +189,14 @@
      :local-player-eye-pos runtime-bridge/local-player-eye-pos
      :local-player-look-end runtime-bridge/local-player-look-end
      :clear-client-activated-overlay runtime-bridge/clear-client-activated-overlay!
+     :client-overlay-activated-override
+     (fn [_owner]
+       (when-let [owner (mc-session/current-local-player-owner)]
+         (overlay-state/get-client-activated owner)))
+     :client-active-overlay-app
+     (fn [_owner]
+       (when-let [owner (mc-session/current-local-player-owner)]
+         (overlay-state/get-active-overlay-app owner)))
      :run-client-effect (fn [effect-key payload]
                           (case effect-key
                             :mcmod/spawn-local-scripted-effect
@@ -199,6 +207,7 @@
 
                             (log/debug "Unhandled client effect key" effect-key)))
 	     :get-client-player #(.player (Minecraft/getInstance))
+	     :local-player-uuid mc-session/local-player-uuid
 	     :set-active-overlay-app (fn [app-kw player-uuid]
 	                                (overlay-state/set-active-overlay-app!
 	                                  {:client-session-id "" :player-uuid (str player-uuid)}

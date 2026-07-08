@@ -281,8 +281,8 @@
 
 (defn write-hint-percent-d! [^INode node source]
   (let [v (.dGet ^ISigD source)]
-    (when-not (== v (.getDSlot node 1))
-      (.setDSlot node 1 v)
+    (when-not (== v (.getDSlot node 2))
+      (.setDSlot node 2 v)
       (.setFlag node FLAG-RENDER-DIRTY))))
 
 (defn write-color-stops! [^INode node source]
@@ -333,6 +333,12 @@
       (.setOSlot node 0 v)
       (.setFlag node FLAG-RENDER-DIRTY))))
 
+(defn write-scroll-offset-d! [^INode node source]
+  (let [v (.dGet ^ISigD source)]
+    (when-not (== v (.getDSlot node 3))
+      (.setDSlot node 3 v)
+      (.setFlag node FLAG-RENDER-DIRTY))))
+
 ;; ============================================================================
 ;; Kind definition table (S0 static def)
 ;; ============================================================================
@@ -378,7 +384,15 @@
                    :color-stops write-color-stops!
                    :bg-src write-bg-src!
                    :fg-src write-fg-src!
-                   :icon-src write-icon-src!}
+                   :icon-src write-icon-src!
+                   :scroll-offset write-scroll-offset-d!}
+    :hit? false}
+
+   :crosshair
+   {:dslots {:phase 0 :intensity 1}
+    :oslots {}
+    :oslots-backend-base 0
+    :prop-writers {}
     :hit? false}
 
    :shader-quad

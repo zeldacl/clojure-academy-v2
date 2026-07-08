@@ -130,23 +130,48 @@
 ;; ============================================================================
 
 (defn bake-progress! [^INode node]
-  (let [stops (.getOSlot node 0)]
-    (when (seq stops)
-      ;; Bake color-stops into int[] for zero-alloc gradient fill
-      (.setOSlot node SLOT-PROG-BANDS nil))))
+  (let [bg (.getOSlot node 1)
+        fg (.getOSlot node 2)]
+    (when (string? bg) (.setOSlot node 8 (resolve-rl bg)))
+    (when (string? fg) (.setOSlot node 9 (resolve-rl fg)))))
+
+(defn- icon-cutout [^INode node]
+  (get (.getStaticProps node) :icon-cutout))
 
 (defn render-progress! [^GuiGraphics gg ^INode node]
   (let [x       (node-abs-x node)   y       (node-abs-y node)
         w       (scaled-w node)     h       (scaled-h node)
-        percent (.getDSlot node SLOT-PROG-PROGRESS)
-        filled-w (unchecked-int (* percent w))
+        percent (double (.getDSlot node SLOT-PROG-PROGRESS))
+        hint    (.getDSlot node 2)
+        scroll  (.getDSlot node 3)
+        filled-w (int (* percent w))
         ix (unchecked-int x) iy (unchecked-int y)
-        iw (unchecked-int w) ih (unchecked-int (+ y h))]
-    ;; Background
-    (.fill gg ix iy (unchecked-int (+ x w)) ih (unchecked-int 0x80333333))
-    ;; Filled portion
-    (when (pos? filled-w)
-      (.fill gg ix iy (unchecked-int (+ x filled-w)) ih (unchecked-int 0xFF4488CC)))))
+        iw (unchecked-int w) ih (unchecked-int (+ y h))
+        ^ResourceLocation bg-rl (.getOSlot node 8)
+        ^ResourceLocation fg-rl (.getOSlot node 9)
+        cutout (icon-cutout node)
+        cutout-start (when cutout (+ ix (int (:x-offset cutout 0))))
+        cutout-width (when cutout (int (:w cutout 0)))
+        cutout-end (when cutout (+ cutout-start cutout-width))]
+    (when bg-rl
+      (.blit gg bg-rl ix iy 0 0 iw ih iw ih))
+    (when (and (pos? hint) (< hint percent))
+      (let [hint-x (int (+ x (* hint w)))]
+        (.fill gg hint-x iy (+ hint-x 1) ih (unchecked-int 0x80FF4444))))
+    (letfn [(draw-segment! [seg-start seg-end]
+              (when (< seg-start seg-end)
+                (when fg-rl
+                  (let [uoff (float (* scroll w))]
+                    (.enableScissor gg seg-start iy seg-end ih)
+                    (.blit gg fg-rl ix iy uoff 0.0 iw ih (float iw) (float ih))
+                    (.disableScissor gg)))))]
+      (when (and fg-rl (pos? filled-w))
+        (let [bar-start ix
+              bar-end (int (+ x filled-w))]
+          (if (and cutout-start cutout-width (pos? cutout-width))
+            (do (draw-segment! bar-start (min bar-end cutout-start))
+                (draw-segment! (max bar-start cutout-end) bar-end))
+            (draw-segment! bar-start bar-end)))))))
 
 ;; ============================================================================
 ;; :shader-quad / :shader-ring / :shader-progress
@@ -196,7 +221,34 @@
 (defn bake-list! [^INode _node] nil)
 
 ;; ============================================================================
-;; :draw-ops — escape hatch
+;; :crosshair
+;; ============================================================================
+
+(defn render-crosshair! [^GuiGraphics gg ^INode node]
+  (let [cx (unchecked-int (node-abs-x node))
+        cy (unchecked-int (node-abs-y node))
+        p (double (.getDSlot node 0))
+        amp (double (.getDSlot node 1))
+        pulse (+ 1.0 (* 0.5 (Math/sin (* 2.0 Math/PI p))))
+        radius (+ 11.0 (* 4.0 pulse amp))
+        gap (+ 6 (int (* 2.0 pulse amp)))
+        len (+ 8 (int (* 2.0 pulse amp)))
+        line-color 0xB4E8F8FF
+        ring-color 0x88DDF2FF]
+    (.fill gg (- cx len) (dec cy) (- cx gap) (inc cy) line-color)
+    (.fill gg (+ cx gap) (dec cy) (+ cx len) (inc cy) line-color)
+    (.fill gg (dec cx) (- cy len) (inc cx) (- cy gap) line-color)
+    (.fill gg (dec cx) (+ cy gap) (inc cx) (+ cy len) line-color)
+    (doseq [idx (range 24)]
+      (let [a (/ (* 2.0 Math/PI idx) 24.0)
+            rx (+ cx (int (Math/round (* radius (Math/cos a)))))
+            ry (+ cy (int (Math/round (* radius (Math/sin a)))))]
+        (.fill gg (dec rx) (dec ry) (inc rx) (inc ry) ring-color)))))
+
+(defn bake-crosshair! [^INode _node] nil)
+
+;; ============================================================================
+;; :draw-ops — escape hatch (CGUI compat; reactive overlay does not use)
 ;; ============================================================================
 
 (defn render-draw-ops! [^GuiGraphics _gg ^INode _node] nil)
@@ -218,6 +270,7 @@
    :line            {:render! render-line!            :bake! bake-line!}
    :group           {:render! render-group!           :bake! bake-group!}
    :list            {:render! render-list!            :bake! bake-list!}
+   :crosshair       {:render! render-crosshair!       :bake! bake-crosshair!}
    :draw-ops        {:render! render-draw-ops!        :bake! bake-draw-ops!}})
 
 ;; ============================================================================
