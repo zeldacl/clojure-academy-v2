@@ -5,7 +5,8 @@
             [cn.li.ac.gui.info-area-reactive :as info-area]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.acapi.wireless IWirelessMatrix]
-           [cn.li.mcmod.uipojo.runtime UiRt]))
+           [cn.li.mcmod.uipojo.runtime UiRt]
+           [cn.li.mcmod.ui.node INode]))
 
 (defn rebuild!
   [^UiRt rt container player data]
@@ -43,8 +44,8 @@
                           :editable? true :color-change? false)
               pass-row (info-area/add-property! ctx "password" ""
                           :editable? true :masked? true :color-change? false)
-              ssid-n (:value-node ssid-row)
-              pass-n (:value-node pass-row)]
+              ^INode ssid-n (:value-node ssid-row)
+              ^INode pass-n (:value-node pass-row)]
           (info-area/add-button! ctx "INIT"
             (fn []
               (let [ssid (str (or (.getOSlot ssid-n 0) ""))

@@ -14,7 +14,7 @@
 ;; Main GUI (fan slot)
 ;; ============================================================================
 (def ^:private main-schema-id :wind-gen-main) (def ^:private main-sync (gui-sync/schema-sync-fns wind-schema/wind-gen-main-schema))
-(defn- fan-item-stack? [s] (when (and s (not (try (pitem/item-is-empty? s) (catch Exception _ true)))) (let [rn (try (some-> s pitem/item-get-item pitem/item-get-registry-name str) (catch Exception _ nil))] (or (= rn "windgen_fan") (= rn "my_mod:windgen_fan") (and rn (.endsWith rn ":windgen_fan"))))))
+(defn- fan-item-stack? [s] (when (and s (not (try (pitem/item-is-empty? s) (catch Exception _ true)))) (let [^String rn (try (some-> s pitem/item-get-item pitem/item-get-registry-name str) (catch Exception _ nil))] (or (= rn "windgen_fan") (= rn "my_mod:windgen_fan") (and rn (.endsWith rn ":windgen_fan"))))))
 (defn- create-main-container [tile player] (gui-sync/create-schema-container wind-schema/wind-gen-main-schema tile player :wind-gen-main {:gui-id (gui-manifest/gui-id :wind-gen-main)}))
 (defn- main-slot-count [_] (slot-schema/tile-slot-count main-schema-id))
 (defn- main-get-slot [c i] (common/get-slot-item-be c i))

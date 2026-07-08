@@ -76,7 +76,7 @@
     (doseq [[idx link] (map-indexed vector (:links (:donation about-data)))]
       (events/on! r (keyword (str "link-" idx)) :left-click
         (fn [_rt _n _e]
-          (try (java.awt.Desktop/getDesktop) (.browse (java.net.URI. (:url link)))
+          (try (.browse (java.awt.Desktop/getDesktop) (java.net.URI. (:url link)))
                (catch Exception _ (log/warn "Cannot open URL" (:url link)))))))
 
     ;; Scroll
