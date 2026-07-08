@@ -3,7 +3,7 @@
   (:require [cn.li.ac.content.block-loader-core :as block-loader]
             [cn.li.mcmod.util.log :as log]
             [cn.li.ac.integration.block.energy-converter.init :as ec-init]
-            [cn.li.ac.integration.block.energy-converter.gui :as ec-gui]
+            [cn.li.ac.integration.block.energy-converter.gui-reactive :as ec-gui-reactive]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]))
 
 (def ^:private integration-block-spec
@@ -14,7 +14,7 @@
                   (fn []
                     (log/info "Initializing integration block definitions...")
                     (ec-init/init-converters!))
-                  ec-gui/register-converter-guis!]
+                  ec-gui-reactive/register-converter-guis-reactive!]
    :post-init-entries [(fn []
                          (log/info "Integration block definitions initialized"))
                        (fn []

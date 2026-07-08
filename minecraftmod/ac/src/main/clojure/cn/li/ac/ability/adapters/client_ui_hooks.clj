@@ -17,6 +17,7 @@
             [cn.li.ac.ability.client.reactive-hud :as reactive-hud]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.content.ability.teleporter.location-teleport-screen :as location-teleport-screen]
+            [cn.li.ac.content.ability.teleporter.location-teleport-reactive :as location-teleport-reactive]
             [cn.li.ac.ability.client.screens.preset-editor :as preset-editor-screen]
             [cn.li.ac.ability.client.screens.preset-editor-reactive :as preset-editor-reactive]
             [cn.li.ac.ability.client.screens.skill-tree :as skill-tree-screen]
@@ -1068,7 +1069,7 @@
     ;; Register CGUI screen widget factories (replaces managed-screen dispatch)
     (skill-tree-screen/install-widget-factory!)
     (preset-editor-screen/install-widget-factory!)
-    (location-teleport-screen/init!)
+    (location-teleport-reactive/init!)
     (net-client/register-push-handler! catalog/MSG-SYNC-RUNTIME
       (fn [{:keys [uuid ability-data]}]
         (when (and uuid ability-data)

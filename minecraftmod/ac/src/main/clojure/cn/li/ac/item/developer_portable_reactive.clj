@@ -1,19 +1,29 @@
 (ns cn.li.ac.item.developer-portable-reactive
   "Complete reactive replacement for developer_portable.clj.
-   Signal-driven: portable container + reactive developer screen + energy sync."
+   Reuses cn.li.ac.block.developer.panel-reactive's full classic layout
+   (left/right panel, console, skill-tree area, overlays) via its shared
+   build-runtime! entry point — the same one the block developer screen
+   uses — since portable dev needs the identical UI, just standalone-hosted
+   with no wireless link and energy synced from the held item each frame
+   instead of a tile-entity's server-synced schema."
   (:require [cn.li.ac.ability.client.api :as api]
             [cn.li.ac.ability.client.read-model :as read-model]
             [cn.li.ac.ability.util.uuid :as uuid]
+            [cn.li.ac.block.developer.panel-reactive :as panel-reactive]
             [cn.li.ac.energy.operations :as energy]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.client.platform-bridge :as bridge]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.ui.runtime :as rt]
-            [cn.li.mcmod.ui.signal :as sig]))
+            [cn.li.mcmod.ui.node :as node]
+            [cn.li.mcmod.ui.signal :as sig])
+  (:import [cn.li.mcmod.uipojo.runtime UiRt]
+           [cn.li.mcmod.ui.node INode]
+           [cn.li.mcmod.uipojo.signal ISigO]))
 
 ;; ============================================================================
-;; Portable container (preserved from old developer_portable.clj — pure logic)
+;; Portable container (reused verbatim from old developer_portable.clj)
 ;; ============================================================================
 
 (def ^:private portable-max-energy 10000.0)
@@ -28,9 +38,9 @@
       (double (energy/get-item-energy stack)) 0.0)))
 
 (defn- make-portable-on-dev-start [owner]
-  (fn [action _extra callback]
+  (fn [action extra callback]
     (case action
-      :learn-skill (api/req-learn-skill! owner (-> _extra :skill-id keyword) callback)
+      :learn-skill (api/req-learn-skill! owner (-> extra :skill-id keyword) callback)
       :level-up    (api/req-level-up! owner callback)
       (when callback (callback {:success false :reason "not-available-on-portable"})))))
 
@@ -43,17 +53,30 @@
      :is-developing         (atom false)
      :development-progress  (atom 0.0)
      :development-complete? (atom false)
+     :structure-valid       (atom true)
      :user-uuid             (atom player-uuid-str)
      :user-name             (atom player-name-str)
      :player                player
      :tile-entity           nil
      :container-type        :portable-developer
-     :structure-valid       (atom true)
      :metadata              (atom {})
      :on-dev-start          (make-portable-on-dev-start owner)}))
 
 ;; ============================================================================
-;; Reactive developer screen
+;; set-tick! — force a per-frame side-effecting computed-o to actually run
+;; (see developer panel-reactive.clj for the fuller writeup).
+;; ============================================================================
+
+(defn- pull-o! [_node source] (.sGet ^ISigO source) nil)
+
+(defn- set-tick! [^UiRt rt key computed-sig]
+  (let [^INode anchor (rt/node-by-id rt :root)
+        b (sig/bind! computed-sig anchor pull-o! (rt/get-dirty-bindings-q rt))]
+    (rt/register-binding! rt (.getIdx anchor) b)
+    (rt/put-user-signal! rt key b)))
+
+;; ============================================================================
+;; Entry point
 ;; ============================================================================
 
 (defn create-runtime [player]
@@ -62,27 +85,17 @@
                 {:client-session-id session-id :player-uuid (uuid/player-uuid player)}
                 :skill-tree)
         container (make-portable-container player owner)
-        r (rt/create-runtime)
-        clock (rt/clock-ms-sig r)
-        safe-val #(some-> % deref)]
-    ;; Ensure player state for skill tree
-    (let [owner-key (read-model/owner-key owner :skill-tree)]
-      (read-model/ensure-player-state! owner-key))
-    ;; Energy signal (sync from held item each frame)
-    (rt/put-user-signal! r :energy
-      (sig/computed-d [clock] (fn [_] (current-energy-from-held-item player))))
-    ;; Tier signal
-    (rt/put-user-signal! r :tier-str
-      (sig/computed-o [clock] (fn [_] (str "Tier: " (name (or @(:tier container) :portable))))))
-    ;; Dev progress signal
-    (rt/put-user-signal! r :dev-progress
-      (sig/computed-d [clock] (fn [_] (double (or @(:development-progress container) 0.0)))))
-    ;; Dev status signal
-    (rt/put-user-signal! r :dev-status
-      (sig/computed-o [clock] (fn [_] (if @(:is-developing container) "DEVELOPING" "IDLE"))))
-    ;; Store container for external access
-    (rt/put-user-signal! r :container container)
-    {:runtime r :container container :owner owner}))
+        _ (read-model/ensure-player-state! (read-model/owner-key owner :skill-tree))
+        r (panel-reactive/build-runtime! container player)]
+    ;; No wireless link on portable — hide the block-only wireless button
+    (let [^INode wb (rt/node-by-id r :button-wireless) ^INode wt (rt/node-by-id r :text-wireless)]
+      (when wb (.setVisible wb false) (.setFlag wb node/FLAG-LAYOUT-DIRTY))
+      (when wt (.setVisible wt false) (.setFlag wt node/FLAG-LAYOUT-DIRTY)))
+    ;; Energy synced from the held item each frame (instead of tile-entity sync)
+    (set-tick! r :portable-energy-tick
+      (sig/computed-o [(rt/clock-ms-sig r)]
+        (fn [_] (reset! (:energy container) (current-energy-from-held-item player)) nil)))
+    r))
 
-(defn open! [{:keys [runtime]}]
-  (bridge/open-reactive-screen! runtime "Portable Developer"))
+(defn open! [player]
+  (bridge/open-reactive-screen! (create-runtime player) "Portable Developer"))

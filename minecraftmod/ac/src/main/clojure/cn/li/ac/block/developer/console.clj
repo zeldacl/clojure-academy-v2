@@ -29,7 +29,7 @@
 ;; i18n key prefix — matching upstream ac.skill_tree.console.*
 (def ^:private console-i18n-prefix "skill_tree.my_mod.console.")
 
-(defn- loc
+(defn loc
   "Resolve a localized console string by key suffix.
    Replaces literal \\n with actual newlines, matching upstream
    localized() → replace(\"\\\\n\", \"\\n\")."
@@ -189,7 +189,7 @@
       ;; no task
       (assoc state :task-timer 0.0))))
 
-(defn- tick-task-running
+(defn tick-task-running
   "Process task queue: dequeue next task as needed."
   [state dt-sec]
   (if (:current-task state)
@@ -203,7 +203,7 @@
       (assoc state :phase :idle :task-queue [] :task-timer 0.0 :current-task nil))))
 
 ;; Messages — use i18n, matching upstream localized() keys
-(defn- msg [k]
+(defn msg [k]
   (case k
     :dev-begin    (loc :dev_begin)
     :no-developer "No developer device detected."
@@ -216,7 +216,7 @@
 ;; State transitions (pure)
 ;; ============================================================================
 
-(defn- tick-boot
+(defn tick-boot
   "Boot phase: build task queue on first tick, then delegate to task runner.
    Matching upstream SkillTree.scala boot sequence with slow-print animation."
   [state dt-sec]
@@ -227,7 +227,7 @@
           (assoc :task-queue tasks :boot-texts-built? true :phase :task-running)
           (tick-task-running dt-sec)))))
 
-(defn- tick-idle
+(defn tick-idle
   [state dt-sec]
   (let [ct (+ (:cursor-timer state) dt-sec)]
     (if (>= ct 0.5)
@@ -254,7 +254,7 @@
                               ["help" "clear"]))]
       (str "Commands: " (str/join ", " (take 4 (distinct names))))))
 
-  (defn- exec-cmd
+  (defn exec-cmd
     "Execute a pending command via registered handlers.
     Returns [new-state action-kw]."
     [state]

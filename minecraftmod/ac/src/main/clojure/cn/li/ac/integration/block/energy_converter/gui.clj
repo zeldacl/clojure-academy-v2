@@ -39,7 +39,7 @@
 	(gui-sync/schema-sync-fns ec-schema/energy-converter-gui-schema
 		{:after-sync! reset-derived-mode!}))
 
-(defn- create-container
+(defn create-container
 	[tile player]
 	(let [state (or (common/get-tile-state tile) {})
 				block-id (str (platform-be/get-block-id tile))]
@@ -53,19 +53,19 @@
 						 :wireless-mode (atom (block-wireless-mode block-id))
 						 :status (atom (if (output-block? block-id) "OUTPUT" "INPUT"))}})))
 
-(defn- get-slot-count [_container]
+(defn get-slot-count [_container]
 	(slot-schema/tile-slot-count converter-slot-schema-id))
 
-(defn- get-slot-item [_container _slot-index] nil)
-(defn- set-slot-item! [_container _slot-index _item-stack] nil)
-(defn- slot-changed! [_container _slot-index] nil)
-(defn- can-place-item? [_container _slot-index _item-stack] false)
-(defn- still-valid? [_container _player] true)
+(defn get-slot-item [_container _slot-index] nil)
+(defn set-slot-item! [_container _slot-index _item-stack] nil)
+(defn slot-changed! [_container _slot-index] nil)
+(defn can-place-item? [_container _slot-index _item-stack] false)
+(defn still-valid? [_container _player] true)
 
-(def ^:private server-menu-sync! (:server-menu-sync! converter-sync))
+(def server-menu-sync! (:server-menu-sync! converter-sync))
 
-(def ^:private on-close (:on-close converter-sync))
-(defn- handle-button-click! [_container _button-id _player] nil)
+(def on-close (:on-close converter-sync))
+(defn handle-button-click! [_container _button-id _player] nil)
 
 (defn- create-wireless-page
 	[container & [opts]]
@@ -83,7 +83,7 @@
 			 :container container
 			 :minecraft-container minecraft-container})))
 
-(defn- converter-container?
+(defn converter-container?
 	[container]
 	(and (map? container)
 			 (= (:container-type container) converter-gui-type)

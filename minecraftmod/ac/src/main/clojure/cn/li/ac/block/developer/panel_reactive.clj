@@ -1,114 +1,561 @@
 (ns cn.li.ac.block.developer.panel-reactive
-  "Reactive Developer Panel — core screen + info area.
-   Complex modules (skill-tree, console, wireless overlay) are TBD stubs.
-   Replaces ~400 lines of find-widget + set-text! + set-progress! + set-texture!."
-  (:require [cn.li.mcmod.ui.runtime :as rt]
-            [cn.li.mcmod.ui.core :as ui]
-            [cn.li.mcmod.ui.dsl :as dsl]
-            [cn.li.mcmod.ui.signal :as sig]
-            [cn.li.mcmod.ui.anim :as anim]
-            [cn.li.mcmod.ui.events :as events]
-            [cn.li.mcmod.client.platform-bridge :as bridge]
-            [cn.li.ac.config.modid :as modid]
-            [cn.li.ac.gui.block-gui-reactive :as bgui]
+  "Complete reactive replacement for developer/panel.clj + gui.clj's classic
+   page_developer.xml layout. All pure business logic (category/level model,
+   right-panel mode derivation, skill-tree render-data, req-start-development!)
+   is reused verbatim from panel.clj. Only CGUI widget construction/lookup and
+   the cover-overlay mechanics are rewritten natively.
+
+   Layout note: page_developer.xml has no new-format XML equivalent, so the
+   classic 400x187 layout is reconstructed here as absolute-position native
+   nodes (positions hand-derived from the old CGUI align/pivot math applied
+   to the original XML's fixed widget tree — see docs in this file's PR)."
+  (:require [clojure.string :as str]
+            [cn.li.ac.ability.service.runtime-store :as store]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.util.log :as log]
-            [clojure.string :as str]))
+            [cn.li.mcmod.i18n :as i18n]
+            [cn.li.ac.config.modid :as modid]
+            [cn.li.ac.gui.info-area-reactive :as info-area]
+            [cn.li.ac.wireless.gui.tab-reactive :as wireless-tab]
+            [cn.li.mcmod.ui.runtime :as rt]
+            [cn.li.mcmod.ui.core :as ui]
+            [cn.li.mcmod.ui.node :as node]
+            [cn.li.mcmod.ui.signal :as sig]
+            [cn.li.mcmod.ui.anim :as ranim]
+            [cn.li.mcmod.ui.events :as events]
+            [cn.li.mcmod.ui.xml :as ui-xml]
+            [cn.li.ac.ability.registry.category :as acat]
+            [cn.li.ac.ability.registry.skill-query :as skill-query]
+            [cn.li.ac.ability.registry.skill :as skill]
+            [cn.li.ac.ability.domain.developer :as developer]
+            [cn.li.ac.ability.util.balance :as bal]
+            [cn.li.ac.ability.util.uuid :as uuid]
+            [cn.li.ac.ability.rules.learning-rules :as learning-rules]
+            [cn.li.ac.ability.model.ability :as adata]
+            [cn.li.ac.ability.client.screens.skill-tree :as skill-tree]
+            [cn.li.ac.ability.client.screens.skill-tree-reactive :as skill-tree-reactive]
+            [cn.li.ac.ability.client.screens.skill-tree-view :as skill-tree-view]
+            [cn.li.ac.block.developer.console-reactive :as console-reactive]
+            [cn.li.ac.block.developer.panel :as panel]
+            [cn.li.mcmod.gui.container.action-payload :as action-payload]
+            [cn.li.mcmod.gui.container-state :as container-state]
+            [cn.li.mcmod.network.client :as net-client])
+  (:import [cn.li.mcmod.uipojo.runtime UiRt]
+           [cn.li.mcmod.ui.node INode]
+           [cn.li.mcmod.uipojo.signal ISigD]))
 
 ;; ============================================================================
-;; Signal-driven property binders (replace textbox-of + set-text-path!)
+;; Layout constants (absolute positions derived from page_developer.xml's
+;; LEFT/RIGHT/CENTER/TOP align+pivot math, resolved by hand against the fixed
+;; 400x187 canvas — see panel.clj's widget-gui-pos for the original formula)
 ;; ============================================================================
 
-(defn- bind-text! [r id value-fn]
-  "Bind a text node to a computed signal that calls value-fn each frame."
-  (let [clock (rt/clock-ms-sig r)
-        txt-sig (sig/computed-o [clock] (fn [_] (str (or (value-fn) ""))))]
-    (ui/bind! r id :text txt-sig)))
+(def ^:private classic-w 400.0)
+(def ^:private classic-h 187.0)
+(def ^:private info-w 93.0)
+(def ^:private info-h 177.0)
+(def ^:private root-w (+ classic-w 7.0 info-w))
+(def ^:private root-h classic-h)
 
-(defn- bind-progress! [r id value-fn]
-  "Bind a progress node to a computed signal."
-  (let [clock (rt/clock-ms-sig r)
-        prog-sig (sig/computed-d [clock] (fn [_] (double (or (value-fn) 0.0))))]
-    (ui/bind! r id :progress prog-sig)))
+(def ^:private area-x 128.0) (def ^:private area-y 18.0)
+(def ^:private area-w 257.0) (def ^:private area-h 139.0)
 
 ;; ============================================================================
-;; Developer screen builder
+;; Node builders
 ;; ============================================================================
+
+(defn- img [id x y w h src]
+  {:kind :image :props {:id id :x (double x) :y (double y) :w (double w) :h (double h) :src src}})
+
+(defn- txt
+  [id x y w h text size color]
+  {:kind :text :props {:id id :x (double x) :y (double y) :w (double w) :h (double h)
+                        :text (str text) :font-size (double size) :color (long color)}})
+
+(defn- box [id x y w h fill]
+  {:kind :box :props {:id id :x (double x) :y (double y) :w (double w) :h (double h) :fill (long fill)}})
+
+(defn- grp [id x y w h & [extra]]
+  {:kind :group :props (merge {:id id :x (double x) :y (double y) :w (double w) :h (double h)} extra)})
+
+(def ^:private tex-path (partial modid/asset-path "textures"))
+
+;; ============================================================================
+;; set-tick! — per-frame side-effecting computed-o, force-pulled every frame
+;; ============================================================================
+;; ComputedO/ComputedD are lazy-pull: depMarkDirty only flags dirty, it never
+;; invokes the wrapped fn. A computed stored via put-user-signal! alone with
+;; no reader NEVER executes. Binding is the only thing that gets eagerly
+;; enqueued on dirty and pulled by rt/flush! each frame, so "per-frame side
+;; effect" signals must be wired as a Binding (anchored to any already-built
+;; node — :root always exists) whose apply-fn simply forces the pull.
+
+(defn- pull-o! [_node source] (.sGet ^cn.li.mcmod.uipojo.signal.ISigO source) nil)
+
+(defn- set-tick!
+  "Replace the per-frame ticker stored under `key`: unbind the previous
+   Binding (if any), then bind `computed-sig` (or just clear if nil)."
+  [^UiRt rt key computed-sig]
+  (when-let [old (rt/user-signal rt key)] (sig/unbind! old))
+  (if computed-sig
+    (let [^INode anchor (rt/node-by-id rt :root)
+          b (sig/bind! computed-sig anchor pull-o! (rt/get-dirty-bindings-q rt))]
+      (rt/register-binding! rt (.getIdx anchor) b)
+      (rt/put-user-signal! rt key b))
+    (rt/put-user-signal! rt key nil)))
+
+;; ============================================================================
+;; Static classic layout spec (400x187 canvas, all children flattened to
+;; absolute root-relative positions)
+;; ============================================================================
+
+(defn- classic-children []
+  [;; --- right side background frame + skill-tree/console mount area ---
+   (img :bg-parent-right 118.0 0.0 278.0 187.0 (tex-path "guis/parent/parent_background_developerright.png"))
+   (img :ui-right 118.0 0.0 278.0 187.0 (tex-path "guis/ui/ui_developerright.png"))
+   (grp :area area-x area-y area-w area-h {:clip? true})
+
+   ;; --- left side background frame ---
+   (img :bg-parent-left 4.0 0.0 108.5 187.0 (tex-path "guis/parent/parent_background_developerleft.png"))
+   (img :ui-left 4.0 0.0 108.5 187.0 (tex-path "guis/ui/ui_developerleft.png"))
+   (img :panel-machine-bg 0.0 0.0 108.5 187.0 (tex-path "guis/parent/parent_background_developermachine.png"))
+
+   ;; --- panel_ability (category/level display, x=6,y=67.5 in original) ---
+   (img :logo-ability 6.0 67.5 32.0 32.0 (tex-path "guis/icons/icon_nocategory.png"))
+   (txt :text-abilityname 37.0 69.5 70.0 12.0 "N/A" 13.0 0xFFFFFFFF)
+   (txt :text-exp 36.0 83.0 42.0 10.0 "EXP 0%" 8.0 0xFFFFFFFF)
+   (box :logo-progress-back 37.0 80.75 70.0 1.5 0x4D666666)
+   (box :logo-progress 37.0 80.75 0.0 1.5 0xFFFFFFFF)
+   (txt :text-level 65.265625 83.5 41.15625 12.0 "Lv.1" 9.0 0xFF1177D6)
+   (img :btn-upgrade 66.0 82.0 48.36 15.49 (tex-path "guis/button/button_learn.png"))
+
+   ;; --- panel_machine (wireless/power/sync-rate, right on top of left frame) ---
+   (txt :text-wireless 4.25 104.5 100.0 12.0 "Current Node:" 12.0 0xFFFFFFFF)
+   (img :button-wireless 8.25 116.5 100.0 16.0 (tex-path "guis/element/element_background300x32.png"))
+   (img :logo-node 11.25 118.5 12.0 12.0 (tex-path "guis/icons/icon_node.png"))
+   (txt :text-nodename 30.25 118.5 70.0 12.0 "N/A" 12.0 0xFFFFFFFF)
+   (txt :text-power 4.25 130.5 100.0 12.0 "Power:" 12.0 0xFFFFFFFF)
+   (box :progress-power-back 5.75 143.0 97.0 8.0 0x33FFFFFF)
+   (box :progress-power 5.75 143.0 0.0 8.0 0xFFFCC532)
+   (txt :text-syncrate 4.25 153.5 100.0 12.0 "Sync Rate:" 12.0 0xFFFFFFFF)
+   (box :progress-syncrate-back 5.75 165.0 97.0 8.0 0x33FFFFFF)
+   (box :progress-syncrate 5.75 165.0 0.0 8.0 0xFF32A4FC)])
+
+(defn- root-spec []
+  {:kind :group
+   :props {:id :root :x 0.0 :y 0.0 :w root-w :h root-h}
+   :children
+   (into (classic-children)
+         [(grp :info-area (+ classic-w 7.0) 5.0 info-w info-h {:clip? true})
+          (box :dev-cover 0.0 0.0 classic-w classic-h 0x00000000)])})
+
+;; ============================================================================
+;; Flat-color box "progress bar" — :box kind has no bindable width prop-writer
+;; in the kinds table, so foreground fill width is written directly via a
+;; custom Binding apply-fn (bypassing the generic prop-writer lookup).
+;; ============================================================================
+
+(defn- write-box-width! [^double full-w ^INode node source]
+  (let [pct (max 0.0 (min 1.0 (double (.dGet ^ISigD source))))
+        w (* full-w pct)]
+    (when-not (== w (.getW node))
+      (.setW node w)
+      (.setFlag node node/FLAG-LAYOUT-DIRTY))))
+
+(defn- bind-box-width! [^UiRt rt id ^double full-w value-sig]
+  (let [^INode n (rt/node-by-id rt id)]
+    (let [b (sig/bind! value-sig n (partial write-box-width! full-w) (rt/get-dirty-bindings-q rt))]
+      (rt/register-binding! rt (.getIdx n) b))))
+
+;; ============================================================================
+;; Hover-alpha for image "buttons" (idle/hover alpha, replacing CGUI tint)
+;; ============================================================================
+
+(defn- hover-alpha-step [idle-a hover-a ^UiRt rt idx _ms]
+  (if (= (long idx) (rt/hovered-idx rt)) (double hover-a) (double idle-a)))
+
+(defn- bind-hover-alpha! [^UiRt rt id ^double idle-a ^double hover-a]
+  (let [^INode n (rt/node-by-id rt id)
+        idx (.getIdx n)
+        clock (rt/clock-ms-sig rt)
+        sig-d (sig/computed-d [clock] (partial hover-alpha-step idle-a hover-a rt idx))]
+    (ui/bind! rt id :alpha sig-d)))
+
+;; ============================================================================
+;; Left/right panel dynamic bindings — reuses panel/current-ui-model verbatim
+;; ============================================================================
+
+(defn- attach-model-bind! [^UiRt rt container player]
+  (let [clock (rt/clock-ms-sig rt)
+        cat-prog (sig/signal-d 0.0)
+        power (sig/signal-d 0.0)
+        sync-rate-sig (sig/signal-d 0.7)]
+    (bind-box-width! rt :logo-progress 70.0 cat-prog)
+    (bind-box-width! rt :progress-power 97.0 power)
+    (bind-box-width! rt :progress-syncrate 97.0 sync-rate-sig)
+    (set-tick! rt :model-tick
+      (sig/computed-o [clock]
+        (fn [_]
+          (let [{:keys [ability-name icon-path exp-label level-label
+                        cat-prog01 power01 sync-rate can-upgrade?]}
+                (panel/current-ui-model container player)]
+            (ui/set-prop! rt :text-abilityname :text ability-name)
+            (ui/set-prop! rt :logo-ability :src icon-path)
+            (ui/set-prop! rt :text-exp :text exp-label)
+            (ui/set-prop! rt :text-level :text level-label)
+            (sig/sset-d! cat-prog cat-prog01)
+            (sig/sset-d! power power01)
+            (sig/sset-d! sync-rate-sig (double (or sync-rate 0.7)))
+            (let [^INode upg (rt/node-by-id rt :btn-upgrade)
+                  ^INode lvl (rt/node-by-id rt :text-level)]
+              (when upg (.setVisible upg (boolean can-upgrade?)) (.setFlag upg node/FLAG-LAYOUT-DIRTY))
+              (when lvl (.setVisible lvl (not can-upgrade?)) (.setFlag lvl node/FLAG-LAYOUT-DIRTY))))
+          nil)))
+    (bind-hover-alpha! rt :btn-upgrade 0.698 1.0)
+    (bind-hover-alpha! rt :button-wireless 0.698 1.0)))
+
+;; ============================================================================
+;; Info-area sidebar — reuses cn.li.ac.gui.info-area-reactive verbatim.
+;; :info-area group already built at our own position in root-spec, so
+;; ensure-shell!'s internal "when-not exists" check is a no-op here.
+;; ============================================================================
+
+(defn- attach-info-area! [^UiRt rt container]
+  (let [ctx (info-area/clear-area! rt)]
+    (info-area/add-histogram-energy! ctx
+      #(double (or @(:energy container) 0.0))
+      #(max 1.0 (double (or @(:max-energy container) 1.0))))
+    (info-area/add-sepline! ctx "Developer")
+    (info-area/add-property! ctx "tier" #(str @(:tier container)))
+    (info-area/add-property! ctx "structure_ok" #(str @(:structure-valid container)))
+    (info-area/add-property! ctx "developing" #(str @(:is-developing container)))))
+
+;; ============================================================================
+;; Wireless node-name label refresh (native replacement for
+;; panel/refresh-linked-node-label! which writes via old find-widget path)
+;; ============================================================================
+
+(defn- refresh-node-name! [^UiRt rt container]
+  (when (:tile-entity container)
+    (let [payload (action-payload/action-payload container {})
+          owner (try (container-state/owner-from-container container)
+                     (catch Exception e (log/error "[dev-panel] owner error:" (ex-message e)) nil))]
+      (net-client/send-to-server
+        owner (panel/dev-msg :list-nodes) payload
+        (fn [resp]
+          (when (map? resp)
+            (let [text (if-let [n (:linked resp)] (or (:node-name n) "N/A") "N/A")]
+              (ui/set-prop! rt :text-nodename :text text))))))))
+
+;; ============================================================================
+;; Cover-overlay mechanics
+;; ============================================================================
+
+(defn- set-cover-visible! [^UiRt rt visible?]
+  (let [^INode n (rt/node-by-id rt :dev-cover)]
+    (.setVisible n visible?)
+    (.setFlag n node/FLAG-LAYOUT-DIRTY)))
+
+(defn- cover-fill-signal [alpha-target clock]
+  (let [smoothed-a (ranim/smoothed alpha-target clock 3.5)]
+    (sig/computed-d [smoothed-a]
+      (fn [a]
+        (double (unchecked-int (bit-shift-left (long (* 255.0 (max 0.0 (min 1.0 (double a))))) 24)))))))
+
+(defn- clear-embedded-runtimes! [^UiRt rt]
+  (when-let [entries (rt/user-signal rt :embedded-runtimes)]
+    (doseq [{:keys [child-rt]} @entries] (rt/dispose! child-rt))
+    (rt/put-user-signal! rt :embedded-runtimes (atom []))))
+
+(defn- add-embedded-runtime! [^UiRt rt entry]
+  (let [a (or (rt/user-signal rt :embedded-runtimes) (atom []))]
+    (rt/put-user-signal! rt :embedded-runtimes a)
+    (swap! a conj entry)))
+
+(defn- clear-modal! [^UiRt rt]
+  (rt/put-user-signal! rt :active-modal (atom nil)))
+
+(defn- bind-cover-fill! [^UiRt rt fill-sig]
+  (when-let [old (rt/user-signal rt :cover-fill-binding)] (sig/unbind! old))
+  (let [^INode n (rt/node-by-id rt :dev-cover)
+        writer (get-in node/kinds [:box :prop-writers :fill])
+        b (sig/bind! fill-sig n writer (rt/get-dirty-bindings-q rt))]
+    (rt/register-binding! rt (.getIdx n) b)
+    (rt/put-user-signal! rt :cover-fill-binding b)))
+
+(defn- close-cover!
+  "Close whatever overlay is currently open: dispose embedded runtimes,
+   clear active-modal, hide cover, clear the ticker user-signal."
+  [^UiRt rt]
+  (clear-embedded-runtimes! rt)
+  (clear-modal! rt)
+  (set-tick! rt :cover-tick nil)
+  (set-cover-visible! rt false)
+  (events/gain-focus! rt -1))
+
+;; ============================================================================
+;; Wireless overlay — reuses wireless-tab-reactive verbatim (full native
+;; interactivity via :active-modal input forwarding).
+;; ============================================================================
+
+(defn- open-wireless-overlay! [^UiRt rt container]
+  (let [alpha-target (sig/signal-d 0.7)
+        fill-sig (cover-fill-signal alpha-target (rt/clock-ms-sig rt))
+        wr (rt/create-runtime)
+        spec (ui-xml/load-spec (modid/namespaced-path "guis/rework/new/page_wireless.xml"))
+        _ (rt/build! wr spec)
+        px (/ (- classic-w 176.0) 2.0) py 0.0]
+    (bind-cover-fill! rt fill-sig)
+    (set-cover-visible! rt true)
+    (wireless-tab/attach-panel! wr {:role :receiver :container container
+                                    :tab-logo-path (tex-path "guis/icons/icon_node.png")
+                                    :connected-row-logo-path (tex-path "guis/icons/icon_node.png")})
+    (add-embedded-runtime! rt {:child-rt wr :x px :y py :w 176.0 :h 187.0 :visible?-fn nil})
+    (rt/put-user-signal! rt :active-modal
+      (atom {:child-rt wr :x px :y py :w 176.0 :h 187.0
+             :on-close-outside
+             (fn []
+               (close-cover! rt)
+               (refresh-node-name! rt container))}))))
+
+;; ============================================================================
+;; Skill-detail / level-up overlays — render-only embedded popup (via
+;; skill-tree-view) + a single manual click-region handler on the cover
+;; (matching the old code's manual mx/my bounds check; no input forwarding
+;; into the popup runtime is needed since it registers no handlers itself).
+;; ============================================================================
+
+(defn- popup-click-region! [^UiRt rt btn-x btn-y btn-w btn-h eligible?-fn on-click! on-outside-close!]
+  (let [^INode cover (rt/node-by-id rt :dev-cover)]
+    (events/on! rt :dev-cover :left-click
+      (fn [_ _ evt]
+        (let [mx (double (:x evt 0)) my (double (:y evt 0))
+              on-btn? (and (eligible?-fn)
+                           (>= mx btn-x) (<= mx (+ btn-x btn-w))
+                           (>= my btn-y) (<= my (+ btn-y btn-h)))]
+          (if on-btn? (on-click!) (on-outside-close!)))))
+    (events/on! rt :dev-cover :key
+      (fn [_ _ evt]
+        (when (= (long (:key-code evt 0)) 256)
+          (on-outside-close!))))
+    (events/gain-focus! rt (.getIdx cover))))
+
+(defn- open-skill-detail-overlay! [^UiRt rt container player skill-id dev-type]
+  (let [alpha-target (sig/signal-d 0.7)
+        fill-sig (cover-fill-signal alpha-target (rt/clock-ms-sig rt))
+        dev-spec (developer/developer-spec (or dev-type :normal))
+        skill-spec (skill/get-skill skill-id)
+        skill-name (or (:name skill-spec) (name skill-id) "Unknown")
+        skill-level (int (or (:level skill-spec) 1))
+        est-consumption (long (* (:cps dev-spec 700.0) (+ 3 (* skill-level skill-level 0.5))))
+        session-id (runtime-hooks/require-player-state-session-id "developer.panel")
+        uuid-str (when player (uuid/player-uuid player))
+        get-ad #(-> (when uuid-str (store/get-player-state* session-id uuid-str)) :ability-data)
+        ad0 (get-ad)
+        skill-icon (skill-query/get-skill-icon-path skill-id)
+        skill-description (when-let [dk (:description-key skill-spec)] (i18n/translate dk))
+        cx 200.0 cy 93.0
+        ta-y (+ cy 20.0) btn-x (- cx 16.0) btn-y (+ ta-y 52.0)
+        state-a (atom {:is-developing? false :progress 0.0 :result nil :error nil})
+        prev-dev-a (atom false)
+        node-data {:skill-id skill-id :skill-name skill-name :skill-level skill-level
+                   :skill-icon skill-icon :skill-description skill-description
+                   :learned (adata/is-learned? ad0 skill-id)
+                   :exp (double (or (adata/get-skill-exp ad0 skill-id) 0.0))}
+        popup-rt (skill-tree-reactive/create-detail-overlay-runtime node-data)]
+    (bind-cover-fill! rt fill-sig)
+    (set-cover-visible! rt true)
+    (add-embedded-runtime! rt {:child-rt popup-rt :x 0.0 :y 0.0 :w classic-w :h classic-h :visible?-fn nil})
+    (popup-click-region! rt btn-x btn-y 32.0 16.0
+      (fn [] (let [s @state-a]
+               (and (not (:learned (get-ad))) (not (:is-developing? s)) (nil? (:result s)))))
+      (fn []
+        (let [energy (double (or @(:energy container) 0.0))
+              ad (get-ad) player-level (int (or (:level ad) 1))]
+          (cond
+            (< energy est-consumption) (swap! state-a assoc :error :low-energy)
+            (> skill-level player-level) (swap! state-a assoc :error :low-level)
+            (not (learning-rules/can-learn? skill-spec ad player-level dev-type))
+            (swap! state-a assoc :error :cond-fail)
+            :else (do (panel/req-start-development! container :learn-skill {:skill-id (name skill-id)})
+                      (swap! state-a assoc :error nil)))))
+      (fn [] (close-cover! rt)))
+    (set-tick! rt :cover-tick
+      (sig/computed-o [(rt/clock-ms-sig rt)]
+        (fn [_]
+          (let [is-dev (boolean @(:is-developing container))
+                dev-prog (double (or @(:development-progress container) 0.0))
+                dev-complete (boolean @(:development-complete? container))
+                prev @prev-dev-a]
+            (cond
+              is-dev (swap! state-a assoc :is-developing? true :progress dev-prog :error nil)
+              (and (not is-dev) prev dev-complete)
+              (swap! state-a assoc :is-developing? false :progress 1.0 :result :success)
+              (and (not is-dev) prev (not dev-complete))
+              (swap! state-a assoc :is-developing? false :result :failed)
+              :else nil)
+            (reset! prev-dev-a is-dev)
+            (let [ad (get-ad) learned? (adata/is-learned? ad skill-id)
+                  updated (assoc node-data :learned learned?
+                                 :exp (double (if learned? (or (adata/get-skill-exp ad skill-id) 0.0) 0.0))
+                                 :dev-state @state-a)]
+              (skill-tree-view/refresh-detail-overlay! popup-rt updated)))
+          nil)))))
+
+(defn- open-levelup-overlay! [^UiRt rt container player developer-type]
+  (let [alpha-target (sig/signal-d 0.7)
+        fill-sig (cover-fill-signal alpha-target (rt/clock-ms-sig rt))
+        dev-type (or (panel/normalize-tier developer-type) :normal)
+        dev-spec (developer/developer-spec dev-type)
+        session-id (runtime-hooks/require-player-state-session-id "developer.panel")
+        uuid-str (when player (uuid/player-uuid player))
+        pstate (when uuid-str (store/get-player-state* session-id uuid-str))
+        ad (:ability-data pstate)
+        current-level (int (or (:level ad) 1))
+        target-level (inc current-level)
+        est-consumption (long (* (:cps dev-spec 700.0) (+ 3 (* target-level target-level 0.5))))
+        cx 200.0 cy 93.0
+        text-base-y (+ cy 25.0) btn-x (- cx 16.0) btn-y (+ text-base-y 40.0)
+        state-a (atom {:is-developing? false :progress 0.0 :result nil :error nil})
+        prev-dev-a (atom false)
+        popup-rt (skill-tree-reactive/create-levelup-overlay-runtime target-level @state-a)]
+    (bind-cover-fill! rt fill-sig)
+    (set-cover-visible! rt true)
+    (add-embedded-runtime! rt {:child-rt popup-rt :x 0.0 :y 0.0 :w classic-w :h classic-h :visible?-fn nil})
+    (popup-click-region! rt btn-x btn-y 32.0 16.0
+      (fn [] (let [s @state-a] (and (not (:is-developing? s)) (nil? (:result s)))))
+      (fn []
+        (let [energy (double (or @(:energy container) 0.0))]
+          (if (< energy est-consumption)
+            (swap! state-a assoc :error :low-energy)
+            (do (panel/req-start-development! container :level-up)
+                (swap! state-a assoc :error nil)))))
+      (fn [] (close-cover! rt)))
+    (set-tick! rt :cover-tick
+      (sig/computed-o [(rt/clock-ms-sig rt)]
+        (fn [_]
+          (let [is-dev (boolean @(:is-developing container))
+                dev-prog (double (or @(:development-progress container) 0.0))
+                dev-complete (boolean @(:development-complete? container))
+                prev @prev-dev-a]
+            (cond
+              is-dev (swap! state-a assoc :is-developing? true :progress dev-prog :error nil)
+              (and (not is-dev) prev dev-complete)
+              (swap! state-a assoc :is-developing? false :progress 1.0 :result :success)
+              (and (not is-dev) prev (not dev-complete))
+              (swap! state-a assoc :is-developing? false :result :failed)
+              :else nil)
+            (reset! prev-dev-a is-dev)
+            (skill-tree-view/refresh-levelup-overlay! popup-rt target-level @state-a))
+          nil)))))
+
+;; ============================================================================
+;; Skill-tree area — embedded render + native click hit-targets (hover via
+;; the framework's own hovered-idx tracking; parallax camera-shift from the
+;; original is a cosmetic-only omission, not a functional one)
+;; ============================================================================
+
+(defn- clear-area! [^UiRt rt]
+  (rt/clear-children! rt (rt/node-by-id rt :area))
+  (clear-embedded-runtimes! rt))
+
+(defn- build-skill-tree-area! [^UiRt rt container player]
+  (let [session-id (runtime-hooks/require-player-state-session-id "developer.panel")
+        {:keys [render-data dev-type]} (panel/skill-tree-render-context session-id player container)
+        nodes (:skill-nodes render-data)
+        hw skill-tree/widget-size
+        embed-rt (skill-tree-reactive/create-embedded-runtime render-data (/ area-w 2.0) (/ area-h 2.0)
+                   area-w area-h nil)
+        hit-nodes (atom {})]
+    (add-embedded-runtime! rt {:child-rt embed-rt :x area-x :y area-y :w area-w :h area-h :visible?-fn nil})
+    (doseq [nd nodes
+            :when (and (or (:can-learn nd) (:learned nd)) (not (:locked? nd)))]
+      (let [id (keyword (str "skill-hit-" (name (:skill-id nd))))
+            spec (box id (:x nd) (:y nd) hw hw 0x00000000)
+            ^INode n (rt/build-child! rt spec (rt/node-by-id rt :area))]
+        (swap! hit-nodes assoc (.getIdx n) (:skill-id nd))
+        (events/on! rt id :left-click
+          (fn [_ _ _] (open-skill-detail-overlay! rt container player (:skill-id nd) dev-type)))))
+    (set-tick! rt :skill-tree-tick
+      (sig/computed-o [(rt/clock-ms-sig rt)]
+        (fn [_]
+          (let [{:keys [render-data]} (panel/skill-tree-render-context session-id player container)
+                hover-id (get @hit-nodes (rt/hovered-idx rt))]
+            (skill-tree-reactive/refresh-embedded-runtime! embed-rt render-data
+              (/ area-w 2.0) (/ area-h 2.0) area-w area-h hover-id))
+          nil)))))
+
+;; ============================================================================
+;; Right-panel mode dispatch — reuses panel/right-panel-mode verbatim
+;; ============================================================================
+
+(defn- attach-right-panel-dispatch! [^UiRt rt container player]
+  (let [last-mode (atom nil)]
+    (set-tick! rt :right-panel-tick
+      (sig/computed-o [(rt/clock-ms-sig rt)]
+        (fn [_]
+          (let [mode (panel/right-panel-mode nil container player)]
+            (when (not= mode @last-mode)
+              (reset! last-mode mode)
+              (set-tick! rt :skill-tree-tick nil)
+              (clear-area! rt)
+              (case mode
+                :console (console-reactive/attach! rt :area area-w area-h
+                           {:mode :learn :container container
+                            :player-name (or @(:user-name container) "Player")
+                            :has-developer (boolean (:tile-entity container))
+                            :on-start-development
+                            (fn [] (panel/req-start-development! container :level-up))})
+                :reset-console (console-reactive/attach! rt :area area-w area-h
+                                  {:mode :reset :container container
+                                   :player-name (or @(:user-name container) "Player")
+                                   :has-developer (boolean (:tile-entity container))
+                                   :on-start-development
+                                   (fn [] (panel/req-start-development! container :reset))})
+                :skill-tree (build-skill-tree-area! rt container player)
+                nil)))
+          nil)))))
+
+;; ============================================================================
+;; Wireless button + upgrade button wiring
+;; ============================================================================
+
+(defn- attach-buttons! [^UiRt rt container player]
+  (events/on! rt :btn-upgrade :left-click
+    (fn [_ _ _] (open-levelup-overlay! rt container player (panel/current-developer-type container))))
+  (events/on! rt :button-wireless :left-click
+    (fn [_ _ _] (open-wireless-overlay! rt container)))
+  (events/on! rt :logo-node :left-click
+    (fn [_ _ _] (open-wireless-overlay! rt container)))
+  (events/on! rt :text-nodename :left-click
+    (fn [_ _ _] (open-wireless-overlay! rt container))))
+
+;; ============================================================================
+;; Entry point
+;; ============================================================================
+
+(defn build-runtime!
+  "Build + wire the full classic developer layout onto a fresh UiRt. Shared
+   entry point for both the block (menu-backed) screen and the portable item
+   (standalone) screen — the only difference between them is how the caller
+   wraps/hosts the returned runtime, and whether the wireless button applies."
+  [container player]
+  (let [r (rt/create-runtime)]
+    (rt/build! r (root-spec))
+    (set-cover-visible! r false)
+    (attach-info-area! r container)
+    (attach-model-bind! r container player)
+    (attach-buttons! r container player)
+    (attach-right-panel-dispatch! r container player)
+    (refresh-node-name! r container)
+    r))
 
 (defn create-screen
-  "Create reactive developer screen.
-   container: atom map with :energy :max-energy :tier :is-developing :category etc.
-   on-dev-start: (fn [action extra callback]) — handles learn/level-up/reset."
-  [{:keys [container menu player on-dev-start]}]
-  (let [r (rt/create-runtime)
-        safe-val #(some-> % deref)
-        clock (rt/clock-ms-sig r)
-        ;; Load developer XML page or build inline
-        spec (dsl/group {:id :root :w 400 :h 187 :align-w :center :align-h :middle}
-               ;; Left panel background
-               (dsl/image {:id :bg :x 0 :y 0 :w 400 :h 187
-                           :src (modid/asset-path "textures" "guis/developer/page_developer.png")})
-               ;; Energy bar
-               (dsl/progress {:id :energy-bar :x 20 :y 150 :w 120 :h 10})
-               ;; Energy text
-               (dsl/text {:id :energy-text :x 20 :y 135 :text "Energy: 0/0 IF"
-                          :font-size 10 :color 0xFFCCCCCC})
-               ;; Tier text
-               (dsl/text {:id :tier-text :x 160 :y 135 :text "Tier: ..."
-                          :font-size 10 :color 0xFFCCCCCC})
-               ;; Status text
-               (dsl/text {:id :status-text :x 160 :y 150 :text "Status: IDLE"
-                          :font-size 10 :color 0xFF888888})
-               ;; Developer progress bar
-               (dsl/progress {:id :dev-progress :x 20 :y 170 :w 360 :h 6})
-               ;; Right panel area (placeholder for skill-tree/console)
-               (dsl/group {:id :right-panel :x 280 :y 10 :w 110 :h 167 :clip? true}
-                 (dsl/text {:id :right-content :x 5 :y 5 :text "..."
-                            :font-size 10 :color 0xFFAAAAAA}))
-               ;; Upgrade button
-               (dsl/box {:id :btn-upgrade :x 300 :y 150 :w 80 :h 20
-                         :fill 0xFF3366CC :hover-tint 0.5}
-                 (dsl/text {:id :btn-upgrade-txt :x 0 :y 0 :text "Upgrade"
-                            :font-size 11 :color 0xFFFFFFFF})))]
-    (rt/build! r spec)
-    ;; Bind energy progress
-    (bind-progress! r :energy-bar
-      (fn [] (/ (double (or (safe-val (:energy container)) 0.0))
-                (max 1.0 (double (or (safe-val (:max-energy container)) 1.0))))))
-    ;; Bind energy text
-    (bind-text! r :energy-text
-      (fn [] (format "Energy: %.0f/%.0f IF"
-                     (double (or (safe-val (:energy container)) 0.0))
-                     (double (or (safe-val (:max-energy container)) 0.0)))))
-    ;; Bind tier
-    (bind-text! r :tier-text
-      (fn [] (str "Tier: " (name (or (safe-val (:tier container)) :portable)))))
-    ;; Bind status
-    (bind-text! r :status-text
-      (fn [] (if (safe-val (:is-developing container)) "DEVELOPING" "IDLE")))
-    ;; Bind dev progress
-    (bind-progress! r :dev-progress
-      (fn [] (double (or (safe-val (:progress container)) 0.0))))
-    ;; Upgrade button handler
-    (events/on! r :btn-upgrade :left-click
-      (fn [_rt _n _e]
-        (when on-dev-start (on-dev-start :level-up {} nil))))
-    ;; Store for external update
-    {:runtime r :container container :menu menu}))
-
-;; ============================================================================
-;; Per-frame update (optional — most work done by computed signals above)
-;; ============================================================================
-
-(defn update!
-  "Per-frame: currently no-op (signals self-update via safe-val closures).
-   Future: add skill-tree/console specific updates here."
-  [_screen]
-  nil)
-
-;; ============================================================================
-;; Screen open
-;; ============================================================================
-
-(defn open!
-  [{:keys [runtime]}]
-  (bridge/open-reactive-screen! runtime "Ability Developer"))
+  [container menu player]
+  (let [r (build-runtime! container player)]
+    {:type :reactive-container-screen
+     :runtime r
+     :container container
+     :menu menu
+     :size-dx (- root-w 176.0)
+     :size-dy (- root-h 166.0)}))

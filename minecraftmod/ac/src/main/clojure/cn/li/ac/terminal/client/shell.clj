@@ -52,16 +52,16 @@
 (def ^:private tex-app-back-hdr (modid/asset-path "textures" "guis/data_terminal/app_back_highlight.png"))
 (def ^:private tex-cursor (modid/asset-path "textures" "guis/data_terminal/cursor.png"))
 
-(defn- grid-position [index]
+(defn grid-position [index]
   (let [row (quot index (:columns grid-config))
         col (rem index (:columns grid-config))]
     [(get (:col-x grid-config) col)
      (get (:row-y grid-config) row)]))
 
-(defn- page-count [apps]
+(defn page-count [apps]
   (max 1 (int (Math/ceil (/ (double (count apps)) (double apps-per-page))))))
 
-(defn- clamp-page [apps page]
+(defn clamp-page [apps page]
   (let [max-page (dec (page-count apps))]
     (-> (int (or page 0)) (max 0) (min max-page))))
 
@@ -119,7 +119,7 @@
 ;; App grid widgets
 ;; ============================================================================
 
-(defn- player-owner [player]
+(defn player-owner [player]
   (runtime/player-owner (or (player-uuid/player-uuid player) (str player))))
 
 (defn- create-app-widget
@@ -483,7 +483,7 @@
       (log/info "[AC-Terminal] opening terminal")
       (open-terminal player))))
 
-(defn- poll-terminal-toggle-key!
+(defn poll-terminal-toggle-key!
   "Called every client tick. Queries GLFW via platform bridge for Left Alt.
   Debounced: only triggers on release→press transition."
   []

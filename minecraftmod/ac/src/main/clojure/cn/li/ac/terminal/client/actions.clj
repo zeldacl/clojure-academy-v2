@@ -2,11 +2,12 @@
   "CLIENT-ONLY: side-checked dynamic-load entry points for shared item handlers and client init."
   (:require [cn.li.ac.terminal.client.apps.skill-tree :as skill-tree]
             [cn.li.ac.terminal.client.apps.tutorial :as tutorial-app]
-            [cn.li.ac.terminal.client.shell :as shell]))
+            [cn.li.ac.terminal.client.shell :as shell]
+            [cn.li.ac.terminal.client.shell-reactive :as shell-reactive]))
 
 (defn install-ui-hooks!
   []
-  (shell/install-ui-hooks!))
+  (shell-reactive/install-ui-hooks-reactive!))
 
 (defn open-terminal!
   [player]

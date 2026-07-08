@@ -276,7 +276,7 @@
 ;; Registration
 ;; ============================================================================
 
-(defn- developer-container? [container]
+(defn developer-container? [container]
   (and (map? container)
        (contains? container :tile-entity)
        (= :developer (:container-type container))))

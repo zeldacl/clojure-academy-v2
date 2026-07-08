@@ -1,25 +1,21 @@
 (ns cn.li.ac.item.energy-items
   "Energy-backed item declarations migrated from original AcademyCraft."
   (:require [cn.li.mcmod.item.dsl :as idsl]
-            [cn.li.ac.item.developer-portable :as developer-portable]
+            [cn.li.ac.item.developer-portable-reactive :as developer-portable-reactive]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.ac.item.item-energy-base :as energy-base]
-            [cn.li.mcmod.util.log :as log]
-            [cn.li.mcmod.client.platform-bridge :as client-bridge]))
+            [cn.li.mcmod.util.log :as log]))
 
 (defonce-guard energy-items-installed?)
 
 (defn- open-portable-developer!
   "Right-click handler for developer_portable item.
-  Opens the classic AcademyCraft CGUI developer screen (page_developer.xml)
-  with machine panel, skill tree, overlays, and console — the same rich UI
-  used by block-based developers."
+  Opens the reactive developer screen (classic layout, machine panel,
+  skill tree, overlays, console) — the same rich UI used by block-based
+  developers, standalone-hosted with no wireless link."
   [{:keys [player side]}]
   (when (= side :client)
-    ;; Build the CGUI screen data (platform-agnostic)
-    (let [screen-map (developer-portable/create-screen player)]
-      ;; Open via platform CGUI screen host
-      (client-bridge/open-screen! {:cgui-root (:cgui screen-map) :title "Portable Developer" :session-id (:session-id screen-map)})))
+    (developer-portable-reactive/open! player))
   {:consume? true})
 
 (defn init-energy-items!

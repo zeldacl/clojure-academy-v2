@@ -81,10 +81,10 @@
 ;; Left panel — ability info and machine status (mostly unchanged)
 ;; ============================================================================
 
-(defn- dev-msg [action]
+(defn dev-msg [action]
   (msg-registry/msg :developer action))
 
-(defn- req-start-development!
+(defn req-start-development!
   "Send a development request. If container has :on-dev-start callback,
   delegates to it (for portable/instant dev). Otherwise sends network
   message for timed block-based development."
@@ -109,20 +109,20 @@
           (log/info "[req-start-development!] response:" (pr-str resp))
           (when callback (callback resp)))))))
 
-(defn- texture-path-from-category-icon [icon-str]
+(defn texture-path-from-category-icon [icon-str]
   (when (string? icon-str)
     (if (str/starts-with? icon-str "textures/")
       (modid/asset-path "textures" (subs icon-str (count "textures/")))
       (modid/asset-path "textures" icon-str))))
 
-(defn- default-ability-icon-path []
+(defn default-ability-icon-path []
   (modid/asset-path "textures" "guis/icons/icon_nocategory.png"))
 
-(defn- normalize-tier [tier]
+(defn normalize-tier [tier]
   (let [k (keyword (or tier :normal))]
     (if (developer/developer-type? k) k :normal)))
 
-(defn- current-developer-type [container]
+(defn current-developer-type [container]
   (let [tile (:tile-entity container)
         block-tier (when tile
                      (some-> (platform-be/get-block-id tile)
@@ -130,7 +130,7 @@
         state-tier (some-> (:tier container) deref normalize-tier)]
     (or block-tier state-tier :normal)))
 
-(defn- category-ui-model
+(defn category-ui-model
   [{:keys [ad cat dev? developer-type energy max-energy bandwidth]}]
   (let [cat-id (:category-id ad)
         has-category? (boolean cat)
@@ -175,12 +175,12 @@
 (declare init-skill-tree-area!)
 (declare refresh-skill-tree-click-targets!)
 
-(defn- current-ui-model [container player]
+(defn current-ui-model [container player]
   (current-ui-model-in-session
     (runtime-hooks/require-player-state-session-id "developer.panel")
     container player))
 
-(defn- current-ui-model-in-session
+(defn current-ui-model-in-session
   [session-id container player]
   (let [energy (double (or @(:energy container) 0.0))
         max-energy (max 1.0 (double (or @(:max-energy container) 1.0)))
@@ -389,12 +389,12 @@
 ;; Right panel — mode dispatch
 ;; ============================================================================
 
-(defn- player-holding-magnetic-coil? [player]
+(defn player-holding-magnetic-coil? [player]
   (and player
        (entity/entity-ops-available?)
        (= special-items/magnetic-coil-item-id (entity/player-get-main-hand-item-id player))))
 
-(defn- right-panel-mode
+(defn right-panel-mode
   "Pure: determine what to render in parent_right/area."
   [_player-state container player]
   (let [uuid-str (when player (uuid/player-uuid player))
@@ -481,7 +481,7 @@
     (/ (- (System/currentTimeMillis) (long open-ms)) 1000.0)
     0.0))
 
-(defn- skill-tree-render-context
+(defn skill-tree-render-context
   [session-id player container]
   (let [uuid-str (when player (uuid/player-uuid player))
         pstate (when uuid-str (store/get-player-state* session-id uuid-str))

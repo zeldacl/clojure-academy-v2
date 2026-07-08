@@ -5,8 +5,8 @@
     <image id="icon" pos="40.0,50.0" size="50.0,50.0" align="left,top" src="my_mod:textures/guis/data_terminal/logo.png"/>
     <image id="arrow_up" pos="0.0,133.0" size="100.0,25.0" scale="0.80" align="center,top" src="my_mod:textures/guis/data_terminal/arrow_up.png"/>
     <image id="app_template" pos="30.0,155.0" size="151.0,151.0" align="left,top" src="my_mod:textures/guis/data_terminal/app_back.png">
-      <image id="icon" pos="9.0,32.0" size="110.0,110.0" align="left,top" src="my_mod:textures/guis/apps/knowledge_record/icon.png" tint="#A0FFFFFF"/>
-      <text id="text" pos="0.0,148.0" size="151.0,21.0" align="left,top" text="Life Record" font-size="32.0" color="#FFFFFFFF"/>
+      <image id="template_icon" pos="9.0,32.0" size="110.0,110.0" align="left,top" src="my_mod:textures/guis/apps/knowledge_record/icon.png" tint="#A0FFFFFF"/>
+      <text id="template_text" pos="0.0,148.0" size="151.0,21.0" align="left,top" text="Life Record" font-size="32.0" color="#FFFFFFFF"/>
     </image>
     <text id="text_username" pos="-40.0,41.7" size="200.0,30.0" align="right,top" text="[username]" font-size="40.0" color="#CCFFFFFF"/>
     <image id="icon_loading" pos="25.0,-31.0" size="48.0,48.0" align="left,top" src="my_mod:textures/guis/data_terminal/loading.png" tint="#BEFFFFFF"/>

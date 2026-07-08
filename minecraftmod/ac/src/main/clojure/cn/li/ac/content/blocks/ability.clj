@@ -5,17 +5,12 @@
 
 (def ^:private ability-block-spec
   {:label :ability
-   ;; NOTE: developer.gui stays on the OLD CGUI path — panel-reactive.clj's
-   ;; create-screen has a different signature (map arg, no :type tag) and
-   ;; the right-panel skill-tree/console dispatch is still a stub. Do not
-   ;; swap until panel-reactive.clj is a full drop-in replacement.
-   ;; ability-interferer IS fully migrated (see generators.clj rationale).
    :namespaces '[cn.li.ac.block.developer.block
-                 cn.li.ac.block.developer.gui
+                 cn.li.ac.block.developer.gui-reactive
                  cn.li.ac.block.ability-interferer.block
                  cn.li.ac.block.ability-interferer.gui-reactive]
    :init-entries '[cn.li.ac.block.developer.block/init-developer!
-                   cn.li.ac.block.developer.gui/init-developer-gui!
+                   cn.li.ac.block.developer.gui-reactive/init-developer-reactive!
                    cn.li.ac.block.ability-interferer.block/init-ability-interferer!
                    cn.li.ac.block.ability-interferer.gui-reactive/init-ability-interferer-reactive!]})
 

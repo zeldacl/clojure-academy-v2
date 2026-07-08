@@ -23,6 +23,68 @@
 (defn- gui-offset [^DelegatingCGuiContainerScreen screen]
   [(.-leftPos screen) (.-topPos screen)])
 
+(defn- render-embedded-runtimes!
+  "Render any child UiRt instances registered by the screen owner under the
+   well-known :embedded-runtimes user-signal (a plain atom holding a vector of
+   {:child-rt :x :y :w :h :visible?-fn} maps). Used by screens that graft a
+   separately-managed reactive sub-tree (e.g. developer panel's skill-tree
+   area / popups) alongside their own main node tree."
+  [^UiRt rt ^GuiGraphics gg left top pt]
+  (when-let [entries (rt/user-signal rt :embedded-runtimes)]
+    (doseq [{:keys [child-rt x y w h visible?-fn]} @entries]
+      (when (or (nil? visible?-fn) (visible?-fn))
+        (render/render-embedded-runtime! gg child-rt (+ (double left) (double x)) (+ (double top) (double y)) w h pt)))))
+
+(defn- dispose-embedded-runtimes! [^UiRt rt]
+  (when-let [entries (rt/user-signal rt :embedded-runtimes)]
+    (doseq [{:keys [child-rt]} @entries]
+      (rt/dispose! child-rt))))
+
+;; ============================================================================
+;; Modal input forwarding — full-screen cover overlay (developer panel popups)
+;; ============================================================================
+;; A screen may register :active-modal (an atom holding nil or
+;; {:child-rt :x :y :w :h :on-close-outside} in GUI-local coords) under the
+;; parent UiRt's user-signals. When present, all mouse/key input is captured:
+;; clicks within the child's bounds forward to it; clicks outside call
+;; on-close-outside; ESC always calls on-close-outside. Absent for every
+;; screen that doesn't opt in — zero effect on existing screens.
+
+(defn- active-modal [^UiRt rt]
+  (when-let [a (rt/user-signal rt :active-modal)] @a))
+
+(defn- modal-child-local [modal lx ly]
+  [(- (double lx) (double (:x modal))) (- (double ly) (double (:y modal)))])
+
+(defn- modal-in-bounds? [modal clx cly]
+  (and (>= clx 0.0) (>= cly 0.0) (<= clx (double (:w modal))) (<= cly (double (:h modal)))))
+
+(defn- modal-mouse-press! [modal lx ly button]
+  (let [[clx cly] (modal-child-local modal lx ly)]
+    (if (modal-in-bounds? modal clx cly)
+      (events/dispatch-mouse-press! (:child-rt modal) clx cly button)
+      (when-let [f (:on-close-outside modal)] (f)))))
+
+(defn- modal-mouse-release! [modal lx ly button]
+  (let [[clx cly] (modal-child-local modal lx ly)]
+    (when (modal-in-bounds? modal clx cly)
+      (events/dispatch-mouse-release! (:child-rt modal) clx cly button))))
+
+(defn- modal-mouse-drag! [modal lx ly button]
+  (let [[clx cly] (modal-child-local modal lx ly)]
+    (when (modal-in-bounds? modal clx cly)
+      (events/dispatch-mouse-drag! (:child-rt modal) clx cly button))))
+
+(defn- modal-key! [modal key-code scan-code modifiers]
+  (if (= (long key-code) 256)
+    (when-let [f (:on-close-outside modal)] (f))
+    (when-not (events/dispatch-editable-key! (:child-rt modal) key-code (char 0))
+      (events/dispatch-key! (:child-rt modal) key-code scan-code modifiers 0))))
+
+(defn- modal-char! [modal code-point]
+  (when-not (events/dispatch-editable-key! (:child-rt modal) 0 (char code-point))
+    (events/dispatch-char! (:child-rt modal) code-point)))
+
 (defn- local-mouse [^DelegatingCGuiContainerScreen screen mx my]
   (let [[left top] (gui-offset screen)]
     [(- (double mx) (double left))
@@ -63,6 +125,7 @@
             (layout/ensure-layout! rt)
             (layout/ensure-tape! rt)
             (render/draw-tape! gg rt (.-leftPos this) (.-topPos this))
+            (render-embedded-runtimes! rt gg (.-leftPos this) (.-topPos this) pt)
             (when (slots-active?* )
               (.callSuperRender this gg mx my pt))
             (catch Exception e
@@ -72,37 +135,58 @@
           (.callSuperRenderBackground this gg)))
       (.withMouseClicked
         (fn click-cb [^DelegatingCGuiContainerScreen this mx my button]
-          (handle-container-click! rt this mx my button (slots-active?*)
-                                   #(boolean (.callSuperMouseClicked this mx my button)))))
+          (if-let [modal (active-modal rt)]
+            (let [[lx ly] (local-mouse this mx my)]
+              (modal-mouse-press! modal lx ly button)
+              true)
+            (handle-container-click! rt this mx my button (slots-active?*)
+                                     #(boolean (.callSuperMouseClicked this mx my button))))))
       (.withMouseReleased
         (fn release-cb [^DelegatingCGuiContainerScreen this mx my button]
-          (let [[lx ly] (local-mouse this mx my)]
-            (events/dispatch-mouse-release! rt lx ly button))
-          (if (slots-active?*)
-            (.callSuperMouseReleased this mx my button)
-            true)))
+          (if-let [modal (active-modal rt)]
+            (let [[lx ly] (local-mouse this mx my)]
+              (modal-mouse-release! modal lx ly button)
+              true)
+            (do
+              (let [[lx ly] (local-mouse this mx my)]
+                (events/dispatch-mouse-release! rt lx ly button))
+              (if (slots-active?*)
+                (.callSuperMouseReleased this mx my button)
+                true)))))
       (.withMouseDragged
         (fn drag-cb [^DelegatingCGuiContainerScreen this mx my button dx dy]
-          (input/handle-mouse-dragged rt (.-leftPos this) (.-topPos this) mx my button dx dy)
-          (if (and (slots-active?*) (not (hit-ui? rt this mx my)))
-            (.callSuperMouseDragged this mx my button dx dy)
-            true)))
+          (if-let [modal (active-modal rt)]
+            (let [[lx ly] (local-mouse this mx my)]
+              (modal-mouse-drag! modal lx ly button)
+              true)
+            (do
+              (input/handle-mouse-dragged rt (.-leftPos this) (.-topPos this) mx my button dx dy)
+              (if (and (slots-active?*) (not (hit-ui? rt this mx my)))
+                (.callSuperMouseDragged this mx my button dx dy)
+                true)))))
       (.withMouseMoved
         (fn move-cb [^DelegatingCGuiContainerScreen this mx my]
-          (input/handle-mouse-moved rt (.-leftPos this) (.-topPos this) mx my)))
+          (when-not (active-modal rt)
+            (input/handle-mouse-moved rt (.-leftPos this) (.-topPos this) mx my))))
       (.withMouseScrolled
         (fn scroll-cb [^DelegatingCGuiContainerScreen this mx my delta]
-          (input/handle-mouse-scrolled rt (.-leftPos this) (.-topPos this) mx my delta)))
+          (when-not (active-modal rt)
+            (input/handle-mouse-scrolled rt (.-leftPos this) (.-topPos this) mx my delta))))
       (.withKeyPressed
         (fn key-cb [_this key-code scan-code modifiers]
-          (input/handle-key-pressed rt key-code scan-code modifiers)))
+          (if-let [modal (active-modal rt)]
+            (do (modal-key! modal key-code scan-code modifiers) true)
+            (input/handle-key-pressed rt key-code scan-code modifiers))))
       (.withCharTyped
         (fn char-cb [_this code-point modifiers]
-          (input/handle-char-typed rt code-point modifiers)))
+          (if-let [modal (active-modal rt)]
+            (do (modal-char! modal code-point) true)
+            (input/handle-char-typed rt code-point modifiers))))
       (.withRemoved
         (fn removed-cb [_this]
           (when-let [tech (:tech-ui screen-data)]
             (tabbed-gui/detach-tab-sync! tech))
+          (dispose-embedded-runtimes! rt)
           (input/handle-removed rt))))))
 
 (defn create-tech-ui-container-screen

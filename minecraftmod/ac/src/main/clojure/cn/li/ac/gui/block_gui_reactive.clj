@@ -16,6 +16,7 @@
           :wireless-role :generator}))"
   (:require [cn.li.ac.gui.tech-ui-tabs-reactive :as tech-tabs]
             [cn.li.ac.wireless.gui.tab-reactive :as wireless-tab]
+            [cn.li.ac.gui.info-area-reactive :as info-area]
             [cn.li.mcmod.ui.runtime :as rt]
             [cn.li.mcmod.ui.core :as ui]
             [cn.li.mcmod.ui.xml :as ui-xml]
@@ -45,18 +46,17 @@
    {:id "wireless" :xml "guis/rework/new/page_wireless.xml"}])
 
 (defn update-signals!
-  "Read container atoms, sset signals. Called each frame by screen host."
-  [{:keys [signals container properties]}]
+  "Read container atoms, sset signals. Called each frame by screen host.
+   :properties text is rendered via attach-histograms-and-properties!'s own
+   live-bound rows (see create-screen) — no longer duplicated here."
+  [{:keys [signals container]}]
   (let [safe-val #(some-> % deref)]
     (sig/sset-d! (:energy signals) (double (or (safe-val (:energy container)) 0.0)))
     (sig/sset-d! (:max-energy signals) (max 1.0 (double (or (safe-val (:max-energy container)) 1.0))))
     (sig/sset-o! (:status signals) (or (safe-val (:status container)) "IDLE"))
     (sig/sset-o! (:gen-speed signals)
                  (format "%.2fIF/T" (double (or (safe-val (:gen-speed container)) 0.0))))
-    (sig/sset-d! (:progress signals) (double (or (safe-val (:progress container)) 0.0)))
-    (when-let [props properties]
-      (doseq [[_k f] props]
-        (when fn? (f))))))
+    (sig/sset-d! (:progress signals) (double (or (safe-val (:progress container)) 0.0)))))
 
 (defn- screen-config [r signals container menu properties histograms
                       current-tab-atom tech-ui custom-bind!]
@@ -85,6 +85,33 @@
               {:kind :group
                :props {:id :info-area :x 179.0 :y 5.0 :w 110.0 :h 177.0 :clip? true}}]})
 
+;; ============================================================================
+;; Histogram/property rendering — was previously accepted as config and
+;; silently discarded (histograms: never consumed anywhere at all; properties:
+;; called each frame by update-signals! but the return value was thrown away).
+;; Renders into the auto-built :info-area sidebar via the already-live
+;; info-area-reactive.clj rows (each row binds its own per-frame Binding, so
+;; it actually refreshes — unlike a bare put-user-signal! computed).
+;; ============================================================================
+
+(defn- attach-histogram! [ctx container h]
+  (case (:type h)
+    :buffer (info-area/add-histogram-energy! ctx (:value-fn h) (:max-fn h))
+    :energy (info-area/add-histogram-energy! ctx
+              #(double (or @(:energy container) 0.0))
+              #(max 1.0 (double (or @(:max-energy container) 1.0))))
+    :capacity (info-area/add-histogram-capacity! ctx
+                #(double (or @(:load container) 0.0))
+                (max 1.0 (double (or @(:max-capacity container) 1.0))))
+    nil))
+
+(defn- attach-histograms-and-properties!
+  [r histograms properties container]
+  (let [ctx (info-area/clear-area! r)]
+    (doseq [h histograms] (attach-histogram! ctx container h))
+    (when (and (seq histograms) (seq properties)) (info-area/add-sepline! ctx "Info"))
+    (doseq [[k f] properties] (info-area/add-property! ctx (name k) f))))
+
 (defn create-screen
   "Create reactive tech-ui screen config.
    Options:
@@ -105,8 +132,13 @@
         base-spec (if wireless?
                     (tech-tabs/build-tabbed-root-spec pages)
                     (ui-xml/load-spec (modid/namespaced-path (inv-page-xml page-xml))))
-        spec (if info-area? (wrap-with-info-area base-spec) base-spec)
+        ;; Auto-build the info-area sidebar when the caller supplied histograms/
+        ;; properties but didn't already request one (matrix/node build+populate
+        ;; their own via custom-bind!, so don't double-populate for those).
+        auto-info-area? (and (not info-area?) (or (seq histograms) (seq properties)))
+        spec (if (or info-area? auto-info-area?) (wrap-with-info-area base-spec) base-spec)
         _ (rt/build! r spec)
+        _ (when auto-info-area? (attach-histograms-and-properties! r histograms properties container))
         tex-path (sig/signal-o
                    (modid/asset-path "textures"
                      (str "guis/ui/ui_" (or texture-name "inv") ".png")))

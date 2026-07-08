@@ -63,14 +63,21 @@
   [r container _menu player _signals]
   (node-info/attach! r container player)
   (let [clock (rt/clock-ms-sig r)
-        ;; 2-second polling: computed with side-effect (writes to linked atom)
-        _ (rt/put-user-signal! r :link-poll-tick
-            (sig/computed-o [clock]
-              (fn [ms]
-                (let [now (long ms)]
-                  (when (zero? (rem (quot now 1000) 2))
-                    (send-link-query! container)))
-                nil)))
+        ;; 2-second polling: computed with side-effect (writes to linked atom).
+        ;; ComputedO stored bare via put-user-signal! is never pulled (lazy-pull,
+        ;; depMarkDirty only flags dirty) — bind it to an always-present node so
+        ;; rt/flush! actually forces this to run each frame.
+        link-poll-tick (sig/computed-o [clock]
+                         (fn [ms]
+                           (let [now (long ms)]
+                             (when (zero? (rem (quot now 1000) 2))
+                               (send-link-query! container)))
+                           nil))
+        _ (let [^cn.li.mcmod.ui.node.INode anchor (rt/node-by-id r :ui_block)
+                b (sig/bind! link-poll-tick anchor
+                    (fn [_node source] (sig/sget-o source) nil)
+                    (rt/get-dirty-bindings-q r))]
+            (rt/register-binding! r (.getIdx anchor) b))
         ;; Breathe alpha: sin wave, 0.675~0.85 range, 0.8s period
         breathe-alpha (sig/computed-d [clock]
                         (fn [ms] (let [t (/ (double ms) 800.0)

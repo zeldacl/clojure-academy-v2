@@ -6,6 +6,7 @@
             [cn.li.mcmod.util.log :as log] [cn.li.ac.gui.manifest :as gui-manifest]
             [cn.li.ac.gui.block-gui-reactive :as bgui]
             [cn.li.mcmod.ui.runtime :as rt] [cn.li.mcmod.ui.signal :as sig]
+            [cn.li.mcmod.ui.core :as ui]
             [cn.li.ac.block.gui.sync :as gui-sync]
             [cn.li.ac.wireless.gui.container.common :as common]
             [cn.li.ac.block.wind-gen.schema :as wind-schema]))
@@ -48,10 +49,11 @@
   (case completeness "complete" (if (= status "COMPLETE") [1.0 1.0 1.0] [0.6 1.0 1.0]) "no_top" [0.2 1.0 1.0] [0.2 0.2 1.0]))
 
 (defn- attach-structure-bind! [r container _menu _player _signals]
-  (let [clock (rt/clock-ms-sig r)]
-    (rt/put-user-signal! r :icon-main-alpha (sig/computed-d [clock] (fn [_] (first (completeness-alpha (or @(:completeness container) "") (or @(:status container) ""))))))
-    (rt/put-user-signal! r :icon-middle-alpha (sig/computed-d [clock] (fn [_] (second (completeness-alpha (or @(:completeness container) "") (or @(:status container) ""))))))
-    (rt/put-user-signal! r :icon-base-alpha (sig/computed-d [clock] (fn [_] 1.0)))))
+  (let [clock (rt/clock-ms-sig r)
+        main-alpha (sig/computed-d [clock] (fn [_] (first (completeness-alpha (or @(:completeness container) "") (or @(:status container) "")))))
+        middle-alpha (sig/computed-d [clock] (fn [_] (second (completeness-alpha (or @(:completeness container) "") (or @(:status container) "")))))]
+    (ui/bind! r :icon_main :alpha main-alpha)
+    (ui/bind! r :icon_middle :alpha middle-alpha)))
 
 (defn- create-base-screen [container menu player]
   (let [safe-val #(some-> % deref)]
