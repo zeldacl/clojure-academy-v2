@@ -1,7 +1,7 @@
 (ns cn.li.mc1201.gui.reactive.clock
   "Clock driver — sset the three clock signals each frame."
   (:require [cn.li.mcmod.ui.signal :as sig])
-  (:import [cn.li.mcmod.ui.runtime UiRt]
+  (:import [cn.li.mcmod.uipojo.runtime UiRt]
            [net.minecraft.client Minecraft]))
 
 (defn tick!

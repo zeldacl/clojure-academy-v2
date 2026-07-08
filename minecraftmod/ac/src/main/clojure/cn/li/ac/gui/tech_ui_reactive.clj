@@ -111,7 +111,7 @@
 
 (defn create-tech-screen-from-root
   "Create screen wrapper — returns map with :runtime :root :size-dx :size-dy"
-  [^cn.li.mcmod.ui.runtime.UiRt rt _current menu]
+  [^cn.li.mcmod.uipojo.runtime.UiRt rt _current menu]
   {:runtime rt
    :root (rt/node-by-idx rt 0)
    :minecraft-container menu

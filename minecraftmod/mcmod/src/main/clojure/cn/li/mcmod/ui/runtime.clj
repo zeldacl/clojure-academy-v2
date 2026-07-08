@@ -1,77 +1,95 @@
 (ns cn.li.mcmod.ui.runtime
-  "UI Runtime (UiRt) — one instance per screen/overlay."
+  "UI Runtime (UiRt) — one instance per screen/overlay.
+   UiRt is a Java POJO (cn.li.mcmod.uipojo.runtime.UiRt) for AOT/reflection=fail compliance."
   (:require [cn.li.mcmod.ui.signal :as sig]
             [cn.li.mcmod.ui.node :as node])
-  (:import [cn.li.mcmod.ui.signal SigD SigL IApply Binding]
+  (:import [cn.li.mcmod.uipojo.runtime UiRt]
+           [cn.li.mcmod.uipojo.signal SigD SigL IApply Binding SignalSupport]
            [cn.li.mcmod.ui.node INode]
+           [clojure.lang IPersistentMap PersistentArrayMap]
            [java.util ArrayList]))
 
-(deftype UiRt
-  [clock-ms partial-ticks game-ticks
-   ^ArrayList nodes id->node ^ArrayList dirty-bindings tape
-   ^:unsynchronized-mutable tree-dirty
-   ^:unsynchronized-mutable ^double screen-w
-   ^:unsynchronized-mutable ^double screen-h
-   ^:unsynchronized-mutable hovered-idx
-   ^:unsynchronized-mutable focus-idx
-   ^:unsynchronized-mutable drag-node-idx
-   ^:unsynchronized-mutable dragging?
-   ^:unsynchronized-mutable ^double drag-start-mx
-   ^:unsynchronized-mutable ^double drag-start-my
-   ^:unsynchronized-mutable ^long drag-start-ms
-   events user-signals
-   ^:unsynchronized-mutable disposed?])
+(defn create-runtime ^UiRt []
+  (UiRt. (SigL. 0 (SignalSupport/newOuts 16))
+         (SigD. 0.0 (SignalSupport/newOuts 16))
+         (SigL. 0 (SignalSupport/newOuts 16))))
 
-(defn create-runtime ^cn.li.mcmod.ui.runtime.UiRt []
-  (UiRt. (SigL. 0 (ArrayList. 16)) (SigD. 0.0 (ArrayList. 16)) (SigL. 0 (ArrayList. 16))
-         (ArrayList. 64) {} (ArrayList. 32) (object-array 0)
-         true 0.0 0.0 nil nil nil false 0.0 0.0 0 {} {} false))
-
-(defn clock-ms-sig ^cn.li.mcmod.ui.signal.SigL      [^UiRt rt] (.clock_ms rt))
-(defn partial-ticks-sig ^cn.li.mcmod.ui.signal.SigD  [^UiRt rt] (.partial_ticks rt))
-(defn game-ticks-sig ^cn.li.mcmod.ui.signal.SigL     [^UiRt rt] (.game_ticks rt))
+(defn clock-ms-sig ^SigL [^UiRt rt] (.getClockMs rt))
+(defn partial-ticks-sig ^SigD [^UiRt rt] (.getPartialTicks rt))
+(defn game-ticks-sig ^SigL [^UiRt rt] (.getGameTicks rt))
 
 (defn register-node! [^UiRt rt id ^INode node]
-  (.add ^ArrayList (.nodes rt) node)
-  (when id (set! (.id__GT_node rt) (assoc (.id__GT_node rt) id node))) node)
-(defn node-by-id ^cn.li.mcmod.ui.node.INode [^UiRt rt id] (get (.id__GT_node rt) id))
-(defn node-by-idx ^cn.li.mcmod.ui.node.INode [^UiRt rt ^long idx]
-  (let [^ArrayList ns (.nodes rt)]
-    (when (and (>= idx 0) (< idx (.size ns))) (.get ns (int idx)))))
+  (.add ^ArrayList (.getNodes rt) node)
+  (when id (.setIdToNode rt (assoc (.getIdToNode rt) id node)))
+  node)
+
+(defn node-by-id ^INode [^UiRt rt id] (get (.getIdToNode rt) id))
+
+(defn node-by-idx ^INode [^UiRt rt ^long idx]
+  (let [^ArrayList ns (.getNodes rt)]
+    (when (and (>= idx 0) (< idx (.size ns)))
+      (.get ns (int idx)))))
 
 (defn flush! [^UiRt rt]
-  (let [^ArrayList q (.dirty_bindings rt) n (.size q)]
+  (let [^ArrayList q (.getDirtyBindings rt) n (.size q)]
     (when (pos? n)
-      (loop [i 0] (when (< i n) (.applyBinding ^IApply (.get q i)) (recur (unchecked-inc-int i))))
+      (loop [i 0]
+        (when (< i n)
+          (.applyBinding ^IApply (.get q i))
+          (recur (unchecked-inc-int i))))
       (.clear q))))
 
 (defn resize! [^UiRt rt ^double w ^double h]
-  (when (or (not= w (.screen_w rt)) (not= h (.screen_h rt)))
-    (set! (.screen_w rt) w) (set! (.screen_h rt) h) (set! (.tree_dirty rt) true)))
-(defn screen-w ^double [^UiRt rt] (.screen_w rt))
-(defn screen-h ^double [^UiRt rt] (.screen_h rt))
+  (when (or (not= w (.getScreenW rt)) (not= h (.getScreenH rt)))
+    (.setScreenW rt w)
+    (.setScreenH rt h)
+    (.setTreeDirty rt true)))
 
-(defn mark-tree-dirty! [^UiRt rt] (set! (.tree_dirty rt) true))
-(defn tree-dirty? [^UiRt rt] (boolean (.tree_dirty rt)))
-(defn clear-tree-dirty! [^UiRt rt] (set! (.tree_dirty rt) false))
+(defn screen-w ^double [^UiRt rt] (.getScreenW rt))
+(defn screen-h ^double [^UiRt rt] (.getScreenH rt))
 
-(defn get-tape-arr [^UiRt rt] (.tape rt))
-(defn set-tape-arr! [^UiRt rt arr] (set! (.tape rt) arr))
-(defn get-dirty-bindings-q ^ArrayList [^UiRt rt] (.dirty_bindings rt))
+(defn mark-tree-dirty! [^UiRt rt] (.setTreeDirty rt true))
+(defn tree-dirty? [^UiRt rt] (.isTreeDirty rt))
+(defn clear-tree-dirty! [^UiRt rt] (.setTreeDirty rt false))
 
-(defn hovered-idx [^UiRt rt] (or (int (.hovered_idx rt)) -1))
-(defn set-hovered-idx! [^UiRt rt idx] (set! (.hovered_idx rt) (Integer/valueOf (int idx))))
-(defn focus-idx [^UiRt rt] (or (int (.focus_idx rt)) -1))
-(defn set-focus-idx! [^UiRt rt idx] (set! (.focus_idx rt) (Integer/valueOf (int idx))))
+(defn get-tape-arr [^UiRt rt] (.getTape rt))
+(defn set-tape-arr! [^UiRt rt arr] (.setTape rt arr))
+(defn get-dirty-bindings-q ^ArrayList [^UiRt rt] (.getDirtyBindings rt))
+
+(defn hovered-idx [^UiRt rt] (.getHoveredIdx rt))
+
+(defn set-hovered-idx! [^UiRt rt idx]
+  (.setHoveredIdx rt (int idx)))
+
+(defn focus-idx [^UiRt rt] (.getFocusIdx rt))
+
+(defn set-focus-idx! [^UiRt rt idx]
+  (.setFocusIdx rt (int idx)))
+
+(defn drag-node-idx [^UiRt rt] (.getDragNodeIdx rt))
+(defn set-drag-node-idx! [^UiRt rt ^long idx] (.setDragNodeIdx rt (int idx)))
+(defn dragging? [^UiRt rt] (.isDragging rt))
+(defn set-dragging?! [^UiRt rt v] (.setDragging rt (boolean v)))
+(defn drag-start-mx [^UiRt rt] (.getDragStartMx rt))
+(defn set-drag-start-mx! [^UiRt rt ^double v] (.setDragStartMx rt v))
+(defn drag-start-my [^UiRt rt] (.getDragStartMy rt))
+(defn set-drag-start-my! [^UiRt rt ^double v] (.setDragStartMy rt v))
+(defn drag-start-ms [^UiRt rt] (.getDragStartMs rt))
+(defn set-drag-start-ms! [^UiRt rt ^long v] (.setDragStartMs rt v))
 
 (defn register-event! [^UiRt rt ^long node-idx event-key handler-fn]
-  (let [events (.events rt) node-events (get events (int node-idx) {})
+  (let [events (.getEvents rt)
+        node-events (get events (int node-idx) {})
         handlers (get node-events event-key [])]
-    (set! (.events rt) (assoc events (int node-idx) (assoc node-events event-key (conj handlers handler-fn)))) nil))
+    (.setEvents rt (assoc events (int node-idx) (assoc node-events event-key (conj handlers handler-fn)))))
+  nil)
+
 (defn get-event-handlers [^UiRt rt ^long node-idx event-key]
-  (get-in (.events rt) [(int node-idx) event-key]))
+  (get-in (.getEvents rt) [(int node-idx) event-key]))
+
 (defn remove-node-events! [^UiRt rt ^long node-idx]
-  (set! (.events rt) (dissoc (.events rt) (int node-idx))) nil)
+  (.setEvents rt (dissoc (.getEvents rt) (int node-idx)))
+  nil)
 
 (defonce ^:private bindings-by-rt (atom {}))
 
@@ -110,20 +128,27 @@
         (when-let [^INode c (aget cs i)] (unbind-subtree! rt c))
         (recur (unchecked-inc-int i))))))
 
-(defn put-user-signal! [^UiRt rt id s] (set! (.user_signals rt) (assoc (.user_signals rt) id s)) nil)
-(defn user-signal [^UiRt rt id] (get (.user_signals rt) id))
+(defn put-user-signal! [^UiRt rt id s]
+  (.setUserSignals rt (assoc (.getUserSignals rt) id s))
+  nil)
+
+(defn user-signal [^UiRt rt id] (get (.getUserSignals rt) id))
 
 (defn dispose! [^UiRt rt]
-  (when-not (boolean (.disposed_QMARK_ rt)) (set! (.disposed_QMARK_ rt) true)
-    (.clear ^ArrayList (.nodes rt)) (set! (.id__GT_node rt) {})
-    (.clear ^ArrayList (.dirty_bindings rt)) (set! (.tape rt) (object-array 0))
-    (set! (.events rt) {}) (set! (.user_signals rt) {})
-    (clear-rt-bindings! rt) nil))
-(defn disposed? [^UiRt rt] (boolean (.disposed_QMARK_ rt)))
+  (when-not (.isDisposed rt)
+    (.setDisposed rt true)
+    (.clear ^ArrayList (.getNodes rt))
+    (.setIdToNode rt PersistentArrayMap/EMPTY)
+    (.clear ^ArrayList (.getDirtyBindings rt))
+    (.setTape rt (object-array 0))
+    (.setEvents rt PersistentArrayMap/EMPTY)
+    (.setUserSignals rt PersistentArrayMap/EMPTY)
+    (clear-rt-bindings! rt))
+  nil)
+
+(defn disposed? [^UiRt rt] (.isDisposed rt))
 
 (defn- init-node-props!
-  "Write kind-specific initial prop values from spec props into dslots/oslots.
-   Uses kind table dslot/oslot index mappings. Numbers → dslots, others → oslots."
   [^INode n kdef props]
   (doseq [[prop-key slot-idx] (:dslots kdef)]
     (when-some [v (get props prop-key)]
@@ -136,40 +161,33 @@
 (declare build-node!)
 
 (defn- build-node!
-  "Recursively build spec into Node tree. Parent registered BEFORE children
-   so idx matches registry position; children linked via add-child!."
   [^UiRt rt spec parent-node]
   (let [{:keys [kind id props children]} spec
         kdef (or (get node/kinds kind) (throw (ex-info (str "Unknown kind: " kind) {:kind kind})))
         dslot-cnt (max (count (:dslots kdef)) 1)
         oslot-cnt (+ (long (:oslots-backend-base kdef (count (:oslots kdef)))) 4)
-        ^ArrayList ns (.nodes rt)
+        ^ArrayList ns (.getNodes rt)
         idx (.size ns)
         n (node/create-node idx id kind props dslot-cnt oslot-cnt props)]
     (register-node! rt id n)
     (init-node-props! n kdef props)
-    (when parent-node
-      (node/add-child! parent-node n))
+    (when parent-node (node/add-child! parent-node n))
     (doseq [c children]
       (when c (build-node! rt c n)))
     n))
 
 (defn build! [^UiRt rt spec]
   (let [root (build-node! rt spec nil)]
-    (set! (.tree_dirty rt) true)
+    (.setTreeDirty rt true)
     (.getIdx ^INode root)))
 
 (defn build-child!
-  "Build a spec subtree and attach it under parent-node.
-   Used by list-set! for template instantiation. Returns the subtree root INode."
-  ^cn.li.mcmod.ui.node.INode [^UiRt rt spec ^INode parent-node]
+  ^INode [^UiRt rt spec ^INode parent-node]
   (let [root (build-node! rt spec parent-node)]
-    (set! (.tree_dirty rt) true)
+    (.setTreeDirty rt true)
     root))
 
 (defn clear-children!
-  "Remove all children from a node (list rebuild). Removes each child's event
-   handlers recursively to prevent handler leaks. Marks tree dirty."
   [^UiRt rt ^INode parent-node]
   (let [^objects cs (.getChildrenArr parent-node)
         n (node/child-count parent-node)]
@@ -179,5 +197,5 @@
           (unbind-subtree! rt c)
           (aset cs i nil))
         (recur (unchecked-inc-int i))))
-    (set! (.tree_dirty rt) true)
+    (.setTreeDirty rt true)
     nil))

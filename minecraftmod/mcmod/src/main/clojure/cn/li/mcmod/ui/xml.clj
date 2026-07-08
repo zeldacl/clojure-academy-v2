@@ -152,7 +152,7 @@
 ;; Public API
 ;; ============================================================================
 
-(defn parse-spec [xml-str]
+(defn parse-spec [^String xml-str]
   "Parse XML string into node-spec map. Top-level <Ui> → spec tree."
   (let [root (xml/parse (java.io.ByteArrayInputStream. (.getBytes xml-str "UTF-8")))
         templates (collect-templates (:content root))]

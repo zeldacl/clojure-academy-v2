@@ -6,7 +6,7 @@
             [cn.li.mc1201.gui.reactive.render :as render]
             [cn.li.mc1201.gui.reactive.clock :as clock]
             [cn.li.mc1201.gui.reactive.input :as input])
-  (:import [cn.li.mcmod.ui.runtime UiRt]
+  (:import [cn.li.mcmod.uipojo.runtime UiRt]
            [cn.li.mc1201.shim DelegatingCGuiContainerScreen]
            [net.minecraft.client.gui GuiGraphics]
            [net.minecraft.world.entity.player Inventory]

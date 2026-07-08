@@ -7,7 +7,7 @@
             [cn.li.mcmod.ui.core :as ui]
             [cn.li.mcmod.ui.signal :as sig]
             [cn.li.mcmod.ui.layout :as layout])
-  (:import [cn.li.mcmod.ui.runtime UiRt]
+  (:import [cn.li.mcmod.uipojo.runtime UiRt]
            [cn.li.mcmod.ui.node INode]))
 
 ;; ============================================================================

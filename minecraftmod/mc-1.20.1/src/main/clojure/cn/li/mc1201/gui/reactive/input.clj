@@ -2,7 +2,7 @@
   "Input wiring: DelegatingScreen callbacks -> event dispatch."
   (:require [cn.li.mcmod.ui.events :as events]
             [cn.li.mcmod.ui.layout :as layout])
-  (:import [cn.li.mcmod.ui.runtime UiRt]))
+  (:import [cn.li.mcmod.uipojo.runtime UiRt]))
 
 (defn handle-key-pressed
   "Dispatch key to focus node. Return semantics match old cgui host:

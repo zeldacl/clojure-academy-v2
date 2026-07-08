@@ -7,7 +7,8 @@
    Pure kind definition table: S0 static immutable def (not in registry).
    Render backend :render!/:bake! installed by mc1201 via install-adapter!
    into [:platform :ui-kinds]."
-  (:import [cn.li.mcmod.ui.signal ISigD ISigO]))
+  (:import [cn.li.mcmod.uipojo.signal ISigD ISigO]
+           [cn.li.mcmod.uipojo.runtime IUiNode]))
 
 ;; ============================================================================
 ;; Bitmask constants
@@ -101,6 +102,7 @@
    oslots]
 
   INode
+  IUiNode
   (getIdx [_] (int idx))
   (getId [_] id)
   (getKind [_] kind)

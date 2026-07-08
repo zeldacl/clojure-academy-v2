@@ -13,7 +13,7 @@
   (:require [cn.li.mcmod.ui.node :as node]
             [cn.li.mcmod.ui.runtime :as rt])
   (:import [cn.li.mcmod.ui.node INode]
-           [cn.li.mcmod.ui.runtime UiRt]
+           [cn.li.mcmod.uipojo.runtime UiRt]
            [java.util ArrayList]))
 
 ;; ============================================================================

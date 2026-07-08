@@ -7,7 +7,7 @@
             [cn.li.mc1201.gui.reactive.input :as input]
             [cn.li.mc1201.gui.reactive.perf :as perf]
             [cn.li.mcmod.util.log :as log])
-  (:import [cn.li.mcmod.ui.runtime UiRt]
+  (:import [cn.li.mcmod.uipojo.runtime UiRt]
            [cn.li.mc1201.shim DelegatingScreen]
            [net.minecraft.client.gui GuiGraphics]
            [net.minecraft.client Minecraft]

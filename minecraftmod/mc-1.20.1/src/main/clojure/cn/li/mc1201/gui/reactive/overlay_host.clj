@@ -6,7 +6,7 @@
             [cn.li.mcmod.ui.layout :as layout]
             [cn.li.mc1201.gui.reactive.render :as render]
             [cn.li.mc1201.gui.reactive.clock :as clock])
-  (:import [cn.li.mcmod.ui.runtime UiRt]
+  (:import [cn.li.mcmod.uipojo.runtime UiRt]
            [net.minecraft.client.gui GuiGraphics]))
 
 (def ^:private overlay-runtimes (atom {}))

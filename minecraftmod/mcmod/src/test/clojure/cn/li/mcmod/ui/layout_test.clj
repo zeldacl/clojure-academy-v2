@@ -6,7 +6,7 @@
             [cn.li.mcmod.ui.dsl :as dsl]
             [cn.li.mcmod.ui.node :as node])
   (:import [cn.li.mcmod.ui.node INode]
-           [cn.li.mcmod.ui.runtime UiRt]))
+           [cn.li.mcmod.uipojo.runtime UiRt]))
 
 ;; ============================================================================
 ;; Layout parity — 与旧 traversal.clj 的 LambdaLib2 对齐语义对照

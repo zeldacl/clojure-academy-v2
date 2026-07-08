@@ -3,7 +3,7 @@
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.mcmod.ui.signal :as sig]
             [cn.li.mcmod.ui.runtime :as rt])
-  (:import [cn.li.mcmod.ui.signal ISigD ISigL ISigO Binding]))
+  (:import [cn.li.mcmod.uipojo.signal ISigD ISigL ISigO Binding]))
 
 ;; ============================================================================
 ;; SigD — 创建/读写/相等短路

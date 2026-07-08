@@ -5,7 +5,7 @@
             [cn.li.mcmod.ui.layout :as ui-layout]
             [clojure.string :as str])
   (:import [cn.li.mcmod.ui.node INode]
-           [cn.li.mcmod.ui.runtime UiRt]
+           [cn.li.mcmod.uipojo.runtime UiRt]
            [net.minecraft.client.gui GuiGraphics Font]
            [net.minecraft.client Minecraft]
            [net.minecraft.resources ResourceLocation]

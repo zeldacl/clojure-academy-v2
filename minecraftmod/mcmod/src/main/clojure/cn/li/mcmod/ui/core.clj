@@ -5,8 +5,8 @@
             [cn.li.mcmod.ui.node :as node]
             [cn.li.mcmod.ui.runtime :as rt]
             [cn.li.mcmod.ui.events :as events])
-  (:import [cn.li.mcmod.ui.signal ISigD ISigO ISigL]
-           [cn.li.mcmod.ui.runtime UiRt]
+  (:import [cn.li.mcmod.uipojo.signal ISigD ISigO ISigL]
+           [cn.li.mcmod.uipojo.runtime UiRt]
            [cn.li.mcmod.ui.node INode]
            [java.util ArrayList]))
 
