@@ -5,7 +5,7 @@
 
 (deftest resolve-image-size-test
   (testing "nil when no size override"
-    (is (nil? (screen-impl/resolve-image-size {:type :cgui-screen-container}))))
+    (is (nil? (screen-impl/resolve-image-size {}))))
   (testing "delta adds to vanilla defaults (TechUI)"
     (is (= [207 186]
            (screen-impl/resolve-image-size {:size-dx 31 :size-dy 20}))))
@@ -15,33 +15,6 @@
   (testing "partial absolute falls back missing axis to default"
     (is (= [0 166]
            (screen-impl/resolve-image-size {:image-width 0})))))
-
-(deftest cgui-screen-container-contract-test
-  (testing "accepts the expected CGUI screen map shape"
-    (is (#'screen-impl/cgui-screen-container?
-         {:type :cgui-screen-container
-          :cgui :root
-          :minecraft-container :menu})))
-  (testing "rejects incomplete screen data"
-    (is (not (#'screen-impl/cgui-screen-container?
-              {:type :cgui-screen-container
-               :cgui :root})))))
-
-(deftest slots-enabled-for-click-test
-  (testing "defaults to enabled when no tab atom exists"
-    (is (#'screen-impl/slots-enabled-for-click? {})))
-  (testing "enables clicks only for the inv tab when tab state exists"
-    (is (#'screen-impl/slots-enabled-for-click?
-         {:current-tab-atom (atom "inv")}))
-    (is (not (#'screen-impl/slots-enabled-for-click?
-              {:current-tab-atom (atom "stats")})))))
-
-    (deftest quick-move-tab-gate-follows-slot-visibility-test
-      (testing "screen bridge quick-move gate allows inventory tab and blocks non-inventory tabs"
-        (is (#'screen-impl/slots-enabled-for-click?
-          {:current-tab-atom (atom "inv")}))
-        (is (not (#'screen-impl/slots-enabled-for-click?
-            {:current-tab-atom (atom "wireless")})))))
 
 (deftest with-screen-client-owner-binds-runtime-owner-test
   (let [menu (Object.)

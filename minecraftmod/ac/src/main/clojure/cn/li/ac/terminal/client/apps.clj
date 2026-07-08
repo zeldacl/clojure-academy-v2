@@ -16,7 +16,7 @@
 (def launchers
   {:about (fn [_player] (about/open!))
    :settings (fn [_player] (settings/open!))
-   :tutorial (fn [_player] (tutorial-app/open!))
+   :tutorial (fn [player] (tutorial-app/open! player))
    :freq-transmitter (fn [player] (freq-transmitter/open! player))
    :media-player (fn [_player] (media/open!))
    :skill-tree skill-tree/open!})

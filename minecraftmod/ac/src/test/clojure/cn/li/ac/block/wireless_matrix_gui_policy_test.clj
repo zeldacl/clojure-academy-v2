@@ -1,6 +1,6 @@
 (ns cn.li.ac.block.wireless-matrix-gui-policy-test
   (:require [clojure.test :refer [deftest is testing]]
-            [cn.li.ac.block.wireless-matrix.gui :as gui]))
+            [cn.li.ac.block.wireless-matrix.gui-reactive :as gui]))
 
 (deftest matrix-info-area-policy-four-state-test
   (testing "initialized + owner"

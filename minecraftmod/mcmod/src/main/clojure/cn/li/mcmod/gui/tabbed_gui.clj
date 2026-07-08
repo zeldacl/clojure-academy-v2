@@ -4,7 +4,6 @@
    This is shared client/server tab switching logic used by platform GUI/menu bridges."
   (:require [cn.li.mcmod.gui.container-state :as container-state]
             [cn.li.mcmod.gui.container.sync-routing :as sync-routing]
-            [cn.li.mcmod.gui.cgui-core :as cgui-core]
             [cn.li.mcmod.gui.owner-contract :as owner-contract]
             [cn.li.mcmod.gui.registry-contract :as registry-contract]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
@@ -103,17 +102,6 @@
   [pages index]
   (when (and (>= index 0) (< index (count pages)))
     (:id (nth pages index))))
-
-(defn switch-tab!
-  "Client: show the page whose `:id` is `page-id`, hide others, and `reset!` TechUI `:current`.
-  Use with the map from your screen builder after `attach-tab-sync!` so
-  server `:tab-index` and slot gating stay in sync."
-  [tech-ui pages page-id]
-  (when-let [cur (:current tech-ui)]
-    (doseq [q pages]
-      (when-let [w (:window q)]
-        (cgui-core/set-visible! w (= page-id (:id q)))))
-    (reset! cur page-id)))
 
 ;; ============================================================================
 ;; Set-tab C2S handler (server)

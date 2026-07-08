@@ -10,7 +10,7 @@
             [cn.li.ac.ability.client.hand-effects :as hand-effects]
             [cn.li.ac.ability.client.keybinds :as client-keybinds]
             [cn.li.ac.ability.client.managed-screens :as managed-screens]
-            [cn.li.ac.content.ability.teleporter.location-teleport-screen :as location-teleport-screen]
+            [cn.li.ac.content.ability.teleporter.location-teleport-reactive :as location-teleport-screen]
             [cn.li.ac.ability.client.screens.preset-editor :as preset-editor-screen]
             [cn.li.ac.ability.client.screens.skill-tree :as skill-tree-screen]
             [cn.li.ac.test.support.network :as network-support]

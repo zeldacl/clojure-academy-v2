@@ -16,7 +16,6 @@
             [cn.li.ac.ability.client.managed-screens :as managed-screens]
             [cn.li.ac.ability.client.reactive-hud :as reactive-hud]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
-            [cn.li.ac.content.ability.teleporter.location-teleport-screen :as location-teleport-screen]
             [cn.li.ac.content.ability.teleporter.location-teleport-reactive :as location-teleport-reactive]
             [cn.li.ac.ability.client.screens.preset-editor :as preset-editor-screen]
             [cn.li.ac.ability.client.screens.preset-editor-reactive :as preset-editor-reactive]
@@ -36,8 +35,8 @@
             [cn.li.ac.client.toast :as toast]
             [cn.li.ac.ability.client.debug-overlay :as debug-overlay]
             [cn.li.ac.tutorial.client.notification :as tutorial-notification]
-            [cn.li.ac.terminal.client.apps.freq-transmitter :as freq-tx]
-            [cn.li.ac.terminal.client.install-effect :as install-fx]
+            [cn.li.ac.terminal.client.apps.freq-transmitter-reactive :as freq-tx]
+            [cn.li.ac.terminal.client.install-effect-reactive :as install-fx]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.i18n :as i18n]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
@@ -93,8 +92,8 @@
     (case screen-key
       :ac/skill-tree skill-tree-screen/screen-id
       :ac/preset-editor preset-editor-screen/screen-id
-      :ac/saved-position location-teleport-screen/screen-id
-      :ac/location-teleport location-teleport-screen/screen-id
+      :ac/saved-position location-teleport-reactive/screen-id
+      :ac/location-teleport location-teleport-reactive/screen-id
       nil)))
 
 (defn- client-ui-runtime-state-snapshot
@@ -341,7 +340,7 @@
     #(do
        (skill-tree-screen/close-screen! owner)
        (preset-editor-screen/close-screen! owner)
-       (location-teleport-screen/close-screen! owner)))
+       (location-teleport-reactive/close-screen! owner)))
   nil)
 
 (defn- clear-client-owned-runtime-state!
@@ -1059,14 +1058,14 @@
   (when (= channel :location-teleport/ui-open)
     (call-with-managed-screen-runtime
       #(when-let [owner (active-managed-screen-owner :ac/location-teleport)]
-         (location-teleport-screen/apply-server-payload! owner payload)))
+         (location-teleport-reactive/apply-server-payload! owner payload)))
     (client-bridge/open-screen! :ac/saved-position payload))
   (ctx/ctx-send-to-local! ctx-id channel payload))
 
 (defn register-client-push-handlers!
   []
   (when (mark-client-push-handlers-registered!)
-    ;; Register CGUI screen widget factories (replaces managed-screen dispatch)
+    ;; Register reactive screen widget factories (replaces managed-screen dispatch)
     (skill-tree-screen/install-widget-factory!)
     (preset-editor-screen/install-widget-factory!)
     (location-teleport-reactive/init!)
@@ -1292,14 +1291,6 @@
                   :ac/preset-editor
                   (assoc (preset-editor-screen/open-screen! owner)
                          :title "Preset Editor")
-
-                  :ac/saved-position
-                  (do (location-teleport-screen/open-screen! owner payload)
-                      {:command :open-cgui-screen :screen-key :ac/saved-position})
-
-                  :ac/location-teleport
-                  (do (location-teleport-screen/open-screen! owner payload)
-                      {:command :open-cgui-screen :screen-key :ac/saved-position})
 
                   nil))))))
 

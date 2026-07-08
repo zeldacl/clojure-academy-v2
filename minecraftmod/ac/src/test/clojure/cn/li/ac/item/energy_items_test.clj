@@ -1,36 +1,17 @@
 (ns cn.li.ac.item.energy-items-test
   (:require [clojure.test :refer [deftest is testing]]
-            [cn.li.ac.item.energy-items :as energy-items]))
+            [cn.li.ac.item.energy-items :as energy-items]
+            [cn.li.ac.item.developer-portable-reactive :as developer-portable-reactive]))
 
-(deftest portable-developer-opens-cgui-screen-test
-  (testing "portable developer opens CGUI developer screen (page_developer.xml)"
+(deftest portable-developer-opens-reactive-screen-test
+  (testing "portable developer opens the reactive developer screen on client side"
     (let [calls (atom [])]
-      (with-redefs [requiring-resolve
-                    (fn [sym]
-                      (cond
-                        (= sym 'cn.li.ac.item.developer-portable/create-screen)
-                        (fn [player]
-                          (swap! calls conj {:step :create-screen :player player})
-                          {:type :cgui-screen :cgui :mock-root :session-id "mock-session"})
-
-                        (= sym 'cn.li.mc1201.gui.screen.cgui-screen-host/open-cgui-screen!)
-                        (fn [root session-id opts]
-                          (swap! calls conj {:step :open-cgui-screen
-                                             :root root
-                                             :session-id session-id
-                                             :opts opts}))
-
-                        :else
-                        (throw (Exception. (str "Unknown requiring-resolve: " sym)))))]
+      (with-redefs [developer-portable-reactive/open!
+                    (fn [player] (swap! calls conj player))]
         (is (= {:consume? true}
                (#'energy-items/open-portable-developer! {:player :player-1
                                                          :side :client})))
-        (is (= [{:step :create-screen :player :player-1}
-                {:step :open-cgui-screen
-                 :root :mock-root
-                 :session-id "mock-session"
-                 :opts {:title "Portable Developer"}}]
-               @calls))))))
+        (is (= [:player-1] @calls))))))
 
 (deftest portable-developer-skips-on-server-side-test
   (testing "portable developer does nothing on server side"

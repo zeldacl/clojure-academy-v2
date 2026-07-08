@@ -5,19 +5,11 @@
 
 (def ^:private generator-block-spec
   {:label :generators
-   ;; Reactive UI migration: screen-fn now comes from *.gui-reactive namespaces
-   ;; (cn.li.mcmod.ui.* signal framework). Old *.gui namespaces are kept as
-   ;; reference/fallback and still loaded (some reactive files delegate
-   ;; container/slot logic to them) but their init-*-gui! is no longer called,
-   ;; so gui-reg/register-block-gui! only runs once with the reactive :screen-fn.
    :namespaces '[cn.li.ac.block.solar-gen.block
-                 cn.li.ac.block.solar-gen.gui
                  cn.li.ac.block.solar-gen.gui-reactive
                  cn.li.ac.block.wind-gen.block
-                 cn.li.ac.block.wind-gen.gui
                  cn.li.ac.block.wind-gen.gui-reactive
                  cn.li.ac.block.phase-gen.block
-                 cn.li.ac.block.phase-gen.gui
                  cn.li.ac.block.phase-gen.gui-reactive
                  cn.li.ac.block.cat-engine.block]
    :init-entries '[cn.li.ac.block.solar-gen.block/init-solar-gen!

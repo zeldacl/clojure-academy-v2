@@ -1,6 +1,6 @@
 (ns cn.li.ac.block.wireless-node-quick-move-test
   (:require [clojure.test :refer [deftest is testing]]
-            [cn.li.ac.block.wireless-node.gui :as node-gui]
+            [cn.li.ac.block.wireless-node.gui-reactive :as node-gui]
             [cn.li.ac.energy.operations :as energy]
             [cn.li.ac.wireless.gui.container.move :as move-common]
             [cn.li.ac.wireless.gui.container.common :as common]))
@@ -16,7 +16,7 @@
                     common/set-slot-item! (fn [c idx item]
                                             (swap! (get-in c [:tile-entity :inventory]) assoc idx item))
                     energy/is-energy-item-supported? (constantly true)]
-        (is (= :energy-item (node-gui/quick-move-stack container 0 100)))
+        (is (= :energy-item (#'node-gui/quickly-move container 0 100)))
         (is (nil? (get @(get-in container [:tile-entity :inventory]) 0)))))))
 
 (deftest quick-move-player-to-node-test
@@ -26,7 +26,7 @@
                     common/set-slot-item! (fn [c idx item]
                                             (swap! (get-in c [:tile-entity :inventory]) assoc idx item))
                     energy/is-energy-item-supported? (fn [item] (= item :energy-item))]
-        (is (= :other-item (node-gui/quick-move-stack container 100 100)))
+        (is (= :other-item (#'node-gui/quickly-move container 100 100)))
         (is (= :other-item (get @(get-in container [:tile-entity :inventory]) 100)))
         (is (nil? (get @(get-in container [:tile-entity :inventory]) 0)))))))
 
@@ -41,7 +41,7 @@
                                       :player-inventory-start player-inventory-start
                                       :cfg cfg})
                       :moved)]
-        (is (= :moved (node-gui/quick-move-stack container 100 100)))
+        (is (= :moved (#'node-gui/quickly-move container 100 100)))
         (is (= 100 (:slot-index @called)))
         (is (= 100 (:player-inventory-start @called)))
         (is (fn? (get-in @called [:cfg :inventory-pred])))

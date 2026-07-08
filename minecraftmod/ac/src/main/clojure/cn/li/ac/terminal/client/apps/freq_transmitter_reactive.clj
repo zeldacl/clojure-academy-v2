@@ -196,3 +196,11 @@
 (defn open!
   ([player] (bridge/open-reactive-screen! (create-runtime player) "Freq Transmitter"))
   ([] (open! nil)))
+
+(defn build-overlay-elements
+  "Build overlay elements for frequency transmitter (non-modal passOn mode).
+   Ported verbatim from the deleted freq_transmitter.clj."
+  [_player-uuid _screen-width _screen-height]
+  [{:kind :fill :x 0 :y 0 :w 640 :h 480 :color 0xC0202020}
+   {:kind :text :text "Frequency Transmitter (Overlay)" :x 200 :y 10 :color 0xFFFFFFFF}
+   {:kind :text :text "Press ESC to close" :x 200 :y 30 :color 0xFF888888}])

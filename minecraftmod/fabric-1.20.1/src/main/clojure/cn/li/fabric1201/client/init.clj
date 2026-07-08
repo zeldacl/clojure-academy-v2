@@ -4,7 +4,6 @@
             [cn.li.mc1201.client.render.pose :as pose-impl]
             [cn.li.mc1201.client.render.buffer :as buffer-impl]
             [cn.li.mc1201.client.screen.host :as screen-host]
-            [cn.li.mc1201.gui.screen.cgui-screen-host :as cgui-screen-host]
             [cn.li.mc1201.client.overlay.state :as overlay-state]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.util.log :as log]
@@ -22,7 +21,7 @@
             [cn.li.fabric1201.client.keyboard-init :as kb-init]
             [cn.li.mc1201.client.font.msdf-setup :as msdf-setup]
             [cn.li.mc1201.client.session :as mc-session]
-            [cn.li.mc1201.gui.reactive.embed-host :as reactive-embed-host]
+            [cn.li.mc1201.gui.reactive.host :as reactive-host]
             [cn.li.mc1201.gui.cgui.font :as cgui-font]
             [cn.li.mc1201.client.effects.sound :as sound]
             [cn.li.mc1201.key-scheme-provider-core :as key-scheme-core]
@@ -101,25 +100,23 @@
       (log/info (str "Fabric BER registered for tile-id " tile-id)))))
 
 (defn- open-screen-dispatcher
-  "Dispatch open-screen to widget factory (keyword) or CGUI screen (map),
-  falling back to managed screen for keywords without a registered factory."
+  "Dispatch open-screen to a registered reactive widget factory, falling back
+  to managed screen for keywords without a registered factory."
   [arg payload]
-  (if (keyword? arg)
+  (when (keyword? arg)
     (if-let [widget (platform-ui/create-widget arg payload)]
-      (let [session-id (:client-session-id payload "")]
-        (cgui-screen-host/open-cgui-screen!
-          widget session-id {:title (name arg)}))
-      (screen-host/open-managed-screen! arg payload))
-    (when (map? arg)
-      (let [{:keys [cgui-root title session-id]} arg]
-        (cgui-screen-host/open-cgui-screen!
-          cgui-root (or session-id "")
-          {:title (or title "CGUI Screen")})))))
+      (reactive-host/open-reactive-screen!
+        (:runtime widget) (:title widget "Screen") {:on-close (:on-close widget)})
+      (screen-host/open-managed-screen! arg payload))))
+
+(defn- open-reactive-screen-handler [& args]
+  (apply reactive-host/open-reactive-screen! args))
 
 (defn- init-content-client-bridge!
   []
   (client-bridge/install-client-bridge!
     {:open-screen open-screen-dispatcher
+     :open-reactive-screen open-reactive-screen-handler
      :slot-key-down runtime-bridge/on-slot-key-down!
      :slot-key-tick runtime-bridge/on-slot-key-tick!
      :slot-key-up runtime-bridge/on-slot-key-up!
@@ -157,8 +154,6 @@
                         (let [^Minecraft mc (Minecraft/getInstance)
                               ^Window win (.getWindow mc)]
                           [(.getGuiScaledWidth win) (.getGuiScaledHeight win)]))
-     :reactive-embed-host! (fn [parent rt]
-                             (reactive-embed-host/reactive-embed-host! parent rt))
      :register-font! (fn [name spec]
                        (cgui-font/register-font! name spec))
      :get-player-owner #(mc-session/current-local-player-owner)

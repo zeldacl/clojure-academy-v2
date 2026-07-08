@@ -1,14 +1,15 @@
 (ns cn.li.ac.block.developer.panel-reactive
   "Complete reactive replacement for developer/panel.clj + gui.clj's classic
-   page_developer.xml layout. All pure business logic (category/level model,
-   right-panel mode derivation, skill-tree render-data, req-start-development!)
-   is reused verbatim from panel.clj. Only CGUI widget construction/lookup and
-   the cover-overlay mechanics are rewritten natively.
+   page_developer.xml layout (both deleted). All pure business logic
+   (category/level model, right-panel mode derivation, skill-tree render-data,
+   req-start-development!) was ported verbatim from the old panel.clj. Only
+   CGUI widget construction/lookup and the cover-overlay mechanics were ever
+   rewritten natively.
 
    Layout note: page_developer.xml has no new-format XML equivalent, so the
    classic 400x187 layout is reconstructed here as absolute-position native
    nodes (positions hand-derived from the old CGUI align/pivot math applied
-   to the original XML's fixed widget tree — see docs in this file's PR)."
+   to the original XML's fixed widget tree)."
   (:require [clojure.string :as str]
             [cn.li.ac.ability.service.runtime-store :as store]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
@@ -31,12 +32,16 @@
             [cn.li.ac.ability.util.balance :as bal]
             [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.ac.ability.rules.learning-rules :as learning-rules]
+            [cn.li.ac.ability.config :as cfg]
             [cn.li.ac.ability.model.ability :as adata]
             [cn.li.ac.ability.client.screens.skill-tree :as skill-tree]
             [cn.li.ac.ability.client.screens.skill-tree-reactive :as skill-tree-reactive]
             [cn.li.ac.ability.client.screens.skill-tree-view :as skill-tree-view]
             [cn.li.ac.block.developer.console-reactive :as console-reactive]
-            [cn.li.ac.block.developer.panel :as panel]
+            [cn.li.ac.item.special-items :as special-items]
+            [cn.li.mcmod.platform.entity :as entity]
+            [cn.li.mcmod.platform.be :as platform-be]
+            [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.mcmod.gui.container.action-payload :as action-payload]
             [cn.li.mcmod.gui.container-state :as container-state]
             [cn.li.mcmod.network.client :as net-client])
@@ -59,6 +64,152 @@
 
 (def ^:private area-x 128.0) (def ^:private area-y 18.0)
 (def ^:private area-w 257.0) (def ^:private area-h 139.0)
+
+;; ============================================================================
+;; Pure business logic (ported verbatim from the deleted panel.clj) — category/
+;; level model, right-panel mode derivation, skill-tree render-data, dev-start
+;; requests. Only CGUI widget construction/lookup was ever rewritten natively;
+;; none of this touches CGUI.
+;; ============================================================================
+
+(defn dev-msg [action]
+  (msg-registry/msg :developer action))
+
+(defn req-start-development!
+  "Send a development request. If container has :on-dev-start callback,
+  delegates to it (for portable/instant dev). Otherwise sends network
+  message for timed block-based development."
+  [container action & [extra callback]]
+  (if-let [handler (:on-dev-start container)]
+    ;; Portable/instant dev path — delegate to container's handler
+    (handler action extra callback)
+    ;; Block dev path — send network message for timed session
+    (let [owner (try (container-state/owner-from-container container)
+                     (catch Exception e
+                       (log/error "[req-start-development!] owner error:" (ex-message e))
+                       nil))
+          msg-id (dev-msg :start-development)
+          payload (action-payload/action-payload container (merge {:action action} extra))]
+      (log/info "[req-start-development!] sending" msg-id "action=" action
+                "owner=" (pr-str owner) "payload=" (pr-str payload))
+      (net-client/send-to-server
+        owner
+        msg-id
+        payload
+        (fn [resp]
+          (log/info "[req-start-development!] response:" (pr-str resp))
+          (when callback (callback resp)))))))
+
+(defn- texture-path-from-category-icon [icon-str]
+  (when (string? icon-str)
+    (if (str/starts-with? icon-str "textures/")
+      (modid/asset-path "textures" (subs icon-str (count "textures/")))
+      (modid/asset-path "textures" icon-str))))
+
+(defn- default-ability-icon-path []
+  (modid/asset-path "textures" "guis/icons/icon_nocategory.png"))
+
+(defn normalize-tier [tier]
+  (let [k (keyword (or tier :normal))]
+    (if (developer/developer-type? k) k :normal)))
+
+(defn current-developer-type [container]
+  (let [tile (:tile-entity container)
+        block-tier (when tile
+                     (some-> (platform-be/get-block-id tile)
+                             developer/developer-type-for-block-id))
+        state-tier (some-> (:tier container) deref normalize-tier)]
+    (or block-tier state-tier :normal)))
+
+(defn- category-ui-model
+  [{:keys [ad cat dev? developer-type energy max-energy bandwidth]}]
+  (let [cat-id (:category-id ad)
+        has-category? (boolean cat)
+        lvl (if has-category? (long (or (:level ad) 1)) 0)
+        level-prog (double (:level-progress ad 0.0))
+        skills-at-level (when cat-id
+                          (skill-query/get-controllable-skills-at-level cat-id lvl))
+        cat-rate (when cat-id (acat/get-prog-incr-rate cat-id))
+        thresh (when (and cat-id (not (>= lvl 5)))
+                 (learning-rules/level-up-threshold ad
+                   skills-at-level cat-rate (cfg/prog-incr-rate)))
+        cat-prog01 (if has-category?
+                     (if (and thresh (pos? thresh))
+                       (max 0.02 (bal/clamp01 (/ level-prog thresh)))
+                       (if (>= lvl 5) 1.0 0.02))
+                     0.0)
+        can-upgrade? (and has-category? (< lvl 5)
+                          (developer/gte? developer-type (developer/min-for-level (inc lvl)))
+                          (if thresh (>= level-prog thresh) true))
+        ability-name (if has-category? (i18n/translate (:name-key cat)) "N/A")
+        icon-path (if has-category?
+                    (or (some-> cat :icon texture-path-from-category-icon)
+                        (default-ability-icon-path))
+                    (default-ability-icon-path))
+        exp-label (if has-category?
+                    (if (>= lvl 5) "MAX"
+                        (if thresh (format "EXP %.0f%%" (* 100.0 cat-prog01)) "EXP 0%"))
+                    "EXP 0%")
+        level-label (cond dev? "Learning"
+                          :else (format "Lv.%d" lvl))]  ;; matching original levelDesc
+    {:has-category? has-category?
+     :can-upgrade? can-upgrade?
+     :ability-name ability-name
+     :icon-path icon-path
+     :exp-label exp-label
+     :level-label level-label
+     :cat-prog01 cat-prog01
+     :sync-rate (:bandwidth (developer/developer-spec developer-type) 0.7)  ;; fixed device property
+     :power01 (bal/clamp01 (/ energy max-energy))}))
+
+(defn- current-ui-model-in-session
+  [session-id container player]
+  (let [energy (double (or @(:energy container) 0.0))
+        max-energy (max 1.0 (double (or @(:max-energy container) 1.0)))
+        dev? (boolean (or @(:is-developing container) false))
+        uuid-str (when player (uuid/player-uuid player))
+        pstate (when uuid-str (store/get-player-state* session-id uuid-str))
+        ad (:ability-data pstate)
+        cat-id (:category-id ad)
+        cat (when cat-id (acat/get-category cat-id))
+        developer-type (current-developer-type container)]
+    (category-ui-model {:ad ad :cat cat :dev? dev? :developer-type developer-type
+                        :energy energy :max-energy max-energy
+                        :bandwidth (:bandwidth (developer/developer-spec developer-type) 0.7)})))
+
+(defn current-ui-model [container player]
+  (current-ui-model-in-session
+    (runtime-hooks/require-player-state-session-id "developer.panel")
+    container player))
+
+(defn skill-tree-render-context
+  [session-id player container]
+  (let [uuid-str (when player (uuid/player-uuid player))
+        pstate (when uuid-str (store/get-player-state* session-id uuid-str))
+        dev-type (current-developer-type container)]
+    {:pstate pstate
+     :dev-type dev-type
+     :render-data (skill-tree/build-render-data-for-player-state pstate dev-type)}))
+
+(defn- player-holding-magnetic-coil? [player]
+  (and player
+       (entity/entity-ops-available?)
+       (= special-items/magnetic-coil-item-id (entity/player-get-main-hand-item-id player))))
+
+(defn right-panel-mode
+  "Pure: determine what to render in parent_right/area."
+  [_player-state container player]
+  (let [uuid-str (when player (uuid/player-uuid player))
+        pstate (when uuid-str (store/get-player-state*
+                                (runtime-hooks/require-player-state-session-id "developer.panel")
+                                uuid-str))
+        ad (:ability-data pstate)
+        has-cat? (boolean (:category-id ad))
+        holding-coil? (player-holding-magnetic-coil? player)]
+    (cond
+      (and has-cat? holding-coil?) :reset-console
+      (not has-cat?) :console
+      :else :skill-tree)))
 
 ;; ============================================================================
 ;; Node builders
@@ -182,7 +333,7 @@
     (ui/bind! rt id :alpha sig-d)))
 
 ;; ============================================================================
-;; Left/right panel dynamic bindings — reuses panel/current-ui-model verbatim
+;; Left/right panel dynamic bindings — reuses current-ui-model verbatim
 ;; ============================================================================
 
 (defn- attach-model-bind! [^UiRt rt container player]
@@ -198,7 +349,7 @@
         (fn [_]
           (let [{:keys [ability-name icon-path exp-label level-label
                         cat-prog01 power01 sync-rate can-upgrade?]}
-                (panel/current-ui-model container player)]
+                (current-ui-model container player)]
             (ui/set-prop! rt :text-abilityname :text ability-name)
             (ui/set-prop! rt :logo-ability :src icon-path)
             (ui/set-prop! rt :text-exp :text exp-label)
@@ -232,7 +383,7 @@
 
 ;; ============================================================================
 ;; Wireless node-name label refresh (native replacement for
-;; panel/refresh-linked-node-label! which writes via old find-widget path)
+;; refresh-linked-node-label! which writes via old find-widget path)
 ;; ============================================================================
 
 (defn- refresh-node-name! [^UiRt rt container]
@@ -241,7 +392,7 @@
           owner (try (container-state/owner-from-container container)
                      (catch Exception e (log/error "[dev-panel] owner error:" (ex-message e)) nil))]
       (net-client/send-to-server
-        owner (panel/dev-msg :list-nodes) payload
+        owner (dev-msg :list-nodes) payload
         (fn [resp]
           (when (map? resp)
             (let [text (if-let [n (:linked resp)] (or (:node-name n) "N/A") "N/A")]
@@ -377,7 +528,7 @@
             (> skill-level player-level) (swap! state-a assoc :error :low-level)
             (not (learning-rules/can-learn? skill-spec ad player-level dev-type))
             (swap! state-a assoc :error :cond-fail)
-            :else (do (panel/req-start-development! container :learn-skill {:skill-id (name skill-id)})
+            :else (do (req-start-development! container :learn-skill {:skill-id (name skill-id)})
                       (swap! state-a assoc :error nil)))))
       (fn [] (close-cover! rt)))
     (set-tick! rt :cover-tick
@@ -405,7 +556,7 @@
 (defn- open-levelup-overlay! [^UiRt rt container player developer-type]
   (let [alpha-target (sig/signal-d 0.7)
         fill-sig (cover-fill-signal alpha-target (rt/clock-ms-sig rt))
-        dev-type (or (panel/normalize-tier developer-type) :normal)
+        dev-type (or (normalize-tier developer-type) :normal)
         dev-spec (developer/developer-spec dev-type)
         session-id (runtime-hooks/require-player-state-session-id "developer.panel")
         uuid-str (when player (uuid/player-uuid player))
@@ -428,7 +579,7 @@
         (let [energy (double (or @(:energy container) 0.0))]
           (if (< energy est-consumption)
             (swap! state-a assoc :error :low-energy)
-            (do (panel/req-start-development! container :level-up)
+            (do (req-start-development! container :level-up)
                 (swap! state-a assoc :error nil)))))
       (fn [] (close-cover! rt)))
     (set-tick! rt :cover-tick
@@ -461,7 +612,7 @@
 
 (defn- build-skill-tree-area! [^UiRt rt container player]
   (let [session-id (runtime-hooks/require-player-state-session-id "developer.panel")
-        {:keys [render-data dev-type]} (panel/skill-tree-render-context session-id player container)
+        {:keys [render-data dev-type]} (skill-tree-render-context session-id player container)
         nodes (:skill-nodes render-data)
         hw skill-tree/widget-size
         embed-rt (skill-tree-reactive/create-embedded-runtime render-data (/ area-w 2.0) (/ area-h 2.0)
@@ -479,14 +630,14 @@
     (set-tick! rt :skill-tree-tick
       (sig/computed-o [(rt/clock-ms-sig rt)]
         (fn [_]
-          (let [{:keys [render-data]} (panel/skill-tree-render-context session-id player container)
+          (let [{:keys [render-data]} (skill-tree-render-context session-id player container)
                 hover-id (get @hit-nodes (rt/hovered-idx rt))]
             (skill-tree-reactive/refresh-embedded-runtime! embed-rt render-data
               (/ area-w 2.0) (/ area-h 2.0) area-w area-h hover-id))
           nil)))))
 
 ;; ============================================================================
-;; Right-panel mode dispatch — reuses panel/right-panel-mode verbatim
+;; Right-panel mode dispatch — reuses right-panel-mode verbatim
 ;; ============================================================================
 
 (defn- attach-right-panel-dispatch! [^UiRt rt container player]
@@ -494,7 +645,7 @@
     (set-tick! rt :right-panel-tick
       (sig/computed-o [(rt/clock-ms-sig rt)]
         (fn [_]
-          (let [mode (panel/right-panel-mode nil container player)]
+          (let [mode (right-panel-mode nil container player)]
             (when (not= mode @last-mode)
               (reset! last-mode mode)
               (set-tick! rt :skill-tree-tick nil)
@@ -505,13 +656,13 @@
                             :player-name (or @(:user-name container) "Player")
                             :has-developer (boolean (:tile-entity container))
                             :on-start-development
-                            (fn [] (panel/req-start-development! container :level-up))})
+                            (fn [] (req-start-development! container :level-up))})
                 :reset-console (console-reactive/attach! rt :area area-w area-h
                                   {:mode :reset :container container
                                    :player-name (or @(:user-name container) "Player")
                                    :has-developer (boolean (:tile-entity container))
                                    :on-start-development
-                                   (fn [] (panel/req-start-development! container :reset))})
+                                   (fn [] (req-start-development! container :reset))})
                 :skill-tree (build-skill-tree-area! rt container player)
                 nil)))
           nil)))))
@@ -522,7 +673,7 @@
 
 (defn- attach-buttons! [^UiRt rt container player]
   (events/on! rt :btn-upgrade :left-click
-    (fn [_ _ _] (open-levelup-overlay! rt container player (panel/current-developer-type container))))
+    (fn [_ _ _] (open-levelup-overlay! rt container player (current-developer-type container))))
   (events/on! rt :button-wireless :left-click
     (fn [_ _ _] (open-wireless-overlay! rt container)))
   (events/on! rt :logo-node :left-click

@@ -10,12 +10,7 @@
 
 (def ^:private wireless-block-spec
   {:label :wireless
-   ;; Reactive UI migration — see generators.clj comment for rationale.
-   ;; wireless-matrix-reactive delegates container/slot/network logic to the
-   ;; old gui.clj's public defns (capability-proxy + ownership-policy code
-   ;; reused as-is); wireless-node-reactive fully reimplements (simpler domain).
    :namespaces '[cn.li.ac.block.wireless-matrix.block
-                cn.li.ac.block.wireless-matrix.gui
                 cn.li.ac.block.wireless-matrix.gui-reactive
                 cn.li.ac.block.wireless-node.block
                 cn.li.ac.block.wireless-node.gui-reactive]

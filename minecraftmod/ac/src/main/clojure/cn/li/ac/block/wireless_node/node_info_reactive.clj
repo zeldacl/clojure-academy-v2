@@ -1,8 +1,8 @@
 (ns cn.li.ac.block.wireless-node.node-info-reactive
   "Reactive info-area for Wireless Node — editable node name + password."
-  (:require [cn.li.ac.block.wireless-node.gui :as node-gui]
-            [cn.li.ac.block.wireless-node.logic :as node-logic]
+  (:require [cn.li.ac.block.wireless-node.logic :as node-logic]
             [cn.li.ac.gui.info-area-reactive :as info-area]
+            [cn.li.ac.wireless.gui.container.common :as common]
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.mcmod.gui.container.action-payload :as action-payload]
             [cn.li.mcmod.network.client :as net-client]
@@ -13,13 +13,26 @@
 (def ^:private gui-type :wireless-node)
 (defn- msg [action] (msg-registry/msg gui-type action))
 
+(defn- get-owner
+  "Ported verbatim from the deleted wireless_node/gui.clj."
+  [container]
+  (let [tile (:tile-entity container)]
+    (node-logic/owner-name (common/get-tile-state tile))))
+
+(defn- node-info-area-policy
+  "Compute editable policy for node info-area fields (ported verbatim from
+   the deleted wireless_node/gui.clj)."
+  [is-owner?]
+  {:editable-node-name? (boolean is-owner?)
+   :editable-password? (boolean is-owner?)})
+
 (defn rebuild!
   [^UiRt rt container player]
   (try
     (let [tile (:tile-entity container)
-          owner-name (node-gui/get-owner container)
+          owner-name (get-owner container)
           is-owner? (node-logic/owner-authorized? owner-name player)
-          policy (node-gui/node-info-area-policy is-owner?)
+          policy (node-info-area-policy is-owner?)
           node-range (fn []
                        (try (str (.getRange ^IWirelessNode tile))
                             (catch Exception _ "0.0")))

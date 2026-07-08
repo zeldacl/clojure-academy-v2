@@ -1,8 +1,7 @@
 (ns cn.li.ac.terminal.client.actions
   "CLIENT-ONLY: side-checked dynamic-load entry points for shared item handlers and client init."
   (:require [cn.li.ac.terminal.client.apps.skill-tree :as skill-tree]
-            [cn.li.ac.terminal.client.apps.tutorial :as tutorial-app]
-            [cn.li.ac.terminal.client.shell :as shell]
+            [cn.li.ac.terminal.client.apps.tutorial-reactive :as tutorial-app]
             [cn.li.ac.terminal.client.shell-reactive :as shell-reactive]))
 
 (defn install-ui-hooks!
@@ -11,7 +10,7 @@
 
 (defn open-terminal!
   [player]
-  (shell/open-terminal player))
+  (shell-reactive/open-terminal! player))
 
 (defn open-tutorial!
   [player]
@@ -23,4 +22,4 @@
 
 (defn toggle-terminal!
   [player]
-  (shell/toggle-terminal! player))
+  (shell-reactive/toggle! player))

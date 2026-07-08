@@ -92,6 +92,14 @@
 (defn show! [player]
   (bridge/open-reactive-screen! (create-runtime player) "Installing..."))
 
+(defn build-overlay-elements
+  "Build overlay elements for terminal install effect (non-modal mode).
+   Ported verbatim from the deleted install_effect.clj."
+  [_player-uuid screen-width screen-height]
+  (let [cx (quot screen-width 2) cy (quot screen-height 2)]
+    [{:kind :fill :x (- cx 150) :y (- cy 20) :w 300 :h 40 :color 0xC0202020}
+     {:kind :text :text "Installing terminal..." :x (- cx 60) :y (- cy 5) :color 0xFFFFFFFF}]))
+
 ;; ============================================================================
 ;; Push handler — same registration as install_effect.clj's
 ;; install-push-handler!, calling this file's reactive show! instead.

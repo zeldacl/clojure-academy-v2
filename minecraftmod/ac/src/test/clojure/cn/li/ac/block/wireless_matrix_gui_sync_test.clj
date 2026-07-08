@@ -1,6 +1,6 @@
 (ns cn.li.ac.block.wireless-matrix-gui-sync-test
   (:require [clojure.test :refer [deftest is testing]]
-            [cn.li.ac.block.wireless-matrix.gui :as gui]
+            [cn.li.ac.block.wireless-matrix.gui-reactive :as gui]
             [cn.li.ac.wireless.gui.container.common :as common]
             [cn.li.ac.block.wireless-matrix.logic :as matrix-logic]))
 

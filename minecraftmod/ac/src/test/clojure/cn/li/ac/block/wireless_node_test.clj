@@ -2,7 +2,7 @@
   "Unit tests for wireless node pure logic."
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.ac.energy.operations :as energy]
-            [cn.li.ac.block.wireless-node.gui :as node-gui]
+            [cn.li.ac.block.wireless-node.gui-reactive :as node-gui]
             [cn.li.ac.block.wireless-node.logic :as node-logic]
             [cn.li.ac.block.wireless-node.handlers :as node-handlers]
             [cn.li.ac.wireless.config :as node-config]

@@ -41,7 +41,7 @@
 					 :screen-factory-fn-kw :create-node-screen
 					 :slot-schema-id :wireless-node
 					 :message-domain :node
-					 :init-fn 'cn.li.ac.block.wireless-node.gui/init-wireless-node-gui!}
+}
 	 :wireless-matrix {:gui-name "wireless-matrix"
 					 :gui-id 1
 					 :display-name "Wireless Matrix"
@@ -50,7 +50,7 @@
 					 :screen-factory-fn-kw :create-matrix-screen
 					 :slot-schema-id :wireless-matrix
 					 :message-domain :matrix
-					 :init-fn 'cn.li.ac.block.wireless-matrix.gui/init-wireless-matrix-gui!}
+}
 	 :solar-gen {:gui-name "solar-gen"
 			 :gui-id 2
 			 :display-name "Solar Generator"
@@ -59,7 +59,7 @@
 			 :screen-factory-fn-kw :create-solar-screen
 			 :slot-schema-id :solar-gen
 			 :message-domain :generator
-			 :init-fn 'cn.li.ac.block.solar-gen.gui/init-solar-gui!}
+}
 	 :wind-gen-main {:gui-name "wind-gen-main"
 				 :gui-id 3
 				 :display-name "Wind Generator Main"
@@ -67,7 +67,7 @@
 				 :registry-name "wind_gen_main_gui"
 				 :screen-factory-fn-kw :create-wind-main-screen
 				 :slot-schema-id :wind-gen-main
-				 :init-fn 'cn.li.ac.block.wind-gen.gui/init-wind-gen-gui!}
+}
 	 :wind-gen-base {:gui-name "wind-gen-base"
 				 :gui-id 4
 				 :display-name "Wind Generator Base"
@@ -75,7 +75,7 @@
 				 :registry-name "wind_gen_base_gui"
 				 :screen-factory-fn-kw :create-wind-base-screen
 				 :slot-schema-id :wind-gen-base
-				 :init-fn 'cn.li.ac.block.wind-gen.gui/init-wind-gen-gui!}
+}
 	 :imag-fusor {:gui-name "imag-fusor"
 			  :gui-id 5
 			  :display-name "Imag Fusor"
@@ -83,7 +83,7 @@
 			  :registry-name "imag_fusor_gui"
 			  :screen-factory-fn-kw :create-imag-fusor-screen
 			  :slot-schema-id :imag-fusor
-			  :init-fn 'cn.li.ac.block.imag-fusor.gui/init-imag-fusor-gui!}
+}
 	 :metal-former {:gui-name "metal-former"
 				 :gui-id 6
 				 :display-name "Metal Former"
@@ -92,7 +92,7 @@
 				 :screen-factory-fn-kw :create-metal-former-screen
 				 :slot-schema-id :metal-former
 				 :message-domain :metal-former
-				 :init-fn 'cn.li.ac.block.metal-former.gui/init-metal-former-gui!}
+}
 	 :phase-gen {:gui-name "phase-gen"
 			 :gui-id 7
 			 :display-name "Phase Generator"
@@ -100,7 +100,7 @@
 			 :registry-name "phase_gen_gui"
 			 :screen-factory-fn-kw :create-phase-gen-screen
 			 :slot-schema-id :phase-gen
-			 :init-fn 'cn.li.ac.block.phase-gen.gui/init-phase-gen-gui!}
+}
 	 :developer {:gui-name "developer"
 			 :gui-id 13
 			 :display-name "Ability Developer"
@@ -109,7 +109,7 @@
 			 :screen-factory-fn-kw :create-developer-screen
 			 :slot-schema-id :developer-gui
 			 :message-domain :developer
-			 :init-fn 'cn.li.ac.block.developer.gui/init-developer-gui!}
+}
 	 :energy-converter {:gui-name "energy-converter"
 				    :gui-id 14
 				    :display-name "Energy Converter"
@@ -118,7 +118,7 @@
 				    :screen-factory-fn-kw :create-energy-converter-screen
 				    :slot-schema-id :energy-converter
 				    :message-domain nil
-				    :init-fn 'cn.li.ac.integration.block.energy-converter.gui/register-converter-guis!}
+}
 	 :ability-interferer {:gui-name "ability-interferer"
 				       :gui-id 15
 				       :display-name "Ability Interferer"
@@ -127,7 +127,7 @@
 				       :screen-factory-fn-kw :create-ability-interferer-screen
 				       :slot-schema-id :ability-interferer
 				       :message-domain :ability-interferer
-				       :init-fn 'cn.li.ac.block.ability-interferer.gui/init-ability-interferer-gui!}})
+}})
 
 (def gui-registration-keys
 	[:gui-id :display-name :gui-type :registry-name :screen-factory-fn-kw :slot-schema-id])

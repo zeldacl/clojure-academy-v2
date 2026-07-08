@@ -1,22 +1,17 @@
 (ns cn.li.ac.terminal.client.shell-reactive
-  "Complete reactive replacement for terminal/client/shell.clj's GUI.
-   All network/state/page logic (query/install/uninstall/launch, page-count,
-   clamp-page, grid-position, player-owner) is reused verbatim from shell.clj.
-   Only the CGUI widget tree + per-frame widget mutation is rewritten native.
-
-   Simplifications versus the original (cosmetic-only, no functional loss):
-   - Per-cell staggered fade-in + breathing cursor decal omitted — app grid
-     appears instantly; hover feedback is native (idle/hover alpha on the
-     app icon image, driven by the framework's own hoveredIdx tracking).
-   - 3D OpenGL rotation → the same 2D translate approximation the CGUI
-     version already used, now driven by real mouse-position signals."
-  (:require [cn.li.ac.config.modid :as modid]
+  "Complete reactive replacement for terminal/client/shell.clj (deleted —
+   this file is now the sole implementation, including the network/state/
+   page-math functions previously delegated from shell.clj: query-terminal-
+   state!, install-app!, page-count, clamp-page, grid-position, player-owner)."
+  (:require [cn.li.ac.ability.util.uuid :as player-uuid]
+            [cn.li.ac.config.modid :as modid]
             [cn.li.ac.terminal.catalog :as catalog]
             [cn.li.ac.terminal.client.apps :as client-apps]
-            [cn.li.ac.terminal.client.shell :as shell]
             [cn.li.ac.terminal.client.runtime :as term-rt]
+            [cn.li.ac.terminal.messages :as terminal-messages]
             [cn.li.mcmod.client.content-actions :as content-actions]
             [cn.li.mcmod.client.platform-bridge :as bridge]
+            [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.ui :as platform-ui]
             [cn.li.mcmod.util.log :as log]
@@ -32,7 +27,50 @@
 
 (def ^:private root-w 640.0)
 (def ^:private root-h 785.0)
-(def ^:private apps-per-page 9)
+
+;; Grid config matching original AcademyCraft TerminalUI:
+;; START_X=65, START_Y=155, STEP_X=180, STEP_Y=180
+(def ^:private grid-config
+  {:columns 3 :rows 3 :col-x [65 245 425] :row-y [155 335 515]
+   :app-width 151 :app-height 151})
+
+(def ^:private apps-per-page (* (:columns grid-config) (:rows grid-config)))
+
+(defn- grid-position [index]
+  (let [row (quot index (:columns grid-config))
+        col (rem index (:columns grid-config))]
+    [(get (:col-x grid-config) col) (get (:row-y grid-config) row)]))
+
+(defn- page-count [apps]
+  (max 1 (int (Math/ceil (/ (double (count apps)) (double apps-per-page))))))
+
+(defn- clamp-page [apps page]
+  (let [max-page (dec (page-count apps))]
+    (-> (int (or page 0)) (max 0) (min max-page))))
+
+;; ============================================================================
+;; Network / RPC (reused verbatim from shell.clj)
+;; ============================================================================
+
+(defn- query-terminal-state! [owner callback]
+  (let [generation (term-rt/ensure-owner! owner)]
+    (net-client/send-to-server owner (terminal-messages/msg-id :get-state) {}
+      (fn [response]
+        (when (term-rt/owner-active? owner generation)
+          (term-rt/dispatch-event! owner :terminal/query-response response)
+          (when callback (callback response)))))))
+
+(defn- install-app! [owner app-id callback]
+  (let [generation (term-rt/ensure-owner! owner)]
+    (term-rt/dispatch-event! owner :terminal/install-app-start {:app-id app-id})
+    (net-client/send-to-server owner (terminal-messages/msg-id :install-app) {:app-id (name app-id)}
+      (fn [response]
+        (when (term-rt/owner-active? owner generation)
+          (term-rt/dispatch-event! owner :terminal/install-app-result (assoc response :app-id app-id))
+          (when callback (callback response)))))))
+
+(defn- player-owner [player]
+  (term-rt/player-owner (or (player-uuid/player-uuid player) (str player))))
 
 ;; ============================================================================
 ;; set-tick! — force a per-frame side-effecting computed-o to actually run.
@@ -81,7 +119,7 @@
 (defn- handle-app-click! [_rt owner app installed? player rebuild!]
   (if installed?
     (client-apps/launch! (:id app) player)
-    (shell/install-app! owner (:id app)
+    (install-app! owner (:id app)
       (fn [response]
         (if (:success response)
           (rebuild!)
@@ -93,14 +131,14 @@
         _ (rt/clear-children! rt grid)
         state (term-rt/state-snapshot owner)
         all-apps (catalog/ordered-apps)
-        page (shell/clamp-page all-apps (:page state))
+        page (clamp-page all-apps (:page state))
         _ (term-rt/dispatch-event! owner :terminal/set-page {:page page})
         installed-apps (:installed-apps state)
         offset (* page apps-per-page)
         page-apps (->> all-apps (drop offset) (take apps-per-page))
-        total-pages (shell/page-count all-apps)]
+        total-pages (page-count all-apps)]
     (doseq [[i app] (map-indexed vector page-apps)]
-      (let [[x y] (shell/grid-position i)
+      (let [[x y] (grid-position i)
             id (keyword (str "app-" i))
             installed? (contains? installed-apps (:id app))]
         (rt/build-child! rt (app-item-spec id app x y) grid)
@@ -119,7 +157,7 @@
 (defn- change-page! [^UiRt rt owner player delta]
   (let [apps (catalog/ordered-apps)
         current (:page (term-rt/state-snapshot owner))
-        next-page (shell/clamp-page apps (+ (int (or current 0)) (int delta)))]
+        next-page (clamp-page apps (+ (int (or current 0)) (int delta)))]
     (when (not= next-page current)
       (term-rt/dispatch-event! owner :terminal/set-page {:page next-page})
       (rebuild-grid! rt owner player))))
@@ -138,8 +176,8 @@
               time-text (format "%02d:%02d" hour minutes)
               state (term-rt/state-snapshot owner)
               all-apps (catalog/ordered-apps)
-              page (shell/clamp-page all-apps (:page state))
-              total-pages (shell/page-count all-apps)
+              page (clamp-page all-apps (:page state))
+              total-pages (page-count all-apps)
               installed-count (count (:installed-apps state))
               total-count (count all-apps)
               loading? (boolean (:loading? state))]
@@ -182,7 +220,7 @@
   (let [r (rt/create-runtime)
         spec (ui-xml/load-spec (modid/asset-path "guis" "new/terminal.xml"))
         _ (rt/build! r spec)
-        owner (shell/player-owner player)]
+        owner (player-owner player)]
     (rt/build-child! r
       {:kind :group :props {:id :app-grid :x 0.0 :y 0.0 :w root-w :h root-h}}
       (rt/node-by-id r :back))
@@ -194,13 +232,56 @@
     (attach-perspective! r)
     (events/on! r :arrow_up :left-click (fn [_ _ _] (change-page! r owner player -1)))
     (events/on! r :arrow_down :left-click (fn [_ _ _] (change-page! r owner player 1)))
-    (shell/query-terminal-state! owner
+    (query-terminal-state! owner
       (fn [_] (rebuild-grid! r owner player)))
     r))
 
 (defn open! [player]
   (let [r (create-runtime player)]
     (bridge/open-reactive-screen! r "Terminal")))
+
+;; ============================================================================
+;; Open/toggle entry points — reused verbatim from shell.clj's open-terminal/
+;; toggle-terminal!/poll-terminal-toggle-key!, except opening goes through
+;; open! (bridge/open-reactive-screen! directly) instead of the old
+;; client-bridge/open-screen! :ac/terminal path, which used a key
+;; (:ac/terminal) that was never actually registered anywhere (only
+;; :ac/terminal-gui was) — the Alt-key toggle silently no-op'd under the old
+;; code. This was a pre-existing bug, not something introduced by the
+;; reactive migration.
+;; ============================================================================
+
+(defn open-terminal!
+  "Query install state first (matching old shell.clj's open-terminal gate);
+   only open the screen if the terminal has been installed."
+  [player]
+  (let [owner (player-owner player)]
+    (query-terminal-state! owner
+      (fn [response]
+        (if (:terminal-installed? response)
+          (open! player)
+          (log/info "Terminal not installed, use item to install first"))))))
+
+(defn toggle! [player]
+  (if (bridge/screen-active?)
+    (bridge/close-screen!)
+    (open-terminal! player)))
+
+(def ^:private glfw-key-left-alt 342)
+(def ^:private terminal-key-was-pressed (atom false))
+
+(defn- poll-terminal-toggle-key!
+  "Called every client tick. Queries GLFW via platform bridge for Left Alt.
+   Debounced: only triggers on release→press transition."
+  []
+  (try
+    (let [now-pressed (boolean (bridge/is-glfw-key-down? glfw-key-left-alt))]
+      (when (and now-pressed (not @terminal-key-was-pressed))
+        (when-let [player (bridge/get-client-player)]
+          (toggle! player)))
+      (reset! terminal-key-was-pressed now-pressed))
+    (catch Exception e
+      (log/warn "[AC-Terminal] GLFW polling error:" (ex-message e)))))
 
 (defn create-terminal-gui-reactive
   "Widget-factory-compatible entry point: returns a {:type :reactive-screen}
@@ -211,11 +292,10 @@
 
 (defn install-ui-hooks-reactive!
   "Registers the reactive terminal screen under the same factory key used by
-   shell.clj's install-ui-hooks!, plus reuses shell.clj's GLFW Alt-key
-   polling (unchanged — it's plain client-tick logic, not CGUI-specific)."
+   shell.clj's install-ui-hooks!, plus this file's own GLFW Alt-key polling."
   []
   (platform-ui/register-widget-factory!
     :ac/terminal-gui
     (fn [{:keys [player]}] (create-terminal-gui-reactive player)))
-  (content-actions/register-client-tick-hook! shell/poll-terminal-toggle-key!)
+  (content-actions/register-client-tick-hook! poll-terminal-toggle-key!)
   (log/info "AC terminal UI hooks installed (reactive)"))

@@ -1,7 +1,7 @@
 (ns cn.li.ac.block.developer.console-test
   "Tests for the console pure state machine."
   (:require [clojure.test :refer [deftest is testing]]
-            [cn.li.ac.block.developer.console :as console]))
+            [cn.li.ac.block.developer.console-reactive :as console]))
 
 (def ^:private null-char (char 0))
 
