@@ -17,6 +17,8 @@
             [cn.li.mcmod.ui.xml :as ui-xml])
   (:import [cn.li.mcmod.ui.node INode]))
 
+(declare populate-settings-list!)
+
 (def ^:private check-tex-true
   (modid/asset-path "textures/guis" "check_true.png"))
 

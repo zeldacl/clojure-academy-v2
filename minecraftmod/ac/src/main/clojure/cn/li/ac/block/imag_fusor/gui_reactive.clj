@@ -26,7 +26,7 @@
 (def ^:private quick-move-config (delay (slot-schema/build-quick-move-config fusor-slot-schema-id {:inventory-pred inventory-pred :rules [{:accept? phase-liquid-unit? :slot-ids [:input-1 :input-2]} {:accept? energy/is-energy-item-supported? :slot-ids [:energy]}]})))
 (defn- quick-move-stack [c i s] (cn.li.ac.wireless.gui.container.move/quick-move-with-rules c i s @quick-move-config))
 
-(defn- attach-binds! [r container _signals]
+(defn- attach-binds! [r container _menu _player _signals]
   (let [clock (rt/clock-ms-sig r)]
     (rt/put-user-signal! r :work-progress (sig/computed-d [clock] (fn [_] (double (or @(:work-progress container) 0.0)))))
     (rt/put-user-signal! r :imagination-needed (sig/computed-o [clock] (fn [_] (str (or @(:imagination-needed container) 0) " IM"))))))

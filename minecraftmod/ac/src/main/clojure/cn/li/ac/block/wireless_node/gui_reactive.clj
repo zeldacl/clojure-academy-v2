@@ -8,6 +8,7 @@
             [cn.li.ac.gui.block-gui-reactive :as bgui]
             [cn.li.mcmod.ui.runtime :as rt] [cn.li.mcmod.ui.core :as ui]
             [cn.li.mcmod.ui.signal :as sig] [cn.li.mcmod.ui.anim :as ranim]
+            [cn.li.ac.block.wireless-node.node-info-reactive :as node-info]
             [cn.li.ac.block.gui.sync :as gui-sync] [cn.li.ac.config.modid :as modid]
             [cn.li.ac.wireless.gui.container.common :as common]
             [cn.li.ac.wireless.gui.container.move :as move-common]
@@ -59,7 +60,8 @@
 (defn- attach-node-binds!
   "Reactive replacement for: create-anim-widget + 2s link polling + breathe-alpha.
    Uses computed signals driven by clock instead of on-frame polling."
-  [r container _signals]
+  [r container _menu player _signals]
+  (node-info/attach! r container player)
   (let [clock (rt/clock-ms-sig r)
         ;; 2-second polling: computed with side-effect (writes to linked atom)
         _ (rt/put-user-signal! r :link-poll-tick
@@ -98,11 +100,11 @@
 (defn create-screen [container menu player]
   (bgui/create-screen
     {:page-xml "guis/rework/new/page_wireless.xml" :texture-name "wireless"
-     :container container :menu menu
+     :container container :menu menu :player player :info-area? true
      :histograms [(bgui/hist-energy 0xFF4488CC)]
      :properties {:range #(str (or @(:range container) "..."))
                   :connections #(str (or @(:connections container) 0))}
-     :wireless? true :wireless-role :machine
+     :wireless? true :wireless-role :node
      :custom-bind! attach-node-binds!}))
 
 (def update! bgui/update-signals!)

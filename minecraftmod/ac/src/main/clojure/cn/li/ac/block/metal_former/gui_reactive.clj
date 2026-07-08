@@ -77,7 +77,7 @@
 
 (defn- attach-binds!
   "Reactive replacement for bind-progress! + bind-mode-icon! + bind-buttons!"
-  [r container _signals]
+  [r container _menu _player _signals]
   (let [clock (rt/clock-ms-sig r)]
     ;; Work progress (replaces on-frame + set-progress! polling)
     (rt/put-user-signal! r :work-progress

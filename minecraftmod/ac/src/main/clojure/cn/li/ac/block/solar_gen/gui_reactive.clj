@@ -23,7 +23,7 @@
 (def ^:private effect-solar-texture (modid/asset-path "textures" "guis/effect/effect_solar.png"))
 (defn- solar-status->frame [status] (case status "STRONG" 0.0 "WEAK" (/ 2.0 3.0) (/ 1.0 3.0)))
 
-(defn- attach-anim-bind! [r container _signals]
+(defn- attach-anim-bind! [r container _menu _player _signals]
   (rt/put-user-signal! r :anim-uv
     (sig/computed-d [(rt/clock-ms-sig r)]
       (fn [_] (solar-status->frame (or @(:status container) "STOPPED"))))))

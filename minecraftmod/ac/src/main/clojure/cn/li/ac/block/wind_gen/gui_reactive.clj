@@ -47,7 +47,7 @@
 (defn- completeness-alpha [completeness status]
   (case completeness "complete" (if (= status "COMPLETE") [1.0 1.0 1.0] [0.6 1.0 1.0]) "no_top" [0.2 1.0 1.0] [0.2 0.2 1.0]))
 
-(defn- attach-structure-bind! [r container _signals]
+(defn- attach-structure-bind! [r container _menu _player _signals]
   (let [clock (rt/clock-ms-sig r)]
     (rt/put-user-signal! r :icon-main-alpha (sig/computed-d [clock] (fn [_] (first (completeness-alpha (or @(:completeness container) "") (or @(:status container) ""))))))
     (rt/put-user-signal! r :icon-middle-alpha (sig/computed-d [clock] (fn [_] (second (completeness-alpha (or @(:completeness container) "") (or @(:status container) ""))))))

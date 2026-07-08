@@ -69,7 +69,7 @@
    :y (+ start-y 14)})
 
 (defn add-property
-  "Add property text node."
+  "Add property text node. For interactive info-area rows use info-area-reactive/add-property!."
   [label value-fn start-y]
   {:node (dsl/text {:text (str label ": ...") :x 10 :y start-y :font-size 10 :color 0xFFAAAAAA})
    :y (+ start-y 14)})

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Ui size="380.0,300.0" align="center,center">
+  <box id="bg" pos="0.0,0.0" size="380.0,300.0" fill="#77272727"/>
+  <text id="title" pos="38.0,11.0" size="320.0,16.0" align="left,top" text="Frequency Transmitter" font-size="12.0" color="#FFFFFFFF"/>
+  <group id="content" pos="10.0,35.0" size="360.0,255.0" align="left,top" clip="true"/>
+</Ui>

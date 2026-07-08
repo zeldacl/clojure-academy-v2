@@ -22,7 +22,7 @@
 (defn still-valid? [_ _] true) (def server-menu-sync! (:server-menu-sync! sync))
 (def on-close (:on-close sync)) (defn handle-button-click! [_ _ _] nil)
 
-(defn- attach-binds! [r container _signals]
+(defn- attach-binds! [r container _menu _player _signals]
   (rt/put-user-signal! r :range-display
     (sig/computed-o [(rt/clock-ms-sig r)] (fn [_] (str (or @(:range container) "...")))))
   (rt/put-user-signal! r :active-display

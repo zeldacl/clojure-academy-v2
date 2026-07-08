@@ -17,7 +17,7 @@
   {:about (fn [_player] (about/open!))
    :settings (fn [_player] (settings/open!))
    :tutorial (fn [_player] (tutorial-app/open!))
-   :freq-transmitter (fn [_player] (freq-transmitter/open!))
+   :freq-transmitter (fn [player] (freq-transmitter/open! player))
    :media-player (fn [_player] (media/open!))
    :skill-tree skill-tree/open!})
 

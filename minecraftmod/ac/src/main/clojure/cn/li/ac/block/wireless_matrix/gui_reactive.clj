@@ -9,27 +9,21 @@
             [cn.li.mcmod.util.log :as log]
             [cn.li.ac.gui.manifest :as gui-manifest]
             [cn.li.ac.gui.block-gui-reactive :as bgui]
+            [cn.li.ac.block.wireless-matrix.matrix-info-reactive :as matrix-info]
             [cn.li.mcmod.ui.runtime :as rt]
-            [cn.li.mcmod.ui.signal :as sig]
             [cn.li.ac.block.wireless-matrix.gui :as old-gui]))
 
 ;; ============================================================================
 ;; Reactive rendering bindings
 ;; ============================================================================
 
-(defn attach-binds! [r container _signals]
-  (let [clock (rt/clock-ms-sig r)]
-    (rt/put-user-signal! r :ssid
-      (sig/computed-o [clock] (fn [_] (or @(:ssid container) "..."))))
-    (rt/put-user-signal! r :bandwidth
-      (sig/computed-o [clock] (fn [_] (str (or @(:bandwidth container) 0) " MHz"))))
-    (rt/put-user-signal! r :connections
-      (sig/computed-o [clock] (fn [_] (str (or @(:connections container) 0)))))))
+(defn attach-binds! [r container _menu _player _signals]
+  (matrix-info/attach! r container _player))
 
 (defn create-screen [container menu player]
   (bgui/create-screen
     {:page-xml "guis/rework/new/page_matrix.xml" :texture-name "matrix"
-     :container container :menu menu
+     :container container :menu menu :player player :info-area? true
      :histograms [(bgui/hist-energy 0xFF4488CC)]
      :properties {:ssid #(or @(:ssid container) "...")
                   :bandwidth #(str (or @(:bandwidth container) 0) " MHz")

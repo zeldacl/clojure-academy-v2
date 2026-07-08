@@ -123,9 +123,15 @@
 ;; :text (MSDF font)
 ;; ============================================================================
 
+(defn- display-text [^INode node raw]
+  (let [s (str (or raw ""))]
+    (if (boolean (get (.getStaticProps node) :masked?))
+      (apply str (repeat (count s) "*"))
+      s)))
+
 (defn bake-text! [^INode node]
   ;; text kind slots (node.clj): dslots {:font-size 0}, oslots {:text 0 :color 1}
-  (let [text      (str (or (.getOSlot node SLOT-TEXT-TEXT) ""))
+  (let [text      (display-text node (or (.getOSlot node SLOT-TEXT-TEXT) ""))
         font-size (.getDSlot node 0)
         color-raw (.getOSlot node 1)
         color     (if (number? color-raw) (unchecked-int (long color-raw)) (unchecked-int 0xFFFFFFFF))]

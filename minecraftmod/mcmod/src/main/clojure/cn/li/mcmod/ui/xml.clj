@@ -69,7 +69,8 @@
            :hover-tint (fn [s] (parse-double s 0.0)) :z (fn [s] (parse-double s 0.0))}
    :text  {:pos parse-pos :text str :font-size (fn [s] (parse-double s 14.0))
            :color parse-color :font str :z (fn [s] (parse-double s 0.0))
-           :editable? (fn [s] (= "true" s))}
+           :editable? (fn [s] (= "true" s))
+           :masked? (fn [s] (= "true" s))}
    :image {:pos parse-pos :size parse-size :src str :alpha (fn [s] (parse-double s 1.0))
            :z (fn [s] (parse-double s 0.0))}
    :progress {:pos parse-pos :size parse-size :z (fn [s] (parse-double s 0.0))}

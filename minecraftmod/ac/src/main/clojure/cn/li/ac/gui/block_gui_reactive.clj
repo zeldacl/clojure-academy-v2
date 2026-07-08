@@ -78,6 +78,13 @@
 ;; Screen creation (replaces tech-ui/assemble-tech-ui-root)
 ;; ============================================================================
 
+(defn- wrap-with-info-area [child-spec]
+  {:kind :group
+   :props {:id :screen-root :w 290.0 :h 187.0}
+   :children [child-spec
+              {:kind :group
+               :props {:id :info-area :x 179.0 :y 5.0 :w 110.0 :h 177.0 :clip? true}}]})
+
 (defn create-screen
   "Create reactive tech-ui screen config.
    Options:
@@ -85,17 +92,20 @@
    :texture-name  - ui_block texture suffix
    :container     - container atom map
    :menu          - Minecraft container menu
+   :player        - opening player (for info-area auth)
+   :info-area?    - attach side info panel (matrix/node)
    :histograms    - [(hist-buffer ...) ...]
    :properties    - {:key value-fn ...}
    :wireless?     - include wireless tab
    :wireless-role - :generator or :machine"
-  [{:keys [page-xml texture-name container menu histograms properties wireless? wireless-role
-            custom-bind!]}]
+  [{:keys [page-xml texture-name container menu player histograms properties wireless? wireless-role
+            info-area? custom-bind!]}]
   (let [r (rt/create-runtime)
         pages (when wireless? (wireless-pages page-xml))
-        spec (if wireless?
-               (tech-tabs/build-tabbed-root-spec pages)
-               (ui-xml/load-spec (modid/namespaced-path (inv-page-xml page-xml))))
+        base-spec (if wireless?
+                    (tech-tabs/build-tabbed-root-spec pages)
+                    (ui-xml/load-spec (modid/namespaced-path (inv-page-xml page-xml))))
+        spec (if info-area? (wrap-with-info-area base-spec) base-spec)
         _ (rt/build! r spec)
         tex-path (sig/signal-o
                    (modid/asset-path "textures"
@@ -120,7 +130,7 @@
                               :container container
                               :menu menu
                               :defer-initial-rebuild? false})))}))
-        _ (when custom-bind! (custom-bind! r container signals))
+        _ (when custom-bind! (custom-bind! r container menu player signals))
         _ (when wireless? (rt/put-user-signal! r :wireless-role (sig/signal-o (name wireless-role))))]
     (screen-config r signals container menu properties histograms
                    current-tab-atom tech-ui custom-bind!)))
