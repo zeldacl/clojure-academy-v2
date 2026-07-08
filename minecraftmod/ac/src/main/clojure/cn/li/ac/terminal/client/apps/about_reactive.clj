@@ -1,48 +1,90 @@
 (ns cn.li.ac.terminal.client.apps.about-reactive
-  "Reactive About app — tab switching via signal, scrollable text.
-   Replaces find-widget + set-visible! + set-text-color! + on-left-click pattern."
-  (:require [cn.li.mcmod.ui.runtime :as rt]
-            [cn.li.mcmod.ui.core :as ui]
-            [cn.li.mcmod.ui.signal :as sig]
-            [cn.li.mcmod.ui.events :as events]
-            [cn.li.ac.terminal.client.apps.reactive-helpers :as h]
+  "Complete reactive replacement for about.clj.
+   Signal-driven tab switching + scroll + donation link handling."
+  (:require [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.client.platform-bridge :as bridge]
             [cn.li.mcmod.util.log :as log]
+            [cn.li.mcmod.ui.runtime :as rt]
+            [cn.li.mcmod.ui.signal :as sig]
+            [cn.li.mcmod.ui.events :as events]
+            [cn.li.mcmod.ui.xml :as ui-xml]
             [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.string :as str]))
 
+;; ============================================================================
+;; Data loading (preserved from old about.clj)
+;; ============================================================================
+
 (defn- load-about-data []
-  (try
-    (let [path (io/resource "assets/my_mod/config/about.edn")]
-      (edn/read-string (slurp path)))
-    (catch Throwable e
-      (log/warn "Failed to load about.edn" (ex-message e))
-      {:credits {:header [] :staff [] :donators []}
-       :donation {:links [] :text []}})))
+  (try (let [path (io/resource "assets/my_mod/config/about.edn")]
+         (edn/read-string (slurp path)))
+       (catch Throwable e (log/warn "Failed to load about.edn" (ex-message e))
+         {:credits {:header [] :staff [] :donators [] :donators-info ""}
+          :donation {:links [] :text []}})))
+
+(defn- build-credit-lines [credits-data]
+  "Build text lines from credits data (preserved from old about.clj)."
+  (let [lines (atom [])]
+    (doseq [line (:header credits-data)] (swap! lines conj {:text line :bold? true :size 14}))
+    (doseq [[job names] (:staff credits-data)]
+      (swap! lines conj {:text (str job ": " (str/join ", " names)) :size 12}))
+    (swap! lines conj {:text "--- Donators ---" :bold? true :size 12})
+    (swap! lines conj {:text (:donators-info credits-data "") :size 10})
+    (doseq [name (:donators credits-data)] (swap! lines conj {:text name :size 10}))
+    (swap! lines conj {:text "Thank you for playing!" :bold? true :size 14})
+    @lines))
+
+(defn- build-donate-lines [donation-data]
+  (let [lines (atom [])]
+    (doseq [line (:text donation-data)] (swap! lines conj {:text line :size 12}))
+    @lines))
+
+;; ============================================================================
+;; Reactive UI
+;; ============================================================================
 
 (defn create-runtime []
-  (let [r (h/load-app "guis/about.xml")
+  (let [r (rt/create-runtime)
+        spec (ui-xml/load-spec (modid/namespaced-path "guis/new/about.xml"))
+        _ (rt/build! r spec)
         about-data (load-about-data)
-        ;; Tab state signal (:credits or :donate)
-        tab (h/tab-signal r :credits)
-        ;; Scroll offset
-        scroll (h/scroll-signal r)]
-    ;; Credit text content as signal
-    (let [credits-text (sig/signal-o (str/join "\n" (get-in about-data [:credits :staff] [])))]
-      (rt/put-user-signal! r :credits-text credits-text))
-    ;; Donation text
-    (let [donate-text (sig/signal-o (str/join "\n" (get-in about-data [:donation :text] [])))]
-      (rt/put-user-signal! r :donate-text donate-text))
-    ;; Tab switch handlers
-    (events/on! r :btn_credits :left-click (fn [_rt _n _e] (sig/sset-o! tab :credits)))
-    (events/on! r :btn_donate :left-click (fn [_rt _n _e] (sig/sset-o! tab :donate)))
-    ;; Donation link click → open URL
-    (doseq [[idx link] (map-indexed vector (get-in about-data [:donation :links] []))]
+        ;; Tab state signal
+        active-tab (sig/signal-o :credits)
+        _ (rt/put-user-signal! r :active-tab active-tab)
+        ;; Credit content lines
+        credit-lines (build-credit-lines (:credits about-data))
+        donate-lines (build-donate-lines (:donation about-data))
+        ;; Content signal (changes with tab)
+        content-sig (sig/signal-o (str/join "\n" (map :text credit-lines)))
+        _ (rt/put-user-signal! r :content-text content-sig)
+        ;; Scroll signal
+        scroll (sig/signal-d 0.0)
+        _ (rt/put-user-signal! r :scroll-offset scroll)]
+
+    ;; Tab switching
+    (events/on! r :btn-credits :left-click
+      (fn [_rt _n _e]
+        (sig/sset-o! active-tab :credits)
+        (sig/sset-o! content-sig (str/join "\n" (map :text credit-lines)))))
+    (events/on! r :btn-donate :left-click
+      (fn [_rt _n _e]
+        (sig/sset-o! active-tab :donate)
+        (sig/sset-o! content-sig (str/join "\n" (map :text donate-lines)))))
+
+    ;; Donation links
+    (doseq [[idx link] (map-indexed vector (:links (:donation about-data)))]
       (events/on! r (keyword (str "link-" idx)) :left-click
-        (fn [_rt _n _e] (bridge/open-screen! :open-url {:url (:url link)}))))
+        (fn [_rt _n _e]
+          (try (java.awt.Desktop/getDesktop) (.browse (java.net.URI. (:url link)))
+               (catch Exception _ (log/warn "Cannot open URL" (:url link)))))))
+
+    ;; Scroll
+    (events/on! r :scroll-area :mouse-scroll
+      (fn [_rt _n evt]
+        (sig/sset-d! scroll (max 0.0 (+ (sig/sget-d scroll) (* (:delta evt) 0.01))))))
     r))
 
 (defn open! []
   (let [r (create-runtime)]
-    (h/open-app! r "About")))
+    (bridge/open-reactive-screen! r "About")))
