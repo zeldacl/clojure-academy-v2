@@ -19,6 +19,8 @@ public class DelegatingCGuiContainerScreen<T extends AbstractContainerMenu>
     private IFn mouseClickedFn;
     private IFn mouseReleasedFn;
     private IFn mouseDraggedFn;
+    private IFn mouseMovedFn;
+    private IFn mouseScrolledFn;
     private IFn keyPressedFn;
     private IFn charTypedFn;
     private IFn removedFn;
@@ -35,6 +37,8 @@ public class DelegatingCGuiContainerScreen<T extends AbstractContainerMenu>
     public DelegatingCGuiContainerScreen withMouseClicked(IFn fn) { this.mouseClickedFn = fn; return this; }
     public DelegatingCGuiContainerScreen withMouseReleased(IFn fn) { this.mouseReleasedFn = fn; return this; }
     public DelegatingCGuiContainerScreen withMouseDragged(IFn fn) { this.mouseDraggedFn = fn; return this; }
+    public DelegatingCGuiContainerScreen withMouseMoved(IFn fn) { this.mouseMovedFn = fn; return this; }
+    public DelegatingCGuiContainerScreen withMouseScrolled(IFn fn) { this.mouseScrolledFn = fn; return this; }
     public DelegatingCGuiContainerScreen withKeyPressed(IFn fn) { this.keyPressedFn = fn; return this; }
     public DelegatingCGuiContainerScreen withCharTyped(IFn fn) { this.charTypedFn = fn; return this; }
     public DelegatingCGuiContainerScreen withRemoved(IFn fn) { this.removedFn = fn; return this; }
@@ -86,6 +90,22 @@ public class DelegatingCGuiContainerScreen<T extends AbstractContainerMenu>
             return r instanceof Boolean ? (Boolean) r : false;
         }
         return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
+    }
+
+    @Override public void mouseMoved(double mouseX, double mouseY) {
+        if (mouseMovedFn != null) {
+            mouseMovedFn.invoke(this, mouseX, mouseY);
+        } else {
+            super.mouseMoved(mouseX, mouseY);
+        }
+    }
+
+    @Override public boolean mouseScrolled(double mouseX, double mouseY, double scrollDelta) {
+        if (mouseScrolledFn != null) {
+            Object r = mouseScrolledFn.invoke(this, mouseX, mouseY, scrollDelta);
+            return r instanceof Boolean ? (Boolean) r : false;
+        }
+        return super.mouseScrolled(mouseX, mouseY, scrollDelta);
     }
 
     @Override public boolean keyPressed(int keyCode, int scanCode, int modifiers) {

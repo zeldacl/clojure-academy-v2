@@ -1,23 +1,35 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Ui size="0.0,0.0" align="center,center">
-  <group id="t_checkbox" pos="58.5,280.0" size="611.0,60.0" align="left,top">
-    <text id="text" pos="15.0,0.0" size="300.0,40.0" align="left,center" text="Hahaa" font-size="40.0" color="#FFFFFFFF"/>
-    <image id="box" pos="550.0,0.0" size="35.0,35.0" align="left,center" src="liutils:textures/cgui/missing.png"/>
-  </group>
-  <group id="t_cathead" pos="58.5,200.0" size="611.0,60.0" align="left,top">
-    <image id="line" pos="0.0,0.0" size="611.0,4.0" align="left,bottom" tint="#96FFFFFF"/>
-    <text id="text" pos="8.0,0.0" size="611.0,60.0" align="left,top" text="niconioni~" font-size="42.0" color="#AAFFFFFF"/>
-  </group>
-  <group id="t_key" pos="63.5,305.0" size="611.0,60.0" align="left,top">
-    <text id="text" pos="15.0,0.0" size="300.0,40.0" align="left,center" text="Hahaa" font-size="40.0" color="#FFFFFFFF"/>
-    <text id="key" pos="440.0,0.0" size="160.0,40.0" align="left,center" text="MOUSE1" font-size="40.0" color="#FFFFFFFF"/>
-  </group>
-  <group id="t_callback" pos="63.5,390.0" size="611.0,60.0" align="left,top">
-    <text id="text" pos="15.0,0.0" size="300.0,40.0" align="left,center" text="Hahaa" font-size="40.0" color="#FFFFFFFF"/>
-    <text id="button" pos="440.0,0.0" size="160.0,40.0" align="left,center" text="OK" font-size="40.0" color="#FFFFFFFF"/>
-  </group>
+  <template name="t_checkbox">
+    <group pos="58.5,280.0" size="611.0,60.0" align="left,top">
+      <text id="text" pos="15.0,0.0" size="300.0,40.0" align="left,center" text="Hahaa" font-size="40.0" color="#FFFFFFFF"/>
+      <image id="box" pos="550.0,0.0" size="35.0,35.0" align="left,center" src="liutils:textures/cgui/missing.png"/>
+    </group>
+  </template>
+  <template name="t_cathead">
+    <group pos="58.5,200.0" size="611.0,60.0" align="left,top">
+      <image id="line" pos="0.0,0.0" size="611.0,4.0" align="left,bottom" tint="#96FFFFFF"/>
+      <text id="text" pos="8.0,0.0" size="611.0,60.0" align="left,top" text="niconioni~" font-size="42.0" color="#AAFFFFFF"/>
+    </group>
+  </template>
+  <template name="t_key">
+    <group pos="63.5,305.0" size="611.0,60.0" align="left,top">
+      <text id="key-label" pos="15.0,0.0" size="300.0,40.0" align="left,center" text="Hahaa" font-size="40.0" color="#FFFFFFFF"/>
+      <text id="key-value" pos="440.0,0.0" size="160.0,40.0" align="left,center" text="MOUSE1" font-size="40.0" color="#FFFFFFFF"/>
+    </group>
+  </template>
+  <template name="t_callback">
+    <group pos="63.5,390.0" size="611.0,60.0" align="left,top">
+      <text id="restore-label" pos="15.0,0.0" size="300.0,40.0" align="left,center" text="Hahaa" font-size="40.0" color="#FFFFFFFF"/>
+      <text id="restore-button" pos="440.0,0.0" size="160.0,40.0" align="left,center" text="OK" font-size="40.0" color="#FFFFFFFF"/>
+    </group>
+  </template>
   <image id="main" pos="0.0,0.0" size="742.0,923.0" scale="0.20" align="center,center" src="my_mod:textures/guis/settings.png">
     <image id="scrollbar" pos="673.0,119.0" size="9.0,96.0" align="left,top" src="my_mod:textures/guis/life_record/rollbar.png"/>
-    <group id="area" pos="60.0,120.0" size="614.0,720.0" align="left,top"/>
+    <group id="area" pos="60.0,120.0" size="614.0,720.0" align="left,top">
+      <list id="settings-list" pos="0.0,0.0" size="614.0,720.0" template="t_checkbox" spacing="10.0"/>
+    </group>
+    <group id="key-row" template="t_key" pos="60.0,840.0" size="611.0,60.0" align="left,top"/>
+    <group id="restore-row" template="t_callback" pos="60.0,900.0" size="611.0,60.0" align="left,top"/>
   </image>
 </Ui>

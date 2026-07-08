@@ -14,9 +14,9 @@
           :properties {:gen_speed speed-fn :status status-fn}
           :wireless? true
           :wireless-role :generator}))"
-  (:require [cn.li.mcmod.ui.runtime :as rt]
+  (:require [cn.li.ac.gui.tech-ui-tabs-reactive :as tech-tabs]
+            [cn.li.mcmod.ui.runtime :as rt]
             [cn.li.mcmod.ui.core :as ui]
-            [cn.li.mcmod.ui.dsl :as dsl]
             [cn.li.mcmod.ui.xml :as ui-xml]
             [cn.li.mcmod.ui.signal :as sig]
             [cn.li.mcmod.client.platform-bridge :as bridge]
@@ -36,6 +36,43 @@
 (defn hist-capacity [color]
   {:type :capacity :color (or color 0xFF44CC88)})
 
+(defn- inv-page-xml [page-xml]
+  (or page-xml "guis/rework/new/page_inv.xml"))
+
+(defn- wireless-pages [page-xml]
+  [{:id tech-tabs/inv-tab-id :xml (inv-page-xml page-xml)}
+   {:id "wireless" :xml "guis/rework/new/page_wireless.xml"}])
+
+(defn update-signals!
+  "Read container atoms, sset signals. Called each frame by screen host."
+  [{:keys [signals container properties]}]
+  (let [safe-val #(some-> % deref)]
+    (sig/sset-d! (:energy signals) (double (or (safe-val (:energy container)) 0.0)))
+    (sig/sset-d! (:max-energy signals) (max 1.0 (double (or (safe-val (:max-energy container)) 1.0))))
+    (sig/sset-o! (:status signals) (or (safe-val (:status container)) "IDLE"))
+    (sig/sset-o! (:gen-speed signals)
+                 (format "%.2fIF/T" (double (or (safe-val (:gen-speed container)) 0.0))))
+    (sig/sset-d! (:progress signals) (double (or (safe-val (:progress container)) 0.0)))
+    (when-let [props properties]
+      (doseq [[_k f] props]
+        (when fn? (f))))))
+
+(defn- screen-config [r signals container menu properties histograms
+                      current-tab-atom tech-ui custom-bind!]
+  {:type :reactive-container-screen
+   :runtime r
+   :signals signals
+   :container container
+   :menu menu
+   :properties properties
+   :histograms histograms
+   :size-dx 31
+   :size-dy 20
+   :update-fn update-signals!
+   :current-tab-atom current-tab-atom
+   :tech-ui tech-ui
+   :custom-bind! custom-bind!})
+
 ;; ============================================================================
 ;; Screen creation (replaces tech-ui/assemble-tech-ui-root)
 ;; ============================================================================
@@ -54,51 +91,28 @@
   [{:keys [page-xml texture-name container menu histograms properties wireless? wireless-role
             custom-bind!]}]
   (let [r (rt/create-runtime)
-        ;; Load inventory page from XML
-        spec (ui-xml/load-spec (modid/namespaced-path (or page-xml "guis/rework/new/page_inv.xml")))
-        root-idx (rt/build! r spec)
-        ;; Set ui_block texture
+        pages (when wireless? (wireless-pages page-xml))
+        spec (if wireless?
+               (tech-tabs/build-tabbed-root-spec pages)
+               (ui-xml/load-spec (modid/namespaced-path (inv-page-xml page-xml))))
+        _ (rt/build! r spec)
         tex-path (sig/signal-o
                    (modid/asset-path "textures"
                      (str "guis/ui/ui_" (or texture-name "inv") ".png")))
         _ (ui/bind! r :ui_block :src tex-path)
-        ;; Create dynamic signals
         signals {:energy (sig/signal-d 0.0)
                  :max-energy (sig/signal-d 1.0)
                  :status (sig/signal-o "IDLE")
                  :gen-speed (sig/signal-o "0IF/T")
                  :progress (sig/signal-d 0.0)}
         _ (doseq [[k s] signals] (rt/put-user-signal! r k s))
-        _ (when custom-bind! (custom-bind! r container signals))]
-    ;; Return config map recognized by mc-1.20.1/gui/screen/impl.clj's
-    ;; reactive-container-screen? predicate, which routes to
-    ;; host-container/create-tech-ui-container-screen to build the real
-    ;; DelegatingCGuiContainerScreen (slots + player inventory + rendering).
-    {:type :reactive-container-screen
-     :runtime r
-     :minecraft-container menu
-     :size-dx 31 :size-dy 20
-     :signals signals
-     :container container
-     :menu menu
-     :properties properties
-     :histograms histograms}))
-
-;; ============================================================================
-;; Per-frame update (replaces on-frame polling)
-;; ============================================================================
-
-(defn update-signals!
-  "Read container atoms, sset signals. Called each frame by screen host."
-  [{:keys [runtime signals container properties]}]
-  (let [safe-val #(some-> % deref)]
-    ;; Core signals
-    (sig/sset-d! (:energy signals) (double (or (safe-val (:energy container)) 0.0)))
-    (sig/sset-d! (:max-energy signals) (max 1.0 (double (or (safe-val (:max-energy container)) 1.0))))
-    (sig/sset-o! (:status signals) (or (safe-val (:status container)) "IDLE"))
-    (sig/sset-o! (:gen-speed signals)
-                 (format "%.2fIF/T" (double (or (safe-val (:gen-speed container)) 0.0))))
-    (sig/sset-d! (:progress signals) (double (or (safe-val (:progress container)) 0.0)))))
+        current-tab-atom (when wireless? (atom tech-tabs/inv-tab-id))
+        tech-ui (when wireless?
+                  (tech-tabs/attach-tab-ui! r pages current-tab-atom container menu))
+        _ (when custom-bind! (custom-bind! r container signals))
+        _ (when wireless? (rt/put-user-signal! r :wireless-role (sig/signal-o (name wireless-role))))]
+    (screen-config r signals container menu properties histograms
+                   current-tab-atom tech-ui custom-bind!)))
 
 ;; ============================================================================
 ;; Open screen (replaces create-screen-fn + registration)
