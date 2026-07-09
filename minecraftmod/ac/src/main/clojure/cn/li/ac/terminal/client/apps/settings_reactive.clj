@@ -14,6 +14,7 @@
             [cn.li.mcmod.ui.signal :as sig]
             [cn.li.mcmod.ui.events :as events]
             [cn.li.mcmod.ui.node :as node]
+            [cn.li.mcmod.ui.slot-write :as slot-write]
             [cn.li.mcmod.ui.xml :as ui-xml])
   (:import [cn.li.mcmod.ui.node INode]))
 
@@ -84,7 +85,7 @@
   (show-only! item :key-row)
   (ui/set-node-prop! r (ui/item-node item :key-label) :text "Open Terminal")
   (let [^INode key-val (ui/item-node item :key-value)
-        writer (get-in node/kinds [:text :prop-writers :text])
+        writer (slot-write/resolve-sig-writer (get node/kinds :text) :text)
         b (sig/bind! key-binding-text key-val writer (rt/get-dirty-bindings-q r))]
     (rt/register-binding! r (.getIdx key-val) b)
     (rt/register-event! r (.getIdx key-val) :left-click

@@ -2,7 +2,8 @@
   "Event dispatch & focus/drag management (pure logic)."
   (:require [cn.li.mcmod.ui.runtime :as rt]
             [cn.li.mcmod.ui.layout :as layout]
-            [cn.li.mcmod.ui.node :as node])
+            [cn.li.mcmod.ui.node :as node]
+            [cn.li.mcmod.ui.slot-write :as slot-write])
   (:import [cn.li.mcmod.uipojo.runtime UiRt]
            [cn.li.mcmod.ui.node INode]))
 
@@ -31,8 +32,7 @@
   (str (or (.getOSlot n 0) "")))
 
 (defn- set-text-value! [^INode n value]
-  (.setOSlot n 0 (str value))
-  (.setFlag n node/FLAG-RENDER-DIRTY))
+  (slot-write/apply-prop! n :text :text (str value)))
 
 (defn- emit-text-event! [^UiRt rt ^INode n event-key]
   (when-let [handlers (rt/get-event-handlers rt (.getIdx n) event-key)]

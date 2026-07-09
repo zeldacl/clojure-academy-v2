@@ -2,7 +2,9 @@
   "UI Runtime (UiRt) — one instance per screen/overlay.
    UiRt is a Java POJO (cn.li.mcmod.uipojo.runtime.UiRt) for AOT/reflection=fail compliance."
   (:require [cn.li.mcmod.ui.signal :as sig]
-            [cn.li.mcmod.ui.node :as node])
+            [cn.li.mcmod.ui.node :as node]
+            [cn.li.mcmod.ui.slot-write :as slot-write]
+            [cn.li.mcmod.ui.node-props-spec :as props-spec])
   (:import [cn.li.mcmod.uipojo.runtime UiRt]
            [cn.li.mcmod.uipojo.signal SigD SigL IApply Binding SignalSupport]
            [cn.li.mcmod.ui.node INode]
@@ -150,13 +152,20 @@
 
 (defn- init-node-props!
   [^INode n kdef props]
-  (doseq [[prop-key slot-idx] (:dslots kdef)]
-    (when-some [v (get props prop-key)]
-      (when (number? v)
-        (.setDSlot n (int slot-idx) (double v)))))
-  (doseq [[prop-key slot-idx] (:oslots kdef)]
-    (when-some [v (get props prop-key)]
-      (.setOSlot n (int slot-idx) v))))
+  (let [kind-kw (.getKind n)
+        writers (set (keys (:prop-writers kdef)))]
+    (doseq [[prop-key slot-idx] (:dslots kdef)]
+      (when-some [v (get props prop-key)]
+        (when-not (contains? writers prop-key)
+          (when (number? v)
+            (slot-write/write-dslot! n (int slot-idx) (double v) :render)))))
+    (doseq [[prop-key slot-idx] (:oslots kdef)]
+      (when-some [v (get props prop-key)]
+        (when-not (contains? writers prop-key)
+          (slot-write/write-oslot! n (int slot-idx) v :render))))
+    (doseq [prop-key writers]
+      (when-some [v (get props prop-key)]
+        (slot-write/apply-prop! n kind-kw prop-key v)))))
 
 (declare build-node!)
 
@@ -170,13 +179,14 @@
         ;; register-node! and every node-by-id lookup returns nil.
         id (or (:id spec) (:id props))
         kdef (or (get node/kinds kind) (throw (ex-info (str "Unknown kind: " kind) {:kind kind})))
+        props* (when props (props-spec/validate-build-props! kind props))
         dslot-cnt (max (count (:dslots kdef)) 1)
         oslot-cnt (+ (long (:oslots-backend-base kdef (count (:oslots kdef)))) 4)
         ^ArrayList ns (.getNodes rt)
         idx (.size ns)
-        n (node/create-node idx id kind props dslot-cnt oslot-cnt props)]
+        n (node/create-node idx id kind props* dslot-cnt oslot-cnt props*)]
     (register-node! rt id n)
-    (init-node-props! n kdef props)
+    (init-node-props! n kdef props*)
     (when parent-node (node/add-child! parent-node n))
     (doseq [c children]
       (when c (build-node! rt c n)))
@@ -204,5 +214,6 @@
           (aset cs i nil))
         (recur (unchecked-inc-int i))))
     (.setChildCount parent-node 0)
+    (node/dev-assert-child-count! parent-node)
     (.setTreeDirty rt true)
     nil))

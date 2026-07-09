@@ -21,6 +21,7 @@
             [cn.li.mcmod.ui.runtime :as rt]
             [cn.li.mcmod.ui.core :as ui]
             [cn.li.mcmod.ui.node :as node]
+            [cn.li.mcmod.ui.slot-write :as slot-write]
             [cn.li.mcmod.ui.signal :as sig]
             [cn.li.mcmod.ui.anim :as ranim]
             [cn.li.mcmod.ui.events :as events]
@@ -429,7 +430,7 @@
 (defn- bind-cover-fill! [^UiRt rt fill-sig]
   (when-let [old (rt/user-signal rt :cover-fill-binding)] (sig/unbind! old))
   (let [^INode n (rt/node-by-id rt :dev-cover)
-        writer (get-in node/kinds [:box :prop-writers :fill])
+        writer (slot-write/resolve-sig-writer (get node/kinds :box) :fill)
         b (sig/bind! fill-sig n writer (rt/get-dirty-bindings-q rt))]
     (rt/register-binding! rt (.getIdx n) b)
     (rt/put-user-signal! rt :cover-fill-binding b)))

@@ -198,12 +198,11 @@
                 name-len (int (or (:max-location-name-length limits) 16))]
             (when (and (not (str/blank? name)) (<= (count name) name-len) (< total max-locs))
               (send-action! rt player-uuid catalog/MSG-REQ-SAVED-POS-ADD {:name name} owner-key)
-              (.setOSlot input-n 0 "")
-              (.setFlag input-n node/FLAG-RENDER-DIRTY)))))
+              (ui/set-node-prop! rt input-n :text "")))))
       (events/on! rt :add-row-cancel :left-click
         (fn [_ _ _]
           (let [^INode input-n (ui/item-node add-row :add-row-input)]
-            (.setOSlot input-n 0 "") (.setFlag input-n node/FLAG-RENDER-DIRTY)))))
+            (ui/set-node-prop! rt input-n :text "")))))
     (rt/put-user-signal! rt :hit-map hit-map)
     (let [scroll-max (max 0 (- total max-visible))]
       (let [^INode up (rt/node-by-id rt :scroll-up) ^INode dn (rt/node-by-id rt :scroll-down)]

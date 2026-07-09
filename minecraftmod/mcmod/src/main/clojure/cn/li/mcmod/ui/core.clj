@@ -3,6 +3,8 @@
    Provides bind!/on!/list-set!/with-nodes for consumer code."
   (:require [cn.li.mcmod.ui.signal :as sig]
             [cn.li.mcmod.ui.node :as node]
+            [cn.li.mcmod.ui.slot-write :as slot-write]
+            [cn.li.mcmod.ui.node-props-spec :as props-spec]
             [cn.li.mcmod.ui.runtime :as rt]
             [cn.li.mcmod.ui.events :as events])
   (:import [cn.li.mcmod.uipojo.signal ISigD ISigO ISigL]
@@ -23,9 +25,11 @@
     (when-not n (throw (ex-info (str "bind!: node not found: " id) {:id id})))
     (let [kind-kw (.getKind n)
           kdef (get node/kinds kind-kw)
-          writer (get-in kdef [:prop-writers prop-key])]
+          spec (slot-write/prop-writer-spec kdef prop-key)
+          writer (slot-write/resolve-sig-writer kdef prop-key)]
       (when-not writer (throw (ex-info (str "bind!: no prop-writer for " kind-kw "/" prop-key)
                                         {:kind kind-kw :prop-key prop-key})))
+      (slot-write/assert-sig-matches! source spec)
       (let [b (sig/bind! source n writer (rt/get-dirty-bindings-q rt))]
         (rt/register-binding! rt (.getIdx n) b)
         nil))))
@@ -58,18 +62,13 @@
    Useful for one-time setup like texture URLs, initial text, etc.
    Usage: (ui/set-prop! rt :label :text \"Hello World\")"
   [^UiRt rt id prop-key value]
-  (let [^INode n (rt/node-by-id rt id)
-        kind-kw (.getKind n)
-        kdef (get node/kinds kind-kw)
-        dslot-idx (get-in kdef [:dslots prop-key])
-        oslot-idx (get-in kdef [:oslots prop-key])]
-    (cond
-      dslot-idx (.setDSlot n dslot-idx (double value))
-      oslot-idx (.setOSlot n oslot-idx value)
-      :else (throw (ex-info (str "set-prop!: unknown property " kind-kw "/" prop-key)
-                             {:kind kind-kw :prop-key prop-key})))
-    (.setFlag n node/FLAG-RENDER-DIRTY)
-    nil))
+  (let [^INode n (rt/node-by-id rt id)]
+    (when-not n (throw (ex-info (str "set-prop!: node not found: " id) {:id id})))
+    (let [kind-kw (.getKind n)]
+      (when (props-spec/pilot-kind? kind-kw)
+        (props-spec/validate-kind-prop! kind-kw prop-key value))
+      (slot-write/apply-prop! n kind-kw prop-key value)
+      nil)))
 
 ;; ============================================================================
 ;; with-nodes macro — id destructuring
@@ -140,14 +139,8 @@
   "Set a property directly on an INode (used with item-node from list-set!)."
   [^UiRt _rt ^INode n prop-key value]
   (when n
-    (let [kind-kw (.getKind n)
-          kdef (get node/kinds kind-kw)
-          dslot-idx (get-in kdef [:dslots prop-key])
-          oslot-idx (get-in kdef [:oslots prop-key])]
-      (cond
-        dslot-idx (.setDSlot n (int dslot-idx) (double value))
-        oslot-idx (.setOSlot n (int oslot-idx) value)
-        :else (throw (ex-info (str "set-node-prop!: unknown property " kind-kw "/" prop-key)
-                              {:kind kind-kw :prop-key prop-key})))
-      (.setFlag n node/FLAG-RENDER-DIRTY)
+    (let [kind-kw (.getKind n)]
+      (when (props-spec/pilot-kind? kind-kw)
+        (props-spec/validate-kind-prop! kind-kw prop-key value))
+      (slot-write/apply-prop! n kind-kw prop-key value)
       nil)))

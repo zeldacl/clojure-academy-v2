@@ -2,6 +2,7 @@
   "Node 模型与 kind 表单元测试。"
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.mcmod.ui.node :as node]
+            [cn.li.mcmod.ui.slot-write :as slot-write]
             [cn.li.mcmod.ui.signal :as sig])
   (:import [cn.li.mcmod.ui.node INode]
            [java.util ArrayList]))
@@ -71,7 +72,7 @@
 ;; ============================================================================
 
 (deftest all-kinds-defined
-  (doseq [k [:group :box :image :text :progress
+  (doseq [k [:group :box :image :text :progress :crosshair
              :shader-quad :shader-ring :shader-progress
              :gradient :line :list]]
     (testing (str "kind " k " exists")
@@ -91,7 +92,8 @@
   (let [progress-def (get node/kinds :progress)]
     (is (contains? (:prop-writers progress-def) :progress))
     (is (contains? (:prop-writers progress-def) :hint))
-    (is (fn? (:progress (:prop-writers progress-def))))))
+    (is (map? (:progress (:prop-writers progress-def))))
+    (is (fn? (slot-write/resolve-sig-writer progress-def :progress)))))
 
 ;; ============================================================================
 ;; add-child! / remove-child! / child-count
@@ -136,7 +138,7 @@
 (deftest prop-writer-equality-shortcircuit
   (let [n (node/create-node 0 nil :box {:fill 0xFF000000} 4 4 {})
         s (sig/signal-d 0xFF000000)
-        writer (get-in node/kinds [:box :prop-writers :fill])]
+        writer (slot-write/resolve-sig-writer (get node/kinds :box) :fill)]
     (is (fn? writer))
     ;; 首写 — 置 RENDER_DIRTY
     (writer n s)

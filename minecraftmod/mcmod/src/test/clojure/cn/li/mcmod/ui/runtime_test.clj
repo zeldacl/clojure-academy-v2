@@ -3,6 +3,7 @@
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.mcmod.ui.runtime :as rt]
             [cn.li.mcmod.ui.node :as node]
+            [cn.li.mcmod.ui.slot-write :as slot-write]
             [cn.li.mcmod.ui.dsl :as dsl]
             [cn.li.mcmod.ui.core :as ui]
             [cn.li.mcmod.ui.signal :as sig]
@@ -137,7 +138,7 @@
                           :template (dsl/box {:id :row :w 100 :h 16})}))
         _ (rt/build! r spec)
         s (sig/signal-d 0.5)
-        writer (get-in node/kinds [:box :prop-writers :hover-tint])]
+        writer (slot-write/resolve-sig-writer (get node/kinds :box) :hover-tint)]
     (ui/list-set! r :entries [1 2]
       (fn [_rt item-root _item]
         (let [b (sig/bind! s item-root writer (rt/get-dirty-bindings-q r))]

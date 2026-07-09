@@ -2,6 +2,7 @@
   "Reactive TechUI info-area — replaces tech-ui-common add-property/add-sepline/add-button."
   (:require [cn.li.mcmod.ui.core :as ui]
             [cn.li.mcmod.ui.node :as node]
+            [cn.li.mcmod.ui.slot-write :as slot-write]
             [cn.li.mcmod.ui.runtime :as rt]
             [cn.li.mcmod.ui.signal :as sig]
             [cn.li.mcmod.ui.events :as events])
@@ -91,7 +92,7 @@
         ^INode row (rt/build-child! rt row-spec (area-node rt))
         ^INode value-n (ui/item-node row value-id)]
     (when (fn? value)
-      (let [writer (get-in node/kinds [:text :prop-writers :text])
+      (let [writer (slot-write/resolve-sig-writer (get node/kinds :text) :text)
             live (sig/computed-d [(rt/clock-ms-sig rt)]
                     (fn [_] (str (value))))
             b (sig/bind! live value-n writer (rt/get-dirty-bindings-q rt))]
@@ -133,7 +134,7 @@
         progress-sig (sig/computed-d [(rt/clock-ms-sig rt)]
                        (fn [_]
                          (min 1.0 (/ (double (load-fn)) cap))))
-        writer (get-in node/kinds [:progress :prop-writers :progress])
+        writer (slot-write/resolve-sig-writer (get node/kinds :progress) :progress)
         b (sig/bind! progress-sig prog writer (rt/get-dirty-bindings-q rt))]
     (rt/register-binding! rt (.getIdx prog) b)
     (advance! ctx 14.0)))
