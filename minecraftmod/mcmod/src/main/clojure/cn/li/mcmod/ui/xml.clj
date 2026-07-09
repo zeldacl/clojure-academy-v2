@@ -3,10 +3,14 @@
    Element name = node kind; attributes = static props; <template> = reusable.
    Single parse path, schema validation at load time."
   (:refer-clojure :exclude [parse-double])
-  (:require [clojure.xml :as xml]
-            [clojure.java.io :as io]
+  (:require [clojure.java.io :as io]
             [clojure.string :as str]
-            [cn.li.mcmod.ui.spec :as ui-spec]))
+            [cn.li.mcmod.ui.spec :as ui-spec])
+  (:import [javax.xml.parsers SAXParserFactory SAXParser]
+           [org.xml.sax ContentHandler Attributes InputSource]
+           [org.xml.sax.helpers DefaultHandler]
+           [java.io InputStream]
+           [java.util ArrayDeque ArrayList]))
 
 ;; ============================================================================
 ;; Attribute parsers
@@ -154,9 +158,71 @@
 ;; Public API
 ;; ============================================================================
 
+;; ============================================================================
+;; SAX-based XML parser — replaces clojure.xml/parse which uses reflection
+;; that breaks on Java 17+ with SAXParserImpl.
+;; ============================================================================
+
+(defn- parse-xml
+  "Parse XML from InputStream using aot-compatible reify implementing ContentHandler.
+   Returns the same {:tag :attrs {:key \"val\"} :content [...]} tree as clojure.xml/parse.
+   Zero reflection, zero runtime code generation — safe under full AOT + Minecraft ClassLoaders."
+  [^InputStream in]
+  (let [^ArrayDeque stack (ArrayDeque.)
+        root (atom nil)
+        ^StringBuilder current-text (StringBuilder.)
+        flush-text! (fn [parent]
+                      (let [s (.toString current-text)]
+                        (.setLength current-text 0)
+                        (when-not (str/blank? s)
+                          (.add ^ArrayList (:content parent) (.trim s)))))
+        handler (reify ContentHandler
+                  (startElement [_this _uri local-name q-name attrs]
+                    (when-let [parent (.peek stack)]
+                      (flush-text! parent))
+                    (let [^Attributes a attrs
+                          tag (keyword (or (not-empty q-name) local-name))
+                          len (.getLength a)
+                          attr-map (reduce (fn [m i]
+                                             (assoc m (keyword (.getQName a (int i)))
+                                                      (.getValue a (int i))))
+                                           {} (range len))
+                          elem {:tag tag :attrs attr-map :content (ArrayList.)}]
+                      (when-let [parent (.peek stack)]
+                        (.add ^ArrayList (:content parent) elem))
+                      (.push stack elem)
+                      (when (nil? @root) (reset! root elem))))
+                  (endElement [_this _uri _local-name _q-name]
+                    (when-let [current (.peek stack)]
+                      (flush-text! current))
+                    (.pop stack))
+                  (characters [_this ch start length]
+                    (.append ^StringBuilder current-text ^chars ch (int start) (int length)))
+                  ;; Remaining ContentHandler methods — must be implemented, all no-ops
+                  (setDocumentLocator [_this _locator])
+                  (startDocument [_this])
+                  (endDocument [_this])
+                  (startPrefixMapping [_this _prefix _uri])
+                  (endPrefixMapping [_this _prefix])
+                  (ignorableWhitespace [_this _ch _start _length])
+                  (processingInstruction [_this _target _data])
+                  (skippedEntity [_this _name]))]
+    (let [^SAXParserFactory factory (SAXParserFactory/newInstance)
+          ^SAXParser parser (.newSAXParser factory)
+          reader (.getXMLReader parser)]
+      (.setContentHandler reader handler)
+      (.parse reader (InputSource. in)))
+    ;; Deep-convert mutable ArrayLists to immutable Clojure vectors
+    (letfn [(to-clj [node]
+              (if (string? node)
+                node
+                (update node :content (fn [^ArrayList l]
+                                        (vec (map to-clj l))))))]
+      (to-clj @root))))
+
 (defn parse-spec [^String xml-str]
   "Parse XML string into node-spec map. Top-level <Ui> → spec tree."
-  (let [root (xml/parse (java.io.ByteArrayInputStream. (.getBytes xml-str "UTF-8")))
+  (let [root (parse-xml (java.io.ByteArrayInputStream. (.getBytes xml-str "UTF-8")))
         templates (collect-templates (:content root))]
     (parse-ui-element root templates)))
 
@@ -171,7 +237,7 @@
                 (io/resource (str "assets/my_mod/" path)))]
     (when-not res
       (throw (ex-info (str "XML resource not found: " resource-path) {:path path})))
-    (let [root (xml/parse res)
+    (let [root (parse-xml (io/input-stream res))
           templates (collect-templates (:content root))
           spec (parse-ui-element root templates)]
       (ui-spec/validate! spec)
