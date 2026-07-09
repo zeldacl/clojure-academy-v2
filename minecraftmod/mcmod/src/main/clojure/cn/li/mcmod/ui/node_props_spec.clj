@@ -17,18 +17,18 @@
    [:visible? {:optional true} boolean?]
    [:clip? {:optional true} boolean?]
    [:transform? {:optional true} boolean?]
-   [:id {:optional true} [:or :keyword? :string?]]])
+   [:id {:optional true} [:or keyword? string?]]])
 
 (def ^:private node-template-schema
   [:map
-   {:kind :keyword?}
-   [:id {:optional true} [:or :keyword? :string? :nil?]]
-   [:props {:optional true} :map?]
-   [:children {:optional true} [:or :nil? [:vector :any]]]])
+   [:kind keyword?]
+   [:id {:optional true} [:or keyword? string? nil?]]
+   [:props {:optional true} map?]
+   [:children {:optional true} [:or nil? vector?]]])
 
 (def ^:private kind-props-schemas
   {:image [:map
-            [:src {:optional true} [:or :string? :nil?]]
+            [:src {:optional true} [:or string? nil?]]
             [:tint {:optional true} [:or vector? keyword?]]
             [:alpha {:optional true} number?]
             [:u {:optional true} number?]
@@ -36,11 +36,11 @@
             [:tex-w {:optional true} number?]
             [:tex-h {:optional true} number?]]
    :text [:map
-          [:text {:optional true} [:or :string? :nil?]]
+          [:text {:optional true} [:or string? nil?]]
           [:color {:optional true} number?]
           [:font-size {:optional true} number?]
-          [:font {:optional true} :any]
-          [:align {:optional true} :any]]
+          [:font {:optional true} [:or string? keyword? map? nil?]]
+          [:align {:optional true} [:or string? keyword? nil?]]]
    :list [:map
           [:template {:optional true} node-template-schema]
           [:spacing {:optional true} number?]

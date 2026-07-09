@@ -2,6 +2,10 @@
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.mcmod.ui.node-props-spec :as props-spec]))
 
+(deftest layout-props-accepts-id-in-props
+  (is (= {:id :root :x 0.0 :y 0.0}
+         (props-spec/validate-layout-props! {:id :root :x 0.0 :y 0.0}))))
+
 (deftest layout-props-valid
   (is (= {:x 1.0 :y 2.0}
          (props-spec/validate-layout-props! {:x 1.0 :y 2.0}))))

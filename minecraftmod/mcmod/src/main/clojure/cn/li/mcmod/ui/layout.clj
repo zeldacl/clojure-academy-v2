@@ -29,13 +29,13 @@
 ;; Alignment offset helpers
 ;; ============================================================================
 
-(defn- ^double align-offset-x [align ^double parent-w ^double scaled-w]
+(defn- align-offset-x [align parent-w scaled-w]
   (case (int align)
     1 (/ (- parent-w scaled-w) 2.0)
     2 (- parent-w scaled-w)
     0.0))
 
-(defn- ^double align-offset-y [align ^double parent-h ^double scaled-h]
+(defn- align-offset-y [align parent-h scaled-h]
   (case (int align)
     1 (/ (- parent-h scaled-h) 2.0)
     2 (- parent-h scaled-h)

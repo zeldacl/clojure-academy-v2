@@ -2,6 +2,7 @@
   "Kind renderers (:render!/:bake!) — ported from CGUI renderer.clj zero-alloc techniques.
    All render fns take [^GuiGraphics gg ^INode node]."
   (:require [cn.li.mc1201.client.texture-registry :as tex-registry]
+            [cn.li.mc1201.gui.cgui.font :as cgui-font]
             [cn.li.mc1201.gui.reactive.clock :as clock]
             [cn.li.mcmod.client.platform-bridge :as platform-bridge]
             [cn.li.mcmod.ui.node :as node]
@@ -10,8 +11,7 @@
   (:import [cn.li.mc1201.client GuiGraphicsHelper]
            [cn.li.mcmod.ui.node INode]
            [cn.li.mcmod.uipojo.runtime UiRt]
-           [net.minecraft.client.gui GuiGraphics Font]
-           [net.minecraft.client Minecraft]
+           [net.minecraft.client.gui GuiGraphics]
            [net.minecraft.client.renderer ShaderInstance]
            [net.minecraft.resources ResourceLocation]
            [com.mojang.blaze3d.vertex PoseStack PoseStack$Pose DefaultVertexFormat VertexFormat$Mode
@@ -176,27 +176,56 @@
       (apply str (repeat (count s) "*"))
       s)))
 
+(defn- text-font-desc [font-raw]
+  (cond
+    (map? font-raw) font-raw
+    (keyword? font-raw) (or (cgui-font/get-font font-raw) {})
+    (string? font-raw) (or (cgui-font/get-font (keyword font-raw)) {})
+    :else {}))
+
+(defn- text-align-kw [align-raw]
+  (let [kw (cond
+             (keyword? align-raw) align-raw
+             (string? align-raw) (keyword align-raw)
+             :else :left)]
+    (case kw
+      :center :center
+      :right :right
+      :left)))
+
 (defn bake-text! [^INode node]
-  ;; text kind slots (node.clj): dslots {:font-size 0}, oslots {:text 0 :color 1}
-  (let [text      (display-text node (or (.getOSlot node SLOT-TEXT-TEXT) ""))
-        font-size (.getDSlot node 0)
+  ;; text kind slots (node.clj): dslots {:font-size 0 :x-offset 1 :y-offset 2}
+  ;; oslots {:text 0 :color 1 :font 2 :align 3}
+  (let [text (display-text node (or (.getOSlot node SLOT-TEXT-TEXT) ""))
+        font-size-raw (.getDSlot node 0)
+        font-size (if (pos? font-size-raw) font-size-raw 14.0)
         color-raw (.getOSlot node 1)
-        color     (if (number? color-raw) (unchecked-int (long color-raw)) (unchecked-int 0xFFFFFFFF))]
+        color (cgui-font/normalize-color-int
+               (if (number? color-raw) (long color-raw) 0xFFFFFFFF))
+        font-raw (or (.getOSlot node 2) (get (.getStaticProps node) :font))
+        align-raw (or (.getOSlot node 3) (get (.getStaticProps node) :align))]
     (.setOSlot node SLOT-TEXT-BAKED
-               {:text text :font-size (double font-size) :color color})))
+                {:text text
+                 :font-size (double font-size)
+                 :color color
+                 :font-desc (text-font-desc font-raw)
+                 :align (text-align-kw align-raw)
+                 :x-off (double (.getDSlot node 1))
+                 :y-off (double (.getDSlot node 2))})))
 
 (defn render-text! [^GuiGraphics gg ^INode node]
   (let [baked (.getOSlot node SLOT-TEXT-BAKED)]
     (when baked
-      (let [{:keys [text color]} baked
+      (let [{:keys [text color font-size font-desc align x-off y-off]} baked
             editable? (boolean (get (.getStaticProps node) :editable?))
             focused? (.hasFlag node node/FLAG-FOCUSED)
             display-text (if (and editable? focused?)
                            (str "[" text "]")
                            (str text))
-            x (node-abs-x node) y (node-abs-y node)
-            ^Font font (.. (Minecraft/getInstance) (getFontManager) (getFont))]
-        (.drawShadow gg font ^String display-text (unchecked-int x) (unchecked-int y) (unchecked-int color))))))
+            x (+ (node-abs-x node) x-off)
+            y (+ (node-abs-y node) y-off)]
+        (cgui-font/draw-text! gg (or font-desc {}) ^String display-text
+                              x y font-size color (or align :left) true)))))
 
 ;; ============================================================================
 ;; :progress
