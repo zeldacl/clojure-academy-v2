@@ -2,6 +2,7 @@
   "XML layout loader — parses new-schema XML into node-spec data.
    Element name = node kind; attributes = static props; <template> = reusable.
    Single parse path, schema validation at load time."
+  (:refer-clojure :exclude [parse-double])
   (:require [clojure.xml :as xml]
             [clojure.java.io :as io]
             [clojure.string :as str]

@@ -12,7 +12,8 @@
            [net.minecraftforge.eventbus.api EventPriority]
            [net.minecraftforge.event TickEvent$ClientTickEvent TickEvent$Phase]
            [net.minecraftforge.client.event InputEvent$Key]
-           [net.minecraft.client Minecraft]))
+           [net.minecraft.client Minecraft]
+           [net.minecraft.client KeyMapping]))
 
 ;; ===== Forge Event Handler Registration =====
 
@@ -50,8 +51,8 @@
                    :client-session-id session-id
                    :logical-side :client}]
       ;; Dispatch only consumed Forge KeyMappings from AC :alternative scheme.
-      (doseq [[input-id key-mapping] (key-mapping-adapter/get-key-mappings-by-input-id)]
-        (when (.consumeClick key-mapping)
+      (doseq [[input-id ^KeyMapping key-mapping] (key-mapping-adapter/get-key-mappings-by-input-id)]
+        (when (.consumeClick ^KeyMapping key-mapping)
           (kb-proto/emit-keyboard-input! input-id context))))
     
     (catch Exception e

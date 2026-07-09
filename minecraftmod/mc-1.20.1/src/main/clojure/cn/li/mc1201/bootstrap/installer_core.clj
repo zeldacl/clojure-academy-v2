@@ -27,6 +27,7 @@
            [net.minecraft.world.level Level]
            [net.minecraft.world.level.block.state BlockState StateDefinition]
            [net.minecraft.world.level.block.state.properties Property]
+           [net.minecraft.world.level.block.entity BlockEntity]
            [net.minecraft.world.phys Vec3]))
 
 (def ^:private ^:dynamic item-protocols-installed? false)
@@ -156,8 +157,8 @@
        :pos-z (fn [^BlockPos this] (.getZ this))
        :create-block-pos (fn [x y z] (BlockPos. (int x) (int y) (int z)))
        :pos-above (fn [^BlockPos p] (.above p))
-       :position-get-block-pos (fn [be] (.getBlockPos be))
-       :position-get-pos (fn [be] (.getBlockPos be))}
+       :position-get-block-pos (fn [^BlockEntity be] (.getBlockPos be))
+       :position-get-pos (fn [^BlockEntity be] (.getBlockPos be))}
       "mc1201")))
 
 (defn- install-item! [adapter]
@@ -178,7 +179,8 @@
      {:item-is-empty?          (fn [^ItemStack this] (.isEmpty this))
       :item-get-count          (fn [^ItemStack this] (.getCount this))
       :item-get-max-stack-size (fn [^ItemStack this] (.getMaxStackSize this))
-      :item-is-equal?          (fn [^ItemStack this other] (.matches this other))
+      :item-is-equal?          (fn [^ItemStack this ^ItemStack other]
+                                (.is this (.getItem other)))
       :item-save-to-nbt        (fn [^ItemStack this nbt] (.save this nbt))
       :item-get-or-create-tag  (fn [^ItemStack this] (.getOrCreateTag this))
       :item-get-max-damage     (fn [^ItemStack this] (.getMaxDamage this))

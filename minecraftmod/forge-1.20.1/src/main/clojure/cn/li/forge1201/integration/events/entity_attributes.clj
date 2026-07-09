@@ -10,7 +10,8 @@
   (:require [cn.li.forge1201.registry.state :as registry-state]
             [cn.li.mcmod.entity.dsl :as edsl]
             [cn.li.mcmod.util.log :as log])
-  (:import [cn.li.forge1201.entity ModEntities]))
+  (:import [cn.li.forge1201.entity ModEntities]
+           [net.minecraftforge.registries RegistryObject]))
 
 (defn handle-entity-attribute-creation
   "Register PathfinderMob default attributes for every :scripted-mob entity type."
@@ -18,7 +19,7 @@
   (doseq [entity-id (edsl/list-entities)]
     (let [entity-spec (edsl/get-entity entity-id)]
       (when (= :scripted-mob (:entity-kind entity-spec))
-        (if-let [ro (registry-state/get-registered-entity-ro entity-id)]
+        (if-let [^RegistryObject ro (registry-state/get-registered-entity-ro entity-id)]
           (when (.isPresent ro)
             (ModEntities/registerMobDefaultAttributes event (.get ro))
             (log/info "Registered attributes for"

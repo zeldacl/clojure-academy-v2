@@ -85,7 +85,7 @@
           (cond
             (reactive-container-screen? screen-data)
             (reactive-host/create-tech-ui-container-screen
-              (assoc screen-data :minecraft-container menu))
+              (assoc screen-data :minecraft-container menu :screen-title (str title) :player-inventory player-inventory))
 
             :else
             (fallback-container-screen menu player-inventory title)))

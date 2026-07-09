@@ -8,6 +8,7 @@
             [cn.li.mcmod.ui.runtime :as rt] [cn.li.mcmod.ui.signal :as sig]
             [cn.li.ac.block.gui.sync :as gui-sync]
             [cn.li.ac.wireless.gui.container.common :as common]
+            [cn.li.ac.wireless.gui.container.move :as move-common]
             [cn.li.ac.block.imag-fusor.config :as cfg]
             [cn.li.ac.block.imag-fusor.recipes :as recipes]
             [cn.li.ac.block.imag-fusor.schema :as fusor-schema]))
@@ -24,7 +25,7 @@
 (def on-close (:on-close fusor-sync)) (defn- handle-button-click! [_ _ _] nil)
 (def ^:private inventory-pred (fn [i s] (>= i s)))
 (def ^:private quick-move-config (delay (slot-schema/build-quick-move-config fusor-slot-schema-id {:inventory-pred inventory-pred :rules [{:accept? phase-liquid-unit? :slot-ids [:input-1 :input-2]} {:accept? energy/is-energy-item-supported? :slot-ids [:energy]}]})))
-(defn- quick-move-stack [c i s] (cn.li.ac.wireless.gui.container.move/quick-move-with-rules c i s @quick-move-config))
+(defn- quick-move-stack [c i s] (move-common/quick-move-with-rules c i s @quick-move-config))
 
 (defn- attach-binds! [r container _menu _player _signals]
   (let [clock (rt/clock-ms-sig r)]

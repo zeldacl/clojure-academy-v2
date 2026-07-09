@@ -161,8 +161,8 @@
                      vec)]
       (when (seq items)
         (let [item-class (RuntimeAccessShared/getItemClass)
-              item-array (into-array item-class items)]
-          (.useNbtForSubtypes registration item-array))
+              ^"[Lnet.minecraft.world.item.Item;" item-array (into-array item-class items)]
+          (.useNbtForSubtypes ^ISubtypeRegistration registration item-array))
         (log/info "Registered JEI NBT subtypes for" (count items) "creative-tab variant items.")))
     (catch Exception e
       (log/error "Failed to register JEI item subtypes:" (ex-message e)))))

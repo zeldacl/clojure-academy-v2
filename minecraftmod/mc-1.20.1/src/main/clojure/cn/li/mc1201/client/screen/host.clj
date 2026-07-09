@@ -78,7 +78,7 @@
                               (with-client-session captured-session-id
                                 #(client-ui/client-handle-managed-screen-char-typed! screen-key ch))))]
         (.setScreen mc
-                    (doto (create-host-screen
+                    (doto ^DelegatingScreen (create-host-screen
                             title
                             (fn [mouse-x mouse-y]
                               (client-ui/client-handle-managed-screen-click! screen-key mouse-x mouse-y))

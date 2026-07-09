@@ -1,5 +1,6 @@
 (ns cn.li.ac.block.ability-interferer.gui-reactive
   "Complete reactive replacement for ability_interferer/gui.clj."
+  (:refer-clojure :exclude [sync])
   (:require [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.gui.spec :as gui-reg] [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.mcmod.network.client :as net-client] [cn.li.mcmod.util.log :as log]

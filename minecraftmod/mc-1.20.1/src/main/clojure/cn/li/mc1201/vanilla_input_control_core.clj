@@ -30,7 +30,7 @@
   ([] (attack-pressed? (get-minecraft)))
   ([minecraft]
    (try
-     (let [opts (get-options minecraft)
+     (let [^Options opts (get-options minecraft)
            attack-key ^KeyMapping (.keyAttack opts)]
        (.isDown attack-key))
      (catch Exception e
@@ -44,7 +44,7 @@
   ([] (use-pressed? (get-minecraft)))
   ([minecraft]
    (try
-     (let [opts (get-options minecraft)
+     (let [^Options opts (get-options minecraft)
            use-key ^KeyMapping (.keyUse opts)]
        (.isDown use-key))
      (catch Exception e
@@ -70,7 +70,7 @@
   ([] (suppress-vanilla-attack-use! (get-minecraft)))
   ([minecraft]
    (try
-     (let [opts (get-options minecraft)
+     (let [^Options opts (get-options minecraft)
            attack-key ^KeyMapping (.keyAttack opts)
            use-key ^KeyMapping (.keyUse opts)]
        
@@ -104,7 +104,7 @@
      ;; so just resetting to false and letting natural polling resume is sufficient.
      ;; If AC handler pressed these keys, they'll become 'pressed' again in next tick.
      
-     (let [opts (get-options minecraft)
+     (let [^Options opts (get-options minecraft)
            attack-key ^KeyMapping (.keyAttack opts)
            use-key ^KeyMapping (.keyUse opts)]
        

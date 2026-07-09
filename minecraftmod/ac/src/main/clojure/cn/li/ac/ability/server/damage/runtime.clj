@@ -66,5 +66,5 @@
                                       (number? result) (double result)
                                       :else current-damage))
                               (catch Exception e (log/warn "Damage handler" handler-id "threw:" (ex-message e)) current-damage))]
-          (recur (rest remaining-handlers) next-damage))))
+          (recur (rest remaining-handlers) (double next-damage)))))
     (catch Exception e (log/warn "process-damage! failed:" (ex-message e)) (double original-damage))))

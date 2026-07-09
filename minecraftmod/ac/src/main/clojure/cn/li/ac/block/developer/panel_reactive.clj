@@ -704,7 +704,8 @@
 
 (defn create-screen
   [container menu player]
-  (let [r (build-runtime! container player)]
+  (let [container (assoc container :menu menu)
+        r (build-runtime! container player)]
     {:type :reactive-container-screen
      :runtime r
      :container container

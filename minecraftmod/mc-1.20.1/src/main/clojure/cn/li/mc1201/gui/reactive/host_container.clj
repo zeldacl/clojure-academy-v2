@@ -21,7 +21,7 @@
     true))
 
 (defn- gui-offset [^DelegatingCGuiContainerScreen screen]
-  [(.-leftPos screen) (.-topPos screen)])
+  [(.getGuiLeft screen) (.getGuiTop screen)])
 
 (defn- render-embedded-runtimes!
   "Render any child UiRt instances registered by the screen owner under the
@@ -124,8 +124,8 @@
             (rt/flush! rt)
             (layout/ensure-layout! rt)
             (layout/ensure-tape! rt)
-            (render/draw-tape! gg rt (.-leftPos this) (.-topPos this))
-            (render-embedded-runtimes! rt gg (.-leftPos this) (.-topPos this) pt)
+            (render/draw-tape! gg rt (.getGuiLeft this) (.getGuiTop this))
+            (render-embedded-runtimes! rt gg (.getGuiLeft this) (.getGuiTop this) pt)
             (when (slots-active?* )
               (.callSuperRender this gg mx my pt))
             (catch Exception e
@@ -160,18 +160,18 @@
               (modal-mouse-drag! modal lx ly button)
               true)
             (do
-              (input/handle-mouse-dragged rt (.-leftPos this) (.-topPos this) mx my button dx dy)
+              (input/handle-mouse-dragged rt (.getGuiLeft this) (.getGuiTop this) mx my button dx dy)
               (if (and (slots-active?*) (not (hit-ui? rt this mx my)))
                 (.callSuperMouseDragged this mx my button dx dy)
                 true)))))
       (.withMouseMoved
         (fn move-cb [^DelegatingCGuiContainerScreen this mx my]
           (when-not (active-modal rt)
-            (input/handle-mouse-moved rt (.-leftPos this) (.-topPos this) mx my))))
+            (input/handle-mouse-moved rt (.getGuiLeft this) (.getGuiTop this) mx my))))
       (.withMouseScrolled
         (fn scroll-cb [^DelegatingCGuiContainerScreen this mx my delta]
           (when-not (active-modal rt)
-            (input/handle-mouse-scrolled rt (.-leftPos this) (.-topPos this) mx my delta))))
+            (input/handle-mouse-scrolled rt (.getGuiLeft this) (.getGuiTop this) mx my delta))))
       (.withKeyPressed
         (fn key-cb [_this key-code scan-code modifiers]
           (if-let [modal (active-modal rt)]
@@ -193,13 +193,13 @@
   "Create container screen from reactive tech-ui assembled map.
    {:runtime :update-fn :current-tab-atom :tech-ui :minecraft-container :size-dx :size-dy}"
   [screen-data]
-  (let [{:keys [runtime minecraft-container size-dx size-dy]} screen-data
+  (let [{:keys [runtime minecraft-container size-dx size-dy screen-title player-inventory]} screen-data
         ^DelegatingCGuiContainerScreen screen
         (create-reactive-container-screen
           screen-data
-          (.-menu minecraft-container)
-          (.-playerInventory minecraft-container)
-          (.getTitle minecraft-container))]
-    (when size-dx (set! (.-imageWidth screen) (+ 176 (int size-dx))))
-    (when size-dy (set! (.-imageHeight screen) (+ 166 (int size-dy))))
+          minecraft-container
+          player-inventory
+          (or screen-title "Container"))]
+    (when size-dx (.setImageSize screen (+ 176 (int size-dx)) (.getYSize screen)))
+    (when size-dy (.setImageSize screen (.getXSize screen) (+ 166 (int size-dy))))
     screen))

@@ -1,5 +1,6 @@
 (ns cn.li.ac.block.phase-gen.gui-reactive
   "Complete reactive replacement for phase_gen/gui.clj."
+  (:refer-clojure :exclude [sync])
   (:require [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.gui.spec :as gui-reg] [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.mcmod.platform.item :as pitem] [cn.li.ac.energy.operations :as energy]

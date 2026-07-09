@@ -252,7 +252,8 @@
        :is-glfw-key-down? (fn [key-code]
                             (try
                               (let [^Minecraft mc (Minecraft/getInstance)
-                                    handle (.. mc getWindow getHandle)]
+                                    ^Window w (.getWindow mc)
+                                    handle (.getWindow w)]
                                 (= 1 (org.lwjgl.glfw.GLFW/glfwGetKey handle (int key-code))))
                               (catch Throwable _ false)))}))
 
