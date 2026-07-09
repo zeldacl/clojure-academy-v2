@@ -7,7 +7,7 @@
             [cn.li.mcmod.util.log :as log] [cn.li.ac.gui.manifest :as gui-manifest]
             [cn.li.ac.gui.block-gui-reactive :as bgui]
             [cn.li.mcmod.ui.runtime :as rt] [cn.li.mcmod.ui.core :as ui]
-            [cn.li.mcmod.ui.signal :as sig] [cn.li.mcmod.ui.anim :as ranim]
+            [cn.li.mcmod.ui.signal :as sig]
             [cn.li.ac.block.wireless-node.node-info-reactive :as node-info]
             [cn.li.ac.block.gui.sync :as gui-sync] [cn.li.ac.config.modid :as modid]
             [cn.li.ac.wireless.gui.container.common :as common]
@@ -16,7 +16,8 @@
             [cn.li.mcmod.gui.container.action-payload :as action-payload]
             [cn.li.ac.block.wireless-node.logic :as node-logic]
             [cn.li.ac.block.wireless-node.schema :as node-schema]
-            [cn.li.mcmod.platform.be :as platform-be]))
+            [cn.li.mcmod.platform.be :as platform-be])
+  (:import [cn.li.mcmod.ui.node INode]))
 
 ;; ============================================================================
 ;; Animation config (preserved from old wireless_node/gui.clj)
@@ -59,45 +60,56 @@
 
 (defn- attach-node-binds!
   "Reactive replacement for: create-anim-widget + 2s link polling + breathe-alpha.
-   Uses computed signals driven by clock instead of on-frame polling."
+   Uses computed signals driven by clock instead of on-frame polling.
+
+   The animated effect_node.png strip is built as a fresh native child of the
+   `:inv` tab-page group (a hand-authored keyword id from tech-ui-tabs-reactive,
+   not the XML-parsed page — XML-loaded node ids come back as plain strings,
+   not keywords, so this is the reliable anchor), positioned/scaled to match
+   the old CGUI create-anim-widget widget (pos 42,35.5 size 186x75 scale 0.5)."
   [r container _menu player _signals]
   (node-info/attach! r container player)
+  (when-let [^INode inv-page (rt/node-by-id r :inv)]
+    (rt/build-child! r
+      {:kind :image
+       :props {:id :node-anim-img :x 42.0 :y 35.5 :w (double anim-tex-w) :h (double anim-tex-h)
+               :scale 0.5 :alpha 0.675 :src anim-texture :tex-h (/ 1.0 (double anim-frame-count))}}
+      inv-page))
   (let [clock (rt/clock-ms-sig r)
         ;; 2-second polling: computed with side-effect (writes to linked atom).
         ;; ComputedO stored bare via put-user-signal! is never pulled (lazy-pull,
         ;; depMarkDirty only flags dirty) — bind it to an always-present node so
-        ;; rt/flush! actually forces this to run each frame.
+        ;; rt/flush! actually forces this to run each frame. :screen-root is the
+        ;; hand-authored wrapper group (block-gui-reactive's wrap-with-info-area),
+        ;; always present since this screen requests :info-area? true.
         link-poll-tick (sig/computed-o [clock]
                          (fn [ms]
                            (let [now (long ms)]
                              (when (zero? (rem (quot now 1000) 2))
                                (send-link-query! container)))
                            nil))
-        _ (let [^cn.li.mcmod.ui.node.INode anchor (rt/node-by-id r :ui_block)
-                b (sig/bind! link-poll-tick anchor
-                    (fn [_node source] (sig/sget-o source) nil)
-                    (rt/get-dirty-bindings-q r))]
-            (rt/register-binding! r (.getIdx anchor) b))
+        _ (when-let [^INode anchor (rt/node-by-id r :screen-root)]
+            (let [b (sig/bind! link-poll-tick anchor
+                      (fn [_node source] (sig/sget-o source) nil)
+                      (rt/get-dirty-bindings-q r))]
+              (rt/register-binding! r (.getIdx anchor) b)))
         ;; Breathe alpha: sin wave, 0.675~0.85 range, 0.8s period
         breathe-alpha (sig/computed-d [clock]
                         (fn [ms] (let [t (/ (double ms) 800.0)
                                        s (* (+ 1.0 (Math/sin (* t Math/PI 2.0))) 0.5)]
                                    (+ 0.675 (* s 0.175)))))
-        _ (rt/put-user-signal! r :breathe-alpha breathe-alpha)
-        ;; Animation frame: driven by state + time
-        anim-frame (sig/computed-d [clock]
-                     (fn [ms]
-                       (let [linked? (boolean (when-let [l (:linked container)] @l))
-                             state (if linked? :linked :unlinked)
-                             {:keys [begin frames frame-time]} (anim-config state)
-                             ticks (quot (long ms) (long frame-time))]
-                         (double (+ begin (rem ticks frames))))))
-        _ (rt/put-user-signal! r :anim-frame anim-frame)
-        ;; Connections + range display
-        _ (rt/put-user-signal! r :connections
-            (sig/computed-o [clock] (fn [_] (str (or @(:connections container) 0)))))
-        _ (rt/put-user-signal! r :range
-            (sig/computed-o [clock] (fn [_] (str (or @(:range container) "...")))))]
+        ;; Animation frame fraction: driven by linked/unlinked state + time
+        anim-frame-v (sig/computed-d [clock]
+                       (fn [ms]
+                         (let [linked? (boolean (when-let [l (:linked container)] @l))
+                               state (if linked? :linked :unlinked)
+                               {:keys [begin frames frame-time]} (anim-config state)
+                               ticks (quot (long ms) (long frame-time))
+                               frame (+ begin (rem ticks frames))]
+                           (/ (double frame) (double anim-frame-count)))))]
+    (when (rt/node-by-id r :node-anim-img)
+      (ui/bind! r :node-anim-img :alpha breathe-alpha)
+      (ui/bind! r :node-anim-img :v anim-frame-v))
     nil))
 
 ;; ============================================================================

@@ -232,7 +232,7 @@
 
 (defn- attach-tag-hover-tick! [^UiRt rt]
   (set-tick! rt :tag-hover-tick
-    (sig/computed-o [(rt/clock-ms-sig rt)]
+    (sig/computed-d [(rt/clock-ms-sig rt)]
       (fn [_]
         (let [hover-map (or (rt/user-signal rt :tag-hover-map) {})
               display-text (get hover-map (rt/hovered-idx rt))
@@ -305,7 +305,7 @@
   (doseq [[id _ _] logo-timings] (set-logo-alpha! rt id 0))
   (let [done? (atom false)]
     (set-tick! rt :logo-anim-tick
-      (sig/computed-o [(rt/clock-ms-sig rt)]
+      (sig/computed-d [(rt/clock-ms-sig rt)]
         (fn [ms]
           (when-not @done?
             (let [elapsed (- (double ms) (double anim-start))]
@@ -356,7 +356,7 @@
 (defn- fade-out-logos! [^UiRt rt fade-start]
   (let [done? (atom false)]
     (set-tick! rt :logo-anim-tick
-      (sig/computed-o [(rt/clock-ms-sig rt)]
+      (sig/computed-d [(rt/clock-ms-sig rt)]
         (fn [ms]
           (when-not @done?
             (let [elapsed (- (double ms) (double fade-start))

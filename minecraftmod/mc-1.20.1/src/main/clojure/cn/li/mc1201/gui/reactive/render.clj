@@ -7,7 +7,8 @@
             [cn.li.mcmod.ui.node :as node]
             [cn.li.mcmod.ui.layout :as ui-layout]
             [clojure.string :as str])
-  (:import [cn.li.mcmod.ui.node INode]
+  (:import [cn.li.mc1201.client GuiGraphicsHelper]
+           [cn.li.mcmod.ui.node INode]
            [cn.li.mcmod.uipojo.runtime UiRt]
            [net.minecraft.client.gui GuiGraphics Font]
            [net.minecraft.client Minecraft]
@@ -30,6 +31,11 @@
 
 (def ^:private SLOT-IMG-SRC  0)
 (def ^:private SLOT-IMG-BAKED-RL 2)  ;; backend slot: resolved ResourceLocation
+(def ^:private SLOT-IMG-ALPHA 0)
+(def ^:private SLOT-IMG-U     1)
+(def ^:private SLOT-IMG-V     2)
+(def ^:private SLOT-IMG-TEX-W 3)
+(def ^:private SLOT-IMG-TEX-H 4)
 
 (def ^:private SLOT-TEXT-TEXT    0)
 (def ^:private SLOT-TEXT-BAKED  8)  ;; backend slot: baked text runs
@@ -138,11 +144,26 @@
             w  (scaled-w node)    h  (scaled-h node)
             ix (unchecked-int x)  iy (unchecked-int y)
             iw (unchecked-int w)  ih (unchecked-int h)
-            alpha (float (max 0.0 (min 1.0 (.getDSlot node 0))))
+            alpha (float (max 0.0 (min 1.0 (.getDSlot node SLOT-IMG-ALPHA))))
+            u (.getDSlot node SLOT-IMG-U)
+            v (.getDSlot node SLOT-IMG-V)
+            tex-w-raw (.getDSlot node SLOT-IMG-TEX-W)
+            tex-h-raw (.getDSlot node SLOT-IMG-TEX-H)
+            tex-w (if (pos? tex-w-raw) tex-w-raw 1.0)
+            tex-h (if (pos? tex-h-raw) tex-h-raw 1.0)
             [tr tg tb] (image-tint-rgb node)]
         (when (pos? alpha)
           (RenderSystem/setShaderColor tr tg tb alpha)
-          (.blit gg rl ix iy iw ih 0.0 0.0 iw ih iw ih)
+          (if (and (zero? u) (zero? v) (== tex-w 1.0) (== tex-h 1.0))
+            ;; Fast path: no sprite-sheet cropping requested — full-texture blit.
+            (.blit gg rl ix iy iw ih 0.0 0.0 iw ih iw ih)
+            ;; Cropped path: sample a [u,v]→[u+tex-w,v+tex-h] fractional UV region
+            ;; (matching the old CGUI comp/render-texture-region convention), e.g.
+            ;; a single frame out of a vertically-stacked sprite-sheet.
+            (GuiGraphicsHelper/blitTexturedQuad rl
+              (float x) (float y) (float (+ x w)) (float (+ y h)) 0.0
+              (float u) (float (+ u tex-w))
+              (float v) (float (+ v tex-h))))
           (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0))))))
 
 ;; ============================================================================

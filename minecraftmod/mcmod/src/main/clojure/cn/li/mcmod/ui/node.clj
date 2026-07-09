@@ -256,6 +256,30 @@
       (.setDSlot node 0 v)
       (.setFlag node FLAG-RENDER-DIRTY))))
 
+(defn write-u-d! [^INode node source]
+  (let [v (.dGet ^ISigD source)]
+    (when-not (== v (.getDSlot node 1))
+      (.setDSlot node 1 v)
+      (.setFlag node FLAG-RENDER-DIRTY))))
+
+(defn write-v-d! [^INode node source]
+  (let [v (.dGet ^ISigD source)]
+    (when-not (== v (.getDSlot node 2))
+      (.setDSlot node 2 v)
+      (.setFlag node FLAG-RENDER-DIRTY))))
+
+(defn write-tex-w-d! [^INode node source]
+  (let [v (.dGet ^ISigD source)]
+    (when-not (== v (.getDSlot node 3))
+      (.setDSlot node 3 v)
+      (.setFlag node FLAG-RENDER-DIRTY))))
+
+(defn write-tex-h-d! [^INode node source]
+  (let [v (.dGet ^ISigD source)]
+    (when-not (== v (.getDSlot node 4))
+      (.setDSlot node 4 v)
+      (.setFlag node FLAG-RENDER-DIRTY))))
+
 (defn write-tint-rgb! [^INode node source]
   (let [rgb (cond
               (vector? source) (mapv #(double %) source)
@@ -381,7 +405,9 @@
    {:dslots {:alpha 0 :u 1 :v 2 :tex-w 3 :tex-h 4}
     :oslots {:src 0 :tint 1}
     :oslots-backend-base 2
-    :prop-writers {:src write-src! :alpha write-alpha-d! :tint write-tint-rgb!}
+    :prop-writers {:src write-src! :alpha write-alpha-d! :tint write-tint-rgb!
+                   :u write-u-d! :v write-v-d!
+                   :tex-w write-tex-w-d! :tex-h write-tex-h-d!}
     :hit? true}
 
    :text

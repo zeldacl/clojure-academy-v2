@@ -4,10 +4,11 @@
             [cn.li.mcmod.gui.spec :as gui-reg] [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.ac.energy.operations :as energy] [cn.li.mcmod.util.log :as log]
             [cn.li.ac.gui.manifest :as gui-manifest] [cn.li.ac.gui.block-gui-reactive :as bgui]
-            [cn.li.mcmod.ui.runtime :as rt] [cn.li.mcmod.ui.signal :as sig]
+            [cn.li.mcmod.ui.runtime :as rt] [cn.li.mcmod.ui.core :as ui] [cn.li.mcmod.ui.signal :as sig]
             [cn.li.ac.block.gui.sync :as gui-sync] [cn.li.ac.config.modid :as modid]
             [cn.li.ac.wireless.gui.container.common :as common]
-            [cn.li.ac.block.solar-gen.schema :as solar-schema]))
+            [cn.li.ac.block.solar-gen.schema :as solar-schema])
+  (:import [cn.li.mcmod.ui.node INode]))
 
 (def solar-gen-id :solar-gen)
 (def ^:private solar-sync (gui-sync/schema-sync-fns solar-schema/unified-solar-schema))
@@ -24,9 +25,19 @@
 (defn- solar-status->frame [status] (case status "STRONG" 0.0 "WEAK" (/ 2.0 3.0) (/ 1.0 3.0)))
 
 (defn- attach-anim-bind! [r container _menu _player _signals]
-  (rt/put-user-signal! r :anim-uv
-    (sig/computed-d [(rt/clock-ms-sig r)]
-      (fn [_] (solar-status->frame (or @(:status container) "STOPPED"))))))
+  ;; "anim_frame" is a group defined in page_solar.xml (id="anim_frame") — XML-parsed
+  ;; node ids come back as plain strings (not keywords), so the lookup key here must
+  ;; match that exactly. The animated image itself is a fresh native child with its
+  ;; own keyword id, so binding it afterwards via that keyword works normally.
+  (when-let [^INode anim-frame (rt/node-by-id r "anim_frame")]
+    (rt/build-child! r
+      {:kind :image
+       :props {:id :solar-anim-img :x 0.0 :y 0.0 :w 104.0 :h 70.0 :alpha 1.0
+               :src effect-solar-texture :tex-h (/ 1.0 3.0)}}
+      anim-frame)
+    (ui/bind! r :solar-anim-img :v
+      (sig/computed-d [(rt/clock-ms-sig r)]
+        (fn [_] (solar-status->frame (or @(:status container) "STOPPED")))))))
 
 (defn create-screen [container menu player]
   (let [safe-val #(some-> % deref)]
