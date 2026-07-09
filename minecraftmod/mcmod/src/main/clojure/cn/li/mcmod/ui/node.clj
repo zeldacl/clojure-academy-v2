@@ -1,14 +1,14 @@
 (ns cn.li.mcmod.ui.node
   "Node model & kind table. Replaces old CGUI atom-per-field map.
 
-   Node = deftype with mutable primitive fields + dslots/oslots arrays.
-   All access via INode definterface (cross-ns/module safe, remap-safe).
+   Node = Java POJO with mutable primitive fields + dslots/oslots arrays.
+   All access via INode Java interface (cross-ns/module safe, remap-safe).
 
    Pure kind definition table: S0 static immutable def (not in registry).
    Render backend :render!/:bake! installed by mc1201 via install-adapter!
    into [:platform :ui-kinds]."
-  (:import [cn.li.mcmod.uipojo.signal ISigD ISigO]
-           [cn.li.mcmod.uipojo.runtime IUiNode]))
+  (:import [cn.li.mcmod.ui.node INode Node]
+           [cn.li.mcmod.uipojo.signal ISigD ISigO]))
 
 ;; ============================================================================
 ;; Bitmask constants
@@ -20,124 +20,6 @@
 (def ^:const FLAG-HAS-TRANSFORM 8)
 (def ^:const FLAG-HOVERED 16)
 (def ^:const FLAG-FOCUSED 32)
-
-;; ============================================================================
-;; INode definterface
-;; ============================================================================
-
-(definterface INode
-  ;; Identity
-  (^int getIdx [])
-  (^Object getId [])
-  (^Object getKind [])
-  ;; Hierarchy
-  (^Object getParentNode []) (^void setParentNode [^Object p])
-  (^"[Ljava.lang.Object;" getChildrenArr []) (^void setChildrenArr [^"[Ljava.lang.Object;" cs])
-  (^int getChildCount [])
-  ;; Layout inputs (write -> FLAG_LAYOUT_DIRTY)
-  (^double getX []) (^void setX [^double x])
-  (^double getY []) (^void setY [^double y])
-  (^double getW []) (^void setW [^double w])
-  (^double getH []) (^void setH [^double h])
-  (^double getScale []) (^void setScale [^double s])
-  (^double getZ []) (^void setZ [^double z])
-  ;; Layout cache (computed once by ensure-layout!)
-  (^double getAbsX []) (^void setAbsX [^double ax])
-  (^double getAbsY []) (^void setAbsY [^double ay])
-  (^double getCumScale []) (^void setCumScale [^double cs])
-  ;; Static layout meta
-  (^double getPivotX []) (^void setPivotX [^double px])
-  (^double getPivotY []) (^void setPivotY [^double py])
-  (^byte getAlignW []) (^void setAlignW [^byte aw])
-  (^byte getAlignH []) (^void setAlignH [^byte ah])
-  ;; Flags
-  (^int getFlags [])
-  (^void setFlag [^int mask])
-  (^void clearFlag [^int mask])
-  (^boolean hasFlag [^int mask])
-  ;; Visibility
-  (^boolean isVisible []) (^void setVisible [^boolean v])
-  ;; Static props
-  (^Object getStaticProps [])
-  ;; Dynamic slots (kind-specific, indexed per kind slot layout)
-  (^double getDSlot [^int i]) (^void setDSlot [^int i ^double v])
-  (^Object getOSlot [^int i]) (^void setOSlot [^int i ^Object v]))
-
-;; ============================================================================
-;; Node deftype
-;; ============================================================================
-
-(deftype Node
-  ;; Identity (immutable after build)
-  [^long idx
-   id
-   kind
-   ;; Hierarchy (mutable)
-   ^:unsynchronized-mutable parent
-   ^:unsynchronized-mutable children
-   ^:unsynchronized-mutable child-count
-   ;; Layout inputs
-   ^:unsynchronized-mutable ^double x
-   ^:unsynchronized-mutable ^double y
-   ^:unsynchronized-mutable ^double w
-   ^:unsynchronized-mutable ^double h
-   ^:unsynchronized-mutable ^double scale
-   ^:unsynchronized-mutable ^double z
-   ;; Layout cache
-   ^:unsynchronized-mutable ^double abs-x
-   ^:unsynchronized-mutable ^double abs-y
-   ^:unsynchronized-mutable ^double cum-scale
-   ;; Static layout meta
-   ^double pivot-x
-   ^double pivot-y
-   ^:unsynchronized-mutable align-w
-   ^:unsynchronized-mutable align-h
-   ;; Flags
-   ^:unsynchronized-mutable flags
-   ;; Visibility
-   ^:unsynchronized-mutable visible
-   ;; Static props
-   static-props
-   ;; Dynamic slots
-   ^doubles dslots
-   oslots]
-
-  INode
-  IUiNode
-  (getIdx [_] (int idx))
-  (getId [_] id)
-  (getKind [_] kind)
-  (getParentNode [_] parent)
-  (setParentNode [_ p] (set! parent p))
-  (getChildrenArr [_] children)
-  (setChildrenArr [_ cs] (set! children cs))
-  (getChildCount [_] (or (int child-count) 0))
-  (getX [_] x)  (setX [_ v] (set! x v))
-  (getY [_] y)  (setY [_ v] (set! y v))
-  (getW [_] w)  (setW [_ v] (set! w v))
-  (getH [_] h)  (setH [_ v] (set! h v))
-  (getScale [_] scale)  (setScale [_ v] (set! scale v))
-  (getZ [_] z)  (setZ [_ v] (set! z v))
-  (getAbsX [_] abs-x)  (setAbsX [_ v] (set! abs-x v))
-  (getAbsY [_] abs-y)  (setAbsY [_ v] (set! abs-y v))
-  (getCumScale [_] cum-scale)  (setCumScale [_ v] (set! cum-scale v))
-  (getPivotX [_] pivot-x)  (setPivotX [_ _v] nil)
-  (getPivotY [_] pivot-y)  (setPivotY [_ _v] nil)
-  (getAlignW [_] (or (byte align-w) (byte 0)))
-  (setAlignW [_ _v] nil)
-  (getAlignH [_] (or (byte align-h) (byte 0)))
-  (setAlignH [_ _v] nil)
-  (getFlags [_] (or (int flags) 0))
-  (setFlag [_ mask] (set! flags (Integer/valueOf (int (bit-or (or (int flags) 0) (int mask))))))
-  (clearFlag [_ mask] (set! flags (Integer/valueOf (int (bit-and (or (int flags) 0) (bit-not (int mask)))))))
-  (hasFlag [_ mask] (not (zero? (int (bit-and (or (int flags) 0) (int mask))))))
-  (isVisible [_] (boolean visible))
-  (setVisible [_ v] (set! visible (boolean v)))
-  (getStaticProps [_] static-props)
-  (getDSlot [_ i] (aget dslots i))
-  (setDSlot [_ i v] (aset dslots i (double v)))
-  (getOSlot [_ i] (aget ^"[Ljava.lang.Object;" oslots i))
-  (setOSlot [_ i v] (aset ^"[Ljava.lang.Object;" oslots i v)))
 
 ;; ============================================================================
 ;; Factory
@@ -155,55 +37,50 @@
         visible? (boolean (get props :visible? true))
         clip? (boolean (get props :clip? false))
         transform? (boolean (get props :transform? false))
-        flags-val (Integer/valueOf
-                    (int (bit-or (if clip? FLAG-CLIP 0)
-                                 (if transform? FLAG-HAS-TRANSFORM 0)
-                                 FLAG-LAYOUT-DIRTY FLAG-RENDER-DIRTY)))
-        aw (Byte/valueOf (byte (case align-w :center 1 :right 2 0)))
-        ah (Byte/valueOf (byte (case align-h :middle 1 :bottom 2 0)))]
-    (Node. (long (int idx)) id kind
+        flags-val (int (bit-or (if clip? FLAG-CLIP 0)
+                               (if transform? FLAG-HAS-TRANSFORM 0)
+                               FLAG-LAYOUT-DIRTY FLAG-RENDER-DIRTY))
+        aw (byte (case align-w :center 1 :right 2 0))
+        ah (byte (case align-h :middle 1 :bottom 2 0))]
+    (Node. (int idx) id kind
            nil                                   ;; parent
-           (object-array 4)                      ;; children
-           (Integer/valueOf 0)                   ;; child-count
+           nil                                   ;; children (POJO allocates)
            (double x) (double y) (double w) (double h) (double scale) (double z)
            0.0 0.0 1.0                           ;; abs-x/y, cum-scale
            (double pivot-x) (double pivot-y)
            aw ah
            flags-val
-           (Boolean/valueOf visible?)
+           visible?
            static-props
            (double-array dslot-count)
            (object-array oslot-count))))
 
 (defn child-count
-  "Get child count by scanning children array to first null."
+  "O(1) child count — maintained by add-child!/remove-child!/clear-children!."
   [^INode node]
-  (let [^"[Ljava.lang.Object;" cs (.getChildrenArr node)]
-    (loop [i 0]
-      (if (or (>= i (alength cs)) (nil? (aget cs i)))
-        i
-        (recur (unchecked-inc-int i))))))
+  (.getChildCount node))
 
 (defn add-child!
   "Add child to parent's children array (auto-grow). Sets parent back-ref."
   [^INode parent ^INode child]
-  (let [^objects old (.getChildrenArr parent)
-        n (child-count parent)
+  (let [n (.getChildCount parent)
+        ^objects old (.getChildrenArr parent)
         cap (alength old)]
     (if (< n cap)
       (aset old n child)
-      (let [new-arr (object-array (max 8 (* 2 cap)))]
+      (let [new-arr (make-array INode (max 8 (* 2 cap)))]
         (System/arraycopy old 0 new-arr 0 n)
         (aset new-arr n child)
         (.setChildrenArr parent new-arr)))
     (.setParentNode child parent)
+    (.setChildCount parent (unchecked-inc-int n))
     parent))
 
 (defn remove-child!
   "Remove child from parent's children array by identity."
   [^INode parent ^INode child]
-  (let [^"[Ljava.lang.Object;" cs (.getChildrenArr parent)
-        n (child-count parent)]
+  (let [n (.getChildCount parent)
+        ^objects cs (.getChildrenArr parent)]
     (loop [i 0]
       (when (< i n)
         (if (identical? child (aget cs i))
@@ -212,7 +89,8 @@
               (when (< j (dec n))
                 (aset cs j (aget cs (unchecked-inc-int j)))
                 (recur (unchecked-inc-int j))))
-            (aset cs (dec n) nil))
+            (aset cs (dec n) nil)
+            (.setChildCount parent (dec n)))
           (recur (unchecked-inc-int i))))))
   parent)
 

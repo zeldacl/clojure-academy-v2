@@ -94,11 +94,10 @@
   ^cn.li.mcmod.ui.node.INode [^INode subtree-root target-id]
   (if (= target-id (.getId subtree-root))
     subtree-root
-    (let [^objects cs (.getChildrenArr subtree-root)
-          n (node/child-count subtree-root)]
+    (let [n (.getChildCount subtree-root)]
       (loop [i 0]
         (when (< i n)
-          (if-let [^INode c (aget cs i)]
+          (if-let [^INode c (.getChild subtree-root i)]
             (or (find-in-subtree c target-id)
                 (recur (unchecked-inc-int i)))
             (recur (unchecked-inc-int i))))))))

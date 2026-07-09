@@ -300,11 +300,10 @@
                     (fn [rt item slot-data]
                       (update-skill-slot-item! rt item slot-data))))
     (when-let [^INode list-node (ui/node r :skill-slots)]
-      (let [^objects cs (.getChildrenArr list-node)
-            n (.getChildCount list-node)]
+      (let [n (.getChildCount list-node)]
         (dotimes [i n]
           (when-let [slot (nth slots i nil)]
-            (when-let [^INode item (aget cs i)]
+            (when-let [^INode item (.getChild list-node i)]
               (update-skill-slot-item! r item slot)))))))
     (set-visible! r :skill-slots (seq (:skill-slots snapshot))))
 
@@ -357,11 +356,10 @@
       (ui/list-set! r :toasts toasts
                     (fn [rt item data] (update-toast-item! rt item data))))
     (when-let [^INode list-node (ui/node r :toasts)]
-      (let [^objects cs (.getChildrenArr list-node)
-            n (.getChildCount list-node)]
+      (let [n (.getChildCount list-node)]
         (dotimes [i n]
           (when-let [toast (nth toasts i nil)]
-            (when-let [^INode item (aget cs i)]
+            (when-let [^INode item (.getChild list-node i)]
               (update-toast-item! r item toast))))))))
 
 (defn- update-vm-wave-item! [r item wave]
@@ -383,11 +381,10 @@
       (ui/list-set! r :vm-waves waves
                     (fn [rt item data] (update-vm-wave-item! rt item data))))
     (when-let [^INode list-node (ui/node r :vm-waves)]
-      (let [^objects cs (.getChildrenArr list-node)
-            n (.getChildCount list-node)]
+      (let [n (.getChildCount list-node)]
         (dotimes [i n]
           (when-let [wave (nth waves i nil)]
-            (when-let [^INode item (aget cs i)]
+            (when-let [^INode item (.getChild list-node i)]
               (update-vm-wave-item! r item wave))))))))
 
 (defn- update-charging-layer! [r snapshot sw sh]
@@ -425,11 +422,10 @@
           (ui/list-set! r :coin-qte-dots dots
                         (fn [rt item dot] (update-coin-qte-dot! rt item dot))))
         (when-let [^INode list-node (ui/node r :coin-qte-dots)]
-          (let [^objects cs (.getChildrenArr list-node)
-                n (.getChildCount list-node)]
+          (let [n (.getChildCount list-node)]
             (dotimes [i n]
               (when-let [dot (nth dots i nil)]
-                (when-let [^INode item (aget cs i)]
+                (when-let [^INode item (.getChild list-node i)]
                   (update-coin-qte-dot! r item dot))))))
         (set-box-node-at! r (ui/node r :coin-qte-marker)
                           (:x marker) (:y marker) (:w marker) (:h marker) (:color marker))
@@ -483,11 +479,10 @@
                         (ui/set-node-prop! r n :text (str (:text line)))
                         (ui/set-node-prop! r n :color (long (:color line)))))))
     (when-let [^INode list-node (ui/node r :debug-lines)]
-      (let [^objects cs (.getChildrenArr list-node)
-            n (.getChildCount list-node)]
+      (let [n (.getChildCount list-node)]
         (dotimes [i n]
           (when-let [line (nth lines i nil)]
-            (when-let [^INode item (aget cs i)]
+            (when-let [^INode item (.getChild list-node i)]
               (let [^INode txt (ui/item-node item :line)]
                 (.setX txt (double (:x line)))
                 (.setY txt (double (:y line)))

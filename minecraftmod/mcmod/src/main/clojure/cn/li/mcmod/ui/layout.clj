@@ -95,11 +95,10 @@
    parent-scale parent-w parent-h]
   (let [list-scroll (when (= (.getKind parent) :list)
                       (.getDSlot parent 1))
-        ^"[Ljava.lang.Object;" cs (.getChildrenArr parent)
-        n (node/child-count parent)]
+        n (.getChildCount parent)]
     (loop [i 0]
       (when (< i n)
-        (let [^INode child (aget cs i)]
+        (let [^INode child (.getChild parent i)]
           (when (and child (.isVisible child))
             (when (or (.hasFlag child node/FLAG-LAYOUT-DIRTY)
                       (= (.getKind parent) :list))
@@ -127,13 +126,12 @@
       (when has-clip (.add tape-arr push-clip-sentinel))
       (when has-tf   (.add tape-arr push-transform-sentinel))
       (.add tape-arr node)
-      (let [^"[Ljava.lang.Object;" cs (.getChildrenArr node)
-            n (node/child-count node)]
+      (let [n (.getChildCount node)]
         (when (pos? n)
           (let [visible-children
                 (loop [i 0 acc (transient [])]
                   (if (< i n)
-                    (let [^INode c (aget cs i)]
+                    (let [^INode c (.getChild node i)]
                       (if (and c (.isVisible c))
                         (recur (unchecked-inc-int i) (conj! acc c))
                         (recur (unchecked-inc-int i) acc)))

@@ -122,10 +122,10 @@
   [^UiRt rt ^INode node]
   (unbind-node-bindings! rt (.getIdx node))
   (remove-node-events! rt (.getIdx node))
-  (let [^objects cs (.getChildrenArr node) n (node/child-count node)]
+  (let [n (.getChildCount node)]
     (loop [i 0]
       (when (< i n)
-        (when-let [^INode c (aget cs i)] (unbind-subtree! rt c))
+        (when-let [^INode c (.getChild node i)] (unbind-subtree! rt c))
         (recur (unchecked-inc-int i))))))
 
 (defn put-user-signal! [^UiRt rt id s]
@@ -195,13 +195,14 @@
 
 (defn clear-children!
   [^UiRt rt ^INode parent-node]
-  (let [^objects cs (.getChildrenArr parent-node)
-        n (node/child-count parent-node)]
+  (let [n (.getChildCount parent-node)
+        ^objects cs (.getChildrenArr parent-node)]
     (loop [i 0]
       (when (< i n)
         (when-let [^INode c (aget cs i)]
           (unbind-subtree! rt c)
           (aset cs i nil))
         (recur (unchecked-inc-int i))))
+    (.setChildCount parent-node 0)
     (.setTreeDirty rt true)
     nil))
