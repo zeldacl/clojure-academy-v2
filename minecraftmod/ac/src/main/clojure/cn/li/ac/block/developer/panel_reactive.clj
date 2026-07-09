@@ -346,7 +346,7 @@
     (bind-box-width! rt :progress-power 97.0 power)
     (bind-box-width! rt :progress-syncrate 97.0 sync-rate-sig)
     (set-tick! rt :model-tick
-      (sig/computed-o [clock]
+      (sig/computed-d [clock]
         (fn [_]
           (let [{:keys [ability-name icon-path exp-label level-label
                         cat-prog01 power01 sync-rate can-upgrade?]}
@@ -533,7 +533,7 @@
                       (swap! state-a assoc :error nil)))))
       (fn [] (close-cover! rt)))
     (set-tick! rt :cover-tick
-      (sig/computed-o [(rt/clock-ms-sig rt)]
+      (sig/computed-d [(rt/clock-ms-sig rt)]
         (fn [_]
           (let [is-dev (boolean @(:is-developing container))
                 dev-prog (double (or @(:development-progress container) 0.0))
@@ -584,7 +584,7 @@
                 (swap! state-a assoc :error nil)))))
       (fn [] (close-cover! rt)))
     (set-tick! rt :cover-tick
-      (sig/computed-o [(rt/clock-ms-sig rt)]
+      (sig/computed-d [(rt/clock-ms-sig rt)]
         (fn [_]
           (let [is-dev (boolean @(:is-developing container))
                 dev-prog (double (or @(:development-progress container) 0.0))
@@ -629,7 +629,7 @@
         (events/on! rt id :left-click
           (fn [_ _ _] (open-skill-detail-overlay! rt container player (:skill-id nd) dev-type)))))
     (set-tick! rt :skill-tree-tick
-      (sig/computed-o [(rt/clock-ms-sig rt)]
+      (sig/computed-d [(rt/clock-ms-sig rt)]
         (fn [_]
           (let [{:keys [render-data]} (skill-tree-render-context session-id player container)
                 hover-id (get @hit-nodes (rt/hovered-idx rt))]
@@ -644,7 +644,7 @@
 (defn- attach-right-panel-dispatch! [^UiRt rt container player]
   (let [last-mode (atom nil)]
     (set-tick! rt :right-panel-tick
-      (sig/computed-o [(rt/clock-ms-sig rt)]
+      (sig/computed-d [(rt/clock-ms-sig rt)]
         (fn [_]
           (let [mode (right-panel-mode nil container player)]
             (when (not= mode @last-mode)

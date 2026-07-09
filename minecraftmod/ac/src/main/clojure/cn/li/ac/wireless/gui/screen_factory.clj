@@ -67,8 +67,7 @@
     
     (catch Throwable e
       (log/error "[SCREEN-FACTORY-CORE] Failed to create " (name gui-type) " screen:" (ex-message e))
-      (log/error "[SCREEN-FACTORY-CORE] Exception:" e)
-      (.printStackTrace e)
+      (log/stacktrace "[SCREEN-FACTORY-CORE] Exception:" e)
       nil)))
 
 
