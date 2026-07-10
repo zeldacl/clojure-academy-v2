@@ -17,7 +17,7 @@
             [cn.li.mcmod.i18n :as i18n]))
 
 (def ^:private rh-path [:service :reactive-hud])
-(def ^:private cui-path [:service :client-ui])
+(def ^:private cui-path [:service :client-ui :runtime]) ; shared client-ui runtime atom leaf (see client-ui-hooks)
 (def ^:private vm-wave-glow "my_mod:textures/effects/glow_circle.png")
 (def ^:private coin-dot-count 12)
 

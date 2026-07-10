@@ -68,16 +68,19 @@
 ;; ============================================================================
 
 (def ^:private kind-attrs
-  "Attribute mapping for each kind. Maps XML attr name → spec key + parse fn."
+  "Attribute mapping for each kind. Maps XML attr name → spec key + parse fn.
+   Boolean predicate props use a legal (?-free) XML attr name and a
+   map-returning parse fn to emit the ?-suffixed spec key the nodes read
+   (XML attribute names cannot contain '?')."
   {:group {:pos parse-pos :size parse-size :scale (fn [s] (or (parse-double s nil) 1.0))
-           :align parse-align :clip? (fn [s] (= "true" s)) :z (fn [s] (parse-double s 0.0))}
+           :align parse-align :clip (fn [s] {:clip? (= "true" s)}) :z (fn [s] (parse-double s 0.0))}
    :box   {:pos parse-pos :size parse-size :fill parse-color :outline parse-color
            :outline-width (fn [s] (parse-double s 0.0)) :tint parse-color
            :hover-tint (fn [s] (parse-double s 0.0)) :z (fn [s] (parse-double s 0.0))}
    :text  {:pos parse-pos :text str :font-size (fn [s] (parse-double s 14.0))
            :color parse-color :font str :z (fn [s] (parse-double s 0.0))
-           :editable? (fn [s] (= "true" s))
-           :masked? (fn [s] (= "true" s))}
+           :editable (fn [s] {:editable? (= "true" s)})
+           :masked (fn [s] {:masked? (= "true" s)})}
    :image {:pos parse-pos :size parse-size :src str :alpha (fn [s] (parse-double s 1.0))
            :z (fn [s] (parse-double s 0.0))}
    :progress {:pos parse-pos :size parse-size :z (fn [s] (parse-double s 0.0))}
@@ -145,6 +148,11 @@
       (let [props (parse-elem-attrs kind attrs)
             props (if-let [id-attr (:id attrs)]
                     (assoc props :id (keyword id-attr))
+                    props)
+            ;; :visible — common to every kind (like :id), so handled here
+            ;; rather than per-kind. Legal XML name → ?-suffixed spec key.
+            props (if-let [vis (:visible attrs)]
+                    (assoc props :visible? (= "true" vis))
                     props)
             ;; :list — replace template NAME string with the resolved template SPEC
             props (if (and (= kind :list) (:template attrs))

@@ -35,6 +35,6 @@
       </group>
     </group>
     <!-- Tag tooltip (rendered above everything) -->
-    <text id="tag-tooltip" pos="0.0,0.0" size="120.0,14.0" align="left,top" text="" font-size="10.0" color="#FFFFFFFF" visible?="false"/>
+    <text id="tag-tooltip" pos="0.0,0.0" size="120.0,14.0" align="left,top" text="" font-size="10.0" color="#FFFFFFFF" visible="false"/>
   </group>
 </Ui>

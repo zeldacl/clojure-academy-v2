@@ -62,9 +62,14 @@
   ;; (allocating) context scan runs at most once per real context change, not per-frame.
   :overlay-context-cache {}})
 
-;; Client UI runtime — Framework [:service :client-ui]
+;; Client UI runtime — Framework [:service :client-ui :runtime]
+;; NOTE: a LEAF under the :client-ui branch, not the branch node itself.
+;; toast/notification/debug-overlay each nest their own atom as a sibling leaf
+;; under [:service :client-ui] (treating it as a map), so the runtime atom must
+;; not occupy [:service :client-ui] directly — doing so made assoc-in on the
+;; sibling leaves throw ClassCastException (Atom cannot be cast to Associative).
 
-(def ^:private cui-path [:service :client-ui])
+(def ^:private cui-path [:service :client-ui :runtime])
 
 (defn- client-ui-runtime-state-atom []
   (if-let [fw-atom (fw/fw-atom)]
