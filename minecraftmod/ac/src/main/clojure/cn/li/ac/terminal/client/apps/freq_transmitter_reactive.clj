@@ -24,7 +24,7 @@
       (:player-uuid (runtime-hooks/default-client-owner))))
 
 (defn- content-node [^UiRt rt]
-  (ui/node rt :content))
+  (ui/node rt "content"))
 
 (defn- clear-content! [^UiRt rt]
   (when-let [^INode area (content-node rt)]

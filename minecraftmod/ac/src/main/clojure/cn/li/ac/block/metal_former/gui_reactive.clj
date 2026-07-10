@@ -93,9 +93,9 @@
       (sig/computed-o [clock]
         (fn [_] (str/upper-case (recipes/mode->string @(:mode container))))))
     ;; Mode switching buttons (replaces bind-buttons! + on-left-click)
-    (cn.li.mcmod.ui.events/on! r :btn-left :left-click
+    (cn.li.mcmod.ui.events/on! r "btn_left" :left-click
       (fn [_rt _n _e] (request-alternate! container -1)))
-    (cn.li.mcmod.ui.events/on! r :btn-right :left-click
+    (cn.li.mcmod.ui.events/on! r "btn_right" :left-click
       (fn [_rt _n _e] (request-alternate! container 1)))))
 
 (defn create-screen [container menu player]

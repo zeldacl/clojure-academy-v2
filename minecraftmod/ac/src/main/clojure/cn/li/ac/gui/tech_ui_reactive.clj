@@ -28,7 +28,7 @@
           root-idx (rt/build! r spec)
           ;; Set ui_block texture via signal
           tex-path (sig/signal-o (modid/asset-path "textures" (str "guis/ui/ui_" name ".png")))]
-      (ui/bind! r :ui_block :src tex-path)  ;; image src signal
+      (ui/bind! r "ui_block" :src tex-path)  ;; image src signal
       {:id "inv" :runtime r :page-node (rt/node-by-idx r root-idx)})
     (catch Exception e
       (log/error "Error creating reactive inventory page:" (ex-message e))

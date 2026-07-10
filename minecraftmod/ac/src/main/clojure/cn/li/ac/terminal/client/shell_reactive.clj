@@ -94,7 +94,7 @@
 (defn- set-tick! [^UiRt rt key computed-sig]
   (when-let [old (rt/user-signal rt key)] (sig/unbind! old))
   (if computed-sig
-    (let [^INode anchor (rt/node-by-id rt :back)
+    (let [^INode anchor (rt/node-by-id rt "back")
           b (sig/bind! computed-sig anchor pull-o! (rt/get-dirty-bindings-q rt))]
       (rt/register-binding! rt (.getIdx anchor) b)
       (rt/put-user-signal! rt key b))
@@ -147,8 +147,8 @@
           (fn [_ _ _]
             (handle-app-click! rt owner app installed? player
               (fn [] (rebuild-grid! rt owner player)))))))
-    (ui/set-prop! rt :arrow_up :alpha (if (> page 0) 1.0 0.35))
-    (ui/set-prop! rt :arrow_down :alpha (if (< page (dec total-pages)) 1.0 0.35))))
+    (ui/set-prop! rt "arrow_up" :alpha (if (> page 0) 1.0 0.35))
+    (ui/set-prop! rt "arrow_down" :alpha (if (< page (dec total-pages)) 1.0 0.35))))
 
 ;; ============================================================================
 ;; Page navigation
@@ -167,7 +167,7 @@
 ;; ============================================================================
 
 (defn- attach-header-tick! [^UiRt rt owner player]
-  (ui/set-prop! rt :text_username :text (entity/player-get-name player))
+  (ui/set-prop! rt "text_username" :text (entity/player-get-name player))
   (set-tick! rt :header-tick
     (sig/computed-o [(rt/clock-ms-sig rt)]
       (fn [ms]
@@ -181,11 +181,11 @@
               installed-count (count (:installed-apps state))
               total-count (count all-apps)
               loading? (boolean (:loading? state))]
-          (ui/set-prop! rt :text_appcount
+          (ui/set-prop! rt "text_appcount"
             :text (str installed-count "/" total-count " Applications, " time-text
                        "  P" (inc page) "/" total-pages))
-          (let [^INode li (rt/node-by-id rt :icon_loading)
-                ^INode lt (rt/node-by-id rt :text_loading)]
+          (let [^INode li (rt/node-by-id rt "icon_loading")
+                ^INode lt (rt/node-by-id rt "text_loading")]
             (when li (.setVisible li loading?) (.setFlag li node/FLAG-LAYOUT-DIRTY))
             (when lt (.setVisible lt loading?) (.setFlag lt node/FLAG-LAYOUT-DIRTY))))
         nil))))
@@ -199,7 +199,7 @@
 (defn- attach-perspective! [^UiRt rt]
   (let [mouse-x (sig/signal-d (/ root-w 2.0))
         mouse-y (sig/signal-d (/ root-h 2.0))
-        ^INode back (rt/node-by-id rt :back)]
+        ^INode back (rt/node-by-id rt "back")]
     (rt/put-user-signal! rt :on-pointer-move
       (fn [mx my] (sig/sset-d! mouse-x mx) (sig/sset-d! mouse-y my)))
     (set-tick! rt :perspective-tick
@@ -223,15 +223,15 @@
         owner (player-owner player)]
     (rt/build-child! r
       {:kind :group :props {:id :app-grid :x 0.0 :y 0.0 :w root-w :h root-h}}
-      (rt/node-by-id r :back))
-    (let [^INode tmpl (rt/node-by-id r :app_template)]
+      (rt/node-by-id r "back"))
+    (let [^INode tmpl (rt/node-by-id r "app_template")]
       (when tmpl (.setVisible tmpl false) (.setFlag tmpl node/FLAG-LAYOUT-DIRTY)))
-    (let [^INode li (rt/node-by-id r :icon_loading) ^INode lt (rt/node-by-id r :text_loading)]
+    (let [^INode li (rt/node-by-id r "icon_loading") ^INode lt (rt/node-by-id r "text_loading")]
       (when li (.setVisible li false)) (when lt (.setVisible lt false)))
     (attach-header-tick! r owner player)
     (attach-perspective! r)
-    (events/on! r :arrow_up :left-click (fn [_ _ _] (change-page! r owner player -1)))
-    (events/on! r :arrow_down :left-click (fn [_ _ _] (change-page! r owner player 1)))
+    (events/on! r "arrow_up" :left-click (fn [_ _ _] (change-page! r owner player -1)))
+    (events/on! r "arrow_down" :left-click (fn [_ _ _] (change-page! r owner player 1)))
     (query-terminal-state! owner
       (fn [_] (rebuild-grid! r owner player)))
     r))

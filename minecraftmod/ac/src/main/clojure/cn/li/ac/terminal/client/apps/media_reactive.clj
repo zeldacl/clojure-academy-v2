@@ -20,9 +20,12 @@
     (rt/put-user-signal! r :progress progress)
     (rt/put-user-signal! r :volume volume)
     (rt/put-user-signal! r :current-track current-track)
-    (events/on! r :btn-play :left-click (fn [_ _ _] (sig/sset-o! playing? true)))
-    (events/on! r :btn-pause :left-click (fn [_ _ _] (sig/sset-o! playing? false)))
-    (events/on! r :btn-stop :left-click (fn [_ _ _] (sig/sset-d! progress 0.0) (sig/sset-o! playing? false)))
+    ;; media_player.xml has exactly two clickable controls: "pop" (play/pause
+    ;; toggle) and "stop" — matching the deleted old media.clj's design, not
+    ;; the 3-button (:btn-play/:btn-pause/:btn-stop) model this reactive port
+    ;; previously assumed (those ids never existed in the XML at all).
+    (events/on! r "pop" :left-click (fn [_ _ _] (sig/sset-o! playing? (not (sig/sget-o playing?)))))
+    (events/on! r "stop" :left-click (fn [_ _ _] (sig/sset-d! progress 0.0) (sig/sset-o! playing? false)))
     r))
 
 (defn open! [] (let [r (create-runtime)] (bridge/open-reactive-screen! r "Media Player")))

@@ -142,7 +142,10 @@
         tex-path (sig/signal-o
                    (modid/asset-path "textures"
                      (str "guis/ui/ui_" (or texture-name "inv") ".png")))
-        _ (ui/bind! r :ui_block :src tex-path)
+        ;; "ui_block" is the XML-parsed background-texture element id (id="ui_block"
+        ;; in every page_*.xml) — XML-loaded node ids come back as plain strings,
+        ;; not keywords, so the lookup key here must be a string, not :ui_block.
+        _ (ui/bind! r "ui_block" :src tex-path)
         signals {:energy (sig/signal-d 0.0)
                  :max-energy (sig/signal-d 1.0)
                  :status (sig/signal-o "IDLE")

@@ -63,24 +63,28 @@
         _ (rt/put-user-signal! r :scroll-offset scroll)]
 
     ;; Tab switching
-    (events/on! r :btn-credits :left-click
+    (events/on! r "btn_credits" :left-click
       (fn [_rt _n _e]
         (sig/sset-o! active-tab :credits)
         (sig/sset-o! content-sig (str/join "\n" (map :text credit-lines)))))
-    (events/on! r :btn-donate :left-click
+    (events/on! r "btn_donate" :left-click
       (fn [_rt _n _e]
         (sig/sset-o! active-tab :donate)
         (sig/sset-o! content-sig (str/join "\n" (map :text donate-lines)))))
 
-    ;; Donation links
+    ;; Donation links — about.xml has no per-link elements (content gap predating
+    ;; this reactive port, not a string/keyword id issue); guard so a non-empty
+    ;; :links list in about.edn doesn't crash the whole screen on open. Links
+    ;; are currently not clickable in-game until dedicated UI elements exist.
     (doseq [[idx link] (map-indexed vector (:links (:donation about-data)))]
-      (events/on! r (keyword (str "link-" idx)) :left-click
-        (fn [_rt _n _e]
-          (try (.browse (java.awt.Desktop/getDesktop) (java.net.URI. (:url link)))
-               (catch Exception _ (log/warn "Cannot open URL" (:url link)))))))
+      (when-let [_n (rt/node-by-id r (str "link-" idx))]
+        (events/on! r (str "link-" idx) :left-click
+          (fn [_rt _n _e]
+            (try (.browse (java.awt.Desktop/getDesktop) (java.net.URI. (:url link)))
+                 (catch Exception _ (log/warn "Cannot open URL" (:url link))))))))
 
     ;; Scroll
-    (events/on! r :scroll-area :mouse-scroll
+    (events/on! r "scroll_area" :mouse-scroll
       (fn [_rt _n evt]
         (sig/sset-d! scroll (max 0.0 (+ (sig/sget-d scroll) (* (:delta evt) 0.01))))))
     r))

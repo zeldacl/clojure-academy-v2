@@ -39,7 +39,7 @@
 (defn- pull-o! [_node source] (.sGet ^ISigO source) nil)
 
 (defn- set-tick! [^UiRt rt key computed-sig]
-  (let [^INode anchor (rt/node-by-id rt :main)
+  (let [^INode anchor (rt/node-by-id rt "main")
         b (sig/bind! computed-sig anchor pull-o! (rt/get-dirty-bindings-q rt))]
     (rt/register-binding! rt (.getIdx anchor) b)
     (rt/put-user-signal! rt key b)))
@@ -72,7 +72,7 @@
         progress (sig/signal-d 0.0)]
     (rt/build-child! r
       {:kind :box :props {:id :bar-fill :x 0.0 :y 0.0 :w 0.0 :h 4.0 :fill 0xFFE0E0E0}}
-      (rt/node-by-id r :progbar))
+      (rt/node-by-id r "progbar"))
     (bind-box-width! r :bar-fill 145.0 progress)
     (let [done? (atom false)]
       (set-tick! r :install-tick
