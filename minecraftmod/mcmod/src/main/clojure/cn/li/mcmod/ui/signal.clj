@@ -3,7 +3,7 @@
 
    Implementation: Java POJOs in cn.li.mcmod.uipojo.signal.* (AOT/reflection=fail safe).
    This namespace is a thin Clojure API over those classes."
-  (:import [cn.li.mcmod.uipojo.signal SigD SigL SigO ComputedD ComputedO Binding
+  (:import [cn.li.mcmod.uipojo.signal SigD SigL SigO ComputedD ComputedO ComputedDO Binding
             ISigD ISigL ISigO IApply IDoubleSource ISupportsOuts IDep SignalSupport]
            [cn.li.mcmod.uipojo.runtime IUiNode]
            [java.util ArrayList]))
@@ -69,6 +69,20 @@
         s2 (nth srcs 2 nil)
         more (to-more-object-sources srcs)
         c (ComputedO. s0 s1 s2 more f (int n) nil true (SignalSupport/newOuts 4))]
+    (doseq [^ISupportsOuts s srcs]
+      (add-dep! (SignalSupport/outsOf s) c))
+    c))
+
+(defn computed-do ^ComputedDO [sources f]
+  "Double-driven object computed.  Sources are IDoubleSource (e.g. clock-ms),
+   f receives doubles, returns Object.  Type-safe bridge for clock→string/text."
+  (let [srcs (vec sources)
+        n (count srcs)
+        s0 (nth srcs 0 nil)
+        s1 (nth srcs 1 nil)
+        s2 (nth srcs 2 nil)
+        more (to-more-double-sources srcs)
+        c (ComputedDO. s0 s1 s2 more f (int n) nil true (SignalSupport/newOuts 4))]
     (doseq [^ISupportsOuts s srcs]
       (add-dep! (SignalSupport/outsOf s) c))
     c))

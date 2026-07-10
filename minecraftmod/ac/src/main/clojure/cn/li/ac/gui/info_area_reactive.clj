@@ -93,7 +93,7 @@
         ^INode value-n (ui/item-node row value-id)]
     (when (fn? value)
       (let [writer (slot-write/resolve-sig-writer (get node/kinds :text) :text)
-            live (sig/computed-d [(rt/clock-ms-sig rt)]
+            live (sig/computed-do [(rt/clock-ms-sig rt)]
                     (fn [_] (str (value))))
             b (sig/bind! live value-n writer (rt/get-dirty-bindings-q rt))]
         (rt/register-binding! rt (.getIdx value-n) b)))
