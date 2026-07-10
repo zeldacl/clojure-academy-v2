@@ -6,6 +6,7 @@
             [cn.li.mcmod.ui.core :as ui]
             [cn.li.mcmod.ui.events :as events]
             [cn.li.mcmod.ui.node :as node]
+            [cn.li.mcmod.ui.runtime :as rt]
             [cn.li.mcmod.ui.xml :as ui-xml])
   (:import [cn.li.mcmod.uipojo.runtime UiRt]
            [cn.li.mcmod.ui.node INode]))
@@ -48,6 +49,7 @@
         (when-not (= visible? (.isVisible n))
           (.setVisible n visible?)
           (.setFlag n node/FLAG-LAYOUT-DIRTY)))))
+  (rt/mark-tree-dirty! rt)
   (reset! current-atom page-id)
   nil)
 

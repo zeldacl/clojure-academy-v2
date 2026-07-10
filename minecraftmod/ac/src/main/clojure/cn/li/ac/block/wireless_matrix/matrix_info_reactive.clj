@@ -156,7 +156,7 @@
           policy (matrix-info-area-policy
                    (boolean (network-initialized? data)) is-owner?)
           ctx (info-area/clear-area! rt)]
-      (info-area/add-histogram-capacity! ctx #(double (:load data)) (double (:max-capacity data)))
+      (info-area/add-histogram-capacity! ctx (fn [] (double (:load data))) (double (:max-capacity data)))
       (info-area/add-sepline! ctx "info")
       (info-area/add-property! ctx "owner" placer)
       (info-area/add-property! ctx "range" (format "%.0f" (double (:range data))))

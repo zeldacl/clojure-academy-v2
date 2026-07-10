@@ -181,9 +181,9 @@
     {:page-xml "guis/rework/new/page_matrix.xml" :texture-name "matrix"
      :container container :menu menu :player player :info-area? true
      :histograms [(bgui/hist-energy 0xFF4488CC)]
-     :properties {:ssid #(or @(:ssid container) "...")
-                  :bandwidth #(str (or @(:bandwidth container) 0) " MHz")
-                  :connections #(str (or @(:connections container) 0))}
+     :properties {:ssid (fn [] (or @(:ssid container) "..."))
+                  :bandwidth (fn [] (str (or @(:bandwidth container) 0) " MHz"))
+                  :connections (fn [] (str (or @(:connections container) 0)))}
      :wireless? true :wireless-role :machine :custom-bind! attach-binds!}))
 
 (def update! bgui/update-signals!)

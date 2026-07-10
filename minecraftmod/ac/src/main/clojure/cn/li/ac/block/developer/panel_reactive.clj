@@ -375,12 +375,12 @@
 (defn- attach-info-area! [^UiRt rt container]
   (let [ctx (info-area/clear-area! rt)]
     (info-area/add-histogram-energy! ctx
-      #(double (or @(:energy container) 0.0))
-      #(max 1.0 (double (or @(:max-energy container) 1.0))))
+      (fn [] (double (or @(:energy container) 0.0)))
+      (fn [] (max 1.0 (double (or @(:max-energy container) 1.0)))))
     (info-area/add-sepline! ctx "Developer")
-    (info-area/add-property! ctx "tier" #(str @(:tier container)))
-    (info-area/add-property! ctx "structure_ok" #(str @(:structure-valid container)))
-    (info-area/add-property! ctx "developing" #(str @(:is-developing container)))))
+    (info-area/add-property! ctx "tier" (fn [] (str @(:tier container))))
+    (info-area/add-property! ctx "structure_ok" (fn [] (str @(:structure-valid container))))
+    (info-area/add-property! ctx "developing" (fn [] (str @(:is-developing container))))))
 
 ;; ============================================================================
 ;; Wireless node-name label refresh (native replacement for

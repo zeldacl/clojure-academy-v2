@@ -118,11 +118,11 @@
 
 (defn create-screen [container menu player]
   (bgui/create-screen
-    {:page-xml "guis/rework/new/page_wireless.xml" :texture-name "wireless"
+    {:texture-name "node"
      :container container :menu menu :player player :info-area? true
      :histograms [(bgui/hist-energy 0xFF4488CC)]
-     :properties {:range #(str (or @(:range container) "..."))
-                  :connections #(str (or @(:connections container) 0))}
+     :properties {:range (fn [] (str (or @(:range container) "...")))
+                  :connections (fn [] (str (or @(:connections container) 0)))}
      :wireless? true :wireless-role :node
      :custom-bind! attach-node-binds!}))
 

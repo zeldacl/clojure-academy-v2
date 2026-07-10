@@ -15,13 +15,21 @@
 (def ^:private edit-color 0xFF2180D8)
 
 (defn ensure-shell!
-  "Ensure :info-area group exists on runtime (sibling to machine panel)."
+  "Ensure :info-area group exists on runtime (sibling to machine panel).
+   Background uses :nine-slice matching upstream BlendQuad (blend_quad.png 3×3 + line.png borders)."
   [^UiRt rt]
   (when-not (ui/node rt :info-area)
     (let [root (rt/node-by-idx rt 0)]
       (rt/build-child! rt
+        {:kind :nine-slice
+         :props {:id :info-area-bg :x 179.0 :y 5.0 :w 100.0 :h 177.0
+                 :margin 4.0
+                 :src "my_mod:textures/guis/blend_quad"
+                 :line-tex "my_mod:textures/guis/line"}}
+        root)
+      (rt/build-child! rt
         {:kind :group
-         :props {:id :info-area :x 179.0 :y 5.0 :w 110.0 :h 177.0 :clip? true}}
+         :props {:id :info-area :x 179.0 :y 5.0 :w 100.0 :h 177.0 :clip? true}}
         root)))
   nil)
 

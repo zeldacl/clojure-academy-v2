@@ -68,8 +68,8 @@
    :menu menu
    :properties properties
    :histograms histograms
-   :size-dx 31
-   :size-dy 20
+   :size-dx 114  ;; 290 (screen-root w) - 176 (vanilla default) — room for info-area sidebar
+   :size-dy 21   ;; 187 (screen-root h) - 166 (vanilla default)
    :update-fn update-signals!
    :current-tab-atom current-tab-atom
    :tech-ui tech-ui
@@ -83,8 +83,13 @@
   {:kind :group
    :props {:id :screen-root :w 290.0 :h 187.0}
    :children [child-spec
+              {:kind :nine-slice
+               :props {:id :info-area-bg :x 179.0 :y 5.0 :w 100.0 :h 177.0
+                       :margin 4.0
+                       :src "my_mod:textures/guis/blend_quad"
+                       :line-tex "my_mod:textures/guis/line"}}
               {:kind :group
-               :props {:id :info-area :x 179.0 :y 5.0 :w 110.0 :h 177.0 :clip? true}}]})
+               :props {:id :info-area :x 179.0 :y 5.0 :w 100.0 :h 177.0 :clip? true}}]})
 
 ;; ============================================================================
 ;; Histogram/property rendering — was previously accepted as config and
@@ -99,10 +104,10 @@
   (case (:type h)
     :buffer (info-area/add-histogram-energy! ctx (:value-fn h) (:max-fn h))
     :energy (info-area/add-histogram-energy! ctx
-              #(double (or @(:energy container) 0.0))
-              #(max 1.0 (double (or @(:max-energy container) 1.0))))
+              (fn [] (double (or @(:energy container) 0.0)))
+              (fn [] (max 1.0 (double (or @(:max-energy container) 1.0)))))
     :capacity (info-area/add-histogram-capacity! ctx
-                #(double (or @(:load container) 0.0))
+                (fn [] (double (or @(:load container) 0.0)))
                 (max 1.0 (double (or @(:max-capacity container) 1.0))))
     nil))
 

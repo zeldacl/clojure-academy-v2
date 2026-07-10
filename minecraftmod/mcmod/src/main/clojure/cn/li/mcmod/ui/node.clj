@@ -226,4 +226,13 @@
     :oslots-backend-base 0
     :prop-writers {:spacing       {:slot :dslot :idx 0 :sig :d :dirty :layout}
                    :scroll-offset {:slot :dslot :idx 1 :sig :d :dirty :layout}}
-    :hit? true}})
+    :hit? true}
+
+   :nine-slice
+   {:dslots {:margin 0}
+    :oslots {:src 0 :line-tex 1}
+    :oslots-backend-base 2
+    :prop-writers {:src      {:slot :oslot :idx 0 :sig :o}
+                   :line-tex {:slot :oslot :idx 1 :sig :o}
+                   :margin   {:slot :dslot :idx 0 :sig :d}}
+    :hit? false}})

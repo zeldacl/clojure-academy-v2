@@ -389,6 +389,81 @@
 (defn bake-list! [^INode _node] nil)
 
 ;; ============================================================================
+;; :nine-slice — 9-slice textured background (port of AcademyCraft BlendQuad)
+;; ============================================================================
+
+(def ^:private SLOT-NS-SRC 0)
+(def ^:private SLOT-NS-LINE 1)
+(def ^:private SLOT-NS-BAKED 2)  ;; oslot index 2 = backend slot (base 2)
+(def ^:private SLOT-NS-MARGIN 0)
+
+(defn bake-nine-slice! [^INode node]
+  (let [src (.getOSlot node SLOT-NS-SRC)]
+    (when (string? src)
+      (.setOSlot node SLOT-NS-BAKED (resolve-rl src))))
+  (let [line (.getOSlot node SLOT-NS-LINE)]
+    (when (string? line)
+      (.setOSlot node SLOT-NS-LINE (resolve-rl line)))))
+
+(defn- render-nine-slice-quad!
+  "Render a single textured quad via BufferBuilder (matching upstream glBegin/glEnd)."
+  [^Matrix4f pose-matrix ^BufferBuilder bb
+   x0 y0 x1 y1 u0 v0 u1 v1]
+  (.vertex bb pose-matrix (float x0) (float y1) 0.0) (.uv bb (float u0) (float v1)) (.endVertex bb)
+  (.vertex bb pose-matrix (float x1) (float y1) 0.0) (.uv bb (float u1) (float v1)) (.endVertex bb)
+  (.vertex bb pose-matrix (float x1) (float y0) 0.0) (.uv bb (float u1) (float v0)) (.endVertex bb)
+  (.vertex bb pose-matrix (float x0) (float y0) 0.0) (.uv bb (float u0) (float v0)) (.endVertex bb))
+
+(defn render-nine-slice! [^GuiGraphics gg ^INode node]
+  (let [^ResourceLocation tex (.getOSlot node SLOT-NS-BAKED)]
+    (when tex
+      (let [raw-margin (.getDSlot node SLOT-NS-MARGIN)
+            margin (max 1.0 (if (pos? raw-margin) raw-margin 4.0))
+            x  (node-abs-x node)  y  (node-abs-y node)
+            w  (scaled-w node)    h  (scaled-h node)
+            ;; 3x3 grid UVs: each tile is 1/3 of texture
+            step  (/ 1.0 3.0)
+            ;; Destination: x coords [x-margin, x, x+w, x+w+margin]
+            d-xs [(double (- x margin)) (double x) (double (+ x w)) (double (+ x w margin))]
+            d-ys [(double (- y margin)) (double y) (double (+ y h)) (double (+ y h margin))]
+            ^PoseStack ps (.pose gg)
+            ^PoseStack$Pose entry (.last ps)
+            ^Matrix4f pose-matrix (.pose entry)
+            ^Tesselator tess (Tesselator/getInstance)
+            ^BufferBuilder bb (.getBuilder tess)]
+        (RenderSystem/enableBlend)
+        (RenderSystem/defaultBlendFunc)
+        (RenderSystem/setShaderTexture 0 tex)
+        (.begin bb VertexFormat$Mode/QUADS DefaultVertexFormat/POSITION_TEX)
+        (dotimes [i 3]
+          (dotimes [j 3]
+            (let [u0 (* i step)  u1 (+ u0 step)
+                  v0 (* j step)  v1 (+ v0 step)]
+              (render-nine-slice-quad! pose-matrix bb
+                (d-xs i) (d-ys j) (d-xs (inc i)) (d-ys (inc j))
+                u0 v0 u1 v1))))
+        (BufferUploader/drawWithShader (.end bb))
+        ;; Top & bottom decorative lines (matching upstream lineTex rendering)
+        (when-let [^ResourceLocation line-tex (.getOSlot node SLOT-NS-LINE)]
+          (let [lm 3.2
+                lt -8.6  lh 12.0
+                lb (- h 2.0)  lbh 8.0]
+            (RenderSystem/setShaderTexture 0 line-tex)
+            (.begin bb VertexFormat$Mode/QUADS DefaultVertexFormat/POSITION_TEX)
+            ;; Top line
+            (render-nine-slice-quad! pose-matrix bb
+              (- x lm) (+ y lt) (+ x w lm) (+ y lt lh) 0.0 0.0 1.0 1.0)
+            ;; Bottom line
+            (render-nine-slice-quad! pose-matrix bb
+              (- x lm) (+ y lb) (+ x w lm) (+ y lb lbh) 0.0 0.0 1.0 1.0)
+            (BufferUploader/drawWithShader (.end bb))))
+        (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0)))))
+
+;; ============================================================================
+;; :crosshair
+;; ============================================================================
+
+;; ============================================================================
 ;; :crosshair
 ;; ============================================================================
 
@@ -442,6 +517,7 @@
    :line            {:render! render-line!            :bake! bake-line!}
    :group           {:render! render-group!           :bake! bake-group!}
    :list            {:render! render-list!            :bake! bake-list!}
+   :nine-slice      {:render! render-nine-slice!      :bake! bake-nine-slice!}
    :crosshair       {:render! render-crosshair!       :bake! bake-crosshair!}})
 
 ;; ============================================================================
