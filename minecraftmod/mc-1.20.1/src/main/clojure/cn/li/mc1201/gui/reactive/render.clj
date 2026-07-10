@@ -462,6 +462,78 @@
         (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0)))))
 
 ;; ============================================================================
+;; :glow-line — matches upstream ACRenderingHelper.drawGlow + lineSegment
+;; ============================================================================
+
+(def ^:private SLOT-GL-X0 0) (def ^:private SLOT-GL-X1 1)
+(def ^:private SLOT-GL-Y 2) (def ^:private SLOT-GL-LINEW 3)
+(def ^:private SLOT-GL-GLOWSZ 4)
+
+(defn- bake-glow-line! [^INode node]
+  (when (nil? (.getOSlot node 0))
+    (.setOSlot node 0
+                {:lu (resolve-rl "my_mod:textures/guis/glow_lu")
+                 :ru (resolve-rl "my_mod:textures/guis/glow_ru")
+                 :ld (resolve-rl "my_mod:textures/guis/glow_ld")
+                 :rd (resolve-rl "my_mod:textures/guis/glow_rd")
+                 :l  (resolve-rl "my_mod:textures/guis/glow_left")
+                 :r  (resolve-rl "my_mod:textures/guis/glow_right")
+                 :u  (resolve-rl "my_mod:textures/guis/glow_up")
+                 :d  (resolve-rl "my_mod:textures/guis/glow_down")})))
+
+(defn- glow-quad! [^Matrix4f pm ^BufferBuilder bb x0 y0 x1 y1 u0 v0 u1 v1]
+  (.vertex bb pm (float x0) (float y1) 0.0) (.uv bb (float u0) (float v1)) (.endVertex bb)
+  (.vertex bb pm (float x1) (float y1) 0.0) (.uv bb (float u1) (float v1)) (.endVertex bb)
+  (.vertex bb pm (float x1) (float y0) 0.0) (.uv bb (float u1) (float v0)) (.endVertex bb)
+  (.vertex bb pm (float x0) (float y0) 0.0) (.uv bb (float u0) (float v0)) (.endVertex bb))
+
+(defn render-glow-line! [^GuiGraphics gg ^INode node]
+  (when (.isVisible node)
+    (let [x0 (node-abs-x node)  y0 (node-abs-y node)
+          gx0 (+ x0 (.getDSlot node SLOT-GL-X0))
+          gx1 (+ x0 (.getDSlot node SLOT-GL-X1))
+          gy  (+ y0 (.getDSlot node SLOT-GL-Y))
+          line-w (max 1.0 (.getDSlot node SLOT-GL-LINEW))
+          glow-sz (max 1.0 (.getDSlot node SLOT-GL-GLOWSZ))
+          hw (/ line-w 2.0)
+          texs (.getOSlot node 0)]
+      (when texs
+        (let [s (double glow-sz)
+              glx0 (- gx0 s) glx1 (+ gx1 s)
+              gly0 (- gy s)  gly1 (+ gy s)
+              ^PoseStack ps (.pose gg)
+              ^Matrix4f pm (.pose (.last ps))
+              ^Tesselator tess (Tesselator/getInstance)
+              ^BufferBuilder bb (.getBuilder tess)]
+          (RenderSystem/enableBlend)
+          (RenderSystem/defaultBlendFunc)
+          (.begin bb VertexFormat$Mode/QUADS DefaultVertexFormat/POSITION_TEX)
+          ;; corners
+          (RenderSystem/setShaderTexture 0 ^ResourceLocation (:lu texs))
+          (glow-quad! pm bb glx0 gly0 gx0 gy0 0.0 0.0 1.0 1.0)
+          (RenderSystem/setShaderTexture 0 ^ResourceLocation (:ru texs))
+          (glow-quad! pm bb gx1 gly0 glx1 gy0 0.0 0.0 1.0 1.0)
+          (RenderSystem/setShaderTexture 0 ^ResourceLocation (:ld texs))
+          (glow-quad! pm bb glx0 gy1 gx0 gly1 0.0 0.0 1.0 1.0)
+          (RenderSystem/setShaderTexture 0 ^ResourceLocation (:rd texs))
+          (glow-quad! pm bb gx1 gy1 glx1 gly1 0.0 0.0 1.0 1.0)
+          ;; edges
+          (RenderSystem/setShaderTexture 0 ^ResourceLocation (:l texs))
+          (glow-quad! pm bb glx0 gy0 gx0 gy1 0.0 0.0 1.0 1.0)
+          (RenderSystem/setShaderTexture 0 ^ResourceLocation (:r texs))
+          (glow-quad! pm bb gx1 gy0 glx1 gy1 0.0 0.0 1.0 1.0)
+          (RenderSystem/setShaderTexture 0 ^ResourceLocation (:u texs))
+          (glow-quad! pm bb gx0 gly0 gx1 gy0 0.0 0.0 1.0 1.0)
+          (RenderSystem/setShaderTexture 0 ^ResourceLocation (:d texs))
+          (glow-quad! pm bb gx0 gy1 gx1 gly1 0.0 0.0 1.0 1.0)
+          (BufferUploader/drawWithShader (.end bb))
+          ;; center bright line
+          (RenderSystem/setShaderTexture 0 (resolve-rl "my_mod:textures/guis/line"))
+          (.begin bb VertexFormat$Mode/QUADS DefaultVertexFormat/POSITION_TEX)
+          (glow-quad! pm bb gx0 (- gy hw) gx1 (+ gy hw) 0.0 0.0 1.0 1.0)
+          (BufferUploader/drawWithShader (.end bb)))))))
+
+;; ============================================================================
 ;; :crosshair
 ;; ============================================================================
 
@@ -520,6 +592,7 @@
    :group           {:render! render-group!           :bake! bake-group!}
    :list            {:render! render-list!            :bake! bake-list!}
    :nine-slice      {:render! render-nine-slice!      :bake! bake-nine-slice!}
+   :glow-line       {:render! render-glow-line!       :bake! bake-glow-line!}
    :crosshair       {:render! render-crosshair!       :bake! bake-crosshair!}})
 
 ;; ============================================================================

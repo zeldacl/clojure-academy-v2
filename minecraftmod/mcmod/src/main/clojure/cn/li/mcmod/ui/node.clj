@@ -235,4 +235,11 @@
     :prop-writers {:src      {:slot :oslot :idx 0 :sig :o}
                    :line-tex {:slot :oslot :idx 1 :sig :o}
                    :margin   {:slot :dslot :idx 0 :sig :d}}
+    :hit? false}
+
+   :glow-line
+   {:dslots {:x0 0 :x1 1 :y 2 :line-w 3 :glow-sz 4}
+    :oslots {}
+    :oslots-backend-base 0
+    :prop-writers {}
     :hit? false}})

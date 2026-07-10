@@ -36,25 +36,21 @@
             [cn.li.mcmod.ui.core :as ui]
             [cn.li.mcmod.ui.node :as node]
             [cn.li.mcmod.ui.signal :as sig]
+            [cn.li.mcmod.ui.xml :as ui-xml]
             [cn.li.mcmod.ui.events :as events])
   (:import [cn.li.mcmod.uipojo.runtime UiRt]
            [cn.li.mcmod.ui.node INode]
            [cn.li.mcmod.uipojo.signal ISigO]))
 
 ;; ============================================================================
-;; Layout constants — absolute frame-root positions (frame 427×240)
+;; Layout — loaded from guis/new/tutorial.xml (port of upstream academy:guis/tutorial.xml)
 ;; ============================================================================
 
-(def ^:private gw 427.0) (def ^:private gh 240.0)
 (def ^:private eh 12.0) (def ^:private lih 207.0) (def ^:private liw 72.0)
 (def ^:private cow 160.0) (def ^:private coh 210.5)
-(def ^:private area-x 277.75) (def ^:private area-y 8.75)
-(def ^:private area-w 134.0) (def ^:private area-h 134.0)
-(def ^:private tex (partial modid/asset-path "textures/guis"))
 
 ;; ============================================================================
 ;; set-tick! — force a per-frame side-effecting computed-o to actually run
-;; (see developer panel-reactive.clj for the fuller writeup).
 ;; ============================================================================
 
 (defn- pull-o! [_node source] (.sGet ^ISigO source) nil)
@@ -78,51 +74,12 @@
         sig-d (sig/computed-d [clock] (partial hover-alpha-step idle-a hover-a rt idx))]
     (ui/bind! rt id :alpha sig-d)))
 
-(defn- img
-  ([id x y w h src] (img id x y w h src 1.0 true))
-  ([id x y w h src scale] (img id x y w h src scale true))
-  ([id x y w h src scale visible?]
-   {:kind :image :props {:id id :x (double x) :y (double y) :w (double w) :h (double h)
-                          :src src :scale (double scale) :visible? visible?}}))
-
 ;; ============================================================================
-;; Root spec — static chrome. Logo1's glow lines are children of a scaled
-;; anchor group (scale=0.25) so their local coordinates match the original
-;; logo1-local unscaled math verbatim (cum-scale handles the conversion,
-;; exactly like the old nested-widget system did).
+;; Root spec — loaded from upstream tutorial.xml port
 ;; ============================================================================
 
 (defn- root-spec []
-  {:kind :box
-   :props {:id :root :x 0.0 :y 0.0 :w gw :h gh :fill 0xC0101010}
-   :children
-   [(img :left-bg 7.0 9.75 85.0 220.5 (tex "window_tutorial_left.png"))
-    {:kind :group :props {:id :list :x 13.6 :y 16.75 :w liw :h lih :clip? true}}
-
-    (img :logo0 145.625 19.0 899.0 548.0 (tex "tutorial/logo0.png") 0.25)
-    (img :logo1 145.625 149.5 899.0 236.0 (tex "tutorial/logo1.png") 0.25)
-    (img :logo2 145.625 149.5 899.0 236.0 (tex "tutorial/logo2.png") 0.25)
-    (img :logo3 239.375 65.375 149.0 149.0 (tex "tutorial/logo3.png") 0.25)
-    {:kind :group :props {:id :logo1-anchor :x 145.625 :y 149.5 :w 0.0 :h 0.0 :scale 0.25}
-     :children
-     [{:kind :box :props {:id :glow-right :x 0.0 :y 127.0 :w 0.0 :h 12.0 :fill 0x30FFFFFF :visible? false}}
-      {:kind :box :props {:id :glow-left :x 0.0 :y 127.0 :w 0.0 :h 12.0 :fill 0x30FFFFFF :visible? false}}]}
-
-    {:kind :group :props {:id :center-panel :x 97.0 :y 12.75 :w cow :h coh :clip? true :visible? false}}
-    (img :scroll-track 254.5 11.75 9.5 216.5 (tex "button/widget_scroll_1.png"))
-    (img :scroll-thumb 254.5 11.75 9.5 53.0 (tex "button/widget_scroll_2.png"))
-
-    {:kind :group :props {:id :preview-area :x area-x :y area-y :w area-w :h area-h}}
-    {:kind :group :props {:id :tag-area :x 277.5 :y 130.5 :w 133.0 :h 18.0}}
-    (img :btn-left 270.5 51.5 30.0 130.0 (tex "button/button_left_2.png") 0.4 false)
-    (img :btn-right 405.5 51.5 30.0 130.0 (tex "button/button_right_2.png") 0.4 false)
-
-    (img :right-window-bg 265.5 148.25 158.5 82.0 (tex "window_tutorial_left.png") 1.0 false)
-    {:kind :text :props {:id :title-text :x 274.75 :y 157.5 :w 130.0 :h 14.0
-                          :text "" :font-size 10.0 :color 0xFFFFFFFF}}
-    {:kind :group :props {:id :brief-content :x 274.75 :y 169.5 :w 130.0 :h 50.0 :clip? true}}
-    {:kind :text :props {:id :tag-tooltip :x 277.5 :y 122.0 :w 120.0 :h 14.0
-                          :text "" :font-size 10.0 :color 0xFFFFFFFF :visible? false}}]})
+  (ui-xml/load-spec (modid/namespaced-path "guis/new/tutorial.xml")))
 
 ;; ============================================================================
 ;; Markdown content — cache + native segment rendering (reused verbatim from
@@ -312,6 +269,7 @@
               (doseq [[id start-ms dur-ms] logo-timings]
                 (set-logo-alpha! rt id (logo-fade-alpha elapsed start-ms dur-ms)))
               ;; Glow animation (logo1-local unscaled coords via the scaled anchor group)
+              ;; :glow-line dslots: x0=0 x1=1 y=2 line-w=3 glow-sz=4
               (let [dt (- elapsed 400.0) b1 300.0 b2 200.0
                     ln 500.0 ln2 300.0 cl 50.0 half-w 449.5
                     ^INode gr (rt/node-by-id rt :glow-right) ^INode gl (rt/node-by-id rt :glow-left)]
@@ -319,13 +277,13 @@
                   (if (< dt b1)
                     (let [len (* ln (/ dt b1))]
                       (when (> len cl)
-                        (.setVisible gr true) (.setX gr (+ half-w cl)) (.setW gr (- len cl))
-                        (.setVisible gl true) (.setX gl (- half-w len)) (.setW gl (- len cl))
+                        (.setVisible gr true) (.setDSlot gr 0 (+ half-w cl)) (.setDSlot gr 1 (+ half-w len))
+                        (.setVisible gl true) (.setDSlot gl 0 (- half-w len)) (.setDSlot gl 1 (- half-w cl))
                         (.setFlag gr node/FLAG-LAYOUT-DIRTY) (.setFlag gl node/FLAG-LAYOUT-DIRTY)))
                     (let [ldt (min (- dt b1) b2)
                           len2 (+ (- ln cl cl) (* (- ln2 (- ln cl cl)) (/ ldt b2)))]
-                      (.setX gr (+ half-w (- ln len2))) (.setW gr len2)
-                      (.setX gl (- half-w ln)) (.setW gl len2)
+                      (.setDSlot gr 0 (+ half-w (- ln len2))) (.setDSlot gr 1 (+ half-w len2))
+                      (.setDSlot gl 0 (- half-w ln)) (.setDSlot gl 1 (- (+ half-w ln) len2))
                       (.setFlag gr node/FLAG-LAYOUT-DIRTY) (.setFlag gl node/FLAG-LAYOUT-DIRTY)))))
               (when (>= elapsed 2400.0)
                 (let [^INode list-n (rt/node-by-id rt :list)]
@@ -342,8 +300,9 @@
   (set-logo-alpha! rt :logo1 255)
   (let [ln 500.0 ln2 300.0 half-w 449.5
         ^INode gr (rt/node-by-id rt :glow-right) ^INode gl (rt/node-by-id rt :glow-left)]
-    (.setVisible gr true) (.setX gr (+ half-w (- ln ln2))) (.setW gr ln2)
-    (.setVisible gl true) (.setX gl (- half-w ln)) (.setW gl ln2)
+    ;; :glow-line dslots: x0=0 x1=1
+    (.setVisible gr true) (.setDSlot gr 0 (+ half-w (- ln ln2))) (.setDSlot gr 1 (+ half-w ln2))
+    (.setVisible gl true) (.setDSlot gl 0 (- half-w ln)) (.setDSlot gl 1 (- (+ half-w ln) ln2))
     (.setFlag gr node/FLAG-LAYOUT-DIRTY) (.setFlag gl node/FLAG-LAYOUT-DIRTY)))
 
 ;; ============================================================================
