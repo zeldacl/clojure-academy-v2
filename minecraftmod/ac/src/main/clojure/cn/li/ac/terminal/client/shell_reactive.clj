@@ -169,7 +169,7 @@
 (defn- attach-header-tick! [^UiRt rt owner player]
   (ui/set-prop! rt :text_username :text (entity/player-get-name player))
   (set-tick! rt :header-tick
-    (sig/computed-do [(rt/clock-ms-sig rt)]
+    (sig/computed-o [(rt/clock-ms-sig rt)]
       (fn [ms]
         (let [t (long (/ (long ms) 1000))
               hour (mod (quot t 3600) 24) minutes (mod (quot t 60) 60)
@@ -203,7 +203,7 @@
     (rt/put-user-signal! rt :on-pointer-move
       (fn [mx my] (sig/sset-d! mouse-x mx) (sig/sset-d! mouse-y my)))
     (set-tick! rt :perspective-tick
-      (sig/computed-do [(rt/clock-ms-sig rt)]
+      (sig/computed-o [(rt/clock-ms-sig rt)]
         (fn [_]
           (let [nx (- (/ (sig/sget-d mouse-x) root-w) 0.5)
                 ny (- (/ (sig/sget-d mouse-y) root-h) 0.5)]

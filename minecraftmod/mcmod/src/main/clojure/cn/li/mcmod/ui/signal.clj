@@ -3,7 +3,7 @@
 
    Implementation: Java POJOs in cn.li.mcmod.uipojo.signal.* (AOT/reflection=fail safe).
    This namespace is a thin Clojure API over those classes."
-  (:import [cn.li.mcmod.uipojo.signal SigD SigL SigO ComputedD ComputedO ComputedDO Binding
+  (:import [cn.li.mcmod.uipojo.signal SigD SigL SigO ComputedD ComputedO Binding
             ISigD ISigL ISigO IApply IDoubleSource ISupportsOuts IDep SignalSupport]
            [cn.li.mcmod.uipojo.runtime IUiNode]
            [java.util ArrayList]))
@@ -45,10 +45,6 @@
   (when (> (count srcs) 3)
     (into-array IDoubleSource (subvec srcs 3))))
 
-(defn- to-more-object-sources [srcs]
-  (when (> (count srcs) 3)
-    (into-array ISigO (subvec srcs 3))))
-
 (defn computed-d ^ComputedD [sources f]
   (let [srcs (vec sources)
         n (count srcs)
@@ -62,27 +58,16 @@
     c))
 
 (defn computed-o ^ComputedO [sources f]
+  "Universal object-valued computed signal.  Sources may be ISigO, IDoubleSource,
+   or ISigD — recompute() dispatches on type.  Use for any Object-producing
+   computation (string, keyword, vector) regardless of source types."
   (let [srcs (vec sources)
         n (count srcs)
         s0 (nth srcs 0 nil)
         s1 (nth srcs 1 nil)
         s2 (nth srcs 2 nil)
-        more (to-more-object-sources srcs)
+        more (when (> n 3) (into-array Object (subvec srcs 3)))
         c (ComputedO. s0 s1 s2 more f (int n) nil true (SignalSupport/newOuts 4))]
-    (doseq [^ISupportsOuts s srcs]
-      (add-dep! (SignalSupport/outsOf s) c))
-    c))
-
-(defn computed-do ^ComputedDO [sources f]
-  "Double-driven object computed.  Sources are IDoubleSource (e.g. clock-ms),
-   f receives doubles, returns Object.  Type-safe bridge for clock→string/text."
-  (let [srcs (vec sources)
-        n (count srcs)
-        s0 (nth srcs 0 nil)
-        s1 (nth srcs 1 nil)
-        s2 (nth srcs 2 nil)
-        more (to-more-double-sources srcs)
-        c (ComputedDO. s0 s1 s2 more f (int n) nil true (SignalSupport/newOuts 4))]
     (doseq [^ISupportsOuts s srcs]
       (add-dep! (SignalSupport/outsOf s) c))
     c))

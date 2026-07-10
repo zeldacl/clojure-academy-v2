@@ -475,7 +475,7 @@
                               :on-start-development on-start-development))
         clock (rt/clock-ms-sig rt)
         last-ms (double-array 1 (double (sig/sget-l clock)))
-        tick-sig (sig/computed-do [clock]
+        tick-sig (sig/computed-o [clock]
                    (fn [ms]
                      (let [dt (max 0.001 (/ (- (double ms) (aget last-ms 0)) 1000.0))]
                        (aset last-ms 0 (double ms))

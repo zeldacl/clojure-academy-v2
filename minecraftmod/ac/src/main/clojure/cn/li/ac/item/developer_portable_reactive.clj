@@ -93,7 +93,7 @@
       (when wt (.setVisible wt false) (.setFlag wt node/FLAG-LAYOUT-DIRTY)))
     ;; Energy synced from the held item each frame (instead of tile-entity sync)
     (set-tick! r :portable-energy-tick
-      (sig/computed-do [(rt/clock-ms-sig r)]
+      (sig/computed-o [(rt/clock-ms-sig r)]
         (fn [_] (reset! (:energy container) (current-energy-from-held-item player)) nil)))
     r))
 

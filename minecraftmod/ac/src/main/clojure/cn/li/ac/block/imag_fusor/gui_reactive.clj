@@ -30,7 +30,7 @@
 (defn- attach-binds! [r container _menu _player _signals]
   (let [clock (rt/clock-ms-sig r)]
     (rt/put-user-signal! r :work-progress (sig/computed-d [clock] (fn [_] (double (or @(:work-progress container) 0.0)))))
-    (rt/put-user-signal! r :imagination-needed (sig/computed-do [clock] (fn [_] (str (or @(:imagination-needed container) 0) " IM"))))))
+    (rt/put-user-signal! r :imagination-needed (sig/computed-o [clock] (fn [_] (str (or @(:imagination-needed container) 0) " IM"))))))
 
 (defn create-screen [container menu player]
   (let [safe-val #(some-> % deref)]

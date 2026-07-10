@@ -173,7 +173,7 @@
 
 (defn- install-timeout-tick! [^UiRt rt state rebuild!]
   (rt/put-user-signal! rt :freq-timeout
-    (sig/computed-do [(rt/clock-ms-sig rt)]
+    (sig/computed-o [(rt/clock-ms-sig rt)]
       (fn [_]
         (let [phase (:phase @state)
               elapsed (/ (- (System/currentTimeMillis) (long (:state-start-time @state))) 1000.0)]

@@ -5,22 +5,27 @@ import clojure.lang.IFn;
 import clojure.lang.ISeq;
 import java.util.ArrayList;
 
+/**
+ * Universal object-valued computed signal.
+ * Sources may be ISigO, IDoubleSource, or ISigD — recompute() dispatches on type.
+ * Dependency tracking uses ISupportsOuts only (type-agnostic).
+ */
 public final class ComputedO implements ISigO, IDep, ISupportsOuts {
 
-    private final ISigO s0;
-    private final ISigO s1;
-    private final ISigO s2;
-    private final ISigO[] moreSources;
+    private final Object s0;
+    private final Object s1;
+    private final Object s2;
+    private final Object[] moreSources;
     private final IFn f;
     private final int nSources;
     private Object value;
     private boolean dirty;
     private final ArrayList<IDep> outs;
 
-    public ComputedO(ISigO s0,
-                     ISigO s1,
-                     ISigO s2,
-                     ISigO[] moreSources,
+    public ComputedO(Object s0,
+                     Object s1,
+                     Object s2,
+                     Object[] moreSources,
                      IFn f,
                      int nSources,
                      Object value,
@@ -69,27 +74,38 @@ public final class ComputedO implements ISigO, IDep, ISupportsOuts {
             case 0:
                 return f.invoke();
             case 1:
-                return f.invoke(s0.sGet());
+                return f.invoke(readSource(s0));
             case 2:
-                return f.invoke(s0.sGet(), s1.sGet());
+                return f.invoke(readSource(s0), readSource(s1));
             case 3:
-                return f.invoke(s0.sGet(), s1.sGet(), s2.sGet());
+                return f.invoke(readSource(s0), readSource(s1), readSource(s2));
             default:
                 Object[] args = new Object[nSources];
-                args[0] = s0.sGet();
+                args[0] = readSource(s0);
                 if (nSources > 1) {
-                    args[1] = s1.sGet();
+                    args[1] = readSource(s1);
                 }
                 if (nSources > 2) {
-                    args[2] = s2.sGet();
+                    args[2] = readSource(s2);
                 }
                 if (moreSources != null) {
                     for (int i = 0; i < moreSources.length; i++) {
-                        args[3 + i] = moreSources[i].sGet();
+                        args[3 + i] = readSource(moreSources[i]);
                     }
                 }
                 return f.applyTo(toSeq(args));
         }
+    }
+
+    private static Object readSource(Object src) {
+        if (src instanceof ISigO)
+            return ((ISigO) src).sGet();
+        if (src instanceof IDoubleSource)
+            return ((IDoubleSource) src).readAsDouble();
+        if (src instanceof ISigD)
+            return ((ISigD) src).dGet();
+        throw new IllegalArgumentException(
+            "ComputedO: unsupported source type " + src.getClass().getName());
     }
 
     private static ISeq toSeq(Object[] args) {

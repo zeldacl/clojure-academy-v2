@@ -87,10 +87,10 @@
                   0.0))))
     ;; Mode display (replaces on-frame + set-texture! + set-text!)
     (rt/put-user-signal! r :mode-texture
-      (sig/computed-do [clock]
+      (sig/computed-o [clock]
         (fn [_] (recipes/mode->icon-texture @(:mode container)))))
     (rt/put-user-signal! r :mode-label
-      (sig/computed-do [clock]
+      (sig/computed-o [clock]
         (fn [_] (str/upper-case (recipes/mode->string @(:mode container))))))
     ;; Mode switching buttons (replaces bind-buttons! + on-left-click)
     (cn.li.mcmod.ui.events/on! r :btn_left :left-click
