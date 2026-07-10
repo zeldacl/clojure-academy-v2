@@ -72,7 +72,7 @@
   (when-let [^INode inv-page (rt/node-by-id r :inv)]
     (rt/build-child! r
       {:kind :image
-       :props {:id :node-anim-img :x 42.0 :y 35.5 :w (double anim-tex-w) :h (double anim-tex-h)
+       :props {:id :node-anim-img :x 40.0 :y 35.5 :w (double anim-tex-w) :h (double anim-tex-h)
                :scale 0.5 :alpha 0.675 :src anim-texture :tex-h (/ 1.0 (double anim-frame-count))}}
       inv-page))
   (let [clock (rt/clock-ms-sig r)

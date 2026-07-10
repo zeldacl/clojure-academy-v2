@@ -120,7 +120,6 @@
           (try
             (when-let [update-fn (:update-fn screen-data)]
               (update-fn screen-data))
-            (.renderBackground this gg)
             (clock/tick! rt pt)
             (rt/resize! rt (double (.-width this)) (double (.-height this)))
             (rt/flush! rt)
@@ -143,15 +142,26 @@
                           " wh=(" (some-> anim .getW) "," (some-> anim .getH) ")"
                           " scale=" (some-> anim .getScale))))
             (layout/ensure-tape! rt)
-            (render/draw-tape! gg rt (.getGuiLeft this) (.getGuiTop this))
-            (render-embedded-runtimes! rt gg (.getGuiLeft this) (.getGuiTop this) pt)
-            (when (slots-active?* )
-              (.callSuperRender this gg mx my pt))
+            (if (slots-active?*)
+              ;; inv tab: let vanilla AbstractContainerScreen.render orchestrate
+              ;; layering — screen dark bg → renderBg (= our reactive tree, via
+              ;; bg-cb) → widgets → slots → tooltips. Drawing the tree BEFORE
+              ;; callSuperRender put it under render()'s own dark-bg pass, which
+              ;; dimmed the whole UI.
+              (.callSuperRender this gg mx my pt)
+              ;; non-inv tab: no vanilla slots — draw dark bg + reactive tree here.
+              (do (.renderBackground this gg)
+                  (render/draw-tape! gg rt (.getGuiLeft this) (.getGuiTop this))
+                  (render-embedded-runtimes! rt gg (.getGuiLeft this) (.getGuiTop this) pt)))
             (catch Exception e
               (log/stacktrace "host-container render failed" e)))))
       (.withRenderBg
-        (fn bg-cb [^DelegatingCGuiContainerScreen this ^GuiGraphics gg _mx _my _pt]
-          (.callSuperRenderBackground this gg)))
+        (fn bg-cb [^DelegatingCGuiContainerScreen this ^GuiGraphics gg pt _mx _my]
+          ;; renderBg runs inside super.render, right after the screen dark bg and
+          ;; before the slots — the correct layer for the reactive tree (slots draw
+          ;; on top; the tree is not dimmed by a second dark-bg pass).
+          (render/draw-tape! gg rt (.getGuiLeft this) (.getGuiTop this))
+          (render-embedded-runtimes! rt gg (.getGuiLeft this) (.getGuiTop this) pt)))
       (.withMouseClicked
         (fn click-cb [^DelegatingCGuiContainerScreen this mx my button]
           (if-let [modal (active-modal rt)]

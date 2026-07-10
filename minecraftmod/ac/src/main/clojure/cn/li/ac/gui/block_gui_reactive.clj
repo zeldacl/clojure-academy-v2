@@ -145,13 +145,16 @@
         spec (if (or info-area? auto-info-area?) (wrap-with-info-area base-spec) base-spec)
         _ (rt/build! r spec)
         _ (when auto-info-area? (attach-histograms-and-properties! r histograms properties container))
-        tex-path (sig/signal-o
-                   (modid/asset-path "textures"
-                     (str "guis/ui/ui_" (or texture-name "inv") ".png")))
         ;; :ui_block exists in page_inv.xml (background texture swapped per block
         ;; type); page_wireless.xml and other custom layouts may omit it.
-        _ (when-let [^INode ui-block (rt/node-by-id r :ui_block)]
-            (ui/bind! r :ui_block :src tex-path))
+        ;; Direct set (not bind!): the texture is static, and bind! only fires on
+        ;; a signal *change* — a static signal-o never pushes its initial value,
+        ;; so a bound src is never written and ui_block would keep its XML default
+        ;; (ui_phasegen.png). set-prop! writes immediately.
+        _ (when (rt/node-by-id r :ui_block)
+            (ui/set-prop! r :ui_block :src
+              (modid/asset-path "textures"
+                (str "guis/ui/ui_" (or texture-name "inv") ".png"))))
         signals {:energy (sig/signal-d 0.0)
                  :max-energy (sig/signal-d 1.0)
                  :status (sig/signal-o "IDLE")
