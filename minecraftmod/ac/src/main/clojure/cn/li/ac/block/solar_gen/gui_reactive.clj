@@ -25,11 +25,9 @@
 (defn- solar-status->frame [status] (case status "STRONG" 0.0 "WEAK" (/ 2.0 3.0) (/ 1.0 3.0)))
 
 (defn- attach-anim-bind! [r container _menu _player _signals]
-  ;; "anim_frame" is a group defined in page_solar.xml (id="anim_frame") — XML-parsed
-  ;; node ids come back as plain strings (not keywords), so the lookup key here must
-  ;; match that exactly. The animated image itself is a fresh native child with its
-  ;; own keyword id, so binding it afterwards via that keyword works normally.
-  (when-let [^INode anim-frame (rt/node-by-id r "anim_frame")]
+  ;; "anim_frame" is a group defined in page_solar.xml (id="anim_frame")
+  ;; — now keywordized by parse-ui-element.
+  (when-let [^INode anim-frame (rt/node-by-id r :anim_frame)]
     (rt/build-child! r
       {:kind :image
        :props {:id :solar-anim-img :x 0.0 :y 0.0 :w 104.0 :h 70.0 :alpha 1.0

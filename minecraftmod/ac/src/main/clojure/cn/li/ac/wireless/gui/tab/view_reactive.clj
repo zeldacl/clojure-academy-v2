@@ -103,10 +103,10 @@
                         (* (sig/sget-d scroll) max-scroll))))]
     (rt/put-user-signal! rt :wireless-scroll scroll)
     (rt/put-user-signal! rt :wireless-avail-count avail-count)
-    (ui/bind! rt "zone_elementlist" :scroll-offset scroll-px)
-    (events/on! rt "btn_arrowup" :left-click
+    (ui/bind! rt :zone_elementlist :scroll-offset scroll-px)
+    (events/on! rt :btn_arrowup :left-click
       (fn [_ _ _]
         (sig/sset-d! scroll (max 0.0 (- (sig/sget-d scroll) 0.125)))))
-    (events/on! rt "btn_arrowdown" :left-click
+    (events/on! rt :btn_arrowdown :left-click
       (fn [_ _ _]
         (sig/sset-d! scroll (min 1.0 (+ (sig/sget-d scroll) 0.125)))))))

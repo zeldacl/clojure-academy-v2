@@ -23,7 +23,8 @@
             [cn.li.mcmod.ui.signal :as sig]
             [cn.li.mcmod.client.platform-bridge :as bridge]
             [cn.li.ac.config.modid :as modid]
-            [cn.li.mcmod.util.log :as log]))
+            [cn.li.mcmod.util.log :as log])
+  (:import [cn.li.mcmod.ui.node INode]))
 
 ;; ============================================================================
 ;; Config API (replaces tech-ui-common constructors)
@@ -142,10 +143,10 @@
         tex-path (sig/signal-o
                    (modid/asset-path "textures"
                      (str "guis/ui/ui_" (or texture-name "inv") ".png")))
-        ;; "ui_block" is the XML-parsed background-texture element id (id="ui_block"
-        ;; in every page_*.xml) — XML-loaded node ids come back as plain strings,
-        ;; not keywords, so the lookup key here must be a string, not :ui_block.
-        _ (ui/bind! r "ui_block" :src tex-path)
+        ;; :ui_block exists in page_inv.xml (background texture swapped per block
+        ;; type); page_wireless.xml and other custom layouts may omit it.
+        _ (when-let [^INode ui-block (rt/node-by-id r :ui_block)]
+            (ui/bind! r :ui_block :src tex-path))
         signals {:energy (sig/signal-d 0.0)
                  :max-energy (sig/signal-d 1.0)
                  :status (sig/signal-o "IDLE")

@@ -13,10 +13,10 @@
   "Node spec 的 schema 向量。编译为 validator fn 后仅校验顶层结构；
    子节点递归在 build! 时逐个检查 kind 表存在性。"
   [:map
-   {:kind :keyword?}
-   [:id [:or :nil? :keyword? :string?]]
-   [:props [:or :nil? :map?]]
-   [:children [:or :nil? [:vector :any]]]])
+   [:kind keyword?]
+   [:id [:or nil? keyword? string?]]
+   [:props [:or nil? map?]]
+   [:children [:or nil? [:vector (constantly true)]]]])
 
 (def ^:private compiled-validator
   (schema/lazy-validator node-spec-schema))

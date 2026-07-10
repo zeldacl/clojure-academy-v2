@@ -82,7 +82,7 @@
         ;; rt/flush! actually forces this to run each frame. :screen-root is the
         ;; hand-authored wrapper group (block-gui-reactive's wrap-with-info-area),
         ;; always present since this screen requests :info-area? true.
-        link-poll-tick (sig/computed-o [clock]
+        link-poll-tick (sig/computed-d [clock]
                          (fn [ms]
                            (let [now (long ms)]
                              (when (zero? (rem (quot now 1000) 2))

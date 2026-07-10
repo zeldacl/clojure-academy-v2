@@ -53,11 +53,13 @@
     {:w 0.0 :h 0.0}))
 
 (defn- parse-align [s]
-  "Parse 'center,middle' into {:align-w :center :align-h :middle}."
+  "Parse 'center,center' into {:align-w :center :align-h :middle}.
+   XML uses 'center' for both axes; framework uses :middle for vertical center."
   (if s
     (let [parts (str/split (str/trim s) #"\s*,\s*")
           w (keyword (or (first parts) "left"))
-          h (keyword (or (second parts) "top"))]
+          h-raw (or (second parts) "top")
+          h (keyword (if (= "center" h-raw) "middle" h-raw))]
       {:align-w w :align-h h})
     {:align-w :left :align-h :top}))
 
@@ -136,12 +138,13 @@
     (if (and (:template attrs) (not= kind :list))
       ;; Non-list element referencing a template: clone the template spec
       (if-let [tmpl (get templates (:template attrs))]
-        (merge tmpl {:id (:id attrs)})
+        (merge tmpl (when-let [id-val (:id attrs)]
+                      {:id (keyword id-val)}))
         (throw (ex-info (str "Template not found: " (:template attrs)) {})))
       ;; Regular element (or :list — template resolved into props below)
       (let [props (parse-elem-attrs kind attrs)
             props (if-let [id-attr (:id attrs)]
-                    (assoc props :id id-attr)
+                    (assoc props :id (keyword id-attr))
                     props)
             ;; :list — replace template NAME string with the resolved template SPEC
             props (if (and (= kind :list) (:template attrs))
@@ -150,7 +153,7 @@
                       (throw (ex-info (str "List template not found: " (:template attrs)) {})))
                     props)]
         {:kind kind
-         :id (:id attrs (str (gensym "node-")))
+         :id (keyword (:id attrs (str (gensym "node-"))))
          :props props
          :children (vec (keep #(parse-ui-element % templates) (non-template-children content)))}))))
 

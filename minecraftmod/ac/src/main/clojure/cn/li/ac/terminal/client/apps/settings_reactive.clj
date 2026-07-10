@@ -134,9 +134,9 @@
         key-binding-text (sig/signal-o "LMENU")
         recording? (atom false)
         current-key (atom "LMENU")]
-    (ui/bind! r "settings-list" :scroll-offset scroll-px)
+    (ui/bind! r :settings-list :scroll-offset scroll-px)
     (populate-settings-list! r rows key-binding-text recording? current-key)
-    (events/on! r "scrollbar" :mouse-scroll
+    (events/on! r :scrollbar :mouse-scroll
       (fn [_ _ evt]
         (sig/sset-d! scroll (max 0.0 (min 1.0 (+ (sig/sget-d scroll) (* (:delta evt) 0.01)))))))
     r))

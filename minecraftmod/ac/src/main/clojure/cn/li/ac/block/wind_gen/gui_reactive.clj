@@ -52,8 +52,8 @@
   (let [clock (rt/clock-ms-sig r)
         main-alpha (sig/computed-d [clock] (fn [_] (first (completeness-alpha (or @(:completeness container) "") (or @(:status container) "")))))
         middle-alpha (sig/computed-d [clock] (fn [_] (second (completeness-alpha (or @(:completeness container) "") (or @(:status container) "")))))]
-    (ui/bind! r "icon_main" :alpha main-alpha)
-    (ui/bind! r "icon_middle" :alpha middle-alpha)))
+    (ui/bind! r :icon_main :alpha main-alpha)
+    (ui/bind! r :icon_middle :alpha middle-alpha)))
 
 (defn- create-base-screen [container menu player]
   (let [safe-val #(some-> % deref)]
