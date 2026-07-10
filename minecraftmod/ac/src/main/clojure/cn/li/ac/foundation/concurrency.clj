@@ -95,6 +95,7 @@
        {:success true :value new-value})
      (catch Exception ex
        (log/warn (str "Atomic batch update failed: " label) ex)
+       (log/stacktrace "Atomic batch update failed" ex)
        {:success false :error ex}))))
 
 ;; ============================================================================
@@ -246,6 +247,7 @@
             (if (< attempt max-retries)
               (do
                 (log/warn (str "Attempt " (inc attempt) " failed, retrying in " delay "ms..."))
+                (log/stacktrace "with-retries attempt failed" ex)
                 (Thread/sleep (long delay))
                 false)
               (throw ex))))

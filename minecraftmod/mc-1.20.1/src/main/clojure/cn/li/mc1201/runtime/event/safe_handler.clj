@@ -9,4 +9,5 @@
     (f)
     (catch Exception e
       (log/error (str "Error handling " label) e)
+      (log/stacktrace (str "Error handling " label " - full trace") e)
       default-result)))

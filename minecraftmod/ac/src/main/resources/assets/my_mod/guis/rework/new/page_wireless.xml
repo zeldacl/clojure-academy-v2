@@ -5,7 +5,8 @@
       <image id="el_icon_logo" pos="8.0,0.0" size="12.0,12.0" align="left,center" src="my_mod:textures/guis/icons/icon_matrix.png" tint="#B2FFFFFF"/>
       <text id="el_text_name" pos="20.0,0.0" size="40.0,8.0" align="left,center" text="" font-size="9.0" color="#FFDDDDDD"/>
       <image id="el_icon_key" pos="60.0,0.0" size="12.0,12.0" align="left,center" src="my_mod:textures/guis/icons/icon_key.png" tint="#B2FFFFFF"/>
-      <text id="el_input_pass" pos="72.5,3.5" size="48.0,9.0" align="left,top" text="" font-size="9.0" color="#FFDDDDDD" editable="true"/>
+      <box id="el_input_bg" pos="72.5,3.5" size="48.0,9.0" fill="#AA222222"/>
+      <text id="el_input_pass" pos="72.5,3.5" size="48.0,9.0" align="left,top" text="" font-size="10.0" color="#FFFFFFFF" editable="true" masked?="true"/>
       <image id="el_icon_connect" pos="125.0,0.0" size="12.0,12.0" align="left,center" src="my_mod:textures/guis/icons/icon_unconnected.png" tint="#99FFFFFF"/>
     </image>
   </template>
@@ -18,7 +19,7 @@
       <image id="elem_connected" pos="2.0,-10.0" size="150.0,18.0" align="left,top" src="my_mod:textures/guis/element/element_background300x32.png">
         <image id="ec_icon_logo" pos="8.0,0.0" size="12.0,12.0" align="left,center" src="my_mod:textures/guis/icons/icon_matrix.png"/>
         <text id="ec_text_name" pos="20.0,0.0" size="80.0,8.0" align="left,center" text="Not Connected" font-size="9.0" color="#FFFFFFFF"/>
-        <image id="ec_icon_connect" pos="125.0,0.0" size="12.0,12.0" align="left,center" src="my_mod:textures/guis/icons/icon_unconnected.png" tint="#CCFFFFFF"/>
+        <image id="ec_icon_connect" pos="125.0,0.0" size="12.0,12.0" align="left,center" src="my_mod:textures/guis/icons/icon_connected.png" tint="#CCFFFFFF"/>
       </image>
       <image id="btn_arrowup" pos="0.0,7.0" size="16.0,16.0" align="right,top" src="my_mod:textures/guis/button/button_arrowupb.png" tint="#CCFFFFFF"/>
       <image id="btn_arrowdown" pos="0.0,0.0" size="16.0,16.0" align="right,bottom" src="my_mod:textures/guis/button/button_arrowdownb.png" tint="#CCFFFFFF"/>

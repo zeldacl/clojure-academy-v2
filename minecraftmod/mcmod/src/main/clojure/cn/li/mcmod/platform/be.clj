@@ -37,8 +37,8 @@
 (defn be-get-level [be] (be-op :be-get-level be))
 
 (defn be-get-world-safe [be]
-  (let [level (try (be-op :be-get-level be) (catch Exception _ nil))
-        world (try (be-op :be-get-world be) (catch Exception _ nil))
+  (let [level (try (be-op :be-get-level be) (catch Exception e (log/stacktrace "be-get-level failed" e) nil))
+        world (try (be-op :be-get-world be) (catch Exception e (log/stacktrace "be-get-world failed" e) nil))
         result (or level world)]
     (when (and be (nil? result))
       (log/warn "be-get-world-safe returned nil — be-op :be-get-level =" (some? level) ":be-get-world =" (some? world)))
@@ -49,13 +49,15 @@
     (world/world-get-tile-entity* w block-pos)
     (catch Exception e
       (call-log :warn "get-block-entity failed:" (ex-message e))
+      (log/stacktrace "get-block-entity failed" e)
       nil)))
 
 (defn get-custom-state [be]
   (when be
     (try (be-op :be-get-custom-state be)
          (catch Exception e
-           (call-log :warn "get-custom-state failed:" (ex-message e)) nil))))
+           (call-log :warn "get-custom-state failed:" (ex-message e))
+           (log/stacktrace "get-custom-state failed" e) nil))))
 
 (defn set-custom-state! [be state]
   (when be
@@ -63,33 +65,38 @@
       (be-op :be-set-custom-state! be state)
       (be-op :be-set-changed! be)
       (catch Exception e
-        (call-log :error "set-custom-state! failed:" (ex-message e))))))
+        (call-log :error "set-custom-state! failed:" (ex-message e))
+        (log/stacktrace "set-custom-state! failed" e)))))
 
 (defn be-get-block-id [be]
   (when be
     (try (be-op :be-get-block-id be)
          (catch Exception e
-           (call-log :warn "be-get-block-id failed:" (ex-message e)) nil))))
+           (call-log :warn "be-get-block-id failed:" (ex-message e))
+           (log/stacktrace "be-get-block-id failed" e) nil))))
 
 (defn get-block-id [be]
   (when be
     (try (be-op :be-get-block-id be)
          (catch Exception e
-           (call-log :warn "get-block-id failed:" (ex-message e)) nil))))
+           (call-log :warn "get-block-id failed:" (ex-message e))
+           (log/stacktrace "get-block-id failed" e) nil))))
 
 (defn get-tile-id [be]
   (when be
     (try (be-op :be-get-tile-id be)
          (catch Exception e
-           (call-log :warn "get-tile-id failed:" (ex-message e)) nil))))
+           (call-log :warn "get-tile-id failed:" (ex-message e))
+           (log/stacktrace "get-tile-id failed" e) nil))))
 
 (defn set-changed! [be]
   (when be
     (try (be-op :be-set-changed! be)
          (catch Exception e
-           (call-log :warn "set-changed! failed:" (ex-message e)) nil))))
+           (call-log :warn "set-changed! failed:" (ex-message e))
+           (log/stacktrace "set-changed! failed" e) nil))))
 
 (defn get-fluid-height [be]
   (when be
     (try (or (be-op :be-get-fluid-height be) 0.0)
-         (catch Exception _ 0.0))))
+         (catch Exception e (log/stacktrace "be-get-fluid-height failed" e) 0.0))))

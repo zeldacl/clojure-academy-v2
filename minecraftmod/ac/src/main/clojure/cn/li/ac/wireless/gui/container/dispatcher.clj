@@ -118,6 +118,7 @@
     (boolean (validate-container container player))
     (catch Exception e
       (log/error "Error validating container:"(ex-message e))
+      (log/stacktrace "Error validating container" e)
       false)))
 
 (defn server-menu-sync!
@@ -128,6 +129,7 @@
     true
     (catch Exception e
       (log/error "Error in server menu sync:" (ex-message e))
+      (log/stacktrace "Error in server menu sync" e)
       false)))
 
 (defn safe-handle-button-click!
@@ -145,6 +147,7 @@
     true
     (catch Exception e
       (log/error "Error handling button click:"(ex-message e))
+      (log/stacktrace "Error handling button click" e)
       false)))
 
 (defn safe-handle-text-input!
@@ -163,6 +166,7 @@
     true
     (catch Exception e
       (log/error "Error handling text input:"(ex-message e))
+      (log/stacktrace "Error handling text input" e)
       false)))
 
 (defn safe-close!
@@ -178,6 +182,7 @@
     true
     (catch Exception e
       (log/error "Error closing container:"(ex-message e))
+      (log/stacktrace "Error closing container" e)
       false)))
 
 ;; ============================================================================
@@ -195,6 +200,7 @@
       0)
     (catch Exception e
       (log/error "Error getting slot count:"(ex-message e))
+      (log/stacktrace "Error getting slot count" e)
       0)))
 
 (defn slot-get-item
@@ -206,6 +212,7 @@
         (f container slot-index)))
     (catch Exception e
       (log/error "Error getting slot item:"(ex-message e))
+      (log/stacktrace "Error getting slot item" e)
       nil)))
 
 (defn slot-set-item!
@@ -217,6 +224,7 @@
         (f container slot-index item-stack)))
     (catch Exception e
       (log/error "Error setting slot item:"(ex-message e))
+      (log/stacktrace "Error setting slot item" e)
       nil)))
 
 (defn slot-can-place?
@@ -230,6 +238,7 @@
       false)
     (catch Exception e
       (log/error "Error checking slot placement:"(ex-message e))
+      (log/stacktrace "Error checking slot placement" e)
       false)))
 
 (defn slot-changed!
@@ -241,6 +250,7 @@
         (f container slot-index)))
     (catch Exception e
       (log/error "Error in slot changed notification:"(ex-message e))
+      (log/stacktrace "Error in slot changed notification" e)
       nil)))
 
 (defn execute-quick-move
@@ -254,6 +264,7 @@
         (f container slot-index player-inventory-start)))
     (catch Exception e
       (log/error "Error executing quick move:" (ex-message e))
+      (log/stacktrace "Error executing quick move" e)
       nil)))
 
 (defn safe-execute-quick-move
@@ -263,6 +274,7 @@
     (execute-quick-move container slot-index player-inventory-start)
     (catch Exception e
       (log/error "Error in safe quick move:" (ex-message e))
+      (log/stacktrace "Error in safe quick move" e)
       nil)))
 
 ;; ============================================================================

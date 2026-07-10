@@ -112,7 +112,8 @@
   (try
     (render-level-plan! evt)
     (catch Exception e
-      (log/error "Level effect render failed" e))))
+      (log/error "Level effect render failed" e)
+      (log/stacktrace "Level effect render failed" e))))
 
 (defn init! []
   (when-not (var-get #'*tick-listener-registered?*)

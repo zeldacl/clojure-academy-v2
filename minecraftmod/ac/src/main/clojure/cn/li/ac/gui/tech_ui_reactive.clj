@@ -32,6 +32,7 @@
       {:id "inv" :runtime r :page-node (rt/node-by-idx r root-idx)})
     (catch Exception e
       (log/error "Error creating reactive inventory page:" (ex-message e))
+      (log/stacktrace "Error creating reactive inventory page" e)
       {:id "inv" :runtime (rt/create-runtime) :page-node nil})))
 
 (defn create-rework-page

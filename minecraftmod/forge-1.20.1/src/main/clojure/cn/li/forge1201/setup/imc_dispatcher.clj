@@ -13,7 +13,8 @@
 	[thunk]
 	(try
 		(thunk)
-		(catch Throwable _
+		(catch Throwable e
+			(log/stacktrace "safe-invoke caught exception" e)
 			nil)))
 
 (defn- imc-method-key
@@ -56,7 +57,8 @@
 									(accept [_ msg]
 										(handle-imc-message! msg)))))
 		(catch Throwable t
-			(log/error "Failed to process IMC registrations" t))))
+			(log/error "Failed to process IMC registrations" t)
+			(log/stacktrace "handle-imc-process-event! caught exception" t))))
 
 (defn register-imc-listener!
 	[^IEventBus mod-bus]

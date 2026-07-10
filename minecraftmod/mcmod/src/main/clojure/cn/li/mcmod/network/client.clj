@@ -146,6 +146,7 @@
                    true
                    (catch Exception e
                      (log/error "Error in push handler" msg-id ":" (ex-message e))
+                     (log/stacktrace "Error in push handler" e)
                      true))
                  false))]
        {:kind ::client-network-session
@@ -376,7 +377,8 @@
      (try
        (handler payload)
        (catch Exception e
-         (log/error "Error in push handler" msg-id ":" (ex-message e))))
+         (log/error "Error in push handler" msg-id ":" (ex-message e))
+         (log/stacktrace "Error in push handler" e)))
      (log/warn "No push handler registered for" msg-id)))
   ([owner msg-id payload]
    (if-let [session (resolve-client-network-session owner {:allow-install? false})]

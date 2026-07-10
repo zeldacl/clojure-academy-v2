@@ -38,7 +38,8 @@
               (float rot-z))
         (.setCanceled evt true)))
     (catch Exception e
-      (log/error "DirectedShock hand render failed" e))))
+      (log/error "DirectedShock hand render failed" e)
+      (log/stacktrace "DirectedShock hand render failed" e))))
 
 (defn init! []
   (when-not (var-get #'*tick-listener-registered?*)

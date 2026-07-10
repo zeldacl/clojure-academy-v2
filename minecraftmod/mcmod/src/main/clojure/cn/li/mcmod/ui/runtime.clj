@@ -165,7 +165,10 @@
           (slot-write/write-oslot! n (int slot-idx) v :render))))
     (doseq [prop-key writers]
       (when-some [v (get props prop-key)]
-        (slot-write/apply-prop! n kind-kw prop-key v)))))
+        (slot-write/apply-prop! n kind-kw prop-key v)))
+    ;; Defaults: image alpha = 1.0 (images without explicit alpha must be visible)
+    (when (and (= kind-kw :image) (zero? (.getDSlot n 0)))
+      (.setDSlot n 0 1.0))))
 
 (declare build-node!)
 

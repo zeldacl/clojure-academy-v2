@@ -24,10 +24,17 @@
     (.setFlag n (dirty-mask dirty-kw))))
 
 (defn- tint-rgb-value
+  "Convert tint to RGB float vector [r g b].  Accepts vector [r g b], ARGB long
+   (from parse-color), or nil → white."
   [source]
-  (if (vector? source)
-    (mapv #(double %) source)
-    [255.0 255.0 255.0]))
+  (cond
+    (vector? source) (mapv #(double %) source)
+    (number? source)
+    (let [l (long source)]
+      [(double (/ (bit-and (bit-shift-right l 16) 0xFF) 255.0))
+       (double (/ (bit-and (bit-shift-right l 8) 0xFF) 255.0))
+       (double (/ (bit-and l 0xFF) 255.0))])
+    :else [1.0 1.0 1.0]))
 
 (defn- coerce-static-value
   [spec v]

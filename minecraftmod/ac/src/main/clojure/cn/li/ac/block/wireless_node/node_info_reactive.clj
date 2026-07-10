@@ -65,6 +65,7 @@
       nil)
     (catch Exception e
       (log/error "node-info-reactive rebuild failed:" (ex-message e))
+      (log/stacktrace "node-info-reactive rebuild exception:" e)
       nil)))
 
 (defn attach!

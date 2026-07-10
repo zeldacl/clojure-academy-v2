@@ -33,7 +33,8 @@
             ^ResourceLocation key (.getKey BuiltInRegistries/ITEM item)]
         (when key
           (str (.getNamespace key) ":" (.getPath key))))
-      (catch Exception _
+      (catch Exception e
+        (log/stacktrace "item-stack->id: failed to resolve item id" e)
         nil))))
 
 ;; ============================================================================
@@ -45,7 +46,8 @@
   (when (and player item-id)
     (try
       (tutorial-platform/on-item-event! player item-id event-type)
-      (catch Throwable _))))
+      (catch Throwable e
+        (log/stacktrace "dispatch-item-event!: failed to dispatch item event" e)))))
 
 (defn- on-item-crafted
   [^PlayerEvent$ItemCraftedEvent event]
@@ -87,7 +89,8 @@
           (let [^ServerPlayer player (.player event)]
             (try
               (tutorial-platform/process-pending-activations! player)
-              (catch Throwable _))))))))
+              (catch Throwable e
+                (log/stacktrace "on-player-tick: process-pending-activations! failed" e)))))))))
 
 (defn- install-forge-tutorial-activated-bridge!
   []
@@ -105,7 +108,8 @@
          (when player
            (.post MinecraftForge/EVENT_BUS
                 (cn.li.forge1201.event.TutorialActivatedEvent. player (name tut-id)))))
-       (catch Throwable _)))))
+       (catch Throwable e
+         (log/stacktrace "install-forge-tutorial-activated-bridge!: hook callback failed" e))))))
 
 ;; ============================================================================
 ;; Registration
@@ -142,7 +146,8 @@
                         (accept [_ evt] (on-player-tick evt))))
         (try
           (install-forge-tutorial-activated-bridge!)
-          (catch Throwable _))
+          (catch Throwable e
+            (log/stacktrace "init!: install-forge-tutorial-activated-bridge! failed" e)))
         (reset! registered? true)
         (log/info "Tutorial item event listeners registered"))))
     nil))

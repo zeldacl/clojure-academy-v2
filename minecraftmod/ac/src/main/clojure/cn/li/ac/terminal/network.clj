@@ -19,13 +19,16 @@
       (let [uid (uuid/player-uuid player)]
         (try
           (achievement-dispatcher/trigger-custom-event! uid "terminal_installed")
-          (catch Throwable _ nil))
+          (catch Throwable e
+            (log/stacktrace "Failed to trigger terminal_installed achievement" e)))
         (try
           (server-bridge/send-to-client! uid (terminal-messages/msg-id :terminal-install-effect) {})
-          (catch Throwable _ nil)))
+          (catch Throwable e
+            (log/stacktrace "Failed to send terminal install effect" e))))
       {:success true}
       (catch Exception e
         (log/error "Error installing terminal:" (ex-message e))
+        (log/stacktrace "Error installing terminal" e)
         {:success false :error (ex-message e)}))))
 
 (defn handle-install-app
@@ -39,6 +42,7 @@
         {:success false :error "App not found"}))
     (catch Exception e
       (log/error "Error installing app:" (ex-message e))
+      (log/stacktrace "Error installing app" e)
       {:success false :error (ex-message e)})))
 
 (defn handle-uninstall-app
@@ -49,6 +53,7 @@
       {:success true :app-id app-id})
     (catch Exception e
       (log/error "Error uninstalling app:" (ex-message e))
+      (log/stacktrace "Error uninstalling app" e)
       {:success false :error (ex-message e)})))
 
 (defn handle-get-state
@@ -67,6 +72,7 @@
        :app-count (catalog/app-count)})
     (catch Exception e
       (log/error "Error getting terminal state:" (ex-message e))
+      (log/stacktrace "Error getting terminal state" e)
       {:error (ex-message e)})))
 
 (defn register-handlers!

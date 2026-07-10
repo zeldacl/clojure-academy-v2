@@ -18,7 +18,7 @@
   [tag]
   (when (nbt/nbt-has-key-safe? tag nbt-key)
     (try (clojure.edn/read-string (nbt/nbt-get-string tag nbt-key))
-         (catch Exception _ nil))))
+         (catch Exception e (log/stacktrace "Failed to deserialize terminal state from NBT" e) nil))))
 
 (defn- save-state!
   [tag state]

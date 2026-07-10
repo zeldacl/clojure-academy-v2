@@ -4,6 +4,7 @@
   (:require [cn.li.mcmod.ui.runtime :as rt]
             [cn.li.mcmod.ui.layout :as layout]
             [cn.li.mcmod.ui.events :as events]
+            [cn.li.mcmod.util.log :as log]
             [cn.li.mc1201.gui.reactive.render :as render]
             [cn.li.mc1201.gui.reactive.clock :as clock]
             [cn.li.mc1201.gui.reactive.input :as input]
@@ -129,7 +130,7 @@
             (when (slots-active?* )
               (.callSuperRender this gg mx my pt))
             (catch Exception e
-              (.printStackTrace e)))))
+              (log/stacktrace "host-container render failed" e)))))
       (.withRenderBg
         (fn bg-cb [^DelegatingCGuiContainerScreen this ^GuiGraphics gg _mx _my _pt]
           (.callSuperRenderBackground this gg)))

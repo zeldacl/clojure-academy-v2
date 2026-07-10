@@ -6,7 +6,8 @@
   (:require [cn.li.mcmod.content.registry :as content-registry]
             [cn.li.mcmod.schema.core :as schema]
             [cn.li.mcmod.runtime.owner :as runtime-owner]
-            [cn.li.mcmod.framework :as fw]))
+            [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.util.log :as log]))
 
 (def ^:private noop
   (fn [& _] nil))
@@ -404,7 +405,7 @@
   (doseq [f (if-let [fw-atom (fw/fw-atom)]
               (get-in @fw-atom server-player-login-hooks-path [])
               [])]
-    (try (f player) (catch Throwable _ nil))))
+    (try (f player) (catch Throwable e (log/stacktrace "Error running server player login hook" e)))))
 
 (defn register-client-input-descriptor!
   "Register a content-owned client input descriptor through the neutral registry."

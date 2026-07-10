@@ -98,6 +98,7 @@
             (respond-fn request-id (or response {}))))
         (catch Exception e
           (log/error "Error handling request" msg-id ":" (ex-message e))
+          (log/stacktrace "Error handling request" e)
           (when (and respond-fn (>= request-id 0))
             (respond-fn request-id {:success false :error (ex-message e)})))))
     (do

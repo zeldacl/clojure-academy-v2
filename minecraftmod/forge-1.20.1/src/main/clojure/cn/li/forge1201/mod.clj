@@ -166,28 +166,32 @@
             (key-scheme-spi/install-provider! (key-scheme-core/get-spi-implementation))
             (vanilla-spi/install-suppressor! (vanilla-control/get-spi-implementation))
             (catch Exception e
-              (log/warn e "Failed to install keyboard input SPI providers")))
+              (log/warn e "Failed to install keyboard input SPI providers")
+              (log/stacktrace "Failed to install keyboard input SPI providers" e)))
           
           ;; ===== Content Keybinding Initialization (post-SPI) =====
           ;; Run content-registered post-SPI init callbacks (e.g. AC keybindings)
           (try
             (lifecycle/run-post-spi-client-init!)
             (catch Exception e
-              (log/error e "Failed to run post-SPI content keybinding init")))
+              (log/error e "Failed to run post-SPI content keybinding init")
+              (log/stacktrace "Failed to run post-SPI content keybinding init" e)))
           
           ;; ===== Forge KeyMapping Registration =====
           ;; Register all :alternative scheme inputs as Forge KeyMappings
           (try
             (key-mapping-adapter/register-all-keybindings-from-ac!)
             (catch Exception e
-              (log/error e "Failed to register Forge KeyMappings")))
+              (log/error e "Failed to register Forge KeyMappings")
+              (log/stacktrace "Failed to register Forge KeyMappings" e)))
           
           ;; ===== Forge Event Handler Installation =====
           ;; Install InputEvent$Key listener to route Forge events
           (try
             (keyboard-event-handler/install-forge-event-handler!)
             (catch Exception e
-              (log/error e "Failed to install Forge keyboard event handler")))
+              (log/error e "Failed to install Forge keyboard event handler")
+              (log/stacktrace "Failed to install Forge keyboard event handler" e)))
           
           ;; ===== Standard Client Initialization =====
           (gui-init/init-client!)

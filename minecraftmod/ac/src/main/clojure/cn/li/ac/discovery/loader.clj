@@ -13,6 +13,7 @@
          :failed failed}
         (catch Throwable t
           (log/error "Discovery require failed" ns-sym (.getMessage t))
+          (log/stacktrace "Discovery require failed" t)
           {:loaded loaded
            :failed (conj failed {:ns ns-sym :error (.getMessage t)})})))
     {:loaded [] :failed []}

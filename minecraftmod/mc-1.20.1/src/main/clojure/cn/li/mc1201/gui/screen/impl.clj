@@ -77,6 +77,7 @@
                        (gui-reg/get-screen-factory-fn factory-fn-kw)
                        (catch Exception e
                          (log/error "[SCREEN-FACTORY] Screen factory not registered for" factory-fn-kw ":" (.getMessage e))
+                         (log/stacktrace "[SCREEN-FACTORY] Stacktrace for screen factory lookup" e)
                          nil)))]
     (if factory-fn
       (try
@@ -91,6 +92,7 @@
             (fallback-container-screen menu player-inventory title)))
         (catch Throwable e
           (log/error "[SCREEN-FACTORY] Error creating CGui screen for GUI ID" gui-id ":" (.getMessage e))
+          (log/stacktrace "[SCREEN-FACTORY] Stacktrace for screen creation" e)
           (fallback-container-screen menu player-inventory title)))
       (do
         (log/error "[SCREEN-FACTORY] Missing factory function, using fallback screen. gui-id=" gui-id "factory-fn-kw=" factory-fn-kw)

@@ -215,24 +215,6 @@
 ;; ============================================================================
 ;; Node builders
 ;; ============================================================================
-
-(defn- img [id x y w h src]
-  {:kind :image :props {:id id :x (double x) :y (double y) :w (double w) :h (double h) :src src}})
-
-(defn- txt
-  [id x y w h text size color]
-  {:kind :text :props {:id id :x (double x) :y (double y) :w (double w) :h (double h)
-                        :text (str text) :font-size (double size) :color (long color)}})
-
-(defn- box [id x y w h fill]
-  {:kind :box :props {:id id :x (double x) :y (double y) :w (double w) :h (double h) :fill (long fill)}})
-
-(defn- grp [id x y w h & [extra]]
-  {:kind :group :props (merge {:id id :x (double x) :y (double y) :w (double w) :h (double h)} extra)})
-
-(def ^:private tex-path (partial modid/asset-path "textures"))
-
-;; ============================================================================
 ;; set-tick! — per-frame side-effecting computed-o, force-pulled every frame
 ;; ============================================================================
 ;; ComputedO/ComputedD are lazy-pull: depMarkDirty only flags dirty, it never
@@ -256,50 +238,15 @@
       (rt/put-user-signal! rt key b))
     (rt/put-user-signal! rt key nil)))
 
-;; ============================================================================
-;; Static classic layout spec (400x187 canvas, all children flattened to
-;; absolute root-relative positions)
-;; ============================================================================
-
-(defn- classic-children []
-  [;; --- right side background frame + skill-tree/console mount area ---
-   (img :bg-parent-right 118.0 0.0 278.0 187.0 (tex-path "guis/parent/parent_background_developerright.png"))
-   (img :ui-right 118.0 0.0 278.0 187.0 (tex-path "guis/ui/ui_developerright.png"))
-   (grp :area area-x area-y area-w area-h {:clip? true})
-
-   ;; --- left side background frame ---
-   (img :bg-parent-left 4.0 0.0 108.5 187.0 (tex-path "guis/parent/parent_background_developerleft.png"))
-   (img :ui-left 4.0 0.0 108.5 187.0 (tex-path "guis/ui/ui_developerleft.png"))
-   (img :panel-machine-bg 0.0 0.0 108.5 187.0 (tex-path "guis/parent/parent_background_developermachine.png"))
-
-   ;; --- panel_ability (category/level display, x=6,y=67.5 in original) ---
-   (img :logo-ability 6.0 67.5 32.0 32.0 (tex-path "guis/icons/icon_nocategory.png"))
-   (txt :text-abilityname 37.0 69.5 70.0 12.0 "N/A" 13.0 0xFFFFFFFF)
-   (txt :text-exp 36.0 83.0 42.0 10.0 "EXP 0%" 8.0 0xFFFFFFFF)
-   (box :logo-progress-back 37.0 80.75 70.0 1.5 0x4D666666)
-   (box :logo-progress 37.0 80.75 0.0 1.5 0xFFFFFFFF)
-   (txt :text-level 65.265625 83.5 41.15625 12.0 "Lv.1" 9.0 0xFF1177D6)
-   (img :btn-upgrade 66.0 82.0 48.36 15.49 (tex-path "guis/button/button_learn.png"))
-
-   ;; --- panel_machine (wireless/power/sync-rate, right on top of left frame) ---
-   (txt :text-wireless 4.25 104.5 100.0 12.0 "Current Node:" 12.0 0xFFFFFFFF)
-   (img :button-wireless 8.25 116.5 100.0 16.0 (tex-path "guis/element/element_background300x32.png"))
-   (img :logo-node 11.25 118.5 12.0 12.0 (tex-path "guis/icons/icon_node.png"))
-   (txt :text-nodename 30.25 118.5 70.0 12.0 "N/A" 12.0 0xFFFFFFFF)
-   (txt :text-power 4.25 130.5 100.0 12.0 "Power:" 12.0 0xFFFFFFFF)
-   (box :progress-power-back 5.75 143.0 97.0 8.0 0x33FFFFFF)
-   (box :progress-power 5.75 143.0 0.0 8.0 0xFFFCC532)
-   (txt :text-syncrate 4.25 153.5 100.0 12.0 "Sync Rate:" 12.0 0xFFFFFFFF)
-   (box :progress-syncrate-back 5.75 165.0 97.0 8.0 0x33FFFFFF)
-   (box :progress-syncrate 5.75 165.0 0.0 8.0 0xFF32A4FC)])
-
 (defn- root-spec []
-  {:kind :group
-   :props {:id :root :x 0.0 :y 0.0 :w root-w :h root-h}
-   :children
-   (into (classic-children)
-         [(grp :info-area (+ classic-w 7.0) 5.0 info-w info-h {:clip? true})
-          (box :dev-cover 0.0 0.0 classic-w classic-h 0x00000000)])})
+  (let [page-spec (ui-xml/load-spec (modid/namespaced-path "guis/rework/new/page_developer.xml"))]
+    {:kind :group
+     :props {:id :root :x 0.0 :y 0.0 :w root-w :h root-h}
+     :children [page-spec
+                {:kind :group
+                 :props {:id :info-area :x (+ classic-w 7.0) :y 5.0 :w info-w :h info-h :clip? true}}
+                {:kind :box
+                 :props {:id :dev-cover :x 0.0 :y 0.0 :w classic-w :h classic-h :fill 0x00000000}}]}))
 
 ;; ============================================================================
 ;; Flat-color box "progress bar" — :box kind has no bindable width prop-writer

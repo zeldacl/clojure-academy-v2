@@ -141,7 +141,8 @@
   [player]
   (try
     (str (or (entity/player-get-name player) ""))
-    (catch Exception _
+    (catch Exception e
+      (log/stacktrace "[wireless-node] player-name lookup failed" e)
       "")))
 
 (defn owner-authorized?
@@ -228,12 +229,12 @@
         state1 (-> state
                    (assoc :update-ticker ticker)
                    (assoc :max-energy (node-max-energy state)))
-        state2 (try (tick-charge-in state1) (catch Exception _ state1))
-        state3 (try (tick-charge-out state2) (catch Exception _ state2))]
+        state2 (try (tick-charge-in state1) (catch Exception e (log/stacktrace "[wireless-node] tick-charge-in failed" e) state1))
+        state3 (try (tick-charge-out state2) (catch Exception e (log/stacktrace "[wireless-node] tick-charge-out failed" e) state2))]
     (if (zero? (mod ticker (node-config/sync-interval)))
       (try
         (tick-check-network state3 level pos be)
-        (catch Exception _ state3))
+        (catch Exception e (log/stacktrace "[wireless-node] tick-check-network outer safety net" e) state3))
       state3)))
 
 (def node-scripted-tick-fn
@@ -269,7 +270,8 @@
           (machine-runtime/commit-state! be world pos state state')))
       (try
         (wireless-api/register-node-spatial! world node-vb)
-        (catch Exception _))
+        (catch Exception e
+          (log/stacktrace (str "[wireless-node] register-node-spatial! failed at " pos) e)))
       (log/info "Node placed by" player-name "at" pos))))
 
 (defn handle-node-break
@@ -285,4 +287,5 @@
         (when be
           (wireless-api/unlink-node-from-network! be)
           (wireless-api/destroy-node-connection-for-node! be))
-        (catch Exception _)))))
+        (catch Exception e
+          (log/stacktrace (str "[wireless-node] cleanup failed at " pos) e))))))

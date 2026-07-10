@@ -3,7 +3,8 @@
 
    Content actions stored at [:platform :content-actions].
    Client tick hooks stored at [:service :client-tick-hooks]."
-  (:require [cn.li.mcmod.framework :as fw]))
+  (:require [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.util.log :as log]))
 
 (defn install-client-content-actions!
   [actions _label]
@@ -31,7 +32,7 @@
   "Run all registered client tick hooks. Called by platform client tick handler."
   []
   (doseq [f (get-in @(fw/fw-atom) [:service :client-tick-hooks] [])]
-    (try (f) (catch Throwable _ nil))))
+    (try (f) (catch Throwable e (log/stacktrace "Client tick hook failed" e) nil))))
 
 (defn reset-client-content-actions-for-test!
   []

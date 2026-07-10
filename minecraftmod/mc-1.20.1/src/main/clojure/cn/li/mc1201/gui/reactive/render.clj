@@ -309,7 +309,8 @@
           (.vertex bb pose-matrix x y 0.0) (.uv bb 0.0 0.0) (.endVertex bb)
           (BufferUploader/drawWithShader (.end bb)))
         (RenderSystem/setShader (StaticShaderSupplier. nil))
-        (catch Exception _ nil)))))
+        (catch Exception e
+          (cn.li.mcmod.util.log/stacktrace "shader render failed" e))))))
 
 (defn render-shader-quad! [^GuiGraphics gg ^INode node]
   (render-shader-progress-node! gg node))
@@ -371,7 +372,8 @@
           (.vertex bb pose-matrix (float (- x1e nx)) (float (- y1e ny)) 0.0) (.uv bb 1.0 0.0) (.endVertex bb)
           (BufferUploader/drawWithShader (.end bb))
           (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0))
-        (catch Exception _ nil)))))
+        (catch Exception e
+          (cn.li.mcmod.util.log/stacktrace "line render failed" e))))))
 (defn bake-line! [^INode _node] nil)
 
 ;; ============================================================================
