@@ -154,6 +154,13 @@
             props (if-let [vis (:visible attrs)]
                     (assoc props :visible? (= "true" vis))
                     props)
+            ;; :align — common to every kind; parse-elem-attrs maps it only for
+            ;; :group, so image/box/progress/list would otherwise drop it (the
+            ;; XML author wrote align="center,center" on <image> and it silently
+            ;; had no effect). parse-align returns {:align-w :align-h}.
+            props (if-let [align (:align attrs)]
+                    (merge props (parse-align align))
+                    props)
             ;; :list — replace template NAME string with the resolved template SPEC
             props (if (and (= kind :list) (:template attrs))
                     (if-let [tmpl (get templates (:template attrs))]

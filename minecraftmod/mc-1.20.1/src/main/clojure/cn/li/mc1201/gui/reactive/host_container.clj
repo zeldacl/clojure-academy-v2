@@ -10,6 +10,7 @@
             [cn.li.mc1201.gui.reactive.input :as input]
             [cn.li.mcmod.gui.tabbed-gui :as tabbed-gui])
   (:import [cn.li.mcmod.uipojo.runtime UiRt]
+           [cn.li.mcmod.ui.node INode]
            [cn.li.mc1201.shim DelegatingCGuiContainerScreen]
            [net.minecraft.client.gui GuiGraphics]
            [net.minecraft.world.entity.player Inventory]
@@ -124,6 +125,23 @@
             (rt/resize! rt (double (.-width this)) (double (.-height this)))
             (rt/flush! rt)
             (layout/ensure-layout! rt)
+            ;; TEMP one-shot geometry diagnostic — remove after alignment is fixed.
+            (when-not (rt/user-signal rt :dbg-geom-logged?)
+              (rt/put-user-signal! rt :dbg-geom-logged? true)
+              (let [^INode root (rt/node-by-idx rt 0)
+                    kw?  (some? (rt/node-by-id rt :ui_block))
+                    str? (some? (rt/node-by-id rt "ui_block"))
+                    ^INode uiblk (or (rt/node-by-id rt :ui_block) (rt/node-by-id rt "ui_block"))
+                    ^INode anim (or (rt/node-by-id rt :node-anim-img) (rt/node-by-id rt "node-anim-img"))]
+                (log/info "[GUI-DBG] leftPos=" (.getGuiLeft this) " topPos=" (.getGuiTop this)
+                          " screenW=" (.-width this) " screenH=" (.-height this)
+                          " | root abs=(" (some-> root .getAbsX) "," (some-> root .getAbsY) ")"
+                          " | ui_block kwLookup=" kw? " strLookup=" str?
+                          " abs=(" (some-> uiblk .getAbsX) "," (some-> uiblk .getAbsY) ")"
+                          " src=" (some-> uiblk (.getOSlot 0))
+                          " | anim abs=(" (some-> anim .getAbsX) "," (some-> anim .getAbsY) ")"
+                          " wh=(" (some-> anim .getW) "," (some-> anim .getH) ")"
+                          " scale=" (some-> anim .getScale))))
             (layout/ensure-tape! rt)
             (render/draw-tape! gg rt (.getGuiLeft this) (.getGuiTop this))
             (render-embedded-runtimes! rt gg (.getGuiLeft this) (.getGuiTop this) pt)

@@ -611,8 +611,14 @@
   "Render the flat tape: iterate Object[].
    Node with RENDER_DIRTY → run :bake! first (resolve textures / bake text /
    pre-compute gradient bands into backend slots), clear the flag, then :render!
-   reads only cached fields. Sentinels → PoseStack push/pop."
-  [^GuiGraphics gg ^UiRt rt _left _top]
+   reads only cached fields. Sentinels → PoseStack push/pop.
+
+   Node abs coords are 0-rooted; `left`/`top` are the GUI's on-screen origin
+   (container leftPos/topPos, standalone screen offset, or an embedded widget's
+   offset). We translate the PoseStack by (left,top) so the tree lands where the
+   input layer already assumes it is (input/* subtracts left/top before
+   hit-testing) and where vanilla renders the container slots (leftPos+slot.x)."
+  [^GuiGraphics gg ^UiRt rt left top]
   (let [^objects tape (cn.li.mcmod.ui.runtime/get-tape-arr rt)
         n (alength tape)
         push-clip ui-layout/push-clip-sentinel
@@ -621,6 +627,8 @@
         pop-xf    ui-layout/pop-transform-sentinel]
     (when (pos? n)
       (let [^PoseStack pose (.pose gg)]
+        (.pushPose pose)
+        (.translate pose (double left) (double top) 0.0)
         (loop [i 0]
           (when (< i n)
             (let [entry (aget tape i)]
@@ -639,4 +647,5 @@
                       (identical? pop-clip entry)  (.popPose pose)
                       (identical? push-xf entry)   (.pushPose pose)
                       (identical? pop-xf entry)    (.popPose pose))))
-            (recur (unchecked-inc-int i))))))))
+            (recur (unchecked-inc-int i))))
+        (.popPose pose)))))
