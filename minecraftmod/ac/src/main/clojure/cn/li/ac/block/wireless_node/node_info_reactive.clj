@@ -42,7 +42,7 @@
         #(max 1.0 (double (or @(:max-energy container) 1.0))))
       (info-area/add-histogram-capacity! ctx
         #(double (or @(:capacity container) 0.0))
-        #(max 1.0 (double (or @(:max-capacity container) 1.0))))
+        (max 1.0 (double (or @(:max-capacity container) 1.0))))
       (info-area/add-sepline! ctx "Info")
       (info-area/add-property! ctx "Range" node-range)
       (info-area/add-property! ctx "Owner" owner-name)
