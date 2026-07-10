@@ -76,7 +76,7 @@
     (bind-box-width! r :bar-fill 145.0 progress)
     (let [done? (atom false)]
       (set-tick! r :install-tick
-        (sig/computed-o [(rt/clock-ms-sig r)]
+        (sig/computed-do [(rt/clock-ms-sig r)]
           (fn [_]
             (let [dt (- (now-secs) start-time)]
               (sig/sset-d! progress (min 1.0 (/ (max 0.0 dt) anim-length)))

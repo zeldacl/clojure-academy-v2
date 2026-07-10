@@ -29,7 +29,7 @@
 
 (defn- attach-binds! [r container _menu _player _signals]
   (rt/put-user-signal! r :liquid-amount
-    (sig/computed-o [(rt/clock-ms-sig r)] (fn [_] (str (or @(:liquid container) 0) " mB")))))
+    (sig/computed-do [(rt/clock-ms-sig r)] (fn [_] (str (or @(:liquid container) 0) " mB")))))
 
 (defn create-screen [container menu player]
   (let [safe-val #(some-> % deref)]

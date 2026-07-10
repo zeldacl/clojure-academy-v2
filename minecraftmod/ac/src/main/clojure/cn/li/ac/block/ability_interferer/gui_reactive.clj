@@ -25,9 +25,9 @@
 
 (defn- attach-binds! [r container _menu _player _signals]
   (rt/put-user-signal! r :range-display
-    (sig/computed-o [(rt/clock-ms-sig r)] (fn [_] (str (or @(:range container) "...")))))
+    (sig/computed-do [(rt/clock-ms-sig r)] (fn [_] (str (or @(:range container) "...")))))
   (rt/put-user-signal! r :active-display
-    (sig/computed-o [(rt/clock-ms-sig r)] (fn [_] (if @(:active? container) "ON" "OFF")))))
+    (sig/computed-do [(rt/clock-ms-sig r)] (fn [_] (if @(:active? container) "ON" "OFF")))))
 
 (defn create-screen [container menu player]
   (let [safe-val #(some-> % deref)]

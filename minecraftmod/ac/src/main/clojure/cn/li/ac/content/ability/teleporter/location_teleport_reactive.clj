@@ -216,7 +216,7 @@
 
 (defn- attach-info-panel-tick! [^UiRt rt owner-key]
   (set-tick! rt :info-tick
-    (sig/computed-o [(rt/clock-ms-sig rt)]
+    (sig/computed-do [(rt/clock-ms-sig rt)]
       (fn [_]
         (let [hit-map @(or (rt/user-signal rt :hit-map) (atom {}))
               loc (hovered-location rt hit-map)]
@@ -296,7 +296,7 @@
     (send-query! r player-uuid owner-key)
     (set-tick! r :refresh-tick
       (let [counter (long-array 1)]
-        (sig/computed-o [(rt/clock-ms-sig r)]
+        (sig/computed-do [(rt/clock-ms-sig r)]
           (fn [_]
             (aset counter 0 (unchecked-inc (aget counter 0)))
             (when (zero? (rem (aget counter 0) 100))
