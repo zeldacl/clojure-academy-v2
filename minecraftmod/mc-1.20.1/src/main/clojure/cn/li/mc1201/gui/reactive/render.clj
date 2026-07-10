@@ -501,6 +501,7 @@
         (let [s (double glow-sz)
               glx0 (- gx0 s) glx1 (+ gx1 s)
               gly0 (- gy s)  gly1 (+ gy s)
+              gy0 (- gy hw)  gy1 (+ gy hw)
               ^PoseStack ps (.pose gg)
               ^Matrix4f pm (.pose (.last ps))
               ^Tesselator tess (Tesselator/getInstance)

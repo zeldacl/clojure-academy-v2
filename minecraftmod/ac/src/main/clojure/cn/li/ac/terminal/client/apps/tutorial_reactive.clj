@@ -102,6 +102,9 @@
           (swap! content-cache assoc cache-key result)
           result))))
 
+(defn- img [id x y w h src]
+  {:kind :image :props {:id id :x x :y y :w w :h h :src src}})
+
 (defn- seg-node-spec [id seg y w]
   (let [image? (= (:type seg) :image)]
     (if image?

@@ -110,6 +110,14 @@
 (defn- default-ability-icon-path []
   (modid/asset-path "textures" "guis/icons/icon_nocategory.png"))
 
+(defn- tex-path
+  "Namespaced texture :src from a relative texture path (sans 'textures/')."
+  [p]
+  (modid/asset-path "textures" p))
+
+(defn- box [id x y w h fill]
+  {:kind :box :props {:id id :x x :y y :w w :h h :fill fill}})
+
 (defn normalize-tier [tier]
   (let [k (keyword (or tier :normal))]
     (if (developer/developer-type? k) k :normal)))
