@@ -251,8 +251,18 @@
             editable? (boolean (get (.getStaticProps node) :editable?))
             focused? (.hasFlag node node/FLAG-FOCUSED)
             align-kw (or align :left)
+            ;; Vertical alignment: MSDF text draws with y as the em-box top, so a
+            ;; node with align-h center/bottom otherwise renders top-aligned in its
+            ;; box (reads as "too low" for a tall font in a short row). Offset y by
+            ;; the em-box within the node's height to honor align-h (0 top / 1
+            ;; middle / 2 bottom), matching how images/boxes already center.
+            node-h (* (.getH node) (.getCumScale node))
+            v-off (case (int (.getAlignH node))
+                    1 (/ (- node-h (double font-size)) 2.0)
+                    2 (- node-h (double font-size))
+                    0.0)
             x (+ (node-abs-x node) x-off)
-            y (+ (node-abs-y node) y-off)]
+            y (+ (node-abs-y node) y-off v-off)]
         ;; Draw the text (masked if masked? already handled by display-text in bake-text!)
         (cgui-font/draw-text! gg (or font-desc {}) ^String text
                               x y font-size color align-kw true)

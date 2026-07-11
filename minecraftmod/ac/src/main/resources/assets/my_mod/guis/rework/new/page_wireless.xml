@@ -6,7 +6,7 @@
       <text id="el_text_name" pos="20.0,0.0" size="40.0,8.0" align="left,center" text="" font-size="9.0" color="#FFDDDDDD"/>
       <image id="el_icon_key" pos="60.0,0.0" size="12.0,12.0" align="left,center" src="my_mod:textures/guis/icons/icon_key.png" tint="#B2FFFFFF"/>
       <box id="el_input_bg" pos="72.5,3.5" size="48.0,9.0" fill="#AA222222"/>
-      <text id="el_input_pass" pos="72.5,3.5" size="48.0,9.0" align="left,top" text="" font-size="10.0" color="#FFFFFFFF" editable="true" masked="true"/>
+      <text id="el_input_pass" pos="72.5,3.5" size="48.0,9.0" align="left,center" text="" font-size="10.0" color="#FFFFFFFF" editable="true" masked="true"/>
       <image id="el_icon_connect" pos="125.0,0.0" size="12.0,12.0" align="left,center" src="my_mod:textures/guis/icons/icon_unconnected.png" tint="#99FFFFFF"/>
     </image>
   </template>
