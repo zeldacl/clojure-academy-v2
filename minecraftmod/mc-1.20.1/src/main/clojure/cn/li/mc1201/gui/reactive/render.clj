@@ -244,7 +244,8 @@
         ;; sits at the end of the text (caretPos == content.length). Blink alternates
         ;; each second, matching upstream's getAbsTime() % 2.
         (when (and editable? focused?
-                   (< (rem (quot (System/currentTimeMillis) 1000) 2) 1))
+                   ;; Blink: 300ms on, 300ms off (faster than AcademyCraft's 1s cycle)
+                   (< (rem (System/currentTimeMillis) 600) 300))
           (let [text-w (cgui-font/text-width (or font-desc {}) ^String text font-size)
                 ;; cursor-x follows alignment (like upstream's origin.x + sumLength)
                 cursor-x (case align-kw

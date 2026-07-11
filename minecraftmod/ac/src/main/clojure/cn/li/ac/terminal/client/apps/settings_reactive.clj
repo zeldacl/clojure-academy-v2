@@ -53,23 +53,23 @@
     (.setVisible n true)))
 
 (defn- update-checkbox-item! [r item p checked?]
-  (show-only! item "checkbox-row")
-  (let [text-n (ui/item-node item "text")
-        box-n (ui/item-node item "box")]
+  (show-only! item :checkbox-row)
+  (let [text-n (ui/item-node item :text)
+        box-n (ui/item-node item :box)]
     (ui/set-node-prop! r text-n :text (checkbox-text p))
     (ui/set-node-prop! r box-n :src (if checked? check-tex-true check-tex-false))))
 
 (defn- wire-checkbox-click! [r item p]
-  (let [^INode box (ui/item-node item "box")]
+  (let [^INode box (ui/item-node item :box)]
     (rt/register-event! r (.getIdx box) :left-click
       (fn [_ _ _]
         (let [new-val (toggle-config! p)]
           (update-checkbox-item! r item p new-val))))))
 
 (defn- wire-cathead-item! [r item label]
-  (show-only! item "cathead-text")
-  (ui/set-node-prop! r (ui/item-node item "cathead-text") :text label)
-  (when-let [^INode line (ui/item-node item "cathead-line")]
+  (show-only! item :cathead-text)
+  (ui/set-node-prop! r (ui/item-node item :cathead-text) :text label)
+  (when-let [^INode line (ui/item-node item :cathead-line)]
     (.setVisible line true)))
 
 (defn- all-settings-rows []
@@ -82,9 +82,9 @@
       [{:type :key-binding} {:type :restore}])))
 
 (defn- wire-key-binding-item! [r item key-binding-text recording? current-key]
-  (show-only! item "key-row")
-  (ui/set-node-prop! r (ui/item-node item "key-label") :text "Open Terminal")
-  (let [^INode key-val (ui/item-node item "key-value")
+  (show-only! item :key-row)
+  (ui/set-node-prop! r (ui/item-node item :key-label) :text "Open Terminal")
+  (let [^INode key-val (ui/item-node item :key-value)
         writer (slot-write/resolve-sig-writer (get node/kinds :text) :text)
         b (sig/bind! key-binding-text key-val writer (rt/get-dirty-bindings-q r))]
     (rt/register-binding! r (.getIdx key-val) b)
@@ -101,10 +101,10 @@
             (sig/sset-o! key-binding-text kn)))))))
 
 (defn- wire-restore-item! [r item key-binding-text recording? current-key]
-  (show-only! item "restore-row")
-  (ui/set-node-prop! r (ui/item-node item "restore-label") :text "Restore Defaults")
-  (ui/set-node-prop! r (ui/item-node item "restore-button") :text "Reset")
-  (let [^INode btn (ui/item-node item "restore-button")]
+  (show-only! item :restore-row)
+  (ui/set-node-prop! r (ui/item-node item :restore-label) :text "Restore Defaults")
+  (ui/set-node-prop! r (ui/item-node item :restore-button) :text "Reset")
+  (let [^INode btn (ui/item-node item :restore-button)]
     (rt/register-event! r (.getIdx btn) :left-click
       (fn [_ _ _]
         (doseq [p props] (persist! (:domain p) (:key p) false))
