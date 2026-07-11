@@ -82,7 +82,7 @@
            :editable (fn [s] {:editable? (= "true" s)})
            :masked (fn [s] {:masked? (= "true" s)})}
    :image {:pos parse-pos :size parse-size :src str :alpha (fn [s] (parse-double s 1.0))
-           :z (fn [s] (parse-double s 0.0))}
+           :tint parse-color :z (fn [s] (parse-double s 0.0))}
    :progress {:pos parse-pos :size parse-size :z (fn [s] (parse-double s 0.0))}
    :list   {:pos parse-pos :size parse-size :spacing (fn [s] (parse-double s 4.0))
             :template str :z (fn [s] (parse-double s 0.0))}})

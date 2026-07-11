@@ -29,7 +29,7 @@
 (def ^:private kind-props-schemas
   {:image [:map
             [:src {:optional true} [:or string? nil?]]
-            [:tint {:optional true} [:or vector? keyword?]]
+            [:tint {:optional true} [:or number? vector? keyword?]]
             [:alpha {:optional true} number?]
             [:u {:optional true} number?]
             [:v {:optional true} number?]

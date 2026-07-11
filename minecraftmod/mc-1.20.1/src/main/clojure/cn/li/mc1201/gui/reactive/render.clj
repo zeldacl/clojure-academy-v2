@@ -148,7 +148,18 @@
       [1.0 1.0 1.0])))
 
 (defn render-image! [^GuiGraphics gg ^INode node]
-  (let [^ResourceLocation rl (.getOSlot node SLOT-IMG-BAKED-RL)]
+  (let [rl-obj (.getOSlot node SLOT-IMG-BAKED-RL)
+        ;; Fallback: if bake-image! never ran (FLAG-RENDER-DIRTY wasn't set or
+        ;; the node wasn't in the tape when the flag was checked), SLOT-IMG-BAKED-RL
+        ;; is nil even though SLOT-IMG-SRC has a valid string. Resolve inline so
+        ;; the image draws rather than silently disappearing.
+        ^ResourceLocation rl (if (instance? ResourceLocation rl-obj)
+                               rl-obj
+                               (when-let [src (.getOSlot node SLOT-IMG-SRC)]
+                                 (when (string? src)
+                                   (let [resolved (resolve-rl src)]
+                                     (.setOSlot node SLOT-IMG-BAKED-RL resolved)
+                                     resolved))))]
     (when rl
       (let [x  (node-abs-x node)  y  (node-abs-y node)
             w  (scaled-w node)    h  (scaled-h node)
