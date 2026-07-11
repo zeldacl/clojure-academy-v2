@@ -82,7 +82,18 @@
 (defn- wrap-with-info-area [child-spec]
   {:kind :group
    :props {:id :screen-root :w 290.0 :h 187.0}
-   :children [child-spec
+   :children [;; Left-anchor the machine page so the background's slot-holes line
+              ;; up with the vanilla slots (drawn at guiLeft + schema-x). A raw XML
+              ;; page's <Ui>/main nodes are center-aligned; without an anchor they
+              ;; center inside the 290-wide screen-root (the info-area adds ~114px
+              ;; on the right), shifting the background ~57px right of the slots.
+              ;; Width 172 (not 176) matches the wireless tabbed-root's page-group
+              ;; exactly: a 176-wide page centered in 172 lands at x=-2, the same
+              ;; origin node/phase/solar render at; anchoring at 176 would leave
+              ;; the page 2px right of those (and of the slots).
+              {:kind :group
+               :props {:id :page-anchor :x 0.0 :y 0.0 :w 172.0 :h 187.0}
+               :children [child-spec]}
               {:kind :nine-slice
                :props {:id :info-area-bg :x 179.0 :y 5.0 :w 100.0 :h 177.0
                        :margin 4.0

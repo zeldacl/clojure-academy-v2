@@ -173,8 +173,12 @@
 ;; Reactive rendering bindings
 ;; ============================================================================
 
-(defn attach-binds! [r container _menu _player _signals]
-  (matrix-info/attach! r container _player))
+(defn attach-binds! [r container menu _player _signals]
+  ;; Carry the live Minecraft menu on the container so the info-area's server
+  ;; requests (gather-info/init/change-ssid/change-password) can resolve the
+  ;; container-id — the container map doesn't carry it on its own (same pattern
+  ;; as wireless_node/send-link-query!'s (assoc container :minecraft-container)).
+  (matrix-info/attach! r (assoc container :minecraft-container menu) _player))
 
 (defn create-screen [container menu player]
   (bgui/create-screen
@@ -191,12 +195,22 @@
 ;; ============================================================================
 
 (defonce-guard matrix-reactive-installed?)
+
+(defn- matrix-container?
+  "Predicate used by the GUI dispatcher (get-config-by-container) to route
+   validate/close/slot operations to this GUI. Every other block GUI registers
+   one; without it the matrix container can't be matched and close/validate fall
+   through to \"Unknown container type\"."
+  [c]
+  (and (map? c) (= (:container-type c) :matrix)))
+
 (defn init-wireless-matrix-reactive! []
   (with-init-guard matrix-reactive-installed?
     (gui-reg/register-block-gui!
       (gui-manifest/gui-name :wireless-matrix)
       (merge (gui-manifest/gui-registration :wireless-matrix)
-        {:container-fn create-container
+        {:container-predicate matrix-container?
+         :container-fn create-container
          :screen-fn create-screen
          :server-menu-sync-fn server-menu-sync!
          :validate-fn still-valid?
