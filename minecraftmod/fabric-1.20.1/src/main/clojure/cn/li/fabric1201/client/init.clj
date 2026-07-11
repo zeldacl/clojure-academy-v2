@@ -148,7 +148,7 @@
                        nil)
      :blit-textured-quad! (fn [graphics texture x1 y1 x2 y2 z u0 u1 v0 v1]
                             (GuiGraphicsHelper/blitTexturedQuad
-                              texture (float x1) (float y1) (float x2) (float y2) (float z)
+                              graphics texture (float x1) (float y1) (float x2) (float y2) (float z)
                               (float u0) (float u1) (float v0) (float v1)))
      :get-window-size (fn []
                         (let [^Minecraft mc (Minecraft/getInstance)

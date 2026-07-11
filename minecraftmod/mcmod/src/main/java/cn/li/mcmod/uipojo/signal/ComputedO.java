@@ -44,10 +44,11 @@ public final class ComputedO implements ISigO, IDep, ISupportsOuts {
 
     @Override
     public void depMarkDirty() {
-        if (!dirty) {
-            dirty = true;
-            SignalSupport.notifyOuts(outs);
-        }
+        // See ComputedD.depMarkDirty: intentionally unguarded so a bound-but-
+        // never-read computed still propagates its first source change. Binding's
+        // `queued` flag keeps enqueue idempotent.
+        dirty = true;
+        SignalSupport.notifyOuts(outs);
     }
 
     @Override

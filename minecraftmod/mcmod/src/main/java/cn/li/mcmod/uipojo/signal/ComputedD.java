@@ -39,10 +39,16 @@ public final class ComputedD implements ISigD, IDoubleSource, IDep, ISupportsOut
 
     @Override
     public void depMarkDirty() {
-        if (!dirty) {
-            dirty = true;
-            SignalSupport.notifyOuts(outs);
-        }
+        // Intentionally NOT guarded by `if (!dirty)`. Computeds are created
+        // dirty=true and only clear dirty on read (dGet). A bound-but-never-read
+        // computed would, under that guard, drop its FIRST source-change
+        // notification and thus never propagate to its bindings again — freezing
+        // clock-driven bindings (animations/ticks). Re-notifying while already
+        // dirty is safe: Binding.depMarkDirty is idempotent via its `queued` flag,
+        // and for the common single-source-per-frame case dGet clears dirty each
+        // frame so no extra notifications occur anyway.
+        dirty = true;
+        SignalSupport.notifyOuts(outs);
     }
 
     @Override

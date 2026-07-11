@@ -166,8 +166,10 @@
             (.blit gg rl ix iy iw ih 0.0 0.0 iw ih iw ih)
             ;; Cropped path: sample a [u,v]→[u+tex-w,v+tex-h] fractional UV region
             ;; (matching the old CGUI comp/render-texture-region convention), e.g.
-            ;; a single frame out of a vertically-stacked sprite-sheet.
-            (GuiGraphicsHelper/blitTexturedQuad rl
+            ;; a single frame out of a vertically-stacked sprite-sheet. Pass `gg`
+            ;; so the quad is transformed by the current PoseStack (draw-tape's
+            ;; leftPos/topPos translate) instead of rendering at raw coordinates.
+            (GuiGraphicsHelper/blitTexturedQuad gg rl
               (float x) (float y) (float (+ x w)) (float (+ y h)) 0.0
               (float u) (float (+ u tex-w))
               (float v) (float (+ v tex-h))))

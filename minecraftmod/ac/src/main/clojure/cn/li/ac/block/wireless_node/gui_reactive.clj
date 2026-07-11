@@ -16,7 +16,8 @@
             [cn.li.mcmod.gui.container.action-payload :as action-payload]
             [cn.li.ac.block.wireless-node.logic :as node-logic]
             [cn.li.ac.block.wireless-node.schema :as node-schema]
-            [cn.li.mcmod.platform.be :as platform-be])
+            [cn.li.mcmod.platform.be :as platform-be]
+            [cn.li.mcmod.hooks.core :as runtime-hooks])
   (:import [cn.li.mcmod.ui.node INode]))
 
 ;; ============================================================================
@@ -52,7 +53,17 @@
 ;; ============================================================================
 
 (defn- msg [action] (msg-registry/msg gui-type action))
-(defn- send-link-query! [container] (net-client/send-to-server (msg :query-link) (action-payload/action-payload container {}) (fn [resp] (when (and resp (contains? resp :linked)) (when-let [a (:linked container)] (reset! a (boolean (:linked resp))))))))
+(defn- send-link-query! [container menu owner]
+  ;; Resolve container-id from the live menu (the container map doesn't carry it on
+  ;; its own) and use the owner captured at screen-creation for the send: the
+  ;; client-session-id context is thread-local and NOT bound in the render/flush
+  ;; loop where this poll runs (铁律六: context does not cross async boundaries).
+  ;; Fail-soft: skip until both are available — a hard throw here would be caught
+  ;; by the host render loop and re-logged every frame, flooding the log.
+  (let [c (assoc container :minecraft-container menu)]
+    (when (and owner (action-payload/menu-container-id c))
+      (net-client/send-to-server owner (msg :query-link) (action-payload/action-payload c {})
+        (fn [resp] (when (and resp (contains? resp :linked)) (when-let [a (:linked container)] (reset! a (boolean (:linked resp))))))))))
 
 ;; ============================================================================
 ;; Reactive animation + polling bindings
@@ -67,26 +78,37 @@
    not the XML-parsed page — XML-loaded node ids come back as plain strings,
    not keywords, so this is the reliable anchor), positioned/scaled to match
    the old CGUI create-anim-widget widget (pos 42,35.5 size 186x75 scale 0.5)."
-  [r container _menu player _signals]
+  [r container menu player _signals]
   (node-info/attach! r container player)
-  (when-let [^INode inv-page (rt/node-by-id r :inv)]
+  (when-let [^INode ui-block (or (rt/node-by-id r :ui_block) (rt/node-by-id r "ui_block"))]
     (rt/build-child! r
       {:kind :image
-       :props {:id :node-anim-img :x 40.0 :y 35.5 :w (double anim-tex-w) :h (double anim-tex-h)
+       ;; Child of the ui_node background image so it tracks its position and
+       ;; scale. Centered on the ui_block-specific (node) graphic, which occupies
+       ;; the UPPER half of the image (ui_inventory is the lower half). From
+       ;; decoding the textures the node graphic centers at panel (71.5, 53.5);
+       ;; the effect renders 93×37.5 (186×75 @ scale 0.5), so top-left =
+       ;; (71.5-46.5, 53.5-18.75) = (25, 34.75). The image geometric center
+       ;; (41.5, 74.75) sits on the ui_block/ui_inventory boundary — too low.
+       :props {:id :node-anim-img :x 25.0 :y 34.75 :w (double anim-tex-w) :h (double anim-tex-h)
                :scale 0.5 :alpha 0.675 :src anim-texture :tex-h (/ 1.0 (double anim-frame-count))}}
-      inv-page))
+      ui-block))
   (let [clock (rt/clock-ms-sig r)
-        ;; 2-second polling: computed with side-effect (writes to linked atom).
-        ;; ComputedO stored bare via put-user-signal! is never pulled (lazy-pull,
-        ;; depMarkDirty only flags dirty) — bind it to an always-present node so
-        ;; rt/flush! actually forces this to run each frame. :screen-root is the
-        ;; hand-authored wrapper group (block-gui-reactive's wrap-with-info-area),
-        ;; always present since this screen requests :info-area? true.
-        link-poll-tick (sig/computed-d [clock]
+        ;; 2-second link polling, edge-triggered: fire once per 2s bucket, not on
+        ;; every clock change within an even second (the old (rem (quot ms 1000) 2)
+        ;; test fired ~20×/s). This ComputedO's value is unused — it exists only to
+        ;; run the side-effect when the clock changes; bound to :screen-root below
+        ;; so rt/flush! drives it (an unbound computed is never pulled).
+        last-poll (atom -1)
+        ;; Capture the client owner now — screen-creation runs inside the bound
+        ;; client context; the render/flush loop that later drives the poll does not.
+        link-owner (runtime-hooks/current-player-state-owner)
+        link-poll-tick (sig/computed-o [clock]
                          (fn [ms]
-                           (let [now (long ms)]
-                             (when (zero? (rem (quot now 1000) 2))
-                               (send-link-query! container)))
+                           (let [bucket (quot (long ms) 2000)]
+                             (when (not= bucket @last-poll)
+                               (reset! last-poll bucket)
+                               (send-link-query! container menu link-owner)))
                            nil))
         _ (when-let [^INode anchor (rt/node-by-id r :screen-root)]
             (let [b (sig/bind! link-poll-tick anchor

@@ -75,13 +75,6 @@
 (defn bind! ^Binding [^ISupportsOuts source ^IUiNode node apply-fn ^ArrayList flush-queue]
   (let [b (Binding. source node apply-fn false flush-queue)]
     (add-dep! (SignalSupport/outsOf source) b)
-    ;; Apply the initial value immediately. Besides writing the current value,
-    ;; this PULLS the source once — critical for ComputedD/ComputedO, which start
-    ;; dirty=true and only clear dirty on read (dGet). Without an initial pull the
-    ;; computed stays dirty forever, so depMarkDirty (guarded by `if (!dirty)`)
-    ;; never cascades to this binding on later source changes → the binding never
-    ;; re-fires (e.g. clock-driven animations render a single frozen frame).
-    (.applyBinding ^Binding b)
     b))
 
 (defn unbind! [^Binding b]
