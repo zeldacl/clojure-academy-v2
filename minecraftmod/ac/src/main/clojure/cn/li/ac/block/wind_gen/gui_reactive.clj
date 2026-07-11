@@ -3,6 +3,7 @@
   (:require [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.gui.spec :as gui-reg] [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.mcmod.platform.item :as pitem] [cn.li.ac.energy.operations :as energy]
+            [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.util.log :as log] [cn.li.ac.gui.manifest :as gui-manifest]
             [cn.li.ac.gui.block-gui-reactive :as bgui]
             [cn.li.mcmod.ui.runtime :as rt] [cn.li.mcmod.ui.signal :as sig]
@@ -10,6 +11,18 @@
             [cn.li.ac.block.gui.sync :as gui-sync]
             [cn.li.ac.wireless.gui.container.common :as common]
             [cn.li.ac.block.wind-gen.schema :as wind-schema]))
+
+;; ============================================================================
+;; Wind Generator GUIs (main + base)
+;; ============================================================================
+
+(defn- block-altitude
+  "Info-area \"altitude\" value (upstream: tile.getPos.getY). The block never
+   moves, so resolve it once at screen creation rather than per frame."
+  [container]
+  (or (try (some-> (:tile-entity container) pos/position-get-block-pos pos/pos-y str)
+           (catch Exception _ nil))
+      "..."))
 
 ;; ============================================================================
 ;; Main GUI (fan slot)
@@ -25,12 +38,13 @@
 (def ^:private main-server-sync! (:server-menu-sync! main-sync))
 (defn- main-container? [c] (= (:container-type c) :wind-gen-main))
 (defn- create-main-screen [container menu player]
-  (bgui/create-screen {:page-xml "guis/rework/new/page_windmain.xml" :texture-name "windmain"
-                        :container container :menu menu :histograms []
-                        :properties {:altitude (fn [] (str (or @(:altitude container) "...")))
-                                     :fan (fn [] (if @(:fan-installed container) "YES" "NO"))
-                                     :obstacle (fn [] (if @(:no-obstacle container) "CLEAR" "BLOCKED"))}
-                        :wireless? false}))
+  (let [altitude (block-altitude container)]
+    (bgui/create-screen {:page-xml "guis/rework/new/page_windmain.xml" :texture-name "windmain"
+                          :container container :menu menu :histograms []
+                          :properties {:altitude (fn [] altitude)
+                                       :fan (fn [] (if @(:fan-installed container) "YES" "NO"))
+                                       :obstacle (fn [] (if @(:no-obstacle container) "CLEAR" "BLOCKED"))}
+                          :wireless? false})))
 
 ;; ============================================================================
 ;; Base GUI (energy + wireless)
@@ -56,16 +70,14 @@
     (ui/bind! r :icon_middle :alpha middle-alpha)))
 
 (defn- create-base-screen [container menu player]
-  (let [safe-val #(some-> % deref)]
+  (let [altitude (block-altitude container)]
     (bgui/create-screen
       {:page-xml "guis/rework/new/page_windbase.xml" :texture-name "windbase"
        :container container :menu menu
        :histograms [(bgui/hist-buffer (fn [] (double (or @(:energy container) 0.0))) (fn [] (max 1.0 (double (or @(:max-energy container) 1.0)))))]
        :properties {:gen_speed (fn [] (format "%.2fIF/T" (double (or @(:gen-speed container) 0.0))))
                     :status (fn [] (or @(:status container) "IDLE"))
-                    :altitude (fn [] (str (or @(:altitude container) "...")))
-                    :fan (fn [] (if @(:fan-installed container) "YES" "NO"))
-                    :obstacle (fn [] (if @(:no-obstacle container) "CLEAR" "BLOCKED"))}
+                    :altitude (fn [] altitude)}
        :wireless? true :wireless-role :generator :custom-bind! attach-structure-bind!})))
 
 (def update! bgui/update-signals!) (def open! bgui/open!)
