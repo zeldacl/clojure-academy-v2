@@ -37,12 +37,16 @@
                        (try (str (.getRange ^IWirelessNode tile))
                             (catch Exception _ "0.0")))
           ctx (info-area/clear-area! rt)]
-      (info-area/add-histogram-energy! ctx
-        (fn [] (double (or @(:energy container) 0.0)))
-        (fn [] (max 1.0 (double (or @(:max-energy container) 1.0)))))
-      (info-area/add-histogram-capacity! ctx
-        (fn [] (double (or @(:capacity container) 0.0)))
-        (max 1.0 (double (or @(:max-capacity container) 1.0))))
+      (info-area/add-histogram! ctx
+        [{:label "Energy" :color 0xFF25C4FF
+          :value-fn (fn [] (double (or @(:energy container) 0.0)))
+          :max (max 1.0 (double (or @(:max-energy container) 1.0)))
+          :desc-fn (fn [] (format "%.0f IF" (double (or @(:energy container) 0.0))))}
+         {:label "Load" :color 0xFFFF6C00
+          :value-fn (fn [] (double (or @(:capacity container) 0.0)))
+          :max (max 1.0 (double (or @(:max-capacity container) 1.0)))
+          :desc-fn (fn [] (str (long (or @(:capacity container) 0))
+                               "/" (long (max 1.0 (double (or @(:max-capacity container) 1.0))))))}])
       (info-area/add-sepline! ctx "Info")
       (info-area/add-property! ctx "Range" node-range)
       (info-area/add-property! ctx "Owner" owner-name)

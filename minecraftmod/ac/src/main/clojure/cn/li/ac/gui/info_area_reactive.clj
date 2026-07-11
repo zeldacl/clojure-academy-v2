@@ -121,32 +121,89 @@
     (events/on! rt btn-id :left-click (fn [_ _ _] (on-click)))
     (advance! ctx 12.0)))
 
-(defn add-histogram-capacity!
-  [ctx load-fn max-capacity]
+(def ^:private histogram-tex "my_mod:textures/guis/histogram.png")
+
+(defn- write-box-height!
+  "Binding writer: set a box's height to full-h × pct (source ISigD 0..1). With
+   :align-h :bottom the box grows UPWARD from its parent's bottom edge — a
+   vertical fill bar."
+  [^double full-h ^INode node source]
+  (let [pct (max 0.0 (min 1.0 (double (.dGet ^cn.li.mcmod.uipojo.signal.ISigD source))))
+        h (* full-h pct)]
+    (when-not (== h (.getH node))
+      (.setH node h)
+      (.setFlag node node/FLAG-LAYOUT-DIRTY))))
+
+(defn add-histogram!
+  "AcademyCraft-exact histogram (TechUI.histogram + histProperty): the
+   guis/histogram.png frame scaled 0.4, one vertical fill-up bar per elem (bar
+   value clamped to [0.03,1] like upstream), then a per-elem property row of
+   label + colored icon + live value text.
+   elems: [{:label :color :value-fn (fn->raw) :max :desc-fn (fn->string)}]."
+  [ctx elems]
   (let [^UiRt rt (:rt ctx)
         y @(:y ctx)
-        row-id (next-id! ctx)
-        prog-id (keyword (str (name row-id) "-bar"))
-        cap (max 1.0 (double max-capacity))
-        row-spec {:kind :group
-                  :props {:id row-id :x 6.0 :y y :w 98.0 :h 12.0}
-                  :children
-                  [{:kind :text
-                    :props {:id (keyword (str (name row-id) "-label"))
-                            :x 0.0 :y 0.0 :w 30.0 :h 8.0
-                            :text "Load" :font-size 6.0 :color 0xFFCCCCCC}}
-                   {:kind :progress
-                    :props {:id prog-id :x 32.0 :y 2.0 :w 60.0 :h 6.0 :progress 0.0}}]}
-        ^INode row (rt/build-child! rt row-spec (area-node rt))
-        ^INode prog (ui/item-node row prog-id)
-        progress-sig (sig/computed-d [(rt/clock-ms-sig rt)]
-                       (fn [_]
-                         (min 1.0 (/ (double (load-fn)) cap))))
-        writer (slot-write/resolve-sig-writer (get node/kinds :progress) :progress)
-        b (sig/bind! progress-sig prog writer (rt/get-dirty-bindings-q rt))]
-    (rt/register-binding! rt (.getIdx prog) b)
-    (advance! ctx 14.0)))
+        scale 0.4
+        bar-h 120.0
+        hist-id (next-id! ctx)
+        fill-id (fn [idx] (keyword (str (name hist-id) "-b" (long idx))))
+        bars (vec (mapcat
+                    (fn [idx elem]
+                      [{:kind :group
+                        :props {:id (keyword (str (name hist-id) "-r" (long idx)))
+                                :x (+ 56.0 (* (double idx) 40.0)) :y 78.0 :w 16.0 :h bar-h}
+                        :children [{:kind :box
+                                    :props {:id (fill-id idx) :x 0.0 :y 0.0 :w 16.0 :h 0.0
+                                            :fill (:color elem) :align-h :bottom}}]}])
+                    (range) elems))
+        frame-spec {:kind :group
+                    :props {:id hist-id :x 8.0 :y y :w 210.0 :h 210.0 :scale scale}
+                    :children (into [{:kind :image
+                                      :props {:id (keyword (str (name hist-id) "-frame"))
+                                              :x 0.0 :y 0.0 :w 210.0 :h 210.0 :src histogram-tex}}]
+                                    bars)}]
+    (rt/build-child! rt frame-spec (area-node rt))
+    (doseq [[idx elem] (map-indexed vector elems)]
+      (when-let [^INode bar (rt/node-by-id rt (fill-id idx))]
+        (let [vf (:value-fn elem)
+              cap (max 1.0 (double (:max elem)))
+              pct-sig (sig/computed-d [(rt/clock-ms-sig rt)]
+                        (fn [_] (max 0.03 (min 1.0 (/ (double (vf)) cap)))))
+              b (sig/bind! pct-sig bar (partial write-box-height! bar-h) (rt/get-dirty-bindings-q rt))]
+          (rt/register-binding! rt (.getIdx bar) b))))
+    (advance! ctx (+ 4.0 (* 210.0 scale)))
+    ;; per-elem property row: label + colored icon + live value text (histProperty)
+    (doseq [elem elems]
+      (let [ry @(:y ctx)
+            rid (next-id! ctx)
+            val-id (keyword (str (name rid) "-v"))
+            df (:desc-fn elem)
+            row-spec {:kind :group :props {:id rid :x 6.0 :y ry :w 98.0 :h 8.0}
+                      :children
+                      [{:kind :text :props {:id (keyword (str (name rid) "-l"))
+                                            :x 0.0 :y 0.0 :w 30.0 :h 8.0
+                                            :text (:label elem) :font-size 8.0 :color 0xFFCCCCCC}}
+                       {:kind :box :props {:id (keyword (str (name rid) "-i"))
+                                           :x 33.0 :y 1.0 :w 6.0 :h 6.0 :fill (:color elem)}}
+                       {:kind :text :props {:id val-id :x 43.0 :y 0.0 :w 55.0 :h 8.0
+                                            :text (str (df)) :font-size 8.0 :color 0xFFFFFFFF}}]}
+            ^INode row (rt/build-child! rt row-spec (area-node rt))
+            ^INode val-n (ui/item-node row val-id)
+            writer (slot-write/resolve-sig-writer (get node/kinds :text) :text)
+            live (sig/computed-o [(rt/clock-ms-sig rt)] (fn [_] (str (df))))
+            b (sig/bind! live val-n writer (rt/get-dirty-bindings-q rt))]
+        (rt/register-binding! rt (.getIdx val-n) b)
+        (advance! ctx 10.0)))))
 
+;; Single-bar back-compat shims (auto-info-area callers). Colors/desc match
+;; AcademyCraft TechUI.histEnergy / histCapacity.
 (defn add-histogram-energy!
   [ctx value-fn max-fn]
-  (add-histogram-capacity! ctx value-fn (max-fn)))
+  (add-histogram! ctx [{:label "Energy" :color 0xFF25C4FF :value-fn value-fn :max (max-fn)
+                        :desc-fn (fn [] (format "%.0f IF" (double (value-fn))))}]))
+
+(defn add-histogram-capacity!
+  [ctx load-fn max-capacity]
+  (let [mx (max 1.0 (double max-capacity))]
+    (add-histogram! ctx [{:label "Load" :color 0xFFFF6C00 :value-fn load-fn :max mx
+                          :desc-fn (fn [] (str (long (load-fn)) "/" (long mx)))}])))

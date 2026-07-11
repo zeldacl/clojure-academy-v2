@@ -12,7 +12,7 @@
            [cn.li.mcmod.ui.node INode]
            [cn.li.mcmod.uipojo.runtime UiRt]
            [net.minecraft.client.gui GuiGraphics]
-           [net.minecraft.client.renderer ShaderInstance]
+           [net.minecraft.client.renderer GameRenderer ShaderInstance]
            [net.minecraft.resources ResourceLocation]
            [com.mojang.blaze3d.vertex PoseStack PoseStack$Pose DefaultVertexFormat VertexFormat$Mode
             Tesselator BufferBuilder BufferUploader]
@@ -91,12 +91,15 @@
         w  (scaled-w node)    h  (scaled-h node)
         ix (unchecked-int x)  iy (unchecked-int y)
         iw (unchecked-int (+ x w))  ih (unchecked-int (+ y h))]
-    ;; Fill
-    (let [fill-argb (unchecked-int (.getDSlot node SLOT-BOX-FILL))]
+    ;; Fill. Go via long, not a direct double->int cast: fills are stored as
+    ;; doubles and Java's double->int SATURATES at Integer.MAX_VALUE, so any
+    ;; ARGB with alpha >= 0x80 (value > 2^31) would clamp to 0x7FFFFFFF (faint
+    ;; white). double->long->int wraps correctly and preserves the ARGB bits.
+    (let [fill-argb (unchecked-int (long (.getDSlot node SLOT-BOX-FILL)))]
       (when (not= fill-argb 0)
         (.fill gg ix iy iw ih fill-argb)))
-    ;; Outline
-    (let [outline-argb (unchecked-int (.getDSlot node SLOT-BOX-OUTLINE))
+    ;; Outline (same double->long->int wrap as fill above)
+    (let [outline-argb (unchecked-int (long (.getDSlot node SLOT-BOX-OUTLINE)))
           outline-w    (.getDSlot node SLOT-BOX-OUTLINE-W)]
       (when (and (not= outline-argb 0) (> outline-w 0.0))
         (.fill gg ix iy iw (unchecked-int (+ iy outline-w)) outline-argb)
@@ -444,6 +447,15 @@
             ^BufferBuilder bb (.getBuilder tess)]
         (RenderSystem/enableBlend)
         (RenderSystem/defaultBlendFunc)
+        ;; Bind the position_tex shader explicitly: BufferUploader/drawWithShader
+        ;; uses the *currently set* shader, and text/other nodes rendered earlier
+        ;; leave a different one active — without this the quad draws untextured
+        ;; (pure white). Also reset the shader color so we're not tinted.
+        (RenderSystem/setShader (StaticShaderSupplier. (GameRenderer/getPositionTexShader)))
+        ;; blend_quad tint: AcademyCraft draws it with Colors.monoBlend(0, 0.5) =
+        ;; black @ 0.5 alpha (a translucent dark panel). White would show the raw
+        ;; (light) texture — that's the "pure white" background.
+        (RenderSystem/setShaderColor 0.0 0.0 0.0 0.5)
         (RenderSystem/setShaderTexture 0 tex)
         (.begin bb VertexFormat$Mode/QUADS DefaultVertexFormat/POSITION_TEX)
         (dotimes [i 3]
@@ -459,6 +471,8 @@
           (let [lm 3.2
                 lt -8.6  lh 12.0
                 lb (- h 2.0)  lbh 8.0]
+            ;; lines drawn at full white (upstream resets glColor4d(1,1,1,1))
+            (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0)
             (RenderSystem/setShaderTexture 0 line-tex)
             (.begin bb VertexFormat$Mode/QUADS DefaultVertexFormat/POSITION_TEX)
             ;; Top line
