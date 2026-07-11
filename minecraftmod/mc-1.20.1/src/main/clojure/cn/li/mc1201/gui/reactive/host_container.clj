@@ -151,6 +151,11 @@
           ;; on top; the tree is not dimmed by a second dark-bg pass).
           (render/draw-tape! gg rt (.getGuiLeft this) (.getGuiTop this))
           (render-embedded-runtimes! rt gg (.getGuiLeft this) (.getGuiTop this) pt)))
+      (.withRenderLabels
+        ;; Suppress vanilla's title + "Inventory" labels: the reactive tree draws
+        ;; its own text, so these overlap it — and an empty screen title leaks in
+        ;; as the literal string "empty[style={}]".
+        (fn labels-cb [^DelegatingCGuiContainerScreen _this ^GuiGraphics _gg _mx _my] nil))
       (.withMouseClicked
         (fn click-cb [^DelegatingCGuiContainerScreen this mx my button]
           (if-let [modal (active-modal rt)]
