@@ -27,10 +27,15 @@
   ;; XML-parsed ids are keywords; string lookups fail
   (let [^INode text-name (ui/item-node item :el_text_name)
         ^INode icon-key (ui/item-node item :el_icon_key)
+        ^INode input-bg (ui/item-node item :el_input_bg)
         ^INode input-pass (ui/item-node item :el_input_pass)
         ^INode icon-connect (ui/item-node item :el_icon_connect)
         encrypted? (boolean encrypted?)]
     (ui/set-node-prop! rt text-name :text name)
+    ;; Upstream hides the password field (and, in our port, its backing box) for
+    ;; unencrypted targets; only el_icon_key/el_input_pass were toggled before, so
+    ;; the el_input_bg box stayed drawn as a stray dark rectangle on open networks.
+    (when input-bg (.setVisible input-bg encrypted?))
     (if encrypted?
       (do (.setVisible icon-key true)
           (.setVisible input-pass true)

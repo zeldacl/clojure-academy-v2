@@ -24,17 +24,23 @@
     (.setFlag n (dirty-mask dirty-kw))))
 
 (defn- tint-rgb-value
-  "Convert tint to RGB float vector [r g b].  Accepts vector [r g b], ARGB long
-   (from parse-color), or nil → white."
+  "Convert tint to an RGBA channel vector in 0-255 space (the image render layer
+   divides by 255 and folds the alpha into the node's draw alpha). Accepts a
+   vector [r g b] / [r g b a] (already 0-255, e.g. HUD wave tints), an ARGB long
+   from parse-color, or nil → opaque white. The long branch must NOT normalize to
+   0-1: doing so double-divides at render time and every tinted image goes black.
+   The alpha byte matters — the wireless/tech-ui icons encode their dimming (0xB2,
+   0x99, 0xCC …) in the tint alpha, so dropping it renders them fully opaque."
   [source]
   (cond
     (vector? source) (mapv #(double %) source)
     (number? source)
     (let [l (long source)]
-      [(double (/ (bit-and (bit-shift-right l 16) 0xFF) 255.0))
-       (double (/ (bit-and (bit-shift-right l 8) 0xFF) 255.0))
-       (double (/ (bit-and l 0xFF) 255.0))])
-    :else [1.0 1.0 1.0]))
+      [(double (bit-and (bit-shift-right l 16) 0xFF))
+       (double (bit-and (bit-shift-right l 8) 0xFF))
+       (double (bit-and l 0xFF))
+       (double (bit-and (bit-shift-right l 24) 0xFF))])
+    :else [255.0 255.0 255.0 255.0]))
 
 (defn- coerce-static-value
   [spec v]

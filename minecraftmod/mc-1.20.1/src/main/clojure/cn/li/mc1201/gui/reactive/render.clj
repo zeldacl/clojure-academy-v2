@@ -138,14 +138,15 @@
     (when (string? src)
       (.setOSlot node SLOT-IMG-BAKED-RL (resolve-rl src)))))
 
-(defn- image-tint-rgb [^INode node]
+(defn- image-tint-rgba [^INode node]
   (let [raw (.getOSlot node 1)]
     (if (vector? raw)
-      (let [[r g b] raw]
+      (let [[r g b a] raw]
         [(float (/ (double (or r 255.0)) 255.0))
          (float (/ (double (or g 255.0)) 255.0))
-         (float (/ (double (or b 255.0)) 255.0))])
-      [1.0 1.0 1.0])))
+         (float (/ (double (or b 255.0)) 255.0))
+         (float (/ (double (or a 255.0)) 255.0))])
+      [1.0 1.0 1.0 1.0])))
 
 (defn render-image! [^GuiGraphics gg ^INode node]
   (let [rl-obj (.getOSlot node SLOT-IMG-BAKED-RL)
@@ -172,9 +173,16 @@
             tex-h-raw (.getDSlot node SLOT-IMG-TEX-H)
             tex-w (if (pos? tex-w-raw) tex-w-raw 1.0)
             tex-h (if (pos? tex-h-raw) tex-h-raw 1.0)
-            [tr tg tb] (image-tint-rgb node)]
+            [tr tg tb ta] (image-tint-rgba node)]
         (when (pos? alpha)
-          (RenderSystem/setShaderColor tr tg tb alpha)
+          ;; Enable blend for the alpha channel — otherwise a texture with
+          ;; transparency (white glyph icons, the faint element_background) renders
+          ;; opaque, filling its quad with solid RGB. :text and :nine-slice already
+          ;; do this; images previously relied on whatever blend state the prior
+          ;; tape node happened to leave, so alpha rendering was order-dependent.
+          (RenderSystem/enableBlend)
+          (RenderSystem/defaultBlendFunc)
+          (RenderSystem/setShaderColor tr tg tb (* alpha ta))
           (if (and (zero? u) (zero? v) (== tex-w 1.0) (== tex-h 1.0))
             ;; Fast path: no sprite-sheet cropping requested — full-texture blit.
             (.blit gg rl ix iy iw ih 0.0 0.0 iw ih iw ih)
