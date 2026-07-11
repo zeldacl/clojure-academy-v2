@@ -231,13 +231,28 @@
       (let [{:keys [text color font-size font-desc align x-off y-off]} baked
             editable? (boolean (get (.getStaticProps node) :editable?))
             focused? (.hasFlag node node/FLAG-FOCUSED)
-            display-text (if (and editable? focused?)
-                           (str "[" text "]")
-                           (str text))
+            align-kw (or align :left)
             x (+ (node-abs-x node) x-off)
             y (+ (node-abs-y node) y-off)]
-        (cgui-font/draw-text! gg (or font-desc {}) ^String display-text
-                              x y font-size color (or align :left) true)))))
+        ;; Draw the text (masked if masked? already handled by display-text in bake-text!)
+        (cgui-font/draw-text! gg (or font-desc {}) ^String text
+                              x y font-size color align-kw true)
+        ;; Blinking caret cursor | at the end of text (matching AcademyCraft TextBox:
+        ;; font.draw("|", origin.x + sumLength(display, 0, localCaret), origin.y-1, option)
+        ;; when w.isFocused() && allowEdit && GameTimer.getAbsTime() % 2 < 1).
+        ;; Reactive text doesn't have a caret-position system yet, so the cursor
+        ;; sits at the end of the text (caretPos == content.length). Blink alternates
+        ;; each second, matching upstream's getAbsTime() % 2.
+        (when (and editable? focused?
+                   (< (rem (quot (System/currentTimeMillis) 1000) 2) 1))
+          (let [text-w (cgui-font/text-width (or font-desc {}) ^String text font-size)
+                ;; cursor-x follows alignment (like upstream's origin.x + sumLength)
+                cursor-x (case align-kw
+                           :center (+ x (/ text-w 2.0))
+                           :right  x
+                           (+ x text-w))]
+            (cgui-font/draw-text! gg (or font-desc {}) "|"
+                                  cursor-x (- y 1.0) font-size color :left false)))))))
 
 ;; ============================================================================
 ;; :progress

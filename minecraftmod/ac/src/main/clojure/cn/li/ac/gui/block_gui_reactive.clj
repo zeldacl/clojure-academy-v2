@@ -68,7 +68,7 @@
    :menu menu
    :properties properties
    :histograms histograms
-   :size-dx 114  ;; 290 (screen-root w) - 176 (vanilla default) — room for info-area sidebar
+   :size-dx 31   ;; AcademyCraft ContainerUI: xSize += 31 (176+31=207 total)
    :size-dy 21   ;; 187 (screen-root h) - 166 (vanilla default)
    :update-fn update-signals!
    :current-tab-atom current-tab-atom

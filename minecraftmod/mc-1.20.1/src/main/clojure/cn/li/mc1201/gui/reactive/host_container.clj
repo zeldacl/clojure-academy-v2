@@ -196,10 +196,16 @@
           (when-not (active-modal rt)
             (input/handle-mouse-scrolled rt (.getGuiLeft this) (.getGuiTop this) mx my delta))))
       (.withKeyPressed
-        (fn key-cb [_this key-code scan-code modifiers]
+        (fn key-cb [^DelegatingCGuiContainerScreen this key-code scan-code modifiers]
           (if-let [modal (active-modal rt)]
             (do (modal-key! modal key-code scan-code modifiers) true)
-            (input/handle-key-pressed rt key-code scan-code modifiers))))
+            (let [handled (input/handle-key-pressed rt key-code scan-code modifiers)]
+              ;; DelegatingCGuiContainerScreen.keyPressed only calls this fn;
+              ;; it never calls super.keyPressed, so vanilla's ESC→onClose() is
+              ;; dead code. We must close the screen ourselves.
+              (when (and handled (= (long key-code) 256))
+                (.onClose this))
+              handled))))
       (.withCharTyped
         (fn char-cb [_this code-point modifiers]
           (if-let [modal (active-modal rt)]

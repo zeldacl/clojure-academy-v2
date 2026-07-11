@@ -84,19 +84,32 @@
         label-id (keyword (str (name row-id) "-label"))
         value-id (keyword (str (name row-id) "-value"))
         value-color (if editable? edit-color idle-color)
+        ;; AcademyCraft-style [ ] brackets flanking the editable value
+        ;; (upstream: box("[").pos(-4,0), box("]").pos(valueArea.width + 2, 0))
+        brackets (when editable?
+                   [{:kind :text
+                     :props {:id (keyword (str (name row-id) "-lb"))
+                             :x (- label-w 6.0) :y 0.0 :w 10.0 :h row-h
+                             :text "[" :font-size 8.0 :color idle-color}}
+                    {:kind :text
+                     :props {:id (keyword (str (name row-id) "-rb"))
+                             :x (+ label-w (- 98.0 label-w) 2.0) :y 0.0 :w 10.0 :h row-h
+                             :text "]" :font-size 8.0 :color idle-color}}])
         row-spec {:kind :group
                   :props {:id row-id :x 6.0 :y y :w 98.0 :h row-h}
-                  :children
-                  [{:kind :text
-                    :props {:id label-id :x 0.0 :y 0.0 :w label-w :h row-h
-                            :text (str label) :font-size 8.0 :color 0xFFAAAAAA}}
-                   {:kind :text
-                    :props (cond-> {:id value-id
-                                    :x label-w :y 0.0 :w (- 98.0 label-w) :h row-h
-                                    :text (if (fn? value) (value) (str value))
-                                    :font-size 8.0 :color value-color
-                                    :editable? (boolean editable?)}
-                             masked? (assoc :masked? true))}]}
+                  :children (vec
+                              (concat
+                                [{:kind :text
+                                  :props {:id label-id :x 0.0 :y 0.0 :w label-w :h row-h
+                                          :text (str label) :font-size 8.0 :color 0xFFAAAAAA}}
+                                 {:kind :text
+                                  :props (cond-> {:id value-id
+                                                  :x label-w :y 0.0 :w (- 98.0 label-w) :h row-h
+                                                  :text (if (fn? value) (value) (str value))
+                                                  :font-size 8.0 :color value-color
+                                                  :editable? (boolean editable?)}
+                                           masked? (assoc :masked? true))}]
+                                (or brackets ())))}
         ^INode row (rt/build-child! rt row-spec (area-node rt))
         ^INode value-n (ui/item-node row value-id)]
     (when (fn? value)
