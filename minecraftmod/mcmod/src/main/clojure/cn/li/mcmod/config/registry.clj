@@ -7,6 +7,21 @@
 
 (def ^:private config-path [:registry :configs])
 
+;; Generation counter bumped on every config mutation — callers that cache
+;; derived values (e.g. ability skill specs after apply-skill-overrides) can
+;; check this instead of recomputing from get-config-values on every read.
+(def ^:private generation-path [:service :config-generation])
+
+(defn config-generation []
+  (if-let [fw-atom (fw/fw-atom)]
+    (get-in @fw-atom generation-path 0)
+    0))
+
+(defn- bump-generation! []
+  (when-let [fw-atom (fw/fw-atom)]
+    (swap! fw-atom update-in generation-path (fnil inc 0)))
+  nil)
+
 (defn- config-snapshot []
   (if-let [fw-atom (fw/fw-atom)]
     (get-in @fw-atom config-path)
@@ -16,6 +31,7 @@
   (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom update-in config-path
            (fn [current] (apply f (or current {:descriptor-registry {} :value-registry {}}) args))))
+  (bump-generation!)
   nil)
 
 (defn get-descriptor-registry []
@@ -86,4 +102,5 @@
 (defn reset-config-for-test! []
   (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom assoc-in config-path {:descriptor-registry {} :value-registry {}}))
+  (bump-generation!)
   nil)

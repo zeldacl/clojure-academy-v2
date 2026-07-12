@@ -60,6 +60,24 @@
       (is (not (contains? (get-in (sync-core/scheduler-snapshot) [:test-session :dirty-players]) "online")))
       (is (contains? (get-in (sync-core/scheduler-snapshot) [:test-session :dirty-players]) "offline")))))
 
+(deftest full-sync-safety-net-flushes-clean-online-players-test
+  (let [owner {:server-session-id :test-session}
+        sent (atom [])]
+    (with-redefs [runtime-hooks/build-sync-payload (fn [uuid] {:uuid uuid})
+                  runtime-hooks/mark-player-clean! (fn [_uuid] nil)
+                  runtime-hooks/list-player-uuids (fn [] ["never-dirty"])]
+      ;; Advance to tick 190 (19 flush cycles of 10) without anyone dirty.
+      (doseq [server-tick-id (range 1 191)]
+        (sync-core/tick-sync! (fn [uuid payload] (swap! sent conj [uuid payload]))
+                              (assoc owner :server-tick-id server-tick-id)))
+      (is (empty? @sent))
+      ;; Tick 200 is a forced full-sync boundary — flushes even though
+      ;; "never-dirty" was never marked dirty.
+      (doseq [server-tick-id (range 191 201)]
+        (sync-core/tick-sync! (fn [uuid payload] (swap! sent conj [uuid payload]))
+                              (assoc owner :server-tick-id server-tick-id)))
+      (is (= [["never-dirty" {:uuid "never-dirty"}]] @sent)))))
+
 (deftest scheduler-owner-is-required-test
   (is (thrown-with-msg? clojure.lang.ExceptionInfo
                         #"requires :server-session-id"

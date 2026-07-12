@@ -38,12 +38,10 @@
 	(let [method-key (imc-method-key msg)
 				payload (resolve-payload msg)]
 		(case method-key
-			"register_network_handler"
-			"register_topology_network_handler"
+			("register_network_handler" "register_topology_network_handler")
 			(imc-dispatch/register-network-handler! payload)
 
-			"register_network_node_handler"
-			"register_topology_node_handler"
+			("register_network_node_handler" "register_topology_node_handler")
 			(imc-dispatch/register-node-handler! payload)
 
 			(log/debug "Ignoring unsupported IMC method" method-key))))

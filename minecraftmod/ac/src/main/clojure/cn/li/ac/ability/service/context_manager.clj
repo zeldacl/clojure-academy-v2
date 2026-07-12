@@ -19,12 +19,26 @@
             [cn.li.ac.ability.model.ability :as adata]
             [cn.li.ac.ability.model.resource :as rdata]
             [cn.li.ac.ability.messages :as catalog]
+            [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.runtime.owner :as owner]
             [cn.li.mcmod.util.log :as log]))
 
 (def ^:private default-terminated-context-grace-ms 1000)
 (def ^:private default-keepalive-timeout-ms 1500)
+
+;; Keepalive/purge sweep guard — Framework [:service :ctx-manager-sweep-guard].
+;; on-player-tick! invokes tick-context-manager! once per online player per server
+;; tick; this guard collapses that to at most one real sweep per unique server tick.
+(def ^:private sweep-guard-path [:service :ctx-manager-sweep-guard])
+
+(defn- sweep-guard-atom
+  ^clojure.lang.IAtom []
+  (if-let [fw-atom (fw/fw-atom)]
+    (or (get-in @fw-atom sweep-guard-path)
+        (get-in (swap! fw-atom update-in sweep-guard-path #(or % (atom nil)))
+                sweep-guard-path))
+    (atom nil)))
 
 (defn keepalive-timeout-ms
   "Server-side keepalive timeout threshold in milliseconds.
@@ -66,19 +80,20 @@
 
 (defn- active-server-contexts-for-player
   [player-uuid]
-  (let [owner (server-context-owner player-uuid)
-        pid (str player-uuid)]
-    (->> (ctx/snapshot-context-registry)
-         vals
-         (reduce (fn [acc ctx-map]
-                   (if (and (= :server (:logical-side ctx-map))
-                            (= pid (:player-uuid ctx-map))
-                            (= ctx/STATUS-ALIVE (:status ctx-map))
-                            (= ctx-state/INPUT-ACTIVE (:input-state ctx-map)))
-                     (conj acc ctx-map)
-                     acc))
-                 [])
-         (sort-by #(vector (get % :id) (get % :server-id))))))
+  (let [pid (str player-uuid)
+        matches (->> (ctx/snapshot-context-registry)
+                    vals
+                    (reduce (fn [acc ctx-map]
+                              (if (and (= :server (:logical-side ctx-map))
+                                       (= pid (:player-uuid ctx-map))
+                                       (= ctx/STATUS-ALIVE (:status ctx-map))
+                                       (= ctx-state/INPUT-ACTIVE (:input-state ctx-map)))
+                                (conj acc ctx-map)
+                                acc))
+                            []))]
+    (if (next matches)
+      (sort-by #(vector (get % :id) (get % :server-id)) matches)
+      matches)))
 
 (defn activate-context!
   "Called on the CLIENT when player triggers a skill (e.g., key press).
@@ -223,20 +238,29 @@
                               callback))
 
 (defn tick-player-contexts!
-  "Drive all active server-owned contexts for one player once per server tick."
+  "Drive all active server-owned contexts for one player once per server tick.
+  Early-exits when the player has no context-registry entries at all — the
+  common case for idle players — avoiding the global registry snapshot,
+  owner map allocation, and :purge-terminated-contexts command dispatch."
   [player-uuid]
-  (let [owner (server-context-owner player-uuid)]
-    (doseq [spec (active-server-contexts-for-player player-uuid)]
-      (tick-context-entry! owner send-terminated-context! spec))
-    (when-let [server-session-id (owner/store-session-id owner)]
-      (command-rt/run-command-in-session!
-       server-session-id
-       player-uuid
-       {:command :purge-terminated-contexts}))))
+  (when (seq (:context-registry (server-player-state player-uuid)))
+    (let [owner (server-context-owner player-uuid)]
+      (doseq [spec (active-server-contexts-for-player player-uuid)]
+        (tick-context-entry! owner send-terminated-context! spec))
+      (when-let [server-session-id (owner/store-session-id owner)]
+        (command-rt/run-command-in-session!
+         server-session-id
+         player-uuid
+         {:command :purge-terminated-contexts})))))
 
 (defn tick-context-manager!
-  "Call once per second (or per server tick with rate limiting).
-  Checks keepalive timeouts on all live ALIVE contexts."
+  "Keepalive/purge sweep. Called once per online player per server tick from
+  on-player-tick!, but the sweep itself is global (not player-scoped), so it
+  actually runs at most once per unique server tick id — see sweep-guard-atom."
   []
-  (terminate-expired-contexts!)
-  (purge-stale-terminated-contexts!))
+  (let [tick-id (some-> (runtime-hooks/*player-state-owner*) :server-tick-id)
+        guard (sweep-guard-atom)]
+    (when (or (nil? tick-id) (not= tick-id @guard))
+      (when tick-id (reset! guard tick-id))
+      (terminate-expired-contexts!)
+      (purge-stale-terminated-contexts!))))

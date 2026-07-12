@@ -5,6 +5,7 @@
             [cn.li.ac.ability.service.runtime-store :as store]
             [cn.li.ac.ability.service.reducer :as reducer]
             [cn.li.ac.ability.effects.interpreter :as interpreter]
+            [cn.li.ac.test.support.player-state :as player-state-support]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (def ^:private baseline-state
@@ -65,44 +66,63 @@
 
 (deftest run-command-in-session-idempotent-replay-test
   (testing "idempotent mode replays cached result and skips reducer/effects"
-    (command-rt/reset-command-traces-for-test!)
-    (let [apply-count (atom 0)
-          effect-count (atom 0)
-          command {:command :level-up
-                   :command-id "idempotent-command-1"}
-          opts {:idempotent? true}]
+    (player-state-support/with-framework
+      (fn []
+        (command-rt/reset-command-traces-for-test!)
+        (let [apply-count (atom 0)
+              effect-count (atom 0)
+              command {:command :level-up
+                       :command-id "idempotent-command-1"}
+              opts {:idempotent? true}]
           (with-redefs [store/get-or-create-player-state! (fn [_session-id _uuid] baseline-state)
-                    store/set-player-state!* (fn [_session-id _uuid _state] nil)
-                    store/mark-player-dirty! (fn [_session-id _uuid] nil)
-                    reducer/apply-command (fn [state _normalized-command]
-                                            (swap! apply-count inc)
-                                            {:state state
-                                             :events [{:event/type :ability/test-event}]
-                                             :effects [{:effect/type :persist-state}]})
-                    interpreter/execute-reducer-result! (fn [_result]
-                                                          (swap! effect-count inc)
-                                                          nil)]
-        (let [first-result (command-rt/run-command-in-session! "session-A" "player-A" command opts)
-              second-result (command-rt/run-command-in-session! "session-A" "player-A" command opts)]
-          (is (= 1 @apply-count))
-          (is (= 1 @effect-count))
-          (is (nil? (:idempotent-replay? first-result)))
-          (is (true? (:idempotent-replay? second-result))))))))
+                        store/set-player-state!* (fn [_session-id _uuid _state] nil)
+                        store/mark-player-dirty! (fn [_session-id _uuid] nil)
+                        reducer/apply-command (fn [state _normalized-command]
+                                                (swap! apply-count inc)
+                                                {:state state
+                                                 :events [{:event/type :ability/test-event}]
+                                                 :effects [{:effect/type :persist-state}]})
+                        interpreter/execute-reducer-result! (fn [_result]
+                                                              (swap! effect-count inc)
+                                                              nil)]
+            (let [first-result (command-rt/run-command-in-session! "session-A" "player-A" command opts)
+                  second-result (command-rt/run-command-in-session! "session-A" "player-A" command opts)]
+              (is (= 1 @apply-count))
+              (is (= 1 @effect-count))
+              (is (nil? (:idempotent-replay? first-result)))
+              (is (true? (:idempotent-replay? second-result))))))))))
 
 (deftest run-command-in-session-records-trace-test
   (testing "command trace snapshot contains completed command entry"
-    (command-rt/reset-command-traces-for-test!)
-    (with-redefs [store/get-or-create-player-state! (fn [_session-id _uuid] baseline-state)
-                  store/set-player-state!* (fn [_session-id _uuid _state] nil)
-                  store/mark-player-dirty! (fn [_session-id _uuid] nil)
-                  reducer/apply-command (fn [state _normalized-command]
-                                          {:state state :events [] :effects []})
-                  interpreter/execute-reducer-result! (fn [_result] nil)]
-      (command-rt/run-command-in-session! "session-Z" "player-Z"
-                                          {:command :level-up
-                                           :command-id "trace-check-1"})
-      (is (contains? (command-rt/command-traces-snapshot)
-                     ["session-Z" "player-Z" "trace-check-1"])))))
+    (player-state-support/with-framework
+      (fn []
+        (command-rt/reset-command-traces-for-test!)
+        (with-redefs [store/get-or-create-player-state! (fn [_session-id _uuid] baseline-state)
+                      store/set-player-state!* (fn [_session-id _uuid _state] nil)
+                      store/mark-player-dirty! (fn [_session-id _uuid] nil)
+                      reducer/apply-command (fn [state _normalized-command]
+                                              {:state state :events [] :effects []})
+                      interpreter/execute-reducer-result! (fn [_result] nil)]
+          (command-rt/run-command-in-session! "session-Z" "player-Z"
+                                              {:command :level-up
+                                               :command-id "trace-check-1"})
+          (is (contains? (command-rt/command-traces-snapshot)
+                         ["session-Z" "player-Z" "trace-check-1"])))))))
+
+(deftest run-command-in-session-tick-command-not-traced-test
+  (testing "auto-generated command ids (no explicit :command-id) are never traced"
+    (player-state-support/with-framework
+      (fn []
+        (command-rt/reset-command-traces-for-test!)
+        (with-redefs [store/get-or-create-player-state! (fn [_session-id _uuid] baseline-state)
+                      store/set-player-state!* (fn [_session-id _uuid _state] nil)
+                      store/mark-player-dirty! (fn [_session-id _uuid] nil)
+                      reducer/apply-command (fn [state _normalized-command]
+                                              {:state state :events [] :effects []})
+                      interpreter/execute-reducer-result! (fn [_result] nil)]
+          (dotimes [_ 5]
+            (command-rt/run-command-in-session! "session-Z" "player-Z" {:command :server-tick}))
+          (is (empty? (command-rt/command-traces-snapshot))))))))
 
 (deftest command-sequence-isomorphic-across-session-injection-test
   (testing "same command sequence yields isomorphic state/effects under different injected sessions"

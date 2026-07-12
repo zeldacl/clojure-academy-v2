@@ -30,6 +30,10 @@
    :init-damage-handlers! noop
    :list-player-uuids (fn [] [])
    :build-sync-payload (fn [_] nil)
+   ;; Default true: unknown/unregistered player state is always considered
+   ;; dirty (safe fallback — matches pre-dirty-tracking behavior of syncing
+   ;; every player every tick).
+   :player-state-dirty? (fn [_] true)
    :mark-player-clean! noop
    :get-player-state (fn [_] nil)
   :sync-player-state! (fn [_ _] nil)
@@ -456,6 +460,14 @@
 (defn build-sync-payload
   [player-uuid]
   ((:build-sync-payload (hooks-core-state-snapshot)) player-uuid))
+
+(defn player-state-dirty?
+  "Return true when player-uuid's runtime state has unsynced changes.
+  Content layer implements this by reading the per-player :dirty? flag; the
+  default hook conservatively returns true so platforms without a registered
+  implementation keep syncing every tick (safe fallback)."
+  [player-uuid]
+  (boolean ((:player-state-dirty? (hooks-core-state-snapshot)) player-uuid)))
 
 (defn mark-player-clean!
   [player-uuid]

@@ -73,15 +73,22 @@
     event))
 
 (defn fire-calc-event!
+  "Chain base-value through all handlers subscribed to event-type, each seeing
+  the running :value from the previous handler. Zero-allocation fast path when
+  no handler is subscribed (the common case on the per-player tick path)."
   [event-type base-value extra]
-  (let [state (atom (merge extra {:event/type event-type :value base-value}))]
-    (doseq [h (get (:subscribers (event-subscriber-state-snapshot)) event-type [])]
-      (try (let [result (h @state)]
-             (when (number? result)
-               (swap! state assoc :value result)))
-           (catch Exception e
-             (log/warn "Calc event subscriber threw" event-type (ex-message e)))))
-    (:value @state)))
+  (let [handlers (get (:subscribers (event-subscriber-state-snapshot)) event-type)]
+    (if-not (seq handlers)
+      base-value
+      (let [event (merge extra {:event/type event-type})]
+        (reduce (fn [value h]
+                  (let [result (try (h (assoc event :value value))
+                                    (catch Exception e
+                                      (log/warn "Calc event subscriber threw" event-type (ex-message e))
+                                      nil))]
+                    (if (number? result) result value)))
+                base-value
+                handlers)))))
 
 ;; Event Type Constants
 (def EVT-ABILITY-ACTIVATE    :ability/activate)

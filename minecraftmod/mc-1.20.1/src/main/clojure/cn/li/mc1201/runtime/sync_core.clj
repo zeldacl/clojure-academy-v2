@@ -8,6 +8,13 @@
 
 (def ^:private default-flush-interval-ticks 10)
 
+;; Low-frequency full-sync safety net: with per-player dirty tracking (see
+;; lifecycle-core/on-player-tick!), a write path that changes runtime state
+;; without going through the reducer's dirty marking would silently stop
+;; syncing that player. Force a full snapshot of every online player at this
+;; interval regardless of tracked dirty state so such a gap self-heals.
+(def ^:private full-sync-interval-ticks 200)
+
 (defn create-sync-scheduler-runtime
   ([]
    (create-sync-scheduler-runtime {}))
@@ -130,9 +137,11 @@
                    tick (:tick-counter next-state)
                    due? (and (not duplicate-server-tick?)
 							 (zero? (mod tick (flush-interval-ticks))))
+                   force-full? (and due? (zero? (mod tick full-sync-interval-ticks)))
                    dirty-uuids (when due? (keys (:dirty-players next-state)))]
                (reset! result {:advanced? (not duplicate-server-tick?)
                                :due? due?
+                               :force-full? force-full?
                                :tick tick
                                :session-key session-key
                                :dirty-uuids (vec dirty-uuids)})
@@ -167,19 +176,26 @@
    nil))
 
 (defn tick-sync!
-  "Flush dirty player snapshots periodically.
+  "Flush dirty player snapshots periodically. Every full-sync-interval-ticks,
+  flushes all online players regardless of tracked dirty state (safety net —
+  see full-sync-interval-ticks).
   send-fn: (fn [uuid payload]) — supplied by the platform network bridge."
   [send-fn owner]
-  (let [{:keys [due? tick session-key dirty-uuids]} (advance-scheduler! owner)]
+  (let [{:keys [due? force-full? tick session-key dirty-uuids]} (advance-scheduler! owner)]
     (when due?
-      (doseq [uuid dirty-uuids]
-        (power-runtime/with-client-ctx {:player-owner owner}
-          (when-let [payload (build-sync-payload uuid)]
-            (try
-              (when send-fn
-                (send-fn uuid payload))
-              (power-runtime/mark-player-clean! uuid)
-              (mark-player-flushed! session-key uuid tick)
-              (catch Throwable _
-                ;; Keep the dirty marker so a later tick can retry.
-                nil))))))))
+      (let [flush-uuids (if force-full?
+                          (vec (into (set dirty-uuids)
+                                     (power-runtime/with-client-ctx {:player-owner owner}
+                                       (power-runtime/list-player-uuids))))
+                          dirty-uuids)]
+        (doseq [uuid flush-uuids]
+          (power-runtime/with-client-ctx {:player-owner owner}
+            (when-let [payload (build-sync-payload uuid)]
+              (try
+                (when send-fn
+                  (send-fn uuid payload))
+                (power-runtime/mark-player-clean! uuid)
+                (mark-player-flushed! session-key uuid tick)
+                (catch Throwable _
+                  ;; Keep the dirty marker so a later tick can retry.
+                  nil)))))))))

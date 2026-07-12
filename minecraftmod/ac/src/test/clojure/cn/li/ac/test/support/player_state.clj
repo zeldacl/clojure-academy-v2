@@ -9,7 +9,7 @@
 (def test-session-id
   (:server-session-id test-player-state-owner))
 
-(defn- with-framework [f]
+(defn with-framework [f]
   (let [prev-fw fw/*framework*]
     (try
       (when-let [fw-inst (or (fw/create-framework)

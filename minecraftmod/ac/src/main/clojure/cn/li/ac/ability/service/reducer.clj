@@ -288,6 +288,13 @@
 ;; Sub-Reducer: server-tick
 ;; ============================================================================
 
+(defn- assoc-if-changed
+  "assoc k v only when v differs from the current value at k — idle-tick
+  reducer branches then return the same top-level map object, which lets
+  callers short-circuit on identical? instead of paying for a full not=."
+  [m k v]
+  (if (= (get m k) v) m (assoc m k v)))
+
 (defn- cmd-server-tick
   "Advance one server tick: resource/cooldown recovery, develop tick, completion.
 
@@ -304,9 +311,9 @@
         eff-ol-speed (or ol-speed (cfg/overload-recover-speed))
         res-result (resource/server-tick-recovery res-data eff-cp-speed eff-ol-speed)
         {:keys [data]} (cooldown/server-tick cd-data)
-        ticked-state (assoc player-state
-                            :resource-data (:data res-result)
-                            :cooldown-data data)
+        ticked-state (-> player-state
+                        (assoc-if-changed :resource-data (:data res-result))
+                        (assoc-if-changed :cooldown-data data))
         develop-data (:develop-data ticked-state)
         dev-result (when (and develop-data (ddata/developing? develop-data))
                      (develop-rules/tick-develop develop-data))

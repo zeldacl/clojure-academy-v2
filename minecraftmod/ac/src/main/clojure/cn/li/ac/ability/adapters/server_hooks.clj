@@ -264,6 +264,10 @@
         :preset-data (:preset-data state)
         :develop-data (:develop-data state)}))
 
+   :player-state-dirty?
+   (fn [player-uuid]
+     (boolean (:dirty? (runtime-get-player-state player-uuid))))
+
    :mark-player-clean!
    (fn [player-uuid]
      (runtime-mark-clean! player-uuid))

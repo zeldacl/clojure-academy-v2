@@ -38,13 +38,17 @@
     (assoc d [ctrl-id sub-id] value)))
 
 (defn tick-cooldowns
-  "Decrement all cooldowns by 1; remove entries at 0."
+  "Decrement all cooldowns by 1; remove entries at 0.
+  Returns d unchanged (identical?) when already empty, so idle-player ticks
+  don't allocate a fresh map or break command_runtime's not= dirty check."
   [d]
-  (->> d
-       (keep (fn [[k v]]
-               (let [nv (dec v)]
-                 (when (pos? nv) [k nv]))))
-       (into {})))
+  (if (empty? d)
+    d
+    (->> d
+         (keep (fn [[k v]]
+                 (let [nv (dec v)]
+                   (when (pos? nv) [k nv]))))
+         (into {}))))
 
 ;; ============================================================================
 ;; Serialization helpers

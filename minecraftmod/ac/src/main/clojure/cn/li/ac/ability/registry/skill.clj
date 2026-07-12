@@ -4,6 +4,7 @@
   Registry stored in Framework [:registry :skills]."
   (:require [cn.li.ac.ability.registry.skill-spec :as skill-spec]
             [cn.li.ac.ability.skill-config :as skill-config]
+            [cn.li.mcmod.config.registry :as config-reg]
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.util.log :as log]))
 
@@ -29,6 +30,29 @@
   (when (:frozen? (skill-registry-state-snapshot))
     (throw (ex-info "Skill registry is frozen" {}))))
 
+;; apply-skill-overrides recomputation cache — Framework [:service :skill-spec-cache].
+;; Invalidated wholesale on config-generation bump (any config mutation anywhere),
+;; not per-skill, since scoping to a domain would require threading the skill's
+;; config domain through here — a global generation is simpler and this cache
+;; only ever needs to survive within one generation on the hot tick path.
+(def ^:private spec-cache-path [:service :skill-spec-cache])
+
+(defn- spec-cache-atom
+  ^clojure.lang.IAtom []
+  (if-let [fw-atom (fw/fw-atom)]
+    (or (get-in @fw-atom spec-cache-path)
+        (get-in (swap! fw-atom update-in spec-cache-path #(or % (atom {:gen -1 :specs {}})))
+                spec-cache-path))
+    (atom {:gen -1 :specs {}})))
+
+(defn- reset-spec-cache!
+  "Invalidate the per-skill override cache. Called whenever the underlying
+  skill registry contents are replaced wholesale (test resets) so a stale
+  spec can never be served for a skill id re-registered with different data."
+  []
+  (reset! (spec-cache-atom) {:gen -1 :specs {}})
+  nil)
+
 ;; Backward-compatible factory
 (defn create-skill-registry-runtime
   ([]
@@ -42,6 +66,7 @@
   (when-let [fw-atom (fw/fw-atom)]
     (when-let [state* (:state* runtime)]
       (swap! fw-atom assoc-in skill-path @state*)))
+  (reset-spec-cache!)
   runtime)
 
 ;; Query
@@ -54,6 +79,7 @@
   ([snapshot]
    (when-let [fw-atom (fw/fw-atom)]
      (swap! fw-atom assoc-in skill-path {:registry (or snapshot {}) :frozen? false}))
+   (reset-spec-cache!)
    nil))
 
 (defn freeze-skill-registry! []
@@ -88,5 +114,16 @@
   (:registry (skill-registry-state-snapshot)))
 
 (defn get-skill [skill-id]
-  (some-> (raw-skill skill-id)
-          skill-config/apply-skill-overrides))
+  (when-let [raw (raw-skill skill-id)]
+    (let [gen (config-reg/config-generation)
+          cache* (spec-cache-atom)
+          {cached-gen :gen specs :specs} @cache*]
+      (if (and (= gen cached-gen) (contains? specs skill-id))
+        (get specs skill-id)
+        (let [spec (skill-config/apply-skill-overrides raw)]
+          (swap! cache*
+                 (fn [c]
+                   (if (= (:gen c) gen)
+                     (update c :specs assoc skill-id spec)
+                     {:gen gen :specs {skill-id spec}})))
+          spec)))))

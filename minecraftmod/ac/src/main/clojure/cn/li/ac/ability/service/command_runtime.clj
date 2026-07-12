@@ -6,18 +6,40 @@
   2) apply reducer command(s)
   3) persist resulting state
   4) execute emitted events/effects"
-  (:require 
+  (:require
             [cn.li.ac.ability.application.contracts :as contracts]
             [cn.li.ac.ability.service.runtime-store :as store]
 [cn.li.ac.ability.effects.interpreter :as interpreter]
             [cn.li.ac.ability.service.reducer :as reducer]
+            [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.runtime.owner :as owner]))
 
 (def ^:private default-command-trace-ttl-ms 60000)
 (def ^:private default-max-command-traces 2048)
 
-(def ^:private recent-command-traces* (atom {}))
+;; Trace map and the auto-id sequence both live under Framework [:service ...] —
+;; only commands with an explicit :command-id (idempotent network retries) are ever
+;; traced or looked up, so this map stays small and is never touched by tick commands.
+(def ^:private command-traces-path [:service :ability-command-traces])
+(def ^:private command-seq-path [:service :ability-command-id-seq])
+
+(defn- command-traces-atom
+  ^clojure.lang.IAtom []
+  (if-let [fw-atom (fw/fw-atom)]
+    (or (get-in @fw-atom command-traces-path)
+        (get-in (swap! fw-atom update-in command-traces-path #(or % (atom {})))
+                command-traces-path))
+    (atom {})))
+
+(defn- command-seq-counter
+  ^java.util.concurrent.atomic.AtomicLong []
+  (if-let [fw-atom (fw/fw-atom)]
+    (or (get-in @fw-atom command-seq-path)
+        (get-in (swap! fw-atom update-in command-seq-path
+                       #(or % (java.util.concurrent.atomic.AtomicLong.)))
+                command-seq-path))
+    (java.util.concurrent.atomic.AtomicLong.)))
 
 (defn- now-ms
   []
@@ -47,37 +69,43 @@
 (defn- lookup-command-trace
   [session-id uuid command-id]
   (when command-id
-    (get @recent-command-traces* (trace-key session-id uuid command-id))))
+    (get @(command-traces-atom) (trace-key session-id uuid command-id))))
 
 (defn- record-command-trace!
+  "Only ever called for commands carrying an explicit :command-id — auto-generated
+   tick command ids are never traced (they can never be replayed/looked up)."
   [session-id uuid command-id result]
-  (when command-id
-    (let [at (now-ms)
-          ttl-ms default-command-trace-ttl-ms
-          max-size default-max-command-traces]
-      (swap! recent-command-traces*
-             (fn [snapshot]
-               (-> snapshot
-                   (assoc (trace-key session-id uuid command-id)
-                          {:completed-at-ms at
-                           :result result})
-                   (prune-command-traces at ttl-ms max-size))))))
+  (let [at (now-ms)
+        ttl-ms default-command-trace-ttl-ms
+        max-size default-max-command-traces
+        k (trace-key session-id uuid command-id)
+        entry {:completed-at-ms at :result result}]
+    (swap! (command-traces-atom)
+           (fn [snapshot]
+             (let [snapshot (assoc snapshot k entry)]
+               (if (> (count snapshot) max-size)
+                 (prune-command-traces snapshot at ttl-ms max-size)
+                 snapshot)))))
   nil)
 
 (defn reset-command-traces-for-test!
   []
-  (reset! recent-command-traces* {})
+  (reset! (command-traces-atom) {})
   nil)
 
 (defn command-traces-snapshot
   []
-  @recent-command-traces*)
+  @(command-traces-atom))
+
+(defn- next-auto-command-id
+  []
+  (str "auto-" (.incrementAndGet (command-seq-counter))))
 
 (defn- ensure-command-owner-fields
   [session-id uuid command]
   (-> command
       contracts/trim-command-meta
-      (update :command-id #(or % (str (java.util.UUID/randomUUID))))
+      (update :command-id #(or % (next-auto-command-id)))
       (assoc :uuid uuid)
       (assoc :player-uuid uuid)
       (cond->
@@ -96,11 +124,14 @@
                             :or {mark-dirty? true}
                             :as opts}]
   (contracts/assert-command! command)
-  (let [session-id (resolve-session-id session-id)
+  ;; Captured before normalization: only an explicit command-id (idempotent network
+  ;; retries) is ever traced. Auto-generated ids (internal tick commands) skip trace
+  ;; recording entirely — they can never be looked up again.
+  (let [explicit-command-id (:command-id command)
+        session-id (resolve-session-id session-id)
         normalized (ensure-command-owner-fields session-id uuid command)
-        command-id (:command-id normalized)
-        cached (when (:idempotent? opts)
-                 (some-> (lookup-command-trace session-id uuid command-id)
+        cached (when (and explicit-command-id (:idempotent? opts))
+                 (some-> (lookup-command-trace session-id uuid explicit-command-id)
                          :result))]
     (if cached
       (assoc cached :idempotent-replay? true)
@@ -121,7 +152,8 @@
             (store/mark-player-dirty! session-id uuid)))
         (runtime-hooks/with-player-state-owner owner
           (interpreter/execute-reducer-result! result))
-        (record-command-trace! session-id uuid command-id result)
+        (when explicit-command-id
+          (record-command-trace! session-id uuid explicit-command-id result))
         result))))
 
 (defn run-command-in-session!
