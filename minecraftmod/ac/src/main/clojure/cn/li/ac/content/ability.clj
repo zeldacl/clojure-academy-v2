@@ -6,6 +6,7 @@
   explicit ability content initialization."
   (:require [cn.li.ac.ability.dsl :refer [defcategory]]
             [cn.li.ac.ability.discovery :as discovery]
+            [cn.li.ac.ability.integration.external-providers :as external-providers]
             [cn.li.ac.ability.passive :as passive]
             [cn.li.ac.ability.registry.category :as category]
             [cn.li.ac.ability.registry.skill :as skill-registry]
@@ -128,6 +129,9 @@
         (register-declared-skills! skill-namespaces)
         (doseq [ns-sym skill-namespaces]
           (run-namespace-init! ns-sym)))
+      ;; Third-party skills, via ServiceLoader — must run before the freeze
+      ;; calls below (registry/skill.clj rejects registration once frozen).
+      (external-providers/load-external-providers!)
       (md-damage/init!)
       (tp-passive/register-passive-hooks!)
       ;; Register generic item actions (not skill-specific)
