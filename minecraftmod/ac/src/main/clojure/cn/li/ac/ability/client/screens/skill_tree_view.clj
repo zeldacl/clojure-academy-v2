@@ -203,46 +203,47 @@
               (ctext (+ btn-y 4.0) 32 9.0 0xFF101010 "LEARN"))))))))
 
 
-(defn- refresh-levelup-popup! [^UiRt rt target-level dev-state]
+(defn- refresh-levelup-popup! [^UiRt rt target-level dev-state w h bg?]
   (clear-popup! rt)
   (when-let [^INode layer (ui/node rt :popup-layer)]
-    (rt/build-child! rt {:kind :box :props {:x 0.0 :y 0.0 :w 420.0 :h 260.0 :fill 0xB3000000}} layer)
-    (let [cx 210.0 cy 130.0
+    (when bg?
+      (rt/build-child! rt {:kind :box :props {:x 0.0 :y 0.0 :w (double w) :h (double h) :fill 0xB3000000}} layer))
+    (let [cx (/ (double w) 2.0) cy (/ (double h) 2.0)
           icon-x (- cx 25.0) icon-y (- cy 25.0)
           cond-icon (modid/asset-path "textures" (str "abilities/condition/any" target-level ".png"))
           result (:result dev-state)
+          developing? (boolean (:is-developing? dev-state))
           progress (cond
-                     (:is-developing? dev-state) (double (:progress dev-state 0.0))
+                     developing? (double (:progress dev-state 0.0))
                      (= result :success) 1.0
                      :else 0.0)
           hint (cond
-                 (:is-developing? dev-state) (i18n/translate "skill_tree.my_mod.dev_developing")
+                 developing? (i18n/translate "skill_tree.my_mod.dev_developing")
                  (= result :success) (i18n/translate "skill_tree.my_mod.dev_successful")
                  (= result :failed) (i18n/translate "skill_tree.my_mod.dev_failed")
                  (= (:error dev-state) :low-energy) (i18n/translate "skill_tree.my_mod.noenergy")
-                 :else (i18n/translate "skill_tree.my_mod.level_question"))]
+                 :else (i18n/translate "skill_tree.my_mod.level_question"))
+          ctext (fn [y tw fs color s]
+                  (rt/build-child! rt {:kind :text
+                                       :props {:x (- cx (/ (double tw) 2.0)) :y y :w (double tw) :h 14.0
+                                               :text (str s) :font-size fs :color color :align "center"}} layer))]
       (rt/build-child! rt {:kind :image :props {:x icon-x :y icon-y :w 50.0 :h 50.0
-                                                 :src (tex-src :skill-back)}} layer)
+                                                :src (tex-src :skill-back)}} layer)
       (rt/build-child! rt {:kind :image :props {:x (+ icon-x 11.5) :y (+ icon-y 11.5) :w 27.0 :h 27.0
-                                                 :src cond-icon}} layer)
+                                                :src cond-icon}} layer)
       (rt/build-child! rt {:kind :shader-progress
-                            :props {:x icon-x :y icon-y :w 50.0 :h 50.0 :progress (float progress)
-                                    :shader-props {:shader-id :ring-progbar
-                                                   :texture-0 (tex-src :skill-view-outline)
-                                                   :texture-1 (tex-src :skill-mask)}}} layer)
-      (rt/build-child! rt {:kind :text :props {:x cx :y (+ cy 28.0) :w 200.0 :h 14.0
-                                                 :text (format (i18n/translate "skill_tree.my_mod.uplevel")
-                                                               (str "Lv." target-level))
-                                                 :font-size 12.0 :color 0xFFFFFFFF}} layer)
-      (when hint
-        (rt/build-child! rt {:kind :text :props {:x cx :y (+ cy 51.0) :w 240.0 :h 14.0
-                                                   :text hint :font-size 9.0 :color 0xAAFFFFFF}} layer))
-      (when (and (not (:is-developing? dev-state)) (nil? result))
+                           :props {:x icon-x :y icon-y :w 50.0 :h 50.0 :progress (float progress)
+                                   :shader-props {:shader-id :ring-progbar
+                                                  :texture-0 (tex-src :skill-view-outline)
+                                                  :texture-1 (tex-src :skill-mask)}}} layer)
+      (ctext (+ cy 28.0) 220 12.0 0xFFFFFFFF
+             (format (i18n/translate "skill_tree.my_mod.uplevel") (str "Lv." target-level)))
+      (when hint (ctext (+ cy 51.0) 260 9.0 0xFFAAAAAA hint))
+      (when (and (not developing?) (nil? result))
         (let [btn-x (- cx 16.0) btn-y (+ cy 70.0)]
           (rt/build-child! rt {:kind :image :props {:x btn-x :y btn-y :w 32.0 :h 16.0
-                                                     :src (tex-src :tex-button)}} layer)
-          (rt/build-child! rt {:kind :text :props {:x cx :y (+ btn-y 4.0) :w 32.0 :h 12.0
-                                                   :text "LEARN" :font-size 9.0 :color 0xFF101010}} layer))))))
+                                                    :src (tex-src :tex-button)}} layer)
+          (ctext (+ btn-y 4.0) 32 9.0 0xFF101010 "LEARN"))))))
 
 (defn- tree-bbox
   "Bounding box of all skill nodes in logic coords (node origin + total-size)."
@@ -311,7 +312,7 @@
       (cond
         (:showing-level-up-popup? st)
         (refresh-levelup-popup! rt (inc (int (get-in rd [:ability-info :level] 1)))
-                                (:level-up-dev-state st))
+                                (:level-up-dev-state st) 420 260 true)
         (:selected-skill st)
         (let [sel (:selected-skill st)
               node (first (filter #(= (:skill-id %) sel) (:skill-nodes rd)))]
@@ -456,5 +457,5 @@
   (when-not (ui/node rt :root)
     (rt/build! rt {:kind :group :id :root :props {:w 400.0 :h 187.0}
                    :children [{:kind :group :id :popup-layer :props {:x 0.0 :y 0.0 :w 400.0 :h 187.0}}]}))
-  (refresh-levelup-popup! rt target-level dev-state)
+  (refresh-levelup-popup! rt target-level dev-state 400 187 false)
   (rt/mark-tree-dirty! rt))

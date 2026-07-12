@@ -578,14 +578,15 @@
         current-level (int (or (:level ad) 1))
         target-level (inc current-level)
         est-consumption (long (* (:cps dev-spec 700.0) (+ 3 (* target-level target-level 0.5))))
-        cx 200.0 cy 93.0
-        text-base-y (+ cy 25.0) btn-x (- cx 16.0) btn-y (+ text-base-y 40.0)
+        cx 200.0 cy 93.5
+        btn-x (- cx 16.0) btn-y (+ cy 70.0)
         state-a (atom {:is-developing? false :progress 0.0 :result nil :error nil})
         prev-dev-a (atom false)
         last-state (atom nil)
         popup-rt (skill-tree-reactive/create-levelup-overlay-runtime target-level @state-a)]
     (bind-cover-fill! rt fill-sig)
     (set-cover-visible! rt true)
+    (cover-fullscreen! rt)
     (add-embedded-runtime! rt {:child-rt popup-rt :x 0.0 :y 0.0 :w classic-w :h classic-h :visible?-fn nil :overlay? true})
     (popup-click-region! rt btn-x btn-y 32.0 16.0
       (fn [] (let [s @state-a] (and (not (:is-developing? s)) (nil? (:result s)))))
