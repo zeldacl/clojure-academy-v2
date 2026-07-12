@@ -6,12 +6,16 @@
   (:refer-clojure :exclude [format]))
 
 (def ^:dynamic *translate-fn*
-  "Function (fn [key] -> string). Defaults to identity; platform should bind/alter-var-root."
-  (fn [k] (str k)))
+  "Function (fn [key args] -> string). `args` is a (possibly empty) seq of format
+   arguments passed to the platform formatter. Defaults to returning the key;
+   platform modules alter-var-root this at init."
+  (fn [k _args] (str k)))
 
 (defn translate
-  "Translate a language key using the platform-provided implementation.
-   If none is installed, returns key string."
-  [k]
-  (*translate-fn* k))
+  "Translate a language key. Extra args are handed to the platform formatter
+   (Minecraft's I18n.get) to fill the language file's %s/%d specifiers — so the
+   i18n layer does the formatting, honouring locale + positional (%1$s) args.
+   With no args the raw translation is returned."
+  [k & args]
+  (*translate-fn* k args))
 

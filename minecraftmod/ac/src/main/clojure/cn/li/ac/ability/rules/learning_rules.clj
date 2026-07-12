@@ -73,15 +73,12 @@
       {:pass? (empty? f) :failures f})))
 
 (defn conditions-with-status
-  "All displayable learn conditions for a skill, each with an :accepted flag.
-   Unlike check-all-conditions (failures only), this returns every condition so
-   the skill popup can show the met + unmet icons (upstream skillViewArea)."
+  "Displayable learn conditions for a skill, each with an :accepted flag. Mirrors
+   upstream: the level condition has shouldDisplay=false so it is omitted; only
+   developer-type / prerequisite / any-skill-level conditions are shown."
   [skill-spec ability-data player-level developer-type]
   (vec
    (concat
-    (when (:level skill-spec)
-      [{:type :level :required-level (:level skill-spec)
-        :accepted (check-level-condition player-level (:level skill-spec))}])
     (when (:developer-type skill-spec)
       [{:type :developer-type :required (:developer-type skill-spec)
         :accepted (check-developer-type-condition developer-type (:developer-type skill-spec))}])

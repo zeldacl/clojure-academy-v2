@@ -551,11 +551,11 @@
                             (= (:result s) :success) (i18n/translate "skill_tree.my_mod.dev_successful")
                             (= (:result s) :failed) (i18n/translate "skill_tree.my_mod.dev_failed")
                             (= (:error s) :low-energy) (i18n/translate "skill_tree.my_mod.noenergy")
-                            (= (:error s) :low-level) (format (i18n/translate "skill_tree.my_mod.level_fail")
-                                                              (int skill-level))
+                            (= (:error s) :low-level) (i18n/translate "skill_tree.my_mod.level_fail"
+                                                                      (int skill-level))
                             (= (:error s) :cond-fail) (i18n/translate "skill_tree.my_mod.condition_fail")
-                            :else (format (i18n/translate "skill_tree.my_mod.learn_question")
-                                          (str est-consumption)))
+                            :else (i18n/translate "skill_tree.my_mod.learn_question"
+                                                  (str est-consumption)))
                   updated (assoc node-data :learned learned?
                                  :exp (double (if learned? (or (adata/get-skill-exp ad skill-id) 0.0) 0.0))
                                  :message message

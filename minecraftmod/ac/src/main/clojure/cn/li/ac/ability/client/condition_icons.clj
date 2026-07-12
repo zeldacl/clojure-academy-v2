@@ -5,7 +5,7 @@
   Original condition icon textures live under abilities/condition/.
   For now, we use existing texture paths; copy condition icons from
   original AcademyCraft assets as needed."
-  (:require [cn.li.ac.ability.domain.developer :as developer]))
+  (:require [cn.li.ac.ability.registry.skill-query :as skill-query]))
 
 (def condition-icon-base-path
   "Base path for condition icon textures."
@@ -15,24 +15,32 @@
   [suffix]
   (str condition-icon-base-path suffix))
 
+(defn- developer-type-texture
+  "Developer type's own block/item texture (upstream DevConditionDeveloperType
+   getIcon = type.texture)."
+  [dt]
+  (case (keyword dt)
+    :portable "textures/item/developer_portable_empty.png"
+    :advanced "textures/block/dev_advanced.png"
+    "textures/block/dev_normal.png"))
+
 ;; ============================================================================
 ;; Condition type → {:icon-path :text-fn}
 ;; text-fn receives the condition map and returns a hint string.
+;; Matches upstream getIcon(): level is not displayed (shouldDisplay=false),
+;; developer-type uses the developer texture, prerequisite uses the required
+;; skill's icon, any-skill-level uses anyN.png.
 ;; ============================================================================
 
 (def condition-type-map
-  {:level
-   {:icon-path (condition-icon-path "level.png")
-    :text-fn (fn [c] (str "Requires Level " (:required-level c (:level c))))}
-
-   :developer-type
-   {:icon-path (condition-icon-path "developer.png")
+  {:developer-type
+   {:icon-path (fn [c] (developer-type-texture (:required c (:developer-type c))))
     :text-fn (fn [c]
                (let [dt (:required c (:developer-type c))]
                  (str "Requires " (name dt) " developer")))}
 
    :prerequisite
-   {:icon-path (condition-icon-path "any2.png")
+   {:icon-path (fn [c] (skill-query/get-skill-icon-path (:skill-id c)))
     :text-fn (fn [c]
                (let [sid (:skill-id c)
                      req (:required c (:min-exp c 0.0))]

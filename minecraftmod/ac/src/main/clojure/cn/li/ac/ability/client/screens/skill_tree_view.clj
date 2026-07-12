@@ -237,7 +237,7 @@
                                                   :texture-0 (tex-src :skill-view-outline)
                                                   :texture-1 (tex-src :skill-mask)}}} layer)
       (ctext (+ cy 28.0) 220 12.0 0xFFFFFFFF
-             (format (i18n/translate "skill_tree.my_mod.uplevel") (str "Lv." target-level)))
+             (i18n/translate "skill_tree.my_mod.uplevel" (str "Lv." target-level)))
       (when hint (ctext (+ cy 51.0) 260 9.0 0xFFAAAAAA hint))
       (when (and (not developing?) (nil? result))
         (let [btn-x (- cx 16.0) btn-y (+ cy 70.0)]

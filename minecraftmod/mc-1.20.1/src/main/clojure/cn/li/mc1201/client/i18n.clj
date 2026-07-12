@@ -1,12 +1,19 @@
 (ns cn.li.mc1201.client.i18n
   "CLIENT-ONLY shared i18n implementation for Minecraft 1.20.1."
   (:require [cn.li.mcmod.i18n :as i18n])
-  (:import [net.minecraft.client.resources.language I18n]))
+  (:import [net.minecraft.client.resources.language I18n]
+           [net.minecraft.locale Language]))
 
 (defn translate
-  [k]
+  ;; With args, let Minecraft's I18n.get format the string (locale-aware, honours
+  ;; %s/%d and positional %1$s). With no args, return the RAW translation via
+  ;; Language.getOrDefault — I18n.get would run String.format on a %s-containing
+  ;; value with zero args and yield Minecraft's "Format error: ..." string.
+  [k args]
   (try
-    (I18n/get (str k) (object-array 0))
+    (if (seq args)
+      (I18n/get (str k) (to-array args))
+      (.getOrDefault (Language/getInstance) (str k)))
     (catch Throwable _
       (str k))))
 
