@@ -16,10 +16,4 @@
                       :targets [:level :immediate]
                       :immediate-fn shield-end-sound!}}}))
 
-(defn init! [] (fx-spec/register! spec) nil)
-
-(defn light-shield-fx-snapshot [] (arc-beam/snapshot :light-shield))
-
-(defn reset-light-shield-fx-for-test! [] (arc-beam/reset-for-test! :light-shield) nil)
-
-(defn clear-light-shield-owner! [owner-key] (arc-beam/clear-owner! :light-shield owner-key) nil)
+(arc-beam/def-arc-beam-fx :light-shield)

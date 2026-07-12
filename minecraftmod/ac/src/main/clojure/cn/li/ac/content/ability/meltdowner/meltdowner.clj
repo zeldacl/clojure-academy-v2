@@ -211,8 +211,6 @@
   :description-key "ability.skill.meltdowner.meltdowner.desc"
   :icon            "textures/abilities/meltdowner/skills/meltdowner.png"
   :ui-position     [115 40]
-  :level           3
-  :controllable?   true
   :ctrl-id         :meltdowner
   :cp-consume-speed 0.0
   :overload-consume-speed 0.0

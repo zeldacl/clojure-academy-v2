@@ -303,8 +303,6 @@
   :description-key "ability.skill.teleporter.location_teleport.desc"
   :icon "textures/abilities/teleporter/skills/location_teleport.png"
   :ui-position [118 50]
-  :level 3
-  :controllable? false
   :ctrl-id :location-teleport
   :cp-consume-speed 0.0
   :overload-consume-speed 0.0

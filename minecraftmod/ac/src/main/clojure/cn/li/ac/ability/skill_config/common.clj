@@ -1,19 +1,26 @@
 (ns cn.li.ac.ability.skill-config.common
-  "Common skill-config data shared by the public facade and category data namespaces.")
+  "Common skill-config data shared by the public facade and category data namespaces.
+
+  skill-definitions is the single source of truth for :level and
+  :controllable? — defskill (dsl.clj) rejects declaring either, and
+  registry/skill.clj register-skill! fills them in from here at registration
+  time. Edit the entry here, not in a skill's content namespace.")
 
 (def category-ids
   [:electromaster :meltdowner :teleporter :vecmanip])
 
 (def skill-definitions
+  ;; electromaster :level values verified against AcademyCraft original source
+  ;; (Skill(id, level) constructor calls) — see cn.academy.ability.vanilla.electromaster.skill.*.
   [{:id :arc-gen :category-id :electromaster :level 1 :controllable? true}
-   {:id :body-intensify :category-id :electromaster :level 4 :controllable? true}
-   {:id :current-charging :category-id :electromaster :level 2 :controllable? true}
-   {:id :mag-manip :category-id :electromaster :level 3 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
-   {:id :mag-movement :category-id :electromaster :level 3 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
+   {:id :body-intensify :category-id :electromaster :level 3 :controllable? true}
+   {:id :current-charging :category-id :electromaster :level 1 :controllable? true}
+   {:id :mag-manip :category-id :electromaster :level 2 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
+   {:id :mag-movement :category-id :electromaster :level 2 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
   {:id :mine-detect :category-id :electromaster :level 3 :controllable? false}
-   {:id :railgun :category-id :electromaster :level 3 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
-   {:id :thunder-bolt :category-id :electromaster :level 2 :controllable? false}
-   {:id :thunder-clap :category-id :electromaster :level 1 :controllable? true}
+   {:id :railgun :category-id :electromaster :level 4 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
+   {:id :thunder-bolt :category-id :electromaster :level 4 :controllable? false}
+   {:id :thunder-clap :category-id :electromaster :level 5 :controllable? true}
 
    {:id :electron-bomb :category-id :meltdowner :level 1 :controllable? false}
    {:id :electron-missile :category-id :meltdowner :level 5 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}

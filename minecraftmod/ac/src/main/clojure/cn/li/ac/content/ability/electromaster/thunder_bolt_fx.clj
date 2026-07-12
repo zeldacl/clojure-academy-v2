@@ -13,15 +13,4 @@
      :aoe-points? true
      :channels [{:topic :thunder-bolt/fx-perform :mode :perform}]}))
 
-(defn init! []
-  (fx-spec/register! spec)
-  nil)
-
-(defn thunder-bolt-fx-snapshot []
-  (arc-beam/snapshot :thunder-bolt-strike))
-
-(defn reset-thunder-bolt-fx-for-test! []
-  (arc-beam/reset-for-test! :thunder-bolt-strike))
-
-(defn clear-thunder-bolt-owner! [owner-key]
-  (arc-beam/clear-owner! :thunder-bolt-strike owner-key))
+(arc-beam/def-arc-beam-fx :thunder-bolt-strike)

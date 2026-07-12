@@ -20,10 +20,4 @@
                                          :y (double (or (:y p) 0.0))
                                          :z (double (or (:z p) 0.0))})}}}))
 
-(defn init! [] (fx-spec/register! spec) nil)
-
-(defn vec-deviation-fx-snapshot [] (arc-beam/snapshot :vec-deviation))
-
-(defn reset-vec-deviation-fx-for-test! [] (arc-beam/reset-for-test! :vec-deviation) nil)
-
-(defn clear-vec-deviation-owner! [owner-key] (arc-beam/clear-owner! :vec-deviation owner-key) nil)
+(arc-beam/def-arc-beam-fx :vec-deviation)

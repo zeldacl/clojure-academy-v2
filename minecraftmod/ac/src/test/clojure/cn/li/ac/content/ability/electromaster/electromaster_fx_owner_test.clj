@@ -15,14 +15,14 @@
 (defn- reset-fixture [f]
   (try
     (hand-effects/reset-hand-effect-registry-for-test!)
-    (mag-manip-fx/reset-mag-manip-fx-for-test!)
-    (current-charging-fx/reset-current-charging-fx-for-test!)
+    (mag-manip-fx/reset-fx-for-test!)
+    (current-charging-fx/reset-fx-for-test!)
     (mag-manip-fx/init!)
     (current-charging-fx/init!)
     (f)
     (finally
-      (mag-manip-fx/reset-mag-manip-fx-for-test!)
-      (current-charging-fx/reset-current-charging-fx-for-test!)
+      (mag-manip-fx/reset-fx-for-test!)
+      (current-charging-fx/reset-fx-for-test!)
       (hand-effects/reset-hand-effect-registry-for-test!))))
 
 (use-fixtures :each reset-fixture)
@@ -40,18 +40,18 @@
     (invoke-charging-enqueue! "ctx-a" :current-charging/fx-update {:mode :update :charge-ticks 12 :good? true})
     (invoke-charging-enqueue! "ctx-b" :current-charging/fx-update {:mode :update :charge-ticks 30 :good? false})
 
-    (let [mag-snapshot (mag-manip-fx/mag-manip-fx-snapshot)
-          charging-snapshot (current-charging-fx/current-charging-fx-snapshot)]
+    (let [mag-snapshot (mag-manip-fx/fx-snapshot)
+          charging-snapshot (current-charging-fx/fx-snapshot)]
       (is (= "minecraft:copper_block" (get-in mag-snapshot [:states [:ctx "ctx-a"] :block-id])))
       (is (= "minecraft:gold_block" (get-in mag-snapshot [:states [:ctx "ctx-b"] :block-id])))
       (is (= 12 (get-in charging-snapshot [:states [:ctx "ctx-a"] :charge-ticks])))
       (is (= 30 (get-in charging-snapshot [:states [:ctx "ctx-b"] :charge-ticks]))))
 
-    (mag-manip-fx/clear-mag-manip-owner! [:ctx "ctx-a"])
-    (current-charging-fx/clear-current-charging-owner! [:ctx "ctx-a"])
+    (mag-manip-fx/clear-fx-owner! [:ctx "ctx-a"])
+    (current-charging-fx/clear-fx-owner! [:ctx "ctx-a"])
 
-    (let [mag-snapshot (mag-manip-fx/mag-manip-fx-snapshot)
-          charging-snapshot (current-charging-fx/current-charging-fx-snapshot)]
+    (let [mag-snapshot (mag-manip-fx/fx-snapshot)
+          charging-snapshot (current-charging-fx/fx-snapshot)]
       (is (nil? (get-in mag-snapshot [:states [:ctx "ctx-a"]])))
       (is (some? (get-in mag-snapshot [:states [:ctx "ctx-b"]])))
       (is (nil? (get-in charging-snapshot [:states [:ctx "ctx-a"]])))

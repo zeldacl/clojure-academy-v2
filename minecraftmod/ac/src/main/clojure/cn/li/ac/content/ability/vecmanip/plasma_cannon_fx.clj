@@ -22,10 +22,4 @@
 											:level-payload (fn [_ _ p]
 																			 {:performed? (boolean (:performed? p))})}}}))
 
-(defn init! [] (fx-spec/register! spec) nil)
-
-(defn plasma-cannon-fx-snapshot [] (arc-beam/snapshot :plasma-cannon))
-
-(defn reset-plasma-cannon-fx-for-test! [] (arc-beam/reset-for-test! :plasma-cannon) nil)
-
-(defn clear-plasma-cannon-owner! [owner-key] (arc-beam/clear-owner! :plasma-cannon owner-key) nil)
+(arc-beam/def-arc-beam-fx :plasma-cannon)

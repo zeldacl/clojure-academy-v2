@@ -10,10 +10,4 @@
      :channels {:shot {:topic :railgun/fx-shot}
                 :reflect {:topic :railgun/fx-reflect}}}))
 
-(defn init! [] (fx-spec/register! spec) nil)
-
-(defn railgun-fx-snapshot [] (arc-beam/snapshot :railgun-shot))
-
-(defn reset-railgun-fx-for-test! [] (arc-beam/reset-for-test! :railgun-shot) nil)
-
-(defn clear-railgun-owner! [owner-key] (arc-beam/clear-owner! :railgun-shot owner-key) nil)
+(arc-beam/def-arc-beam-fx :railgun-shot)

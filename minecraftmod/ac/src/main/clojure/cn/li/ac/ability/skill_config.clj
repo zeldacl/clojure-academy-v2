@@ -35,17 +35,20 @@
 (def field-definitions
   common/field-definitions)
 
+;; One entry per category module — adding a category means adding one entry
+;; here (plus the :require above) instead of touching two separate concat
+;; forms.
+(def ^:private category-modules
+  [{:tunable electromaster/skill-tunable-definitions :internal electromaster/internal-tunable-definitions}
+   {:tunable meltdowner/skill-tunable-definitions :internal meltdowner/internal-tunable-definitions}
+   {:tunable teleporter/skill-tunable-definitions :internal teleporter/internal-tunable-definitions}
+   {:tunable vecmanip/skill-tunable-definitions :internal vecmanip/internal-tunable-definitions}])
+
 (def skill-tunable-definitions
-  (vec (concat electromaster/skill-tunable-definitions
-               meltdowner/skill-tunable-definitions
-               teleporter/skill-tunable-definitions
-               vecmanip/skill-tunable-definitions)))
+  (vec (mapcat :tunable category-modules)))
 
 (def ^:private internal-tunable-definitions
-  (vec (concat electromaster/internal-tunable-definitions
-               meltdowner/internal-tunable-definitions
-               teleporter/internal-tunable-definitions
-               vecmanip/internal-tunable-definitions)))
+  (vec (mapcat :internal category-modules)))
 
 (def field-definitions-by-id
   (into {} (map #(vector (get % :id) %) field-definitions)))

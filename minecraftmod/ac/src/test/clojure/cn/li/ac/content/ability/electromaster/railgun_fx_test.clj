@@ -8,10 +8,10 @@
 (defn- reset-fixture [f]
   (try
         (level-effects/reset-level-effect-registry-for-test!)
-        (railgun-fx/reset-railgun-fx-for-test!)
+        (railgun-fx/reset-fx-for-test!)
         (f)
         (finally
-          (railgun-fx/reset-railgun-fx-for-test!)
+          (railgun-fx/reset-fx-for-test!)
           (level-effects/reset-level-effect-registry-for-test!))))
 
 (use-fixtures :each reset-fixture)
@@ -72,7 +72,7 @@
     (let [plan (arc-beam/effect-build-plan :railgun-shot {:x 0.0 :y 65.0 :z 0.0} nil 0)]
       (is (some? plan))
       (is (seq (:ops plan))))
-    (is (= 1 (count (get (:beam-effects (railgun-fx/railgun-fx-snapshot)) [:ctx "ctx-main"]))))))
+    (is (= 1 (count (get (:beam-effects (railgun-fx/fx-snapshot)) [:ctx "ctx-main"]))))))
 
 (deftest two-owners-keep-railgun-beams-independent-test
   (do
@@ -80,14 +80,14 @@
                                          :end {:x 6.0 :y 64.0 :z 0.0}})
     (arc-beam/enqueue-for-test! :railgun-shot "ctx-b" :railgun/fx-reflect {:start {:x 0.0 :y 65.0 :z 0.0}
                                            :end {:x 6.0 :y 65.0 :z 0.0}})
-    (let [snapshot (railgun-fx/railgun-fx-snapshot)]
+    (let [snapshot (railgun-fx/fx-snapshot)]
       (is (= 1 (count (get (:beam-effects snapshot) [:ctx "ctx-a"]))))
       (is (= 1 (count (get (:beam-effects snapshot) [:ctx "ctx-b"]))))
-      (railgun-fx/clear-railgun-owner! [:ctx "ctx-a"])
-      (let [after-clear (railgun-fx/railgun-fx-snapshot)]
+      (railgun-fx/clear-fx-owner! [:ctx "ctx-a"])
+      (let [after-clear (railgun-fx/fx-snapshot)]
         (is (nil? (get (:beam-effects after-clear) [:ctx "ctx-a"])))
         (is (= 1 (count (get (:beam-effects after-clear) [:ctx "ctx-b"]))))))))
 
-(deftest railgun-fx-snapshot-default-without-registered-state-test
+(deftest fx-snapshot-default-without-registered-state-test
   (is (= {:beam-effects {}}
-         (railgun-fx/railgun-fx-snapshot))))
+         (railgun-fx/fx-snapshot))))

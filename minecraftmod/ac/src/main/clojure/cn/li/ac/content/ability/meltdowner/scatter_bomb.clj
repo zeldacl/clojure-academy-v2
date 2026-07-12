@@ -179,8 +179,6 @@
   :description-key "ability.skill.meltdowner.scatter_bomb.desc"
   :icon           "textures/abilities/meltdowner/skills/scatter_bomb.png"
   :ui-position    [70 50]
-  :level          2
-  :controllable?  true
   :ctrl-id        :scatter-bomb
   :cp-consume-speed 0.0
   :overload-consume-speed 0.0

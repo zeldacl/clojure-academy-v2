@@ -11,10 +11,4 @@
                 :update {:topic :mag-movement/fx-update :mode :update}
                 :end {:topic :mag-movement/fx-end :mode :end}}}))
 
-(defn init! [] (fx-spec/register! spec) nil)
-
-(defn mag-movement-fx-snapshot [] (arc-beam/snapshot :mag-movement))
-
-(defn reset-mag-movement-fx-for-test! [] (arc-beam/reset-for-test! :mag-movement) nil)
-
-(defn clear-mag-movement-owner! [owner-key] (arc-beam/clear-owner! :mag-movement owner-key) nil)
+(arc-beam/def-arc-beam-fx :mag-movement)

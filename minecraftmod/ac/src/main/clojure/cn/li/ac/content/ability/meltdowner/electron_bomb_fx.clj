@@ -15,10 +15,4 @@
 																				{:start (:start p) :end (:end p)})}
 								:end {:topic :electron-bomb/fx-end :mode :end}}}))
 
-(defn init! [] (fx-spec/register! spec) nil)
-
-(defn electron-bomb-fx-snapshot [] (arc-beam/snapshot :electron-bomb))
-
-(defn reset-electron-bomb-fx-for-test! [] (arc-beam/reset-for-test! :electron-bomb) nil)
-
-(defn clear-electron-bomb-owner! [owner-key] (arc-beam/clear-owner! :electron-bomb owner-key) nil)
+(arc-beam/def-arc-beam-fx :electron-bomb)

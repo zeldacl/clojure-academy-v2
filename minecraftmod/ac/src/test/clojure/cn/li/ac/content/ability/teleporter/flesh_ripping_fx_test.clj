@@ -9,11 +9,11 @@
 
 (defn- with-fresh-flesh-ripping-fx-runtime [f]
   (level-effects/reset-level-effect-registry-for-test!)
-  (frfx/reset-flesh-ripping-fx-for-test!)
+  (frfx/reset-fx-for-test!)
       (try
         (f)
         (finally
-          (frfx/reset-flesh-ripping-fx-for-test!)
+          (frfx/reset-fx-for-test!)
           (level-effects/reset-level-effect-registry-for-test!))))
 
 (use-fixtures :each with-fresh-flesh-ripping-fx-runtime)
@@ -83,13 +83,13 @@
                                          :owner-key [:ctx "ctx-1"])
     (level-effects/enqueue-level-effect! :flesh-ripping "ctx-1" :flesh-ripping/fx-update {:mode :update :target-x 1.0 :target-y 2.0 :target-z 3.0 :hit? false}
                                          :owner-key [:ctx "ctx-1"])
-      (is (some? (get (:fx-state (frfx/flesh-ripping-fx-snapshot)) [:ctx "ctx-1"])))
+      (is (some? (get (:fx-state (frfx/fx-snapshot)) [:ctx "ctx-1"])))
     (level-effects/enqueue-level-effect! :flesh-ripping "ctx-1" :flesh-ripping/fx-end {:mode :end}
                                          :owner-key [:ctx "ctx-1"])
-    (is (nil? (get (:fx-state (frfx/flesh-ripping-fx-snapshot)) [:ctx "ctx-1"])))))
+    (is (nil? (get (:fx-state (frfx/fx-snapshot)) [:ctx "ctx-1"])))))
 
 
 
-(deftest flesh-ripping-fx-snapshot-default-without-registered-state-test
+(deftest fx-snapshot-default-without-registered-state-test
   (is (= {:fx-state {}}
-         (frfx/flesh-ripping-fx-snapshot))))
+         (frfx/fx-snapshot))))

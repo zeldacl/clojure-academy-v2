@@ -385,8 +385,6 @@
   :description-key "ability.skill.vecmanip.groundshock.desc"
   :icon "textures/abilities/vecmanip/skills/ground_shock.png"
   :ui-position [64 85]
-  :level 1
-  :controllable? false
   :ctrl-id :groundshock
   :cp-consume-speed 0.0
   :overload-consume-speed 0.0

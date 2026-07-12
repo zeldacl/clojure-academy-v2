@@ -14,10 +14,4 @@
                                            :rescan-interval (:rescan-interval p)})}
                 :end {:topic :mine-detect/fx-end :mode :end}}}))
 
-(defn init! [] (fx-spec/register! spec) nil)
-
-(defn mine-detect-fx-snapshot [] (arc-beam/snapshot :mine-detect))
-
-(defn reset-mine-detect-fx-for-test! [] (arc-beam/reset-for-test! :mine-detect) nil)
-
-(defn clear-mine-detect-owner! [owner-key] (arc-beam/clear-owner! :mine-detect owner-key) nil)
+(arc-beam/def-arc-beam-fx :mine-detect)

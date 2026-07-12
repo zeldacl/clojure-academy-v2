@@ -11,10 +11,10 @@
   (runtime-hooks/with-client-ctx {:session-id :test-session}
     (try
           (level-effects/reset-level-effect-registry-for-test!)
-          (rb-fx/reset-ray-barrage-fx-for-test!)
+          (rb-fx/reset-fx-for-test!)
           (f)
           (finally
-            (rb-fx/reset-ray-barrage-fx-for-test!)
+            (rb-fx/reset-fx-for-test!)
             (level-effects/reset-level-effect-registry-for-test!)))))
 
 (use-fixtures :each reset-fixture)
@@ -117,14 +117,14 @@
                 :to-x 4.0 :to-y 64.0 :to-z 6.0
                 :source-player-id "player-a"
                 :world-id "world-a"})
-      (is (some? (get-in (rb-fx/ray-barrage-fx-snapshot) [:beam-queue [:ctx "ctx-a"]])))
+      (is (some? (get-in (rb-fx/fx-snapshot) [:beam-queue [:ctx "ctx-a"]])))
       (is (seq (:ops (arc-beam/effect-build-plan :ray-barrage {:x 0.0 :y 65.0 :z 0.0} nil 0))))
       (dotimes [_ 12]
         (level-effects/update-effect-state! :ray-barrage
           (fn [store] (arc-beam/effect-tick-state! :level :ray-barrage store))
           nil))
       (is (nil? (arc-beam/effect-build-plan :ray-barrage {:x 0.0 :y 65.0 :z 0.0} nil 0)))
-      (is (empty? (:beam-queue (rb-fx/ray-barrage-fx-snapshot)))))))
+      (is (empty? (:beam-queue (rb-fx/fx-snapshot)))))))
 
 (deftest beam-alpha-fades-with-ttl-test
   (do
@@ -135,11 +135,11 @@
                 :source-player-id "player-a"
                 :world-id "world-a"})
 
-      (is (= 12 (get-in (rb-fx/ray-barrage-fx-snapshot) [:beam-queue [:ctx "ctx-fade"] 0 :ttl])))
+      (is (= 12 (get-in (rb-fx/fx-snapshot) [:beam-queue [:ctx "ctx-fade"] 0 :ttl])))
       (level-effects/update-effect-state! :ray-barrage
         (fn [store] (arc-beam/effect-tick-state! :level :ray-barrage store))
         nil)
-      (is (= 11 (get-in (rb-fx/ray-barrage-fx-snapshot) [:beam-queue [:ctx "ctx-fade"] 0 :ttl]))
+      (is (= 11 (get-in (rb-fx/fx-snapshot) [:beam-queue [:ctx "ctx-fade"] 0 :ttl]))
           "beam ttl should deterministically decay by one tick")
       (is (seq (:ops (arc-beam/effect-build-plan :ray-barrage nil nil 1))))
 
@@ -149,6 +149,6 @@
           nil))
 
       (is (nil? (arc-beam/effect-build-plan :ray-barrage nil nil 13)))
-      (is (empty? (:beam-queue (rb-fx/ray-barrage-fx-snapshot)))))))
+      (is (empty? (:beam-queue (rb-fx/fx-snapshot)))))))
 
 

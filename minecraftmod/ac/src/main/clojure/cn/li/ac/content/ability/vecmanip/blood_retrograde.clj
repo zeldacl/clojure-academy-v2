@@ -253,8 +253,6 @@
   :description-key "ability.skill.vecmanip.blood_retrograde.desc"
   :icon "textures/abilities/vecmanip/skills/blood_retro.png"
   :ui-position [204 83]
-  :level 4
-  :controllable? true
   :ctrl-id :blood-retrograde
   :cp-consume-speed 0.0
   :overload-consume-speed 0.0

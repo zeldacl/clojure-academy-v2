@@ -10,10 +10,10 @@
   (runtime-hooks/with-client-ctx {:session-id :test-session}
     (try
           (level-effects/reset-level-effect-registry-for-test!)
-          (rad-fx/reset-rad-intensify-fx-for-test!)
+          (rad-fx/reset-fx-for-test!)
           (f)
           (finally
-            (rad-fx/reset-rad-intensify-fx-for-test!)
+            (rad-fx/reset-fx-for-test!)
             (level-effects/reset-level-effect-registry-for-test!)))))
 
 (use-fixtures :each reset-fixture)
@@ -63,13 +63,13 @@
   (with-redefs [rand-int (fn [_] 2)]
     (arc-beam/enqueue-for-test! :rad-intensify-mark "ctx-a" :rad-intensify/fx-mark
       {:target-id "target-1" :ticks-left 3 :x 3.0 :y 65.0 :z 7.0})
-      (is (= 3 (get-in (rad-fx/rad-intensify-fx-snapshot)
+      (is (= 3 (get-in (rad-fx/fx-snapshot)
                        [:marks [[:ctx "ctx-a"] "target-1"] :ticks-left])))
       (is (seq (:ops (arc-beam/effect-build-plan :rad-intensify-mark {:x 0.0 :y 65.0 :z 0.0} nil 0))))
       (dotimes [_ 3]
         (level-effects/update-effect-state! :rad-intensify-mark
           (fn [store] (arc-beam/effect-tick-state! :level :rad-intensify-mark store))))
-      (is (empty? (:marks (rad-fx/rad-intensify-fx-snapshot))))
+      (is (empty? (:marks (rad-fx/fx-snapshot))))
       (is (nil? (arc-beam/effect-build-plan :rad-intensify-mark {:x 0.0 :y 65.0 :z 0.0} nil 0)))))
 
 (deftest multi-target-state-isolated-test
@@ -79,6 +79,6 @@
     {:target-id "target-b" :ticks-left 1 :x 2.0 :y 64.0 :z 2.0})
   (level-effects/update-effect-state! :rad-intensify-mark
     (fn [store] (arc-beam/effect-tick-state! :level :rad-intensify-mark store)))
-    (let [snapshot (rad-fx/rad-intensify-fx-snapshot)]
+    (let [snapshot (rad-fx/fx-snapshot)]
       (is (contains? (:marks snapshot) [[:ctx "ctx-a"] "target-a"]))
       (is (not (contains? (:marks snapshot) [[:ctx "ctx-b"] "target-b"])))))

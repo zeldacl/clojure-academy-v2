@@ -11,10 +11,4 @@
                 :perform {:topic :penetrate-tp/fx-perform :mode :perform}
                 :end {:topic :penetrate-tp/fx-end :mode :end}}}))
 
-(defn init! [] (fx-spec/register! spec) nil)
-
-(defn penetrate-teleport-fx-snapshot [] (arc-beam/snapshot :penetrate-teleport))
-
-(defn reset-penetrate-teleport-fx-for-test! [] (arc-beam/reset-for-test! :penetrate-teleport) nil)
-
-(defn clear-penetrate-teleport-owner! [owner-key] (arc-beam/clear-owner! :penetrate-teleport owner-key) nil)
+(arc-beam/def-arc-beam-fx :penetrate-teleport)

@@ -37,10 +37,4 @@
                                                {:from-x (:x origin) :from-y (:y origin) :from-z (:z origin)
                                                 :to-x (:x beam-end) :to-y (:y beam-end) :to-z (:z beam-end)})))))}}}))
 
-(defn init! [] (fx-spec/register! spec) nil)
-
-(defn ray-barrage-fx-snapshot [] (arc-beam/snapshot :ray-barrage))
-
-(defn reset-ray-barrage-fx-for-test! [] (arc-beam/reset-for-test! :ray-barrage) nil)
-
-(defn clear-ray-barrage-owner! [owner-key] (arc-beam/clear-owner! :ray-barrage owner-key) nil)
+(arc-beam/def-arc-beam-fx :ray-barrage)

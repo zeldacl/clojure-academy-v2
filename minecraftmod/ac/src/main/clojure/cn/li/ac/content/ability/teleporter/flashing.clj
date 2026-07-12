@@ -576,9 +576,7 @@
 
   :ui-position     [220 20]
 
-  :level           5
 
-  :controllable?   true
 
   :ctrl-id         :flashing
 

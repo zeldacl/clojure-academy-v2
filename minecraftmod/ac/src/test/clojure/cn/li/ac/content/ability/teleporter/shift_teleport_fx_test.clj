@@ -9,11 +9,11 @@
 
 (defn- with-fresh-shift-teleport-fx-runtime [f]
   (level-effects/reset-level-effect-registry-for-test!)
-  (stfx/reset-shift-teleport-fx-for-test!)
+  (stfx/reset-fx-for-test!)
       (try
         (f)
         (finally
-          (stfx/reset-shift-teleport-fx-for-test!)
+          (stfx/reset-fx-for-test!)
           (level-effects/reset-level-effect-registry-for-test!))))
 
 (use-fixtures :each with-fresh-shift-teleport-fx-runtime)
@@ -61,13 +61,13 @@
                                          :owner-key [:ctx "ctx-1"])
     (level-effects/enqueue-level-effect! :shift-teleport "ctx-1" :shift-teleport/fx-update {:mode :update :x 1.0 :y 2.0 :z 3.0 :target-count 1 :target-hit? false :hand-valid? true}
                                          :owner-key [:ctx "ctx-1"])
-    (is (some? (get (:fx-state (stfx/shift-teleport-fx-snapshot)) [:ctx "ctx-1"])))
+    (is (some? (get (:fx-state (stfx/fx-snapshot)) [:ctx "ctx-1"])))
     (level-effects/enqueue-level-effect! :shift-teleport "ctx-1" :shift-teleport/fx-end {:mode :end}
                                          :owner-key [:ctx "ctx-1"])
-    (is (nil? (get (:fx-state (stfx/shift-teleport-fx-snapshot)) [:ctx "ctx-1"])))))
+    (is (nil? (get (:fx-state (stfx/fx-snapshot)) [:ctx "ctx-1"])))))
 
 
 
-(deftest shift-teleport-fx-snapshot-default-without-registered-state-test
+(deftest fx-snapshot-default-without-registered-state-test
   (is (= {:fx-state {}}
-         (stfx/shift-teleport-fx-snapshot))))
+         (stfx/fx-snapshot))))

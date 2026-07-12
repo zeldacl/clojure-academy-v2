@@ -9,11 +9,11 @@
 
 (defn- with-fresh-penetrate-teleport-fx-runtime [f]
   (level-effects/reset-level-effect-registry-for-test!)
-  (pfx/reset-penetrate-teleport-fx-for-test!)
+  (pfx/reset-fx-for-test!)
       (try
         (f)
         (finally
-          (pfx/reset-penetrate-teleport-fx-for-test!)
+          (pfx/reset-fx-for-test!)
           (level-effects/reset-level-effect-registry-for-test!))))
 
 (use-fixtures :each with-fresh-penetrate-teleport-fx-runtime)
@@ -54,12 +54,12 @@
       (dotimes [_ 3] (level-effects/tick-level-effects!))
       (level-effects/enqueue-level-effect! :penetrate-teleport "ctx-1" :penetrate-teleport/fx-perform {:mode :perform :to-x 4.0 :to-y 5.0 :to-z 6.0}
                                          :owner-key [:ctx "ctx-1"])
-      (is (true? (get-in (pfx/penetrate-teleport-fx-snapshot) [:fx-state [:ctx "ctx-1"] :available?])))
+      (is (true? (get-in (pfx/fx-snapshot) [:fx-state [:ctx "ctx-1"] :available?])))
       (is (= 1 (count @particle-calls*)))
       (is (= 1 (count @sound-calls*))))))
 
 
 
-(deftest penetrate-teleport-fx-snapshot-default-without-registered-state-test
+(deftest fx-snapshot-default-without-registered-state-test
   (is (= {:fx-state {}}
-         (pfx/penetrate-teleport-fx-snapshot))))
+         (pfx/fx-snapshot))))

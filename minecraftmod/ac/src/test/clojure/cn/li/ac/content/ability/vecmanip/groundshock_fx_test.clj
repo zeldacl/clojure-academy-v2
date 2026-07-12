@@ -13,13 +13,13 @@
 (defn- reset-fixture [f]
   (runtime-hooks/with-client-ctx {:session-id :test-session}
     (hand-effects/reset-hand-effect-registry-for-test!)
-    (gfx/reset-groundshock-fx-for-test!)
+    (gfx/reset-fx-for-test!)
     (gfx/init!)
     (try
       (f)
       (finally
         (hand-effects/reset-hand-effect-registry-for-test!)
-        (gfx/reset-groundshock-fx-for-test!)))))
+        (gfx/reset-fx-for-test!)))))
 
 (use-fixtures :each reset-fixture)
 
@@ -92,7 +92,7 @@
       (invoke-hand-enqueue! "ctx-b" :groundshock/fx-start {:mode :start})
       (invoke-hand-enqueue! "ctx-a" :groundshock/fx-update {:mode :update :charge-ticks 2})
       (invoke-hand-enqueue! "ctx-b" :groundshock/fx-update {:mode :update :charge-ticks 4})
-      (let [snapshot (gfx/groundshock-fx-snapshot)]
+      (let [snapshot (gfx/fx-snapshot)]
         (is (= 2 (:charge-ticks (get (:hand-state snapshot) [:ctx "ctx-a"]))))
         (is (= 4 (:charge-ticks (get (:hand-state snapshot) [:ctx "ctx-b"]))))
         (is (= 6 (count @pitch-deltas*))))
@@ -100,12 +100,12 @@
       (invoke-hand-enqueue! "ctx-b" :groundshock/fx-end {:mode :end :performed? false})
       (hand-effects/update-effect-state! :groundshock
         (fn [store] (arc-beam/effect-tick-state! :hand :groundshock store)))
-      (let [snapshot (gfx/groundshock-fx-snapshot)]
+      (let [snapshot (gfx/fx-snapshot)]
         (is (= 3 (:perform-ticks (get (:hand-state snapshot) [:ctx "ctx-a"]))))
         (is (nil? (get (:hand-state snapshot) [:ctx "ctx-b"]))))
-      (gfx/clear-groundshock-owner! [:ctx "ctx-a"])
-      (is (empty? (:hand-state (gfx/groundshock-fx-snapshot)))))))
+      (gfx/clear-fx-owner! [:ctx "ctx-a"])
+      (is (empty? (:hand-state (gfx/fx-snapshot)))))))
 
-(deftest groundshock-fx-snapshot-default-without-registered-state-test
+(deftest fx-snapshot-default-without-registered-state-test
   (is (= {:hand-state {}}
-         (gfx/groundshock-fx-snapshot))))
+         (gfx/fx-snapshot))))

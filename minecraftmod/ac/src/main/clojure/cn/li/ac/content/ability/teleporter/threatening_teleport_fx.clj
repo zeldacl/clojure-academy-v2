@@ -14,10 +14,4 @@
                 :perform {:topic :threatening-tp/fx-perform :mode :perform :level-payload target-payload}
                 :end {:topic :threatening-tp/fx-end :mode :end}}}))
 
-(defn init! [] (fx-spec/register! spec) nil)
-
-(defn threatening-teleport-fx-snapshot [] (arc-beam/snapshot :threatening-teleport))
-
-(defn reset-threatening-teleport-fx-for-test! [] (arc-beam/reset-for-test! :threatening-teleport) nil)
-
-(defn clear-threatening-teleport-owner! [owner-key] (arc-beam/clear-owner! :threatening-teleport owner-key) nil)
+(arc-beam/def-arc-beam-fx :threatening-teleport)

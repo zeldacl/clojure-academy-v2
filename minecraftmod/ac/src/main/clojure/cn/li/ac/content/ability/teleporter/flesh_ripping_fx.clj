@@ -18,10 +18,4 @@
                 :perform {:topic :flesh-ripping/fx-perform :mode :perform :level-payload flesh-target-payload}
                 :end {:topic :flesh-ripping/fx-end :mode :end}}}))
 
-(defn init! [] (fx-spec/register! spec) nil)
-
-(defn flesh-ripping-fx-snapshot [] (arc-beam/snapshot :flesh-ripping))
-
-(defn reset-flesh-ripping-fx-for-test! [] (arc-beam/reset-for-test! :flesh-ripping) nil)
-
-(defn clear-flesh-ripping-owner! [owner-key] (arc-beam/clear-owner! :flesh-ripping owner-key) nil)
+(arc-beam/def-arc-beam-fx :flesh-ripping)

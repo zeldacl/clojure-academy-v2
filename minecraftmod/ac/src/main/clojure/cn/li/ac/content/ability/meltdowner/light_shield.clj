@@ -263,8 +263,6 @@
   :description-key "ability.skill.meltdowner.light_shield.desc"
   :icon           "textures/abilities/meltdowner/skills/light_shield.png"
   :ui-position    [55 15]
-  :level          2
-  :controllable?  true
   :ctrl-id        :light-shield
   :cp-consume-speed 0.0
   :overload-consume-speed 0.0

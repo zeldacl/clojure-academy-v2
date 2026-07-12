@@ -27,4 +27,4 @@
                  :targets [:immediate]
                  :immediate-fn on-fx-end}]}))
 
-(defn init! [] (fx-spec/register! spec) nil)
+(arc-beam/def-arc-beam-fx :body-intensify)

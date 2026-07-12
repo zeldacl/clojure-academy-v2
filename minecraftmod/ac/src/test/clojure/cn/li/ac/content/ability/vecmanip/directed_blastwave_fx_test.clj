@@ -9,10 +9,10 @@
 (defn- reset-fixture [f]
   (try
         (level-effects/reset-level-effect-registry-for-test!)
-        (blastwave-fx/reset-directed-blastwave-fx-for-test!)
+        (blastwave-fx/reset-fx-for-test!)
         (f)
         (finally
-          (blastwave-fx/reset-directed-blastwave-fx-for-test!)
+          (blastwave-fx/reset-fx-for-test!)
           (level-effects/reset-level-effect-registry-for-test!))))
 
 (use-fixtures :each reset-fixture)
@@ -55,7 +55,7 @@
                 :pos {:x 1.0 :y 2.0 :z 3.0}
                 :look-dir {:x 0.0 :y 0.0 :z 1.0}
                 :charge-ticks 20})
-      (is (= 1 (count (get (:waves (blastwave-fx/directed-blastwave-fx-snapshot)) [:ctx "ctx-wave"]))))
+      (is (= 1 (count (get (:waves (blastwave-fx/fx-snapshot)) [:ctx "ctx-wave"]))))
       (is (= 1 (count @sound-calls*)))
       (is (= "my_mod:vecmanip.directed_blast"
              (:sound-id (first @sound-calls*)))))))
@@ -70,7 +70,7 @@
       (level-effects/update-effect-state! :directed-blastwave
         (fn [store] (arc-beam/effect-tick-state! :level :directed-blastwave store))
         nil)
-      (is (empty? (:effect-state (blastwave-fx/directed-blastwave-fx-snapshot))))
+      (is (empty? (:effect-state (blastwave-fx/fx-snapshot))))
       (arc-beam/enqueue-for-test! :directed-blastwave "ctx-tick" :directed-blastwave/fx-perform
                {:mode :perform
                 :pos {:x 1.0 :y 2.0 :z 3.0}
@@ -79,7 +79,7 @@
         (level-effects/update-effect-state! :directed-blastwave
           (fn [store] (arc-beam/effect-tick-state! :level :directed-blastwave store))
           nil))
-      (is (empty? (:waves (blastwave-fx/directed-blastwave-fx-snapshot)))))))
+      (is (empty? (:waves (blastwave-fx/fx-snapshot)))))))
 
 (deftest two-owners-keep-blastwave-state-and-waves-independent-test
   (do
@@ -90,14 +90,14 @@
       (arc-beam/enqueue-for-test! :directed-blastwave "ctx-b" :directed-blastwave/fx-perform {:mode :start :source-player-id "player-b"})
       (arc-beam/enqueue-for-test! :directed-blastwave "ctx-a" :directed-blastwave/fx-perform {:mode :update :charge-ticks 7 :punched? true :source-player-id "player-a"})
       (arc-beam/enqueue-for-test! :directed-blastwave "ctx-b" :directed-blastwave/fx-perform {:mode :update :charge-ticks 11 :punched? false :source-player-id "player-b"})
-      (let [snapshot (blastwave-fx/directed-blastwave-fx-snapshot)]
+      (let [snapshot (blastwave-fx/fx-snapshot)]
         (is (= 7 (get-in (get (:effect-state snapshot) [:ctx "ctx-a"]) [:charge-ticks])))
         (is (= 11 (get-in (get (:effect-state snapshot) [:ctx "ctx-b"]) [:charge-ticks]))))
       (arc-beam/enqueue-for-test! :directed-blastwave "ctx-a" :directed-blastwave/fx-perform {:mode :end :performed? false :source-player-id "player-a"})
       (level-effects/update-effect-state! :directed-blastwave
         (fn [store] (arc-beam/effect-tick-state! :level :directed-blastwave store))
         nil)
-      (let [snapshot (blastwave-fx/directed-blastwave-fx-snapshot)]
+      (let [snapshot (blastwave-fx/fx-snapshot)]
         (is (nil? (get (:effect-state snapshot) [:ctx "ctx-a"])))
         (is (= 11 (get-in (get (:effect-state snapshot) [:ctx "ctx-b"]) [:charge-ticks]))))
       (arc-beam/enqueue-for-test! :directed-blastwave "ctx-a" :directed-blastwave/fx-perform
@@ -110,13 +110,13 @@
                 :pos {:x 10.0 :y 2.0 :z 3.0}
                 :look-dir {:x 1.0 :y 0.0 :z 0.0}
                 :source-player-id "player-b"})
-      (let [snapshot (blastwave-fx/directed-blastwave-fx-snapshot)]
+      (let [snapshot (blastwave-fx/fx-snapshot)]
         (is (= #{[:ctx "ctx-a"] [:ctx "ctx-b"]}
                (set (keys (:waves snapshot)))))
         (is (= 1 (count (get (:waves snapshot) [:ctx "ctx-a"]))))
         (is (= 1 (count (get (:waves snapshot) [:ctx "ctx-b"]))))
-        (blastwave-fx/clear-directed-blastwave-owner! [:ctx "ctx-a"])
-        (let [after-clear (blastwave-fx/directed-blastwave-fx-snapshot)]
+        (blastwave-fx/clear-fx-owner! [:ctx "ctx-a"])
+        (let [after-clear (blastwave-fx/fx-snapshot)]
           (is (nil? (get (:waves after-clear) [:ctx "ctx-a"])))
           (is (= 1 (count (get (:waves after-clear) [:ctx "ctx-b"])))))))))
 

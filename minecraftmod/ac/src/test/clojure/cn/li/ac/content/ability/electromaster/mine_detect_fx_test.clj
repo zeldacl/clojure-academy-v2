@@ -11,12 +11,12 @@
   (runtime-hooks/with-client-ctx {:session-id :test-session}
     (try
       (level-effects/reset-level-effect-registry-for-test!)
-      (mine-detect-fx/reset-mine-detect-fx-for-test!)
+      (mine-detect-fx/reset-fx-for-test!)
       (mine-detect-fx/init!)
       (client-sounds/poll-sound-effects!)
       (f)
       (finally
-        (mine-detect-fx/reset-mine-detect-fx-for-test!)
+        (mine-detect-fx/reset-fx-for-test!)
         (client-sounds/poll-sound-effects!)
         (level-effects/reset-level-effect-registry-for-test!)))))
 
@@ -27,7 +27,7 @@
    :owner-key [:ctx ctx-id]})
 
 (defn- owner-state [ctx-id]
-  (get (:effect-state (mine-detect-fx/mine-detect-fx-snapshot)) [:ctx ctx-id]))
+  (get (:effect-state (mine-detect-fx/fx-snapshot)) [:ctx ctx-id]))
 
 (defn- invoke-enqueue!
   [ctx-id channel payload]
@@ -144,10 +144,10 @@
     {:mode :perform :range 31.0 :advanced? true :life-ticks 20 :rescan-interval 2})
   (is (= 8.0 (:range (owner-state "ctx-a"))))
   (is (= 28.0 (:range (owner-state "ctx-b"))))
-  (mine-detect-fx/clear-mine-detect-owner! [:ctx "ctx-a"])
+  (mine-detect-fx/clear-fx-owner! [:ctx "ctx-a"])
   (is (nil? (owner-state "ctx-a")))
   (is (some? (owner-state "ctx-b"))))
 
-(deftest mine-detect-fx-snapshot-default-without-registered-state-test
+(deftest fx-snapshot-default-without-registered-state-test
   (is (= {:effect-state {}}
-         (mine-detect-fx/mine-detect-fx-snapshot))))
+         (mine-detect-fx/fx-snapshot))))

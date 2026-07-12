@@ -78,8 +78,6 @@
   :description-key "ability.skill.meltdowner.electron_bomb.desc"
   :icon           "textures/abilities/meltdowner/skills/electron_bomb.png"
   :ui-position    [15 45]
-  :level          1
-  :controllable?  false
   :ctrl-id        :electron-bomb
   :pattern        :instant
   :cost           {:down {:cp       (fn [{:keys [player-id]}]

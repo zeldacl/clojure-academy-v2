@@ -25,10 +25,4 @@
                           :level-payload (fn [_ _ p]
                                            {:start (:start p) :end (:end p)})}}}))
 
-(defn init! [] (fx-spec/register! spec) nil)
-
-(defn meltdowner-fx-snapshot [] (arc-beam/snapshot :meltdowner))
-
-(defn reset-meltdowner-fx-for-test! [] (arc-beam/reset-for-test! :meltdowner) nil)
-
-(defn clear-meltdowner-owner! [owner-key] (arc-beam/clear-owner! :meltdowner owner-key) nil)
+(arc-beam/def-arc-beam-fx :meltdowner)

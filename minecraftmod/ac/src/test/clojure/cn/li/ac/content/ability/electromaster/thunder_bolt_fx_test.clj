@@ -9,10 +9,10 @@
 (defn- reset-fixture [f]
   (try
         (level-effects/reset-level-effect-registry-for-test!)
-        (tb-fx/reset-thunder-bolt-fx-for-test!)
+        (tb-fx/reset-fx-for-test!)
         (f)
         (finally
-          (tb-fx/reset-thunder-bolt-fx-for-test!)
+          (tb-fx/reset-fx-for-test!)
           (level-effects/reset-level-effect-registry-for-test!))))
 
 (use-fixtures :each reset-fixture)
@@ -76,14 +76,14 @@
                 :end {:x 3.0 :y 64.0 :z 3.0}
                 :aoe-points [{:x 4.0 :y 64.0 :z 2.0}
                              {:x 2.0 :y 64.0 :z 4.0}]})
-      (is (= 5 (count (get (:arcs (tb-fx/thunder-bolt-fx-snapshot)) [:ctx "ctx-main"]))))
+      (is (= 5 (count (get (:arcs (tb-fx/fx-snapshot)) [:ctx "ctx-main"]))))
       (is (= 1 (count @sounds*)))
       (is (= "my_mod:em.arc_strong" (:sound-id (first @sounds*))))
       (is (some? (arc-beam/effect-build-plan :thunder-bolt-strike {:x 0.0 :y 65.0 :z 0.0} nil 0)))
       (dotimes [_ 30]
         (level-effects/update-effect-state! :thunder-bolt-strike
           (fn [store] (arc-beam/effect-tick-state! :level :thunder-bolt-strike store))))
-      (is (empty? (:arcs (tb-fx/thunder-bolt-fx-snapshot))))
+      (is (empty? (:arcs (tb-fx/fx-snapshot))))
       (is (nil? (arc-beam/effect-build-plan :thunder-bolt-strike {:x 0.0 :y 65.0 :z 0.0} nil 0))))))
 
 (deftest two-owners-keep-independent-arc-queues-test
@@ -100,13 +100,13 @@
                {:start {:x 10.0 :y 64.0 :z 0.0}
                 :end {:x 13.0 :y 64.0 :z 3.0}
                 :aoe-points []})
-      (let [snapshot (tb-fx/thunder-bolt-fx-snapshot)]
+      (let [snapshot (tb-fx/fx-snapshot)]
         (is (= #{[:ctx "ctx-a"] [:ctx "ctx-b"]}
                (set (keys (:arcs snapshot)))))
         (is (= 3 (count (get (:arcs snapshot) [:ctx "ctx-a"]))))
         (is (= 3 (count (get (:arcs snapshot) [:ctx "ctx-b"])))))
-      (tb-fx/clear-thunder-bolt-owner! [:ctx "ctx-a"])
-      (let [snapshot (tb-fx/thunder-bolt-fx-snapshot)]
+      (tb-fx/clear-fx-owner! [:ctx "ctx-a"])
+      (let [snapshot (tb-fx/fx-snapshot)]
         (is (nil? (get (:arcs snapshot) [:ctx "ctx-a"])))
         (is (= 3 (count (get (:arcs snapshot) [:ctx "ctx-b"])))))
       (is (= 2 (count @sounds*))))))
@@ -118,10 +118,10 @@
                                                                (swap! sounds* conj (last args))
                                                                nil)]
       (arc-beam/enqueue-for-test! :thunder-bolt-strike "ctx-invalid" :thunder-bolt/fx-perform {:start {:x 0.0 :y 64.0 :z 0.0}})
-      (is (empty? (:arcs (tb-fx/thunder-bolt-fx-snapshot))))
+      (is (empty? (:arcs (tb-fx/fx-snapshot))))
       (is (empty? @sounds*))
       (is (nil? (arc-beam/effect-build-plan :thunder-bolt-strike {:x 0.0 :y 65.0 :z 0.0} nil 0))))))
 
-(deftest thunder-bolt-fx-snapshot-defaults-without-registered-state-test
+(deftest fx-snapshot-defaults-without-registered-state-test
   (is (= {:arcs {}}
-         (tb-fx/thunder-bolt-fx-snapshot))))
+         (tb-fx/fx-snapshot))))

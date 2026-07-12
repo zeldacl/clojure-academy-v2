@@ -19,10 +19,4 @@
 											:level-payload (fn [_ _ p]
 																			 {:performed? (boolean (:performed? p))})}}}))
 
-(defn init! [] (fx-spec/register! spec) nil)
-
-(defn vec-accel-fx-snapshot [] (arc-beam/snapshot :vec-accel))
-
-(defn reset-vec-accel-fx-for-test! [] (arc-beam/reset-for-test! :vec-accel) nil)
-
-(defn clear-vec-accel-owner! [owner-key] (arc-beam/clear-owner! :vec-accel owner-key) nil)
+(arc-beam/def-arc-beam-fx :vec-accel)

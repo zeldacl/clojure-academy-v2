@@ -9,10 +9,10 @@
 (defn- reset-fixture [f]
   (try
         (level-effects/reset-level-effect-registry-for-test!)
-        (brfx/reset-blood-retrograde-fx-for-test!)
+        (brfx/reset-fx-for-test!)
         (f)
         (finally
-          (brfx/reset-blood-retrograde-fx-for-test!)
+          (brfx/reset-fx-for-test!)
           (level-effects/reset-level-effect-registry-for-test!))))
 
 (use-fixtures :each reset-fixture)
@@ -146,11 +146,11 @@
                                :offset-u 0.0 :offset-v 0.0 :texture-id 1}]})
       (level-effects/update-effect-state! :blood-retrograde
         (fn [store] (arc-beam/effect-tick-state! :level :blood-retrograde store)))
-      (is (= 21 (:ticks (get (:effect-state (brfx/blood-retrograde-fx-snapshot)) [:ctx "ctx-main"]))))
+      (is (= 21 (:ticks (get (:effect-state (brfx/fx-snapshot)) [:ctx "ctx-main"]))))
       (dotimes [_ 9]
         (level-effects/update-effect-state! :blood-retrograde
           (fn [store] (arc-beam/effect-tick-state! :level :blood-retrograde store))))
-      (let [snapshot (brfx/blood-retrograde-fx-snapshot)]
+      (let [snapshot (brfx/fx-snapshot)]
         (is (nil? (get (:splashes snapshot) [:ctx "ctx-main"])))
         (is (= 1 (count (get (:sprays snapshot) [:ctx "ctx-main"])))))))
 
@@ -170,13 +170,13 @@
                    :sound-pos {:x 2.0 :y 3.0 :z 4.0}
                    :splashes [{:x 2.0 :y 3.0 :z 4.0 :size 1.0}]
                    :sprays [{:x 5.0 :y 6.0 :z 7.0 :face :north :size 1.0}]})
-    (let [snapshot (brfx/blood-retrograde-fx-snapshot)]
+    (let [snapshot (brfx/fx-snapshot)]
       (is (= 5 (:ticks (get (:effect-state snapshot) [:ctx "ctx-a"]))))
       (is (= 15 (:ticks (get (:effect-state snapshot) [:ctx "ctx-b"]))))
       (is (= 1 (count (get (:splashes snapshot) [:ctx "ctx-a"]))))
       (is (= 1 (count (get (:sprays snapshot) [:ctx "ctx-b"]))))
-      (brfx/clear-blood-retrograde-owner! [:ctx "ctx-a"])
-      (let [after-clear (brfx/blood-retrograde-fx-snapshot)]
+      (brfx/clear-fx-owner! [:ctx "ctx-a"])
+      (let [after-clear (brfx/fx-snapshot)]
         (is (nil? (get (:effect-state after-clear) [:ctx "ctx-a"])))
         (is (nil? (get (:splashes after-clear) [:ctx "ctx-a"])))
         (is (= 1 (count (get (:sprays after-clear) [:ctx "ctx-b"]))))))))

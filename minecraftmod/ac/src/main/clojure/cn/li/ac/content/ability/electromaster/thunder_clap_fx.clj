@@ -25,10 +25,4 @@
                                         :charge-ratio (double (or (:charge-ratio p) 0.0))
                                         :target (get p :target)})}}}))
 
-(defn init! [] (fx-spec/register! spec) nil)
-
-(defn thunder-clap-fx-snapshot [] (arc-beam/snapshot :thunder-clap))
-
-(defn reset-thunder-clap-fx-for-test! [] (arc-beam/reset-for-test! :thunder-clap) nil)
-
-(defn clear-thunder-clap-owner! [owner-key] (arc-beam/clear-owner! :thunder-clap owner-key) nil)
+(arc-beam/def-arc-beam-fx :thunder-clap)

@@ -1,34 +1,25 @@
 (ns cn.li.ac.ability.registry.skill
   "Canonical AC skill registry storage and registration API.
 
-  Registry stored in Framework [:registry :skills]."
-  (:require [cn.li.ac.ability.registry.skill-spec :as skill-spec]
+  Registry stored in Framework [:registry :skills]. Standard
+  snapshot/freeze/register/reset plumbing lives in registry-core; this
+  namespace only adds skill-specific validation, normalization, and the
+  apply-skill-overrides cache."
+  (:require [cn.li.ac.ability.registry.registry-core :as registry-core]
+            [cn.li.ac.ability.registry.skill-spec :as skill-spec]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.mcmod.config.registry :as config-reg]
-            [cn.li.mcmod.framework :as fw]
-            [cn.li.mcmod.util.log :as log]))
-
-;; Skill Registry — Framework [:registry :skills]
+            [cn.li.mcmod.framework :as fw]))
 
 (def ^:private skill-path [:registry :skills])
-
-(defn- skill-registry-state-snapshot []
-  (if-let [fw-atom (fw/fw-atom)]
-    (get-in @fw-atom skill-path {:registry {} :frozen? false})
-    {:registry {} :frozen? false}))
-
-(defn- update-skill-registry-state! [f & args]
-  (when-let [fw-atom (fw/fw-atom)]
-    (swap! fw-atom update-in skill-path
-           (fn [current] (apply f (or current {:registry {} :frozen? false}) args))))
-  nil)
 
 (defn- stable-skill-identity [spec]
   (select-keys spec [:id :category-id :level :ctrl-id :pattern]))
 
-(defn- assert-registry-open! []
-  (when (:frozen? (skill-registry-state-snapshot))
-    (throw (ex-info "Skill registry is frozen" {}))))
+(def ^:private ops
+  (registry-core/make-registry-ops skill-path
+                                   {:label "skill"
+                                    :conflict-key-fn stable-skill-identity}))
 
 ;; apply-skill-overrides recomputation cache — Framework [:service :skill-spec-cache].
 ;; Invalidated wholesale on config-generation bump (any config mutation anywhere),
@@ -53,65 +44,76 @@
   (reset! (spec-cache-atom) {:gen -1 :specs {}})
   nil)
 
-;; Backward-compatible factory
 (defn create-skill-registry-runtime
+  "Composition-root factory: an isolated {registry frozen?} state atom that
+  runtime-container can install/reinstall as a unit (production reset paths
+  and test fixtures)."
   ([]
    {::skill-registry-runtime true
     :state* (atom {:registry {} :frozen? false})})
   ([{:keys [state*] :or {state* (atom {:registry {} :frozen? false})}}]
    {::skill-registry-runtime true :state* state*}))
 
-;; Backward-compatible install
 (defn install-skill-registry-runtime! [runtime]
-  (when-let [fw-atom (fw/fw-atom)]
-    (when-let [state* (:state* runtime)]
-      (swap! fw-atom assoc-in skill-path @state*)))
+  (when-let [state* (:state* runtime)]
+    ((:reset-for-test! ops) (:registry @state*)))
   (reset-spec-cache!)
   runtime)
 
-;; Query
 (defn skill-registry-snapshot []
-  (:registry (skill-registry-state-snapshot)))
+  ((:snapshot ops)))
 
 (defn reset-skill-registry-for-test!
   ([]
    (reset-skill-registry-for-test! {}))
   ([snapshot]
-   (when-let [fw-atom (fw/fw-atom)]
-     (swap! fw-atom assoc-in skill-path {:registry (or snapshot {}) :frozen? false}))
+   ((:reset-for-test! ops) snapshot)
    (reset-spec-cache!)
    nil))
 
 (defn freeze-skill-registry! []
-  (update-skill-registry-state! assoc :frozen? true)
-  nil)
+  ((:freeze! ops)))
+
+(defn- inject-configured-fields
+  "defskill-declared skills carry no :level/:controllable? (the defskill macro
+  rejects them at compile time) — fill both in from
+  skill-config/skill-definitions-by-id, the single source of truth for those
+  two fields, and cross-check :category-id agrees.
+
+  Callers that already supply :level directly (generic/course-chain passive
+  skills built outside the defskill DSL, and any future external/third-party
+  skill provider) are trusted as-is and skipped — they have no
+  skill-definitions entry by design."
+  [{:keys [id category-id] :as spec}]
+  (if (contains? spec :level)
+    spec
+    (if-let [defn-entry (get skill-config/skill-definitions-by-id id)]
+      (do
+        (when (not= category-id (:category-id defn-entry))
+          (throw (ex-info "register-skill!: :category-id disagrees with skill-config/skill-definitions"
+                          {:id id
+                           :defskill-category-id category-id
+                           :skill-definitions-category-id (:category-id defn-entry)})))
+        (merge spec (select-keys defn-entry [:level :controllable?])))
+      (throw (ex-info "register-skill!: no skill-config/skill-definitions entry for this skill id"
+                      {:id id})))))
 
 (defn register-skill!
   "Validate, normalize, and register a skill spec."
-  [{:keys [id category-id level] :as spec}]
-  (when-not (and (keyword? id) (keyword? category-id) (integer? level))
-    (throw (IllegalArgumentException. "register-skill!: id & category-id must be keywords, level must be integer")))
-  (let [full (skill-spec/normalize-skill-spec spec)]
-    (if-let [existing (get (:registry (skill-registry-state-snapshot)) id)]
-      (if (= (stable-skill-identity existing) (stable-skill-identity full))
-        existing
-        (throw (ex-info "Conflicting skill id"
-                        {:id id :existing (stable-skill-identity existing)
-                         :new (stable-skill-identity full)})))
-      (do
-        (assert-registry-open!)
-        (update-skill-registry-state! assoc-in [:registry id] full)
-        (log/info "Registered skill" id "in category" category-id)
-        full))))
+  [spec]
+  (let [{:keys [id category-id level] :as spec} (inject-configured-fields spec)]
+    (when-not (and (keyword? id) (keyword? category-id) (integer? level))
+      (throw (IllegalArgumentException. "register-skill!: id & category-id must be keywords, level must be integer")))
+    ((:register! ops) (skill-spec/normalize-skill-spec spec))))
 
 (defn raw-skill [skill-id]
-  (get (:registry (skill-registry-state-snapshot)) skill-id))
+  ((:get ops) skill-id))
 
 (defn raw-skills []
-  (vals (:registry (skill-registry-state-snapshot))))
+  ((:get-all ops)))
 
 (defn raw-skill-entries []
-  (:registry (skill-registry-state-snapshot)))
+  ((:snapshot ops)))
 
 (defn get-skill [skill-id]
   (when-let [raw (raw-skill skill-id)]

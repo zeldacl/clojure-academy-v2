@@ -209,8 +209,6 @@
   :description-key "ability.skill.meltdowner.ray_barrage.desc"
   :icon           "textures/abilities/meltdowner/skills/ray_barrage.png"
   :ui-position    [140 10]
-  :level          4
-  :controllable?  false
   :ctrl-id        :ray-barrage
   :pattern        :instant
   :cost           {:down {:cp       (fn [{:keys [player-id]}]

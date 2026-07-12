@@ -663,9 +663,7 @@
 
   :ui-position    [175 47]
 
-  :level          4
 
-  :controllable?  true
 
   :ctrl-id        :shift-teleport
 

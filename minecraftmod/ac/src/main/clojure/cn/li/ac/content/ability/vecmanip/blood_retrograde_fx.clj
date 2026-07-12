@@ -20,10 +20,4 @@
 																						:splashes (:splashes p)
 																						:sprays (:sprays p)})}}}))
 
-(defn init! [] (fx-spec/register! spec) nil)
-
-(defn blood-retrograde-fx-snapshot [] (arc-beam/snapshot :blood-retrograde))
-
-(defn reset-blood-retrograde-fx-for-test! [] (arc-beam/reset-for-test! :blood-retrograde) nil)
-
-(defn clear-blood-retrograde-owner! [owner-key] (arc-beam/clear-owner! :blood-retrograde owner-key) nil)
+(arc-beam/def-arc-beam-fx :blood-retrograde)

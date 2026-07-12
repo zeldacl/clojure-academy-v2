@@ -236,9 +236,7 @@
 
   :ui-position    [130 12]
 
-  :level          3
 
-  :controllable?  true
 
   :ctrl-id        :flesh-ripping
 

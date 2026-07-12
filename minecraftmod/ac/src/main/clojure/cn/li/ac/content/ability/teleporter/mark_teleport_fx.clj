@@ -13,10 +13,4 @@
                 :perform {:topic :mark-teleport/fx-perform :mode :perform
                           :level-payload (fn [_ _ p] {:target (:target p) :distance (double (or (:distance p) 0.0))})}}}))
 
-(defn init! [] (fx-spec/register! spec) nil)
-
-(defn mark-teleport-fx-snapshot [] (arc-beam/snapshot :mark-teleport))
-
-(defn reset-mark-teleport-fx-for-test! [] (arc-beam/reset-for-test! :mark-teleport) nil)
-
-(defn clear-mark-teleport-owner! [owner-key] (arc-beam/clear-owner! :mark-teleport owner-key) nil)
+(arc-beam/def-arc-beam-fx :mark-teleport)

@@ -387,9 +387,7 @@
 
   :ui-position    [14 42]
 
-  :level          1
 
-  :controllable?  true
 
   :ctrl-id        :threatening-teleport
 

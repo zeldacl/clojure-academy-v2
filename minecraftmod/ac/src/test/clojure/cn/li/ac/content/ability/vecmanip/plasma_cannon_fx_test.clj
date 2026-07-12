@@ -10,10 +10,10 @@
 (defn- reset-fixture [f]
   (try
         (level-effects/reset-level-effect-registry-for-test!)
-        (pcfx/reset-plasma-cannon-fx-for-test!)
+        (pcfx/reset-fx-for-test!)
         (f)
         (finally
-          (pcfx/reset-plasma-cannon-fx-for-test!)
+          (pcfx/reset-fx-for-test!)
           (level-effects/reset-level-effect-registry-for-test!))))
 
 (use-fixtures :each reset-fixture)
@@ -130,7 +130,7 @@
         (is (= 3 (count @sound-calls*)))
         (is (= 10 (count @particle-calls*)))
         (is (= 1 (count (:ops plan))))
-        (is (= 10 (get-in (pcfx/plasma-cannon-fx-snapshot)
+        (is (= 10 (get-in (pcfx/fx-snapshot)
                           [:effect-state [:ctx "ctx-main"] :ticks]))))
       (reset! sound-calls* [])
       (reset! particle-calls* [])

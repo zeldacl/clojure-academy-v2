@@ -13,13 +13,7 @@
                 :update {:topic :current-charging/fx-update :mode :update :targets [:hand]}
                 :end {:topic :current-charging/fx-end :mode :end :targets [:hand]}}}))
 
-(defn init! [] (fx-spec/register! spec) nil)
-
-(defn current-charging-fx-snapshot [] (arc-beam/snapshot :current-charging))
-
-(defn reset-current-charging-fx-for-test! [] (arc-beam/reset-for-test! :current-charging) nil)
-
-(defn clear-current-charging-owner! [owner-key] (arc-beam/clear-owner! :current-charging owner-key) nil)
+(arc-beam/def-arc-beam-fx :current-charging)
 
 (defn- visual-max-ticks []
   (max 1 (int (or (skill-config/tunable-int :current-charging :charge.visual-max-ticks) 40))))
@@ -30,7 +24,7 @@
    :charged 0.0 :started-at-ms 0 :ending-at-ms 0})
 
 (defn- current-store []
-  (let [store (current-charging-fx-snapshot)]
+  (let [store (fx-snapshot)]
     (if (contains? store :states) store (arc-beam/initial-state :current-charging))))
 
 (defn- state-for-selector [store selector]

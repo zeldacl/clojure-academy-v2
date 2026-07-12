@@ -18,10 +18,4 @@
                                             :from-x (:from-x p) :from-y (:from-y p) :from-z (:from-z p)})}
                 :end {:topic :shift-teleport/fx-end :mode :end}}}))
 
-(defn init! [] (fx-spec/register! spec) nil)
-
-(defn shift-teleport-fx-snapshot [] (arc-beam/snapshot :shift-teleport))
-
-(defn reset-shift-teleport-fx-for-test! [] (arc-beam/reset-for-test! :shift-teleport) nil)
-
-(defn clear-shift-teleport-owner! [owner-key] (arc-beam/clear-owner! :shift-teleport owner-key) nil)
+(arc-beam/def-arc-beam-fx :shift-teleport)

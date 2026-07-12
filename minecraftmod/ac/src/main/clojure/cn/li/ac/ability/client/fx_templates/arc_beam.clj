@@ -393,5 +393,22 @@
                       :transform-fn transform})
               spec)))))
 
+;; ---------------------------------------------------------------------------
+;; Per-skill FX boilerplate
+;; ---------------------------------------------------------------------------
+
+(defmacro def-arc-beam-fx
+  "Declare the standard `init!` / `fx-snapshot` / `reset-fx-for-test!` /
+  `clear-fx-owner!` quartet for one skill's FX namespace, given its
+  (already-defined, via build-spec) `spec` var and :effect-id keyword.
+  Expands in the calling (per-skill FX) namespace, so every skill FX file
+  collapses these four near-identical forms into one macro invocation."
+  [effect-kw]
+  `(do
+     (defn ~'init! [] (fx-spec/register! ~'spec) nil)
+     (defn ~'fx-snapshot [] (snapshot ~effect-kw))
+     (defn ~'reset-fx-for-test! [] (reset-for-test! ~effect-kw))
+     (defn ~'clear-fx-owner! [owner-key#] (clear-owner! ~effect-kw owner-key#))))
+
 ;; Custom effect implementations (defmethod registrations)
 (require 'cn.li.ac.ability.client.fx-templates.arc-beam.impl.load)

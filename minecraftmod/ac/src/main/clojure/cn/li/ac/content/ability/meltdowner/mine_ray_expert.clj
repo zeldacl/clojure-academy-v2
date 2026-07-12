@@ -53,8 +53,6 @@
   :description-key "ability.skill.meltdowner.mine_ray_expert.desc"
   :icon           "textures/abilities/meltdowner/skills/mine_ray_expert.png"
   :ui-position    [172 70]
-  :level          4
-  :controllable?  true
   :ctrl-id        :mine-ray-expert
   :cp-consume-speed 0.0
   :overload-consume-speed 0.0

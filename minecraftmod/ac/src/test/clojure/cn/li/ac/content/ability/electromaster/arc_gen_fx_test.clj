@@ -12,11 +12,11 @@
 (defn- with-fresh-arc-gen-fx-runtime [f]
   (try
     (level-effects/reset-level-effect-registry-for-test!)
-    (arc-fx/reset-arc-gen-fx-for-test!)
+    (arc-fx/reset-fx-for-test!)
     (arc-fx/init!)
     (f)
     (finally
-      (arc-fx/reset-arc-gen-fx-for-test!)
+      (arc-fx/reset-fx-for-test!)
       (level-effects/reset-level-effect-registry-for-test!))))
 
 (use-fixtures :each with-fresh-arc-gen-fx-runtime)
@@ -76,7 +76,7 @@
       (let [plan (build-plan {:x 0.0 :y 65.0 :z 0.0} nil 0)]
         (is (some? plan))
         (is (seq (:ops plan))))
-      (is (= 1 (count (get (:arcs (arc-fx/arc-gen-fx-snapshot)) [:ctx "ctx-main"]))))
+      (is (= 1 (count (get (:arcs (arc-fx/fx-snapshot)) [:ctx "ctx-main"]))))
       (is (= 1 (count @sounds*)))
       (is (= "my_mod:em.arc_weak" (:sound-id (first @sounds*)))))))
 
@@ -90,15 +90,15 @@
       {:mode :perform
        :start {:x 0.0 :y 1.0 :z 0.0}
        :end {:x 1.0 :y 1.0 :z 0.0}})
-    (let [snapshot (arc-fx/arc-gen-fx-snapshot)]
+    (let [snapshot (arc-fx/fx-snapshot)]
       (is (= 1 (count (get (:arcs snapshot) [:ctx "ctx-a"]))))
       (is (= 1 (count (get (:arcs snapshot) [:ctx "ctx-b"]))))
-      (arc-fx/clear-arc-gen-owner! [:ctx "ctx-a"])
-      (let [after-clear (arc-fx/arc-gen-fx-snapshot)]
+      (arc-fx/clear-fx-owner! [:ctx "ctx-a"])
+      (let [after-clear (arc-fx/fx-snapshot)]
         (is (nil? (get (:arcs after-clear) [:ctx "ctx-a"])))
         (is (= 1 (count (get (:arcs after-clear) [:ctx "ctx-b"]))))))))
 
-(deftest arc-gen-fx-snapshot-default-without-registered-state-test
-  (arc-fx/reset-arc-gen-fx-for-test!)
+(deftest fx-snapshot-default-without-registered-state-test
+  (arc-fx/reset-fx-for-test!)
   (is (= {:arcs {}}
-         (arc-fx/arc-gen-fx-snapshot))))
+         (arc-fx/fx-snapshot))))

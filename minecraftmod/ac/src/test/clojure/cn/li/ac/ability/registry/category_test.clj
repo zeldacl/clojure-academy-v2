@@ -45,7 +45,7 @@
     (cat/register-category! spec)
     (is (= spec (cat/register-category! spec)))
     (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                          #"Conflicting ability category id"
+                          #"Conflicting category id"
                           (cat/register-category! (assoc spec :name-key "cat.changed"))))
     (cat/freeze-category-registry!)
     (is (thrown-with-msg? clojure.lang.ExceptionInfo

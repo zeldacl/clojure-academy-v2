@@ -9,11 +9,11 @@
 
 (defn- with-fresh-flashing-fx-runtime [f]
   (level-effects/reset-level-effect-registry-for-test!)
-  (ffx/reset-flashing-fx-for-test!)
+  (ffx/reset-fx-for-test!)
       (try
         (f)
         (finally
-          (ffx/reset-flashing-fx-for-test!)
+          (ffx/reset-fx-for-test!)
           (level-effects/reset-level-effect-registry-for-test!))))
 
 (use-fixtures :each with-fresh-flashing-fx-runtime)
@@ -88,6 +88,6 @@
 
 
 
-(deftest flashing-fx-snapshot-default-without-registered-state-test
+(deftest fx-snapshot-default-without-registered-state-test
   (is (= {:fx-state {}}
-         (ffx/flashing-fx-snapshot))))
+         (ffx/fx-snapshot))))

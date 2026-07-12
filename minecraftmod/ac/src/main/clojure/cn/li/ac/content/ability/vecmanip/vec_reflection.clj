@@ -485,8 +485,6 @@
   :description-key "ability.skill.vecmanip.vec_reflection.desc"
   :icon "textures/abilities/vecmanip/skills/vec_reflection.png"
   :ui-position [210 50]
-  :level 4
-  :controllable? true
   :ctrl-id :vec-reflection
   :cp-consume-speed 0.0
   :overload-consume-speed 0.0

@@ -16,4 +16,4 @@
                  :targets [:immediate]
                  :immediate-fn on-perform-success!}]}))
 
-(defn init! [] (fx-spec/register! spec) nil)
+(arc-beam/def-arc-beam-fx :location-teleport)

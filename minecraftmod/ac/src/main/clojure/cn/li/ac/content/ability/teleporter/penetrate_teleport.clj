@@ -586,9 +586,7 @@
 
   :ui-position    [60 46]
 
-  :level          2
 
-  :controllable?  true
 
   :ctrl-id        :penetrate-teleport
 

@@ -8,10 +8,10 @@
 (defn- reset-fixture [f]
   (try
         (level-effects/reset-level-effect-registry-for-test!)
-        (thunder-clap-fx/reset-thunder-clap-fx-for-test!)
+        (thunder-clap-fx/reset-fx-for-test!)
         (f)
         (finally
-          (thunder-clap-fx/reset-thunder-clap-fx-for-test!)
+          (thunder-clap-fx/reset-fx-for-test!)
           (level-effects/reset-level-effect-registry-for-test!))))
 
 (use-fixtures :each reset-fixture)
@@ -122,18 +122,18 @@
                                                 :charge-ratio 0.5
                                                 :target {:x 1.0 :y 64.0 :z 0.0}
                                                 :source-player-id "player-a"})
-    (is (some? (get-in (thunder-clap-fx/thunder-clap-fx-snapshot) [:effect-state [:ctx "ctx-a"]])))
+    (is (some? (get-in (thunder-clap-fx/fx-snapshot) [:effect-state [:ctx "ctx-a"]])))
     (arc-beam/enqueue-for-test! :thunder-clap "ctx-a" :thunder-clap/fx-perform {:mode :perform
                                                 :performed? true
                                                 :ticks 12
                                                 :charge-ratio 0.6
                                                 :target {:x 1.0 :y 64.0 :z 0.0}
                                                 :source-player-id "player-a"})
-    (is (some? (get-in (thunder-clap-fx/thunder-clap-fx-snapshot) [:impacts [:ctx "ctx-a"]])))
+    (is (some? (get-in (thunder-clap-fx/fx-snapshot) [:impacts [:ctx "ctx-a"]])))
     (arc-beam/enqueue-for-test! :thunder-clap "ctx-a" :thunder-clap/fx-end {:mode :end
                                             :performed? true
                                             :source-player-id "player-a"})
-    (let [snapshot (thunder-clap-fx/thunder-clap-fx-snapshot)]
+    (let [snapshot (thunder-clap-fx/fx-snapshot)]
       (is (nil? (get-in snapshot [:effect-state [:ctx "ctx-a"]])))
       (is (some? (get-in snapshot [:impacts [:ctx "ctx-a"]]))))))
 

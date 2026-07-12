@@ -8,4 +8,4 @@
      :initial-state (fn [] {})
      :channels {:crit-hit {:topic :teleporter/fx-crit-hit :mode :crit-hit}}}))
 
-(defn init! [] (fx-spec/register! spec) nil)
+(arc-beam/def-arc-beam-fx :teleporter-crit)

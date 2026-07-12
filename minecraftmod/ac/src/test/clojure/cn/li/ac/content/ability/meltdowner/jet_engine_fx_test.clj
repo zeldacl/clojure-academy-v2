@@ -12,10 +12,10 @@
   (runtime-hooks/with-client-ctx {:session-id :test-session}
     (try
           (level-effects/reset-level-effect-registry-for-test!)
-          (je-fx/reset-jet-engine-fx-for-test!)
+          (je-fx/reset-fx-for-test!)
           (f)
           (finally
-            (je-fx/reset-jet-engine-fx-for-test!)
+            (je-fx/reset-fx-for-test!)
             (level-effects/reset-level-effect-registry-for-test!)))))
 
 (use-fixtures :each reset-fixture)
@@ -56,7 +56,7 @@
                                                        "shield-uuid-1"))]
       (je-fx/init!)
       (dispatch! "ctx-je" :jet-engine/fx-start {:mode :mark-start :target {:x 1.0 :y 64.0 :z 1.0} :hold-ticks 0})
-      (is (= :marking (get-in (je-fx/jet-engine-fx-snapshot) [:fx-state [:ctx "ctx-je"] :phase])))
+      (is (= :marking (get-in (je-fx/fx-snapshot) [:fx-state [:ctx "ctx-je"] :phase])))
       (is (seq (:ops (arc-beam/effect-build-plan :jet-engine {:x 0.0 :y 65.0 :z 0.0} nil 0))))
 
       (dispatch! "ctx-je" :jet-engine/fx-trigger-start
@@ -65,7 +65,7 @@
                   :target {:x 4.0 :y 64.0 :z 0.0}
                   :pos {:x 1.0 :y 64.0 :z 0.0}
                   :trigger-ticks 0})
-      (is (= :triggering (get-in (je-fx/jet-engine-fx-snapshot) [:fx-state [:ctx "ctx-je"] :phase])))
+      (is (= :triggering (get-in (je-fx/fx-snapshot) [:fx-state [:ctx "ctx-je"] :phase])))
       (let [ops (:ops (arc-beam/effect-build-plan :jet-engine {:x 0.0 :y 65.0 :z 0.0} nil 1))]
         (is (seq ops))
         (is (some #(= :line (:kind %)) ops))
@@ -116,9 +116,9 @@
                   :target {:x 4.0 :y 64.0 :z 0.0}
                   :pos {:x 1.0 :y 64.0 :z 0.0}
                   :trigger-ticks 0})
-      (is (contains? (set (keys (:fx-state (je-fx/jet-engine-fx-snapshot)))) [:ctx "ctx-je"]))
+      (is (contains? (set (keys (:fx-state (je-fx/fx-snapshot)))) [:ctx "ctx-je"]))
       (dispatch! "ctx-je" :jet-engine/fx-trigger-end {:mode :trigger-end})
-      (is (not (contains? (set (keys (:fx-state (je-fx/jet-engine-fx-snapshot)))) [:ctx "ctx-je"])))
+      (is (not (contains? (set (keys (:fx-state (je-fx/fx-snapshot)))) [:ctx "ctx-je"])))
       (is (= [[:mcmod/spawn-local-scripted-effect {:effect-id "entity_diamond_shield"}]
               [:mcmod/remove-local-scripted-effect {:entity-uuid "shield-uuid-3"}]]
              @local-effects*)))))
@@ -148,4 +148,4 @@
         (level-effects/tick-level-effects!))
 
       (is (nil? (arc-beam/effect-build-plan :jet-engine {:x 0.0 :y 65.0 :z 0.0} nil 20)))
-      (is (empty? (:fx-state (je-fx/jet-engine-fx-snapshot)))))))
+      (is (empty? (:fx-state (je-fx/fx-snapshot)))))))

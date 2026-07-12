@@ -10,102 +10,61 @@
      :prog-incr-rate float         ; experience gain rate for this category
      :enabled       bool}
 
-  Registry stored in Framework [:registry :categories]."
-  (:require [cn.li.mcmod.framework :as fw]
-            [cn.li.mcmod.util.log :as log]))
-
-;; ============================================================================
-;; Registry — Framework [:registry :categories]
-;; ============================================================================
+  Registry stored in Framework [:registry :categories]. Standard
+  snapshot/freeze/register/reset plumbing lives in registry-core."
+  (:require [cn.li.ac.ability.registry.registry-core :as registry-core]))
 
 (def ^:private cat-path [:registry :categories])
 
-(defn- category-registry-state-snapshot []
-  (if-let [fw-atom (fw/fw-atom)]
-    (get-in @fw-atom cat-path {:registry {} :frozen? false})
-    {:registry {} :frozen? false}))
+(defn- validate-category! [{:keys [id] :as spec}]
+  (when-not (and (keyword? id) (string? (:name-key spec)))
+    (throw (IllegalArgumentException. "register-category!: id must be keyword, :name-key must be string"))))
 
-(defn- update-category-registry-state! [f & args]
-  (when-let [fw-atom (fw/fw-atom)]
-    (swap! fw-atom update-in cat-path
-           (fn [current] (apply f (or current {:registry {} :frozen? false}) args))))
-  nil)
+(def ^:private ops
+  (registry-core/make-registry-ops cat-path
+                                   {:label "category"
+                                    :validate! validate-category!}))
 
-(defn- assert-registry-open! []
-  (when (:frozen? (category-registry-state-snapshot))
-    (throw (ex-info "Category registry is frozen" {}))))
-
-;; ============================================================================
-;; Backward-compatible install (writes to Framework)
-;; Backward-compatible factory
 (defn create-category-registry-runtime
+  "Composition-root factory: an isolated {registry frozen?} state atom that
+  runtime-container can install/reinstall as a unit."
   ([]
    {::category-registry-runtime true
     :state* (atom {:registry {} :frozen? false})})
   ([{:keys [state*] :or {state* (atom {:registry {} :frozen? false})}}]
    {::category-registry-runtime true :state* state*}))
 
-;; ============================================================================
-
 (defn install-category-registry-runtime!
-  "Backward-compatible install. Writes to Framework [:registry :categories]."
   [runtime]
-  (when-let [fw-atom (fw/fw-atom)]
-    (when-let [state* (:state* runtime)]
-      (swap! fw-atom assoc-in cat-path @state*)))
+  (when-let [state* (:state* runtime)]
+    ((:reset-for-test! ops) (:registry @state*)))
   runtime)
 
-;; ============================================================================
-;; Query API
-;; ============================================================================
-
 (defn category-registry-snapshot []
-  (:registry (category-registry-state-snapshot)))
+  ((:snapshot ops)))
 
 (defn reset-category-registry-for-test!
   ([]
    (reset-category-registry-for-test! {}))
   ([snapshot]
-   (when-let [fw-atom (fw/fw-atom)]
-     (swap! fw-atom assoc-in cat-path {:registry (or snapshot {}) :frozen? false}))
-   nil))
+   ((:reset-for-test! ops) snapshot)))
 
 (defn freeze-category-registry! []
-  (update-category-registry-state! assoc :frozen? true)
-  nil)
-
-;; ============================================================================
-;; Registration
-;; ============================================================================
+  ((:freeze! ops)))
 
 (defn register-category!
   "Register a category spec with idempotent duplicate handling."
-  [{:keys [id] :as spec}]
-  (when-not (and (keyword? id) (string? (:name-key spec)))
-    (throw (IllegalArgumentException. "register-category!: id must be keyword, :name-key must be string")))
-  (if-let [existing (get (:registry (category-registry-state-snapshot)) id)]
-    (if (= existing spec)
-      existing
-      (throw (ex-info "Conflicting ability category id"
-                      {:id id :existing existing :new spec})))
-    (do
-      (assert-registry-open!)
-      (update-category-registry-state! assoc-in [:registry id] spec)
-      (log/info "Registered ability category" id)
-      spec)))
-
-;; ============================================================================
-;; Query
-;; ============================================================================
+  [spec]
+  ((:register! ops) spec))
 
 (defn get-category [cat-id]
-  (get (:registry (category-registry-state-snapshot)) cat-id))
+  ((:get ops) cat-id))
 
 (defn get-all-categories []
-  (vals (:registry (category-registry-state-snapshot))))
+  ((:get-all ops)))
 
 (defn category-enabled? [cat-id]
   (boolean (:enabled (get-category cat-id))))
 
 (defn get-prog-incr-rate [cat-id]
-  (get-in (:registry (category-registry-state-snapshot)) [cat-id :prog-incr-rate] 1.0))
+  (get-in ((:snapshot ops)) [cat-id :prog-incr-rate] 1.0))

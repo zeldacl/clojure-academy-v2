@@ -18,12 +18,12 @@
   (runtime-hooks/with-client-ctx {:session-id :test-session}
     (try
       (level-effects/reset-level-effect-registry-for-test!)
-      (mag-movement-fx/reset-mag-movement-fx-for-test!)
+      (mag-movement-fx/reset-fx-for-test!)
       (mag-movement-fx/init!)
       (client-sounds/poll-sound-effects!)
       (f)
       (finally
-        (mag-movement-fx/reset-mag-movement-fx-for-test!)
+        (mag-movement-fx/reset-fx-for-test!)
         (client-sounds/poll-sound-effects!)
         (level-effects/reset-level-effect-registry-for-test!)))))
 
@@ -72,11 +72,11 @@
   (invoke-level-enqueue! "ctx-main" :mag-movement/fx-start {:mode :start :target {:x 1.0 :y 2.0 :z 3.0}})
   (invoke-level-enqueue! "ctx-main" :mag-movement/fx-update {:mode :update :target {:x 4.0 :y 5.0 :z 6.0}})
   (is (= {:active? true :target {:x 4.0 :y 5.0 :z 6.0} :ticks 0}
-         (select-keys (get (:effect-state (mag-movement-fx/mag-movement-fx-snapshot)) [:ctx "ctx-main"])
+         (select-keys (get (:effect-state (mag-movement-fx/fx-snapshot)) [:ctx "ctx-main"])
                       [:active? :target :ticks])))
   (invoke-level-enqueue! "ctx-main" :mag-movement/fx-end {:mode :end})
   (invoke-level-enqueue! "ctx-main" :mag-movement/fx-end {:mode :end})
-  (is (nil? (get (:effect-state (mag-movement-fx/mag-movement-fx-snapshot)) [:ctx "ctx-main"]))))
+  (is (nil? (get (:effect-state (mag-movement-fx/fx-snapshot)) [:ctx "ctx-main"]))))
 
 (deftest tick-queues-loop-sound-every-10-ticks-test
   (let [sounds* (atom [])]
@@ -96,16 +96,16 @@
   (invoke-level-enqueue! "ctx-a" :mag-movement/fx-start {:mode :start :target {:x 1.0 :y 2.0 :z 3.0}})
   (invoke-level-enqueue! "ctx-b" :mag-movement/fx-start {:mode :start :target {:x 4.0 :y 5.0 :z 6.0}})
   (invoke-level-enqueue! "ctx-a" :mag-movement/fx-update {:mode :update :target {:x 7.0 :y 8.0 :z 9.0}})
-  (let [snapshot (mag-movement-fx/mag-movement-fx-snapshot)]
+  (let [snapshot (mag-movement-fx/fx-snapshot)]
     (is (= {:x 7.0 :y 8.0 :z 9.0}
            (:target (get (:effect-state snapshot) [:ctx "ctx-a"]))))
     (is (= {:x 4.0 :y 5.0 :z 6.0}
            (:target (get (:effect-state snapshot) [:ctx "ctx-b"]))))
-    (mag-movement-fx/clear-mag-movement-owner! [:ctx "ctx-a"])
-    (let [after-clear (mag-movement-fx/mag-movement-fx-snapshot)]
+    (mag-movement-fx/clear-fx-owner! [:ctx "ctx-a"])
+    (let [after-clear (mag-movement-fx/fx-snapshot)]
       (is (nil? (get (:effect-state after-clear) [:ctx "ctx-a"])))
       (is (some? (get (:effect-state after-clear) [:ctx "ctx-b"]))))))
 
-(deftest mag-movement-fx-snapshot-default-without-registered-state-test
+(deftest fx-snapshot-default-without-registered-state-test
   (is (= {:effect-state {}}
-         (mag-movement-fx/mag-movement-fx-snapshot))))
+         (mag-movement-fx/fx-snapshot))))

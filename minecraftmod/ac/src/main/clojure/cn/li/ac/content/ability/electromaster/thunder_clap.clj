@@ -10,6 +10,7 @@
   Exp: 0.003 per use"
   (:require [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
             [cn.li.ac.ability.fx :as fx]
+            [cn.li.ac.ability.util.attack :as attack]
             [cn.li.ac.ability.util.balance :as bal]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
@@ -46,27 +47,6 @@
      :y (+ (double (:y eye)) (* (double (:y look*)) range))
      :z (+ (double (:z eye)) (* (double (:z look*)) range))}))
 
-(defn- block-impact-point
-  [hit]
-  {:x (double (or (:hit-x hit) (:x hit) 0.0))
-   :y (double (or (:hit-y hit) (:y hit) 0.0))
-   :z (double (or (:hit-z hit) (:z hit) 0.0))})
-
-(defn- entity-impact-point
-  [hit]
-  {:x (double (or (:x hit) (:hit-x hit) 0.0))
-   :y (+ (double (or (:y hit) (:hit-y hit) 0.0))
-         (double (or (:eye-height hit) 0.0)))
-   :z (double (or (:z hit) (:hit-z hit) 0.0))})
-
-(defn- hit-kind
-  [hit]
-  (let [kind (:hit-type hit)]
-    (cond
-      (= kind :entity) :entity
-      (= kind :block) :block
-      :else :miss)))
-
 (defn- resolve-raycast-target
   [player-id]
   (let [range (targeting-range)
@@ -82,9 +62,9 @@
                                         (double (or (:y look) 0.0))
                                         (double (or (:z look) 1.0))
                                         (double range)))]
-    (case (if hit (hit-kind hit) :miss)
-      :entity (entity-impact-point hit)
-      :block (block-impact-point hit)
+    (case (if hit (attack/hit-kind hit) :miss)
+      :entity (attack/entity-impact-point hit)
+      :block (attack/block-impact-point hit)
       (resolve-fallback-target player-id))))
 
 (defn- current-target
@@ -199,8 +179,6 @@
   :description-key "ability.skill.electromaster.thunder_clap.desc"
   :icon            "textures/abilities/electromaster/skills/thunder_clap.png"
   :ui-position     [204 80]
-  :level           5  ;; matching original Skill("thunder_clap", 5)
-  :controllable?   true
   :ctrl-id         :thunder-clap
   :pattern         :charge-window
   :input-policy    {:settle-perform-on-key-up?

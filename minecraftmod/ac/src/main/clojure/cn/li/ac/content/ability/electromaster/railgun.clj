@@ -379,8 +379,6 @@
   :description-key "ability.skill.electromaster.railgun.desc"
   :icon            "textures/abilities/electromaster/skills/railgun.png"
   :ui-position     [164 59]
-  :level           4
-  :controllable?   true
   :ctrl-id         :railgun
   :cp-consume-speed 1.0
   :overload-consume-speed 1.0

@@ -9,11 +9,11 @@
 
 (defn- with-fresh-mark-teleport-fx-runtime [f]
   (level-effects/reset-level-effect-registry-for-test!)
-  (mfx/reset-mark-teleport-fx-for-test!)
+  (mfx/reset-fx-for-test!)
       (try
         (f)
         (finally
-          (mfx/reset-mark-teleport-fx-for-test!)
+          (mfx/reset-fx-for-test!)
           (level-effects/reset-level-effect-registry-for-test!))))
 
 (use-fixtures :each with-fresh-mark-teleport-fx-runtime)
@@ -61,13 +61,13 @@
                                          :owner-key [:ctx "ctx-1"])
     (level-effects/enqueue-level-effect! :mark-teleport "ctx-1" :mark-teleport/fx-update {:mode :update :target {:x 1.0 :y 2.0 :z 3.0} :distance 2.0}
                                          :owner-key [:ctx "ctx-1"])
-    (is (some? (get (:effect-state (mfx/mark-teleport-fx-snapshot)) [:ctx "ctx-1"])))
+    (is (some? (get (:effect-state (mfx/fx-snapshot)) [:ctx "ctx-1"])))
     (level-effects/enqueue-level-effect! :mark-teleport "ctx-1" :mark-teleport/fx-end {:mode :end}
                                          :owner-key [:ctx "ctx-1"])
-    (is (nil? (get (:effect-state (mfx/mark-teleport-fx-snapshot)) [:ctx "ctx-1"])))))
+    (is (nil? (get (:effect-state (mfx/fx-snapshot)) [:ctx "ctx-1"])))))
 
 
 
-(deftest mark-teleport-fx-snapshot-default-without-registered-state-test
+(deftest fx-snapshot-default-without-registered-state-test
   (is (= {:effect-state {}}
-         (mfx/mark-teleport-fx-snapshot))))
+         (mfx/fx-snapshot))))

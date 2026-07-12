@@ -8,11 +8,11 @@
 
 (defn- with-fresh-threatening-teleport-fx-runtime [f]
   (level-effects/reset-level-effect-registry-for-test!)
-  (tfx/reset-threatening-teleport-fx-for-test!)
+  (tfx/reset-fx-for-test!)
       (try
         (f)
         (finally
-          (tfx/reset-threatening-teleport-fx-for-test!)
+          (tfx/reset-fx-for-test!)
           (level-effects/reset-level-effect-registry-for-test!))))
 
 (use-fixtures :each with-fresh-threatening-teleport-fx-runtime)
@@ -46,18 +46,18 @@
                                          :owner-key [:ctx "ctx-a"])
     (level-effects/enqueue-level-effect! :threatening-teleport "ctx-b" :threatening-teleport/fx-update {:mode :update :target-x 4.0 :target-y 5.0 :target-z 6.0 :hit? false}
                                          :owner-key [:ctx "ctx-b"])
-    (let [snapshot (tfx/threatening-teleport-fx-snapshot)]
+    (let [snapshot (tfx/fx-snapshot)]
       (is (true? (:hit? (get (:fx-state snapshot) [:ctx "ctx-a"]))))
       (is (= {:x 4.0 :y 5.0 :z 6.0}
              (:aim (get (:fx-state snapshot) [:ctx "ctx-b"])))))
     (level-effects/enqueue-level-effect! :threatening-teleport "ctx-a" :threatening-teleport/fx-end {:mode :end}
                                          :owner-key [:ctx "ctx-a"])
-    (let [snapshot (tfx/threatening-teleport-fx-snapshot)]
+    (let [snapshot (tfx/fx-snapshot)]
       (is (nil? (get (:fx-state snapshot) [:ctx "ctx-a"])))
       (is (some? (get (:fx-state snapshot) [:ctx "ctx-b"]))))
-    (tfx/clear-threatening-teleport-owner! [:ctx "ctx-b"])
-    (is (empty? (:fx-state (tfx/threatening-teleport-fx-snapshot))))))
+    (tfx/clear-fx-owner! [:ctx "ctx-b"])
+    (is (empty? (:fx-state (tfx/fx-snapshot))))))
 
-(deftest threatening-teleport-fx-snapshot-default-without-registered-state-test
+(deftest fx-snapshot-default-without-registered-state-test
   (is (= {:fx-state {}}
-         (tfx/threatening-teleport-fx-snapshot))))
+         (tfx/fx-snapshot))))

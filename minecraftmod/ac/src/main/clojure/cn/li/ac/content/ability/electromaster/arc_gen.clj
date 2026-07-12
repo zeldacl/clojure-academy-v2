@@ -170,8 +170,6 @@
   :description-key "ability.skill.electromaster.arc_gen.desc"
   :icon           "textures/abilities/electromaster/skills/arc_gen.png"
   :ui-position    [24 46]
-  :level          1
-  :controllable?  true
   :ctrl-id        :arc-gen
   :pattern        :instant
   :cost           {:down {:cp       (fn [player-id _skill-id exp]

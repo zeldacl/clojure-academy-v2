@@ -9,10 +9,10 @@
 (defn- reset-fixture [f]
   (try
         (level-effects/reset-level-effect-registry-for-test!)
-        (vafx/reset-vec-accel-fx-for-test!)
+        (vafx/reset-fx-for-test!)
         (f)
         (finally
-          (vafx/reset-vec-accel-fx-for-test!)
+          (vafx/reset-fx-for-test!)
           (level-effects/reset-level-effect-registry-for-test!))))
 
 (use-fixtures :each reset-fixture)
@@ -58,11 +58,11 @@
                        :look-dir {:x 0.0 :y 0.0 :z 1.0}
                        :init-vel {:x 0.0 :y 0.5 :z 1.0}
                        :source-player-id "player-b"})
-    (let [snapshot (vafx/vec-accel-fx-snapshot)]
+    (let [snapshot (vafx/fx-snapshot)]
       (is (= 12 (:charge-ticks (get (:effect-state snapshot) [:ctx "ctx-a"]))))
       (is (= 3 (:charge-ticks (get (:effect-state snapshot) [:ctx "ctx-b"]))))
-      (vafx/clear-vec-accel-owner! [:ctx "ctx-a"])
-      (let [after-clear (vafx/vec-accel-fx-snapshot)]
+      (vafx/clear-fx-owner! [:ctx "ctx-a"])
+      (let [after-clear (vafx/fx-snapshot)]
         (is (nil? (get (:effect-state after-clear) [:ctx "ctx-a"])))
         (is (some? (get (:effect-state after-clear) [:ctx "ctx-b"])))))))
 

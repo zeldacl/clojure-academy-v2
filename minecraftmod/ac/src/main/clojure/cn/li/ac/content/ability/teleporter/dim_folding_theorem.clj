@@ -11,8 +11,6 @@
   :description-key "ability.skill.teleporter.dim_folding_theorem.desc"
   :icon "textures/abilities/teleporter/skills/dim_folding_theorem.png"
   :ui-position [50 75]
-  :level 1
-  :controllable? false
   :ctrl-id :dim-folding-theorem
   :pattern :passive
   :prerequisites [{:skill-id :threatening-teleport :min-exp 0.2}])

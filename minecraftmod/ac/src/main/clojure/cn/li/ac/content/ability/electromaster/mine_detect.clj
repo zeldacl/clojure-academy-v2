@@ -73,8 +73,6 @@
   :description-key "ability.skill.electromaster.mine_detect.desc"
   :icon           "textures/abilities/electromaster/skills/mine_detect.png"
   :ui-position    [225 12]
-  :level          3
-  :controllable?  false
   :ctrl-id        :mine-detect
   :pattern        :instant
   :cost           {:down {:cp       (fn [player-id _skill-id exp]

@@ -211,8 +211,6 @@
   :description-key "ability.skill.electromaster.current_charging.desc"
   :icon        "textures/abilities/electromaster/skills/charging.png"
   :ui-position [55 18]
-  :level       1
-  :controllable? true
   :ctrl-id     :current-charging
   :pattern     :hold-channel
   :cooldown    {:mode :manual}

@@ -12,12 +12,12 @@
 (defn- with-fresh-current-charging-fx-runtime [f]
   (try
     (hand-effects/reset-hand-effect-registry-for-test!)
-    (current-charging-fx/reset-current-charging-fx-for-test!)
+    (current-charging-fx/reset-fx-for-test!)
     (current-charging-fx/init!)
     (f)
     (finally
       (hand-effects/reset-hand-effect-registry-for-test!)
-      (current-charging-fx/reset-current-charging-fx-for-test!))))
+      (current-charging-fx/reset-fx-for-test!))))
 
 (use-fixtures :each with-fresh-current-charging-fx-runtime)
 
@@ -60,7 +60,7 @@
 
 (deftest fx-state-updates-and-queues-loop-sound-test
   (let [queued* (atom [])]
-    (current-charging-fx/reset-current-charging-fx-for-test!)
+    (current-charging-fx/reset-fx-for-test!)
     (with-redefs [client-sounds/queue-current-sound-effect! (fn [payload]
                                                               (swap! queued* conj payload)
                                                               nil)]
@@ -86,7 +86,7 @@
 
 (deftest two-owners-keep-current-charging-state-independent-test
   (let [queued* (atom [])]
-    (current-charging-fx/reset-current-charging-fx-for-test!)
+    (current-charging-fx/reset-fx-for-test!)
     (with-redefs [client-sounds/queue-current-sound-effect! (fn [payload]
                                                               (swap! queued* conj payload)
                                                               nil)]
@@ -94,7 +94,7 @@
       (invoke-hand-enqueue! "ctx-b" :current-charging/fx-start {:mode :start :is-item true})
       (invoke-hand-enqueue! "ctx-a" :current-charging/fx-update {:mode :update :good? true :charge-ticks 10})
       (invoke-hand-enqueue! "ctx-b" :current-charging/fx-update {:mode :update :good? false :charge-ticks 30})
-      (let [snapshot (current-charging-fx/current-charging-fx-snapshot)
+      (let [snapshot (current-charging-fx/fx-snapshot)
             state-a (get (:states snapshot) [:ctx "ctx-a"])
             state-b (get (:states snapshot) [:ctx "ctx-b"])]
         (is (= #{[:ctx "ctx-a"] [:ctx "ctx-b"]}
@@ -107,14 +107,14 @@
       (is (false? (:active? (current-charging-fx/current-state [:ctx "ctx-a"]))))
       (is (true? (:blending? (current-charging-fx/current-state [:ctx "ctx-a"]))))
       (is (true? (:active? (current-charging-fx/current-state [:ctx "ctx-b"]))))
-      (current-charging-fx/clear-current-charging-owner! [:ctx "ctx-a"])
-      (let [snapshot (current-charging-fx/current-charging-fx-snapshot)]
+      (current-charging-fx/clear-fx-owner! [:ctx "ctx-a"])
+      (let [snapshot (current-charging-fx/fx-snapshot)]
         (is (nil? (get (:states snapshot) [:ctx "ctx-a"])))
         (is (= 30 (:charge-ticks (get (:states snapshot) [:ctx "ctx-b"]))))))
     (is (= 2 (count @queued*)))))
 
-(deftest current-charging-fx-snapshot-default-without-registered-state-test
+(deftest fx-snapshot-default-without-registered-state-test
   (is (= {:states {}}
-         (current-charging-fx/current-charging-fx-snapshot)))
+         (current-charging-fx/fx-snapshot)))
   (is (= false
          (:active? (current-charging-fx/current-state :missing-selector)))))

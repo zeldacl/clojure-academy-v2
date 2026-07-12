@@ -188,8 +188,6 @@
   :description-key "ability.skill.meltdowner.electron_missile.desc"
   :icon           "textures/abilities/meltdowner/skills/electron_missile.png"
   :ui-position    [210 35]
-  :level          5
-  :controllable?  true
   :ctrl-id        :electron-missile
   :cp-consume-speed 0.0
   :overload-consume-speed 0.0

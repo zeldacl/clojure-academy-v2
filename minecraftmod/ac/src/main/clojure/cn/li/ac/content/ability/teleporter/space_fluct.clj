@@ -11,8 +11,6 @@
   :description-key "ability.skill.teleporter.space_fluct.desc"
   :icon "textures/abilities/teleporter/skills/space_fluct.png"
   :ui-position [160 80]
-  :level 4
-  :controllable? false
   :ctrl-id :space-fluct
   :pattern :passive
   :prerequisites [{:skill-id :shift-teleport :min-exp 0.0}])

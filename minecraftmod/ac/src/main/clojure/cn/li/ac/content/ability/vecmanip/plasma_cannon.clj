@@ -363,8 +363,6 @@
   :description-key "ability.skill.vecmanip.plasma_cannon.desc"
   :icon "textures/abilities/vecmanip/skills/plasma_cannon.png"
   :ui-position [175 14]
-  :level 5
-  :controllable? false
   :ctrl-id :plasma-cannon
   :cp-consume-speed 0.0
   :overload-consume-speed 0.0

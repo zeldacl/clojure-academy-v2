@@ -9,10 +9,10 @@
 (defn- reset-fixture [f]
   (try
         (level-effects/reset-level-effect-registry-for-test!)
-        (vdfx/reset-vec-deviation-fx-for-test!)
+        (vdfx/reset-fx-for-test!)
         (f)
         (finally
-          (vdfx/reset-vec-deviation-fx-for-test!)
+          (vdfx/reset-fx-for-test!)
           (level-effects/reset-level-effect-registry-for-test!))))
 
 (use-fixtures :each reset-fixture)
@@ -45,11 +45,11 @@
 (deftest enqueue-stop-entity-requires-marked-flag-test
   (do
     (is (= {:effect-state {} :wave-effects {}}
-           (vdfx/vec-deviation-fx-snapshot)))
+           (vdfx/fx-snapshot)))
     (arc-beam/enqueue-for-test! :vec-deviation "ctx-main" :vec-deviation/fx-stop-entity {:mode :stop-entity :x 1.0 :y 2.0 :z 3.0 :marked? false})
-    (is (empty? (:wave-effects (vdfx/vec-deviation-fx-snapshot))))
+    (is (empty? (:wave-effects (vdfx/fx-snapshot))))
     (arc-beam/enqueue-for-test! :vec-deviation "ctx-main" :vec-deviation/fx-stop-entity {:mode :stop-entity :x 1.0 :y 2.0 :z 3.0 :marked? true})
-    (let [waves (get (:wave-effects (vdfx/vec-deviation-fx-snapshot)) [:ctx "ctx-main"])]
+    (let [waves (get (:wave-effects (vdfx/fx-snapshot)) [:ctx "ctx-main"])]
       (is (= 1 (count waves)))
       (is (= 3.0 (:z (first waves)))))))
 
@@ -99,13 +99,13 @@
     (arc-beam/enqueue-for-test! :vec-deviation "ctx-b" :vec-deviation/fx-stop-entity {:mode :start :source-player-id "player-b"})
     (arc-beam/enqueue-for-test! :vec-deviation "ctx-a" :vec-deviation/fx-stop-entity {:mode :stop-entity :x 1.0 :y 64.0 :z 1.0 :marked? true :source-player-id "player-a"})
     (arc-beam/enqueue-for-test! :vec-deviation "ctx-b" :vec-deviation/fx-stop-entity {:mode :stop-entity :x 2.0 :y 64.0 :z 2.0 :marked? true :source-player-id "player-b"})
-    (let [snapshot (vdfx/vec-deviation-fx-snapshot)]
+    (let [snapshot (vdfx/fx-snapshot)]
       (is (:active? (get (:effect-state snapshot) [:ctx "ctx-a"])))
       (is (:active? (get (:effect-state snapshot) [:ctx "ctx-b"])))
       (is (= 1 (count (get (:wave-effects snapshot) [:ctx "ctx-a"]))))
       (is (= 1 (count (get (:wave-effects snapshot) [:ctx "ctx-b"]))))
-      (vdfx/clear-vec-deviation-owner! [:ctx "ctx-a"])
-      (let [after-clear (vdfx/vec-deviation-fx-snapshot)]
+      (vdfx/clear-fx-owner! [:ctx "ctx-a"])
+      (let [after-clear (vdfx/fx-snapshot)]
         (is (nil? (get (:effect-state after-clear) [:ctx "ctx-a"])))
         (is (nil? (get (:wave-effects after-clear) [:ctx "ctx-a"])))
         (is (:active? (get (:effect-state after-clear) [:ctx "ctx-b"])))))))

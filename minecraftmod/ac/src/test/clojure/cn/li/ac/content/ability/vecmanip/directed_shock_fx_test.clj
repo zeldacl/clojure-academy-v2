@@ -12,15 +12,15 @@
 (defn- with-fresh-directed-shock-runtime [f]
   (try
     (hand-effects/reset-hand-effect-registry-for-test!)
-    (dsfx/reset-directed-shock-fx-for-test!)
+    (dsfx/reset-fx-for-test!)
     (dsfx/init!)
     (f)
     (finally
       (hand-effects/reset-hand-effect-registry-for-test!)
-      (dsfx/reset-directed-shock-fx-for-test!))))
+      (dsfx/reset-fx-for-test!))))
 
 (defn- owner-state [ctx-id]
-  (get (:effect-state (dsfx/directed-shock-fx-snapshot)) [:ctx ctx-id]))
+  (get (:effect-state (dsfx/fx-snapshot)) [:ctx ctx-id]))
 
 (use-fixtures :each with-fresh-directed-shock-runtime)
 
@@ -82,7 +82,7 @@
       (swap! now* + 301)
       (hand-effects/update-effect-state! :directed-shock
         (fn [store] (arc-beam/effect-tick-state! :hand :directed-shock store)))
-      (is (empty? (:effect-state (dsfx/directed-shock-fx-snapshot)))))))
+      (is (empty? (:effect-state (dsfx/fx-snapshot)))))))
 
 (deftest two-owners-keep-directed-shock-state-independent-test
   (with-redefs [client-sounds/queue-current-sound-effect! (fn [_] nil)]
@@ -93,9 +93,9 @@
     (invoke-hand-enqueue! "ctx-a" :directed-shock/fx-end {:mode :end :performed? false})
     (is (nil? (owner-state "ctx-a")))
     (is (= :punch (:stage (owner-state "ctx-b"))))
-    (dsfx/clear-directed-shock-owner! [:ctx "ctx-b"])
-    (is (empty? (:effect-state (dsfx/directed-shock-fx-snapshot))))))
+    (dsfx/clear-fx-owner! [:ctx "ctx-b"])
+    (is (empty? (:effect-state (dsfx/fx-snapshot))))))
 
-(deftest directed-shock-fx-snapshot-default-without-registered-state-test
+(deftest fx-snapshot-default-without-registered-state-test
   (is (= {:effect-state {}}
-         (dsfx/directed-shock-fx-snapshot))))
+         (dsfx/fx-snapshot))))

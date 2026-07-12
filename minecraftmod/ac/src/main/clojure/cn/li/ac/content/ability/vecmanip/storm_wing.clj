@@ -319,8 +319,6 @@
   :description-key "ability.skill.vecmanip.storm_wing.desc"
   :icon "textures/abilities/vecmanip/skills/storm_wing.png"
   :ui-position [130 20]
-  :level 3
-  :controllable? true
   :ctrl-id :storm-wing
   :cp-consume-speed 1.0
   :overload-consume-speed 1.0

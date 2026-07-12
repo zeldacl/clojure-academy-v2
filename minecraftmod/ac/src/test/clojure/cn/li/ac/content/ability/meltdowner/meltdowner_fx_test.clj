@@ -11,10 +11,10 @@
   (runtime-hooks/with-client-ctx {:session-id :test-session}
     (try
           (level-effects/reset-level-effect-registry-for-test!)
-          (md-fx/reset-meltdowner-fx-for-test!)
+          (md-fx/reset-fx-for-test!)
           (f)
           (finally
-            (md-fx/reset-meltdowner-fx-for-test!)
+            (md-fx/reset-fx-for-test!)
             (level-effects/reset-level-effect-registry-for-test!)))))
 
 (use-fixtures :each reset-fixture)
@@ -117,18 +117,18 @@
                                              :ticks 10
                                              :charge-ratio 0.5
                                              :source-player-id "player-a"})
-    (is (some? (get-in (md-fx/meltdowner-fx-snapshot) [:effect-state [:ctx "ctx-a"]])))
+    (is (some? (get-in (md-fx/fx-snapshot) [:effect-state [:ctx "ctx-a"]])))
     (arc-beam/enqueue-for-test! :meltdowner "ctx-a" :meltdowner/fx-perform {:mode :perform
                                               :start {:x 1.0 :y 64.0 :z 0.0}
                                               :end {:x 2.0 :y 64.0 :z 1.0}
                                               :charge-ticks 20
                                               :beam-length 30.0
                                               :source-player-id "player-a"})
-    (is (some? (get-in (md-fx/meltdowner-fx-snapshot) [:rays [:ctx "ctx-a"]])))
+    (is (some? (get-in (md-fx/fx-snapshot) [:rays [:ctx "ctx-a"]])))
     (arc-beam/enqueue-for-test! :meltdowner "ctx-a" :meltdowner/fx-end {:mode :end
                                           :performed? true
                                           :source-player-id "player-a"})
-    (let [snapshot (md-fx/meltdowner-fx-snapshot)]
+    (let [snapshot (md-fx/fx-snapshot)]
       (is (false? (get-in snapshot [:effect-state [:ctx "ctx-a"] :active?])))
       (is (some? (get-in snapshot [:rays [:ctx "ctx-a"]]))))))
 
@@ -187,6 +187,6 @@
       (dotimes [_ 16]
         (level-effects/update-effect-state! :meltdowner
           (fn [store] (arc-beam/effect-tick-state! :level :meltdowner store))))
-      (is (nil? (get-in (md-fx/meltdowner-fx-snapshot) [:rays [:ctx "ctx-cadence"]]))))))
+      (is (nil? (get-in (md-fx/fx-snapshot) [:rays [:ctx "ctx-cadence"]]))))))
 
 

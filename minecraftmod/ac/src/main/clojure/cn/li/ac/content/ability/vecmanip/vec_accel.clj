@@ -109,8 +109,6 @@
   :description-key "ability.skill.vecmanip.vec_accel.desc"
   :icon        "textures/abilities/vecmanip/skills/vec_accel.png"
   :ui-position [76 40]
-  :level       2
-  :controllable? false
   :ctrl-id     :vec-accel
   :pattern     :hold-charge-release
   :cooldown    {:mode :manual}

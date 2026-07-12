@@ -15,15 +15,4 @@
                                       :end (:end p)
                                       :hit-type (:hit-type p)})}]}))
 
-(defn init! []
-  (fx-spec/register! spec)
-  nil)
-
-(defn arc-gen-fx-snapshot []
-  (arc-beam/snapshot :arc-gen))
-
-(defn reset-arc-gen-fx-for-test! []
-  (arc-beam/reset-for-test! :arc-gen))
-
-(defn clear-arc-gen-owner! [owner-key]
-  (arc-beam/clear-owner! :arc-gen owner-key))
+(arc-beam/def-arc-beam-fx :arc-gen)

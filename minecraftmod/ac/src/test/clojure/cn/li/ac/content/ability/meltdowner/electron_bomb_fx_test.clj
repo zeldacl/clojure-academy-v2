@@ -12,10 +12,10 @@
   (runtime-hooks/with-client-ctx {:session-id :test-session}
     (try
           (level-effects/reset-level-effect-registry-for-test!)
-          (electron-bomb-fx/reset-electron-bomb-fx-for-test!)
+          (electron-bomb-fx/reset-fx-for-test!)
           (f)
           (finally
-            (electron-bomb-fx/reset-electron-bomb-fx-for-test!)
+            (electron-bomb-fx/reset-fx-for-test!)
             (level-effects/reset-level-effect-registry-for-test!)))))
 
 (use-fixtures :each reset-fixture)
@@ -102,7 +102,7 @@
                                                         nil)]
       (arc-beam/enqueue-for-test! :electron-bomb "ctx-a" :electron-bomb/fx-spawn
                {:mode :spawn :x 1.0 :y 64.0 :z 2.0 :dx 0.0 :dy 0.0 :dz 1.0})
-      (is (some? (get-in (electron-bomb-fx/electron-bomb-fx-snapshot) [:effect-state [:ctx "ctx-a"]])))
+      (is (some? (get-in (electron-bomb-fx/fx-snapshot) [:effect-state [:ctx "ctx-a"]])))
       (let [spawn-plan (arc-beam/effect-build-plan :electron-bomb {:x 0.0 :y 65.0 :z 0.0} nil 0)]
         (is (seq (:ops spawn-plan))))
       (arc-beam/enqueue-for-test! :electron-bomb "ctx-a" :electron-bomb/fx-beam
@@ -111,7 +111,7 @@
                 :end {:x 1.0 :y 64.0 :z 17.0}
                 :performed? true
                 :target-uuid "target-1"})
-      (let [snapshot (electron-bomb-fx/electron-bomb-fx-snapshot)]
+      (let [snapshot (electron-bomb-fx/fx-snapshot)]
         (is (nil? (get-in snapshot [:effect-state [:ctx "ctx-a"]])))
         (is (seq (get-in snapshot [:beams [:ctx "ctx-a"]]))))
       (is (seq (:ops (arc-beam/effect-build-plan :electron-bomb {:x 0.0 :y 65.0 :z 0.0} nil 0))))
@@ -139,7 +139,7 @@
           (fn [store] (arc-beam/effect-tick-state! :level :electron-bomb store))
           nil))
 
-      (is (nil? (get-in (electron-bomb-fx/electron-bomb-fx-snapshot) [:effect-state [:ctx "ctx-cadence"]]))
+      (is (nil? (get-in (electron-bomb-fx/fx-snapshot) [:effect-state [:ctx "ctx-cadence"]]))
           "active electron-bomb state should auto-expire after tick > 40")
       (is (= 13 (count @particles*))
           "orbit particles should be emitted on ticks 3,6,...,39")

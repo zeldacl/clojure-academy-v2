@@ -12,12 +12,12 @@
 (defn- with-fresh-mag-manip-fx-runtime [f]
   (try
     (hand-effects/reset-hand-effect-registry-for-test!)
-    (mag-manip-fx/reset-mag-manip-fx-for-test!)
+    (mag-manip-fx/reset-fx-for-test!)
     (mag-manip-fx/init!)
     (f)
     (finally
       (hand-effects/reset-hand-effect-registry-for-test!)
-      (mag-manip-fx/reset-mag-manip-fx-for-test!))))
+      (mag-manip-fx/reset-fx-for-test!))))
 
 (use-fixtures :each with-fresh-mag-manip-fx-runtime)
 
@@ -63,21 +63,21 @@
              @hand-enqueued*)))))
 
 (deftest two-owners-keep-mag-manip-state-independent-test
-  (mag-manip-fx/reset-mag-manip-fx-for-test!)
+  (mag-manip-fx/reset-fx-for-test!)
   (with-redefs [client-sounds/current-effect-owner (fn [] {:client-session-id "mag-manip-test"})
                 client-sounds/queue-current-sound-effect! (fn [& _] nil)
                 client-sounds/queue-sound-effect! (fn [& _] nil)]
     (invoke-hand-enqueue! "ctx-a" :mag-manip/fx-hold {:mode :hold-start :block-id "minecraft:iron_block"})
     (invoke-hand-enqueue! "ctx-b" :mag-manip/fx-hold {:mode :hold-start :block-id "minecraft:gold_block"})
     (invoke-hand-enqueue! "ctx-a" :mag-manip/fx-hold {:mode :hold-loop :block-id "minecraft:copper_block"})
-    (let [snapshot (mag-manip-fx/mag-manip-fx-snapshot)]
+    (let [snapshot (mag-manip-fx/fx-snapshot)]
       (is (= "minecraft:copper_block" (:block-id (get (:states snapshot) [:ctx "ctx-a"]))))
       (is (= "minecraft:gold_block" (:block-id (get (:states snapshot) [:ctx "ctx-b"]))))
-      (mag-manip-fx/clear-mag-manip-owner! [:ctx "ctx-a"])
-      (let [snapshot (mag-manip-fx/mag-manip-fx-snapshot)]
+      (mag-manip-fx/clear-fx-owner! [:ctx "ctx-a"])
+      (let [snapshot (mag-manip-fx/fx-snapshot)]
         (is (nil? (get (:states snapshot) [:ctx "ctx-a"])))
         (is (some? (get (:states snapshot) [:ctx "ctx-b"])))))))
 
-(deftest mag-manip-fx-snapshot-default-without-registered-state-test
+(deftest fx-snapshot-default-without-registered-state-test
   (is (= {:states {}}
-         (mag-manip-fx/mag-manip-fx-snapshot))))
+         (mag-manip-fx/fx-snapshot))))

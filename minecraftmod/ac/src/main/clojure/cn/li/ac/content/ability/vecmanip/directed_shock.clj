@@ -136,8 +136,6 @@
   :description-key "ability.skill.vecmanip.directed_shock.desc"
   :icon "textures/abilities/vecmanip/skills/dir_shock.png"
   :ui-position [16 45]
-  :level 1
-  :controllable? false
   :ctrl-id :directed-shock
   :pattern :charge-window
   :cooldown {:mode :manual}

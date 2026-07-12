@@ -193,8 +193,6 @@
   :description-key "ability.skill.vecmanip.directed_blastwave.desc"
   :icon        "textures/abilities/vecmanip/skills/dir_blast.png"
   :ui-position [136 80]
-  :level       3
-  :controllable? false
   :ctrl-id     :directed-blastwave
   :pattern     :charge-window
   :cooldown    {:mode :manual}

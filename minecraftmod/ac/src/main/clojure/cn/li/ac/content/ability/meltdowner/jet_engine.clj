@@ -270,8 +270,6 @@
   :description-key "ability.skill.meltdowner.jet_engine.desc"
   :icon "textures/abilities/meltdowner/skills/jet_engine.png"
   :ui-position [170 32]
-  :level 4
-  :controllable? true
   :ctrl-id :jet-engine
   :cp-consume-speed 0.0
   :overload-consume-speed 0.0

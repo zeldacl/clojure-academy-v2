@@ -493,9 +493,7 @@
 
   :ui-position [70 16]
 
-  :level 2
 
-  :controllable? true
 
   :ctrl-id :mark-teleport
 

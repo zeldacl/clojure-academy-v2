@@ -13,17 +13,17 @@
       (vec-accel-fx/init!)
       (storm-wing-fx/init!)
       (plasma-cannon-fx/init!)
-      (vec-deviation-fx/reset-vec-deviation-fx-for-test!)
-      (vec-accel-fx/reset-vec-accel-fx-for-test!)
+      (vec-deviation-fx/reset-fx-for-test!)
+      (vec-accel-fx/reset-fx-for-test!)
       (storm-wing-fx/reset-storm-wing-fx-for-test!)
-      (plasma-cannon-fx/reset-plasma-cannon-fx-for-test!)
+      (plasma-cannon-fx/reset-fx-for-test!)
       (try
         (f)
         (finally
-          (vec-deviation-fx/reset-vec-deviation-fx-for-test!)
-          (vec-accel-fx/reset-vec-accel-fx-for-test!)
+          (vec-deviation-fx/reset-fx-for-test!)
+          (vec-accel-fx/reset-fx-for-test!)
           (storm-wing-fx/reset-storm-wing-fx-for-test!)
-          (plasma-cannon-fx/reset-plasma-cannon-fx-for-test!))))
+          (plasma-cannon-fx/reset-fx-for-test!))))
 
 (use-fixtures :each reset-fixture)
 
@@ -43,13 +43,13 @@
                                    {:mode :stop-entity :x 1.0 :y 64.0 :z 1.0 :marked? true}))
   (dispatch! :vec-deviation (event "ctx-b" :vec-deviation/fx-stop-entity
                                    {:mode :stop-entity :x 2.0 :y 64.0 :z 2.0 :marked? true}))
-    (let [snapshot (vec-deviation-fx/vec-deviation-fx-snapshot)]
+    (let [snapshot (vec-deviation-fx/fx-snapshot)]
       (is (:active? (get (:effect-state snapshot) [:ctx "ctx-a"])))
       (is (:active? (get (:effect-state snapshot) [:ctx "ctx-b"])))
       (is (= 1 (count (get (:wave-effects snapshot) [:ctx "ctx-a"]))))
       (is (= 1 (count (get (:wave-effects snapshot) [:ctx "ctx-b"]))))
-      (vec-deviation-fx/clear-vec-deviation-owner! [:ctx "ctx-a"])
-      (let [after-clear (vec-deviation-fx/vec-deviation-fx-snapshot)]
+      (vec-deviation-fx/clear-fx-owner! [:ctx "ctx-a"])
+      (let [after-clear (vec-deviation-fx/fx-snapshot)]
         (is (nil? (get (:effect-state after-clear) [:ctx "ctx-a"])))
         (is (nil? (get (:wave-effects after-clear) [:ctx "ctx-a"])))
         (is (:active? (get (:effect-state after-clear) [:ctx "ctx-b"]))))))
@@ -65,11 +65,11 @@
                                {:mode :update :charge-ticks 3 :can-perform? false
                                 :look-dir {:x 0.0 :y 0.0 :z 1.0}
                                 :init-vel {:x 0.0 :y 0.5 :z 1.0}}))
-    (let [snapshot (vec-accel-fx/vec-accel-fx-snapshot)]
+    (let [snapshot (vec-accel-fx/fx-snapshot)]
       (is (= 12 (:charge-ticks (get (:effect-state snapshot) [:ctx "ctx-a"]))))
       (is (= 3 (:charge-ticks (get (:effect-state snapshot) [:ctx "ctx-b"]))))
-      (vec-accel-fx/clear-vec-accel-owner! [:ctx "ctx-a"])
-      (let [after-clear (vec-accel-fx/vec-accel-fx-snapshot)]
+      (vec-accel-fx/clear-fx-owner! [:ctx "ctx-a"])
+      (let [after-clear (vec-accel-fx/fx-snapshot)]
         (is (nil? (get (:effect-state after-clear) [:ctx "ctx-a"])))
         (is (some? (get (:effect-state after-clear) [:ctx "ctx-b"]))))))
 
@@ -104,12 +104,12 @@
     (dispatch! :plasma-cannon (event "ctx-b" :plasma-cannon/fx-update
                                     {:mode :update :charge-ticks 8 :charge-pos {:x 2.0 :y 64.0 :z 2.0}
                                      :flight-ticks 2 :state :go}))
-    (let [snapshot (plasma-cannon-fx/plasma-cannon-fx-snapshot)
+    (let [snapshot (plasma-cannon-fx/fx-snapshot)
           plan (level-effects/build-level-effect-plan nil nil 0)]
       (is (= 24 (:charge-ticks (get (:effect-state snapshot) [:ctx "ctx-a"]))))
       (is (= :go (:state (get (:effect-state snapshot) [:ctx "ctx-b"]))))
       (is (= 2 (count (:ops plan))))
-      (plasma-cannon-fx/clear-plasma-cannon-owner! [:ctx "ctx-a"])
-      (let [after-clear (plasma-cannon-fx/plasma-cannon-fx-snapshot)]
+      (plasma-cannon-fx/clear-fx-owner! [:ctx "ctx-a"])
+      (let [after-clear (plasma-cannon-fx/fx-snapshot)]
         (is (nil? (get (:effect-state after-clear) [:ctx "ctx-a"])))
         (is (some? (get (:effect-state after-clear) [:ctx "ctx-b"])))))))

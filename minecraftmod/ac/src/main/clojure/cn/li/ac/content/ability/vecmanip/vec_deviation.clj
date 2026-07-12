@@ -267,8 +267,6 @@
   :description-key "ability.skill.vecmanip.vec_deviation.desc"
   :icon "textures/abilities/vecmanip/skills/vec_deviation.png"
   :ui-position [145 53]
-  :level 2
-  :controllable? true
   :ctrl-id :vec-deviation
   :cp-consume-speed 0.0
   :overload-consume-speed 0.0

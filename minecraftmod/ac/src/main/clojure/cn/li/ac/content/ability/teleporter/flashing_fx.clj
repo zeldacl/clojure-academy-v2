@@ -19,10 +19,4 @@
                                                   {:from-x (:from-x p) :from-y (:from-y p) :from-z (:from-z p)}))}
                 :state-end {:topic :flashing/fx-state-end :mode :state-end}}}))
 
-(defn init! [] (fx-spec/register! spec) nil)
-
-(defn flashing-fx-snapshot [] (arc-beam/snapshot :flashing))
-
-(defn reset-flashing-fx-for-test! [] (arc-beam/reset-for-test! :flashing) nil)
-
-(defn clear-flashing-owner! [owner-key] (arc-beam/clear-owner! :flashing owner-key) nil)
+(arc-beam/def-arc-beam-fx :flashing)

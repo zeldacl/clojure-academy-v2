@@ -37,12 +37,25 @@
 ;; ============================================================================
 
 (defmacro defskill
-  "Declare a skill map without registration."
+  "Declare a skill map without registration.
+
+  :level and :controllable? must NOT be declared here — they're sourced from
+  skill-config/skill-definitions (the single source of truth for those two
+  fields; see registry/skill.clj register-skill!). Declaring them in defskill
+  would be dead data that can silently drift out of sync with the config
+  entry actually used at runtime (this happened in practice — thunder-bolt's
+  defskill said level 4 while skill-definitions said level 2)."
   [sym & opts]
   (let [kv-map (apply hash-map opts)
-        skill-map (definition-core/build-skill-spec sym kv-map)]
-    `(let [skill-map# (assoc ~skill-map :ac/content-type :skill)]
-       (def ~sym skill-map#))))
+        offending (filterv #(contains? kv-map %) [:level :controllable?])]
+    (when (seq offending)
+      (throw (ex-info (str "defskill " sym ": " offending " must not be declared here — "
+                           "add/edit the entry for :" (name (definition-core/definition-id sym kv-map))
+                           " in cn.li.ac.ability.skill-config.common/skill-definitions instead")
+                      {:skill sym :offending-keys offending})))
+    (let [skill-map (definition-core/build-skill-spec sym kv-map)]
+      `(let [skill-map# (assoc ~skill-map :ac/content-type :skill)]
+         (def ~sym skill-map#)))))
 
 ;; ============================================================================
 ;; def-skill-config-ops

@@ -19,10 +19,4 @@
                       :level-payload (fn [_ _ p]
                                        {:performed? (boolean (:performed? p))})}}}))
 
-(defn init! [] (fx-spec/register! spec) nil)
-
-(defn directed-blastwave-fx-snapshot [] (arc-beam/snapshot :directed-blastwave))
-
-(defn reset-directed-blastwave-fx-for-test! [] (arc-beam/reset-for-test! :directed-blastwave) nil)
-
-(defn clear-directed-blastwave-owner! [owner-key] (arc-beam/clear-owner! :directed-blastwave owner-key) nil)
+(arc-beam/def-arc-beam-fx :directed-blastwave)

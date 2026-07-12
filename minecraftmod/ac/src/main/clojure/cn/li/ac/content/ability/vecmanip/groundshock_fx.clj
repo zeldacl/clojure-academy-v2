@@ -20,10 +20,4 @@
                       :hand-payload (fn [_ _ p]
                                       {:performed? (boolean (:performed? p))})}}}))
 
-(defn init! [] (fx-spec/register! spec) nil)
-
-(defn groundshock-fx-snapshot [] (arc-beam/snapshot :groundshock))
-
-(defn reset-groundshock-fx-for-test! [] (arc-beam/reset-for-test! :groundshock) nil)
-
-(defn clear-groundshock-owner! [owner-key] (arc-beam/clear-owner! :groundshock owner-key) nil)
+(arc-beam/def-arc-beam-fx :groundshock)
