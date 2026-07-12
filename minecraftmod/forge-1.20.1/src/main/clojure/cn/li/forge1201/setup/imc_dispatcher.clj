@@ -27,18 +27,7 @@
 
 (defn- handle-imc-message!
 	[msg]
-	(let [method-key (imc-method-key msg)
-				payload (resolve-payload msg)]
-		;; Keys are the WirelessImc.java REGISTER_* constants — the published
-		;; third-party contract.
-		(case method-key
-			"register_wireless_network_handler"
-			(imc-dispatch/register-network-handler! payload)
-
-			"register_wireless_node_handler"
-			(imc-dispatch/register-node-handler! payload)
-
-			(log/debug "Ignoring unsupported IMC method" method-key))))
+	(imc-dispatch/register-by-method-key! (imc-method-key msg) (resolve-payload msg)))
 
 (defn- handle-imc-process-event!
 	[^InterModProcessEvent evt]

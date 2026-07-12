@@ -10,7 +10,8 @@
             [cn.li.ac.wireless.data.network-runtime :as network-runtime]
             [cn.li.ac.wireless.data.network-lookup :as lookup]
             [cn.li.ac.wireless.data.world :as wdata]
-            [cn.li.ac.wireless.service.commands :as commands]))
+            [cn.li.ac.wireless.service.commands :as commands]
+            [cn.li.mcmod.events.world-state-notify :as world-state-notify]))
 
 (use-fixtures :each support-fw/with-fresh-framework)
 
@@ -111,6 +112,27 @@
         net (network-state/create-wireless-net wd (vb/create-vmatrix 0 0 0) "s" "p")]
     (with-redefs [resolver/resolve-matrix-cap (constantly nil)]
       (is (false? (network-validation/is-in-range? net 0 0 0 nil))))))
+
+(deftest idle-network-ticks-produce-no-state-commits-test
+  ;; Acceptance for the tick refactor: a quiet network (no nodes, no energy
+  ;; flow) must not swap world-state or mark the SavedData dirty on ANY tick.
+  (let [wd (wdata/create-world-data (test-world :w-idle))
+        matrix-cap (stubs/fake-matrix {})
+        matrix-vb (vb/create-vmatrix 0 0 0)
+        notifies (atom 0)]
+    (with-redefs [vb/is-chunk-loaded? (constantly true)
+                  resolver/resolve-matrix-cap (caps-by-pos {[0 0 0] matrix-cap})]
+      (is (:success (commands/create-network! wd matrix-vb "idle" "p")))
+      (with-redefs [world-state-notify/notify-world-state-changed!
+                    (fn [_] (swap! notifies inc))]
+        (dotimes [t 80]
+          (network-runtime/tick-wireless-net!
+            (lookup/get-network-by-ssid wd "idle") nil
+            {:game-time (long t)
+             :cfg ncfg/default-values
+             :cap-cache nil})))
+      (is (zero? @notifies)
+          "idle network must produce zero state commits across two balance intervals"))))
 
 (deftest balance-energy-moves-toward-average-test
   (let [wd (wdata/create-world-data (test-world :w-bal))

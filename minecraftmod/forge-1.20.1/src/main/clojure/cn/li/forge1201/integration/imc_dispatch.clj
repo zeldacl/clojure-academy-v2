@@ -76,6 +76,24 @@
 		:else
 		(log/debug "Ignoring unsupported topology node IMC handler type" (type handler))))
 
+(defn register-by-method-key!
+	"Route one IMC registration by its method key. Keys are the
+	`WirelessImc.java` REGISTER_* constants — the published third-party
+	contract. Unknown keys are ignored at DEBUG."
+	[method-key payload]
+	(case method-key
+		"register_wireless_network_handler" (register-network-handler! payload)
+		"register_wireless_node_handler" (register-node-handler! payload)
+		(log/debug "Ignoring unsupported IMC method" method-key)))
+
+(defn reset-handlers-for-test!
+	"Clear all registered IMC handlers. Test isolation only."
+	[]
+	(locking handler-registry-lock
+		(alter-var-root #'*network-handlers* (constantly []))
+		(alter-var-root #'*node-handlers* (constantly []))
+		nil))
+
 (defn- invoke-safe
 	"Call f, return nil. If it throws, log and return ::remove-handler."
 	[handler-entry f]
