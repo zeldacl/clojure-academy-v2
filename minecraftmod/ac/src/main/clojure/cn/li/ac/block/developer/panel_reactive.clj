@@ -309,27 +309,41 @@
   (let [clock (rt/clock-ms-sig rt)
         cat-prog (sig/signal-d 0.0)
         power (sig/signal-d 0.0)
-        sync-rate-sig (sig/signal-d 0.7)]
+        sync-rate-sig (sig/signal-d 0.7)
+        ;; Stable for the screen's lifetime — resolve once, not per frame.
+        session-id (panel-session-id container)
+        uuid-str (when player (uuid/player-uuid player))
+        last-ver (atom ::none)]
     (bind-box-width! rt :logo-progress 70.0 cat-prog)
     (bind-box-width! rt :progress-power 97.0 power)
     (bind-box-width! rt :progress-syncrate 97.0 sync-rate-sig)
     (set-tick! rt :model-tick
       (sig/computed-o [clock]
         (fn [_]
-          (let [{:keys [ability-name icon-path exp-label level-label
-                        cat-prog01 power01 sync-rate can-upgrade?]}
-                (current-ui-model container player)]
-            (ui/set-prop! rt :text-abilityname :text ability-name)
-            (ui/set-prop! rt :logo-ability :src icon-path)
-            (ui/set-prop! rt :text-exp :text exp-label)
-            (ui/set-prop! rt :text-level :text level-label)
-            (sig/sset-d! cat-prog cat-prog01)
-            (sig/sset-d! power power01)
-            (sig/sset-d! sync-rate-sig (double (or sync-rate 0.7)))
-            (let [^INode upg (rt/node-by-id rt :btn-upgrade)
-                  ^INode lvl (rt/node-by-id rt :text-level)]
-              (when upg (.setVisible upg (boolean can-upgrade?)) (.setFlag upg node/FLAG-LAYOUT-DIRTY))
-              (when lvl (.setVisible lvl (not can-upgrade?)) (.setFlag lvl node/FLAG-LAYOUT-DIRTY))))
+          ;; The whole model is a function of [ability-data energy max-energy
+          ;; developer-type]. Compute a cheap version from those and skip the
+          ;; recompute + prop writes on idle frames (the common case).
+          (let [pstate (when uuid-str (store/get-player-state* session-id uuid-str))
+                energy (double (or @(:energy container) 0.0))
+                max-energy (double (or @(:max-energy container) 1.0))
+                dev-type (current-developer-type container)
+                ver [(hash (:ability-data pstate)) energy max-energy dev-type]]
+            (when (not= ver @last-ver)
+              (reset! last-ver ver)
+              (let [{:keys [ability-name icon-path exp-label level-label
+                            cat-prog01 power01 sync-rate can-upgrade?]}
+                    (current-ui-model container player)]
+                (ui/set-prop! rt :text-abilityname :text ability-name)
+                (ui/set-prop! rt :logo-ability :src icon-path)
+                (ui/set-prop! rt :text-exp :text exp-label)
+                (ui/set-prop! rt :text-level :text level-label)
+                (sig/sset-d! cat-prog cat-prog01)
+                (sig/sset-d! power power01)
+                (sig/sset-d! sync-rate-sig (double (or sync-rate 0.7)))
+                (let [^INode upg (rt/node-by-id rt :btn-upgrade)
+                      ^INode lvl (rt/node-by-id rt :text-level)]
+                  (when upg (.setVisible upg (boolean can-upgrade?)) (.setFlag upg node/FLAG-LAYOUT-DIRTY))
+                  (when lvl (.setVisible lvl (not can-upgrade?)) (.setFlag lvl node/FLAG-LAYOUT-DIRTY))))))
           nil)))
     (bind-hover-alpha! rt :btn-upgrade 0.698 1.0)
     (bind-hover-alpha! rt :button-wireless 0.698 1.0)))
