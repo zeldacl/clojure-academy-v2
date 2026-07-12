@@ -374,6 +374,18 @@
     (.setVisible n visible?)
     (.setFlag n node/FLAG-LAYOUT-DIRTY)))
 
+(defn- cover-fullscreen! [^UiRt rt]
+  ;; :dev-cover is a child of :root, drawn at getGuiLeft/Top. The runtime is
+  ;; resized to the whole screen, so offset the cover by -getGuiLeft/-getGuiTop
+  ;; and size it to the screen — a full-screen dark backdrop + click catcher,
+  ;; matching upstream's blackCover(gui).
+  (let [^INode n (rt/node-by-id rt :dev-cover)
+        sw (double (rt/screen-w rt)) sh (double (rt/screen-h rt))]
+    (.setX n (- (/ (- sw classic-w) 2.0)))
+    (.setY n (- (/ (- sh classic-h) 2.0)))
+    (.setW n sw) (.setH n sh)
+    (.setFlag n node/FLAG-LAYOUT-DIRTY)))
+
 (defn- cover-fill-signal [alpha-target clock]
   (let [smoothed-a (ranim/smoothed alpha-target clock 3.5)]
     (sig/computed-d [smoothed-a]
@@ -485,8 +497,8 @@
         ad0 (get-ad)
         skill-icon (skill-query/get-skill-icon-path skill-id)
         skill-description (when-let [dk (:description-key skill-spec)] (i18n/translate dk))
-        cx 200.0 cy 93.0
-        ta-y (+ cy 20.0) btn-x (- cx 16.0) btn-y (+ ta-y 52.0)
+        cx 200.0 cy 93.5
+        btn-x (- cx 16.0) btn-y (+ cy 82.0)
         state-a (atom {:is-developing? false :progress 0.0 :result nil :error nil})
         prev-dev-a (atom false)
         last-updated (atom nil)
@@ -499,6 +511,7 @@
         popup-rt (skill-tree-reactive/create-detail-overlay-runtime node-data)]
     (bind-cover-fill! rt fill-sig)
     (set-cover-visible! rt true)
+    (cover-fullscreen! rt)
     (add-embedded-runtime! rt {:child-rt popup-rt :x 0.0 :y 0.0 :w classic-w :h classic-h :visible?-fn nil :overlay? true})
     (popup-click-region! rt btn-x btn-y 32.0 16.0
       (fn [] (let [s @state-a]

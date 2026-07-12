@@ -135,13 +135,16 @@
 
 (defn- refresh-detail-popup!
   "Skill detail popup — matches upstream skillViewArea. Centered on the w×h popup
-   (the developer overlay is 400×187, the full-screen tree 420×260)."
-  [^UiRt rt node w h]
+   (the developer overlay is 400×187, the full-screen tree 420×260). bg? draws
+   the dark backdrop; the developer overlay passes false and lets its full-screen
+   :dev-cover darken instead."
+  [^UiRt rt node w h bg?]
   (clear-popup! rt)
   (when-let [^INode layer (ui/node rt :popup-layer)]
-    (rt/build-child! rt
-      {:kind :box :props {:x 0.0 :y 0.0 :w (double w) :h (double h) :fill 0xB3000000}}
-      layer)
+    (when bg?
+      (rt/build-child! rt
+        {:kind :box :props {:x 0.0 :y 0.0 :w (double w) :h (double h) :fill 0xB3000000}}
+        layer))
     (let [cx (/ (double w) 2.0) cy (/ (double h) 2.0)
           back-x (- cx 25.0) back-y (- cy 25.0)
           {:keys [skill-name skill-icon skill-level skill-description learned exp message dev-state]} node
@@ -312,7 +315,7 @@
         (:selected-skill st)
         (let [sel (:selected-skill st)
               node (first (filter #(= (:skill-id %) sel) (:skill-nodes rd)))]
-          (if node (refresh-detail-popup! rt node 420 260) (clear-popup! rt)))
+          (if node (refresh-detail-popup! rt node 420 260 true) (clear-popup! rt)))
         :else (clear-popup! rt))
       (let [show-level? (and (get-in rd [:ability-info :can-level-up])
                              (not (:showing-level-up-popup? st)))]
@@ -445,7 +448,7 @@
   (when-not (ui/node rt :root)
     (rt/build! rt {:kind :group :id :root :props {:w 400.0 :h 187.0}
                    :children [{:kind :group :id :popup-layer :props {:x 0.0 :y 0.0 :w 400.0 :h 187.0}}]}))
-  (refresh-detail-popup! rt node 400 187)
+  (refresh-detail-popup! rt node 400 187 false)
   (rt/mark-tree-dirty! rt))
 
 (defn refresh-levelup-overlay!
