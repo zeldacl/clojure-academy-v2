@@ -18,7 +18,7 @@
         <text id="text-exp" pos="30.0,15.5" size="42.0,10.0" align="left,top" text="EXP 0%" font-size="8.0" color="#FFFFFFFF"/>
         <box id="logo-progress-back" pos="31.0,-2.0" size="70.0,1.5" fill="#4D666666"/>
         <box id="logo-progress" pos="31.0,-2.0" size="70.0,1.5" fill="#FFFFFFFF"/>
-        <text id="text-level" pos="27.8,6.0" size="41.2,12.0" align="center,center" text="Lv.1" font-size="9.0" color="#FF1177D6"/>
+        <text id="text-level" pos="27.8,6.0" size="41.2,12.0" align="center,center" text-align="right" text="Lv.1" font-size="9.0" color="#FF1177D6"/>
         <image id="btn-upgrade" pos="60.0,14.5" size="186.0,59.5" scale="0.26" align="left,top" src="my_mod:textures/guis/button/button_learn.png" tint="#B2FFFFFF"/>
       </group>
       <!-- Machine panel -->

@@ -156,12 +156,16 @@
                     (or (some-> cat :icon texture-path-from-category-icon)
                         (default-ability-icon-path))
                     (default-ability-icon-path))
-        exp-label (if has-category?
-                    (if (>= lvl 5) "MAX"
-                        (if thresh (format "EXP %.0f%%" (* 100.0 cat-prog01)) "EXP 0%"))
-                    "EXP 0%")
-        level-label (cond dev? "Learning"
-                          :else (format "Lv.%d" lvl))]  ;; matching original levelDesc
+        ;; Upstream (SkillTree.scala): "EXP " + (levelProgress*100).toInt + "%" —
+        ;; always shown (no "MAX"), truncated, using the raw 0..1 fraction. The
+        ;; 0.02 floor applies only to the progress BAR (cat-prog01), not the text.
+        exp-frac (if has-category?
+                   (cond (and thresh (pos? thresh)) (bal/clamp01 (/ level-prog thresh))
+                         (>= lvl 5) 1.0
+                         :else 0.0)
+                   0.0)
+        exp-label (format "EXP %d%%" (int (* 100.0 exp-frac)))
+        level-label (format "Level %d" lvl)]  ;; matches upstream AbilityLocalization.levelDesc → "Level N"
     {:has-category? has-category?
      :can-upgrade? can-upgrade?
      :ability-name ability-name
