@@ -86,14 +86,14 @@
 
 (defn create-embedded-runtime
   "UiRt for developer-panel embed (257×139 area)."
-  [render-data mx my w h hover-id]
+  [render-data mx my w h hover-id anim-s]
   (let [r (rt/create-runtime)]
-    (view/refresh-embedded! r render-data mx my w h hover-id)
+    (view/refresh-embedded! r render-data mx my w h hover-id anim-s)
     r))
 
 (defn refresh-embedded-runtime!
-  [^UiRt r render-data mx my w h hover-id]
-  (view/refresh-embedded! r render-data mx my w h hover-id))
+  [^UiRt r render-data mx my w h hover-id anim-s]
+  (view/refresh-embedded! r render-data mx my w h hover-id anim-s))
 
 (defn create-detail-overlay-runtime [node]
   (let [r (rt/create-runtime)]

@@ -17,9 +17,13 @@
            [net.minecraft.network.chat Component]))
 
 (defn- slots-active? [screen-data]
-  (if-let [current (:current-tab-atom screen-data)]
-    (= "inv" @current)
-    true))
+  (cond
+    ;; Slotless full-screen UIs (e.g. developer panel): no menu slots are drawn
+    ;; or interactive. Without this the default (no tab-atom → true) makes
+    ;; AbstractContainerScreen render the menu's player-inventory slots.
+    (:no-slots? screen-data) false
+    (:current-tab-atom screen-data) (= "inv" @(:current-tab-atom screen-data))
+    :else true))
 
 (defn- gui-offset [^DelegatingCGuiContainerScreen screen]
   [(.getGuiLeft screen) (.getGuiTop screen)])

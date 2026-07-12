@@ -5,14 +5,8 @@
   (:require [cn.li.mcmod.ui.signal :as sig]))
 
 ;; ============================================================================
-;; smooth-toward
+;; smooth-mask-channel
 ;; ============================================================================
-
-(defn- ^double smooth-toward [^double current ^double target ^double rate ^double dt]
-  (let [delta (- target current)]
-    (if (<= (Math/abs delta) 0.0005)
-      target
-      (+ current (* (Math/signum delta) (min (* rate dt) (Math/abs delta)))))))
 
 (defn- ^double smooth-mask-channel [^double from ^double to ^double dt]
   (let [delta (- to from)]
@@ -25,8 +19,16 @@
 ;; ============================================================================
 
 (defn- ^double smoothed-step [^doubles cell ^double rate ^double target ^double now-ms]
+  ;; smooth-toward inlined: a 4-double-arg primitive helper invoked from another
+  ;; primitive fn triggers an IFn$DDDDO/invokePrim dispatch mismatch (Clojure
+  ;; primitive-return interfaces don't cover 4 double args), so keep the step
+  ;; local — all doubles, zero boxing.
   (let [dt (max 0.0 (/ (- now-ms (aget cell 1)) 1000.0))
-        v  (smooth-toward (aget cell 0) target rate dt)]
+        current (aget cell 0)
+        delta (- target current)
+        v (if (<= (Math/abs delta) 0.0005)
+            target
+            (+ current (* (Math/signum delta) (min (* rate dt) (Math/abs delta)))))]
     (aset cell 0 (double v))
     (aset cell 1 (double now-ms))
     v))

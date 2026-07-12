@@ -392,6 +392,18 @@
     (doseq [{:keys [child-rt]} @entries] (rt/dispose! child-rt))
     (rt/put-user-signal! rt :embedded-runtimes (atom []))))
 
+(defn- remove-embedded-runtimes!
+  "Dispose + drop only the embedded runtimes matching `pred`, keeping the rest.
+   The skill-tree area embed and the cover overlays share :embedded-runtimes, so
+   a blanket clear on overlay-close would also wipe the skill tree. Overlays are
+   tagged :overlay? — close-cover! removes those, a mode switch removes the rest."
+  [^UiRt rt pred]
+  (when-let [a (rt/user-signal rt :embedded-runtimes)]
+    (let [entries @a]
+      (doseq [{:keys [child-rt] :as e} entries]
+        (when (pred e) (rt/dispose! child-rt)))
+      (reset! a (vec (remove pred entries))))))
+
 (defn- add-embedded-runtime! [^UiRt rt entry]
   (let [a (or (rt/user-signal rt :embedded-runtimes) (atom []))]
     (rt/put-user-signal! rt :embedded-runtimes a)
@@ -409,10 +421,11 @@
     (rt/put-user-signal! rt :cover-fill-binding b)))
 
 (defn- close-cover!
-  "Close whatever overlay is currently open: dispose embedded runtimes,
-   clear active-modal, hide cover, clear the ticker user-signal."
+  "Close whatever overlay is currently open: dispose the overlay's embedded
+   runtime (leaving the persistent skill-tree area embed intact), clear
+   active-modal, hide cover, clear the ticker user-signal."
   [^UiRt rt]
-  (clear-embedded-runtimes! rt)
+  (remove-embedded-runtimes! rt :overlay?)
   (clear-modal! rt)
   (set-tick! rt :cover-tick nil)
   (set-cover-visible! rt false)
@@ -435,7 +448,7 @@
     (wireless-tab/attach-panel! wr {:role :receiver :container container
                                     :tab-logo-path (tex-path "guis/icons/icon_node.png")
                                     :connected-row-logo-path (tex-path "guis/icons/icon_node.png")})
-    (add-embedded-runtime! rt {:child-rt wr :x px :y py :w 176.0 :h 187.0 :visible?-fn nil})
+    (add-embedded-runtime! rt {:child-rt wr :x px :y py :w 176.0 :h 187.0 :visible?-fn nil :overlay? true})
     (rt/put-user-signal! rt :active-modal
       (atom {:child-rt wr :x px :y py :w 176.0 :h 187.0
              :on-close-outside
@@ -490,7 +503,7 @@
         popup-rt (skill-tree-reactive/create-detail-overlay-runtime node-data)]
     (bind-cover-fill! rt fill-sig)
     (set-cover-visible! rt true)
-    (add-embedded-runtime! rt {:child-rt popup-rt :x 0.0 :y 0.0 :w classic-w :h classic-h :visible?-fn nil})
+    (add-embedded-runtime! rt {:child-rt popup-rt :x 0.0 :y 0.0 :w classic-w :h classic-h :visible?-fn nil :overlay? true})
     (popup-click-region! rt btn-x btn-y 32.0 16.0
       (fn [] (let [s @state-a]
                (and (not (:learned (get-ad))) (not (:is-developing? s)) (nil? (:result s)))))
@@ -546,7 +559,7 @@
         popup-rt (skill-tree-reactive/create-levelup-overlay-runtime target-level @state-a)]
     (bind-cover-fill! rt fill-sig)
     (set-cover-visible! rt true)
-    (add-embedded-runtime! rt {:child-rt popup-rt :x 0.0 :y 0.0 :w classic-w :h classic-h :visible?-fn nil})
+    (add-embedded-runtime! rt {:child-rt popup-rt :x 0.0 :y 0.0 :w classic-w :h classic-h :visible?-fn nil :overlay? true})
     (popup-click-region! rt btn-x btn-y 32.0 16.0
       (fn [] (let [s @state-a] (and (not (:is-developing? s)) (nil? (:result s)))))
       (fn []
@@ -582,32 +595,41 @@
 
 (defn- clear-area! [^UiRt rt]
   (rt/clear-children! rt (rt/node-by-id rt :area))
-  (clear-embedded-runtimes! rt))
+  (remove-embedded-runtimes! rt (complement :overlay?)))
 
 (defn- build-skill-tree-area! [^UiRt rt container player]
   (let [session-id (panel-session-id container)
         {:keys [render-data dev-type]} (skill-tree-render-context session-id player container)
         nodes (:skill-nodes render-data)
         hw skill-tree/widget-size
+        ;; Same fit transform the embed uses for the visible tree, applied to the
+        ;; invisible click hit-boxes so clicks land on the on-screen nodes.
+        [fit-s fit-ox fit-oy] (skill-tree-view/area-fit-transform nodes area-w area-h)
+        open-ms (atom nil)
         embed-rt (skill-tree-reactive/create-embedded-runtime render-data (/ area-w 2.0) (/ area-h 2.0)
-                   area-w area-h nil)
+                   area-w area-h nil 0.0)
         hit-nodes (atom {})]
     (add-embedded-runtime! rt {:child-rt embed-rt :x area-x :y area-y :w area-w :h area-h :visible?-fn nil})
     (doseq [nd nodes
             :when (and (or (:can-learn nd) (:learned nd)) (not (:locked? nd)))]
       (let [id (keyword (str "skill-hit-" (name (:skill-id nd))))
-            spec (box id (:x nd) (:y nd) hw hw 0x00000000)
+            hx (+ fit-ox (* (double (:x nd)) fit-s))
+            hy (+ fit-oy (* (double (:y nd)) fit-s))
+            hsz (* hw fit-s)
+            spec (box id hx hy hsz hsz 0x00000000)
             ^INode n (rt/build-child! rt spec (rt/node-by-id rt :area))]
         (swap! hit-nodes assoc (.getIdx n) (:skill-id nd))
         (events/on! rt id :left-click
           (fn [_ _ _] (open-skill-detail-overlay! rt container player (:skill-id nd) dev-type)))))
     (set-tick! rt :skill-tree-tick
       (sig/computed-o [(rt/clock-ms-sig rt)]
-        (fn [_]
+        (fn [now-ms]
+          (when (nil? @open-ms) (reset! open-ms (double now-ms)))
           (let [{:keys [render-data]} (skill-tree-render-context session-id player container)
-                hover-id (get @hit-nodes (rt/hovered-idx rt))]
+                hover-id (get @hit-nodes (rt/hovered-idx rt))
+                anim-s (/ (- (double now-ms) (double @open-ms)) 1000.0)]
             (skill-tree-reactive/refresh-embedded-runtime! embed-rt render-data
-              (/ area-w 2.0) (/ area-h 2.0) area-w area-h hover-id))
+              (/ area-w 2.0) (/ area-h 2.0) area-w area-h hover-id anim-s))
           nil)))))
 
 ;; ============================================================================
@@ -683,5 +705,6 @@
      :runtime r
      :container container
      :menu menu
+     :no-slots? true  ;; developer is a full-screen UI; hide the menu's inventory slots
      :size-dx (- root-w 176.0)
      :size-dy (- root-h 166.0)}))

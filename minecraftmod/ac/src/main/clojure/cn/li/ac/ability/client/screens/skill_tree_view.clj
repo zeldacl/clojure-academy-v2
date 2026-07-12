@@ -65,14 +65,23 @@
                :color (line-color m-alpha child-learned?)}})))
 
 (defn- skill-node-spec
-  [{:keys [x y skill-icon learned exp m-alpha skill-id]} pdx pdy]
+  [{:keys [x y skill-icon learned exp m-alpha skill-id idx]} pdx pdy anim-s]
   (let [sx (- (double x) pdx) sy (- (double y) pdy)
         ta logic/total-size
         pa logic/prog-align
         ia logic/align
         da logic/draw-align
-        alpha (float (clamp01 (or m-alpha 0.7)))
-        icon-alpha (float (clamp01 (* alpha 0.9)))]
+        ma (double (or m-alpha 0.7))
+        ;; Staggered fade-in on open (matches upstream SkillTree.scala:328-331):
+        ;; per-node dt = elapsed - (idx*0.08 + 0.1); back/icon/progress ramp in
+        ;; with small offsets. anim-s = nil → fully revealed (no animation).
+        reveal? (some? anim-s)
+        dt (if reveal? (- (double anim-s) (+ (* (long (or idx 0)) 0.08) 0.1)) 1.0)
+        back-mult (if reveal? (clamp01 (* dt 10.0)) 1.0)
+        icon-mult (if reveal? (clamp01 (* (- dt 0.08) 10.0)) 1.0)
+        prog-mult (if reveal? (clamp01 (* (- dt 0.12) 2.0)) 1.0)
+        alpha (float (clamp01 (* ma back-mult)))
+        icon-alpha (float (clamp01 (* ma 0.9 icon-mult)))]
     {:kind :group
      :props {:x sx :y sy :w ta :h ta}
      :children
@@ -86,7 +95,7 @@
           (when learned
             {:kind :shader-progress
              :props {:x pa :y pa :w logic/prog-size :h logic/prog-size
-                     :progress (float (or exp 0.0))
+                     :progress (float (* (double (or exp 0.0)) prog-mult))
                      :shader-props {:shader-id :ring-progbar
                                     :texture-0 (tex-src :skill-outline)
                                     :texture-1 (tex-src :skill-mask)}}})]))}))
@@ -243,14 +252,49 @@
           (rt/build-child! rt {:kind :text :props {:x cx :y (+ btn-y 4.0) :w 32.0 :h 12.0
                                                    :text "LEARN" :font-size 9.0 :color 0xFF101010}} layer))))))
 
-(defn- rebuild-tree-layer! [^UiRt rt rd pdx pdy]
+(defn- tree-bbox
+  "Bounding box of all skill nodes in logic coords (node origin + total-size)."
+  [nodes]
+  (when (seq nodes)
+    (let [xs (map (comp double :x) nodes)
+          ys (map (comp double :y) nodes)]
+      {:minx (apply min xs) :maxx (+ (apply max xs) logic/total-size)
+       :miny (apply min ys) :maxy (+ (apply max ys) logic/total-size)})))
+
+(defn area-fit-transform
+  "Scale + offset that fits the skill-node bounding box into a w×h area, centered.
+   Returns [scale offset-x offset-y]; a node at logic (x,y) maps to
+   (offset-x + x*scale, offset-y + y*scale). Shared by the visible tree render
+   and the panel's invisible click hit-boxes so they stay aligned."
+  [nodes w h]
+  (if-let [bb (tree-bbox nodes)]
+    (let [bw (max 1.0 (- (:maxx bb) (:minx bb)))
+          bh (max 1.0 (- (:maxy bb) (:miny bb)))
+          pad 14.0
+          s (min 1.0 (/ (- (double w) pad) bw) (/ (- (double h) pad) bh))
+          bcx (/ (+ (:minx bb) (:maxx bb)) 2.0)
+          bcy (/ (+ (:miny bb) (:maxy bb)) 2.0)]
+      [s (- (/ (double w) 2.0) (* bcx s)) (- (/ (double h) 2.0) (* bcy s))])
+    [1.0 0.0 0.0]))
+
+(defn- rebuild-tree-layer!
+  "Rebuild connections + nodes under a fit-to-area camera group. The node layout
+   (skill-tree logic) is authored for a larger canvas, so scale+center it into
+   the target w×h — otherwise nodes render outside the area. anim-s threads the
+   open-reveal elapsed time to skill-node-spec (nil = no animation)."
+  [^UiRt rt rd pdx pdy w h anim-s]
   (when-let [^INode layer (ui/node rt :tree-layer)]
     (rt/clear-children! rt layer)
-    (doseq [conn (:connections rd)]
-      (when-let [spec (connection-spec conn pdx pdy)]
-        (rt/build-child! rt spec layer)))
-    (doseq [n (:skill-nodes rd)]
-      (rt/build-child! rt (skill-node-spec n pdx pdy) layer))
+    (let [nodes (:skill-nodes rd)
+          [s offx offy] (area-fit-transform nodes w h)
+          ^INode cam (rt/build-child! rt {:kind :group
+                                          :props {:x offx :y offy :w (double w) :h (double h) :scale s}}
+                       layer)]
+      (doseq [conn (:connections rd)]
+        (when-let [spec (connection-spec conn pdx pdy)]
+          (rt/build-child! rt spec cam)))
+      (doseq [n nodes]
+        (rt/build-child! rt (skill-node-spec n pdx pdy anim-s) cam)))
     (rt/mark-tree-dirty! rt)))
 
 (defn refresh-screen!
@@ -268,7 +312,7 @@
         (.setDSlot bg 2 (double bv))
         (.setFlag bg node/FLAG-RENDER-DIRTY))
       (refresh-header! rt (:ability-info rd))
-      (rebuild-tree-layer! rt rd pdx pdy)
+      (rebuild-tree-layer! rt rd pdx pdy w h nil)
       (refresh-tooltip! rt rd)
       (cond
         (:showing-level-up-popup? st)
@@ -286,12 +330,13 @@
       (rt/mark-tree-dirty! rt))))
 
 (defn refresh-embedded!
-  "Refresh embedded skill tree (developer panel area)."
-  [^UiRt rt render-data mx my w h hover-id]
+  "Refresh embedded skill tree (developer panel area). anim-s = elapsed seconds
+   since the tree opened (nil = no reveal animation)."
+  [^UiRt rt render-data mx my w h hover-id anim-s]
   (ensure-shell! rt w h)
   (let [rd (assoc render-data :hover-skill hover-id)
         [pdx pdy] (parallax-offset mx my w h)]
-    (rebuild-tree-layer! rt rd pdx pdy)
+    (rebuild-tree-layer! rt rd pdx pdy w h anim-s)
     (refresh-tooltip! rt rd)
     (clear-popup! rt)
     (set-visible! (ui/node rt :level-btn) false)
