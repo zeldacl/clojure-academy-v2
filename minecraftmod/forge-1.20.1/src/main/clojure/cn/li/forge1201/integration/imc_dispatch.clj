@@ -6,12 +6,9 @@
 	the corresponding runtime payload fires, so they receive the same information
 	as a regular EventBus subscriber but via callback.
 
-	Handler isolation: a handler that throws is logged at DEBUG and removed so
+	Handler isolation: a handler that throws is logged at WARN and removed so
 	it cannot disrupt subsequent ticks or other handlers."
 	(:require [cn.li.mcmod.util.log :as log]))
-
-(def register-topology-network-handler-key "register_topology_network_handler")
-(def register-topology-node-handler-key "register_topology_node_handler")
 
 (def ^:private handler-registry-lock
 	(Object.))
@@ -81,12 +78,14 @@
 
 (defn- invoke-safe
 	"Call f, return nil. If it throws, log and return ::remove-handler."
-	[f]
+	[handler-entry f]
 	(try
 		(f)
 		nil
 		(catch Exception e
-			(log/debug "IMC topology handler threw exception, removing it:" (ex-message e))
+			(log/warn "IMC topology handler threw exception, removing it:"
+								(pr-str (get handler-entry :kind)) (type (get handler-entry :handler))
+								"-" (ex-message e))
 			::remove-handler)))
 
 (defn- invoke-network-handler! [{:keys [kind handler]} payload]
@@ -98,14 +97,10 @@
 		:consumer (.accept ^java.util.function.Consumer handler payload)
 		nil))
 
-(defn- dispatch-network! [action ssid matrix]
-	(let [payload {:kind :topology/network
-							 :action action
-							 :ssid ssid
-							 :matrix matrix}
-				bad (keep (fn [h]
+(defn- dispatch-network! [payload]
+	(let [bad (keep (fn [h]
 									(when (= ::remove-handler
-												 (invoke-safe #(invoke-network-handler! h payload)))
+												 (invoke-safe h #(invoke-network-handler! h payload)))
 										h))
 								(network-handlers-snapshot))]
 		(when (seq bad)
@@ -120,27 +115,23 @@
 		:consumer (.accept ^java.util.function.Consumer handler payload)
 		nil))
 
-(defn- dispatch-node! [action node]
-	(let [payload {:kind :topology/node
-							 :action action
-							 :node node}
-				bad (keep (fn [h]
+(defn- dispatch-node! [payload]
+	(let [bad (keep (fn [h]
 									(when (= ::remove-handler
-												 (invoke-safe #(invoke-node-handler! h payload)))
+												 (invoke-safe h #(invoke-node-handler! h payload)))
 										h))
 								(node-handlers-snapshot))]
 		(when (seq bad)
 			(remove-node-handlers! bad))))
 
-(defn- on-runtime-event [event]
+(defn- on-runtime-event
+	"Forward the full event map — device link events carry :generator/:receiver
+	caps alongside :node; handlers get everything the internal event has."
+	[event]
 	(when (map? event)
-		(case (:kind event)
-			:topology/network
-			(dispatch-network! (:action event) (:ssid event) (:matrix event))
-
-			:topology/node
-			(dispatch-node! (:action event) (:node event))
-
+		(case (get event :kind)
+			:topology/network (dispatch-network! event)
+			:topology/node (dispatch-node! event)
 			nil)))
 
 (defn dispatch-event!

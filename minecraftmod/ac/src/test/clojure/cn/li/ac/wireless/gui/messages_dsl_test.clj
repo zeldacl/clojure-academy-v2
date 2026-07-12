@@ -1,17 +1,20 @@
 (ns cn.li.ac.wireless.gui.messages-dsl-test
   "Tests for wireless GUI message DSL and catalog integration."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [cn.li.mcmod.gui.message.dsl :as msg-dsl]
             [cn.li.ac.gui.manifest :as gui-manifest]
+            [cn.li.ac.test.support.framework :as support-fw]
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.ac.wireless.gui.message.api :as wireless-msgs]
-            [cn.li.ac.wireless.shared.message-registry :as shared-registry]))
+            [cn.li.ac.wireless.gui.message.bootstrap :as shared-registry]))
+
+(use-fixtures :each support-fw/with-fresh-framework)
 
 (def expected-node-actions
   #{:change-name :change-password :list-networks :connect :disconnect})
 
 (def expected-matrix-actions
-  #{:gather-info :init :change-ssid :change-password :sync-state})
+  #{:gather-info :init :change-ssid :change-password})
 
 (def ^:private wireless-prefix "wireless")
 

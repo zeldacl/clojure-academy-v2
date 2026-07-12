@@ -179,12 +179,31 @@
     :default 20
     :min 1
     :max 200
-    :comment "Ticks before a stale wireless device (capability gone) is removed from a connection."}])
+    :comment "Ticks before a stale wireless device (capability gone) is removed from a connection."}
+   {:key :validate-interval-ticks
+    :section :performance
+    :path "performance.validate-interval-ticks"
+    :type :int
+    :default 20
+    :min 1
+    :max 1200
+    :comment "Ticks between node-connection integrity validation passes."}
+   {:key :sweep-interval-ticks
+    :section :performance
+    :path "performance.sweep-interval-ticks"
+    :type :int
+    :default 600
+    :min 20
+    :max 24000
+    :comment "Ticks between periodic sweeps unregistering disposed networks/connections."}])
 
 (def default-values
   (into {} (map #(vector (get % :key) (get % :default)) descriptors)))
 
-(defn- cfg []
+(defn cfg
+  "Full config snapshot map. Tick paths call this once per tick and pass the
+  snapshot down via ctx instead of re-merging per getter call."
+  []
   (merge default-values
          (config-reg/get-config-values config-common/wireless-domain)))
 
@@ -244,3 +263,9 @@
 
 (defn stale-device-cooldown-ticks []
   (:stale-device-cooldown-ticks (cfg)))
+
+(defn validate-interval-ticks []
+  (:validate-interval-ticks (cfg)))
+
+(defn sweep-interval-ticks []
+  (:sweep-interval-ticks (cfg)))

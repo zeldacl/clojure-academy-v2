@@ -1,8 +1,7 @@
 (ns cn.li.ac.wireless.core.capability-resolver
   "Resolve wireless capabilities from tiles or VBlocks."
   (:require [cn.li.ac.wireless.core.vblock :as vb]
-            [cn.li.ac.wireless.core.capability-lookup :as cap-lookup]
-            [cn.li.mcmod.platform.be :as platform-be])
+            [cn.li.ac.wireless.core.capability-lookup :as cap-lookup])
   (:import [cn.li.acapi.wireless
             IWirelessGenerator
             IWirelessMatrix
@@ -51,3 +50,24 @@
     :generator (resolve-generator-cap world vblock)
     :receiver (resolve-receiver-cap world vblock)
     nil))
+
+(def ^:private cache-miss ::miss)
+
+(defn resolve-cap-cached
+  "Resolve `(resolve-fn world vblock)` through a tick-scoped mutable cache.
+
+  `cache` is a java.util.HashMap owned by the per-tick ctx: single-threaded
+  (server thread) use only, discarded at tick end — capability identity is
+  stable within one tick, so misses are cached too. `nil` cache falls through
+  to a direct resolve (non-tick callers)."
+  [^java.util.HashMap cache resolve-fn world vblock]
+  (if (nil? cache)
+    (resolve-fn world vblock)
+    (let [k [(:x vblock) (:y vblock) (:z vblock) (:block-type vblock)]
+          hit (.get cache k)]
+      (cond
+        (identical? cache-miss hit) nil
+        (some? hit) hit
+        :else (let [v (resolve-fn world vblock)]
+                (.put cache k (or v cache-miss))
+                v)))))

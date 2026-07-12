@@ -6,22 +6,24 @@
             [cn.li.mcmod.util.log :as log]))
 
 (defn validate!
-  "Validate network integrity.
-  Returns true if valid, false if should be disposed."
-  [network world]
-  (let [matrix-vb (:matrix network)
-        chunk-loaded? (vb/is-chunk-loaded? matrix-vb world)
-        cap (resolver/resolve-matrix-cap world matrix-vb)]
-    (if (and chunk-loaded? (not cap))
-      (do
-        (log/info (str "[validate] Network '" (net-state/get-ssid network)
-                       "' chunk-loaded?=" chunk-loaded?
-                       " cap=" (pr-str cap)
-                       " matrix-vb=" (pr-str (select-keys matrix-vb [:x :y :z :block-type :ignore-chunk]))
-                       " => disposing (matrix destroyed)"))
-        (net-state/mark-disposed! network))
-      network)
-    (net-state/active? network)))
+  "Validate network integrity. Disposes the network when its matrix chunk is
+  loaded but the matrix capability is gone (block destroyed).
+  Returns true if valid, false if disposed."
+  ([network world]
+   (validate! network world nil))
+  ([network world cap-cache]
+   (let [matrix-vb (:matrix network)
+         chunk-loaded? (vb/is-chunk-loaded? matrix-vb world)
+         cap (resolver/resolve-cap-cached
+               cap-cache resolver/resolve-matrix-cap world matrix-vb)]
+     (if (and chunk-loaded? (not cap))
+       (do
+         (log/info (format "[validate] Network '%s' matrix destroyed at %s — disposing"
+                           (net-state/get-ssid network)
+                           (vb/vblock-to-string matrix-vb)))
+         (net-state/mark-disposed! network)
+         false)
+       (net-state/active? network)))))
 
 (defn is-in-range?
   "Check if coordinates are in network range."
@@ -33,7 +35,7 @@
     false))
 
 (defn dispose!
-  "Dispose the network and unlink all nodes."
-  [network world]
+  "Dispose the network."
+  [network _world]
   (net-state/mark-disposed! network)
   (log/info (format "Network '%s' disposed" (net-state/get-ssid network))))

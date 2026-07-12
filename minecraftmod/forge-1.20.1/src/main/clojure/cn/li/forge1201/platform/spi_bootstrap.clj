@@ -132,6 +132,7 @@
            :world-place-block-by-id (resolve-binding! 'world-place-block-by-id)
            :world-is-chunk-loaded? (resolve-binding! 'world-is-chunk-loaded?)
            :world-get-day-time (resolve-binding! 'world-get-day-time)
+           :world-get-game-time (resolve-binding! 'world-get-game-time)
            :world-get-dimension-id (resolve-binding! 'world-get-dimension-id)
            :world-server-session-id (resolve-binding! 'world-server-session-id)
            :world-get-players (resolve-binding! 'world-get-players)

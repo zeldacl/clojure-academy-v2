@@ -1,9 +1,17 @@
 (ns cn.li.ac.block.wireless-node-quick-move-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [cn.li.ac.block.wireless-node.gui-reactive :as node-gui]
+            [cn.li.ac.block.wireless-node.logic :as node-logic]
             [cn.li.ac.energy.operations :as energy]
+            [cn.li.ac.test.support.framework :as support-fw]
             [cn.li.ac.wireless.gui.container.move :as move-common]
             [cn.li.ac.wireless.gui.container.common :as common]))
+
+(use-fixtures :each (fn [f]
+                      (support-fw/with-fresh-framework
+                        (fn []
+                          (node-logic/ensure-node-slot-schema!)
+                          (f)))))
 
 (defn- make-container
   [slots]

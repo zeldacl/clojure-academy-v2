@@ -1,7 +1,10 @@
 (ns cn.li.ac.wireless.data.world-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
+            [cn.li.ac.test.support.framework :as support-fw]
             [cn.li.ac.test.support.wireless-stubs :as stubs]
+            [cn.li.ac.test.support.nbt :as test-nbt]
             [cn.li.ac.wireless.core.vblock :as vb]
+            [cn.li.ac.wireless.core.capability-resolver :as resolver]
             [cn.li.ac.wireless.data.network-state :as network-state]
             [cn.li.ac.wireless.data.node-conn :as node-conn]
             [cn.li.ac.wireless.data.network-lookup :as lookup]
@@ -10,24 +13,22 @@
             [cn.li.ac.wireless.data.world :as world]
             [cn.li.mcmod.platform.nbt :as nbt]))
 
-(use-fixtures
-  :each
-  (fn [f]
-    (world-registry/call-with-world-registry-runtime
-      (world-registry/create-world-registry-runtime)
-      f)))
+(use-fixtures :each support-fw/with-fresh-framework)
 
 (defn- test-world
   [world-id]
   {:server-session-id :test-session
    :world-id world-id})
 
+(defn- caps-by-pos
+  [pos->cap]
+  (fn [_world vblock] (get pos->cap (vb/pos-of vblock))))
+
 (deftest get-world-data-caches-per-world-test
   (let [w (test-world :world-a)
         a (world/get-world-data w)
         b (world/get-world-data w)]
     (is (identical? a b))
-    (is (= w (:world a)))
     (is (= [:test-session :world-a] (:world-key a)))
     (world/remove-world-data! w)))
 
@@ -52,20 +53,18 @@
     (is (nil? (world/get-world-data-non-create world-a-nether)))
     (is (some? (world/get-world-data-non-create world-b)))))
 
-
-
 (deftest world-key-isolates-session-and-dimension-test
   (let [world-a {:server-session-id :session-a :dimension-id :overworld :ref 1}
-      world-a-new-ref {:server-session-id :session-a :dimension-id :overworld :ref 2}
-      world-b {:server-session-id :session-b :dimension-id :overworld :ref 3}
-      a (world/get-world-data world-a)
-      a2 (world/get-world-data world-a-new-ref)
-      b (world/get-world-data world-b)]
+        world-a-new-ref {:server-session-id :session-a :dimension-id :overworld :ref 2}
+        world-b {:server-session-id :session-b :dimension-id :overworld :ref 3}
+        a (world/get-world-data world-a)
+        a2 (world/get-world-data world-a-new-ref)
+        b (world/get-world-data world-b)]
     (is (= [:session-a :overworld] (:world-key a)))
     (is (= [:session-a :overworld] (:world-key a2)))
     (is (= [:session-b :overworld] (:world-key b)))
-    (world-registry/update-state-value! a :networks conj :shared)
-    (is (= [:shared] (world-registry/networks a2)))
+    (world-registry/update-state-value! a :networks assoc [0 0 0] :shared)
+    (is (= {[0 0 0] :shared} (world-registry/networks a2)))
     (is (empty? (world-registry/networks b)))
     (is (= 2 (count (world-registry/registry-snapshot))))
 
@@ -80,90 +79,84 @@
     (is (not (:success (commands/create-network! wd matrix "s1" "pw2"))))))
 
 (deftest create-network-registers-lookups-test
-  (let [w (test-world :w-lu)
-        wd (world/create-world-data w)
-        tiles (atom {[0 0 0] (stubs/fake-matrix {})})
+  (let [wd (world/create-world-data (test-world :w-lu))
         matrix-vb (vb/create-vmatrix 0 0 0)]
-    (stubs/with-tile-world tiles
-      (fn []
-        (is (:success (commands/create-network! wd matrix-vb "reg" "pw")))
-        (is (some? (lookup/get-network-by-matrix wd matrix-vb)))
-        (is (some? (lookup/get-network-by-ssid wd "reg")))
-        (is (pos? (count (world-registry/spatial-index wd))))))))
+    (is (:success (commands/create-network! wd matrix-vb "reg" "pw")))
+    (is (some? (lookup/get-network-by-matrix wd matrix-vb)))
+    (is (some? (lookup/get-network-by-ssid wd "reg")))))
 
 (deftest destroy-network-clears-node-lookups-test
-  (let [w (test-world :w-dest)
-        wd (world/create-world-data w)
-        m (stubs/fake-matrix {:capacity 4})
-        n (stubs/mutable-node {})
-        tiles (atom {[0 0 0] m [3 0 0] n})
+  (let [wd (world/create-world-data (test-world :w-dest))
+        matrix-cap (stubs/fake-matrix {:capacity 4})
         matrix-vb (vb/create-vmatrix 0 0 0)
         node-vb (vb/create-vnode 3 0 0)]
-    (stubs/with-tile-world tiles
-      (fn []
-        (is (:success (commands/create-network! wd matrix-vb "dnet" "p")))
-        (let [net (lookup/get-network-by-ssid wd "dnet")]
-          (is (:success (commands/link-node-to-network! wd net node-vb "p" nil))))
-          (is (some? (get (world-registry/net-lookup wd) node-vb)))
-          (commands/destroy-network! wd net)
-          (is (nil? (get (world-registry/net-lookup wd) node-vb)))
-          (is (nil? (lookup/get-network-by-ssid wd "dnet"))))))))
-
-(deftest change-network-ssid-refreshes-string-lookup-test
-  (let [wd (world/create-world-data (test-world :w-rename))
-        matrix-vb (vb/create-vmatrix 0 0 0)]
-    (is (:success (commands/create-network! wd matrix-vb "old" "p")))
-    (let [network (lookup/get-network-by-ssid wd "old")]
-      (is (:success (commands/change-network-ssid! network "new")))
-      (let [network (lookup/get-network-by-ssid wd "new")]
-        (is (= "new" (network-state/get-ssid network)))
-        (is (nil? (lookup/get-network-by-ssid wd "old")))
-        (is (some? network))))))
+    (with-redefs [vb/is-chunk-loaded? (constantly true)
+                  resolver/resolve-matrix-cap (caps-by-pos {[0 0 0] matrix-cap})]
+      (is (:success (commands/create-network! wd matrix-vb "dnet" "p")))
+      (let [net (lookup/get-network-by-ssid wd "dnet")]
+        (is (:success (commands/link-node-to-network! wd net node-vb "p" nil)))
+        (is (some? (lookup/get-network-by-node wd node-vb)))
+        (commands/destroy-network! wd (lookup/get-network-by-ssid wd "dnet"))
+        (is (nil? (lookup/get-network-by-node wd node-vb)))
+        (is (nil? (lookup/get-network-by-ssid wd "dnet")))))))
 
 (deftest world-lifecycle-saved-data-restores-active-world-state-test
+  (test-nbt/install-test-nbt-ops!)
   (let [world-id (test-world :w-lifecycle)
+        matrix-cap (stubs/fake-matrix {})
+        node-cap (stubs/mutable-node {})
+        gen-cap (stubs/generator-stub {})
         matrix-vb (vb/create-vmatrix 0 0 0)
         node-vb (vb/create-vnode 3 0 0)
         node-conn-vb (vb/->VBlock 3 0 0 :node-conn true)
-        gen-vb (vb/->VBlock 5 0 0 :generator true)
-        tiles (atom {[0 0 0] (stubs/fake-matrix {})
-                     [3 0 0] (stubs/mutable-node {})
-                     [5 0 0] (stubs/generator-stub {})})]
-    (stubs/with-tile-world tiles
-      (fn []
-        (let [wd (world/create-world-data world-id)]
-          (is (:success (commands/create-network! wd matrix-vb "persist" "pw")))
-          (is (:success (commands/link-node-to-network! wd (lookup/get-network-by-ssid wd "persist") node-vb "pw" nil)))
-          (let [conn (commands/ensure-node-connection! wd node-conn-vb)]
-            (is (true? (node-conn/add-generator! conn gen-vb world-id))))
-          (world/register-world-data! world-id wd)
-          (let [saved (world/on-world-save world-id)]
-            (world/remove-world-data! world-id)
-            (is (nil? (world/get-world-data-non-create world-id)))
-            (let [restored (world/on-world-load world-id saved)]
-              (is (not (identical? wd restored)))
-              (let [network (lookup/get-network-by-matrix restored matrix-vb)
-                    conn (lookup/get-node-connection restored gen-vb)]
-                (is (= "persist" (network-state/get-ssid network)))
-                (is (= [node-vb] (network-state/get-nodes network)))
-                (is (identical? network (lookup/get-network-by-node restored node-vb)))
-                (is (= [gen-vb] (node-conn/get-generators conn)))))))))))
+        gen-vb (vb/->VBlock 5 0 0 :generator true)]
+    (with-redefs [vb/is-chunk-loaded? (constantly true)
+                  resolver/resolve-matrix-cap (caps-by-pos {[0 0 0] matrix-cap})
+                  resolver/resolve-node-cap (caps-by-pos {[3 0 0] node-cap})
+                  resolver/resolve-generator-cap (caps-by-pos {[5 0 0] gen-cap})]
+      (let [wd (world/create-world-data world-id)]
+        (is (:success (commands/create-network! wd matrix-vb "persist" "pw")))
+        (is (:success (commands/link-node-to-network!
+                        wd (lookup/get-network-by-ssid wd "persist") node-vb "pw" nil)))
+        (let [conn (commands/ensure-node-connection! wd node-conn-vb)]
+          (is (true? (node-conn/add-generator! conn gen-vb world-id))))
+        (world/register-world-data! world-id wd)
+        (let [saved (world/on-world-save world-id)]
+          (world/remove-world-data! world-id)
+          (is (nil? (world/get-world-data-non-create world-id)))
+          (let [restored (world/on-world-load world-id saved)]
+            (is (not (identical? wd restored)))
+            (let [network (lookup/get-network-by-matrix restored matrix-vb)
+                  conn (lookup/get-node-connection restored gen-vb)]
+              (is (= "persist" (network-state/get-ssid network)))
+              (is (= [node-vb] (network-state/get-nodes network)))
+              (is (identical? network (lookup/get-network-by-node restored node-vb)))
+              (is (= [gen-vb] (node-conn/get-generators conn))))))))))
 
 (deftest world-lifecycle-skips-invalid-saved-wireless-entries-test
+  (test-nbt/install-test-nbt-ops!)
   (let [world-id (test-world :w-lifecycle-corrupt)
-        tiles (atom {})]
-    (stubs/with-tile-world tiles
-      (fn []
-        (let [payload (nbt/create-nbt-compound)
-              networks (nbt/create-nbt-list)
-              connections (nbt/create-nbt-list)]
-          ;; Missing required nested fields (`matrix`, `node`, receivers/generators).
-          ;; A single corrupt entry should not prevent the world from loading.
-          (nbt/nbt-append! networks (nbt/create-nbt-compound))
-          (nbt/nbt-append! connections (nbt/create-nbt-compound))
-          (nbt/nbt-set-tag! payload "networks" networks)
-          (nbt/nbt-set-tag! payload "connections" connections)
-          (let [restored (world/on-world-load world-id (world/create-wi-saved-data nil payload))]
-            (is (identical? restored (world/get-world-data-non-create world-id)))
-            (is (empty? (world-registry/networks restored)))
-            (is (empty? (world-registry/connections restored)))))))))
+        payload (nbt/create-nbt-compound)
+        networks (nbt/create-nbt-list)
+        connections (nbt/create-nbt-list)]
+    ;; Entries missing required nested fields (`matrix`, `node`, ...).
+    ;; A single corrupt entry must not prevent the world from loading.
+    (nbt/nbt-set-int! payload "schemaVersion" 2)
+    (nbt/nbt-append! networks (nbt/create-nbt-compound))
+    (nbt/nbt-append! connections (nbt/create-nbt-compound))
+    (nbt/nbt-set-tag! payload "networks" networks)
+    (nbt/nbt-set-tag! payload "connections" connections)
+    (let [restored (world/on-world-load world-id (world/create-wi-saved-data nil payload))]
+      (is (= restored (world/get-world-data-non-create world-id)))
+      (is (empty? (world-registry/networks restored)))
+      (is (empty? (world-registry/connections restored))))))
+
+(deftest world-load-rejects-old-schema-with-fresh-state-test
+  (test-nbt/install-test-nbt-ops!)
+  (let [world-id (test-world :w-schema-v1)
+        payload (nbt/create-nbt-compound)]
+    (nbt/nbt-set-int! payload "schemaVersion" 1)
+    (let [restored (world/on-world-load world-id (world/create-wi-saved-data nil payload))]
+      (is (some? restored))
+      (is (empty? (world-registry/networks restored)))
+      (is (empty? (world-registry/connections restored))))))

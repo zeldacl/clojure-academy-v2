@@ -1,10 +1,13 @@
 (ns cn.li.ac.wireless.service.commands-test
-  (:require [clojure.test :refer [deftest is]]
+  (:require [clojure.test :refer [deftest is use-fixtures]]
+            [cn.li.ac.test.support.framework :as support-fw]
             [cn.li.ac.wireless.core.vblock :as vb]
             [cn.li.ac.wireless.data.network-lookup :as lookup]
             [cn.li.ac.wireless.data.network-state :as network-state]
             [cn.li.ac.wireless.data.world :as world]
             [cn.li.ac.wireless.service.commands :as commands]))
+
+(use-fixtures :each support-fw/with-fresh-framework)
 
 (defn- test-world
   [world-id]

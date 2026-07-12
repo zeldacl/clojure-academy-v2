@@ -89,13 +89,13 @@
    :slots [{:id :input :type :energy :x 42 :y 10}
            {:id :output :type :energy :x 42 :y 80}]})
 
-(defonce ^:private node-slot-schema-registration
-  (delay
-    (slot-schema/register-slot-schema! node-slot-schema-config)))
-
 (defn ensure-node-slot-schema!
+  "Idempotent: registers the node slot schema into the current Framework atom
+  when missing. Registry state lives in the Framework, so a once-only delay
+  would go stale whenever a fresh Framework is installed (tests, relaunch)."
   []
-  @node-slot-schema-registration)
+  (when-not (slot-schema/get-slot-schema node-slot-schema-id)
+    (slot-schema/register-slot-schema! node-slot-schema-config)))
 
 (defn node-input-slot-index
   []
@@ -277,15 +277,11 @@
 (defn handle-node-break
   [_node-type]
   (fn [world pos _block-id]
-    (log/info "Breaking Wireless Node")
-    (let [node-vb (vb/create-vnode (ppos/pos-x pos) (ppos/pos-y pos) (ppos/pos-z pos))
-          be (platform-world/world-get-tile-entity* world pos)]
-      ;; Inventory items are dropped automatically by SharedScriptedBlock.onRemove
-      ;; via Containers.dropContents.
-      (try
-        (wireless-api/unregister-node-spatial! world node-vb)
-        (when be
-          (wireless-api/unlink-node-from-network! be)
-          (wireless-api/destroy-node-connection-for-node! be))
-        (catch Exception e
-          (log/stacktrace (str "[wireless-node] cleanup failed at " pos) e))))))
+    ;; Inventory items are dropped automatically by SharedScriptedBlock.onRemove
+    ;; via Containers.dropContents. Cleanup is position-based — it must not
+    ;; depend on the BlockEntity still being alive.
+    (try
+      (wireless-api/cleanup-node-at!
+        world (ppos/pos-x pos) (ppos/pos-y pos) (ppos/pos-z pos))
+      (catch Exception e
+        (log/warn "[wireless-node] break cleanup failed at" pos ":" (ex-message e))))))

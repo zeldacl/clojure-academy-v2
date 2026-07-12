@@ -1,87 +1,48 @@
 (ns cn.li.ac.wireless.core.spatial-index
-  "Shared spatial index for the wireless system.
+  "Chunk-bucketed spatial index for wireless node discovery.
 
-  The index maps chunk-coord [cx cy cz] -> #{vblock}, allowing O(1) range
-  searches instead of full-table scans.
-
-  This module is a pure atom-based data structure with no dependency on
-  world.clj or network.clj, deliberately breaking the circular-dependency
-  that previously forced network.clj to duplicate removal logic."
-  (:require [cn.li.ac.foundation.position :as pos]
-            [cn.li.mcmod.util.log :as log]))
-
-;; ============================================================================
-;; Construction
-;; ============================================================================
-
-(defn create-spatial-index
-  "Return a fresh spatial-index atom: {[cx cy cz] -> #{vblock}}."
-  []
-  (atom {}))
+  Immutable value: {[cx cy cz] -> #{[x y z]}}. Members are position tuples;
+  entries are added when a wireless node block is placed (or rebuilt from
+  save) and removed only when the block is broken. Stale entries are harmless:
+  discovery resolves the node capability and filters misses."
+  (:require [cn.li.ac.foundation.position :as pos]))
 
 (defn create-spatial-index-value
-  "Return a fresh spatial-index value: {[cx cy cz] -> #{vblock}}."
+  "Return a fresh spatial-index value: {[cx cy cz] -> #{[x y z]}}."
   []
   {})
 
-;; ============================================================================
-;; Mutation
-;; ============================================================================
-
 (defn add-to-index
-  "Add `vblock` to an immutable spatial index value."
-  [index vblock]
-  (let [chunk-key (pos/pos->chunk-key (:x vblock) (:y vblock) (:z vblock))]
-    (update index chunk-key (fnil conj #{}) vblock)))
-
-(defn add-to-index!
-  "Add `vblock` to `index-atom` at the appropriate chunk bucket."
-  [index-atom vblock]
-  (swap! index-atom add-to-index vblock))
+  "Add position tuple `[x y z]` to an immutable spatial index value."
+  [index [x y z :as p]]
+  (update index (pos/pos->chunk-key x y z) (fnil conj #{}) p))
 
 (defn remove-from-index
-  "Remove `vblock` from an immutable spatial index value.
-   Returns index unchanged when vblock has nil coordinates."
-  [index vblock]
-  (if (or (nil? (:x vblock)) (nil? (:y vblock)) (nil? (:z vblock)))
+  "Remove position tuple `[x y z]` from an immutable spatial index value.
+   Removes the chunk bucket entirely when it becomes empty."
+  [index [x y z :as p]]
+  (if (or (nil? x) (nil? y) (nil? z))
     index
-    (let [chunk-key (pos/pos->chunk-key (:x vblock) (:y vblock) (:z vblock))]
+    (let [chunk-key (pos/pos->chunk-key x y z)]
       (if-let [chunk-set (get index chunk-key)]
-        (let [new-set (disj chunk-set vblock)]
+        (let [new-set (disj chunk-set p)]
           (if (empty? new-set)
             (dissoc index chunk-key)
             (assoc index chunk-key new-set)))
         index))))
 
-(defn remove-from-index!
-  "Remove `vblock` from `index-atom`.  Removes the bucket entirely when empty."
-  [index-atom vblock]
-  (swap! index-atom remove-from-index vblock))
-
-;; ============================================================================
-;; Query
-;; ============================================================================
-
 (defn nearby-chunk-keys
-  "Return the set of chunk keys whose bounding boxes overlap a sphere of
+  "Return the chunk keys whose bounding boxes overlap a sphere of
   `search-radius` centered at (x, y, z)."
   [x y z search-radius]
   (pos/nearby-chunk-keys x y z search-radius))
 
-(defn vblocks-in-index
-  "Return the union of all vblocks in `chunk-keys` from an index value."
+(defn positions-in-index
+  "Return the union of all position tuples in `chunk-keys` from an index value."
   [index chunk-keys]
-  (log/info "[vblocks-in-index] index-keys=" (pr-str (keys index)))
-  (doseq [ck (take 3 chunk-keys)]
-    (log/info "[vblocks-in-index] lookup-key=" (pr-str ck) "found=" (boolean (get index ck))))
   (reduce (fn [acc chunk-key]
-            (if-let [vblocks (get index chunk-key)]
-              (into acc vblocks)
+            (if-let [ps (get index chunk-key)]
+              (into acc ps)
               acc))
           #{}
           chunk-keys))
-
-(defn vblocks-in-chunks
-  "Return the union of all vblocks stored in the given `chunk-keys`."
-  [index-atom chunk-keys]
-  (vblocks-in-index @index-atom chunk-keys))

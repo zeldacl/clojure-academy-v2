@@ -5,7 +5,7 @@
   The wireless system (cn.li.ac.wireless.*) has no compile-time dependency on
   these namespaces; blocks interact through acapi Java interfaces."
   (:require [cn.li.ac.content.block-loader-core :as block-loader]
-            [cn.li.ac.wireless.shared.message-registry :as msg-reg]
+            [cn.li.ac.wireless.gui.message.bootstrap :as msg-reg]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]))
 
 (def ^:private wireless-block-spec

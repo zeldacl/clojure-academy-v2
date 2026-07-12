@@ -21,19 +21,28 @@
 (defrecord WiWorldData [world-key])
 
 (defn initial-world-state
-  "Return a fresh per-world topology map (pure data, NBT-serializable)."
+  "Return a fresh per-world topology map (pure data, NBT-serializable).
+
+  Entities are stored in position-keyed maps (pos = [x y z]); lookup tables
+  hold position references, never entity values — one entity, one home."
   []
-  {:net-lookup   {}
-   :node-lookup  {}
-   :spatial-index (si/create-spatial-index-value)
-   :networks     []
-   :connections  []})
+  {:networks       {}    ; {matrix-pos -> WirelessNet}
+   :connections    {}    ; {node-pos -> NodeConn}
+   :net-by-ssid    {}    ; {ssid -> matrix-pos}
+   :node-to-net    {}    ; {node-pos -> matrix-pos}
+   :device-to-node {}    ; {generator/receiver-pos -> node-pos}
+   :spatial-index  (si/create-spatial-index-value)}) ; {chunk-key -> #{[x y z]}}, placed node blocks only
 
 ;; ============================================================================
 ;; Framework paths
 ;; ============================================================================
 
 (def ^:private worlds-path [:service :wireless-worlds])
+
+;; Transient runtime state (stale timestamps etc.): never persisted, never
+;; fires the world-state-changed notify — mutating it must not mark the
+;; SavedData dirty.
+(def ^:private transient-root-path [:service :wireless-transient])
 
 (defn- registry-path [world-key]
   (conj worlds-path world-key))
@@ -144,37 +153,50 @@
     wi-data))
 
 (defn remove-world-data!
-  "Remove world data (called on world unload)."
+  "Remove world data and its transient runtime state (called on world unload)."
   [world]
   (let [wk (world-key world)]
     (when-let [fw-atom (fw/fw-atom)]
-      (swap! fw-atom update-in worlds-path dissoc wk)))
+      (swap! fw-atom (fn [fw-state]
+                       (-> fw-state
+                           (update-in worlds-path dissoc wk)
+                           (update-in transient-root-path dissoc wk))))))
   (log/info (format "Removed WiWorldData for world: %s" (world-key world))))
 
+(defn- remove-session-entries
+  [entries session-id]
+  (if entries
+    (into {} (remove (fn [[[entry-session-id _world-id] _data]]
+                       (= session-id entry-session-id))
+                     entries))
+    {}))
+
 (defn clear-session-world-data!
-  "Remove all wireless world data owned by one server session."
+  "Remove all wireless world data (and transient state) owned by one server session."
   [owner-or-session-id]
   (let [session-id (if (map? owner-or-session-id)
                      (first (world-owner-key/world-key owner-or-session-id))
                      owner-or-session-id)]
     (when-let [fw-atom (fw/fw-atom)]
-      (swap! fw-atom update-in worlds-path
-             (fn [worlds]
-               (if worlds
-                 (into {} (remove (fn [[[entry-session-id _world-id] _data]]
-                                    (= session-id entry-session-id))
-                                  worlds))
-                 {}))))
+      (swap! fw-atom (fn [fw-state]
+                       (-> fw-state
+                           (update-in worlds-path remove-session-entries session-id)
+                           (update-in transient-root-path remove-session-entries session-id)))))
     nil))
 
 ;; ============================================================================
 ;; State CRUD
 ;; ============================================================================
 
+(defn world-state
+  "Read the entire world-state map once (preferred in tick paths)."
+  [world-data]
+  (or (get-world-state (:world-key world-data)) (initial-world-state)))
+
 (defn state-value
   "Read a key from world-state."
   [world-data key]
-  (get (or (get-world-state (:world-key world-data)) (initial-world-state)) key))
+  (get (world-state world-data) key))
 
 (defn set-state-value!
   "Set a key in world-state."
@@ -194,14 +216,42 @@
   (apply update-world-state! (:world-key world-data) f args))
 
 ;; ============================================================================
+;; Transient runtime state — per world-key, outside world-state: mutations do
+;; NOT fire notify-world-state-changed! (no SavedData dirty, no NBT).
+;; ============================================================================
+
+(defn transient-value
+  "Read a key from this world's transient runtime state."
+  [world-data key]
+  (when-let [fw-atom (fw/fw-atom)]
+    (get-in @fw-atom (conj transient-root-path (:world-key world-data) key))))
+
+(defn update-transient-value!
+  "Update a key in this world's transient runtime state. Returns nil."
+  [world-data key f & args]
+  (when-let [fw-atom (fw/fw-atom)]
+    (swap! fw-atom update-in (conj transient-root-path (:world-key world-data) key)
+           (fn [current] (apply f current args))))
+  nil)
+
+;; ============================================================================
 ;; Domain accessors
 ;; ============================================================================
 
-(defn net-lookup [world-data] (state-value world-data :net-lookup))
-(defn node-lookup [world-data] (state-value world-data :node-lookup))
+(defn networks
+  "Position-keyed network map: {matrix-pos -> WirelessNet}."
+  [world-data]
+  (state-value world-data :networks))
+
+(defn connections
+  "Position-keyed connection map: {node-pos -> NodeConn}."
+  [world-data]
+  (state-value world-data :connections))
+
+(defn net-by-ssid [world-data] (state-value world-data :net-by-ssid))
+(defn node-to-net [world-data] (state-value world-data :node-to-net))
+(defn device-to-node [world-data] (state-value world-data :device-to-node))
 (defn spatial-index [world-data] (state-value world-data :spatial-index))
-(defn networks [world-data] (state-value world-data :networks))
-(defn connections [world-data] (state-value world-data :connections))
 
 ;; ============================================================================
 ;; Diagnostics & testing
@@ -219,13 +269,3 @@
   []
   (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom assoc-in worlds-path {})))
-
-(defn create-world-registry-runtime
-  "Test/runtime factory for the wireless world registry store."
-  []
-  {::runtime ::world-registry})
-
-(defn call-with-world-registry-runtime
-  "Run `f` with world registry runtime installed (identity wrapper for test isolation)."
-  [_runtime f]
-  (f))

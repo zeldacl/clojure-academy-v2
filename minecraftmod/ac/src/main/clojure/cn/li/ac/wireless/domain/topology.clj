@@ -1,14 +1,16 @@
 (ns cn.li.ac.wireless.domain.topology
   "Pure wireless topology transitions over world-state maps.
 
-  No world-registry transact, capability IO, or logging — callers commit via
-  `wireless.service.commands` and `wireless.data.entity-commit`."
+  All maps key by position tuple [x y z] (see `vb/pos-of`). The spatial index
+  tracks placed wireless node blocks only; entries are added on placement /
+  registration and removed only when the block is broken.
+
+  No world-registry access, capability IO, or logging — `wireless.data.store`
+  applies these transforms in single atomic swaps; admission rules (password,
+  capacity, range) live in `wireless.service.commands`."
   (:require [cn.li.ac.wireless.core.spatial-index :as si]
             [cn.li.ac.wireless.core.vblock :as vb]
-            [cn.li.ac.wireless.data.network-lookup :as lookup]
-            [cn.li.ac.wireless.data.network-state :as net-state]
-            [cn.li.ac.wireless.domain.model :as model])
-  (:import [cn.li.acapi.wireless IWirelessMatrix]))
+            [cn.li.ac.wireless.data.network-state :as net-state]))
 
 (defn- connection-generators [conn]
   (vec (or (get-in conn [:state :generators]) [])))
@@ -16,57 +18,100 @@
 (defn- connection-receivers [conn]
   (vec (or (get-in conn [:state :receivers]) [])))
 
+(defn- dissoc-entries-pointing-at
+  "Remove `pos->target` entries for the given vblocks, but only when they
+  still point at `target` (a vblock re-linked elsewhere is left alone)."
+  [m target vblocks]
+  (reduce (fn [m vblock]
+            (let [p (vb/pos-of vblock)]
+              (if (= target (get m p))
+                (dissoc m p)
+                m)))
+          m
+          vblocks))
+
+;; ============================================================================
+;; Networks
+;; ============================================================================
+
 (defn register-network
   [state net]
-  (-> state
-      (update :networks conj net)
-      (update :net-lookup
-              #(-> %
-                   (assoc (:matrix net) net)
-                   (assoc (net-state/get-ssid net) net)))
-      (update :spatial-index si/add-to-index (:matrix net))))
+  (let [mpos (vb/pos-of (:matrix net))]
+    (-> state
+        (update :networks assoc mpos net)
+        (update :net-by-ssid assoc (net-state/get-ssid net) mpos))))
 
 (defn link-network-node
   [state net node-vblock]
-  (-> state
-      (update :net-lookup assoc node-vblock net)
-      (update :spatial-index si/add-to-index node-vblock)))
+  (let [mpos (vb/pos-of (:matrix net))
+        npos (vb/pos-of node-vblock)]
+    (-> state
+        (update :node-to-net assoc npos mpos)
+        (update :spatial-index si/add-to-index npos))))
 
 (defn unlink-network-node
   [state node-vblock]
-  (update state :net-lookup dissoc node-vblock))
+  (update state :node-to-net dissoc (vb/pos-of node-vblock)))
 
 (defn unregister-network
   [state net]
-  (let [state (-> state
-                  (update :net-lookup dissoc (:matrix net) (net-state/get-ssid net))
-                  (update :networks (fn [items] (filterv #(not= % net) items)))
-                  (update :spatial-index si/remove-from-index (:matrix net)))]
-    (reduce unlink-network-node state (net-state/get-nodes net))))
+  (let [mpos (vb/pos-of (:matrix net))
+        ssid (net-state/get-ssid net)]
+    (-> state
+        (update :networks dissoc mpos)
+        (update :net-by-ssid (fn [m] (if (= mpos (get m ssid)) (dissoc m ssid) m)))
+        (update :node-to-net dissoc-entries-pointing-at mpos (net-state/get-nodes net)))))
+
+(defn refresh-ssid-lookup
+  [state old-ssid new-ssid network]
+  (let [mpos (vb/pos-of (:matrix network))]
+    (-> state
+        (update :net-by-ssid (fn [m] (if (= mpos (get m old-ssid)) (dissoc m old-ssid) m)))
+        (update :net-by-ssid assoc new-ssid mpos))))
+
+;; ============================================================================
+;; Connections
+;; ============================================================================
 
 (defn register-connection
   [state conn]
-  (-> state
-      (update :connections conj conn)
-      (update :node-lookup assoc (:node conn) conn)
-      (update :spatial-index si/add-to-index (:node conn))))
+  (let [npos (vb/pos-of (:node conn))]
+    (-> state
+        (update :connections assoc npos conn)
+        (update :spatial-index si/add-to-index npos))))
 
 (defn link-connection-device
   [state conn device-vblock]
-  (update state :node-lookup assoc device-vblock conn))
+  (update state :device-to-node assoc
+          (vb/pos-of device-vblock) (vb/pos-of (:node conn))))
 
 (defn unlink-connection-device
   [state device-vblock]
-  (update state :node-lookup dissoc device-vblock))
+  (update state :device-to-node dissoc (vb/pos-of device-vblock)))
 
 (defn unregister-connection
   [state conn]
-  (let [state (-> state
-                  (update :node-lookup dissoc (:node conn))
-                  (update :connections (fn [items] (filterv #(not= % conn) items)))
-                  (update :spatial-index si/remove-from-index (:node conn)))
+  (let [npos (vb/pos-of (:node conn))
         devices (concat (connection-generators conn) (connection-receivers conn))]
-    (reduce unlink-connection-device state devices)))
+    (-> state
+        (update :connections dissoc npos)
+        (update :device-to-node dissoc-entries-pointing-at npos devices))))
+
+;; ============================================================================
+;; Spatial index (placed node blocks)
+;; ============================================================================
+
+(defn track-node-position
+  [state node-vblock]
+  (update state :spatial-index si/add-to-index (vb/pos-of node-vblock)))
+
+(defn untrack-node-position
+  [state node-vblock]
+  (update state :spatial-index si/remove-from-index (vb/pos-of node-vblock)))
+
+;; ============================================================================
+;; Rebuild (deserialization)
+;; ============================================================================
 
 (defn rebuild-network-indexes
   [state net]
@@ -82,48 +127,9 @@
             state
             (concat (connection-generators conn) (connection-receivers conn)))))
 
-(defn ssid-available?
-  [world-data network new-ssid]
-  (let [existing (lookup/get-network-by-ssid world-data new-ssid)]
-    (or (nil? existing) (identical? existing network))))
-
-(defn can-create-network?
-  [world-data ssid matrix-vblock]
-  (and (nil? (lookup/get-network-by-ssid world-data ssid))
-       (nil? (lookup/get-network-by-matrix world-data matrix-vblock))))
-
-(defn password-valid?
-  [network password-attempt]
-  (= password-attempt (net-state/get-password network)))
-
-(defn network-has-node-capacity?
-  [network world]
-  (model/network-has-capacity?
-    {:nodes (net-state/get-nodes network)}
-    (net-state/get-capacity network world)))
-
-(defn matrix-in-range?
-  [network node-vblock world]
-  (if-let [matrix (net-state/get-matrix network world)]
-    (let [range (.getMatrixRange ^IWirelessMatrix matrix)
-          dist-sq (vb/dist-sq node-vblock (:matrix network))]
-      (<= dist-sq (* range range)))
-    false))
-
-(defn validate-add-node
-  [network node-vblock password-attempt world]
-  (cond
-    (not (password-valid? network password-attempt))
-    {:ok false :reason :password}
-
-    (not (network-has-node-capacity? network world))
-    {:ok false :reason :capacity}
-
-    (not (matrix-in-range? network node-vblock world))
-    {:ok false :reason :range}
-
-    :else
-    {:ok true}))
+;; ============================================================================
+;; Node membership
+;; ============================================================================
 
 (defn add-node-to-network
   [network node-vblock]
@@ -141,9 +147,3 @@
                 :nodes
                 (filterv #(not (vb/vblock-equals? % node-vblock)) nodes))
      :removed? removed?}))
-
-(defn refresh-ssid-lookup
-  [state old-ssid new-ssid network]
-  (-> state
-      (update :net-lookup dissoc old-ssid)
-      (update :net-lookup assoc new-ssid network)))

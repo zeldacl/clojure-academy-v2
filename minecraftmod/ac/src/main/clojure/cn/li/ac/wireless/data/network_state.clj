@@ -14,7 +14,6 @@
    :password password
    :nodes []
    :buffer 0.0
-   :update-counter 0
    :disposed false})
 
 (defn create-wireless-net
@@ -55,7 +54,7 @@
 
 (defn- commit!
   [network updated]
-  (entity-commit/commit-network! (:world-data network) network updated))
+  (entity-commit/commit-network! (:world-data network) updated))
 
 (defn set-state-value!
   [network key value]
@@ -76,7 +75,6 @@
 (defn get-load [network] (count (get-nodes network)))
 
 (defn get-buffer [network] (state-value network :buffer))
-(defn get-update-counter [network] (state-value network :update-counter))
 (defn set-nodes! [network nodes]
   (set-state-value! network :nodes (vec nodes)))
 (defn update-nodes! [network f & args]
@@ -88,10 +86,6 @@
 (defn set-buffer! [network value]
   (let [updated (set-state-value! network :buffer value)]
     (state-value updated :buffer)))
-(defn set-update-counter! [network value]
-  (set-state-value! network :update-counter value))
-(defn increment-update-counter! [network]
-  (update-state-value! network :update-counter (fnil inc 0)))
 (defn mark-disposed! [network]
   (set-state-value! network :disposed true))
 

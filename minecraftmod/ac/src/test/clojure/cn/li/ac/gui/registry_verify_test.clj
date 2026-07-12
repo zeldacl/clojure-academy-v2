@@ -2,8 +2,9 @@
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [cn.li.ac.gui.manifest :as gui-manifest]
             [cn.li.ac.gui.registry-verify :as registry-verify]
+            [cn.li.ac.test.support.framework :as support-fw]
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
-            [cn.li.ac.wireless.shared.message-registry :as shared-registry]
+            [cn.li.ac.wireless.gui.message.bootstrap :as shared-registry]
             [cn.li.mcmod.network.server :as net-server]))
 
 (defn- reset-registries! [f]
@@ -16,7 +17,7 @@
         (net-server/reset-handlers-for-test!)
         (msg-registry/reset-registry-for-test! msg-snapshot)))))
 
-(use-fixtures :each reset-registries!)
+(use-fixtures :each (fn [f] (support-fw/with-fresh-framework #(reset-registries! f))))
 
 (deftest message-domain-contract-manifest-test
   (testing "every declared domain has a registry contract"

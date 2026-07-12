@@ -47,6 +47,10 @@
 	[^Level level]
 	(.getDayTime level))
 
+(defn world-get-game-time
+	[^Level level]
+	(.getGameTime level))
+
 (defn world-get-dimension-id
 	[^Level level]
 	(str (.location (.dimension level))))

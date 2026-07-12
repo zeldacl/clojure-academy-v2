@@ -6,9 +6,6 @@
   (:require [cn.li.ac.wireless.data.world-registry :as world-registry]
             [cn.li.ac.wireless.data.persistence :as persistence]
             [cn.li.ac.wireless.data.world-runtime :as runtime]
-            [cn.li.ac.wireless.data.node-conn :as node-conn]
-            [cn.li.ac.wireless.core.vblock :as vb]
-            [cn.li.mcmod.platform.nbt :as nbt]
             [cn.li.mcmod.events.world-lifecycle :as world-lifecycle]
             [cn.li.mcmod.util.log :as log]))
 
@@ -62,14 +59,17 @@
   ([world saved-data]
    (when saved-data
      (cond
-       (and world saved-data)
-       (persistence/world-data-from-nbt world saved-data)
-
-       (map? saved-data)
+       ;; Wrapper map — detected by its keys, not by map?, so a bare NBT
+       ;; payload that happens to be a Clojure map is not mistaken for it.
+       (and (map? saved-data)
+            (or (contains? saved-data :wi-data) (contains? saved-data :wi-nbt)))
        (let [payload (:wi-nbt saved-data)]
          (if payload
            (when world (persistence/world-data-from-nbt world payload))
            (:wi-data saved-data)))
+
+       world
+       (persistence/world-data-from-nbt world saved-data)
 
        :else
        nil))))
@@ -84,13 +84,6 @@
             conn-count (count (world-registry/connections registered))]
         (log/info "[on-world-load] Restored WiWorldData from save:"
                   net-count "networks," conn-count "connections")
-        (doseq [conn (world-registry/connections registered)]
-          (let [gens (node-conn/get-generators conn)
-                recs (node-conn/get-receivers conn)]
-            (log/info "  Loaded connection: node=" (vb/vblock-to-string (:node conn))
-                      "generators=" (count gens) "receivers=" (count recs))
-            (doseq [g gens]
-              (log/info "    generator:" (vb/vblock-to-string g)))))
         registered)
       (let [fresh (create-world-data world)]
         (log/info "No saved WiWorldData found, created fresh world data")
@@ -102,26 +95,14 @@
 (defn on-world-save
   "Called before world save - prepare data for serialization."
   [world]
-  (if-let [wi-data (get-world-data-non-create world)]
-    (let [pre-conn-count (count (world-registry/connections wi-data))]
-      ;; Log pre-validation state for diagnostics
-      (doseq [conn (world-registry/connections wi-data)]
-        (let [recs (node-conn/get-receivers conn)
-              gens (node-conn/get-generators conn)]
-          (doseq [r recs]
-            (log/debug "[on-world-save] connection node=" (vb/vblock-to-string (:node conn))
-                       "receiver=" (vb/vblock-to-string r)))
-          (doseq [g gens]
-            (log/debug "[on-world-save] connection node=" (vb/vblock-to-string (:node conn))
-                       "generator=" (vb/vblock-to-string g)))))
-      (runtime/network-impl-validator wi-data world)
-      (runtime/node-connection-impl-validator wi-data world)
-      (let [net-count (count (world-registry/networks wi-data))
-            post-conn-count (count (world-registry/connections wi-data))
-            nbt-data (persistence/world-data-to-nbt wi-data world)]
-        (log/info "[on-world-save] Saving" net-count "networks," post-conn-count "connections")
-        nbt-data))
-    nil))
+  (when-let [wi-data (get-world-data-non-create world)]
+    (runtime/network-impl-validator wi-data world)
+    (runtime/node-connection-impl-validator wi-data world)
+    (let [net-count (count (world-registry/networks wi-data))
+          conn-count (count (world-registry/connections wi-data))
+          nbt-data (persistence/world-data-to-nbt wi-data world)]
+      (log/info "[on-world-save] Saving" net-count "networks," conn-count "connections")
+      nbt-data)))
 
 (defn on-world-tick
   "Called each server world tick - advance wireless runtime state."

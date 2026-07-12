@@ -8,6 +8,7 @@
             [cn.li.ac.block.wireless-matrix.stats :as stats]
             [cn.li.ac.item.constraint-plate :as plate]
             [cn.li.ac.item.mat-core :as core]
+            [cn.li.ac.wireless.api :as wireless-api]
             [cn.li.ac.wireless.config :as matrix-config]
             [cn.li.mcmod.block.state-schema :as schema]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
@@ -245,6 +246,10 @@
   []
   (fn [world pos _block-id]
     ;; Inventory items are dropped automatically by SharedScriptedBlock.onRemove
-    ;; via Containers.dropContents. This handler exists for future cleanup hooks.
-    (when (world/world-get-tile-entity* world pos)
-      {:break-handled true})))
+    ;; via Containers.dropContents.
+    (try
+      (wireless-api/destroy-network-at!
+        world (pos/pos-x pos) (pos/pos-y pos) (pos/pos-z pos))
+      (catch Exception e
+        (log/warn "[wireless-matrix] break cleanup failed at" pos ":" (ex-message e))))
+    {:break-handled true}))

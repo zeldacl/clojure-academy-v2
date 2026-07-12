@@ -1,9 +1,9 @@
 (ns cn.li.ac.test.support.nbt
-  (:require [cn.li.mcmod.platform.nbt :as nbt]))
+  (:require [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.platform.nbt :as nbt]))
 
 (def ^:private compound-marker ::atom-compound)
 (def ^:private list-marker ::atom-list)
-(def ^:private ops-installed? (atom false))
 
 (defn- nk [k] (if (keyword? k) (name k) (str k)))
 
@@ -16,9 +16,11 @@
 (defn- new-list [] {:type list-marker :data (atom [])})
 
 (defn install-test-nbt-ops!
+  "Install atom-backed NBT ops into the current Framework atom. Ops live in
+  the Framework, so tests that swap in a fresh Framework must call this again
+  — guard on the live atom, never on a one-shot flag."
   []
-  (when-not @ops-installed?
-    (reset! ops-installed? true)
+  (when (and (fw/fw-atom) (not (nbt/nbt-ops-available?)))
     (nbt/install-nbt-ops!
       {:nbt-set-int! (fn [c k v]
                        (when (compound? c)

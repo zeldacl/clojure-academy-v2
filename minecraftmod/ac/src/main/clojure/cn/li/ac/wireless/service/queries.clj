@@ -12,7 +12,6 @@
             [cn.li.ac.wireless.data.world-registry :as world-registry]
             [cn.li.ac.wireless.domain.model :as model]
             [cn.li.mcmod.platform.be :as platform-be]
-            [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.platform.position :as pos])
   (:import [cn.li.acapi.wireless IWirelessNode]))
 
@@ -66,23 +65,21 @@
     (lookup/get-node-connection world-data rec-vb)))
 
 (defn find-available-nodes-at
-  "Find node capabilities in range of coordinates that can accept links."
+  "Find node capabilities in range of coordinates that can accept links.
+  Candidates come from the spatial index (position tuples of placed node
+  blocks); stale entries fail capability resolution and drop out."
   [world x y z]
   (let [search-range (wireless-config/node-search-range)
         max-results (wireless-config/max-results)
         world-data (world-registry/get-world-data world)
         nearby-chunks (spatial/get-nearby-chunks x y z search-range)
-        candidate-vblocks (spatial/get-vblocks-in-chunks world-data nearby-chunks)
-        ;; Deduplicate by world position — the same node can appear as both
-        ;; :node (from network) and :node-conn (from connection) vblock types.
-        candidate-vblocks (map first (vals (group-by (fn [vb] [(:x vb) (:y vb) (:z vb)]) candidate-vblocks)))
-        _ (log/info "[find-available-nodes-at] pos=" [x y z] "search-range=" search-range "nearby-chunks=" (count nearby-chunks) "candidate-vblocks=" (count candidate-vblocks))
-        _ (let [si (world-registry/spatial-index world-data)] (log/info "[find-available-nodes-at] spatial-index total keys=" (count si) "keys=" (pr-str (keys si))))
+        candidate-positions (spatial/get-positions-in-chunks world-data nearby-chunks)
         range-sq (* search-range search-range)
         matching-nodes
         (reduce
-          (fn [acc node-vb]
-            (let [dist-sq (vb/dist-sq-pos node-vb x y z)]
+          (fn [acc [nx ny nz]]
+            (let [node-vb (vb/create-vnode nx ny nz)
+                  dist-sq (vb/dist-sq-pos node-vb x y z)]
               (if (<= dist-sq range-sq)
                 (if-let [node (resolver/resolve-node-cap world node-vb)]
                   (let [node-range (.getRange ^IWirelessNode node)
@@ -100,8 +97,8 @@
                   acc)
                 acc)))
           []
-          candidate-vblocks)]
-    (take max-results matching-nodes)))
+          candidate-positions)]
+    (vec (take max-results matching-nodes))))
 
 (defn find-available-nodes
   [world block-pos]

@@ -1,14 +1,17 @@
 (ns cn.li.ac.block.wireless-node-test
   "Unit tests for wireless node pure logic."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [cn.li.ac.energy.operations :as energy]
             [cn.li.ac.block.wireless-node.gui-reactive :as node-gui]
             [cn.li.ac.block.wireless-node.logic :as node-logic]
             [cn.li.ac.block.wireless-node.handlers :as node-handlers]
+            [cn.li.ac.test.support.framework :as support-fw]
             [cn.li.ac.wireless.config :as node-config]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.ac.wireless.core.capability-resolver :as resolver])
   (:import [cn.li.acapi.wireless IWirelessNode]))
+
+(use-fixtures :each support-fw/with-fresh-framework)
 
 (deftest node-types-source-of-truth-test
   (testing "node-types mirrors config contract"

@@ -1,4 +1,4 @@
-(ns cn.li.ac.wireless.shared.message-registry
+(ns cn.li.ac.wireless.gui.message.bootstrap
   "Centralized wireless message registration.
 
   This provides the single startup registration path for wireless GUI messages."

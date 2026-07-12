@@ -12,8 +12,6 @@
   - For Java ScriptedBlockEntity: use getCapability().isPresent() via CapabilitySlots"
   (:require [cn.li.ac.foundation.vblock :as foundation-vb]
             [cn.li.ac.wireless.core.vblock-resolver :as resolver]
-            [cn.li.ac.wireless.data.vblock-codec :as codec]
-            [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.platform.position :as pos]))
 
 ;; ============================================================================
@@ -88,6 +86,13 @@
 ;; Core Operations
 ;; ============================================================================
 
+(defn pos-of
+  "Position tuple [x y z] for a vblock — the canonical topology map key.
+  All world-state maps (:networks/:connections/:node-to-net/:device-to-node/
+  :spatial-index) key by this tuple, never by the vblock record itself."
+  [vblock]
+  (foundation-vb/vblock->position vblock))
+
 (defn vblock-pos
   "Get BlockPos for vblock using platform abstraction"
   [vblock]
@@ -122,26 +127,6 @@
   (foundation-vb/vblock-distance-squared
     vblock
     (foundation-vb/vblock x y z (:block-type vblock) (:ignore-chunk vblock))))
-
-;; ============================================================================
-;; NBT Serialization
-;; ============================================================================
-
-;; NOTE:
-;; Canonical wireless persistence is in wireless.data.persistence. Keep this
-;; position codec tolerant because it is shared by networks and node connections.
-
-(defn vblock-to-nbt
-  "Serialize vblock to NBT using platform abstraction"
-  [vblock]
-  (codec/vblock-to-nbt vblock))
-
-(defn vblock-from-nbt
-  "Deserialize vblock from NBT using platform abstraction"
-  ([compound]
-   (vblock-from-nbt compound :node false))
-  ([compound default-type default-ignore-chunk]
-     (from-foundation (codec/vblock-from-nbt compound default-type default-ignore-chunk))))
 
 ;; ============================================================================
 ;; Equality and Hashing
@@ -197,10 +182,3 @@
   [vblocks x y z]
   (first (filter #(= [x y z] (foundation-vb/vblock->position %))
                  vblocks)))
-
-;; ============================================================================
-;; Initialization
-;; ============================================================================
-
-(defn init-virtual-blocks! []
-  (log/info "Virtual blocks system initialized"))

@@ -3,6 +3,7 @@
 		(:require [cn.li.ac.wireless.core.vblock :as vb]
 						[cn.li.ac.wireless.core.capability-resolver :as resolver]
 						[cn.li.ac.wireless.data.network-state :as network-state]
+						[cn.li.ac.wireless.data.store :as store]
 						[cn.li.ac.wireless.service.commands :as commands]
 						[cn.li.ac.wireless.service.queries :as queries]
 						[cn.li.ac.wireless.data.network-lookup :as lookup]
@@ -110,6 +111,47 @@
 							 :matrix ^IWirelessMatrix matrix-cap})))
 				result)))
 
+(defn destroy-network-at!
+	"Destroy the network whose matrix sits at (x,y,z) — matrix-break cleanup.
+	Works without a live BlockEntity; the :destroyed topology event fires
+	best-effort while the matrix capability still resolves."
+	[world x y z]
+	(when-let [world-data (world-registry/get-world-data-non-create world)]
+		(let [matrix-vb (vb/create-vmatrix x y z)]
+			(when-let [network-item (lookup/get-network-by-matrix world-data matrix-vb)]
+				(let [ssid (network-state/get-ssid network-item)
+							matrix-cap (resolver/resolve-matrix-cap world matrix-vb)
+							result (commands/destroy-network! world-data network-item)]
+					(when (and (:success result) matrix-cap)
+						(platform-events/fire-event!
+							{:kind :topology/network
+							 :action :destroyed
+							 :ssid ssid
+							 :matrix ^IWirelessMatrix matrix-cap}))
+					result)))))
+
+(defn cleanup-node-at!
+	"Node-break cleanup by position: untrack from the spatial index, unlink
+	from its network, and destroy its node connection. Works without a live
+	BlockEntity; topology events fire best-effort while caps still resolve."
+	[world x y z]
+	(when-let [world-data (world-registry/get-world-data-non-create world)]
+		(let [node-vb (vb/create-vnode x y z)]
+			(store/remove-spatial-vblock! world-data node-vb)
+			(when-let [network-item (lookup/get-network-by-node world-data node-vb)]
+				(let [result (commands/unlink-node-from-network! network-item node-vb)]
+					(when (:success result)
+						(when-let [node-cap (resolver/resolve-node-cap world node-vb)]
+							(when-let [matrix-cap (resolver/resolve-matrix-cap world (:matrix network-item))]
+								(platform-events/fire-event!
+									{:kind :topology/node
+									 :action :disconnected
+									 :matrix ^IWirelessMatrix matrix-cap
+									 :node ^IWirelessNode node-cap}))))))
+			(when-let [conn (lookup/get-node-connection world-data node-vb)]
+				(commands/destroy-node-connection! world-data conn))
+			nil)))
+
 (defn link-node-to-network!
 		[node-tile matrix-tile password]
 		(when-let [network-item (get-wireless-net-by-matrix matrix-tile)]
@@ -160,35 +202,39 @@
 
 (def ^:private device-ops
   "Per-device-type capability and command dispatch — eliminates copy-paste
-  across the four link/unlink functions."
-  {:generator {:resolve-cap   resolver/generator-capability
-               :create-vb     vb/create-vgenerator
-               :link-cmd      commands/link-generator-to-connection!
-               :unlink-cmd    commands/unlink-generator-from-connection!
-               :get-conn      get-node-conn-by-generator
+  across the four link/unlink functions. Values are vars so runtime rebinding
+  (tests, tooling) is honored."
+  {:generator {:resolve-cap   #'resolver/generator-capability
+               :create-vb     #'vb/create-vgenerator
+               :link-cmd      #'commands/link-generator-to-connection!
+               :unlink-cmd    #'commands/unlink-generator-from-connection!
+               :get-conn      #'get-node-conn-by-generator
                :link-action   :generator-linked
                :unlink-action :generator-unlinked
                :event-key     :generator
                :not-device    :not-a-generator}
-   :receiver  {:resolve-cap   resolver/receiver-capability
-               :create-vb     vb/create-vreceiver
-               :link-cmd      commands/link-receiver-to-connection!
-               :unlink-cmd    commands/unlink-receiver-from-connection!
-               :get-conn      get-node-conn-by-receiver
+   :receiver  {:resolve-cap   #'resolver/receiver-capability
+               :create-vb     #'vb/create-vreceiver
+               :link-cmd      #'commands/link-receiver-to-connection!
+               :unlink-cmd    #'commands/unlink-receiver-from-connection!
+               :get-conn      #'get-node-conn-by-receiver
                :link-action   :receiver-linked
                :unlink-action :receiver-unlinked
                :event-key     :receiver
                :not-device    :not-a-receiver}})
 
 (defn- link-device!
-  "Shared implementation for link-generator-to-node! / link-receiver-to-node!."
+  "Shared implementation for link-generator-to-node! / link-receiver-to-node!.
+  Order: node capability → password auth → device capability → link."
   [device-tile node-tile password need-auth device-type]
   (let [{:keys [resolve-cap create-vb link-cmd link-action event-key not-device]}
         (get device-ops device-type)]
     (if-let [node-cap (resolver/node-capability node-tile)]
-      (if-let [dev-cap (resolve-cap device-tile)]
-        (if (or (not need-auth)
-                (= (str password) (str (.getPassword ^IWirelessNode node-cap))))
+      (if-not (or (not need-auth)
+                  (= (str password) (str (.getPassword ^IWirelessNode node-cap))))
+        (do (log/info "[link-device!]" device-type "password mismatch")
+            {:success false :reason :password})
+        (if-let [dev-cap (resolve-cap device-tile)]
           (let [world      (platform-be/be-get-world-safe node-tile)
                 world-data (world-registry/get-world-data world)
                 node-vb    (vb/create-vnode-conn node-tile)
@@ -201,9 +247,10 @@
                  :node ^IWirelessNode node-cap
                  event-key dev-cap}))
             result)
-          (do (log/info "[link-device!]" device-type "password mismatch") {:success false :reason :password}))
-        (do (log/info "[link-device!]" device-type "device " (name device-type) " has no capability. block-id=" (some-> device-tile platform-be/get-block-id)) {:success false :reason not-device}))
-      (do (log/info "[link-device!]" device-type "target has no IWirelessNode. block-id=" (some-> node-tile platform-be/get-block-id)) {:success false :reason :not-a-node}))))
+          (do (log/info "[link-device!]" device-type "device " (name device-type) " has no capability. block-id=" (some-> device-tile platform-be/get-block-id))
+              {:success false :reason not-device})))
+      (do (log/info "[link-device!]" device-type "target has no IWirelessNode. block-id=" (some-> node-tile platform-be/get-block-id))
+          {:success false :reason :not-a-node}))))
 
 (defn- unlink-device!
   "Shared implementation for unlink-generator-from-node! / unlink-receiver-from-node!."
@@ -263,10 +310,10 @@
 		"Track a placed wireless node in the world spatial index."
 		[world node-vblock]
 		(let [world-data (world-registry/get-world-data world)]
-			(commands/add-spatial-vblock! world-data node-vblock)))
+			(store/add-spatial-vblock! world-data node-vblock)))
 
 (defn unregister-node-spatial!
 		"Remove a wireless node from the world spatial index."
 		[world node-vblock]
 		(when-let [world-data (world-registry/get-world-data-non-create world)]
-			(commands/remove-spatial-vblock! world-data node-vblock)))
+			(store/remove-spatial-vblock! world-data node-vblock)))

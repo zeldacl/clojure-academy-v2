@@ -15,19 +15,22 @@
 
 (defn pos->chunk-key
   "Convert world coordinates (x, y, z) to chunk key [cx, cy, cz].
-  
-  Chunks are 16×16×16 blocks. This uses integer division to find
-  which chunk a position falls into.
-  
+
+  Chunks are 16×16×16 blocks. Uses arithmetic shift so negative
+  coordinates bucket uniformly (floor division), matching Minecraft's
+  own chunk coordinate math.
+
   Args:
     x (int): World x coordinate
-    y (int): World y coordinate  
+    y (int): World y coordinate
     z (int): World z coordinate
-    
+
   Returns:
     [cx cy cz]: Chunk coordinates"
   [x y z]
-  [(quot x 16) (quot y 16) (quot z 16)])
+  [(bit-shift-right (long x) 4)
+   (bit-shift-right (long y) 4)
+   (bit-shift-right (long z) 4)])
 
 (defn chunk-key->bounds
   "Get the bounding box for a chunk key.
@@ -105,9 +108,7 @@
   [x y z search-radius]
   (let [radius (long search-radius)
         chunk-range (inc (quot radius 16))
-        cx (quot (long x) 16)
-        cy (quot (long y) 16)
-        cz (quot (long z) 16)]
+        [cx cy cz] (pos->chunk-key x y z)]
     (vec (for [dx (range (- chunk-range) (inc chunk-range))
               dy (range (- chunk-range) (inc chunk-range))
               dz (range (- chunk-range) (inc chunk-range))]
@@ -127,9 +128,7 @@
   [x y z search-radius]
   (let [radius (long search-radius)
         chunk-range (inc (quot radius 16))
-        cx (quot (long x) 16)
-        cy (quot (long y) 16)
-        cz (quot (long z) 16)
+        [cx cy cz] (pos->chunk-key x y z)
         num-chunks (* (inc (* 2 chunk-range))
                       (inc (* 2 chunk-range))
                       (inc (* 2 chunk-range)))]

@@ -6,7 +6,7 @@
 (def world-ops-keys
   #{:world-get-tile-entity :world-get-block-state :world-set-block :world-remove-block
     :world-break-block :world-place-block-by-id :world-is-chunk-loaded?
-    :world-get-day-time :world-get-dimension-id :world-server-session-id
+    :world-get-day-time :world-get-game-time :world-get-dimension-id :world-server-session-id
     :world-get-players :world-is-raining :world-is-client-side :world-can-see-sky})
 
 (def block-state-keys
@@ -49,6 +49,7 @@
 (defn world-place-block-by-id*  [w id pos fl]     (world-call :world-place-block-by-id w id pos fl))
 (defn world-is-chunk-loaded?*   [w cx cz]         (world-call :world-is-chunk-loaded? w cx cz))
 (defn world-get-day-time*       [w]               (world-call :world-get-day-time w))
+(defn world-get-game-time*      [w]               (world-call :world-get-game-time w))
 (defn world-get-dimension-id*   [w]               (world-call :world-get-dimension-id w))
 (defn world-server-session-id*  [w]               (world-call :world-server-session-id w))
 (defn world-get-players*        [w]               (world-call :world-get-players w))

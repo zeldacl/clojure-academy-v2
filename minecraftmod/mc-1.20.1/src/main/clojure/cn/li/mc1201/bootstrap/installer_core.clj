@@ -75,6 +75,7 @@
                               (world-block-ops/world-place-block-by-id adapter level block-id p flags))
    :world-is-chunk-loaded? (fn [^Level level cx cz] (.hasChunk level (int cx) (int cz)))
    :world-get-day-time (fn [^Level level] (.getDayTime level))
+   :world-get-game-time (fn [^Level level] (.getGameTime level))
    :world-get-dimension-id (fn [^Level level] (str (.location (.dimension level))))
    :world-server-session-id world-server-session-id-value
    :world-get-players (fn [^Level level] (seq (.players level)))

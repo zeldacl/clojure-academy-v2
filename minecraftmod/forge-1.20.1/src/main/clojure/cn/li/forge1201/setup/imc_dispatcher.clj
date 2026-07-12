@@ -9,14 +9,6 @@
 
 (def ^:private event-priority (delay EventPriority/NORMAL))
 
-(defn- safe-invoke
-	[thunk]
-	(try
-		(thunk)
-		(catch Throwable e
-			(log/stacktrace "safe-invoke caught exception" e)
-			nil)))
-
 (defn- imc-method-key
 	[^InterModComms$IMCMessage msg]
 	(str (.method msg)))
@@ -37,11 +29,13 @@
 	[msg]
 	(let [method-key (imc-method-key msg)
 				payload (resolve-payload msg)]
+		;; Keys are the WirelessImc.java REGISTER_* constants — the published
+		;; third-party contract.
 		(case method-key
-			("register_network_handler" "register_topology_network_handler")
+			"register_wireless_network_handler"
 			(imc-dispatch/register-network-handler! payload)
 
-			("register_network_node_handler" "register_topology_node_handler")
+			"register_wireless_node_handler"
 			(imc-dispatch/register-node-handler! payload)
 
 			(log/debug "Ignoring unsupported IMC method" method-key))))

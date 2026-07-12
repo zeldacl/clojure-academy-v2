@@ -10,7 +10,7 @@
 (def message-domain-actions
 	"Wireless GUI message actions keyed by GUI/message domain.
 
-	These domains are consumed by cn.li.ac.wireless.shared.message-registry during
+	These domains are consumed by cn.li.ac.wireless.gui.message.bootstrap during
 	content startup and by tests/guards that need one source of truth."
 	{:matrix [:gather-info :init :change-ssid :change-password]
 	 :node [:change-name :change-password :list-networks :connect :disconnect]

@@ -93,6 +93,6 @@
                   platform-be/set-custom-state! (fn [_ state] (reset! saved-state state))
                   uuid/player-uuid (fn [_] "test-uuid-123")
                   entity/player-get-name (fn [_] "alice")]
-      (handler {:player :player :world :world :pos :pos})
+      (handler :player :world :pos :wireless-matrix)
       (is (= "test-uuid-123" (:placer-uuid @saved-state)))
       (is (= "alice" (:placer-name @saved-state))))))

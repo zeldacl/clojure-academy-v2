@@ -6,6 +6,18 @@
   [x lo hi]
   (-> x (max lo) (min hi)))
 
+(defn rotated
+  "Rotate vector `v` by a game-time-derived offset — long-run fair ordering
+  for bandwidth-budgeted loops without per-tick shuffle allocation."
+  [v ^long game-time]
+  (let [n (count v)]
+    (if (< n 2)
+      v
+      (let [k (Math/floorMod game-time n)]
+        (if (zero? k)
+          v
+          (into (subvec v k) (subvec v 0 k)))))))
+
 (defn balance-plan
   "Build a pure balancing plan.
 
