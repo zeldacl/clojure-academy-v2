@@ -13,6 +13,7 @@
   (:require [clojure.string :as str]
             [cn.li.ac.ability.service.runtime-store :as store]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
+            [cn.li.mcmod.runtime.owner :as runtime-owner]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.i18n :as i18n]
             [cn.li.ac.config.modid :as modid]
@@ -186,9 +187,22 @@
                         :energy energy :max-energy max-energy
                         :bandwidth (:bandwidth (developer/developer-spec developer-type) 0.7)})))
 
+(defn- panel-session-id
+  "Resolve the runtime-store session-id for this developer screen from the
+   container's canonical owner (set at menu-open). Unlike
+   require-player-state-session-id, this works on the client render thread:
+   the container screen pushes no per-frame session/owner context, so the
+   ThreadLocal *player-state-owner* is nil during flush!. The container map
+   carries the owner, so reading it here is stable and context-free. Falls back
+   to the bound owner for any caller without an enriched container."
+  [container]
+  (or (some-> (container-state/owner-from-container container)
+              runtime-owner/store-session-id)
+      (runtime-hooks/require-player-state-session-id "developer.panel")))
+
 (defn current-ui-model [container player]
   (current-ui-model-in-session
-    (runtime-hooks/require-player-state-session-id "developer.panel")
+    (panel-session-id container)
     container player))
 
 (defn skill-tree-render-context
@@ -210,7 +224,7 @@
   [_player-state container player]
   (let [uuid-str (when player (uuid/player-uuid player))
         pstate (when uuid-str (store/get-player-state*
-                                (runtime-hooks/require-player-state-session-id "developer.panel")
+                                (panel-session-id container)
                                 uuid-str))
         ad (:ability-data pstate)
         has-cat? (boolean (:category-id ad))
@@ -301,7 +315,7 @@
     (bind-box-width! rt :progress-power 97.0 power)
     (bind-box-width! rt :progress-syncrate 97.0 sync-rate-sig)
     (set-tick! rt :model-tick
-      (sig/computed-d [clock]
+      (sig/computed-o [clock]
         (fn [_]
           (let [{:keys [ability-name icon-path exp-label level-label
                         cat-prog01 power01 sync-rate can-upgrade?]}
@@ -455,7 +469,7 @@
         skill-name (or (:name skill-spec) (name skill-id) "Unknown")
         skill-level (int (or (:level skill-spec) 1))
         est-consumption (long (* (:cps dev-spec 700.0) (+ 3 (* skill-level skill-level 0.5))))
-        session-id (runtime-hooks/require-player-state-session-id "developer.panel")
+        session-id (panel-session-id container)
         uuid-str (when player (uuid/player-uuid player))
         get-ad #(-> (when uuid-str (store/get-player-state* session-id uuid-str)) :ability-data)
         ad0 (get-ad)
@@ -488,7 +502,7 @@
                       (swap! state-a assoc :error nil)))))
       (fn [] (close-cover! rt)))
     (set-tick! rt :cover-tick
-      (sig/computed-d [(rt/clock-ms-sig rt)]
+      (sig/computed-o [(rt/clock-ms-sig rt)]
         (fn [_]
           (let [is-dev (boolean @(:is-developing container))
                 dev-prog (double (or @(:development-progress container) 0.0))
@@ -514,7 +528,7 @@
         fill-sig (cover-fill-signal alpha-target (rt/clock-ms-sig rt))
         dev-type (or (normalize-tier developer-type) :normal)
         dev-spec (developer/developer-spec dev-type)
-        session-id (runtime-hooks/require-player-state-session-id "developer.panel")
+        session-id (panel-session-id container)
         uuid-str (when player (uuid/player-uuid player))
         pstate (when uuid-str (store/get-player-state* session-id uuid-str))
         ad (:ability-data pstate)
@@ -539,7 +553,7 @@
                 (swap! state-a assoc :error nil)))))
       (fn [] (close-cover! rt)))
     (set-tick! rt :cover-tick
-      (sig/computed-d [(rt/clock-ms-sig rt)]
+      (sig/computed-o [(rt/clock-ms-sig rt)]
         (fn [_]
           (let [is-dev (boolean @(:is-developing container))
                 dev-prog (double (or @(:development-progress container) 0.0))
@@ -567,7 +581,7 @@
   (clear-embedded-runtimes! rt))
 
 (defn- build-skill-tree-area! [^UiRt rt container player]
-  (let [session-id (runtime-hooks/require-player-state-session-id "developer.panel")
+  (let [session-id (panel-session-id container)
         {:keys [render-data dev-type]} (skill-tree-render-context session-id player container)
         nodes (:skill-nodes render-data)
         hw skill-tree/widget-size
@@ -584,7 +598,7 @@
         (events/on! rt id :left-click
           (fn [_ _ _] (open-skill-detail-overlay! rt container player (:skill-id nd) dev-type)))))
     (set-tick! rt :skill-tree-tick
-      (sig/computed-d [(rt/clock-ms-sig rt)]
+      (sig/computed-o [(rt/clock-ms-sig rt)]
         (fn [_]
           (let [{:keys [render-data]} (skill-tree-render-context session-id player container)
                 hover-id (get @hit-nodes (rt/hovered-idx rt))]
@@ -599,7 +613,7 @@
 (defn- attach-right-panel-dispatch! [^UiRt rt container player]
   (let [last-mode (atom nil)]
     (set-tick! rt :right-panel-tick
-      (sig/computed-d [(rt/clock-ms-sig rt)]
+      (sig/computed-o [(rt/clock-ms-sig rt)]
         (fn [_]
           (let [mode (right-panel-mode nil container player)]
             (when (not= mode @last-mode)

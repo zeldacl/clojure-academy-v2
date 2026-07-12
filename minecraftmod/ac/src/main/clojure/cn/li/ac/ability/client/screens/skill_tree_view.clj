@@ -19,6 +19,16 @@
   (when-let [path (tex-reg/get-texture-path registry-key)]
     (modid/namespaced-path (str path))))
 
+(defn- icon-src
+  "Namespace a raw skill :icon path (e.g. \"textures/abilities/.../x.png\") into
+   the mod's asset namespace. Skill :icon values are stored as bare relative
+   paths, so a bare :src resolves to the minecraft namespace and 404s. Pass
+   through when already namespaced or blank."
+  [icon]
+  (if (and (string? icon) (seq icon) (not (.contains ^String icon ":")))
+    (modid/namespaced-path icon)
+    icon))
+
 (defn- parallax-offset
   [mx my w h]
   (let [mx01 (clamp01 (/ (double mx) (max 1.0 (double w))))
@@ -72,7 +82,7 @@
           (merge {:kind :image :props {:x pa :y pa :w logic/prog-size :h logic/prog-size
                                        :src (tex-src :skill-outline) :alpha (* alpha 0.6)}})
           (merge {:kind :image :props {:x ia :y ia :w logic/icon-size :h logic/icon-size
-                                       :src skill-icon :alpha icon-alpha}})
+                                       :src (icon-src skill-icon) :alpha icon-alpha}})
           (when learned
             {:kind :shader-progress
              :props {:x pa :y pa :w logic/prog-size :h logic/prog-size
@@ -83,7 +93,7 @@
 
 (defn- shell-spec [w h]
   {:kind :group :id :root
-   :props {:w (double w) :h (double h) :align-w :center :align-h :center}
+   :props {:w (double w) :h (double h) :align-w :center :align-h :middle}
    :children
    [{:kind :image :id :bg :props {:x 0.0 :y 0.0 :w (double w) :h (double h)
                                   :src (tex-src :bg-area) :alpha 1.0}}
@@ -154,7 +164,7 @@
       (rt/build-child! rt {:kind :image :props {:x back-x :y back-y :w back-sz :h back-sz
                                                  :src (tex-src :skill-back)}} layer)
       (rt/build-child! rt {:kind :image :props {:x icon-x :y icon-y :w icon-sz :h icon-sz
-                                                 :src skill-icon}} layer)
+                                                 :src (icon-src skill-icon)}} layer)
       (when learned
         (rt/build-child! rt {:kind :shader-progress
                               :props {:x back-x :y back-y :w back-sz :h back-sz
