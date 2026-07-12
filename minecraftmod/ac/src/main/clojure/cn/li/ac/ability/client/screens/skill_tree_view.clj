@@ -67,47 +67,6 @@
                :alpha (clamp01 (* (or m-alpha 0.7) (if child-learned? 1.0 0.4)))
                :color (line-color m-alpha child-learned?)}})))
 
-(defn- skill-node-spec
-  [{:keys [x y skill-icon learned exp m-alpha skill-id idx]} pdx pdy anim-s]
-  (let [sx (- (double x) pdx) sy (- (double y) pdy)
-        ta logic/total-size
-        da logic/draw-align
-        ;; Upstream draws every element inside a glTranslate(DrawAlign) frame, so
-        ;; back/outline/icon/ring all share the same DrawAlign origin and end up
-        ;; concentric (center 8.0 in the 16px widget). Offsetting outline/icon/ring
-        ;; by draw-align reproduces that — otherwise they sit 3.5px off the back
-        ;; and off-center in the click hit-box.
-        opa (+ da logic/prog-align)  ;; outline / progress ring
-        oia (+ da logic/align)       ;; skill icon
-        ma (double (or m-alpha 0.7))
-        ;; Staggered fade-in on open (matches upstream SkillTree.scala:328-331):
-        ;; per-node dt = elapsed - (idx*0.08 + 0.1); back/icon/progress ramp in
-        ;; with small offsets. anim-s = nil → fully revealed (no animation).
-        reveal? (some? anim-s)
-        dt (if reveal? (- (double anim-s) (+ (* (long (or idx 0)) 0.08) 0.1)) 1.0)
-        back-mult (if reveal? (clamp01 (* dt 10.0)) 1.0)
-        icon-mult (if reveal? (clamp01 (* (- dt 0.08) 10.0)) 1.0)
-        prog-mult (if reveal? (clamp01 (* (- dt 0.12) 2.0)) 1.0)
-        alpha (float (clamp01 (* ma back-mult)))
-        icon-alpha (float (clamp01 (* ma 0.9 icon-mult)))]
-    {:kind :group
-     :props {:x sx :y sy :w ta :h ta}
-     :children
-     (vec
-       (remove nil?
-         [(merge {:kind :image :props {:x da :y da :w ta :h ta :src (tex-src :skill-back) :alpha alpha}})
-          (merge {:kind :image :props {:x opa :y opa :w logic/prog-size :h logic/prog-size
-                                       :src (tex-src :skill-outline) :alpha (* alpha 0.6)}})
-          (merge {:kind :image :props {:x oia :y oia :w logic/icon-size :h logic/icon-size
-                                       :src (icon-src skill-icon) :alpha icon-alpha}})
-          (when learned
-            {:kind :shader-progress
-             :props {:x opa :y opa :w logic/prog-size :h logic/prog-size
-                     :progress (float (* (double (or exp 0.0)) prog-mult))
-                     :shader-props {:shader-id :ring-progbar
-                                    :texture-0 (tex-src :skill-outline)
-                                    :texture-1 (tex-src :skill-mask)}}})]))}))
-
 (defn- shell-spec [w h]
   {:kind :group :id :root
    :props {:w (double w) :h (double h) :align-w :center :align-h :middle}
@@ -290,25 +249,9 @@
        (double (Math/round (- (/ (double h) 2.0) (* bcy s))))])
     [1.0 0.0 0.0]))
 
-(defn- rebuild-tree-layer!
-  "Rebuild connections + nodes under a fit-to-area camera group. The node layout
-   (skill-tree logic) is authored for a larger canvas, so scale+center it into
-   the target w×h — otherwise nodes render outside the area. anim-s threads the
-   open-reveal elapsed time to skill-node-spec (nil = no animation)."
-  [^UiRt rt rd pdx pdy w h anim-s]
-  (when-let [^INode layer (ui/node rt :tree-layer)]
-    (rt/clear-children! rt layer)
-    (let [nodes (:skill-nodes rd)
-          [s offx offy] (area-fit-transform nodes w h)
-          ^INode cam (rt/build-child! rt {:kind :group
-                                          :props {:x offx :y offy :w (double w) :h (double h) :scale s}}
-                       layer)]
-      (doseq [conn (:connections rd)]
-        (when-let [spec (connection-spec conn pdx pdy)]
-          (rt/build-child! rt spec cam)))
-      (doseq [n nodes]
-        (rt/build-child! rt (skill-node-spec n pdx pdy anim-s) cam)))
-    (rt/mark-tree-dirty! rt)))
+;; Shared build-once/mutate core (defined below) — used by both the full-screen
+;; refresh-screen! and the developer-panel embed, so they don't diverge.
+(declare build-tree! apply-parallax! apply-anim!)
 
 (defn refresh-screen!
   "Refresh full-screen skill tree (420×260)."
@@ -317,7 +260,6 @@
         _ (ensure-shell! rt w h)
         st (logic/screen-state-snapshot owner)
         rd (logic/build-screen-render-data owner)
-        [pdx pdy] (parallax-offset mx my w h)
         [bu bv] (bg-uv mx my w h)]
     (when rd
       (when-let [^INode bg (ui/node rt :bg)]
@@ -325,7 +267,19 @@
         (.setDSlot bg 2 (double bv))
         (.setFlag bg node/FLAG-RENDER-DIRTY))
       (refresh-header! rt (:ability-info rd))
-      (rebuild-tree-layer! rt rd pdx pdy w h nil)
+      ;; Shared build-once + mutate: rebuild the node tree only when the node/
+      ;; connection data changes; otherwise just move the camera (parallax). The
+      ;; handles persist on the runtime across the input-driven refreshes.
+      (let [ver (hash [(:skill-nodes rd) (:connections rd)])
+            handles (if (or (nil? (rt/user-signal rt :screen-tree-handles))
+                            (not= ver (rt/user-signal rt :screen-tree-ver)))
+                      (let [hs (build-tree! rt rd w h)]
+                        (rt/put-user-signal! rt :screen-tree-handles hs)
+                        (rt/put-user-signal! rt :screen-tree-ver ver)
+                        (apply-anim! rt hs nil)   ;; full alpha (no reveal fade on full-screen)
+                        hs)
+                      (rt/user-signal rt :screen-tree-handles))]
+        (apply-parallax! rt handles mx my w h))
       (refresh-tooltip! rt rd)
       (cond
         (:showing-level-up-popup? st)
@@ -342,22 +296,110 @@
         (set-visible! (ui/node rt :level-lbl) show-level?))
       (rt/mark-tree-dirty! rt))))
 
-(defn refresh-embedded!
-  "Refresh embedded skill tree (developer panel area). anim-s = elapsed seconds
-   since the tree opened (nil = no reveal animation)."
-  [^UiRt rt render-data mx my w h hover-id anim-s]
+;; ============================================================================
+;; Build-once + mutate — shared by the full-screen refresh-screen! and the
+;; developer-panel embed. The tree structure is built once and only rebuilt when
+;; skill data changes. Parallax moves the node container, hover updates the
+;; tooltip, and the reveal animation mutates node alphas — none rebuild the tree.
+;; ============================================================================
+
+(defn- mark-subtree-dirty! [^INode n]
+  (.setFlag n node/FLAG-LAYOUT-DIRTY)
+  (let [c (.getChildCount n)]
+    (loop [i 0]
+      (when (< i c)
+        (mark-subtree-dirty! (.getChild n i))
+        (recur (unchecked-inc-int i))))))
+
+(defn- build-skill-node!
+  "Build one skill-node group under `parent`, returning mutable handles."
+  [^UiRt rt ^INode parent nd]
+  (let [ta logic/total-size
+        da logic/draw-align
+        opa (+ da logic/prog-align)
+        oia (+ da logic/align)
+        ^INode grp (rt/build-child! rt {:kind :group
+                                        :props {:x (double (:x nd)) :y (double (:y nd)) :w ta :h ta}} parent)
+        back (rt/build-child! rt {:kind :image :props {:x da :y da :w ta :h ta
+                                                       :src (tex-src :skill-back) :alpha 0.0}} grp)
+        outline (rt/build-child! rt {:kind :image :props {:x opa :y opa :w logic/prog-size :h logic/prog-size
+                                                          :src (tex-src :skill-outline) :alpha 0.0}} grp)
+        icon (rt/build-child! rt {:kind :image :props {:x oia :y oia :w logic/icon-size :h logic/icon-size
+                                                       :src (icon-src (:skill-icon nd)) :alpha 0.0}} grp)
+        ring (when (:learned nd)
+               (rt/build-child! rt {:kind :shader-progress
+                                    :props {:x opa :y opa :w logic/prog-size :h logic/prog-size :progress 0.0
+                                            :shader-props {:shader-id :ring-progbar
+                                                           :texture-0 (tex-src :skill-outline)
+                                                           :texture-1 (tex-src :skill-mask)}}} grp))]
+    {:idx (long (or (:idx nd) 0)) :back back :outline outline :icon icon :ring ring
+     :m-alpha (double (or (:m-alpha nd) 0.7)) :exp (double (or (:exp nd) 0.0))}))
+
+(defn- apply-node-anim!
+  "Mutate a node's alphas/progress for the reveal. anim-s = nil → final state."
+  [^UiRt rt h anim-s]
+  (let [ma (double (:m-alpha h))
+        reveal? (some? anim-s)
+        dt (if reveal? (- (double anim-s) (+ (* (double (:idx h)) 0.08) 0.1)) 1.0)
+        back-mult (if reveal? (clamp01 (* dt 10.0)) 1.0)
+        icon-mult (if reveal? (clamp01 (* (- dt 0.08) 10.0)) 1.0)
+        prog-mult (if reveal? (clamp01 (* (- dt 0.12) 2.0)) 1.0)
+        a (clamp01 (* ma back-mult))]
+    (ui/set-node-prop! rt (:back h) :alpha a)
+    (ui/set-node-prop! rt (:outline h) :alpha (* a 0.6))
+    (ui/set-node-prop! rt (:icon h) :alpha (clamp01 (* ma 0.9 icon-mult)))
+    (when-let [ring (:ring h)]
+      (ui/set-node-prop! rt ring :progress (float (* (:exp h) prog-mult))))))
+
+(defn- build-tree!
+  "Build the :tree-cam camera group + connections + skill nodes under :tree-layer
+   once, returning mutation handles. Chrome/visibility is the caller's concern."
+  [^UiRt rt render-data w h]
+  (let [nodes (:skill-nodes render-data)
+        [s offx offy] (area-fit-transform nodes w h)
+        ^INode layer (ui/node rt :tree-layer)]
+    (rt/clear-children! rt layer)
+    (let [^INode cam (rt/build-child! rt {:kind :group :id :tree-cam
+                                          :props {:x offx :y offy :w (double w) :h (double h) :scale s}}
+                       layer)]
+      (doseq [conn (:connections render-data)]
+        (when-let [spec (connection-spec conn 0.0 0.0)]
+          (rt/build-child! rt spec cam)))
+      (rt/mark-tree-dirty! rt)
+      {:cam cam :fit [s offx offy] :nodes (mapv #(build-skill-node! rt cam %) nodes)})))
+
+(defn build-embedded!
+  "Build the embedded skill tree once. Returns handles {:cam :fit :nodes} for
+   later mutation. Only a skill-data change should call this again."
+  [^UiRt rt render-data w h]
   (ensure-shell! rt w h)
-  (let [rd (assoc render-data :hover-skill hover-id)
-        [pdx pdy] (parallax-offset mx my w h)]
-    (rebuild-tree-layer! rt rd pdx pdy w h anim-s)
-    (refresh-tooltip! rt rd)
-    (clear-popup! rt)
-    (set-visible! (ui/node rt :level-btn) false)
-    (set-visible! (ui/node rt :level-lbl) false)
-    (set-visible! (ui/node rt :overlay) false)
-    (doseq [id [:cat-text :lvl-text :cp-text :ov-text]]
-      (set-visible! (ui/node rt id) false))
-    (rt/mark-tree-dirty! rt)))
+  (set-visible! (ui/node rt :level-btn) false)
+  (set-visible! (ui/node rt :level-lbl) false)
+  (set-visible! (ui/node rt :overlay) false)
+  (doseq [id [:cat-text :lvl-text :cp-text :ov-text]] (set-visible! (ui/node rt id) false))
+  (clear-popup! rt)
+  (build-tree! rt render-data w h))
+
+(defn apply-anim!
+  "Mutate node alphas for the reveal (anim-s) or final state (nil)."
+  [^UiRt rt handles anim-s]
+  (doseq [h (:nodes handles)] (apply-node-anim! rt h anim-s)))
+
+(defn apply-parallax!
+  "Move the node container by the pointer parallax and re-layout its subtree —
+   no rebuild. (The background stays put; only the nodes drift.)"
+  [^UiRt rt handles mx my w h]
+  (let [[s offx offy] (:fit handles)
+        [pdx pdy] (parallax-offset mx my w h)
+        ^INode cam (:cam handles)]
+    (.setX cam (- (double offx) (* (double pdx) (double s))))
+    (.setY cam (- (double offy) (* (double pdy) (double s))))
+    (mark-subtree-dirty! cam)))
+
+(defn set-hover!
+  "Update the hover tooltip only."
+  [^UiRt rt render-data hover-id]
+  (refresh-tooltip! rt (assoc render-data :hover-skill hover-id)))
 
 (defn refresh-detail-overlay!
   "Standalone detail popup runtime (developer panel overlay)."

@@ -594,24 +594,40 @@
 
 (defn- build-skill-tree-area! [^UiRt rt container player]
   (let [session-id (panel-session-id container)
-        {:keys [render-data dev-type]} (skill-tree-render-context session-id player container)
-        nodes (:skill-nodes render-data)
-        ;; Only learnable/learned nodes are interactive (upstream filter).
-        clickable (filterv #(and (or (:can-learn %) (:learned %)) (not (:locked? %))) nodes)
-        [fit-s fit-ox fit-oy] (skill-tree-view/area-fit-transform nodes area-w area-h)
+        uuid-str (when player (uuid/player-uuid player))
+        dev-type (current-developer-type container)
+        get-pstate #(when uuid-str (store/get-player-state* session-id uuid-str))
+        clickable-of (fn [rd] (filterv #(and (or (:can-learn %) (:learned %)) (not (:locked? %)))
+                                       (:skill-nodes rd)))
+        pstate0 (get-pstate)
+        rd0 (skill-tree/build-render-data-for-player-state pstate0 dev-type)
+        ;; Node layout is stable (authored positions, learning doesn't move nodes),
+        ;; so the fit transform is computed once.
+        [fit-s fit-ox fit-oy] (skill-tree-view/area-fit-transform (:skill-nodes rd0) area-w area-h)
+        rd-a (atom rd0)                       ;; render-data cache, refreshed on skill change
+        clickable-a (atom (clickable-of rd0)) ;; interactive nodes, refreshed with rd-a
         open-ms (atom nil)
         mouse-a (atom nil)   ;; area-local pointer for parallax
         hover-a (atom nil)   ;; skill-id under the pointer (for highlight)
+        anim-settled? (atom false)
+        ;; Per-frame change detection — mutate only what changed, never rebuild
+        ;; unless the skill data itself changed.
+        last-ver (atom (hash (:ability-data pstate0)))
+        last-mouse (atom ::none)
+        last-hover (atom ::none)
         ^INode area-node (rt/node-by-id rt :area)
-        embed-rt (skill-tree-reactive/create-embedded-runtime render-data (/ area-w 2.0) (/ area-h 2.0)
-                   area-w area-h nil 0.0)]
+        embed-rt (rt/create-runtime)
+        ;; Tree structure built ONCE; handles are mutated for parallax/anim.
+        handles-a (atom (skill-tree-view/build-embedded! embed-rt rd0 area-w area-h))]
+    (skill-tree-view/apply-anim! embed-rt @handles-a 0.0)  ;; start hidden (fades in)
+    (skill-tree-view/apply-parallax! embed-rt @handles-a (/ area-w 2.0) (/ area-h 2.0) area-w area-h)
     ;; On move: track area-local pointer + which skill is hovered (both on demand).
     (rt/put-user-signal! rt :on-pointer-move
       (fn [mx my]
         (let [cmx (- (double mx) (.getAbsX area-node))
               cmy (- (double my) (.getAbsY area-node))]
           (reset! mouse-a [cmx cmy])
-          (reset! hover-a (skill-under-pointer clickable cmx cmy fit-s fit-ox fit-oy)))))
+          (reset! hover-a (skill-under-pointer @clickable-a cmx cmy fit-s fit-ox fit-oy)))))
     ;; Single transparent input catcher over the whole area — resolves the clicked
     ;; skill on click only. Replaces the per-node shadow hit-boxes entirely.
     (rt/build-child! rt (box :skill-input 0.0 0.0 area-w area-h 0x00000000) area-node)
@@ -619,7 +635,7 @@
       (fn [_ _ evt]
         (let [cmx (- (double (:x evt)) (.getAbsX area-node))
               cmy (- (double (:y evt)) (.getAbsY area-node))]
-          (when-let [sid (skill-under-pointer clickable cmx cmy fit-s fit-ox fit-oy)]
+          (when-let [sid (skill-under-pointer @clickable-a cmx cmy fit-s fit-ox fit-oy)]
             (open-skill-detail-overlay! rt container player sid dev-type)))))
     (add-embedded-runtime! rt {:child-rt embed-rt :anchor-node area-node
                                :x area-x :y area-y :w area-w :h area-h :visible?-fn nil})
@@ -627,11 +643,33 @@
       (sig/computed-o [(rt/clock-ms-sig rt)]
         (fn [now-ms]
           (when (nil? @open-ms) (reset! open-ms (double now-ms)))
-          (let [{:keys [render-data]} (skill-tree-render-context session-id player container)
-                anim-s (/ (- (double now-ms) (double @open-ms)) 1000.0)
-                [amx amy] (or @mouse-a [(/ area-w 2.0) (/ area-h 2.0)])]
-            (skill-tree-reactive/refresh-embedded-runtime! embed-rt render-data
-              amx amy area-w area-h @hover-a anim-s))
+          (let [anim-s (/ (- (double now-ms) (double @open-ms)) 1000.0)
+                anim-active? (< anim-s 1.0)          ;; reveal settles by ~0.92s
+                mouse (or @mouse-a [(/ area-w 2.0) (/ area-h 2.0)])
+                hv @hover-a
+                pstate (get-pstate)
+                ver (hash (:ability-data pstate))
+                skill-changed? (not= ver @last-ver)]
+            ;; Only a skill-data change rebuilds the tree structure.
+            (when skill-changed?
+              (reset! last-ver ver)
+              (let [rd (skill-tree/build-render-data-for-player-state pstate dev-type)]
+                (reset! rd-a rd)
+                (reset! clickable-a (clickable-of rd))
+                (reset! handles-a (skill-tree-view/build-embedded! embed-rt rd area-w area-h))))
+            ;; Reveal: mutate node alphas while the fade plays; settle once after.
+            (when (or anim-active? skill-changed? (not @anim-settled?))
+              (skill-tree-view/apply-anim! embed-rt @handles-a (when anim-active? anim-s))
+              (when-not anim-active? (reset! anim-settled? true)))
+            ;; Parallax: move the node container (+ re-layout) on pointer move / rebuild.
+            (when (or skill-changed? (not= mouse @last-mouse))
+              (reset! last-mouse mouse)
+              (skill-tree-view/apply-parallax! embed-rt @handles-a
+                (first mouse) (second mouse) area-w area-h))
+            ;; Hover: tooltip only.
+            (when (or skill-changed? (not= hv @last-hover))
+              (reset! last-hover hv)
+              (skill-tree-view/set-hover! embed-rt @rd-a hv)))
           nil)))))
 
 ;; ============================================================================
