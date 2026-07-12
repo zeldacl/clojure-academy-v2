@@ -17,7 +17,6 @@
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.i18n :as i18n]
             [cn.li.ac.config.modid :as modid]
-            [cn.li.ac.gui.info-area-reactive :as info-area]
             [cn.li.ac.wireless.gui.tab-reactive :as wireless-tab]
             [cn.li.mcmod.ui.runtime :as rt]
             [cn.li.mcmod.ui.core :as ui]
@@ -59,9 +58,7 @@
 
 (def ^:private classic-w 400.0)
 (def ^:private classic-h 187.0)
-(def ^:private info-w 93.0)
-(def ^:private info-h 177.0)
-(def ^:private root-w (+ classic-w 7.0 info-w))
+(def ^:private root-w classic-w)  ;; upstream developer has no info-area sidebar
 (def ^:private root-h classic-h)
 
 (def ^:private area-x 128.0) (def ^:private area-y 18.0)
@@ -269,8 +266,6 @@
     {:kind :group
      :props {:id :root :x 0.0 :y 0.0 :w root-w :h root-h}
      :children [page-spec
-                {:kind :group
-                 :props {:id :info-area :x (+ classic-w 7.0) :y 5.0 :w info-w :h info-h :clip? true}}
                 {:kind :box
                  :props {:id :dev-cover :x 0.0 :y 0.0 :w classic-w :h classic-h :fill 0x00000000}}]}))
 
@@ -338,22 +333,6 @@
           nil)))
     (bind-hover-alpha! rt :btn-upgrade 0.698 1.0)
     (bind-hover-alpha! rt :button-wireless 0.698 1.0)))
-
-;; ============================================================================
-;; Info-area sidebar — reuses cn.li.ac.gui.info-area-reactive verbatim.
-;; :info-area group already built at our own position in root-spec, so
-;; ensure-shell!'s internal "when-not exists" check is a no-op here.
-;; ============================================================================
-
-(defn- attach-info-area! [^UiRt rt container]
-  (let [ctx (info-area/clear-area! rt)]
-    (info-area/add-histogram-energy! ctx
-      (fn [] (double (or @(:energy container) 0.0)))
-      (fn [] (max 1.0 (double (or @(:max-energy container) 1.0)))))
-    (info-area/add-sepline! ctx "Developer")
-    (info-area/add-property! ctx "tier" (fn [] (str @(:tier container))))
-    (info-area/add-property! ctx "structure_ok" (fn [] (str @(:structure-valid container))))
-    (info-area/add-property! ctx "developing" (fn [] (str @(:is-developing container))))))
 
 ;; ============================================================================
 ;; Wireless node-name label refresh (native replacement for
@@ -700,7 +679,6 @@
   (let [r (rt/create-runtime)]
     (rt/build! r (root-spec))
     (set-cover-visible! r false)
-    (attach-info-area! r container)
     (attach-model-bind! r container player)
     (attach-buttons! r container player)
     (attach-right-panel-dispatch! r container player)
