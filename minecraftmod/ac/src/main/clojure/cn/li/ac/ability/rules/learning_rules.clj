@@ -72,6 +72,26 @@
     (let [f (persistent! failures)]
       {:pass? (empty? f) :failures f})))
 
+(defn conditions-with-status
+  "All displayable learn conditions for a skill, each with an :accepted flag.
+   Unlike check-all-conditions (failures only), this returns every condition so
+   the skill popup can show the met + unmet icons (upstream skillViewArea)."
+  [skill-spec ability-data player-level developer-type]
+  (vec
+   (concat
+    (when (:level skill-spec)
+      [{:type :level :required-level (:level skill-spec)
+        :accepted (check-level-condition player-level (:level skill-spec))}])
+    (when (:developer-type skill-spec)
+      [{:type :developer-type :required (:developer-type skill-spec)
+        :accepted (check-developer-type-condition developer-type (:developer-type skill-spec))}])
+    (for [{:keys [skill-id min-exp]} (:prerequisites skill-spec)]
+      {:type :prerequisite :skill-id skill-id :required min-exp
+       :accepted (check-dependency-condition ability-data skill-id min-exp)})
+    (for [c (:conditions skill-spec) :when (= (:type c) :any-skill-level)]
+      {:type :any-skill-level :required-level (:level c)
+       :accepted (check-any-skill-level-condition ability-data (:level c))}))))
+
 (defn can-learn?
   "Convenience predicate—returns boolean. Returns false for nil skill-spec."
   [skill-spec ability-data player-level developer-type]

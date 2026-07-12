@@ -2,6 +2,7 @@
   "Native reactive skill tree UI — builds/refreshes UiRt nodes from render data.
    No draw-ops; shared by full-screen and developer-panel embed."
   (:require [cn.li.ac.ability.client.screens.skill-tree :as logic]
+            [cn.li.ac.ability.client.condition-icons :as condition-icons]
             [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.client.texture-registry :as tex-reg]
             [cn.li.mcmod.i18n :as i18n]
@@ -110,21 +111,27 @@
                                           (double (get-in ab [:overload :cur] 0.0))
                                           (double (get-in ab [:overload :max] 0.0)))))
 
-(defn- refresh-tooltip! [^UiRt rt rd]
-  (let [^INode tip (ui/node rt :tooltip)
-        hover-id (:hover-skill rd)
-        hover-node (when hover-id (first (filter #(= (:skill-id %) hover-id) (:skill-nodes rd))))]
-    (set-visible! tip (some? hover-node))
-    (when hover-node
-      (ui/set-prop! rt :tip-name :text (str (:skill-name hover-node)))
-      (ui/set-prop! rt :tip-desc :text (str (:skill-description hover-node)))
-      (ui/set-prop! rt :tip-prog :text (format "Progress: %d%%" (int (* 100.0 (:exp hover-node)))))
-      (ui/set-prop! rt :tip-state :text (if (:learned hover-node) "Learned" "Not learned"))
-      (ui/set-prop! rt :tip-state :color (if (:learned hover-node) 0xFF88FF88 0xFFFF8888)))))
-
 (defn- clear-popup! [^UiRt rt]
   (when-let [^INode layer (ui/node rt :popup-layer)]
     (rt/clear-children! rt layer)))
+
+(defn- wrap-text
+  "Word-aware wrap of `s` into lines of at most `max-chars` (approximate upstream
+   Font.drawSeperated width-wrap; CJK strings with no spaces fall through as one
+   run and are hard-chunked)."
+  [^String s max-chars]
+  (cond
+    (or (nil? s) (= "" s)) []
+    (<= (count s) max-chars) [s]
+    :else
+    (loop [words (seq (.split s " ")) line "" lines []]
+      (if (empty? words)
+        (if (= "" line) lines (conj lines line))
+        (let [w (first words)
+              cand (if (= "" line) w (str line " " w))]
+          (if (<= (count cand) (int max-chars))
+            (recur (next words) cand lines)
+            (recur (next words) w (conj lines line))))))))
 
 (defn- refresh-detail-popup!
   "Skill detail popup — matches upstream skillViewArea. Centered on the w×h popup
@@ -165,12 +172,29 @@
           (ctext (+ cy 40.0) 220 8.0 0xFFa1e1ff
                  (str (i18n/translate "skill_tree.my_mod.skill_exp") " " (int (* 100.0 (or exp 0.0))) "%"))
           (when skill-description
-            (ctext (+ cy 50.0) 260 9.0 0xFFDDDDDD skill-description)))
+            (doseq [[i line] (map-indexed vector (wrap-text skill-description 42))]
+              (ctext (+ cy 50.0 (* (double i) 10.0)) 260 9.0 0xFFDDDDDD line))))
         (do
           (ctext (+ cy 40.0) 240 10.0 0xFFff5555 (i18n/translate "skill_tree.my_mod.skill_not_learned"))
-          (when message (ctext (+ cy 62.0) 280 10.0 0xFFCCCCCC message))
+          ;; Requirement icons (upstream: "Req." label + condition icons, greyed
+          ;; when not accepted). Centred row of 14px icons stepped by 16px.
+          (let [conds (:conditions node)
+                n (count conds)
+                step 16.0 isz 14.0
+                left (- cx (/ (* step (double n)) 2.0))]
+            (when (pos? n)
+              (rt/build-child! rt {:kind :text :props {:x (- left 44.0) :y (+ cy 52.0) :w 40.0 :h 12.0
+                                                       :text (i18n/translate "skill_tree.my_mod.req")
+                                                       :font-size 9.0 :color 0xFFAAAAAA :align "right"}} layer)
+              (doseq [[i c] (map-indexed vector conds)]
+                (when-let [info (condition-icons/condition-display-info c)]
+                  (rt/build-child! rt {:kind :image
+                                       :props {:x (+ left (* step (double i))) :y (+ cy 50.0) :w isz :h isz
+                                               :src (icon-src (:icon-path info))
+                                               :tint (if (:accepted c) 0xFFFFFFFF 0xFF555555)}} layer)))))
+          (when message (ctext (+ cy 66.0) 280 10.0 0xFFCCCCCC message))
           (when-not developing?
-            (let [btn-x (- cx 16.0) btn-y (+ cy 80.0)]
+            (let [btn-x (- cx 16.0) btn-y (+ cy 82.0)]
               (rt/build-child! rt {:kind :image :props {:x btn-x :y btn-y :w 32.0 :h 16.0
                                                         :src (tex-src :tex-button)}} layer)
               (ctext (+ btn-y 4.0) 32 9.0 0xFF101010 "LEARN"))))))))
@@ -249,7 +273,7 @@
 
 ;; Shared build-once/mutate core (defined below) — used by both the full-screen
 ;; refresh-screen! and the developer-panel embed, so they don't diverge.
-(declare build-tree! apply-parallax! apply-anim!)
+(declare build-tree! apply-parallax! apply-anim! set-hover!)
 
 (defn refresh-screen!
   "Refresh full-screen skill tree (420×260)."
@@ -277,8 +301,10 @@
                         (apply-anim! rt hs nil)   ;; full alpha (no reveal fade on full-screen)
                         hs)
                       (rt/user-signal rt :screen-tree-handles))]
-        (apply-parallax! rt handles mx my w h))
-      (refresh-tooltip! rt rd)
+        (apply-parallax! rt handles mx my w h)
+        ;; Shared hover-scale (same code as the embed) instead of a tooltip.
+        (set-hover! rt handles (:hover-skill rd)))
+      (set-visible! (ui/node rt :tooltip) false)
       (cond
         (:showing-level-up-popup? st)
         (refresh-levelup-popup! rt (inc (int (get-in rd [:ability-info :level] 1)))

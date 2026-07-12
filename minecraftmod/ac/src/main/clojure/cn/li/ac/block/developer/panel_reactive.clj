@@ -493,7 +493,9 @@
         node-data {:skill-id skill-id :skill-name skill-name :skill-level skill-level
                    :skill-icon skill-icon :skill-description skill-description
                    :learned (adata/is-learned? ad0 skill-id)
-                   :exp (double (or (adata/get-skill-exp ad0 skill-id) 0.0))}
+                   :exp (double (or (adata/get-skill-exp ad0 skill-id) 0.0))
+                   :conditions (learning-rules/conditions-with-status
+                                 skill-spec ad0 (int (or (:level ad0) 1)) dev-type)}
         popup-rt (skill-tree-reactive/create-detail-overlay-runtime node-data)]
     (bind-cover-fill! rt fill-sig)
     (set-cover-visible! rt true)
