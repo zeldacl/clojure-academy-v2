@@ -489,6 +489,7 @@
         ta-y (+ cy 20.0) btn-x (- cx 16.0) btn-y (+ ta-y 52.0)
         state-a (atom {:is-developing? false :progress 0.0 :result nil :error nil})
         prev-dev-a (atom false)
+        last-updated (atom nil)
         node-data {:skill-id skill-id :skill-name skill-name :skill-level skill-level
                    :skill-icon skill-icon :skill-description skill-description
                    :learned (adata/is-learned? ad0 skill-id)
@@ -527,10 +528,27 @@
               :else nil)
             (reset! prev-dev-a is-dev)
             (let [ad (get-ad) learned? (adata/is-learned? ad skill-id)
+                  s @state-a
+                  ;; Learn prompt / development status line (upstream skillViewArea).
+                  message (cond
+                            (:is-developing? s) (str (i18n/translate "skill_tree.my_mod.progress")
+                                                      " " (int (* 100.0 (:progress s 0.0))) "%")
+                            (= (:result s) :success) (i18n/translate "skill_tree.my_mod.dev_successful")
+                            (= (:result s) :failed) (i18n/translate "skill_tree.my_mod.dev_failed")
+                            (= (:error s) :low-energy) (i18n/translate "skill_tree.my_mod.noenergy")
+                            (= (:error s) :low-level) (format (i18n/translate "skill_tree.my_mod.level_fail")
+                                                              (int skill-level))
+                            (= (:error s) :cond-fail) (i18n/translate "skill_tree.my_mod.condition_fail")
+                            :else (format (i18n/translate "skill_tree.my_mod.learn_question")
+                                          (str est-consumption)))
                   updated (assoc node-data :learned learned?
                                  :exp (double (if learned? (or (adata/get-skill-exp ad skill-id) 0.0) 0.0))
-                                 :dev-state @state-a)]
-              (skill-tree-view/refresh-detail-overlay! popup-rt updated)))
+                                 :message message
+                                 :dev-state s)]
+              ;; Rebuild the popup only when its content changes (idle = skip).
+              (when (not= updated @last-updated)
+                (reset! last-updated updated)
+                (skill-tree-view/refresh-detail-overlay! popup-rt updated))))
           nil)))))
 
 (defn- open-levelup-overlay! [^UiRt rt container player developer-type]
@@ -549,6 +567,7 @@
         text-base-y (+ cy 25.0) btn-x (- cx 16.0) btn-y (+ text-base-y 40.0)
         state-a (atom {:is-developing? false :progress 0.0 :result nil :error nil})
         prev-dev-a (atom false)
+        last-state (atom nil)
         popup-rt (skill-tree-reactive/create-levelup-overlay-runtime target-level @state-a)]
     (bind-cover-fill! rt fill-sig)
     (set-cover-visible! rt true)
@@ -577,7 +596,11 @@
               (swap! state-a assoc :is-developing? false :result :failed)
               :else nil)
             (reset! prev-dev-a is-dev)
-            (skill-tree-view/refresh-levelup-overlay! popup-rt target-level @state-a))
+            ;; Rebuild the popup only when its state changes (idle = skip).
+            (let [s @state-a]
+              (when (not= s @last-state)
+                (reset! last-state s)
+                (skill-tree-view/refresh-levelup-overlay! popup-rt target-level s))))
           nil)))))
 
 ;; ============================================================================
@@ -680,10 +703,10 @@
               (reset! last-mouse mouse)
               (skill-tree-view/apply-parallax! embed-rt @handles-a
                 (first mouse) (second mouse) area-w area-h))
-            ;; Hover: tooltip only.
+            ;; Hover: scale the node under the pointer (no tooltip); only on change.
             (when (or skill-changed? (not= hv @last-hover))
               (reset! last-hover hv)
-              (skill-tree-view/set-hover! embed-rt @rd-a hv)))
+              (skill-tree-view/set-hover! embed-rt @handles-a hv)))
           nil)))))
 
 ;; ============================================================================
