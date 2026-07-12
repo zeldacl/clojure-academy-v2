@@ -606,10 +606,16 @@
         ;; invisible click hit-boxes so clicks land on the on-screen nodes.
         [fit-s fit-ox fit-oy] (skill-tree-view/area-fit-transform nodes area-w area-h)
         open-ms (atom nil)
+        mouse-a (atom nil)
+        ^INode area-node (rt/node-by-id rt :area)
         embed-rt (skill-tree-reactive/create-embedded-runtime render-data (/ area-w 2.0) (/ area-h 2.0)
                    area-w area-h nil 0.0)
         hit-nodes (atom {})]
-    (add-embedded-runtime! rt {:child-rt embed-rt :x area-x :y area-y :w area-w :h area-h :visible?-fn nil})
+    ;; Track the pointer (gui-local) so the tick can feed area-relative mouse to
+    ;; the embed for the background/node parallax.
+    (rt/put-user-signal! rt :on-pointer-move (fn [mx my] (reset! mouse-a [(double mx) (double my)])))
+    (add-embedded-runtime! rt {:child-rt embed-rt :anchor-node area-node
+                               :x area-x :y area-y :w area-w :h area-h :visible?-fn nil})
     (doseq [nd nodes
             :when (and (or (:can-learn nd) (:learned nd)) (not (:locked? nd)))]
       (let [id (keyword (str "skill-hit-" (name (:skill-id nd))))
@@ -627,9 +633,13 @@
           (when (nil? @open-ms) (reset! open-ms (double now-ms)))
           (let [{:keys [render-data]} (skill-tree-render-context session-id player container)
                 hover-id (get @hit-nodes (rt/hovered-idx rt))
-                anim-s (/ (- (double now-ms) (double @open-ms)) 1000.0)]
+                anim-s (/ (- (double now-ms) (double @open-ms)) 1000.0)
+                [amx amy] (if-let [m @mouse-a]
+                            [(- (double (first m)) (.getAbsX area-node))
+                             (- (double (second m)) (.getAbsY area-node))]
+                            [(/ area-w 2.0) (/ area-h 2.0)])]
             (skill-tree-reactive/refresh-embedded-runtime! embed-rt render-data
-              (/ area-w 2.0) (/ area-h 2.0) area-w area-h hover-id anim-s))
+              amx amy area-w area-h hover-id anim-s))
           nil)))))
 
 ;; ============================================================================

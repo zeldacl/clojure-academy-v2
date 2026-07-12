@@ -10,6 +10,7 @@
             [cn.li.mc1201.gui.reactive.input :as input]
             [cn.li.mcmod.gui.tabbed-gui :as tabbed-gui])
   (:import [cn.li.mcmod.uipojo.runtime UiRt]
+           [cn.li.mcmod.ui.node INode]
            [cn.li.mc1201.shim DelegatingCGuiContainerScreen]
            [net.minecraft.client.gui GuiGraphics]
            [net.minecraft.world.entity.player Inventory]
@@ -36,9 +37,13 @@
    area / popups) alongside their own main node tree."
   [^UiRt rt ^GuiGraphics gg left top pt]
   (when-let [entries (rt/user-signal rt :embedded-runtimes)]
-    (doseq [{:keys [child-rt x y w h visible?-fn]} @entries]
+    (doseq [{:keys [child-rt x y w h visible?-fn anchor-node]} @entries]
       (when (or (nil? visible?-fn) (visible?-fn))
-        (render/render-embedded-runtime! gg child-rt (+ (double left) (double x)) (+ (double top) (double y)) w h pt)))))
+        ;; An entry may anchor to a live node (e.g. the developer :area) so the
+        ;; embed follows that node's laid-out position instead of hardcoded x/y.
+        (let [ax (if anchor-node (.getAbsX ^INode anchor-node) (double x))
+              ay (if anchor-node (.getAbsY ^INode anchor-node) (double y))]
+          (render/render-embedded-runtime! gg child-rt (+ (double left) ax) (+ (double top) ay) w h pt))))))
 
 (defn- dispose-embedded-runtimes! [^UiRt rt]
   (when-let [entries (rt/user-signal rt :embedded-runtimes)]

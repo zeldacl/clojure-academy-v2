@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Ui size="0.0,0.0" align="center,center">
-  <group id="main" pos="0.0,0.0" size="400.0,187.0" align="center,center">
+<Ui size="0.0,0.0" align="left,top">
+  <group id="main" pos="0.0,0.0" size="400.0,187.0" align="left,top">
     <!-- Right side frame -->
     <group id="parent-right" pos="-4.0,0.0" size="278.0,187.0" align="right,center">
       <image id="bg-parent-right" pos="0.0,0.0" size="278.0,187.0" align="left,top" src="my_mod:textures/guis/parent/parent_background_developerright.png"/>
