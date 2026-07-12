@@ -29,7 +29,10 @@
     (modid/namespaced-path icon)
     icon))
 
-(defn- parallax-offset
+(defn parallax-offset
+  "Node parallax shift (±5px at the edges) from the pointer position — the tree
+   nodes are drawn at (x - pdx, y - pdy). Public so the developer panel can shift
+   its click hit-boxes by the same amount."
   [mx my w h]
   (let [mx01 (clamp01 (/ (double mx) (max 1.0 (double w))))
         my01 (clamp01 (/ (double my) (max 1.0 (double h))))]
@@ -68,9 +71,14 @@
   [{:keys [x y skill-icon learned exp m-alpha skill-id idx]} pdx pdy anim-s]
   (let [sx (- (double x) pdx) sy (- (double y) pdy)
         ta logic/total-size
-        pa logic/prog-align
-        ia logic/align
         da logic/draw-align
+        ;; Upstream draws every element inside a glTranslate(DrawAlign) frame, so
+        ;; back/outline/icon/ring all share the same DrawAlign origin and end up
+        ;; concentric (center 8.0 in the 16px widget). Offsetting outline/icon/ring
+        ;; by draw-align reproduces that — otherwise they sit 3.5px off the back
+        ;; and off-center in the click hit-box.
+        opa (+ da logic/prog-align)  ;; outline / progress ring
+        oia (+ da logic/align)       ;; skill icon
         ma (double (or m-alpha 0.7))
         ;; Staggered fade-in on open (matches upstream SkillTree.scala:328-331):
         ;; per-node dt = elapsed - (idx*0.08 + 0.1); back/icon/progress ramp in
@@ -88,13 +96,13 @@
      (vec
        (remove nil?
          [(merge {:kind :image :props {:x da :y da :w ta :h ta :src (tex-src :skill-back) :alpha alpha}})
-          (merge {:kind :image :props {:x pa :y pa :w logic/prog-size :h logic/prog-size
+          (merge {:kind :image :props {:x opa :y opa :w logic/prog-size :h logic/prog-size
                                        :src (tex-src :skill-outline) :alpha (* alpha 0.6)}})
-          (merge {:kind :image :props {:x ia :y ia :w logic/icon-size :h logic/icon-size
+          (merge {:kind :image :props {:x oia :y oia :w logic/icon-size :h logic/icon-size
                                        :src (icon-src skill-icon) :alpha icon-alpha}})
           (when learned
             {:kind :shader-progress
-             :props {:x pa :y pa :w logic/prog-size :h logic/prog-size
+             :props {:x opa :y opa :w logic/prog-size :h logic/prog-size
                      :progress (float (* (double (or exp 0.0)) prog-mult))
                      :shader-props {:shader-id :ring-progbar
                                     :texture-0 (tex-src :skill-outline)
@@ -274,7 +282,12 @@
           s (min 1.0 (/ (- (double w) pad) bw) (/ (- (double h) pad) bh))
           bcx (/ (+ (:minx bb) (:maxx bb)) 2.0)
           bcy (/ (+ (:miny bb) (:maxy bb)) 2.0)]
-      [s (- (/ (double w) 2.0) (* bcx s)) (- (/ (double h) 2.0) (* bcy s))])
+      ;; Round the offset to whole pixels: images blit at integer coords while the
+      ;; exp-ring shader draws at float coords, so a fractional offset desyncs the
+      ;; icon from its ring. Integer offset keeps them on the same pixel grid.
+      [s
+       (double (Math/round (- (/ (double w) 2.0) (* bcx s))))
+       (double (Math/round (- (/ (double h) 2.0) (* bcy s))))])
     [1.0 0.0 0.0]))
 
 (defn- rebuild-tree-layer!

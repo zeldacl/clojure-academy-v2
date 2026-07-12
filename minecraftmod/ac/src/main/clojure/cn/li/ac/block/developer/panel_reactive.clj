@@ -589,7 +589,8 @@
         ^INode area-node (rt/node-by-id rt :area)
         embed-rt (skill-tree-reactive/create-embedded-runtime render-data (/ area-w 2.0) (/ area-h 2.0)
                    area-w area-h nil 0.0)
-        hit-nodes (atom {})]
+        hit-nodes (atom {})
+        hit-entries (atom [])]
     ;; Track the pointer (gui-local) so the tick can feed area-relative mouse to
     ;; the embed for the background/node parallax.
     (rt/put-user-signal! rt :on-pointer-move (fn [mx my] (reset! mouse-a [(double mx) (double my)])))
@@ -604,6 +605,7 @@
             spec (box id hx hy hsz hsz 0x00000000)
             ^INode n (rt/build-child! rt spec (rt/node-by-id rt :area))]
         (swap! hit-nodes assoc (.getIdx n) (:skill-id nd))
+        (swap! hit-entries conj {:node n :bx hx :by hy})
         (events/on! rt id :left-click
           (fn [_ _ _] (open-skill-detail-overlay! rt container player (:skill-id nd) dev-type)))))
     (set-tick! rt :skill-tree-tick
@@ -616,7 +618,15 @@
                 [amx amy] (if-let [m @mouse-a]
                             [(- (double (first m)) (.getAbsX area-node))
                              (- (double (second m)) (.getAbsY area-node))]
-                            [(/ area-w 2.0) (/ area-h 2.0)])]
+                            [(/ area-w 2.0) (/ area-h 2.0)])
+                [pdx pdy] (skill-tree-view/parallax-offset amx amy area-w area-h)]
+            ;; Shift the hit-boxes by the same parallax as the visible nodes so
+            ;; clicks stay aligned when the tree drifts under the pointer.
+            (doseq [e @hit-entries]
+              (let [^INode hn (:node e)]
+                (.setX hn (- (double (:bx e)) (* (double pdx) fit-s)))
+                (.setY hn (- (double (:by e)) (* (double pdy) fit-s)))
+                (.setFlag hn node/FLAG-LAYOUT-DIRTY)))
             (skill-tree-reactive/refresh-embedded-runtime! embed-rt render-data
               amx amy area-w area-h hover-id anim-s))
           nil)))))
