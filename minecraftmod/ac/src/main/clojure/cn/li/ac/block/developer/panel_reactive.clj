@@ -502,7 +502,7 @@
         (fn [_]
           (let [is-dev (boolean @(:is-developing container))
                 dev-prog (double (or @(:development-progress container) 0.0))
-                dev-complete (boolean @(:development-complete? container))
+                dev-complete (boolean (some-> (:development-complete? container) deref))
                 prev @prev-dev-a]
             (cond
               is-dev (swap! state-a assoc :is-developing? true :progress dev-prog :error nil)
@@ -553,7 +553,7 @@
         (fn [_]
           (let [is-dev (boolean @(:is-developing container))
                 dev-prog (double (or @(:development-progress container) 0.0))
-                dev-complete (boolean @(:development-complete? container))
+                dev-complete (boolean (some-> (:development-complete? container) deref))
                 prev @prev-dev-a]
             (cond
               is-dev (swap! state-a assoc :is-developing? true :progress dev-prog :error nil)
@@ -576,59 +576,62 @@
   (rt/clear-children! rt (rt/node-by-id rt :area))
   (remove-embedded-runtimes! rt (complement :overlay?)))
 
+(defn- skill-under-pointer
+  "Skill-id whose widget contains the area-local point (cmx,cmy), applying the
+   same fit + parallax transform as the visible nodes. Computed on demand
+   (hover/click) — no shadow hit-boxes, no per-frame work (upstream-style: the
+   widget under the pointer is the target)."
+  [nodes cmx cmy fit-s fit-ox fit-oy]
+  (let [[pdx pdy] (skill-tree-view/parallax-offset cmx cmy area-w area-h)
+        sz (* skill-tree/widget-size fit-s)]
+    (some (fn [nd]
+            (let [vx (+ fit-ox (* (- (double (:x nd)) (double pdx)) fit-s))
+                  vy (+ fit-oy (* (- (double (:y nd)) (double pdy)) fit-s))]
+              (when (and (>= cmx vx) (< cmx (+ vx sz))
+                         (>= cmy vy) (< cmy (+ vy sz)))
+                (:skill-id nd))))
+          nodes)))
+
 (defn- build-skill-tree-area! [^UiRt rt container player]
   (let [session-id (panel-session-id container)
         {:keys [render-data dev-type]} (skill-tree-render-context session-id player container)
         nodes (:skill-nodes render-data)
-        hw skill-tree/widget-size
-        ;; Same fit transform the embed uses for the visible tree, applied to the
-        ;; invisible click hit-boxes so clicks land on the on-screen nodes.
+        ;; Only learnable/learned nodes are interactive (upstream filter).
+        clickable (filterv #(and (or (:can-learn %) (:learned %)) (not (:locked? %))) nodes)
         [fit-s fit-ox fit-oy] (skill-tree-view/area-fit-transform nodes area-w area-h)
         open-ms (atom nil)
-        mouse-a (atom nil)
+        mouse-a (atom nil)   ;; area-local pointer for parallax
+        hover-a (atom nil)   ;; skill-id under the pointer (for highlight)
         ^INode area-node (rt/node-by-id rt :area)
         embed-rt (skill-tree-reactive/create-embedded-runtime render-data (/ area-w 2.0) (/ area-h 2.0)
-                   area-w area-h nil 0.0)
-        hit-nodes (atom {})
-        hit-entries (atom [])]
-    ;; Track the pointer (gui-local) so the tick can feed area-relative mouse to
-    ;; the embed for the background/node parallax.
-    (rt/put-user-signal! rt :on-pointer-move (fn [mx my] (reset! mouse-a [(double mx) (double my)])))
+                   area-w area-h nil 0.0)]
+    ;; On move: track area-local pointer + which skill is hovered (both on demand).
+    (rt/put-user-signal! rt :on-pointer-move
+      (fn [mx my]
+        (let [cmx (- (double mx) (.getAbsX area-node))
+              cmy (- (double my) (.getAbsY area-node))]
+          (reset! mouse-a [cmx cmy])
+          (reset! hover-a (skill-under-pointer clickable cmx cmy fit-s fit-ox fit-oy)))))
+    ;; Single transparent input catcher over the whole area — resolves the clicked
+    ;; skill on click only. Replaces the per-node shadow hit-boxes entirely.
+    (rt/build-child! rt (box :skill-input 0.0 0.0 area-w area-h 0x00000000) area-node)
+    (events/on! rt :skill-input :left-click
+      (fn [_ _ evt]
+        (let [cmx (- (double (:x evt)) (.getAbsX area-node))
+              cmy (- (double (:y evt)) (.getAbsY area-node))]
+          (when-let [sid (skill-under-pointer clickable cmx cmy fit-s fit-ox fit-oy)]
+            (open-skill-detail-overlay! rt container player sid dev-type)))))
     (add-embedded-runtime! rt {:child-rt embed-rt :anchor-node area-node
                                :x area-x :y area-y :w area-w :h area-h :visible?-fn nil})
-    (doseq [nd nodes
-            :when (and (or (:can-learn nd) (:learned nd)) (not (:locked? nd)))]
-      (let [id (keyword (str "skill-hit-" (name (:skill-id nd))))
-            hx (+ fit-ox (* (double (:x nd)) fit-s))
-            hy (+ fit-oy (* (double (:y nd)) fit-s))
-            hsz (* hw fit-s)
-            spec (box id hx hy hsz hsz 0x00000000)
-            ^INode n (rt/build-child! rt spec (rt/node-by-id rt :area))]
-        (swap! hit-nodes assoc (.getIdx n) (:skill-id nd))
-        (swap! hit-entries conj {:node n :bx hx :by hy})
-        (events/on! rt id :left-click
-          (fn [_ _ _] (open-skill-detail-overlay! rt container player (:skill-id nd) dev-type)))))
     (set-tick! rt :skill-tree-tick
       (sig/computed-o [(rt/clock-ms-sig rt)]
         (fn [now-ms]
           (when (nil? @open-ms) (reset! open-ms (double now-ms)))
           (let [{:keys [render-data]} (skill-tree-render-context session-id player container)
-                hover-id (get @hit-nodes (rt/hovered-idx rt))
                 anim-s (/ (- (double now-ms) (double @open-ms)) 1000.0)
-                [amx amy] (if-let [m @mouse-a]
-                            [(- (double (first m)) (.getAbsX area-node))
-                             (- (double (second m)) (.getAbsY area-node))]
-                            [(/ area-w 2.0) (/ area-h 2.0)])
-                [pdx pdy] (skill-tree-view/parallax-offset amx amy area-w area-h)]
-            ;; Shift the hit-boxes by the same parallax as the visible nodes so
-            ;; clicks stay aligned when the tree drifts under the pointer.
-            (doseq [e @hit-entries]
-              (let [^INode hn (:node e)]
-                (.setX hn (- (double (:bx e)) (* (double pdx) fit-s)))
-                (.setY hn (- (double (:by e)) (* (double pdy) fit-s)))
-                (.setFlag hn node/FLAG-LAYOUT-DIRTY)))
+                [amx amy] (or @mouse-a [(/ area-w 2.0) (/ area-h 2.0)])]
             (skill-tree-reactive/refresh-embedded-runtime! embed-rt render-data
-              amx amy area-w area-h hover-id anim-s))
+              amx amy area-w area-h @hover-a anim-s))
           nil)))))
 
 ;; ============================================================================
